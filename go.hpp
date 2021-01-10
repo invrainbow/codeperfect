@@ -123,7 +123,7 @@ struct Parser_It {
                 break;
             case IT_BUFFER:
                 buffer_params.it.pos = pos;
-                break;l
+                break;
         }
     }
 };
@@ -1086,5 +1086,5 @@ struct Index_Reader {
     bool ok;
 
     bool init(ccstr index_path);
-    bool find_decl(ccstr decl_name, cstr filename_buf, s32 filename_size, cur2 *offset);
+    bool find_decl(ccstr decl_name, Index_Entry_Result *res);
 };

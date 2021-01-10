@@ -2,6 +2,7 @@
     plan:
         - finish researching and really understand/build a model of go imports
         - get find_decl_in_index() working
+        - tomorrow's schedule: ide until first call, streamlit until standup, ide after
     done:
     todo:
     notes:

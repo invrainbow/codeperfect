@@ -142,8 +142,6 @@ Loaded_It* default_file_loader(ccstr filepath) {
 fn<Loaded_It* (ccstr filepath)> file_loader = default_file_loader;
 
 Ast* parse_file_into_ast(ccstr filepath) {
-    // print("parsing %s", filepath);
-
     // NOTE: have the ability to parse toplevel decls one by one
     // also, we need a new system of tags (TODO, NOTE, etc) for varying
     // priorities
@@ -152,7 +150,8 @@ Ast* parse_file_into_ast(ccstr filepath) {
     defer { iter->cleanup(); };
     if (iter->it == NULL) return NULL;
 
-    iter->it->se
+    // print("parsing %s", filepath);
+    // iter->it->se
 
     Parser p;
     p.init(iter->it, filepath);
@@ -2655,8 +2654,10 @@ File_Ast* Golang::find_decl_in_source(File_Ast* source, ccstr desired_decl_name,
     return NULL;
 }
 
-File_Ast *parse_decl_from_specific_pos(Index_Entry_Result *res) {
-    auto iter = file_loader(filepath);
+File_Ast *parse_decl_from_index_entry(Index_Entry_Result *res) {
+    // TODO: determine filepath from res
+#if 0
+    auto iter = file_loader(res->filename);
     defer { iter->cleanup(); };
     if (iter->it == NULL) return NULL;
 
@@ -2666,9 +2667,9 @@ File_Ast *parse_decl_from_specific_pos(Index_Entry_Result *res) {
     p.init(iter->it, filepath);
     defer { p.cleanup(); };
 
-    res->hdr
-    res->filename
-    res->name
+    // res->hdr
+    // res->filename
+    // res->name
 
     /*
     AST_FUNC_DECL
@@ -2679,6 +2680,8 @@ File_Ast *parse_decl_from_specific_pos(Index_Entry_Result *res) {
 
     // is this enough?
     auto ast = p.parse_decl();
+#endif
+    return NULL;
 }
 
 File_Ast *Golang::find_decl_in_index(ccstr import_path, ccstr desired_decl_name) {

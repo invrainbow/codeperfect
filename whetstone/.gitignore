@@ -1,0 +1,9 @@
+# https://github.com/github/gitignore/blob/master/Go.gitignore
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+vendor/

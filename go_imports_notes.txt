@@ -19,3 +19,20 @@ read:
 When using modules, downloaded packages are stored in the module cache.
 (See 'go help module-get' and 'go help goproxy'.)
 
+
+question: when i create a module, i can then run go commands from that module.
+but how do i tell other modules about my module? how do i make my module known
+to the larger go system?
+
+answer: i see, i have to *make* it known by publishing it or referring to it
+from another module with `replace` in go.mod
+
+
+resolving imports for modules:
+ - if there's a replace, look there, if it doesn't exist, crash
+ - require lists the actual deps, `replace` just provides information about how to find deps
+
+ok so we need to keep track of:
+ - where all used modules are
+ - any time any of those changes, invalidate & update our index
+
