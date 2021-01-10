@@ -1,0 +1,6 @@
+imconfig.h
+imgui*
+imstb_*
+*.vcxproj*
+*.sln
+packages.config

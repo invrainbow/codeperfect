@@ -1,0 +1,32 @@
+# python
+*.pyc
+.venv/
+
+# binary files
+*.o
+/raven
+/gotest
+*.ilk
+*.exe
+*.pdb
+*.obj
+
+# clangd index
+.clangd
+
+# debugging crap
+*.dSYM
+
+# misc
+imgui.ini
+.vscode
+
+# visual studio crap
+packages
+debug.log
+
+# delve
+__debug_bin
+
+# i like to pipe build output to log.txt
+log.txt

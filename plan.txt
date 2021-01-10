@@ -1,0 +1,13 @@
+1/7/21
+plan:
+ - 
+
+1/6/21
+plan:
+ - n/a
+done:
+ - read/write indexes
+ - remove dependency on visual studio for build
+todo:
+ - index to actually look up decls in intellisense
+ - check out remedybg

@@ -1,0 +1,154 @@
+#pragma once
+
+#include "common.hpp"
+#include "os.hpp"
+
+ccstr our_format_json(ccstr s);
+ccstr our_strcpy(ccstr s);
+ccstr our_dirname(ccstr path);
+ccstr our_basename(ccstr path);
+ccstr our_sprintf(ccstr fmt, ...);
+
+bool strcpy_safe(cstr buf, s32 count, ccstr src);
+
+struct Text_Renderer {
+    Stack* mem;
+    s32 start;
+
+    void init();
+
+    void write(ccstr fmt, ...) {
+        va_list args, args2;
+        va_start(args, fmt);
+        va_copy(args2, args);
+
+        auto len = vsnprintf(NULL, 0, fmt, args);
+        auto buf = (char*)mem->alloc(sizeof(char) * (len + 1));
+
+        vsnprintf(buf, len + 1, fmt, args2);
+
+        va_end(args);
+        va_end(args2);
+
+        // lop off the '\0' from vsnprintf
+        mem->sp--;
+    }
+
+    void writechar(char ch) { *(char*)mem->alloc(1) = ch; }
+
+    void erasechar() { mem->sp--; }
+
+    char* finish() {
+        mem->buf[mem->sp++] = '\0';
+        return (char*)(mem->buf + start);
+    }
+};
+
+struct Json_Renderer : public Text_Renderer {
+    void prim(ccstr s) {
+        writechar('"');
+        for (ccstr p = s; *p != '\0'; p++) {
+            switch (*p) {
+                case '\n': write("\\n"); break;
+                case '\r': write("\\r"); break;
+                case '\t': write("\\t"); break;
+                case '"': write("\\\""); break;
+                case '\\': write("\\\\"); break;
+                default: writechar(*p); break;
+            }
+        }
+        writechar('"');
+    }
+
+    void prim(int n) { write("%d", n); }
+    void prim(float n) { write("%f", n); }
+    void prim(bool b) { write("%s", b ? "true" : "false"); }
+
+    void prim(void* v) {
+        if (v != NULL)
+            print("warning: prim(void*) is only for sending 'NULL'");
+        write("null");
+    }
+
+    void field(ccstr key, int value) { field(key, [&]() { prim(value); }); }
+    void field(ccstr key, float value) { field(key, [&]() { prim(value); }); }
+    void field(ccstr key, ccstr value) { field(key, [&]() { prim(value); }); }
+    void field(ccstr key, bool value) { field(key, [&]() { prim(value); }); }
+    void field(ccstr key, void* value) { field(key, [&]() { prim(value); }); }
+
+    void field(ccstr key, lambda value) {
+        prim(key);
+        writechar(':');
+        value();
+        sep();
+    }
+
+    void obj(lambda f) {
+        writechar('{');
+        f();
+        if (mem->buf[mem->sp - 1] == ',')
+            erasechar();
+        writechar('}');
+    }
+
+    void arr(lambda f) {
+        writechar('[');
+        f();
+        if (mem->buf[mem->sp - 1] == ',')
+            erasechar();
+        writechar(']');
+    }
+
+    void sep() { writechar(','); }
+};
+
+const s32 DEFAULT_QUEUE_SIZE = 128;
+
+void *stub_alloc_memory(s32 size);
+
+template <typename T>
+struct In_Memory_Queue {
+    T *arr;
+    s32 queue_base;
+    s32 queue_pos;
+    s32 cap;
+    Lock lock;
+
+    void init(s32 n = DEFAULT_QUEUE_SIZE) {
+        ptr0(this);
+
+        arr = (T*)stub_alloc_memory(sizeof(T) * n);
+        cap = n;
+        lock.init();
+    }
+
+    void cleanup() {
+        lock.cleanup();
+    }
+
+    s32 increment_index(s32 i) {
+        return i + 1 == cap ? 0 : i + 1;
+    }
+
+    bool push(T *t) {
+        SCOPED_LOCK(&lock);
+
+        auto new_pos = increment_index(queue_pos);
+        if (new_pos == queue_base) // we're full!
+            return false;
+
+        memcpy(&arr[queue_pos], t, sizeof(T));
+        queue_pos = new_pos;
+        return true;
+    }
+
+    bool pop(T *t) {
+        SCOPED_LOCK(&lock);
+
+        if (queue_base == queue_pos) return false;
+
+        memcpy(t, &arr[queue_base], sizeof(T));
+        queue_base = increment_index(queue_base);
+        return true;
+    }
+};
