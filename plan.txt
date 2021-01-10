@@ -1,13 +1,34 @@
+1/8/21
+    plan:
+        - finish researching and really understand/build a model of go imports
+        - get find_decl_in_index() working
+    done:
+    todo:
+    notes:
+
 1/7/21
-plan:
- - 
+    plan:
+        - get find_decl_in_index() working
+    done:
+        - seamless edit/build/debug cycle now
+        - Index_Reader::find_decl is now working, just need find_decl_in_index now
+    todo:
+        - ran into hurdle implementing find_decl_in_index re: resolving import
+          paths. in particular, once we learn from the index what the filename
+          and position are, we need to know where to find it. from there i realized
+          actually idk much about import resolution, so need to keep reading;
+          see go_imports_notes.txt notes:
+    notes:
+        - i should fix naysayer88.vim, the pink autocomplete in command bar
+          looks like shit
 
 1/6/21
-plan:
- - n/a
-done:
- - read/write indexes
- - remove dependency on visual studio for build
-todo:
- - index to actually look up decls in intellisense
- - check out remedybg
+    plan:
+        - n/a
+    done:
+        - read/write indexes
+        - remove dependency on visual studio for build
+    todo:
+        - index to actually look up decls in intellisense
+        - check out remedybg
+    notes:

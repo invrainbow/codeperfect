@@ -20,6 +20,7 @@
 # misc
 imgui.ini
 .vscode
+.vs/
 
 # visual studio crap
 packages

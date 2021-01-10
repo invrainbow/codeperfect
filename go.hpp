@@ -100,6 +100,7 @@ struct Parser_It {
     }
 
     cur2 get_pos() {
+        // TODO: to convert between pos types based on this->type
         switch (type) {
             case IT_STRING:
                 return new_cur2(string_params.pos.x, -1);
@@ -112,6 +113,7 @@ struct Parser_It {
     }
 
     void set_pos(cur2 pos) {
+        // TODO: to convert between pos types based on this->type
         switch (type) {
             case IT_STRING:
                 string_params.pos = pos;
@@ -121,7 +123,7 @@ struct Parser_It {
                 break;
             case IT_BUFFER:
                 buffer_params.it.pos = pos;
-                break;
+                break;l
         }
     }
 };
@@ -1019,10 +1021,15 @@ enum Index_Entry_Type {
     IET_FUNC,
 };
 
-
 struct Index_Entry_Hdr {
     Index_Entry_Type type;
     cur2 pos;
+};
+
+struct Index_Entry_Result {
+    Index_Entry_Hdr hdr;
+    ccstr filename;
+    ccstr name;
 };
 
 enum {

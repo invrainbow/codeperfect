@@ -152,6 +152,8 @@ Ast* parse_file_into_ast(ccstr filepath) {
     defer { iter->cleanup(); };
     if (iter->it == NULL) return NULL;
 
+    iter->it->se
+
     Parser p;
     p.init(iter->it, filepath);
     defer { p.cleanup(); };
@@ -2653,13 +2655,36 @@ File_Ast* Golang::find_decl_in_source(File_Ast* source, ccstr desired_decl_name,
     return NULL;
 }
 
-ccstr absolute_path_to_import_path(ccstr path) {
-    // get path relative to GO_
-    // TODO: do this shit
-    return NULL;
+File_Ast *parse_decl_from_specific_pos(Index_Entry_Result *res) {
+    auto iter = file_loader(filepath);
+    defer { iter->cleanup(); };
+    if (iter->it == NULL) return NULL;
+
+    iter->it->set_pos(offset);
+
+    Parser p;
+    p.init(iter->it, filepath);
+    defer { p.cleanup(); };
+
+    res->hdr
+    res->filename
+    res->name
+
+    /*
+    AST_FUNC_DECL
+    AST_VALUE_SPEC
+    AST_IMPORT_SPEC
+    AST_TYPE_SPEC
+    */
+
+    // is this enough?
+    auto ast = p.parse_decl();
 }
 
-File_Ast* Golang::find_decl_in_index(ccstr import_path, ccstr desired_decl_name) {
+File_Ast *Golang::find_decl_in_index(ccstr import_path, ccstr desired_decl_name) {
+    // ok, problem, how do we convert import_path into an absolute path?
+    // i guess the index needs to be annotated with what path it got it from.
+
     auto index_path = path_join(GO_INDEX_PATH, import_path);
 
     char filename[256] = {0};
@@ -2667,9 +2692,12 @@ File_Ast* Golang::find_decl_in_index(ccstr import_path, ccstr desired_decl_name)
 
     Index_Reader reader;
     if (!reader.init(index_path)) return NULL;
-    if (!reader.find_decl(desired_decl_name, filename, _countof(filename), &offset)) return NULL;
 
-    // ok, go read the decl from `filename`:`offset` now
+    Index_Entry_Result res;
+
+    if (!reader.find_decl(desired_decl_name, &res)) return NULL;
+
+    return parse_decl_from_index_entry(&res);
 }
 
 // import_path can be NULL, but if the caller provides it, we can use it
@@ -4278,9 +4306,11 @@ void Golang::read_index() {
     char filename[256] = {0};
     cur2 offset = {0};
 
-    if (!reader.find_decl("CanonType.MustParse", filename, _countof(filename), &offset)) return;
+    Index_Entry_Result res;
 
-    print("found at %s:%s", filename, format_pos(offset));
+    if (!reader.find_decl("CanonType.MustParse", &res)) return;
+
+    print("found at %s:%s", res.filename, format_pos(res.hdr.pos));
 }
 
 bool Golang::delete_index() {
@@ -4495,11 +4525,9 @@ bool Index_Reader::init(ccstr index_path) {
     return true;
 }
 
-void* bsearch (const void* key, const void* base,
-               size_t num, size_t size,
-               int (*compar)(const void*,const void*));
+// cstr filename_buf, s32 filename_size, cur2 *offset
 
-bool Index_Reader::find_decl(ccstr decl_name, cstr filename_buf, s32 filename_size, cur2 *offset) {
+bool Index_Reader::find_decl(ccstr decl_name, Index_Entry_Result *out) {
     auto _offsets = alloc_array(i32, decl_count);
     List<i32> offsets;
     offsets.init(LIST_FIXED, decl_count, _offsets);
@@ -4507,52 +4535,33 @@ bool Index_Reader::find_decl(ccstr decl_name, cstr filename_buf, s32 filename_si
     for (u32 i = 0; i < decl_count; i++)
         offsets.append(findex.read4());
 
-    auto read_name_from_offset = [&](u32 offset) -> ccstr {
-        // TODO
-        return NULL;
-    };
-
     auto get_name = [&](i32 offset) -> ccstr {
         if (offset == -1) return decl_name;
 
-        return read_name_from_offset(offset);
+        fdata.seek(offset);
+
+        Index_Entry_Hdr hdr;
+        fdata.readn(&hdr, sizeof(hdr));
+        fdata.readstr();
+        auto name = fdata.readstr();
+
+        return name;
     };
 
     auto cmpfunc = [&](i32 *a, i32 *b) {
-        return strcmp(get_name(*a), get_name(*b));
+        auto sa = get_name(*a);
+        auto sb = get_name(*b);
+        return strcmp(sa, sb);
     };
 
     i32 key = -1;
     auto poffset = offsets.bfind(&key, cmpfunc);
     if (poffset == NULL) return false;
 
-    // TODO: grab filename and file offset from *poffset (which is an offset into data.db)
+    fdata.seek(*poffset);
+    fdata.readn(&out->hdr, sizeof(out->hdr));
+    out->filename = fdata.readstr();     // TODO: do we need to copy this?
+    out->name = fdata.readstr();
+
     return true;
 }
-
-/*
-{
-    for (u32 i = 0; i < decl_count; i++) {
-        auto offset = findex.read4();
-        fdata.seek(offset);
-
-        Index_Entry_Hdr hdr;
-        fdata.readn(&hdr, sizeof(hdr));
-        if (!ok) return;
-
-        auto filename = fdata.readstr();
-        if (!ok) return;
-
-        auto name = fdata.readstr();
-        if (!ok) return;
-
-        print(
-            "%s\t%s\t%s\t%s",
-            filename,
-            name,
-            format_pos(hdr.pos),
-            index_entry_type_str(hdr.type)
-        );
-    }
-}
-*/

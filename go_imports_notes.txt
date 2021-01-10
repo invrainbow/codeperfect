@@ -1,0 +1,21 @@
+# Notes on Go imports
+
+if we're using modules, just skip gopath
+    i assume we still check in goroot for stdlib
+
+
+internal directories: if we have the tree
+    $GOPATH
+        src/
+            foo/  # this is a package
+                internal/
+                    bar/
+        pkg/
+        bin/
+
+then only files under foo's tree can import "foo/internal/bar"
+
+read:
+When using modules, downloaded packages are stored in the module cache.
+(See 'go help module-get' and 'go help goproxy'.)
+
