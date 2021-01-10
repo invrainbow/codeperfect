@@ -1,3 +1,45 @@
+/*
+Our overall index-building process should just be like, "ensure the index exists
+and is complete and correct." Let's call this "ensure index."
+
+I mean, right now the algorithm is just:
+    - look up the package path
+    - go through all decls, find the one we want.
+
+So our index should answer three core questions:
+    1) our project's dependencies -- WHAT ARE THEY (ensures completeness)
+    2) given an import path -- WHERE IS THE PACKAGE (gives us package path)
+    3) given a decl -- WHERE IS IT DECLARED (gives us file:pos)
+
+This ensures, for ALL of our dependencies, we can easily get a full filepath +
+position. From there we can just parse the decl.
+
+If we can answer any variant of these three questions within 1ms, intellisense
+is effectively solved for now.
+
+(For now because after asking these questions, our intellisense still has to a
+bit more work.  Eventually, we would hope to just build up a complete database
+of our program's types.)
+
+So we want to ensure that as much of the time as possible, our index contains
+the complete, correct answer to these questions. This is what our "ensure
+index" process takes care of.
+
+So at any given point our index should contain knowledge about these two
+questions, and as the "truth" of these questions changes, our index should
+update (in an ideal world, immediately).
+
+Several things that happen here:
+
+ - index runs background process checking if it's correct, fixes if not
+ - subscribe to various "hooks" that indicate a change of information, index
+   goes and retrieves new info
+ - IDE notifies index that it's wrong (e.g. gave wrong result)
+
+And if we build the interface correctly, in the future we can seamlessly switch
+out the index for something even faster.
+*/
+
 #include "go.hpp"
 
 #include "utils.hpp"
@@ -7,11 +49,9 @@
 // PRELEASE: dynamically determine this
 static const char GOROOT[] = "c:\\go\\src";
 static const char GOPATH[] = "c:\\users\\brandon\\go\\src";
-static const char GO_INDEX_PATH[] = "c:\\users\\brandon\\appdata\\roaming\\ide\\index";
+static const char GOROOT_INDEX_PATH[] = "c:\\users\\brandon\\appdata\\roaming\\ide\\index";
 
-typedef fn<bool(ccstr)> resolve_package_cb;
-
-const u32 INDEX_DB_MAGIC_NUMBER = 0x49fa98;
+const u32 INDEX_MAGIC_NUMBER = 0x49fa98;
 
 ccstr format_pos(cur2 pos) {
     if (pos.y == -1)
@@ -19,35 +59,28 @@ ccstr format_pos(cur2 pos) {
     return our_sprintf("%d:%d", pos.y, pos.x);
 }
 
-ccstr resolve_package_path(ccstr import_path, resolve_package_cb f) {
-    /*
-    resolution order:
-    1) vendor
-    2) if go.mod exists
-         a) replace directive in go.mod
-         b) $GOPATH/pkg/mod
-    3) gopath
-    4) goroot
+typedef fn<bool(ccstr, Import_Location)> resolve_package_cb;
 
-    # pseudocode
-    for path in [go through paths in resolution order]:
-        if f(path):
-            return path
-    */
-
+ccstr resolve_import_path(ccstr import_path, resolve_package_cb f) {
     {
-        ccstr _paths[4];
-        List<ccstr> paths;
-        paths.init(LIST_FIXED, _countof(_paths), _paths);
+        ccstr ret = NULL;
 
-        paths.append(path_join(path_join(world.wksp.path, "vendor"), import_path));
+        auto check = [&](Import_Location imploc_type, ccstr path) {
+            if (ret != NULL)
+                return;
+            if (check_path(path) == CPR_DIRECTORY && f(path, imploc_type))
+                ret = path;
+        };
+
+        check(IMPLOC_VENDOR, path_join(path_join(world.wksp.path, "vendor"), import_path));
+
         // TODO: if (world.wksp.go_mod_exists) ...
-        paths.append(path_join(GOPATH, import_path));
-        paths.append(path_join(GOROOT, import_path));
+        // check(IMPLOC_GOMOD, ...);
 
-        For (paths)
-            if (check_path(it) == CPR_DIRECTORY && f(it))
-                return it;
+        check(IMPLOC_GOPATH, path_join(GOPATH, import_path));
+        check(IMPLOC_GOROOT, path_join(GOROOT, import_path));
+
+        return ret;
     }
 
     return NULL;
@@ -2490,7 +2523,7 @@ Resolved_Import* resolve_import(ccstr import_path) {
     List<ccstr>* files = NULL;
     Resolved_Import* ret = NULL;
 
-    auto path = resolve_package_path(import_path, [&](ccstr path) {
+    auto path = resolve_import_path(import_path, [&](ccstr path, Import_Location loctype) {
         auto files = list_source_files(path);
         if (files != NULL) {
             For (*files) {
@@ -2688,16 +2721,16 @@ File_Ast *Golang::find_decl_in_index(ccstr import_path, ccstr desired_decl_name)
     // ok, problem, how do we convert import_path into an absolute path?
     // i guess the index needs to be annotated with what path it got it from.
 
-    auto index_path = path_join(GO_INDEX_PATH, import_path);
+    // TODO: determine index path
 
-    char filename[256] = {0};
-    cur2 offset = {0};
+    auto index_path = path_join(GO_INDEX_PATH, import_path);
+    Index_Reader reader;
+    if (!reader.init(index_path)) return NULL;
 
     Index_Reader reader;
     if (!reader.init(index_path)) return NULL;
 
     Index_Entry_Result res;
-
     if (!reader.find_decl(desired_decl_name, &res)) return NULL;
 
     return parse_decl_from_index_entry(&res);
@@ -2803,7 +2836,7 @@ File_Ast* Golang::get_base_type(File_Ast* type) {
 
                     // FIXME: it just makes no sense what i'm doing here
                     // i think i was originally intending to use sel.x->id.lit to LOOK UP the package path, and append that to GOPATH
-                    // but now we should just call resolve_package_path
+                    // but now we should just call resolve_import_path
                     //
                     // Also, find_decl_in_package should be passed an import path;
                     // I just don't know what the fuck this code even does right now
@@ -3241,7 +3274,7 @@ Jump_To_Definition_Result* Golang::jump_to_definition(ccstr filepath, cur2 pos) 
                             return true;
                         };
 
-                        auto try_path = [&](ccstr pkgpath) -> bool {
+                        auto try_path = [&](ccstr pkgpath, Import_Location loctype) -> bool {
                             return try_decl(find_decl_in_package(pkgpath, sel->id.lit, NULL));
                         };
 
@@ -3256,7 +3289,7 @@ Jump_To_Definition_Result* Golang::jump_to_definition(ccstr filepath, cur2 pos) 
                             auto decl = find_decl_in_package(NULL, sel->id.lit, import_path);
                             if (try_decl(decl)) return true;
 
-                            return (resolve_package_path(import_path, try_path) != NULL);
+                            return (resolve_import_path(import_path, try_path) != NULL);
                         };
 
                         if (try_to_find_package())
@@ -3351,7 +3384,7 @@ bool Golang::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period, Au
                             auto spec_ast = spec->ast;
                             if (spec_ast->type != AST_IMPORT_SPEC) break;
 
-                            auto cb = [&](ccstr pkgpath) {
+                            auto cb = [&](ccstr pkgpath, Import_Location loctype) {
                                 auto decls = list_decls_in_package(pkgpath);
 
                                 s32 len = 0;
@@ -3373,7 +3406,7 @@ bool Golang::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period, Au
                             };
 
                             auto import_path = spec_ast->import_spec.path->basic_lit.val.string_val;
-                            if (resolve_package_path(import_path, cb) == NULL) break;
+                            if (resolve_import_path(import_path, cb) == NULL) break;
 
                             ret.type = AUTOCOMPLETE_PACKAGE_EXPORTS;
                             ret.keyword_start_position = ast->selector_expr.period_pos;
@@ -3536,7 +3569,7 @@ int Golang::list_methods_in_type(File_Ast* type, List<Field>* ret) {
                 auto import_path = decl->ast->import_spec.path->basic_lit.val.string_val;
                 if (import_path == NULL) break;
 
-                resolve_package_path(import_path, [&](ccstr path) -> bool {
+                resolve_import_path(import_path, [&](ccstr path, Import_Location loctype) -> bool {
                     auto result = find_decl_in_package(path, type_name, NULL);
                     if (result != NULL)
                         if (result->ast->type == AST_TYPE_SPEC)
@@ -4204,6 +4237,246 @@ ccstr index_entry_type_str(Index_Entry_Type type) {
     return NULL;
 }
 
+ccstr get_receiver_typename_from_func_decl(Ast *func_decl) {
+    auto recv = func_decl->func_decl.recv;
+
+    if (recv == NULL) return NULL;
+    if (recv->type != AST_PARAMETERS) return NULL;
+
+    auto fields = recv->parameters.fields;
+    if (fields == NULL) return NULL;
+    if (fields->list.len != 1) return NULL;
+    if (fields->list[0]->field.type == NULL) return NULL;
+    if (fields->list[0]->field.type->type != AST_ID) return NULL;
+
+    return fields->list[0]->field.type->id.lit;
+}
+
+void Index::update_with_package(ccstr path, ccstr root, ccstr import_path, Import_Location loctype) {
+    list_directory(path, [&](Dir_Entry* ent) {
+        if (ent->type == DIRENT_DIR) return;
+
+        // for now, only grab non-test .go files
+        if (!str_ends_with(ent->name, ".go")) return;
+        if (str_ends_with(ent->name, "_test.go")) return;
+
+        auto filepath = path_join(path, ent->name);
+        auto ast = parse_file_into_ast(filepath);
+        if (ast == NULL) return;
+
+        print("    %s", ent->name);
+        list_decls_in_source(make_file_ast(ast, filepath), LISTDECLS_DECLS, [&](Named_Decl* decl) {
+            for (auto&& it : *decl->names) {
+                auto name = it.name->id.lit;
+                if (it.spec->type === AST_FUNC_DECL) {
+                    auto receiver_name = get_receiver_typename_from_func_decl(it.spec);
+                    if (receiver_name != NULL)
+                        name = our_sprintf("%s.%s", receiver_name, name);
+                }
+                w.write_decl(filename, name, it.spec, loctype);
+            }
+        });
+    });
+}
+
+Index_Stream *open_and_validate_imports_db(ccstr path) {
+    if (check_path(path) != CPR_FILE) return NULL;
+
+    Frame frame;
+
+    auto f = alloc_object(Index_Stream);
+    if (f->open(path, FILE_MODE_READ, FILE_OPEN_EXISTNG) != FILE_RESULT_SUCCESS) {
+        frame.restore();
+        return NULL;
+    }
+
+    if (!f->read_file_header(INDEX_FILE_IMPORTS)) {
+        frame.restore();
+        return NULL;
+    }
+
+    return f;
+}
+
+bool are_sets_equal(String_Set *a, String_Set *b) {
+    auto a_items = a->items();
+    For (*a_items)
+        if (!b->has(it))
+            return false;
+
+    auto b_items = b->items();
+    For (*b_items)
+        if (!a->has(it))
+            return false;
+
+    return true;
+}
+
+void Index::main_loop() {
+    // Thoughts. We are not a version/dependency manager. That is go.mod's job.
+    // We're primarily interested in, WHAT IMPORT PATHS DO WE CALL?  and WHERE
+    // ARE THOSE PACKAGES LOCATED? We may incidentally need to answer questions
+    // about versions, but our source of truth is mainly concerned with just
+    // GIVE ME THE SET OF ALL INCLUDED IMPORT PATHS.
+
+    auto index_path = path_join(world.wksp.path, ".ide/index");
+
+    {
+        SCOPED_FRAME();
+        ensure_directory_exists(index_path);
+    }
+
+    auto handle_error = [&](ccstr err) {
+        error("%s", err);
+        // TODO: What's our error handling strategy?
+    };
+
+    while (true) {
+        bool imports_db_changed = false;
+
+        // check that set of import paths is correct
+        // -----------------------------------------
+
+        auto imports_db = path_join(index_path, "imports.db");
+        List<ccstr> current_imports;
+
+        {
+            auto f = open_and_validate_imports_db(imports_db);
+            if (f == NULL) {
+                handle_error("Invalid imports.db file.");
+                return;
+            }
+            defer { f->cleanup(); };
+
+            auto num_imports = f.read4();
+            current_imports.init(LIST_STACK, 64);
+            for (u32 i = 0; i < num_imports; i++)
+                current_imports.append(f.readstr());
+        }
+
+        List<ccstr> new_imports;
+        new_imports.init(LIST_STACK, 64);
+        if (!get_workspace_imports(&new_imports)) {
+            handle_error("Unable to get workspace imports.");
+            return;
+        }
+
+        {
+            Index_Stream fw;
+            auto res = fw.open(path_join(index_folder, "index.db"), FILE_MODE_WRITE, FILE_CREATE_NEW);
+            if (res == FILE_RESULT_SUCCESS) {
+                handle_error("Unable to open index.db for writing.");
+                return;
+            }
+            defer { fw->cleanup(); };
+
+            fw->write_file_header(INDEX_FILE_IMPORTS);
+            fw->write4(new_imports.len);
+            For (new_imports) fw->writestr(it);
+        }
+
+        {
+            SCOPED_FRAME();
+            String_Set current_imports_set;
+            String_Set new_imports;
+            For (current_imports) current_imports_set.add(it);
+            For (new_imports) new_imports_set.add(it);
+            imports_db_changed = !are_sets_equal(&current_imports_set, &new_imports);
+        }
+
+        // TODO: do something with imports_db_changd (e.g. stop checking it until we get notif)
+
+        // OK, WE HAVE IMPORTS NOW!!!
+        // now we need to check that they're all indexed
+
+        // check that all import paths are indexed with correct, most recent info
+        // ----------------------------------------------------------------------
+
+        For (new_imports) {
+            // TODO: update index of `it`
+        }
+
+        // wait for notifications from various places that we should re-fetch info.
+        // ------------------------------------------------------------------------
+    }
+}
+
+void Golang::crawl_package(ccstr root, ccstr import_path, Import_Location loctype) {
+    auto path = path_join(root, import_path);
+    print("%s", path);
+
+    auto list_dir = [&](bool find_dirs, fn<void(ccstr)> f) {
+        list_directory(path, [&](Dir_Entry* ent) {
+            auto is_dir = (ent->type == DIRENT_DIR);
+            if (is_dir != find_dirs) return;
+
+            ccstr new_path = ent->name;
+            if (import_path[0] != '\0')
+                new_path = path_join(import_path, new_path);
+            f(new_path);
+        });
+    };
+
+    // TODO: maybe we need to use a separate allocator for holding the names in Index_Writer.decls!
+
+    {
+        SCOPED_FRAME();
+
+        SCOPED_ARENA(&world.build_index_arena);
+        world.build_index_arena.init(1024 * 1024);
+        defer { world.build_index_arena.cleanup(); };
+
+        Index_Writer w;
+        if (w.init(import_path) != FILE_RESULT_SUCCESS) return;
+        defer { w.cleanup(); };
+
+        // crawl files
+        list_dir(false, [&](ccstr new_path) {
+            if (!str_ends_with(new_path, ".go")) return;
+            auto filename = path_join(root, new_path);
+
+            auto ast = parse_file_into_ast(filename);
+            if (ast == NULL) return;
+
+            // TODO: defer { EmptyWorkingSet(GetCurrentProcess()); }; 
+
+            print("    %s", new_path);
+            list_decls_in_source(make_file_ast(ast, filename), LISTDECLS_DECLS, [&](Named_Decl* decl) {
+                for (auto&& it : *decl->names) {
+                    auto name = it.name->id.lit;
+
+                    auto get_receiver_typename = [&]() -> ccstr {
+                        if (it.spec->type != AST_FUNC_DECL) return NULL;
+
+                        auto recv = it.spec->func_decl.recv;
+
+                        if (recv == NULL) return NULL;
+                        if (recv->type != AST_PARAMETERS) return NULL;
+
+                        auto fields = recv->parameters.fields;
+                        if (fields == NULL) return NULL;
+                        if (fields->list.len != 1) return NULL;
+                        if (fields->list[0]->field.type == NULL) return NULL;
+                        if (fields->list[0]->field.type->type != AST_ID) return NULL;
+
+                        return fields->list[0]->field.type->id.lit;
+                    };
+
+                    auto receiver_typename = get_receiver_typename();
+                    if (receiver_typename != NULL)
+                        name = our_sprintf("%s.%s", receiver_typename, name);
+
+                    w.write_decl(filename, name, it.spec, loctype);
+                }
+            });
+        });
+
+        w.finish_writing();
+    }
+
+    // crawl subdirs
+    list_dir(true, [&](ccstr it) { crawl_package(root, it, loctype); });
+}
 
 void Golang::build_index() {
     world.build_index_arena.cleanup();
@@ -4211,93 +4484,14 @@ void Golang::build_index() {
     SCOPED_FRAME();
     SCOPED_MEM(&world.build_index_mem);
 
-    fn<void(ccstr, ccstr)> crawl_location;
+    crawl_package(path_join(world.wksp.path, "vendor"), "golang.org/x/text/language", IMPLOC_VENDOR);
 
-    crawl_location = [&](ccstr root, ccstr import_path) {
-        auto path = path_join(root, import_path == NULL ? "" : import_path);
-        print("%s", path);
+    // crawl_package(path_join(world.wksp.path, "vendor"), "", IMPLOC_VENDOR);
 
-        auto list_dir = [&](bool find_dirs, fn<void(ccstr)> f) {
-            list_directory(path, [&](Dir_Entry* ent) {
-                auto is_dir = (ent->type == DIRENT_DIR);
-                if (is_dir != find_dirs) return;
+    // TODO: check world.wksp.go_mod_exists
 
-                ccstr new_path = ent->name;
-                if (import_path != NULL)
-                    new_path = path_join(import_path, new_path);
-                f(new_path);
-            });
-        };
-
-        // TODO: maybe we need to use a separate allocator for holding the names in Index_Writer.decls!
-
-        {
-            SCOPED_FRAME();
-
-            SCOPED_ARENA(&world.build_index_arena);
-            world.build_index_arena.init(1024 * 1024);
-            defer { world.build_index_arena.cleanup(); };
-
-            Index_Writer w;
-            if (w.init(import_path) != FILE_RESULT_SUCCESS) return;
-            defer { w.cleanup(); };
-
-            // crawl files
-            list_dir(false, [&](ccstr new_path) {
-                if (!str_ends_with(new_path, ".go")) return;
-                auto filename = path_join(root, new_path);
-
-                auto ast = parse_file_into_ast(filename);
-                if (ast == NULL) return;
-
-                // TODO: defer { EmptyWorkingSet(GetCurrentProcess()); }; 
-
-                print("    %s", new_path);
-                list_decls_in_source(make_file_ast(ast, filename), LISTDECLS_DECLS, [&](Named_Decl* decl) {
-                    for (auto&& it : *decl->names) {
-                        auto name = it.name->id.lit;
-
-                        auto get_receiver_typename = [&]() -> ccstr {
-                            if (it.spec->type != AST_FUNC_DECL) return NULL;
-
-                            auto recv = it.spec->func_decl.recv;
-
-                            if (recv == NULL) return NULL;
-                            if (recv->type != AST_PARAMETERS) return NULL;
-
-                            auto fields = recv->parameters.fields;
-                            if (fields == NULL) return NULL;
-                            if (fields->list.len != 1) return NULL;
-                            if (fields->list[0]->field.type == NULL) return NULL;
-                            if (fields->list[0]->field.type->type != AST_ID) return NULL;
-
-                            return fields->list[0]->field.type->id.lit;
-                        };
-
-                        auto receiver_typename = get_receiver_typename();
-                        if (receiver_typename != NULL)
-                            name = our_sprintf("%s.%s", receiver_typename, name);
-
-                        w.write_decl(filename, name, it.spec);
-                    }
-                });
-            });
-
-            w.finish_writing();
-        }
-
-        // crawl dirs
-        list_dir(true, [&](ccstr new_path) {
-            crawl_location(root, new_path);
-        });
-    };
-
-    crawl_location(path_join(world.wksp.path, "vendor"), "golang.org/x/text/language");
-    // crawl_location(path_join(world.wksp.path, "vendor"), NULL);
-
-    // TODO: if (world.wksp.go_mod_exists) ...
-    // crawl_location(GOPATH, NULL);
-    // crawl_location(GOROOT, NULL);
+    // crawl_package(GOPATH, "", IMPLOC_GOPATH);
+    // crawl_package(GOROOT, "", IMPLOC_GOROOT);
 }
 
 void Golang::read_index() {
@@ -4363,6 +4557,11 @@ bool Index_Stream::writestr(ccstr s) {
     return true;
 }
 
+bool Index_Stream::write_file_header(Index_File_Type type) {
+    write4(INDEX_MAGIC_NUMBER);
+    write1(type);
+}
+
 void Index_Stream::readn(void* buf, s32 n) {
     ok = f.read((char*)buf, n);
     if (ok) offset += n;
@@ -4405,10 +4604,17 @@ ccstr Index_Stream::readstr() {
     return s;
 }
 
+bool Index_Stream read_file_header(Index_File_Type wanted_type) {
+    if (findex.read4() == INDEX_DB_MAGIC_NUMBER)
+        if (findex.read1() == wanted_type)
+            return true;
+    return false;
+}
+
 int Index_Writer::init(ccstr import_path) {
     ptr0(this);
 
-    auto index_folder = path_join(GO_INDEX_PATH, import_path == NULL ? "" : import_path);
+    auto index_folder = path_join(GO_INDEX_PATH, import_path);
 
     if (!ensure_directory_exists(index_folder))
         return FILE_RESULT_FAILURE;
@@ -4420,10 +4626,8 @@ int Index_Writer::init(ccstr import_path) {
     if (res != FILE_RESULT_SUCCESS) return res;
 
     // write file headers
-    findex.write4(INDEX_DB_MAGIC_NUMBER);
-    findex.write1(IW_FILE_INDEX);
-    fdata.write4(INDEX_DB_MAGIC_NUMBER);
-    fdata.write1(IW_FILE_DATA);
+    findex.write_header(INDEX_FILE_INDEX);
+    fdata.write_header(INDEX_FILE_DATA);
 
     // initialize decls
     // TODO: we need to add a LIST_ARENA/LIST_MEM using our custom memory allocator
@@ -4454,7 +4658,7 @@ bool Index_Writer::finish_writing() {
     }
 }
 
-bool Index_Writer::write_decl(ccstr filename, ccstr name, Ast* spec) {
+bool Index_Writer::write_decl(ccstr filename, ccstr name, Ast* spec, Import_Location loctype) {
     auto get_entry_type = [&]() {
         switch (spec->type) {
             case AST_VALUE_SPEC: return IET_VALUE;
@@ -4491,6 +4695,7 @@ bool Index_Writer::write_decl(ccstr filename, ccstr name, Ast* spec) {
     Index_Entry_Hdr hdr = {
         .type = type,
         .pos = spec->start,
+        .loctype = loctype,
     };
 
     IW_ASSERT(fdata.writen(&hdr, sizeof(hdr)));
@@ -4518,11 +4723,8 @@ bool Index_Reader::init(ccstr index_path) {
         return false;
     }
 
-    assert(findex.read4() == INDEX_DB_MAGIC_NUMBER);
-    assert(findex.read1() == IW_FILE_INDEX);
-
-    assert(fdata.read4() == INDEX_DB_MAGIC_NUMBER);
-    assert(fdata.read1() == IW_FILE_DATA);
+    assert(findex.read_file_header(INDEX_FILE_INDEX));
+    assert(fdata.read_file_header(INDEX_FILE_DATA));
 
     decl_count = findex.read4();
     return true;

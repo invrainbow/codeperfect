@@ -23,37 +23,37 @@ struct List {
     ListMode mode;
     Stack* stack;    // for LIST_STACK
 
-    void init_with_stack(s32 _cap) {
-        stack = get_current_mem_stub();
-        T* _items = (T*)stack->alloc(sizeof(T) * _cap);
-        init(LIST_STACK, _cap, _items);
-    }
-
     void init(ListMode _mode, s32 _cap, T* _items = NULL) {
         ptr0(this);
 
         mode = _mode;
         switch (mode) {
-            case LIST_MALLOC:
-                cap = _cap;
-                items = (T*)our_malloc(sizeof(T) * cap);
-                if (items == NULL)
-                    throw new Oom_Error("unable to our_malloc for array");
-                mem0(items, sizeof(T) * cap);
-                break;
-            case LIST_CHUNK:
-                items = (T*)alloc_chunk_stub(_cap, &cap);
-                if (items == NULL)
-                    throw new Oom_Error("unable to alloc chunk for array");
-                break;
-            case LIST_FIXED:
-                items = _items;
-                cap = _cap;
-                break;
-            case LIST_STACK:
-                items = _items;
-                cap = _cap;
-                break;
+        case LIST_STACK:
+            cap = _cap;
+            stack = get_current_mem_stub();
+            items = (T*)stack->alloc(sizeof(T) * _cap);
+            mem0(items, sizeof(T) * cap);
+            break;
+        case LIST_MALLOC:
+            cap = _cap;
+            items = (T*)our_malloc(sizeof(T) * cap);
+            if (items == NULL)
+                throw new Oom_Error("unable to our_malloc for array");
+            mem0(items, sizeof(T) * cap);
+            break;
+        case LIST_CHUNK:
+            items = (T*)alloc_chunk_stub(_cap, &cap);
+            if (items == NULL)
+                throw new Oom_Error("unable to alloc chunk for array");
+            break;
+        case LIST_FIXED:
+            items = _items;
+            cap = _cap;
+            break;
+        case LIST_STACK:
+            items = _items;
+            cap = _cap;
+            break;
         }
     }
 
@@ -65,10 +65,9 @@ struct List {
             case LIST_CHUNK:
                 free_chunk_stub((uchar*)items, cap);
                 break;
-            case LIST_FIXED:
-                break;
-            case LIST_STACK:
-                break;
+
+            case LIST_FIXED: break; // noop
+            case LIST_STACK: break; // noop
         }
 
         items = NULL;

@@ -1,11 +1,36 @@
+1/9/21
+    plan:
+        - really hope to get find_decl_in_index working
+        - first we have to understand go imports
+        - maybe have to start building out v2 of indexer
+        - i still have stupid contracting shit to finish
+    done:
+        - created String_Set for removing duplicates
+        - mapped out a plan/process for our index to follow
+            - see huge comment at top of go.cpp
+        - early proto of Index::main_loop() with import path checking
+    todo:
+        - build out the index now
+    notes:
+        - i'm feeling optimistic, this seems entirely doable.
+        - just keep working on the IDE, improve your discipline more and more,
+          and stay on top of employment (shouldn't be hard, at most 3-4 hours a
+          day total)
+
 1/8/21
     plan:
         - finish researching and really understand/build a model of go imports
         - get find_decl_in_index() working
         - tomorrow's schedule: ide until first call, streamlit until standup, ide after
     done:
+        - messed around with dev setup some more (need to start real work)
+        - >:(
     todo:
+        - get find_decl_in_index working (precursor to that is to figure out model of imports)
     notes:
+        - i think i'll go for per-project indexes
+        - do we just aggressively autoindex goroot, gopath, and vendor all at once?
+          or index what we're importing?
 
 1/7/21
     plan:

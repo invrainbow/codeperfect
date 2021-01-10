@@ -982,6 +982,92 @@ struct Field {
     File_Ast decl;
 };
 
+enum Index_Entry_Type {
+    IET_INVALID = 0,
+    IET_VALUE,
+    IET_TYPE,
+    IET_FUNC,
+};
+
+enum Import_Location {
+    IMPLOC_GOPATH = 0,
+    IMPLOC_GOROOT = 1,
+    IMPLOC_GOMOD = 2,
+    IMPLOC_VENDOR = 3,
+};
+
+struct Index_Entry_Hdr {
+    Index_Entry_Type type;
+    cur2 pos;
+    Import_Location loctype;
+    // we need the path as well
+};
+
+struct Index_Entry_Result {
+    Index_Entry_Hdr hdr;
+    ccstr filename;
+    ccstr name;
+};
+
+enum Index_File_Type {
+    INDEX_FILE_INDEX,
+    INDEX_FILE_DATA,
+    INDEX_FILE_IMPORTS,
+};
+
+struct Index_Stream {
+    File f;
+    u32 offset;
+    ccstr path;
+    bool ok;
+
+    File_Result open(ccstr _path, u32 access, File_Open_Mode open_mode);
+    bool seek(u32 offset);
+    void cleanup();
+    bool writen(void* buf, int n);
+    bool write1(i8 x);
+    bool write2(i16 x);
+    bool write4(i32 x);
+    bool write8(i64 x);
+    bool writestr(ccstr s);
+    bool write_file_header(Index_File_Type type);
+    void readn(void* buf, s32 n);
+    char read1();
+    i16 read2();
+    i32 read4();
+    ccstr readstr();
+    bool read_file_header(Index_File_Type wanted_type);
+};
+
+struct Index_Writer {
+    Index_Stream findex;
+    Index_Stream fdata;
+    u32 decl_count_offset;
+
+    struct Decl_To_Write {
+        ccstr name;
+        u32 offset;
+    };
+
+    // u32 decl_count;
+    List<Decl_To_Write> decls;
+
+    int init(ccstr import_path);
+    void cleanup();
+    bool finish_writing();
+    bool write_decl(ccstr filename, ccstr name, Ast* spec, Import_Location loctype);
+};
+
+struct Index_Reader {
+    Index_Stream findex;
+    Index_Stream fdata;
+    u32 decl_count;
+    bool ok;
+
+    bool init(ccstr index_path);
+    bool find_decl(ccstr decl_name, Index_Entry_Result *res);
+};
+
 struct Golang {
     bool match_import_spec(Ast* import_spec, ccstr want);
     s32 count_decls_in_source(File_Ast* source, int flags);
@@ -1012,79 +1098,19 @@ struct Golang {
     void build_index();
     void read_index();
     bool delete_index();
+    void crawl_package(ccstr root, ccstr import_path, Import_Location loctype);
 };
 
-enum Index_Entry_Type {
-    IET_INVALID = 0,
-    IET_VALUE,
-    IET_TYPE,
-    IET_FUNC,
-};
+// Our index maintains and provides THE ETERNALLY CORRECT SOURCE OF TRUTH about
+// the following questions (for now):
+//
+// 1) Our project's dependencies -- WHAT ARE THEY
+// 2) Given an import path -- WHERE IS THE PACKAGE
+// 3) Given a decl -- WHERE IS IT DECLARED (down to file:pos)
+// 
+// See the top of go.cpp.
+struct Index {
+    void update_with_package(ccstr path, ccstr root, ccstr import_path, Import_Location loctype);
 
-struct Index_Entry_Hdr {
-    Index_Entry_Type type;
-    cur2 pos;
-};
-
-struct Index_Entry_Result {
-    Index_Entry_Hdr hdr;
-    ccstr filename;
-    ccstr name;
-};
-
-enum {
-    IW_FILE_INDEX,
-    IW_FILE_DATA,
-};
-
-struct Index_Stream {
-    File f;
-    u32 offset;
-    ccstr path;
-    bool ok;
-
-    File_Result open(ccstr _path, u32 access, File_Open_Mode open_mode);
-    bool seek(u32 offset);
-    void cleanup();
-    bool writen(void* buf, int n);
-    bool write1(i8 x);
-    bool write2(i16 x);
-    bool write4(i32 x);
-    bool write8(i64 x);
-    bool writestr(ccstr s);
-    void readn(void* buf, s32 n);
-    char read1();
-    i16 read2();
-    i32 read4();
-
-    ccstr readstr();
-};
-
-struct Index_Writer {
-    Index_Stream findex;
-    Index_Stream fdata;
-    u32 decl_count_offset;
-
-    struct Decl_To_Write {
-        ccstr name;
-        u32 offset;
-    };
-
-    // u32 decl_count;
-    List<Decl_To_Write> decls;
-
-    int init(ccstr import_path);
-    void cleanup();
-    bool finish_writing();
-    bool write_decl(ccstr filename, ccstr name, Ast* spec);
-};
-
-struct Index_Reader {
-    Index_Stream findex;
-    Index_Stream fdata;
-    u32 decl_count;
-    bool ok;
-
-    bool init(ccstr index_path);
-    bool find_decl(ccstr decl_name, Index_Entry_Result *res);
+    void main_loop();
 };

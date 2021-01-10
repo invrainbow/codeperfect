@@ -356,8 +356,6 @@ void* our_malloc(size_t size);
 void our_free(void* p);
 bool str_ends_with(ccstr a, ccstr b);
 
-struct Stack;
-
 struct Oom_Error : std::runtime_error {
   Oom_Error() : std::runtime_error("out of memory") {}
   Oom_Error(ccstr s) : std::runtime_error(s) {}
