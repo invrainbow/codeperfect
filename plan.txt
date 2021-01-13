@@ -1,3 +1,57 @@
+1/13/21
+    plan:
+        - write this tomorrow
+    done:
+    todo:
+    notes:
+
+1/12/21
+    plan:
+        - n/a
+    done:
+        - finished streamlit and overview
+        - worked a little on IDE, not enough
+        - got imports sync working
+    todo:
+        - the rest of our index
+    notes:
+        - i am hungry
+
+1/11/21
+    plan:
+        - 7am - wake up, work on IDE
+        - 9am - call with overview, work on his shit
+        - 11am - streamlit meetings, finish streamlit stuff
+        - 3pm - work on IDE until sleep
+        - 6pm - exercise, eat
+        - goal: get indexing system working, have it correctly gather import
+          paths and build index. already have most of the pieces, just write the
+          necessary code.
+    done:
+        - woke up late, didn't get up at 7am to work on IDE
+        - stayed on top of streamlit and overview
+        - did not work on IDE.
+    todo:
+        - work on IDE!
+    notes:
+        - work on IDE!
+
+1/10/21
+    plan:
+        - get indexing system working, have it correctly gather import paths
+          and build index.
+        - stretch: maybe start on rebuilding index when import paths, files, or
+          dependencies change
+        - do IDE work in the morning, freelance in the afteronon, then IDE till
+          sleep.
+    done:
+        - i didn't really work on IDE today. filled out main_loop() a bit more,
+        not much.
+    todo:
+        - same as start of day really
+    notes:
+        - start getting into strict schedule tomorrow
+
 1/9/21
     plan:
         - really hope to get find_decl_in_index working
@@ -16,6 +70,8 @@
         - just keep working on the IDE, improve your discipline more and more,
           and stay on top of employment (shouldn't be hard, at most 3-4 hours a
           day total)
+        - before thought find_decl_in_index was a few lines away, now know it's
+          going to require completion of our `Index` class.
 
 1/8/21
     plan:

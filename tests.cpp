@@ -81,15 +81,8 @@ void test_arena() {
 
 void test_index() {
 #if 1
-    Golang go;
-
-    if (!go.delete_index()) {
-        error("well we couldn't delete the index lmao");
-        return;
-    }
-
-    go.build_index();
-    go.read_index();
+    Go_Index index;
+    index.main_loop();
 #else
     world.build_index_arena.cleanup();
     world.build_index_arena.init();

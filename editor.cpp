@@ -454,7 +454,7 @@ void Editor::trigger_autocomplete(bool triggered_by_dot) {
     SCOPED_MEM(&world.parser_mem);
     SCOPED_FRAME();
 
-    Golang go;
+    Go_Index go;
     Autocomplete ac;
 
     world.autocomplete_mem.sp = 0;
@@ -585,7 +585,7 @@ void Editor::trigger_parameter_hint(bool triggered_by_paren) {
     SCOPED_MEM(&world.parser_mem);
     SCOPED_FRAME();
 
-    Golang go;
+    Go_Index go;
     auto hint = go.parameter_hint(filepath, cursor, triggered_by_paren);
     if (hint == NULL) return;
 

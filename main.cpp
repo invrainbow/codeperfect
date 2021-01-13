@@ -1014,7 +1014,7 @@ int main() {
                                         SCOPED_MEM(&world.parser_mem);
                                         SCOPED_FRAME();
 
-                                        Golang go;
+                                        Go_Index go;
                                         auto result = go.jump_to_definition(editor->filepath, new_cur2(editor->cur_to_offset(editor->cur), 0));
                                         if (result == NULL) {
                                             error("unable to jump to definition");

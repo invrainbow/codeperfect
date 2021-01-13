@@ -50,10 +50,6 @@ struct List {
             items = _items;
             cap = _cap;
             break;
-        case LIST_STACK:
-            items = _items;
-            cap = _cap;
-            break;
         }
     }
 

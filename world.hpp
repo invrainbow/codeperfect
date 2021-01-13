@@ -411,6 +411,13 @@ List<T>* alloc_list(s32 len) {
     return ret;
 }
 
+template <typename T>
+List<T>* alloc_list() {
+    auto ret = alloc_object(List<T>);
+    ret->init(LIST_STACK, 32);
+    return ret;
+}
+
 #define TAB_SIZE 2 // TODO
 
 struct Arena_Alloc_String {

@@ -1,0 +1,32 @@
+Ideas about what would make a good IDE
+
+   Log window. A kind of log window showing what's happening behind the scenes, but not
+autistic developer debug notes -- stuff that actually allows the user to build
+a model of how their tool is working and a closer relationship with the IDE.
+for example, "detected import, now indexing ___"
+
+    Context-aware autocomplete, including, if you're in a toplevel, all you can
+write is func, const, var, and type.
+
+    Our core advantage by intent is: work with a tiny team (right now just me) to
+reduce/eliminate overhead; spend ALL of our time working on things that
+actually matter, instead of stupid "serious-sounding" stuff; and program in a
+non-stupid way (the jblow way) to be able to ship features like crazy (it's slow at
+first, but after the 20kloc mark we're going to enter warp speed).
+    So it is worth thinking hard about what this set of "right things" is.
+
+    One of these days I really need to create a string class.
+
+    I wish C++ had a more obvious syntax that you're declaring a lambda/closure
+inside a function. Right now you have to read all the way to the [&] to
+realize.
+
+    Philosphically, how much do we want users to be involved in/know about the
+internal workings of Raven?  With a tool like an IDE, having a mental map of
+the inner workings of the tool is part of using the tool effectively.
+
+    WHAT IS A GOOD NAME?
+
+    We need a replacement for uthash that lets us handle memory allocation.
+UPDATE: uthash supports overriding uthash_malloc with custom allocator.
+

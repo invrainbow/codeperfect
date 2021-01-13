@@ -3,9 +3,18 @@
 package sync
 
 import (
-    "fmt"
+	"fmt"
+	"github.com/google/go-cmp/cmp"
+	"golang.org/x/text/language"
 )
 
 func Download() {
-    fmt.Println("this is where we download stuff")
+	fmt.Println("this is where we download stuff")
+
+	// print out language for no reason
+	lang := language.English
+	fmt.Printf("language: %v", lang)
+
+	// print out a useless diff
+	fmt.Println(cmp.Diff("Hello World", "Hello Go"))
 }

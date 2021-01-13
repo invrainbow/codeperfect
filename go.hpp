@@ -1068,7 +1068,16 @@ struct Index_Reader {
     bool find_decl(ccstr decl_name, Index_Entry_Result *res);
 };
 
-struct Golang {
+// Our index maintains and provides THE ETERNALLY CORRECT SOURCE OF TRUTH about
+// the following questions (for now):
+//
+// 1) Our project's dependencies -- WHAT ARE THEY
+// 2) Given an import path -- WHERE IS THE PACKAGE
+// 3) Given a decl -- WHERE IS IT DECLARED (down to file:pos)
+// 
+// See the top of go.cpp.
+
+struct Go_Index {
     bool match_import_spec(Ast* import_spec, ccstr want);
     s32 count_decls_in_source(File_Ast* source, int flags);
     List<Named_Decl>* list_decls_in_source(File_Ast* source, int flags, List<Named_Decl>* out = NULL);
@@ -1090,27 +1099,15 @@ struct Golang {
     int list_methods_in_base_type(File_Ast* ast, List<Field>* ret);
     List<Field>* list_fields_and_methods_in_type(File_Ast* base_type, File_Ast* interim_type);
     ccstr get_id_import_path(File_Ast* ast);
-
     Jump_To_Definition_Result* jump_to_definition(ccstr filepath, cur2 pos);
     bool autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period, Autocomplete* out);
     Parameter_Hint* parameter_hint(ccstr filepath, cur2 pos, bool triggered_by_paren);
 
-    void build_index();
     void read_index();
     bool delete_index();
     void crawl_package(ccstr root, ccstr import_path, Import_Location loctype);
-};
 
-// Our index maintains and provides THE ETERNALLY CORRECT SOURCE OF TRUTH about
-// the following questions (for now):
-//
-// 1) Our project's dependencies -- WHAT ARE THEY
-// 2) Given an import path -- WHERE IS THE PACKAGE
-// 3) Given a decl -- WHERE IS IT DECLARED (down to file:pos)
-// 
-// See the top of go.cpp.
-struct Index {
     void update_with_package(ccstr path, ccstr root, ccstr import_path, Import_Location loctype);
-
     void main_loop();
 };
+
