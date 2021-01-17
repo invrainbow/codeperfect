@@ -1,9 +1,43 @@
-1/13/21
+1/16/21
     plan:
-        - write this tomorrow
+        - day 1 of implementing new routine, run through it and work on ide
     done:
+        - added hashing of packages, now ready to start implementing ensure_index_correct.
+    todo:
+        - implement ensure_index_correct, start adding hooks to tell when index has changed.
+
+1/15/21
+    plan:
+        - life gets back on track, take advantage of it.
+        - get the godforsaken index working
+    done:
+        - made life plan for the next year, logistics shit
+        - didn't get to work on ide
     todo:
     notes:
+
+1/14/21
+    plan:
+        - didn't make one
+    done:
+        - streamlit, overview
+    todo:
+        - get index working
+    notes:
+        - tomorrow life gets back on track
+
+1/13/21
+    plan:
+        - don't go on the internet or masturbate or waste time. approved
+          activities are work, ide, read, work out, strategy for future.
+    done:
+        - ended up spending all day on streamlit and overview
+    todo:
+        - tomorrow i get paid, can get my life back on track, go to office
+          again
+    notes:
+        - cut back on internet usage, start making massive progress on ide
+          again
 
 1/12/21
     plan:
@@ -16,6 +50,9 @@
         - the rest of our index
     notes:
         - i am hungry
+        - i've already blocked common timewasting websites, stick it through
+          and stay off the internet for a month, don't get fomo (the real fomo
+          is realizing you could be retired by now)
 
 1/11/21
     plan:

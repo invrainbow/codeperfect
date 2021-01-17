@@ -426,4 +426,19 @@ void *xplat_binary_search(const void *key, void *list, s32 num, s32 size, compar
     return bsearch_s(key, list, num, size, _cmp_trampoline, &cmp);
 }
 
+#define GET_FILE_SIZE_ERROR ((u64)-1)
+
+u64 _get_file_size(HANDLE f) {
+    LARGE_INTEGER size;
+    if (!GetFileSizeEx(f, &size)) return GET_FILE_SIZE_ERROR;
+    return (u64)size.QuadPart;
+}
+
+u64 get_file_size(ccstr path) {
+    HANDLE f = CreateFileA(path, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (f == INVALID_HANDLE_VALUE) return GET_FILE_SIZE_ERROR;
+    defer { CloseHandle(f); };
+    return _get_file_size(f);
+}
+
 #endif

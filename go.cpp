@@ -47,6 +47,9 @@ out the index for something even faster.
 #include "os.hpp"
 #include "set.hpp"
 
+// due to casey being casey, this can only be included once in the whole project
+#include "meow_hash_x64_aesni.h"
+
 // PRELEASE: dynamically determine this
 static const char GOROOT[] = "c:\\go\\src";
 static const char GOPATH[] = "c:\\users\\brandon\\go\\src";
@@ -4312,13 +4315,13 @@ bool are_sets_equal(String_Set *a, String_Set *b) {
     return true;
 }
 
-void get_workspace_imports(ccstr path, List<ccstr> *out, String_Set *seen) {
+void get_package_imports(ccstr path, List<ccstr> *out, String_Set *seen) {
     list_directory(path, [&](Dir_Entry* ent) {
         auto new_path = path_join(path, ent->name);
 
         if (ent->type == DIRENT_DIR) {
             if (!streq(ent->name, "vendor"))
-                get_workspace_imports(new_path, out, seen);
+                get_package_imports(new_path, out, seen);
             return;
         }
 
@@ -4352,16 +4355,122 @@ void get_workspace_imports(ccstr path, List<ccstr> *out, String_Set *seen) {
     });
 }
 
-List<ccstr> *get_workspace_imports(ccstr path) {
+List<ccstr> *get_package_imports(ccstr path) {
     auto ret = alloc_list<ccstr>();
     String_Set set;
     set.init();
     defer { set.cleanup() ;};
 
-    get_workspace_imports(path, ret, &set);
+    get_package_imports(path, ret, &set);
     return ret;
 }
 
+/*
+INDEX FOLDER:
+    - imports
+    - folders/mapped/one/to/one/with/libraries
+        - index
+        - data
+        - hash
+*/
+
+List<ccstr> *read_imports_from_index(ccstr imports_path) {
+    auto f = open_and_validate_imports_db(imports_path);
+    if (f == NULL) return NULL;
+    defer { f->cleanup(); };
+
+    if (!f->read_file_header(INDEX_FILE_IMPORTS)) return NULL;
+
+    auto num_imports = f->read4();
+    auto ret = alloc_list<ccstr>();
+    for (u32 i = 0; i < num_imports; i++)
+        ret->append(f->readstr());
+    return ret;
+}
+
+bool Go_Index::ensure_imports_list_correct(Eil_Result *res) {
+    Frame frame;
+
+    auto _handle_error = [&](ccstr message) { 
+        handle_error(message);
+        frame.restore();
+    };
+
+    auto imports_path = path_join(get_index_path(), "imports");
+    auto old_imports = read_imports_from_index(imports_path); // can be NULL, just means first time running
+    auto new_imports = get_package_imports(world.wksp.path);
+
+    if (new_imports == NULL)
+        return _handle_error("Unable to get workspace imports."), false;
+
+    {
+        // write out new imports
+        Index_Stream fw;
+        auto res = fw.open(imports_path, FILE_MODE_WRITE, FILE_CREATE_NEW);
+        if (res != FILE_RESULT_SUCCESS)
+            return _handle_error("Unable to open imports for writing."), false;
+        defer { fw.cleanup(); };
+
+        fw.write_file_header(INDEX_FILE_IMPORTS);
+        fw.write4(new_imports->len);
+        For (*new_imports) fw.writestr(it);
+    }
+
+    // compare old imports to new
+
+    String_Set current_imports_set;
+    current_imports_set.init();
+    if (old_imports != NULL)
+        For (*old_imports) current_imports_set.add(it);
+
+    String_Set new_imports_set;
+    new_imports_set.init();
+    For (*new_imports) new_imports_set.add(it);
+
+    auto removed_imports = alloc_list<ccstr>();
+    if (old_imports != NULL)
+        For (*old_imports)
+            if (!new_imports_set.has(it))
+                removed_imports->append(it);
+
+    auto added_imports = alloc_list<ccstr>();
+    For (*new_imports)
+        if (!current_imports_set.has(it))
+            added_imports->append(it);
+
+    res->old_imports = old_imports;
+    res->new_imports = new_imports;
+    res->added_imports = added_imports;
+    res->removed_imports = removed_imports;
+    return true;
+}
+
+void Go_Index::handle_error(ccstr err) {
+    // TODO: What's our error handling strategy?
+    error("%s", err);
+}
+
+u64 Go_Index::hash_package(ccstr path) {
+    u64 ret = 0;
+    bool error = false;
+
+    list_directory(path, [&](Dir_Entry* ent) {
+        if (ent->type == DIRENT_DIR) return;
+        if (!str_ends_with(ent->name, ".go")) return;
+        if (str_ends_with(ent->name, "_test.go")) return;
+
+        auto f = read_entire_file(path_join(path, ent->name));
+        if (f == NULL) {
+            error = true;
+            return;
+        }
+        defer { free_entire_file(f); };
+        ret ^= MeowU64From(MeowHash(MeowDefaultSeed, f->len, f->data), 0);
+        ret ^= MeowU64From(MeowHash(MeowDefaultSeed, strlen(ent->name), ent->name), 0);
+    });
+
+    return error ? 0 : ret;
+}
 
 void Go_Index::main_loop() {
     // Thoughts. We are not a version/dependency manager. That is go.mod's job.
@@ -4370,104 +4479,32 @@ void Go_Index::main_loop() {
     // about versions, but our source of truth is mainly concerned with just
     // GIVE ME THE SET OF ALL INCLUDED IMPORT PATHS.
 
-    auto index_path = get_index_path();
-
     {
         SCOPED_FRAME();
-        ensure_directory_exists(index_path);
+        ensure_directory_exists(get_index_path());
     }
-
-    auto handle_error = [&](ccstr err) {
-        error("%s", err);
-        // TODO: What's our error handling strategy?
-    };
 
     while (true) {
-        List<ccstr> *current_imports = NULL;
-
-        {
-            auto f = open_and_validate_imports_db(path_join(index_path, "imports.db"));
-            if (f != NULL) {
-                defer { f->cleanup(); };
-                auto num_imports = f->read4();
-
-                current_imports = alloc_list<ccstr>();
-                for (u32 i = 0; i < num_imports; i++)
-                    current_imports->append(f->readstr());
-            }
+        Eil_Result res;
+        if (!ensure_imports_list_correct(&res)) {
+            break; // ???
         }
-
-        auto new_imports = get_workspace_imports(world.wksp.path);
-        if (new_imports == NULL) {
-            handle_error("Unable to get workspace imports.");
-            return;
-        }
-
-        {
-            Index_Stream fw;
-            auto res = fw.open(path_join(index_path, "imports.db"), FILE_MODE_WRITE, FILE_CREATE_NEW);
-            if (res == FILE_RESULT_SUCCESS) {
-                handle_error("Unable to open imports.db for writing.");
-                return;
-            }
-            defer { fw.cleanup(); };
-
-            fw.write_file_header(INDEX_FILE_IMPORTS);
-            fw.write4(new_imports->len);
-            For (*new_imports) fw.writestr(it);
-        }
-
-        {
-            SCOPED_FRAME();
-
-            String_Set current_imports_set;
-            current_imports_set.init();
-            if (current_imports != NULL)
-                For (*current_imports)
-                    current_imports_set.add(it);
-
-            String_Set new_imports_set;
-            new_imports_set.init();
-            For (*new_imports) new_imports_set.add(it);
-
-            auto added_imports = alloc_list<ccstr>();
-            auto removed_imports = alloc_list<ccstr>();
-
-            if (current_imports != NULL)
-                For (*current_imports)
-                    if (!new_imports_set.has(it))
-                        removed_imports->append(it);
-
-            For (*new_imports)
-                if (!current_imports_set.has(it))
-                    added_imports->append(it);
-
-            print("Removed imports:");
-            For (*removed_imports)
-                print(" - %s", it);
-
-            print("\nAdded imports:");
-            For (*added_imports) 
-                print(" - %s", it);
-        }
-
-        return; // we're just testing
-
-        // TODO: do something with imports_db_changd (e.g. stop checking it until we get notif)
 
         // OK, WE HAVE IMPORTS NOW!!!
-        // now we need to check that they're all indexed
 
-        // check that all import paths are indexed with correct, most recent info
-        // ----------------------------------------------------------------------
-
-        For (*new_imports) {
-            // TODO: update index of `it`
+        For (*res.new_imports) {
+            // `it` is an import path -- resolve it and crawl it.
+            // fuck me, so what if the import resolution list is: a, b, c, d (a being highest)
+            // and first time resolving we get b
+            // and then a package gets created at a, how will that change get reflected?
+            // should the hash also reflect resolution order?
         }
-
-        // wait for notifications from various places that we should re-fetch info.
-        // ------------------------------------------------------------------------
     }
+
+
+    // now we need to check that they're all indexed
+    // check that all import paths are indexed with correct, most recent info
+    // wait for notifications from various places that we should re-fetch info.
 }
 
 void Go_Index::crawl_package(ccstr root, ccstr import_path, Import_Location loctype) {
@@ -4579,7 +4616,7 @@ File_Result Index_Stream::open(ccstr _path, u32 access, File_Open_Mode open_mode
     offset = 0;
     ok = true;
 
-    // TODO: CREATE_NEW? what's the policy around if index.db already exists?
+    // TODO: CREATE_NEW? what's the policy around if index already exists?
     return f.init(path, access, open_mode);
 }
 
@@ -4672,15 +4709,15 @@ bool Index_Stream::read_file_header(Index_File_Type wanted_type) {
 int Index_Writer::init(ccstr import_path) {
     ptr0(this);
 
-    auto index_path = get_index_path();
+    index_path = path_join(get_index_path(), import_path);
 
     if (!ensure_directory_exists(index_path))
         return FILE_RESULT_FAILURE;
 
-    auto res = findex.open(path_join(index_path, "index.db"), FILE_MODE_WRITE, FILE_CREATE_NEW);
+    auto res = findex.open(path_join(index_path, "index"), FILE_MODE_WRITE, FILE_CREATE_NEW);
     if (res != FILE_RESULT_SUCCESS) return res;
 
-    res = fdata.open(path_join(index_path, "data.db"), FILE_MODE_WRITE, FILE_CREATE_NEW);
+    res = fdata.open(path_join(index_path, "data"), FILE_MODE_WRITE, FILE_CREATE_NEW);
     if (res != FILE_RESULT_SUCCESS) return res;
 
     // write file headers
@@ -4703,6 +4740,18 @@ void Index_Writer::cleanup() {
 }
 
 #define IW_ASSERT(x) if (!(x)) return false
+
+bool Index_Writer::write_hash(u64 hash) {
+    Index_Stream f;
+    if (f.open(path_join(index_path, "hash"), FILE_MODE_WRITE, FILE_CREATE_NEW) != FILE_RESULT_SUCCESS)
+        return false;
+    defer { f.cleanup(); };
+
+    if (!f.write_file_header(INDEX_FILE_HASH)) return false;
+    if (!f.writen(&hash, sizeof(hash))) return false;
+
+    return true;
+}
 
 bool Index_Writer::finish_writing() {
     IW_ASSERT(findex.write4(decls.len));
@@ -4765,19 +4814,34 @@ bool Index_Writer::write_decl(ccstr filename, ccstr name, Ast* spec, Import_Loca
 
 #undef IW_ASSERT
 
-bool Index_Reader::init(ccstr index_path) {
+u64 Index_Reader::read_hash() {
+    Index_Stream f;
+
+    if (f.open(path_join(index_path, "hash"), FILE_MODE_READ, FILE_OPEN_EXISTING) != FILE_RESULT_SUCCESS)
+        return 0;
+
+    if (!f.read_file_header(INDEX_FILE_HASH)) return 0;
+
+    u64 ret = 0;
+    if (f.readn(&ret, sizeof(ret)), !f.ok) return 0;
+    return ret;
+}
+
+bool Index_Reader::init(ccstr _index_path) {
+    index_path = _index_path;
+
     decl_count = 0;
 
-    auto indexfile_path = path_join(index_path, "index.db");
-    auto datafile_path = path_join(index_path, "data.db");
+    auto indexfile_path = path_join(index_path, "index");
+    auto datafile_path = path_join(index_path, "data");
 
     if (findex.open(indexfile_path, FILE_MODE_READ, FILE_OPEN_EXISTING) != FILE_RESULT_SUCCESS) {
-        print("couldn't open index.db");
+        print("couldn't open index");
         return false;
     }
 
     if (fdata.open(datafile_path, FILE_MODE_READ, FILE_OPEN_EXISTING) != FILE_RESULT_SUCCESS) {
-        print("couldn't open data.db");
+        print("couldn't open data");
         return false;
     }
 

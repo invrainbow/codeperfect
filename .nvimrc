@@ -1,2 +1,2 @@
-set makeprg=build.bat
+let &makeprg = 'build.bat'
 nnoremap <Leader>b :Make<CR>

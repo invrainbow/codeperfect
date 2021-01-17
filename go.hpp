@@ -1013,6 +1013,7 @@ enum Index_File_Type {
     INDEX_FILE_INDEX,
     INDEX_FILE_DATA,
     INDEX_FILE_IMPORTS,
+    INDEX_FILE_HASH,
 };
 
 struct Index_Stream {
@@ -1040,6 +1041,7 @@ struct Index_Stream {
 };
 
 struct Index_Writer {
+    ccstr index_path;
     Index_Stream findex;
     Index_Stream fdata;
     u32 decl_count_offset;
@@ -1052,19 +1054,23 @@ struct Index_Writer {
     // u32 decl_count;
     List<Decl_To_Write> decls;
 
+    void write_package_hash();
     int init(ccstr import_path);
     void cleanup();
     bool finish_writing();
     bool write_decl(ccstr filename, ccstr name, Ast* spec, Import_Location loctype);
+    bool write_hash(u64 hash);
 };
 
 struct Index_Reader {
+    ccstr index_path;
     Index_Stream findex;
     Index_Stream fdata;
     u32 decl_count;
     bool ok;
 
-    bool init(ccstr index_path);
+    u64 read_hash();
+    bool init(ccstr _index_path);
     bool find_decl(ccstr decl_name, Index_Entry_Result *res);
 };
 
@@ -1076,6 +1082,13 @@ struct Index_Reader {
 // 3) Given a decl -- WHERE IS IT DECLARED (down to file:pos)
 // 
 // See the top of go.cpp.
+
+struct Eil_Result {
+    List<ccstr> *old_imports;
+    List<ccstr> *new_imports;
+    List<ccstr> *added_imports;
+    List<ccstr> *removed_imports;
+};
 
 struct Go_Index {
     bool match_import_spec(Ast* import_spec, ccstr want);
@@ -1109,5 +1122,8 @@ struct Go_Index {
 
     void update_with_package(ccstr path, ccstr root, ccstr import_path, Import_Location loctype);
     void main_loop();
+    void handle_error(ccstr err);
+    bool ensure_imports_list_correct(Eil_Result *res);
+    u64 hash_package(ccstr path);
 };
 

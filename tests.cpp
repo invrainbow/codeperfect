@@ -91,12 +91,19 @@ void test_index() {
 #endif
 }
 
-bool run_tests() {
-    // return test_arena(), true;
-    return test_index(), true;
-    // return test_debugger(), true;
-    // return test_parameter_hint(), true;
-    // return test_process(), true;
+void test_hash() {
+    Go_Index index;
+    auto hash = index.hash_package("W:\\whetstone\\vendor\\github.com\\google\\go-cmp\\cmp");
+    print("hash is %llx", hash);
+}
 
+bool run_tests() {
+#if 1
+    // write a test that calls write_hash and uses read_hash to read it back out
+    test_hash();
+    system("pause");
+    return true;
+#else
     return false;
+#endif
 }

@@ -23,3 +23,29 @@ cstr normalize_path_separator(cstr path) {
             path[i] = PATH_SEP;
     return path;
 }
+
+Entire_File *read_entire_file(ccstr path) {
+    auto f = fopen(path, "rb");
+    if (f == NULL) return NULL;
+
+    fseek(f, 0, SEEK_END);
+    auto len = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    auto data = malloc(len);
+    if (data == NULL) return NULL;
+
+    if (fread(data, len, 1, f) != 1) {
+        free(data);
+        return NULL;
+    }
+
+    auto ret = alloc_object(Entire_File);
+    ret->data = data;
+    ret->len = len;
+    return ret;
+}
+
+void free_entire_file(Entire_File *file) {
+    free(file->data);
+}
