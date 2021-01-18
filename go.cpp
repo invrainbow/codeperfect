@@ -56,7 +56,7 @@ static const char GOPATH[] = "c:\\users\\brandon\\go\\src";
 
 const u32 INDEX_MAGIC_NUMBER = 0x49fa98;
 
-#define get_index_path() path_join(world.wksp.path, ".ide/index")
+#define get_index_path() path_join(path_join(world.wksp.path, ".ide"), "index")
 
 ccstr format_pos(cur2 pos) {
     if (pos.y == -1)
@@ -65,6 +65,97 @@ ccstr format_pos(cur2 pos) {
 }
 
 typedef fn<bool(ccstr, Import_Location)> resolve_package_cb;
+
+// FIXME: will fuck up if we list directory first time, dir changes,
+// and then we list second time. fix this somehow
+List<ccstr>* list_source_files(ccstr dirpath) {
+    auto ret = alloc_list<ccstr>();
+
+    auto save_gofiles = [&](Dir_Entry *ent) {
+        if (ent->type == DIRENT_DIR) return;
+        if (!str_ends_with(ent->name, ".go")) return;
+
+        // TODO: keep this?
+        if (str_ends_with(ent->name, "_test.go")) return;
+
+        ret->append(our_strcpy(ent->name));
+    };
+
+    return list_directory(dirpath, save_gofiles) ? ret : NULL;
+}
+
+ccstr get_package_name(ccstr path) {
+    if (check_path(path) != CPR_DIRECTORY) return NULL;
+
+    auto files = list_source_files(path);
+    if (files == NULL) return NULL;
+
+    For (*files) {
+        auto filepath = path_join(path, it);
+        auto pkgname = get_package_name_from_file(filepath);
+        if (pkgname != NULL)
+            return pkgname;
+    }
+
+    return NULL;
+}
+
+Resolved_Import* resolve_import(ccstr import_path) {
+    if (world.wksp.gomod_exists) {
+        auto& info = world.wksp.gomod_info;
+
+        // TODO: should probably have something like "imports_equal" instead of streq
+        if (streq(import_path, info.module_path)) {
+            auto package_name = get_package_name(world.wksp.path);
+            if (package_name != NULL) {
+                auto ret = alloc_object(Resolved_Import);
+                ret->path = world.wksp.path;
+                ret->package_name = package_name;
+                ret->location_type = IMPLOC_GOMOD;
+                return ret;
+            }
+        }
+
+        For (info.directives) {
+            switch (it.type) {
+            case GOMOD_DIRECTIVE_REQUIRE:
+                // TODO: check
+                break;
+            case GOMOD_DIRECTIVE_REPLACE:
+                // TODO: check
+                break;
+            }
+        }
+
+        // so at this point, we have a go.mod file but no folder path that can
+        // be resolved from it. what do we do? shouldn't we check if it's in
+        // vendor etc?
+        return NULL;
+    }
+
+    auto paths = alloc_list<ccstr>();
+    paths->append(path_join(path_join(world.wksp.path, "vendor"), import_path));
+
+    paths->append(path_join(GOPATH, import_path));
+    paths->append(path_join(GOROOT, import_path));
+
+    auto location_types = alloc_list<Import_Location>();
+    location_types->append(IMPLOC_VENDOR);
+    location_types->append(IMPLOC_GOPATH);
+    location_types->append(IMPLOC_GOROOT);
+
+    for (u32 i = 0; i < paths->len; i++) {
+        auto package_name = get_package_name(paths->at(i));
+        if (package_name != NULL) {
+            auto ret = alloc_object(Resolved_Import);
+            ret->path = paths->at(i);
+            ret->location_type = location_types->at(i);
+            ret->package_name = package_name;
+        }
+    }
+
+    return NULL;
+}
 
 ccstr resolve_import_path(ccstr import_path, resolve_package_cb f) {
     {
@@ -79,7 +170,7 @@ ccstr resolve_import_path(ccstr import_path, resolve_package_cb f) {
 
         check(IMPLOC_VENDOR, path_join(path_join(world.wksp.path, "vendor"), import_path));
 
-        // TODO: if (world.wksp.go_mod_exists) ...
+        // TODO: if (world.wksp.gomod_exists) ...
         // check(IMPLOC_GOMOD, ...);
 
         check(IMPLOC_GOPATH, path_join(GOPATH, import_path));
@@ -2495,60 +2586,6 @@ cur2 Parser::lex() {
 #undef expect
 #undef parser_error
 
-// FIXME: will fuck up if we list directory first time, dir changes,
-// and then we list second time. fix this somehow
-List<ccstr>* list_source_files(ccstr dirpath) {
-    u32 num_files = 0;
-
-    auto is_gofile = [&](Dir_Entry *ent) -> bool {
-        if (ent->type == DIRENT_DIR) return true;
-        if (!str_ends_with(ent->name, ".go")) return true;
-        if (str_ends_with(ent->name, "_test.go")) return true;
-        return false;
-    };
-
-    auto count_gofiles = [&](Dir_Entry *ent) {
-        if (is_gofile(ent)) num_files++;
-    };
-
-    if (!list_directory(dirpath, count_gofiles)) return NULL;
-
-    auto ret = alloc_list<ccstr>(num_files);
-
-    auto save_gofiles = [&](Dir_Entry *ent) {
-        if (is_gofile(ent)) ret->append(our_strcpy(ent->name));
-    };
-
-    if (!list_directory(dirpath, save_gofiles)) return NULL;
-
-    return ret;
-}
-
-Resolved_Import* resolve_import(ccstr import_path) {
-    List<ccstr>* files = NULL;
-    Resolved_Import* ret = NULL;
-
-    auto path = resolve_import_path(import_path, [&](ccstr path, Import_Location loctype) {
-        auto files = list_source_files(path);
-        if (files != NULL) {
-            For (*files) {
-                auto filepath = path_join(path, it);
-                auto pkgname = get_package_name_from_file(filepath);
-                if (pkgname != NULL) {
-                    ret = alloc_object(Resolved_Import);
-                    ret->package_name = pkgname;
-                    return true;
-                }
-            }
-        }
-        return false;
-    });
-
-    if (ret != NULL) ret->resolved_path = path;
-
-    return ret;
-}
-
 bool Go_Index::match_import_spec(Ast* import_spec, ccstr want) {
     auto name = import_spec->import_spec.package_name;
     if (name != NULL)
@@ -2749,6 +2786,9 @@ File_Ast* Go_Index::find_decl_in_package(ccstr path, ccstr desired_decl_name, cc
             return potential_ret;
     }
 
+    // this is stupid, we should probably split this out into find_decl_in_index
+    if (path == NULL) return NULL;
+
     // TODO: contain our memory growth with SCOPED_FRAME
     auto files = list_source_files(path);
     if (files == NULL) return NULL;
@@ -2839,7 +2879,7 @@ File_Ast* Go_Index::get_base_type(File_Ast* type) {
 
                     // FIXME: it just makes no sense what i'm doing here
                     // i think i was originally intending to use sel.x->id.lit to LOOK UP the package path, and append that to GOPATH
-                    // but now we should just call resolve_import_path
+                    // but now we should just call resolve_import
                     //
                     // Also, find_decl_in_package should be passed an import path;
                     // I just don't know what the fuck this code even does right now
@@ -3137,7 +3177,7 @@ Infer_Res* Go_Index::infer_type(File_Ast* expr, bool resolve) {
 
                             auto sel = selexpr.sel->id.lit;
 
-                            decl = find_decl_in_package(ri->resolved_path, sel, path);
+                            decl = find_decl_in_package(ri->path, sel, path);
                             if (decl == NULL) break;
 
                             return get_type_from_decl(decl, sel);
@@ -3277,22 +3317,23 @@ Jump_To_Definition_Result* Go_Index::jump_to_definition(ccstr filepath, cur2 pos
                             return true;
                         };
 
-                        auto try_path = [&](ccstr pkgpath, Import_Location loctype) -> bool {
-                            return try_decl(find_decl_in_package(pkgpath, sel->id.lit, NULL));
-                        };
-
                         auto try_to_find_package = [&]() -> bool {
-                            auto spec = find_decl_of_id(make_file_ast(x, filepath));
+                            auto spec = x->id.decl;
                             if (spec == NULL) return false;
+                            if (spec->type != AST_IMPORT_SPEC) return false;
 
-                            auto ast = spec->ast;
-                            if (ast->type != AST_IMPORT_SPEC) return false;
+                            // first try to find the decl using our index
+                            auto import_path = spec->import_spec.path->basic_lit.val.string_val;
+                            if (try_decl(find_decl_in_package(NULL, sel->id.lit, import_path)))
+                                return true;
 
-                            auto import_path = ast->import_spec.path->basic_lit.val.string_val;
-                            auto decl = find_decl_in_package(NULL, sel->id.lit, import_path);
-                            if (try_decl(decl)) return true;
+                            // try to just find it by parsing package
+                            auto res = resolve_import(import_path);
+                            if (res != NULL)
+                                if (try_decl(find_decl_in_package(res->path, sel->id.lit, NULL)))
+                                    return true;
 
-                            return (resolve_import_path(import_path, try_path) != NULL);
+                            return false;
                         };
 
                         if (try_to_find_package())
@@ -3409,7 +3450,28 @@ bool Go_Index::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period, 
                             };
 
                             auto import_path = spec_ast->import_spec.path->basic_lit.val.string_val;
-                            if (resolve_import_path(import_path, cb) == NULL) break;
+                            auto res = resolve_import(import_path);
+                            if (res == NULL) break;
+
+                            // at this point, we have confirmation that x refers to a package.
+                            // doesn't matter if we can't find any decls, we should terminate here
+                            // with what we find, and not keep searching as though x might be something else
+
+                            {
+                                SCOPED_MEM(&world.autocomplete_mem);
+                                ret.results = alloc_list<AC_Result>();
+
+                                auto decls = list_decls_in_package(res->path);
+                                if (decls != NULL) {
+
+                                    for (auto&& decl : *decls) {
+                                        For (*decl.names) {
+                                            auto result = ret.results->append();
+                                            result->name = our_strcpy(it.name->id.lit);
+                                        }
+                                    }
+                                }
+                            }
 
                             ret.type = AUTOCOMPLETE_PACKAGE_EXPORTS;
                             ret.keyword_start_position = ast->selector_expr.period_pos;
@@ -3565,20 +3627,19 @@ int Go_Index::list_methods_in_type(File_Ast* type, List<Field>* ret) {
                 if (x == NULL) break;
                 if (x->type != AST_ID) break;
 
-                auto decl = find_decl_of_id(make_file_ast(x, type->file));
-                if (decl == NULL) break;
-                if (decl->ast->type != AST_IMPORT_SPEC) break;
+                auto id_decl = find_decl_of_id(make_file_ast(x, type->file));
+                if (id_decl == NULL) break;
+                if (id_decl->ast->type != AST_IMPORT_SPEC) break;
 
-                auto import_path = decl->ast->import_spec.path->basic_lit.val.string_val;
+                auto import_path = id_decl->ast->import_spec.path->basic_lit.val.string_val;
                 if (import_path == NULL) break;
 
-                resolve_import_path(import_path, [&](ccstr path, Import_Location loctype) -> bool {
-                    auto result = find_decl_in_package(path, type_name, NULL);
-                    if (result != NULL)
-                        if (result->ast->type == AST_TYPE_SPEC)
-                            package_to_search = path;
-                    return true;
-                });
+                auto res = resolve_import(import_path);
+                if (res == NULL) break;
+
+                auto decl = find_decl_in_package(res->path, type_name, NULL);
+                if (decl != NULL && decl->ast->type == AST_TYPE_SPEC)
+                    package_to_search = res->path;
             }
             break;
     }
@@ -3971,7 +4032,7 @@ OpPrec op_to_prec(TokType type) {
     return PREC_LOWEST;
 }
 
-ccstr gomod_tok_type_str(GoModTokType t) {
+ccstr gomod_tok_type_str(Gomod_Tok_Type t) {
     switch (t) {
         define_str_case(GOMOD_TOK_ILLEGAL);
         define_str_case(GOMOD_TOK_EOF);
@@ -3990,7 +4051,7 @@ ccstr gomod_tok_type_str(GoModTokType t) {
     return NULL;
 };
 
-void Go_Mod_Parser::parse(Go_Mod_Info* info) {
+void Gomod_Parser::parse(Gomod_Info* info) {
 #define ASSERT(x) if (!(x)) goto done
 #define EXPECT(x) ASSERT((lex(), (tok.type == (x))))
 
@@ -4032,11 +4093,11 @@ void Go_Mod_Parser::parse(Go_Mod_Info* info) {
                     lex();
 
                     auto read_spec = [&]() -> bool {
-                        Go_Mod_Directive* directive = NULL;
+                        Gomod_Directive* directive = NULL;
 
                         ASSERT(tok.type == GOMOD_TOK_STRIDENT);
                         if (keyword == GOMOD_TOK_REQUIRE) {
-                            directive = alloc_object(Go_Mod_Directive);
+                            directive = alloc_object(Gomod_Directive);
                             directive->type = GOMOD_DIRECTIVE_REQUIRE;
                             directive->module_path = tok.val;
                         }
@@ -4071,7 +4132,7 @@ void Go_Mod_Parser::parse(Go_Mod_Info* info) {
                     lex();
 
                     auto read_spec = [&]() -> bool {
-                        auto directive = alloc_object(Go_Mod_Directive);
+                        auto directive = alloc_object(Gomod_Directive);
                         directive->type = GOMOD_DIRECTIVE_REPLACE;
 
                         ASSERT(tok.type == GOMOD_TOK_STRIDENT);
@@ -4125,7 +4186,7 @@ bool gomod_isspace(char ch) {
     return ch == ' ' || ch == '\t' || ch == '\r';
 }
 
-void Go_Mod_Parser::lex() {
+void Gomod_Parser::lex() {
     tok.type = GOMOD_TOK_ILLEGAL;
     tok.val_truncated = false;
     tok.val = NULL;
@@ -4217,7 +4278,7 @@ void Go_Mod_Parser::lex() {
     salloc.done();
 
     ccstr keywords[] = { "module", "go" ,"require", "replace", "exclude" };
-    GoModTokType types[] = { GOMOD_TOK_MODULE, GOMOD_TOK_GO, GOMOD_TOK_REQUIRE, GOMOD_TOK_REPLACE, GOMOD_TOK_EXCLUDE };
+    Gomod_Tok_Type types[] = { GOMOD_TOK_MODULE, GOMOD_TOK_GO, GOMOD_TOK_REQUIRE, GOMOD_TOK_REPLACE, GOMOD_TOK_EXCLUDE };
 
     for (u32 i = 0; i < _countof(keywords); i++) {
         if (streq(tok.val, keywords[i])) {
@@ -4344,8 +4405,6 @@ void get_package_imports(ccstr path, List<ccstr> *out, String_Set *seen) {
                     auto import_path = it->import_spec.path->basic_lit.val.string_val;
                     if (!seen->has(import_path)) {
                         import_path = our_strcpy(import_path);
-
-                        print("%s", import_path);
                         out->append(import_path);
                         seen->add(import_path);
                     }
@@ -4450,23 +4509,31 @@ void Go_Index::handle_error(ccstr err) {
     error("%s", err);
 }
 
-u64 Go_Index::hash_package(ccstr path) {
+u64 Go_Index::hash_package(ccstr import_path) {
     u64 ret = 0;
-    bool error = false;
+    auto add_hash = [&](void *p, s32 n) {
+        ret ^= MeowU64From(MeowHash(MeowDefaultSeed, n, p), 0);
+    };
 
-    list_directory(path, [&](Dir_Entry* ent) {
+    auto res = resolve_import(import_path);
+    if (res == NULL) return 0;
+    add_hash((void*)res->path, strlen(res->path));
+
+    bool error = false;
+    list_directory(res->path, [&](Dir_Entry* ent) {
         if (ent->type == DIRENT_DIR) return;
         if (!str_ends_with(ent->name, ".go")) return;
         if (str_ends_with(ent->name, "_test.go")) return;
 
-        auto f = read_entire_file(path_join(path, ent->name));
+        auto f = read_entire_file(path_join(res->path, ent->name));
         if (f == NULL) {
             error = true;
             return;
         }
         defer { free_entire_file(f); };
-        ret ^= MeowU64From(MeowHash(MeowDefaultSeed, f->len, f->data), 0);
-        ret ^= MeowU64From(MeowHash(MeowDefaultSeed, strlen(ent->name), ent->name), 0);
+
+        add_hash(f->data, f->len);
+        add_hash(ent->name, strlen(ent->name));
     });
 
     return error ? 0 : ret;
@@ -4478,6 +4545,9 @@ void Go_Index::main_loop() {
     // ARE THOSE PACKAGES LOCATED? We may incidentally need to answer questions
     // about versions, but our source of truth is mainly concerned with just
     // GIVE ME THE SET OF ALL INCLUDED IMPORT PATHS.
+    //
+    // Because of this, we will want to include import paths that haven't been
+    // added yet to go.mod.
 
     {
         SCOPED_FRAME();
@@ -4490,17 +4560,18 @@ void Go_Index::main_loop() {
             break; // ???
         }
 
-        // OK, WE HAVE IMPORTS NOW!!!
-
         For (*res.new_imports) {
+            print("new import: %s, hash = %llx", it, hash_package(it));
             // `it` is an import path -- resolve it and crawl it.
             // fuck me, so what if the import resolution list is: a, b, c, d (a being highest)
             // and first time resolving we get b
             // and then a package gets created at a, how will that change get reflected?
             // should the hash also reflect resolution order?
         }
-    }
 
+        // just testing
+        break;
+    }
 
     // now we need to check that they're all indexed
     // check that all import paths are indexed with correct, most recent info

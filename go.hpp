@@ -847,13 +847,13 @@ struct Parser {
     void parser_error(ccstr fmt, ...);
 };
 
-enum Go_Mod_DirectiveType {
+enum Gomod_DirectiveType {
     GOMOD_DIRECTIVE_REQUIRE,
     GOMOD_DIRECTIVE_REPLACE,
 };
 
-struct Go_Mod_Directive {
-    Go_Mod_DirectiveType type;
+struct Gomod_Directive {
+    Gomod_DirectiveType type;
     ccstr module_path;
     ccstr module_version;
 
@@ -862,13 +862,13 @@ struct Go_Mod_Directive {
     ccstr replace_version; 
 };
 
-struct Go_Mod_Info {
+struct Gomod_Info {
     ccstr module_path;
     ccstr go_version;
-    List<Go_Mod_Directive*> directives;
+    List<Gomod_Directive*> directives;
 };
 
-enum GoModTokType {
+enum Gomod_Tok_Type {
     GOMOD_TOK_ILLEGAL,
     GOMOD_TOK_EOF,
 
@@ -894,20 +894,20 @@ enum GoModTokType {
     GOMOD_TOK_STRIDENT,
 };
 
-ccstr gomod_tok_type_str(GoModTokType t);
+ccstr gomod_tok_type_str(Gomod_Tok_Type t);
 
-struct Go_Mod_Token {
-    GoModTokType type;
+struct Gomod_Token {
+    Gomod_Tok_Type type;
     ccstr val;
     bool val_truncated;
 };
 
-struct Go_Mod_Parser {
+struct Gomod_Parser {
     Parser_It* it;
-    Go_Mod_Token tok;
+    Gomod_Token tok;
 
     void lex();
-    void parse(Go_Mod_Info* info);
+    void parse(Gomod_Info* info);
 };
 
 ccstr path_join(ccstr a, ccstr b);
@@ -915,9 +915,17 @@ bool dir_exists(ccstr path);
 List<ccstr>* list_source_files(ccstr dirpath);
 ccstr get_package_name_from_file(ccstr filepath);
 
+enum Import_Location {
+    IMPLOC_GOPATH = 0,
+    IMPLOC_GOROOT = 1,
+    IMPLOC_GOMOD = 2,
+    IMPLOC_VENDOR = 3,
+};
+
 struct Resolved_Import {
-    ccstr resolved_path;
+    ccstr path;
     ccstr package_name;
+    Import_Location location_type;
 };
 
 Resolved_Import* resolve_import(ccstr import_path);
@@ -989,13 +997,6 @@ enum Index_Entry_Type {
     IET_FUNC,
 };
 
-enum Import_Location {
-    IMPLOC_GOPATH = 0,
-    IMPLOC_GOROOT = 1,
-    IMPLOC_GOMOD = 2,
-    IMPLOC_VENDOR = 3,
-};
-
 struct Index_Entry_Hdr {
     Index_Entry_Type type;
     cur2 pos;
@@ -1044,7 +1045,6 @@ struct Index_Writer {
     ccstr index_path;
     Index_Stream findex;
     Index_Stream fdata;
-    u32 decl_count_offset;
 
     struct Decl_To_Write {
         ccstr name;

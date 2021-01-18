@@ -237,7 +237,7 @@ void Workspace::init() {
         auto gomod_path = path_join(path, "go.mod");
 
         if (check_path(gomod_path) == CPR_FILE) {
-            go_mod_exists = true;
+            gomod_exists = true;
             parse_gomod_file(gomod_path);
         }
     }
@@ -256,14 +256,14 @@ bool Workspace::parse_gomod_file(ccstr path) {
     it.type = IT_FILE;
     it.file_params.file = f;
 
-    Go_Mod_Parser p;
+    Gomod_Parser p;
     p.it = &it;
 
-    go_mod_info.directives.cleanup();
-    ptr0(&go_mod_info);
-    go_mod_info.directives.init(LIST_MALLOC, 128);
+    gomod_info.directives.cleanup();
+    ptr0(&gomod_info);
+    gomod_info.directives.init(LIST_MALLOC, 128);
 
-    p.parse(&go_mod_info);
+    p.parse(&gomod_info);
     return true;
 }
 

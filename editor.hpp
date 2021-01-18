@@ -134,8 +134,8 @@ struct Workspace {
 
   i32 resizing_pane; // if this value is i, we're resizing the border between i and i+1
 
-  bool go_mod_exists;
-  Go_Mod_Info go_mod_info;
+  bool gomod_exists;
+  Gomod_Info gomod_info;
 
   void init();
   bool parse_gomod_file(ccstr path);

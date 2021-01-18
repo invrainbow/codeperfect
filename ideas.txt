@@ -30,3 +30,8 @@ the inner workings of the tool is part of using the tool effectively.
     We need a replacement for uthash that lets us handle memory allocation.
 UPDATE: uthash supports overriding uthash_malloc with custom allocator.
 
+    Fun project: add String class
+
+    Fun project: add Pool memory (a la Pool.jai) to unify Stack and Arena
+
+    Fun project: Refactor the "walk_ast to find ast containing `pos`" pattern

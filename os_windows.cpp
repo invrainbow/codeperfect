@@ -274,7 +274,7 @@ File_Result File::init(ccstr path, u32 mode, File_Open_Mode open_mode) {
     auto get_win32_open_mode = [&]() {
         switch (open_mode) {
             case FILE_OPEN_EXISTING: return OPEN_EXISTING;
-            case FILE_CREATE_NEW: return CREATE_NEW;
+            case FILE_CREATE_NEW: return CREATE_ALWAYS;
         }
         return 0;
     };

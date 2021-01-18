@@ -1,3 +1,10 @@
+1/17/21
+    plan:
+        - implement ensure_index_correct
+        - see if we can get it running with IDE!
+    done:
+    todo:
+
 1/16/21
     plan:
         - day 1 of implementing new routine, run through it and work on ide
