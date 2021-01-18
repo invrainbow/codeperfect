@@ -3,7 +3,12 @@
         - implement ensure_index_correct
         - see if we can get it running with IDE!
     done:
+        - refactored import resolution
+        - hashing now includes package path
     todo:
+        - started go.mod parsing
+    notes:
+        - tomorrow at least try to get indexes working
 
 1/16/21
     plan:
