@@ -1,3 +1,18 @@
+1/18/21
+    plan:
+        - ok fuck this shit, we're going to get indexing WORKING
+        - main goal is to get ensure_index_correct working
+        - stretch goal is start receiving notifications/hooks to re-update index
+    done:
+        - hashes working for all packages
+        - find_decl_with_package now working with package lookup
+    todo:
+        - have Go_Index::main_loop() running in a thread
+        - add hooks to tell Go_Index to re-update index
+        - integrate find_decl_with_package with the rest of the ide
+    notes:
+        - not a bad day, do double tomorrow
+
 1/17/21
     plan:
         - implement ensure_index_correct

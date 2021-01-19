@@ -2,18 +2,17 @@
 #include "world.hpp"
 
 ccstr get_normalized_path(ccstr path) {
-  u32 len = get_normalized_path(path, NULL, 0);
-  if (len == 0)
-    return NULL;
+    u32 len = get_normalized_path(path, NULL, 0);
+    if (len == 0) return NULL;
 
-  auto old = MEM->sp;
-  auto ret = alloc_array(char, len + 1);
+    auto old = MEM->sp;
+    auto ret = alloc_array(char, len + 1);
 
-  if (get_normalized_path(path, ret, len + 1) == 0) {
-    MEM->sp = old;
-    return NULL;
-  }
-  return ret;
+    if (get_normalized_path(path, ret, len + 1) == 0) {
+        MEM->sp = old;
+        return NULL;
+    }
+    return ret;
 }
 
 // Mutates and returns path.
@@ -48,4 +47,8 @@ Entire_File *read_entire_file(ccstr path) {
 
 void free_entire_file(Entire_File *file) {
     free(file->data);
+}
+
+bool is_sep(char ch) {
+    return ch == '/' || ch == '\\';
 }

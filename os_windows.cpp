@@ -364,9 +364,15 @@ bool ensure_directory_exists(ccstr path) {
     auto newpath = normalize_path_separator((cstr)path);
     auto res = SHCreateDirectoryExA(NULL, (ccstr)newpath, NULL);
 
-    print("%s", Win32_Error(get_win32_error(res)).str);
+    switch (res) {
+    case ERROR_ALREADY_EXISTS:
+    case ERROR_FILE_EXISTS:
+    case ERROR_SUCCESS:
+        return true;
+    }
 
-    return res == ERROR_SUCCESS;
+    print("ensure_directory_exists error: %s", Win32_Error(get_win32_error(res)).str);
+    return false;
 }
 
 wchar_t* ansi_to_unicode(ccstr s) {
@@ -442,3 +448,16 @@ u64 get_file_size(ccstr path) {
 }
 
 #endif
+
+ccstr rel_to_abs_path(ccstr path) {
+    auto len = GetFullPathNameA(path, 0, NULL, NULL);
+    if (len == 0) return NULL;
+
+    Frame frame;
+    auto ret = alloc_array(char, len);
+    if (GetFullPathNameA(path, len, ret, NULL) != len) {
+        frame.restore();
+        return NULL;
+    }
+    return ret;
+}

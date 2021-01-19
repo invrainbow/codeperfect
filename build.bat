@@ -1,5 +1,9 @@
 @echo off
 
+rem just make sure ide.exe isn't running
+remedybg.exe stop-debugging
+taskkill /F /IM ide.exe
+
 cl /MP /MDd /nologo /EHsc /w /std:c++latest /DEBUG /Zi /Fe:ide.exe^
     /DGLEW_STATIC^
     /Iw:\packages\glfw.3.3.2\build\native\include^

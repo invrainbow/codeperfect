@@ -8,6 +8,7 @@ ccstr our_strcpy(ccstr s);
 ccstr our_dirname(ccstr path);
 ccstr our_basename(ccstr path);
 ccstr our_sprintf(ccstr fmt, ...);
+ccstr our_strcat(ccstr a, ccstr b);
 
 bool strcpy_safe(cstr buf, s32 count, ccstr src);
 

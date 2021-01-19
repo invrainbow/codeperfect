@@ -11,5 +11,7 @@ bool run_tests() {
     Gomod_Parser parser;
     Go_Index index;
     index.main_loop();
+
+    system("pause");
     return true;
 }

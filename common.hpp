@@ -354,7 +354,8 @@ void _error(ccstr fmt, ...);
 
 void* our_malloc(size_t size);
 void our_free(void* p);
-bool str_ends_with(ccstr a, ccstr b);
+bool str_ends_with(ccstr a, ccstr suf);
+bool str_starts_with(ccstr a, ccstr pre);
 
 struct Oom_Error : std::runtime_error {
   Oom_Error() : std::runtime_error("out of memory") {}
@@ -380,19 +381,11 @@ struct Stack {
   }
 
   void* alloc(s32 n, bool zero = true) {
-    if (sp + n > cap) {
-      panic("out of memory");
-    }
-
+    if (sp + n > cap) panic("out of memory");
     auto ret = &buf[sp];
     sp += n;
-
-    int x = 8;
-    if (zero && n > 0) {
+    if (zero && n > 0)
       mem0(ret, n);
-      x += 9;
-    }
-
     return ret;
   }
 };

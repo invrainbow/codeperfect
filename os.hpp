@@ -208,6 +208,7 @@ bool ensure_directory_exists(ccstr path);
 bool delete_rm_rf(ccstr path);
 
 cstr normalize_path_separator(cstr path);
+bool is_sep(char ch);
 
 typedef fn<int(const void *a, const void *b)> compare_func;
 
@@ -223,3 +224,4 @@ struct Entire_File {
 
 Entire_File *read_entire_file(ccstr path);
 void free_entire_file(Entire_File *file);
+ccstr rel_to_abs_path(ccstr path);

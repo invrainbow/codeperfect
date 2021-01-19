@@ -132,7 +132,7 @@ bool isid(int c);
 bool ishex(int c);
 bool isoct(int c);
 
-enum TokType {
+enum Tok_Type {
     TOK_ILLEGAL,
     TOK_EOF,
     TOK_COMMENT,
@@ -216,9 +216,9 @@ enum TokType {
     TOK_VAR,
 };
 
-ccstr tok_type_str(TokType type);
+ccstr tok_type_str(Tok_Type type);
 
-enum TokImagType {
+enum Tok_Imag_Type {
     IMAG_INT,
     IMAG_FLOAT,
 };
@@ -227,7 +227,7 @@ union TokenVal {
     u32 int_val;
     float float_val;
     struct {
-        TokImagType type;
+        Tok_Imag_Type type;
         union {
             int int_val;
             float float_val;
@@ -238,7 +238,7 @@ union TokenVal {
 };
 
 struct Token {
-    TokType type;
+    Tok_Type type;
     ccstr lit;
     cur2 start_before_leading_whitespace;
     cur2 start;
@@ -246,7 +246,7 @@ struct Token {
     TokenVal val;
 };
 
-enum AstType {
+enum Ast_Type {
     AST_ILLEGAL,
     AST_BASIC_LIT,
     AST_ID,
@@ -307,18 +307,18 @@ enum AstType {
     _AST_TYPES_COUNT_,
 };
 
-ccstr ast_type_str(AstType type);
+ccstr ast_type_str(Ast_Type type);
 
-enum AstChanDirection {
+enum Ast_Chan_Direction {
     AST_CHAN_RECV,
     AST_CHAN_SEND,
     AST_CHAN_BI,
 };
 
-ccstr ast_chan_direction_str(AstChanDirection dir);
+ccstr ast_chan_direction_str(Ast_Chan_Direction dir);
 
 struct Ast {
-    AstType type;
+    Ast_Type type;
     cur2 start;
     cur2 end;
 
@@ -331,7 +331,7 @@ struct Ast {
         } func_lit;
 
         struct {
-            TokType type;
+            Tok_Type type;
             Ast* specs;
         } decl;
 
@@ -346,14 +346,14 @@ struct Ast {
         } basic_lit;
 
         struct {
-            TokType op;
+            Tok_Type op;
             Ast* rhs;
         } unary_expr;
 
         List<Ast*> list;
 
         struct {
-            TokType op;
+            Tok_Type op;
             Ast* lhs;
             Ast* rhs;
         } binary_expr;
@@ -375,7 +375,7 @@ struct Ast {
         } map_type;
 
         struct {
-            AstChanDirection direction;
+            Ast_Chan_Direction direction;
             Ast* base_type;
         } chan_type;
 
@@ -476,7 +476,7 @@ struct Ast {
         } return_stmt;
 
         struct {
-            TokType branch_type;
+            Tok_Type branch_type;
             Ast* label;
         } branch_stmt;
 
@@ -496,7 +496,7 @@ struct Ast {
             Ast* ids;
             Ast* type;
             Ast* vals;
-            TokType spec_type;
+            Tok_Type spec_type;
         } value_spec;
 
         struct {
@@ -512,12 +512,12 @@ struct Ast {
 
         struct {
             Ast* lhs;
-            TokType op;
+            Tok_Type op;
             Ast* rhs;
         } assign_stmt;
 
         struct {
-            TokType op;
+            Tok_Type op;
             Ast* x;
         } inc_dec_stmt;
 
@@ -605,7 +605,7 @@ struct AC_Result {
     // File_Ast* decl;
 };
 
-enum AutocompleteType {
+enum Autocomplete_Type {
     AUTOCOMPLETE_NONE = 0,
     AUTOCOMPLETE_STRUCT_FIELDS,
     AUTOCOMPLETE_PACKAGE_EXPORTS,
@@ -614,7 +614,7 @@ enum AutocompleteType {
 
 struct Autocomplete {
     List<AC_Result>* results;
-    AutocompleteType type;
+    Autocomplete_Type type;
     cur2 keyword_start_position;
 };
 
@@ -623,13 +623,13 @@ struct Parameter_Hint {
     Ast* call_args;
 };
 
-enum WalkAction {
+enum Walk_Action {
     WALK_CONTINUE,
     WALK_ABORT,
     WALK_SKIP_CHILDREN,
 };
 
-typedef fn<WalkAction(Ast* ast, ccstr name, int depth)> WalkAstFn;
+typedef fn<Walk_Action(Ast* ast, ccstr name, int depth)> WalkAstFn;
 
 void walk_ast(Ast* root, WalkAstFn fn);
 
@@ -644,13 +644,13 @@ enum OpPrec {
     PREC_HIGHEST,
 };
 
-OpPrec op_to_prec(TokType type);
+OpPrec op_to_prec(Tok_Type type);
 
-typedef fn<bool(TokType)> SyncLookupFunc;
+typedef fn<bool(Tok_Type)> Sync_Lookup_Func;
 
-bool lookup_stmt_start(TokType type);
-bool lookup_decl_start(TokType type);
-bool lookup_expr_end(TokType type);
+bool lookup_stmt_start(Tok_Type type);
+bool lookup_decl_start(Tok_Type type);
+bool lookup_expr_end(Tok_Type type);
 
 struct Parse_Error {
     ccstr error;
@@ -809,18 +809,19 @@ struct Parser {
     } list_mem;
     i32 expr_lev; // < 0: in control clause, >= 0: in expression
     Token tok;
-    TokType last_token_type;
+    Tok_Type last_token_type;
     ccstr filepath; // for debugging purposes
 
     void init(Parser_It* _it, ccstr _filepath = NULL);
     void cleanup();
     Ast_List new_list();
-    void synchronize(SyncLookupFunc lookup);
+    void synchronize(Sync_Lookup_Func lookup);
     void _throwError(ccstr s);
-    Ast* new_ast(AstType type, cur2 start);
-    cur2 _expect(TokType want, ccstr file, u32 line);
+    Ast* new_ast(Ast_Type type, cur2 start);
+    cur2 _expect(Tok_Type want, ccstr file, u32 line);
     Ast* parse_id_list();
-    Ast* parse_decl(SyncLookupFunc sync_lookup, bool import_allowed = false);
+    Ast *parse_spec(Tok_Type spec_type, bool *previous_spec_contains_iota = NULL);
+    Ast* parse_decl(Sync_Lookup_Func sync_lookup, bool import_allowed = false);
     void declare_var(ccstr name, Ast* decl, Ast* jump_to);
     Ast* parse_parameters(bool ellipsis_ok);
     Ast* parse_result();
@@ -834,7 +835,7 @@ struct Parser {
     Ast* parse_call_args();
     Ast* parse_primary_expr(bool lhs);
     Ast* parse_literal_value();
-    bool eat_comma(TokType closing, ccstr context);
+    bool eat_comma(Tok_Type closing, ccstr context);
     Ast* parse_expr(bool lhs, OpPrec prec = PREC_LOWEST);
     Ast* parse_type_list();
     void resolve(Ast* id);
@@ -910,7 +911,9 @@ struct Gomod_Parser {
     void parse(Gomod_Info* info);
 };
 
-ccstr path_join(ccstr a, ccstr b);
+ccstr _path_join(ccstr a, ...);
+#define path_join(...) _path_join(__VA_ARGS__, NULL)
+
 bool dir_exists(ccstr path);
 List<ccstr>* list_source_files(ccstr dirpath);
 ccstr get_package_name_from_file(ccstr filepath);
@@ -969,15 +972,14 @@ struct Infer_Res {
     File_Ast* base_type;
 };
 
+struct Named_Decl_Item {
+    Ast* name;
+    Ast* spec;
+};
+
 struct Named_Decl {
     File_Ast* decl;
-
-    struct Name {
-        Ast* name;
-        Ast* spec;
-    };
-
-    List<Name>* names;
+    List<Named_Decl_Item>* items;
 };
 
 enum {
@@ -992,7 +994,8 @@ struct Field {
 
 enum Index_Entry_Type {
     IET_INVALID = 0,
-    IET_VALUE,
+    IET_CONST,
+    IET_VAR,
     IET_TYPE,
     IET_FUNC,
 };
@@ -1000,14 +1003,14 @@ enum Index_Entry_Type {
 struct Index_Entry_Hdr {
     Index_Entry_Type type;
     cur2 pos;
-    Import_Location loctype;
-    // we need the path as well
 };
 
 struct Index_Entry_Result {
     Index_Entry_Hdr hdr;
     ccstr filename;
     ccstr name;
+    ccstr package_path;
+    Import_Location loctype;
 };
 
 enum Index_File_Type {
@@ -1056,21 +1059,24 @@ struct Index_Writer {
 
     void write_package_hash();
     int init(ccstr import_path);
+    void write_headers(ccstr resolved_path, Import_Location loctype);
     void cleanup();
     bool finish_writing();
-    bool write_decl(ccstr filename, ccstr name, Ast* spec, Import_Location loctype);
+    bool write_decl(ccstr filename, ccstr name, Ast* spec);
     bool write_hash(u64 hash);
 };
 
 struct Index_Reader {
     ccstr index_path;
-    Index_Stream findex;
-    Index_Stream fdata;
-    u32 decl_count;
-    bool ok;
+    ccstr indexfile_path;
+    ccstr datafile_path;
 
-    u64 read_hash();
-    bool init(ccstr _index_path);
+    // bool ok;
+
+    // honestly having an index_reader class is not factoring out well
+    // abstractions suck lol
+
+    void init(ccstr _index_path);
     bool find_decl(ccstr decl_name, Index_Entry_Result *res);
 };
 
@@ -1118,12 +1124,10 @@ struct Go_Index {
 
     void read_index();
     bool delete_index();
-    void crawl_package(ccstr root, ccstr import_path, Import_Location loctype);
 
-    void update_with_package(ccstr path, ccstr root, ccstr import_path, Import_Location loctype);
     void main_loop();
     void handle_error(ccstr err);
     bool ensure_imports_list_correct(Eil_Result *res);
-    u64 hash_package(ccstr path);
+    u64 hash_package(ccstr import_path, Resolved_Import **pres);
 };
 

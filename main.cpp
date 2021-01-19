@@ -212,7 +212,7 @@ void render_ast(Ast* ast, ccstr label = "Root") {
         s32 p;
     } node_stack = { 0 };
 
-    walk_ast(ast, [&](Ast* node, ccstr name, int depth) -> WalkAction {
+    walk_ast(ast, [&](Ast* node, ccstr name, int depth) -> Walk_Action {
         if (depth <= last_depth) {
             auto pops = last_depth - depth + 1;
             for (u32 i = 0; i < pops; i++)
