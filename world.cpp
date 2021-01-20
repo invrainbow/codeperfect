@@ -127,8 +127,8 @@ void World::init() {
     nvim_data.hl_defs.init(LIST_FIXED, _countof(nvim_data._hl_defs), nvim_data._hl_defs);
     nvim_data.grid_to_window.init(LIST_FIXED, _countof(nvim_data._grid_to_window), nvim_data._grid_to_window);
 
-    // nvim.init();
-    // nvim.start_running();
+    nvim.init();
+    nvim.start_running();
 
     fill_file_tree(wksp.path);
 

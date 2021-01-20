@@ -55,6 +55,7 @@ bool get_win32_file_info(ccstr path, BY_HANDLE_FILE_INFORMATION* out) {
     HANDLE h = CreateFileA(path, 0, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if (h == INVALID_HANDLE_VALUE)
         return false;
+    defer { CloseHandle(h); };
     return GetFileInformationByHandle(h, out);
 }
 
@@ -130,9 +131,9 @@ bool Process::run(ccstr _cmd) {
 
         // auto args = our_sprintf("cmd /S /K \"start cmd /S /K \"%s\"\"", cmd);
         auto args = our_sprintf("cmd /S /C \"%s\"", cmd);
-        print("%s", args);
+        print("(Process::run) %s", args);
         if (!CreateProcessA(NULL, (LPSTR)args, NULL, NULL, TRUE, 0, NULL, dir, &si, &pi)) {
-            error("error: %s", get_win32_error());
+            error("(CreateProcessA) error: %s", get_win32_error());
             return false;
         }
     }

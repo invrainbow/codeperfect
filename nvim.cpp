@@ -547,13 +547,11 @@ void Nvim::run_event_loop() {
                                 auto channel_id = reader.read_int(); CHECKOK();
                                 reader.skip_object(); CHECKOK();
 
-                                // what was this for originally?
-                                /*
+                                // pass channel id to neovim so we can send it to rpcrequest
                                 start_request_message("nvim_set_var", 2);
                                 writer.write_string("channel_id");
                                 writer.write_int(channel_id);
                                 end_message();
-                                */
                             }
                             break;
 #if 0
@@ -812,6 +810,7 @@ void Nvim::init() {
 void Nvim::start_running() {
     nvim_proc.init();
     nvim_proc.use_stdin = true;
+    nvim_proc.dir = "w:/"; // TODO
 
     // TODO: get full path of init.vim
     nvim_proc.run("nvim -u ./init.vim -i NONE -N --embed --headless");

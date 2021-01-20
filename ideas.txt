@@ -35,3 +35,7 @@ UPDATE: uthash supports overriding uthash_malloc with custom allocator.
     Fun project: add Pool memory (a la Pool.jai) to unify Stack and Arena
 
     Fun project: Refactor the "walk_ast to find ast containing `pos`" pattern
+
+    My memory management is all fucked up, honestly might need to just spend a
+day cleaning that shit up. Would help morale a lot too (think how much progress
+stalled when we had no idea how to manage memory with Go_Index).

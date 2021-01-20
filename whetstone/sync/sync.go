@@ -9,7 +9,7 @@ import (
 )
 
 func Download() {
-	fmt.Println("this is where we download stuff")
+	fmt
 
 	// print out language for no reason
 	lang := language.English

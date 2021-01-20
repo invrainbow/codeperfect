@@ -1487,17 +1487,17 @@ int main() {
     double last_time = glfwGetTime();
     i64 last_frame_time = current_time_in_nanoseconds();
 
-#if 0
+#if 1
     {
         SCOPED_FRAME();
-        auto path = path_join(world.wksp.path, "hello.go");
+        auto path = path_join(world.wksp.path, "sync/sync.go");
         world.get_current_pane()->focus_editor(path);
         ui.recalculate_view_sizes();
 
         auto editor = world.get_current_editor();
         while (!editor->is_nvim_ready()) continue;
 
-        world.get_current_editor()->move_cursor(new_cur2(11, 8));
+        world.get_current_editor()->move_cursor(new_cur2(3, 11));
     }
 #endif
 

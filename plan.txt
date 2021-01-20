@@ -1,3 +1,19 @@
+1/19/21
+    plan:
+        - streamlit shit done, go hard on ide
+        - find_decl_with_package now working, try to get intellisense working
+          again with main IDE
+    done:
+        - figured out we need to add import_path to File_Ast
+        - neovim working again
+    todo:
+        - currently rewriting our list_decls_* and find_decl_* functions to use
+          index which has been more involved than i thought
+    notes:
+        - as soon as Go_Index works, and some bugs ironed out, i think we have
+          working intellisense. just need to grind through this rewrite
+        - grrr i wish i had more hours in the day (discipline is the answer)
+
 1/18/21
     plan:
         - ok fuck this shit, we're going to get indexing WORKING

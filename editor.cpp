@@ -150,8 +150,8 @@ void Pane::cleanup() {
 
 bool check_file_dimensions(ccstr path) {
     File f;
-    if (!f.init(path, FILE_MODE_READ, FILE_OPEN_EXISTING)) {
-        print("error: %s", get_last_error());
+    if (f.init(path, FILE_MODE_READ, FILE_OPEN_EXISTING) != FILE_RESULT_SUCCESS) {
+        print("Error opening file while checknig file dimensions: %s", get_last_error());
         return false;
     }
     defer { f.cleanup(); };

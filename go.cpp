@@ -196,31 +196,6 @@ Resolved_Import* resolve_import(ccstr import_path) {
     return NULL;
 }
 
-ccstr resolve_import_path(ccstr import_path, resolve_package_cb f) {
-    {
-        ccstr ret = NULL;
-
-        auto check = [&](Import_Location imploc_type, ccstr path) {
-            if (ret != NULL)
-                return;
-            if (check_path(path) == CPR_DIRECTORY && f(path, imploc_type))
-                ret = path;
-        };
-
-        check(IMPLOC_VENDOR, path_join(world.wksp.path, "vendor", import_path));
-
-        // TODO: if (world.wksp.gomod_exists) ...
-        // check(IMPLOC_GOMOD, ...);
-
-        check(IMPLOC_GOPATH, path_join(GOPATH, import_path));
-        check(IMPLOC_GOROOT, path_join(GOROOT, import_path));
-
-        return ret;
-    }
-
-    return NULL;
-}
-
 ccstr _path_join(ccstr a, ...) {
     auto get_part_length = [&](ccstr s) {
         auto len = strlen(s);
@@ -383,7 +358,7 @@ void walk_ast(Ast* root, WalkAstFn fn) {
     queue.init(LIST_MALLOC, 256);
     defer { queue.cleanup(); };
 
-    auto _add = [&](Ast* ast, ccstr fullname, int depth) {
+    auto add_to_queue = [&](Ast* ast, ccstr fullname, int depth) {
         if (ast == NULL || ast->type == AST_ILLEGAL) return;
 
         auto fieldname = strrchr(fullname, '.');
@@ -396,7 +371,7 @@ void walk_ast(Ast* root, WalkAstFn fn) {
         item->depth = depth;
     };
     
-    _add(root, ".root", 0);
+    add_to_queue(root, ".root", 0);
 
     while (queue.len > 0) {
         auto last = &queue[queue.len - 1];
@@ -407,211 +382,224 @@ void walk_ast(Ast* root, WalkAstFn fn) {
         if (result == WALK_ABORT) break;
         if (result == WALK_SKIP_CHILDREN) continue;
 
-#define add(x) _add(x, #x, last_depth + 1)
+        SCOPED_FRAME();
+
+        auto children_nodes = alloc_list<Ast*>();
+        auto children_strings = alloc_list<ccstr>();
+
+        auto _add_child = [&](Ast *ast, ccstr fullname) {
+            children_nodes->append(ast);
+            children_strings->append(fullname);
+        };
+
+#define add_child(x) _add_child(x, #x)
 
         auto ast = last->ast;
         switch (ast->type) {
             case AST_ELLIPSIS:
-                add(ast->ellipsis.type);
+                add_child(ast->ellipsis.type);
                 break;
             case AST_LIST:
                 {
                     u32 i = 0;
                     For (ast->list) {
-                        _add(it, our_sprintf(".%d", i++), last_depth + 1);
+                        _add_child(it, our_sprintf(".%d", i++));
                     }
                 }
                 break;
             case AST_UNARY_EXPR:
-                add(ast->unary_expr.rhs);
+                add_child(ast->unary_expr.rhs);
                 break;
             case AST_BINARY_EXPR:
-                add(ast->binary_expr.lhs);
-                add(ast->binary_expr.rhs);
+                add_child(ast->binary_expr.lhs);
+                add_child(ast->binary_expr.rhs);
                 break;
             case AST_ARRAY_TYPE:
-                add(ast->array_type.base_type);
-                add(ast->array_type.length);
+                add_child(ast->array_type.base_type);
+                add_child(ast->array_type.length);
                 break;
             case AST_POINTER_TYPE:
-                add(ast->pointer_type.base_type);
+                add_child(ast->pointer_type.base_type);
                 break;
             case AST_SLICE_TYPE:
-                add(ast->slice_type.base_type);
+                add_child(ast->slice_type.base_type);
                 break;
             case AST_MAP_TYPE:
-                add(ast->map_type.key_type);
-                add(ast->map_type.value_type);
+                add_child(ast->map_type.key_type);
+                add_child(ast->map_type.value_type);
                 break;
             case AST_STRUCT_TYPE:
-                add(ast->struct_type.fields);
+                add_child(ast->struct_type.fields);
                 break;
             case AST_INTERFACE_TYPE:
-                add(ast->interface_type.specs);
+                add_child(ast->interface_type.specs);
                 break;
             case AST_CHAN_TYPE:
-                add(ast->chan_type.base_type);
+                add_child(ast->chan_type.base_type);
                 break;
             case AST_FUNC_TYPE:
-                add(ast->func_type.signature);
+                add_child(ast->func_type.signature);
                 break;
             case AST_PAREN:
-                add(ast->paren.x);
+                add_child(ast->paren.x);
                 break;
             case AST_SELECTOR_EXPR:
-                add(ast->selector_expr.x);
-                add(ast->selector_expr.sel);
+                add_child(ast->selector_expr.x);
+                add_child(ast->selector_expr.sel);
                 break;
             case AST_SLICE_EXPR:
-                add(ast->slice_expr.x);
-                add(ast->slice_expr.s1);
-                add(ast->slice_expr.s2);
-                add(ast->slice_expr.s3);
+                add_child(ast->slice_expr.x);
+                add_child(ast->slice_expr.s1);
+                add_child(ast->slice_expr.s2);
+                add_child(ast->slice_expr.s3);
                 break;
             case AST_INDEX_EXPR:
-                add(ast->index_expr.x);
-                add(ast->index_expr.key);
+                add_child(ast->index_expr.x);
+                add_child(ast->index_expr.key);
                 break;
             case AST_TYPE_ASSERTION_EXPR:
-                add(ast->type_assertion_expr.x);
-                add(ast->type_assertion_expr.type);
+                add_child(ast->type_assertion_expr.x);
+                add_child(ast->type_assertion_expr.type);
                 break;
             case AST_CALL_EXPR:
-                add(ast->call_expr.func);
-                add(ast->call_expr.call_args);
+                add_child(ast->call_expr.func);
+                add_child(ast->call_expr.call_args);
                 break;
             case AST_CALL_ARGS:
-                add(ast->call_args.args);
+                add_child(ast->call_args.args);
             case AST_LITERAL_ELEM:
-                add(ast->literal_elem.elem);
-                add(ast->literal_elem.key);
+                add_child(ast->literal_elem.elem);
+                add_child(ast->literal_elem.key);
                 break;
             case AST_LITERAL_VALUE:
-                add(ast->literal_value.elems);
+                add_child(ast->literal_value.elems);
                 break;
             case AST_FIELD:
-                add(ast->field.type);
-                add(ast->field.ids);
+                add_child(ast->field.type);
+                add_child(ast->field.ids);
                 break;
             case AST_PARAMETERS:
-                add(ast->parameters.fields);
+                add_child(ast->parameters.fields);
                 break;
             case AST_FUNC_LIT:
-                add(ast->func_lit.signature);
-                add(ast->func_lit.body);
+                add_child(ast->func_lit.signature);
+                add_child(ast->func_lit.body);
                 break;
             case AST_BLOCK:
-                add(ast->block.stmts);
+                add_child(ast->block.stmts);
                 break;
             case AST_SIGNATURE:
-                add(ast->signature.params);
-                add(ast->signature.result);
+                add_child(ast->signature.params);
+                add_child(ast->signature.result);
                 break;
             case AST_COMPOSITE_LIT:
-                add(ast->composite_lit.base_type);
-                add(ast->composite_lit.literal_value);
+                add_child(ast->composite_lit.base_type);
+                add_child(ast->composite_lit.literal_value);
                 break;
             case AST_GO_STMT:
-                add(ast->go_stmt.x);
+                add_child(ast->go_stmt.x);
                 break;
             case AST_DEFER_STMT:
-                add(ast->defer_stmt.x);
+                add_child(ast->defer_stmt.x);
                 break;
             case AST_SELECT_STMT:
-                add(ast->select_stmt.clauses);
+                add_child(ast->select_stmt.clauses);
                 break;
             case AST_SWITCH_STMT:
-                add(ast->switch_stmt.s1);
-                add(ast->switch_stmt.s2);
-                add(ast->switch_stmt.body);
+                add_child(ast->switch_stmt.s1);
+                add_child(ast->switch_stmt.s2);
+                add_child(ast->switch_stmt.body);
                 break;
             case AST_IF_STMT:
-                add(ast->if_stmt.init);
-                add(ast->if_stmt.cond);
-                add(ast->if_stmt.body);
-                add(ast->if_stmt.else_);
+                add_child(ast->if_stmt.init);
+                add_child(ast->if_stmt.cond);
+                add_child(ast->if_stmt.body);
+                add_child(ast->if_stmt.else_);
                 break;
             case AST_FOR_STMT:
-                add(ast->for_stmt.s1);
-                add(ast->for_stmt.s2);
-                add(ast->for_stmt.s3);
-                add(ast->for_stmt.body);
+                add_child(ast->for_stmt.s1);
+                add_child(ast->for_stmt.s2);
+                add_child(ast->for_stmt.s3);
+                add_child(ast->for_stmt.body);
                 break;
             case AST_RETURN_STMT:
-                add(ast->return_stmt.exprs);
+                add_child(ast->return_stmt.exprs);
                 break;
             case AST_BRANCH_STMT:
-                add(ast->branch_stmt.label);
+                add_child(ast->branch_stmt.label);
                 break;
             case AST_DECL:
-                add(ast->decl.specs);
+                add_child(ast->decl.specs);
                 break;
             case AST_ASSIGN_STMT:
-                add(ast->assign_stmt.lhs);
-                add(ast->assign_stmt.rhs);
+                add_child(ast->assign_stmt.lhs);
+                add_child(ast->assign_stmt.rhs);
                 break;
             case AST_VALUE_SPEC:
-                add(ast->value_spec.ids);
-                add(ast->value_spec.type);
-                add(ast->value_spec.vals);
+                add_child(ast->value_spec.ids);
+                add_child(ast->value_spec.type);
+                add_child(ast->value_spec.vals);
                 break;
             case AST_IMPORT_SPEC:
-                add(ast->import_spec.path);
-                add(ast->import_spec.package_name);
+                add_child(ast->import_spec.path);
+                add_child(ast->import_spec.package_name);
                 break;
             case AST_TYPE_SPEC:
-                add(ast->type_spec.id);
-                add(ast->type_spec.type);
+                add_child(ast->type_spec.id);
+                add_child(ast->type_spec.type);
                 break;
             case AST_INC_DEC_STMT:
-                add(ast->inc_dec_stmt.x);
+                add_child(ast->inc_dec_stmt.x);
                 break;
             case AST_SEND_STMT:
-                add(ast->send_stmt.value);
-                add(ast->send_stmt.chan);
+                add_child(ast->send_stmt.value);
+                add_child(ast->send_stmt.chan);
                 break;
             case AST_LABELED_STMT:
-                add(ast->labeled_stmt.label);
-                add(ast->labeled_stmt.stmt);
+                add_child(ast->labeled_stmt.label);
+                add_child(ast->labeled_stmt.stmt);
                 break;
             case AST_EXPR_STMT:
-                add(ast->expr_stmt.x);
+                add_child(ast->expr_stmt.x);
                 break;
             case AST_PACKAGE_DECL:
-                add(ast->package_decl.name);
+                add_child(ast->package_decl.name);
                 break;
             case AST_SOURCE:
-                add(ast->source.package_decl);
-                add(ast->source.imports);
-                add(ast->source.decls);
+                add_child(ast->source.package_decl);
+                add_child(ast->source.imports);
+                add_child(ast->source.decls);
                 break;
             case AST_STRUCT_FIELD:
-                add(ast->struct_field.ids);
-                add(ast->struct_field.type);
-                add(ast->struct_field.tag);
+                add_child(ast->struct_field.ids);
+                add_child(ast->struct_field.type);
+                add_child(ast->struct_field.tag);
                 break;
             case AST_INTERFACE_SPEC:
-                add(ast->interface_spec.name);
-                add(ast->interface_spec.signature);
-                add(ast->interface_spec.type);
+                add_child(ast->interface_spec.name);
+                add_child(ast->interface_spec.signature);
+                add_child(ast->interface_spec.type);
                 break;
             case AST_CASE_CLAUSE:
-                add(ast->case_clause.stmts);
-                add(ast->case_clause.vals);
+                add_child(ast->case_clause.stmts);
+                add_child(ast->case_clause.vals);
                 break;
             case AST_COMM_CLAUSE:
-                add(ast->comm_clause.stmts);
-                add(ast->comm_clause.comm);
+                add_child(ast->comm_clause.stmts);
+                add_child(ast->comm_clause.comm);
                 break;
             case AST_FUNC_DECL:
-                add(ast->func_decl.name);
-                add(ast->func_decl.body);
-                add(ast->func_decl.signature);
-                add(ast->func_decl.recv);
+                add_child(ast->func_decl.name);
+                add_child(ast->func_decl.body);
+                add_child(ast->func_decl.signature);
+                add_child(ast->func_decl.recv);
                 break;
         }
 
-#undef add
+        for (i32 i = children_nodes->len - 1; i >= 0; i--)
+            add_to_queue(children_nodes->at(i), children_strings->at(i), last_depth + 1);
+
+#undef add_child
     }
 }
 
@@ -2638,7 +2626,6 @@ Ast* Parser::parse_file() {
     return fill_end(ast);
 }
 
-// is this even necessary? i have a feeling it'll come in useful later
 Ast* Parser::fill_end(Ast* ast) {
     ast->end = tok.start_before_leading_whitespace;
     return ast;
@@ -2659,10 +2646,11 @@ cur2 Parser::lex() {
 #undef expect
 #undef parser_error
 
-File_Ast* Go_Index::make_file_ast(Ast* ast, ccstr file) {
+File_Ast* Go_Index::make_file_ast(Ast* ast, ccstr file, ccstr import_path) {
     File_Ast* ret = alloc_object(File_Ast);
     ret->ast = ast;
     ret->file = file;
+    ret->import_path = import_path;
     return ret;
 }
 
@@ -2683,7 +2671,7 @@ void Go_Index::list_decls_in_source(File_Ast* source, int flags, fn<void(Named_D
     auto& s = source->ast->source;
 
     auto process_decl = [&](Ast* decl, Named_Decl* ret) {
-        ret->decl = make_file_ast(decl, source->file);
+        ret->decl = source->dup(decl);
 
         switch (decl->type) {
             case AST_FUNC_DECL:
@@ -2831,19 +2819,20 @@ File_Ast *Go_Index::find_decl_in_index(ccstr import_path, ccstr desired_decl_nam
     case IET_TYPE: ast = p.parse_spec(TOK_TYPE); break;
     }
 
-    return ast == NULL ? NULL : make_file_ast(ast, filepath);
+    return ast == NULL ? NULL : make_file_ast(ast, filepath, import_path);
 }
 
 // between path and import_path, exactly one should be null.
 //  - if path provided, does direct search
 //  - if import_path provided, tries index, then resolves import_path to get path and do direct search.
+// honestly we should just never call this with path but no import_path
 File_Ast* Go_Index::find_decl_in_package(ccstr path, ccstr desired_decl_name, ccstr import_path) {
     // first try to find it in the index.
-    if (import_path != NULL) {
-        auto potential_ret = find_decl_in_index(import_path, desired_decl_name);
-        if (potential_ret != NULL)
-            return potential_ret;
+    auto potential_ret = find_decl_in_index(import_path, desired_decl_name);
+    if (potential_ret != NULL)
+        return potential_ret;
 
+    if (path == NULL) {
         auto ri = resolve_import(import_path);
         if (ri == NULL) return NULL;
         path = ri->path;
@@ -2859,7 +2848,7 @@ File_Ast* Go_Index::find_decl_in_package(ccstr path, ccstr desired_decl_name, cc
         auto filename = path_join(path, it);
         auto ast = parse_file_into_ast(filename);
         if (ast != NULL) {
-            auto ret = find_decl_in_source(make_file_ast(ast, filename), desired_decl_name);
+            auto ret = find_decl_in_source(make_file_ast(ast, filename, import_path), desired_decl_name);
             if (ret != NULL)
                 return ret;
         }
@@ -2884,21 +2873,38 @@ List<Named_Decl>* Go_Index::list_decls_in_package(ccstr path) {
     return ret;
 }
 
+List<ccstr> *Go_Index::list_decl_names(ccstr import_path) {
+    auto ret = list_decl_names_from_index(import_path);
+    if (ret != NULL) return ret;
+
+    auto ri = resolve_import(import_path);
+    if (ri == NULL) return NULL;
+
+    auto decls = list_decls_in_package(ri->path);
+    if (decls == NULL) return NULL;
+
+    auto ret = alloc_list<ccstr>();
+    For (*decls)
+        For (*it.items)
+            ret->append(it.name->id.lit);
+    return ret;
+}
+
 File_Ast* Go_Index::find_decl_of_id(File_Ast* fa) {
     auto id = fa->ast;
 
     // check if it has a decl already attached to it by the parser
     if (id->id.decl != NULL)
-        return make_file_ast(id->id.decl, fa->file);
+        return fa->dup(id->id.decl);
 
     auto lit = id->id.lit;
 
     // check if it's declared in the current file
-    auto ret = find_decl_in_source(make_file_ast(parse_file_into_ast(fa->file), fa->file), lit, false);
+    auto ret = find_decl_in_source(fa->dup(parse_file_into_ast(fa->file)), lit, false);
     if (ret != NULL) return ret;
 
     // check if it's declared in the current package
-    ret = find_decl_in_package(our_dirname(fa->file), lit, NULL);
+    ret = find_decl_in_package(our_dirname(fa->file), lit, fa->import_path);
     if (ret != NULL) return ret;
 
     return NULL;
@@ -2910,7 +2916,7 @@ File_Ast* Go_Index::get_base_type(File_Ast* type) {
         switch (ast->type) {
             case AST_ID:
                 {
-                    auto decl = find_decl_of_id(make_file_ast(ast, type->file));
+                    auto decl = find_decl_of_id(type->dup(ast));
                     if (decl == NULL)
                         goto done;
 
@@ -2927,6 +2933,9 @@ File_Ast* Go_Index::get_base_type(File_Ast* type) {
                     if (sel.x->type != AST_ID)
                         goto done;
 
+                    goto done;  // TODO: fix this shit below
+
+                    /*
                     // FIXME: it just makes no sense what i'm doing here
                     // i think i was originally intending to use sel.x->id.lit to LOOK UP the package path, and append that to GOPATH
                     // but now we should just call resolve_import
@@ -2942,6 +2951,7 @@ File_Ast* Go_Index::get_base_type(File_Ast* type) {
 
                     type = new_type;
                     break;
+                    */
                 }
             default:
                 goto done;
@@ -2972,7 +2982,7 @@ File_Ast* Go_Index::get_type_from_decl(File_Ast* decl, ccstr id) {
 
                     auto expr = rhs->list[0];
 
-                    auto r = infer_type(make_file_ast(expr, decl->file));
+                    auto r = infer_type(decl->dup(expr));
                     if (r == NULL) return NULL;
 
                     auto type = r->type->ast;
@@ -3024,7 +3034,7 @@ File_Ast* Go_Index::get_type_from_decl(File_Ast* decl, ccstr id) {
 
                 // if rhslen == 1, expect it to be a parameter list
                 if (rhslen == 1) {
-                    auto r = infer_type(make_file_ast(rhs->list[0], decl->file));
+                    auto r = infer_type(decl->dup(rhs->list[0]));
                     if (r == NULL) return NULL;
 
                     auto type = r->type->ast;
@@ -3036,7 +3046,7 @@ File_Ast* Go_Index::get_type_from_decl(File_Ast* decl, ccstr id) {
                         For (type->parameters.fields->list) {
                             auto len = it->struct_field.ids->list.len;
                             if (offset + len >= idx)
-                                return make_file_ast(it->struct_field.type, decl->file);
+                                return decl->dup(it->struct_field.type);
                             offset += len;
                         }
                     }
@@ -3046,7 +3056,7 @@ File_Ast* Go_Index::get_type_from_decl(File_Ast* decl, ccstr id) {
                 }
 
                 if (rhslen == lhs->list.len) {
-                    auto r = infer_type(make_file_ast(rhs->list[idx], decl->file));
+                    auto r = infer_type(decl->dup(rhs->list[idx]));
                     return r == NULL ? NULL : r->type;
                 }
 
@@ -3056,7 +3066,7 @@ File_Ast* Go_Index::get_type_from_decl(File_Ast* decl, ccstr id) {
         case AST_VALUE_SPEC:
             {
                 if (ast->value_spec.type != NULL)
-                    return make_file_ast(ast->value_spec.type, decl->file);
+                    return decl->dup(ast->value_spec.type);
 
                 auto& spec_ids = ast->value_spec.ids->list;
 
@@ -3072,7 +3082,7 @@ File_Ast* Go_Index::get_type_from_decl(File_Ast* decl, ccstr id) {
                 auto& spec_vals = ast->value_spec.vals->list;
 
                 if (spec_ids.len == spec_vals.len) {
-                    auto r = infer_type(make_file_ast(spec_vals[idx], decl->file));
+                    auto r = infer_type(decl->dup(spec_vals[idx]));
                     return r == NULL ? NULL : r->type;
                 } else {
                     do {
@@ -3084,7 +3094,7 @@ File_Ast* Go_Index::get_type_from_decl(File_Ast* decl, ccstr id) {
                             val->type != AST_TYPE_ASSERTION_EXPR)
                             break;
 
-                        auto r = infer_type(make_file_ast(val, decl->file));
+                        auto r = infer_type(decl->dup(val));
                         if (r == NULL) break;
 
                         Ast* type = r->type->ast;
@@ -3094,13 +3104,13 @@ File_Ast* Go_Index::get_type_from_decl(File_Ast* decl, ccstr id) {
                         if (idx >= fields.len) break;
 
                         auto field = fields[idx];
-                        return make_file_ast(field->field.type, r->type->file);
+                        return r->type->dup(field->field.type);
                     } while (0);
                 }
                 break;
             }
         case AST_TYPE_SPEC:
-            return make_file_ast(ast->type_spec.type, decl->file);
+            return decl->dup(ast->type_spec.type);
         case AST_FUNC_DECL:
         case AST_IMPORT_SPEC:
             return decl;
@@ -3158,7 +3168,7 @@ Infer_Res* Go_Index::infer_type(File_Ast* expr, bool resolve) {
         switch (ast->type) {
             case AST_CALL_EXPR:
                 {
-                    auto r = infer_type(make_file_ast(ast->call_expr.func, expr->file));
+                    auto r = infer_type(expr->dup(ast->call_expr.func));
                     if (r == NULL) return NULL;
 
                     auto type = r->type->ast;
@@ -3171,11 +3181,11 @@ Infer_Res* Go_Index::infer_type(File_Ast* expr, bool resolve) {
                     else
                         return NULL;
 
-                    return make_file_ast(sig->signature.result, r->type->file);
+                    return r->type->dup(sig->signature.result);
                 }
             case AST_INDEX_EXPR:
                 do {
-                    auto r = infer_type(make_file_ast(ast->call_expr.func, expr->file), true);
+                    auto r = infer_type(expr->dup(ast->call_expr.func), true);
                     if (r == NULL) break;
 
                     auto type = r->base_type->ast;
@@ -3210,7 +3220,7 @@ Infer_Res* Go_Index::infer_type(File_Ast* expr, bool resolve) {
                             auto file = parse_file_into_ast(expr->file);
                             if (file == NULL) break;
 
-                            auto decl = find_decl_in_source(make_file_ast(file, expr->file), selexpr.x->id.lit);
+                            auto decl = find_decl_in_source(expr->dup(file), selexpr.x->id.lit);
                             if (decl == NULL) break;
                             if (decl->ast->type != AST_IMPORT_SPEC) break;
 
@@ -3224,26 +3234,26 @@ Infer_Res* Go_Index::infer_type(File_Ast* expr, bool resolve) {
                         } while (0);
                     }
 
-                    auto r = infer_type(make_file_ast(selexpr.x, expr->file), true);
+                    auto r = infer_type(expr->dup(selexpr.x), true);
                     if (r == NULL) break;
 
                     auto field = find_field_or_method_in_type(r->base_type, r->type, selexpr.sel->id.lit);
                     if (field == NULL) break;
 
-                    return make_file_ast(field->ast->struct_field.type, field->file);
+                    return field->dup(field->ast->struct_field.type);
                 } while (0);
                 return NULL;
             case AST_SLICE_EXPR:
                 {
-                    auto r = infer_type(make_file_ast(ast->slice_expr.x, expr->file));
+                    auto r = infer_type(expr->dup(ast->slice_expr.x));
                     if (r == NULL) return NULL;
                     return r->type;
                 }
             case AST_TYPE_ASSERTION_EXPR:
-                return make_file_ast(ast->type_assertion_expr.type, expr->file);
+                return expr->dup(ast->type_assertion_expr.type);
             case AST_ID:
                 {
-                    auto decl = find_decl_of_id(make_file_ast(ast, expr->file));
+                    auto decl = find_decl_of_id(expr->dup(ast));
                     if (decl == NULL) return NULL;
                     return get_type_from_decl(decl, ast->id.lit);
                 }
@@ -3412,25 +3422,20 @@ bool Go_Index::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period, 
     Autocomplete ret = { 0 };
 
     auto generate_results_from_current_package = [&]() -> List<AC_Result>* {
-        auto decls = list_decls_in_package(our_dirname(filepath));
+        // what's the import path of our workspace?
+        auto names = list_decl_names(world.wksp.go_import_path);
+        if (names == NULL) return NULL;
 
-        s32 len = 0;
-        For (*decls) len += it.items->len;
-
-        List<AC_Result>* results = NULL;
-
+        List<AC_Result> *ret = NULL;
         {
             SCOPED_MEM(&world.autocomplete_mem);
-            results = alloc_list<AC_Result>(len);
-            for (auto&& decl : *decls) {
-                For (*decl.items) {
-                    auto result = results->append();
-                    result->name = our_strcpy(it.name->id.lit);
-                }
+            auto results = alloc_list<AC_Result>();
+            For (*names) {
+                auto r = results->append();
+                r->name = our_strcpy(it);
             }
         }
-
-        return results;
+        return ret;
     };
 
     walk_ast(file, [&](Ast* ast, ccstr name, int depth) -> Walk_Action {
@@ -3443,7 +3448,8 @@ bool Go_Index::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period, 
             case AST_SELECTOR_EXPR:
                 {
                     auto sel = ast->selector_expr.sel;
-                    if (locate_pos_relative_to_ast(pos, sel) != 0) return WALK_CONTINUE;
+                    if (pos < ast->selector_expr.period_pos || pos > sel->end)
+                        return WALK_CONTINUE;
 
                     auto x = ast->selector_expr.x;
                     if (x->type == AST_ID) {
@@ -3456,30 +3462,10 @@ bool Go_Index::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period, 
                             auto spec_ast = spec->ast;
                             if (spec_ast->type != AST_IMPORT_SPEC) break;
 
-                            auto cb = [&](ccstr pkgpath, Import_Location loctype) {
-                                auto decls = list_decls_in_package(pkgpath);
-
-                                s32 len = 0;
-                                For (*decls)
-                                    len += it.items->len;
-
-                                {
-                                    SCOPED_MEM(&world.autocomplete_mem);
-                                    ret.results = alloc_list<AC_Result>(len);
-                                    for (auto&& decl : *decls) {
-                                        For (*decl.items) {
-                                            auto result = ret.results->append();
-                                            result->name = our_strcpy(it.name->id.lit);
-                                        }
-                                    }
-                                }
-
-                                return true;
-                            };
-
                             auto import_path = spec_ast->import_spec.path->basic_lit.val.string_val;
-                            auto res = resolve_import(import_path);
-                            if (res == NULL) break;
+
+                            auto names = list_decl_names(import_path);
+                            if (names == NULL) break;
 
                             // at this point, we have confirmation that x refers to a package.
                             // doesn't matter if we can't find any decls, we should terminate here
@@ -3488,15 +3474,9 @@ bool Go_Index::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period, 
                             {
                                 SCOPED_MEM(&world.autocomplete_mem);
                                 ret.results = alloc_list<AC_Result>();
-
-                                auto decls = list_decls_in_package(res->path);
-                                if (decls != NULL) {
-                                    for (auto&& decl : *decls) {
-                                        For (*decl.items) {
-                                            auto result = ret.results->append();
-                                            result->name = our_strcpy(it.name->id.lit);
-                                        }
-                                    }
+                                For (*names) {
+                                    auto result = ret.results->append();
+                                    result->name = our_strcpy(it);
                                 }
                             }
 
@@ -3597,8 +3577,6 @@ List<Field>* Go_Index::list_fields_in_type(File_Ast* ast) {
     return ret;
 }
 
-// Ast* follow
-
 int Go_Index::list_methods_in_base_type(File_Ast* ast, List<Field>* ret) {
     auto type = ast->ast;
     if (type == NULL) return 0;
@@ -3608,7 +3586,7 @@ int Go_Index::list_methods_in_base_type(File_Ast* ast, List<Field>* ret) {
         case AST_POINTER_TYPE:
             {
                 auto pointee = type->pointer_type.base_type;
-                auto base_type = get_base_type(make_file_ast(pointee, ast->file));
+                auto base_type = get_base_type(ast->dup(pointee));
                 count += list_methods_in_base_type(base_type, ret);
             }
             break;
@@ -3617,7 +3595,7 @@ int Go_Index::list_methods_in_base_type(File_Ast* ast, List<Field>* ret) {
                 auto& f = it->struct_field;
                 if (f.ids == NULL)
                     if (f.type->type == AST_ID || f.type->type != AST_SELECTOR_EXPR)
-                        count += list_methods_in_type(make_file_ast(f.type, ast->file), ret);
+                        count += list_methods_in_type(ast->dup(f.type), ret);
             }
             break;
     }
@@ -3630,79 +3608,55 @@ int Go_Index::list_methods_in_type(File_Ast* type, List<Field>* ret) {
     ccstr package_to_search = NULL;
 
     switch (ast->type) {
-        case AST_ID:
-            {
-                type_name = ast->id.lit;
-                package_to_search = our_dirname(type->file);
-            }
-            break;
-        case AST_SELECTOR_EXPR:
-            {
-                // foo.Bar
-                // assert foo is package
-                // probably assert first letter of Bar is capitalized
-                // assert bar is name of a type
+    case AST_ID:
+        type_name = ast->id.lit;
+        package_to_search = type->import_path;
+        break;
+    case AST_SELECTOR_EXPR:
+        {
+            // foo.Bar
+            // assert foo is package
+            // probably assert first letter of Bar is capitalized
+            // assert bar is name of a type
 
-                auto sel = ast->selector_expr.sel;
-                if (sel == NULL) break;
-                if (sel->type != AST_ID) break;
+            auto sel = ast->selector_expr.sel;
+            if (sel == NULL) break;
+            if (sel->type != AST_ID) break;
 
-                type_name = sel->id.lit;
-                if (!isupper(type_name[0])) break;
+            type_name = sel->id.lit;
+            if (!isupper(type_name[0])) break;
 
-                auto x = ast->selector_expr.x;
-                if (x == NULL) break;
-                if (x->type != AST_ID) break;
+            auto x = ast->selector_expr.x;
+            if (x == NULL) break;
+            if (x->type != AST_ID) break;
 
-                auto id_decl = find_decl_of_id(make_file_ast(x, type->file));
-                if (id_decl == NULL) break;
-                if (id_decl->ast->type != AST_IMPORT_SPEC) break;
+            auto id_decl = find_decl_of_id(type->dup(x));
+            if (id_decl == NULL) break;
+            if (id_decl->ast->type != AST_IMPORT_SPEC) break;
 
-                auto import_path = id_decl->ast->import_spec.path->basic_lit.val.string_val;
-                if (import_path == NULL) break;
+            auto import_path = id_decl->ast->import_spec.path->basic_lit.val.string_val;
+            if (import_path == NULL) break;
 
-                auto res = resolve_import(import_path);
-                if (res == NULL) break;
-
-                auto decl = find_decl_in_package(res->path, type_name, NULL);
-                if (decl != NULL && decl->ast->type == AST_TYPE_SPEC)
-                    package_to_search = res->path;
-            }
-            break;
+            package_to_search = import_path;
+        }
+        break;
     }
 
     if (type_name == NULL || package_to_search == NULL) return 0;
 
     int count = 0;
-    auto decls = list_decls_in_package(package_to_search);
+    auto prefix = our_sprintf("%s.", type_name);
+    auto names = list_decls_names(res);
 
-    // FIXME: i'm pretty sure this needs to be optimized using our index too
-    // actually i'm sure this whole function needs to be rewritten to use index
+    For (*names) {
+        if (!str_starts_with(prefix)) continue;
 
-    For (*decls) {
-        auto decl = it.decl->ast;
-        if (decl->type != AST_FUNC_DECL) continue;
-
-        auto recv = decl->func_decl.recv;
-        if (recv == NULL) continue;
-        if (recv->parameters.fields->list.len == 0) continue;
-
-        auto type = unpointer(recv->parameters.fields->list[0]->field.type);
-        if (type == NULL) continue;
-        if (type->type != AST_ID) continue;
-        if (!streq(type->id.lit, type_name)) continue;
-
-        if (ret != NULL) {
-            auto r = ret->append();
-            r->decl.ast = decl;
-            r->decl.file = it.decl->file;
-            r->id.ast = decl->func_decl.name;
-            r->id.file = it.decl->file;
-        }
-
+        // TODO: add this somehow
+        auto r = ret->append();
+        /* File_Ast */ r->decl = ...;
+        /* File_Ast */ r->id = ...;
         count++;
     }
-
     return count;
 }
 
@@ -3740,7 +3694,7 @@ int Go_Index::list_fields_in_type(File_Ast* ast, List<Field>* ret) {
         case AST_POINTER_TYPE:
             {
                 auto pointee = type->pointer_type.base_type;
-                auto base_type = get_base_type(make_file_ast(pointee, ast->file));
+                auto base_type = get_base_type(ast->dup(pointee));
                 count += list_fields_in_type(base_type, ret);
             }
             break;
@@ -3748,7 +3702,7 @@ int Go_Index::list_fields_in_type(File_Ast* ast, List<Field>* ret) {
             For (type->struct_type.fields->list) {
                 auto& f = it->struct_field;
                 if (f.ids == NULL) {
-                    auto base_type = get_base_type(make_file_ast(f.type, ast->file));
+                    auto base_type = get_base_type(ast->dup(f.type));
                     count += list_fields_in_type(base_type, ret);
                     continue;
                 }
@@ -3769,7 +3723,7 @@ int Go_Index::list_fields_in_type(File_Ast* ast, List<Field>* ret) {
                 auto& s = it->interface_spec;
 
                 if (s.type != NULL) {
-                    auto base_type = get_base_type(make_file_ast(s.type, ast->file));
+                    auto base_type = get_base_type(ast->dup(s.type));
                     if (base_type != NULL)
                         count += list_fields_in_type(base_type, ret);
                     continue;
@@ -4596,6 +4550,7 @@ void Go_Index::main_loop() {
 
         print("Hash is different, updating index...");
 
+        // update index
         {
             auto path = ri->path;
             auto import_path = it;
@@ -4639,14 +4594,8 @@ void Go_Index::main_loop() {
         }
     }
 
-    // testing
-
-    auto decl = find_decl_in_package(NULL, "Download", "github.com/invrainbow/whetstone/sync");
-    print("found decl at %s:%s", decl->file, format_pos(decl->ast->start));
-
-    // now we need to check that they're all indexed
-    // check that all import paths are indexed with correct, most recent info
-    // wait for notifications from various places that we should re-fetch info.
+    // TODO: the actual loop goes here, this comes later, wait for
+    // notifications from various places that we should re-fetch info.
 }
 
 bool Go_Index::delete_index() {

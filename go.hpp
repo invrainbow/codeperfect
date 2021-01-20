@@ -594,9 +594,19 @@ struct Ast {
     };
 };
 
+// an Ast contextualized within a file (full file path) and package (import path)
 struct File_Ast {
     Ast* ast;
     ccstr file;
+    ccstr import_path;
+
+    File_Ast *dup(Ast *new_ast) {
+        auto ret = alloc_object(File_Ast);
+        ret->ast = new_ast;
+        ret->file = file;
+        ret->import_path = import_path;
+        return ret;
+    };
 };
 
 struct AC_Result {

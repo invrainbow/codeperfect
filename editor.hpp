@@ -128,6 +128,8 @@ struct Pane {
 
 struct Workspace {
   char path[MAX_PATH];
+  char go_import_path[MAX_PATH];
+
   Pane _panes[4];
   List<Pane> panes;
   u32 current_pane;
