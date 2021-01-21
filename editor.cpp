@@ -324,13 +324,17 @@ void Editor::init() {
     ptr0(this);
     id = ++world.next_editor_id;
     mem.init("editor mem");
-    highlights_lock.init();
+
+    highlights.lock.init();
+    highlights.mem_a.init("editor highlights mem a");
+    highlights.mem_b.init("editor highlights mem b");
 }
 
 void Editor::cleanup() {
     mem.cleanup();
-    highlights->cleanup();
-    highlights_lock.cleanup();
+
+    highlights.rows->cleanup();
+    highlights.lock.cleanup();
 }
 
 ccstr hl_type_str(HlType type) {

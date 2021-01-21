@@ -1,3 +1,5 @@
+#pragma once
+
 #include "uthash.h"
 #include "list.hpp"
 

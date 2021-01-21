@@ -6,24 +6,24 @@ UI ui;
 run_before_main { ui.init(); };
 
 vec3f rgb_hex(ccstr s) {
-  if (s[0] == '#') s++;
+    if (s[0] == '#') s++;
 
-  char r[] = { s[0], s[1], '\0' };
-  char g[] = { s[2], s[3], '\0' };
-  char b[] = { s[4], s[5], '\0' };
+    char r[] = { s[0], s[1], '\0' };
+    char g[] = { s[2], s[3], '\0' };
+    char b[] = { s[4], s[5], '\0' };
 
-  return {
-    strtol(r, NULL, 16) / 255.0f,
-    strtol(g, NULL, 16) / 255.0f,
-    strtol(b, NULL, 16) / 255.0f,
-  };
+    return {
+        strtol(r, NULL, 16) / 255.0f,
+        strtol(g, NULL, 16) / 255.0f,
+        strtol(b, NULL, 16) / 255.0f,
+    };
 }
 
 vec4f rgba(vec3f color, float alpha) {
-  vec4f ret;
-  ret.rgb = color;
-  ret.a = alpha;
-  return ret;
+    vec4f ret;
+    ret.rgb = color;
+    ret.a = alpha;
+    return ret;
 }
 
 const vec3f COLOR_WHITE = rgb_hex("#ffffff");
@@ -42,710 +42,698 @@ const vec3f COLOR_THEME_4 = rgb_hex("eca895");
 const vec3f COLOR_THEME_5 = rgb_hex("e8918c");
 
 void UI::init() {
-  ptr0(this);
-  font = &world.font;
+    ptr0(this);
+    font = &world.font;
 }
 
 void UI::flush_verts() {
-  if (verts.len == 0) return;
+    if (verts.len == 0) return;
 
-  glBufferData(GL_ARRAY_BUFFER, sizeof(Vert) * verts.len, verts.items, GL_DYNAMIC_DRAW);
-  glDrawArrays(GL_TRIANGLES, 0, verts.len);
-  verts.len = 0;
+    glBufferData(GL_ARRAY_BUFFER, sizeof(Vert) * verts.len, verts.items, GL_DYNAMIC_DRAW);
+    glDrawArrays(GL_TRIANGLES, 0, verts.len);
+    verts.len = 0;
 }
 
 void UI::draw_quad(boxf b, boxf uv, vec4f color, bool solid) {
-  if (verts.len + 6 >= verts.cap)
-    flush_verts();
+    if (verts.len + 6 >= verts.cap)
+        flush_verts();
 
-  b.x *= world.display_scale.x;
-  b.w *= world.display_scale.x;
-  b.y *= world.display_scale.y;
-  b.h *= world.display_scale.y;
+    b.x *= world.display_scale.x;
+    b.w *= world.display_scale.x;
+    b.y *= world.display_scale.y;
+    b.h *= world.display_scale.y;
 
-  verts.append({ b.x, b.y + b.h, uv.x, uv.y + uv.h, color, solid });
-  verts.append({ b.x, b.y, uv.x, uv.y, color, solid });
-  verts.append({ b.x + b.w, b.y, uv.x + uv.w, uv.y, color, solid });
-  verts.append({ b.x, b.y + b.h, uv.x, uv.y + uv.h, color, solid });
-  verts.append({ b.x + b.w, b.y, uv.x + uv.w, uv.y, color, solid });
-  verts.append({ b.x + b.w, b.y + b.h, uv.x + uv.w, uv.y + uv.h, color, solid });
+    verts.append({ b.x, b.y + b.h, uv.x, uv.y + uv.h, color, solid });
+    verts.append({ b.x, b.y, uv.x, uv.y, color, solid });
+    verts.append({ b.x + b.w, b.y, uv.x + uv.w, uv.y, color, solid });
+    verts.append({ b.x, b.y + b.h, uv.x, uv.y + uv.h, color, solid });
+    verts.append({ b.x + b.w, b.y, uv.x + uv.w, uv.y, color, solid });
+    verts.append({ b.x + b.w, b.y + b.h, uv.x + uv.w, uv.y + uv.h, color, solid });
 }
 
 void UI::draw_rect(boxf b, vec4f color) {
-  draw_quad(b, { 0, 0, 1, 1 }, color, true);
+    draw_quad(b, { 0, 0, 1, 1 }, color, true);
 }
 
 void UI::draw_bordered_rect_outer(boxf b, vec4f color, vec4f border_color, int border_width) {
-  auto b2 = b;
-  b2.x -= border_width;
-  b2.y -= border_width;
-  b2.h += border_width * 2;
-  b2.w += border_width * 2;
+    auto b2 = b;
+    b2.x -= border_width;
+    b2.y -= border_width;
+    b2.h += border_width * 2;
+    b2.w += border_width * 2;
 
-  draw_rect(b2, border_color);
-  draw_rect(b, color);
+    draw_rect(b2, border_color);
+    draw_rect(b, color);
 }
 
 // advances pos forward
 void UI::draw_char(vec2f* pos, char ch, vec4f color) {
-  stbtt_aligned_quad q;
-  stbtt_GetPackedQuad(font->char_info, font->tex_size, font->tex_size, ch - ' ', &pos->x, &pos->y, &q, 0);
-  if (q.x1 > q.x0) {
-    boxf box = { q.x0, q.y0, q.x1 - q.x0, q.y1 - q.y0 };
-    boxf uv = { q.s0, q.t0, q.s1 - q.s0, q.t1 - q.t0 };
-    draw_quad(box, uv, color, false);
-  }
+    stbtt_aligned_quad q;
+    stbtt_GetPackedQuad(font->char_info, font->tex_size, font->tex_size, ch - ' ', &pos->x, &pos->y, &q, 0);
+    if (q.x1 > q.x0) {
+        boxf box = { q.x0, q.y0, q.x1 - q.x0, q.y1 - q.y0 };
+        boxf uv = { q.s0, q.t0, q.s1 - q.s0, q.t1 - q.t0 };
+        draw_quad(box, uv, color, false);
+    }
 }
 
 void UI::draw_string(vec2f pos, ccstr s, vec4f color) {
-  pos.y += font->offset_y;
-  for (u32 i = 0, len = strlen(s); i < len; i++)
-    draw_char(&pos, s[i], color);
+    pos.y += font->offset_y;
+    for (u32 i = 0, len = strlen(s); i < len; i++)
+        draw_char(&pos, s[i], color);
 }
 
 float UI::get_text_width(ccstr s) {
-  float x = 0, y = 0;
-  stbtt_aligned_quad q;
-  for (u32 i = 0, len = strlen(s); i < len; i++)
-    stbtt_GetPackedQuad(font->char_info, font->tex_size, font->tex_size, s[i] - ' ', &x, &y, &q, 0);
-  return x;
+    float x = 0, y = 0;
+    stbtt_aligned_quad q;
+    for (u32 i = 0, len = strlen(s); i < len; i++)
+        stbtt_GetPackedQuad(font->char_info, font->tex_size, font->tex_size, s[i] - ' ', &x, &y, &q, 0);
+    return x;
 }
 
 boxf UI::get_sidebar_area() {
-  boxf sidebar_area;
-  ptr0(&sidebar_area);
+    boxf sidebar_area;
+    ptr0(&sidebar_area);
 
-  if (world.sidebar.view != SIDEBAR_CLOSED) {
-    sidebar_area.h = world.window_size.y;
-    sidebar_area.w = world.sidebar.width;
-  }
+    if (world.sidebar.view != SIDEBAR_CLOSED) {
+        sidebar_area.h = world.window_size.y;
+        sidebar_area.w = world.sidebar.width;
+    }
 
-  return sidebar_area;
+    return sidebar_area;
 }
 
 boxf UI::get_panes_area() {
-  boxf panes_area;
-  panes_area.pos = { 0, 0 };
-  panes_area.size = world.window_size;
+    boxf panes_area;
+    panes_area.pos = { 0, 0 };
+    panes_area.size = world.window_size;
 
-  boxf sidebar_area = get_sidebar_area();
-  panes_area.x += sidebar_area.w;
-  panes_area.w -= sidebar_area.w;
+    boxf sidebar_area = get_sidebar_area();
+    panes_area.x += sidebar_area.w;
+    panes_area.w -= sidebar_area.w;
 
-  return panes_area;
+    return panes_area;
 }
 
 u32 advance_subtree_in_file_explorer(u32 i) {
-  auto it = world.file_explorer.files[i++];
-  if (it->num_children != -1)
-    for (u32 j = 0; j < it->num_children; j++)
-      i = advance_subtree_in_file_explorer(i);
-  return i;
+    auto it = world.file_explorer.files[i++];
+    if (it->num_children != -1)
+        for (u32 j = 0; j < it->num_children; j++)
+            i = advance_subtree_in_file_explorer(i);
+    return i;
 }
 
 void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
-  {
-    // prepare opengl for drawing shit
-    glViewport(0, 0, world.display_size.x, world.display_size.y);
-    glUseProgram(program);
-    glActiveTexture(GL_TEXTURE0); // activate texture
-    glBindTexture(GL_TEXTURE_2D, font->texid);
-    glBindVertexArray(vao); // bind my vertex array & buffers
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    verts.init(LIST_FIXED, 6 * 128, alloc_array(Vert, 6 * 128));
-  }
-
-  auto& wksp = world.wksp;
-
-  boxf panes_area = get_panes_area();
-  boxf sidebar_area = get_sidebar_area();
-
-  boxf error_list_area;
-  error_list_area.x = 0;
-  error_list_area.y = world.window_size.y;
-  error_list_area.w = world.window_size.x;
-  error_list_area.h = 0;
-
-  if (world.error_list.show) {
-    panes_area.h -= world.error_list.height;
-    error_list_area.y -= world.error_list.height;
-    error_list_area.h += world.error_list.height;
-  }
-
-  boxf pane_area;
-  pane_area.pos = panes_area.pos;
-
-  if (world.sidebar.view != SIDEBAR_CLOSED) {
-    draw_rect(sidebar_area, rgba(COLOR_BLACK));
-
-    switch (world.sidebar.view) {
-      case SIDEBAR_FILE_EXPLORER:
-        {
-          vec2f pos = sidebar_area.pos;
-          pos.y -= world.file_explorer.scroll_offset;
-
-          for (u32 i = 0; i < world.file_explorer.files.len;) {
-            auto it = world.file_explorer.files[i];
-
-            if (pos.y >= sidebar_area.y) {
-              SCOPED_FRAME();
-              auto s = (cstr)our_sprintf("%*s%s", it->depth * 2, "", it->name);
-              auto available_width = (int)(sidebar_area.w / font->width);
-              if (available_width < strlen(s))
-                s[available_width] = '\0';
-
-              boxf line_area;
-              line_area.pos = pos;
-              line_area.w = sidebar_area.w;
-              line_area.h = font->height;
-
-              if (line_area.contains(world.ui.mouse_pos))
-                draw_rect(line_area, rgba(COLOR_DARK_GREY));
-              draw_string(pos, s, rgba(COLOR_WHITE));
-            }
-
-            pos.y += font->height;
-            if (pos.y > sidebar_area.h) break;
-
-            if (it->num_children != -1 && !it->open)
-              i = advance_subtree_in_file_explorer(i);
-            else
-              i++;
-          }
-        }
-        break;
-      case SIDEBAR_SEARCH_RESULTS:
-        {
-          vec2f pos;
-          pos.x = 0;
-          pos.y = sidebar_area.y - world.search_results.scroll_offset;
-          pos.y += font->offset_y;
-
-          For (world.search_results.results) {
-            if (pos.y >= sidebar_area.y) {
-              SCOPED_FRAME();
-
-              pos.x = 0;
-
-              boxf line_area;
-              line_area.pos = pos;
-              line_area.y -= font->offset_y;
-              line_area.w = sidebar_area.w;
-              line_area.h = font->height;
-
-              if (line_area.contains(world.ui.mouse_pos))
-                draw_rect(line_area, rgba(COLOR_DARK_GREY));
-
-              auto str = our_sprintf("%s:%d:%d ", it->filename, it->row, it->match_col);
-              auto len = strlen(str);
-
-              for (u32 i = 0; i < len && pos.x < sidebar_area.w; i++)
-                draw_char(&pos, str[i], rgba(COLOR_WHITE));
-
-              len = strlen(it->preview);
-              for (u32 i = 0; i < len && pos.x < sidebar_area.w; i++) {
-                auto color = rgba(COLOR_WHITE);
-                if (it->match_col_in_preview <= i && i < it->match_col_in_preview + it->match_len)
-                  color = rgba(COLOR_LIME);
-                draw_char(&pos, it->preview[i], color);
-              }
-            }
-
-            pos.y += font->height;
-            if (pos.y > sidebar_area.h) break;
-          }
-        }
-        break;
-    }
-  }
-
-  // draw panes
-  u32 current_pane = 0;
-  for (auto && pane : wksp.panes) {
-    auto is_pane_selected = (current_pane == wksp.current_pane);
-
-    pane_area.w = pane.width;
-    pane_area.h = panes_area.h;
-
-    boxf tabs_area, editor_area;
-    get_tabs_and_editor_area(&pane_area, &tabs_area, &editor_area);
-
-    draw_rect(tabs_area, rgba(is_pane_selected ? COLOR_MEDIUM_GREY : COLOR_DARK_GREY));
-    draw_rect(editor_area, rgba(COLOR_BLACK));
-
-    vec2 tab_padding = { 15, 5 };
-
-    boxf tab;
-    tab.pos = tabs_area.pos + new_vec2(5, tabs_area.h - tab_padding.y * 2 - font->height);
-
-    // draw tabs
-    u32 tab_id = 0;
-    for (auto&& editor : pane.editors) {
-      bool is_selected = (tab_id == pane.current_editor);
-
-      ccstr label;
-      if (editor.is_untitled) {
-        label = "<untitled>";
-      } else {
-        auto filepath = editor.filepath;
-        label = filepath;
-        auto root_len = strlen(wksp.path);
-        if (wksp.path[root_len - 1] != '/')
-          root_len++;
-        label += root_len;
-      }
-
-      auto text_width = get_text_width(label);
-
-      tab.w = text_width + tab_padding.x * 2;
-      tab.h = font->height + tab_padding.y * 2;
-
-      draw_rect(tab, rgba(is_selected ? COLOR_BLACK : COLOR_MEDIUM_DARK_GREY));
-      draw_string(tab.pos + tab_padding, label, rgba(is_selected ? COLOR_WHITE : COLOR_LIGHT_GREY));
-
-      tab.pos.x += tab.w + 5;
-      tab_id++;
+    {
+        // prepare opengl for drawing shit
+        glViewport(0, 0, world.display_size.x, world.display_size.y);
+        glUseProgram(program);
+        glActiveTexture(GL_TEXTURE0); // activate texture
+        glBindTexture(GL_TEXTURE_2D, font->texid);
+        glBindVertexArray(vao); // bind my vertex array & buffers
+        glBindBuffer(GL_ARRAY_BUFFER, vbo);
+        verts.init(LIST_FIXED, 6 * 128, alloc_array(Vert, 6 * 128));
     }
 
-    // draw editor
-    if (pane.editors.len > 0) {
-      vec2f cur_pos = editor_area.pos + new_vec2f(EDITOR_MARGIN_X, EDITOR_MARGIN_Y);
-      cur_pos.y += font->offset_y;
+    auto& wksp = world.wksp;
 
-      auto editor = pane.get_current_editor();
+    boxf panes_area = get_panes_area();
+    boxf sidebar_area = get_sidebar_area();
 
-      if (world.nvim_data.waiting_focus_window == editor->id) {
-        // TODO
-      } else {
-        auto &buf = editor->buf;
-        auto &view = editor->view;
+    boxf error_list_area;
+    error_list_area.x = 0;
+    error_list_area.y = world.window_size.y;
+    error_list_area.w = world.window_size.x;
+    error_list_area.h = 0;
 
-        vec2f actual_cursor_position = { -1, -1 };
+    if (world.error_list.show) {
+        panes_area.h -= world.error_list.height;
+        error_list_area.y -= world.error_list.height;
+        error_list_area.h += world.error_list.height;
+    }
 
-        auto draw_background = [&](vec3f color) {
-          boxf b = { cur_pos.x, cur_pos.y - font->offset_y, (float)font->width, (float)font->height };
-          draw_rect(b, rgba(color));
-        };
+    boxf pane_area;
+    pane_area.pos = panes_area.pos;
 
-        auto draw_cursor = [&]() {
-          actual_cursor_position = cur_pos;  // save position where cursor is drawn for later use
-          draw_background(COLOR_LIME);
-        };
+    if (world.sidebar.view != SIDEBAR_CLOSED) {
+        draw_rect(sidebar_area, rgba(COLOR_BLACK));
 
-        List<Client_Breakpoint> breakpoints_for_this_editor;
+        switch (world.sidebar.view) {
+            case SIDEBAR_FILE_EXPLORER:
+                {
+                    vec2f pos = sidebar_area.pos;
+                    pos.y -= world.file_explorer.scroll_offset;
 
-        {
-          u32 len = 0;
-          For (world.dbg.breakpoints)
-            if (streq(it.file, editor->filepath))
-              len++;
+                    for (u32 i = 0; i < world.file_explorer.files.len;) {
+                        auto it = world.file_explorer.files[i];
 
-          alloc_list(&breakpoints_for_this_editor, len);
-          For (world.dbg.breakpoints) {
-            if (streq(it.file, editor->filepath)) {
-              auto p = breakpoints_for_this_editor.append();
-              memcpy(p, &it, sizeof(it));
-            }
-          }
-        }
+                        if (pos.y >= sidebar_area.y) {
+                            SCOPED_FRAME();
+                            auto s = (cstr)our_sprintf("%*s%s", it->depth * 2, "", it->name);
+                            auto available_width = (int)(sidebar_area.w / font->width);
+                            if (available_width < strlen(s))
+                                s[available_width] = '\0';
 
-        if (buf.lines.len == 0) {
-          draw_cursor();
-        }
+                            boxf line_area;
+                            line_area.pos = pos;
+                            line_area.w = sidebar_area.w;
+                            line_area.h = font->height;
 
-        auto relative_y = 0;
-        for (u32 y = view.y; y < view.y + view.h; y++, relative_y++) {
-          if (y >= buf.lines.len) break;
+                            if (line_area.contains(world.ui.mouse_pos))
+                                draw_rect(line_area, rgba(COLOR_DARK_GREY));
+                            draw_string(pos, s, rgba(COLOR_WHITE));
+                        }
 
-          auto line = &buf.lines[y];
-          auto highlights = &editor->highlights->at(relative_y);
-          auto highlight_idx = 0;
+                        pos.y += font->height;
+                        if (pos.y > sidebar_area.h) break;
 
-          auto is_stopped_at_this_line = [&]() -> bool {
-            if (world.dbg.state_flag == DBGSTATE_PAUSED)
-              if (streq(world.dbg.state.file_stopped_at, editor->filepath))
-                if (world.dbg.state.line_stopped_at == y + 1)
-                  return true;
-            return false;
-          };
-
-          boxf line_box = {
-            cur_pos.x,
-            cur_pos.y - font->offset_y,
-            (float)editor_area.w,
-            (float)font->height - 1,
-          };
-
-          if (is_stopped_at_this_line()) {
-            draw_rect(line_box, rgba(COLOR_DARK_YELLOW));
-          } else {
-            For (breakpoints_for_this_editor) {
-              if (it.line == y + 1) {
-                bool inactive = (it.pending || world.dbg.state_flag == DBGSTATE_INACTIVE);
-                draw_rect(line_box, rgba(COLOR_DARK_RED, inactive ? 0.5 : 1.0));
+                        if (it->num_children != -1 && !it->open)
+                            i = advance_subtree_in_file_explorer(i);
+                        else
+                            i++;
+                    }
+                }
                 break;
-              }
-            }
-          }
+            case SIDEBAR_SEARCH_RESULTS:
+                {
+                    vec2f pos;
+                    pos.x = 0;
+                    pos.y = sidebar_area.y - world.search_results.scroll_offset;
+                    pos.y += font->offset_y;
 
-          auto is_cursor_match = [&](cur2 cur, i32 x, i32 y) -> bool {
-            if (cur.y != y) return false;
-          };
+                    For (world.search_results.results) {
+                        if (pos.y >= sidebar_area.y) {
+                            SCOPED_FRAME();
 
-          u32 actual_x = 0;
-          for (u32 x = view.x; x < view.x + view.w; x++) {
-            if (x >= line->len) break;
+                            pos.x = 0;
 
-            /*
-            while (highlight_idx < highlights->len) {
-              auto hl = highlights->at(highlight_idx);
-              if (actual_x > hl.col + hl.len) {
-                highlight_idx++;
-              } else {
+                            boxf line_area;
+                            line_area.pos = pos;
+                            line_area.y -= font->offset_y;
+                            line_area.w = sidebar_area.w;
+                            line_area.h = font->height;
+
+                            if (line_area.contains(world.ui.mouse_pos))
+                                draw_rect(line_area, rgba(COLOR_DARK_GREY));
+
+                            auto str = our_sprintf("%s:%d:%d ", it->filename, it->row, it->match_col);
+                            auto len = strlen(str);
+
+                            for (u32 i = 0; i < len && pos.x < sidebar_area.w; i++)
+                                draw_char(&pos, str[i], rgba(COLOR_WHITE));
+
+                            len = strlen(it->preview);
+                            for (u32 i = 0; i < len && pos.x < sidebar_area.w; i++) {
+                                auto color = rgba(COLOR_WHITE);
+                                if (it->match_col_in_preview <= i && i < it->match_col_in_preview + it->match_len)
+                                    color = rgba(COLOR_LIME);
+                                draw_char(&pos, it->preview[i], color);
+                            }
+                        }
+
+                        pos.y += font->height;
+                        if (pos.y > sidebar_area.h) break;
+                    }
+                }
                 break;
-              }
-            }
-            */
+        }
+    }
 
-            auto text_color = COLOR_WHITE;
-            if (editor->cur == new_cur2(x, y)) {
-              draw_cursor();
-              text_color = COLOR_BLACK;
+    // draw panes
+    u32 current_pane = 0;
+    for (auto && pane : wksp.panes) {
+        auto is_pane_selected = (current_pane == wksp.current_pane);
+
+        pane_area.w = pane.width;
+        pane_area.h = panes_area.h;
+
+        boxf tabs_area, editor_area;
+        get_tabs_and_editor_area(&pane_area, &tabs_area, &editor_area);
+
+        draw_rect(tabs_area, rgba(is_pane_selected ? COLOR_MEDIUM_GREY : COLOR_DARK_GREY));
+        draw_rect(editor_area, rgba(COLOR_BLACK));
+
+        vec2 tab_padding = { 15, 5 };
+
+        boxf tab;
+        tab.pos = tabs_area.pos + new_vec2(5, tabs_area.h - tab_padding.y * 2 - font->height);
+
+        // draw tabs
+        u32 tab_id = 0;
+        for (auto&& editor : pane.editors) {
+            bool is_selected = (tab_id == pane.current_editor);
+
+            ccstr label;
+            if (editor.is_untitled) {
+                label = "<untitled>";
             } else {
-              switch (highlights->at(actual_x).type) {
-                case HL_COMMENT:   text_color = COLOR_THEME_1; break;
-                case HL_STATEMENT: text_color = COLOR_THEME_2; break;
-                case HL_TYPE:      text_color = COLOR_THEME_3; break;
-                case HL_CONSTANT:  text_color = COLOR_THEME_4; break;
-                case HL_VISUAL:
-                  draw_background(COLOR_MEDIUM_GREY);
-                  text_color = COLOR_BLACK;
-                  break;
-              }
+                auto filepath = editor.filepath;
+                label = filepath;
+                auto root_len = strlen(wksp.path);
+                if (wksp.path[root_len - 1] != '/')
+                    root_len++;
+                label += root_len;
             }
 
-            uchar uch = line->at(x);
-            if (uch == '\t')
-              cur_pos.x += font->width * TAB_SIZE;
-            else
-              draw_char(&cur_pos, (char)uch, rgba(text_color));
+            auto text_width = get_text_width(label);
 
-            actual_x += (uch == '\t' ? TAB_SIZE : 1);
-          }
+            tab.w = text_width + tab_padding.x * 2;
+            tab.h = font->height + tab_padding.y * 2;
 
-          if (editor->cur == new_cur2(line->len, y))
-            draw_cursor();
+            draw_rect(tab, rgba(is_selected ? COLOR_BLACK : COLOR_MEDIUM_DARK_GREY));
+            draw_string(tab.pos + tab_padding, label, rgba(is_selected ? COLOR_WHITE : COLOR_LIGHT_GREY));
 
-          cur_pos.x = editor_area.x + EDITOR_MARGIN_X;
-          cur_pos.y += font->height;
+            tab.pos.x += tab.w + 5;
+            tab_id++;
         }
 
-        do {
-          // we can't draw the autocomplete if we don't know where to draw it
-          // when would this ever happen though?
-          if (actual_cursor_position.x == -1) break;
+        // draw editor
+        if (pane.editors.len > 0) {
+            vec2f cur_pos = editor_area.pos + new_vec2f(EDITOR_MARGIN_X, EDITOR_MARGIN_Y);
+            cur_pos.y += font->offset_y;
 
-          auto &ac = editor->autocomplete;
+            auto editor = pane.get_current_editor();
 
-          if (ac.ac.results == NULL) break;
+            if (world.nvim_data.waiting_focus_window == editor->id) {
+                // TODO
+            } else {
+                auto &buf = editor->buf;
+                auto &view = editor->view;
 
-          s32 max_len = 0;
-          s32 num_items = min(ac.filtered_results->len, AUTOCOMPLETE_WINDOW_ITEMS);
+                vec2f actual_cursor_position = { -1, -1 };
 
-          auto format_name = [&](int i, ccstr name) -> ccstr {
-            return our_sprintf("%d) %s", i + 1, name);
-          };
+                auto draw_background = [&](vec3f color) {
+                    boxf b = { cur_pos.x, cur_pos.y - font->offset_y, (float)font->width, (float)font->height };
+                    draw_rect(b, rgba(color));
+                };
 
-          {
-            s32 idx = 0;
-            For(*ac.filtered_results) {
-              s32 len;
-              {
-                SCOPED_FRAME();
-                len = strlen(format_name(idx, ac.ac.results->at(it).name));
-              }
-              if (len > max_len)
-                max_len = len;
-              idx++;
+                auto draw_cursor = [&]() {
+                    actual_cursor_position = cur_pos;    // save position where cursor is drawn for later use
+                    draw_background(COLOR_LIME);
+                };
+
+                List<Client_Breakpoint> breakpoints_for_this_editor;
+
+                {
+                    u32 len = 0;
+                    For (world.dbg.breakpoints)
+                        if (streq(it.file, editor->filepath))
+                            len++;
+
+                    alloc_list(&breakpoints_for_this_editor, len);
+                    For (world.dbg.breakpoints) {
+                        if (streq(it.file, editor->filepath)) {
+                            auto p = breakpoints_for_this_editor.append();
+                            memcpy(p, &it, sizeof(it));
+                        }
+                    }
+                }
+
+                if (buf.lines.len == 0) {
+                    draw_cursor();
+                }
+
+                auto relative_y = 0;
+                for (u32 y = view.y; y < view.y + view.h; y++, relative_y++) {
+                    if (y >= buf.lines.len) break;
+
+                    auto line = &buf.lines[y];
+                    auto highlights = &editor->highlights.rows->at(relative_y);
+                    auto highlight_idx = 0;
+
+                    auto is_stopped_at_this_line = [&]() -> bool {
+                        if (world.dbg.state_flag == DBGSTATE_PAUSED)
+                            if (streq(world.dbg.state.file_stopped_at, editor->filepath))
+                                if (world.dbg.state.line_stopped_at == y + 1)
+                                    return true;
+                        return false;
+                    };
+
+                    boxf line_box = {
+                        cur_pos.x,
+                        cur_pos.y - font->offset_y,
+                        (float)editor_area.w,
+                        (float)font->height - 1,
+                    };
+
+                    if (is_stopped_at_this_line()) {
+                        draw_rect(line_box, rgba(COLOR_DARK_YELLOW));
+                    } else {
+                        For (breakpoints_for_this_editor) {
+                            if (it.line == y + 1) {
+                                bool inactive = (it.pending || world.dbg.state_flag == DBGSTATE_INACTIVE);
+                                draw_rect(line_box, rgba(COLOR_DARK_RED, inactive ? 0.5 : 1.0));
+                                break;
+                            }
+                        }
+                    }
+
+                    auto is_cursor_match = [&](cur2 cur, i32 x, i32 y) -> bool {
+                        if (cur.y != y) return false;
+                    };
+
+                    u32 actual_x = 0;
+                    for (u32 x = view.x; x < view.x + view.w; x++) {
+                        if (x >= line->len) break;
+
+                        /*
+                        while (highlight_idx < highlights->len) {
+                            auto hl = highlights->at(highlight_idx);
+                            if (actual_x > hl.col + hl.len) {
+                                highlight_idx++;
+                            } else {
+                                break;
+                            }
+                        }
+                        */
+
+                        auto text_color = COLOR_WHITE;
+                        if (editor->cur == new_cur2(x, y)) {
+                            draw_cursor();
+                            text_color = COLOR_BLACK;
+                        } else {
+                            switch (highlights->at(actual_x).type) {
+                                case HL_COMMENT:     text_color = COLOR_THEME_1; break;
+                                case HL_STATEMENT: text_color = COLOR_THEME_2; break;
+                                case HL_TYPE:            text_color = COLOR_THEME_3; break;
+                                case HL_CONSTANT:    text_color = COLOR_THEME_4; break;
+                                case HL_VISUAL:
+                                    draw_background(COLOR_MEDIUM_GREY);
+                                    text_color = COLOR_BLACK;
+                                    break;
+                            }
+                        }
+
+                        uchar uch = line->at(x);
+                        if (uch == '\t')
+                            cur_pos.x += font->width * TAB_SIZE;
+                        else
+                            draw_char(&cur_pos, (char)uch, rgba(text_color));
+
+                        actual_x += (uch == '\t' ? TAB_SIZE : 1);
+                    }
+
+                    if (editor->cur == new_cur2(line->len, y))
+                        draw_cursor();
+
+                    cur_pos.x = editor_area.x + EDITOR_MARGIN_X;
+                    cur_pos.y += font->height;
+                }
+
+                do {
+                    // we can't draw the autocomplete if we don't know where to draw it
+                    // when would this ever happen though?
+                    if (actual_cursor_position.x == -1) break;
+
+                    auto &ac = editor->autocomplete;
+
+                    if (ac.ac.results == NULL) break;
+
+                    s32 max_len = 0;
+                    s32 num_items = min(ac.filtered_results->len, AUTOCOMPLETE_WINDOW_ITEMS);
+
+                    auto format_name = [&](int i, ccstr name) -> ccstr {
+                        return our_sprintf("%d) %s", i + 1, name);
+                    };
+
+                    {
+                        s32 idx = 0;
+                        For(*ac.filtered_results) {
+                            s32 len;
+                            {
+                                SCOPED_FRAME();
+                                len = strlen(format_name(idx, ac.ac.results->at(it).name));
+                            }
+                            if (len > max_len)
+                                max_len = len;
+                            idx++;
+                        }
+                    }
+
+                    if (num_items > 0) {
+                        boxf menu;
+                        menu.w = font->width * max_len;
+                        menu.h = font->height * num_items;
+                        menu.x = min(actual_cursor_position.x - strlen(ac.prefix) * font->width, world.window_size.x - menu.w);
+                        menu.y = min(actual_cursor_position.y - font->offset_y + font->height, world.window_size.y - menu.h);
+
+                        draw_bordered_rect_outer(menu, rgba(COLOR_BLACK), rgba(COLOR_LIGHT_GREY), 1);
+
+                        auto menu_pos = menu.pos;
+
+                        for (int i = ac.view; i < ac.view + num_items; i++) {
+                            auto idx = ac.filtered_results->at(i);
+
+                            vec3f color = new_vec3f(1.0, 1.0, 1.0);
+
+                            if (i == ac.selection) {
+                                boxf b;
+                                b.pos = menu_pos;
+                                b.h = font->height;
+                                b.w = menu.w;
+                                draw_rect(b, rgba(COLOR_WHITE));
+                                color = new_vec3f(0.0, 0.0, 0.0);
+                            }
+
+                            {
+                                SCOPED_FRAME();
+                                auto str = format_name(i, ac.ac.results->at(idx).name);
+                                draw_string(menu_pos, str, rgba(color));
+                            }
+
+                            menu_pos.y += font->height;
+                        }
+                    }
+                } while (0);
+
+                do {
+                    if (actual_cursor_position.x == -1) break;
+
+                    auto &hint = editor->parameter_hint;
+                    if (hint.params == NULL) break;
+
+                    u32 str_len = 0;
+                    if (hint.params->len == 0)
+                        str_len = 2;
+                    else
+                        str_len = (2 * (hint.params->len - 1)) + 2;
+                    For(*hint.params) str_len += strlen(it);
+
+                    boxf bg;
+                    bg.w = font->width * str_len;
+                    bg.h = font->height;
+                    bg.x = min(actual_cursor_position.x, world.window_size.x - bg.w);
+                    bg.y = min(actual_cursor_position.y - font->offset_y - font->height, world.window_size.y - bg.h);
+
+                    draw_bordered_rect_outer(bg, rgba(COLOR_DARK_GREY), rgba(COLOR_WHITE), 1);
+
+                    Text_Renderer rend;
+                    rend.init();
+                    rend.write("(");
+                    for (int i = 0; i < hint.params->len; i++) {
+                        rend.write("%s", hint.params->at(i));
+                        if (i < hint.params->len - 1)
+                            rend.write(", ");
+                    }
+                    rend.write(")");
+                    draw_string(bg.pos, rend.finish(), rgba(COLOR_WHITE));
+                } while (0);
+
+                if (world.use_nvim) {
+                    ccstr mode_str = NULL;
+
+                    switch (editor->nvim_data.vimode) {
+                        case VIMODE_NORMAL: mode_str = "NORMAL"; break;
+                        case VIMODE_VISUAL: mode_str = "VISUAL"; break;
+                        case VIMODE_INSERT: mode_str = "INSERT"; break;
+                        case VIMODE_REPLACE: mode_str = "REPLACE"; break;
+                    }
+
+                    if (mode_str != NULL) {
+                        boxf b;
+                        b.x = editor_area.x;
+                        b.y = editor_area.y + editor_area.h;
+                        b.x += 10;
+                        b.y -= 10;
+                        b.w = font->width * strlen(mode_str);
+                        b.h = font->height;
+                        b.y -= b.h;
+
+                        draw_rect(b, rgba(COLOR_WHITE));
+                        draw_string(b.pos, mode_str, rgba(COLOR_BLACK));
+                    }
+                }
             }
-          }
+        }
 
-          if (num_items > 0) {
-            boxf menu;
-            menu.w = font->width * max_len;
-            menu.h = font->height * num_items;
-            menu.x = min(actual_cursor_position.x - strlen(ac.prefix) * font->width, world.window_size.x - menu.w);
-            menu.y = min(actual_cursor_position.y - font->offset_y + font->height, world.window_size.y - menu.h);
+        current_pane++;
+        pane_area.x += pane_area.w;
+    }
 
-            draw_bordered_rect_outer(menu, rgba(COLOR_BLACK), rgba(COLOR_LIGHT_GREY), 1);
+    // draw pane resizers
 
-            auto menu_pos = menu.pos;
+    {
+        auto num_areas = world.wksp.panes.len - 1;
+        auto resize_areas = alloc_array(boxf, num_areas);
+        ui.get_pane_resize_areas(resize_areas, num_areas);
 
-            for (int i = ac.view; i < ac.view + num_items; i++) {
-              auto idx = ac.filtered_results->at(i);
-
-              vec3f color = new_vec3f(1.0, 1.0, 1.0);
-
-              if (i == ac.selection) {
-                boxf b;
-                b.pos = menu_pos;
-                b.h = font->height;
-                b.w = menu.w;
+        for (u32 i = 0; i < num_areas; i++) {
+            auto& b = resize_areas[i];
+            if (b.contains(world.ui.mouse_pos))
                 draw_rect(b, rgba(COLOR_WHITE));
-                color = new_vec3f(0.0, 0.0, 0.0);
-              }
-
-              {
-                SCOPED_FRAME();
-                auto str = format_name(i, ac.ac.results->at(idx).name);
-                draw_string(menu_pos, str, rgba(color));
-              }
-
-              menu_pos.y += font->height;
-            }
-          }
-        } while (0);
-
-        do {
-          if (actual_cursor_position.x == -1) break;
-
-          auto &hint = editor->parameter_hint;
-          if (hint.params == NULL) break;
-
-          u32 str_len = 0;
-          if (hint.params->len == 0)
-            str_len = 2;
-          else
-            str_len = (2 * (hint.params->len - 1)) + 2;
-          For(*hint.params) str_len += strlen(it);
-
-          boxf bg;
-          bg.w = font->width * str_len;
-          bg.h = font->height;
-          bg.x = min(actual_cursor_position.x, world.window_size.x - bg.w);
-          bg.y = min(actual_cursor_position.y - font->offset_y - font->height, world.window_size.y - bg.h);
-
-          draw_bordered_rect_outer(bg, rgba(COLOR_DARK_GREY), rgba(COLOR_WHITE), 1);
-
-          Text_Renderer rend;
-          rend.init();
-          rend.write("(");
-          for (int i = 0; i < hint.params->len; i++) {
-            rend.write("%s", hint.params->at(i));
-            if (i < hint.params->len - 1)
-              rend.write(", ");
-          }
-          rend.write(")");
-          draw_string(bg.pos, rend.finish(), rgba(COLOR_WHITE));
-        } while (0);
-
-        if (world.use_nvim) {
-          ccstr mode_str = NULL;
-
-          switch (editor->nvim_data.vimode) {
-            case VIMODE_NORMAL: mode_str = "NORMAL"; break;
-            case VIMODE_VISUAL: mode_str = "VISUAL"; break;
-            case VIMODE_INSERT: mode_str = "INSERT"; break;
-            case VIMODE_REPLACE: mode_str = "REPLACE"; break;
-          }
-
-          if (mode_str != NULL) {
-            boxf b;
-            b.x = editor_area.x;
-            b.y = editor_area.y + editor_area.h;
-            b.x += 10;
-            b.y -= 10;
-            b.w = font->width * strlen(mode_str);
-            b.h = font->height;
-            b.y -= b.h;
-
-            draw_rect(b, rgba(COLOR_WHITE));
-            draw_string(b.pos, mode_str, rgba(COLOR_BLACK));
-          }
+            else
+                draw_rect(b, rgba(COLOR_WHITE));
         }
-      }
     }
 
-    current_pane++;
-    pane_area.x += pane_area.w;
-  }
+    auto get_debugger_state_string = [&]() -> ccstr {
+        switch (world.dbg.state_flag) {
+            case DBGSTATE_PAUSED: return "PAUSED";
+            case DBGSTATE_STARTING: return "STARTING";
+            case DBGSTATE_RUNNING: return "RUNNING";
+        }
+        return NULL;
+    };
 
-  // draw pane resizers
+    auto state_str = get_debugger_state_string();
+    if (state_str != NULL) {
+        boxf b;
+        b.w = (font->width * strlen(state_str));
+        b.h = font->height;
+        b.x = world.display_size.x - 10 - b.w;
+        b.y = world.display_size.y - 10 - b.h;
 
-  {
-    auto num_areas = world.wksp.panes.len - 1;
-    auto resize_areas = alloc_array(boxf, num_areas);
-    ui.get_pane_resize_areas(resize_areas, num_areas);
-
-    for (u32 i = 0; i < num_areas; i++) {
-      auto& b = resize_areas[i];
-      if (b.contains(world.ui.mouse_pos))
-        draw_rect(b, rgba(COLOR_WHITE));
-      else
-        draw_rect(b, rgba(COLOR_WHITE));
+        draw_rect(b, rgba(COLOR_DARK_RED));
+        draw_string(b.pos, state_str, rgba(COLOR_WHITE));
     }
-  }
 
-  auto get_debugger_state_string = [&]() -> ccstr {
-    switch (world.dbg.state_flag) {
-      case DBGSTATE_PAUSED: return "PAUSED";
-      case DBGSTATE_STARTING: return "STARTING";
-      case DBGSTATE_RUNNING: return "RUNNING";
+    if (world.error_list.show) {
+        draw_rect(error_list_area, rgba(COLOR_DARK_GREY));
+
+        vec2f pos = error_list_area.pos;
+
+        For (world.build_errors.errors) {
+            SCOPED_FRAME();
+            auto s = our_sprintf("%s:%d:%d: %s", it->file, it->row, it->col, it->message);
+            draw_string(pos, s, rgba(COLOR_WHITE));
+        }
     }
-    return NULL;
-  };
 
-  auto state_str = get_debugger_state_string();
-  if (state_str != NULL) {
-    boxf b;
-    b.w = (font->width * strlen(state_str));
-    b.h = font->height;
-    b.x = world.display_size.x - 10 - b.w;
-    b.y = world.display_size.y - 10 - b.h;
+    // ????????????
 
-    draw_rect(b, rgba(COLOR_DARK_RED));
-    draw_string(b.pos, state_str, rgba(COLOR_WHITE));
-  }
-
-  if (world.error_list.show) {
-    draw_rect(error_list_area, rgba(COLOR_DARK_GREY));
-
-    vec2f pos = error_list_area.pos;
-
-    For (world.build_errors.errors) {
-      SCOPED_FRAME();
-      auto s = our_sprintf("%s:%d:%d: %s", it->file, it->row, it->col, it->message);
-      draw_string(pos, s, rgba(COLOR_WHITE));
-    }
-  }
-
-  // ????????????
-
-  // TODO: draw 'search anywhere' window
-  flush_verts();
+    // TODO: draw 'search anywhere' window
+    flush_verts();
 }
 
 void UI::get_tabs_and_editor_area(boxf* pane_area, boxf* ptabs_area, boxf* peditor_area) {
-  boxf tabs_area, editor_area;
+    boxf tabs_area, editor_area;
 
-  tabs_area.pos = pane_area->pos;
-  tabs_area.w = pane_area->w;
-  tabs_area.h = 30; // ???
+    tabs_area.pos = pane_area->pos;
+    tabs_area.w = pane_area->w;
+    tabs_area.h = 30; // ???
 
-  editor_area.pos = pane_area->pos;
-  editor_area.y += tabs_area.h;
-  editor_area.w = pane_area->w;
-  editor_area.h = pane_area->h - tabs_area.h;
+    editor_area.pos = pane_area->pos;
+    editor_area.y += tabs_area.h;
+    editor_area.w = pane_area->w;
+    editor_area.h = pane_area->h - tabs_area.h;
 
-  if (ptabs_area != NULL)
-    memcpy(ptabs_area, &tabs_area, sizeof(boxf));
-  if (peditor_area != NULL)
-    memcpy(peditor_area, &editor_area, sizeof(boxf));
+    if (ptabs_area != NULL)
+        memcpy(ptabs_area, &tabs_area, sizeof(boxf));
+    if (peditor_area != NULL)
+        memcpy(peditor_area, &editor_area, sizeof(boxf));
 }
 
 void UI::recalculate_view_sizes() {
-  boxf panes_area;
-  panes_area.pos = { 0, 0 };
-  panes_area.size = world.window_size;
+    boxf panes_area;
+    panes_area.pos = { 0, 0 };
+    panes_area.size = world.window_size;
 
-  boxf pane_area;
-  pane_area.x = 0;
-  pane_area.y = 0;
-  pane_area.w = panes_area.w / world.wksp.panes.len;
-  pane_area.h = panes_area.h;
+    boxf pane_area;
+    pane_area.x = 0;
+    pane_area.y = 0;
+    pane_area.w = panes_area.w / world.wksp.panes.len;
+    pane_area.h = panes_area.h;
 
-  for (auto&& pane : world.wksp.panes) {
-    pane_area.w = pane.width;
+    for (auto&& pane : world.wksp.panes) {
+        pane_area.w = pane.width;
 
-    boxf editor_area;
-    get_tabs_and_editor_area(&pane_area, NULL, &editor_area);
+        boxf editor_area;
+        get_tabs_and_editor_area(&pane_area, NULL, &editor_area);
 
-    for (auto&& editor : pane.editors) {
-      vec2 new_size;
-      new_size.x = (i32)((editor_area.w - EDITOR_MARGIN_X) / world.font.width);
-      new_size.y = (i32)((editor_area.h - EDITOR_MARGIN_Y) / world.font.height);
+        for (auto&& editor : pane.editors) {
+            vec2 new_size;
+            new_size.x = (i32)((editor_area.w - EDITOR_MARGIN_X) / world.font.width);
+            new_size.y = (i32)((editor_area.h - EDITOR_MARGIN_Y) / world.font.height);
 
-      // allocate highlights buffer
-      auto highlights_buf = (Hl_Token*)malloc(sizeof(Hl_Token) * (new_size.x * new_size.y));
-      assert(highlights_buf != NULL);
+            auto &hls = editor.highlights;
 
-      // allocate highlights list
-      List<List<Hl_Token>>* highlights;
-      {
-        SCOPED_USE_MALLOC();
-        highlights = alloc_list<List<Hl_Token>>(new_size.y);
-        assert(highlights != NULL);
-      }
+            auto newmem = hls.mem_toggle ? &hls.mem_a : &hls.mem_b;
+            auto oldmem = !hls.mem_toggle ? &hls.mem_a : &hls.mem_b;
+            hls.mem_toggle = !hls.mem_toggle;
 
-      {
-        SCOPED_LOCK(&editor.highlights_lock);
+            SCOPED_MEM(newmem);
+            newmem->reset();
 
-        // initialize highlights list
-        for (u32 row = 0; row < new_size.y; row++) {
-          auto new_row = highlights->append();
-          new_row->init(LIST_FIXED, new_size.x, &highlights_buf[row * new_size.x]);
+            auto buf = alloc_array(Hl_Token, new_size.x * new_size.y);
+            auto rows = alloc_list<List<Hl_Token>>(new_size.y);
 
-          List<Hl_Token>* old_row = NULL;
-          if (editor.highlights != NULL && row < editor.highlights->len)
-            old_row = &editor.highlights->at(row);
+            {
+                SCOPED_LOCK(&hls.lock);
+                for (u32 row = 0; row < new_size.y; row++) {
+                    auto hlrow = rows->append();
+                    hlrow->init(LIST_FIXED, new_size.x, &buf[row * new_size.x]);
 
-          for (u32 col = 0; col < new_size.x; col++) {
-            auto p = new_row->append();
-            if (old_row != NULL && col < old_row->len)
-              p->type = old_row->at(col).type;
-            else
-              p->type = HL_NONE;
-          }
+                    List<Hl_Token>* old_row = NULL;
+                    if (hls.rows != NULL && row < hls.rows->len)
+                        old_row = &hls.rows->at(row);
+
+                    for (u32 col = 0; col < new_size.x; col++) {
+                        auto p = hlrow->append();
+                        if (old_row != NULL && col < old_row->len)
+                            p->type = old_row->at(col).type;
+                        else
+                            p->type = HL_NONE;
+                    }
+                }
+                hls.buf = buf;
+                hls.rows = rows;
+            }
+
+            editor.view.size = new_size;
+            if (!editor.nvim_data.is_resizing)
+                if (!world.nvim.resize_editor(&editor))
+                    editor.nvim_data.need_initial_resize = true;
         }
 
-        // free resources
-        if (editor.highlights_buf != NULL)
-          our_free(editor.highlights_buf);
-        if (editor.highlights != NULL) {
-          editor.highlights->cleanup();
-          our_free(editor.highlights);
-        }
-
-        // assign new highlights buffer/list to editor
-        editor.highlights_buf = highlights_buf;
-        editor.highlights = highlights;
-      }
-
-      editor.view.size = new_size;
-      if (!editor.nvim_data.is_resizing)
-        if (!world.nvim.resize_editor(&editor))
-          editor.nvim_data.need_initial_resize = true;
+        pane_area.x += pane_area.w;
     }
-
-    pane_area.x += pane_area.w;
-  }
 }
 
 void UI::get_pane_resize_areas(boxf *out, s32 count) {
-  float offset = 0;
-  auto panes_area = get_panes_area();
+    float offset = 0;
+    auto panes_area = get_panes_area();
 
-  for (u32 i = 0; i < world.wksp.panes.len - 1 && i < count; i++) {
-    offset += world.wksp.panes[i].width;
+    for (u32 i = 0; i < world.wksp.panes.len - 1 && i < count; i++) {
+        offset += world.wksp.panes[i].width;
 
-    auto box = &out[i];
-    box->w = 2;
-    box->h = panes_area.h;
-    box->x = offset - 1;
-    box->y = 0;
-  }
+        auto box = &out[i];
+        box->w = 2;
+        box->h = panes_area.h;
+        box->x = offset - 1;
+        box->y = 0;
+    }
 }
 
 i32 UI::get_current_resize_area(boxf* out) {
-  SCOPED_FRAME();
+    SCOPED_FRAME();
 
-  auto num_areas = world.wksp.panes.len - 1;
-  auto resize_areas = alloc_array(boxf, num_areas);
+    auto num_areas = world.wksp.panes.len - 1;
+    auto resize_areas = alloc_array(boxf, num_areas);
 
-  get_pane_resize_areas(resize_areas, num_areas);
+    get_pane_resize_areas(resize_areas, num_areas);
 
-  for (u32 i = 0; i < num_areas; i++)
-    if (resize_areas[i].contains(world.ui.mouse_pos))
-      return memcpy(out, &resize_areas[i], sizeof(boxf)), i;
-  return -1;
+    for (u32 i = 0; i < num_areas; i++)
+        if (resize_areas[i].contains(world.ui.mouse_pos))
+            return memcpy(out, &resize_areas[i], sizeof(boxf)), i;
+    return -1;
 }

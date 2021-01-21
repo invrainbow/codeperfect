@@ -58,9 +58,14 @@ struct Editor {
   bool is_untitled;
   Pool mem;
 
-  Lock highlights_lock;
-  Hl_Token* highlights_buf;
-  List<List<Hl_Token>>* highlights;
+  struct {
+      Pool mem_a;
+      Pool mem_b;
+      bool mem_toggle;
+      Lock lock;
+      Hl_Token* buf;
+      List<List<Hl_Token>>* rows;
+  } highlights;
 
   struct {
     bool is_buf_attached;
@@ -144,3 +149,5 @@ struct Workspace {
   void activate_pane(u32 idx);
   Pane* get_current_pane();
 };
+
+bool check_file_dimensions(ccstr path);

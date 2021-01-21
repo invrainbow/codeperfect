@@ -20,8 +20,14 @@ struct Pool {
     ccstr name;
 
     void init(ccstr _name) {
+        ptr0(this);
+
         name = _name;
         blocksize = DEFAULT_BUCKET_SIZE;
+        obsolete_blocks.init(LIST_MALLOC, 32);
+        used_blocks.init(LIST_MALLOC, 32);
+        unused_blocks.init(LIST_MALLOC, 32);
+
         request_new_block();
     }
 

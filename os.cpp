@@ -26,6 +26,7 @@ cstr normalize_path_separator(cstr path) {
 Entire_File *read_entire_file(ccstr path) {
     auto f = fopen(path, "rb");
     if (f == NULL) return NULL;
+    defer { fclose(f); };
 
     fseek(f, 0, SEEK_END);
     auto len = ftell(f);

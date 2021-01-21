@@ -46,6 +46,7 @@ out the index for something even faster.
 #include "world.hpp"
 #include "os.hpp"
 #include "set.hpp"
+#include "editor.hpp"
 
 // due to casey being casey, this can only be included once in the whole project
 #include "meow_hash_x64_aesni.h"
@@ -320,8 +321,13 @@ Ast* parse_file_into_ast(ccstr filepath) {
     // also, we need a new system of tags (TODO, NOTE, etc) for varying
     // priorities
 
+    if (str_ends_with(filepath, "sync.go")) {
+        print("here");
+    }
     auto iter = file_loader(filepath);
-    defer { iter->cleanup(); };
+    defer {
+        iter->cleanup();
+    };
     if (iter->it == NULL) return NULL;
 
     // print("parsing %s", filepath);
@@ -2899,7 +2905,7 @@ List<ccstr> *Go_Index::list_decl_names(ccstr import_path) {
     return ret;
 }
 
-File_Ast* Go_Index::find_decl_of_id(File_Ast* fa) {
+File_Ast* Go_Index::find_decl_of_id(File_Ast* fa, bool import_only) {
     auto id = fa->ast;
 
     // check if it has a decl already attached to it by the parser
@@ -2909,7 +2915,7 @@ File_Ast* Go_Index::find_decl_of_id(File_Ast* fa) {
     auto lit = id->id.lit;
 
     // check if it's declared in the current file
-    auto ret = find_decl_in_source(fa->dup(parse_file_into_ast(fa->file)), lit, false);
+    auto ret = find_decl_in_source(fa->dup(parse_file_into_ast(fa->file)), lit, import_only);
     if (ret != NULL) return ret;
 
     // check if it's declared in the current package
@@ -3464,7 +3470,7 @@ bool Go_Index::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period, 
                         bool found_package = false;
 
                         do {
-                            auto spec = find_decl_of_id(make_file_ast(x, filepath, world.wksp.path));
+                            auto spec = find_decl_of_id(make_file_ast(x, filepath, world.wksp.path), true);
                             if (spec == NULL) break;
 
                             auto spec_ast = spec->ast;
@@ -4318,6 +4324,7 @@ Index_Stream *open_and_validate_imports_db(ccstr path) {
 
     if (!f->read_file_header(INDEX_FILE_IMPORTS)) {
         frame.restore();
+        f->cleanup();
         return NULL;
     }
 
@@ -4428,8 +4435,7 @@ bool Go_Index::ensure_imports_list_correct(Eil_Result *res) {
     {
         // write out new imports
         Index_Stream fw;
-        auto res = fw.open(imports_path, FILE_MODE_WRITE, FILE_CREATE_NEW);
-        if (res != FILE_RESULT_SUCCESS)
+        if (fw.open(imports_path, FILE_MODE_WRITE, FILE_CREATE_NEW) != FILE_RESULT_SUCCESS)
             return _handle_error("Unable to open imports for writing."), false;
         defer { fw.cleanup(); };
 
@@ -4593,9 +4599,6 @@ void Go_Index::main_loop() {
                             if (receiver_name != NULL)
                                 name = our_sprintf("%s.%s", receiver_name, name);
                         }
-                        if (streq(name, "Errorf")) {
-                            print("Errorf found");
-                        }
                         w.write_decl(ent->name, name, it.spec);
                     }
                 });
@@ -4615,6 +4618,8 @@ bool Go_Index::delete_index() {
 }
 
 // -----
+s32 num_index_stream_opens = 0;
+s32 num_index_stream_closes = 0;
 
 File_Result Index_Stream::open(ccstr _path, u32 access, File_Open_Mode open_mode) {
     ptr0(this);
@@ -4624,10 +4629,14 @@ File_Result Index_Stream::open(ccstr _path, u32 access, File_Open_Mode open_mode
     ok = true;
 
     // TODO: CREATE_NEW? what's the policy around if index already exists?
-    return f.init(path, access, open_mode);
+    auto ret = f.init(path, access, open_mode);
+    if (ret == FILE_RESULT_SUCCESS)
+        num_index_stream_opens++;
+    return ret;
 }
 
 void Index_Stream::cleanup() {
+    num_index_stream_closes++;
     f.cleanup();
 }
 

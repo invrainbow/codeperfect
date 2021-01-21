@@ -1,2 +1,2 @@
 @echo off
-start remedybg ide.exe
+start remedybg session.rdbg

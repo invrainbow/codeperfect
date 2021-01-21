@@ -3,20 +3,21 @@
         - n/a, didn't write
     done:
         - autocomplete working again!
+        - migration to Pool nearly done
     todo:
+        - migration to Pool done, app is running fine. noticed a bug in
+          parameter hints, probably has to do with String_Allocator which got
+          rewritten using Pool.
         - autocomplete has a backspace bug
-        - finish migration over to Pool
     notes:
         - while working on parameter hints, realized memory is fucked, decided
           to jump in and rewrite our memory management to use a unified Pool
-          class. code not building right now, need to fix bugs and then it's
-          going to be many hours of just fixing whatever bugs come up. but
-          already the code looks a lot cleaner and manageable.
-        - tomorrow, see if i can finish that, hopefully get parameter hints
-          working too
-        - tomorrow's starting point: get the Pool changes to build, then try to
-          get the IDE running and fix whatever new issues Pool introduced, then
-          get parameter hints working.
+          class. that part is mostly working, just need to fix whatever bugs
+          come up. but already the code looks a lot cleaner and manageable.
+        - tomorrow, fix parameter hints bug, then the big thing to figure out is:
+           if we have "github.com/foo/bar" in go.mod and then we import
+           "github.com/foo/bar/baz", resolve_import doesn't work; need to fix this.
+        - tomorrow's starting point: fix aforementioned resolve_import problem.
 
 1/19/21
     plan:

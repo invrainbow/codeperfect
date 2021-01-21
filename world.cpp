@@ -42,7 +42,7 @@ void fill_file_tree(ccstr path) {
     SCOPED_MEM(&world.file_explorer_mem);
 
     world.file_explorer_mem.cleanup();
-    world.file_explorer_mem.init();
+    world.file_explorer_mem.init("file_explorer_mem");
 
     auto& out = world.file_explorer.files;
     out.cleanup();
@@ -85,7 +85,6 @@ void fill_file_tree(ccstr path) {
 void World::init() {
     ptr0(this);
     MEM = &frame_mem;
-    use_nvim = true;
 
 #define init_mem(x) x.init(#x)
     init_mem(frame_mem);
@@ -111,17 +110,17 @@ void World::init() {
 
     dbg.breakpoints.init(LIST_FIXED, _countof(dbg._breakpoints), dbg._breakpoints);
     dbg.watches.init(LIST_FIXED, _countof(dbg._watches), dbg._watches);
+    wnd_debugger.current_location = -1;
 
     wksp.init();
 
     wnd_open_file.files.init(LIST_FIXED, _countof(wnd_open_file._files), wnd_open_file._files);
 
-    wnd_debugger.current_location = -1;
-
+    use_nvim = true;
     nvim_data.hl_defs.init(LIST_FIXED, _countof(nvim_data._hl_defs), nvim_data._hl_defs);
     nvim_data.grid_to_window.init(LIST_FIXED, _countof(nvim_data._grid_to_window), nvim_data._grid_to_window);
-    // nvim.init();
-    // nvim.start_running();
+    nvim.init();
+    nvim.start_running();
 
     fill_file_tree(wksp.path);
 

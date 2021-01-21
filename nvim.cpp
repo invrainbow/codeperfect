@@ -289,8 +289,7 @@ void Nvim::run_event_loop() {
                                     if (editor == NULL)
                                         continue;
 
-                                    auto highlights = editor->highlights;
-
+                                    auto highlights = editor->highlights.rows;
                                     bot = min(highlights->len, bot);
 
                                     auto move_row = [&](u32 dest, u32 src) {
@@ -334,7 +333,7 @@ void Nvim::run_event_loop() {
                                         continue;
                                     }
 
-                                    auto&& hlrow = editor->highlights->at(row);
+                                    auto&& hlrow = editor->highlights.rows->at(row);
                                     auto num_cells = reader.read_array(); CHECKOK();
 
                                     for (u32 k = 0; k < num_cells; k++) {
@@ -822,7 +821,7 @@ void Nvim::start_running() {
     writer.proc = &nvim_proc;
 
     auto nvim_event_loop = [](void *param) {
-        SCOPED_MEM(&world.frame_mem);
+        SCOPED_MEM(&world.nvim_loop_mem);
         ((Nvim*)param)->run_event_loop();
     };
 
