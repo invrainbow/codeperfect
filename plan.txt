@@ -1,3 +1,23 @@
+1/20/21
+    plan:
+        - n/a, didn't write
+    done:
+        - autocomplete working again!
+    todo:
+        - autocomplete has a backspace bug
+        - finish migration over to Pool
+    notes:
+        - while working on parameter hints, realized memory is fucked, decided
+          to jump in and rewrite our memory management to use a unified Pool
+          class. code not building right now, need to fix bugs and then it's
+          going to be many hours of just fixing whatever bugs come up. but
+          already the code looks a lot cleaner and manageable.
+        - tomorrow, see if i can finish that, hopefully get parameter hints
+          working too
+        - tomorrow's starting point: get the Pool changes to build, then try to
+          get the IDE running and fix whatever new issues Pool introduced, then
+          get parameter hints working.
+
 1/19/21
     plan:
         - streamlit shit done, go hard on ide

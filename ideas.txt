@@ -32,10 +32,23 @@ UPDATE: uthash supports overriding uthash_malloc with custom allocator.
 
     Fun project: add String class
 
-    Fun project: add Pool memory (a la Pool.jai) to unify Stack and Arena
+    [DONE] Fun project: add Pool memory (a la Pool.jai) to unify Stack and Arena
 
     Fun project: Refactor the "walk_ast to find ast containing `pos`" pattern
 
     My memory management is all fucked up, honestly might need to just spend a
 day cleaning that shit up. Would help morale a lot too (think how much progress
 stalled when we had no idea how to manage memory with Go_Index).
+
+    When ending day, write down where you left off so the next day you can pick
+up.
+
+    Right now, when we call make_file_ast on the currenet file during
+autocomplete or gotodef, we assume current package name is
+world.wksp.go_import_path. This will fail if user edits files outside current
+workspace. Need function to translate directory path into import path.
+
+    Now that our memory isn't retarded anymore, rework Scoped_Table to not use
+LIST_MALLOC 
+
+    See how many LIST_MALLOCs should just be LIST_POOLs.

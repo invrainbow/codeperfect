@@ -56,7 +56,7 @@ struct Editor {
   Pane* pane;
   char filepath[MAX_PATH];
   bool is_untitled;
-  Arena arena;
+  Pool mem;
 
   Lock highlights_lock;
   Hl_Token* highlights_buf;

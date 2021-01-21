@@ -184,20 +184,19 @@ bool Debugger::write1(u8 ch) {
 
 bool Debugger::read_stdin_until(char want, ccstr* pret) {
     auto start = MEM->sp;
+    Text_Renderer r;
+    Frame frame;
 
+    r.init();
     for (char c; headless_proc.read1(&c);) {
         if (c == want) {
-            if (pret != NULL) {
-                *alloc_object(char) = '\0';
-                *pret = (ccstr)(MEM->buf + start);
-            }
+            if (pret != NULL) *pret = r.finish();
             return true;
         }
-        if (pret != NULL)
-            *alloc_object(char) = c;
+        if (pret != NULL) r.writechar(c);
     }
 
-    MEM->sp = start;
+    frame.restore();
     return false;
 }
 
@@ -309,17 +308,16 @@ bool Debugger::read_packet(Packet* p) {
 #endif
 
     auto read = [&]() -> ccstr {
-        auto start = MEM->sp;
+        Frame frame;
+        Text_Renderer r;
+        r.init();
 
         for (char c; (c = read1()) != 0;) {
-            if (c == '\n') {
-                *alloc_object(char) = '\0';
-                return (ccstr)(MEM->buf + start);
-            }
-            *alloc_object(char) = c;
+            if (c == '\n') return r.finish();
+            r.writechar(c);
         }
 
-        MEM->sp = start;
+        frame.restore();
         return NULL;
     };
 
@@ -570,12 +568,12 @@ i32 Json_Navigator::get(i32 i, ccstr keys) {
         SCOPED_FRAME();
 
         if (ch == '[') {
-            auto key = (char*)(MEM->buf + MEM->sp);
+            Text_Renderer r;
+            r.init();
             for (char ch; (ch = keys[j++]) != ']';)
-                *alloc_object(char) = ch;
-            *alloc_object(char) = '\0';
+                r.writechar(ch);
 
-            auto idx = atoi(key);
+            auto idx = atoi(r.finish());
 
             auto tok = tokens->at(i++);
             if (tok.type != JSMN_ARRAY) return -1;
@@ -597,10 +595,11 @@ i32 Json_Navigator::get(i32 i, ccstr keys) {
                 return false;
             };
 
-            auto key = (char*)(MEM->buf + MEM->sp);
+            Text_Renderer r;
+            r.init();
             while (!is_delim(keys[j]))
-                *alloc_object(char) = keys[j++];
-            *alloc_object(char) = '\0';
+                r.writechar(keys[j++]);
+            auto key = r.finish();
 
             auto tok = tokens->at(i++);
             if (tok.type != JSMN_OBJECT) return -1;

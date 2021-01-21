@@ -308,7 +308,7 @@ struct General_Parser {
 
     Process* proc;
     char ch;
-    Arena_Alloc_String salloc;
+    String_Allocator salloc;
 
     void init(Process* _proc) {
         ptr0(this);
@@ -365,7 +365,7 @@ struct General_Parser {
         return false;
     }
 
-    // assumes we're in a SCOPED_ARENA
+    // assumes we're in a SCOPED_MEM
     void parse_find_results() {
         while (true) {
             READ_CHAR();
@@ -468,7 +468,7 @@ struct General_Parser {
         return NULL;
     }
 
-    // assumes we're in a SCOPED_ARENA
+    // assumes we're in a SCOPED_POOL
     void parse_build_errors() {
         while (true) {
             READ_CHAR();
@@ -1497,7 +1497,7 @@ int main() {
         auto editor = world.get_current_editor();
         while (!editor->is_nvim_ready()) continue;
 
-        world.get_current_editor()->move_cursor(new_cur2(3, 11));
+        world.get_current_editor()->move_cursor(new_cur2(10, 11));
     }
 #endif
 
@@ -1526,7 +1526,7 @@ int main() {
                         General_Parser parser;
                         parser.init(&proc);
                         {
-                            SCOPED_ARENA(&search_results.arena);
+                            SCOPED_MEM(&search_results.pool);
                             parser.parse_find_results();
                         }
 
@@ -1597,7 +1597,7 @@ int main() {
 
                 switch (proc.status()) {
                     case PROCESS_DONE:
-                        world.search_results.arena.cleanup();
+                        world.search_results.pool.cleanup();
 
                         world.jobs.flag_build = false;
                         if (proc.exit_code != 0) {
@@ -1608,7 +1608,7 @@ int main() {
                             General_Parser parser;
                             parser.init(&proc);
                             {
-                                SCOPED_ARENA(&ref.arena);
+                                SCOPED_MEM(&ref.pool);
                                 parser.parse_build_errors();
                             }
 
@@ -1898,7 +1898,7 @@ int main() {
                 ImGui::Separator();
 
                 if (ImGui::Button("Search for All")) {
-                    world.search_results.arena.cleanup();
+                    world.search_results.pool.cleanup();
                     run_proc_the_normal_way(
                         &world.jobs.search.proc,
                         our_sprintf("ag --ackmate %s %s \"%s\"", wnd.use_regex ? "" : "-Q", wnd.case_sensitive ? "-s" : "", wnd.find_str)

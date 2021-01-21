@@ -31,3 +31,6 @@ __debug_bin
 
 # i like to pipe build output to log.txt
 log.txt
+
+# during debugging, parse errors cause the current file to get dumped here
+test.go

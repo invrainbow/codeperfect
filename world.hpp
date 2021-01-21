@@ -58,22 +58,40 @@ struct Build_Error {
 };
 
 struct World {
-    Stack frame_mem;
-    Stack parser_mem;
-    Stack ast_viewer_mem;
-    Stack autocomplete_mem;
-    Stack parameter_hint_mem;
-    Stack open_file_mem;
-    Stack debugger_mem;
-    Stack scratch_mem;
-    Stack nvim_mem;
-    Stack nvim_loop_mem;
-    Stack build_index_mem;
-    /**/
-    Arena file_explorer_arena;
-    Arena build_arena;
-    Arena gomod_parser_arena;
-    Arena build_index_arena;
+    Pool frame_mem;
+    Pool parser_mem;
+    Pool ast_viewer_mem;
+    Pool autocomplete_mem;
+    Pool parameter_hint_mem;
+    Pool open_file_mem;
+    Pool debugger_mem;
+    Pool scratch_mem;
+    Pool nvim_mem;
+    Pool nvim_loop_mem;
+    Pool file_explorer_mem;
+    Pool build_mem;
+    Pool gomod_parser_mem;
+    Pool build_index_mem;
+
+    Fridge<Chunk0> chunk0_fridge;
+    Fridge<Chunk1> chunk1_fridge;
+    Fridge<Chunk2> chunk2_fridge;
+    Fridge<Chunk3> chunk3_fridge;
+    Fridge<Chunk4> chunk4_fridge;
+    Fridge<Chunk5> chunk5_fridge;
+    Fridge<Chunk6> chunk6_fridge;
+
+    GLFWwindow* window;
+    vec2 window_size;
+    vec2 display_size;
+    vec2f display_scale;
+
+    Font font;
+
+    Nvim nvim;
+    bool use_nvim;
+
+    u32 next_editor_id;
 
     struct {
         Nvim_Hl_Def _hl_defs[128];
@@ -84,25 +102,6 @@ struct World {
         u32 waiting_focus_window;
     } nvim_data;
 
-    // Stack *current_mem;
-
-    Pool<Chunk0> chunk0_pool;
-    Pool<Chunk1> chunk1_pool;
-    Pool<Chunk2> chunk2_pool;
-    Pool<Chunk3> chunk3_pool;
-    Pool<Chunk4> chunk4_pool;
-    Pool<Chunk5> chunk5_pool;
-    Pool<Chunk6> chunk6_pool;
-
-    Nvim nvim;
-    GLFWwindow* window;
-    vec2 window_size;
-    vec2 display_size;
-    vec2f display_scale;
-    Font font;
-    bool use_nvim;
-
-    u32 next_editor_id;
 
     struct {
         char build_command[MAX_PATH];
@@ -119,34 +118,34 @@ struct World {
     } sidebar;
 
     struct {
-        Arena arena;
+        Pool pool;
         List<Search_Result*> results;
         i32 scroll_offset;
 
         void init() {
-            arena.init();
+            pool.init("search_results");
             results.init(LIST_MALLOC, 128);
         }
 
         void cleanup() {
-            arena.cleanup();
+            pool.cleanup();
             results.cleanup();
         }
     } search_results;
 
     struct {
-        Arena arena;
+        Pool pool;
         List<Build_Error*> errors;
         i32 scroll_offset;
         u32 selection;
 
         void init() {
-            arena.init();
+            pool.init("build_errors");
             errors.init(LIST_MALLOC, 128);
         }
 
         void cleanup() {
-            arena.cleanup();
+            pool.cleanup();
             errors.cleanup();
         }
     } build_errors;
@@ -292,106 +291,41 @@ struct World {
 };
 
 extern World world;
-extern thread_local Stack* MEM;
-extern thread_local Arena* ARENA_MEM;
+extern thread_local Pool *MEM;
 
 uchar* alloc_chunk(s32 needed, s32* new_size);
 void free_chunk(uchar* buf, s32 cap);
 
 struct Frame {
-    Stack* stack;
-    Arena* arena;
-
-    union {
-        struct {
-            s32 sp;
-        } old_stack_data;
-
-        struct {
-            Arena_Page* curr;
-            s32 ptr;
-        } old_arena_data;
-    };
-
-    // void* starting_pointer;
+    Pool *pool;
+    Pool_Block *block;
+    s32 pos;
 
     Frame() {
-        stack = MEM;
-        arena = ARENA_MEM;
-
-        if (arena != NULL) {
-            old_arena_data.curr = arena->curr;
-            old_arena_data.ptr = arena->curr->ptr;
-            // starting_pointer = (void*)((char*)(&arena->curr) + arena->curr->ptr);
-        } else if (stack != NULL) {
-            old_stack_data.sp = stack->sp;
-            // starting_pointer = &stack->buf[stack->sp];
-        }
+        pool = MEM;
+        block = pool->curr;
+        pos = pool->sp;
     }
 
     void restore() {
-        if (arena != NULL) {
-            // TODO: this is what we need to fix lmao, i think maybe we just don't put new pages before curr.
-            arena->rewind_to(old_arena_data.curr);
-            old_arena_data.curr->ptr = old_arena_data.ptr;
-        } else if (stack != NULL) {
-            stack->sp = old_stack_data.sp;
-        }
+        pool->restore(block, pos);
     }
 };
 
 struct Scoped_Frame {
     Frame frame;
-    ~Scoped_Frame() {
-        frame.restore();
-    }
+    ~Scoped_Frame() { frame.restore(); }
 };
 
 #define SCOPED_FRAME() Scoped_Frame GENSYM(SCOPED_FRAME)
 
 struct Scoped_Mem {
-    Stack* old_stack;
-    Arena* old_arena;
-
-    Scoped_Mem(Stack* stack) {
-        old_stack = MEM;
-        old_arena = ARENA_MEM;
-        MEM = stack;
-        ARENA_MEM = NULL;
-    }
-
-    ~Scoped_Mem() {
-        MEM = old_stack;
-        ARENA_MEM = old_arena;
-    }
-};
-
-struct Scoped_Arena {
-    Arena* old;
-    Scoped_Arena(Arena* arena) { old = ARENA_MEM; ARENA_MEM = arena; }
-    ~Scoped_Arena() { ARENA_MEM = old; }
-};
-
-struct Scoped_Use_Malloc {
-    Stack* old_mem;
-    Arena* old_arena;
-
-    Scoped_Use_Malloc() {
-        old_mem = MEM;
-        old_arena = ARENA_MEM;
-        MEM = NULL;
-        ARENA_MEM = NULL;
-    }
-
-    ~Scoped_Use_Malloc() {
-        MEM = old_mem;
-        ARENA_MEM = old_arena;
-    }
+    Pool* old;
+    Scoped_Mem(Pool *pool) { old = MEM; MEM = pool; }
+    ~Scoped_Mem() { MEM = old; }
 };
 
 #define SCOPED_MEM(x) Scoped_Mem GENSYM(SCOPED_MEM)(x)
-#define SCOPED_ARENA(x) Scoped_Arena GENSYM(SCOPED_ARENA)(x)
-#define SCOPED_USE_MALLOC() Scoped_Use_Malloc GENSYM(SCOPED_ARENA)
 
 void* _alloc_memory(s32 size, bool zero);
 
@@ -414,30 +348,32 @@ List<T>* alloc_list(s32 len) {
 template <typename T>
 List<T>* alloc_list() {
     auto ret = alloc_object(List<T>);
-    ret->init(LIST_STACK, 32);
+    ret->init(LIST_POOL, 32);
     return ret;
 }
 
 #define TAB_SIZE 2 // TODO
 
-struct Arena_Alloc_String {
-    s32 oldptr;
+// what was even the point of this again?
+// why couldn't we just allocate the string?
+struct String_Allocator {
+    s32 oldpos;
 
     char* start(u32 to_reserve) {
-        ARENA_MEM->ensure_can_alloc(to_reserve);
-        oldptr = ARENA_MEM->curr->ptr;
-        return (char*)ARENA_MEM->alloc(0);
+        MEM->ensure_enough(to_reserve);
+        oldpos = MEM->sp;
+        return (char*)MEM->alloc(0);
     }
 
     bool push(char ch) {
-        if (!ARENA_MEM->can_alloc(1))
+        if (!MEM->can_alloc(1))
             return false;
-        *(char*)ARENA_MEM->alloc(1) = ch;
+        *(char*)MEM->alloc(1) = ch;
         return true;
     }
 
     bool done() { return push('\0'); }
-    void revert() { ARENA_MEM->curr->ptr = oldptr; }
-    void truncate() { ARENA_MEM->curr->ptr--; push('\0'); }
+    void revert() { MEM->sp = oldpos; }
+    void truncate() { MEM->sp--; push('\0'); }
 };
 

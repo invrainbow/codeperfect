@@ -65,7 +65,13 @@ ccstr format_pos(cur2 pos) {
     return our_sprintf("%d:%d", pos.y, pos.x);
 }
 
-typedef fn<bool(ccstr, Import_Location)> resolve_package_cb;
+File_Ast *File_Ast::dup(Ast *new_ast) {
+    auto ret = alloc_object(File_Ast);
+    ret->ast = new_ast;
+    ret->file = file;
+    ret->import_path = import_path;
+    return ret;
+};
 
 // FIXME: will fuck up if we list directory first time, dir changes,
 // and then we list second time. fix this somehow
@@ -255,6 +261,7 @@ ccstr get_package_name_from_file(ccstr filepath) {
 
     Parser parser;
     parser.init(&it);
+    parser.filepath = filepath;
 
     auto ast = parser.parse_package_decl();
     if (ast == NULL) return NULL;
@@ -322,6 +329,7 @@ Ast* parse_file_into_ast(ccstr filepath) {
 
     Parser p;
     p.init(iter->it, filepath);
+    p.filepath = filepath;
     defer { p.cleanup(); };
 
     return p.parse_file();
@@ -1040,7 +1048,7 @@ void Parser::lex_with_comments() {
     // call get_type(), initial run
     initial_run = true;
     auto type = get_type();
-    if (type != TOK_EOF) {
+    if (type != TOK_EOF && type != TOK_ILLEGAL) {
         switch (type) {
             case TOK_STRING:
             case TOK_ID:
@@ -1056,7 +1064,7 @@ void Parser::lex_with_comments() {
         type = get_type();
         if (buffer != NULL)
             buffer[buffer_len] = '\0';
-    } else if (insert_semi()) {
+    } else if (type == TOK_EOF && insert_semi()) {
         return;
     }
 
@@ -2787,38 +2795,26 @@ File_Ast* Go_Index::find_decl_in_source(File_Ast* source, ccstr desired_decl_nam
 }
 
 File_Ast *Go_Index::find_decl_in_index(ccstr import_path, ccstr desired_decl_name) {
-    // ok, problem, how do we convert import_path into an absolute path?
-    // i guess the index needs to be annotated with what path it got it from.
-
     auto index_path = get_index_path(import_path);
 
     Index_Reader reader;
-    reader.init(index_path);
+    if (!reader.init(index_path)) return NULL;
+    defer { reader.cleanup(); };
 
     Index_Entry_Result res;
     if (!reader.find_decl(desired_decl_name, &res)) return NULL;
 
-    auto filepath = path_join(res.package_path, res.filename);
-
-    auto iter = file_loader(filepath);
-    defer { iter->cleanup(); };
-    if (iter->it == NULL) return NULL;
-
-    iter->it->set_pos(res.hdr.pos);
-
-    Parser p;
-    p.init(iter->it, filepath);
-    defer { p.cleanup(); };
+    auto filepath = path_join(reader.meta.package_path, res.filename);
 
     Ast *ast = NULL;
-
-    switch (res.hdr.type) {
-    case IET_FUNC: ast = p.parse_decl(lookup_decl_start); break;
-    case IET_CONST: ast = p.parse_spec(TOK_CONST); break;
-    case IET_VAR: ast = p.parse_spec(TOK_VAR); break;
-    case IET_TYPE: ast = p.parse_spec(TOK_TYPE); break;
-    }
-
+    with_parser_at_location(filepath, res.hdr.pos, [&](Parser *p) {
+        switch (res.hdr.type) {
+        case IET_FUNC: ast = p->parse_decl(lookup_decl_start); break;
+        case IET_CONST: ast = p->parse_spec(TOK_CONST); break;
+        case IET_VAR: ast = p->parse_spec(TOK_VAR); break;
+        case IET_TYPE: ast = p->parse_spec(TOK_TYPE); break;
+        }
+    });
     return ast == NULL ? NULL : make_file_ast(ast, filepath, import_path);
 }
 
@@ -2858,7 +2854,7 @@ File_Ast* Go_Index::find_decl_in_package(ccstr path, ccstr desired_decl_name, cc
     return NULL;
 }
 
-List<Named_Decl>* Go_Index::list_decls_in_package(ccstr path) {
+List<Named_Decl>* Go_Index::list_decls_in_package(ccstr path, ccstr import_path) {
     auto files = list_source_files(path);
     if (files == NULL) return NULL;
 
@@ -2867,9 +2863,22 @@ List<Named_Decl>* Go_Index::list_decls_in_package(ccstr path) {
         auto filename = path_join(path, it);
         auto ast = parse_file_into_ast(filename);
         if (ast != NULL)
-            list_decls_in_source(make_file_ast(ast, filename), LISTDECLS_DECLS, ret);
+            list_decls_in_source(make_file_ast(ast, filename, import_path), LISTDECLS_DECLS, ret);
     }
 
+    return ret;
+}
+
+List<ccstr> *Go_Index::list_decl_names_from_index(ccstr import_path) {
+    Index_Reader reader;
+    if (!reader.init(get_index_path(import_path))) return NULL;
+    defer { reader.cleanup(); };
+
+    auto decls = reader.list_decls();
+    if (decls == NULL) return NULL;
+
+    auto ret = alloc_list<ccstr>(decls->len);
+    For (*decls) ret->append(our_strcpy(it.name));
     return ret;
 }
 
@@ -2880,10 +2889,10 @@ List<ccstr> *Go_Index::list_decl_names(ccstr import_path) {
     auto ri = resolve_import(import_path);
     if (ri == NULL) return NULL;
 
-    auto decls = list_decls_in_package(ri->path);
+    auto decls = list_decls_in_package(ri->path, import_path);
     if (decls == NULL) return NULL;
 
-    auto ret = alloc_list<ccstr>();
+    ret = alloc_list<ccstr>();
     For (*decls)
         For (*it.items)
             ret->append(it.name->id.lit);
@@ -3189,22 +3198,20 @@ Infer_Res* Go_Index::infer_type(File_Ast* expr, bool resolve) {
                     if (r == NULL) break;
 
                     auto type = r->base_type->ast;
-                    auto file = r->base_type->file;
-
                     while (type->type == AST_POINTER_TYPE)
                         type = type->pointer_type.base_type;
                     if (type == NULL) break;
 
                     switch (type->type) {
                         case AST_ARRAY_TYPE:
-                            return make_file_ast(type->array_type.base_type, file);
+                            return r->base_type->dup(type->array_type.base_type);
                         case AST_MAP_TYPE:
-                            return make_file_ast(type->map_type.value_type, file);
+                            return r->base_type->dup(type->map_type.value_type);
                         case AST_SLICE_TYPE:
-                            return make_file_ast(type->slice_type.base_type, file);
+                            return r->base_type->dup(type->slice_type.base_type);
                         case AST_ID:
                             if (streq(ast->id.lit, "string"))
-                                return make_file_ast(PRIMITIVE_TYPE);
+                                return make_file_ast(PRIMITIVE_TYPE, NULL, NULL);
                             break;
                     }
                 } while (0);
@@ -3316,6 +3323,7 @@ Jump_To_Definition_Result* Go_Index::jump_to_definition(ccstr filepath, cur2 pos
 
         Parser p;
         p.init(iter->it);
+        p.filepath = filepath;
         defer { p.cleanup(); };
         file = p.parse_file();
     }
@@ -3379,7 +3387,7 @@ Jump_To_Definition_Result* Go_Index::jump_to_definition(ccstr filepath, cur2 pos
                     }
 
                     do {
-                        auto r = infer_type(make_file_ast(ast->selector_expr.x, filepath), true);
+                        auto r = infer_type(make_file_ast(ast->selector_expr.x, filepath, world.wksp.go_import_path), true);
                         if (r == NULL) break;
 
                         auto field = find_field_or_method_in_type(r->base_type, r->type, sel->id.lit);
@@ -3393,7 +3401,7 @@ Jump_To_Definition_Result* Go_Index::jump_to_definition(ccstr filepath, cur2 pos
                 }
             case AST_ID:
                 do {
-                    auto decl = find_decl_of_id(make_file_ast(ast, filepath));
+                    auto decl = find_decl_of_id(make_file_ast(ast, filepath, world.wksp.go_import_path));
                     if (decl == NULL) break;
 
                     auto id = locate_id_in_decl(decl->ast, ast->id.lit);
@@ -3456,14 +3464,13 @@ bool Go_Index::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period, 
                         bool found_package = false;
 
                         do {
-                            auto spec = find_decl_of_id(make_file_ast(x, filepath));
+                            auto spec = find_decl_of_id(make_file_ast(x, filepath, world.wksp.path));
                             if (spec == NULL) break;
 
                             auto spec_ast = spec->ast;
                             if (spec_ast->type != AST_IMPORT_SPEC) break;
 
                             auto import_path = spec_ast->import_spec.path->basic_lit.val.string_val;
-
                             auto names = list_decl_names(import_path);
                             if (names == NULL) break;
 
@@ -3486,7 +3493,7 @@ bool Go_Index::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period, 
                         } while (0);
                     }
 
-                    auto r = infer_type(make_file_ast(x, filepath), true);
+                    auto r = infer_type(make_file_ast(x, filepath, world.wksp.go_import_path), true);
                     if (r == NULL) return WALK_ABORT;
 
                     auto fields = list_fields_and_methods_in_type(r->base_type, r->type);
@@ -3545,7 +3552,7 @@ Parameter_Hint* Go_Index::parameter_hint(ccstr filepath, cur2 pos, bool triggere
         if (locate_pos_relative_to_ast(pos, args) != 0)
             return WALK_CONTINUE;
 
-        auto type = infer_type(make_file_ast(ast->call_expr.func, filepath), true);
+        auto type = infer_type(make_file_ast(ast->call_expr.func, filepath, world.wksp.go_import_path), true);
         if (type != NULL) {
             auto get_func_signature = [&](Ast* func) -> Ast* {
                 switch (func->type) {
@@ -3646,15 +3653,15 @@ int Go_Index::list_methods_in_type(File_Ast* type, List<Field>* ret) {
 
     int count = 0;
     auto prefix = our_sprintf("%s.", type_name);
-    auto names = list_decls_names(res);
+    auto names = list_decl_names(package_to_search);
 
     For (*names) {
-        if (!str_starts_with(prefix)) continue;
+        if (!str_starts_with(it, prefix)) continue;
 
         // TODO: add this somehow
         auto r = ret->append();
-        /* File_Ast */ r->decl = ...;
-        /* File_Ast */ r->id = ...;
+        // /* File_Ast */ r->decl = ...;
+        // /* File_Ast */ r->id = ...;
         count++;
     }
     return count;
@@ -4211,7 +4218,7 @@ void Gomod_Parser::lex() {
     tok.type = GOMOD_TOK_STRIDENT;
 
     // get ready to read a string or identifier
-    Arena_Alloc_String salloc;
+    String_Allocator salloc;
     tok.val = salloc.start(MAX_PATH);
 
     auto should_end = [&](char ch) {
@@ -4350,6 +4357,7 @@ void get_package_imports(ccstr path, List<ccstr> *out, String_Set *seen) {
 
         Parser p;
         p.init(iter->it, new_path);
+        p.filepath = new_path;
         defer { p.cleanup(); };
 
         p.parse_package_decl();
@@ -4577,13 +4585,16 @@ void Go_Index::main_loop() {
                 auto ast = parse_file_into_ast(filepath);
                 if (ast == NULL) return; // what to do here? this is an error
 
-                list_decls_in_source(make_file_ast(ast, filepath), LISTDECLS_DECLS, [&](Named_Decl* decl) {
+                list_decls_in_source(make_file_ast(ast, filepath, import_path), LISTDECLS_DECLS, [&](Named_Decl* decl) {
                     for (auto&& it : *decl->items) {
                         auto name = it.name->id.lit;
                         if (it.spec->type == AST_FUNC_DECL) {
                             auto receiver_name = get_receiver_typename_from_func_decl(it.spec);
                             if (receiver_name != NULL)
                                 name = our_sprintf("%s.%s", receiver_name, name);
+                        }
+                        if (streq(name, "Errorf")) {
+                            print("Errorf found");
                         }
                         w.write_decl(ent->name, name, it.spec);
                     }
@@ -4717,8 +4728,6 @@ int Index_Writer::init(ccstr import_path) {
     if (res != FILE_RESULT_SUCCESS) return res;
 
     // initialize decls
-    // TODO: we need to add a LIST_ARENA/LIST_MEM using our custom memory allocator
-    // and also make it dynamically resizable 
     decls.init(LIST_MALLOC, 128);
 
     return FILE_RESULT_SUCCESS;
@@ -4817,22 +4826,18 @@ bool Index_Writer::write_decl(ccstr filename, ccstr name, Ast* spec) {
 
 #undef IW_ASSERT
 
-void Index_Reader::init(ccstr _index_path) {
+bool Index_Reader::init(ccstr _index_path) {
     index_path = _index_path;
     indexfile_path = path_join(index_path, "index");
     datafile_path = path_join(index_path, "data");
-}
 
-// cstr filename_buf, s32 filename_size, cur2 *offset
-
-bool Index_Reader::find_decl(ccstr decl_name, Index_Entry_Result *out) {
     Index_Stream findex;
     if (findex.open(indexfile_path, FILE_MODE_READ, FILE_OPEN_EXISTING) != FILE_RESULT_SUCCESS) {
         print("couldn't open index");
         return false;
     }
+    defer { findex.cleanup(); };
 
-    Index_Stream fdata;
     if (fdata.open(datafile_path, FILE_MODE_READ, FILE_OPEN_EXISTING) != FILE_RESULT_SUCCESS) {
         print("couldn't open data");
         return false;
@@ -4841,14 +4846,33 @@ bool Index_Reader::find_decl(ccstr decl_name, Index_Entry_Result *out) {
     assert(findex.read_file_header(INDEX_FILE_INDEX));
     assert(fdata.read_file_header(INDEX_FILE_DATA));
 
-    auto package_path = findex.readstr();
-    auto loctype = (Import_Location)findex.read1();
+    meta.package_path = findex.readstr();
+    meta.loctype = (Import_Location)findex.read1();
+
     auto decl_count = findex.read4();
-
-    auto offsets = alloc_list<i32>(decl_count);
+    decl_offsets = alloc_list<i32>(decl_count);
     for (u32 i = 0; i < decl_count; i++)
-        offsets->append(findex.read4());
+        decl_offsets->append(findex.read4());
+}
 
+void Index_Reader::cleanup() {
+    fdata.cleanup();
+}
+
+List<Index_Entry_Result> *Index_Reader::list_decls() {
+    auto ret = alloc_list<Index_Entry_Result>();
+    For (*decl_offsets) {
+        auto out = ret->append();
+
+        fdata.seek(it);
+        fdata.readn(&out->hdr, sizeof(out->hdr));
+        out->filename = fdata.readstr();     // TODO: do we need to copy this?
+        out->name = fdata.readstr();
+    }
+    return ret;
+}
+
+bool Index_Reader::find_decl(ccstr decl_name, Index_Entry_Result *out) {
     auto get_name = [&](i32 offset) -> ccstr {
         if (offset == -1) return decl_name;
         fdata.seek(offset);
@@ -4864,15 +4888,26 @@ bool Index_Reader::find_decl(ccstr decl_name, Index_Entry_Result *out) {
     };
 
     i32 key = -1;
-    auto poffset = offsets->bfind(&key, cmpfunc);
+    auto poffset = decl_offsets->bfind(&key, cmpfunc);
     if (poffset == NULL) return false;
 
     fdata.seek(*poffset);
     fdata.readn(&out->hdr, sizeof(out->hdr));
     out->filename = fdata.readstr();     // TODO: do we need to copy this?
     out->name = fdata.readstr();
-    out->package_path = package_path;
-    out->loctype = loctype;
-
     return true;
+}
+
+void with_parser_at_location(ccstr filepath, cur2 location, parser_cb cb) {
+    auto iter = file_loader(filepath);
+    defer{ iter->cleanup(); };
+    if (iter->it == NULL) return;
+    iter->it->set_pos(location);
+
+    Parser p;
+    p.init(iter->it);
+    p.filepath = filepath;
+    defer{ p.cleanup(); };
+
+    cb(&p);
 }

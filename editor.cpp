@@ -2,6 +2,7 @@
 #include "os.hpp"
 #include "world.hpp"
 #include "ui.hpp"
+#include "go.hpp"
 
 void Editor::raw_move_cursor(cur2 c) {
     cur = c;
@@ -244,9 +245,9 @@ void Workspace::init() {
 }
 
 bool Workspace::parse_gomod_file(ccstr path) {
-    world.gomod_parser_arena.cleanup();
-    world.gomod_parser_arena.init();
-    SCOPED_ARENA(&world.gomod_parser_arena);
+    world.gomod_parser_mem.cleanup();
+    world.gomod_parser_mem.init("gomod_parser_mem");
+    SCOPED_MEM(&world.gomod_parser_mem);
 
     FILE* f = fopen(path, "r");
     if (f == NULL) return false;
@@ -322,12 +323,12 @@ bool Editor::is_nvim_ready() {
 void Editor::init() {
     ptr0(this);
     id = ++world.next_editor_id;
-    arena.init();
+    mem.init("editor mem");
     highlights_lock.init();
 }
 
 void Editor::cleanup() {
-    arena.cleanup();
+    mem.cleanup();
     highlights->cleanup();
     highlights_lock.cleanup();
 }
@@ -341,21 +342,6 @@ ccstr hl_type_str(HlType type) {
         define_str_case(HL_CONSTANT);
     }
     return NULL;
-}
-
-typedef fn<void(Parser*)> parser_cb;
-
-void with_parser_at_location(ccstr filepath, cur2 location, parser_cb cb) {
-    auto iter = file_loader(filepath);
-    defer{ iter->cleanup(); };
-    if (iter->it == NULL) return;
-    iter->it->set_pos(location);
-
-    Parser p;
-    p.init(iter->it);
-    defer{ p.cleanup(); };
-
-    cb(&p);
 }
 
 void Editor::on_type() {
@@ -493,14 +479,22 @@ void Editor::filter_autocomplete_results(Autocomplete* ac) {
         if (id->id.bad) {
             autocomplete.prefix[0] = '\0';
         } else {
-            assert(id->start.y == cur.y);
-            auto prefix_len = cur.x - id->start.x;
-
-            prefix_len = min(prefix_len, _countof(autocomplete.prefix) - 1);
-            if (prefix_len == 0)
+            if (cur < id->start) {
+                // happens if we're at "foo.    bar"
+                //                           ^
+                // there's whitespace between period and sel, and we're in it
                 autocomplete.prefix[0] = '\0';
-            else
-                strncpy(autocomplete.prefix, id->id.lit, prefix_len);
+            } else if (cur > id->end) {
+                // this shouldn't happen
+                break;
+            } else {
+                auto prefix_len = cur.x - id->start.x;
+                prefix_len = min(prefix_len, _countof(autocomplete.prefix) - 1);
+                if (prefix_len == 0)
+                    autocomplete.prefix[0] = '\0';
+                else
+                    strncpy(autocomplete.prefix, id->id.lit, prefix_len);
+            }
         }
 
         prefix_found = true;

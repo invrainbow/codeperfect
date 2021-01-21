@@ -1,6 +1,7 @@
 #include "nvim.hpp"
 #include "buffer.hpp"
 #include "world.hpp"
+#include "utils.hpp"
 // #include <strsafe.h>
 
 Editor* find_editor_by_window(u32 win_id) {
@@ -858,19 +859,20 @@ ccstr Mp_Reader::read_string() {
     auto len = read_length();
     if (!ok) return NULL;
 
-    auto old_sp = MEM->sp;
+    Frame frame;
+    Text_Renderer r;
+    r.init();
+
     for (u32 i = 0; i < len; i++) {
         char ch = read1();
         if (!ok) {
-            MEM->sp = old_sp;
+            frame.restore();
             return NULL;
         }
-        *alloc_object(char) = ch;
+        r.writechar(ch);
     }
-    *alloc_object(char) = '\0';
-
     ok = true;
-    return (ccstr)(MEM->buf + old_sp);
+    return r.finish();
 }
 
 Ext_Info* Mp_Reader::read_ext() {

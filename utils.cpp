@@ -28,14 +28,11 @@ ccstr our_format_json(ccstr s) {
         proc.write1(s[i]);
     proc.done_writing();
 
-    auto ret = (ccstr)(MEM->buf + MEM->sp);
-
+    Text_Renderer r;
+    r.init();
     char ch;
-    while (proc.read1(&ch))
-        *alloc_object(char) = ch;
-    *alloc_object(char) = '\0';
-
-    return ret;
+    while (proc.read1(&ch)) r.writechar(ch);
+    return r.finish();
 }
 
 ccstr our_strcpy(ccstr s) {
@@ -95,7 +92,8 @@ ccstr our_strcat(ccstr a, ccstr b) {
 
 void Text_Renderer::init() {
     mem = MEM;
-    start = mem->sp;
+    s = (cstr)mem->alloc(0);
+    len = 0;
 }
 
 void *stub_alloc_memory(s32 size) {

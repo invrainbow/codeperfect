@@ -600,13 +600,7 @@ struct File_Ast {
     ccstr file;
     ccstr import_path;
 
-    File_Ast *dup(Ast *new_ast) {
-        auto ret = alloc_object(File_Ast);
-        ret->ast = new_ast;
-        ret->file = file;
-        ret->import_path = import_path;
-        return ret;
-    };
+    File_Ast *dup(Ast *new_ast);
 };
 
 struct AC_Result {
@@ -690,14 +684,14 @@ struct Scoped_Table {
         UT_hash_handle hh;
     };
 
-    Arena arena;
+    Pool mem;
     Entry* table;
     List<Overwrite> overwrites;
     List<u32> scopes;
 
     void init() {
         table = NULL;
-        arena.init();
+        mem.init("scoped table mem");
         overwrites.init(LIST_MALLOC, 100);
         scopes.init(LIST_MALLOC, 100);
     }
@@ -710,7 +704,7 @@ struct Scoped_Table {
             HASH_DEL(table, curr);
         }
 
-        arena.cleanup();
+        mem.cleanup();
         overwrites.cleanup();
         scopes.cleanup();
     }
@@ -718,7 +712,7 @@ struct Scoped_Table {
     void open_scope() { scopes.append(overwrites.len); }
 
     Entry* alloc_entry() {
-        return (Entry*)arena.alloc(sizeof(Entry));
+        return (Entry*)mem.alloc(sizeof(Entry));
     }
 
     bool close_scope() {
@@ -1019,8 +1013,10 @@ struct Index_Entry_Result {
     Index_Entry_Hdr hdr;
     ccstr filename;
     ccstr name;
-    ccstr package_path;
-    Import_Location loctype;
+
+    // this information now in index_reader::meta
+    // ccstr package_path;
+    // Import_Location loctype;
 };
 
 enum Index_File_Type {
@@ -1080,14 +1076,24 @@ struct Index_Reader {
     ccstr index_path;
     ccstr indexfile_path;
     ccstr datafile_path;
+    List<i32> *decl_offsets;
 
+    struct {
+        ccstr package_path;
+        Import_Location loctype;
+    } meta;
+
+    // Index_Stream findex;
+    Index_Stream fdata;
     // bool ok;
 
     // honestly having an index_reader class is not factoring out well
     // abstractions suck lol
 
-    void init(ccstr _index_path);
+    bool init(ccstr _index_path);
+    List<Index_Entry_Result> *list_decls();
     bool find_decl(ccstr decl_name, Index_Entry_Result *res);
+    void cleanup();
 };
 
 // Our index maintains and provides THE ETERNALLY CORRECT SOURCE OF TRUTH about
@@ -1114,10 +1120,13 @@ struct Go_Index {
     File_Ast* find_decl_in_index(ccstr import_path, ccstr desired_decl_name);
     File_Ast* find_decl_in_source(File_Ast* source, ccstr desired_decl_name, bool import_only = false);
     File_Ast* find_decl_in_package(ccstr path, ccstr desired_decl_name, ccstr import_path);
-    List<Named_Decl>* list_decls_in_package(ccstr path);
+    List<Named_Decl>* list_decls_in_package(ccstr path, ccstr import_path);
+    List<ccstr> *list_decl_names_from_index(ccstr import_path);
+    List<ccstr> *list_decl_names(ccstr import_path);
     File_Ast* find_decl_of_id(File_Ast* fa);
     File_Ast* get_base_type(File_Ast* type);
-    File_Ast* make_file_ast(Ast* ast, ccstr file = NULL);
+    // File_Ast* make_file_ast(Ast* ast, ccstr file = NULL);
+    File_Ast* make_file_ast(Ast* ast, ccstr file, ccstr import_path);
     File_Ast* get_type_from_decl(File_Ast* decl, ccstr id);
     File_Ast* find_field_or_method_in_type(File_Ast* base_type, File_Ast* interim_type, ccstr name);
     Infer_Res* infer_type(File_Ast* expr, bool resolve = false);
@@ -1141,3 +1150,6 @@ struct Go_Index {
     u64 hash_package(ccstr import_path, Resolved_Import **pres);
 };
 
+typedef fn<void(Parser*)> parser_cb;
+
+void with_parser_at_location(ccstr filepath, cur2 location, parser_cb cb);

@@ -8,12 +8,14 @@ enum ListMode {
     LIST_MALLOC,
     LIST_FIXED,
     LIST_CHUNK,
-    LIST_STACK,
+    LIST_POOL,
 };
 
 uchar* alloc_chunk_stub(s32 needed, s32* new_size);
 void free_chunk_stub(uchar* buf, s32 cap);
-Stack* get_current_mem_stub();
+
+void *get_current_pool_stub();
+void *alloc_from_pool_stub(void *pool, s32 n);
 
 template <typename T>
 struct List {
@@ -21,49 +23,46 @@ struct List {
     s32 len;
     s32 cap;
     ListMode mode;
-    Stack* stack;    // for LIST_STACK
+    void *pool;  // for LIST_POOL. can't include Pool because it depends on List
 
     void init(ListMode _mode, s32 _cap, T* _items = NULL) {
         ptr0(this);
 
         mode = _mode;
         switch (mode) {
-        case LIST_STACK:
+        case LIST_FIXED:
+            items = _items;
             cap = _cap;
-            stack = get_current_mem_stub();
-            items = (T*)stack->alloc(sizeof(T) * _cap);
+            break;
+        case LIST_POOL:
+            cap = _cap;
+            pool = get_current_pool_stub();
+            items = (T*)alloc_from_pool_stub(pool, sizeof(T) * _cap);
             mem0(items, sizeof(T) * cap);
             break;
         case LIST_MALLOC:
             cap = _cap;
             items = (T*)our_malloc(sizeof(T) * cap);
             if (items == NULL)
-                throw new Oom_Error("unable to our_malloc for array");
+                panic("unable to our_malloc for array");
             mem0(items, sizeof(T) * cap);
             break;
         case LIST_CHUNK:
             items = (T*)alloc_chunk_stub(_cap, &cap);
             if (items == NULL)
-                throw new Oom_Error("unable to alloc chunk for array");
-            break;
-        case LIST_FIXED:
-            items = _items;
-            cap = _cap;
+                panic("unable to alloc chunk for array");
             break;
         }
     }
 
     void cleanup() {
         switch (mode) {
-            case LIST_MALLOC:
-                our_free(items);
-                break;
-            case LIST_CHUNK:
-                free_chunk_stub((uchar*)items, cap);
-                break;
-
-            case LIST_FIXED: break; // noop
-            case LIST_STACK: break; // noop
+        case LIST_MALLOC:
+            our_free(items);
+            break;
+        case LIST_CHUNK:
+            free_chunk_stub((uchar*)items, cap);
+            break;
         }
 
         items = NULL;
@@ -93,44 +92,42 @@ struct List {
             return true;
 
         switch (mode) {
-            case LIST_MALLOC:
-                while (cap < new_cap)
-                    cap *= 2;
-                items = (T*)realloc(items, sizeof(T) * cap);
-                if (items == NULL)
-                    return false;
-                mem0(items + len, sizeof(T) * (cap - len));
-                break;
-
-            case LIST_STACK:
-                {
-                    while (cap < new_cap)
-                        cap *= 2;
-                    auto new_items = (T*)stack->alloc(sizeof(T) * cap);
-                    if (new_items == NULL)
-                        return false;
-
-                    mem0(new_items, sizeof(T) * cap);
-                    memcpy(new_items, items, sizeof(T) * len);
-                    items = new_items;
-                }
-                break;
-
-            case LIST_FIXED:
+        case LIST_MALLOC:
+            while (cap < new_cap)
+                cap *= 2;
+            items = (T*)realloc(items, sizeof(T) * cap);
+            if (items == NULL)
                 return false;
+            mem0(items + len, sizeof(T) * (cap - len));
+            break;
 
-            case LIST_CHUNK:
-                {
-                    s32 chunksize;
-                    auto chunk = (T*)alloc_chunk_stub(new_cap, &chunksize);
+        case LIST_POOL:
+            {
+                while (cap < new_cap) cap *= 2;
+                auto new_items = (T*)alloc_from_pool_stub(pool, sizeof(T) * cap);
+                if (new_items == NULL)
+                    return false;
+                mem0(new_items, sizeof(T) * cap);
+                memcpy(new_items, items, sizeof(T) * len);
+                items = new_items;
+            }
+            break;
 
-                    memcpy(chunk, items, sizeof(T) * len);
-                    free_chunk_stub((uchar*)items, cap);
+        case LIST_FIXED:
+            return false;
 
-                    items = chunk;
-                    cap = chunksize;
-                }
-                break;
+        case LIST_CHUNK:
+            {
+                s32 chunksize;
+                auto chunk = (T*)alloc_chunk_stub(new_cap, &chunksize);
+
+                memcpy(chunk, items, sizeof(T) * len);
+                free_chunk_stub((uchar*)items, cap);
+
+                items = chunk;
+                cap = chunksize;
+            }
+            break;
         }
 
         return true;

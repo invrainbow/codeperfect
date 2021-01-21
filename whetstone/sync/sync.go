@@ -9,7 +9,7 @@ import (
 )
 
 func Download() {
-	fmt
+	fmt.Errorf
 
 	// print out language for no reason
 	lang := language.English

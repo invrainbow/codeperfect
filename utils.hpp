@@ -2,6 +2,7 @@
 
 #include "common.hpp"
 #include "os.hpp"
+#include "pool.hpp"
 
 ccstr our_format_json(ccstr s);
 ccstr our_strcpy(ccstr s);
@@ -13,36 +14,40 @@ ccstr our_strcat(ccstr a, ccstr b);
 bool strcpy_safe(cstr buf, s32 count, ccstr src);
 
 struct Text_Renderer {
-    Stack* mem;
-    s32 start;
+    Pool *mem;
+    cstr s;
+    s32 len;
 
     void init();
+
+    void *request_memory(s32 n) {
+        if (!mem->can_alloc(n)) {
+            auto snew = mem->alloc(len + n);
+            memcpy(snew, s, len);
+            s = (cstr)snew;
+            mem->sp -= n;
+        }
+        return mem->alloc(n);
+    }
 
     void write(ccstr fmt, ...) {
         va_list args, args2;
         va_start(args, fmt);
         va_copy(args2, args);
 
-        auto len = vsnprintf(NULL, 0, fmt, args);
-        auto buf = (char*)mem->alloc(sizeof(char) * (len + 1));
-
-        vsnprintf(buf, len + 1, fmt, args2);
+        auto n = vsnprintf(NULL, 0, fmt, args);
+        auto buf = request_memory(n);
+        vsnprintf((char*)buf, n + 1, fmt, args2);
+        erasechar(); // lop off the '\0' from vsnprintf
+        len += n;
 
         va_end(args);
         va_end(args2);
-
-        // lop off the '\0' from vsnprintf
-        mem->sp--;
     }
 
-    void writechar(char ch) { *(char*)mem->alloc(1) = ch; }
-
+    void writechar(char ch) { *(char*)request_memory(1) = ch; }
     void erasechar() { mem->sp--; }
-
-    char* finish() {
-        mem->buf[mem->sp++] = '\0';
-        return (char*)(mem->buf + start);
-    }
+    cstr finish() { return writechar('\0'), s; }
 };
 
 struct Json_Renderer : public Text_Renderer {
@@ -87,7 +92,7 @@ struct Json_Renderer : public Text_Renderer {
     void obj(lambda f) {
         writechar('{');
         f();
-        if (mem->buf[mem->sp - 1] == ',')
+        if (s[len-1] == ',')
             erasechar();
         writechar('}');
     }
@@ -95,7 +100,7 @@ struct Json_Renderer : public Text_Renderer {
     void arr(lambda f) {
         writechar('[');
         f();
-        if (mem->buf[mem->sp - 1] == ',')
+        if (s[len-1] == ',')
             erasechar();
         writechar(']');
     }

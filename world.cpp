@@ -1,8 +1,7 @@
 #include "world.hpp"
 
 World world;
-thread_local Stack* MEM;
-thread_local Arena* ARENA_MEM;
+thread_local Pool *MEM;
 
 run_before_main { world.init(); };
 
@@ -14,13 +13,13 @@ uchar* alloc_chunk(s32 needed, s32* new_size) {
 
         *new_size = size;
         switch (size) {
-            case CHUNK0: return (uchar*)world.chunk0_pool.alloc();
-            case CHUNK1: return (uchar*)world.chunk1_pool.alloc();
-            case CHUNK2: return (uchar*)world.chunk2_pool.alloc();
-            case CHUNK3: return (uchar*)world.chunk3_pool.alloc();
-            case CHUNK4: return (uchar*)world.chunk4_pool.alloc();
-            case CHUNK5: return (uchar*)world.chunk5_pool.alloc();
-            case CHUNK6: return (uchar*)world.chunk6_pool.alloc();
+            case CHUNK0: return (uchar*)world.chunk0_fridge.alloc();
+            case CHUNK1: return (uchar*)world.chunk1_fridge.alloc();
+            case CHUNK2: return (uchar*)world.chunk2_fridge.alloc();
+            case CHUNK3: return (uchar*)world.chunk3_fridge.alloc();
+            case CHUNK4: return (uchar*)world.chunk4_fridge.alloc();
+            case CHUNK5: return (uchar*)world.chunk5_fridge.alloc();
+            case CHUNK6: return (uchar*)world.chunk6_fridge.alloc();
         }
     }
 
@@ -29,21 +28,21 @@ uchar* alloc_chunk(s32 needed, s32* new_size) {
 
 void free_chunk(uchar* buf, s32 cap) {
     switch (cap) {
-        case CHUNK0: world.chunk0_pool.free((Chunk0*)buf); break;
-        case CHUNK1: world.chunk1_pool.free((Chunk1*)buf); break;
-        case CHUNK2: world.chunk2_pool.free((Chunk2*)buf); break;
-        case CHUNK3: world.chunk3_pool.free((Chunk3*)buf); break;
-        case CHUNK4: world.chunk4_pool.free((Chunk4*)buf); break;
-        case CHUNK5: world.chunk5_pool.free((Chunk5*)buf); break;
-        case CHUNK6: world.chunk6_pool.free((Chunk6*)buf); break;
+        case CHUNK0: world.chunk0_fridge.free((Chunk0*)buf); break;
+        case CHUNK1: world.chunk1_fridge.free((Chunk1*)buf); break;
+        case CHUNK2: world.chunk2_fridge.free((Chunk2*)buf); break;
+        case CHUNK3: world.chunk3_fridge.free((Chunk3*)buf); break;
+        case CHUNK4: world.chunk4_fridge.free((Chunk4*)buf); break;
+        case CHUNK5: world.chunk5_fridge.free((Chunk5*)buf); break;
+        case CHUNK6: world.chunk6_fridge.free((Chunk6*)buf); break;
     }
 }
 
 void fill_file_tree(ccstr path) {
-    SCOPED_ARENA(&world.file_explorer_arena);
+    SCOPED_MEM(&world.file_explorer_mem);
 
-    world.file_explorer_arena.cleanup();
-    world.file_explorer_arena.init();
+    world.file_explorer_mem.cleanup();
+    world.file_explorer_mem.init();
 
     auto& out = world.file_explorer.files;
     out.cleanup();
@@ -57,7 +56,7 @@ void fill_file_tree(ccstr path) {
 
             File_Explorer_Entry *file;
             {
-                SCOPED_ARENA(&world.file_explorer_arena);
+                SCOPED_MEM(&world.file_explorer_mem);
                 file = alloc_object(File_Explorer_Entry);
                 file->name = our_strcpy(ent->name);
             }
@@ -85,35 +84,30 @@ void fill_file_tree(ccstr path) {
 
 void World::init() {
     ptr0(this);
-
     MEM = &frame_mem;
-    ARENA_MEM = NULL;
-
     use_nvim = true;
 
-#define init_mem(x, size) x.init(size, #x)
-
-    init_mem(frame_mem, 1024 * 1024);
-    init_mem(parser_mem, 100 * 1024 * 1024);
-    init_mem(ast_viewer_mem, 1024 * 64);
-    init_mem(autocomplete_mem, 1024 * 64);
-    init_mem(parameter_hint_mem, 1024 * 64);
-    init_mem(open_file_mem, 1024 * 1024);
-    init_mem(scratch_mem, 1024 * 1024);
-    init_mem(debugger_mem, 1024 * 1024);
-    init_mem(nvim_mem, 1024 * 1024);
-    init_mem(nvim_loop_mem, 1024 * 1024);
-    init_mem(build_index_mem, 1024 * 1024);
-
+#define init_mem(x) x.init(#x)
+    init_mem(frame_mem);
+    init_mem(parser_mem);
+    init_mem(ast_viewer_mem);
+    init_mem(autocomplete_mem);
+    init_mem(parameter_hint_mem);
+    init_mem(open_file_mem);
+    init_mem(scratch_mem);
+    init_mem(debugger_mem);
+    init_mem(nvim_mem);
+    init_mem(nvim_loop_mem);
+    init_mem(build_index_mem);
 #undef init_mem
 
-    chunk0_pool.init_managed(1024);
-    chunk1_pool.init_managed(512);
-    chunk2_pool.init_managed(256);
-    chunk3_pool.init_managed(128);
-    chunk4_pool.init_managed(64);
-    chunk5_pool.init_managed(32);
-    chunk6_pool.init_managed(16);
+    chunk0_fridge.init_managed(1024);
+    chunk1_fridge.init_managed(512);
+    chunk2_fridge.init_managed(256);
+    chunk3_fridge.init_managed(128);
+    chunk4_fridge.init_managed(64);
+    chunk5_fridge.init_managed(32);
+    chunk6_fridge.init_managed(16);
 
     dbg.breakpoints.init(LIST_FIXED, _countof(dbg._breakpoints), dbg._breakpoints);
     dbg.watches.init(LIST_FIXED, _countof(dbg._watches), dbg._watches);
@@ -126,9 +120,8 @@ void World::init() {
 
     nvim_data.hl_defs.init(LIST_FIXED, _countof(nvim_data._hl_defs), nvim_data._hl_defs);
     nvim_data.grid_to_window.init(LIST_FIXED, _countof(nvim_data._grid_to_window), nvim_data._grid_to_window);
-
-    nvim.init();
-    nvim.start_running();
+    // nvim.init();
+    // nvim.start_running();
 
     fill_file_tree(wksp.path);
 
@@ -138,7 +131,7 @@ void World::init() {
     windows_open.search_and_replace = false;
     windows_open.build_and_debug = false;
 
-    // TODO: bounds checking once we allow user to enter this command himself
+    // TODO: allow user to enter this command himself
     strcpy_safe(world.settings.build_command, _countof(world.settings.build_command), "go build gotest.go"); 
 }
 
@@ -162,13 +155,7 @@ Editor* World::find_editor(find_editor_func f) {
 }
 
 void* _alloc_memory(s32 size, bool zero) {
-    if (ARENA_MEM != NULL)
-        return ARENA_MEM->alloc(size, zero);
-
-    if (MEM != NULL)
-        return MEM->alloc(size, zero);
-
-    auto ret = malloc(size);
+    auto ret = MEM->alloc(size);
     if (zero) mem0(ret, size);
     return ret;
 }
