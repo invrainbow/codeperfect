@@ -1,3 +1,16 @@
+1/21/21
+    plan:
+        - didn't start working until 4:50pm, was in meetings all day, and also
+          wasn't disciplined enough about cutting off streamlit work
+        - keep fixing Pool-related bugs that come up
+        - fix resolve_import, keep trying to get all of intellisense working
+    done:
+        - resolve_import fixed (that was actually really easy), autocomplete
+          working again for `language.English`
+    notes:
+        - from now on just going to merge todo and notes, they're both just a
+          message to myself tomorrow.
+
 1/20/21
     plan:
         - n/a, didn't write

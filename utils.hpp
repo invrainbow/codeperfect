@@ -45,6 +45,13 @@ struct Text_Renderer {
         va_end(args2);
     }
 
+    void writestr(ccstr s, s32 len = -1) {
+        // write("%s", s);
+        if (len == -1) len = strlen(s);
+        auto buf = request_memory(len);
+        strncpy((char*)buf, s, len);
+    }
+
     void writechar(char ch) { *(char*)request_memory(1) = ch; }
     void erasechar() { mem->sp--; }
     cstr finish() { return writechar('\0'), s; }

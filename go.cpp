@@ -52,8 +52,8 @@ out the index for something even faster.
 #include "meow_hash_x64_aesni.h"
 
 // PRELEASE: dynamically determine this
-static const char GOROOT[] = "c:\\go\\src";
-static const char GOPATH[] = "c:\\users\\brandon\\go\\src";
+static const char GOROOT[] = "c:\\go";
+static const char GOPATH[] = "c:\\users\\brandon\\go";
 
 const u32 INDEX_MAGIC_NUMBER = 0x49fa98;
 
@@ -108,81 +108,126 @@ ccstr get_package_name(ccstr path) {
     return NULL;
 }
 
+
 Resolved_Import* resolve_import(ccstr import_path) {
+
     if (world.wksp.gomod_exists) {
-        auto try_path = [&](ccstr path) {
-            auto package_name = get_package_name(path);
-            if (package_name != NULL) {
-                auto ret = alloc_object(Resolved_Import);
-                ret->path = path;
-                ret->package_name = package_name;
-                ret->location_type = IMPLOC_GOMOD;
-                return ret;
+        // So in our go.mod, we have a bunch of directives that at the end of
+        // the day basically say to us, "when you come across this import path,
+        // go to this file path to find the package." So our strategy is: go
+        // through all of these "mappings," see if the import path (call it the
+        // base path) contains as a subfolder the import path we're trying to
+        // resolve.
+        //
+        // If it does, we use that mapping to find the path of the directory we
+        // think our import path resolves to. Then we check if it's a package.
+        // If so, we've hit gold.
+
+        // represents as path as list of its parts, e.g. "a/b/c" becomes ["a", "b", "c"]
+        typedef List<ccstr> Path_List;
+
+        // may have to pull into global str_split function
+        // also WHEN ARE WE CREATING OUR STRING CLASS
+        auto make_path = [&](ccstr path) -> Path_List* {
+            auto len = strlen(path);
+            u32 start = 0;
+            auto ret = alloc_list<ccstr>();
+
+            while (start < len) {
+                u32 end = start;
+                while (end < len && !is_sep(path[end]))
+                    end++;
+
+                auto partlen = end-start;
+                auto s = alloc_array(char, partlen+1);
+                strncpy(s, path + start, partlen);
+                s[partlen] = '\0';
+                ret->append(s);
+
+                start = end+1;
             }
+            return ret;
         };
 
-        auto is_import_contained_in = [&](ccstr _a, ccstr _b) {
-            auto a = (cstr)our_strcpy(_a);
-            auto b = (cstr)our_strcpy(_b);
+        auto import_path_list = make_path(import_path);
 
-            // anything else we need to normalize?
-            normalize_path_separator(a);
-            normalize_path_separator(b);
+        auto try_mapping = [&](ccstr base_path, ccstr resolve_to) -> Resolved_Import * {
+            // First check if base path contains our import path, e.g. base_path =
+            // "a/b/c" and import_path = "a/b/c/d/e".  If it does, grab the
+            // import_path relative to path, in this case "d/e".
 
-            char sep[2] = { PATH_SEP, '\0' };
-            return str_starts_with(a, our_strcat(b, sep));
+            auto base_path_list = make_path(base_path);
+            if (base_path_list->len > import_path_list->len) return NULL;
+
+            for (u32 i = 0; i < base_path_list->len; i++)
+                if (!streq(base_path_list->at(i), import_path_list->at(i)))
+                    return NULL;
+
+            // at this point, we know base_path contains import_path!
+            // now build up the relative path and append to resolve_to
+
+            Text_Renderer r;
+            r.init();
+            r.writestr(resolve_to);
+            if (base_path_list->len < import_path_list->len) {
+                for (u32 i = base_path_list->len; i < import_path_list->len; i++) {
+                    r.writechar('/');
+                    r.writestr(import_path_list->at(i));
+                }
+            }
+
+            // go to our final resolved path (with relative path tacked on),
+            // check if it's a package, if so, we've hit gold
+
+            auto filepath = r.finish();
+            auto package_name = get_package_name(filepath);
+            if (package_name == NULL) return NULL;
+
+            auto ret = alloc_object(Resolved_Import);
+            ret->path = filepath;
+            ret->package_name = package_name;
+            ret->location_type = IMPLOC_GOMOD;
+            return ret;
         };
 
-        auto try_gomod_package = [&](ccstr import_path, ccstr version) {
-            auto path = path_join(GOPATH, "pkg", "mod", our_sprintf("%s@%s", import_path, version));
-            return try_path(path);
+        auto get_pkg_mod_path = [&](ccstr import_path, ccstr version) {
+            return path_join(GOPATH, our_sprintf("pkg/mod/%s@%s", import_path, version));
         };
+
+#define RETURN_IF(x) { auto ret = (x); if (ret != NULL) return ret; }
 
         auto& info = world.wksp.gomod_info;
-        if (is_import_contained_in(import_path, info.module_path)) {
-            auto suffix = import_path + strlen(info.module_path);
-            if (is_sep(suffix[0])) suffix++;
-
-            ccstr path = (ccstr)world.wksp.path;
-            if (suffix[0] != '\0')
-                path = path_join(path, suffix);
-
-            auto ret = try_path(path);
-            if (ret != NULL) return ret;
-        }
+        if (info.module_path != NULL)
+            RETURN_IF(try_mapping(info.module_path, world.wksp.path));
 
         For (info.directives) {
             switch (it->type) {
             case GOMOD_DIRECTIVE_REQUIRE:
-                {
-                    auto ret = try_gomod_package(it->module_path, it->module_version);
-                    if (ret != NULL) return ret;
-                }
+                RETURN_IF(try_mapping(it->module_path, get_pkg_mod_path(it->module_path, it->module_version)));
                 break;
             case GOMOD_DIRECTIVE_REPLACE:
-                if (it->replace_version == NULL) {
-                    // filepath
-                    auto ret = try_path(rel_to_abs_path(it->replace_path));
-                    if (ret != NULL) return ret;
-                } else {
-                    // module path
-                    auto ret = try_gomod_package(it->replace_path, it->replace_version);
-                    if (ret != NULL) return ret;
+                {
+                    ccstr filepath;
+                    if (it->replace_version == NULL)
+                        filepath = rel_to_abs_path(it->replace_path);
+                    else
+                        filepath = get_pkg_mod_path(it->replace_path, it->replace_version);
+                    RETURN_IF(try_mapping(it->module_path, filepath));
                 }
                 break;
             }
         }
 
-        // at this point, we have a go.mod file but no folder path that can
-        // be resolved from it. what do we do?
-        //
-        // for now, just fallthrough and keep checking vendor, goroot, gopath, etc
+#undef RETURN_IF
+
+        // no folder path can be resolved from our go.mod. fallthrough and keep
+        // checking vendor, goroot, gopath, etc
     }
 
     auto paths = alloc_list<ccstr>();
     paths->append(path_join(world.wksp.path, "vendor", import_path));
-    paths->append(path_join(GOROOT, import_path));
-    paths->append(path_join(GOPATH, import_path));
+    paths->append(path_join(GOROOT, "src", import_path));
+    paths->append(path_join(GOPATH, "src", import_path));
 
     auto location_types = alloc_list<Import_Location>();
     location_types->append(IMPLOC_VENDOR);
@@ -248,8 +293,6 @@ ccstr _path_join(ccstr a, ...) {
 } 
 
 ccstr get_package_name_from_file(ccstr filepath) {
-    Frame frame;
-
     FILE* f = fopen(filepath, "rb");
     if (f == NULL) {
         error("Unable to open file.");
@@ -262,29 +305,13 @@ ccstr get_package_name_from_file(ccstr filepath) {
 
     Parser parser;
     parser.init(&it);
+    defer { parser.cleanup(); };
     parser.filepath = filepath;
 
     auto ast = parser.parse_package_decl();
     if (ast == NULL) return NULL;
-
-    do {
-        auto name = ast->package_decl.name;
-        if (name == NULL) break;
-        if (name->id.lit == NULL) break;
-
-        auto lit = name->id.lit;
-        if (lit == NULL) break;
-
-        frame.restore();
-
-        auto len = strlen(lit);
-        auto ret = alloc_array(char, len + 1);
-        memmove(ret, lit, sizeof(char) * (len + 1));
-        return ret;
-    } while (0);
-
-    frame.restore();
-    return NULL;
+    if (ast->package_decl.name == NULL) return NULL;
+    return ast->package_decl.name->id.lit;
 }
 
 Loaded_It* default_file_loader(ccstr filepath) {

@@ -49,6 +49,6 @@ world.wksp.go_import_path. This will fail if user edits files outside current
 workspace. Need function to translate directory path into import path.
 
     Now that our memory isn't retarded anymore, rework Scoped_Table to not use
-LIST_MALLOC 
+LIST_MALLOC. And also just rewrite large sections of Parser.
 
     See how many LIST_MALLOCs should just be LIST_POOLs.
