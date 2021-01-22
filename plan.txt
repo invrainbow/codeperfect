@@ -7,9 +7,13 @@
     done:
         - resolve_import fixed (that was actually really easy), autocomplete
           working again for `language.English`
+        - parameter hints rendering fixed
     notes:
         - from now on just going to merge todo and notes, they're both just a
           message to myself tomorrow.
+        - so surprisingly everything is just working, next start working on
+          hooks to update the index. make a list of these and then just start
+          implementing them
 
 1/20/21
     plan:

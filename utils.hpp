@@ -36,7 +36,7 @@ struct Text_Renderer {
         va_copy(args2, args);
 
         auto n = vsnprintf(NULL, 0, fmt, args);
-        auto buf = request_memory(n);
+        auto buf = request_memory(n + 1);
         vsnprintf((char*)buf, n + 1, fmt, args2);
         erasechar(); // lop off the '\0' from vsnprintf
         len += n;
