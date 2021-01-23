@@ -1130,7 +1130,6 @@ enum Go_Watch_Type {
     WATCH_WKSP,
     WATCH_GOPATH,
     WATCH_GOROOT,
-    WATCH_VENDOR,
 };
 
 struct Go_Index;
@@ -1143,19 +1142,21 @@ struct Go_Index_Watcher {
 };
 
 struct Go_Index {
-    List<Index_Event> events;
-    Lock events_lock;
+    List<Index_Event> index_events;
+    Lock index_events_lock;
 
     // we can get rid of this stupidity when i get async ReadDirectoryChanges working
     Go_Index_Watcher wksp_watcher;
     Go_Index_Watcher gopath_watcher;
     Go_Index_Watcher goroot_watcher;
-    Go_Index_Watcher vendor_watcher;
     Thread_Handle main_loop_thread;
 
     bool init();
     void cleanup();
     void process_fs_event(Go_Index_Watcher *watcher, Fs_Event *event);
+
+    void queue_index_event(Index_Event *event);
+    bool pop_index_event(Index_Event *event);
 
     /*
      * re-fetch imports list when:

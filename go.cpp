@@ -3317,6 +3317,29 @@ Infer_Res* Go_Index::infer_type(File_Ast* expr, bool resolve) {
     return result;
 }
 
+// I need to start reusing code to deal with paths, relative paths, all that
+// shit lol. Maybe a good 1hr project.
+
+ccstr get_path_relative_to(ccstr fullpath, ccstr base) {
+    fullpath += strlen(base);
+    if (is_sep(fullpath[0])) fullpath++;
+    return fullpath;
+}
+
+ccstr get_workspace_import_path() {
+    if (world.wksp.gomod_exists) {
+        auto module_path = world.wksp.gomod_info.module_path;;
+        if (module_path != NULL) return module_path;
+    }
+
+    // if we're inside gopath
+    auto gopath_base = path_join(GOPATH, "src");
+    if (str_starts_with(world.wksp.path, gopath_base))
+        return get_path_relative_to(world.wksp.path, gopath_base);
+
+    return NULL; // should we just panic? this is a pretty bad situation
+}
+
 // This function assumes that decl contains id.
 Ast* Go_Index::locate_id_in_decl(Ast* decl, ccstr id) {
     switch (decl->type) {
@@ -3418,7 +3441,7 @@ Jump_To_Definition_Result* Go_Index::jump_to_definition(ccstr filepath, cur2 pos
                     }
 
                     do {
-                        auto r = infer_type(make_file_ast(ast->selector_expr.x, filepath, world.wksp.go_import_path), true);
+                        auto r = infer_type(make_file_ast(ast->selector_expr.x, filepath, get_workspace_import_path()), true);
                         if (r == NULL) break;
 
                         auto field = find_field_or_method_in_type(r->base_type, r->type, sel->id.lit);
@@ -3432,7 +3455,7 @@ Jump_To_Definition_Result* Go_Index::jump_to_definition(ccstr filepath, cur2 pos
                 }
             case AST_ID:
                 do {
-                    auto decl = find_decl_of_id(make_file_ast(ast, filepath, world.wksp.go_import_path));
+                    auto decl = find_decl_of_id(make_file_ast(ast, filepath, get_workspace_import_path()));
                     if (decl == NULL) break;
 
                     auto id = locate_id_in_decl(decl->ast, ast->id.lit);
@@ -3462,7 +3485,7 @@ bool Go_Index::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period, 
 
     auto generate_results_from_current_package = [&]() -> List<AC_Result>* {
         // what's the import path of our workspace?
-        auto names = list_decl_names(world.wksp.go_import_path);
+        auto names = list_decl_names(get_workspace_import_path());
         if (names == NULL) return NULL;
 
         List<AC_Result> *ret = NULL;
@@ -3524,7 +3547,7 @@ bool Go_Index::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period, 
                         } while (0);
                     }
 
-                    auto r = infer_type(make_file_ast(x, filepath, world.wksp.go_import_path), true);
+                    auto r = infer_type(make_file_ast(x, filepath, get_workspace_import_path()), true);
                     if (r == NULL) return WALK_ABORT;
 
                     auto fields = list_fields_and_methods_in_type(r->base_type, r->type);
@@ -3583,7 +3606,7 @@ Parameter_Hint* Go_Index::parameter_hint(ccstr filepath, cur2 pos, bool triggere
         if (locate_pos_relative_to_ast(pos, args) != 0)
             return WALK_CONTINUE;
 
-        auto type = infer_type(make_file_ast(ast->call_expr.func, filepath, world.wksp.go_import_path), true);
+        auto type = infer_type(make_file_ast(ast->call_expr.func, filepath, get_workspace_import_path()), true);
         if (type != NULL) {
             auto get_func_signature = [&](Ast* func) -> Ast* {
                 switch (func->type) {
@@ -4644,8 +4667,23 @@ void Go_Index::main_loop() {
         }
     }
 
-    // TODO: the actual loop goes here, this comes later, wait for
-    // notifications from various places that we should re-fetch info.
+    while (true) {
+        Index_Event event = {0};
+        if (!pop_index_event(&event)) {
+            // sleep for a bit
+            sleep_milliseconds(100);
+            continue;
+        }
+
+        switch (event.type) {
+        case INDEX_EVENT_FETCH_IMPORTS:
+            // TODO: fetch imports
+            break;
+        case INDEX_EVENT_REINDEX_PACKAGE:
+            // TODO: reindex event.reindex_package.import_path
+            break;
+        }
+    }
 }
 
 bool Go_Index::delete_index() {
@@ -4653,51 +4691,76 @@ bool Go_Index::delete_index() {
     return delete_rm_rf(get_index_path());
 }
 
-void Go_Index::process_fs_event(Go_Index_Watcher *watcher, Fs_Event *event) {
-    auto path = path_join(
-        watcher->watch.path,
-        event->type == FSEVENT_RENAME ? event->new_filepath : event->filepath
-    );
+void Go_Index::queue_index_event(Index_Event *event) {
+    SCOPED_LOCK(&index_events_lock);
+    index_events.append(event);
+}
 
-    auto queue_for_rescan = [&](ccstr import_path) {
-        // TODO
+bool Go_Index::pop_index_event(Index_Event *event) {
+    SCOPED_LOCK(&index_events_lock);
+    if (index_events.len == 0) return false;
+
+    memcpy(event, &index_events[0], sizeof(Index_Event));
+    index_events.remove(0);
+    return true;
+}
+
+void Go_Index::process_fs_event(Go_Index_Watcher *w, Fs_Event *event) {
+    auto watch_path = w->watch.path;
+
+    auto directory_to_import_path = [&](ccstr path) -> ccstr {
+        switch (w->type) {
+        case WATCH_WKSP:
+            {
+                auto vendor_path = path_join(watch_path, "vendor");
+                if (str_starts_with(path, vendor_path))
+                    return get_path_relative_to(path, vendor_path);
+                return path_join(
+                    get_workspace_import_path(),
+                    get_path_relative_to(path, world.wksp.path)
+                );
+            }
+            break;
+        case WATCH_GOPATH:
+        case WATCH_GOROOT:
+            return get_path_relative_to(watch_path, path);
+        }
+        return NULL;
     };
 
+    auto queue_for_rescan = [&](ccstr directory) {
+        auto import_path = directory_to_import_path(directory);
+        if (import_path == NULL) return;
+
+        Index_Event event;
+        event.type = INDEX_EVENT_REINDEX_PACKAGE;
+        event.reindex_package.import_path = import_path;
+        queue_index_event(&event);
+    };
+
+    auto path = path_join(watch_path, event->type == FSEVENT_RENAME ? event->new_filepath : event->filepath);
     auto res = check_path(path);
     switch (res) {
-    case CPR_NONEXISTENT:
-        return;  // idk why this would happen
     case CPR_DIRECTORY:
         switch (event->type) {
         case FSEVENT_CHANGE:
-            // what does change even mean here?
-            break;
+            break; // what does change even mean here?
         case FSEVENT_DELETE:
         case FSEVENT_CREATE:
-            // find out what find out what import path this was and rescan
+            queue_for_rescan(path);
             break;
         case FSEVENT_RENAME:
-            // find out what find out what import paths old and new were, and rescan both
+            queue_for_rescan(path);
+            queue_for_rescan(path_join(watch_path, event->filepath));
             break;
         }
     case CPR_FILE:
-        if (!str_ends_with(path, ".go")) return;
-        if (str_ends_with(path, "_test.go")) return;
+        if (!str_ends_with(path, ".go")) break;
+        if (str_ends_with(path, "_test.go")) break;
 
-        // ok, so some .go file was added, deleted, changed, or renamed
-        // i think all we do now is find out what package (import path) it's in
-        // and queue that up for a re-scan lol
-        // like do we even give a fuck, can we just have the rescanner queue decide what to do next
-
-        // there's just this huge decision matrix that needs to be done lol
-        // and also we need to write the rescanner
-        // CODING IS SO HARD
-
-        if (watcher->type == WATCH_WKSP) {
-            // do something different probably?
-        } else {
-            // find out what import path file belongs to, and rescan
-        }
+        // some .go file was added/deleted/changed/renamed
+        // queue its directory for a re-scan
+        queue_for_rescan(our_dirname(path));
     }
 }
 
@@ -4707,7 +4770,6 @@ bool Go_Index::init() {
     if (!wksp_watcher.watch.init("path/here")) return false;
     if (!gopath_watcher.watch.init("path/here")) return false;
     if (!goroot_watcher.watch.init("path/here")) return false;
-    if (!vendor_watcher.watch.init("path/here")) return false;
 }
 
 void run_watcher_stub(void *param) {
@@ -4741,7 +4803,6 @@ bool Go_Index::run_threads() {
     if (!init_watcher(&wksp_watcher, WATCH_WKSP)) return false;
     if (!init_watcher(&gopath_watcher, WATCH_GOPATH)) return false;
     if (!init_watcher(&goroot_watcher, WATCH_GOROOT)) return false;
-    if (!init_watcher(&vendor_watcher, WATCH_VENDOR)) return false;
 
     main_loop_thread = create_thread(run_main_loop_stub, this);
     if (main_loop_thread == NULL) return false;
@@ -4765,12 +4826,10 @@ void Go_Index::cleanup() {
     kill_and_close(&wksp_watcher.thread);
     kill_and_close(&gopath_watcher.thread);
     kill_and_close(&goroot_watcher.thread);
-    kill_and_close(&vendor_watcher.thread);
 
     wksp_watcher.watch.cleanup();
     gopath_watcher.watch.cleanup();
     goroot_watcher.watch.cleanup();
-    vendor_watcher.watch.cleanup();
 }
 
 // -----

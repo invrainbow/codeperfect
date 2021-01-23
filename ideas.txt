@@ -47,6 +47,7 @@ up.
 autocomplete or gotodef, we assume current package name is
 world.wksp.go_import_path. This will fail if user edits files outside current
 workspace. Need function to translate directory path into import path.
+    Update: world.wksp.go_import_path has been replaced with get_workspace_import_path()
 
     Now that our memory isn't retarded anymore, rework Scoped_Table to not use
 LIST_MALLOC. And also just rewrite large sections of Parser.

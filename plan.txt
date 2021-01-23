@@ -12,6 +12,10 @@
           threads to watch wksp, gopath, goroot, vendor and a bunch of
           scaffolding is in place to send off events. now this all needs to be
           tested, and actual events need to be sent and handled
+
+          update: ok, handle_fs_event is also filled out, index events are also
+          written, we just need main_loop to receive
+          INDEX_EVENT_REINDEX_PACKAGE and actually reindex the package.
     notes:
         - this is harder than i thought it'd be tbh. luckily i have a full day
           tomorrow. next items are handling file/directory changes by sending
