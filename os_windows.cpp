@@ -462,3 +462,81 @@ ccstr rel_to_abs_path(ccstr path) {
     }
     return ret;
 }
+
+const s32 FS_WATCHER_BUFSIZE = 1024 * 32;
+
+bool Fs_Watcher::init(ccstr _path) {
+    ptr0(this);
+    path = _path;
+    dir_handle = CreateFileA(path, FILE_LIST_DIRECTORY, 0, NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+    if (dir_handle == NULL) return false;
+
+    buf = alloc_memory(FS_WATCHER_BUFSIZE);
+    return true;
+}
+
+void Fs_Watcher::cleanup() {
+    if (dir_handle != NULL) CloseHandle(dir_handle);
+}
+
+bool Fs_Watcher::next_event(Fs_Event *event) {
+    if (!has_more) {
+        auto flags = FILE_NOTIFY_CHANGE_FILE_NAME |
+            FILE_NOTIFY_CHANGE_DIR_NAME |
+            FILE_NOTIFY_CHANGE_ATTRIBUTES |
+            FILE_NOTIFY_CHANGE_LAST_WRITE |
+            FILE_NOTIFY_CHANGE_CREATION;
+
+        DWORD bytes_transferred = 0;
+        if (!ReadDirectoryChangesW(dir_handle, buf, FS_WATCHER_BUFSIZE, TRUE, flags, &bytes_transferred, NULL, NULL))
+            return false;
+
+        if (bytes_transferred == 0) return false;
+
+        offset = 0;
+        has_more = true;
+    }
+
+    auto copy_file_name = [&](FILE_NOTIFY_INFORMATION *info, char *dest, s32 destsize) {
+        // support unicode later
+        // and to be honest maybe our string class should just handle seamless ansi/unicode transition lol
+        auto len = info->FileNameLength;
+        for (u32 i = 0; i < len && i < destsize-1; i++)
+            dest[i] = (char)info->FileName[i];
+        dest[len] = 0;
+    };
+
+    auto info = (FILE_NOTIFY_INFORMATION*)((u8*)buf + offset);
+    if (info->Action == FILE_ACTION_RENAMED_NEW_NAME)
+        return next_event(event);   // we shouldn't be here, ask for next event lmao
+
+    copy_file_name(info, event->filepath, _countof(event->filepath));
+    switch (info->Action) {
+    case FILE_ACTION_ADDED:
+        event->type = FSEVENT_CREATE;
+        break;
+    case FILE_ACTION_REMOVED:
+        event->type = FSEVENT_DELETE;
+        break;
+    case FILE_ACTION_MODIFIED:
+        event->type = FSEVENT_CHANGE;
+        break;
+    case FILE_ACTION_RENAMED_OLD_NAME:
+        event->type = FSEVENT_CHANGE;
+        if (info->NextEntryOffset == 0) return false;
+
+        offset += info->NextEntryOffset;
+        info = (FILE_NOTIFY_INFORMATION*)((u8*)buf + offset);
+
+        if (info->Action != FILE_ACTION_RENAMED_NEW_NAME) return false;
+        copy_file_name(info, event->new_filepath, _countof(event->new_filepath));
+        break;
+    }
+
+    if (info->NextEntryOffset == 0)
+        has_more = false;
+    else
+        offset += info->NextEntryOffset;
+
+    return true;
+}

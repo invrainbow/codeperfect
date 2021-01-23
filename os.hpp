@@ -12,7 +12,7 @@
 #define OS_MAC 1
 #elif defined(__linux__)
 #undef OS_LINUX
-#define OS_LINUX 1 
+#define OS_LINUX 1
 #else
 #error "what the fuck OS is this?"
 #endif
@@ -225,3 +225,30 @@ struct Entire_File {
 Entire_File *read_entire_file(ccstr path);
 void free_entire_file(Entire_File *file);
 ccstr rel_to_abs_path(ccstr path);
+
+enum Fs_Event_Type {
+    FSEVENT_CHANGE,
+    FSEVENT_DELETE,
+    FSEVENT_CREATE,
+    FSEVENT_RENAME,
+};
+
+struct Fs_Event {
+    Fs_Event_Type type;
+    char filepath[MAX_PATH];
+    char new_filepath[MAX_PATH];
+};
+
+struct Fs_Watcher {
+#if OS_WIN
+    void *buf;
+    bool has_more;
+    s32 offset;
+    ccstr path;
+    HANDLE dir_handle;
+#endif
+
+    bool init(ccstr _path);
+    void cleanup();
+    bool next_event(Fs_Event *event);
+};

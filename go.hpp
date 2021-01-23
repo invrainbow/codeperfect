@@ -863,8 +863,8 @@ struct Gomod_Directive {
     ccstr module_version;
 
     // for replace
-    ccstr replace_path; 
-    ccstr replace_version; 
+    ccstr replace_path;
+    ccstr replace_version;
 };
 
 struct Gomod_Info {
@@ -1102,7 +1102,7 @@ struct Index_Reader {
 // 1) Our project's dependencies -- WHAT ARE THEY
 // 2) Given an import path -- WHERE IS THE PACKAGE
 // 3) Given a decl -- WHERE IS IT DECLARED (down to file:pos)
-// 
+//
 // See the top of go.cpp.
 
 struct Eil_Result {
@@ -1112,7 +1112,69 @@ struct Eil_Result {
     List<ccstr> *removed_imports;
 };
 
+enum Index_Event_Type {
+    INDEX_EVENT_FETCH_IMPORTS,
+    INDEX_EVENT_REINDEX_PACKAGE,
+};
+
+struct Index_Event {
+    Index_Event_Type type;
+    union {
+        struct {
+            ccstr import_path;
+        } reindex_package;
+    };
+};
+
+enum Go_Watch_Type {
+    WATCH_WKSP,
+    WATCH_GOPATH,
+    WATCH_GOROOT,
+    WATCH_VENDOR,
+};
+
+struct Go_Index;
+
+struct Go_Index_Watcher {
+    Go_Index *_this;
+    Go_Watch_Type type;
+    Thread_Handle thread;
+    Fs_Watcher watch;
+};
+
 struct Go_Index {
+    List<Index_Event> events;
+    Lock events_lock;
+
+    // we can get rid of this stupidity when i get async ReadDirectoryChanges working
+    Go_Index_Watcher wksp_watcher;
+    Go_Index_Watcher gopath_watcher;
+    Go_Index_Watcher goroot_watcher;
+    Go_Index_Watcher vendor_watcher;
+    Thread_Handle main_loop_thread;
+
+    bool init();
+    void cleanup();
+    void process_fs_event(Go_Index_Watcher *watcher, Fs_Event *event);
+
+    /*
+     * re-fetch imports list when:
+     *  - file in current workspace changes.
+     *      - user saves file from within ide
+     *      - file changes from outside.
+     *
+     * re-crawl a particular package when:
+     * (i guess when its hash would change? that would be when?)
+     *  - reolved import path changes
+     *  - *.go file contents change
+     *  - *.go filename changes
+     *
+     *  weird special case is: when file in current wksp changes, we re-crawl whole wksp? can't be right.
+     *
+     *  ok so we need to watch for changes on a whole bunch of files
+     *
+     */
+
     bool match_import_spec(Ast* import_spec, ccstr want);
     s32 count_decls_in_source(File_Ast* source, int flags);
     List<Named_Decl>* list_decls_in_source(File_Ast* source, int flags, List<Named_Decl>* out = NULL);
@@ -1148,6 +1210,8 @@ struct Go_Index {
     void handle_error(ccstr err);
     bool ensure_imports_list_correct(Eil_Result *res);
     u64 hash_package(ccstr import_path, Resolved_Import **pres);
+
+    bool run_threads();
 };
 
 typedef fn<void(Parser*)> parser_cb;

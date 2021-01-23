@@ -110,18 +110,16 @@ ccstr get_package_name(ccstr path) {
 
 
 Resolved_Import* resolve_import(ccstr import_path) {
-
     if (world.wksp.gomod_exists) {
-        // So in our go.mod, we have a bunch of directives that at the end of
-        // the day basically say to us, "when you come across this import path,
-        // go to this file path to find the package." So our strategy is: go
-        // through all of these "mappings," see if the import path (call it the
-        // base path) contains as a subfolder the import path we're trying to
-        // resolve.
+        // In our go.mod, we have a bunch of directives that basically give us
+        // the info, "when you come across this import path, go to this file
+        // path to find the package." So our strategy is: go through all these
+        // "mappings," see if the import path (the "base path") contains as a
+        // subfolder the import path we're trying to resolve.
         //
-        // If it does, we use that mapping to find the path of the directory we
-        // think our import path resolves to. Then we check if it's a package.
-        // If so, we've hit gold.
+        // If it does, use that mapping to find the path of the directory we
+        // think our import path resolves to. Then check if it's a package.  If
+        // so, we've hit gold.
 
         // represents as path as list of its parts, e.g. "a/b/c" becomes ["a", "b", "c"]
         typedef List<ccstr> Path_List;
@@ -4563,6 +4561,17 @@ void Go_Index::main_loop() {
     // Because of this, we'll want to include import paths that haven't been
     // added to go.mod.
 
+    /*
+    broadly speaking events fall into:
+     - our set of imports has changed
+     - the hash for one of our imports changed
+    that pretty much it? lol
+    so we really just need to implement
+        update index for a given import path
+        add/remove import
+    fuck, i just remembered, we also need to support nested go.mod
+    */
+
     {
         SCOPED_FRAME();
         ensure_directory_exists(get_index_path());
@@ -4644,7 +4653,128 @@ bool Go_Index::delete_index() {
     return delete_rm_rf(get_index_path());
 }
 
+void Go_Index::process_fs_event(Go_Index_Watcher *watcher, Fs_Event *event) {
+    auto path = path_join(
+        watcher->watch.path,
+        event->type == FSEVENT_RENAME ? event->new_filepath : event->filepath
+    );
+
+    auto queue_for_rescan = [&](ccstr import_path) {
+        // TODO
+    };
+
+    auto res = check_path(path);
+    switch (res) {
+    case CPR_NONEXISTENT:
+        return;  // idk why this would happen
+    case CPR_DIRECTORY:
+        switch (event->type) {
+        case FSEVENT_CHANGE:
+            // what does change even mean here?
+            break;
+        case FSEVENT_DELETE:
+        case FSEVENT_CREATE:
+            // find out what find out what import path this was and rescan
+            break;
+        case FSEVENT_RENAME:
+            // find out what find out what import paths old and new were, and rescan both
+            break;
+        }
+    case CPR_FILE:
+        if (!str_ends_with(path, ".go")) return;
+        if (str_ends_with(path, "_test.go")) return;
+
+        // ok, so some .go file was added, deleted, changed, or renamed
+        // i think all we do now is find out what package (import path) it's in
+        // and queue that up for a re-scan lol
+        // like do we even give a fuck, can we just have the rescanner queue decide what to do next
+
+        // there's just this huge decision matrix that needs to be done lol
+        // and also we need to write the rescanner
+        // CODING IS SO HARD
+
+        if (watcher->type == WATCH_WKSP) {
+            // do something different probably?
+        } else {
+            // find out what import path file belongs to, and rescan
+        }
+    }
+}
+
+bool Go_Index::init() {
+    ptr0(this);
+
+    if (!wksp_watcher.watch.init("path/here")) return false;
+    if (!gopath_watcher.watch.init("path/here")) return false;
+    if (!goroot_watcher.watch.init("path/here")) return false;
+    if (!vendor_watcher.watch.init("path/here")) return false;
+}
+
+void run_watcher_stub(void *param) {
+    auto w = (Go_Index_Watcher*)param;
+    Fs_Event event;
+
+    while (true) {
+        if (w->watch.next_event(&event))
+            w->_this->process_fs_event(w, &event);
+
+        // unable to get next event???
+        error("unable to get next event? why?????");
+        // should we sleep a bit?
+    }
+}
+
+void run_main_loop_stub(void *p) {
+    ((Go_Index*)p)->main_loop();
+};
+
+bool Go_Index::run_threads() {
+    auto _this = this;
+
+    auto init_watcher = [&](Go_Index_Watcher *w, Go_Watch_Type type) -> bool {
+        w->type = type;
+        w->_this = _this;
+        w->thread = create_thread(run_watcher_stub, &w);
+        return w->thread != NULL;
+    };
+
+    if (!init_watcher(&wksp_watcher, WATCH_WKSP)) return false;
+    if (!init_watcher(&gopath_watcher, WATCH_GOPATH)) return false;
+    if (!init_watcher(&goroot_watcher, WATCH_GOROOT)) return false;
+    if (!init_watcher(&vendor_watcher, WATCH_VENDOR)) return false;
+
+    main_loop_thread = create_thread(run_main_loop_stub, this);
+    if (main_loop_thread == NULL) return false;
+
+    return true;
+}
+
+void Go_Index::cleanup() {
+    auto kill_and_close = [&](Thread_Handle *phandle) {
+        if (*phandle != NULL) {
+            kill_thread(*phandle);
+            close_thread_handle(*phandle);
+            *phandle = NULL;
+        }
+    };
+
+    kill_and_close(&main_loop_thread);
+
+    // ...
+
+    kill_and_close(&wksp_watcher.thread);
+    kill_and_close(&gopath_watcher.thread);
+    kill_and_close(&goroot_watcher.thread);
+    kill_and_close(&vendor_watcher.thread);
+
+    wksp_watcher.watch.cleanup();
+    gopath_watcher.watch.cleanup();
+    goroot_watcher.watch.cleanup();
+    vendor_watcher.watch.cleanup();
+}
+
 // -----
+
 s32 num_index_stream_opens = 0;
 s32 num_index_stream_closes = 0;
 

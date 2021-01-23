@@ -52,3 +52,9 @@ workspace. Need function to translate directory path into import path.
 LIST_MALLOC. And also just rewrite large sections of Parser.
 
     See how many LIST_MALLOCs should just be LIST_POOLs.
+
+    If we don't handle the stupid Unicode situation soon, we're going to be
+fucked the longer we wait. Need to get that shit over with. Probably the first
+thing we need to do as soon as indexing is done.
+
+    Need to handle nested vendor directories for Go too.

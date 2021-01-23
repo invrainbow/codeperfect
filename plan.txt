@@ -1,3 +1,36 @@
+1/22/21
+    plan:
+        - didn't start work until after 5
+        - support nested go.mod
+            - create an example to test this with
+        - add hooks
+        - after that, i think the best plan is just start trying to build
+          landsharkive, this will naturally reveal almost all intellisense
+          problems, fix those
+    done:
+        - ok so uh i wrote a bunch of code that waits for files and sets up
+          threads to watch wksp, gopath, goroot, vendor and a bunch of
+          scaffolding is in place to send off events. now this all needs to be
+          tested, and actual events need to be sent and handled
+    notes:
+        - this is harder than i thought it'd be tbh. luckily i have a full day
+          tomorrow. next items are handling file/directory changes by sending
+          off events (like "re-index import path" or "re-scan project
+          imports"), which then need to be handled in the main loop.
+
+          so right now the file watcher's only job is just: when files and dirs
+          change, figure out what action that corresponds to, and tell
+          main_loop to do it. main_loop then has to decide when it's prudent to
+          do so, e.g. if 100 f files in a package change, file watcher will
+          send off a 100 "re-index package" events, but it should obviously
+          only run once.  so it will need to both constantly run those actions
+          (re-indexing), and also at the same time process new events, so it
+          can say e.g. "got a new event to re-index, but we're already
+          re-indexing that, so discard event."
+
+          coding is so hard tbh
+          luckily it's even harder for jetbrains engineers :)
+
 1/21/21
     plan:
         - didn't start working until 4:50pm, was in meetings all day, and also
@@ -13,7 +46,8 @@
           message to myself tomorrow.
         - so surprisingly everything is just working, next start working on
           hooks to update the index. make a list of these and then just start
-          implementing them
+          implementing them (this is tomorrow's starting point)
+        - fuck, i just remembered, we also need to support nested go.mod
 
 1/20/21
     plan:
