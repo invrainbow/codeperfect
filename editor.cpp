@@ -249,13 +249,12 @@ bool Workspace::parse_gomod_file(ccstr path) {
     world.gomod_parser_mem.init("gomod_parser_mem");
     SCOPED_MEM(&world.gomod_parser_mem);
 
-    FILE* f = fopen(path, "r");
-    if (f == NULL) return false;
-    defer { fclose(f); };
+    auto ef = read_entire_file(path);
+    if (ef == NULL) return false;
+    defer { free_entire_file(ef); };
 
     Parser_It it;
-    it.type = IT_FILE;
-    it.file_params.file = f;
+    it.init(ef);
 
     Gomod_Parser p;
     p.it = &it;

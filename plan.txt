@@ -18,6 +18,11 @@
           w:\whetstone. it should just work though since we should set cwd to
           world.wksp.path, need fix
         - autocomplete shouldn't include methods with receivers, like "foo.bar"
+        - tomorrow: typing "runes." in main.go no longer triggers autocomplete,
+          probably the change to using mmap for go.cpp that broke it, fix that
+          first. then I guess just go through the outstanding bugs in
+          ideas.txt, or start working on unicode, or just try to build
+          landsharkive and see/fix what goes wrong.
 
 1/22/21
     plan:

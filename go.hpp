@@ -4,12 +4,12 @@
 #include "buffer.hpp"
 #include "utils.hpp"
 
+#include "os.hpp"
 #include "uthash.h"
 
 enum ItType {
     IT_INVALID = 0,
-    IT_FILE,
-    IT_STRING,
+    IT_DATA,
     IT_BUFFER,
 };
 
@@ -18,34 +18,27 @@ struct Parser_It {
 
     union {
         struct {
-            FILE* file;
-        } file_params;
-
-        struct {
             cur2 pos;
-            ccstr string; // TODO: unicode
+            u8 *data; // TODO: unicode
             s32 len;
-        } string_params;
+        } data_params;
 
         struct {
             Buffer_It it;
         } buffer_params;
     };
 
-    void init(FILE* _file) {
+    void init(Entire_File *ef) {
+        init((u8*)ef->data, ef->len);
+    }
+
+    void init(u8 *data, s32 _len) {
         ptr0(this);
-        type = IT_FILE;
+        type = IT_DATA;
 
-        file_params.file = _file;
-    };
-
-    void init(ccstr str, s32 _len) {
-        ptr0(this);
-        type = IT_STRING;
-
-        string_params.string = str;
-        string_params.len = _len;
-        string_params.pos = new_cur2(0, 0);
+        data_params.data = data;
+        data_params.len = _len;
+        data_params.pos = new_cur2(0, 0);
     }
 
     void init(Buffer* buf) {
@@ -57,14 +50,8 @@ struct Parser_It {
 
     u8 peek() {
         switch (type) {
-            case IT_FILE:
-                {
-                    auto ret = fgetc(file_params.file);
-                    ungetc(ret, file_params.file);
-                    return ret;
-                }
-            case IT_STRING:
-                return string_params.string[string_params.pos.x];
+            case IT_DATA:
+                return data_params.data[data_params.pos.x];
             case IT_BUFFER:
                 return (u8)buffer_params.it.peek();
         }
@@ -73,12 +60,10 @@ struct Parser_It {
 
     u8 next() {
         switch (type) {
-            case IT_FILE:
-                return (u8)fgetc(file_params.file);
-            case IT_STRING:
+            case IT_DATA:
                 {
                     auto ret = peek();
-                    string_params.pos.x++;
+                    data_params.pos.x++;
                     return ret;
                 }
             case IT_BUFFER:
@@ -89,10 +74,8 @@ struct Parser_It {
 
     bool eof() {
         switch (type) {
-            case IT_FILE:
-                return (bool)feof(file_params.file);
-            case IT_STRING:
-                return (string_params.pos.x == string_params.len);
+            case IT_DATA:
+                return (data_params.pos.x == data_params.len);
             case IT_BUFFER:
                 return buffer_params.it.eof();
         }
@@ -102,10 +85,8 @@ struct Parser_It {
     cur2 get_pos() {
         // TODO: to convert between pos types based on this->type
         switch (type) {
-            case IT_STRING:
-                return new_cur2(string_params.pos.x, -1);
-            case IT_FILE:
-                return new_cur2(ftell(file_params.file), -1);
+            case IT_DATA:
+                return new_cur2(data_params.pos.x, -1);
             case IT_BUFFER:
                 return buffer_params.it.pos;
         }
@@ -115,11 +96,8 @@ struct Parser_It {
     void set_pos(cur2 pos) {
         // TODO: to convert between pos types based on this->type
         switch (type) {
-            case IT_STRING:
-                string_params.pos = pos;
-                break;
-            case IT_FILE:
-                fseek(file_params.file, pos.x, SEEK_SET);
+            case IT_DATA:
+                data_params.pos = pos;
                 break;
             case IT_BUFFER:
                 buffer_params.it.pos = pos;
@@ -938,14 +916,13 @@ struct Resolved_Import {
 Resolved_Import* resolve_import(ccstr import_path);
 
 struct Loaded_It {
-    FILE* f;
+    Entire_File *ef;
     Parser_It* it;
 
     void cleanup() {
-        if (f != NULL) {
-            fclose(f);
-            f = NULL;
-        }
+        if (ef == NULL) return;
+        free_entire_file(ef);
+        ef = NULL;
     }
 };
 

@@ -6,7 +6,7 @@
 #include "nvim.hpp"
 
 bool run_tests() {
-    // return false;
+    return false;
 
     world.init(true);
     Go_Index index;

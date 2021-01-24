@@ -290,15 +290,12 @@ ccstr _path_join(ccstr a, ...) {
 }
 
 ccstr get_package_name_from_file(ccstr filepath) {
-    FILE* f = fopen(filepath, "rb");
-    if (f == NULL) {
-        error("Unable to open file.");
-        return NULL;
-    }
-    defer { fclose(f); };
+    auto ef = read_entire_file(filepath);
+    if (ef == NULL) return NULL;
+    defer { free_entire_file(ef); };
 
     Parser_It it;
-    it.init(f);
+    it.init(ef);
 
     Parser parser;
     parser.init(&it);
@@ -326,14 +323,14 @@ Loaded_It* default_file_loader(ccstr filepath) {
         }
     }
 
-    auto f = fopen(filepath, "rb");
-    if (f == NULL) return NULL;
+    auto ef = read_entire_file(filepath);
+    if (ef == NULL) return NULL;
 
     auto it = alloc_object(Parser_It);
-    it->init(f);
+    it->init(ef);
 
     auto ret = alloc_object(Loaded_It);
-    ret->f = f;
+    ret->ef = ef;
     ret->it = it;
     return ret;
 }
