@@ -37,8 +37,6 @@ template <typename F> int operator+(Run_Function, F&& f) {
     return 0;
 };
 
-#define run_before_main static int GENSYM(run_before_main) = Run_Function() + []()
-
 // typedefs & aliases
 typedef size_t s32;
 typedef uint8_t u8;

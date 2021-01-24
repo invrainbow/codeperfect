@@ -435,21 +435,16 @@ void Editor::on_type() {
     }
 }
 
-// OK, I think the most likely cause here is world.parser_mem being reused.
-// investigate that shit
-
 void Editor::trigger_autocomplete(bool triggered_by_dot) {
     ptr0(&autocomplete);
 
-    SCOPED_MEM(&world.parser_mem);
-    SCOPED_FRAME();
+    SCOPED_MEM(&world.index.main_thread_mem);
+    defer { world.index.main_thread_mem.reset(); };
 
-    Go_Index go;
     Autocomplete ac;
+    world.autocomplete_mem.reset();
 
-    world.autocomplete_mem.sp = 0;
-
-    if (!go.autocomplete(filepath, cur, triggered_by_dot, &ac)) return;
+    if (!world.index.autocomplete(filepath, cur, triggered_by_dot, &ac)) return;
 
     {
         SCOPED_MEM(&world.autocomplete_mem);
@@ -474,8 +469,8 @@ void Editor::filter_autocomplete_results(Autocomplete* ac) {
     bool prefix_found = false;
 
     do {
-        SCOPED_MEM(&world.parser_mem);
-        SCOPED_FRAME();
+        SCOPED_MEM(&world.index.main_thread_mem);
+        defer { world.index.main_thread_mem.reset(); };
 
         auto id = parse_autocomplete_id(ac);
         if (id == NULL) break;
@@ -580,16 +575,14 @@ void Editor::trigger_parameter_hint(bool triggered_by_paren) {
     auto cursor = cur;
     auto out = &parameter_hint;
 
-    SCOPED_MEM(&world.parser_mem);
-    SCOPED_FRAME();
+    SCOPED_MEM(&world.index.main_thread_mem);
+    defer { world.index.main_thread_mem.reset(); };
 
-    Go_Index go;
-    auto hint = go.parameter_hint(filepath, cursor, triggered_by_paren);
+    auto hint = world.index.parameter_hint(filepath, cursor, triggered_by_paren);
     if (hint == NULL) return;
 
     SCOPED_MEM(&world.parameter_hint_mem);
-
-    world.parameter_hint_mem.sp = 0;
+    world.parameter_hint_mem.reset();
 
     auto fields = hint->signature->signature.params->parameters.fields;
     auto params = alloc_list<ccstr>(fields->list.len);

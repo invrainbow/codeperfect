@@ -467,11 +467,15 @@ const s32 FS_WATCHER_BUFSIZE = 1024 * 32;
 
 bool Fs_Watcher::init(ccstr _path) {
     ptr0(this);
-    path = _path;
-    dir_handle = CreateFileA(path, FILE_LIST_DIRECTORY, 0, NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
-    if (dir_handle == NULL) return false;
 
-    buf = alloc_memory(FS_WATCHER_BUFSIZE);
+    path = _path;
+    dir_handle = CreateFileA(path, FILE_LIST_DIRECTORY, FILE_SHARE_WRITE | FILE_SHARE_READ | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+    if (dir_handle == INVALID_HANDLE_VALUE) {
+        print("unable to create file for fswatcher: %s", get_last_error());
+        return false;
+    }
+
+    buf = alloc_array(FILE_NOTIFY_INFORMATION, FS_WATCHER_BUFSIZE);
     return true;
 }
 
@@ -488,10 +492,15 @@ bool Fs_Watcher::next_event(Fs_Event *event) {
             FILE_NOTIFY_CHANGE_CREATION;
 
         DWORD bytes_transferred = 0;
-        if (!ReadDirectoryChangesW(dir_handle, buf, FS_WATCHER_BUFSIZE, TRUE, flags, &bytes_transferred, NULL, NULL))
+        if (!ReadDirectoryChangesW(dir_handle, buf, sizeof(FILE_NOTIFY_INFORMATION) * FS_WATCHER_BUFSIZE, TRUE, flags, &bytes_transferred, NULL, NULL)) {
+            print("unable to read directory changes: %s", get_last_error());
             return false;
+        }
 
-        if (bytes_transferred == 0) return false;
+        if (bytes_transferred == 0) {
+            print("bytes transferred was 0");
+            return false;
+        }
 
         offset = 0;
         has_more = true;
@@ -500,10 +509,11 @@ bool Fs_Watcher::next_event(Fs_Event *event) {
     auto copy_file_name = [&](FILE_NOTIFY_INFORMATION *info, char *dest, s32 destsize) {
         // support unicode later
         // and to be honest maybe our string class should just handle seamless ansi/unicode transition lol
-        auto len = info->FileNameLength;
-        for (u32 i = 0; i < len && i < destsize-1; i++)
+        auto len = info->FileNameLength / sizeof(WCHAR);
+        u32 i = 0;
+        for (; i < len && i < destsize-1; i++)
             dest[i] = (char)info->FileName[i];
-        dest[len] = 0;
+        dest[i] = 0;
     };
 
     auto info = (FILE_NOTIFY_INFORMATION*)((u8*)buf + offset);
@@ -522,7 +532,7 @@ bool Fs_Watcher::next_event(Fs_Event *event) {
         event->type = FSEVENT_CHANGE;
         break;
     case FILE_ACTION_RENAMED_OLD_NAME:
-        event->type = FSEVENT_CHANGE;
+        event->type = FSEVENT_RENAME;
         if (info->NextEntryOffset == 0) return false;
 
         offset += info->NextEntryOffset;

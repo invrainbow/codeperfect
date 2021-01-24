@@ -6,26 +6,11 @@
 #include "nvim.hpp"
 
 bool run_tests() {
-    // return false;
-
-    /*
-    auto ast = parse_file_into_ast("testfile.go");
-    For (ast->source.decls->list) {
-        if (it->type == AST_FUNC_DECL) {
-            auto stmt = it->func_decl.body->block.stmts->list[0];
-            print("...");
-        }
-    }
-
-    return true;
     return false;
-    */
 
+    world.init(true);
     Go_Index index;
-    index.delete_index();
-    index.main_loop();
-    return false;
-
+    // if (!index.init()) return false;eturn;
     system("pause");
     return true;
 }

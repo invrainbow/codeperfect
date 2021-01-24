@@ -59,7 +59,6 @@ struct Build_Error {
 
 struct World {
     Pool frame_mem;
-    Pool parser_mem;
     Pool ast_viewer_mem;
     Pool autocomplete_mem;
     Pool parameter_hint_mem;
@@ -85,6 +84,8 @@ struct World {
     vec2 window_size;
     vec2 display_size;
     vec2f display_scale;
+
+    Go_Index index;
 
     Font font;
 
@@ -284,7 +285,7 @@ struct World {
         }
     } dbg;
 
-    void init();
+    void init(bool test);
     Pane* get_current_pane();
     Editor* get_current_editor();
     Editor* find_editor(find_editor_func f);

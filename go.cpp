@@ -108,7 +108,6 @@ ccstr get_package_name(ccstr path) {
     return NULL;
 }
 
-
 Resolved_Import* resolve_import(ccstr import_path) {
     if (world.wksp.gomod_exists) {
         // In our go.mod, we have a bunch of directives that basically give us
@@ -249,7 +248,7 @@ Resolved_Import* resolve_import(ccstr import_path) {
 ccstr _path_join(ccstr a, ...) {
     auto get_part_length = [&](ccstr s) {
         auto len = strlen(s);
-        if (is_sep(s[len-1])) len--;
+        if (len > 0 && is_sep(s[len-1])) len--;
         return len;
     };
 
@@ -288,7 +287,7 @@ ccstr _path_join(ccstr a, ...) {
 
     ret[k] = '\0';
     return ret;
-} 
+}
 
 ccstr get_package_name_from_file(ccstr filepath) {
     FILE* f = fopen(filepath, "rb");
@@ -409,7 +408,7 @@ void walk_ast(Ast* root, WalkAstFn fn) {
         item->name = fieldname;
         item->depth = depth;
     };
-    
+
     add_to_queue(root, ".root", 0);
 
     while (queue.len > 0) {
@@ -697,8 +696,11 @@ void Parser::parser_error(ccstr fmt, ...) {
     print("%s", filepath);
     print("pos = %s", format_pos(tok.start));
 
+    /*
+    // for debugging
     if (!streq(filepath, "./test.go"))
         copy_file(filepath, "./test.go", true);
+    */
 
     vprintf(fmt, args);
     printf("\n");
@@ -1221,11 +1223,16 @@ void init_ast_sizes() {
     AST_SIZES[AST_FUNC_DECL] = sizeof(Ast::func_decl);
 }
 
-run_before_main { init_ast_sizes(); };
-
 const int AST_HEADER_SIZE = get_ast_header_size();
 
 Ast* Parser::new_ast(Ast_Type type, cur2 start) {
+    static bool ast_sizes_initialized = false;
+
+    if (!ast_sizes_initialized)  {
+        init_ast_sizes();
+        ast_sizes_initialized = true;
+    }
+
     auto ret = (Ast*)alloc_memory(AST_HEADER_SIZE + AST_SIZES[type]);
     // auto ret = (Ast*)alloc_memory(sizeof(Ast));
     ret->type = type;
@@ -1439,7 +1446,7 @@ Ast* Parser::parse_decl(Sync_Lookup_Func sync_lookup, bool import_allowed) {
 
     auto parse = [&]() {
         auto spec = parse_spec(spec_type, &previous_spec_contains_iota);
-        if (spec == NULL) 
+        if (spec == NULL)
             synchronize(sync_lookup);
         else
             specs.push(spec);
@@ -1479,7 +1486,8 @@ Ast* Parser::parse_parameters(bool ellipsis_ok) {
     auto list = new_list();
     if (tok.type != TOK_RPAREN) {
         while (true) {
-            list.push(parse_type(ellipsis_ok));
+            auto type = parse_type(ellipsis_ok);
+            if (type != NULL) list.push(type);
             if (tok.type != TOK_COMMA) break;
             lex();
             if (tok.type == TOK_RPAREN) break;
@@ -4456,8 +4464,6 @@ List<ccstr> *read_imports_from_index(ccstr imports_path) {
     if (f == NULL) return NULL;
     defer { f->cleanup(); };
 
-    if (!f->read_file_header(INDEX_FILE_IMPORTS)) return NULL;
-
     auto num_imports = f->read4();
     auto ret = alloc_list<ccstr>();
     for (u32 i = 0; i < num_imports; i++)
@@ -4468,9 +4474,10 @@ List<ccstr> *read_imports_from_index(ccstr imports_path) {
 bool Go_Index::ensure_imports_list_correct(Eil_Result *res) {
     Frame frame;
 
-    auto _handle_error = [&](ccstr message) { 
+    auto _handle_error = [&](ccstr message) {
         handle_error(message);
         frame.restore();
+        return false;
     };
 
     auto imports_path = get_index_path("imports");
@@ -4478,13 +4485,13 @@ bool Go_Index::ensure_imports_list_correct(Eil_Result *res) {
     auto new_imports = get_package_imports(world.wksp.path);
 
     if (new_imports == NULL)
-        return _handle_error("Unable to get workspace imports."), false;
+        return _handle_error("Unable to get workspace imports.");
 
     {
         // write out new imports
         Index_Stream fw;
         if (fw.open(imports_path, FILE_MODE_WRITE, FILE_CREATE_NEW) != FILE_RESULT_SUCCESS)
-            return _handle_error("Unable to open imports for writing."), false;
+            return _handle_error("Unable to open imports for writing.");
         defer { fw.cleanup(); };
 
         fw.write_file_header(INDEX_FILE_IMPORTS);
@@ -4574,113 +4581,103 @@ u64 read_index_hash(ccstr import_path) {
     return f.ok ? ret : 0;
 }
 
-void Go_Index::main_loop() {
-    // Thought: We are not a version/dependency manager. That is go.mod's job.
-    // We're primarily interested in, WHAT IMPORT PATHS DO WE CALL?  and WHERE
-    // ARE THOSE PACKAGES LOCATED? We may incidentally need to answer questions
-    // about versions, but our source of truth is mainly concerned with just
-    // GIVE ME THE SET OF ALL INCLUDED IMPORT PATHS.
-    //
-    // Because of this, we'll want to include import paths that haven't been
-    // added to go.mod.
+bool Go_Index::ensure_package_correct(ccstr import_path) {
+    Resolved_Import *ri = NULL;
+    auto hash = hash_package(import_path, &ri);
+    if (hash == 0)
+        return handle_error(our_sprintf("Unable to hash package %s", import_path)), false;
 
-    /*
-    broadly speaking events fall into:
-     - our set of imports has changed
-     - the hash for one of our imports changed
-    that pretty much it? lol
-    so we really just need to implement
-        update index for a given import path
-        add/remove import
-    fuck, i just remembered, we also need to support nested go.mod
-    */
+    print("Checking import %s, hash = %llx", import_path, hash);
 
+    auto current_hash = read_index_hash(import_path);
+    if (current_hash == hash)
+        return print("Hash hasn't changed, no need to update."), true;
+
+    print("Hash is different, updating index...");
+
+    // update index
     {
-        SCOPED_FRAME();
-        ensure_directory_exists(get_index_path());
+        auto path = ri->path;
+        print("crawling %s", path);
+
+        // TODO: maybe we need to use a separate allocator for holding the names in Index_Writer.decls!
+        Index_Writer w;
+        if (w.init(import_path) != FILE_RESULT_SUCCESS) return false;
+        defer { w.cleanup(); };
+
+        w.write_hash(hash);
+        w.write_headers(path, ri->location_type);
+
+        list_directory(path, [&](Dir_Entry* ent) {
+            if (ent->type == DIRENT_DIR) return;
+
+            // for now, only grab non-test .go files
+            if (!str_ends_with(ent->name, ".go")) return;
+            if (str_ends_with(ent->name, "_test.go")) return;
+
+            auto filepath = path_join(path, ent->name);
+            auto ast = parse_file_into_ast(filepath);
+            if (ast == NULL) return; // what to do here? this is an error
+
+            list_decls_in_source(make_file_ast(ast, filepath, import_path), LISTDECLS_DECLS, [&](Named_Decl* decl) {
+                for (auto&& it : *decl->items) {
+                    auto name = it.name->id.lit;
+                    if (it.spec->type == AST_FUNC_DECL) {
+                        auto receiver_name = get_receiver_typename_from_func_decl(it.spec);
+                        if (receiver_name != NULL)
+                            name = our_sprintf("%s.%s", receiver_name, name);
+                    }
+                    w.write_decl(ent->name, name, it.spec);
+                }
+            });
+        });
+
+        w.finish_writing();
     }
+}
+
+bool Go_Index::ensure_entire_index_correct() {
+    ensure_directory_exists(get_index_path());
 
     Eil_Result res;
-    if (!ensure_imports_list_correct(&res)) {
-        return;
-    }
+    if (!ensure_imports_list_correct(&res)) return false;
+    For (*res.new_imports) ensure_package_correct(it);
+}
 
-    For (*res.new_imports) {
-        Resolved_Import *ri = NULL;
-        auto hash = hash_package(it, &ri);
-        if (hash == 0) {
-            handle_error(our_sprintf("Unable to hash package %s", it));
-            continue; // ???
-        }
+void Go_Index::run_background_thread() {
+    SCOPED_MEM(&background_mem);
 
-        print("checking import %s, hash = %llx", it, hash);
-
-        auto current_hash = read_index_hash(it);
-        if (current_hash == hash) {
-            print("Hash hasn't changed, no need to update.");
-            continue;
-        }
-
-        print("Hash is different, updating index...");
-
-        // update index
-        {
-            auto path = ri->path;
-            auto import_path = it;
-            auto loctype = ri->location_type;
-
-            print("crawling %s", path);
-
-            // TODO: maybe we need to use a separate allocator for holding the names in Index_Writer.decls!
-            Index_Writer w;
-            if (w.init(import_path) != FILE_RESULT_SUCCESS) return;
-            defer { w.cleanup(); };
-
-            w.write_hash(hash);
-            w.write_headers(path, loctype);
-
-            list_directory(path, [&](Dir_Entry* ent) {
-                if (ent->type == DIRENT_DIR) return;
-
-                // for now, only grab non-test .go files
-                if (!str_ends_with(ent->name, ".go")) return;
-                if (str_ends_with(ent->name, "_test.go")) return;
-
-                auto filepath = path_join(path, ent->name);
-                auto ast = parse_file_into_ast(filepath);
-                if (ast == NULL) return; // what to do here? this is an error
-
-                list_decls_in_source(make_file_ast(ast, filepath, import_path), LISTDECLS_DECLS, [&](Named_Decl* decl) {
-                    for (auto&& it : *decl->items) {
-                        auto name = it.name->id.lit;
-                        if (it.spec->type == AST_FUNC_DECL) {
-                            auto receiver_name = get_receiver_typename_from_func_decl(it.spec);
-                            if (receiver_name != NULL)
-                                name = our_sprintf("%s.%s", receiver_name, name);
-                        }
-                        w.write_decl(ent->name, name, it.spec);
-                    }
-                });
-            });
-
-            w.finish_writing();
-        }
+    {
+        // when we start up, first ensure the entire index is correct
+        SCOPED_FRAME();
+        ensure_entire_index_correct();
     }
 
     while (true) {
         Index_Event event = {0};
         if (!pop_index_event(&event)) {
-            // sleep for a bit
+            // no events, don't immediately keep trying to pop, sleep for a bit
             sleep_milliseconds(100);
             continue;
         }
 
+        // The below is just v1 -- we still need to make sure we're not
+        // reindexing a million times in response to a million file changes.
+        // Need to keep track of last fetch.
+
         switch (event.type) {
         case INDEX_EVENT_FETCH_IMPORTS:
-            // TODO: fetch imports
+            {
+                Eil_Result res;
+                if (!ensure_imports_list_correct(&res)) break;
+                For (*res.added_imports) ensure_package_correct(it);
+                background_mem.reset();
+                break;
+            }
             break;
         case INDEX_EVENT_REINDEX_PACKAGE:
-            // TODO: reindex event.reindex_package.import_path
+            ensure_package_correct(event.import_path);
+            background_mem.reset();
             break;
         }
     }
@@ -4689,11 +4686,6 @@ void Go_Index::main_loop() {
 bool Go_Index::delete_index() {
     SCOPED_FRAME();
     return delete_rm_rf(get_index_path());
-}
-
-void Go_Index::queue_index_event(Index_Event *event) {
-    SCOPED_LOCK(&index_events_lock);
-    index_events.append(event);
 }
 
 bool Go_Index::pop_index_event(Index_Event *event) {
@@ -4705,7 +4697,13 @@ bool Go_Index::pop_index_event(Index_Event *event) {
     return true;
 }
 
-void Go_Index::process_fs_event(Go_Index_Watcher *w, Fs_Event *event) {
+void Go_Index::handle_fs_event(Go_Index_Watcher *w, Fs_Event *event) {
+    // only one thread calls this at a time
+    SCOPED_LOCK(&fs_event_lock);
+
+    SCOPED_MEM(&watcher_mem);
+    defer { watcher_mem.reset(); };
+
     auto watch_path = w->watch.path;
 
     auto directory_to_import_path = [&](ccstr path) -> ccstr {
@@ -4728,17 +4726,36 @@ void Go_Index::process_fs_event(Go_Index_Watcher *w, Fs_Event *event) {
         return NULL;
     };
 
+    auto queue_event = [&]() -> Index_Event* {
+        index_events_lock.enter();
+        if (index_events.len > MAX_INDEX_EVENTS) {
+            index_events_lock.leave();
+            return NULL;
+        }
+        return index_events.append();
+    };
+
+    auto commit_event = [&]() {
+        index_events_lock.leave();
+    };
+
     auto queue_for_rescan = [&](ccstr directory) {
         auto import_path = directory_to_import_path(directory);
         if (import_path == NULL) return;
 
-        Index_Event event;
-        event.type = INDEX_EVENT_REINDEX_PACKAGE;
-        event.reindex_package.import_path = import_path;
-        queue_index_event(&event);
+        auto event = queue_event();
+        event->type = INDEX_EVENT_REINDEX_PACKAGE;
+        strcpy_safe(event->import_path, _countof(event->import_path), import_path);
+        commit_event();
     };
 
     auto path = path_join(watch_path, event->type == FSEVENT_RENAME ? event->new_filepath : event->filepath);
+
+    // ignore changes to {wksp.path}/.ide
+    if (w->type == WATCH_WKSP)
+        if (str_starts_with(path, path_join(watch_path, ".ide")))
+            return;
+
     auto res = check_path(path);
     switch (res) {
     case CPR_DIRECTORY:
@@ -4758,6 +4775,12 @@ void Go_Index::process_fs_event(Go_Index_Watcher *w, Fs_Event *event) {
         if (!str_ends_with(path, ".go")) break;
         if (str_ends_with(path, "_test.go")) break;
 
+        if (w->type == WATCH_WKSP) {
+            auto event = queue_event();
+            event->type = INDEX_EVENT_FETCH_IMPORTS;
+            commit_event();
+        }
+
         // some .go file was added/deleted/changed/renamed
         // queue its directory for a re-scan
         queue_for_rescan(our_dirname(path));
@@ -4767,27 +4790,33 @@ void Go_Index::process_fs_event(Go_Index_Watcher *w, Fs_Event *event) {
 bool Go_Index::init() {
     ptr0(this);
 
-    if (!wksp_watcher.watch.init("path/here")) return false;
-    if (!gopath_watcher.watch.init("path/here")) return false;
-    if (!goroot_watcher.watch.init("path/here")) return false;
+    background_mem.init();
+    watcher_mem.init();
+    main_thread_mem.init();
+
+    index_events.init(LIST_POOL, 32);
+    index_events_lock.init();
+    fs_event_lock.init();
+
+    if (!wksp_watcher.watch.init(world.wksp.path)) return false;
+    // if (!gopath_watcher.watch.init(path_join(GOPATH, "src"))) return false;
+    // if (!goroot_watcher.watch.init(path_join(GOPATH, "src"))) return false;
 }
 
 void run_watcher_stub(void *param) {
     auto w = (Go_Index_Watcher*)param;
-    Fs_Event event;
+    Fs_Event event = {0};
 
     while (true) {
         if (w->watch.next_event(&event))
-            w->_this->process_fs_event(w, &event);
-
-        // unable to get next event???
-        error("unable to get next event? why?????");
-        // should we sleep a bit?
+            w->_this->handle_fs_event(w, &event);
+        else
+            error("unable to get next event"); // should we sleep a bit?
     }
 }
 
-void run_main_loop_stub(void *p) {
-    ((Go_Index*)p)->main_loop();
+void run_background_thread_stub(void *p) {
+    ((Go_Index*)p)->run_background_thread();
 };
 
 bool Go_Index::run_threads() {
@@ -4796,15 +4825,15 @@ bool Go_Index::run_threads() {
     auto init_watcher = [&](Go_Index_Watcher *w, Go_Watch_Type type) -> bool {
         w->type = type;
         w->_this = _this;
-        w->thread = create_thread(run_watcher_stub, &w);
+        w->thread = create_thread(run_watcher_stub, w);
         return w->thread != NULL;
     };
 
     if (!init_watcher(&wksp_watcher, WATCH_WKSP)) return false;
-    if (!init_watcher(&gopath_watcher, WATCH_GOPATH)) return false;
-    if (!init_watcher(&goroot_watcher, WATCH_GOROOT)) return false;
+    // if (!init_watcher(&gopath_watcher, WATCH_GOPATH)) return false;
+    // if (!init_watcher(&goroot_watcher, WATCH_GOROOT)) return false;
 
-    main_loop_thread = create_thread(run_main_loop_stub, this);
+    main_loop_thread = create_thread(run_background_thread_stub, this);
     if (main_loop_thread == NULL) return false;
 
     return true;
@@ -4820,16 +4849,20 @@ void Go_Index::cleanup() {
     };
 
     kill_and_close(&main_loop_thread);
-
-    // ...
-
     kill_and_close(&wksp_watcher.thread);
     kill_and_close(&gopath_watcher.thread);
     kill_and_close(&goroot_watcher.thread);
 
     wksp_watcher.watch.cleanup();
-    gopath_watcher.watch.cleanup();
-    goroot_watcher.watch.cleanup();
+    // gopath_watcher.watch.cleanup();
+    // goroot_watcher.watch.cleanup();
+
+    index_events_lock.cleanup();
+    fs_event_lock.cleanup();
+
+    background_mem.cleanup();
+    watcher_mem.cleanup();
+    main_thread_mem.cleanup();
 }
 
 // -----

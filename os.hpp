@@ -241,7 +241,7 @@ struct Fs_Event {
 
 struct Fs_Watcher {
 #if OS_WIN
-    void *buf;
+    FILE_NOTIFY_INFORMATION *buf;
     bool has_more;
     s32 offset;
     ccstr path;

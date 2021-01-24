@@ -58,4 +58,6 @@ LIST_MALLOC. And also just rewrite large sections of Parser.
 fucked the longer we wait. Need to get that shit over with. Probably the first
 thing we need to do as soon as indexing is done.
 
-    Need to handle nested vendor directories for Go too.
+    Need to handle nested vendor directories for Go too. And nested go.mod.
+
+    Our syntax highlighting is weird/slow/jumpy, need to fix this.

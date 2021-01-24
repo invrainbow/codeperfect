@@ -1,9 +1,11 @@
 package main
 
 import (
-	"github.com/invrainbow/whetstone/sync"
+	"fmt"
+	"golang.org/x/text/runes"
+	"golang.org/x/text/currency"
 )
 
 func main() {
-	sync.Download()
+
 }

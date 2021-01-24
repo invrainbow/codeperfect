@@ -405,7 +405,6 @@ struct Nvim {
     u32 request_id;
     Thread_Handle event_loop_thread;
 
-    Nvim_Request _requests[128];
     List<Nvim_Request> requests;
 
     void init();

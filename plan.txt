@@ -1,3 +1,20 @@
+1/23/21
+    plan:
+        - get hooks working
+        - test out all the cases
+        - try to get the ide working
+        - what are we doing to do about unicode? can't tell if this is going to
+          be a super easy or super hard transition
+    done:
+        - hooks semi-working, saving file crawls newly added path, fixed
+          several crashes
+        - go.cpp and nvim.cpp now have consistent, intentionally planned memory
+          management
+    notes:
+        - ctrl+p doesn't work unless we explicitly set working directory to
+          w:\whetstone. it should just work though since we should set cwd to
+          world.wksp.path, need fix
+
 1/22/21
     plan:
         - didn't start work until after 5

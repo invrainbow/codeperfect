@@ -3,7 +3,6 @@
 #include "world.hpp"
 
 UI ui;
-run_before_main { ui.init(); };
 
 vec3f rgb_hex(ccstr s) {
     if (s[0] == '#') s++;

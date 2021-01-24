@@ -1119,11 +1119,7 @@ enum Index_Event_Type {
 
 struct Index_Event {
     Index_Event_Type type;
-    union {
-        struct {
-            ccstr import_path;
-        } reindex_package;
-    };
+    char import_path[MAX_PATH]; // for reindex_package
 };
 
 enum Go_Watch_Type {
@@ -1141,9 +1137,16 @@ struct Go_Index_Watcher {
     Fs_Watcher watch;
 };
 
+#define MAX_INDEX_EVENTS 1024 // don't let file change dos us
+
 struct Go_Index {
+    Pool background_mem;
+    Pool watcher_mem;
+    Pool main_thread_mem;
+
     List<Index_Event> index_events;
     Lock index_events_lock;
+    Lock fs_event_lock;
 
     // we can get rid of this stupidity when i get async ReadDirectoryChanges working
     Go_Index_Watcher wksp_watcher;
@@ -1153,9 +1156,9 @@ struct Go_Index {
 
     bool init();
     void cleanup();
-    void process_fs_event(Go_Index_Watcher *watcher, Fs_Event *event);
+    void handle_fs_event(Go_Index_Watcher *watcher, Fs_Event *event);
 
-    void queue_index_event(Index_Event *event);
+    bool queue_index_event(Index_Event *event);
     bool pop_index_event(Index_Event *event);
 
     /*
@@ -1207,7 +1210,9 @@ struct Go_Index {
     void read_index();
     bool delete_index();
 
-    void main_loop();
+    bool ensure_entire_index_correct();
+    bool ensure_package_correct(ccstr import_path);
+    void run_background_thread();
     void handle_error(ccstr err);
     bool ensure_imports_list_correct(Eil_Result *res);
     u64 hash_package(ccstr import_path, Resolved_Import **pres);

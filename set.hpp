@@ -10,6 +10,7 @@ struct String_Set {
     };
 
     struct Item *table;
+    s32 len;
 
     List<ccstr> *items() {
         u32 count = HASH_COUNT(table);
@@ -32,6 +33,7 @@ struct String_Set {
     void add(ccstr s) {
         if (has(s)) return;
 
+        len++;
         auto item = alloc_object(Item);
         item->name = s;
         HASH_ADD_KEYPTR(hh, table, s, strlen(s), item);
@@ -40,7 +42,10 @@ struct String_Set {
     void remove(ccstr s) {
         Item *item = NULL;
         HASH_FIND_STR(table, s, item);
-        if (item != NULL) HASH_DEL(table, item);
+        if (item != NULL) {
+            HASH_DEL(table, item);
+            len--;
+        }
     }
 
     bool has(ccstr s) {

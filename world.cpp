@@ -3,8 +3,6 @@
 World world;
 thread_local Pool *MEM;
 
-run_before_main { world.init(); };
-
 uchar* alloc_chunk(s32 needed, s32* new_size) {
     ChunkSize sizes[] = { CHUNK0, CHUNK1, CHUNK2, CHUNK3, CHUNK4, CHUNK5, CHUNK6 };
 
@@ -38,6 +36,9 @@ void free_chunk(uchar* buf, s32 cap) {
     }
 }
 
+// honestly, using our new infra + mem management, we should probably
+// just rewrite fill_file_tree. and while we're at it, replace `ag -g "" | fzf`
+
 void fill_file_tree(ccstr path) {
     SCOPED_MEM(&world.file_explorer_mem);
 
@@ -68,6 +69,7 @@ void fill_file_tree(ccstr path) {
             if (ent->type & FILE_TYPE_DIRECTORY) {
                 file->num_children = 0;
                 {
+                    /// why do we need scratch_mem here?
                     SCOPED_MEM(&world.scratch_mem);
                     SCOPED_FRAME();
                     auto new_path = path_join(path, ent->name);
@@ -82,13 +84,12 @@ void fill_file_tree(ccstr path) {
     recur(path, NULL, 0);
 }
 
-void World::init() {
+void World::init(bool test) {
     ptr0(this);
     MEM = &frame_mem;
 
 #define init_mem(x) x.init(#x)
     init_mem(frame_mem);
-    init_mem(parser_mem);
     init_mem(ast_viewer_mem);
     init_mem(autocomplete_mem);
     init_mem(parameter_hint_mem);
@@ -114,13 +115,22 @@ void World::init() {
 
     wksp.init();
 
+    if (!test) {
+        index.init();
+        index.run_threads();
+    }
+
     wnd_open_file.files.init(LIST_FIXED, _countof(wnd_open_file._files), wnd_open_file._files);
 
     use_nvim = true;
     nvim_data.hl_defs.init(LIST_FIXED, _countof(nvim_data._hl_defs), nvim_data._hl_defs);
     nvim_data.grid_to_window.init(LIST_FIXED, _countof(nvim_data._grid_to_window), nvim_data._grid_to_window);
-    nvim.init();
-    nvim.start_running();
+
+    if (!test) {
+        SCOPED_MEM(&nvim_mem);
+        nvim.init();
+        nvim.start_running();
+    }
 
     fill_file_tree(wksp.path);
 
@@ -154,7 +164,8 @@ Editor* World::find_editor(find_editor_func f) {
 }
 
 void* _alloc_memory(s32 size, bool zero) {
-    auto ret = MEM->alloc(size);
+    auto mem = MEM;
+    auto ret = mem->alloc(size);
     if (zero) mem0(ret, size);
     return ret;
 }

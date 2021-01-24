@@ -768,7 +768,6 @@ void Nvim::run_event_loop() {
 #undef ASSERT
 }
 
-
 // caller is expected to write `params_length` params
 void Nvim::write_request_header(u32 msgid, ccstr method, u32 params_length) {
     writer.write_array(4);
@@ -800,11 +799,12 @@ void Nvim::init() {
     ptr0(this);
 
     request_id = 0;
-    requests.init(LIST_FIXED, _countof(_requests), _requests);
 
     send_lock.init();
     print_lock.init();
     requests_lock.init();
+
+    requests.init(LIST_POOL, 32);
 }
 
 void Nvim::start_running() {
@@ -840,6 +840,7 @@ void Nvim::cleanup() {
     }
 
     nvim_proc.cleanup();
+    requests.cleanup();
 }
 
 ccstr Mp_Reader::read_string() {

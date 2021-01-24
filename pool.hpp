@@ -19,7 +19,7 @@ struct Pool {
     s32 blocksize;
     ccstr name;
 
-    void init(ccstr _name) {
+    void init(ccstr _name = NULL) {
         ptr0(this);
 
         name = _name;
@@ -29,6 +29,18 @@ struct Pool {
         unused_blocks.init(LIST_MALLOC, 32);
 
         request_new_block();
+    }
+
+    void cleanup() {
+        For (unused_blocks) free(it);
+        For (used_blocks) free(it);
+        For (obsolete_blocks) free(it);
+        if (curr != NULL) free(curr);
+
+        unused_blocks.len = 0;
+        used_blocks.len = 0;
+        obsolete_blocks.len = 0;
+        curr = NULL;
     }
 
     void request_new_block() {
@@ -79,13 +91,6 @@ struct Pool {
         return ret;
     }
 
-    void cleanup() {
-        For (unused_blocks) free(it);
-        For (used_blocks) free(it);
-        For (obsolete_blocks) free(it);
-        if (curr != NULL) free(curr);
-    }
-
     void reset() {
         if (curr != NULL) {
             unused_blocks.append(curr);
@@ -97,6 +102,8 @@ struct Pool {
 
         For (obsolete_blocks) free(it);
         obsolete_blocks.len = 0;
+
+        request_new_block();
     }
 };
 

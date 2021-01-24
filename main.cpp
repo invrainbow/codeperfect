@@ -528,8 +528,15 @@ enum {
     OUR_MOD_CTRL = 1 << 3,
 };
 
+void init_everything() {
+    world.init(false);
+    ui.init();
+}
+
 int main() {
     if (run_tests()) return EXIT_SUCCESS;
+
+    init_everything();
 
     SCOPED_MEM(&world.frame_mem);
 
@@ -1011,11 +1018,10 @@ int main() {
                                         auto editor = world.get_current_editor();
                                         if (editor == NULL) break;
 
-                                        SCOPED_MEM(&world.parser_mem);
-                                        SCOPED_FRAME();
+                                        SCOPED_MEM(&world.index.main_thread_mem);
+                                        defer { world.index.main_thread_mem.reset(); };
 
-                                        Go_Index go;
-                                        auto result = go.jump_to_definition(editor->filepath, new_cur2(editor->cur_to_offset(editor->cur), 0));
+                                        auto result = world.index.jump_to_definition(editor->filepath, new_cur2(editor->cur_to_offset(editor->cur), 0));
                                         if (result == NULL) {
                                             error("unable to jump to definition");
                                             return;
@@ -1259,7 +1265,7 @@ int main() {
                             auto cur = editor->cur;
 
                             /*
-                            Here we send the key to nvim. We need to handle the response when: 
+                            Here we send the key to nvim. We need to handle the response when:
                             we need to do something that relies on the *effect* of the key being completed.
                             For example, when the user types a '.', we need the period to be in the buffer
                             before calling trigger_autocomplete, since it passes the buffer through a Go parser
@@ -1399,7 +1405,7 @@ int main() {
             char keys[2] = { (char)ch, '\0' };
             // TODO: i don't think we always need to track response, right?
             // only when autocomplete or parameter hints is open
-            send_nvim_keys(keys); 
+            send_nvim_keys(keys);
         }
     });
 
@@ -1502,7 +1508,7 @@ int main() {
 #endif
 
     while (!glfwWindowShouldClose(world.window)) {
-        world.frame_mem.sp = 0;
+        world.frame_mem.reset();
 
         SCOPED_MEM(&world.frame_mem);
 
@@ -1568,7 +1574,7 @@ int main() {
 
                         {
                             SCOPED_MEM(&world.open_file_mem);
-                            world.open_file_mem.sp = 0;
+                            world.open_file_mem.reset();
 
                             wnd.files.len = 0;
 
@@ -1709,7 +1715,7 @@ int main() {
                     ImGui::Text("Open a file to parse its AST.");
                 } else {
                     if (ImGui::Button("Parse AST from current file")) {
-                        world.ast_viewer_mem.sp = 0;
+                        world.ast_viewer_mem.reset();
                         SCOPED_MEM(&world.ast_viewer_mem);
                         world.wnd_ast_viewer.ast = parse_file_into_ast(ed->filepath);
                     }
