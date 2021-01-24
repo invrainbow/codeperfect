@@ -23,6 +23,7 @@ cstr normalize_path_separator(cstr path) {
     return path;
 }
 
+#if 0
 Entire_File *read_entire_file(ccstr path) {
     auto f = fopen(path, "rb");
     if (f == NULL) return NULL;
@@ -49,6 +50,7 @@ Entire_File *read_entire_file(ccstr path) {
 void free_entire_file(Entire_File *file) {
     free(file->data);
 }
+#endif
 
 bool is_sep(char ch) {
     return ch == '/' || ch == '\\';

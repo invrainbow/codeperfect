@@ -550,3 +550,37 @@ bool Fs_Watcher::next_event(Fs_Event *event) {
 
     return true;
 }
+
+Entire_File *read_entire_file(ccstr path) {
+    HANDLE f = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (f == INVALID_HANDLE_VALUE) return NULL;
+
+    LARGE_INTEGER filesize;
+    if (!GetFileSizeEx(f, &filesize)) return NULL;
+
+    if (filesize.HighPart > 0) {
+        print("file is too large");
+        return NULL;
+    }
+
+    auto flen = filesize.LowPart;
+
+    HANDLE map = CreateFileMapping(f, 0, PAGE_READONLY, 0, flen, NULL);
+    if (map == NULL) {
+        print("error: %s", get_last_error());
+        return NULL;
+    }
+    defer { CloseHandle(map); };
+
+    auto buf = (char*)MapViewOfFile(map, FILE_SHARE_READ, 0, 0, flen);
+    if (buf == NULL) return NULL;
+
+    auto ret = alloc_object(Entire_File);
+    ret->data = buf;
+    ret->len = flen;
+    return ret;
+}
+
+void free_entire_file(Entire_File *file) {
+    UnmapViewOfFile(file->data);
+}

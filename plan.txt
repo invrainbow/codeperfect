@@ -10,6 +10,9 @@
           several crashes
         - go.cpp and nvim.cpp now have consistent, intentionally planned memory
           management
+        - refactor multiple functions into find_nodes_containing_pos()
+        - fix parameter hints rendering weird
+        - use mmap for read_entire_file (can replace Parser IT_FILE with this too)
     notes:
         - ctrl+p doesn't work unless we explicitly set working directory to
           w:\whetstone. it should just work though since we should set cwd to
