@@ -554,22 +554,16 @@ bool Fs_Watcher::next_event(Fs_Event *event) {
 Entire_File *read_entire_file(ccstr path) {
     HANDLE f = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if (f == INVALID_HANDLE_VALUE) return NULL;
+    defer { CloseHandle(f); };
 
-    LARGE_INTEGER filesize;
-    if (!GetFileSizeEx(f, &filesize)) return NULL;
+    LARGE_INTEGER size;
+    if (!GetFileSizeEx(f, &size)) return NULL;
+    if (size.HighPart > 0) return NULL;
 
-    if (filesize.HighPart > 0) {
-        print("file is too large");
-        return NULL;
-    }
-
-    auto flen = filesize.LowPart;
+    auto flen = size.LowPart;
 
     HANDLE map = CreateFileMapping(f, 0, PAGE_READONLY, 0, flen, NULL);
-    if (map == NULL) {
-        print("error: %s", get_last_error());
-        return NULL;
-    }
+    if (map == NULL) return NULL;
     defer { CloseHandle(map); };
 
     auto buf = (char*)MapViewOfFile(map, FILE_SHARE_READ, 0, 0, flen);
