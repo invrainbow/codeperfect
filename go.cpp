@@ -365,25 +365,6 @@ Ast* parse_file_into_ast(ccstr filepath) {
     return p.parse_file();
 }
 
-/*
-ok, the basic algorithm is:
-
-# this is depth first
-def walk_ast(ast, depth):
-        fn(ast, depth)
-        for child in ast.children:
-                walk_ast(child, depth)
-
-def walk_ast(ast):
-        depth = 0
-        queue = [(ast, 0)]
-        while queue:
-                curr, depth = queue.poplast()
-                fn(curr)
-                for child in curr.children:
-                        queue.append((child, depth + 1))
-*/
-
 void walk_ast(Ast* root, WalkAstFn fn) {
     struct Queue_Item {
         Ast* ast;
@@ -639,6 +620,15 @@ void walk_ast(Ast* root, WalkAstFn fn) {
 
 #undef add_child
     }
+}
+
+void find_nodes_containing_pos(Ast *root, cur2 pos, fn<Walk_Action(Ast *it)> callback) {
+    walk_ast(root, [&](Ast* ast, ccstr name, int depth) -> Walk_Action {
+        int res = locate_pos_relative_to_ast(pos, ast);
+        if (res < 0) return WALK_ABORT;
+        if (res > 0) return WALK_SKIP_CHILDREN;
+        return callback(ast);
+    });
 }
 
 void Ast_List::init(Parser* _parser, cur2 _start_pos) {
@@ -3395,16 +3385,9 @@ Jump_To_Definition_Result* Go_Index::jump_to_definition(ccstr filepath, cur2 pos
     Jump_To_Definition_Result result;
     result.file = NULL;
 
-    walk_ast(file, [&](Ast* ast, ccstr name, int depth) -> Walk_Action {
-        if (ast->start > pos)
-            return WALK_ABORT;
-        if (ast->end <= pos)
-            return WALK_SKIP_CHILDREN;
-
-        // at this point (ast->start <= pos < ast->end)
-
+    find_nodes_containing_pos(file, pos, [&](Ast *ast) -> Walk_Action {
         auto contains_pos = [&](Ast* ast) -> bool {
-            return (ast->start <= pos && pos < ast->end);
+            return locate_pos_relative_to_ast(pos, ast) == 0;
         };
 
         switch (ast->type) {
@@ -3508,12 +3491,7 @@ bool Go_Index::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period, 
         return ret;
     };
 
-    walk_ast(file, [&](Ast* ast, ccstr name, int depth) -> Walk_Action {
-        int res = locate_pos_relative_to_ast(pos, ast);
-        if (res < 0) return WALK_ABORT;
-        if (res > 0) return WALK_SKIP_CHILDREN;
-
-        // at this point, (ast->start <= pos <= ast->end)
+    find_nodes_containing_pos(file, pos, [&](Ast *ast) -> Walk_Action {
         switch (ast->type) {
             case AST_SELECTOR_EXPR:
                 {
@@ -3602,11 +3580,7 @@ Parameter_Hint* Go_Index::parameter_hint(ccstr filepath, cur2 pos, bool triggere
 
     Parameter_Hint* ret = NULL;
 
-    auto walk_callback = [&](Ast* ast, ccstr name, int depth) -> Walk_Action {
-        int res = locate_pos_relative_to_ast(pos, ast);
-        if (res < 0) return WALK_ABORT;
-        if (res > 0) return WALK_SKIP_CHILDREN;
-
+    auto walk_callback = [&](Ast* ast) -> Walk_Action {
         if (ast->type != AST_CALL_EXPR)
             return WALK_CONTINUE;
 
@@ -3635,7 +3609,7 @@ Parameter_Hint* Go_Index::parameter_hint(ccstr filepath, cur2 pos, bool triggere
         return WALK_ABORT;
     };
 
-    walk_ast(file, walk_callback);
+    find_nodes_containing_pos(file, pos, walk_callback);
     return ret;
 }
 
@@ -5169,3 +5143,4 @@ void with_parser_at_location(ccstr filepath, cur2 location, parser_cb cb) {
 
     cb(&p);
 }
+

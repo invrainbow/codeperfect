@@ -369,7 +369,7 @@ void Editor::on_type() {
             // TODO: what happens if we backspace into a '.'? e.g.
             //     foo.bar|
             // and we backspace the r, a, and b
-            // we probably shouldn't trigger autocomplete 
+            // we probably shouldn't trigger autocomplete
             // though honestly it's probably fine if we can get autocomplete faster lol
             trigger_autocomplete(true);
             break;
@@ -523,6 +523,11 @@ void Editor::filter_autocomplete_results(Autocomplete* ac) {
 struct Type_Renderer : public Text_Renderer {
     void write_type(Ast* t) {
         switch (t->type) {
+            case AST_SELECTOR_EXPR:
+                write_type(t->selector_expr.x);
+                writechar('.');
+                write_type(t->selector_expr.sel);
+                break;
             case AST_ELLIPSIS:
                 write("...");
                 write_type(t->ellipsis.type);
@@ -593,10 +598,11 @@ void Editor::trigger_parameter_hint(bool triggered_by_paren) {
 
         auto& ids = it->field.ids->list;
         for (int i = 0; i < ids.len; i++) {
-            rend.write("%s ", ids[i]->id.lit);
+            rend.writestr(ids[i]->id.lit);
             if (i < ids.len - 1)
                 rend.write(", ");
         }
+        rend.writechar(' ');
         rend.write_type(it->field.type);
         params->append(rend.finish());
     }

@@ -14,6 +14,7 @@
         - ctrl+p doesn't work unless we explicitly set working directory to
           w:\whetstone. it should just work though since we should set cwd to
           world.wksp.path, need fix
+        - autocomplete shouldn't include methods with receivers, like "foo.bar"
 
 1/22/21
     plan:

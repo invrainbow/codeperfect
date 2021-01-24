@@ -34,7 +34,7 @@ UPDATE: uthash supports overriding uthash_malloc with custom allocator.
 
     [DONE] Fun project: add Pool memory (a la Pool.jai) to unify Stack and Arena
 
-    Fun project: Refactor the "walk_ast to find ast containing `pos`" pattern
+    [DONE] Fun project: Refactor the "walk_ast to find ast containing `pos`" pattern
 
     My memory management is all fucked up, honestly might need to just spend a
 day cleaning that shit up. Would help morale a lot too (think how much progress
@@ -43,7 +43,7 @@ stalled when we had no idea how to manage memory with Go_Index).
     When ending day, write down where you left off so the next day you can pick
 up.
 
-    Right now, when we call make_file_ast on the currenet file during
+    Right now, when we call make_file_ast on the current file during
 autocomplete or gotodef, we assume current package name is
 world.wksp.go_import_path. This will fail if user edits files outside current
 workspace. Need function to translate directory path into import path.
@@ -61,3 +61,7 @@ thing we need to do as soon as indexing is done.
     Need to handle nested vendor directories for Go too. And nested go.mod.
 
     Our syntax highlighting is weird/slow/jumpy, need to fix this.
+
+    Syntax highlight parameter hint
+
+    When you maximize the window, it doesn't resize the editor.
