@@ -44,11 +44,16 @@ ccstr our_strcpy(ccstr s) {
 
 ccstr our_dirname(ccstr path) {
 #ifdef _WIN32
-    auto old = MEM->sp;
-    auto ret = alloc_array(char, strlen(path) + 1);
+    auto s = (char*)our_strcpy(path);
+    auto len = strlen(s);
+    if (is_sep(s[len-1]))
+        s[len-1] = '\0';
 
-    _splitpath(path, ret, NULL, NULL, NULL);
-    _splitpath(path, NULL, ret + strlen(ret), NULL, NULL);
+    auto old = MEM->sp;
+    auto ret = alloc_array(char, strlen(s) + 1);
+
+    _splitpath(s, ret, NULL, NULL, NULL);
+    _splitpath(s, NULL, ret + strlen(ret), NULL, NULL);
 
     MEM->sp = old + strlen(ret) + 1;
     return ret;

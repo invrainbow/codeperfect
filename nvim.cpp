@@ -810,7 +810,7 @@ void Nvim::init() {
 void Nvim::start_running() {
     nvim_proc.init();
     nvim_proc.use_stdin = true;
-    nvim_proc.dir = "w:/"; // TODO
+    nvim_proc.dir = "c:/users/brandon/ide"; // TODO
 
     // TODO: get full path of init.vim
     nvim_proc.run("nvim -u ./init.vim -i NONE -N --embed --headless");

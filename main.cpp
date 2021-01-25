@@ -529,6 +529,7 @@ enum {
 };
 
 void init_everything() {
+    git_libgit2_init();
     world.init(false);
     ui.init();
 }
@@ -740,50 +741,43 @@ int main() {
                     case SIDEBAR_FILE_EXPLORER:
                         {
                             auto index = (int)((world.ui.mouse_pos.y - sidebar_area.y + world.file_explorer.scroll_offset) / ui.font->height);
-
-                            auto& files = world.file_explorer.files;
-
+                            auto& files = world.file_tree;
                             u32 file_index = 0;
-                            for (u32 i = 0; i < index; i++) {
-                                auto it = files[file_index];
-                                if (it->num_children != -1 && !it->open)
+
+                            for (u32 i = 0; i < index && file_index < files.len; i++) {
+                                auto it = &files[file_index];
+                                if (it->num_children != -1 && !it->state.open)
                                     file_index = advance_subtree_in_file_explorer(file_index);
                                 else
                                     file_index++;
                             }
 
-                            if (index >= world.file_explorer.files.len) break;
+                            if (file_index >= files.len) break;
 
-                            auto file = world.file_explorer.files[file_index];
+                            auto file = &files[file_index];
                             if (file->num_children == -1) { // normal file
-                                u32 num_nodes = 0;
-                                for (auto curr = file; curr != NULL; curr = curr->parent)
-                                    num_nodes++;
-
                                 {
                                     SCOPED_FRAME();
 
-                                    auto path = alloc_array(File_Explorer_Entry*, num_nodes);
-                                    u32 i = 0;
-                                    for (auto curr = file; curr != NULL; curr = curr->parent)
-                                        path[i++] = curr;
+                                    auto path = alloc_list<i32>();
+                                    for (auto idx = file_index; idx != -1; idx = files[idx].parent)
+                                        path->append(idx);
 
-                                    Text_Renderer rend;
-                                    rend.init();
+                                    Text_Renderer r;
+                                    r.init();
 
-                                    for (i32 j = num_nodes - 1; j >= 0; j--) {
-                                        rend.write("%s", path[j]->name);
-                                        if (j != 0)
-                                            rend.write("/");
+                                    for (i32 j = path->len - 1; j >= 0; j--) {
+                                        r.write("%s", files[path->at(j)].name);
+                                        if (j != 0) r.write("/");
                                     }
 
-                                    auto s = path_join(world.wksp.path, rend.finish());
+                                    auto s = path_join(world.wksp.path, r.finish());
                                     world.get_current_pane()->focus_editor(s);
                                 }
 
                                 ui.recalculate_view_sizes();
                             } else {
-                                file->open = !file->open;
+                                file->state.open = !file->state.open;
                             }
                         }
                         break;
@@ -1115,10 +1109,6 @@ int main() {
                                     else
                                         world.sidebar.view = SIDEBAR_FILE_EXPLORER;
 
-                                    // this is honestly so bad, like where is our logic stored
-                                    // should consolidate into ui
-                                    // also wondering if i should get rid of wksp
-                                    world.wksp.resize_panes_proportionally(ui.get_panes_area().w);
                                     ui.recalculate_view_sizes();
                                     break;
                                 case GLFW_KEY_LEFT_BRACKET:
@@ -1491,7 +1481,7 @@ int main() {
     double last_time = glfwGetTime();
     i64 last_frame_time = current_time_in_nanoseconds();
 
-#if 1
+#if 0
     {
         SCOPED_FRAME();
         auto path = path_join(world.wksp.path, "sync/sync.go");

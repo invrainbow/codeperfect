@@ -208,7 +208,7 @@ bool copy_file(ccstr src, ccstr dest, bool overwrite);
 bool ensure_directory_exists(ccstr path);
 bool delete_rm_rf(ccstr path);
 
-cstr normalize_path_separator(cstr path);
+cstr normalize_path_separator(cstr path, char sep = 0);
 bool is_sep(char ch);
 
 typedef fn<int(const void *a, const void *b)> compare_func;
@@ -253,3 +253,5 @@ struct Fs_Watcher {
     void cleanup();
     bool next_event(Fs_Event *event);
 };
+
+ccstr get_path_relative_to(ccstr full, ccstr base);

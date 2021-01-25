@@ -10,6 +10,8 @@
 *.exe
 *.pdb
 *.obj
+*.lib
+*.exp
 
 # clangd index
 .clangd

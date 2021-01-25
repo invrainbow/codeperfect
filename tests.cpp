@@ -28,7 +28,7 @@ bool run_tests() {
     Process proc;
     proc.init();
     proc.use_stdin = true;
-    proc.dir = "w:\\";
+    proc.dir = "c:\\users\\brandon\\ide";
     proc.run("go run buildparser.go");
 
     proc.writestr("C:\\Users\\Brandon\\go\\pkg\\mod\\golang.org\\x\\text@v0.3.5\\width\\gen.go\n");

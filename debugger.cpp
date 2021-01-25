@@ -16,7 +16,7 @@
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <netdb.h>  
+#include <netdb.h>
 
 #endif
 
@@ -351,7 +351,7 @@ bool Debugger::read_packet(Packet* p) {
             print("[\"recv\"]\n%s", our_format_json(p->string));
         return true;
     }
-    
+
     if (DEBUGGER_LOG)
         print("[\"recv\"]\n\"<error: unable to read packet>\"");
     return false;
@@ -413,24 +413,10 @@ List<Breakpoint>* Debugger::list_breakpoints() {
         if (id < 0) continue;
 
         auto start = MEM->sp;
-        auto relative_path = alloc_array(char, MAX_PATH + 1);
-        bool ok = false;
 
-        {
-            SCOPED_FRAME();
-            auto wksp_path = get_normalized_path(world.wksp.path);
-            auto full_path = get_normalized_path(js.str(js.get(it, ".file")));
-            auto result = (const char*)std::filesystem::relative(full_path, wksp_path).c_str();
-            if (strlen(result) <= MAX_PATH) {
-                strcpy_safe(relative_path, MAX_PATH + 1, result);
-                ok = true;
-            }
-        }
-
-        if (!ok) {
-            MEM->sp = start;
-            continue;
-        }
+        auto wksp_path = get_normalized_path(world.wksp.path);
+        auto full_path = get_normalized_path(js.str(js.get(it, ".file")));
+        auto relative_path = get_path_relative_to(full_path, wksp_path);
 
         MEM->sp = start + strlen(relative_path) + 1;
 
@@ -583,7 +569,7 @@ i32 Json_Navigator::get(i32 i, ccstr keys) {
                 i = advance_node(i);
             continue;
         }
-        
+
         if (ch == '.') {
             auto is_delim = [&](char ch) -> bool {
                 switch (ch) {

@@ -1,5 +1,6 @@
 #include "os.hpp"
 #include "world.hpp"
+#include <filesystem>
 
 ccstr get_normalized_path(ccstr path) {
     u32 len = get_normalized_path(path, NULL, 0);
@@ -16,10 +17,12 @@ ccstr get_normalized_path(ccstr path) {
 }
 
 // Mutates and returns path.
-cstr normalize_path_separator(cstr path) {
+cstr normalize_path_separator(cstr path, char sep) {
+    if (sep == 0) sep = PATH_SEP;
+
     for (u32 i = 0; path[i] != '\0'; i++)
-        if (path[i] == '/' || path[i] == '\\')
-            path[i] = PATH_SEP;
+        if (is_sep(path[i]))
+            path[i] = sep;
     return path;
 }
 

@@ -221,7 +221,7 @@ void Workspace::init() {
     panes.init(LIST_FIXED, _countof(_panes), _panes);
 
 #if 1
-    auto newpath = (cstr)our_strcpy("w:/whetstone");
+    auto newpath = (cstr)our_strcpy("c:/users/brandon/ide/whetstone");
     strcpy_safe(path, _countof(path), normalize_path_separator(newpath));
 #else
     Select_File_Opts opts;
@@ -231,6 +231,12 @@ void Workspace::init() {
     opts.save = false;
     let_user_select_file(&opts);
 #endif
+
+    git_buf root = {0};
+    if (git_repository_discover(&root, path, 0, NULL) == 0) {
+        git_repository_open(&git_repo, root.ptr);
+        git_buf_free(&root);
+    }
 
     // try to parse gomod
     {
@@ -267,23 +273,6 @@ bool Workspace::parse_gomod_file(ccstr path) {
     return true;
 }
 
-// move to ui?
-void Workspace::resize_panes_proportionally(float new_width) {
-    float total = 0;
-    auto widths = alloc_array(float, panes.cap);
-
-    {
-        u32 i = 0;
-        For (panes) {
-            total += it.width;
-            widths[i++] = it.width;
-        }
-    }
-
-    for (u32 i = 0; i < panes.len; i++)
-        panes[i].width = widths[i] / total * new_width;
-}
-
 void Workspace::activate_pane(u32 idx) {
     if (idx > panes.len) return;
 
@@ -291,11 +280,13 @@ void Workspace::activate_pane(u32 idx) {
         auto panes_width = ui.get_panes_area().w;
 
         auto new_width = panes_width - (panes_width / (panes.len + 1));
-        resize_panes_proportionally(new_width);
+        ui.resize_panes_proportionally(new_width);
 
         auto pane = panes.append();
         pane->init();
         pane->width = panes_width / panes.len;
+
+        ui.recalculate_view_sizes();
     }
 
     current_pane = idx;

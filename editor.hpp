@@ -1,5 +1,6 @@
 #pragma once
 
+#include <git2.h>
 #include "list.hpp"
 #include "buffer.hpp"
 #include "go.hpp"
@@ -140,6 +141,8 @@ struct Workspace {
 
   i32 resizing_pane; // if this value is i, we're resizing the border between i and i+1
 
+  git_repository *git_repo;
+
   bool gomod_exists;
   Gomod_Info gomod_info;
 
@@ -147,7 +150,6 @@ struct Workspace {
   bool parse_gomod_file(ccstr path);
   void activate_pane(u32 idx);
   Pane* get_current_pane();
-  void resize_panes_proportionally(float new_width);
 };
 
 bool check_file_dimensions(ccstr path);

@@ -14,6 +14,9 @@
           and use "runes" anyway. i'm sure it's ez
     done:
         - autocomplete works with build constraints again
+        - use libgit2 to check .gitignore, populate filetree ourselves
+            - now we don't really even need `ag -g ""`
+        - fix resizing bugs
     notes:
 
 1/23/21

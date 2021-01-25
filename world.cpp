@@ -39,49 +39,68 @@ void free_chunk(uchar* buf, s32 cap) {
 // honestly, using our new infra + mem management, we should probably
 // just rewrite fill_file_tree. and while we're at it, replace `ag -g "" | fzf`
 
+bool is_ignored_by_git(ccstr path, bool isdir) {
+    auto git_repo = world.wksp.git_repo;
+    if (git_repo == NULL) return false;
+
+    SCOPED_FRAME();
+
+    // get path relative to repo root
+    auto relpath = get_path_relative_to(path, git_repository_workdir(git_repo));
+    if (relpath == NULL) return false;
+
+    // if it's a directory, libgit2 requires a slash to be at the end
+    if (isdir)
+        if (!is_sep(relpath[strlen(relpath)-1]))
+            relpath = our_sprintf("%s/", relpath, PATH_SEP);
+
+    // libgit2 requires forward slashes
+    relpath = (ccstr)normalize_path_separator((cstr)relpath, '/');
+
+    // get rid of "./" at beginning, it breaks libgit2
+    if (str_starts_with(relpath, "./")) relpath += 2;
+
+    int is_ignored = false;
+    if (git_ignore_path_is_ignored(&is_ignored, git_repo, relpath) == 0)
+        return is_ignored;
+    return false;
+}
+
 void fill_file_tree(ccstr path) {
-    SCOPED_MEM(&world.file_explorer_mem);
+    SCOPED_MEM(&world.file_tree_mem);
+    world.file_tree_mem.reset();
 
-    world.file_explorer_mem.cleanup();
-    world.file_explorer_mem.init("file_explorer_mem");
+    auto &files = world.file_tree;
+    files.init(LIST_POOL, 32);
 
-    auto& out = world.file_explorer.files;
-    out.cleanup();
-    out.init(LIST_MALLOC, 256);
-
-    fn<void(ccstr path, File_Explorer_Entry *parent, i32 depth)> recur;
-
-    recur = [&](ccstr path, File_Explorer_Entry* parent, i32 depth) {
+    u32 depth = 0;
+    fn<void(ccstr, i32)> recur = [&](ccstr path, i32 parent) {
         list_directory(path, [&](Dir_Entry *ent) {
-            if (parent != NULL) parent->num_children++;
+            auto fullpath = path_join(path, ent->name);
+            if (is_ignored_by_git(fullpath, ent->type & FILE_TYPE_DIRECTORY))
+                return;
 
-            File_Explorer_Entry *file;
-            {
-                SCOPED_MEM(&world.file_explorer_mem);
-                file = alloc_object(File_Explorer_Entry);
-                file->name = our_strcpy(ent->name);
-            }
-            file->parent = parent;
+            if (parent != -1) files[parent].num_children++;
+
+            auto file_idx = files.len;
+            auto file = files.append();
+            file->name = our_strcpy(ent->name);
             file->depth = depth;
-            file->open = false;
-            out.append(file);
+            file->parent = parent;
+            file->state.open = false;
 
             if (ent->type & FILE_TYPE_DIRECTORY) {
                 file->num_children = 0;
-                {
-                    /// why do we need scratch_mem here?
-                    SCOPED_MEM(&world.scratch_mem);
-                    SCOPED_FRAME();
-                    auto new_path = path_join(path, ent->name);
-                    recur(new_path, file, depth + 1);
-                }
+                depth++;
+                recur(fullpath, file_idx);
+                depth--;
             } else {
                 file->num_children = -1;
             }
         });
     };
 
-    recur(path, NULL, 0);
+    recur(path, -1);
 }
 
 void World::init(bool test) {
@@ -90,6 +109,7 @@ void World::init(bool test) {
 
 #define init_mem(x) x.init(#x)
     init_mem(frame_mem);
+    init_mem(file_tree_mem);
     init_mem(ast_viewer_mem);
     init_mem(autocomplete_mem);
     init_mem(parameter_hint_mem);
@@ -141,7 +161,7 @@ void World::init(bool test) {
     windows_open.build_and_debug = false;
 
     // TODO: allow user to enter this command himself
-    strcpy_safe(world.settings.build_command, _countof(world.settings.build_command), "go build gotest.go"); 
+    strcpy_safe(world.settings.build_command, _countof(world.settings.build_command), "go build gotest.go");
 }
 
 Pane* World::get_current_pane() {

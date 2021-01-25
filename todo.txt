@@ -33,9 +33,9 @@ Handle nested vendor directories for Go too. And nested go.mod.
 
 Add syntax highlighting to parameter hint.
 
-[bug] When you maximize the window, it doesn't resize the editor.
-
 [bug] When autocomplete opens, as you type, the menu should stay at the same
 spot it opened, not follow you.
 
 [bug] When you resize a pane too small, it ruins syntax highlighting.
+
+[bug] When tabs overflow the tab bar, current tab just goes offscreen.

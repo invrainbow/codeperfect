@@ -4,6 +4,7 @@
 #include "editor.hpp"
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
+#include <git2.h>
 #include "ui.hpp"
 #include "os.hpp"
 #include "go.hpp"
@@ -13,14 +14,6 @@
 #include "imgui.h"
 
 typedef fn<bool(Editor* e)> find_editor_func;
-
-struct File_Explorer_Entry {
-    ccstr name;
-    bool open;
-    i32 depth;
-    i32 num_children;
-    File_Explorer_Entry* parent;
-};
 
 struct Nvim_Hl_Def {
     u32 id;
@@ -57,6 +50,17 @@ struct Build_Error {
     ccstr message;
 };
 
+struct File_Tree_Entry {
+    ccstr name;
+    i32 num_children;
+    i32 depth;
+    i32 parent;
+
+    struct {
+        bool open;
+    } state;
+};
+
 struct World {
     Pool frame_mem;
     Pool ast_viewer_mem;
@@ -67,7 +71,7 @@ struct World {
     Pool scratch_mem;
     Pool nvim_mem;
     Pool nvim_loop_mem;
-    Pool file_explorer_mem;
+    Pool file_tree_mem;
     Pool build_mem;
     Pool gomod_parser_mem;
     Pool build_index_mem;
@@ -94,6 +98,8 @@ struct World {
 
     u32 next_editor_id;
 
+    List<File_Tree_Entry> file_tree;
+
     struct {
         Nvim_Hl_Def _hl_defs[128];
         List<Nvim_Hl_Def> hl_defs;
@@ -102,7 +108,6 @@ struct World {
         bool is_ui_attached;
         u32 waiting_focus_window;
     } nvim_data;
-
 
     struct {
         char build_command[MAX_PATH];
@@ -152,7 +157,6 @@ struct World {
     } build_errors;
 
     struct {
-        List<File_Explorer_Entry*> files;
         i32 scroll_offset;
     } file_explorer;
 

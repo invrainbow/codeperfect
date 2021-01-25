@@ -3342,11 +3342,13 @@ Infer_Res* Go_Index::infer_type(File_Ast* expr, bool resolve) {
 // I need to start reusing code to deal with paths, relative paths, all that
 // shit lol. Maybe a good 1hr project.
 
+/*
 ccstr get_path_relative_to(ccstr fullpath, ccstr base) {
     fullpath += strlen(base);
     if (is_sep(fullpath[0])) fullpath++;
     return fullpath;
 }
+*/
 
 ccstr get_workspace_import_path() {
     if (world.wksp.gomod_exists) {

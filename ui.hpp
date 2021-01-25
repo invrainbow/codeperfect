@@ -107,6 +107,8 @@ struct UI {
   void recalculate_view_sizes();
   void get_pane_resize_areas(boxf* out, s32 count);
   i32 get_current_resize_area(boxf* out);
+  void resize_panes_proportionally(float new_width);
+  void resize_panes_proportionally();
 };
 
 extern UI ui;

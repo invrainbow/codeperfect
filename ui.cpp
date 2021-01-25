@@ -135,9 +135,9 @@ boxf UI::get_panes_area() {
 }
 
 u32 advance_subtree_in_file_explorer(u32 i) {
-    auto it = world.file_explorer.files[i++];
-    if (it->num_children != -1)
-        for (u32 j = 0; j < it->num_children; j++)
+    auto &it = world.file_tree[i++];
+    if (it.num_children != -1)
+        for (u32 j = 0; j < it.num_children; j++)
             i = advance_subtree_in_file_explorer(i);
     return i;
 }
@@ -183,12 +183,20 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                     vec2f pos = sidebar_area.pos;
                     pos.y -= world.file_explorer.scroll_offset;
 
-                    for (u32 i = 0; i < world.file_explorer.files.len;) {
-                        auto it = world.file_explorer.files[i];
+                    u32 depth = 0;
+
+                    for (u32 i = 0; i < world.file_tree.len;) {
+                        auto it = &world.file_tree[i];
 
                         if (pos.y >= sidebar_area.y) {
                             SCOPED_FRAME();
-                            auto s = (cstr)our_sprintf("%*s%s", it->depth * 2, "", it->name);
+                            auto s = (cstr)our_sprintf(
+                                "%*s%s%s",
+                                it->depth * 2,
+                                "",
+                                it->name,
+                                it->num_children == -1 ? "" : "/"
+                            );
                             auto available_width = (int)(sidebar_area.w / font->width);
                             if (available_width < strlen(s))
                                 s[available_width] = '\0';
@@ -206,7 +214,7 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                         pos.y += font->height;
                         if (pos.y > sidebar_area.h) break;
 
-                        if (it->num_children != -1 && !it->open)
+                        if (it->num_children != -1 && !it->state.open)
                             i = advance_subtree_in_file_explorer(i);
                         else
                             i++;
@@ -641,9 +649,9 @@ void UI::get_tabs_and_editor_area(boxf* pane_area, boxf* ptabs_area, boxf* pedit
 }
 
 void UI::recalculate_view_sizes() {
-    boxf panes_area;
-    panes_area.pos = { 0, 0 };
-    panes_area.size = world.window_size;
+    resize_panes_proportionally();
+
+    boxf panes_area = get_panes_area();
 
     boxf pane_area;
     pane_area.x = 0;
@@ -734,3 +742,25 @@ i32 UI::get_current_resize_area(boxf* out) {
             return memcpy(out, resize_areas+i, sizeof(boxf)), i;
     return -1;
 }
+
+void UI::resize_panes_proportionally() {
+    resize_panes_proportionally(get_panes_area().w);
+}
+
+void UI::resize_panes_proportionally(float new_width) {
+    auto& panes = world.wksp.panes;
+    float total = 0;
+    auto widths = alloc_array(float, panes.cap);
+
+    {
+        u32 i = 0;
+        For (panes) {
+            total += it.width;
+            widths[i++] = it.width;
+        }
+    }
+
+    for (u32 i = 0; i < panes.len; i++)
+        panes[i].width = widths[i] / total * new_width;
+}
+

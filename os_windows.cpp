@@ -5,9 +5,8 @@
 #include "win32.hpp"
 #include "world.hpp"
 
-// #include <shobjidl.h>
+#include <shlwapi.h>
 #include <shlobj.h>
-#include <shlobj_core.h>
 #include <stdlib.h>
 #include <search.h>
 
@@ -583,4 +582,18 @@ Entire_File *read_entire_file(ccstr path) {
 
 void free_entire_file(Entire_File *file) {
     UnmapViewOfFile(file->data);
+}
+
+ccstr get_path_relative_to(ccstr full, ccstr base) {
+    Frame frame;
+
+    auto full2 = (ccstr)normalize_path_separator((cstr)our_strcpy(full));
+    auto base2 = (ccstr)normalize_path_separator((cstr)our_strcpy(base));
+    auto buf = alloc_array(char, MAX_PATH+1);
+
+    if (!PathRelativePathToA(buf, base2, FILE_ATTRIBUTE_DIRECTORY, full2, 0)) {
+        frame.restore();
+        return NULL;
+    }
+    return buf;
 }
