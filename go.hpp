@@ -7,21 +7,20 @@
 #include "os.hpp"
 #include "uthash.h"
 
-enum ItType {
+enum It_Type {
     IT_INVALID = 0,
-    IT_DATA,
+    IT_MMAP,
     IT_BUFFER,
 };
 
 struct Parser_It {
-    ItType type;
+    It_Type type;
 
     union {
         struct {
+            Entire_File *ef; // TODO: unicode
             cur2 pos;
-            u8 *data; // TODO: unicode
-            s32 len;
-        } data_params;
+        } mmap_params;
 
         struct {
             Buffer_It it;
@@ -29,16 +28,15 @@ struct Parser_It {
     };
 
     void init(Entire_File *ef) {
-        init((u8*)ef->data, ef->len);
+        ptr0(this);
+        type = IT_MMAP;
+
+        mmap_params.ef = ef;
+        mmap_params.pos = new_cur2(0, 0);
     }
 
-    void init(u8 *data, s32 _len) {
-        ptr0(this);
-        type = IT_DATA;
-
-        data_params.data = data;
-        data_params.len = _len;
-        data_params.pos = new_cur2(0, 0);
+    void cleanup() {
+        if (type == IT_MMAP) free_entire_file(mmap_params.ef);
     }
 
     void init(Buffer* buf) {
@@ -50,8 +48,8 @@ struct Parser_It {
 
     u8 peek() {
         switch (type) {
-            case IT_DATA:
-                return data_params.data[data_params.pos.x];
+            case IT_MMAP:
+                return mmap_params.ef->data[mmap_params.pos.x];
             case IT_BUFFER:
                 return (u8)buffer_params.it.peek();
         }
@@ -60,10 +58,10 @@ struct Parser_It {
 
     u8 next() {
         switch (type) {
-            case IT_DATA:
+            case IT_MMAP:
                 {
                     auto ret = peek();
-                    data_params.pos.x++;
+                    mmap_params.pos.x++;
                     return ret;
                 }
             case IT_BUFFER:
@@ -74,8 +72,8 @@ struct Parser_It {
 
     bool eof() {
         switch (type) {
-            case IT_DATA:
-                return (data_params.pos.x == data_params.len);
+            case IT_MMAP:
+                return (mmap_params.pos.x == mmap_params.ef->len);
             case IT_BUFFER:
                 return buffer_params.it.eof();
         }
@@ -85,8 +83,8 @@ struct Parser_It {
     cur2 get_pos() {
         // TODO: to convert between pos types based on this->type
         switch (type) {
-            case IT_DATA:
-                return new_cur2(data_params.pos.x, -1);
+            case IT_MMAP:
+                return new_cur2(mmap_params.pos.x, -1);
             case IT_BUFFER:
                 return buffer_params.it.pos;
         }
@@ -96,8 +94,8 @@ struct Parser_It {
     void set_pos(cur2 pos) {
         // TODO: to convert between pos types based on this->type
         switch (type) {
-            case IT_DATA:
-                data_params.pos = pos;
+            case IT_MMAP:
+                mmap_params.pos = pos;
                 break;
             case IT_BUFFER:
                 buffer_params.it.pos = pos;
@@ -794,8 +792,9 @@ struct Parser {
     Tok_Type last_token_type;
     ccstr filepath; // for debugging purposes
 
-    void init(Parser_It* _it, ccstr _filepath = NULL);
+    void init(Parser_It* _it, ccstr _filepath = NULL, bool no_lex = false);
     void cleanup();
+    void reinit_without_lex();
     Ast_List new_list();
     void synchronize(Sync_Lookup_Func lookup);
     void _throwError(ccstr s);
@@ -897,7 +896,6 @@ ccstr _path_join(ccstr a, ...);
 #define path_join(...) _path_join(__VA_ARGS__, NULL)
 
 bool dir_exists(ccstr path);
-List<ccstr>* list_source_files(ccstr dirpath);
 ccstr get_package_name_from_file(ccstr filepath);
 
 enum Import_Location {
@@ -926,7 +924,7 @@ struct Loaded_It {
     }
 };
 
-extern fn<Loaded_It* (ccstr filepath)> file_loader;
+extern fn<Parser_It* (ccstr filepath)> file_loader;
 
 Ast* parse_file_into_ast(ccstr filepath);
 
@@ -1131,6 +1129,10 @@ struct Go_Index {
     Go_Index_Watcher goroot_watcher;
     Thread_Handle main_loop_thread;
 
+    // this hurts me
+    char current_exe_path[MAX_PATH];
+    Process buildparser_proc;
+
     bool init();
     void cleanup();
     void handle_fs_event(Go_Index_Watcher *watcher, Fs_Event *event);
@@ -1195,8 +1197,14 @@ struct Go_Index {
     u64 hash_package(ccstr import_path, Resolved_Import **pres);
 
     bool run_threads();
+
+    bool is_file_included_in_build(ccstr path);
+    List<ccstr>* list_source_files(ccstr dirpath);
+    ccstr get_package_name(ccstr path);
+    Resolved_Import* resolve_import(ccstr import_path);
 };
 
 typedef fn<void(Parser*)> parser_cb;
 
 void with_parser_at_location(ccstr filepath, cur2 location, parser_cb cb);
+void with_parser_at_location(ccstr filepath, parser_cb cb);

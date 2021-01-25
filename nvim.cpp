@@ -105,7 +105,7 @@ void Nvim::run_event_loop() {
             case MPRPC_NOTIFICATION:
                 {
                     auto method = reader.read_string(); CHECKOK();
-                    print("got notification with method %s", method);
+                    // print("got notification with method %s", method);
                     auto params_length = reader.read_array(); CHECKOK();
 
                     auto just_skip_params = [&]() {
@@ -171,7 +171,7 @@ void Nvim::run_event_loop() {
 
                             bool isflush = streq(op, "flush");
 
-                            print(" - op %s", op);
+                            // print(" - op %s", op);
 
                             for (u32 j = 1; j < argsets_len; j++) {
                                 auto args_len = reader.read_array(); CHECKOK();
@@ -283,7 +283,7 @@ void Nvim::run_event_loop() {
                                     auto rows = reader.read_int(); CHECKOK();
                                     auto cols = reader.read_int(); CHECKOK();
 
-                                    print("top = %d, bot = %d, rows = %d", top, bot, rows);
+                                    // print("top = %d, bot = %d, rows = %d", top, bot, rows);
 
                                     auto editor = find_editor_by_grid(grid);
                                     if (editor == NULL)
@@ -390,7 +390,7 @@ void Nvim::run_event_loop() {
                                         def->len = col - last_col;
                                         def->type = hltype;
                                     };
-                            
+
                                     auto num_cells = reader.read_array(); CHECKOK();
 
                                     {
@@ -447,7 +447,7 @@ void Nvim::run_event_loop() {
                     auto method = reader.read_string(); CHECKOK();
                     auto params_length = reader.read_array(); CHECKOK();
 
-                    print("got request with method %s", method);
+                    // print("got request with method %s", method);
 
                     if (streq(method, "user_typed")) {
                         ASSERT(params_length == 1);
@@ -488,11 +488,11 @@ void Nvim::run_event_loop() {
                         if (reader.peek_type() == MP_STRING) {
                             auto error_str = reader.read_string(); CHECKOK();
                             SCOPED_FRAME();
-                            print("error in response for msgid %d: %d", msgid, error_str);
+                            // print("error in response for msgid %d: %d", msgid, error_str);
                         } else {
                             auto type = reader.peek_type();
                             reader.skip_object(); CHECKOK();
-                            print("error in response for msgid %d: (error was not a string, instead was %s)", msgid, mptype_str(type));
+                            // print("error in response for msgid %d: (error was not a string, instead was %s)", msgid, mptype_str(type));
                         }
                     } else {
                         reader.read_nil(); CHECKOK();
@@ -502,7 +502,7 @@ void Nvim::run_event_loop() {
 
                     /*
                     At this point, we have read the error and printed it out if there was one.
-                    If there was, `error` will be `true`. 
+                    If there was, `error` will be `true`.
 
                     For 'handled' requests (meaning it's a request type with a `case`
                     below), it's the handler's job (below) to both read the response object, AND
@@ -590,7 +590,7 @@ void Nvim::run_event_loop() {
                             {
                                 ASSERT(editor != NULL);
                                 if (error) {
-                                    print("error");
+                                    // print("error");
                                 }
                                 reader.skip_object(); CHECKOK();
                             }
@@ -600,7 +600,7 @@ void Nvim::run_event_loop() {
                                 ASSERT(editor != NULL);
                                 editor->nvim_data.is_resizing = false;
                                 if (error) {
-                                    print("error");
+                                    // print("error");
                                 }
                                 reader.skip_object(); CHECKOK();
                             }

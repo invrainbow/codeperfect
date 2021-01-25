@@ -70,6 +70,7 @@ struct Process {
     bool can_read();
     bool read1(char* ch);
     bool write1(char ch);
+    bool writestr(ccstr s, s32 len = 0);
     ccstr readall(u32* plen = NULL);
     void flush();
     void done_writing();
@@ -218,7 +219,7 @@ void *xplat_binary_search(const void *key, void *list, s32 num, s32 size, compar
 u64 get_file_size(ccstr file);
 
 struct Entire_File {
-    void *data;
+    u8 *data;
     s32 len;
 };
 

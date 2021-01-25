@@ -13,12 +13,18 @@ ccstr our_strcat(ccstr a, ccstr b);
 
 bool strcpy_safe(cstr buf, s32 count, ccstr src);
 
+Pool *stub_get_mem();
+
 struct Text_Renderer {
     Pool *mem;
     cstr s;
     s32 len;
 
-    void init();
+    void init() {
+        mem = stub_get_mem();
+        s = (cstr)mem->alloc(0);
+        len = 0;
+    }
 
     void *request_memory(s32 n) {
         if (!mem->can_alloc(n)) {

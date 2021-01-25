@@ -267,33 +267,35 @@ bool Workspace::parse_gomod_file(ccstr path) {
     return true;
 }
 
+// move to ui?
+void Workspace::resize_panes_proportionally(float new_width) {
+    float total = 0;
+    auto widths = alloc_array(float, panes.cap);
+
+    {
+        u32 i = 0;
+        For (panes) {
+            total += it.width;
+            widths[i++] = it.width;
+        }
+    }
+
+    for (u32 i = 0; i < panes.len; i++)
+        panes[i].width = widths[i] / total * new_width;
+}
+
 void Workspace::activate_pane(u32 idx) {
     if (idx > panes.len) return;
 
     if (idx == panes.len) {
-        float total = 0;
-        auto widths = alloc_array(float, panes.cap);
+        auto panes_width = ui.get_panes_area().w;
 
-        {
-            u32 i = 0;
-            For (panes) {
-                total += it.width;
-                widths[i++] = it.width;
-            }
-        }
+        auto new_width = panes_width - (panes_width / (panes.len + 1));
+        resize_panes_proportionally(new_width);
 
         auto pane = panes.append();
         pane->init();
-        pane->width = world.display_size.x / panes.len;
-
-        if (panes.len > 1) {
-            UI ui;
-            ui.init();
-
-            float new_total = world.display_size.x - pane->width;
-            for (u32 i = 0; i < panes.len - 1; i++)
-                panes[i].width = widths[i] / total * new_total;
-        }
+        pane->width = panes_width / panes.len;
     }
 
     current_pane = idx;

@@ -187,6 +187,12 @@ bool Process::read1(char* ch) {
     return ReadFile(stdout_r, ch, 1, &n, NULL) && (n == 1);
 }
 
+bool Process::writestr(ccstr s, s32 len) {
+    if (len == 0) len = strlen(s);
+    DWORD n = 0;
+    return WriteFile(stdin_w, s, len, &n, NULL) && (n == len);
+}
+
 bool Process::write1(char ch) {
     DWORD n = 0;
     return WriteFile(stdin_w, &ch, 1, &n, NULL) && (n == 1);
@@ -566,11 +572,11 @@ Entire_File *read_entire_file(ccstr path) {
     if (map == NULL) return NULL;
     defer { CloseHandle(map); };
 
-    auto buf = (char*)MapViewOfFile(map, FILE_SHARE_READ, 0, 0, flen);
+    auto buf = MapViewOfFile(map, FILE_SHARE_READ, 0, 0, flen);
     if (buf == NULL) return NULL;
 
     auto ret = alloc_object(Entire_File);
-    ret->data = buf;
+    ret->data = (u8*)buf;
     ret->len = flen;
     return ret;
 }

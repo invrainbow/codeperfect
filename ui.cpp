@@ -618,8 +618,6 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
         }
     }
 
-    // ????????????
-
     // TODO: draw 'search anywhere' window
     flush_verts();
 }
@@ -709,8 +707,8 @@ void UI::recalculate_view_sizes() {
 }
 
 void UI::get_pane_resize_areas(boxf *out, s32 count) {
-    float offset = 0;
     auto panes_area = get_panes_area();
+    float offset = panes_area.x;
 
     for (u32 i = 0; i < world.wksp.panes.len - 1 && i < count; i++) {
         offset += world.wksp.panes[i].width;
@@ -733,6 +731,6 @@ i32 UI::get_current_resize_area(boxf* out) {
 
     for (u32 i = 0; i < num_areas; i++)
         if (resize_areas[i].contains(world.ui.mouse_pos))
-            return memcpy(out, &resize_areas[i], sizeof(boxf)), i;
+            return memcpy(out, resize_areas+i, sizeof(boxf)), i;
     return -1;
 }

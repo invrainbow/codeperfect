@@ -1,0 +1,41 @@
+[idea] Log window. A kind of log window showing what's happening behind the
+scenes, but not autistic developer debug notes -- stuff that actually allows
+the user to build a model of how their tool is working and a closer
+relationship with the IDE. For example, "detected import, now indexing ___".
+
+[idea] Context-aware autocomplete, including, if you're in a toplevel, all you
+can write is func, const, var, and type.
+
+Create a string class.
+
+COME UP WITH A GOOD NAME.
+
+Use our allocator for uthash_malloc.
+
+Right now, when we call make_file_ast on the current file during autocomplete
+or gotodef, we assume current package name is world.wksp.go_import_path. This
+will fail if user edits files outside current workspace. Need function to
+translate directory path into import path. Update: world.wksp.go_import_path
+has been replaced with get_workspace_import_path().
+
+Now that our memory isn't retarded anymore, rework Scoped_Table to not use
+LIST_MALLOC. And also just rewrite large sections of Parser.
+
+See how many LIST_MALLOCs should just be LIST_POOLs.
+
+Handle unicode. If we don't handle the stupid Unicode situation soon, we're
+going to be fucked the longer we wait. Need to get that shit over with.
+Probably the first thing we need to do as soon as indexing is done.
+
+Handle nested vendor directories for Go too. And nested go.mod.
+
+[bug] Syntax highlighting is weird/slow/jumpy.
+
+Add syntax highlighting to parameter hint.
+
+[bug] When you maximize the window, it doesn't resize the editor.
+
+[bug] When autocomplete opens, as you type, the menu should stay at the same
+spot it opened, not follow you.
+
+[bug] When you resize a pane too small, it ruins syntax highlighting.

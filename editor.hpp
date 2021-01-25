@@ -147,6 +147,7 @@ struct Workspace {
   bool parse_gomod_file(ccstr path);
   void activate_pane(u32 idx);
   Pane* get_current_pane();
+  void resize_panes_proportionally(float new_width);
 };
 
 bool check_file_dimensions(ccstr path);

@@ -284,7 +284,7 @@ void run_proc_the_normal_way(Process* proc, ccstr cmd) {
     proc->init();
     proc->dir = world.wksp.path;
 
-    print("running: %s", cmd);
+    // print("running: %s", cmd);
     proc->run(cmd);
 }
 
@@ -853,14 +853,8 @@ int main() {
 
     glfwSetKeyCallback(world.window, [](GLFWwindow* wnd, i32 key, i32 scan, i32 ev, i32 mod) {
         ImGuiIO& io = ImGui::GetIO();
-        if (ev == GLFW_PRESS) {
-            print("keycallback press, sending to imgui");
-            io.KeysDown[key] = true;
-        }
-        if (ev == GLFW_RELEASE) {
-            print("keycallback release, sending to imgui");
-            io.KeysDown[key] = false;
-        }
+        if (ev == GLFW_PRESS) io.KeysDown[key] = true;
+        if (ev == GLFW_RELEASE) io.KeysDown[key] = false;
 
         io.KeyCtrl = io.KeysDown[GLFW_KEY_LEFT_CONTROL] || io.KeysDown[GLFW_KEY_RIGHT_CONTROL];
         io.KeyShift = io.KeysDown[GLFW_KEY_LEFT_SHIFT] || io.KeysDown[GLFW_KEY_RIGHT_SHIFT];
@@ -1120,6 +1114,12 @@ int main() {
                                         world.sidebar.view = SIDEBAR_CLOSED;
                                     else
                                         world.sidebar.view = SIDEBAR_FILE_EXPLORER;
+
+                                    // this is honestly so bad, like where is our logic stored
+                                    // should consolidate into ui
+                                    // also wondering if i should get rid of wksp
+                                    world.wksp.resize_panes_proportionally(ui.get_panes_area().w);
+                                    ui.recalculate_view_sizes();
                                     break;
                                 case GLFW_KEY_LEFT_BRACKET:
                                     {
@@ -1377,10 +1377,8 @@ int main() {
         if (nmod == OUR_MOD_CTRL) return;
 
         ImGuiIO& io = ImGui::GetIO();
-        if (ch > 0 && ch < 0x10000) {
-            print("charcallback, sending to imgui");
+        if (ch > 0 && ch < 0x10000)
             io.AddInputCharacter((u16)ch);
-        }
 
         if (world.windows_open.open_file) {
             auto& ref = world.wnd_open_file;

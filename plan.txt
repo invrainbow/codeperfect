@@ -1,3 +1,21 @@
+1/24/21
+    plan:
+        - so now autocomplete isn't working with golang.org/x/text/width because of build constraints
+        - get build constraints working
+        - fix all weird ui errors when you resize window, maximize window, open/close file explorer
+        - start building out landsharkive
+        - honestly, you know what, when you have:
+              func main() {
+                  fmt.
+                  runes.
+              }
+          like when you type "runes." here, it can't autocomplete because it
+          picks it up as "fmt.runes".... but we should be able to detect this
+          and use "runes" anyway. i'm sure it's ez
+    done:
+        - autocomplete works with build constraints again
+    notes:
+
 1/23/21
     plan:
         - get hooks working

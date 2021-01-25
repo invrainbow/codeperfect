@@ -90,12 +90,10 @@ ccstr our_strcat(ccstr a, ccstr b) {
     return our_sprintf("%s%s", a, b);
 }
 
-void Text_Renderer::init() {
-    mem = MEM;
-    s = (cstr)mem->alloc(0);
-    len = 0;
-}
-
 void *stub_alloc_memory(s32 size) {
         return alloc_memory(size);
+}
+
+Pool *stub_get_mem() {
+    return MEM;
 }

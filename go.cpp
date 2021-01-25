@@ -72,11 +72,43 @@ File_Ast *File_Ast::dup(Ast *new_ast) {
     ret->file = file;
     ret->import_path = import_path;
     return ret;
-};
+}
+
+auto split_string(ccstr str, fn<bool(char)> pred) -> List<ccstr>* {
+    auto len = strlen(str);
+    u32 start = 0;
+    auto ret = alloc_list<ccstr>();
+
+    while (start < len) {
+        u32 end = start;
+        while (end < len && !pred(str[end])) end++;
+
+        auto partlen = end-start;
+        auto s = alloc_array(char, partlen+1);
+        strncpy(s, str + start, partlen);
+        s[partlen] = '\0';
+        ret->append(s);
+
+        start = end+1;
+    }
+    return ret;
+}
+
+// i can't believe this but we *may* need to just do interop with go
+
+bool Go_Index::is_file_included_in_build(ccstr path) {
+    buildparser_proc.writestr(path);
+    buildparser_proc.write1('\n');
+
+    char ch = 0;
+    if (!buildparser_proc.read1(&ch))
+        panic("buildparser crashed, we're not going to be able to do anything");
+    return (ch == 1);
+}
 
 // FIXME: will fuck up if we list directory first time, dir changes,
 // and then we list second time. fix this somehow
-List<ccstr>* list_source_files(ccstr dirpath) {
+List<ccstr>* Go_Index::list_source_files(ccstr dirpath) {
     auto ret = alloc_list<ccstr>();
 
     auto save_gofiles = [&](Dir_Entry *ent) {
@@ -86,13 +118,54 @@ List<ccstr>* list_source_files(ccstr dirpath) {
         // TODO: keep this?
         if (str_ends_with(ent->name, "_test.go")) return;
 
+        {
+            SCOPED_FRAME();
+            if (!is_file_included_in_build(path_join(dirpath, ent->name))) return;
+        }
+
         ret->append(our_strcpy(ent->name));
     };
 
     return list_directory(dirpath, save_gofiles) ? ret : NULL;
 }
 
-ccstr get_package_name(ccstr path) {
+List<ccstr>* list_source_files_golist(ccstr dirpath) {
+    Process proc;
+    proc.init();
+    defer { proc.cleanup(); };
+    proc.dir = dirpath;
+    proc.use_stdin = false;
+    if (!proc.run("go list -json | jq \".GoFiles | .[]\"")) return NULL;
+
+    Process_Status status;
+    while ((status = proc.status()) == PROCESS_WAITING) continue;
+
+    if (status != PROCESS_DONE) return NULL;
+
+    Text_Renderer r;
+    auto ret = alloc_list<ccstr>();
+    char ch = 0;
+    r.init();
+
+    while (true) {
+        if (!proc.read1(&ch)) break;
+        if (ch == '"') continue;
+        if (ch == '\r') {
+            if (!proc.read1(&ch)) break;
+            if (ch != '\n') break;
+        }
+        if (ch == '\n') {
+            ret->append(r.finish());
+            r.init();
+            continue;
+        }
+        r.writechar(ch);
+    }
+    if (r.len > 0) ret->append(r.finish());
+    return ret;
+}
+
+ccstr Go_Index::get_package_name(ccstr path) {
     if (check_path(path) != CPR_DIRECTORY) return NULL;
 
     auto files = list_source_files(path);
@@ -101,14 +174,13 @@ ccstr get_package_name(ccstr path) {
     For (*files) {
         auto filepath = path_join(path, it);
         auto pkgname = get_package_name_from_file(filepath);
-        if (pkgname != NULL)
-            return pkgname;
+        if (pkgname != NULL) return pkgname;
     }
 
     return NULL;
 }
 
-Resolved_Import* resolve_import(ccstr import_path) {
+Resolved_Import* Go_Index::resolve_import(ccstr import_path) {
     if (world.wksp.gomod_exists) {
         // In our go.mod, we have a bunch of directives that basically give us
         // the info, "when you come across this import path, go to this file
@@ -123,27 +195,8 @@ Resolved_Import* resolve_import(ccstr import_path) {
         // represents as path as list of its parts, e.g. "a/b/c" becomes ["a", "b", "c"]
         typedef List<ccstr> Path_List;
 
-        // may have to pull into global str_split function
-        // also WHEN ARE WE CREATING OUR STRING CLASS
         auto make_path = [&](ccstr path) -> Path_List* {
-            auto len = strlen(path);
-            u32 start = 0;
-            auto ret = alloc_list<ccstr>();
-
-            while (start < len) {
-                u32 end = start;
-                while (end < len && !is_sep(path[end]))
-                    end++;
-
-                auto partlen = end-start;
-                auto s = alloc_array(char, partlen+1);
-                strncpy(s, path + start, partlen);
-                s[partlen] = '\0';
-                ret->append(s);
-
-                start = end+1;
-            }
-            return ret;
+            return (Path_List*)split_string(path, [&](char ch) -> bool { return is_sep(ch); });
         };
 
         auto import_path_list = make_path(import_path);
@@ -290,35 +343,23 @@ ccstr _path_join(ccstr a, ...) {
 }
 
 ccstr get_package_name_from_file(ccstr filepath) {
-    auto ef = read_entire_file(filepath);
-    if (ef == NULL) return NULL;
-    defer { free_entire_file(ef); };
-
-    Parser_It it;
-    it.init(ef);
-
-    Parser parser;
-    parser.init(&it);
-    defer { parser.cleanup(); };
-    parser.filepath = filepath;
-
-    auto ast = parser.parse_package_decl();
+    Ast *ast = NULL;
+    with_parser_at_location(filepath, [&](Parser *p) {
+        ast = p->parse_package_decl();
+    });
     if (ast == NULL) return NULL;
     if (ast->package_decl.name == NULL) return NULL;
     return ast->package_decl.name->id.lit;
 }
 
-Loaded_It* default_file_loader(ccstr filepath) {
+Parser_It* default_file_loader(ccstr filepath) {
     // try to find filepath among editors
     for (auto&& pane : world.wksp.panes) {
         For (pane.editors) {
             if (streq(it.filepath, filepath)) {
                 auto iter = alloc_object(Parser_It);
                 iter->init(&it.buf);
-
-                auto ret = alloc_object(Loaded_It);
-                ret->it = iter;
-                return ret;
+                return iter;
             }
         }
     }
@@ -328,38 +369,17 @@ Loaded_It* default_file_loader(ccstr filepath) {
 
     auto it = alloc_object(Parser_It);
     it->init(ef);
-
-    auto ret = alloc_object(Loaded_It);
-    ret->ef = ef;
-    ret->it = it;
-    return ret;
+    return it;
 }
 
-fn<Loaded_It* (ccstr filepath)> file_loader = default_file_loader;
+fn<Parser_It* (ccstr filepath)> file_loader = default_file_loader;
 
 Ast* parse_file_into_ast(ccstr filepath) {
-    // NOTE: have the ability to parse toplevel decls one by one
-    // also, we need a new system of tags (TODO, NOTE, etc) for varying
-    // priorities
-
-    if (str_ends_with(filepath, "sync.go")) {
-        print("here");
-    }
-    auto iter = file_loader(filepath);
-    defer {
-        iter->cleanup();
-    };
-    if (iter->it == NULL) return NULL;
-
-    // print("parsing %s", filepath);
-    // iter->it->se
-
-    Parser p;
-    p.init(iter->it, filepath);
-    p.filepath = filepath;
-    defer { p.cleanup(); };
-
-    return p.parse_file();
+    Ast *ret = NULL;
+    with_parser_at_location(filepath, [&](Parser *p) {
+        ret = p->parse_file();
+    });
+    return ret;
 }
 
 void walk_ast(Ast* root, WalkAstFn fn) {
@@ -1076,6 +1096,7 @@ void Parser::lex_with_comments() {
             case TOK_FLOAT:
             case TOK_IMAG:
             case TOK_RUNE:
+            case TOK_COMMENT:
                 buffer = alloc_array(char, buffer_len + 1);
                 break;
         }
@@ -1103,7 +1124,7 @@ void Parser::lex_with_comments() {
     }
 }
 
-void Parser::init(Parser_It* _it, ccstr _filepath) {
+void Parser::init(Parser_It* _it, ccstr _filepath, bool no_lex) {
     ptr0(this);
 
     // init fields
@@ -1119,12 +1140,20 @@ void Parser::init(Parser_It* _it, ccstr _filepath) {
     decl_table.init();
 
     // read first token
-    lex();
+    if (!no_lex) lex();
 }
 
 void Parser::cleanup() {
     our_free(list_mem.buf);
     decl_table.cleanup();
+}
+
+void Parser::reinit_without_lex() {
+    auto old_it = it;
+    auto old_filepath = filepath;
+    cleanup();
+    old_it->set_pos(new_cur2(0, 0));
+    init(old_it, old_filepath, true);
 }
 
 Ast_List Parser::new_list() {
@@ -2665,8 +2694,6 @@ Ast* Parser::fill_end(Ast* ast) {
     return ast;
 }
 
-void lex_with_comments();
-
 cur2 Parser::lex() {
     auto ret = tok.start;
     do {
@@ -3365,13 +3392,13 @@ Jump_To_Definition_Result* Go_Index::jump_to_definition(ccstr filepath, cur2 pos
     {
         auto iter = file_loader(filepath);
         defer { iter->cleanup(); };
-        if (iter->it == NULL) return NULL;
+        if (iter == NULL) return NULL;
 
-        if (iter->it->type == IT_BUFFER)
-            pos = iter->it->buffer_params.it.buf->offset_to_cur(pos.x);
+        if (iter->type == IT_BUFFER)
+            pos = iter->buffer_params.it.buf->offset_to_cur(pos.x);
 
         Parser p;
-        p.init(iter->it);
+        p.init(iter);
         p.filepath = filepath;
         defer { p.cleanup(); };
         file = p.parse_file();
@@ -4076,9 +4103,14 @@ void Gomod_Parser::parse(Gomod_Info* info) {
 #define ASSERT(x) if (!(x)) goto done
 #define EXPECT(x) ASSERT((lex(), (tok.type == (x))))
 
-    while (lex(), (tok.type != GOMOD_TOK_EOF && tok.type != GOMOD_TOK_ILLEGAL)) {
-        auto keyword = tok.type;
+    while (true) {
+        lex();
+        while (tok.type == GOMOD_TOK_NEWLINE)
+            lex();
+        if (tok.type == GOMOD_TOK_EOF || tok.type == GOMOD_TOK_ILLEGAL)
+            break;
 
+        auto keyword = tok.type;
         switch (keyword) {
             case GOMOD_TOK_MODULE:
                 {
@@ -4385,29 +4417,22 @@ void get_package_imports(ccstr path, List<ccstr> *out, String_Set *seen) {
         if (!str_ends_with(ent->name, ".go")) return;
         if (str_ends_with(ent->name, "_test.go")) return;
 
-        auto iter = file_loader(new_path);
-        defer { iter->cleanup(); };
-        if (iter->it == NULL) return;
+        with_parser_at_location(new_path, [&](Parser *p) {
+            p->parse_package_decl();
+            while (p->tok.type == TOK_IMPORT) {
+                auto decl = p->parse_decl(lookup_decl_start, true);
+                if (decl == NULL) continue;
 
-        Parser p;
-        p.init(iter->it, new_path);
-        p.filepath = new_path;
-        defer { p.cleanup(); };
-
-        p.parse_package_decl();
-        while (p.tok.type == TOK_IMPORT) {
-            auto decl = p.parse_decl(lookup_decl_start, true);
-            if (decl != NULL) {
                 For (decl->decl.specs->list) {
                     auto import_path = it->import_spec.path->basic_lit.val.string_val;
-                    if (!seen->has(import_path)) {
-                        import_path = our_strcpy(import_path);
-                        out->append(import_path);
-                        seen->add(import_path);
-                    }
+                    if (seen->has(import_path)) continue;
+
+                    import_path = our_strcpy(import_path);
+                    out->append(import_path);
+                    seen->add(import_path);
                 }
             }
-        }
+        });
     });
 }
 
@@ -4772,6 +4797,19 @@ bool Go_Index::init() {
     if (!wksp_watcher.watch.init(world.wksp.path)) return false;
     // if (!gopath_watcher.watch.init(path_join(GOPATH, "src"))) return false;
     // if (!goroot_watcher.watch.init(path_join(GOPATH, "src"))) return false;
+
+    buildparser_proc.init();
+    buildparser_proc.use_stdin = true;
+
+    {
+        SCOPED_FRAME();
+        GetModuleFileNameA(NULL, current_exe_path, _countof(current_exe_path));
+        auto path = our_dirname(current_exe_path);
+        strcpy_safe(current_exe_path, _countof(current_exe_path), path);
+    }
+
+    buildparser_proc.dir = current_exe_path;
+    buildparser_proc.run("go run buildparser.go");
 }
 
 void run_watcher_stub(void *param) {
@@ -5129,15 +5167,17 @@ bool Index_Reader::find_decl(ccstr decl_name, Index_Entry_Result *out) {
 
 void with_parser_at_location(ccstr filepath, cur2 location, parser_cb cb) {
     auto iter = file_loader(filepath);
-    defer{ iter->cleanup(); };
-    if (iter->it == NULL) return;
-    iter->it->set_pos(location);
+    defer { iter->cleanup(); };
+    if (iter == NULL) return;
+    iter->set_pos(location);
 
     Parser p;
-    p.init(iter->it);
-    p.filepath = filepath;
-    defer{ p.cleanup(); };
+    p.init(iter, filepath);
+    defer { p.cleanup(); };
 
     cb(&p);
 }
 
+void with_parser_at_location(ccstr filepath, parser_cb cb) {
+    with_parser_at_location(filepath, new_cur2(0, 0), cb);
+}
