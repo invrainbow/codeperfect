@@ -60,9 +60,9 @@ bool is_ignored_by_git(ccstr path, bool isdir) {
     // get rid of "./" at beginning, it breaks libgit2
     if (str_starts_with(relpath, "./")) relpath += 2;
 
-    int is_ignored = false;
-    if (git_ignore_path_is_ignored(&is_ignored, git_repo, relpath) == 0)
-        return is_ignored;
+    int ignored = 0;
+    if (git_ignore_path_is_ignored(&ignored, git_repo, relpath) == 0)
+        return (bool)ignored;
     return false;
 }
 
