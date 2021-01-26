@@ -1163,11 +1163,9 @@ struct Go_Index {
     s32 count_decls_in_source(File_Ast* source, int flags);
     List<Named_Decl>* list_decls_in_source(File_Ast* source, int flags, List<Named_Decl>* out = NULL);
     void list_decls_in_source(File_Ast* source, int flags, fn<void(Named_Decl*)> fn);
-    File_Ast* find_decl_in_index(ccstr import_path, ccstr desired_decl_name);
     File_Ast* find_decl_in_source(File_Ast* source, ccstr desired_decl_name, bool import_only = false);
-    File_Ast* find_decl_in_package(ccstr path, ccstr desired_decl_name, ccstr import_path);
+    File_Ast* find_decl_in_package(ccstr desired_decl_name, ccstr import_path);
     List<Named_Decl>* list_decls_in_package(ccstr path, ccstr import_path);
-    List<ccstr> *list_decl_names_from_index(ccstr import_path);
     List<ccstr> *list_decl_names(ccstr import_path);
     File_Ast* find_decl_of_id(File_Ast* fa, bool import_only = false);
     File_Ast* get_base_type(File_Ast* type);

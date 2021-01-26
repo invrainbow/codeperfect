@@ -1732,7 +1732,7 @@ Ast* Parser::parse_type(bool is_param) {
                 expect(TOK_RBRACE);
 
                 ast->struct_type.fields = fields.save();
-                return ast;
+                return fill_end(ast);
             }
         case TOK_INTERFACE:
             {
@@ -1778,7 +1778,7 @@ Ast* Parser::parse_type(bool is_param) {
                 expect(TOK_RBRACE);
 
                 ast->interface_type.specs = specs.save();
-                return ast;
+                return fill_end(ast);
             }
         case TOK_FUNC:
             ast = new_ast(AST_FUNC_TYPE, lex());
@@ -2857,7 +2857,7 @@ Ast *Index_Reader::parse_decl_from_entry(Index_Entry *entry) {
     return ast;
 }
 
-File_Ast *Go_Index::find_decl_in_index(ccstr import_path, ccstr desired_decl_name) {
+File_Ast* Go_Index::find_decl_in_package(ccstr desired_decl_name, ccstr import_path) {
     auto index_path = get_index_path(import_path);
 
     Index_Reader reader;
@@ -2872,46 +2872,6 @@ File_Ast *Go_Index::find_decl_in_index(ccstr import_path, ccstr desired_decl_nam
 
     auto filepath = path_join(reader.meta.package_path, res.filename);
     return make_file_ast(ast, filepath, import_path);
-}
-
-// between path and import_path, exactly one should be null.
-//  - if path provided, does direct search
-//  - if import_path provided, tries index, then resolves import_path to get path and do direct search.
-// honestly we should just never call this with path but no import_path
-File_Ast* Go_Index::find_decl_in_package(ccstr path, ccstr desired_decl_name, ccstr import_path) {
-    return find_decl_in_index(import_path, desired_decl_name);
-
-    /*
-    // first try to find it in the index.
-    auto potential_ret = find_decl_in_index(import_path, desired_decl_name);
-    if (potential_ret != NULL)
-        return potential_ret;
-
-    if (path == NULL) {
-        auto ri = resolve_import(import_path);
-        if (ri == NULL) return NULL;
-        path = ri->path;
-    }
-
-    // TODO: contain our memory growth with SCOPED_FRAME
-    auto files = list_source_files(path);
-    if (files == NULL) return NULL;
-
-    For (*files) {
-        Frame frame;
-
-        auto filename = path_join(path, it);
-        auto ast = parse_file_into_ast(filename);
-        if (ast != NULL) {
-            auto ret = find_decl_in_source(make_file_ast(ast, filename, import_path), desired_decl_name);
-            if (ret != NULL)
-                return ret;
-        }
-
-        frame.restore();
-    }
-    return NULL;
-    */
 }
 
 List<Named_Decl>* Go_Index::list_decls_in_package(ccstr path, ccstr import_path) {
@@ -2929,7 +2889,7 @@ List<Named_Decl>* Go_Index::list_decls_in_package(ccstr path, ccstr import_path)
     return ret;
 }
 
-List<ccstr> *Go_Index::list_decl_names_from_index(ccstr import_path) {
+List<ccstr> *Go_Index::list_decl_names(ccstr import_path) {
     Index_Reader reader;
     if (!reader.init(get_index_path(import_path))) return NULL;
     defer { reader.cleanup(); };
@@ -2942,40 +2902,11 @@ List<ccstr> *Go_Index::list_decl_names_from_index(ccstr import_path) {
     return ret;
 }
 
-List<ccstr> *Go_Index::list_decl_names(ccstr import_path) {
-    return list_decl_names_from_index(import_path);
-
-    /*
-    auto ret = list_decl_names_from_index(import_path);
-    if (ret != NULL) return ret;
-
-    auto ri = resolve_import(import_path);
-    if (ri == NULL) return NULL;
-
-    auto decls = list_decls_in_package(ri->path, import_path);
-    if (decls == NULL) return NULL;
-
-    // TODO: this needs to include the receiver name, which makes me think this
-    // procedure should be merged with ensure_package_correct
-    ret = alloc_list<ccstr>();
-    For (*decls)
-        For (*it.items)
-            ret->append(it.name->id.lit);
-    return ret;
-    */
-}
-
 File_Ast* Go_Index::find_decl_of_id(File_Ast* fa, bool import_only) {
     auto id = fa->ast;
-
-    // check if it has a decl already attached to it by the parser
     if (id->id.decl != NULL)
         return fa->dup(id->id.decl);
-
-    auto lit = id->id.lit;
-
-    // check if it's declared in the current package
-    return find_decl_in_package(our_dirname(fa->file), lit, fa->import_path);
+    return find_decl_in_package(id->id.lit, fa->import_path);
 }
 
 File_Ast* Go_Index::get_base_type(File_Ast* type) {
@@ -3350,7 +3281,7 @@ Infer_Res* Go_Index::infer_type(File_Ast* expr, bool resolve) {
                     auto import_path = decl->ast->import_spec.path->basic_lit.val.string_val;
                     auto sel = selexpr.sel->id.lit;
 
-                    decl = find_decl_in_package(NULL, sel, import_path);
+                    decl = find_decl_in_package(sel, import_path);
                     if (decl == NULL) break;
 
                     interim_type = get_type_from_decl(decl, sel);
@@ -3519,7 +3450,7 @@ Jump_To_Definition_Result* Go_Index::jump_to_definition(ccstr filepath, cur2 pos
                             if (spec->type != AST_IMPORT_SPEC) return false;
 
                             auto import_path = spec->import_spec.path->basic_lit.val.string_val;
-                            auto decl = find_decl_in_package(NULL, sel->id.lit, import_path);
+                            auto decl = find_decl_in_package(sel->id.lit, import_path);
 
                             if (decl == NULL) return false;
 
@@ -5279,8 +5210,8 @@ bool Index_Reader::find_decl(ccstr decl_name, Index_Entry *out) {
 
 void with_parser_at_location(ccstr filepath, cur2 location, parser_cb cb) {
     auto iter = file_loader(filepath);
-    defer { iter->cleanup(); };
     if (iter == NULL) return;
+    defer { iter->cleanup(); };
     iter->set_pos(location);
 
     Parser p;

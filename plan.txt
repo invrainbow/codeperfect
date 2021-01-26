@@ -13,6 +13,7 @@
               accept when it isn't and have a shitty fallback
         - added a bunch of missing code in list_decl_names, infer_type
         - fix bug with listing methods of a type from index
+        - fix bug with AST_STRUCT_TYPE and AST_INTERFACE_TYPE not being filled with ends
     notes:
 
 1/24/21
