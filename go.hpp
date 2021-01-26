@@ -798,7 +798,7 @@ struct Parser {
     Ast_List new_list();
     void synchronize(Sync_Lookup_Func lookup);
     void _throwError(ccstr s);
-    Ast* new_ast(Ast_Type type, cur2 start);
+    // Ast* new_ast(Ast_Type type, cur2 start);
     cur2 _expect(Tok_Type want, ccstr file, u32 line);
     Ast* parse_id_list();
     Ast *parse_spec(Tok_Type spec_type, bool *previous_spec_contains_iota = NULL);
@@ -984,7 +984,7 @@ struct Index_Entry_Hdr {
     cur2 pos;
 };
 
-struct Index_Entry_Result {
+struct Index_Entry {
     Index_Entry_Hdr hdr;
     ccstr filename;
     ccstr name;
@@ -1066,9 +1066,10 @@ struct Index_Reader {
     // abstractions suck lol
 
     bool init(ccstr _index_path);
-    List<Index_Entry_Result> *list_decls();
-    bool find_decl(ccstr decl_name, Index_Entry_Result *res);
+    List<Index_Entry> *list_decls();
+    bool find_decl(ccstr decl_name, Index_Entry *res);
     void cleanup();
+    Ast *parse_decl_from_entry(Index_Entry *res);
 };
 
 // Our index maintains and provides THE ETERNALLY CORRECT SOURCE OF TRUTH about

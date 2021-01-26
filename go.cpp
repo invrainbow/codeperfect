@@ -668,6 +668,88 @@ void Ast_List::push(Ast* ast) {
     len++;
 }
 
+int get_ast_header_size() {
+    Ast ast;
+    return ((u64)(void*)&ast.extra_data_start - (u64)(void*)&ast);
+}
+
+int AST_SIZES[_AST_TYPES_COUNT_];
+
+void init_ast_sizes() {
+    mem0(AST_SIZES, sizeof(AST_SIZES));
+
+    AST_SIZES[AST_FUNC_LIT] = sizeof(Ast::func_lit);
+    AST_SIZES[AST_DECL] = sizeof(Ast::decl);
+    AST_SIZES[AST_SIGNATURE] = sizeof(Ast::signature);
+    AST_SIZES[AST_BASIC_LIT] = sizeof(Ast::basic_lit);
+    AST_SIZES[AST_UNARY_EXPR] = sizeof(Ast::unary_expr);
+    AST_SIZES[AST_LIST] = sizeof(Ast::list);
+    AST_SIZES[AST_BINARY_EXPR] = sizeof(Ast::binary_expr);
+    AST_SIZES[AST_ID] = sizeof(Ast::id);
+    AST_SIZES[AST_SLICE_TYPE] = sizeof(Ast::slice_type);
+    AST_SIZES[AST_MAP_TYPE] = sizeof(Ast::map_type);
+    AST_SIZES[AST_CHAN_TYPE] = sizeof(Ast::chan_type);
+    AST_SIZES[AST_POINTER_TYPE] = sizeof(Ast::pointer_type);
+    AST_SIZES[AST_ARRAY_TYPE] = sizeof(Ast::array_type);
+    AST_SIZES[AST_PAREN] = sizeof(Ast::paren);
+    AST_SIZES[AST_SELECTOR_EXPR] = sizeof(Ast::selector_expr);
+    AST_SIZES[AST_SLICE_EXPR] = sizeof(Ast::slice_expr);
+    AST_SIZES[AST_INDEX_EXPR] = sizeof(Ast::index_expr);
+    AST_SIZES[AST_TYPE_ASSERTION_EXPR] = sizeof(Ast::type_assertion_expr);
+    AST_SIZES[AST_CALL_EXPR] = sizeof(Ast::call_expr);
+    AST_SIZES[AST_CALL_ARGS] = sizeof(Ast::call_args);
+    AST_SIZES[AST_LITERAL_ELEM] = sizeof(Ast::literal_elem);
+    AST_SIZES[AST_LITERAL_VALUE] = sizeof(Ast::literal_value);
+    AST_SIZES[AST_ELLIPSIS] = sizeof(Ast::ellipsis);
+    AST_SIZES[AST_FIELD] = sizeof(Ast::field);
+    AST_SIZES[AST_PARAMETERS] = sizeof(Ast::parameters);
+    AST_SIZES[AST_BLOCK] = sizeof(Ast::block);
+    AST_SIZES[AST_COMPOSITE_LIT] = sizeof(Ast::composite_lit);
+    AST_SIZES[AST_GO_STMT] = sizeof(Ast::go_stmt);
+    AST_SIZES[AST_DEFER_STMT] = sizeof(Ast::defer_stmt);
+    AST_SIZES[AST_IF_STMT] = sizeof(Ast::if_stmt);
+    AST_SIZES[AST_RETURN_STMT] = sizeof(Ast::return_stmt);
+    AST_SIZES[AST_BRANCH_STMT] = sizeof(Ast::branch_stmt);
+    AST_SIZES[AST_STRUCT_TYPE] = sizeof(Ast::struct_type);
+    AST_SIZES[AST_INTERFACE_TYPE] = sizeof(Ast::interface_type);
+    AST_SIZES[AST_FUNC_TYPE] = sizeof(Ast::func_type);
+    AST_SIZES[AST_VALUE_SPEC] = sizeof(Ast::value_spec);
+    AST_SIZES[AST_IMPORT_SPEC] = sizeof(Ast::import_spec);
+    AST_SIZES[AST_TYPE_SPEC] = sizeof(Ast::type_spec);
+    AST_SIZES[AST_ASSIGN_STMT] = sizeof(Ast::assign_stmt);
+    AST_SIZES[AST_INC_DEC_STMT] = sizeof(Ast::inc_dec_stmt);
+    AST_SIZES[AST_SEND_STMT] = sizeof(Ast::send_stmt);
+    AST_SIZES[AST_LABELED_STMT] = sizeof(Ast::labeled_stmt);
+    AST_SIZES[AST_EXPR_STMT] = sizeof(Ast::expr_stmt);
+    AST_SIZES[AST_PACKAGE_DECL] = sizeof(Ast::package_decl);
+    AST_SIZES[AST_SOURCE] = sizeof(Ast::source);
+    AST_SIZES[AST_STRUCT_FIELD] = sizeof(Ast::struct_field);
+    AST_SIZES[AST_INTERFACE_SPEC] = sizeof(Ast::interface_spec);
+    AST_SIZES[AST_SWITCH_STMT] = sizeof(Ast::switch_stmt);
+    AST_SIZES[AST_SELECT_STMT] = sizeof(Ast::select_stmt);
+    AST_SIZES[AST_FOR_STMT] = sizeof(Ast::for_stmt);
+    AST_SIZES[AST_CASE_CLAUSE] = sizeof(Ast::case_clause);
+    AST_SIZES[AST_COMM_CLAUSE] = sizeof(Ast::comm_clause);
+    AST_SIZES[AST_FUNC_DECL] = sizeof(Ast::func_decl);
+}
+
+const int AST_HEADER_SIZE = get_ast_header_size();
+
+Ast* new_ast(Ast_Type type, cur2 start) {
+    static bool ast_sizes_initialized = false;
+
+    if (!ast_sizes_initialized)  {
+        init_ast_sizes();
+        ast_sizes_initialized = true;
+    }
+
+    auto ret = (Ast*)alloc_memory(AST_HEADER_SIZE + AST_SIZES[type]);
+    // auto ret = (Ast*)alloc_memory(sizeof(Ast));
+    ret->type = type;
+    ret->start = start;
+    return ret;
+}
+
 Ast* Ast_List::save() {
     auto& mem = parser->list_mem;
 
@@ -675,7 +757,7 @@ Ast* Ast_List::save() {
     memcpy(items, mem.buf + start, sizeof(Ast*) * len);
     mem.sp = start;
 
-    auto ast = parser->new_ast(AST_LIST, start_pos);
+    auto ast = new_ast(AST_LIST, start_pos);
     ast->list.init(LIST_FIXED, len, items);
     ast->list.len = len;
 
@@ -1172,88 +1254,6 @@ void Parser::_throwError(ccstr s) {
 
     // what should we do with parser errors though?
     // throw std::runtime_error(s);
-}
-
-int get_ast_header_size() {
-    Ast ast;
-    return ((u64)(void*)&ast.extra_data_start - (u64)(void*)&ast);
-}
-
-int AST_SIZES[_AST_TYPES_COUNT_];
-
-void init_ast_sizes() {
-    mem0(AST_SIZES, sizeof(AST_SIZES));
-
-    AST_SIZES[AST_FUNC_LIT] = sizeof(Ast::func_lit);
-    AST_SIZES[AST_DECL] = sizeof(Ast::decl);
-    AST_SIZES[AST_SIGNATURE] = sizeof(Ast::signature);
-    AST_SIZES[AST_BASIC_LIT] = sizeof(Ast::basic_lit);
-    AST_SIZES[AST_UNARY_EXPR] = sizeof(Ast::unary_expr);
-    AST_SIZES[AST_LIST] = sizeof(Ast::list);
-    AST_SIZES[AST_BINARY_EXPR] = sizeof(Ast::binary_expr);
-    AST_SIZES[AST_ID] = sizeof(Ast::id);
-    AST_SIZES[AST_SLICE_TYPE] = sizeof(Ast::slice_type);
-    AST_SIZES[AST_MAP_TYPE] = sizeof(Ast::map_type);
-    AST_SIZES[AST_CHAN_TYPE] = sizeof(Ast::chan_type);
-    AST_SIZES[AST_POINTER_TYPE] = sizeof(Ast::pointer_type);
-    AST_SIZES[AST_ARRAY_TYPE] = sizeof(Ast::array_type);
-    AST_SIZES[AST_PAREN] = sizeof(Ast::paren);
-    AST_SIZES[AST_SELECTOR_EXPR] = sizeof(Ast::selector_expr);
-    AST_SIZES[AST_SLICE_EXPR] = sizeof(Ast::slice_expr);
-    AST_SIZES[AST_INDEX_EXPR] = sizeof(Ast::index_expr);
-    AST_SIZES[AST_TYPE_ASSERTION_EXPR] = sizeof(Ast::type_assertion_expr);
-    AST_SIZES[AST_CALL_EXPR] = sizeof(Ast::call_expr);
-    AST_SIZES[AST_CALL_ARGS] = sizeof(Ast::call_args);
-    AST_SIZES[AST_LITERAL_ELEM] = sizeof(Ast::literal_elem);
-    AST_SIZES[AST_LITERAL_VALUE] = sizeof(Ast::literal_value);
-    AST_SIZES[AST_ELLIPSIS] = sizeof(Ast::ellipsis);
-    AST_SIZES[AST_FIELD] = sizeof(Ast::field);
-    AST_SIZES[AST_PARAMETERS] = sizeof(Ast::parameters);
-    AST_SIZES[AST_BLOCK] = sizeof(Ast::block);
-    AST_SIZES[AST_COMPOSITE_LIT] = sizeof(Ast::composite_lit);
-    AST_SIZES[AST_GO_STMT] = sizeof(Ast::go_stmt);
-    AST_SIZES[AST_DEFER_STMT] = sizeof(Ast::defer_stmt);
-    AST_SIZES[AST_IF_STMT] = sizeof(Ast::if_stmt);
-    AST_SIZES[AST_RETURN_STMT] = sizeof(Ast::return_stmt);
-    AST_SIZES[AST_BRANCH_STMT] = sizeof(Ast::branch_stmt);
-    AST_SIZES[AST_STRUCT_TYPE] = sizeof(Ast::struct_type);
-    AST_SIZES[AST_INTERFACE_TYPE] = sizeof(Ast::interface_type);
-    AST_SIZES[AST_FUNC_TYPE] = sizeof(Ast::func_type);
-    AST_SIZES[AST_VALUE_SPEC] = sizeof(Ast::value_spec);
-    AST_SIZES[AST_IMPORT_SPEC] = sizeof(Ast::import_spec);
-    AST_SIZES[AST_TYPE_SPEC] = sizeof(Ast::type_spec);
-    AST_SIZES[AST_ASSIGN_STMT] = sizeof(Ast::assign_stmt);
-    AST_SIZES[AST_INC_DEC_STMT] = sizeof(Ast::inc_dec_stmt);
-    AST_SIZES[AST_SEND_STMT] = sizeof(Ast::send_stmt);
-    AST_SIZES[AST_LABELED_STMT] = sizeof(Ast::labeled_stmt);
-    AST_SIZES[AST_EXPR_STMT] = sizeof(Ast::expr_stmt);
-    AST_SIZES[AST_PACKAGE_DECL] = sizeof(Ast::package_decl);
-    AST_SIZES[AST_SOURCE] = sizeof(Ast::source);
-    AST_SIZES[AST_STRUCT_FIELD] = sizeof(Ast::struct_field);
-    AST_SIZES[AST_INTERFACE_SPEC] = sizeof(Ast::interface_spec);
-    AST_SIZES[AST_SWITCH_STMT] = sizeof(Ast::switch_stmt);
-    AST_SIZES[AST_SELECT_STMT] = sizeof(Ast::select_stmt);
-    AST_SIZES[AST_FOR_STMT] = sizeof(Ast::for_stmt);
-    AST_SIZES[AST_CASE_CLAUSE] = sizeof(Ast::case_clause);
-    AST_SIZES[AST_COMM_CLAUSE] = sizeof(Ast::comm_clause);
-    AST_SIZES[AST_FUNC_DECL] = sizeof(Ast::func_decl);
-}
-
-const int AST_HEADER_SIZE = get_ast_header_size();
-
-Ast* Parser::new_ast(Ast_Type type, cur2 start) {
-    static bool ast_sizes_initialized = false;
-
-    if (!ast_sizes_initialized)  {
-        init_ast_sizes();
-        ast_sizes_initialized = true;
-    }
-
-    auto ret = (Ast*)alloc_memory(AST_HEADER_SIZE + AST_SIZES[type]);
-    // auto ret = (Ast*)alloc_memory(sizeof(Ast));
-    ret->type = type;
-    ret->start = start;
-    return ret;
 }
 
 cur2 Parser::_expect(Tok_Type want, ccstr file, u32 line) {
@@ -2506,8 +2506,7 @@ Ast* Parser::parse_primary_expr(bool lhs) {
                     // and if the type is an id, must be part of expression
                     switch (ret->type) {
                         case AST_ID:
-                            if (expr_lev < 0)
-                                goto done;
+                            if (expr_lev < 0) goto done;
                             break;
                         case AST_ARRAY_TYPE:
                         case AST_SLICE_TYPE:
@@ -2515,17 +2514,14 @@ Ast* Parser::parse_primary_expr(bool lhs) {
                         case AST_MAP_TYPE:
                             break;
                         case AST_SELECTOR_EXPR:
-                            if (ret->selector_expr.x->type != AST_ID)
-                                goto done;
-                            if (expr_lev < 0)
-                                goto done;
+                            if (ret->selector_expr.x->type != AST_ID) goto done;
+                            if (expr_lev < 0) goto done;
                             break;
                         default:
                             goto done;
                     }
 
-                    if (lhs)
-                        resolve(ret);
+                    if (lhs) resolve(ret);
 
                     auto literal_value = parse_literal_value();
 
@@ -2847,6 +2843,20 @@ File_Ast* Go_Index::find_decl_in_source(File_Ast* source, ccstr desired_decl_nam
     return NULL;
 }
 
+Ast *Index_Reader::parse_decl_from_entry(Index_Entry *entry) {
+    Ast *ast = NULL;
+    auto filepath = path_join(meta.package_path, entry->filename);
+    with_parser_at_location(filepath, entry->hdr.pos, [&](Parser *p) {
+        switch (entry->hdr.type) {
+        case IET_FUNC: ast = p->parse_decl(lookup_decl_start); break;
+        case IET_CONST: ast = p->parse_spec(TOK_CONST); break;
+        case IET_VAR: ast = p->parse_spec(TOK_VAR); break;
+        case IET_TYPE: ast = p->parse_spec(TOK_TYPE); break;
+        }
+    });
+    return ast;
+}
+
 File_Ast *Go_Index::find_decl_in_index(ccstr import_path, ccstr desired_decl_name) {
     auto index_path = get_index_path(import_path);
 
@@ -2854,21 +2864,14 @@ File_Ast *Go_Index::find_decl_in_index(ccstr import_path, ccstr desired_decl_nam
     if (!reader.init(index_path)) return NULL;
     defer { reader.cleanup(); };
 
-    Index_Entry_Result res;
+    Index_Entry res;
     if (!reader.find_decl(desired_decl_name, &res)) return NULL;
 
-    auto filepath = path_join(reader.meta.package_path, res.filename);
+    auto ast = reader.parse_decl_from_entry(&res);
+    if (ast == NULL) return  NULL;
 
-    Ast *ast = NULL;
-    with_parser_at_location(filepath, res.hdr.pos, [&](Parser *p) {
-        switch (res.hdr.type) {
-        case IET_FUNC: ast = p->parse_decl(lookup_decl_start); break;
-        case IET_CONST: ast = p->parse_spec(TOK_CONST); break;
-        case IET_VAR: ast = p->parse_spec(TOK_VAR); break;
-        case IET_TYPE: ast = p->parse_spec(TOK_TYPE); break;
-        }
-    });
-    return ast == NULL ? NULL : make_file_ast(ast, filepath, import_path);
+    auto filepath = path_join(reader.meta.package_path, res.filename);
+    return make_file_ast(ast, filepath, import_path);
 }
 
 // between path and import_path, exactly one should be null.
@@ -2876,6 +2879,9 @@ File_Ast *Go_Index::find_decl_in_index(ccstr import_path, ccstr desired_decl_nam
 //  - if import_path provided, tries index, then resolves import_path to get path and do direct search.
 // honestly we should just never call this with path but no import_path
 File_Ast* Go_Index::find_decl_in_package(ccstr path, ccstr desired_decl_name, ccstr import_path) {
+    return find_decl_in_index(import_path, desired_decl_name);
+
+    /*
     // first try to find it in the index.
     auto potential_ret = find_decl_in_index(import_path, desired_decl_name);
     if (potential_ret != NULL)
@@ -2905,6 +2911,7 @@ File_Ast* Go_Index::find_decl_in_package(ccstr path, ccstr desired_decl_name, cc
         frame.restore();
     }
     return NULL;
+    */
 }
 
 List<Named_Decl>* Go_Index::list_decls_in_package(ccstr path, ccstr import_path) {
@@ -2936,6 +2943,9 @@ List<ccstr> *Go_Index::list_decl_names_from_index(ccstr import_path) {
 }
 
 List<ccstr> *Go_Index::list_decl_names(ccstr import_path) {
+    return list_decl_names_from_index(import_path);
+
+    /*
     auto ret = list_decl_names_from_index(import_path);
     if (ret != NULL) return ret;
 
@@ -2945,11 +2955,14 @@ List<ccstr> *Go_Index::list_decl_names(ccstr import_path) {
     auto decls = list_decls_in_package(ri->path, import_path);
     if (decls == NULL) return NULL;
 
+    // TODO: this needs to include the receiver name, which makes me think this
+    // procedure should be merged with ensure_package_correct
     ret = alloc_list<ccstr>();
     For (*decls)
         For (*it.items)
             ret->append(it.name->id.lit);
     return ret;
+    */
 }
 
 File_Ast* Go_Index::find_decl_of_id(File_Ast* fa, bool import_only) {
@@ -2961,62 +2974,63 @@ File_Ast* Go_Index::find_decl_of_id(File_Ast* fa, bool import_only) {
 
     auto lit = id->id.lit;
 
-    // check if it's declared in the current file
-    auto ret = find_decl_in_source(fa->dup(parse_file_into_ast(fa->file)), lit, import_only);
-    if (ret != NULL) return ret;
-
     // check if it's declared in the current package
-    ret = find_decl_in_package(our_dirname(fa->file), lit, fa->import_path);
-    if (ret != NULL) return ret;
-
-    return NULL;
+    return find_decl_in_package(our_dirname(fa->file), lit, fa->import_path);
 }
 
 File_Ast* Go_Index::get_base_type(File_Ast* type) {
     while (true) {
         auto ast = unparen(type->ast);
         switch (ast->type) {
-            case AST_ID:
-                {
-                    auto decl = find_decl_of_id(type->dup(ast));
-                    if (decl == NULL)
-                        goto done;
+        case AST_POINTER_TYPE:
+            {
+                auto base_type = get_base_type(type->dup(ast->pointer_type.base_type));
+                auto ast2 = new_ast(AST_POINTER_TYPE, new_cur2(0, 0));
+                ast2->pointer_type.base_type = base_type->ast;
+                return base_type->dup(ast2);
+            }
+            break;
+        case AST_ID:
+            {
+                auto decl = find_decl_of_id(type->dup(ast));
+                if (decl == NULL)
+                    goto done;
 
-                    auto new_type = get_type_from_decl(decl, ast->id.lit);
-                    if (new_type == NULL)
-                        goto done;
+                auto new_type = get_type_from_decl(decl, ast->id.lit);
+                if (new_type == NULL)
+                    goto done;
 
-                    type = new_type;
-                    break;
-                }
-            case AST_SELECTOR_EXPR:
-                {
-                    auto& sel = ast->selector_expr;
-                    if (sel.x->type != AST_ID)
-                        goto done;
+                type = new_type;
+                break;
+            }
+        case AST_SELECTOR_EXPR:
+            {
+                auto& sel = ast->selector_expr;
+                if (sel.x->type != AST_ID)
+                    goto done;
 
-                    goto done;  // TODO: fix this shit below
+                goto done;  // TODO: fix this shit below
 
-                    /*
-                    // FIXME: it just makes no sense what i'm doing here
-                    // i think i was originally intending to use sel.x->id.lit to LOOK UP the package path, and append that to GOPATH
-                    // but now we should just call resolve_import
-                    //
-                    // Also, find_decl_in_package should be passed an import path;
-                    // I just don't know what the fuck this code even does right now
-                    auto pkg_path = path_join(GOPATH, sel.x->id.lit);
-                    auto decl = find_decl_in_package(pkg_path, sel.sel->id.lit, NULL);
+                /*
+                // FIXME: it just makes no sense what i'm doing here
+                // i think i was originally intending to use sel.x->id.lit to LOOK UP the package path, and append that to GOPATH
+                // but now we should just call resolve_import
+                //
+                // Also, find_decl_in_package should be passed an import path;
+                // I just don't know what the fuck this code even does right now
+                auto pkg_path = path_join(GOPATH, sel.x->id.lit);
+                auto decl = find_decl_in_package(pkg_path, sel.sel->id.lit, NULL);
 
-                    auto new_type = get_type_from_decl(decl, sel.sel->id.lit);
-                    if (new_type == NULL)
-                        goto done;
+                auto new_type = get_type_from_decl(decl, sel.sel->id.lit);
+                if (new_type == NULL)
+                    goto done;
 
-                    type = new_type;
-                    break;
-                    */
-                }
-            default:
-                goto done;
+                type = new_type;
+                break;
+                */
+            }
+        default:
+            goto done;
         }
     }
 done:
@@ -3106,9 +3120,9 @@ File_Ast* Go_Index::get_type_from_decl(File_Ast* decl, ccstr id) {
                     {
                         s32 offset = 0;
                         For (type->parameters.fields->list) {
-                            auto len = it->struct_field.ids->list.len;
+                            auto len = it->field.ids->list.len;
                             if (offset + len >= idx)
-                                return decl->dup(it->struct_field.type);
+                                return r->type->dup(it->field.type);
                             offset += len;
                         }
                     }
@@ -3220,116 +3234,180 @@ File_Ast* Go_Index::find_field_or_method_in_type(File_Ast* base_type, File_Ast* 
  *     var x c
  *
  * infer_type("x") will return c as the immediate type and struct { foo int
- * } as the base type. Currently only works for types that are relevant to
- * jump_to_definition.
+ * } as the base type.
  */
 Infer_Res* Go_Index::infer_type(File_Ast* expr, bool resolve) {
-    auto infer_interim_type = [&]() -> File_Ast* {
-        auto ast = unparen(expr->ast);
+    File_Ast *interim_type = NULL;
 
-        switch (ast->type) {
-            case AST_CALL_EXPR:
+    auto ast = unparen(expr->ast);
+    switch (ast->type) {
+    case AST_UNARY_EXPR:
+        {
+            auto r = infer_type(expr->dup(ast->unary_expr.rhs));
+            if (r == NULL) goto done;
+
+            switch (ast->unary_expr.op) {
+            // case TOK_RANGE: // idk even what to do here
+            case TOK_ADD:
+            case TOK_SUB:
+            case TOK_NOT:
+            case TOK_XOR:
                 {
-                    auto r = infer_type(expr->dup(ast->call_expr.func));
-                    if (r == NULL) return NULL;
-
-                    auto type = r->type->ast;
-                    Ast* sig = NULL;
-
-                    if (type->type == AST_FUNC_DECL)
-                        sig = type->func_decl.signature;
-                    else if (type->type == AST_FUNC_LIT)
-                        sig = type->func_lit.signature;
-                    else
-                        return NULL;
-
-                    return r->type->dup(sig->signature.result);
+                    auto id = new_ast(AST_ID, new_cur2(0, 0));
+                    id->id.lit = "int";
+                    interim_type = make_file_ast(id, NULL, NULL);
                 }
-            case AST_INDEX_EXPR:
-                do {
-                    auto r = infer_type(expr->dup(ast->call_expr.func), true);
-                    if (r == NULL) break;
-
+                break;
+            case TOK_MUL:
+                {
+                    if (r->base_type == NULL) break;
                     auto type = r->base_type->ast;
-                    while (type->type == AST_POINTER_TYPE)
-                        type = type->pointer_type.base_type;
-                    if (type == NULL) break;
-
-                    switch (type->type) {
-                        case AST_ARRAY_TYPE:
-                            return r->base_type->dup(type->array_type.base_type);
-                        case AST_MAP_TYPE:
-                            return r->base_type->dup(type->map_type.value_type);
-                        case AST_SLICE_TYPE:
-                            return r->base_type->dup(type->slice_type.base_type);
-                        case AST_ID:
-                            if (streq(ast->id.lit, "string"))
-                                return make_file_ast(PRIMITIVE_TYPE, NULL, NULL);
-                            break;
-                    }
-                } while (0);
-                return NULL;
-            case AST_SELECTOR_EXPR:
-                do {
-                    auto& selexpr = ast->selector_expr;
-
-                    if (selexpr.x->type == AST_ID) {
-                        do {
-                            if (selexpr.x->id.decl != NULL) break;
-
-                            auto file = parse_file_into_ast(expr->file);
-                            if (file == NULL) break;
-
-                            auto decl = find_decl_in_source(expr->dup(file), selexpr.x->id.lit);
-                            if (decl == NULL) break;
-                            if (decl->ast->type != AST_IMPORT_SPEC) break;
-
-                            auto import_path = decl->ast->import_spec.path->basic_lit.val.string_val;
-                            auto sel = selexpr.sel->id.lit;
-
-                            decl = find_decl_in_package(NULL, sel, import_path);
-                            if (decl == NULL) break;
-
-                            return get_type_from_decl(decl, sel);
-                        } while (0);
-                    }
-
-                    auto r = infer_type(expr->dup(selexpr.x), true);
-                    if (r == NULL) break;
-
-                    auto field = find_field_or_method_in_type(r->base_type, r->type, selexpr.sel->id.lit);
-                    if (field == NULL) break;
-
-                    return field->dup(field->ast->struct_field.type);
-                } while (0);
-                return NULL;
-            case AST_SLICE_EXPR:
-                {
-                    auto r = infer_type(expr->dup(ast->slice_expr.x));
-                    if (r == NULL) return NULL;
-                    return r->type;
+                    if (type->type != AST_POINTER_TYPE) break;
+                    interim_type = r->base_type->dup(type->pointer_type.base_type);
                 }
-            case AST_TYPE_ASSERTION_EXPR:
-                return expr->dup(ast->type_assertion_expr.type);
-            case AST_ID:
+                break;
+            case TOK_AND:
                 {
-                    auto decl = find_decl_of_id(expr->dup(ast));
-                    if (decl == NULL) return NULL;
-                    return get_type_from_decl(decl, ast->id.lit);
+                    // don't need base type here
+                    auto type = r->type->ast;
+                    auto new_type = new_ast(AST_POINTER_TYPE, new_cur2(0, 0));
+                    new_type->pointer_type.base_type = type;
+                    interim_type = r->type->dup(new_type);
                 }
+                break;
+            case TOK_ARROW:
+                {
+                    if (r->base_type == NULL) break;
+                    auto type = r->base_type->ast;
+                    if (type->type != AST_CHAN_TYPE) break;
+                    interim_type = r->base_type->dup(type->chan_type.base_type);
+                }
+                break;
+            }
         }
-        return NULL;
-    };
+        break;
+    case AST_CALL_EXPR:
+        {
+            auto r = infer_type(expr->dup(ast->call_expr.func), true);
+            if (r == NULL) goto done;
+            if (r->base_type == NULL) goto done;
 
-    auto interim_type = infer_interim_type();
-    if (interim_type == NULL)
-        return NULL;
+            auto type = r->base_type->ast;
+            Ast* sig = NULL;
+
+            if (type->type == AST_FUNC_DECL)
+                sig = type->func_decl.signature;
+            else if (type->type == AST_FUNC_LIT)
+                sig = type->func_lit.signature;
+            else
+                goto done;
+
+            interim_type = r->base_type->dup(sig->signature.result);
+        }
+        break;
+    case AST_INDEX_EXPR:
+        do {
+            auto r = infer_type(expr->dup(ast->call_expr.func), true);
+            if (r == NULL) break;
+
+            auto type = r->base_type->ast;
+            while (type->type == AST_POINTER_TYPE)
+                type = type->pointer_type.base_type;
+            if (type == NULL) break;
+
+            switch (type->type) {
+            case AST_ARRAY_TYPE:
+                interim_type = r->base_type->dup(type->array_type.base_type);
+                break;
+            case AST_MAP_TYPE:
+                interim_type = r->base_type->dup(type->map_type.value_type);
+                break;
+            case AST_SLICE_TYPE:
+                interim_type = r->base_type->dup(type->slice_type.base_type);
+                break;
+            case AST_ID:
+                if (streq(ast->id.lit, "string"))
+                    interim_type = make_file_ast(PRIMITIVE_TYPE, NULL, NULL);
+                break;
+            }
+        } while (0);
+        break;
+    case AST_SELECTOR_EXPR:
+        do {
+            auto& selexpr = ast->selector_expr;
+
+            if (selexpr.x->type == AST_ID) {
+                do {
+                    if (selexpr.x->id.decl != NULL) break;
+
+                    auto file = parse_file_into_ast(expr->file);
+                    if (file == NULL) break;
+
+                    auto decl = find_decl_in_source(expr->dup(file), selexpr.x->id.lit);
+                    if (decl == NULL) break;
+                    if (decl->ast->type != AST_IMPORT_SPEC) break;
+
+                    auto import_path = decl->ast->import_spec.path->basic_lit.val.string_val;
+                    auto sel = selexpr.sel->id.lit;
+
+                    decl = find_decl_in_package(NULL, sel, import_path);
+                    if (decl == NULL) break;
+
+                    interim_type = get_type_from_decl(decl, sel);
+                    goto done;
+                } while (0);
+            }
+
+            auto r = infer_type(expr->dup(selexpr.x), true);
+            if (r == NULL) break;
+
+            auto field = find_field_or_method_in_type(r->base_type, r->type, selexpr.sel->id.lit);
+            if (field == NULL) break;
+
+            switch (field->ast->type) {
+            case AST_FUNC_DECL:
+                interim_type = field;
+                break;
+            case AST_STRUCT_FIELD:
+                interim_type = field->dup(field->ast->struct_field.type);
+                break;
+            }
+        } while (0);
+        break;
+    case AST_SLICE_EXPR:
+        {
+            auto r = infer_type(expr->dup(ast->slice_expr.x));
+            if (r == NULL) goto done;
+            interim_type = r->type;
+        }
+        break;
+    case AST_TYPE_ASSERTION_EXPR:
+        interim_type = expr->dup(ast->type_assertion_expr.type);
+        break;
+    case AST_ID:
+        {
+            auto decl = find_decl_of_id(expr->dup(ast));
+            if (decl == NULL) goto done;
+            interim_type = get_type_from_decl(decl, ast->id.lit);
+        }
+        break;
+    case AST_COMPOSITE_LIT:
+        {
+            auto r = infer_type(expr->dup(ast->composite_lit.base_type));
+            if (r == NULL) goto done;
+            interim_type = r->type;
+            break;
+        }
+        break;
+    }
+done:
+
+    if (interim_type == NULL) return NULL;
 
     File_Ast* base_type = NULL;
     if (resolve) {
         base_type = get_base_type(interim_type);
-        if (base_type == NULL)
-            return NULL;
+        if (base_type == NULL) return NULL;
     }
 
     auto result = alloc_object(Infer_Res);
@@ -3703,29 +3781,64 @@ int Go_Index::list_methods_in_type(File_Ast* type, List<Field>* ret) {
             if (id_decl == NULL) break;
             if (id_decl->ast->type != AST_IMPORT_SPEC) break;
 
-            auto import_path = id_decl->ast->import_spec.path->basic_lit.val.string_val;
-            if (import_path == NULL) break;
-
-            package_to_search = import_path;
+            package_to_search = id_decl->ast->import_spec.path->basic_lit.val.string_val;
         }
         break;
     }
 
     if (type_name == NULL || package_to_search == NULL) return 0;
 
+    /*
+    Ok, so our algorithm *really* needs to be:
+
+        if the index is available
+            prefix = our_sprintf("%s.", type_name)
+            for each item in index that starts with prefix
+                use item to generate field
+                append field to ret
+        else
+            go and list decls from the package
+            if decl is func and receiver is our type_name
+                use decl to generate field
+                append field to ret
+
+    ...fuck this shit lol
+    honestly, should we just have intellisense not work if the index isn't working lmao
+    */
+
     int count = 0;
     auto prefix = our_sprintf("%s.", type_name);
-    auto names = list_decl_names(package_to_search);
 
-    For (*names) {
-        if (!str_starts_with(it, prefix)) continue;
+    Index_Reader reader;
+    if (!reader.init(get_index_path(package_to_search))) return 0;
+    defer { reader.cleanup(); };
 
-        // TODO: add this somehow
+    auto decls = reader.list_decls();
+    if (decls == NULL) return NULL;
+
+    For (*decls) {
+        if (it.hdr.type != IET_FUNC) continue;
+        if (!str_starts_with(it.name, prefix)) continue;
+
+        auto ast = reader.parse_decl_from_entry(&it);
+        if (ast == NULL) continue;
+        if (ast->type != AST_FUNC_DECL) continue;
+
+        auto filepath = path_join(reader.meta.package_path, it.filename);
+
         auto r = ret->append();
-        // /* File_Ast */ r->decl = ...;
-        // /* File_Ast */ r->id = ...;
+
+        r->decl.ast = ast;
+        r->decl.file = filepath;
+        r->decl.import_path = package_to_search;
+
+        r->id.ast = ast->func_decl.name;
+        r->id.file = filepath;
+        r->id.import_path = package_to_search;
+
         count++;
     }
+
     return count;
 }
 
@@ -3738,13 +3851,7 @@ List<Field>* Go_Index::list_fields_and_methods_in_type(File_Ast* base_type, File
             break;
     }
 
-    s32 len = list_fields_in_type(base_type, NULL);
-    if (is_named_type) {
-        len += list_methods_in_type(interim_type, NULL);
-        len += list_methods_in_base_type(base_type, NULL);
-    }
-
-    auto ret = alloc_list<Field>(len);
+    auto ret = alloc_list<Field>();
     list_fields_in_type(base_type, ret);
     if (is_named_type) {
         list_methods_in_type(interim_type, ret);
@@ -4366,10 +4473,13 @@ ccstr get_receiver_typename_from_func_decl(Ast *func_decl) {
     auto fields = recv->parameters.fields;
     if (fields == NULL) return NULL;
     if (fields->list.len != 1) return NULL;
-    if (fields->list[0]->field.type == NULL) return NULL;
-    if (fields->list[0]->field.type->type != AST_ID) return NULL;
 
-    return fields->list[0]->field.type->id.lit;
+    auto recvtype = fields->list[0]->field.type;
+    if (recvtype == NULL) return NULL;
+    recvtype = unpointer(recvtype);
+
+    if (recvtype->type != AST_ID) return NULL;
+    return recvtype->id.lit;
 }
 
 Index_Stream *open_and_validate_imports_db(ccstr path) {
@@ -5128,8 +5238,8 @@ void Index_Reader::cleanup() {
     fdata.cleanup();
 }
 
-List<Index_Entry_Result> *Index_Reader::list_decls() {
-    auto ret = alloc_list<Index_Entry_Result>();
+List<Index_Entry> *Index_Reader::list_decls() {
+    auto ret = alloc_list<Index_Entry>();
     For (*decl_offsets) {
         auto out = ret->append();
 
@@ -5141,7 +5251,7 @@ List<Index_Entry_Result> *Index_Reader::list_decls() {
     return ret;
 }
 
-bool Index_Reader::find_decl(ccstr decl_name, Index_Entry_Result *out) {
+bool Index_Reader::find_decl(ccstr decl_name, Index_Entry *out) {
     auto get_name = [&](i32 offset) -> ccstr {
         if (offset == -1) return decl_name;
         fdata.seek(offset);

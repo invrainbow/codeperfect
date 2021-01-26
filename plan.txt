@@ -1,3 +1,20 @@
+1/25/21
+    plan:
+        - we need to start making crazy headway if we're going to meet our deadlines
+        - strictly speaking our 2/1 goal is to get indexing working, so i think we
+          should just stress test our autocomplete/parameter hints/jump to def, and make sure
+          it doesn't crash.
+    done:
+        - fix different bugs causing autocomplete and param hints to not work
+        - change so intellisense just doesn't work when index not complete
+            - this is consistent with how other ides work
+            - yes, we are trying to be better than other ides, but the way to do that
+              is to rigorously ensure our index is always up to date, not to
+              accept when it isn't and have a shitty fallback
+        - added a bunch of missing code in list_decl_names, infer_type
+        - fix bug with listing methods of a type from index
+    notes:
+
 1/24/21
     plan:
         - so now autocomplete isn't working with golang.org/x/text/width because of build constraints

@@ -39,3 +39,28 @@ spot it opened, not follow you.
 [bug] When you resize a pane too small, it ruins syntax highlighting.
 
 [bug] When tabs overflow the tab bar, current tab just goes offscreen.
+
+Add clipboard support to editor, both vim paste and ctrl+v.
+
+[bug] When you press tab to fill in autocomplete without typing any prefix, it
+autocompletes, but leaves the menu open (and moves it to your cursor).
+
+[bug] If you press shift+escape on a parameter hint, you can move around and
+the parameter hit will stay open and follow you.
+
+[bug] Typing "foo(bar(" will use autocomplete for foo, not bar.
+
+Make parameter hint open back up when comma is typed.
+
+In parameter hint, highlight which parameter we're currently on.
+
+In parameter hint, close hint when end paren is typed.
+
+[bug] Earlier, when typing a literal value, it got into an infinite loop,
+presumably inside parse_literal_value (judging by both the context of the crash
+and also the error message it was printing out was from eat_comma). Can't
+repro right now, but it's there.
+
+Since we depend so heavily on the index for all aspects of intellisense (e.g.
+find_decl_of_id relies on it directly), we MUST invalidate the index as soon as
+a file changes.
