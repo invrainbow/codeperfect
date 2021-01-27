@@ -3466,12 +3466,18 @@ bool Go_Index::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period, 
     Autocomplete ret = { 0 };
 
     auto generate_results_from_current_package = [&]() -> List<AC_Result>* {
-        // what's the import path of our workspace?
-        //
-        //
-        // auto import_path = get_import_path_r
+        auto curr_path = our_dirname(filepath);
+        auto wksp_path = world.wksp.path;
 
-        auto names = list_decl_names(get_workspace_import_path());
+        if (!make_path(wksp_path)->contains(make_path(curr_path)))
+            return NULL;
+
+        auto import_path = path_join(
+            get_workspace_import_path(),
+            get_path_relative_to(curr_path, wksp_path)
+        );
+
+        auto names = list_decl_names(import_path);
         if (names == NULL) return NULL;
 
         {
@@ -3559,9 +3565,9 @@ bool Go_Index::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period, 
     if (ret.results == NULL) {
         if (triggered_by_period) return false;
 
-        out->type = AUTOCOMPLETE_IDENTIFIER;
-        out->keyword_start_position = pos;
-        out->results = generate_results_from_current_package();
+        ret.type = AUTOCOMPLETE_IDENTIFIER;
+        ret.keyword_start_position = pos;
+        ret.results = generate_results_from_current_package();
     }
 
     memcpy(out, &ret, sizeof(ret));
