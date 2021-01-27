@@ -33,9 +33,6 @@ Handle nested vendor directories for Go too. And nested go.mod.
 
 Add syntax highlighting to parameter hint.
 
-[bug] When autocomplete opens, as you type, the menu should stay at the same
-spot it opened, not follow you.
-
 [bug] When you resize a pane too small, it ruins syntax highlighting.
 
 [bug] When tabs overflow the tab bar, current tab just goes offscreen.
@@ -78,5 +75,9 @@ Our neovim integration gives complete access to :commands, /search, etc. Think
 about how we should handle this. Also, Vim highlights when I search for stuff
 are weird.
 
-[bug] Pressing ctrl+space (to open autocomplete) without typing anything
-triggers a crash.
+Make autocomplete on a blank line include accessible decls in current file.
+
+When you press `ce` after a dot as in "instance_of_struct.", it will open
+autocomplete. I THINK (if memory serves me) all it basically does is "after
+every keystroke, if we land to the right of a dot, trigger autocomplete. Need
+to fix this.
