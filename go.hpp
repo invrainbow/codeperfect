@@ -1116,6 +1116,7 @@ struct Go_Index_Watcher {
 #define MAX_INDEX_EVENTS 1024 // don't let file change dos us
 
 struct Go_Index {
+    Pool general_mem;
     Pool background_mem;
     Pool watcher_mem;
     Pool main_thread_mem;

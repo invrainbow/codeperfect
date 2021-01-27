@@ -2906,7 +2906,11 @@ File_Ast* Go_Index::find_decl_of_id(File_Ast* fa, bool import_only) {
     auto id = fa->ast;
     if (id->id.decl != NULL)
         return fa->dup(id->id.decl);
-    return find_decl_in_package(id->id.lit, fa->import_path);
+
+    auto lit = id->id.lit;
+    if (import_only)
+        return find_decl_in_source(fa->dup(parse_file_into_ast(fa->file)), lit, true);
+    return find_decl_in_package(lit, fa->import_path);
 }
 
 File_Ast* Go_Index::get_base_type(File_Ast* type) {
@@ -4829,9 +4833,12 @@ void Go_Index::handle_fs_event(Go_Index_Watcher *w, Fs_Event *event) {
 bool Go_Index::init() {
     ptr0(this);
 
+    general_mem.init();
     background_mem.init();
     watcher_mem.init();
     main_thread_mem.init();
+
+    SCOPED_MEM(&general_mem);
 
     index_events.init(LIST_POOL, 32);
     index_events_lock.init();
@@ -4915,6 +4922,7 @@ void Go_Index::cleanup() {
     background_mem.cleanup();
     watcher_mem.cleanup();
     main_thread_mem.cleanup();
+    general_mem.cleanup();
 }
 
 // -----

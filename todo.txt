@@ -64,3 +64,16 @@ repro right now, but it's there.
 Since we depend so heavily on the index for all aspects of intellisense (e.g.
 find_decl_of_id relies on it directly), we MUST invalidate the index as soon as
 a file changes.
+
+[bug?] Go_Index reindexes twice whenever we save a file.
+
+Make sure list_methods_in_type also checks methods in embedded fields of
+structs.
+
+Enable adding new files/folder in file explorer.
+
+Sort autocomplete by relevance (want most likely hit to be first one).
+
+Our neovim integration gives complete access to :commands, /search, etc. Think
+about how we should handle this. Also, Vim highlights when I search for stuff
+are weird.
