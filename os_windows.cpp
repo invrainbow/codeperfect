@@ -597,3 +597,13 @@ ccstr get_path_relative_to(ccstr full, ccstr base) {
     }
     return buf;
 }
+
+ccstr get_canon_path(ccstr path) {
+    Frame frame;
+    auto ret = alloc_array(char, MAX_PATH+1);
+    if (!PathCanonicalizeA(ret, path)) {
+        frame.restore();
+        return NULL;
+    }
+    return ret;
+}

@@ -1168,7 +1168,8 @@ struct Go_Index {
     File_Ast* find_decl_in_package(ccstr desired_decl_name, ccstr import_path);
     List<Named_Decl>* list_decls_in_package(ccstr path, ccstr import_path);
     List<ccstr> *list_decl_names(ccstr import_path);
-    File_Ast* find_decl_of_id(File_Ast* fa, bool import_only = false);
+    File_Ast* find_decl_of_id(File_Ast* fa, bool import_only);
+    File_Ast* find_decl_of_id(File_Ast* fa);
     File_Ast* get_base_type(File_Ast* type);
     // File_Ast* make_file_ast(Ast* ast, ccstr file = NULL);
     File_Ast* make_file_ast(Ast* ast, ccstr file, ccstr import_path);
@@ -1181,7 +1182,6 @@ struct Go_Index {
     int list_methods_in_type(File_Ast* ast, List<Field>* ret);
     int list_methods_in_base_type(File_Ast* ast, List<Field>* ret);
     List<Field>* list_fields_and_methods_in_type(File_Ast* base_type, File_Ast* interim_type);
-    ccstr get_id_import_path(File_Ast* ast);
     Jump_To_Definition_Result* jump_to_definition(ccstr filepath, cur2 pos);
     bool autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period, Autocomplete* out);
     Parameter_Hint* parameter_hint(ccstr filepath, cur2 pos, bool triggered_by_paren);

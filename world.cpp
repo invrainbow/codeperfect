@@ -105,6 +105,9 @@ void fill_file_tree(ccstr path) {
 
 void World::init(bool test) {
     ptr0(this);
+
+    git_libgit2_init();
+
     MEM = &frame_mem;
 
 #define init_mem(x) x.init(#x)

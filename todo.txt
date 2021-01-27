@@ -77,3 +77,6 @@ Sort autocomplete by relevance (want most likely hit to be first one).
 Our neovim integration gives complete access to :commands, /search, etc. Think
 about how we should handle this. Also, Vim highlights when I search for stuff
 are weird.
+
+[bug] Pressing ctrl+space (to open autocomplete) without typing anything
+triggers a crash.

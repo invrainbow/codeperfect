@@ -74,26 +74,6 @@ File_Ast *File_Ast::dup(Ast *new_ast) {
     return ret;
 }
 
-auto split_string(ccstr str, fn<bool(char)> pred) -> List<ccstr>* {
-    auto len = strlen(str);
-    u32 start = 0;
-    auto ret = alloc_list<ccstr>();
-
-    while (start < len) {
-        u32 end = start;
-        while (end < len && !pred(str[end])) end++;
-
-        auto partlen = end-start;
-        auto s = alloc_array(char, partlen+1);
-        strncpy(s, str + start, partlen);
-        s[partlen] = '\0';
-        ret->append(s);
-
-        start = end+1;
-    }
-    return ret;
-}
-
 // i can't believe this but we *may* need to just do interop with go
 
 bool Go_Index::is_file_included_in_build(ccstr path) {
@@ -193,43 +173,19 @@ Resolved_Import* Go_Index::resolve_import(ccstr import_path) {
         // so, we've hit gold.
 
         // represents as path as list of its parts, e.g. "a/b/c" becomes ["a", "b", "c"]
-        typedef List<ccstr> Path_List;
-
-        auto make_path = [&](ccstr path) -> Path_List* {
-            return (Path_List*)split_string(path, [&](char ch) -> bool { return is_sep(ch); });
-        };
 
         auto import_path_list = make_path(import_path);
 
         auto try_mapping = [&](ccstr base_path, ccstr resolve_to) -> Resolved_Import * {
-            // First check if base path contains our import path, e.g. base_path =
-            // "a/b/c" and import_path = "a/b/c/d/e".  If it does, grab the
-            // import_path relative to path, in this case "d/e".
-
             auto base_path_list = make_path(base_path);
-            if (base_path_list->len > import_path_list->len) return NULL;
+            if (!base_path_list->contains(import_path_list)) return NULL;
 
-            for (u32 i = 0; i < base_path_list->len; i++)
-                if (!streq(base_path_list->at(i), import_path_list->at(i)))
-                    return NULL;
+            ccstr filepath;
+            if (import_path_list->parts->len == base_path_list->parts->len)
+                filepath = resolve_to;
+            else
+                filepath = path_join(resolve_to, get_path_relative_to(import_path, base_path));
 
-            // at this point, we know base_path contains import_path!
-            // now build up the relative path and append to resolve_to
-
-            Text_Renderer r;
-            r.init();
-            r.writestr(resolve_to);
-            if (base_path_list->len < import_path_list->len) {
-                for (u32 i = base_path_list->len; i < import_path_list->len; i++) {
-                    r.writechar('/');
-                    r.writestr(import_path_list->at(i));
-                }
-            }
-
-            // go to our final resolved path (with relative path tacked on),
-            // check if it's a package, if so, we've hit gold
-
-            auto filepath = r.finish();
             auto package_name = get_package_name(filepath);
             if (package_name == NULL) return NULL;
 
@@ -2902,6 +2858,13 @@ List<ccstr> *Go_Index::list_decl_names(ccstr import_path) {
     return ret;
 }
 
+File_Ast* Go_Index::find_decl_of_id(File_Ast* fa) {
+    auto ret = find_decl_of_id(fa, true);
+    if (ret == NULL)
+        ret = find_decl_of_id(fa, false);
+    return ret;
+}
+
 File_Ast* Go_Index::find_decl_of_id(File_Ast* fa, bool import_only) {
     auto id = fa->ast;
     if (id->id.decl != NULL)
@@ -3352,17 +3315,6 @@ done:
     return result;
 }
 
-// I need to start reusing code to deal with paths, relative paths, all that
-// shit lol. Maybe a good 1hr project.
-
-/*
-ccstr get_path_relative_to(ccstr fullpath, ccstr base) {
-    fullpath += strlen(base);
-    if (is_sep(fullpath[0])) fullpath++;
-    return fullpath;
-}
-*/
-
 ccstr get_workspace_import_path() {
     if (world.wksp.gomod_exists) {
         auto module_path = world.wksp.gomod_info.module_path;;
@@ -3515,19 +3467,22 @@ bool Go_Index::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period, 
 
     auto generate_results_from_current_package = [&]() -> List<AC_Result>* {
         // what's the import path of our workspace?
+        //
+        //
+        // auto import_path = get_import_path_r
+
         auto names = list_decl_names(get_workspace_import_path());
         if (names == NULL) return NULL;
 
-        List<AC_Result> *ret = NULL;
         {
             SCOPED_MEM(&world.autocomplete_mem);
-            auto results = alloc_list<AC_Result>();
+            auto ret = alloc_list<AC_Result>();
             For (*names) {
-                auto r = results->append();
+                auto r = ret->append();
                 r->name = our_strcpy(it);
             }
+            return ret;
         }
-        return ret;
     };
 
     find_nodes_containing_pos(file, pos, [&](Ast *ast) -> Walk_Action {

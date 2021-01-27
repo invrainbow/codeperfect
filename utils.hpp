@@ -171,3 +171,13 @@ struct In_Memory_Queue {
         return true;
     }
 };
+
+struct Path {
+    List<ccstr> *parts;
+
+    void init(List<ccstr> *parts);
+    bool contains(Path *path);
+};
+
+Path* make_path(ccstr s);
+List<ccstr> *split_string(ccstr str, fn<bool(char)> pred);

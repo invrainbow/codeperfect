@@ -9,10 +9,10 @@
 #endif
 
 bool strcpy_safe(cstr buf, s32 count, ccstr src) {
-        auto len = strlen(src);
-        if (count < len + 1) return false;
-        strncpy(buf, src, len +1);
-        return true;
+    auto len = strlen(src);
+    if (count < len + 1) return false;
+    strncpy(buf, src, len +1);
+    return true;
 }
 
 ccstr our_format_json(ccstr s) {
@@ -96,9 +96,57 @@ ccstr our_strcat(ccstr a, ccstr b) {
 }
 
 void *stub_alloc_memory(s32 size) {
-        return alloc_memory(size);
+    return alloc_memory(size);
 }
 
 Pool *stub_get_mem() {
     return MEM;
 }
+
+List<ccstr> *split_string(ccstr str, fn<bool(char)> pred) {
+    auto len = strlen(str);
+    u32 start = 0;
+    auto ret = alloc_list<ccstr>();
+
+    while (start < len) {
+        u32 end = start;
+        while (end < len && !pred(str[end])) end++;
+
+        auto partlen = end-start;
+        auto s = alloc_array(char, partlen+1);
+        strncpy(s, str + start, partlen);
+        s[partlen] = '\0';
+        ret->append(s);
+
+        start = end+1;
+    }
+    return ret;
+}
+
+Path* make_path(ccstr s) {
+    auto pred = [&](char ch) -> bool { return is_sep(ch); };
+    auto parts = split_string(s, pred);
+
+    auto path = alloc_object(Path);
+    path->init(parts);
+    return path;
+}
+
+void Path::init(List<ccstr> *_parts) {
+    ptr0(this);
+    parts = _parts;
+}
+
+// Check if `this` contains `other`, e.g. this = "a/b/c" and other =
+// "a/b/c/d/e".
+bool Path::contains(Path *other) {
+    if (parts->len > other->parts->len) return false;
+
+    for (u32 i = 0; i < parts->len; i++) {
+        auto x = parts->at(i);
+        auto y = other->parts->at(i);
+        if (!streqi(x, y)) return false;
+    }
+    return true;
+}
+

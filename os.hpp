@@ -254,4 +254,7 @@ struct Fs_Watcher {
     bool next_event(Fs_Event *event);
 };
 
+// this must be case-insensitive
 ccstr get_path_relative_to(ccstr full, ccstr base);
+
+ccstr get_canon_path(ccstr path);

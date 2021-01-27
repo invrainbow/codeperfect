@@ -7,6 +7,15 @@
 
 bool run_tests() {
     return false;
+
+    world.init(true);
+
+    auto a = get_path_relative_to("c:/A/B/C", "c:/a");
+    print("%s", a);
+    system("pause");
+    return true;
+
+    // return false;
     /*
     return false;
 

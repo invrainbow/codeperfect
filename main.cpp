@@ -529,7 +529,6 @@ enum {
 };
 
 void init_everything() {
-    git_libgit2_init();
     world.init(false);
     ui.init();
 }
@@ -914,442 +913,443 @@ int main() {
             return;
         }
 
+        auto handle_escape = [&]() -> bool {
+            bool handled = false;
+            auto editor = world.get_current_editor();
+
+            if (editor->autocomplete.ac.results != NULL) {
+                handled = true;
+                editor->autocomplete.ac.results = NULL;
+            }
+            if (editor->parameter_hint.params != NULL) {
+                handled = true;
+                editor->parameter_hint.params = NULL;
+            }
+            return handled;
+        };
+
         switch (ev) {
-            case GLFW_PRESS:
-            case GLFW_REPEAT:
-                switch (nmod) {
-                    case OUR_MOD_SHIFT:
-                        if (world.use_nvim) {
-                            switch (key) {
-                                case GLFW_KEY_ENTER: send_nvim_keys("<S-Enter>"); break;
-                                case GLFW_KEY_TAB: send_nvim_keys("<S-Tab>"); break;
-                                case GLFW_KEY_UP: send_nvim_keys("<S-Up>"); break;
-                                case GLFW_KEY_RIGHT: send_nvim_keys("<S-Right>"); break;
-                                case GLFW_KEY_DOWN: send_nvim_keys("<S-Down>"); break;
-                                case GLFW_KEY_LEFT: send_nvim_keys("<S-Left>"); break;
-                                case GLFW_KEY_ESCAPE: send_nvim_keys("<S-Esc>"); break;
-                                case GLFW_KEY_BACKSPACE: send_nvim_keys("<S-Backspace>"); break;
-                            }
-                            break;
+        case GLFW_PRESS:
+        case GLFW_REPEAT:
+            switch (nmod) {
+            case OUR_MOD_SHIFT:
+                if (world.use_nvim) {
+                    switch (key) {
+                    case GLFW_KEY_ENTER: send_nvim_keys("<S-Enter>"); break;
+                    case GLFW_KEY_TAB: send_nvim_keys("<S-Tab>"); break;
+                    case GLFW_KEY_UP: send_nvim_keys("<S-Up>"); break;
+                    case GLFW_KEY_RIGHT: send_nvim_keys("<S-Right>"); break;
+                    case GLFW_KEY_DOWN: send_nvim_keys("<S-Down>"); break;
+                    case GLFW_KEY_LEFT: send_nvim_keys("<S-Left>"); break;
+                    case GLFW_KEY_BACKSPACE: send_nvim_keys("<S-Backspace>"); break;
+                    case GLFW_KEY_ESCAPE: if (!handle_escape()) send_nvim_keys("<S-Esc>"); break;
+                    }
+                    break;
+                }
+                break;
+
+            case OUR_MOD_CTRL:
+                {
+                    bool handled = false;
+
+                    if (world.use_nvim) {
+                        handled = true;
+                        switch (key) {
+                        case GLFW_KEY_ENTER: send_nvim_keys("<C-Enter>"); break;
+                        // case GLFW_KEY_TAB: send_nvim_keys("<C-Tab>"); break;
+                        case GLFW_KEY_UP: send_nvim_keys("<C-Up>"); break;
+                        case GLFW_KEY_RIGHT: send_nvim_keys("<C-Right>"); break;
+                        case GLFW_KEY_DOWN: send_nvim_keys("<C-Down>"); break;
+                        case GLFW_KEY_LEFT: send_nvim_keys("<C-Left>"); break;
+                        case GLFW_KEY_BACKSPACE: send_nvim_keys("<C-Backspace>"); break;
+                        case GLFW_KEY_ESCAPE: if (!handle_escape()) send_nvim_keys("<C-Esc>"); break;
+                        default: handled = false; break;
+                        }
+                    }
+
+                    if (handled) break;
+
+                    switch (key) {
+                    case GLFW_KEY_1:
+                        world.wksp.activate_pane(0);
+                        break;
+                    case GLFW_KEY_2:
+                        world.wksp.activate_pane(1);
+                        break;
+                    case GLFW_KEY_3:
+                        world.wksp.activate_pane(2);
+                        break;
+                    case GLFW_KEY_4:
+                        world.wksp.activate_pane(3);
+                        break;
+                    case GLFW_KEY_P:
+                        world.windows_open.open_file ^= 1;
+                        if (world.windows_open.open_file) {
+                            auto &wnd = world.wnd_open_file;
+
+                            wnd.query[0] = '\0';
+                            wnd.selection = 0;
+                            wnd.searching = false;
+                            wnd.files.init(LIST_MALLOC, 128);
                         }
                         break;
-
-                    case OUR_MOD_CTRL:
+                    case GLFW_KEY_S:
                         {
-                            bool handled = false;
-
-                            if (world.use_nvim) {
-                                handled = true;
-                                switch (key) {
-                                    case GLFW_KEY_ENTER: send_nvim_keys("<C-Enter>"); break;
-                                    // case GLFW_KEY_TAB: send_nvim_keys("<C-Tab>"); break;
-                                    case GLFW_KEY_UP: send_nvim_keys("<C-Up>"); break;
-                                    case GLFW_KEY_RIGHT: send_nvim_keys("<C-Right>"); break;
-                                    case GLFW_KEY_DOWN: send_nvim_keys("<C-Down>"); break;
-                                    case GLFW_KEY_LEFT: send_nvim_keys("<C-Left>"); break;
-                                    case GLFW_KEY_ESCAPE: send_nvim_keys("<C-Esc>"); break;
-                                    case GLFW_KEY_BACKSPACE: send_nvim_keys("<C-Backspace>"); break;
-                                    default: handled = false; break;
-                                }
-                            }
-
-                            if (handled) break;
-
-                            switch (key) {
-                                case GLFW_KEY_1:
-                                    world.wksp.activate_pane(0);
-                                    break;
-                                case GLFW_KEY_2:
-                                    world.wksp.activate_pane(1);
-                                    break;
-                                case GLFW_KEY_3:
-                                    world.wksp.activate_pane(2);
-                                    break;
-                                case GLFW_KEY_4:
-                                    world.wksp.activate_pane(3);
-                                    break;
-                                case GLFW_KEY_P:
-                                    world.windows_open.open_file ^= 1;
-                                    if (world.windows_open.open_file) {
-                                        auto &wnd = world.wnd_open_file;
-
-                                        wnd.query[0] = '\0';
-                                        wnd.selection = 0;
-                                        wnd.searching = false;
-                                        wnd.files.init(LIST_MALLOC, 128);
-                                    }
-                                    break;
-                                case GLFW_KEY_S:
-                                    {
-                                        auto editor = world.get_current_editor();
-                                        if (editor == NULL) break;
-
-                                        if (editor->is_untitled) {
-                                            Select_File_Opts opts;
-                                            opts.buf = editor->filepath;
-                                            opts.bufsize = _countof(editor->filepath);
-                                            opts.folder = false;
-                                            opts.save = true;
-                                            let_user_select_file(&opts);
-                                            editor->is_untitled = false;
-                                        }
-
-                                        FILE* f = fopen(editor->filepath, "w");
-                                        if (f == NULL) break; // TODO: display error
-                                        defer { fclose(f); };
-
-                                        editor->buf.write(f);
-                                        break;
-                                    }
-                                case GLFW_KEY_G:
-                                    {
-                                        auto editor = world.get_current_editor();
-                                        if (editor == NULL) break;
-
-                                        SCOPED_MEM(&world.index.main_thread_mem);
-                                        defer { world.index.main_thread_mem.reset(); };
-
-                                        auto result = world.index.jump_to_definition(editor->filepath, new_cur2(editor->cur_to_offset(editor->cur), 0));
-                                        if (result == NULL) {
-                                            error("unable to jump to definition");
-                                            return;
-                                        }
-
-                                        auto target_ed = editor;
-
-                                        if (!streq(editor->filepath, result->file)) {
-                                            target_ed = world.get_current_pane()->focus_editor(result->file);
-                                            ui.recalculate_view_sizes();
-                                        }
-
-                                        if (target_ed != NULL) {
-                                            auto pos = result->pos;
-
-                                            if (world.use_nvim) {
-                                                target_ed->nvim_data.initial_pos = pos;
-                                                target_ed->nvim_data.need_initial_pos_set = true;
-                                            } else {
-                                                target_ed->move_cursor(pos);
-                                            }
-                                        }
-                                        break;
-                                    }
-                                case GLFW_KEY_SPACE:
-                                    {
-                                        auto ed = world.get_current_editor();
-                                        if (ed == NULL) break;
-                                        // TODO: set triggered_by_dot to true if the last character is a
-                                        // period
-                                        ed->trigger_autocomplete(false);
-                                        break;
-                                    }
-                                case GLFW_KEY_J:
-                                case GLFW_KEY_K:
-                                    {
-                                        auto ed = world.get_current_editor();
-                                        if (ed == NULL) return;
-
-                                        auto &ac = ed->autocomplete;
-
-                                        if (ac.ac.results != NULL) {
-                                            int delta = (key == GLFW_KEY_J ? 1 : -1);
-                                            if (ac.selection == 0 && delta == -1)
-                                                ac.selection = ac.filtered_results->len - 1;
-                                            else
-                                                ac.selection = (ac.selection + delta) % ac.filtered_results->len;
-
-                                            if (ac.selection >= ac.view + AUTOCOMPLETE_WINDOW_ITEMS)
-                                                ac.view = ac.selection - AUTOCOMPLETE_WINDOW_ITEMS + 1;
-                                            if (ac.selection < ac.view)
-                                                ac.view = ac.selection;
-                                        }
-
-                                        break;
-                                    }
-                                case GLFW_KEY_W:
-                                    // TODO: Close tab.
-                                    break;
-                                case GLFW_KEY_N:
-                                    world.get_current_pane()->open_empty_editor();
-                                    ui.recalculate_view_sizes();
-                                    break;
-                            }
-                        }
-                        break;
-
-                    case OUR_MOD_CTRL | OUR_MOD_SHIFT:
-                        {
-                            bool handled = false;
-                            if (world.use_nvim) {
-                                handled = true;
-                                switch (key) {
-                                    case GLFW_KEY_ENTER: send_nvim_keys("<C-S-Enter>"); break;
-                                    case GLFW_KEY_UP: send_nvim_keys("<C-S-Up>"); break;
-                                    case GLFW_KEY_RIGHT: send_nvim_keys("<C-S-Right>"); break;
-                                    case GLFW_KEY_DOWN: send_nvim_keys("<C-S-Down>"); break;
-                                    case GLFW_KEY_LEFT: send_nvim_keys("<C-S-Left>"); break;
-                                    case GLFW_KEY_ESCAPE: send_nvim_keys("<C-S-Esc>"); break;
-                                    case GLFW_KEY_BACKSPACE: send_nvim_keys("<C-S-Backspace>"); break;
-                                    default: handled = false; break;
-                                }
-                            }
-
-                            if (handled) break;
-
-                            switch (key) {
-                                case GLFW_KEY_A:
-                                    world.windows_open.ast_viewer ^= 1;
-                                    break;
-                                case GLFW_KEY_F:
-                                    world.windows_open.search_and_replace ^= 1;
-                                    break;
-                                case GLFW_KEY_E:
-                                    if (world.sidebar.view == SIDEBAR_FILE_EXPLORER)
-                                        world.sidebar.view = SIDEBAR_CLOSED;
-                                    else
-                                        world.sidebar.view = SIDEBAR_FILE_EXPLORER;
-
-                                    ui.recalculate_view_sizes();
-                                    break;
-                                case GLFW_KEY_LEFT_BRACKET:
-                                    {
-                                        auto pane = world.get_current_pane();
-                                        u32 idx;
-                                        if (pane->current_editor == 0)
-                                            idx = pane->editors.len - 1;
-                                        else
-                                            idx = pane->current_editor - 1;
-                                        pane->focus_editor_by_index(idx);
-                                        break;
-                                    }
-                                case GLFW_KEY_RIGHT_BRACKET:
-                                    {
-                                        auto pane = world.get_current_pane();
-                                        auto idx = (pane->current_editor + 1) % pane->editors.len;
-                                        pane->focus_editor_by_index(idx);
-                                        break;
-                                    }
-                            }
-                            break;
-                        }
-                    case OUR_MOD_NONE:
-                        {
-                            bool done = true;
-
-                            // first handle non-editor keys
-
-                            switch (key) {
-                                case GLFW_KEY_F12:
-                                    world.windows_open.im_demo ^= 1;
-                                    break;
-                                case GLFW_KEY_F5:
-                                    switch (world.dbg.state_flag) {
-                                        case DBGSTATE_PAUSED:
-                                            {
-                                                Dbg_Call call;
-                                                call.type = DBGCALL_CONTINUE_RUNNING;
-                                                if (!world.dbg.call_queue.push(&call)) {
-                                                    // TODO: surface error
-                                                }
-                                            }
-                                            break;
-
-                                        case DBGSTATE_INACTIVE:
-                                            do {
-                                                auto &&dbg = world.dbg;
-                                                dbg.call_queue.init();
-
-                                                // TODO: when do we stop debugging? do we kill this thread, wait for it to die, etc?
-                                                dbg.thread = create_thread(debugger_loop_thread, NULL);
-                                                if (dbg.thread == NULL) {
-                                                    error("unable to create thread to start process: %s", get_last_error());
-                                                    dbg.call_queue.cleanup();
-                                                    break;
-                                                }
-                                            } while (0);
-                                            break;
-                                    }
-                                    break;
-                                case GLFW_KEY_F9:
-                                    {
-                                        auto editor = world.get_current_editor();
-                                        ccstr file = editor->filepath;
-                                        auto lineno = editor->cur.y + 1;
-
-                                        auto &&ref = world.dbg;
-                                        auto &&dbg = ref.debugger;
-
-                                        auto idx = ref.breakpoints.find([&](Client_Breakpoint *it) -> bool {
-                                            return are_breakpoints_same(file, lineno, it->file, it->line);
-                                        });
-
-                                        if (idx == -1) {
-                                            auto it = ref.breakpoints.append();
-                                            it->file = file;
-                                            it->line = lineno;
-                                            it->pending = true;
-
-                                            if (ref.state_flag != DBGSTATE_INACTIVE) {
-                                                Dbg_Call call;
-                                                call.type = DBGCALL_SET_BREAKPOINT;
-                                                call.set_breakpoint.filename = file;
-                                                call.set_breakpoint.lineno = lineno;
-
-                                                if (!ref.call_queue.push(&call)) {
-                                                    // TODO: surface error
-                                                }
-                                            }
-                                        } else {
-                                            ref.breakpoints.remove(idx);
-                                            if (ref.state_flag != DBGSTATE_INACTIVE) {
-                                                ref.debugger.unset_breakpoint(file, lineno);
-
-                                                Dbg_Call call;
-                                                call.type = DBGCALL_UNSET_BREAKPOINT;
-                                                call.unset_breakpoint.filename = file;
-                                                call.unset_breakpoint.lineno = lineno;
-
-                                                if (!ref.call_queue.push(&call)) {
-                                                    // TODO: surface error
-                                                }
-                                            }
-                                        }
-                                    }
-                                    break;
-                                case GLFW_KEY_F10:
-                                    {
-                                        if (world.dbg.state_flag != DBGSTATE_PAUSED) break;
-
-                                        Dbg_Call call;
-                                        call.type = DBGCALL_STEP_OVER;
-                                        if (!world.dbg.call_queue.push(&call)) {
-                                            // TODO: surface error
-                                        }
-                                    }
-                                    break;
-                                case GLFW_KEY_F11:
-                                    {
-                                        if (world.dbg.state_flag != DBGSTATE_PAUSED) break;
-
-                                        Dbg_Call call;
-                                        call.type = DBGCALL_STEP_INTO;
-
-                                        if (!world.dbg.call_queue.push(&call)) {
-                                            // TODO: surface error
-                                        }
-                                    }
-                                    break;
-                                default:
-                                    done = false;
-                                    break;
-                            }
-
-                            if (done) break;
-                            if (world.windows_open.is_any_open()) break;
-                            if (world.popups_open.is_any_open()) break;
-
                             auto editor = world.get_current_editor();
                             if (editor == NULL) break;
 
-                            auto &buf = editor->buf;
-                            auto cur = editor->cur;
+                            if (editor->is_untitled) {
+                                Select_File_Opts opts;
+                                opts.buf = editor->filepath;
+                                opts.bufsize = _countof(editor->filepath);
+                                opts.folder = false;
+                                opts.save = true;
+                                let_user_select_file(&opts);
+                                editor->is_untitled = false;
+                            }
 
-                            /*
-                            Here we send the key to nvim. We need to handle the response when:
-                            we need to do something that relies on the *effect* of the key being completed.
-                            For example, when the user types a '.', we need the period to be in the buffer
-                            before calling trigger_autocomplete, since it passes the buffer through a Go parser
-                            and expects to find an (incomplete) AST_SELECTOR_EXPR.
+                            FILE* f = fopen(editor->filepath, "w");
+                            if (f == NULL) break; // TODO: display error
+                            defer { fclose(f); };
 
-                            So, the only keys we need to track are:
-                             - backspace (for autocomplete, the character needs to be erased first)
-                             - typed characters in insert mode
-                                 - this includes '.' (autocomplete) and '(' (parameter hints)
-                            */
+                            editor->buf.write(f);
+                            break;
+                        }
+                    case GLFW_KEY_G:
+                        {
+                            auto editor = world.get_current_editor();
+                            if (editor == NULL) break;
 
-                            switch (key) {
-                                case GLFW_KEY_UP: send_nvim_keys("<Up>"); break;
-                                case GLFW_KEY_RIGHT: send_nvim_keys("<Right>"); break;
-                                case GLFW_KEY_DOWN: send_nvim_keys("<Down>"); break;
-                                case GLFW_KEY_LEFT: send_nvim_keys("<Left>"); break;
-                                case GLFW_KEY_BACKSPACE: send_nvim_keys("<Backspace>"); break;
+                            SCOPED_MEM(&world.index.main_thread_mem);
+                            defer { world.index.main_thread_mem.reset(); };
 
-                                case GLFW_KEY_TAB:
-                                case GLFW_KEY_ENTER:
-                                    {
-                                        auto& ac = editor->autocomplete;
-                                        if (ac.ac.results != NULL && ac.filtered_results->len > 0) {
-                                            auto idx = ac.filtered_results->at(ac.selection);
-                                            auto& result = ac.ac.results->at(idx);
+                            auto result = world.index.jump_to_definition(editor->filepath, new_cur2(editor->cur_to_offset(editor->cur), 0));
+                            if (result == NULL) {
+                                error("unable to jump to definition");
+                                return;
+                            }
 
-                                            auto ac_start = editor->cur;
-                                            ac_start.x -= strlen(ac.prefix);
-                                            buf.remove(ac_start, editor->cur);
+                            auto target_ed = editor;
 
-                                            auto len = strlen(result.name);
-                                            auto name = alloc_array(uchar, len);
-                                            for (u32 i = 0; i < len; i++)
-                                                name[i] = (uchar)result.name[i];
-                                            buf.insert(ac_start, name, len);
+                            if (!streq(editor->filepath, result->file)) {
+                                target_ed = world.get_current_pane()->focus_editor(result->file);
+                                ui.recalculate_view_sizes();
+                            }
 
-                                            ac.ac.results = NULL;
-                                            ac_start.x += len;
+                            if (target_ed != NULL) {
+                                auto pos = result->pos;
 
-                                            // update buffer
-                                            {
-                                                auto& nv = world.nvim;
-                                                auto msgid = nv.start_request_message("nvim_buf_set_lines", 5);
-                                                {
-                                                    auto req = nv.save_request(NVIM_REQ_AUTOCOMPLETE_SETBUF, msgid, editor->id);
-                                                    req->autocomplete_setbuf.target_cursor = ac_start;
-                                                }
-                                                nv.writer.write_int(editor->nvim_data.buf_id); // buffer
-                                                nv.writer.write_int(ac_start.y); // start
-                                                nv.writer.write_int(ac_start.y + 1); // end
-                                                nv.writer.write_bool(false); // strict_indexing
-                                                {
-                                                    nv.writer.write_array(1); // replacement
-                                                    auto& line = buf.lines[ac_start.y];
-                                                    {
-                                                        // write a single string.
-                                                        nv.writer.write1(MP_OP_STRING);
-                                                        nv.writer.write4(line.len);
-                                                        for (u32 i = 0; i < line.len; i++)
-                                                            nv.writer.write1((char)line[i]);
-                                                    }
-                                                }
-                                                nv.end_message();
-                                            }
-                                            break;
-                                        } else {
-                                            if (key == GLFW_KEY_TAB)
-                                                send_nvim_keys("<Tab>");
-                                            else
-                                                send_nvim_keys("<Enter>");
-                                        }
-                                        break;
-                                    }
-                                case GLFW_KEY_ESCAPE:
-                                    {
-                                        bool handled = false;
-
-                                        if (editor->autocomplete.ac.results != NULL) {
-                                            handled = true;
-                                            editor->autocomplete.ac.results = NULL;
-                                        }
-                                        if (editor->parameter_hint.params != NULL) {
-                                            handled = true;
-                                            editor->parameter_hint.params = NULL;
-                                        }
-
-                                        // if (!handled) send_nvim_keys("<Esc>");
-                                        send_nvim_keys("<Esc>");
-                                    }
-                                    break;
+                                if (world.use_nvim) {
+                                    target_ed->nvim_data.initial_pos = pos;
+                                    target_ed->nvim_data.need_initial_pos_set = true;
+                                } else {
+                                    target_ed->move_cursor(pos);
+                                }
                             }
                             break;
                         }
+                    case GLFW_KEY_SPACE:
+                        {
+                            auto ed = world.get_current_editor();
+                            if (ed == NULL) break;
+                            // TODO: set triggered_by_dot to true if the last character is a
+                            // period
+                            ed->trigger_autocomplete(false);
+                            break;
+                        }
+                    case GLFW_KEY_J:
+                    case GLFW_KEY_K:
+                        {
+                            auto ed = world.get_current_editor();
+                            if (ed == NULL) return;
+
+                            auto &ac = ed->autocomplete;
+
+                            if (ac.ac.results != NULL) {
+                                int delta = (key == GLFW_KEY_J ? 1 : -1);
+                                if (ac.selection == 0 && delta == -1)
+                                    ac.selection = ac.filtered_results->len - 1;
+                                else
+                                    ac.selection = (ac.selection + delta) % ac.filtered_results->len;
+
+                                if (ac.selection >= ac.view + AUTOCOMPLETE_WINDOW_ITEMS)
+                                    ac.view = ac.selection - AUTOCOMPLETE_WINDOW_ITEMS + 1;
+                                if (ac.selection < ac.view)
+                                    ac.view = ac.selection;
+                            }
+
+                            break;
+                        }
+                    case GLFW_KEY_W:
+                        // TODO: Close tab.
+                        break;
+                    case GLFW_KEY_N:
+                        world.get_current_pane()->open_empty_editor();
+                        ui.recalculate_view_sizes();
+                        break;
+                    }
                 }
+                break;
+
+            case OUR_MOD_CTRL | OUR_MOD_SHIFT:
+                {
+                    bool handled = false;
+                    if (world.use_nvim) {
+                        handled = true;
+                        switch (key) {
+                        case GLFW_KEY_ENTER: send_nvim_keys("<C-S-Enter>"); break;
+                        case GLFW_KEY_UP: send_nvim_keys("<C-S-Up>"); break;
+                        case GLFW_KEY_RIGHT: send_nvim_keys("<C-S-Right>"); break;
+                        case GLFW_KEY_DOWN: send_nvim_keys("<C-S-Down>"); break;
+                        case GLFW_KEY_LEFT: send_nvim_keys("<C-S-Left>"); break;
+                        case GLFW_KEY_ESCAPE: if (!handle_escape()) send_nvim_keys("<C-S-Esc>"); break;
+                        case GLFW_KEY_BACKSPACE: send_nvim_keys("<C-S-Backspace>"); break;
+                        default: handled = false; break;
+                        }
+                    }
+
+                    if (handled) break;
+
+                    switch (key) {
+                    case GLFW_KEY_A:
+                        world.windows_open.ast_viewer ^= 1;
+                        break;
+                    case GLFW_KEY_F:
+                        world.windows_open.search_and_replace ^= 1;
+                        break;
+                    case GLFW_KEY_E:
+                        if (world.sidebar.view == SIDEBAR_FILE_EXPLORER)
+                            world.sidebar.view = SIDEBAR_CLOSED;
+                        else
+                            world.sidebar.view = SIDEBAR_FILE_EXPLORER;
+
+                        ui.recalculate_view_sizes();
+                        break;
+                    case GLFW_KEY_LEFT_BRACKET:
+                        {
+                            auto pane = world.get_current_pane();
+                            u32 idx;
+                            if (pane->current_editor == 0)
+                                idx = pane->editors.len - 1;
+                            else
+                                idx = pane->current_editor - 1;
+                            pane->focus_editor_by_index(idx);
+                            break;
+                        }
+                    case GLFW_KEY_RIGHT_BRACKET:
+                        {
+                            auto pane = world.get_current_pane();
+                            auto idx = (pane->current_editor + 1) % pane->editors.len;
+                            pane->focus_editor_by_index(idx);
+                            break;
+                        }
+                    }
+                    break;
+                }
+            case OUR_MOD_NONE:
+                {
+                    bool done = true;
+
+                    // first handle non-editor keys
+
+                    switch (key) {
+                    case GLFW_KEY_F12:
+                        world.windows_open.im_demo ^= 1;
+                        break;
+                    case GLFW_KEY_F5:
+                        switch (world.dbg.state_flag) {
+                            case DBGSTATE_PAUSED:
+                                {
+                                    Dbg_Call call;
+                                    call.type = DBGCALL_CONTINUE_RUNNING;
+                                    if (!world.dbg.call_queue.push(&call)) {
+                                        // TODO: surface error
+                                    }
+                                }
+                                break;
+
+                            case DBGSTATE_INACTIVE:
+                                do {
+                                    auto &&dbg = world.dbg;
+                                    dbg.call_queue.init();
+
+                                    // TODO: when do we stop debugging? do we kill this thread, wait for it to die, etc?
+                                    dbg.thread = create_thread(debugger_loop_thread, NULL);
+                                    if (dbg.thread == NULL) {
+                                        error("unable to create thread to start process: %s", get_last_error());
+                                        dbg.call_queue.cleanup();
+                                        break;
+                                    }
+                                } while (0);
+                                break;
+                        }
+                        break;
+                    case GLFW_KEY_F9:
+                        {
+                            auto editor = world.get_current_editor();
+                            ccstr file = editor->filepath;
+                            auto lineno = editor->cur.y + 1;
+
+                            auto &&ref = world.dbg;
+                            auto &&dbg = ref.debugger;
+
+                            auto idx = ref.breakpoints.find([&](Client_Breakpoint *it) -> bool {
+                                return are_breakpoints_same(file, lineno, it->file, it->line);
+                            });
+
+                            if (idx == -1) {
+                                auto it = ref.breakpoints.append();
+                                it->file = file;
+                                it->line = lineno;
+                                it->pending = true;
+
+                                if (ref.state_flag != DBGSTATE_INACTIVE) {
+                                    Dbg_Call call;
+                                    call.type = DBGCALL_SET_BREAKPOINT;
+                                    call.set_breakpoint.filename = file;
+                                    call.set_breakpoint.lineno = lineno;
+
+                                    if (!ref.call_queue.push(&call)) {
+                                        // TODO: surface error
+                                    }
+                                }
+                            } else {
+                                ref.breakpoints.remove(idx);
+                                if (ref.state_flag != DBGSTATE_INACTIVE) {
+                                    ref.debugger.unset_breakpoint(file, lineno);
+
+                                    Dbg_Call call;
+                                    call.type = DBGCALL_UNSET_BREAKPOINT;
+                                    call.unset_breakpoint.filename = file;
+                                    call.unset_breakpoint.lineno = lineno;
+
+                                    if (!ref.call_queue.push(&call)) {
+                                        // TODO: surface error
+                                    }
+                                }
+                            }
+                        }
+                        break;
+                    case GLFW_KEY_F10:
+                        {
+                            if (world.dbg.state_flag != DBGSTATE_PAUSED) break;
+
+                            Dbg_Call call;
+                            call.type = DBGCALL_STEP_OVER;
+                            if (!world.dbg.call_queue.push(&call)) {
+                                // TODO: surface error
+                            }
+                        }
+                        break;
+                    case GLFW_KEY_F11:
+                        {
+                            if (world.dbg.state_flag != DBGSTATE_PAUSED) break;
+
+                            Dbg_Call call;
+                            call.type = DBGCALL_STEP_INTO;
+
+                            if (!world.dbg.call_queue.push(&call)) {
+                                // TODO: surface error
+                            }
+                        }
+                        break;
+                    default:
+                        done = false;
+                        break;
+                    }
+
+                    if (done) break;
+                    if (world.windows_open.is_any_open()) break;
+                    if (world.popups_open.is_any_open()) break;
+
+                    auto editor = world.get_current_editor();
+                    if (editor == NULL) break;
+
+                    auto &buf = editor->buf;
+                    auto cur = editor->cur;
+
+                    /*
+                    Here we send the key to nvim. We need to handle the response when:
+                    we need to do something that relies on the *effect* of the key being completed.
+                    For example, when the user types a '.', we need the period to be in the buffer
+                    before calling trigger_autocomplete, since it passes the buffer through a Go parser
+                    and expects to find an (incomplete) AST_SELECTOR_EXPR.
+
+                    So, the only keys we need to track are:
+                     - backspace (for autocomplete, the character needs to be erased first)
+                     - typed characters in insert mode
+                         - this includes '.' (autocomplete) and '(' (parameter hints)
+                    */
+
+                    switch (key) {
+                    case GLFW_KEY_UP: send_nvim_keys("<Up>"); break;
+                    case GLFW_KEY_RIGHT: send_nvim_keys("<Right>"); break;
+                    case GLFW_KEY_DOWN: send_nvim_keys("<Down>"); break;
+                    case GLFW_KEY_LEFT: send_nvim_keys("<Left>"); break;
+                    case GLFW_KEY_BACKSPACE: send_nvim_keys("<Backspace>"); break;
+
+                    case GLFW_KEY_TAB:
+                    case GLFW_KEY_ENTER:
+                        {
+                            auto& ac = editor->autocomplete;
+                            if (ac.ac.results != NULL && ac.filtered_results->len > 0) {
+                                auto idx = ac.filtered_results->at(ac.selection);
+                                auto& result = ac.ac.results->at(idx);
+
+                                auto ac_start = editor->cur;
+                                ac_start.x -= strlen(ac.prefix);
+                                buf.remove(ac_start, editor->cur);
+
+                                auto len = strlen(result.name);
+                                auto name = alloc_array(uchar, len);
+                                for (u32 i = 0; i < len; i++)
+                                    name[i] = (uchar)result.name[i];
+                                buf.insert(ac_start, name, len);
+
+                                ac.ac.results = NULL;
+                                ac_start.x += len;
+
+                                // update buffer
+                                {
+                                    auto& nv = world.nvim;
+                                    auto msgid = nv.start_request_message("nvim_buf_set_lines", 5);
+                                    {
+                                        auto req = nv.save_request(NVIM_REQ_AUTOCOMPLETE_SETBUF, msgid, editor->id);
+                                        req->autocomplete_setbuf.target_cursor = ac_start;
+                                    }
+                                    nv.writer.write_int(editor->nvim_data.buf_id); // buffer
+                                    nv.writer.write_int(ac_start.y); // start
+                                    nv.writer.write_int(ac_start.y + 1); // end
+                                    nv.writer.write_bool(false); // strict_indexing
+                                    {
+                                        nv.writer.write_array(1); // replacement
+                                        auto& line = buf.lines[ac_start.y];
+                                        {
+                                            // write a single string.
+                                            nv.writer.write1(MP_OP_STRING);
+                                            nv.writer.write4(line.len);
+                                            for (u32 i = 0; i < line.len; i++)
+                                                nv.writer.write1((char)line[i]);
+                                        }
+                                    }
+                                    nv.end_message();
+                                }
+                                break;
+                            } else {
+                                if (key == GLFW_KEY_TAB)
+                                    send_nvim_keys("<Tab>");
+                                else
+                                    send_nvim_keys("<Enter>");
+                            }
+                            break;
+                        }
+                    case GLFW_KEY_ESCAPE:
+                        if (!handle_escape()) send_nvim_keys("<Esc>");
+                        break;
+                    }
+                    break;
+                }
+            }
         }
     });
 
