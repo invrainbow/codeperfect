@@ -1,10 +1,17 @@
-[idea] Log window. A kind of log window showing what's happening behind the
+Ideas
+=====
+
+Log window. A kind of log window showing what's happening behind the
 scenes, but not autistic developer debug notes -- stuff that actually allows
 the user to build a model of how their tool is working and a closer
 relationship with the IDE. For example, "detected import, now indexing ___".
 
-[idea] Context-aware autocomplete, including, if you're in a toplevel, all you
+Context-aware autocomplete, including, if you're in a toplevel, all you
 can write is func, const, var, and type.
+
+
+Tasks
+=====
 
 Create a string class.
 
@@ -29,23 +36,7 @@ Probably the first thing we need to do as soon as indexing is done.
 
 Handle nested vendor directories for Go too. And nested go.mod.
 
-[bug] Syntax highlighting is weird/slow/jumpy.
-
-Add syntax highlighting to parameter hint.
-
-[bug] When you resize a pane too small, it ruins syntax highlighting.
-
-[bug] When tabs overflow the tab bar, current tab just goes offscreen.
-
 Add clipboard support to editor, both vim paste and ctrl+v.
-
-[bug] When you press tab to fill in autocomplete without typing any prefix, it
-autocompletes, but leaves the menu open (and moves it to your cursor).
-
-[bug] If you press shift+escape on a parameter hint, you can move around and
-the parameter hit will stay open and follow you.
-
-[bug] Typing "foo(bar(" will use autocomplete for foo, not bar.
 
 Make parameter hint open back up when comma is typed.
 
@@ -53,16 +44,11 @@ In parameter hint, highlight which parameter we're currently on.
 
 In parameter hint, close hint when end paren is typed.
 
-[bug] Earlier, when typing a literal value, it got into an infinite loop,
-presumably inside parse_literal_value (judging by both the context of the crash
-and also the error message it was printing out was from eat_comma). Can't
-repro right now, but it's there.
+Add syntax highlighting to parameter hint.
 
 Since we depend so heavily on the index for all aspects of intellisense (e.g.
 find_decl_of_id relies on it directly), we MUST invalidate the index as soon as
 a file changes.
-
-[bug?] Go_Index reindexes twice whenever we save a file.
 
 Make sure list_methods_in_type also checks methods in embedded fields of
 structs.
@@ -94,3 +80,34 @@ really only be used to handle the stuff nvim excels at, namely, normal-mode
 commands.
 
 Add autoindent to insert mode (no longer handled by nvim).
+
+
+Bugs
+====
+
+Syntax highlighting is weird/slow/jumpy.
+
+When you resize a pane too small, it ruins syntax highlighting.
+
+When tabs overflow the tab bar, current tab just goes offscreen.
+
+When you press tab to fill in autocomplete without typing any prefix, it
+autocompletes, but leaves the menu open (and moves it to your cursor).
+
+If you press shift+escape on a parameter hint, you can move around and
+the parameter hit will stay open and follow you.
+
+Typing "foo(bar(" will use autocomplete for foo, not bar.
+
+Earlier, when typing a literal value, it got into an infinite loop,
+presumably inside parse_literal_value (judging by both the context of the crash
+and also the error message it was printing out was from eat_comma). Can't
+repro right now, but it's there.
+
+
+Purgatory
+=========
+
+[bug?] Go_Index reindexes twice whenever we save a file.  Update: I mean, the
+debounce stops it from reindexing twice, but savig a file still sends two
+filesystem change events. Not sure if worth fixing.
