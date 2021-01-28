@@ -243,21 +243,12 @@ void Nvim::run_event_loop() {
                     auto params_length = reader.read_array(); CHECKOK();
 
                     // print("got request with method %s", method);
+                    // check `method` against names of rpcrequests
 
-                    if (streq(method, "user_typed")) {
-                        ASSERT(params_length == 1);
-                        auto buf_id = reader.read_int(); CHECKOK();
-                        auto editor = find_editor_by_buffer(buf_id);
-                        if (editor != NULL) {
-                            editor->on_type();
-                        } else {
-                            // ??? shit done fucked up
-                        }
-                    } else {
-                        for (u32 i = 0; i < params_length; i++) {
-                            reader.skip_object();
-                            CHECKOK();
-                        }
+                    // in the default case we just skip params
+                    for (u32 i = 0; i < params_length; i++) {
+                        reader.skip_object();
+                        CHECKOK();
                     }
 
                     start_response_message(msgid);

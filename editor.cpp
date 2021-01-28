@@ -322,6 +322,9 @@ void Editor::cleanup() {
     mem.cleanup();
 }
 
+// Below we have on_type, which used to get called when in nvim CursorMovedI
+// got called and we sent rpcrqeuest here. This needs to go into our insert-mode handler now.
+#if 0
 void Editor::on_type() {
     auto last_character = buf.iter(buf.dec_cur(cur)).peek();
 
@@ -408,6 +411,7 @@ void Editor::on_type() {
         }
     }
 }
+#endif
 
 void Editor::trigger_autocomplete(bool triggered_by_dot) {
     ptr0(&autocomplete);

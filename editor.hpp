@@ -84,8 +84,6 @@ struct Editor {
     int get_indent_of_line(int y);
     Buffer_It iter();
     Buffer_It iter(cur2 _cur);
-    // void process_key_after_nvim_finishes(u32 key);
-    void on_type();
 
     void trigger_autocomplete(bool triggered_by_dot);
     void filter_autocomplete_results(Autocomplete* ac);
