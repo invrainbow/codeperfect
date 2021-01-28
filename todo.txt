@@ -81,3 +81,14 @@ When you press `ce` after a dot as in "instance_of_struct.", it will open
 autocomplete. I THINK (if memory serves me) all it basically does is "after
 every keystroke, if we land to the right of a dot, trigger autocomplete. Need
 to fix this.
+
+A group of changes needs to be made to fix a large class of problems.
+ - Hand-roll our own syntax parser (stop using nvim's)
+ - In insert mode, handle input ourselves
+This can be done in order.
+ - Turn off current syntax highlighting
+ - Get native input handling working
+ - Write our own syntax highlighter.
+I predict this will stop about 80% of our stupid random crashes. nvim should
+really only be used to handle the stuff nvim excels at, namely, normal-mode
+commands.
