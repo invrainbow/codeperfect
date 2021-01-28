@@ -4648,6 +4648,8 @@ bool Go_Index::ensure_entire_index_correct() {
     For (*res.new_imports) ensure_package_correct(it);
 }
 
+#define EVENT_DEBOUNCE_DELAY_MS 3000 // wait 3 seconds (arbitrary)
+
 void Go_Index::run_background_thread() {
     SCOPED_MEM(&background_mem);
 
@@ -4657,32 +4659,39 @@ void Go_Index::run_background_thread() {
         ensure_entire_index_correct();
     }
 
-    while (true) {
-        Index_Event event = {0};
-        if (!pop_index_event(&event)) {
-            // no events, don't immediately keep trying to pop, sleep for a bit
-            sleep_milliseconds(100);
-            continue;
+    auto pop_index_event = [&](Index_Event *out) -> bool {
+        SCOPED_LOCK(&index_events_lock);
+        if (index_events.len == 0) return false;
+
+        auto current_time = current_time_in_nanoseconds();
+        for (u32 i = 0; i < index_events.len; i++) {
+            auto event = &index_events[i];
+            if ((current_time - event->time) / 1000000.f > EVENT_DEBOUNCE_DELAY_MS) {
+                memcpy(out, event, sizeof(Index_Event));
+                index_events.remove(i);
+                return true;
+            }
         }
+        return false;
+    };
 
-        // The below is just v1 -- we still need to make sure we're not
-        // reindexing a million times in response to a million file changes.
-        // Need to keep track of last fetch.
-
-        switch (event.type) {
-        case INDEX_EVENT_FETCH_IMPORTS:
-            {
-                Eil_Result res;
-                if (!ensure_imports_list_correct(&res)) break;
-                For (*res.added_imports) ensure_package_correct(it);
+    for (Index_Event event = {0}; true; sleep_milliseconds(100)) {
+        while (pop_index_event(&event)) {
+            switch (event.type) {
+            case INDEX_EVENT_FETCH_IMPORTS:
+                {
+                    Eil_Result res;
+                    if (!ensure_imports_list_correct(&res)) break;
+                    For (*res.added_imports) ensure_package_correct(it);
+                    background_mem.reset();
+                    break;
+                }
+                break;
+            case INDEX_EVENT_REINDEX_PACKAGE:
+                ensure_package_correct(event.import_path);
                 background_mem.reset();
                 break;
             }
-            break;
-        case INDEX_EVENT_REINDEX_PACKAGE:
-            ensure_package_correct(event.import_path);
-            background_mem.reset();
-            break;
         }
     }
 }
@@ -4690,15 +4699,6 @@ void Go_Index::run_background_thread() {
 bool Go_Index::delete_index() {
     SCOPED_FRAME();
     return delete_rm_rf(get_index_path());
-}
-
-bool Go_Index::pop_index_event(Index_Event *event) {
-    SCOPED_LOCK(&index_events_lock);
-    if (index_events.len == 0) return false;
-
-    memcpy(event, &index_events[0], sizeof(Index_Event));
-    index_events.remove(0);
-    return true;
 }
 
 void Go_Index::handle_fs_event(Go_Index_Watcher *w, Fs_Event *event) {
@@ -4725,44 +4725,62 @@ void Go_Index::handle_fs_event(Go_Index_Watcher *w, Fs_Event *event) {
             break;
         case WATCH_GOPATH:
         case WATCH_GOROOT:
-            return get_path_relative_to(watch_path, path);
+            return get_path_relative_to(path, watch_path);
         }
         return NULL;
     };
 
-    auto queue_event = [&]() -> Index_Event* {
-        index_events_lock.enter();
-        if (index_events.len > MAX_INDEX_EVENTS) {
-            index_events_lock.leave();
-            return NULL;
-        }
-        return index_events.append();
-    };
+    auto queue_event = [&](Index_Event_Type type, ccstr import_path) {
+        SCOPED_LOCK(&index_events_lock);
 
-    auto commit_event = [&]() {
-        index_events_lock.leave();
+        if (index_events.len > MAX_INDEX_EVENTS) return;
+
+        auto pred = [&](Index_Event *event) -> bool {
+            if (event->type != type) return false;
+
+            if (type == INDEX_EVENT_REINDEX_PACKAGE)
+                if (!streqi(event->import_path, import_path))
+                    return false;
+
+            return true;
+        };
+
+        auto idx = index_events.find(pred);
+        if (idx != -1) {
+            index_events[idx].time = current_time_in_nanoseconds();
+            return;
+        }
+
+        auto ev = index_events.append();
+        ev->time = current_time_in_nanoseconds();
+        ev->type = type;
+        strcpy_safe(ev->import_path, _countof(ev->import_path), import_path);
     };
 
     auto queue_for_rescan = [&](ccstr directory) {
         auto import_path = directory_to_import_path(directory);
         if (import_path == NULL) return;
-
-        auto event = queue_event();
-        event->type = INDEX_EVENT_REINDEX_PACKAGE;
-        strcpy_safe(event->import_path, _countof(event->import_path), import_path);
-        commit_event();
+        queue_event(INDEX_EVENT_REINDEX_PACKAGE, import_path);
     };
 
-    auto path = path_join(watch_path, event->type == FSEVENT_RENAME ? event->new_filepath : event->filepath);
+    auto path = path_join(watch_path, event->filepath);
 
     // ignore changes to {wksp.path}/.ide
     if (w->type == WATCH_WKSP)
         if (str_starts_with(path, path_join(watch_path, ".ide")))
             return;
 
+    auto is_git_folder = [&](ccstr path, bool isdir) -> bool {
+        SCOPED_FRAME();
+        auto pathlist = make_path(path);
+        return pathlist->parts->find([&](ccstr *it) { return streqi(*it, ".git"); }) != -1;
+    };
+
     auto res = check_path(path);
     switch (res) {
     case CPR_DIRECTORY:
+        if (is_git_folder(path, true)) break;
+
         switch (event->type) {
         case FSEVENT_CHANGE:
             break; // what does change even mean here?
@@ -4771,19 +4789,21 @@ void Go_Index::handle_fs_event(Go_Index_Watcher *w, Fs_Event *event) {
             queue_for_rescan(path);
             break;
         case FSEVENT_RENAME:
-            queue_for_rescan(path);
-            queue_for_rescan(path_join(watch_path, event->filepath));
+            {
+                auto old_path = path_join(watch_path, event->old_filepath);
+                if (is_git_folder(old_path, true)) break;
+                queue_for_rescan(path);
+                queue_for_rescan(old_path);
+            }
             break;
         }
     case CPR_FILE:
+        if (is_git_folder(path, false)) break;
         if (!str_ends_with(path, ".go")) break;
         if (str_ends_with(path, "_test.go")) break;
 
-        if (w->type == WATCH_WKSP) {
-            auto event = queue_event();
-            event->type = INDEX_EVENT_FETCH_IMPORTS;
-            commit_event();
-        }
+        if (w->type == WATCH_WKSP)
+            queue_event(INDEX_EVENT_FETCH_IMPORTS, NULL);
 
         // some .go file was added/deleted/changed/renamed
         // queue its directory for a re-scan
@@ -4806,8 +4826,8 @@ bool Go_Index::init() {
     fs_event_lock.init();
 
     if (!wksp_watcher.watch.init(world.wksp.path)) return false;
-    // if (!gopath_watcher.watch.init(path_join(GOPATH, "src"))) return false;
-    // if (!goroot_watcher.watch.init(path_join(GOPATH, "src"))) return false;
+    if (!gopath_watcher.watch.init(path_join(GOPATH, "src"))) return false;
+    // if (!goroot_watcher.watch.init(path_join(GOROOT, "src"))) return false;
 
     buildparser_proc.init();
     buildparser_proc.use_stdin = true;
@@ -4850,11 +4870,11 @@ bool Go_Index::run_threads() {
     };
 
     if (!init_watcher(&wksp_watcher, WATCH_WKSP)) return false;
-    // if (!init_watcher(&gopath_watcher, WATCH_GOPATH)) return false;
+    if (!init_watcher(&gopath_watcher, WATCH_GOPATH)) return false;
     // if (!init_watcher(&goroot_watcher, WATCH_GOROOT)) return false;
 
-    main_loop_thread = create_thread(run_background_thread_stub, this);
-    if (main_loop_thread == NULL) return false;
+    bg_thread = create_thread(run_background_thread_stub, this);
+    if (bg_thread == NULL) return false;
 
     return true;
 }
@@ -4868,14 +4888,14 @@ void Go_Index::cleanup() {
         }
     };
 
-    kill_and_close(&main_loop_thread);
+    kill_and_close(&bg_thread);
     kill_and_close(&wksp_watcher.thread);
     kill_and_close(&gopath_watcher.thread);
-    kill_and_close(&goroot_watcher.thread);
+    // kill_and_close(&goroot_watcher.thread);
 
     wksp_watcher.watch.cleanup();
-    // gopath_watcher.watch.cleanup();
-    // goroot_watcher.watch.cleanup();
+    gopath_watcher.watch.cleanup();
+    goroot_watcher.watch.cleanup();
 
     index_events_lock.cleanup();
     fs_event_lock.cleanup();

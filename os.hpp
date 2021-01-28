@@ -237,7 +237,7 @@ enum Fs_Event_Type {
 struct Fs_Event {
     Fs_Event_Type type;
     char filepath[MAX_PATH];
-    char new_filepath[MAX_PATH];
+    char old_filepath[MAX_PATH];
 };
 
 struct Fs_Watcher {

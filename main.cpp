@@ -2022,7 +2022,7 @@ int main() {
             auto curr = current_time_in_nanoseconds();
             auto rest = (1000000000.f / FRAME_RATE_CAP) - (curr - last_frame_time);
             if (rest > 0)
-                sleep_milliseconds((u32)(rest / 1000.0f / 1000.0f));
+                sleep_milliseconds((u32)(rest / 1000000.0f));
             last_frame_time = curr;
         }
     }

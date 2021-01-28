@@ -79,7 +79,7 @@ u64 current_time_in_nanoseconds() {
 
     LARGE_INTEGER now;
     QueryPerformanceCounter(&now);
-    now.QuadPart *= 1000;
+    now.QuadPart *= 1000000000;
     return now.QuadPart / freq.QuadPart;
 }
 
@@ -544,7 +544,9 @@ bool Fs_Watcher::next_event(Fs_Event *event) {
         info = (FILE_NOTIFY_INFORMATION*)((u8*)buf + offset);
 
         if (info->Action != FILE_ACTION_RENAMED_NEW_NAME) return false;
-        copy_file_name(info, event->new_filepath, _countof(event->new_filepath));
+
+        strcpy_safe(event->old_filepath, _countof(event->old_filepath), event->filepath);
+        copy_file_name(info, event->filepath, _countof(event->filepath));
         break;
     }
 

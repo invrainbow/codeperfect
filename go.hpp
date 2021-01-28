@@ -1096,6 +1096,7 @@ enum Index_Event_Type {
 struct Index_Event {
     Index_Event_Type type;
     char import_path[MAX_PATH]; // for reindex_package
+    u64 time;
 };
 
 enum Go_Watch_Type {
@@ -1129,7 +1130,7 @@ struct Go_Index {
     Go_Index_Watcher wksp_watcher;
     Go_Index_Watcher gopath_watcher;
     Go_Index_Watcher goroot_watcher;
-    Thread_Handle main_loop_thread;
+    Thread_Handle bg_thread;
 
     // this hurts me
     char current_exe_path[MAX_PATH];
