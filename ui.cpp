@@ -525,11 +525,11 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                 if (world.use_nvim) {
                     ccstr mode_str = NULL;
 
-                    switch (editor->nvim_data.vimode) {
-                        case VIMODE_NORMAL: mode_str = "NORMAL"; break;
-                        case VIMODE_VISUAL: mode_str = "VISUAL"; break;
-                        case VIMODE_INSERT: mode_str = "INSERT"; break;
-                        case VIMODE_REPLACE: mode_str = "REPLACE"; break;
+                    switch (editor->nvim_data.mode) {
+                        case VI_NORMAL: mode_str = "NORMAL"; break;
+                        case VI_VISUAL: mode_str = "VISUAL"; break;
+                        case VI_INSERT: mode_str = "INSERT"; break;
+                        case VI_REPLACE: mode_str = "REPLACE"; break;
                     }
 
                     if (mode_str != NULL) {

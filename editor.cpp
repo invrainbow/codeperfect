@@ -588,3 +588,9 @@ void Editor::trigger_parameter_hint(bool triggered_by_paren) {
     out->start = hint->call_args->start;
     out->params = params;
 }
+
+void Editor::type_char(char ch) {
+    uchar uch = ch;
+    buf.insert(cur, &uch, 1);
+    raw_move_cursor(buf.inc_cur(cur));
+}

@@ -925,7 +925,60 @@ int main() {
                 handled = true;
                 editor->parameter_hint.params = NULL;
             }
+
+            if (editor->nvim_data.mode == VI_INSERT) {
+                auto& nv = world.nvim;
+
+                auto msgid = nv.start_request_message("nvim_buf_get_changedtick", 1);
+                nv.save_request(NVIM_REQ_POST_INSERT_GETCHANGEDTICK, msgid, editor->id);
+                nv.writer.write_int(editor->nvim_data.buf_id);
+                nv.end_message();
+
+                handled = true;
+            }
+
             return handled;
+        };
+
+        // TODO: all these operations that add or remove a single character in
+        // buf could definitely be optimized, I believe right now even for
+        // single char changes, it destroys the whole line, creates a new line,
+        // and copies it over.
+
+        auto handle_enter = [&](ccstr nvim_string) {
+            auto editor = world.get_current_editor();
+            if (editor->nvim_data.mode != VI_INSERT) {
+                send_nvim_keys(nvim_string);
+                return;
+            }
+
+            editor->type_char('\n');
+            // TODO: autoindent
+        };
+
+        auto handle_tab = [&](ccstr nvim_string) {
+            auto editor = world.get_current_editor();
+            if (editor->nvim_data.mode != VI_INSERT) {
+                send_nvim_keys(nvim_string);
+                return;
+            }
+            editor->type_char('\t');
+        };
+
+        auto handle_backspace = [&](ccstr nvim_string) {
+            auto editor = world.get_current_editor();
+            if (editor->nvim_data.mode != VI_INSERT) {
+                send_nvim_keys(nvim_string);
+                return;
+            }
+
+            auto buf = &editor->buf;
+            auto back1 = buf->dec_cur(editor->cur);
+            buf->remove(back1, editor->cur);
+            editor->raw_move_cursor(back1);
+
+            if (editor->cur < editor->nvim_insert.backspaced_to)
+                editor->nvim_insert.backspaced_to = editor->cur;
         };
 
         switch (ev) {
@@ -935,13 +988,9 @@ int main() {
             case OUR_MOD_SHIFT:
                 if (world.use_nvim) {
                     switch (key) {
-                    case GLFW_KEY_ENTER: send_nvim_keys("<S-Enter>"); break;
-                    case GLFW_KEY_TAB: send_nvim_keys("<S-Tab>"); break;
-                    case GLFW_KEY_UP: send_nvim_keys("<S-Up>"); break;
-                    case GLFW_KEY_RIGHT: send_nvim_keys("<S-Right>"); break;
-                    case GLFW_KEY_DOWN: send_nvim_keys("<S-Down>"); break;
-                    case GLFW_KEY_LEFT: send_nvim_keys("<S-Left>"); break;
-                    case GLFW_KEY_BACKSPACE: send_nvim_keys("<S-Backspace>"); break;
+                    case GLFW_KEY_ENTER: handle_enter("<S-Enter>"); break;
+                    case GLFW_KEY_TAB: handle_tab("<S-Tab>"); break;
+                    case GLFW_KEY_BACKSPACE: handle_backspace("<S-Backspace>"); break;
                     case GLFW_KEY_ESCAPE: if (!handle_escape()) send_nvim_keys("<S-Esc>"); break;
                     }
                     break;
@@ -955,13 +1004,8 @@ int main() {
                     if (world.use_nvim) {
                         handled = true;
                         switch (key) {
-                        case GLFW_KEY_ENTER: send_nvim_keys("<C-Enter>"); break;
-                        // case GLFW_KEY_TAB: send_nvim_keys("<C-Tab>"); break;
-                        case GLFW_KEY_UP: send_nvim_keys("<C-Up>"); break;
-                        case GLFW_KEY_RIGHT: send_nvim_keys("<C-Right>"); break;
-                        case GLFW_KEY_DOWN: send_nvim_keys("<C-Down>"); break;
-                        case GLFW_KEY_LEFT: send_nvim_keys("<C-Left>"); break;
-                        case GLFW_KEY_BACKSPACE: send_nvim_keys("<C-Backspace>"); break;
+                        case GLFW_KEY_ENTER: handle_enter("<C-Enter>"); break;
+                        case GLFW_KEY_BACKSPACE: handle_backspace("<C-Backspace>"); break;
                         case GLFW_KEY_ESCAPE: if (!handle_escape()) send_nvim_keys("<C-Esc>"); break;
                         default: handled = false; break;
                         }
@@ -1097,13 +1141,9 @@ int main() {
                     if (world.use_nvim) {
                         handled = true;
                         switch (key) {
-                        case GLFW_KEY_ENTER: send_nvim_keys("<C-S-Enter>"); break;
-                        case GLFW_KEY_UP: send_nvim_keys("<C-S-Up>"); break;
-                        case GLFW_KEY_RIGHT: send_nvim_keys("<C-S-Right>"); break;
-                        case GLFW_KEY_DOWN: send_nvim_keys("<C-S-Down>"); break;
-                        case GLFW_KEY_LEFT: send_nvim_keys("<C-S-Left>"); break;
+                        case GLFW_KEY_ENTER: handle_enter("<C-S-Enter>"); break;
                         case GLFW_KEY_ESCAPE: if (!handle_escape()) send_nvim_keys("<C-S-Esc>"); break;
-                        case GLFW_KEY_BACKSPACE: send_nvim_keys("<C-S-Backspace>"); break;
+                        case GLFW_KEY_BACKSPACE: handle_backspace("<C-S-Backspace>"); break;
                         default: handled = false; break;
                         }
                     }
@@ -1282,12 +1322,7 @@ int main() {
                     */
 
                     switch (key) {
-                    case GLFW_KEY_UP: send_nvim_keys("<Up>"); break;
-                    case GLFW_KEY_RIGHT: send_nvim_keys("<Right>"); break;
-                    case GLFW_KEY_DOWN: send_nvim_keys("<Down>"); break;
-                    case GLFW_KEY_LEFT: send_nvim_keys("<Left>"); break;
-                    case GLFW_KEY_BACKSPACE: send_nvim_keys("<Backspace>"); break;
-
+                    case GLFW_KEY_BACKSPACE: handle_backspace("<Backspace>"); break;
                     case GLFW_KEY_TAB:
                     case GLFW_KEY_ENTER:
                         {
@@ -1337,9 +1372,9 @@ int main() {
                                 break;
                             } else {
                                 if (key == GLFW_KEY_TAB)
-                                    send_nvim_keys("<Tab>");
+                                    handle_tab("<Tab>");
                                 else
-                                    send_nvim_keys("<Enter>");
+                                    handle_enter("<Enter>");
                             }
                             break;
                         }
@@ -1390,10 +1425,18 @@ int main() {
         if (ed == NULL) return;
 
         if (isprint(ch)) {
-            char keys[2] = { (char)ch, '\0' };
-            // TODO: i don't think we always need to track response, right?
-            // only when autocomplete or parameter hints is open
-            send_nvim_keys(keys);
+            if (ed->nvim_data.mode == VI_INSERT) {
+                ed->type_char(ch);
+                // a) insert character into editor buffer
+                // b) add character to nvim_insert.buf
+                // c) initiate redraw of syntax highlighting
+                // d) handle whatever on_type bullshit we had before
+            } else {
+                char keys[2] = { (char)ch, '\0' };
+                // TODO: i don't think we always need to track response, right?
+                // only when autocomplete or parameter hints is open
+                send_nvim_keys(keys);
+            }
         }
     });
 

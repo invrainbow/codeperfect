@@ -97,7 +97,7 @@ enum MpReadMode {
 struct Ext_Info {
     NvimExtType type;
     // for now all the extension types just have an int
-    u32 object_id; 
+    u32 object_id;
 };
 
 struct Mp_Reader {
@@ -354,7 +354,7 @@ enum MprpcMessageType {
     MPRPC_NOTIFICATION = 2,
 };
 
-enum Nvim_RequestType {
+enum Nvim_Request_Type {
     NVIM_REQ_GET_API_INFO,
     NVIM_REQ_CREATE_BUF,
     NVIM_REQ_OPEN_WIN,
@@ -368,11 +368,12 @@ enum Nvim_RequestType {
     NVIM_REQ_SET_CURSOR,
     NVIM_REQ_AUTOCOMPLETE_SETBUF,
     // NVIM_REQ_AUTOCOMPLETE_MOVECURSOR,
+    NVIM_REQ_POST_INSERT_GETCHANGEDTICK,
 };
 
 struct Nvim_Request {
     u32 msgid;
-    Nvim_RequestType type;
+    Nvim_Request_Type type;
     u32 editor_id;
 
     union {
@@ -392,6 +393,9 @@ struct Nvim_Request {
         struct {
             cur2 target_cursor;
         } autocomplete_setbuf;
+
+        struct {
+        };
     };
 };
 
@@ -415,7 +419,7 @@ struct Nvim {
     void write_response_header(u32 msgid);
     void write_notification_header(ccstr method, u32 params_length);
 
-    Nvim_Request* save_request(Nvim_RequestType type, u32 msgid, u32 editor_id) {
+    Nvim_Request* save_request(Nvim_Request_Type type, u32 msgid, u32 editor_id) {
         auto req = requests.append();
         req->type = type;
         req->msgid = msgid;

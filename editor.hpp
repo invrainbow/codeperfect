@@ -16,18 +16,13 @@ struct Client_Parameter_Hint {
     u32 current_param;
 };
 
-enum EditorNvimStatus {
-    ENS_BUF_PENDING,
-    ENS_WIN_PENDING,
-    ENS_SET_LINES_PENDING,
-};
-
-enum ViMode {
-    VIMODE_NONE,
-    VIMODE_NORMAL,
-    VIMODE_VISUAL,
-    VIMODE_INSERT,
-    VIMODE_REPLACE,
+enum Vi_Mode {
+    VI_NONE,
+    VI_NORMAL,
+    VI_VISUAL,
+    VI_INSERT,
+    VI_REPLACE,
+    VI_UNKNOWN,
 };
 
 struct Pane;
@@ -48,12 +43,18 @@ struct Editor {
         FILE* file_handle;
         u32 win_id;
 
-        ViMode vimode;
+        Vi_Mode mode;
         bool is_resizing;
         bool need_initial_resize;
         bool need_initial_pos_set;
         cur2 initial_pos;
     } nvim_data;
+
+    struct {
+        cur2 start;
+        cur2 backspaced_to;
+        u32 skip_changedticks_until;
+    } nvim_insert;
 
     void init();
     void cleanup();
@@ -89,6 +90,8 @@ struct Editor {
     void filter_autocomplete_results(Autocomplete* ac);
     Ast* parse_autocomplete_id(Autocomplete* ac);
     void trigger_parameter_hint(bool triggered_by_paren);
+
+    void type_char(char ch);
 };
 
 struct Pane {

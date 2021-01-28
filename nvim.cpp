@@ -132,16 +132,19 @@ void Nvim::run_event_loop() {
                                 reader.skip_object(); CHECKOK();
                             }
                         } else {
+                            bool should_skip = changedtick <= editor->nvim_insert.skip_changedticks_until;
+
                             if (lastline == -1)
                                 lastline = editor->buf.lines.len;
 
-                            editor->buf.delete_lines(firstline, lastline);
+                            if (!should_skip)
+                                editor->buf.delete_lines(firstline, lastline);
 
                             for (u32 i = 0; i < num_lines; i++) {
                                 SCOPED_FRAME();
 
                                 auto line = reader.read_string(); CHECKOK();
-                                if (editor != NULL) {
+                                if (!should_skip) {
                                     auto len = strlen(line);
                                     auto unicode_line = alloc_array(uchar, len);
                                     for (u32 i = 0; i < len; i++)
@@ -182,14 +185,24 @@ void Nvim::run_event_loop() {
                                     auto editor = world.get_current_editor();
                                     if (editor == NULL) break;
 
+                                    auto old_mode = editor->nvim_data.mode;
+
                                     if (streq(mode_name, "normal"))
-                                        editor->nvim_data.vimode = VIMODE_NORMAL;
+                                        editor->nvim_data.mode = VI_NORMAL;
                                     else if (streq(mode_name, "insert"))
-                                        editor->nvim_data.vimode = VIMODE_INSERT;
+                                        editor->nvim_data.mode = VI_INSERT;
                                     else if (streq(mode_name, "replace"))
-                                        editor->nvim_data.vimode = VIMODE_REPLACE;
+                                        editor->nvim_data.mode = VI_REPLACE;
                                     else if (streq(mode_name, "visual"))
-                                        editor->nvim_data.vimode = VIMODE_VISUAL;
+                                        editor->nvim_data.mode = VI_VISUAL;
+                                    else // error?
+                                        editor->nvim_data.mode = VI_UNKNOWN;
+
+                                    if (editor->nvim_data.mode == VI_INSERT) {
+                                        editor->nvim_insert.start = editor->cur;
+                                        editor->nvim_insert.backspaced_to = editor->cur;
+                                    }
+
                                 } else if (streq(op, "win_viewport")) {
                                     SCOPED_FRAME();
                                     ASSERT(args_len == 6);
@@ -310,6 +323,42 @@ void Nvim::run_event_loop() {
                     }
 
                     switch (req->type) {
+                        case NVIM_REQ_POST_INSERT_GETCHANGEDTICK:
+                            {
+                                ASSERT(editor != NULL);
+
+                                // skip next update from nvim
+                                auto changedtick = reader.read_int(); CHECKOK();
+                                editor->nvim_insert.skip_changedticks_until = changedtick + 1;
+
+                                auto cur = editor->cur;
+                                auto backspaced_to = editor->nvim_insert.backspaced_to;
+                                auto start = editor->nvim_insert.start;
+
+                                // set new lines
+                                start_request_message("nvim_buf_set_lines", 5);
+                                writer.write_int(editor->nvim_data.buf_id);
+                                writer.write_int(backspaced_to.y);
+                                writer.write_int(start.y + 1);
+                                writer.write_bool(false);
+                                writer.write_array(cur.y - backspaced_to.y + 1);
+                                for (u32 y = backspaced_to.y; y <= cur.y; y++) {
+                                    auto& line = editor->buf.lines[y];
+                                    writer.write1(MP_OP_STRING);
+                                    writer.write4(line.len);
+                                    For (line) writer.write1(it);
+                                }
+                                end_message();
+
+                                // move cursor
+                                editor->move_cursor(editor->cur);
+
+                                // send the <esc> key that we delayed
+                                start_request_message("nvim_input", 1);
+                                writer.write_string("<Esc>");
+                                end_message();
+                            }
+                            break;
                         case NVIM_REQ_AUTOCOMPLETE_SETBUF:
                             {
                                 ASSERT(editor != NULL);
@@ -410,8 +459,7 @@ void Nvim::run_event_loop() {
                                         For (tmpbuf.lines) {
                                             writer.write1(MP_OP_STRING);
                                             writer.write4(it.len);
-                                            For (it)
-                                                writer.write1(it);
+                                            For (it) writer.write1(it);
                                         }
                                     }
 

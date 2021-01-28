@@ -87,8 +87,10 @@ A group of changes needs to be made to fix a large class of problems.
  - In insert mode, handle input ourselves
 This can be done in order.
  - [x] Turn off current syntax highlighting
- - [ ] Get native input handling working
+ - [x] Get native input handling working
  - [ ] Write our own syntax highlighter.
 I predict this will stop about 80% of our stupid random crashes. nvim should
 really only be used to handle the stuff nvim excels at, namely, normal-mode
 commands.
+
+Add autoindent to insert mode (no longer handled by nvim).
