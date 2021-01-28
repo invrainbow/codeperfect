@@ -340,38 +340,6 @@ void Nvim::run_event_loop() {
                                 end_message();
                             }
                             break;
-#if 0
-                        case NVIM_REQ_REPLACE_TERMCODES:
-                            {
-                                if (error) {
-                                    reader.skip_object(); CHECKOK();
-                                    break;
-                                }
-
-                                ASSERT(editor != NULL);
-                                auto s = reader.read_string(); CHECKOK();
-
-                                {
-                                    auto msgid = start_request_message("nvim_feedkeys", 3);
-
-                                    auto newreq = save_request(NVIM_REQ_FEEDKEYS, msgid, editor->id);
-                                    newreq->feedkeys.key = req->replace_termcodes.key;
-
-                                    writer.write_string(s);
-                                    writer.write_string("n");
-                                    writer.write_bool(true);
-                                    end_message();
-                                }
-                            }
-                            break;
-                        case NVIM_REQ_FEEDKEYS:
-                            {
-                                ASSERT(editor != NULL);
-                                editor->process_key_after_nvim_finishes(req->feedkeys.key);
-                                reader.skip_object(); CHECKOK();
-                            }
-                            break;
-#endif
                         case NVIM_REQ_SET_CURSOR:
                             {
                                 ASSERT(editor != NULL);
