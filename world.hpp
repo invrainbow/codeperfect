@@ -15,11 +15,6 @@
 
 typedef fn<bool(Editor* e)> find_editor_func;
 
-struct Nvim_Hl_Def {
-    u32 id;
-    HlType type;
-};
-
 struct Grid_Window_Pair {
     u32 grid;
     u32 win;
@@ -101,8 +96,6 @@ struct World {
     List<File_Tree_Entry> file_tree;
 
     struct {
-        Nvim_Hl_Def _hl_defs[128];
-        List<Nvim_Hl_Def> hl_defs;
         Grid_Window_Pair _grid_to_window[128];
         List<Grid_Window_Pair> grid_to_window;
         bool is_ui_attached;

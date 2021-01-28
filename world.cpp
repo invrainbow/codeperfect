@@ -146,7 +146,6 @@ void World::init(bool test) {
     wnd_open_file.files.init(LIST_FIXED, _countof(wnd_open_file._files), wnd_open_file._files);
 
     use_nvim = true;
-    nvim_data.hl_defs.init(LIST_FIXED, _countof(nvim_data._hl_defs), nvim_data._hl_defs);
     nvim_data.grid_to_window.init(LIST_FIXED, _countof(nvim_data._grid_to_window), nvim_data._grid_to_window);
 
     if (!test) {

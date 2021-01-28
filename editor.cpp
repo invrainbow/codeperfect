@@ -316,28 +316,10 @@ void Editor::init() {
     ptr0(this);
     id = ++world.next_editor_id;
     mem.init("editor mem");
-
-    highlights.lock.init();
-    highlights.mem_a.init("editor highlights mem a");
-    highlights.mem_b.init("editor highlights mem b");
 }
 
 void Editor::cleanup() {
     mem.cleanup();
-
-    highlights.rows->cleanup();
-    highlights.lock.cleanup();
-}
-
-ccstr hl_type_str(HlType type) {
-    switch (type) {
-        define_str_case(HL_NONE);
-        define_str_case(HL_COMMENT);
-        define_str_case(HL_STATEMENT);
-        define_str_case(HL_TYPE);
-        define_str_case(HL_CONSTANT);
-    }
-    return NULL;
 }
 
 void Editor::on_type() {

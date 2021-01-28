@@ -30,23 +30,6 @@ enum ViMode {
   VIMODE_REPLACE,
 };
 
-enum HlType {
-  HL_NONE,
-  HL_COMMENT,
-  HL_STATEMENT,
-  HL_TYPE,
-  HL_CONSTANT,
-  HL_VISUAL,
-};
-
-ccstr hl_type_str(HlType type);
-
-struct Hl_Token {
-  HlType type : 8;
-  // u32 col;
-  // u32 len;
-};
-
 struct Pane;
 
 struct Editor {
@@ -58,15 +41,6 @@ struct Editor {
   char filepath[MAX_PATH];
   bool is_untitled;
   Pool mem;
-
-  struct {
-      Pool mem_a;
-      Pool mem_b;
-      bool mem_toggle;
-      Lock lock;
-      Hl_Token* buf;
-      List<List<Hl_Token>>* rows;
-  } highlights;
 
   struct {
     bool is_buf_attached;

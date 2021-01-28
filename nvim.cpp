@@ -79,9 +79,8 @@ void Nvim::run_event_loop() {
         writer.write_int(200);
         writer.write_int(100);
         {
-            writer.write_map(3);
+            writer.write_map(2);
             writer.write_string("ext_linegrid"); writer.write_bool(true);
-            writer.write_string("ext_hlstate"); writer.write_bool(true);
             writer.write_string("ext_multigrid"); writer.write_bool(true);
         }
         end_message();
@@ -169,10 +168,6 @@ void Nvim::run_event_loop() {
                             auto argsets_len = reader.read_array(); CHECKOK();
                             auto op = reader.read_string(); CHECKOK();
 
-                            bool isflush = streq(op, "flush");
-
-                            // print(" - op %s", op);
-
                             for (u32 j = 1; j < argsets_len; j++) {
                                 auto args_len = reader.read_array(); CHECKOK();
 
@@ -227,206 +222,6 @@ void Nvim::run_event_loop() {
                                     auto grid = reader.read_int(); CHECKOK();
                                     auto window = reader.read_ext(); CHECKOK();
                                     assoc_grid_with_window(grid, window->object_id);
-                                } else if (streq(op, "hl_attr_define")) {
-                                    ASSERT(args_len == 4);
-
-                                    auto id = reader.read_int(); CHECKOK();
-                                    /* rgb_attr = */ reader.skip_object(); CHECKOK();
-                                    /* cterm_attr = */ reader.skip_object(); CHECKOK();
-                                    auto info_maps = reader.read_array(); CHECKOK();
-
-                                    HlType hltype = HL_NONE;
-
-                                    if (info_maps > 0) {
-                                        for (u32 i = 0; i < info_maps - 1; i++) {
-                                            reader.skip_object(); CHECKOK();
-                                        }
-                                        auto info_keys = reader.read_map(); CHECKOK();
-                                        for (u32 i = 0; i < info_keys; i++) {
-                                            auto key = reader.read_string(); CHECKOK();
-                                            if (hltype != HL_NONE) {
-                                                reader.skip_object(); CHECKOK();
-                                                continue;
-                                            }
-
-                                            if (streq(key, "hi_name")) {
-                                                auto name = reader.read_string(); CHECKOK();
-
-                                                if (streq(name, "Statement")) hltype = HL_STATEMENT;
-                                                if (streq(name, "Comment"))     hltype = HL_COMMENT;
-                                                if (streq(name, "Type"))            hltype = HL_TYPE;
-                                                if (streq(name, "Constant"))    hltype = HL_CONSTANT;
-                                                if (streq(name, "Visual"))        hltype = HL_VISUAL;
-                                            } else {
-                                                reader.skip_object(); CHECKOK();
-                                            }
-                                        }
-
-                                        if (hltype != HL_NONE) {
-                                            auto& defs = world.nvim_data.hl_defs;
-
-                                            auto def = defs.find_or_append([&](Nvim_Hl_Def* it) { return it->id == id; });
-                                            assert(def != NULL);
-
-                                            def->id = id;
-                                            def->type = hltype;
-                                        }
-                                    }
-                                } else if (streq(op, "grid_scroll")) {
-                                    ASSERT(args_len == 7);
-
-                                    auto grid = reader.read_int(); CHECKOK();
-                                    auto top = reader.read_int(); CHECKOK();
-                                    auto bot = reader.read_int(); CHECKOK();
-                                    auto left = reader.read_int(); CHECKOK();
-                                    auto right = reader.read_int(); CHECKOK();
-                                    auto rows = reader.read_int(); CHECKOK();
-                                    auto cols = reader.read_int(); CHECKOK();
-
-                                    // print("top = %d, bot = %d, rows = %d", top, bot, rows);
-
-                                    auto editor = find_editor_by_grid(grid);
-                                    if (editor == NULL)
-                                        continue;
-
-                                    auto highlights = editor->highlights.rows;
-                                    bot = min(highlights->len, bot);
-
-                                    auto move_row = [&](u32 dest, u32 src) {
-                                        auto pdest = highlights->at(dest);
-                                        auto psrc = highlights->at(src);
-                                        assert(pdest.len == psrc.len);
-
-                                        for (u32 i = 0; i < pdest.len; i++) {
-                                            pdest[i].type = psrc[i].type;
-                                            psrc[i].type = HL_NONE;
-                                        }
-                                    };
-
-                                    if (rows < 0) {
-                                        rows = -rows;
-                                        for (i32 k = bot - 1; k >= top + rows; k--)
-                                            move_row(k, k - rows);
-                                    } else {
-                                        for (u32 k = top; k < bot - rows; k++)
-                                            move_row(k, k + rows);
-                                    }
-                                } else if (streq(op, "grid_line")) {
-                                    ASSERT(args_len == 4);
-
-                                    auto grid = reader.read_int(); CHECKOK();
-                                    auto row = reader.read_int(); CHECKOK();
-                                    auto col = reader.read_int(); CHECKOK();
-
-                                    i32 last_hl = -1;
-                                    HlType last_hltype = HL_NONE;
-                                    // u32 last_col = col;
-
-                                    auto editor = find_editor_by_grid(grid);
-                                    if (editor == NULL) {
-                                        reader.skip_object(); CHECKOK();
-                                        continue;
-                                    }
-
-                                    if (row < 0 || row >= editor->view.h) {
-                                        reader.skip_object(); CHECKOK();
-                                        continue;
-                                    }
-
-                                    auto&& hlrow = editor->highlights.rows->at(row);
-                                    auto num_cells = reader.read_array(); CHECKOK();
-
-                                    for (u32 k = 0; k < num_cells; k++) {
-                                        auto cell_len = reader.read_array();
-                                        ASSERT(1 <= cell_len && cell_len <= 3);
-
-                                        // skip character (we don't care)
-                                        ASSERT(reader.peek_type() == MP_STRING);
-                                        reader.skip_object(); CHECKOK();
-
-                                        // read highlight id & reps
-                                        i32 hl = -1, reps = 0;
-                                        if (cell_len == 2) {
-                                            hl = reader.read_int(); CHECKOK();
-                                        } else if (cell_len == 3) {
-                                            hl = reader.read_int(); CHECKOK();
-                                            reps = reader.read_int(); CHECKOK();
-                                        }
-
-                                        // new highlight? write out previous highlight
-                                        if (hl != -1 && hl != last_hl) {
-                                            last_hl = hl;
-
-                                            auto& defs = world.nvim_data.hl_defs;
-                                            auto idx = defs.find([&](Nvim_Hl_Def* it) { return it->id == last_hl; });
-                                            if (idx != -1)
-                                                last_hltype = defs[idx].type;
-                                            else
-                                                last_hltype = HL_NONE;
-                                        }
-
-                                        for (u32 i = 0; (i < (reps != 0 ? reps : 1)) && (col + i < hlrow.len); i++)
-                                            hlrow[col + i].type = last_hltype;
-                                        col += (reps != 0 ? reps : 1);
-                                    }
-
-                                    /*
-                                    auto save_highlight = [&]() {
-                                        HlType hltype = HL_NONE;
-
-                                        // look up highlight type from the highlight id
-                                        auto& defs = world.nvim_data.hl_defs;
-                                        auto idx = defs.find([&](Nvim_Hl_Def* it) { return it->id == last_hl; });
-                                        if (idx != -1)
-                                            hltype = defs[idx].type;
-
-                                        if (hltype == HL_NONE) return;
-
-                                        auto _row = row;
-                                        auto def = hlrow->append();
-                                        if (def == NULL) return;
-
-                                        def->col = last_col;
-                                        def->len = col - last_col;
-                                        def->type = hltype;
-                                    };
-
-                                    auto num_cells = reader.read_array(); CHECKOK();
-
-                                    {
-                                        SCOPED_LOCK(&editor->highlights_lock);
-
-                                        for (u32 k = 0; k < num_cells; k++) {
-                                            auto cell_len = reader.read_array();
-                                            ASSERT(1 <= cell_len && cell_len <= 3);
-
-                                            // skip character (we don't care)
-                                            ASSERT(reader.peek_type() == MP_STRING);
-                                            reader.skip_object(); CHECKOK();
-
-                                            // read highlight id & reps
-                                            i32 hl = -1, reps = 0;
-                                            if (cell_len == 2) {
-                                                hl = reader.read_int(); CHECKOK();
-                                            } else if (cell_len == 3) {
-                                                hl = reader.read_int(); CHECKOK();
-                                                reps = reader.read_int(); CHECKOK();
-                                            }
-
-                                            // new highlight? write out previous highlight
-                                            if (hl != -1 && hl != last_hl) {
-                                                save_highlight();
-                                                last_hl = hl;
-                                                last_col = col;
-                                            }
-
-                                            col += (reps != 0 ? reps : 1);
-                                        }
-                                    }
-                                    save_highlight();
-                                    */
-
-
                                 } else {
                                     for (u32 k = 0; k < args_len; k++) {
                                         reader.skip_object();

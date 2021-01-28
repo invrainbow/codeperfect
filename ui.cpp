@@ -365,8 +365,6 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                     if (y >= buf.lines.len) break;
 
                     auto line = &buf.lines[y];
-                    auto highlights = &editor->highlights.rows->at(relative_y);
-                    auto highlight_idx = 0;
 
                     auto is_stopped_at_this_line = [&]() -> bool {
                         if (world.dbg.state_flag == DBGSTATE_PAUSED)
@@ -403,32 +401,10 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                     for (u32 x = view.x; x < view.x + view.w; x++) {
                         if (x >= line->len) break;
 
-                        /*
-                        while (highlight_idx < highlights->len) {
-                            auto hl = highlights->at(highlight_idx);
-                            if (actual_x > hl.col + hl.len) {
-                                highlight_idx++;
-                            } else {
-                                break;
-                            }
-                        }
-                        */
-
                         auto text_color = COLOR_WHITE;
                         if (editor->cur == new_cur2(x, y)) {
                             draw_cursor();
                             text_color = COLOR_BLACK;
-                        } else {
-                            switch (highlights->at(actual_x).type) {
-                                case HL_COMMENT:     text_color = COLOR_THEME_1; break;
-                                case HL_STATEMENT: text_color = COLOR_THEME_2; break;
-                                case HL_TYPE:            text_color = COLOR_THEME_3; break;
-                                case HL_CONSTANT:    text_color = COLOR_THEME_4; break;
-                                case HL_VISUAL:
-                                    draw_background(COLOR_MEDIUM_GREY);
-                                    text_color = COLOR_BLACK;
-                                    break;
-                            }
                         }
 
                         uchar uch = line->at(x);
@@ -669,40 +645,6 @@ void UI::recalculate_view_sizes() {
             vec2 new_size;
             new_size.x = (i32)((editor_area.w - EDITOR_MARGIN_X) / world.font.width);
             new_size.y = (i32)((editor_area.h - EDITOR_MARGIN_Y) / world.font.height);
-
-            auto &hls = editor.highlights;
-
-            auto newmem = hls.mem_toggle ? &hls.mem_a : &hls.mem_b;
-            auto oldmem = !hls.mem_toggle ? &hls.mem_a : &hls.mem_b;
-            hls.mem_toggle = !hls.mem_toggle;
-
-            SCOPED_MEM(newmem);
-            newmem->reset();
-
-            auto buf = alloc_array(Hl_Token, new_size.x * new_size.y);
-            auto rows = alloc_list<List<Hl_Token>>(new_size.y);
-
-            {
-                SCOPED_LOCK(&hls.lock);
-                for (u32 row = 0; row < new_size.y; row++) {
-                    auto hlrow = rows->append();
-                    hlrow->init(LIST_FIXED, new_size.x, &buf[row * new_size.x]);
-
-                    List<Hl_Token>* old_row = NULL;
-                    if (hls.rows != NULL && row < hls.rows->len)
-                        old_row = &hls.rows->at(row);
-
-                    for (u32 col = 0; col < new_size.x; col++) {
-                        auto p = hlrow->append();
-                        if (old_row != NULL && col < old_row->len)
-                            p->type = old_row->at(col).type;
-                        else
-                            p->type = HL_NONE;
-                    }
-                }
-                hls.buf = buf;
-                hls.rows = rows;
-            }
 
             editor.view.size = new_size;
             if (!editor.nvim_data.is_resizing)
