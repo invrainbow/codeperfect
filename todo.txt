@@ -97,7 +97,6 @@ presumably inside parse_literal_value (judging by both the context of the crash
 and also the error message it was printing out was from eat_comma). Can't
 repro right now, but it's there.
 
-
 Purgatory
 =========
 

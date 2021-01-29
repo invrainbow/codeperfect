@@ -977,9 +977,7 @@ int main() {
             if (editor->cur < editor->nvim_insert.backspaced_to)
                 editor->nvim_insert.backspaced_to = editor->cur;
 
-            if (editor->autocomplete.ac.results != NULL)
-                if (editor->cursor_passed_autocomplete_start())
-                    editor->autocomplete.ac.results = NULL;
+            editor->update_autocomplete();
         };
 
         switch (ev) {
@@ -1332,8 +1330,7 @@ int main() {
                         {
                             auto& ac = editor->autocomplete;
                             if (ac.ac.results != NULL && ac.filtered_results->len > 0) {
-                                auto idx = ac.filtered_results->at(ac.selection);
-                                auto& result = ac.ac.results->at(idx);
+                                auto idx = ac.filtered_results->at(ac.selection); auto& result = ac.ac.results->at(idx);
 
                                 auto ac_start = editor->cur;
                                 ac_start.x -= strlen(ac.prefix);

@@ -10,6 +10,10 @@ func init() {
 	db, err := gorm.Open(sqlite.Open("gorm.db"), &gorm.Config{})
 }
 
+type Conn struct {
+	db int
+}
+
 func NewConn() *Conn {
 	conn := &Conn{}
 	sqldb := sqlite.Open("gorm.db")

@@ -93,7 +93,7 @@ struct Editor {
 
     void type_char(char ch);
     void type_char_in_insert_mode(char ch);
-    bool cursor_passed_autocomplete_start();
+    void update_autocomplete();
 };
 
 struct Pane {

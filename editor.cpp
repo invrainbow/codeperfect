@@ -376,10 +376,12 @@ void Editor::filter_autocomplete_results(Autocomplete* ac) {
             } else {
                 auto prefix_len = cur.x - id->start.x;
                 prefix_len = min(prefix_len, _countof(autocomplete.prefix) - 1);
-                if (prefix_len == 0)
+                if (prefix_len == 0) {
                     autocomplete.prefix[0] = '\0';
-                else
+                } else {
                     strncpy(autocomplete.prefix, id->id.lit, prefix_len);
+                    autocomplete.prefix[prefix_len] = '\0';
+                }
             }
         }
 
@@ -504,11 +506,27 @@ void Editor::type_char(char ch) {
     raw_move_cursor(buf.inc_cur(cur));
 }
 
-bool Editor::cursor_passed_autocomplete_start() {
-    auto& ac = autocomplete.ac;
-    if (ac.type == AUTOCOMPLETE_PACKAGE_EXPORTS || ac.type == AUTOCOMPLETE_STRUCT_FIELDS)
-        return cur <= ac.keyword_start_position;
-    return cur < ac.keyword_start_position;
+void Editor::update_autocomplete() {
+    if (autocomplete.ac.results != NULL) {
+        auto& ac = autocomplete.ac;
+
+        auto passed_start = [&]() {
+            auto& ac = autocomplete.ac;
+            if (ac.type == AUTOCOMPLETE_PACKAGE_EXPORTS || ac.type == AUTOCOMPLETE_STRUCT_FIELDS)
+                return cur <= ac.keyword_start_position;
+            return cur < ac.keyword_start_position;
+        };
+
+        auto passed_end = [&]() {
+            auto id = parse_autocomplete_id(&autocomplete.ac);
+            return id != NULL && cur > id->end;
+        };
+
+        if (passed_start() || passed_end())
+            autocomplete.ac.results = NULL;
+        else
+            filter_autocomplete_results(&autocomplete.ac);
+    }
 }
 
 void Editor::type_char_in_insert_mode(char ch) {
@@ -519,19 +537,7 @@ void Editor::type_char_in_insert_mode(char ch) {
         case '(': trigger_parameter_hint(true); break;
     }
 
-    if (autocomplete.ac.results != NULL) {
-        auto& ac = autocomplete.ac;
-
-        auto passed_end = [&]() {
-            auto id = parse_autocomplete_id(&autocomplete.ac);
-            return id != NULL && cur > id->end;
-        };
-
-        if (cursor_passed_autocomplete_start() || passed_end())
-            autocomplete.ac.results = NULL;
-        else
-            filter_autocomplete_results(&autocomplete.ac);
-    }
+    update_autocomplete();
 
     // reset parameter hint when cursor goes before hint start
     auto& hint = parameter_hint;
