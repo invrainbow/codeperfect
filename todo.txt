@@ -87,15 +87,9 @@ When tabs overflow the tab bar, current tab just goes offscreen.
 When you press tab to fill in autocomplete without typing any prefix, it
 autocompletes, but leaves the menu open (and moves it to your cursor).
 
-If you press shift+escape on a parameter hint, you can move around and
-the parameter hit will stay open and follow you.
-
 Typing "foo(bar(" will use autocomplete for foo, not bar.
 
-Earlier, when typing a literal value, it got into an infinite loop,
-presumably inside parse_literal_value (judging by both the context of the crash
-and also the error message it was printing out was from eat_comma). Can't
-repro right now, but it's there.
+
 
 Purgatory
 =========
@@ -103,3 +97,8 @@ Purgatory
 [bug?] Go_Index reindexes twice whenever we save a file.  Update: I mean, the
 debounce stops it from reindexing twice, but savig a file still sends two
 filesystem change events. Not sure if worth fixing.
+
+Earlier, when typing a literal value, it got into an infinite loop,
+presumably inside parse_literal_value (judging by both the context of the crash
+and also the error message it was printing out was from eat_comma). Can't
+repro right now, but it's there.

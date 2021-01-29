@@ -328,6 +328,7 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                 auto &view = editor->view;
 
                 vec2f actual_cursor_position = { -1, -1 };
+                vec2f actual_parameter_hint_start = { -1, -1 };
 
                 auto draw_background = [&](vec3f color) {
                     boxf b = { cur_pos.x, cur_pos.y - font->offset_y, (float)font->width, (float)font->height };
@@ -356,9 +357,9 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                     }
                 }
 
-                if (buf.lines.len == 0) {
-                    draw_cursor();
-                }
+                if (buf.lines.len == 0) draw_cursor();
+
+                auto &hint = editor->parameter_hint;
 
                 auto relative_y = 0;
                 for (u32 y = view.y; y < view.y + view.h; y++, relative_y++) {
@@ -413,7 +414,9 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                         else
                             draw_char(&cur_pos, (char)uch, rgba(text_color));
 
-                        actual_x += (uch == '\t' ? TAB_SIZE : 1);
+                        if (hint.params != NULL)
+                            if (x == hint.start.x && y == hint.start.y)
+                                actual_parameter_hint_start = cur_pos;
                     }
 
                     if (editor->cur == new_cur2(line->len, y))
@@ -490,9 +493,8 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                 } while (0);
 
                 do {
-                    if (actual_cursor_position.x == -1) break;
+                    if (actual_parameter_hint_start.x == -1) break;
 
-                    auto &hint = editor->parameter_hint;
                     if (hint.params == NULL) break;
 
                     u32 str_len = 0;
@@ -505,8 +507,8 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                     boxf bg;
                     bg.w = font->width * str_len;
                     bg.h = font->height;
-                    bg.x = min(actual_cursor_position.x, world.window_size.x - bg.w);
-                    bg.y = min(actual_cursor_position.y - font->offset_y - font->height, world.window_size.y - bg.h);
+                    bg.x = min(actual_parameter_hint_start.x, world.window_size.x - bg.w);
+                    bg.y = min(actual_parameter_hint_start.y - font->offset_y - font->height, world.window_size.y - bg.h);
 
                     draw_bordered_rect_outer(bg, rgba(COLOR_DARK_GREY), rgba(COLOR_WHITE), 1);
 
