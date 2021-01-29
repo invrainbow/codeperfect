@@ -4754,7 +4754,9 @@ void Go_Index::handle_fs_event(Go_Index_Watcher *w, Fs_Event *event) {
         auto ev = index_events.append();
         ev->time = current_time_in_nanoseconds();
         ev->type = type;
-        strcpy_safe(ev->import_path, _countof(ev->import_path), import_path);
+
+        if (import_path != NULL)
+            strcpy_safe(ev->import_path, _countof(ev->import_path), import_path);
     };
 
     auto queue_for_rescan = [&](ccstr directory) {

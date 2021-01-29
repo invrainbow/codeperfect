@@ -283,8 +283,6 @@ void run_proc_the_normal_way(Process* proc, ccstr cmd) {
     proc->cleanup();
     proc->init();
     proc->dir = world.wksp.path;
-
-    // print("running: %s", cmd);
     proc->run(cmd);
 }
 
@@ -663,7 +661,6 @@ int main() {
         auto& font = world.font;
 
         ui.recalculate_view_sizes();
-        print("resizing to (%d, %d)", w, h);
 
         mat4f projection;
         new_ortho_matrix(projection, 0, w, h, 0);
@@ -962,7 +959,7 @@ int main() {
                 send_nvim_keys(nvim_string);
                 return;
             }
-            editor->type_char('\t');
+            editor->type_char_in_insert_mode('\t');
         };
 
         auto handle_backspace = [&](ccstr nvim_string) {
@@ -979,6 +976,10 @@ int main() {
 
             if (editor->cur < editor->nvim_insert.backspaced_to)
                 editor->nvim_insert.backspaced_to = editor->cur;
+
+            if (editor->autocomplete.ac.results != NULL)
+                if (editor->cursor_passed_autocomplete_start())
+                    editor->autocomplete.ac.results = NULL;
         };
 
         switch (ev) {
@@ -1025,6 +1026,9 @@ int main() {
                         break;
                     case GLFW_KEY_4:
                         world.wksp.activate_pane(3);
+                        break;
+                    case GLFW_KEY_R:
+                        send_nvim_keys("<C-r>");
                         break;
                     case GLFW_KEY_P:
                         world.windows_open.open_file ^= 1;
@@ -1426,7 +1430,7 @@ int main() {
 
         if (isprint(ch)) {
             if (ed->nvim_data.mode == VI_INSERT) {
-                ed->type_char(ch);
+                ed->type_char_in_insert_mode(ch);
                 // a) insert character into editor buffer
                 // b) add character to nvim_insert.buf
                 // c) initiate redraw of syntax highlighting

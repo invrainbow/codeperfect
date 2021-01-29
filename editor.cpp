@@ -322,97 +322,6 @@ void Editor::cleanup() {
     mem.cleanup();
 }
 
-// Below we have on_type, which used to get called when in nvim CursorMovedI
-// got called and we sent rpcrqeuest here. This needs to go into our insert-mode handler now.
-#if 0
-void Editor::on_type() {
-    auto last_character = buf.iter(buf.dec_cur(cur)).peek();
-
-    /*
-    I think the plan is to build this out in stages:
-
-        stage 1 (noob): given a current buffer state and cursor position, set up
-        autocomplete/hints to have the correct state.
-
-    This seems like it'd be kind of slow. Probably not an issue; my computer
-    spins THREE BILLION TIMES a second. But ideally we'd have:
-
-        stage 2 (advanced): take into account previous state and make only the
-        changes we need from the last character.
-    */
-
-    switch (last_character) {
-        case '.':
-            // TODO: what happens if we backspace into a '.'? e.g.
-            //     foo.bar|
-            // and we backspace the r, a, and b
-            // we probably shouldn't trigger autocomplete
-            // though honestly it's probably fine if we can get autocomplete faster lol
-            trigger_autocomplete(true);
-            break;
-        case '(':
-            trigger_parameter_hint(true);
-            break;
-    }
-
-    if (autocomplete.ac.results != NULL) {
-        auto& ac = autocomplete.ac;
-
-        auto passed_start = [&]() {
-            if (ac.type == AUTOCOMPLETE_PACKAGE_EXPORTS || ac.type == AUTOCOMPLETE_STRUCT_FIELDS)
-                return cur <= ac.keyword_start_position;
-            return cur < ac.keyword_start_position;
-        };
-
-        auto passed_end = [&]() {
-            auto id = parse_autocomplete_id(&autocomplete.ac);
-            return id != NULL && cur > id->end;
-        };
-
-        if (passed_start() || passed_end())
-            autocomplete.ac.results = NULL;
-        else
-            filter_autocomplete_results(&autocomplete.ac);
-    }
-
-    // reset parameter hint when cursor goes before hint start
-    auto& hint = parameter_hint;
-    if (hint.params != NULL) {
-        auto should_close_hints = [&]() {
-            if (cur < hint.start) return true;
-
-            bool ret = false;
-            with_parser_at_location(filepath, hint.start, [&](Parser* p) {
-                auto call_args = p->parse_call_args();
-                ret = (cur > call_args->end);
-            });
-            return ret;
-        };
-
-        if (should_close_hints()) {
-            hint.params = NULL;
-        } else {
-            with_parser_at_location(filepath, hint.start, [&](Parser* p) {
-                auto call_args = p->parse_call_args();
-                u32 idx = 0;
-                For (call_args->call_args.args->list) {
-                    // When parser parses something invalid, most commonly lack of
-                    // TOK_RPAREN, like when user starts typing "foo(", it adds NULL to
-                    // args; just ignore it.
-                    if (it == NULL) continue;
-
-                    if (locate_pos_relative_to_ast(cur, it) == 0) {
-                        hint.current_param = idx;
-                        break;
-                    }
-                    idx++;
-                }
-            });
-        }
-    }
-}
-#endif
-
 void Editor::trigger_autocomplete(bool triggered_by_dot) {
     ptr0(&autocomplete);
 
@@ -593,4 +502,70 @@ void Editor::type_char(char ch) {
     uchar uch = ch;
     buf.insert(cur, &uch, 1);
     raw_move_cursor(buf.inc_cur(cur));
+}
+
+bool Editor::cursor_passed_autocomplete_start() {
+    auto& ac = autocomplete.ac;
+    if (ac.type == AUTOCOMPLETE_PACKAGE_EXPORTS || ac.type == AUTOCOMPLETE_STRUCT_FIELDS)
+        return cur <= ac.keyword_start_position;
+    return cur < ac.keyword_start_position;
+}
+
+void Editor::type_char_in_insert_mode(char ch) {
+    type_char(ch);
+
+    switch (ch) {
+        case '.': trigger_autocomplete(true); break;
+        case '(': trigger_parameter_hint(true); break;
+    }
+
+    if (autocomplete.ac.results != NULL) {
+        auto& ac = autocomplete.ac;
+
+        auto passed_end = [&]() {
+            auto id = parse_autocomplete_id(&autocomplete.ac);
+            return id != NULL && cur > id->end;
+        };
+
+        if (cursor_passed_autocomplete_start() || passed_end())
+            autocomplete.ac.results = NULL;
+        else
+            filter_autocomplete_results(&autocomplete.ac);
+    }
+
+    // reset parameter hint when cursor goes before hint start
+    auto& hint = parameter_hint;
+    if (hint.params != NULL) {
+        auto should_close_hints = [&]() {
+            if (cur < hint.start) return true;
+
+            bool ret = false;
+            with_parser_at_location(filepath, hint.start, [&](Parser* p) {
+                auto call_args = p->parse_call_args();
+                ret = (cur > call_args->end);
+            });
+            return ret;
+        };
+
+        if (should_close_hints()) {
+            hint.params = NULL;
+        } else {
+            with_parser_at_location(filepath, hint.start, [&](Parser* p) {
+                auto call_args = p->parse_call_args();
+                u32 idx = 0;
+                For (call_args->call_args.args->list) {
+                    // When parser parses something invalid, most commonly lack of
+                    // TOK_RPAREN, like when user starts typing "foo(", it adds NULL to
+                    // args; just ignore it.
+                    if (it == NULL) continue;
+
+                    if (locate_pos_relative_to_ast(cur, it) == 0) {
+                        hint.current_param = idx;
+                        break;
+                    }
+                    idx++;
+                }
+            });
+        }
+    }
 }

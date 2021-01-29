@@ -92,6 +92,8 @@ struct Editor {
     void trigger_parameter_hint(bool triggered_by_paren);
 
     void type_char(char ch);
+    void type_char_in_insert_mode(char ch);
+    bool cursor_passed_autocomplete_start();
 };
 
 struct Pane {
