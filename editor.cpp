@@ -548,7 +548,7 @@ void Editor::type_char_in_insert_mode(char ch) {
             bool ret = false;
             with_parser_at_location(filepath, hint.start, [&](Parser* p) {
                 auto call_args = p->parse_call_args();
-                ret = (cur > call_args->end);
+                ret = (cur >= call_args->end);
             });
             return ret;
         };

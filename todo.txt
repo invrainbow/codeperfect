@@ -44,8 +44,6 @@ unobtrusive though.
 
 In parameter hint, highlight which parameter we're currently on.
 
-In parameter hint, close hint when end paren is typed.
-
 Add syntax highlighting to parameter hint.
 
 Since we depend so heavily on the index for all aspects of intellisense (e.g.
