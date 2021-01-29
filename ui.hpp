@@ -98,7 +98,7 @@ struct UI {
   void draw_rect(boxf b, vec4f color);
   void draw_bordered_rect_outer(boxf b, vec4f color, vec4f border_color, int border_width);
   void draw_char(vec2f* pos, char ch, vec4f color);
-  void draw_string(vec2f pos, ccstr s, vec4f color);
+  vec2f draw_string(vec2f pos, ccstr s, vec4f color);
   float get_text_width(ccstr s);
   boxf get_sidebar_area();
   boxf get_panes_area();

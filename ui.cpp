@@ -26,6 +26,7 @@ vec4f rgba(vec3f color, float alpha) {
 }
 
 const vec3f COLOR_WHITE = rgb_hex("#ffffff");
+const vec3f COLOR_RED = rgb_hex("#ff8888");
 const vec3f COLOR_DARK_RED = rgb_hex("#880000");
 const vec3f COLOR_DARK_YELLOW = rgb_hex("#6b6d0a");
 const vec3f COLOR_BLACK = rgb_hex("#000000");
@@ -96,10 +97,12 @@ void UI::draw_char(vec2f* pos, char ch, vec4f color) {
     }
 }
 
-void UI::draw_string(vec2f pos, ccstr s, vec4f color) {
+vec2f UI::draw_string(vec2f pos, ccstr s, vec4f color) {
     pos.y += font->offset_y;
     for (u32 i = 0, len = strlen(s); i < len; i++)
         draw_char(&pos, s[i], color);
+    pos.y -= font->offset_y;
+    return pos;
 }
 
 float UI::get_text_width(ccstr s) {
@@ -512,16 +515,21 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
 
                     draw_bordered_rect_outer(bg, rgba(COLOR_DARK_GREY), rgba(COLOR_WHITE), 1);
 
-                    Text_Renderer rend;
-                    rend.init();
-                    rend.write("(");
-                    for (int i = 0; i < hint.params->len; i++) {
-                        rend.write("%s", hint.params->at(i));
-                        if (i < hint.params->len - 1)
-                            rend.write(", ");
+                    {
+                        auto pos = bg.pos;
+
+                        auto draw = [&](ccstr s, vec4f color) {
+                            pos = draw_string(pos, s, color);
+                        };
+
+                        draw("(", rgba(COLOR_WHITE));
+                        for (int i = 0; i < hint.params->len; i++) {
+                            draw(hint.params->at(i), i == hint.current_param ? rgba(COLOR_RED) : rgba(COLOR_WHITE));
+                            if (i < hint.params->len - 1)
+                                draw(", ", rgba(COLOR_WHITE));
+                        }
+                        draw(")", rgba(COLOR_WHITE));
                     }
-                    rend.write(")");
-                    draw_string(bg.pos, rend.finish(), rgba(COLOR_WHITE));
                 } while (0);
 
                 if (world.use_nvim) {
