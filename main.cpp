@@ -1069,7 +1069,7 @@ int main() {
                             SCOPED_MEM(&world.index.main_thread_mem);
                             defer { world.index.main_thread_mem.reset(); };
 
-                            auto result = world.index.jump_to_definition(editor->filepath, new_cur2(editor->cur_to_offset(editor->cur), 0));
+                            auto result = world.index.jump_to_definition(editor->filepath, new_cur2(editor->cur_to_offset(editor->cur), -1));
                             if (result == NULL) {
                                 error("unable to jump to definition");
                                 return;
@@ -1086,9 +1086,15 @@ int main() {
                                 auto pos = result->pos;
 
                                 if (world.use_nvim) {
-                                    target_ed->nvim_data.initial_pos = pos;
-                                    target_ed->nvim_data.need_initial_pos_set = true;
+                                    if (target_ed->is_nvim_ready()) {
+                                        if (pos.y == -1) pos = target_ed->offset_to_cur(pos.x);
+                                        target_ed->move_cursor(pos);
+                                    } else {
+                                        target_ed->nvim_data.initial_pos = pos;
+                                        target_ed->nvim_data.need_initial_pos_set = true;
+                                    }
                                 } else {
+                                    if (pos.y == -1) pos = target_ed->offset_to_cur(pos.x);
                                     target_ed->move_cursor(pos);
                                 }
                             }

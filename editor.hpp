@@ -43,6 +43,9 @@ struct Editor {
         FILE* file_handle;
         u32 win_id;
 
+        bool got_initial_cur;
+        bool got_initial_lines;
+
         Vi_Mode mode;
         bool is_resizing;
         bool need_initial_resize;

@@ -64,6 +64,18 @@ Editor* find_editor_by_grid(u32 grid) {
     return find_editor_by_window(table[idx].win);
 }
 
+void handle_editor_set_initial_pos(Editor *editor) {
+    if (editor->is_nvim_ready()) {
+        if (editor->nvim_data.need_initial_pos_set) {
+            editor->nvim_data.need_initial_pos_set = false;
+            auto pos = editor->nvim_data.initial_pos;
+            if (pos.y == -1)
+                pos = editor->offset_to_cur(pos.x);
+            editor->move_cursor(pos);
+        }
+    }
+}
+
 void Nvim::run_event_loop() {
     auto before_exit = [&]() {
         print("exiting...");
@@ -158,13 +170,9 @@ void Nvim::run_event_loop() {
                         // notif when it comes
                         reader.skip_object(); CHECKOK();
 
-                        if (editor->nvim_data.need_initial_pos_set) {
-                            editor->nvim_data.need_initial_pos_set = false;
-
-                            auto pos = editor->nvim_data.initial_pos;
-                            if (pos.y == -1)
-                                pos = editor->offset_to_cur(pos.x);
-                            editor->move_cursor(pos);
+                        if (!editor->nvim_data.got_initial_lines) {
+                            editor->nvim_data.got_initial_lines = true;
+                            handle_editor_set_initial_pos(editor);
                         }
                     } else if (streq(method, "redraw")) {
                         for (u32 i = 0; i < params_length; i++) {
@@ -221,6 +229,11 @@ void Nvim::run_event_loop() {
                                         continue; // TODO: handle us still receiving notifications for nonexistent window
 
                                     editor->raw_move_cursor(new_cur2((u32)curcol, (u32)curline));
+
+                                    if (!editor->nvim_data.got_initial_cur) {
+                                        editor->nvim_data.got_initial_cur = true;
+                                        handle_editor_set_initial_pos(editor);
+                                    }
                                 } else if (streq(op, "win_pos")) {
                                     ASSERT(args_len == 6);
                                     auto grid = reader.read_int(); CHECKOK();

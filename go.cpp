@@ -3401,16 +3401,16 @@ Jump_To_Definition_Result* Go_Index::jump_to_definition(ccstr filepath, cur2 pos
                     auto x = ast->selector_expr.x;
                     if (x->type == AST_ID) {
                         auto try_to_find_package = [&]() -> bool {
-                            auto spec = x->id.decl;
+                            auto spec = find_decl_of_id(make_file_ast(x, filepath, file_to_import_path(filepath)));
                             if (spec == NULL) return false;
-                            if (spec->type != AST_IMPORT_SPEC) return false;
+                            if (spec->ast->type != AST_IMPORT_SPEC) return false;
 
-                            auto import_path = spec->import_spec.path->basic_lit.val.string_val;
+                            auto import_path = spec->ast->import_spec.path->basic_lit.val.string_val;
                             auto decl = find_decl_in_package(sel->id.lit, import_path);
 
                             if (decl == NULL) return false;
 
-                            auto id = locate_id_in_decl(decl->ast, x->id.lit);
+                            auto id = locate_id_in_decl(decl->ast, sel->id.lit);
                             if (id == NULL) return false;
 
                             result.file = decl->file;
@@ -3443,8 +3443,8 @@ Jump_To_Definition_Result* Go_Index::jump_to_definition(ccstr filepath, cur2 pos
                     auto id = locate_id_in_decl(decl->ast, ast->id.lit);
                     if (id == NULL) break;
 
-                    result.pos = id->start;
                     result.file = decl->file;
+                    result.pos = id->start;
                 } while (0);
                 return WALK_ABORT;
         }
@@ -3453,6 +3453,24 @@ Jump_To_Definition_Result* Go_Index::jump_to_definition(ccstr filepath, cur2 pos
 
     if (result.file == NULL)
         return NULL;
+
+    if (result.pos.y == -1) {
+        auto ef = read_entire_file(result.file);
+        if (ef == NULL) return NULL;
+        defer { free_entire_file(ef); };
+
+        cur2 newpos = {0};
+        for (u32 i = 0; i < ef->len && i < result.pos.x; i++) {
+            if (ef->data[i] == '\r') continue;
+            if (ef->data[i] == '\n') {
+                newpos.y++;
+                newpos.x = 0;
+                continue;
+            }
+            newpos.x++;
+        }
+        result.pos = newpos;
+    }
 
     auto ret = alloc_object(Jump_To_Definition_Result);
     *ret = result;
