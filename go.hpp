@@ -1102,6 +1102,7 @@ struct Index_Event {
 enum Go_Watch_Type {
     WATCH_WKSP,
     WATCH_GOPATH,
+    WATCH_PKGMOD,
     WATCH_GOROOT,
 };
 
@@ -1129,6 +1130,7 @@ struct Go_Index {
     // we can get rid of this stupidity when i get async ReadDirectoryChanges working
     Go_Index_Watcher wksp_watcher;
     Go_Index_Watcher gopath_watcher;
+    Go_Index_Watcher pkgmod_watcher;
     Go_Index_Watcher goroot_watcher;
     Thread_Handle bg_thread;
 
@@ -1203,6 +1205,9 @@ struct Go_Index {
     List<ccstr>* list_source_files(ccstr dirpath);
     ccstr get_package_name(ccstr path);
     Resolved_Import* resolve_import(ccstr import_path);
+    ccstr directory_to_import_path(ccstr path_str);
+    ccstr file_to_import_path(ccstr filepath);
+
 };
 
 typedef fn<void(Parser*)> parser_cb;

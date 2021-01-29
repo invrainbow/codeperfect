@@ -150,3 +150,31 @@ bool Path::contains(Path *other) {
     return true;
 }
 
+ccstr Path::str() {
+    auto len = 0;
+    For (*parts) len += strlen(it);
+    len += parts->len - 1;
+
+    auto ret = alloc_array(char, len+1);
+    u32 k = 0;
+
+    for (u32 i = 0; i < parts->len; i++) {
+        auto it = parts->at(i);
+
+        auto len = strlen(it);
+        memcpy(ret + k, it, len);
+        k += len;
+
+        if (i + 1 < parts->len)
+            ret[k++] = PATH_SEP;
+    }
+
+    ret[k] = '\0';
+    return ret;
+}
+
+bool path_contains_in_subtree(ccstr base_path, ccstr full_path) {
+    SCOPED_FRAME();
+    return make_path(base_path)->contains(make_path(full_path));
+}
+

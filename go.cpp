@@ -2672,8 +2672,8 @@ bool Go_Index::match_import_spec(Ast* import_spec, ccstr want) {
     if (name != NULL)
         return streq(name->id.lit, want);
 
-    auto pathstr = import_spec->import_spec.path->basic_lit.val.string_val;
-    auto imp = resolve_import(pathstr);
+    auto path_str = import_spec->import_spec.path->basic_lit.val.string_val;
+    auto imp = resolve_import(path_str);
     if (imp == NULL)
         return false;
 
@@ -2736,8 +2736,8 @@ void Go_Index::list_decls_in_source(File_Ast* source, int flags, fn<void(Named_D
                                 continue;
                             }
 
-                            auto pathstr = path->basic_lit.val.string_val;
-                            auto resolved_import = resolve_import(pathstr);
+                            auto path_str = path->basic_lit.val.string_val;
+                            auto resolved_import = resolve_import(path_str);
                             if (resolved_import == NULL) continue;
 
                             auto ast = alloc_object(Ast);
@@ -3423,7 +3423,7 @@ Jump_To_Definition_Result* Go_Index::jump_to_definition(ccstr filepath, cur2 pos
                     }
 
                     do {
-                        auto r = infer_type(make_file_ast(ast->selector_expr.x, filepath, get_workspace_import_path()), true);
+                        auto r = infer_type(make_file_ast(ast->selector_expr.x, filepath, file_to_import_path(filepath)), true);
                         if (r == NULL) break;
 
                         auto field = find_field_or_method_in_type(r->base_type, r->type, sel->id.lit);
@@ -3437,7 +3437,7 @@ Jump_To_Definition_Result* Go_Index::jump_to_definition(ccstr filepath, cur2 pos
                 }
             case AST_ID:
                 do {
-                    auto decl = find_decl_of_id(make_file_ast(ast, filepath, get_workspace_import_path()));
+                    auto decl = find_decl_of_id(make_file_ast(ast, filepath, file_to_import_path(filepath)));
                     if (decl == NULL) break;
 
                     auto id = locate_id_in_decl(decl->ast, ast->id.lit);
@@ -3504,7 +3504,7 @@ bool Go_Index::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period, 
                         bool found_package = false;
 
                         do {
-                            auto spec = find_decl_of_id(make_file_ast(x, filepath, world.wksp.path), true);
+                            auto spec = find_decl_of_id(make_file_ast(x, filepath, file_to_import_path(filepath)), true);
                             if (spec == NULL) break;
 
                             auto spec_ast = spec->ast;
@@ -3533,7 +3533,7 @@ bool Go_Index::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period, 
                         } while (0);
                     }
 
-                    auto r = infer_type(make_file_ast(x, filepath, get_workspace_import_path()), true);
+                    auto r = infer_type(make_file_ast(x, filepath, file_to_import_path(filepath)), true);
                     if (r == NULL) return WALK_ABORT;
 
                     auto fields = list_fields_and_methods_in_type(r->base_type, r->type);
@@ -4701,6 +4701,65 @@ bool Go_Index::delete_index() {
     return delete_rm_rf(get_index_path());
 }
 
+ccstr remove_ats_from_path(ccstr s) {
+    auto path = make_path(s);
+
+    // Fuck this shit, we're just going to mutate path directly.  Yes,
+    // `parts` is a list of const char*s,  but we only do that because
+    // C is stupid and if you pass strings around as char* you end up
+    // having to cast them to const everywhere.
+    //
+    // WE DO NOT EVER use const to indicate that memory is read-only.
+    // In our programs, we do not have the concept of read-only memory.
+    // Why would I ever want to BAN MYSELF from writing to MY OWN
+    // MEMORY?
+
+    For (*path->parts) {
+        // in every part, remove "@whatever"
+        auto atpos = strchr((char*)it, '@');
+        if (atpos != NULL) *atpos = '\0';
+    }
+
+    return path->str();
+}
+
+ccstr Go_Index::file_to_import_path(ccstr filepath) {
+    return directory_to_import_path(our_dirname(filepath));
+}
+
+ccstr Go_Index::directory_to_import_path(ccstr path_str) {
+    // resolution order: vendor, workspace, gopath/pkg/mod, gopath, goroot
+
+    // TODO: SCOPED_FRAME()?
+
+    auto path = make_path(path_str);
+
+    auto check = [&](ccstr base_path_str, bool is_pkg_mod) -> ccstr {
+        auto base_path = make_path(base_path_str);
+        if (!base_path->contains(path)) return NULL;
+
+        auto ret = get_path_relative_to(path_str, base_path_str);
+        if (is_pkg_mod) ret = remove_ats_from_path(ret);
+        return ret;
+    };
+
+    ccstr paths[] = {
+        path_join(world.wksp.path, "vendor"),
+        world.wksp.path,
+        path_join(GOPATH, "pkg/mod"),
+        path_join(GOPATH, "src"),
+        path_join(GOROOT, "src"),
+    };
+
+    bool pkgmod[] = { false, false, true, false, false };
+
+    for (u32 i = 0; i < _countof(paths); i++) {
+        auto ret = check(paths[i], pkgmod[i]);
+        if (ret != NULL) return ret;
+    }
+    return NULL;
+}
+
 void Go_Index::handle_fs_event(Go_Index_Watcher *w, Fs_Event *event) {
     // only one thread calls this at a time
     SCOPED_LOCK(&fs_event_lock);
@@ -4710,12 +4769,12 @@ void Go_Index::handle_fs_event(Go_Index_Watcher *w, Fs_Event *event) {
 
     auto watch_path = w->watch.path;
 
-    auto directory_to_import_path = [&](ccstr path) -> ccstr {
+    auto _directory_to_import_path = [&](ccstr path) -> ccstr {
         switch (w->type) {
         case WATCH_WKSP:
             {
                 auto vendor_path = path_join(watch_path, "vendor");
-                if (str_starts_with(path, vendor_path))
+                if (path_contains_in_subtree(vendor_path, path))
                     return get_path_relative_to(path, vendor_path);
                 return path_join(
                     get_workspace_import_path(),
@@ -4723,6 +4782,8 @@ void Go_Index::handle_fs_event(Go_Index_Watcher *w, Fs_Event *event) {
                 );
             }
             break;
+        case WATCH_PKGMOD:
+            return remove_ats_from_path(get_path_relative_to(path, watch_path));
         case WATCH_GOPATH:
         case WATCH_GOROOT:
             return get_path_relative_to(path, watch_path);
@@ -4760,14 +4821,13 @@ void Go_Index::handle_fs_event(Go_Index_Watcher *w, Fs_Event *event) {
     };
 
     auto queue_for_rescan = [&](ccstr directory) {
-        auto import_path = directory_to_import_path(directory);
+        auto import_path = _directory_to_import_path(directory);
         if (import_path == NULL) return;
         queue_event(INDEX_EVENT_REINDEX_PACKAGE, import_path);
     };
 
     auto path = path_join(watch_path, event->filepath);
 
-    // ignore changes to {wksp.path}/.ide
     if (w->type == WATCH_WKSP)
         if (str_starts_with(path, path_join(watch_path, ".ide")))
             return;
@@ -4805,7 +4865,8 @@ void Go_Index::handle_fs_event(Go_Index_Watcher *w, Fs_Event *event) {
         if (str_ends_with(path, "_test.go")) break;
 
         if (w->type == WATCH_WKSP)
-            queue_event(INDEX_EVENT_FETCH_IMPORTS, NULL);
+            if (!str_starts_with(path, path_join(watch_path, "vendor")))
+                queue_event(INDEX_EVENT_FETCH_IMPORTS, NULL);
 
         // some .go file was added/deleted/changed/renamed
         // queue its directory for a re-scan
@@ -4829,7 +4890,8 @@ bool Go_Index::init() {
 
     if (!wksp_watcher.watch.init(world.wksp.path)) return false;
     if (!gopath_watcher.watch.init(path_join(GOPATH, "src"))) return false;
-    // if (!goroot_watcher.watch.init(path_join(GOROOT, "src"))) return false;
+    if (!pkgmod_watcher.watch.init(path_join(GOPATH, "pkg/mod"))) return false;
+    if (!goroot_watcher.watch.init(path_join(GOROOT, "src"))) return false;
 
     buildparser_proc.init();
     buildparser_proc.use_stdin = true;
@@ -4873,7 +4935,8 @@ bool Go_Index::run_threads() {
 
     if (!init_watcher(&wksp_watcher, WATCH_WKSP)) return false;
     if (!init_watcher(&gopath_watcher, WATCH_GOPATH)) return false;
-    // if (!init_watcher(&goroot_watcher, WATCH_GOROOT)) return false;
+    if (!init_watcher(&pkgmod_watcher, WATCH_PKGMOD)) return false;
+    if (!init_watcher(&goroot_watcher, WATCH_GOROOT)) return false;
 
     bg_thread = create_thread(run_background_thread_stub, this);
     if (bg_thread == NULL) return false;
@@ -4893,10 +4956,12 @@ void Go_Index::cleanup() {
     kill_and_close(&bg_thread);
     kill_and_close(&wksp_watcher.thread);
     kill_and_close(&gopath_watcher.thread);
-    // kill_and_close(&goroot_watcher.thread);
+    kill_and_close(&pkgmod_watcher.thread);
+    kill_and_close(&goroot_watcher.thread);
 
     wksp_watcher.watch.cleanup();
     gopath_watcher.watch.cleanup();
+    pkgmod_watcher.watch.cleanup();
     goroot_watcher.watch.cleanup();
 
     index_events_lock.cleanup();

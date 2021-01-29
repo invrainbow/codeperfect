@@ -597,6 +597,10 @@ ccstr get_path_relative_to(ccstr full, ccstr base) {
         frame.restore();
         return NULL;
     }
+
+    // remove the "./" or ".\\" at the beginning
+    if (buf[0] == '.' && is_sep(buf[1])) buf += 2;
+
     return buf;
 }
 

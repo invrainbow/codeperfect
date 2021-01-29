@@ -177,7 +177,9 @@ struct Path {
 
     void init(List<ccstr> *parts);
     bool contains(Path *path);
+    ccstr str();
 };
 
 Path* make_path(ccstr s);
 List<ccstr> *split_string(ccstr str, fn<bool(char)> pred);
+bool path_contains_in_subtree(ccstr base_path, ccstr full_path);
