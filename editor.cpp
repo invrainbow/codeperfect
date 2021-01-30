@@ -529,16 +529,8 @@ void Editor::update_autocomplete() {
     }
 }
 
-void Editor::type_char_in_insert_mode(char ch) {
-    type_char(ch);
 
-    switch (ch) {
-        case '.': trigger_autocomplete(true); break;
-        case '(': trigger_parameter_hint(true); break;
-    }
-
-    update_autocomplete();
-
+void Editor::update_parameter_hint() {
     // reset parameter hint when cursor goes before hint start
     auto& hint = parameter_hint;
     if (hint.params != NULL) {
@@ -556,6 +548,7 @@ void Editor::type_char_in_insert_mode(char ch) {
         if (should_close_hints()) {
             hint.params = NULL;
         } else {
+            hint.current_param = -1;
             with_parser_at_location(filepath, hint.start, [&](Parser* p) {
                 auto call_args = p->parse_call_args();
                 u32 idx = 0;
@@ -565,7 +558,8 @@ void Editor::type_char_in_insert_mode(char ch) {
                     // args; just ignore it.
                     if (it == NULL) continue;
 
-                    if (locate_pos_relative_to_ast(cur, it) == 0) {
+                    // if (locate_pos_relative_to_ast(cur, it) == 0) {
+                    if (cur <= it->end) {
                         hint.current_param = idx;
                         break;
                     }
@@ -574,4 +568,16 @@ void Editor::type_char_in_insert_mode(char ch) {
             });
         }
     }
+}
+
+void Editor::type_char_in_insert_mode(char ch) {
+    type_char(ch);
+
+    switch (ch) {
+        case '.': trigger_autocomplete(true); break;
+        case '(': trigger_parameter_hint(true); break;
+    }
+
+    update_autocomplete();
+    update_parameter_hint();
 }

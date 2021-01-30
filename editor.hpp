@@ -14,6 +14,7 @@ struct Client_Parameter_Hint {
     List<ccstr>* params;
     cur2 start;
     u32 current_param;
+    bool closed;
 };
 
 enum Vi_Mode {
@@ -97,6 +98,7 @@ struct Editor {
     void type_char(char ch);
     void type_char_in_insert_mode(char ch);
     void update_autocomplete();
+    void update_parameter_hint();
 };
 
 struct Pane {

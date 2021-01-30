@@ -977,6 +977,7 @@ int main() {
                 editor->nvim_insert.backspaced_to = editor->cur;
 
             editor->update_autocomplete();
+            editor->update_parameter_hint();
         };
 
         switch (ev) {
@@ -1075,7 +1076,7 @@ int main() {
                                 opts.bufsize = _countof(editor->filepath);
                                 opts.folder = false;
                                 opts.save = true;
-                                let_user_select_file(&opts);
+                                if (!let_user_select_file(&opts)) break;
                                 editor->is_untitled = false;
                             }
 
@@ -1124,15 +1125,20 @@ int main() {
                             }
                             break;
                         }
+                    case GLFW_KEY_SLASH:
+                        {
+                            auto ed = world.get_current_editor();
+                            if (ed == NULL) break;
+                            ed->trigger_parameter_hint(false);
+                        }
+                        break;
                     case GLFW_KEY_SPACE:
                         {
                             auto ed = world.get_current_editor();
                             if (ed == NULL) break;
-                            // TODO: set triggered_by_dot to true if the last character is a
-                            // period
                             ed->trigger_autocomplete(false);
-                            break;
                         }
+                        break;
                     case GLFW_KEY_J:
                     case GLFW_KEY_K:
                         {
