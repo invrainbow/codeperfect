@@ -67,6 +67,8 @@ Typing "<<" in normal mode (de-indent) doesn't work.
 Parameter hint doesn't color first parameter when first parameter is an
 incomplete string.
 
+User is able to undo the initial filling of buffer with filecontents, to bring
+buffer back to being empty.
 
 
 Purgatory
