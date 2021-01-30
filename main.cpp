@@ -946,7 +946,43 @@ int main() {
             }
 
             editor->type_char('\n');
-            // TODO: autoindent
+
+            auto cur = editor->cur;
+
+            auto y = max(0, cur.y-1);
+            while (true) {
+                auto& line = editor->buf.lines[y];
+                for (u32 x = 0; x < line.len; x++)
+                    if (!isspace(line[x]))
+                        goto done;
+                if (y == 0) break;
+                y--;
+            }
+        done:
+
+            auto& line = editor->buf.lines[y];
+            u32 copy_spaces_until = 0;
+            {
+                u32 x = 0;
+                for (; x < line.len; x++)
+                    if (!isspace(line[x]))
+                        break;
+                if (x == line.len)  // all spaces
+                    x = 0;
+                copy_spaces_until = x;
+            }
+
+            // copy first `copy_spaces_until` chars of line y
+            for (u32 x = 0; x < copy_spaces_until; x++)
+                editor->type_char(line[x]);
+
+            for (i32 x = line.len-1; x >= 0; x--) {
+                if (!isspace(line[x])) {
+                    if (line[x] == '{')
+                        editor->type_char('\t');
+                    break;
+                }
+            }
         };
 
         auto handle_tab = [&](ccstr nvim_string) {
