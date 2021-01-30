@@ -3290,12 +3290,8 @@ Infer_Res* Go_Index::infer_type(File_Ast* expr, bool resolve) {
         }
         break;
     case AST_COMPOSITE_LIT:
-        {
-            auto r = infer_type(expr->dup(ast->composite_lit.base_type));
-            if (r == NULL) goto done;
-            interim_type = r->type;
-            break;
-        }
+        interim_type = expr->dup(ast->composite_lit.base_type);
+        break;
         break;
     }
 done:
@@ -3654,9 +3650,11 @@ int Go_Index::list_methods_in_base_type(File_Ast* ast, List<Field>* ret) {
         case AST_STRUCT_TYPE:
             For (type->struct_type.fields->list) {
                 auto& f = it->struct_field;
-                if (f.ids == NULL)
-                    if (f.type->type == AST_ID || f.type->type != AST_SELECTOR_EXPR)
-                        count += list_methods_in_type(ast->dup(f.type), ret);
+                if (f.ids == NULL) {
+                    auto embedded_type = unpointer(f.type);
+                    if (embedded_type->type == AST_ID || embedded_type->type == AST_SELECTOR_EXPR)
+                        count += list_methods_in_type(ast->dup(embedded_type), ret);
+                }
             }
             break;
     }
@@ -4752,12 +4750,21 @@ ccstr Go_Index::directory_to_import_path(ccstr path_str) {
 
     auto path = make_path(path_str);
 
-    auto check = [&](ccstr base_path_str, bool is_pkg_mod) -> ccstr {
+    enum Path_Type {
+        PATH_WHO_CARES,
+        PATH_PKGMOD,
+        PATH_WKSP,
+    };
+
+    auto check = [&](ccstr base_path_str, Path_Type path_type) -> ccstr {
         auto base_path = make_path(base_path_str);
         if (!base_path->contains(path)) return NULL;
 
         auto ret = get_path_relative_to(path_str, base_path_str);
-        if (is_pkg_mod) ret = remove_ats_from_path(ret);
+        switch (path_type) {
+        case PATH_WKSP: return path_join(get_workspace_import_path(), ret);
+        case PATH_PKGMOD: return remove_ats_from_path(ret);
+        }
         return ret;
     };
 
@@ -4769,10 +4776,10 @@ ccstr Go_Index::directory_to_import_path(ccstr path_str) {
         path_join(GOROOT, "src"),
     };
 
-    bool pkgmod[] = { false, false, true, false, false };
+    Path_Type path_types[] = { PATH_WHO_CARES, PATH_WKSP, PATH_PKGMOD, PATH_WHO_CARES, PATH_WHO_CARES };
 
     for (u32 i = 0; i < _countof(paths); i++) {
-        auto ret = check(paths[i], pkgmod[i]);
+        auto ret = check(paths[i], path_types[i]);
         if (ret != NULL) return ret;
     }
     return NULL;

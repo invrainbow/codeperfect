@@ -34,9 +34,6 @@ Since we depend so heavily on the index for all aspects of intellisense (e.g.
 find_decl_of_id relies on it directly), we MUST invalidate the index as soon as
 a file changes.
 
-Make sure list_methods_in_type also checks methods in embedded fields of
-structs.
-
 Enable adding new files/folder in file explorer.
 
 Our neovim integration gives complete access to :commands, /search, etc. Think
