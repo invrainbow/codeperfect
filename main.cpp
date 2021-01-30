@@ -937,13 +937,14 @@ int main() {
             return handled;
         };
 
+        auto editor = world.get_current_editor();
+
         // TODO: all these operations that add or remove a single character in
         // buf could definitely be optimized, I believe right now even for
         // single char changes, it destroys the whole line, creates a new line,
         // and copies it over.
 
         auto handle_enter = [&](ccstr nvim_string) {
-            auto editor = world.get_current_editor();
             if (editor->nvim_data.mode != VI_INSERT) {
                 send_nvim_keys(nvim_string);
                 return;
@@ -954,7 +955,6 @@ int main() {
         };
 
         auto handle_tab = [&](ccstr nvim_string) {
-            auto editor = world.get_current_editor();
             if (editor->nvim_data.mode != VI_INSERT) {
                 send_nvim_keys(nvim_string);
                 return;
@@ -963,7 +963,6 @@ int main() {
         };
 
         auto handle_backspace = [&](ccstr nvim_string) {
-            auto editor = world.get_current_editor();
             if (editor->nvim_data.mode != VI_INSERT) {
                 send_nvim_keys(nvim_string);
                 return;
@@ -1026,7 +1025,34 @@ int main() {
                         world.wksp.activate_pane(3);
                         break;
                     case GLFW_KEY_R:
-                        send_nvim_keys("<C-r>");
+                        if (editor->nvim_data.mode != VI_INSERT)
+                            send_nvim_keys("<C-r>");
+                        break;
+                    case GLFW_KEY_V:
+                        if (editor->nvim_data.mode == VI_INSERT) {
+                            auto clipboard_contents = glfwGetClipboardString(world.window);
+                            if (clipboard_contents == NULL)
+                                break;
+
+                            auto len = strlen(clipboard_contents);
+                            if (len == 0) break;
+
+                            SCOPED_FRAME();
+
+                            auto text = alloc_array(uchar, len);
+                            for (u32 i = 0; i < len; i++)
+                                text[i] = clipboard_contents[i];
+
+                            editor->buf.insert(editor->cur, text, len);
+
+                            auto cur = editor->cur;
+                            for (u32 i = 0; i < len; i++)
+                                cur = editor->buf.inc_cur(cur);
+
+                            editor->raw_move_cursor(cur);
+                        } else {
+                            send_nvim_keys("<C-v>");
+                        }
                         break;
                     case GLFW_KEY_P:
                         world.windows_open.open_file ^= 1;
@@ -1041,7 +1067,6 @@ int main() {
                         break;
                     case GLFW_KEY_S:
                         {
-                            auto editor = world.get_current_editor();
                             if (editor == NULL) break;
 
                             if (editor->is_untitled) {
@@ -1063,7 +1088,6 @@ int main() {
                         }
                     case GLFW_KEY_G:
                         {
-                            auto editor = world.get_current_editor();
                             if (editor == NULL) break;
 
                             SCOPED_MEM(&world.index.main_thread_mem);
@@ -1234,7 +1258,6 @@ int main() {
                         break;
                     case GLFW_KEY_F9:
                         {
-                            auto editor = world.get_current_editor();
                             ccstr file = editor->filepath;
                             auto lineno = editor->cur.y + 1;
 
@@ -1309,8 +1332,6 @@ int main() {
                     if (done) break;
                     if (world.windows_open.is_any_open()) break;
                     if (world.popups_open.is_any_open()) break;
-
-                    auto editor = world.get_current_editor();
                     if (editor == NULL) break;
 
                     auto &buf = editor->buf;

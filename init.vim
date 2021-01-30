@@ -3,3 +3,4 @@
 " endfunction
 " autocmd CursorMovedI * call HandleCursorMove()
 
+set clipboard=unnamed

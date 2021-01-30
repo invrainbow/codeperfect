@@ -30,8 +30,6 @@ Probably the first thing we need to do as soon as indexing is done.
 
 Handle nested vendor directories for Go too. And nested go.mod.
 
-Add clipboard support to editor, both vim paste and ctrl+v.
-
 Make parameter hint open back up when comma is typed.  Actually, why not just
 make parameter hint stay open as long as we're inside a call_expr? Has to be
 unobtrusive though.
@@ -69,6 +67,8 @@ really only be used to handle the stuff nvim excels at, namely, normal-mode
 commands.
 
 Add autoindent to insert mode (no longer handled by nvim).
+
+Make our new insert mode handle multiple insert points, like ctrl-v + s.
 
 
 Bugs
