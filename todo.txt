@@ -30,10 +30,6 @@ Probably the first thing we need to do as soon as indexing is done.
 
 Handle nested vendor directories for Go too. And nested go.mod.
 
-Basic highlighting of the current parameter hint param already exists, but it's
-broken (you'll see). Fix it, and add more detailed syntax highlighting (like
-the type).
-
 Since we depend so heavily on the index for all aspects of intellisense (e.g.
 find_decl_of_id relies on it directly), we MUST invalidate the index as soon as
 a file changes.
@@ -77,6 +73,11 @@ When you press tab to fill in autocomplete without typing any prefix, it
 autocompletes, but leaves the menu open (and moves it to your cursor).
 
 Typing "foo(bar(" will use autocomplete for foo, not bar.
+
+Typing "<<" in normal mode (de-indent) doesn't work.
+
+Parameter hint doesn't color first parameter when first parameter is an
+incomplete string.
 
 
 
