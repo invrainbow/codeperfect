@@ -526,15 +526,10 @@ enum {
     OUR_MOD_CTRL = 1 << 3,
 };
 
-void init_everything() {
-    world.init(false);
-    ui.init();
-}
-
 int main() {
-    if (run_tests()) return EXIT_SUCCESS;
+    world.init(false);
 
-    init_everything();
+    if (run_tests()) return EXIT_SUCCESS;
 
     SCOPED_MEM(&world.frame_mem);
 

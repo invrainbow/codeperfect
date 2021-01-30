@@ -1,4 +1,6 @@
 #include "world.hpp"
+#include "ui.hpp"
+#include "fzy_match.h"
 
 World world;
 thread_local Pool *MEM;
@@ -35,9 +37,6 @@ void free_chunk(uchar* buf, s32 cap) {
         case CHUNK6: world.chunk6_fridge.free((Chunk6*)buf); break;
     }
 }
-
-// honestly, using our new infra + mem management, we should probably
-// just rewrite fill_file_tree. and while we're at it, replace `ag -g "" | fzf`
 
 bool is_ignored_by_git(ccstr path, bool isdir) {
     auto git_repo = world.wksp.git_repo;
@@ -107,6 +106,7 @@ void World::init(bool test) {
     ptr0(this);
 
     git_libgit2_init();
+    fzy_init();
 
     MEM = &frame_mem;
 
@@ -164,6 +164,8 @@ void World::init(bool test) {
 
     // TODO: allow user to enter this command himself
     strcpy_safe(world.settings.build_command, _countof(world.settings.build_command), "go build gotest.go");
+
+    ::ui.init();
 }
 
 Pane* World::get_current_pane() {

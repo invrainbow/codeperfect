@@ -3,6 +3,7 @@
 #include "world.hpp"
 #include "ui.hpp"
 #include "go.hpp"
+#include "fzy_match.h"
 
 void Editor::raw_move_cursor(cur2 c) {
     cur = c;
@@ -371,8 +372,7 @@ void Editor::filter_autocomplete_results(Autocomplete* ac) {
                 // there's whitespace between period and sel, and we're in it
                 autocomplete.prefix[0] = '\0';
             } else if (cur > id->end) {
-                // this shouldn't happen
-                break;
+                break;  // this shouldn't happen
             } else {
                 auto prefix_len = cur.x - id->start.x;
                 prefix_len = min(prefix_len, _countof(autocomplete.prefix) - 1);
@@ -390,23 +390,21 @@ void Editor::filter_autocomplete_results(Autocomplete* ac) {
 
     if (!prefix_found) return;
 
-    auto match = [&](AC_Result& res) -> bool {
-        auto prefix_len = strlen(autocomplete.prefix);
-        if (prefix_len == 0) return true;
-
-        int pi = 0;
-        for (ccstr p = res.name; *p != '\0'; p++)
-            if (tolower(*p) == tolower(autocomplete.prefix[pi]))
-                if (++pi == prefix_len)
-                    return true;
-        return false;
-    };
+    auto prefix = autocomplete.prefix;
 
     autocomplete.filtered_results->len = 0;
     auto results = ac->results;
     for (int i = 0; i < results->len; i++)
-        if (match(results->at(i)))
+        if (fzy_has_match(prefix, results->at(i).name))
             autocomplete.filtered_results->append(i);
+
+    autocomplete.filtered_results->sort([&](int *ia, int *ib) -> int {
+        auto a = fzy_match(prefix, ac->results->at(*ia).name);
+        auto b = fzy_match(prefix, ac->results->at(*ib).name);
+
+        // reverse
+        return a < b ? 1 : (a > b ? -1 : 0);
+    });
 }
 
 struct Type_Renderer : public Text_Renderer {
