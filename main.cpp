@@ -65,6 +65,7 @@ observations about visual studio
 #include "nvim.hpp"
 #include "ui.hpp"
 #include "tests.hpp"
+#include "fzy_match.h"
 
 #include "imgui.h"
 #include "veramono.hpp"
@@ -286,17 +287,51 @@ void run_proc_the_normal_way(Process* proc, ccstr cmd) {
     proc->run(cmd);
 }
 
-void list_files() {
-    auto& wnd = world.wnd_open_file;
+void filter_files() {
+    auto wnd = &world.wnd_open_file;
 
-    wnd.searching = true;
+    wnd->filtered_results->len = 0;
 
-    world.jobs.flag_list_files = true;
+    u32 i = 0;
+    For (*wnd->filepaths) {
+        if (fzy_has_match(wnd->query, it))
+            wnd->filtered_results->append(i);
+        i++;
+    }
 
-    run_proc_the_normal_way(
-        &world.jobs.list_files.proc,
-        our_sprintf("ag --ignore-dir vendor -l --nocolor -g \"\" | fzf -f \"%s\"", wnd.query)
-    );
+    wnd->filtered_results->sort([&](int *ia, int *ib) {
+        auto a = fzy_match(wnd->query, wnd->filepaths->at(*ia));
+        auto b = fzy_match(wnd->query, wnd->filepaths->at(*ib));
+        return a < b ? 1 : (a > b ? -1 : 0);  // reverse
+    });
+}
+
+void init_open_file() {
+    SCOPED_MEM(&world.open_file_mem);
+    world.open_file_mem.reset();
+
+    auto wnd = &world.wnd_open_file;
+    ptr0(wnd);
+    wnd->filepaths = alloc_list<ccstr>();
+    wnd->filtered_results = alloc_list<int>();
+
+    fn<void(ccstr)> fill_files = [&](ccstr path) {
+        auto thispath = path_join(world.wksp.path, path);
+        list_directory(thispath, [&](Dir_Entry *entry) {
+            bool isdir = (entry->type == DIRENT_DIR);
+
+            auto fullpath = path_join(thispath, entry->name);
+            if (is_ignored_by_git(fullpath, isdir)) return;
+
+            auto relpath = path[0] == '\0' ? our_strcpy(entry->name) : path_join(path, entry->name);
+            if (isdir)
+                fill_files(relpath);
+            else
+                wnd->filepaths->append(relpath);
+        });
+    };
+
+    fill_files("");
 }
 
 struct General_Parser {
@@ -864,11 +899,11 @@ int main() {
                     switch (key) {
                         case GLFW_KEY_DOWN:
                             wnd.selection++;
-                            wnd.selection %= wnd.files.len;
+                            wnd.selection %= wnd.filtered_results->len;
                             break;
                         case GLFW_KEY_UP:
                             if (wnd.selection == 0)
-                                wnd.selection = wnd.files.len - 1;
+                                wnd.selection = wnd.filtered_results->len - 1;
                             else
                                 wnd.selection--;
                             break;
@@ -877,26 +912,23 @@ int main() {
                                 auto &wnd = world.wnd_open_file;
                                 if (wnd.query[0] != '\0')
                                     wnd.query[strlen(wnd.query) - 1] = '\0';
-                                if (wnd.query[0] != '\0')
-                                    list_files();
-                                else
-                                    wnd.files.len = 0;
+                                if (strlen(wnd.query) >= 3)
+                                    filter_files();
                             }
                             break;
                         case GLFW_KEY_ESCAPE:
-                            world.jobs.list_files.proc.cleanup();
                             world.windows_open.open_file = false;
                             break;
                         case GLFW_KEY_ENTER:
-                            world.jobs.list_files.proc.cleanup();
                             world.windows_open.open_file = false;
 
-                            if (wnd.files.len == 0) break;
+                            if (wnd.filtered_results->len == 0) break;
 
+                            auto relpath = wnd.filepaths->at(wnd.filtered_results->at(wnd.selection));
+                            auto filepath = path_join(world.wksp.path, relpath);
                             auto pane = world.get_current_pane();
-                            auto query = path_join(world.wksp.path, wnd.files[wnd.selection]);
 
-                            pane->focus_editor(query);
+                            pane->focus_editor(filepath);
                             ui.recalculate_view_sizes();
                             break;
                     }
@@ -1088,14 +1120,8 @@ int main() {
                         break;
                     case GLFW_KEY_P:
                         world.windows_open.open_file ^= 1;
-                        if (world.windows_open.open_file) {
-                            auto &wnd = world.wnd_open_file;
-
-                            wnd.query[0] = '\0';
-                            wnd.selection = 0;
-                            wnd.searching = false;
-                            wnd.files.init(LIST_MALLOC, 128);
-                        }
+                        if (world.windows_open.open_file)
+                            init_open_file();
                         break;
                     case GLFW_KEY_S:
                         {
@@ -1477,7 +1503,7 @@ int main() {
                 if (ch < 0xff && isprint(ch)) {
                     ref.query[len] = ch;
                     ref.query[len + 1] = '\0';
-                    list_files();
+                    filter_files();
                 }
             }
             return;
@@ -1653,46 +1679,6 @@ int main() {
                 }
             }
 
-            if (world.jobs.flag_list_files) {
-                auto& proc = world.jobs.list_files.proc;
-                auto& wnd = world.wnd_open_file;
-
-                switch (proc.status()) {
-                    case PROCESS_ERROR:
-                        wnd.files.len = 0;
-                        wnd.searching = false;
-                        world.jobs.flag_list_files = false;
-                        proc.cleanup();
-                        break;
-                    case PROCESS_DONE:
-                        world.jobs.flag_list_files = false;
-                        wnd.searching = false;
-
-                        {
-                            SCOPED_MEM(&world.open_file_mem);
-                            world.open_file_mem.reset();
-
-                            wnd.files.len = 0;
-
-                            char c;
-                            char* s = alloc_array(char, 0);
-
-                            while (proc.read1(&c)) {
-                                if (c == '\n') {
-                                    *alloc_object(char) = '\0';
-                                    wnd.files.append(s);
-                                    s = alloc_array(char, 0);
-                                } else {
-                                    *alloc_object(char) = c;
-                                }
-                            }
-                        }
-
-                        proc.cleanup();
-                        break;
-                }
-            }
-
             if (world.jobs.flag_build) {
                 auto& proc = world.jobs.build.proc;
                 // auto& wnd = world.wnd_open_file;
@@ -1791,9 +1777,8 @@ int main() {
                 ImGui::Text("%-30s", wnd.query);
                 ImGui::Separator();
 
-                for (u32 i = 0; i < wnd.files.len; i++) {
-                    auto& it = wnd.files[i];
-
+                for (u32 i = 0; i < wnd.filtered_results->len; i++) {
+                    auto it = wnd.filepaths->at(wnd.filtered_results->at(i));
                     if (i == wnd.selection)
                         ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.5f, 1.0f), "%s", it);
                     else

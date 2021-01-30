@@ -66,10 +66,6 @@ Make our new insert mode handle multiple insert points, like ctrl-v + s.
 
 Add nested parameter hints.
 
-Use fzy's algorithm (open source here:
-https://github.com/jhawthorn/fzy/blob/master/src/match.c) and replace every
-instance where we shell out to fzf.
-
 
 
 Bugs

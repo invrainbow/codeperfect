@@ -159,17 +159,12 @@ struct World {
     struct {
         union {
             struct {
-                bool flag_list_files : 1;
                 bool flag_search_and_replace : 1;
                 bool flag_search : 1;
                 bool flag_build;
             };
             u64 mask;
         };
-
-        struct {
-            Process proc;
-        } list_files;
 
         struct {
             Process proc;
@@ -219,11 +214,10 @@ struct World {
     } popups_open;
 
     struct {
-        bool searching;
         char query[MAX_PATH];
         u32 selection;
-        ccstr _files[100];
-        List<ccstr> files;
+        List<ccstr> *filepaths;
+        List<int> *filtered_results;
     } wnd_open_file;
 
     struct {
@@ -375,3 +369,4 @@ struct String_Allocator {
     void truncate() { MEM->sp--; push('\0'); }
 };
 
+bool is_ignored_by_git(ccstr path, bool isdir);
