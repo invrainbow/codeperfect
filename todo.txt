@@ -10,12 +10,11 @@ Context-aware autocomplete, including, if you're in a toplevel, all you
 can write is func, const, var, and type.
 
 
-Tasks
-=====
+
+Improvements
+============
 
 Create a string class.
-
-COME UP WITH A GOOD NAME.
 
 Use our allocator for uthash_malloc.
 
@@ -24,15 +23,19 @@ LIST_MALLOC. And also just rewrite large sections of Parser.
 
 See how many LIST_MALLOCs should just be LIST_POOLs.
 
+
+
+Features
+========
+
 Handle unicode. If we don't handle the stupid Unicode situation soon, we're
 going to be fucked the longer we wait. Need to get that shit over with.
 Probably the first thing we need to do as soon as indexing is done.
 
 Handle nested vendor directories for Go too. And nested go.mod.
 
-Since we depend so heavily on the index for all aspects of intellisense (e.g.
-find_decl_of_id relies on it directly), we MUST invalidate the index as soon as
-a file changes.
+Make sure we invalidate the index as soon as a file changes, so that we don't
+e.g.  jump to definition at wrong place.
 
 Enable adding new files/folder in file explorer.
 
@@ -42,16 +45,7 @@ are weird.
 
 Make autocomplete on a blank line include accessible decls in current file.
 
-A group of changes needs to be made to fix a large class of problems.
- - Hand-roll our own syntax parser (stop using nvim's)
- - In insert mode, handle input ourselves
-This can be done in order.
- - [x] Turn off current syntax highlighting
- - [x] Get native input handling working
- - [ ] Write our own syntax highlighter.
-I predict this will stop about 80% of our stupid random crashes. nvim should
-really only be used to handle the stuff nvim excels at, namely, normal-mode
-commands.
+Add syntax highlighting.
 
 In insert mode, make closing brace de-indent.
 
@@ -82,7 +76,7 @@ Purgatory
 =========
 
 [bug?] Go_Index reindexes twice whenever we save a file.  Update: I mean, the
-debounce stops it from reindexing twice, but savig a file still sends two
+debounce stops it from reindexing twice, but saving a file still sends two
 filesystem change events. Not sure if worth fixing.
 
 Earlier, when typing a literal value, it got into an infinite loop,
