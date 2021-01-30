@@ -42,6 +42,7 @@ void uchar_to_cstr(uchar c, cstr out, s32* pn);
 struct Buffer {
   List<Line> lines;
   bool initialized;
+  bool dirty;
 
   void init();
   void cleanup();

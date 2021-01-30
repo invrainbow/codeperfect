@@ -294,6 +294,7 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
             bool is_selected = (tab_id == pane.current_editor);
 
             ccstr label;
+
             if (editor.is_untitled) {
                 label = "<untitled>";
             } else {
@@ -303,6 +304,7 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                 if (wksp.path[root_len - 1] != '/')
                     root_len++;
                 label += root_len;
+                label = our_sprintf("%s%s", label, editor.buf.dirty ? "*" : "");
             }
 
             auto text_width = get_text_width(label);

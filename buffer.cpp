@@ -139,6 +139,7 @@ uchar Cstr_To_Ustr::feed(u8 ch, bool* found) {
 void Buffer::init() {
     lines.init(LIST_MALLOC, 128);
     initialized = true;
+    dirty = false;
 }
 
 void Buffer::cleanup() {
@@ -205,10 +206,12 @@ void Buffer::delete_lines(u32 y1, u32 y2) {
     if (y2 < lines.len)
         memmove(&lines[y1], &lines[y2], sizeof(Line) * (lines.len - y2));
     lines.len -= (y2 - y1);
+    dirty = true;
 }
 
 void Buffer::clear() {
     delete_lines(0, lines.len);
+    dirty = true;
 }
 
 void Buffer::insert_line(u32 y, uchar* text, s32 len) {
@@ -223,10 +226,12 @@ void Buffer::insert_line(u32 y, uchar* text, s32 len) {
     memcpy(lines[y].items, text, sizeof(uchar) * len);
 
     lines.len++;
+    dirty = true;
 }
 
 void Buffer::append_line(uchar* text, s32 len) {
     insert_line(lines.len, text, len);
+    dirty = true;
 }
 
 void Buffer::insert(cur2 start, uchar* text, s32 len) {
@@ -255,6 +260,8 @@ void Buffer::insert(cur2 start, uchar* text, s32 len) {
             last = i + 1;
         }
     }
+
+    dirty = true;
 }
 
 void Buffer::remove(cur2 start, cur2 end) {
@@ -274,6 +281,7 @@ void Buffer::remove(cur2 start, cur2 end) {
             memcpy(lines[y1].items + x1, lines[y2].items + x2, sizeof(uchar) * (lines[y2].len - x2));
         delete_lines(y1 + 1, min(lines.len, y2 + 1));
     }
+    dirty = true;
 }
 
 Buffer_It Buffer::iter(cur2 c) {

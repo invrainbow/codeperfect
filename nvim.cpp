@@ -64,7 +64,7 @@ Editor* find_editor_by_grid(u32 grid) {
     return find_editor_by_window(table[idx].win);
 }
 
-void handle_editor_set_initial_pos(Editor *editor) {
+void handle_editor_on_ready(Editor *editor) {
     if (editor->is_nvim_ready()) {
         if (editor->nvim_data.need_initial_pos_set) {
             editor->nvim_data.need_initial_pos_set = false;
@@ -73,6 +73,10 @@ void handle_editor_set_initial_pos(Editor *editor) {
                 pos = editor->offset_to_cur(pos.x);
             editor->move_cursor(pos);
         }
+
+        // clear dirty indicator (it'll be set after we filled buf during
+        // nvim_buf_lines_event)
+        editor->buf.dirty = false;
     }
 }
 
@@ -172,7 +176,7 @@ void Nvim::run_event_loop() {
 
                         if (!editor->nvim_data.got_initial_lines) {
                             editor->nvim_data.got_initial_lines = true;
-                            handle_editor_set_initial_pos(editor);
+                            handle_editor_on_ready(editor);
                         }
                     } else if (streq(method, "redraw")) {
                         for (u32 i = 0; i < params_length; i++) {
@@ -232,7 +236,7 @@ void Nvim::run_event_loop() {
 
                                     if (!editor->nvim_data.got_initial_cur) {
                                         editor->nvim_data.got_initial_cur = true;
-                                        handle_editor_set_initial_pos(editor);
+                                        handle_editor_on_ready(editor);
                                     }
                                 } else if (streq(op, "win_pos")) {
                                     ASSERT(args_len == 6);

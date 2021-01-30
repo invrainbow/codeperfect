@@ -1142,6 +1142,7 @@ int main() {
                             defer { fclose(f); };
 
                             editor->buf.write(f);
+                            editor->buf.dirty = false;
                             break;
                         }
                     case GLFW_KEY_G:

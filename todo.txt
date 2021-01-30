@@ -51,8 +51,6 @@ In insert mode, make closing brace de-indent.
 
 Make our new insert mode handle multiple insert points, like ctrl-v + s.
 
-Add a "dirty" indicator.
-
 Add nested parameter hints.
 
 
