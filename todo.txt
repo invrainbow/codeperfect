@@ -51,6 +51,8 @@ In insert mode, make closing brace de-indent.
 
 Make our new insert mode handle multiple insert points, like ctrl-v + s.
 
+Add a "dirty" indicator.
+
 Add nested parameter hints.
 
 
@@ -60,10 +62,7 @@ Bugs
 
 When tabs overflow the tab bar, current tab just goes offscreen.
 
-When you press tab to fill in autocomplete without typing any prefix, it
-autocompletes, but leaves the menu open (and moves it to your cursor).
-
-Typing "foo(bar(" will use autocomplete for foo, not bar.
+Typing "foo(bar(" will use parameter hint for foo, not bar.
 
 Typing "<<" in normal mode (de-indent) doesn't work.
 

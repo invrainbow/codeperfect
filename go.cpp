@@ -4761,10 +4761,10 @@ ccstr Go_Index::directory_to_import_path(ccstr path_str) {
         if (!base_path->contains(path)) return NULL;
 
         auto ret = get_path_relative_to(path_str, base_path_str);
-        switch (path_type) {
-        case PATH_WKSP: return path_join(get_workspace_import_path(), ret);
-        case PATH_PKGMOD: return remove_ats_from_path(ret);
-        }
+        if (path_type == PATH_WKSP)
+            return path_join(get_workspace_import_path(), ret);
+        if (path_type == PATH_PKGMOD)
+            return remove_ats_from_path(ret);
         return ret;
     };
 
