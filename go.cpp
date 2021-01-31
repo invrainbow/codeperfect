@@ -2506,7 +2506,7 @@ Ast* Parser::parse_literal_value() {
     };
 
     auto elems = new_list();
-    for (; tok.type != TOK_RBRACE && tok.type != TOK_EOF; eat_comma(TOK_RBRACE, "composite literal")) {
+    while (tok.type != TOK_RBRACE && tok.type != TOK_EOF) {
         auto item = new_ast(AST_LITERAL_ELEM, tok.start);
 
         Ast* key = parse_literal_elem();
@@ -2522,6 +2522,9 @@ Ast* Parser::parse_literal_value() {
         item->literal_elem.key = key;
         item->literal_elem.elem = elem;
         elems.push(item);
+
+        if (!eat_comma(TOK_RBRACE, "composite literal"))
+            break;
     }
 
     expect(TOK_RBRACE);
@@ -2938,156 +2941,161 @@ done:
 File_Ast* Go_Index::get_type_from_decl(File_Ast* decl, ccstr id) {
     auto ast = decl->ast;
     switch (ast->type) {
-        case AST_ASSIGN_STMT:
-            {
-                // a, b, c = foo()                                // lhs.len = 1
-                // a, b, c = foo(), bar(), baz()    // lhs.len > 1 and rhs.len == 1
-                // a = foo()                                            // lhs.len > 1 and rhs.len == lhs.len
+    case AST_FIELD:
+        For (ast->field.ids->list)
+            if (it->type == AST_ID && streq(it->id.lit, id))
+                return decl->dup(ast->field.type);
+        break;
+    case AST_ASSIGN_STMT:
+        {
+            // a, b, c = foo()                 // lhs.len = 1
+            // a, b, c = foo(), bar(), baz()   // lhs.len > 1 and rhs.len == 1
+            // a = foo()                       // lhs.len > 1 and rhs.len == lhs.len
 
-                auto op = ast->assign_stmt.op;
-                if (op != TOK_DEFINE && op != TOK_ASSIGN) return NULL;
+            auto op = ast->assign_stmt.op;
+            if (op != TOK_DEFINE && op != TOK_ASSIGN) return NULL;
 
-                auto lhs = ast->assign_stmt.lhs;
-                auto rhs = ast->assign_stmt.rhs;
+            auto lhs = ast->assign_stmt.lhs;
+            auto rhs = ast->assign_stmt.rhs;
 
-                if (lhs->list.len == 1) {
-                    if (!streq(lhs->list[0]->id.lit, id)) return NULL;
-                    if (rhs->list.len != 1) return NULL;
+            if (lhs->list.len == 1) {
+                if (!streq(lhs->list[0]->id.lit, id)) return NULL;
+                if (rhs->list.len != 1) return NULL;
 
-                    auto expr = rhs->list[0];
+                auto expr = rhs->list[0];
 
-                    auto r = infer_type(decl->dup(expr));
-                    if (r == NULL) return NULL;
+                auto r = infer_type(decl->dup(expr));
+                if (r == NULL) return NULL;
 
-                    auto type = r->type->ast;
+                auto type = r->type->ast;
 
-                    if (type->type == AST_PARAMETERS) {
-                        if (type->parameters.fields->list.len > 1) return NULL;
+                if (type->type == AST_PARAMETERS) {
+                    if (type->parameters.fields->list.len > 1) return NULL;
 
-                        auto field = type->parameters.fields->list[0];
-                        auto ids = field->field.ids;
+                    auto field = type->parameters.fields->list[0];
+                    auto ids = field->field.ids;
 
-                        if (ids != NULL && ids->list.len > 1) return NULL;
+                    if (ids != NULL && ids->list.len > 1) return NULL;
 
-                        r->type->ast = field->field.type;
-                    }
-
-                    return r->type;
+                    r->type->ast = field->field.type;
                 }
 
-                // at this point, lhslen > 1
-
-                i32 idx = -1;
-                {
-                    i32 i = 0;
-                    For (ast->assign_stmt.lhs->list) {
-                        if (it->type == AST_ID && streq(it->id.lit, id)) {
-                            idx = i;
-                            break;
-                        }
-                        i++;
-                    }
-                }
-
-                if (idx == -1) return NULL;
-
-                // ok, so we've identified the `idx`th item in lhs as the matching identifier.
-                // now we have to figure out what element in rhs it corresponds to.
-
-                // figure out how many values are in rhs.
-                auto rhslen = rhs->list.len;
-                if (rhslen == 1) {
-                    auto first = rhs->list[0];
-                    if (first->type == AST_PARAMETERS) {
-                        s32 count = 0;
-                        For (first->parameters.fields->list)
-                            count += it->field.ids->list.len;
-                        rhslen = count;
-                    }
-                }
-
-                // if rhslen == 1, expect it to be a parameter list
-                if (rhslen == 1) {
-                    auto r = infer_type(decl->dup(rhs->list[0]));
-                    if (r == NULL) return NULL;
-
-                    auto type = r->type->ast;
-                    if (type->type != AST_PARAMETERS) return NULL;
-
-                    // get the type of the `idx`th parameter.
-                    {
-                        s32 offset = 0;
-                        For (type->parameters.fields->list) {
-                            auto len = it->field.ids->list.len;
-                            if (offset + len >= idx)
-                                return r->type->dup(it->field.type);
-                            offset += len;
-                        }
-                    }
-
-                    // somehow didn't find anything? (if rhslen <= idx)
-                    return NULL;
-                }
-
-                if (rhslen == lhs->list.len) {
-                    auto r = infer_type(decl->dup(rhs->list[idx]));
-                    return r == NULL ? NULL : r->type;
-                }
-
-                // rhslen != lhslen
-                return NULL;
+                return r->type;
             }
-        case AST_VALUE_SPEC:
+
+            // at this point, lhslen > 1
+
+            i32 idx = -1;
             {
-                if (ast->value_spec.type != NULL)
-                    return decl->dup(ast->value_spec.type);
-
-                auto& spec_ids = ast->value_spec.ids->list;
-
-                i32 idx = -1;
-                for (u32 i = 0; i < spec_ids.len; i++) {
-                    if (streq(spec_ids[i]->id.lit, id)) {
+                i32 i = 0;
+                For (ast->assign_stmt.lhs->list) {
+                    if (it->type == AST_ID && streq(it->id.lit, id)) {
                         idx = i;
                         break;
                     }
+                    i++;
                 }
-                if (idx == -1) return NULL;
-
-                auto& spec_vals = ast->value_spec.vals->list;
-
-                if (spec_ids.len == spec_vals.len) {
-                    auto r = infer_type(decl->dup(spec_vals[idx]));
-                    return r == NULL ? NULL : r->type;
-                } else {
-                    do {
-                        if (spec_vals.len != 1) break;
-
-                        auto val = spec_vals[0];
-                        if (val == NULL) break;
-                        if (val->type != AST_CALL_EXPR &&
-                            val->type != AST_TYPE_ASSERTION_EXPR)
-                            break;
-
-                        auto r = infer_type(decl->dup(val));
-                        if (r == NULL) break;
-
-                        Ast* type = r->type->ast;
-                        if (type->type != AST_PARAMETERS) break;
-
-                        auto& fields = type->parameters.fields->list;
-                        if (idx >= fields.len) break;
-
-                        auto field = fields[idx];
-                        return r->type->dup(field->field.type);
-                    } while (0);
-                }
-                break;
             }
-        case AST_TYPE_SPEC:
-            return decl->dup(ast->type_spec.type);
-        case AST_FUNC_DECL:
-        case AST_IMPORT_SPEC:
-            return decl;
+
+            if (idx == -1) return NULL;
+
+            // ok, so we've identified the `idx`th item in lhs as the matching identifier.
+            // now we have to figure out what element in rhs it corresponds to.
+
+            // figure out how many values are in rhs.
+            auto rhslen = rhs->list.len;
+            if (rhslen == 1) {
+                auto first = rhs->list[0];
+                if (first->type == AST_PARAMETERS) {
+                    s32 count = 0;
+                    For (first->parameters.fields->list)
+                        count += it->field.ids->list.len;
+                    rhslen = count;
+                }
+            }
+
+            // if rhslen == 1, expect it to be a parameter list
+            if (rhslen == 1) {
+                auto r = infer_type(decl->dup(rhs->list[0]));
+                if (r == NULL) return NULL;
+
+                auto type = r->type->ast;
+                if (type->type != AST_PARAMETERS) return NULL;
+
+                // get the type of the `idx`th parameter.
+                {
+                    s32 offset = 0;
+                    For (type->parameters.fields->list) {
+                        auto len = it->field.ids->list.len;
+                        if (offset + len >= idx)
+                            return r->type->dup(it->field.type);
+                        offset += len;
+                    }
+                }
+
+                // somehow didn't find anything? (if rhslen <= idx)
+                return NULL;
+            }
+
+            if (rhslen == lhs->list.len) {
+                auto r = infer_type(decl->dup(rhs->list[idx]));
+                return r == NULL ? NULL : r->type;
+            }
+
+            // rhslen != lhslen
+            return NULL;
+        }
+    case AST_VALUE_SPEC:
+        {
+            if (ast->value_spec.type != NULL)
+                return decl->dup(ast->value_spec.type);
+
+            auto& spec_ids = ast->value_spec.ids->list;
+
+            i32 idx = -1;
+            for (u32 i = 0; i < spec_ids.len; i++) {
+                if (streq(spec_ids[i]->id.lit, id)) {
+                    idx = i;
+                    break;
+                }
+            }
+            if (idx == -1) return NULL;
+
+            auto& spec_vals = ast->value_spec.vals->list;
+
+            if (spec_ids.len == spec_vals.len) {
+                auto r = infer_type(decl->dup(spec_vals[idx]));
+                return r == NULL ? NULL : r->type;
+            } else {
+                do {
+                    if (spec_vals.len != 1) break;
+
+                    auto val = spec_vals[0];
+                    if (val == NULL) break;
+                    if (val->type != AST_CALL_EXPR &&
+                        val->type != AST_TYPE_ASSERTION_EXPR)
+                        break;
+
+                    auto r = infer_type(decl->dup(val));
+                    if (r == NULL) break;
+
+                    Ast* type = r->type->ast;
+                    if (type->type != AST_PARAMETERS) break;
+
+                    auto& fields = type->parameters.fields->list;
+                    if (idx >= fields.len) break;
+
+                    auto field = fields[idx];
+                    return r->type->dup(field->field.type);
+                } while (0);
+            }
+            break;
+        }
+    case AST_TYPE_SPEC:
+        return decl->dup(ast->type_spec.type);
+    case AST_FUNC_DECL:
+    case AST_IMPORT_SPEC:
+        return decl;
     }
     return NULL;
 }
@@ -3328,23 +3336,23 @@ ccstr get_workspace_import_path() {
 // This function assumes that decl contains id.
 Ast* Go_Index::locate_id_in_decl(Ast* decl, ccstr id) {
     switch (decl->type) {
-        case AST_IMPORT_SPEC:
-            {
-                auto name = decl->import_spec.package_name;
-                if (name != NULL)
-                    return name;
-                return decl;
-            }
-        case AST_VALUE_SPEC:
-            For (decl->value_spec.ids->list) {
-                if (streq(it->id.lit, id))
-                    return it;
-            }
-            break;
-        case AST_TYPE_SPEC:
-            return decl->type_spec.id;
-        case AST_FUNC_DECL:
-            return decl->func_decl.name;
+    case AST_IMPORT_SPEC:
+        {
+            auto name = decl->import_spec.package_name;
+            if (name != NULL)
+                return name;
+            return decl;
+        }
+    case AST_VALUE_SPEC:
+        For (decl->value_spec.ids->list) {
+            if (streq(it->id.lit, id))
+                return it;
+        }
+        break;
+    case AST_TYPE_SPEC:
+        return decl->type_spec.id;
+    case AST_FUNC_DECL:
+        return decl->func_decl.name;
     }
     return NULL;
 }
@@ -3378,71 +3386,71 @@ Jump_To_Definition_Result* Go_Index::jump_to_definition(ccstr filepath, cur2 pos
         };
 
         switch (ast->type) {
-            case AST_PACKAGE_DECL:
-                if (contains_pos(ast->package_decl.name)) {
-                    result.file = filepath;
-                    result.pos = ast->package_decl.name->start;
-                }
-                return WALK_ABORT;
-            case AST_IMPORT_SPEC:
+        case AST_PACKAGE_DECL:
+            if (contains_pos(ast->package_decl.name)) {
                 result.file = filepath;
-                result.pos = ast->start;
-                return WALK_ABORT;
-            case AST_SELECTOR_EXPR:
-                {
-                    auto sel = ast->selector_expr.sel;
-                    if (!contains_pos(sel))
-                        return WALK_CONTINUE;
+                result.pos = ast->package_decl.name->start;
+            }
+            return WALK_ABORT;
+        case AST_IMPORT_SPEC:
+            result.file = filepath;
+            result.pos = ast->start;
+            return WALK_ABORT;
+        case AST_SELECTOR_EXPR:
+            {
+                auto sel = ast->selector_expr.sel;
+                if (!contains_pos(sel))
+                    return WALK_CONTINUE;
 
-                    auto x = ast->selector_expr.x;
-                    if (x->type == AST_ID) {
-                        auto try_to_find_package = [&]() -> bool {
-                            auto spec = find_decl_of_id(make_file_ast(x, filepath, file_to_import_path(filepath)));
-                            if (spec == NULL) return false;
-                            if (spec->ast->type != AST_IMPORT_SPEC) return false;
+                auto x = ast->selector_expr.x;
+                if (x->type == AST_ID) {
+                    auto try_to_find_package = [&]() -> bool {
+                        auto spec = find_decl_of_id(make_file_ast(x, filepath, file_to_import_path(filepath)));
+                        if (spec == NULL) return false;
+                        if (spec->ast->type != AST_IMPORT_SPEC) return false;
 
-                            auto import_path = spec->ast->import_spec.path->basic_lit.val.string_val;
-                            auto decl = find_decl_in_package(sel->id.lit, import_path);
+                        auto import_path = spec->ast->import_spec.path->basic_lit.val.string_val;
+                        auto decl = find_decl_in_package(sel->id.lit, import_path);
 
-                            if (decl == NULL) return false;
+                        if (decl == NULL) return false;
 
-                            auto id = locate_id_in_decl(decl->ast, sel->id.lit);
-                            if (id == NULL) return false;
+                        auto id = locate_id_in_decl(decl->ast, sel->id.lit);
+                        if (id == NULL) return false;
 
-                            result.file = decl->file;
-                            result.pos = id->start;
-                            return true;
-                        };
+                        result.file = decl->file;
+                        result.pos = id->start;
+                        return true;
+                    };
 
-                        if (try_to_find_package())
-                            return WALK_ABORT;
-                    }
-
-                    do {
-                        auto r = infer_type(make_file_ast(ast->selector_expr.x, filepath, file_to_import_path(filepath)), true);
-                        if (r == NULL) break;
-
-                        auto field = find_field_or_method_in_type(r->base_type, r->type, sel->id.lit);
-                        if (field == NULL) break;
-
-                        result.file = field->file;
-                        result.pos = field->ast->start;
-                    } while (0);
-
-                    return WALK_ABORT;
+                    if (try_to_find_package())
+                        return WALK_ABORT;
                 }
-            case AST_ID:
+
                 do {
-                    auto decl = find_decl_of_id(make_file_ast(ast, filepath, file_to_import_path(filepath)));
-                    if (decl == NULL) break;
+                    auto r = infer_type(make_file_ast(ast->selector_expr.x, filepath, file_to_import_path(filepath)), true);
+                    if (r == NULL) break;
 
-                    auto id = locate_id_in_decl(decl->ast, ast->id.lit);
-                    if (id == NULL) break;
+                    auto field = find_field_or_method_in_type(r->base_type, r->type, sel->id.lit);
+                    if (field == NULL) break;
 
-                    result.file = decl->file;
-                    result.pos = id->start;
+                    result.file = field->file;
+                    result.pos = field->ast->start;
                 } while (0);
+
                 return WALK_ABORT;
+            }
+        case AST_ID:
+            do {
+                auto decl = find_decl_of_id(make_file_ast(ast, filepath, file_to_import_path(filepath)));
+                if (decl == NULL) break;
+
+                auto id = locate_id_in_decl(decl->ast, ast->id.lit);
+                if (id == NULL) break;
+
+                result.file = decl->file;
+                result.pos = id->start;
+            } while (0);
+            return WALK_ABORT;
         }
         return WALK_CONTINUE;
     });
@@ -3507,70 +3515,70 @@ bool Go_Index::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period, 
 
     find_nodes_containing_pos(file, pos, [&](Ast *ast) -> Walk_Action {
         switch (ast->type) {
-            case AST_SELECTOR_EXPR:
-                {
-                    auto sel = ast->selector_expr.sel;
-                    if (pos < ast->selector_expr.period_pos || pos > sel->end)
-                        return WALK_CONTINUE;
+        case AST_SELECTOR_EXPR:
+            {
+                auto sel = ast->selector_expr.sel;
+                if (pos < ast->selector_expr.period_pos || pos > sel->end)
+                    return WALK_CONTINUE;
 
-                    auto x = ast->selector_expr.x;
-                    if (x->type == AST_ID) {
-                        bool found_package = false;
+                auto x = ast->selector_expr.x;
+                if (x->type == AST_ID) {
+                    bool found_package = false;
 
-                        do {
-                            auto spec = find_decl_of_id(make_file_ast(x, filepath, file_to_import_path(filepath)), true);
-                            if (spec == NULL) break;
+                    do {
+                        auto spec = find_decl_of_id(make_file_ast(x, filepath, file_to_import_path(filepath)), true);
+                        if (spec == NULL) break;
 
-                            auto spec_ast = spec->ast;
-                            if (spec_ast->type != AST_IMPORT_SPEC) break;
+                        auto spec_ast = spec->ast;
+                        if (spec_ast->type != AST_IMPORT_SPEC) break;
 
-                            auto import_path = spec_ast->import_spec.path->basic_lit.val.string_val;
-                            auto names = list_decl_names(import_path);
-                            if (names == NULL) break;
+                        auto import_path = spec_ast->import_spec.path->basic_lit.val.string_val;
+                        auto names = list_decl_names(import_path);
+                        if (names == NULL) break;
 
-                            // at this point, we have confirmation that x refers to a package.
-                            // doesn't matter if we can't find any decls, we should terminate here
-                            // with what we find, and not keep searching as though x might be something else
+                        // at this point, we have confirmation that x refers to a package.
+                        // doesn't matter if we can't find any decls, we should terminate here
+                        // with what we find, and not keep searching as though x might be something else
 
-                            {
-                                SCOPED_MEM(&world.autocomplete_mem);
-                                ret.results = alloc_list<AC_Result>();
-                                For (*names) {
-                                    auto result = ret.results->append();
-                                    result->name = our_strcpy(it);
-                                }
+                        {
+                            SCOPED_MEM(&world.autocomplete_mem);
+                            ret.results = alloc_list<AC_Result>();
+                            For (*names) {
+                                auto result = ret.results->append();
+                                result->name = our_strcpy(it);
                             }
-
-                            ret.type = AUTOCOMPLETE_PACKAGE_EXPORTS;
-                            ret.keyword_start_position = ast->selector_expr.period_pos;
-                            return WALK_ABORT;
-                        } while (0);
-                    }
-
-                    auto r = infer_type(make_file_ast(x, filepath, file_to_import_path(filepath)), true);
-                    if (r == NULL) return WALK_ABORT;
-
-                    auto fields = list_fields_and_methods_in_type(r->base_type, r->type);
-
-                    {
-                        SCOPED_MEM(&world.autocomplete_mem);
-                        ret.results = alloc_list<AC_Result>(fields->len);
-                        For (*fields) {
-                            auto result = ret.results->append();
-                            result->name = our_strcpy(it.id.ast->id.lit);
                         }
-                    }
 
-                    ret.type = AUTOCOMPLETE_STRUCT_FIELDS;
-                    ret.keyword_start_position = ast->selector_expr.period_pos;
+                        ret.type = AUTOCOMPLETE_PACKAGE_EXPORTS;
+                        ret.keyword_start_position = ast->selector_expr.period_pos;
+                        return WALK_ABORT;
+                    } while (0);
                 }
-                return WALK_ABORT;
 
-            case AST_ID:
-                out->type = AUTOCOMPLETE_IDENTIFIER;
-                out->keyword_start_position = ast->start;
-                out->results = generate_results_from_current_package();
-                break;
+                auto r = infer_type(make_file_ast(x, filepath, file_to_import_path(filepath)), true);
+                if (r == NULL) return WALK_ABORT;
+
+                auto fields = list_fields_and_methods_in_type(r->base_type, r->type);
+
+                {
+                    SCOPED_MEM(&world.autocomplete_mem);
+                    ret.results = alloc_list<AC_Result>(fields->len);
+                    For (*fields) {
+                        auto result = ret.results->append();
+                        result->name = our_strcpy(it.id.ast->id.lit);
+                    }
+                }
+
+                ret.type = AUTOCOMPLETE_STRUCT_FIELDS;
+                ret.keyword_start_position = ast->selector_expr.period_pos;
+            }
+            return WALK_ABORT;
+
+        case AST_ID:
+            out->type = AUTOCOMPLETE_IDENTIFIER;
+            out->keyword_start_position = ast->start;
+            out->results = generate_results_from_current_package();
+            break;
         }
 
         return WALK_CONTINUE;
@@ -3606,8 +3614,8 @@ Parameter_Hint* Go_Index::parameter_hint(ccstr filepath, cur2 pos, bool triggere
         if (type != NULL) {
             auto get_func_signature = [&](Ast* func) -> Ast* {
                 switch (func->type) {
-                    case AST_FUNC_DECL: return func->func_decl.signature;
-                    case AST_FUNC_TYPE: return func->func_type.signature;
+                case AST_FUNC_DECL: return func->func_decl.signature;
+                case AST_FUNC_TYPE: return func->func_type.signature;
                 }
                 return NULL;
             };
@@ -3640,23 +3648,23 @@ int Go_Index::list_methods_in_base_type(File_Ast* ast, List<Field>* ret) {
     int count = 0;
 
     switch (type->type) {
-        case AST_POINTER_TYPE:
-            {
-                auto pointee = type->pointer_type.base_type;
-                auto base_type = get_base_type(ast->dup(pointee));
-                count += list_methods_in_base_type(base_type, ret);
+    case AST_POINTER_TYPE:
+        {
+            auto pointee = type->pointer_type.base_type;
+            auto base_type = get_base_type(ast->dup(pointee));
+            count += list_methods_in_base_type(base_type, ret);
+        }
+        break;
+    case AST_STRUCT_TYPE:
+        For (type->struct_type.fields->list) {
+            auto& f = it->struct_field;
+            if (f.ids == NULL) {
+                auto embedded_type = unpointer(f.type);
+                if (embedded_type->type == AST_ID || embedded_type->type == AST_SELECTOR_EXPR)
+                    count += list_methods_in_type(ast->dup(embedded_type), ret);
             }
-            break;
-        case AST_STRUCT_TYPE:
-            For (type->struct_type.fields->list) {
-                auto& f = it->struct_field;
-                if (f.ids == NULL) {
-                    auto embedded_type = unpointer(f.type);
-                    if (embedded_type->type == AST_ID || embedded_type->type == AST_SELECTOR_EXPR)
-                        count += list_methods_in_type(ast->dup(embedded_type), ret);
-                }
-            }
-            break;
+        }
+        break;
     }
     return count;
 }
@@ -3757,10 +3765,10 @@ int Go_Index::list_methods_in_type(File_Ast* type, List<Field>* ret) {
 List<Field>* Go_Index::list_fields_and_methods_in_type(File_Ast* base_type, File_Ast* interim_type) {
     bool is_named_type = false;
     switch (unpointer(interim_type->ast)->type) {
-        case AST_ID:
-        case AST_SELECTOR_EXPR:
-            is_named_type = true;
-            break;
+    case AST_ID:
+    case AST_SELECTOR_EXPR:
+        is_named_type = true;
+        break;
     }
 
     auto ret = alloc_list<Field>();
@@ -3779,54 +3787,54 @@ int Go_Index::list_fields_in_type(File_Ast* ast, List<Field>* ret) {
     int count = 0;
 
     switch (type->type) {
-        case AST_POINTER_TYPE:
-            {
-                auto pointee = type->pointer_type.base_type;
-                auto base_type = get_base_type(ast->dup(pointee));
+    case AST_POINTER_TYPE:
+        {
+            auto pointee = type->pointer_type.base_type;
+            auto base_type = get_base_type(ast->dup(pointee));
+            count += list_fields_in_type(base_type, ret);
+        }
+        break;
+    case AST_STRUCT_TYPE:
+        For (type->struct_type.fields->list) {
+            auto& f = it->struct_field;
+            if (f.ids == NULL) {
+                auto base_type = get_base_type(ast->dup(f.type));
                 count += list_fields_in_type(base_type, ret);
+                continue;
             }
-            break;
-        case AST_STRUCT_TYPE:
-            For (type->struct_type.fields->list) {
-                auto& f = it->struct_field;
-                if (f.ids == NULL) {
-                    auto base_type = get_base_type(ast->dup(f.type));
-                    count += list_fields_in_type(base_type, ret);
-                    continue;
-                }
-                for (auto&& id : f.ids->list) {
-                    if (ret != NULL) {
-                        auto item = ret->append();
-                        item->id.ast = id;
-                        item->id.file = ast->file;
-                        item->decl.ast = it;
-                        item->decl.file = ast->file;
-                    }
-                    count++;
-                }
-            }
-            break;
-        case AST_INTERFACE_TYPE:
-            For (type->interface_type.specs->list) {
-                auto& s = it->interface_spec;
-
-                if (s.type != NULL) {
-                    auto base_type = get_base_type(ast->dup(s.type));
-                    if (base_type != NULL)
-                        count += list_fields_in_type(base_type, ret);
-                    continue;
-                }
-
+            for (auto&& id : f.ids->list) {
                 if (ret != NULL) {
                     auto item = ret->append();
-                    item->id.ast = s.name;
+                    item->id.ast = id;
                     item->id.file = ast->file;
                     item->decl.ast = it;
                     item->decl.file = ast->file;
                 }
                 count++;
             }
-            break;
+        }
+        break;
+    case AST_INTERFACE_TYPE:
+        For (type->interface_type.specs->list) {
+            auto& s = it->interface_spec;
+
+            if (s.type != NULL) {
+                auto base_type = get_base_type(ast->dup(s.type));
+                if (base_type != NULL)
+                    count += list_fields_in_type(base_type, ret);
+                continue;
+            }
+
+            if (ret != NULL) {
+                auto item = ret->append();
+                item->id.ast = s.name;
+                item->id.file = ast->file;
+                item->decl.ast = it;
+                item->decl.file = ast->file;
+            }
+            count++;
+        }
+        break;
     }
 
     return count;
@@ -4029,74 +4037,74 @@ bool isoct(int c) { return ('0' <= c && c <= '7'); }
 
 bool lookup_stmt_start(Tok_Type type) {
     switch (type) {
-        case TOK_BREAK:
-        case TOK_CONST:
-        case TOK_CONTINUE:
-        case TOK_DEFER:
-        case TOK_FALLTHROUGH:
-        case TOK_FOR:
-        case TOK_GO:
-        case TOK_GOTO:
-        case TOK_IF:
-        case TOK_RETURN:
-        case TOK_SELECT:
-        case TOK_SWITCH:
-        case TOK_TYPE:
-        case TOK_VAR:
-            return true;
+    case TOK_BREAK:
+    case TOK_CONST:
+    case TOK_CONTINUE:
+    case TOK_DEFER:
+    case TOK_FALLTHROUGH:
+    case TOK_FOR:
+    case TOK_GO:
+    case TOK_GOTO:
+    case TOK_IF:
+    case TOK_RETURN:
+    case TOK_SELECT:
+    case TOK_SWITCH:
+    case TOK_TYPE:
+    case TOK_VAR:
+        return true;
     }
     return false;
 }
 
 bool lookup_decl_start(Tok_Type type) {
     switch (type) {
-        case TOK_CONST:
-        case TOK_TYPE:
-        case TOK_VAR:
-            return true;
+    case TOK_CONST:
+    case TOK_TYPE:
+    case TOK_VAR:
+        return true;
     }
     return false;
 }
 
 bool lookup_expr_end(Tok_Type type) {
     switch (type) {
-        case TOK_COMMA:
-        case TOK_COLON:
-        case TOK_SEMICOLON:
-        case TOK_RPAREN:
-        case TOK_RBRACK:
-        case TOK_RBRACE:
-            return true;
+    case TOK_COMMA:
+    case TOK_COLON:
+    case TOK_SEMICOLON:
+    case TOK_RPAREN:
+    case TOK_RBRACK:
+    case TOK_RBRACE:
+        return true;
     }
     return false;
 }
 
 OpPrec op_to_prec(Tok_Type type) {
     switch (type) {
-        case TOK_MUL:
-        case TOK_QUO:
-        case TOK_REM:
-        case TOK_SHL:
-        case TOK_SHR:
-        case TOK_AND:
-        case TOK_AND_NOT:
-            return PREC_MUL;
-        case TOK_ADD:
-        case TOK_SUB:
-        case TOK_OR:
-        case TOK_XOR:
-            return PREC_ADD;
-        case TOK_EQL:
-        case TOK_NEQ:
-        case TOK_LSS:
-        case TOK_LEQ:
-        case TOK_GTR:
-        case TOK_GEQ:
-            return PREC_COMPARE;
-        case TOK_LAND:
-            return PREC_LAND;
-        case TOK_LOR:
-            return PREC_LOR;
+    case TOK_MUL:
+    case TOK_QUO:
+    case TOK_REM:
+    case TOK_SHL:
+    case TOK_SHR:
+    case TOK_AND:
+    case TOK_AND_NOT:
+        return PREC_MUL;
+    case TOK_ADD:
+    case TOK_SUB:
+    case TOK_OR:
+    case TOK_XOR:
+        return PREC_ADD;
+    case TOK_EQL:
+    case TOK_NEQ:
+    case TOK_LSS:
+    case TOK_LEQ:
+    case TOK_GTR:
+    case TOK_GEQ:
+        return PREC_COMPARE;
+    case TOK_LAND:
+        return PREC_LAND;
+    case TOK_LOR:
+        return PREC_LOR;
     }
     return PREC_LOWEST;
 }
@@ -4133,119 +4141,119 @@ void Gomod_Parser::parse(Gomod_Info* info) {
 
         auto keyword = tok.type;
         switch (keyword) {
-            case GOMOD_TOK_MODULE:
-                {
-                    lex();
-                    if (tok.type == GOMOD_TOK_LPAREN) {
-                        EXPECT(GOMOD_TOK_LPAREN);
-                        EXPECT(GOMOD_TOK_NEWLINE);
-                        EXPECT(GOMOD_TOK_STRIDENT);
-                        if (!tok.val_truncated)
-                            info->module_path = our_strcpy(tok.val);
-                        EXPECT(GOMOD_TOK_NEWLINE);
-                        EXPECT(GOMOD_TOK_RPAREN);
-                    } else if (tok.type == GOMOD_TOK_STRIDENT) {
-                        if (!tok.val_truncated)
-                            info->module_path = our_strcpy(tok.val);
-                    } else {
-                        goto done;
-                    }
+        case GOMOD_TOK_MODULE:
+            {
+                lex();
+                if (tok.type == GOMOD_TOK_LPAREN) {
+                    EXPECT(GOMOD_TOK_LPAREN);
                     EXPECT(GOMOD_TOK_NEWLINE);
-                }
-                break;
-            case GOMOD_TOK_GO:
-                {
                     EXPECT(GOMOD_TOK_STRIDENT);
                     if (!tok.val_truncated)
-                        info->go_version = our_strcpy(tok.val);
+                        info->module_path = our_strcpy(tok.val);
                     EXPECT(GOMOD_TOK_NEWLINE);
+                    EXPECT(GOMOD_TOK_RPAREN);
+                } else if (tok.type == GOMOD_TOK_STRIDENT) {
+                    if (!tok.val_truncated)
+                        info->module_path = our_strcpy(tok.val);
+                } else {
+                    goto done;
                 }
-                break;
-            case GOMOD_TOK_REQUIRE:
-            case GOMOD_TOK_EXCLUDE:
-                {
-                    lex();
+                EXPECT(GOMOD_TOK_NEWLINE);
+            }
+            break;
+        case GOMOD_TOK_GO:
+            {
+                EXPECT(GOMOD_TOK_STRIDENT);
+                if (!tok.val_truncated)
+                    info->go_version = our_strcpy(tok.val);
+                EXPECT(GOMOD_TOK_NEWLINE);
+            }
+            break;
+        case GOMOD_TOK_REQUIRE:
+        case GOMOD_TOK_EXCLUDE:
+            {
+                lex();
 
-                    auto read_spec = [&]() -> bool {
-                        Gomod_Directive* directive = NULL;
+                auto read_spec = [&]() -> bool {
+                    Gomod_Directive* directive = NULL;
 
-                        ASSERT(tok.type == GOMOD_TOK_STRIDENT);
-                        if (keyword == GOMOD_TOK_REQUIRE) {
-                            directive = alloc_object(Gomod_Directive);
-                            directive->type = GOMOD_DIRECTIVE_REQUIRE;
-                            directive->module_path = tok.val;
-                        }
-
-                        EXPECT(GOMOD_TOK_STRIDENT);
-
-                        if (keyword == GOMOD_TOK_REQUIRE) {
-                            directive->module_version = tok.val;
-                            info->directives.append(directive);
-                        }
-
-                        EXPECT(GOMOD_TOK_NEWLINE);
-                        return true;
-
-                    done:
-                        return false;
-                    };
-
-                    if (tok.type == GOMOD_TOK_LPAREN) {
-                        EXPECT(GOMOD_TOK_NEWLINE);
-                        while (lex(), tok.type != GOMOD_TOK_RPAREN) {
-                            ASSERT(read_spec());
-                        }
-                        EXPECT(GOMOD_TOK_NEWLINE);
-                    } else {
-                        ASSERT(read_spec());
-                    }
-                }
-                break;
-            case GOMOD_TOK_REPLACE:
-                {
-                    lex();
-
-                    auto read_spec = [&]() -> bool {
-                        auto directive = alloc_object(Gomod_Directive);
-                        directive->type = GOMOD_DIRECTIVE_REPLACE;
-
-                        ASSERT(tok.type == GOMOD_TOK_STRIDENT);
+                    ASSERT(tok.type == GOMOD_TOK_STRIDENT);
+                    if (keyword == GOMOD_TOK_REQUIRE) {
+                        directive = alloc_object(Gomod_Directive);
+                        directive->type = GOMOD_DIRECTIVE_REQUIRE;
                         directive->module_path = tok.val;
+                    }
 
-                        lex();
-                        if (tok.type != GOMOD_TOK_ARROW) {
-                            ASSERT(tok.type == GOMOD_TOK_STRIDENT);
-                            directive->module_version = tok.val;
-                            EXPECT(GOMOD_TOK_ARROW);
-                        }
+                    EXPECT(GOMOD_TOK_STRIDENT);
 
-                        EXPECT(GOMOD_TOK_STRIDENT);
-                        directive->replace_path = tok.val;
+                    if (keyword == GOMOD_TOK_REQUIRE) {
+                        directive->module_version = tok.val;
+                        info->directives.append(directive);
+                    }
 
-                        lex();
-                        if (tok.type != GOMOD_TOK_NEWLINE) {
-                            ASSERT(tok.type == GOMOD_TOK_STRIDENT);
-                            directive->replace_version = tok.val;
-                            EXPECT(GOMOD_TOK_NEWLINE);
-                        }
-                        return true;
+                    EXPECT(GOMOD_TOK_NEWLINE);
+                    return true;
 
-                    done:
-                        return false;
-                    };
+                done:
+                    return false;
+                };
 
-                    if (tok.type == GOMOD_TOK_LPAREN) {
-                        EXPECT(GOMOD_TOK_NEWLINE);
-                        while (lex(), (tok.type != GOMOD_TOK_RPAREN)) {
-                            ASSERT(read_spec());
-                        }
-                    } else if (tok.type == GOMOD_TOK_STRIDENT) {
+                if (tok.type == GOMOD_TOK_LPAREN) {
+                    EXPECT(GOMOD_TOK_NEWLINE);
+                    while (lex(), tok.type != GOMOD_TOK_RPAREN) {
                         ASSERT(read_spec());
                     }
+                    EXPECT(GOMOD_TOK_NEWLINE);
+                } else {
+                    ASSERT(read_spec());
                 }
-                break;
-            default:
-                goto done;
+            }
+            break;
+        case GOMOD_TOK_REPLACE:
+            {
+                lex();
+
+                auto read_spec = [&]() -> bool {
+                    auto directive = alloc_object(Gomod_Directive);
+                    directive->type = GOMOD_DIRECTIVE_REPLACE;
+
+                    ASSERT(tok.type == GOMOD_TOK_STRIDENT);
+                    directive->module_path = tok.val;
+
+                    lex();
+                    if (tok.type != GOMOD_TOK_ARROW) {
+                        ASSERT(tok.type == GOMOD_TOK_STRIDENT);
+                        directive->module_version = tok.val;
+                        EXPECT(GOMOD_TOK_ARROW);
+                    }
+
+                    EXPECT(GOMOD_TOK_STRIDENT);
+                    directive->replace_path = tok.val;
+
+                    lex();
+                    if (tok.type != GOMOD_TOK_NEWLINE) {
+                        ASSERT(tok.type == GOMOD_TOK_STRIDENT);
+                        directive->replace_version = tok.val;
+                        EXPECT(GOMOD_TOK_NEWLINE);
+                    }
+                    return true;
+
+                done:
+                    return false;
+                };
+
+                if (tok.type == GOMOD_TOK_LPAREN) {
+                    EXPECT(GOMOD_TOK_NEWLINE);
+                    while (lex(), (tok.type != GOMOD_TOK_RPAREN)) {
+                        ASSERT(read_spec());
+                    }
+                } else if (tok.type == GOMOD_TOK_STRIDENT) {
+                    ASSERT(read_spec());
+                }
+            }
+            break;
+        default:
+            goto done;
         }
     }
 
@@ -4275,30 +4283,30 @@ void Gomod_Parser::lex() {
 
     char firstchar = it->next();
     switch (firstchar) {
-        case '(': tok.type = GOMOD_TOK_LPAREN; return;
-        case ')': tok.type = GOMOD_TOK_RPAREN; return;
-        case '\n':
-            while (it->peek() == '\n') it->next();
-            tok.type = GOMOD_TOK_NEWLINE;
+    case '(': tok.type = GOMOD_TOK_LPAREN; return;
+    case ')': tok.type = GOMOD_TOK_RPAREN; return;
+    case '\n':
+        while (it->peek() == '\n') it->next();
+        tok.type = GOMOD_TOK_NEWLINE;
+        return;
+
+    case '=':
+        if (it->peek() == '>') {
+            it->next();
+            tok.type = GOMOD_TOK_ARROW;
             return;
+        }
+        break;
 
-        case '=':
-            if (it->peek() == '>') {
+    case '/':
+        if (it->peek() == '/') {
+            it->next();
+            while (it->peek() != '\n')
                 it->next();
-                tok.type = GOMOD_TOK_ARROW;
-                return;
-            }
-            break;
-
-        case '/':
-            if (it->peek() == '/') {
-                it->next();
-                while (it->peek() != '\n')
-                    it->next();
-                lex();
-                return;
-            }
-            break;
+            lex();
+            return;
+        }
+        break;
     }
 
     tok.type = GOMOD_TOK_STRIDENT;
@@ -4327,26 +4335,26 @@ void Gomod_Parser::lex() {
     char ch;
 
     switch (firstchar) {
-        case '"':
-            do {
-                ch = it->next();
-                if (!try_push_char(ch)) break;
-                if (ch == '\\')
-                    if (!try_push_char(it->next())) break;
-            } while (ch == '"');
-            break;
-        case '`':
-            do {
-                ch = it->next();
-                if (!try_push_char(ch)) break;
-            } while (ch != '`');
-            break;
-        default:
-            while ((ch = it->peek()), (!gomod_isspace(ch) && ch != '\n')) {
-                it->next();
-                if (!try_push_char(ch)) break;
-            }
-            break;
+    case '"':
+        do {
+            ch = it->next();
+            if (!try_push_char(ch)) break;
+            if (ch == '\\')
+                if (!try_push_char(it->next())) break;
+        } while (ch == '"');
+        break;
+    case '`':
+        do {
+            ch = it->next();
+            if (!try_push_char(ch)) break;
+        } while (ch != '`');
+        break;
+    default:
+        while ((ch = it->peek()), (!gomod_isspace(ch) && ch != '\n')) {
+            it->next();
+            if (!try_push_char(ch)) break;
+        }
+        break;
     }
 
     salloc.done();

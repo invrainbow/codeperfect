@@ -63,6 +63,10 @@ When user clicks on a search result, after opening the file, jump to the right p
 
 Set cursor when user hovers over something, like pane resizers.
 
+Send ctrl+e to nvim.
+
+Make parameter hints show return type.
+
 
 
 Bugs
@@ -80,6 +84,9 @@ incomplete string.
 User is able to undo the initial filling of buffer with filecontents, to bring
 buffer back to being empty.
 
+Autocomplete in helper.go is kind of slow again -- figure out why and fix.
+
+
 
 Purgatory
 =========
@@ -92,3 +99,4 @@ Earlier, when typing a literal value, it got into an infinite loop,
 presumably inside parse_literal_value (judging by both the context of the crash
 and also the error message it was printing out was from eat_comma). Can't
 repro right now, but it's there.
+

@@ -161,9 +161,9 @@ void World::init(bool test) {
     windows_open.build_and_debug = false;
 
     // TODO: allow user to enter this command himself
-    strcpy_safe(world.settings.build_command, _countof(world.settings.build_command), "go build gotest.go");
+    strcpy_safe(world.settings.build_command, _countof(world.settings.build_command), "go build main.go");
 
-    ::ui.init();
+    if (!test) ::ui.init();
 }
 
 Pane* World::get_current_pane() {

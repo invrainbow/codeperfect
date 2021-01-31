@@ -10,10 +10,10 @@ bool run_tests() {
 
     world.init(true);
 
-    auto a = get_path_relative_to("c:/A/B/C", "c:/a");
-    print("%s", a);
+    parse_file_into_ast("helper/bug.go");
     system("pause");
     return true;
+
 
     // return false;
     /*

@@ -222,7 +222,7 @@ void Workspace::init() {
     panes.init(LIST_FIXED, _countof(_panes), _panes);
 
 #if 1
-    auto newpath = (cstr)our_strcpy("c:/users/brandon/ide/whetstone");
+    auto newpath = (cstr)our_strcpy("c:/users/brandon/ide/helper");
     strcpy_safe(path, _countof(path), normalize_path_separator(newpath));
 #else
     Select_File_Opts opts;

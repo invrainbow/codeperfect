@@ -323,6 +323,8 @@ void init_open_file() {
             auto fullpath = path_join(thispath, entry->name);
             if (is_ignored_by_git(fullpath, isdir)) return;
 
+            if (isdir && streq(path, "") && streq(entry->name, ".ide")) return;
+
             auto relpath = path[0] == '\0' ? our_strcpy(entry->name) : path_join(path, entry->name);
             if (isdir)
                 fill_files(relpath);
@@ -574,9 +576,9 @@ void init_with_file_at_location(ccstr path, cur2 cur) {
 }
 
 int main() {
-    world.init(false);
-
     if (run_tests()) return EXIT_SUCCESS;
+
+    world.init(false);
 
     SCOPED_MEM(&world.frame_mem);
 
@@ -1623,7 +1625,7 @@ int main() {
 
                 switch (proc.status()) {
                 case PROCESS_DONE:
-                    world.search_results.pool.cleanup();
+                    world.build_errors.pool.cleanup();
 
                     world.jobs.flag_build = false;
                     if (proc.exit_code != 0) {
