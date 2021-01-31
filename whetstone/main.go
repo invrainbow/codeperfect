@@ -23,4 +23,5 @@ func main() {
 	// models.Item
 
 	foo := &Foo{}
+	foo.Print()
 }

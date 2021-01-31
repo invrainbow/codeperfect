@@ -88,14 +88,22 @@ u32 advance_subtree_in_file_explorer(u32 i);
 const auto EDITOR_MARGIN_X = 5.0;
 const auto EDITOR_MARGIN_Y = 5.0;
 
+#define ROUND_TL (1 << 0)
+#define ROUND_BL (1 << 1)
+#define ROUND_TR (1 << 2)
+#define ROUND_BR (1 << 3)
+#define ROUND_ALL (ROUND_TL | ROUND_BL | ROUND_TR | ROUND_BR)
+
 struct UI {
     Font* font;
     List<Vert> verts;
 
     void init();
     void flush_verts();
+    void draw_triangle(vec2f a, vec2f b, vec2f c, vec2f uva, vec2f uvb, vec2f uvc, vec4f color, bool solid);
     void draw_quad(boxf b, boxf uv, vec4f color, bool solid);
     void draw_rect(boxf b, vec4f color);
+    void draw_rounded_rect(boxf b, vec4f color, float radius, int round_flags);
     void draw_bordered_rect_outer(boxf b, vec4f color, vec4f border_color, int border_width);
     void draw_char(vec2f* pos, char ch, vec4f color);
     vec2f draw_string(vec2f pos, ccstr s, vec4f color);
@@ -105,10 +113,10 @@ struct UI {
     void draw_everything(GLuint vao, GLuint vbo, GLuint program);
     void get_tabs_and_editor_area(boxf* pane_area, boxf* ptabs_area, boxf* peditor_area);
     void recalculate_view_sizes();
-    void get_pane_resize_areas(boxf* out, s32 count);
     i32 get_current_resize_area(boxf* out);
     void resize_panes_proportionally(float new_width);
     void resize_panes_proportionally();
+    bool was_area_clicked(boxf area);
 };
 
 extern UI ui;

@@ -187,7 +187,8 @@ struct World {
         cur2 mouse_pos;
         cur2f mouse_delta;
         double scroll_buffer;
-        bool mouse_buttons_pressed[3];
+        bool mouse_down[ImGuiMouseButton_COUNT];
+        bool mouse_just_pressed[ImGuiMouseButton_COUNT];
         GLFWcursor* cursors[ImGuiMouseCursor_COUNT];
     } ui;
 

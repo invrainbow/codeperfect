@@ -2,6 +2,9 @@
 #include "common.hpp"
 #include "world.hpp"
 
+#define _USE_MATH_DEFINES // what the fuck is this lol
+#include <math.h>
+
 UI ui;
 
 vec3f rgb_hex(ccstr s) {
@@ -54,25 +57,126 @@ void UI::flush_verts() {
     verts.len = 0;
 }
 
+void UI::draw_triangle(vec2f a, vec2f b, vec2f c, vec2f uva, vec2f uvb, vec2f uvc, vec4f color, bool solid) {
+    if (verts.len + 3 >= verts.cap)
+        flush_verts();
+
+    a.x *= world.display_scale.x;
+    a.y *= world.display_scale.y;
+    b.x *= world.display_scale.x;
+    b.y *= world.display_scale.y;
+    c.x *= world.display_scale.x;
+    c.y *= world.display_scale.y;
+
+    verts.append({ a.x, a.y, uva.x, uva.y, color, solid });
+    verts.append({ b.x, b.y, uvb.x, uvb.y, color, solid });
+    verts.append({ c.x, c.y, uvc.x, uvc.y, color, solid });
+}
+
 void UI::draw_quad(boxf b, boxf uv, vec4f color, bool solid) {
     if (verts.len + 6 >= verts.cap)
         flush_verts();
 
-    b.x *= world.display_scale.x;
-    b.w *= world.display_scale.x;
-    b.y *= world.display_scale.y;
-    b.h *= world.display_scale.y;
+    draw_triangle(
+        {b.x, b.y + b.h},
+        {b.x, b.y},
+        {b.x + b.w, b.y},
+        {uv.x, uv.y + uv.h},
+        {uv.x, uv.y},
+        {uv.x + uv.w, uv.y},
+        color,
+        solid
+    );
 
-    verts.append({ b.x, b.y + b.h, uv.x, uv.y + uv.h, color, solid });
-    verts.append({ b.x, b.y, uv.x, uv.y, color, solid });
-    verts.append({ b.x + b.w, b.y, uv.x + uv.w, uv.y, color, solid });
-    verts.append({ b.x, b.y + b.h, uv.x, uv.y + uv.h, color, solid });
-    verts.append({ b.x + b.w, b.y, uv.x + uv.w, uv.y, color, solid });
-    verts.append({ b.x + b.w, b.y + b.h, uv.x + uv.w, uv.y + uv.h, color, solid });
+    draw_triangle(
+        {b.x, b.y + b.h},
+        {b.x + b.w, b.y},
+        {b.x + b.w, b.y + b.h},
+        {uv.x, uv.y + uv.h},
+        {uv.x + uv.w, uv.y},
+        {uv.x + uv.w, uv.y + uv.h},
+        color,
+        solid
+    );
+
 }
 
 void UI::draw_rect(boxf b, vec4f color) {
     draw_quad(b, { 0, 0, 1, 1 }, color, true);
+}
+
+void UI::draw_rounded_rect(boxf b, vec4f color, float radius, int round_flags) {
+    /* A picture is worth a thousand words:
+       _________
+      |_|     |_|
+      |_       _|
+      |_|_____|_| */
+
+    boxf edge;
+    edge.x = b.x;
+    edge.y = b.y + radius;
+    edge.w = radius;
+    edge.h = b.h - radius * 2;
+    draw_rect(edge, color);
+
+    edge.x = b.x + radius;
+    edge.y = b.y;
+    edge.h = radius;
+    edge.w = b.w - radius * 2;
+    draw_rect(edge, color);
+
+    edge.x = b.x + b.w - radius;
+    edge.y = b.y + radius;
+    edge.w = radius;
+    edge.h = b.h - radius * 2;
+    draw_rect(edge, color);
+
+    edge.x = b.x + radius;
+    edge.y = b.y + b.h - radius;
+    edge.w = b.w - radius * 2;
+    edge.h = radius;
+    draw_rect(edge, color);
+
+    boxf center;
+    center.x = b.x + radius;
+    center.y = b.y + radius;
+    center.w = b.w - radius * 2;
+    center.h = b.h - radius * 2;
+    draw_rect(center, color);
+
+    auto draw_rounded_corner = [&](vec2f center, float start_rad, float end_rad) {
+        vec2f zero = {0};
+
+        float increment = (end_rad - start_rad) / max(3, (int)(radius / 5));
+        for (float angle = start_rad; angle < end_rad; angle += increment) {
+            auto ang1 = angle;
+            auto ang2 = angle + increment;
+
+            vec2f v1 = {center.x + radius * cos(ang1), center.y - radius * sin(ang1)};
+            vec2f v2 = {center.x + radius * cos(ang2), center.y - radius * sin(ang2)};
+
+            draw_triangle(center, v1, v2, zero, zero, zero, color, true);
+        }
+    };
+
+    auto draw_corner = [&](bool round, vec2f center, float ang_start, float ang_end) {
+        if (round) {
+            draw_rounded_corner(center, ang_start, ang_end);
+            return;
+        }
+
+        boxf b;
+        b.x = fmin(center.x, center.x + radius * cos(ang_start));
+        b.y = fmin(center.y, center.y - radius * sin(ang_start));
+        b.w = radius;
+        b.h = radius;
+        draw_rect(b, color);
+    };
+
+    draw_corner(round_flags & ROUND_TR, {b.x + b.w - radius, b.y + radius}, 0, M_PI / 2);
+    draw_corner(round_flags & ROUND_TL, {b.x + radius, b.y + radius}, M_PI / 2, M_PI);
+    draw_corner(round_flags & ROUND_BL, {b.x + radius, b.y + b.h - radius}, M_PI, M_PI * 3/2);
+    draw_corner(round_flags & ROUND_BR, {b.x + b.w - radius, b.y + b.h - radius}, M_PI * 3/2, M_PI * 2);
 }
 
 void UI::draw_bordered_rect_outer(boxf b, vec4f color, vec4f border_color, int border_width) {
@@ -145,6 +249,13 @@ u32 advance_subtree_in_file_explorer(u32 i) {
     return i;
 }
 
+bool UI::was_area_clicked(boxf area) {
+    if (world.ui.mouse_just_pressed[GLFW_MOUSE_BUTTON_LEFT])
+        if (area.contains(world.ui.mouse_pos))
+            return true;
+    return false;
+}
+
 void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
     {
         // prepare opengl for drawing shit
@@ -180,96 +291,158 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
     if (world.sidebar.view != SIDEBAR_CLOSED) {
         draw_rect(sidebar_area, rgba(COLOR_BLACK));
 
+        const float SIDEBAR_PADDING_X = 4;
+        const float SIDEBAR_PADDING_Y = 4;
+
+        sidebar_area.x += SIDEBAR_PADDING_X;
+        sidebar_area.w -= SIDEBAR_PADDING_X * 2;
+
         switch (world.sidebar.view) {
-            case SIDEBAR_FILE_EXPLORER:
-                {
-                    vec2f pos = sidebar_area.pos;
-                    pos.y -= world.file_explorer.scroll_offset;
+        case SIDEBAR_FILE_EXPLORER:
+            {
+                const float ITEM_PADDING_X = 4;
+                const float ITEM_PADDING_Y = 2;
+                const float ITEM_MARGIN_X = 4;
 
-                    u32 depth = 0;
+                vec2f pos = sidebar_area.pos;
+                pos.y -= world.file_explorer.scroll_offset;
+                u32 depth = 0;
 
-                    for (u32 i = 0; i < world.file_tree.len;) {
-                        auto it = &world.file_tree[i];
+                for (u32 i = 0; i < world.file_tree.len;) {
+                    auto it = &world.file_tree[i];
 
-                        if (pos.y >= sidebar_area.y) {
-                            SCOPED_FRAME();
-                            auto s = (cstr)our_sprintf(
-                                "%*s%s%s",
-                                it->depth * 2,
-                                "",
-                                it->name,
-                                it->num_children == -1 ? "" : "/"
-                            );
-                            auto available_width = (int)(sidebar_area.w / font->width);
-                            if (available_width < strlen(s))
-                                s[available_width] = '\0';
+                    boxf row_area;
+                    row_area.pos = pos;
+                    row_area.w = sidebar_area.w;
+                    row_area.h = font->height;
+                    row_area.h += ITEM_PADDING_Y * 2;
 
-                            boxf line_area;
-                            line_area.pos = pos;
-                            line_area.w = sidebar_area.w;
-                            line_area.h = font->height;
+                    auto is_row_visible = [&]() {
+                        auto sb_top = sidebar_area.y;
+                        auto sb_bot = sidebar_area.y + sidebar_area.h;;
 
-                            if (line_area.contains(world.ui.mouse_pos))
-                                draw_rect(line_area, rgba(COLOR_DARK_GREY));
-                            draw_string(pos, s, rgba(COLOR_WHITE));
-                        }
+                        auto row_top = row_area.y;
+                        auto row_bot = row_area.y + row_area.h;
 
-                        pos.y += font->height;
-                        if (pos.y > sidebar_area.h) break;
+                        if (sb_top <= row_top && row_top <= sb_bot)
+                            if (sb_top <= row_bot && row_bot <= sb_bot)
+                                return true;
+                        return false;
+                    };
 
-                        if (it->num_children != -1 && !it->state.open)
-                            i = advance_subtree_in_file_explorer(i);
-                        else
-                            i++;
-                    }
-                }
-                break;
-            case SIDEBAR_SEARCH_RESULTS:
-                {
-                    vec2f pos;
-                    pos.x = 0;
-                    pos.y = sidebar_area.y - world.search_results.scroll_offset;
-                    pos.y += font->offset_y;
+                    if (is_row_visible()) {
+                        SCOPED_FRAME();
 
-                    For (world.search_results.results) {
-                        if (pos.y >= sidebar_area.y) {
-                            SCOPED_FRAME();
+                        if (row_area.contains(world.ui.mouse_pos))
+                            draw_rect(row_area, rgba(COLOR_DARK_GREY));
 
-                            pos.x = 0;
+                        if (was_area_clicked(row_area)) {
+                            if (it->num_children == -1) {
+                                SCOPED_FRAME();
 
-                            boxf line_area;
-                            line_area.pos = pos;
-                            line_area.y -= font->offset_y;
-                            line_area.w = sidebar_area.w;
-                            line_area.h = font->height;
+                                auto path = alloc_list<i32>();
+                                for (auto idx = i; idx != -1; idx = world.file_tree[idx].parent)
+                                    path->append(idx);
 
-                            if (line_area.contains(world.ui.mouse_pos))
-                                draw_rect(line_area, rgba(COLOR_DARK_GREY));
+                                Text_Renderer r;
+                                r.init();
+                                for (i32 j = path->len - 1; j >= 0; j--) {
+                                    r.write("%s", world.file_tree[path->at(j)].name);
+                                    if (j != 0) r.write("/");
+                                }
 
-                            auto str = our_sprintf("%s:%d:%d ", it->filename, it->row, it->match_col);
-                            auto len = strlen(str);
-
-                            for (u32 i = 0; i < len && pos.x < sidebar_area.w; i++)
-                                draw_char(&pos, str[i], rgba(COLOR_WHITE));
-
-                            len = strlen(it->preview);
-                            for (u32 i = 0; i < len && pos.x < sidebar_area.w; i++) {
-                                auto color = rgba(COLOR_WHITE);
-                                if (it->match_col_in_preview <= i && i < it->match_col_in_preview + it->match_len)
-                                    color = rgba(COLOR_LIME);
-                                draw_char(&pos, it->preview[i], color);
+                                world.get_current_pane()->focus_editor(path_join(world.wksp.path, r.finish()));
+                                recalculate_view_sizes();
+                            } else {
+                                it->state.open = !it->state.open;
                             }
+
                         }
 
-                        pos.y += font->height;
-                        if (pos.y > sidebar_area.h) break;
+                        boxf text_area = row_area;
+                        text_area.x += ITEM_PADDING_X;
+                        text_area.w -= ITEM_PADDING_X * 2;
+                        text_area.y += ITEM_PADDING_Y;
+                        text_area.h -= ITEM_PADDING_Y * 2;
+
+                        auto label = (cstr)our_sprintf(
+                            "%*s%s%s",
+                            it->depth * 2,
+                            "",
+                            it->name,
+                            it->num_children == -1 ? "" : "/"
+                        );
+
+                        auto avail_chars = (int)(text_area.w / font->width);
+                        if (avail_chars < strlen(label))
+                            label[avail_chars] = '\0';
+
+                        draw_string(text_area.pos, label, rgba(COLOR_WHITE));
                     }
+
+                    pos.y += row_area.h;
+
+                    if (pos.y > sidebar_area.h) break;
+
+                    if (it->num_children != -1 && !it->state.open)
+                        i = advance_subtree_in_file_explorer(i);
+                    else
+                        i++;
                 }
-                break;
+            }
+            break;
+        case SIDEBAR_SEARCH_RESULTS:
+            {
+                vec2f pos;
+                pos.x = 0;
+                pos.y = sidebar_area.y - world.search_results.scroll_offset;
+                pos.y += font->offset_y;
+
+                For (world.search_results.results) {
+                    if (pos.y >= sidebar_area.y) {
+                        SCOPED_FRAME();
+
+                        pos.x = 0;
+
+                        boxf line_area;
+                        line_area.pos = pos;
+                        line_area.y -= font->offset_y;
+                        line_area.w = sidebar_area.w;
+                        line_area.h = font->height;
+
+                        if (line_area.contains(world.ui.mouse_pos))
+                            draw_rect(line_area, rgba(COLOR_DARK_GREY));
+
+                        if (was_area_clicked(line_area)) {
+                            world.get_current_pane()->focus_editor(it->filename);
+                            ui.recalculate_view_sizes();
+                            // TODO: jump to the right position too
+                        }
+
+                        auto str = our_sprintf("%s:%d:%d ", it->filename, it->row, it->match_col);
+                        auto len = strlen(str);
+
+                        for (u32 i = 0; i < len && pos.x < sidebar_area.w; i++)
+                            draw_char(&pos, str[i], rgba(COLOR_WHITE));
+
+                        len = strlen(it->preview);
+                        for (u32 i = 0; i < len && pos.x < sidebar_area.w; i++) {
+                            auto color = rgba(COLOR_WHITE);
+                            if (it->match_col_in_preview <= i && i < it->match_col_in_preview + it->match_len)
+                                color = rgba(COLOR_LIME);
+                            draw_char(&pos, it->preview[i], color);
+                        }
+                    }
+
+                    pos.y += font->height;
+                    if (pos.y > sidebar_area.h) break;
+                }
+            }
+            break;
         }
     }
 
-    // draw panes
+    // Draw panes.
     u32 current_pane = 0;
     for (auto && pane : wksp.panes) {
         auto is_pane_selected = (current_pane == wksp.current_pane);
@@ -312,8 +485,17 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
             tab.w = text_width + tab_padding.x * 2;
             tab.h = font->height + tab_padding.y * 2;
 
-            draw_rect(tab, rgba(is_selected ? COLOR_BLACK : COLOR_MEDIUM_DARK_GREY));
+            vec3f tab_color = COLOR_MEDIUM_DARK_GREY;
+            if (is_selected)
+                tab_color = COLOR_BLACK;
+            else if (tab.contains(world.ui.mouse_pos))
+                tab_color = COLOR_DARK_GREY;
+
+            draw_rounded_rect(tab, rgba(tab_color), 4, ROUND_TL | ROUND_TR);
             draw_string(tab.pos + tab_padding, label, rgba(is_selected ? COLOR_WHITE : COLOR_LIGHT_GREY));
+
+            if (was_area_clicked(tab))
+                pane.focus_editor_by_index(tab_id);
 
             tab.pos.x += tab.w + 5;
             tab_id++;
@@ -444,7 +626,7 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                     s32 num_items = min(ac.filtered_results->len, AUTOCOMPLETE_WINDOW_ITEMS);
 
                     auto format_name = [&](int i, ccstr name) -> ccstr {
-                        return our_sprintf("%d) %s", i + 1, name);
+                        return our_sprintf("%s", name);
                     };
 
                     {
@@ -538,10 +720,10 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                     ccstr mode_str = NULL;
 
                     switch (editor->nvim_data.mode) {
-                        case VI_NORMAL: mode_str = "NORMAL"; break;
-                        case VI_VISUAL: mode_str = "VISUAL"; break;
-                        case VI_INSERT: mode_str = "INSERT"; break;
-                        case VI_REPLACE: mode_str = "REPLACE"; break;
+                    case VI_NORMAL: mode_str = "NORMAL"; break;
+                    case VI_VISUAL: mode_str = "VISUAL"; break;
+                    case VI_INSERT: mode_str = "INSERT"; break;
+                    case VI_REPLACE: mode_str = "REPLACE"; break;
                     }
 
                     if (mode_str != NULL) {
@@ -565,27 +747,44 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
         pane_area.x += pane_area.w;
     }
 
-    // draw pane resizers
-
     {
-        auto num_areas = world.wksp.panes.len - 1;
-        auto resize_areas = alloc_array(boxf, num_areas);
-        ui.get_pane_resize_areas(resize_areas, num_areas);
+        // Draw pane resizers.
 
-        for (u32 i = 0; i < num_areas; i++) {
-            auto& b = resize_areas[i];
-            if (b.contains(world.ui.mouse_pos))
+        // TODO: set cursors. For reference:
+        // glfwSetCursor(wnd, world.ui.cursors[ImGuiMouseCursor_ResizeEW]);
+        // glfwSetCursor(wnd, world.ui.cursors[ImGuiMouseCursor_Arrow]);
+
+        auto panes_area = get_panes_area();
+        float offset = panes_area.x;
+
+        for (u32 i = 0; i < world.wksp.panes.len - 1; i++) {
+            offset += world.wksp.panes[i].width;
+
+            boxf b;
+            b.w = 4;
+            b.h = panes_area.h;
+            b.x = offset - 2;
+            b.y = 0;
+
+            if (b.contains(world.ui.mouse_pos)) {
                 draw_rect(b, rgba(COLOR_WHITE));
-            else
-                draw_rect(b, rgba(COLOR_WHITE));
+                if (world.ui.mouse_down[GLFW_MOUSE_BUTTON_LEFT]) {
+                    world.wksp.resizing_pane = i;
+                } else {
+                    ui.recalculate_view_sizes();
+                    world.wksp.resizing_pane = -1;
+                }
+            } else {
+                draw_rect(b, rgba(COLOR_MEDIUM_GREY));
+            }
         }
     }
 
     auto get_debugger_state_string = [&]() -> ccstr {
         switch (world.dbg.state_flag) {
-            case DBGSTATE_PAUSED: return "PAUSED";
-            case DBGSTATE_STARTING: return "STARTING";
-            case DBGSTATE_RUNNING: return "RUNNING";
+        case DBGSTATE_PAUSED: return "PAUSED";
+        case DBGSTATE_STARTING: return "STARTING";
+        case DBGSTATE_RUNNING: return "RUNNING";
         }
         return NULL;
     };
@@ -666,35 +865,6 @@ void UI::recalculate_view_sizes() {
 
         pane_area.x += pane_area.w;
     }
-}
-
-void UI::get_pane_resize_areas(boxf *out, s32 count) {
-    auto panes_area = get_panes_area();
-    float offset = panes_area.x;
-
-    for (u32 i = 0; i < world.wksp.panes.len - 1 && i < count; i++) {
-        offset += world.wksp.panes[i].width;
-
-        auto box = &out[i];
-        box->w = 2;
-        box->h = panes_area.h;
-        box->x = offset - 1;
-        box->y = 0;
-    }
-}
-
-i32 UI::get_current_resize_area(boxf* out) {
-    SCOPED_FRAME();
-
-    auto num_areas = world.wksp.panes.len - 1;
-    auto resize_areas = alloc_array(boxf, num_areas);
-
-    get_pane_resize_areas(resize_areas, num_areas);
-
-    for (u32 i = 0; i < num_areas; i++)
-        if (resize_areas[i].contains(world.ui.mouse_pos))
-            return memcpy(out, resize_areas+i, sizeof(boxf)), i;
-    return -1;
 }
 
 void UI::resize_panes_proportionally() {

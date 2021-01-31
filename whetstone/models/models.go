@@ -8,7 +8,7 @@ import (
 
 type Item struct {
 	gorm.Model
-
+	
 	ItemType int
 	Content string
 	ExternalID string

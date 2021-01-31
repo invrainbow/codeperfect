@@ -229,39 +229,39 @@ void render_ast(Ast* ast, ccstr label = "Root") {
         if (!open) return WALK_SKIP_CHILDREN;
 
         switch (node->type) {
-            case AST_INC_DEC_STMT:
-                ImGui::Text("op: %s", tok_type_str(node->inc_dec_stmt.op));
-                break;
-            case AST_SWITCH_STMT:
-                ImGui::Text("is_type_switch: %s", node->switch_stmt.is_type_switch ? "true" : "false");
-                break;
-            case AST_BASIC_LIT:
-                ImGui::Text("lit: %s", node->basic_lit.lit);
-                break;
-            case AST_ID:
-                ImGui::Text("lit: %s", node->id.lit);
-                break;
-            case AST_UNARY_EXPR:
-                ImGui::Text("op: %s", tok_type_str(node->unary_expr.op));
-                break;
-            case AST_BINARY_EXPR:
-                ImGui::Text("op: %s", tok_type_str(node->binary_expr.op));
-                break;
-            case AST_CHAN_TYPE:
-                ImGui::Text("direction: %s", ast_chan_direction_str(node->chan_type.direction));
-                break;
-            case AST_CALL_ARGS:
-                ImGui::Text("ellip: %s", node->call_args.ellip ? "true" : "false");
-                break;
-            case AST_BRANCH_STMT:
-                ImGui::Text("branch_type: %s", tok_type_str(node->branch_stmt.branch_type));
-                break;
-            case AST_DECL:
-                ImGui::Text("type: %s", tok_type_str(node->decl.type));
-                break;
-            case AST_ASSIGN_STMT:
-                ImGui::Text("op: %s", tok_type_str(node->assign_stmt.op));
-                break;
+        case AST_INC_DEC_STMT:
+            ImGui::Text("op: %s", tok_type_str(node->inc_dec_stmt.op));
+            break;
+        case AST_SWITCH_STMT:
+            ImGui::Text("is_type_switch: %s", node->switch_stmt.is_type_switch ? "true" : "false");
+            break;
+        case AST_BASIC_LIT:
+            ImGui::Text("lit: %s", node->basic_lit.lit);
+            break;
+        case AST_ID:
+            ImGui::Text("lit: %s", node->id.lit);
+            break;
+        case AST_UNARY_EXPR:
+            ImGui::Text("op: %s", tok_type_str(node->unary_expr.op));
+            break;
+        case AST_BINARY_EXPR:
+            ImGui::Text("op: %s", tok_type_str(node->binary_expr.op));
+            break;
+        case AST_CHAN_TYPE:
+            ImGui::Text("direction: %s", ast_chan_direction_str(node->chan_type.direction));
+            break;
+        case AST_CALL_ARGS:
+            ImGui::Text("ellip: %s", node->call_args.ellip ? "true" : "false");
+            break;
+        case AST_BRANCH_STMT:
+            ImGui::Text("branch_type: %s", tok_type_str(node->branch_stmt.branch_type));
+            break;
+        case AST_DECL:
+            ImGui::Text("type: %s", tok_type_str(node->decl.type));
+            break;
+        case AST_ASSIGN_STMT:
+            ImGui::Text("op: %s", tok_type_str(node->assign_stmt.op));
+            break;
         }
 
         return WALK_CONTINUE;
@@ -561,6 +561,18 @@ enum {
     OUR_MOD_CTRL = 1 << 3,
 };
 
+void init_with_file_at_location(ccstr path, cur2 cur) {
+    SCOPED_FRAME();
+
+    world.get_current_pane()->focus_editor(path);
+    ui.recalculate_view_sizes();
+
+    auto editor = world.get_current_editor();
+    while (!editor->is_nvim_ready()) continue;
+
+    world.get_current_editor()->move_cursor(cur);
+}
+
 int main() {
     world.init(false);
 
@@ -593,17 +605,8 @@ int main() {
     glfwSwapInterval(0);
 
     ImGui::CreateContext();
-    ImGuiIO& io = ImGui::GetIO();
-    ImGui::StyleColorsDark();
 
-    {
-        ImGuiStyle& style = ImGui::GetStyle();
-        style.ItemInnerSpacing.x = 8;
-        style.ItemSpacing.x = 10;
-        style.ItemSpacing.y = 10;
-        style.WindowPadding.x = 12;
-        style.WindowPadding.y = 12;
-    }
+    ImGuiIO& io = ImGui::GetIO();
 
     io.BackendFlags |= ImGuiBackendFlags_HasMouseCursors;
     io.BackendFlags |= ImGuiBackendFlags_HasSetMousePos;
@@ -721,104 +724,23 @@ int main() {
             auto& pane2 = world.wksp.panes[i+1];
             auto delta = world.ui.mouse_delta.x;
 
-            if (delta < (100 - pane1.width)) {
+            if (delta < (100 - pane1.width))
                 delta = 100 - pane1.width;
-            }
-            if (delta > pane2.width - 100) {
+            if (delta > pane2.width - 100)
                 delta = pane2.width - 100;
-            }
 
             pane1.width += delta;
             pane2.width -= delta;
-        } else {
-            boxf resize_area;
-            if (ui.get_current_resize_area(&resize_area) != -1) {
-                glfwSetCursor(wnd, world.ui.cursors[ImGuiMouseCursor_ResizeEW]);
-            } else {
-                glfwSetCursor(wnd, world.ui.cursors[ImGuiMouseCursor_Arrow]);
-            }
         }
     });
 
     glfwSetMouseButtonCallback(world.window, [](GLFWwindow* wnd, int button, int action, int mods) {
-        if (button == GLFW_MOUSE_BUTTON_LEFT) {
-            if (action == GLFW_PRESS) {
-                boxf resize_area;
-                auto resize_area_index = ui.get_current_resize_area(&resize_area);
-                if (resize_area_index != -1)
-                    world.wksp.resizing_pane = resize_area_index;
-            } else if (action == GLFW_RELEASE) {
-                if (world.wksp.resizing_pane != -1) {
-                    ui.recalculate_view_sizes();
-                    world.wksp.resizing_pane = -1;
-                }
-            }
-        }
+        // Don't set world.ui.mouse_down here. We set it based on
+        // world.ui.mouse_just_pressed and some additional logic below, while
+        // we're setting io.MouseDown for ImGui.
 
-        if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
-            // handle sidebar clicks
-            do {
-                if (world.sidebar.view == SIDEBAR_CLOSED) break;
-
-                auto sidebar_area = ui.get_sidebar_area();
-                if (!sidebar_area.contains(world.ui.mouse_pos)) break;
-
-                switch (world.sidebar.view) {
-                    case SIDEBAR_FILE_EXPLORER:
-                        {
-                            auto index = (int)((world.ui.mouse_pos.y - sidebar_area.y + world.file_explorer.scroll_offset) / ui.font->height);
-                            auto& files = world.file_tree;
-                            u32 file_index = 0;
-
-                            for (u32 i = 0; i < index && file_index < files.len; i++) {
-                                auto it = &files[file_index];
-                                if (it->num_children != -1 && !it->state.open)
-                                    file_index = advance_subtree_in_file_explorer(file_index);
-                                else
-                                    file_index++;
-                            }
-
-                            if (file_index >= files.len) break;
-
-                            auto file = &files[file_index];
-                            if (file->num_children == -1) { // normal file
-                                {
-                                    SCOPED_FRAME();
-
-                                    auto path = alloc_list<i32>();
-                                    for (auto idx = file_index; idx != -1; idx = files[idx].parent)
-                                        path->append(idx);
-
-                                    Text_Renderer r;
-                                    r.init();
-
-                                    for (i32 j = path->len - 1; j >= 0; j--) {
-                                        r.write("%s", files[path->at(j)].name);
-                                        if (j != 0) r.write("/");
-                                    }
-
-                                    auto s = path_join(world.wksp.path, r.finish());
-                                    world.get_current_pane()->focus_editor(s);
-                                }
-
-                                ui.recalculate_view_sizes();
-                            } else {
-                                file->state.open = !file->state.open;
-                            }
-                        }
-                        break;
-                    case SIDEBAR_SEARCH_RESULTS:
-                        {
-                            auto index = (int)((world.ui.mouse_pos.y - sidebar_area.y + world.search_results.scroll_offset) / ui.font->height);
-                            auto& results = world.search_results.results;
-
-                            world.get_current_pane()->focus_editor(results[index]->filename);
-                            ui.recalculate_view_sizes();
-                        }
-                        break;
-                }
-            } while (0);
-        }
+        if (action == GLFW_PRESS && button >= 0 && button < IM_ARRAYSIZE(world.ui.mouse_just_pressed))
+            world.ui.mouse_just_pressed[button] = true;
     });
 
     glfwSetScrollCallback(world.window, [](GLFWwindow* wnd, double dx, double dy) {
@@ -837,12 +759,12 @@ int main() {
             };
 
             switch (world.sidebar.view) {
-                case SIDEBAR_FILE_EXPLORER:
-                    add_dy(&world.file_explorer.scroll_offset);
-                    break;
-                case SIDEBAR_SEARCH_RESULTS:
-                    add_dy(&world.search_results.scroll_offset);
-                    break;
+            case SIDEBAR_FILE_EXPLORER:
+                add_dy(&world.file_explorer.scroll_offset);
+                break;
+            case SIDEBAR_SEARCH_RESULTS:
+                add_dy(&world.search_results.scroll_offset);
+                break;
             }
 
             return;
@@ -894,45 +816,45 @@ int main() {
         if (world.windows_open.open_file) {
             auto &wnd = world.wnd_open_file;
             switch (ev) {
-                case GLFW_PRESS:
-                case GLFW_REPEAT:
-                    switch (key) {
-                        case GLFW_KEY_DOWN:
-                            wnd.selection++;
-                            wnd.selection %= wnd.filtered_results->len;
-                            break;
-                        case GLFW_KEY_UP:
-                            if (wnd.selection == 0)
-                                wnd.selection = wnd.filtered_results->len - 1;
-                            else
-                                wnd.selection--;
-                            break;
-                        case GLFW_KEY_BACKSPACE:
-                            {
-                                auto &wnd = world.wnd_open_file;
-                                if (wnd.query[0] != '\0')
-                                    wnd.query[strlen(wnd.query) - 1] = '\0';
-                                if (strlen(wnd.query) >= 3)
-                                    filter_files();
-                            }
-                            break;
-                        case GLFW_KEY_ESCAPE:
-                            world.windows_open.open_file = false;
-                            break;
-                        case GLFW_KEY_ENTER:
-                            world.windows_open.open_file = false;
-
-                            if (wnd.filtered_results->len == 0) break;
-
-                            auto relpath = wnd.filepaths->at(wnd.filtered_results->at(wnd.selection));
-                            auto filepath = path_join(world.wksp.path, relpath);
-                            auto pane = world.get_current_pane();
-
-                            pane->focus_editor(filepath);
-                            ui.recalculate_view_sizes();
-                            break;
+            case GLFW_PRESS:
+            case GLFW_REPEAT:
+                switch (key) {
+                case GLFW_KEY_DOWN:
+                    wnd.selection++;
+                    wnd.selection %= wnd.filtered_results->len;
+                    break;
+                case GLFW_KEY_UP:
+                    if (wnd.selection == 0)
+                        wnd.selection = wnd.filtered_results->len - 1;
+                    else
+                        wnd.selection--;
+                    break;
+                case GLFW_KEY_BACKSPACE:
+                    {
+                        auto &wnd = world.wnd_open_file;
+                        if (wnd.query[0] != '\0')
+                            wnd.query[strlen(wnd.query) - 1] = '\0';
+                        if (strlen(wnd.query) >= 3)
+                            filter_files();
                     }
                     break;
+                case GLFW_KEY_ESCAPE:
+                    world.windows_open.open_file = false;
+                    break;
+                case GLFW_KEY_ENTER:
+                    world.windows_open.open_file = false;
+
+                    if (wnd.filtered_results->len == 0) break;
+
+                    auto relpath = wnd.filepaths->at(wnd.filtered_results->at(wnd.selection));
+                    auto filepath = path_join(world.wksp.path, relpath);
+                    auto pane = world.get_current_pane();
+
+                    pane->focus_editor(filepath);
+                    ui.recalculate_view_sizes();
+                    break;
+                }
+                break;
             }
             return;
         }
@@ -1221,11 +1143,43 @@ int main() {
                             break;
                         }
                     case GLFW_KEY_W:
-                        // TODO: Close tab.
+                        {
+                            auto pane = world.get_current_pane();
+                            if (pane == NULL) break;
+
+                            auto editor = pane->get_current_editor();
+                            if (editor == NULL) {
+                                // can't close the last pane
+                                if (world.wksp.panes.len <= 1) break;
+
+                                pane->cleanup();
+                                world.wksp.panes.remove(world.wksp.current_pane);
+                                ui.resize_panes_proportionally();
+                                if (world.wksp.current_pane >= world.wksp.panes.len)
+                                    world.wksp.current_pane = world.wksp.panes.len - 1;
+                            } else {
+                                editor->cleanup();
+                                pane->editors.remove(pane->current_editor);
+                                if (pane->editors.len == 0)
+                                    pane->current_editor = -1;
+                                else if (pane->current_editor >= pane->editors.len)
+                                    pane->current_editor = pane->editors.len - 1;
+                            }
+                        }
                         break;
                     case GLFW_KEY_N:
                         world.get_current_pane()->open_empty_editor();
                         ui.recalculate_view_sizes();
+                        break;
+                    case GLFW_KEY_TAB:
+                        {
+                            auto pane = world.get_current_pane();
+                            if (pane->editors.len == 0) break;
+
+                            auto idx = (pane->current_editor + 1) % pane->editors.len;
+                            pane->focus_editor_by_index(idx);
+                        }
+
                         break;
                     }
                 }
@@ -1261,24 +1215,19 @@ int main() {
 
                         ui.recalculate_view_sizes();
                         break;
-                    case GLFW_KEY_LEFT_BRACKET:
+                    case GLFW_KEY_TAB:
                         {
                             auto pane = world.get_current_pane();
+                            if (pane->editors.len == 0) break;
+
                             u32 idx;
                             if (pane->current_editor == 0)
                                 idx = pane->editors.len - 1;
                             else
                                 idx = pane->current_editor - 1;
                             pane->focus_editor_by_index(idx);
-                            break;
                         }
-                    case GLFW_KEY_RIGHT_BRACKET:
-                        {
-                            auto pane = world.get_current_pane();
-                            auto idx = (pane->current_editor + 1) % pane->editors.len;
-                            pane->focus_editor_by_index(idx);
-                            break;
-                        }
+                        break;
                     }
                     break;
                 }
@@ -1294,30 +1243,30 @@ int main() {
                         break;
                     case GLFW_KEY_F5:
                         switch (world.dbg.state_flag) {
-                            case DBGSTATE_PAUSED:
-                                {
-                                    Dbg_Call call;
-                                    call.type = DBGCALL_CONTINUE_RUNNING;
-                                    if (!world.dbg.call_queue.push(&call)) {
-                                        // TODO: surface error
-                                    }
+                        case DBGSTATE_PAUSED:
+                            {
+                                Dbg_Call call;
+                                call.type = DBGCALL_CONTINUE_RUNNING;
+                                if (!world.dbg.call_queue.push(&call)) {
+                                    // TODO: surface error
                                 }
-                                break;
+                            }
+                            break;
 
-                            case DBGSTATE_INACTIVE:
-                                do {
-                                    auto &&dbg = world.dbg;
-                                    dbg.call_queue.init();
+                        case DBGSTATE_INACTIVE:
+                            do {
+                                auto &&dbg = world.dbg;
+                                dbg.call_queue.init();
 
-                                    // TODO: when do we stop debugging? do we kill this thread, wait for it to die, etc?
-                                    dbg.thread = create_thread(debugger_loop_thread, NULL);
-                                    if (dbg.thread == NULL) {
-                                        error("unable to create thread to start process: %s", get_last_error());
-                                        dbg.call_queue.cleanup();
-                                        break;
-                                    }
-                                } while (0);
-                                break;
+                                // TODO: when do we stop debugging? do we kill this thread, wait for it to die, etc?
+                                dbg.thread = create_thread(debugger_loop_thread, NULL);
+                                if (dbg.thread == NULL) {
+                                    error("unable to create thread to start process: %s", get_last_error());
+                                    dbg.call_queue.cleanup();
+                                    break;
+                                }
+                            } while (0);
+                            break;
                         }
                         break;
                     case GLFW_KEY_F9:
@@ -1525,8 +1474,6 @@ int main() {
                 // d) handle whatever on_type bullshit we had before
             } else {
                 char keys[2] = { (char)ch, '\0' };
-                // TODO: i don't think we always need to track response, right?
-                // only when autocomplete or parameter hints is open
                 send_nvim_keys(keys);
             }
         }
@@ -1616,19 +1563,7 @@ int main() {
     double last_time = glfwGetTime();
     i64 last_frame_time = current_time_in_nanoseconds();
 
-#if 0
-    {
-        SCOPED_FRAME();
-        auto path = path_join(world.wksp.path, "sync/sync.go");
-        world.get_current_pane()->focus_editor(path);
-        ui.recalculate_view_sizes();
-
-        auto editor = world.get_current_editor();
-        while (!editor->is_nvim_ready()) continue;
-
-        world.get_current_editor()->move_cursor(new_cur2(10, 11));
-    }
-#endif
+    // init_with_file_at_location(path_join(world.wksp.path, "sync/sync.go"), new_cur2(10, 11));
 
     while (!glfwWindowShouldClose(world.window)) {
         world.frame_mem.reset();
@@ -1636,32 +1571,34 @@ int main() {
         SCOPED_MEM(&world.frame_mem);
 
         {
+            // Check jobs.
+
             if (world.jobs.flag_search) {
                 auto& job = world.jobs.search;
                 auto& proc = job.proc;
                 auto& search_results = world.search_results;
 
                 switch (proc.status()) {
-                    case PROCESS_ERROR:
-                        world.jobs.flag_search = false;
-                        search_results.cleanup();
-                        proc.cleanup();
-                        break;
-                    case PROCESS_DONE:
-                        world.jobs.flag_search = false;
-                        search_results.cleanup();
-                        search_results.init();
+                case PROCESS_ERROR:
+                    world.jobs.flag_search = false;
+                    search_results.cleanup();
+                    proc.cleanup();
+                    break;
+                case PROCESS_DONE:
+                    world.jobs.flag_search = false;
+                    search_results.cleanup();
+                    search_results.init();
 
-                        General_Parser parser;
-                        parser.init(&proc);
-                        {
-                            SCOPED_MEM(&search_results.pool);
-                            parser.parse_find_results();
-                        }
+                    General_Parser parser;
+                    parser.init(&proc);
+                    {
+                        SCOPED_MEM(&search_results.pool);
+                        parser.parse_find_results();
+                    }
 
-                        world.sidebar.view = SIDEBAR_SEARCH_RESULTS;
-                        proc.cleanup();
-                        break;
+                    world.sidebar.view = SIDEBAR_SEARCH_RESULTS;
+                    proc.cleanup();
+                    break;
                 }
             }
 
@@ -1670,13 +1607,13 @@ int main() {
                 auto& proc = job.proc;
 
                 switch (proc.status()) {
-                    case PROCESS_DONE:
-                        job.signal_done = true;
-                        // fallthrough
-                    case PROCESS_ERROR:
-                        world.jobs.flag_search_and_replace = false;
-                        proc.cleanup();
-                        break;
+                case PROCESS_DONE:
+                    job.signal_done = true;
+                    // fallthrough
+                case PROCESS_ERROR:
+                    world.jobs.flag_search_and_replace = false;
+                    proc.cleanup();
+                    break;
                 }
             }
 
@@ -1685,35 +1622,35 @@ int main() {
                 // auto& wnd = world.wnd_open_file;
 
                 switch (proc.status()) {
-                    case PROCESS_DONE:
-                        world.search_results.pool.cleanup();
+                case PROCESS_DONE:
+                    world.search_results.pool.cleanup();
 
-                        world.jobs.flag_build = false;
-                        if (proc.exit_code != 0) {
-                            auto& ref = world.build_errors;
-                            ref.cleanup();
-                            ref.init();
+                    world.jobs.flag_build = false;
+                    if (proc.exit_code != 0) {
+                        auto& ref = world.build_errors;
+                        ref.cleanup();
+                        ref.init();
 
-                            General_Parser parser;
-                            parser.init(&proc);
-                            {
-                                SCOPED_MEM(&ref.pool);
-                                parser.parse_build_errors();
-                            }
-
-                            world.error_list.show = true;
-                        } else {
-                            world.jobs.build.signal_done = true;
+                        General_Parser parser;
+                        parser.init(&proc);
+                        {
+                            SCOPED_MEM(&ref.pool);
+                            parser.parse_build_errors();
                         }
 
-                        proc.cleanup();
-                        break;
+                        world.error_list.show = true;
+                    } else {
+                        world.jobs.build.signal_done = true;
+                    }
 
-                    case PROCESS_ERROR:
-                        world.jobs.flag_build = false;
-                        world.search_results.cleanup();
-                        proc.cleanup();
-                        break;
+                    proc.cleanup();
+                    break;
+
+                case PROCESS_ERROR:
+                    world.jobs.flag_build = false;
+                    world.search_results.cleanup();
+                    proc.cleanup();
+                    break;
                 }
             }
         }
@@ -1722,45 +1659,54 @@ int main() {
         glClearColor(COLOR_WHITE.r, COLOR_WHITE.g, COLOR_WHITE.b, 1.0);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        // TODO: do we need to do this every frame?
-        io.DisplaySize = ImVec2((float)world.window_size.x, (float)world.window_size.y);
-        io.DisplayFramebufferScale = ImVec2(world.display_scale.x, world.display_scale.y);
-
-        double new_time = glfwGetTime();
-        io.DeltaTime = last_time > 0.0 ? (float)(new_time - last_time) : (float)(1.0f / 60.0f);
-        last_time = new_time;
-
-        if (glfwGetWindowAttrib(world.window, GLFW_FOCUSED)) {
-            if (io.WantSetMousePos) {
-                glfwSetCursorPos(world.window, (double)io.MousePos.x, (double)io.MousePos.y);
-            } else {
-                double x, y;
-                glfwGetCursorPos(world.window, &x, &y);
-                io.MousePos = ImVec2((float)x, (float)y);
-            }
-        } else {
-            io.MousePos = ImVec2(-FLT_MAX, -FLT_MAX);
-        }
-
-        for (i32 i = 0; i < 3; i++) {
-            io.MouseDown[i] = world.ui.mouse_buttons_pressed[i] || glfwGetMouseButton(world.window, i) != 0;
-            world.ui.mouse_buttons_pressed[i] = false;
-        }
-
-        bool cur_changed = ((io.ConfigFlags & ImGuiConfigFlags_NoMouseCursorChange) == 0);
-        bool cur_enabled = (glfwGetInputMode(world.window, GLFW_CURSOR) != GLFW_CURSOR_DISABLED);
-
-        if (cur_changed && cur_enabled) {
-            ImGuiMouseCursor cur = ImGui::GetMouseCursor();
-            if (io.MouseDrawCursor || cur == ImGuiMouseCursor_None) {
-                glfwSetInputMode(world.window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
-            } else {
-                glfwSetInputMode(world.window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-                // glfwSetCursor(world.window, world.ui.cursors[cur] ? world.ui.cursors[cur] : world.ui.cursors[ImGuiMouseCursor_Arrow]);
-            }
+        {
+            // Send info to UI.
         }
 
         ui.draw_everything(vao, vbo, world.ui.program);
+
+        {
+            // Send info to ImGui.
+
+            // TODO: do we need to do this every frame?
+            io.DisplaySize = ImVec2((float)world.window_size.x, (float)world.window_size.y);
+            io.DisplayFramebufferScale = ImVec2(world.display_scale.x, world.display_scale.y);
+
+            double new_time = glfwGetTime();
+            io.DeltaTime = last_time > 0.0 ? (float)(new_time - last_time) : (float)(1.0f / 60.0f);
+            last_time = new_time;
+
+            io.MousePos = ImVec2(-FLT_MAX, -FLT_MAX);
+            if (glfwGetWindowAttrib(world.window, GLFW_FOCUSED)) {
+                if (io.WantSetMousePos) {
+                    glfwSetCursorPos(world.window, (double)io.MousePos.x, (double)io.MousePos.y);
+                } else {
+                    double x, y;
+                    glfwGetCursorPos(world.window, &x, &y);
+                    io.MousePos = ImVec2((float)x, (float)y);
+                }
+            }
+
+            for (i32 i = 0; i < IM_ARRAYSIZE(io.MouseDown); i++) {
+                bool down = world.ui.mouse_just_pressed[i] || glfwGetMouseButton(world.window, i) != 0;
+                io.MouseDown[i] = down;
+                world.ui.mouse_down[i] = down;
+                world.ui.mouse_just_pressed[i] = false;
+            }
+
+            bool cur_changed = ((io.ConfigFlags & ImGuiConfigFlags_NoMouseCursorChange) == 0);
+            bool cur_enabled = (glfwGetInputMode(world.window, GLFW_CURSOR) != GLFW_CURSOR_DISABLED);
+
+            if (cur_changed && cur_enabled) {
+                ImGuiMouseCursor cur = ImGui::GetMouseCursor();
+                if (io.MouseDrawCursor || cur == ImGuiMouseCursor_None) {
+                    glfwSetInputMode(world.window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
+                } else {
+                    glfwSetInputMode(world.window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+                    glfwSetCursor(world.window, world.ui.cursors[cur] ? world.ui.cursors[cur] : world.ui.cursors[ImGuiMouseCursor_Arrow]);
+                }
+            }
+        }
 
         {
             // render imgui stuff
@@ -2114,9 +2060,9 @@ int main() {
         {
             // wait until next frame
             auto curr = current_time_in_nanoseconds();
-            auto rest = (1000000000.f / FRAME_RATE_CAP) - (curr - last_frame_time);
-            if (rest > 0)
-                sleep_milliseconds((u32)(rest / 1000000.0f));
+            auto remaining = (1000000000.f / FRAME_RATE_CAP) - (curr - last_frame_time);
+            if (remaining > 0)
+                sleep_milliseconds((u32)(remaining / 1000000.0f));
             last_frame_time = curr;
         }
     }
