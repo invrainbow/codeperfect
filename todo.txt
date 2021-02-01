@@ -96,6 +96,15 @@ When using contextless autocomplete in a case statement, if you type a prefix,
 then autocomplete, it ignores the prefix.  E.g. if you type "case fo", press
 ctrl+space, and select "four", it will end up with "case fofour".
 
+A rather serious bug. Right now we depend on the index as our source of truth.
+We update this index when files are changed. The bug occurs when we edit files
+in our own workspace; because the files are being edited in our buffer, and not
+written to file yet, the changes are not reflected in our index. This creates a
+mismatch between the index and reality, resulting in extremely weird bugs, like
+crashes. We must write our program to not crash in the case of totally bogus
+index information, and also figure out a way to get up to date info about our
+open files.
+
 
 
 Purgatory

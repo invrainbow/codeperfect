@@ -4736,8 +4736,11 @@ bool Go_Index::ensure_package_correct(ccstr import_path) {
 bool Go_Index::ensure_entire_index_correct() {
     ensure_directory_exists(get_index_path());
 
+    ensure_package_correct(get_workspace_import_path());
+
     Eil_Result res;
     if (!ensure_imports_list_correct(&res)) return false;
+
     For (*res.new_imports) ensure_package_correct(it);
 }
 
