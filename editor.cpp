@@ -260,7 +260,7 @@ bool Workspace::parse_gomod_file(ccstr path) {
 
     gomod_info.directives.cleanup();
     ptr0(&gomod_info);
-    gomod_info.directives.init(LIST_MALLOC, 128);
+    gomod_info.directives.init(LIST_POOL, 128);
 
     p.parse(&gomod_info);
     return true;

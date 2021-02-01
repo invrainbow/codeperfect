@@ -3,6 +3,7 @@
 #include "common.hpp"
 #include "buffer.hpp"
 #include "utils.hpp"
+#include "mem.hpp"
 
 #include "os.hpp"
 #include "uthash.h"
@@ -660,7 +661,7 @@ struct Scoped_Table {
         UT_hash_handle hh;
     };
 
-    Pool mem;
+    Pool *mem;
     Entry* table;
     List<Overwrite> overwrites;
     List<u32> scopes;
@@ -678,9 +679,10 @@ struct Scoped_Table {
 
     void init() {
         table = NULL;
-        mem.init("scoped table mem");
-        overwrites.init(LIST_MALLOC, 100);
-        scopes.init(LIST_MALLOC, 100);
+        mem = MEM;
+
+        overwrites.init(LIST_POOL, 100);
+        scopes.init(LIST_POOL, 100);
     }
 
     void cleanup() {
@@ -691,7 +693,6 @@ struct Scoped_Table {
             HASH_DEL(table, curr);
         }
 
-        mem.cleanup();
         overwrites.cleanup();
         scopes.cleanup();
     }
@@ -699,7 +700,7 @@ struct Scoped_Table {
     void open_scope() { scopes.append(overwrites.len); }
 
     Entry* alloc_entry() {
-        return (Entry*)mem.alloc(sizeof(Entry));
+        return (Entry*)mem->alloc(sizeof(Entry));
     }
 
     bool close_scope() {
@@ -1051,10 +1052,12 @@ struct Index_Writer {
     // u32 decl_count;
     List<Decl_To_Write> decls;
 
+    void init();
+    int open(ccstr import_path);
+    void close();
+
     void write_package_hash();
-    int init(ccstr import_path);
     void write_headers(ccstr resolved_path, Import_Location loctype);
-    void cleanup();
     bool finish_writing();
     bool write_decl(ccstr filename, ccstr name, Ast* spec);
     bool write_hash(u64 hash);
@@ -1150,6 +1153,8 @@ struct Go_Index {
     // this hurts me
     char current_exe_path[MAX_PATH];
     Process buildparser_proc;
+
+    Index_Writer background_index_writer;
 
     bool init();
     void cleanup();

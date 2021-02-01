@@ -486,6 +486,8 @@ void Nvim::run_event_loop() {
                                     writer.write4(it.len);
                                     For (it) writer.write1(it);
                                 }
+
+                                editor->buf.clear();
                                 end_message();
                             }
 

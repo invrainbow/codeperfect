@@ -124,7 +124,10 @@ struct World {
 
         void init() {
             pool.init("search_results");
-            results.init(LIST_MALLOC, 128);
+            {
+                SCOPED_MEM(&pool);
+                results.init(LIST_POOL, 128);
+            }
         }
 
         void cleanup() {

@@ -16,13 +16,6 @@ Improvements
 
 Create a string class.
 
-Use our allocator for uthash_malloc.
-
-Now that our memory isn't retarded anymore, rework Scoped_Table to not use
-LIST_MALLOC. And also just rewrite large sections of Parser.
-
-See how many LIST_MALLOCs should just be LIST_POOLs.
-
 Should we just use nvim_paste instead of nvim_buf_set_lines when user pastes?
 
 
@@ -105,6 +98,8 @@ crashes. We must write our program to not crash in the case of totally bogus
 index information, and also figure out a way to get up to date info about our
 open files.
 
+Vim mode is not shown when file first opened, requires it to change first.
+
 
 
 Purgatory
@@ -118,4 +113,3 @@ Earlier, when typing a literal value, it got into an infinite loop,
 presumably inside parse_literal_value (judging by both the context of the crash
 and also the error message it was printing out was from eat_comma). Can't
 repro right now, but it's there.
-

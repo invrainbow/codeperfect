@@ -345,10 +345,8 @@ void walk_ast(Ast* root, WalkAstFn fn) {
         ccstr name;
     };
 
-    // yes, malloc is bad, figure this out later.
     List<Queue_Item> queue;
-    queue.init(LIST_MALLOC, 256);
-    defer { queue.cleanup(); };
+    queue.init(LIST_POOL, 32);
 
     auto add_to_queue = [&](Ast* ast, ccstr fullname, int depth) {
         if (ast == NULL || ast->type == AST_ILLEGAL) return;
@@ -4696,12 +4694,11 @@ bool Go_Index::ensure_package_correct(ccstr import_path) {
         print("crawling %s", path);
 
         // TODO: maybe we need to use a separate allocator for holding the names in Index_Writer.decls!
-        Index_Writer w;
-        if (w.init(import_path) != FILE_RESULT_SUCCESS) return false;
-        defer { w.cleanup(); };
+        if (background_index_writer.open(import_path) != FILE_RESULT_SUCCESS) return false;
+        defer { background_index_writer.close(); };
 
-        w.write_hash(hash);
-        w.write_headers(path, ri->location_type);
+        background_index_writer.write_hash(hash);
+        background_index_writer.write_headers(path, ri->location_type);
 
         list_directory(path, [&](Dir_Entry* ent) {
             if (ent->type == DIRENT_DIR) return;
@@ -4724,12 +4721,12 @@ bool Go_Index::ensure_package_correct(ccstr import_path) {
                         if (receiver_name != NULL)
                             name = our_sprintf("%s.%s", receiver_name, name);
                     }
-                    w.write_decl(ent->name, name, it.spec);
+                    background_index_writer.write_decl(ent->name, name, it.spec);
                 }
             });
         });
 
-        w.finish_writing();
+        background_index_writer.finish_writing();
     }
 }
 
@@ -4748,6 +4745,7 @@ bool Go_Index::ensure_entire_index_correct() {
 
 void Go_Index::run_background_thread() {
     SCOPED_MEM(&background_mem);
+    background_index_writer.init();
 
     {
         // when we start up, first ensure the entire index is correct
@@ -5184,11 +5182,13 @@ bool Index_Stream::read_file_header(Index_File_Type wanted_type) {
     return false;
 }
 
-int Index_Writer::init(ccstr import_path) {
+void Index_Writer::init() {
     ptr0(this);
+    decls.init(LIST_POOL, 128);
+}
 
+int Index_Writer::open(ccstr import_path) {
     index_path = get_index_path(import_path);
-
     if (!ensure_directory_exists(index_path))
         return FILE_RESULT_FAILURE;
 
@@ -5197,9 +5197,6 @@ int Index_Writer::init(ccstr import_path) {
 
     res = fdata.open(path_join(index_path, "data"), FILE_MODE_WRITE, FILE_CREATE_NEW);
     if (res != FILE_RESULT_SUCCESS) return res;
-
-    // initialize decls
-    decls.init(LIST_MALLOC, 128);
 
     return FILE_RESULT_SUCCESS;
 }
@@ -5212,10 +5209,9 @@ void Index_Writer::write_headers(ccstr resolved_path, Import_Location loctype) {
     fdata.write_file_header(INDEX_FILE_DATA);
 }
 
-void Index_Writer::cleanup() {
+void Index_Writer::close() {
     findex.cleanup();
     fdata.cleanup();
-    decls.cleanup();
 }
 
 #define IW_ASSERT(x) if (!(x)) return false
