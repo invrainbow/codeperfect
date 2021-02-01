@@ -369,6 +369,7 @@ enum Nvim_Request_Type {
     NVIM_REQ_AUTOCOMPLETE_SETBUF,
     // NVIM_REQ_AUTOCOMPLETE_MOVECURSOR,
     NVIM_REQ_POST_INSERT_GETCHANGEDTICK,
+    NVIM_REQ_FILEOPEN_CLEAR_UNDO,
 };
 
 struct Nvim_Request {
@@ -466,5 +467,6 @@ struct Nvim {
     }
 
     bool resize_editor(Editor* editor);
+    void handle_editor_on_ready(Editor *editor);
 };
 

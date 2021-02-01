@@ -23,6 +23,8 @@ LIST_MALLOC. And also just rewrite large sections of Parser.
 
 See how many LIST_MALLOCs should just be LIST_POOLs.
 
+Should we just use nvim_paste instead of nvim_buf_set_lines when user pastes?
+
 
 
 Features
@@ -82,9 +84,6 @@ Typing "foo(bar(" will use parameter hint for foo, not bar.
 
 Parameter hint doesn't color first parameter when first parameter is an
 incomplete string.
-
-User is able to undo the initial filling of buffer with filecontents, to bring
-buffer back to being empty.
 
 Autocomplete in helper.go is kind of slow again -- figure out why and fix.
 

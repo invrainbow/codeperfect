@@ -64,20 +64,29 @@ Editor* find_editor_by_grid(u32 grid) {
     return find_editor_by_window(table[idx].win);
 }
 
-void handle_editor_on_ready(Editor *editor) {
-    if (editor->is_nvim_ready()) {
-        if (editor->nvim_data.need_initial_pos_set) {
-            editor->nvim_data.need_initial_pos_set = false;
-            auto pos = editor->nvim_data.initial_pos;
-            if (pos.y == -1)
-                pos = editor->offset_to_cur(pos.x);
-            editor->move_cursor(pos);
-        }
+void Nvim::handle_editor_on_ready(Editor *editor) {
+    if (!editor->is_nvim_ready()) return;
 
-        // clear dirty indicator (it'll be set after we filled buf during
-        // nvim_buf_lines_event)
-        editor->buf.dirty = false;
+    if (editor->nvim_data.need_initial_pos_set) {
+        editor->nvim_data.need_initial_pos_set = false;
+        auto pos = editor->nvim_data.initial_pos;
+        if (pos.y == -1)
+            pos = editor->offset_to_cur(pos.x);
+        editor->move_cursor(pos);
     }
+
+    // clear dirty indicator (it'll be set after we filled buf during
+    // nvim_buf_lines_event)
+    editor->buf.dirty = false;
+
+    // clear undo history
+    auto msgid = start_request_message("nvim_call_function", 2);
+    save_request(NVIM_REQ_FILEOPEN_CLEAR_UNDO, msgid, editor->id);
+
+    writer.write_string("IDEClearUndo");
+    writer.write_array(1);
+    writer.write_int(editor->nvim_data.buf_id);
+    end_message();
 }
 
 void Nvim::run_event_loop() {
@@ -340,239 +349,247 @@ void Nvim::run_event_loop() {
                     }
 
                     switch (req->type) {
-                        case NVIM_REQ_POST_INSERT_GETCHANGEDTICK:
-                            {
-                                ASSERT(editor != NULL);
+                    case NVIM_REQ_FILEOPEN_CLEAR_UNDO:
+                        {
+                            ASSERT(editor != NULL);
+                            reader.skip_object(); CHECKOK();
+                            if (!error)
+                                editor->buf.dirty = false;
+                        }
+                        break;
+                    case NVIM_REQ_POST_INSERT_GETCHANGEDTICK:
+                        {
+                            ASSERT(editor != NULL);
 
-                                // skip next update from nvim
-                                auto changedtick = reader.read_int(); CHECKOK();
-                                editor->nvim_insert.skip_changedticks_until = changedtick + 1;
+                            // skip next update from nvim
+                            auto changedtick = reader.read_int(); CHECKOK();
+                            editor->nvim_insert.skip_changedticks_until = changedtick + 1;
 
-                                auto cur = editor->cur;
-                                auto backspaced_to = editor->nvim_insert.backspaced_to;
-                                auto start = editor->nvim_insert.start;
+                            auto cur = editor->cur;
+                            auto backspaced_to = editor->nvim_insert.backspaced_to;
+                            auto start = editor->nvim_insert.start;
 
-                                // set new lines
-                                start_request_message("nvim_buf_set_lines", 5);
-                                writer.write_int(editor->nvim_data.buf_id);
-                                writer.write_int(backspaced_to.y);
-                                writer.write_int(start.y + 1);
-                                writer.write_bool(false);
-                                writer.write_array(cur.y - backspaced_to.y + 1);
-                                for (u32 y = backspaced_to.y; y <= cur.y; y++) {
-                                    auto& line = editor->buf.lines[y];
-                                    writer.write1(MP_OP_STRING);
-                                    writer.write4(line.len);
-                                    For (line) writer.write1(it);
-                                }
-                                end_message();
-
-                                // move cursor
-                                editor->move_cursor(editor->cur);
-
-                                // send the <esc> key that we delayed
-                                start_request_message("nvim_input", 1);
-                                writer.write_string("<Esc>");
-                                end_message();
+                            // set new lines
+                            start_request_message("nvim_buf_set_lines", 5);
+                            writer.write_int(editor->nvim_data.buf_id);
+                            writer.write_int(backspaced_to.y);
+                            writer.write_int(start.y + 1);
+                            writer.write_bool(false);
+                            writer.write_array(cur.y - backspaced_to.y + 1);
+                            for (u32 y = backspaced_to.y; y <= cur.y; y++) {
+                                auto& line = editor->buf.lines[y];
+                                writer.write1(MP_OP_STRING);
+                                writer.write4(line.len);
+                                For (line) writer.write1(it);
                             }
-                            break;
-                        case NVIM_REQ_AUTOCOMPLETE_SETBUF:
-                            {
-                                ASSERT(editor != NULL);
-                                reader.skip_object(); CHECKOK();
-                                if (!error) {
-                                    editor->move_cursor(req->autocomplete_setbuf.target_cursor);
-                                }
+                            end_message();
+
+                            // move cursor
+                            editor->move_cursor(editor->cur);
+
+                            // send the <esc> key that we delayed
+                            start_request_message("nvim_input", 1);
+                            writer.write_string("<Esc>");
+                            end_message();
+                        }
+                        break;
+                    case NVIM_REQ_AUTOCOMPLETE_SETBUF:
+                        {
+                            ASSERT(editor != NULL);
+                            reader.skip_object(); CHECKOK();
+                            if (!error) {
+                                editor->move_cursor(req->autocomplete_setbuf.target_cursor);
                             }
-                            break;
+                        }
+                        break;
 
-                        case NVIM_REQ_GET_API_INFO:
-                            {
-                                if (error) {
-                                    reader.skip_object(); CHECKOK();
-                                    break;
-                                }
-
-                                auto len = reader.read_array(); CHECKOK();
-                                ASSERT(len == 2);
-
-                                auto channel_id = reader.read_int(); CHECKOK();
-                                reader.skip_object(); CHECKOK();
-
-                                // pass channel id to neovim so we can send it to rpcrequest
-                                start_request_message("nvim_set_var", 2);
-                                writer.write_string("channel_id");
-                                writer.write_int(channel_id);
-                                end_message();
-                            }
-                            break;
-                        case NVIM_REQ_SET_CURSOR:
-                            {
-                                ASSERT(editor != NULL);
-                                if (error) {
-                                    // print("error");
-                                }
-                                reader.skip_object(); CHECKOK();
-                            }
-                            break;
-                        case NVIM_REQ_RESIZE:
-                            {
-                                ASSERT(editor != NULL);
-                                editor->nvim_data.is_resizing = false;
-                                if (error) {
-                                    // print("error");
-                                }
-                                reader.skip_object(); CHECKOK();
-                            }
-                            break;
-                        case NVIM_REQ_CREATE_BUF:
-                            {
-                                u32 bufid = 0;
-                                if (!error && reader.peek_type() == MP_EXT) {
-                                    auto ext = reader.read_ext();
-                                    bufid = ext->object_id;
-                                } else {
-                                    reader.skip_object(); CHECKOK();
-                                }
-
-                                if (bufid == 0) {
-                                    // TODO: mark the editor as having an error
-                                    break;
-                                }
-
-                                ASSERT(editor != NULL);
-
-                                editor->nvim_data.buf_id = bufid;
-                                // editor->nvim_data.status = ENS_WIN_PENDING;
-
-                                {
-                                    auto msgid = start_request_message("nvim_buf_attach", 3);
-                                    save_request(NVIM_REQ_BUF_ATTACH, msgid, editor->id);
-
-                                    writer.write_int(bufid);
-                                    writer.write_bool(false);
-                                    writer.write_map(0);
-                                    end_message();
-                                }
-
-                                {
-                                    start_request_message("nvim_buf_set_lines", 5);
-
-                                    writer.write_int(bufid);
-                                    writer.write_int(0);
-                                    writer.write_int(-1);
-                                    writer.write_bool(false);
-
-                                    if (editor->nvim_data.file_handle != NULL) {
-                                        Buffer tmpbuf;
-                                        tmpbuf.init();
-                                        defer { tmpbuf.cleanup(); };
-
-                                        tmpbuf.read(editor->nvim_data.file_handle);
-                                        fclose(editor->nvim_data.file_handle);
-                                        editor->nvim_data.file_handle = NULL;
-
-                                        writer.write_array(tmpbuf.lines.len);
-                                        For (tmpbuf.lines) {
-                                            writer.write1(MP_OP_STRING);
-                                            writer.write4(it.len);
-                                            For (it) writer.write1(it);
-                                        }
-                                    }
-
-                                    end_message();
-                                }
-
-                                {
-                                    typedef fn<void()> write_value_func;
-                                    auto set_option = [&](ccstr key, write_value_func f) {
-                                        start_request_message("nvim_buf_set_option", 3);
-                                        writer.write_int(bufid);
-                                        writer.write_string(key);
-                                        f();
-                                        end_message();
-                                    };
-
-                                    set_option("shiftwidth", [&]() { writer.write_int(2); });
-                                    set_option("tabstop", [&]() { writer.write_int(2); });
-                                    set_option("expandtab", [&]() { writer.write_bool(false); });
-                                    set_option("wrap", [&]() { writer.write_bool(false); });
-                                    set_option("autoindent", [&]() { writer.write_bool(true); });
-                                    set_option("filetype", [&]() { writer.write_string("go"); });
-                                    // how to do eq. of `filetype indent plugin on'?
-                                }
-
-                                {
-                                    auto msgid = start_request_message("nvim_open_win", 3);
-                                    save_request(NVIM_REQ_OPEN_WIN, msgid, editor->id);
-
-                                    writer.write_int(bufid);
-                                    writer.write_bool(false);
-                                    writer.write_map(5);
-                                    writer.write_string("relative"); writer.write_string("win");
-                                    writer.write_string("row"); writer.write_int(0);
-                                    writer.write_string("col"); writer.write_int(0);
-                                    writer.write_string("width"); writer.write_int(200);
-                                    writer.write_string("height"); writer.write_int(100);
-                                    end_message();
-                                }
-                            }
-                            break;
-                        case NVIM_REQ_SET_CURRENT_WIN:
+                    case NVIM_REQ_GET_API_INFO:
+                        {
                             if (error) {
-                                // TODO
-                                reader.skip_object();
+                                reader.skip_object(); CHECKOK();
                                 break;
                             }
-                            reader.read_nil();
-                            if (editor->id == world.nvim_data.waiting_focus_window) {
-                                world.nvim_data.waiting_focus_window = 0;
+
+                            auto len = reader.read_array(); CHECKOK();
+                            ASSERT(len == 2);
+
+                            auto channel_id = reader.read_int(); CHECKOK();
+                            reader.skip_object(); CHECKOK();
+
+                            // pass channel id to neovim so we can send it to rpcrequest
+                            start_request_message("nvim_set_var", 2);
+                            writer.write_string("channel_id");
+                            writer.write_int(channel_id);
+                            end_message();
+                        }
+                        break;
+                    case NVIM_REQ_SET_CURSOR:
+                        {
+                            ASSERT(editor != NULL);
+                            if (error) {
+                                // print("error");
                             }
-                            break;
-                        case NVIM_REQ_OPEN_WIN:
+                            reader.skip_object(); CHECKOK();
+                        }
+                        break;
+                    case NVIM_REQ_RESIZE:
+                        {
+                            ASSERT(editor != NULL);
+                            editor->nvim_data.is_resizing = false;
+                            if (error) {
+                                // print("error");
+                            }
+                            reader.skip_object(); CHECKOK();
+                        }
+                        break;
+                    case NVIM_REQ_CREATE_BUF:
+                        {
+                            u32 bufid = 0;
+                            if (!error && reader.peek_type() == MP_EXT) {
+                                auto ext = reader.read_ext();
+                                bufid = ext->object_id;
+                            } else {
+                                reader.skip_object(); CHECKOK();
+                            }
+
+                            if (bufid == 0) {
+                                // TODO: mark the editor as having an error
+                                break;
+                            }
+
+                            ASSERT(editor != NULL);
+
+                            editor->nvim_data.buf_id = bufid;
+                            // editor->nvim_data.status = ENS_WIN_PENDING;
+
                             {
-                                auto run = [&]() -> bool {
-                                    if (error) return false;
-                                    if (reader.peek_type() != MP_EXT) return false;
+                                auto msgid = start_request_message("nvim_buf_attach", 3);
+                                save_request(NVIM_REQ_BUF_ATTACH, msgid, editor->id);
 
-                                    auto ext = reader.read_ext();
-                                    if (!reader.ok) return false;
+                                writer.write_int(bufid);
+                                writer.write_bool(false);
+                                writer.write_map(0);
+                                end_message();
+                            }
 
-                                    editor->nvim_data.win_id = ext->object_id;
-                                    if (world.nvim_data.waiting_focus_window == editor->id)
-                                        set_current_window(editor);
-                                    return true;
+                            {
+                                start_request_message("nvim_buf_set_lines", 5);
+
+                                writer.write_int(bufid);
+                                writer.write_int(0);
+                                writer.write_int(-1);
+                                writer.write_bool(false);
+
+                                if (editor->nvim_data.file_handle != NULL) {
+                                    Buffer tmpbuf;
+                                    tmpbuf.init();
+                                    defer { tmpbuf.cleanup(); };
+
+                                    tmpbuf.read(editor->nvim_data.file_handle);
+                                    fclose(editor->nvim_data.file_handle);
+                                    editor->nvim_data.file_handle = NULL;
+
+                                    writer.write_array(tmpbuf.lines.len);
+                                    For (tmpbuf.lines) {
+                                        writer.write1(MP_OP_STRING);
+                                        writer.write4(it.len);
+                                        For (it) writer.write1(it);
+                                    }
+                                }
+
+                                end_message();
+                            }
+
+                            {
+                                typedef fn<void()> write_value_func;
+                                auto set_option = [&](ccstr key, write_value_func f) {
+                                    start_request_message("nvim_buf_set_option", 3);
+                                    writer.write_int(bufid);
+                                    writer.write_string(key);
+                                    f();
+                                    end_message();
                                 };
 
-                                if (!run()) {
-                                    reader.skip_object();
-                                    // TODO: mark error
-                                }
+                                set_option("shiftwidth", [&]() { writer.write_int(2); });
+                                set_option("tabstop", [&]() { writer.write_int(2); });
+                                set_option("expandtab", [&]() { writer.write_bool(false); });
+                                set_option("wrap", [&]() { writer.write_bool(false); });
+                                set_option("autoindent", [&]() { writer.write_bool(true); });
+                                set_option("filetype", [&]() { writer.write_string("go"); });
+                                // how to do eq. of `filetype indent plugin on'?
                             }
-                            break;
-                        case NVIM_REQ_BUF_ATTACH:
+
                             {
-                                reader.skip_object();
-                                if (error) {
-                                    // TODO: mark error
-                                    break;
-                                }
-                                editor->nvim_data.is_buf_attached = true;
+                                auto msgid = start_request_message("nvim_open_win", 3);
+                                save_request(NVIM_REQ_OPEN_WIN, msgid, editor->id);
+
+                                writer.write_int(bufid);
+                                writer.write_bool(false);
+                                writer.write_map(5);
+                                writer.write_string("relative"); writer.write_string("win");
+                                writer.write_string("row"); writer.write_int(0);
+                                writer.write_string("col"); writer.write_int(0);
+                                writer.write_string("width"); writer.write_int(200);
+                                writer.write_string("height"); writer.write_int(100);
+                                end_message();
                             }
+                        }
+                        break;
+                    case NVIM_REQ_SET_CURRENT_WIN:
+                        if (error) {
+                            // TODO
+                            reader.skip_object();
                             break;
-                        case NVIM_REQ_UI_ATTACH:
-                            {
+                        }
+                        reader.read_nil();
+                        if (editor->id == world.nvim_data.waiting_focus_window) {
+                            world.nvim_data.waiting_focus_window = 0;
+                        }
+                        break;
+                    case NVIM_REQ_OPEN_WIN:
+                        {
+                            auto run = [&]() -> bool {
+                                if (error) return false;
+                                if (reader.peek_type() != MP_EXT) return false;
+
+                                auto ext = reader.read_ext();
+                                if (!reader.ok) return false;
+
+                                editor->nvim_data.win_id = ext->object_id;
+                                if (world.nvim_data.waiting_focus_window == editor->id)
+                                    set_current_window(editor);
+                                return true;
+                            };
+
+                            if (!run()) {
                                 reader.skip_object();
-                                if (error) {
-                                    // TODO: mark error
-                                    break;
-                                }
-                                world.nvim_data.is_ui_attached = true;
+                                // TODO: mark error
                             }
-                            break;
-                        default:
-                            unhandled = true;
-                            break;
+                        }
+                        break;
+                    case NVIM_REQ_BUF_ATTACH:
+                        {
+                            reader.skip_object();
+                            if (error) {
+                                // TODO: mark error
+                                break;
+                            }
+                            editor->nvim_data.is_buf_attached = true;
+                        }
+                        break;
+                    case NVIM_REQ_UI_ATTACH:
+                        {
+                            reader.skip_object();
+                            if (error) {
+                                // TODO: mark error
+                                break;
+                            }
+                            world.nvim_data.is_ui_attached = true;
+                        }
+                        break;
+                    default:
+                        unhandled = true;
+                        break;
                     }
 
                     if (unhandled) {
