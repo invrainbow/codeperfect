@@ -39,3 +39,6 @@ test.go
 
 # remedybg debug session
 *.rdbg
+
+# created by our own ide
+.ide

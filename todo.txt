@@ -28,6 +28,8 @@ See how many LIST_MALLOCs should just be LIST_POOLs.
 Features
 ========
 
+Figure out fmt/lint/whatever on save. Or have a hotkey to do it?
+
 Handle unicode. If we don't handle the stupid Unicode situation soon, we're
 going to be fucked the longer we wait. Need to get that shit over with.
 Probably the first thing we need to do as soon as indexing is done.
@@ -35,7 +37,10 @@ Probably the first thing we need to do as soon as indexing is done.
 Handle nested vendor directories for Go too. And nested go.mod.
 
 Make sure we invalidate the index as soon as a file changes, so that we don't
-e.g.  jump to definition at wrong place.
+e.g.  jump to definition at wrong place. Additional notes: This most obvious
+place this happens is when we're editing a file, and change a struct Foo. Then
+we say "var foo Foo; foo." and the autocomplete menu is wrong, because it
+hasn't updated with the newest Foo yet. (How do we fix this?)
 
 Enable adding new files/folder in file explorer.
 
@@ -57,13 +62,11 @@ Make sure we're not able to trigger race condition by pressing i and some other
 letters super fast. What might happen is I press i, before neovim signals mode
 change, I press another letter, that gets sent to neovim, we get out of sync.
 
-Add rounded rectangles (look at how imgui does it).
-
 When user clicks on a search result, after opening the file, jump to the right position too.
 
 Set cursor when user hovers over something, like pane resizers.
 
-Send ctrl+e to nvim.
+Send ctrl+<key>s to nvim.
 
 Make parameter hints show return type.
 
@@ -76,8 +79,6 @@ When tabs overflow the tab bar, current tab just goes offscreen.
 
 Typing "foo(bar(" will use parameter hint for foo, not bar.
 
-Typing "<<" in normal mode (de-indent) doesn't work.
-
 Parameter hint doesn't color first parameter when first parameter is an
 incomplete string.
 
@@ -85,6 +86,24 @@ User is able to undo the initial filling of buffer with filecontents, to bring
 buffer back to being empty.
 
 Autocomplete in helper.go is kind of slow again -- figure out why and fix.
+
+Screen suddenly turned white, only tabs were drawn, why? Did we hit a
+breakpoint mid-draw or something? (But shouldn't buffer swapping make it draw
+all at once?)
+
+Text flashes for a second when replacing with vim's r. Probably has to do with
+how we're receiving nvim_buf_lines_event. I think it's because
+nvim_buf_lines_event is happening in a separate thread. Do we need to lock? Or
+what's the solution here?
+
+When using contextless autocomplete, if you type a prefix, then autocomplete,
+it ignores the prefix.  E.g. if you type "fo", press ctrl+space, and select
+"four", it will end up typing our "fofour".
+
+Methods with receivers (e.g. Foo.Command) show up when autocompleting from a
+package.
+
+Contextless autocomplete doesn't include imports.
 
 
 

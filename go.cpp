@@ -459,6 +459,7 @@ void walk_ast(Ast* root, WalkAstFn fn) {
                 break;
             case AST_CALL_ARGS:
                 add_child(ast->call_args.args);
+                break;
             case AST_LITERAL_ELEM:
                 add_child(ast->literal_elem.elem);
                 add_child(ast->literal_elem.key);
@@ -1799,6 +1800,8 @@ Ast* Parser::parse_simple_stmt() {
     }
 
     auto expr = lhs->list.items[0];
+    if (expr == NULL) return NULL; // when does this happen?
+
     switch (tok.type) {
         case TOK_COLON:
             {
@@ -2521,7 +2524,7 @@ Ast* Parser::parse_literal_value() {
 
         item->literal_elem.key = key;
         item->literal_elem.elem = elem;
-        elems.push(item);
+        elems.push(fill_end(item));
 
         if (!eat_comma(TOK_RBRACE, "composite literal"))
             break;
@@ -3026,7 +3029,9 @@ File_Ast* Go_Index::get_type_from_decl(File_Ast* decl, ccstr id) {
                 {
                     s32 offset = 0;
                     For (type->parameters.fields->list) {
-                        auto len = it->field.ids->list.len;
+                        s32 len = 1;
+                        if (it->field.ids != NULL)
+                            len = it->field.ids->list.len;
                         if (offset + len >= idx)
                             return r->type->dup(it->field.type);
                         offset += len;
