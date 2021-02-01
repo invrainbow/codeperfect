@@ -25,9 +25,7 @@ Features
 
 Figure out fmt/lint/whatever on save. Or have a hotkey to do it?
 
-Handle unicode. If we don't handle the stupid Unicode situation soon, we're
-going to be fucked the longer we wait. Need to get that shit over with.
-Probably the first thing we need to do as soon as indexing is done.
+Handle unicode.
 
 Handle nested vendor directories for Go too. And nested go.mod.
 
@@ -37,7 +35,7 @@ place this happens is when we're editing a file, and change a struct Foo. Then
 we say "var foo Foo; foo." and the autocomplete menu is wrong, because it
 hasn't updated with the newest Foo yet. (How do we fix this?)
 
-Enable adding new files/folder in file explorer.
+Enable adding new files/folders in file explorer.
 
 Our neovim integration gives complete access to :commands, /search, etc. Think
 about how we should handle this. Also, Vim highlights when I search for stuff
@@ -76,7 +74,7 @@ Typing "foo(bar(" will use parameter hint for foo, not bar.
 Parameter hint doesn't color first parameter when first parameter is an
 incomplete string.
 
-Autocomplete in helper.go is kind of slow again -- figure out why and fix.
+Autocomplete in helper.go is kind of slow again.
 
 Screen suddenly turned white, only tabs were drawn, why? Did we hit a
 breakpoint mid-draw or something? (But shouldn't buffer swapping make it draw
