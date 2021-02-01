@@ -3549,6 +3549,7 @@ bool Go_Index::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period, 
                             SCOPED_MEM(&world.autocomplete_mem);
                             ret.results = alloc_list<AC_Result>();
                             For (*names) {
+                                if (strchr(it, '.') != NULL) continue;
                                 auto result = ret.results->append();
                                 result->name = our_strcpy(it);
                             }
@@ -4649,6 +4650,8 @@ bool Go_Index::ensure_package_correct(ccstr import_path) {
             if (str_ends_with(ent->name, "_test.go")) return;
 
             auto filepath = path_join(path, ent->name);
+            if (!is_file_included_in_build(filepath)) return;
+
             auto ast = parse_file_into_ast(filepath);
             if (ast == NULL) return; // what to do here? this is an error
 

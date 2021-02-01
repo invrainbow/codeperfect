@@ -100,9 +100,6 @@ When using contextless autocomplete, if you type a prefix, then autocomplete,
 it ignores the prefix.  E.g. if you type "fo", press ctrl+space, and select
 "four", it will end up typing our "fofour".
 
-Methods with receivers (e.g. Foo.Command) show up when autocompleting from a
-package.
-
 Contextless autocomplete doesn't include imports.
 
 
