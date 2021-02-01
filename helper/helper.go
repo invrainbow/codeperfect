@@ -14,6 +14,17 @@ import (
 	"github.com/reviewdog/errorformat"
 )
 
+func x() {
+	testFoo := 1
+	if testFoo == 1 {
+		testBar := 2
+		if testBar == 2 {
+			testBaz := 3
+
+		}
+	}
+}
+
 type Oper uint8
 
 const (

@@ -596,6 +596,41 @@ void walk_ast(Ast* root, WalkAstFn fn) {
     }
 }
 
+List<ccstr> *list_local_names_accessible_to(ccstr filepath, Ast *source, cur2 pos) {
+    Ast *toplevel_decl = NULL;
+
+    // find the toplevel that contains res
+    walk_ast(source, [&](Ast *ast, ccstr name, int depth) -> Walk_Action {
+        // depth = 0 is source
+        // depth = 1 is decls->list
+        // depth = 2 is toplevels
+        if (ast->type == AST_PACKAGE_DECL) return WALK_SKIP_CHILDREN;
+        if (depth < 2) return WALK_CONTINUE;
+
+        if (depth == 2) { // toplevel
+            if (ast->type != AST_DECL && ast->type != AST_FUNC_DECL) return WALK_SKIP_CHILDREN;
+            int res = locate_pos_relative_to_ast(pos, ast);
+            if (res < 0) return WALK_ABORT;
+            if (res > 0) return WALK_SKIP_CHILDREN;
+
+            toplevel_decl = ast;
+            return WALK_ABORT;
+        }
+
+        return WALK_CONTINUE;
+    });
+
+    if (toplevel_decl == NULL) return NULL;
+
+    List<ccstr> *ret = NULL;
+    with_parser_at_location(filepath, toplevel_decl->start, [&](Parser *p) {
+        p->dump_decl_table_at = pos;
+        p->parse_decl(lookup_decl_start, false);
+        ret = p->decl_table_dump;
+    });
+    return ret;
+}
+
 void find_nodes_containing_pos(Ast *root, cur2 pos, fn<Walk_Action(Ast *it)> callback) {
     walk_ast(root, [&](Ast* ast, ccstr name, int depth) -> Walk_Action {
         int res = locate_pos_relative_to_ast(pos, ast);
@@ -1169,6 +1204,9 @@ void Parser::init(Parser_It* _it, ccstr _filepath, bool no_lex) {
     // init fields
     it = _it;
     filepath = _filepath;
+
+    // default isn't zero
+    dump_decl_table_at = {-1, -1};
 
     // init list mem
     list_mem.cap = 128;
@@ -2659,6 +2697,11 @@ cur2 Parser::lex() {
         if (tok.type != TOK_COMMENT)
             last_token_type = tok.type;
     } while (tok.type == TOK_COMMENT);
+
+    if (dump_decl_table_at.x != -1)
+        if (ret < dump_decl_table_at && tok.start > dump_decl_table_at)
+            decl_table_dump = decl_table.get_names();
+
     return ret;
 }
 
@@ -3524,6 +3567,14 @@ bool Go_Index::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period, 
                 r->name = it.name->id.lit;
             }
         });
+
+        auto local_names = list_local_names_accessible_to(filepath, file, pos);
+        if (local_names != NULL) {
+            For (*local_names) {
+                auto r = ret->append();
+                r->name = it;
+            }
+        }
 
         return ret;
     };

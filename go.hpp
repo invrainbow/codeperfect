@@ -665,6 +665,17 @@ struct Scoped_Table {
     List<Overwrite> overwrites;
     List<u32> scopes;
 
+    List<ccstr> *get_names() {
+        Entry* curr;
+        Entry* tmp;
+
+        auto ret = alloc_list<ccstr>();
+        HASH_ITER(hh, table, curr, tmp) {
+            ret->append(curr->key);
+        }
+        return ret;
+    }
+
     void init() {
         table = NULL;
         mem.init("scoped table mem");
@@ -791,6 +802,8 @@ struct Parser {
     Token tok;
     Tok_Type last_token_type;
     ccstr filepath; // for debugging purposes
+    cur2 dump_decl_table_at;
+    List<ccstr> *decl_table_dump;
 
     void init(Parser_It* _it, ccstr _filepath = NULL, bool no_lex = false);
     void cleanup();

@@ -50,8 +50,6 @@ Our neovim integration gives complete access to :commands, /search, etc. Think
 about how we should handle this. Also, Vim highlights when I search for stuff
 are weird.
 
-Make autocomplete on a blank line include accessible decls in current file.
-
 Add syntax highlighting.
 
 In insert mode, make closing brace de-indent.
