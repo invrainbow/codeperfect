@@ -89,12 +89,10 @@ Autocomplete in helper.go is kind of slow again -- figure out why and fix.
 
 Screen suddenly turned white, only tabs were drawn, why? Did we hit a
 breakpoint mid-draw or something? (But shouldn't buffer swapping make it draw
-all at once?)
-
-Text flashes for a second when replacing with vim's r. Probably has to do with
-how we're receiving nvim_buf_lines_event. I think it's because
-nvim_buf_lines_event is happening in a separate thread. Do we need to lock? Or
-what's the solution here?
+all at once?) Related: text flashes for a second when replacing with vim's r.
+Probably has to do with how we're receiving nvim_buf_lines_event. I think it's
+because nvim_buf_lines_event is happening in a separate thread. Do we need to
+lock? Or what's the solution here?
 
 When using contextless autocomplete, if you type a prefix, then autocomplete,
 it ignores the prefix.  E.g. if you type "fo", press ctrl+space, and select
