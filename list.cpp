@@ -1,6 +1,5 @@
 #include "list.hpp"
-#include "world.hpp"
-#include "pool.hpp"
+#include "mem.hpp"
 
 uchar* alloc_chunk_stub(s32 needed, s32* new_size) {
     return alloc_chunk(needed, new_size);

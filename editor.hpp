@@ -41,7 +41,6 @@ struct Editor {
     struct {
         bool is_buf_attached;
         u32 buf_id;
-        FILE* file_handle;
         u32 win_id;
 
         bool got_initial_cur;

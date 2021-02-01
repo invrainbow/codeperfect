@@ -51,7 +51,7 @@ void Editor::reset_state() {
 bool Editor::load_file(ccstr new_filepath) {
     if (buf.initialized)
         buf.cleanup();
-    buf.init();
+    buf.init(&mem);
 
     FILE* f = NULL;
     if (new_filepath != NULL) {
@@ -68,24 +68,16 @@ bool Editor::load_file(ccstr new_filepath) {
     }
 
     reset_state();
+    buf.read(f);
+    fclose(f);
 
     if (world.use_nvim) {
-        // nvim_data.status = ENS_BUF_PENDING;
-        nvim_data.file_handle = f;
-
         auto& nv = world.nvim;
-
-        {
-            auto msgid = nv.start_request_message("nvim_create_buf", 2);
-            nv.save_request(NVIM_REQ_CREATE_BUF, msgid, id);
-
-            nv.writer.write_bool(false);
-            nv.writer.write_bool(true);
-            nv.end_message();
-        }
-    } else if (f != NULL) {
-        buf.read(f);
-        fclose(f);
+        auto msgid = nv.start_request_message("nvim_create_buf", 2);
+        nv.save_request(NVIM_REQ_CREATE_BUF, msgid, id);
+        nv.writer.write_bool(false);
+        nv.writer.write_bool(true);
+        nv.end_message();
     }
 
     return true;

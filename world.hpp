@@ -12,6 +12,7 @@
 #include "nvim.hpp"
 #include "utils.hpp"
 #include "imgui.h"
+#include "mem.hpp"
 
 typedef fn<bool(Editor* e)> find_editor_func;
 
@@ -140,12 +141,14 @@ struct World {
 
         void init() {
             pool.init("build_errors");
-            errors.init(LIST_MALLOC, 128);
+            {
+                SCOPED_MEM(&pool);
+                errors.init(LIST_POOL, 32);
+            }
         }
 
         void cleanup() {
             pool.cleanup();
-            errors.cleanup();
         }
     } build_errors;
 
@@ -284,66 +287,6 @@ struct World {
 };
 
 extern World world;
-extern thread_local Pool *MEM;
-
-uchar* alloc_chunk(s32 needed, s32* new_size);
-void free_chunk(uchar* buf, s32 cap);
-
-struct Frame {
-    Pool *pool;
-    Pool_Block *block;
-    s32 pos;
-
-    Frame() {
-        pool = MEM;
-        block = pool->curr;
-        pos = pool->sp;
-    }
-
-    void restore() {
-        pool->restore(block, pos);
-    }
-};
-
-struct Scoped_Frame {
-    Frame frame;
-    ~Scoped_Frame() { frame.restore(); }
-};
-
-#define SCOPED_FRAME() Scoped_Frame GENSYM(SCOPED_FRAME)
-
-struct Scoped_Mem {
-    Pool* old;
-    Scoped_Mem(Pool *pool) { old = MEM; MEM = pool; }
-    ~Scoped_Mem() { MEM = old; }
-};
-
-#define SCOPED_MEM(x) Scoped_Mem GENSYM(SCOPED_MEM)(x)
-
-void* _alloc_memory(s32 size, bool zero);
-
-#define alloc_memory(n) _alloc_memory(n, true)
-#define alloc_array(T, n) (T *)alloc_memory(sizeof(T) * (n))
-#define alloc_object(T) alloc_array(T, 1)
-
-template <typename T>
-void alloc_list(List<T>* list, s32 len) {
-    list->init(LIST_FIXED, len, alloc_array(T, len));
-}
-
-template <typename T>
-List<T>* alloc_list(s32 len) {
-    auto ret = alloc_object(List<T>);
-    alloc_list(ret, len);
-    return ret;
-}
-
-template <typename T>
-List<T>* alloc_list() {
-    auto ret = alloc_object(List<T>);
-    ret->init(LIST_POOL, 32);
-    return ret;
-}
 
 #define TAB_SIZE 2 // TODO
 

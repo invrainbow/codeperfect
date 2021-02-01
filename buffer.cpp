@@ -136,8 +136,12 @@ uchar Cstr_To_Ustr::feed(u8 ch, bool* found) {
     return 0;
 }
 
-void Buffer::init() {
-    lines.init(LIST_MALLOC, 128);
+void Buffer::init(Pool *_mem) {
+    mem = _mem;
+    {
+        SCOPED_MEM(mem);
+        lines.init(LIST_POOL, 128);
+    }
     initialized = true;
     dirty = false;
 }

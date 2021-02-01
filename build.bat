@@ -13,7 +13,7 @@ cl /MP /MDd /nologo /EHsc /w /std:c++latest /DEBUG /Zi /Fe:ide.exe^
     imgui.cpp imgui_demo.cpp imgui_draw.cpp imgui_widgets.cpp list.cpp^
     nvim.cpp os.cpp os_windows.cpp^
     process_test.cpp tests.cpp ui.cpp utils.cpp veramono.cpp world.cpp^
-    impl.cpp fzy_match.cpp^
+    impl.cpp fzy_match.cpp mem.cpp^
     /link /NOLOGO /IGNORE:4099^
     /NODEFAULTLIB:MSVCRT /NODEFAULTLIB:LIBCMTD^
     /LIBPATH:W:\packages\glfw.3.3.2\build\native\lib\static\v142\x64^

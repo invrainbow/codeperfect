@@ -95,14 +95,6 @@ ccstr our_strcat(ccstr a, ccstr b) {
     return our_sprintf("%s%s", a, b);
 }
 
-void *stub_alloc_memory(s32 size) {
-    return alloc_memory(size);
-}
-
-Pool *stub_get_mem() {
-    return MEM;
-}
-
 List<ccstr> *split_string(ccstr str, fn<bool(char)> pred) {
     auto len = strlen(str);
     u32 start = 0;

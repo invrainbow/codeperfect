@@ -2,7 +2,7 @@
 
 #include "common.hpp"
 #include "os.hpp"
-#include "pool.hpp"
+#include "mem.hpp"
 
 ccstr our_format_json(ccstr s);
 ccstr our_strcpy(ccstr s);
@@ -13,15 +13,13 @@ ccstr our_strcat(ccstr a, ccstr b);
 
 bool strcpy_safe(cstr buf, s32 count, ccstr src);
 
-Pool *stub_get_mem();
-
 struct Text_Renderer {
     Pool *mem;
     cstr s;
     s32 len;
 
     void init() {
-        mem = stub_get_mem();
+        mem = MEM;
         s = (cstr)mem->alloc(0);
         len = 0;
     }
@@ -123,8 +121,6 @@ struct Json_Renderer : public Text_Renderer {
 
 const s32 DEFAULT_QUEUE_SIZE = 128;
 
-void *stub_alloc_memory(s32 size);
-
 template <typename T>
 struct In_Memory_Queue {
     T *arr;
@@ -136,7 +132,7 @@ struct In_Memory_Queue {
     void init(s32 n = DEFAULT_QUEUE_SIZE) {
         ptr0(this);
 
-        arr = (T*)stub_alloc_memory(sizeof(T) * n);
+        arr = (T*)alloc_memory(sizeof(T) * n);
         cap = n;
         lock.init();
     }

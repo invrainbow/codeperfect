@@ -472,7 +472,7 @@ void Nvim::run_event_loop() {
                                 end_message();
                             }
 
-                            {
+                            if (!editor->is_untitled) {
                                 start_request_message("nvim_buf_set_lines", 5);
 
                                 writer.write_int(bufid);
@@ -480,23 +480,12 @@ void Nvim::run_event_loop() {
                                 writer.write_int(-1);
                                 writer.write_bool(false);
 
-                                if (editor->nvim_data.file_handle != NULL) {
-                                    Buffer tmpbuf;
-                                    tmpbuf.init();
-                                    defer { tmpbuf.cleanup(); };
-
-                                    tmpbuf.read(editor->nvim_data.file_handle);
-                                    fclose(editor->nvim_data.file_handle);
-                                    editor->nvim_data.file_handle = NULL;
-
-                                    writer.write_array(tmpbuf.lines.len);
-                                    For (tmpbuf.lines) {
-                                        writer.write1(MP_OP_STRING);
-                                        writer.write4(it.len);
-                                        For (it) writer.write1(it);
-                                    }
+                                writer.write_array(editor->buf.lines.len);
+                                For (editor->buf.lines) {
+                                    writer.write1(MP_OP_STRING);
+                                    writer.write4(it.len);
+                                    For (it) writer.write1(it);
                                 }
-
                                 end_message();
                             }
 
