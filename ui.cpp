@@ -414,12 +414,16 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                             draw_rect(line_area, rgba(COLOR_DARK_GREY));
 
                         if (was_area_clicked(line_area)) {
-                            world.get_current_pane()->focus_editor(it->filename);
+                            {
+                                SCOPED_FRAME();
+                                auto path = path_join(world.wksp.path, it->filename);
+                                auto pos = new_cur2(it->match_col, it->row-1);
+                                world.get_current_pane()->focus_editor(path, pos);
+                            }
                             ui.recalculate_view_sizes();
-                            // TODO: jump to the right position too
                         }
 
-                        auto str = our_sprintf("%s:%d:%d ", it->filename, it->row, it->match_col);
+                        auto str = our_sprintf("%s:%d:%d ", it->filename, it->row, it->match_col+1);
                         auto len = strlen(str);
 
                         for (u32 i = 0; i < len && pos.x < sidebar_area.w; i++)

@@ -6,6 +6,8 @@
 #include "fzy_match.h"
 
 void Editor::raw_move_cursor(cur2 c) {
+    if (c.y == -1) c = buf.offset_to_cur(c.x);
+
     cur = c;
 
 #if 0
@@ -168,10 +170,14 @@ bool check_file_dimensions(ccstr path) {
 }
 
 Editor* Pane::focus_editor(ccstr path) {
+    return focus_editor(path, new_cur2(-1, -1));
+}
+
+Editor* Pane::focus_editor(ccstr path, cur2 pos) {
     u32 i = 0;
     For (editors) {
         if (are_filepaths_same_file(path, it.filepath))
-            return focus_editor_by_index(i);
+            return focus_editor_by_index(i, pos);
         i++;
     }
 
@@ -183,13 +189,26 @@ Editor* Pane::focus_editor(ccstr path) {
     auto ed = editors.append();
     ed->init();
     ed->load_file(path);
-    return focus_editor_by_index(editors.len - 1);
+    return focus_editor_by_index(editors.len - 1, pos);
 }
 
 Editor *Pane::focus_editor_by_index(u32 idx) {
+    return focus_editor_by_index(idx, new_cur2(-1, -1));
+}
+
+Editor *Pane::focus_editor_by_index(u32 idx, cur2 pos) {
     current_editor = idx;
 
     auto &editor = editors[idx];
+
+    if (pos.x != -1) {
+        if (editor.is_nvim_ready()) {
+            editor.move_cursor(pos);
+        } else {
+            editor.nvim_data.need_initial_pos_set = true;
+            editor.nvim_data.initial_pos = pos;
+        }
+    }
 
     world.nvim_data.waiting_focus_window = editor.id;
 

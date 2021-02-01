@@ -53,9 +53,6 @@ Make sure we're not able to trigger race condition by pressing i and some other
 letters super fast. What might happen is I press i, before neovim signals mode
 change, I press another letter, that gets sent to neovim, we get out of sync.
 
-When user clicks on a search result, after opening the file, jump to the right
-position too.
-
 Set cursor when user hovers over something, like pane resizers.
 
 Handle ctrl+e. (harder because we're not using nvim to handle view?)

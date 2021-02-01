@@ -64,9 +64,6 @@ struct Editor {
 
     bool is_nvim_ready();
 
-    // u32 _breakpoints[MAX_BREAKPOINTS];
-    // List<u32> breakpoints;
-
     struct {
         Autocomplete ac;
         List<int>* filtered_results;
@@ -109,6 +106,8 @@ struct Pane {
     void cleanup();
     Editor* focus_editor(ccstr path);
     Editor* focus_editor_by_index(u32 index);
+    Editor* focus_editor(ccstr path, cur2 pos);
+    Editor* focus_editor_by_index(u32 index, cur2 pos);
     Editor* get_current_editor();
     Editor* open_empty_editor();
 };
