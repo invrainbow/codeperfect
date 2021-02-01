@@ -1013,8 +1013,15 @@ int main() {
                         world.wksp.activate_pane(3);
                         break;
                     case GLFW_KEY_R:
-                        if (editor->nvim_data.mode != VI_INSERT)
-                            send_nvim_keys("<C-r>");
+                    case GLFW_KEY_O:
+                    case GLFW_KEY_I:
+                        if (editor->nvim_data.mode != VI_INSERT) {
+                            SCOPED_FRAME();
+                            send_nvim_keys(our_sprintf("<C-%c>", tolower((char)key)));
+                        }
+                        break;
+                    case GLFW_KEY_E:
+                        // TODO
                         break;
                     case GLFW_KEY_V:
                         if (editor->nvim_data.mode == VI_INSERT) {

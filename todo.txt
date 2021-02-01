@@ -67,7 +67,7 @@ position too.
 
 Set cursor when user hovers over something, like pane resizers.
 
-Send ctrl+<key>s to nvim.
+Handle ctrl+e. (harder because we're not using nvim to handle view?)
 
 Make parameter hints show return type.
 
