@@ -1475,8 +1475,12 @@ int main() {
                 // c) initiate redraw of syntax highlighting
                 // d) handle whatever on_type bullshit we had before
             } else {
-                char keys[2] = { (char)ch, '\0' };
-                send_nvim_keys(keys);
+                if (ch == '<') {
+                    send_nvim_keys("<LT>");
+                } else {
+                    char keys[2] = { (char)ch, '\0' };
+                    send_nvim_keys(keys);
+                }
             }
         }
     });
