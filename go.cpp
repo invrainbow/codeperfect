@@ -3507,15 +3507,25 @@ bool Go_Index::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period, 
         auto names = list_decl_names(import_path);
         if (names == NULL) return NULL;
 
+        List<AC_Result> *ret = NULL;
+
         {
             SCOPED_MEM(&world.autocomplete_mem);
-            auto ret = alloc_list<AC_Result>();
+            ret = alloc_list<AC_Result>();
             For (*names) {
                 auto r = ret->append();
                 r->name = our_strcpy(it);
             }
-            return ret;
         }
+
+        list_decls_in_source(make_file_ast(file, filepath, file_to_import_path(filepath)), LISTDECLS_IMPORTS, [&](Named_Decl *it) {
+            For (*it->items) {
+                auto r = ret->append();
+                r->name = it.name->id.lit;
+            }
+        });
+
+        return ret;
     };
 
     find_nodes_containing_pos(file, pos, [&](Ast *ast) -> Walk_Action {
@@ -3581,9 +3591,9 @@ bool Go_Index::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period, 
             return WALK_ABORT;
 
         case AST_ID:
-            out->type = AUTOCOMPLETE_IDENTIFIER;
-            out->keyword_start_position = ast->start;
-            out->results = generate_results_from_current_package();
+            ret.type = AUTOCOMPLETE_IDENTIFIER;
+            ret.keyword_start_position = ast->start;
+            ret.results = generate_results_from_current_package();
             break;
         }
 

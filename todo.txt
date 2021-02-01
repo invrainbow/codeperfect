@@ -62,7 +62,8 @@ Make sure we're not able to trigger race condition by pressing i and some other
 letters super fast. What might happen is I press i, before neovim signals mode
 change, I press another letter, that gets sent to neovim, we get out of sync.
 
-When user clicks on a search result, after opening the file, jump to the right position too.
+When user clicks on a search result, after opening the file, jump to the right
+position too.
 
 Set cursor when user hovers over something, like pane resizers.
 
@@ -94,11 +95,9 @@ Probably has to do with how we're receiving nvim_buf_lines_event. I think it's
 because nvim_buf_lines_event is happening in a separate thread. Do we need to
 lock? Or what's the solution here?
 
-When using contextless autocomplete, if you type a prefix, then autocomplete,
-it ignores the prefix.  E.g. if you type "fo", press ctrl+space, and select
-"four", it will end up typing our "fofour".
-
-Contextless autocomplete doesn't include imports.
+When using contextless autocomplete in a case statement, if you type a prefix,
+then autocomplete, it ignores the prefix.  E.g. if you type "case fo", press
+ctrl+space, and select "four", it will end up with "case fofour".
 
 
 
