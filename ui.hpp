@@ -109,6 +109,7 @@ struct UI {
     vec2f draw_string(vec2f pos, ccstr s, vec4f color);
     float get_text_width(ccstr s);
     boxf get_sidebar_area();
+    boxf get_build_results_area();
     boxf get_panes_area();
     void draw_everything(GLuint vao, GLuint vbo, GLuint program);
     void get_tabs_and_editor_area(boxf* pane_area, boxf* ptabs_area, boxf* peditor_area);

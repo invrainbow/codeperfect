@@ -1652,6 +1652,7 @@ int main() {
                         }
 
                         world.error_list.show = true;
+                        ui.recalculate_view_sizes();
                     } else {
                         world.jobs.build.signal_done = true;
                     }

@@ -33,6 +33,7 @@ const vec3f COLOR_RED = rgb_hex("#ff8888");
 const vec3f COLOR_DARK_RED = rgb_hex("#880000");
 const vec3f COLOR_DARK_YELLOW = rgb_hex("#6b6d0a");
 const vec3f COLOR_BLACK = rgb_hex("#000000");
+const vec3f COLOR_BG = rgb_hex("#181818");
 const vec3f COLOR_LIGHT_GREY = rgb_hex("#eeeeee");
 const vec3f COLOR_DARK_GREY = rgb_hex("#333333");
 const vec3f COLOR_MEDIUM_DARK_GREY = rgb_hex("#585858");
@@ -238,6 +239,9 @@ boxf UI::get_panes_area() {
     panes_area.x += sidebar_area.w;
     panes_area.w -= sidebar_area.w;
 
+    boxf build_results_area = get_build_results_area();
+    panes_area.h -= build_results_area.h;
+
     return panes_area;
 }
 
@@ -273,23 +277,20 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
     boxf panes_area = get_panes_area();
     boxf sidebar_area = get_sidebar_area();
 
-    boxf error_list_area;
-    error_list_area.x = 0;
-    error_list_area.y = world.window_size.y;
-    error_list_area.w = world.window_size.x;
-    error_list_area.h = 0;
-
-    if (world.error_list.show) {
-        panes_area.h -= world.error_list.height;
-        error_list_area.y -= world.error_list.height;
-        error_list_area.h += world.error_list.height;
-    }
-
     boxf pane_area;
     pane_area.pos = panes_area.pos;
 
     if (world.sidebar.view != SIDEBAR_CLOSED) {
-        draw_rect(sidebar_area, rgba(COLOR_BLACK));
+        draw_rect(sidebar_area, rgba(COLOR_BG));
+
+        {
+            boxf line;
+            line.x = sidebar_area.x + sidebar_area.w - 1;
+            line.y = sidebar_area.y;
+            line.h = sidebar_area.h;
+            line.w = 2;
+            draw_rect(line, rgba(COLOR_DARK_GREY));
+        }
 
         const float SIDEBAR_PADDING_X = 4;
         const float SIDEBAR_PADDING_Y = 4;
@@ -300,12 +301,13 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
         switch (world.sidebar.view) {
         case SIDEBAR_FILE_EXPLORER:
             {
-                const float ITEM_PADDING_X = 4;
-                const float ITEM_PADDING_Y = 2;
-                const float ITEM_MARGIN_X = 4;
+                const float ITEM_PADDING_X = 8;
+                const float ITEM_PADDING_Y = 4;
+                const float ITEM_MARGIN = 4;
 
                 vec2f pos = sidebar_area.pos;
                 pos.y -= world.file_explorer.scroll_offset;
+                pos.y += ITEM_MARGIN;
                 u32 depth = 0;
 
                 for (u32 i = 0; i < world.file_tree.len;) {
@@ -334,7 +336,7 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                         SCOPED_FRAME();
 
                         if (row_area.contains(world.ui.mouse_pos))
-                            draw_rect(row_area, rgba(COLOR_DARK_GREY));
+                            draw_rounded_rect(row_area, rgba(COLOR_DARK_GREY), 4, ROUND_ALL);
 
                         if (was_area_clicked(row_area)) {
                             if (it->num_children == -1) {
@@ -458,7 +460,7 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
         get_tabs_and_editor_area(&pane_area, &tabs_area, &editor_area);
 
         draw_rect(tabs_area, rgba(is_pane_selected ? COLOR_MEDIUM_GREY : COLOR_DARK_GREY));
-        draw_rect(editor_area, rgba(COLOR_BLACK));
+        draw_rect(editor_area, rgba(COLOR_BG));
 
         vec2 tab_padding = { 15, 5 };
 
@@ -491,7 +493,7 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
 
             vec3f tab_color = COLOR_MEDIUM_DARK_GREY;
             if (is_selected)
-                tab_color = COLOR_BLACK;
+                tab_color = COLOR_BG;
             else if (tab.contains(world.ui.mouse_pos))
                 tab_color = COLOR_DARK_GREY;
 
@@ -806,19 +808,62 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
     }
 
     if (world.error_list.show) {
-        draw_rect(error_list_area, rgba(COLOR_DARK_GREY));
+        const float ITEM_PADDING_X = 5;
+        const float ITEM_PADDING_Y = 3;
 
-        vec2f pos = error_list_area.pos;
+        boxf build_results_area = get_build_results_area();
+        draw_rect(build_results_area, rgba(COLOR_DARK_GREY));
+
+        boxf row_area;
+        row_area.x = build_results_area.x;
+        row_area.y = build_results_area.y;
+        row_area.h = font->height + ITEM_PADDING_Y * 2;
+        row_area.w = build_results_area.w;
 
         For (world.build_errors.errors) {
             SCOPED_FRAME();
             auto s = our_sprintf("%s:%d:%d: %s", it->file, it->row, it->col, it->message);
-            draw_string(pos, s, rgba(COLOR_WHITE));
+
+            bool hover = row_area.contains(world.ui.mouse_pos);
+            if (hover)
+                draw_rect(row_area, rgba(COLOR_LIGHT_GREY));
+
+            if (was_area_clicked(row_area)) {
+                {
+                    SCOPED_FRAME();
+                    auto path = path_join(world.wksp.path, it->file);
+                    auto pos = new_cur2(it->col-1, it->row-1);
+                    world.get_current_pane()->focus_editor(path, pos);
+                }
+                ui.recalculate_view_sizes();
+            }
+
+            auto pos = row_area.pos;
+            pos.x += ITEM_PADDING_X;
+            pos.y += ITEM_PADDING_Y;
+            draw_string(pos, s, rgba(hover ? COLOR_BLACK : COLOR_WHITE));
+
+            row_area.y += row_area.h;
         }
     }
 
     // TODO: draw 'search anywhere' window
     flush_verts();
+}
+
+boxf UI::get_build_results_area() {
+    boxf b;
+    b.x = 0;
+    b.y = world.window_size.y;
+    b.w = world.window_size.x;
+    b.h = 0;
+
+    if (world.error_list.show) {
+        b.y -= world.error_list.height;
+        b.h += world.error_list.height;
+    }
+
+    return b;
 }
 
 void UI::get_tabs_and_editor_area(boxf* pane_area, boxf* ptabs_area, boxf* peditor_area) {

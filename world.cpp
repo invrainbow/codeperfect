@@ -124,10 +124,10 @@ void World::init(bool test) {
     error_list.height = 150;
 
     windows_open.search_and_replace = false;
-    windows_open.build_and_debug = false;
+    windows_open.build_and_debug = true;
 
     // TODO: allow user to enter this command himself
-    strcpy_safe(world.settings.build_command, _countof(world.settings.build_command), "go build main.go");
+    strcpy_safe(world.settings.build_command, _countof(world.settings.build_command), "go build helper.go");
 
     if (!test) ::ui.init();
 }
