@@ -93,7 +93,10 @@ index information, and also figure out a way to get up to date info about our
 open files.
 
 Vim mode is not shown when file first opened, requires it to change first.
-
+Update: while investigating this, discovered that if we open files a and b, go
+to file b, enter insert mode, switch to file a, file a will also be in insert
+mode. This is related to previous bug; basically our state management around
+the mode is fucked.
 
 
 Purgatory
