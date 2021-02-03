@@ -105,7 +105,7 @@ func parseErrors(buildOutput string) {
 	scan := efm.NewScanner(strings.NewReader(buildOutput))
 	var arr []errorformat.Entry
 	for scan.Scan() {
-		arr = append(arr, scan
+		arr = append(arr, scan)
 	}
 }
 
@@ -125,9 +125,9 @@ func main() {
 			if err != nil {
 				panic(err)
 			}
-			var arr string[]
+			var arr []string
 			for i := 0; i < numParts; i++ {
-				s, err := r.ReadString():
+				s, err := r.ReadString()
 				if err != nil {
 					panic(err)
 				}

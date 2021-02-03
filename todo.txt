@@ -99,6 +99,13 @@ to file b, enter insert mode, switch to file a, file a will also be in insert
 mode. This is related to previous bug; basically our state management around
 the mode is fucked.
 
+Just got a memory corruption error in Index_Writer::finish_writing() when
+trying to sort decls. The decls' memory had gotten corrupted. This was when I
+was building and clicking on errors.  At this point, don't have a repro. Just
+documenting that this issue exists. Qingping suggests storing length of each
+string might prevent memory corruptions in future. We'll see.
+
+
 
 Purgatory
 =========
