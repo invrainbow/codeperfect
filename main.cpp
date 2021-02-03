@@ -567,7 +567,6 @@ void init_with_file_at_location(ccstr path, cur2 cur) {
     SCOPED_FRAME();
 
     world.get_current_pane()->focus_editor(path);
-    ui.recalculate_view_sizes();
 
     auto editor = world.get_current_editor();
     while (!editor->is_nvim_ready()) continue;
@@ -694,8 +693,6 @@ int main() {
         world.window_size.y = h;
 
         auto& font = world.font;
-
-        ui.recalculate_view_sizes();
 
         mat4f projection;
         new_ortho_matrix(projection, 0, w, h, 0);
@@ -853,7 +850,6 @@ int main() {
                     auto pane = world.get_current_pane();
 
                     pane->focus_editor(filepath);
-                    ui.recalculate_view_sizes();
                     break;
                 }
                 break;
@@ -1093,7 +1089,6 @@ int main() {
 
                             if (!streq(editor->filepath, result->file)) {
                                 target_ed = world.get_current_pane()->focus_editor(result->file);
-                                ui.recalculate_view_sizes();
                             }
 
                             if (target_ed != NULL) {
@@ -1163,7 +1158,6 @@ int main() {
 
                                 pane->cleanup();
                                 world.wksp.panes.remove(world.wksp.current_pane);
-                                ui.resize_panes_proportionally();
                                 if (world.wksp.current_pane >= world.wksp.panes.len)
                                     world.wksp.current_pane = world.wksp.panes.len - 1;
                             } else {
@@ -1178,7 +1172,6 @@ int main() {
                         break;
                     case GLFW_KEY_N:
                         world.get_current_pane()->open_empty_editor();
-                        ui.recalculate_view_sizes();
                         break;
                     case GLFW_KEY_TAB:
                         {
@@ -1221,8 +1214,6 @@ int main() {
                             world.sidebar.view = SIDEBAR_CLOSED;
                         else
                             world.sidebar.view = SIDEBAR_FILE_EXPLORER;
-
-                        ui.recalculate_view_sizes();
                         break;
                     case GLFW_KEY_TAB:
                         {
@@ -1652,7 +1643,6 @@ int main() {
                         }
 
                         world.error_list.show = true;
-                        ui.recalculate_view_sizes();
                     } else {
                         world.jobs.build.signal_done = true;
                     }

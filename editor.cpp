@@ -15,10 +15,16 @@ void Editor::raw_move_cursor(cur2 c) {
         autocomplete.results = NULL;
 #endif
 
-    if (cur.x < view.x)
-        view.x = cur.x;
-    if (cur.x >= view.x + view.w)
-        view.x = cur.x - view.w + 1;
+    auto& line = buf.lines[c.y];
+
+    u32 vx = 0;
+    for (u32 i = 0; i < c.x; i++)
+        vx += line[i] == '\t' ? TAB_SIZE : 1;
+
+    if (vx < view.x)
+        view.x = vx;
+    if (vx >= view.x + view.w)
+        view.x = vx - view.w + 1;
     if (cur.y < view.y)
         view.y = cur.y;
     if (cur.y >= view.y + view.h)
@@ -89,6 +95,7 @@ Editor* Pane::open_empty_editor() {
     auto ed = editors.append();
     ed->init();
     ed->load_file(NULL);
+    ui.recalculate_view_sizes();
     return focus_editor_by_index(editors.len - 1);
 }
 
@@ -189,6 +196,7 @@ Editor* Pane::focus_editor(ccstr path, cur2 pos) {
     auto ed = editors.append();
     ed->init();
     ed->load_file(path);
+    ui.recalculate_view_sizes(true);
     return focus_editor_by_index(editors.len - 1, pos);
 }
 
@@ -291,14 +299,13 @@ void Workspace::activate_pane(u32 idx) {
     if (idx == panes.len) {
         auto panes_width = ui.get_panes_area().w;
 
-        auto new_width = panes_width - (panes_width / (panes.len + 1));
-        ui.resize_panes_proportionally(new_width);
+        float new_width = panes_width;
+        if (panes.len > 0)
+            new_width /= panes.len;
 
         auto pane = panes.append();
         pane->init();
-        pane->width = panes_width / panes.len;
-
-        ui.recalculate_view_sizes();
+        pane->width = new_width;
     }
 
     current_pane = idx;

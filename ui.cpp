@@ -48,6 +48,7 @@ const vec3f COLOR_THEME_5 = rgb_hex("e8918c");
 void UI::init() {
     ptr0(this);
     font = &world.font;
+    editor_sizes.init(LIST_FIXED, _countof(_editor_sizes), _editor_sizes);
 }
 
 void UI::flush_verts() {
@@ -354,7 +355,6 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                                 }
 
                                 world.get_current_pane()->focus_editor(path_join(world.wksp.path, r.finish()));
-                                recalculate_view_sizes();
                             } else {
                                 it->state.open = !it->state.open;
                             }
@@ -422,7 +422,6 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                                 auto pos = new_cur2(it->match_col, it->row-1);
                                 world.get_current_pane()->focus_editor(path, pos);
                             }
-                            ui.recalculate_view_sizes();
                         }
 
                         auto str = our_sprintf("%s:%d:%d ", it->filename, it->row, it->match_col+1);
@@ -777,7 +776,6 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                 if (world.ui.mouse_down[GLFW_MOUSE_BUTTON_LEFT]) {
                     world.wksp.resizing_pane = i;
                 } else {
-                    ui.recalculate_view_sizes();
                     world.wksp.resizing_pane = -1;
                 }
             } else {
@@ -835,7 +833,6 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                     auto pos = new_cur2(it->col-1, it->row-1);
                     world.get_current_pane()->focus_editor(path, pos);
                 }
-                ui.recalculate_view_sizes();
             }
 
             auto pos = row_area.pos;
@@ -849,6 +846,8 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
 
     // TODO: draw 'search anywhere' window
     flush_verts();
+
+    recalculate_view_sizes();
 }
 
 boxf UI::get_build_results_area() {
@@ -884,56 +883,55 @@ void UI::get_tabs_and_editor_area(boxf* pane_area, boxf* ptabs_area, boxf* pedit
         memcpy(peditor_area, &editor_area, sizeof(boxf));
 }
 
-void UI::recalculate_view_sizes() {
-    resize_panes_proportionally();
-
+void UI::recalculate_view_sizes(bool force) {
     boxf panes_area = get_panes_area();
+    auto new_sizes = alloc_list<vec2f>();
+
+    float total = 0;
+    For (world.wksp.panes) total += it.width;
 
     boxf pane_area;
-    pane_area.x = 0;
-    pane_area.y = 0;
-    pane_area.w = panes_area.w / world.wksp.panes.len;
+    pane_area.pos = {0, 0};
     pane_area.h = panes_area.h;
 
-    for (auto&& pane : world.wksp.panes) {
-        pane_area.w = pane.width;
+    For (world.wksp.panes) {
+        it.width = it.width / total * panes_area.w;
+        pane_area.w = it.width;
 
         boxf editor_area;
         get_tabs_and_editor_area(&pane_area, NULL, &editor_area);
+        new_sizes->append(editor_area.size);
 
-        for (auto&& editor : pane.editors) {
-            vec2 new_size;
-            new_size.x = (i32)((editor_area.w - EDITOR_MARGIN_X) / world.font.width);
-            new_size.y = (i32)((editor_area.h - EDITOR_MARGIN_Y) / world.font.height);
+        pane_area.x += pane_area.w;
+    }
 
-            editor.view.size = new_size;
+    auto changed = [&]() -> bool {
+        if (new_sizes->len != editor_sizes.len) return true;
+
+        for (u32 i = 0; i < new_sizes->len; i++) {
+            auto a = new_sizes->at(i);
+            auto b = editor_sizes[i];
+
+            if (a.x != b.x) return true;
+            if (a.y != b.y) return true;
+        }
+        return false;
+    };
+
+    if (!changed() && !force) return;
+
+    editor_sizes.len = 0;
+    For (*new_sizes) editor_sizes.append(&it);
+
+    for (u32 i = 0; i < world.wksp.panes.len; i++) {
+        for (auto&& editor : world.wksp.panes[i].editors) {
+            editor.view.w = (i32)((editor_sizes[i].x - EDITOR_MARGIN_X) / world.font.width);
+            editor.view.h = (i32)((editor_sizes[i].y - EDITOR_MARGIN_Y) / world.font.height);
+
             if (!editor.nvim_data.is_resizing)
                 if (!world.nvim.resize_editor(&editor))
                     editor.nvim_data.need_initial_resize = true;
         }
-
-        pane_area.x += pane_area.w;
     }
-}
-
-void UI::resize_panes_proportionally() {
-    resize_panes_proportionally(get_panes_area().w);
-}
-
-void UI::resize_panes_proportionally(float new_width) {
-    auto& panes = world.wksp.panes;
-    float total = 0;
-    auto widths = alloc_array(float, panes.cap);
-
-    {
-        u32 i = 0;
-        For (panes) {
-            total += it.width;
-            widths[i++] = it.width;
-        }
-    }
-
-    for (u32 i = 0; i < panes.len; i++)
-        panes[i].width = widths[i] / total * new_width;
 }
 

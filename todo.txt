@@ -18,11 +18,6 @@ Create a string class.
 
 Should we just use nvim_paste instead of nvim_buf_set_lines when user pastes?
 
-Right now we're just calling recalculate_view_sizes() any time we think we're
-making a change that would change the view sizes. Any way to just have ui tell
-us when view sizes have changed (or better, just run recalcalculate_view_sizes
-for us)?
-
 
 
 Features

@@ -3,6 +3,7 @@
 #include <math.h>
 #include "stb_truetype.h"
 #include "common.hpp"
+#include "editor.hpp"
 #include "list.hpp"
 #include <GL/glew.h>
 
@@ -98,6 +99,9 @@ struct UI {
     Font* font;
     List<Vert> verts;
 
+    vec2f _editor_sizes[MAX_PANES];
+    List<vec2f> editor_sizes;
+
     void init();
     void flush_verts();
     void draw_triangle(vec2f a, vec2f b, vec2f c, vec2f uva, vec2f uvb, vec2f uvc, vec4f color, bool solid);
@@ -113,11 +117,10 @@ struct UI {
     boxf get_panes_area();
     void draw_everything(GLuint vao, GLuint vbo, GLuint program);
     void get_tabs_and_editor_area(boxf* pane_area, boxf* ptabs_area, boxf* peditor_area);
-    void recalculate_view_sizes();
+    void recalculate_view_sizes(bool force = false);
     i32 get_current_resize_area(boxf* out);
-    void resize_panes_proportionally(float new_width);
-    void resize_panes_proportionally();
     bool was_area_clicked(boxf area);
+    List<vec2f> *get_pane_editor_sizes();
 };
 
 extern UI ui;

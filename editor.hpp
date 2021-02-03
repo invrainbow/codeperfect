@@ -112,10 +112,12 @@ struct Pane {
     Editor* open_empty_editor();
 };
 
+#define MAX_PANES 4
+
 struct Workspace {
     char path[MAX_PATH];
 
-    Pane _panes[4];
+    Pane _panes[MAX_PANES];
     List<Pane> panes;
     u32 current_pane;
 
