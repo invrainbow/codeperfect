@@ -1206,6 +1206,10 @@ int main() {
                     case GLFW_KEY_A:
                         world.windows_open.ast_viewer ^= 1;
                         break;
+                    case GLFW_KEY_B:
+                        run_proc_the_normal_way(&world.jobs.build.proc, world.settings.build_command);
+                        world.jobs.flag_build = true;
+                        break;
                     case GLFW_KEY_F:
                         world.windows_open.search_and_replace ^= 1;
                         break;
