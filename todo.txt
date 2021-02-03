@@ -25,6 +25,9 @@ Features
 
 Figure out fmt/lint/whatever on save. Or have a hotkey to do it?
 
+How are we going to let user run tests? Or edit test files? How does that
+conflict with current models and assumptions in go.cpp?
+
 Handle unicode.
 
 Handle nested vendor directories for Go too. And nested go.mod.
@@ -44,8 +47,6 @@ are weird.
 Add syntax highlighting.
 
 In insert mode, make closing brace de-indent.
-
-Make our new insert mode handle multiple insert points, like ctrl-v + s.
 
 Add nested parameter hints.
 
