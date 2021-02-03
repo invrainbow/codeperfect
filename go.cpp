@@ -572,12 +572,12 @@ void walk_ast(Ast* root, WalkAstFn fn) {
                 add_child(ast->interface_spec.type);
                 break;
             case AST_CASE_CLAUSE:
-                add_child(ast->case_clause.stmts);
                 add_child(ast->case_clause.vals);
+                add_child(ast->case_clause.stmts);
                 break;
             case AST_COMM_CLAUSE:
-                add_child(ast->comm_clause.stmts);
                 add_child(ast->comm_clause.comm);
+                add_child(ast->comm_clause.stmts);
                 break;
             case AST_FUNC_DECL:
                 add_child(ast->func_decl.name);

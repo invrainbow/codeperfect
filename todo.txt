@@ -83,10 +83,6 @@ Probably has to do with how we're receiving nvim_buf_lines_event. I think it's
 because nvim_buf_lines_event is happening in a separate thread. Do we need to
 lock? Or what's the solution here?
 
-When using contextless autocomplete in a case statement, if you type a prefix,
-then autocomplete, it ignores the prefix.  E.g. if you type "case fo", press
-ctrl+space, and select "four", it will end up with "case fofour".
-
 A rather serious bug. Right now we depend on the index as our source of truth.
 We update this index when files are changed. The bug occurs when we edit files
 in our own workspace; because the files are being edited in our buffer, and not
