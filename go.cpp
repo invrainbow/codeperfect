@@ -951,11 +951,7 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 p
                     if (resolved_res == NULL) break;
 
                     auto results = alloc_list<Goresult>();
-                    list_fields_and_methods(
-                        res,
-                        resolved_res,
-                        results
-                    );
+                    list_fields_and_methods(res, resolved_res, results);
 
                     For (*results) {
                         auto field = it.decl;
