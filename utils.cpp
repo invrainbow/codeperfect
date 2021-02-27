@@ -36,6 +36,8 @@ ccstr our_format_json(ccstr s) {
 }
 
 ccstr our_strcpy(ccstr s) {
+    if (s == NULL) return NULL;
+
     auto len = strlen(s);
     auto ret = alloc_array(char, len + 1);
     memcpy(ret, s, sizeof(char) * (len + 1));
@@ -49,13 +51,9 @@ ccstr our_dirname(ccstr path) {
     if (is_sep(s[len-1]))
         s[len-1] = '\0';
 
-    auto old = MEM->sp;
     auto ret = alloc_array(char, strlen(s) + 1);
-
     _splitpath(s, ret, NULL, NULL, NULL);
     _splitpath(s, NULL, ret + strlen(ret), NULL, NULL);
-
-    MEM->sp = old + strlen(ret) + 1;
     return ret;
 #else
     return dirname((char*)our_strcpy(path));
@@ -64,10 +62,8 @@ ccstr our_dirname(ccstr path) {
 
 ccstr our_basename(ccstr path) {
 #ifdef _WIN32
-    auto old = MEM->sp;
     auto ret = (cstr)our_strcpy(path);
     PathStripPathA(ret);
-    MEM->sp = old + strlen(ret) + 1;
     return (ccstr)ret;
 #else
     auto ret = our_strcpy(path);
@@ -140,6 +136,16 @@ bool Path::contains(Path *other) {
         if (!streqi(x, y)) return false;
     }
     return true;
+}
+
+bool Path::goto_parent() {
+    if (parts->len == 0) return false;
+    parts->len--;
+    return true;
+}
+
+void Path::goto_child(ccstr child) {
+    parts->append(child);
 }
 
 ccstr Path::str() {

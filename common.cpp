@@ -7,6 +7,7 @@
 
 #include <stdexcept>
 #include <functional>
+#include <windows.h>
 
 vec2 new_vec2(i32 x, i32 y) {
     vec2 v;

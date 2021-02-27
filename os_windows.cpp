@@ -305,6 +305,7 @@ u32 File::seek(u32 pos) {
 
 bool File::read(char *buf, s32 size, s32 *bytes_read) {
     DWORD n = 0;
+
     if (!ReadFile(h, buf, size, &n, NULL)) return false;
 
     if (bytes_read != NULL)

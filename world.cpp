@@ -36,7 +36,7 @@ void fill_file_tree(ccstr path) {
     world.file_tree_mem.reset();
 
     auto &files = world.file_tree;
-    files.init(LIST_POOL, 32);
+    files.init();
 
     u32 depth = 0;
     fn<void(ccstr, i32)> recur = [&](ccstr path, i32 parent) {
@@ -68,7 +68,7 @@ void fill_file_tree(ccstr path) {
     recur(path, -1);
 }
 
-void World::init(bool test) {
+void World::init() {
     ptr0(this);
 
     git_libgit2_init();
@@ -79,7 +79,6 @@ void World::init(bool test) {
 #define init_mem(x) x.init(#x)
     init_mem(frame_mem);
     init_mem(file_tree_mem);
-    init_mem(ast_viewer_mem);
     init_mem(autocomplete_mem);
     init_mem(parameter_hint_mem);
     init_mem(open_file_mem);
@@ -90,32 +89,26 @@ void World::init(bool test) {
     init_mem(build_index_mem);
 #undef init_mem
 
-    chunk0_fridge.init_managed(1024);
-    chunk1_fridge.init_managed(512);
-    chunk2_fridge.init_managed(256);
-    chunk3_fridge.init_managed(128);
-    chunk4_fridge.init_managed(64);
-    chunk5_fridge.init_managed(32);
-    chunk6_fridge.init_managed(16);
+    chunk0_fridge.init(512);
+    chunk1_fridge.init(256);
+    chunk2_fridge.init(128);
+    chunk3_fridge.init(64);
+    chunk4_fridge.init(32);
+    chunk5_fridge.init(16);
+    chunk6_fridge.init(8);
 
     dbg.breakpoints.init(LIST_FIXED, _countof(dbg._breakpoints), dbg._breakpoints);
     dbg.watches.init(LIST_FIXED, _countof(dbg._watches), dbg._watches);
     wnd_debugger.current_location = -1;
 
     wksp.init();
-
-    if (!test) {
-        index.init();
-        index.run_threads();
-    }
+    indexer.init();
 
     use_nvim = true;
     nvim_data.grid_to_window.init(LIST_FIXED, _countof(nvim_data._grid_to_window), nvim_data._grid_to_window);
-
-    if (!test) {
+    {
         SCOPED_MEM(&nvim_mem);
         nvim.init();
-        nvim.start_running();
     }
 
     fill_file_tree(wksp.path);
@@ -125,11 +118,21 @@ void World::init(bool test) {
 
     windows_open.search_and_replace = false;
     windows_open.build_and_debug = false;
+    windows_open.im_metrics = false;
 
     // TODO: allow user to enter this command himself
     strcpy_safe(world.settings.build_command, _countof(world.settings.build_command), "go build helper.go");
 
-    if (!test) ::ui.init();
+    ::ui.init();
+}
+
+void World::start_background_threads() {
+    indexer.start_background_thread();
+
+    {
+        SCOPED_MEM(&nvim_mem);
+        nvim.start_running();
+    }
 }
 
 Pane* World::get_current_pane() {

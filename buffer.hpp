@@ -42,7 +42,10 @@ void uchar_to_cstr(uchar c, cstr out, s32* pn);
 
 struct Buffer {
     Pool *mem;
+
     List<Line> lines;
+    List<u32> bytecounts;
+
     bool initialized;
     bool dirty;
 
@@ -64,3 +67,5 @@ struct Buffer {
     i32 cur_to_offset(cur2 c);
     cur2 offset_to_cur(i32 off);
 };
+
+s32 uchar_size(uchar c);

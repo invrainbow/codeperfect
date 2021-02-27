@@ -14,24 +14,11 @@ ccstr our_strcat(ccstr a, ccstr b);
 bool strcpy_safe(cstr buf, s32 count, ccstr src);
 
 struct Text_Renderer {
-    Pool *mem;
-    cstr s;
-    s32 len;
+    List<char> chars;
 
     void init() {
-        mem = MEM;
-        s = (cstr)mem->alloc(0);
-        len = 0;
-    }
-
-    void *request_memory(s32 n) {
-        if (!mem->can_alloc(n)) {
-            auto snew = mem->alloc(len + n);
-            memcpy(snew, s, len);
-            s = (cstr)snew;
-            mem->sp -= n;
-        }
-        return mem->alloc(n);
+        ptr0(this);
+        chars.init();
     }
 
     void write(ccstr fmt, ...) {
@@ -40,25 +27,20 @@ struct Text_Renderer {
         va_copy(args2, args);
 
         auto n = vsnprintf(NULL, 0, fmt, args);
-        auto buf = request_memory(n + 1);
+        chars.ensure_cap(chars.len + n + 1);
+
+        auto buf = chars.items + chars.len;
         vsnprintf((char*)buf, n + 1, fmt, args2);
-        erasechar(); // lop off the '\0' from vsnprintf
-        len += n;
+        chars.len += n;
 
         va_end(args);
         va_end(args2);
     }
 
-    void writestr(ccstr s, s32 len = -1) {
-        // write("%s", s);
-        if (len == -1) len = strlen(s);
-        auto buf = request_memory(len);
-        strncpy((char*)buf, s, len);
-    }
-
-    void writechar(char ch) { *(char*)request_memory(1) = ch; }
-    void erasechar() { mem->sp--; }
-    cstr finish() { return writechar('\0'), s; }
+    void writestr(ccstr s, s32 len = -1) { write("%s", s); }
+    void writechar(char ch) { chars.append(ch); }
+    void erasechar() { chars.len--; }
+    cstr finish() { return writechar('\0'), chars.items; }
 };
 
 struct Json_Renderer : public Text_Renderer {
@@ -103,7 +85,7 @@ struct Json_Renderer : public Text_Renderer {
     void obj(lambda f) {
         writechar('{');
         f();
-        if (s[len-1] == ',')
+        if (chars[chars.len-1] == ',')
             erasechar();
         writechar('}');
     }
@@ -111,7 +93,7 @@ struct Json_Renderer : public Text_Renderer {
     void arr(lambda f) {
         writechar('[');
         f();
-        if (s[len-1] == ',')
+        if (chars[chars.len-1] == ',')
             erasechar();
         writechar(']');
     }
@@ -174,6 +156,9 @@ struct Path {
     void init(List<ccstr> *parts);
     bool contains(Path *path);
     ccstr str();
+
+    bool goto_parent();
+    void goto_child(ccstr child);
 };
 
 Path* make_path(ccstr s);

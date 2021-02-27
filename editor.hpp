@@ -5,6 +5,7 @@
 #include "buffer.hpp"
 #include "go.hpp"
 #include "os.hpp"
+#include "tree_sitter_crap.hpp"
 
 const int AUTOCOMPLETE_WINDOW_ITEMS = 10;
 
@@ -26,17 +27,38 @@ enum Vi_Mode {
     VI_UNKNOWN,
 };
 
+struct Edit_From_Nvim {
+    u32 firstline;
+    u32 lastline;
+    List<uchar*> *lines;
+    List<s32> *line_lengths;
+};
+
 struct Pane;
 
 struct Editor {
     u32 id;
+    Pool mem;
+    Pane* pane;
+
     Buffer buf;
+    Lock buf_lock;
+
     box view;
     cur2 cur;
-    Pane* pane;
+
     char filepath[MAX_PATH];
     bool is_untitled;
-    Pool mem;
+
+    TSParser *parser;
+    TSTree *tree;
+    TSTreeCursor cursor;
+    char tsinput_buffer[128];
+    TSInputEdit curr_change;
+
+    Pool nvim_edit_mem;
+    Lock nvim_edit_lock;
+    List<Edit_From_Nvim> nvim_edit_queue;
 
     struct {
         bool is_buf_attached;
@@ -74,6 +96,8 @@ struct Editor {
 
     Client_Parameter_Hint parameter_hint;
 
+    void process_nvim_edit(Edit_From_Nvim *edit);
+    void update_tree();
     void raw_move_cursor(cur2 c);
     void move_cursor(cur2 c);
     void reset_state();
@@ -88,13 +112,17 @@ struct Editor {
 
     void trigger_autocomplete(bool triggered_by_dot);
     void filter_autocomplete_results(Autocomplete* ac);
-    Ast* parse_autocomplete_id(Autocomplete* ac);
     void trigger_parameter_hint(bool triggered_by_paren);
 
     void type_char(char ch);
     void type_char_in_insert_mode(char ch);
     void update_autocomplete();
     void update_parameter_hint();
+
+    void start_change();
+    void end_change();
+
+    void apply_edits(List<TSInputEdit> *edits);
 };
 
 struct Pane {
@@ -125,11 +153,7 @@ struct Workspace {
 
     git_repository *git_repo;
 
-    bool gomod_exists;
-    Gomod_Info gomod_info;
-
     void init();
-    bool parse_gomod_file(ccstr path);
     void activate_pane(u32 idx);
     Pane* get_current_pane();
 };

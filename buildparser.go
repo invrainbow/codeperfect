@@ -16,10 +16,14 @@ func main() {
 		path := in.Text()
 		match, err := ctx.MatchFile(filepath.Dir(path), filepath.Base(path))
 		if err != nil {
+			// out.WriteString(err.Error())
+			// out.WriteString("\n")
 			out.WriteByte(2)
 		} else if match {
+			// out.WriteString("match\n")
 			out.WriteByte(1)
 		} else {
+			// out.WriteString("not match\n")
 			out.WriteByte(0)
 		}
 		out.Flush()

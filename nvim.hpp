@@ -450,7 +450,7 @@ struct Nvim {
         send_lock.leave();
     }
 
-    i32 find_request_by_msgid(u32 msgid) {
+    Nvim_Request *find_request_by_msgid(u32 msgid) {
         return requests.find([&](Nvim_Request* it) -> bool {
             return it->msgid == msgid;
         });

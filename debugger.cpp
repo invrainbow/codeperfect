@@ -732,10 +732,9 @@ void debugger_loop_thread(void*) {
                             surface_error("Unable to set breakpoint.");
                             props.breakpoints.remove(find_func);
                         } else {
-                            auto idx = props.breakpoints.find(find_func);
-                            if (idx != -1) {
-                                auto&& it = props.breakpoints[idx];
-                                it.pending = false;
+                            auto bkpt = props.breakpoints.find(find_func);
+                            if (bkpt != NULL) {
+                                bkpt->pending = false;
                             } else {
                                 // TODO: error -- this shouldn't happen
                             }

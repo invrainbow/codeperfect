@@ -22,6 +22,13 @@ void uchar_to_cstr(uchar c, cstr out, s32* pn) {
     *pn = k;
 }
 
+s32 uchar_size(uchar c) {
+    if (c <= 0x7f) return 1;
+    if (c <= 0x7ff) return 2;
+    if (c <= 0xffff) return 3;
+    return 4;
+}
+
 uchar Buffer_It::get(cur2 _pos) {
     auto old = pos;
     pos = _pos;
@@ -30,6 +37,7 @@ uchar Buffer_It::get(cur2 _pos) {
 }
 
 bool Buffer_It::eof() {
+    if (buf->lines.len == 0) return true;
     return (y == buf->lines.len - 1 && x == buf->lines[y].len);
 }
 
@@ -141,6 +149,7 @@ void Buffer::init(Pool *_mem) {
     {
         SCOPED_MEM(mem);
         lines.init(LIST_POOL, 128);
+        bytecounts.init(LIST_POOL, 128);
     }
     initialized = true;
     dirty = false;
@@ -161,20 +170,27 @@ void Buffer::read(FILE* f) {
 
     clear();
 
-    auto insert_new_line = [&]() -> Line* {
-        auto line = lines.append();
-        if (line == NULL)
-            panic("unable to insert new line");
+    Line *line = NULL;
+    u32 *bc = NULL;
+
+    auto insert_new_line = [&]() {
+        line = lines.append();
+        bc = bytecounts.append();
+
+        if (line == NULL) panic("unable to insert new line");
+
         line->init(LIST_CHUNK, CHUNK0);
-        return line;
+        *bc = 0;
     };
 
-    auto line = insert_new_line();
+    insert_new_line();
     for (conv.init(); !feof(f) && fread(&ch, 1, 1, f) == 1;) {
         uchar uch = conv.feed(ch, &found);
+        *bc++;
+
         if (found) {
             if (uch == '\n') // TODO: handle \r
-                line = insert_new_line();
+                insert_new_line();
             else
                 line->append(uch);
         }
@@ -207,9 +223,13 @@ void Buffer::delete_lines(u32 y1, u32 y2) {
     for (u32 y = y1; y < y2; y++)
         lines[y].cleanup();
 
-    if (y2 < lines.len)
+    if (y2 < lines.len) {
         memmove(&lines[y1], &lines[y2], sizeof(Line) * (lines.len - y2));
+        memmove(&bytecounts[y1], &bytecounts[y2], sizeof(Line) * (bytecounts.len - y2));
+    }
+
     lines.len -= (y2 - y1);
+    bytecounts.len -= (y2 - y1);
     dirty = true;
 }
 
@@ -218,18 +238,29 @@ void Buffer::clear() {
     dirty = true;
 }
 
+s32 get_bytecount(Line *line) {
+    s32 bc = 0;
+    For (*line) bc += uchar_size(it);
+    return bc;
+}
+
 void Buffer::insert_line(u32 y, uchar* text, s32 len) {
     lines.ensure_cap(lines.len + 1);
-    if (y > lines.len)
+    if (y > lines.len) {
         y = lines.len;
-    else if (y < lines.len)
+    } else if (y < lines.len) {
         memmove(&lines[y + 1], &lines[y], sizeof(Line) * (lines.len - y));
+        memmove(&bytecounts[y + 1], &bytecounts[y], sizeof(u32) * (bytecounts.len - y));
+    }
 
     lines[y].init(LIST_CHUNK, len);
     lines[y].len = len;
     memcpy(lines[y].items, text, sizeof(uchar) * len);
 
+    bytecounts[y] = get_bytecount(&lines[y]);
+
     lines.len++;
+    bytecounts.len++;
     dirty = true;
 }
 
@@ -241,28 +272,44 @@ void Buffer::append_line(uchar* text, s32 len) {
 void Buffer::insert(cur2 start, uchar* text, s32 len) {
     i32 x = start.x, y = start.y;
 
+    bool has_newline = false;
+    for (u32 i = 0; i < len; i++) {
+        if (text[i] == '\n') {
+            has_newline = true;
+            break;
+        }
+    }
+
     if (y == lines.len)
         append_line(NULL, 0);
 
-    Line* line = &lines[y];
+    auto line = &lines[y];
     s32 total_len = line->len + len;
-    uchar* buf = alloc_temp_array(total_len);
-    defer { free_temp_array(buf, total_len); };
 
-    if (x > 0)
-        memcpy(buf, line->items, sizeof(uchar) * x);
-    memcpy(buf + x, text, sizeof(uchar) * len);
-    if (line->len > x)
-        memcpy(buf + x + len, line->items + x, sizeof(uchar) * (line->len - x));
+    if (has_newline) {
+        uchar* buf = alloc_temp_array(total_len);
+        defer { free_temp_array(buf, total_len); };
 
-    delete_lines(y, y + 1);
+        if (x > 0)
+            memcpy(buf, line->items, sizeof(uchar) * x);
+        memcpy(&buf[x], text, sizeof(uchar) * len);
+        if (line->len > x)
+            memcpy(&buf[x+len], &line->items[x], sizeof(uchar) * (line->len - x));
 
-    u32 last = 0;
-    for (u32 i = 0; i <= total_len; i++) {
-        if (i == total_len || buf[i] == '\n') {
-            insert_line(y++, buf + last, i - last);
-            last = i + 1;
+        delete_lines(y, y + 1);
+
+        u32 last = 0;
+        for (u32 i = 0; i <= total_len; i++) {
+            if (i == total_len || buf[i] == '\n') {
+                insert_line(y++, buf + last, i - last);
+                last = i + 1;
+            }
         }
+    } else {
+        line->ensure_cap(total_len);
+        memmove(&line->items[x + len], &line->items[x], sizeof(uchar) * (line->len - x));
+        memcpy(&line->items[x], text, sizeof(uchar) * len);
+        line->len = total_len;
     }
 
     dirty = true;
@@ -285,6 +332,7 @@ void Buffer::remove(cur2 start, cur2 end) {
             memcpy(lines[y1].items + x1, lines[y2].items + x2, sizeof(uchar) * (lines[y2].len - x2));
         delete_lines(y1 + 1, min(lines.len, y2 + 1));
     }
+    bytecounts[y1] = get_bytecount(&lines[y1]);
     dirty = true;
 }
 
@@ -321,8 +369,12 @@ void Buffer::free_temp_array(uchar* buf, s32 size) {
 i32 Buffer::cur_to_offset(cur2 c) {
     i32 ret = 0;
     for (u32 y = 0; y < c.y; y++)
-        ret += lines[y].len + 1; // assuming newline takes 1 char
-    return ret + c.x;
+        ret += get_bytecount(&lines[y]) + 1; // assuming newline takes 1 char
+
+    for (u32 x = 0; x < c.x; x++)
+        ret += uchar_size(lines[c.y][x]);
+
+    return ret;
 }
 
 cur2 Buffer::offset_to_cur(i32 off) {
@@ -330,13 +382,21 @@ cur2 Buffer::offset_to_cur(i32 off) {
     ret.x = -1;
     ret.y = -1;
 
-    for (u32 y = 0; y < lines.len; y++) {
-        auto& it = lines[y];
-        if (off <= it.len) {
-            ret.x = off;
+    for (u32 y = 0; y < bytecounts.len; y++) {
+        auto& it = bytecounts[y];
+        if (off <= it) {
             ret.y = y;
+            for (u32 x = 0; x < lines[y].len; x++) {
+                auto size = uchar_size(lines[y][x]);
+                if (off < size) {
+                    ret.x = x;
+                    break;
+                }
+                off -= size;
+            }
+            break;
         }
-        off -= (it.len + 1);
+        off -= (it + 1);
     }
 
     return ret;

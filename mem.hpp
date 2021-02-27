@@ -3,55 +3,54 @@
 #include "common.hpp"
 #include "list.hpp"
 
-template <typename T> struct Fridge {
-    // An element is the object we want to allocate.
-    // We use that same space to store next pointers, to save space.
-    // Game Engine Architecture, 5.2.1.2. Pool Allocators.
-    //
-    // We call this a fridge allocator; our pool allocator is something else (see
-    // `struct Pool`).
+struct Fridge_Block {
+    Fridge_Block *next;
+};
 
+#define FRIDGE_BLOCK_SIZE 128
+
+template <typename T>
+struct Fridge {
     union Elem {
         T obj;
         Elem* next;
     };
 
-    bool managed;
+    Fridge_Block *blocks;
     Elem* head;
-    u32 size;
+    u32 blocksize;
 
-    void init_with_data(T* data, s32 n, s32 new_size) {
-        head = (Elem*)data;
-        for (i32 i = 0; i < n - 1; i++)
+    void init(s32 bsize) {
+        ptr0(this);
+
+        blocksize = bsize;
+        add_new_block();
+    }
+
+    void cleanup() {
+        auto block = blocks;
+        while (block != NULL) {
+            auto next = block->next;
+            our_free(block);
+            block = next;
+        }
+    }
+
+    void add_new_block() {
+        auto next_block = (Fridge_Block*)our_malloc(sizeof(Fridge_Block) + sizeof(T) * blocksize);
+
+        head = (Elem*)((u8*)next_block + sizeof(Fridge_Block));
+        for (i32 i = 0; i < blocksize - 1; i++)
             head[i].next = &head[i + 1];
-        head[n - 1].next = NULL;
-        size = new_size;
-    }
+        head[blocksize - 1].next = NULL;
 
-    void init_unmanaged(T* data, s32 _size) {
-        managed = false;
-        init_with_data(data, _size, _size);
-    }
-
-    void init_managed(s32 _size) {
-        managed = true;
-
-        T* data = (T*)our_malloc(sizeof(T) * _size);
-        if (data == NULL)
-            panic("our_malloc failed for Pool::init_managed");
-        init_with_data(data, _size, _size);
+        next_block->next = blocks;
+        blocks = next_block;
     }
 
     T* alloc() {
         if (head == NULL) {
-            if (!managed)
-                return NULL;
-
-            T* new_data = (T*)our_malloc(sizeof(T) * size);
-            if (new_data == NULL)
-                panic("our_malloc failed for Pool::alloc");
-
-            init_with_data(new_data, size, size * 2);
+            add_new_block();
             assert(head != NULL);
         }
 
@@ -69,7 +68,8 @@ template <typename T> struct Fridge {
     }
 };
 
-#define DEFAULT_BUCKET_SIZE 65536
+#define POOL_DEFAULT_BUCKET_SIZE 65536
+#define POOL_MEMORY_ALIGNMENT 8
 
 struct Pool_Block {
     u8 *base;
@@ -84,12 +84,44 @@ struct Pool {
     s32 sp;
     s32 blocksize;
     ccstr name;
+    u64 mem_allocated;
+
+    bool owns_address(void *addr) {
+        auto check_block = [&](Pool_Block *block) -> bool {
+            if (block == NULL) return false;
+
+            auto start = (u64)block->base;
+            auto end = start + block->size;
+            auto x = (u64)addr;
+            return start <= x && x < end;
+        };
+
+#define CHECK(x) if (check_block(x)) return true
+
+        For (obsolete_blocks) CHECK(it);
+        For (used_blocks) CHECK(it);
+        For (unused_blocks) CHECK(it);
+        CHECK(curr);
+
+#undef CHECK
+
+        return false;
+    }
+
+    u64 recount_total_allocated() {
+        u64 ret = 0;
+        for (u32 i = 0; i < obsolete_blocks.len; i++) ret += obsolete_blocks.items[i]->size;
+        for (u32 i = 0; i < used_blocks.len; i++) ret += used_blocks.items[i]->size;
+        for (u32 i = 0; i < unused_blocks.len; i++) ret += unused_blocks.items[i]->size;
+        if (curr != NULL) ret += curr->size;
+        return ret;
+    }
 
     void init(ccstr _name = NULL) {
         ptr0(this);
 
         name = _name;
-        blocksize = DEFAULT_BUCKET_SIZE;
+        blocksize = POOL_DEFAULT_BUCKET_SIZE;
         obsolete_blocks.init(LIST_MALLOC, 32);
         used_blocks.init(LIST_MALLOC, 32);
         unused_blocks.init(LIST_MALLOC, 32);
@@ -98,26 +130,29 @@ struct Pool {
     }
 
     void cleanup() {
-        For (unused_blocks) free(it);
-        For (used_blocks) free(it);
-        For (obsolete_blocks) free(it);
-        if (curr != NULL) free(curr);
+        For (unused_blocks) our_free(it);
+        For (used_blocks) our_free(it);
+        For (obsolete_blocks) our_free(it);
+        if (curr != NULL) our_free(curr);
 
         unused_blocks.len = 0;
         used_blocks.len = 0;
         obsolete_blocks.len = 0;
         curr = NULL;
+        mem_allocated = 0;
     }
 
     void request_new_block() {
-        if (curr != NULL)
+        if (curr != NULL) {
             used_blocks.append(&curr);
+        }
 
         if (unused_blocks.len > 0) {
             curr = unused_blocks[unused_blocks.len - 1];
             unused_blocks.len--;
         } else {
-            curr = (Pool_Block*)malloc(sizeof(Pool_Block) + blocksize);
+            curr = (Pool_Block*)our_malloc(sizeof(Pool_Block) + blocksize);
+            mem_allocated += blocksize;
         }
 
         sp = 0;
@@ -127,7 +162,11 @@ struct Pool {
 
     void restore(Pool_Block *block, s32 pos) {
         // if this was a previous used block, just reset pos back to beginning
-        sp = (block == curr ? pos : 0);
+        // TODO: actually, we could restore to previous block and just put all
+        // blocks after that in unused_blocks
+        auto new_pos = block == curr ? pos : 0;
+
+        sp = new_pos;
     }
 
     void ensure_enough(s32 n) {
@@ -139,8 +178,9 @@ struct Pool {
             blocksize = bs;
             if (curr != NULL) obsolete_blocks.append(curr);
             For (used_blocks) obsolete_blocks.append(it);
-
             used_blocks.len = 0;
+            For (unused_blocks) obsolete_blocks.append(it);
+            unused_blocks.len = 0;
             curr = NULL;
         }
         request_new_block();
@@ -151,6 +191,9 @@ struct Pool {
     }
 
     void *alloc(s32 n) {
+        if (n % POOL_MEMORY_ALIGNMENT != 0)
+            n += (POOL_MEMORY_ALIGNMENT - (n % POOL_MEMORY_ALIGNMENT));
+
         ensure_enough(n);
         auto ret = curr->base + sp;
         sp += n;
@@ -166,7 +209,10 @@ struct Pool {
         For (used_blocks) unused_blocks.append(it);
         used_blocks.len = 0;
 
-        For (obsolete_blocks) free(it);
+        For (obsolete_blocks) {
+            mem_allocated -= it->size;
+            our_free(it);
+        }
         obsolete_blocks.len = 0;
 
         request_new_block();
@@ -174,8 +220,9 @@ struct Pool {
 };
 
 extern thread_local Pool *MEM;
+extern thread_local bool use_pool_for_tree_sitter;
 
-void* _alloc_memory(s32 size, bool zero);
+void* _alloc_memory(size_t size, bool zero);
 
 #define alloc_memory(n) _alloc_memory(n, true)
 #define alloc_array(T, n) (T *)alloc_memory(sizeof(T) * (n))
@@ -196,7 +243,7 @@ List<T>* alloc_list(s32 len) {
 template <typename T>
 List<T>* alloc_list() {
     auto ret = alloc_object(List<T>);
-    ret->init(LIST_POOL, 32);
+    ret->init();
     return ret;
 }
 
@@ -233,3 +280,10 @@ struct Scoped_Mem {
 
 uchar* alloc_chunk(s32 needed, s32* new_size);
 void free_chunk(uchar* buf, s32 cap);
+
+extern "C" {
+void* ts_interop_malloc(size_t size);
+void* ts_interop_calloc(size_t x, size_t y);
+void* ts_interop_realloc(void *old_mem, size_t new_size);
+void ts_interop_free(void *p);
+}

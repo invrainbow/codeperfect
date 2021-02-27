@@ -1,64 +1,131 @@
-/*
-Our overall index-building process should just be like, "ensure the index exists
-and is complete and correct." Let's call this "ensure index."
-
-I mean, right now the algorithm is just:
-    - look up the package path
-    - go through all decls, find the one we want.
-
-So our index should answer three core questions:
-    1) our project's dependencies -- WHAT ARE THEY (ensures completeness)
-    2) given an import path -- WHERE IS THE PACKAGE (gives us package path)
-    3) given a decl -- WHERE IS IT DECLARED (gives us file:pos)
-
-This ensures, for ALL of our dependencies, we can easily get a full filepath +
-position. From there we can just parse the decl.
-
-If we can answer any variant of these three questions within 1ms, intellisense
-is effectively solved for now.
-
-(For now because after asking these questions, our intellisense still has to a
-bit more work.  Eventually, we would hope to just build up a complete database
-of our program's types.)
-
-So we want to ensure that as much of the time as possible, our index contains
-the complete, correct answer to these questions. This is what our "ensure
-index" process takes care of.
-
-So at any given point our index should contain knowledge about these two
-questions, and as the "truth" of these questions changes, our index should
-update (in an ideal world, immediately).
-
-Several things that happen here:
-
- - index runs background process checking if it's correct, fixes if not
- - subscribe to various "hooks" that indicate a change of information, index
-   goes and retrieves new info
- - IDE notifies index that it's wrong (e.g. gave wrong result)
-
-And if we build the interface correctly, in the future we can seamlessly switch
-out the index for something even faster.
-*/
-
 #include "go.hpp"
-
 #include "utils.hpp"
 #include "world.hpp"
+#include "mem.hpp"
 #include "os.hpp"
 #include "set.hpp"
 #include "editor.hpp"
+#include "meow_hash.hpp"
+#include "uthash.h"
 
-// due to casey being casey, this can only be included once in the whole project
-#include "meow_hash_x64_aesni.h"
+#include <type_traits>
 
-// PRELEASE: dynamically determine this
+// TODO: dynamically determine this
 static const char GOROOT[] = "c:\\go";
 static const char GOPATH[] = "c:\\users\\brandon\\go";
 
-const u32 INDEX_MAGIC_NUMBER = 0x49fa98;
+// -----
 
-#define VA_ARGS(...) , ##__VA_ARGS__
-#define get_index_path(...) path_join(world.wksp.path, ".ide", "index" VA_ARGS(__VA_ARGS__))
+s32 num_index_stream_opens = 0;
+s32 num_index_stream_closes = 0;
+
+// should we move this logic to os.cpp?
+ccstr normalize_resolved_path(ccstr path) {
+    auto ret = (cstr)our_strcpy(path);
+
+#if OS_WIN
+    auto len = strlen(ret);
+    for (u32 i = 0; i < len; i++)
+        ret[i] = is_sep(ret[i]) ? PATH_SEP : tolower(ret[i]);
+    while (len > 0 && is_sep(ret[len-1])) len--;
+    ret[len] = '\0';
+#elif OS_MAC
+    // TODO
+#elif OS_LINUX
+    // TODO
+#endif
+
+    return (ccstr)ret;
+}
+
+File_Result Index_Stream::open(ccstr _path, u32 access, File_Open_Mode open_mode) {
+    ptr0(this);
+
+    path = _path;
+    offset = 0;
+    ok = true;
+
+    auto ret = f.init(path, access, open_mode);
+    if (ret == FILE_RESULT_SUCCESS)
+        num_index_stream_opens++;
+    return ret;
+}
+
+void Index_Stream::cleanup() {
+    num_index_stream_closes++;
+    f.cleanup();
+}
+
+bool Index_Stream::seek(u32 _offset) {
+    offset = f.seek(_offset);
+    return true; // ???
+}
+
+bool Index_Stream::writen(void *buf, int n) {
+    s32 written = 0;
+    if (f.write((char*)buf, n, &written)) {
+        offset += written;
+        return true;
+    }
+    return false;
+}
+
+bool Index_Stream::write1(i8 x) { return writen(&x, 1); }
+bool Index_Stream::write2(i16 x) { return writen(&x, 2); }
+bool Index_Stream::write4(i32 x) { return writen(&x, 4); }
+bool Index_Stream::write8(i64 x) { return writen(&x, 8); }
+
+bool Index_Stream::writestr(ccstr s) {
+    if (s == NULL) return write2(0);
+    auto len = strlen(s);
+    if (!write2(len)) return false;
+    if (!writen((void*)s, len)) return false;
+    return true;
+}
+
+void Index_Stream::readn(void *buf, s32 n) {
+    ok = f.read((char*)buf, n);
+    if (ok) offset += n;
+}
+
+char Index_Stream::read1() {
+    char ch = 0;
+    readn(&ch, 1);
+    return ch;
+}
+
+i16 Index_Stream::read2() {
+    char buf[2];
+    readn(buf, 2);
+    return ok ? *(i16*)buf : 0;
+}
+
+i32 Index_Stream::read4() {
+    char buf[4];
+    readn(buf, 4);
+    return ok ? *(i32*)buf : 0;
+}
+
+ccstr Index_Stream::readstr() {
+    Frame frame;
+
+    auto size = (u32)read2();
+    if (!ok) return NULL;
+    if (size == 0) return NULL;
+
+    auto s = alloc_array(char, size + 1);
+    readn(s, size);
+    if (!ok) {
+        frame.restore();
+        return NULL;
+    }
+
+    s[size] = '\0';
+    ok = true;
+    return s;
+}
+
+// -----
 
 ccstr format_pos(cur2 pos) {
     if (pos.y == -1)
@@ -66,17 +133,595 @@ ccstr format_pos(cur2 pos) {
     return our_sprintf("%d:%d", pos.y, pos.x);
 }
 
-File_Ast *File_Ast::dup(Ast *new_ast) {
-    auto ret = alloc_object(File_Ast);
-    ret->ast = new_ast;
-    ret->file = file;
-    ret->import_path = import_path;
+struct Parser_Input {
+    Go_Indexer *indexer;
+    Parser_It *it;
+    char buf[128];
+};
+
+const char* read_from_parser_input(void *p, uint32_t off, TSPoint pos, uint32_t *read) {
+    Parser_Input *input = (Parser_Input*)p;
+    Parser_It *it = input->it;
+    auto buf = input->buf;
+    auto bufsize = _countof(input->buf);
+    u32 n = 0;
+
+    if (it->type == IT_MMAP)
+        it->set_pos(new_cur2((i32)off, (i32)-1));
+    else if (it->type == IT_BUFFER)
+        it->set_pos(tspoint_to_cur(pos));
+
+    while (!it->eof()) {
+        auto uch = it->next();
+        if (uch == 0) break;
+
+        auto size = uchar_size(uch);
+        if (n + size + 1 > bufsize) break;
+
+        uchar_to_cstr(uch, &buf[n], &size);
+        n += size;
+    }
+
+    *read = n;
+    buf[n] = '\0';
+    return buf;
+}
+
+void Go_Indexer::background_thread() {
+    SCOPED_MEM(&mem);
+    use_pool_for_tree_sitter = true;
+
+    Index_Stream s;
+
+#if 0
+    crawl_index();
+    print("finished crawling index");
+    print("writing...");
+
+    if (s.open("db", FILE_MODE_WRITE, FILE_CREATE_NEW) != FILE_RESULT_SUCCESS) return;
+    write_object<Go_Index>(&index, &s);
+    s.cleanup();
+    print("done writing");
+
+    final_mem.cleanup();
+    final_mem.init();
+#endif
+
+    print("reading...");
+    if (s.open("db", FILE_MODE_READ, FILE_OPEN_EXISTING) != FILE_RESULT_SUCCESS) return;
+    defer { s.cleanup(); };
+    {
+        SCOPED_MEM(&final_mem);
+        memcpy(&index, read_object<Go_Index>(&s), sizeof(Go_Index));
+    }
+    print("successfully read index from disk, final_mem.size = %d", final_mem.mem_allocated);
+
+    while (true) continue; // just stay running for now
+}
+
+bool Go_Indexer::start_background_thread() {
+    auto fn = [](void* param) {
+        auto indexer = (Go_Indexer*)param;
+        indexer->background_thread();
+    };
+    return (bgthread = create_thread(fn, this)) != NULL;
+}
+
+Parsed_File *Go_Indexer::parse_file(ccstr filepath) {
+    Parsed_File *ret = NULL;
+
+    for (auto&& pane : world.wksp.panes) {
+        for (auto&& editor : pane.editors) {
+            if (streq(editor.filepath, filepath)) {
+                auto it = alloc_object(Parser_It);
+                it->init(&editor.buf);
+
+                ret = alloc_object(Parsed_File);
+                ret->tree_belongs_to_editor = true;
+                ret->it = it;
+                ret->tree = editor.tree;
+                goto done;
+            }
+        }
+    }
+done:
+
+    if (ret == NULL) {
+        auto ef = read_entire_file(filepath);
+        if (ef == NULL) return NULL;
+
+        auto it = alloc_object(Parser_It);
+        it->init(ef);
+
+        Parser_Input pinput;
+        pinput.indexer = this;
+        pinput.it = it;
+
+        TSInput input;
+        input.payload = &pinput;
+        input.encoding = TSInputEncodingUTF8;
+        input.read = read_from_parser_input;
+
+        auto tree = ts_parser_parse(new_ts_parser(), NULL, input);
+        if (tree == NULL) return NULL;
+
+        ret = alloc_object(Parsed_File);
+        ret->tree_belongs_to_editor = false;
+        ret->it = pinput.it;
+        ret->tree = tree;
+    }
+
+    ret->root = new_ast_node(ts_tree_root_node(ret->tree));
+    current_parsed_files.append(ret);
+    return ret;
+}
+
+void Go_Indexer::free_parsed_file(Parsed_File *file) {
+    our_assert(
+        current_parsed_files.len > 0 && (*current_parsed_files.last() == file),
+        "parsed files freed out of order"
+    );
+    current_parsed_files.len--;
+
+    if (file->it != NULL) file->it->cleanup();
+
+    // do we even need to free tree, if we're using our custom pool memory?
+    /*
+    if (file->tree != NULL)
+        if (!file->tree_belongs_to_editor)
+            ts_tree_delete(file->tree);
+    */
+}
+
+// returns -1 if pos before ast, 0 if inside, 1 if after
+i32 cmp_pos_to_node(cur2 pos, Ast_Node *node) {
+    if (pos.y == -1) {
+        if (pos.x < node->start_byte) return -1;
+        if (pos.x > node->end_byte) return 1;
+        return 0;
+    }
+
+    if (pos < node->start) return -1;
+    if (pos > node->end) return 1;
+    return 0;
+}
+
+void Go_Indexer::walk_ast_node(Ast_Node *node, bool abstract_only, Walk_TS_Callback cb) {
+    auto cursor = ts_tree_cursor_new(node->node);
+    defer { ts_tree_cursor_delete(&cursor); };
+
+    walk_ts_cursor(&cursor, abstract_only, [&](Ast_Node *node, Ts_Field_Type type, int depth) -> Walk_Action {
+        node->indexer = this;
+        return cb(node, type, depth);
+    });
+}
+
+void Go_Indexer::find_nodes_containing_pos(Ast_Node *root, cur2 pos, fn<Walk_Action(Ast_Node *it)> callback) {
+    walk_ast_node(root, true, [&](Ast_Node *node, Ts_Field_Type, int) -> Walk_Action {
+        int res = cmp_pos_to_node(pos, node);
+        if (res < 0) return WALK_ABORT;
+        if (res > 0) return WALK_SKIP_CHILDREN;
+        return callback(node);
+    });
+}
+
+ccstr gomod_tok_type_str(Gomod_Tok_Type t) {
+    switch (t) {
+    define_str_case(GOMOD_TOK_ILLEGAL);
+    define_str_case(GOMOD_TOK_EOF);
+    define_str_case(GOMOD_TOK_COMMENT);
+    define_str_case(GOMOD_TOK_LPAREN);
+    define_str_case(GOMOD_TOK_RPAREN);
+    define_str_case(GOMOD_TOK_ARROW);
+    define_str_case(GOMOD_TOK_NEWLINE);
+    define_str_case(GOMOD_TOK_MODULE);
+    define_str_case(GOMOD_TOK_GO);
+    define_str_case(GOMOD_TOK_REQUIRE);
+    define_str_case(GOMOD_TOK_REPLACE);
+    define_str_case(GOMOD_TOK_EXCLUDE);
+    define_str_case(GOMOD_TOK_STRIDENT);
+    }
+    return NULL;
+};
+
+// -----
+
+Ast_Node *Ast_Node::dup(TSNode new_node) {
+    return indexer->new_ast_node(new_node);
+}
+
+ccstr Ast_Node::string() {
+    auto last = indexer->current_parsed_files.last();
+    our_assert(last != NULL, "no current parsed file");
+
+    auto pf = *last;
+    auto it = pf->it;
+
+    // auto start_byte = ts_node_start_byte(node);
+    // auto end_byte = ts_node_end_byte(node);
+
+    if (it->type == IT_MMAP)
+        it->set_pos(new_cur2((i32)start_byte, (i32)-1));
+    else if (it->type == IT_BUFFER)
+        it->set_pos(start);
+
+    auto len = end_byte - start_byte;
+    auto ret = alloc_array(char, len + 1);
+    for (u32 i = 0; i < len; i++)
+        ret[i] = it->next();
+    ret[len] = '\0';
+    return ret;
+}
+
+Gotype *Go_Indexer::new_gotype(Gotype_Type type) {
+    // maybe optimize size of the object we allocate, like we did with Ast
+    auto ret = alloc_object(Gotype);
+    ret->type = type;
+    return ret;
+}
+
+Go_Package *Go_Indexer::find_package_in_index(ccstr import_path, ccstr resolved_path) {
+    return index.packages->find([&](Go_Package *it) -> bool {
+        return (
+            streq(it->import_path, import_path)
+            && streq(it->resolved_path, resolved_path)
+        );
+    });
+}
+
+ccstr Go_Indexer::find_import_path_referred_to_by_id(ccstr id, Go_Ctx *ctx, ccstr *resolved_path) {
+    auto current_pkg = find_package_in_index(ctx->import_path, ctx->resolved_path);
+    if (current_pkg == NULL) return NULL;
+
+    auto imp = current_pkg->individual_imports->find([&](Go_Single_Import *it) -> bool {
+        return streq(it->file, ctx->filename) && streq(it->package_name, id);
+    });
+    if (imp == NULL) return NULL;
+
+    auto dep = current_pkg->dependencies->find([&](Go_Dependency *it) -> bool {
+        return streq(it->import_path, imp->import_path);
+    });
+    if (dep == NULL) return NULL;
+
+    *resolved_path = dep->resolved_path;
+    return imp->import_path;
+}
+
+ccstr parse_go_string(ccstr s) {
+    // just strips the quotes for now, handle backslashes and shit when we need
+
+    auto len = strlen(s);
+    if ((s[0] == '"' && s[len-1] == '"') || (s[0] == '`' && s[len-1] == '`')) {
+        auto ret = (cstr)our_strcpy(s);
+        ret[len-1] = '\0';
+        return &ret[1];
+    }
+    return NULL;
+}
+
+void Go_Indexer::crawl_index() {
+    Pool package_scratch_mem;   // temp pool, torn down after processing each package
+    Pool crawl_mem;             // pool holding info needed to orchestrate crawl_index
+    Pool intermediate_mem;      // temp mem that holds package info
+
+    package_scratch_mem.init("package_scratch_mem");
+    crawl_mem.init("crawl_mem");
+    intermediate_mem.init("intermediate_mem");
+
+    defer { package_scratch_mem.cleanup(); };
+    defer { crawl_mem.cleanup(); };
+    defer { intermediate_mem.cleanup(); };
+
+    SCOPED_MEM(&crawl_mem);
+
+    {
+        SCOPED_MEM(&intermediate_mem);
+        // index.current_path = world.wksp.path;
+        index.current_path = normalize_path_separator((cstr)our_strcpy("C:/Users/Brandon/compose-cli"));
+        index.gomod = parse_gomod_file(path_join(index.current_path, "go.mod"));
+        index.current_import_path = get_workspace_import_path();
+        index.packages = alloc_list<Go_Package>();
+    }
+
+    fn<void(ccstr, ccstr)> process_initial_imports;
+    fn<void(ccstr, ccstr)> process_import;
+
+    struct Queue_Item {
+        ccstr import_path;
+        ccstr resolved_path;
+    };
+
+    List<Queue_Item> queue;
+    queue.init();
+
+    auto append_to_queue = [&](ccstr import_path, ccstr resolved_path) {
+        SCOPED_MEM(&crawl_mem);
+        auto item = queue.append();
+        item->import_path = our_strcpy(import_path);
+        item->resolved_path = normalize_resolved_path(resolved_path);
+    };
+
+    process_initial_imports = [&](ccstr import_path, ccstr resolved_path) {
+        bool is_go_package = false;
+
+        list_directory(resolved_path, [&](Dir_Entry *ent) {
+            if (ent->type == DIRENT_FILE) {
+                if (!is_go_package)
+                    if (str_ends_with(ent->name, ".go"))
+                        if (is_file_included_in_build(path_join(resolved_path, ent->name)))
+                            is_go_package = true;
+                return;
+            }
+
+            if (streq(ent->name, "vendor")) return;
+
+            process_initial_imports(
+                normalize_path_separator((cstr)path_join(import_path, ent->name), '/'),
+                path_join(resolved_path, ent->name)
+            );
+        });
+
+        if (is_go_package) append_to_queue(import_path, resolved_path);
+    };
+
+    process_initial_imports(index.current_import_path, index.current_path);
+
+    auto get_package = [&](ccstr import_path, ccstr resolved_path) -> Go_Package * {
+        auto pkg = find_package_in_index(import_path, resolved_path);
+        if (pkg == NULL) {
+            SCOPED_MEM(&intermediate_mem);
+
+            pkg = index.packages->append();
+
+            pkg->individual_imports = alloc_list<Go_Single_Import>();
+            pkg->dependencies = alloc_list<Go_Dependency>();
+            pkg->decls = alloc_list<Godecl>();
+            pkg->files = alloc_list<Go_Package_File_Info>();
+
+            pkg->import_path = our_strcpy(import_path);
+            pkg->resolved_path = normalize_resolved_path(resolved_path);
+
+            pkg->status = GPS_OUTDATED;
+        }
+        return pkg;
+    };
+
+    // get package status, but don't create a new package if one doesn't exist
+    // (unlike get_package)
+    auto get_package_status = [&](ccstr import_path, ccstr resolved_path) -> Go_Package_Status {
+        auto pkg = find_package_in_index(import_path, normalize_resolved_path(resolved_path));
+        return pkg == NULL ? GPS_OUTDATED : pkg->status;
+    };
+
+    while (queue.len > 0) {
+        SCOPED_MEM(&package_scratch_mem);
+        defer { package_scratch_mem.reset(); };
+
+        auto item = queue.last();
+        auto import_path = item->import_path;
+        auto resolved_path = item->resolved_path;
+        auto pkg = get_package(import_path, resolved_path);
+
+        if (pkg->status == GPS_READY) {
+            queue.len--;
+            continue;
+        }
+
+        print("processing %s -> %s", import_path, resolved_path);
+
+        pkg->status = GPS_UPDATING;
+
+        defer {
+            SCOPED_MEM(&intermediate_mem);
+            memcpy(pkg, pkg->copy(), sizeof(Go_Package));
+        };
+
+        // for now, don't include tests
+        auto source_files = list_source_files(resolved_path, false);
+
+        bool added_new_deps = false;
+        For (*source_files) {
+            auto filename = it;
+
+            auto pf = parse_file(path_join(resolved_path, filename));
+            if (pf == NULL) continue;
+            defer { free_parsed_file(pf); };
+
+            Go_Ctx ctx;
+            ctx.filename = filename;
+            ctx.import_path = import_path;
+            ctx.resolved_path = resolved_path;
+
+            // ----
+
+            // add import info
+            FOR_NODE_CHILDREN (pf->root) {
+                if (it->type != TS_IMPORT_DECLARATION) continue;
+
+                auto speclist_node = it->child();
+                FOR_NODE_CHILDREN (speclist_node) {
+                    Ast_Node *name_node = NULL;
+                    Ast_Node *path_node = NULL;
+
+                    if (it->type == TS_IMPORT_SPEC) {
+                        path_node = it->field(TSF_PATH);
+                        name_node = it->field(TSF_NAME);
+                    } else if (it->type == TS_INTERPRETED_STRING_LITERAL) {
+                        path_node = it;
+                        name_node = NULL;
+                    } else {
+                        continue;
+                    }
+
+                    ccstr new_import_path = NULL;
+                    Resolved_Import *ri = NULL;
+
+                    new_import_path = parse_go_string(path_node->string());
+                    ri = resolve_import_from_filesystem(new_import_path, &ctx);
+                    if (ri == NULL) continue;
+
+                    auto status = get_package_status(new_import_path, ri->path);
+                    if (status == GPS_UPDATING) {
+                        // TODO: notify user that cycle was detected
+                    } else if (status == GPS_OUTDATED) {
+                        added_new_deps = true;
+                        append_to_queue(new_import_path, ri->path);
+                    }
+
+                    // record import
+                    auto imp = pkg->individual_imports->append();
+                    imp->file = filename;
+                    imp->import_path = new_import_path;
+                    if (name_node == NULL || name_node->null) {
+                        imp->package_name_type = GPN_IMPLICIT;
+                        imp->package_name = ri->package_name;
+                    } else if (name_node->type == TS_DOT) {
+                        imp->package_name_type = GPN_DOT;
+                    } else if (name_node->type == TS_BLANK_IDENTIFIER) {
+                        imp->package_name_type = GPN_BLANK;
+                    } else {
+                        imp->package_name_type = GPN_EXPLICIT;
+                        imp->package_name = name_node->string();
+                    }
+
+                    // record dependency
+                    auto match_dep = [&](Go_Dependency *it) {
+                        return streq(it->import_path, new_import_path) && streq(it->resolved_path, ri->path);
+                    };
+
+                    if (pkg->dependencies->find(match_dep) == NULL) {
+                        auto dep = pkg->dependencies->append();
+                        dep->import_path = new_import_path;
+                        dep->resolved_path = normalize_resolved_path(ri->path);
+                        dep->package_name = our_strcpy(ri->package_name);
+                    }
+                }
+            }
+        }
+
+        if (added_new_deps) continue;
+
+        // no dependencies left, process the current item now
+        // -----
+
+        For (*source_files) {
+            auto filename = it;
+
+            auto pf = parse_file(path_join(resolved_path, filename));
+            if (pf == NULL) continue;
+            defer { free_parsed_file(pf); };
+
+            Go_Ctx ctx;
+            ctx.filename = filename;
+            ctx.import_path = import_path;
+            ctx.resolved_path = resolved_path;
+
+            // ----
+
+            auto finfo = pkg->files->append();
+            finfo->filename = our_strcpy(filename);
+            finfo->scope_ops = alloc_list<Go_Scope_Op>();
+
+            List<Goresult> results;
+            results.init();
+
+            List<int> open_scopes;
+            open_scopes.init();
+
+            auto add_scope_op = [&](Go_Scope_Op_Type type) -> Go_Scope_Op * {
+                auto op = finfo->scope_ops->append();
+                op->type = type;
+                return op;
+            };
+
+            walk_ast_node(pf->root, true, [&](Ast_Node* node, Ts_Field_Type, int depth) -> Walk_Action {
+                for (; open_scopes.len > 0 && depth <= *open_scopes.last(); open_scopes.len--)
+                    add_scope_op(GSOP_CLOSE_SCOPE)->pos = node->start;
+
+                switch (node->type) {
+                case TS_IF_STATEMENT:
+                case TS_FOR_STATEMENT:
+                case TS_TYPE_SWITCH_STATEMENT:
+                case TS_EXPRESSION_SWITCH_STATEMENT:
+                case TS_BLOCK:
+                    open_scopes.append(depth);
+                    add_scope_op(GSOP_OPEN_SCOPE)->pos = node->start;
+                    break;
+
+                case TS_SHORT_VAR_DECLARATION:
+                case TS_CONST_DECLARATION:
+                case TS_VAR_DECLARATION:
+                    {
+                        results.len = 0;
+                        node_to_decls(node, &results, &ctx);
+                        For (results) add_scope_op(GSOP_DECL)->decl = it.decl;
+                    }
+                    break;
+                }
+
+                return WALK_CONTINUE;
+            });
+
+            FOR_NODE_CHILDREN (pf->root) {
+                switch (it->type) {
+                case TS_PACKAGE_CLAUSE:
+                    pkg->package_name = it->child()->string();
+                    break;
+                case TS_VAR_DECLARATION:
+                case TS_CONST_DECLARATION:
+                case TS_FUNCTION_DECLARATION:
+                case TS_METHOD_DECLARATION:
+                case TS_TYPE_DECLARATION:
+                case TS_SHORT_VAR_DECLARATION:
+                    results.len = 0;
+                    node_to_decls(it, &results, &ctx);
+                    For (results) pkg->decls->append(it.decl);
+                    break;
+                }
+            }
+        }
+
+        pkg->status = GPS_READY;
+        queue.len--;
+    }
+
+    {
+        SCOPED_MEM(&final_mem);
+        memcpy(&index, index.copy(), sizeof(Go_Index));
+    }
+    intermediate_mem.reset();
+}
+
+void Go_Indexer::handle_error(ccstr err) {
+    // TODO: What's our error handling strategy?
+    error("%s", err);
+}
+
+u64 Go_Indexer::hash_package(ccstr resolved_package_path) {
+    u64 ret = 0;
+    ret ^= meow_hash((void*)resolved_package_path, strlen(resolved_package_path));
+
+    {
+        SCOPED_FRAME();
+
+        auto files = list_source_files(resolved_package_path, false);
+        if (files == NULL) return 0;
+
+        For (*files) {
+            auto f = read_entire_file(path_join(resolved_package_path, it));
+            if (f == NULL) return 0;
+            defer { free_entire_file(f); };
+
+            ret ^= meow_hash(f->data, f->len);
+            ret ^= meow_hash((void*)it, strlen(it));
+        }
+    }
+
     return ret;
 }
 
 // i can't believe this but we *may* need to just do interop with go
-
-bool Go_Index::is_file_included_in_build(ccstr path) {
+bool Go_Indexer::is_file_included_in_build(ccstr path) {
     buildparser_proc.writestr(path);
     buildparser_proc.write1('\n');
 
@@ -86,17 +731,13 @@ bool Go_Index::is_file_included_in_build(ccstr path) {
     return (ch == 1);
 }
 
-// FIXME: will fuck up if we list directory first time, dir changes,
-// and then we list second time. fix this somehow
-List<ccstr>* Go_Index::list_source_files(ccstr dirpath) {
+List<ccstr>* Go_Indexer::list_source_files(ccstr dirpath, bool include_tests) {
     auto ret = alloc_list<ccstr>();
 
     auto save_gofiles = [&](Dir_Entry *ent) {
         if (ent->type == DIRENT_DIR) return;
         if (!str_ends_with(ent->name, ".go")) return;
-
-        // TODO: keep this?
-        if (str_ends_with(ent->name, "_test.go")) return;
+        if (str_ends_with(ent->name, "_test.go") && !include_tests) return;
 
         {
             SCOPED_FRAME();
@@ -109,46 +750,24 @@ List<ccstr>* Go_Index::list_source_files(ccstr dirpath) {
     return list_directory(dirpath, save_gofiles) ? ret : NULL;
 }
 
-List<ccstr>* list_source_files_golist(ccstr dirpath) {
-    Process proc;
-    proc.init();
-    defer { proc.cleanup(); };
-    proc.dir = dirpath;
-    proc.use_stdin = false;
-    if (!proc.run("go list -json | jq \".GoFiles | .[]\"")) return NULL;
+ccstr Go_Indexer::get_package_name_from_file(ccstr filepath) {
+    auto pf = parse_file(filepath);
+    if (pf == NULL) return NULL;
+    defer { free_parsed_file(pf); };
 
-    Process_Status status;
-    while ((status = proc.status()) == PROCESS_WAITING) continue;
-
-    if (status != PROCESS_DONE) return NULL;
-
-    Text_Renderer r;
-    auto ret = alloc_list<ccstr>();
-    char ch = 0;
-    r.init();
-
-    while (true) {
-        if (!proc.read1(&ch)) break;
-        if (ch == '"') continue;
-        if (ch == '\r') {
-            if (!proc.read1(&ch)) break;
-            if (ch != '\n') break;
-        }
-        if (ch == '\n') {
-            ret->append(r.finish());
-            r.init();
-            continue;
-        }
-        r.writechar(ch);
+    FOR_NODE_CHILDREN(pf->root) {
+        if (it->type == TS_COMMENT) continue;
+        if (it->type != TS_PACKAGE_CLAUSE) break;
+        return it->child()->string();
     }
-    if (r.len > 0) ret->append(r.finish());
-    return ret;
+
+    return NULL;
 }
 
-ccstr Go_Index::get_package_name(ccstr path) {
+ccstr Go_Indexer::get_package_name(ccstr path) {
     if (check_path(path) != CPR_DIRECTORY) return NULL;
 
-    auto files = list_source_files(path);
+    auto files = list_source_files(path, false);
     if (files == NULL) return NULL;
 
     For (*files) {
@@ -160,3349 +779,211 @@ ccstr Go_Index::get_package_name(ccstr path) {
     return NULL;
 }
 
-Resolved_Import* Go_Index::resolve_import(ccstr import_path) {
-    if (world.wksp.gomod_exists) {
-        // In our go.mod, we have a bunch of directives that basically give us
-        // the info, "when you come across this import path, go to this file
-        // path to find the package." So our strategy is: go through all these
-        // "mappings," see if the import path (the "base path") contains as a
-        // subfolder the import path we're trying to resolve.
-        //
-        // If it does, use that mapping to find the path of the directory we
-        // think our import path resolves to. Then check if it's a package.  If
-        // so, we've hit gold.
+Resolved_Import *Go_Indexer::check_potential_resolved_import(ccstr filepath) {
+    auto package_name = get_package_name(filepath);
+    if (package_name == NULL) return NULL;
 
-        // represents as path as list of its parts, e.g. "a/b/c" becomes ["a", "b", "c"]
+    auto ret = alloc_object(Resolved_Import);
+    ret->path = filepath;
+    ret->package_name = package_name;
+    return ret;
+}
 
-        auto import_path_list = make_path(import_path);
+Resolved_Import *Go_Indexer::resolve_import_from_gomod(ccstr import_path, Gomod_Info *info, Go_Ctx *ctx) {
+    auto import_path_list = make_path(import_path);
 
-        auto try_mapping = [&](ccstr base_path, ccstr resolve_to) -> Resolved_Import * {
-            auto base_path_list = make_path(base_path);
-            if (!base_path_list->contains(import_path_list)) return NULL;
+    auto try_mapping = [&](ccstr base_path, ccstr resolve_to) -> Resolved_Import * {
+        auto base_path_list = make_path(base_path);
+        if (!base_path_list->contains(import_path_list)) return NULL;
 
-            ccstr filepath;
-            if (import_path_list->parts->len == base_path_list->parts->len)
-                filepath = resolve_to;
-            else
-                filepath = path_join(resolve_to, get_path_relative_to(import_path, base_path));
+        ccstr filepath = resolve_to;
+        if (import_path_list->parts->len != base_path_list->parts->len)
+            filepath = path_join(filepath, get_path_relative_to(import_path, base_path));
+        return check_potential_resolved_import(filepath);
+    };
 
-            auto package_name = get_package_name(filepath);
-            if (package_name == NULL) return NULL;
-
-            auto ret = alloc_object(Resolved_Import);
-            ret->path = filepath;
-            ret->package_name = package_name;
-            ret->location_type = IMPLOC_GOMOD;
-            return ret;
-        };
-
-        auto get_pkg_mod_path = [&](ccstr import_path, ccstr version) {
-            return path_join(GOPATH, our_sprintf("pkg/mod/%s@%s", import_path, version));
-        };
+    auto get_pkg_mod_path = [&](ccstr import_path, ccstr version) {
+        return path_join(GOPATH, our_sprintf("pkg/mod/%s@%s", import_path, version));
+    };
 
 #define RETURN_IF(x) { auto ret = (x); if (ret != NULL) return ret; }
 
-        auto& info = world.wksp.gomod_info;
-        if (info.module_path != NULL)
-            RETURN_IF(try_mapping(info.module_path, world.wksp.path));
+    if (info->module_path != NULL)
+        RETURN_IF(try_mapping(info->module_path, index.current_path));
 
-        For (info.directives) {
-            switch (it->type) {
-            case GOMOD_DIRECTIVE_REQUIRE:
-                RETURN_IF(try_mapping(it->module_path, get_pkg_mod_path(it->module_path, it->module_version)));
-                break;
-            case GOMOD_DIRECTIVE_REPLACE:
-                {
-                    ccstr filepath;
-                    if (it->replace_version == NULL)
-                        filepath = rel_to_abs_path(it->replace_path);
-                    else
-                        filepath = get_pkg_mod_path(it->replace_path, it->replace_version);
-                    RETURN_IF(try_mapping(it->module_path, filepath));
-                }
-                break;
+    For (*info->directives) {
+        switch (it.type) {
+        case GOMOD_DIRECTIVE_REQUIRE:
+            RETURN_IF(try_mapping(it.module_path, get_pkg_mod_path(it.module_path, it.module_version)));
+            break;
+        case GOMOD_DIRECTIVE_REPLACE:
+            {
+                ccstr filepath;
+                if (it.replace_version == NULL)
+                    filepath = rel_to_abs_path(it.replace_path);
+                else
+                    filepath = get_pkg_mod_path(it.replace_path, it.replace_version);
+                RETURN_IF(try_mapping(it.module_path, filepath));
             }
+            break;
         }
+    }
 
 #undef RETURN_IF
-
-        // no folder path can be resolved from our go.mod. fallthrough and keep
-        // checking vendor, goroot, gopath, etc
-    }
-
-    auto paths = alloc_list<ccstr>();
-    paths->append(path_join(world.wksp.path, "vendor", import_path));
-    paths->append(path_join(GOROOT, "src", import_path));
-    paths->append(path_join(GOPATH, "src", import_path));
-
-    auto location_types = alloc_list<Import_Location>();
-    location_types->append(IMPLOC_VENDOR);
-    location_types->append(IMPLOC_GOPATH);
-    location_types->append(IMPLOC_GOROOT);
-
-    for (u32 i = 0; i < paths->len; i++) {
-        auto package_name = get_package_name(paths->at(i));
-        if (package_name != NULL) {
-            auto ret = alloc_object(Resolved_Import);
-            ret->path = paths->at(i);
-            ret->location_type = location_types->at(i);
-            ret->package_name = package_name;
-            return ret;
-        }
-    }
-
-    return NULL;
 }
 
-ccstr _path_join(ccstr a, ...) {
-    auto get_part_length = [&](ccstr s) {
-        auto len = strlen(s);
-        if (len > 0 && is_sep(s[len-1])) len--;
-        return len;
-    };
+// resolve import by consulting the index
+Resolved_Import* Go_Indexer::resolve_import(ccstr import_path, Go_Ctx *ctx) {
+    auto pkg = find_package_in_index(ctx->import_path, ctx->resolved_path);
+    if (pkg == NULL) return NULL;
 
-    va_list vl, vlcount;
-    s32 total_len = 0;
-    s32 num_parts = 0;
-
-    va_start(vl, a);
-    va_copy(vlcount, vl);
-
-    for (;; num_parts++) {
-        ccstr val = (num_parts == 0 ? a : va_arg(vlcount, ccstr));
-        if (val == NULL) break;
-        total_len += get_part_length(val);
-    }
-    total_len += (num_parts-1); // path separators
-
-    auto ret = alloc_array(char, total_len + 1);
-    u32 k = 0;
-
-    for (u32 i = 0; i < num_parts; i++) {
-        ccstr val = (i == 0 ? a : va_arg(vl, ccstr));
-        auto len = get_part_length(val);
-
-        // copy val into ret, normalizing path separators
-        for (u32 j = 0; j < len; j++) {
-            auto ch = val[j];
-            if (is_sep(ch))
-                ch = PATH_SEP;
-            ret[k++] = ch;
-        }
-
-        if (i + 1 < num_parts)
-            ret[k++] = PATH_SEP;
-    }
-
-    ret[k] = '\0';
-    return ret;
-}
-
-ccstr get_package_name_from_file(ccstr filepath) {
-    Ast *ast = NULL;
-    with_parser_at_location(filepath, [&](Parser *p) {
-        ast = p->parse_package_decl();
+    auto dep = pkg->dependencies->find([&](Go_Dependency *it) -> bool {
+        return streq(it->import_path, import_path);
     });
-    if (ast == NULL) return NULL;
-    if (ast->package_decl.name == NULL) return NULL;
-    return ast->package_decl.name->id.lit;
-}
-
-Parser_It* default_file_loader(ccstr filepath) {
-    // try to find filepath among editors
-    for (auto&& pane : world.wksp.panes) {
-        For (pane.editors) {
-            if (streq(it.filepath, filepath)) {
-                auto iter = alloc_object(Parser_It);
-                iter->init(&it.buf);
-                return iter;
-            }
-        }
-    }
-
-    auto ef = read_entire_file(filepath);
-    if (ef == NULL) return NULL;
-
-    auto it = alloc_object(Parser_It);
-    it->init(ef);
-    return it;
-}
-
-fn<Parser_It* (ccstr filepath)> file_loader = default_file_loader;
-
-Ast* parse_file_into_ast(ccstr filepath) {
-    Ast *ret = NULL;
-    with_parser_at_location(filepath, [&](Parser *p) {
-        ret = p->parse_file();
-    });
-    return ret;
-}
-
-void walk_ast(Ast* root, WalkAstFn fn) {
-    struct Queue_Item {
-        Ast* ast;
-        int depth;
-        ccstr name;
-    };
-
-    List<Queue_Item> queue;
-    queue.init(LIST_POOL, 32);
-
-    auto add_to_queue = [&](Ast* ast, ccstr fullname, int depth) {
-        if (ast == NULL || ast->type == AST_ILLEGAL) return;
-
-        auto fieldname = strrchr(fullname, '.');
-        if (fieldname != NULL)
-            fieldname++;
-
-        auto item = queue.append();
-        item->ast = ast;
-        item->name = fieldname;
-        item->depth = depth;
-    };
-
-    add_to_queue(root, ".root", 0);
-
-    while (queue.len > 0) {
-        auto last = &queue[queue.len - 1];
-        auto last_depth = last->depth;
-        auto result = fn(last->ast, last->name, last->depth);
-        queue.len--;
-
-        if (result == WALK_ABORT) break;
-        if (result == WALK_SKIP_CHILDREN) continue;
-
-        SCOPED_FRAME();
-
-        auto children_nodes = alloc_list<Ast*>();
-        auto children_strings = alloc_list<ccstr>();
-
-        auto _add_child = [&](Ast *ast, ccstr fullname) {
-            children_nodes->append(ast);
-            children_strings->append(fullname);
-        };
-
-#define add_child(x) _add_child(x, #x)
-
-        auto ast = last->ast;
-        switch (ast->type) {
-            case AST_ELLIPSIS:
-                add_child(ast->ellipsis.type);
-                break;
-            case AST_LIST:
-                {
-                    u32 i = 0;
-                    For (ast->list) {
-                        _add_child(it, our_sprintf(".%d", i++));
-                    }
-                }
-                break;
-            case AST_UNARY_EXPR:
-                add_child(ast->unary_expr.rhs);
-                break;
-            case AST_BINARY_EXPR:
-                add_child(ast->binary_expr.lhs);
-                add_child(ast->binary_expr.rhs);
-                break;
-            case AST_ARRAY_TYPE:
-                add_child(ast->array_type.base_type);
-                add_child(ast->array_type.length);
-                break;
-            case AST_POINTER_TYPE:
-                add_child(ast->pointer_type.base_type);
-                break;
-            case AST_SLICE_TYPE:
-                add_child(ast->slice_type.base_type);
-                break;
-            case AST_MAP_TYPE:
-                add_child(ast->map_type.key_type);
-                add_child(ast->map_type.value_type);
-                break;
-            case AST_STRUCT_TYPE:
-                add_child(ast->struct_type.fields);
-                break;
-            case AST_INTERFACE_TYPE:
-                add_child(ast->interface_type.specs);
-                break;
-            case AST_CHAN_TYPE:
-                add_child(ast->chan_type.base_type);
-                break;
-            case AST_FUNC_TYPE:
-                add_child(ast->func_type.signature);
-                break;
-            case AST_PAREN:
-                add_child(ast->paren.x);
-                break;
-            case AST_SELECTOR_EXPR:
-                add_child(ast->selector_expr.x);
-                add_child(ast->selector_expr.sel);
-                break;
-            case AST_SLICE_EXPR:
-                add_child(ast->slice_expr.x);
-                add_child(ast->slice_expr.s1);
-                add_child(ast->slice_expr.s2);
-                add_child(ast->slice_expr.s3);
-                break;
-            case AST_INDEX_EXPR:
-                add_child(ast->index_expr.x);
-                add_child(ast->index_expr.key);
-                break;
-            case AST_TYPE_ASSERTION_EXPR:
-                add_child(ast->type_assertion_expr.x);
-                add_child(ast->type_assertion_expr.type);
-                break;
-            case AST_CALL_EXPR:
-                add_child(ast->call_expr.func);
-                add_child(ast->call_expr.call_args);
-                break;
-            case AST_CALL_ARGS:
-                add_child(ast->call_args.args);
-                break;
-            case AST_LITERAL_ELEM:
-                add_child(ast->literal_elem.elem);
-                add_child(ast->literal_elem.key);
-                break;
-            case AST_LITERAL_VALUE:
-                add_child(ast->literal_value.elems);
-                break;
-            case AST_FIELD:
-                add_child(ast->field.type);
-                add_child(ast->field.ids);
-                break;
-            case AST_PARAMETERS:
-                add_child(ast->parameters.fields);
-                break;
-            case AST_FUNC_LIT:
-                add_child(ast->func_lit.signature);
-                add_child(ast->func_lit.body);
-                break;
-            case AST_BLOCK:
-                add_child(ast->block.stmts);
-                break;
-            case AST_SIGNATURE:
-                add_child(ast->signature.params);
-                add_child(ast->signature.result);
-                break;
-            case AST_COMPOSITE_LIT:
-                add_child(ast->composite_lit.base_type);
-                add_child(ast->composite_lit.literal_value);
-                break;
-            case AST_GO_STMT:
-                add_child(ast->go_stmt.x);
-                break;
-            case AST_DEFER_STMT:
-                add_child(ast->defer_stmt.x);
-                break;
-            case AST_SELECT_STMT:
-                add_child(ast->select_stmt.clauses);
-                break;
-            case AST_SWITCH_STMT:
-                add_child(ast->switch_stmt.s1);
-                add_child(ast->switch_stmt.s2);
-                add_child(ast->switch_stmt.body);
-                break;
-            case AST_IF_STMT:
-                add_child(ast->if_stmt.init);
-                add_child(ast->if_stmt.cond);
-                add_child(ast->if_stmt.body);
-                add_child(ast->if_stmt.else_);
-                break;
-            case AST_FOR_STMT:
-                add_child(ast->for_stmt.s1);
-                add_child(ast->for_stmt.s2);
-                add_child(ast->for_stmt.s3);
-                add_child(ast->for_stmt.body);
-                break;
-            case AST_RETURN_STMT:
-                add_child(ast->return_stmt.exprs);
-                break;
-            case AST_BRANCH_STMT:
-                add_child(ast->branch_stmt.label);
-                break;
-            case AST_DECL:
-                add_child(ast->decl.specs);
-                break;
-            case AST_ASSIGN_STMT:
-                add_child(ast->assign_stmt.lhs);
-                add_child(ast->assign_stmt.rhs);
-                break;
-            case AST_VALUE_SPEC:
-                add_child(ast->value_spec.ids);
-                add_child(ast->value_spec.type);
-                add_child(ast->value_spec.vals);
-                break;
-            case AST_IMPORT_SPEC:
-                add_child(ast->import_spec.path);
-                add_child(ast->import_spec.package_name);
-                break;
-            case AST_TYPE_SPEC:
-                add_child(ast->type_spec.id);
-                add_child(ast->type_spec.type);
-                break;
-            case AST_INC_DEC_STMT:
-                add_child(ast->inc_dec_stmt.x);
-                break;
-            case AST_SEND_STMT:
-                add_child(ast->send_stmt.value);
-                add_child(ast->send_stmt.chan);
-                break;
-            case AST_LABELED_STMT:
-                add_child(ast->labeled_stmt.label);
-                add_child(ast->labeled_stmt.stmt);
-                break;
-            case AST_EXPR_STMT:
-                add_child(ast->expr_stmt.x);
-                break;
-            case AST_PACKAGE_DECL:
-                add_child(ast->package_decl.name);
-                break;
-            case AST_SOURCE:
-                add_child(ast->source.package_decl);
-                add_child(ast->source.imports);
-                add_child(ast->source.decls);
-                break;
-            case AST_STRUCT_FIELD:
-                add_child(ast->struct_field.ids);
-                add_child(ast->struct_field.type);
-                add_child(ast->struct_field.tag);
-                break;
-            case AST_INTERFACE_SPEC:
-                add_child(ast->interface_spec.name);
-                add_child(ast->interface_spec.signature);
-                add_child(ast->interface_spec.type);
-                break;
-            case AST_CASE_CLAUSE:
-                add_child(ast->case_clause.vals);
-                add_child(ast->case_clause.stmts);
-                break;
-            case AST_COMM_CLAUSE:
-                add_child(ast->comm_clause.comm);
-                add_child(ast->comm_clause.stmts);
-                break;
-            case AST_FUNC_DECL:
-                add_child(ast->func_decl.name);
-                add_child(ast->func_decl.body);
-                add_child(ast->func_decl.signature);
-                add_child(ast->func_decl.recv);
-                break;
-        }
-
-        for (i32 i = children_nodes->len - 1; i >= 0; i--)
-            add_to_queue(children_nodes->at(i), children_strings->at(i), last_depth + 1);
-
-#undef add_child
-    }
-}
-
-List<ccstr> *list_local_names_accessible_to(ccstr filepath, Ast *source, cur2 pos) {
-    Ast *toplevel_decl = NULL;
-
-    // find the toplevel that contains res
-    walk_ast(source, [&](Ast *ast, ccstr name, int depth) -> Walk_Action {
-        // depth = 0 is source
-        // depth = 1 is decls->list
-        // depth = 2 is toplevels
-        if (ast->type == AST_PACKAGE_DECL) return WALK_SKIP_CHILDREN;
-        if (depth < 2) return WALK_CONTINUE;
-
-        if (depth == 2) { // toplevel
-            if (ast->type != AST_DECL && ast->type != AST_FUNC_DECL) return WALK_SKIP_CHILDREN;
-            int res = locate_pos_relative_to_ast(pos, ast);
-            if (res < 0) return WALK_ABORT;
-            if (res > 0) return WALK_SKIP_CHILDREN;
-
-            toplevel_decl = ast;
-            return WALK_ABORT;
-        }
-
-        return WALK_CONTINUE;
-    });
-
-    if (toplevel_decl == NULL) return NULL;
-
-    List<ccstr> *ret = NULL;
-    with_parser_at_location(filepath, toplevel_decl->start, [&](Parser *p) {
-        p->dump_decl_table_at = pos;
-        p->parse_decl(lookup_decl_start, false);
-        ret = p->decl_table_dump;
-    });
-    return ret;
-}
-
-void find_nodes_containing_pos(Ast *root, cur2 pos, fn<Walk_Action(Ast *it)> callback) {
-    walk_ast(root, [&](Ast* ast, ccstr name, int depth) -> Walk_Action {
-        int res = locate_pos_relative_to_ast(pos, ast);
-        if (res < 0) return WALK_ABORT;
-        if (res > 0) return WALK_SKIP_CHILDREN;
-        return callback(ast);
-    });
-}
-
-void Ast_List::init(Parser* _parser, cur2 _start_pos) {
-    parser = _parser;
-    start = parser->list_mem.sp;
-    len = 0;
-    start_pos = _start_pos;
-}
-
-void Ast_List::init(Parser* _parser) { return init(_parser, _parser->tok.start); }
-
-void Ast_List::push(Ast* ast) {
-    auto& mem = parser->list_mem;
-
-    if (mem.sp + 1 >= mem.cap) {
-        mem.cap *= 2;
-        mem.buf = (Ast**)realloc(mem.buf, sizeof(Ast*) * mem.cap);
-    }
-    mem.buf[mem.sp++] = ast;
-    len++;
-}
-
-int get_ast_header_size() {
-    Ast ast;
-    return ((u64)(void*)&ast.extra_data_start - (u64)(void*)&ast);
-}
-
-int AST_SIZES[_AST_TYPES_COUNT_];
-
-void init_ast_sizes() {
-    mem0(AST_SIZES, sizeof(AST_SIZES));
-
-    AST_SIZES[AST_FUNC_LIT] = sizeof(Ast::func_lit);
-    AST_SIZES[AST_DECL] = sizeof(Ast::decl);
-    AST_SIZES[AST_SIGNATURE] = sizeof(Ast::signature);
-    AST_SIZES[AST_BASIC_LIT] = sizeof(Ast::basic_lit);
-    AST_SIZES[AST_UNARY_EXPR] = sizeof(Ast::unary_expr);
-    AST_SIZES[AST_LIST] = sizeof(Ast::list);
-    AST_SIZES[AST_BINARY_EXPR] = sizeof(Ast::binary_expr);
-    AST_SIZES[AST_ID] = sizeof(Ast::id);
-    AST_SIZES[AST_SLICE_TYPE] = sizeof(Ast::slice_type);
-    AST_SIZES[AST_MAP_TYPE] = sizeof(Ast::map_type);
-    AST_SIZES[AST_CHAN_TYPE] = sizeof(Ast::chan_type);
-    AST_SIZES[AST_POINTER_TYPE] = sizeof(Ast::pointer_type);
-    AST_SIZES[AST_ARRAY_TYPE] = sizeof(Ast::array_type);
-    AST_SIZES[AST_PAREN] = sizeof(Ast::paren);
-    AST_SIZES[AST_SELECTOR_EXPR] = sizeof(Ast::selector_expr);
-    AST_SIZES[AST_SLICE_EXPR] = sizeof(Ast::slice_expr);
-    AST_SIZES[AST_INDEX_EXPR] = sizeof(Ast::index_expr);
-    AST_SIZES[AST_TYPE_ASSERTION_EXPR] = sizeof(Ast::type_assertion_expr);
-    AST_SIZES[AST_CALL_EXPR] = sizeof(Ast::call_expr);
-    AST_SIZES[AST_CALL_ARGS] = sizeof(Ast::call_args);
-    AST_SIZES[AST_LITERAL_ELEM] = sizeof(Ast::literal_elem);
-    AST_SIZES[AST_LITERAL_VALUE] = sizeof(Ast::literal_value);
-    AST_SIZES[AST_ELLIPSIS] = sizeof(Ast::ellipsis);
-    AST_SIZES[AST_FIELD] = sizeof(Ast::field);
-    AST_SIZES[AST_PARAMETERS] = sizeof(Ast::parameters);
-    AST_SIZES[AST_BLOCK] = sizeof(Ast::block);
-    AST_SIZES[AST_COMPOSITE_LIT] = sizeof(Ast::composite_lit);
-    AST_SIZES[AST_GO_STMT] = sizeof(Ast::go_stmt);
-    AST_SIZES[AST_DEFER_STMT] = sizeof(Ast::defer_stmt);
-    AST_SIZES[AST_IF_STMT] = sizeof(Ast::if_stmt);
-    AST_SIZES[AST_RETURN_STMT] = sizeof(Ast::return_stmt);
-    AST_SIZES[AST_BRANCH_STMT] = sizeof(Ast::branch_stmt);
-    AST_SIZES[AST_STRUCT_TYPE] = sizeof(Ast::struct_type);
-    AST_SIZES[AST_INTERFACE_TYPE] = sizeof(Ast::interface_type);
-    AST_SIZES[AST_FUNC_TYPE] = sizeof(Ast::func_type);
-    AST_SIZES[AST_VALUE_SPEC] = sizeof(Ast::value_spec);
-    AST_SIZES[AST_IMPORT_SPEC] = sizeof(Ast::import_spec);
-    AST_SIZES[AST_TYPE_SPEC] = sizeof(Ast::type_spec);
-    AST_SIZES[AST_ASSIGN_STMT] = sizeof(Ast::assign_stmt);
-    AST_SIZES[AST_INC_DEC_STMT] = sizeof(Ast::inc_dec_stmt);
-    AST_SIZES[AST_SEND_STMT] = sizeof(Ast::send_stmt);
-    AST_SIZES[AST_LABELED_STMT] = sizeof(Ast::labeled_stmt);
-    AST_SIZES[AST_EXPR_STMT] = sizeof(Ast::expr_stmt);
-    AST_SIZES[AST_PACKAGE_DECL] = sizeof(Ast::package_decl);
-    AST_SIZES[AST_SOURCE] = sizeof(Ast::source);
-    AST_SIZES[AST_STRUCT_FIELD] = sizeof(Ast::struct_field);
-    AST_SIZES[AST_INTERFACE_SPEC] = sizeof(Ast::interface_spec);
-    AST_SIZES[AST_SWITCH_STMT] = sizeof(Ast::switch_stmt);
-    AST_SIZES[AST_SELECT_STMT] = sizeof(Ast::select_stmt);
-    AST_SIZES[AST_FOR_STMT] = sizeof(Ast::for_stmt);
-    AST_SIZES[AST_CASE_CLAUSE] = sizeof(Ast::case_clause);
-    AST_SIZES[AST_COMM_CLAUSE] = sizeof(Ast::comm_clause);
-    AST_SIZES[AST_FUNC_DECL] = sizeof(Ast::func_decl);
-}
-
-const int AST_HEADER_SIZE = get_ast_header_size();
-
-Ast* new_ast(Ast_Type type, cur2 start) {
-    static bool ast_sizes_initialized = false;
-
-    if (!ast_sizes_initialized)  {
-        init_ast_sizes();
-        ast_sizes_initialized = true;
-    }
-
-    auto ret = (Ast*)alloc_memory(AST_HEADER_SIZE + AST_SIZES[type]);
-    // auto ret = (Ast*)alloc_memory(sizeof(Ast));
-    ret->type = type;
-    ret->start = start;
-    return ret;
-}
-
-Ast* Ast_List::save() {
-    auto& mem = parser->list_mem;
-
-    auto items = alloc_array(Ast*, len);
-    memcpy(items, mem.buf + start, sizeof(Ast*) * len);
-    mem.sp = start;
-
-    auto ast = new_ast(AST_LIST, start_pos);
-    ast->list.init(LIST_FIXED, len, items);
-    ast->list.len = len;
-
-    return parser->fill_end(ast);
-}
-
-Ast* unparen(Ast* ast) {
-    while (ast != NULL && ast->type == AST_PAREN)
-        ast = ast->paren.x;
-    return ast;
-}
-
-Ast* unpointer(Ast* ast) {
-    while (ast != NULL && ast->type == AST_POINTER_TYPE)
-        ast = ast->pointer_type.base_type;
-    return ast;
-}
-
-#define expect(x) _expect(x, __FILE__, __LINE__)
-
-void Parser::parser_error(ccstr fmt, ...) {
-    va_list args;
-    va_start(args, fmt);
-
-    print("%s", filepath);
-    print("pos = %s", format_pos(tok.start));
-
-    /*
-    // for debugging
-    if (!streq(filepath, "./test.go"))
-        copy_file(filepath, "./test.go", true);
-    */
-
-    vprintf(fmt, args);
-    printf("\n");
-
-    va_end(args);
-}
-
-void Parser::lex_with_comments() {
-    tok.start_before_leading_whitespace = it->get_pos();
-
-    auto should_insert_semi = [&]() -> bool {
-        switch (last_token_type) {
-            case TOK_ID:
-            case TOK_INT:
-            case TOK_FLOAT:
-            case TOK_IMAG:
-            case TOK_RUNE:
-            case TOK_STRING:
-            case TOK_BREAK:
-            case TOK_CONTINUE:
-            case TOK_FALLTHROUGH:
-            case TOK_RETURN:
-            case TOK_INC:
-            case TOK_DEC:
-            case TOK_RPAREN:
-            case TOK_RBRACE:
-            case TOK_RBRACK:
-                // semicolon should be auto inserted after these tokens
-                return true;
-
-            case TOK_PERIOD:
-                // PREVIOUS NOTE: these tokens don't trigger semicolon insertion per language spec, but
-                // it makes things easier for us
-                // return true;
-
-                // NEW NOTE: we can't do this, because it causes failure when parsing:
-                //
-                //     func foo() {
-                //         x = x.
-                //             call()
-                //     }
-                return false;
-        }
-        return false;
-    };
-
-    auto insert_semi = [&]() -> bool {
-        if (should_insert_semi()) {
-            tok.start = it->get_pos();
-            tok.type = TOK_SEMICOLON;
-            tok.lit = ";"; // NOTE: do we do this?
-            return true;
-        }
-        return false;
-    };
-
-    // eat whitespace, inserting semicolon if we hit a newline
-    for (; isspace(it->peek()) && !it->eof(); it->next())
-        if (it->peek() == '\n')
-            if (insert_semi())
-                return;
-
-    // At this point, preprocessing is done --    we've eaten whitespace and
-    // checked for semicolon insertion. We're now ready to read the token itself.
-
-    cstr buffer = NULL;
-    s32 buffer_len = 0;
-    s32 buffer_pos = 0;
-    bool initial_run = true;
-
-    auto next = [&]() -> u8 {
-        auto ret = it->next();
-        if (initial_run)
-            buffer_len++;
-        else if (buffer != NULL && buffer_pos < buffer_len)
-            buffer[buffer_pos++] = ret;
-        return ret;
-    };
-
-    auto read_rune = [&]() -> bool {
-        auto ch = next();
-
-        if (ch == '\n') {
-            parser_error("Invalid newline found inside rune or string literal.");
-            return false;
-        }
-
-        if (ch == '\\') {
-            u32 read_hex = 0;
-            bool ok = true;
-
-            ch = next();
-            switch (ch) {
-                case 'x': read_hex = 2; break;
-                case 'u': read_hex = 4; break;
-                case 'U': read_hex = 8; break;
-            }
-
-            if (read_hex > 0) {
-                auto esc_ch = ch;
-                for (u32 i = 0; i < read_hex; i++) {
-                    auto ch = next();
-                    if (!ishex(ch)) {
-                        if (ok) {
-                            parser_error("Expected hex character to follow '\\%c' in rune literal.", esc_ch);
-                            ok = false;
-                        }
-                    }
-                }
-            } else if (isoct(ch)) {
-                if (!isoct(next())) ok = false;
-                if (!isoct(next())) ok = false;
-                if (!ok)
-                    parser_error("Expected octal digit to follow '\\' in rune literal.");
-            }
-
-            return ok;
-        }
-        return true;
-    };
-
-    auto get_type = [&]() -> Tok_Type {
-        if (it->eof()) return TOK_EOF;
-
-        auto ch = next();
-
-        // check if it's a symbolic token
-        switch (ch) {
-            case '+':
-                switch (it->peek()) {
-                    case '+': return next(), TOK_INC;
-                    case '=': return next(), TOK_ADD_ASSIGN;
-                }
-                return TOK_ADD;
-            case '-':
-                switch (it->peek()) {
-                    case '-': return next(), TOK_DEC;
-                    case '=': return next(), TOK_SUB_ASSIGN;
-                }
-                return TOK_SUB;
-            case '&':
-                switch (it->peek()) {
-                    case '&': return next(), TOK_LAND;
-                    case '=': return next(), TOK_AND_ASSIGN;
-                    case '^':
-                        next();
-                        if (it->peek() == '=')
-                            return next(), TOK_AND_NOT_ASSIGN;
-                        return TOK_AND_NOT;
-                }
-                return TOK_AND;
-            case '*':
-                if (it->peek() == '=')
-                    return next(), TOK_MUL_ASSIGN;
-                return TOK_MUL;
-            case '%':
-                if (it->peek() == '=')
-                    return next(), TOK_REM_ASSIGN;
-                return TOK_REM;
-            case '|':
-                switch (it->peek()) {
-                    case '|': return next(), TOK_LOR;
-                    case '=': return next(), TOK_OR_ASSIGN;
-                }
-                return TOK_OR;
-            case '<':
-                switch (it->peek()) {
-                    case '<':
-                        next();
-                        if (it->peek() == '=')
-                            return next(), TOK_SHL_ASSIGN;
-                        return TOK_SHL;
-                    case '-':
-                        next();
-                        return TOK_ARROW;
-                    case '=':
-                        next();
-                        return TOK_LEQ;
-                }
-                return TOK_LSS;
-            case '>':
-                switch (it->peek()) {
-                    case '>':
-                        next();
-                        if (it->peek() == '=')
-                            return next(), TOK_SHR_ASSIGN;
-                        return TOK_SHR;
-                    case '=':
-                        return next(), TOK_GEQ;
-                }
-                return TOK_GTR;
-            case '=':
-                if (it->peek() == '=')
-                    return next(), TOK_EQL;
-                return TOK_ASSIGN;
-            case '^':
-                if (it->peek() == '=')
-                    return next(), TOK_XOR_ASSIGN;
-                return TOK_XOR;
-            case '(': return TOK_LPAREN;
-            case '[': return TOK_LBRACK;
-            case '{': return TOK_LBRACE;
-            case ')': return TOK_RPAREN;
-            case ']': return TOK_RBRACK;
-            case '}': return TOK_RBRACE;
-            case ';': return TOK_SEMICOLON;
-            case ',': return TOK_COMMA;
-            case ':':
-                if (it->peek() == '=')
-                    return next(), TOK_DEFINE;
-                return TOK_COLON;
-            case '!':
-                return it->peek() == '=' ? (next(), TOK_NEQ) : TOK_NOT;
-            case '.':
-                if (it->peek() == '.') {
-                    next();
-                    if (it->peek() != '.') {
-                        parser_error("Invalid start of ellipsis");
-                        return TOK_ILLEGAL;
-                    }
-                    it->next();
-                    return TOK_ELLIPSIS;
-                }
-                return TOK_PERIOD;
-            case '/':
-                switch (it->peek()) {
-                    case '/':
-                        while (it->peek() != '\n')
-                            next();
-                        return TOK_COMMENT;
-                    case '*':
-                        {
-                            bool last_was_star = false;
-                            while (true) {
-                                auto ch = next();
-                                if (ch == '/' && last_was_star) break;
-                                last_was_star = (ch == '*');
-                            }
-                        }
-                        return TOK_COMMENT;
-                    case '=':
-                        return next(), TOK_QUO_ASSIGN;
-                }
-                return TOK_QUO;
-            case '`':
-                while (it->peek() != '`')
-                    next();
-                next();
-                return TOK_STRING;
-            case '"':
-                {
-                    bool illegal = false;
-                    while (it->peek() != '"') {
-                        if (it->peek() == '\n')
-                            return TOK_ILLEGAL;
-                        if (!read_rune())
-                            illegal = true;
-                    }
-                    next(); // eat the '"'
-                    return illegal ? TOK_ILLEGAL : TOK_STRING;
-                }
-            case '\'':
-                {
-                    bool illegal = false;
-                    if (!read_rune())
-                        illegal = true;
-                    if (next() != '\'') {
-                        while (next() != '\'')
-                            continue;
-                        illegal = true;
-                        parser_error("Expected only one character in rune literal.");
-                    }
-                    return illegal ? TOK_ILLEGAL : TOK_RUNE;
-                }
-        }
-
-        if (isdigit(ch)) {
-            bool is_imag = false;
-            bool is_float = false;
-
-            // TODO: actually properly lex the number lit
-            auto is_number_lit = [&](u8 c, u8 prev) -> bool {
-                if (ishex(c)) return true;
-                switch (c) {
-                    case '_':
-                    case 'b':
-                    case 'B':
-                    case 'x':
-                    case 'X':
-                    case 'e':
-                    case 'E':
-                    case 'i':
-                        is_imag = true;
-                        return true;
-                    case '.':
-                        is_float = true;
-                        return true;
-                    case '+':
-                    case '-':
-                        switch (prev) {
-                            case 'e':
-                            case 'E':
-                            case 'p':
-                            case 'P':
-                                return true;
-                        }
-                }
-                return false;
-            };
-
-            u8 ch, last = 0;
-            while (is_number_lit((ch = it->peek()), last)) {
-                next();
-                last = ch;
-            }
-
-            if (is_imag) return TOK_IMAG;
-            if (is_float) return TOK_FLOAT;
-            return TOK_INT;
-        }
-
-        if (!isid(ch)) {
-            parser_error("Illegal character 0x%X found.", ch);
-            return TOK_ILLEGAL;
-        }
-
-        while (isid(it->peek()))
-            next();
-
-        if (!initial_run) {
-            struct Keyword {
-                Tok_Type type;
-                ccstr string;
-                s32 len;
-            };
-
-            Keyword keywords[] = {
-                    {TOK_BREAK, "break", 5},
-                    {TOK_CASE, "case", 4},
-                    {TOK_CHAN, "chan", 4},
-                    {TOK_CONST, "const", 5},
-                    {TOK_CONTINUE, "continue", 8},
-                    {TOK_DEFAULT, "default", 7},
-                    {TOK_DEFER, "defer", 5},
-                    {TOK_ELSE, "else", 4},
-                    {TOK_FALLTHROUGH, "fallthrough", 11},
-                    {TOK_FOR, "for", 3},
-                    {TOK_FUNC, "func", 4},
-                    {TOK_GO, "go", 2},
-                    {TOK_GOTO, "goto", 4},
-                    {TOK_IF, "if", 2},
-                    {TOK_IMPORT, "import", 6},
-                    {TOK_INTERFACE, "interface", 9},
-                    {TOK_MAP, "map", 3},
-                    {TOK_PACKAGE, "package", 7},
-                    {TOK_RANGE, "range", 5},
-                    {TOK_RETURN, "return", 6},
-                    {TOK_SELECT, "select", 6},
-                    {TOK_STRUCT, "struct", 6},
-                    {TOK_SWITCH, "switch", 6},
-                    {TOK_TYPE, "type", 4},
-                    {TOK_VAR, "var", 3},
-            };
-
-            For (keywords)
-                if (it.len == buffer_len && strneq(it.string, buffer, it.len))
-                    return it.type;
-        }
-
-        return TOK_ID;
-    };
-
-    // TODO: Ok, I think the plan is to call get_type() twice, once to count how
-    // many chars, and once to save it
-
-    tok.start = it->get_pos();
-
-    // call get_type(), initial run
-    initial_run = true;
-    auto type = get_type();
-    if (type != TOK_EOF && type != TOK_ILLEGAL) {
-        switch (type) {
-            case TOK_STRING:
-            case TOK_ID:
-            case TOK_INT:
-            case TOK_FLOAT:
-            case TOK_IMAG:
-            case TOK_RUNE:
-            case TOK_COMMENT:
-                buffer = alloc_array(char, buffer_len + 1);
-                break;
-        }
-        it->set_pos(tok.start);
-        initial_run = false;
-        type = get_type();
-        if (buffer != NULL)
-            buffer[buffer_len] = '\0';
-    } else if (type == TOK_EOF && insert_semi()) {
-        return;
-    }
-
-    tok.type = type;
-    tok.lit = buffer;
-
-    // NOTE: parse values of literals. I don't think this is actually
-    // necessary...
-    if (tok.type == TOK_STRING) {
-        // len includes the '\0'
-        auto value_len = buffer_len - 2;
-        auto value = alloc_array(char, value_len + 1);
-        strncpy(value, buffer + 1, value_len);
-        value[value_len] = '\0';
-        tok.val.string_val = value;
-    }
-}
-
-void Parser::init(Parser_It* _it, ccstr _filepath, bool no_lex) {
-    ptr0(this);
-
-    // init fields
-    it = _it;
-    filepath = _filepath;
-
-    // default isn't zero
-    dump_decl_table_at = {-1, -1};
-
-    // init list mem
-    list_mem.cap = 128;
-    list_mem.buf = (Ast**)our_malloc(sizeof(Ast*) * list_mem.cap);
-    list_mem.sp = 0;
-
-    // init decl_table hash table
-    decl_table.init();
-
-    // read first token
-    if (!no_lex) lex();
-}
-
-void Parser::cleanup() {
-    our_free(list_mem.buf);
-    decl_table.cleanup();
-}
-
-void Parser::reinit_without_lex() {
-    auto old_it = it;
-    auto old_filepath = filepath;
-    cleanup();
-    old_it->set_pos(new_cur2(0, 0));
-    init(old_it, old_filepath, true);
-}
-
-Ast_List Parser::new_list() {
-    Ast_List list;
-    list.init(this);
-    return list;
-}
-
-void Parser::synchronize(Sync_Lookup_Func lookup) {
-    while (!lookup(tok.type) && tok.type != TOK_EOF)
-        lex();
-}
-
-void Parser::_throwError(ccstr s) {
-    parser_error("%s", s);
-
-    // what should we do with parser errors though?
-    // throw std::runtime_error(s);
-}
-
-cur2 Parser::_expect(Tok_Type want, ccstr file, u32 line) {
-    bool match = false;
-    auto start = tok.start;
-    auto got = tok.type;
-
-    if (want == TOK_SEMICOLON) {
-        switch (got) {
-            case TOK_SEMICOLON:
-            case TOK_RPAREN:
-            case TOK_RBRACE:
-                match = true;
-                break;
-        }
-        if (got == TOK_SEMICOLON)
-            lex();
-    } else {
-        match = (got == want);
-        lex();
-    }
-
-    if (!match) {
-        parser_error("%s:%d: Expected %s at %s, got %s instead", file, line, tok_type_str(want), format_pos(start), tok_type_str(got));
-        if (want == TOK_SEMICOLON)
-            synchronize(lookup_stmt_start);
-        else
-            lex(); // make progress
-    }
-
-    return match ? start : INVALID_POS;
-}
-
-Ast* Parser::parse_id_list() {
-    auto list = new_list();
-    list.push(parse_id());
-    while (tok.type == TOK_COMMA) {
-        lex();
-        list.push(parse_id());
-    }
-    return list.save();
-}
-
-Ast *Parser::parse_spec(Tok_Type spec_type, bool *previous_spec_contains_iota) {
-    switch (spec_type) {
-    case TOK_VAR:
-    case TOK_CONST:
-        {
-            auto start = tok.start;
-
-            auto ids = parse_id_list();
-            auto type = parse_type();
-
-            Ast* vals = NULL;
-            if (tok.type == TOK_ASSIGN) {
-                lex();
-                vals = parse_expr_list(false);
-            }
-
-            auto contains_iota = [&](Ast* rhs) {
-                if (rhs == NULL) return false;
-                if (rhs->type != AST_LIST) return false;
-
-                bool ret = false;
-                walk_ast(rhs, [&](Ast* ast, ccstr, int) -> Walk_Action {
-                    if (ast->type == AST_ID && streq(ast->id.lit, "iota")) {
-                        ret = true;
-                        return WALK_ABORT;
-                    }
-                    return WALK_CONTINUE;
-                });
-                return ret;
-            };
-
-            if (contains_iota(vals))
-                if (previous_spec_contains_iota != NULL)
-                    *previous_spec_contains_iota = true;
-
-            if (type == NULL && vals == NULL)
-                if (previous_spec_contains_iota != NULL)
-                    if (!*previous_spec_contains_iota)
-                        parser_error("%s spec needs type or values.", tok_type_str(spec_type));
-
-            auto ast = new_ast(AST_VALUE_SPEC, start);
-            ast->value_spec.ids = ids;
-            ast->value_spec.type = type;
-            ast->value_spec.vals = vals;
-            ast->value_spec.spec_type = spec_type;
-
-            For (ids->list) { declare_var(it->id.lit, ast, it); }
-
-            return fill_end(ast);
-        }
-    case TOK_TYPE:
-        {
-            auto ast = new_ast(AST_TYPE_SPEC, tok.start);
-
-            ast->type_spec.id = parse_id();
-
-            bool alias = false;
-            if (tok.type == TOK_ASSIGN) {
-                alias = true;
-                lex();
-            }
-
-            ast->type_spec.is_alias = alias;
-            ast->type_spec.type = parse_type();
-
-            if (ast->type_spec.type == NULL)
-                parser_error("Type definition must be a valid type.");
-
-            auto id = ast->type_spec.id;
-            declare_var(id->id.lit, ast, id);
-            return fill_end(ast);
-        }
-    case TOK_IMPORT:
-        {
-            auto ast = new_ast(AST_IMPORT_SPEC, tok.start);
-
-            Ast* name = NULL;
-            switch (tok.type) {
-                case TOK_PERIOD:
-                    name = new_ast(AST_ID, tok.start);
-                    name->id.lit = tok.lit;
-                    lex();
-                    name = fill_end(name);
-                    break;
-                case TOK_ID:
-                    name = parse_id();
-                    break;
-            }
-            ast->import_spec.package_name = name;
-
-            if (tok.type != TOK_STRING) {
-                parser_error("Expected string for package path in import.");
-                return NULL;
-            }
-
-            auto path = new_ast(AST_BASIC_LIT, tok.start);
-            path->basic_lit.val = tok.val;
-            path->basic_lit.lit = tok.lit;
-            lex();
-            ast->import_spec.path = fill_end(path);
-
-            return fill_end(ast);
-        }
-    }
-    return NULL; // we should never get here
-}
-
-Ast* Parser::parse_decl(Sync_Lookup_Func sync_lookup, bool import_allowed) {
-    bool ok = false;
-
-    auto start = tok.start;
-    auto spec_type = tok.type;
-
-    switch (spec_type) {
-        case TOK_FUNC:
-            {
-                auto ast = new_ast(AST_FUNC_DECL, lex());
-
-                Ast* recv = NULL;
-                if (tok.type == TOK_LPAREN)
-                    recv = parse_parameters(false);
-
-                ast->func_decl.recv = recv;
-
-                auto name = parse_id();
-                ast->func_decl.name = name;
-
-                ast->func_decl.signature = parse_signature();
-
-                if (tok.type == TOK_LBRACE)
-                    ast->func_decl.body = parse_block();
-
-                declare_var(name->id.lit, ast, name);
-
-                expect(TOK_SEMICOLON);
-                return fill_end(ast);
-            }
-        case TOK_CONST:
-        case TOK_VAR:
-        case TOK_TYPE:
-            ok = true;
-            break;
-        case TOK_IMPORT:
-            if (import_allowed)
-                ok = true;
-            else
-                parser_error("Unexpected `import` found.");
-            break;
-        default:
-            parser_error("Expected to find a declaration.");
-            break;
-    }
-
-    if (!ok) {
-        synchronize(sync_lookup);
-        return NULL; // NOTE: BAD_STMT or something instead?
-    }
-
-    bool previous_spec_contains_iota = false;
-
-    lex(); // eat the decl keyword
-    auto specs = new_list();
-
-    auto parse = [&]() {
-        auto spec = parse_spec(spec_type, &previous_spec_contains_iota);
-        if (spec == NULL)
-            synchronize(sync_lookup);
-        else
-            specs.push(spec);
-    };
-
-    // try {
-    if (tok.type == TOK_LPAREN) {
-        for (lex(); tok.type != TOK_RPAREN && tok.type != TOK_EOF; expect(TOK_SEMICOLON))
-            parse();
-        expect(TOK_RPAREN);
-    } else {
-        parse();
-    }
-    expect(TOK_SEMICOLON);
-    // } catch (Parse_Error &e) {
-    //     synchronize(sync_lookup);
-    // }
-
-    auto ast = new_ast(AST_DECL, start);
-    ast->decl.type = spec_type;
-    ast->decl.specs = specs.save();
-    return fill_end(ast);
-}
-
-void Parser::declare_var(ccstr name, Ast* decl, Ast* jump_to) {
-    auto p = decl_table.set(name);
-    p->decl_ast = decl;
-    p->where_to_jump = jump_to;
-}
-
-Ast* Parser::parse_parameters(bool ellipsis_ok) {
-    auto ret = new_ast(AST_PARAMETERS, expect(TOK_LPAREN));
-
-    auto fields = new_list();
-
-    // parse initial list of types (might also be a list of ids)
-    auto list = new_list();
-    if (tok.type != TOK_RPAREN) {
-        while (true) {
-            auto type = parse_type(ellipsis_ok);
-            if (type != NULL) list.push(type);
-            if (tok.type != TOK_COMMA) break;
-            lex();
-            if (tok.type == TOK_RPAREN) break;
-        }
-    }
-    auto ids = list.save();
-
-    // analyze our list of types
-    // case 1: func (a, b, c int, d float)
-    // case 2: func (typeA, typeB, typeC)
-    // just try to parse the next type
-
-    auto type = parse_type(ellipsis_ok);
-
-    auto push_field = [&](Ast* type, Ast* ids) {
-        auto field = new_ast(AST_FIELD, ids == NULL ? type->start : ids->start);
-        field->field.type = type;
-        field->field.ids = ids;
-        fields.push(field);
-
-        if (ids != NULL)
-            For (ids->list) declare_var(it->id.lit, field, it);
-    };
-
-    // case 1
-    if (type != NULL) {
-        push_field(type, ids);
-        while (eat_comma(TOK_RPAREN, "parameter list")) {
-            if (tok.type == TOK_RPAREN) break;
-            auto ids = parse_id_list();
-            push_field(parse_type(true), ids);
-        }
-    } else {
-        For (ids->list) push_field(it, NULL);
-    }
-
-    expect(TOK_RPAREN);
-
-    ret->parameters.fields = fields.save();
-    return fill_end(ret);
-}
-
-Ast* Parser::parse_result() {
-    if (tok.type == TOK_LPAREN)
-        return parse_parameters(false);
-
-    auto type = parse_type();
-    if (type == NULL) return NULL;
-
-    auto field = new_ast(AST_FIELD, type->start);
-    field->field.type = type;
-    field->field.ids = NULL;
-
-    auto fields = new_list();
-    fields.push(field);
-
-    auto ret = new_ast(AST_PARAMETERS, field->start);
-    ret->parameters.fields = fields.save();
-    return ret;
-}
-
-Ast* Parser::parse_signature() {
-    auto ast = new_ast(AST_SIGNATURE, tok.start);
-    ast->signature.params = parse_parameters(true);
-    ast->signature.result = parse_result();
-    return fill_end(ast);
-}
-
-Ast* Parser::parse_id() {
-    auto lit = tok.lit;
-    bool bad = false;
-
-    if (tok.type != TOK_ID) {
-        lit = "_";
-        bad = true;
-    }
-
-    auto ast = new_ast(AST_ID, expect(TOK_ID));
-    ast->id.lit = lit;
-    ast->id.bad = bad;
-    return fill_end(ast);
-}
-
-Ast* Parser::parse_type(bool is_param) {
-    Ast* ast;
-
-    switch (tok.type) {
-        case TOK_ELLIPSIS:
-            if (!is_param) break;
-            ast = new_ast(AST_ELLIPSIS, lex());
-            ast->ellipsis.type = parse_type();
-            return fill_end(ast);
-
-        case TOK_LPAREN:
-            ast = new_ast(AST_PAREN, lex());
-            ast->paren.x = parse_type();
-            expect(TOK_RPAREN);
-            return fill_end(ast);
-
-        case TOK_ID:
-            {
-                auto ret = parse_id();
-                if (tok.type == TOK_PERIOD) {
-                    auto period_pos = tok.start;
-                    lex();
-
-                    auto ast = new_ast(AST_SELECTOR_EXPR, ret->start);
-                    ast->selector_expr.x = ret;
-                    ast->selector_expr.period_pos = period_pos;
-                    ast->selector_expr.sel = parse_id();
-                    ret = fill_end(ast);
-                }
-                return ret;
-            }
-        case TOK_LBRACK:
-            {
-                ast = new_ast(AST_ILLEGAL, lex());
-
-                Ast* length = NULL, * type = NULL;
-
-                if (tok.type != TOK_RBRACK) {
-                    if (tok.type == TOK_ELLIPSIS) {
-                        length = new_ast(AST_ELLIPSIS, lex());
-                    } else {
-                        length = parse_expr(false);
-                    }
-                }
-                expect(TOK_RBRACK);
-                type = parse_type();
-
-                if (length == NULL) {
-                    ast->type = AST_SLICE_TYPE;
-                    ast->slice_type.base_type = type;
-                } else {
-                    ast->type = AST_ARRAY_TYPE;
-                    ast->array_type.length = length;
-                    ast->array_type.base_type = type;
-                }
-                return fill_end(ast);
-            }
-
-        case TOK_MUL:
-            ast = new_ast(AST_POINTER_TYPE, lex());
-            ast->pointer_type.base_type = parse_type();
-            return fill_end(ast);
-
-        case TOK_MAP:
-            ast = new_ast(AST_MAP_TYPE, lex());
-
-            expect(TOK_LBRACK);
-            ast->map_type.key_type = parse_type();
-            expect(TOK_RBRACK);
-            ast->map_type.value_type = parse_type();
-
-            return fill_end(ast);
-
-        case TOK_CHAN:
-            {
-                ast = new_ast(AST_CHAN_TYPE, lex());
-
-                auto direction = AST_CHAN_BI;
-                if (tok.type == TOK_ARROW) {
-                    lex();
-                    direction = AST_CHAN_SEND;
-                }
-
-                ast->chan_type.direction = direction;
-                ast->chan_type.base_type = parse_type();
-                return fill_end(ast);
-            }
-        case TOK_ARROW:
-            ast = new_ast(AST_CHAN_TYPE, lex());
-            expect(TOK_CHAN);
-            ast->chan_type.direction = AST_CHAN_RECV;
-            ast->chan_type.base_type = parse_type();
-            return fill_end(ast);
-        case TOK_STRUCT:
-            {
-                ast = new_ast(AST_STRUCT_TYPE, lex());
-                expect(TOK_LBRACE);
-
-                auto fields = new_list();
-                while (tok.type != TOK_RBRACE && tok.type != TOK_EOF) {
-                    auto field = new_ast(AST_STRUCT_FIELD, tok.start);
-
-                    Ast* type = NULL;
-                    Ast* ids = NULL;
-                    if (tok.type == TOK_MUL) {
-                        type = parse_type();
-                    } else {
-                        ids = parse_id_list();
-                        type = parse_type();
-                        if (type == NULL) {
-                            if (ids->list.len > 1)
-                                parser_error("Cannot declare more than one type in struct field.");
-                            type = ids->list.items[0];
-                            ids = NULL; // TODO: a way to free ASTs (use pool mem)
-
-                            if (tok.type == TOK_PERIOD) {
-                                auto period_pos = tok.start;
-                                lex();
-
-                                auto newtype = new_ast(AST_SELECTOR_EXPR, type->start);
-                                newtype->selector_expr.period_pos = period_pos;
-                                newtype->selector_expr.x = type;
-                                newtype->selector_expr.sel = parse_id();
-                                type = fill_end(newtype);
-                            }
-                        }
-                    }
-
-                    field->struct_field.ids = ids;
-                    field->struct_field.type = type;
-
-                    if (tok.type == TOK_STRING) {
-                        auto tag = new_ast(AST_BASIC_LIT, tok.start);
-                        tag->basic_lit.val = tok.val;
-                        tag->basic_lit.lit = tok.lit;
-                        lex();
-                        field->struct_field.tag = fill_end(tag);
-                    }
-
-                    fields.push(fill_end(field));
-                    expect(TOK_SEMICOLON);
-                }
-                expect(TOK_RBRACE);
-
-                ast->struct_type.fields = fields.save();
-                return fill_end(ast);
-            }
-        case TOK_INTERFACE:
-            {
-                ast = new_ast(AST_INTERFACE_TYPE, lex());
-                expect(TOK_LBRACE);
-
-                auto specs = new_list();
-                while (tok.type != TOK_RBRACE && tok.type != TOK_EOF) {
-                    auto spec = new_ast(AST_INTERFACE_SPEC, tok.start);
-
-                    Ast* name = NULL;
-                    Ast* signature = NULL;
-                    Ast* type = NULL;
-
-                    name = parse_id();
-                    if (tok.type == TOK_LPAREN) {
-                        signature = parse_signature();
-                    } else {
-                        if (tok.type == TOK_PERIOD) {
-                            auto period_pos = tok.start;
-                            lex();
-                            auto sel = parse_id();
-
-                            auto newname = new_ast(AST_SELECTOR_EXPR, name->start);
-                            newname->selector_expr.sel = sel;
-                            newname->selector_expr.x = name;
-                            newname->selector_expr.period_pos = period_pos;
-                            name = fill_end(newname);
-                        }
-                        // NOTE: be more strict about requiring this to be
-                        // TypeName?
-                        type = name;
-                        name = NULL;
-                    }
-
-                    spec->interface_spec.name = name;
-                    spec->interface_spec.type = type;
-                    spec->interface_spec.signature = signature;
-                    specs.push(spec);
-
-                    expect(TOK_SEMICOLON);
-                }
-                expect(TOK_RBRACE);
-
-                ast->interface_type.specs = specs.save();
-                return fill_end(ast);
-            }
-        case TOK_FUNC:
-            ast = new_ast(AST_FUNC_TYPE, lex());
-            ast->func_type.signature = parse_signature();
-            return fill_end(ast);
-    }
-    return NULL;
-}
-
-Ast* Parser::parse_simple_stmt() {
-    auto lhs = parse_expr_list();
-
-    switch (tok.type) {
-        case TOK_DEFINE:
-        case TOK_ASSIGN:
-        case TOK_ADD_ASSIGN:
-        case TOK_SUB_ASSIGN:
-        case TOK_MUL_ASSIGN:
-        case TOK_QUO_ASSIGN:
-        case TOK_REM_ASSIGN:
-        case TOK_AND_ASSIGN:
-        case TOK_OR_ASSIGN:
-        case TOK_XOR_ASSIGN:
-        case TOK_SHL_ASSIGN:
-        case TOK_SHR_ASSIGN:
-        case TOK_AND_NOT_ASSIGN:
-            {
-                auto assign_op = tok.type;
-
-                auto ret = new_ast(AST_ASSIGN_STMT, lhs->start);
-                ret->assign_stmt.op = assign_op;
-                ret->assign_stmt.lhs = lhs;
-
-                lex();
-
-                Ast* rhs = NULL;
-                bool is_range = false;
-
-                if (tok.type == TOK_RANGE && (assign_op == TOK_DEFINE || assign_op == TOK_ASSIGN)) {
-                    auto expr = new_ast(AST_UNARY_EXPR, lex());
-                    expr->unary_expr.op = TOK_RANGE;
-                    expr->unary_expr.rhs = parse_expr(false);
-                    fill_end(expr);
-
-                    auto list = new_list();
-                    list.push(expr);
-                    rhs = list.save();
-                } else {
-                    rhs = parse_expr_list(false);
-                }
-
-                if (assign_op == TOK_DEFINE)
-                    For (lhs->list) declare_var(it->id.lit, ret, it);
-
-                ret->assign_stmt.rhs = rhs;
-                return fill_end(ret);
-            }
-    }
-
-    if (lhs->list.len > 1) {
-        parser_error("Expected only 1 expression.");
-    }
-
-    auto expr = lhs->list.items[0];
-    if (expr == NULL) return NULL; // when does this happen?
-
-    switch (tok.type) {
-        case TOK_COLON:
-            {
-                lex();
-
-                // NOTE: remember that labels can also be jumped to with go to
-                // definition
-                auto ast = new_ast(AST_LABELED_STMT, expr->start);
-                ast->labeled_stmt.label = expr;
-                ast->labeled_stmt.stmt = parse_stmt();
-                return fill_end(ast);
-            }
-        case TOK_ARROW:
-            {
-                lex();
-
-                auto ast = new_ast(AST_SEND_STMT, expr->start);
-                ast->send_stmt.chan = expr;
-                ast->send_stmt.value = parse_expr(false);
-                return fill_end(ast);
-            }
-        case TOK_INC:
-        case TOK_DEC:
-            {
-                auto op = tok.type;
-                lex();
-
-                auto ast = new_ast(AST_INC_DEC_STMT, expr->start);
-                ast->inc_dec_stmt.x = expr;
-                ast->inc_dec_stmt.op = op;
-                return fill_end(ast);
-            }
-    }
-
-    auto ret = new_ast(AST_EXPR_STMT, expr->start);
-    ret->expr_stmt.x = expr;
-    return fill_end(ret);
-}
-
-Ast* Parser::parse_stmt() {
-    switch (tok.type) {
-        case TOK_ID:
-        case TOK_INT:
-        case TOK_FLOAT:
-        case TOK_IMAG:
-        case TOK_RUNE:
-        case TOK_STRING:
-        case TOK_FUNC:
-        case TOK_LPAREN:
-        case TOK_LBRACK:
-        case TOK_STRUCT:
-        case TOK_MAP:
-        case TOK_CHAN:
-        case TOK_INTERFACE:
-        case TOK_ADD:
-        case TOK_SUB:
-        case TOK_MUL:
-        case TOK_AND:
-        case TOK_XOR:
-        case TOK_ARROW:
-        case TOK_NOT:
-            {
-                auto stmt = parse_simple_stmt();
-
-                // labeled statements will have already parsed the following
-                // statement entirely, don't expect a semicolon.
-                if (stmt->type != AST_LABELED_STMT)
-                    expect(TOK_SEMICOLON);
-
-                return stmt;
-            }
-        case TOK_GO:
-            {
-                auto ast = new_ast(AST_GO_STMT, lex());
-                ast->go_stmt.x = parse_expr(false);
-                expect(TOK_SEMICOLON);
-                return fill_end(ast);
-            }
-        case TOK_DEFER:
-            {
-                auto ast = new_ast(AST_DEFER_STMT, lex());
-                ast->defer_stmt.x = parse_expr(false);
-                expect(TOK_SEMICOLON);
-                return fill_end(ast);
-            }
-        case TOK_RETURN:
-            {
-                auto ast = new_ast(AST_RETURN_STMT, lex());
-                if (tok.type != TOK_SEMICOLON && tok.type != TOK_RBRACE)
-                    ast->return_stmt.exprs = parse_expr_list(false);
-                expect(TOK_SEMICOLON);
-                return fill_end(ast);
-            }
-        case TOK_SEMICOLON:
-            return fill_end(new_ast(AST_EMPTY, lex()));
-        case TOK_CONST:
-        case TOK_VAR:
-        case TOK_TYPE:
-            return parse_decl(lookup_stmt_start, false);
-        case TOK_BREAK:
-        case TOK_FALLTHROUGH:
-        case TOK_CONTINUE:
-        case TOK_GOTO:
-            {
-                auto type = tok.type;
-
-                auto ast = new_ast(AST_BRANCH_STMT, lex());
-                ast->branch_stmt.branch_type = type;
-                if (type != TOK_FALLTHROUGH && tok.type == TOK_ID)
-                    ast->branch_stmt.label = parse_id();
-
-                expect(TOK_SEMICOLON);
-                return fill_end(ast);
-            }
-        case TOK_LBRACE:
-            {
-                auto ret = parse_block();
-                expect(TOK_SEMICOLON);
-                return ret;
-            }
-        case TOK_SWITCH:
-            {
-                auto ast = new_ast(AST_SWITCH_STMT, lex());
-
-                Ast* s1 = NULL, * s2 = NULL;
-
-                if (tok.type != TOK_LBRACE) {
-                    auto old = expr_lev;
-                    expr_lev = -1;
-                    defer { expr_lev = old; };
-
-                    if (tok.type != TOK_SEMICOLON) {
-                        s2 = parse_simple_stmt();
-                    }
-                    if (tok.type == TOK_SEMICOLON) {
-                        lex();
-                        s1 = s2;
-                        s2 = NULL;
-
-                        if (tok.type != TOK_LBRACE) {
-                            s2 = parse_simple_stmt();
-                        }
-                    }
-                }
-
-                auto is_type_switch_guard = [&](Ast* ast) -> bool {
-                    if (ast == NULL) return false;
-                    auto is_type_switch_assert = [&](Ast* ast) -> bool {
-                        return (ast->type == AST_TYPE_ASSERTION_EXPR &&
-                            ast->type_assertion_expr.type == NULL);
-                    };
-                    switch (ast->type) {
-                        case AST_EXPR_STMT:
-                            return is_type_switch_assert(ast->expr_stmt.x);
-                        case AST_ASSIGN_STMT:
-                            {
-                                auto& lhs = ast->assign_stmt.lhs->list;
-                                auto& rhs = ast->assign_stmt.rhs->list;
-                                if (lhs.len == 1 && rhs.len == 1 &&
-                                    is_type_switch_assert(rhs.items[0])) {
-                                    switch (ast->assign_stmt.op) {
-                                        case TOK_ASSIGN:
-                                        case TOK_DEFINE:
-                                            return true;
-                                    }
-                                }
-                            }
-                    }
-                    return false;
-                };
-
-                auto is_type_switch = is_type_switch_guard(s2);
-                expect(TOK_LBRACE);
-
-                auto clauses = new_list();
-                while (tok.type == TOK_CASE || tok.type == TOK_DEFAULT) {
-                    auto type = tok.type;
-                    auto clause = new_ast(AST_CASE_CLAUSE, lex());
-
-                    if (type == TOK_CASE) {
-                        if (is_type_switch)
-                            clause->case_clause.vals = parse_type_list();
-                        else
-                            clause->case_clause.vals = parse_expr_list(false);
-                    }
-
-                    expect(TOK_COLON);
-
-                    clause->case_clause.stmts = parse_stmt_list();
-                    clauses.push(fill_end(clause));
-                }
-
-                expect(TOK_RBRACE);
-                expect(TOK_SEMICOLON);
-
-                ast->switch_stmt.s1 = s1;
-                ast->switch_stmt.s2 = s2;
-                ast->switch_stmt.body = clauses.save();
-                ast->switch_stmt.is_type_switch = is_type_switch;
-
-                return fill_end(ast);
-            }
-        case TOK_IF:
-            {
-                fn<Ast* ()> parse_if_stmt;
-                parse_if_stmt = [&]() -> Ast* {
-                    auto ast = new_ast(AST_IF_STMT, lex());
-                    Ast* init = NULL, * cond = NULL;
-
-                    auto parse_header = [&]() {
-                        if (tok.type == TOK_LBRACE)
-                            parser_error("Missing condition in if statement.");
-
-                        auto old = expr_lev;
-                        expr_lev = -1;
-                        defer { expr_lev = old; };
-
-                        if (tok.type != TOK_SEMICOLON)
-                            init = parse_simple_stmt();
-
-                        if (tok.type == TOK_SEMICOLON) {
-                            lex();
-                            cond = parse_expr(false);
-                        } else {
-                            if (init->type != AST_EXPR_STMT)
-                                parser_error("Expected expression as condition in if header.");
-                            cond = init->expr_stmt.x;
-                            init = NULL;
-                        }
-                    };
-
-                    parse_header();
-                    ast->if_stmt.init = init;
-                    ast->if_stmt.cond = cond;
-                    ast->if_stmt.body = parse_block();
-
-                    Ast* else_ = NULL;
-                    if (tok.type == TOK_ELSE) {
-                        lex();
-                        switch (tok.type) {
-                            case TOK_IF:
-                                else_ = parse_if_stmt();
-                                break;
-                            case TOK_LBRACE:
-                                else_ = parse_block();
-                                expect(TOK_SEMICOLON);
-                                break;
-                            default:
-                                parser_error("Expected if or block after else.");
-                                break;
-                        }
-                    } else {
-                        expect(TOK_SEMICOLON);
-                    }
-
-                    ast->if_stmt.else_ = else_;
-                    return fill_end(ast);
-                };
-                return parse_if_stmt();
-            }
-        case TOK_SELECT:
-            {
-                auto ast = new_ast(AST_SELECT_STMT, lex());
-
-                expect(TOK_LBRACE);
-
-                decl_table.open_scope();
-
-                auto clauses = new_list();
-                while (tok.type == TOK_CASE || tok.type == TOK_DEFAULT) {
-                    decl_table.open_scope();
-
-                    auto clause = new_ast(AST_COMM_CLAUSE, tok.start);
-
-                    Ast* comm = NULL;
-
-                    if (tok.type == TOK_CASE) {
-                        lex();
-                        auto list = parse_expr_list();
-                        auto& lhs = list->list;
-
-                        if (tok.type == TOK_ARROW) {
-                            auto chan = lhs.items[0];
-                            comm = new_ast(AST_SEND_STMT, chan->start);
-                            comm->send_stmt.chan = chan;
-                            comm->send_stmt.value = parse_expr(false);
-                            comm = fill_end(comm);
-                        } else {
-                            auto type = tok.type;
-                            if (type == TOK_ASSIGN || type == TOK_DEFINE) {
-                                lex();
-                                auto start = tok.start;
-
-                                auto rhs = new_list();
-                                rhs.push(parse_expr(false));
-
-                                comm = new_ast(AST_ASSIGN_STMT, list->start);
-                                comm->assign_stmt.lhs = list;
-                                comm->assign_stmt.op = type;
-                                comm->assign_stmt.rhs = rhs.save();
-
-                                if (type == TOK_DEFINE)
-                                    For (list->list) declare_var(it->id.lit, comm, it);
-
-                                comm = fill_end(comm);
-                            } else {
-                                auto x = lhs.items[0];
-                                comm = new_ast(AST_EXPR_STMT, x->start);
-                                comm->expr_stmt.x = x;
-                                comm = fill_end(comm);
-                            }
-                        }
-                    } else {
-                        lex(); // skip the TOK_DEFAULT
-                    }
-
-                    expect(TOK_COLON);
-
-                    clause->comm_clause.comm = comm;
-                    clause->comm_clause.stmts = parse_stmt_list();
-
-                    decl_table.close_scope();
-
-                    clauses.push(fill_end(clause));
-                }
-
-                decl_table.close_scope();
-
-                expect(TOK_RBRACE);
-                expect(TOK_SEMICOLON);
-
-                ast->select_stmt.clauses = clauses.save();
-                return fill_end(ast);
-            }
-        case TOK_FOR:
-            {
-                auto ast = new_ast(AST_FOR_STMT, lex());
-
-                Ast* s1 = NULL;
-                Ast* s2 = NULL;
-                Ast* s3 = NULL;
-                bool is_range = false;
-
-                if (tok.type != TOK_LBRACE) {
-                    auto old = expr_lev;
-                    expr_lev = -1;
-                    defer { expr_lev = old; };
-
-                    if (tok.type != TOK_SEMICOLON) {
-                        // "for range x { ... }"
-                        if (tok.type == TOK_RANGE) {
-                            auto expr = new_ast(AST_UNARY_EXPR, lex());
-                            expr->unary_expr.op = TOK_RANGE;
-                            expr->unary_expr.rhs = parse_expr(false);
-                            expr = fill_end(expr);
-
-                            auto rhs = new_list();
-                            rhs.push(expr);
-
-                            s2 = new_ast(AST_ASSIGN_STMT, expr->start);
-                            s2->assign_stmt.rhs = rhs.save();
-                            s2->assign_stmt.lhs = NULL;
-                            s2->assign_stmt.op = TOK_ILLEGAL;
-                            s2 = fill_end(s2);
-
-                            is_range = true;
-                        } else {
-                            s2 = parse_simple_stmt();
-                            if (s2->type == AST_ASSIGN_STMT) {
-                                switch (s2->assign_stmt.op) {
-                                    case TOK_DEFINE:
-                                    case TOK_ASSIGN:
-                                        {
-                                            auto rhs = s2->assign_stmt.rhs;
-
-                                            if (rhs->type == AST_UNARY_EXPR)
-                                                if (rhs->unary_expr.op == TOK_RANGE)
-                                                    is_range = true;
-
-                                            if (s2->assign_stmt.op == TOK_DEFINE)
-                                                For (s2->assign_stmt.lhs->list)
-                                                declare_var(it->id.lit, s2, it);
-
-                                            break;
-                                        }
-                                }
-                            }
-                        }
-                    }
-
-                    if (!is_range && tok.type == TOK_SEMICOLON) {
-                        lex();
-                        s1 = s2;
-                        s2 = NULL;
-                        if (tok.type != TOK_SEMICOLON)
-                            s2 = parse_simple_stmt();
-                        expect(TOK_SEMICOLON);
-                        if (tok.type != TOK_LBRACE)
-                            s3 = parse_simple_stmt();
-                    }
-                }
-
-                ast->for_stmt.s1 = s1;
-                ast->for_stmt.s2 = s2;
-                ast->for_stmt.s3 = s3;
-                ast->for_stmt.body = parse_block();
-
-                expect(TOK_SEMICOLON);
-                return fill_end(ast);
-            }
-    }
-    return NULL;
-}
-
-Ast* Parser::parse_stmt_list() {
-    auto is_terminal = [&](Tok_Type type) -> bool {
-        switch (type) {
-            case TOK_CASE:
-            case TOK_DEFAULT:
-            case TOK_RBRACE:
-            case TOK_EOF:
-                return true;
-        }
-        return false;
-    };
-
-    auto stmts = new_list();
-    while (!is_terminal(tok.type)) {
-        auto stmt = parse_stmt();
-
-        // Here, is_terminal only checks for four different token types. If we have
-        // a syntax error, and the next token isn't terminal but doesn't result in
-        // a valid statement, we'd just loop forever. To fix that we break out if
-        // we couldn't read a statement.
-        //
-        // TODO: Should we synx or anything like tht?
-        if (stmt == NULL) break;
-
-        stmts.push(stmt);
-    }
-    return stmts.save();
-}
-
-Ast* Parser::parse_block() {
-    auto ast = new_ast(AST_BLOCK, expect(TOK_LBRACE));
-
-    decl_table.open_scope();
-    ast->block.stmts = parse_stmt_list();
-    decl_table.close_scope();
-
-    expect(TOK_RBRACE);
-    return fill_end(ast);
-}
-
-Ast* Parser::parse_call_args() {
-    auto ast = new_ast(AST_CALL_ARGS, expect(TOK_LPAREN));
-
-    expr_lev++;
-    bool ellip = false;
-
-    auto args = new_list();
-    while (tok.type != TOK_RPAREN && tok.type != TOK_EOF && !ellip) {
-        auto expr = parse_expr(false);
-        args.push(expr);
-        if (tok.type == TOK_ELLIPSIS) {
-            ellip = true;
-            lex();
-        }
-        if (!eat_comma(TOK_RPAREN, "function call")) break;
-    }
-    expect(TOK_RPAREN);
-    expr_lev--;
-
-    ast->call_args.args = args.save();
-    ast->call_args.ellip = ellip;
-    return fill_end(ast);
-}
-
-Ast* Parser::parse_primary_expr(bool lhs) {
-    Ast* ret = NULL;
-    auto start = tok.start;
-
-    // parse operand
-    switch (tok.type) {
-        case TOK_ADD:
-        case TOK_SUB:
-        case TOK_NOT:
-        case TOK_XOR:
-        case TOK_MUL:
-        case TOK_AND:
-        case TOK_ARROW:
-            // TODO: oh fuck there's some weird shit around parsing
-            // arrows...
-            ret = new_ast(AST_UNARY_EXPR, start);
-            ret->unary_expr.op = tok.type;
-            lex();
-            ret->unary_expr.rhs = parse_primary_expr(false);
-            ret = fill_end(ret);
-            break;
-        case TOK_LPAREN:
-            ret = new_ast(AST_PAREN, lex());
-            expr_lev++;
-            ret->paren.x = parse_expr(false);
-            expr_lev--;
-            expect(TOK_RPAREN);
-            ret = fill_end(ret);
-            break;
-        case TOK_INT:
-        case TOK_FLOAT:
-        case TOK_IMAG:
-        case TOK_RUNE:
-        case TOK_STRING:
-            ret = new_ast(AST_BASIC_LIT, tok.start);
-            ret->basic_lit.val = tok.val;
-            ret->basic_lit.lit = tok.lit;
-            lex();
-            ret = fill_end(ret);
-            break;
-        case TOK_ID:
-            ret = parse_id();
-            if (!lhs)
-                resolve(ret);
-            break;
-        case TOK_FUNC:
-            ret = new_ast(AST_FUNC_LIT, lex());
-            ret->func_lit.signature = parse_signature();
-            expr_lev++;
-            ret->func_lit.body = parse_block();
-            expr_lev--;
-            ret = fill_end(ret);
-            break;
-        default:
-            ret = parse_type();
-            break;
-    }
-
-    if (ret == NULL) {
-        return NULL;
-    }
-
-    auto make_ast = [&](Ast_Type type) -> Ast* {
-        return new_ast(type, ret->start);
-    };
-
-    while (true) {
-        switch (tok.type) {
-            case TOK_PERIOD:
-                {
-                    auto period_pos = tok.start;
-
-                    lex();
-                    if (lhs) resolve(ret);
-
-                    switch (tok.type) {
-                        case TOK_ID:
-                            {
-                                auto ast = make_ast(AST_SELECTOR_EXPR);
-                                ast->selector_expr.x = ret;
-                                ast->selector_expr.period_pos = period_pos;
-                                ast->selector_expr.sel = parse_id();
-                                ret = fill_end(ast);
-                                break;
-                            }
-                        case TOK_LPAREN:
-                            {
-                                lex();
-                                auto ast = make_ast(AST_TYPE_ASSERTION_EXPR);
-                                ast->type_assertion_expr.x = ret;
-                                if (tok.type == TOK_TYPE) {
-                                    lex();
-                                    ast->type_assertion_expr.type = NULL;
-                                } else {
-                                    ast->type_assertion_expr.type = parse_type();
-                                }
-                                expect(TOK_RPAREN);
-                                ret = fill_end(ast);
-                                break;
-                            }
-                        default:
-                            parser_error("expected selector or type assertion");
-
-                            auto ast = make_ast(AST_SELECTOR_EXPR);
-
-                            auto sel = new_ast(AST_ID, tok.start_before_leading_whitespace);
-                            sel->id.lit = "_";
-                            sel = fill_end(sel);
-
-                            lex();
-
-                            ast->selector_expr.x = ret;
-                            ast->selector_expr.period_pos = period_pos;
-                            ast->selector_expr.sel = sel;
-                            ret = fill_end(ast);
-                            break;
-                    }
-                }
-                break;
-            case TOK_LBRACK:
-                {
-                    lex();
-
-                    if (lhs)
-                        resolve(ret);
-
-                    expr_lev++;
-
-                    Ast* keys[3] = { NULL, NULL, NULL };
-                    s32 colons = 0;
-
-                    if (tok.type != TOK_COLON)
-                        keys[0] = parse_expr(false);
-
-                    for (u32 i = 1; tok.type == TOK_COLON && i < 3; i++) {
-                        colons++;
-                        lex();
-                        if (tok.type != TOK_COLON && tok.type != TOK_RBRACK &&
-                            tok.type != TOK_EOF)
-                            keys[i] = parse_expr(false);
-                    }
-
-                    expr_lev--;
-
-                    expect(TOK_RBRACK);
-
-                    if (colons == 0) {
-                        auto ast = make_ast(AST_INDEX_EXPR);
-                        ast->index_expr.x = ret;
-                        ast->index_expr.key = keys[0];
-                        ret = fill_end(ast);
-                        break;
-                    }
-
-                    if (colons == 2)
-                        if (keys[1] == NULL || keys[2] == NULL)
-                            parser_error("Second and third indexes are required in 3-index slice.");
-
-                    auto ast = new_ast(AST_SLICE_EXPR, ret->start);
-                    ast->slice_expr.x = ret;
-                    ast->slice_expr.s1 = keys[0];
-                    ast->slice_expr.s2 = keys[1];
-                    ast->slice_expr.s3 = keys[2];
-
-                    ret = fill_end(ast);
-                    break;
-                }
-            case TOK_LPAREN:
-                {
-                    if (lhs)
-                        resolve(ret);
-
-                    auto ast = make_ast(AST_CALL_EXPR);
-                    ast->call_expr.func = ret;
-                    ast->call_expr.call_args = parse_call_args();
-                    ret = fill_end(ast);
-                    break;
-                }
-            case TOK_LBRACE:
-                {
-                    // check that expression is a literal type
-                    // TOK_LBRACE is only allowed if part of composite literal
-                    // and if the type is an id, must be part of expression
-                    switch (ret->type) {
-                        case AST_ID:
-                            if (expr_lev < 0) goto done;
-                            break;
-                        case AST_ARRAY_TYPE:
-                        case AST_SLICE_TYPE:
-                        case AST_STRUCT_TYPE:
-                        case AST_MAP_TYPE:
-                            break;
-                        case AST_SELECTOR_EXPR:
-                            if (ret->selector_expr.x->type != AST_ID) goto done;
-                            if (expr_lev < 0) goto done;
-                            break;
-                        default:
-                            goto done;
-                    }
-
-                    if (lhs) resolve(ret);
-
-                    auto literal_value = parse_literal_value();
-
-                    auto ast = make_ast(AST_COMPOSITE_LIT);
-                    ast->composite_lit.base_type = ret;
-                    ast->composite_lit.literal_value = literal_value;
-                    ret = fill_end(ast);
-
-                    break;
-                }
-            default:
-                goto done;
-        }
-    }
-done:
-
-    return ret;
-}
-
-Ast* Parser::parse_literal_value() {
-    auto ast = new_ast(AST_LITERAL_VALUE, expect(TOK_LBRACE));
-
-    auto parse_literal_elem = [&]() -> Ast* {
-        return (tok.type == TOK_LBRACE ? parse_literal_value()
-            : parse_expr(false));
-    };
-
-    auto elems = new_list();
-    while (tok.type != TOK_RBRACE && tok.type != TOK_EOF) {
-        auto item = new_ast(AST_LITERAL_ELEM, tok.start);
-
-        Ast* key = parse_literal_elem();
-        Ast* elem = NULL;
-        if (tok.type == TOK_COLON) {
-            lex();
-            elem = parse_literal_elem();
-        } else {
-            elem = key;
-            key = NULL;
-        }
-
-        item->literal_elem.key = key;
-        item->literal_elem.elem = elem;
-        elems.push(fill_end(item));
-
-        if (!eat_comma(TOK_RBRACE, "composite literal"))
-            break;
-    }
-
-    expect(TOK_RBRACE);
-    ast->literal_value.elems = elems.save();
-    return fill_end(ast);
-}
-
-bool Parser::eat_comma(Tok_Type closing, ccstr context) {
-    if (tok.type == TOK_COMMA) {
-        lex();
-        return true;
-    }
-    if (tok.type != closing)
-        parser_error("Expected %s in %s.", tok_type_str(closing), context);
-    return false;
-}
-
-Ast* Parser::parse_expr(bool lhs, OpPrec prec) {
-    auto x = parse_primary_expr(lhs);
-
-    while (true) {
-        auto oprec = op_to_prec(tok.type);
-        auto op = tok.type;
-
-        if (prec >= oprec) return x;
-
-        if (lhs) {
-            resolve(x);
-            lhs = false;
-        }
-
-        lex();
-
-        auto bin = new_ast(AST_BINARY_EXPR, x->start);
-        bin->binary_expr.lhs = x;
-        bin->binary_expr.op = tok.type;
-        bin->binary_expr.rhs = parse_expr(false, oprec);
-        x = fill_end(bin);
-    }
-}
-
-Ast* Parser::parse_type_list() {
-    auto types = new_list();
-    types.push(parse_type());
-    while (tok.type == TOK_COMMA) {
-        lex();
-        types.push(parse_expr(false));
-    }
-    return types.save();
-}
-
-void Parser::resolve(Ast* id) {
-    if (id->type != AST_ID) return;
-    if (streq(id->id.lit, "_")) return;
-
-    auto decl = decl_table.get(id->id.lit);
-    id->id.decl = decl.decl_ast;
-    id->id.decl_id = decl.where_to_jump;
-}
-
-Ast* Parser::parse_expr_list(bool lhs) {
-    auto exprs = new_list();
-
-    exprs.push(parse_expr(lhs));
-    while (tok.type == TOK_COMMA) {
-        lex();
-        exprs.push(parse_expr(lhs));
-    }
-
-    auto ret = exprs.save();
-
-    if (lhs) {
-        switch (tok.type) {
-            case TOK_DEFINE:
-            case TOK_COLON:
-                break;
-            default:
-                For (ret->list) resolve(it);
-                break;
-        }
-    }
-
-    return ret;
-}
-
-Ast* Parser::parse_package_decl() {
-    auto pkg = new_ast(AST_PACKAGE_DECL, expect(TOK_PACKAGE));
-    pkg->package_decl.name = parse_id();
-    // NOTE: check for invalid "_"
-    expect(TOK_SEMICOLON);
-    return fill_end(pkg);
-}
-
-Ast* Parser::parse_file() {
-    auto ast = new_ast(AST_SOURCE, tok.start);
-    ast->source.package_decl = parse_package_decl();
-
-    auto imports = new_list();
-    while (tok.type == TOK_IMPORT) {
-        auto decl = parse_decl(lookup_decl_start, true);
-        if (decl != NULL)
-            imports.push(decl);
-    }
-    ast->source.imports = imports.save();
-
-    decl_table.open_scope();
-
-    auto decls = new_list();
-    while (tok.type != TOK_EOF) {
-        auto decl = parse_decl(lookup_decl_start, false);
-        if (decl != NULL)
-            decls.push(decl);
-    }
-    ast->source.decls = decls.save();
-
-    decl_table.close_scope();
-    return fill_end(ast);
-}
-
-Ast* Parser::fill_end(Ast* ast) {
-    ast->end = tok.start_before_leading_whitespace;
-    return ast;
-}
-
-cur2 Parser::lex() {
-    auto ret = tok.start;
-    do {
-        lex_with_comments();
-        if (tok.type != TOK_COMMENT)
-            last_token_type = tok.type;
-    } while (tok.type == TOK_COMMENT);
-
-    if (dump_decl_table_at.x != -1)
-        if (ret < dump_decl_table_at && tok.start > dump_decl_table_at)
-            decl_table_dump = decl_table.get_names();
-
-    return ret;
-}
-
-#undef expect
-#undef parser_error
-
-File_Ast* Go_Index::make_file_ast(Ast* ast, ccstr file, ccstr import_path) {
-    File_Ast* ret = alloc_object(File_Ast);
-    ret->ast = ast;
-    ret->file = file;
-    ret->import_path = import_path;
-    return ret;
-}
-
-bool Go_Index::match_import_spec(Ast* import_spec, ccstr want) {
-    auto name = import_spec->import_spec.package_name;
-    if (name != NULL)
-        return streq(name->id.lit, want);
-
-    auto path_str = import_spec->import_spec.path->basic_lit.val.string_val;
-    auto imp = resolve_import(path_str);
-    if (imp == NULL)
-        return false;
-
-    return streq(imp->package_name, want);
-}
-
-void Go_Index::list_decls_in_source(File_Ast* source, int flags, fn<void(Named_Decl*)> fn) {
-    auto& s = source->ast->source;
-
-    auto process_decl = [&](Ast* decl, Named_Decl* ret) {
-        ret->decl = source->dup(decl);
-
-        switch (decl->type) {
-            case AST_FUNC_DECL:
-                {
-                    ret->items = alloc_list<Named_Decl_Item>(1);
-
-                    auto item = ret->items->append();
-                    item->name = decl->func_decl.name;
-                    item->spec = decl;
-                    break;
-                }
-            case AST_DECL:
-                switch (decl->decl.type) {
-                    case TOK_TYPE:
-                        {
-                            ret->items = alloc_list<Named_Decl_Item>(decl->decl.specs->list.len);
-                            For (decl->decl.specs->list) {
-                                auto item = ret->items->append();
-                                item->name = it->type_spec.id;
-                                item->spec = it;
-                            }
-                            break;
-                        }
-                    case TOK_VAR:
-                    case TOK_CONST:
-                        {
-                            u32 len = 0;
-                            For (decl->decl.specs->list) { len += it->value_spec.ids->list.len; }
-                            ret->items = alloc_list<Named_Decl_Item>(len);
-                            For (decl->decl.specs->list) {
-                                auto spec = it;
-                                For (it->value_spec.ids->list) {
-                                    auto item = ret->items->append();
-                                    item->spec = spec;
-                                    item->name = it;
-                                }
-                            }
-                            break;
-                        }
-                    case TOK_IMPORT:
-                        ret->items = alloc_list<Named_Decl_Item>(decl->decl.specs->list.len);
-                        For (decl->decl.specs->list) {
-                            auto path = it->import_spec.path;
-                            auto name = it->import_spec.package_name;
-                            if (name != NULL) {
-                                auto item = ret->items->append();
-                                item->name = name;
-                                item->spec = it;
-                                continue;
-                            }
-
-                            auto path_str = path->basic_lit.val.string_val;
-                            auto resolved_import = resolve_import(path_str);
-                            if (resolved_import == NULL) continue;
-
-                            auto ast = alloc_object(Ast);
-                            ast->type = AST_ID;
-                            ast->id.lit = resolved_import->package_name;
-
-                            auto item = ret->items->append();
-                            item->name = ast;
-                            item->spec = it;
-                        }
-                        break;
-                }
-                break;
-        }
-    };
-
-    if (flags & LISTDECLS_IMPORTS) {
-        For (s.imports->list) {
-            Named_Decl decl;
-            process_decl(it, &decl);
-            fn(&decl);
-        }
-    }
-
-    if (flags & LISTDECLS_DECLS) {
-        For (s.decls->list) {
-            Named_Decl decl;
-            process_decl(it, &decl);
-            fn(&decl);
-        }
-    }
-}
-
-List<Named_Decl>* Go_Index::list_decls_in_source(File_Ast* source, int flags, List<Named_Decl>* out) {
-    if (out == NULL)
-        out = alloc_list<Named_Decl>();
-    list_decls_in_source(source, flags, [&](Named_Decl* it) { out->append(it); });
-    return out;
-}
-
-File_Ast* Go_Index::find_decl_in_source(File_Ast* source, ccstr desired_decl_name, bool import_only) {
-    int flags = LISTDECLS_IMPORTS;
-    if (!import_only)
-        flags |= LISTDECLS_DECLS;
-
-    auto make_result = [&](Ast* decl) -> File_Ast* {
-        auto ret = alloc_object(File_Ast);
-        ret->ast = decl;
-        ret->file = source->file;
-        return ret;
-    };
-
-    auto decls = list_decls_in_source(source, flags);
-    for (auto&& decl : *decls)
-        For (*decl.items)
-            if (streq(it.name->id.lit, desired_decl_name))
-                return make_result(it.spec);
-
-    return NULL;
-}
-
-Ast *Index_Reader::parse_decl_from_entry(Index_Entry *entry) {
-    Ast *ast = NULL;
-    auto filepath = path_join(meta.package_path, entry->filename);
-    with_parser_at_location(filepath, entry->hdr.pos, [&](Parser *p) {
-        switch (entry->hdr.type) {
-        case IET_FUNC: ast = p->parse_decl(lookup_decl_start); break;
-        case IET_CONST: ast = p->parse_spec(TOK_CONST); break;
-        case IET_VAR: ast = p->parse_spec(TOK_VAR); break;
-        case IET_TYPE: ast = p->parse_spec(TOK_TYPE); break;
-        }
-    });
-    return ast;
-}
-
-File_Ast* Go_Index::find_decl_in_package(ccstr desired_decl_name, ccstr import_path) {
-    auto index_path = get_index_path(import_path);
-
-    Index_Reader reader;
-    if (!reader.init(index_path)) return NULL;
-    defer { reader.cleanup(); };
-
-    Index_Entry res;
-    if (!reader.find_decl(desired_decl_name, &res)) return NULL;
-
-    auto ast = reader.parse_decl_from_entry(&res);
-    if (ast == NULL) return  NULL;
-
-    auto filepath = path_join(reader.meta.package_path, res.filename);
-    return make_file_ast(ast, filepath, import_path);
-}
-
-List<Named_Decl>* Go_Index::list_decls_in_package(ccstr path, ccstr import_path) {
-    auto files = list_source_files(path);
-    if (files == NULL) return NULL;
-
-    auto ret = alloc_list<Named_Decl>();
-    For (*files) {
-        auto filename = path_join(path, it);
-        auto ast = parse_file_into_ast(filename);
-        if (ast != NULL)
-            list_decls_in_source(make_file_ast(ast, filename, import_path), LISTDECLS_DECLS, ret);
-    }
-
-    return ret;
-}
-
-List<ccstr> *Go_Index::list_decl_names(ccstr import_path) {
-    Index_Reader reader;
-    if (!reader.init(get_index_path(import_path))) return NULL;
-    defer { reader.cleanup(); };
-
-    auto decls = reader.list_decls();
-    if (decls == NULL) return NULL;
-
-    auto ret = alloc_list<ccstr>(decls->len);
-    For (*decls) ret->append(our_strcpy(it.name));
-    return ret;
-}
-
-File_Ast* Go_Index::find_decl_of_id(File_Ast* fa) {
-    auto ret = find_decl_of_id(fa, true);
-    if (ret == NULL)
-        ret = find_decl_of_id(fa, false);
-    return ret;
-}
-
-File_Ast* Go_Index::find_decl_of_id(File_Ast* fa, bool import_only) {
-    auto id = fa->ast;
-    if (id->id.decl != NULL)
-        return fa->dup(id->id.decl);
-
-    auto lit = id->id.lit;
-    if (import_only)
-        return find_decl_in_source(fa->dup(parse_file_into_ast(fa->file)), lit, true);
-    return find_decl_in_package(lit, fa->import_path);
-}
-
-File_Ast* Go_Index::get_base_type(File_Ast* type) {
-    while (true) {
-        auto ast = unparen(type->ast);
-        switch (ast->type) {
-        case AST_POINTER_TYPE:
-            {
-                auto base_type = get_base_type(type->dup(ast->pointer_type.base_type));
-                auto ast2 = new_ast(AST_POINTER_TYPE, new_cur2(0, 0));
-                ast2->pointer_type.base_type = base_type->ast;
-                return base_type->dup(ast2);
-            }
-            break;
-        case AST_ID:
-            {
-                auto decl = find_decl_of_id(type->dup(ast));
-                if (decl == NULL)
-                    goto done;
-
-                auto new_type = get_type_from_decl(decl, ast->id.lit);
-                if (new_type == NULL)
-                    goto done;
-
-                type = new_type;
-                break;
-            }
-        case AST_SELECTOR_EXPR:
-            {
-                auto& sel = ast->selector_expr;
-                if (sel.x->type != AST_ID)
-                    goto done;
-
-                goto done;  // TODO: fix this shit below
-
-                /*
-                // FIXME: it just makes no sense what i'm doing here
-                // i think i was originally intending to use sel.x->id.lit to LOOK UP the package path, and append that to GOPATH
-                // but now we should just call resolve_import
-                //
-                // Also, find_decl_in_package should be passed an import path;
-                // I just don't know what the fuck this code even does right now
-                auto pkg_path = path_join(GOPATH, sel.x->id.lit);
-                auto decl = find_decl_in_package(pkg_path, sel.sel->id.lit, NULL);
-
-                auto new_type = get_type_from_decl(decl, sel.sel->id.lit);
-                if (new_type == NULL)
-                    goto done;
-
-                type = new_type;
-                break;
-                */
-            }
-        default:
-            goto done;
-        }
-    }
-done:
-    return type;
-}
-
-File_Ast* Go_Index::get_type_from_decl(File_Ast* decl, ccstr id) {
-    auto ast = decl->ast;
-    switch (ast->type) {
-    case AST_FIELD:
-        For (ast->field.ids->list)
-            if (it->type == AST_ID && streq(it->id.lit, id))
-                return decl->dup(ast->field.type);
-        break;
-    case AST_ASSIGN_STMT:
-        {
-            // a, b, c = foo()                 // lhs.len = 1
-            // a, b, c = foo(), bar(), baz()   // lhs.len > 1 and rhs.len == 1
-            // a = foo()                       // lhs.len > 1 and rhs.len == lhs.len
-
-            auto op = ast->assign_stmt.op;
-            if (op != TOK_DEFINE && op != TOK_ASSIGN) return NULL;
-
-            auto lhs = ast->assign_stmt.lhs;
-            auto rhs = ast->assign_stmt.rhs;
-
-            if (lhs->list.len == 1) {
-                if (!streq(lhs->list[0]->id.lit, id)) return NULL;
-                if (rhs->list.len != 1) return NULL;
-
-                auto expr = rhs->list[0];
-
-                auto r = infer_type(decl->dup(expr));
-                if (r == NULL) return NULL;
-
-                auto type = r->type->ast;
-
-                if (type->type == AST_PARAMETERS) {
-                    if (type->parameters.fields->list.len > 1) return NULL;
-
-                    auto field = type->parameters.fields->list[0];
-                    auto ids = field->field.ids;
-
-                    if (ids != NULL && ids->list.len > 1) return NULL;
-
-                    r->type->ast = field->field.type;
-                }
-
-                return r->type;
-            }
-
-            // at this point, lhslen > 1
-
-            i32 idx = -1;
-            {
-                i32 i = 0;
-                For (ast->assign_stmt.lhs->list) {
-                    if (it->type == AST_ID && streq(it->id.lit, id)) {
-                        idx = i;
-                        break;
-                    }
-                    i++;
-                }
-            }
-
-            if (idx == -1) return NULL;
-
-            // ok, so we've identified the `idx`th item in lhs as the matching identifier.
-            // now we have to figure out what element in rhs it corresponds to.
-
-            // figure out how many values are in rhs.
-            auto rhslen = rhs->list.len;
-            if (rhslen == 1) {
-                auto first = rhs->list[0];
-                if (first->type == AST_PARAMETERS) {
-                    s32 count = 0;
-                    For (first->parameters.fields->list)
-                        count += it->field.ids->list.len;
-                    rhslen = count;
-                }
-            }
-
-            // if rhslen == 1, expect it to be a parameter list
-            if (rhslen == 1) {
-                auto r = infer_type(decl->dup(rhs->list[0]));
-                if (r == NULL) return NULL;
-
-                auto type = r->type->ast;
-                if (type->type != AST_PARAMETERS) return NULL;
-
-                // get the type of the `idx`th parameter.
-                {
-                    s32 offset = 0;
-                    For (type->parameters.fields->list) {
-                        s32 len = 1;
-                        if (it->field.ids != NULL)
-                            len = it->field.ids->list.len;
-                        if (offset + len >= idx)
-                            return r->type->dup(it->field.type);
-                        offset += len;
-                    }
-                }
-
-                // somehow didn't find anything? (if rhslen <= idx)
-                return NULL;
-            }
-
-            if (rhslen == lhs->list.len) {
-                auto r = infer_type(decl->dup(rhs->list[idx]));
-                return r == NULL ? NULL : r->type;
-            }
-
-            // rhslen != lhslen
-            return NULL;
-        }
-    case AST_VALUE_SPEC:
-        {
-            if (ast->value_spec.type != NULL)
-                return decl->dup(ast->value_spec.type);
-
-            auto& spec_ids = ast->value_spec.ids->list;
-
-            i32 idx = -1;
-            for (u32 i = 0; i < spec_ids.len; i++) {
-                if (streq(spec_ids[i]->id.lit, id)) {
-                    idx = i;
-                    break;
-                }
-            }
-            if (idx == -1) return NULL;
-
-            auto& spec_vals = ast->value_spec.vals->list;
-
-            if (spec_ids.len == spec_vals.len) {
-                auto r = infer_type(decl->dup(spec_vals[idx]));
-                return r == NULL ? NULL : r->type;
-            } else {
-                do {
-                    if (spec_vals.len != 1) break;
-
-                    auto val = spec_vals[0];
-                    if (val == NULL) break;
-                    if (val->type != AST_CALL_EXPR &&
-                        val->type != AST_TYPE_ASSERTION_EXPR)
-                        break;
-
-                    auto r = infer_type(decl->dup(val));
-                    if (r == NULL) break;
-
-                    Ast* type = r->type->ast;
-                    if (type->type != AST_PARAMETERS) break;
-
-                    auto& fields = type->parameters.fields->list;
-                    if (idx >= fields.len) break;
-
-                    auto field = fields[idx];
-                    return r->type->dup(field->field.type);
-                } while (0);
-            }
-            break;
-        }
-    case AST_TYPE_SPEC:
-        return decl->dup(ast->type_spec.type);
-    case AST_FUNC_DECL:
-    case AST_IMPORT_SPEC:
-        return decl;
-    }
-    return NULL;
+    if (dep == NULL) return NULL;
+
+    auto ri = alloc_object(Resolved_Import);
+    ri->path = dep->resolved_path;
+    ri->package_name = dep->package_name;
+    return ri;
 }
 
 /*
- * Given an AST_STRUCT_TYPE or AST_INTERFACE_TYPE, returns the interim type
+ * Given a TS_STRUCT_TYPE or TS_INTERFACE_TYPE, returns the interim type
  * (in Ast form) of a given field. Recursively handles embedded
  * fields/specs.
  */
-File_Ast* Go_Index::find_field_or_method_in_type(File_Ast* base_type, File_Ast* interim_type, ccstr name) {
-    File_Ast result;
-    bool found = false;
-
-    {
-        SCOPED_FRAME();
-        auto fields = list_fields_and_methods_in_type(base_type, interim_type);
-        For (*fields) {
-            if (streq(it.id.ast->id.lit, name)) {
-                found = true;
-                memcpy(&result, &it.decl, sizeof(it.decl));
-                break;
-            }
-        }
-    }
-
-    if (found) {
-        auto ret = alloc_object(File_Ast);
-        memcpy(ret, &result, sizeof(result));
-        return ret;
-    }
-
-    return NULL;
-}
-
-/*
- * This infers the type of expr and returns the decl of the immediate type
- * and base type. For example:
- *
- *     type a struct { foo int }
- *     type b a
- *     type c b
- *     var x c
- *
- * infer_type("x") will return c as the immediate type and struct { foo int
- * } as the base type.
- */
-Infer_Res* Go_Index::infer_type(File_Ast* expr, bool resolve) {
-    File_Ast *interim_type = NULL;
-
-    auto ast = unparen(expr->ast);
-    switch (ast->type) {
-    case AST_UNARY_EXPR:
-        {
-            auto r = infer_type(expr->dup(ast->unary_expr.rhs));
-            if (r == NULL) goto done;
-
-            switch (ast->unary_expr.op) {
-            // case TOK_RANGE: // idk even what to do here
-            case TOK_ADD:
-            case TOK_SUB:
-            case TOK_NOT:
-            case TOK_XOR:
-                {
-                    auto id = new_ast(AST_ID, new_cur2(0, 0));
-                    id->id.lit = "int";
-                    interim_type = make_file_ast(id, NULL, NULL);
-                }
-                break;
-            case TOK_MUL:
-                {
-                    if (r->base_type == NULL) break;
-                    auto type = r->base_type->ast;
-                    if (type->type != AST_POINTER_TYPE) break;
-                    interim_type = r->base_type->dup(type->pointer_type.base_type);
-                }
-                break;
-            case TOK_AND:
-                {
-                    // don't need base type here
-                    auto type = r->type->ast;
-                    auto new_type = new_ast(AST_POINTER_TYPE, new_cur2(0, 0));
-                    new_type->pointer_type.base_type = type;
-                    interim_type = r->type->dup(new_type);
-                }
-                break;
-            case TOK_ARROW:
-                {
-                    if (r->base_type == NULL) break;
-                    auto type = r->base_type->ast;
-                    if (type->type != AST_CHAN_TYPE) break;
-                    interim_type = r->base_type->dup(type->chan_type.base_type);
-                }
-                break;
-            }
-        }
-        break;
-    case AST_CALL_EXPR:
-        {
-            auto r = infer_type(expr->dup(ast->call_expr.func), true);
-            if (r == NULL) goto done;
-            if (r->base_type == NULL) goto done;
-
-            auto type = r->base_type->ast;
-            Ast* sig = NULL;
-
-            if (type->type == AST_FUNC_DECL)
-                sig = type->func_decl.signature;
-            else if (type->type == AST_FUNC_LIT)
-                sig = type->func_lit.signature;
-            else
-                goto done;
-
-            interim_type = r->base_type->dup(sig->signature.result);
-        }
-        break;
-    case AST_INDEX_EXPR:
-        do {
-            auto r = infer_type(expr->dup(ast->call_expr.func), true);
-            if (r == NULL) break;
-
-            auto type = r->base_type->ast;
-            while (type->type == AST_POINTER_TYPE)
-                type = type->pointer_type.base_type;
-            if (type == NULL) break;
-
-            switch (type->type) {
-            case AST_ARRAY_TYPE:
-                interim_type = r->base_type->dup(type->array_type.base_type);
-                break;
-            case AST_MAP_TYPE:
-                interim_type = r->base_type->dup(type->map_type.value_type);
-                break;
-            case AST_SLICE_TYPE:
-                interim_type = r->base_type->dup(type->slice_type.base_type);
-                break;
-            case AST_ID:
-                if (streq(ast->id.lit, "string"))
-                    interim_type = make_file_ast(PRIMITIVE_TYPE, NULL, NULL);
-                break;
-            }
-        } while (0);
-        break;
-    case AST_SELECTOR_EXPR:
-        do {
-            auto& selexpr = ast->selector_expr;
-
-            if (selexpr.x->type == AST_ID) {
-                do {
-                    if (selexpr.x->id.decl != NULL) break;
-
-                    auto file = parse_file_into_ast(expr->file);
-                    if (file == NULL) break;
-
-                    auto decl = find_decl_in_source(expr->dup(file), selexpr.x->id.lit);
-                    if (decl == NULL) break;
-                    if (decl->ast->type != AST_IMPORT_SPEC) break;
-
-                    auto import_path = decl->ast->import_spec.path->basic_lit.val.string_val;
-                    auto sel = selexpr.sel->id.lit;
-
-                    decl = find_decl_in_package(sel, import_path);
-                    if (decl == NULL) break;
-
-                    interim_type = get_type_from_decl(decl, sel);
-                    goto done;
-                } while (0);
-            }
-
-            auto r = infer_type(expr->dup(selexpr.x), true);
-            if (r == NULL) break;
-
-            auto field = find_field_or_method_in_type(r->base_type, r->type, selexpr.sel->id.lit);
-            if (field == NULL) break;
-
-            switch (field->ast->type) {
-            case AST_FUNC_DECL:
-                interim_type = field;
-                break;
-            case AST_STRUCT_FIELD:
-                interim_type = field->dup(field->ast->struct_field.type);
-                break;
-            }
-        } while (0);
-        break;
-    case AST_SLICE_EXPR:
-        {
-            auto r = infer_type(expr->dup(ast->slice_expr.x));
-            if (r == NULL) goto done;
-            interim_type = r->type;
-        }
-        break;
-    case AST_TYPE_ASSERTION_EXPR:
-        interim_type = expr->dup(ast->type_assertion_expr.type);
-        break;
-    case AST_ID:
-        {
-            auto decl = find_decl_of_id(expr->dup(ast));
-            if (decl == NULL) goto done;
-            interim_type = get_type_from_decl(decl, ast->id.lit);
-        }
-        break;
-    case AST_COMPOSITE_LIT:
-        interim_type = expr->dup(ast->composite_lit.base_type);
-        break;
-        break;
-    }
-done:
-
-    if (interim_type == NULL) return NULL;
-
-    File_Ast* base_type = NULL;
-    if (resolve) {
-        base_type = get_base_type(interim_type);
-        if (base_type == NULL) return NULL;
-    }
-
-    auto result = alloc_object(Infer_Res);
-    result->type = interim_type;
-    result->base_type = base_type;
-
-    return result;
-}
-
-ccstr get_workspace_import_path() {
-    if (world.wksp.gomod_exists) {
-        auto module_path = world.wksp.gomod_info.module_path;;
+ccstr Go_Indexer::get_workspace_import_path() {
+    if (index.gomod->exists) {
+        auto module_path = index.gomod->module_path;
         if (module_path != NULL) return module_path;
     }
 
     // if we're inside gopath
     auto gopath_base = path_join(GOPATH, "src");
-    if (str_starts_with(world.wksp.path, gopath_base))
-        return get_path_relative_to(world.wksp.path, gopath_base);
-
-    return NULL; // should we just panic? this is a pretty bad situation
-}
-
-// This function assumes that decl contains id.
-Ast* Go_Index::locate_id_in_decl(Ast* decl, ccstr id) {
-    switch (decl->type) {
-    case AST_IMPORT_SPEC:
-        {
-            auto name = decl->import_spec.package_name;
-            if (name != NULL)
-                return name;
-            return decl;
-        }
-    case AST_VALUE_SPEC:
-        For (decl->value_spec.ids->list) {
-            if (streq(it->id.lit, id))
-                return it;
-        }
-        break;
-    case AST_TYPE_SPEC:
-        return decl->type_spec.id;
-    case AST_FUNC_DECL:
-        return decl->func_decl.name;
+    if (str_starts_with(index.current_path, gopath_base)) {
+        auto ret = (cstr)get_path_relative_to(index.current_path, gopath_base);
+        return normalize_path_separator(ret, '/');
     }
+
+    // should we just panic? this is a pretty bad situation
+    // maybe this should be a check on program start?
     return NULL;
 }
 
-Jump_To_Definition_Result* Go_Index::jump_to_definition(ccstr filepath, cur2 pos) {
-    Ast* file = NULL;
+Goresult *Go_Indexer::find_decl_of_id(ccstr id, cur2 id_pos, Go_Ctx *ctx) {
+    // we have to check if id is declared in local decls, imports, or
+    // toplevels. this is all info that will be stored in our index. TODO.
 
-    {
-        auto iter = file_loader(filepath);
-        defer { iter->cleanup(); };
-        if (iter == NULL) return NULL;
+    return find_decl_in_package(id, ctx->import_path, ctx->resolved_path);
+}
 
-        if (iter->type == IT_BUFFER)
-            pos = iter->buffer_params.it.buf->offset_to_cur(pos.x);
+ccstr Go_Indexer::get_filepath_from_ctx(Go_Ctx *ctx) {
+    return path_join(ctx->resolved_path, ctx->filename);
+}
 
-        Parser p;
-        p.init(iter);
-        p.filepath = filepath;
-        defer { p.cleanup(); };
-        file = p.parse_file();
-    }
+Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 pos) {
+    auto pf = parse_file(filepath);
+    if (pf == NULL) return NULL;
+    defer { free_parsed_file(pf); };
 
-    if (file == NULL) return NULL;
+    auto file = pf->root;
 
-    Jump_To_Definition_Result result;
-    result.file = NULL;
+    Go_Ctx ctx = {0};
+    ctx.import_path = file_to_import_path(filepath);
+    ctx.resolved_path = normalize_resolved_path(our_dirname(filepath));
+    ctx.filename = our_basename(filepath);
 
-    find_nodes_containing_pos(file, pos, [&](Ast *ast) -> Walk_Action {
-        auto contains_pos = [&](Ast* ast) -> bool {
-            return locate_pos_relative_to_ast(pos, ast) == 0;
+    Jump_To_Definition_Result result = {0};
+
+    find_nodes_containing_pos(file, pos, [&](Ast_Node *node) -> Walk_Action {
+        auto contains_pos = [&](Ast_Node *node) -> bool {
+            return cmp_pos_to_node(pos, node) == 0;
         };
 
-        switch (ast->type) {
-        case AST_PACKAGE_DECL:
-            if (contains_pos(ast->package_decl.name)) {
-                result.file = filepath;
-                result.pos = ast->package_decl.name->start;
+        switch (node->type) {
+        case TS_PACKAGE_CLAUSE:
+            {
+                auto name_node = node->child();
+                if (contains_pos(name_node)) {
+                    result.file = filepath;
+                    result.pos = name_node->start;
+                }
             }
             return WALK_ABORT;
-        case AST_IMPORT_SPEC:
+
+        case TS_IMPORT_SPEC:
             result.file = filepath;
-            result.pos = ast->start;
+            result.pos = node->start;
             return WALK_ABORT;
-        case AST_SELECTOR_EXPR:
+
+        case TS_QUALIFIED_TYPE:
+        case TS_SELECTOR_EXPRESSION:
             {
-                auto sel = ast->selector_expr.sel;
-                if (!contains_pos(sel))
-                    return WALK_CONTINUE;
+                auto sel_node = node->field(node->type == TS_QUALIFIED_TYPE ? TSF_NAME : TSF_FIELD);
+                if (!contains_pos(sel_node)) return WALK_CONTINUE;
 
-                auto x = ast->selector_expr.x;
-                if (x->type == AST_ID) {
-                    auto try_to_find_package = [&]() -> bool {
-                        auto spec = find_decl_of_id(make_file_ast(x, filepath, file_to_import_path(filepath)));
-                        if (spec == NULL) return false;
-                        if (spec->ast->type != AST_IMPORT_SPEC) return false;
+                auto sel_name = sel_node->string();
+                auto operand_node = node->field(node->type == TS_QUALIFIED_TYPE ? TSF_PACKAGE : TSF_OPERAND);
 
-                        auto import_path = spec->ast->import_spec.path->basic_lit.val.string_val;
-                        auto decl = find_decl_in_package(sel->id.lit, import_path);
+                if (operand_node->type == TS_IDENTIFIER || operand_node->type == TS_PACKAGE_IDENTIFIER) {
+                    auto id = operand_node->string();
+                    do {
+                        ccstr resolved_path = NULL;
+                        auto import_path = find_import_path_referred_to_by_id(id, &ctx, &resolved_path);
+                        if (import_path == NULL) break;
+                        if (resolved_path == NULL) break;
 
-                        if (decl == NULL) return false;
+                        auto res = find_decl_in_package(sel_name, import_path, resolved_path);
+                        if (res == NULL) break;
 
-                        auto id = locate_id_in_decl(decl->ast, sel->id.lit);
-                        if (id == NULL) return false;
-
-                        result.file = decl->file;
-                        result.pos = id->start;
-                        return true;
-                    };
-
-                    if (try_to_find_package())
+                        result.pos = res->decl->name_start;
+                        result.file = get_filepath_from_ctx(res->ctx);
                         return WALK_ABORT;
+                    } while (0);
                 }
 
                 do {
-                    auto r = infer_type(make_file_ast(ast->selector_expr.x, filepath, file_to_import_path(filepath)), true);
-                    if (r == NULL) break;
+                    auto res = infer_type(operand_node, &ctx);
+                    if (res == NULL) break;
 
-                    auto field = find_field_or_method_in_type(r->base_type, r->type, sel->id.lit);
-                    if (field == NULL) break;
+                    auto resolved_res = resolve_type(res->gotype, res->ctx);
+                    if (resolved_res == NULL) break;
 
-                    result.file = field->file;
-                    result.pos = field->ast->start;
+                    auto results = alloc_list<Goresult>();
+                    list_fields_and_methods(
+                        res,
+                        resolved_res,
+                        results
+                    );
+
+                    For (*results) {
+                        auto field = it.decl;
+                        if (streq(field->name, sel_name)) {
+                            result.pos = field->name_start;
+                            result.file = get_filepath_from_ctx(it.ctx);
+                            return WALK_ABORT;
+                        }
+                    }
                 } while (0);
-
-                return WALK_ABORT;
             }
-        case AST_ID:
-            do {
-                auto decl = find_decl_of_id(make_file_ast(ast, filepath, file_to_import_path(filepath)));
-                if (decl == NULL) break;
+            return WALK_ABORT;
 
-                auto id = locate_id_in_decl(decl->ast, ast->id.lit);
-                if (id == NULL) break;
-
-                result.file = decl->file;
-                result.pos = id->start;
-            } while (0);
+        case TS_IDENTIFIER:
+            {
+                auto res = find_decl_of_id(node->string(), node->start, &ctx);
+                if (res != NULL) {
+                    result.file = get_filepath_from_ctx(res->ctx);
+                    result.pos = res->decl->name_start;
+                }
+            }
             return WALK_ABORT;
         }
+
         return WALK_CONTINUE;
     });
 
-    if (result.file == NULL)
-        return NULL;
+    if (result.file == NULL) return NULL;
 
     if (result.pos.y == -1) {
         auto ef = read_entire_file(result.file);
@@ -3527,1304 +1008,116 @@ Jump_To_Definition_Result* Go_Index::jump_to_definition(ccstr filepath, cur2 pos
     return ret;
 }
 
-bool Go_Index::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period, Autocomplete *out) {
-    auto file = parse_file_into_ast(filepath);
-    if (file == NULL) return NULL;
+bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period, Autocomplete *out) {
+    return false;
+}
 
-    Autocomplete ret = { 0 };
+Parameter_Hint *Go_Indexer::parameter_hint(ccstr filepath, cur2 pos, bool triggered_by_paren) {
+    return NULL;
+}
 
-    auto generate_results_from_current_package = [&]() -> List<AC_Result>* {
-        auto curr_path = our_dirname(filepath);
-        auto wksp_path = world.wksp.path;
+void Go_Indexer::list_fields_and_methods(Goresult *type_res, Goresult *resolved_type_res, List<Goresult> *ret) {
+    // list fields of resolved type
+    // ----------------------------
 
-        if (!make_path(wksp_path)->contains(make_path(curr_path)))
-            return NULL;
+    auto resolved_type = resolved_type_res->gotype;
 
-        auto import_path = path_join(
-            get_workspace_import_path(),
-            get_path_relative_to(curr_path, wksp_path)
+    switch (resolved_type->type) {
+    case GOTYPE_POINTER:
+        list_fields_and_methods(
+            make_goresult(resolved_type->pointer_base, resolved_type_res->ctx),
+            resolved_type_res,
+            ret
         );
+        return;
 
-        auto names = list_decl_names(import_path);
-        if (names == NULL) return NULL;
-
-        List<AC_Result> *ret = NULL;
-
+    case GOTYPE_STRUCT:
+    case GOTYPE_INTERFACE:
         {
-            SCOPED_MEM(&world.autocomplete_mem);
-            ret = alloc_list<AC_Result>();
-            For (*names) {
-                auto r = ret->append();
-                r->name = our_strcpy(it);
-            }
-        }
-
-        list_decls_in_source(make_file_ast(file, filepath, file_to_import_path(filepath)), LISTDECLS_IMPORTS, [&](Named_Decl *it) {
-            For (*it->items) {
-                auto r = ret->append();
-                r->name = it.name->id.lit;
-            }
-        });
-
-        auto local_names = list_local_names_accessible_to(filepath, file, pos);
-        if (local_names != NULL) {
-            For (*local_names) {
-                auto r = ret->append();
-                r->name = it;
-            }
-        }
-
-        return ret;
-    };
-
-    find_nodes_containing_pos(file, pos, [&](Ast *ast) -> Walk_Action {
-        switch (ast->type) {
-        case AST_SELECTOR_EXPR:
-            {
-                auto sel = ast->selector_expr.sel;
-                if (pos < ast->selector_expr.period_pos || pos > sel->end)
-                    return WALK_CONTINUE;
-
-                auto x = ast->selector_expr.x;
-                if (x->type == AST_ID) {
-                    bool found_package = false;
-
-                    do {
-                        auto spec = find_decl_of_id(make_file_ast(x, filepath, file_to_import_path(filepath)), true);
-                        if (spec == NULL) break;
-
-                        auto spec_ast = spec->ast;
-                        if (spec_ast->type != AST_IMPORT_SPEC) break;
-
-                        auto import_path = spec_ast->import_spec.path->basic_lit.val.string_val;
-                        auto names = list_decl_names(import_path);
-                        if (names == NULL) break;
-
-                        // at this point, we have confirmation that x refers to a package.
-                        // doesn't matter if we can't find any decls, we should terminate here
-                        // with what we find, and not keep searching as though x might be something else
-
-                        {
-                            SCOPED_MEM(&world.autocomplete_mem);
-                            ret.results = alloc_list<AC_Result>();
-                            For (*names) {
-                                if (strchr(it, '.') != NULL) continue;
-                                auto result = ret.results->append();
-                                result->name = our_strcpy(it);
-                            }
-                        }
-
-                        ret.type = AUTOCOMPLETE_PACKAGE_EXPORTS;
-                        ret.keyword_start_position = ast->selector_expr.period_pos;
-                        return WALK_ABORT;
-                    } while (0);
+            // technically point the same place, but want to be semantically correct
+            auto specs = resolved_type->type == GOTYPE_STRUCT ? resolved_type->struct_specs : resolved_type->interface_specs;
+            For (*specs) {
+                if (it.is_embedded) {
+                    auto res = resolve_type(it.embedded_type, resolved_type_res->ctx);
+                    if (res == NULL) continue;
+                    list_fields_and_methods(make_goresult(it.embedded_type, resolved_type_res->ctx), res, ret);
+                } else {
+                    ret->append(make_goresult(it.field, resolved_type_res->ctx));
                 }
-
-                auto r = infer_type(make_file_ast(x, filepath, file_to_import_path(filepath)), true);
-                if (r == NULL) return WALK_ABORT;
-
-                auto fields = list_fields_and_methods_in_type(r->base_type, r->type);
-
-                {
-                    SCOPED_MEM(&world.autocomplete_mem);
-                    ret.results = alloc_list<AC_Result>(fields->len);
-                    For (*fields) {
-                        auto result = ret.results->append();
-                        result->name = our_strcpy(it.id.ast->id.lit);
-                    }
-                }
-
-                ret.type = AUTOCOMPLETE_STRUCT_FIELDS;
-                ret.keyword_start_position = ast->selector_expr.period_pos;
-            }
-            return WALK_ABORT;
-
-        case AST_ID:
-            ret.type = AUTOCOMPLETE_IDENTIFIER;
-            ret.keyword_start_position = ast->start;
-            ret.results = generate_results_from_current_package();
-            break;
-        }
-
-        return WALK_CONTINUE;
-    });
-
-    if (ret.results == NULL) {
-        if (triggered_by_period) return false;
-
-        ret.type = AUTOCOMPLETE_IDENTIFIER;
-        ret.keyword_start_position = pos;
-        ret.results = generate_results_from_current_package();
-    }
-
-    memcpy(out, &ret, sizeof(ret));
-    return true;
-}
-
-Parameter_Hint* Go_Index::parameter_hint(ccstr filepath, cur2 pos, bool triggered_by_paren) {
-    auto file = parse_file_into_ast(filepath);
-    if (file == NULL) return NULL;
-
-    Parameter_Hint* ret = NULL;
-
-    auto walk_callback = [&](Ast* ast) -> Walk_Action {
-        if (ast->type != AST_CALL_EXPR)
-            return WALK_CONTINUE;
-
-        auto args = ast->call_expr.call_args;
-        if (locate_pos_relative_to_ast(pos, args) != 0)
-            return WALK_CONTINUE;
-
-        auto type = infer_type(make_file_ast(ast->call_expr.func, filepath, get_workspace_import_path()), true);
-        if (type != NULL) {
-            auto get_func_signature = [&](Ast* func) -> Ast* {
-                switch (func->type) {
-                case AST_FUNC_DECL: return func->func_decl.signature;
-                case AST_FUNC_TYPE: return func->func_type.signature;
-                }
-                return NULL;
-            };
-
-            auto sig = get_func_signature(type->base_type->ast);
-            if (sig != NULL) {
-                ret = alloc_object(Parameter_Hint);
-                ret->signature = sig;
-                ret->call_args = args;
-            }
-        }
-
-        return WALK_ABORT;
-    };
-
-    find_nodes_containing_pos(file, pos, walk_callback);
-    return ret;
-}
-
-List<Field>* Go_Index::list_fields_in_type(File_Ast* ast) {
-    s32 len = list_fields_in_type(ast, NULL);
-    auto ret = alloc_list<Field>(len);
-    list_fields_in_type(ast, ret);
-    return ret;
-}
-
-int Go_Index::list_methods_in_base_type(File_Ast* ast, List<Field>* ret) {
-    auto type = ast->ast;
-    if (type == NULL) return 0;
-    int count = 0;
-
-    switch (type->type) {
-    case AST_POINTER_TYPE:
-        {
-            auto pointee = type->pointer_type.base_type;
-            auto base_type = get_base_type(ast->dup(pointee));
-            count += list_methods_in_base_type(base_type, ret);
-        }
-        break;
-    case AST_STRUCT_TYPE:
-        For (type->struct_type.fields->list) {
-            auto& f = it->struct_field;
-            if (f.ids == NULL) {
-                auto embedded_type = unpointer(f.type);
-                if (embedded_type->type == AST_ID || embedded_type->type == AST_SELECTOR_EXPR)
-                    count += list_methods_in_type(ast->dup(embedded_type), ret);
             }
         }
         break;
     }
-    return count;
-}
 
-int Go_Index::list_methods_in_type(File_Ast* type, List<Field>* ret) {
-    auto ast = unpointer(type->ast);
+    // list methods of unresolved type
+    // -------------------------------
+
+    auto type = type_res->gotype;
     ccstr type_name = NULL;
-    ccstr package_to_search = NULL;
-
-    switch (ast->type) {
-    case AST_ID:
-        type_name = ast->id.lit;
-        package_to_search = type->import_path;
-        break;
-    case AST_SELECTOR_EXPR:
-        {
-            // foo.Bar
-            // assert foo is package
-            // probably assert first letter of Bar is capitalized
-            // assert bar is name of a type
-
-            auto sel = ast->selector_expr.sel;
-            if (sel == NULL) break;
-            if (sel->type != AST_ID) break;
-
-            type_name = sel->id.lit;
-            if (!isupper(type_name[0])) break;
-
-            auto x = ast->selector_expr.x;
-            if (x == NULL) break;
-            if (x->type != AST_ID) break;
-
-            auto id_decl = find_decl_of_id(type->dup(x));
-            if (id_decl == NULL) break;
-            if (id_decl->ast->type != AST_IMPORT_SPEC) break;
-
-            package_to_search = id_decl->ast->import_spec.path->basic_lit.val.string_val;
-        }
-        break;
-    }
-
-    if (type_name == NULL || package_to_search == NULL) return 0;
-
-    /*
-    Ok, so our algorithm *really* needs to be:
-
-        if the index is available
-            prefix = our_sprintf("%s.", type_name)
-            for each item in index that starts with prefix
-                use item to generate field
-                append field to ret
-        else
-            go and list decls from the package
-            if decl is func and receiver is our type_name
-                use decl to generate field
-                append field to ret
-
-    ...fuck this shit lol
-    honestly, should we just have intellisense not work if the index isn't working lmao
-    */
-
-    int count = 0;
-    auto prefix = our_sprintf("%s.", type_name);
-
-    Index_Reader reader;
-    if (!reader.init(get_index_path(package_to_search))) return 0;
-    defer { reader.cleanup(); };
-
-    auto decls = reader.list_decls();
-    if (decls == NULL) return NULL;
-
-    For (*decls) {
-        if (it.hdr.type != IET_FUNC) continue;
-        if (!str_starts_with(it.name, prefix)) continue;
-
-        auto ast = reader.parse_decl_from_entry(&it);
-        if (ast == NULL) continue;
-        if (ast->type != AST_FUNC_DECL) continue;
-
-        auto filepath = path_join(reader.meta.package_path, it.filename);
-
-        auto r = ret->append();
-
-        r->decl.ast = ast;
-        r->decl.file = filepath;
-        r->decl.import_path = package_to_search;
-
-        r->id.ast = ast->func_decl.name;
-        r->id.file = filepath;
-        r->id.import_path = package_to_search;
-
-        count++;
-    }
-
-    return count;
-}
-
-List<Field>* Go_Index::list_fields_and_methods_in_type(File_Ast* base_type, File_Ast* interim_type) {
-    bool is_named_type = false;
-    switch (unpointer(interim_type->ast)->type) {
-    case AST_ID:
-    case AST_SELECTOR_EXPR:
-        is_named_type = true;
-        break;
-    }
-
-    auto ret = alloc_list<Field>();
-    list_fields_in_type(base_type, ret);
-    if (is_named_type) {
-        list_methods_in_type(interim_type, ret);
-        list_methods_in_base_type(base_type, ret);
-    }
-
-    return ret;
-}
-
-int Go_Index::list_fields_in_type(File_Ast* ast, List<Field>* ret) {
-    auto type = ast->ast;
-    if (type == NULL) return 0;
-    int count = 0;
+    ccstr target_import_path = NULL;
+    ccstr target_resolved_path = NULL;
 
     switch (type->type) {
-    case AST_POINTER_TYPE:
-        {
-            auto pointee = type->pointer_type.base_type;
-            auto base_type = get_base_type(ast->dup(pointee));
-            count += list_fields_in_type(base_type, ret);
-        }
+    case GOTYPE_ID:
+        // TODO: if decl of id is not a toplevel, exit (locally defined types won't have methods)
+        type_name = type->id_name;
+        target_import_path = type_res->ctx->import_path;
+        target_resolved_path = type_res->ctx->resolved_path;
         break;
-    case AST_STRUCT_TYPE:
-        For (type->struct_type.fields->list) {
-            auto& f = it->struct_field;
-            if (f.ids == NULL) {
-                auto base_type = get_base_type(ast->dup(f.type));
-                count += list_fields_in_type(base_type, ret);
-                continue;
-            }
-            for (auto&& id : f.ids->list) {
-                if (ret != NULL) {
-                    auto item = ret->append();
-                    item->id.ast = id;
-                    item->id.file = ast->file;
-                    item->decl.ast = it;
-                    item->decl.file = ast->file;
-                }
-                count++;
-            }
-        }
-        break;
-    case AST_INTERFACE_TYPE:
-        For (type->interface_type.specs->list) {
-            auto& s = it->interface_spec;
-
-            if (s.type != NULL) {
-                auto base_type = get_base_type(ast->dup(s.type));
-                if (base_type != NULL)
-                    count += list_fields_in_type(base_type, ret);
-                continue;
-            }
-
-            if (ret != NULL) {
-                auto item = ret->append();
-                item->id.ast = s.name;
-                item->id.file = ast->file;
-                item->decl.ast = it;
-                item->decl.file = ast->file;
-            }
-            count++;
-        }
-        break;
-    }
-
-    return count;
-}
-
-// returns -1 if pos is before ast
-//                    0 if pos is inside ast
-//                    1 if pos is after ast
-i32 locate_pos_relative_to_ast(cur2 pos, Ast* ast) {
-    if (pos < ast->start) return -1;
-    if (pos > ast->end) return 1;
-    return 0;
-};
-
-bool is_prime(u32 x) {
-    if (x < 2) return false;
-    if (x < 4) return true;
-    if (x % 2 == 0) return false;
-
-    for (int i = 3; i <= floor(sqrt((double)x)); i += 2)
-        if (x % i == 0)
-            return false;
-    return true;
-}
-
-u32 next_prime(u32 x) {
-    while (!is_prime(x))
-        x++;
-    return x;
-}
-
-ccstr tok_type_str(Tok_Type type) {
-    switch (type) {
-        define_str_case(TOK_ILLEGAL);
-        define_str_case(TOK_EOF);
-        define_str_case(TOK_COMMENT);
-        define_str_case(TOK_ID);
-        define_str_case(TOK_INT);
-        define_str_case(TOK_FLOAT);
-        define_str_case(TOK_IMAG);
-        define_str_case(TOK_RUNE);
-        define_str_case(TOK_STRING);
-        define_str_case(TOK_ADD);
-        define_str_case(TOK_SUB);
-        define_str_case(TOK_MUL);
-        define_str_case(TOK_QUO);
-        define_str_case(TOK_REM);
-        define_str_case(TOK_AND);
-        define_str_case(TOK_OR);
-        define_str_case(TOK_XOR);
-        define_str_case(TOK_SHL);
-        define_str_case(TOK_SHR);
-        define_str_case(TOK_AND_NOT);
-        define_str_case(TOK_ADD_ASSIGN);
-        define_str_case(TOK_SUB_ASSIGN);
-        define_str_case(TOK_MUL_ASSIGN);
-        define_str_case(TOK_QUO_ASSIGN);
-        define_str_case(TOK_REM_ASSIGN);
-        define_str_case(TOK_AND_ASSIGN);
-        define_str_case(TOK_OR_ASSIGN);
-        define_str_case(TOK_XOR_ASSIGN);
-        define_str_case(TOK_SHL_ASSIGN);
-        define_str_case(TOK_SHR_ASSIGN);
-        define_str_case(TOK_AND_NOT_ASSIGN);
-        define_str_case(TOK_LAND);
-        define_str_case(TOK_LOR);
-        define_str_case(TOK_ARROW);
-        define_str_case(TOK_INC);
-        define_str_case(TOK_DEC);
-        define_str_case(TOK_EQL);
-        define_str_case(TOK_LSS);
-        define_str_case(TOK_GTR);
-        define_str_case(TOK_ASSIGN);
-        define_str_case(TOK_NOT);
-        define_str_case(TOK_NEQ);
-        define_str_case(TOK_LEQ);
-        define_str_case(TOK_GEQ);
-        define_str_case(TOK_DEFINE);
-        define_str_case(TOK_ELLIPSIS);
-        define_str_case(TOK_LPAREN);
-        define_str_case(TOK_LBRACK);
-        define_str_case(TOK_LBRACE);
-        define_str_case(TOK_COMMA);
-        define_str_case(TOK_PERIOD);
-        define_str_case(TOK_RPAREN);
-        define_str_case(TOK_RBRACK);
-        define_str_case(TOK_RBRACE);
-        define_str_case(TOK_SEMICOLON);
-        define_str_case(TOK_COLON);
-        define_str_case(TOK_BREAK);
-        define_str_case(TOK_CASE);
-        define_str_case(TOK_CHAN);
-        define_str_case(TOK_CONST);
-        define_str_case(TOK_CONTINUE);
-        define_str_case(TOK_DEFAULT);
-        define_str_case(TOK_DEFER);
-        define_str_case(TOK_ELSE);
-        define_str_case(TOK_FALLTHROUGH);
-        define_str_case(TOK_FOR);
-        define_str_case(TOK_FUNC);
-        define_str_case(TOK_GO);
-        define_str_case(TOK_GOTO);
-        define_str_case(TOK_IF);
-        define_str_case(TOK_IMPORT);
-        define_str_case(TOK_INTERFACE);
-        define_str_case(TOK_MAP);
-        define_str_case(TOK_PACKAGE);
-        define_str_case(TOK_RANGE);
-        define_str_case(TOK_RETURN);
-        define_str_case(TOK_SELECT);
-        define_str_case(TOK_STRUCT);
-        define_str_case(TOK_SWITCH);
-        define_str_case(TOK_TYPE);
-        define_str_case(TOK_VAR);
-    }
-    return NULL;
-}
-
-ccstr ast_type_str(Ast_Type type) {
-    switch (type) {
-        define_str_case(AST_ILLEGAL);
-        define_str_case(AST_BASIC_LIT);
-        define_str_case(AST_ID);
-        define_str_case(AST_UNARY_EXPR);
-        define_str_case(AST_BINARY_EXPR);
-        define_str_case(AST_ARRAY_TYPE);
-        define_str_case(AST_POINTER_TYPE);
-        define_str_case(AST_SLICE_TYPE);
-        define_str_case(AST_MAP_TYPE);
-        define_str_case(AST_STRUCT_TYPE);
-        define_str_case(AST_INTERFACE_TYPE);
-        define_str_case(AST_CHAN_TYPE);
-        define_str_case(AST_FUNC_TYPE);
-        define_str_case(AST_PAREN);
-        define_str_case(AST_SELECTOR_EXPR);
-        define_str_case(AST_SLICE_EXPR);
-        define_str_case(AST_INDEX_EXPR);
-        define_str_case(AST_TYPE_ASSERTION_EXPR);
-        define_str_case(AST_CALL_EXPR);
-        define_str_case(AST_CALL_ARGS);
-        define_str_case(AST_LITERAL_ELEM);
-        define_str_case(AST_LITERAL_VALUE);
-        define_str_case(AST_LIST);
-        define_str_case(AST_ELLIPSIS);
-        define_str_case(AST_FIELD);
-        define_str_case(AST_PARAMETERS);
-        define_str_case(AST_FUNC_LIT);
-        define_str_case(AST_BLOCK);
-        define_str_case(AST_SIGNATURE);
-        define_str_case(AST_COMPOSITE_LIT);
-        define_str_case(AST_GO_STMT);
-        define_str_case(AST_DEFER_STMT);
-        define_str_case(AST_SELECT_STMT);
-        define_str_case(AST_SWITCH_STMT);
-        define_str_case(AST_IF_STMT);
-        define_str_case(AST_FOR_STMT);
-        define_str_case(AST_RETURN_STMT);
-        define_str_case(AST_BRANCH_STMT);
-        define_str_case(AST_EMPTY_STMT);
-        define_str_case(AST_DECL);
-        define_str_case(AST_ASSIGN_STMT);
-        define_str_case(AST_VALUE_SPEC);
-        define_str_case(AST_IMPORT_SPEC);
-        define_str_case(AST_TYPE_SPEC);
-        define_str_case(AST_INC_DEC_STMT);
-        define_str_case(AST_SEND_STMT);
-        define_str_case(AST_LABELED_STMT);
-        define_str_case(AST_EXPR_STMT);
-        define_str_case(AST_PACKAGE_DECL);
-        define_str_case(AST_SOURCE);
-        define_str_case(AST_STRUCT_FIELD);
-        define_str_case(AST_INTERFACE_SPEC);
-        define_str_case(AST_CASE_CLAUSE);
-        define_str_case(AST_COMM_CLAUSE);
-        define_str_case(AST_FUNC_DECL);
-        define_str_case(AST_EMPTY);
-    }
-    return NULL;
-};
-
-ccstr ast_chan_direction_str(Ast_Chan_Direction dir) {
-    switch (dir) {
-        define_str_case(AST_CHAN_RECV);
-        define_str_case(AST_CHAN_SEND);
-        define_str_case(AST_CHAN_BI);
-    }
-    return NULL;
-}
-
-bool isid(int c) { return (isalnum(c) || c == '_'); }
-
-bool ishex(int c) {
-    if ('0' <= c && c <= '9') return true;
-    if ('a' <= c && c <= 'f') return true;
-    if ('A' <= c && c <= 'F') return true;
-    return false;
-}
-
-bool isoct(int c) { return ('0' <= c && c <= '7'); }
-
-bool lookup_stmt_start(Tok_Type type) {
-    switch (type) {
-    case TOK_BREAK:
-    case TOK_CONST:
-    case TOK_CONTINUE:
-    case TOK_DEFER:
-    case TOK_FALLTHROUGH:
-    case TOK_FOR:
-    case TOK_GO:
-    case TOK_GOTO:
-    case TOK_IF:
-    case TOK_RETURN:
-    case TOK_SELECT:
-    case TOK_SWITCH:
-    case TOK_TYPE:
-    case TOK_VAR:
-        return true;
-    }
-    return false;
-}
-
-bool lookup_decl_start(Tok_Type type) {
-    switch (type) {
-    case TOK_CONST:
-    case TOK_TYPE:
-    case TOK_VAR:
-        return true;
-    }
-    return false;
-}
-
-bool lookup_expr_end(Tok_Type type) {
-    switch (type) {
-    case TOK_COMMA:
-    case TOK_COLON:
-    case TOK_SEMICOLON:
-    case TOK_RPAREN:
-    case TOK_RBRACK:
-    case TOK_RBRACE:
-        return true;
-    }
-    return false;
-}
-
-OpPrec op_to_prec(Tok_Type type) {
-    switch (type) {
-    case TOK_MUL:
-    case TOK_QUO:
-    case TOK_REM:
-    case TOK_SHL:
-    case TOK_SHR:
-    case TOK_AND:
-    case TOK_AND_NOT:
-        return PREC_MUL;
-    case TOK_ADD:
-    case TOK_SUB:
-    case TOK_OR:
-    case TOK_XOR:
-        return PREC_ADD;
-    case TOK_EQL:
-    case TOK_NEQ:
-    case TOK_LSS:
-    case TOK_LEQ:
-    case TOK_GTR:
-    case TOK_GEQ:
-        return PREC_COMPARE;
-    case TOK_LAND:
-        return PREC_LAND;
-    case TOK_LOR:
-        return PREC_LOR;
-    }
-    return PREC_LOWEST;
-}
-
-ccstr gomod_tok_type_str(Gomod_Tok_Type t) {
-    switch (t) {
-        define_str_case(GOMOD_TOK_ILLEGAL);
-        define_str_case(GOMOD_TOK_EOF);
-        define_str_case(GOMOD_TOK_COMMENT);
-        define_str_case(GOMOD_TOK_LPAREN);
-        define_str_case(GOMOD_TOK_RPAREN);
-        define_str_case(GOMOD_TOK_ARROW);
-        define_str_case(GOMOD_TOK_NEWLINE);
-        define_str_case(GOMOD_TOK_MODULE);
-        define_str_case(GOMOD_TOK_GO);
-        define_str_case(GOMOD_TOK_REQUIRE);
-        define_str_case(GOMOD_TOK_REPLACE);
-        define_str_case(GOMOD_TOK_EXCLUDE);
-        define_str_case(GOMOD_TOK_STRIDENT);
-    }
-    return NULL;
-};
-
-void Gomod_Parser::parse(Gomod_Info* info) {
-#define ASSERT(x) if (!(x)) goto done
-#define EXPECT(x) ASSERT((lex(), (tok.type == (x))))
-
-    while (true) {
-        lex();
-        while (tok.type == GOMOD_TOK_NEWLINE)
-            lex();
-        if (tok.type == GOMOD_TOK_EOF || tok.type == GOMOD_TOK_ILLEGAL)
-            break;
-
-        auto keyword = tok.type;
-        switch (keyword) {
-        case GOMOD_TOK_MODULE:
-            {
-                lex();
-                if (tok.type == GOMOD_TOK_LPAREN) {
-                    EXPECT(GOMOD_TOK_LPAREN);
-                    EXPECT(GOMOD_TOK_NEWLINE);
-                    EXPECT(GOMOD_TOK_STRIDENT);
-                    if (!tok.val_truncated)
-                        info->module_path = our_strcpy(tok.val);
-                    EXPECT(GOMOD_TOK_NEWLINE);
-                    EXPECT(GOMOD_TOK_RPAREN);
-                } else if (tok.type == GOMOD_TOK_STRIDENT) {
-                    if (!tok.val_truncated)
-                        info->module_path = our_strcpy(tok.val);
-                } else {
-                    goto done;
-                }
-                EXPECT(GOMOD_TOK_NEWLINE);
-            }
-            break;
-        case GOMOD_TOK_GO:
-            {
-                EXPECT(GOMOD_TOK_STRIDENT);
-                if (!tok.val_truncated)
-                    info->go_version = our_strcpy(tok.val);
-                EXPECT(GOMOD_TOK_NEWLINE);
-            }
-            break;
-        case GOMOD_TOK_REQUIRE:
-        case GOMOD_TOK_EXCLUDE:
-            {
-                lex();
-
-                auto read_spec = [&]() -> bool {
-                    Gomod_Directive* directive = NULL;
-
-                    ASSERT(tok.type == GOMOD_TOK_STRIDENT);
-                    if (keyword == GOMOD_TOK_REQUIRE) {
-                        directive = alloc_object(Gomod_Directive);
-                        directive->type = GOMOD_DIRECTIVE_REQUIRE;
-                        directive->module_path = tok.val;
-                    }
-
-                    EXPECT(GOMOD_TOK_STRIDENT);
-
-                    if (keyword == GOMOD_TOK_REQUIRE) {
-                        directive->module_version = tok.val;
-                        info->directives.append(directive);
-                    }
-
-                    EXPECT(GOMOD_TOK_NEWLINE);
-                    return true;
-
-                done:
-                    return false;
-                };
-
-                if (tok.type == GOMOD_TOK_LPAREN) {
-                    EXPECT(GOMOD_TOK_NEWLINE);
-                    while (lex(), tok.type != GOMOD_TOK_RPAREN) {
-                        ASSERT(read_spec());
-                    }
-                    EXPECT(GOMOD_TOK_NEWLINE);
-                } else {
-                    ASSERT(read_spec());
-                }
-            }
-            break;
-        case GOMOD_TOK_REPLACE:
-            {
-                lex();
-
-                auto read_spec = [&]() -> bool {
-                    auto directive = alloc_object(Gomod_Directive);
-                    directive->type = GOMOD_DIRECTIVE_REPLACE;
-
-                    ASSERT(tok.type == GOMOD_TOK_STRIDENT);
-                    directive->module_path = tok.val;
-
-                    lex();
-                    if (tok.type != GOMOD_TOK_ARROW) {
-                        ASSERT(tok.type == GOMOD_TOK_STRIDENT);
-                        directive->module_version = tok.val;
-                        EXPECT(GOMOD_TOK_ARROW);
-                    }
-
-                    EXPECT(GOMOD_TOK_STRIDENT);
-                    directive->replace_path = tok.val;
-
-                    lex();
-                    if (tok.type != GOMOD_TOK_NEWLINE) {
-                        ASSERT(tok.type == GOMOD_TOK_STRIDENT);
-                        directive->replace_version = tok.val;
-                        EXPECT(GOMOD_TOK_NEWLINE);
-                    }
-                    return true;
-
-                done:
-                    return false;
-                };
-
-                if (tok.type == GOMOD_TOK_LPAREN) {
-                    EXPECT(GOMOD_TOK_NEWLINE);
-                    while (lex(), (tok.type != GOMOD_TOK_RPAREN)) {
-                        ASSERT(read_spec());
-                    }
-                } else if (tok.type == GOMOD_TOK_STRIDENT) {
-                    ASSERT(read_spec());
-                }
-            }
-            break;
-        default:
-            goto done;
-        }
-    }
-
-done:
-    return;
-}
-
-#undef EXPECT
-#undef ASSERT
-
-bool gomod_isspace(char ch) {
-    return ch == ' ' || ch == '\t' || ch == '\r';
-}
-
-void Gomod_Parser::lex() {
-    tok.type = GOMOD_TOK_ILLEGAL;
-    tok.val_truncated = false;
-    tok.val = NULL;
-
-    while (gomod_isspace(it->peek()))
-        it->next();
-
-    if (it->eof()) {
-        tok.type = GOMOD_TOK_EOF;
-        return;
-    }
-
-    char firstchar = it->next();
-    switch (firstchar) {
-    case '(': tok.type = GOMOD_TOK_LPAREN; return;
-    case ')': tok.type = GOMOD_TOK_RPAREN; return;
-    case '\n':
-        while (it->peek() == '\n') it->next();
-        tok.type = GOMOD_TOK_NEWLINE;
-        return;
-
-    case '=':
-        if (it->peek() == '>') {
-            it->next();
-            tok.type = GOMOD_TOK_ARROW;
-            return;
-        }
-        break;
-
-    case '/':
-        if (it->peek() == '/') {
-            it->next();
-            while (it->peek() != '\n')
-                it->next();
-            lex();
-            return;
-        }
-        break;
-    }
-
-    tok.type = GOMOD_TOK_STRIDENT;
-
-    // get ready to read a string or identifier
-    String_Allocator salloc;
-    tok.val = salloc.start(MAX_PATH);
-
-    auto should_end = [&](char ch) {
-        if (firstchar == '"' || firstchar == '`')
-            return ch == firstchar;
-        return gomod_isspace(ch) || ch == '\n';
-    };
-
-    auto try_push_char = [&](char ch) {
-        if (salloc.push(ch)) return true;
-
-        // unable to push? truncate val and ingest rest of string
-        tok.val_truncated = true;
-        salloc.truncate();
-        while (!should_end(it->peek())) it->next();
-        return false;
-    };
-
-    try_push_char(firstchar);
-    char ch;
-
-    switch (firstchar) {
-    case '"':
-        do {
-            ch = it->next();
-            if (!try_push_char(ch)) break;
-            if (ch == '\\')
-                if (!try_push_char(it->next())) break;
-        } while (ch == '"');
-        break;
-    case '`':
-        do {
-            ch = it->next();
-            if (!try_push_char(ch)) break;
-        } while (ch != '`');
+    case GOTYPE_SEL:
+        type_name = type->sel_sel;
+        target_import_path = find_import_path_referred_to_by_id(type->sel_name, type_res->ctx, &target_resolved_path);
         break;
     default:
-        while ((ch = it->peek()), (!gomod_isspace(ch) && ch != '\n')) {
-            it->next();
-            if (!try_push_char(ch)) break;
-        }
         break;
     }
 
-    salloc.done();
+    if (type_name == NULL || target_import_path == NULL) return;
 
-    ccstr keywords[] = { "module", "go" ,"require", "replace", "exclude" };
-    Gomod_Tok_Type types[] = { GOMOD_TOK_MODULE, GOMOD_TOK_GO, GOMOD_TOK_REQUIRE, GOMOD_TOK_REPLACE, GOMOD_TOK_EXCLUDE };
+    auto decls = get_package_decls(target_import_path, target_resolved_path);
+    if (decls == NULL) return;
 
-    for (u32 i = 0; i < _countof(keywords); i++) {
-        if (streq(tok.val, keywords[i])) {
-            salloc.revert();
-            tok.val = NULL;
-            tok.val_truncated = false;
-            tok.type = types[i];
-            return;
-        }
+    For (*decls) {
+        if (it.type != GODECL_FUNC) continue;
+
+        auto functype = it.gotype;
+        if (functype->func_recv == NULL) continue;
+
+        auto recv = unpointer_type(functype->func_recv, NULL)->gotype;
+
+        if (recv->type != GOTYPE_ID) continue;
+        if (!streq(recv->id_name, type_name)) continue;
+
+        auto ctx = alloc_object(Go_Ctx);
+        ctx->import_path = target_import_path;
+        ctx->filename = it.file;
+
+        ret->append(make_goresult(&it, ctx));
     }
 }
 
-ccstr index_entry_type_str(Index_Entry_Type type) {
-    switch (type) {
-        define_str_case(IET_INVALID);
-        define_str_case(IET_CONST);
-        define_str_case(IET_VAR);
-        define_str_case(IET_TYPE);
-        define_str_case(IET_FUNC);
-    }
-    return NULL;
-}
-
-ccstr get_receiver_typename_from_func_decl(Ast *func_decl) {
-    auto recv = func_decl->func_decl.recv;
-
-    if (recv == NULL) return NULL;
-    if (recv->type != AST_PARAMETERS) return NULL;
-
-    auto fields = recv->parameters.fields;
-    if (fields == NULL) return NULL;
-    if (fields->list.len != 1) return NULL;
-
-    auto recvtype = fields->list[0]->field.type;
-    if (recvtype == NULL) return NULL;
-    recvtype = unpointer(recvtype);
-
-    if (recvtype->type != AST_ID) return NULL;
-    return recvtype->id.lit;
-}
-
-Index_Stream *open_and_validate_imports_db(ccstr path) {
-    if (check_path(path) != CPR_FILE) return NULL;
-
-    Frame frame;
-
-    auto f = alloc_object(Index_Stream);
-    if (f->open(path, FILE_MODE_READ, FILE_OPEN_EXISTING) != FILE_RESULT_SUCCESS) {
-        frame.restore();
-        return NULL;
-    }
-
-    if (!f->read_file_header(INDEX_FILE_IMPORTS)) {
-        frame.restore();
-        f->cleanup();
-        return NULL;
-    }
-
-    return f;
-}
-
-bool are_sets_equal(String_Set *a, String_Set *b) {
-    auto a_items = a->items();
-    For (*a_items)
-        if (!b->has(it))
-            return false;
-
-    auto b_items = b->items();
-    For (*b_items)
-        if (!a->has(it))
-            return false;
-
-    return true;
-}
-
-void get_package_imports(ccstr path, List<ccstr> *out, String_Set *seen) {
-    list_directory(path, [&](Dir_Entry* ent) {
-        auto new_path = path_join(path, ent->name);
-
-        if (ent->type == DIRENT_DIR) {
-            if (!streq(ent->name, "vendor"))
-                get_package_imports(new_path, out, seen);
-            return;
-        }
-
-        if (!str_ends_with(ent->name, ".go")) return;
-        if (str_ends_with(ent->name, "_test.go")) return;
-
-        with_parser_at_location(new_path, [&](Parser *p) {
-            p->parse_package_decl();
-            while (p->tok.type == TOK_IMPORT) {
-                auto decl = p->parse_decl(lookup_decl_start, true);
-                if (decl == NULL) continue;
-
-                For (decl->decl.specs->list) {
-                    auto import_path = it->import_spec.path->basic_lit.val.string_val;
-                    if (seen->has(import_path)) continue;
-
-                    import_path = our_strcpy(import_path);
-                    out->append(import_path);
-                    seen->add(import_path);
-                }
-            }
-        });
-    });
-}
-
-List<ccstr> *get_package_imports(ccstr path) {
-    auto ret = alloc_list<ccstr>();
-    String_Set set;
-    set.init();
-    defer { set.cleanup() ;};
-
-    get_package_imports(path, ret, &set);
-    return ret;
-}
-
-/*
-INDEX FOLDER:
-    - imports
-    - folders/mapped/one/to/one/with/libraries
-        - index
-        - data
-        - hash
-*/
-
-List<ccstr> *read_imports_from_index(ccstr imports_path) {
-    auto f = open_and_validate_imports_db(imports_path);
-    if (f == NULL) return NULL;
-    defer { f->cleanup(); };
-
-    auto num_imports = f->read4();
-    auto ret = alloc_list<ccstr>();
-    for (u32 i = 0; i < num_imports; i++)
-        ret->append(f->readstr());
-    return ret;
-}
-
-bool Go_Index::ensure_imports_list_correct(Eil_Result *res) {
-    Frame frame;
-
-    auto _handle_error = [&](ccstr message) {
-        handle_error(message);
-        frame.restore();
-        return false;
-    };
-
-    auto imports_path = get_index_path("imports");
-    auto old_imports = read_imports_from_index(imports_path); // can be NULL, just means first time running
-    auto new_imports = get_package_imports(world.wksp.path);
-
-    if (new_imports == NULL)
-        return _handle_error("Unable to get workspace imports.");
-
-    {
-        // write out new imports
-        Index_Stream fw;
-        if (fw.open(imports_path, FILE_MODE_WRITE, FILE_CREATE_NEW) != FILE_RESULT_SUCCESS)
-            return _handle_error("Unable to open imports for writing.");
-        defer { fw.cleanup(); };
-
-        fw.write_file_header(INDEX_FILE_IMPORTS);
-        fw.write4(new_imports->len);
-        For (*new_imports) fw.writestr(it);
-    }
-
-    // compare old imports to new
-
-    String_Set current_imports_set;
-    current_imports_set.init();
-    if (old_imports != NULL)
-        For (*old_imports) current_imports_set.add(it);
-
-    String_Set new_imports_set;
-    new_imports_set.init();
-    For (*new_imports) new_imports_set.add(it);
-
-    auto removed_imports = alloc_list<ccstr>();
-    if (old_imports != NULL)
-        For (*old_imports)
-            if (!new_imports_set.has(it))
-                removed_imports->append(it);
-
-    auto added_imports = alloc_list<ccstr>();
-    For (*new_imports)
-        if (!current_imports_set.has(it))
-            added_imports->append(it);
-
-    res->old_imports = old_imports;
-    res->new_imports = new_imports;
-    res->added_imports = added_imports;
-    res->removed_imports = removed_imports;
-    return true;
-}
-
-void Go_Index::handle_error(ccstr err) {
-    // TODO: What's our error handling strategy?
-    error("%s", err);
-}
-
-u64 Go_Index::hash_package(ccstr import_path, Resolved_Import **pres) {
-    u64 ret = 0;
-    auto add_hash = [&](void *p, s32 n) {
-        ret ^= MeowU64From(MeowHash(MeowDefaultSeed, n, p), 0);
-    };
-
-    auto res = resolve_import(import_path);
-    if (res == NULL) return 0;
-    add_hash((void*)res->path, strlen(res->path));
-
-    bool error = false;
-    list_directory(res->path, [&](Dir_Entry* ent) {
-        if (ent->type == DIRENT_DIR) return;
-        if (!str_ends_with(ent->name, ".go")) return;
-        if (str_ends_with(ent->name, "_test.go")) return;
-
-        auto f = read_entire_file(path_join(res->path, ent->name));
-        if (f == NULL) {
-            error = true;
-            return;
-        }
-        defer { free_entire_file(f); };
-
-        add_hash(f->data, f->len);
-        add_hash(ent->name, strlen(ent->name));
-    });
-
-    if (error) return 0;
-
-    *pres = res;
-    return ret;
-}
-
-u64 read_index_hash(ccstr import_path) {
-    auto hash_file = get_index_path(import_path, "hash");
-    Index_Stream f;
-
-    if (f.open(hash_file, FILE_MODE_READ, FILE_OPEN_EXISTING) != FILE_RESULT_SUCCESS)
-        return 0;
-    defer { f.cleanup(); };
-
-    if (!f.read_file_header(INDEX_FILE_HASH)) return 0;
-
-    u64 ret = 0;
-    f.readn(&ret, sizeof(ret));
-    return f.ok ? ret : 0;
-}
-
-bool Go_Index::ensure_package_correct(ccstr import_path) {
-    Resolved_Import *ri = NULL;
-    auto hash = hash_package(import_path, &ri);
-    if (hash == 0)
-        return handle_error(our_sprintf("Unable to hash package %s", import_path)), false;
-
-    print("Checking import %s, hash = %llx", import_path, hash);
-
-    auto current_hash = read_index_hash(import_path);
-    if (current_hash == hash)
-        return print("Hash hasn't changed, no need to update."), true;
-
-    print("Hash is different, updating index...");
-
-    // update index
-    {
-        auto path = ri->path;
-        print("crawling %s", path);
-
-        // TODO: maybe we need to use a separate allocator for holding the names in Index_Writer.decls!
-        if (background_index_writer.open(import_path) != FILE_RESULT_SUCCESS) return false;
-        defer { background_index_writer.close(); };
-
-        background_index_writer.write_hash(hash);
-        background_index_writer.write_headers(path, ri->location_type);
-
-        list_directory(path, [&](Dir_Entry* ent) {
-            if (ent->type == DIRENT_DIR) return;
-
-            // for now, only grab non-test .go files
-            if (!str_ends_with(ent->name, ".go")) return;
-            if (str_ends_with(ent->name, "_test.go")) return;
-
-            auto filepath = path_join(path, ent->name);
-            if (!is_file_included_in_build(filepath)) return;
-
-            auto ast = parse_file_into_ast(filepath);
-            if (ast == NULL) return; // what to do here? this is an error
-
-            list_decls_in_source(make_file_ast(ast, filepath, import_path), LISTDECLS_DECLS, [&](Named_Decl* decl) {
-                for (auto&& it : *decl->items) {
-                    auto name = it.name->id.lit;
-                    if (it.spec->type == AST_FUNC_DECL) {
-                        auto receiver_name = get_receiver_typename_from_func_decl(it.spec);
-                        if (receiver_name != NULL)
-                            name = our_sprintf("%s.%s", receiver_name, name);
-                    }
-                    background_index_writer.write_decl(ent->name, name, it.spec);
-                }
-            });
-        });
-
-        background_index_writer.finish_writing();
-    }
-}
-
-bool Go_Index::ensure_entire_index_correct() {
-    ensure_directory_exists(get_index_path());
-
-    ensure_package_correct(get_workspace_import_path());
-
-    Eil_Result res;
-    if (!ensure_imports_list_correct(&res)) return false;
-
-    For (*res.new_imports) ensure_package_correct(it);
+void Go_Indexer::read_index_from_filesystem() {
+    // TODO:  do this
 }
 
 #define EVENT_DEBOUNCE_DELAY_MS 3000 // wait 3 seconds (arbitrary)
 
-void Go_Index::run_background_thread() {
-    SCOPED_MEM(&background_mem);
-    background_index_writer.init();
-
-    {
-        // when we start up, first ensure the entire index is correct
-        SCOPED_FRAME();
-        ensure_entire_index_correct();
-    }
-
-    auto pop_index_event = [&](Index_Event *out) -> bool {
-        SCOPED_LOCK(&index_events_lock);
-        if (index_events.len == 0) return false;
-
-        auto current_time = current_time_in_nanoseconds();
-        for (u32 i = 0; i < index_events.len; i++) {
-            auto event = &index_events[i];
-            if ((current_time - event->time) / 1000000.f > EVENT_DEBOUNCE_DELAY_MS) {
-                memcpy(out, event, sizeof(Index_Event));
-                index_events.remove(i);
-                return true;
-            }
-        }
-        return false;
-    };
-
-    for (Index_Event event = {0}; true; sleep_milliseconds(100)) {
-        while (pop_index_event(&event)) {
-            switch (event.type) {
-            case INDEX_EVENT_FETCH_IMPORTS:
-                {
-                    Eil_Result res;
-                    if (!ensure_imports_list_correct(&res)) break;
-                    For (*res.added_imports) ensure_package_correct(it);
-                    background_mem.reset();
-                    break;
-                }
-                break;
-            case INDEX_EVENT_REINDEX_PACKAGE:
-                ensure_package_correct(event.import_path);
-                background_mem.reset();
-                break;
-            }
-        }
-    }
-}
-
-bool Go_Index::delete_index() {
-    SCOPED_FRAME();
-    return delete_rm_rf(get_index_path());
-}
-
+// mutates parts inside path
 ccstr remove_ats_from_path(ccstr s) {
     auto path = make_path(s);
-
-    // Fuck this shit, we're just going to mutate path directly.  Yes,
-    // `parts` is a list of const char*s,  but we only do that because
-    // C is stupid and if you pass strings around as char* you end up
-    // having to cast them to const everywhere.
-    //
-    // WE DO NOT EVER use const to indicate that memory is read-only.
-    // In our programs, we do not have the concept of read-only memory.
-    // Why would I ever want to BAN MYSELF from writing to MY OWN
-    // MEMORY?
-
     For (*path->parts) {
-        // in every part, remove "@whatever"
         auto atpos = strchr((char*)it, '@');
         if (atpos != NULL) *atpos = '\0';
     }
-
     return path->str();
 }
 
-ccstr Go_Index::file_to_import_path(ccstr filepath) {
+ccstr Go_Indexer::file_to_import_path(ccstr filepath) {
     return directory_to_import_path(our_dirname(filepath));
 }
 
-ccstr Go_Index::directory_to_import_path(ccstr path_str) {
+ccstr Go_Indexer::directory_to_import_path(ccstr path_str) {
     // resolution order: vendor, workspace, gopath/pkg/mod, gopath, goroot
-
-    // TODO: SCOPED_FRAME()?
 
     auto path = make_path(path_str);
 
@@ -4833,6 +1126,8 @@ ccstr Go_Index::directory_to_import_path(ccstr path_str) {
         PATH_PKGMOD,
         PATH_WKSP,
     };
+
+    // TODO: update to work with nested vendor directories
 
     auto check = [&](ccstr base_path_str, Path_Type path_type) -> ccstr {
         auto base_path = make_path(base_path_str);
@@ -4847,8 +1142,8 @@ ccstr Go_Index::directory_to_import_path(ccstr path_str) {
     };
 
     ccstr paths[] = {
-        path_join(world.wksp.path, "vendor"),
-        world.wksp.path,
+        path_join(index.current_path, "vendor"),
+        index.current_path,
         path_join(GOPATH, "pkg/mod"),
         path_join(GOPATH, "src"),
         path_join(GOROOT, "src"),
@@ -4858,16 +1153,16 @@ ccstr Go_Index::directory_to_import_path(ccstr path_str) {
 
     for (u32 i = 0; i < _countof(paths); i++) {
         auto ret = check(paths[i], path_types[i]);
-        if (ret != NULL) return ret;
+        if (ret != NULL) return normalize_path_separator((cstr)our_strcpy(ret), '/');
     }
     return NULL;
 }
 
-void Go_Index::handle_fs_event(Go_Index_Watcher *w, Fs_Event *event) {
+void Go_Indexer::handle_fs_event(Go_Index_Watcher *w, Fs_Event *event) {
     // only one thread calls this at a time
+    /*
     SCOPED_LOCK(&fs_event_lock);
 
-    SCOPED_MEM(&watcher_mem);
     defer { watcher_mem.reset(); };
 
     auto watch_path = w->watch.path;
@@ -4881,7 +1176,7 @@ void Go_Index::handle_fs_event(Go_Index_Watcher *w, Fs_Event *event) {
                     return get_path_relative_to(path, vendor_path);
                 return path_join(
                     get_workspace_import_path(),
-                    get_path_relative_to(path, world.wksp.path)
+                    get_path_relative_to(path, index.current_path)
                 );
             }
             break;
@@ -4975,29 +1270,19 @@ void Go_Index::handle_fs_event(Go_Index_Watcher *w, Fs_Event *event) {
         // queue its directory for a re-scan
         queue_for_rescan(our_dirname(path));
     }
+    */
 }
 
-bool Go_Index::init() {
+void Go_Indexer::init() {
     ptr0(this);
 
-    general_mem.init();
-    background_mem.init();
-    watcher_mem.init();
-    main_thread_mem.init();
+    mem.init("indexer_mem");
+    final_mem.init("final_mem");
+    ui_mem.init("ui_mem");
 
-    SCOPED_MEM(&general_mem);
+    SCOPED_MEM(&mem);
 
-    index_events.init(LIST_POOL, 32);
-    index_events_lock.init();
-    fs_event_lock.init();
-
-    if (!wksp_watcher.watch.init(world.wksp.path)) return false;
-    if (!gopath_watcher.watch.init(path_join(GOPATH, "src"))) return false;
-    if (!pkgmod_watcher.watch.init(path_join(GOPATH, "pkg/mod"))) return false;
-    if (!goroot_watcher.watch.init(path_join(GOROOT, "src"))) return false;
-
-    buildparser_proc.init();
-    buildparser_proc.use_stdin = true;
+    current_parsed_files.init();
 
     {
         SCOPED_FRAME();
@@ -5007,377 +1292,1826 @@ bool Go_Index::init() {
     }
 
     buildparser_proc.dir = current_exe_path;
+    buildparser_proc.use_stdin = true;
     buildparser_proc.run("go run buildparser.go");
 }
 
-void run_watcher_stub(void *param) {
-    auto w = (Go_Index_Watcher*)param;
-    Fs_Event event = {0};
-
-    while (true) {
-        if (w->watch.next_event(&event))
-            w->_this->handle_fs_event(w, &event);
-        else
-            error("unable to get next event"); // should we sleep a bit?
+void Go_Indexer::cleanup() {
+    if (bgthread != NULL) {
+        kill_thread(bgthread);
+        close_thread_handle(bgthread);
+        bgthread = NULL;
     }
+
+    buildparser_proc.cleanup();
+    mem.cleanup();
+    final_mem.cleanup();
+    ui_mem.cleanup();
 }
 
-void run_background_thread_stub(void *p) {
-    ((Go_Index*)p)->run_background_thread();
-};
+// resolves import by literally fucking around the filesystem trying to figure it out
+Resolved_Import* Go_Indexer::resolve_import_from_filesystem(ccstr import_path, Go_Ctx *ctx) {
+    // move up directory tree, looking for vendor or go.mod
+    auto curr_path = make_path(ctx->resolved_path);
+    do {
+        auto dir_name = curr_path->str();
 
-bool Go_Index::run_threads() {
-    auto _this = this;
+        auto vendor_path = path_join(dir_name, "vendor");
+        if (check_path(vendor_path) == CPR_DIRECTORY) {
+            auto ret = check_potential_resolved_import(path_join(vendor_path, import_path));
+            if (ret != NULL) return ret;
+        }
 
-    auto init_watcher = [&](Go_Index_Watcher *w, Go_Watch_Type type) -> bool {
-        w->type = type;
-        w->_this = _this;
-        w->thread = create_thread(run_watcher_stub, w);
-        return w->thread != NULL;
-    };
+        auto gomod_path = path_join(dir_name, "go.mod");
+        if (check_path(gomod_path) == CPR_FILE) {
+            auto gomod = parse_gomod_file(gomod_path);
+            if (gomod->exists) {
+                auto ret = resolve_import_from_gomod(import_path, gomod, ctx);
+                if (ret != NULL) return ret;
+            }
+        }
+    } while (curr_path->goto_parent());
 
-    if (!init_watcher(&wksp_watcher, WATCH_WKSP)) return false;
-    if (!init_watcher(&gopath_watcher, WATCH_GOPATH)) return false;
-    if (!init_watcher(&pkgmod_watcher, WATCH_PKGMOD)) return false;
-    if (!init_watcher(&goroot_watcher, WATCH_GOROOT)) return false;
+    auto ret = check_potential_resolved_import(path_join(GOPATH, "src", import_path));
+    if (ret == NULL)
+        ret = check_potential_resolved_import(path_join(GOROOT, "src", import_path));
+    return ret;
+}
 
-    bg_thread = create_thread(run_background_thread_stub, this);
-    if (bg_thread == NULL) return false;
+List<Godecl> *Go_Indexer::parameter_list_to_fields(Ast_Node *params) {
+    u32 count = 0;
+    FOR_NODE_CHILDREN (params) {
+        auto param = it;
+        auto type_node = it->field(TSF_TYPE);
+        FOR_NODE_CHILDREN (param) {
+            if (it->eq(type_node)) break;
+            count++;
+        }
+    }
+
+    auto ret = alloc_list<Godecl>(count);
+
+    FOR_NODE_CHILDREN (params) {
+        auto type_node = it->field(TSF_TYPE);
+        auto param_node = it;
+
+        FOR_NODE_CHILDREN (param_node) {
+            if (it->eq(type_node)) break;
+
+            auto field = ret->append();
+            field->type = GODECL_FIELD;
+            field->decl_start = param_node->start;
+            field->spec_start = param_node->start;
+            field->name_start = it->start;
+            field->name = it->string();
+            field->gotype = node_to_gotype(type_node);
+        }
+    }
+
+    return ret;
+}
+
+bool Go_Indexer::node_func_to_gotype_sig(Ast_Node *params, Ast_Node *result, Go_Func_Sig *sig) {
+    if (params->type != TS_PARAMETER_LIST) return false;
+
+    sig->params = parameter_list_to_fields(params);
+
+    if (!result->null) {
+        if (result->type == TS_PARAMETER_LIST) {
+            sig->result = parameter_list_to_fields(result);
+        } else {
+            sig->result = alloc_list<Godecl>(1);
+            auto field = sig->result->append();
+            field->type = GODECL_FIELD;
+            field->decl_start = result->start;
+            field->spec_start = result->start;
+            field->name = NULL;
+            field->gotype = node_to_gotype(result);
+        }
+    }
 
     return true;
 }
 
-void Go_Index::cleanup() {
-    auto kill_and_close = [&](Thread_Handle *phandle) {
-        if (*phandle != NULL) {
-            kill_thread(*phandle);
-            close_thread_handle(*phandle);
-            *phandle = NULL;
+Gotype *Go_Indexer::node_to_gotype(Ast_Node *node) {
+    if (node->null) return NULL;
+
+    Gotype *ret = NULL;
+
+    switch (node->type) {
+    case TS_QUALIFIED_TYPE:
+        {
+            auto pkg_node = node->field(TSF_PACKAGE);
+            if (pkg_node->null) break;
+            auto name_node = node->field(TSF_NAME);
+            if (name_node->null) break;
+
+            ret = new_gotype(GOTYPE_SEL);
+            ret->sel_name = pkg_node->string();
+            ret->sel_sel = name_node->string();
         }
+        break;
+
+    case TS_TYPE_IDENTIFIER:
+        ret = new_gotype(GOTYPE_ID);
+        ret->id_name = node->string();
+        break;
+
+    case TS_POINTER_TYPE:
+        ret = new_gotype(GOTYPE_POINTER);
+        ret->pointer_base = node_to_gotype(node->child());
+        break;
+
+    case TS_ARRAY_TYPE:
+        ret = new_gotype(GOTYPE_ARRAY);
+        ret->array_base = node_to_gotype(node->field(TSF_ELEMENT));
+        break;
+
+    case TS_SLICE_TYPE:
+        ret = new_gotype(GOTYPE_SLICE);
+        ret->slice_base = node_to_gotype(node->field(TSF_ELEMENT));
+        break;
+
+    case TS_MAP_TYPE:
+        ret = new_gotype(GOTYPE_MAP);
+        ret->map_key = node_to_gotype(node->field(TSF_KEY));
+        ret->map_value = node_to_gotype(node->field(TSF_VALUE));
+        break;
+
+    case TS_STRUCT_TYPE:
+        {
+            auto fieldlist_node = node->child();
+            if (fieldlist_node->null) break;
+            ret = new_gotype(GOTYPE_STRUCT);
+
+            s32 num_children = 0;
+
+            FOR_NODE_CHILDREN (fieldlist_node) {
+                auto field_node = it;
+                auto type_node = field_node->field(TSF_TYPE);
+
+                u32 total = 0;
+                FOR_NODE_CHILDREN (field_node) {
+                    if (it->eq(type_node)) break;
+                    total++;
+                }
+                if (total == 0) total++;
+
+                num_children += total;
+            }
+
+            ret->struct_specs = alloc_list<Go_Struct_Spec>(num_children);
+
+            FOR_NODE_CHILDREN (fieldlist_node) {
+                auto field_node = it;
+
+                auto tag_node = field_node->field(TSF_TAG);
+                auto type_node = field_node->field(TSF_TYPE);
+                auto field_type = node_to_gotype(type_node);
+
+                bool names_found = false;
+                FOR_NODE_CHILDREN (field_node) {
+                    names_found = !it->eq(type_node);
+                    break;
+                }
+
+                if (names_found) {
+                    FOR_NODE_CHILDREN (field_node) {
+                        if (it->eq(type_node)) break;
+
+                        auto spec = ret->struct_specs->append();
+
+                        if (!tag_node->null)
+                            spec->tag = tag_node->string();
+
+                        spec->is_embedded = false;
+
+                        auto field = alloc_object(Godecl);
+                        field->type = GODECL_FIELD;
+                        field->gotype = field_type;
+                        field->name = it->string();
+                        field->name_start = it->start;
+                        field->spec_start = field_node->start;
+                        field->decl_start = field_node->start;
+
+                        spec->field = field;
+                    }
+                } else {
+                    auto spec = ret->struct_specs->append();
+                    if (!tag_node->null)
+                        spec->tag = tag_node->string();
+                    spec->is_embedded = true;
+                    spec->embedded_type = field_type;
+                }
+            }
+        }
+        break;
+
+    case TS_CHANNEL_TYPE:
+        ret = new_gotype(GOTYPE_CHAN);
+        ret->chan_base = node_to_gotype(node->field(TSF_VALUE));
+        break;
+
+    case TS_INTERFACE_TYPE:
+        {
+            auto speclist_node = node->child();
+            if (speclist_node->null) break;
+
+            ret = alloc_object(Gotype);
+            ret->type = GOTYPE_INTERFACE;
+            ret->interface_specs = alloc_list<Go_Struct_Spec>(speclist_node->child_count);
+
+            FOR_NODE_CHILDREN (speclist_node) {
+                auto spec = ret->interface_specs->append();
+                if (it->type == TS_METHOD_SPEC) {
+                    spec->is_embedded = false;
+
+                    auto field = alloc_object(Godecl);
+                    field->type = GODECL_FIELD;
+                    field->name = it->field(TSF_NAME)->string();
+                    field->gotype = new_gotype(GOTYPE_FUNC);
+                    node_func_to_gotype_sig(
+                        it->field(TSF_PARAMETERS),
+                        it->field(TSF_RESULT),
+                        &field->gotype->func_sig
+                    );
+
+                    spec->field = field;
+                } else {
+                    spec->is_embedded = true;
+                    spec->embedded_type = node_to_gotype(it);
+                }
+            }
+        }
+        break;
+
+    case TS_FUNCTION_TYPE:
+        ret = new_gotype(GOTYPE_FUNC);
+        if (!node_func_to_gotype_sig(node->field(TSF_PARAMETERS), node->field(TSF_RESULT), &ret->func_sig))
+            ret = NULL;
+        break;
+    }
+
+    return ret;
+}
+
+Ast_Node *Go_Indexer::new_ast_node(TSNode node) {
+    auto ret = alloc_object(Ast_Node);
+    ret->init(node);
+    ret->indexer = this;
+    return ret;
+}
+
+void Go_Indexer::node_to_decls(Ast_Node *node, List<Goresult> *results, Go_Ctx *ctx) {
+    auto new_result = [&]() -> Goresult* {
+        auto res = results->append();
+        res->ctx = ctx;
+        res->decl = alloc_object(Godecl);
+        res->decl->file = ctx->filename;
+        res->decl->decl_start = node->start;
+        return res;
     };
 
-    kill_and_close(&bg_thread);
-    kill_and_close(&wksp_watcher.thread);
-    kill_and_close(&gopath_watcher.thread);
-    kill_and_close(&pkgmod_watcher.thread);
-    kill_and_close(&goroot_watcher.thread);
+    switch (node->type) {
+    case TS_IMPORT_DECLARATION:
+        {
+            auto speclist_node = node->child();
+            if (speclist_node->null) break;
+            for (auto spec = speclist_node->child(); !spec->null; spec = spec->next()) {
+                auto decl = new_result()->decl;
 
-    wksp_watcher.watch.cleanup();
-    gopath_watcher.watch.cleanup();
-    pkgmod_watcher.watch.cleanup();
-    goroot_watcher.watch.cleanup();
+                decl->type = GODECL_IMPORT;
+                decl->spec_start = spec->start;
 
-    index_events_lock.cleanup();
-    fs_event_lock.cleanup();
+                auto name_node = spec->field(TSF_NAME);
+                if (!name_node->null) {
+                    decl->name = name_node->string();
+                    decl->name_start = name_node->start;
+                }
 
-    background_mem.cleanup();
-    watcher_mem.cleanup();
-    main_thread_mem.cleanup();
-    general_mem.cleanup();
+                auto path_node = spec->field(TSF_PATH);
+                if (!path_node->null)
+                    decl->import_path = path_node->string();
+            }
+        }
+        break;
+
+    case TS_FUNCTION_DECLARATION:
+    case TS_METHOD_DECLARATION:
+        {
+            auto name = node->field(TSF_NAME);
+            if (name->null) break;
+
+            auto decl = new_result()->decl;
+            decl->type = GODECL_FUNC;
+            decl->spec_start = node->start;
+            decl->name_start = name->start;
+            decl->name = name->string();
+
+            auto params_node = node->field(TSF_PARAMETERS);
+            auto result_node = node->field(TSF_RESULT);
+
+            decl->gotype = new_gotype(GOTYPE_FUNC);
+            if (!node_func_to_gotype_sig(params_node, result_node, &decl->gotype->func_sig)) break;
+
+            if (node->type == TS_METHOD_DECLARATION) {
+                auto recv_node = node->field(TSF_RECEIVER);
+                auto recv_type = recv_node->child()->field(TSF_TYPE);
+                if (!recv_type->null)
+                    decl->gotype->func_recv = node_to_gotype(recv_type);
+            }
+        }
+        break;
+
+    case TS_SHORT_VAR_DECLARATION:
+        {
+            auto left = node->field(TSF_LEFT);
+            auto right = node->field(TSF_RIGHT);
+
+            if (left->type != TS_EXPRESSION_LIST) break;
+            if (right->type != TS_EXPRESSION_LIST) break;
+
+            /*
+             * scenarios:
+             * left = 1, right = 1
+             * left = multi, right = multi
+             * left = multi, right = 1
+             */
+
+            if (left->child_count == 1) {
+                if (right->child_count != 1) break;
+
+                auto res = infer_type(right->child(), ctx);
+                if (res == NULL) break;
+
+                auto name_node = left->child();
+                if (name_node->type != TS_IDENTIFIER) break;
+
+                auto decl = new_result()->decl;
+                decl->type = GODECL_SHORTVAR;
+                decl->spec_start = node->start;
+                decl->name_start = name_node->start;
+                decl->name = name_node->string();
+                decl->gotype = res->gotype;
+                break;
+            }
+
+            if (right->child_count == 1) {
+                auto res = infer_type(right->child(), ctx);
+                if (res == NULL) break;
+                auto gotype = res->gotype;
+                if (gotype->type != GOTYPE_MULTI) break;
+                if (left->child_count != gotype->multi_types->len) break;
+
+                u32 i = 0;
+                FOR_NODE_CHILDREN (left) {
+                    auto name_node = it;
+                    if (it->type != TS_IDENTIFIER) continue;
+
+                    auto single_gotype = gotype->multi_types->at(i++);
+
+                    auto decl = new_result()->decl;
+                    decl->type = GODECL_SHORTVAR;
+                    decl->spec_start = node->start;
+                    decl->name_start = name_node->start;
+                    decl->name = name_node->string();
+                    decl->gotype = single_gotype;
+                }
+
+                break;
+            }
+
+            if (left->child_count != right->child_count) break;
+
+            u32 i = 0;
+
+            Ast_Node *lchild = left->child(), *rchild = right->child();
+            while (!lchild->null) {
+                if (lchild->type != TS_IDENTIFIER) continue;
+
+                auto res = infer_type(rchild, ctx);
+                if (res == NULL) break;
+
+                auto decl = new_result()->decl;
+                decl->type = GODECL_SHORTVAR;
+                decl->spec_start = node->start;
+                decl->name_start = lchild->start;
+                decl->name = lchild->string();
+                decl->gotype = res->gotype;
+
+                lchild = lchild->next();
+                rchild = rchild->next();
+            }
+        }
+        break;
+
+    case TS_TYPE_DECLARATION:
+        for (auto spec = node->child(); !spec->null; spec = spec->next()) {
+            auto name_node = spec->field(TSF_NAME);
+            if (name_node->null) continue;
+
+            auto type_node = spec->field(TSF_TYPE);
+            if (type_node->null) continue;
+
+            auto decl = new_result()->decl;
+            decl->type = GODECL_TYPE;
+            decl->spec_start = spec->start;
+            decl->name_start = name_node->start;
+            decl->name = name_node->string();
+            decl->gotype = node_to_gotype(type_node);
+        }
+        break;
+
+    case TS_CONST_DECLARATION:
+    case TS_VAR_DECLARATION:
+        FOR_NODE_CHILDREN(node) {
+            auto spec = it;
+            auto type_node = spec->field(TSF_TYPE);
+            auto value_node = spec->field(TSF_VALUE);
+
+            if (type_node->null && value_node->null) continue;
+
+            Ast_Node *curr_value = NULL;
+            if (!value_node->null) {
+                our_assert(value_node->type == TS_EXPRESSION_LIST, "rhs must be a TS_EXPRESSION_LIST");
+                curr_value = value_node->child();
+            }
+
+            FOR_NODE_CHILDREN(spec) {
+                if (it->eq(type_node) || it->eq(value_node)) break;
+                auto name_node = it;
+
+                auto make_res = [&]() {
+                    auto res = new_result();
+                    auto decl = res->decl;
+                    decl->type = node->type == TS_CONST_DECLARATION ? GODECL_CONST : GODECL_VAR;
+                    decl->spec_start = spec->start;
+                    decl->name_start = name_node->start;
+                    decl->name = name_node->string();
+                    return res;
+                };
+
+                if (!type_node->null) {
+                    auto res = make_res();
+                    res->decl->gotype = node_to_gotype(type_node);
+                } else {
+                    if (curr_value->null) break;
+                    auto res2 = infer_type(curr_value, ctx);
+                    curr_value = curr_value->next();
+                    if (res2 == NULL) continue;
+
+                    auto res = make_res();
+                    res->ctx = res2->ctx;
+                    res->decl->gotype = res2->gotype;
+                }
+            }
+        }
+        break;
+    }
+}
+
+Goresult *Go_Indexer::unpointer_type(Gotype *type, Go_Ctx *ctx) {
+    while (type->type == GOTYPE_POINTER)
+        type = type->pointer_base;
+    return make_goresult(type, ctx);
+}
+
+List<Godecl> *Go_Indexer::get_package_decls(ccstr import_path, ccstr resolved_path) {
+    For (*index.packages)
+        if (it.status != GPS_OUTDATED)
+            if (streq(it.import_path, import_path))
+                if (streq(it.resolved_path, resolved_path))
+                    return it.decls;
+    return NULL;
+}
+
+Goresult *Go_Indexer::find_decl_in_package(ccstr id, ccstr import_path, ccstr resolved_path) {
+    auto decls = get_package_decls(import_path, resolved_path);
+    if (decls == NULL) return NULL;
+
+    // in the future we can sort this shit
+    For (*decls) {
+        if (streq(it.name, id)) {
+            auto ctx = alloc_object(Go_Ctx);
+            ctx->import_path = import_path;
+            ctx->resolved_path = resolved_path;
+            ctx->filename = it.file;
+            return make_goresult(&it, ctx);
+        }
+    }
+
+    return NULL;
+}
+
+Goresult *Go_Indexer::infer_type(Ast_Node *expr, Go_Ctx *ctx) {
+    if (expr->null) return NULL;
+
+    switch (expr->type) {
+    case TS_UNARY_EXPRESSION:
+        {
+            auto operator_node = expr->field(TSF_OPERATOR);
+            auto operand_node = expr->field(TSF_OPERAND);
+            switch (operator_node->type) {
+            // case TS_RANGE: // idk even what to do here
+            case TS_PLUS: // add
+            case TS_DASH: // sub
+            case TS_CARET: // xor
+                {
+                    auto type = new_gotype(GOTYPE_ID);
+                    type->id_name = "int";
+                    return make_goresult(type, NULL);
+                }
+                break;
+            case TS_BANG: // not
+                {
+                    auto type = new_gotype(GOTYPE_ID);
+                    type->id_name = "bool";
+                    return make_goresult(type, NULL);
+                }
+                break;
+            case TS_STAR: // mul
+                {
+                    auto res = infer_type(operand_node, ctx);
+                    if (res == NULL) return NULL;
+                    if (res->gotype->type != GOTYPE_POINTER) return NULL;
+                    return make_goresult(res->gotype->pointer_base, res->ctx);
+                }
+                break;
+            case TS_AMP: // and
+                {
+                    auto res = infer_type(operand_node, ctx);
+                    if (res == NULL) return NULL;
+
+                    auto type = new_gotype(GOTYPE_POINTER);
+                    type->pointer_base = res->gotype;
+                    return make_goresult(type, res->ctx);
+                }
+                break;
+            case TS_LT_DASH: // arrow
+                {
+                    auto res = infer_type(operand_node, ctx);
+                    if (res == NULL) return NULL;
+                    if (res->gotype->type != GOTYPE_CHAN) return NULL;
+                    return make_goresult(res->gotype->chan_base, res->ctx);
+                }
+                break;
+            }
+        }
+        break;
+
+    case TS_CALL_EXPRESSION:
+        {
+            auto func_node = expr->field(TSF_FUNCTION);
+
+            auto res = infer_type(func_node, ctx);
+            if (res == NULL) break;
+
+            res = resolve_type(res->gotype, res->ctx);
+            res = unpointer_type(res->gotype, res->ctx);
+
+            if (res->gotype->type != GOTYPE_FUNC) return NULL;
+
+            auto result = res->gotype->func_sig.result;
+            if (result == NULL) return NULL;
+
+            auto ret = new_gotype(GOTYPE_MULTI);
+            ret->multi_types = alloc_list<Gotype*>(result->len);
+            For (*result) ret->multi_types->append(it.gotype);
+            return make_goresult(ret, ctx);
+        }
+        break;
+
+    case TS_INDEX_EXPRESSION:
+        {
+            auto operand_node = expr->field(TSF_OPERAND);
+
+            auto res = infer_type(operand_node, ctx);
+            if (res == NULL) return NULL;
+
+            res = resolve_type(res->gotype, res->ctx);
+            res = unpointer_type(res->gotype, res->ctx);
+
+            auto operand_type = res->gotype;
+
+            switch (operand_type->type) {
+            case GOTYPE_ARRAY: return make_goresult(operand_type->array_base, res->ctx);
+            case GOTYPE_MAP: return make_goresult(operand_type->map_value, res->ctx);
+            case GOTYPE_SLICE: return make_goresult(operand_type->slice_base, res->ctx);
+            case GOTYPE_ID:
+                if (streq(operand_type->id_name, "string")) {
+                    auto ret = new_gotype(GOTYPE_ID);
+                    ret->id_name = "rune";
+                    return make_goresult(ret, NULL);
+                }
+                break;
+            }
+        }
+        break;
+
+    case TS_SELECTOR_EXPRESSION:
+        {
+            auto operand_node = expr->field(TSF_OPERAND);
+            auto field_node = expr->field(TSF_FIELD);
+            auto field_name = field_node->string();
+
+            Goresult *res = NULL;
+
+            if (operand_node->type == TS_IDENTIFIER) {
+                auto decl_res = find_decl_of_id(operand_node->string(), operand_node->start, ctx);
+                if (decl_res != NULL) {
+                    auto decl = decl_res->decl;
+                    if (decl->type == GODECL_IMPORT) {
+                        do {
+                            auto ri = resolve_import(decl->import_path, ctx);
+                            if (ri == NULL) break;
+
+                            auto res = find_decl_in_package(field_name, decl->import_path, ri->path);
+                            if (res == NULL) break;
+
+                            auto ext_decl = res->decl;
+                            switch (ext_decl->type) {
+                            case GODECL_VAR:
+                            case GODECL_CONST:
+                            case GODECL_FUNC:
+                                return make_goresult(ext_decl->gotype, ctx);
+                            }
+                        } while (0);
+                        return NULL;
+                    } else {
+                        res = make_goresult(decl->gotype, decl_res->ctx);
+                    }
+                }
+            }
+
+            if (res == NULL)
+                res = infer_type(operand_node, ctx);
+
+            if (res == NULL) return NULL;
+
+            auto resolved_res = resolve_type(res->gotype, res->ctx);
+            resolved_res = unpointer_type(res->gotype, resolved_res->ctx);
+
+            List<Goresult> results;
+            results.init();
+            list_fields_and_methods(res, resolved_res, &results);
+
+            For (results) {
+                auto decl = it.decl;
+                if (streq(decl->name, field_name))
+                    return make_goresult(decl->gotype, it.ctx);
+            }
+        }
+        break;
+
+    case TS_SLICE_EXPRESSION:
+        return infer_type(expr->field(TSF_OPERAND), ctx);
+
+    case TS_TYPE_ASSERTION_EXPRESSION:
+    case TS_TYPE_CONVERSION_EXPRESSION:
+    case TS_COMPOSITE_LITERAL:
+        {
+            auto type_node = expr->field(TSF_TYPE);
+            if (type_node->null) return NULL;
+            return make_goresult(node_to_gotype(type_node), ctx);
+        }
+
+    case TS_IDENTIFIER:
+        {
+            auto res = find_decl_of_id(expr->string(), expr->start, ctx);
+            if (res == NULL) return NULL;
+            return make_goresult(res->decl->gotype, ctx);
+        }
+    }
+
+    return NULL;
+}
+
+Goresult *make_goresult(Gotype *gotype, Go_Ctx *ctx) {
+    auto ret = alloc_object(Goresult);
+    // ret->type = GORESULT_GOTYPE;
+    ret->gotype = gotype;
+    ret->ctx = ctx;
+    return ret;
+}
+
+Goresult *make_goresult(Godecl *decl, Go_Ctx *ctx) {
+    auto ret = alloc_object(Goresult);
+    // ret->type = GORESULT_DECL;
+    ret->decl = decl;
+    ret->ctx = ctx;
+    return ret;
+}
+
+Goresult *Go_Indexer::resolve_type(Gotype *type, Go_Ctx *ctx) {
+    switch (type->type) {
+    case GOTYPE_POINTER:
+        {
+            auto res = resolve_type(type->pointer_base, ctx);
+            if (res == NULL) break;
+
+            auto ret = new_gotype(GOTYPE_POINTER);
+            ret->pointer_base = res->gotype;
+
+            return make_goresult(ret, res->ctx);
+        }
+        break;
+
+    case GOTYPE_ID:
+        {
+            auto res = find_decl_of_id(type->id_name, type->id_pos, ctx);
+            if (res == NULL)
+                res = find_decl_in_package(type->id_name, ctx->import_path, ctx->resolved_path);
+
+            if (res == NULL) break;
+            if (res->decl->type != GODECL_TYPE) break;
+            return resolve_type(res->decl->gotype, res->ctx);
+        }
+
+    case GOTYPE_SEL:
+        {
+            ccstr resolved_path = NULL;
+            auto import_path = find_import_path_referred_to_by_id(type->sel_name, ctx, &resolved_path);
+            if (import_path == NULL) break;
+            if (resolved_path == NULL) break;
+
+            auto res = find_decl_in_package(type->sel_sel, import_path, resolved_path);
+            if (res == NULL) break;
+            if (res->decl->type != GODECL_TYPE) break;
+
+            return resolve_type(res->decl->gotype, res->ctx);
+        }
+    }
+    return make_goresult(type, ctx);
 }
 
 // -----
 
-s32 num_index_stream_opens = 0;
-s32 num_index_stream_closes = 0;
+void walk_ts_cursor(TSTreeCursor *curr, bool abstract_only, Walk_TS_Callback cb) {
+    List<bool> processed;
+    processed.init();
+    processed.append(false);
+    int depth = 0;
 
-File_Result Index_Stream::open(ccstr _path, u32 access, File_Open_Mode open_mode) {
-    ptr0(this);
-
-    path = _path;
-    offset = 0;
-    ok = true;
-
-    // TODO: CREATE_NEW? what's the policy around if index already exists?
-    auto ret = f.init(path, access, open_mode);
-    if (ret == FILE_RESULT_SUCCESS)
-        num_index_stream_opens++;
-    return ret;
-}
-
-void Index_Stream::cleanup() {
-    num_index_stream_closes++;
-    f.cleanup();
-}
-
-bool Index_Stream::seek(u32 _offset) {
-    offset = f.seek(_offset);
-    return true; // ???
-}
-
-bool Index_Stream::writen(void* buf, int n) {
-    s32 written = 0;
-    if (f.write((char*)buf, n, &written)) {
-        offset += written;
-        return true;
-    }
-    return false;
-}
-
-bool Index_Stream::write1(i8 x) { return writen(&x, 1); }
-bool Index_Stream::write2(i16 x) { return writen(&x, 2); }
-bool Index_Stream::write4(i32 x) { return writen(&x, 4); }
-bool Index_Stream::write8(i64 x) { return writen(&x, 8); }
-
-bool Index_Stream::writestr(ccstr s) {
-    auto len = strlen(s);
-    if (!write2(len)) return false;
-    if (!writen((void*)s, len)) return false;
-    return true;
-}
-
-bool Index_Stream::write_file_header(Index_File_Type type) {
-    if (!write4(INDEX_MAGIC_NUMBER)) return false;
-    if (!write1(type)) return false;
-
-    return true;
-}
-
-void Index_Stream::readn(void* buf, s32 n) {
-    ok = f.read((char*)buf, n);
-    if (ok) offset += n;
-}
-
-char Index_Stream::read1() {
-    char ch = 0;
-    readn(&ch, 1);
-    return ch;
-}
-
-i16 Index_Stream::read2() {
-    char buf[2];
-    readn(buf, 2);
-    return ok ? *(i16*)buf : 0;
-}
-
-i32 Index_Stream::read4() {
-    char buf[4];
-    readn(buf, 4);
-    return ok ? *(i32*)buf : 0;
-}
-
-ccstr Index_Stream::readstr() {
-    Frame frame;
-
-    auto size = (u32)read2();
-    if (!ok) return NULL;
-
-    auto s = alloc_array(char, size + 1);
-    for (u32 i = 0; i < size; i++) {
-        s[i] = read1();
-        if (!ok) {
-            frame.restore();
-            return NULL;
-        }
-    }
-
-    ok = true;
-    return s;
-}
-
-bool Index_Stream::read_file_header(Index_File_Type wanted_type) {
-    if (read4() == INDEX_MAGIC_NUMBER)
-        if (read1() == wanted_type)
-            return true;
-    return false;
-}
-
-void Index_Writer::init() {
-    ptr0(this);
-    decls.init(LIST_POOL, 128);
-}
-
-int Index_Writer::open(ccstr import_path) {
-    index_path = get_index_path(import_path);
-    if (!ensure_directory_exists(index_path))
-        return FILE_RESULT_FAILURE;
-
-    auto res = findex.open(path_join(index_path, "index"), FILE_MODE_WRITE, FILE_CREATE_NEW);
-    if (res != FILE_RESULT_SUCCESS) return res;
-
-    res = fdata.open(path_join(index_path, "data"), FILE_MODE_WRITE, FILE_CREATE_NEW);
-    if (res != FILE_RESULT_SUCCESS) return res;
-
-    return FILE_RESULT_SUCCESS;
-}
-
-void Index_Writer::write_headers(ccstr resolved_path, Import_Location loctype) {
-    findex.write_file_header(INDEX_FILE_INDEX);
-    findex.writestr(resolved_path);
-    findex.write1(loctype);
-
-    fdata.write_file_header(INDEX_FILE_DATA);
-}
-
-void Index_Writer::close() {
-    findex.cleanup();
-    fdata.cleanup();
-}
-
-#define IW_ASSERT(x) if (!(x)) return false
-
-bool Index_Writer::write_hash(u64 hash) {
-    Index_Stream f;
-    if (f.open(path_join(index_path, "hash"), FILE_MODE_WRITE, FILE_CREATE_NEW) != FILE_RESULT_SUCCESS)
-        return false;
-    defer { f.cleanup(); };
-
-    if (!f.write_file_header(INDEX_FILE_HASH)) return false;
-    if (!f.writen(&hash, sizeof(hash))) return false;
-
-    return true;
-}
-
-bool Index_Writer::finish_writing() {
-    IW_ASSERT(findex.write4(decls.len));
-
-    decls.sort([](Decl_To_Write *a, Decl_To_Write *b) -> int {
-        return strcmp(a->name, b->name);
-    });
-
-    For (decls) {
-        IW_ASSERT(findex.write4(it.offset));
-    }
-}
-
-bool Index_Writer::write_decl(ccstr filename, ccstr name, Ast* spec) {
-    auto get_entry_type = [&]() {
-        switch (spec->type) {
-        case AST_TYPE_SPEC: return IET_TYPE;
-        case AST_FUNC_DECL: return IET_FUNC;
-        case AST_VALUE_SPEC:
-            switch (spec->value_spec.spec_type) {
-            case TOK_CONST: return IET_CONST;
-            case TOK_VAR: return IET_VAR;
+    while (true) {
+        if (processed[depth]) {
+            if (ts_tree_cursor_goto_next_sibling(curr)) {
+                processed[depth] = false;
+                continue;
+            }
+            if (ts_tree_cursor_goto_parent(curr)) {
+                processed.len--;
+                depth--;
+                continue;
             }
             break;
         }
-        return IET_INVALID;
-    };
 
-    auto type = get_entry_type();
-    if (type == IET_INVALID) return false;
+        auto node = ts_tree_cursor_current_node(curr);
+        if (abstract_only && !ts_node_is_named(node)) {
+            processed[depth] = true;
+            continue;
+        }
 
-    auto has_dot = [&](ccstr s) {
-        for (u32 i = 0; s[i] != '\0'; i++)
-            if (s[i] == '.')
-                return true;
-        return false;
-    };
+        Ast_Node wrapped_node;
+        wrapped_node.init(node);
 
-    if (true || has_dot(name)) {
-        print(
-            "        write: %s, %s, %s, %s",
-            format_pos(spec->start),
-            index_entry_type_str(type),
-            name,
-            our_basename(filename)
-        );
+        auto field_type = ts_tree_cursor_current_field_id(curr);
+        auto result = cb(&wrapped_node, (Ts_Field_Type)field_type, depth);
+        if (result == WALK_ABORT) break;
+
+        processed[depth] = true;
+
+        if (result != WALK_SKIP_CHILDREN)
+            if (ts_tree_cursor_goto_first_child(curr))
+                processed.append(false), depth++;
     }
-
-    auto decl_to_write = decls.append();
-    decl_to_write->offset = fdata.offset;
-    decl_to_write->name = our_strcpy(name);
-
-    Index_Entry_Hdr hdr = {
-        .type = type,
-        .pos = spec->start,
-    };
-
-    IW_ASSERT(fdata.writen(&hdr, sizeof(hdr)));
-    IW_ASSERT(fdata.writestr(our_basename(filename)));
-    IW_ASSERT(fdata.writestr(name));
-
-    return true;
 }
 
-#undef IW_ASSERT
-
-bool Index_Reader::init(ccstr _index_path) {
-    index_path = _index_path;
-    indexfile_path = path_join(index_path, "index");
-    datafile_path = path_join(index_path, "data");
-
-    Index_Stream findex;
-    if (findex.open(indexfile_path, FILE_MODE_READ, FILE_OPEN_EXISTING) != FILE_RESULT_SUCCESS) {
-        print("couldn't open index");
-        return false;
-    }
-    defer { findex.cleanup(); };
-
-    if (fdata.open(datafile_path, FILE_MODE_READ, FILE_OPEN_EXISTING) != FILE_RESULT_SUCCESS) {
-        print("couldn't open data");
-        return false;
-    }
-
-    assert(findex.read_file_header(INDEX_FILE_INDEX));
-    assert(fdata.read_file_header(INDEX_FILE_DATA));
-
-    meta.package_path = findex.readstr();
-    meta.loctype = (Import_Location)findex.read1();
-
-    auto decl_count = findex.read4();
-    decl_offsets = alloc_list<i32>(decl_count);
-    for (u32 i = 0; i < decl_count; i++)
-        decl_offsets->append(findex.read4());
+TSPoint cur_to_tspoint(cur2 c) {
+    TSPoint point;
+    point.row = c.y;
+    point.column = c.x;
+    return point;
 }
 
-void Index_Reader::cleanup() {
-    fdata.cleanup();
+cur2 tspoint_to_cur(TSPoint p) {
+    cur2 c;
+    c.x = p.column;
+    c.y = p.row;
+    return c;
 }
 
-List<Index_Entry> *Index_Reader::list_decls() {
-    auto ret = alloc_list<Index_Entry>();
-    For (*decl_offsets) {
-        auto out = ret->append();
+ccstr ts_field_type_str(Ts_Field_Type type) {
+    switch (type) {
+    define_str_case(TSF_ALIAS);
+    define_str_case(TSF_ALTERNATIVE);
+    define_str_case(TSF_ARGUMENTS);
+    define_str_case(TSF_BODY);
+    define_str_case(TSF_CAPACITY);
+    define_str_case(TSF_CHANNEL);
+    define_str_case(TSF_COMMUNICATION);
+    define_str_case(TSF_CONDITION);
+    define_str_case(TSF_CONSEQUENCE);
+    define_str_case(TSF_ELEMENT);
+    define_str_case(TSF_END);
+    define_str_case(TSF_FIELD);
+    define_str_case(TSF_FUNCTION);
+    define_str_case(TSF_INDEX);
+    define_str_case(TSF_INITIALIZER);
+    define_str_case(TSF_KEY);
+    define_str_case(TSF_LABEL);
+    define_str_case(TSF_LEFT);
+    define_str_case(TSF_LENGTH);
+    define_str_case(TSF_NAME);
+    define_str_case(TSF_OPERAND);
+    define_str_case(TSF_OPERATOR);
+    define_str_case(TSF_PACKAGE);
+    define_str_case(TSF_PARAMETERS);
+    define_str_case(TSF_PATH);
+    define_str_case(TSF_RECEIVER);
+    define_str_case(TSF_RESULT);
+    define_str_case(TSF_RIGHT);
+    define_str_case(TSF_START);
+    define_str_case(TSF_TAG);
+    define_str_case(TSF_TYPE);
+    define_str_case(TSF_UPDATE);
+    define_str_case(TSF_VALUE);
+    }
+    return NULL;
+}
 
-        fdata.seek(it);
-        fdata.readn(&out->hdr, sizeof(out->hdr));
-        out->filename = fdata.readstr();     // TODO: do we need to copy this?
-        out->name = fdata.readstr();
+ccstr ts_ast_type_str(Ts_Ast_Type type) {
+    switch (type) {
+    define_str_case(TS_ERROR);
+    define_str_case(TS_IDENTIFIER);
+    define_str_case(TS_LF);
+    define_str_case(TS_SEMI);
+    define_str_case(TS_PACKAGE);
+    define_str_case(TS_IMPORT);
+    define_str_case(TS_ANON_DOT);
+    define_str_case(TS_BLANK_IDENTIFIER);
+    define_str_case(TS_LPAREN);
+    define_str_case(TS_RPAREN);
+    define_str_case(TS_CONST);
+    define_str_case(TS_COMMA);
+    define_str_case(TS_EQ);
+    define_str_case(TS_VAR);
+    define_str_case(TS_FUNC);
+    define_str_case(TS_DOT_DOT_DOT);
+    define_str_case(TS_TYPE);
+    define_str_case(TS_STAR);
+    define_str_case(TS_LBRACK);
+    define_str_case(TS_RBRACK);
+    define_str_case(TS_STRUCT);
+    define_str_case(TS_LBRACE);
+    define_str_case(TS_RBRACE);
+    define_str_case(TS_INTERFACE);
+    define_str_case(TS_MAP);
+    define_str_case(TS_CHAN);
+    define_str_case(TS_LT_DASH);
+    define_str_case(TS_COLON_EQ);
+    define_str_case(TS_PLUS_PLUS);
+    define_str_case(TS_DASH_DASH);
+    define_str_case(TS_STAR_EQ);
+    define_str_case(TS_SLASH_EQ);
+    define_str_case(TS_PERCENT_EQ);
+    define_str_case(TS_LT_LT_EQ);
+    define_str_case(TS_GT_GT_EQ);
+    define_str_case(TS_AMP_EQ);
+    define_str_case(TS_AMP_CARET_EQ);
+    define_str_case(TS_PLUS_EQ);
+    define_str_case(TS_DASH_EQ);
+    define_str_case(TS_PIPE_EQ);
+    define_str_case(TS_CARET_EQ);
+    define_str_case(TS_COLON);
+    define_str_case(TS_FALLTHROUGH);
+    define_str_case(TS_BREAK);
+    define_str_case(TS_CONTINUE);
+    define_str_case(TS_GOTO);
+    define_str_case(TS_RETURN);
+    define_str_case(TS_GO);
+    define_str_case(TS_DEFER);
+    define_str_case(TS_IF);
+    define_str_case(TS_ELSE);
+    define_str_case(TS_FOR);
+    define_str_case(TS_RANGE);
+    define_str_case(TS_SWITCH);
+    define_str_case(TS_CASE);
+    define_str_case(TS_DEFAULT);
+    define_str_case(TS_SELECT);
+    define_str_case(TS_NEW);
+    define_str_case(TS_MAKE);
+    define_str_case(TS_PLUS);
+    define_str_case(TS_DASH);
+    define_str_case(TS_BANG);
+    define_str_case(TS_CARET);
+    define_str_case(TS_AMP);
+    define_str_case(TS_SLASH);
+    define_str_case(TS_PERCENT);
+    define_str_case(TS_LT_LT);
+    define_str_case(TS_GT_GT);
+    define_str_case(TS_AMP_CARET);
+    define_str_case(TS_PIPE);
+    define_str_case(TS_EQ_EQ);
+    define_str_case(TS_BANG_EQ);
+    define_str_case(TS_LT);
+    define_str_case(TS_LT_EQ);
+    define_str_case(TS_GT);
+    define_str_case(TS_GT_EQ);
+    define_str_case(TS_AMP_AMP);
+    define_str_case(TS_PIPE_PIPE);
+    define_str_case(TS_RAW_STRING_LITERAL);
+    define_str_case(TS_DQUOTE);
+    define_str_case(TS_INTERPRETED_STRING_LITERAL_TOKEN1);
+    define_str_case(TS_ESCAPE_SEQUENCE);
+    define_str_case(TS_INT_LITERAL);
+    define_str_case(TS_FLOAT_LITERAL);
+    define_str_case(TS_IMAGINARY_LITERAL);
+    define_str_case(TS_RUNE_LITERAL);
+    define_str_case(TS_NIL);
+    define_str_case(TS_TRUE);
+    define_str_case(TS_FALSE);
+    define_str_case(TS_COMMENT);
+    define_str_case(TS_SOURCE_FILE);
+    define_str_case(TS_PACKAGE_CLAUSE);
+    define_str_case(TS_IMPORT_DECLARATION);
+    define_str_case(TS_IMPORT_SPEC);
+    define_str_case(TS_DOT);
+    define_str_case(TS_IMPORT_SPEC_LIST);
+    define_str_case(TS_DECLARATION);
+    define_str_case(TS_CONST_DECLARATION);
+    define_str_case(TS_CONST_SPEC);
+    define_str_case(TS_VAR_DECLARATION);
+    define_str_case(TS_VAR_SPEC);
+    define_str_case(TS_FUNCTION_DECLARATION);
+    define_str_case(TS_METHOD_DECLARATION);
+    define_str_case(TS_PARAMETER_LIST);
+    define_str_case(TS_PARAMETER_DECLARATION);
+    define_str_case(TS_VARIADIC_PARAMETER_DECLARATION);
+    define_str_case(TS_TYPE_ALIAS);
+    define_str_case(TS_TYPE_DECLARATION);
+    define_str_case(TS_TYPE_SPEC);
+    define_str_case(TS_EXPRESSION_LIST);
+    define_str_case(TS_PARENTHESIZED_TYPE);
+    define_str_case(TS_SIMPLE_TYPE);
+    define_str_case(TS_POINTER_TYPE);
+    define_str_case(TS_ARRAY_TYPE);
+    define_str_case(TS_IMPLICIT_LENGTH_ARRAY_TYPE);
+    define_str_case(TS_SLICE_TYPE);
+    define_str_case(TS_STRUCT_TYPE);
+    define_str_case(TS_FIELD_DECLARATION_LIST);
+    define_str_case(TS_FIELD_DECLARATION);
+    define_str_case(TS_INTERFACE_TYPE);
+    define_str_case(TS_METHOD_SPEC_LIST);
+    define_str_case(TS_METHOD_SPEC);
+    define_str_case(TS_MAP_TYPE);
+    define_str_case(TS_CHANNEL_TYPE);
+    define_str_case(TS_FUNCTION_TYPE);
+    define_str_case(TS_BLOCK);
+    define_str_case(TS_STATEMENT_LIST);
+    define_str_case(TS_STATEMENT);
+    define_str_case(TS_EMPTY_STATEMENT);
+    define_str_case(TS_SIMPLE_STATEMENT);
+    define_str_case(TS_SEND_STATEMENT);
+    define_str_case(TS_RECEIVE_STATEMENT);
+    define_str_case(TS_INC_STATEMENT);
+    define_str_case(TS_DEC_STATEMENT);
+    define_str_case(TS_ASSIGNMENT_STATEMENT);
+    define_str_case(TS_SHORT_VAR_DECLARATION);
+    define_str_case(TS_LABELED_STATEMENT);
+    define_str_case(TS_EMPTY_LABELED_STATEMENT);
+    define_str_case(TS_FALLTHROUGH_STATEMENT);
+    define_str_case(TS_BREAK_STATEMENT);
+    define_str_case(TS_CONTINUE_STATEMENT);
+    define_str_case(TS_GOTO_STATEMENT);
+    define_str_case(TS_RETURN_STATEMENT);
+    define_str_case(TS_GO_STATEMENT);
+    define_str_case(TS_DEFER_STATEMENT);
+    define_str_case(TS_IF_STATEMENT);
+    define_str_case(TS_FOR_STATEMENT);
+    define_str_case(TS_FOR_CLAUSE);
+    define_str_case(TS_RANGE_CLAUSE);
+    define_str_case(TS_EXPRESSION_SWITCH_STATEMENT);
+    define_str_case(TS_EXPRESSION_CASE);
+    define_str_case(TS_DEFAULT_CASE);
+    define_str_case(TS_TYPE_SWITCH_STATEMENT);
+    define_str_case(TS_TYPE_SWITCH_HEADER);
+    define_str_case(TS_TYPE_CASE);
+    define_str_case(TS_SELECT_STATEMENT);
+    define_str_case(TS_COMMUNICATION_CASE);
+    define_str_case(TS_EXPRESSION);
+    define_str_case(TS_PARENTHESIZED_EXPRESSION);
+    define_str_case(TS_CALL_EXPRESSION);
+    define_str_case(TS_VARIADIC_ARGUMENT);
+    define_str_case(TS_SPECIAL_ARGUMENT_LIST);
+    define_str_case(TS_ARGUMENT_LIST);
+    define_str_case(TS_SELECTOR_EXPRESSION);
+    define_str_case(TS_INDEX_EXPRESSION);
+    define_str_case(TS_SLICE_EXPRESSION);
+    define_str_case(TS_TYPE_ASSERTION_EXPRESSION);
+    define_str_case(TS_TYPE_CONVERSION_EXPRESSION);
+    define_str_case(TS_COMPOSITE_LITERAL);
+    define_str_case(TS_LITERAL_VALUE);
+    define_str_case(TS_KEYED_ELEMENT);
+    define_str_case(TS_ELEMENT);
+    define_str_case(TS_FUNC_LITERAL);
+    define_str_case(TS_UNARY_EXPRESSION);
+    define_str_case(TS_BINARY_EXPRESSION);
+    define_str_case(TS_QUALIFIED_TYPE);
+    define_str_case(TS_INTERPRETED_STRING_LITERAL);
+    define_str_case(TS_SOURCE_FILE_REPEAT1);
+    define_str_case(TS_IMPORT_SPEC_LIST_REPEAT1);
+    define_str_case(TS_CONST_DECLARATION_REPEAT1);
+    define_str_case(TS_CONST_SPEC_REPEAT1);
+    define_str_case(TS_VAR_DECLARATION_REPEAT1);
+    define_str_case(TS_PARAMETER_LIST_REPEAT1);
+    define_str_case(TS_TYPE_DECLARATION_REPEAT1);
+    define_str_case(TS_FIELD_NAME_LIST_REPEAT1);
+    define_str_case(TS_EXPRESSION_LIST_REPEAT1);
+    define_str_case(TS_FIELD_DECLARATION_LIST_REPEAT1);
+    define_str_case(TS_METHOD_SPEC_LIST_REPEAT1);
+    define_str_case(TS_STATEMENT_LIST_REPEAT1);
+    define_str_case(TS_EXPRESSION_SWITCH_STATEMENT_REPEAT1);
+    define_str_case(TS_TYPE_SWITCH_STATEMENT_REPEAT1);
+    define_str_case(TS_TYPE_CASE_REPEAT1);
+    define_str_case(TS_SELECT_STATEMENT_REPEAT1);
+    define_str_case(TS_ARGUMENT_LIST_REPEAT1);
+    define_str_case(TS_LITERAL_VALUE_REPEAT1);
+    define_str_case(TS_INTERPRETED_STRING_LITERAL_REPEAT1);
+    define_str_case(TS_FIELD_IDENTIFIER);
+    define_str_case(TS_LABEL_NAME);
+    define_str_case(TS_PACKAGE_IDENTIFIER);
+    define_str_case(TS_TYPE_IDENTIFIER);
+    }
+    return NULL;
+}
+
+struct Gomod_Parser {
+    Parser_It* it;
+    Gomod_Token tok;
+
+    void parse(Gomod_Info *info) {
+        ptr0(info);
+
+#define ASSERT(x) if (!(x)) goto done
+#define EXPECT(x) ASSERT((lex(), (tok.type == (x))))
+
+        info->directives = alloc_list<Gomod_Directive>();
+
+        auto copy_string = [&](ccstr s) { return our_strcpy(s); };
+
+        while (true) {
+            lex();
+            while (tok.type == GOMOD_TOK_NEWLINE)
+                lex();
+            if (tok.type == GOMOD_TOK_EOF || tok.type == GOMOD_TOK_ILLEGAL)
+                break;
+
+            auto keyword = tok.type;
+            switch (keyword) {
+            case GOMOD_TOK_MODULE:
+                {
+                    lex();
+                    if (tok.type == GOMOD_TOK_LPAREN) {
+                        EXPECT(GOMOD_TOK_LPAREN);
+                        EXPECT(GOMOD_TOK_NEWLINE);
+                        EXPECT(GOMOD_TOK_STRIDENT);
+                        if (!tok.val_truncated)
+                            info->module_path = our_strcpy(tok.val);
+                        EXPECT(GOMOD_TOK_NEWLINE);
+                        EXPECT(GOMOD_TOK_RPAREN);
+                    } else if (tok.type == GOMOD_TOK_STRIDENT) {
+                        if (!tok.val_truncated)
+                            info->module_path = our_strcpy(tok.val);
+                    } else {
+                        goto done;
+                    }
+                    EXPECT(GOMOD_TOK_NEWLINE);
+                }
+                break;
+            case GOMOD_TOK_GO:
+                {
+                    EXPECT(GOMOD_TOK_STRIDENT);
+                    if (!tok.val_truncated)
+                        info->go_version = copy_string(tok.val);
+                    EXPECT(GOMOD_TOK_NEWLINE);
+                }
+                break;
+            case GOMOD_TOK_REQUIRE:
+            case GOMOD_TOK_EXCLUDE:
+                {
+                    lex();
+
+                    auto read_spec = [&]() -> bool {
+                        Gomod_Directive directive = {0};
+
+                        ASSERT(tok.type == GOMOD_TOK_STRIDENT);
+                        if (keyword == GOMOD_TOK_REQUIRE) {
+                            directive.type = GOMOD_DIRECTIVE_REQUIRE;
+                                directive.module_path = copy_string(tok.val);
+                        }
+
+                        EXPECT(GOMOD_TOK_STRIDENT);
+
+                        if (keyword == GOMOD_TOK_REQUIRE)
+                            directive.module_version = copy_string(tok.val);
+
+                        EXPECT(GOMOD_TOK_NEWLINE);
+
+                        if (keyword == GOMOD_TOK_REQUIRE)
+                            info->directives->append(&directive);
+                        return true;
+
+                    done:
+                        return false;
+                    };
+
+                    if (tok.type == GOMOD_TOK_LPAREN) {
+                        EXPECT(GOMOD_TOK_NEWLINE);
+                        while (lex(), tok.type != GOMOD_TOK_RPAREN) {
+                            ASSERT(read_spec());
+                        }
+                        EXPECT(GOMOD_TOK_NEWLINE);
+                    } else {
+                        ASSERT(read_spec());
+                    }
+                }
+                break;
+            case GOMOD_TOK_REPLACE:
+                {
+                    lex();
+
+                    auto read_spec = [&]() -> bool {
+                        Gomod_Directive directive;
+
+                        directive.type = GOMOD_DIRECTIVE_REPLACE;
+
+                        ASSERT(tok.type == GOMOD_TOK_STRIDENT);
+                        directive.module_path = copy_string(tok.val);
+
+                        lex();
+                        if (tok.type != GOMOD_TOK_ARROW) {
+                            ASSERT(tok.type == GOMOD_TOK_STRIDENT);
+                            directive.module_version = copy_string(tok.val);
+                            EXPECT(GOMOD_TOK_ARROW);
+                        }
+
+                        EXPECT(GOMOD_TOK_STRIDENT);
+                        directive.replace_path = tok.val;
+
+                        lex();
+                        if (tok.type != GOMOD_TOK_NEWLINE) {
+                            ASSERT(tok.type == GOMOD_TOK_STRIDENT);
+                            directive.replace_version = copy_string(tok.val);
+                            EXPECT(GOMOD_TOK_NEWLINE);
+                        }
+
+                        info->directives->append(&directive);
+                        return true;
+
+                    done:
+                        return false;
+                    };
+
+                    if (tok.type == GOMOD_TOK_LPAREN) {
+                        EXPECT(GOMOD_TOK_NEWLINE);
+                        while (lex(), (tok.type != GOMOD_TOK_RPAREN)) {
+                            ASSERT(read_spec());
+                        }
+                    } else if (tok.type == GOMOD_TOK_STRIDENT) {
+                        ASSERT(read_spec());
+                    }
+                }
+                break;
+            default:
+                goto done;
+            }
+        }
+
+    done:
+        return;
+    }
+
+#undef EXPECT
+#undef ASSERT
+
+    bool gomod_isspace(char ch) {
+        return ch == ' ' || ch == '\t' || ch == '\r';
+    }
+
+    void lex() {
+        tok.type = GOMOD_TOK_ILLEGAL;
+        tok.val_truncated = false;
+        tok.val = NULL;
+
+        while (gomod_isspace(it->peek()))
+            it->next();
+
+        if (it->eof()) {
+            tok.type = GOMOD_TOK_EOF;
+            return;
+        }
+
+        char firstchar = it->next();
+        switch (firstchar) {
+        case '(': tok.type = GOMOD_TOK_LPAREN; return;
+        case ')': tok.type = GOMOD_TOK_RPAREN; return;
+        case '\n':
+            while (it->peek() == '\n') it->next();
+            tok.type = GOMOD_TOK_NEWLINE;
+            return;
+
+        case '=':
+            if (it->peek() == '>') {
+                it->next();
+                tok.type = GOMOD_TOK_ARROW;
+                return;
+            }
+            break;
+
+        case '/':
+            if (it->peek() == '/') {
+                it->next();
+                while (it->peek() != '\n') it->next();
+                lex();
+                return;
+            }
+            break;
+        }
+
+        tok.type = GOMOD_TOK_STRIDENT;
+
+        // get ready to read a string or identifier
+        List<char> chars;
+        chars.init();
+
+        auto should_end = [&](char ch) {
+            if (firstchar == '"' || firstchar == '`')
+                return ch == firstchar;
+            return gomod_isspace(ch) || ch == '\n';
+        };
+
+        chars.append(firstchar);
+
+        char ch;
+        switch (firstchar) {
+        case '"':
+            do {
+                ch = it->next();
+                chars.append(ch);
+                if (ch == '\\')
+                    chars.append(it->next());
+            } while (ch == '"');
+            break;
+        case '`':
+            do {
+                ch = it->next();
+                chars.append(ch);
+            } while (ch != '`');
+            break;
+        default:
+            while ((ch = it->peek()), (!gomod_isspace(ch) && ch != '\n')) {
+                it->next();
+                chars.append(ch);
+            }
+            break;
+        }
+
+        chars.append('\0');
+        tok.val = chars.items;
+
+        ccstr keywords[] = { "module", "go" ,"require", "replace", "exclude" };
+        Gomod_Tok_Type types[] = { GOMOD_TOK_MODULE, GOMOD_TOK_GO, GOMOD_TOK_REQUIRE, GOMOD_TOK_REPLACE, GOMOD_TOK_EXCLUDE };
+
+        for (u32 i = 0; i < _countof(keywords); i++) {
+            if (streq(tok.val, keywords[i])) {
+                tok.val = NULL;
+                tok.val_truncated = false;
+                tok.type = types[i];
+                return;
+            }
+        }
+    }
+};
+
+Gomod_Info *parse_gomod_file(ccstr filepath) {
+    if (check_path(filepath) != CPR_FILE) {
+        auto info = alloc_object(Gomod_Info);
+        info->exists = false;
+        return info;
+    }
+
+    auto ef = read_entire_file(filepath);
+    if (ef == NULL) {
+        auto info = alloc_object(Gomod_Info);
+        info->exists = false;
+        return info;
+    }
+    defer { free_entire_file(ef); };
+
+    Parser_It it;
+    it.init(ef);
+
+    auto info = alloc_object(Gomod_Info);
+
+    Gomod_Parser p = {0};
+    p.it = &it;
+    p.parse(info);
+
+    info->path = our_strcpy(filepath);
+    info->exists = true;
+    info->hash = meow_hash(ef->data, ef->len);
+
+    return info;
+}
+
+ccstr _path_join(ccstr a, ...) {
+    auto get_part_length = [&](ccstr s) {
+        auto len = strlen(s);
+        if (len > 0 && is_sep(s[len-1])) len--;
+        return len;
+    };
+
+    va_list vl, vlcount;
+    s32 total_len = 0;
+    s32 num_parts = 0;
+
+    va_start(vl, a);
+    va_copy(vlcount, vl);
+
+    for (;; num_parts++) {
+        ccstr val = (num_parts == 0 ? a : va_arg(vlcount, ccstr));
+        if (val == NULL) break;
+        total_len += get_part_length(val);
+    }
+    total_len += (num_parts-1); // path separators
+
+    auto ret = alloc_array(char, total_len + 1);
+    u32 k = 0;
+
+    for (u32 i = 0; i < num_parts; i++) {
+        ccstr val = (i == 0 ? a : va_arg(vl, ccstr));
+        auto len = get_part_length(val);
+
+        // copy val into ret, normalizing path separators
+        for (u32 j = 0; j < len; j++) {
+            auto ch = val[j];
+            if (is_sep(ch)) ch = PATH_SEP;
+            ret[k++] = ch;
+        }
+
+        if (i + 1 < num_parts)
+            ret[k++] = PATH_SEP;
+    }
+
+    ret[k] = '\0';
+    return ret;
+}
+
+TSParser *new_ts_parser() {
+    auto ret = ts_parser_new();
+    ts_parser_set_language(ret, tree_sitter_go());
+    return ret;
+}
+
+// -----
+// stupid c++ template shit
+
+template<typename T>
+T *clone(T *old) {
+    auto ret = alloc_object(T);
+    memcpy(ret, old, sizeof(T));
+    return ret;
+}
+
+template <typename T>
+T* copy_object(T *old) {
+    return old == NULL ? NULL : old->copy();
+}
+
+template <typename T>
+List<T> *copy_list(List<T> *arr, fn<T*(T* it)> copy_func) {
+    if (arr == NULL) return NULL;
+
+    auto new_arr = alloc_object(List<T>);
+    new_arr->init(LIST_POOL, max(arr->len, 1));
+    For (*arr) new_arr->append(copy_func(&it));
+    return new_arr;
+}
+
+template <typename T>
+List<T> *copy_list(List<T> *arr) {
+    auto copy_func = [&](T *it) -> T* { return copy_object(it); };
+    return copy_list<T>(arr, copy_func);
+}
+
+// -----
+// actual code that tells us how to copy objects
+
+Godecl *Godecl::copy() {
+    auto ret = clone(this);
+
+    ret->file = our_strcpy(file);
+    ret->name = our_strcpy(name);
+    if (type == GODECL_IMPORT)
+        ret->import_path = our_strcpy(import_path);
+    else
+        ret->gotype = copy_object(gotype);
+    return ret;
+}
+
+Go_Struct_Spec *Go_Struct_Spec::copy() {
+    auto ret = clone(this);
+    ret->tag = our_strcpy(tag);
+    if (is_embedded)
+        ret->embedded_type = copy_object(embedded_type);
+    else
+        ret->field = copy_object(field);
+    return ret;
+}
+
+Go_Import *Go_Import::copy() {
+    auto ret = clone(this);
+    ret->decl = copy_object(decl);
+    ret->id = our_strcpy(id);
+    ret->import_path = our_strcpy(import_path);
+    return ret;
+}
+
+Gotype *Gotype::copy() {
+    auto ret = clone(this);
+    switch (type) {
+    case GOTYPE_ID:
+        ret->id_name = our_strcpy(id_name);
+        break;
+    case GOTYPE_SEL:
+        ret->sel_name = our_strcpy(sel_name);
+        ret->sel_sel = our_strcpy(sel_sel);
+        break;
+    case GOTYPE_MAP:
+        ret->map_key = copy_object(map_key);
+        ret->map_value = copy_object(map_value);
+        break;
+    case GOTYPE_STRUCT:
+        ret->struct_specs = copy_list(struct_specs);
+        break;
+    case GOTYPE_INTERFACE:
+        ret->interface_specs = copy_list(interface_specs);
+        break;
+    case GOTYPE_POINTER: ret->pointer_base = copy_object(pointer_base); break;
+    case GOTYPE_SLICE: ret->slice_base = copy_object(slice_base); break;
+    case GOTYPE_ARRAY: ret->array_base = copy_object(array_base); break;
+    case GOTYPE_CHAN: ret->chan_base = copy_object(chan_base); break;
+    case GOTYPE_FUNC:
+        ret->func_sig.params = copy_list(func_sig.params);
+        ret->func_sig.result = copy_list(func_sig.result);
+        ret->func_recv = copy_object(ret->func_recv);
+        break;
+    case GOTYPE_MULTI:
+        {
+            Gotype *tmp = NULL;
+            auto copy_func = [&](Gotype** it) {
+                tmp = copy_object(*it);
+                return &tmp;
+            };
+            ret->multi_types = copy_list<Gotype*>(multi_types, copy_func);
+        }
+        break;
     }
     return ret;
 }
 
-bool Index_Reader::find_decl(ccstr decl_name, Index_Entry *out) {
-    auto get_name = [&](i32 offset) -> ccstr {
-        if (offset == -1) return decl_name;
-        fdata.seek(offset);
+Go_Package *Go_Package::copy() {
+    auto ret = clone(this);
 
-        Index_Entry_Hdr hdr;
-        fdata.readn(&hdr, sizeof(hdr));
-        fdata.readstr(); // filename
-        return fdata.readstr(); // decl name
-    };
+    ret->import_path = our_strcpy(import_path);
+    ret->resolved_path = our_strcpy(resolved_path);
+    ret->package_name = our_strcpy(package_name);
 
-    auto cmpfunc = [&](i32 *a, i32 *b) {
-        return strcmp(get_name(*a), get_name(*b));
-    };
+    ret->individual_imports = copy_list(individual_imports);
+    ret->dependencies = copy_list(dependencies);
+    ret->decls = copy_list(decls);
+    ret->files = copy_list(files);
 
-    i32 key = -1;
-    auto poffset = decl_offsets->bfind(&key, cmpfunc);
-    if (poffset == NULL) return false;
-
-    fdata.seek(*poffset);
-    fdata.readn(&out->hdr, sizeof(out->hdr));
-    out->filename = fdata.readstr();     // TODO: do we need to copy this?
-    out->name = fdata.readstr();
-    return true;
+    return ret;
 }
 
-void with_parser_at_location(ccstr filepath, cur2 location, parser_cb cb) {
-    auto iter = file_loader(filepath);
-    if (iter == NULL) return;
-    defer { iter->cleanup(); };
-    iter->set_pos(location);
-
-    Parser p;
-    p.init(iter, filepath);
-    defer { p.cleanup(); };
-
-    cb(&p);
+Go_Single_Import *Go_Single_Import::copy() {
+    auto ret = clone(this);
+    ret->file = our_strcpy(file);
+    ret->package_name = our_strcpy(package_name);
+    ret->import_path = our_strcpy(import_path);
+    return ret;
 }
 
-void with_parser_at_location(ccstr filepath, parser_cb cb) {
-    with_parser_at_location(filepath, new_cur2(0, 0), cb);
+Go_Dependency *Go_Dependency::copy() {
+    auto ret = clone(this);
+    ret->import_path = our_strcpy(import_path);
+    ret->package_name = our_strcpy(package_name);
+    ret->resolved_path = our_strcpy(resolved_path);
+    return ret;
+}
+
+Go_Scope_Op *Go_Scope_Op::copy() {
+    auto ret = clone(this);
+    if (type == GSOP_DECL)
+        ret->decl = copy_object(decl);
+    return ret;
+}
+
+Go_Package_File_Info *Go_Package_File_Info::copy() {
+    auto ret = clone(this);
+    ret->filename = our_strcpy(filename);
+    ret->scope_ops = copy_list(scope_ops);
+    return ret;
+}
+
+Go_Index *Go_Index::copy() {
+    auto ret = clone(this);
+    ret->current_path = our_strcpy(current_path);
+    ret->current_import_path = our_strcpy(current_import_path);
+    ret->gomod = copy_object(gomod);
+    ret->packages = copy_list(packages);
+    return ret;
+}
+
+Gomod_Info *Gomod_Info::copy() {
+    auto ret = clone(this);
+    ret->path = our_strcpy(path);
+    ret->module_path = our_strcpy(module_path);
+    ret->go_version = our_strcpy(go_version);
+    ret->directives = copy_list(directives);
+    return ret;
+}
+
+Gomod_Directive *Gomod_Directive::copy() {
+    auto ret = clone(this);
+    ret->module_path = our_strcpy(module_path);
+    ret->module_version = our_strcpy(module_version);
+    ret->replace_path = our_strcpy(replace_path);
+    ret->replace_version = our_strcpy(replace_version);
+    return ret;
+}
+
+// -----
+// read functions
+
+#define READ_STR(x) x = s->readstr()
+#define READ_OBJ(x) x = read_object<std::remove_pointer<decltype(x)>::type>(s)
+#define READ_LIST(x) x = read_list<std::remove_pointer<decltype(x)>::type::type>(s)
+
+// ---
+
+void Godecl::read(Index_Stream *s) {
+    READ_STR(file);
+    READ_STR(name);
+
+    if (type == GODECL_IMPORT)
+        READ_STR(import_path);
+    else
+        READ_OBJ(gotype);
+}
+
+void Go_Struct_Spec::read(Index_Stream *s) {
+    READ_STR(tag);
+    if (is_embedded)
+        READ_OBJ(embedded_type);
+    else
+        READ_OBJ(field);
+}
+
+void Go_Import::read(Index_Stream *s) {
+    READ_OBJ(decl);
+    READ_STR(id);
+    READ_STR(import_path);
+}
+
+void Go_Single_Import::read(Index_Stream *s) {
+    READ_STR(file);
+    READ_STR(package_name);
+    READ_STR(import_path);
+}
+
+void Gotype::read(Index_Stream *s) {
+    switch (type) {
+    case GOTYPE_ID:
+        READ_STR(id_name);
+        break;
+    case GOTYPE_SEL:
+        READ_STR(sel_name);
+        READ_STR(sel_sel);
+        break;
+    case GOTYPE_MAP:
+        READ_OBJ(map_key);
+        READ_OBJ(map_value);
+        break;
+    case GOTYPE_STRUCT:
+        READ_LIST(struct_specs);
+        break;
+    case GOTYPE_INTERFACE:
+        READ_LIST(interface_specs);
+        break;
+    case GOTYPE_POINTER:
+        READ_OBJ(pointer_base);
+        break;
+    case GOTYPE_FUNC:
+        READ_LIST(func_sig.params);
+        READ_LIST(func_sig.result);
+        READ_OBJ(func_recv);
+        break;
+    case GOTYPE_SLICE:
+        READ_OBJ(slice_base);
+        break;
+    case GOTYPE_ARRAY:
+        READ_OBJ(array_base);
+        break;
+    case GOTYPE_CHAN:
+        READ_OBJ(chan_base);
+        break;
+    case GOTYPE_MULTI:
+        {
+            // can't use READ_LIST here because multi_types contains pointers
+            // (instead of the objects themselves)
+            auto len = s->read4();
+            multi_types = alloc_list<Gotype*>(len);
+            for (u32 i = 0; i < len; i++) {
+                auto gotype = read_object<Gotype>(s);
+                multi_types->append(gotype);
+            }
+        }
+        break;
+    }
+}
+
+void Go_Dependency::read(Index_Stream *s) {
+    READ_STR(import_path);
+    READ_STR(resolved_path);
+    READ_STR(package_name);
+}
+
+void Go_Scope_Op::read(Index_Stream *s) {
+    if (type == GSOP_DECL)
+        READ_OBJ(decl);
+}
+
+void Go_Package_File_Info::read(Index_Stream *s) {
+    READ_STR(filename);
+    READ_LIST(scope_ops);
+}
+
+void Go_Package::read(Index_Stream *s) {
+    READ_STR(import_path);
+    READ_STR(resolved_path);
+    READ_LIST(individual_imports);
+    READ_LIST(dependencies);
+    READ_STR(package_name);
+    READ_LIST(decls);
+    READ_LIST(files);
+}
+
+void Go_Index::read(Index_Stream *s) {
+    READ_STR(current_path);
+    READ_STR(current_import_path);
+    READ_OBJ(gomod);
+    READ_LIST(packages);
+}
+
+void Gomod_Info::read(Index_Stream *s) {
+    READ_STR(path);
+    READ_STR(module_path);
+    READ_STR(go_version);
+    READ_LIST(directives);
+}
+
+void Gomod_Directive::read(Index_Stream *s) {
+    READ_STR(module_path);
+    READ_STR(module_version);
+    READ_STR(replace_path);
+    READ_STR(replace_version);
+}
+
+// ---
+
+#define WRITE_STR(x) s->writestr(x)
+#define WRITE_OBJ(x) write_object<std::remove_pointer<decltype(x)>::type>(x, s)
+#define WRITE_LIST(x) write_list<decltype(x)>(x, s)
+
+void Godecl::write(Index_Stream *s) {
+    WRITE_STR(file);
+    WRITE_STR(name);
+
+    if (type == GODECL_IMPORT)
+        WRITE_STR(import_path);
+    else
+        WRITE_OBJ(gotype);
+}
+
+void Go_Struct_Spec::write(Index_Stream *s) {
+    WRITE_STR(tag);
+    if (is_embedded)
+        WRITE_OBJ(embedded_type);
+    else
+        WRITE_OBJ(field);
+}
+
+void Go_Import::write(Index_Stream *s) {
+    WRITE_OBJ(decl);
+    WRITE_STR(id);
+    WRITE_STR(import_path);
+}
+
+void Go_Single_Import::write(Index_Stream *s) {
+    WRITE_STR(file);
+    WRITE_STR(package_name);
+    WRITE_STR(import_path);
+}
+
+void Gotype::write(Index_Stream *s) {
+    switch (type) {
+    case GOTYPE_ID:
+        WRITE_STR(id_name);
+        break;
+    case GOTYPE_SEL:
+        WRITE_STR(sel_name);
+        WRITE_STR(sel_sel);
+        break;
+    case GOTYPE_MAP:
+        WRITE_OBJ(map_key);
+        WRITE_OBJ(map_value);
+        break;
+    case GOTYPE_STRUCT:
+        WRITE_LIST(struct_specs);
+        break;
+    case GOTYPE_INTERFACE:
+        WRITE_LIST(interface_specs);
+        break;
+    case GOTYPE_POINTER:
+        WRITE_OBJ(pointer_base);
+        break;
+    case GOTYPE_FUNC:
+        WRITE_LIST(func_sig.params);
+        WRITE_LIST(func_sig.result);
+        WRITE_OBJ(func_recv);
+        break;
+    case GOTYPE_SLICE:
+        WRITE_OBJ(slice_base);
+        break;
+    case GOTYPE_ARRAY:
+        WRITE_OBJ(array_base);
+        break;
+    case GOTYPE_CHAN:
+        WRITE_OBJ(chan_base);
+        break;
+    case GOTYPE_MULTI:
+        s->write4(multi_types->len);
+        For (*multi_types) write_object<Gotype>(it, s);
+        break;
+    }
+}
+
+void Go_Dependency::write(Index_Stream *s) {
+    WRITE_STR(import_path);
+    WRITE_STR(resolved_path);
+    WRITE_STR(package_name);
+}
+
+void Go_Scope_Op::write(Index_Stream *s) {
+    if (type == GSOP_DECL)
+        WRITE_OBJ(decl);
+}
+
+void Go_Package_File_Info::write(Index_Stream *s) {
+    WRITE_STR(filename);
+    WRITE_LIST(scope_ops);
+}
+
+void Go_Package::write(Index_Stream *s) {
+    WRITE_STR(import_path);
+    WRITE_STR(resolved_path);
+    WRITE_LIST(individual_imports);
+    WRITE_LIST(dependencies);
+    WRITE_STR(package_name);
+    WRITE_LIST(decls);
+    WRITE_LIST(files);
+}
+
+void Go_Index::write(Index_Stream *s) {
+    WRITE_STR(current_path);
+    WRITE_STR(current_import_path);
+    WRITE_OBJ(gomod);
+    WRITE_LIST(packages);
+}
+
+void Gomod_Info::write(Index_Stream *s) {
+    WRITE_STR(path);
+    WRITE_STR(module_path);
+    WRITE_STR(go_version);
+    WRITE_LIST(directives);
+}
+
+void Gomod_Directive::write(Index_Stream *s) {
+    WRITE_STR(module_path);
+    WRITE_STR(module_version);
+    WRITE_STR(replace_path);
+    WRITE_STR(replace_version);
 }

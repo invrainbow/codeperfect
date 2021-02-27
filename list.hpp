@@ -19,11 +19,17 @@ void *alloc_from_pool_stub(void *pool, s32 n);
 
 template <typename T>
 struct List {
+    typedef T type;
+
     T* items;
     s32 len;
     s32 cap;
     ListMode mode;
     void *pool;  // for LIST_POOL. can't include Pool because it depends on List
+
+    void init() {
+        init(LIST_POOL, 32);
+    }
 
     void init(ListMode _mode, s32 _cap, T* _items = NULL) {
         ptr0(this);
@@ -87,6 +93,11 @@ struct List {
         return items + (len++);
     }
 
+    T* last() {
+        if (len == 0) return NULL;
+        return &items[len-1];
+    }
+
     bool ensure_cap(s32 new_cap) {
         if (cap >= new_cap)
             return true;
@@ -133,6 +144,10 @@ struct List {
         return true;
     }
 
+    void remove(T* p) {
+        remove(p - items);
+    }
+
     void remove(u32 i) {
         if (i >= len)
             return;
@@ -142,18 +157,18 @@ struct List {
 
     typedef fn<bool(T* it)> find_pred;
 
-    i32 find(find_pred f) {
+    T* find(find_pred f) {
         for (int i = 0; i < len; i++)
             if (f(&items[i]))
-                return i;
-        return -1;
+                return &items[i];
+        return NULL;
     }
 
     T* find_or_append(find_pred f) {
-        auto idx = find(f);
-        if (idx == -1)
-            return append();
-        return &items[idx];
+        auto ret = find(f);
+        if (ret == NULL)
+            ret = append();
+        return ret;
     }
 
     typedef fn<int(T *a, T *b)> cmp_func;
@@ -171,11 +186,9 @@ struct List {
     }
 
     bool remove(find_pred f) {
-        auto idx = find(f);
-        if (idx == -1)
-            return false;
-
-        remove(idx);
+        auto p = find(f);
+        if (p == NULL) return false;
+        remove(p);
         return true;
     }
 

@@ -205,70 +205,39 @@ void new_ortho_matrix(float* mat, float l, float r, float b, float t) {
     mat[15] = 1;
 }
 
-void render_ast(Ast* ast, ccstr label = "Root") {
-    int last_depth = -1;
+void render_ts_cursor(TSTreeCursor *curr) {
+    int last_depth = 0;
+    bool last_open = false;
 
-    struct {
-        bool buf[1000];
-        s32 p;
-    } node_stack = { 0 };
+    auto pop = [&](int new_depth) {
+        if (new_depth > last_depth) return;
 
-    walk_ast(ast, [&](Ast* node, ccstr name, int depth) -> Walk_Action {
-        if (depth <= last_depth) {
-            auto pops = last_depth - depth + 1;
-            for (u32 i = 0; i < pops; i++)
-                if (node_stack.buf[--node_stack.p])
-                    ImGui::TreePop();
-        }
+        if (last_open)
+            ImGui::TreePop();
+        for (i32 i = 0; i < last_depth - new_depth; i++)
+            ImGui::TreePop();
+    };
 
+    walk_ts_cursor(curr, false, [&](Ast_Node *node, Ts_Field_Type field_type, int depth) -> Walk_Action {
+        if (node->anon && !world.wnd_ast_vis.show_anon_nodes)
+            return WALK_SKIP_CHILDREN;
+
+        pop(depth);
         last_depth = depth;
 
-        bool open = ImGui::TreeNodeEx(node, 0, "%s: %s", name, ast_type_str(node->type));
+        auto flags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth;
+        last_open = ImGui::TreeNodeEx(node->id, flags, "%s: %s", ts_field_type_str(field_type), ts_ast_type_str(node->type));
 
-        node_stack.buf[node_stack.p++] = open;
-        if (!open) return WALK_SKIP_CHILDREN;
-
-        switch (node->type) {
-        case AST_INC_DEC_STMT:
-            ImGui::Text("op: %s", tok_type_str(node->inc_dec_stmt.op));
-            break;
-        case AST_SWITCH_STMT:
-            ImGui::Text("is_type_switch: %s", node->switch_stmt.is_type_switch ? "true" : "false");
-            break;
-        case AST_BASIC_LIT:
-            ImGui::Text("lit: %s", node->basic_lit.lit);
-            break;
-        case AST_ID:
-            ImGui::Text("lit: %s", node->id.lit);
-            break;
-        case AST_UNARY_EXPR:
-            ImGui::Text("op: %s", tok_type_str(node->unary_expr.op));
-            break;
-        case AST_BINARY_EXPR:
-            ImGui::Text("op: %s", tok_type_str(node->binary_expr.op));
-            break;
-        case AST_CHAN_TYPE:
-            ImGui::Text("direction: %s", ast_chan_direction_str(node->chan_type.direction));
-            break;
-        case AST_CALL_ARGS:
-            ImGui::Text("ellip: %s", node->call_args.ellip ? "true" : "false");
-            break;
-        case AST_BRANCH_STMT:
-            ImGui::Text("branch_type: %s", tok_type_str(node->branch_stmt.branch_type));
-            break;
-        case AST_DECL:
-            ImGui::Text("type: %s", tok_type_str(node->decl.type));
-            break;
-        case AST_ASSIGN_STMT:
-            ImGui::Text("op: %s", tok_type_str(node->assign_stmt.op));
-            break;
+        if (ImGui::IsItemClicked()) {
+            auto editor = world.get_current_editor();
+            if (editor != NULL)
+                editor->move_cursor(node->start);
         }
 
-        return WALK_CONTINUE;
+        return last_open ? WALK_CONTINUE : WALK_SKIP_CHILDREN;
     });
 
-    for (u32 i = 0; i < last_depth; i++)
-        ImGui::TreePop();
+    pop(0);
 }
 
 #define MAX_RETRIES 5
@@ -336,6 +305,7 @@ void init_open_file() {
     fill_files("");
 }
 
+#if 0
 struct General_Parser {
     // This struct houses a few methods that parse random things -- `go build` error
     // messages, `ag --ackmate` search results, etc. Includes some (extremely)
@@ -343,7 +313,7 @@ struct General_Parser {
 
     Process* proc;
     char ch;
-    String_Allocator salloc;
+    List<char> chars;
 
     void init(Process* _proc) {
         ptr0(this);
@@ -554,6 +524,7 @@ struct General_Parser {
 #undef READ_CHAR
 #undef ASSERT
 };
+#endif
 
 enum {
     OUR_MOD_NONE = 0,
@@ -577,7 +548,7 @@ void init_with_file_at_location(ccstr path, cur2 cur) {
 int main() {
     if (run_tests()) return EXIT_SUCCESS;
 
-    world.init(false);
+    world.init();
 
     SCOPED_MEM(&world.frame_mem);
 
@@ -897,10 +868,11 @@ int main() {
                 return;
             }
 
+            editor->start_change();
+
             editor->type_char('\n');
 
             auto cur = editor->cur;
-
             auto y = max(0, cur.y-1);
             while (true) {
                 auto& line = editor->buf.lines[y];
@@ -935,6 +907,8 @@ int main() {
                     break;
                 }
             }
+
+            editor->end_change();
         };
 
         auto handle_tab = [&](ccstr nvim_string) {
@@ -951,13 +925,18 @@ int main() {
                 return;
             }
 
+            editor->start_change();
+
             auto buf = &editor->buf;
             auto back1 = buf->dec_cur(editor->cur);
             buf->remove(back1, editor->cur);
+
             editor->raw_move_cursor(back1);
 
             if (editor->cur < editor->nvim_insert.backspaced_to)
                 editor->nvim_insert.backspaced_to = editor->cur;
+
+            editor->end_change();
 
             editor->update_autocomplete();
             editor->update_parameter_hint();
@@ -1034,7 +1013,9 @@ int main() {
                             for (u32 i = 0; i < len; i++)
                                 text[i] = clipboard_contents[i];
 
+                            editor->start_change();
                             editor->buf.insert(editor->cur, text, len);
+                            editor->end_change();
 
                             auto cur = editor->cur;
                             for (u32 i = 0; i < len; i++)
@@ -1076,36 +1057,33 @@ int main() {
                         {
                             if (editor == NULL) break;
 
-                            SCOPED_MEM(&world.index.main_thread_mem);
-                            defer { world.index.main_thread_mem.reset(); };
+                            SCOPED_MEM(&world.indexer.ui_mem);
+                            defer { world.indexer.ui_mem.reset(); };
 
-                            auto result = world.index.jump_to_definition(editor->filepath, new_cur2(editor->cur_to_offset(editor->cur), -1));
+                            auto result = world.indexer.jump_to_definition(editor->filepath, new_cur2(editor->cur_to_offset(editor->cur), -1));
                             if (result == NULL) {
                                 error("unable to jump to definition");
                                 return;
                             }
 
-                            auto target_ed = editor;
+                            auto target = editor;
+                            if (!streq(editor->filepath, result->file))
+                                target = world.get_current_pane()->focus_editor(result->file);
 
-                            if (!streq(editor->filepath, result->file)) {
-                                target_ed = world.get_current_pane()->focus_editor(result->file);
-                            }
+                            if (target == NULL) break;
 
-                            if (target_ed != NULL) {
-                                auto pos = result->pos;
-
-                                if (world.use_nvim) {
-                                    if (target_ed->is_nvim_ready()) {
-                                        if (pos.y == -1) pos = target_ed->offset_to_cur(pos.x);
-                                        target_ed->move_cursor(pos);
-                                    } else {
-                                        target_ed->nvim_data.initial_pos = pos;
-                                        target_ed->nvim_data.need_initial_pos_set = true;
-                                    }
+                            auto pos = result->pos;
+                            if (world.use_nvim) {
+                                if (target->is_nvim_ready()) {
+                                    if (pos.y == -1) pos = target->offset_to_cur(pos.x);
+                                    target->move_cursor(pos);
                                 } else {
-                                    if (pos.y == -1) pos = target_ed->offset_to_cur(pos.x);
-                                    target_ed->move_cursor(pos);
+                                    target->nvim_data.initial_pos = pos;
+                                    target->nvim_data.need_initial_pos_set = true;
                                 }
+                            } else {
+                                if (pos.y == -1) pos = target->offset_to_cur(pos.x);
+                                target->move_cursor(pos);
                             }
                             break;
                         }
@@ -1203,9 +1181,6 @@ int main() {
                     if (handled) break;
 
                     switch (key) {
-                    case GLFW_KEY_A:
-                        world.windows_open.ast_viewer ^= 1;
-                        break;
                     case GLFW_KEY_B:
                         run_proc_the_normal_way(&world.jobs.build.proc, world.settings.build_command);
                         world.jobs.flag_build = true;
@@ -1263,12 +1238,14 @@ int main() {
                                 dbg.call_queue.init();
 
                                 // TODO: when do we stop debugging? do we kill this thread, wait for it to die, etc?
+                                /*
                                 dbg.thread = create_thread(debugger_loop_thread, NULL);
                                 if (dbg.thread == NULL) {
                                     error("unable to create thread to start process: %s", get_last_error());
                                     dbg.call_queue.cleanup();
                                     break;
                                 }
+                                */
                             } while (0);
                             break;
                         }
@@ -1281,11 +1258,11 @@ int main() {
                             auto &&ref = world.dbg;
                             auto &&dbg = ref.debugger;
 
-                            auto idx = ref.breakpoints.find([&](Client_Breakpoint *it) -> bool {
+                            auto bkpt = ref.breakpoints.find([&](Client_Breakpoint *it) -> bool {
                                 return are_breakpoints_same(file, lineno, it->file, it->line);
                             });
 
-                            if (idx == -1) {
+                            if (bkpt == NULL) {
                                 auto it = ref.breakpoints.append();
                                 it->file = file;
                                 it->line = lineno;
@@ -1302,7 +1279,7 @@ int main() {
                                     }
                                 }
                             } else {
-                                ref.breakpoints.remove(idx);
+                                ref.breakpoints.remove(bkpt);
                                 if (ref.state_flag != DBGSTATE_INACTIVE) {
                                     ref.debugger.unset_breakpoint(file, lineno);
 
@@ -1379,6 +1356,7 @@ int main() {
                                 auto ac_start = editor->cur;
                                 ac_start.x -= strlen(ac.prefix);
                                 buf.remove(ac_start, editor->cur);
+                                // TODO: call editor->start_change() and editor->end_change()
 
                                 auto len = strlen(result.name);
                                 auto name = alloc_array(uchar, len);
@@ -1568,6 +1546,12 @@ int main() {
         glUniform1i(loc, 0);
     }
 
+    // Wait until all the OpenGL crap is initialized. I don't know why, but
+    // creating background threads that run while glfwCreateWindow() is called
+    // results in intermittent crashes. No fucking idea why. I hate
+    // programming.
+    world.start_background_threads();
+
     double last_time = glfwGetTime();
     i64 last_frame_time = current_time_in_nanoseconds();
 
@@ -1577,6 +1561,20 @@ int main() {
         world.frame_mem.reset();
 
         SCOPED_MEM(&world.frame_mem);
+
+        {
+            // Check editor nvim queues.
+            For (world.wksp.panes) {
+                For (it.editors) {
+                    auto& editor = it;
+                    SCOPED_LOCK(&editor.nvim_edit_lock);
+                    For (editor.nvim_edit_queue)
+                        editor.process_nvim_edit(&it);
+                    editor.nvim_edit_queue.len = 0;
+                    editor.nvim_edit_mem.reset();
+                }
+            }
+        }
 
         {
             // Check jobs.
@@ -1597,12 +1595,14 @@ int main() {
                     search_results.cleanup();
                     search_results.init();
 
+                    /*
                     General_Parser parser;
                     parser.init(&proc);
                     {
                         SCOPED_MEM(&search_results.pool);
                         parser.parse_find_results();
                     }
+                    */
 
                     world.sidebar.view = SIDEBAR_SEARCH_RESULTS;
                     proc.cleanup();
@@ -1639,12 +1639,14 @@ int main() {
                         ref.cleanup();
                         ref.init();
 
+                        /*
                         General_Parser parser;
                         parser.init(&proc);
                         {
                             SCOPED_MEM(&ref.pool);
                             parser.parse_build_errors();
                         }
+                        */
 
                         world.error_list.show = true;
                     } else {
@@ -1723,6 +1725,9 @@ int main() {
             if (world.windows_open.im_demo)
                 ImGui::ShowDemoWindow(&world.windows_open.im_demo);
 
+            if (world.windows_open.im_metrics)
+                ImGui::ShowMetricsWindow(&world.windows_open.im_metrics);
+
             if (world.windows_open.open_file) {
                 auto& wnd = world.wnd_open_file;
 
@@ -1739,27 +1744,6 @@ int main() {
                     else
                         ImGui::Text("%s", it);
                 }
-
-                ImGui::End();
-            }
-
-            if (world.windows_open.ast_viewer) {
-                ImGui::Begin("AST Viewer", &world.windows_open.ast_viewer);
-
-                auto ed = world.get_current_editor();
-                if (ed == NULL) {
-                    ImGui::Text("Open a file to parse its AST.");
-                } else {
-                    if (ImGui::Button("Parse AST from current file")) {
-                        world.ast_viewer_mem.reset();
-                        SCOPED_MEM(&world.ast_viewer_mem);
-                        world.wnd_ast_viewer.ast = parse_file_into_ast(ed->filepath);
-                    }
-                }
-
-                auto ast = world.wnd_ast_viewer.ast;
-                if (ast != NULL)
-                    render_ast(ast);
 
                 ImGui::End();
             }
@@ -2024,6 +2008,24 @@ int main() {
 
                 ImGui::End();
             }
+
+            do {
+                auto editor = world.get_current_editor();
+                if (editor == NULL) break;
+
+                auto tree = editor->tree;
+                if (tree == NULL) break;
+
+                static bool show = false;
+                ImGui::Begin("current tree", &show, 0);
+
+                ImGui::Checkbox("show anon?", &world.wnd_ast_vis.show_anon_nodes);
+
+                ts_tree_cursor_reset(&editor->cursor, ts_tree_root_node(tree));
+                render_ts_cursor(&editor->cursor);
+
+                ImGui::End();
+            } while (0);
 
             ImGui::Render();
         }

@@ -352,9 +352,9 @@ void _error(ccstr fmt, ...);
 #define ptr0(ptr) memset(ptr, 0, sizeof(*ptr))
 #define For(arr) for (auto &&it : arr)
 #define define_str_case(x) case x: return #x
+#define our_assert(x, s) if (!(x)) panic(s)
 
 void* our_malloc(size_t size);
 void our_free(void* p);
 bool str_ends_with(ccstr a, ccstr suf);
 bool str_starts_with(ccstr a, ccstr pre);
-

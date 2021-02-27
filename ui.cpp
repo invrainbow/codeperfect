@@ -1,11 +1,15 @@
 #include "ui.hpp"
 #include "common.hpp"
 #include "world.hpp"
+#include "go.hpp"
 
 #define _USE_MATH_DEFINES // what the fuck is this lol
 #include <math.h>
+#include "tree_sitter_crap.hpp"
 
 UI ui;
+
+#define LINE_HEIGHT 1.2
 
 vec3f rgb_hex(ccstr s) {
     if (s[0] == '#') s++;
@@ -30,6 +34,7 @@ vec4f rgba(vec3f color, float alpha) {
 
 const vec3f COLOR_WHITE = rgb_hex("#ffffff");
 const vec3f COLOR_RED = rgb_hex("#ff8888");
+const vec3f COLOR_LIGHT_BLUE = rgb_hex("#6699dd");
 const vec3f COLOR_DARK_RED = rgb_hex("#880000");
 const vec3f COLOR_DARK_YELLOW = rgb_hex("#6b6d0a");
 const vec3f COLOR_BLACK = rgb_hex("#000000");
@@ -44,6 +49,111 @@ const vec3f COLOR_THEME_2 = rgb_hex("fbd19b");
 const vec3f COLOR_THEME_3 = rgb_hex("edb891");
 const vec3f COLOR_THEME_4 = rgb_hex("eca895");
 const vec3f COLOR_THEME_5 = rgb_hex("e8918c");
+
+bool get_type_color(TSSymbol type, vec3f *out) {
+    switch (type) {
+    case TS_PACKAGE:
+    case TS_IMPORT:
+    case TS_CONST:
+    case TS_VAR:
+    case TS_FUNC:
+    case TS_TYPE:
+    case TS_STRUCT:
+    case TS_INTERFACE:
+    case TS_MAP:
+    case TS_CHAN:
+    case TS_FALLTHROUGH:
+    case TS_BREAK:
+    case TS_CONTINUE:
+    case TS_GOTO:
+    case TS_RETURN:
+    case TS_GO:
+    case TS_DEFER:
+    case TS_IF:
+    case TS_ELSE:
+    case TS_FOR:
+    case TS_RANGE:
+    case TS_SWITCH:
+    case TS_CASE:
+    case TS_DEFAULT:
+    case TS_SELECT:
+    case TS_NEW:
+    case TS_MAKE:
+        *out = COLOR_THEME_1;
+        return true;
+
+    case TS_PLUS:
+    case TS_DASH:
+    case TS_BANG:
+    case TS_SEMI:
+    case TS_DOT:
+    case TS_ANON_DOT:
+    case TS_LPAREN:
+    case TS_RPAREN:
+    case TS_COMMA:
+    case TS_EQ:
+    case TS_DOT_DOT_DOT:
+    case TS_STAR:
+    case TS_LBRACK:
+    case TS_RBRACK:
+    case TS_LBRACE:
+    case TS_RBRACE:
+    case TS_CARET:
+    case TS_AMP:
+    case TS_SLASH:
+    case TS_PERCENT:
+    case TS_LT_DASH:
+    case TS_COLON_EQ:
+    case TS_PLUS_PLUS:
+    case TS_DASH_DASH:
+    case TS_STAR_EQ:
+    case TS_SLASH_EQ:
+    case TS_PERCENT_EQ:
+    case TS_LT_LT_EQ:
+    case TS_GT_GT_EQ:
+    case TS_AMP_EQ:
+    case TS_AMP_CARET_EQ:
+    case TS_PLUS_EQ:
+    case TS_DASH_EQ:
+    case TS_PIPE_EQ:
+    case TS_CARET_EQ:
+    case TS_COLON:
+    case TS_LT_LT:
+    case TS_GT_GT:
+    case TS_AMP_CARET:
+    case TS_PIPE:
+    case TS_EQ_EQ:
+    case TS_BANG_EQ:
+    case TS_LT:
+    case TS_LT_EQ:
+    case TS_GT:
+    case TS_GT_EQ:
+    case TS_AMP_AMP:
+    case TS_PIPE_PIPE:
+        *out = COLOR_MEDIUM_GREY;
+        return true;
+
+    case TS_INT_LITERAL:
+    case TS_FLOAT_LITERAL:
+    case TS_IMAGINARY_LITERAL:
+    case TS_RUNE_LITERAL:
+    case TS_NIL:
+    case TS_TRUE:
+    case TS_FALSE:
+        *out = COLOR_THEME_2;
+        return true;
+
+    case TS_COMMENT:
+        *out = COLOR_THEME_3;
+        return true;
+
+    case TS_INTERPRETED_STRING_LITERAL:
+    case TS_RAW_STRING_LITERAL:
+        *out = COLOR_THEME_4;
+        return true;
+    }
+    return false;
+}
 
 void UI::init() {
     ptr0(this);
@@ -358,7 +468,6 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                             } else {
                                 it->state.open = !it->state.open;
                             }
-
                         }
 
                         boxf text_area = row_area;
@@ -513,6 +622,43 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
 
             auto editor = pane.get_current_editor();
 
+            SCOPED_LOCK(&editor->buf_lock);
+
+            struct Highlight {
+                cur2 start;
+                cur2 end;
+                vec3f color;
+            };
+
+            List<Highlight> highlights;
+            highlights.init();
+
+            // generate editor highlights
+            if (editor->tree != NULL) {
+                ts_tree_cursor_reset(&editor->cursor, ts_tree_root_node(editor->tree));
+
+                auto start = new_cur2(0, editor->view.y);
+                auto end = new_cur2(0, editor->view.y + editor->view.h);
+
+                walk_ts_cursor(&editor->cursor, false, [&](Ast_Node *node, Ts_Field_Type, int depth) -> Walk_Action {
+                    auto node_start = node->start;
+                    auto node_end = node->end;
+
+                    if (node_end < start) return WALK_SKIP_CHILDREN;
+                    if (node_start > end) return WALK_ABORT;
+
+                    vec3f color = {0};
+                    if (get_type_color(node->type, &color)) {
+                        auto hl = highlights.append();
+                        hl->start = node_start;
+                        hl->end = node_end;
+                        hl->color = color;
+                    }
+
+                    return WALK_CONTINUE;
+                });
+            }
+
             if (world.nvim_data.waiting_focus_window == editor->id) {
                 // TODO
             } else {
@@ -552,6 +698,8 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                 if (buf.lines.len == 0) draw_cursor();
 
                 auto &hint = editor->parameter_hint;
+
+                int next_hl = (highlights.len > 0 ? 0 : -1);
 
                 auto relative_y = 0;
                 for (u32 y = view.y; y < view.y + view.h; y++, relative_y++) {
@@ -594,7 +742,20 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                     for (u32 x = view.x; x < view.x + view.w; x++) {
                         if (x >= line->len) break;
 
-                        auto text_color = COLOR_WHITE;
+                        vec3f text_color = COLOR_WHITE;
+
+                        if (next_hl != -1) {
+                            auto curr = new_cur2(x, y);
+
+                            while (next_hl != -1 && curr >= highlights[next_hl].end)
+                                if (++next_hl >= highlights.len)
+                                    next_hl = -1;
+
+                            auto& hl = highlights[next_hl];
+                            if (hl.start <= curr && curr < hl.end)
+                                text_color = hl.color;
+                        }
+
                         if (editor->cur == new_cur2(x, y)) {
                             draw_cursor();
                             text_color = COLOR_BLACK;
@@ -615,7 +776,7 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                         draw_cursor();
 
                     cur_pos.x = editor_area.x + EDITOR_MARGIN_X;
-                    cur_pos.y += font->height;
+                    cur_pos.y += font->height * LINE_HEIGHT;
                 }
 
                 do {
@@ -926,7 +1087,7 @@ void UI::recalculate_view_sizes(bool force) {
     for (u32 i = 0; i < world.wksp.panes.len; i++) {
         for (auto&& editor : world.wksp.panes[i].editors) {
             editor.view.w = (i32)((editor_sizes[i].x - EDITOR_MARGIN_X) / world.font.width);
-            editor.view.h = (i32)((editor_sizes[i].y - EDITOR_MARGIN_Y) / world.font.height);
+            editor.view.h = (i32)((editor_sizes[i].y - EDITOR_MARGIN_Y) / world.font.height / LINE_HEIGHT);
 
             if (!editor.nvim_data.is_resizing)
                 if (!world.nvim.resize_editor(&editor))

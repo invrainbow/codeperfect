@@ -17,20 +17,18 @@ Editor* find_editor_by_buffer(u32 buf_id) {
 }
 
 bool Nvim::resize_editor(Editor* editor) {
-    auto idx = world.nvim_data.grid_to_window.find([&](Grid_Window_Pair* it) {
+    auto pair = world.nvim_data.grid_to_window.find([&](Grid_Window_Pair* it) {
         return it->win == editor->nvim_data.win_id;
     });
 
-    if (idx == -1) return false;
-
-    auto& pair = world.nvim_data.grid_to_window[idx];
+    if (pair == NULL) return false;
 
     editor->nvim_data.is_resizing = true;
 
     auto msgid = start_request_message("nvim_ui_try_resize_grid", 3);
     save_request(NVIM_REQ_RESIZE, msgid, editor->id);
 
-    writer.write_int(pair.grid);
+    writer.write_int(pair->grid);
     writer.write_int(editor->view.w);
     writer.write_int(editor->view.h);
     end_message();
@@ -58,10 +56,10 @@ void assoc_grid_with_window(u32 grid, u32 win) {
 Editor* find_editor_by_grid(u32 grid) {
     auto& table = world.nvim_data.grid_to_window;
 
-    auto idx = table.find([&](Grid_Window_Pair* it) { return it->grid == grid; });
-    if (idx == -1) return NULL;
+    auto pair = table.find([&](Grid_Window_Pair* it) { return it->grid == grid; });
+    if (pair == NULL) return NULL;
 
-    return find_editor_by_window(table[idx].win);
+    return find_editor_by_window(pair->win);
 }
 
 void Nvim::handle_editor_on_ready(Editor *editor) {
@@ -151,31 +149,57 @@ void Nvim::run_event_loop() {
                         auto num_lines = reader.read_array(); CHECKOK();
 
                         auto editor = find_editor_by_buffer(buf_id);
-                        if (editor == NULL) {
+
+                        bool is_change_empty = firstline == lastline && num_lines == 0;
+                        bool skip = (
+                            editor == NULL
+                            || !editor->nvim_data.got_initial_lines
+                            || changedtick <= editor->nvim_insert.skip_changedticks_until
+                            || is_change_empty
+                        );
+
+                        if (skip) {
                             for (u32 i = 0; i < num_lines; i++) {
                                 SCOPED_FRAME();
                                 reader.skip_object(); CHECKOK();
                             }
                         } else {
-                            bool should_skip = changedtick <= editor->nvim_insert.skip_changedticks_until;
+                            SCOPED_FRAME();
 
-                            if (lastline == -1)
-                                lastline = editor->buf.lines.len;
-
-                            if (!should_skip)
-                                editor->buf.delete_lines(firstline, lastline);
+                            auto tmp_lines = alloc_list<uchar*>();
+                            auto tmp_line_lengths = alloc_list<s32>();
 
                             for (u32 i = 0; i < num_lines; i++) {
-                                SCOPED_FRAME();
-
                                 auto line = reader.read_string(); CHECKOK();
-                                if (!should_skip) {
-                                    auto len = strlen(line);
+                                auto len = strlen(line);
+                                {
                                     auto unicode_line = alloc_array(uchar, len);
                                     for (u32 i = 0; i < len; i++)
                                         unicode_line[i] = line[i];
-                                    editor->buf.insert_line(firstline + i, unicode_line, len);
+                                    tmp_lines->append(unicode_line);
+                                    tmp_line_lengths->append(len);
                                 }
+                            }
+
+                            SCOPED_LOCK(&editor->nvim_edit_lock);
+                            SCOPED_MEM(&editor->nvim_edit_mem);
+
+                            auto edit = editor->nvim_edit_queue.append();
+                            edit->firstline = firstline;
+                            edit->lastline = lastline;
+
+                            edit->lines = alloc_list<uchar*>(tmp_lines->len);
+                            edit->line_lengths = alloc_list<s32>(tmp_line_lengths->len);
+
+                            for (u32 i = 0; i < tmp_lines->len; i++) {
+                                auto& line = tmp_lines->at(i);
+                                auto& line_length = tmp_line_lengths->at(i);
+
+                                auto unicode_line = alloc_array(uchar, line_length);
+                                memcpy(unicode_line, line, sizeof(uchar) * line_length);
+
+                                edit->lines->append(unicode_line);
+                                edit->line_lengths->append(line_length);
                             }
                         }
 
@@ -300,8 +324,8 @@ void Nvim::run_event_loop() {
                 {
                     auto msgid = reader.read_int(); CHECKOK();
 
-                    i32 idx = find_request_by_msgid(msgid);
-                    if (idx == -1) {
+                    auto req = find_request_by_msgid(msgid);
+                    if (req == NULL) {
                         reader.skip_object(); CHECKOK(); // error
                         reader.skip_object(); CHECKOK(); // result
                         break;
@@ -335,8 +359,6 @@ void Nvim::run_event_loop() {
 
                     For 'unhandled' requests, we just skip over the response.
                     */
-
-                    auto req = &requests[idx];
 
                     Editor* editor = NULL;
                     if (req->editor_id != 0) {
@@ -472,7 +494,7 @@ void Nvim::run_event_loop() {
                                 end_message();
                             }
 
-                            if (!editor->is_untitled) {
+                            {
                                 start_request_message("nvim_buf_set_lines", 5);
 
                                 writer.write_int(bufid);
@@ -487,7 +509,7 @@ void Nvim::run_event_loop() {
                                     For (it) writer.write1(it);
                                 }
 
-                                editor->buf.clear();
+                                // editor->buf.clear();
                                 end_message();
                             }
 
@@ -502,12 +524,12 @@ void Nvim::run_event_loop() {
                                 };
 
                                 set_option("shiftwidth", [&]() { writer.write_int(2); });
-                                set_option("tabstop", [&]() { writer.write_int(2); });
-                                set_option("expandtab", [&]() { writer.write_bool(false); });
-                                set_option("wrap", [&]() { writer.write_bool(false); });
+                                set_option("tabstop",    [&]() { writer.write_int(2); });
+                                set_option("expandtab",  [&]() { writer.write_bool(false); });
+                                set_option("wrap",       [&]() { writer.write_bool(false); });
                                 set_option("autoindent", [&]() { writer.write_bool(true); });
-                                set_option("filetype", [&]() { writer.write_string("go"); });
-                                // how to do eq. of `filetype indent plugin on'?
+                                set_option("filetype",   [&]() { writer.write_string("go"); });
+                                // how to do equiv. of `filetype indent plugin on'?
                             }
 
                             {
@@ -631,7 +653,7 @@ void Nvim::init() {
     print_lock.init();
     requests_lock.init();
 
-    requests.init(LIST_POOL, 32);
+    requests.init();
 }
 
 void Nvim::start_running() {

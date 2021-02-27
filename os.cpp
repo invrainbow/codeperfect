@@ -6,11 +6,11 @@ ccstr get_normalized_path(ccstr path) {
     u32 len = get_normalized_path(path, NULL, 0);
     if (len == 0) return NULL;
 
-    auto old = MEM->sp;
+    Frame frame;
     auto ret = alloc_array(char, len + 1);
 
     if (get_normalized_path(path, ret, len + 1) == 0) {
-        MEM->sp = old;
+        frame.restore();
         return NULL;
     }
     return ret;

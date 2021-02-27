@@ -1,8 +1,0 @@
-remedybg bugs:
-
- -  watch window, name is `world.wksp.path`, value is "w:\whetstone", type is
-    char[260].  when i click 'copy value' it copies nothing
-
-
-
-

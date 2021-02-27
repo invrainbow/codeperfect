@@ -37,7 +37,7 @@ type Reader struct {
 }
 
 func (r *Reader) ReadInto(n int, out interface{}) error {
-	return binary.Read(bytes.NewReader(r.ReadN(n)), binary.LittleEndian, out)
+	return binary.Read(bytes.NewReader(), binary.LittleEndian, out)
 }
 
 func NewReader() *Reader {
@@ -83,12 +83,12 @@ func (r *Reader) ReadString() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	
+
 	arr, err := r.ReadN(len)
 	if err != nil {
 		return "", err
 	}
-	
+
 	return string(arr), nil
 }
 
@@ -112,7 +112,7 @@ func parseErrors(buildOutput string) {
 func main() {
 	in := NewReader()
 	out := bufio.NewWriter(os.Stdout)
-	
+
 	for {
 		op, err := in.Read1()
 		if err != nil {
@@ -133,13 +133,13 @@ func main() {
 				}
 				arr = append(arr, s)
 			}
-			
+
 			cmd := exec.Command(arr[0], arr[1:]...)
 			out, err := cmd.CombinedOutput()
 			if err != nil {
 				panic(err)
 			}
-			
+
 		case OperCheckIsFileBuilt:
 			path, err := r.ReadString()
 			if err != nil {

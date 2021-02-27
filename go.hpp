@@ -4,9 +4,282 @@
 #include "buffer.hpp"
 #include "utils.hpp"
 #include "mem.hpp"
-
 #include "os.hpp"
 #include "uthash.h"
+#include "tree_sitter_crap.hpp"
+
+#undef uthash_malloc
+#undef uthash_free
+#define uthash_malloc(sz) alloc_memory(sz)
+#define uthash_free(ptr, sz)
+
+extern "C" TSLanguage *tree_sitter_go();
+
+// mirrors tree-sitter/src/go.h
+enum Ts_Field_Type {
+    TSF_ALIAS = 1,
+    TSF_ALTERNATIVE = 2,
+    TSF_ARGUMENTS = 3,
+    TSF_BODY = 4,
+    TSF_CAPACITY = 5,
+    TSF_CHANNEL = 6,
+    TSF_COMMUNICATION = 7,
+    TSF_CONDITION = 8,
+    TSF_CONSEQUENCE = 9,
+    TSF_ELEMENT = 10,
+    TSF_END = 11,
+    TSF_FIELD = 12,
+    TSF_FUNCTION = 13,
+    TSF_INDEX = 14,
+    TSF_INITIALIZER = 15,
+    TSF_KEY = 16,
+    TSF_LABEL = 17,
+    TSF_LEFT = 18,
+    TSF_LENGTH = 19,
+    TSF_NAME = 20,
+    TSF_OPERAND = 21,
+    TSF_OPERATOR = 22,
+    TSF_PACKAGE = 23,
+    TSF_PARAMETERS = 24,
+    TSF_PATH = 25,
+    TSF_RECEIVER = 26,
+    TSF_RESULT = 27,
+    TSF_RIGHT = 28,
+    TSF_START = 29,
+    TSF_TAG = 30,
+    TSF_TYPE = 31,
+    TSF_UPDATE = 32,
+    TSF_VALUE = 33,
+};
+
+// mirrors tree-sitter/src/go.h
+enum Ts_Ast_Type {
+    TS_ERROR = ((TSSymbol)-1),
+    TS_IDENTIFIER = 1,
+    TS_LF = 2,
+    TS_SEMI = 3,
+    TS_PACKAGE = 4,
+    TS_IMPORT = 5,
+    TS_ANON_DOT = 6,
+    TS_BLANK_IDENTIFIER = 7,
+    TS_LPAREN = 8,
+    TS_RPAREN = 9,
+    TS_CONST = 10,
+    TS_COMMA = 11,
+    TS_EQ = 12,
+    TS_VAR = 13,
+    TS_FUNC = 14,
+    TS_DOT_DOT_DOT = 15,
+    TS_TYPE = 16,
+    TS_STAR = 17,
+    TS_LBRACK = 18,
+    TS_RBRACK = 19,
+    TS_STRUCT = 20,
+    TS_LBRACE = 21,
+    TS_RBRACE = 22,
+    TS_INTERFACE = 23,
+    TS_MAP = 24,
+    TS_CHAN = 25,
+    TS_LT_DASH = 26,
+    TS_COLON_EQ = 27,
+    TS_PLUS_PLUS = 28,
+    TS_DASH_DASH = 29,
+    TS_STAR_EQ = 30,
+    TS_SLASH_EQ = 31,
+    TS_PERCENT_EQ = 32,
+    TS_LT_LT_EQ = 33,
+    TS_GT_GT_EQ = 34,
+    TS_AMP_EQ = 35,
+    TS_AMP_CARET_EQ = 36,
+    TS_PLUS_EQ = 37,
+    TS_DASH_EQ = 38,
+    TS_PIPE_EQ = 39,
+    TS_CARET_EQ = 40,
+    TS_COLON = 41,
+    TS_FALLTHROUGH = 42,
+    TS_BREAK = 43,
+    TS_CONTINUE = 44,
+    TS_GOTO = 45,
+    TS_RETURN = 46,
+    TS_GO = 47,
+    TS_DEFER = 48,
+    TS_IF = 49,
+    TS_ELSE = 50,
+    TS_FOR = 51,
+    TS_RANGE = 52,
+    TS_SWITCH = 53,
+    TS_CASE = 54,
+    TS_DEFAULT = 55,
+    TS_SELECT = 56,
+    TS_NEW = 57,
+    TS_MAKE = 58,
+    TS_PLUS = 59,
+    TS_DASH = 60,
+    TS_BANG = 61,
+    TS_CARET = 62,
+    TS_AMP = 63,
+    TS_SLASH = 64,
+    TS_PERCENT = 65,
+    TS_LT_LT = 66,
+    TS_GT_GT = 67,
+    TS_AMP_CARET = 68,
+    TS_PIPE = 69,
+    TS_EQ_EQ = 70,
+    TS_BANG_EQ = 71,
+    TS_LT = 72,
+    TS_LT_EQ = 73,
+    TS_GT = 74,
+    TS_GT_EQ = 75,
+    TS_AMP_AMP = 76,
+    TS_PIPE_PIPE = 77,
+    TS_RAW_STRING_LITERAL = 78,
+    TS_DQUOTE = 79,
+    TS_INTERPRETED_STRING_LITERAL_TOKEN1 = 80,
+    TS_ESCAPE_SEQUENCE = 81,
+    TS_INT_LITERAL = 82,
+    TS_FLOAT_LITERAL = 83,
+    TS_IMAGINARY_LITERAL = 84,
+    TS_RUNE_LITERAL = 85,
+    TS_NIL = 86,
+    TS_TRUE = 87,
+    TS_FALSE = 88,
+    TS_COMMENT = 89,
+    TS_SOURCE_FILE = 90,
+    TS_PACKAGE_CLAUSE = 91,
+    TS_IMPORT_DECLARATION = 92,
+    TS_IMPORT_SPEC = 93,
+    TS_DOT = 94,
+    TS_IMPORT_SPEC_LIST = 95,
+    TS_DECLARATION = 96,
+    TS_CONST_DECLARATION = 97,
+    TS_CONST_SPEC = 98,
+    TS_VAR_DECLARATION = 99,
+    TS_VAR_SPEC = 100,
+    TS_FUNCTION_DECLARATION = 101,
+    TS_METHOD_DECLARATION = 102,
+    TS_PARAMETER_LIST = 103,
+    TS_PARAMETER_DECLARATION = 104,
+    TS_VARIADIC_PARAMETER_DECLARATION = 105,
+    TS_TYPE_ALIAS = 106,
+    TS_TYPE_DECLARATION = 107,
+    TS_TYPE_SPEC = 108,
+    TS_EXPRESSION_LIST = 109,
+    TS_PARENTHESIZED_TYPE = 110,
+    TS_SIMPLE_TYPE = 111,
+    TS_POINTER_TYPE = 112,
+    TS_ARRAY_TYPE = 113,
+    TS_IMPLICIT_LENGTH_ARRAY_TYPE = 114,
+    TS_SLICE_TYPE = 115,
+    TS_STRUCT_TYPE = 116,
+    TS_FIELD_DECLARATION_LIST = 117,
+    TS_FIELD_DECLARATION = 118,
+    TS_INTERFACE_TYPE = 119,
+    TS_METHOD_SPEC_LIST = 120,
+    TS_METHOD_SPEC = 121,
+    TS_MAP_TYPE = 122,
+    TS_CHANNEL_TYPE = 123,
+    TS_FUNCTION_TYPE = 124,
+    TS_BLOCK = 125,
+    TS_STATEMENT_LIST = 126,
+    TS_STATEMENT = 127,
+    TS_EMPTY_STATEMENT = 128,
+    TS_SIMPLE_STATEMENT = 129,
+    TS_SEND_STATEMENT = 130,
+    TS_RECEIVE_STATEMENT = 131,
+    TS_INC_STATEMENT = 132,
+    TS_DEC_STATEMENT = 133,
+    TS_ASSIGNMENT_STATEMENT = 134,
+    TS_SHORT_VAR_DECLARATION = 135,
+    TS_LABELED_STATEMENT = 136,
+    TS_EMPTY_LABELED_STATEMENT = 137,
+    TS_FALLTHROUGH_STATEMENT = 138,
+    TS_BREAK_STATEMENT = 139,
+    TS_CONTINUE_STATEMENT = 140,
+    TS_GOTO_STATEMENT = 141,
+    TS_RETURN_STATEMENT = 142,
+    TS_GO_STATEMENT = 143,
+    TS_DEFER_STATEMENT = 144,
+    TS_IF_STATEMENT = 145,
+    TS_FOR_STATEMENT = 146,
+    TS_FOR_CLAUSE = 147,
+    TS_RANGE_CLAUSE = 148,
+    TS_EXPRESSION_SWITCH_STATEMENT = 149,
+    TS_EXPRESSION_CASE = 150,
+    TS_DEFAULT_CASE = 151,
+    TS_TYPE_SWITCH_STATEMENT = 152,
+    TS_TYPE_SWITCH_HEADER = 153,
+    TS_TYPE_CASE = 154,
+    TS_SELECT_STATEMENT = 155,
+    TS_COMMUNICATION_CASE = 156,
+    TS_EXPRESSION = 157,
+    TS_PARENTHESIZED_EXPRESSION = 158,
+    TS_CALL_EXPRESSION = 159,
+    TS_VARIADIC_ARGUMENT = 160,
+    TS_SPECIAL_ARGUMENT_LIST = 161,
+    TS_ARGUMENT_LIST = 162,
+    TS_SELECTOR_EXPRESSION = 163,
+    TS_INDEX_EXPRESSION = 164,
+    TS_SLICE_EXPRESSION = 165,
+    TS_TYPE_ASSERTION_EXPRESSION = 166,
+    TS_TYPE_CONVERSION_EXPRESSION = 167,
+    TS_COMPOSITE_LITERAL = 168,
+    TS_LITERAL_VALUE = 169,
+    TS_KEYED_ELEMENT = 170,
+    TS_ELEMENT = 171,
+    TS_FUNC_LITERAL = 172,
+    TS_UNARY_EXPRESSION = 173,
+    TS_BINARY_EXPRESSION = 174,
+    TS_QUALIFIED_TYPE = 175,
+    TS_INTERPRETED_STRING_LITERAL = 176,
+    TS_SOURCE_FILE_REPEAT1 = 177,
+    TS_IMPORT_SPEC_LIST_REPEAT1 = 178,
+    TS_CONST_DECLARATION_REPEAT1 = 179,
+    TS_CONST_SPEC_REPEAT1 = 180,
+    TS_VAR_DECLARATION_REPEAT1 = 181,
+    TS_PARAMETER_LIST_REPEAT1 = 182,
+    TS_TYPE_DECLARATION_REPEAT1 = 183,
+    TS_FIELD_NAME_LIST_REPEAT1 = 184,
+    TS_EXPRESSION_LIST_REPEAT1 = 185,
+    TS_FIELD_DECLARATION_LIST_REPEAT1 = 186,
+    TS_METHOD_SPEC_LIST_REPEAT1 = 187,
+    TS_STATEMENT_LIST_REPEAT1 = 188,
+    TS_EXPRESSION_SWITCH_STATEMENT_REPEAT1 = 189,
+    TS_TYPE_SWITCH_STATEMENT_REPEAT1 = 190,
+    TS_TYPE_CASE_REPEAT1 = 191,
+    TS_SELECT_STATEMENT_REPEAT1 = 192,
+    TS_ARGUMENT_LIST_REPEAT1 = 193,
+    TS_LITERAL_VALUE_REPEAT1 = 194,
+    TS_INTERPRETED_STRING_LITERAL_REPEAT1 = 195,
+    TS_FIELD_IDENTIFIER = 196,
+    TS_LABEL_NAME = 197,
+    TS_PACKAGE_IDENTIFIER = 198,
+    TS_TYPE_IDENTIFIER = 199,
+};
+
+ccstr ts_field_type_str(Ts_Field_Type type);
+ccstr ts_ast_type_str(Ts_Ast_Type type);
+
+struct Index_Stream {
+    File f;
+    u32 offset;
+    ccstr path;
+    bool ok;
+
+    File_Result open(ccstr _path, u32 access, File_Open_Mode open_mode);
+    bool seek(u32 offset);
+    void cleanup();
+    bool writen(void* buf, int n);
+    bool write1(i8 x);
+    bool write2(i16 x);
+    bool write4(i32 x);
+    bool write8(i64 x);
+    bool writestr(ccstr s);
+    void readn(void* buf, s32 n);
+    char read1();
+    i16 read2();
+    i32 read4();
+    ccstr readstr();
+};
 
 enum It_Type {
     IT_INVALID = 0,
@@ -31,52 +304,50 @@ struct Parser_It {
     void init(Entire_File *ef) {
         ptr0(this);
         type = IT_MMAP;
-
         mmap_params.ef = ef;
         mmap_params.pos = new_cur2(0, 0);
+    }
+
+    void init(Buffer* buf) {
+        ptr0(this);
+        type = IT_BUFFER;
+        buffer_params.it.buf = buf;
     }
 
     void cleanup() {
         if (type == IT_MMAP) free_entire_file(mmap_params.ef);
     }
 
-    void init(Buffer* buf) {
-        ptr0(this);
-        type = IT_BUFFER;
-
-        buffer_params.it.buf = buf;
-    }
-
     u8 peek() {
         switch (type) {
-            case IT_MMAP:
-                return mmap_params.ef->data[mmap_params.pos.x];
-            case IT_BUFFER:
-                return (u8)buffer_params.it.peek();
+        case IT_MMAP:
+            return mmap_params.ef->data[mmap_params.pos.x];
+        case IT_BUFFER:
+            return (u8)buffer_params.it.peek();
         }
         return 0;
     }
 
     u8 next() {
         switch (type) {
-            case IT_MMAP:
-                {
-                    auto ret = peek();
-                    mmap_params.pos.x++;
-                    return ret;
-                }
-            case IT_BUFFER:
-                return (u8)buffer_params.it.next();
+        case IT_MMAP:
+            {
+                auto ret = peek();
+                mmap_params.pos.x++;
+                return ret;
+            }
+        case IT_BUFFER:
+            return (u8)buffer_params.it.next();
         }
         return 0;
     }
 
     bool eof() {
         switch (type) {
-            case IT_MMAP:
-                return (mmap_params.pos.x == mmap_params.ef->len);
-            case IT_BUFFER:
-                return buffer_params.it.eof();
+        case IT_MMAP:
+            return (mmap_params.pos.x == mmap_params.ef->len);
+        case IT_BUFFER:
+            return buffer_params.it.eof();
         }
         return false;
     }
@@ -84,10 +355,10 @@ struct Parser_It {
     cur2 get_pos() {
         // TODO: to convert between pos types based on this->type
         switch (type) {
-            case IT_MMAP:
-                return new_cur2(mmap_params.pos.x, -1);
-            case IT_BUFFER:
-                return buffer_params.it.pos;
+        case IT_MMAP:
+            return new_cur2(mmap_params.pos.x, -1);
+        case IT_BUFFER:
+            return buffer_params.it.pos;
         }
         return new_cur2(0, 0);
     }
@@ -95,495 +366,18 @@ struct Parser_It {
     void set_pos(cur2 pos) {
         // TODO: to convert between pos types based on this->type
         switch (type) {
-            case IT_MMAP:
-                mmap_params.pos = pos;
-                break;
-            case IT_BUFFER:
-                buffer_params.it.pos = pos;
-                break;
+        case IT_MMAP:
+            mmap_params.pos = pos;
+            break;
+        case IT_BUFFER:
+            buffer_params.it.pos = pos;
+            break;
         }
     }
 };
 
-bool isid(int c);
-bool ishex(int c);
-bool isoct(int c);
-
-enum Tok_Type {
-    TOK_ILLEGAL,
-    TOK_EOF,
-    TOK_COMMENT,
-    TOK_ID,                // main
-    TOK_INT,               // 12345
-    TOK_FLOAT,             // 123.45
-    TOK_IMAG,              // 123.45i
-    TOK_RUNE,              // 'a'
-    TOK_STRING,            // "abc"
-    TOK_ADD,               // +
-    TOK_SUB,               // -
-    TOK_MUL,               // *
-    TOK_QUO,               // /
-    TOK_REM,               // %
-    TOK_AND,               // &
-    TOK_OR,                // |
-    TOK_XOR,               // ^
-    TOK_SHL,               // <<
-    TOK_SHR,               // >>
-    TOK_AND_NOT,           // &^
-    TOK_ADD_ASSIGN,        // +=
-    TOK_SUB_ASSIGN,        // -=
-    TOK_MUL_ASSIGN,        // *=
-    TOK_QUO_ASSIGN,        // /=
-    TOK_REM_ASSIGN,        // %=
-    TOK_AND_ASSIGN,        //, &=
-    TOK_OR_ASSIGN,         // |=
-    TOK_XOR_ASSIGN,        // ^=
-    TOK_SHL_ASSIGN,        // <<=
-    TOK_SHR_ASSIGN,        // >>=
-    TOK_AND_NOT_ASSIGN,    // &^=
-    TOK_LAND,              // &&
-    TOK_LOR,               // ||
-    TOK_ARROW,             // <-
-    TOK_INC,               // ++
-    TOK_DEC,               // --
-    TOK_EQL,               // ==
-    TOK_LSS,               // <
-    TOK_GTR,               // >
-    TOK_ASSIGN,            // =
-    TOK_NOT,               // !
-    TOK_NEQ,               // !=
-    TOK_LEQ,               // <=
-    TOK_GEQ,               // >=
-    TOK_DEFINE,            // :=
-    TOK_ELLIPSIS,          // ...
-    TOK_LPAREN,            // (
-    TOK_LBRACK,            // [
-    TOK_LBRACE,            // {
-    TOK_COMMA,             // ,
-    TOK_PERIOD,            // .
-    TOK_RPAREN,            // )
-    TOK_RBRACK,            // ]
-    TOK_RBRACE,            // }
-    TOK_SEMICOLON,         // ;
-    TOK_COLON,             // :
-    TOK_BREAK,
-    TOK_CASE,
-    TOK_CHAN,
-    TOK_CONST,
-    TOK_CONTINUE,
-    TOK_DEFAULT,
-    TOK_DEFER,
-    TOK_ELSE,
-    TOK_FALLTHROUGH,
-    TOK_FOR,
-    TOK_FUNC,
-    TOK_GO,
-    TOK_GOTO,
-    TOK_IF,
-    TOK_IMPORT,
-    TOK_INTERFACE,
-    TOK_MAP,
-    TOK_PACKAGE,
-    TOK_RANGE,
-    TOK_RETURN,
-    TOK_SELECT,
-    TOK_STRUCT,
-    TOK_SWITCH,
-    TOK_TYPE,
-    TOK_VAR,
-};
-
-ccstr tok_type_str(Tok_Type type);
-
-enum Tok_Imag_Type {
-    IMAG_INT,
-    IMAG_FLOAT,
-};
-
-union TokenVal {
-    u32 int_val;
-    float float_val;
-    struct {
-        Tok_Imag_Type type;
-        union {
-            int int_val;
-            float float_val;
-        };
-    } imag_val;
-    char char_val; // TODO: unicode
-    ccstr string_val;
-};
-
-struct Token {
-    Tok_Type type;
-    ccstr lit;
-    cur2 start_before_leading_whitespace;
-    cur2 start;
-    cur2 end;
-    TokenVal val;
-};
-
-enum Ast_Type {
-    AST_ILLEGAL,
-    AST_BASIC_LIT,
-    AST_ID,
-    AST_UNARY_EXPR,
-    AST_BINARY_EXPR,
-    AST_ARRAY_TYPE,
-    AST_POINTER_TYPE,
-    AST_SLICE_TYPE,
-    AST_MAP_TYPE,
-    AST_STRUCT_TYPE,
-    AST_INTERFACE_TYPE,
-    AST_CHAN_TYPE,
-    AST_FUNC_TYPE,
-    AST_PAREN,
-    AST_SELECTOR_EXPR,
-    AST_SLICE_EXPR,
-    AST_INDEX_EXPR,
-    AST_TYPE_ASSERTION_EXPR,
-    AST_CALL_EXPR,
-    AST_CALL_ARGS,
-    AST_LITERAL_ELEM,
-    AST_LITERAL_VALUE,
-    AST_LIST,
-    AST_ELLIPSIS,
-    AST_FIELD,
-    AST_PARAMETERS,
-    AST_FUNC_LIT,
-    AST_BLOCK,
-    AST_SIGNATURE,
-    AST_COMPOSITE_LIT,
-    AST_GO_STMT,
-    AST_DEFER_STMT,
-    AST_SELECT_STMT,
-    AST_SWITCH_STMT,
-    AST_IF_STMT,
-    AST_FOR_STMT,
-    AST_RETURN_STMT,
-    AST_BRANCH_STMT,
-    AST_EMPTY_STMT,
-    AST_DECL,
-    AST_ASSIGN_STMT,
-    AST_VALUE_SPEC,
-    AST_IMPORT_SPEC,
-    AST_TYPE_SPEC,
-    AST_INC_DEC_STMT,
-    AST_SEND_STMT,
-    AST_LABELED_STMT,
-    AST_EXPR_STMT,
-    AST_PACKAGE_DECL,
-    AST_SOURCE,
-    AST_STRUCT_FIELD,
-    AST_INTERFACE_SPEC,
-    AST_CASE_CLAUSE,
-    AST_COMM_CLAUSE,
-    AST_FUNC_DECL,
-    AST_EMPTY,
-
-    _AST_TYPES_COUNT_,
-};
-
-ccstr ast_type_str(Ast_Type type);
-
-enum Ast_Chan_Direction {
-    AST_CHAN_RECV,
-    AST_CHAN_SEND,
-    AST_CHAN_BI,
-};
-
-ccstr ast_chan_direction_str(Ast_Chan_Direction dir);
-
-struct Ast {
-    Ast_Type type;
-    cur2 start;
-    cur2 end;
-
-    union {
-        int extra_data_start;
-
-        struct {
-            Ast* signature;
-            Ast* body;
-        } func_lit;
-
-        struct {
-            Tok_Type type;
-            Ast* specs;
-        } decl;
-
-        struct {
-            Ast* params;
-            Ast* result;
-        } signature;
-
-        struct {
-            TokenVal val;
-            ccstr lit;
-        } basic_lit;
-
-        struct {
-            Tok_Type op;
-            Ast* rhs;
-        } unary_expr;
-
-        List<Ast*> list;
-
-        struct {
-            Tok_Type op;
-            Ast* lhs;
-            Ast* rhs;
-        } binary_expr;
-
-        struct {
-            ccstr lit;
-            Ast* decl;
-            Ast* decl_id;
-            bool bad;
-        } id;
-
-        struct {
-            Ast* base_type;
-        } slice_type;
-
-        struct {
-            Ast* key_type;
-            Ast* value_type;
-        } map_type;
-
-        struct {
-            Ast_Chan_Direction direction;
-            Ast* base_type;
-        } chan_type;
-
-        struct {
-            Ast* base_type;
-        } pointer_type;
-
-        struct {
-            Ast* length;
-            Ast* base_type;
-        } array_type;
-
-        struct {
-            Ast* x;
-        } paren;
-
-        struct {
-            Ast* x;
-            Ast* sel;
-            cur2 period_pos;
-        } selector_expr;
-
-        struct {
-            Ast* x;
-            Ast* s1;
-            Ast* s2;
-            Ast* s3;
-        } slice_expr;
-
-        struct {
-            Ast* x;
-            Ast* key;
-        } index_expr;
-
-        struct {
-            Ast* x;
-            Ast* type;
-        } type_assertion_expr;
-
-        struct {
-            Ast* func;
-            Ast* call_args;
-        } call_expr;
-
-        struct {
-            Ast* args;
-            bool ellip;
-        } call_args;
-
-        struct {
-            Ast* key;
-            Ast* elem;
-        } literal_elem;
-
-        struct {
-            Ast* elems;
-        } literal_value;
-
-        struct {
-            Ast* type;
-        } ellipsis;
-
-        struct {
-            Ast* ids;
-            Ast* type;
-        } field;
-
-        struct {
-            Ast* fields;
-        } parameters;
-
-        struct {
-            Ast* stmts;
-        } block;
-
-        struct {
-            Ast* base_type;
-            Ast* literal_value;
-        } composite_lit;
-
-        struct {
-            Ast* x;
-        } go_stmt;
-
-        struct {
-            Ast* x;
-        } defer_stmt;
-
-        struct {
-            Ast* init;
-            Ast* cond;
-            Ast* body;
-            Ast* else_;
-        } if_stmt;
-
-        struct {
-            Ast* exprs;
-        } return_stmt;
-
-        struct {
-            Tok_Type branch_type;
-            Ast* label;
-        } branch_stmt;
-
-        struct {
-            Ast* fields;
-        } struct_type;
-
-        struct {
-            Ast* specs;
-        } interface_type;
-
-        struct {
-            Ast* signature;
-        } func_type;
-
-        struct {
-            Ast* ids;
-            Ast* type;
-            Ast* vals;
-            Tok_Type spec_type;
-        } value_spec;
-
-        struct {
-            Ast* package_name;
-            Ast* path;
-        } import_spec;
-
-        struct {
-            Ast* id;
-            Ast* type;
-            bool is_alias;
-        } type_spec;
-
-        struct {
-            Ast* lhs;
-            Tok_Type op;
-            Ast* rhs;
-        } assign_stmt;
-
-        struct {
-            Tok_Type op;
-            Ast* x;
-        } inc_dec_stmt;
-
-        struct {
-            Ast* chan;
-            Ast* value;
-        } send_stmt;
-
-        struct {
-            Ast* label;
-            Ast* stmt;
-        } labeled_stmt;
-
-        struct {
-            Ast* x;
-        } expr_stmt;
-
-        struct {
-            Ast* name;
-        } package_decl;
-
-        struct {
-            Ast* package_decl;
-            Ast* imports;
-            Ast* decls;
-        } source;
-
-        struct {
-            Ast* ids; // NULL means embedded field
-            Ast* type;
-            Ast* tag;
-        } struct_field;
-
-        struct {
-            Ast* name;
-            Ast* signature;
-            Ast* type;
-        } interface_spec;
-
-        struct {
-            Ast* s1;
-            Ast* s2;
-            Ast* body;
-            bool is_type_switch;
-        } switch_stmt;
-
-        struct {
-            Ast* clauses;
-        } select_stmt;
-
-        struct {
-            Ast* s1;
-            Ast* s2;
-            Ast* s3;
-            Ast* body;
-        } for_stmt;
-
-        struct {
-            Ast* vals;
-            Ast* stmts;
-        } case_clause;
-
-        struct {
-            Ast* comm;
-            Ast* stmts;
-        } comm_clause;
-
-        struct {
-            Ast* recv;
-            Ast* name;
-            Ast* signature;
-            Ast* body;
-        } func_decl;
-    };
-};
-
-// an Ast contextualized within a file (full file path) and package (import path)
-struct File_Ast {
-    Ast* ast;
-    ccstr file;
-    ccstr import_path;
-
-    File_Ast *dup(Ast *new_ast);
-};
-
 struct AC_Result {
     ccstr name;
-    // TODO: what else here?
-    // File_Ast* decl;
 };
 
 enum Autocomplete_Type {
@@ -600,247 +394,15 @@ struct Autocomplete {
 };
 
 struct Parameter_Hint {
-    Ast* signature;
-    Ast* call_args;
+    int _; // TODO
+    // Ast* signature;
+    // Ast* call_args;
 };
 
 enum Walk_Action {
     WALK_CONTINUE,
     WALK_ABORT,
     WALK_SKIP_CHILDREN,
-};
-
-typedef fn<Walk_Action(Ast* ast, ccstr name, int depth)> WalkAstFn;
-
-void walk_ast(Ast* root, WalkAstFn fn);
-
-enum OpPrec {
-    PREC_LOWEST = 0,
-    PREC_LOR,
-    PREC_LAND,
-    PREC_COMPARE,
-    PREC_ADD,
-    PREC_MUL,
-    PREC_UNARY,
-    PREC_HIGHEST,
-};
-
-OpPrec op_to_prec(Tok_Type type);
-
-typedef fn<bool(Tok_Type)> Sync_Lookup_Func;
-
-bool lookup_stmt_start(Tok_Type type);
-bool lookup_decl_start(Tok_Type type);
-bool lookup_expr_end(Tok_Type type);
-
-struct Parse_Error {
-    ccstr error;
-
-    Parse_Error(ccstr _error) { error = _error; }
-};
-
-const auto INVALID_POS = new_cur2((u32)-1, (u32)-1);
-
-#define PRIME1 151
-#define PRIME2 163
-#define ITEM_DELETED 0xdeadbeef
-
-u32 next_prime(u32 x);
-
-template <typename T>
-struct Scoped_Table {
-    struct Overwrite {
-        ccstr name;
-        T value;
-        bool restore;
-    };
-
-    struct Entry {
-        ccstr key;
-        T value;
-        UT_hash_handle hh;
-    };
-
-    Pool *mem;
-    Entry* table;
-    List<Overwrite> overwrites;
-    List<u32> scopes;
-
-    List<ccstr> *get_names() {
-        Entry* curr;
-        Entry* tmp;
-
-        auto ret = alloc_list<ccstr>();
-        HASH_ITER(hh, table, curr, tmp) {
-            ret->append(curr->key);
-        }
-        return ret;
-    }
-
-    void init() {
-        table = NULL;
-        mem = MEM;
-
-        overwrites.init(LIST_POOL, 100);
-        scopes.init(LIST_POOL, 100);
-    }
-
-    void cleanup() {
-        Entry* curr;
-        Entry* tmp;
-
-        HASH_ITER(hh, table, curr, tmp) {
-            HASH_DEL(table, curr);
-        }
-
-        overwrites.cleanup();
-        scopes.cleanup();
-    }
-
-    void open_scope() { scopes.append(overwrites.len); }
-
-    Entry* alloc_entry() {
-        return (Entry*)mem->alloc(sizeof(Entry));
-    }
-
-    bool close_scope() {
-        if (scopes.len == 0) {
-            error("No scopes are open.");
-            return false;
-        }
-
-        auto off = scopes[scopes.len - 1];
-
-        for (i32 i = overwrites.len; i > off; i--) {
-            auto&& it = overwrites[i - 1];
-            auto name = it.name;
-            if (it.restore) {
-                auto entry = alloc_entry();
-                entry->key = name;
-                entry->value = it.value;
-                HASH_ADD_KEYPTR(hh, table, entry->key, strlen(entry->key), entry);
-            } else {
-                Entry* entry = NULL;
-                HASH_FIND_STR(table, name, entry);
-                if (entry != NULL) {
-                    HASH_DEL(table, entry);
-                }
-            }
-        }
-
-        overwrites.len = off;
-        scopes.len--;
-        return true;
-    }
-
-    T* set(ccstr name) {
-        auto p = overwrites.append();
-        p->name = name;
-
-        // do we even need to save overwrite if entry == NULL? I forget how this works
-        // TODO: investigate
-
-        Entry* entry = NULL;
-        HASH_FIND_STR(table, name, entry);
-        if (entry != NULL) {
-            p->value = entry->value;
-            p->restore = true;
-        }
-
-        entry = alloc_entry();
-        entry->key = name;
-        HASH_ADD_KEYPTR(hh, table, entry->key, strlen(entry->key), entry);
-        return &entry->value;
-    }
-
-    void set(ccstr name, T value) { *set(name) = value; }
-
-    T get(ccstr name) {
-        Entry* entry = NULL;
-        HASH_FIND_STR(table, name, entry);
-        if (entry == NULL) {
-            T ret;
-            ptr0(&ret);
-            return ret;
-        }
-        return entry->value;
-    }
-};
-
-Ast* unparen(Ast* ast);
-
-struct Decl {
-    Ast* decl_ast;
-    Ast* where_to_jump;
-};
-
-typedef List<Decl> DeclList;
-typedef fn<void(DeclList*)> DumpSymbolTableFunc;
-
-struct Parser;
-
-struct Ast_List {
-    Parser* parser;
-    s32 start;
-    s32 len;
-    cur2 start_pos;
-
-    void init(Parser* _parser, cur2 _start_pos);
-    void init(Parser* _parser);
-    void push(Ast* ast);
-    Ast* save();
-};
-
-struct Parser {
-    Scoped_Table<Decl> decl_table;
-    Parser_It* it;
-    struct {
-        Ast** buf;
-        s32 cap;
-        s32 sp;
-    } list_mem;
-    i32 expr_lev; // < 0: in control clause, >= 0: in expression
-    Token tok;
-    Tok_Type last_token_type;
-    ccstr filepath; // for debugging purposes
-    cur2 dump_decl_table_at;
-    List<ccstr> *decl_table_dump;
-
-    void init(Parser_It* _it, ccstr _filepath = NULL, bool no_lex = false);
-    void cleanup();
-    void reinit_without_lex();
-    Ast_List new_list();
-    void synchronize(Sync_Lookup_Func lookup);
-    void _throwError(ccstr s);
-    // Ast* new_ast(Ast_Type type, cur2 start);
-    cur2 _expect(Tok_Type want, ccstr file, u32 line);
-    Ast* parse_id_list();
-    Ast *parse_spec(Tok_Type spec_type, bool *previous_spec_contains_iota = NULL);
-    Ast* parse_decl(Sync_Lookup_Func sync_lookup, bool import_allowed = false);
-    void declare_var(ccstr name, Ast* decl, Ast* jump_to);
-    Ast* parse_parameters(bool ellipsis_ok);
-    Ast* parse_result();
-    Ast* parse_signature();
-    Ast* parse_id();
-    Ast* parse_type(bool is_param = false);
-    Ast* parse_simple_stmt();
-    Ast* parse_stmt();
-    Ast* parse_stmt_list();
-    Ast* parse_block();
-    Ast* parse_call_args();
-    Ast* parse_primary_expr(bool lhs);
-    Ast* parse_literal_value();
-    bool eat_comma(Tok_Type closing, ccstr context);
-    Ast* parse_expr(bool lhs, OpPrec prec = PREC_LOWEST);
-    Ast* parse_type_list();
-    void resolve(Ast* id);
-    Ast* parse_expr_list(bool lhs = false);
-    Ast* parse_package_decl();
-    Ast* parse_file();
-    Ast* fill_end(Ast* ast);
-    void lex_with_comments();
-    cur2 lex();
-    void parser_error(ccstr fmt, ...);
 };
 
 enum Gomod_DirectiveType {
@@ -856,12 +418,24 @@ struct Gomod_Directive {
     // for replace
     ccstr replace_path;
     ccstr replace_version;
+
+    Gomod_Directive *copy();
+    void read(Index_Stream *s);
+    void write(Index_Stream *s);
 };
 
 struct Gomod_Info {
+    ccstr path;
+    bool exists;
+    u64 hash;
+
     ccstr module_path;
     ccstr go_version;
-    List<Gomod_Directive*> directives;
+    List<Gomod_Directive> *directives;
+
+    Gomod_Info *copy();
+    void read(Index_Stream *s);
+    void write(Index_Stream *s);
 };
 
 enum Gomod_Tok_Type {
@@ -898,194 +472,31 @@ struct Gomod_Token {
     bool val_truncated;
 };
 
-struct Gomod_Parser {
-    Parser_It* it;
-    Gomod_Token tok;
-
-    void lex();
-    void parse(Gomod_Info* info);
-};
-
 ccstr _path_join(ccstr a, ...);
 #define path_join(...) _path_join(__VA_ARGS__, NULL)
 
-bool dir_exists(ccstr path);
 ccstr get_package_name_from_file(ccstr filepath);
 
+/*
 enum Import_Location {
     IMPLOC_GOPATH = 0,
     IMPLOC_GOROOT = 1,
     IMPLOC_GOMOD = 2,
     IMPLOC_VENDOR = 3,
 };
+*/
 
 struct Resolved_Import {
     ccstr path;
     ccstr package_name;
-    Import_Location location_type;
+    // Import_Location location_type;
 };
 
-Resolved_Import* resolve_import(ccstr import_path);
-
-struct Loaded_It {
-    Entire_File *ef;
-    Parser_It* it;
-
-    void cleanup() {
-        if (ef == NULL) return;
-        free_entire_file(ef);
-        ef = NULL;
-    }
-};
-
-extern fn<Parser_It* (ccstr filepath)> file_loader;
-
-Ast* parse_file_into_ast(ccstr filepath);
-
-/*
-where are possible locations for the cursor to jump from?
-    identifier x
-        go to decl of x
-    selector x.y
-        if x is a package, go to decl of y in package x
-        if x has type foo, go to field of struct foo
-*/
-
-#define PRIMITIVE_TYPE (Ast *)NULL
-
-i32 locate_pos_relative_to_ast(cur2 pos, Ast* ast);
+// Resolved_Import* resolve_import(ccstr import_path);
 
 struct Jump_To_Definition_Result {
     ccstr file;
     cur2 pos;
-};
-
-struct Infer_Res {
-    File_Ast* type;
-    File_Ast* base_type;
-};
-
-struct Named_Decl_Item {
-    Ast* name;
-    Ast* spec;
-};
-
-struct Named_Decl {
-    File_Ast* decl;
-    List<Named_Decl_Item>* items;
-};
-
-enum {
-    LISTDECLS_IMPORTS = (1 << 0),
-    LISTDECLS_DECLS = (1 << 1),
-};
-
-struct Field {
-    File_Ast id;
-    File_Ast decl;
-};
-
-enum Index_Entry_Type {
-    IET_INVALID = 0,
-    IET_CONST,
-    IET_VAR,
-    IET_TYPE,
-    IET_FUNC,
-};
-
-struct Index_Entry_Hdr {
-    Index_Entry_Type type;
-    cur2 pos;
-};
-
-struct Index_Entry {
-    Index_Entry_Hdr hdr;
-    ccstr filename;
-    ccstr name;
-
-    // this information now in index_reader::meta
-    // ccstr package_path;
-    // Import_Location loctype;
-};
-
-enum Index_File_Type {
-    INDEX_FILE_INDEX,
-    INDEX_FILE_DATA,
-    INDEX_FILE_IMPORTS,
-    INDEX_FILE_HASH,
-};
-
-struct Index_Stream {
-    File f;
-    u32 offset;
-    ccstr path;
-    bool ok;
-
-    File_Result open(ccstr _path, u32 access, File_Open_Mode open_mode);
-    bool seek(u32 offset);
-    void cleanup();
-    bool writen(void* buf, int n);
-    bool write1(i8 x);
-    bool write2(i16 x);
-    bool write4(i32 x);
-    bool write8(i64 x);
-    bool writestr(ccstr s);
-    bool write_file_header(Index_File_Type type);
-    void readn(void* buf, s32 n);
-    char read1();
-    i16 read2();
-    i32 read4();
-    ccstr readstr();
-    bool read_file_header(Index_File_Type wanted_type);
-};
-
-struct Index_Writer {
-    ccstr index_path;
-    Index_Stream findex;
-    Index_Stream fdata;
-
-    struct Decl_To_Write {
-        ccstr name;
-        u32 offset;
-    };
-
-    // u32 decl_count;
-    List<Decl_To_Write> decls;
-
-    void init();
-    int open(ccstr import_path);
-    void close();
-
-    void write_package_hash();
-    void write_headers(ccstr resolved_path, Import_Location loctype);
-    bool finish_writing();
-    bool write_decl(ccstr filename, ccstr name, Ast* spec);
-    bool write_hash(u64 hash);
-};
-
-struct Index_Reader {
-    ccstr index_path;
-    ccstr indexfile_path;
-    ccstr datafile_path;
-    List<i32> *decl_offsets;
-
-    struct {
-        ccstr package_path;
-        Import_Location loctype;
-    } meta;
-
-    // Index_Stream findex;
-    Index_Stream fdata;
-    // bool ok;
-
-    // honestly having an index_reader class is not factoring out well
-    // abstractions suck lol
-
-    bool init(ccstr _index_path);
-    List<Index_Entry> *list_decls();
-    bool find_decl(ccstr decl_name, Index_Entry *res);
-    void cleanup();
-    Ast *parse_decl_from_entry(Index_Entry *res);
 };
 
 // Our index maintains and provides THE ETERNALLY CORRECT SOURCE OF TRUTH about
@@ -1122,10 +533,93 @@ enum Go_Watch_Type {
     WATCH_GOROOT,
 };
 
-struct Go_Index;
+TSPoint cur_to_tspoint(cur2 c);
+cur2 tspoint_to_cur(TSPoint p);
+
+struct Go_Indexer;
+
+// wrapper around TS_Node, honestly fuck getter patterns
+struct Ast_Node {
+    TSNode node;
+
+    Go_Indexer *indexer;
+    cur2 start;
+    cur2 end;
+    u32 start_byte;
+    u32 end_byte;
+    Ts_Ast_Type type;
+    bool null;
+    ccstr name;
+    const void* id;
+    bool anon;
+    int child_count;
+
+    Ast_Node *dup(TSNode new_node);
+    ccstr string();
+
+    void init(TSNode _node) {
+        ptr0(this);
+        node = _node;
+
+        null = ts_node_is_null(node);
+        if (!null) {
+            start = tspoint_to_cur(ts_node_start_point(node));
+            end = tspoint_to_cur(ts_node_end_point(node));
+            start_byte = ts_node_start_byte(node);
+            end_byte = ts_node_end_byte(node);
+            type = (Ts_Ast_Type)ts_node_symbol(node);
+            name = ts_node_type(node);
+            id = node.id;
+            anon = !ts_node_is_named(node);
+            child_count = ts_node_named_child_count(node);
+        }
+    }
+
+    Ast_Node *source_node() {
+        auto curr = node;
+        while (true) {
+            if ((Ts_Ast_Type)ts_node_symbol(curr) == TS_SOURCE_FILE)
+                break;
+            if (ts_node_is_null(curr))
+                break;
+            curr = ts_node_parent(curr);
+        }
+        return dup(curr);
+    }
+
+    bool eq(Ast_Node *other) { return ts_node_eq(node, other->node); }
+    Ast_Node *field(Ts_Field_Type f) { return dup(ts_node_child_by_field_id(node, f)); }
+
+    TSNode _skip_comment(TSNode x, bool forward) {
+        auto next_func = forward ? ts_node_next_named_sibling : ts_node_prev_named_sibling;
+        while (!ts_node_is_null(x) && ts_node_symbol(x) == TS_COMMENT)
+            x = next_func(x);
+        return x;
+    }
+
+    Ast_Node *child() {
+        auto ret = ts_node_named_child(node, 0);
+        ret = _skip_comment(ret, true);
+        return dup(ret);
+    }
+
+    Ast_Node *parent() { return dup(ts_node_parent(node)); }
+
+    Ast_Node *next() {
+        auto ret = ts_node_next_named_sibling(node);
+        ret = _skip_comment(ret, true);
+        return dup(ret);
+    }
+
+    Ast_Node *prev() {
+        auto ret = ts_node_prev_named_sibling(node);
+        ret = _skip_comment(ret, false);
+        return dup(ret);
+    }
+};
 
 struct Go_Index_Watcher {
-    Go_Index *_this;
+    Go_Indexer *_this;
     Go_Watch_Type type;
     Thread_Handle thread;
     Fs_Watcher watch;
@@ -1133,102 +627,382 @@ struct Go_Index_Watcher {
 
 #define MAX_INDEX_EVENTS 1024 // don't let file change dos us
 
+struct Gotype;
+
+enum Godecl_Type {
+    GODECL_IMPORT,
+    GODECL_VAR,
+    GODECL_CONST,
+    GODECL_TYPE,
+    GODECL_FUNC,
+    GODECL_FIELD,
+    GODECL_SHORTVAR,
+};
+
+struct Godecl {
+    // A decl (TS_XXX_DECLARATION) contains multiple specs (TS_XXX_SPEC), each of which
+    // might contain multiple IDs (TS_IDENTIFIER). Each Godecl corresponds to one of those
+    // IDs.
+
+    Godecl_Type type;
+
+    ccstr file; // only guaranteed to be set on toplevels
+    cur2 decl_start;
+    cur2 spec_start;
+    cur2 name_start;
+    ccstr name;
+
+    union {
+        Gotype *gotype;
+        ccstr import_path; // for GOTYPE_IMPORT
+    };
+
+    Godecl *copy();
+    void read(Index_Stream *s);
+    void write(Index_Stream *s);
+};
+
+struct Go_Func_Sig {
+    List<Godecl> *params;
+    List<Godecl> *result;
+};
+
+// used for or interfaces too
+struct Go_Struct_Spec {
+    bool is_embedded;
+    ccstr tag;
+
+    union {
+        Godecl *field;
+        Gotype *embedded_type;
+    };
+
+    Go_Struct_Spec *copy();
+    void read(Index_Stream *s);
+    void write(Index_Stream *s);
+};
+
+struct Gotype;
+
+enum Goresult_Type {
+    GORESULT_DECL,
+    GORESULT_GOTYPE,
+};
+
+struct Go_Import {
+    Godecl *decl;
+    ccstr id;
+    ccstr import_path;
+    cur2 spec_start;
+
+    Go_Import *copy();
+    void read(Index_Stream *s);
+    void write(Index_Stream *s);
+};
+
+struct Go_Ctx {
+    ccstr import_path;
+    ccstr resolved_path;
+    ccstr filename;
+};
+
+struct Goresult {
+    // we should just know this from context (the context this shows up in, not
+    // the Go_Ctx).
+    // Goresult_Type type; 
+    Go_Ctx *ctx;
+    union {
+        Godecl *decl;
+        Gotype *gotype;
+    };
+};
+
+enum Chan_Direction { CHAN_RECV, CHAN_SEND, CHAN_BI };
+
+enum Gotype_Type {
+    GOTYPE_ID,
+    GOTYPE_SEL,
+    GOTYPE_MAP,
+    GOTYPE_STRUCT,
+    GOTYPE_INTERFACE,
+    GOTYPE_POINTER,
+    GOTYPE_FUNC,
+    GOTYPE_SLICE,
+    GOTYPE_ARRAY,
+    GOTYPE_CHAN,
+    GOTYPE_MULTI,
+};
+
+struct Gotype {
+    Gotype_Type type;
+
+    union {
+        struct {
+            ccstr id_name;
+            cur2 id_pos;
+        };
+
+        struct {
+            ccstr sel_name; // now that we have pkg, do we need this?
+            ccstr sel_sel;
+        };
+
+        List<Go_Struct_Spec> *struct_specs;
+        List<Go_Struct_Spec> *interface_specs;
+        Gotype *pointer_base;
+
+        struct {
+            Gotype *map_key;
+            Gotype *map_value;
+        };
+
+        struct {
+            Go_Func_Sig func_sig;
+            Gotype *func_recv;
+        };
+
+        Gotype *slice_base;
+        Gotype *array_base;
+        Gotype *chan_base;
+
+        List<Gotype*> *multi_types;
+    };
+
+    Gotype *copy();
+    void read(Index_Stream *s);
+    void write(Index_Stream *s);
+};
+
+enum Go_Package_Status {
+    GPS_OUTDATED,
+    GPS_UPDATING,
+    GPS_READY,
+};
+
+enum Go_Package_Name_Type {
+    GPN_IMPLICIT,
+    GPN_EXPLICIT,
+    GPN_BLANK,
+    GPN_DOT,
+};
+
+struct Go_Single_Import {
+    ccstr file;
+    ccstr package_name;
+    Go_Package_Name_Type package_name_type;
+    ccstr import_path;
+
+    Go_Single_Import *copy();
+    void read(Index_Stream *s);
+    void write(Index_Stream *s);
+};
+
+struct Go_Dependency {
+    ccstr import_path;
+    ccstr resolved_path;
+    ccstr package_name;
+
+    Go_Dependency *copy();
+    void read(Index_Stream *s);
+    void write(Index_Stream *s);
+};
+
+enum Go_Scope_Op_Type {
+    GSOP_OPEN_SCOPE,
+    GSOP_CLOSE_SCOPE,
+    GSOP_DECL,
+};
+
+struct Go_Scope_Op {
+    Go_Scope_Op_Type type; 
+
+    union {
+        Godecl *decl; // GSOP_DECL
+        cur2 pos;     // GSOP_OPEN_SCOPE, GSOP_CLOSE_SCOPE
+    };
+
+    Go_Scope_Op *copy();
+    void read(Index_Stream *s);
+    void write(Index_Stream *s);
+};
+
+struct Go_Package_File_Info {
+    ccstr filename;
+    List<Go_Scope_Op> *scope_ops;
+
+    Go_Package_File_Info *copy();
+    void read(Index_Stream *s);
+    void write(Index_Stream *s);
+};
+
+struct Go_Package {
+    Go_Package_Status status;
+
+    // Together, these two uniquely identify a Go_Package.
+    ccstr import_path;
+    ccstr resolved_path;
+
+    List<Go_Single_Import> *individual_imports;
+    List<Go_Dependency> *dependencies;
+
+    ccstr package_name;
+    List<Godecl> *decls;
+    List<Go_Package_File_Info> *files;
+    bool is_hash_ready;
+    u64 hash;
+
+    Go_Package *copy();
+    void read(Index_Stream *s);
+    void write(Index_Stream *s);
+};
+
 struct Go_Index {
-    Pool general_mem;
-    Pool background_mem;
-    Pool watcher_mem;
-    Pool main_thread_mem;
+    ccstr current_path;
+    ccstr current_import_path;
+    Gomod_Info *gomod;
+    List<Go_Package> *packages;
 
-    List<Index_Event> index_events;
-    Lock index_events_lock;
-    Lock fs_event_lock;
+    Go_Index *copy();
+    void read(Index_Stream *s);
+    void write(Index_Stream *s);
+};
 
-    // we can get rid of this stupidity when i get async ReadDirectoryChanges working
-    Go_Index_Watcher wksp_watcher;
-    Go_Index_Watcher gopath_watcher;
-    Go_Index_Watcher pkgmod_watcher;
-    Go_Index_Watcher goroot_watcher;
-    Thread_Handle bg_thread;
+struct Ts_Type_Entry {
+    ccstr string;
+    Ts_Go_Symbol type;
+    UT_hash_handle hh;
+};
 
-    // this hurts me
+struct Parsed_File {
+    Ast_Node *root;
+    TSTree *tree;
+    Parser_It *it;
+    bool tree_belongs_to_editor;
+};
+
+typedef fn<Walk_Action(Ast_Node *node, Ts_Field_Type field_type, int depth)> Walk_TS_Callback;
+void walk_ts_cursor(TSTreeCursor *curr, bool abstract_only, Walk_TS_Callback cb);
+
+struct Go_Indexer {
+    Pool mem;        // mem that exists for lifetime of Go_Indexer
+    Pool final_mem;  // memory that holds the final value of this->index`
+    Pool ui_mem;     // memory used by UI when it calls jump to definition, etc.
+
+    Go_Index index;
+
     char current_exe_path[MAX_PATH];
     Process buildparser_proc;
 
-    Index_Writer background_index_writer;
+    List<Parsed_File*> current_parsed_files;
 
-    bool init();
+    Thread_Handle bgthread;
+
+    // ---
+
+    void background_thread();
+    bool start_background_thread();
+
+    void init();
     void cleanup();
-    void handle_fs_event(Go_Index_Watcher *watcher, Fs_Event *event);
 
-    bool queue_index_event(Index_Event *event);
-    bool pop_index_event(Index_Event *event);
-
-    /*
-     * re-fetch imports list when:
-     *  - file in current workspace changes.
-     *      - user saves file from within ide
-     *      - file changes from outside.
-     *
-     * re-crawl a particular package when:
-     * (i guess when its hash would change? that would be when?)
-     *  - reolved import path changes
-     *  - *.go file contents change
-     *  - *.go filename changes
-     *
-     *  weird special case is: when file in current wksp changes, we re-crawl whole wksp? can't be right.
-     *
-     *  ok so we need to watch for changes on a whole bunch of files
-     *
-     */
-
-    bool match_import_spec(Ast* import_spec, ccstr want);
-    s32 count_decls_in_source(File_Ast* source, int flags);
-    List<Named_Decl>* list_decls_in_source(File_Ast* source, int flags, List<Named_Decl>* out = NULL);
-    void list_decls_in_source(File_Ast* source, int flags, fn<void(Named_Decl*)> fn);
-    File_Ast* find_decl_in_source(File_Ast* source, ccstr desired_decl_name, bool import_only = false);
-    File_Ast* find_decl_in_package(ccstr desired_decl_name, ccstr import_path);
-    List<Named_Decl>* list_decls_in_package(ccstr path, ccstr import_path);
-    List<ccstr> *list_decl_names(ccstr import_path);
-    File_Ast* find_decl_of_id(File_Ast* fa, bool import_only);
-    File_Ast* find_decl_of_id(File_Ast* fa);
-    File_Ast* get_base_type(File_Ast* type);
-    // File_Ast* make_file_ast(Ast* ast, ccstr file = NULL);
-    File_Ast* make_file_ast(Ast* ast, ccstr file, ccstr import_path);
-    File_Ast* get_type_from_decl(File_Ast* decl, ccstr id);
-    File_Ast* find_field_or_method_in_type(File_Ast* base_type, File_Ast* interim_type, ccstr name);
-    Infer_Res* infer_type(File_Ast* expr, bool resolve = false);
-    Ast* locate_id_in_decl(Ast* decl, ccstr id);
-    List<Field>* list_fields_in_type(File_Ast* ast);
-    int list_fields_in_type(File_Ast* ast, List<Field>* ret);
-    int list_methods_in_type(File_Ast* ast, List<Field>* ret);
-    int list_methods_in_base_type(File_Ast* ast, List<Field>* ret);
-    List<Field>* list_fields_and_methods_in_type(File_Ast* base_type, File_Ast* interim_type);
     Jump_To_Definition_Result* jump_to_definition(ccstr filepath, cur2 pos);
-    bool autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period, Autocomplete* out);
-    Parameter_Hint* parameter_hint(ccstr filepath, cur2 pos, bool triggered_by_paren);
+    bool autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period, Autocomplete *out);
+    Parameter_Hint *parameter_hint(ccstr filepath, cur2 pos, bool triggered_by_paren);
 
-    void read_index();
-    bool delete_index();
-
-    bool ensure_entire_index_correct();
-    bool ensure_package_correct(ccstr import_path);
-    void run_background_thread();
-    void handle_error(ccstr err);
-    bool ensure_imports_list_correct(Eil_Result *res);
-    u64 hash_package(ccstr import_path, Resolved_Import **pres);
-
-    bool run_threads();
+    void run_background_thread2();
+    ccstr file_to_import_path(ccstr filepath);
+    ccstr directory_to_import_path(ccstr path_str);
+    void handle_fs_event(Go_Index_Watcher *w, Fs_Event *event);
+    void temp();
+    void process_package(ccstr import_path);
 
     bool is_file_included_in_build(ccstr path);
-    List<ccstr>* list_source_files(ccstr dirpath);
+    List<ccstr>* list_source_files(ccstr dirpath, bool include_tests);
     ccstr get_package_name(ccstr path);
-    Resolved_Import* resolve_import(ccstr import_path);
-    ccstr directory_to_import_path(ccstr path_str);
-    ccstr file_to_import_path(ccstr filepath);
-
+    Resolved_Import* resolve_import_from_filesystem(ccstr import_path, Go_Ctx *ctx);
+    Resolved_Import* resolve_import(ccstr import_path, Go_Ctx *ctx);
+    Parsed_File *parse_file(ccstr filepath);
+    void free_parsed_file(Parsed_File *file);
+    ccstr get_workspace_import_path();
+    void handle_error(ccstr err);
+    u64 hash_package(ccstr resolved_package_path);
+    void read_index_from_filesystem();
+    ccstr get_package_name_from_file(ccstr filepath);
+    ccstr get_filepath_from_ctx(Go_Ctx *ctx);
+    Goresult *infer_type(Ast_Node *expr, Go_Ctx *ctx);
+    Goresult *resolve_type(Gotype *type, Go_Ctx *ctx);
+    Goresult *unpointer_type(Gotype *type, Go_Ctx *ctx);
+    List<Godecl> *parameter_list_to_fields(Ast_Node *params);
+    Gotype *node_to_gotype(Ast_Node *node);
+    Goresult *find_decl_of_id(ccstr id, cur2 id_pos, Go_Ctx *ctx);
+    void list_fields_and_methods(Goresult *type_res, Goresult *resolved_type_res, List<Goresult> *ret);
+    bool node_func_to_gotype_sig(Ast_Node *params, Ast_Node *result, Go_Func_Sig *sig);
+    void node_to_decls(Ast_Node *node, List<Goresult> *results, Go_Ctx *ctx);
+    Gotype *new_gotype(Gotype_Type type);
+    Goresult *find_decl_in_package(ccstr id, ccstr import_path, ccstr resolved_path);
+    List<Godecl> *get_package_decls(ccstr import_path, ccstr resolved_path);
+    Resolved_Import *resolve_import_from_gomod(ccstr import_path, Gomod_Info *info, Go_Ctx *ctx);
+    Resolved_Import *check_potential_resolved_import(ccstr filepath);
+    Go_Package *find_package_in_index(ccstr import_path, ccstr resolved_path);
+    ccstr find_import_path_referred_to_by_id(ccstr id, Go_Ctx *ctx, ccstr *resolved_path);
+    void crawl_index();
+    Ast_Node *new_ast_node(TSNode node);
+    Pool *get_final_mem();
+    void find_nodes_containing_pos(Ast_Node *root, cur2 pos, fn<Walk_Action(Ast_Node *it)> callback);
+    void walk_ast_node(Ast_Node *node, bool abstract_only, Walk_TS_Callback cb);
 };
 
-typedef fn<void(Parser*)> parser_cb;
+#define FOR_NODE_CHILDREN(node) for (auto it = (node)->child(); !it->null; it = it->next())
 
-void with_parser_at_location(ccstr filepath, cur2 location, parser_cb cb);
-void with_parser_at_location(ccstr filepath, parser_cb cb);
+Goresult *make_goresult(Gotype *gotype, Go_Ctx *ctx);
+Goresult *make_goresult(Godecl *decl, Go_Ctx *ctx);
+
+Gomod_Info *parse_gomod_file(ccstr filepath);
+
+TSParser *new_ts_parser();
+
+template<typename T>
+T *read_object(Index_Stream *s) {
+    auto size = s->read2();
+    if (size == 0) return NULL;
+
+    // TODO: i mean, don't literally crash the program, show an error and
+    // rebuild the index or something
+    our_assert(size == sizeof(T), "size mismatch while reading object from index");
+
+    auto obj = alloc_object(T);
+    s->readn(obj, size);
+    obj->read(s);
+    return obj;
+}
+
+template<typename T>
+List<T> *read_list(Index_Stream *s) {
+    auto len = s->read4();
+    auto specs = alloc_list<T>(len);
+    for (u32 i = 0; i < len; i++)
+        specs->append(read_object<T>(s));
+    return specs;
+}
+
+template<typename T>
+void write_object(T *obj, Index_Stream *s) {
+    if (obj == NULL) {
+        s->write2(0);
+        return;
+    }
+
+    s->write2(sizeof(T));
+    s->writen(obj, sizeof(T));
+    obj->write(s);
+}
+
+template<typename L>
+void write_list(L arr, Index_Stream *s) {
+    if (arr == NULL) {
+        s->write4(0);
+        return;
+    }
+    s->write4(arr->len);
+    For (*arr) write_object(&it, s);
+}

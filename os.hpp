@@ -258,3 +258,4 @@ struct Fs_Watcher {
 ccstr get_path_relative_to(ccstr full, ccstr base);
 
 ccstr get_canon_path(ccstr path);
+

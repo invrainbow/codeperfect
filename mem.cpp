@@ -3,10 +3,44 @@
 #include "common.hpp"
 
 thread_local Pool *MEM;
+thread_local bool use_pool_for_tree_sitter = false;
+
+void* _ts_alloc_memory(s32 size, int zero) {
+    auto ret = _alloc_memory(size + sizeof(int), (bool)zero);
+    *(int*)ret = size;
+    return (char*)ret + sizeof(int);
+}
+
+void* ts_interop_malloc(size_t size) {
+    if (!use_pool_for_tree_sitter) return malloc(size);
+
+    return _ts_alloc_memory(size, 0);
+}
+
+void* ts_interop_calloc(size_t x, size_t y) {
+    if (!use_pool_for_tree_sitter) return calloc(x, y);
+    return _ts_alloc_memory(x * y, 1);
+}
+
+void* ts_interop_realloc(void *old_mem, size_t new_size) {
+    if (!use_pool_for_tree_sitter) return realloc(old_mem, new_size);
+
+    if (new_size == 0) return NULL;
+
+    auto new_mem = _ts_alloc_memory(new_size, 0);
+    if (old_mem != NULL) {
+        auto old_size = *((int*)old_mem - 1);
+        memcpy(new_mem, old_mem, min(old_size, new_size));
+    }
+    return new_mem;
+}
+
+void ts_interop_free(void *p) {
+    if (!use_pool_for_tree_sitter) free(p);
+}
 
 void* _alloc_memory(s32 size, bool zero) {
-    auto mem = MEM;
-    auto ret = mem->alloc(size);
+    auto ret = MEM->alloc(size);
     if (zero) mem0(ret, size);
     return ret;
 }

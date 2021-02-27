@@ -59,7 +59,6 @@ struct File_Tree_Entry {
 
 struct World {
     Pool frame_mem;
-    Pool ast_viewer_mem;
     Pool autocomplete_mem;
     Pool parameter_hint_mem;
     Pool open_file_mem;
@@ -69,7 +68,6 @@ struct World {
     Pool nvim_loop_mem;
     Pool file_tree_mem;
     Pool build_mem;
-    Pool gomod_parser_mem;
     Pool build_index_mem;
 
     Fridge<Chunk0> chunk0_fridge;
@@ -85,7 +83,7 @@ struct World {
     vec2 display_size;
     vec2f display_scale;
 
-    Go_Index index;
+    Go_Indexer indexer;
 
     Font font;
 
@@ -126,7 +124,7 @@ struct World {
             pool.init("search_results");
             {
                 SCOPED_MEM(&pool);
-                results.init(LIST_POOL, 128);
+                results.init();
             }
         }
 
@@ -146,7 +144,7 @@ struct World {
             pool.init("build_errors");
             {
                 SCOPED_MEM(&pool);
-                errors.init(LIST_POOL, 32);
+                errors.init();
             }
         }
 
@@ -201,7 +199,7 @@ struct World {
     struct Windows_Open {
         bool open_file;
         bool im_demo;
-        bool ast_viewer;
+        bool im_metrics;
         bool search_and_replace;
         bool build_and_debug;
 
@@ -228,6 +226,10 @@ struct World {
     } wnd_open_file;
 
     struct {
+        bool show_anon_nodes;
+    } wnd_ast_vis;
+
+    struct {
         char find_str[256];
         char replace_str[256];
         bool use_regex;
@@ -240,10 +242,6 @@ struct World {
 
     struct {
     } wnd_im_demo;
-
-    struct {
-        Ast* ast;
-    } wnd_ast_viewer;
 
     struct {
         i32 current_location;
@@ -283,7 +281,8 @@ struct World {
         }
     } dbg;
 
-    void init(bool test);
+    void init();
+    void start_background_threads();
     Pane* get_current_pane();
     Editor* get_current_editor();
     Editor* find_editor(find_editor_func f);
@@ -292,28 +291,5 @@ struct World {
 extern World world;
 
 #define TAB_SIZE 2 // TODO
-
-// what was even the point of this again?
-// why couldn't we just allocate the string?
-struct String_Allocator {
-    s32 oldpos;
-
-    char* start(u32 to_reserve) {
-        MEM->ensure_enough(to_reserve);
-        oldpos = MEM->sp;
-        return (char*)MEM->alloc(0);
-    }
-
-    bool push(char ch) {
-        if (!MEM->can_alloc(1))
-            return false;
-        *(char*)MEM->alloc(1) = ch;
-        return true;
-    }
-
-    bool done() { return push('\0'); }
-    void revert() { MEM->sp = oldpos; }
-    void truncate() { MEM->sp--; push('\0'); }
-};
 
 bool is_ignored_by_git(ccstr path, bool isdir);

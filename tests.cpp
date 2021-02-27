@@ -1,54 +1,48 @@
 #include "tests.hpp"
-
-#include "debugger.hpp"
-#include "common.hpp"
-#include "world.hpp"
-#include "nvim.hpp"
+#include "mem.hpp"
 
 bool run_tests() {
     return false;
 
-    world.init(true);
+    world.init();
+    compiler_dont_optimize_me_away();
 
-    parse_file_into_ast("helper/bug.go");
+    Index_Stream s;
+    s.open("db", FILE_MODE_READ, FILE_OPEN_EXISTING);
+    defer { s.cleanup(); };
+
+    Pool mem;
+    mem.init();
+    {
+        SCOPED_MEM(&mem);
+        auto index = read_object<Go_Index>(&s);
+        print("done reading");
+    }
+
     system("pause");
     return true;
+}
 
+void clear_screen() {
+    HANDLE h;
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
+    DWORD count;
+    DWORD cells;
+    COORD coords = {0, 0};
 
-    // return false;
-    /*
-    return false;
+    h = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (h == INVALID_HANDLE_VALUE) return;
 
-    world.init(true);
-    Go_Index index;
+    if (!GetConsoleScreenBufferInfo(h, &csbi)) return;
+    cells = csbi.dwSize.X * csbi.dwSize.Y;
 
-    Resolved_Import *ri = NULL;
-    auto import_path = "github.com/invrainbow/whetstone";
-    auto hash = index.hash_package(import_path, &ri);
-    print("package: %s", import_path);
-    print("hash = %llx", hash);
-    print("path = %s", ri->path);
-    print("package name = %s", ri->package_name);
-    print("location_type = %d", ri->location_type);
-    */
+    if (!FillConsoleOutputCharacterA(h, ' ', cells, coords, &count)) return;
+    if (!FillConsoleOutputAttribute(h, csbi.wAttributes, cells, coords, &count)) return;
 
-    world.init(true);
+    SetConsoleCursorPosition(h, coords);
+}
 
-    Process proc;
-    proc.init();
-    proc.use_stdin = true;
-    proc.dir = "c:\\users\\brandon\\ide";
-    proc.run("go run buildparser.go");
-
-    proc.writestr("C:\\Users\\Brandon\\go\\pkg\\mod\\golang.org\\x\\text@v0.3.5\\width\\gen.go\n");
-    char b1;
-    if (!proc.read1(&b1)) error("error");
-
-    proc.writestr("C:\\Users\\Brandon\\go\\pkg\\mod\\golang.org\\x\\text@v0.3.5\\width\\width.go\n");
-    char b2;
-    if (!proc.read1(&b2)) error("error");
-
-    print("gen.go = %d, width.go = %d", b1, b2);
-    system("pause");
-    return true;
+void compiler_dont_optimize_me_away() {
+    print("%d", world.frame_mem.owns_address((void*)0x49fa98));
+    print("%d", world.frame_mem.recount_total_allocated());
 }

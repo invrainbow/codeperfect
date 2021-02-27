@@ -1,7 +1,7 @@
 @echo off
 
 rem just make sure ide.exe isn't running
-remedybg.exe stop-debugging
+rem remedybg.exe stop-debugging
 taskkill /F /IM ide.exe
 
 cl /MP /MDd /nologo /EHsc /w /std:c++latest /DEBUG /Zi /Fe:ide.exe^
@@ -9,11 +9,13 @@ cl /MP /MDd /nologo /EHsc /w /std:c++latest /DEBUG /Zi /Fe:ide.exe^
     /Iw:\packages\glfw.3.3.2\build\native\include^
     /Iw:\packages\glew.1.9.0.1\build\native\include^
     /Iw:\packages\libgit2\include^
+    /Iw:\tree-sitter\include^
+    /Iw:\tree-sitter\src^
     main.cpp buffer.cpp common.cpp debugger.cpp editor.cpp go.cpp^
     imgui.cpp imgui_demo.cpp imgui_draw.cpp imgui_widgets.cpp list.cpp^
-    nvim.cpp os.cpp os_windows.cpp^
+    nvim.cpp os.cpp os_windows.cpp meow_hash.cpp^
     process_test.cpp tests.cpp ui.cpp utils.cpp veramono.cpp world.cpp^
-    impl.cpp fzy_match.cpp mem.cpp^
+    impl.cpp fzy_match.cpp mem.cpp tree-sitter/src/lib.c^
     /link /NOLOGO /IGNORE:4099^
     /NODEFAULTLIB:MSVCRT /NODEFAULTLIB:LIBCMTD^
     /LIBPATH:W:\packages\glfw.3.3.2\build\native\lib\static\v142\x64^

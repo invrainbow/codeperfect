@@ -4,6 +4,7 @@
 #include "ui.hpp"
 #include "go.hpp"
 #include "fzy_match.h"
+#include "tree_sitter_crap.hpp"
 
 void Editor::raw_move_cursor(cur2 c) {
     if (c.y == -1) c = buf.offset_to_cur(c.x);
@@ -29,6 +30,35 @@ void Editor::raw_move_cursor(cur2 c) {
         view.y = cur.y;
     if (cur.y >= view.y + view.h)
         view.y = cur.y - view.h + 1;
+}
+
+void Editor::update_tree() {
+    TSInput input;
+    input.payload = this;
+    input.encoding = TSInputEncodingUTF8;
+
+    input.read = [](void *p, uint32_t off, TSPoint pos, uint32_t *read) -> const char* {
+        Editor *editor = (Editor*)p;
+        auto it = editor->buf.iter(editor->offset_to_cur(off));
+        u32 n = 0;
+
+        while (!it.eof()) {
+            auto uch = it.next();
+            if (uch == 0) {
+                break;
+            }
+            auto size = uchar_size(uch);
+            if (n + size + 1 > _countof(tsinput_buffer)) break;
+            uchar_to_cstr(uch, &editor->tsinput_buffer[n], &size);
+            n += size;
+        }
+
+        *read = n;
+        editor->tsinput_buffer[n] = '\0';
+        return editor->tsinput_buffer;
+    };
+
+    tree = ts_parser_parse(parser, tree, input);
 }
 
 void Editor::move_cursor(cur2 c) {
@@ -57,6 +87,8 @@ void Editor::reset_state() {
 }
 
 bool Editor::load_file(ccstr new_filepath) {
+    reset_state();
+
     if (buf.initialized)
         buf.cleanup();
     buf.init(&mem);
@@ -71,13 +103,13 @@ bool Editor::load_file(ccstr new_filepath) {
         f = fopen(filepath, "r");
         if (f == NULL)
             return error("unable to open %s for reading: %s", filepath, strerror(errno)), false;
+        defer { fclose(f); };
+        buf.read(f);
     } else {
         is_untitled = true;
+        uchar tmp = 0;
+        buf.insert_line(0, &tmp, 0);
     }
-
-    reset_state();
-    buf.read(f);
-    fclose(f);
 
     if (world.use_nvim) {
         auto& nv = world.nvim;
@@ -88,6 +120,7 @@ bool Editor::load_file(ccstr new_filepath) {
         nv.end_message();
     }
 
+    update_tree();
     return true;
 }
 
@@ -95,7 +128,7 @@ Editor* Pane::open_empty_editor() {
     auto ed = editors.append();
     ed->init();
     ed->load_file(NULL);
-    ui.recalculate_view_sizes();
+    ui.recalculate_view_sizes(true);
     return focus_editor_by_index(editors.len - 1);
 }
 
@@ -241,7 +274,8 @@ void Workspace::init() {
     panes.init(LIST_FIXED, _countof(_panes), _panes);
 
 #if 1
-    auto newpath = (cstr)our_strcpy("c:/users/brandon/ide/helper");
+    // auto newpath = (cstr)our_strcpy("c:/users/brandon/ide/helper");
+    auto newpath = (cstr)our_strcpy("C:/Users/Brandon/compose-cli");
     strcpy_safe(path, _countof(path), normalize_path_separator(newpath));
 #else
     Select_File_Opts opts;
@@ -257,40 +291,6 @@ void Workspace::init() {
         git_repository_open(&git_repo, root.ptr);
         git_buf_free(&root);
     }
-
-    // try to parse gomod
-    {
-        SCOPED_FRAME();
-        auto gomod_path = path_join(path, "go.mod");
-
-        if (check_path(gomod_path) == CPR_FILE) {
-            gomod_exists = true;
-            parse_gomod_file(gomod_path);
-        }
-    }
-}
-
-bool Workspace::parse_gomod_file(ccstr path) {
-    world.gomod_parser_mem.cleanup();
-    world.gomod_parser_mem.init("gomod_parser_mem");
-    SCOPED_MEM(&world.gomod_parser_mem);
-
-    auto ef = read_entire_file(path);
-    if (ef == NULL) return false;
-    defer { free_entire_file(ef); };
-
-    Parser_It it;
-    it.init(ef);
-
-    Gomod_Parser p;
-    p.it = &it;
-
-    gomod_info.directives.cleanup();
-    ptr0(&gomod_info);
-    gomod_info.directives.init(LIST_POOL, 128);
-
-    p.parse(&gomod_info);
-    return true;
 }
 
 void Workspace::activate_pane(u32 idx) {
@@ -334,14 +334,68 @@ bool Editor::is_nvim_ready() {
 void Editor::init() {
     ptr0(this);
     id = ++world.next_editor_id;
+
     mem.init("editor mem");
+    SCOPED_MEM(&mem);
+
+    parser = new_ts_parser();
+    buf_lock.init();
+
+    nvim_edit_mem.init("editor nvim_edit_mem");
+    nvim_edit_lock.init();
+
+    // this should be initialized using mem; nvim_edit_mem is for
+    // the data that gets passed into the queue
+    nvim_edit_queue.init();
+}
+
+void Editor::process_nvim_edit(Edit_From_Nvim *edit) {
+    SCOPED_LOCK(&buf_lock);
+
+    auto firstline = edit->firstline;
+    auto lastline = edit->lastline;
+    auto new_lines = edit->lines;
+    auto new_line_lengths = edit->line_lengths;
+
+    if (lastline == -1) lastline = buf.lines.len;
+
+    auto start_cur = new_cur2(0, (i32)firstline);
+    auto old_end_cur = new_cur2(0, (i32)lastline);
+
+    TSInputEdit tsedit = {0};
+
+    if (tree != NULL) {
+        tsedit.start_byte = cur_to_offset(start_cur);
+        tsedit.start_point = cur_to_tspoint(start_cur);
+        tsedit.old_end_byte = cur_to_offset(old_end_cur);
+        tsedit.old_end_point = cur_to_tspoint(old_end_cur);
+    }
+
+    buf.delete_lines(firstline, lastline);
+    for (u32 i = 0; i < new_lines->len; i++) {
+        auto line = new_lines->at(i);
+        auto len = new_line_lengths->at(i);
+        buf.insert_line(firstline + i, line, len);
+    }
+
+    if (tree != NULL) {
+        auto new_end_cur = new_cur2(0, firstline + new_lines->len);
+        tsedit.new_end_byte = cur_to_offset(new_end_cur);
+        tsedit.new_end_point = cur_to_tspoint(new_end_cur);
+        ts_tree_edit(tree, &tsedit);
+    }
+
+    update_tree();
 }
 
 void Editor::cleanup() {
     mem.cleanup();
+    buf_lock.cleanup();
+    nvim_edit_lock.cleanup();
 }
 
 void Editor::trigger_autocomplete(bool triggered_by_dot) {
+    /*
     ptr0(&autocomplete);
 
     SCOPED_MEM(&world.index.main_thread_mem);
@@ -359,19 +413,11 @@ void Editor::trigger_autocomplete(bool triggered_by_dot) {
     }
 
     memcpy(&autocomplete.ac, &ac, sizeof(ac));
-}
-
-Ast* Editor::parse_autocomplete_id(Autocomplete* ac) {
-    auto pos = ac->keyword_start_position;
-    if (ac->type == AUTOCOMPLETE_STRUCT_FIELDS || ac->type == AUTOCOMPLETE_PACKAGE_EXPORTS)
-        pos.x++;
-
-    Ast* id = NULL;
-    with_parser_at_location(filepath, pos, [&](Parser* p) { id = p->parse_id(); });
-    return id;
+    */
 }
 
 void Editor::filter_autocomplete_results(Autocomplete* ac) {
+    /*
     bool prefix_found = false;
 
     do {
@@ -423,8 +469,10 @@ void Editor::filter_autocomplete_results(Autocomplete* ac) {
         // reverse
         return a < b ? 1 : (a > b ? -1 : 0);
     });
+    */
 }
 
+/*
 struct Type_Renderer : public Text_Renderer {
     void write_type(Ast* t) {
         switch (t->type) {
@@ -478,8 +526,10 @@ struct Type_Renderer : public Text_Renderer {
         }
     }
 };
+*/
 
 void Editor::trigger_parameter_hint(bool triggered_by_paren) {
+    /*
     parameter_hint.params = NULL;
 
     auto cursor = cur;
@@ -514,6 +564,7 @@ void Editor::trigger_parameter_hint(bool triggered_by_paren) {
 
     out->start = hint->call_args->start;
     out->params = params;
+    */
 }
 
 void Editor::type_char(char ch) {
@@ -523,6 +574,7 @@ void Editor::type_char(char ch) {
 }
 
 void Editor::update_autocomplete() {
+    /*
     if (autocomplete.ac.results != NULL) {
         auto& ac = autocomplete.ac;
 
@@ -543,10 +595,11 @@ void Editor::update_autocomplete() {
         else
             filter_autocomplete_results(&autocomplete.ac);
     }
+    */
 }
 
-
 void Editor::update_parameter_hint() {
+    /*
     // reset parameter hint when cursor goes before hint start
     auto& hint = parameter_hint;
     if (hint.params != NULL) {
@@ -584,10 +637,43 @@ void Editor::update_parameter_hint() {
             });
         }
     }
+    */
+}
+
+void Editor::start_change() {
+    buf_lock.enter();
+
+    ptr0(&curr_change);
+    curr_change.start_point = cur_to_tspoint(cur);
+    curr_change.start_byte = cur_to_offset(cur);
+}
+
+void Editor::end_change() {
+    auto end = cur_to_offset(cur);
+
+    curr_change.old_end_byte = curr_change.start_byte;
+    curr_change.old_end_point = curr_change.start_point;
+
+    if (end < curr_change.start_byte) {
+        curr_change.start_byte = end;
+        curr_change.start_point = cur_to_tspoint(cur);
+    }
+
+    curr_change.new_end_byte = end;
+    curr_change.new_end_point = cur_to_tspoint(cur);
+
+    ts_tree_edit(tree, &curr_change);
+    update_tree();
+
+    buf_lock.leave();
 }
 
 void Editor::type_char_in_insert_mode(char ch) {
+    start_change();
     type_char(ch);
+    end_change();
+
+    // at this point, tree is up to date! we can simply walk, don't need to re-parse :)
 
     switch (ch) {
         case '.': trigger_autocomplete(true); break;
