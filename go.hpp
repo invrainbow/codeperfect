@@ -272,7 +272,6 @@ struct Index_Stream {
     bool write1(i8 x);
     bool write2(i16 x);
     bool write4(i32 x);
-    bool write8(i64 x);
     bool writestr(ccstr s);
     void readn(void* buf, s32 n);
     char read1();
@@ -320,10 +319,8 @@ struct Parser_It {
 
     u8 peek() {
         switch (type) {
-        case IT_MMAP:
-            return mmap_params.ef->data[mmap_params.pos.x];
-        case IT_BUFFER:
-            return (u8)buffer_params.it.peek();
+        case IT_MMAP: return mmap_params.ef->data[mmap_params.pos.x];
+        case IT_BUFFER: return (u8)buffer_params.it.peek();
         }
         return 0;
     }
@@ -342,12 +339,31 @@ struct Parser_It {
         return 0;
     }
 
-    bool eof() {
+    u8 prev() {
         switch (type) {
         case IT_MMAP:
-            return (mmap_params.pos.x == mmap_params.ef->len);
+            {
+                auto ret = peek();
+                mmap_params.pos.x--;
+                return ret;
+            }
         case IT_BUFFER:
-            return buffer_params.it.eof();
+            return (u8)buffer_params.it.prev();
+        }
+        return 0;
+    }
+
+    bool bof() {
+        switch (type) {
+        case IT_MMAP: return (mmap_params.pos.x == 0);
+        case IT_BUFFER: return buffer_params.it.bof();
+        }
+    }
+    
+    bool eof() {
+        switch (type) {
+        case IT_MMAP: return (mmap_params.pos.x == mmap_params.ef->len);
+        case IT_BUFFER: return buffer_params.it.eof();
         }
         return false;
     }
@@ -391,12 +407,6 @@ struct Autocomplete {
     List<AC_Result>* results;
     Autocomplete_Type type;
     cur2 keyword_start_position;
-};
-
-struct Parameter_Hint {
-    int _; // TODO
-    // Ast* signature;
-    // Ast* call_args;
 };
 
 enum Walk_Action {
@@ -490,29 +500,6 @@ struct Resolved_Import {
     ccstr path;
     ccstr package_name;
     // Import_Location location_type;
-};
-
-// Resolved_Import* resolve_import(ccstr import_path);
-
-struct Jump_To_Definition_Result {
-    ccstr file;
-    cur2 pos;
-};
-
-// Our index maintains and provides THE ETERNALLY CORRECT SOURCE OF TRUTH about
-// the following questions (for now):
-//
-// 1) Our project's dependencies -- WHAT ARE THEY
-// 2) Given an import path -- WHERE IS THE PACKAGE
-// 3) Given a decl -- WHERE IS IT DECLARED (down to file:pos)
-//
-// See the top of go.cpp.
-
-struct Eil_Result {
-    List<ccstr> *old_imports;
-    List<ccstr> *new_imports;
-    List<ccstr> *added_imports;
-    List<ccstr> *removed_imports;
 };
 
 enum Index_Event_Type {
@@ -651,6 +638,7 @@ struct Godecl {
     cur2 spec_start;
     cur2 name_start;
     ccstr name;
+    bool incomplete;
 
     union {
         Gotype *gotype;
@@ -682,22 +670,9 @@ struct Go_Struct_Spec {
     void write(Index_Stream *s);
 };
 
-struct Gotype;
-
 enum Goresult_Type {
     GORESULT_DECL,
     GORESULT_GOTYPE,
-};
-
-struct Go_Import {
-    Godecl *decl;
-    ccstr id;
-    ccstr import_path;
-    cur2 spec_start;
-
-    Go_Import *copy();
-    void read(Index_Stream *s);
-    void write(Index_Stream *s);
 };
 
 struct Go_Ctx {
@@ -712,6 +687,7 @@ struct Goresult {
     // Goresult_Type type; 
     Go_Ctx *ctx;
     union {
+        void *ptr;
         Godecl *decl;
         Gotype *gotype;
     };
@@ -791,6 +767,8 @@ struct Go_Single_Import {
     ccstr package_name;
     Go_Package_Name_Type package_name_type;
     ccstr import_path;
+    ccstr resolved_path;
+    Godecl *decl;
 
     Go_Single_Import *copy();
     void read(Index_Stream *s);
@@ -867,12 +845,6 @@ struct Go_Index {
     void write(Index_Stream *s);
 };
 
-struct Ts_Type_Entry {
-    ccstr string;
-    Ts_Go_Symbol type;
-    UT_hash_handle hh;
-};
-
 struct Parsed_File {
     Ast_Node *root;
     TSTree *tree;
@@ -882,6 +854,17 @@ struct Parsed_File {
 
 typedef fn<Walk_Action(Ast_Node *node, Ts_Field_Type field_type, int depth)> Walk_TS_Callback;
 void walk_ts_cursor(TSTreeCursor *curr, bool abstract_only, Walk_TS_Callback cb);
+
+struct Parameter_Hint {
+    Gotype *gotype;
+};
+
+struct Jump_To_Definition_Result {
+    ccstr file;
+    cur2 pos;
+};
+
+typedef fn<Godecl*(Godecl_Type type, cur2 spec_start, ccstr name)> Node_To_Decls_Callback;
 
 struct Go_Indexer {
     Pool mem;        // mem that exists for lifetime of Go_Indexer
@@ -934,10 +917,10 @@ struct Go_Indexer {
     Goresult *unpointer_type(Gotype *type, Go_Ctx *ctx);
     List<Godecl> *parameter_list_to_fields(Ast_Node *params);
     Gotype *node_to_gotype(Ast_Node *node);
-    Goresult *find_decl_of_id(ccstr id, cur2 id_pos, Go_Ctx *ctx);
+    Goresult *find_decl_of_id(ccstr id, cur2 id_pos, Go_Ctx *ctx, Go_Single_Import **single_import = NULL);
     void list_fields_and_methods(Goresult *type_res, Goresult *resolved_type_res, List<Goresult> *ret);
     bool node_func_to_gotype_sig(Ast_Node *params, Ast_Node *result, Go_Func_Sig *sig);
-    void node_to_decls(Ast_Node *node, List<Goresult> *results, Go_Ctx *ctx);
+    void node_to_decls(Ast_Node *node, List<Goresult> *results, Go_Ctx *ctx, Node_To_Decls_Callback create_decl);
     Gotype *new_gotype(Gotype_Type type);
     Goresult *find_decl_in_package(ccstr id, ccstr import_path, ccstr resolved_path);
     List<Godecl> *get_package_decls(ccstr import_path, ccstr resolved_path);
@@ -950,6 +933,8 @@ struct Go_Indexer {
     Pool *get_final_mem();
     void find_nodes_containing_pos(Ast_Node *root, cur2 pos, fn<Walk_Action(Ast_Node *it)> callback);
     void walk_ast_node(Ast_Node *node, bool abstract_only, Walk_TS_Callback cb);
+    Go_Package *find_package(ccstr import_path, ccstr resolved_path);
+    void import_spec_to_decl(Ast_Node *spec_node, Godecl *decl);
 };
 
 #define FOR_NODE_CHILDREN(node) for (auto it = (node)->child(); !it->null; it = it->next())

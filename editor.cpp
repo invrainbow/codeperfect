@@ -529,18 +529,18 @@ struct Type_Renderer : public Text_Renderer {
 */
 
 void Editor::trigger_parameter_hint(bool triggered_by_paren) {
-    /*
     parameter_hint.params = NULL;
 
     auto cursor = cur;
     auto out = &parameter_hint;
 
-    SCOPED_MEM(&world.index.main_thread_mem);
-    defer { world.index.main_thread_mem.reset(); };
+    SCOPED_MEM(&world.indexer.ui_mem);
+    defer { world.indexer.ui_mem.reset(); };
 
-    auto hint = world.index.parameter_hint(filepath, cursor, triggered_by_paren);
+    auto hint = world.indexer.parameter_hint(filepath, cursor, triggered_by_paren);
     if (hint == NULL) return;
 
+    /*
     SCOPED_MEM(&world.parameter_hint_mem);
     world.parameter_hint_mem.reset();
 

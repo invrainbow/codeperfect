@@ -73,7 +73,6 @@ bool Index_Stream::writen(void *buf, int n) {
 bool Index_Stream::write1(i8 x) { return writen(&x, 1); }
 bool Index_Stream::write2(i16 x) { return writen(&x, 2); }
 bool Index_Stream::write4(i32 x) { return writen(&x, 4); }
-bool Index_Stream::write8(i64 x) { return writen(&x, 8); }
 
 bool Index_Stream::writestr(ccstr s) {
     if (s == NULL) return write2(0);
@@ -173,7 +172,7 @@ void Go_Indexer::background_thread() {
 
     Index_Stream s;
 
-#if 0
+#if 1
     crawl_index();
     print("finished crawling index");
     print("writing...");
@@ -516,9 +515,9 @@ void Go_Indexer::crawl_index() {
             memcpy(pkg, pkg->copy(), sizeof(Go_Package));
         };
 
-        // for now, don't include tests
-        auto source_files = list_source_files(resolved_path, false);
+        auto source_files = list_source_files(resolved_path, false);  // for now, don't include tests
 
+        // find "neighbors" a la DFS
         bool added_new_deps = false;
         For (*source_files) {
             auto filename = it;
@@ -536,9 +535,10 @@ void Go_Indexer::crawl_index() {
 
             // add import info
             FOR_NODE_CHILDREN (pf->root) {
-                if (it->type != TS_IMPORT_DECLARATION) continue;
+                auto decl_node = it;
+                if (decl_node->type != TS_IMPORT_DECLARATION) continue;
 
-                auto speclist_node = it->child();
+                auto speclist_node = decl_node->child();
                 FOR_NODE_CHILDREN (speclist_node) {
                     Ast_Node *name_node = NULL;
                     Ast_Node *path_node = NULL;
@@ -568,10 +568,32 @@ void Go_Indexer::crawl_index() {
                         append_to_queue(new_import_path, ri->path);
                     }
 
+                    // save decl
+                    auto decl = alloc_object(Godecl);
+                    decl->file = ctx.filename;
+                    decl->decl_start = decl_node->start;
+                    import_spec_to_decl(it, decl);
+
+                    // record dependency
+                    auto match_dep = [&](Go_Dependency *it) {
+                        return streq(it->import_path, new_import_path) && streq(it->resolved_path, ri->path);
+                    };
+
+                    auto dep = pkg->dependencies->find(match_dep);
+                    if (dep == NULL) {
+                        dep = pkg->dependencies->append();
+                        dep->import_path = new_import_path;
+                        dep->resolved_path = normalize_resolved_path(ri->path);
+                        dep->package_name = our_strcpy(ri->package_name);
+                    }
+
                     // record import
                     auto imp = pkg->individual_imports->append();
+                    imp->decl = decl;
                     imp->file = filename;
                     imp->import_path = new_import_path;
+                    imp->resolved_path = dep->resolved_path;
+
                     if (name_node == NULL || name_node->null) {
                         imp->package_name_type = GPN_IMPLICIT;
                         imp->package_name = ri->package_name;
@@ -584,17 +606,6 @@ void Go_Indexer::crawl_index() {
                         imp->package_name = name_node->string();
                     }
 
-                    // record dependency
-                    auto match_dep = [&](Go_Dependency *it) {
-                        return streq(it->import_path, new_import_path) && streq(it->resolved_path, ri->path);
-                    };
-
-                    if (pkg->dependencies->find(match_dep) == NULL) {
-                        auto dep = pkg->dependencies->append();
-                        dep->import_path = new_import_path;
-                        dep->resolved_path = normalize_resolved_path(ri->path);
-                        dep->package_name = our_strcpy(ri->package_name);
-                    }
                 }
             }
         }
@@ -604,17 +615,64 @@ void Go_Indexer::crawl_index() {
         // no dependencies left, process the current item now
         // -----
 
-        For (*source_files) {
-            auto filename = it;
+        /*
+         * as we create scope_ops, we call node_to_decls, which calls
+         * infer_type which requires access to information about all the decls
+         * it depends on.
+         *
+         * so first we should process all the decls, using whatever algorithm
+         * we come up with to fix that same problem of needing dependency decls
+         * already resolved
+         *
+         * then we create the scope ops, and i guess *as we're creating it* we
+         * need maintain a lookup table of local decls, and somehow provide
+         * that information to infer_type et al?
+         *
+         * fuck me lol
+         */
 
-            auto pf = parse_file(path_join(resolved_path, filename));
+        Go_Ctx ctx = {0};
+        ctx.import_path = import_path;
+        ctx.resolved_path = resolved_path;
+
+        // get the decls parsed
+        For (*source_files) {
+            ctx.filename = it;
+
+            auto pf = parse_file(path_join(resolved_path, ctx.filename));
             if (pf == NULL) continue;
             defer { free_parsed_file(pf); };
 
-            Go_Ctx ctx;
-            ctx.filename = filename;
-            ctx.import_path = import_path;
-            ctx.resolved_path = resolved_path;
+
+            List<Goresult> results;
+            results.init();
+
+            FOR_NODE_CHILDREN (pf->root) {
+                switch (it->type) {
+                case TS_PACKAGE_CLAUSE:
+                    if (pkg->package_name == NULL)
+                        pkg->package_name = it->child()->string();
+                    break;
+                case TS_VAR_DECLARATION:
+                case TS_CONST_DECLARATION:
+                case TS_FUNCTION_DECLARATION:
+                case TS_METHOD_DECLARATION:
+                case TS_TYPE_DECLARATION:
+                case TS_SHORT_VAR_DECLARATION:
+                    results.len = 0;
+                    node_to_decls(it, &results, &ctx);
+                    For (results) pkg->decls->append(it.decl);
+                    break;
+                }
+            }
+        }
+
+        For (*source_files) {
+            ctx.filename = it;
+
+            auto pf = parse_file(path_join(resolved_path, ctx.filename));
+            if (pf == NULL) continue;
+            defer { free_parsed_file(pf); };
 
             // ----
 
@@ -661,24 +719,6 @@ void Go_Indexer::crawl_index() {
 
                 return WALK_CONTINUE;
             });
-
-            FOR_NODE_CHILDREN (pf->root) {
-                switch (it->type) {
-                case TS_PACKAGE_CLAUSE:
-                    pkg->package_name = it->child()->string();
-                    break;
-                case TS_VAR_DECLARATION:
-                case TS_CONST_DECLARATION:
-                case TS_FUNCTION_DECLARATION:
-                case TS_METHOD_DECLARATION:
-                case TS_TYPE_DECLARATION:
-                case TS_SHORT_VAR_DECLARATION:
-                    results.len = 0;
-                    node_to_decls(it, &results, &ctx);
-                    For (results) pkg->decls->append(it.decl);
-                    break;
-                }
-            }
         }
 
         pkg->status = GPS_READY;
@@ -871,11 +911,113 @@ ccstr Go_Indexer::get_workspace_import_path() {
     return NULL;
 }
 
-Goresult *Go_Indexer::find_decl_of_id(ccstr id, cur2 id_pos, Go_Ctx *ctx) {
-    // we have to check if id is declared in local decls, imports, or
-    // toplevels. this is all info that will be stored in our index. TODO.
+Go_Package *Go_Indexer::find_package(ccstr import_path, ccstr resolved_path) {
+    return index.packages->find([&](Go_Package *it) -> bool {
+        return (
+            it->status != GPS_OUTDATED
+            && streq(it->import_path, import_path)
+            && streq(it->resolved_path, resolved_path)
+        );
+    });
+}
 
-    return find_decl_in_package(id, ctx->import_path, ctx->resolved_path);
+Goresult *Go_Indexer::find_decl_of_id(ccstr id_to_find, cur2 id_pos, Go_Ctx *ctx, Go_Single_Import **single_import) {
+    Go_Package_File_Info *finfo = NULL;
+
+    auto pkg = find_package(ctx->import_path, ctx->resolved_path);
+    if (pkg != NULL) {
+        auto check = [&](Go_Package_File_Info *it) { return streq(it->filename, ctx->filename); };
+        finfo = pkg->files->find(check);
+        if (finfo != NULL) {
+            auto scope_ops = finfo->scope_ops;
+
+            struct Old_Value {
+                ccstr name;
+                Godecl *value;
+            };
+
+            struct Table_Entry {
+                ccstr name;
+                Godecl *value;
+                UT_hash_handle hh;
+            };
+
+            List<Old_Value> old_values;
+            List<int> frames;
+            Table_Entry *lookup = NULL;
+            defer { HASH_CLEAR(hh, lookup); };
+
+            auto get_decl = [&](ccstr id) -> Godecl * {
+                Table_Entry *item = NULL;
+                HASH_FIND_STR(lookup, id, item);
+                if (item == NULL) return NULL;
+                return item->value;
+            };
+
+            auto set_decl = [&](ccstr id, Godecl *decl) {
+                Table_Entry *item = NULL;
+                HASH_FIND_STR(lookup, id, item);
+                if (item == NULL) {
+                    item = alloc_object(Table_Entry);
+                    HASH_ADD_KEYPTR(hh, lookup, id, strlen(id), item);
+                }
+                item->value = decl;
+            };
+
+            old_values.init();
+            frames.init();
+
+            For (*scope_ops) {
+                if (it.pos > id_pos) break;
+
+                switch (it.type) {
+                case GSOP_OPEN_SCOPE:
+                    frames.append(old_values.len);
+                    break;
+                case GSOP_CLOSE_SCOPE:
+                    if (frames.len == 0) break;
+                    for (auto pos = *frames.last(); old_values.len > pos; old_values.len--) {
+                        auto old = old_values.last();
+
+                        // there was no previous value, delete it
+                        if (old->value == NULL) {
+                            Table_Entry *item = NULL;
+                            HASH_FIND_STR(lookup, old->name, item);
+                            if (item != NULL)
+                                HASH_DEL(lookup, item);
+                        } else {
+                            set_decl(old->name, old->value);
+                        }
+                    }
+                    frames.len--;
+                    break;
+                case GSOP_DECL:
+                    {
+                        auto old = old_values.append();
+                        old->name = it.decl->name;
+                        old->value = get_decl(old->name);
+                        set_decl(old->name, it.decl);
+                    }
+                    break;
+                }
+            }
+
+            auto decl = get_decl(id_to_find);
+            if (decl != NULL) return make_goresult(decl, ctx);
+        }
+
+        For (*pkg->individual_imports) {
+            if (streq(it.file, ctx->filename)) {
+                if (streq(it.package_name, id_to_find)) {
+                    if (single_import != NULL)
+                        *single_import = &it;
+                    return make_goresult(it.decl, ctx);
+                }
+            }
+        }
+    }
+
+    return find_decl_in_package(id_to_find, ctx->import_path, ctx->resolved_path);
 }
 
 ccstr Go_Indexer::get_filepath_from_ctx(Go_Ctx *ctx) {
@@ -1009,7 +1151,71 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
 }
 
 Parameter_Hint *Go_Indexer::parameter_hint(ccstr filepath, cur2 pos, bool triggered_by_paren) {
-    return NULL;
+    auto pf = parse_file(filepath);
+    if (pf == NULL) return NULL;
+    defer { free_parsed_file(pf); };
+
+    Ast_Node *func_expr = NULL;
+    bool call_expression_found = false;
+
+    auto go_back_until_non_space = [&]() -> cur2 {
+        auto it = alloc_object(Parser_It);
+        memcpy(it, pf->it, sizeof(Parser_It));
+        it->set_pos(pos);
+        while (!it->bof() && isspace(it->peek())) it->prev();
+        return it->get_pos();
+    };
+
+    find_nodes_containing_pos(pf->root, go_back_until_non_space(), [&](Ast_Node *node) -> Walk_Action {
+        switch (node->type) {
+        case TS_CALL_EXPRESSION:
+            {
+                if (cmp_pos_to_node(pos, node) != 0) return WALK_ABORT;
+
+                auto func = node->field(TSF_FUNCTION);
+                if (!func->null) {
+                    func_expr = func;
+                    // don't abort, if there's a deeper func_expr we want to use that one
+                }
+            }
+            break;
+        case TS_LPAREN:
+            {
+                auto prev = node->prev();
+                if (!prev->null)
+                    func_expr = prev;
+                else {
+                    auto parent = node->parent();
+                    if (!parent->null && parent->type == TS_ERROR) {
+                        auto parent_prev = parent->prev();
+                        if (!parent_prev->null)
+                            func_expr = parent_prev;
+                    }
+                }
+            }
+            return WALK_ABORT;
+        }
+        return WALK_CONTINUE;
+    });
+
+    if (func_expr == NULL) return NULL;
+
+    Go_Ctx ctx = {0};
+    ctx.import_path = file_to_import_path(filepath);
+    ctx.resolved_path = normalize_resolved_path(our_dirname(filepath));
+    ctx.filename = our_basename(filepath);
+
+    auto res = infer_type(func_expr, &ctx);
+    if (res == NULL) return NULL;
+
+    // should we try to "normalize" the types in res?  like say we have
+    // packages foo and bar bar calls a func foo.Func foo includes package blah
+    // and includes a type blah.Type in foo.Func if we just render "blah.Type"
+    // it won't really be clear what blah refers to
+
+    auto hint = alloc_object(Parameter_Hint);
+    hint->gotype = res->gotype->copy();
+    return hint;
 }
 
 void Go_Indexer::list_fields_and_methods(Goresult *type_res, Goresult *resolved_type_res, List<Goresult> *ret) {
@@ -1558,51 +1764,53 @@ Ast_Node *Go_Indexer::new_ast_node(TSNode node) {
     return ret;
 }
 
-void Go_Indexer::node_to_decls(Ast_Node *node, List<Goresult> *results, Go_Ctx *ctx) {
-    auto new_result = [&]() -> Goresult* {
+void Go_Indexer::import_spec_to_decl(Ast_Node *spec_node, Godecl *decl) {
+    decl->type = GODECL_IMPORT;
+    decl->spec_start = spec_node->start;
+
+    auto name_node = spec_node->field(TSF_NAME);
+    if (!name_node->null) {
+        decl->name = name_node->string();
+        decl->name_start = name_node->start;
+    }
+
+    auto path_node = spec_node->field(TSF_PATH);
+    if (!path_node->null)
+        decl->import_path = path_node->string();
+}
+
+Godecl *default_node_to_decls_callback(Godecl_Type type, cur2 spec_start, ccstr name) {
+    auto ret = alloc_object(Godecl);
+    ret->type = type;
+    ret->spec_start = spec_start;
+    ret->name = name;
+    return ret;
+}
+
+void Go_Indexer::node_to_decls(
+    Ast_Node *node,
+    List<Goresult> *results,
+    Go_Ctx *ctx,
+    Node_To_Decls_Callback create_decl
+) {
+    auto new_result = [&](Godecl_Type type, cur2 spec_start, ccstr name) -> Goresult* {
         auto res = results->append();
         res->ctx = ctx;
-        res->decl = alloc_object(Godecl);
+        res->decl = create_decl(type, spec_start, name);
         res->decl->file = ctx->filename;
         res->decl->decl_start = node->start;
         return res;
     };
 
     switch (node->type) {
-    case TS_IMPORT_DECLARATION:
-        {
-            auto speclist_node = node->child();
-            if (speclist_node->null) break;
-            for (auto spec = speclist_node->child(); !spec->null; spec = spec->next()) {
-                auto decl = new_result()->decl;
-
-                decl->type = GODECL_IMPORT;
-                decl->spec_start = spec->start;
-
-                auto name_node = spec->field(TSF_NAME);
-                if (!name_node->null) {
-                    decl->name = name_node->string();
-                    decl->name_start = name_node->start;
-                }
-
-                auto path_node = spec->field(TSF_PATH);
-                if (!path_node->null)
-                    decl->import_path = path_node->string();
-            }
-        }
-        break;
-
     case TS_FUNCTION_DECLARATION:
     case TS_METHOD_DECLARATION:
         {
             auto name = node->field(TSF_NAME);
             if (name->null) break;
 
-            auto decl = new_result()->decl;
-            decl->type = GODECL_FUNC;
-            decl->spec_start = node->start;
+            auto decl = new_result(GODECL_FUNC, node->start, name->string())->decl;
             decl->name_start = name->start;
-            decl->name = name->string();
 
             auto params_node = node->field(TSF_PARAMETERS);
             auto result_node = node->field(TSF_RESULT);
@@ -1615,6 +1823,67 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Goresult> *results, Go_Ctx *
                 auto recv_type = recv_node->child()->field(TSF_TYPE);
                 if (!recv_type->null)
                     decl->gotype->func_recv = node_to_gotype(recv_type);
+            }
+        }
+        break;
+
+    case TS_TYPE_DECLARATION:
+        for (auto spec = node->child(); !spec->null; spec = spec->next()) {
+            auto name_node = spec->field(TSF_NAME);
+            if (name_node->null) continue;
+
+            auto type_node = spec->field(TSF_TYPE);
+            if (type_node->null) continue;
+
+            auto decl = new_result(GODECL_TYPE, spec->start, name_node->string())->decl;
+            decl->name_start = name_node->start;
+            decl->gotype = node_to_gotype(type_node);
+        }
+        break;
+
+    case TS_CONST_DECLARATION:
+    case TS_VAR_DECLARATION:
+        FOR_NODE_CHILDREN(node) {
+            auto spec = it;
+            auto type_node = spec->field(TSF_TYPE);
+            auto value_node = spec->field(TSF_VALUE);
+
+            if (type_node->null && value_node->null) continue;
+
+            Ast_Node *curr_value = NULL;
+            if (!value_node->null) {
+                our_assert(value_node->type == TS_EXPRESSION_LIST, "rhs must be a TS_EXPRESSION_LIST");
+                curr_value = value_node->child();
+            }
+
+            FOR_NODE_CHILDREN(spec) {
+                if (it->eq(type_node) || it->eq(value_node)) break;
+                auto name_node = it;
+
+                auto make_res = [&]() {
+                    auto res = new_result(
+                        node->type == TS_CONST_DECLARATION ? GODECL_CONST : GODECL_VAR,
+                        spec->start,
+                        name_node->string()
+                    );
+                    auto decl = res->decl;
+                    decl->name_start = name_node->start;
+                    return res;
+                };
+
+                if (!type_node->null) {
+                    auto res = make_res();
+                    res->decl->gotype = node_to_gotype(type_node);
+                } else {
+                    if (curr_value->null) break;
+                    auto res2 = infer_type(curr_value, ctx); // set encountered_incomplete_decl here
+                    curr_value = curr_value->next();
+                    if (res2 == NULL) continue;
+
+                    auto res = make_res();
+                    res->ctx = res2->ctx;
+                    res->decl->gotype = res2->gotype;
+                }
             }
         }
         break;
@@ -1643,11 +1912,8 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Goresult> *results, Go_Ctx *
                 auto name_node = left->child();
                 if (name_node->type != TS_IDENTIFIER) break;
 
-                auto decl = new_result()->decl;
-                decl->type = GODECL_SHORTVAR;
-                decl->spec_start = node->start;
+                auto decl = new_result(GODECL_SHORTVAR, node->start, name_node->string())->decl;
                 decl->name_start = name_node->start;
-                decl->name = name_node->string();
                 decl->gotype = res->gotype;
                 break;
             }
@@ -1666,11 +1932,8 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Goresult> *results, Go_Ctx *
 
                     auto single_gotype = gotype->multi_types->at(i++);
 
-                    auto decl = new_result()->decl;
-                    decl->type = GODECL_SHORTVAR;
-                    decl->spec_start = node->start;
+                    auto decl = new_result(GODECL_SHORTVAR, node->start, name_node->string())->decl;
                     decl->name_start = name_node->start;
-                    decl->name = name_node->string();
                     decl->gotype = single_gotype;
                 }
 
@@ -1688,78 +1951,12 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Goresult> *results, Go_Ctx *
                 auto res = infer_type(rchild, ctx);
                 if (res == NULL) break;
 
-                auto decl = new_result()->decl;
-                decl->type = GODECL_SHORTVAR;
-                decl->spec_start = node->start;
+                auto decl = new_result(GODECL_SHORTVAR, node->start, lchild->string())->decl;
                 decl->name_start = lchild->start;
-                decl->name = lchild->string();
                 decl->gotype = res->gotype;
 
                 lchild = lchild->next();
                 rchild = rchild->next();
-            }
-        }
-        break;
-
-    case TS_TYPE_DECLARATION:
-        for (auto spec = node->child(); !spec->null; spec = spec->next()) {
-            auto name_node = spec->field(TSF_NAME);
-            if (name_node->null) continue;
-
-            auto type_node = spec->field(TSF_TYPE);
-            if (type_node->null) continue;
-
-            auto decl = new_result()->decl;
-            decl->type = GODECL_TYPE;
-            decl->spec_start = spec->start;
-            decl->name_start = name_node->start;
-            decl->name = name_node->string();
-            decl->gotype = node_to_gotype(type_node);
-        }
-        break;
-
-    case TS_CONST_DECLARATION:
-    case TS_VAR_DECLARATION:
-        FOR_NODE_CHILDREN(node) {
-            auto spec = it;
-            auto type_node = spec->field(TSF_TYPE);
-            auto value_node = spec->field(TSF_VALUE);
-
-            if (type_node->null && value_node->null) continue;
-
-            Ast_Node *curr_value = NULL;
-            if (!value_node->null) {
-                our_assert(value_node->type == TS_EXPRESSION_LIST, "rhs must be a TS_EXPRESSION_LIST");
-                curr_value = value_node->child();
-            }
-
-            FOR_NODE_CHILDREN(spec) {
-                if (it->eq(type_node) || it->eq(value_node)) break;
-                auto name_node = it;
-
-                auto make_res = [&]() {
-                    auto res = new_result();
-                    auto decl = res->decl;
-                    decl->type = node->type == TS_CONST_DECLARATION ? GODECL_CONST : GODECL_VAR;
-                    decl->spec_start = spec->start;
-                    decl->name_start = name_node->start;
-                    decl->name = name_node->string();
-                    return res;
-                };
-
-                if (!type_node->null) {
-                    auto res = make_res();
-                    res->decl->gotype = node_to_gotype(type_node);
-                } else {
-                    if (curr_value->null) break;
-                    auto res2 = infer_type(curr_value, ctx);
-                    curr_value = curr_value->next();
-                    if (res2 == NULL) continue;
-
-                    auto res = make_res();
-                    res->ctx = res2->ctx;
-                    res->decl->gotype = res2->gotype;
-                }
             }
         }
         break;
@@ -1881,6 +2078,16 @@ Goresult *Go_Indexer::infer_type(Ast_Node *expr, Go_Ctx *ctx) {
         {
             auto operand_node = expr->field(TSF_OPERAND);
 
+            if (
+                operand_node->type == TS_IDENTIFIER
+                && operand_node->start_byte == 16135
+                && streq(ctx->import_path, "runtime")
+                && streq(ctx->resolved_path, "c:\\go\\src\\runtime")
+                && streq(ctx->filename, "debuglog.go")
+            ) {
+                __debugbreak();
+            }
+
             auto res = infer_type(operand_node, ctx);
             if (res == NULL) return NULL;
 
@@ -1913,17 +2120,12 @@ Goresult *Go_Indexer::infer_type(Ast_Node *expr, Go_Ctx *ctx) {
             Goresult *res = NULL;
 
             if (operand_node->type == TS_IDENTIFIER) {
-                auto decl_res = find_decl_of_id(operand_node->string(), operand_node->start, ctx);
+                Go_Single_Import *si = NULL;
+                auto decl_res = find_decl_of_id(operand_node->string(), operand_node->start, ctx, &si);
                 if (decl_res != NULL) {
-                    auto decl = decl_res->decl;
-                    if (decl->type == GODECL_IMPORT) {
-                        do {
-                            auto ri = resolve_import(decl->import_path, ctx);
-                            if (ri == NULL) break;
-
-                            auto res = find_decl_in_package(field_name, decl->import_path, ri->path);
-                            if (res == NULL) break;
-
+                    if (si != NULL) {
+                        auto res = find_decl_in_package(field_name, si->import_path, si->resolved_path);
+                        if (res != NULL) {
                             auto ext_decl = res->decl;
                             switch (ext_decl->type) {
                             case GODECL_VAR:
@@ -1931,10 +2133,10 @@ Goresult *Go_Indexer::infer_type(Ast_Node *expr, Go_Ctx *ctx) {
                             case GODECL_FUNC:
                                 return make_goresult(ext_decl->gotype, ctx);
                             }
-                        } while (0);
+                        }
                         return NULL;
                     } else {
-                        res = make_goresult(decl->gotype, decl_res->ctx);
+                        res = make_goresult(decl_res->decl->gotype, decl_res->ctx);
                     }
                 }
             }
@@ -1975,6 +2177,7 @@ Goresult *Go_Indexer::infer_type(Ast_Node *expr, Go_Ctx *ctx) {
         {
             auto res = find_decl_of_id(expr->string(), expr->start, ctx);
             if (res == NULL) return NULL;
+            if (res->decl->gotype == NULL) return NULL;
             return make_goresult(res->decl->gotype, ctx);
         }
     }
@@ -1982,21 +2185,17 @@ Goresult *Go_Indexer::infer_type(Ast_Node *expr, Go_Ctx *ctx) {
     return NULL;
 }
 
-Goresult *make_goresult(Gotype *gotype, Go_Ctx *ctx) {
+Goresult *make_goresult(void *ptr, Go_Ctx *ctx) {
+    our_assert(ptr != NULL, "make_goresult should never contain a NULL value, just return NULL instead!");
+
     auto ret = alloc_object(Goresult);
-    // ret->type = GORESULT_GOTYPE;
-    ret->gotype = gotype;
+    ret->ptr = ptr;
     ret->ctx = ctx;
     return ret;
 }
 
-Goresult *make_goresult(Godecl *decl, Go_Ctx *ctx) {
-    auto ret = alloc_object(Goresult);
-    // ret->type = GORESULT_DECL;
-    ret->decl = decl;
-    ret->ctx = ctx;
-    return ret;
-}
+Goresult *make_goresult(Gotype *gotype, Go_Ctx *ctx) { return make_goresult(gotype, ctx); }
+Goresult *make_goresult(Godecl *decl, Go_Ctx *ctx) { return make_goresult(decl, ctx); }
 
 Goresult *Go_Indexer::resolve_type(Gotype *type, Go_Ctx *ctx) {
     switch (type->type) {
@@ -2015,9 +2214,6 @@ Goresult *Go_Indexer::resolve_type(Gotype *type, Go_Ctx *ctx) {
     case GOTYPE_ID:
         {
             auto res = find_decl_of_id(type->id_name, type->id_pos, ctx);
-            if (res == NULL)
-                res = find_decl_in_package(type->id_name, ctx->import_path, ctx->resolved_path);
-
             if (res == NULL) break;
             if (res->decl->type != GODECL_TYPE) break;
             return resolve_type(res->decl->gotype, res->ctx);
@@ -2726,14 +2922,6 @@ Go_Struct_Spec *Go_Struct_Spec::copy() {
     return ret;
 }
 
-Go_Import *Go_Import::copy() {
-    auto ret = clone(this);
-    ret->decl = copy_object(decl);
-    ret->id = our_strcpy(id);
-    ret->import_path = our_strcpy(import_path);
-    return ret;
-}
-
 Gotype *Gotype::copy() {
     auto ret = clone(this);
     switch (type) {
@@ -2797,6 +2985,8 @@ Go_Single_Import *Go_Single_Import::copy() {
     ret->file = our_strcpy(file);
     ret->package_name = our_strcpy(package_name);
     ret->import_path = our_strcpy(import_path);
+    ret->resolved_path = our_strcpy(resolved_path);
+    ret->decl = copy_object(decl);
     return ret;
 }
 
@@ -2876,16 +3066,12 @@ void Go_Struct_Spec::read(Index_Stream *s) {
         READ_OBJ(field);
 }
 
-void Go_Import::read(Index_Stream *s) {
-    READ_OBJ(decl);
-    READ_STR(id);
-    READ_STR(import_path);
-}
-
 void Go_Single_Import::read(Index_Stream *s) {
     READ_STR(file);
     READ_STR(package_name);
     READ_STR(import_path);
+    READ_STR(resolved_path);
+    READ_OBJ(decl);
 }
 
 void Gotype::read(Index_Stream *s) {
@@ -3010,16 +3196,12 @@ void Go_Struct_Spec::write(Index_Stream *s) {
         WRITE_OBJ(field);
 }
 
-void Go_Import::write(Index_Stream *s) {
-    WRITE_OBJ(decl);
-    WRITE_STR(id);
-    WRITE_STR(import_path);
-}
-
 void Go_Single_Import::write(Index_Stream *s) {
     WRITE_STR(file);
     WRITE_STR(package_name);
     WRITE_STR(import_path);
+    WRITE_STR(resolved_path);
+    WRITE_OBJ(decl);
 }
 
 void Gotype::write(Index_Stream *s) {
