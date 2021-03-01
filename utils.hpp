@@ -3,6 +3,7 @@
 #include "common.hpp"
 #include "os.hpp"
 #include "mem.hpp"
+#include "uthash.h"
 
 ccstr our_format_json(ccstr s);
 ccstr our_strcpy(ccstr s);
@@ -164,3 +165,101 @@ struct Path {
 Path* make_path(ccstr s);
 List<ccstr> *split_string(ccstr str, fn<bool(char)> pred);
 bool path_contains_in_subtree(ccstr base_path, ccstr full_path);
+
+template <typename T>
+struct Scoped_Table {
+    struct Old_Value {
+        ccstr name;
+        T value;
+    };
+
+    struct Table_Entry {
+        ccstr name;
+        T value;
+        UT_hash_handle hh;
+    };
+
+    List<Old_Value> old_values;
+    List<int> frames;
+    Table_Entry *lookup = NULL;
+    Pool *mem;
+
+    void init() {
+        mem = MEM;
+        SCOPED_MEM(mem);
+
+        old_values.init();
+        frames.init();
+    }
+
+    void cleanup() {
+        SCOPED_MEM(mem);
+
+        HASH_CLEAR(hh, lookup);
+    }
+
+    void push_scope() {
+        SCOPED_MEM(mem);
+
+        frames.append(old_values.len);
+    }
+
+    void pop_scope() {
+        SCOPED_MEM(mem);
+
+        if (frames.len == 0) return;
+        for (auto pos = *frames.last(); old_values.len > pos; old_values.len--) {
+            auto old = old_values.last();
+
+            // there was no previous value, delete it
+            if (old->value == NULL) {
+                Table_Entry *item = NULL;
+                HASH_FIND_STR(lookup, old->name, item);
+                if (item != NULL)
+                    HASH_DEL(lookup, item);
+            } else {
+                _set_value(old->name, old->value);
+            }
+        }
+        frames.len--;
+    }
+
+    void set(ccstr name, T value) {
+        SCOPED_MEM(mem);
+
+        auto old = old_values.append();
+        old->name = name;
+        old->value = get(old->name);
+
+        _set_value(old->name, value);
+    }
+
+    T get(ccstr name, bool *found = NULL) {
+        SCOPED_MEM(mem);
+
+        Table_Entry *item = NULL;
+        HASH_FIND_STR(lookup, name, item);
+
+        if (item == NULL) {
+            T zero = {0};
+            if (found != NULL) *found = false;
+            return zero;
+        }
+
+        if (found != NULL) *found = true;
+        return item->value;
+    }
+
+    void _set_value(ccstr name, T value) {
+        SCOPED_MEM(mem);
+
+        Table_Entry *item = NULL;
+        HASH_FIND_STR(lookup, name, item);
+        if (item == NULL) {
+            item = alloc_object(Table_Entry);
+            item->name = name;
+            HASH_ADD_KEYPTR(hh, lookup, name, strlen(name), item);
+        }
+        item->value = value;
+    }
+};

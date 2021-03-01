@@ -472,99 +472,109 @@ void Editor::filter_autocomplete_results(Autocomplete* ac) {
     */
 }
 
-/*
 struct Type_Renderer : public Text_Renderer {
-    void write_type(Ast* t) {
+    void write_type(Gotype *t) {
         switch (t->type) {
-            case AST_SELECTOR_EXPR:
-                write_type(t->selector_expr.x);
-                writechar('.');
-                write_type(t->selector_expr.sel);
-                break;
-            case AST_ELLIPSIS:
-                write("...");
-                write_type(t->ellipsis.type);
-                break;
-            case AST_ID:
-                write("%s", t->id.lit);
-                break;
-            case AST_SLICE_TYPE:
-                write("[]");
-                write_type(t->slice_type.base_type);
-                break;
-            case AST_ARRAY_TYPE:
-                write("[]");
-                write_type(t->array_type.base_type);
-                break;
-            case AST_POINTER_TYPE:
-                write("*");
-                write_type(t->pointer_type.base_type);
-                break;
-            case AST_MAP_TYPE:
-                write("map[");
-                write_type(t->map_type.key_type);
-                write("]");
-                write_type(t->map_type.value_type);
-                break;
-            case AST_CHAN_TYPE:
-                if (t->chan_type.direction == AST_CHAN_RECV)
-                    write("<-");
-                write("chan");
-                write_type(t->chan_type.base_type);
-                if (t->chan_type.direction == AST_CHAN_SEND)
-                    write("<-");
-                break;
-            case AST_STRUCT_TYPE:
-                write("struct");
-                break;
-            case AST_INTERFACE_TYPE:
-                write("interface");
-                break;
-            case AST_FUNC_TYPE:
+        case GOTYPE_ID:
+            write("%s", t->id_name);
+            break;
+        case GOTYPE_SEL:
+            write("%s.%s", t->sel_name, t->sel_sel);
+            break;
+        case GOTYPE_MAP:
+            write("map[");
+            write_type(t->map_key);
+            write("]");
+            write_type(t->map_value);
+            break;
+        case GOTYPE_STRUCT:
+            write("struct");
+            break;
+        case GOTYPE_INTERFACE:
+            write("interface");
+            break;
+        case GOTYPE_POINTER:
+            write("*");
+            write_type(t->pointer_base);
+            break;
+        case GOTYPE_FUNC:
+            {
                 write("func");
-                break;
+
+                auto write_params = [&](List<Godecl> *params) {
+                    write("(");
+
+                    u32 i = 0;
+                    For (*params) {
+                        write("%s ", it.name);
+                        write_type(it.gotype);
+                        if (i < params->len - 1)
+                            write(", ");
+                        i++;
+                    }
+
+                    write(")");
+                };
+
+                auto &sig = t->func_sig;
+                write_params(sig.params);
+
+                auto result = sig.result;
+                if (result != NULL && result->len > 0) {
+                    if (result->len == 1 && result->at(0).name == NULL) {
+                        write(" ");
+                        write_type(result->at(0).gotype);
+                    } else {
+                        write_params(result);
+                    }
+                }
+            }
+            break;
+        case GOTYPE_SLICE:
+            write("[]");
+            write_type(t->slice_base);
+            break;
+        case GOTYPE_ARRAY:
+            write("[]");
+            write_type(t->array_base);
+            break;
+        case GOTYPE_CHAN:
+            if (t->chan_direction == CHAN_RECV)
+                write("<-");
+            write("chan");
+            write_type(t->chan_base);
+            if (t->chan_direction == CHAN_SEND)
+                write("<-");
+            break;
+        case GOTYPE_MULTI:
+            write("(multi type?)");
         }
     }
 };
-*/
 
 void Editor::trigger_parameter_hint(bool triggered_by_paren) {
-    parameter_hint.params = NULL;
+    ptr0(&parameter_hint);
 
-    auto cursor = cur;
-    auto out = &parameter_hint;
+    {
+        SCOPED_MEM(&world.indexer.ui_mem);
+        defer { world.indexer.ui_mem.reset(); };
 
-    SCOPED_MEM(&world.indexer.ui_mem);
-    defer { world.indexer.ui_mem.reset(); };
+        auto hint = world.indexer.parameter_hint(filepath, cur, triggered_by_paren);
+        if (hint == NULL) return;
 
-    auto hint = world.indexer.parameter_hint(filepath, cursor, triggered_by_paren);
-    if (hint == NULL) return;
+        {
+            SCOPED_MEM(&world.parameter_hint_mem);
+            world.parameter_hint_mem.reset();
 
-    /*
-    SCOPED_MEM(&world.parameter_hint_mem);
-    world.parameter_hint_mem.reset();
+            parameter_hint.gotype = hint->gotype->copy();
+            parameter_hint.start = hint->call_args_start;
 
-    auto fields = hint->signature->signature.params->parameters.fields;
-    auto params = alloc_list<ccstr>(fields->list.len);
-
-    For (fields->list) {
-        Type_Renderer rend;
-        rend.init();
-
-        auto& ids = it->field.ids->list;
-        for (int i = 0; i < ids.len; i++) {
-            rend.writestr(ids[i]->id.lit);
-            if (i < ids.len - 1)
-                rend.write(", ");
+            Type_Renderer rend;
+            rend.init();
+            rend.write_type(parameter_hint.gotype);
+            parameter_hint.help_text = rend.finish();
         }
-        rend.writechar(' ');
-        rend.write_type(it->field.type);
-        params->append(rend.finish());
     }
-
-    out->start = hint->call_args->start;
-    out->params = params;
-    */
 }
 
 void Editor::type_char(char ch) {
@@ -599,35 +609,37 @@ void Editor::update_autocomplete() {
 }
 
 void Editor::update_parameter_hint() {
-    /*
     // reset parameter hint when cursor goes before hint start
     auto& hint = parameter_hint;
-    if (hint.params != NULL) {
+    if (hint.gotype != NULL) {
         auto should_close_hints = [&]() {
             if (cur < hint.start) return true;
 
+            auto root = world.indexer.new_ast_node(ts_tree_root_node(tree));
+
             bool ret = false;
-            with_parser_at_location(filepath, hint.start, [&](Parser* p) {
-                auto call_args = p->parse_call_args();
-                ret = (cur >= call_args->end);
+            world.indexer.find_nodes_containing_pos(root, hint.start, [&](Ast_Node *it) -> Walk_Action {
+                if (it->start == hint.start)
+                    if (it->type == TS_ARGUMENT_LIST)
+                        if (cur >= it->end) {
+                            ret = true;
+                            return WALK_ABORT;
+                        }
+                return WALK_CONTINUE;
             });
+
             return ret;
         };
 
         if (should_close_hints()) {
-            hint.params = NULL;
+            hint.gotype = NULL;
         } else {
+            /*
             hint.current_param = -1;
             with_parser_at_location(filepath, hint.start, [&](Parser* p) {
                 auto call_args = p->parse_call_args();
                 u32 idx = 0;
                 For (call_args->call_args.args->list) {
-                    // When parser parses something invalid, most commonly lack of
-                    // TOK_RPAREN, like when user starts typing "foo(", it adds NULL to
-                    // args; just ignore it.
-                    if (it == NULL) continue;
-
-                    // if (locate_pos_relative_to_ast(cur, it) == 0) {
                     if (cur <= it->end) {
                         hint.current_param = idx;
                         break;
@@ -635,9 +647,9 @@ void Editor::update_parameter_hint() {
                     idx++;
                 }
             });
+            */
         }
     }
-    */
 }
 
 void Editor::start_change() {

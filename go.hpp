@@ -707,6 +707,7 @@ enum Gotype_Type {
     GOTYPE_ARRAY,
     GOTYPE_CHAN,
     GOTYPE_MULTI,
+    GOTYPE_VARIADIC,
 };
 
 struct Gotype {
@@ -739,9 +740,14 @@ struct Gotype {
 
         Gotype *slice_base;
         Gotype *array_base;
-        Gotype *chan_base;
+
+        struct {
+            Gotype *chan_base;
+            Chan_Direction chan_direction;
+        };
 
         List<Gotype*> *multi_types;
+        Gotype *variadic_base;
     };
 
     Gotype *copy();
@@ -793,11 +799,8 @@ enum Go_Scope_Op_Type {
 
 struct Go_Scope_Op {
     Go_Scope_Op_Type type; 
-
-    union {
-        Godecl *decl; // GSOP_DECL
-        cur2 pos;     // GSOP_OPEN_SCOPE, GSOP_CLOSE_SCOPE
-    };
+    cur2 pos;
+    Godecl *decl;
 
     Go_Scope_Op *copy();
     void read(Index_Stream *s);
@@ -857,6 +860,7 @@ void walk_ts_cursor(TSTreeCursor *curr, bool abstract_only, Walk_TS_Callback cb)
 
 struct Parameter_Hint {
     Gotype *gotype;
+    cur2 call_args_start;
 };
 
 struct Jump_To_Definition_Result {
@@ -871,6 +875,8 @@ struct Go_Indexer {
     Pool final_mem;  // memory that holds the final value of this->index`
     Pool ui_mem;     // memory used by UI when it calls jump to definition, etc.
 
+    Pool scoped_table_mem;
+
     Go_Index index;
 
     char current_exe_path[MAX_PATH];
@@ -879,6 +885,8 @@ struct Go_Indexer {
     List<Parsed_File*> current_parsed_files;
 
     Thread_Handle bgthread;
+
+    Scoped_Table<Godecl*> *local_decls;
 
     // ---
 
@@ -920,7 +928,7 @@ struct Go_Indexer {
     Goresult *find_decl_of_id(ccstr id, cur2 id_pos, Go_Ctx *ctx, Go_Single_Import **single_import = NULL);
     void list_fields_and_methods(Goresult *type_res, Goresult *resolved_type_res, List<Goresult> *ret);
     bool node_func_to_gotype_sig(Ast_Node *params, Ast_Node *result, Go_Func_Sig *sig);
-    void node_to_decls(Ast_Node *node, List<Goresult> *results, Go_Ctx *ctx, Node_To_Decls_Callback create_decl);
+    void node_to_decls(Ast_Node *node, List<Goresult> *results, Go_Ctx *ctx);
     Gotype *new_gotype(Gotype_Type type);
     Goresult *find_decl_in_package(ccstr id, ccstr import_path, ccstr resolved_path);
     List<Godecl> *get_package_decls(ccstr import_path, ccstr resolved_path);
@@ -931,10 +939,10 @@ struct Go_Indexer {
     void crawl_index();
     Ast_Node *new_ast_node(TSNode node);
     Pool *get_final_mem();
-    void find_nodes_containing_pos(Ast_Node *root, cur2 pos, fn<Walk_Action(Ast_Node *it)> callback);
     void walk_ast_node(Ast_Node *node, bool abstract_only, Walk_TS_Callback cb);
     Go_Package *find_package(ccstr import_path, ccstr resolved_path);
     void import_spec_to_decl(Ast_Node *spec_node, Godecl *decl);
+    void find_nodes_containing_pos(Ast_Node *root, cur2 pos, fn<Walk_Action(Ast_Node *it)> callback);
 };
 
 #define FOR_NODE_CHILDREN(node) for (auto it = (node)->child(); !it->null; it = it->next())

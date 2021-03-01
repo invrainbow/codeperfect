@@ -12,9 +12,10 @@ const int AUTOCOMPLETE_WINDOW_ITEMS = 10;
 #define MAX_BREAKPOINTS 128
 
 struct Client_Parameter_Hint {
-    List<ccstr>* params;
+    Gotype *gotype; // save this here in case we need it later
+    ccstr help_text;
     cur2 start;
-    u32 current_param;
+    // u32 current_param;
     bool closed;
 };
 

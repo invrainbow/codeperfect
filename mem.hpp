@@ -252,8 +252,8 @@ struct Frame {
     Pool_Block *block;
     s32 pos;
 
-    Frame() {
-        pool = MEM;
+    void init(Pool *mem) {
+        pool = mem;
         block = pool->curr;
         pos = pool->sp;
     }
@@ -265,10 +265,13 @@ struct Frame {
 
 struct Scoped_Frame {
     Frame frame;
+    Scoped_Frame() { frame.init(MEM); };
+    Scoped_Frame(Pool *mem) { frame.init(mem); };
     ~Scoped_Frame() { frame.restore(); }
 };
 
 #define SCOPED_FRAME() Scoped_Frame GENSYM(SCOPED_FRAME)
+#define SCOPED_FRAME_WITH_MEM(mem) Scoped_Frame GENSYM(SCOPED_FRAME)(mem)
 
 struct Scoped_Mem {
     Pool* old;

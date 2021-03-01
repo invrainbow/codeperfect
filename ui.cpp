@@ -767,8 +767,8 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                         else
                             draw_char(&cur_pos, (char)uch, rgba(text_color));
 
-                        if (hint.params != NULL)
-                            if (x == hint.start.x && y == hint.start.y)
+                        if (hint.gotype != NULL)
+                            if (new_cur2(x, y) == hint.start)
                                 actual_parameter_hint_start = cur_pos;
                     }
 
@@ -848,38 +848,16 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                 do {
                     if (actual_parameter_hint_start.x == -1) break;
 
-                    if (hint.params == NULL) break;
-
-                    u32 str_len = 0;
-                    if (hint.params->len == 0)
-                        str_len = 2;
-                    else
-                        str_len = (2 * (hint.params->len - 1)) + 2;
-                    For(*hint.params) str_len += strlen(it);
+                    if (hint.gotype == NULL) break;
 
                     boxf bg;
-                    bg.w = font->width * str_len;
+                    bg.w = font->width * strlen(hint.help_text);
                     bg.h = font->height;
                     bg.x = min(actual_parameter_hint_start.x, world.window_size.x - bg.w);
                     bg.y = min(actual_parameter_hint_start.y - font->offset_y - font->height, world.window_size.y - bg.h);
 
                     draw_bordered_rect_outer(bg, rgba(COLOR_DARK_GREY), rgba(COLOR_WHITE), 1);
-
-                    {
-                        auto pos = bg.pos;
-
-                        auto draw = [&](ccstr s, vec4f color) {
-                            pos = draw_string(pos, s, color);
-                        };
-
-                        draw("(", rgba(COLOR_WHITE));
-                        for (int i = 0; i < hint.params->len; i++) {
-                            draw(hint.params->at(i), i == hint.current_param ? rgba(COLOR_RED) : rgba(COLOR_WHITE));
-                            if (i < hint.params->len - 1)
-                                draw(", ", rgba(COLOR_WHITE));
-                        }
-                        draw(")", rgba(COLOR_WHITE));
-                    }
+                    draw_string(bg.pos, hint.help_text, rgba(COLOR_WHITE));
                 } while (0);
 
                 if (world.use_nvim) {

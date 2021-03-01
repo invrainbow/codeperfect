@@ -222,11 +222,24 @@ void render_ts_cursor(TSTreeCursor *curr) {
         if (node->anon && !world.wnd_ast_vis.show_anon_nodes)
             return WALK_SKIP_CHILDREN;
 
+        // auto changed = ts_node_has_changes(node->node);
+
         pop(depth);
         last_depth = depth;
 
         auto flags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth;
-        last_open = ImGui::TreeNodeEx(node->id, flags, "%s: %s", ts_field_type_str(field_type), ts_ast_type_str(node->type));
+
+        auto type_str = ts_ast_type_str(node->type);
+        if (type_str == NULL)
+            type_str = "(unknown)";
+        else
+            type_str += strlen("TS_");
+
+        auto field_type_str = ts_field_type_str(field_type);
+        if (field_type_str == NULL)
+            last_open = ImGui::TreeNodeEx(node->id, flags, "%s", type_str);
+        else
+            last_open = ImGui::TreeNodeEx(node->id, flags, "(%s) %s", field_type_str + strlen("TSF_"), type_str);
 
         if (ImGui::IsItemClicked()) {
             auto editor = world.get_current_editor();
@@ -836,9 +849,9 @@ int main() {
                 handled = true;
                 editor->autocomplete.ac.results = NULL;
             }
-            if (editor->parameter_hint.params != NULL) {
+            if (editor->parameter_hint.gotype != NULL) {
                 handled = true;
-                editor->parameter_hint.params = NULL;
+                editor->parameter_hint.gotype = NULL;
             }
 
             if (editor->nvim_data.mode == VI_INSERT) {
@@ -1252,6 +1265,8 @@ int main() {
                         break;
                     case GLFW_KEY_F9:
                         {
+                            if (editor == NULL) break;
+
                             ccstr file = editor->filepath;
                             auto lineno = editor->cur.y + 1;
 
