@@ -398,7 +398,7 @@ struct AC_Result {
 
 enum Autocomplete_Type {
     AUTOCOMPLETE_NONE = 0,
-    AUTOCOMPLETE_STRUCT_FIELDS,
+    AUTOCOMPLETE_FIELDS_AND_METHODS,
     AUTOCOMPLETE_PACKAGE_EXPORTS,
     AUTOCOMPLETE_IDENTIFIER,
 };
@@ -406,7 +406,7 @@ enum Autocomplete_Type {
 struct Autocomplete {
     List<AC_Result>* results;
     Autocomplete_Type type;
-    cur2 keyword_start_position;
+    cur2 dot_start_position;
 };
 
 enum Walk_Action {
@@ -584,13 +584,13 @@ struct Ast_Node {
         return x;
     }
 
+    Ast_Node *parent() { return dup(ts_node_parent(node)); }
+
     Ast_Node *child() {
         auto ret = ts_node_named_child(node, 0);
         ret = _skip_comment(ret, true);
         return dup(ret);
     }
-
-    Ast_Node *parent() { return dup(ts_node_parent(node)); }
 
     Ast_Node *next() {
         auto ret = ts_node_next_named_sibling(node);
@@ -600,6 +600,24 @@ struct Ast_Node {
 
     Ast_Node *prev() {
         auto ret = ts_node_prev_named_sibling(node);
+        ret = _skip_comment(ret, false);
+        return dup(ret);
+    }
+
+    Ast_Node *child_all() {
+        auto ret = ts_node_child(node, 0);
+        ret = _skip_comment(ret, true);
+        return dup(ret);
+    }
+
+    Ast_Node *next_all() {
+        auto ret = ts_node_next_sibling(node);
+        ret = _skip_comment(ret, true);
+        return dup(ret);
+    }
+
+    Ast_Node *prev_all() {
+        auto ret = ts_node_prev_sibling(node);
         ret = _skip_comment(ret, false);
         return dup(ret);
     }
@@ -621,7 +639,7 @@ enum Godecl_Type {
     GODECL_VAR,
     GODECL_CONST,
     GODECL_TYPE,
-    GODECL_FUNC,
+    GODECL_FUNC, // should we have GODECL_METHOD too? can just check gotype->func_recv
     GODECL_FIELD,
     GODECL_SHORTVAR,
 };
@@ -931,7 +949,7 @@ struct Go_Indexer {
     void node_to_decls(Ast_Node *node, List<Goresult> *results, Go_Ctx *ctx);
     Gotype *new_gotype(Gotype_Type type);
     Goresult *find_decl_in_package(ccstr id, ccstr import_path, ccstr resolved_path);
-    List<Godecl> *get_package_decls(ccstr import_path, ccstr resolved_path);
+    List<Goresult> *get_package_decls(ccstr import_path, ccstr resolved_path);
     Resolved_Import *resolve_import_from_gomod(ccstr import_path, Gomod_Info *info, Go_Ctx *ctx);
     Resolved_Import *check_potential_resolved_import(ccstr filepath);
     Go_Package *find_package_in_index(ccstr import_path, ccstr resolved_path);
@@ -943,6 +961,7 @@ struct Go_Indexer {
     Go_Package *find_package(ccstr import_path, ccstr resolved_path);
     void import_spec_to_decl(Ast_Node *spec_node, Godecl *decl);
     void find_nodes_containing_pos(Ast_Node *root, cur2 pos, fn<Walk_Action(Ast_Node *it)> callback);
+    List<Goresult> *get_possible_dot_completions(Ast_Node *operand_node, bool *was_package, Go_Ctx *ctx);
 };
 
 #define FOR_NODE_CHILDREN(node) for (auto it = (node)->child(); !it->null; it = it->next())

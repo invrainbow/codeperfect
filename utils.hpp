@@ -184,6 +184,13 @@ struct Scoped_Table {
     Table_Entry *lookup = NULL;
     Pool *mem;
 
+    List<Table_Entry*> *entries() {
+        auto ret = alloc_list<Table_Entry*>(HASH_COUNT(lookup));
+        Table_Entry *curr = NULL, *tmp = NULL;
+        HASH_ITER(hh, lookup, curr, tmp) ret->append(curr);
+        return ret;
+    }
+
     void init() {
         mem = MEM;
         SCOPED_MEM(mem);

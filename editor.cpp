@@ -395,34 +395,28 @@ void Editor::cleanup() {
 }
 
 void Editor::trigger_autocomplete(bool triggered_by_dot) {
-    /*
     ptr0(&autocomplete);
 
-    SCOPED_MEM(&world.index.main_thread_mem);
-    defer { world.index.main_thread_mem.reset(); };
+    SCOPED_MEM(&world.indexer.ui_mem);
+    defer { world.indexer.ui_mem.reset(); };
 
     Autocomplete ac;
     world.autocomplete_mem.reset();
 
-    if (!world.index.autocomplete(filepath, cur, triggered_by_dot, &ac)) return;
+    if (!world.indexer.autocomplete(filepath, cur, triggered_by_dot, &ac)) return;
 
-    {
-        SCOPED_MEM(&world.autocomplete_mem);
-        autocomplete.filtered_results = alloc_list<int>(ac.results->len);
-        filter_autocomplete_results(&ac);
-    }
-
-    memcpy(&autocomplete.ac, &ac, sizeof(ac));
-    */
+    // TODO: copy results over to world.autocomplete_mem, and into autocomplete.ac
+    // TODO: filter_autocomplete_results(&ac);
 }
 
 void Editor::filter_autocomplete_results(Autocomplete* ac) {
-    /*
     bool prefix_found = false;
 
+    // TODO: refilter
+    /*
     do {
-        SCOPED_MEM(&world.index.main_thread_mem);
-        defer { world.index.main_thread_mem.reset(); };
+        SCOPED_MEM(&world.indexer.ui_mem);
+        defer { world.indexer.ui_mem.reset(); };
 
         auto id = parse_autocomplete_id(ac);
         if (id == NULL) break;
@@ -451,6 +445,7 @@ void Editor::filter_autocomplete_results(Autocomplete* ac) {
 
         prefix_found = true;
     } while (0);
+    */
 
     if (!prefix_found) return;
 
@@ -465,11 +460,8 @@ void Editor::filter_autocomplete_results(Autocomplete* ac) {
     autocomplete.filtered_results->sort([&](int *ia, int *ib) -> int {
         auto a = fzy_match(prefix, ac->results->at(*ia).name);
         auto b = fzy_match(prefix, ac->results->at(*ib).name);
-
-        // reverse
-        return a < b ? 1 : (a > b ? -1 : 0);
+        return a < b ? 1 : (a > b ? -1 : 0); // reverse
     });
-    */
 }
 
 struct Type_Renderer : public Text_Renderer {

@@ -1018,6 +1018,35 @@ ccstr Go_Indexer::get_filepath_from_ctx(Go_Ctx *ctx) {
     return path_join(ctx->resolved_path, ctx->filename);
 }
 
+List<Goresult> *Go_Indexer::get_possible_dot_completions(Ast_Node *operand_node, bool *was_package, Go_Ctx *ctx) {
+    if (operand_node->type == TS_IDENTIFIER || operand_node->type == TS_PACKAGE_IDENTIFIER) {
+        do {
+            ccstr resolved_path = NULL;
+            auto import_path = find_import_path_referred_to_by_id(operand_node->string(), ctx, &resolved_path);
+            if (import_path == NULL) break;
+            if (resolved_path == NULL) break;
+
+            auto ret = get_package_decls(import_path, resolved_path);
+            if (ret != NULL)  {
+                *was_package = true;
+                return ret;
+            }
+        } while (0);
+    }
+
+    auto res = infer_type(operand_node, ctx);
+    if (res == NULL) return NULL;
+
+    auto resolved_res = resolve_type(res->gotype, res->ctx);
+    if (resolved_res == NULL) return NULL;
+
+    auto results = alloc_list<Goresult>();
+    list_fields_and_methods(res, resolved_res, results);
+
+    *was_package = false;
+    return results;
+}
+
 Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 pos) {
     auto pf = parse_file(filepath);
     if (pf == NULL) return NULL;
@@ -1059,45 +1088,22 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 p
                 auto sel_node = node->field(node->type == TS_QUALIFIED_TYPE ? TSF_NAME : TSF_FIELD);
                 if (!contains_pos(sel_node)) return WALK_CONTINUE;
 
-                auto sel_name = sel_node->string();
                 auto operand_node = node->field(node->type == TS_QUALIFIED_TYPE ? TSF_PACKAGE : TSF_OPERAND);
 
-                if (operand_node->type == TS_IDENTIFIER || operand_node->type == TS_PACKAGE_IDENTIFIER) {
-                    auto id = operand_node->string();
-                    do {
-                        ccstr resolved_path = NULL;
-                        auto import_path = find_import_path_referred_to_by_id(id, &ctx, &resolved_path);
-                        if (import_path == NULL) break;
-                        if (resolved_path == NULL) break;
-
-                        auto res = find_decl_in_package(sel_name, import_path, resolved_path);
-                        if (res == NULL) break;
-
-                        result.pos = res->decl->name_start;
-                        result.file = get_filepath_from_ctx(res->ctx);
-                        return WALK_ABORT;
-                    } while (0);
-                }
-
-                do {
-                    auto res = infer_type(operand_node, &ctx);
-                    if (res == NULL) break;
-
-                    auto resolved_res = resolve_type(res->gotype, res->ctx);
-                    if (resolved_res == NULL) break;
-
-                    auto results = alloc_list<Goresult>();
-                    list_fields_and_methods(res, resolved_res, results);
-
+                bool dontcare;
+                auto results = get_possible_dot_completions(operand_node, &dontcare, &ctx);
+                if (results != NULL) {
+                    auto sel_name = sel_node->string();
                     For (*results) {
-                        auto field = it.decl;
-                        if (streq(field->name, sel_name)) {
-                            result.pos = field->name_start;
+                        auto decl = it.decl;
+
+                        if (streq(decl->name, sel_name)) {
+                            result.pos = decl->name_start;
                             result.file = get_filepath_from_ctx(it.ctx);
                             return WALK_ABORT;
                         }
                     }
-                } while (0);
+                }
             }
             return WALK_ABORT;
 
@@ -1168,8 +1174,9 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
         FOUND_LONE_IDENTIFIER,
     };
 
-    Current_Situation stuation = FOUND_JACK_SHIT;
+    Current_Situation situation = FOUND_JACK_SHIT;
     Ast_Node *expr_to_analyze = NULL;
+    cur2 dot_start = {0};
 
     // i believe right now there are three possibilities:
     //
@@ -1182,23 +1189,30 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
         case TS_QUALIFIED_TYPE:
         case TS_SELECTOR_EXPRESSION:
             {
-                auto field = node->field(TSF_FIELD);
-                if (field->null) break;
-                if (cmp_pos_to_node(pos, field) != 0) break;
-                if (pos > field->end) return WALK_ABORT;
+                auto sel_node = node->field(node->type == TS_QUALIFIED_TYPE ? TSF_NAME : TSF_FIELD);
+                if (cmp_pos_to_node(pos, sel_node) != 0) return WALK_CONTINUE;
 
-                if (cmp_pos_to_node(pos, node) != 0) return WALK_ABORT;
+                auto operand_node = node->field(node->type == TS_QUALIFIED_TYPE ? TSF_PACKAGE : TSF_OPERAND);
+                if (operand_node->null) return WALK_ABORT;
 
-                auto operand = node->field(TSF_OPERAND);
-                if (operand->null) break;
+                bool dot_found = false;
+                for (auto curr = node->child_all(); !curr->null; curr = curr->next_all()) {
+                    if (curr->type == TS_ANON_DOT) {
+                        dot_found = true;
+                        dot_start = curr->start;
+                        break;
+                    }
+                }
 
-                expr_to_analyze = operand;
+                if (!dot_found) return WALK_ABORT;
+
+                expr_to_analyze = operand_node;
                 situation = FOUND_DOT_COMPLETE;
             }
             return WALK_ABORT;
 
         case TS_IDENTIFIER:
-            expr_to_analyze = parent_prev;
+            expr_to_analyze = node;
             situation = FOUND_LONE_IDENTIFIER;
             return WALK_ABORT;
 
@@ -1208,6 +1222,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                 if (!prev->null) {
                     expr_to_analyze = prev;
                     situation = FOUND_DOT_COMPLETE;
+                    dot_start = node->start;
                 } else {
                     auto parent = node->parent();
                     if (!parent->null && parent->type == TS_ERROR) {
@@ -1215,6 +1230,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                         if (!parent_prev->null) {
                             expr_to_analyze = parent_prev;
                             situation = FOUND_DOT_COMPLETE;
+                            dot_start = node->start;
                         }
                     }
                 }
@@ -1224,24 +1240,90 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
         return WALK_CONTINUE;
     });
 
+    List<AC_Result> *ac_results = NULL;
+
     switch (situation) {
-    case FOUND_JACK_SHIT:
-        break;
     case FOUND_DOT_COMPLETE:
         {
-            if (operand->type == TS_
-            auto res = infer_type(operand, &ctx);
-            if (res == NULL) break;
+            bool was_package = false;
+            auto results = get_possible_dot_completions(expr_to_analyze, &was_package, &ctx);
+            if (results == NULL) return false;
 
-            auto resolved_res = resolve_type(res->gotype, res->ctx);
-            if (resolved_res == NULL) break;
+            ac_results = alloc_list<AC_Result>(results->len);
+            For (*results) ac_results->append()->name = it.decl->name;
 
-            list_fields_and_methods(res, resolved_res, &results);
+            out->type = (was_package ? AUTOCOMPLETE_PACKAGE_EXPORTS : AUTOCOMPLETE_FIELDS_AND_METHODS);
         }
         break;
+    case FOUND_JACK_SHIT:
+        dot_start = pos;
+        // fallthrough
     case FOUND_LONE_IDENTIFIER:
+        {
+            String_Set seen_strings;
+            seen_strings.init();
+
+            ac_results = alloc_list<AC_Result>();
+
+            auto pkg = find_package(ctx.import_path, ctx.resolved_path);
+            if (pkg != NULL) {
+                auto check = [&](Go_Package_File_Info *it) { return streq(it->filename, ctx.filename); };
+                auto finfo = pkg->files->find(check);
+                if (finfo != NULL) {
+                    SCOPED_FRAME_WITH_MEM(&scoped_table_mem);
+                    Scoped_Table<bool> table;
+                    {
+                        SCOPED_MEM(&scoped_table_mem);
+                        table.init();
+                    }
+                    defer { table.cleanup(); };
+
+                    For (*finfo->scope_ops) {
+                        if (it.pos > pos) break;
+                        switch (it.type) {
+                        case GSOP_OPEN_SCOPE: table.push_scope(); break;
+                        case GSOP_CLOSE_SCOPE: table.pop_scope(); break;
+                        case GSOP_DECL: table.set(it.decl->name, true); break;
+                        }
+                    }
+
+                    auto entries = table.entries();
+                    For (*entries) {
+                        ac_results->append()->name = it->name;
+                        seen_strings.add(it->name);
+                    }
+                }
+
+                For (*pkg->individual_imports) {
+                    if (streq(it.file, ctx.filename)) {
+                        if (!seen_strings.has(it.package_name)) {
+                            ac_results->append()->name = it.package_name;
+                            seen_strings.add(it.package_name);
+                        }
+                    }
+                }
+            }
+
+            auto results = get_package_decls(ctx.import_path, ctx.resolved_path);
+            if (results != NULL) {
+                For (*results) {
+                    auto decl = it.decl;
+                    if (decl->type == GODECL_FUNC && decl->gotype->func_recv != NULL)
+                        continue;
+                    if (!seen_strings.has(decl->name)) {
+                        ac_results->append()->name = decl->name;
+                        seen_strings.add(decl->name);
+                    }
+                }
+            }
+
+            out->type = AUTOCOMPLETE_IDENTIFIER;
+        }
         break;
     }
+
+    out->dot_start_position = dot_start;
+    out->results = ac_results;
 
     return true;
 }
@@ -1379,13 +1461,15 @@ void Go_Indexer::list_fields_and_methods(Goresult *type_res, Goresult *resolved_
 
     if (type_name == NULL || target_import_path == NULL) return;
 
-    auto decls = get_package_decls(target_import_path, target_resolved_path);
-    if (decls == NULL) return;
+    auto results = get_package_decls(target_import_path, target_resolved_path);
+    if (results == NULL) return;
 
-    For (*decls) {
-        if (it.type != GODECL_FUNC) continue;
+    For (*results) {
+        auto decl = it.decl;
 
-        auto functype = it.gotype;
+        if (decl->type != GODECL_FUNC) continue;
+
+        auto functype = decl->gotype;
         if (functype->func_recv == NULL) continue;
 
         auto recv = unpointer_type(functype->func_recv, NULL)->gotype;
@@ -1395,9 +1479,9 @@ void Go_Indexer::list_fields_and_methods(Goresult *type_res, Goresult *resolved_
 
         auto ctx = alloc_object(Go_Ctx);
         ctx->import_path = target_import_path;
-        ctx->filename = it.file;
+        ctx->filename = decl->file;
 
-        ret->append(make_goresult(&it, ctx));
+        ret->append(make_goresult(decl, ctx));
     }
 }
 
@@ -2113,30 +2197,33 @@ Goresult *Go_Indexer::unpointer_type(Gotype *type, Go_Ctx *ctx) {
     return make_goresult(type, ctx);
 }
 
-List<Godecl> *Go_Indexer::get_package_decls(ccstr import_path, ccstr resolved_path) {
+List<Goresult> *Go_Indexer::get_package_decls(ccstr import_path, ccstr resolved_path) {
     For (*index.packages)
         if (it.status != GPS_OUTDATED)
             if (streq(it.import_path, import_path))
-                if (streq(it.resolved_path, resolved_path))
-                    return it.decls;
+                if (streq(it.resolved_path, resolved_path)) {
+                    auto ret = alloc_list<Goresult>(it.decls->len);
+                    For (*it.decls) {
+                        auto ctx = alloc_object(Go_Ctx);
+                        ctx->import_path = import_path;
+                        ctx->resolved_path = resolved_path;
+                        ctx->filename = it.file;
+                        ret->append(make_goresult(&it, ctx));
+                    }
+                    return ret;
+                }
+
     return NULL;
 }
 
 Goresult *Go_Indexer::find_decl_in_package(ccstr id, ccstr import_path, ccstr resolved_path) {
-    auto decls = get_package_decls(import_path, resolved_path);
-    if (decls == NULL) return NULL;
+    auto results = get_package_decls(import_path, resolved_path);
+    if (results == NULL) return NULL;
 
     // in the future we can sort this shit
-    For (*decls) {
-        if (streq(it.name, id)) {
-            auto ctx = alloc_object(Go_Ctx);
-            ctx->import_path = import_path;
-            ctx->resolved_path = resolved_path;
-            ctx->filename = it.file;
-            return make_goresult(&it, ctx);
-        }
-    }
-
+    For (*results)
+        if (streq(it.decl->name, id))
+            return &it;
     return NULL;
 }
 
