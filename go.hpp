@@ -405,8 +405,9 @@ enum Autocomplete_Type {
 
 struct Autocomplete {
     List<AC_Result>* results;
+    ccstr prefix;
     Autocomplete_Type type;
-    cur2 dot_start_position;
+    cur2 keyword_start_position;
 };
 
 enum Walk_Action {
@@ -816,7 +817,7 @@ enum Go_Scope_Op_Type {
 };
 
 struct Go_Scope_Op {
-    Go_Scope_Op_Type type; 
+    Go_Scope_Op_Type type;
     cur2 pos;
     Godecl *decl;
 

@@ -11,11 +11,6 @@ void Editor::raw_move_cursor(cur2 c) {
 
     cur = c;
 
-#if 0
-    if (reset_autocomplete)
-        autocomplete.results = NULL;
-#endif
-
     auto& line = buf.lines[c.y];
 
     u32 vx = 0;
@@ -400,68 +395,41 @@ void Editor::trigger_autocomplete(bool triggered_by_dot) {
     SCOPED_MEM(&world.indexer.ui_mem);
     defer { world.indexer.ui_mem.reset(); };
 
-    Autocomplete ac;
-    world.autocomplete_mem.reset();
-
+    Autocomplete ac = {0};
     if (!world.indexer.autocomplete(filepath, cur, triggered_by_dot, &ac)) return;
 
-    // TODO: copy results over to world.autocomplete_mem, and into autocomplete.ac
-    // TODO: filter_autocomplete_results(&ac);
-}
+    {
+        // copy from &ac to &autocomplete.ac
 
-void Editor::filter_autocomplete_results(Autocomplete* ac) {
-    bool prefix_found = false;
+        world.autocomplete_mem.reset();
+        SCOPED_MEM(&world.autocomplete_mem);
 
-    // TODO: refilter
-    /*
-    do {
-        SCOPED_MEM(&world.indexer.ui_mem);
-        defer { world.indexer.ui_mem.reset(); };
+        memcpy(&autocomplete.ac, &ac, sizeof(Autocomplete));
 
-        auto id = parse_autocomplete_id(ac);
-        if (id == NULL) break;
-
-        if (id->id.bad) {
-            autocomplete.prefix[0] = '\0';
-        } else {
-            if (cur < id->start) {
-                // happens if we're at "foo.    bar"
-                //                           ^
-                // there's whitespace between period and sel, and we're in it
-                autocomplete.prefix[0] = '\0';
-            } else if (cur > id->end) {
-                break;  // this shouldn't happen
-            } else {
-                auto prefix_len = cur.x - id->start.x;
-                prefix_len = min(prefix_len, _countof(autocomplete.prefix) - 1);
-                if (prefix_len == 0) {
-                    autocomplete.prefix[0] = '\0';
-                } else {
-                    strncpy(autocomplete.prefix, id->id.lit, prefix_len);
-                    autocomplete.prefix[prefix_len] = '\0';
-                }
-            }
+        auto new_results = alloc_list<AC_Result>(ac.results->len);
+        For (*ac.results) {
+            auto result = new_results->append();
+            result->name = our_strcpy(it.name);
         }
 
-        prefix_found = true;
-    } while (0);
-    */
+        autocomplete.ac.results = new_results;
+        autocomplete.filtered_results = alloc_list<int>();
 
-    if (!prefix_found) return;
+        auto prefix = autocomplete.ac.prefix;
 
-    auto prefix = autocomplete.prefix;
+        // OPTIMIZATION: if we added characters to prefix, then we only need to
+        // search through the existing filtered results
+        auto results = autocomplete.ac.results;
+        for (int i = 0; i < results->len; i++)
+            if (fzy_has_match(prefix, results->at(i).name))
+                autocomplete.filtered_results->append(i);
 
-    autocomplete.filtered_results->len = 0;
-    auto results = ac->results;
-    for (int i = 0; i < results->len; i++)
-        if (fzy_has_match(prefix, results->at(i).name))
-            autocomplete.filtered_results->append(i);
-
-    autocomplete.filtered_results->sort([&](int *ia, int *ib) -> int {
-        auto a = fzy_match(prefix, ac->results->at(*ia).name);
-        auto b = fzy_match(prefix, ac->results->at(*ib).name);
-        return a < b ? 1 : (a > b ? -1 : 0); // reverse
-    });
+        autocomplete.filtered_results->sort([&](int *ia, int *ib) -> int {
+            auto a = fzy_match(prefix, autocomplete.ac.results->at(*ia).name);
+            auto b = fzy_match(prefix, autocomplete.ac.results->at(*ib).name);
+            return a < b ? 1 : (a > b ? -1 : 0); // reverse
+        });
+    }
 }
 
 struct Type_Renderer : public Text_Renderer {
@@ -576,71 +544,73 @@ void Editor::type_char(char ch) {
 }
 
 void Editor::update_autocomplete() {
+    if (autocomplete.ac.results == NULL) return;
+
+    trigger_autocomplete(false);
+
     /*
-    if (autocomplete.ac.results != NULL) {
+    auto& ac = autocomplete.ac;
+
+    auto passed_start = [&]() {
         auto& ac = autocomplete.ac;
+        if (ac.type == AUTOCOMPLETE_PACKAGE_EXPORTS || ac.type == AUTOCOMPLETE_STRUCT_FIELDS)
+            return cur <= ac.keyword_start_position;
+        return cur < ac.keyword_start_position;
+    };
 
-        auto passed_start = [&]() {
-            auto& ac = autocomplete.ac;
-            if (ac.type == AUTOCOMPLETE_PACKAGE_EXPORTS || ac.type == AUTOCOMPLETE_STRUCT_FIELDS)
-                return cur <= ac.keyword_start_position;
-            return cur < ac.keyword_start_position;
-        };
+    auto passed_end = [&]() {
+        auto id = parse_autocomplete_id(&autocomplete.ac);
+        return id != NULL && cur > id->end;
+    };
 
-        auto passed_end = [&]() {
-            auto id = parse_autocomplete_id(&autocomplete.ac);
-            return id != NULL && cur > id->end;
-        };
-
-        if (passed_start() || passed_end())
-            autocomplete.ac.results = NULL;
-        else
-            filter_autocomplete_results(&autocomplete.ac);
-    }
+    if (passed_start() || passed_end())
+        autocomplete.ac.results = NULL;
+    else
+        filter_autocomplete_results(&autocomplete.ac);
     */
 }
 
 void Editor::update_parameter_hint() {
     // reset parameter hint when cursor goes before hint start
     auto& hint = parameter_hint;
-    if (hint.gotype != NULL) {
-        auto should_close_hints = [&]() {
-            if (cur < hint.start) return true;
+    if (hint.gotype == NULL) return;
 
-            auto root = world.indexer.new_ast_node(ts_tree_root_node(tree));
+    auto should_close_hints = [&]() {
+        if (cur < hint.start) return true;
 
-            bool ret = false;
-            world.indexer.find_nodes_containing_pos(root, hint.start, [&](Ast_Node *it) -> Walk_Action {
-                if (it->start == hint.start)
-                    if (it->type == TS_ARGUMENT_LIST)
-                        if (cur >= it->end) {
-                            ret = true;
-                            return WALK_ABORT;
-                        }
-                return WALK_CONTINUE;
-            });
+        auto root = world.indexer.new_ast_node(ts_tree_root_node(tree));
 
-            return ret;
-        };
-
-        if (should_close_hints()) {
-            hint.gotype = NULL;
-        } else {
-            /*
-            hint.current_param = -1;
-            with_parser_at_location(filepath, hint.start, [&](Parser* p) {
-                auto call_args = p->parse_call_args();
-                u32 idx = 0;
-                For (call_args->call_args.args->list) {
-                    if (cur <= it->end) {
-                        hint.current_param = idx;
-                        break;
+        bool ret = false;
+        world.indexer.find_nodes_containing_pos(root, hint.start, [&](Ast_Node *it) -> Walk_Action {
+            if (it->start == hint.start)
+                if (it->type == TS_ARGUMENT_LIST)
+                    if (cur >= it->end) {
+                        ret = true;
+                        return WALK_ABORT;
                     }
-                    idx++;
+            return WALK_CONTINUE;
+        });
+
+        return ret;
+    };
+
+    if (should_close_hints()) {
+        hint.gotype = NULL;
+    } else {
+        /*
+        hint.current_param = -1;
+        with_parser_at_location(filepath, hint.start, [&](Parser* p) {
+            auto call_args = p->parse_call_args();
+            u32 idx = 0;
+            For (call_args->call_args.args->list) {
+                if (cur <= it->end) {
+                    hint.current_param = idx;
+                    break;
                 }
-            });
-            */
-        }
+                idx++;
+            }
+        });
+        */
     }
 }
 
@@ -679,11 +649,20 @@ void Editor::type_char_in_insert_mode(char ch) {
 
     // at this point, tree is up to date! we can simply walk, don't need to re-parse :)
 
+    bool did_autocomplete = false;
+    bool did_parameter_hint = false;
+
     switch (ch) {
-        case '.': trigger_autocomplete(true); break;
-        case '(': trigger_parameter_hint(true); break;
+    case '.':
+        trigger_autocomplete(true);
+        did_autocomplete = true;
+        break;
+    case '(':
+        trigger_parameter_hint(true);
+        did_parameter_hint = true;
+        break;
     }
 
-    update_autocomplete();
-    update_parameter_hint();
+    if (!did_autocomplete) update_autocomplete();
+    if (!did_parameter_hint) update_parameter_hint();
 }

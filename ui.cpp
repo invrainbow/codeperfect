@@ -813,7 +813,7 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                         boxf menu;
                         menu.w = font->width * max_len;
                         menu.h = font->height * num_items;
-                        menu.x = min(actual_cursor_position.x - strlen(ac.prefix) * font->width, world.window_size.x - menu.w);
+                        menu.x = min(actual_cursor_position.x - strlen(ac.ac.prefix) * font->width, world.window_size.x - menu.w);
                         menu.y = min(actual_cursor_position.y - font->offset_y + font->height, world.window_size.y - menu.h);
 
                         draw_bordered_rect_outer(menu, rgba(COLOR_BLACK), rgba(COLOR_LIGHT_GREY), 1);

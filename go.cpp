@@ -1176,7 +1176,8 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
 
     Current_Situation situation = FOUND_JACK_SHIT;
     Ast_Node *expr_to_analyze = NULL;
-    cur2 dot_start = {0};
+    cur2 keyword_start = {0};
+    ccstr prefix = NULL;
 
     // i believe right now there are three possibilities:
     //
@@ -1189,22 +1190,41 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
         case TS_QUALIFIED_TYPE:
         case TS_SELECTOR_EXPRESSION:
             {
-                auto sel_node = node->field(node->type == TS_QUALIFIED_TYPE ? TSF_NAME : TSF_FIELD);
-                if (cmp_pos_to_node(pos, sel_node) != 0) return WALK_CONTINUE;
-
                 auto operand_node = node->field(node->type == TS_QUALIFIED_TYPE ? TSF_PACKAGE : TSF_OPERAND);
                 if (operand_node->null) return WALK_ABORT;
+                if (cmp_pos_to_node(pos, operand_node) == 0) return WALK_CONTINUE;
+
+                auto sel_node = node->field(node->type == TS_QUALIFIED_TYPE ? TSF_NAME : TSF_FIELD);
 
                 bool dot_found = false;
                 for (auto curr = node->child_all(); !curr->null; curr = curr->next_all()) {
                     if (curr->type == TS_ANON_DOT) {
                         dot_found = true;
-                        dot_start = curr->start;
                         break;
                     }
                 }
 
                 if (!dot_found) return WALK_ABORT;
+
+                switch (cmp_pos_to_node(pos, sel_node)) {
+                case -1: // pos is before sel
+                    keyword_start = pos;
+                    prefix = "";
+                    break;
+                case 0: // pos is inside sel
+                    keyword_start = sel_node->start;
+                    prefix = sel_node->string();
+                    break;
+                case 1: // pos is after sel
+                    // if it's directly to the right of sel, like foo.bar|,
+                    // then we treat cursor as being "in" sel
+                    if (pos == sel_node->end) {
+                        keyword_start = sel_node->start;
+                        prefix = sel_node->string();
+                        break;
+                    }
+                    return WALK_ABORT;
+                }
 
                 expr_to_analyze = operand_node;
                 situation = FOUND_DOT_COMPLETE;
@@ -1222,7 +1242,8 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                 if (!prev->null) {
                     expr_to_analyze = prev;
                     situation = FOUND_DOT_COMPLETE;
-                    dot_start = node->start;
+                    keyword_start = pos;
+                    prefix = "";
                 } else {
                     auto parent = node->parent();
                     if (!parent->null && parent->type == TS_ERROR) {
@@ -1230,7 +1251,8 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                         if (!parent_prev->null) {
                             expr_to_analyze = parent_prev;
                             situation = FOUND_DOT_COMPLETE;
-                            dot_start = node->start;
+                            keyword_start = pos;
+                            prefix = "";
                         }
                     }
                 }
@@ -1256,7 +1278,8 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
         }
         break;
     case FOUND_JACK_SHIT:
-        dot_start = pos;
+        keyword_start = pos;
+        prefix = "";
         // fallthrough
     case FOUND_LONE_IDENTIFIER:
         {
@@ -1322,8 +1345,9 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
         break;
     }
 
-    out->dot_start_position = dot_start;
+    out->keyword_start_position = keyword_start;
     out->results = ac_results;
+    out->prefix = prefix;
 
     return true;
 }
@@ -1412,11 +1436,11 @@ void Go_Indexer::list_fields_and_methods(Goresult *type_res, Goresult *resolved_
     switch (resolved_type->type) {
     case GOTYPE_POINTER:
         list_fields_and_methods(
+            type_res,
             make_goresult(resolved_type->pointer_base, resolved_type_res->ctx),
-            resolved_type_res,
             ret
         );
-        return;
+        break;
 
     case GOTYPE_STRUCT:
     case GOTYPE_INTERFACE:
@@ -2393,6 +2417,10 @@ Goresult *Go_Indexer::infer_type(Ast_Node *expr, Go_Ctx *ctx) {
             return make_goresult(node_to_gotype(type_node), ctx);
         }
 
+    // Although its name is TS_PACKAGE_IDENTIFIER, that just means it is part
+    // of a selector expression. It may well be just a normal identifier that
+    // refers to an object.
+    case TS_PACKAGE_IDENTIFIER:
     case TS_IDENTIFIER:
         {
             auto res = find_decl_of_id(expr->string(), expr->start, ctx);

@@ -90,7 +90,6 @@ struct Editor {
     struct {
         Autocomplete ac;
         List<int>* filtered_results;
-        char prefix[256];
         u32 selection;
         u32 view;
     } autocomplete;

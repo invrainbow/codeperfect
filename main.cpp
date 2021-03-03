@@ -1369,7 +1369,7 @@ int main() {
                                 auto idx = ac.filtered_results->at(ac.selection); auto& result = ac.ac.results->at(idx);
 
                                 auto ac_start = editor->cur;
-                                ac_start.x -= strlen(ac.prefix);
+                                ac_start.x -= strlen(ac.ac.prefix);
                                 buf.remove(ac_start, editor->cur);
                                 // TODO: call editor->start_change() and editor->end_change()
 
