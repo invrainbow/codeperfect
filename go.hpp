@@ -714,6 +714,11 @@ struct Goresult {
 
 enum Chan_Direction { CHAN_RECV, CHAN_SEND, CHAN_BI };
 
+enum Range_Type {
+    RANGE_LIST,
+    RANGE_MAP,
+};
+
 enum Gotype_Type {
     GOTYPE_ID,
     GOTYPE_SEL,
@@ -727,6 +732,8 @@ enum Gotype_Type {
     GOTYPE_CHAN,
     GOTYPE_MULTI,
     GOTYPE_VARIADIC,
+    GOTYPE_ASSERTION,
+    GOTYPE_RANGE,
 };
 
 struct Gotype {
@@ -767,6 +774,14 @@ struct Gotype {
 
         List<Gotype*> *multi_types;
         Gotype *variadic_base;
+        Gotype *assertion_base;
+
+        struct {
+            // This is the type of the thing in range, not the type of the returned item.
+            // So if x is an []int and we have range x, range_base is []int, not int.
+            Gotype *range_base;
+            Range_Type range_type;
+        };
     };
 
     Gotype *copy();
@@ -889,6 +904,8 @@ struct Jump_To_Definition_Result {
 
 typedef fn<Godecl*(Godecl_Type type, cur2 spec_start, ccstr name)> Node_To_Decls_Callback;
 
+typedef fn<Goresult*()> New_Goresult_Func;
+
 struct Go_Indexer {
     Pool mem;        // mem that exists for lifetime of Go_Indexer
     Pool final_mem;  // memory that holds the final value of this->index`
@@ -963,6 +980,7 @@ struct Go_Indexer {
     void import_spec_to_decl(Ast_Node *spec_node, Godecl *decl);
     void find_nodes_containing_pos(Ast_Node *root, cur2 pos, fn<Walk_Action(Ast_Node *it)> callback);
     List<Goresult> *get_possible_dot_completions(Ast_Node *operand_node, bool *was_package, Go_Ctx *ctx);
+    bool assignment_to_decls(List<Ast_Node*> *lhs, List<Ast_Node*> *rhs, New_Goresult_Func new_goresult, Go_Ctx *ctx);
 };
 
 #define FOR_NODE_CHILDREN(node) for (auto it = (node)->child(); !it->null; it = it->next())

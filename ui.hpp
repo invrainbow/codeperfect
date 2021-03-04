@@ -108,7 +108,7 @@ struct UI {
     void draw_quad(boxf b, boxf uv, vec4f color, bool solid);
     void draw_rect(boxf b, vec4f color);
     void draw_rounded_rect(boxf b, vec4f color, float radius, int round_flags);
-    void draw_bordered_rect_outer(boxf b, vec4f color, vec4f border_color, int border_width);
+    void draw_bordered_rect_outer(boxf b, vec4f color, vec4f border_color, int border_width, float radius = 0);
     void draw_char(vec2f* pos, char ch, vec4f color);
     vec2f draw_string(vec2f pos, ccstr s, vec4f color);
     float get_text_width(ccstr s);

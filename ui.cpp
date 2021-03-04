@@ -291,15 +291,20 @@ void UI::draw_rounded_rect(boxf b, vec4f color, float radius, int round_flags) {
     draw_corner(round_flags & ROUND_BR, {b.x + b.w - radius, b.y + b.h - radius}, M_PI * 3/2, M_PI * 2);
 }
 
-void UI::draw_bordered_rect_outer(boxf b, vec4f color, vec4f border_color, int border_width) {
+void UI::draw_bordered_rect_outer(boxf b, vec4f color, vec4f border_color, int border_width, float radius) {
     auto b2 = b;
     b2.x -= border_width;
     b2.y -= border_width;
     b2.h += border_width * 2;
     b2.w += border_width * 2;
 
-    draw_rect(b2, border_color);
-    draw_rect(b, color);
+    if (radius == 0) {
+        draw_rect(b2, border_color);
+        draw_rect(b, color);
+    } else {
+        draw_rounded_rect(b2, border_color, radius, ROUND_ALL);
+        draw_rounded_rect(b, color, radius, ROUND_ALL);
+    }
 }
 
 // advances pos forward
@@ -810,15 +815,19 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                     }
 
                     if (num_items > 0) {
+                        const float MENU_PADDING = 4;
+                        const float ITEM_PADDING_X = 4;
+                        const float ITEM_PADDING_Y = 2;
+
                         boxf menu;
-                        menu.w = font->width * max_len;
-                        menu.h = font->height * num_items;
+                        menu.w = (font->width * max_len) + (ITEM_PADDING_X * 2) + (MENU_PADDING * 2);
+                        menu.h = (font->height * num_items) + (ITEM_PADDING_Y * 2 * num_items) + (MENU_PADDING * 2);
                         menu.x = min(actual_cursor_position.x - strlen(ac.ac.prefix) * font->width, world.window_size.x - menu.w);
                         menu.y = min(actual_cursor_position.y - font->offset_y + font->height, world.window_size.y - menu.h);
 
-                        draw_bordered_rect_outer(menu, rgba(COLOR_BLACK), rgba(COLOR_LIGHT_GREY), 1);
+                        draw_bordered_rect_outer(menu, rgba(COLOR_BLACK), rgba(COLOR_LIGHT_GREY), 1, 4);
 
-                        auto menu_pos = menu.pos;
+                        auto menu_pos = menu.pos + new_vec2f(MENU_PADDING, MENU_PADDING);
 
                         for (int i = ac.view; i < ac.view + num_items; i++) {
                             auto idx = ac.filtered_results->at(i);
@@ -828,19 +837,21 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                             if (i == ac.selection) {
                                 boxf b;
                                 b.pos = menu_pos;
-                                b.h = font->height;
-                                b.w = menu.w;
-                                draw_rect(b, rgba(COLOR_WHITE));
-                                color = new_vec3f(0.0, 0.0, 0.0);
+                                b.h = font->height + (ITEM_PADDING_Y * 2);
+                                b.w = menu.w - (MENU_PADDING * 2);
+                                draw_rounded_rect(b, rgba(COLOR_DARK_GREY), 4, ROUND_ALL);
+                                // color = new_vec3f(0.0, 0.0, 0.0);
                             }
 
                             {
                                 SCOPED_FRAME();
                                 auto str = format_name(i, ac.ac.results->at(idx).name);
-                                draw_string(menu_pos, str, rgba(color));
+
+                                auto pos = menu_pos + new_vec2f(ITEM_PADDING_X, ITEM_PADDING_Y);
+                                draw_string(pos, str, rgba(color));
                             }
 
-                            menu_pos.y += font->height;
+                            menu_pos.y += font->height + ITEM_PADDING_Y * 2;
                         }
                     }
                 } while (0);

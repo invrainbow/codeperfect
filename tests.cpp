@@ -7,6 +7,13 @@ bool run_tests() {
     world.init();
     compiler_dont_optimize_me_away();
 
+    use_pool_for_tree_sitter = true;
+
+    Go_Indexer indexer;
+    indexer.init();
+    indexer.crawl_index();
+
+    /*
     Index_Stream s;
     s.open("db", FILE_MODE_READ, FILE_OPEN_EXISTING);
     defer { s.cleanup(); };
@@ -18,6 +25,7 @@ bool run_tests() {
         auto index = read_object<Go_Index>(&s);
         print("done reading");
     }
+    */
 
     system("pause");
     return true;

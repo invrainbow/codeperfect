@@ -1234,6 +1234,9 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
         case TS_IDENTIFIER:
             expr_to_analyze = node;
             situation = FOUND_LONE_IDENTIFIER;
+            keyword_start = node->start;
+            prefix = our_strcpy(node->string());
+            ((cstr)prefix)[pos.x - node->start.x] = '\0';
             return WALK_ABORT;
 
         case TS_ANON_DOT:
@@ -1821,7 +1824,6 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node) {
 
     Gotype *ret = NULL;
 
-
     switch (node->type) {
     // case TS_SIMPLE_TYPE:
 
@@ -2011,6 +2013,119 @@ void Go_Indexer::import_spec_to_decl(Ast_Node *spec_node, Godecl *decl) {
         decl->import_path = path_node->string();
 }
 
+bool Go_Indexer::assignment_to_decls(List<Ast_Node*> *lhs, List<Ast_Node*> *rhs, New_Goresult_Func new_goresult, Go_Ctx *ctx) {
+    if (lhs->len == 0 || rhs->len == 0) return false; // what the fuck?
+
+    auto add_new_result = [&](Ast_Node *name_node, Gotype *gotype, Go_Ctx *ctx) {
+        if (name_node->type != TS_IDENTIFIER) return;
+
+        auto name = name_node->string();
+        if (streq(name, "_")) return;
+
+        auto goresult = new_goresult();
+        goresult->ctx = ctx;
+        goresult->decl->name = name;
+        goresult->decl->name_start = name_node->start;
+        goresult->decl->gotype = gotype;
+    };
+
+    auto new_primitive_type = [&](ccstr name) -> Gotype * {
+        auto ret = new_gotype(GOTYPE_ID);
+        ret->id_name = name;
+        return ret;
+    };
+
+    // scenarios:
+    // left = 1, right = 1
+    // left = multi, right = multi
+    // left = multi, right = 1
+
+    if (lhs->len > 1 && rhs->len == 1) {
+        auto res = infer_type(rhs->at(0), ctx);
+        if (res == NULL) return false;
+
+        auto gotype = res->gotype;
+        auto ln = lhs->len;
+
+        switch (gotype->type) {
+        case GOTYPE_MULTI:
+            if (ln != gotype->multi_types->len) return false;
+            for (int i = 0; i < ln; i++)
+                add_new_result(lhs->at(i), gotype->multi_types->at(i), res->ctx);
+            break;
+        case GOTYPE_ASSERTION:
+            if (ln != 1 && ln != 2) return false;
+            add_new_result(lhs->at(0), gotype->assertion_base, res->ctx);
+            if (ln == 2)
+                add_new_result(lhs->at(1), new_primitive_type("bool"), res->ctx);
+            break;
+        case GOTYPE_RANGE:
+            switch (gotype->range_base->type) {
+            case GOTYPE_MAP:
+                if (ln != 1 && ln != 2) return false;
+                add_new_result(lhs->at(0), gotype->range_base->map_key, res->ctx);
+                if (ln == 2)
+                    add_new_result(lhs->at(0), gotype->range_base->map_value, res->ctx);
+                break;
+            case GOTYPE_ARRAY:
+            case GOTYPE_SLICE:
+                if (ln != 2) return false;
+                add_new_result(lhs->at(0), new_primitive_type("int"), res->ctx);
+                add_new_result(
+                    lhs->at(1),
+                    gotype->type == GOTYPE_ARRAY ? gotype->array_base : gotype->slice_base,
+                    res->ctx
+                );
+                break;
+            case GOTYPE_ID:
+                if (!streq(gotype->id_name, "string") || ln != 2) return false;
+                add_new_result(lhs->at(0), new_primitive_type("int"), res->ctx);
+                add_new_result(lhs->at(1), new_primitive_type("rune"), res->ctx);
+                break;
+            default:
+                return false;
+            }
+            break;
+        default:
+            return false;
+        }
+
+        return true;
+    }
+
+    if (lhs->len == rhs->len) {
+        // individual parts of rhs can't  be a multi
+        // otherwise, direct assignment
+
+        for (u32 i = 0; i < lhs->len; i++) {
+            auto name_node = lhs->at(i);
+            if (name_node->type != TS_IDENTIFIER) continue;
+
+            auto value_node = rhs->at(i);
+            auto res = infer_type(value_node, ctx);
+            if (res == NULL) continue;
+
+            auto gotype = res->gotype;
+            if (gotype->type == GOTYPE_MULTI || gotype->type == GOTYPE_RANGE) continue;
+
+            if (gotype->type == GOTYPE_ASSERTION)
+                gotype = gotype->assertion_base;
+
+            auto goresult = new_goresult();
+            goresult->ctx = res->ctx;
+
+            auto decl = goresult->decl;
+            decl->name = name_node->string();
+            decl->name_start = name_node->start;
+            decl->gotype = res->gotype;
+        }
+
+        return true;
+    }
+
+    return false;
+}
+
 void Go_Indexer::node_to_decls(Ast_Node *node, List<Goresult> *results, Go_Ctx *ctx) {
     auto new_result = [&]() -> Goresult * {
         auto res = results->append();
@@ -2081,12 +2196,6 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Goresult> *results, Go_Ctx *
 
             if (type_node->null && value_node->null) continue;
 
-            Ast_Node *curr_value = NULL;
-            if (!value_node->null) {
-                our_assert(value_node->type == TS_EXPRESSION_LIST, "rhs must be a TS_EXPRESSION_LIST");
-                curr_value = value_node->child();
-            }
-
             Gotype *type_node_gotype = NULL;
             if (!type_node->null) {
                 type_node_gotype = node_to_gotype(type_node);
@@ -2097,35 +2206,57 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Goresult> *results, Go_Ctx *
                     t->variadic_base = type_node_gotype;
                     type_node_gotype = t;
                 }
-            }
 
-            FOR_NODE_CHILDREN(spec) {
-                if (it->eq(type_node) || it->eq(value_node)) break;
-                auto name_node = it;
+                FOR_NODE_CHILDREN (spec) {
+                    if (it->eq(type_node) || it->eq(value_node)) break;
 
-                auto make_res = [&]() {
+                    auto decl = new_result()->decl;
+
+                    switch (node->type) {
+                    case TS_PARAMETER_LIST: decl->type = GODECL_FIELD; break;
+                    case TS_CONST_DECLARATION: decl->type = GODECL_CONST; break;
+                    case TS_VAR_DECLARATION: decl->type = GODECL_VAR; break;
+                    }
+
+                    decl->spec_start = spec->start;
+                    decl->name = it->string();
+                    decl->name_start = it->start;
+                    decl->gotype = type_node_gotype;
+                }
+            } else {
+                our_assert(value_node->type == TS_EXPRESSION_LIST, "rhs must be a TS_EXPRESSION_LIST");
+
+                u32 lhs_count = 0;
+                FOR_NODE_CHILDREN (spec) {
+                    if (it->eq(type_node) || it->eq(value_node)) break;
+                    lhs_count++;
+                }
+
+                auto lhs = alloc_list<Ast_Node*>(lhs_count);
+                auto rhs = alloc_list<Ast_Node*>(value_node->child_count);
+
+                FOR_NODE_CHILDREN (spec) {
+                    if (it->eq(type_node) || it->eq(value_node)) break;
+                    lhs->append(it);
+                }
+
+                FOR_NODE_CHILDREN (value_node) rhs->append(it);
+
+                auto new_goresult = [&]() -> Goresult * {
                     auto res = new_result();
                     auto decl = res->decl;
-                    decl->type = node->type == TS_CONST_DECLARATION ? GODECL_CONST : GODECL_VAR;
                     decl->spec_start = spec->start;
-                    decl->name = name_node->string();
-                    decl->name_start = name_node->start;
+
+                    switch (node->type) {
+                    case TS_PARAMETER_LIST: decl->type = GODECL_FIELD; break;
+                    case TS_CONST_DECLARATION: decl->type = GODECL_CONST; break;
+                    case TS_VAR_DECLARATION: decl->type = GODECL_VAR; break;
+                    }
+
                     return res;
                 };
 
-                if (!type_node->null) {
-                    auto res = make_res();
-                    res->decl->gotype = type_node_gotype;
-                } else {
-                    if (curr_value->null) break;
-                    auto res2 = infer_type(curr_value, ctx);
-                    curr_value = curr_value->next();
-                    if (res2 == NULL) continue;
-
-                    auto res = make_res();
-                    res->ctx = res2->ctx;
-                    res->decl->gotype = res2->gotype;
-                }
+                assignment_to_decls(lhs, rhs, new_goresult, ctx);
             }
         }
         break;
@@ -2138,78 +2269,22 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Goresult> *results, Go_Ctx *
             if (left->type != TS_EXPRESSION_LIST) break;
             if (right->type != TS_EXPRESSION_LIST) break;
 
-            /*
-             * scenarios:
-             * left = 1, right = 1
-             * left = multi, right = multi
-             * left = multi, right = 1
-             */
+            auto lhs = alloc_list<Ast_Node*>(left->child_count);
+            auto rhs = alloc_list<Ast_Node*>(right->child_count);
 
-            if (left->child_count == 1) {
-                if (right->child_count != 1) break;
+            FOR_NODE_CHILDREN (left) lhs->append(it); 
+            FOR_NODE_CHILDREN (right) rhs->append(it); 
 
-                auto res = infer_type(right->child(), ctx);
-                if (res == NULL) break;
-
-                auto name_node = left->child();
-                if (name_node->type != TS_IDENTIFIER) break;
-
-                auto decl = new_result()->decl;
-                decl->type = GODECL_SHORTVAR;
+            auto new_goresult = [&]() -> Goresult * {
+                auto res = new_result();
+                auto decl = res->decl;
                 decl->spec_start = node->start;
-                decl->name = name_node->string();
-                decl->name_start = name_node->start;
-                decl->gotype = res->gotype;
-                break;
-            }
+                decl->type = GODECL_SHORTVAR;
+                return res;
+            };
 
-            if (right->child_count == 1) {
-                auto res = infer_type(right->child(), ctx);
-                if (res == NULL) break;
-                auto gotype = res->gotype;
-                if (gotype->type != GOTYPE_MULTI) break;
-                if (left->child_count != gotype->multi_types->len) break;
+            assignment_to_decls(lhs, rhs, new_goresult, ctx);
 
-                u32 i = 0;
-                FOR_NODE_CHILDREN (left) {
-                    auto name_node = it;
-                    if (it->type != TS_IDENTIFIER) continue;
-
-                    auto single_gotype = gotype->multi_types->at(i++);
-                    if (single_gotype == NULL) continue;
-
-                    auto decl = new_result()->decl;
-                    decl->type = GODECL_SHORTVAR;
-                    decl->spec_start = node->start;
-                    decl->name = name_node->string();
-                    decl->name_start = name_node->start;
-                    decl->gotype = single_gotype;
-                }
-
-                break;
-            }
-
-            if (left->child_count != right->child_count) break;
-
-            Ast_Node *lchild = left->child(), *rchild = right->child();
-            while (!lchild->null) {
-                do {
-                    if (lchild->type != TS_IDENTIFIER) break;
-
-                    auto res = infer_type(rchild, ctx);
-                    if (res == NULL) break;
-
-                    auto decl = new_result()->decl;
-                    decl->type = GODECL_SHORTVAR;
-                    decl->spec_start = node->start;
-                    decl->name = lchild->string();
-                    decl->name_start = lchild->start;
-                    decl->gotype = res->gotype;
-                } while (0);
-
-                lchild = lchild->next();
-                rchild = rchild->next();
-            }
         }
         break;
     }
@@ -2342,7 +2417,6 @@ Goresult *Go_Indexer::infer_type(Ast_Node *expr, Go_Ctx *ctx) {
 
             switch (operand_type->type) {
             case GOTYPE_ARRAY: return make_goresult(operand_type->array_base, res->ctx);
-            case GOTYPE_MAP: return make_goresult(operand_type->map_value, res->ctx);
             case GOTYPE_SLICE: return make_goresult(operand_type->slice_base, res->ctx);
             case GOTYPE_ID:
                 if (streq(operand_type->id_name, "string")) {
@@ -2351,6 +2425,12 @@ Goresult *Go_Indexer::infer_type(Ast_Node *expr, Go_Ctx *ctx) {
                     return make_goresult(ret, NULL);
                 }
                 break;
+            case GOTYPE_MAP:
+                {
+                    auto ret = new_gotype(GOTYPE_ASSERTION);
+                    ret->assertion_base = operand_type->map_value;
+                    return make_goresult(ret, res->ctx);
+                }
             }
         }
         break;
@@ -2408,13 +2488,22 @@ Goresult *Go_Indexer::infer_type(Ast_Node *expr, Go_Ctx *ctx) {
     case TS_SLICE_EXPRESSION:
         return infer_type(expr->field(TSF_OPERAND), ctx);
 
-    case TS_TYPE_ASSERTION_EXPRESSION:
     case TS_TYPE_CONVERSION_EXPRESSION:
     case TS_COMPOSITE_LITERAL:
         {
             auto type_node = expr->field(TSF_TYPE);
             if (type_node->null) return NULL;
             return make_goresult(node_to_gotype(type_node), ctx);
+        }
+
+    case TS_TYPE_ASSERTION_EXPRESSION:
+        {
+            auto type_node = expr->field(TSF_TYPE);
+            if (type_node->null) return NULL;
+
+            auto ret = new_gotype(GOTYPE_ASSERTION);
+            ret->assertion_base = node_to_gotype(type_node);
+            return make_goresult(ret, ctx);
         }
 
     // Although its name is TS_PACKAGE_IDENTIFIER, that just means it is part
@@ -3209,6 +3298,15 @@ Gotype *Gotype::copy() {
             ret->multi_types = copy_list<Gotype*>(multi_types, copy_func);
         }
         break;
+    case GOTYPE_VARIADIC:
+        ret->variadic_base = copy_object(variadic_base);
+        break;
+    case GOTYPE_ASSERTION:
+        ret->assertion_base = copy_object(assertion_base);
+        break;
+    case GOTYPE_RANGE:
+        ret->range_base = copy_object(range_base);
+        break;
     }
     return ret;
 }
@@ -3357,6 +3455,7 @@ void Gotype::read(Index_Stream *s) {
         break;
     case GOTYPE_CHAN:
         READ_OBJ(chan_base);
+        chan_direction = (Chan_Direction)s->read1();
         break;
     case GOTYPE_MULTI:
         {
@@ -3369,6 +3468,16 @@ void Gotype::read(Index_Stream *s) {
                 multi_types->append(gotype);
             }
         }
+        break;
+    case GOTYPE_VARIADIC:
+        READ_OBJ(variadic_base);
+        break;
+    case GOTYPE_ASSERTION:
+        READ_OBJ(assertion_base);
+        break;
+    case GOTYPE_RANGE:
+        READ_OBJ(range_base);
+        range_type = (Range_Type)s->read1();
         break;
     }
 }
@@ -3487,10 +3596,21 @@ void Gotype::write(Index_Stream *s) {
         break;
     case GOTYPE_CHAN:
         WRITE_OBJ(chan_base);
+        s->write1(chan_direction);
         break;
     case GOTYPE_MULTI:
         s->write4(multi_types->len);
         For (*multi_types) write_object<Gotype>(it, s);
+        break;
+    case GOTYPE_VARIADIC:
+        WRITE_OBJ(variadic_base);
+        break;
+    case GOTYPE_ASSERTION:
+        WRITE_OBJ(assertion_base);
+        break;
+    case GOTYPE_RANGE:
+        WRITE_OBJ(range_base);
+        s->write1(range_type);
         break;
     }
 }
