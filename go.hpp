@@ -978,7 +978,7 @@ struct Go_Indexer {
     void walk_ast_node(Ast_Node *node, bool abstract_only, Walk_TS_Callback cb);
     Go_Package *find_package(ccstr import_path, ccstr resolved_path);
     void import_spec_to_decl(Ast_Node *spec_node, Godecl *decl);
-    void find_nodes_containing_pos(Ast_Node *root, cur2 pos, fn<Walk_Action(Ast_Node *it)> callback);
+    void find_nodes_containing_pos(Ast_Node *root, cur2 pos, bool abstract_only, fn<Walk_Action(Ast_Node *it)> callback);
     List<Goresult> *get_possible_dot_completions(Ast_Node *operand_node, bool *was_package, Go_Ctx *ctx);
     bool assignment_to_decls(List<Ast_Node*> *lhs, List<Ast_Node*> *rhs, New_Goresult_Func new_goresult, Go_Ctx *ctx);
 };

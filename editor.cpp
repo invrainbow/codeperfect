@@ -581,7 +581,7 @@ void Editor::update_parameter_hint() {
         auto root = world.indexer.new_ast_node(ts_tree_root_node(tree));
 
         bool ret = false;
-        world.indexer.find_nodes_containing_pos(root, hint.start, [&](Ast_Node *it) -> Walk_Action {
+        world.indexer.find_nodes_containing_pos(root, hint.start, true, [&](Ast_Node *it) -> Walk_Action {
             if (it->start == hint.start)
                 if (it->type == TS_ARGUMENT_LIST)
                     if (cur >= it->end) {

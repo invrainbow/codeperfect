@@ -295,8 +295,8 @@ void Go_Indexer::walk_ast_node(Ast_Node *node, bool abstract_only, Walk_TS_Callb
     });
 }
 
-void Go_Indexer::find_nodes_containing_pos(Ast_Node *root, cur2 pos, fn<Walk_Action(Ast_Node *it)> callback) {
-    walk_ast_node(root, true, [&](Ast_Node *node, Ts_Field_Type, int) -> Walk_Action {
+void Go_Indexer::find_nodes_containing_pos(Ast_Node *root, cur2 pos, bool abstract_only, fn<Walk_Action(Ast_Node *it)> callback) {
+    walk_ast_node(root, abstract_only, [&](Ast_Node *node, Ts_Field_Type, int) -> Walk_Action {
         int res = cmp_pos_to_node(pos, node);
         if (res < 0) return WALK_ABORT;
         if (res > 0) return WALK_SKIP_CHILDREN;
@@ -609,7 +609,6 @@ void Go_Indexer::crawl_index() {
                         imp->package_name_type = GPN_EXPLICIT;
                         imp->package_name = name_node->string();
                     }
-
                 }
             }
         }
@@ -1061,7 +1060,7 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 p
 
     Jump_To_Definition_Result result = {0};
 
-    find_nodes_containing_pos(file, pos, [&](Ast_Node *node) -> Walk_Action {
+    find_nodes_containing_pos(file, pos, false, [&](Ast_Node *node) -> Walk_Action {
         auto contains_pos = [&](Ast_Node *node) -> bool {
             return cmp_pos_to_node(pos, node) == 0;
         };
@@ -1107,12 +1106,17 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 p
             }
             return WALK_ABORT;
 
+        case TS_PACKAGE_IDENTIFIER:
+        case TS_TYPE_IDENTIFIER:
         case TS_IDENTIFIER:
             {
                 auto res = find_decl_of_id(node->string(), node->start, &ctx);
                 if (res != NULL) {
                     result.file = get_filepath_from_ctx(res->ctx);
-                    result.pos = res->decl->name_start;
+                    if (res->decl->name != NULL)
+                        result.pos = res->decl->name_start;
+                    else
+                        result.pos = res->decl->spec_start;
                 }
             }
             return WALK_ABORT;
@@ -1185,7 +1189,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
     // 2) ill-formed ts_selector_expression in the making; we have a ts_anon_dot
     // 3) we have nothing, just do a keyword autocomplete
 
-    find_nodes_containing_pos(pf->root, go_back_until_non_space(), [&](Ast_Node *node) -> Walk_Action {
+    find_nodes_containing_pos(pf->root, go_back_until_non_space(), false, [&](Ast_Node *node) -> Walk_Action {
         switch (node->type) {
         case TS_QUALIFIED_TYPE:
         case TS_SELECTOR_EXPRESSION:
@@ -1371,7 +1375,7 @@ Parameter_Hint *Go_Indexer::parameter_hint(ccstr filepath, cur2 pos, bool trigge
     Ast_Node *func_expr = NULL;
     cur2 call_args_start;
 
-    find_nodes_containing_pos(pf->root, go_back_until_non_space(), [&](Ast_Node *node) -> Walk_Action {
+    find_nodes_containing_pos(pf->root, go_back_until_non_space(), false, [&](Ast_Node *node) -> Walk_Action {
         switch (node->type) {
         case TS_CALL_EXPRESSION:
             {
@@ -2435,32 +2439,38 @@ Goresult *Go_Indexer::infer_type(Ast_Node *expr, Go_Ctx *ctx) {
         }
         break;
 
+    case TS_QUALIFIED_TYPE:
     case TS_SELECTOR_EXPRESSION:
         {
-            auto operand_node = expr->field(TSF_OPERAND);
-            auto field_node = expr->field(TSF_FIELD);
+            auto operand_node = expr->field(expr->type == TS_QUALIFIED_TYPE ? TSF_PACKAGE : TSF_OPERAND);
+            auto field_node = expr->field(expr->type == TS_QUALIFIED_TYPE ? TSF_NAME : TSF_FIELD);
             auto field_name = field_node->string();
 
             Goresult *res = NULL;
 
-            if (operand_node->type == TS_IDENTIFIER) {
-                Go_Single_Import *si = NULL;
-                auto decl_res = find_decl_of_id(operand_node->string(), operand_node->start, ctx, &si);
-                if (decl_res != NULL) {
-                    if (si != NULL) {
-                        auto res = find_decl_in_package(field_name, si->import_path, si->resolved_path);
-                        if (res != NULL) {
-                            auto ext_decl = res->decl;
-                            switch (ext_decl->type) {
-                            case GODECL_VAR:
-                            case GODECL_CONST:
-                            case GODECL_FUNC:
-                                return make_goresult(ext_decl->gotype, res->ctx);
+            switch (operand_node->type) {
+            case TS_IDENTIFIER:
+            case TS_PACKAGE_IDENTIFIER:
+            case TS_TYPE_IDENTIFIER:
+                {
+                    Go_Single_Import *si = NULL;
+                    auto decl_res = find_decl_of_id(operand_node->string(), operand_node->start, ctx, &si);
+                    if (decl_res != NULL) {
+                        if (si != NULL) {
+                            auto res = find_decl_in_package(field_name, si->import_path, si->resolved_path);
+                            if (res != NULL) {
+                                auto ext_decl = res->decl;
+                                switch (ext_decl->type) {
+                                case GODECL_VAR:
+                                case GODECL_CONST:
+                                case GODECL_FUNC:
+                                    return make_goresult(ext_decl->gotype, res->ctx);
+                                }
                             }
+                            return NULL;
+                        } else {
+                            res = make_goresult(decl_res->decl->gotype, decl_res->ctx);
                         }
-                        return NULL;
-                    } else {
-                        res = make_goresult(decl_res->decl->gotype, decl_res->ctx);
                     }
                 }
             }
@@ -2510,6 +2520,7 @@ Goresult *Go_Indexer::infer_type(Ast_Node *expr, Go_Ctx *ctx) {
     // of a selector expression. It may well be just a normal identifier that
     // refers to an object.
     case TS_PACKAGE_IDENTIFIER:
+    case TS_TYPE_IDENTIFIER:
     case TS_IDENTIFIER:
         {
             auto res = find_decl_of_id(expr->string(), expr->start, ctx);
