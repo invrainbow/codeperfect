@@ -1346,19 +1346,6 @@ int main() {
                     auto &buf = editor->buf;
                     auto cur = editor->cur;
 
-                    /*
-                    Here we send the key to nvim. We need to handle the response when:
-                    we need to do something that relies on the *effect* of the key being completed.
-                    For example, when the user types a '.', we need the period to be in the buffer
-                    before calling trigger_autocomplete, since it passes the buffer through a Go parser
-                    and expects to find an (incomplete) AST_SELECTOR_EXPR.
-
-                    So, the only keys we need to track are:
-                     - backspace (for autocomplete, the character needs to be erased first)
-                     - typed characters in insert mode
-                         - this includes '.' (autocomplete) and '(' (parameter hints)
-                    */
-
                     switch (key) {
                     case GLFW_KEY_BACKSPACE: handle_backspace("<Backspace>"); break;
                     case GLFW_KEY_TAB:
@@ -1366,21 +1353,38 @@ int main() {
                         {
                             auto& ac = editor->autocomplete;
                             if (ac.ac.results != NULL && ac.filtered_results->len > 0) {
-                                auto idx = ac.filtered_results->at(ac.selection); auto& result = ac.ac.results->at(idx);
+                                auto idx = ac.filtered_results->at(ac.selection);
+                                auto& result = ac.ac.results->at(idx);
 
-                                auto ac_start = editor->cur;
-                                ac_start.x -= strlen(ac.ac.prefix);
-                                buf.remove(ac_start, editor->cur);
-                                // TODO: call editor->start_change() and editor->end_change()
-
+                                // grab len & save name
                                 auto len = strlen(result.name);
                                 auto name = alloc_array(uchar, len);
                                 for (u32 i = 0; i < len; i++)
                                     name[i] = (uchar)result.name[i];
+
+                                // figure out where insertion starts and ends
+                                auto ac_start = editor->cur;
+                                ac_start.x -= strlen(ac.ac.prefix);
+                                auto ac_end = ac_start;
+                                ac_end.x += len;
+
+                                // perform the edit
+                                buf.remove(ac_start, editor->cur);
                                 buf.insert(ac_start, name, len);
 
+                                // tell tree-sitter about the edit
+                                TSInputEdit tsedit = {0};
+                                tsedit.start_byte = editor->cur_to_offset(ac_start);
+                                tsedit.start_point = cur_to_tspoint(ac_start);
+                                tsedit.old_end_byte = editor->cur_to_offset(editor->cur);
+                                tsedit.old_end_point = cur_to_tspoint(editor->cur);
+                                tsedit.new_end_byte = editor->cur_to_offset(ac_end);
+                                tsedit.new_end_point = cur_to_tspoint(ac_end);
+                                ts_tree_edit(editor->tree, &tsedit);
+                                editor->update_tree();
+
+                                // clear autocomplete
                                 ac.ac.results = NULL;
-                                ac_start.x += len;
 
                                 // update buffer
                                 {
@@ -1388,11 +1392,11 @@ int main() {
                                     auto msgid = nv.start_request_message("nvim_buf_set_lines", 5);
                                     {
                                         auto req = nv.save_request(NVIM_REQ_AUTOCOMPLETE_SETBUF, msgid, editor->id);
-                                        req->autocomplete_setbuf.target_cursor = ac_start;
+                                        req->autocomplete_setbuf.target_cursor = ac_end;
                                     }
                                     nv.writer.write_int(editor->nvim_data.buf_id); // buffer
-                                    nv.writer.write_int(ac_start.y); // start
-                                    nv.writer.write_int(ac_start.y + 1); // end
+                                    nv.writer.write_int(ac_end.y); // start
+                                    nv.writer.write_int(ac_end.y + 1); // end
                                     nv.writer.write_bool(false); // strict_indexing
                                     {
                                         nv.writer.write_array(1); // replacement

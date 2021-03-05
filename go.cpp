@@ -1018,19 +1018,23 @@ ccstr Go_Indexer::get_filepath_from_ctx(Go_Ctx *ctx) {
 }
 
 List<Goresult> *Go_Indexer::get_possible_dot_completions(Ast_Node *operand_node, bool *was_package, Go_Ctx *ctx) {
-    if (operand_node->type == TS_IDENTIFIER || operand_node->type == TS_PACKAGE_IDENTIFIER) {
+    switch (operand_node->type) {
+    case TS_IDENTIFIER:
+    case TS_PACKAGE_IDENTIFIER:
+    case TS_TYPE_IDENTIFIER:
         do {
             ccstr resolved_path = NULL;
             auto import_path = find_import_path_referred_to_by_id(operand_node->string(), ctx, &resolved_path);
             if (import_path == NULL) break;
             if (resolved_path == NULL) break;
 
-            auto ret = get_package_decls(import_path, resolved_path);
+            auto ret = get_package_decls(import_path, resolved_path, true);
             if (ret != NULL)  {
                 *was_package = true;
                 return ret;
             }
         } while (0);
+        break;
     }
 
     auto res = infer_type(operand_node, ctx);
@@ -1150,16 +1154,62 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 p
     return ret;
 }
 
+bool isident(int c) {
+    return isalnum(c) || c == '_';
+}
+
+bool is_expression_node(Ast_Node *node) {
+    switch (node->type) {
+    case TS_PARENTHESIZED_EXPRESSION:
+    case TS_CALL_EXPRESSION:
+    case TS_SELECTOR_EXPRESSION:
+    case TS_INDEX_EXPRESSION:
+    case TS_SLICE_EXPRESSION:
+    case TS_TYPE_ASSERTION_EXPRESSION:
+    case TS_TYPE_CONVERSION_EXPRESSION:
+    case TS_UNARY_EXPRESSION:
+    case TS_BINARY_EXPRESSION:
+    case TS_RAW_STRING_LITERAL:
+    case TS_INT_LITERAL:
+    case TS_FLOAT_LITERAL:
+    case TS_IMAGINARY_LITERAL:
+    case TS_RUNE_LITERAL:
+    case TS_COMPOSITE_LITERAL:
+    case TS_FUNC_LITERAL:
+    case TS_INTERPRETED_STRING_LITERAL:
+    case TS_IDENTIFIER:
+    // others that show up in the context of what we consider an expression
+    case TS_QUALIFIED_TYPE:
+    case TS_TYPE_IDENTIFIER:
+    case TS_PACKAGE_IDENTIFIER:
+        return true;
+    }
+    return false;
+}
+
 bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period, Autocomplete *out) {
     auto pf = parse_file(filepath);
     if (pf == NULL) return false;
     defer { free_parsed_file(pf); };
 
-    auto go_back_until_non_space = [&]() -> cur2 {
+    auto intelligently_move_cursor_backwards = [&]() -> cur2 {
         auto it = alloc_object(Parser_It);
         memcpy(it, pf->it, sizeof(Parser_It));
         it->set_pos(pos);
-        while (!it->bof() && isspace(it->peek())) it->prev();
+
+        // if we're on a space, go back until we hit a nonspace.
+        //
+        // otherwise, check for the following scenario: we're on a non-ident,
+        // and previous char is ident. in that case, go back to previous char.
+
+        if (isspace(it->peek())) {
+            while (!it->bof() && isspace(it->peek())) it->prev();
+        } else if (!isident(it->peek())) {
+            it->prev();
+            if (!isident(it->peek()) && it->peek() != '.')
+                it->next();
+        }
+
         return it->get_pos();
     };
 
@@ -1176,6 +1226,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
         FOUND_JACK_SHIT,
         FOUND_DOT_COMPLETE,
         FOUND_LONE_IDENTIFIER,
+        FOUND_PROBLEM_NEED_TO_EXIT,
     };
 
     Current_Situation situation = FOUND_JACK_SHIT;
@@ -1189,7 +1240,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
     // 2) ill-formed ts_selector_expression in the making; we have a ts_anon_dot
     // 3) we have nothing, just do a keyword autocomplete
 
-    find_nodes_containing_pos(pf->root, go_back_until_non_space(), false, [&](Ast_Node *node) -> Walk_Action {
+    find_nodes_containing_pos(pf->root, intelligently_move_cursor_backwards(), false, [&](Ast_Node *node) -> Walk_Action {
         switch (node->type) {
         case TS_QUALIFIED_TYPE:
         case TS_SELECTOR_EXPRESSION:
@@ -1217,7 +1268,8 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                     break;
                 case 0: // pos is inside sel
                     keyword_start = sel_node->start;
-                    prefix = sel_node->string();
+                    prefix = our_strcpy(sel_node->string());
+                    ((cstr)prefix)[pos.x - sel_node->start.x] = '\0';
                     break;
                 case 1: // pos is after sel
                     // if it's directly to the right of sel, like foo.bar|,
@@ -1235,6 +1287,8 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
             }
             return WALK_ABORT;
 
+        case TS_PACKAGE_IDENTIFIER:
+        case TS_TYPE_IDENTIFIER:
         case TS_IDENTIFIER:
             expr_to_analyze = node;
             situation = FOUND_LONE_IDENTIFIER;
@@ -1254,9 +1308,20 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                 } else {
                     auto parent = node->parent();
                     if (!parent->null && parent->type == TS_ERROR) {
-                        auto parent_prev = parent->prev();
-                        if (!parent_prev->null) {
-                            expr_to_analyze = parent_prev;
+                        auto expr = parent->prev();
+                        if (!expr->null) {
+                            while (!is_expression_node(expr)) {
+                                expr = expr->child();
+                                if (expr->null) {
+                                    situation = FOUND_PROBLEM_NEED_TO_EXIT;
+                                    return WALK_ABORT;
+                                }
+
+                                Ast_Node *next = NULL;
+                                while (!(next = expr->next())->null) expr = next;
+                            }
+
+                            expr_to_analyze = expr;
                             situation = FOUND_DOT_COMPLETE;
                             keyword_start = pos;
                             prefix = "";
@@ -1272,11 +1337,13 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
     List<AC_Result> *ac_results = NULL;
 
     switch (situation) {
+    case FOUND_PROBLEM_NEED_TO_EXIT:
+        return false;
     case FOUND_DOT_COMPLETE:
         {
             bool was_package = false;
             auto results = get_possible_dot_completions(expr_to_analyze, &was_package, &ctx);
-            if (results == NULL) return false;
+            if (results == NULL || results->len == 0) return false;
 
             ac_results = alloc_list<AC_Result>(results->len);
             For (*results) ac_results->append()->name = it.decl->name;
@@ -1347,6 +1414,8 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                 }
             }
 
+            if (ac_results->len == 0) return false;
+
             out->type = AUTOCOMPLETE_IDENTIFIER;
         }
         break;
@@ -1394,13 +1463,13 @@ Parameter_Hint *Go_Indexer::parameter_hint(ccstr filepath, cur2 pos, bool trigge
             break;
         case TS_LPAREN:
             {
-                auto prev = node->prev();
+                auto prev = node->prev_all();
                 if (!prev->null)
                     func_expr = prev;
                 else {
                     auto parent = node->parent();
                     if (!parent->null && parent->type == TS_ERROR) {
-                        auto parent_prev = parent->prev();
+                        auto parent_prev = parent->prev_all();
                         if (!parent_prev->null) {
                             func_expr = parent_prev;
                             call_args_start = node->start;
@@ -1422,6 +1491,7 @@ Parameter_Hint *Go_Indexer::parameter_hint(ccstr filepath, cur2 pos, bool trigge
 
     auto res = infer_type(func_expr, &ctx);
     if (res == NULL) return NULL;
+    if (res->gotype->type != GOTYPE_FUNC) return NULL;
 
     // should we try to "normalize" the types in res?  like say we have
     // packages foo and bar bar calls a func foo.Func foo includes package blah
@@ -1442,12 +1512,11 @@ void Go_Indexer::list_fields_and_methods(Goresult *type_res, Goresult *resolved_
 
     switch (resolved_type->type) {
     case GOTYPE_POINTER:
-        list_fields_and_methods(
-            type_res,
-            make_goresult(resolved_type->pointer_base, resolved_type_res->ctx),
-            ret
-        );
-        break;
+        {
+            auto new_resolved_type_res = make_goresult(resolved_type->pointer_base, resolved_type_res->ctx);
+            list_fields_and_methods(type_res, new_resolved_type_res, ret);
+            return;
+        }
 
     case GOTYPE_STRUCT:
     case GOTYPE_INTERFACE:
@@ -2300,13 +2369,16 @@ Goresult *Go_Indexer::unpointer_type(Gotype *type, Go_Ctx *ctx) {
     return make_goresult(type, ctx);
 }
 
-List<Goresult> *Go_Indexer::get_package_decls(ccstr import_path, ccstr resolved_path) {
+List<Goresult> *Go_Indexer::get_package_decls(ccstr import_path, ccstr resolved_path, bool public_only) {
     For (*index.packages)
         if (it.status != GPS_OUTDATED)
             if (streq(it.import_path, import_path))
                 if (streq(it.resolved_path, resolved_path)) {
                     auto ret = alloc_list<Goresult>(it.decls->len);
                     For (*it.decls) {
+                        if (public_only && !(it.name != NULL && isupper(it.name[0])))
+                            continue;
+
                         auto ctx = alloc_object(Go_Ctx);
                         ctx->import_path = import_path;
                         ctx->resolved_path = resolved_path;

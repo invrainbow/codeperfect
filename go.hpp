@@ -967,7 +967,7 @@ struct Go_Indexer {
     void node_to_decls(Ast_Node *node, List<Goresult> *results, Go_Ctx *ctx);
     Gotype *new_gotype(Gotype_Type type);
     Goresult *find_decl_in_package(ccstr id, ccstr import_path, ccstr resolved_path);
-    List<Goresult> *get_package_decls(ccstr import_path, ccstr resolved_path);
+    List<Goresult> *get_package_decls(ccstr import_path, ccstr resolved_path, bool public_only = false);
     Resolved_Import *resolve_import_from_gomod(ccstr import_path, Gomod_Info *info, Go_Ctx *ctx);
     Resolved_Import *check_potential_resolved_import(ccstr filepath);
     Go_Package *find_package_in_index(ccstr import_path, ccstr resolved_path);

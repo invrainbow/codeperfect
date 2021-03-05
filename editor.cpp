@@ -389,40 +389,48 @@ void Editor::cleanup() {
     nvim_edit_lock.cleanup();
 }
 
+// basically the rule is, if autocomplete comes up empty ON FIRST OPEN, then keep it closed
+
 void Editor::trigger_autocomplete(bool triggered_by_dot) {
     ptr0(&autocomplete);
 
     SCOPED_MEM(&world.indexer.ui_mem);
     defer { world.indexer.ui_mem.reset(); };
 
+    bool was_already_open = (autocomplete.ac.results != NULL);
+
     Autocomplete ac = {0};
     if (!world.indexer.autocomplete(filepath, cur, triggered_by_dot, &ac)) return;
 
     {
-        // copy from &ac to &autocomplete.ac
-
+        // use autocomplete_mem
         world.autocomplete_mem.reset();
         SCOPED_MEM(&world.autocomplete_mem);
 
-        memcpy(&autocomplete.ac, &ac, sizeof(Autocomplete));
-
+        // copy results
         auto new_results = alloc_list<AC_Result>(ac.results->len);
-        For (*ac.results) {
-            auto result = new_results->append();
-            result->name = our_strcpy(it.name);
-        }
+        For (*ac.results) new_results->append()->name = our_strcpy(it.name);
 
-        autocomplete.ac.results = new_results;
+        // copy ac over to autocomplete.ac
+        memcpy(&autocomplete.ac, &ac, sizeof(Autocomplete));
         autocomplete.filtered_results = alloc_list<int>();
+        autocomplete.ac.prefix = our_strcpy(ac.prefix);
+        autocomplete.ac.results = new_results;
 
         auto prefix = autocomplete.ac.prefix;
+        auto results = autocomplete.ac.results;
 
         // OPTIMIZATION: if we added characters to prefix, then we only need to
         // search through the existing filtered results
-        auto results = autocomplete.ac.results;
+
         for (int i = 0; i < results->len; i++)
             if (fzy_has_match(prefix, results->at(i).name))
                 autocomplete.filtered_results->append(i);
+
+        if (!was_already_open && autocomplete.filtered_results->len == 0) {
+            autocomplete.ac.results = NULL;
+            return;
+        }
 
         autocomplete.filtered_results->sort([&](int *ia, int *ib) -> int {
             auto a = fzy_match(prefix, autocomplete.ac.results->at(*ia).name);
@@ -433,7 +441,7 @@ void Editor::trigger_autocomplete(bool triggered_by_dot) {
 }
 
 struct Type_Renderer : public Text_Renderer {
-    void write_type(Gotype *t) {
+    void write_type(Gotype *t, bool parameter_hint_root = false) {
         switch (t->type) {
         case GOTYPE_ID:
             write("%s", t->id_name);
@@ -459,7 +467,8 @@ struct Type_Renderer : public Text_Renderer {
             break;
         case GOTYPE_FUNC:
             {
-                write("func");
+                if (!parameter_hint_root)
+                    write("func");
 
                 auto write_params = [&](List<Godecl> *params) {
                     write("(");
@@ -531,7 +540,7 @@ void Editor::trigger_parameter_hint(bool triggered_by_paren) {
 
             Type_Renderer rend;
             rend.init();
-            rend.write_type(parameter_hint.gotype);
+            rend.write_type(parameter_hint.gotype, true);
             parameter_hint.help_text = rend.finish();
         }
     }
