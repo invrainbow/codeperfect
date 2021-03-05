@@ -50,8 +50,8 @@ const vec3f COLOR_THEME_3 = rgb_hex("edb891");
 const vec3f COLOR_THEME_4 = rgb_hex("eca895");
 const vec3f COLOR_THEME_5 = rgb_hex("e8918c");
 
-bool get_type_color(TSSymbol type, vec3f *out) {
-    switch (type) {
+bool get_type_color(Ast_Node *node, Editor *editor, vec3f *out) {
+    switch (node->type) {
     case TS_PACKAGE:
     case TS_IMPORT:
     case TS_CONST:
@@ -151,7 +151,39 @@ bool get_type_color(TSSymbol type, vec3f *out) {
     case TS_RAW_STRING_LITERAL:
         *out = COLOR_THEME_4;
         return true;
+
+    case TS_IDENTIFIER:
+    case TS_FIELD_IDENTIFIER:
+    case TS_PACKAGE_IDENTIFIER:
+    case TS_TYPE_IDENTIFIER:
+        {
+            auto len = node->end_byte - node->start_byte;
+            if (len >= 16) break;
+
+            ccstr keywords[] = {
+                "package", "import", "const", "var", "func",
+                "type", "struct", "interface", "map", "chan",
+                "fallthrough", "break", "continue", "goto", "return",
+                "go", "defer", "if", "else",
+                "for", "range", "switch", "case",
+                "default", "select", "new", "make",
+            };
+
+            char keyword[16] = {0};
+            auto it = editor->iter(node->start);
+            for (u32 i = 0; it.pos != node->end; i++)
+                keyword[i] = it.next();
+
+            For (keywords) {
+                if (streq(it, keyword)) {
+                    *out = COLOR_THEME_1;
+                    return true;
+                }
+            }
+        }
+        break;
     }
+
     return false;
 }
 
@@ -653,7 +685,7 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                     if (node_start > end) return WALK_ABORT;
 
                     vec3f color = {0};
-                    if (get_type_color(node->type, &color)) {
+                    if (get_type_color(node, editor, &color)) {
                         auto hl = highlights.append();
                         hl->start = node_start;
                         hl->end = node_end;

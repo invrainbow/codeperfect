@@ -1020,6 +1020,7 @@ ccstr Go_Indexer::get_filepath_from_ctx(Go_Ctx *ctx) {
 List<Goresult> *Go_Indexer::get_possible_dot_completions(Ast_Node *operand_node, bool *was_package, Go_Ctx *ctx) {
     switch (operand_node->type) {
     case TS_IDENTIFIER:
+    case TS_FIELD_IDENTIFIER:
     case TS_PACKAGE_IDENTIFIER:
     case TS_TYPE_IDENTIFIER:
         do {
@@ -1113,6 +1114,7 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 p
         case TS_PACKAGE_IDENTIFIER:
         case TS_TYPE_IDENTIFIER:
         case TS_IDENTIFIER:
+        case TS_FIELD_IDENTIFIER:
             {
                 auto res = find_decl_of_id(node->string(), node->start, &ctx);
                 if (res != NULL) {
@@ -1181,6 +1183,7 @@ bool is_expression_node(Ast_Node *node) {
     // others that show up in the context of what we consider an expression
     case TS_QUALIFIED_TYPE:
     case TS_TYPE_IDENTIFIER:
+    case TS_FIELD_IDENTIFIER:
     case TS_PACKAGE_IDENTIFIER:
         return true;
     }
@@ -1290,6 +1293,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
         case TS_PACKAGE_IDENTIFIER:
         case TS_TYPE_IDENTIFIER:
         case TS_IDENTIFIER:
+        case TS_FIELD_IDENTIFIER:
             expr_to_analyze = node;
             situation = FOUND_LONE_IDENTIFIER;
             keyword_start = node->start;
@@ -2522,6 +2526,7 @@ Goresult *Go_Indexer::infer_type(Ast_Node *expr, Go_Ctx *ctx) {
 
             switch (operand_node->type) {
             case TS_IDENTIFIER:
+            case TS_FIELD_IDENTIFIER:
             case TS_PACKAGE_IDENTIFIER:
             case TS_TYPE_IDENTIFIER:
                 {
@@ -2594,6 +2599,7 @@ Goresult *Go_Indexer::infer_type(Ast_Node *expr, Go_Ctx *ctx) {
     case TS_PACKAGE_IDENTIFIER:
     case TS_TYPE_IDENTIFIER:
     case TS_IDENTIFIER:
+    case TS_FIELD_IDENTIFIER:
         {
             auto res = find_decl_of_id(expr->string(), expr->start, ctx);
             if (res == NULL) return NULL;
