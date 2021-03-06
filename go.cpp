@@ -2342,31 +2342,26 @@ Gotype *Go_Indexer::expr_to_gotype(Ast_Node *expr) {
 
     switch (expr->type) {
     case TS_UNARY_EXPRESSION:
-        {
-            auto operator_node = expr->field(TSF_OPERATOR);
-            auto operand_node = expr->field(TSF_OPERAND);
-
-            switch (operator_node->type) {
-            // case TS_RANGE: // idk even what to do here
-            case TS_PLUS: // add
-            case TS_DASH: // sub
-            case TS_CARET: // xor
-                return new_primitive_type("int");
-            case TS_BANG: // not
-                return new_primitive_type("bool");
-            case TS_STAR: // mul
-                ret = new_gotype(GOTYPE_LAZY_DEREFERENCE);
-                ret->lazy_dereference_base = expr_to_gotype(operand_node);
-                return ret;
-            case TS_AMP: // and
-                ret = new_gotype(GOTYPE_LAZY_REFERENCE);
-                ret->lazy_reference_base = expr_to_gotype(operand_node);
-                return ret;
-            case TS_LT_DASH: // arrow
-                ret = new_gotype(GOTYPE_LAZY_ARROW);
-                ret->lazy_arrow_base = expr_to_gotype(operand_node);
-                return ret;
-            }
+        switch (expr->field(TSF_OPERATOR)->type) {
+        // case TS_RANGE: // idk even what to do here
+        case TS_PLUS: // add
+        case TS_DASH: // sub
+        case TS_CARET: // xor
+            return new_primitive_type("int");
+        case TS_BANG: // not
+            return new_primitive_type("bool");
+        case TS_STAR: // mul
+            ret = new_gotype(GOTYPE_LAZY_DEREFERENCE);
+            ret->lazy_dereference_base = expr_to_gotype(expr->field(TSF_OPERAND));
+            return ret;
+        case TS_AMP: // and
+            ret = new_gotype(GOTYPE_LAZY_REFERENCE);
+            ret->lazy_reference_base = expr_to_gotype(expr->field(TSF_OPERAND));
+            return ret;
+        case TS_LT_DASH: // arrow
+            ret = new_gotype(GOTYPE_LAZY_ARROW);
+            ret->lazy_arrow_base = expr_to_gotype(expr->field(TSF_OPERAND));
+            return ret;
         }
         break;
 
