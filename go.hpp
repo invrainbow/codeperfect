@@ -734,6 +734,18 @@ enum Gotype_Type {
     GOTYPE_VARIADIC,
     GOTYPE_ASSERTION,
     GOTYPE_RANGE,
+
+    _GOTYPE_LAZY_MARKER_, // #define IS_LAZY_TYPE(x) (x > _GOTYPE_LAZY_MARKER_)
+
+    // "lazy" types
+    GOTYPE_LAZY_INDEX,
+    GOTYPE_LAZY_CALL,
+    GOTYPE_LAZY_DEREFERENCE,
+    GOTYPE_LAZY_REFERENCE,
+    GOTYPE_LAZY_ARROW,
+    GOTYPE_LAZY_ID,
+    GOTYPE_LAZY_SEL,
+    GOTYPE_LAZY_ONE_OF_MULTI,
 };
 
 struct Gotype {
@@ -753,6 +765,9 @@ struct Gotype {
         List<Go_Struct_Spec> *struct_specs;
         List<Go_Struct_Spec> *interface_specs;
         Gotype *pointer_base;
+
+        Gotype *index_base;
+        Gotype *call_base;
 
         struct {
             Gotype *map_key;
@@ -781,6 +796,27 @@ struct Gotype {
             // So if x is an []int and we have range x, range_base is []int, not int.
             Gotype *range_base;
             Range_Type range_type;
+        };
+
+        struct {
+            ccstr lazy_id_name;
+            cur2 lazy_id_pos;
+        };
+
+        struct {
+            Gotype *lazy_sel_base;
+            ccstr lazy_sel_sel;
+        };
+
+        Gotype *lazy_index_base;
+        Gotype *lazy_call_base;
+        Gotype *lazy_dereference_base;
+        Gotype *lazy_reference_base;
+        Gotype *lazy_arrow_base;
+
+        struct {
+            Gotype *lazy_one_of_multi_base;
+            int lazy_one_of_multi_index;
         };
     };
 
@@ -902,9 +938,7 @@ struct Jump_To_Definition_Result {
     cur2 pos;
 };
 
-typedef fn<Godecl*(Godecl_Type type, cur2 spec_start, ccstr name)> Node_To_Decls_Callback;
-
-typedef fn<Goresult*()> New_Goresult_Func;
+typedef fn<Godecl*()> New_Godecl_Func;
 
 struct Go_Indexer {
     Pool mem;        // mem that exists for lifetime of Go_Indexer
@@ -956,7 +990,6 @@ struct Go_Indexer {
     void read_index_from_filesystem();
     ccstr get_package_name_from_file(ccstr filepath);
     ccstr get_filepath_from_ctx(Go_Ctx *ctx);
-    Goresult *infer_type(Ast_Node *expr, Go_Ctx *ctx);
     Goresult *resolve_type(Gotype *type, Go_Ctx *ctx);
     Goresult *unpointer_type(Gotype *type, Go_Ctx *ctx);
     List<Godecl> *parameter_list_to_fields(Ast_Node *params);
@@ -964,7 +997,7 @@ struct Go_Indexer {
     Goresult *find_decl_of_id(ccstr id, cur2 id_pos, Go_Ctx *ctx, Go_Single_Import **single_import = NULL);
     void list_fields_and_methods(Goresult *type_res, Goresult *resolved_type_res, List<Goresult> *ret);
     bool node_func_to_gotype_sig(Ast_Node *params, Ast_Node *result, Go_Func_Sig *sig);
-    void node_to_decls(Ast_Node *node, List<Goresult> *results, Go_Ctx *ctx);
+    void node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr filename);
     Gotype *new_gotype(Gotype_Type type);
     Goresult *find_decl_in_package(ccstr id, ccstr import_path, ccstr resolved_path);
     List<Goresult> *get_package_decls(ccstr import_path, ccstr resolved_path, bool public_only = false);
@@ -980,7 +1013,10 @@ struct Go_Indexer {
     void import_spec_to_decl(Ast_Node *spec_node, Godecl *decl);
     void find_nodes_containing_pos(Ast_Node *root, cur2 pos, bool abstract_only, fn<Walk_Action(Ast_Node *it)> callback);
     List<Goresult> *get_possible_dot_completions(Ast_Node *operand_node, bool *was_package, Go_Ctx *ctx);
-    bool assignment_to_decls(List<Ast_Node*> *lhs, List<Ast_Node*> *rhs, New_Goresult_Func new_goresult, Go_Ctx *ctx);
+    bool assignment_to_decls(List<Ast_Node*> *lhs, List<Ast_Node*> *rhs, New_Godecl_Func new_godecl);
+    Gotype *new_primitive_type(ccstr name);
+    Goresult *evaluate_type(Gotype *gotype, Go_Ctx *ctx);
+    Gotype *expr_to_gotype(Ast_Node *expr);
 };
 
 #define FOR_NODE_CHILDREN(node) for (auto it = (node)->child(); !it->null; it = it->next())

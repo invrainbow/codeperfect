@@ -2,7 +2,7 @@
 #include "mem.hpp"
 
 bool run_tests() {
-    return false;
+    // return false;
 
     world.init();
     compiler_dont_optimize_me_away();
@@ -12,6 +12,7 @@ bool run_tests() {
     Go_Indexer indexer;
     indexer.init();
     indexer.crawl_index();
+    indexer.background_thread();
 
     /*
     Index_Stream s;
