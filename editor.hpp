@@ -56,7 +56,6 @@ struct Editor {
     TSTreeCursor cursor;
     char tsinput_buffer[128];
     TSInputEdit curr_change;
-
     Pool nvim_edit_mem;
     Lock nvim_edit_lock;
     List<Edit_From_Nvim> nvim_edit_queue;

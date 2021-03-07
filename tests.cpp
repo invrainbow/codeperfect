@@ -11,8 +11,30 @@ bool run_tests() {
 
     Go_Indexer indexer;
     indexer.init();
+
+    /*
+    auto pf = indexer.parse_file("test.go");
+    FOR_NODE_CHILDREN (pf->root) {
+        if (it->type == TS_IMPORT_DECLARATION) {
+            auto speclist = it->child();
+            FOR_NODE_CHILDREN (speclist) {
+                Ast_Node *path_node = NULL;
+
+                if (it->type == TS_IMPORT_SPEC)
+                    path_node = it->field(TSF_PATH);
+                else if (it->type == TS_INTERPRETED_STRING_LITERAL)
+                    path_node = it;
+                else
+                    continue;
+
+                print("%s", path_node->string());
+            }
+        }
+    }
+    */
+
     indexer.crawl_index();
-    indexer.background_thread();
+    // indexer.background_thread();
 
     /*
     Index_Stream s;

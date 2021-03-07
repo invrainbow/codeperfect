@@ -91,6 +91,11 @@ ccstr our_strcat(ccstr a, ccstr b) {
     return our_sprintf("%s%s", a, b);
 }
 
+List<ccstr> *split_string(ccstr str, char sep) {
+    auto pred = [&](char ch) -> bool { return ch == sep; };
+    return split_string(str, pred);
+}
+
 List<ccstr> *split_string(ccstr str, fn<bool(char)> pred) {
     auto len = strlen(str);
     u32 start = 0;

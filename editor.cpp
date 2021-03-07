@@ -587,7 +587,7 @@ void Editor::update_parameter_hint() {
     auto should_close_hints = [&]() {
         if (cur < hint.start) return true;
 
-        auto root = world.indexer.new_ast_node(ts_tree_root_node(tree));
+        auto root = new_ast_node(ts_tree_root_node(tree), NULL);
 
         bool ret = false;
         world.indexer.find_nodes_containing_pos(root, hint.start, true, [&](Ast_Node *it) -> Walk_Action {

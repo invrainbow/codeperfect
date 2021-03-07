@@ -37,7 +37,7 @@ struct Index_Printer {
         SCOPED_PUSH_DEPTH();
 
         For (*index->packages) {
-            pr("%s -> %s", it.import_path, it.resolved_path);
+            pr("%s", it.import_path);
             SCOPED_PUSH_DEPTH();
 
             pr("status: %d", it.status);
@@ -47,14 +47,6 @@ struct Index_Printer {
                 SCOPED_PUSH_DEPTH();
                 For (*it.individual_imports)
                     pr("[%s] %s \"%s\"", it.file, it.package_name, it.import_path);
-            }
-
-            {
-                pr("dependencies: %d", it.dependencies->len);
-                SCOPED_PUSH_DEPTH();
-                For (*it.dependencies) {
-                    pr("%s \"%s\" -> \"%s\"", it.package_name, it.import_path, it.resolved_path);
-                }
             }
 
             pr("package_name: %s", it.package_name);
