@@ -13,6 +13,7 @@
 // TODO: dynamically determine this
 static const char GOROOT[] = "c:\\go";
 static const char GOPATH[] = "c:\\users\\brandon\\go";
+const char TEST_PATH[] = "c:\\users\\brandon\\compose-cli";
 
 // -----
 
@@ -202,9 +203,11 @@ void Go_Indexer::background_thread() {
     SCOPED_MEM(&mem);
     use_pool_for_tree_sitter = true;
 
+    package_lookup.init(TEST_PATH);
+
     Index_Stream s;
 
-#if 1
+#if 0
     crawl_index();
     print("finished crawling index");
     print("writing...");
@@ -423,17 +426,9 @@ void Go_Indexer::crawl_index() {
 
     SCOPED_MEM(&crawl_mem);
 
-    auto current_path = normalize_path_separator((cstr)our_strcpy("C:/Users/Brandon/compose-cli"));
-
-    {
-        SCOPED_MEM(&mem);
-        package_lookup.init(current_path);
-    }
-
     {
         SCOPED_MEM(&intermediate_mem);
-        // index.current_path = world.wksp.path;
-        index.current_path = our_strcpy(current_path);
+        // index.current_path = world.wksp.path; index.current_path = our_strcpy(TEST_PATH);
         index.current_import_path = our_strcpy(get_workspace_import_path());
         index.packages = alloc_list<Go_Package>();
     }

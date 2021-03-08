@@ -2,7 +2,7 @@
 #include "mem.hpp"
 
 bool run_tests() {
-    // return false;
+    return false;
 
     world.init();
     compiler_dont_optimize_me_away();
@@ -10,42 +10,27 @@ bool run_tests() {
     use_pool_for_tree_sitter = true;
 
     Go_Indexer indexer;
+    Index_Stream s;
+
     indexer.init();
-
-    /*
-    auto pf = indexer.parse_file("test.go");
-    FOR_NODE_CHILDREN (pf->root) {
-        if (it->type == TS_IMPORT_DECLARATION) {
-            auto speclist = it->child();
-            FOR_NODE_CHILDREN (speclist) {
-                Ast_Node *path_node = NULL;
-
-                if (it->type == TS_IMPORT_SPEC)
-                    path_node = it->field(TSF_PATH);
-                else if (it->type == TS_INTERPRETED_STRING_LITERAL)
-                    path_node = it;
-                else
-                    continue;
-
-                print("%s", path_node->string());
-            }
-        }
-    }
-    */
-
     indexer.crawl_index();
     // indexer.background_thread();
 
-    Index_Stream s;
+    // write
+    if (s.open("db", FILE_MODE_WRITE, FILE_CREATE_NEW) != FILE_RESULT_SUCCESS) return false;
+    write_object<Go_Index>(&indexer.index, &s);
+    s.cleanup();
+    print("done writing");
+
+    // read back in
     s.open("db", FILE_MODE_READ, FILE_OPEN_EXISTING);
     defer { s.cleanup(); };
-
     Pool mem;
     mem.init();
     {
         SCOPED_MEM(&mem);
         auto index = read_object<Go_Index>(&s);
-        print("done reading");
+        print("done reading, mem used is %d", mem.mem_allocated);
     }
 
     system("pause");
