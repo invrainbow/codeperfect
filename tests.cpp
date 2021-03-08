@@ -36,7 +36,6 @@ bool run_tests() {
     indexer.crawl_index();
     // indexer.background_thread();
 
-    /*
     Index_Stream s;
     s.open("db", FILE_MODE_READ, FILE_OPEN_EXISTING);
     defer { s.cleanup(); };
@@ -48,7 +47,6 @@ bool run_tests() {
         auto index = read_object<Go_Index>(&s);
         print("done reading");
     }
-    */
 
     system("pause");
     return true;

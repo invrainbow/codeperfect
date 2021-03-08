@@ -132,10 +132,16 @@ void Package_Lookup::init(ccstr current_module_filepath) {
             } else if (parts->len == 2) {
                 auto import_path = parts->at(0);
                 auto version = parts->at(1);
-                auto path = path_join(GOPATH, our_sprintf("pkg/mod/%s@%s", import_path, version));
-                add_path(import_path, normalize_path_separator((cstr)path));
-            } else {
-                return;
+                auto subpath = normalize_path_in_module_cache(our_sprintf("%s@%s", import_path, version));
+                auto path = path_join(GOPATH, "pkg/mod", subpath);
+                add_path(import_path, path);
+            } else if (parts->len == 5) {
+                auto import_path = parts->at(0);
+                auto new_import_path = parts->at(3);
+                auto version = parts->at(4);
+                auto subpath = normalize_path_in_module_cache(our_sprintf("%s@%s", new_import_path, version));
+                auto path = path_join(GOPATH, "pkg/mod", subpath);
+                add_path(import_path, path);
             }
 
             line.len = 0;
@@ -409,11 +415,9 @@ void Go_Indexer::crawl_index() {
     Pool crawl_mem;             // pool holding info needed to orchestrate crawl_index
     Pool intermediate_mem;      // temp mem that holds package info
 
-    package_scratch_mem.init("package_scratch_mem");
     crawl_mem.init("crawl_mem");
     intermediate_mem.init("intermediate_mem");
 
-    defer { package_scratch_mem.cleanup(); };
     defer { crawl_mem.cleanup(); };
     defer { intermediate_mem.cleanup(); };
 
@@ -434,12 +438,6 @@ void Go_Indexer::crawl_index() {
         index.packages = alloc_list<Go_Package>();
     }
 
-    fn<void(ccstr, ccstr)> process_initial_imports;
-    fn<void(ccstr, ccstr)> process_import;
-
-    String_Set seen;
-    seen.init();
-
     List<ccstr> queue;
     queue.init();
 
@@ -448,6 +446,7 @@ void Go_Indexer::crawl_index() {
         queue.append(our_strcpy(import_path));
     };
 
+    fn<void(ccstr, ccstr)> process_initial_imports;
     process_initial_imports = [&](ccstr import_path, ccstr resolved_path) {
         bool is_go_package = false;
 
@@ -470,7 +469,6 @@ void Go_Indexer::crawl_index() {
 
         if (is_go_package) append_to_queue(import_path);
     };
-
     process_initial_imports(index.current_import_path, index.current_path);
 
     // get package status, but don't create a new package if one doesn't exist
@@ -481,15 +479,15 @@ void Go_Indexer::crawl_index() {
     };
 
     while (queue.len > 0) {
+        package_scratch_mem.init();
+        defer { package_scratch_mem.cleanup(); };
         SCOPED_MEM(&package_scratch_mem);
-        defer { package_scratch_mem.reset(); };
 
         auto import_path = *queue.last();
         queue.len--;
 
-        auto ri = resolve_import(import_path);
-        if (ri == NULL) continue;
-        auto resolved_path = ri->path;
+        auto resolved_path = get_package_path(import_path);
+        if (resolved_path == NULL) continue;
 
         auto pkg = find_package_in_index(import_path);
         if (pkg == NULL) {
@@ -622,6 +620,7 @@ void Go_Indexer::crawl_index() {
 
                     auto ri = resolve_import(new_import_path);
                     if (ri == NULL) {
+                        ri = resolve_import(new_import_path);
                         continue;
                     }
 
@@ -755,31 +754,33 @@ ccstr Go_Indexer::get_package_name(ccstr path) {
     return NULL;
 }
 
-Resolved_Import *Go_Indexer::check_potential_resolved_import(ccstr filepath) {
-    auto package_name = get_package_name(filepath);
-    if (package_name == NULL) return NULL;
+ccstr Go_Indexer::get_package_path(ccstr import_path) {
+    auto ret = package_lookup.resolve_import(import_path);
+    if (ret != NULL) return ret;
 
-    auto ret = alloc_object(Resolved_Import);
-    ret->path = filepath;
-    ret->package_name = package_name;
-    return ret;
+    auto path = path_join(GOROOT, "src", import_path);
+    if (check_path(path) != CPR_DIRECTORY) return NULL;
+    bool is_package = false;
+    list_directory(path, [&](Dir_Entry *ent) {
+        if (!is_package)
+            if (ent->type == DIRENT_FILE)
+                if (str_ends_with(ent->name, ".go"))
+                    is_package = true;
+    });
+    return is_package ? path : NULL;
 }
 
 Resolved_Import* Go_Indexer::resolve_import(ccstr import_path) {
-    auto ret = package_lookup.resolve_import(import_path);
-    if (ret != NULL) {
-        auto pkg = find_package_in_index(import_path);
-        if (pkg != NULL) {
-            auto ri = alloc_object(Resolved_Import);
-            ri->path = ret;
-            ri->package_name = pkg->package_name;
-            return ri;
-        }
-    }
+    auto path = get_package_path(import_path);
+    if (path == NULL) return NULL;
 
-    // TODO: I believe this ignores build rules, so make
-    // check_potential_resolved_import not check that to save time
-    return check_potential_resolved_import(path_join(GOROOT, "src", import_path));
+    auto name = get_package_name(path);
+    if (name == NULL) return NULL;
+
+    auto ret = alloc_object(Resolved_Import);
+    ret->path = path;
+    ret->package_name = name;
+    return ret;
 }
 
 ccstr Go_Indexer::get_workspace_import_path() {
@@ -2104,8 +2105,8 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
             auto lhs = alloc_list<Ast_Node*>(left->child_count);
             auto rhs = alloc_list<Ast_Node*>(right->child_count);
 
-            FOR_NODE_CHILDREN (left) lhs->append(it); 
-            FOR_NODE_CHILDREN (right) rhs->append(it); 
+            FOR_NODE_CHILDREN (left) lhs->append(it);
+            FOR_NODE_CHILDREN (right) rhs->append(it);
 
             auto new_godecl = [&]() -> Godecl * {
                 auto decl = new_result();

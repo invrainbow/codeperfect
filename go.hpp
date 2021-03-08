@@ -889,10 +889,35 @@ struct Package_Lookup {
     }
 
     void add_path(ccstr import_path, ccstr filepath) {
+        filepath = normalize_path_separator((cstr)our_strcpy(filepath));
+
+        print("adding %s -> %s", import_path, filepath);
+
         auto path = make_path(import_path);
         auto curr = root;
         For (*path->parts) curr = goto_child(curr, it, true);
         curr->value = filepath;
+    }
+
+    ccstr normalize_path_in_module_cache(ccstr import_path) {
+        u32 len = 0;
+        u32 slen = strlen(import_path);
+
+        for (u32 i = 0; i < slen; i++)
+            len += (isupper(import_path[i]) ? 2 : 1);
+
+        auto new_filepath = alloc_array(char, len+1);
+        for (u32 i = 0, j = 0; i < slen; i++) {
+            auto ch = import_path[i];
+            if (isupper(ch)) {
+                new_filepath[j++] = '!';
+                new_filepath[j++] = tolower(ch);
+            } else {
+                new_filepath[j++] = ch;
+            }
+        }
+        new_filepath[len] = '\0';
+        return new_filepath;
     }
 
     ccstr resolve_import(ccstr import_path) {
@@ -969,7 +994,7 @@ struct Go_Indexer {
     bool is_file_included_in_build(ccstr path);
     List<ccstr>* list_source_files(ccstr dirpath, bool include_tests);
     ccstr get_package_name(ccstr path);
-    // Resolved_Import* resolve_import_from_filesystem(ccstr import_path, ccstr from_path);
+    ccstr get_package_path(ccstr import_path);
     Resolved_Import* resolve_import(ccstr import_path);
     Parsed_File *parse_file(ccstr filepath);
     void free_parsed_file(Parsed_File *file);
