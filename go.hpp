@@ -867,7 +867,8 @@ struct Package_Lookup {
         ccstr value; // only leaves have values
     };
 
-    Node *root;
+    Node *root_import_to_resolved;
+    Node *root_resolved_to_import;
     ccstr module_path;
 
     void init(ccstr current_module_filepath);
@@ -888,15 +889,20 @@ struct Package_Lookup {
         return NULL;
     }
 
-    void add_path(ccstr import_path, ccstr filepath) {
-        filepath = normalize_path_separator((cstr)our_strcpy(filepath));
+    void add_to_root(Node *root, ccstr key, ccstr value) {
+        print("adding %s -> %s", key, value);
 
-        print("adding %s -> %s", import_path, filepath);
-
-        auto path = make_path(import_path);
+        auto path = make_path(key);
         auto curr = root;
         For (*path->parts) curr = goto_child(curr, it, true);
-        curr->value = filepath;
+        curr->value = value;
+    }
+
+
+    void add_path(ccstr import_path, ccstr resolved_path) {
+        resolved_path = normalize_path_separator((cstr)our_strcpy(resolved_path));
+        add_to_root(root_import_to_resolved, import_path, resolved_path);
+        add_to_root(root_resolved_to_import, resolved_path, import_path);
     }
 
     ccstr normalize_path_in_module_cache(ccstr import_path) {
@@ -920,8 +926,8 @@ struct Package_Lookup {
         return new_filepath;
     }
 
-    ccstr resolve_import(ccstr import_path) {
-        auto parts = make_path(import_path)->parts;
+    ccstr convert_path(Node *root, ccstr path) {
+        auto parts = make_path(path)->parts;
 
         Node *curr = root;
         ccstr last_value = NULL;
@@ -941,15 +947,64 @@ struct Package_Lookup {
 
         if (last_value == NULL) return NULL;
 
-        auto ret = alloc_list<ccstr>();
+        auto ret = alloc_list<ccstr>(parts->len - last_index);
         ret->append(last_value);
         for (u32 i = last_index; i < parts->len; i++)
             ret->append(parts->at(i));
 
-        Path path;
-        path.init(ret);
-        return path.str();
+        Path p;
+        p.init(ret);
+        return p.str();
     }
+
+    ccstr resolve_import(ccstr import_path) {
+        return convert_path(root_import_to_resolved, import_path);
+    }
+
+    ccstr resolved_path_to_import_path(ccstr resolved_path) {
+        return convert_path(root_resolved_to_import, resolved_path);
+    }
+};
+
+// i guess for now don't allow we shouldln't a
+enum Indexer_Task_Type {
+    ITT_REANALYZE_FILE,
+    ITT_GOMOD_CHANGED,
+    // ITT_UPDATE_EDITOR_TREE,
+};
+
+/*
+start keeping track of "is index ready"
+
+when gomod changes, use the algorithm to go through all existing packages and
+recrawl what we need
+
+as a file is edited, we already keep the tree updated
+
+so when autocomplete or param hints are triggered.... i guess we re-analyze the
+tree to get the decls?
+
+    (to be honest what really needs to happen is we need to use the same algorithm
+    that tree-sitter uses to implement incremental parsing, to do incremental
+    analysis
+
+    THIS IS WHY YOU UNDERSTAND CONCEPTS YOURSELF & WRITE YOUR OWN CODE INSTEAD OF
+    USING "LIBRARIES" LIKE A FUCKING JETBRAINS EMPLOYEE DORK)
+*/
+
+struct Indexer_Task {
+    Indexer_Task_Type type;
+
+    union {
+        struct {
+            ccstr reanalyze_file_filename;
+            // file_saved
+        };
+
+        struct {
+            // gomod_changed
+        };
+    };
 };
 
 struct Go_Indexer {
@@ -964,13 +1019,11 @@ struct Go_Indexer {
     char current_exe_path[MAX_PATH];
     Process buildparser_proc;
 
-    List<Parsed_File*> current_parsed_files;
-
     Thread_Handle bgthread;
 
-    Scoped_Table<Godecl*> *local_decls;
-
     Package_Lookup package_lookup;
+    List<Indexer_Task> task_queue;
+    Lock task_queue_lock;
 
     // ---
 
@@ -985,8 +1038,7 @@ struct Go_Indexer {
     Parameter_Hint *parameter_hint(ccstr filepath, cur2 pos, bool triggered_by_paren);
 
     void run_background_thread2();
-    ccstr file_to_import_path(ccstr filepath);
-    ccstr directory_to_import_path(ccstr path_str);
+    ccstr filepath_to_import_path(ccstr filepath);
     void handle_fs_event(Go_Index_Watcher *w, Fs_Event *event);
     void temp();
     void process_package(ccstr import_path);
@@ -1001,7 +1053,6 @@ struct Go_Indexer {
     ccstr get_workspace_import_path();
     void handle_error(ccstr err);
     u64 hash_package(ccstr resolved_package_path);
-    void read_index_from_filesystem();
     ccstr get_package_name_from_file(ccstr filepath);
     ccstr get_filepath_from_ctx(Go_Ctx *ctx);
     Goresult *resolve_type(Gotype *type, Go_Ctx *ctx);
@@ -1029,6 +1080,13 @@ struct Go_Indexer {
     Gotype *new_primitive_type(ccstr name);
     Goresult *evaluate_type(Gotype *gotype, Go_Ctx *ctx);
     Gotype *expr_to_gotype(Ast_Node *expr);
+    void process_tree_into_package(
+        Go_Package *pkg,
+        Ast_Node *root,
+        ccstr filename,
+        List<ccstr> *import_paths,
+        List<Godecl> *scope_ops_decls
+    );
 };
 
 Ast_Node *new_ast_node(TSNode node, Parser_It *it);
