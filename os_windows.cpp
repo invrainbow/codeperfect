@@ -100,7 +100,18 @@ void Process::cleanup() {
     close_and_null_handle(&proc);
 }
 
+// this is by far the stupidest bug ever
+// https://devblogs.microsoft.com/oldnewthing/20200306-00/?p=103538
+CRITICAL_SECTION global_create_process_lock;
+void init_global_create_process_lock() {
+    InitializeCriticalSection(&global_create_process_lock);
+}
+int _ = (init_global_create_process_lock(), 0);
+
 bool Process::run(ccstr _cmd) {
+    EnterCriticalSection(&global_create_process_lock);
+    defer { LeaveCriticalSection(&global_create_process_lock); };
+
     cmd = _cmd;
 
     SECURITY_ATTRIBUTES sa = { 0 };

@@ -118,18 +118,10 @@ void Package_Lookup::init(ccstr current_module_filepath) {
     if (!proc.run("go list -m all")) return;
     defer { proc.cleanup(); };
 
-    /*
     List<char> line;
     line.init();
-    */
-
     char ch;
-    while (proc.read1(&ch)) {
-        printf("%c", ch);
-        continue;
-    }
 
-    /*
     do {
         line.len = 0;
         for (ch = '\0'; proc.read1(&ch) && ch != '\n'; ch = '\0')
@@ -155,7 +147,6 @@ void Package_Lookup::init(ccstr current_module_filepath) {
             add_path(import_path, path);
         }
     } while (ch != '\0');
-    */
 }
 
 // -----
@@ -209,18 +200,7 @@ void Go_Indexer::background_thread() {
     SCOPED_MEM(&mem);
     use_pool_for_tree_sitter = true;
 
-    {
-        Process proc;
-        proc.init();
-        proc.dir = TEST_PATH;
-        if (!proc.run("go list -m all")) return;
-        defer { proc.cleanup(); };
-
-        char ch;
-        while (proc.read1(&ch)) putchar(ch);
-    }
-
-    // package_lookup.init(TEST_PATH);
+    package_lookup.init(TEST_PATH);
 
     Index_Stream s;
 

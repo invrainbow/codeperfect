@@ -898,7 +898,6 @@ struct Package_Lookup {
         curr->value = value;
     }
 
-
     void add_path(ccstr import_path, ccstr resolved_path) {
         resolved_path = normalize_path_separator((cstr)our_strcpy(resolved_path));
         add_to_root(root_import_to_resolved, import_path, resolved_path);
