@@ -90,7 +90,9 @@ struct List {
     T* append() {
         if (!ensure_cap(len + 1))
             return NULL;
-        return items + (len++);
+        auto ret = items + (len++);
+        ptr0(ret);
+        return ret;
     }
 
     T* last() {

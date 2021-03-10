@@ -13,6 +13,11 @@ bool run_tests() {
     Index_Stream s;
 
     indexer.init();
+    indexer.package_lookup.init("c:\\users\\brandon\\compose-cli");
+    auto path = indexer.package_lookup.resolve_import("github.com/docker/compose-cli/local/moby");
+    print("%s", path);
+
+    /*
     indexer.crawl_index();
     // indexer.background_thread();
 
@@ -32,6 +37,7 @@ bool run_tests() {
         auto index = read_object<Go_Index>(&s);
         print("done reading, mem used is %d", mem.mem_allocated);
     }
+    */
 
     system("pause");
     return true;

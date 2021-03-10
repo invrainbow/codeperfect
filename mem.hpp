@@ -161,12 +161,36 @@ struct Pool {
     }
 
     void restore(Pool_Block *block, s32 pos) {
-        // if this was a previous used block, just reset pos back to beginning
-        // TODO: actually, we could restore to previous block and just put all
-        // blocks after that in unused_blocks
-        auto new_pos = block == curr ? pos : 0;
+        if (block != curr) {
+            auto pblock = used_blocks.find([&](Pool_Block **it) -> bool {
+                return *it == block;
+            });
 
-        sp = new_pos;
+            if (pblock == NULL) {
+                pblock = obsolete_blocks.find([&](Pool_Block **it) -> bool {
+                    return *it == block;
+                });
+                assert(pblock != NULL);
+                // if the block was obsoleted, we're not going to use it,
+                // but we *can* just reset all the current used blocks
+                if (curr != NULL) {
+                    unused_blocks.append(curr);
+                    curr = NULL;
+                }
+                For (used_blocks) unused_blocks.append(it);
+                used_blocks.len = 0;
+                request_new_block();
+            } else {
+                auto idx = pblock - used_blocks.items;
+                if (curr != NULL)
+                    unused_blocks.append(curr);
+                for (u32 i = idx + 1; i < used_blocks.len; i++)
+                    unused_blocks.append(used_blocks[i]);
+                used_blocks.len = idx;
+                curr = block;
+            }
+        }
+        sp = pos;
     }
 
     void ensure_enough(s32 n) {

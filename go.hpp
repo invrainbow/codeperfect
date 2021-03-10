@@ -773,14 +773,13 @@ enum Go_Package_Name_Type {
     GPN_DOT,
 };
 
-struct Go_Single_Import {
-    ccstr file;
+struct Go_Import {
     ccstr package_name;
     Go_Package_Name_Type package_name_type;
     ccstr import_path;
     Godecl *decl;
 
-    Go_Single_Import *copy();
+    Go_Import *copy();
     void read(Index_Stream *s);
     void write(Index_Stream *s);
 };
@@ -801,11 +800,13 @@ struct Go_Scope_Op {
     void write(Index_Stream *s);
 };
 
-struct Go_Package_File_Info {
+struct Go_File {
     ccstr filename;
     List<Go_Scope_Op> *scope_ops;
+    List<Godecl> *decls;
+    List<Go_Import> *imports;
 
-    Go_Package_File_Info *copy();
+    Go_File *copy();
     void read(Index_Stream *s);
     void write(Index_Stream *s);
 };
@@ -813,12 +814,9 @@ struct Go_Package_File_Info {
 struct Go_Package {
     Go_Package_Status status;
     ccstr import_path;
-    List<Go_Single_Import> *individual_imports;
-
+    // ccstr resolved_path?
     ccstr package_name;
-    List<Godecl> *decls;
-    List<Go_Package_File_Info> *files;
-    bool is_hash_ready;
+    List<Go_File> *files;
     u64 hash;
 
     Go_Package *copy();
@@ -946,7 +944,7 @@ struct Package_Lookup {
 
         if (last_value == NULL) return NULL;
 
-        auto ret = alloc_list<ccstr>(parts->len - last_index);
+        auto ret = alloc_list<ccstr>(parts->len - last_index + 1);
         ret->append(last_value);
         for (u32 i = last_index; i < parts->len; i++)
             ret->append(parts->at(i));
@@ -1058,7 +1056,7 @@ struct Go_Indexer {
     Goresult *unpointer_type(Gotype *type, Go_Ctx *ctx);
     List<Godecl> *parameter_list_to_fields(Ast_Node *params);
     Gotype *node_to_gotype(Ast_Node *node);
-    Goresult *find_decl_of_id(ccstr id, cur2 id_pos, Go_Ctx *ctx, Go_Single_Import **single_import = NULL);
+    Goresult *find_decl_of_id(ccstr id, cur2 id_pos, Go_Ctx *ctx, Go_Import **single_import = NULL);
     void list_fields_and_methods(Goresult *type_res, Goresult *resolved_type_res, List<Goresult> *ret);
     bool node_func_to_gotype_sig(Ast_Node *params, Ast_Node *result, Go_Func_Sig *sig);
     void node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr filename);
@@ -1080,11 +1078,10 @@ struct Go_Indexer {
     Goresult *evaluate_type(Gotype *gotype, Go_Ctx *ctx);
     Gotype *expr_to_gotype(Ast_Node *expr);
     void process_tree_into_package(
-        Go_Package *pkg,
+        Go_File *file,
         Ast_Node *root,
         ccstr filename,
-        List<ccstr> *import_paths,
-        List<Godecl> *scope_ops_decls
+        ccstr *package_name
     );
 };
 
