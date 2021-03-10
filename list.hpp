@@ -98,6 +98,18 @@ struct List {
         return &items[len-1];
     }
 
+    void filter(fn<bool(T *it)> pred) {
+        List<int> to_remove;
+        to_remove.init();
+
+        for (u32 i = 0; i < len; i++)
+            if (!pred(items + i))
+                to_remove.append(i);
+
+        for (u32 i = 0; i < to_remove.len; i++)
+            remove(to_remove[i] - i);
+    }
+
     bool ensure_cap(s32 new_cap) {
         if (cap >= new_cap)
             return true;

@@ -118,39 +118,44 @@ void Package_Lookup::init(ccstr current_module_filepath) {
     if (!proc.run("go list -m all")) return;
     defer { proc.cleanup(); };
 
+    /*
     List<char> line;
     line.init();
+    */
 
-    while (true) {
-        char ch;
-        bool eof = !proc.read1(&ch);
-        if (eof || ch == '\n') {
-            line.append('\0');
-
-            auto parts = split_string(line.items, ' ');
-            if (parts->len == 1) {
-                module_path = our_strcpy(parts->at(0));
-                add_path(module_path, current_module_filepath);
-            } else if (parts->len == 2) {
-                auto import_path = parts->at(0);
-                auto version = parts->at(1);
-                auto subpath = normalize_path_in_module_cache(our_sprintf("%s@%s", import_path, version));
-                auto path = path_join(GOPATH, "pkg/mod", subpath);
-                add_path(import_path, path);
-            } else if (parts->len == 5) {
-                auto import_path = parts->at(0);
-                auto new_import_path = parts->at(3);
-                auto version = parts->at(4);
-                auto subpath = normalize_path_in_module_cache(our_sprintf("%s@%s", new_import_path, version));
-                auto path = path_join(GOPATH, "pkg/mod", subpath);
-                add_path(import_path, path);
-            }
-
-            line.len = 0;
-            if (eof) break; else continue;
-        }
-        line.append(ch);
+    char ch;
+    while (proc.read1(&ch)) {
+        printf("%c", ch);
+        continue;
     }
+
+    /*
+    do {
+        line.len = 0;
+        for (ch = '\0'; proc.read1(&ch) && ch != '\n'; ch = '\0')
+            line.append(ch);
+
+        line.append('\0');
+        auto parts = split_string(line.items, ' ');
+        if (parts->len == 1) {
+            module_path = our_strcpy(parts->at(0));
+            add_path(module_path, current_module_filepath);
+        } else if (parts->len == 2) {
+            auto import_path = parts->at(0);
+            auto version = parts->at(1);
+            auto subpath = normalize_path_in_module_cache(our_sprintf("%s@%s", import_path, version));
+            auto path = path_join(GOPATH, "pkg/mod", subpath);
+            add_path(import_path, path);
+        } else if (parts->len == 5) {
+            auto import_path = parts->at(0);
+            auto new_import_path = parts->at(3);
+            auto version = parts->at(4);
+            auto subpath = normalize_path_in_module_cache(our_sprintf("%s@%s", new_import_path, version));
+            auto path = path_join(GOPATH, "pkg/mod", subpath);
+            add_path(import_path, path);
+        }
+    } while (ch != '\0');
+    */
 }
 
 // -----
@@ -204,11 +209,22 @@ void Go_Indexer::background_thread() {
     SCOPED_MEM(&mem);
     use_pool_for_tree_sitter = true;
 
-    package_lookup.init(TEST_PATH);
+    {
+        Process proc;
+        proc.init();
+        proc.dir = TEST_PATH;
+        if (!proc.run("go list -m all")) return;
+        defer { proc.cleanup(); };
+
+        char ch;
+        while (proc.read1(&ch)) putchar(ch);
+    }
+
+    // package_lookup.init(TEST_PATH);
 
     Index_Stream s;
 
-#if 0
+#if 1
     crawl_index();
     print("finished crawling index");
     print("writing...");
@@ -466,7 +482,10 @@ void Go_Indexer::process_tree_into_package(
     // add decls
     // ---------
 
-    // TODO: remove decls that belong to filename
+    pkg->decls->filter([&](Godecl *it) -> bool {
+        return !streq(it->file, filename);
+    });
+
     FOR_NODE_CHILDREN (root) {
         switch (it->type) {
         case TS_PACKAGE_CLAUSE:
@@ -487,9 +506,15 @@ void Go_Indexer::process_tree_into_package(
     // add scope_ops
     // -------------
 
-    // TODO: upsert instead of just inserting, and clear scope_ops
-    auto finfo = pkg->files->append();
-    finfo->filename = our_strcpy(filename);
+    auto finfo = pkg->files->find([&](Go_Package_File_Info *it) -> bool {
+        return streq(it->filename, filename);
+    });
+
+    if (finfo == NULL) {
+        finfo = pkg->files->append();
+        finfo->filename = our_strcpy(filename);
+    }
+
     finfo->scope_ops = alloc_list<Go_Scope_Op>();
 
     auto add_scope_op = [&](Go_Scope_Op_Type type) -> Go_Scope_Op * {
@@ -537,7 +562,10 @@ void Go_Indexer::process_tree_into_package(
         return WALK_CONTINUE;
     });
 
-    // TODO: clear individual_imports before inserting
+    pkg->individual_imports->filter([&](Go_Single_Import *it) -> bool {
+        return !streq(it->file, filename);
+    });
+
     // add import info
     FOR_NODE_CHILDREN (root) {
         auto decl_node = it;
@@ -1623,6 +1651,7 @@ void Go_Indexer::init() {
     buildparser_proc.use_stdin = true;
     buildparser_proc.run("go run buildparser.go");
 
+    task_queue_lock.init();
     task_queue.init();
 }
 
