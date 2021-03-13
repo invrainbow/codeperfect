@@ -5,13 +5,7 @@
 #include "utils.hpp"
 #include "mem.hpp"
 #include "os.hpp"
-#include "uthash.h"
 #include "tree_sitter_crap.hpp"
-
-#undef uthash_malloc
-#undef uthash_free
-#define uthash_malloc(sz) alloc_memory(sz)
-#define uthash_free(ptr, sz)
 
 extern "C" TSLanguage *tree_sitter_go();
 
@@ -873,7 +867,7 @@ struct Package_Lookup {
 
     Node *goto_child(Node *node, ccstr name, bool create_if_not_found) {
         for (auto it = node->children; it != NULL; it = it->next)
-            if (streq(it->name, name))
+            if (streqi(it->name, name))
                 return it;
 
         if (create_if_not_found) {
@@ -923,7 +917,7 @@ struct Package_Lookup {
         return new_filepath;
     }
 
-    ccstr convert_path(Node *root, ccstr path) {
+    ccstr convert_path(Node *root, ccstr path, char sep) {
         auto parts = make_path(path)->parts;
 
         Node *curr = root;
@@ -951,15 +945,15 @@ struct Package_Lookup {
 
         Path p;
         p.init(ret);
-        return p.str();
+        return normalize_path_separator((cstr)p.str(), sep);
     }
 
     ccstr resolve_import(ccstr import_path) {
-        return convert_path(root_import_to_resolved, import_path);
+        return convert_path(root_import_to_resolved, import_path, '\\');
     }
 
     ccstr resolved_path_to_import_path(ccstr resolved_path) {
-        return convert_path(root_resolved_to_import, resolved_path);
+        return convert_path(root_resolved_to_import, resolved_path, '/');
     }
 };
 
@@ -1002,6 +996,36 @@ struct Indexer_Task {
             // gomod_changed
         };
     };
+};
+
+enum Tok_Type {
+    TOK_ILLEGAL,
+    TOK_EOF,
+    TOK_COMMENT,
+    TOK_ID,
+};
+
+struct Token {
+    Tok_Type type;
+    cur2 start;
+    cur2 end;
+};
+
+// we used to have a full on parser that could parse the whole go language in
+// theory, but it was shit and it kept running into problems and crashing. but
+// the advantage it had over tree-sitter was that it could parse a single rule
+// instead of the whole file. so we are going to use it to parse just the
+// package declaration from files, for get_package_name().
+struct Parser {
+    Parser_It* it;
+    Token tok;
+    ccstr filepath; // for debugging purposes
+
+    void init(Parser_It* _it, ccstr _filepath = NULL);
+    void lex();
+    ccstr get_package_name();
+    ccstr get_token_string();
+    bool match_token_to_string(ccstr str);
 };
 
 struct Go_Indexer {
@@ -1083,6 +1107,7 @@ struct Go_Indexer {
         ccstr filename,
         ccstr *package_name
     );
+    void iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> cb, ccstr filename);
 };
 
 Ast_Node *new_ast_node(TSNode node, Parser_It *it);

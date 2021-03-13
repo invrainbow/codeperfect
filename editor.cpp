@@ -334,6 +334,7 @@ void Editor::init() {
     SCOPED_MEM(&mem);
 
     parser = new_ts_parser();
+
     buf_lock.init();
 
     nvim_edit_mem.init("editor nvim_edit_mem");
@@ -384,6 +385,9 @@ void Editor::process_nvim_edit(Edit_From_Nvim *edit) {
 }
 
 void Editor::cleanup() {
+    ts_parser_delete(parser);
+    ts_tree_delete(tree); // i remember this being super slow, is it still if it's just one tree?
+
     mem.cleanup();
     buf_lock.cleanup();
     nvim_edit_lock.cleanup();

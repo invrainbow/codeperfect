@@ -14,8 +14,9 @@ bool run_tests() {
 
     indexer.init();
     indexer.package_lookup.init("c:\\users\\brandon\\compose-cli");
-    auto path = indexer.package_lookup.resolve_import("github.com/docker/compose-cli/local/moby");
-    print("%s", path);
+    indexer.start_background_thread();
+
+    while (true) continue;
 
     /*
     indexer.crawl_index();

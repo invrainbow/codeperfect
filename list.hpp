@@ -51,6 +51,7 @@ struct List {
             items = (T*)our_malloc(sizeof(T) * cap);
             if (items == NULL)
                 panic("unable to our_malloc for array");
+            global_mem_allocated += sizeof(T) * cap;
             mem0(items, sizeof(T) * cap);
             break;
         case LIST_CHUNK:
@@ -64,6 +65,7 @@ struct List {
     void cleanup() {
         switch (mode) {
         case LIST_MALLOC:
+            global_mem_allocated -= sizeof(T) * cap;
             our_free(items);
             break;
         case LIST_CHUNK:
@@ -118,12 +120,19 @@ struct List {
 
         switch (mode) {
         case LIST_MALLOC:
-            while (cap < new_cap)
-                cap *= 2;
-            items = (T*)realloc(items, sizeof(T) * cap);
-            if (items == NULL)
-                return false;
-            mem0(items + len, sizeof(T) * (cap - len));
+            {
+                auto old_cap = cap;
+                while (cap < new_cap)
+                    cap *= 2;
+                items = (T*)realloc(items, sizeof(T) * cap);
+                if (items == NULL)
+                    return false;
+
+                global_mem_allocated -= sizeof(T) * old_cap;
+                global_mem_allocated += sizeof(T) * cap;
+
+                mem0(items + len, sizeof(T) * (cap - len));
+            }
             break;
 
         case LIST_POOL:

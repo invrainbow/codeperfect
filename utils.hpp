@@ -3,7 +3,7 @@
 #include "common.hpp"
 #include "os.hpp"
 #include "mem.hpp"
-#include "uthash.h"
+#include "hash.hpp"
 
 ccstr our_format_json(ccstr s);
 ccstr our_strcpy(ccstr s);
