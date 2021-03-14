@@ -9,6 +9,50 @@
 
 UI ui;
 
+ccstr image_filenames[] = {
+    "images/add.png",
+    "images/folder.png",
+    "images/add-folder.png",
+};
+
+bool UI::init_sprite_texture() {
+    sprite_tex_size = 1024;
+
+    glActiveTexture(GL_TEXTURE0 + TEXTURE_IMAGES);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+    {
+        SCOPED_FRAME();
+
+        stbrp_context context;
+        s32 node_count = 4096 * 2;
+        auto nodes = alloc_array(stbrp_node, node_count);
+
+        stbrp_init_target(&context, 4096, 4096, nodes, node_count);
+        if (!stbrp_pack_rects(&context, sprite_rects.items, sprite_rects.len))
+            return false;
+
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, sprite_tex_size, sprite_tex_size, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+
+        u32 i = 0;
+        For (sprite_rects) {
+            int w = 0, h = 0, chans = 0;
+            auto data = stbi_load(image_filenames[i], &w, &h, &chans, STBI_rgb_alpha);
+            assert(chans == 4);
+
+            if (data == NULL) return false;
+            defer { stbi_image_free(data); };
+
+            assert(it.w == w);
+            assert(it.h == h);
+
+            glTexSubImage2D(GL_TEXTURE_2D, 0, it.x, it.y, w, h, GL_RGBA, GL_UNSIGNED_BYTE, data);
+            i++;
+        }
+    }
+}
+
 #define LINE_HEIGHT 1.2
 
 vec3f rgb_hex(ccstr s) {
@@ -191,6 +235,19 @@ void UI::init() {
     ptr0(this);
     font = &world.font;
     editor_sizes.init(LIST_FIXED, _countof(_editor_sizes), _editor_sizes);
+
+    sprite_rects.init();
+
+    For (image_filenames) {
+        int w = 0, h = 0, comp = 0;
+        auto data = stbi_load(it, &w, &h, &comp, STBI_rgb_alpha);
+        assert(data != NULL);
+        defer { stbi_image_free(data); };
+
+        auto rect = sprite_rects.append();
+        rect->w = w;
+        rect->h = h;
+    }
 }
 
 void UI::flush_verts() {
@@ -201,7 +258,7 @@ void UI::flush_verts() {
     verts.len = 0;
 }
 
-void UI::draw_triangle(vec2f a, vec2f b, vec2f c, vec2f uva, vec2f uvb, vec2f uvc, vec4f color, bool solid) {
+void UI::draw_triangle(vec2f a, vec2f b, vec2f c, vec2f uva, vec2f uvb, vec2f uvc, vec4f color, Draw_Mode mode, Texture_Id texture) {
     if (verts.len + 3 >= verts.cap)
         flush_verts();
 
@@ -212,12 +269,12 @@ void UI::draw_triangle(vec2f a, vec2f b, vec2f c, vec2f uva, vec2f uvb, vec2f uv
     c.x *= world.display_scale.x;
     c.y *= world.display_scale.y;
 
-    verts.append({ a.x, a.y, uva.x, uva.y, color, solid });
-    verts.append({ b.x, b.y, uvb.x, uvb.y, color, solid });
-    verts.append({ c.x, c.y, uvc.x, uvc.y, color, solid });
+    verts.append({ a.x, a.y, uva.x, uva.y, color, mode, texture });
+    verts.append({ b.x, b.y, uvb.x, uvb.y, color, mode, texture });
+    verts.append({ c.x, c.y, uvc.x, uvc.y, color, mode, texture });
 }
 
-void UI::draw_quad(boxf b, boxf uv, vec4f color, bool solid) {
+void UI::draw_quad(boxf b, boxf uv, vec4f color, Draw_Mode mode, Texture_Id texture) {
     if (verts.len + 6 >= verts.cap)
         flush_verts();
 
@@ -229,7 +286,8 @@ void UI::draw_quad(boxf b, boxf uv, vec4f color, bool solid) {
         {uv.x, uv.y},
         {uv.x + uv.w, uv.y},
         color,
-        solid
+        mode,
+        texture
     );
 
     draw_triangle(
@@ -240,13 +298,13 @@ void UI::draw_quad(boxf b, boxf uv, vec4f color, bool solid) {
         {uv.x + uv.w, uv.y},
         {uv.x + uv.w, uv.y + uv.h},
         color,
-        solid
+        mode,
+        texture
     );
-
 }
 
 void UI::draw_rect(boxf b, vec4f color) {
-    draw_quad(b, { 0, 0, 1, 1 }, color, true);
+    draw_quad(b, { 0, 0, 1, 1 }, color, DRAW_SOLID);
 }
 
 void UI::draw_rounded_rect(boxf b, vec4f color, float radius, int round_flags) {
@@ -299,7 +357,7 @@ void UI::draw_rounded_rect(boxf b, vec4f color, float radius, int round_flags) {
             vec2f v1 = {center.x + radius * cos(ang1), center.y - radius * sin(ang1)};
             vec2f v2 = {center.x + radius * cos(ang2), center.y - radius * sin(ang2)};
 
-            draw_triangle(center, v1, v2, zero, zero, zero, color, true);
+            draw_triangle(center, v1, v2, zero, zero, zero, color, DRAW_SOLID);
         }
     };
 
@@ -346,7 +404,7 @@ void UI::draw_char(vec2f* pos, char ch, vec4f color) {
     if (q.x1 > q.x0) {
         boxf box = { q.x0, q.y0, q.x1 - q.x0, q.y1 - q.y0 };
         boxf uv = { q.s0, q.t0, q.s1 - q.s0, q.t1 - q.t0 };
-        draw_quad(box, uv, color, false);
+        draw_quad(box, uv, color, DRAW_FONT_MASK);
     }
 }
 
@@ -413,8 +471,6 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
         // prepare opengl for drawing shit
         glViewport(0, 0, world.display_size.x, world.display_size.y);
         glUseProgram(program);
-        glActiveTexture(GL_TEXTURE0); // activate texture
-        glBindTexture(GL_TEXTURE_2D, font->texid);
         glBindVertexArray(vao); // bind my vertex array & buffers
         glBindBuffer(GL_ARRAY_BUFFER, vbo);
         verts.init(LIST_FIXED, 6 * 128, alloc_array(Vert, 6 * 128));
@@ -1026,10 +1082,30 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
         }
     }
 
+    draw_image(SIMAGE_ADD, new_vec2f(100, 100), new_vec2f(24, 24));
+    draw_image(SIMAGE_ADD_FOLDER, new_vec2f(200, 100), new_vec2f(24, 24));
+    draw_image(SIMAGE_FOLDER, new_vec2f(300, 100), new_vec2f(24, 24));
+
     // TODO: draw 'search anywhere' window
     flush_verts();
 
     recalculate_view_sizes();
+}
+
+void UI::draw_image(Sprites_Image_Type image_id, vec2f pos, vec2f size) {
+    auto rect = &sprite_rects[image_id];
+
+    boxf b;
+    b.pos = pos;
+    b.size = size;
+
+    boxf uv;
+    uv.x = rect->x / sprite_tex_size;
+    uv.y = rect->y / sprite_tex_size;
+    uv.w = rect->w / sprite_tex_size;
+    uv.h = rect->h / sprite_tex_size;
+
+    draw_quad(b, uv, {0}, DRAW_IMAGE, TEXTURE_IMAGES);
 }
 
 boxf UI::get_build_results_area() {

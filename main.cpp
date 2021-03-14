@@ -82,17 +82,19 @@ char vert_shader[] = R"(
 in vec2 pos;
 in vec2 uv;
 in vec4 color;
-in int solid;
+in int mode;
+in int texture_id;
 out vec2 _uv;
 out vec4 _color;
-flat out int _solid;
+flat out int _mode;
+flat out int _texture_id;
 uniform mat4 projection;
 
 void main(void) {
     _uv = uv;
     _color = color;
-    _solid = solid;
-
+    _mode = mode;
+    _texture_id = texture_id;
     gl_Position = projection * vec4(pos, 0, 1);
 }
 )";
@@ -102,12 +104,41 @@ char frag_shader[] = R"(
 
 in vec2 _uv;
 in vec4 _color;
-flat in int _solid;
+flat in int _mode;
+flat in int _texture_id;
 out vec4 outcolor;
-uniform sampler2D tex;
+uniform sampler2D tex0;
+uniform sampler2D tex1;
+uniform sampler2D tex2;
+uniform sampler2D tex3;
+uniform sampler2D tex4;
+uniform sampler2D tex5;
+
+vec4 our_texture(vec2 uv) {
+    if (_texture_id == 0) return texture(tex0, uv);
+    if (_texture_id == 1) return texture(tex1, uv);
+    if (_texture_id == 2) return texture(tex2, uv);
+    if (_texture_id == 3) return texture(tex3, uv);
+    if (_texture_id == 4) return texture(tex4, uv);
+    if (_texture_id == 5) return texture(tex5, uv);
+    return vec4(0);
+}
 
 void main(void) {
-    outcolor = vec4(_color.rgb, (_solid == 1 ? _color.a : texture(tex, _uv).r));
+    switch (_mode) {
+    case 0: // DRAW_SOLID
+        outcolor = vec4(_color.rgb, 1);
+        break;
+    case 1: // DRAW_MASK
+        outcolor = vec4(_color.rgb, our_texture(_uv).r);
+        break;
+    case 2: // DRAW_IMAGE
+        outcolor = our_texture(_uv);
+        break;
+    case 3: // DRAW_MASK_IMAGE
+        outcolor = vec4(_color.rgb, (0.5 + dot(vec3(0.33, 0.33, 0.33), our_texture(_uv).rgb) * 0.5) * our_texture(_uv).a);
+        break;
+    }
 }
 )";
 
@@ -785,26 +816,36 @@ int main() {
     // now that we have world.display_size, we can call wksp.activate_pane
     world.wksp.activate_pane(0);
 
-    if (!world.font.init(vera_mono_ttf, FONT_SIZE))
-        return error("could not initialize font"), EXIT_FAILURE;
-    io.Fonts->AddFontFromMemoryTTF(vera_mono_ttf, vera_mono_ttf_len, FONT_SIZE);
+    // initialize & bind textures
+    glGenTextures(__TEXTURE_COUNT__, world.ui.textures);
+    for (u32 i = 0; i < __TEXTURE_COUNT__; i++) {
+        glActiveTexture(GL_TEXTURE0 + i);
+        glBindTexture(GL_TEXTURE_2D, world.ui.textures[i]);
+    }
+    // from here, if we want to modify a texture, just set the active texture
+    // are we going to run out of texture units?
 
-    GLuint im_font_texture;
+    if (!world.font.init(vera_mono_ttf, FONT_SIZE, TEXTURE_FONT))
+        return error("could not initialize font"), EXIT_FAILURE;
+
+    ui.init_sprite_texture();
+
     {
         // init imgui texture
+        io.Fonts->AddFontFromMemoryTTF(vera_mono_ttf, vera_mono_ttf_len, FONT_SIZE);
+
         u8* pixels;
         i32 width, height;
-
         io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
 
-        glGenTextures(1, &im_font_texture);
-        glBindTexture(GL_TEXTURE_2D, im_font_texture);
+        glActiveTexture(GL_TEXTURE0 + TEXTURE_FONT_IMGUI);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
 
-        io.Fonts->TexID = (void*)(intptr_t)im_font_texture;
+        // i don't think this is needed
+        // io.Fonts->TexID = (void*)TEXTURE_FONT_IMGUI;
     }
 
     glfwSetWindowSizeCallback(world.window, [](GLFWwindow* wnd, i32 w, i32 h) {
@@ -1391,6 +1432,7 @@ int main() {
 
                                 // TODO: when do we stop debugging? do we kill this thread, wait for it to die, etc?
                                 /*
+                                // TODO: remember that create_thread allocates memory now
                                 dbg.thread = create_thread(debugger_loop_thread, NULL);
                                 if (dbg.thread == NULL) {
                                     error("unable to create thread to start process: %s", get_last_error());
@@ -1662,17 +1704,24 @@ int main() {
         glEnableVertexAttribArray(loc);
         glVertexAttribPointer(loc, 4, GL_FLOAT, GL_FALSE, sizeof(Vert), (void*)_offsetof(Vert, color));
 
-        loc = glGetAttribLocation(world.ui.program, "solid");
+        loc = glGetAttribLocation(world.ui.program, "mode");
         glEnableVertexAttribArray(loc);
-        glVertexAttribIPointer(loc, 1, GL_INT, sizeof(Vert), (void*)_offsetof(Vert, solid));
+        glVertexAttribIPointer(loc, 1, GL_INT, sizeof(Vert), (void*)_offsetof(Vert, mode));
+
+        loc = glGetAttribLocation(world.ui.program, "texture_id");
+        glEnableVertexAttribArray(loc);
+        glVertexAttribIPointer(loc, 1, GL_INT, sizeof(Vert), (void*)_offsetof(Vert, texture_id));
 
         loc = glGetUniformLocation(world.ui.program, "projection");
         mat4f ortho_projection;
         new_ortho_matrix(ortho_projection, 0, world.display_size.x, world.display_size.y, 0);
         glUniformMatrix4fv(loc, 1, GL_FALSE, (float*)ortho_projection);
 
-        loc = glGetUniformLocation(world.ui.program, "tex");
-        glUniform1i(loc, 0);
+        for (u32 i = 0; i < __TEXTURE_COUNT__; i++) {
+            char key[] = {'t', 'e', 'x', '0' + i, '\0'};
+            loc = glGetUniformLocation(world.ui.program, key);
+            glUniform1i(loc, i);
+        }
     }
 
     {
@@ -1701,7 +1750,7 @@ int main() {
         glUniformMatrix4fv(loc, 1, GL_FALSE, (float*)ortho_projection);
 
         loc = glGetUniformLocation(world.ui.im_program, "tex");
-        glUniform1i(loc, 0);
+        glUniform1i(loc, TEXTURE_FONT_IMGUI);
     }
 
     // Wait until all the OpenGL crap is initialized. I don't know why, but
@@ -2227,7 +2276,6 @@ int main() {
             glViewport(0, 0, world.display_size.x, world.display_size.y);
             glUseProgram(world.ui.im_program);
             glBindVertexArray(im_vao);
-            glBindTexture(GL_TEXTURE_2D, im_font_texture);
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
             glEnable(GL_SCISSOR_TEST);
 
@@ -2244,8 +2292,6 @@ int main() {
 
                 for (i32 j = 0; j < cmd_list->CmdBuffer.Size; j++) {
                     const ImDrawCmd* cmd = &cmd_list->CmdBuffer[j];
-
-                    glBindTexture(GL_TEXTURE_2D, (GLuint)(intptr_t)cmd->TextureId);
                     glScissor(cmd->ClipRect.x, (world.display_size.y - cmd->ClipRect.w), (cmd->ClipRect.z - cmd->ClipRect.x), (cmd->ClipRect.w - cmd->ClipRect.y));
                     glDrawElements(GL_TRIANGLES, cmd->ElemCount, elem_size, offset);
                     offset += cmd->ElemCount;

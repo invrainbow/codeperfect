@@ -2,21 +2,29 @@
 
 #include <math.h>
 #include "stb_truetype.h"
+#include "stb_image.h"
+#include "stb_rect_pack.h"
 #include "common.hpp"
 #include "editor.hpp"
 #include "list.hpp"
 #include <GL/glew.h>
 
+enum Texture_Id {
+    TEXTURE_FONT,
+    TEXTURE_FONT_IMGUI,
+    TEXTURE_IMAGES,
+    __TEXTURE_COUNT__,
+};
+
 struct Font {
     stbtt_packedchar char_info['~' - ' ' + 1];
 
-    GLuint texid;
     i32 tex_size;
     i32 offset_y;
     i32 height;
     float width;
 
-    bool init(u8* font_data, u32 font_size) {
+    bool init(u8* font_data, u32 font_size, int texture_id) {
         height = font_size;
         tex_size = (i32)pow(2.0f, (i32)log2(sqrt((float)height * height * 128)) + 1);
 
@@ -41,8 +49,7 @@ struct Font {
 
         stbtt_PackEnd(&context);
 
-        glGenTextures(1, &texid);
-        glBindTexture(GL_TEXTURE_2D, texid);
+        glActiveTexture(GL_TEXTURE0 + texture_id);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, tex_size, tex_size, 0, GL_RED, GL_UNSIGNED_BYTE, atlas_data);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -72,16 +79,8 @@ struct Vert {
     float u;
     float v;
     vec4f color;
-    i32 solid;
-};
-
-struct Im_Vert {
-    float x;
-    float y;
-    float u;
-    float v;
-    vec3f color;
-    i32 solid;
+    i32 mode;
+    i32 texture_id;
 };
 
 u32 advance_subtree_in_file_explorer(u32 i);
@@ -95,17 +94,40 @@ const auto EDITOR_MARGIN_Y = 5.0;
 #define ROUND_BR (1 << 3)
 #define ROUND_ALL (ROUND_TL | ROUND_BL | ROUND_TR | ROUND_BR)
 
+// these names are shit lol
+enum Draw_Mode {
+    DRAW_SOLID = 0,         // draw solid color
+    DRAW_FONT_MASK = 1,     // draw color using texture(...).r as mask
+    DRAW_IMAGE = 2,         // draw a texture directly
+    DRAW_IMAGE_MASK = 3,    // draw color using texture(...).a as mask
+};
+
+enum Sprites_Image_Type {
+    SIMAGE_ADD,
+    SIMAGE_FOLDER,
+    SIMAGE_ADD_FOLDER,
+};
+
+struct Image_To_Draw {
+    Sprites_Image_Type image_id;
+    boxf box;
+    boxf uv;
+};
+
 struct UI {
     Font* font;
     List<Vert> verts;
 
     vec2f _editor_sizes[MAX_PANES];
     List<vec2f> editor_sizes;
+    List<stbrp_rect> sprite_rects;
+    float sprite_tex_size;
 
     void init();
+    bool init_sprite_texture();
     void flush_verts();
-    void draw_triangle(vec2f a, vec2f b, vec2f c, vec2f uva, vec2f uvb, vec2f uvc, vec4f color, bool solid);
-    void draw_quad(boxf b, boxf uv, vec4f color, bool solid);
+    void draw_triangle(vec2f a, vec2f b, vec2f c, vec2f uva, vec2f uvb, vec2f uvc, vec4f color, Draw_Mode mode, Texture_Id texture = TEXTURE_FONT);
+    void draw_quad(boxf b, boxf uv, vec4f color, Draw_Mode mode, Texture_Id texture = TEXTURE_FONT);
     void draw_rect(boxf b, vec4f color);
     void draw_rounded_rect(boxf b, vec4f color, float radius, int round_flags);
     void draw_bordered_rect_outer(boxf b, vec4f color, vec4f border_color, int border_width, float radius = 0);
@@ -121,6 +143,8 @@ struct UI {
     i32 get_current_resize_area(boxf* out);
     bool was_area_clicked(boxf area);
     List<vec2f> *get_pane_editor_sizes();
+    void draw_image(Sprites_Image_Type image_id, vec2f pos, vec2f size);
+    void flush_images();
 };
 
 extern UI ui;

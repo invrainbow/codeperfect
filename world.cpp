@@ -87,6 +87,7 @@ void World::init() {
     init_mem(nvim_mem);
     init_mem(nvim_loop_mem);
     init_mem(build_index_mem);
+    init_mem(ui_mem);
 #undef init_mem
 
     chunk0_fridge.init(512);
@@ -123,7 +124,10 @@ void World::init() {
     // TODO: allow user to enter this command himself
     strcpy_safe(world.settings.build_command, _countof(world.settings.build_command), "go build helper.go");
 
-    ::ui.init();
+    {
+        SCOPED_MEM(&ui_mem);
+        ::ui.init();
+    }
 }
 
 void World::start_background_threads() {

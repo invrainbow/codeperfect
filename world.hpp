@@ -69,6 +69,7 @@ struct World {
     Pool file_tree_mem;
     Pool build_mem;
     Pool build_index_mem;
+    Pool ui_mem;
 
     Fridge<Chunk0> chunk0_fridge;
     Fridge<Chunk1> chunk1_fridge;
@@ -194,6 +195,7 @@ struct World {
         bool mouse_down[ImGuiMouseButton_COUNT];
         bool mouse_just_pressed[ImGuiMouseButton_COUNT];
         GLFWcursor* cursors[ImGuiMouseCursor_COUNT];
+        GLuint textures[__TEXTURE_COUNT__];
     } ui;
 
     struct Windows_Open {
