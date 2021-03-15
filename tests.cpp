@@ -18,6 +18,9 @@ bool run_tests() {
 
     while (true) continue;
 
+    // auto resp = indexer.run_gohelper_command(GH_OP_RESOLVE_IMPORT_PATH, "k8s.io/apiserver/pkg/util/feature");
+    // print("%s", resp);
+
     /*
     indexer.crawl_index();
     // indexer.background_thread();

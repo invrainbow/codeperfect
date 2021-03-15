@@ -115,7 +115,7 @@ void Package_Lookup::init(ccstr current_module_filepath) {
     Process proc;
     proc.init();
     proc.dir = current_module_filepath;
-    if (!proc.run("go list -m all")) return;
+    if (!proc.run("go list -mod=mod -m all")) return;
     defer { proc.cleanup(); };
 
     List<char> line;
@@ -315,7 +315,7 @@ void Go_Indexer::background_thread() {
 
     Index_Stream s;
 
-#if 0
+#if 1
     crawl_index();
     print("finished crawling index");
     print("writing...");
@@ -787,6 +787,7 @@ void Go_Indexer::crawl_index() {
             }
 
             if (streq(ent->name, "vendor")) return;
+            if (streq(ent->name, ".git")) return;
 
             process_initial_imports(
                 normalize_path_separator((cstr)path_join(import_path, ent->name), '/'),
@@ -909,13 +910,43 @@ u64 Go_Indexer::hash_package(ccstr resolved_package_path) {
 
 // i can't believe this but we *may* need to just do interop with go
 bool Go_Indexer::is_file_included_in_build(ccstr path) {
-    buildparser_proc.writestr(path);
-    buildparser_proc.write1('\n');
+    auto resp = run_gohelper_command(GH_OP_CHECK_INCLUDED_IN_BUILD, path, NULL);
+    return streq(resp, "true");
+}
 
-    char ch = 0;
-    if (!buildparser_proc.read1(&ch))
-        panic("buildparser crashed, we're not going to be able to do anything");
-    return (ch == 1);
+ccstr Go_Indexer::run_gohelper_command(Gohelper_Op op, ...) {
+    va_list vl;
+    va_start(vl, op);
+
+    gohelper_proc.writestr(our_sprintf("%d", op));
+    gohelper_proc.write1('\n');
+
+    ccstr param = NULL;
+    while ((param = va_arg(vl, ccstr)) != NULL) {
+        gohelper_proc.writestr(param);
+        gohelper_proc.write1('\n');
+    }
+
+    auto read_line = [&]() -> ccstr {
+        auto ret = alloc_list<char>();
+        char ch;
+        while (true) {
+            assert(gohelper_proc.read1(&ch), "gohelper crashed, we can't do anything anymore");
+            if (ch == '\n') break;
+            ret->append(ch);
+        }
+        ret->append('\0');
+        return ret->items;
+    };
+
+    auto ret = read_line();
+    if (streq(ret, "error")) {
+        gohelper_returned_error = true;
+        return read_line();
+    }
+
+    gohelper_returned_error = true;
+    return ret;
 }
 
 List<ccstr>* Go_Indexer::list_source_files(ccstr dirpath, bool include_tests) {
@@ -1833,9 +1864,9 @@ void Go_Indexer::init() {
         strcpy_safe(current_exe_path, _countof(current_exe_path), path);
     }
 
-    buildparser_proc.dir = current_exe_path;
-    buildparser_proc.use_stdin = true;
-    buildparser_proc.run("go run buildparser.go");
+    gohelper_proc.dir = TEST_PATH;
+    gohelper_proc.use_stdin = true;
+    gohelper_proc.run(our_sprintf("go run %s", path_join(current_exe_path, "helper/helper.go")));
 
     task_queue_lock.init();
     task_queue.init();
@@ -1848,7 +1879,7 @@ void Go_Indexer::cleanup() {
         bgthread = NULL;
     }
 
-    buildparser_proc.cleanup();
+    gohelper_proc.cleanup();
     mem.cleanup();
     final_mem.cleanup();
     ui_mem.cleanup();

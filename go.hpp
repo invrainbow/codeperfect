@@ -1029,6 +1029,12 @@ struct Parser {
     bool match_token_to_string(ccstr str);
 };
 
+enum Gohelper_Op {
+    GH_OP_INVALID,
+    GH_OP_CHECK_INCLUDED_IN_BUILD,
+    GH_OP_RESOLVE_IMPORT_PATH,
+};
+
 struct Go_Indexer {
     Pool mem;        // mem that exists for lifetime of Go_Indexer
     Pool final_mem;  // memory that holds the final value of this->index`
@@ -1039,7 +1045,8 @@ struct Go_Indexer {
     Go_Index index;
 
     char current_exe_path[MAX_PATH];
-    Process buildparser_proc;
+    Process gohelper_proc;
+    bool gohelper_returned_error;
 
     Thread_Handle bgthread;
 
@@ -1066,6 +1073,7 @@ struct Go_Indexer {
     void process_package(ccstr import_path);
 
     bool is_file_included_in_build(ccstr path);
+    ccstr run_gohelper_command(Gohelper_Op op, ...);
     List<ccstr>* list_source_files(ccstr dirpath, bool include_tests);
     ccstr get_package_name(ccstr path);
     ccstr get_package_path(ccstr import_path);
