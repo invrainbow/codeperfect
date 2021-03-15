@@ -126,8 +126,8 @@ void Package_Lookup::init(ccstr current_module_filepath) {
         line.len = 0;
         for (ch = '\0'; proc.read1(&ch) && ch != '\n'; ch = '\0')
             line.append(ch);
-
         line.append('\0');
+
         auto parts = split_string(line.items, ' ');
         if (parts->len == 1) {
             module_path = our_strcpy(parts->at(0));
@@ -945,7 +945,7 @@ ccstr Go_Indexer::run_gohelper_command(Gohelper_Op op, ...) {
         return read_line();
     }
 
-    gohelper_returned_error = true;
+    gohelper_returned_error = false;
     return ret;
 }
 
