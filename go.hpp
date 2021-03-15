@@ -746,6 +746,7 @@ struct Gotype {
         struct {
             Gotype *lazy_one_of_multi_base;
             int lazy_one_of_multi_index;
+            bool lazy_one_of_multi_is_single; // lhs.len == 1 && rhs.len == 1
         };
     };
 

@@ -2148,7 +2148,7 @@ void Go_Indexer::import_spec_to_decl(Ast_Node *spec_node, Godecl *decl) {
 bool Go_Indexer::assignment_to_decls(List<Ast_Node*> *lhs, List<Ast_Node*> *rhs, New_Godecl_Func new_godecl) {
     if (lhs->len == 0 || rhs->len == 0) return false;
 
-    if (lhs->len > 1 && rhs->len == 1) {
+    if (rhs->len == 1) {
         auto multi_type = expr_to_gotype(rhs->at(0));
 
         u32 index = 0;
@@ -2163,6 +2163,7 @@ bool Go_Indexer::assignment_to_decls(List<Ast_Node*> *lhs, List<Ast_Node*> *rhs,
             auto gotype = new_gotype(GOTYPE_LAZY_ONE_OF_MULTI);
             gotype->lazy_one_of_multi_base = multi_type;
             gotype->lazy_one_of_multi_index = index;
+            gotype->lazy_one_of_multi_is_single = (lhs->len == 1);
 
             auto decl = new_godecl();
             decl->name = it->string();
@@ -2626,7 +2627,13 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
         {
             auto res = evaluate_type(gotype->lazy_one_of_multi_base, ctx);
             if (res == NULL) return NULL;
-            if (res->gotype->type != GOTYPE_MULTI) return NULL;
+
+            if (res->gotype->type != GOTYPE_MULTI) {
+                // means we got foo := bar (lhs.len == 1, rhs.len == 1), just return type of bar here
+                if (gotype->lazy_one_of_multi_is_single)
+                    return res;
+                return NULL;
+            }
 
             auto ret = res->gotype->multi_types->at(gotype->lazy_one_of_multi_index);
             return evaluate_type(ret, res->ctx);
