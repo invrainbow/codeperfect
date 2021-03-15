@@ -116,6 +116,7 @@ void World::init() {
 
     sidebar.width = 300;
     error_list.height = 150;
+    file_explorer.selection = -1;
 
     windows_open.search_and_replace = false;
     windows_open.build_and_debug = false;

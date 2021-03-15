@@ -136,7 +136,8 @@ void main(void) {
         outcolor = our_texture(_uv);
         break;
     case 3: // DRAW_MASK_IMAGE
-        outcolor = vec4(_color.rgb, (0.5 + dot(vec3(0.33, 0.33, 0.33), our_texture(_uv).rgb) * 0.5) * our_texture(_uv).a);
+        // outcolor = vec4(_color.rgb, (0.5 + dot(vec3(0.33, 0.33, 0.33), our_texture(_uv).rgb) * 0.5) * our_texture(_uv).a);
+        outcolor = vec4(_color.rgb, our_texture(_uv).a);
         break;
     }
 }

@@ -156,6 +156,10 @@ struct World {
 
     struct {
         i32 scroll_offset;
+        i32 selection;
+        // char buf[256];
+        // bool adding_something;
+        // bool thing_being_added_is_file;
     } file_explorer;
 
     // in the future, multiple workspaces?
