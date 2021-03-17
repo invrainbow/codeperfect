@@ -486,13 +486,14 @@ bool Fs_Watcher::init(ccstr _path) {
     ptr0(this);
 
     path = _path;
-    dir_handle = CreateFileA(path, FILE_LIST_DIRECTORY, FILE_SHARE_WRITE | FILE_SHARE_READ | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+    dir_handle = CreateFileA(path, FILE_LIST_DIRECTORY, FILE_SHARE_WRITE | FILE_SHARE_READ | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED, NULL);
     if (dir_handle == INVALID_HANDLE_VALUE) {
         print("unable to create file for fswatcher: %s", get_last_error());
         return false;
     }
 
     buf = alloc_array(FILE_NOTIFY_INFORMATION, FS_WATCHER_BUFSIZE);
+    initiate_wait();
     return true;
 }
 
@@ -500,22 +501,30 @@ void Fs_Watcher::cleanup() {
     if (dir_handle != NULL) CloseHandle(dir_handle);
 }
 
+bool Fs_Watcher::initiate_wait() {
+    auto flags = FILE_NOTIFY_CHANGE_FILE_NAME |
+        FILE_NOTIFY_CHANGE_DIR_NAME |
+        FILE_NOTIFY_CHANGE_ATTRIBUTES |
+        FILE_NOTIFY_CHANGE_LAST_WRITE |
+        FILE_NOTIFY_CHANGE_CREATION;
+
+    if (!ReadDirectoryChangesW(dir_handle, buf, sizeof(FILE_NOTIFY_INFORMATION) * FS_WATCHER_BUFSIZE, TRUE, flags, NULL, &ol, NULL)) {
+        error("unable to read directory changes: %s", get_last_error());
+        return false;
+    }
+    return true;
+}
+
 bool Fs_Watcher::next_event(Fs_Event *event) {
     if (!has_more) {
-        auto flags = FILE_NOTIFY_CHANGE_FILE_NAME |
-            FILE_NOTIFY_CHANGE_DIR_NAME |
-            FILE_NOTIFY_CHANGE_ATTRIBUTES |
-            FILE_NOTIFY_CHANGE_LAST_WRITE |
-            FILE_NOTIFY_CHANGE_CREATION;
-
-        DWORD bytes_transferred = 0;
-        if (!ReadDirectoryChangesW(dir_handle, buf, sizeof(FILE_NOTIFY_INFORMATION) * FS_WATCHER_BUFSIZE, TRUE, flags, &bytes_transferred, NULL, NULL)) {
-            print("unable to read directory changes: %s", get_last_error());
+        DWORD bytes_read = 0;
+        if (!GetOverlappedResult(dir_handle, &ol, &bytes_read, FALSE))
             return false;
-        }
 
-        if (bytes_transferred == 0) {
-            print("bytes transferred was 0");
+        initiate_wait();
+
+        if (bytes_read == 0) {
+            print("number of events overflowed our FILE_NOTIFY_INFORMATION buffer");
             return false;
         }
 
@@ -557,8 +566,7 @@ bool Fs_Watcher::next_event(Fs_Event *event) {
 
         if (info->Action != FILE_ACTION_RENAMED_NEW_NAME) return false;
 
-        strcpy_safe(event->old_filepath, _countof(event->old_filepath), event->filepath);
-        copy_file_name(info, event->filepath, _countof(event->filepath));
+        copy_file_name(info, event->new_filepath, _countof(event->new_filepath));
         break;
     }
 

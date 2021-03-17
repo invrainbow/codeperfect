@@ -196,23 +196,6 @@ const char* read_from_parser_input(void *p, uint32_t off, TSPoint pos, uint32_t 
     return buf;
 }
 
-/*
-Ast* Parser::parse_id() {
-    auto lit = tok.lit;
-    bool bad = false;
-
-    if (tok.type != TOK_ID) {
-        lit = "_";
-        bad = true;
-    }
-
-    auto ast = new_ast(AST_ID, expect(TOK_ID));
-    ast->id.lit = lit;
-    ast->id.bad = bad;
-    return fill_end(ast);
-}
-*/
-
 void Parser::init(Parser_It* _it, ccstr _filepath) {
     ptr0(this);
     it = _it;
@@ -307,6 +290,47 @@ ccstr Parser::get_package_name() {
     return get_token_string();
 }
 
+/*
+open challenges:
+ - get memory model working with process_tree_into_package() when it's a new file
+ - when file is changed, what do? just call process_tree_into_package()?
+ - when go.mod changed, what do?
+*/
+
+void Go_Indexer::reload_all_dirty_files() {
+    For (world.wksp.panes) {
+        For (it.editors) {
+            if (!it.index_dirty) continue;
+            it.index_dirty = false;
+
+            auto filename = our_basename(it.filepath);
+
+            auto import_path = filepath_to_import_path(our_dirname(it.filepath));
+            auto pkg = find_package_in_index(import_path);
+            if (pkg == NULL) continue;
+
+            auto file = pkg->files->find([&](Go_File *it) -> bool { return streq(it->filename, filename); });
+            if (file == NULL) file = pkg->files->append();
+
+            auto iter = alloc_object(Parser_It);
+            iter->init(&it.buf);
+            auto root_node = new_ast_node(ts_tree_root_node(it.tree), iter);
+
+            process_tree_into_package(file, root_node, filename, NULL);
+        }
+    }
+}
+
+bool is_git_folder(ccstr path) {
+    SCOPED_FRAME();
+    auto pathlist = make_path(path);
+    return pathlist->parts->find([&](ccstr *it) { return streqi(*it, ".git"); }) != NULL;
+}
+
+void handle_gomod_changed() {
+    // go through immediate
+}
+
 void Go_Indexer::background_thread() {
     SCOPED_MEM(&mem);
     use_pool_for_tree_sitter = true;
@@ -315,7 +339,7 @@ void Go_Indexer::background_thread() {
 
     Index_Stream s;
 
-#if 1
+#if 0
     crawl_index();
     print("finished crawling index");
     print("writing...");
@@ -338,44 +362,83 @@ void Go_Indexer::background_thread() {
     }
     print("successfully read index from disk, final_mem.size = %d", final_mem.mem_allocated);
 
-    // process task queue
-    while (true) {
-        Indexer_Task task = {0};
+    // wait for filesystem change events
+    // ALL of our memory management has to be reworked for the code below, fuck me
 
-        {
-            SCOPED_LOCK(&task_queue_lock);
-            if (task_queue.len == 0) continue;
-            memcpy(&task, &task_queue[--task_queue.len], sizeof(task));
-        }
+    for (;; Sleep(100)) {
+        Fs_Event event;
+        if (!wksp_watch.next_event(&event)) continue;
 
-        switch (task.type) {
-        case ITT_REANALYZE_FILE:
+        if (is_git_folder(event.filepath)) continue;
+
+        auto filepath = path_join(index.current_path, event.filepath);
+
+        switch (check_path(filepath)) {
+        case CPR_DIRECTORY:
             {
-                auto filename = task.reanalyze_file_filename;
-
-                auto import_path = filepath_to_import_path(our_dirname(filename));
-                if (import_path == NULL) break;
-
-                auto package = find_package_in_index(import_path);
-                if (package == NULL) break;
-
-                auto pf = parse_file(filename);
-                if (pf == NULL) break;
-                defer { free_parsed_file(pf); };
-
-                /*
-                // TODO: find the Go_File, and call process_tree_into_package
-                List<ccstr> import_paths;
-                import_paths.init();
-
-                List<Godecl> decls;
-                decls.init();
-
-                process_tree_into_package(package, pf->root, filename, &import_paths, &decls);
-                */
+                auto pkg = find_package_in_index(filepath_to_import_path(filepath));
+                switch (event.type) {
+                case FSEVENT_CHANGE:
+                    // what does this even mean?
+                    break;
+                case FSEVENT_DELETE:
+                    index.packages->remove(pkg);
+                    break;
+                case FSEVENT_CREATE:
+                    if (pkg == NULL) index.packages->remove(pkg);
+                    // TODO: parse files in Go_Package
+                    // actually, will there *be* any files? i don't know how
+                    // the windows api works when you drag an existing folder
+                    // with files in, does it first do a create event on empty
+                    // directory, then create events on each file?
+                    break;
+                case FSEVENT_RENAME:
+                    // do we even care
+                    // TODO: change the import path
+                    break;
+                }
             }
             break;
-        case ITT_GOMOD_CHANGED:
+        case CPR_FILE:
+            {
+                if (!str_ends_with(filepath, ".go")) break;
+                // if (str_ends_with(filepath, "_test.go")) break;
+
+                auto pkg = find_package_in_index(filepath_to_import_path(our_dirname(filepath)));
+                auto filename = our_basename(event.filepath);
+                auto file = pkg->files->find([&](Go_File *it) -> bool {
+                    return streq(filename, it->filename);
+                });
+
+                switch (event.type) {
+                case FSEVENT_CHANGE:
+                case FSEVENT_CREATE:
+                    {
+                        if (file == NULL) file = pkg->files->append();
+
+                        ccstr package_name = NULL;
+
+                        auto pf = parse_file(filepath);
+                        if (pf == NULL) continue;
+                        defer { free_parsed_file(pf); };
+
+                        process_tree_into_package(file, pf->root, filename, &package_name);
+
+                        if (package_name != NULL)
+                            if (!streq(pkg->package_name, package_name))
+                                pkg->package_name = our_strcpy(package_name);
+                    }
+                    break;
+                case FSEVENT_DELETE:
+                    if (file == NULL) break;
+                    pkg->files->remove(file);
+                    break;
+                case FSEVENT_RENAME:
+                    if (file == NULL) break;
+                    file->filename = our_basename(event.new_filepath);
+                    break;
+                }
+            }
             break;
         }
     }
@@ -530,11 +593,12 @@ Go_Package *Go_Indexer::find_package_in_index(ccstr import_path) {
     });
 }
 
-Go_Package *Go_Indexer::find_package(ccstr import_path) {
-    if (index.packages == NULL) return NULL;
-    return index.packages->find([&](Go_Package *it) -> bool {
-        return it->status != GPS_OUTDATED && streq(it->import_path, import_path);
-    });
+Go_Package *Go_Indexer::find_up_to_date_package(ccstr import_path) {
+    auto pkg = find_package_in_index(import_path);
+    if (pkg != NULL)
+        if (pkg->status != GPS_OUTDATED)
+            return pkg;
+    return NULL;
 }
 
 ccstr Go_Indexer::find_import_path_referred_to_by_id(ccstr id, Go_Ctx *ctx) {
@@ -542,7 +606,7 @@ ccstr Go_Indexer::find_import_path_referred_to_by_id(ccstr id, Go_Ctx *ctx) {
     if (pkg == NULL) return NULL;
 
     For (*pkg->files) {
-        if (it.filename, ctx->filename) {
+        if (streq(it.filename, ctx->filename)) {
             For (*it.imports)
                 if (it.package_name != NULL && streq(it.package_name, id))
                         return it.import_path;
@@ -1045,7 +1109,7 @@ ccstr Go_Indexer::get_workspace_import_path() {
 }
 
 Goresult *Go_Indexer::find_decl_of_id(ccstr id_to_find, cur2 id_pos, Go_Ctx *ctx, Go_Import **single_import) {
-    auto pkg = find_package(ctx->import_path);
+    auto pkg = find_up_to_date_package(ctx->import_path);
     if (pkg != NULL) {
         auto check = [&](Go_File *it) { return streq(it->filename, ctx->filename); };
         auto file = pkg->files->find(check);
@@ -1511,13 +1575,13 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                         if (ri == NULL) continue;
                         add_result(ri->package_name);
                     } else if (name_node->type != TS_DOT && name_node->type != TS_BLANK_IDENTIFIER) {
-                        add_result(name_node->string()); 
+                        add_result(name_node->string());
                     }
                 }
             }
 
             /* to read imports from the index:
-            auto pkg = find_package(ctx.import_path);
+            auto pkg = find_up_to_date_package(ctx.import_path);
             auto check = [&](Go_File *it) { return streq(it->filename, ctx.filename); };
             auto file = pkg->files->find(check);
             For (*file->imports) it.package_name; */
@@ -1732,121 +1796,6 @@ ccstr Go_Indexer::filepath_to_import_path(ccstr path_str) {
     return p.str();
 }
 
-void Go_Indexer::handle_fs_event(Go_Index_Watcher *w, Fs_Event *event) {
-    // only one thread calls this at a time
-    /*
-    SCOPED_LOCK(&fs_event_lock);
-
-    defer { watcher_mem.reset(); };
-
-    auto watch_path = w->watch.path;
-
-    auto _directory_to_import_path = [&](ccstr path) -> ccstr {
-        switch (w->type) {
-        case WATCH_WKSP:
-            {
-                auto vendor_path = path_join(watch_path, "vendor");
-                if (path_contains_in_subtree(vendor_path, path))
-                    return get_path_relative_to(path, vendor_path);
-                return path_join(
-                    get_workspace_import_path(),
-                    get_path_relative_to(path, index.current_path)
-                );
-            }
-            break;
-        case WATCH_PKGMOD:
-            return remove_ats_from_path(get_path_relative_to(path, watch_path));
-        case WATCH_GOPATH:
-        case WATCH_GOROOT:
-            return get_path_relative_to(path, watch_path);
-        }
-        return NULL;
-    };
-
-    auto queue_event = [&](Index_Event_Type type, ccstr import_path) {
-        SCOPED_LOCK(&index_events_lock);
-
-        if (index_events.len > MAX_INDEX_EVENTS) return;
-
-        auto pred = [&](Index_Event *event) -> bool {
-            if (event->type != type) return false;
-
-            if (type == INDEX_EVENT_REINDEX_PACKAGE)
-                if (!streqi(event->import_path, import_path))
-                    return false;
-
-            return true;
-        };
-
-        auto idx = index_events.find(pred);
-        if (idx != -1) {
-            index_events[idx].time = current_time_in_nanoseconds();
-            return;
-        }
-
-        auto ev = index_events.append();
-        ev->time = current_time_in_nanoseconds();
-        ev->type = type;
-
-        if (import_path != NULL)
-            strcpy_safe(ev->import_path, _countof(ev->import_path), import_path);
-    };
-
-    auto queue_for_rescan = [&](ccstr directory) {
-        auto import_path = _directory_to_import_path(directory);
-        if (import_path == NULL) return;
-        queue_event(INDEX_EVENT_REINDEX_PACKAGE, import_path);
-    };
-
-    auto path = path_join(watch_path, event->filepath);
-
-    if (w->type == WATCH_WKSP)
-        if (str_starts_with(path, path_join(watch_path, ".ide")))
-            return;
-
-    auto is_git_folder = [&](ccstr path, bool isdir) -> bool {
-        SCOPED_FRAME();
-        auto pathlist = make_path(path);
-        return pathlist->parts->find([&](ccstr *it) { return streqi(*it, ".git"); }) != -1;
-    };
-
-    auto res = check_path(path);
-    switch (res) {
-    case CPR_DIRECTORY:
-        if (is_git_folder(path, true)) break;
-
-        switch (event->type) {
-        case FSEVENT_CHANGE:
-            break; // what does change even mean here?
-        case FSEVENT_DELETE:
-        case FSEVENT_CREATE:
-            queue_for_rescan(path);
-            break;
-        case FSEVENT_RENAME:
-            {
-                auto old_path = path_join(watch_path, event->old_filepath);
-                if (is_git_folder(old_path, true)) break;
-                queue_for_rescan(path);
-                queue_for_rescan(old_path);
-            }
-            break;
-        }
-    case CPR_FILE:
-        if (is_git_folder(path, false)) break;
-        if (!str_ends_with(path, ".go")) break;
-        if (str_ends_with(path, "_test.go")) break;
-
-        if (w->type == WATCH_WKSP)
-            if (!str_starts_with(path, path_join(watch_path, "vendor")))
-                queue_event(INDEX_EVENT_FETCH_IMPORTS, NULL);
-
-        // some .go file was added/deleted/changed/renamed
-        // queue its directory for a re-scan
-        queue_for_rescan(our_dirname(path));
-    }
-    */
-}
-
 void Go_Indexer::init() {
     ptr0(this);
 
@@ -1867,9 +1816,6 @@ void Go_Indexer::init() {
     gohelper_proc.dir = TEST_PATH;
     gohelper_proc.use_stdin = true;
     gohelper_proc.run(our_sprintf("go run %s", path_join(current_exe_path, "helper/helper.go")));
-
-    task_queue_lock.init();
-    task_queue.init();
 }
 
 void Go_Indexer::cleanup() {
@@ -1885,22 +1831,6 @@ void Go_Indexer::cleanup() {
     ui_mem.cleanup();
     scoped_table_mem.cleanup();
 }
-
-/*
-Resolved_Import* Go_Indexer::resolve_import_from_filesystem(ccstr import_path, ccstr from_path) {
-    // move up directory tree, looking for vendor
-    auto curr_path = make_path(from_path);
-    do {
-        auto dir_name = curr_path->str();
-        auto vendor_path = path_join(dir_name, "vendor");
-        if (check_path(vendor_path) == CPR_DIRECTORY) {
-            auto ret = check_potential_resolved_import(path_join(vendor_path, import_path));
-            if (ret != NULL) return ret;
-        }
-    } while (curr_path->goto_parent());
-    return check_potential_resolved_import(path_join(GOPATH, "src", import_path));
-}
-*/
 
 List<Godecl> *Go_Indexer::parameter_list_to_fields(Ast_Node *params) {
     u32 count = 0;

@@ -441,13 +441,6 @@ struct Index_Event {
     u64 time;
 };
 
-enum Go_Watch_Type {
-    WATCH_WKSP,
-    WATCH_GOPATH,
-    WATCH_PKGMOD,
-    WATCH_GOROOT,
-};
-
 TSPoint cur_to_tspoint(cur2 c);
 cur2 tspoint_to_cur(TSPoint p);
 
@@ -551,13 +544,6 @@ struct Ast_Node {
         ret = _skip_comment(ret, false);
         return dup(ret);
     }
-};
-
-struct Go_Index_Watcher {
-    Go_Indexer *_this;
-    Go_Watch_Type type;
-    Thread_Handle thread;
-    Fs_Watcher watch;
 };
 
 #define MAX_INDEX_EVENTS 1024 // don't let file change dos us
@@ -1051,8 +1037,11 @@ struct Go_Indexer {
     Thread_Handle bgthread;
 
     Package_Lookup package_lookup;
-    List<Indexer_Task> task_queue;
-    Lock task_queue_lock;
+
+    // TODO: initialize these
+    // Fs_Watcher modcache_watch; // strictly speaking, this shouldn't change...
+    // Fs_Watcher goroot_watch;
+    Fs_Watcher wksp_watch;
 
     // ---
 
@@ -1068,7 +1057,6 @@ struct Go_Indexer {
 
     void run_background_thread2();
     ccstr filepath_to_import_path(ccstr filepath);
-    void handle_fs_event(Go_Index_Watcher *w, Fs_Event *event);
     void temp();
     void process_package(ccstr import_path);
 
@@ -1102,7 +1090,7 @@ struct Go_Indexer {
     void crawl_index();
     Pool *get_final_mem();
     void walk_ast_node(Ast_Node *node, bool abstract_only, Walk_TS_Callback cb);
-    Go_Package *find_package(ccstr import_path);
+    Go_Package *find_up_to_date_package(ccstr import_path);
     void import_spec_to_decl(Ast_Node *spec_node, Godecl *decl);
     void find_nodes_containing_pos(Ast_Node *root, cur2 pos, bool abstract_only, fn<Walk_Action(Ast_Node *it)> callback);
     List<Goresult> *get_possible_dot_completions(Ast_Node *operand_node, bool *was_package, Go_Ctx *ctx);
@@ -1117,6 +1105,7 @@ struct Go_Indexer {
         ccstr *package_name
     );
     void iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> cb, ccstr filename);
+    void reload_all_dirty_files();
 };
 
 Ast_Node *new_ast_node(TSNode node, Parser_It *it);

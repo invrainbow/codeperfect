@@ -60,6 +60,9 @@ struct Editor {
     Lock nvim_edit_lock;
     List<Edit_From_Nvim> nvim_edit_queue;
 
+    // is this file "dirty" from the perspective of the index?
+    bool index_dirty;
+
     struct {
         bool is_buf_attached;
         u32 buf_id;
