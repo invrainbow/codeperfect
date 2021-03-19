@@ -20,7 +20,7 @@ bool is_ignored_by_git(ccstr path, bool isdir) {
             relpath = our_sprintf("%s/", relpath, PATH_SEP);
 
     // libgit2 requires forward slashes
-    relpath = (ccstr)normalize_path_separator((cstr)relpath, '/');
+    relpath = normalize_path_sep(relpath, '/');
 
     // get rid of "./" at beginning, it breaks libgit2
     if (str_starts_with(relpath, "./")) relpath += 2;

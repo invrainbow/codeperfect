@@ -878,7 +878,7 @@ struct Package_Lookup {
     }
 
     void add_path(ccstr import_path, ccstr resolved_path) {
-        resolved_path = normalize_path_separator((cstr)our_strcpy(resolved_path));
+        resolved_path = normalize_path_sep(our_strcpy(resolved_path));
         add_to_root(root_import_to_resolved, import_path, resolved_path);
         add_to_root(root_resolved_to_import, resolved_path, import_path);
     }
@@ -932,7 +932,7 @@ struct Package_Lookup {
 
         Path p;
         p.init(ret);
-        return normalize_path_separator((cstr)p.str(), sep);
+        return normalize_path_sep(p.str(), sep);
     }
 
     ccstr resolve_import(ccstr import_path) {
@@ -1106,6 +1106,7 @@ struct Go_Indexer {
     );
     void iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> cb, ccstr filename);
     void reload_all_dirty_files();
+    Go_Package_Status get_package_status(ccstr import_path);
 };
 
 Ast_Node *new_ast_node(TSNode node, Parser_It *it);

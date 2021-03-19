@@ -379,7 +379,7 @@ bool copy_file(ccstr src, ccstr dest, bool overwrite) {
 bool ensure_directory_exists(ccstr path) {
     SCOPED_FRAME();
 
-    auto newpath = normalize_path_separator((cstr)path);
+    auto newpath = normalize_path_sep(path);
     auto res = SHCreateDirectoryExA(NULL, (ccstr)newpath, NULL);
 
     switch (res) {
@@ -609,8 +609,8 @@ void free_entire_file(Entire_File *file) {
 ccstr get_path_relative_to(ccstr full, ccstr base) {
     Frame frame;
 
-    auto full2 = (ccstr)normalize_path_separator((cstr)our_strcpy(full));
-    auto base2 = (ccstr)normalize_path_separator((cstr)our_strcpy(base));
+    auto full2 = normalize_path_sep(full);
+    auto base2 = normalize_path_sep(base);
     auto buf = alloc_array(char, MAX_PATH+1);
 
     if (!PathRelativePathToA(buf, base2, FILE_ATTRIBUTE_DIRECTORY, full2, 0)) {

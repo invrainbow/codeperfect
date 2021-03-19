@@ -331,115 +331,384 @@ void handle_gomod_changed() {
     // go through immediate
 }
 
+/*
+The procedure is:
+
+    - try to read from disk
+    - add entire workspace to queue
+    - look through all packages, add any uncrawled imports to queue
+    - start event loop
+        - if there's anything in the queue, process it (crawl_index can just be folded into this part of the procedure)
+        - if there have been any file changes, process them
+        - either of this may add more items to the queue 
+        - if we've allocated > x bytes of memory from final_mem, copy index over to new pool
+*/
+
 void Go_Indexer::background_thread() {
+    // =====
+    // create pools that we'll need
+
+    Pool bg_orch_mem;   // mem containing info for orchestrating background thread
+    Pool scratch_mem;   // scratch mem to be periodically torn down & reinitialized
+
+    bg_orch_mem.init("bg_orch_mem"); 
+    scratch_mem.init("scratch_mem"); 
+
+    defer { bg_orch_mem.cleanup(); };
+    defer { scratch_mem.cleanup(); };
+
+    // =====
+    // other initialization
+
     SCOPED_MEM(&mem);
+
     use_pool_for_tree_sitter = true;
 
     package_lookup.init(TEST_PATH);
 
-    Index_Stream s;
+    List<ccstr> queue;
+    queue.init();
 
-#if 0
-    crawl_index();
-    print("finished crawling index");
-    print("writing...");
+    auto append_to_queue = [&](ccstr import_path) {
+        SCOPED_MEM(&bg_orch_mem);
+        queue.append(our_strcpy(import_path));
+    };
 
+    // =====
+    // attempt to read in index from disk
+
+    {
+        print("reading...");
+
+        Index_Stream s;
+        if (s.open("db", FILE_MODE_READ, FILE_OPEN_EXISTING) != FILE_RESULT_SUCCESS) return;
+        defer { s.cleanup(); };
+
+        {
+            SCOPED_MEM(&final_mem);
+            memcpy(&index, read_object<Go_Index>(&s), sizeof(Go_Index));
+        }
+
+        print("successfully read index from disk, final_mem.size = %d", final_mem.mem_allocated);
+    }
+
+    // =====
+    // make sure workspace is in index or queue
+
+    {
+        SCOPED_FRAME();
+
+        auto import_paths_queue = alloc_list<ccstr>();
+        auto resolved_paths_queue = alloc_list<ccstr>();
+
+        while (import_paths_queue->len > 0) {
+            auto import_path = *import_paths_queue->last();
+            auto resolved_path = *resolved_paths_queue->last();
+
+            import_paths_queue->len--;
+            resolved_paths_queue->len--;
+
+            bool is_go_package = false;
+
+            list_directory(resolved_path, [&](Dir_Entry *ent) {
+                if (ent->type == DIRENT_FILE) {
+                    if (!is_go_package)
+                        if (str_ends_with(ent->name, ".go"))
+                            if (is_file_included_in_build(path_join(resolved_path, ent->name)))
+                                is_go_package = true;
+                    return;
+                }
+
+                if (streq(ent->name, "vendor")) return;
+                if (streq(ent->name, ".git")) return;
+
+                import_paths_queue->append(normalize_path_sep(path_join(import_path, ent->name), '/'));
+                resolved_paths_queue->append(path_join(resolved_path, ent->name));
+            });
+
+            if (is_go_package) append_to_queue(import_path);
+        }
+    }
+
+    // =====
+    // if we have any ready packages, see if they have any imports that were missed
+
+    {
+        SCOPED_FRAME();
+
+        String_Set seen;
+        seen.init();
+        defer { seen.cleanup(); };
+
+        For (*index.packages) {
+            if (it.status != GPS_READY) continue;
+            if (it.files == NULL) continue;
+
+            For (*it.files) {
+                if (it.imports == NULL) continue;
+                For (*it.imports) {
+                    if (seen.has(it.import_path)) continue;
+                    seen.add(it.import_path);
+
+                    if (get_package_status(it.import_path) != GPS_READY)
+                        append_to_queue(it.import_path);
+                }
+            }
+        }
+    }
+
+    /*
+    // write to db
     if (s.open("db", FILE_MODE_WRITE, FILE_CREATE_NEW) != FILE_RESULT_SUCCESS) return;
     write_object<Go_Index>(&index, &s);
     s.cleanup();
-    print("done writing");
+    */
 
-    final_mem.cleanup();
-    final_mem.init();
-#endif
+    // =====
+    // main loop
+    // 1) process items in queue
+    // 2) process filesystem events
+    // 3) clean up memory by transferring index from final_mem to new pool, and swapping
 
-    print("reading...");
-    if (s.open("db", FILE_MODE_READ, FILE_OPEN_EXISTING) != FILE_RESULT_SUCCESS) return;
-    defer { s.cleanup(); };
-    {
-        SCOPED_MEM(&final_mem);
-        memcpy(&index, read_object<Go_Index>(&s), sizeof(Go_Index));
-    }
-    print("successfully read index from disk, final_mem.size = %d", final_mem.mem_allocated);
-
-    // wait for filesystem change events
-    // ALL of our memory management has to be reworked for the code below, fuck me
+    int last_final_mem_allocated = final_mem.mem_allocated;
 
     for (;; Sleep(100)) {
+        // -----
+        // process filesystem events
+
         Fs_Event event;
-        if (!wksp_watch.next_event(&event)) continue;
+        for (u32 items_processed = 0; items_processed < 10 && wksp_watch.next_event(&event); items_processed++) {
+            if (is_git_folder(event.filepath)) continue;
 
-        if (is_git_folder(event.filepath)) continue;
+            auto filepath = path_join(index.current_path, event.filepath);
+            auto cpr = check_path(filepath);
 
-        auto filepath = path_join(index.current_path, event.filepath);
+            // uncomment next to lines to just print out filesystem events
+            // print("%s(dir): %s", cpr == CPR_DIRECTORY ? "dir" : "file", fs_event_type_str(event.type), event.filepath);
+            // continue;
 
-        switch (check_path(filepath)) {
-        case CPR_DIRECTORY:
-            {
-                auto pkg = find_package_in_index(filepath_to_import_path(filepath));
-                switch (event.type) {
-                case FSEVENT_CHANGE:
-                    // what does this even mean?
-                    break;
-                case FSEVENT_DELETE:
-                    index.packages->remove(pkg);
-                    break;
-                case FSEVENT_CREATE:
-                    if (pkg == NULL) index.packages->remove(pkg);
-                    // TODO: parse files in Go_Package
-                    // actually, will there *be* any files? i don't know how
-                    // the windows api works when you drag an existing folder
-                    // with files in, does it first do a create event on empty
-                    // directory, then create events on each file?
-                    break;
-                case FSEVENT_RENAME:
-                    // do we even care
-                    // TODO: change the import path
-                    break;
-                }
-            }
-            break;
-        case CPR_FILE:
-            {
-                if (!str_ends_with(filepath, ".go")) break;
-                // if (str_ends_with(filepath, "_test.go")) break;
+            Pool scratch_mem;
+            scratch_mem.init("scratch_mem");
+            defer { scratch_mem.cleanup(); };
+            SCOPED_MEM(&scratch_mem);
 
-                auto pkg = find_package_in_index(filepath_to_import_path(our_dirname(filepath)));
-                auto filename = our_basename(event.filepath);
-                auto file = pkg->files->find([&](Go_File *it) -> bool {
-                    return streq(filename, it->filename);
-                });
+            switch (cpr) {
+            case CPR_DIRECTORY:
+                {
+                    auto import_path = filepath_to_import_path(filepath);
+                    auto pkg = find_package_in_index(import_path);
 
-                switch (event.type) {
-                case FSEVENT_CHANGE:
-                case FSEVENT_CREATE:
-                    {
-                        if (file == NULL) file = pkg->files->append();
+                    switch (event.type) {
+                    case FSEVENT_CHANGE:
+                        // what does this even mean?
+                        break;
+                    case FSEVENT_DELETE:
+                        index.packages->remove(pkg);
+                        break;
+                    case FSEVENT_CREATE:
+                        {
+                            // NOTE/TODO: will there even *be* any files? i don't know
+                            // how the windows api works when you copy a whole folder
+                            // in, does it send a create event with empty directory,
+                            // then create events on each file?
 
-                        ccstr package_name = NULL;
+                            if (pkg == NULL) {
+                                SCOPED_MEM(&final_mem);
+                                pkg = index.packages->append();
+                                pkg->status = GPS_OUTDATED;
+                                pkg->files = alloc_list<Go_File>();
+                                pkg->import_path = our_strcpy(import_path);
+                            }
 
-                        auto pf = parse_file(filepath);
-                        if (pf == NULL) continue;
-                        defer { free_parsed_file(pf); };
+                            pkg->status = GPS_UPDATING;
+                            pkg->files->len = 0;
 
-                        process_tree_into_package(file, pf->root, filename, &package_name);
+                            auto source_files = list_source_files(filepath, false);
+                            For (*source_files) {
+                                Pool tmp_mem;
+                                tmp_mem.init();
+                                defer { tmp_mem.cleanup(); };
 
-                        if (package_name != NULL)
-                            if (!streq(pkg->package_name, package_name))
-                                pkg->package_name = our_strcpy(package_name);
+                                SCOPED_MEM(&tmp_mem);
+
+                                auto pf = parse_file(path_join(filepath, it));
+                                if (pf == NULL) continue;
+                                defer { free_parsed_file(pf); };
+
+                                auto file = pkg->files->append();
+                                file->filename = it;
+                                file->scope_ops = alloc_list<Go_Scope_Op>();
+                                file->decls = alloc_list<Godecl>();
+                                file->imports = alloc_list<Go_Import>();
+
+                                ccstr package_name = NULL;
+
+                                process_tree_into_package(file, pf->root, it, &package_name);
+
+                                {
+                                    SCOPED_MEM(&final_mem);
+                                    if (package_name != NULL)
+                                        pkg->package_name = our_strcpy(package_name);
+                                    memcpy(file, file->copy(), sizeof(Go_File));
+                                }
+
+                                For (*file->imports) {
+                                    auto status = get_package_status(it.import_path);
+                                    if (status == GPS_OUTDATED) {
+                                        // TODO: append_to_queue(it.import_path);
+                                        // TODO: what's the equivalent of append_to_queue() here?
+                                    }
+                                }
+
+                                EmptyWorkingSet(GetCurrentProcess());
+                            }
+
+                            pkg->status = GPS_READY;
+                            break;
+                        }
+                    case FSEVENT_RENAME:
+                        {
+                            SCOPED_MEM(&final_mem);
+                            pkg->import_path = filepath_to_import_path(path_join(index.current_path, event.new_filepath));
+                        }
+                        break;
                     }
-                    break;
-                case FSEVENT_DELETE:
-                    if (file == NULL) break;
-                    pkg->files->remove(file);
-                    break;
-                case FSEVENT_RENAME:
-                    if (file == NULL) break;
-                    file->filename = our_basename(event.new_filepath);
-                    break;
                 }
+                break;
+            case CPR_FILE:
+                {
+                    if (!str_ends_with(filepath, ".go")) break;
+                    // if (str_ends_with(filepath, "_test.go")) break;
+
+                    auto pkg = find_package_in_index(filepath_to_import_path(our_dirname(filepath)));
+                    auto filename = our_basename(event.filepath);
+                    auto file = pkg->files->find([&](Go_File *it) -> bool {
+                        return streq(filename, it->filename);
+                    });
+
+                    switch (event.type) {
+                    case FSEVENT_CHANGE:
+                    case FSEVENT_CREATE:
+                        {
+                            if (file == NULL) file = pkg->files->append();
+
+                            ccstr package_name = NULL;
+
+                            auto pf = parse_file(filepath);
+                            if (pf == NULL) continue;
+                            defer { free_parsed_file(pf); };
+
+                            process_tree_into_package(file, pf->root, filename, &package_name);
+
+                            {
+                                SCOPED_MEM(&final_mem);
+                                if (package_name != NULL)
+                                    if (!streq(pkg->package_name, package_name))
+                                        pkg->package_name = our_strcpy(package_name);
+                                memcpy(file, file->copy(), sizeof(Go_File));
+                            }
+                        }
+                        break;
+                    case FSEVENT_DELETE:
+                        if (file == NULL) break;
+                        pkg->files->remove(file);
+                        break;
+                    case FSEVENT_RENAME:
+                        if (file == NULL) break;
+                        {
+                            SCOPED_MEM(&final_mem);
+                            file->filename = our_basename(event.new_filepath);
+                        }
+                        break;
+                    }
+                }
+                break;
             }
-            break;
+        }
+
+        // ----
+        // process items in queue
+
+        for (int items_processed = 0; items_processed < 10 && queue.len > 0; items_processed++) {
+            scratch_mem.init("scratch_mem");
+            defer { scratch_mem.cleanup(); };
+            SCOPED_MEM(&scratch_mem);
+
+            auto import_path = *queue.last();
+            queue.len--;
+
+            auto resolved_path = get_package_path(import_path);
+            if (resolved_path == NULL) continue;
+
+            auto pkg = find_package_in_index(import_path);
+            if (pkg != NULL) {
+                assert(pkg->status == GPS_READY); // we shouldn't be in this situation otherwise
+                continue;
+            }
+
+            {
+                SCOPED_MEM(&final_mem);
+                pkg = index.packages->append();
+                pkg->status = GPS_OUTDATED;
+                pkg->files = alloc_list<Go_File>();
+                pkg->import_path = our_strcpy(import_path);
+            }
+
+            print("processing %s -> %s", import_path, resolved_path);
+
+            pkg->status = GPS_UPDATING;
+
+            auto source_files = list_source_files(resolved_path, false);
+            For (*source_files) {
+                SCOPED_FRAME();
+
+                auto pf = parse_file(path_join(resolved_path, it));
+                if (pf == NULL) continue;
+                defer { free_parsed_file(pf); };
+
+                auto file = pkg->files->append();
+                file->filename = it;
+                file->scope_ops = alloc_list<Go_Scope_Op>();
+                file->decls = alloc_list<Godecl>();
+                file->imports = alloc_list<Go_Import>();
+
+                ccstr package_name = NULL;
+
+                process_tree_into_package(file, pf->root, it, &package_name);
+
+                {
+                    SCOPED_MEM(&final_mem);
+                    if (package_name != NULL)
+                        pkg->package_name = our_strcpy(package_name);
+                    memcpy(file, file->copy(), sizeof(Go_File));
+                }
+
+                For (*file->imports) {
+                    auto status = get_package_status(it.import_path);
+                    if (status == GPS_OUTDATED)
+                        append_to_queue(it.import_path);
+                }
+
+                EmptyWorkingSet(GetCurrentProcess());
+            }
+
+            pkg->status = GPS_READY;
+        }
+
+        // -----
+        // clean up memory if it's getting out of control
+        if (final_mem.mem_allocated - last_final_mem_allocated > 1024 * 1024 * 50) {
+            Pool new_pool;
+            new_pool.init();
+
+            {
+                SCOPED_MEM(&new_pool);
+                memcpy(&index, index.copy(), sizeof(index));
+            }
+
+            final_mem.cleanup();
+            memcpy(&final_mem, &new_pool, sizeof(Pool));
+            last_final_mem_allocated = final_mem.mem_allocated;
         }
     }
 }
@@ -599,6 +868,11 @@ Go_Package *Go_Indexer::find_up_to_date_package(ccstr import_path) {
         if (pkg->status != GPS_OUTDATED)
             return pkg;
     return NULL;
+}
+
+Go_Package_Status Go_Indexer::get_package_status(ccstr import_path) {
+    auto pkg = find_package_in_index(import_path);
+    return pkg == NULL ? GPS_OUTDATED : pkg->status;
 }
 
 ccstr Go_Indexer::find_import_path_referred_to_by_id(ccstr id, Go_Ctx *ctx) {
@@ -803,20 +1077,15 @@ void Go_Indexer::process_tree_into_package(
 }
 
 void Go_Indexer::crawl_index() {
-    Pool package_scratch_mem;   // temp pool, torn down after processing each package
+    Pool package_scratch_mem;   // temp pool, rebuilt before & torn down after processing each package
     Pool crawl_mem;             // pool holding info needed to orchestrate crawl_index
-    Pool intermediate_mem;      // temp mem that holds package info
 
     crawl_mem.init("crawl_mem");
-    intermediate_mem.init("intermediate_mem");
-
     defer { crawl_mem.cleanup(); };
-    defer { intermediate_mem.cleanup(); };
-
     SCOPED_MEM(&crawl_mem);
 
     {
-        SCOPED_MEM(&intermediate_mem);
+        SCOPED_MEM(&final_mem);
         // index.current_path = world.wksp.path;
         index.current_path = our_strcpy(TEST_PATH);
         index.current_import_path = our_strcpy(get_workspace_import_path());
@@ -854,7 +1123,7 @@ void Go_Indexer::crawl_index() {
             if (streq(ent->name, ".git")) return;
 
             process_initial_imports(
-                normalize_path_separator((cstr)path_join(import_path, ent->name), '/'),
+                normalize_path_sep(path_join(import_path, ent->name), '/'),
                 path_join(resolved_path, ent->name)
             );
         });
@@ -863,14 +1132,7 @@ void Go_Indexer::crawl_index() {
     };
     process_initial_imports(index.current_import_path, index.current_path);
 
-    // get package status, but don't create a new package if one doesn't exist
-    // (unlike get_package)
-    auto get_package_status = [&](ccstr import_path) -> Go_Package_Status {
-        auto pkg = find_package_in_index(import_path);
-        return pkg == NULL ? GPS_OUTDATED : pkg->status;
-    };
-
-    for (bool first_item = true; queue.len > 0; first_item = false) {
+    while (queue.len > 0) {
         package_scratch_mem.init("package_scratch_mem");
         defer { package_scratch_mem.cleanup(); };
         SCOPED_MEM(&package_scratch_mem);
@@ -888,7 +1150,7 @@ void Go_Indexer::crawl_index() {
         }
 
         {
-            SCOPED_MEM(&intermediate_mem);
+            SCOPED_MEM(&final_mem);
             pkg = index.packages->append();
             pkg->status = GPS_OUTDATED;
             pkg->files = alloc_list<Go_File>();
@@ -899,7 +1161,7 @@ void Go_Indexer::crawl_index() {
 
         pkg->status = GPS_UPDATING;
 
-        auto source_files = list_source_files(resolved_path, first_item);
+        auto source_files = list_source_files(resolved_path, false);
         For (*source_files) {
             SCOPED_FRAME();
 
@@ -918,7 +1180,7 @@ void Go_Indexer::crawl_index() {
             process_tree_into_package(file, pf->root, it, &package_name);
 
             {
-                SCOPED_MEM(&intermediate_mem);
+                SCOPED_MEM(&final_mem);
                 if (package_name != NULL)
                     pkg->package_name = our_strcpy(package_name);
                 memcpy(file, file->copy(), sizeof(Go_File));
@@ -935,13 +1197,6 @@ void Go_Indexer::crawl_index() {
 
         pkg->status = GPS_READY;
     }
-
-    {
-        SCOPED_MEM(&final_mem);
-        memcpy(&index, index.copy(), sizeof(Go_Index));
-    }
-
-    intermediate_mem.reset();
 }
 
 void Go_Indexer::handle_error(ccstr err) {
@@ -1816,6 +2071,8 @@ void Go_Indexer::init() {
     gohelper_proc.dir = TEST_PATH;
     gohelper_proc.use_stdin = true;
     gohelper_proc.run(our_sprintf("go run %s", path_join(current_exe_path, "helper/helper.go")));
+
+    wksp_watch.init(TEST_PATH);
 }
 
 void Go_Indexer::cleanup() {
