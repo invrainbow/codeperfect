@@ -1087,7 +1087,6 @@ struct Go_Indexer {
     Resolved_Import *check_potential_resolved_import(ccstr filepath);
     Go_Package *find_package_in_index(ccstr import_path);
     ccstr find_import_path_referred_to_by_id(ccstr id, Go_Ctx *ctx);
-    void crawl_index();
     Pool *get_final_mem();
     void walk_ast_node(Ast_Node *node, bool abstract_only, Walk_TS_Callback cb);
     Go_Package *find_up_to_date_package(ccstr import_path);

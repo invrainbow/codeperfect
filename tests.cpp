@@ -2,45 +2,28 @@
 #include "mem.hpp"
 
 bool run_tests() {
-    return false;
+    // return false;
 
+    // initialize everything
     world.init();
     compiler_dont_optimize_me_away();
-
     use_pool_for_tree_sitter = true;
 
+    // run indexer
     Go_Indexer indexer;
-    Index_Stream s;
-
     indexer.init();
-    indexer.package_lookup.init("c:\\users\\brandon\\compose-cli");
-    indexer.start_background_thread();
+    indexer.background_thread();
 
-    while (true) continue;
-
-    // auto resp = indexer.run_gohelper_command(GH_OP_RESOLVE_IMPORT_PATH, "k8s.io/apiserver/pkg/util/feature");
-    // print("%s", resp);
+    // indexer.start_background_thread();
+    // while (true) continue;
 
     /*
-    indexer.crawl_index();
-    // indexer.background_thread();
-
-    // write
-    if (s.open("db", FILE_MODE_WRITE, FILE_CREATE_NEW) != FILE_RESULT_SUCCESS) return false;
-    write_object<Go_Index>(&indexer.index, &s);
-    s.cleanup();
-    print("done writing");
-
-    // read back in
-    s.open("db", FILE_MODE_READ, FILE_OPEN_EXISTING);
+    Index_Stream s;
+    s.open("db", FILE_MODE_WRITE, FILE_CREATE_NEW) == FILE_RESULT_SUCCESS
+    s.open("db", FILE_MODE_READ, FILE_OPEN_EXISTING) == FILE_RESULT_SUCCESS
     defer { s.cleanup(); };
-    Pool mem;
-    mem.init();
-    {
-        SCOPED_MEM(&mem);
-        auto index = read_object<Go_Index>(&s);
-        print("done reading, mem used is %d", mem.mem_allocated);
-    }
+    write_object<Go_Index>(&indexer.index, &s);
+    auto index = read_object<Go_Index>(&s);
     */
 
     system("pause");

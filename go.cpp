@@ -338,7 +338,7 @@ The procedure is:
     - add entire workspace to queue
     - look through all packages, add any uncrawled imports to queue
     - start event loop
-        - if there's anything in the queue, process it (crawl_index can just be folded into this part of the procedure)
+        - if there's anything in the queue, process it
         - if there have been any file changes, process them
         - either of this may add more items to the queue 
         - if we've allocated > x bytes of memory from final_mem, copy index over to new pool
@@ -642,11 +642,8 @@ void Go_Indexer::background_thread() {
 
             auto pkg = find_package_in_index(import_path);
             if (pkg != NULL) {
-                assert(pkg->status == GPS_READY); // we shouldn't be in this situation otherwise
-                continue;
-            }
-
-            {
+                if (pkg->status == GPS_READY) continue;
+            } else {
                 SCOPED_MEM(&final_mem);
                 pkg = index.packages->append();
                 pkg->status = GPS_OUTDATED;
@@ -1073,129 +1070,6 @@ void Go_Indexer::process_tree_into_package(
                 imp->package_name = name_node->string();
             }
         }
-    }
-}
-
-void Go_Indexer::crawl_index() {
-    Pool package_scratch_mem;   // temp pool, rebuilt before & torn down after processing each package
-    Pool crawl_mem;             // pool holding info needed to orchestrate crawl_index
-
-    crawl_mem.init("crawl_mem");
-    defer { crawl_mem.cleanup(); };
-    SCOPED_MEM(&crawl_mem);
-
-    {
-        SCOPED_MEM(&final_mem);
-        // index.current_path = world.wksp.path;
-        index.current_path = our_strcpy(TEST_PATH);
-        index.current_import_path = our_strcpy(get_workspace_import_path());
-        index.packages = alloc_list<Go_Package>();
-    }
-
-    List<Godecl> decls;
-    {
-        SCOPED_MEM(&crawl_mem);
-        decls.init();
-    }
-
-    List<ccstr> queue;
-    queue.init();
-
-    auto append_to_queue = [&](ccstr import_path) {
-        SCOPED_MEM(&crawl_mem);
-        queue.append(our_strcpy(import_path));
-    };
-
-    fn<void(ccstr, ccstr)> process_initial_imports;
-    process_initial_imports = [&](ccstr import_path, ccstr resolved_path) {
-        bool is_go_package = false;
-
-        list_directory(resolved_path, [&](Dir_Entry *ent) {
-            if (ent->type == DIRENT_FILE) {
-                if (!is_go_package)
-                    if (str_ends_with(ent->name, ".go"))
-                        if (is_file_included_in_build(path_join(resolved_path, ent->name)))
-                            is_go_package = true;
-                return;
-            }
-
-            if (streq(ent->name, "vendor")) return;
-            if (streq(ent->name, ".git")) return;
-
-            process_initial_imports(
-                normalize_path_sep(path_join(import_path, ent->name), '/'),
-                path_join(resolved_path, ent->name)
-            );
-        });
-
-        if (is_go_package) append_to_queue(import_path);
-    };
-    process_initial_imports(index.current_import_path, index.current_path);
-
-    while (queue.len > 0) {
-        package_scratch_mem.init("package_scratch_mem");
-        defer { package_scratch_mem.cleanup(); };
-        SCOPED_MEM(&package_scratch_mem);
-
-        auto import_path = *queue.last();
-        queue.len--;
-
-        auto resolved_path = get_package_path(import_path);
-        if (resolved_path == NULL) continue;
-
-        auto pkg = find_package_in_index(import_path);
-        if (pkg != NULL) {
-            assert(pkg->status == GPS_READY); // we shouldn't be in this situation otherwise
-            continue;
-        }
-
-        {
-            SCOPED_MEM(&final_mem);
-            pkg = index.packages->append();
-            pkg->status = GPS_OUTDATED;
-            pkg->files = alloc_list<Go_File>();
-            pkg->import_path = our_strcpy(import_path);
-        }
-
-        print("processing %s -> %s", import_path, resolved_path);
-
-        pkg->status = GPS_UPDATING;
-
-        auto source_files = list_source_files(resolved_path, false);
-        For (*source_files) {
-            SCOPED_FRAME();
-
-            auto pf = parse_file(path_join(resolved_path, it));
-            if (pf == NULL) continue;
-            defer { free_parsed_file(pf); };
-
-            auto file = pkg->files->append();
-            file->filename = it;
-            file->scope_ops = alloc_list<Go_Scope_Op>();
-            file->decls = alloc_list<Godecl>();
-            file->imports = alloc_list<Go_Import>();
-
-            ccstr package_name = NULL;
-
-            process_tree_into_package(file, pf->root, it, &package_name);
-
-            {
-                SCOPED_MEM(&final_mem);
-                if (package_name != NULL)
-                    pkg->package_name = our_strcpy(package_name);
-                memcpy(file, file->copy(), sizeof(Go_File));
-            }
-
-            For (*file->imports) {
-                auto status = get_package_status(it.import_path);
-                if (status == GPS_OUTDATED)
-                    append_to_queue(it.import_path);
-            }
-
-            EmptyWorkingSet(GetCurrentProcess());
-        }
-
-        pkg->status = GPS_READY;
     }
 }
 
