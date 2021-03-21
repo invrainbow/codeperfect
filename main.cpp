@@ -127,7 +127,7 @@ vec4 our_texture(vec2 uv) {
 void main(void) {
     switch (_mode) {
     case 0: // DRAW_SOLID
-        outcolor = vec4(_color.rgb, 1);
+        outcolor = _color;
         break;
     case 1: // DRAW_MASK
         outcolor = vec4(_color.rgb, our_texture(_uv).r);
@@ -1053,6 +1053,7 @@ int main() {
         // and copies it over.
 
         auto handle_enter = [&](ccstr nvim_string) {
+            if (editor == NULL) return;
             if (editor->nvim_data.mode != VI_INSERT) {
                 send_nvim_keys(nvim_string);
                 return;
@@ -1102,6 +1103,7 @@ int main() {
         };
 
         auto handle_tab = [&](ccstr nvim_string) {
+            if (editor == NULL) return;
             if (editor->nvim_data.mode != VI_INSERT) {
                 send_nvim_keys(nvim_string);
                 return;
@@ -1110,6 +1112,7 @@ int main() {
         };
 
         auto handle_backspace = [&](ccstr nvim_string) {
+            if (editor == NULL) return;
             if (editor->nvim_data.mode != VI_INSERT) {
                 send_nvim_keys(nvim_string);
                 return;
@@ -2214,6 +2217,42 @@ int main() {
                     ImGui::EndPopup();
                 }
 
+                ImGui::End();
+            }
+
+            if (world.dialogs_open.add_file_or_folder) {
+                auto &wnd = world.wnd_add_file_or_folder;
+
+                auto label = our_sprintf(
+                    "Add %s to %s",
+                    wnd.folder ? "folder" : "file",
+                    wnd.location_is_root ? "workspace root" : wnd.location
+                );
+
+                ImGui::Begin(label, &world.dialogs_open.add_file_or_folder, ImGuiWindowFlags_AlwaysAutoResize);
+
+                ImGui::Text("Name:");
+                ImGui::InputText("##add_file", wnd.name, IM_ARRAYSIZE(wnd.name));
+
+                if (ImGui::Button("Add")) {
+                    world.dialogs_open.add_file_or_folder = false;
+
+                    if (strlen(wnd.name) > 0) {
+                        auto dest = wnd.location_is_root ? world.wksp.path : path_join(world.wksp.path, wnd.location);
+                        auto path = path_join(dest, wnd.name);
+
+                        if (wnd.folder) {
+                            CreateDirectoryA(path, NULL);
+                        } else {
+                            // need to share, or else we have race condition
+                            // with fsevent handler in
+                            // Go_Indexer::background_thread() trying to read
+                            auto h = CreateFileA(path, 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+                            if (h != INVALID_HANDLE_VALUE) CloseHandle(h);
+                        }
+
+                    }
+                }
                 ImGui::End();
             }
 

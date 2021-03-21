@@ -536,10 +536,10 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                 const float BUTTONS_AREA_PADDING_X = 4;
                 const float BUTTONS_AREA_PADDING_Y = 4;
                 const float BUTTON_MARGIN_X = 4;
+                const float BUTTON_PADDING = 4;
 
-                /*
                 boxf buttons_area = sidebar_area;
-                buttons_area.h = BUTTON_SIZE + BUTTONS_AREA_PADDING_Y * 2;
+                buttons_area.h = BUTTON_SIZE + (BUTTON_PADDING * 2) + (BUTTONS_AREA_PADDING_Y * 2);
 
                 // draw buttons area
                 {
@@ -547,19 +547,27 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                     int button_idx = 0;
                     boxf button_area;
 
-                    button_area.x = buttons_area.x + buttons_area.w - BUTTONS_AREA_PADDING_X - BUTTON_SIZE;
+                    button_area.x = buttons_area.x + buttons_area.w - BUTTONS_AREA_PADDING_X - BUTTON_SIZE - BUTTON_PADDING;
                     button_area.y = buttons_area.y + BUTTONS_AREA_PADDING_Y;
-                    button_area.w = BUTTON_SIZE;
-                    button_area.h = BUTTON_SIZE;
+                    button_area.w = BUTTON_SIZE + (BUTTON_PADDING * 2);
+                    button_area.h = BUTTON_SIZE + (BUTTON_PADDING * 2);
 
                     // call this from right to left
                     auto draw_button = [&](Sprites_Image_Type image_id) -> bool {
                         auto mouse_flags = get_mouse_flags(button_area);
                         if (mouse_flags & MOUSE_HOVER)
-                            draw_rect(button_area, rgba(COLOR_WHITE));
-                        draw_image(image_id, button_area);
+                            draw_rounded_rect(button_area, rgba(COLOR_WHITE, 0.2), 2, ROUND_ALL);
+
+                        boxf icon_area = button_area;
+                        icon_area.x += BUTTON_PADDING;
+                        icon_area.y += BUTTON_PADDING;
+                        icon_area.w -= BUTTON_PADDING * 2;
+                        icon_area.h -= BUTTON_PADDING * 2;
+                        draw_image(image_id, icon_area);
+
                         button_area.pos.x -= BUTTON_MARGIN_X;
                         button_area.pos.x -= BUTTON_SIZE;
+                        button_area.pos.x -= BUTTON_PADDING * 2;
                         return (mouse_flags & MOUSE_CLICKED);
                     };
 
@@ -567,22 +575,28 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                         print("refresh clicked");
                     }
 
-                    if (draw_button(SIMAGE_ADD_FOLDER)) {
+                    auto open_add_file_or_folder = [&](bool folder) {
+                        world.dialogs_open.add_file_or_folder = true;
 
-                        // add folder
-                    }
+                        if (world.file_explorer.selection == -1) {
+                            world.wnd_add_file_or_folder.location_is_root = true;
+                        } else {
+                            // TODO: how do we generate the file path based on selection?
+                            // world.wnd_add_file_or_folder.location = ???
+                        }
 
-                    if (draw_button(SIMAGE_ADD)) {
-                        // add image
-                    }
+                        world.wnd_add_file_or_folder.folder = folder;
+                    };
+
+                    if (draw_button(SIMAGE_ADD_FOLDER))
+                        open_add_file_or_folder(true);
+                    if (draw_button(SIMAGE_ADD))
+                        open_add_file_or_folder(false);
                 }
-                */
 
                 boxf files_area = sidebar_area;
-                /*
                 files_area.h -= buttons_area.h;
                 files_area.y += buttons_area.h;
-                */
 
                 boxf row_area;
                 row_area.pos = files_area.pos;
@@ -674,6 +688,11 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                     else
                         i++;
                 }
+
+                boxf sep_area = buttons_area;
+                sep_area.y += buttons_area.h;
+                sep_area.h = 1;
+                draw_rect(sep_area, rgba(COLOR_WHITE, 0.2));
             }
             break;
         case SIDEBAR_SEARCH_RESULTS:
