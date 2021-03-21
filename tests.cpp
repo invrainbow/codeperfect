@@ -2,7 +2,7 @@
 #include "mem.hpp"
 
 bool run_tests() {
-    // return false;
+    return false;
 
     // initialize everything
     world.init();

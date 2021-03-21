@@ -8,6 +8,7 @@
 #include "tree_sitter_crap.hpp"
 
 extern "C" TSLanguage *tree_sitter_go();
+extern const char TEST_PATH[];
 
 // mirrors tree-sitter/src/go.h
 enum Ts_Field_Type {
@@ -808,7 +809,6 @@ struct Go_Package {
 struct Go_Index {
     ccstr current_path;
     ccstr current_import_path;
-    u64 gomod_hash;
     List<Go_Package> *packages;
 
     Go_Index *copy();
@@ -838,7 +838,7 @@ struct Jump_To_Definition_Result {
 
 typedef fn<Godecl*()> New_Godecl_Func;
 
-struct Package_Lookup {
+struct Module_Resolver {
     struct Node {
         ccstr name;
         Node *children;
@@ -1036,7 +1036,8 @@ struct Go_Indexer {
 
     Thread_Handle bgthread;
 
-    Package_Lookup package_lookup;
+    Module_Resolver module_resolver;
+    Scoped_Table<Go_Package*> package_lookup;
 
     // TODO: initialize these
     // Fs_Watcher modcache_watch; // strictly speaking, this shouldn't change...
@@ -1135,10 +1136,11 @@ T *read_object(Index_Stream *s) {
 template<typename T>
 List<T> *read_list(Index_Stream *s) {
     auto len = s->read4();
-    auto specs = alloc_list<T>(len);
+    auto ret = alloc_object(List<T>);
+    ret->init(LIST_POOL, len);
     for (u32 i = 0; i < len; i++)
-        specs->append(read_object<T>(s));
-    return specs;
+        ret->append(read_object<T>(s));
+    return ret;
 }
 
 template<typename T>

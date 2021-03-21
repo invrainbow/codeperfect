@@ -269,9 +269,8 @@ void Workspace::init() {
     panes.init(LIST_FIXED, _countof(_panes), _panes);
 
 #if 1
-    // auto newpath = "c:/users/brandon/ide/helper";
-    auto newpath = "C:/Users/Brandon/compose-cli";
-    strcpy_safe(path, _countof(path), normalize_path_sep(newpath));
+    // strcpy_safe(path, _countof(path), normalize_path_sep("c:/users/brandon/ide/helper"));
+    strcpy_safe(path, _countof(path), normalize_path_sep(TEST_PATH));
 #else
     Select_File_Opts opts;
     opts.buf = path;

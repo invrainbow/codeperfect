@@ -122,8 +122,8 @@ struct List {
         case LIST_MALLOC:
             {
                 auto old_cap = cap;
-                while (cap < new_cap)
-                    cap *= 2;
+                cap = 1 << (int)ceil(log2(new_cap));
+
                 items = (T*)realloc(items, sizeof(T) * cap);
                 if (items == NULL)
                     return false;
@@ -137,7 +137,7 @@ struct List {
 
         case LIST_POOL:
             {
-                while (cap < new_cap) cap *= 2;
+                cap = 1 << (int)ceil(log2(new_cap));
                 auto new_items = (T*)alloc_from_pool_stub(pool, sizeof(T) * cap);
                 if (new_items == NULL)
                     return false;

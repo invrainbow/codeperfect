@@ -546,6 +546,8 @@ bool Fs_Watcher::next_event(Fs_Event *event) {
     if (info->Action == FILE_ACTION_RENAMED_NEW_NAME)
         return next_event(event);   // we shouldn't be here, ask for next event lmao
 
+    ptr0(event);
+
     copy_file_name(info, event->filepath, _countof(event->filepath));
     switch (info->Action) {
     case FILE_ACTION_ADDED:
