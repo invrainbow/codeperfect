@@ -3,7 +3,7 @@
 #include "common.hpp"
 #include "os.hpp"
 #include "mem.hpp"
-#include "uthash.h"
+#include "hash.hpp"
 
 ccstr our_format_json(ccstr s);
 ccstr our_strcpy(ccstr s);
@@ -164,6 +164,7 @@ struct Path {
 
 Path* make_path(ccstr s);
 List<ccstr> *split_string(ccstr str, fn<bool(char)> pred);
+List<ccstr> *split_string(ccstr str, char sep);
 bool path_contains_in_subtree(ccstr base_path, ccstr full_path);
 
 template <typename T>
@@ -171,6 +172,7 @@ struct Scoped_Table {
     struct Old_Value {
         ccstr name;
         T value;
+        bool dne;
     };
 
     struct Table_Entry {
@@ -219,7 +221,7 @@ struct Scoped_Table {
             auto old = old_values.last();
 
             // there was no previous value, delete it
-            if (old->value == NULL) {
+            if (old->dne) {
                 Table_Entry *item = NULL;
                 HASH_FIND_STR(lookup, old->name, item);
                 if (item != NULL)
@@ -234,11 +236,30 @@ struct Scoped_Table {
     void set(ccstr name, T value) {
         SCOPED_MEM(mem);
 
+        bool exists = false;
+        auto val = get(name, &exists);
+
         auto old = old_values.append();
         old->name = name;
-        old->value = get(old->name);
+        old->dne = !exists;
+        if (!old->dne)
+            old->value = val;
 
         _set_value(old->name, value);
+    }
+
+    void remove(ccstr name) {
+        SCOPED_MEM(mem);
+
+        Table_Entry *item = NULL;
+        HASH_FIND_STR(lookup, name, item);
+        if (item == NULL) return;
+
+        auto old = old_values.append();
+        old->name = name;
+        old->value = item->value;
+
+        HASH_DEL(lookup, item);
     }
 
     T get(ccstr name, bool *found = NULL) {
@@ -270,3 +291,12 @@ struct Scoped_Table {
         item->value = value;
     }
 };
+
+template<typename T>
+bool iszero(T* p) {
+    auto ptr = (char*)p;
+    for (u32 i = 0; i < sizeof(T); i++)
+        if (ptr[i] != 0)
+            return false;
+    return true;
+}

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "uthash.h"
 #include "list.hpp"
+#include "hash.hpp"
 
 struct String_Set {
     struct Item {
@@ -26,6 +26,7 @@ struct String_Set {
         table = NULL;
     }
 
+    // ???
     void cleanup() {
         HASH_CLEAR(hh, table);
     }
@@ -54,7 +55,6 @@ struct String_Set {
         return (item != NULL);
     }
 };
-
 
 /*
 template <typename T>

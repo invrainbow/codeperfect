@@ -51,6 +51,7 @@ struct List {
             items = (T*)our_malloc(sizeof(T) * cap);
             if (items == NULL)
                 panic("unable to our_malloc for array");
+            global_mem_allocated += sizeof(T) * cap;
             mem0(items, sizeof(T) * cap);
             break;
         case LIST_CHUNK:
@@ -64,6 +65,7 @@ struct List {
     void cleanup() {
         switch (mode) {
         case LIST_MALLOC:
+            global_mem_allocated -= sizeof(T) * cap;
             our_free(items);
             break;
         case LIST_CHUNK:
@@ -90,12 +92,26 @@ struct List {
     T* append() {
         if (!ensure_cap(len + 1))
             return NULL;
-        return items + (len++);
+        auto ret = items + (len++);
+        ptr0(ret);
+        return ret;
     }
 
     T* last() {
         if (len == 0) return NULL;
         return &items[len-1];
+    }
+
+    void filter(fn<bool(T *it)> pred) {
+        List<int> to_remove;
+        to_remove.init();
+
+        for (u32 i = 0; i < len; i++)
+            if (!pred(items + i))
+                to_remove.append(i);
+
+        for (u32 i = 0; i < to_remove.len; i++)
+            remove(to_remove[i] - i);
     }
 
     bool ensure_cap(s32 new_cap) {
@@ -104,17 +120,24 @@ struct List {
 
         switch (mode) {
         case LIST_MALLOC:
-            while (cap < new_cap)
-                cap *= 2;
-            items = (T*)realloc(items, sizeof(T) * cap);
-            if (items == NULL)
-                return false;
-            mem0(items + len, sizeof(T) * (cap - len));
+            {
+                auto old_cap = cap;
+                cap = 1 << (int)ceil(log2(new_cap));
+
+                items = (T*)realloc(items, sizeof(T) * cap);
+                if (items == NULL)
+                    return false;
+
+                global_mem_allocated -= sizeof(T) * old_cap;
+                global_mem_allocated += sizeof(T) * cap;
+
+                mem0(items + len, sizeof(T) * (cap - len));
+            }
             break;
 
         case LIST_POOL:
             {
-                while (cap < new_cap) cap *= 2;
+                cap = 1 << (int)ceil(log2(new_cap));
                 auto new_items = (T*)alloc_from_pool_stub(pool, sizeof(T) * cap);
                 if (new_items == NULL)
                     return false;

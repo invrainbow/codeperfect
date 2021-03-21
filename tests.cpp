@@ -2,30 +2,28 @@
 #include "mem.hpp"
 
 bool run_tests() {
-    // return false;
+    return false;
 
+    // initialize everything
     world.init();
     compiler_dont_optimize_me_away();
-
     use_pool_for_tree_sitter = true;
 
+    // run indexer
     Go_Indexer indexer;
     indexer.init();
-    indexer.crawl_index();
     indexer.background_thread();
+
+    // indexer.start_background_thread();
+    // while (true) continue;
 
     /*
     Index_Stream s;
-    s.open("db", FILE_MODE_READ, FILE_OPEN_EXISTING);
+    s.open("db", FILE_MODE_WRITE, FILE_CREATE_NEW) == FILE_RESULT_SUCCESS
+    s.open("db", FILE_MODE_READ, FILE_OPEN_EXISTING) == FILE_RESULT_SUCCESS
     defer { s.cleanup(); };
-
-    Pool mem;
-    mem.init();
-    {
-        SCOPED_MEM(&mem);
-        auto index = read_object<Go_Index>(&s);
-        print("done reading");
-    }
+    write_object<Go_Index>(&indexer.index, &s);
+    auto index = read_object<Go_Index>(&s);
     */
 
     system("pause");

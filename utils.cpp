@@ -91,6 +91,11 @@ ccstr our_strcat(ccstr a, ccstr b) {
     return our_sprintf("%s%s", a, b);
 }
 
+List<ccstr> *split_string(ccstr str, char sep) {
+    auto pred = [&](char ch) -> bool { return ch == sep; };
+    return split_string(str, pred);
+}
+
 List<ccstr> *split_string(ccstr str, fn<bool(char)> pred) {
     auto len = strlen(str);
     u32 start = 0;
@@ -175,4 +180,3 @@ bool path_contains_in_subtree(ccstr base_path, ccstr full_path) {
     SCOPED_FRAME();
     return make_path(base_path)->contains(make_path(full_path));
 }
-

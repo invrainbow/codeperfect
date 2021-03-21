@@ -55,7 +55,8 @@ void _error(ccstr fmt, ...) {
     va_copy(args2, args);
 
     auto len = vsnprintf(NULL, 0, fmt, args);
-    auto buf = (char*)malloc(sizeof(char) * (len + 1));
+    auto buf = (char*)our_malloc(sizeof(char) * (len + 1));
+    defer { our_free(buf); };
 
     vsnprintf(buf, len + 1, fmt, args2);
 
@@ -91,3 +92,5 @@ bool boxf::contains(vec2f point) {
             return true;
     return false;
 }
+
+s32 global_mem_allocated = 0;

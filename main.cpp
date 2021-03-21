@@ -82,17 +82,19 @@ char vert_shader[] = R"(
 in vec2 pos;
 in vec2 uv;
 in vec4 color;
-in int solid;
+in int mode;
+in int texture_id;
 out vec2 _uv;
 out vec4 _color;
-flat out int _solid;
+flat out int _mode;
+flat out int _texture_id;
 uniform mat4 projection;
 
 void main(void) {
     _uv = uv;
     _color = color;
-    _solid = solid;
-
+    _mode = mode;
+    _texture_id = texture_id;
     gl_Position = projection * vec4(pos, 0, 1);
 }
 )";
@@ -102,12 +104,42 @@ char frag_shader[] = R"(
 
 in vec2 _uv;
 in vec4 _color;
-flat in int _solid;
+flat in int _mode;
+flat in int _texture_id;
 out vec4 outcolor;
-uniform sampler2D tex;
+uniform sampler2D tex0;
+uniform sampler2D tex1;
+uniform sampler2D tex2;
+uniform sampler2D tex3;
+uniform sampler2D tex4;
+uniform sampler2D tex5;
+
+vec4 our_texture(vec2 uv) {
+    if (_texture_id == 0) return texture(tex0, uv);
+    if (_texture_id == 1) return texture(tex1, uv);
+    if (_texture_id == 2) return texture(tex2, uv);
+    if (_texture_id == 3) return texture(tex3, uv);
+    if (_texture_id == 4) return texture(tex4, uv);
+    if (_texture_id == 5) return texture(tex5, uv);
+    return vec4(0);
+}
 
 void main(void) {
-    outcolor = vec4(_color.rgb, (_solid == 1 ? _color.a : texture(tex, _uv).r));
+    switch (_mode) {
+    case 0: // DRAW_SOLID
+        outcolor = _color;
+        break;
+    case 1: // DRAW_MASK
+        outcolor = vec4(_color.rgb, our_texture(_uv).r);
+        break;
+    case 2: // DRAW_IMAGE
+        outcolor = our_texture(_uv);
+        break;
+    case 3: // DRAW_MASK_IMAGE
+        // outcolor = vec4(_color.rgb, (0.5 + dot(vec3(0.33, 0.33, 0.33), our_texture(_uv).rgb) * 0.5) * our_texture(_uv).a);
+        outcolor = vec4(_color.rgb, our_texture(_uv).a);
+        break;
+    }
 }
 )";
 
@@ -203,6 +235,141 @@ void new_ortho_matrix(float* mat, float l, float r, float b, float t) {
     mat[13] = -(t + b) / (t - b);
     mat[14] = 0;
     mat[15] = 1;
+}
+
+void render_godecl(Godecl *decl);
+void render_gotype(Gotype *gotype, ccstr field = NULL);
+
+void render_godecl(Godecl *decl) {
+    auto flags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth;
+    if (ImGui::TreeNodeEx(decl, flags, "%s", godecl_type_str(decl->type))) {
+        ImGui::Text("decl_start: %s", format_pos(decl->decl_start));
+        ImGui::Text("spec_start: %s", format_pos(decl->spec_start));
+        ImGui::Text("name_start: %s", format_pos(decl->name_start));
+        ImGui::Text("name: %s", decl->name);
+
+        switch (decl->type) {
+        case GODECL_IMPORT:
+            ImGui::Text("import_path: %s", decl->import_path);
+            break;
+        case GODECL_VAR:
+        case GODECL_CONST:
+        case GODECL_TYPE:
+        case GODECL_FUNC:
+        case GODECL_FIELD:
+        case GODECL_SHORTVAR:
+            render_gotype(decl->gotype);
+            break;
+        }
+        ImGui::TreePop();
+    }
+}
+
+void render_gotype(Gotype *gotype, ccstr field) {
+    if (gotype == NULL) return;
+
+    auto flags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth;
+    bool is_open = false;
+
+    if (field == NULL)
+        is_open = ImGui::TreeNodeEx(gotype, flags, "%s", gotype_type_str(gotype->type));
+    else
+        is_open = ImGui::TreeNodeEx(gotype, flags, "%s: %s", field, gotype_type_str(gotype->type));
+
+    if (is_open) {
+        switch (gotype->type) {
+        case GOTYPE_ID:
+            ImGui::Text("name: %s", gotype->id_name);
+            ImGui::Text("pos: %s", format_pos(gotype->id_pos));
+            break;
+        case GOTYPE_SEL:
+            ImGui::Text("package: %s", gotype->sel_name);
+            ImGui::Text("sel: %s", gotype->sel_sel);
+            break;
+        case GOTYPE_MAP:
+            render_gotype(gotype->map_key, "key");
+            render_gotype(gotype->map_value, "value");
+            break;
+        case GOTYPE_STRUCT:
+        case GOTYPE_INTERFACE:
+            {
+                auto specs = gotype->type == GOTYPE_STRUCT ? gotype->struct_specs : gotype->interface_specs;
+                for (u32 i = 0; i < specs->len; i++) {
+                    auto it = &specs->items[i];
+                    if (ImGui::TreeNodeEx(it, flags, "spec %d", i)) {
+                        ImGui::Text("is_embedded: %d", it->is_embedded);
+                        ImGui::Text("tag: %s", it->tag);
+                        if (it->is_embedded)
+                            render_gotype(it->embedded_type);
+                        else
+                            render_godecl(it->field);
+                        ImGui::TreePop();
+                    }
+                }
+            }
+            break;
+        case GOTYPE_POINTER: render_gotype(gotype->pointer_base, "base"); break;
+        case GOTYPE_SLICE: render_gotype(gotype->slice_base, "base"); break;
+        case GOTYPE_ARRAY: render_gotype(gotype->array_base, "base"); break;
+        case GOTYPE_LAZY_INDEX: render_gotype(gotype->lazy_index_base, "base"); break;
+        case GOTYPE_LAZY_CALL: render_gotype(gotype->lazy_call_base, "base"); break;
+        case GOTYPE_LAZY_DEREFERENCE: render_gotype(gotype->lazy_dereference_base, "base"); break;
+        case GOTYPE_LAZY_REFERENCE: render_gotype(gotype->lazy_reference_base, "base"); break;
+        case GOTYPE_LAZY_ARROW: render_gotype(gotype->lazy_arrow_base, "base"); break;
+        case GOTYPE_VARIADIC: render_gotype(gotype->variadic_base, "base"); break;
+        case GOTYPE_ASSERTION: render_gotype(gotype->assertion_base, "base"); break;
+
+        case GOTYPE_CHAN:
+            render_gotype(gotype->chan_base, "base"); break;
+            ImGui::Text("direction: %d", gotype->chan_direction);
+            break;
+
+        case GOTYPE_FUNC:
+            if (gotype->func_sig.params == NULL) {
+                ImGui::Text("params: NULL");
+            } else if (ImGui::TreeNodeEx(&gotype->func_sig.params, flags, "params:")) {
+                For (*gotype->func_sig.params)
+                    render_godecl(&it);
+                ImGui::TreePop();
+            }
+
+            if (gotype->func_sig.result == NULL) {
+                ImGui::Text("result: NULL");
+            } else if (ImGui::TreeNodeEx(&gotype->func_sig.result, flags, "result:")) {
+                For (*gotype->func_sig.result)
+                    render_godecl(&it);
+                ImGui::TreePop();
+            }
+
+            render_gotype(gotype->func_recv);
+            break;
+
+        case GOTYPE_MULTI:
+            For (*gotype->multi_types) render_gotype(it);
+            break;
+
+        case GOTYPE_RANGE:
+            render_gotype(gotype->range_base, "base");
+            ImGui::Text("type: %d", gotype->range_type);
+            break;
+
+        case GOTYPE_LAZY_ID:
+            ImGui::Text("name: %s", gotype->lazy_id_name);
+            ImGui::Text("pos: %s", format_pos(gotype->lazy_id_pos));
+            break;
+
+        case GOTYPE_LAZY_SEL:
+            render_gotype(gotype->lazy_sel_base, "base");
+            ImGui::Text("sel: %s", gotype->lazy_sel_sel);
+            break;
+
+        case GOTYPE_LAZY_ONE_OF_MULTI:
+            render_gotype(gotype->lazy_one_of_multi_base, "base");
+            ImGui::Text("index: %d", gotype->lazy_one_of_multi_index);
+            break;
+        }
+        ImGui::TreePop();
+    }
 }
 
 void render_ts_cursor(TSTreeCursor *curr) {
@@ -650,26 +817,36 @@ int main() {
     // now that we have world.display_size, we can call wksp.activate_pane
     world.wksp.activate_pane(0);
 
-    if (!world.font.init(vera_mono_ttf, FONT_SIZE))
-        return error("could not initialize font"), EXIT_FAILURE;
-    io.Fonts->AddFontFromMemoryTTF(vera_mono_ttf, vera_mono_ttf_len, FONT_SIZE);
+    // initialize & bind textures
+    glGenTextures(__TEXTURE_COUNT__, world.ui.textures);
+    for (u32 i = 0; i < __TEXTURE_COUNT__; i++) {
+        glActiveTexture(GL_TEXTURE0 + i);
+        glBindTexture(GL_TEXTURE_2D, world.ui.textures[i]);
+    }
+    // from here, if we want to modify a texture, just set the active texture
+    // are we going to run out of texture units?
 
-    GLuint im_font_texture;
+    if (!world.font.init(vera_mono_ttf, FONT_SIZE, TEXTURE_FONT))
+        return error("could not initialize font"), EXIT_FAILURE;
+
+    ui.init_sprite_texture();
+
     {
         // init imgui texture
+        io.Fonts->AddFontFromMemoryTTF(vera_mono_ttf, vera_mono_ttf_len, FONT_SIZE);
+
         u8* pixels;
         i32 width, height;
-
         io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
 
-        glGenTextures(1, &im_font_texture);
-        glBindTexture(GL_TEXTURE_2D, im_font_texture);
+        glActiveTexture(GL_TEXTURE0 + TEXTURE_FONT_IMGUI);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
 
-        io.Fonts->TexID = (void*)(intptr_t)im_font_texture;
+        // i don't think this is needed
+        // io.Fonts->TexID = (void*)TEXTURE_FONT_IMGUI;
     }
 
     glfwSetWindowSizeCallback(world.window, [](GLFWwindow* wnd, i32 w, i32 h) {
@@ -876,6 +1053,7 @@ int main() {
         // and copies it over.
 
         auto handle_enter = [&](ccstr nvim_string) {
+            if (editor == NULL) return;
             if (editor->nvim_data.mode != VI_INSERT) {
                 send_nvim_keys(nvim_string);
                 return;
@@ -925,6 +1103,7 @@ int main() {
         };
 
         auto handle_tab = [&](ccstr nvim_string) {
+            if (editor == NULL) return;
             if (editor->nvim_data.mode != VI_INSERT) {
                 send_nvim_keys(nvim_string);
                 return;
@@ -933,6 +1112,7 @@ int main() {
         };
 
         auto handle_backspace = [&](ccstr nvim_string) {
+            if (editor == NULL) return;
             if (editor->nvim_data.mode != VI_INSERT) {
                 send_nvim_keys(nvim_string);
                 return;
@@ -1156,8 +1336,12 @@ int main() {
                                 pane->editors.remove(pane->current_editor);
                                 if (pane->editors.len == 0)
                                     pane->current_editor = -1;
-                                else if (pane->current_editor >= pane->editors.len)
-                                    pane->current_editor = pane->editors.len - 1;
+                                else {
+                                    auto new_idx = pane->current_editor;
+                                    if (new_idx >= pane->editors.len)
+                                        new_idx = pane->editors.len - 1;
+                                    pane->focus_editor_by_index(new_idx);
+                                }
                             }
                         }
                         break;
@@ -1252,6 +1436,7 @@ int main() {
 
                                 // TODO: when do we stop debugging? do we kill this thread, wait for it to die, etc?
                                 /*
+                                // TODO: remember that create_thread allocates memory now
                                 dbg.thread = create_thread(debugger_loop_thread, NULL);
                                 if (dbg.thread == NULL) {
                                     error("unable to create thread to start process: %s", get_last_error());
@@ -1523,17 +1708,24 @@ int main() {
         glEnableVertexAttribArray(loc);
         glVertexAttribPointer(loc, 4, GL_FLOAT, GL_FALSE, sizeof(Vert), (void*)_offsetof(Vert, color));
 
-        loc = glGetAttribLocation(world.ui.program, "solid");
+        loc = glGetAttribLocation(world.ui.program, "mode");
         glEnableVertexAttribArray(loc);
-        glVertexAttribIPointer(loc, 1, GL_INT, sizeof(Vert), (void*)_offsetof(Vert, solid));
+        glVertexAttribIPointer(loc, 1, GL_INT, sizeof(Vert), (void*)_offsetof(Vert, mode));
+
+        loc = glGetAttribLocation(world.ui.program, "texture_id");
+        glEnableVertexAttribArray(loc);
+        glVertexAttribIPointer(loc, 1, GL_INT, sizeof(Vert), (void*)_offsetof(Vert, texture_id));
 
         loc = glGetUniformLocation(world.ui.program, "projection");
         mat4f ortho_projection;
         new_ortho_matrix(ortho_projection, 0, world.display_size.x, world.display_size.y, 0);
         glUniformMatrix4fv(loc, 1, GL_FALSE, (float*)ortho_projection);
 
-        loc = glGetUniformLocation(world.ui.program, "tex");
-        glUniform1i(loc, 0);
+        for (u32 i = 0; i < __TEXTURE_COUNT__; i++) {
+            char key[] = {'t', 'e', 'x', '0' + i, '\0'};
+            loc = glGetUniformLocation(world.ui.program, key);
+            glUniform1i(loc, i);
+        }
     }
 
     {
@@ -1562,7 +1754,7 @@ int main() {
         glUniformMatrix4fv(loc, 1, GL_FALSE, (float*)ortho_projection);
 
         loc = glGetUniformLocation(world.ui.im_program, "tex");
-        glUniform1i(loc, 0);
+        glUniform1i(loc, TEXTURE_FONT_IMGUI);
     }
 
     // Wait until all the OpenGL crap is initialized. I don't know why, but
@@ -2028,6 +2220,42 @@ int main() {
                 ImGui::End();
             }
 
+            if (world.dialogs_open.add_file_or_folder) {
+                auto &wnd = world.wnd_add_file_or_folder;
+
+                auto label = our_sprintf(
+                    "Add %s to %s",
+                    wnd.folder ? "folder" : "file",
+                    wnd.location_is_root ? "workspace root" : wnd.location
+                );
+
+                ImGui::Begin(label, &world.dialogs_open.add_file_or_folder, ImGuiWindowFlags_AlwaysAutoResize);
+
+                ImGui::Text("Name:");
+                ImGui::InputText("##add_file", wnd.name, IM_ARRAYSIZE(wnd.name));
+
+                if (ImGui::Button("Add")) {
+                    world.dialogs_open.add_file_or_folder = false;
+
+                    if (strlen(wnd.name) > 0) {
+                        auto dest = wnd.location_is_root ? world.wksp.path : path_join(world.wksp.path, wnd.location);
+                        auto path = path_join(dest, wnd.name);
+
+                        if (wnd.folder) {
+                            CreateDirectoryA(path, NULL);
+                        } else {
+                            // need to share, or else we have race condition
+                            // with fsevent handler in
+                            // Go_Indexer::background_thread() trying to read
+                            auto h = CreateFileA(path, 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+                            if (h != INVALID_HANDLE_VALUE) CloseHandle(h);
+                        }
+
+                    }
+                }
+                ImGui::End();
+            }
+
             do {
                 auto editor = world.get_current_editor();
                 if (editor == NULL) break;
@@ -2035,15 +2263,46 @@ int main() {
                 auto tree = editor->tree;
                 if (tree == NULL) break;
 
-                static bool show = false;
-                ImGui::Begin("current tree", &show, 0);
+                static bool show_tree = false;
+                static bool show_decls = false;
 
-                ImGui::Checkbox("show anon?", &world.wnd_ast_vis.show_anon_nodes);
+                {
+                    ImGui::Begin("current tree", &show_tree, 0);
+                    ImGui::Checkbox("show anon?", &world.wnd_ast_vis.show_anon_nodes);
+                    ts_tree_cursor_reset(&editor->cursor, ts_tree_root_node(tree));
+                    render_ts_cursor(&editor->cursor);
+                    ImGui::End();
+                }
 
-                ts_tree_cursor_reset(&editor->cursor, ts_tree_root_node(tree));
-                render_ts_cursor(&editor->cursor);
+                {
+                    ImGui::Begin("current decl", &show_decls, 0);
 
-                ImGui::End();
+                    List<Godecl> decls;
+                    decls.init();
+
+                    Parser_It it = {0};
+                    it.init(&editor->buf);
+
+                    Ast_Node node = {0};
+                    node.init(ts_tree_root_node(tree), &it);
+
+                    FOR_NODE_CHILDREN (&node) {
+                        switch (it->type) {
+                        case TS_VAR_DECLARATION:
+                        case TS_CONST_DECLARATION:
+                        case TS_FUNCTION_DECLARATION:
+                        case TS_METHOD_DECLARATION:
+                        case TS_TYPE_DECLARATION:
+                        case TS_SHORT_VAR_DECLARATION:
+                            decls.len = 0;
+                            world.indexer.node_to_decls(it, &decls, NULL);
+                            For (decls) render_godecl(&it);
+                            break;
+                        }
+                    }
+
+                    ImGui::End();
+                }
             } while (0);
 
             ImGui::Render();
@@ -2057,7 +2316,6 @@ int main() {
             glViewport(0, 0, world.display_size.x, world.display_size.y);
             glUseProgram(world.ui.im_program);
             glBindVertexArray(im_vao);
-            glBindTexture(GL_TEXTURE_2D, im_font_texture);
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
             glEnable(GL_SCISSOR_TEST);
 
@@ -2074,8 +2332,6 @@ int main() {
 
                 for (i32 j = 0; j < cmd_list->CmdBuffer.Size; j++) {
                     const ImDrawCmd* cmd = &cmd_list->CmdBuffer[j];
-
-                    glBindTexture(GL_TEXTURE_2D, (GLuint)(intptr_t)cmd->TextureId);
                     glScissor(cmd->ClipRect.x, (world.display_size.y - cmd->ClipRect.w), (cmd->ClipRect.z - cmd->ClipRect.x), (cmd->ClipRect.w - cmd->ClipRect.y));
                     glDrawElements(GL_TRIANGLES, cmd->ElemCount, elem_size, offset);
                     offset += cmd->ElemCount;

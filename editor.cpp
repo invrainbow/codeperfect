@@ -269,9 +269,8 @@ void Workspace::init() {
     panes.init(LIST_FIXED, _countof(_panes), _panes);
 
 #if 1
-    // auto newpath = (cstr)our_strcpy("c:/users/brandon/ide/helper");
-    auto newpath = (cstr)our_strcpy("C:/Users/Brandon/compose-cli");
-    strcpy_safe(path, _countof(path), normalize_path_separator(newpath));
+    // strcpy_safe(path, _countof(path), normalize_path_sep("c:/users/brandon/ide/helper"));
+    strcpy_safe(path, _countof(path), normalize_path_sep(TEST_PATH));
 #else
     Select_File_Opts opts;
     opts.buf = path;
@@ -334,6 +333,7 @@ void Editor::init() {
     SCOPED_MEM(&mem);
 
     parser = new_ts_parser();
+
     buf_lock.init();
 
     nvim_edit_mem.init("editor nvim_edit_mem");
@@ -384,6 +384,9 @@ void Editor::process_nvim_edit(Edit_From_Nvim *edit) {
 }
 
 void Editor::cleanup() {
+    ts_parser_delete(parser);
+    ts_tree_delete(tree); // i remember this being super slow, is it still if it's just one tree?
+
     mem.cleanup();
     buf_lock.cleanup();
     nvim_edit_lock.cleanup();
@@ -587,7 +590,7 @@ void Editor::update_parameter_hint() {
     auto should_close_hints = [&]() {
         if (cur < hint.start) return true;
 
-        auto root = world.indexer.new_ast_node(ts_tree_root_node(tree));
+        auto root = new_ast_node(ts_tree_root_node(tree), NULL);
 
         bool ret = false;
         world.indexer.find_nodes_containing_pos(root, hint.start, true, [&](Ast_Node *it) -> Walk_Action {

@@ -5,6 +5,7 @@
 
 struct Fridge_Block {
     Fridge_Block *next;
+    s32 size;
 };
 
 #define FRIDGE_BLOCK_SIZE 128
@@ -31,6 +32,7 @@ struct Fridge {
         auto block = blocks;
         while (block != NULL) {
             auto next = block->next;
+            global_mem_allocated -= block->size;
             our_free(block);
             block = next;
         }
@@ -38,6 +40,8 @@ struct Fridge {
 
     void add_new_block() {
         auto next_block = (Fridge_Block*)our_malloc(sizeof(Fridge_Block) + sizeof(T) * blocksize);
+        next_block->size = sizeof(T) * blocksize;
+        global_mem_allocated += next_block->size;
 
         head = (Elem*)((u8*)next_block + sizeof(Fridge_Block));
         for (i32 i = 0; i < blocksize - 1; i++)
@@ -129,11 +133,24 @@ struct Pool {
         request_new_block();
     }
 
+    Pool_Block *alloc_block(s32 blocksize) {
+        auto ret = (Pool_Block*)our_malloc(sizeof(Pool_Block) + blocksize);
+        mem_allocated += blocksize;
+        global_mem_allocated += blocksize;
+        return ret;
+    }
+
+    void free_block(Pool_Block *block) {
+        mem_allocated -= block->size;
+        global_mem_allocated -= block->size;
+        our_free(block);
+    }
+
     void cleanup() {
-        For (unused_blocks) our_free(it);
-        For (used_blocks) our_free(it);
-        For (obsolete_blocks) our_free(it);
-        if (curr != NULL) our_free(curr);
+        For (unused_blocks) free_block(it);
+        For (used_blocks) free_block(it);
+        For (obsolete_blocks) free_block(it);
+        if (curr != NULL) free_block(curr);
 
         unused_blocks.len = 0;
         used_blocks.len = 0;
@@ -151,8 +168,7 @@ struct Pool {
             curr = unused_blocks[unused_blocks.len - 1];
             unused_blocks.len--;
         } else {
-            curr = (Pool_Block*)our_malloc(sizeof(Pool_Block) + blocksize);
-            mem_allocated += blocksize;
+            curr = alloc_block(blocksize);
         }
 
         sp = 0;
@@ -161,12 +177,36 @@ struct Pool {
     }
 
     void restore(Pool_Block *block, s32 pos) {
-        // if this was a previous used block, just reset pos back to beginning
-        // TODO: actually, we could restore to previous block and just put all
-        // blocks after that in unused_blocks
-        auto new_pos = block == curr ? pos : 0;
+        if (block != curr) {
+            auto pblock = used_blocks.find([&](Pool_Block **it) -> bool {
+                return *it == block;
+            });
 
-        sp = new_pos;
+            if (pblock == NULL) {
+                pblock = obsolete_blocks.find([&](Pool_Block **it) -> bool {
+                    return *it == block;
+                });
+                assert(pblock != NULL);
+                // if the block was obsoleted, we're not going to use it,
+                // but we *can* just reset all the current used blocks
+                if (curr != NULL) {
+                    unused_blocks.append(curr);
+                    curr = NULL;
+                }
+                For (used_blocks) unused_blocks.append(it);
+                used_blocks.len = 0;
+                request_new_block();
+            } else {
+                auto idx = pblock - used_blocks.items;
+                if (curr != NULL)
+                    unused_blocks.append(curr);
+                for (u32 i = idx + 1; i < used_blocks.len; i++)
+                    unused_blocks.append(used_blocks[i]);
+                used_blocks.len = idx;
+                curr = block;
+            }
+        }
+        sp = pos;
     }
 
     void ensure_enough(s32 n) {
@@ -209,10 +249,7 @@ struct Pool {
         For (used_blocks) unused_blocks.append(it);
         used_blocks.len = 0;
 
-        For (obsolete_blocks) {
-            mem_allocated -= it->size;
-            our_free(it);
-        }
+        For (obsolete_blocks) free_block(it);
         obsolete_blocks.len = 0;
 
         request_new_block();

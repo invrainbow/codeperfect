@@ -69,6 +69,7 @@ struct World {
     Pool file_tree_mem;
     Pool build_mem;
     Pool build_index_mem;
+    Pool ui_mem;
 
     Fridge<Chunk0> chunk0_fridge;
     Fridge<Chunk1> chunk1_fridge;
@@ -155,6 +156,10 @@ struct World {
 
     struct {
         i32 scroll_offset;
+        i32 selection;
+        // char buf[256];
+        // bool adding_something;
+        // bool thing_being_added_is_file;
     } file_explorer;
 
     // in the future, multiple workspaces?
@@ -194,6 +199,7 @@ struct World {
         bool mouse_down[ImGuiMouseButton_COUNT];
         bool mouse_just_pressed[ImGuiMouseButton_COUNT];
         GLFWcursor* cursors[ImGuiMouseCursor_COUNT];
+        GLuint textures[__TEXTURE_COUNT__];
     } ui;
 
     struct Windows_Open {
@@ -202,21 +208,25 @@ struct World {
         bool im_metrics;
         bool search_and_replace;
         bool build_and_debug;
-
-        bool is_any_open() {
-            Windows_Open zero = { 0 };
-            return (memcmp(this, &zero, sizeof(*this)) != 0);
-        }
+        bool is_any_open() { return iszero(this); }
     } windows_open;
 
     struct Popups_Open {
         bool debugger_add_watch;
-
-        bool is_any_open() {
-            Popups_Open zero = { 0 };
-            return (memcmp(this, &zero, sizeof(*this)) != 0);
-        }
+        bool is_any_open() { return iszero(this); }
     } popups_open;
+
+    struct Dialog_Open {
+        bool add_file_or_folder;
+        bool is_any_open() { return iszero(this); }
+    } dialogs_open;
+
+    struct {
+        char name[MAX_PATH];
+        char location[MAX_PATH];
+        bool location_is_root;
+        bool folder;
+    } wnd_add_file_or_folder;
 
     struct {
         char query[MAX_PATH];

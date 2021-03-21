@@ -9,6 +9,61 @@
 
 UI ui;
 
+ccstr image_filenames[] = {
+    "images/add.png",
+    "images/folder.png",
+    "images/add-folder.png",
+    "images/refresh.png",
+    "images/source-file.png",
+};
+
+// true means "should use DRAW_IMAGE_MASK"
+bool image_mask_types[] = {
+    true,
+    false,
+    true,
+    true,
+    true,
+};
+
+bool UI::init_sprite_texture() {
+    sprite_tex_size = 1024;
+
+    glActiveTexture(GL_TEXTURE0 + TEXTURE_IMAGES);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+    {
+        SCOPED_FRAME();
+
+        stbrp_context context;
+        s32 node_count = 4096 * 2;
+        auto nodes = alloc_array(stbrp_node, node_count);
+
+        stbrp_init_target(&context, 4096, 4096, nodes, node_count);
+        if (!stbrp_pack_rects(&context, sprite_rects.items, sprite_rects.len))
+            return false;
+
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, sprite_tex_size, sprite_tex_size, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+
+        u32 i = 0;
+        For (sprite_rects) {
+            int w = 0, h = 0, chans = 0;
+            auto data = stbi_load(image_filenames[i], &w, &h, &chans, STBI_rgb_alpha);
+            assert(chans == 4);
+
+            if (data == NULL) return false;
+            defer { stbi_image_free(data); };
+
+            assert(it.w == w);
+            assert(it.h == h);
+
+            glTexSubImage2D(GL_TEXTURE_2D, 0, it.x, it.y, w, h, GL_RGBA, GL_UNSIGNED_BYTE, data);
+            i++;
+        }
+    }
+}
+
 #define LINE_HEIGHT 1.2
 
 vec3f rgb_hex(ccstr s) {
@@ -191,6 +246,19 @@ void UI::init() {
     ptr0(this);
     font = &world.font;
     editor_sizes.init(LIST_FIXED, _countof(_editor_sizes), _editor_sizes);
+
+    sprite_rects.init();
+
+    For (image_filenames) {
+        int w = 0, h = 0, comp = 0;
+        auto data = stbi_load(it, &w, &h, &comp, STBI_rgb_alpha);
+        assert(data != NULL);
+        defer { stbi_image_free(data); };
+
+        auto rect = sprite_rects.append();
+        rect->w = w;
+        rect->h = h;
+    }
 }
 
 void UI::flush_verts() {
@@ -201,7 +269,7 @@ void UI::flush_verts() {
     verts.len = 0;
 }
 
-void UI::draw_triangle(vec2f a, vec2f b, vec2f c, vec2f uva, vec2f uvb, vec2f uvc, vec4f color, bool solid) {
+void UI::draw_triangle(vec2f a, vec2f b, vec2f c, vec2f uva, vec2f uvb, vec2f uvc, vec4f color, Draw_Mode mode, Texture_Id texture) {
     if (verts.len + 3 >= verts.cap)
         flush_verts();
 
@@ -212,12 +280,12 @@ void UI::draw_triangle(vec2f a, vec2f b, vec2f c, vec2f uva, vec2f uvb, vec2f uv
     c.x *= world.display_scale.x;
     c.y *= world.display_scale.y;
 
-    verts.append({ a.x, a.y, uva.x, uva.y, color, solid });
-    verts.append({ b.x, b.y, uvb.x, uvb.y, color, solid });
-    verts.append({ c.x, c.y, uvc.x, uvc.y, color, solid });
+    verts.append({ a.x, a.y, uva.x, uva.y, color, mode, texture });
+    verts.append({ b.x, b.y, uvb.x, uvb.y, color, mode, texture });
+    verts.append({ c.x, c.y, uvc.x, uvc.y, color, mode, texture });
 }
 
-void UI::draw_quad(boxf b, boxf uv, vec4f color, bool solid) {
+void UI::draw_quad(boxf b, boxf uv, vec4f color, Draw_Mode mode, Texture_Id texture) {
     if (verts.len + 6 >= verts.cap)
         flush_verts();
 
@@ -229,7 +297,8 @@ void UI::draw_quad(boxf b, boxf uv, vec4f color, bool solid) {
         {uv.x, uv.y},
         {uv.x + uv.w, uv.y},
         color,
-        solid
+        mode,
+        texture
     );
 
     draw_triangle(
@@ -240,13 +309,13 @@ void UI::draw_quad(boxf b, boxf uv, vec4f color, bool solid) {
         {uv.x + uv.w, uv.y},
         {uv.x + uv.w, uv.y + uv.h},
         color,
-        solid
+        mode,
+        texture
     );
-
 }
 
 void UI::draw_rect(boxf b, vec4f color) {
-    draw_quad(b, { 0, 0, 1, 1 }, color, true);
+    draw_quad(b, { 0, 0, 1, 1 }, color, DRAW_SOLID);
 }
 
 void UI::draw_rounded_rect(boxf b, vec4f color, float radius, int round_flags) {
@@ -299,7 +368,7 @@ void UI::draw_rounded_rect(boxf b, vec4f color, float radius, int round_flags) {
             vec2f v1 = {center.x + radius * cos(ang1), center.y - radius * sin(ang1)};
             vec2f v2 = {center.x + radius * cos(ang2), center.y - radius * sin(ang2)};
 
-            draw_triangle(center, v1, v2, zero, zero, zero, color, true);
+            draw_triangle(center, v1, v2, zero, zero, zero, color, DRAW_SOLID);
         }
     };
 
@@ -346,7 +415,7 @@ void UI::draw_char(vec2f* pos, char ch, vec4f color) {
     if (q.x1 > q.x0) {
         boxf box = { q.x0, q.y0, q.x1 - q.x0, q.y1 - q.y0 };
         boxf uv = { q.s0, q.t0, q.s1 - q.s0, q.t1 - q.t0 };
-        draw_quad(box, uv, color, false);
+        draw_quad(box, uv, color, DRAW_FONT_MASK);
     }
 }
 
@@ -401,11 +470,21 @@ u32 advance_subtree_in_file_explorer(u32 i) {
     return i;
 }
 
-bool UI::was_area_clicked(boxf area) {
-    if (world.ui.mouse_just_pressed[GLFW_MOUSE_BUTTON_LEFT])
-        if (area.contains(world.ui.mouse_pos))
-            return true;
-    return false;
+int UI::get_mouse_flags(boxf area) {
+    // how do we handle like overlapping elements later?
+    // it can't be that hard, imgui does it
+
+    int ret = 0;
+    if (area.contains(world.ui.mouse_pos)) {
+        ret |= MOUSE_HOVER;
+        if (world.ui.mouse_just_pressed[GLFW_MOUSE_BUTTON_LEFT])
+            ret |= MOUSE_CLICKED;
+        if (world.ui.mouse_just_pressed[GLFW_MOUSE_BUTTON_RIGHT])
+            ret |= MOUSE_RCLICKED;
+        if (world.ui.mouse_just_pressed[GLFW_MOUSE_BUTTON_MIDDLE])
+            ret |= MOUSE_MCLICKED;
+    }
+    return ret;
 }
 
 void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
@@ -413,8 +492,6 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
         // prepare opengl for drawing shit
         glViewport(0, 0, world.display_size.x, world.display_size.y);
         glUseProgram(program);
-        glActiveTexture(GL_TEXTURE0); // activate texture
-        glBindTexture(GL_TEXTURE_2D, font->texid);
         glBindVertexArray(vao); // bind my vertex array & buffers
         glBindBuffer(GL_ARRAY_BUFFER, vbo);
         verts.init(LIST_FIXED, 6 * 128, alloc_array(Vert, 6 * 128));
@@ -453,23 +530,91 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                 const float ITEM_PADDING_Y = 4;
                 const float ITEM_MARGIN = 4;
 
-                vec2f pos = sidebar_area.pos;
-                pos.y -= world.file_explorer.scroll_offset;
-                pos.y += ITEM_MARGIN;
                 u32 depth = 0;
 
-                for (u32 i = 0; i < world.file_tree.len;) {
+                const float BUTTON_SIZE = 16;
+                const float BUTTONS_AREA_PADDING_X = 4;
+                const float BUTTONS_AREA_PADDING_Y = 4;
+                const float BUTTON_MARGIN_X = 4;
+                const float BUTTON_PADDING = 4;
+
+                boxf buttons_area = sidebar_area;
+                buttons_area.h = BUTTON_SIZE + (BUTTON_PADDING * 2) + (BUTTONS_AREA_PADDING_Y * 2);
+
+                // draw buttons area
+                {
+                    int num_buttons = 3;
+                    int button_idx = 0;
+                    boxf button_area;
+
+                    button_area.x = buttons_area.x + buttons_area.w - BUTTONS_AREA_PADDING_X - BUTTON_SIZE - BUTTON_PADDING;
+                    button_area.y = buttons_area.y + BUTTONS_AREA_PADDING_Y;
+                    button_area.w = BUTTON_SIZE + (BUTTON_PADDING * 2);
+                    button_area.h = BUTTON_SIZE + (BUTTON_PADDING * 2);
+
+                    // call this from right to left
+                    auto draw_button = [&](Sprites_Image_Type image_id) -> bool {
+                        auto mouse_flags = get_mouse_flags(button_area);
+                        if (mouse_flags & MOUSE_HOVER)
+                            draw_rounded_rect(button_area, rgba(COLOR_WHITE, 0.2), 2, ROUND_ALL);
+
+                        boxf icon_area = button_area;
+                        icon_area.x += BUTTON_PADDING;
+                        icon_area.y += BUTTON_PADDING;
+                        icon_area.w -= BUTTON_PADDING * 2;
+                        icon_area.h -= BUTTON_PADDING * 2;
+                        draw_image(image_id, icon_area);
+
+                        button_area.pos.x -= BUTTON_MARGIN_X;
+                        button_area.pos.x -= BUTTON_SIZE;
+                        button_area.pos.x -= BUTTON_PADDING * 2;
+                        return (mouse_flags & MOUSE_CLICKED);
+                    };
+
+                    if (draw_button(SIMAGE_REFRESH)) {
+                        print("refresh clicked");
+                    }
+
+                    auto open_add_file_or_folder = [&](bool folder) {
+                        world.dialogs_open.add_file_or_folder = true;
+
+                        if (world.file_explorer.selection == -1) {
+                            world.wnd_add_file_or_folder.location_is_root = true;
+                        } else {
+                            // TODO: how do we generate the file path based on selection?
+                            // world.wnd_add_file_or_folder.location = ???
+                        }
+
+                        world.wnd_add_file_or_folder.folder = folder;
+                    };
+
+                    if (draw_button(SIMAGE_ADD_FOLDER))
+                        open_add_file_or_folder(true);
+                    if (draw_button(SIMAGE_ADD))
+                        open_add_file_or_folder(false);
+                }
+
+                boxf files_area = sidebar_area;
+                files_area.h -= buttons_area.h;
+                files_area.y += buttons_area.h;
+
+                boxf row_area;
+                row_area.pos = files_area.pos;
+                row_area.y -= world.file_explorer.scroll_offset;
+                row_area.y += ITEM_MARGIN;
+                row_area.w = files_area.w;
+                row_area.h = font->height;
+                row_area.h += ITEM_PADDING_Y * 2;
+
+                for (u32 i = 0; i < world.file_tree.len && row_area.y <= files_area.h; row_area.y += row_area.h) {
                     auto it = &world.file_tree[i];
 
-                    boxf row_area;
-                    row_area.pos = pos;
-                    row_area.w = sidebar_area.w;
-                    row_area.h = font->height;
-                    row_area.h += ITEM_PADDING_Y * 2;
+                    if (world.file_explorer.selection == i)
+                        draw_rounded_rect(row_area, rgba(COLOR_DARK_GREY), 4, ROUND_ALL);
 
                     auto is_row_visible = [&]() {
-                        auto sb_top = sidebar_area.y;
-                        auto sb_bot = sidebar_area.y + sidebar_area.h;;
+                        auto sb_top = files_area.y;
+                        auto sb_bot = files_area.y + files_area.h;;
 
                         auto row_top = row_area.y;
                         auto row_bot = row_area.y + row_area.h;
@@ -483,10 +628,14 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                     if (is_row_visible()) {
                         SCOPED_FRAME();
 
-                        if (row_area.contains(world.ui.mouse_pos))
+                        int mouse_flags = get_mouse_flags(row_area);
+
+                        if (mouse_flags & MOUSE_HOVER)
                             draw_rounded_rect(row_area, rgba(COLOR_DARK_GREY), 4, ROUND_ALL);
 
-                        if (was_area_clicked(row_area)) {
+                        if (mouse_flags & MOUSE_CLICKED) {
+                            world.file_explorer.selection = i;
+
                             if (it->num_children == -1) {
                                 SCOPED_FRAME();
 
@@ -508,19 +657,25 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                         }
 
                         boxf text_area = row_area;
-                        text_area.x += ITEM_PADDING_X;
+                        text_area.x += ITEM_PADDING_X + it->depth * 20;
                         text_area.w -= ITEM_PADDING_X * 2;
                         text_area.y += ITEM_PADDING_Y;
                         text_area.h -= ITEM_PADDING_Y * 2;
 
-                        auto label = (cstr)our_sprintf(
-                            "%*s%s%s",
-                            it->depth * 2,
-                            "",
-                            it->name,
-                            it->num_children == -1 ? "" : "/"
-                        );
+                        const float ICON_SIZE = 16;
 
+                        boxf icon_area;
+                        icon_area.pos = text_area.pos;
+                        icon_area.w = text_area.h;
+                        icon_area.h = text_area.h;
+
+                        text_area.x += (icon_area.w + 5);
+                        text_area.w -= (icon_area.w + 5);
+
+                        // draw_image(SIMAGE_FOLDER, icon_area);
+                        draw_image(it->num_children == -1 ? SIMAGE_SOURCE_FILE : SIMAGE_FOLDER, icon_area);
+
+                        auto label = (cstr)our_strcpy(it->name);
                         auto avail_chars = (int)(text_area.w / font->width);
                         if (avail_chars < strlen(label))
                             label[avail_chars] = '\0';
@@ -528,15 +683,16 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                         draw_string(text_area.pos, label, rgba(COLOR_WHITE));
                     }
 
-                    pos.y += row_area.h;
-
-                    if (pos.y > sidebar_area.h) break;
-
                     if (it->num_children != -1 && !it->state.open)
                         i = advance_subtree_in_file_explorer(i);
                     else
                         i++;
                 }
+
+                boxf sep_area = buttons_area;
+                sep_area.y += buttons_area.h;
+                sep_area.h = 1;
+                draw_rect(sep_area, rgba(COLOR_WHITE, 0.2));
             }
             break;
         case SIDEBAR_SEARCH_RESULTS:
@@ -558,16 +714,16 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                         line_area.w = sidebar_area.w;
                         line_area.h = font->height;
 
-                        if (line_area.contains(world.ui.mouse_pos))
+                        auto mouse_flags = get_mouse_flags(line_area);
+
+                        if (mouse_flags & MOUSE_HOVER)
                             draw_rect(line_area, rgba(COLOR_DARK_GREY));
 
-                        if (was_area_clicked(line_area)) {
-                            {
-                                SCOPED_FRAME();
-                                auto path = path_join(world.wksp.path, it->filename);
-                                auto pos = new_cur2(it->match_col, it->row-1);
-                                world.get_current_pane()->focus_editor(path, pos);
-                            }
+                        if (mouse_flags & MOUSE_CLICKED) {
+                            SCOPED_FRAME();
+                            auto path = path_join(world.wksp.path, it->filename);
+                            auto pos = new_cur2(it->match_col, it->row-1);
+                            world.get_current_pane()->focus_editor(path, pos);
                         }
 
                         auto str = our_sprintf("%s:%d:%d ", it->filename, it->row, it->match_col+1);
@@ -612,6 +768,8 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
         boxf tab;
         tab.pos = tabs_area.pos + new_vec2(5, tabs_area.h - tab_padding.y * 2 - font->height);
 
+        i32 tab_to_remove = -1;
+
         // draw tabs
         u32 tab_id = 0;
         for (auto&& editor : pane.editors) {
@@ -636,20 +794,43 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
             tab.w = text_width + tab_padding.x * 2;
             tab.h = font->height + tab_padding.y * 2;
 
+            auto mouse_flags = get_mouse_flags(tab);
+
             vec3f tab_color = COLOR_MEDIUM_DARK_GREY;
             if (is_selected)
                 tab_color = COLOR_BG;
-            else if (tab.contains(world.ui.mouse_pos))
+            else if (mouse_flags & MOUSE_HOVER)
                 tab_color = COLOR_DARK_GREY;
 
             draw_rounded_rect(tab, rgba(tab_color), 4, ROUND_TL | ROUND_TR);
             draw_string(tab.pos + tab_padding, label, rgba(is_selected ? COLOR_WHITE : COLOR_LIGHT_GREY));
 
-            if (was_area_clicked(tab))
+            if (mouse_flags & MOUSE_CLICKED)
                 pane.focus_editor_by_index(tab_id);
+
+            if (mouse_flags & MOUSE_MCLICKED)
+                tab_to_remove = tab_id;
 
             tab.pos.x += tab.w + 5;
             tab_id++;
+        }
+
+        if (tab_to_remove != -1) {
+            // duplicate of code in main.cpp under GLFW_KEY_W handler, refactor
+            // if we copy this a few more times
+            pane.editors[tab_to_remove].cleanup();
+            pane.editors.remove(tab_to_remove);
+
+            if (pane.editors.len == 0)
+                pane.current_editor = -1;
+            else if (pane.current_editor == tab_to_remove) {
+                auto new_idx = pane.current_editor;
+                if (new_idx >= pane.editors.len)
+                    new_idx = pane.editors.len - 1;
+                pane.focus_editor_by_index(new_idx);
+            } else if (pane.current_editor > tab_to_remove) {
+                pane.current_editor--;
+            }
         }
 
         // draw editor
@@ -953,7 +1134,7 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
             b.x = offset - 2;
             b.y = 0;
 
-            if (b.contains(world.ui.mouse_pos)) {
+            if (get_mouse_flags(b) & MOUSE_HOVER) {
                 draw_rect(b, rgba(COLOR_WHITE));
                 if (world.ui.mouse_down[GLFW_MOUSE_BUTTON_LEFT]) {
                     world.wksp.resizing_pane = i;
@@ -1004,23 +1185,22 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
             SCOPED_FRAME();
             auto s = our_sprintf("%s:%d:%d: %s", it->file, it->row, it->col, it->message);
 
-            bool hover = row_area.contains(world.ui.mouse_pos);
-            if (hover)
+            auto mouse_flags = get_mouse_flags(row_area);
+
+            if (mouse_flags & MOUSE_HOVER)
                 draw_rect(row_area, rgba(COLOR_LIGHT_GREY));
 
-            if (was_area_clicked(row_area)) {
-                {
-                    SCOPED_FRAME();
-                    auto path = path_join(world.wksp.path, it->file);
-                    auto pos = new_cur2(it->col-1, it->row-1);
-                    world.get_current_pane()->focus_editor(path, pos);
-                }
+            if (mouse_flags & MOUSE_CLICKED) {
+                SCOPED_FRAME();
+                auto path = path_join(world.wksp.path, it->file);
+                auto pos = new_cur2(it->col-1, it->row-1);
+                world.get_current_pane()->focus_editor(path, pos);
             }
 
             auto pos = row_area.pos;
             pos.x += ITEM_PADDING_X;
             pos.y += ITEM_PADDING_Y;
-            draw_string(pos, s, rgba(hover ? COLOR_BLACK : COLOR_WHITE));
+            draw_string(pos, s, rgba((mouse_flags & MOUSE_HOVER) ? COLOR_BLACK : COLOR_WHITE));
 
             row_area.y += row_area.h;
         }
@@ -1030,6 +1210,21 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
     flush_verts();
 
     recalculate_view_sizes();
+}
+
+void UI::draw_image(Sprites_Image_Type image_id, boxf b) {
+    auto rect = &sprite_rects[image_id];
+
+    boxf uv;
+    uv.x = rect->x / sprite_tex_size;
+    uv.y = rect->y / sprite_tex_size;
+    uv.w = rect->w / sprite_tex_size;
+    uv.h = rect->h / sprite_tex_size;
+
+    if (image_mask_types[image_id])
+        draw_quad(b, uv, {1.0, 1.0, 1.0, 1.0}, DRAW_IMAGE_MASK, TEXTURE_IMAGES);
+    else
+        draw_quad(b, uv, {0}, DRAW_IMAGE, TEXTURE_IMAGES);
 }
 
 boxf UI::get_build_results_area() {

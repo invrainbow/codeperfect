@@ -16,14 +16,16 @@ ccstr get_normalized_path(ccstr path) {
     return ret;
 }
 
-// Mutates and returns path.
-cstr normalize_path_separator(cstr path, char sep) {
+ccstr normalize_path_sep(ccstr path, char sep) {
     if (sep == 0) sep = PATH_SEP;
 
-    for (u32 i = 0; path[i] != '\0'; i++)
-        if (is_sep(path[i]))
-            path[i] = sep;
-    return path;
+    auto len = strlen(path);
+    auto ret = alloc_array(char, len+1);
+
+    for (u32 i = 0; i < len; i++)
+        ret[i] = is_sep(path[i]) ? sep : path[i];
+    ret[len] = '\0';
+    return ret;
 }
 
 #if 0
@@ -57,4 +59,14 @@ void free_entire_file(Entire_File *file) {
 
 bool is_sep(char ch) {
     return ch == '/' || ch == '\\';
+}
+
+ccstr fs_event_type_str(Fs_Event_Type t) {
+    switch (t) {
+    define_str_case(FSEVENT_CHANGE);
+    define_str_case(FSEVENT_DELETE);
+    define_str_case(FSEVENT_CREATE);
+    define_str_case(FSEVENT_RENAME);
+    }
+    return NULL;
 }

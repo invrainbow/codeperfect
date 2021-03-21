@@ -100,7 +100,18 @@ void Process::cleanup() {
     close_and_null_handle(&proc);
 }
 
+// this is by far the stupidest bug ever
+// https://devblogs.microsoft.com/oldnewthing/20200306-00/?p=103538
+CRITICAL_SECTION global_create_process_lock;
+void init_global_create_process_lock() {
+    InitializeCriticalSection(&global_create_process_lock);
+}
+int _ = (init_global_create_process_lock(), 0);
+
 bool Process::run(ccstr _cmd) {
+    EnterCriticalSection(&global_create_process_lock);
+    defer { LeaveCriticalSection(&global_create_process_lock); };
+
     cmd = _cmd;
 
     SECURITY_ATTRIBUTES sa = { 0 };
@@ -239,7 +250,7 @@ DWORD WINAPI _run_thread(void* p) {
 }
 
 Thread_Handle create_thread(Thread_Callback callback, void* param) {
-    auto ctx = (Thread_Ctx*)our_malloc(sizeof(Thread_Ctx));
+    auto ctx = alloc_object(Thread_Ctx);
     ctx->callback = callback;
     ctx->param = param;
 
@@ -368,7 +379,7 @@ bool copy_file(ccstr src, ccstr dest, bool overwrite) {
 bool ensure_directory_exists(ccstr path) {
     SCOPED_FRAME();
 
-    auto newpath = normalize_path_separator((cstr)path);
+    auto newpath = normalize_path_sep(path);
     auto res = SHCreateDirectoryExA(NULL, (ccstr)newpath, NULL);
 
     switch (res) {
@@ -475,13 +486,14 @@ bool Fs_Watcher::init(ccstr _path) {
     ptr0(this);
 
     path = _path;
-    dir_handle = CreateFileA(path, FILE_LIST_DIRECTORY, FILE_SHARE_WRITE | FILE_SHARE_READ | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+    dir_handle = CreateFileA(path, FILE_LIST_DIRECTORY, FILE_SHARE_WRITE | FILE_SHARE_READ | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED, NULL);
     if (dir_handle == INVALID_HANDLE_VALUE) {
         print("unable to create file for fswatcher: %s", get_last_error());
         return false;
     }
 
     buf = alloc_array(FILE_NOTIFY_INFORMATION, FS_WATCHER_BUFSIZE);
+    initiate_wait();
     return true;
 }
 
@@ -489,22 +501,30 @@ void Fs_Watcher::cleanup() {
     if (dir_handle != NULL) CloseHandle(dir_handle);
 }
 
+bool Fs_Watcher::initiate_wait() {
+    auto flags = FILE_NOTIFY_CHANGE_FILE_NAME |
+        FILE_NOTIFY_CHANGE_DIR_NAME |
+        FILE_NOTIFY_CHANGE_ATTRIBUTES |
+        FILE_NOTIFY_CHANGE_LAST_WRITE |
+        FILE_NOTIFY_CHANGE_CREATION;
+
+    if (!ReadDirectoryChangesW(dir_handle, buf, sizeof(FILE_NOTIFY_INFORMATION) * FS_WATCHER_BUFSIZE, TRUE, flags, NULL, &ol, NULL)) {
+        error("unable to read directory changes: %s", get_last_error());
+        return false;
+    }
+    return true;
+}
+
 bool Fs_Watcher::next_event(Fs_Event *event) {
     if (!has_more) {
-        auto flags = FILE_NOTIFY_CHANGE_FILE_NAME |
-            FILE_NOTIFY_CHANGE_DIR_NAME |
-            FILE_NOTIFY_CHANGE_ATTRIBUTES |
-            FILE_NOTIFY_CHANGE_LAST_WRITE |
-            FILE_NOTIFY_CHANGE_CREATION;
-
-        DWORD bytes_transferred = 0;
-        if (!ReadDirectoryChangesW(dir_handle, buf, sizeof(FILE_NOTIFY_INFORMATION) * FS_WATCHER_BUFSIZE, TRUE, flags, &bytes_transferred, NULL, NULL)) {
-            print("unable to read directory changes: %s", get_last_error());
+        DWORD bytes_read = 0;
+        if (!GetOverlappedResult(dir_handle, &ol, &bytes_read, FALSE))
             return false;
-        }
 
-        if (bytes_transferred == 0) {
-            print("bytes transferred was 0");
+        initiate_wait();
+
+        if (bytes_read == 0) {
+            print("number of events overflowed our FILE_NOTIFY_INFORMATION buffer");
             return false;
         }
 
@@ -526,6 +546,8 @@ bool Fs_Watcher::next_event(Fs_Event *event) {
     if (info->Action == FILE_ACTION_RENAMED_NEW_NAME)
         return next_event(event);   // we shouldn't be here, ask for next event lmao
 
+    ptr0(event);
+
     copy_file_name(info, event->filepath, _countof(event->filepath));
     switch (info->Action) {
     case FILE_ACTION_ADDED:
@@ -546,8 +568,7 @@ bool Fs_Watcher::next_event(Fs_Event *event) {
 
         if (info->Action != FILE_ACTION_RENAMED_NEW_NAME) return false;
 
-        strcpy_safe(event->old_filepath, _countof(event->old_filepath), event->filepath);
-        copy_file_name(info, event->filepath, _countof(event->filepath));
+        copy_file_name(info, event->new_filepath, _countof(event->new_filepath));
         break;
     }
 
@@ -590,8 +611,8 @@ void free_entire_file(Entire_File *file) {
 ccstr get_path_relative_to(ccstr full, ccstr base) {
     Frame frame;
 
-    auto full2 = (ccstr)normalize_path_separator((cstr)our_strcpy(full));
-    auto base2 = (ccstr)normalize_path_separator((cstr)our_strcpy(base));
+    auto full2 = normalize_path_sep(full);
+    auto base2 = normalize_path_sep(base);
     auto buf = alloc_array(char, MAX_PATH+1);
 
     if (!PathRelativePathToA(buf, base2, FILE_ATTRIBUTE_DIRECTORY, full2, 0)) {

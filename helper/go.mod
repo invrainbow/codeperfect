@@ -1,5 +1,5 @@
-module github.com/invrainbow/ide/helper
+module github.com/invrainbow/ide
 
-go 1.15
+go 1.16
 
-require github.com/reviewdog/errorformat v0.0.0-20210108094505-14ca1bbbde27
+require golang.org/x/tools v0.1.0 // indirect

@@ -208,7 +208,7 @@ bool copy_file(ccstr src, ccstr dest, bool overwrite);
 bool ensure_directory_exists(ccstr path);
 bool delete_rm_rf(ccstr path);
 
-cstr normalize_path_separator(cstr path, char sep = 0);
+ccstr normalize_path_sep(ccstr path, char sep = 0);
 bool is_sep(char ch);
 
 typedef fn<int(const void *a, const void *b)> compare_func;
@@ -234,10 +234,12 @@ enum Fs_Event_Type {
     FSEVENT_RENAME,
 };
 
+ccstr fs_event_type_str(Fs_Event_Type t);
+
 struct Fs_Event {
     Fs_Event_Type type;
     char filepath[MAX_PATH];
-    char old_filepath[MAX_PATH];
+    char new_filepath[MAX_PATH];
 };
 
 struct Fs_Watcher {
@@ -247,10 +249,13 @@ struct Fs_Watcher {
     s32 offset;
     ccstr path;
     HANDLE dir_handle;
+    OVERLAPPED ol;
 #endif
 
     bool init(ccstr _path);
     void cleanup();
+
+    bool initiate_wait();
     bool next_event(Fs_Event *event);
 };
 

@@ -20,7 +20,7 @@ bool is_ignored_by_git(ccstr path, bool isdir) {
             relpath = our_sprintf("%s/", relpath, PATH_SEP);
 
     // libgit2 requires forward slashes
-    relpath = (ccstr)normalize_path_separator((cstr)relpath, '/');
+    relpath = normalize_path_sep(relpath, '/');
 
     // get rid of "./" at beginning, it breaks libgit2
     if (str_starts_with(relpath, "./")) relpath += 2;
@@ -87,6 +87,7 @@ void World::init() {
     init_mem(nvim_mem);
     init_mem(nvim_loop_mem);
     init_mem(build_index_mem);
+    init_mem(ui_mem);
 #undef init_mem
 
     chunk0_fridge.init(512);
@@ -115,6 +116,7 @@ void World::init() {
 
     sidebar.width = 300;
     error_list.height = 150;
+    file_explorer.selection = -1;
 
     windows_open.search_and_replace = false;
     windows_open.build_and_debug = false;
@@ -123,7 +125,10 @@ void World::init() {
     // TODO: allow user to enter this command himself
     strcpy_safe(world.settings.build_command, _countof(world.settings.build_command), "go build helper.go");
 
-    ::ui.init();
+    {
+        SCOPED_MEM(&ui_mem);
+        ::ui.init();
+    }
 }
 
 void World::start_background_threads() {

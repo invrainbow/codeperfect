@@ -5,15 +5,10 @@
 #include "utils.hpp"
 #include "mem.hpp"
 #include "os.hpp"
-#include "uthash.h"
 #include "tree_sitter_crap.hpp"
 
-#undef uthash_malloc
-#undef uthash_free
-#define uthash_malloc(sz) alloc_memory(sz)
-#define uthash_free(ptr, sz)
-
 extern "C" TSLanguage *tree_sitter_go();
+extern const char TEST_PATH[];
 
 // mirrors tree-sitter/src/go.h
 enum Ts_Field_Type {
@@ -317,15 +312,15 @@ struct Parser_It {
         if (type == IT_MMAP) free_entire_file(mmap_params.ef);
     }
 
-    u8 peek() {
+    uchar peek() {
         switch (type) {
         case IT_MMAP: return mmap_params.ef->data[mmap_params.pos.x];
-        case IT_BUFFER: return (u8)buffer_params.it.peek();
+        case IT_BUFFER: return buffer_params.it.peek();
         }
         return 0;
     }
 
-    u8 next() {
+    uchar next() {
         switch (type) {
         case IT_MMAP:
             {
@@ -334,12 +329,12 @@ struct Parser_It {
                 return ret;
             }
         case IT_BUFFER:
-            return (u8)buffer_params.it.next();
+            return buffer_params.it.next();
         }
         return 0;
     }
 
-    u8 prev() {
+    uchar prev() {
         switch (type) {
         case IT_MMAP:
             {
@@ -348,7 +343,7 @@ struct Parser_It {
                 return ret;
             }
         case IT_BUFFER:
-            return (u8)buffer_params.it.prev();
+            return buffer_params.it.prev();
         }
         return 0;
     }
@@ -416,73 +411,6 @@ enum Walk_Action {
     WALK_SKIP_CHILDREN,
 };
 
-enum Gomod_DirectiveType {
-    GOMOD_DIRECTIVE_REQUIRE,
-    GOMOD_DIRECTIVE_REPLACE,
-};
-
-struct Gomod_Directive {
-    Gomod_DirectiveType type;
-    ccstr module_path;
-    ccstr module_version;
-
-    // for replace
-    ccstr replace_path;
-    ccstr replace_version;
-
-    Gomod_Directive *copy();
-    void read(Index_Stream *s);
-    void write(Index_Stream *s);
-};
-
-struct Gomod_Info {
-    ccstr path;
-    bool exists;
-    u64 hash;
-
-    ccstr module_path;
-    ccstr go_version;
-    List<Gomod_Directive> *directives;
-
-    Gomod_Info *copy();
-    void read(Index_Stream *s);
-    void write(Index_Stream *s);
-};
-
-enum Gomod_Tok_Type {
-    GOMOD_TOK_ILLEGAL,
-    GOMOD_TOK_EOF,
-
-    // comment
-    GOMOD_TOK_COMMENT,
-
-    // punctuation
-    GOMOD_TOK_LPAREN,
-    GOMOD_TOK_RPAREN,
-    GOMOD_TOK_ARROW,
-
-    // whitespace
-    GOMOD_TOK_NEWLINE,
-
-    // keywords
-    GOMOD_TOK_MODULE,
-    GOMOD_TOK_GO,
-    GOMOD_TOK_REQUIRE,
-    GOMOD_TOK_REPLACE,
-    GOMOD_TOK_EXCLUDE,
-
-    // strings & identifiers
-    GOMOD_TOK_STRIDENT,
-};
-
-ccstr gomod_tok_type_str(Gomod_Tok_Type t);
-
-struct Gomod_Token {
-    Gomod_Tok_Type type;
-    ccstr val;
-    bool val_truncated;
-};
-
 ccstr _path_join(ccstr a, ...);
 #define path_join(...) _path_join(__VA_ARGS__, NULL)
 
@@ -514,13 +442,6 @@ struct Index_Event {
     u64 time;
 };
 
-enum Go_Watch_Type {
-    WATCH_WKSP,
-    WATCH_GOPATH,
-    WATCH_PKGMOD,
-    WATCH_GOROOT,
-};
-
 TSPoint cur_to_tspoint(cur2 c);
 cur2 tspoint_to_cur(TSPoint p);
 
@@ -529,8 +450,8 @@ struct Go_Indexer;
 // wrapper around TS_Node, honestly fuck getter patterns
 struct Ast_Node {
     TSNode node;
+    Parser_It *it;
 
-    Go_Indexer *indexer;
     cur2 start;
     cur2 end;
     u32 start_byte;
@@ -545,9 +466,11 @@ struct Ast_Node {
     Ast_Node *dup(TSNode new_node);
     ccstr string();
 
-    void init(TSNode _node) {
+    void init(TSNode _node, Parser_It *_it) {
         ptr0(this);
+
         node = _node;
+        it = _it;
 
         null = ts_node_is_null(node);
         if (!null) {
@@ -624,13 +547,6 @@ struct Ast_Node {
     }
 };
 
-struct Go_Index_Watcher {
-    Go_Indexer *_this;
-    Go_Watch_Type type;
-    Thread_Handle thread;
-    Fs_Watcher watch;
-};
-
 #define MAX_INDEX_EVENTS 1024 // don't let file change dos us
 
 struct Gotype;
@@ -645,6 +561,8 @@ enum Godecl_Type {
     GODECL_SHORTVAR,
 };
 
+ccstr godecl_type_str(Godecl_Type type);
+
 struct Godecl {
     // A decl (TS_XXX_DECLARATION) contains multiple specs (TS_XXX_SPEC), each of which
     // might contain multiple IDs (TS_IDENTIFIER). Each Godecl corresponds to one of those
@@ -657,7 +575,6 @@ struct Godecl {
     cur2 spec_start;
     cur2 name_start;
     ccstr name;
-    bool incomplete;
 
     union {
         Gotype *gotype;
@@ -696,7 +613,7 @@ enum Goresult_Type {
 
 struct Go_Ctx {
     ccstr import_path;
-    ccstr resolved_path;
+    // ccstr resolved_path;
     ccstr filename;
 };
 
@@ -748,6 +665,8 @@ enum Gotype_Type {
     GOTYPE_LAZY_ONE_OF_MULTI,
 };
 
+ccstr gotype_type_str(Gotype_Type type);
+
 struct Gotype {
     Gotype_Type type;
 
@@ -762,17 +681,14 @@ struct Gotype {
             ccstr sel_sel;
         };
 
-        List<Go_Struct_Spec> *struct_specs;
-        List<Go_Struct_Spec> *interface_specs;
-        Gotype *pointer_base;
-
-        Gotype *index_base;
-        Gotype *call_base;
-
         struct {
             Gotype *map_key;
             Gotype *map_value;
         };
+
+        List<Go_Struct_Spec> *struct_specs;
+        List<Go_Struct_Spec> *interface_specs;
+        Gotype *pointer_base;
 
         struct {
             Go_Func_Sig func_sig;
@@ -817,6 +733,7 @@ struct Gotype {
         struct {
             Gotype *lazy_one_of_multi_base;
             int lazy_one_of_multi_index;
+            bool lazy_one_of_multi_is_single; // lhs.len == 1 && rhs.len == 1
         };
     };
 
@@ -838,25 +755,13 @@ enum Go_Package_Name_Type {
     GPN_DOT,
 };
 
-struct Go_Single_Import {
-    ccstr file;
+struct Go_Import {
     ccstr package_name;
     Go_Package_Name_Type package_name_type;
     ccstr import_path;
-    ccstr resolved_path;
     Godecl *decl;
 
-    Go_Single_Import *copy();
-    void read(Index_Stream *s);
-    void write(Index_Stream *s);
-};
-
-struct Go_Dependency {
-    ccstr import_path;
-    ccstr resolved_path;
-    ccstr package_name;
-
-    Go_Dependency *copy();
+    Go_Import *copy();
     void read(Index_Stream *s);
     void write(Index_Stream *s);
 };
@@ -877,29 +782,23 @@ struct Go_Scope_Op {
     void write(Index_Stream *s);
 };
 
-struct Go_Package_File_Info {
+struct Go_File {
     ccstr filename;
     List<Go_Scope_Op> *scope_ops;
+    List<Godecl> *decls;
+    List<Go_Import> *imports;
 
-    Go_Package_File_Info *copy();
+    Go_File *copy();
     void read(Index_Stream *s);
     void write(Index_Stream *s);
 };
 
 struct Go_Package {
     Go_Package_Status status;
-
-    // Together, these two uniquely identify a Go_Package.
     ccstr import_path;
-    ccstr resolved_path;
-
-    List<Go_Single_Import> *individual_imports;
-    List<Go_Dependency> *dependencies;
-
+    // ccstr resolved_path?
     ccstr package_name;
-    List<Godecl> *decls;
-    List<Go_Package_File_Info> *files;
-    bool is_hash_ready;
+    List<Go_File> *files;
     u64 hash;
 
     Go_Package *copy();
@@ -910,7 +809,6 @@ struct Go_Package {
 struct Go_Index {
     ccstr current_path;
     ccstr current_import_path;
-    Gomod_Info *gomod;
     List<Go_Package> *packages;
 
     Go_Index *copy();
@@ -940,6 +838,189 @@ struct Jump_To_Definition_Result {
 
 typedef fn<Godecl*()> New_Godecl_Func;
 
+struct Module_Resolver {
+    struct Node {
+        ccstr name;
+        Node *children;
+        Node *next;
+        ccstr value; // only leaves have values
+    };
+
+    Node *root_import_to_resolved;
+    Node *root_resolved_to_import;
+    ccstr module_path;
+
+    void init(ccstr current_module_filepath);
+
+    Node *goto_child(Node *node, ccstr name, bool create_if_not_found) {
+        for (auto it = node->children; it != NULL; it = it->next)
+            if (streqi(it->name, name))
+                return it;
+
+        if (create_if_not_found) {
+            auto ret = alloc_object(Node);
+            ret->next = node->children;
+            ret->name = our_strcpy(name);
+            node->children = ret;
+            return ret;
+        }
+
+        return NULL;
+    }
+
+    void add_to_root(Node *root, ccstr key, ccstr value) {
+        print("adding %s -> %s", key, value);
+
+        auto path = make_path(key);
+        auto curr = root;
+        For (*path->parts) curr = goto_child(curr, it, true);
+        curr->value = value;
+    }
+
+    void add_path(ccstr import_path, ccstr resolved_path) {
+        resolved_path = normalize_path_sep(our_strcpy(resolved_path));
+        add_to_root(root_import_to_resolved, import_path, resolved_path);
+        add_to_root(root_resolved_to_import, resolved_path, import_path);
+    }
+
+    ccstr normalize_path_in_module_cache(ccstr import_path) {
+        u32 len = 0;
+        u32 slen = strlen(import_path);
+
+        for (u32 i = 0; i < slen; i++)
+            len += (isupper(import_path[i]) ? 2 : 1);
+
+        auto new_filepath = alloc_array(char, len+1);
+        for (u32 i = 0, j = 0; i < slen; i++) {
+            auto ch = import_path[i];
+            if (isupper(ch)) {
+                new_filepath[j++] = '!';
+                new_filepath[j++] = tolower(ch);
+            } else {
+                new_filepath[j++] = ch;
+            }
+        }
+        new_filepath[len] = '\0';
+        return new_filepath;
+    }
+
+    ccstr convert_path(Node *root, ccstr path, char sep) {
+        auto parts = make_path(path)->parts;
+
+        Node *curr = root;
+        ccstr last_value = NULL;
+        i32 last_index = -1;
+
+        for (u32 i = 0; i < parts->len; i++) {
+            auto part = parts->at(i);
+
+            curr = goto_child(curr, part, false);
+            if (curr == NULL) break;
+
+            if (curr->value != NULL) {
+                last_value = curr->value;
+                last_index = i + 1;
+            }
+        }
+
+        if (last_value == NULL) return NULL;
+
+        auto ret = alloc_list<ccstr>(parts->len - last_index + 1);
+        ret->append(last_value);
+        for (u32 i = last_index; i < parts->len; i++)
+            ret->append(parts->at(i));
+
+        Path p;
+        p.init(ret);
+        return normalize_path_sep(p.str(), sep);
+    }
+
+    ccstr resolve_import(ccstr import_path) {
+        return convert_path(root_import_to_resolved, import_path, '\\');
+    }
+
+    ccstr resolved_path_to_import_path(ccstr resolved_path) {
+        return convert_path(root_resolved_to_import, resolved_path, '/');
+    }
+};
+
+// i guess for now don't allow we shouldln't a
+enum Indexer_Task_Type {
+    ITT_REANALYZE_FILE,
+    ITT_GOMOD_CHANGED,
+    // ITT_UPDATE_EDITOR_TREE,
+};
+
+/*
+start keeping track of "is index ready"
+
+when gomod changes, use the algorithm to go through all existing packages and
+recrawl what we need
+
+as a file is edited, we already keep the tree updated
+
+so when autocomplete or param hints are triggered.... i guess we re-analyze the
+tree to get the decls?
+
+    (to be honest what really needs to happen is we need to use the same algorithm
+    that tree-sitter uses to implement incremental parsing, to do incremental
+    analysis
+
+    THIS IS WHY YOU UNDERSTAND CONCEPTS YOURSELF & WRITE YOUR OWN CODE INSTEAD OF
+    USING "LIBRARIES" LIKE A FUCKING JETBRAINS EMPLOYEE DORK)
+*/
+
+struct Indexer_Task {
+    Indexer_Task_Type type;
+
+    union {
+        struct {
+            ccstr reanalyze_file_filename;
+            // file_saved
+        };
+
+        struct {
+            // gomod_changed
+        };
+    };
+};
+
+enum Tok_Type {
+    TOK_ILLEGAL,
+    TOK_EOF,
+    TOK_COMMENT,
+    TOK_ID,
+};
+
+struct Token {
+    Tok_Type type;
+    cur2 start;
+    cur2 end;
+};
+
+// we used to have a full on parser that could parse the whole go language in
+// theory, but it was shit and it kept running into problems and crashing. but
+// the advantage it had over tree-sitter was that it could parse a single rule
+// instead of the whole file. so we are going to use it to parse just the
+// package declaration from files, for get_package_name().
+struct Parser {
+    Parser_It* it;
+    Token tok;
+    ccstr filepath; // for debugging purposes
+
+    void init(Parser_It* _it, ccstr _filepath = NULL);
+    void lex();
+    ccstr get_package_name();
+    ccstr get_token_string();
+    bool match_token_to_string(ccstr str);
+};
+
+enum Gohelper_Op {
+    GH_OP_INVALID,
+    GH_OP_CHECK_INCLUDED_IN_BUILD,
+    GH_OP_RESOLVE_IMPORT_PATH,
+};
+
 struct Go_Indexer {
     Pool mem;        // mem that exists for lifetime of Go_Indexer
     Pool final_mem;  // memory that holds the final value of this->index`
@@ -950,13 +1031,18 @@ struct Go_Indexer {
     Go_Index index;
 
     char current_exe_path[MAX_PATH];
-    Process buildparser_proc;
-
-    List<Parsed_File*> current_parsed_files;
+    Process gohelper_proc;
+    bool gohelper_returned_error;
 
     Thread_Handle bgthread;
 
-    Scoped_Table<Godecl*> *local_decls;
+    Module_Resolver module_resolver;
+    Scoped_Table<Go_Package*> package_lookup;
+
+    // TODO: initialize these
+    // Fs_Watcher modcache_watch; // strictly speaking, this shouldn't change...
+    // Fs_Watcher goroot_watch;
+    Fs_Watcher wksp_watch;
 
     // ---
 
@@ -971,45 +1057,40 @@ struct Go_Indexer {
     Parameter_Hint *parameter_hint(ccstr filepath, cur2 pos, bool triggered_by_paren);
 
     void run_background_thread2();
-    ccstr file_to_import_path(ccstr filepath);
-    ccstr directory_to_import_path(ccstr path_str);
-    void handle_fs_event(Go_Index_Watcher *w, Fs_Event *event);
+    ccstr filepath_to_import_path(ccstr filepath);
     void temp();
     void process_package(ccstr import_path);
 
     bool is_file_included_in_build(ccstr path);
+    ccstr run_gohelper_command(Gohelper_Op op, ...);
     List<ccstr>* list_source_files(ccstr dirpath, bool include_tests);
     ccstr get_package_name(ccstr path);
-    Resolved_Import* resolve_import_from_filesystem(ccstr import_path, Go_Ctx *ctx);
-    Resolved_Import* resolve_import(ccstr import_path, Go_Ctx *ctx);
+    ccstr get_package_path(ccstr import_path);
+    Resolved_Import* resolve_import(ccstr import_path);
     Parsed_File *parse_file(ccstr filepath);
     void free_parsed_file(Parsed_File *file);
     ccstr get_workspace_import_path();
     void handle_error(ccstr err);
     u64 hash_package(ccstr resolved_package_path);
-    void read_index_from_filesystem();
     ccstr get_package_name_from_file(ccstr filepath);
     ccstr get_filepath_from_ctx(Go_Ctx *ctx);
     Goresult *resolve_type(Gotype *type, Go_Ctx *ctx);
     Goresult *unpointer_type(Gotype *type, Go_Ctx *ctx);
     List<Godecl> *parameter_list_to_fields(Ast_Node *params);
     Gotype *node_to_gotype(Ast_Node *node);
-    Goresult *find_decl_of_id(ccstr id, cur2 id_pos, Go_Ctx *ctx, Go_Single_Import **single_import = NULL);
+    Goresult *find_decl_of_id(ccstr id, cur2 id_pos, Go_Ctx *ctx, Go_Import **single_import = NULL);
     void list_fields_and_methods(Goresult *type_res, Goresult *resolved_type_res, List<Goresult> *ret);
     bool node_func_to_gotype_sig(Ast_Node *params, Ast_Node *result, Go_Func_Sig *sig);
     void node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr filename);
     Gotype *new_gotype(Gotype_Type type);
-    Goresult *find_decl_in_package(ccstr id, ccstr import_path, ccstr resolved_path);
-    List<Goresult> *get_package_decls(ccstr import_path, ccstr resolved_path, bool public_only = false);
-    Resolved_Import *resolve_import_from_gomod(ccstr import_path, Gomod_Info *info, Go_Ctx *ctx);
+    Goresult *find_decl_in_package(ccstr id, ccstr import_path);
+    List<Goresult> *get_package_decls(ccstr import_path, bool public_only = false);
     Resolved_Import *check_potential_resolved_import(ccstr filepath);
-    Go_Package *find_package_in_index(ccstr import_path, ccstr resolved_path);
-    ccstr find_import_path_referred_to_by_id(ccstr id, Go_Ctx *ctx, ccstr *resolved_path);
-    void crawl_index();
-    Ast_Node *new_ast_node(TSNode node);
+    Go_Package *find_package_in_index(ccstr import_path);
+    ccstr find_import_path_referred_to_by_id(ccstr id, Go_Ctx *ctx);
     Pool *get_final_mem();
     void walk_ast_node(Ast_Node *node, bool abstract_only, Walk_TS_Callback cb);
-    Go_Package *find_package(ccstr import_path, ccstr resolved_path);
+    Go_Package *find_up_to_date_package(ccstr import_path);
     void import_spec_to_decl(Ast_Node *spec_node, Godecl *decl);
     void find_nodes_containing_pos(Ast_Node *root, cur2 pos, bool abstract_only, fn<Walk_Action(Ast_Node *it)> callback);
     List<Goresult> *get_possible_dot_completions(Ast_Node *operand_node, bool *was_package, Go_Ctx *ctx);
@@ -1017,14 +1098,23 @@ struct Go_Indexer {
     Gotype *new_primitive_type(ccstr name);
     Goresult *evaluate_type(Gotype *gotype, Go_Ctx *ctx);
     Gotype *expr_to_gotype(Ast_Node *expr);
+    void process_tree_into_package(
+        Go_File *file,
+        Ast_Node *root,
+        ccstr filename,
+        ccstr *package_name
+    );
+    void iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> cb, ccstr filename);
+    void reload_all_dirty_files();
+    Go_Package_Status get_package_status(ccstr import_path);
 };
+
+Ast_Node *new_ast_node(TSNode node, Parser_It *it);
 
 #define FOR_NODE_CHILDREN(node) for (auto it = (node)->child(); !it->null; it = it->next())
 
 Goresult *make_goresult(Gotype *gotype, Go_Ctx *ctx);
 Goresult *make_goresult(Godecl *decl, Go_Ctx *ctx);
-
-Gomod_Info *parse_gomod_file(ccstr filepath);
 
 TSParser *new_ts_parser();
 
@@ -1046,10 +1136,11 @@ T *read_object(Index_Stream *s) {
 template<typename T>
 List<T> *read_list(Index_Stream *s) {
     auto len = s->read4();
-    auto specs = alloc_list<T>(len);
+    auto ret = alloc_object(List<T>);
+    ret->init(LIST_POOL, len);
     for (u32 i = 0; i < len; i++)
-        specs->append(read_object<T>(s));
-    return specs;
+        ret->append(read_object<T>(s));
+    return ret;
 }
 
 template<typename T>
@@ -1073,3 +1164,5 @@ void write_list(L arr, Index_Stream *s) {
     s->write4(arr->len);
     For (*arr) write_object(&it, s);
 }
+
+ccstr format_pos(cur2 pos);
