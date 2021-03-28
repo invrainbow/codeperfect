@@ -606,15 +606,20 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                 row_area.h = font->height;
                 row_area.h += ITEM_PADDING_Y * 2;
 
-                for (u32 i = 0; i < world.file_tree.len && row_area.y <= files_area.h; row_area.y += row_area.h) {
-                    auto it = &world.file_tree[i];
+                auto stack = alloc_list<File_Tree_Node*>();
+                for (auto child = world.file_tree->children; child != NULL; child = child->next)
+                    stack->append(child);
+
+                for (u32 i = 0; stack->len > 0 && row_area.y <= files_area.y + files_area.h; i++, row_area.y += row_area.h) {
+                    auto it = *stack->last();
+                    stack->len--;
 
                     if (world.file_explorer.selection == i)
                         draw_rounded_rect(row_area, rgba(COLOR_DARK_GREY), 4, ROUND_ALL);
 
                     auto is_row_visible = [&]() {
                         auto sb_top = files_area.y;
-                        auto sb_bot = files_area.y + files_area.h;;
+                        auto sb_bot = files_area.y + files_area.h;
 
                         auto row_top = row_area.y;
                         auto row_bot = row_area.y + row_area.h;
@@ -636,23 +641,24 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                         if (mouse_flags & MOUSE_CLICKED) {
                             world.file_explorer.selection = i;
 
-                            if (it->num_children == -1) {
+                            if (it->is_directory) {
+                                it->open = !it->open;
+                            } else {
                                 SCOPED_FRAME();
 
-                                auto path = alloc_list<i32>();
-                                for (auto idx = i; idx != -1; idx = world.file_tree[idx].parent)
-                                    path->append(idx);
+                                auto path = alloc_list<File_Tree_Node*>();
+                                for (auto curr = it; curr != NULL; curr = curr->parent)
+                                    path->append(curr);
+                                path->len--; // remove root
 
                                 Text_Renderer r;
                                 r.init();
                                 for (i32 j = path->len - 1; j >= 0; j--) {
-                                    r.write("%s", world.file_tree[path->at(j)].name);
+                                    r.write("%s", path->at(j)->name);
                                     if (j != 0) r.write("/");
                                 }
 
                                 world.get_current_pane()->focus_editor(path_join(world.wksp.path, r.finish()));
-                            } else {
-                                it->state.open = !it->state.open;
                             }
                         }
 
@@ -673,7 +679,7 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                         text_area.w -= (icon_area.w + 5);
 
                         // draw_image(SIMAGE_FOLDER, icon_area);
-                        draw_image(it->num_children == -1 ? SIMAGE_SOURCE_FILE : SIMAGE_FOLDER, icon_area);
+                        draw_image(it->is_directory ? SIMAGE_FOLDER : SIMAGE_SOURCE_FILE, icon_area);
 
                         auto label = (cstr)our_strcpy(it->name);
                         auto avail_chars = (int)(text_area.w / font->width);
@@ -683,10 +689,14 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                         draw_string(text_area.pos, label, rgba(COLOR_WHITE));
                     }
 
-                    if (it->num_children != -1 && !it->state.open)
-                        i = advance_subtree_in_file_explorer(i);
-                    else
-                        i++;
+                    if (it->is_directory) {
+                        SCOPED_FRAME();
+                        auto children = alloc_list<File_Tree_Node*>();
+                        for (auto curr = it->children; curr != NULL; curr = curr->next)
+                            children->append(curr);
+                        for (i32 i = children->len-1; i >= 0; i--)
+                            stack->append(children->at(i));
+                    }
                 }
 
                 boxf sep_area = buttons_area;

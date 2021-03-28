@@ -57,6 +57,17 @@ struct File_Tree_Entry {
     } state;
 };
 
+struct File_Tree_Node {
+    bool is_directory;
+    ccstr name;
+    i32 num_children;
+    i32 depth;
+    File_Tree_Node *parent;
+    File_Tree_Node *children;
+    File_Tree_Node *next;
+    bool open;
+};
+
 struct World {
     Pool frame_mem;
     Pool autocomplete_mem;
@@ -93,7 +104,8 @@ struct World {
 
     u32 next_editor_id;
 
-    List<File_Tree_Entry> file_tree;
+    // List<File_Tree_Entry> file_tree;
+    File_Tree_Node *file_tree;
 
     struct {
         Grid_Window_Pair _grid_to_window[128];
@@ -208,17 +220,17 @@ struct World {
         bool im_metrics;
         bool search_and_replace;
         bool build_and_debug;
-        bool is_any_open() { return iszero(this); }
+        bool is_any_open() { return !iszero(this); }
     } windows_open;
 
     struct Popups_Open {
         bool debugger_add_watch;
-        bool is_any_open() { return iszero(this); }
+        bool is_any_open() { return !iszero(this); }
     } popups_open;
 
     struct Dialog_Open {
         bool add_file_or_folder;
-        bool is_any_open() { return iszero(this); }
+        bool is_any_open() { return !iszero(this); }
     } dialogs_open;
 
     struct {

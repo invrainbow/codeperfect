@@ -31,6 +31,7 @@ bool is_ignored_by_git(ccstr path, bool isdir) {
     return false;
 }
 
+/*
 void fill_file_tree(ccstr path) {
     SCOPED_MEM(&world.file_tree_mem);
     world.file_tree_mem.reset();
@@ -66,6 +67,47 @@ void fill_file_tree(ccstr path) {
     };
 
     recur(path, -1);
+}
+*/
+
+void fill_file_tree(ccstr path) {
+    SCOPED_MEM(&world.file_tree_mem);
+    world.file_tree_mem.reset();
+
+    world.file_tree = alloc_object(File_Tree_Node);
+    world.file_tree->is_directory = true;
+    world.file_tree->depth = -1;
+
+    u32 depth = 0;
+
+    fn<void(ccstr, File_Tree_Node*)> recur = [&](ccstr path, File_Tree_Node *parent) {
+        list_directory(path, [&](Dir_Entry *ent) {
+            auto fullpath = path_join(path, ent->name);
+            if (is_ignored_by_git(fullpath, ent->type & FILE_TYPE_DIRECTORY))
+                return;
+
+            auto file = alloc_object(File_Tree_Node);
+            file->name = our_strcpy(ent->name);
+            file->is_directory = (ent->type & FILE_TYPE_DIRECTORY);
+            file->num_children = 0;
+            file->parent = parent;
+            file->children = NULL;
+            file->depth = depth;
+            file->open = false;
+            file->next = parent->children;
+
+            parent->children = file;
+            parent->num_children++;
+
+            if (file->is_directory) {
+                depth++;
+                recur(fullpath, file);
+                depth--;
+            }
+        });
+    };
+
+    recur(path, world.file_tree);
 }
 
 void World::init() {

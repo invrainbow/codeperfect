@@ -250,7 +250,7 @@ DWORD WINAPI _run_thread(void* p) {
 }
 
 Thread_Handle create_thread(Thread_Callback callback, void* param) {
-    auto ctx = alloc_object(Thread_Ctx);
+    auto ctx = (Thread_Ctx*)our_malloc(sizeof(Thread_Ctx));
     ctx->callback = callback;
     ctx->param = param;
 
