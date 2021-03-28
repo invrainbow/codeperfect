@@ -181,10 +181,13 @@ void Nvim::run_event_loop() {
                                 }
                             }
 
-                            SCOPED_LOCK(&editor->nvim_edit_lock);
-                            SCOPED_MEM(&editor->nvim_edit_mem);
+                            SCOPED_LOCK(&editor->msg_lock);
+                            SCOPED_MEM(&editor->msg_mem);
 
-                            auto edit = editor->nvim_edit_queue.append();
+                            auto msg = editor->msg_queue.append();
+                            msg->type = EMSG_NVIM_EDIT;
+
+                            auto edit = &msg->nvim_edit;
                             edit->firstline = firstline;
                             edit->lastline = lastline;
 

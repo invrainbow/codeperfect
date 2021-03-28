@@ -783,12 +783,14 @@ struct Go_Scope_Op {
 };
 
 struct Go_File {
+    Pool pool;
+
     ccstr filename;
     List<Go_Scope_Op> *scope_ops;
     List<Godecl> *decls;
     List<Go_Import> *imports;
 
-    Go_File *copy();
+    // Go_File *copy();
     void read(Index_Stream *s);
     void write(Index_Stream *s);
 };
@@ -1021,10 +1023,16 @@ enum Gohelper_Op {
     GH_OP_RESOLVE_IMPORT_PATH,
 };
 
+enum {
+    GETDECLS_PUBLIC_ONLY = 1 << 0,
+    GETDECLS_EXCLUDE_METHODS = 1 << 1,
+};
+
 struct Go_Indexer {
     Pool mem;        // mem that exists for lifetime of Go_Indexer
     Pool final_mem;  // memory that holds the final value of this->index`
     Pool ui_mem;     // memory used by UI when it calls jump to definition, etc.
+    Pool scratch_mem;
 
     Pool scoped_table_mem;
 
@@ -1038,6 +1046,8 @@ struct Go_Indexer {
 
     Module_Resolver module_resolver;
     Scoped_Table<Go_Package*> package_lookup;
+
+    // List<ccstr> files_to_ignore_fsevents_on;
 
     // TODO: initialize these
     // Fs_Watcher modcache_watch; // strictly speaking, this shouldn't change...
@@ -1081,10 +1091,10 @@ struct Go_Indexer {
     Goresult *find_decl_of_id(ccstr id, cur2 id_pos, Go_Ctx *ctx, Go_Import **single_import = NULL);
     void list_fields_and_methods(Goresult *type_res, Goresult *resolved_type_res, List<Goresult> *ret);
     bool node_func_to_gotype_sig(Ast_Node *params, Ast_Node *result, Go_Func_Sig *sig);
-    void node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr filename);
+    void node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr filename, Pool *target_pool = NULL);
     Gotype *new_gotype(Gotype_Type type);
     Goresult *find_decl_in_package(ccstr id, ccstr import_path);
-    List<Goresult> *get_package_decls(ccstr import_path, bool public_only = false);
+    List<Goresult> *get_package_decls(ccstr import_path, int flags = 0);
     Resolved_Import *check_potential_resolved_import(ccstr filepath);
     Go_Package *find_package_in_index(ccstr import_path);
     ccstr find_import_path_referred_to_by_id(ccstr id, Go_Ctx *ctx);
@@ -1107,6 +1117,7 @@ struct Go_Indexer {
     void iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> cb, ccstr filename);
     void reload_all_dirty_files();
     Go_Package_Status get_package_status(ccstr import_path);
+    void replace_package_name(Go_Package *pkg, ccstr package_name);
 };
 
 Ast_Node *new_ast_node(TSNode node, Parser_It *it);

@@ -54,6 +54,7 @@ void Editor::update_tree() {
     };
 
     tree = ts_parser_parse(parser, tree, input);
+    index_dirty = true;
 }
 
 void Editor::move_cursor(cur2 c) {
@@ -79,6 +80,44 @@ void Editor::move_cursor(cur2 c) {
 void Editor::reset_state() {
     cur.x = 0;
     cur.y = 0;
+}
+
+// I'm just going to make this a separate function from load_file(), since it is doing mostly a different thing.
+void Editor::reload_file() {
+    auto f = fopen(filepath, "r");
+    if (f == NULL) {
+        error("unable to open %s for reading: %s", filepath, strerror(errno));
+        return;
+    }
+    defer { fclose(f); };
+
+    TSInputEdit tsedit = {0};
+
+    if (tree != NULL) {
+        cur2 start = new_cur2(0, 0);
+        cur2 old_end = new_cur2((i32)buf.lines.last()->len, buf.lines.len-1);
+
+        tsedit.start_byte = cur_to_offset(start);
+        tsedit.start_point = cur_to_tspoint(start);
+        tsedit.old_end_byte = cur_to_offset(old_end);
+        tsedit.old_end_point = cur_to_tspoint(old_end);
+    }
+
+    if (buf.initialized)
+        buf.cleanup();
+    buf.init(&mem);
+    buf.read(f);
+
+    if (tree != NULL) {
+        cur2 new_end = new_cur2((i32)buf.lines.last()->len, buf.lines.len-1);
+
+        tsedit.new_end_byte = cur_to_offset(new_end);
+        tsedit.new_end_point = cur_to_tspoint(new_end);
+
+        ts_tree_edit(tree, &tsedit);
+    }
+
+    update_tree();
 }
 
 bool Editor::load_file(ccstr new_filepath) {
@@ -336,51 +375,70 @@ void Editor::init() {
 
     buf_lock.init();
 
-    nvim_edit_mem.init("editor nvim_edit_mem");
-    nvim_edit_lock.init();
+    msg_mem.init("editor msg_mem");
+    msg_lock.init();
 
-    // this should be initialized using mem; nvim_edit_mem is for
+    // this should be initialized using mem; msg_mem is for
     // the data that gets passed into the queue
-    nvim_edit_queue.init();
+    msg_queue.init();
 }
 
-void Editor::process_nvim_edit(Edit_From_Nvim *edit) {
-    SCOPED_LOCK(&buf_lock);
+void Editor::process_msg(Editor_Msg *msg) {
+    switch (msg->type) {
+    case EMSG_NVIM_EDIT:
+        {
+            auto edit = &msg->nvim_edit;
 
-    auto firstline = edit->firstline;
-    auto lastline = edit->lastline;
-    auto new_lines = edit->lines;
-    auto new_line_lengths = edit->line_lengths;
+            SCOPED_LOCK(&buf_lock);
 
-    if (lastline == -1) lastline = buf.lines.len;
+            auto firstline = edit->firstline;
+            auto lastline = edit->lastline;
+            auto new_lines = edit->lines;
+            auto new_line_lengths = edit->line_lengths;
 
-    auto start_cur = new_cur2(0, (i32)firstline);
-    auto old_end_cur = new_cur2(0, (i32)lastline);
+            if (lastline == -1) lastline = buf.lines.len;
 
-    TSInputEdit tsedit = {0};
+            auto start_cur = new_cur2(0, (i32)firstline);
+            auto old_end_cur = new_cur2(0, (i32)lastline);
+            if (lastline == buf.lines.len) {
+                start_cur = buf.dec_cur(start_cur);
+                old_end_cur = new_cur2((i32)buf.lines.last()->len, (i32)buf.lines.len - 1);
+            }
 
-    if (tree != NULL) {
-        tsedit.start_byte = cur_to_offset(start_cur);
-        tsedit.start_point = cur_to_tspoint(start_cur);
-        tsedit.old_end_byte = cur_to_offset(old_end_cur);
-        tsedit.old_end_point = cur_to_tspoint(old_end_cur);
+            TSInputEdit tsedit = {0};
+
+            if (tree != NULL) {
+                tsedit.start_byte = cur_to_offset(start_cur);
+                tsedit.start_point = cur_to_tspoint(start_cur);
+                tsedit.old_end_byte = cur_to_offset(old_end_cur);
+                tsedit.old_end_point = cur_to_tspoint(old_end_cur);
+            }
+
+            buf.delete_lines(firstline, lastline);
+            for (u32 i = 0; i < new_lines->len; i++) {
+                auto line = new_lines->at(i);
+                auto len = new_line_lengths->at(i);
+                buf.insert_line(firstline + i, line, len);
+            }
+
+            if (tree != NULL) {
+                auto new_end_cur = new_cur2(0, firstline + new_lines->len);
+                if (firstline + new_lines->len == buf.lines.len)
+                    new_end_cur = new_cur2((i32)buf.lines.last()->len, (i32)buf.lines.len - 1);
+
+                tsedit.new_end_byte = cur_to_offset(new_end_cur);
+                tsedit.new_end_point = cur_to_tspoint(new_end_cur);
+                ts_tree_edit(tree, &tsedit);
+            }
+
+            update_tree();
+        }
+        break;
+
+    case EMSG_RELOAD:
+        reload_file();
+        break;
     }
-
-    buf.delete_lines(firstline, lastline);
-    for (u32 i = 0; i < new_lines->len; i++) {
-        auto line = new_lines->at(i);
-        auto len = new_line_lengths->at(i);
-        buf.insert_line(firstline + i, line, len);
-    }
-
-    if (tree != NULL) {
-        auto new_end_cur = new_cur2(0, firstline + new_lines->len);
-        tsedit.new_end_byte = cur_to_offset(new_end_cur);
-        tsedit.new_end_point = cur_to_tspoint(new_end_cur);
-        ts_tree_edit(tree, &tsedit);
-    }
-
-    update_tree();
 }
 
 void Editor::cleanup() {
@@ -388,8 +446,9 @@ void Editor::cleanup() {
     ts_tree_delete(tree); // i remember this being super slow, is it still if it's just one tree?
 
     mem.cleanup();
+    msg_mem.cleanup();
     buf_lock.cleanup();
-    nvim_edit_lock.cleanup();
+    msg_lock.cleanup();
 }
 
 // basically the rule is, if autocomplete comes up empty ON FIRST OPEN, then keep it closed
@@ -463,6 +522,10 @@ struct Type_Renderer : public Text_Renderer {
             break;
         case GOTYPE_INTERFACE:
             write("interface");
+            break;
+        case GOTYPE_VARIADIC:
+            write("...");
+            write_type(t->variadic_base);
             break;
         case GOTYPE_POINTER:
             write("*");
@@ -632,13 +695,13 @@ void Editor::start_change() {
     ptr0(&curr_change);
     curr_change.start_point = cur_to_tspoint(cur);
     curr_change.start_byte = cur_to_offset(cur);
+
+    curr_change.old_end_point = curr_change.start_point;
+    curr_change.old_end_byte = curr_change.start_byte;
 }
 
 void Editor::end_change() {
     auto end = cur_to_offset(cur);
-
-    curr_change.old_end_byte = curr_change.start_byte;
-    curr_change.old_end_point = curr_change.start_point;
 
     if (end < curr_change.start_byte) {
         curr_change.start_byte = end;

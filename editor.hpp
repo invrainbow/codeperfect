@@ -28,11 +28,20 @@ enum Vi_Mode {
     VI_UNKNOWN,
 };
 
-struct Edit_From_Nvim {
-    u32 firstline;
-    u32 lastline;
-    List<uchar*> *lines;
-    List<s32> *line_lengths;
+enum Editor_Msg_Type {
+    EMSG_NVIM_EDIT,
+    EMSG_RELOAD,
+};
+
+struct Editor_Msg {
+    Editor_Msg_Type type;
+
+    struct {
+        u32 firstline;
+        u32 lastline;
+        List<uchar*> *lines;
+        List<s32> *line_lengths;
+    } nvim_edit;
 };
 
 struct Pane;
@@ -56,9 +65,10 @@ struct Editor {
     TSTreeCursor cursor;
     char tsinput_buffer[128];
     TSInputEdit curr_change;
-    Pool nvim_edit_mem;
-    Lock nvim_edit_lock;
-    List<Edit_From_Nvim> nvim_edit_queue;
+
+    Pool msg_mem;
+    Lock msg_lock;
+    List<Editor_Msg> msg_queue;
 
     // is this file "dirty" from the perspective of the index?
     bool index_dirty;
@@ -98,7 +108,7 @@ struct Editor {
 
     Client_Parameter_Hint parameter_hint;
 
-    void process_nvim_edit(Edit_From_Nvim *edit);
+    void process_msg(Editor_Msg *msg);
     void update_tree();
     void raw_move_cursor(cur2 c);
     void move_cursor(cur2 c);
@@ -125,6 +135,7 @@ struct Editor {
     void end_change();
 
     void apply_edits(List<TSInputEdit> *edits);
+    void reload_file();
 };
 
 struct Pane {

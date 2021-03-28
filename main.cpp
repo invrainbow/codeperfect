@@ -1778,11 +1778,11 @@ int main() {
             For (world.wksp.panes) {
                 For (it.editors) {
                     auto& editor = it;
-                    SCOPED_LOCK(&editor.nvim_edit_lock);
-                    For (editor.nvim_edit_queue)
-                        editor.process_nvim_edit(&it);
-                    editor.nvim_edit_queue.len = 0;
-                    editor.nvim_edit_mem.reset();
+                    SCOPED_LOCK(&editor.msg_lock);
+                    For (editor.msg_queue)
+                        editor.process_msg(&it);
+                    editor.msg_queue.len = 0;
+                    editor.msg_mem.reset();
                 }
             }
         }

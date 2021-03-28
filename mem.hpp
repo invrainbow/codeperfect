@@ -121,11 +121,11 @@ struct Pool {
         return ret;
     }
 
-    void init(ccstr _name = NULL) {
+    void init(ccstr _name = NULL, u32 override_blocksize = 0) {
         ptr0(this);
 
         name = _name;
-        blocksize = POOL_DEFAULT_BUCKET_SIZE;
+        blocksize = override_blocksize == 0 ? POOL_DEFAULT_BUCKET_SIZE : override_blocksize;
         obsolete_blocks.init(LIST_MALLOC, 32);
         used_blocks.init(LIST_MALLOC, 32);
         unused_blocks.init(LIST_MALLOC, 32);
@@ -292,6 +292,9 @@ struct Frame {
     void init(Pool *mem) {
         pool = mem;
         block = pool->curr;
+        if (block == NULL) {
+            print("breakpoint");
+        }
         pos = pool->sp;
     }
 
