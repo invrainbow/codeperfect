@@ -354,7 +354,7 @@ struct Parser_It {
         case IT_BUFFER: return buffer_params.it.bof();
         }
     }
-    
+
     bool eof() {
         switch (type) {
         case IT_MMAP: return (mmap_params.pos.x == mmap_params.ef->len);
@@ -620,7 +620,7 @@ struct Go_Ctx {
 struct Goresult {
     // we should just know this from context (the context this shows up in, not
     // the Go_Ctx).
-    // Goresult_Type type; 
+    // Goresult_Type type;
     Go_Ctx *ctx;
     union {
         void *ptr;

@@ -96,7 +96,7 @@ bool Process::run(ccstr _cmd) {
 
         // we've duplicated, don't need anymore
         close_pipe_handle(&stdin_pipe[PIPE_READ]);
-        close_pipe_handle(&stdout_pipe[PIPE_WRITE]); 
+        close_pipe_handle(&stdout_pipe[PIPE_WRITE]);
 
         // run our command
         exit(execlp("/bin/bash", "bash", "-c", "echo 8", NULL));
@@ -104,7 +104,7 @@ bool Process::run(ccstr _cmd) {
 
     // used by child only
     close_pipe_handle(&stdin_pipe[PIPE_READ]);
-    close_pipe_handle(&stdout_pipe[PIPE_WRITE]); 
+    close_pipe_handle(&stdout_pipe[PIPE_WRITE]);
 
     return true;
 }

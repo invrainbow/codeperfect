@@ -618,7 +618,7 @@ void Go_Indexer::background_thread() {
                 /*
                 auto editor = get_open_editor(filepath);
                 if (editor != NULL) {
-                    // TODO: there was supposed to be a lock here before 
+                    // TODO: there was supposed to be a lock here before
                     // the whole thing got commented out
                     auto msg = editor->msg_queue.append();
                     msg->type = EMSG_RELOAD;
