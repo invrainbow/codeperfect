@@ -83,8 +83,6 @@ struct Vert {
     i32 texture_id;
 };
 
-u32 advance_subtree_in_file_explorer(u32 i);
-
 const auto EDITOR_MARGIN_X = 5.0;
 const auto EDITOR_MARGIN_Y = 5.0;
 

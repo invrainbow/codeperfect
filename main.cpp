@@ -1558,15 +1558,17 @@ int main() {
                                 buf.insert(ac_start, name, len);
 
                                 // tell tree-sitter about the edit
-                                TSInputEdit tsedit = {0};
-                                tsedit.start_byte = editor->cur_to_offset(ac_start);
-                                tsedit.start_point = cur_to_tspoint(ac_start);
-                                tsedit.old_end_byte = editor->cur_to_offset(editor->cur);
-                                tsedit.old_end_point = cur_to_tspoint(editor->cur);
-                                tsedit.new_end_byte = editor->cur_to_offset(ac_end);
-                                tsedit.new_end_point = cur_to_tspoint(ac_end);
-                                ts_tree_edit(editor->tree, &tsedit);
-                                editor->update_tree();
+                                if (editor->is_go_file) {
+                                    TSInputEdit tsedit = {0};
+                                    tsedit.start_byte = editor->cur_to_offset(ac_start);
+                                    tsedit.start_point = cur_to_tspoint(ac_start);
+                                    tsedit.old_end_byte = editor->cur_to_offset(editor->cur);
+                                    tsedit.old_end_point = cur_to_tspoint(editor->cur);
+                                    tsedit.new_end_byte = editor->cur_to_offset(ac_end);
+                                    tsedit.new_end_point = cur_to_tspoint(ac_end);
+                                    ts_tree_edit(editor->tree, &tsedit);
+                                    editor->update_tree();
+                                }
 
                                 // clear autocomplete
                                 ac.ac.results = NULL;

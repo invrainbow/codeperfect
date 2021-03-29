@@ -46,17 +46,6 @@ struct Build_Error {
     ccstr message;
 };
 
-struct File_Tree_Entry {
-    ccstr name;
-    i32 num_children;
-    i32 depth;
-    i32 parent;
-
-    struct {
-        bool open;
-    } state;
-};
-
 struct File_Tree_Node {
     bool is_directory;
     ccstr name;
@@ -104,7 +93,6 @@ struct World {
 
     u32 next_editor_id;
 
-    // List<File_Tree_Entry> file_tree;
     File_Tree_Node *file_tree;
 
     struct {
@@ -315,3 +303,5 @@ extern World world;
 #define TAB_SIZE 2 // TODO
 
 bool is_ignored_by_git(ccstr path, bool isdir);
+
+void fill_file_tree(ccstr path);

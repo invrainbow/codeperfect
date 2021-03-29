@@ -462,14 +462,6 @@ boxf UI::get_panes_area() {
     return panes_area;
 }
 
-u32 advance_subtree_in_file_explorer(u32 i) {
-    auto &it = world.file_tree[i++];
-    if (it.num_children != -1)
-        for (u32 j = 0; j < it.num_children; j++)
-            i = advance_subtree_in_file_explorer(i);
-    return i;
-}
-
 int UI::get_mouse_flags(boxf area) {
     // how do we handle like overlapping elements later?
     // it can't be that hard, imgui does it
@@ -485,6 +477,45 @@ int UI::get_mouse_flags(boxf area) {
             ret |= MOUSE_MCLICKED;
     }
     return ret;
+}
+
+File_Tree_Node *get_file_tree_node_from_index(int idx) {
+    auto stack = alloc_list<File_Tree_Node*>();
+    for (auto child = world.file_tree->children; child != NULL; child = child->next)
+        stack->append(child);
+
+    for (u32 i = 0; stack->len > 0; i++) {
+        auto it = *stack->last();
+        if (i == idx) return it;
+
+        stack->len--;
+
+        if (it->is_directory && it->open) {
+            SCOPED_FRAME();
+            auto children = alloc_list<File_Tree_Node*>();
+            for (auto curr = it->children; curr != NULL; curr = curr->next)
+                children->append(curr);
+            for (i32 i = children->len-1; i >= 0; i--)
+                stack->append(children->at(i));
+        }
+    }
+
+    return NULL;
+}
+
+ccstr file_tree_node_to_path(File_Tree_Node *node) {
+    auto path = alloc_list<File_Tree_Node*>();
+    for (auto curr = node; curr != NULL; curr = curr->parent)
+        path->append(curr);
+    path->len--; // remove root
+
+    Text_Renderer r;
+    r.init();
+    for (i32 j = path->len - 1; j >= 0; j--) {
+        r.write("%s", path->at(j)->name);
+        if (j != 0) r.write("/");
+    }
+    return r.finish();
 }
 
 void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
@@ -529,6 +560,7 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                 const float ITEM_PADDING_X = 8;
                 const float ITEM_PADDING_Y = 4;
                 const float ITEM_MARGIN = 4;
+                const float SPACE_BETWEEN_ITEMS = 1;
 
                 u32 depth = 0;
 
@@ -572,20 +604,37 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                     };
 
                     if (draw_button(SIMAGE_REFRESH)) {
-                        print("refresh clicked");
+                        // TODO: probably make this async task
+                        fill_file_tree(wksp.path);
                     }
 
                     auto open_add_file_or_folder = [&](bool folder) {
                         world.dialogs_open.add_file_or_folder = true;
 
-                        if (world.file_explorer.selection == -1) {
-                            world.wnd_add_file_or_folder.location_is_root = true;
-                        } else {
-                            // TODO: how do we generate the file path based on selection?
-                            // world.wnd_add_file_or_folder.location = ???
+                        File_Tree_Node *node = NULL;
+
+                        auto is_root = [&]() {
+                            if (world.file_explorer.selection == -1) return true;
+
+                            node = get_file_tree_node_from_index(world.file_explorer.selection);
+                            if (node->is_directory) return false;
+
+                            node = node->parent;
+                            return (node->parent == NULL);
+                        };
+
+                        auto &wnd = world.wnd_add_file_or_folder;
+
+                        wnd.location_is_root = is_root();
+                        if (!wnd.location_is_root) {
+                            strcpy_safe(
+                                wnd.location,
+                                _countof(wnd.location),
+                                file_tree_node_to_path(node)
+                            );
                         }
 
-                        world.wnd_add_file_or_folder.folder = folder;
+                        wnd.folder = folder;
                     };
 
                     if (draw_button(SIMAGE_ADD_FOLDER))
@@ -610,7 +659,7 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                 for (auto child = world.file_tree->children; child != NULL; child = child->next)
                     stack->append(child);
 
-                for (u32 i = 0; stack->len > 0 && row_area.y <= files_area.y + files_area.h; i++, row_area.y += row_area.h) {
+                for (u32 i = 0; stack->len > 0 && row_area.y <= files_area.y + files_area.h; i++, row_area.y += row_area.h + SPACE_BETWEEN_ITEMS) {
                     auto it = *stack->last();
                     stack->len--;
 
@@ -645,20 +694,9 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                                 it->open = !it->open;
                             } else {
                                 SCOPED_FRAME();
-
-                                auto path = alloc_list<File_Tree_Node*>();
-                                for (auto curr = it; curr != NULL; curr = curr->parent)
-                                    path->append(curr);
-                                path->len--; // remove root
-
-                                Text_Renderer r;
-                                r.init();
-                                for (i32 j = path->len - 1; j >= 0; j--) {
-                                    r.write("%s", path->at(j)->name);
-                                    if (j != 0) r.write("/");
-                                }
-
-                                world.get_current_pane()->focus_editor(path_join(world.wksp.path, r.finish()));
+                                auto rel_path = file_tree_node_to_path(it);
+                                auto full_path = path_join(world.wksp.path, rel_path);
+                                world.get_current_pane()->focus_editor(full_path);
                             }
                         }
 
@@ -689,7 +727,7 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                         draw_string(text_area.pos, label, rgba(COLOR_WHITE));
                     }
 
-                    if (it->is_directory) {
+                    if (it->is_directory && it->open) {
                         SCOPED_FRAME();
                         auto children = alloc_list<File_Tree_Node*>();
                         for (auto curr = it->children; curr != NULL; curr = curr->next)

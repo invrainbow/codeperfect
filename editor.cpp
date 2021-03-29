@@ -28,6 +28,8 @@ void Editor::raw_move_cursor(cur2 c) {
 }
 
 void Editor::update_tree() {
+    if (!is_go_file) return;
+
     TSInput input;
     input.payload = this;
     input.encoding = TSInputEncodingUTF8;
@@ -145,6 +147,8 @@ bool Editor::load_file(ccstr new_filepath) {
         buf.insert_line(0, &tmp, 0);
     }
 
+    is_go_file = str_ends_with(new_filepath, ".go");
+
     if (world.use_nvim) {
         auto& nv = world.nvim;
         auto msgid = nv.start_request_message("nvim_create_buf", 2);
@@ -218,31 +222,6 @@ void Pane::cleanup() {
     editors.cleanup();
 }
 
-bool check_file_dimensions(ccstr path) {
-    File f;
-    if (f.init(path, FILE_MODE_READ, FILE_OPEN_EXISTING) != FILE_RESULT_SUCCESS) {
-        print("Error opening file while checknig file dimensions: %s", get_last_error());
-        return false;
-    }
-    defer { f.cleanup(); };
-
-    u32 line_count = 1;
-    u32 max_line_len = 0;
-    u32 line_len = 0;
-    char next_ch = 0;
-
-    while (f.read(&next_ch, 1)) {
-        if (next_ch == '\n') {
-            if (line_count++ > 65000)
-                return false;
-            line_len = 0;
-        } else if (line_len++ > 65000) {
-            return false;
-        }
-    }
-    return true;
-}
-
 Editor* Pane::focus_editor(ccstr path) {
     return focus_editor(path, new_cur2(-1, -1));
 }
@@ -255,10 +234,13 @@ Editor* Pane::focus_editor(ccstr path, cur2 pos) {
         i++;
     }
 
+    /*
+    TODO: check this elsewhere
     if (!check_file_dimensions(path)) {
         error("Unfortunately, we currently don't support files with more than 65,000 lines, or lines with more than 65,000 characters.");
         return NULL;
     }
+    */
 
     auto ed = editors.append();
     ed->init();
@@ -407,7 +389,7 @@ void Editor::process_msg(Editor_Msg *msg) {
 
             TSInputEdit tsedit = {0};
 
-            if (tree != NULL) {
+            if (is_go_file && tree != NULL) {
                 tsedit.start_byte = cur_to_offset(start_cur);
                 tsedit.start_point = cur_to_tspoint(start_cur);
                 tsedit.old_end_byte = cur_to_offset(old_end_cur);
@@ -421,17 +403,19 @@ void Editor::process_msg(Editor_Msg *msg) {
                 buf.insert_line(firstline + i, line, len);
             }
 
-            if (tree != NULL) {
-                auto new_end_cur = new_cur2(0, firstline + new_lines->len);
-                if (firstline + new_lines->len == buf.lines.len)
-                    new_end_cur = new_cur2((i32)buf.lines.last()->len, (i32)buf.lines.len - 1);
+            if (is_go_file) {
+                if (tree != NULL) {
+                    auto new_end_cur = new_cur2(0, firstline + new_lines->len);
+                    if (firstline + new_lines->len == buf.lines.len)
+                        new_end_cur = new_cur2((i32)buf.lines.last()->len, (i32)buf.lines.len - 1);
 
-                tsedit.new_end_byte = cur_to_offset(new_end_cur);
-                tsedit.new_end_point = cur_to_tspoint(new_end_cur);
-                ts_tree_edit(tree, &tsedit);
+                    tsedit.new_end_byte = cur_to_offset(new_end_cur);
+                    tsedit.new_end_point = cur_to_tspoint(new_end_cur);
+                    ts_tree_edit(tree, &tsedit);
+                }
+
+                update_tree();
             }
-
-            update_tree();
         }
         break;
 
@@ -690,6 +674,8 @@ void Editor::update_parameter_hint() {
 }
 
 void Editor::start_change() {
+    if (!is_go_file) return;
+
     buf_lock.enter();
 
     ptr0(&curr_change);
@@ -701,6 +687,8 @@ void Editor::start_change() {
 }
 
 void Editor::end_change() {
+    if (!is_go_file) return;
+
     auto end = cur_to_offset(cur);
 
     if (end < curr_change.start_byte) {

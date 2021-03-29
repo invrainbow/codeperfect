@@ -10,7 +10,7 @@
 // TODO: dynamically determine this
 static const char GOROOT[] = "c:\\go";
 static const char GOPATH[] = "c:\\users\\brandon\\go";
-const char TEST_PATH[] = "c:\\users\\brandon\\newproject";
+const char TEST_PATH[] = "c:\\users\\brandon\\life";
 
 // -----
 
@@ -592,7 +592,7 @@ void Go_Indexer::background_thread() {
                 // i have a great fucking idea
                 // why don't we just exclude any file here that's open in an editor
                 // since files open in editor will get picked up by reload_all_dirty_files() anyway
-                if (get_open_editor(filepath) != NULL) break;
+                if (get_open_editor(filepath) != NULL) return;
 
                 auto pkg = find_package_in_index(filepath_to_import_path(our_dirname(filepath)));
                 if (pkg == NULL) return;
