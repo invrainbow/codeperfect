@@ -19,31 +19,6 @@ struct Client_Parameter_Hint {
     bool closed;
 };
 
-enum Vi_Mode {
-    VI_NONE,
-    VI_NORMAL,
-    VI_VISUAL,
-    VI_INSERT,
-    VI_REPLACE,
-    VI_UNKNOWN,
-};
-
-enum Editor_Msg_Type {
-    EMSG_NVIM_EDIT,
-    EMSG_RELOAD,
-};
-
-struct Editor_Msg {
-    Editor_Msg_Type type;
-
-    struct {
-        u32 firstline;
-        u32 lastline;
-        List<uchar*> *lines;
-        List<s32> *line_lengths;
-    } nvim_edit;
-};
-
 struct Pane;
 
 struct Editor {
@@ -52,7 +27,6 @@ struct Editor {
     Pane* pane;
 
     Buffer buf;
-    Lock buf_lock;
 
     box view;
     cur2 cur;
@@ -66,10 +40,6 @@ struct Editor {
     char tsinput_buffer[128];
     TSInputEdit curr_change;
 
-    Pool msg_mem;
-    Lock msg_lock;
-    List<Editor_Msg> msg_queue;
-
     // is this file "dirty" from the perspective of the index?
     bool index_dirty;
     bool is_go_file;
@@ -82,7 +52,6 @@ struct Editor {
         bool got_initial_cur;
         bool got_initial_lines;
 
-        Vi_Mode mode;
         bool is_resizing;
         bool need_initial_resize;
         bool need_initial_pos_set;
@@ -109,7 +78,6 @@ struct Editor {
 
     Client_Parameter_Hint parameter_hint;
 
-    void process_msg(Editor_Msg *msg);
     void update_tree();
     void raw_move_cursor(cur2 c);
     void move_cursor(cur2 c);
@@ -137,6 +105,8 @@ struct Editor {
 
     void apply_edits(List<TSInputEdit> *edits);
     void reload_file();
+    void update_lines(int firstline, int lastline, List<uchar*> *lines, List<s32> *line_lengths);
+    bool trigger_escape();
 };
 
 struct Pane {

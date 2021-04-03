@@ -358,16 +358,11 @@ enum Nvim_Request_Type {
     NVIM_REQ_GET_API_INFO,
     NVIM_REQ_CREATE_BUF,
     NVIM_REQ_OPEN_WIN,
-    NVIM_REQ_BUF_SET_LINES,
     NVIM_REQ_BUF_ATTACH,
     NVIM_REQ_UI_ATTACH,
     NVIM_REQ_SET_CURRENT_WIN,
     NVIM_REQ_RESIZE,
-    NVIM_REQ_REPLACE_TERMCODES,
-    NVIM_REQ_FEEDKEYS,
-    NVIM_REQ_SET_CURSOR,
     NVIM_REQ_AUTOCOMPLETE_SETBUF,
-    // NVIM_REQ_AUTOCOMPLETE_MOVECURSOR,
     NVIM_REQ_POST_INSERT_GETCHANGEDTICK,
     NVIM_REQ_FILEOPEN_CLEAR_UNDO,
 };
@@ -384,33 +379,83 @@ struct Nvim_Request {
         } resize;
 
         struct {
-            u32 key;
-        } replace_termcodes;
-
-        struct {
-            u32 key;
-        } feedkeys;
-
-        struct {
             cur2 target_cursor;
         } autocomplete_setbuf;
+    };
+};
+
+enum Nvim_Notification_Type {
+    NVIM_NOTIF_BUF_LINES,
+    NVIM_NOTIF_MODE_CHANGE,
+    NVIM_NOTIF_WIN_VIEWPORT,
+    NVIM_NOTIF_WIN_POS,
+};
+
+struct Nvim_Message {
+    MprpcMessageType type;
+    union {
+        struct {
+            Nvim_Request *original_request;
+            union {
+                int changedtick;
+                int channel_id;
+                Ext_Info buf;
+                Ext_Info win;
+            };
+        } response;
 
         struct {
-        };
+            Nvim_Notification_Type type;
+            union {
+                struct {
+                    Ext_Info buf;
+                    int changedtick;
+                    int firstline;
+                    int lastline;
+                    List<uchar*> *lines;
+                    List<s32> *line_lengths;
+                } buf_lines;
+
+                struct {
+                    ccstr mode_name;
+                    int mode_index;
+                } mode_change;
+
+                struct {
+                    int grid;
+                    Ext_Info window;
+                    int topline;
+                    int botline;
+                    int curline;
+                    int curcol;
+                } win_viewport;
+
+                struct {
+                    int grid;
+                    Ext_Info window;
+                } win_pos;
+            };
+        } notification;
     };
 };
 
 struct Nvim {
+    Pool mem;
+    Pool loop_mem;
+
     Process nvim_proc;
     Mp_Reader reader;
     Mp_Writer writer;
     Lock send_lock;
-    Lock print_lock;
     Lock requests_lock;
     u32 request_id;
     Thread_Handle event_loop_thread;
 
     List<Nvim_Request> requests;
+
+    List<Nvim_Message> message_queue;
+    Lock messages_lock;
+    Pool messages_mem;
 
     void init();
     void start_running();
@@ -421,6 +466,10 @@ struct Nvim {
     void write_notification_header(ccstr method, u32 params_length);
 
     Nvim_Request* save_request(Nvim_Request_Type type, u32 msgid, u32 editor_id) {
+        if (msgid == 12) {
+            print("break here");
+        }
+
         auto req = requests.append();
         req->type = type;
         req->msgid = msgid;
@@ -431,7 +480,6 @@ struct Nvim {
     // TODO: document the request lifecycle
     u32 start_request_message(ccstr method, u32 params_length) {
         send_lock.enter();
-        print_lock.enter();
 
         auto msgid = request_id++;
         write_request_header(msgid, method, params_length);
@@ -440,13 +488,11 @@ struct Nvim {
 
     void start_response_message(u32 msgid) {
         send_lock.enter();
-        print_lock.enter();
         write_response_header(msgid);
     }
 
     void end_message() {
         writer.flush();
-        print_lock.leave();
         send_lock.leave();
     }
 
@@ -468,5 +514,6 @@ struct Nvim {
 
     bool resize_editor(Editor* editor);
     void handle_editor_on_ready(Editor *editor);
+    void handle_message_from_main_thread(Nvim_Message *event);
 };
 

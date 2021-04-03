@@ -888,8 +888,6 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
 
             auto editor = pane.get_current_editor();
 
-            SCOPED_LOCK(&editor->buf_lock);
-
             struct Highlight {
                 cur2 start;
                 cur2 end;
@@ -1135,7 +1133,7 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                 if (world.use_nvim) {
                     ccstr mode_str = NULL;
 
-                    switch (editor->nvim_data.mode) {
+                    switch (world.nvim_data.mode) {
                     case VI_NORMAL: mode_str = "NORMAL"; break;
                     case VI_VISUAL: mode_str = "VISUAL"; break;
                     case VI_INSERT: mode_str = "INSERT"; break;

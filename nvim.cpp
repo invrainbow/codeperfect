@@ -47,6 +47,7 @@ void assoc_grid_with_window(u32 grid, u32 win) {
     auto editor = find_editor_by_window(win);
     if (editor != NULL) {
         if (editor->nvim_data.need_initial_resize) {
+            print("[nvim] need initial resize, calling world.nvim.resize_editor()...");
             world.nvim.resize_editor(editor);
             editor->nvim_data.need_initial_resize = false;
         }
@@ -62,10 +63,21 @@ Editor* find_editor_by_grid(u32 grid) {
     return find_editor_by_window(pair->win);
 }
 
+Editor* find_editor_by_id(u32 id) {
+    auto is_match = [&](Editor* it) -> bool { return it->id == id; };
+    return world.find_editor(is_match);
+}
+
 void Nvim::handle_editor_on_ready(Editor *editor) {
+    print("[nvim] handle_editor_on_ready() called...");
+
     if (!editor->is_nvim_ready()) return;
 
+    print("[nvim] nvim is ready!");
+
     if (editor->nvim_data.need_initial_pos_set) {
+        print("[nvim] need initial pos set, setting...");
+
         editor->nvim_data.need_initial_pos_set = false;
         auto pos = editor->nvim_data.initial_pos;
         if (pos.y == -1)
@@ -85,6 +97,275 @@ void Nvim::handle_editor_on_ready(Editor *editor) {
     writer.write_array(1);
     writer.write_int(editor->nvim_data.buf_id);
     end_message();
+}
+
+ccstr nvim_request_type_str(Nvim_Request_Type type) {
+    switch (type) {
+    define_str_case(NVIM_REQ_GET_API_INFO);
+    define_str_case(NVIM_REQ_CREATE_BUF);
+    define_str_case(NVIM_REQ_OPEN_WIN);
+    define_str_case(NVIM_REQ_BUF_ATTACH);
+    define_str_case(NVIM_REQ_UI_ATTACH);
+    define_str_case(NVIM_REQ_SET_CURRENT_WIN);
+    define_str_case(NVIM_REQ_RESIZE);
+    define_str_case(NVIM_REQ_AUTOCOMPLETE_SETBUF);
+    define_str_case(NVIM_REQ_POST_INSERT_GETCHANGEDTICK);
+    define_str_case(NVIM_REQ_FILEOPEN_CLEAR_UNDO);
+    }
+    return NULL;
+}
+
+ccstr nvim_notification_type_str(Nvim_Notification_Type type) {
+    switch (type) {
+        define_str_case(NVIM_NOTIF_BUF_LINES);
+        define_str_case(NVIM_NOTIF_MODE_CHANGE);
+        define_str_case(NVIM_NOTIF_WIN_VIEWPORT);
+        define_str_case(NVIM_NOTIF_WIN_POS);
+    }
+    return NULL;
+}
+
+// TODO: also need to remove request from queue once it's been processed
+void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
+    switch (event->type) {
+    case MPRPC_RESPONSE:
+        {
+            auto req = event->response.original_request;
+            print("[nvim] received RESPONSE event, request type = %s", nvim_request_type_str(req->type));
+
+            // grab associated editor, break if we can't find it
+            Editor* editor = NULL;
+            if (req->editor_id != 0) {
+                auto is_match = [&](Editor* it) -> bool { return it->id == req->editor_id; };
+                editor = world.find_editor(is_match);
+                if (editor == NULL) {
+                    reader.skip_object();
+                    break;
+                }
+            }
+
+            switch (req->type) {
+            case NVIM_REQ_FILEOPEN_CLEAR_UNDO:
+                editor->buf.dirty = false;
+                break;
+            case NVIM_REQ_POST_INSERT_GETCHANGEDTICK:
+                {
+                    // skip next update from nvim
+                    editor->nvim_insert.skip_changedticks_until = event->response.changedtick + 1;
+
+                    auto cur = editor->cur;
+                    auto backspaced_to = editor->nvim_insert.backspaced_to;
+                    auto start = editor->nvim_insert.start;
+
+                    // set new lines
+                    start_request_message("nvim_buf_set_lines", 5);
+                    writer.write_int(editor->nvim_data.buf_id);
+                    writer.write_int(backspaced_to.y);
+                    writer.write_int(start.y + 1);
+                    writer.write_bool(false);
+                    writer.write_array(cur.y - backspaced_to.y + 1);
+                    for (u32 y = backspaced_to.y; y <= cur.y; y++) {
+                        auto& line = editor->buf.lines[y];
+                        writer.write1(MP_OP_STRING);
+                        writer.write4(line.len);
+                        For (line) writer.write1(it);
+                    }
+                    end_message();
+
+                    // move cursor
+                    editor->move_cursor(editor->cur);
+
+                    // send the <esc> key that we delayed
+                    start_request_message("nvim_input", 1);
+                    writer.write_string("<Esc>");
+                    end_message();
+                }
+                break;
+            case NVIM_REQ_AUTOCOMPLETE_SETBUF:
+                editor->move_cursor(req->autocomplete_setbuf.target_cursor);
+                break;
+
+            case NVIM_REQ_GET_API_INFO:
+                // pass channel id to neovim so we can send it to rpcrequest
+                start_request_message("nvim_set_var", 2);
+                writer.write_string("channel_id");
+                writer.write_int(event->response.channel_id);
+                end_message();
+                break;
+
+            case NVIM_REQ_RESIZE:
+                editor->nvim_data.is_resizing = false;
+                break;
+
+            case NVIM_REQ_CREATE_BUF:
+                editor->nvim_data.buf_id = event->response.buf.object_id;
+                // editor->nvim_data.status = ENS_WIN_PENDING;
+
+                {
+                    auto msgid = start_request_message("nvim_buf_attach", 3);
+                    save_request(NVIM_REQ_BUF_ATTACH, msgid, editor->id);
+
+                    writer.write_int(event->response.buf.object_id);
+                    writer.write_bool(false);
+                    writer.write_map(0);
+                    end_message();
+                }
+
+                {
+                    start_request_message("nvim_buf_set_lines", 5);
+
+                    writer.write_int(event->response.buf.object_id);
+                    writer.write_int(0);
+                    writer.write_int(-1);
+                    writer.write_bool(false);
+
+                    writer.write_array(editor->buf.lines.len);
+                    For (editor->buf.lines) {
+                        writer.write1(MP_OP_STRING);
+                        writer.write4(it.len);
+                        For (it) writer.write1(it);
+                    }
+
+                    // editor->buf.clear();
+                    end_message();
+                }
+
+                {
+                    typedef fn<void()> write_value_func;
+                    auto set_option = [&](ccstr key, write_value_func f) {
+                        start_request_message("nvim_buf_set_option", 3);
+                        writer.write_int(event->response.buf.object_id);
+                        writer.write_string(key);
+                        f();
+                        end_message();
+                    };
+
+                    set_option("shiftwidth", [&]() { writer.write_int(2); });
+                    set_option("tabstop",    [&]() { writer.write_int(2); });
+                    set_option("expandtab",  [&]() { writer.write_bool(false); });
+                    set_option("wrap",       [&]() { writer.write_bool(false); });
+                    set_option("autoindent", [&]() { writer.write_bool(true); });
+                    set_option("filetype",   [&]() { writer.write_string("go"); });
+                    // how to do equiv. of `filetype indent plugin on'?
+                }
+
+                {
+                    auto msgid = start_request_message("nvim_open_win", 3);
+                    save_request(NVIM_REQ_OPEN_WIN, msgid, editor->id);
+
+                    writer.write_int(event->response.buf.object_id);
+                    writer.write_bool(false);
+                    writer.write_map(5);
+                    writer.write_string("relative"); writer.write_string("win");
+                    writer.write_string("row"); writer.write_int(0);
+                    writer.write_string("col"); writer.write_int(0);
+                    writer.write_string("width"); writer.write_int(200);
+                    writer.write_string("height"); writer.write_int(100);
+                    end_message();
+                }
+                break;
+            case NVIM_REQ_SET_CURRENT_WIN:
+                if (editor->id == world.nvim_data.waiting_focus_window)
+                    world.nvim_data.waiting_focus_window = 0;
+                break;
+            case NVIM_REQ_OPEN_WIN:
+                editor->nvim_data.win_id = event->response.win.object_id;
+                if (world.nvim_data.waiting_focus_window == editor->id)
+                    set_current_window(editor);
+                break;
+            case NVIM_REQ_BUF_ATTACH:
+                editor->nvim_data.is_buf_attached = true;
+                break;
+            case NVIM_REQ_UI_ATTACH:
+                world.nvim_data.is_ui_attached = true;
+                break;
+            }
+        }
+        break;
+    case MPRPC_NOTIFICATION:
+        print("[nvim] received NOTIFICATION event, notification type = %s", nvim_notification_type_str(event->notification.type));
+        switch (event->notification.type) {
+        case NVIM_NOTIF_BUF_LINES:
+            {
+                auto &args = event->notification.buf_lines;
+                auto editor = find_editor_by_buffer(args.buf.object_id);
+
+                auto is_change_empty = (args.firstline == args.lastline && args.lines->len == 0);
+
+                bool skip = (
+                    editor == NULL
+                    || !editor->nvim_data.got_initial_lines
+                    || args.changedtick <= editor->nvim_insert.skip_changedticks_until
+                    || is_change_empty
+                );
+
+                print("[nvim] updating lines...");
+                if (!skip) editor->update_lines(args.firstline, args.lastline, args.lines, args.line_lengths);
+
+                if (!editor->nvim_data.got_initial_lines) {
+                    print("[nvim] got_initial_lines = false, setting to true & calling handle_editor_on_ready()");
+                    editor->nvim_data.got_initial_lines = true;
+                    handle_editor_on_ready(editor);
+                }
+            } 
+            break;
+        case NVIM_NOTIF_MODE_CHANGE:
+            {
+                auto &args = event->notification.mode_change;
+
+                auto editor = world.get_current_editor();
+                if (editor == NULL) break;
+
+                auto old_mode = world.nvim_data.mode;
+
+                if (streq(args.mode_name, "normal"))
+                    world.nvim_data.mode = VI_NORMAL;
+                else if (streq(args.mode_name, "insert"))
+                    world.nvim_data.mode = VI_INSERT;
+                else if (streq(args.mode_name, "replace"))
+                    world.nvim_data.mode = VI_REPLACE;
+                else if (streq(args.mode_name, "visual"))
+                    world.nvim_data.mode = VI_VISUAL;
+                else
+                    world.nvim_data.mode = VI_UNKNOWN;
+
+                if (world.nvim_data.mode == VI_INSERT) {
+                    editor->nvim_insert.start = editor->cur;
+                    editor->nvim_insert.backspaced_to = editor->cur;
+                }
+            }
+            break;
+
+        case NVIM_NOTIF_WIN_VIEWPORT:
+            {
+                auto &args = event->notification.win_viewport;
+
+                assoc_grid_with_window(args.grid, args.window.object_id);
+
+                auto editor = find_editor_by_window(args.window.object_id);
+                if (editor == NULL)
+                    break; // TODO: handle us still receiving notifications for nonexistent window
+
+                editor->raw_move_cursor(new_cur2((u32)args.curcol, (u32)args.curline));
+
+                if (!editor->nvim_data.got_initial_cur) {
+                    print("[nvim] got_initial_cur = false, setting to true & calling handle_editor_on_ready()");
+                    editor->nvim_data.got_initial_cur = true;
+                    handle_editor_on_ready(editor);
+                }
+            }
+            break;
+
+        case NVIM_NOTIF_WIN_POS:
+            {
+                auto &args = event->notification.win_pos;
+                assoc_grid_with_window(args.grid, args.window.object_id);
+            }
+            break;
+        }
+        break;
+    }
+
 }
 
 void Nvim::run_event_loop() {
@@ -123,496 +404,284 @@ void Nvim::run_event_loop() {
         auto expected_len = (msgtype == MPRPC_NOTIFICATION ? 3 : 4);
         ASSERT(msglen == expected_len);
 
+        auto add_event = [&](fn<void(Nvim_Message*)> f) {
+            SCOPED_LOCK(&messages_lock);
+            SCOPED_MEM(&messages_mem);
+
+            auto event = message_queue.append();
+            event->type = msgtype;
+            f(event);
+        };
+
         switch (msgtype) {
-            case MPRPC_NOTIFICATION:
-                {
-                    auto method = reader.read_string(); CHECKOK();
-                    // print("got notification with method %s", method);
-                    auto params_length = reader.read_array(); CHECKOK();
+        case MPRPC_NOTIFICATION:
+            {
+                auto method = reader.read_string(); CHECKOK();
+                // print("got notification with method %s", method);
+                auto params_length = reader.read_array(); CHECKOK();
 
-                    auto just_skip_params = [&]() {
-                        for (u32 i = 0; i < params_length; i++) {
-                            reader.skip_object();
-                            CHECKOK();
-                        }
-                    };
-
-                    if (streq(method, "nvim_buf_lines_event")) {
-                        SCOPED_FRAME();
-
-                        auto buf_ext = reader.read_ext(); CHECKOK();
-                        auto buf_id = buf_ext->object_id;
-
-                        auto changedtick = reader.read_int(); CHECKOK();
-                        auto firstline = reader.read_int(); CHECKOK();
-                        auto lastline = reader.read_int(); CHECKOK();
-                        auto num_lines = reader.read_array(); CHECKOK();
-
-                        auto editor = find_editor_by_buffer(buf_id);
-
-                        bool is_change_empty = firstline == lastline && num_lines == 0;
-                        bool skip = (
-                            editor == NULL
-                            || !editor->nvim_data.got_initial_lines
-                            || changedtick <= editor->nvim_insert.skip_changedticks_until
-                            || is_change_empty
-                        );
-
-                        if (skip) {
-                            for (u32 i = 0; i < num_lines; i++) {
-                                SCOPED_FRAME();
-                                reader.skip_object(); CHECKOK();
-                            }
-                        } else {
-                            SCOPED_FRAME();
-
-                            auto tmp_lines = alloc_list<uchar*>();
-                            auto tmp_line_lengths = alloc_list<s32>();
-
-                            for (u32 i = 0; i < num_lines; i++) {
-                                auto line = reader.read_string(); CHECKOK();
-                                auto len = strlen(line);
-                                {
-                                    auto unicode_line = alloc_array(uchar, len);
-                                    for (u32 i = 0; i < len; i++)
-                                        unicode_line[i] = line[i];
-                                    tmp_lines->append(unicode_line);
-                                    tmp_line_lengths->append(len);
-                                }
-                            }
-
-                            SCOPED_LOCK(&editor->msg_lock);
-                            SCOPED_MEM(&editor->msg_mem);
-
-                            auto msg = editor->msg_queue.append();
-                            msg->type = EMSG_NVIM_EDIT;
-
-                            auto edit = &msg->nvim_edit;
-                            edit->firstline = firstline;
-                            edit->lastline = lastline;
-
-                            edit->lines = alloc_list<uchar*>(tmp_lines->len);
-                            edit->line_lengths = alloc_list<s32>(tmp_line_lengths->len);
-
-                            for (u32 i = 0; i < tmp_lines->len; i++) {
-                                auto& line = tmp_lines->at(i);
-                                auto& line_length = tmp_line_lengths->at(i);
-
-                                auto unicode_line = alloc_array(uchar, line_length);
-                                memcpy(unicode_line, line, sizeof(uchar) * line_length);
-
-                                edit->lines->append(unicode_line);
-                                edit->line_lengths->append(line_length);
-                            }
-                        }
-
-                        // skip {more} param. we don't care, we'll just handle the next
-                        // notif when it comes
-                        reader.skip_object(); CHECKOK();
-
-                        if (!editor->nvim_data.got_initial_lines) {
-                            editor->nvim_data.got_initial_lines = true;
-                            handle_editor_on_ready(editor);
-                        }
-                    } else if (streq(method, "redraw")) {
-                        for (u32 i = 0; i < params_length; i++) {
-                            auto argsets_len = reader.read_array(); CHECKOK();
-                            auto op = reader.read_string(); CHECKOK();
-
-                            for (u32 j = 1; j < argsets_len; j++) {
-                                auto args_len = reader.read_array(); CHECKOK();
-
-                                if (streq(op, "mode_change")) {
-                                    // i think this could cause race condition
-                                    SCOPED_FRAME();
-                                    ASSERT(args_len == 2);
-
-                                    auto mode_name = reader.read_string(); CHECKOK();
-                                    auto mode_index = reader.read_int(); CHECKOK();
-
-                                    auto editor = world.get_current_editor();
-                                    if (editor == NULL) break;
-
-                                    auto old_mode = editor->nvim_data.mode;
-
-                                    if (streq(mode_name, "normal"))
-                                        editor->nvim_data.mode = VI_NORMAL;
-                                    else if (streq(mode_name, "insert"))
-                                        editor->nvim_data.mode = VI_INSERT;
-                                    else if (streq(mode_name, "replace"))
-                                        editor->nvim_data.mode = VI_REPLACE;
-                                    else if (streq(mode_name, "visual"))
-                                        editor->nvim_data.mode = VI_VISUAL;
-                                    else // error?
-                                        editor->nvim_data.mode = VI_UNKNOWN;
-
-                                    if (editor->nvim_data.mode == VI_INSERT) {
-                                        editor->nvim_insert.start = editor->cur;
-                                        editor->nvim_insert.backspaced_to = editor->cur;
-                                    }
-
-                                } else if (streq(op, "win_viewport")) {
-                                    SCOPED_FRAME();
-                                    ASSERT(args_len == 6);
-
-                                    auto grid = reader.read_int(); CHECKOK();
-                                    auto window = reader.read_ext(); CHECKOK();
-                                    auto topline = reader.read_int(); CHECKOK();
-                                    auto botline = reader.read_int(); CHECKOK();
-                                    auto curline = reader.read_int(); CHECKOK();
-                                    auto curcol = reader.read_int(); CHECKOK();
-
-                                    assoc_grid_with_window(grid, window->object_id);
-
-                                    auto editor = find_editor_by_window(window->object_id);
-                                    if (editor == NULL)
-                                        continue; // TODO: handle us still receiving notifications for nonexistent window
-
-                                    editor->raw_move_cursor(new_cur2((u32)curcol, (u32)curline));
-
-                                    if (!editor->nvim_data.got_initial_cur) {
-                                        editor->nvim_data.got_initial_cur = true;
-                                        handle_editor_on_ready(editor);
-                                    }
-                                } else if (streq(op, "win_pos")) {
-                                    ASSERT(args_len == 6);
-                                    auto grid = reader.read_int(); CHECKOK();
-                                    auto window = reader.read_ext(); CHECKOK();
-                                    /* auto start_row = */ reader.read_int(); CHECKOK();
-                                    /* auto start_col = */ reader.read_int(); CHECKOK();
-                                    /* auto width = */ reader.read_int(); CHECKOK();
-                                    /* auto height = */ reader.read_int(); CHECKOK();
-                                    assoc_grid_with_window(grid, window->object_id);
-                                } else if (streq(op, "win_external_pos")) {
-                                    ASSERT(args_len == 2);
-                                    auto grid = reader.read_int(); CHECKOK();
-                                    auto window = reader.read_ext(); CHECKOK();
-                                    assoc_grid_with_window(grid, window->object_id);
-                                } else {
-                                    for (u32 k = 0; k < args_len; k++) {
-                                        reader.skip_object();
-                                        CHECKOK();
-                                    }
-                                }
-                            }
-                        }
-                    } else {
-                        just_skip_params();
-                        CHECKOK();
-                    }
-                }
-                break;
-            case MPRPC_REQUEST:
-                {
-                    auto msgid = reader.read_int(); CHECKOK();
-                    auto method = reader.read_string(); CHECKOK();
-                    auto params_length = reader.read_array(); CHECKOK();
-
-                    // print("got request with method %s", method);
-                    // check `method` against names of rpcrequests
-
-                    // in the default case we just skip params
+                auto just_skip_params = [&]() {
                     for (u32 i = 0; i < params_length; i++) {
                         reader.skip_object();
                         CHECKOK();
                     }
+                };
 
-                    start_response_message(msgid);
-                    writer.write_nil(); // no error
-                    writer.write_string(""); // empty response
-                    end_message();
-                }
-                break;
-            case MPRPC_RESPONSE:
-                {
-                    auto msgid = reader.read_int(); CHECKOK();
+                if (streq(method, "nvim_buf_lines_event")) {
+                    SCOPED_FRAME();
 
-                    auto req = find_request_by_msgid(msgid);
-                    if (req == NULL) {
-                        reader.skip_object(); CHECKOK(); // error
-                        reader.skip_object(); CHECKOK(); // result
-                        break;
+                    auto buf = reader.read_ext(); CHECKOK();
+                    auto changedtick = reader.read_int(); CHECKOK();
+                    auto firstline = reader.read_int(); CHECKOK();
+                    auto lastline = reader.read_int(); CHECKOK();
+                    auto num_lines = reader.read_array(); CHECKOK();
+
+                    List<uchar*> *lines;
+                    List<s32> *line_lengths;
+
+                    {
+                        SCOPED_MEM(&messages_mem);
+                        lines = alloc_list<uchar*>();
+                        line_lengths = alloc_list<s32>();
                     }
 
-                    bool error = false;
-                    if (reader.peek_type() != MP_NIL) {
-                        error = true;
-                        if (reader.peek_type() == MP_STRING) {
-                            auto error_str = reader.read_string(); CHECKOK();
-                            SCOPED_FRAME();
-                            // print("error in response for msgid %d: %d", msgid, error_str);
-                        } else {
-                            auto type = reader.peek_type();
-                            reader.skip_object(); CHECKOK();
-                            // print("error in response for msgid %d: (error was not a string, instead was %s)", msgid, mptype_str(type));
-                        }
-                    } else {
-                        reader.read_nil(); CHECKOK();
-                    }
-
-                    bool unhandled = false;
-
-                    /*
-                    At this point, we have read the error and printed it out if there was one.
-                    If there was, `error` will be `true`.
-
-                    For 'handled' requests (meaning it's a request type with a `case`
-                    below), it's the handler's job (below) to both read the response object, AND
-                    determine what action to take if there was an error.
-
-                    For 'unhandled' requests, we just skip over the response.
-                    */
-
-                    Editor* editor = NULL;
-                    if (req->editor_id != 0) {
-                        auto is_match = [&](Editor* it) -> bool { return it->id == req->editor_id; };
-                        editor = world.find_editor(is_match);
-                        if (editor == NULL) {
-                            reader.skip_object();
-                            break;
+                    for (u32 i = 0; i < num_lines; i++) {
+                        auto line = reader.read_string(); CHECKOK();
+                        auto len = strlen(line);
+                        {
+                            SCOPED_MEM(&messages_mem);
+                            auto unicode_line = alloc_array(uchar, len);
+                            for (u32 i = 0; i < len; i++)
+                                unicode_line[i] = line[i];
+                            lines->append(unicode_line);
+                            line_lengths->append(len);
                         }
                     }
 
-                    switch (req->type) {
-                    case NVIM_REQ_FILEOPEN_CLEAR_UNDO:
-                        {
-                            ASSERT(editor != NULL);
-                            reader.skip_object(); CHECKOK();
-                            if (!error)
-                                editor->buf.dirty = false;
-                        }
-                        break;
-                    case NVIM_REQ_POST_INSERT_GETCHANGEDTICK:
-                        {
-                            ASSERT(editor != NULL);
+                    add_event([&](Nvim_Message *msg) {
+                        msg->notification.type = NVIM_NOTIF_BUF_LINES;
+                        msg->notification.buf_lines.buf = *buf;
+                        msg->notification.buf_lines.changedtick = changedtick;
+                        msg->notification.buf_lines.firstline = firstline;
+                        msg->notification.buf_lines.lastline = lastline;
+                        msg->notification.buf_lines.lines = lines;
+                        msg->notification.buf_lines.line_lengths = line_lengths;
+                    });
 
-                            // skip next update from nvim
-                            auto changedtick = reader.read_int(); CHECKOK();
-                            editor->nvim_insert.skip_changedticks_until = changedtick + 1;
+                    // skip {more} param. we don't care, we'll just handle the next
+                    // notif when it comes
+                    reader.skip_object(); CHECKOK();
+                } else if (streq(method, "redraw")) {
+                    for (u32 i = 0; i < params_length; i++) {
+                        auto argsets_len = reader.read_array(); CHECKOK();
+                        auto op = reader.read_string(); CHECKOK();
 
-                            auto cur = editor->cur;
-                            auto backspaced_to = editor->nvim_insert.backspaced_to;
-                            auto start = editor->nvim_insert.start;
+                        for (u32 j = 1; j < argsets_len; j++) {
+                            auto args_len = reader.read_array(); CHECKOK();
 
-                            // set new lines
-                            start_request_message("nvim_buf_set_lines", 5);
-                            writer.write_int(editor->nvim_data.buf_id);
-                            writer.write_int(backspaced_to.y);
-                            writer.write_int(start.y + 1);
-                            writer.write_bool(false);
-                            writer.write_array(cur.y - backspaced_to.y + 1);
-                            for (u32 y = backspaced_to.y; y <= cur.y; y++) {
-                                auto& line = editor->buf.lines[y];
-                                writer.write1(MP_OP_STRING);
-                                writer.write4(line.len);
-                                For (line) writer.write1(it);
-                            }
-                            end_message();
+                            if (streq(op, "mode_change")) {
+                                SCOPED_FRAME();
+                                ASSERT(args_len == 2);
 
-                            // move cursor
-                            editor->move_cursor(editor->cur);
+                                auto mode_name = reader.read_string(); CHECKOK();
+                                auto mode_index = reader.read_int(); CHECKOK();
 
-                            // send the <esc> key that we delayed
-                            start_request_message("nvim_input", 1);
-                            writer.write_string("<Esc>");
-                            end_message();
-                        }
-                        break;
-                    case NVIM_REQ_AUTOCOMPLETE_SETBUF:
-                        {
-                            ASSERT(editor != NULL);
-                            reader.skip_object(); CHECKOK();
-                            if (!error) {
-                                editor->move_cursor(req->autocomplete_setbuf.target_cursor);
-                            }
-                        }
-                        break;
+                                add_event([&](Nvim_Message *m) {
+                                    m->notification.type = NVIM_NOTIF_MODE_CHANGE;
+                                    m->notification.mode_change.mode_name = our_strcpy(mode_name);
+                                    m->notification.mode_change.mode_index = mode_index;
+                                });
+                            } else if (streq(op, "win_viewport")) {
+                                SCOPED_FRAME();
+                                ASSERT(args_len == 6);
 
-                    case NVIM_REQ_GET_API_INFO:
-                        {
-                            if (error) {
-                                reader.skip_object(); CHECKOK();
-                                break;
-                            }
+                                auto grid = reader.read_int(); CHECKOK();
+                                auto window = reader.read_ext(); CHECKOK();
+                                auto topline = reader.read_int(); CHECKOK();
+                                auto botline = reader.read_int(); CHECKOK();
+                                auto curline = reader.read_int(); CHECKOK();
+                                auto curcol = reader.read_int(); CHECKOK();
 
-                            auto len = reader.read_array(); CHECKOK();
-                            ASSERT(len == 2);
+                                add_event([&](Nvim_Message *m) {
+                                    m->notification.type = NVIM_NOTIF_WIN_VIEWPORT;
+                                    m->notification.win_viewport.grid = grid;
+                                    m->notification.win_viewport.window = *window;
+                                    m->notification.win_viewport.topline = topline;
+                                    m->notification.win_viewport.botline = botline;
+                                    m->notification.win_viewport.curline = curline;
+                                    m->notification.win_viewport.curcol = curcol;
+                                });
+                            } else if (streq(op, "win_pos")) {
+                                ASSERT(args_len == 6);
+                                auto grid = reader.read_int(); CHECKOK();
+                                auto window = reader.read_ext(); CHECKOK();
+                                /* auto start_row = */ reader.read_int(); CHECKOK();
+                                /* auto start_col = */ reader.read_int(); CHECKOK();
+                                /* auto width = */ reader.read_int(); CHECKOK();
+                                /* auto height = */ reader.read_int(); CHECKOK();
 
-                            auto channel_id = reader.read_int(); CHECKOK();
-                            reader.skip_object(); CHECKOK();
+                                add_event([&](Nvim_Message *m) {
+                                    m->notification.type = NVIM_NOTIF_WIN_POS;
+                                    m->notification.win_pos.grid = grid;
+                                    m->notification.win_pos.window = *window;
+                                });
+                            } else if (streq(op, "win_external_pos")) {
+                                ASSERT(args_len == 2);
+                                auto grid = reader.read_int(); CHECKOK();
+                                auto window = reader.read_ext(); CHECKOK();
 
-                            // pass channel id to neovim so we can send it to rpcrequest
-                            start_request_message("nvim_set_var", 2);
-                            writer.write_string("channel_id");
-                            writer.write_int(channel_id);
-                            end_message();
-                        }
-                        break;
-                    case NVIM_REQ_SET_CURSOR:
-                        {
-                            ASSERT(editor != NULL);
-                            if (error) {
-                                // print("error");
-                            }
-                            reader.skip_object(); CHECKOK();
-                        }
-                        break;
-                    case NVIM_REQ_RESIZE:
-                        {
-                            ASSERT(editor != NULL);
-                            editor->nvim_data.is_resizing = false;
-                            if (error) {
-                                // print("error");
-                            }
-                            reader.skip_object(); CHECKOK();
-                        }
-                        break;
-                    case NVIM_REQ_CREATE_BUF:
-                        {
-                            u32 bufid = 0;
-                            if (!error && reader.peek_type() == MP_EXT) {
-                                auto ext = reader.read_ext();
-                                bufid = ext->object_id;
+                                add_event([&](Nvim_Message *m) {
+                                    m->notification.type = NVIM_NOTIF_WIN_POS;
+                                    m->notification.win_pos.grid = grid;
+                                    m->notification.win_pos.window = *window;
+                                });
                             } else {
-                                reader.skip_object(); CHECKOK();
-                            }
-
-                            if (bufid == 0) {
-                                // TODO: mark the editor as having an error
-                                break;
-                            }
-
-                            ASSERT(editor != NULL);
-
-                            editor->nvim_data.buf_id = bufid;
-                            // editor->nvim_data.status = ENS_WIN_PENDING;
-
-                            {
-                                auto msgid = start_request_message("nvim_buf_attach", 3);
-                                save_request(NVIM_REQ_BUF_ATTACH, msgid, editor->id);
-
-                                writer.write_int(bufid);
-                                writer.write_bool(false);
-                                writer.write_map(0);
-                                end_message();
-                            }
-
-                            {
-                                start_request_message("nvim_buf_set_lines", 5);
-
-                                writer.write_int(bufid);
-                                writer.write_int(0);
-                                writer.write_int(-1);
-                                writer.write_bool(false);
-
-                                writer.write_array(editor->buf.lines.len);
-                                For (editor->buf.lines) {
-                                    writer.write1(MP_OP_STRING);
-                                    writer.write4(it.len);
-                                    For (it) writer.write1(it);
+                                for (u32 k = 0; k < args_len; k++) {
+                                    reader.skip_object();
+                                    CHECKOK();
                                 }
-
-                                // editor->buf.clear();
-                                end_message();
-                            }
-
-                            {
-                                typedef fn<void()> write_value_func;
-                                auto set_option = [&](ccstr key, write_value_func f) {
-                                    start_request_message("nvim_buf_set_option", 3);
-                                    writer.write_int(bufid);
-                                    writer.write_string(key);
-                                    f();
-                                    end_message();
-                                };
-
-                                set_option("shiftwidth", [&]() { writer.write_int(2); });
-                                set_option("tabstop",    [&]() { writer.write_int(2); });
-                                set_option("expandtab",  [&]() { writer.write_bool(false); });
-                                set_option("wrap",       [&]() { writer.write_bool(false); });
-                                set_option("autoindent", [&]() { writer.write_bool(true); });
-                                set_option("filetype",   [&]() { writer.write_string("go"); });
-                                // how to do equiv. of `filetype indent plugin on'?
-                            }
-
-                            {
-                                auto msgid = start_request_message("nvim_open_win", 3);
-                                save_request(NVIM_REQ_OPEN_WIN, msgid, editor->id);
-
-                                writer.write_int(bufid);
-                                writer.write_bool(false);
-                                writer.write_map(5);
-                                writer.write_string("relative"); writer.write_string("win");
-                                writer.write_string("row"); writer.write_int(0);
-                                writer.write_string("col"); writer.write_int(0);
-                                writer.write_string("width"); writer.write_int(200);
-                                writer.write_string("height"); writer.write_int(100);
-                                end_message();
                             }
                         }
-                        break;
-                    case NVIM_REQ_SET_CURRENT_WIN:
-                        if (error) {
-                            // TODO
-                            reader.skip_object();
-                            break;
-                        }
-                        reader.read_nil();
-                        if (editor->id == world.nvim_data.waiting_focus_window) {
-                            world.nvim_data.waiting_focus_window = 0;
-                        }
-                        break;
-                    case NVIM_REQ_OPEN_WIN:
-                        {
-                            auto run = [&]() -> bool {
-                                if (error) return false;
-                                if (reader.peek_type() != MP_EXT) return false;
-
-                                auto ext = reader.read_ext();
-                                if (!reader.ok) return false;
-
-                                editor->nvim_data.win_id = ext->object_id;
-                                if (world.nvim_data.waiting_focus_window == editor->id)
-                                    set_current_window(editor);
-                                return true;
-                            };
-
-                            if (!run()) {
-                                reader.skip_object();
-                                // TODO: mark error
-                            }
-                        }
-                        break;
-                    case NVIM_REQ_BUF_ATTACH:
-                        {
-                            reader.skip_object();
-                            if (error) {
-                                // TODO: mark error
-                                break;
-                            }
-                            editor->nvim_data.is_buf_attached = true;
-                        }
-                        break;
-                    case NVIM_REQ_UI_ATTACH:
-                        {
-                            reader.skip_object();
-                            if (error) {
-                                // TODO: mark error
-                                break;
-                            }
-                            world.nvim_data.is_ui_attached = true;
-                        }
-                        break;
-                    default:
-                        unhandled = true;
-                        break;
                     }
+                } else {
+                    just_skip_params();
+                    CHECKOK();
+                }
+            }
+            break;
+        case MPRPC_REQUEST:
+            {
+                auto msgid = reader.read_int(); CHECKOK();
+                auto method = reader.read_string(); CHECKOK();
+                auto params_length = reader.read_array(); CHECKOK();
 
-                    if (unhandled) {
+                // print("got request with method %s", method);
+                // check `method` against names of rpcrequests
+
+                // in the default case we just skip params
+                for (u32 i = 0; i < params_length; i++) {
+                    reader.skip_object();
+                    CHECKOK();
+                }
+
+                start_response_message(msgid);
+                writer.write_nil(); // no error
+                writer.write_string(""); // empty response
+                end_message();
+            }
+            break;
+        case MPRPC_RESPONSE:
+            {
+                auto msgid = reader.read_int(); CHECKOK();
+                print("[nvim] [raw] got response with msgid %d", msgid);
+
+                auto req = find_request_by_msgid(msgid);
+                if (req == NULL) {
+                    print("[nvim] couldn't find request for msgid %d", msgid);
+                    reader.skip_object(); CHECKOK(); // error
+                    reader.skip_object(); CHECKOK(); // result
+                    break;
+                }
+                defer { requests.remove(req); };
+
+                if (reader.peek_type() != MP_NIL) {
+                    if (reader.peek_type() == MP_STRING) {
+                        auto error_str = reader.read_string(); CHECKOK();
+                        SCOPED_FRAME();
+                        print("error in response for msgid %d: %d", msgid, error_str);
+                    } else {
+                        auto type = reader.peek_type();
+                        reader.skip_object(); CHECKOK();
+                        print("error in response for msgid %d: (error was not a string, instead was %s)", msgid, mptype_str(type));
+                    }
+                    reader.skip_object();
+                    break;
+                }
+
+                // read the error
+                reader.read_nil(); CHECKOK();
+
+                // grab associated editor, break if we can't find it
+                Editor* editor = NULL;
+                if (req->editor_id != 0) {
+                    auto is_match = [&](Editor* it) -> bool { return it->id == req->editor_id; };
+                    editor = world.find_editor(is_match);
+                    if (editor == NULL) {
                         reader.skip_object();
+                        break;
                     }
                 }
-                break;
+
+                auto add_response_event = [&](fn<void(Nvim_Message*)> f) {
+                    if (req->msgid == 12) {
+                        print("break here");
+                    }
+
+                    add_event([&](Nvim_Message *it) {
+                        auto req_copy = alloc_object(Nvim_Request);
+                        memcpy(req_copy, req, sizeof(Nvim_Request));
+                        it->response.original_request = req_copy;
+                        f(it);
+                    });
+                };
+
+                switch (req->type) {
+                case NVIM_REQ_POST_INSERT_GETCHANGEDTICK:
+                    {
+                        auto changedtick = reader.read_int(); CHECKOK();
+                        add_response_event([&](Nvim_Message *m) {
+                            m->response.changedtick = changedtick;
+                        });
+                    }
+                    break;
+                case NVIM_REQ_GET_API_INFO:
+                    {
+                        auto len = reader.read_array(); CHECKOK();
+                        ASSERT(len == 2);
+
+                        auto channel_id = reader.read_int(); CHECKOK();
+                        reader.skip_object(); CHECKOK();
+
+                        add_response_event([&](Nvim_Message *m) {
+                            m->response.channel_id = channel_id;
+                        });
+                    }
+                    break;
+                case NVIM_REQ_CREATE_BUF:
+                    {
+                        if (reader.peek_type() != MP_EXT) {
+                            reader.skip_object(); CHECKOK(); // check if this path ever gets hit
+                            break;
+                        }
+
+                        auto buf = reader.read_ext(); CHECKOK();
+                        add_response_event([&](Nvim_Message *m) {
+                            m->response.buf = *buf;
+                        });
+                    }
+                    break;
+
+                case NVIM_REQ_OPEN_WIN:
+                    {
+                        if (reader.peek_type() != MP_EXT) {
+                            reader.skip_object(); CHECKOK(); // check if this path ever gets hit
+                            break;
+                        }
+
+                        auto win = reader.read_ext(); CHECKOK();
+                        add_response_event([&](Nvim_Message *m) {
+                            m->response.win = *win;
+                        });
+                    }
+                    break;
+
+                default:
+                    reader.skip_object();
+                    add_response_event([&](Nvim_Message*) {});
+                    break;
+                }
+            }
+            break;
         }
     }
 
@@ -653,10 +722,13 @@ void Nvim::init() {
     request_id = 0;
 
     send_lock.init();
-    print_lock.init();
     requests_lock.init();
 
     requests.init();
+
+    messages_lock.init();
+    message_queue.init();
+    messages_mem.init();
 }
 
 void Nvim::start_running() {
@@ -683,7 +755,6 @@ void Nvim::start_running() {
 
 void Nvim::cleanup() {
     send_lock.cleanup();
-    print_lock.cleanup();
     requests_lock.cleanup();
 
     if (event_loop_thread != NULL) {

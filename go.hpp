@@ -1123,6 +1123,7 @@ struct Go_Indexer {
 Ast_Node *new_ast_node(TSNode node, Parser_It *it);
 
 #define FOR_NODE_CHILDREN(node) for (auto it = (node)->child(); !it->null; it = it->next())
+#define FOR_ALL_NODE_CHILDREN(node) for (auto it = (node)->child_all(); !it->null; it = it->next_all())
 
 Goresult *make_goresult(Gotype *gotype, Go_Ctx *ctx);
 Goresult *make_goresult(Godecl *decl, Go_Ctx *ctx);

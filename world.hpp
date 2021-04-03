@@ -57,6 +57,15 @@ struct File_Tree_Node {
     bool open;
 };
 
+enum Vi_Mode {
+    VI_NONE,
+    VI_NORMAL,
+    VI_VISUAL,
+    VI_INSERT,
+    VI_REPLACE,
+    VI_UNKNOWN,
+};
+
 struct World {
     Pool frame_mem;
     Pool autocomplete_mem;
@@ -64,12 +73,14 @@ struct World {
     Pool open_file_mem;
     Pool debugger_mem;
     Pool scratch_mem;
-    Pool nvim_mem;
-    Pool nvim_loop_mem;
     Pool file_tree_mem;
     Pool build_mem;
     Pool build_index_mem;
     Pool ui_mem;
+
+    // move these to nvim?
+    Pool nvim_mem;
+    Pool nvim_loop_mem;
 
     Fridge<Chunk0> chunk0_fridge;
     Fridge<Chunk1> chunk1_fridge;
@@ -100,6 +111,7 @@ struct World {
         List<Grid_Window_Pair> grid_to_window;
         bool is_ui_attached;
         u32 waiting_focus_window;
+        Vi_Mode mode;
     } nvim_data;
 
     struct {

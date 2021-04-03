@@ -9,6 +9,8 @@
 void Editor::raw_move_cursor(cur2 c) {
     if (c.y == -1) c = buf.offset_to_cur(c.x);
 
+    if (c.y < 0 || c.y >= buf.lines.len) return;
+
     cur = c;
 
     auto& line = buf.lines[c.y];
@@ -25,6 +27,51 @@ void Editor::raw_move_cursor(cur2 c) {
         view.y = cur.y;
     if (cur.y >= view.y + view.h)
         view.y = cur.y - view.h + 1;
+}
+
+void Editor::update_lines(int firstline, int lastline, List<uchar*> *new_lines, List<s32> *line_lengths) {
+    if (lastline == -1) lastline = buf.lines.len;
+
+    auto start_cur = new_cur2(0, (i32)firstline);
+    auto old_end_cur = new_cur2(0, (i32)lastline);
+    if (lastline == buf.lines.len) {
+        start_cur = buf.dec_cur(start_cur);
+        old_end_cur = new_cur2((i32)buf.lines.last()->len, (i32)buf.lines.len - 1);
+    }
+
+    TSInputEdit tsedit = {0};
+
+    if (is_go_file && tree != NULL) {
+        tsedit.start_byte = cur_to_offset(start_cur);
+        tsedit.start_point = cur_to_tspoint(start_cur);
+        tsedit.old_end_byte = cur_to_offset(old_end_cur);
+        tsedit.old_end_point = cur_to_tspoint(old_end_cur);
+    }
+
+    buf.delete_lines(firstline, lastline);
+    for (u32 i = 0; i < new_lines->len; i++) {
+        auto line = new_lines->at(i);
+        auto len = line_lengths->at(i);
+        buf.insert_line(firstline + i, line, len);
+    }
+
+    if (is_go_file) {
+        if (tree != NULL) {
+            auto new_end_cur = new_cur2(0, firstline + new_lines->len);
+            if (firstline + new_lines->len == buf.lines.len) {
+                if (buf.lines.len == 0)
+                    new_end_cur = new_cur2(0, 0);
+                else
+                    new_end_cur = new_cur2((i32)buf.lines.last()->len, (i32)buf.lines.len - 1);
+            }
+
+            tsedit.new_end_byte = cur_to_offset(new_end_cur);
+            tsedit.new_end_point = cur_to_tspoint(new_end_cur);
+            ts_tree_edit(tree, &tsedit);
+        }
+
+        update_tree();
+    }
 }
 
 void Editor::update_tree() {
@@ -64,18 +111,14 @@ void Editor::move_cursor(cur2 c) {
 
     if (world.use_nvim) {
         auto& nv = world.nvim;
-
+        nv.start_request_message("nvim_win_set_cursor", 2);
+        nv.writer.write_int(nvim_data.win_id);
         {
-            auto msgid = nv.start_request_message("nvim_win_set_cursor", 2);
-            nv.save_request(NVIM_REQ_SET_CURSOR, msgid, id);
-            nv.writer.write_int(nvim_data.win_id);
-            {
-                nv.writer.write_array(2);
-                nv.writer.write_int(c.y + 1);
-                nv.writer.write_int(c.x);
-            }
-            nv.end_message();
+            nv.writer.write_array(2);
+            nv.writer.write_int(c.y + 1);
+            nv.writer.write_int(c.x);
         }
+        nv.end_message();
     }
 }
 
@@ -253,7 +296,38 @@ Editor *Pane::focus_editor_by_index(u32 idx) {
     return focus_editor_by_index(idx, new_cur2(-1, -1));
 }
 
+bool Editor::trigger_escape() {
+    bool handled = false;
+
+    if (autocomplete.ac.results != NULL) {
+        handled = true;
+        autocomplete.ac.results = NULL;
+    }
+
+    if (parameter_hint.gotype != NULL) {
+        handled = true;
+        parameter_hint.gotype = NULL;
+    }
+
+    if (world.nvim_data.mode == VI_INSERT) {
+        auto& nv = world.nvim;
+        auto msgid = nv.start_request_message("nvim_buf_get_changedtick", 1);
+        nv.save_request(NVIM_REQ_POST_INSERT_GETCHANGEDTICK, msgid, id);
+        nv.writer.write_int(nvim_data.buf_id);
+        nv.end_message();
+
+        handled = true;
+    }
+
+    return handled;
+}
+
 Editor *Pane::focus_editor_by_index(u32 idx, cur2 pos) {
+    if (current_editor != idx) {
+        auto e = world.get_current_editor();
+        if (e != NULL) e->trigger_escape();
+    }
+
     current_editor = idx;
 
     auto &editor = editors[idx];
@@ -323,13 +397,23 @@ void Workspace::activate_pane(u32 idx) {
         pane->width = new_width;
     }
 
+    if (current_pane != idx) {
+        auto e = world.get_current_editor();
+        if (e != NULL) e->trigger_escape();
+    }
+
     current_pane = idx;
 
     if (world.use_nvim) {
         auto pane = get_current_pane();
+        if (pane->current_editor != -1)
+            pane->focus_editor_by_index(pane->current_editor);
+
+        /*
         auto editor = pane->get_current_editor();
         if (editor != NULL)
             world.nvim.set_current_window(editor);
+        */
     }
 }
 
@@ -354,75 +438,6 @@ void Editor::init() {
     SCOPED_MEM(&mem);
 
     parser = new_ts_parser();
-
-    buf_lock.init();
-
-    msg_mem.init("editor msg_mem");
-    msg_lock.init();
-
-    // this should be initialized using mem; msg_mem is for
-    // the data that gets passed into the queue
-    msg_queue.init();
-}
-
-void Editor::process_msg(Editor_Msg *msg) {
-    switch (msg->type) {
-    case EMSG_NVIM_EDIT:
-        {
-            auto edit = &msg->nvim_edit;
-
-            SCOPED_LOCK(&buf_lock);
-
-            auto firstline = edit->firstline;
-            auto lastline = edit->lastline;
-            auto new_lines = edit->lines;
-            auto new_line_lengths = edit->line_lengths;
-
-            if (lastline == -1) lastline = buf.lines.len;
-
-            auto start_cur = new_cur2(0, (i32)firstline);
-            auto old_end_cur = new_cur2(0, (i32)lastline);
-            if (lastline == buf.lines.len) {
-                start_cur = buf.dec_cur(start_cur);
-                old_end_cur = new_cur2((i32)buf.lines.last()->len, (i32)buf.lines.len - 1);
-            }
-
-            TSInputEdit tsedit = {0};
-
-            if (is_go_file && tree != NULL) {
-                tsedit.start_byte = cur_to_offset(start_cur);
-                tsedit.start_point = cur_to_tspoint(start_cur);
-                tsedit.old_end_byte = cur_to_offset(old_end_cur);
-                tsedit.old_end_point = cur_to_tspoint(old_end_cur);
-            }
-
-            buf.delete_lines(firstline, lastline);
-            for (u32 i = 0; i < new_lines->len; i++) {
-                auto line = new_lines->at(i);
-                auto len = new_line_lengths->at(i);
-                buf.insert_line(firstline + i, line, len);
-            }
-
-            if (is_go_file) {
-                if (tree != NULL) {
-                    auto new_end_cur = new_cur2(0, firstline + new_lines->len);
-                    if (firstline + new_lines->len == buf.lines.len)
-                        new_end_cur = new_cur2((i32)buf.lines.last()->len, (i32)buf.lines.len - 1);
-
-                    tsedit.new_end_byte = cur_to_offset(new_end_cur);
-                    tsedit.new_end_point = cur_to_tspoint(new_end_cur);
-                    ts_tree_edit(tree, &tsedit);
-                }
-
-                update_tree();
-            }
-        }
-        break;
-
-    case EMSG_RELOAD:
-        reload_file();
-        break;
-    }
 }
 
 void Editor::cleanup() {
@@ -430,9 +445,6 @@ void Editor::cleanup() {
     ts_tree_delete(tree); // i remember this being super slow, is it still if it's just one tree?
 
     mem.cleanup();
-    msg_mem.cleanup();
-    buf_lock.cleanup();
-    msg_lock.cleanup();
 }
 
 // basically the rule is, if autocomplete comes up empty ON FIRST OPEN, then keep it closed
@@ -676,8 +688,6 @@ void Editor::update_parameter_hint() {
 void Editor::start_change() {
     if (!is_go_file) return;
 
-    buf_lock.enter();
-
     ptr0(&curr_change);
     curr_change.start_point = cur_to_tspoint(cur);
     curr_change.start_byte = cur_to_offset(cur);
@@ -701,8 +711,6 @@ void Editor::end_change() {
 
     ts_tree_edit(tree, &curr_change);
     update_tree();
-
-    buf_lock.leave();
 }
 
 void Editor::type_char_in_insert_mode(char ch) {
@@ -724,6 +732,92 @@ void Editor::type_char_in_insert_mode(char ch) {
         trigger_parameter_hint(true);
         did_parameter_hint = true;
         break;
+    case '}':
+        {
+            if (cur.x == 0) break;
+
+            auto rbrace_pos = buf.dec_cur(cur);
+
+            auto &line = buf.lines[rbrace_pos.y];
+            bool starts_with_spaces = true;
+            for (u32 x = 0; x < rbrace_pos.x; x++) {
+                if (line[x] != ' ' && line[x] != '\t') {
+                    starts_with_spaces = false;
+                    break;
+                }
+            }
+
+            if (!starts_with_spaces) break;
+
+            Parser_It it;
+            it.init(&buf);
+
+            auto root_node = new_ast_node(ts_tree_root_node(tree), &it);
+
+            Ast_Node *rbrace_node = alloc_object(Ast_Node);
+
+            world.indexer.find_nodes_containing_pos(root_node, rbrace_pos, false, [&](Ast_Node *it) {
+                if (it->type == TS_RBRACE) {
+                    memcpy(rbrace_node, it, sizeof(Ast_Node));
+                    return WALK_ABORT;
+                }
+                return WALK_CONTINUE;
+            });
+
+            auto curr = rbrace_node->prev_all();
+            int depth = 1;
+
+            i32 lbrace_line = -1;
+
+            fn<void(Ast_Node*)> process_node = [&](Ast_Node* node) {
+                if (lbrace_line != -1) return;
+
+                SCOPED_FRAME();
+                auto children = alloc_list<Ast_Node*>(node->child_count);
+                FOR_ALL_NODE_CHILDREN (node) children->append(it);
+                for (; children->len > 0; children->len--)
+                    process_node(*children->last());
+
+                if (node->type == TS_RBRACE)
+                    depth++;
+                if (node->type == TS_LBRACE) {
+                    depth--;
+                    if (depth == 0) {
+                        lbrace_line = node->start.y;
+                        return;
+                    }
+                }
+            };
+
+            for (; !curr->null && lbrace_line == -1; curr = curr->parent()) {
+                while (lbrace_line == -1) {
+                    process_node(curr);
+                    auto prev = curr->prev_all();
+                    if (prev->null) break;
+                    curr = prev;
+                }
+            }
+
+            if (lbrace_line == -1) break;
+
+            auto indentation = alloc_list<uchar>();
+            For (buf.lines[lbrace_line]) {
+                if (it == '\t' || it == ' ')
+                    indentation->append(it);
+                else
+                    break;
+            }
+
+            auto start = new_cur2(0, rbrace_pos.y);
+            if (start < nvim_insert.backspaced_to)
+                nvim_insert.backspaced_to = start;
+
+            start_change();
+            buf.remove(start, rbrace_pos);
+            buf.insert(start, indentation->items, indentation->len);
+            cur = new_cur2(indentation->len + 1, rbrace_pos.y);
+            end_change();
+        }
     }
 
     if (!did_autocomplete) update_autocomplete();

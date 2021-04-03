@@ -1018,34 +1018,11 @@ int main() {
             return;
         }
 
-        auto handle_escape = [&]() -> bool {
-            bool handled = false;
-            auto editor = world.get_current_editor();
-
-            if (editor->autocomplete.ac.results != NULL) {
-                handled = true;
-                editor->autocomplete.ac.results = NULL;
-            }
-            if (editor->parameter_hint.gotype != NULL) {
-                handled = true;
-                editor->parameter_hint.gotype = NULL;
-            }
-
-            if (editor->nvim_data.mode == VI_INSERT) {
-                auto& nv = world.nvim;
-
-                auto msgid = nv.start_request_message("nvim_buf_get_changedtick", 1);
-                nv.save_request(NVIM_REQ_POST_INSERT_GETCHANGEDTICK, msgid, editor->id);
-                nv.writer.write_int(editor->nvim_data.buf_id);
-                nv.end_message();
-
-                handled = true;
-            }
-
-            return handled;
-        };
-
         auto editor = world.get_current_editor();
+
+        auto handle_escape = [&]() -> bool {
+            return editor->trigger_escape();
+        };
 
         // TODO: all these operations that add or remove a single character in
         // buf could definitely be optimized, I believe right now even for
@@ -1054,7 +1031,7 @@ int main() {
 
         auto handle_enter = [&](ccstr nvim_string) {
             if (editor == NULL) return;
-            if (editor->nvim_data.mode != VI_INSERT) {
+            if (world.nvim_data.mode != VI_INSERT) {
                 send_nvim_keys(nvim_string);
                 return;
             }
@@ -1104,7 +1081,7 @@ int main() {
 
         auto handle_tab = [&](ccstr nvim_string) {
             if (editor == NULL) return;
-            if (editor->nvim_data.mode != VI_INSERT) {
+            if (world.nvim_data.mode != VI_INSERT) {
                 send_nvim_keys(nvim_string);
                 return;
             }
@@ -1113,7 +1090,7 @@ int main() {
 
         auto handle_backspace = [&](ccstr nvim_string) {
             if (editor == NULL) return;
-            if (editor->nvim_data.mode != VI_INSERT) {
+            if (world.nvim_data.mode != VI_INSERT) {
                 send_nvim_keys(nvim_string);
                 return;
             }
@@ -1183,7 +1160,7 @@ int main() {
                     case GLFW_KEY_R:
                     case GLFW_KEY_O:
                     case GLFW_KEY_I:
-                        if (editor->nvim_data.mode != VI_INSERT) {
+                        if (world.nvim_data.mode != VI_INSERT) {
                             SCOPED_FRAME();
                             send_nvim_keys(our_sprintf("<C-%c>", tolower((char)key)));
                         }
@@ -1192,7 +1169,7 @@ int main() {
                         // TODO
                         break;
                     case GLFW_KEY_V:
-                        if (editor->nvim_data.mode == VI_INSERT) {
+                        if (world.nvim_data.mode == VI_INSERT) {
                             auto clipboard_contents = glfwGetClipboardString(world.window);
                             if (clipboard_contents == NULL)
                                 break;
@@ -1330,7 +1307,7 @@ int main() {
                                 pane->cleanup();
                                 world.wksp.panes.remove(world.wksp.current_pane);
                                 if (world.wksp.current_pane >= world.wksp.panes.len)
-                                    world.wksp.current_pane = world.wksp.panes.len - 1;
+                                    world.wksp.activate_pane(world.wksp.panes.len - 1);
                             } else {
                                 editor->cleanup();
                                 pane->editors.remove(pane->current_editor);
@@ -1533,6 +1510,7 @@ int main() {
 
                     switch (key) {
                     case GLFW_KEY_BACKSPACE: handle_backspace("<Backspace>"); break;
+
                     case GLFW_KEY_TAB:
                     case GLFW_KEY_ENTER:
                         {
@@ -1570,11 +1548,14 @@ int main() {
                                     editor->update_tree();
                                 }
 
+                                // move cursor forward
+                                editor->raw_move_cursor(new_cur2(ac_start.x + len, ac_start.y));
+
                                 // clear autocomplete
                                 ac.ac.results = NULL;
 
                                 // update buffer
-                                {
+                                if (world.nvim_data.mode != VI_INSERT) {
                                     auto& nv = world.nvim;
                                     auto msgid = nv.start_request_message("nvim_buf_set_lines", 5);
                                     {
@@ -1654,7 +1635,7 @@ int main() {
         if (ed == NULL) return;
 
         if (isprint(ch)) {
-            if (ed->nvim_data.mode == VI_INSERT) {
+            if (world.nvim_data.mode == VI_INSERT) {
                 ed->type_char_in_insert_mode(ch);
                 // a) insert character into editor buffer
                 // b) add character to nvim_insert.buf
@@ -1776,17 +1757,14 @@ int main() {
         SCOPED_MEM(&world.frame_mem);
 
         {
-            // Check editor nvim queues.
-            For (world.wksp.panes) {
-                For (it.editors) {
-                    auto& editor = it;
-                    SCOPED_LOCK(&editor.msg_lock);
-                    For (editor.msg_queue)
-                        editor.process_msg(&it);
-                    editor.msg_queue.len = 0;
-                    editor.msg_mem.reset();
-                }
-            }
+            auto &nv = world.nvim;
+
+            // Process messages in nvim queue.
+            SCOPED_LOCK(&nv.messages_lock);
+            For (nv.message_queue)
+                nv.handle_message_from_main_thread(&it);
+            nv.messages_mem.reset();
+            nv.message_queue.len = 0;
         }
 
         {
