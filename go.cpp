@@ -888,11 +888,14 @@ void Go_Indexer::background_thread() {
             // This way we're not stuck trying over and over to write.
             last_write_time = time;
 
-            Index_Stream s;
-            if (s.open(path_join(TEST_PATH, "db"), FILE_MODE_WRITE, FILE_CREATE_NEW) != FILE_RESULT_SUCCESS) break;
-            defer { s.cleanup(); };
+            {
+                Index_Stream s;
+                if (s.open(path_join(TEST_PATH, "db.tmp"), FILE_MODE_WRITE, FILE_CREATE_NEW) != FILE_RESULT_SUCCESS) break;
+                defer { s.cleanup(); };
+                write_object<Go_Index>(&index, &s);
+            }
 
-            write_object<Go_Index>(&index, &s);
+            move_file_atomically(path_join(TEST_PATH, "db.tmp"), path_join(TEST_PATH, "db"));
         } while (0);
     }
 }

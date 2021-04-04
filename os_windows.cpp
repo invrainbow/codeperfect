@@ -635,3 +635,7 @@ ccstr get_canon_path(ccstr path) {
     }
     return ret;
 }
+
+bool move_file_atomically(ccstr src, ccstr dest) {
+    return ReplaceFileA(dest, src, NULL, 0, NULL, NULL);
+}
