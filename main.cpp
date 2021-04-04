@@ -1070,8 +1070,13 @@ int main() {
 
             for (i32 x = line.len-1; x >= 0; x--) {
                 if (!isspace(line[x])) {
-                    if (line[x] == '{')
+                    switch (line[x]) {
+                    case '{':
+                    case '(':
+                    case '[':
                         editor->type_char('\t');
+                        break;
+                    }
                     break;
                 }
             }

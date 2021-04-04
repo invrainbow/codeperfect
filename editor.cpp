@@ -732,11 +732,30 @@ void Editor::type_char_in_insert_mode(char ch) {
         trigger_parameter_hint(true);
         did_parameter_hint = true;
         break;
+
     case '}':
+    case ')':
+    case ']':
         {
             if (cur.x == 0) break;
 
             auto rbrace_pos = buf.dec_cur(cur);
+
+            Ts_Ast_Type brace_type = TS_ERROR, other_brace_type = TS_ERROR;
+            switch (ch) {
+            case '}':
+                brace_type = TS_RBRACE;
+                other_brace_type = TS_LBRACE;
+                break;
+            case ')':
+                brace_type = TS_RPAREN;
+                other_brace_type = TS_LPAREN;
+                break;
+            case ']':
+                brace_type = TS_RBRACK;
+                other_brace_type = TS_LBRACK;
+                break;
+            }
 
             auto &line = buf.lines[rbrace_pos.y];
             bool starts_with_spaces = true;
@@ -757,7 +776,7 @@ void Editor::type_char_in_insert_mode(char ch) {
             Ast_Node *rbrace_node = alloc_object(Ast_Node);
 
             world.indexer.find_nodes_containing_pos(root_node, rbrace_pos, false, [&](Ast_Node *it) {
-                if (it->type == TS_RBRACE) {
+                if (it->type == brace_type) {
                     memcpy(rbrace_node, it, sizeof(Ast_Node));
                     return WALK_ABORT;
                 }
@@ -778,9 +797,9 @@ void Editor::type_char_in_insert_mode(char ch) {
                 for (; children->len > 0; children->len--)
                     process_node(*children->last());
 
-                if (node->type == TS_RBRACE)
+                if (node->type == brace_type)
                     depth++;
-                if (node->type == TS_LBRACE) {
+                if (node->type == other_brace_type) {
                     depth--;
                     if (depth == 0) {
                         lbrace_line = node->start.y;
