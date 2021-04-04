@@ -790,6 +790,8 @@ struct Go_File {
     List<Godecl> *decls;
     List<Go_Import> *imports;
 
+    u64 hash;
+
     // Go_File *copy();
     void read(Index_Stream *s);
     void write(Index_Stream *s);
@@ -848,11 +850,13 @@ struct Module_Resolver {
         ccstr value; // only leaves have values
     };
 
+    Pool mem;
     Node *root_import_to_resolved;
     Node *root_resolved_to_import;
     ccstr module_path;
 
     void init(ccstr current_module_filepath);
+    void cleanup();
 
     Node *goto_child(Node *node, ccstr name, bool create_if_not_found) {
         for (auto it = node->children; it != NULL; it = it->next)
@@ -1054,6 +1058,9 @@ struct Go_Indexer {
     // Fs_Watcher goroot_watch;
     Fs_Watcher wksp_watch;
 
+    Lock handle_gomod_changed_lock;
+    bool flag_handle_gomod_changed;
+
     // ---
 
     void background_thread();
@@ -1108,7 +1115,7 @@ struct Go_Indexer {
     Gotype *new_primitive_type(ccstr name);
     Goresult *evaluate_type(Gotype *gotype, Go_Ctx *ctx);
     Gotype *expr_to_gotype(Ast_Node *expr);
-    void process_tree_into_package(
+    void process_tree_into_gofile(
         Go_File *file,
         Ast_Node *root,
         ccstr filename,
@@ -1118,6 +1125,8 @@ struct Go_Indexer {
     void reload_all_dirty_files();
     Go_Package_Status get_package_status(ccstr import_path);
     void replace_package_name(Go_Package *pkg, ccstr package_name);
+    void fill_package_hash(Go_Package *pkg);
+    u64 hash_file(ccstr filepath);
 };
 
 Ast_Node *new_ast_node(TSNode node, Parser_It *it);
