@@ -4,6 +4,14 @@
 #include "utils.hpp"
 // #include <strsafe.h>
 
+#define NVIM_DEBUG 0
+
+#if NVIM_DEBUG
+#define nvim_print(fmt, ...) print("[nvim] " fmt, ##__VA_ARGS__)
+#else
+#define nvim_print(fmt, ...)
+#endif
+
 Editor* find_editor_by_window(u32 win_id) {
     return world.find_editor([&](Editor* it) {
         return it->nvim_data.win_id == win_id;
@@ -47,7 +55,7 @@ void assoc_grid_with_window(u32 grid, u32 win) {
     auto editor = find_editor_by_window(win);
     if (editor != NULL) {
         if (editor->nvim_data.need_initial_resize) {
-            print("[nvim] need initial resize, calling world.nvim.resize_editor()...");
+            nvim_print("need initial resize, calling world.nvim.resize_editor()...");
             world.nvim.resize_editor(editor);
             editor->nvim_data.need_initial_resize = false;
         }
@@ -69,14 +77,14 @@ Editor* find_editor_by_id(u32 id) {
 }
 
 void Nvim::handle_editor_on_ready(Editor *editor) {
-    print("[nvim] handle_editor_on_ready() called...");
+    nvim_print("handle_editor_on_ready() called...");
 
     if (!editor->is_nvim_ready()) return;
 
-    print("[nvim] nvim is ready!");
+    nvim_print("nvim is ready!");
 
     if (editor->nvim_data.need_initial_pos_set) {
-        print("[nvim] need initial pos set, setting...");
+        nvim_print("need initial pos set, setting...");
 
         editor->nvim_data.need_initial_pos_set = false;
         auto pos = editor->nvim_data.initial_pos;
@@ -131,7 +139,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
     case MPRPC_RESPONSE:
         {
             auto req = event->response.original_request;
-            print("[nvim] received RESPONSE event, request type = %s", nvim_request_type_str(req->type));
+            nvim_print("received RESPONSE event, request type = %s", nvim_request_type_str(req->type));
 
             // grab associated editor, break if we can't find it
             Editor* editor = NULL;
@@ -283,7 +291,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
         }
         break;
     case MPRPC_NOTIFICATION:
-        print("[nvim] received NOTIFICATION event, notification type = %s", nvim_notification_type_str(event->notification.type));
+        nvim_print("received NOTIFICATION event, notification type = %s", nvim_notification_type_str(event->notification.type));
         switch (event->notification.type) {
         case NVIM_NOTIF_BUF_LINES:
             {
@@ -299,15 +307,15 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                     || is_change_empty
                 );
 
-                print("[nvim] updating lines...");
+                nvim_print("updating lines...");
                 if (!skip) editor->update_lines(args.firstline, args.lastline, args.lines, args.line_lengths);
 
                 if (!editor->nvim_data.got_initial_lines) {
-                    print("[nvim] got_initial_lines = false, setting to true & calling handle_editor_on_ready()");
+                    nvim_print("got_initial_lines = false, setting to true & calling handle_editor_on_ready()");
                     editor->nvim_data.got_initial_lines = true;
                     handle_editor_on_ready(editor);
                 }
-            } 
+            }
             break;
         case NVIM_NOTIF_MODE_CHANGE:
             {
@@ -349,7 +357,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 editor->raw_move_cursor(new_cur2((u32)args.curcol, (u32)args.curline));
 
                 if (!editor->nvim_data.got_initial_cur) {
-                    print("[nvim] got_initial_cur = false, setting to true & calling handle_editor_on_ready()");
+                    nvim_print("got_initial_cur = false, setting to true & calling handle_editor_on_ready()");
                     editor->nvim_data.got_initial_cur = true;
                     handle_editor_on_ready(editor);
                 }
@@ -436,34 +444,29 @@ void Nvim::run_event_loop() {
                     auto lastline = reader.read_int(); CHECKOK();
                     auto num_lines = reader.read_array(); CHECKOK();
 
-                    List<uchar*> *lines;
-                    List<s32> *line_lengths;
-
-                    {
-                        SCOPED_MEM(&messages_mem);
-                        lines = alloc_list<uchar*>();
-                        line_lengths = alloc_list<s32>();
-                    }
-
-                    for (u32 i = 0; i < num_lines; i++) {
-                        auto line = reader.read_string(); CHECKOK();
-                        auto len = strlen(line);
-                        {
-                            SCOPED_MEM(&messages_mem);
-                            auto unicode_line = alloc_array(uchar, len);
-                            for (u32 i = 0; i < len; i++)
-                                unicode_line[i] = line[i];
-                            lines->append(unicode_line);
-                            line_lengths->append(len);
-                        }
-                    }
-
                     add_event([&](Nvim_Message *msg) {
                         msg->notification.type = NVIM_NOTIF_BUF_LINES;
                         msg->notification.buf_lines.buf = *buf;
                         msg->notification.buf_lines.changedtick = changedtick;
                         msg->notification.buf_lines.firstline = firstline;
                         msg->notification.buf_lines.lastline = lastline;
+
+                        auto lines = alloc_list<uchar*>();
+                        auto line_lengths = alloc_list<s32>();
+
+                        for (u32 i = 0; i < num_lines; i++) {
+                            auto line = reader.read_string(); CHECKOK();
+                            auto len = strlen(line);
+                            {
+                                SCOPED_MEM(&messages_mem);
+                                auto unicode_line = alloc_array(uchar, len);
+                                for (u32 i = 0; i < len; i++)
+                                    unicode_line[i] = line[i];
+                                lines->append(unicode_line);
+                                line_lengths->append(len);
+                            }
+                        }
+
                         msg->notification.buf_lines.lines = lines;
                         msg->notification.buf_lines.line_lengths = line_lengths;
                     });
@@ -573,11 +576,11 @@ void Nvim::run_event_loop() {
         case MPRPC_RESPONSE:
             {
                 auto msgid = reader.read_int(); CHECKOK();
-                print("[nvim] [raw] got response with msgid %d", msgid);
+                nvim_print("[raw] got response with msgid %d", msgid);
 
                 auto req = find_request_by_msgid(msgid);
                 if (req == NULL) {
-                    print("[nvim] couldn't find request for msgid %d", msgid);
+                    nvim_print("couldn't find request for msgid %d", msgid);
                     reader.skip_object(); CHECKOK(); // error
                     reader.skip_object(); CHECKOK(); // result
                     break;
@@ -613,10 +616,6 @@ void Nvim::run_event_loop() {
                 }
 
                 auto add_response_event = [&](fn<void(Nvim_Message*)> f) {
-                    if (req->msgid == 12) {
-                        print("break here");
-                    }
-
                     add_event([&](Nvim_Message *it) {
                         auto req_copy = alloc_object(Nvim_Request);
                         memcpy(req_copy, req, sizeof(Nvim_Request));

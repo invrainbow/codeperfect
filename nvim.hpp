@@ -466,10 +466,6 @@ struct Nvim {
     void write_notification_header(ccstr method, u32 params_length);
 
     Nvim_Request* save_request(Nvim_Request_Type type, u32 msgid, u32 editor_id) {
-        if (msgid == 12) {
-            print("break here");
-        }
-
         auto req = requests.append();
         req->type = type;
         req->msgid = msgid;
