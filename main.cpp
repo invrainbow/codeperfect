@@ -1,39 +1,16 @@
 /*
-next task to do
----------------
-Test new implementation of crawl_location inside Golang::build_index(),
-make sure it works, start writing decls, make sure that works, continue trying
-to parse Go files faster and with less memory.
-
-notes
------
-- in visual mode, highlight spaces too
-- close parameter hint when ')' is typed
-- autocomplete doesn't work when prefix is a keyword, e.g. "default" (for gin.Default())
-- had a weird bug where when we typed "fmt.Fprintf(", the hint showed up, we typed "w", the screen froze and started spazzing out
-- handle exclude directives
+TODO:
 - indent is fucked up when creating an untitled buffer (but it works after we save, quit, re-run, reopen file)
-- commands with long output freeze; clear pipe
-- permanent settings system so we can save things like "don't show again"
-- configuration/settings? i mean, i'm against "customization", but some settings are still needed
+- settings system
 - limit scrolling past bottom in sidebar
 - support scrolloff (start by modifying Editor::move_cursor)
 - destroy editor's nvim resources when closing a tab (can we even close tab rn?)
 - Neovim Unicode integration
 - investigate open source licenses for all the crap we're using
-- how do we handle string length limits in stacktrace?
-- "can't connect to debugger" error path is currently not handled
-- indicator for "dirty" buffer
 - we have a lot of ambiguity around:
     1) how to sync data with delve
     2) where the source of truth should be stored
 - (mac) running processes from different folder (e.g. for ctrl+p) only works in tmux???
-- make nvim use system clipboard (or at least have as option) (and also just get clipboard working)
-
-observations about visual studio
---------------------------------
-- ctrl+p lags like a bitch, not instant at all
-- ctrl-tab to shift between editors lags
 */
 
 #include <ctype.h>
