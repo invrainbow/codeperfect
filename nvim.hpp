@@ -89,11 +89,6 @@ struct Mp_Writer {
     void write_map(u32 len) { write_raw_array(len, MP_OP_MAP); }
 };
 
-enum MpReadMode {
-    MP_READ_PROC,
-    MP_READ_BUF,
-};
-
 struct Ext_Info {
     NvimExtType type;
     // for now all the extension types just have an int
@@ -101,19 +96,8 @@ struct Ext_Info {
 };
 
 struct Mp_Reader {
-    MpReadMode read_mode;
     u64 offset;
-    union {
-        struct {
-            char* buf;
-            u32 len;
-            u32 ptr;
-        } read_buf;
-
-        struct {
-            Process* proc;
-        } read_proc;
-    };
+    Process* proc;
     bool ok; // success status of last read
 
     /*
@@ -136,22 +120,7 @@ struct Mp_Reader {
 
     u8 _read1() {
         u8 ret = 0;
-        bool success = false;
-
-        switch (read_mode) {
-            case MP_READ_BUF:
-                if (read_buf.ptr < read_buf.len) {
-                    success = true;
-                    ret = read_buf.buf[read_buf.ptr++];
-                }
-                break;
-            case MP_READ_PROC:
-                if (read_proc.proc->read1((char*)&ret))
-                    success = true;
-                break;
-        }
-
-        ok = success;
+        ok = proc->read1((char*)&ret);
         return ret;
     }
 
@@ -209,23 +178,8 @@ struct Mp_Reader {
     }
 
     u8 peek() {
-        bool success = false;
         u8 ch = 0;
-
-        switch (read_mode) {
-            case MP_READ_BUF:
-                if (read_buf.ptr < read_buf.len) {
-                    success = true;
-                    ch = read_buf.buf[read_buf.ptr];
-                }
-                break;
-            case MP_READ_PROC:
-                if (read_proc.proc->peek((char*)&ch))
-                    success = true;
-                break;
-        }
-
-        ok = success;
+        ok = proc->peek((char*)&ch);
         return ch;
     }
 
