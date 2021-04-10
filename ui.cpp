@@ -87,6 +87,10 @@ vec4f rgba(vec3f color, float alpha) {
     return ret;
 }
 
+vec4f rgba(ccstr hex, float alpha) {
+    return rgba(rgb_hex(hex), alpha);
+}
+
 const vec3f COLOR_WHITE = rgb_hex("#ffffff");
 const vec3f COLOR_RED = rgb_hex("#ff8888");
 const vec3f COLOR_LIGHT_BLUE = rgb_hex("#6699dd");
@@ -215,7 +219,7 @@ bool get_type_color(Ast_Node *node, Editor *editor, vec3f *out) {
             auto len = node->end_byte - node->start_byte;
             if (len >= 16) break;
 
-            ccstr keywords[] = {
+            ccstr keywords1[] = {
                 "package", "import", "const", "var", "func",
                 "type", "struct", "interface", "map", "chan",
                 "fallthrough", "break", "continue", "goto", "return",
@@ -224,14 +228,25 @@ bool get_type_color(Ast_Node *node, Editor *editor, vec3f *out) {
                 "default", "select", "new", "make",
             };
 
+            ccstr keywords2[] = {
+                "int", "append", "len", "string", "rune", "bool",
+            };
+
             char keyword[16] = {0};
             auto it = editor->iter(node->start);
             for (u32 i = 0; it.pos != node->end; i++)
                 keyword[i] = it.next();
 
-            For (keywords) {
+            For (keywords1) {
                 if (streq(it, keyword)) {
                     *out = COLOR_THEME_1;
+                    return true;
+                }
+            }
+
+            For (keywords2) {
+                if (streq(it, keyword)) {
+                    *out = COLOR_THEME_5;
                     return true;
                 }
             }
@@ -447,8 +462,11 @@ boxf UI::get_sidebar_area() {
     return sidebar_area;
 }
 
-boxf UI::get_panes_area() {
-    boxf panes_area;
+const float STATUS_PADDING_X = 4;
+const float STATUS_PADDING_Y = 2;
+
+boxf UI::get_panes_area(boxf *pstatus_area) {
+    boxf panes_area, status_area;
     panes_area.pos = { 0, 0 };
     panes_area.size = world.window_size;
 
@@ -459,6 +477,15 @@ boxf UI::get_panes_area() {
     boxf build_results_area = get_build_results_area();
     panes_area.h -= build_results_area.h;
 
+    status_area.h = font->height + STATUS_PADDING_Y * 2;
+    status_area.w = panes_area.w;
+    status_area.x = panes_area.x;
+    status_area.y = panes_area.y + panes_area.h - status_area.h;
+
+    panes_area.h -= status_area.h;
+
+    if (pstatus_area != NULL)
+        *pstatus_area = status_area;
     return panes_area;
 }
 
@@ -530,7 +557,8 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
 
     auto& wksp = world.wksp;
 
-    boxf panes_area = get_panes_area();
+    boxf status_area = {0};
+    boxf panes_area = get_panes_area(&status_area);
     boxf sidebar_area = get_sidebar_area();
 
     boxf pane_area;
@@ -923,7 +951,7 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                 });
             }
 
-            if (world.nvim_data.waiting_focus_window == editor->id) {
+            if (world.nvim.waiting_focus_window == editor->id) {
                 // TODO
             } else {
                 auto &buf = editor->buf;
@@ -1129,31 +1157,6 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                     draw_bordered_rect_outer(bg, rgba(COLOR_DARK_GREY), rgba(COLOR_WHITE), 1);
                     draw_string(bg.pos, hint.help_text, rgba(COLOR_WHITE));
                 } while (0);
-
-                if (world.use_nvim) {
-                    ccstr mode_str = NULL;
-
-                    switch (world.nvim_data.mode) {
-                    case VI_NORMAL: mode_str = "NORMAL"; break;
-                    case VI_VISUAL: mode_str = "VISUAL"; break;
-                    case VI_INSERT: mode_str = "INSERT"; break;
-                    case VI_REPLACE: mode_str = "REPLACE"; break;
-                    }
-
-                    if (mode_str != NULL) {
-                        boxf b;
-                        b.x = editor_area.x;
-                        b.y = editor_area.y + editor_area.h;
-                        b.x += 10;
-                        b.y -= 10;
-                        b.w = font->width * strlen(mode_str);
-                        b.h = font->height;
-                        b.y -= b.h;
-
-                        draw_rect(b, rgba(COLOR_WHITE));
-                        draw_string(b.pos, mode_str, rgba(COLOR_BLACK));
-                    }
-                }
             }
         }
 
@@ -1168,7 +1171,6 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
         // glfwSetCursor(wnd, world.ui.cursors[ImGuiMouseCursor_ResizeEW]);
         // glfwSetCursor(wnd, world.ui.cursors[ImGuiMouseCursor_Arrow]);
 
-        auto panes_area = get_panes_area();
         float offset = panes_area.x;
 
         for (u32 i = 0; i < world.wksp.panes.len - 1; i++) {
@@ -1191,6 +1193,48 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                 draw_rect(b, rgba(COLOR_MEDIUM_GREY));
             }
         }
+    }
+
+    {
+        draw_rect(status_area, rgba("#252525"));
+
+        boxf str_area;
+        str_area.pos = status_area.pos;
+        str_area.h = status_area.h;
+
+        auto draw_status_piece = [&](ccstr s, vec4f bgcolor, vec4f fgcolor) {
+            str_area.w = font->width * strlen(s) + (STATUS_PADDING_X * 2);
+            draw_rect(str_area, bgcolor);
+
+            boxf text_area = str_area;
+            text_area.x += STATUS_PADDING_X;
+            text_area.y += STATUS_PADDING_Y;
+            text_area.w -= (STATUS_PADDING_X * 2);
+            text_area.h -= (STATUS_PADDING_Y * 2);
+            draw_string(text_area.pos, s, fgcolor);
+
+            str_area.x += str_area.w;
+        };
+
+        if (world.use_nvim) {
+            ccstr mode_str = NULL;
+
+            switch (world.nvim.mode) {
+            case VI_NORMAL: mode_str = "NORMAL"; break;
+            case VI_VISUAL: mode_str = "VISUAL"; break;
+            case VI_INSERT: mode_str = "INSERT"; break;
+            case VI_REPLACE: mode_str = "REPLACE"; break;
+            default: mode_str = "UNKNOWN"; break;
+            }
+
+            if (mode_str != NULL)
+                draw_status_piece(mode_str, rgba("#666666"), rgba("aaaaaa"));
+        }
+
+        if (world.indexer.ready)
+            draw_status_piece("INDEX READY", rgba("#008800"), rgba("#cceecc"));
+        else
+            draw_status_piece("INDEXING IN PROGRESS", rgba("#880000"), rgba("#eecccc"));
     }
 
     auto get_debugger_state_string = [&]() -> ccstr {

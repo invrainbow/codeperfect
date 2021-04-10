@@ -145,7 +145,7 @@ struct UI {
     float get_text_width(ccstr s);
     boxf get_sidebar_area();
     boxf get_build_results_area();
-    boxf get_panes_area();
+    boxf get_panes_area(boxf *pstatus_area = NULL);
     void draw_everything(GLuint vao, GLuint vbo, GLuint program);
     void get_tabs_and_editor_area(boxf* pane_area, boxf* ptabs_area, boxf* peditor_area);
     void recalculate_view_sizes(bool force = false);
@@ -161,6 +161,7 @@ extern UI ui;
 
 vec3f rgb_hex(ccstr s);
 vec4f rgba(vec3f color, float alpha = 1.0);
+vec4f rgba(ccstr hex, float alpha = 1.0);
 
 extern const vec3f COLOR_WHITE;
 extern const vec3f COLOR_DARK_RED;
