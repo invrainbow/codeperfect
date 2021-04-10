@@ -3,7 +3,6 @@
 #include "world.hpp"
 #include "os.hpp"
 #include "utils.hpp"
-#include <filesystem>
 
 #if OS_WIN
 
