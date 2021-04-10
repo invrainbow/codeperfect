@@ -161,7 +161,6 @@ void World::init() {
     init_mem(parameter_hint_mem);
     init_mem(open_file_mem);
     init_mem(scratch_mem);
-    init_mem(debugger_mem);
     init_mem(build_index_mem);
     init_mem(ui_mem);
 #undef init_mem

@@ -605,7 +605,7 @@ bool Json_Navigator::boolean(i32 i) {
 
 void Debugger::start_loop() {
     auto func = [&](void*) {
-        SCOPED_MEM(&world.debugger_mem);
+        SCOPED_MEM(&loop_mem);
         MEM->reset();
         run_loop();
     };

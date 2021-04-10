@@ -57,7 +57,6 @@ struct World {
     Pool autocomplete_mem;
     Pool parameter_hint_mem;
     Pool open_file_mem;
-    Pool debugger_mem;
     Pool scratch_mem;
     Pool file_tree_mem;
     Pool build_mem;
