@@ -242,19 +242,19 @@ struct Thread_Ctx {
     void* param;
 };
 
-DWORD WINAPI _run_thread(void* p) {
-    auto ctx = (Thread_Ctx*)p;
-    ctx->callback(ctx->param);
-    our_free(ctx);
-    return 0;
-}
-
 Thread_Handle create_thread(Thread_Callback callback, void* param) {
     auto ctx = (Thread_Ctx*)our_malloc(sizeof(Thread_Ctx));
     ctx->callback = callback;
     ctx->param = param;
 
-    return (Thread_Handle)CreateThread(NULL, 0, _run_thread, ctx, 0, NULL);
+    auto run = [](void *p) -> DWORD WINAPI {
+        auto ctx = (Thread_Ctx*)p;
+        ctx->callback(ctx->param);
+        our_free(ctx);
+        return 0;
+    };
+
+    return (Thread_Handle)CreateThread(NULL, 0, run, ctx, 0, NULL);
 }
 
 void close_thread_handle(Thread_Handle h) {
@@ -271,6 +271,10 @@ void Lock::init() {
 
 void Lock::cleanup() {
     DeleteCriticalSection(&lock);
+}
+
+bool Lock::try_enter() {
+    return TryEnterCriticalSection(&lock);
 }
 
 bool Lock::enter() {
@@ -404,13 +408,13 @@ wchar_t* ansi_to_unicode(ccstr s) {
 bool delete_rm_rf(ccstr path) {
     auto hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
     if (FAILED(hr)) return false;
-    defer{ CoUninitialize(); };
+    defer { CoUninitialize(); };
 
     IFileOperation* op = NULL;
 
     hr = CoCreateInstance(CLSID_FileOperation, NULL, CLSCTX_ALL, IID_PPV_ARGS(&op));
     if (FAILED(hr)) return false;
-    defer{ op->Release(); };
+    defer { op->Release(); };
 
     if (FAILED(op->SetOperationFlags(FOF_NO_UI))) return false;
 
