@@ -360,3 +360,4 @@ bool str_ends_with(ccstr a, ccstr suf);
 bool str_starts_with(ccstr a, ccstr pre);
 
 extern s32 global_mem_allocated;
+extern const u64 MAX_U64;

@@ -9,6 +9,8 @@
 #include <functional>
 #include <windows.h>
 
+const u64 MAX_U64 = (u64)(-1);
+
 vec2 new_vec2(i32 x, i32 y) {
     vec2 v;
     v.x = x;
