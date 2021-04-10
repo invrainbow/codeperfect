@@ -1212,10 +1212,18 @@ int main() {
                             SCOPED_MEM(&world.indexer.ui_mem);
                             defer { world.indexer.ui_mem.reset(); };
 
-                            auto result = world.indexer.jump_to_definition(editor->filepath, new_cur2(editor->cur_to_offset(editor->cur), -1));
-                            if (result == NULL) {
-                                error("unable to jump to definition");
-                                return;
+                            Jump_To_Definition_Result *result = NULL;
+
+                            {
+                                if (!world.indexer.ready) return; // strictly we can just call try_enter(), but want consistency with UI, which is based on `ready`
+                                if (!world.indexer.lock.try_enter()) return;
+                                defer { world.indexer.lock.leave(); };
+
+                                result = world.indexer.jump_to_definition(editor->filepath, new_cur2(editor->cur_to_offset(editor->cur), -1));
+                                if (result == NULL) {
+                                    error("unable to jump to definition");
+                                    return;
+                                }
                             }
 
                             auto target = editor;
@@ -2266,6 +2274,22 @@ int main() {
                     ImGui::End();
                 }
             } while (0);
+
+            {
+                ImGui::Begin("Temporary");
+
+                if (ImGui::Button("Reload go.mod")) {
+                    SCOPED_LOCK(&world.indexer.flag_lock);
+                    world.indexer.flag_handle_gomod_changed = true;
+                }
+
+                if (ImGui::Button("Re-index everything")) {
+                    SCOPED_LOCK(&world.indexer.flag_lock);
+                    world.indexer.flag_reindex_everything = true;
+                }
+
+                ImGui::End();
+            }
 
             ImGui::Render();
         }

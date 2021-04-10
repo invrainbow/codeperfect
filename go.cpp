@@ -10,7 +10,8 @@
 // TODO: dynamically determine this
 static const char GOROOT[] = "c:\\go";
 static const char GOPATH[] = "c:\\users\\brandon\\go";
-const char TEST_PATH[] = "c:\\users\\brandon\\life";
+const char TEST_PATH[] = "c:\\users\\brandon\\cryptopals";
+// const char TEST_PATH[] = "c:\\users\\brandon\\life";
 
 // -----
 
@@ -201,7 +202,7 @@ const char* read_from_parser_input(void *p, uint32_t off, TSPoint pos, uint32_t 
     return buf;
 }
 
-void Parser::init(Parser_It* _it, ccstr _filepath) {
+void Ghetto_Parser::init(Parser_It* _it, ccstr _filepath) {
     ptr0(this);
     it = _it;
     filepath = _filepath;
@@ -209,7 +210,7 @@ void Parser::init(Parser_It* _it, ccstr _filepath) {
 
 bool isid(int c) { return (isalnum(c) || c == '_'); }
 
-void Parser::lex() {
+void Ghetto_Parser::lex() {
     // tok.start_before_leading_whitespace = it->get_pos();
 
     while (isspace(it->peek()) && !it->eof())
@@ -253,7 +254,7 @@ void Parser::lex() {
 }
 
 // we could just do streq(get_token_string(tok), str) but this doesn't require memory
-bool Parser::match_token_to_string(ccstr str) {
+bool Ghetto_Parser::match_token_to_string(ccstr str) {
     auto len = strlen(str);
     if (tok.end.y != tok.start.y) return false;
     if (tok.end.x - tok.start.x != len) return false;
@@ -268,7 +269,7 @@ bool Parser::match_token_to_string(ccstr str) {
     return true;
 }
 
-ccstr Parser::get_token_string() {
+ccstr Ghetto_Parser::get_token_string() {
     if (tok.start.y != tok.end.y) return NULL;
 
     auto old_pos = it->get_pos();
@@ -284,7 +285,7 @@ ccstr Parser::get_token_string() {
     return ret;
 }
 
-ccstr Parser::get_package_name() {
+ccstr Ghetto_Parser::get_package_name() {
     do { lex(); } while (tok.type == TOK_COMMENT);
 
     if (tok.type != TOK_ID) return NULL;
@@ -295,6 +296,7 @@ ccstr Parser::get_package_name() {
     return get_token_string();
 }
 
+// @Write
 Go_File *get_ready_file_in_package(Go_Package *pkg, ccstr filename) {
     auto file = pkg->files->find([&](Go_File *it) { return streq(filename, it->filename); });
 
@@ -316,15 +318,6 @@ Go_File *get_ready_file_in_package(Go_Package *pkg, ccstr filename) {
     return file;
 }
 
-void Go_Indexer::fill_package_hash(Go_Package *pkg) {
-    pkg->hash = hash_package(pkg->import_path);
-}
-
-/*
-open challenges:
- - when go.mod changed, what do?
-*/
-
 /*
 granularize our background thread loop
 either:
@@ -333,6 +326,8 @@ either:
         - honestly, wouldn't this slow things down?
 */
 
+// @Write
+// Should only be called from main thread.
 void Go_Indexer::reload_all_dirty_files() {
     For (world.wksp.panes) {
         For (it.editors) {
@@ -387,6 +382,7 @@ The procedure is:
         - if we've allocated > x bytes of memory from final_mem, copy index over to new pool
 */
 
+// @Write
 void Go_Indexer::replace_package_name(Go_Package *pkg, ccstr package_name) {
     if (package_name == NULL) return;
 
@@ -400,34 +396,81 @@ void Go_Indexer::replace_package_name(Go_Package *pkg, ccstr package_name) {
     }
 }
 
+// @Write
 void Go_Indexer::background_thread() {
-    // === create pools that we'll need ===
-
-    // mem containing info for orchestrating background thread
-    Pool bg_orch_mem;
-    bg_orch_mem.init("bg_orch_mem");
-    defer { bg_orch_mem.cleanup(); };
-
-    // other initialization
+    // initialize stuff
     // ===
 
-    SCOPED_MEM(&mem);
+    Pool thread_mem;
+    thread_mem.init("thread_mem");
+    defer { thread_mem.cleanup(); };
 
+    SCOPED_MEM(&mem);
     use_pool_for_tree_sitter = true;
 
-    List<ccstr> queue;
+    List<ccstr> package_queue;
+    String_Set already_enqueued_packages;
 
     {
-        SCOPED_MEM(&bg_orch_mem);
+        SCOPED_MEM(&thread_mem);
         module_resolver.init(TEST_PATH);
         package_lookup.init();
-        queue.init();
-        // TODO: when do we clean this stuff up?
+        package_queue.init();
+        already_enqueued_packages.init();
     }
 
-    auto append_to_queue = [&](ccstr import_path) {
-        SCOPED_MEM(&bg_orch_mem);
-        queue.append(our_strcpy(import_path));
+    // utility functions
+    // ===
+
+    auto enqueue_package = [&](ccstr import_path) {
+        // TODO: periodically clean up thread_mem
+        SCOPED_MEM(&thread_mem);
+
+        if (already_enqueued_packages.has(import_path))
+            return;
+
+        package_queue.append(our_strcpy(import_path));
+        already_enqueued_packages.add(import_path);
+    };
+
+    auto pop_package_from_queue = [&]() -> ccstr {
+        auto import_path = *package_queue.last();
+        package_queue.len--;
+        already_enqueued_packages.remove(import_path);
+        return import_path;
+    };
+
+    auto enqueue_imports_from_file = [&](Go_File *file) {
+        if (file->imports == NULL) return;
+        For (*file->imports) {
+            if (already_enqueued_packages.has(it.import_path))
+                continue;
+            if (get_package_status(it.import_path) != GPS_READY)
+                enqueue_package(it.import_path);
+        }
+    };
+
+    auto fill_package_hash = [&](Go_Package *pkg) -> bool {
+        auto path = get_package_path(pkg->import_path);
+        if (path == NULL) return false;
+
+        auto hash = hash_package(path);
+        if (hash == 0) return false;
+
+        pkg->hash = hash;
+        return true;
+    };
+
+    auto invalidate_packages_with_outdated_hash = [&]() {
+        For (*index.packages) {
+            if (it.status != GPS_READY) continue;
+            // if hash has changed, mark outdated & queue for re-processing
+            auto package_path = get_package_path(it.import_path);
+            if (it.hash == hash_package(package_path)) continue;
+
+            it.status = GPS_OUTDATED;
+            enqueue_package(it.import_path);
+        }
     };
 
     // try to read in index from disk
@@ -508,22 +551,10 @@ void Go_Indexer::background_thread() {
 
             if (!already_in_index) {
                 if (is_go_package || streq(import_path, index.current_import_path))
-                    append_to_queue(import_path);
+                    enqueue_package(import_path);
             }
         }
     }
-
-    /*
-    // TEST: remove fmt from packages, check that it gets picked up below
-    {
-        bool found = false;
-        auto pkg = package_lookup.get("fmt", &found);
-        our_assert(found, "unable to find \"fmt\" in index???");
-
-        index.packages->remove(pkg);
-        package_lookup.remove("fmt");
-    }
-    */
 
     // if we have any ready packages, see if they have any imports that were missed
     // ===
@@ -531,75 +562,53 @@ void Go_Indexer::background_thread() {
     {
         SCOPED_FRAME();
 
-        String_Set seen;
-        seen.init();
-        defer { seen.cleanup(); };
-
         For (*index.packages) {
             if (it.status != GPS_READY) {
-                append_to_queue(it.import_path);
+                enqueue_package(it.import_path);
                 continue;
             }
 
-            if (it.files == NULL) continue; // when would this happen?
-
-            For (*it.files) {
-                if (it.imports == NULL) continue;
-                For (*it.imports) {
-                    if (seen.has(it.import_path)) continue;
-                    seen.add(it.import_path);
-
-                    if (get_package_status(it.import_path) != GPS_READY)
-                        append_to_queue(it.import_path);
-                }
-            }
+            if (it.files != NULL)
+                For (*it.files)
+                    enqueue_imports_from_file(&it);
         }
     }
 
-    auto invalidate_packages_with_outdated_hash = [&]() {
-        For (*index.packages) {
-            if (it.status != GPS_READY) continue;
-            // if hash has changed, mark outdated & queue for re-processing
-            auto package_path = get_package_path(it.import_path);
-            if (it.hash == hash_package(package_path)) continue;
-
-            it.status = GPS_OUTDATED;
-            append_to_queue(it.import_path);
-        }
-    };
+    // enqueue packages with outdated hash
+    // ===
 
     invalidate_packages_with_outdated_hash();
 
     // main loop
-    // 1) process items in queue
-    // 2) process filesystem events
-    // 3) clean up memory by transferring index from final_mem to new pool, and swapping
-    // 4) i guess write index to disk? tho shouldn't this happen in a more explicit way, instead of on an interval
     // ===
 
     int last_final_mem_allocated = final_mem.mem_allocated;
     u64 last_write_time = 0;
+    u64 last_hash_check = MAX_U64;
 
-    for (;; Sleep(100)) {
+    for (;; sleep_milliseconds(100)) {
         bool force_write_this_time = false;
 
         // process handle_gomod_changed request
-        // ===
+        // ---
 
-        {
-            bool is_set = false;
-            {
-                SCOPED_LOCK(&handle_gomod_changed_lock);
-                is_set = flag_handle_gomod_changed;
-                if (is_set)
-                    flag_handle_gomod_changed = false;
-            }
+        auto is_set = [&](bool *p) -> bool {
+            SCOPED_LOCK(&flag_lock);
+            auto ret = *p;
+            if (ret) *p = false;
+            return ret;
+        };
 
-            if (is_set) {
-                module_resolver.cleanup();
-                module_resolver.init(TEST_PATH);
-                invalidate_packages_with_outdated_hash();
-            }
+        if (is_set(&flag_handle_gomod_changed)) {
+            start_writing();
+
+            module_resolver.cleanup();
+            module_resolver.init(TEST_PATH);
+            invalidate_packages_with_outdated_hash();
+        }
+
+        if (is_set(&flag_reindex_everything)) {
+            // TODO: i'll write this when it's needed
         }
 
         // process filesystem events
@@ -607,6 +616,7 @@ void Go_Indexer::background_thread() {
 
         Fs_Event event;
         for (u32 items_processed = 0; items_processed < 10 && wksp_watch.next_event(&event); items_processed++) {
+            Pool scratch_mem;
             scratch_mem.init("scratch_mem");
             defer { scratch_mem.cleanup(); };
             SCOPED_MEM(&scratch_mem);
@@ -627,14 +637,14 @@ void Go_Indexer::background_thread() {
                 auto file = pkg->files->find([&](Go_File *it) { return streq(filename, it->filename); });
                 if (file == NULL) return;
 
-                pkg->files->remove(file);
+                {
+                    SCOPED_WRITE();
+                    pkg->files->remove(file);
+                }
             };
 
             auto handle_gofile_created = [&](ccstr filepath) {
-                // i have a great fucking idea
-                // why don't we just exclude any file here that's open in an editor
-                // since files open in editor will get picked up by reload_all_dirty_files() anyway
-                if (get_open_editor(filepath) != NULL) return;
+                // if (get_open_editor(filepath) != NULL) return;
 
                 auto pkg = find_package_in_index(filepath_to_import_path(our_dirname(filepath)));
                 if (pkg == NULL) return;
@@ -646,26 +656,17 @@ void Go_Indexer::background_thread() {
                 if (pf == NULL) return;
                 defer { free_parsed_file(pf); };
 
+                start_writing();
+
                 ccstr package_name = NULL;
                 process_tree_into_gofile(file, pf->root, event.filepath, &package_name);
                 replace_package_name(pkg, package_name);
 
                 // queue up any new imports
-                For (*file->imports) {
-                    auto status = get_package_status(it.import_path);
-                    if (status == GPS_OUTDATED)
-                        append_to_queue(it.import_path);
-                }
+                enqueue_imports_from_file(file);
 
-                /*
-                auto editor = get_open_editor(filepath);
-                if (editor != NULL) {
-                    // TODO: there was supposed to be a lock here before
-                    // the whole thing got commented out
-                    auto msg = editor->msg_queue.append();
-                    msg->type = EMSG_RELOAD;
-                }
-                */
+                // rehash package
+                fill_package_hash(pkg);
 
                 /*
                 if file changed from outside
@@ -683,6 +684,7 @@ void Go_Indexer::background_thread() {
                     // try treating filepath as a directory
                     auto pkg = find_package_in_index(filepath_to_import_path(filepath));
                     if (pkg != NULL) {
+                        SCOPED_WRITE();
                         index.packages->remove(pkg);
                     } else if (str_ends_with(event.filepath, ".go")) {
                         // try treating filepath as a file
@@ -694,7 +696,10 @@ void Go_Indexer::background_thread() {
             case FSEVENT_CHANGE:
                 {
                     auto filepath = path_join(index.current_path, event.filepath);
+
+                    // what does FSEVENT_CHANGE on CPR_DIRECTORY mean?
                     if (check_path(filepath) != CPR_FILE) break;
+
                     if (!str_ends_with(filepath, ".go")) break;
 
                     // handled same way as file creation
@@ -714,6 +719,8 @@ void Go_Indexer::background_thread() {
                             auto import_path = filepath_to_import_path(filepath);
                             auto pkg = find_package_in_index(import_path);
 
+                            start_writing();
+
                             if (pkg == NULL) {
                                 SCOPED_MEM(&final_mem);
                                 pkg = index.packages->append();
@@ -727,29 +734,27 @@ void Go_Indexer::background_thread() {
                             pkg->files->len = 0;
 
                             auto source_files = list_source_files(filepath, false);
-                            For (*source_files) {
-                                Pool tmp_mem;
-                                tmp_mem.init();
-                                defer { tmp_mem.cleanup(); };
+                            if (source_files != NULL) {
+                                For (*source_files) {
+                                    Pool tmp_mem;
+                                    tmp_mem.init();
+                                    defer { tmp_mem.cleanup(); };
 
-                                SCOPED_MEM(&tmp_mem);
+                                    SCOPED_MEM(&tmp_mem);
 
-                                auto full_filepath = path_join(filepath, it);
+                                    auto full_filepath = path_join(filepath, it);
 
-                                auto pf = parse_file(full_filepath);
-                                if (pf == NULL) continue;
-                                defer { free_parsed_file(pf); };
+                                    auto pf = parse_file(full_filepath);
+                                    if (pf == NULL) continue;
+                                    defer { free_parsed_file(pf); };
 
-                                auto file = get_ready_file_in_package(pkg, it);
+                                    auto file = get_ready_file_in_package(pkg, it);
 
-                                ccstr package_name = NULL;
-                                process_tree_into_gofile(file, pf->root, full_filepath, &package_name);
-                                replace_package_name(pkg, package_name);
+                                    ccstr package_name = NULL;
+                                    process_tree_into_gofile(file, pf->root, full_filepath, &package_name);
+                                    replace_package_name(pkg, package_name);
 
-                                For (*file->imports) {
-                                    auto status = get_package_status(it.import_path);
-                                    if (status == GPS_OUTDATED)
-                                        append_to_queue(it.import_path);
+                                    enqueue_imports_from_file(file);
                                 }
                             }
 
@@ -783,6 +788,7 @@ void Go_Indexer::background_thread() {
                             auto new_import_path = filepath_to_import_path(new_filepath);
 
                             {
+                                SCOPED_WRITE();
                                 SCOPED_MEM(&final_mem);
                                 pkg->import_path = our_strcpy(new_import_path);
                             }
@@ -812,8 +818,10 @@ void Go_Indexer::background_thread() {
                                 if (file == NULL) break;
 
                                 {
+                                    SCOPED_WRITE();
                                     SCOPED_MEM(&final_mem);
                                     file->filename = our_basename(event.new_filepath);
+                                    file->hash = hash_file(event.new_filepath);
                                 }
                             }
                         }
@@ -827,18 +835,15 @@ void Go_Indexer::background_thread() {
         // process items in queue
         // ---
 
-        bool queue_had_stuff = (queue.len > 0);
+        bool queue_had_stuff = (package_queue.len > 0);
 
-        for (int items_processed = 0; items_processed < 10 && queue.len > 0; items_processed++) {
+        for (int items_processed = 0; items_processed < 10 && package_queue.len > 0; items_processed++) {
+            Pool scratch_mem;
             scratch_mem.init("scratch_mem");
             defer { scratch_mem.cleanup(); };
             SCOPED_MEM(&scratch_mem);
 
-            auto import_path = *queue.last();
-            queue.len--;
-
-            auto resolved_path = get_package_path(import_path);
-            if (resolved_path == NULL) continue;
+            auto import_path = pop_package_from_queue();
 
             auto pkg = find_package_in_index(import_path);
             if (pkg != NULL) {
@@ -852,35 +857,44 @@ void Go_Indexer::background_thread() {
                 package_lookup.set(pkg->import_path, pkg);
             }
 
+            auto resolved_path = get_package_path(import_path);
+            if (resolved_path == NULL) {
+                // This means this package is one of our dependencies, but it
+                // has not been added to go.mod yet, so we can't resolve it.
+                // Mark the package as ready for now. When it is eventually
+                // added and go.mod is changed, it will be invalidated.
+                pkg->status = GPS_READY;
+                pkg->hash = 0;
+                continue;
+            }
+
             print("processing %s -> %s", import_path, resolved_path);
 
             pkg->status = GPS_UPDATING;
 
             auto source_files = list_source_files(resolved_path, false);
-            For (*source_files) {
-                auto filename = it;
+            if (source_files != NULL) {
+                For (*source_files) {
+                    auto filename = it;
 
-                // TODO: refactor this block too, pretty sure we're doing same
-                // thing somewhere else
+                    // TODO: refactor this block too, pretty sure we're doing same
+                    // thing somewhere else
 
-                SCOPED_FRAME();
+                    SCOPED_FRAME();
 
-                auto filepath = path_join(resolved_path, filename);
+                    auto filepath = path_join(resolved_path, filename);
 
-                auto pf = parse_file(filepath);
-                if (pf == NULL) continue;
-                defer { free_parsed_file(pf); };
+                    auto pf = parse_file(filepath);
+                    if (pf == NULL) continue;
+                    defer { free_parsed_file(pf); };
 
-                auto file = get_ready_file_in_package(pkg, filename);
+                    auto file = get_ready_file_in_package(pkg, filename);
 
-                ccstr package_name = NULL;
-                process_tree_into_gofile(file, pf->root, filepath, &package_name);
-                replace_package_name(pkg, package_name);
+                    ccstr package_name = NULL;
+                    process_tree_into_gofile(file, pf->root, filepath, &package_name);
+                    replace_package_name(pkg, package_name);
 
-                For (*file->imports) {
-                    auto status = get_package_status(it.import_path);
-                    if (status == GPS_OUTDATED)
-                        append_to_queue(it.import_path);
+                    enqueue_imports_from_file(file);
                 }
             }
 
@@ -888,8 +902,12 @@ void Go_Indexer::background_thread() {
             pkg->status = GPS_READY;
         }
 
-        if (queue_had_stuff && queue.len == 0)
-            force_write_this_time = true;
+        if (package_queue.len == 0) {
+            if (queue_had_stuff)
+                force_write_this_time = true;
+            if (!ready)
+                stop_writing();
+        }
 
         // clean up memory if it's getting out of control
         // ---
@@ -919,7 +937,7 @@ void Go_Indexer::background_thread() {
 
             // if there's still stuff in queue, don't write yet, we'll trigger
             // a write when we clear out the queue
-            if (queue.len > 0) return false;
+            if (package_queue.len > 0) return false;
 
             auto ten_minutes_in_ns = (u64)10 * 60 * 1000 * 1000 * 1000;
             if (time - last_write_time >= ten_minutes_in_ns) return true;
@@ -968,7 +986,7 @@ Parsed_File *Go_Indexer::parse_file(ccstr filepath) {
         ret = alloc_object(Parsed_File);
         ret->tree_belongs_to_editor = true;
         ret->it = it;
-        ret->tree = editor->tree;
+        ret->tree = ts_tree_copy(editor->tree);
     } else {
         auto ef = read_entire_file(filepath);
         if (ef == NULL) return NULL;
@@ -1028,7 +1046,8 @@ i32 cmp_pos_to_node(cur2 pos, Ast_Node *node) {
     return 0;
 }
 
-void Go_Indexer::walk_ast_node(Ast_Node *node, bool abstract_only, Walk_TS_Callback cb) {
+// @Functional
+void walk_ast_node(Ast_Node *node, bool abstract_only, Walk_TS_Callback cb) {
     auto cursor = ts_tree_cursor_new(node->node);
     defer { ts_tree_cursor_delete(&cursor); };
 
@@ -1038,7 +1057,8 @@ void Go_Indexer::walk_ast_node(Ast_Node *node, bool abstract_only, Walk_TS_Callb
     });
 }
 
-void Go_Indexer::find_nodes_containing_pos(Ast_Node *root, cur2 pos, bool abstract_only, fn<Walk_Action(Ast_Node *it)> callback) {
+// @Functional
+void find_nodes_containing_pos(Ast_Node *root, cur2 pos, bool abstract_only, fn<Walk_Action(Ast_Node *it)> callback) {
     walk_ast_node(root, abstract_only, [&](Ast_Node *node, Ts_Field_Type, int) -> Walk_Action {
         int res = cmp_pos_to_node(pos, node);
         if (res < 0) return WALK_ABORT;
@@ -1197,6 +1217,7 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
  - adds scope ops to the right entry in package->files
  - adds import paths to individual_imports
 */
+// @Write
 void Go_Indexer::process_tree_into_gofile(
     Go_File *file,
     Ast_Node *root,
@@ -1278,12 +1299,6 @@ void Go_Indexer::process_tree_into_gofile(
 
             auto new_import_path = parse_go_string(path_node->string());
 
-            auto ri = resolve_import(new_import_path);
-            if (ri == NULL) {
-                ri = resolve_import(new_import_path);
-                continue;
-            }
-
             // decl
             auto decl = alloc_object(Godecl);
             decl->file = filename;
@@ -1296,7 +1311,9 @@ void Go_Indexer::process_tree_into_gofile(
             imp->import_path = new_import_path;
             if (name_node == NULL || name_node->null) {
                 imp->package_name_type = GPN_IMPLICIT;
-                imp->package_name = ri->package_name;
+                auto ri = resolve_import(new_import_path);
+                if (ri != NULL)
+                    imp->package_name = ri->package_name;
             } else if (name_node->type == TS_DOT) {
                 imp->package_name_type = GPN_DOT;
             } else if (name_node->type == TS_BLANK_IDENTIFIER) {
@@ -1334,6 +1351,8 @@ u64 Go_Indexer::hash_file(ccstr filepath) {
 }
 
 u64 Go_Indexer::hash_package(ccstr resolved_package_path) {
+    if (resolved_package_path == NULL) return 0;
+
     u64 ret = 0;
     ret ^= meow_hash((void*)resolved_package_path, strlen(resolved_package_path));
 
@@ -1420,7 +1439,7 @@ ccstr Go_Indexer::get_package_name_from_file(ccstr filepath) {
         auto it = alloc_object(Parser_It);
         it->init(ef);
 
-        Parser p;
+        Ghetto_Parser p;
         p.init(it, filepath);
         auto name = p.get_package_name();
         if (name == NULL) {
@@ -1541,7 +1560,7 @@ List<Goresult> *Go_Indexer::get_possible_dot_completions(Ast_Node *operand_node,
             auto import_path = find_import_path_referred_to_by_id(operand_node->string(), ctx);
             if (import_path == NULL) break;
 
-            auto ret = get_package_decls(import_path, GETDECLS_PUBLIC_ONLY | GETDECLS_EXCLUDE_METHODS);
+            auto ret = list_package_decls(import_path, LISTDECLS_PUBLIC_ONLY | LISTDECLS_EXCLUDE_METHODS);
             if (ret != NULL)  {
                 *was_package = true;
                 return ret;
@@ -1979,7 +1998,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
             auto file = pkg->files->find(check);
             For (*file->imports) it.package_name; */
 
-            auto results = get_package_decls(ctx.import_path, GETDECLS_EXCLUDE_METHODS);
+            auto results = list_package_decls(ctx.import_path, LISTDECLS_EXCLUDE_METHODS);
             if (results != NULL)
                 For (*results)
                     add_result(it.decl->name);
@@ -2136,7 +2155,7 @@ void Go_Indexer::list_fields_and_methods(Goresult *type_res, Goresult *resolved_
 
     if (type_name == NULL || target_import_path == NULL) return;
 
-    auto results = get_package_decls(target_import_path);
+    auto results = list_package_decls(target_import_path);
     if (results == NULL) return;
 
     For (*results) {
@@ -2201,7 +2220,6 @@ void Go_Indexer::init() {
     mem.init("indexer_mem");
     final_mem.init("final_mem");
     ui_mem.init("ui_mem");
-    scratch_mem.init("scratch_mem");
     scoped_table_mem.init("scoped_table_mem");
 
     SCOPED_MEM(&mem);
@@ -2219,8 +2237,26 @@ void Go_Indexer::init() {
 
     wksp_watch.init(TEST_PATH);
 
-    handle_gomod_changed_lock.init();
+    flag_lock.init();
     // files_to_ignore_fsevents_on
+
+    lock.init();
+
+    start_writing();
+}
+
+void Go_Indexer::start_writing() {
+    if (!ready) return;
+
+    ready = false;
+    lock.enter();
+}
+
+void Go_Indexer::stop_writing() {
+    if (ready) return;
+
+    lock.leave();
+    ready = true;
 }
 
 void Go_Indexer::cleanup() {
@@ -2234,9 +2270,9 @@ void Go_Indexer::cleanup() {
     mem.cleanup();
     final_mem.cleanup();
     ui_mem.cleanup();
-    scratch_mem.cleanup();
     scoped_table_mem.cleanup();
-    handle_gomod_changed_lock.init();
+    flag_lock.cleanup();
+    lock.cleanup();
 }
 
 List<Godecl> *Go_Indexer::parameter_list_to_fields(Ast_Node *params) {
@@ -2568,6 +2604,9 @@ bool Go_Indexer::assignment_to_decls(List<Ast_Node*> *lhs, List<Ast_Node*> *rhs,
     return false;
 }
 
+// @Functional I should start labeling which functions are "functional" in the
+// sense that they don't affect any state in Go_Indexer, and basically just
+// input-output.  This function is like that.
 void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr filename, Pool *target_pool) {
     auto new_result = [&]() -> Godecl * {
         auto decl = results->append();
@@ -2748,52 +2787,34 @@ Goresult *Go_Indexer::unpointer_type(Gotype *type, Go_Ctx *ctx) {
     return make_goresult(type, ctx);
 }
 
-List<Goresult> *Go_Indexer::get_package_decls(ccstr import_path, int flags) {
-    if (index.packages == NULL) return NULL;
-    For (*index.packages) {
-        if (it.status == GPS_OUTDATED) continue;
-        if (!streq(it.import_path, import_path)) continue;
+List<Goresult> *Go_Indexer::list_package_decls(ccstr import_path, int flags) {
+    auto pkg = find_up_to_date_package(import_path);
+    if (pkg == NULL) return NULL;
 
-        u32 len = 0;
-        For (*it.files) {
-            For (*it.decls) {
-                if (flags & GETDECLS_PUBLIC_ONLY)
-                    if (!(it.name != NULL && isupper(it.name[0])))
-                        continue;
-                len++;
-            }
+    auto ret = alloc_list<Goresult>();
+
+    For (*pkg->files) {
+        For (*it.decls) {
+            if (flags & LISTDECLS_PUBLIC_ONLY)
+                if (!(it.name != NULL && isupper(it.name[0])))
+                    continue;
+
+            if (flags & LISTDECLS_EXCLUDE_METHODS)
+                if (it.type == GODECL_FUNC && it.gotype->func_recv != NULL)
+                    continue;
+
+            auto ctx = alloc_object(Go_Ctx);
+            ctx->import_path = import_path;
+            ctx->filename = it.file;
+            ret->append(make_goresult(&it, ctx));
         }
-
-        auto ret = alloc_list<Goresult>(len);
-
-        For (*it.files) {
-            For (*it.decls) {
-                if (streq(it.name, "JSON"))
-                    print("breakpoint");
-
-                if (flags & GETDECLS_PUBLIC_ONLY)
-                    if (!(it.name != NULL && isupper(it.name[0])))
-                        continue;
-
-                if (flags & GETDECLS_EXCLUDE_METHODS)
-                    if (it.type == GODECL_FUNC && it.gotype->func_recv != NULL)
-                        continue;
-
-                auto ctx = alloc_object(Go_Ctx);
-                ctx->import_path = import_path;
-                ctx->filename = it.file;
-                ret->append(make_goresult(&it, ctx));
-            }
-        }
-
-        return ret;
     }
 
-    return NULL;
+    return ret;
 }
 
 Goresult *Go_Indexer::find_decl_in_package(ccstr id, ccstr import_path) {
-    auto results = get_package_decls(import_path, GETDECLS_EXCLUDE_METHODS);
+    auto results = list_package_decls(import_path, LISTDECLS_EXCLUDE_METHODS);
     if (results == NULL) return NULL;
 
     // in the future we can sort this shit
@@ -2834,8 +2855,8 @@ Gotype *Go_Indexer::expr_to_gotype(Ast_Node *expr) {
         break;
 
     case TS_BINARY_EXPRESSION:
-        // TODO
-        break;
+        // TODO: these operators should return bool: || && == != < <= > >=
+        return new_primitive_type("int");
 
     case TS_CALL_EXPRESSION:
         ret = new_gotype(GOTYPE_LAZY_CALL);

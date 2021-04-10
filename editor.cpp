@@ -455,6 +455,10 @@ void Editor::trigger_autocomplete(bool triggered_by_dot) {
     SCOPED_MEM(&world.indexer.ui_mem);
     defer { world.indexer.ui_mem.reset(); };
 
+    if (!world.indexer.ready) return; // strictly we can just call try_enter(), but want consistency with UI, which is based on `ready`
+    if (!world.indexer.lock.try_enter()) return;
+    defer { world.indexer.lock.leave(); };
+
     bool was_already_open = (autocomplete.ac.results != NULL);
 
     Autocomplete ac = {0};
@@ -590,6 +594,10 @@ void Editor::trigger_parameter_hint(bool triggered_by_paren) {
         SCOPED_MEM(&world.indexer.ui_mem);
         defer { world.indexer.ui_mem.reset(); };
 
+        if (!world.indexer.ready) return; // strictly we can just call try_enter(), but want consistency with UI, which is based on `ready`
+        if (!world.indexer.lock.try_enter()) return;
+        defer { world.indexer.lock.leave(); };
+
         auto hint = world.indexer.parameter_hint(filepath, cur, triggered_by_paren);
         if (hint == NULL) return;
 
@@ -652,7 +660,7 @@ void Editor::update_parameter_hint() {
         auto root = new_ast_node(ts_tree_root_node(tree), NULL);
 
         bool ret = false;
-        world.indexer.find_nodes_containing_pos(root, hint.start, true, [&](Ast_Node *it) -> Walk_Action {
+        find_nodes_containing_pos(root, hint.start, true, [&](Ast_Node *it) -> Walk_Action {
             if (it->start == hint.start)
                 if (it->type == TS_ARGUMENT_LIST)
                     if (cur >= it->end) {
@@ -775,7 +783,7 @@ void Editor::type_char_in_insert_mode(char ch) {
 
             Ast_Node *rbrace_node = alloc_object(Ast_Node);
 
-            world.indexer.find_nodes_containing_pos(root_node, rbrace_pos, false, [&](Ast_Node *it) {
+            find_nodes_containing_pos(root_node, rbrace_pos, false, [&](Ast_Node *it) {
                 if (it->type == brace_type) {
                     memcpy(rbrace_node, it, sizeof(Ast_Node));
                     return WALK_ABORT;

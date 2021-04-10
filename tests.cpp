@@ -3,7 +3,7 @@
 
 bool run_tests() {
     return false;
-
+#if 0
     // initialize everything
     world.init();
     compiler_dont_optimize_me_away();
@@ -28,6 +28,7 @@ bool run_tests() {
 
     system("pause");
     return true;
+#endif
 }
 
 void clear_screen() {

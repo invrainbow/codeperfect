@@ -110,13 +110,49 @@ void fill_file_tree(ccstr path) {
     recur(path, world.file_tree);
 }
 
+bool copy_file(ccstr src, ccstr dest) {
+    auto ef = read_entire_file(src);
+    if (ef == NULL) return false;
+    defer { free_entire_file(ef); };
+
+    File f;
+    if (f.init(dest, FILE_MODE_WRITE, FILE_CREATE_NEW) != FILE_RESULT_SUCCESS)
+        return false;
+    defer { f.cleanup(); };
+
+    s32 ret = 0;
+    return f.write((char*)ef->data, ef->len, &ret) && (ret == ef->len);
+}
+
+void shell(ccstr s, ccstr dir) {
+    Process p;
+    p.init();
+    p.dir = dir;
+    p.run(s);
+    while (p.status() == PROCESS_WAITING) continue;
+}
+
+void prepare_workspace() {
+    auto p = [&](ccstr f) {
+        return path_join(TEST_PATH, f);
+    };
+
+    if (!copy_file(p("main.go.bak"), p("main.go")))
+        panic("failed to copy main.go.bak");
+
+    delete_rm_rf(p("db.tmp"));
+    delete_rm_rf(p("go.mod"));
+    delete_rm_rf(p("go.sum"));
+
+    shell("go mod init github.com/invrainbow/life", TEST_PATH);
+    shell("go mod tidy", TEST_PATH);
+}
+
 void World::init() {
     ptr0(this);
 
     git_libgit2_init();
     fzy_init();
-
-    MEM = &frame_mem;
 
 #define init_mem(x) x.init(#x)
     init_mem(frame_mem);
@@ -131,6 +167,8 @@ void World::init() {
     init_mem(build_index_mem);
     init_mem(ui_mem);
 #undef init_mem
+
+    MEM = &frame_mem;
 
     chunk0_fridge.init(512);
     chunk1_fridge.init(256);

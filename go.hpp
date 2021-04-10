@@ -1004,12 +1004,12 @@ struct Token {
     cur2 end;
 };
 
-// we used to have a full on parser that could parse the whole go language in
-// theory, but it was shit and it kept running into problems and crashing. but
-// the advantage it had over tree-sitter was that it could parse a single rule
-// instead of the whole file. so we are going to use it to parse just the
-// package declaration from files, for get_package_name().
-struct Parser {
+// We used to have a full on parser that was designed to and could mostly parse
+// the whole go language, but it was shit and it kept running into problems and
+// crashing. But it had the advantage over tree-sitter that it could parse a
+// single rule instead of the whole file. So we're going to use part of it to
+// parse just the package declaration from files, for get_package_name().
+struct Ghetto_Parser {
     Parser_It* it;
     Token tok;
     ccstr filepath; // for debugging purposes
@@ -1028,15 +1028,14 @@ enum Gohelper_Op {
 };
 
 enum {
-    GETDECLS_PUBLIC_ONLY = 1 << 0,
-    GETDECLS_EXCLUDE_METHODS = 1 << 1,
+    LISTDECLS_PUBLIC_ONLY = 1 << 0,
+    LISTDECLS_EXCLUDE_METHODS = 1 << 1,
 };
 
 struct Go_Indexer {
     Pool mem;        // mem that exists for lifetime of Go_Indexer
     Pool final_mem;  // memory that holds the final value of this->index`
     Pool ui_mem;     // memory used by UI when it calls jump to definition, etc.
-    Pool scratch_mem;
 
     Pool scoped_table_mem;
 
@@ -1058,8 +1057,12 @@ struct Go_Indexer {
     // Fs_Watcher goroot_watch;
     Fs_Watcher wksp_watch;
 
-    Lock handle_gomod_changed_lock;
+    Lock flag_lock;
     bool flag_handle_gomod_changed;
+    bool flag_reindex_everything;
+
+    Lock lock;
+    bool ready;
 
     // ---
 
@@ -1101,15 +1104,13 @@ struct Go_Indexer {
     void node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr filename, Pool *target_pool = NULL);
     Gotype *new_gotype(Gotype_Type type);
     Goresult *find_decl_in_package(ccstr id, ccstr import_path);
-    List<Goresult> *get_package_decls(ccstr import_path, int flags = 0);
+    List<Goresult> *list_package_decls(ccstr import_path, int flags = 0);
     Resolved_Import *check_potential_resolved_import(ccstr filepath);
     Go_Package *find_package_in_index(ccstr import_path);
     ccstr find_import_path_referred_to_by_id(ccstr id, Go_Ctx *ctx);
     Pool *get_final_mem();
-    void walk_ast_node(Ast_Node *node, bool abstract_only, Walk_TS_Callback cb);
     Go_Package *find_up_to_date_package(ccstr import_path);
     void import_spec_to_decl(Ast_Node *spec_node, Godecl *decl);
-    void find_nodes_containing_pos(Ast_Node *root, cur2 pos, bool abstract_only, fn<Walk_Action(Ast_Node *it)> callback);
     List<Goresult> *get_possible_dot_completions(Ast_Node *operand_node, bool *was_package, Go_Ctx *ctx);
     bool assignment_to_decls(List<Ast_Node*> *lhs, List<Ast_Node*> *rhs, New_Godecl_Func new_godecl);
     Gotype *new_primitive_type(ccstr name);
@@ -1125,9 +1126,28 @@ struct Go_Indexer {
     void reload_all_dirty_files();
     Go_Package_Status get_package_status(ccstr import_path);
     void replace_package_name(Go_Package *pkg, ccstr package_name);
-    void fill_package_hash(Go_Package *pkg);
     u64 hash_file(ccstr filepath);
+    void start_writing();
+    void stop_writing();
 };
+
+struct Scoped_Write {
+    Go_Indexer *p;
+
+    Scoped_Write(Go_Indexer *_p) {
+        p = _p;
+        p->start_writing();
+    }
+
+    ~Scoped_Write() {
+        p->stop_writing();
+    }
+};
+
+#define SCOPED_WRITE() Scoped_Write GENSYM(SCOPED_WRITE)(this)
+
+void walk_ast_node(Ast_Node *node, bool abstract_only, Walk_TS_Callback cb);
+void find_nodes_containing_pos(Ast_Node *root, cur2 pos, bool abstract_only, fn<Walk_Action(Ast_Node *it)> callback);
 
 Ast_Node *new_ast_node(TSNode node, Parser_It *it);
 
