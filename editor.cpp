@@ -309,7 +309,7 @@ bool Editor::trigger_escape() {
         parameter_hint.gotype = NULL;
     }
 
-    if (world.nvim_data.mode == VI_INSERT) {
+    if (world.nvim.mode == VI_INSERT) {
         auto& nv = world.nvim;
         auto msgid = nv.start_request_message("nvim_buf_get_changedtick", 1);
         nv.save_request(NVIM_REQ_POST_INSERT_GETCHANGEDTICK, msgid, id);
@@ -341,7 +341,7 @@ Editor *Pane::focus_editor_by_index(u32 idx, cur2 pos) {
         }
     }
 
-    world.nvim_data.waiting_focus_window = editor.id;
+    world.nvim.waiting_focus_window = editor.id;
 
     if (editor.nvim_data.win_id != 0)
         world.nvim.set_current_window(&editor);
@@ -424,7 +424,7 @@ Pane* Workspace::get_current_pane() {
 }
 
 bool Editor::is_nvim_ready() {
-    return world.nvim_data.is_ui_attached
+    return world.nvim.is_ui_attached
         && nvim_data.is_buf_attached
         && (nvim_data.buf_id != 0)
         && (nvim_data.win_id != 0);
@@ -443,6 +443,8 @@ void Editor::init() {
 void Editor::cleanup() {
     ts_parser_delete(parser);
     ts_tree_delete(tree); // i remember this being super slow, is it still if it's just one tree?
+
+    // TODO: delete nvim resources
 
     mem.cleanup();
 }

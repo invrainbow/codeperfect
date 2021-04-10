@@ -16,11 +16,6 @@
 
 typedef fn<bool(Editor* e)> find_editor_func;
 
-struct Grid_Window_Pair {
-    u32 grid;
-    u32 win;
-};
-
 struct Search_Result {
     u32 match_col;
     u32 match_col_in_preview;
@@ -57,15 +52,6 @@ struct File_Tree_Node {
     bool open;
 };
 
-enum Vi_Mode {
-    VI_NONE,
-    VI_NORMAL,
-    VI_VISUAL,
-    VI_INSERT,
-    VI_REPLACE,
-    VI_UNKNOWN,
-};
-
 struct World {
     Pool frame_mem;
     Pool autocomplete_mem;
@@ -77,10 +63,6 @@ struct World {
     Pool build_mem;
     Pool build_index_mem;
     Pool ui_mem;
-
-    // move these to nvim?
-    Pool nvim_mem;
-    Pool nvim_loop_mem;
 
     Fridge<Chunk0> chunk0_fridge;
     Fridge<Chunk1> chunk1_fridge;
@@ -102,17 +84,13 @@ struct World {
     Nvim nvim;
     bool use_nvim;
 
+    Debugger dbg;
+
     u32 next_editor_id;
 
     File_Tree_Node *file_tree;
 
-    struct {
-        Grid_Window_Pair _grid_to_window[128];
-        List<Grid_Window_Pair> grid_to_window;
-        bool is_ui_attached;
-        u32 waiting_focus_window;
-        Vi_Mode mode;
-    } nvim_data;
+    Workspace wksp; // in the future, multiple workspaces?
 
     struct {
         char build_command[MAX_PATH];
@@ -173,9 +151,6 @@ struct World {
         // bool adding_something;
         // bool thing_being_added_is_file;
     } file_explorer;
-
-    // in the future, multiple workspaces?
-    Workspace wksp;
 
     struct {
         union {
@@ -268,40 +243,6 @@ struct World {
     struct {
         i32 current_location;
     } wnd_debugger;
-
-    struct {
-        // the debugger itself
-        Debugger debugger;
-
-        // internals
-        Thread_Handle thread;
-        Lock lock;
-
-        In_Memory_Queue<Dbg_Call> call_queue;
-
-        // HANDLE pipe_w;
-        // HANDLE pipe_r;
-
-        // client-side list of all breakpoints
-        Client_Breakpoint _breakpoints[1024];
-        List<Client_Breakpoint> breakpoints;
-
-        // client-side list of all watches
-        Dbg_Watch _watches[128];
-        List<Dbg_Watch> watches;
-
-        // debugger state
-        DbgState state_flag;
-        struct {
-            ccstr file_stopped_at;
-            u32 line_stopped_at;
-            List<Dbg_Location>* stackframe;
-        } state;
-
-        bool send_dbgcall(Dbg_Call* call) {
-            return call_queue.push(call);
-        }
-    } dbg;
 
     void init();
     void start_background_threads();

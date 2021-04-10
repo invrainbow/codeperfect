@@ -99,6 +99,7 @@ enum Dbg_CallType {
     DBGCALL_CHANGE_VARIABLE,
     DBGCALL_EVAL_WATCHES,
     DBGCALL_EVAL_SINGLE_WATCH,
+    DBGCALL_START,
 };
 
 struct Dbg_Call {
@@ -192,19 +193,38 @@ struct Dbg_Location {
 };
 
 struct Debugger {
-    Process headless_proc;
+    Pool mem;
+    Pool loop_mem;
+
+    Lock lock;
+    List<Client_Breakpoint> breakpoints;
+    List<Dbg_Watch> watches;
+    In_Memory_Queue<Dbg_Call> call_queue;
+    Thread_Handle thread;
+    Json_Renderer* rend;
+
+    // per session stuff
+    // Process dlv_proc;
     int conn;
     int packetid;
-    Json_Renderer* rend;
-#ifdef _WIN32
-    bool wsa_started;
-#endif
 
-    bool init();
-    u8 read1();
+    DbgState state_flag;
+    struct {
+        ccstr file_stopped_at;
+        u32 line_stopped_at;
+        List<Dbg_Location>* stackframe;
+    } state;
+
+    // Debugger has no cleanup method, because it's meant to run for the
+    // program's entire lifespan.
+
+    void init();
     void cleanup();
+    bool start();
+    void stop();
+
+    u8 read1();
     bool write1(u8 ch);
-    bool read_stdin_until(char want, ccstr* pret = NULL);
     Packet* send_packet(ccstr packet_name, lambda f, bool read = true);
     bool read_packet(Packet* p);
     Packet* set_breakpoint(ccstr filename, u32 lineno);
@@ -223,6 +243,9 @@ struct Debugger {
 
     List<Dbg_Var>* save_list_of_vars(Json_Navigator js, i32 idx);
     void save_single_var(Json_Navigator js, i32 idx, Dbg_Var* out);
+    void start_loop();
+    void run_loop();
+    void surface_error(ccstr msg);
 };
 
 void debugger_loop_thread(void*);

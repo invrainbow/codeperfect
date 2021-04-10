@@ -393,10 +393,27 @@ struct Nvim_Message {
     };
 };
 
+struct Grid_Window_Pair {
+    u32 grid;
+    u32 win;
+};
+
+enum Vi_Mode {
+    VI_NONE,
+    VI_NORMAL,
+    VI_VISUAL,
+    VI_INSERT,
+    VI_REPLACE,
+    VI_UNKNOWN,
+};
+
 struct Nvim {
+    // memory
     Pool mem;
     Pool loop_mem;
+    Pool messages_mem;
 
+    // orchestration
     Process nvim_proc;
     Mp_Reader reader;
     Mp_Writer writer;
@@ -404,12 +421,15 @@ struct Nvim {
     Lock requests_lock;
     u32 request_id;
     Thread_Handle event_loop_thread;
-
     List<Nvim_Request> requests;
-
     List<Nvim_Message> message_queue;
     Lock messages_lock;
-    Pool messages_mem;
+
+    // state
+    List<Grid_Window_Pair> grid_to_window;
+    bool is_ui_attached;
+    u32 waiting_focus_window;
+    Vi_Mode mode;
 
     void init();
     void start_running();
@@ -465,5 +485,7 @@ struct Nvim {
     bool resize_editor(Editor* editor);
     void handle_editor_on_ready(Editor *editor);
     void handle_message_from_main_thread(Nvim_Message *event);
+    void assoc_grid_with_window(u32 grid, u32 win);
+    Editor* find_editor_by_grid(u32 grid);
 };
 

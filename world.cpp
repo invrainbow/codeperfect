@@ -162,8 +162,6 @@ void World::init() {
     init_mem(open_file_mem);
     init_mem(scratch_mem);
     init_mem(debugger_mem);
-    init_mem(nvim_mem);
-    init_mem(nvim_loop_mem);
     init_mem(build_index_mem);
     init_mem(ui_mem);
 #undef init_mem
@@ -178,19 +176,16 @@ void World::init() {
     chunk5_fridge.init(16);
     chunk6_fridge.init(8);
 
-    dbg.breakpoints.init(LIST_FIXED, _countof(dbg._breakpoints), dbg._breakpoints);
-    dbg.watches.init(LIST_FIXED, _countof(dbg._watches), dbg._watches);
+    // prepare_workspace();
+
+    use_nvim = true;
+
     wnd_debugger.current_location = -1;
 
     wksp.init();
     indexer.init();
-
-    use_nvim = true;
-    nvim_data.grid_to_window.init(LIST_FIXED, _countof(nvim_data._grid_to_window), nvim_data._grid_to_window);
-    {
-        SCOPED_MEM(&nvim_mem);
-        nvim.init();
-    }
+    nvim.init();
+    dbg.init();
 
     fill_file_tree(wksp.path);
 
@@ -213,11 +208,8 @@ void World::init() {
 
 void World::start_background_threads() {
     indexer.start_background_thread();
-
-    {
-        SCOPED_MEM(&nvim_mem);
-        nvim.start_running();
-    }
+    nvim.start_running();
+    dbg.start_loop();
 }
 
 Pane* World::get_current_pane() {

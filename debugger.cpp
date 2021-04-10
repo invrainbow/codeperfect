@@ -160,30 +160,12 @@ u8 Debugger::read1() {
     return ret;
 }
 
-void Debugger::cleanup() {
-    if (conn != 0 && conn != -1) {
-#if OS_WIN
-        closesocket(conn);
-#else
-        close(conn);
-#endif
-        conn = -1;
-    }
-
-#if OS_WIN
-    if (wsa_started) {
-        WSACleanup();
-        wsa_started = false;
-    }
-#endif
-}
-
 bool Debugger::write1(u8 ch) {
     return (send(conn, (char*)&ch, 1, 0) == 1);
 }
 
+#if 0
 bool Debugger::read_stdin_until(char want, ccstr* pret) {
-    auto start = MEM->sp;
     Text_Renderer r;
     Frame frame;
 
@@ -199,69 +181,51 @@ bool Debugger::read_stdin_until(char want, ccstr* pret) {
     frame.restore();
     return false;
 }
+#endif
 
-bool Debugger::init() {
+void Debugger::init() {
     ptr0(this);
-    conn = -1;
 
-    auto server = "127.0.0.1";
-    auto port = "1234";
+    mem.init();
+    loop_mem.init();
+
+    SCOPED_MEM(&mem);
+
+    lock.init();
+    breakpoints.init();
+    watches.init();
+    call_queue.init();
 
 #if OS_WIN
     WSADATA wsa;
     if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
-        return error("wsastartup failed"), false;
-    wsa_started = true;
+        panic("WSAStartup failed");
 #endif
+}
 
-    addrinfo hints = { 0 };
-    hints.ai_family = AF_INET;
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_protocol = IPPROTO_TCP;
+void Debugger::cleanup() {
+    lock.cleanup();
 
-    addrinfo* result;
-    if (getaddrinfo(server, port, &hints, &result) != 0)
-        return error("unable to resolve server:port %s:%s", server, port), false;
-
-    auto make_connection = [&]() -> int {
-        for (auto ptr = result; ptr != NULL; ptr = ptr->ai_next) {
-            auto fd = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
-            if (fd == -1)
-                return -1;
-            if (connect(fd, ptr->ai_addr, ptr->ai_addrlen) != -1) {
-                u_long mode = 1; // non-blocking
-#if OS_WIN
-                auto result = ioctlsocket(fd, FIONBIO, &mode);
-#else
-                auto result = ioctl(fd, FIONBIO, &mode);
-#endif
-                if (result == 0) return fd;
-            }
-
-            print("unable to connect: %s", get_socket_error());
-#if OS_WIN
-            closesocket(fd);
-#else
-            close(fd);
-#endif
-        }
-        return -1;
-    };
-
-    conn = make_connection();
-    if (conn == -1) {
-        return error("unable to connect: %s", get_socket_error()), false;
+    if (thread != NULL) {
+        kill_thread(thread);
+        close_thread_handle(thread);
     }
 
-    auto resp = send_packet("SetApiVersion", [&]() {
-        rend->field("APIVersion", 2);
-    });
+#if OS_WIN
+    WSACleanup();
+#endif
 
-    if (resp == NULL)
-        return error("unable to set API version"), false;
-
-    return true;
+    mem.cleanup();
+    loop_mem.cleanup();
 }
+
+#if OS_WIN
+#define ioctl_stub ioctlsocket
+#define close_stub closesocket
+#else
+#define ioctl_stub ioctl
+#define close_stub close
+#endif
 
 Packet* Debugger::send_packet(ccstr packet_name, lambda f, bool read) {
     {
@@ -457,7 +421,6 @@ List<Breakpoint>* Debugger::list_breakpoints() {
     return ret;
 }
 
-
 int parse_json_with_jsmn(ccstr s, jsmntok_t* tokens, u32 num_toks) {
     jsmn_parser parser;
     jsmn_init(&parser);
@@ -640,154 +603,213 @@ bool Json_Navigator::boolean(i32 i) {
     return false;
 }
 
-void debugger_loop_thread(void*) {
-    MEM = &world.debugger_mem;
-    MEM->sp = 0;
-
-    // TODO: initialize everything else we need to for the debugger.
-    // should this even go in debugger_loop_thread? or like inside the key callback?
-    world.wnd_debugger.current_location = -1;
-
-    auto& props = world.dbg;
-
-    ptr0(&props.state);
-    props.state_flag = DBGSTATE_STARTING;
-
-    props.lock.init();
-    defer { props.lock.cleanup(); };
-
-    auto& dbg = props.debugger;
-    dbg.init();
-    defer { dbg.cleanup(); };
-
-    {
-        SCOPED_LOCK(&props.lock);
-        For (props.breakpoints) {
-            dbg.set_breakpoint(it.file, it.line);
-            it.pending = false;
-        }
-    }
-
-    props.state_flag = DBGSTATE_RUNNING;
-    defer { props.state_flag = DBGSTATE_INACTIVE; };
-
-    dbg.exec_continue(false);
-
-    auto surface_error = [&](ccstr msg) {
-        // TODO: surface some kind of error, how do?
+void Debugger::start_loop() {
+    auto func = [&](void*) {
+        SCOPED_MEM(&world.debugger_mem);
+        MEM->reset();
+        run_loop();
     };
 
+    SCOPED_MEM(&mem);
+    thread = create_thread(func, NULL);
+}
+
+void Debugger::surface_error(ccstr msg) {
+    // TODO: surface some kind of error, how do?
+}
+
+bool Debugger::start() {
+    conn = -1;
+
+    auto server = "127.0.0.1";
+    auto port = "1234";
+
+    addrinfo hints = { 0 };
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_protocol = IPPROTO_TCP;
+
+    addrinfo* result;
+    if (getaddrinfo(server, port, &hints, &result) != 0)
+        return error("unable to resolve server:port %s:%s", server, port), false;
+
+    auto make_connection = [&]() -> int {
+        for (auto ptr = result; ptr != NULL; ptr = ptr->ai_next) {
+            auto fd = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
+            if (fd == -1) return -1;
+
+            u_long io_mode = 1; // non-blocking
+            if (connect(fd, ptr->ai_addr, ptr->ai_addrlen) != -1)
+                if (ioctl_stub(fd, FIONBIO, &io_mode) == 0)
+                    return fd;
+
+            print("unable to connect: %s", get_socket_error());
+            close_stub(fd);
+        }
+        return -1;
+    };
+
+    conn = make_connection();
+    if (conn == -1)
+        return error("unable to connect: %s", get_socket_error()), false;
+
+    auto resp = send_packet("SetApiVersion", [&]() {
+        rend->field("APIVersion", 2);
+    });
+
+    if (resp == NULL)
+        return error("unable to set API version"), false;
+
+    return true;
+}
+
+void Debugger::stop() {
+    if (conn != 0 && conn != -1)
+        close_stub(conn);
+    // TODO: probably kill dlv_proc too
+}
+
+void Debugger::run_loop() {
     while (true) {
         Dbg_Call call;
-        if (props.call_queue.pop(&call)) {
+        if (call_queue.pop(&call)) {
             switch (call.type) {
-                case DBGCALL_EVAL_SINGLE_WATCH:
+            case DBGCALL_START:
+                {
+                    // TODO: initialize everything else we need to for the debugger.
+                    // should this even go in debugger_loop_thread? or like inside the key callback?
+                    world.wnd_debugger.current_location = -1;
+
+                    ptr0(&state);
+                    state_flag = DBGSTATE_STARTING;
+                    packetid = 0;
+                    start();
                     {
-                        auto& params = call.eval_single_watch;
-                        auto& dbg = world.dbg.debugger;
-
-                        auto& watch = world.dbg.watches[params.watch_id];
-                        watch.state = DBGWATCH_PENDING;
-                        if (!dbg.eval_expression(watch.expr, -1, params.frame_id, &watch.value))
-                            watch.state = DBGWATCH_ERROR;
-                        else
-                            watch.state = DBGWATCH_READY;
-                    }
-                    break;
-                case DBGCALL_EVAL_WATCHES:
-                    {
-                        auto& params = call.eval_watches;
-                        auto& dbg = world.dbg.debugger;
-
-                        For (world.dbg.watches)
-                            it.state = DBGWATCH_PENDING;
-
-                        auto results = alloc_array(bool, world.dbg.watches.len);
-
-                        u32 i = 0;
-                        For (world.dbg.watches)
-                            results[i++] = dbg.eval_expression(it.expr, -1, params.frame_id, &it.value);
-
-                        i = 0;
-                        For (world.dbg.watches)
-                            it.state = (results[i++] ?    DBGWATCH_READY : DBGWATCH_ERROR);
-                    }
-                    break;
-                case DBGCALL_SET_BREAKPOINT:
-                    {
-                        auto& params = call.set_breakpoint;
-
-                        auto resp = dbg.set_breakpoint(params.filename, params.lineno);
-                        if (resp == NULL) {
-                            surface_error("Unable to set breakpoint.");
-                            break;
+                        SCOPED_LOCK(&lock);
+                        For (breakpoints) {
+                            set_breakpoint(it.file, it.line);
+                            it.pending = false;
                         }
+                    }
+                    exec_continue(false);
+                    state_flag = DBGSTATE_RUNNING;
+                }
+                break;
 
-                        auto find_func = [&](Client_Breakpoint* bp) -> bool {
-                            return are_breakpoints_same(bp->file, bp->line, params.filename, params.lineno);
-                        };
+            case DBGCALL_EVAL_SINGLE_WATCH:
+                {
+                    auto& params = call.eval_single_watch;
 
-                        auto js = resp->js();
-                        if (js.get(0, ".result.Breakpoint.id") == -1) {
-                            surface_error("Unable to set breakpoint.");
-                            props.breakpoints.remove(find_func);
+                    auto& watch = watches[params.watch_id];
+                    watch.state = DBGWATCH_PENDING;
+                    if (!eval_expression(watch.expr, -1, params.frame_id, &watch.value))
+                        watch.state = DBGWATCH_ERROR;
+                    else
+                        watch.state = DBGWATCH_READY;
+                }
+                break;
+            case DBGCALL_EVAL_WATCHES:
+                {
+                    auto& params = call.eval_watches;
+
+                    For (watches)
+                        it.state = DBGWATCH_PENDING;
+
+                    auto results = alloc_array(bool, watches.len);
+
+                    u32 i = 0;
+                    For (watches)
+                        results[i++] = eval_expression(it.expr, -1, params.frame_id, &it.value);
+
+                    i = 0;
+                    For (watches)
+                        it.state = (results[i++] ? DBGWATCH_READY : DBGWATCH_ERROR);
+                }
+                break;
+            case DBGCALL_SET_BREAKPOINT:
+                {
+                    auto& params = call.set_breakpoint;
+
+                    auto resp = set_breakpoint(params.filename, params.lineno);
+                    if (resp == NULL) {
+                        surface_error("Unable to set breakpoint.");
+                        break;
+                    }
+
+                    auto find_func = [&](Client_Breakpoint* bp) -> bool {
+                        return are_breakpoints_same(bp->file, bp->line, params.filename, params.lineno);
+                    };
+
+                    auto js = resp->js();
+                    if (js.get(0, ".result.Breakpoint.id") == -1) {
+                        surface_error("Unable to set breakpoint.");
+                        breakpoints.remove(find_func);
+                    } else {
+                        auto bkpt = breakpoints.find(find_func);
+                        if (bkpt != NULL) {
+                            bkpt->pending = false;
                         } else {
-                            auto bkpt = props.breakpoints.find(find_func);
-                            if (bkpt != NULL) {
-                                bkpt->pending = false;
-                            } else {
-                                // TODO: error -- this shouldn't happen
-                            }
+                            // TODO: error -- this shouldn't happen
                         }
                     }
-                    break;
-                case DBGCALL_UNSET_BREAKPOINT:
-                    dbg.unset_breakpoint(
-                        call.unset_breakpoint.filename,
-                        call.unset_breakpoint.lineno
-                    );
-                    break;
-                case DBGCALL_CONTINUE_RUNNING:
-                    props.state_flag = DBGSTATE_RUNNING;
-                    dbg.exec_continue(false);
-                    break;
-                case DBGCALL_STEP_INTO:
-                    props.state_flag = DBGSTATE_RUNNING;
-                    dbg.exec_step_into(false);
-                    break;
-                case DBGCALL_STEP_OVER:
-                    props.state_flag = DBGSTATE_RUNNING;
-                    dbg.exec_step_over(false);
-                    break;
-                case DBGCALL_RUN_UNTIL: break;
-                case DBGCALL_CHANGE_VARIABLE: break;
+                }
+                break;
+            case DBGCALL_UNSET_BREAKPOINT:
+                unset_breakpoint(
+                    call.unset_breakpoint.filename,
+                    call.unset_breakpoint.lineno
+                );
+                break;
+            case DBGCALL_CONTINUE_RUNNING:
+                state_flag = DBGSTATE_RUNNING;
+                exec_continue(false);
+                break;
+            case DBGCALL_STEP_INTO:
+                state_flag = DBGSTATE_RUNNING;
+                exec_step_into(false);
+                break;
+            case DBGCALL_STEP_OVER:
+                state_flag = DBGSTATE_RUNNING;
+                exec_step_over(false);
+                break;
+            case DBGCALL_RUN_UNTIL: break;
+            case DBGCALL_CHANGE_VARIABLE: break;
             }
-        } else if (dbg.can_read()) {
-            // if our state machine is out of sync, just exit
-            if (props.state_flag != DBGSTATE_RUNNING) return;
+            continue;
+        }
 
-            Packet p;
-            if (!dbg.read_packet(&p)) return;
+        if (state_flag != DBGSTATE_RUNNING) continue;
+        if (!can_read()) continue;
 
-            // FIXME: memory is going to overflow here with all of our js.str(...) calls without freeing
+        Packet p;
+        if (!read_packet(&p)) {
+            stop();
+            state_flag = DBGSTATE_INACTIVE;
+            break;
+        }
 
-            auto js = p.js();
+        // FIXME: memory is going to overflow here with all of our js.str(...) calls without freeing
 
-            auto is_exited = js.boolean(js.get(0, ".result.State.exited"));
-            if (is_exited) break;
+        auto js = p.js();
 
-            // auto is_recording = js.boolean(js.get(0, ".result.State.Recording"));
-            auto is_running = js.boolean(js.get(0, ".result.State.Running"));
+        auto is_exited = js.boolean(js.get(0, ".result.State.exited"));
+        if (is_exited) {
+            stop();
+            state_flag = DBGSTATE_INACTIVE;
+            break;
+        }
 
-            // debugger hit breakpoint
-            if (!is_running) {
-                props.state.stackframe = dbg.get_stackframe();
-                props.state.file_stopped_at = get_normalized_path(js.str(js.get(0, ".result.State.currentThread.file")));
-                props.state.line_stopped_at = js.num(js.get(0, ".result.State.currentThread.line"));
-                props.state_flag = DBGSTATE_PAUSED;
-            } else {
-                props.state_flag = DBGSTATE_RUNNING;
-            }
+        // auto is_recording = js.boolean(js.get(0, ".result.State.Recording"));
+        auto is_running = js.boolean(js.get(0, ".result.State.Running"));
+
+        // debugger hit breakpoint
+        if (!is_running) {
+            state.stackframe = get_stackframe();
+            state.file_stopped_at = get_normalized_path(js.str(js.get(0, ".result.State.currentThread.file")));
+            state.line_stopped_at = js.num(js.get(0, ".result.State.currentThread.line"));
+            state_flag = DBGSTATE_PAUSED;
+        } else {
+            state_flag = DBGSTATE_RUNNING;
         }
     }
 }

@@ -1008,7 +1008,7 @@ int main() {
 
         auto handle_enter = [&](ccstr nvim_string) {
             if (editor == NULL) return;
-            if (world.nvim_data.mode != VI_INSERT) {
+            if (world.nvim.mode != VI_INSERT) {
                 send_nvim_keys(nvim_string);
                 return;
             }
@@ -1063,7 +1063,7 @@ int main() {
 
         auto handle_tab = [&](ccstr nvim_string) {
             if (editor == NULL) return;
-            if (world.nvim_data.mode != VI_INSERT) {
+            if (world.nvim.mode != VI_INSERT) {
                 send_nvim_keys(nvim_string);
                 return;
             }
@@ -1072,7 +1072,7 @@ int main() {
 
         auto handle_backspace = [&](ccstr nvim_string) {
             if (editor == NULL) return;
-            if (world.nvim_data.mode != VI_INSERT) {
+            if (world.nvim.mode != VI_INSERT) {
                 send_nvim_keys(nvim_string);
                 return;
             }
@@ -1142,7 +1142,7 @@ int main() {
                     case GLFW_KEY_R:
                     case GLFW_KEY_O:
                     case GLFW_KEY_I:
-                        if (world.nvim_data.mode != VI_INSERT) {
+                        if (world.nvim.mode != VI_INSERT) {
                             SCOPED_FRAME();
                             send_nvim_keys(our_sprintf("<C-%c>", tolower((char)key)));
                         }
@@ -1151,7 +1151,7 @@ int main() {
                         // TODO
                         break;
                     case GLFW_KEY_V:
-                        if (world.nvim_data.mode == VI_INSERT) {
+                        if (world.nvim.mode == VI_INSERT) {
                             auto clipboard_contents = glfwGetClipboardString(world.window);
                             if (clipboard_contents == NULL)
                                 break;
@@ -1397,21 +1397,13 @@ int main() {
                             break;
 
                         case DBGSTATE_INACTIVE:
-                            do {
-                                auto &&dbg = world.dbg;
-                                dbg.call_queue.init();
-
-                                // TODO: when do we stop debugging? do we kill this thread, wait for it to die, etc?
-                                /*
-                                // TODO: remember that create_thread allocates memory now
-                                dbg.thread = create_thread(debugger_loop_thread, NULL);
-                                if (dbg.thread == NULL) {
-                                    error("unable to create thread to start process: %s", get_last_error());
-                                    dbg.call_queue.cleanup();
-                                    break;
+                            {
+                                Dbg_Call call;
+                                call.type = DBGCALL_START;
+                                if (!world.dbg.call_queue.push(&call)) {
+                                    // TODO: surface error
                                 }
-                                */
-                            } while (0);
+                            }
                             break;
                         }
                         break;
@@ -1422,40 +1414,39 @@ int main() {
                             ccstr file = editor->filepath;
                             auto lineno = editor->cur.y + 1;
 
-                            auto &&ref = world.dbg;
-                            auto &&dbg = ref.debugger;
+                            auto &dbg = world.dbg;
 
-                            auto bkpt = ref.breakpoints.find([&](Client_Breakpoint *it) -> bool {
+                            auto bkpt = dbg.breakpoints.find([&](Client_Breakpoint *it) -> bool {
                                 return are_breakpoints_same(file, lineno, it->file, it->line);
                             });
 
                             if (bkpt == NULL) {
-                                auto it = ref.breakpoints.append();
+                                auto it = dbg.breakpoints.append();
                                 it->file = file;
                                 it->line = lineno;
                                 it->pending = true;
 
-                                if (ref.state_flag != DBGSTATE_INACTIVE) {
+                                if (dbg.state_flag != DBGSTATE_INACTIVE) {
                                     Dbg_Call call;
                                     call.type = DBGCALL_SET_BREAKPOINT;
                                     call.set_breakpoint.filename = file;
                                     call.set_breakpoint.lineno = lineno;
 
-                                    if (!ref.call_queue.push(&call)) {
+                                    if (!dbg.call_queue.push(&call)) {
                                         // TODO: surface error
                                     }
                                 }
                             } else {
-                                ref.breakpoints.remove(bkpt);
-                                if (ref.state_flag != DBGSTATE_INACTIVE) {
-                                    ref.debugger.unset_breakpoint(file, lineno);
+                                dbg.breakpoints.remove(bkpt);
+                                if (dbg.state_flag != DBGSTATE_INACTIVE) {
+                                    dbg.unset_breakpoint(file, lineno);
 
                                     Dbg_Call call;
                                     call.type = DBGCALL_UNSET_BREAKPOINT;
                                     call.unset_breakpoint.filename = file;
                                     call.unset_breakpoint.lineno = lineno;
 
-                                    if (!ref.call_queue.push(&call)) {
+                                    if (!dbg.call_queue.push(&call)) {
                                         // TODO: surface error
                                     }
                                 }
@@ -1545,7 +1536,7 @@ int main() {
                                 ac.ac.results = NULL;
 
                                 // update buffer
-                                if (world.nvim_data.mode != VI_INSERT) {
+                                if (world.nvim.mode != VI_INSERT) {
                                     auto& nv = world.nvim;
                                     auto msgid = nv.start_request_message("nvim_buf_set_lines", 5);
                                     {
@@ -1625,7 +1616,7 @@ int main() {
         if (ed == NULL) return;
 
         if (isprint(ch)) {
-            if (world.nvim_data.mode == VI_INSERT) {
+            if (world.nvim.mode == VI_INSERT) {
                 ed->type_char_in_insert_mode(ch);
                 // a) insert character into editor buffer
                 // b) add character to nvim_insert.buf

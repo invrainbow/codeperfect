@@ -25,7 +25,7 @@ Editor* find_editor_by_buffer(u32 buf_id) {
 }
 
 bool Nvim::resize_editor(Editor* editor) {
-    auto pair = world.nvim_data.grid_to_window.find([&](Grid_Window_Pair* it) {
+    auto pair = grid_to_window.find([&](Grid_Window_Pair* it) {
         return it->win == editor->nvim_data.win_id;
     });
 
@@ -43,8 +43,8 @@ bool Nvim::resize_editor(Editor* editor) {
     return true;
 }
 
-void assoc_grid_with_window(u32 grid, u32 win) {
-    auto& table = world.nvim_data.grid_to_window;
+void Nvim::assoc_grid_with_window(u32 grid, u32 win) {
+    auto& table = grid_to_window;
 
     auto pair = table.find_or_append([&](Grid_Window_Pair* it) { return it->grid == grid; });
     assert(pair != NULL);
@@ -62,8 +62,8 @@ void assoc_grid_with_window(u32 grid, u32 win) {
     }
 }
 
-Editor* find_editor_by_grid(u32 grid) {
-    auto& table = world.nvim_data.grid_to_window;
+Editor* Nvim::find_editor_by_grid(u32 grid) {
+    auto& table = grid_to_window;
 
     auto pair = table.find([&](Grid_Window_Pair* it) { return it->grid == grid; });
     if (pair == NULL) return NULL;
@@ -273,19 +273,19 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 }
                 break;
             case NVIM_REQ_SET_CURRENT_WIN:
-                if (editor->id == world.nvim_data.waiting_focus_window)
-                    world.nvim_data.waiting_focus_window = 0;
+                if (editor->id == waiting_focus_window)
+                    waiting_focus_window = 0;
                 break;
             case NVIM_REQ_OPEN_WIN:
                 editor->nvim_data.win_id = event->response.win.object_id;
-                if (world.nvim_data.waiting_focus_window == editor->id)
+                if (waiting_focus_window == editor->id)
                     set_current_window(editor);
                 break;
             case NVIM_REQ_BUF_ATTACH:
                 editor->nvim_data.is_buf_attached = true;
                 break;
             case NVIM_REQ_UI_ATTACH:
-                world.nvim_data.is_ui_attached = true;
+                is_ui_attached = true;
                 break;
             }
         }
@@ -324,20 +324,20 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 auto editor = world.get_current_editor();
                 if (editor == NULL) break;
 
-                auto old_mode = world.nvim_data.mode;
+                auto old_mode = mode;
 
                 if (streq(args.mode_name, "normal"))
-                    world.nvim_data.mode = VI_NORMAL;
+                    mode = VI_NORMAL;
                 else if (streq(args.mode_name, "insert"))
-                    world.nvim_data.mode = VI_INSERT;
+                    mode = VI_INSERT;
                 else if (streq(args.mode_name, "replace"))
-                    world.nvim_data.mode = VI_REPLACE;
+                    mode = VI_REPLACE;
                 else if (streq(args.mode_name, "visual"))
-                    world.nvim_data.mode = VI_VISUAL;
+                    mode = VI_VISUAL;
                 else
-                    world.nvim_data.mode = VI_UNKNOWN;
+                    mode = VI_UNKNOWN;
 
-                if (world.nvim_data.mode == VI_INSERT) {
+                if (mode == VI_INSERT) {
                     editor->nvim_insert.start = editor->cur;
                     editor->nvim_insert.backspaced_to = editor->cur;
                 }
@@ -718,19 +718,26 @@ void Nvim::write_notification_header(ccstr method, u32 params_length) {
 void Nvim::init() {
     ptr0(this);
 
+    mem.init();
+    loop_mem.init();
+
     request_id = 0;
+
+    SCOPED_MEM(&mem);
 
     send_lock.init();
     requests_lock.init();
-
     requests.init();
-
     messages_lock.init();
     message_queue.init();
     messages_mem.init();
+
+    grid_to_window.init();
 }
 
 void Nvim::start_running() {
+    SCOPED_MEM(&mem);
+
     nvim_proc.init();
     nvim_proc.use_stdin = true;
     nvim_proc.dir = "c:/users/brandon/ide"; // TODO
@@ -738,17 +745,16 @@ void Nvim::start_running() {
     // TODO: get full path of init.vim
     nvim_proc.run("nvim -u ./init.vim -i NONE -N --embed --headless");
 
-    reader.read_mode = MP_READ_PROC;
-    reader.read_proc.proc = &nvim_proc;
+    reader.proc = &nvim_proc;
     reader.offset = 0;
     writer.proc = &nvim_proc;
 
-    auto nvim_event_loop = [](void *param) {
-        SCOPED_MEM(&world.nvim_loop_mem);
-        ((Nvim*)param)->run_event_loop();
+    auto func = [&](void*) {
+        SCOPED_MEM(&loop_mem);
+        run_event_loop();
     };
 
-    event_loop_thread = create_thread(nvim_event_loop, this);
+    event_loop_thread = create_thread(func, NULL);
     if (event_loop_thread == NULL) return;
 }
 
@@ -762,7 +768,10 @@ void Nvim::cleanup() {
     }
 
     nvim_proc.cleanup();
-    requests.cleanup();
+
+    mem.cleanup();
+    loop_mem.cleanup();
+    messages_mem.cleanup();
 }
 
 ccstr Mp_Reader::read_string() {
