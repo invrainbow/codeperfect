@@ -158,7 +158,7 @@ bool list_directory(ccstr path, list_directory_cb cb);
 
 // TODO: group these into a struct?
 typedef void* Thread_Handle;
-typedef fn<void(void*)> Thread_Callback;
+typedef void (*Thread_Callback)(void*);
 Thread_Handle create_thread(Thread_Callback callback, void* param);
 void close_thread_handle(Thread_Handle h);
 void kill_thread(Thread_Handle h);

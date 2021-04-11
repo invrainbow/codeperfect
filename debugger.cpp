@@ -603,14 +603,15 @@ bool Json_Navigator::boolean(i32 i) {
 }
 
 void Debugger::start_loop() {
-    auto func = [&](void*) {
-        SCOPED_MEM(&loop_mem);
+    auto func = [](void *param) {
+        auto dbg = (Debugger*)param;
+        SCOPED_MEM(&dbg->loop_mem);
         MEM->reset();
-        run_loop();
+        dbg->run_loop();
     };
 
     SCOPED_MEM(&mem);
-    thread = create_thread(func, NULL);
+    thread = create_thread(func, this);
 }
 
 void Debugger::surface_error(ccstr msg) {

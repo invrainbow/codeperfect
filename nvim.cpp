@@ -749,12 +749,13 @@ void Nvim::start_running() {
     reader.offset = 0;
     writer.proc = &nvim_proc;
 
-    auto func = [&](void*) {
-        SCOPED_MEM(&loop_mem);
-        run_event_loop();
+    auto func = [](void *p) {
+        auto nvim = (Nvim*)p;
+        SCOPED_MEM(&nvim->loop_mem);
+        nvim->run_event_loop();
     };
 
-    event_loop_thread = create_thread(func, NULL);
+    event_loop_thread = create_thread(func, this);
     if (event_loop_thread == NULL) return;
 }
 
