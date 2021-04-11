@@ -5,9 +5,13 @@ import (
 	"fmt"
 	"go/build"
 	"os"
+    "os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+    "github.com/google/shlex"
+    "github.com/reviewdog/errorformat"
+    "bytes"
 )
 
 const (
@@ -15,6 +19,9 @@ const (
 	OpCheckIncludedInBuild
 	OpResolveImportPath
 	OpTest
+    OpStartBuild
+    OpGetBuildStatus
+    OpStopBuild
 )
 
 func write(x interface{}) {
@@ -26,21 +33,34 @@ func writeError(x error) {
     write(strings.ReplaceAll(x.Error(), "\n", "\\n"))
 }
 
-func main() {
-	in := bufio.NewScanner(os.Stdin)
-	// out := bufio.NewWriter(os.Stdout)
-	ctx := build.Default
+type GoBuild struct {
+    done bool
+    errors []*errorformat.Entry
+    cmd *exec.Cmd
+}
 
-    /*
-    write("running...")
-    pkg, err := ctx.Import("c:/users/brandon/go/pkg/mod/k8s.io/api@v0.20.1/core/v1", "", build.FindOnly)
-    if err != nil {
-        writeError(err)
-    } else {
-        write(pkg.ImportPath)
+func main() {
+    // os.Chdir("c:/users/brandon/cryptopals")
+
+	in := bufio.NewScanner(os.Stdin)
+	ctx := build.Default
+    var currentBuild *GoBuild = nil
+
+    readLine := func() string {
+        if !in.Scan() {
+            panic("unable to read line")
+        }
+        return in.Text()
     }
-    return
-    */
+
+    stopBuild := func() {
+        if currentBuild == nil {
+            return
+        }
+
+        currentBuild.cmd.Process.Kill()
+        currentBuild = nil
+    }
 
 loop:
 	for in.Scan() {
@@ -52,10 +72,7 @@ loop:
 
 		switch op {
 		case OpCheckIncludedInBuild:
-			if !in.Scan() {
-				break loop
-			}
-			path := in.Text()
+            path := readLine()
 			match, err := ctx.MatchFile(filepath.Dir(path), filepath.Base(path))
 			if err != nil {
 				writeError(err)
@@ -66,10 +83,7 @@ loop:
 			}
 
 		case OpResolveImportPath:
-			if !in.Scan() {
-				break loop
-			}
-			path := in.Text()
+			path := readLine()
 			pkg, err := ctx.Import(path, "", build.FindOnly)
 			if err != nil {
 				writeError(err)
@@ -78,16 +92,69 @@ loop:
 			}
 
         case OpTest:
-			if !in.Scan() {
-				break loop
-			}
-			path := in.Text()
+			path := readLine()
             pkg, err := ctx.Import(path, "", 0)
             if err != nil {
                 writeError(err)
                 break
             }
             write(pkg.ImportPath)
+
+        case OpStartBuild:
+            stopBuild()
+
+            parts, err := shlex.Split(readLine())
+            if err != nil {
+                writeError(err)
+            }
+            cmd := exec.Command(parts[0], parts[1:]...)
+
+            currentBuild = &GoBuild{}
+            currentBuild.done = false
+            currentBuild.cmd = cmd
+
+            go func(b *GoBuild) {
+                out, err := b.cmd.CombinedOutput()
+                if err != nil {
+                    if _, ok := err.(*exec.ExitError); ok {
+                        efm, _ := errorformat.NewErrorformat([]string{`%f:%l:%c: %m`})
+                        s := efm.NewScanner(bytes.NewReader(out))
+                        for s.Scan() {
+                            ent := s.Entry()
+                            if ent.Valid {
+                                b.errors = append(b.errors, ent)
+                            }
+                        }
+                    }
+                }
+                b.done = true
+            }(currentBuild)
+
+            write("true")
+
+        case OpGetBuildStatus:
+            if currentBuild == nil {
+                write("inactive")
+                break
+            }
+
+            if currentBuild.done {
+                write("done")
+                write(len(currentBuild.errors))
+                for _, ent := range currentBuild.errors {
+                    write(ent.Filename)
+                    write(ent.Lnum)
+                    write(ent.Col)
+                    write(ent.Vcol)
+                    write(ent.Text)
+                }
+            } else {
+                write("running")
+            }
+
+        case OpStopBuild:
+            stopBuild()
+            write("true")
 
 		default:
 			break loop

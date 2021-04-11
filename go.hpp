@@ -1022,9 +1022,13 @@ struct Ghetto_Parser {
 };
 
 enum Gohelper_Op {
-    GH_OP_INVALID,
+    GH_OP_INVALID = 0,
     GH_OP_CHECK_INCLUDED_IN_BUILD,
     GH_OP_RESOLVE_IMPORT_PATH,
+    GH_OP_TEST,
+    GH_OP_START_BUILD,
+    GH_OP_GET_BUILD_STATUS,
+    GH_OP_STOP_BUILD,
 };
 
 enum {
@@ -1044,6 +1048,7 @@ struct Go_Indexer {
     char current_exe_path[MAX_PATH];
     Process gohelper_proc;
     bool gohelper_returned_error;
+    Lock gohelper_lock;
 
     Thread_Handle bgthread;
 
@@ -1129,6 +1134,9 @@ struct Go_Indexer {
     u64 hash_file(ccstr filepath);
     void start_writing();
     void stop_writing();
+
+    ccstr gohelper_readline();
+    ccstr gohelper_run(Gohelper_Op op, ...);
 };
 
 struct Scoped_Write {

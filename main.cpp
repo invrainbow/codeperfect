@@ -150,6 +150,70 @@ void main(void) {
 }
 )";
 
+void do_build(void*) {
+    auto& indexer = world.indexer;
+    auto& b = world.build;
+
+    SCOPED_MEM(&b.mem);
+
+    {
+        SCOPED_LOCK(&indexer.gohelper_lock);
+
+        indexer.gohelper_run(GH_OP_START_BUILD, world.settings.build_command, NULL);
+        if (indexer.gohelper_returned_error) {
+            b.done = true;
+            b.build_itself_had_error = true;
+            world.error_list.show = true;
+            return;
+        }
+    }
+
+    for (;; sleep_milliseconds(100)) {
+        SCOPED_LOCK(&indexer.gohelper_lock);
+
+        auto resp = indexer.gohelper_run(GH_OP_GET_BUILD_STATUS, NULL);
+        if (indexer.gohelper_returned_error) {
+            b.done = true;
+            b.build_itself_had_error = true;
+            world.error_list.show = true;
+            return;
+        }
+
+        if (!streq(resp, "done")) continue;
+
+        auto lenstr = indexer.gohelper_readline();
+        auto len = atoi(lenstr);
+
+        for (u32 i = 0; i < len; i++) {
+            auto file = indexer.gohelper_readline();
+            auto line_str = indexer.gohelper_readline();
+            auto col_str = indexer.gohelper_readline();
+            auto is_vcol_str = indexer.gohelper_readline();
+            auto text = indexer.gohelper_readline();
+
+            auto line = atoi(line_str);
+            auto col = atoi(col_str);
+            auto is_vcol = atoi(is_vcol_str);
+
+            auto build_error = b.errors.append();
+            build_error->file = file;
+            build_error->row = line;
+            build_error->col = col; // TODO: handle is_vcol (is this ever true?)
+            build_error->message = text;
+        }
+
+        b.done = true;
+        world.error_list.show = true;
+        break;
+    }
+}
+
+void kick_off_build() {
+    world.build.cleanup();
+    world.build.init();
+    world.build.thread = create_thread(do_build, NULL);
+}
+
 GLint compile_program(cstr vert_code, cstr frag_code) {
     auto compile_shader = [](cstr code, u32 type) -> GLuint {
         GLuint shader = glCreateShader(type);
@@ -461,227 +525,6 @@ void init_open_file() {
 
     fill_files("");
 }
-
-#if 0
-struct General_Parser {
-    // This struct houses a few methods that parse random things -- `go build` error
-    // messages, `ag --ackmate` search results, etc. Includes some (extremely)
-    // basic utilities for parsing.
-
-    Process* proc;
-    char ch;
-    List<char> chars;
-
-    void init(Process* _proc) {
-        ptr0(this);
-        proc = _proc;
-    }
-
-    // \r\n is actually the dumbest thing ever lol
-    bool read_char() {
-        do {
-            if (!proc->read1(&ch)) return false;
-        } while (ch == '\r');
-        return true;
-    }
-
-    bool peek_char(char* out) {
-        char tmp;
-
-        while (true) {
-            if (!proc->peek(&tmp)) return false;
-            if (tmp != '\r') break;
-            if (!proc->read1(&tmp)) return false;
-        }
-
-        *out = tmp;
-        return true;
-    }
-
-#define ASSERT(x) if (!(x)) { goto done; }
-#define READ_CHAR() ASSERT(read_char())
-
-    bool read_int(i32* out, char* delim = NULL) {
-        char tmp[32];
-        u32 i = 0;
-
-        while (true) {
-            READ_CHAR();
-            if (!isdigit(ch)) {
-                if (delim != NULL)
-                    *delim = ch;
-                break;
-            }
-            if (i + 1 >= _countof(tmp)) {
-                do { READ_CHAR(); } while (isdigit(ch));
-                return false;
-            }
-            tmp[i++] = ch;
-        }
-
-        tmp[i] = '\0';
-        *out = strtol(tmp, NULL, 10);
-        return true;
-
-    done:
-        return false;
-    }
-
-    // assumes we're in a SCOPED_MEM
-    void parse_find_results() {
-        while (true) {
-            READ_CHAR();
-            ASSERT(ch == ':');
-
-            // read filename
-            auto filename = read_until(MAX_PATH, '\n');
-            if (filename == NULL) {
-                do { READ_CHAR(); } while (ch != '\n');
-                continue;
-            }
-
-            u32 skipped_results = 0;
-
-            // read each line
-            while (true) {
-                char tmp = 0;
-                ASSERT(peek_char(&tmp));
-                // proc->peek(&tmp));
-                if (tmp == '\n') {
-                    READ_CHAR();
-                    break;
-                }
-
-                i32 row = 0, col = 0, match_len = 0;
-                bool ok = true;
-                char delim;
-
-                ok = ok && read_int(&row);
-                ok = ok && read_int(&col);
-                ok = ok && read_int(&match_len, &delim);
-
-                u32 results_in_row = 1;
-                while (ok && delim != ':') {
-                    i32 junk;
-                    ok = ok && read_int(&junk);
-                    ok = ok && read_int(&junk, &delim);
-                    results_in_row++;
-                }
-
-                if (!ok) {
-                    skipped_results++;
-                    while (ch != '\n') READ_CHAR();
-                    continue;
-                }
-
-                auto result = alloc_object(Search_Result);
-                world.search_results.results.append(result);
-
-                result->filename = filename;
-                result->row = row;
-                result->match_col = col;
-                result->match_len = match_len;
-                result->results_in_row = results_in_row;
-
-                if (col > 20) {
-                    for (u32 i = 0; i < col - 20; i++) {
-                        READ_CHAR();
-                    }
-                    result->match_col_in_preview = 20;
-                } else {
-                    result->match_col_in_preview = col;
-                }
-
-                const int PREVIEW_LEN = 40;
-
-                auto preview = salloc.start(PREVIEW_LEN + 1);
-                for (u32 i = 0; i < 40; i++) {
-                    READ_CHAR();
-                    if (ch == '\n') break;
-                    salloc.push(ch);
-                }
-                salloc.done();
-
-                while (ch != '\n') {
-                    READ_CHAR();
-                }
-
-                result->preview = preview;
-            }
-        }
-
-    done:
-        return;
-    }
-
-    ccstr read_until(u32 to_reserve, char until) {
-        auto ret = salloc.start(MAX_PATH);
-        while (ch != until) {
-            READ_CHAR();
-            bool success = (ch == until ? salloc.done() : salloc.push(ch));
-            if (!success) {
-                salloc.revert();
-                return NULL;
-            }
-        }
-        return ret;
-
-    done:
-        return NULL;
-    }
-
-    // assumes we're in a SCOPED_POOL
-    void parse_build_errors() {
-        while (true) {
-            READ_CHAR();
-            if (ch == '#') {
-                while (ch != '\n') {
-                    READ_CHAR();
-                }
-                continue;
-            }
-
-            auto filename = read_until(MAX_PATH, ':');
-            if (filename == NULL) {
-                do { READ_CHAR(); } while (ch != '\n');
-                continue;
-            }
-
-            i32 row = 0, col = 0;
-            char delim = 0;
-
-            ASSERT(read_int(&row, &delim));
-            ASSERT(delim == ':');
-            ASSERT(read_int(&col, &delim));
-            ASSERT(delim == ':');
-
-            READ_CHAR();
-            ASSERT(ch == ' ');
-
-            auto message = read_until(120, '\n');
-            if (message == NULL) {
-                do { READ_CHAR(); } while (ch != '\n');
-                continue;
-            }
-
-            auto build_error = alloc_object(Build_Error);
-            world.build_errors.errors.append(build_error);
-
-            build_error->col = col;
-            build_error->row = row;
-            build_error->file = filename;
-            build_error->message = message;
-        }
-
-    done:
-        // TODO: any kind of cleanup here
-        return;
-    }
-
-#undef READ_CHAR
-#undef ASSERT
-};
-#endif
 
 enum {
     OUR_MOD_NONE = 0,
@@ -1346,8 +1189,7 @@ int main() {
 
                     switch (key) {
                     case GLFW_KEY_B:
-                        run_proc_the_normal_way(&world.jobs.build.proc, world.settings.build_command);
-                        world.jobs.flag_build = true;
+                        kick_off_build();
                         break;
                     case GLFW_KEY_F:
                         world.windows_open.search_and_replace ^= 1;
@@ -1796,45 +1638,6 @@ int main() {
                     break;
                 }
             }
-
-            if (world.jobs.flag_build) {
-                auto& proc = world.jobs.build.proc;
-                // auto& wnd = world.wnd_open_file;
-
-                switch (proc.status()) {
-                case PROCESS_DONE:
-                    world.build_errors.pool.cleanup();
-
-                    world.jobs.flag_build = false;
-                    if (proc.exit_code != 0) {
-                        auto& ref = world.build_errors;
-                        ref.cleanup();
-                        ref.init();
-
-                        /*
-                        General_Parser parser;
-                        parser.init(&proc);
-                        {
-                            SCOPED_MEM(&ref.pool);
-                            parser.parse_build_errors();
-                        }
-                        */
-
-                        world.error_list.show = true;
-                    } else {
-                        world.jobs.build.signal_done = true;
-                    }
-
-                    proc.cleanup();
-                    break;
-
-                case PROCESS_ERROR:
-                    world.jobs.flag_build = false;
-                    world.search_results.cleanup();
-                    proc.cleanup();
-                    break;
-                }
-            }
         }
 
         glDisable(GL_SCISSOR_TEST);
@@ -2096,7 +1899,7 @@ int main() {
                 ImGui::Separator();
 
                 if (ImGui::Button("Search for All")) {
-                    world.search_results.pool.cleanup();
+                    world.search_results.mem.cleanup();
                     run_proc_the_normal_way(
                         &world.jobs.search.proc,
                         our_sprintf("ag --ackmate %s %s \"%s\"", wnd.use_regex ? "" : "-Q", wnd.case_sensitive ? "-s" : "", wnd.find_str)
@@ -2159,8 +1962,7 @@ int main() {
 
                 ImGui::InputText("##build_command", world.settings.build_command, _countof(world.settings.build_command));
                 if (ImGui::Button("Build")) {
-                    run_proc_the_normal_way(&world.jobs.build.proc, world.settings.build_command);
-                    world.jobs.flag_build = true;
+                    kick_off_build();
                 }
 
                 if (world.jobs.build.signal_done) {
@@ -2267,7 +2069,37 @@ int main() {
             } while (0);
 
             {
-                ImGui::Begin("Temporary");
+                ImGui::Begin("Debugger controls");
+
+                if (ImGui::Button("Run")) {
+                    switch (world.dbg.state_flag) {
+                    case DBGSTATE_PAUSED:
+                        {
+                            Dbg_Call call;
+                            call.type = DBGCALL_CONTINUE_RUNNING;
+                            if (!world.dbg.call_queue.push(&call)) {
+                                // TODO: surface error
+                            }
+                        }
+                        break;
+
+                    case DBGSTATE_INACTIVE:
+                        {
+                            Dbg_Call call;
+                            call.type = DBGCALL_START;
+                            if (!world.dbg.call_queue.push(&call)) {
+                                // TODO: surface error
+                            }
+                        }
+                        break;
+                    }
+                }
+
+                ImGui::End();
+            }
+
+            {
+                ImGui::Begin("Go controls");
 
                 if (ImGui::Button("Reload go.mod")) {
                     SCOPED_LOCK(&world.indexer.flag_lock);

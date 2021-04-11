@@ -1369,11 +1369,27 @@ u64 Go_Indexer::hash_package(ccstr resolved_package_path) {
 }
 
 bool Go_Indexer::is_file_included_in_build(ccstr path) {
-    auto resp = run_gohelper_command(GH_OP_CHECK_INCLUDED_IN_BUILD, path, NULL);
+    SCOPED_LOCK(&gohelper_lock);
+
+    auto resp = gohelper_run(GH_OP_CHECK_INCLUDED_IN_BUILD, path, NULL);
+    if (gohelper_returned_error) return false;
+
     return streq(resp, "true");
 }
 
-ccstr Go_Indexer::run_gohelper_command(Gohelper_Op op, ...) {
+ccstr Go_Indexer::gohelper_readline() {
+    auto ret = alloc_list<char>();
+    char ch;
+    while (true) {
+        our_assert(gohelper_proc.read1(&ch), "gohelper crashed, we can't do anything anymore");
+        if (ch == '\n') break;
+        ret->append(ch);
+    }
+    ret->append('\0');
+    return ret->items;
+}
+
+ccstr Go_Indexer::gohelper_run(Gohelper_Op op, ...) {
     va_list vl;
     va_start(vl, op);
 
@@ -1398,10 +1414,12 @@ ccstr Go_Indexer::run_gohelper_command(Gohelper_Op op, ...) {
         return ret->items;
     };
 
-    auto ret = read_line();
+    auto ret = gohelper_readline();
     if (streq(ret, "error")) {
         gohelper_returned_error = true;
-        return read_line();
+        auto errmsg = gohelper_readline();
+        error("gohelper returned error for op %d: %s", op, errmsg);
+        return errmsg;
     }
 
     gohelper_returned_error = false;
@@ -2233,14 +2251,13 @@ void Go_Indexer::init() {
 
     gohelper_proc.dir = TEST_PATH;
     gohelper_proc.use_stdin = true;
-    gohelper_proc.run(our_sprintf("go run %s", path_join(current_exe_path, "helper/helper.go")));
+    gohelper_proc.run(path_join(current_exe_path, "helper", "helper.exe"));
 
     wksp_watch.init(TEST_PATH);
 
     flag_lock.init();
-    // files_to_ignore_fsevents_on
-
     lock.init();
+    gohelper_lock.init();
 
     start_writing();
 }
@@ -2273,6 +2290,7 @@ void Go_Indexer::cleanup() {
     scoped_table_mem.cleanup();
     flag_lock.cleanup();
     lock.cleanup();
+    gohelper_lock.cleanup();
 }
 
 List<Godecl> *Go_Indexer::parameter_list_to_fields(Ast_Node *params) {

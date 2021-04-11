@@ -1271,9 +1271,9 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
         row_area.h = font->height + ITEM_PADDING_Y * 2;
         row_area.w = build_results_area.w;
 
-        For (world.build_errors.errors) {
+        For (world.build.errors) {
             SCOPED_FRAME();
-            auto s = our_sprintf("%s:%d:%d: %s", it->file, it->row, it->col, it->message);
+            auto s = our_sprintf("%s:%d:%d: %s", it.file, it.row, it.col, it.message);
 
             auto mouse_flags = get_mouse_flags(row_area);
 
@@ -1282,8 +1282,8 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
 
             if (mouse_flags & MOUSE_CLICKED) {
                 SCOPED_FRAME();
-                auto path = path_join(world.wksp.path, it->file);
-                auto pos = new_cur2(it->col-1, it->row-1);
+                auto path = path_join(world.wksp.path, it.file);
+                auto pos = new_cur2(it.col-1, it.row-1);
                 world.get_current_pane()->focus_editor(path, pos);
             }
 

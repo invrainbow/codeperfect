@@ -130,6 +130,15 @@ void shell(ccstr s, ccstr dir) {
     p.dir = dir;
     p.run(s);
     while (p.status() == PROCESS_WAITING) continue;
+
+    if (p.exit_code != 0) {
+        print("go build helper/helper.go failed with exit code %d, output below:", p.exit_code);
+        char ch;
+        while (p.read1(&ch)) {
+            printf("%c", ch);
+        }
+        panic("askldjfhalkfh");
+    }
 }
 
 void prepare_workspace() {
@@ -176,6 +185,7 @@ void World::init() {
     chunk6_fridge.init(8);
 
     // prepare_workspace();
+    shell("go build helper.go", "w:/helper");
 
     use_nvim = true;
 
@@ -193,11 +203,11 @@ void World::init() {
     file_explorer.selection = -1;
 
     windows_open.search_and_replace = false;
-    windows_open.build_and_debug = false;
+    windows_open.build_and_debug = true;
     windows_open.im_metrics = false;
 
     // TODO: allow user to enter this command himself
-    strcpy_safe(world.settings.build_command, _countof(world.settings.build_command), "go build helper.go");
+    strcpy_safe(world.settings.build_command, _countof(world.settings.build_command), "go build p1.go");
 
     {
         SCOPED_MEM(&ui_mem);

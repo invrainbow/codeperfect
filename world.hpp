@@ -106,42 +106,50 @@ struct World {
     } sidebar;
 
     struct {
-        Pool pool;
+        Pool mem;
         List<Search_Result*> results;
         i32 scroll_offset;
 
         void init() {
-            pool.init("search_results");
+            mem.init("search_results");
             {
-                SCOPED_MEM(&pool);
+                SCOPED_MEM(&mem);
                 results.init();
             }
         }
 
         void cleanup() {
-            pool.cleanup();
-            results.cleanup();
+            mem.cleanup();
         }
     } search_results;
 
     struct {
-        Pool pool;
-        List<Build_Error*> errors;
+        Pool mem;
+
+        bool done;
+        List<Build_Error> errors;
+        bool build_itself_had_error;
+        Thread_Handle thread;
         i32 scroll_offset;
         u32 selection;
 
         void init() {
-            pool.init("build_errors");
-            {
-                SCOPED_MEM(&pool);
-                errors.init();
-            }
+            ptr0(this);
+            mem.init("build");
+
+            SCOPED_MEM(&mem);
+
+            errors.init();
         }
 
         void cleanup() {
-            pool.cleanup();
+            if (thread != NULL) {
+                kill_thread(thread);
+                close_thread_handle(thread);
+            }
+            mem.cleanup();
         }
-    } build_errors;
+    } build;
 
     struct {
         i32 scroll_offset;
