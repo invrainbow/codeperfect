@@ -103,6 +103,7 @@ const vec3f COLOR_DARK_GREY = rgb_hex("#333333");
 const vec3f COLOR_MEDIUM_DARK_GREY = rgb_hex("#585858");
 const vec3f COLOR_MEDIUM_GREY = rgb_hex("#888888");
 const vec3f COLOR_LIME = rgb_hex("#22ff22");
+const vec3f COLOR_GREEN = rgb_hex("#88dd88");
 const vec3f COLOR_THEME_1 = rgb_hex("fd3f5c");
 const vec3f COLOR_THEME_2 = rgb_hex("fbd19b");
 const vec3f COLOR_THEME_3 = rgb_hex("edb891");
@@ -230,6 +231,7 @@ bool get_type_color(Ast_Node *node, Editor *editor, vec3f *out) {
 
             ccstr keywords2[] = {
                 "int", "append", "len", "string", "rune", "bool",
+                "byte", "copy", "float32", "float64", "error",
             };
 
             char keyword[16] = {0};
@@ -282,6 +284,20 @@ void UI::flush_verts() {
     glBufferData(GL_ARRAY_BUFFER, sizeof(Vert) * verts.len, verts.items, GL_DYNAMIC_DRAW);
     glDrawArrays(GL_TRIANGLES, 0, verts.len);
     verts.len = 0;
+}
+
+void UI::start_clip(boxf b) {
+    flush_verts();
+    glEnable(GL_SCISSOR_TEST);
+    glScissor(b.x, world.display_size.y - (b.y + b.h), b.w, b.h);
+    clipping = true;
+    current_clip = b;
+}
+
+void UI::end_clip() {
+    flush_verts();
+    glDisable(GL_SCISSOR_TEST);
+    clipping = false;
 }
 
 void UI::draw_triangle(vec2f a, vec2f b, vec2f c, vec2f uva, vec2f uvb, vec2f uvc, vec4f color, Draw_Mode mode, Texture_Id texture) {
@@ -450,15 +466,26 @@ float UI::get_text_width(ccstr s) {
     return x;
 }
 
+boxf UI::get_viewport_area() {
+    boxf b = {0};
+    b.size = world.window_size;
+    b.y += world.ui.menubar_height;
+    b.h -= world.ui.menubar_height;
+    return b;
+}
+
 boxf UI::get_sidebar_area() {
-    boxf sidebar_area;
-    ptr0(&sidebar_area);
+    auto viewport_area = get_viewport_area();
+
+    boxf sidebar_area = {0};
+    sidebar_area.pos = viewport_area.pos;
 
     if (world.sidebar.view != SIDEBAR_CLOSED) {
-        sidebar_area.h = world.window_size.y;
+        sidebar_area.h = viewport_area.h;
         sidebar_area.w = world.sidebar.width;
     }
 
+    sidebar_area.h -= get_build_results_area().h;
     return sidebar_area;
 }
 
@@ -466,17 +493,15 @@ const float STATUS_PADDING_X = 4;
 const float STATUS_PADDING_Y = 2;
 
 boxf UI::get_panes_area(boxf *pstatus_area) {
-    boxf panes_area, status_area;
-    panes_area.pos = { 0, 0 };
-    panes_area.size = world.window_size;
+    auto panes_area = get_viewport_area();
 
-    boxf sidebar_area = get_sidebar_area();
+    auto sidebar_area = get_sidebar_area();
     panes_area.x += sidebar_area.w;
     panes_area.w -= sidebar_area.w;
 
-    boxf build_results_area = get_build_results_area();
-    panes_area.h -= build_results_area.h;
+    panes_area.h -= get_build_results_area().h;
 
+    boxf status_area;
     status_area.h = font->height + STATUS_PADDING_Y * 2;
     status_area.w = panes_area.w;
     status_area.x = panes_area.x;
@@ -493,14 +518,24 @@ int UI::get_mouse_flags(boxf area) {
     // how do we handle like overlapping elements later?
     // it can't be that hard, imgui does it
 
+    if (world.ui.mouse_captured_by_imgui)
+        return 0;
+
+    auto contains_mouse = [&]() -> bool {
+        if (area.contains(world.ui.mouse_pos))
+            if (!clipping || current_clip.contains(world.ui.mouse_pos))
+                return true;
+        return false;
+    };
+
     int ret = 0;
-    if (area.contains(world.ui.mouse_pos)) {
+    if (contains_mouse()) {
         ret |= MOUSE_HOVER;
-        if (world.ui.mouse_just_pressed[GLFW_MOUSE_BUTTON_LEFT])
+        if (world.ui.mouse_down[GLFW_MOUSE_BUTTON_LEFT])
             ret |= MOUSE_CLICKED;
-        if (world.ui.mouse_just_pressed[GLFW_MOUSE_BUTTON_RIGHT])
+        if (world.ui.mouse_down[GLFW_MOUSE_BUTTON_RIGHT])
             ret |= MOUSE_RCLICKED;
-        if (world.ui.mouse_just_pressed[GLFW_MOUSE_BUTTON_MIDDLE])
+        if (world.ui.mouse_down[GLFW_MOUSE_BUTTON_MIDDLE])
             ret |= MOUSE_MCLICKED;
     }
     return ret;
@@ -637,7 +672,7 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                     }
 
                     auto open_add_file_or_folder = [&](bool folder) {
-                        world.dialogs_open.add_file_or_folder = true;
+                        world.wnd_add_file_or_folder.show = true;
 
                         File_Tree_Node *node = NULL;
 
@@ -675,6 +710,9 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                 files_area.h -= buttons_area.h;
                 files_area.y += buttons_area.h;
 
+                start_clip(files_area);
+                defer { end_clip(); };
+
                 boxf row_area;
                 row_area.pos = files_area.pos;
                 row_area.y -= world.file_explorer.scroll_offset;
@@ -701,10 +739,10 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                         auto row_top = row_area.y;
                         auto row_bot = row_area.y + row_area.h;
 
-                        if (sb_top <= row_top && row_top <= sb_bot)
-                            if (sb_top <= row_bot && row_bot <= sb_bot)
-                                return true;
-                        return false;
+                        return (
+                            sb_top <= row_top && row_top <= sb_bot
+                            || sb_top <= row_bot && row_bot <= sb_bot
+                        );
                     };
 
                     if (is_row_visible()) {
@@ -849,19 +887,31 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
         // draw tabs
         u32 tab_id = 0;
         for (auto&& editor : pane.editors) {
+            SCOPED_FRAME();
+
             bool is_selected = (tab_id == pane.current_editor);
 
-            ccstr label;
+            ccstr label = NULL;
 
             if (editor.is_untitled) {
                 label = "<untitled>";
             } else {
-                auto filepath = editor.filepath;
-                label = filepath;
-                auto root_len = strlen(wksp.path);
-                if (wksp.path[root_len - 1] != '/')
-                    root_len++;
-                label += root_len;
+                auto wksp_path = make_path(wksp.path);
+                auto file_path = make_path(editor.filepath);
+
+                if (wksp_path->contains(file_path)) {
+                    Text_Renderer r;
+                    r.init();
+                    for (int i = wksp_path->parts->len; i < file_path->parts->len; i++) {
+                        r.writestr(file_path->parts->at(i));
+                        if (i + 1 < file_path->parts->len)
+                            r.writechar(PATH_SEP);
+                    }
+                    label = r.finish();
+                } else {
+                    label = file_path->str();
+                }
+
                 label = our_sprintf("%s%s", label, editor.buf.dirty ? "*" : "");
             }
 
@@ -1271,28 +1321,69 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
         row_area.h = font->height + ITEM_PADDING_Y * 2;
         row_area.w = build_results_area.w;
 
-        For (world.build.errors) {
-            SCOPED_FRAME();
-            auto s = our_sprintf("%s:%d:%d: %s", it.file, it.row, it.col, it.message);
+        if (world.build.done) {
+            if (world.build.errors.len == 0) {
+                auto pos = row_area.pos;
+                pos.x += ITEM_PADDING_X;
+                pos.y += ITEM_PADDING_Y;
+                draw_string(pos, "Build was successful!", rgba(COLOR_GREEN));
+            } else {
+                row_area.y -= world.wnd_build_and_debug.scroll_offset;
 
-            auto mouse_flags = get_mouse_flags(row_area);
+                start_clip(build_results_area);
+                defer { end_clip(); };
 
-            if (mouse_flags & MOUSE_HOVER)
-                draw_rect(row_area, rgba(COLOR_LIGHT_GREY));
+                int index = 0;
+                For (world.build.errors) {
+                    defer {
+                        row_area.y += row_area.h;
+                        index++;
+                    };
 
-            if (mouse_flags & MOUSE_CLICKED) {
-                SCOPED_FRAME();
-                auto path = path_join(world.wksp.path, it.file);
-                auto pos = new_cur2(it.col-1, it.row-1);
-                world.get_current_pane()->focus_editor(path, pos);
+                    if (index == world.build.current_error) {
+                        if (row_area.y + row_area.h > build_results_area.y + build_results_area.h) {
+                            auto delta = (row_area.y + row_area.h) - (build_results_area.y + build_results_area.h);
+                            world.wnd_build_and_debug.scroll_offset += delta;
+                        }
+                        if (row_area.y < build_results_area.y) {
+                            world.wnd_build_and_debug.scroll_offset -= (build_results_area.y - row_area.y);
+                        }
+                    }
+
+                    if (row_area.y > build_results_area.y + build_results_area.h) continue;
+
+                    auto mouse_flags = get_mouse_flags(row_area);
+
+                    vec3f text_color = COLOR_WHITE;
+
+                    if (mouse_flags & MOUSE_HOVER)
+                        draw_rect(row_area, rgba(COLOR_MEDIUM_GREY));
+
+                    if (index == world.build.current_error) {
+                        draw_rect(row_area, rgba(COLOR_LIGHT_GREY));
+                        text_color = COLOR_BLACK;
+                    }
+
+                    if (mouse_flags & MOUSE_CLICKED) {
+                        world.build.current_error = index;
+                        go_to_error(index);
+                    }
+
+                    if (row_area.y + row_area.h > build_results_area.y) {
+                        SCOPED_FRAME();
+                        auto s = our_sprintf("%s:%d:%d: %s", it.file, it.row, it.col, it.message);
+                        auto pos = row_area.pos;
+                        pos.x += ITEM_PADDING_X;
+                        pos.y += ITEM_PADDING_Y;
+                        draw_string(pos, s, rgba(text_color));
+                    }
+                }
             }
-
+        } else {
             auto pos = row_area.pos;
             pos.x += ITEM_PADDING_X;
             pos.y += ITEM_PADDING_Y;
-            draw_string(pos, s, rgba((mouse_flags & MOUSE_HOVER) ? COLOR_BLACK : COLOR_WHITE));
-
-            row_area.y += row_area.h;
+            draw_string(pos, "Building...", rgba(COLOR_MEDIUM_GREY));
         }
     }
 

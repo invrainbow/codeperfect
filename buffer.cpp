@@ -246,6 +246,8 @@ s32 get_bytecount(Line *line) {
 
 void Buffer::insert_line(u32 y, uchar* text, s32 len) {
     lines.ensure_cap(lines.len + 1);
+    bytecounts.ensure_cap(bytecounts.len + 1);
+
     if (y > lines.len) {
         y = lines.len;
     } else if (y < lines.len) {

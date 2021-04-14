@@ -1,6 +1,7 @@
 set clipboard=unnamed
 set ignorecase
 set autoindent
+set noexpandtab
 
 " called from ide when opening/creating new file to reset undo tree
 function! IDEClearUndo(bufId)

@@ -2,10 +2,6 @@
 TODO:
 - indent is fucked up when creating an untitled buffer (but it works after we save, quit, re-run, reopen file)
 - settings system
-- limit scrolling past bottom in sidebar
-- support scrolloff (start by modifying Editor::move_cursor)
-- destroy editor's nvim resources when closing a tab (can we even close tab rn?)
-- Neovim Unicode integration
 - investigate open source licenses for all the crap we're using
 - we have a lot of ambiguity around:
     1) how to sync data with delve
@@ -48,7 +44,8 @@ TODO:
 #include "veramono.hpp"
 
 #define MAX_PATH 260
-#define FONT_SIZE 14
+#define CODE_FONT_SIZE 14
+#define UI_FONT_SIZE 16
 #define FRAME_RATE_CAP 60
 
 static const char WINDOW_TITLE[] = "i need to think of a name";
@@ -154,6 +151,8 @@ void do_build(void*) {
     auto& indexer = world.indexer;
     auto& b = world.build;
 
+    world.error_list.show = true;
+
     SCOPED_MEM(&b.mem);
 
     {
@@ -163,7 +162,6 @@ void do_build(void*) {
         if (indexer.gohelper_returned_error) {
             b.done = true;
             b.build_itself_had_error = true;
-            world.error_list.show = true;
             return;
         }
     }
@@ -175,7 +173,6 @@ void do_build(void*) {
         if (indexer.gohelper_returned_error) {
             b.done = true;
             b.build_itself_had_error = true;
-            world.error_list.show = true;
             return;
         }
 
@@ -202,6 +199,7 @@ void do_build(void*) {
             build_error->message = text;
         }
 
+        b.current_error = -1;
         b.done = true;
         world.error_list.show = true;
         break;
@@ -502,6 +500,8 @@ void init_open_file() {
 
     auto wnd = &world.wnd_open_file;
     ptr0(wnd);
+
+    wnd->show = true;
     wnd->filepaths = alloc_list<ccstr>();
     wnd->filtered_results = alloc_list<int>();
 
@@ -579,6 +579,7 @@ int main() {
     ImGui::CreateContext();
 
     ImGuiIO& io = ImGui::GetIO();
+    // ImGuI::StyleColorsLight();
 
     io.BackendFlags |= ImGuiBackendFlags_HasMouseCursors;
     io.BackendFlags |= ImGuiBackendFlags_HasSetMousePos;
@@ -646,15 +647,29 @@ int main() {
     // from here, if we want to modify a texture, just set the active texture
     // are we going to run out of texture units?
 
-    if (!world.font.init(vera_mono_ttf, FONT_SIZE, TEXTURE_FONT))
-        return error("could not initialize font"), EXIT_FAILURE;
-
     ui.init_sprite_texture();
 
     {
-        // init imgui texture
-        io.Fonts->AddFontFromMemoryTTF(vera_mono_ttf, vera_mono_ttf_len, FONT_SIZE);
+        SCOPED_FRAME();
 
+        s32 len = 0;
+
+        auto ui_font = read_font_data_from_first_found(&len, "Segoe UI");
+        assert(ui_font != NULL, "unable to load UI font");
+        world.ui.im_font_ui = io.Fonts->AddFontFromMemoryTTF(ui_font, len, UI_FONT_SIZE);
+        // world.ui.im_font_ui = io.Fonts->AddFontFromFileTTF("Oxygen-Regular.ttf", UI_FONT_SIZE);
+        assert(world.ui.im_font_ui != NULL, "unable to load UI font");
+
+        // auto mono_font = read_font_data_from_first_found(&len, "Courier New", "Consolas", "Menlo", "Courier New");
+        // assert(mono_font != NULL, "unable to load code font");
+
+        if (!world.font.init((u8*)vera_mono_ttf, CODE_FONT_SIZE, TEXTURE_FONT))
+            panic("unable to load code font");
+
+        world.ui.im_font_mono = io.Fonts->AddFontFromMemoryTTF(vera_mono_ttf, vera_mono_ttf_len, CODE_FONT_SIZE);
+        assert(world.ui.im_font_mono != NULL, "unable to load code font");
+
+        // init imgui texture
         u8* pixels;
         i32 width, height;
         io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
@@ -728,16 +743,13 @@ int main() {
         io.MouseWheelH += (float)dx;
         io.MouseWheel += (float)dy;
 
+        dy *= (world.font.height * 3);
+
+        auto add_dy = [&](i32* offset) {
+            *offset = (dy > 0 ? (*offset + dy) : relu_sub(*offset, -dy));
+        };
+
         if (ui.get_sidebar_area().contains(world.ui.mouse_pos) && world.sidebar.view != SIDEBAR_CLOSED) {
-            dy *= (world.font.height * 3);
-
-            auto add_dy = [&](i32* offset) {
-                if (dy > 0)
-                    *offset += dy;
-                else
-                    *offset = relu_sub(*offset, -dy);
-            };
-
             switch (world.sidebar.view) {
             case SIDEBAR_FILE_EXPLORER:
                 add_dy(&world.file_explorer.scroll_offset);
@@ -748,6 +760,10 @@ int main() {
             }
 
             return;
+        }
+
+        if (ui.get_build_results_area().contains(world.ui.mouse_pos)) {
+            add_dy(&world.wnd_build_and_debug.scroll_offset);
         }
 
         /*
@@ -793,7 +809,7 @@ int main() {
         if (mod & GLFW_MOD_ALT)
             nmod |= OUR_MOD_ALT;
 
-        if (world.windows_open.open_file) {
+        if (world.wnd_open_file.show && world.wnd_open_file.focused) {
             auto &wnd = world.wnd_open_file;
             switch (ev) {
             case GLFW_PRESS:
@@ -819,10 +835,10 @@ int main() {
                     }
                     break;
                 case GLFW_KEY_ESCAPE:
-                    world.windows_open.open_file = false;
+                    world.wnd_open_file.show = false;
                     break;
                 case GLFW_KEY_ENTER:
-                    world.windows_open.open_file = false;
+                    world.wnd_open_file.show = false;
 
                     if (wnd.filtered_results->len == 0) break;
 
@@ -953,6 +969,27 @@ int main() {
                 }
                 break;
 
+            case OUR_MOD_ALT:
+                switch (key) {
+                case GLFW_KEY_LEFT_BRACKET:
+                    {
+                        auto &b = world.build;
+                        if (--b.current_error < 0)
+                            b.current_error = b.errors.len - 1;
+                        go_to_error(b.current_error);
+                    }
+                    break;
+                case GLFW_KEY_RIGHT_BRACKET:
+                    {
+                        auto &b = world.build;
+                        if (++b.current_error >= b.errors.len)
+                            b.current_error = 0;
+                        go_to_error(b.current_error);
+                    }
+                    break;
+                }
+                break;
+
             case OUR_MOD_CTRL:
                 {
                     bool handled = false;
@@ -991,7 +1028,16 @@ int main() {
                         }
                         break;
                     case GLFW_KEY_E:
-                        // TODO
+                        if (editor == NULL) break;
+                        // TODO: scrolloff
+                        if (editor->cur.y < editor->view.y + 1) {
+                            if (editor->view.y + 1 < editor->buf.lines.len) {
+                                editor->view.y++;
+                                editor->move_cursor(new_cur2(editor->cur.x, editor->view.y));
+                            }
+                        } else {
+                            editor->view.y++;
+                        }
                         break;
                     case GLFW_KEY_V:
                         if (world.nvim.mode == VI_INSERT) {
@@ -1022,8 +1068,8 @@ int main() {
                         }
                         break;
                     case GLFW_KEY_P:
-                        world.windows_open.open_file ^= 1;
-                        if (world.windows_open.open_file)
+                        world.wnd_open_file.show ^= 1;
+                        if (world.wnd_open_file.show)
                             init_open_file();
                         break;
                     case GLFW_KEY_S:
@@ -1220,7 +1266,7 @@ int main() {
                 {
                     bool done = true;
 
-                    // first handle non-editor keys
+                    // first handle global keys
 
                     switch (key) {
                     case GLFW_KEY_F12:
@@ -1324,8 +1370,7 @@ int main() {
                     }
 
                     if (done) break;
-                    if (world.windows_open.is_any_open()) break;
-                    if (world.popups_open.is_any_open()) break;
+                    if (world.ui.keyboard_captured_by_imgui) break;
                     if (editor == NULL) break;
 
                     auto &buf = editor->buf;
@@ -1438,21 +1483,7 @@ int main() {
         if (ch > 0 && ch < 0x10000)
             io.AddInputCharacter((u16)ch);
 
-        if (world.windows_open.open_file) {
-            auto& ref = world.wnd_open_file;
-            auto len = strlen(ref.query);
-            if (len + 1 < _countof(ref.query)) {
-                if (ch < 0xff && isprint(ch)) {
-                    ref.query[len] = ch;
-                    ref.query[len + 1] = '\0';
-                    filter_files();
-                }
-            }
-            return;
-        }
-
-        if (world.popups_open.is_any_open()) return;
-        if (world.windows_open.is_any_open()) return;
+        if (world.ui.keyboard_captured_by_imgui) return;
 
         auto ed = world.get_current_editor();
         if (ed == NULL) return;
@@ -1645,13 +1676,9 @@ int main() {
         glClear(GL_COLOR_BUFFER_BIT);
 
         {
-            // Send info to UI.
-        }
+            // Send info to UI and ImGui.
 
-        ui.draw_everything(vao, vbo, world.ui.program);
-
-        {
-            // Send info to ImGui.
+            // TODO: Send info to UI.
 
             // TODO: do we need to do this every frame?
             io.DisplaySize = ImVec2((float)world.window_size.x, (float)world.window_size.y);
@@ -1675,7 +1702,7 @@ int main() {
             for (i32 i = 0; i < IM_ARRAYSIZE(io.MouseDown); i++) {
                 bool down = world.ui.mouse_just_pressed[i] || glfwGetMouseButton(world.window, i) != 0;
                 io.MouseDown[i] = down;
-                world.ui.mouse_down[i] = down;
+                world.ui.mouse_down[i] = down && !world.ui.mouse_captured_by_imgui;
                 world.ui.mouse_just_pressed[i] = false;
             }
 
@@ -1693,9 +1720,120 @@ int main() {
             }
         }
 
+        // start rendering imgui
+        ImGui::NewFrame();
+
+        // draw menubar first, so we can get its height (which we need for UI)
+        if (ImGui::BeginMainMenuBar()) {
+            world.ui.menubar_height = ImGui::GetWindowSize().y;
+
+            if (ImGui::BeginMenu("File")) {
+                if (ImGui::MenuItem("Open file...", "Ctrl+P")) {
+                    if (!world.wnd_open_file.show) {
+                        world.wnd_open_file.show = true;
+                        init_open_file();
+                    }
+                }
+                ImGui::Separator();
+                if (ImGui::MenuItem("Exit...", "Alt+F4")) {
+                    glfwSetWindowShouldClose(world.window, true);
+                }
+                ImGui::EndMenu();
+            }
+
+            if (ImGui::BeginMenu("Project")) {
+                if (ImGui::MenuItem("Build", "Ctrl+Shift+B")) {
+                    kick_off_build();
+                }
+
+                ImGui::Separator();
+
+                if (ImGui::MenuItem("Run", "F5")) {
+                    switch (world.dbg.state_flag) {
+                    case DBGSTATE_PAUSED:
+                        {
+                            Dbg_Call call;
+                            call.type = DBGCALL_CONTINUE_RUNNING;
+                            if (!world.dbg.call_queue.push(&call)) {
+                                // TODO: surface error
+                            }
+                        }
+                        break;
+
+                    case DBGSTATE_INACTIVE:
+                        {
+                            Dbg_Call call;
+                            call.type = DBGCALL_START;
+                            if (!world.dbg.call_queue.push(&call)) {
+                                // TODO: surface error
+                            }
+                        }
+                        break;
+                    }
+                }
+
+                if (ImGui::MenuItem("Break All")) {
+                }
+
+                if (ImGui::MenuItem("Stop Debugging", "Shift+F5")) {
+                }
+
+                if (ImGui::MenuItem("Step Over", "F10")) {
+                }
+
+                if (ImGui::MenuItem("Step Into", "F11")) {
+                }
+
+                if (ImGui::MenuItem("Step Out", "Shift+F11")) {
+                }
+
+                if (ImGui::MenuItem("Run to Cursor", "Shift+F10")) {
+                }
+
+                ImGui::Separator();
+
+                if (ImGui::MenuItem("Settings")) {
+                    world.windows_open.settings = true;
+                }
+
+                ImGui::EndMenu();
+            }
+
+            if (ImGui::BeginMenu("Developer")) {
+                ImGui::MenuItem("ImGui demo", NULL, &world.windows_open.im_demo);
+                ImGui::MenuItem("ImGui metrics", NULL, &world.windows_open.im_metrics);
+                ImGui::MenuItem("Editor AST viewer", NULL, &world.wnd_editor_tree.show);
+                ImGui::MenuItem("Editor toplevels viewer", NULL, &world.wnd_editor_toplevels.show);
+                ImGui::EndMenu();
+            }
+
+            if (ImGui::BeginMenu("Go")) {
+                if (ImGui::MenuItem("Reload go.mod")) {
+                    SCOPED_LOCK(&world.indexer.flag_lock);
+                    world.indexer.flag_handle_gomod_changed = true;
+                }
+
+                if (ImGui::MenuItem("Re-index everything")) {
+                    SCOPED_LOCK(&world.indexer.flag_lock);
+                    world.indexer.flag_reindex_everything = true;
+                }
+
+                ImGui::EndMenu();
+            }
+
+            ImGui::EndMainMenuBar();
+        }
+
         {
-            // render imgui stuff
-            ImGui::NewFrame();
+            if (world.windows_open.settings) {
+                ImGui::Begin("Project Settings", &world.windows_open.settings, ImGuiWindowFlags_AlwaysAutoResize);
+                if (ImGui::IsWindowFocused)
+
+                ImGui::InputText("Build command", world.settings.build_command, _countof(world.settings.build_command));
+                ImGui::InputText("Debug binary path", world.settings.debug_binary_path, _countof(world.settings.debug_binary_path));
+
+                ImGui::End();
+            }
 
             if (world.windows_open.im_demo)
                 ImGui::ShowDemoWindow(&world.windows_open.im_demo);
@@ -1703,14 +1841,21 @@ int main() {
             if (world.windows_open.im_metrics)
                 ImGui::ShowMetricsWindow(&world.windows_open.im_metrics);
 
-            if (world.windows_open.open_file) {
+            if (world.wnd_open_file.show) {
                 auto& wnd = world.wnd_open_file;
+                ImGui::Begin("Open File", &world.wnd_open_file.show, ImGuiWindowFlags_AlwaysAutoResize);
 
-                ImGui::Begin("Open File", &world.windows_open.open_file, ImGuiWindowFlags_AlwaysAutoResize);
+                wnd.focused = ImGui::IsWindowFocused();
 
                 ImGui::Text("Search for file:");
-                ImGui::Text("%-30s", wnd.query);
-                ImGui::Separator();
+
+                ImGui::PushFont(world.ui.im_font_mono);
+
+                ImGui::InputText("##search_for_file", wnd.query, _countof(wnd.query));
+                if (ImGui::IsWindowAppearing())
+                    ImGui::SetKeyboardFocusHere();
+                if (ImGui::IsItemEdited())
+                    filter_files();
 
                 for (u32 i = 0; i < wnd.filtered_results->len; i++) {
                     auto it = wnd.filepaths->at(wnd.filtered_results->at(i));
@@ -1719,6 +1864,8 @@ int main() {
                     else
                         ImGui::Text("%s", it);
                 }
+
+                ImGui::PopFont();
 
                 ImGui::End();
             }
@@ -1840,11 +1987,10 @@ int main() {
 
                             if (ImGui::Button("Add Watch...")) {
                                 expr_buffer[0] = '\0';
-                                world.popups_open.debugger_add_watch = true;
                                 ImGui::OpenPopup("Add Watch");
                             }
 
-                            if (ImGui::BeginPopupModal("Add Watch", &world.popups_open.debugger_add_watch, ImGuiWindowFlags_AlwaysAutoResize)) {
+                            if (ImGui::BeginPopupModal("Add Watch", &world.wnd_debugger.show_add_watch, ImGuiWindowFlags_AlwaysAutoResize)) {
                                 ImGui::InputText("Expression", expr_buffer, IM_ARRAYSIZE(expr_buffer));
                                 if (ImGui::Button("OK", ImVec2(120, 0))) {
                                     auto watch = world.dbg.watches.append();
@@ -1957,33 +2103,7 @@ int main() {
                 ImGui::End();
             }
 
-            if (world.windows_open.build_and_debug) {
-                ImGui::Begin("Build and debug", &world.windows_open.build_and_debug, ImGuiWindowFlags_AlwaysAutoResize);
-
-                ImGui::InputText("##build_command", world.settings.build_command, _countof(world.settings.build_command));
-                if (ImGui::Button("Build")) {
-                    kick_off_build();
-                }
-
-                if (world.jobs.build.signal_done) {
-                    world.jobs.build.signal_done = false;
-                    ImGui::OpenPopup("Done");
-                }
-
-                ImGui::SetNextWindowSize(ImVec2(450, -1));
-                if (ImGui::BeginPopupModal("Done", NULL, ImGuiWindowFlags_NoResize)) {
-                    ImGui::TextWrapped("The build has completed with no errors.");
-                    ImGui::NewLine();
-                    if (ImGui::Button("Ok")) {
-                        ImGui::CloseCurrentPopup();
-                    }
-                    ImGui::EndPopup();
-                }
-
-                ImGui::End();
-            }
-
-            if (world.dialogs_open.add_file_or_folder) {
+            if (world.wnd_add_file_or_folder.show) {
                 auto &wnd = world.wnd_add_file_or_folder;
 
                 auto label = our_sprintf(
@@ -1992,13 +2112,13 @@ int main() {
                     wnd.location_is_root ? "workspace root" : wnd.location
                 );
 
-                ImGui::Begin(label, &world.dialogs_open.add_file_or_folder, ImGuiWindowFlags_AlwaysAutoResize);
+                ImGui::Begin(label, &wnd.show, ImGuiWindowFlags_AlwaysAutoResize);
 
                 ImGui::Text("Name:");
                 ImGui::InputText("##add_file", wnd.name, IM_ARRAYSIZE(wnd.name));
 
                 if (ImGui::Button("Add")) {
-                    world.dialogs_open.add_file_or_folder = false;
+                    world.wnd_add_file_or_folder.show = false;
 
                     if (strlen(wnd.name) > 0) {
                         auto dest = wnd.location_is_root ? world.wksp.path : path_join(world.wksp.path, wnd.location);
@@ -2026,19 +2146,16 @@ int main() {
                 auto tree = editor->tree;
                 if (tree == NULL) break;
 
-                static bool show_tree = false;
-                static bool show_decls = false;
-
-                {
-                    ImGui::Begin("current tree", &show_tree, 0);
+                if (world.wnd_editor_tree.show) {
+                    ImGui::Begin("AST", &world.wnd_editor_tree.show, 0);
                     ImGui::Checkbox("show anon?", &world.wnd_ast_vis.show_anon_nodes);
                     ts_tree_cursor_reset(&editor->cursor, ts_tree_root_node(tree));
                     render_ts_cursor(&editor->cursor);
                     ImGui::End();
                 }
 
-                {
-                    ImGui::Begin("current decl", &show_decls, 0);
+                if (world.wnd_editor_toplevels.show) {
+                    ImGui::Begin("Toplevels", &world.wnd_editor_toplevels.show, 0);
 
                     List<Godecl> decls;
                     decls.init();
@@ -2068,54 +2185,13 @@ int main() {
                 }
             } while (0);
 
-            {
-                ImGui::Begin("Debugger controls");
-
-                if (ImGui::Button("Run")) {
-                    switch (world.dbg.state_flag) {
-                    case DBGSTATE_PAUSED:
-                        {
-                            Dbg_Call call;
-                            call.type = DBGCALL_CONTINUE_RUNNING;
-                            if (!world.dbg.call_queue.push(&call)) {
-                                // TODO: surface error
-                            }
-                        }
-                        break;
-
-                    case DBGSTATE_INACTIVE:
-                        {
-                            Dbg_Call call;
-                            call.type = DBGCALL_START;
-                            if (!world.dbg.call_queue.push(&call)) {
-                                // TODO: surface error
-                            }
-                        }
-                        break;
-                    }
-                }
-
-                ImGui::End();
-            }
-
-            {
-                ImGui::Begin("Go controls");
-
-                if (ImGui::Button("Reload go.mod")) {
-                    SCOPED_LOCK(&world.indexer.flag_lock);
-                    world.indexer.flag_handle_gomod_changed = true;
-                }
-
-                if (ImGui::Button("Re-index everything")) {
-                    SCOPED_LOCK(&world.indexer.flag_lock);
-                    world.indexer.flag_reindex_everything = true;
-                }
-
-                ImGui::End();
-            }
+            world.ui.mouse_captured_by_imgui = io.WantCaptureMouse;
+            world.ui.keyboard_captured_by_imgui = io.WantCaptureKeyboard || ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow);
 
             ImGui::Render();
         }
+
+        ui.draw_everything(vao, vbo, world.ui.program);
 
         {
             // draw imgui buffers

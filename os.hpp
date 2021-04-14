@@ -38,9 +38,13 @@ enum Process_Status {
 enum Pipe_Direction { PIPE_READ = 0, PIPE_WRITE = 1 };
 
 struct Process {
+    // all these options are getting really hairy...
     ccstr cmd;
     ccstr dir;
     bool use_stdin;
+    bool dont_use_stdout; // inverted because by default we want to use stdout
+    bool create_new_console;
+    bool keep_open_after_exit;
 
 #if OS_WIN
     HANDLE stdin_w;
@@ -266,3 +270,6 @@ ccstr get_path_relative_to(ccstr full, ccstr base);
 ccstr get_canon_path(ccstr path);
 
 bool move_file_atomically(ccstr src, ccstr dest);
+
+void *read_font_data_from_name(s32 *len, ccstr name);
+void *read_font_data_from_first_found(s32 *plen, ...);

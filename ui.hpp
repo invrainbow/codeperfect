@@ -131,6 +131,8 @@ struct UI {
     List<vec2f> editor_sizes;
     List<stbrp_rect> sprite_rects;
     float sprite_tex_size;
+    bool clipping;
+    boxf current_clip;
 
     void init();
     bool init_sprite_texture();
@@ -155,6 +157,9 @@ struct UI {
     void draw_image(Sprites_Image_Type image_id, boxf b);
     // void draw_image_masked(Sprites_Image_Type image_id, boxf b, vec4f color);
     void flush_images();
+    boxf get_viewport_area();
+    void start_clip(boxf b);
+    void end_clip();
 };
 
 extern UI ui;

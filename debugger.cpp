@@ -3,6 +3,7 @@
 #include "world.hpp"
 #include "os.hpp"
 #include "utils.hpp"
+#include "go.hpp"
 
 #if OS_WIN
 
@@ -19,7 +20,7 @@
 
 #endif
 
-#define DEBUGGER_LOG 1
+#define DEBUGGER_LOG 0
 
 Json_Navigator Packet::js() {
     Json_Navigator ret;
@@ -621,6 +622,23 @@ void Debugger::surface_error(ccstr msg) {
 bool Debugger::start() {
     conn = -1;
 
+    dlv_proc.init();
+    // dlv_proc.use_stdin = true;
+    dlv_proc.dont_use_stdout = true;
+    dlv_proc.dir = TEST_PATH;
+    dlv_proc.create_new_console = true;
+    dlv_proc.run("dlv exec --headless main.exe --listen=127.0.0.1:1234");
+
+    /*
+    // read the first line
+    char ch = 0;
+    do {
+        if (!dlv_proc.read1(&ch)) return false;
+        printf("%c", ch);
+    } while (ch != '\n');
+    printf("\n");
+    */
+
     auto server = "127.0.0.1";
     auto port = "1234";
 
@@ -649,7 +667,11 @@ bool Debugger::start() {
         return -1;
     };
 
-    conn = make_connection();
+    for (u32 i = 0; i < 10; i++, sleep_milliseconds(1000)) {
+        conn = make_connection();
+        if (conn != -1) break;
+    }
+
     if (conn == -1)
         return error("unable to connect: %s", get_socket_error()), false;
 
@@ -666,10 +688,15 @@ bool Debugger::start() {
 void Debugger::stop() {
     if (conn != 0 && conn != -1)
         close_stub(conn);
+    dlv_proc.cleanup();
     // TODO: probably kill dlv_proc too
 }
 
 void Debugger::run_loop() {
+    defer {
+        print("debugger loop ending???");
+    };
+
     while (true) {
         Dbg_Call call;
         if (call_queue.pop(&call)) {
@@ -683,7 +710,12 @@ void Debugger::run_loop() {
                     ptr0(&state);
                     state_flag = DBGSTATE_STARTING;
                     packetid = 0;
-                    start();
+
+                    if (!start()) {
+                        state_flag = DBGSTATE_INACTIVE;
+                        break;
+                    }
+
                     {
                         SCOPED_LOCK(&lock);
                         For (breakpoints) {
@@ -785,7 +817,7 @@ void Debugger::run_loop() {
         if (!read_packet(&p)) {
             stop();
             state_flag = DBGSTATE_INACTIVE;
-            break;
+            continue;
         }
 
         // FIXME: memory is going to overflow here with all of our js.str(...) calls without freeing
@@ -796,7 +828,7 @@ void Debugger::run_loop() {
         if (is_exited) {
             stop();
             state_flag = DBGSTATE_INACTIVE;
-            break;
+            continue;
         }
 
         // auto is_recording = js.boolean(js.get(0, ".result.State.Recording"));

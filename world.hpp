@@ -93,6 +93,7 @@ struct World {
 
     struct {
         char build_command[MAX_PATH];
+        char debug_binary_path[MAX_PATH];
     } settings;
 
     struct {
@@ -128,6 +129,7 @@ struct World {
 
         bool done;
         List<Build_Error> errors;
+        int current_error;
         bool build_itself_had_error;
         Thread_Handle thread;
         i32 scroll_offset;
@@ -177,11 +179,6 @@ struct World {
         struct {
             Process proc;
         } search;
-
-        struct {
-            Process proc;
-            bool signal_done;
-        } build;
     } jobs;
 
     struct {
@@ -189,33 +186,36 @@ struct World {
         GLint im_program;
         cur2 mouse_pos;
         cur2f mouse_delta;
+        ImFont *im_font_mono;
+        ImFont *im_font_ui;
         double scroll_buffer;
         bool mouse_down[ImGuiMouseButton_COUNT];
         bool mouse_just_pressed[ImGuiMouseButton_COUNT];
         GLFWcursor* cursors[ImGuiMouseCursor_COUNT];
         GLuint textures[__TEXTURE_COUNT__];
+        float menubar_height;
+        bool mouse_captured_by_imgui;
+        bool keyboard_captured_by_imgui;
     } ui;
 
     struct Windows_Open {
-        bool open_file;
         bool im_demo;
         bool im_metrics;
         bool search_and_replace;
         bool build_and_debug;
-        bool is_any_open() { return !iszero(this); }
+        bool settings;
     } windows_open;
 
-    struct Popups_Open {
-        bool debugger_add_watch;
-        bool is_any_open() { return !iszero(this); }
-    } popups_open;
-
-    struct Dialog_Open {
-        bool add_file_or_folder;
-        bool is_any_open() { return !iszero(this); }
-    } dialogs_open;
+    struct {
+        bool show;
+    } wnd_editor_tree;
 
     struct {
+        bool show;
+    } wnd_editor_toplevels;
+
+    struct {
+        bool show;
         char name[MAX_PATH];
         char location[MAX_PATH];
         bool location_is_root;
@@ -223,6 +223,8 @@ struct World {
     } wnd_add_file_or_folder;
 
     struct {
+        bool show;
+        bool focused;
         char query[MAX_PATH];
         u32 selection;
         List<ccstr> *filepaths;
@@ -241,6 +243,7 @@ struct World {
     } wnd_search_and_replace;
 
     struct {
+        i32 scroll_offset;
         // ???
     } wnd_build_and_debug;
 
@@ -249,6 +252,7 @@ struct World {
 
     struct {
         i32 current_location;
+        bool show_add_watch;
     } wnd_debugger;
 
     void init();

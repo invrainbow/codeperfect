@@ -321,10 +321,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
             {
                 auto &args = event->notification.mode_change;
 
-                auto editor = world.get_current_editor();
-                if (editor == NULL) break;
-
-                auto old_mode = mode;
+                print("mode: %s", args.mode_name);
 
                 if (streq(args.mode_name, "normal"))
                     mode = VI_NORMAL;
@@ -338,8 +335,11 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                     mode = VI_UNKNOWN;
 
                 if (mode == VI_INSERT) {
-                    editor->nvim_insert.start = editor->cur;
-                    editor->nvim_insert.backspaced_to = editor->cur;
+                    auto editor = world.get_current_editor();
+                    if (editor != NULL) {
+                        editor->nvim_insert.start = editor->cur;
+                        editor->nvim_insert.backspaced_to = editor->cur;
+                    }
                 }
             }
             break;
@@ -373,7 +373,6 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
         }
         break;
     }
-
 }
 
 void Nvim::run_event_loop() {

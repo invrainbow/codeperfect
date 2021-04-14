@@ -3,7 +3,7 @@
 #include "common.hpp"
 #include <stdlib.h>
 
-enum ListMode {
+enum List_Mode {
     LIST_UNINITIALIZED = 0,
     LIST_MALLOC,
     LIST_FIXED,
@@ -24,14 +24,14 @@ struct List {
     T* items;
     s32 len;
     s32 cap;
-    ListMode mode;
+    List_Mode mode;
     void *pool;  // for LIST_POOL. can't include Pool because it depends on List
 
     void init() {
         init(LIST_POOL, 32);
     }
 
-    void init(ListMode _mode, s32 _cap, T* _items = NULL) {
+    void init(List_Mode _mode, s32 _cap, T* _items = NULL) {
         ptr0(this);
 
         mode = _mode;

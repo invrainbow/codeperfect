@@ -143,3 +143,5 @@ struct Workspace {
 };
 
 bool check_file_dimensions(ccstr path);
+
+void go_to_error(int index);

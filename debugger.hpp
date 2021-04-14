@@ -204,7 +204,7 @@ struct Debugger {
     Json_Renderer* rend;
 
     // per session stuff
-    // Process dlv_proc;
+    Process dlv_proc;
     int conn;
     int packetid;
 

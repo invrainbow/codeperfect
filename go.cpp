@@ -961,7 +961,9 @@ void Go_Indexer::background_thread() {
                 write_object<Go_Index>(&index, &s);
             }
 
-            move_file_atomically(path_join(TEST_PATH, "db.tmp"), path_join(TEST_PATH, "db"));
+            if (!move_file_atomically(path_join(TEST_PATH, "db.tmp"), path_join(TEST_PATH, "db"))) {
+                error("unable to move db.tmp to db, error: %s", get_last_error());
+            }
         } while (0);
     }
 }
@@ -1189,6 +1191,7 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
             }
             break;
 
+        case TS_TYPE_DECLARATION:
         case TS_PARAMETER_LIST:
         case TS_SHORT_VAR_DECLARATION:
         case TS_CONST_DECLARATION:
@@ -2404,6 +2407,7 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node) {
     case TS_TYPE_IDENTIFIER:
         ret = new_gotype(GOTYPE_ID);
         ret->id_name = node->string();
+        ret->id_pos = node->start;
         break;
 
     case TS_POINTER_TYPE:
@@ -2938,11 +2942,8 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
             case GOTYPE_ARRAY: return evaluate_type(operand_type->array_base, res->ctx);
             case GOTYPE_SLICE: return evaluate_type(operand_type->slice_base, res->ctx);
             case GOTYPE_ID:
-                if (streq(operand_type->id_name, "string")) {
-                    auto ret = new_gotype(GOTYPE_ID);
-                    ret->id_name = "rune";
-                    return make_goresult(ret, NULL);
-                }
+                if (streq(operand_type->id_name, "string"))
+                    return make_goresult(new_primitive_type("rune"), NULL);
                 break;
             case GOTYPE_MAP:
                 {

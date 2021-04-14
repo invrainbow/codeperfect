@@ -199,15 +199,15 @@ void World::init() {
     fill_file_tree(wksp.path);
 
     sidebar.width = 300;
-    error_list.height = 150;
+    error_list.height = 125;
     file_explorer.selection = -1;
 
     windows_open.search_and_replace = false;
-    windows_open.build_and_debug = true;
+    windows_open.build_and_debug = false;
     windows_open.im_metrics = false;
 
-    // TODO: allow user to enter this command himself
-    strcpy_safe(world.settings.build_command, _countof(world.settings.build_command), "go build p1.go");
+    strcpy_safe(world.settings.build_command, _countof(world.settings.build_command), "go build -o main.exe --gcflags=\"all=-N -l\" ./...");
+    strcpy_safe(world.settings.debug_binary_path, _countof(world.settings.debug_binary_path), "main.exe");
 
     {
         SCOPED_MEM(&ui_mem);

@@ -118,7 +118,7 @@ bool Process::run(ccstr _cmd) {
     sa.nLength = sizeof(SECURITY_ATTRIBUTES);
     sa.bInheritHandle = TRUE;
 
-    if (!CreatePipe(&stdout_r, &stdout_w, &sa, 0))
+    if (!dont_use_stdout && !CreatePipe(&stdout_r, &stdout_w, &sa, 0))
         return false;
     if (use_stdin && !CreatePipe(&stdin_r, &stdin_w, &sa, 0))
         return false;
@@ -130,8 +130,10 @@ bool Process::run(ccstr _cmd) {
     STARTUPINFOA si = { 0 };
 
     si.cb = sizeof(si);
-    si.hStdError = stdout_w;
-    si.hStdOutput = stdout_w;
+    if (!dont_use_stdout) {
+        si.hStdError = stdout_w;
+        si.hStdOutput = stdout_w;
+    }
     if (use_stdin)
         si.hStdInput = stdin_r;
     si.dwFlags = STARTF_USESTDHANDLES;
@@ -140,9 +142,9 @@ bool Process::run(ccstr _cmd) {
         SCOPED_FRAME();
 
         // auto args = our_sprintf("cmd /S /K \"start cmd /S /K \"%s\"\"", cmd);
-        auto args = our_sprintf("cmd /S /C \"%s\"", cmd);
+        auto args = our_sprintf("cmd /S /C %s\"%s\"", keep_open_after_exit ? "/K " : "", cmd);
         print("(Process::run) %s", args);
-        if (!CreateProcessA(NULL, (LPSTR)args, NULL, NULL, TRUE, 0, NULL, dir, &si, &pi)) {
+        if (!CreateProcessA(NULL, (LPSTR)args, NULL, NULL, TRUE, create_new_console ? CREATE_NEW_CONSOLE : 0, NULL, dir, &si, &pi)) {
             error("(CreateProcessA) error: %s", get_win32_error());
             return false;
         }
@@ -641,5 +643,58 @@ ccstr get_canon_path(ccstr path) {
 }
 
 bool move_file_atomically(ccstr src, ccstr dest) {
-    return ReplaceFileA(dest, src, NULL, 0, NULL, NULL);
+    SCOPED_FRAME();
+    // return ReplaceFileA(dest, src, our_sprintf("%s.bak" src), REPLACEFILE_IGNORE_MERGE_ERRORS, NULL, NULL);
+    return MoveFileA(src, dest);
+}
+
+void *read_font_data_from_name(s32 *len, ccstr name) {
+    auto hfont = CreateFontA(
+        0, 0, 0, 0, 0, 0, 0, 0,
+        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH,
+        name
+    );
+    if (hfont == NULL) return NULL;
+    defer { DeleteObject(hfont); };
+
+    auto hdc = CreateCompatibleDC(NULL);
+    if (hdc == NULL) return NULL;
+    defer { DeleteDC(hdc); };
+
+    SelectObject(hdc, hfont);
+    auto size = GetFontData(hdc, 0, 0, NULL, 0);
+    if (size == 0) return NULL;
+
+    Frame frame;
+
+    auto ret = alloc_array(char, size);
+    if (GetFontData(hdc, 0, 0, ret, size) != size) {
+        frame.restore();
+        return NULL;
+    }
+
+    *len = size;
+    return ret;
+}
+
+void *read_font_data_from_first_found(s32 *plen, ...) {
+    va_list vl;
+    va_start(vl, plen);
+
+    void *font_data = NULL;
+    s32 len = 0;
+
+    ccstr curr = NULL;
+    while ((curr = va_arg(vl, ccstr)) != NULL) {
+        Frame frame;
+        font_data = read_font_data_from_name(&len, curr);
+        if (font_data != NULL) break;
+        frame.restore();
+    }
+
+    va_end(vl);
+
+    if (font_data != NULL)
+        *plen = len;
+    return font_data;
 }

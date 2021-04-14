@@ -190,7 +190,8 @@ bool Editor::load_file(ccstr new_filepath) {
         buf.insert_line(0, &tmp, 0);
     }
 
-    is_go_file = str_ends_with(new_filepath, ".go");
+    // TODO: when untitled file is saved, set is_go_file
+    is_go_file = (new_filepath != NULL && str_ends_with(new_filepath, ".go"));
 
     if (world.use_nvim) {
         auto& nv = world.nvim;
@@ -441,8 +442,10 @@ void Editor::init() {
 }
 
 void Editor::cleanup() {
-    ts_parser_delete(parser);
-    ts_tree_delete(tree); // i remember this being super slow, is it still if it's just one tree?
+    if (parser != NULL)
+        ts_parser_delete(parser);
+    if (tree != NULL)
+        ts_tree_delete(tree); // i remember this being super slow, is it still if it's just one tree?
 
     // TODO: delete nvim resources
 
@@ -851,4 +854,16 @@ void Editor::type_char_in_insert_mode(char ch) {
 
     if (!did_autocomplete) update_autocomplete();
     if (!did_parameter_hint) update_parameter_hint();
+}
+
+void go_to_error(int index) {
+    auto &b = world.build;
+    if (index < 0 || index >= b.errors.len) return;
+
+    auto &error = b.errors[index];
+
+    SCOPED_FRAME();
+    auto path = path_join(world.wksp.path, error.file);
+    auto pos = new_cur2(error.col-1, error.row-1);
+    world.get_current_pane()->focus_editor(path, pos);
 }
