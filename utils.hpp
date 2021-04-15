@@ -300,3 +300,6 @@ bool iszero(T* p) {
             return false;
     return true;
 }
+
+void atomic_set_flag(Lock *lock, bool *p);
+bool atomic_check_flag(Lock *lock, bool *p);

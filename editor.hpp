@@ -44,6 +44,9 @@ struct Editor {
     bool index_dirty;
     bool is_go_file;
 
+    bool saving;
+    Process goimports_proc;
+
     struct {
         bool is_buf_attached;
         u32 buf_id;
@@ -56,6 +59,10 @@ struct Editor {
         bool need_initial_resize;
         bool need_initial_pos_set;
         cur2 initial_pos;
+
+        bool waiting_for_move_cursor;
+        cur2 move_cursor_to;
+        int move_cursor_save_nvim_request;
     } nvim_data;
 
     struct {
@@ -80,7 +87,7 @@ struct Editor {
 
     void update_tree();
     void raw_move_cursor(cur2 c);
-    void move_cursor(cur2 c);
+    void move_cursor(cur2 c, int save_nvim_request = 0);
     void reset_state();
     bool load_file(ccstr new_filepath);
     bool save_file();
@@ -107,6 +114,7 @@ struct Editor {
     void reload_file();
     void update_lines(int firstline, int lastline, List<uchar*> *lines, List<s32> *line_lengths);
     bool trigger_escape();
+    void format_on_save();
 };
 
 struct Pane {

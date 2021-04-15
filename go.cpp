@@ -981,6 +981,7 @@ Parsed_File *Go_Indexer::parse_file(ccstr filepath) {
     Parsed_File *ret = NULL;
 
     auto editor = get_open_editor(filepath);
+    /*
     if (editor != NULL) {
         auto it = alloc_object(Parser_It);
         it->init(&editor->buf);
@@ -990,6 +991,8 @@ Parsed_File *Go_Indexer::parse_file(ccstr filepath) {
         ret->it = it;
         ret->tree = ts_tree_copy(editor->tree);
     } else {
+    */
+    {
         auto ef = read_entire_file(filepath);
         if (ef == NULL) return NULL;
 

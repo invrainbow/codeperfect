@@ -309,6 +309,7 @@ enum MprpcMessageType {
 };
 
 enum Nvim_Request_Type {
+    NVIM_REQ_NONE = 0,
     NVIM_REQ_GET_API_INFO,
     NVIM_REQ_CREATE_BUF,
     NVIM_REQ_OPEN_WIN,
@@ -318,7 +319,10 @@ enum Nvim_Request_Type {
     NVIM_REQ_RESIZE,
     NVIM_REQ_AUTOCOMPLETE_SETBUF,
     NVIM_REQ_POST_INSERT_GETCHANGEDTICK,
+    NVIM_REQ_POST_INSERT_MOVE_CURSOR,
     NVIM_REQ_FILEOPEN_CLEAR_UNDO,
+    NVIM_REQ_POST_SAVE_GETCHANGEDTICK,
+    NVIM_REQ_POST_SAVE_SETLINES,
 };
 
 struct Nvim_Request {
@@ -335,6 +339,14 @@ struct Nvim_Request {
         struct {
             cur2 target_cursor;
         } autocomplete_setbuf;
+
+        struct {
+            cur2 cur;
+        } post_save_setlines;
+
+        struct {
+            cur2 cur;
+        } post_save_getchangedtick;
     };
 };
 

@@ -40,6 +40,8 @@ struct Cstr_To_Ustr {
 
 void uchar_to_cstr(uchar c, cstr out, s32* pn);
 
+typedef fn<bool(char*)> Buffer_Read_Func;
+
 struct Buffer {
     Pool *mem;
 
@@ -49,8 +51,10 @@ struct Buffer {
     bool initialized;
     bool dirty;
 
+    void copy_from(Buffer *other);
     void init(Pool *_mem);
     void cleanup();
+    void read(Buffer_Read_Func f);
     void read(FILE* f);
     void write(FILE* f);
     void delete_lines(u32 y1, u32 y2);

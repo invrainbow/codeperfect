@@ -180,3 +180,15 @@ bool path_contains_in_subtree(ccstr base_path, ccstr full_path) {
     SCOPED_FRAME();
     return make_path(base_path)->contains(make_path(full_path));
 }
+
+void atomic_set_flag(Lock *lock, bool *p) {
+    SCOPED_LOCK(lock);
+    *p = true;
+}
+
+bool atomic_check_flag(Lock *lock, bool *p) {
+    SCOPED_LOCK(lock);
+    auto ret = *p;
+    if (ret) *p = false;
+    return ret;
+}

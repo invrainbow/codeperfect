@@ -969,6 +969,14 @@ int main() {
                 }
                 break;
 
+            case OUR_MOD_ALT | OUR_MOD_SHIFT:
+                switch (key) {
+                case GLFW_KEY_F:
+                    editor->format_on_save();
+                    break;
+                }
+                break;
+
             case OUR_MOD_ALT:
                 switch (key) {
                 case GLFW_KEY_LEFT_BRACKET:
@@ -1086,12 +1094,17 @@ int main() {
                                 editor->is_untitled = false;
                             }
 
-                            FILE* f = fopen(editor->filepath, "w");
-                            if (f == NULL) break; // TODO: display error
-                            defer { fclose(f); };
+                            editor->format_on_save();
 
-                            editor->buf.write(f);
-                            editor->buf.dirty = false;
+                            {
+                                FILE* f = fopen(editor->filepath, "w");
+                                if (f == NULL) return; // TODO: display error
+                                defer { fclose(f); };
+
+                                editor->buf.write(f);
+                                editor->buf.dirty = false;
+                            }
+
                             break;
                         }
                     case GLFW_KEY_G:
@@ -1809,13 +1822,17 @@ int main() {
 
             if (ImGui::BeginMenu("Go")) {
                 if (ImGui::MenuItem("Reload go.mod")) {
-                    SCOPED_LOCK(&world.indexer.flag_lock);
-                    world.indexer.flag_handle_gomod_changed = true;
+                    atomic_set_flag(
+                        &world.indexer.flag_lock,
+                        &world.indexer.flag_handle_gomod_changed
+                    );
                 }
 
                 if (ImGui::MenuItem("Re-index everything")) {
-                    SCOPED_LOCK(&world.indexer.flag_lock);
-                    world.indexer.flag_reindex_everything = true;
+                    atomic_set_flag(
+                        &world.indexer.flag_lock,
+                        &world.indexer.flag_reindex_everything
+                    );
                 }
 
                 ImGui::EndMenu();

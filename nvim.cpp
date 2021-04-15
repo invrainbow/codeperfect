@@ -2,6 +2,7 @@
 #include "buffer.hpp"
 #include "world.hpp"
 #include "utils.hpp"
+#include "go.hpp"
 // #include <strsafe.h>
 
 #define NVIM_DEBUG 0
@@ -119,6 +120,8 @@ ccstr nvim_request_type_str(Nvim_Request_Type type) {
     define_str_case(NVIM_REQ_AUTOCOMPLETE_SETBUF);
     define_str_case(NVIM_REQ_POST_INSERT_GETCHANGEDTICK);
     define_str_case(NVIM_REQ_FILEOPEN_CLEAR_UNDO);
+    define_str_case(NVIM_REQ_POST_SAVE_GETCHANGEDTICK);
+    define_str_case(NVIM_REQ_POST_SAVE_SETLINES);
     }
     return NULL;
 }
@@ -156,6 +159,44 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
             case NVIM_REQ_FILEOPEN_CLEAR_UNDO:
                 editor->buf.dirty = false;
                 break;
+
+            case NVIM_REQ_POST_SAVE_SETLINES:
+                editor->saving = false;
+                editor->buf.dirty = false;
+                {
+                    auto cur = req->post_save_setlines.cur;
+                    if (cur.y >= editor->buf.lines.len) {
+                        cur.y = editor->buf.lines.len-1;
+                        cur.x = relu_sub(editor->buf.lines[cur.y].len, 1);
+                    }
+                    editor->move_cursor(cur);
+                }
+                break;
+
+            case NVIM_REQ_POST_SAVE_GETCHANGEDTICK:
+                {
+                    // skip next update from nvim
+                    editor->nvim_insert.skip_changedticks_until = event->response.changedtick + 1;
+
+                    auto msgid = start_request_message("nvim_buf_set_lines", 5);
+                    auto req2 = save_request(NVIM_REQ_POST_SAVE_SETLINES, msgid, editor->id);
+                    req2->post_save_setlines.cur = req->post_save_getchangedtick.cur;
+
+                    writer.write_int(event->response.buf.object_id);
+                    writer.write_int(0);
+                    writer.write_int(-1);
+                    writer.write_bool(false);
+
+                    writer.write_array(editor->buf.lines.len);
+                    For (editor->buf.lines) {
+                        writer.write1(MP_OP_STRING);
+                        writer.write4(it.len);
+                        For (it) writer.write1(it);
+                    }
+                    end_message();
+                }
+                break;
+
             case NVIM_REQ_POST_INSERT_GETCHANGEDTICK:
                 {
                     // skip next update from nvim
@@ -181,14 +222,19 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                     end_message();
 
                     // move cursor
-                    editor->move_cursor(editor->cur);
-
-                    // send the <esc> key that we delayed
-                    start_request_message("nvim_input", 1);
-                    writer.write_string("<Esc>");
-                    end_message();
+                    print("sending move_cursor to %s", format_pos(editor->cur));
+                    editor->move_cursor(editor->cur, NVIM_REQ_POST_INSERT_MOVE_CURSOR);
                 }
                 break;
+
+            case NVIM_REQ_POST_INSERT_MOVE_CURSOR:
+                print("sending escape", format_pos(editor->cur));
+                // send the <esc> key that we delayed
+                start_request_message("nvim_input", 1);
+                writer.write_string("<Esc>");
+                end_message();
+                break;
+
             case NVIM_REQ_AUTOCOMPLETE_SETBUF:
                 editor->move_cursor(req->autocomplete_setbuf.target_cursor);
                 break;
@@ -334,11 +380,19 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 else
                     mode = VI_UNKNOWN;
 
-                if (mode == VI_INSERT) {
-                    auto editor = world.get_current_editor();
-                    if (editor != NULL) {
+                auto editor = world.get_current_editor();
+                if (editor != NULL) {
+                    if (mode == VI_INSERT) {
                         editor->nvim_insert.start = editor->cur;
                         editor->nvim_insert.backspaced_to = editor->cur;
+                    } else if (mode == VI_NORMAL) {
+                        if (editor->nvim_data.waiting_for_move_cursor) {
+                            editor->nvim_data.waiting_for_move_cursor = false;
+                            editor->move_cursor(
+                                editor->nvim_data.move_cursor_to,
+                                editor->nvim_data.move_cursor_save_nvim_request
+                            );
+                        }
                     }
                 }
             }
@@ -354,6 +408,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 if (editor == NULL)
                     break; // TODO: handle us still receiving notifications for nonexistent window
 
+                print("got cursor change to %s", format_pos(new_cur2((u32)args.curcol, (u32)args.curline)));
                 editor->raw_move_cursor(new_cur2((u32)args.curcol, (u32)args.curline));
 
                 if (!editor->nvim_data.got_initial_cur) {

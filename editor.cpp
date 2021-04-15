@@ -106,12 +106,25 @@ void Editor::update_tree() {
     index_dirty = true;
 }
 
-void Editor::move_cursor(cur2 c) {
+void Editor::move_cursor(cur2 c, int save_nvim_request) {
+    if (world.nvim.mode == VI_INSERT) {
+        nvim_data.waiting_for_move_cursor = true;
+        nvim_data.move_cursor_to = c;
+        nvim_data.move_cursor_save_nvim_request = save_nvim_request;
+
+        world.nvim.start_request_message("nvim_input", 1);
+        world.nvim.writer.write_string("<Esc>");
+        world.nvim.end_message();
+        return;
+    }
+
     raw_move_cursor(c);
 
     if (world.use_nvim) {
         auto& nv = world.nvim;
-        nv.start_request_message("nvim_win_set_cursor", 2);
+        auto msgid = nv.start_request_message("nvim_win_set_cursor", 2);
+        if (save_nvim_request != 0)
+            nv.save_request((Nvim_Request_Type)save_nvim_request, msgid, id);
         nv.writer.write_int(nvim_data.win_id);
         {
             nv.writer.write_array(2);
@@ -448,7 +461,7 @@ void Editor::cleanup() {
         ts_tree_delete(tree); // i remember this being super slow, is it still if it's just one tree?
 
     // TODO: delete nvim resources
-
+    buf.cleanup();
     mem.cleanup();
 }
 
@@ -854,6 +867,50 @@ void Editor::type_char_in_insert_mode(char ch) {
 
     if (!did_autocomplete) update_autocomplete();
     if (!did_parameter_hint) update_parameter_hint();
+}
+
+void Editor::format_on_save() {
+    auto old_cur = cur;
+
+    auto &proc = goimports_proc;
+    proc.cleanup();
+    proc.init();
+    proc.use_stdin = true;
+    proc.run("goimports");
+    saving = true;
+
+    For (buf.lines) {
+        // TODO(unicode)
+        For (it) proc.write1((char)it);
+        proc.write1('\n');
+    }
+    proc.done_writing();
+
+    Buffer swapbuf;
+    swapbuf.init(MEM);
+    swapbuf.read([&](char* out) { return proc.read1(out); });
+    defer { swapbuf.cleanup(); };
+
+    while (proc.status() == PROCESS_WAITING) continue;
+    bool success = (proc.exit_code == 0);
+    proc.cleanup();
+
+    if (success) {
+        buf.copy_from(&swapbuf);
+
+        if (tree != NULL) {
+            ts_tree_delete(tree);
+            tree = NULL;
+        }
+        update_tree();
+
+        auto &nv = world.nvim;
+        auto msgid = nv.start_request_message("nvim_buf_get_changedtick", 1);
+        auto req = nv.save_request(NVIM_REQ_POST_SAVE_GETCHANGEDTICK, msgid, id);
+        req->post_save_getchangedtick.cur = old_cur;
+        nv.writer.write_int(nvim_data.buf_id);
+        nv.end_message();
+    }
 }
 
 void go_to_error(int index) {

@@ -156,12 +156,32 @@ void Buffer::init(Pool *_mem) {
 }
 
 void Buffer::cleanup() {
-    clear();
-    lines.cleanup();
-    initialized = false;
+    if (initialized) {
+        clear();
+        initialized = false;
+    }
 }
 
-void Buffer::read(FILE* f) {
+void Buffer::copy_from(Buffer *other) {
+    Buffer_It it = {0};
+    it.buf = other;
+
+    char tmp[4];
+    s32 count = 0;
+    u32 pos = 0;
+
+    read([&](char *out) -> bool {
+        if (pos >= count) {
+            if (it.eof()) return false;
+            uchar_to_cstr(it.next(), tmp, &count);
+            pos = 0;
+        }
+        *out = tmp[pos++];
+        return true;
+    });
+}
+
+void Buffer::read(Buffer_Read_Func f) {
     // Expects buf to be empty.
 
     char ch;
@@ -184,7 +204,8 @@ void Buffer::read(FILE* f) {
     };
 
     insert_new_line();
-    for (conv.init(); !feof(f) && fread(&ch, 1, 1, f) == 1;) {
+    conv.init();
+    while (f(&ch)) {
         uchar uch = conv.feed(ch, &found);
         *bc++;
 
@@ -195,6 +216,12 @@ void Buffer::read(FILE* f) {
                 line->append(uch);
         }
     }
+}
+
+void Buffer::read(FILE* f) {
+    read([&](char* out) -> bool {
+        return !feof(f) && fread(out, 1, 1, f) == 1;
+    });
 }
 
 void Buffer::write(FILE* f) {
