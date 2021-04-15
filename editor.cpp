@@ -910,6 +910,8 @@ void Editor::format_on_save() {
         req->post_save_getchangedtick.cur = old_cur;
         nv.writer.write_int(nvim_data.buf_id);
         nv.end_message();
+    } else {
+        saving = false;
     }
 }
 
