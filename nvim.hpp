@@ -355,6 +355,14 @@ enum Nvim_Notification_Type {
     NVIM_NOTIF_MODE_CHANGE,
     NVIM_NOTIF_WIN_VIEWPORT,
     NVIM_NOTIF_WIN_POS,
+    NVIM_NOTIF_CUSTOM_REVEAL_LINE,
+    NVIM_NOTIF_CUSTOM_MOVE_CURSOR,
+};
+
+enum Screen_Pos {
+    SCREEN_POS_TOP,
+    SCREEN_POS_MIDDLE,
+    SCREEN_POS_BOTTOM,
 };
 
 struct Nvim_Message {
@@ -381,6 +389,15 @@ struct Nvim_Message {
                     List<uchar*> *lines;
                     List<s32> *line_lengths;
                 } buf_lines;
+
+                struct {
+                    Screen_Pos screen_pos;
+                    bool reset_cursor;
+                } custom_reveal_line;
+
+                struct {
+                    Screen_Pos screen_pos;
+                } custom_move_cursor;
 
                 struct {
                     ccstr mode_name;

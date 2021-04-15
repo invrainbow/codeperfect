@@ -4,10 +4,44 @@ set autoindent
 set noexpandtab
 
 " called from ide when opening/creating new file to reset undo tree
-function! IDEClearUndo(bufId)
+function! IdeClearUndo(bufId)
     let oldlevels = &undolevels
     call nvim_buf_set_option(a:bufId, 'undolevels', -1)
     call nvim_buf_set_lines(a:bufId, 0, 0, 0, [])
     call nvim_buf_set_option(a:bufId, 'undolevels', oldlevels)
     unlet oldlevels
 endfunction
+
+function! IdeNotify(cmd, ...) abort
+    call rpcnotify(g:channel_id, 'custom_notification', a:cmd, a:000)
+endfunction
+
+function s:reveal(where, resetCursor)
+    call IdeNotify('reveal_line', a:where, a:resetCursor)
+endfunction
+
+nnoremap z<CR> <Cmd>call <SID>reveal(0, 1)<CR>
+xnoremap z<CR> <Cmd>call <SID>reveal(0, 1)<CR>
+nnoremap zt <Cmd>call <SID>reveal(0, 0)<CR>
+xnoremap zt <Cmd>call <SID>reveal(0, 0)<CR>
+nnoremap z. <Cmd>call <SID>reveal(1, 1)<CR>
+xnoremap z. <Cmd>call <SID>reveal(1, 1)<CR>
+nnoremap zz <Cmd>call <SID>reveal(1, 0)<CR>
+xnoremap zz <Cmd>call <SID>reveal(1, 0)<CR>
+nnoremap z- <Cmd>call <SID>reveal(2, 1)<CR>
+xnoremap z- <Cmd>call <SID>reveal(2, 1)<CR>
+nnoremap zb <Cmd>call <SID>reveal(2, 0)<CR>
+xnoremap zb <Cmd>call <SID>reveal(2, 0)<CR>
+
+function s:moveCursor(to)
+    " register jumplist in vim
+    normal! m'
+    call IdeNotify('move_cursor', a:to)
+endfunction
+
+nnoremap H <Cmd>call <SID>moveCursor(0)<CR>
+xnoremap H <Cmd>call <SID>moveCursor(0)<CR>
+nnoremap M <Cmd>call <SID>moveCursor(1)<CR>
+xnoremap M <Cmd>call <SID>moveCursor(1)<CR>
+nnoremap L <Cmd>call <SID>moveCursor(2)<CR>
+xnoremap L <Cmd>call <SID>moveCursor(2)<CR>

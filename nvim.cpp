@@ -102,7 +102,7 @@ void Nvim::handle_editor_on_ready(Editor *editor) {
     auto msgid = start_request_message("nvim_call_function", 2);
     save_request(NVIM_REQ_FILEOPEN_CLEAR_UNDO, msgid, editor->id);
 
-    writer.write_string("IDEClearUndo");
+    writer.write_string("IdeClearUndo");
     writer.write_array(1);
     writer.write_int(editor->nvim_data.buf_id);
     end_message();
@@ -339,6 +339,69 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
     case MPRPC_NOTIFICATION:
         nvim_print("received NOTIFICATION event, notification type = %s", nvim_notification_type_str(event->notification.type));
         switch (event->notification.type) {
+        case NVIM_NOTIF_CUSTOM_MOVE_CURSOR:
+            {
+                auto editor = world.get_current_editor();
+                if (editor == NULL) break;
+
+                auto &view = editor->view;
+                u32 y = 0;
+
+                switch (event->notification.custom_move_cursor.screen_pos) {
+                case SCREEN_POS_TOP:
+                    y = view.y;
+                    break;
+                case SCREEN_POS_MIDDLE:
+                    y = view.y + (view.h / 2);
+                    break;
+                case SCREEN_POS_BOTTOM:
+                    y = view.y + view.h - 1;
+                    break;
+                }
+
+                if (y >= editor->buf.lines.len)
+                    y = editor->buf.lines.len-1;
+
+                auto &line = editor->buf.lines[y];
+                u32 x = 0;
+                while (x < line.len && isspace((char)line[x]))
+                    x++;
+                if (x == line.len) x = 0;
+
+                editor->move_cursor(new_cur2(x, y));
+            }
+            break;
+        case NVIM_NOTIF_CUSTOM_REVEAL_LINE:
+            {
+                auto editor = world.get_current_editor();
+                if (editor == NULL) break;
+
+                u32 y = editor->cur.y;
+                auto &view = editor->view;
+
+                switch (event->notification.custom_reveal_line.screen_pos) {
+                case SCREEN_POS_TOP:
+                    view.y = y;
+                    break;
+                case SCREEN_POS_MIDDLE:
+                    view.y = relu_sub(y, view.h / 2);
+                    break;
+                case SCREEN_POS_BOTTOM:
+                    view.y = relu_sub(y + 1, view.h);
+                    break;
+                }
+
+                if (event->notification.custom_reveal_line.reset_cursor) {
+                    auto &line = editor->buf.lines[y];
+                    u32 x = 0;
+                    while (x < line.len && isspace((char)line[x]))
+                        x++;
+                    if (x == line.len) x = 0;
+
+                    editor->move_cursor(new_cur2(x, y));
+                }
+            }
+            break;
         case NVIM_NOTIF_BUF_LINES:
             {
                 auto &args = event->notification.buf_lines;
@@ -489,7 +552,31 @@ void Nvim::run_event_loop() {
                     }
                 };
 
-                if (streq(method, "nvim_buf_lines_event")) {
+                print("method: %s", method);
+
+                if (streq(method, "custom_notification")) {
+                    SCOPED_FRAME();
+
+                    auto cmd = reader.read_string(); CHECKOK();
+                    auto num_args = reader.read_array(); CHECKOK();
+                    if (streq(cmd, "reveal_line")) {
+                        assert(num_args == 2);
+                        auto screen_pos = (Screen_Pos)reader.read_int(); CHECKOK();
+                        auto reset_cursor = (bool)reader.read_int();
+                        add_event([&](Nvim_Message *msg) {
+                            msg->notification.type = NVIM_NOTIF_CUSTOM_REVEAL_LINE;
+                            msg->notification.custom_reveal_line.screen_pos = screen_pos;
+                            msg->notification.custom_reveal_line.reset_cursor = reset_cursor;
+                        });
+                    } else if (streq(cmd, "move_cursor")) {
+                        assert(num_args == 1);
+                        auto screen_pos = (Screen_Pos)reader.read_int(); CHECKOK();
+                        add_event([&](Nvim_Message *msg) {
+                            msg->notification.type = NVIM_NOTIF_CUSTOM_MOVE_CURSOR;
+                            msg->notification.custom_move_cursor.screen_pos = screen_pos;
+                        });
+                    }
+                } else if (streq(method, "nvim_buf_lines_event")) {
                     SCOPED_FRAME();
 
                     auto buf = reader.read_ext(); CHECKOK();
