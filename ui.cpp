@@ -580,6 +580,9 @@ ccstr file_tree_node_to_path(File_Tree_Node *node) {
     return r.finish();
 }
 
+const float LINE_NUMBER_MARGIN_LEFT = 3;
+const float LINE_NUMBER_MARGIN_RIGHT = 15;
+
 void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
     {
         // prepare opengl for drawing shit
@@ -1076,12 +1079,22 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                         }
                     }
 
+                    auto line_number_width = (int)log10(buf.lines.len) + 1;
+
                     auto is_cursor_match = [&](cur2 cur, i32 x, i32 y) -> bool {
                         if (cur.y != y) return false;
                     };
 
-                    u32 actual_x = 0;
-                    for (u32 x = view.x; x < view.x + view.w; x++) {
+                    {
+                        cur_pos.x += LINE_NUMBER_MARGIN_LEFT;
+                        auto line_number_str = our_sprintf("%*d", line_number_width, y + 1);
+                        auto len = strlen(line_number_str);
+                        for (u32 i = 0; i < len; i++)
+                            draw_char(&cur_pos, line_number_str[i], rgba(COLOR_MEDIUM_DARK_GREY));
+                        cur_pos.x += LINE_NUMBER_MARGIN_RIGHT;
+                    }
+
+                    for (u32 x = view.x, vx = view.x; vx < view.x + view.w; x++) {
                         if (x >= line->len) break;
 
                         vec3f text_color = COLOR_WHITE;
@@ -1456,8 +1469,14 @@ void UI::recalculate_view_sizes(bool force) {
         it.width = it.width / total * panes_area.w;
         pane_area.w = it.width;
 
+        int line_number_width = 0;
+        auto editor = it.get_current_editor();
+        if (editor != NULL)
+            line_number_width = (int)log10(editor->buf.lines.len) + 1;
+
         boxf editor_area;
         get_tabs_and_editor_area(&pane_area, NULL, &editor_area);
+        editor_area.w -= ((line_number_width * font->width) + LINE_NUMBER_MARGIN_LEFT + LINE_NUMBER_MARGIN_RIGHT);
         new_sizes->append(editor_area.size);
 
         pane_area.x += pane_area.w;

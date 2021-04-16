@@ -129,6 +129,7 @@ struct UI {
 
     vec2f _editor_sizes[MAX_PANES];
     List<vec2f> editor_sizes;
+
     List<stbrp_rect> sprite_rects;
     float sprite_tex_size;
     bool clipping;
