@@ -644,8 +644,12 @@ ccstr get_canon_path(ccstr path) {
 
 bool move_file_atomically(ccstr src, ccstr dest) {
     SCOPED_FRAME();
-    // return ReplaceFileA(dest, src, our_sprintf("%s.bak" src), REPLACEFILE_IGNORE_MERGE_ERRORS, NULL, NULL);
-    return MoveFileA(src, dest);
+
+    auto h = CreateFile(dest, GENERIC_WRITE, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (h != INVALID_HANDLE_VALUE)
+        CloseHandle(h);
+
+    return ReplaceFileA(dest, src, NULL, REPLACEFILE_IGNORE_MERGE_ERRORS, NULL, NULL);
 }
 
 void *read_font_data_from_name(s32 *len, ccstr name) {
