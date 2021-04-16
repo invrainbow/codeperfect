@@ -1098,7 +1098,7 @@ struct Go_Indexer {
     ccstr get_package_name(ccstr path);
     ccstr get_package_path(ccstr import_path);
     Resolved_Import* resolve_import(ccstr import_path);
-    Parsed_File *parse_file(ccstr filepath);
+    Parsed_File *parse_file(ccstr filepath, bool use_latest = false);
     void free_parsed_file(Parsed_File *file);
     ccstr get_workspace_import_path();
     void handle_error(ccstr err);

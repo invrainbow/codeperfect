@@ -977,12 +977,11 @@ bool Go_Indexer::start_background_thread() {
     return (bgthread = create_thread(fn, this)) != NULL;
 }
 
-Parsed_File *Go_Indexer::parse_file(ccstr filepath) {
+Parsed_File *Go_Indexer::parse_file(ccstr filepath, bool use_latest) {
     Parsed_File *ret = NULL;
 
     auto editor = get_open_editor(filepath);
-    /*
-    if (editor != NULL) {
+    if (editor != NULL && use_latest) {
         auto it = alloc_object(Parser_It);
         it->init(&editor->buf);
 
@@ -991,8 +990,6 @@ Parsed_File *Go_Indexer::parse_file(ccstr filepath) {
         ret->it = it;
         ret->tree = ts_tree_copy(editor->tree);
     } else {
-    */
-    {
         auto ef = read_entire_file(filepath);
         if (ef == NULL) return NULL;
 
@@ -1620,7 +1617,7 @@ List<Goresult> *Go_Indexer::get_possible_dot_completions(Ast_Node *operand_node,
 Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 pos) {
     reload_all_dirty_files();
 
-    auto pf = parse_file(filepath);
+    auto pf = parse_file(filepath, true);
     if (pf == NULL) return NULL;
     defer { free_parsed_file(pf); };
 
@@ -1760,7 +1757,7 @@ bool is_expression_node(Ast_Node *node) {
 bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period, Autocomplete *out) {
     reload_all_dirty_files();
 
-    auto pf = parse_file(filepath);
+    auto pf = parse_file(filepath, true);
     if (pf == NULL) return false;
     defer { free_parsed_file(pf); };
 
@@ -2043,7 +2040,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
 Parameter_Hint *Go_Indexer::parameter_hint(ccstr filepath, cur2 pos, bool triggered_by_paren) {
     reload_all_dirty_files();
 
-    auto pf = parse_file(filepath);
+    auto pf = parse_file(filepath, true);
     if (pf == NULL) return NULL;
     defer { free_parsed_file(pf); };
 
