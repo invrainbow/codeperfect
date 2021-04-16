@@ -462,6 +462,7 @@ struct Ast_Node {
     const void* id;
     bool anon;
     int child_count;
+    int all_child_count;
 
     Ast_Node *dup(TSNode new_node);
     ccstr string();
@@ -483,6 +484,7 @@ struct Ast_Node {
             id = node.id;
             anon = !ts_node_is_named(node);
             child_count = ts_node_named_child_count(node);
+            all_child_count = ts_node_child_count(node);
         }
     }
 
@@ -544,6 +546,10 @@ struct Ast_Node {
         auto ret = ts_node_prev_sibling(node);
         ret = _skip_comment(ret, false);
         return dup(ret);
+    }
+
+    bool is_missing() {
+        return ts_node_is_missing(node);
     }
 };
 

@@ -809,16 +809,29 @@ void Editor::type_char_in_insert_mode(char ch) {
                 return WALK_CONTINUE;
             });
 
-            auto curr = rbrace_node->prev_all();
+            auto walk_upwards = [&](Ast_Node *curr) -> Ast_Node * {
+                while (true) {
+                    // try to get prev
+                    auto prev = curr->prev_all();
+                    if (!prev->null) return prev;
+
+                    // unable to? get parent, try again
+                    curr = curr->parent();
+                    if (curr->null) return curr;
+                }
+            };
+
+            auto curr = walk_upwards(rbrace_node);
             int depth = 1;
 
             i32 lbrace_line = -1;
 
             fn<void(Ast_Node*)> process_node = [&](Ast_Node* node) {
                 if (lbrace_line != -1) return;
+                if (node->is_missing()) return;
 
                 SCOPED_FRAME();
-                auto children = alloc_list<Ast_Node*>(node->child_count);
+                auto children = alloc_list<Ast_Node*>(node->all_child_count);
                 FOR_ALL_NODE_CHILDREN (node) children->append(it);
                 for (; children->len > 0; children->len--)
                     process_node(*children->last());
@@ -834,14 +847,8 @@ void Editor::type_char_in_insert_mode(char ch) {
                 }
             };
 
-            for (; !curr->null && lbrace_line == -1; curr = curr->parent()) {
-                while (lbrace_line == -1) {
-                    process_node(curr);
-                    auto prev = curr->prev_all();
-                    if (prev->null) break;
-                    curr = prev;
-                }
-            }
+            for (; !curr->null && lbrace_line == -1; curr = walk_upwards(curr))
+                process_node(curr);
 
             if (lbrace_line == -1) break;
 
