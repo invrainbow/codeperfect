@@ -1115,12 +1115,15 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                             draw_cursor();
                             text_color = COLOR_BLACK;
                         }
-
                         uchar uch = line->at(x);
-                        if (uch == '\t')
-                            cur_pos.x += font->width * TAB_SIZE;
-                        else
+                        if (uch == '\t') {
+                            auto chars = TAB_SIZE - ((vx - view.x) % TAB_SIZE);
+                            cur_pos.x += font->width * chars;
+                            vx += chars;
+                        } else {
                             draw_char(&cur_pos, (char)uch, rgba(text_color));
+                            vx++;
+                        }
 
                         if (hint.gotype != NULL)
                             if (new_cur2(x, y) == hint.start)
