@@ -185,6 +185,8 @@ void World::init() {
     chunk6_fridge.init(8);
 
     // prepare_workspace();
+
+    // build helper
     shell("go build helper.go", "w:/helper");
 
     use_nvim = true;

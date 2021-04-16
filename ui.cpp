@@ -1245,8 +1245,8 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
             boxf b;
             b.w = 4;
             b.h = panes_area.h;
-            b.x = offset - 2;
-            b.y = 0;
+            b.x = panes_area.x + offset - 2;
+            b.y = panes_area.y;
 
             if (get_mouse_flags(b) & MOUSE_HOVER) {
                 draw_rect(b, rgba(COLOR_WHITE));

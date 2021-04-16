@@ -264,7 +264,7 @@ struct World {
 
 extern World world;
 
-#define TAB_SIZE 2 // TODO
+#define TAB_SIZE 4 // TODO
 
 bool is_ignored_by_git(ccstr path, bool isdir);
 
