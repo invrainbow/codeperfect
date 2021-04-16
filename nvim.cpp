@@ -1010,37 +1010,37 @@ void Mp_Reader::skip_object() {
     u32 arrlen; // for array and map
     auto obj_type = peek_type();
     switch (obj_type) {
-        case MP_NIL: read_nil(); return;
-        case MP_BOOL: read_bool(); return;
-        case MP_INT: read_int(); return;
-        case MP_DOUBLE: read_double(); return;
-        case MP_STRING: read_string(); return;
-        case MP_EXT: read_ext(); return;
-        case MP_ARRAY:
-        case MP_MAP:
-            arrlen = obj_type == MP_ARRAY ? read_array() : (read_map() * 2);
-            if (ok) {
-                for (u32 i = 0; i < arrlen; i++) {
-                    skip_object();
-                    if (!ok)
-                        break;
-                }
+    case MP_NIL: read_nil(); return;
+    case MP_BOOL: read_bool(); return;
+    case MP_INT: read_int(); return;
+    case MP_DOUBLE: read_double(); return;
+    case MP_STRING: read_string(); return;
+    case MP_EXT: read_ext(); return;
+    case MP_ARRAY:
+    case MP_MAP:
+        arrlen = obj_type == MP_ARRAY ? read_array() : (read_map() * 2);
+        if (ok) {
+            for (u32 i = 0; i < arrlen; i++) {
+                skip_object();
+                if (!ok)
+                    break;
             }
-            return;
+        }
+        return;
     }
 }
 
 ccstr mptype_str(MpType type) {
     switch (type) {
-        define_str_case(MP_UNKNOWN);
-        define_str_case(MP_BOOL);
-        define_str_case(MP_INT);
-        define_str_case(MP_DOUBLE);
-        define_str_case(MP_STRING);
-        define_str_case(MP_NIL);
-        define_str_case(MP_ARRAY);
-        define_str_case(MP_MAP);
-        define_str_case(MP_EXT);
+    define_str_case(MP_UNKNOWN);
+    define_str_case(MP_BOOL);
+    define_str_case(MP_INT);
+    define_str_case(MP_DOUBLE);
+    define_str_case(MP_STRING);
+    define_str_case(MP_NIL);
+    define_str_case(MP_ARRAY);
+    define_str_case(MP_MAP);
+    define_str_case(MP_EXT);
     }
     return NULL;
 }
