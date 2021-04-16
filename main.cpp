@@ -545,10 +545,31 @@ void init_with_file_at_location(ccstr path, cur2 cur) {
     world.get_current_editor()->move_cursor(cur);
 }
 
+struct Timer {
+    u64 time;
+
+    void init() {
+        time = current_time_in_nanoseconds();
+    }
+
+    void log(ccstr s) {
+        auto curr = current_time_in_nanoseconds();
+        print("%dms: %s", (curr - time) / 1000000, s);
+        time = curr;
+    }
+};
+
 int main() {
+    Timer t;
+    t.init();
+
     if (run_tests()) return EXIT_SUCCESS;
 
+    t.log("run_tests");
+
     world.init();
+
+    t.log("world.init");
 
     SCOPED_MEM(&world.frame_mem);
 
@@ -556,14 +577,20 @@ int main() {
         return error("glfwInit failed"), EXIT_FAILURE;
     defer { glfwTerminate(); };
 
+    t.log("glfw init");
+
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
+    t.log("window hints");
+
     world.window = glfwCreateWindow(420, 420, WINDOW_TITLE, NULL, NULL);
     if (world.window == NULL)
         return error("could not create window"), EXIT_FAILURE;
+
+    t.log("actually create the window");
 
     glfwMakeContextCurrent(world.window);
 
@@ -575,6 +602,8 @@ int main() {
     }
 
     glfwSwapInterval(0);
+
+    t.log("random shit");
 
     ImGui::CreateContext();
 
@@ -626,6 +655,8 @@ int main() {
     if (world.ui.im_program == -1)
         return EXIT_FAILURE;
 
+    t.log("fill out a bunch of shit");
+
     // window sizing crap
     glfwSetWindowSize(world.window, 1280, 720);
     glfwSetWindowPos(world.window, 50, 50);
@@ -638,6 +669,8 @@ int main() {
     // now that we have world.display_size, we can call wksp.activate_pane
     world.wksp.activate_pane(0);
 
+    t.log("more shit");
+
     // initialize & bind textures
     glGenTextures(__TEXTURE_COUNT__, world.ui.textures);
     for (u32 i = 0; i < __TEXTURE_COUNT__; i++) {
@@ -648,6 +681,8 @@ int main() {
     // are we going to run out of texture units?
 
     ui.init_sprite_texture();
+
+    t.log("textures");
 
     {
         SCOPED_FRAME();
@@ -683,6 +718,8 @@ int main() {
         // i don't think this is needed
         // io.Fonts->TexID = (void*)TEXTURE_FONT_IMGUI;
     }
+
+    t.log("init fonts");
 
     glfwSetWindowSizeCallback(world.window, [](GLFWwindow* wnd, i32 w, i32 h) {
         world.window_size.x = w;
@@ -1519,6 +1556,8 @@ int main() {
         }
     });
 
+    t.log("set random callbacks");
+
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glDisable(GL_CULL_FACE);
@@ -1607,11 +1646,15 @@ int main() {
         glUniform1i(loc, TEXTURE_FONT_IMGUI);
     }
 
+    t.log("opengl shit");
+
     // Wait until all the OpenGL crap is initialized. I don't know why, but
     // creating background threads that run while glfwCreateWindow() is called
     // results in intermittent crashes. No fucking idea why. I hate
     // programming.
     world.start_background_threads();
+
+    t.log("start background threads");
 
     double last_time = glfwGetTime();
     i64 last_frame_time = current_time_in_nanoseconds();
