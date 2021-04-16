@@ -39,6 +39,7 @@ TODO:
 #include "ui.hpp"
 #include "tests.hpp"
 #include "fzy_match.h"
+#include "settings.hpp"
 
 #include "imgui.h"
 #include "veramono.hpp"
@@ -1860,6 +1861,7 @@ int main() {
                 ImGui::MenuItem("ImGui metrics", NULL, &world.windows_open.im_metrics);
                 ImGui::MenuItem("Editor AST viewer", NULL, &world.wnd_editor_tree.show);
                 ImGui::MenuItem("Editor toplevels viewer", NULL, &world.wnd_editor_toplevels.show);
+                ImGui::MenuItem("Brandon Hsiao Roll Your Own IDE Construction Set", NULL, &world.wnd_style_editor.show);
                 ImGui::EndMenu();
             }
 
@@ -2196,6 +2198,34 @@ int main() {
 
                     }
                 }
+                ImGui::End();
+            }
+
+            if (world.wnd_style_editor.show) {
+                ImGui::Begin("Style Editor", &world.wnd_style_editor.show, ImGuiWindowFlags_AlwaysAutoResize);
+
+                ImGui::SliderFloat("status_padding_x", &settings.STATUS_PADDING_X, 0.0, 20.0f, "%.0f");
+                ImGui::SliderFloat("status_padding_y", &settings.STATUS_PADDING_Y, 0.0, 20.0f, "%.0f");
+                ImGui::SliderFloat("line_number_margin_left", &settings.LINE_NUMBER_MARGIN_LEFT, 0.0, 20.0f, "%.0f");
+                ImGui::SliderFloat("line_number_margin_right", &settings.LINE_NUMBER_MARGIN_RIGHT, 0.0, 20.0f, "%.0f");
+                ImGui::SliderFloat("sidebar_padding_x", &settings.SIDEBAR_PADDING_X, 0.0, 20.0f, "%.0f");
+                ImGui::SliderFloat("sidebar_padding_y", &settings.SIDEBAR_PADDING_Y, 0.0, 20.0f, "%.0f");
+                ImGui::SliderFloat("sidebar_item_padding_x", &settings.SIDEBAR_ITEM_PADDING_X, 0.0, 20.0f, "%.0f");
+                ImGui::SliderFloat("sidebar_item_padding_y", &settings.SIDEBAR_ITEM_PADDING_Y, 0.0, 20.0f, "%.0f");
+                ImGui::SliderFloat("filetree_item_margin", &settings.FILETREE_ITEM_MARGIN, 0.0, 20.0f, "%.0f");
+                ImGui::SliderFloat("filetree_item_padding_y", &settings.FILETREE_ITEM_PADDING_Y, 0.0, 20.0f, "%.0f");
+                ImGui::SliderFloat("filetree_space_between_items", &settings.FILETREE_SPACE_BETWEEN_ITEMS, 0.0, 20.0f, "%.0f");
+                ImGui::SliderFloat("filetree_button_size", &settings.FILETREE_BUTTON_SIZE, 0.0, 20.0f, "%.0f");
+                ImGui::SliderFloat("filetree_buttons_area_padding_x", &settings.FILETREE_BUTTONS_AREA_PADDING_X, 0.0, 20.0f, "%.0f");
+                ImGui::SliderFloat("filetree_buttons_area_padding_y", &settings.FILETREE_BUTTONS_AREA_PADDING_Y, 0.0, 20.0f, "%.0f");
+                ImGui::SliderFloat("filetree_button_margin_x", &settings.FILETREE_BUTTON_MARGIN_X, 0.0, 20.0f, "%.0f");
+                ImGui::SliderFloat("filetree_button_padding", &settings.FILETREE_BUTTON_PADDING, 0.0, 20.0f, "%.0f");
+                ImGui::SliderFloat("autocomplete_menu_padding", &settings.AUTOCOMPLETE_MENU_PADDING, 0.0, 20.0f, "%.0f");
+                ImGui::SliderFloat("autocomplete_item_padding_x", &settings.AUTOCOMPLETE_ITEM_PADDING_X, 0.0, 20.0f, "%.0f");
+                ImGui::SliderFloat("autocomplete_item_padding_y", &settings.AUTOCOMPLETE_ITEM_PADDING_Y, 0.0, 20.0f, "%.0f");
+                ImGui::SliderFloat("error_list_item_padding_x", &settings.ERROR_LIST_ITEM_PADDING_X, 0.0, 20.0f, "%.0f");
+                ImGui::SliderFloat("error_list_item_padding_y", &settings.ERROR_LIST_ITEM_PADDING_Y, 0.0, 20.0f, "%.0f");
+
                 ImGui::End();
             }
 

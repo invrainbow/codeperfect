@@ -255,6 +255,10 @@ struct World {
         bool show_add_watch;
     } wnd_debugger;
 
+    struct {
+        bool show;
+    } wnd_style_editor;
+
     void init();
     void start_background_threads();
     Pane* get_current_pane();

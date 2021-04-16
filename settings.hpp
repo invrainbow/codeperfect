@@ -1,0 +1,28 @@
+#pragma once
+
+struct Settings {
+    float STATUS_PADDING_X = 4;
+    float STATUS_PADDING_Y = 2;
+    float LINE_NUMBER_MARGIN_LEFT = 3;
+    float LINE_NUMBER_MARGIN_RIGHT = 15;
+    float SIDEBAR_PADDING_X = 4;
+    float SIDEBAR_PADDING_Y = 4;
+    float SIDEBAR_ITEM_PADDING_X = 8;
+    float SIDEBAR_ITEM_PADDING_Y = 4;
+    float FILETREE_ITEM_MARGIN = 4;
+    float FILETREE_ITEM_PADDING_Y = 4;
+    float FILETREE_SPACE_BETWEEN_ITEMS = 1;
+    float FILETREE_BUTTON_SIZE = 16;
+    float FILETREE_BUTTONS_AREA_PADDING_X = 4;
+    float FILETREE_BUTTONS_AREA_PADDING_Y = 4;
+    float FILETREE_BUTTON_MARGIN_X = 4;
+    float FILETREE_BUTTON_PADDING = 4;
+    // float ICON_SIZE = 16;
+    float AUTOCOMPLETE_MENU_PADDING = 4;
+    float AUTOCOMPLETE_ITEM_PADDING_X = 4;
+    float AUTOCOMPLETE_ITEM_PADDING_Y = 2;
+    float ERROR_LIST_ITEM_PADDING_X = 5;
+    float ERROR_LIST_ITEM_PADDING_Y = 3;
+};
+
+extern Settings settings;

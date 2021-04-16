@@ -2,6 +2,7 @@
 #include "common.hpp"
 #include "world.hpp"
 #include "go.hpp"
+#include "settings.hpp"
 
 #define _USE_MATH_DEFINES // what the fuck is this lol
 #include <math.h>
@@ -489,9 +490,6 @@ boxf UI::get_sidebar_area() {
     return sidebar_area;
 }
 
-const float STATUS_PADDING_X = 4;
-const float STATUS_PADDING_Y = 2;
-
 boxf UI::get_panes_area(boxf *pstatus_area) {
     auto panes_area = get_viewport_area();
 
@@ -502,7 +500,7 @@ boxf UI::get_panes_area(boxf *pstatus_area) {
     panes_area.h -= get_build_results_area().h;
 
     boxf status_area;
-    status_area.h = font->height + STATUS_PADDING_Y * 2;
+    status_area.h = font->height + settings.STATUS_PADDING_Y * 2;
     status_area.w = panes_area.w;
     status_area.x = panes_area.x;
     status_area.y = panes_area.y + panes_area.h - status_area.h;
@@ -580,9 +578,6 @@ ccstr file_tree_node_to_path(File_Tree_Node *node) {
     return r.finish();
 }
 
-const float LINE_NUMBER_MARGIN_LEFT = 3;
-const float LINE_NUMBER_MARGIN_RIGHT = 15;
-
 void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
     {
         // prepare opengl for drawing shit
@@ -614,30 +609,16 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
             draw_rect(line, rgba(COLOR_DARK_GREY));
         }
 
-        const float SIDEBAR_PADDING_X = 4;
-        const float SIDEBAR_PADDING_Y = 4;
-
-        sidebar_area.x += SIDEBAR_PADDING_X;
-        sidebar_area.w -= SIDEBAR_PADDING_X * 2;
+        sidebar_area.x += settings.SIDEBAR_PADDING_X;
+        sidebar_area.w -= settings.SIDEBAR_PADDING_X * 2;
 
         switch (world.sidebar.view) {
         case SIDEBAR_FILE_EXPLORER:
             {
-                const float ITEM_PADDING_X = 8;
-                const float ITEM_PADDING_Y = 4;
-                const float ITEM_MARGIN = 4;
-                const float SPACE_BETWEEN_ITEMS = 1;
-
                 u32 depth = 0;
 
-                const float BUTTON_SIZE = 16;
-                const float BUTTONS_AREA_PADDING_X = 4;
-                const float BUTTONS_AREA_PADDING_Y = 4;
-                const float BUTTON_MARGIN_X = 4;
-                const float BUTTON_PADDING = 4;
-
                 boxf buttons_area = sidebar_area;
-                buttons_area.h = BUTTON_SIZE + (BUTTON_PADDING * 2) + (BUTTONS_AREA_PADDING_Y * 2);
+                buttons_area.h = settings.FILETREE_BUTTON_SIZE + (settings.FILETREE_BUTTON_PADDING * 2) + (settings.FILETREE_BUTTONS_AREA_PADDING_Y * 2);
 
                 // draw buttons area
                 {
@@ -645,10 +626,10 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                     int button_idx = 0;
                     boxf button_area;
 
-                    button_area.x = buttons_area.x + buttons_area.w - BUTTONS_AREA_PADDING_X - BUTTON_SIZE - BUTTON_PADDING;
-                    button_area.y = buttons_area.y + BUTTONS_AREA_PADDING_Y;
-                    button_area.w = BUTTON_SIZE + (BUTTON_PADDING * 2);
-                    button_area.h = BUTTON_SIZE + (BUTTON_PADDING * 2);
+                    button_area.x = buttons_area.x + buttons_area.w - settings.FILETREE_BUTTONS_AREA_PADDING_X - settings.FILETREE_BUTTON_SIZE - settings.FILETREE_BUTTON_PADDING;
+                    button_area.y = buttons_area.y + settings.FILETREE_BUTTONS_AREA_PADDING_Y;
+                    button_area.w = settings.FILETREE_BUTTON_SIZE + (settings.FILETREE_BUTTON_PADDING * 2);
+                    button_area.h = settings.FILETREE_BUTTON_SIZE + (settings.FILETREE_BUTTON_PADDING * 2);
 
                     // call this from right to left
                     auto draw_button = [&](Sprites_Image_Type image_id) -> bool {
@@ -657,15 +638,15 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                             draw_rounded_rect(button_area, rgba(COLOR_WHITE, 0.2), 2, ROUND_ALL);
 
                         boxf icon_area = button_area;
-                        icon_area.x += BUTTON_PADDING;
-                        icon_area.y += BUTTON_PADDING;
-                        icon_area.w -= BUTTON_PADDING * 2;
-                        icon_area.h -= BUTTON_PADDING * 2;
+                        icon_area.x += settings.FILETREE_BUTTON_PADDING;
+                        icon_area.y += settings.FILETREE_BUTTON_PADDING;
+                        icon_area.w -= settings.FILETREE_BUTTON_PADDING * 2;
+                        icon_area.h -= settings.FILETREE_BUTTON_PADDING * 2;
                         draw_image(image_id, icon_area);
 
-                        button_area.pos.x -= BUTTON_MARGIN_X;
-                        button_area.pos.x -= BUTTON_SIZE;
-                        button_area.pos.x -= BUTTON_PADDING * 2;
+                        button_area.pos.x -= settings.FILETREE_BUTTON_MARGIN_X;
+                        button_area.pos.x -= settings.FILETREE_BUTTON_SIZE;
+                        button_area.pos.x -= settings.FILETREE_BUTTON_PADDING * 2;
                         return (mouse_flags & MOUSE_CLICKED);
                     };
 
@@ -719,16 +700,16 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                 boxf row_area;
                 row_area.pos = files_area.pos;
                 row_area.y -= world.file_explorer.scroll_offset;
-                row_area.y += ITEM_MARGIN;
+                row_area.y += settings.FILETREE_ITEM_MARGIN;
                 row_area.w = files_area.w;
                 row_area.h = font->height;
-                row_area.h += ITEM_PADDING_Y * 2;
+                row_area.h += settings.FILETREE_ITEM_PADDING_Y * 2;
 
                 auto stack = alloc_list<File_Tree_Node*>();
                 for (auto child = world.file_tree->children; child != NULL; child = child->next)
                     stack->append(child);
 
-                for (u32 i = 0; stack->len > 0 && row_area.y <= files_area.y + files_area.h; i++, row_area.y += row_area.h + SPACE_BETWEEN_ITEMS) {
+                for (u32 i = 0; stack->len > 0 && row_area.y <= files_area.y + files_area.h; i++, row_area.y += row_area.h + settings.FILETREE_SPACE_BETWEEN_ITEMS) {
                     auto it = *stack->last();
                     stack->len--;
 
@@ -770,12 +751,10 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                         }
 
                         boxf text_area = row_area;
-                        text_area.x += ITEM_PADDING_X + it->depth * 20;
-                        text_area.w -= ITEM_PADDING_X * 2;
-                        text_area.y += ITEM_PADDING_Y;
-                        text_area.h -= ITEM_PADDING_Y * 2;
-
-                        const float ICON_SIZE = 16;
+                        text_area.x += settings.SIDEBAR_ITEM_PADDING_X + it->depth * 20;
+                        text_area.w -= settings.SIDEBAR_ITEM_PADDING_X * 2;
+                        text_area.y += settings.SIDEBAR_ITEM_PADDING_Y;
+                        text_area.h -= settings.SIDEBAR_ITEM_PADDING_Y * 2;
 
                         boxf icon_area;
                         icon_area.pos = text_area.pos;
@@ -1086,12 +1065,12 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                     };
 
                     {
-                        cur_pos.x += LINE_NUMBER_MARGIN_LEFT;
+                        cur_pos.x += settings.LINE_NUMBER_MARGIN_LEFT;
                         auto line_number_str = our_sprintf("%*d", line_number_width, y + 1);
                         auto len = strlen(line_number_str);
                         for (u32 i = 0; i < len; i++)
                             draw_char(&cur_pos, line_number_str[i], rgba(COLOR_MEDIUM_DARK_GREY));
-                        cur_pos.x += LINE_NUMBER_MARGIN_RIGHT;
+                        cur_pos.x += settings.LINE_NUMBER_MARGIN_RIGHT;
                     }
 
                     for (u32 x = view.x, vx = view.x; vx < view.x + view.w; x++) {
@@ -1168,19 +1147,15 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                     }
 
                     if (num_items > 0) {
-                        const float MENU_PADDING = 4;
-                        const float ITEM_PADDING_X = 4;
-                        const float ITEM_PADDING_Y = 2;
-
                         boxf menu;
-                        menu.w = (font->width * max_len) + (ITEM_PADDING_X * 2) + (MENU_PADDING * 2);
-                        menu.h = (font->height * num_items) + (ITEM_PADDING_Y * 2 * num_items) + (MENU_PADDING * 2);
+                        menu.w = (font->width * max_len) + (settings.AUTOCOMPLETE_ITEM_PADDING_X * 2) + (settings.AUTOCOMPLETE_MENU_PADDING * 2);
+                        menu.h = (font->height * num_items) + (settings.AUTOCOMPLETE_ITEM_PADDING_Y * 2 * num_items) + (settings.AUTOCOMPLETE_MENU_PADDING * 2);
                         menu.x = min(actual_cursor_position.x - strlen(ac.ac.prefix) * font->width, world.window_size.x - menu.w);
                         menu.y = min(actual_cursor_position.y - font->offset_y + font->height, world.window_size.y - menu.h);
 
                         draw_bordered_rect_outer(menu, rgba(COLOR_BLACK), rgba(COLOR_LIGHT_GREY), 1, 4);
 
-                        auto menu_pos = menu.pos + new_vec2f(MENU_PADDING, MENU_PADDING);
+                        auto menu_pos = menu.pos + new_vec2f(settings.AUTOCOMPLETE_MENU_PADDING, settings.AUTOCOMPLETE_MENU_PADDING);
 
                         for (int i = ac.view; i < ac.view + num_items; i++) {
                             auto idx = ac.filtered_results->at(i);
@@ -1190,8 +1165,8 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                             if (i == ac.selection) {
                                 boxf b;
                                 b.pos = menu_pos;
-                                b.h = font->height + (ITEM_PADDING_Y * 2);
-                                b.w = menu.w - (MENU_PADDING * 2);
+                                b.h = font->height + (settings.AUTOCOMPLETE_ITEM_PADDING_Y * 2);
+                                b.w = menu.w - (settings.AUTOCOMPLETE_MENU_PADDING * 2);
                                 draw_rounded_rect(b, rgba(COLOR_DARK_GREY), 4, ROUND_ALL);
                                 // color = new_vec3f(0.0, 0.0, 0.0);
                             }
@@ -1200,11 +1175,11 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                                 SCOPED_FRAME();
                                 auto str = format_name(i, ac.ac.results->at(idx).name);
 
-                                auto pos = menu_pos + new_vec2f(ITEM_PADDING_X, ITEM_PADDING_Y);
+                                auto pos = menu_pos + new_vec2f(settings.AUTOCOMPLETE_ITEM_PADDING_X, settings.AUTOCOMPLETE_ITEM_PADDING_Y);
                                 draw_string(pos, str, rgba(color));
                             }
 
-                            menu_pos.y += font->height + ITEM_PADDING_Y * 2;
+                            menu_pos.y += font->height + settings.AUTOCOMPLETE_ITEM_PADDING_Y * 2;
                         }
                     }
                 } while (0);
@@ -1269,14 +1244,14 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
         str_area.h = status_area.h;
 
         auto draw_status_piece = [&](ccstr s, vec4f bgcolor, vec4f fgcolor) {
-            str_area.w = font->width * strlen(s) + (STATUS_PADDING_X * 2);
+            str_area.w = font->width * strlen(s) + (settings.STATUS_PADDING_X * 2);
             draw_rect(str_area, bgcolor);
 
             boxf text_area = str_area;
-            text_area.x += STATUS_PADDING_X;
-            text_area.y += STATUS_PADDING_Y;
-            text_area.w -= (STATUS_PADDING_X * 2);
-            text_area.h -= (STATUS_PADDING_Y * 2);
+            text_area.x += settings.STATUS_PADDING_X;
+            text_area.y += settings.STATUS_PADDING_Y;
+            text_area.w -= (settings.STATUS_PADDING_X * 2);
+            text_area.h -= (settings.STATUS_PADDING_Y * 2);
             draw_string(text_area.pos, s, fgcolor);
 
             str_area.x += str_area.w;
@@ -1325,23 +1300,20 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
     }
 
     if (world.error_list.show) {
-        const float ITEM_PADDING_X = 5;
-        const float ITEM_PADDING_Y = 3;
-
         boxf build_results_area = get_build_results_area();
         draw_rect(build_results_area, rgba(COLOR_DARK_GREY));
 
         boxf row_area;
         row_area.x = build_results_area.x;
         row_area.y = build_results_area.y;
-        row_area.h = font->height + ITEM_PADDING_Y * 2;
+        row_area.h = font->height + settings.ERROR_LIST_ITEM_PADDING_Y * 2;
         row_area.w = build_results_area.w;
 
         if (world.build.done) {
             if (world.build.errors.len == 0) {
                 auto pos = row_area.pos;
-                pos.x += ITEM_PADDING_X;
-                pos.y += ITEM_PADDING_Y;
+                pos.x += settings.ERROR_LIST_ITEM_PADDING_X;
+                pos.y += settings.ERROR_LIST_ITEM_PADDING_Y;
                 draw_string(pos, "Build was successful!", rgba(COLOR_GREEN));
             } else {
                 row_area.y -= world.wnd_build_and_debug.scroll_offset;
@@ -1389,16 +1361,16 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                         SCOPED_FRAME();
                         auto s = our_sprintf("%s:%d:%d: %s", it.file, it.row, it.col, it.message);
                         auto pos = row_area.pos;
-                        pos.x += ITEM_PADDING_X;
-                        pos.y += ITEM_PADDING_Y;
+                        pos.x += settings.ERROR_LIST_ITEM_PADDING_X;
+                        pos.y += settings.ERROR_LIST_ITEM_PADDING_Y;
                         draw_string(pos, s, rgba(text_color));
                     }
                 }
             }
         } else {
             auto pos = row_area.pos;
-            pos.x += ITEM_PADDING_X;
-            pos.y += ITEM_PADDING_Y;
+            pos.x += settings.ERROR_LIST_ITEM_PADDING_X;
+            pos.y += settings.ERROR_LIST_ITEM_PADDING_Y;
             draw_string(pos, "Building...", rgba(COLOR_MEDIUM_GREY));
         }
     }
@@ -1479,7 +1451,7 @@ void UI::recalculate_view_sizes(bool force) {
 
         boxf editor_area;
         get_tabs_and_editor_area(&pane_area, NULL, &editor_area);
-        editor_area.w -= ((line_number_width * font->width) + LINE_NUMBER_MARGIN_LEFT + LINE_NUMBER_MARGIN_RIGHT);
+        editor_area.w -= ((line_number_width * font->width) + settings.LINE_NUMBER_MARGIN_LEFT + settings.LINE_NUMBER_MARGIN_RIGHT);
         new_sizes->append(editor_area.size);
 
         pane_area.x += pane_area.w;
