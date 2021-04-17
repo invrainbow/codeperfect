@@ -992,14 +992,20 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                 vec2f actual_cursor_position = { -1, -1 };
                 vec2f actual_parameter_hint_start = { -1, -1 };
 
-                auto draw_background = [&](vec3f color) {
-                    boxf b = { cur_pos.x, cur_pos.y - font->offset_y, (float)font->width, (float)font->height };
-                    draw_rect(b, rgba(color));
-                };
-
                 auto draw_cursor = [&]() {
                     actual_cursor_position = cur_pos;    // save position where cursor is drawn for later use
-                    draw_background(COLOR_LIME);
+                    boxf b;
+                    b.x = cur_pos.x;
+                    b.y = cur_pos.y - font->offset_y;
+                    b.h = (float)font->height;
+
+                    if (world.nvim.mode == VI_INSERT && !world.nvim.exiting_insert_mode) {
+                        b.w = 2;
+                    } else {
+                        b.w = (float)font->width;
+                    }
+
+                    draw_rect(b, rgba(COLOR_LIME));
                 };
 
                 List<Client_Breakpoint> breakpoints_for_this_editor;
@@ -1092,7 +1098,8 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
 
                         if (editor->cur == new_cur2(x, y)) {
                             draw_cursor();
-                            text_color = COLOR_BLACK;
+                            if (world.nvim.mode != VI_INSERT)
+                                text_color = COLOR_BLACK;
                         }
                         uchar uch = line->at(x);
                         if (uch == '\t') {
