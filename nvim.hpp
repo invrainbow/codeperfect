@@ -433,6 +433,8 @@ enum Vi_Mode {
     VI_VISUAL,
     VI_INSERT,
     VI_REPLACE,
+    VI_OPERATOR,
+    VI_CMDLINE,
     VI_UNKNOWN,
 };
 

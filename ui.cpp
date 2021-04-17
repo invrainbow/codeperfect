@@ -1265,6 +1265,8 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
             case VI_VISUAL: mode_str = "VISUAL"; break;
             case VI_INSERT: mode_str = "INSERT"; break;
             case VI_REPLACE: mode_str = "REPLACE"; break;
+            case VI_OPERATOR: mode_str = "OPERATOR"; break;
+            case VI_CMDLINE: mode_str = "CMDLINE"; break;
             default: mode_str = "UNKNOWN"; break;
             }
 

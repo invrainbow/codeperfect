@@ -434,6 +434,10 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                     mode = VI_REPLACE;
                 else if (streq(args.mode_name, "visual"))
                     mode = VI_VISUAL;
+                else if (streq(args.mode_name, "operator"))
+                    mode = VI_OPERATOR;
+                else if (streq(args.mode_name, "cmdline_normal"))
+                    mode = VI_CMDLINE;
                 else
                     mode = VI_UNKNOWN;
 
