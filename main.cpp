@@ -1257,6 +1257,10 @@ int main() {
                                         new_idx = pane->editors.len - 1;
                                     pane->focus_editor_by_index(new_idx);
                                 }
+
+                                world.nvim.start_request_message("nvim_input", 1);
+                                world.nvim.writer.write_string("<Esc>");
+                                world.nvim.end_message();
                             }
                         }
                         break;
