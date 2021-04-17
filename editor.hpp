@@ -43,6 +43,7 @@ struct Editor {
     // is this file "dirty" from the perspective of the index?
     bool index_dirty;
     bool is_go_file;
+    u64 disable_file_watcher_until;
 
     bool saving;
     Process goimports_proc;
@@ -111,7 +112,7 @@ struct Editor {
     void end_change();
 
     void apply_edits(List<TSInputEdit> *edits);
-    void reload_file();
+    void reload_file(bool because_of_file_watcher = false);
     void update_lines(int firstline, int lastline, List<uchar*> *lines, List<s32> *line_lengths);
     bool trigger_escape();
     void format_on_save();

@@ -164,6 +164,7 @@ void World::init() {
     fzy_init();
 
 #define init_mem(x) x.init(#x)
+    init_mem(world_mem);
     init_mem(frame_mem);
     init_mem(file_tree_mem);
     init_mem(autocomplete_mem);
@@ -172,8 +173,10 @@ void World::init() {
     init_mem(scratch_mem);
     init_mem(build_index_mem);
     init_mem(ui_mem);
+    init_mem(message_queue_mem);
 #undef init_mem
 
+    // use frame_mem as the default mem
     MEM = &frame_mem;
 
     chunk0_fridge.init(512);
@@ -183,6 +186,15 @@ void World::init() {
     chunk4_fridge.init(32);
     chunk5_fridge.init(16);
     chunk6_fridge.init(8);
+
+    {
+        // do we need world_mem anywhere else?
+        // i assume we will have other things that "orchestrate" world
+        SCOPED_MEM(&world_mem);
+        message_queue.init();
+    }
+
+    message_queue_lock.init();
 
     // prepare_workspace();
 
@@ -217,6 +229,15 @@ void World::init() {
     }
 }
 
+void World::add_event(fn<void(Main_Thread_Message*)> f) {
+    SCOPED_LOCK(&message_queue_lock);
+    SCOPED_MEM(&message_queue_mem);
+
+    auto msg = message_queue.append();
+    f(msg);
+    print("added msg: %d", msg->type);
+}
+
 void World::start_background_threads() {
     indexer.start_background_thread();
     nvim.start_running();
@@ -242,3 +263,7 @@ Editor* World::find_editor(find_editor_func f) {
     return NULL;
 }
 
+Editor* World::find_editor_by_id(u32 id) {
+    auto is_match = [&](Editor* it) -> bool { return it->id == id; };
+    return find_editor(is_match);
+}

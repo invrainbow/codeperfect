@@ -141,7 +141,10 @@ void Editor::reset_state() {
 }
 
 // I'm just going to make this a separate function from load_file(), since it is doing mostly a different thing.
-void Editor::reload_file() {
+void Editor::reload_file(bool because_of_file_watcher) {
+    if (because_of_file_watcher && disable_file_watcher_until > current_time_in_nanoseconds())
+        return;
+
     auto f = fopen(filepath, "r");
     if (f == NULL) {
         error("unable to open %s for reading: %s", filepath, strerror(errno));
@@ -165,6 +168,25 @@ void Editor::reload_file() {
         buf.cleanup();
     buf.init(&mem);
     buf.read(f);
+
+    if (world.use_nvim) {
+        nvim_data.got_initial_lines = false;
+
+        auto& nv = world.nvim;
+        nv.start_request_message("nvim_buf_set_lines", 5);
+        nv.writer.write_int(nvim_data.buf_id);
+        nv.writer.write_int(0);
+        nv.writer.write_int(-1);
+        nv.writer.write_bool(false);
+        nv.writer.write_array(buf.lines.len);
+        For (buf.lines) {
+            nv.writer.write1(MP_OP_STRING);
+            nv.writer.write4(it.len);
+            For (it) nv.writer.write1(it);
+        }
+        nv.end_message();
+    }
+
 
     if (tree != NULL) {
         cur2 new_end = new_cur2((i32)buf.lines.last()->len, buf.lines.len-1);

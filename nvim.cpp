@@ -72,11 +72,6 @@ Editor* Nvim::find_editor_by_grid(u32 grid) {
     return find_editor_by_window(pair->win);
 }
 
-Editor* find_editor_by_id(u32 id) {
-    auto is_match = [&](Editor* it) -> bool { return it->id == id; };
-    return world.find_editor(is_match);
-}
-
 void Nvim::handle_editor_on_ready(Editor *editor) {
     nvim_print("handle_editor_on_ready() called...");
 
@@ -147,8 +142,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
             // grab associated editor, break if we can't find it
             Editor* editor = NULL;
             if (req->editor_id != 0) {
-                auto is_match = [&](Editor* it) -> bool { return it->id == req->editor_id; };
-                editor = world.find_editor(is_match);
+                editor = world.find_editor_by_id(req->editor_id);
                 if (editor == NULL) {
                     reader.skip_object();
                     break;
@@ -530,12 +524,11 @@ void Nvim::run_event_loop() {
         ASSERT(msglen == expected_len);
 
         auto add_event = [&](fn<void(Nvim_Message*)> f) {
-            SCOPED_LOCK(&messages_lock);
-            SCOPED_MEM(&messages_mem);
-
-            auto event = message_queue.append();
-            event->type = msgtype;
-            f(event);
+            world.add_event([&](Main_Thread_Message *msg) {
+                msg->type = MTM_NVIM_MESSAGE;
+                msg->nvim_message.type = msgtype;
+                f(&msg->nvim_message);
+            });
         };
 
         switch (msgtype) {

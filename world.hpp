@@ -52,7 +52,22 @@ struct File_Tree_Node {
     bool open;
 };
 
+enum Main_Thread_Message_Type {
+    MTM_NVIM_MESSAGE,
+    MTM_RELOAD_EDITOR,
+};
+
+struct Main_Thread_Message {
+    Main_Thread_Message_Type type;
+
+    union {
+        Nvim_Message nvim_message;
+        u32 reload_editor_id;
+    };
+};
+
 struct World {
+    Pool world_mem;
     Pool frame_mem;
     Pool autocomplete_mem;
     Pool parameter_hint_mem;
@@ -62,6 +77,7 @@ struct World {
     Pool build_mem;
     Pool build_index_mem;
     Pool ui_mem;
+    Pool message_queue_mem;
 
     Fridge<Chunk0> chunk0_fridge;
     Fridge<Chunk1> chunk1_fridge;
@@ -75,6 +91,9 @@ struct World {
     vec2 window_size;
     vec2 display_size;
     vec2f display_scale;
+
+    Lock message_queue_lock;
+    List<Main_Thread_Message> message_queue;
 
     Go_Indexer indexer;
 
@@ -264,6 +283,8 @@ struct World {
     Pane* get_current_pane();
     Editor* get_current_editor();
     Editor* find_editor(find_editor_func f);
+    void add_event(fn<void(Main_Thread_Message*)> f);
+    Editor* find_editor_by_id(u32 id);
 };
 
 extern World world;

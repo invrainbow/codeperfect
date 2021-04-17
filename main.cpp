@@ -1135,6 +1135,8 @@ int main() {
                             editor->format_on_save();
 
                             {
+                                editor->disable_file_watcher_until = current_time_in_nanoseconds() + (2 * 1000000000);
+
                                 FILE* f = fopen(editor->filepath, "w");
                                 if (f == NULL) return; // TODO: display error
                                 defer { fclose(f); };
@@ -1668,14 +1670,29 @@ int main() {
         SCOPED_MEM(&world.frame_mem);
 
         {
-            auto &nv = world.nvim;
-
             // Process messages in nvim queue.
-            SCOPED_LOCK(&nv.messages_lock);
-            For (nv.message_queue)
-                nv.handle_message_from_main_thread(&it);
-            nv.messages_mem.reset();
-            nv.message_queue.len = 0;
+            SCOPED_LOCK(&world.message_queue_lock);
+
+            For (world.message_queue) {
+                switch (it.type) {
+                case MTM_NVIM_MESSAGE:
+                    {
+                        auto &nv = world.nvim;
+                        nv.handle_message_from_main_thread(&it.nvim_message);
+                    }
+                    break;
+                case MTM_RELOAD_EDITOR:
+                    {
+                        auto editor = world.find_editor_by_id(it.reload_editor_id);
+                        if (editor == NULL) break;
+                        editor->reload_file(true);
+                    }
+                    break;
+                }
+            }
+
+            world.message_queue_mem.reset();
+            world.message_queue.len = 0;
         }
 
         {

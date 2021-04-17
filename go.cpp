@@ -644,7 +644,13 @@ void Go_Indexer::background_thread() {
             };
 
             auto handle_gofile_created = [&](ccstr filepath) {
-                // if (get_open_editor(filepath) != NULL) return;
+                auto editor = get_open_editor(filepath);
+                if (editor != NULL) {
+                    world.add_event([&](Main_Thread_Message *msg) {
+                        msg->type = MTM_RELOAD_EDITOR;
+                        msg->reload_editor_id = editor->id;
+                    });
+                }
 
                 auto pkg = find_package_in_index(filepath_to_import_path(our_dirname(filepath)));
                 if (pkg == NULL) return;
