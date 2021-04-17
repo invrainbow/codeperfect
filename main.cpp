@@ -1130,6 +1130,7 @@ int main() {
                                 opts.save = true;
                                 if (!let_user_select_file(&opts)) break;
                                 editor->is_untitled = false;
+                                editor->is_go_file = str_ends_with(editor->filepath, ".go");
                             }
 
                             editor->format_on_save();
