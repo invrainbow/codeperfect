@@ -302,8 +302,8 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                         end_message();
                     };
 
-                    set_option("shiftwidth", [&]() { writer.write_int(2); });
-                    set_option("tabstop",    [&]() { writer.write_int(2); });
+                    set_option("shiftwidth", [&]() { writer.write_int(4); });
+                    set_option("tabstop",    [&]() { writer.write_int(4); });
                     set_option("expandtab",  [&]() { writer.write_bool(false); });
                     set_option("wrap",       [&]() { writer.write_bool(false); });
                     set_option("autoindent", [&]() { writer.write_bool(true); });
