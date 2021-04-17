@@ -106,11 +106,10 @@ void Editor::update_tree() {
     index_dirty = true;
 }
 
-void Editor::move_cursor(cur2 c, int save_nvim_request) {
+void Editor::move_cursor(cur2 c) {
     if (world.nvim.mode == VI_INSERT) {
         nvim_data.waiting_for_move_cursor = true;
         nvim_data.move_cursor_to = c;
-        nvim_data.move_cursor_save_nvim_request = save_nvim_request;
 
         world.nvim.start_request_message("nvim_input", 1);
         world.nvim.writer.write_string("<Esc>");
@@ -123,8 +122,6 @@ void Editor::move_cursor(cur2 c, int save_nvim_request) {
     if (world.use_nvim) {
         auto& nv = world.nvim;
         auto msgid = nv.start_request_message("nvim_win_set_cursor", 2);
-        if (save_nvim_request != 0)
-            nv.save_request((Nvim_Request_Type)save_nvim_request, msgid, id);
         nv.writer.write_int(nvim_data.win_id);
         {
             nv.writer.write_array(2);
@@ -353,6 +350,7 @@ bool Editor::trigger_escape() {
         nv.end_message();
 
         handled = true;
+        nv.exiting_insert_mode = true;
     }
 
     return handled;

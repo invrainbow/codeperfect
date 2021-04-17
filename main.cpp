@@ -1553,11 +1553,11 @@ int main() {
 
         if (isprint(ch)) {
             if (world.nvim.mode == VI_INSERT) {
-                ed->type_char_in_insert_mode(ch);
-                // a) insert character into editor buffer
-                // b) add character to nvim_insert.buf
-                // c) initiate redraw of syntax highlighting
-                // d) handle whatever on_type bullshit we had before
+                if (world.nvim.exiting_insert_mode) {
+                    world.nvim.chars_after_exiting_insert_mode.append(ch);
+                } else {
+                    ed->type_char_in_insert_mode(ch);
+                }
             } else {
                 if (ch == '<') {
                     send_nvim_keys("<LT>");

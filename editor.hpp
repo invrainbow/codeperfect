@@ -63,7 +63,6 @@ struct Editor {
 
         bool waiting_for_move_cursor;
         cur2 move_cursor_to;
-        int move_cursor_save_nvim_request;
     } nvim_data;
 
     struct {
@@ -88,7 +87,7 @@ struct Editor {
 
     void update_tree();
     void raw_move_cursor(cur2 c);
-    void move_cursor(cur2 c, int save_nvim_request = 0);
+    void move_cursor(cur2 c);
     void reset_state();
     bool load_file(ccstr new_filepath);
     bool save_file();

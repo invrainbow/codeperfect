@@ -461,6 +461,8 @@ struct Nvim {
     bool is_ui_attached;
     u32 waiting_focus_window;
     Vi_Mode mode;
+    bool exiting_insert_mode;
+    List<char> chars_after_exiting_insert_mode;
 
     void init();
     void start_running();

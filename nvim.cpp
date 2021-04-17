@@ -216,8 +216,22 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                     end_message();
 
                     // move cursor
-                    print("sending move_cursor to %s", format_pos(editor->cur));
-                    editor->move_cursor(editor->cur, NVIM_REQ_POST_INSERT_MOVE_CURSOR);
+                    {
+                        auto cur = editor->cur;
+                        if (cur.x > 0) cur.x--; // simulate the "back 1" that vim normally does when exiting insert mode
+                        print("sending move_cursor to %s", format_pos(cur));
+                        editor->raw_move_cursor(cur);
+                    }
+
+                    auto msgid = start_request_message("nvim_win_set_cursor", 2);
+                    save_request(NVIM_REQ_POST_INSERT_MOVE_CURSOR, msgid, editor->id);
+                    writer.write_int(editor->nvim_data.win_id);
+                    {
+                        writer.write_array(2);
+                        writer.write_int(editor->cur.y + 1);
+                        writer.write_int(editor->cur.x);
+                    }
+                    end_message();
                 }
                 break;
 
@@ -449,12 +463,18 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                     } else if (mode == VI_NORMAL) {
                         if (editor->nvim_data.waiting_for_move_cursor) {
                             editor->nvim_data.waiting_for_move_cursor = false;
-                            editor->move_cursor(
-                                editor->nvim_data.move_cursor_to,
-                                editor->nvim_data.move_cursor_save_nvim_request
-                            );
+                            editor->move_cursor(editor->nvim_data.move_cursor_to);
                         }
                     }
+                }
+
+                if (mode != VI_INSERT && exiting_insert_mode) {
+                    start_request_message("nvim_input", 1);
+                    writer.write_string(chars_after_exiting_insert_mode.items, chars_after_exiting_insert_mode.len);
+                    end_message();
+
+                    chars_after_exiting_insert_mode.len = 0;
+                    exiting_insert_mode = false;
                 }
             }
             break;
@@ -470,7 +490,27 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                     break; // TODO: handle us still receiving notifications for nonexistent window
 
                 print("got cursor change to %s", format_pos(new_cur2((u32)args.curcol, (u32)args.curline)));
-                editor->raw_move_cursor(new_cur2((u32)args.curcol, (u32)args.curline));
+
+                /*
+                Here is the situation. Through testing, I've found that when
+                you exit insert mode, cursor change is sent before mode change.
+
+                So we're going to keep ignoring cursor change notifications in
+                insert mode, and the notification that moves the cursor 1 back
+                after leaving insert mode will be ignored (since it comes
+                before mode change, we will still be in insert mode).  Then we
+                will move the cursor back 1 *manually.*
+
+                If the cursor-before-mode order changes, we will need to fix
+                this. It's also possible this is a race condition that so far
+                has happened to put the cursor-change notification first?
+                Fucking hell, this is why async APIs (and APIs in general) are
+                gay.
+                */
+                if (mode != VI_INSERT)
+                    editor->raw_move_cursor(new_cur2((u32)args.curcol, (u32)args.curline));
+                else
+                    print("in insert mode, ignoring cursor change");
 
                 if (!editor->nvim_data.got_initial_cur) {
                     nvim_print("got_initial_cur = false, setting to true & calling handle_editor_on_ready()");
@@ -869,8 +909,8 @@ void Nvim::init() {
     messages_lock.init();
     message_queue.init();
     messages_mem.init();
-
     grid_to_window.init();
+    chars_after_exiting_insert_mode.init();
 }
 
 void Nvim::start_running() {
