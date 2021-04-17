@@ -1135,30 +1135,69 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                     s32 max_len = 0;
                     s32 num_items = min(ac.filtered_results->len, AUTOCOMPLETE_WINDOW_ITEMS);
 
-                    auto format_name = [&](int i, ccstr name) -> ccstr {
-                        return our_sprintf("%s", name);
-                    };
-
-                    {
-                        s32 idx = 0;
-                        For(*ac.filtered_results) {
-                            s32 len;
-                            {
-                                SCOPED_FRAME();
-                                len = strlen(format_name(idx, ac.ac.results->at(it).name));
-                            }
-                            if (len > max_len)
-                                max_len = len;
-                            idx++;
-                        }
+                    For(*ac.filtered_results) {
+                        auto len = strlen(ac.ac.results->at(it).name);
+                        if (len > max_len)
+                            max_len = len;
                     }
+
+                    /*
+                    OK SO BASICALLY
+                    first try to put it in bottom
+                    then put it in top
+                    if neither fits then shrink it to max(bottom_limit, top_limit) and then put it there
+                    */
 
                     if (num_items > 0) {
                         boxf menu;
+
                         menu.w = (font->width * max_len) + (settings.AUTOCOMPLETE_ITEM_PADDING_X * 2) + (settings.AUTOCOMPLETE_MENU_PADDING * 2);
                         menu.h = (font->height * num_items) + (settings.AUTOCOMPLETE_ITEM_PADDING_Y * 2 * num_items) + (settings.AUTOCOMPLETE_MENU_PADDING * 2);
-                        menu.x = min(actual_cursor_position.x - strlen(ac.ac.prefix) * font->width, world.window_size.x - menu.w);
-                        menu.y = min(actual_cursor_position.y - font->offset_y + font->height, world.window_size.y - menu.h);
+
+                        // menu.x = min(actual_cursor_position.x - strlen(ac.ac.prefix) * font->width, world.window_size.x - menu.w);
+                        // menu.y = min(actual_cursor_position.y - font->offset_y + font->height, world.window_size.y - menu.h);
+
+                        {
+                            auto y1 = actual_cursor_position.y - font->offset_y;
+                            auto y2 = actual_cursor_position.y - font->offset_y + font->height;
+
+                            if (y2 + menu.h < world.window_size.y) {
+                                menu.y = y2;
+                            } else if (y1 >= menu.h) {
+                                menu.y = y1 - menu.h;
+                            } else {
+                                auto space_under = world.window_size.y - y2;
+                                auto space_above = y1;
+
+                                if (space_under > space_above) {
+                                    menu.y = y2;
+                                    menu.h = space_under;
+                                } else {
+                                    menu.y = 0;
+                                    menu.h = y1;
+                                }
+                            }
+
+                            auto x1 = actual_cursor_position.x - strlen(ac.ac.prefix) * font->width;
+                            auto x2 = actual_cursor_position.x;
+
+                            if (x1 + menu.w < world.window_size.x) {
+                                menu.x = x1;
+                            } else if (x2 >= menu.w) {
+                                menu.x = x2 - menu.w;
+                            } else {
+                                auto space_right = world.window_size.x - x1;
+                                auto space_left = x2;
+
+                                if (space_right > space_left) {
+                                    menu.x = x1;
+                                    menu.w = space_right;
+                                } else {
+                                    menu.x = 0;
+                                    menu.w = x2;
+                                }
+                            }
+                        }
 
                         draw_bordered_rect_outer(menu, rgba(COLOR_BLACK), rgba(COLOR_LIGHT_GREY), 1, 4);
 
@@ -1180,7 +1219,7 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
 
                             {
                                 SCOPED_FRAME();
-                                auto str = format_name(i, ac.ac.results->at(idx).name);
+                                auto str = ac.ac.results->at(idx).name;
 
                                 auto pos = menu_pos + new_vec2f(settings.AUTOCOMPLETE_ITEM_PADDING_X, settings.AUTOCOMPLETE_ITEM_PADDING_Y);
                                 draw_string(pos, str, rgba(color));
