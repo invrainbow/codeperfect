@@ -1122,7 +1122,9 @@ int main() {
                         {
                             if (editor == NULL) break;
 
-                            if (editor->is_untitled) {
+                            bool untitled = editor->is_untitled;
+
+                            if (untitled) {
                                 Select_File_Opts opts;
                                 opts.buf = editor->filepath;
                                 opts.bufsize = _countof(editor->filepath);
@@ -1147,6 +1149,7 @@ int main() {
                                 editor->buf.dirty = false;
                             }
 
+                            if (untitled) fill_file_tree();
                             break;
                         }
                     case GLFW_KEY_G:
@@ -1244,6 +1247,7 @@ int main() {
                                     world.wksp.activate_pane(world.wksp.panes.len - 1);
                             } else {
                                 editor->cleanup();
+
                                 pane->editors.remove(pane->current_editor);
                                 if (pane->editors.len == 0)
                                     pane->current_editor = -1;
@@ -2215,6 +2219,7 @@ int main() {
                             if (h != INVALID_HANDLE_VALUE) CloseHandle(h);
                         }
 
+                        fill_file_tree();
                     }
                 }
                 ImGui::End();

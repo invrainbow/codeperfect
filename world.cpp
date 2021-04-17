@@ -70,7 +70,7 @@ void fill_file_tree(ccstr path) {
 }
 */
 
-void fill_file_tree(ccstr path) {
+void fill_file_tree() {
     SCOPED_MEM(&world.file_tree_mem);
     world.file_tree_mem.reset();
 
@@ -107,7 +107,7 @@ void fill_file_tree(ccstr path) {
         });
     };
 
-    recur(path, world.file_tree);
+    recur(world.wksp.path, world.file_tree);
 }
 
 bool copy_file(ccstr src, ccstr dest) {
@@ -210,7 +210,7 @@ void World::init() {
     nvim.init();
     dbg.init();
 
-    fill_file_tree(wksp.path);
+    fill_file_tree();
 
     sidebar.width = 300;
     error_list.height = 125;

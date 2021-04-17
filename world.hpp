@@ -293,4 +293,4 @@ extern World world;
 
 bool is_ignored_by_git(ccstr path, bool isdir);
 
-void fill_file_tree(ccstr path);
+void fill_file_tree();
