@@ -343,7 +343,18 @@ void sleep_milliseconds(u32 milliseconds) {
     Sleep((DWORD)milliseconds);
 }
 
+wchar_t* ansi_to_unicode(ccstr s) {
+    auto len = MultiByteToWideChar(CP_UTF8, 0, s, -1, NULL, 0);
+    if (len == 0) return NULL;
+
+    auto ret = alloc_array(wchar_t, len);
+    if (MultiByteToWideChar(CP_UTF8, 0, s, -1, ret, len) != len) return NULL;
+    return ret;
+}
+
 bool let_user_select_file(Select_File_Opts* opts) {
+    SCOPED_FRAME();
+
     HRESULT hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
     if (FAILED(hr)) return false;
     defer { CoUninitialize(); };
@@ -359,6 +370,16 @@ bool let_user_select_file(Select_File_Opts* opts) {
     if (opts->folder)
         if (FAILED(dialog->SetOptions(FOS_PICKFOLDERS)))
             return false;
+
+    IShellItem *default_folder = NULL;
+    defer { if (default_folder != NULL) default_folder->Release(); };
+
+    if (opts->starting_folder != NULL) {
+        if (FAILED(SHCreateItemFromParsingName(ansi_to_unicode(opts->starting_folder), NULL, IID_IShellItem, (void**)&default_folder)))
+            return false;
+        if (FAILED(dialog->SetDefaultFolder(default_folder)))
+            return false;
+    }
 
     if (FAILED(dialog->Show(NULL))) return false;
 
@@ -397,14 +418,6 @@ bool ensure_directory_exists(ccstr path) {
 
     print("ensure_directory_exists error: %s", Win32_Error(get_win32_error(res)).str);
     return false;
-}
-
-wchar_t* ansi_to_unicode(ccstr s) {
-    auto len = MultiByteToWideChar(CP_UTF8, 0, s, -1, NULL, 0);
-    auto ret = alloc_array(wchar_t, len);
-
-    MultiByteToWideChar(CP_UTF8, 0, s, -1, ret, len);
-    return ret;
 }
 
 bool delete_rm_rf(ccstr path) {

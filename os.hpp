@@ -204,6 +204,7 @@ void sleep_milliseconds(u32 milliseconds);
 struct Select_File_Opts {
     cstr buf;
     u32 bufsize;
+    ccstr starting_folder;
     bool folder;
     bool save;
 };
