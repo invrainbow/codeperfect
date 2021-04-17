@@ -72,7 +72,7 @@ inline u32 max(u32 a, u32 b) { return a > b ? a : b; }
 inline u32 min(u32 a, u32 b) { return a < b ? a : b; }
 inline u32 relu_sub(u32 a, u32 b) { return a < b ? 0 : a - b; }
 
-enum ChunkSize {
+enum Chunk_Size {
     CHUNK0 = 20,
     CHUNK1 = 100,
     CHUNK2 = 500,

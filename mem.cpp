@@ -52,7 +52,7 @@ void* _alloc_memory(s32 size, bool zero) {
 }
 
 uchar* alloc_chunk(s32 needed, s32* new_size) {
-    ChunkSize sizes[] = { CHUNK0, CHUNK1, CHUNK2, CHUNK3, CHUNK4, CHUNK5, CHUNK6 };
+    Chunk_Size sizes[] = { CHUNK0, CHUNK1, CHUNK2, CHUNK3, CHUNK4, CHUNK5, CHUNK6 };
 
     for (auto size : sizes) {
         if (size < needed) continue;
@@ -69,7 +69,10 @@ uchar* alloc_chunk(s32 needed, s32* new_size) {
         }
     }
 
-    return NULL;
+    auto size = (int)sizes[_countof(sizes) - 1]; // last largest size
+    while (size < needed) size *= 2;
+    *new_size = size;
+    return (uchar*)our_malloc(sizeof(uchar) * size);
 }
 
 void free_chunk(uchar* buf, s32 cap) {
@@ -81,5 +84,6 @@ void free_chunk(uchar* buf, s32 cap) {
         case CHUNK4: world.chunk4_fridge.free((Chunk4*)buf); break;
         case CHUNK5: world.chunk5_fridge.free((Chunk5*)buf); break;
         case CHUNK6: world.chunk6_fridge.free((Chunk6*)buf); break;
+        default: our_free(buf); break;
     }
 }
