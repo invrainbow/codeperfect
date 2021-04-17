@@ -942,16 +942,18 @@ int main() {
             for (u32 x = 0; x < copy_spaces_until; x++)
                 editor->type_char(line[x]);
 
-            for (i32 x = line.len-1; x >= 0; x--) {
-                if (!isspace(line[x])) {
-                    switch (line[x]) {
-                    case '{':
-                    case '(':
-                    case '[':
-                        editor->type_char('\t');
+            if (editor->is_go_file) {
+                for (i32 x = line.len-1; x >= 0; x--) {
+                    if (!isspace(line[x])) {
+                        switch (line[x]) {
+                        case '{':
+                        case '(':
+                        case '[':
+                            editor->type_char('\t');
+                            break;
+                        }
                         break;
                     }
-                    break;
                 }
             }
 

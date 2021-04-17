@@ -783,6 +783,8 @@ void Editor::type_char_in_insert_mode(char ch) {
     case ')':
     case ']':
         {
+            if (!is_go_file) break;
+
             if (cur.x == 0) break;
 
             auto rbrace_pos = buf.dec_cur(cur);
