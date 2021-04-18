@@ -46,7 +46,7 @@ TODO:
 
 #define MAX_PATH 260
 #define CODE_FONT_SIZE 14
-#define UI_FONT_SIZE 16
+#define UI_FONT_SIZE 15
 #define FRAME_RATE_CAP 60
 
 static const char WINDOW_TITLE[] = "i need to think of a name";
@@ -690,10 +690,11 @@ int main() {
 
         s32 len = 0;
 
-        auto ui_font = read_font_data_from_first_found(&len, "Segoe UI");
-        assert(ui_font != NULL, "unable to load UI font");
-        world.ui.im_font_ui = io.Fonts->AddFontFromMemoryTTF(ui_font, len, UI_FONT_SIZE);
-        // world.ui.im_font_ui = io.Fonts->AddFontFromFileTTF("Oxygen-Regular.ttf", UI_FONT_SIZE);
+        // auto ui_font = read_font_data_from_first_found(&len, "Segoe UI");
+        // assert(ui_font != NULL, "unable to load UI font");
+        // world.ui.im_font_ui = io.Fonts->AddFontFromMemoryTTF(ui_font, len, UI_FONT_SIZE);
+
+        world.ui.im_font_ui = io.Fonts->AddFontFromFileTTF("FiraSans-Regular.ttf", UI_FONT_SIZE);
         assert(world.ui.im_font_ui != NULL, "unable to load UI font");
 
         // auto mono_font = read_font_data_from_first_found(&len, "Courier New", "Consolas", "Menlo", "Courier New");
