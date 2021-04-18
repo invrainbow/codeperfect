@@ -5,6 +5,7 @@
 #include "go.hpp"
 #include "fzy_match.h"
 #include "tree_sitter_crap.hpp"
+#include "settings.hpp"
 
 void Editor::raw_move_cursor(cur2 c) {
     if (c.y == -1) c = buf.offset_to_cur(c.x);
@@ -22,11 +23,11 @@ void Editor::raw_move_cursor(cur2 c) {
     if (vx < view.x)
         view.x = vx;
     if (vx >= view.x + view.w)
-        view.x = vx - view.w + 1;
-    if (cur.y < view.y)
-        view.y = cur.y;
-    if (cur.y >= view.y + view.h)
-        view.y = cur.y - view.h + 1;
+       view.x = vx - view.w + 1;
+    if (relu_sub(cur.y, settings.scrolloff) < view.y)
+        view.y = relu_sub(cur.y, settings.scrolloff);
+    if (cur.y + settings.scrolloff >= view.y + view.h)
+        view.y = cur.y + settings.scrolloff - view.h + 1;
 }
 
 void Editor::update_lines(int firstline, int lastline, List<uchar*> *new_lines, List<s32> *line_lengths) {

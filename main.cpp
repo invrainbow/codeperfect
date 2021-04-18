@@ -1078,10 +1078,10 @@ int main() {
                     case GLFW_KEY_E:
                         if (editor == NULL) break;
                         // TODO: scrolloff
-                        if (editor->cur.y < editor->view.y + 1) {
+                        if (relu_sub(editor->cur.y, settings.scrolloff) < editor->view.y + 1) {
                             if (editor->view.y + 1 < editor->buf.lines.len) {
                                 editor->view.y++;
-                                editor->move_cursor(new_cur2(editor->cur.x, editor->view.y));
+                                editor->move_cursor(new_cur2(editor->cur.x, editor->view.y + settings.scrolloff));
                             }
                         } else {
                             editor->view.y++;

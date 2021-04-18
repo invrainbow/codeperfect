@@ -3,6 +3,7 @@
 #include "world.hpp"
 #include "utils.hpp"
 #include "go.hpp"
+#include "settings.hpp"
 // #include <strsafe.h>
 
 #define NVIM_DEBUG 0
@@ -389,13 +390,13 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
 
                 switch (event->notification.custom_reveal_line.screen_pos) {
                 case SCREEN_POS_TOP:
-                    view.y = y;
+                    view.y = relu_sub(y, settings.scrolloff);
                     break;
                 case SCREEN_POS_MIDDLE:
                     view.y = relu_sub(y, view.h / 2);
                     break;
                 case SCREEN_POS_BOTTOM:
-                    view.y = relu_sub(y + 1, view.h);
+                    view.y = relu_sub(y + settings.scrolloff + 1, view.h);
                     break;
                 }
 
