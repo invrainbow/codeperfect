@@ -232,10 +232,7 @@ void World::init() {
 void World::add_event(fn<void(Main_Thread_Message*)> f) {
     SCOPED_LOCK(&message_queue_lock);
     SCOPED_MEM(&message_queue_mem);
-
-    auto msg = message_queue.append();
-    f(msg);
-    print("added msg: %d", msg->type);
+    f(message_queue.append());
 }
 
 void World::start_background_threads() {

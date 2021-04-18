@@ -9,7 +9,7 @@
 #define NVIM_DEBUG 0
 
 #if NVIM_DEBUG
-#define nvim_print(fmt, ...) print("[nvim] " fmt, ##__VA_ARGS__)
+#define nvim_print(fmt, ...) nvim_print("[nvim] " fmt, ##__VA_ARGS__)
 #else
 #define nvim_print(fmt, ...)
 #endif
@@ -220,7 +220,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                     {
                         auto cur = editor->cur;
                         if (cur.x > 0) cur.x--; // simulate the "back 1" that vim normally does when exiting insert mode
-                        print("sending move_cursor to %s", format_pos(cur));
+                        nvim_print("sending move_cursor to %s", format_pos(cur));
                         editor->raw_move_cursor(cur);
                     }
 
@@ -237,7 +237,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 break;
 
             case NVIM_REQ_POST_INSERT_MOVE_CURSOR:
-                print("sending escape", format_pos(editor->cur));
+                nvim_print("sending escape", format_pos(editor->cur));
                 // send the <esc> key that we delayed
                 start_request_message("nvim_input", 1);
                 writer.write_string("<Esc>");
@@ -439,7 +439,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
             {
                 auto &args = event->notification.mode_change;
 
-                print("mode: %s", args.mode_name);
+                nvim_print("mode: %s", args.mode_name);
 
                 if (streq(args.mode_name, "normal"))
                     mode = VI_NORMAL;
@@ -490,7 +490,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 if (editor == NULL)
                     break; // TODO: handle us still receiving notifications for nonexistent window
 
-                print("got cursor change to %s", format_pos(new_cur2((u32)args.curcol, (u32)args.curline)));
+                nvim_print("got cursor change to %s", format_pos(new_cur2((u32)args.curcol, (u32)args.curline)));
 
                 /*
                 Here is the situation. Through testing, I've found that when
@@ -511,7 +511,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 if (mode != VI_INSERT)
                     editor->raw_move_cursor(new_cur2((u32)args.curcol, (u32)args.curline));
                 else
-                    print("in insert mode, ignoring cursor change");
+                    nvim_print("in insert mode, ignoring cursor change");
 
                 if (!editor->nvim_data.got_initial_cur) {
                     nvim_print("got_initial_cur = false, setting to true & calling handle_editor_on_ready()");
@@ -534,7 +534,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
 
 void Nvim::run_event_loop() {
     auto before_exit = [&]() {
-        print("exiting...");
+        nvim_print("exiting...");
     };
 
 #define ASSERT(x) if (!(x)) { before_exit(); return; }
@@ -580,7 +580,7 @@ void Nvim::run_event_loop() {
         case MPRPC_NOTIFICATION:
             {
                 auto method = reader.read_string(); CHECKOK();
-                // print("got notification with method %s", method);
+                // nvim_print("got notification with method %s", method);
                 auto params_length = reader.read_array(); CHECKOK();
 
                 auto just_skip_params = [&]() {
@@ -590,7 +590,7 @@ void Nvim::run_event_loop() {
                     }
                 };
 
-                print("method: %s", method);
+                nvim_print("method: %s", method);
 
                 if (streq(method, "custom_notification")) {
                     SCOPED_FRAME();
@@ -737,7 +737,7 @@ void Nvim::run_event_loop() {
                 auto method = reader.read_string(); CHECKOK();
                 auto params_length = reader.read_array(); CHECKOK();
 
-                // print("got request with method %s", method);
+                // nvim_print("got request with method %s", method);
                 // check `method` against names of rpcrequests
 
                 // in the default case we just skip params
@@ -770,11 +770,11 @@ void Nvim::run_event_loop() {
                     if (reader.peek_type() == MP_STRING) {
                         auto error_str = reader.read_string(); CHECKOK();
                         SCOPED_FRAME();
-                        print("error in response for msgid %d: %d", msgid, error_str);
+                        nvim_print("error in response for msgid %d: %d", msgid, error_str);
                     } else {
                         auto type = reader.peek_type();
                         reader.skip_object(); CHECKOK();
-                        print("error in response for msgid %d: (error was not a string, instead was %s)", msgid, mptype_str(type));
+                        nvim_print("error in response for msgid %d: (error was not a string, instead was %s)", msgid, mptype_str(type));
                     }
                     reader.skip_object();
                     break;
