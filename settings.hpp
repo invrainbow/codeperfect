@@ -1,28 +1,31 @@
 #pragma once
 
 struct Settings {
-    float STATUS_PADDING_X = 4;
-    float STATUS_PADDING_Y = 2;
-    float LINE_NUMBER_MARGIN_LEFT = 3;
-    float LINE_NUMBER_MARGIN_RIGHT = 15;
-    float SIDEBAR_PADDING_X = 4;
-    float SIDEBAR_PADDING_Y = 4;
-    float SIDEBAR_ITEM_PADDING_X = 8;
-    float SIDEBAR_ITEM_PADDING_Y = 4;
-    float FILETREE_ITEM_MARGIN = 4;
-    float FILETREE_ITEM_PADDING_Y = 4;
-    float FILETREE_SPACE_BETWEEN_ITEMS = 1;
-    float FILETREE_BUTTON_SIZE = 16;
-    float FILETREE_BUTTONS_AREA_PADDING_X = 4;
-    float FILETREE_BUTTONS_AREA_PADDING_Y = 4;
-    float FILETREE_BUTTON_MARGIN_X = 4;
-    float FILETREE_BUTTON_PADDING = 4;
-    // float ICON_SIZE = 16;
-    float AUTOCOMPLETE_MENU_PADDING = 4;
-    float AUTOCOMPLETE_ITEM_PADDING_X = 4;
-    float AUTOCOMPLETE_ITEM_PADDING_Y = 2;
-    float ERROR_LIST_ITEM_PADDING_X = 5;
-    float ERROR_LIST_ITEM_PADDING_Y = 3;
+    // styling
+    float status_padding_x = 4;
+    float status_padding_y = 2;
+    float line_number_margin_left = 3;
+    float line_number_margin_right = 15;
+    float sidebar_padding_x = 4;
+    float sidebar_padding_y = 4;
+    float sidebar_item_padding_x = 8;
+    float sidebar_item_padding_y = 4;
+    float filetree_item_margin = 4;
+    float filetree_item_padding_y = 4;
+    float filetree_space_between_items = 1;
+    float filetree_button_size = 16;
+    float filetree_buttons_area_padding_x = 4;
+    float filetree_buttons_area_padding_y = 4;
+    float filetree_button_margin_x = 4;
+    float filetree_button_padding = 4;
+    // float icon_size = 16;
+    float autocomplete_menu_padding = 4;
+    float autocomplete_item_padding_x = 4;
+    float autocomplete_item_padding_y = 2;
+    float error_list_item_padding_x = 5;
+    float error_list_item_padding_y = 3;
+
+    float scrolloff = 2;
 };
 
 extern Settings settings;
