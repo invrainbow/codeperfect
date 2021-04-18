@@ -484,8 +484,6 @@ u64 get_file_size(ccstr path) {
     return _get_file_size(f);
 }
 
-#endif
-
 ccstr rel_to_abs_path(ccstr path) {
     auto len = GetFullPathNameA(path, 0, NULL, NULL);
     if (len == 0) return NULL;
@@ -715,3 +713,15 @@ void *read_font_data_from_first_found(s32 *plen, ...) {
         *plen = len;
     return font_data;
 }
+
+Ask_User_Result ask_user_yes_no_cancel(void* parent_window, ccstr text, ccstr title) {
+    int ret = MessageBoxA((HWND)parent_window, text, title, MB_YESNOCANCEL | MB_ICONEXCLAMATION | MB_TOPMOST);
+    switch (ret) {
+    case IDYES: return ASKUSER_YES;
+    case IDNO: return ASKUSER_NO;
+    case IDCANCEL: return ASKUSER_CANCEL;
+    }
+    return ASKUSER_ERROR;
+}
+
+#endif

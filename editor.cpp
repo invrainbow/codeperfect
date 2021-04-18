@@ -899,7 +899,7 @@ void Editor::type_char_in_insert_mode(char ch) {
     if (!did_parameter_hint) update_parameter_hint();
 }
 
-void Editor::format_on_save() {
+void Editor::format_on_save(bool write_to_nvim) {
     auto old_cur = cur;
 
     auto &proc = goimports_proc;
@@ -934,15 +934,50 @@ void Editor::format_on_save() {
         }
         update_tree();
 
-        auto &nv = world.nvim;
-        auto msgid = nv.start_request_message("nvim_buf_get_changedtick", 1);
-        auto req = nv.save_request(NVIM_REQ_POST_SAVE_GETCHANGEDTICK, msgid, id);
-        req->post_save_getchangedtick.cur = old_cur;
-        nv.writer.write_int(nvim_data.buf_id);
-        nv.end_message();
+        if (write_to_nvim) {
+            auto &nv = world.nvim;
+            auto msgid = nv.start_request_message("nvim_buf_get_changedtick", 1);
+            auto req = nv.save_request(NVIM_REQ_POST_SAVE_GETCHANGEDTICK, msgid, id);
+            req->post_save_getchangedtick.cur = old_cur;
+            nv.writer.write_int(nvim_data.buf_id);
+            nv.end_message();
+        }
     } else {
         saving = false;
     }
+}
+
+void Editor::handle_save(bool about_to_close) {
+    bool untitled = is_untitled;
+
+    if (untitled) {
+        Select_File_Opts opts;
+        opts.buf = filepath;
+        opts.bufsize = _countof(filepath);
+        opts.folder = false;
+        opts.save = true;
+        opts.starting_folder = our_strcpy(TEST_PATH);
+        if (!let_user_select_file(&opts)) return;
+
+        is_untitled = false;
+        is_go_file = str_ends_with(filepath, ".go");
+    }
+
+    format_on_save(!about_to_close);
+
+    // save to disk
+    {
+        disable_file_watcher_until = current_time_in_nanoseconds() + (2 * 1000000000);
+
+        FILE* f = fopen(filepath, "w");
+        if (f == NULL) return; // TODO: display error
+        defer { fclose(f); };
+
+        buf.write(f);
+        buf.dirty = false;
+    }
+
+    if (untitled) world.fill_file_tree();
 }
 
 void go_to_error(int index) {

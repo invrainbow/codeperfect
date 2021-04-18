@@ -274,3 +274,12 @@ bool move_file_atomically(ccstr src, ccstr dest);
 
 void *read_font_data_from_name(s32 *len, ccstr name);
 void *read_font_data_from_first_found(s32 *plen, ...);
+
+enum Ask_User_Result {
+    ASKUSER_ERROR = 0,
+    ASKUSER_YES,
+    ASKUSER_NO,
+    ASKUSER_CANCEL,
+};
+
+Ask_User_Result ask_user_yes_no_cancel(void* parent_window, ccstr text, ccstr title);

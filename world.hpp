@@ -285,6 +285,7 @@ struct World {
     Editor* find_editor(find_editor_func f);
     void add_event(fn<void(Main_Thread_Message*)> f);
     Editor* find_editor_by_id(u32 id);
+    void fill_file_tree();
 };
 
 extern World world;
@@ -293,4 +294,3 @@ extern World world;
 
 bool is_ignored_by_git(ccstr path, bool isdir);
 
-void fill_file_tree();

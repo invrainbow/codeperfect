@@ -70,13 +70,13 @@ void fill_file_tree(ccstr path) {
 }
 */
 
-void fill_file_tree() {
-    SCOPED_MEM(&world.file_tree_mem);
-    world.file_tree_mem.reset();
+void World::fill_file_tree() {
+    SCOPED_MEM(&file_tree_mem);
+    file_tree_mem.reset();
 
-    world.file_tree = alloc_object(File_Tree_Node);
-    world.file_tree->is_directory = true;
-    world.file_tree->depth = -1;
+    file_tree = alloc_object(File_Tree_Node);
+    file_tree->is_directory = true;
+    file_tree->depth = -1;
 
     u32 depth = 0;
 
@@ -107,7 +107,7 @@ void fill_file_tree() {
         });
     };
 
-    recur(world.wksp.path, world.file_tree);
+    recur(wksp.path, file_tree);
 }
 
 bool copy_file(ccstr src, ccstr dest) {

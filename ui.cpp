@@ -652,7 +652,7 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
 
                     if (draw_button(SIMAGE_REFRESH)) {
                         // TODO: probably make this async task
-                        fill_file_tree();
+                        world.fill_file_tree();
                     }
 
                     auto open_add_file_or_folder = [&](bool folder) {
@@ -893,9 +893,9 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                 } else {
                     label = file_path->str();
                 }
-
-                label = our_sprintf("%s%s", label, editor.buf.dirty ? "*" : "");
             }
+
+            label = our_sprintf("%s%s", label, editor.buf.dirty ? "*" : "");
 
             auto text_width = get_text_width(label);
 

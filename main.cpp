@@ -24,9 +24,6 @@ TODO:
 #include <string.h>
 #include <utility>
 
-#include <GL/glew.h>
-#include <GLFW/glfw3.h>
-
 #include "os.hpp"
 #include "common.hpp"
 #include "debugger.hpp"
@@ -43,6 +40,13 @@ TODO:
 
 #include "imgui.h"
 #include "veramono.hpp"
+
+#if OS_WIN
+#define GLFW_EXPOSE_NATIVE_WIN32
+#endif
+#include <GL/glew.h>
+#include <GLFW/glfw3.h>
+#include <GLFW/glfw3native.h>
 
 #define MAX_PATH 260
 #define CODE_FONT_SIZE 14
@@ -559,6 +563,12 @@ struct Timer {
         time = curr;
     }
 };
+
+void* get_native_window_handle(GLFWwindow *window) {
+#if OS_WIN
+    return (void*)glfwGetWin32Window(window);
+#endif
+}
 
 int main() {
     Timer t;
@@ -1122,39 +1132,9 @@ int main() {
                             init_open_file();
                         break;
                     case GLFW_KEY_S:
-                        {
-                            if (editor == NULL) break;
-
-                            bool untitled = editor->is_untitled;
-
-                            if (untitled) {
-                                Select_File_Opts opts;
-                                opts.buf = editor->filepath;
-                                opts.bufsize = _countof(editor->filepath);
-                                opts.folder = false;
-                                opts.save = true;
-                                opts.starting_folder = our_strcpy(TEST_PATH);
-                                if (!let_user_select_file(&opts)) break;
-                                editor->is_untitled = false;
-                                editor->is_go_file = str_ends_with(editor->filepath, ".go");
-                            }
-
-                            editor->format_on_save();
-
-                            {
-                                editor->disable_file_watcher_until = current_time_in_nanoseconds() + (2 * 1000000000);
-
-                                FILE* f = fopen(editor->filepath, "w");
-                                if (f == NULL) return; // TODO: display error
-                                defer { fclose(f); };
-
-                                editor->buf.write(f);
-                                editor->buf.dirty = false;
-                            }
-
-                            if (untitled) fill_file_tree();
-                            break;
-                        }
+                        if (editor != NULL)
+                            editor->handle_save();
+                        break;
                     case GLFW_KEY_G:
                         {
                             if (editor == NULL) break;
@@ -1249,6 +1229,18 @@ int main() {
                                 if (world.wksp.current_pane >= world.wksp.panes.len)
                                     world.wksp.activate_pane(world.wksp.panes.len - 1);
                             } else {
+                                if (editor->buf.dirty) {
+                                    auto result = ask_user_yes_no_cancel(
+                                        get_native_window_handle(world.window),
+                                        our_sprintf("Do you want to save your changes to %s?", our_basename(editor->filepath)),
+                                        "Your changes will be lost if you don't."
+                                    );
+                                    if (result == ASKUSER_CANCEL)
+                                        break;
+                                    else if (result == ASKUSER_YES)
+                                        editor->handle_save(true);
+                                }
+
                                 editor->cleanup();
 
                                 pane->editors.remove(pane->current_editor);
@@ -2226,7 +2218,7 @@ int main() {
                             if (h != INVALID_HANDLE_VALUE) CloseHandle(h);
                         }
 
-                        fill_file_tree();
+                        world.fill_file_tree();
                     }
                 }
                 ImGui::End();

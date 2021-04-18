@@ -114,7 +114,8 @@ struct Editor {
     void reload_file(bool because_of_file_watcher = false);
     void update_lines(int firstline, int lastline, List<uchar*> *lines, List<s32> *line_lengths);
     bool trigger_escape();
-    void format_on_save();
+    void format_on_save(bool write_to_nvim = true);
+    void handle_save(bool about_to_close = false);
 };
 
 struct Pane {
