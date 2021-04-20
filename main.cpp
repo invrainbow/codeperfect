@@ -438,7 +438,7 @@ void render_ts_cursor(TSTreeCursor *curr) {
         pop(depth);
         last_depth = depth;
 
-        auto flags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth;
+        auto flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth;
 
         auto type_str = ts_ast_type_str(node->type);
         if (type_str == NULL)
@@ -448,9 +448,24 @@ void render_ts_cursor(TSTreeCursor *curr) {
 
         auto field_type_str = ts_field_type_str(field_type);
         if (field_type_str == NULL)
-            last_open = ImGui::TreeNodeEx(node->id, flags, "%s", type_str);
+            last_open = ImGui::TreeNodeEx(
+                node->id,
+                flags,
+                "%s, start = %s, end = %s",
+                type_str,
+                format_pos(node->start),
+                format_pos(node->end)
+            );
         else
-            last_open = ImGui::TreeNodeEx(node->id, flags, "(%s) %s", field_type_str + strlen("TSF_"), type_str);
+            last_open = ImGui::TreeNodeEx(
+                node->id,
+                flags,
+                "(%s) %s, start = %s, end = %s",
+                field_type_str + strlen("TSF_"),
+                type_str,
+                format_pos(node->start),
+                format_pos(node->end)
+            );
 
         if (ImGui::IsItemClicked()) {
             auto editor = world.get_current_editor();

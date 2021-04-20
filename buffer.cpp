@@ -207,7 +207,7 @@ void Buffer::read(Buffer_Read_Func f) {
     conv.init();
     while (f(&ch)) {
         uchar uch = conv.feed(ch, &found);
-        *bc++;
+        (*bc)++;
 
         if (found) {
             if (uch == '\n') // TODO: handle \r
@@ -413,7 +413,7 @@ cur2 Buffer::offset_to_cur(i32 off) {
 
     for (u32 y = 0; y < bytecounts.len; y++) {
         auto& it = bytecounts[y];
-        if (off <= it) {
+        if (off < it) {
             ret.y = y;
             for (u32 x = 0; x < lines[y].len; x++) {
                 auto size = uchar_size(lines[y][x]);
@@ -423,9 +423,20 @@ cur2 Buffer::offset_to_cur(i32 off) {
                 }
                 off -= size;
             }
+            if (ret.x == -1) {
+                assert(off == 0);
+                ret.x = lines[y].len;
+            }
             break;
         }
-        off -= (it + 1);
+        off -= it;
+    }
+
+    if (ret.x == -1 || ret.y == -1) {
+        assert(ret.x == -1 && ret.y == -1);
+        assert(off == 0);
+        ret.y = lines.len-1;
+        ret.x = lines[ret.y].len;
     }
 
     return ret;

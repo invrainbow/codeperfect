@@ -89,11 +89,11 @@ void Editor::update_tree() {
 
         while (!it.eof()) {
             auto uch = it.next();
-            if (uch == 0) {
-                break;
-            }
+            if (uch == 0) break;
+
             auto size = uchar_size(uch);
-            if (n + size + 1 > _countof(tsinput_buffer)) break;
+            if (n + size + 1 > _countof(editor->tsinput_buffer)) break;
+
             uchar_to_cstr(uch, &editor->tsinput_buffer[n], &size);
             n += size;
         }
@@ -264,13 +264,7 @@ i32 Editor::cur_to_offset(cur2 c) {
 i32 Editor::cur_to_offset() { return cur_to_offset(cur); }
 
 cur2 Editor::offset_to_cur(i32 offset) {
-    for (i32 y = 0; y < buf.lines.len; y++) {
-        auto len = buf.lines[y].len;
-        if (offset <= len)
-            return new_cur2(offset, y);
-        offset -= (len + 1);
-    }
-    return new_cur2(-1, -1);
+    return buf.offset_to_cur(offset);
 }
 
 int Editor::get_indent_of_line(int y) {
