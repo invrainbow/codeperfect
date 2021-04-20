@@ -1101,9 +1101,16 @@ int main() {
                             send_nvim_keys(our_sprintf("<C-%c>", tolower((char)key)));
                         }
                         break;
+                    case GLFW_KEY_Y:
+                        if (editor == NULL) break;
+                        if (editor->view.y > 0) {
+                            editor->view.y--;
+                            if (editor->cur.y + settings.scrolloff >= editor->view.y + editor->view.h)
+                                editor->move_cursor(new_cur2(editor->cur.x, editor->view.y + editor->view.h - 1 - settings.scrolloff));
+                        }
+                        break;
                     case GLFW_KEY_E:
                         if (editor == NULL) break;
-                        // TODO: scrolloff
                         if (relu_sub(editor->cur.y, settings.scrolloff) < editor->view.y + 1) {
                             if (editor->view.y + 1 < editor->buf.lines.len) {
                                 editor->view.y++;

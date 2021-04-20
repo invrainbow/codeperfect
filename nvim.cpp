@@ -401,13 +401,13 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
 
                 switch (event->notification.custom_move_cursor.screen_pos) {
                 case SCREEN_POS_TOP:
-                    y = view.y;
+                    y = view.y + min(view.h - 1, settings.scrolloff);
                     break;
                 case SCREEN_POS_MIDDLE:
                     y = view.y + (view.h / 2);
                     break;
                 case SCREEN_POS_BOTTOM:
-                    y = view.y + view.h - 1;
+                    y = view.y + relu_sub(view.h, 1 + settings.scrolloff);
                     break;
                 }
 
