@@ -350,6 +350,7 @@ enum Nvim_Notification_Type {
     NVIM_NOTIF_MODE_CHANGE,
     NVIM_NOTIF_WIN_VIEWPORT,
     NVIM_NOTIF_WIN_POS,
+    NVIM_NOTIF_CMDLINE_SHOW,
     NVIM_NOTIF_GRID_LINE,
     NVIM_NOTIF_GRID_SCROLL,
     NVIM_NOTIF_HL_ATTR_DEFINE,
@@ -421,6 +422,12 @@ struct Nvim_Message {
                     int grid;
                     Ext_Info window;
                 } win_pos;
+
+                struct {
+                    ccstr content;
+                    ccstr firstc;
+                    ccstr prompt;
+                } cmdline_show;
 
                 struct {
                     int grid;
@@ -502,6 +509,12 @@ struct Nvim {
     Vi_Mode mode;
     bool exiting_insert_mode;
     List<char> chars_after_exiting_insert_mode;
+
+    struct {
+        List<char> content;
+        List<char> firstc;
+        List<char> prompt;
+    } cmdline;
 
     void init();
     void start_running();

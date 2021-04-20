@@ -1305,45 +1305,87 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
     {
         draw_rect(status_area, rgba("#252525"));
 
-        boxf str_area;
-        str_area.pos = status_area.pos;
-        str_area.h = status_area.h;
+        boxf str_area_l;
+        str_area_l.pos = status_area.pos;
+        str_area_l.h = status_area.h;
 
-        auto draw_status_piece = [&](ccstr s, vec4f bgcolor, vec4f fgcolor) {
-            str_area.w = font->width * strlen(s) + (settings.status_padding_x * 2);
-            draw_rect(str_area, bgcolor);
+        boxf str_area_r;
+        str_area_r.pos = status_area.pos;
+        str_area_r.x += status_area.w;
+        str_area_r.h = status_area.h;
 
-            boxf text_area = str_area;
+        enum {
+            LEFT = 0,
+            RIGHT = 1,
+        };
+
+        auto draw_status_piece = [&](int dir, ccstr s, vec4f bgcolor, vec4f fgcolor) {
+            auto str_area = dir == RIGHT ? &str_area_r : &str_area_l;
+
+            str_area->w = font->width * strlen(s) + (settings.status_padding_x * 2);
+            if (dir == RIGHT)
+                str_area->x -= str_area->w;
+
+            draw_rect(*str_area, bgcolor);
+
+            boxf text_area = *str_area;
             text_area.x += settings.status_padding_x;
             text_area.y += settings.status_padding_y;
             text_area.w -= (settings.status_padding_x * 2);
             text_area.h -= (settings.status_padding_y * 2);
             draw_string(text_area.pos, s, fgcolor);
 
-            str_area.x += str_area.w;
+            if (dir == LEFT)
+                str_area->x += str_area->w;
         };
 
         if (world.use_nvim) {
-            ccstr mode_str = NULL;
+            auto should_show_cmd = [&]() -> bool {
+                auto &nv = world.nvim;
+                if (nv.mode != VI_CMDLINE) return false;
+                if (nv.cmdline.content.len > 0) return true;
+                if (nv.cmdline.firstc.len > 0) return true;
+                if (nv.cmdline.prompt.len > 0) return true;
+                return false;
+            };
 
-            switch (world.nvim.mode) {
-            case VI_NORMAL: mode_str = "NORMAL"; break;
-            case VI_VISUAL: mode_str = "VISUAL"; break;
-            case VI_INSERT: mode_str = "INSERT"; break;
-            case VI_REPLACE: mode_str = "REPLACE"; break;
-            case VI_OPERATOR: mode_str = "OPERATOR"; break;
-            case VI_CMDLINE: mode_str = "CMDLINE"; break;
-            default: mode_str = "UNKNOWN"; break;
+            if (should_show_cmd()) {
+                auto &cmd = world.nvim.cmdline;
+
+                auto get_title = [&]() -> ccstr {
+                    if (cmd.prompt.len > 1)
+                        return cmd.prompt.items;
+                    if (streq(cmd.firstc.items, "/"))
+                        return "Forward search: ";
+                    if (streq(cmd.firstc.items, "?"))
+                        return "Backward search: ";
+                    if (streq(cmd.firstc.items, ":"))
+                        return "Command: ";
+                    return cmd.firstc.items;
+                };
+
+                auto command = our_sprintf("%s%s", get_title(), cmd.content.items);
+                draw_status_piece(LEFT, command, rgba("#888833"), rgba("#cccc88"));
+            } else {
+                ccstr mode_str = NULL;
+                switch (world.nvim.mode) {
+                case VI_NORMAL: mode_str = "NORMAL"; break;
+                case VI_VISUAL: mode_str = "VISUAL"; break;
+                case VI_INSERT: mode_str = "INSERT"; break;
+                case VI_REPLACE: mode_str = "REPLACE"; break;
+                case VI_OPERATOR: mode_str = "OPERATOR"; break;
+                case VI_CMDLINE: mode_str = "CMDLINE"; break;
+                default: mode_str = "UNKNOWN"; break;
+                }
+                draw_status_piece(LEFT, mode_str, rgba("#666666"), rgba("aaaaaa"));
             }
-
-            if (mode_str != NULL)
-                draw_status_piece(mode_str, rgba("#666666"), rgba("aaaaaa"));
         }
 
         if (world.indexer.ready)
-            draw_status_piece("INDEX READY", rgba("#008800"), rgba("#cceecc"));
+            draw_status_piece(RIGHT, "INDEX READY", rgba("#008800"), rgba("#cceecc"));
         else
-            draw_status_piece("INDEXING IN PROGRESS", rgba("#880000"), rgba("#eecccc"));
+            draw_status_piece(RIGHT, "INDEXING IN PROGRESS", rgba("#880000"), rgba("#eecccc"));
+
     }
 
     auto get_debugger_state_string = [&]() -> ccstr {

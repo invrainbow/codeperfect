@@ -478,6 +478,29 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 }
             }
             break;
+
+        case NVIM_NOTIF_CMDLINE_SHOW:
+            {
+                auto &args = event->notification.cmdline_show;
+
+                auto copy_str_into_list = [&](ccstr s, List<char> *out) {
+                    auto len = strlen(s);
+                    out->len = 0;
+                    for (u32 i = 0; i < len; i++)
+                        out->append(s[i]);
+                    out->append('\0');
+                };
+
+                copy_str_into_list(args.content, &cmdline.content);
+                copy_str_into_list(args.firstc, &cmdline.firstc);
+                copy_str_into_list(args.prompt, &cmdline.prompt);
+
+                nvim_print("cmdline.content = \"%s\", \"%s\"", args.content, cmdline.content.items);
+                nvim_print("cmdline.firstc = \"%s\", \"%s\"", args.firstc, cmdline.firstc.items);
+                nvim_print("cmdline.prompt = \"%s\", \"%s\"", args.prompt, cmdline.prompt.items);
+            }
+            break;
+
         case NVIM_NOTIF_MODE_CHANGE:
             {
                 auto &args = event->notification.mode_change;
@@ -705,10 +728,40 @@ void Nvim::run_event_loop() {
                         auto argsets_len = reader.read_array(); CHECKOK();
                         auto op = reader.read_string(); CHECKOK();
 
+                        nvim_print("redraw op: %s", op);
+
                         for (u32 j = 1; j < argsets_len; j++) {
                             auto args_len = reader.read_array(); CHECKOK();
 
-                            if (streq(op, "mode_change")) {
+                            if (streq(op, "cmdline_show")) {
+                                SCOPED_FRAME();
+                                ASSERT(args_len == 6);
+
+                                Text_Renderer r;
+                                r.init();
+                                auto num_content_parts = reader.read_array(); CHECKOK();
+                                for (u32 i = 0; i < num_content_parts; i++) {
+                                    auto partsize = reader.read_array(); CHECKOK();
+                                    ASSERT(partsize == 2);
+                                    reader.skip_object(); CHECKOK(); // skip attrs, we don't care
+                                    auto s = reader.read_string(); CHECKOK();
+                                    r.writestr(s);
+                                }
+                                auto content = r.finish();
+
+                                /* auto pos = */ reader.read_int(); CHECKOK();
+                                auto firstc = reader.read_string(); CHECKOK();
+                                auto prompt = reader.read_string(); CHECKOK();
+                                /* auto indent = */ reader.read_int(); CHECKOK();
+                                /* auto level = */ reader.read_int(); CHECKOK();
+
+                                add_event([&](Nvim_Message *m) {
+                                    m->notification.type = NVIM_NOTIF_CMDLINE_SHOW;
+                                    m->notification.cmdline_show.content = our_strcpy(content);
+                                    m->notification.cmdline_show.firstc = our_strcpy(firstc);
+                                    m->notification.cmdline_show.prompt = our_strcpy(prompt);
+                                });
+                            } else if (streq(op, "mode_change")) {
                                 SCOPED_FRAME();
                                 ASSERT(args_len == 2);
 
@@ -1051,6 +1104,9 @@ void Nvim::init() {
     messages_mem.init();
     grid_to_window.init();
     chars_after_exiting_insert_mode.init();
+    cmdline.content.init();
+    cmdline.firstc.init();
+    cmdline.prompt.init();
     hl_defs.init();
 }
 
