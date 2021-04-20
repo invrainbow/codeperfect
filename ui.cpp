@@ -694,100 +694,106 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                 files_area.h -= buttons_area.h;
                 files_area.y += buttons_area.h;
 
-                start_clip(files_area);
-                defer { end_clip(); };
+                // draw files area
+                {
+                    start_clip(files_area);
+                    defer { end_clip(); };
 
-                boxf row_area;
-                row_area.pos = files_area.pos;
-                row_area.y -= world.file_explorer.scroll_offset;
-                row_area.y += settings.filetree_item_margin;
-                row_area.w = files_area.w;
-                row_area.h = font->height;
-                row_area.h += settings.filetree_item_padding_y * 2;
+                    boxf row_area;
+                    row_area.pos = files_area.pos;
+                    row_area.y -= world.file_explorer.scroll_offset;
+                    row_area.y += settings.filetree_item_margin;
+                    row_area.w = files_area.w;
+                    row_area.h = font->height;
+                    row_area.h += settings.filetree_item_padding_y * 2;
 
-                auto stack = alloc_list<File_Tree_Node*>();
-                for (auto child = world.file_tree->children; child != NULL; child = child->next)
-                    stack->append(child);
+                    auto stack = alloc_list<File_Tree_Node*>();
+                    for (auto child = world.file_tree->children; child != NULL; child = child->next)
+                        stack->append(child);
 
-                for (u32 i = 0; stack->len > 0 && row_area.y <= files_area.y + files_area.h; i++, row_area.y += row_area.h + settings.filetree_space_between_items) {
-                    auto it = *stack->last();
-                    stack->len--;
+                    for (u32 i = 0; stack->len > 0 && row_area.y <= files_area.y + files_area.h; i++, row_area.y += row_area.h + settings.filetree_space_between_items) {
+                        auto it = *stack->last();
+                        stack->len--;
 
-                    if (world.file_explorer.selection == i)
-                        draw_rounded_rect(row_area, rgba(COLOR_DARK_GREY), 4, ROUND_ALL);
-
-                    auto is_row_visible = [&]() {
-                        auto sb_top = files_area.y;
-                        auto sb_bot = files_area.y + files_area.h;
-
-                        auto row_top = row_area.y;
-                        auto row_bot = row_area.y + row_area.h;
-
-                        return (
-                            sb_top <= row_top && row_top <= sb_bot
-                            || sb_top <= row_bot && row_bot <= sb_bot
-                        );
-                    };
-
-                    if (is_row_visible()) {
-                        SCOPED_FRAME();
-
-                        int mouse_flags = get_mouse_flags(row_area);
-
-                        if (mouse_flags & MOUSE_HOVER)
+                        if (world.file_explorer.selection == i)
                             draw_rounded_rect(row_area, rgba(COLOR_DARK_GREY), 4, ROUND_ALL);
 
-                        if (mouse_flags & MOUSE_CLICKED) {
-                            world.file_explorer.selection = i;
+                        auto is_row_visible = [&]() {
+                            auto sb_top = files_area.y;
+                            auto sb_bot = files_area.y + files_area.h;
 
-                            if (it->is_directory) {
-                                it->open = !it->open;
-                            } else {
-                                SCOPED_FRAME();
-                                auto rel_path = file_tree_node_to_path(it);
-                                auto full_path = path_join(world.wksp.path, rel_path);
-                                world.get_current_pane()->focus_editor(full_path);
+                            auto row_top = row_area.y;
+                            auto row_bot = row_area.y + row_area.h;
+
+                            return (
+                                sb_top <= row_top && row_top <= sb_bot
+                                || sb_top <= row_bot && row_bot <= sb_bot
+                            );
+                        };
+
+                        if (is_row_visible()) {
+                            SCOPED_FRAME();
+
+                            int mouse_flags = get_mouse_flags(row_area);
+
+                            if (mouse_flags & MOUSE_HOVER)
+                                draw_rounded_rect(row_area, rgba(COLOR_DARK_GREY), 4, ROUND_ALL);
+
+                            if (mouse_flags & MOUSE_CLICKED) {
+                                world.file_explorer.selection = i;
+
+                                if (it->is_directory) {
+                                    it->open = !it->open;
+                                } else {
+                                    SCOPED_FRAME();
+                                    auto rel_path = file_tree_node_to_path(it);
+                                    auto full_path = path_join(world.wksp.path, rel_path);
+                                    world.get_current_pane()->focus_editor(full_path);
+                                }
                             }
+
+                            boxf text_area = row_area;
+                            text_area.x += settings.sidebar_item_padding_x + it->depth * 20;
+                            text_area.w -= settings.sidebar_item_padding_x * 2;
+                            text_area.y += settings.sidebar_item_padding_y;
+                            text_area.h -= settings.sidebar_item_padding_y * 2;
+
+                            boxf icon_area;
+                            icon_area.pos = text_area.pos;
+                            icon_area.w = text_area.h;
+                            icon_area.h = text_area.h;
+
+                            text_area.x += (icon_area.w + 5);
+                            text_area.w -= (icon_area.w + 5);
+
+                            // draw_image(SIMAGE_FOLDER, icon_area);
+                            draw_image(it->is_directory ? SIMAGE_FOLDER : SIMAGE_SOURCE_FILE, icon_area);
+
+                            auto label = (cstr)our_strcpy(it->name);
+                            auto avail_chars = (int)(text_area.w / font->width);
+                            if (avail_chars < strlen(label))
+                                label[avail_chars] = '\0';
+
+                            draw_string(text_area.pos, label, rgba(COLOR_WHITE));
                         }
 
-                        boxf text_area = row_area;
-                        text_area.x += settings.sidebar_item_padding_x + it->depth * 20;
-                        text_area.w -= settings.sidebar_item_padding_x * 2;
-                        text_area.y += settings.sidebar_item_padding_y;
-                        text_area.h -= settings.sidebar_item_padding_y * 2;
-
-                        boxf icon_area;
-                        icon_area.pos = text_area.pos;
-                        icon_area.w = text_area.h;
-                        icon_area.h = text_area.h;
-
-                        text_area.x += (icon_area.w + 5);
-                        text_area.w -= (icon_area.w + 5);
-
-                        // draw_image(SIMAGE_FOLDER, icon_area);
-                        draw_image(it->is_directory ? SIMAGE_FOLDER : SIMAGE_SOURCE_FILE, icon_area);
-
-                        auto label = (cstr)our_strcpy(it->name);
-                        auto avail_chars = (int)(text_area.w / font->width);
-                        if (avail_chars < strlen(label))
-                            label[avail_chars] = '\0';
-
-                        draw_string(text_area.pos, label, rgba(COLOR_WHITE));
-                    }
-
-                    if (it->is_directory && it->open) {
-                        SCOPED_FRAME();
-                        auto children = alloc_list<File_Tree_Node*>();
-                        for (auto curr = it->children; curr != NULL; curr = curr->next)
-                            children->append(curr);
-                        for (i32 i = children->len-1; i >= 0; i--)
-                            stack->append(children->at(i));
+                        if (it->is_directory && it->open) {
+                            SCOPED_FRAME();
+                            auto children = alloc_list<File_Tree_Node*>();
+                            for (auto curr = it->children; curr != NULL; curr = curr->next)
+                                children->append(curr);
+                            for (i32 i = children->len-1; i >= 0; i--)
+                                stack->append(children->at(i));
+                        }
                     }
                 }
 
                 boxf sep_area = buttons_area;
                 sep_area.y += buttons_area.h;
                 sep_area.h = 1;
+                // should we do this?
+                sep_area.x -= settings.sidebar_padding_x;
+                sep_area.w += settings.sidebar_padding_x * 2;
                 draw_rect(sep_area, rgba(COLOR_WHITE, 0.2));
             }
             break;
