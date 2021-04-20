@@ -237,7 +237,7 @@ bool get_type_color(Ast_Node *node, Editor *editor, vec3f *out) {
 
             char keyword[16] = {0};
             auto it = editor->iter(node->start);
-            for (u32 i = 0; it.pos != node->end; i++)
+            for (u32 i = 0; i < _countof(keyword) && it.pos != node->end; i++)
                 keyword[i] = it.next();
 
             For (keywords1) {
@@ -970,6 +970,7 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
 
                     if (node_end < start) return WALK_SKIP_CHILDREN;
                     if (node_start > end) return WALK_ABORT;
+                    if (node->child_count != 0) return WALK_CONTINUE;
 
                     vec3f color = {0};
                     if (get_type_color(node, editor, &color)) {
@@ -992,20 +993,22 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                 vec2f actual_cursor_position = { -1, -1 };
                 vec2f actual_parameter_hint_start = { -1, -1 };
 
-                auto draw_cursor = [&]() {
-                    actual_cursor_position = cur_pos;    // save position where cursor is drawn for later use
+                auto draw_background = [&](bool insert_cursor, vec4f color) {
                     boxf b;
                     b.x = cur_pos.x;
                     b.y = cur_pos.y - font->offset_y;
                     b.h = (float)font->height;
-
-                    if (world.nvim.mode == VI_INSERT && !world.nvim.exiting_insert_mode) {
+                    if (insert_cursor)
                         b.w = 2;
-                    } else {
+                    else
                         b.w = (float)font->width;
-                    }
+                    draw_rect(b, color);
+                };
 
-                    draw_rect(b, rgba(COLOR_LIME));
+                auto draw_cursor = [&]() {
+                    actual_cursor_position = cur_pos;    // save position where cursor is drawn for later use
+                    bool insert_cursor = (world.nvim.mode == VI_INSERT && !world.nvim.exiting_insert_mode);
+                    draw_background(insert_cursor, rgba(COLOR_LIME));
                 };
 
                 List<Client_Breakpoint> breakpoints_for_this_editor;
@@ -1100,7 +1103,24 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                             draw_cursor();
                             if (world.nvim.mode != VI_INSERT)
                                 text_color = COLOR_BLACK;
+                        } else {
+                            auto topline = editor->nvim_data.grid_topline;
+                            if (topline <= y && y < topline + NVIM_DEFAULT_HEIGHT) {
+                                auto hl = editor->highlights[y - topline][vx];
+                                switch (hl) {
+                                case HL_INCSEARCH:
+                                    draw_background(false, rgba("#553333"));
+                                    break;
+                                case HL_SEARCH:
+                                    draw_background(false, rgba("#994444"));
+                                    break;
+                                case HL_VISUAL:
+                                    draw_background(false, rgba("#335533"));
+                                    break;
+                                }
+                            }
                         }
+
                         uchar uch = line->at(x);
                         if (uch == '\t') {
                             auto chars = TAB_SIZE - ((vx - view.x) % TAB_SIZE);

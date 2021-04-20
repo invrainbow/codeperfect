@@ -7,6 +7,9 @@
 #include "os.hpp"
 #include "tree_sitter_crap.hpp"
 
+#define NVIM_DEFAULT_WIDTH 200
+#define NVIM_DEFAULT_HEIGHT 500
+
 const int AUTOCOMPLETE_WINDOW_ITEMS = 10;
 
 #define MAX_BREAKPOINTS 128
@@ -47,6 +50,7 @@ struct Editor {
 
     bool saving;
     Process goimports_proc;
+    char highlights[NVIM_DEFAULT_HEIGHT][NVIM_DEFAULT_WIDTH];
 
     struct {
         bool is_buf_attached;
@@ -60,6 +64,7 @@ struct Editor {
 
         bool waiting_for_move_cursor;
         cur2 move_cursor_to;
+        int grid_topline;
     } nvim_data;
 
     struct {

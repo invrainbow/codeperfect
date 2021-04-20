@@ -6,10 +6,10 @@
 #include "settings.hpp"
 // #include <strsafe.h>
 
-#define NVIM_DEBUG 0
+#define NVIM_DEBUG 1
 
 #if NVIM_DEBUG
-#define nvim_print(fmt, ...) nvim_print("[nvim] " fmt, ##__VA_ARGS__)
+#define nvim_print(fmt, ...) print("[nvim] " fmt, ##__VA_ARGS__)
 #else
 #define nvim_print(fmt, ...)
 #endif
@@ -270,6 +270,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                         end_message();
                     };
 
+                    set_option("scrolloff",  [&]() { writer.write_int(100); });
                     set_option("shiftwidth", [&]() { writer.write_int(4); });
                     set_option("tabstop",    [&]() { writer.write_int(4); });
                     set_option("expandtab",  [&]() { writer.write_bool(false); });
@@ -289,8 +290,8 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                     writer.write_string("relative"); writer.write_string("win");
                     writer.write_string("row"); writer.write_int(0);
                     writer.write_string("col"); writer.write_int(0);
-                    writer.write_string("width"); writer.write_int(200);
-                    writer.write_string("height"); writer.write_int(100);
+                    writer.write_string("width"); writer.write_int(NVIM_DEFAULT_WIDTH);
+                    writer.write_string("height"); writer.write_int(NVIM_DEFAULT_HEIGHT);
                     end_message();
                 }
                 break;
@@ -315,6 +316,81 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
     case MPRPC_NOTIFICATION:
         nvim_print("received NOTIFICATION event, notification type = %s", nvim_notification_type_str(event->notification.type));
         switch (event->notification.type) {
+        case NVIM_NOTIF_GRID_LINE:
+            {
+                auto &args = event->notification.grid_line;
+
+                auto editor = find_editor_by_grid(args.grid);
+                if (editor == NULL) break;
+
+                // args.row, args.col
+
+                i32 last_hl = -1;
+                Hl_Type last_hltype = HL_NONE;
+                auto col = args.col;
+
+                For (*args.cells) {
+                    if (it.hl != -1 && it.hl != last_hl) {
+                        last_hl = it.hl;
+                        auto def = hl_defs.find([&](Hl_Def *it) { return it->id == last_hl; });
+                        last_hltype = def == NULL ? HL_NONE : def->type;
+                    }
+                    for (u32 i = 0; (i < (it.reps != 0 ? it.reps : 1)) && (col + i < NVIM_DEFAULT_WIDTH); i++)
+                        editor->highlights[args.row][col] = last_hltype;
+                    col += (it.reps != 0 ? it.reps : 1);
+                }
+            }
+            break;
+        case NVIM_NOTIF_GRID_SCROLL:
+            {
+                auto &args = event->notification.grid_scroll;
+
+                auto editor = find_editor_by_grid(args.grid);
+                if (editor == NULL) break;
+
+                auto move_row = [&](u32 dest, u32 src) {
+                    for (u32 i = 0; i < NVIM_DEFAULT_WIDTH; i++) {
+                        editor->highlights[dest][i] = editor->highlights[src][i];
+                        editor->highlights[src][i] = HL_NONE;
+                    }
+                };
+
+                auto top = args.top;
+                auto bot = min(NVIM_DEFAULT_HEIGHT, args.bot);
+                auto rows = args.rows;
+
+                if (args.rows < 0) {
+                    rows = -rows;
+                    for (i32 k = bot - 1; k >= top + rows; k--)
+                        move_row(k, k - rows);
+                } else {
+                    for (u32 k = top; k < bot - rows; k++)
+                        move_row(k, k + rows);
+                }
+            }
+            break;
+        case NVIM_NOTIF_HL_ATTR_DEFINE:
+            {
+                auto &args = event->notification.hl_attr_define;
+
+                nvim_print("got hl def for: %s", args.hi_name);
+
+                auto get_hl_type = [&]() -> Hl_Type {
+                    if (streq(args.hi_name, "IncSearch")) return HL_INCSEARCH;
+                    if (streq(args.hi_name, "Search")) return HL_SEARCH;
+                    if (streq(args.hi_name, "Visual")) return HL_VISUAL;
+
+                    return HL_NONE;
+                };
+
+                auto hl_type = get_hl_type();
+                if (hl_type != HL_NONE) {
+                    auto def = hl_defs.find_or_append([&](Hl_Def *it) { return it->id == args.id; });
+                    def->id = args.id;
+                    def->type = hl_type;
+                }
+            }
+            break;
         case NVIM_NOTIF_CUSTOM_MOVE_CURSOR:
             {
                 auto editor = world.get_current_editor();
@@ -457,6 +533,8 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 if (editor == NULL)
                     break; // TODO: handle us still receiving notifications for nonexistent window
 
+                editor->nvim_data.grid_topline = args.topline;
+
                 nvim_print("got cursor change to %s", format_pos(new_cur2((u32)args.curcol, (u32)args.curline)));
 
                 /*
@@ -511,12 +589,14 @@ void Nvim::run_event_loop() {
         auto msgid = start_request_message("nvim_ui_attach", 3);
         save_request(NVIM_REQ_UI_ATTACH, msgid, 0);
 
-        writer.write_int(200);
-        writer.write_int(100);
+        writer.write_int(NVIM_DEFAULT_WIDTH);
+        writer.write_int(NVIM_DEFAULT_HEIGHT);
         {
-            writer.write_map(2);
+            writer.write_map(4);
             writer.write_string("ext_linegrid"); writer.write_bool(true);
             writer.write_string("ext_multigrid"); writer.write_bool(true);
+            writer.write_string("ext_cmdline"); writer.write_bool(true);
+            writer.write_string("ext_hlstate"); writer.write_bool(true);
         }
         end_message();
     }
@@ -684,6 +764,101 @@ void Nvim::run_event_loop() {
                                     m->notification.win_pos.grid = grid;
                                     m->notification.win_pos.window = *window;
                                 });
+                            } else if (streq(op, "grid_line")) {
+                                ASSERT(args_len == 4);
+
+                                auto grid = reader.read_int(); CHECKOK();
+                                auto row = reader.read_int(); CHECKOK();
+                                auto col = reader.read_int(); CHECKOK();
+                                auto num_cells = reader.read_array(); CHECKOK();
+
+                                add_event([&](Nvim_Message *m) {
+                                    m->notification.type = NVIM_NOTIF_GRID_LINE;
+                                    m->notification.grid_line.grid = grid;
+                                    m->notification.grid_line.row = row;
+                                    m->notification.grid_line.col = col;
+
+                                    auto cells = alloc_list<Grid_Cell>();
+                                    for (u32 k = 0; k < num_cells; k++) {
+                                        auto cell_len = reader.read_array();
+                                        ASSERT(1 <= cell_len && cell_len <= 3);
+
+                                        // skip character (we don't care)
+                                        ASSERT(reader.peek_type() == MP_STRING);
+                                        reader.skip_object(); CHECKOK();
+
+                                        // read highlight id & reps
+                                        i32 hl = -1, reps = 0;
+                                        if (cell_len == 2) {
+                                            hl = reader.read_int(); CHECKOK();
+                                        } else if (cell_len == 3) {
+                                            hl = reader.read_int(); CHECKOK();
+                                            reps = reader.read_int(); CHECKOK();
+                                        }
+
+                                        auto cell = cells->append();
+                                        cell->hl = hl;
+                                        cell->reps = reps;
+                                    }
+
+                                    m->notification.grid_line.cells = cells;
+                                });
+                            } else if (streq(op, "grid_scroll")) {
+                                ASSERT(args_len == 7);
+                                auto grid = reader.read_int(); CHECKOK();
+                                auto top = reader.read_int(); CHECKOK();
+                                auto bot = reader.read_int(); CHECKOK();
+                                auto left = reader.read_int(); CHECKOK();
+                                auto right = reader.read_int(); CHECKOK();
+                                auto rows = reader.read_int(); CHECKOK();
+                                auto cols = reader.read_int(); CHECKOK();
+
+                                add_event([&](Nvim_Message* m) {
+                                    m->notification.type = NVIM_NOTIF_GRID_SCROLL;
+                                    m->notification.grid_scroll.grid = grid;
+                                    m->notification.grid_scroll.top = top;
+                                    m->notification.grid_scroll.bot = bot;
+                                    m->notification.grid_scroll.left = left;
+                                    m->notification.grid_scroll.right = right;
+                                    m->notification.grid_scroll.rows = rows;
+                                    m->notification.grid_scroll.cols = cols;
+                                });
+                            } else if (streq(op, "hl_attr_define")) {
+                                ASSERT(args_len == 4);
+                                auto id = reader.read_int(); CHECKOK();
+                                /* rgb_attr = */ reader.skip_object(); CHECKOK();
+                                /* cterm_attr = */ reader.skip_object(); CHECKOK();
+                                auto info_maps = reader.read_array(); CHECKOK();
+                                ccstr hi_name = NULL;
+
+                                if (info_maps > 0) {
+                                    for (u32 i = 0; i < info_maps - 1; i++) {
+                                        reader.skip_object(); CHECKOK();
+                                    }
+
+                                    auto info_keys = reader.read_map(); CHECKOK();
+                                    for (u32 i = 0; i < info_keys; i++) {
+                                        auto key = reader.read_string(); CHECKOK();
+                                        if (hi_name != NULL) {
+                                            reader.skip_object(); CHECKOK();
+                                            continue;
+                                        }
+
+                                        if (streq(key, "hi_name")) {
+                                            hi_name = reader.read_string(); CHECKOK();
+                                        } else {
+                                            reader.skip_object(); CHECKOK();
+                                        }
+                                    }
+                                }
+
+                                if (hi_name != NULL) {
+                                    add_event([&](Nvim_Message *m) {
+                                        m->notification.type = NVIM_NOTIF_HL_ATTR_DEFINE;
+                                        m->notification.hl_attr_define.id = id;
+                                        m->notification.hl_attr_define.hi_name = our_strcpy(hi_name);
+                                    });
+                                }
                             } else {
                                 for (u32 k = 0; k < args_len; k++) {
                                     reader.skip_object();
@@ -858,9 +1033,6 @@ void Nvim::write_notification_header(ccstr method, u32 params_length) {
     writer.write_array(params_length); // 3
 }
 
-#define NVIM_DEFAULT_WIDTH 200
-#define NVIM_DEFAULT_HEIGHT 100
-
 void Nvim::init() {
     ptr0(this);
 
@@ -879,6 +1051,7 @@ void Nvim::init() {
     messages_mem.init();
     grid_to_window.init();
     chars_after_exiting_insert_mode.init();
+    hl_defs.init();
 }
 
 void Nvim::start_running() {

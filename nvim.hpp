@@ -308,6 +308,7 @@ enum MprpcMessageType {
     MPRPC_NOTIFICATION = 2,
 };
 
+
 enum Nvim_Request_Type {
     NVIM_REQ_NONE = 0,
     NVIM_REQ_GET_API_INFO,
@@ -349,6 +350,10 @@ enum Nvim_Notification_Type {
     NVIM_NOTIF_MODE_CHANGE,
     NVIM_NOTIF_WIN_VIEWPORT,
     NVIM_NOTIF_WIN_POS,
+    NVIM_NOTIF_GRID_LINE,
+    NVIM_NOTIF_GRID_SCROLL,
+    NVIM_NOTIF_HL_ATTR_DEFINE,
+
     NVIM_NOTIF_CUSTOM_REVEAL_LINE,
     NVIM_NOTIF_CUSTOM_MOVE_CURSOR,
 };
@@ -357,6 +362,11 @@ enum Screen_Pos {
     SCREEN_POS_TOP,
     SCREEN_POS_MIDDLE,
     SCREEN_POS_BOTTOM,
+};
+
+struct Grid_Cell {
+    int hl;
+    int reps;
 };
 
 struct Nvim_Message {
@@ -411,6 +421,28 @@ struct Nvim_Message {
                     int grid;
                     Ext_Info window;
                 } win_pos;
+
+                struct {
+                    int grid;
+                    int row;
+                    int col;
+                    List<Grid_Cell> *cells;
+                } grid_line;
+
+                struct {
+                    int grid;
+                    int top;
+                    int bot;
+                    int left;
+                    int right;
+                    int rows;
+                    int cols;
+                } grid_scroll;
+
+                struct {
+                    int id;
+                    ccstr hi_name;
+                } hl_attr_define;
             };
         } notification;
     };
@@ -432,6 +464,18 @@ enum Vi_Mode {
     VI_UNKNOWN,
 };
 
+enum Hl_Type {
+    HL_NONE,
+    HL_INCSEARCH,
+    HL_SEARCH,
+    HL_VISUAL,
+};
+
+struct Hl_Def {
+    int id;
+    Hl_Type type;
+};
+
 struct Nvim {
     // memory
     Pool mem;
@@ -449,6 +493,7 @@ struct Nvim {
     List<Nvim_Request> requests;
     List<Nvim_Message> message_queue;
     Lock messages_lock;
+    List<Hl_Def> hl_defs;
 
     // state
     List<Grid_Window_Pair> grid_to_window;

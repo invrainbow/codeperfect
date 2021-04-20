@@ -2,6 +2,8 @@ set clipboard=unnamed
 set ignorecase
 set autoindent
 set noexpandtab
+set startofline
+set scrolloff=100
 
 " called from ide when opening/creating new file to reset undo tree
 function! IdeClearUndo(bufId)
@@ -45,3 +47,66 @@ nnoremap M <Cmd>call <SID>moveCursor(1)<CR>
 xnoremap M <Cmd>call <SID>moveCursor(1)<CR>
 nnoremap L <Cmd>call <SID>moveCursor(2)<CR>
 xnoremap L <Cmd>call <SID>moveCursor(2)<CR>
+
+scriptencoding utf-8
+
+set shortmess=filnxtToOFI
+set nowrap
+set mouse=a
+set cmdheight=1
+set wildmode=list
+set wildchar=<C-e>
+
+set nobackup
+set nowb
+set noswapfile
+set noautoread
+set scrolloff=100
+set conceallevel=0
+set nocursorline
+
+set hidden
+set bufhidden=hide
+set noautowrite
+set norelativenumber
+set nonumber
+set list
+syntax on
+set signcolumn=no
+
+set statusline=
+set laststatus=0
+set noruler
+set nomodeline
+set modelines=0
+set nofoldenable
+set foldmethod=manual
+
+" Turn on auto-indenting
+set autoindent
+set smartindent
+
+set inccommand=
+
+" lazyredraw breaks the movement
+set nolazyredraw
+
+function s:forceLocalOptions()
+    setlocal nowrap
+    setlocal conceallevel=0
+    setlocal scrolloff=100
+    setlocal hidden
+    setlocal bufhidden=hide
+    setlocal noautowrite
+    setlocal nonumber
+    setlocal norelativenumber
+    setlocal list
+    setlocal nofoldenable
+    setlocal foldmethod=manual
+    setlocal nolazyredraw
+endfunction
+
+augroup VscodeForceOptions
+    autocmd!
+    autocmd BufEnter,FileType * call <SID>forceLocalOptions()
+augroup END
