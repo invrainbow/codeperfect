@@ -55,9 +55,6 @@ struct Editor {
 
         bool got_initial_cur;
         bool got_initial_lines;
-
-        bool is_resizing;
-        bool need_initial_resize;
         bool need_initial_pos_set;
         cur2 initial_pos;
 

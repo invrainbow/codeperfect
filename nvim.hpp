@@ -316,7 +316,6 @@ enum Nvim_Request_Type {
     NVIM_REQ_BUF_ATTACH,
     NVIM_REQ_UI_ATTACH,
     NVIM_REQ_SET_CURRENT_WIN,
-    NVIM_REQ_RESIZE,
     NVIM_REQ_AUTOCOMPLETE_SETBUF,
     NVIM_REQ_POST_INSERT_GETCHANGEDTICK,
     NVIM_REQ_POST_INSERT_MOVE_CURSOR,
@@ -331,11 +330,6 @@ struct Nvim_Request {
     u32 editor_id;
 
     union {
-        struct {
-            u32 to_width;
-            u32 to_height;
-        } resize;
-
         struct {
             cur2 target_cursor;
         } autocomplete_setbuf;
@@ -515,7 +509,6 @@ struct Nvim {
         end_message();
     }
 
-    bool resize_editor(Editor* editor);
     void handle_editor_on_ready(Editor *editor);
     void handle_message_from_main_thread(Nvim_Message *event);
     void assoc_grid_with_window(u32 grid, u32 win);

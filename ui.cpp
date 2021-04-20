@@ -1527,10 +1527,6 @@ void UI::recalculate_view_sizes(bool force) {
         for (auto&& editor : world.wksp.panes[i].editors) {
             editor.view.w = (i32)((editor_sizes[i].x - EDITOR_MARGIN_X) / world.font.width);
             editor.view.h = (i32)((editor_sizes[i].y - EDITOR_MARGIN_Y) / world.font.height / LINE_HEIGHT);
-
-            if (!editor.nvim_data.is_resizing)
-                if (!world.nvim.resize_editor(&editor))
-                    editor.nvim_data.need_initial_resize = true;
         }
     }
 }

@@ -26,25 +26,6 @@ Editor* find_editor_by_buffer(u32 buf_id) {
     });
 }
 
-bool Nvim::resize_editor(Editor* editor) {
-    auto pair = grid_to_window.find([&](Grid_Window_Pair* it) {
-        return it->win == editor->nvim_data.win_id;
-    });
-
-    if (pair == NULL) return false;
-
-    editor->nvim_data.is_resizing = true;
-
-    auto msgid = start_request_message("nvim_ui_try_resize_grid", 3);
-    save_request(NVIM_REQ_RESIZE, msgid, editor->id);
-
-    writer.write_int(pair->grid);
-    writer.write_int(editor->view.w);
-    writer.write_int(editor->view.h);
-    end_message();
-    return true;
-}
-
 void Nvim::assoc_grid_with_window(u32 grid, u32 win) {
     auto& table = grid_to_window;
 
@@ -53,15 +34,6 @@ void Nvim::assoc_grid_with_window(u32 grid, u32 win) {
 
     pair->grid = grid;
     pair->win = win;
-
-    auto editor = find_editor_by_window(win);
-    if (editor != NULL) {
-        if (editor->nvim_data.need_initial_resize) {
-            nvim_print("need initial resize, calling world.nvim.resize_editor()...");
-            world.nvim.resize_editor(editor);
-            editor->nvim_data.need_initial_resize = false;
-        }
-    }
 }
 
 Editor* Nvim::find_editor_by_grid(u32 grid) {
@@ -112,7 +84,6 @@ ccstr nvim_request_type_str(Nvim_Request_Type type) {
     define_str_case(NVIM_REQ_BUF_ATTACH);
     define_str_case(NVIM_REQ_UI_ATTACH);
     define_str_case(NVIM_REQ_SET_CURRENT_WIN);
-    define_str_case(NVIM_REQ_RESIZE);
     define_str_case(NVIM_REQ_AUTOCOMPLETE_SETBUF);
     define_str_case(NVIM_REQ_POST_INSERT_GETCHANGEDTICK);
     define_str_case(NVIM_REQ_FILEOPEN_CLEAR_UNDO);
@@ -254,10 +225,6 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 writer.write_string("channel_id");
                 writer.write_int(event->response.channel_id);
                 end_message();
-                break;
-
-            case NVIM_REQ_RESIZE:
-                editor->nvim_data.is_resizing = false;
                 break;
 
             case NVIM_REQ_CREATE_BUF:
