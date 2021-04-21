@@ -10,7 +10,8 @@
 // TODO: dynamically determine this
 static const char GOROOT[] = "c:\\go";
 static const char GOPATH[] = "c:\\users\\brandon\\go";
-const char TEST_PATH[] = "c:\\users\\brandon\\cryptopals";
+const char TEST_PATH[] = "c:\\users\\brandon\\beego";
+// const char TEST_PATH[] = "c:\\users\\brandon\\cryptopals";
 // const char TEST_PATH[] = "c:\\users\\brandon\\life";
 
 // -----
