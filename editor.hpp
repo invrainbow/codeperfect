@@ -65,6 +65,11 @@ struct Editor {
         bool waiting_for_move_cursor;
         cur2 move_cursor_to;
         int grid_topline;
+
+        u32 post_insert_buf_id;
+        u32 post_insert_win_id;
+        u32 post_insert_delete_len;
+        cur2 post_insert_original_cur;
     } nvim_data;
 
     struct {
@@ -124,6 +129,7 @@ struct Pane {
     List<Editor> editors;
     u32 current_editor;
     float width;
+    float tabs_offset;
 
     void init();
     void cleanup();
