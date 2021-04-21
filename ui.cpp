@@ -869,6 +869,7 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
 
         boxf tab;
         tab.pos = tabs_area.pos + new_vec2(5, tabs_area.h - tab_padding.y * 2 - font->height);
+        tab.x -= pane.tabs_offset;
 
         i32 tab_to_remove = -1;
 
@@ -907,6 +908,17 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
 
             tab.w = text_width + tab_padding.x * 2;
             tab.h = font->height + tab_padding.y * 2;
+
+            // Now `tab` is filled out, and I can do my logic to make sure it's visible on screen
+            if (tab_id == pane.current_editor) {
+                auto margin = tab_id == 0 ? 5 : settings.tabs_offset;
+                if (tab.x < tabs_area.x + margin)
+                    pane.tabs_offset -= (tabs_area.x + margin - tab.x);
+
+                margin = (tab_id == pane.editors.len - 1) ? 5 : settings.tabs_offset;
+                if (tab.x + tab.w > tabs_area.x + tabs_area.w - margin)
+                    pane.tabs_offset += ((tab.x + tab.w) - (tabs_area.x + tabs_area.w - margin));
+            }
 
             auto mouse_flags = get_mouse_flags(tab);
 

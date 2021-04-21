@@ -132,6 +132,7 @@ struct UI {
 
     List<stbrp_rect> sprite_rects;
     float sprite_tex_size;
+
     bool clipping;
     boxf current_clip;
 

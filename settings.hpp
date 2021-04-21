@@ -25,6 +25,8 @@ struct Settings {
     float error_list_item_padding_x = 5;
     float error_list_item_padding_y = 3;
 
+    float tabs_offset = 50;
+
     float scrolloff = 2;
 };
 
