@@ -475,6 +475,22 @@ void Editor::cleanup() {
     if (tree != NULL)
         ts_tree_delete(tree); // i remember this being super slow, is it still if it's just one tree?
 
+    if (nvim_data.win_id != 0) {
+        auto &nv = world.nvim;
+        auto msgid = nv.start_request_message("nvim_win_close", 2);
+        nv.save_request(NVIM_REQ_POST_INSERT_DOTREPEAT_CLOSE_NEW_WIN, msgid, id);
+        nv.writer.write_int(nvim_data.win_id);
+        nv.writer.write_bool(true);
+        nv.end_message();
+    }
+
+    if (nvim_data.post_insert_win_id != 0) {
+        auto &nv = world.nvim;
+        auto msgid = nv.start_request_message("nvim_win_close", 2);
+        nv.save_request(NVIM_REQ_POST_INSERT_DOTREPEAT_CLOSE_NEW_WIN, msgid, id);
+        nv.writer.write_int(nvim_data.post_insert_win_id);
+    }
+
     // TODO: delete nvim resources
     buf.cleanup();
     mem.cleanup();
