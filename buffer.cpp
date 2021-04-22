@@ -252,7 +252,7 @@ void Buffer::delete_lines(u32 y1, u32 y2) {
 
     if (y2 < lines.len) {
         memmove(&lines[y1], &lines[y2], sizeof(Line) * (lines.len - y2));
-        memmove(&bytecounts[y1], &bytecounts[y2], sizeof(Line) * (bytecounts.len - y2));
+        memmove(&bytecounts[y1], &bytecounts[y2], sizeof(u32) * (bytecounts.len - y2));
     }
 
     lines.len -= (y2 - y1);
@@ -268,7 +268,7 @@ void Buffer::clear() {
 s32 get_bytecount(Line *line) {
     s32 bc = 0;
     For (*line) bc += uchar_size(it);
-    return bc;
+    return bc + 1;
 }
 
 void Buffer::insert_line(u32 y, uchar* text, s32 len) {
@@ -339,6 +339,11 @@ void Buffer::insert(cur2 start, uchar* text, s32 len) {
         memmove(&line->items[x + len], &line->items[x], sizeof(uchar) * (line->len - x));
         memcpy(&line->items[x], text, sizeof(uchar) * len);
         line->len = total_len;
+
+        u32 bc = 0;
+        for (u32 i = 0; i < len; i++)
+            bc += uchar_size(text[i]);
+        bytecounts[y] += bc;
     }
 
     dirty = true;
@@ -398,7 +403,7 @@ void Buffer::free_temp_array(uchar* buf, s32 size) {
 i32 Buffer::cur_to_offset(cur2 c) {
     i32 ret = 0;
     for (u32 y = 0; y < c.y; y++)
-        ret += get_bytecount(&lines[y]) + 1; // assuming newline takes 1 char
+        ret += bytecounts[y];
 
     for (u32 x = 0; x < c.x; x++)
         ret += uchar_size(lines[c.y][x]);

@@ -27,6 +27,21 @@ bool image_mask_types[] = {
     true,
 };
 
+int get_line_number_width(Editor *editor) {
+    auto &buf = editor->buf;
+
+    u32 maxval = 0;
+    if (world.replace_line_numbers_with_bytecounts) {
+        For (buf.bytecounts)
+            if (it > maxval)
+                maxval = it;
+    } else {
+        maxval = buf.lines.len;
+    }
+
+    return (int)log10(maxval) + 1;
+}
+
 bool UI::init_sprite_texture() {
     sprite_tex_size = 1024;
 
@@ -1085,7 +1100,7 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                         }
                     }
 
-                    auto line_number_width = (int)log10(buf.lines.len) + 1;
+                    auto line_number_width = get_line_number_width(editor);
 
                     auto is_cursor_match = [&](cur2 cur, i32 x, i32 y) -> bool {
                         if (cur.y != y) return false;
@@ -1093,7 +1108,11 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
 
                     {
                         cur_pos.x += settings.line_number_margin_left;
-                        auto line_number_str = our_sprintf("%*d", line_number_width, y + 1);
+                        ccstr line_number_str = NULL;
+                        if (world.replace_line_numbers_with_bytecounts)
+                            line_number_str = our_sprintf("%*d", line_number_width, buf.bytecounts[y]);
+                        else
+                            line_number_str = our_sprintf("%*d", line_number_width, y + 1);
                         auto len = strlen(line_number_str);
                         for (u32 i = 0; i < len; i++)
                             draw_char(&cur_pos, line_number_str[i], rgba(COLOR_MEDIUM_DARK_GREY));
@@ -1404,6 +1423,11 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
         else
             draw_status_piece(RIGHT, "INDEXING IN PROGRESS", rgba("#880000"), rgba("#eecccc"));
 
+        auto curr_editor = world.get_current_editor();
+        if (curr_editor != NULL) {
+            auto cur = curr_editor->cur;
+            draw_status_piece(RIGHT, our_sprintf("%d,%d", cur.y+1, cur.x+1), rgba(COLOR_WHITE, 0.0), rgba("#aaaaaa"));
+        }
     }
 
     auto get_debugger_state_string = [&]() -> ccstr {
@@ -1575,7 +1599,7 @@ void UI::recalculate_view_sizes(bool force) {
         int line_number_width = 0;
         auto editor = it.get_current_editor();
         if (editor != NULL)
-            line_number_width = (int)log10(editor->buf.lines.len) + 1;
+            line_number_width = get_line_number_width(editor);
 
         boxf editor_area;
         get_tabs_and_editor_area(&pane_area, NULL, &editor_area);

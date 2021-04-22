@@ -112,9 +112,7 @@ void Editor::move_cursor(cur2 c) {
         nvim_data.waiting_for_move_cursor = true;
         nvim_data.move_cursor_to = c;
 
-        world.nvim.start_request_message("nvim_input", 1);
-        world.nvim.writer.write_string("<Esc>");
-        world.nvim.end_message();
+        trigger_escape();
         return;
     }
 

@@ -109,6 +109,7 @@ struct World {
     File_Tree_Node *file_tree;
 
     Workspace wksp; // in the future, multiple workspaces?
+    bool replace_line_numbers_with_bytecounts;
 
     struct {
         char build_command[MAX_PATH];

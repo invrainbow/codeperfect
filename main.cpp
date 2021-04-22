@@ -108,13 +108,13 @@ void main(void) {
     case 0: // DRAW_SOLID
         outcolor = _color;
         break;
-    case 1: // DRAW_MASK
-        outcolor = vec4(_color.rgb, our_texture(_uv).r);
+    case 1: // DRAW_FONT_MASK
+        outcolor = vec4(_color.rgb, our_texture(_uv).r * _color.a);
         break;
     case 2: // DRAW_IMAGE
         outcolor = our_texture(_uv);
         break;
-    case 3: // DRAW_MASK_IMAGE
+    case 3: // DRAW_IMAGE_MASK
         // outcolor = vec4(_color.rgb, (0.5 + dot(vec3(0.33, 0.33, 0.33), our_texture(_uv).rgb) * 0.5) * our_texture(_uv).a);
         outcolor = vec4(_color.rgb, our_texture(_uv).a);
         break;
@@ -1906,6 +1906,7 @@ int main() {
                 ImGui::MenuItem("Editor AST viewer", NULL, &world.wnd_editor_tree.show);
                 ImGui::MenuItem("Editor toplevels viewer", NULL, &world.wnd_editor_toplevels.show);
                 ImGui::MenuItem("Brandon Hsiao Roll Your Own IDE Construction Set", NULL, &world.wnd_style_editor.show);
+                ImGui::MenuItem("Replace line numbers with bytecounts", NULL, &world.replace_line_numbers_with_bytecounts);
                 ImGui::EndMenu();
             }
 
