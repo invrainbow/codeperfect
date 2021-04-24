@@ -228,6 +228,7 @@ bool Editor::load_file(ccstr new_filepath) {
         auto& nv = world.nvim;
         auto msgid = nv.start_request_message("nvim_create_buf", 2);
         nv.save_request(NVIM_REQ_CREATE_BUF, msgid, id);
+
         nv.writer.write_bool(false);
         nv.writer.write_bool(true);
         nv.end_message();
@@ -298,6 +299,7 @@ Editor* Pane::focus_editor(ccstr path) {
 Editor* Pane::focus_editor(ccstr path, cur2 pos) {
     u32 i = 0;
     For (editors) {
+        // TODO: use are_filepaths_equal instead, don't have to access filesystem
         if (are_filepaths_same_file(path, it.filepath))
             return focus_editor_by_index(i, pos);
         i++;
@@ -487,9 +489,11 @@ void Editor::cleanup() {
         auto msgid = nv.start_request_message("nvim_win_close", 2);
         nv.save_request(NVIM_REQ_POST_INSERT_DOTREPEAT_CLOSE_NEW_WIN, msgid, id);
         nv.writer.write_int(nvim_data.post_insert_win_id);
+        nv.end_message();
     }
 
-    // TODO: delete nvim resources
+    // TODO: delete extmarks (or do they autodelete when buf is deleted?)
+
     buf.cleanup();
     mem.cleanup();
 }
@@ -995,7 +999,30 @@ void go_to_error(int index) {
     auto &error = b.errors[index];
 
     SCOPED_FRAME();
+
     auto path = path_join(world.wksp.path, error.file);
     auto pos = new_cur2(error.col-1, error.row-1);
-    world.get_current_pane()->focus_editor(path, pos);
+
+    auto editor = world.find_editor([&](Editor *it) -> bool {
+        return are_filepaths_equal(path, it->filepath);
+    });
+
+    // when build finishes, set marks on existing editors
+    // when editor opens, get all existing errors and set marks
+
+    if (editor == NULL || error.nvim_extmark == 0) {
+        world.get_current_pane()->focus_editor(path, pos);
+        return;
+    }
+
+    world.get_current_pane()->focus_editor(path);
+
+    auto &nv = world.nvim;
+    auto msgid = nv.start_request_message("nvim_buf_get_extmark_by_id", 4);
+    nv.save_request(NVIM_REQ_GOTO_EXTMARK, msgid, editor->id);
+    nv.writer.write_int(editor->nvim_data.buf_id);
+    nv.writer.write_int(b.nvim_namespace_id);
+    nv.writer.write_int(error.nvim_extmark);
+    nv.writer.write_map(0);
+    nv.end_message();
 }

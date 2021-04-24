@@ -331,6 +331,12 @@ enum Nvim_Request_Type {
 
     NVIM_REQ_POST_SAVE_GETCHANGEDTICK,
     NVIM_REQ_POST_SAVE_SETLINES,
+
+    NVIM_REQ_GOTO_EXTMARK,
+
+    NVIM_REQ_CREATE_EXTMARKS_CREATE_NAMESPACE,
+    NVIM_REQ_CREATE_EXTMARKS_SET_EXTMARKS,
+    NVIM_REQ_CREATE_EDITOR_EXTMARKS,
 };
 
 struct Nvim_Request {
@@ -350,6 +356,10 @@ struct Nvim_Request {
         struct {
             cur2 cur;
         } post_save_getchangedtick;
+
+        struct {
+            List<u32> *error_indexes;
+        } create_extmarks;
     };
 };
 
@@ -382,12 +392,18 @@ struct Nvim_Message {
     MprpcMessageType type;
     union {
         struct {
-            Nvim_Request *original_request;
+            u32 msgid;
             union {
                 int changedtick;
                 int channel_id;
                 Ext_Info buf;
                 Ext_Info win;
+                struct {
+                    bool ok;
+                    cur2 pos;
+                } goto_extmark;
+                List<u32> *extmarks;
+                u32 namespace_id;
             };
         } response;
 
@@ -496,12 +512,12 @@ struct Nvim {
     Pool mem;
     Pool loop_mem;
     Pool messages_mem;
+    Pool requests_mem;
 
     // orchestration
     Process nvim_proc;
     Mp_Reader reader;
     Mp_Writer writer;
-    Lock send_lock;
     Lock requests_lock;
     u32 request_id;
     Thread_Handle event_loop_thread;
@@ -517,6 +533,9 @@ struct Nvim {
     Vi_Mode mode;
     bool exiting_insert_mode;
     List<char> chars_after_exiting_insert_mode;
+
+    List<ccstr> started_messages;
+    Pool started_messages_mem;
 
     struct {
         List<char> content;
@@ -542,7 +561,15 @@ struct Nvim {
 
     // TODO: document the request lifecycle
     u32 start_request_message(ccstr method, u32 params_length) {
-        send_lock.enter();
+        requests_lock.enter();
+
+        if (started_messages.len > 0)
+            panic("message already in progress");
+
+        {
+            SCOPED_MEM(&started_messages_mem);
+            started_messages.append(our_strcpy(method));
+        }
 
         auto msgid = request_id++;
         write_request_header(msgid, method, params_length);
@@ -550,19 +577,45 @@ struct Nvim {
     }
 
     void start_response_message(u32 msgid) {
-        send_lock.enter();
+        requests_lock.enter();
+
+        if (started_messages.len > 0)
+            panic("message already in progress");
+
+        {
+            SCOPED_MEM(&started_messages_mem);
+            started_messages.append(our_sprintf("response for msgid %d", msgid));
+        }
+
         write_response_header(msgid);
     }
 
     void end_message() {
+        if (started_messages.len == 0)
+            panic("ending message when none is open???");
+
+        started_messages.len--;
+        if (started_messages.len == 0)
+            started_messages_mem.reset();
+
         writer.flush();
-        send_lock.leave();
+        requests_lock.leave();
     }
 
     Nvim_Request *find_request_by_msgid(u32 msgid) {
         return requests.find([&](Nvim_Request* it) -> bool {
             return it->msgid == msgid;
         });
+    }
+
+    void delete_request_by_msgid(u32 msgid) {
+        SCOPED_MEM(&requests_mem);
+
+        auto req = find_request_by_msgid(msgid);
+        if (req != NULL) requests.remove(req);
+
+        if (requests.len == 0)
+            requests_mem.reset();
     }
 
     void run_event_loop();

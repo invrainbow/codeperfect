@@ -268,25 +268,32 @@ void kill_thread(Thread_Handle h) {
 }
 
 void Lock::init() {
-    InitializeCriticalSection(&lock);
+    ptr0(this);
+    mutex = CreateMutex(NULL, FALSE, NULL);
 }
 
 void Lock::cleanup() {
-    DeleteCriticalSection(&lock);
+    CloseHandle(mutex);
 }
 
 bool Lock::try_enter() {
-    return TryEnterCriticalSection(&lock);
+    auto res = WaitForSingleObject(mutex, 0);
+    if (res == WAIT_ABANDONED)
+        panic("mutex abandoned");
+    return res == WAIT_OBJECT_0;
 }
 
 bool Lock::enter() {
-    EnterCriticalSection(&lock);
+    auto res = WaitForSingleObject(mutex, INFINITE);
+    if (res != WAIT_OBJECT_0) {
+        print("res: %d", res);
+        panic("failed to enter mutex");
+    }
     return true;
 }
 
 bool Lock::leave() {
-    LeaveCriticalSection(&lock);
-    return true;
+    return ReleaseMutex(mutex);
 }
 
 void File::cleanup() {

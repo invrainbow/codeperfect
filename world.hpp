@@ -35,10 +35,12 @@ enum Sidebar_View {
 // TODO: define init/cleanup routines for find and replace, and for build
 
 struct Build_Error {
+    ccstr message;
+    bool valid;
     ccstr file;
     u32 row;
     u32 col;
-    ccstr message;
+    u64 nvim_extmark;
 };
 
 struct File_Tree_Node {
@@ -107,6 +109,7 @@ struct World {
     u32 next_editor_id;
 
     File_Tree_Node *file_tree;
+    u64 next_build_id;
 
     Workspace wksp; // in the future, multiple workspaces?
     bool replace_line_numbers_with_bytecounts;
@@ -147,13 +150,20 @@ struct World {
     struct {
         Pool mem;
 
+        u64 id;
         bool done;
         List<Build_Error> errors;
+        u64 nvim_namespace_id;
         int current_error;
         bool build_itself_had_error;
         Thread_Handle thread;
         i32 scroll_offset;
         u32 selection;
+        bool creating_extmarks;
+
+        bool ready() {
+            return done && !creating_extmarks;
+        }
 
         void init() {
             ptr0(this);
@@ -168,6 +178,7 @@ struct World {
             if (thread != NULL) {
                 kill_thread(thread);
                 close_thread_handle(thread);
+                // TODO: delete nvim namespace and extmarks
             }
             mem.cleanup();
         }

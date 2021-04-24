@@ -27,6 +27,12 @@
 #define PATH_SEP = '/'
 #endif
 
+#if OS_LINUX
+#define FILEPATHS_CASE_SENSITIVE 1
+#else
+#define FILEPATHS_CASE_SENSITIVE 0
+#endif
+
 #include "common.hpp"
 
 enum Process_Status {
@@ -88,10 +94,13 @@ enum File_Type {
 u64 current_time_in_nanoseconds();
 
 bool are_filepaths_same_file(ccstr path1, ccstr path2);
+bool are_filepaths_equal(ccstr a, ccstr b);
 
 struct Lock {
 #if OS_WIN
-    CRITICAL_SECTION lock;
+    // CRITICAL_SECTION lock;
+    // bool count;
+    HANDLE mutex;
 #elif OS_LINUX
     pthread_mutex_t lock;
 #endif

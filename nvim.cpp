@@ -108,20 +108,32 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
     switch (event->type) {
     case MPRPC_RESPONSE:
         {
-            auto req = event->response.original_request;
+            auto req = find_request_by_msgid(event->response.msgid);
+            if (req == NULL) {
+                nvim_print("handle_message_from_main_thread: couldn't find request for msgid %d", event->response.msgid);
+                break;
+            }
+
+            defer { delete_request_by_msgid(req->msgid); };
+
             nvim_print("received RESPONSE event, request type = %s", nvim_request_type_str(req->type));
 
             // grab associated editor, break if we can't find it
             Editor* editor = NULL;
             if (req->editor_id != 0) {
                 editor = world.find_editor_by_id(req->editor_id);
-                if (editor == NULL) {
-                    reader.skip_object();
-                    break;
-                }
+                if (editor == NULL) break;
             }
 
             switch (req->type) {
+            case NVIM_REQ_GOTO_EXTMARK:
+                {
+                    auto &data = event->response.goto_extmark;
+                    if (!data.ok) break;
+                    editor->move_cursor(data.pos);
+                }
+                break;
+
             case NVIM_REQ_FILEOPEN_CLEAR_UNDO:
                 editor->buf.dirty = false;
                 break;
@@ -267,6 +279,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                     writer.write4(delete_len);
                     for (u32 i = 0; i < delete_len; i++)
                         writer.write1('x');
+                    end_message();
                 }
                 break;
 
@@ -280,6 +293,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                         writer.write_int(1);
                         writer.write_int(editor->nvim_data.post_insert_delete_len);
                     }
+                    end_message();
                 }
                 break;
 
@@ -422,12 +436,138 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 editor->nvim_data.win_id = event->response.win.object_id;
                 if (waiting_focus_window == editor->id)
                     set_current_window(editor);
+
+                {
+                    auto &b = world.build;
+                    if (!b.ready()) break;
+
+                    List<u32> *error_indexes = NULL;
+                    {
+                        SCOPED_MEM(&requests_mem);
+                        error_indexes = alloc_list<u32>();
+                    }
+
+                    struct Call {
+                        u32 buf_id;
+                        cur2 pos;
+                    };
+
+                    auto calls = alloc_list<Call>();
+
+                    auto editor_path = get_path_relative_to(editor->filepath, world.wksp.path);
+                    for (u32 i = 0; i < b.errors.len; i++) {
+                        auto &it = b.errors[i];
+
+                        if (it.nvim_extmark != 0) continue;
+                        if (!it.valid) continue;
+                        if (!are_filepaths_equal(editor_path, it.file)) continue;
+
+                        error_indexes->append(i);
+
+                        auto call = calls->append();
+                        call->buf_id = editor->nvim_data.buf_id;
+                        call->pos = new_cur2(it.col - 1, it.row - 1);
+                    }
+
+                    auto msgid = start_request_message("nvim_call_atomic", 1);
+                    auto req = save_request(NVIM_REQ_CREATE_EDITOR_EXTMARKS, msgid, 0);
+                    defer { end_message(); };
+
+                    writer.write_array(calls->len);
+                    For (*calls) {
+                        writer.write_array(2);
+                        writer.write_string("nvim_buf_set_extmark");
+                        {
+                            writer.write_array(5);
+                            writer.write_int(it.buf_id);
+                            writer.write_int(b.nvim_namespace_id);
+                            writer.write_int(it.pos.y);
+                            writer.write_int(it.pos.x);
+                            writer.write_map(0);
+                        }
+                    }
+
+                    req->create_extmarks.error_indexes = error_indexes;
+                }
                 break;
             case NVIM_REQ_BUF_ATTACH:
                 editor->nvim_data.is_buf_attached = true;
                 break;
             case NVIM_REQ_UI_ATTACH:
                 is_ui_attached = true;
+                break;
+
+            case NVIM_REQ_CREATE_EXTMARKS_CREATE_NAMESPACE:
+                {
+                    auto &b = world.build;
+                    b.nvim_namespace_id = event->response.namespace_id;
+
+                    List<u32> *error_indexes = NULL;
+                    {
+                        SCOPED_MEM(&requests_mem);
+                        error_indexes = alloc_list<u32>();
+                    }
+
+                    struct Call {
+                        cur2 pos;
+                        u32 buf_id;
+                    };
+
+                    auto calls = alloc_list<Call>();
+                    For (world.wksp.panes) {
+                        For (it.editors) {
+                            auto editor = it;
+                            auto path = get_path_relative_to(it.filepath, world.wksp.path);
+                            for (u32 i = 0; i < b.errors.len; i++) {
+                                auto &it = b.errors[i];
+                                if (!it.valid) continue;
+                                if (!are_filepaths_equal(path, it.file)) continue;
+
+                                error_indexes->append(i);
+                                auto call = calls->append();
+                                call->pos = new_cur2(it.col - 1, it.row - 1);
+                                call->buf_id = editor.nvim_data.buf_id;
+                            }
+                        }
+                    }
+
+                    auto msgid = start_request_message("nvim_call_atomic", 1);
+                    auto req2 = save_request(NVIM_REQ_CREATE_EXTMARKS_SET_EXTMARKS, msgid, 0);
+                    defer { end_message(); };
+
+                    writer.write_array(calls->len);
+                    For (*calls) {
+                        writer.write_array(2);
+                        writer.write_string("nvim_buf_set_extmark");
+                        {
+                            writer.write_array(5);
+                            writer.write_int(it.buf_id);
+                            writer.write_int(b.nvim_namespace_id);
+                            writer.write_int(it.pos.y);
+                            writer.write_int(it.pos.x);
+                            writer.write_map(0);
+                        }
+                    }
+
+                    req2->create_extmarks.error_indexes = error_indexes;
+                }
+                break;
+
+            case NVIM_REQ_CREATE_EXTMARKS_SET_EXTMARKS:
+            case NVIM_REQ_CREATE_EDITOR_EXTMARKS:
+                {
+                    auto error_indexes = req->create_extmarks.error_indexes;
+                    auto items_to_process = min(error_indexes->len, event->response.extmarks->len);
+
+                    for (u32 i = 0; i < items_to_process; i++) {
+                        auto &err = world.build.errors[error_indexes->at(i)];
+                        auto extmark = event->response.extmarks->at(i);
+                        err.nvim_extmark = extmark;
+                    }
+
+                    if (req->type == NVIM_REQ_CREATE_EXTMARKS_SET_EXTMARKS)
+                        world.build.creating_extmarks = false;
+                }
                 break;
             }
         }
@@ -717,6 +857,13 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
         }
         break;
     }
+
+    if (started_messages.len > 0) {
+        print("---");
+        for (i32 i = started_messages.len - 1; i >= 0; i--)
+            print("%s", started_messages[i]);
+        panic("message not closed");
+    }
 }
 
 void Nvim::run_event_loop() {
@@ -787,7 +934,7 @@ void Nvim::run_event_loop() {
                     auto cmd = reader.read_string(); CHECKOK();
                     auto num_args = reader.read_array(); CHECKOK();
                     if (streq(cmd, "reveal_line")) {
-                        assert(num_args == 2);
+                        ASSERT(num_args == 2);
                         auto screen_pos = (Screen_Pos)reader.read_int(); CHECKOK();
                         auto reset_cursor = (bool)reader.read_int();
                         add_event([&](Nvim_Message *msg) {
@@ -796,7 +943,7 @@ void Nvim::run_event_loop() {
                             msg->notification.custom_reveal_line.reset_cursor = reset_cursor;
                         });
                     } else if (streq(cmd, "move_cursor")) {
-                        assert(num_args == 1);
+                        ASSERT(num_args == 1);
                         auto screen_pos = (Screen_Pos)reader.read_int(); CHECKOK();
                         add_event([&](Nvim_Message *msg) {
                             msg->notification.type = NVIM_NOTIF_CUSTOM_MOVE_CURSOR;
@@ -1071,14 +1218,22 @@ void Nvim::run_event_loop() {
                 auto msgid = reader.read_int(); CHECKOK();
                 nvim_print("[raw] got response with msgid %d", msgid);
 
-                auto req = find_request_by_msgid(msgid);
-                if (req == NULL) {
-                    nvim_print("couldn't find request for msgid %d", msgid);
-                    reader.skip_object(); CHECKOK(); // error
-                    reader.skip_object(); CHECKOK(); // result
-                    break;
+                u32 req_editor_id;
+                Nvim_Request_Type req_type;
+
+                {
+                    SCOPED_LOCK(&requests_lock);
+                    auto req = find_request_by_msgid(msgid);
+                    if (req == NULL) {
+                        nvim_print("couldn't find request for msgid %d", msgid);
+                        reader.skip_object(); CHECKOK(); // error
+                        reader.skip_object(); CHECKOK(); // result
+                        break;
+                    }
+
+                    req_editor_id = req->editor_id;
+                    req_type = req->type;
                 }
-                defer { requests.remove(req); };
 
                 if (reader.peek_type() != MP_NIL) {
                     if (reader.peek_type() == MP_STRING) {
@@ -1091,6 +1246,7 @@ void Nvim::run_event_loop() {
                         nvim_print("error in response for msgid %d: (error was not a string, instead was %s)", msgid, mptype_str(type));
                     }
                     reader.skip_object();
+                    delete_request_by_msgid(msgid);
                     break;
                 }
 
@@ -1099,25 +1255,24 @@ void Nvim::run_event_loop() {
 
                 // grab associated editor, break if we can't find it
                 Editor* editor = NULL;
-                if (req->editor_id != 0) {
-                    auto is_match = [&](Editor* it) -> bool { return it->id == req->editor_id; };
+                if (req_editor_id != 0) {
+                    auto is_match = [&](Editor* it) -> bool { return it->id == req_editor_id; };
                     editor = world.find_editor(is_match);
                     if (editor == NULL) {
                         reader.skip_object();
+                        delete_request_by_msgid(msgid);
                         break;
                     }
                 }
 
                 auto add_response_event = [&](fn<void(Nvim_Message*)> f) {
                     add_event([&](Nvim_Message *it) {
-                        auto req_copy = alloc_object(Nvim_Request);
-                        memcpy(req_copy, req, sizeof(Nvim_Request));
-                        it->response.original_request = req_copy;
+                        it->response.msgid = msgid;
                         f(it);
                     });
                 };
 
-                switch (req->type) {
+                switch (req_type) {
                 case NVIM_REQ_POST_INSERT_GETCHANGEDTICK:
                     {
                         auto changedtick = reader.read_int(); CHECKOK();
@@ -1152,6 +1307,66 @@ void Nvim::run_event_loop() {
                         add_response_event([&](Nvim_Message *m) {
                             m->response.buf = *buf;
                         });
+                    }
+                    break;
+
+                case NVIM_REQ_GOTO_EXTMARK:
+                    {
+                        bool ok = true;
+                        u32 row = 0, col = 0;
+
+                        auto arr_len = reader.read_array(); CHECKOK();
+                        if (arr_len == 0) {
+                            ok = false;
+                        } else if (arr_len == 2) {
+                            row = reader.read_int(); CHECKOK();
+                            col = reader.read_int(); CHECKOK();
+                        } else {
+                            panic(our_sprintf("got array with %d items from nvim_buf_get_extmark_by_id", arr_len));
+                        }
+
+                        add_response_event([&](Nvim_Message *m) {
+                            m->response.goto_extmark.ok = ok;
+                            m->response.goto_extmark.pos = new_cur2(col, row);
+                        });
+                    }
+                    break;
+
+                case NVIM_REQ_CREATE_EXTMARKS_CREATE_NAMESPACE:
+                    {
+                        auto namespace_id = reader.read_int(); CHECKOK();
+                        add_response_event([&](Nvim_Message *m) {
+                            m->response.namespace_id = namespace_id;
+                        });
+                    }
+                    break;
+
+                case NVIM_REQ_CREATE_EXTMARKS_SET_EXTMARKS:
+                case NVIM_REQ_CREATE_EDITOR_EXTMARKS:
+                    {
+                        auto arrlen = reader.read_array(); CHECKOK();
+                        ASSERT(arrlen == 2);
+
+                        auto responses_len = reader.read_array(); CHECKOK();
+                        add_response_event([&](Nvim_Message *m) {
+                            auto extmarks = alloc_list<u32>(responses_len);
+                            for (u32 i = 0; i < responses_len; i++)
+                                extmarks->append(reader.read_int());
+                            m->response.extmarks = extmarks;
+                        });
+
+                        if (reader.peek_type() == MP_NIL) {
+                            reader.read_nil();
+                        } else {
+                            auto arrlen = reader.read_array();
+                            ASSERT(arrlen == 3);
+
+                            auto index = reader.read_int();
+                            reader.skip_object();
+                            auto err = reader.read_string();
+
+                            nvim_print("nvim_call_atomic call #%d had error: %s", index, err);
+                        }
                     }
                     break;
 
@@ -1213,22 +1428,29 @@ void Nvim::init() {
 
     mem.init();
     loop_mem.init();
+    started_messages_mem.init();
 
     request_id = 0;
 
     SCOPED_MEM(&mem);
 
-    send_lock.init();
     requests_lock.init();
     requests.init();
+    requests_mem.init();
+
     messages_lock.init();
     message_queue.init();
     messages_mem.init();
+
     grid_to_window.init();
     chars_after_exiting_insert_mode.init();
+
     cmdline.content.init();
     cmdline.firstc.init();
     cmdline.prompt.init();
+
+    started_messages.init();
+
     hl_defs.init();
 }
 
@@ -1257,7 +1479,6 @@ void Nvim::start_running() {
 }
 
 void Nvim::cleanup() {
-    send_lock.cleanup();
     requests_lock.cleanup();
 
     if (event_loop_thread != NULL) {

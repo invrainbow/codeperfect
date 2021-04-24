@@ -1142,6 +1142,7 @@ struct Go_Indexer {
     void stop_writing();
 
     ccstr gohelper_readline();
+    int gohelper_readint();
     ccstr gohelper_run(Gohelper_Op op, ...);
 };
 

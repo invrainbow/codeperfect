@@ -1399,6 +1399,11 @@ ccstr Go_Indexer::gohelper_readline() {
     return ret->items;
 }
 
+int Go_Indexer::gohelper_readint() {
+    auto line = gohelper_readline();
+    return atoi(line);
+}
+
 ccstr Go_Indexer::gohelper_run(Gohelper_Op op, ...) {
     va_list vl;
     va_start(vl, op);

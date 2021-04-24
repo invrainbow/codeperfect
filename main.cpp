@@ -160,6 +160,8 @@ void do_build(void*) {
 
     SCOPED_MEM(&b.mem);
 
+    b.id = world.next_build_id++;
+
     {
         SCOPED_LOCK(&indexer.gohelper_lock);
 
@@ -183,30 +185,35 @@ void do_build(void*) {
 
         if (!streq(resp, "done")) continue;
 
-        auto lenstr = indexer.gohelper_readline();
-        auto len = atoi(lenstr);
+        auto len = indexer.gohelper_readint();
 
         for (u32 i = 0; i < len; i++) {
-            auto file = indexer.gohelper_readline();
-            auto line_str = indexer.gohelper_readline();
-            auto col_str = indexer.gohelper_readline();
-            auto is_vcol_str = indexer.gohelper_readline();
-            auto text = indexer.gohelper_readline();
+            auto err = b.errors.append();
 
-            auto line = atoi(line_str);
-            auto col = atoi(col_str);
-            auto is_vcol = atoi(is_vcol_str);
+            err->message = indexer.gohelper_readline();
+            err->valid = (bool)indexer.gohelper_readint();
 
-            auto build_error = b.errors.append();
-            build_error->file = file;
-            build_error->row = line;
-            build_error->col = col; // TODO: handle is_vcol (is this ever true?)
-            build_error->message = text;
+            if (err->valid) {
+                err->file = indexer.gohelper_readline();
+                err->row = indexer.gohelper_readint();
+                err->col = indexer.gohelper_readint();
+                auto is_vcol = indexer.gohelper_readint();
+            }
         }
 
         b.current_error = -1;
         b.done = true;
+        b.creating_extmarks = true;
         world.error_list.show = true;
+
+        {
+            auto &nv = world.nvim;
+            auto msgid = nv.start_request_message("nvim_create_namespace", 1);
+            nv.save_request(NVIM_REQ_CREATE_EXTMARKS_CREATE_NAMESPACE, msgid, 0);
+            nv.writer.write_string(our_sprintf("build-%d", world.build.id));
+            nv.end_message();
+        }
+
         break;
     }
 }
@@ -1046,18 +1053,20 @@ int main() {
             case OUR_MOD_ALT:
                 switch (key) {
                 case GLFW_KEY_LEFT_BRACKET:
-                    {
-                        auto &b = world.build;
-                        if (--b.current_error < 0)
-                            b.current_error = b.errors.len - 1;
-                        go_to_error(b.current_error);
-                    }
-                    break;
                 case GLFW_KEY_RIGHT_BRACKET:
                     {
                         auto &b = world.build;
-                        if (++b.current_error >= b.errors.len)
-                            b.current_error = 0;
+                        if (!b.ready() || b.errors.len == 0) break;
+
+                        auto old = b.current_error;
+                        do {
+                            b.current_error += (key == GLFW_KEY_LEFT_BRACKET ? -1 : 1);
+                            if (b.current_error < 0)
+                                b.current_error = b.errors.len - 1;
+                            if (b.current_error >= b.errors.len)
+                                b.current_error = 0;
+                        } while (b.current_error != old && !b.errors[b.current_error].valid);
+
                         go_to_error(b.current_error);
                     }
                     break;

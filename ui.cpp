@@ -1461,7 +1461,7 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
         row_area.h = font->height + settings.error_list_item_padding_y * 2;
         row_area.w = build_results_area.w;
 
-        if (world.build.done) {
+        if (world.build.ready()) {
             if (world.build.errors.len == 0) {
                 auto pos = row_area.pos;
                 pos.x += settings.error_list_item_padding_x;
@@ -1496,7 +1496,7 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
 
                     vec3f text_color = COLOR_WHITE;
 
-                    if (mouse_flags & MOUSE_HOVER)
+                    if (it.valid && mouse_flags & MOUSE_HOVER)
                         draw_rect(row_area, rgba(COLOR_MEDIUM_GREY));
 
                     if (index == world.build.current_error) {
@@ -1504,18 +1504,24 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                         text_color = COLOR_BLACK;
                     }
 
-                    if (mouse_flags & MOUSE_CLICKED) {
+                    if (it.valid && mouse_flags & MOUSE_CLICKED) {
                         world.build.current_error = index;
                         go_to_error(index);
                     }
 
                     if (row_area.y + row_area.h > build_results_area.y) {
                         SCOPED_FRAME();
-                        auto s = our_sprintf("%s:%d:%d: %s", it.file, it.row, it.col, it.message);
                         auto pos = row_area.pos;
                         pos.x += settings.error_list_item_padding_x;
                         pos.y += settings.error_list_item_padding_y;
-                        draw_string(pos, s, rgba(text_color));
+
+                        if (it.valid) {
+                            auto s = our_sprintf("%s:%d:%d: %s", it.file, it.row, it.col, it.message);
+                            draw_string(pos, s, rgba(text_color));
+                        } else {
+                            auto s = our_sprintf("%s", it.message);
+                            draw_string(pos, s, rgba(COLOR_MEDIUM_GREY));
+                        }
                     }
                 }
             }

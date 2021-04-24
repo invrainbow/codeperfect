@@ -33,6 +33,13 @@ func writeError(x error) {
     write(strings.ReplaceAll(x.Error(), "\n", "\\n"))
 }
 
+func boolToInt(b bool) int {
+    if b {
+        return 1
+    }
+    return 0
+}
+
 type GoBuild struct {
     done bool
     errors []*errorformat.Entry
@@ -120,10 +127,7 @@ loop:
                         efm, _ := errorformat.NewErrorformat([]string{`%f:%l:%c: %m`})
                         s := efm.NewScanner(bytes.NewReader(out))
                         for s.Scan() {
-                            ent := s.Entry()
-                            if ent.Valid {
-                                b.errors = append(b.errors, ent)
-                            }
+                            b.errors = append(b.errors, s.Entry())
                         }
                     }
                 }
@@ -142,11 +146,14 @@ loop:
                 write("done")
                 write(len(currentBuild.errors))
                 for _, ent := range currentBuild.errors {
-                    write(ent.Filename)
-                    write(ent.Lnum)
-                    write(ent.Col)
-                    write(ent.Vcol)
                     write(ent.Text)
+                    write(boolToInt(ent.Valid))
+                    if ent.Valid {
+                        write(ent.Filename)
+                        write(ent.Lnum)
+                        write(ent.Col)
+                        write(boolToInt(ent.Vcol))
+                    }
                 }
             } else {
                 write("running")

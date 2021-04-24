@@ -199,7 +199,7 @@ void World::init() {
     // prepare_workspace();
 
     // build helper
-    shell("go build helper.go", "w:/helper");
+    // shell("go build helper.go", "w:/helper");
 
     use_nvim = true;
 
@@ -220,7 +220,7 @@ void World::init() {
     windows_open.build_and_debug = false;
     windows_open.im_metrics = false;
 
-    strcpy_safe(world.settings.build_command, _countof(world.settings.build_command), "go build -o main.exe --gcflags=\"all=-N -l\" ./...");
+    strcpy_safe(world.settings.build_command, _countof(world.settings.build_command), "go build -o main.exe --gcflags=\"all=-N -l\" hello.go");
     strcpy_safe(world.settings.debug_binary_path, _countof(world.settings.debug_binary_path), "main.exe");
 
     {
