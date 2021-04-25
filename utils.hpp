@@ -104,53 +104,6 @@ struct Json_Renderer : public Text_Renderer {
 
 const s32 DEFAULT_QUEUE_SIZE = 128;
 
-template <typename T>
-struct In_Memory_Queue {
-    T *arr;
-    s32 queue_base;
-    s32 queue_pos;
-    s32 cap;
-    Lock lock;
-
-    void init(s32 n = DEFAULT_QUEUE_SIZE) {
-        ptr0(this);
-
-        arr = (T*)alloc_memory(sizeof(T) * n);
-        cap = n;
-        lock.init();
-    }
-
-    void cleanup() {
-        lock.cleanup();
-    }
-
-    s32 increment_index(s32 i) {
-        return i + 1 == cap ? 0 : i + 1;
-    }
-
-    bool push(T *t) {
-        SCOPED_LOCK(&lock);
-
-        auto new_pos = increment_index(queue_pos);
-        if (new_pos == queue_base) // we're full!
-            return false;
-
-        memcpy(&arr[queue_pos], t, sizeof(T));
-        queue_pos = new_pos;
-        return true;
-    }
-
-    bool pop(T *t) {
-        SCOPED_LOCK(&lock);
-
-        if (queue_base == queue_pos) return false;
-
-        memcpy(t, &arr[queue_base], sizeof(T));
-        queue_base = increment_index(queue_base);
-        return true;
-    }
-};
-
 struct Path {
     List<ccstr> *parts;
 

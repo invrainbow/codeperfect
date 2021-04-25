@@ -31,6 +31,19 @@ Json_Navigator Packet::js() {
     return ret;
 }
 
+void Debugger::push_call(Dbg_Call_Type type) {
+    push_call(type, [&](Dbg_Call*) {});
+}
+
+void Debugger::push_call(Dbg_Call_Type type, fn<void(Dbg_Call *call)> f) {
+    SCOPED_LOCK(&calls_lock);
+    SCOPED_MEM(&calls_mem);
+
+    auto call = calls.append();
+    call->type = type;
+    f(call);
+}
+
 bool Debugger::find_breakpoint(ccstr filename, u32 line, Breakpoint* out) {
     SCOPED_FRAME();
 
@@ -200,7 +213,10 @@ void Debugger::init() {
     lock.init();
     breakpoints.init();
     watches.init();
-    call_queue.init();
+
+    calls.init();
+    calls_lock.init();
+    calls_mem.init();
 
 #if OS_WIN
     WSADATA wsa;
@@ -363,6 +379,7 @@ void Debugger::exec_continue(bool read) { send_command("continue", read); }
 void Debugger::exec_step_into(bool read) { send_command("step", read); }
 void Debugger::exec_step_out(bool read) { send_command("stepOut", read); }
 void Debugger::exec_step_over(bool read) { send_command("next", read); }
+void Debugger::exec_halt(bool read) { send_command("halt", read); }
 
 List<Breakpoint>* Debugger::list_breakpoints() {
     auto resp = send_packet("ListBreakpoints", [&]() {});
@@ -692,7 +709,6 @@ void Debugger::stop() {
     if (conn != 0 && conn != -1)
         close_stub(conn);
     dlv_proc.cleanup();
-    // TODO: probably kill dlv_proc too
 }
 
 void Debugger::run_loop() {
@@ -701,116 +717,135 @@ void Debugger::run_loop() {
     };
 
     while (true) {
-        Dbg_Call call;
-        if (call_queue.pop(&call)) {
-            switch (call.type) {
-            case DBGCALL_START:
-                {
-                    // TODO: initialize everything else we need to for the debugger.
-                    // should this even go in debugger_loop_thread? or like inside the key callback?
-                    world.wnd_debugger.current_location = -1;
-
-                    ptr0(&state);
-                    state_flag = DBGSTATE_STARTING;
-                    packetid = 0;
-
-                    if (!start()) {
-                        state_flag = DBGSTATE_INACTIVE;
-                        break;
-                    }
-
+        {
+            SCOPED_LOCK(&calls_lock);
+            For (calls) {
+                switch (it.type) {
+                case DBGCALL_STOP:
                     {
-                        SCOPED_LOCK(&lock);
-                        For (breakpoints) {
-                            set_breakpoint(it.file, it.line);
-                            it.pending = false;
+                        SCOPED_FRAME();
+                        send_packet("Detach", [&]() {
+                            rend->field("Kill", true);
+                        });
+                    }
+                    break;
+
+                case DBGCALL_START:
+                    {
+                        // TODO: initialize everything else we need to for the debugger.
+                        // should this even go in debugger_loop_thread? or like inside the key callback?
+                        world.wnd_debugger.current_location = -1;
+
+                        ptr0(&state);
+                        state_flag = DBGSTATE_STARTING;
+                        packetid = 0;
+
+                        if (!start()) {
+                            state_flag = DBGSTATE_INACTIVE;
+                            break;
                         }
+
+                        {
+                            SCOPED_LOCK(&lock);
+                            For (breakpoints) {
+                                set_breakpoint(it.file, it.line);
+                                it.pending = false;
+                            }
+                        }
+                        exec_continue(false);
+                        state_flag = DBGSTATE_RUNNING;
                     }
-                    exec_continue(false);
-                    state_flag = DBGSTATE_RUNNING;
-                }
-                break;
+                    break;
 
-            case DBGCALL_EVAL_SINGLE_WATCH:
-                {
-                    auto& params = call.eval_single_watch;
+                case DBGCALL_EVAL_SINGLE_WATCH:
+                    {
+                        auto& params = it.eval_single_watch;
 
-                    auto& watch = watches[params.watch_id];
-                    watch.state = DBGWATCH_PENDING;
-                    if (!eval_expression(watch.expr, -1, params.frame_id, &watch.value))
-                        watch.state = DBGWATCH_ERROR;
-                    else
-                        watch.state = DBGWATCH_READY;
-                }
-                break;
-            case DBGCALL_EVAL_WATCHES:
-                {
-                    auto& params = call.eval_watches;
-
-                    For (watches)
-                        it.state = DBGWATCH_PENDING;
-
-                    auto results = alloc_array(bool, watches.len);
-
-                    u32 i = 0;
-                    For (watches)
-                        results[i++] = eval_expression(it.expr, -1, params.frame_id, &it.value);
-
-                    i = 0;
-                    For (watches)
-                        it.state = (results[i++] ? DBGWATCH_READY : DBGWATCH_ERROR);
-                }
-                break;
-            case DBGCALL_SET_BREAKPOINT:
-                {
-                    auto& params = call.set_breakpoint;
-
-                    auto resp = set_breakpoint(params.filename, params.lineno);
-                    if (resp == NULL) {
-                        surface_error("Unable to set breakpoint.");
-                        break;
+                        auto& watch = watches[params.watch_id];
+                        watch.state = DBGWATCH_PENDING;
+                        if (!eval_expression(watch.expr, -1, params.frame_id, &watch.value))
+                            watch.state = DBGWATCH_ERROR;
+                        else
+                            watch.state = DBGWATCH_READY;
                     }
+                    break;
+                case DBGCALL_EVAL_WATCHES:
+                    {
+                        auto& params = it.eval_watches;
 
-                    auto find_func = [&](Client_Breakpoint* bp) -> bool {
-                        return are_breakpoints_same(bp->file, bp->line, params.filename, params.lineno);
-                    };
+                        For (watches)
+                            it.state = DBGWATCH_PENDING;
 
-                    auto js = resp->js();
-                    if (js.get(0, ".result.Breakpoint.id") == -1) {
-                        surface_error("Unable to set breakpoint.");
-                        breakpoints.remove(find_func);
-                    } else {
-                        auto bkpt = breakpoints.find(find_func);
-                        if (bkpt != NULL) {
-                            bkpt->pending = false;
+                        auto results = alloc_array(bool, watches.len);
+
+                        u32 i = 0;
+                        For (watches)
+                            results[i++] = eval_expression(it.expr, -1, params.frame_id, &it.value);
+
+                        i = 0;
+                        For (watches)
+                            it.state = (results[i++] ? DBGWATCH_READY : DBGWATCH_ERROR);
+                    }
+                    break;
+                case DBGCALL_SET_BREAKPOINT:
+                    {
+                        auto& params = it.set_breakpoint;
+
+                        auto resp = set_breakpoint(params.filename, params.lineno);
+                        if (resp == NULL) {
+                            surface_error("Unable to set breakpoint.");
+                            break;
+                        }
+
+                        auto find_func = [&](auto bp) {
+                            return are_breakpoints_same(bp->file, bp->line, params.filename, params.lineno);
+                        };
+
+                        auto js = resp->js();
+                        if (js.get(0, ".result.Breakpoint.id") == -1) {
+                            surface_error("Unable to set breakpoint.");
+                            breakpoints.remove(find_func);
                         } else {
-                            // TODO: error -- this shouldn't happen
+                            auto bkpt = breakpoints.find(find_func);
+                            if (bkpt != NULL) {
+                                bkpt->pending = false;
+                            } else {
+                                // TODO: error -- this shouldn't happen
+                            }
                         }
                     }
+                    break;
+                case DBGCALL_UNSET_BREAKPOINT:
+                    unset_breakpoint(
+                        it.unset_breakpoint.filename,
+                        it.unset_breakpoint.lineno
+                    );
+                    break;
+                case DBGCALL_BREAK_ALL:
+                    exec_halt(false);
+                    break;
+                case DBGCALL_CONTINUE_RUNNING:
+                    state_flag = DBGSTATE_RUNNING;
+                    exec_continue(false);
+                    break;
+                case DBGCALL_STEP_INTO:
+                    state_flag = DBGSTATE_RUNNING;
+                    exec_step_into(false);
+                    break;
+                case DBGCALL_STEP_OVER:
+                    state_flag = DBGSTATE_RUNNING;
+                    exec_step_over(false);
+                    break;
+                case DBGCALL_STEP_OUT:
+                    state_flag = DBGSTATE_RUNNING;
+                    exec_step_out(false);
+                    break;
+                case DBGCALL_RUN_UNTIL: break;
+                case DBGCALL_CHANGE_VARIABLE: break;
                 }
-                break;
-            case DBGCALL_UNSET_BREAKPOINT:
-                unset_breakpoint(
-                    call.unset_breakpoint.filename,
-                    call.unset_breakpoint.lineno
-                );
-                break;
-            case DBGCALL_CONTINUE_RUNNING:
-                state_flag = DBGSTATE_RUNNING;
-                exec_continue(false);
-                break;
-            case DBGCALL_STEP_INTO:
-                state_flag = DBGSTATE_RUNNING;
-                exec_step_into(false);
-                break;
-            case DBGCALL_STEP_OVER:
-                state_flag = DBGSTATE_RUNNING;
-                exec_step_over(false);
-                break;
-            case DBGCALL_RUN_UNTIL: break;
-            case DBGCALL_CHANGE_VARIABLE: break;
             }
-            continue;
+            calls.len = 0;
+            calls_mem.reset();
         }
 
         if (state_flag != DBGSTATE_RUNNING) continue;
@@ -820,6 +855,7 @@ void Debugger::run_loop() {
         if (!read_packet(&p)) {
             stop();
             state_flag = DBGSTATE_INACTIVE;
+            loop_mem.reset();
             continue;
         }
 
@@ -831,6 +867,7 @@ void Debugger::run_loop() {
         if (is_exited) {
             stop();
             state_flag = DBGSTATE_INACTIVE;
+            loop_mem.reset();
             continue;
         }
 

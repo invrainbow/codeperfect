@@ -88,7 +88,7 @@ enum DbgState {
     DBGSTATE_PAUSED,
 };
 
-enum Dbg_CallType {
+enum Dbg_Call_Type {
     DBGCALL_SET_BREAKPOINT = 1,
     DBGCALL_UNSET_BREAKPOINT,
     DBGCALL_CONTINUE_RUNNING,
@@ -100,10 +100,12 @@ enum Dbg_CallType {
     DBGCALL_EVAL_WATCHES,
     DBGCALL_EVAL_SINGLE_WATCH,
     DBGCALL_START,
+    DBGCALL_BREAK_ALL,
+    DBGCALL_STOP,
 };
 
 struct Dbg_Call {
-    Dbg_CallType type;
+    Dbg_Call_Type type;
     union {
         struct {
             ccstr filename;
@@ -200,9 +202,12 @@ struct Debugger {
     Lock lock;
     List<Client_Breakpoint> breakpoints;
     List<Dbg_Watch> watches;
-    In_Memory_Queue<Dbg_Call> call_queue;
     Thread_Handle thread;
     Json_Renderer* rend;
+
+    List<Dbg_Call> calls;
+    Lock calls_lock;
+    Pool calls_mem;
 
     // per session stuff
     Process dlv_proc;
@@ -235,6 +240,7 @@ struct Debugger {
     void exec_step_into(bool read);
     void exec_step_out(bool read);
     void exec_step_over(bool read);
+    void exec_halt(bool read);
     bool find_breakpoint(ccstr filename, u32 line, Breakpoint* out);
     bool can_read();
     List<Breakpoint>* list_breakpoints();
@@ -247,6 +253,9 @@ struct Debugger {
     void start_loop();
     void run_loop();
     void surface_error(ccstr msg);
+
+    void push_call(Dbg_Call_Type type, fn<void(Dbg_Call *call)> f);
+    void push_call(Dbg_Call_Type type);
 };
 
 void debugger_loop_thread(void*);

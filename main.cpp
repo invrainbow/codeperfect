@@ -1037,6 +1037,16 @@ int main() {
                     case GLFW_KEY_TAB: handle_tab("<S-Tab>"); break;
                     case GLFW_KEY_BACKSPACE: handle_backspace("<S-Backspace>"); break;
                     case GLFW_KEY_ESCAPE: if (!handle_escape()) send_nvim_keys("<S-Esc>"); break;
+                    case GLFW_KEY_F5:
+                        if (world.dbg.state_flag == DBGSTATE_INACTIVE) break;
+                        world.dbg.push_call(DBGCALL_STOP);
+                        break;
+                    case GLFW_KEY_F11:
+                        if (world.dbg.state_flag != DBGSTATE_PAUSED) break;
+                        world.dbg.push_call(DBGCALL_STEP_OUT);
+                        break;
+
+
                     }
                     break;
                 }
@@ -1365,23 +1375,11 @@ int main() {
                     case GLFW_KEY_F5:
                         switch (world.dbg.state_flag) {
                         case DBGSTATE_PAUSED:
-                            {
-                                Dbg_Call call;
-                                call.type = DBGCALL_CONTINUE_RUNNING;
-                                if (!world.dbg.call_queue.push(&call)) {
-                                    // TODO: surface error
-                                }
-                            }
+                            world.dbg.push_call(DBGCALL_CONTINUE_RUNNING);
                             break;
 
                         case DBGSTATE_INACTIVE:
-                            {
-                                Dbg_Call call;
-                                call.type = DBGCALL_START;
-                                if (!world.dbg.call_queue.push(&call)) {
-                                    // TODO: surface error
-                                }
-                            }
+                            world.dbg.push_call(DBGCALL_START);
                             break;
                         }
                         break;
@@ -1405,28 +1403,19 @@ int main() {
                                 it->pending = true;
 
                                 if (dbg.state_flag != DBGSTATE_INACTIVE) {
-                                    Dbg_Call call;
-                                    call.type = DBGCALL_SET_BREAKPOINT;
-                                    call.set_breakpoint.filename = file;
-                                    call.set_breakpoint.lineno = lineno;
-
-                                    if (!dbg.call_queue.push(&call)) {
-                                        // TODO: surface error
-                                    }
+                                    dbg.push_call(DBGCALL_SET_BREAKPOINT, [&](Dbg_Call *call) {
+                                        call->set_breakpoint.filename = file;
+                                        call->set_breakpoint.lineno = lineno;
+                                    });
                                 }
                             } else {
                                 dbg.breakpoints.remove(bkpt);
                                 if (dbg.state_flag != DBGSTATE_INACTIVE) {
                                     dbg.unset_breakpoint(file, lineno);
-
-                                    Dbg_Call call;
-                                    call.type = DBGCALL_UNSET_BREAKPOINT;
-                                    call.unset_breakpoint.filename = file;
-                                    call.unset_breakpoint.lineno = lineno;
-
-                                    if (!dbg.call_queue.push(&call)) {
-                                        // TODO: surface error
-                                    }
+                                    dbg.push_call(DBGCALL_UNSET_BREAKPOINT, [&](Dbg_Call *call) {
+                                        call->unset_breakpoint.filename = our_strcpy(file);
+                                        call->unset_breakpoint.lineno = lineno;
+                                    });
                                 }
                             }
                         }
@@ -1434,24 +1423,13 @@ int main() {
                     case GLFW_KEY_F10:
                         {
                             if (world.dbg.state_flag != DBGSTATE_PAUSED) break;
-
-                            Dbg_Call call;
-                            call.type = DBGCALL_STEP_OVER;
-                            if (!world.dbg.call_queue.push(&call)) {
-                                // TODO: surface error
-                            }
+                            world.dbg.push_call(DBGCALL_STEP_OVER);
                         }
                         break;
                     case GLFW_KEY_F11:
                         {
                             if (world.dbg.state_flag != DBGSTATE_PAUSED) break;
-
-                            Dbg_Call call;
-                            call.type = DBGCALL_STEP_INTO;
-
-                            if (!world.dbg.call_queue.push(&call)) {
-                                // TODO: surface error
-                            }
+                            world.dbg.push_call(DBGCALL_STEP_INTO);
                         }
                         break;
                     default:
@@ -1862,40 +1840,33 @@ int main() {
                 if (ImGui::MenuItem("Run", "F5")) {
                     switch (world.dbg.state_flag) {
                     case DBGSTATE_PAUSED:
-                        {
-                            Dbg_Call call;
-                            call.type = DBGCALL_CONTINUE_RUNNING;
-                            if (!world.dbg.call_queue.push(&call)) {
-                                // TODO: surface error
-                            }
-                        }
+                        world.dbg.push_call(DBGCALL_CONTINUE_RUNNING);
                         break;
 
                     case DBGSTATE_INACTIVE:
-                        {
-                            Dbg_Call call;
-                            call.type = DBGCALL_START;
-                            if (!world.dbg.call_queue.push(&call)) {
-                                // TODO: surface error
-                            }
-                        }
+                        world.dbg.push_call(DBGCALL_START);
                         break;
                     }
                 }
 
                 if (ImGui::MenuItem("Break All")) {
+                    world.dbg.push_call(DBGCALL_BREAK_ALL);
                 }
 
                 if (ImGui::MenuItem("Stop Debugging", "Shift+F5")) {
+                    world.dbg.push_call(DBGCALL_STOP);
                 }
 
                 if (ImGui::MenuItem("Step Over", "F10")) {
+                    world.dbg.push_call(DBGCALL_STEP_OVER);
                 }
 
                 if (ImGui::MenuItem("Step Into", "F11")) {
+                    world.dbg.push_call(DBGCALL_STEP_INTO);
                 }
 
                 if (ImGui::MenuItem("Step Out", "Shift+F11")) {
+                    world.dbg.push_call(DBGCALL_STEP_OUT);
                 }
 
                 if (ImGui::MenuItem("Run to Cursor", "Shift+F10")) {
@@ -2009,11 +1980,9 @@ int main() {
                                 ImGui::TreeNodeEx((void*)(uptr)i, tree_flags, "%s (%s:%d)", it.func_name, our_basename(it.filepath), it.lineno);
                                 if (ImGui::IsItemClicked()) {
                                     world.wnd_debugger.current_location = i;
-
-                                    Dbg_Call call;
-                                    call.type = DBGCALL_EVAL_WATCHES;
-                                    call.eval_watches.frame_id = i;
-                                    world.dbg.call_queue.push(&call);
+                                    world.dbg.push_call(DBGCALL_EVAL_WATCHES, [&](auto call) {
+                                        call->eval_watches.frame_id = i;
+                                    });
                                 }
 
                                 i++;
@@ -2127,11 +2096,10 @@ int main() {
 
                                     if (world.dbg.state_flag == DBGSTATE_PAUSED)
                                         if (world.wnd_debugger.current_location != -1) {
-                                            Dbg_Call call;
-                                            call.type = DBGCALL_EVAL_SINGLE_WATCH;
-                                            call.eval_single_watch.frame_id = world.wnd_debugger.current_location;
-                                            call.eval_single_watch.watch_id = world.dbg.watches.len - 1;
-                                            world.dbg.call_queue.push(&call);
+                                            world.dbg.push_call(DBGCALL_EVAL_SINGLE_WATCH, [&](auto call) {
+                                                call->eval_single_watch.frame_id = world.wnd_debugger.current_location;
+                                                call->eval_single_watch.watch_id = world.dbg.watches.len - 1;
+                                            });
                                         }
 
                                     ImGui::CloseCurrentPopup();
