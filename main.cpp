@@ -2035,40 +2035,51 @@ int main() {
                 {
                     ImGui::BeginChild("child2", ImVec2(0, h), true);
                     {
+                        fn<void(Dbg_Var*)> render_var;
+                        int k = 0;
+                        ImGuiTreeNodeFlags tree_flags = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+                        render_var = [&](Dbg_Var* var) {
+                            bool recurse = false;
+
+                            {
+                                SCOPED_FRAME();
+                                auto str_id = our_sprintf("%d-%d", world.wnd_debugger.current_location, k++);
+
+                                if (var->children == NULL || var->children->len == 0)
+                                    ImGui::TreeNodeEx(str_id, tree_flags, "%s = %s", var->name, var->value);
+                                else
+                                    recurse = ImGui::TreeNode(str_id, "%s = %s", var->name, var->value);
+                            }
+
+                            if (recurse) {
+                                For (*var->children)
+                                    render_var(&it);
+                                ImGui::TreePop();
+                            }
+                        };
+
                         if (ImGui::CollapsingHeader("Local Variables", ImGuiTreeNodeFlags_DefaultOpen)) {
                             if (world.wnd_debugger.current_location != -1) {
                                 auto& loc = world.dbg.state.stackframe->at(world.wnd_debugger.current_location);
-
-                                fn<void(Dbg_Var*)> render_var;
-                                int k = 0;
-
-                                ImGuiTreeNodeFlags tree_flags = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
-
-                                render_var = [&](Dbg_Var* var) {
-                                    bool recurse = false;
-
-                                    {
-                                        SCOPED_FRAME();
-                                        auto str_id = our_sprintf("%d-%d", world.wnd_debugger.current_location, k++);
-
-                                        if (var->children == NULL || var->children->len == 0)
-                                            ImGui::TreeNodeEx(str_id, tree_flags, "%s = %s", var->name, var->value);
-                                        else
-                                            recurse = ImGui::TreeNode(str_id, "%s = %s", var->name, var->value);
-                                    }
-
-                                    if (recurse) {
-                                        For (*var->children)
-                                            render_var(&it);
-                                        ImGui::TreePop();
-                                    }
-                                };
-
                                 if (loc.locals != NULL) {
                                     For (*loc.locals)
                                         render_var(&it);
                                 } else {
                                     ImGui::Text("This location has no local variables.");
+                                }
+                            } else {
+                                ImGui::Text("Select a location in the call stack to view the variables there.");
+                            }
+                        }
+
+                        if (ImGui::CollapsingHeader("Arguments", ImGuiTreeNodeFlags_DefaultOpen)) {
+                            if (world.wnd_debugger.current_location != -1) {
+                                auto& loc = world.dbg.state.stackframe->at(world.wnd_debugger.current_location);
+                                if (loc.args != NULL) {
+                                    For (*loc.args)
+                                        render_var(&it);
+                                } else {
+                                    ImGui::Text("This location has no arguments.");
                                 }
                             } else {
                                 ImGui::Text("Select a location in the call stack to view the variables there.");

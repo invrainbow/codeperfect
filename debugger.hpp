@@ -190,6 +190,7 @@ struct Dbg_Location {
     u32 lineno;
     ccstr func_name;
     List<Dbg_Var>* locals;
+    List<Dbg_Var>* args;
 };
 
 struct Debugger {

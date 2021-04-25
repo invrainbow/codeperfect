@@ -6,7 +6,7 @@
 #include "settings.hpp"
 // #include <strsafe.h>
 
-#define NVIM_DEBUG 1
+#define NVIM_DEBUG 0
 
 #if NVIM_DEBUG
 #define nvim_print(fmt, ...) print("[nvim] " fmt, ##__VA_ARGS__)

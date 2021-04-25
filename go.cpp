@@ -147,6 +147,9 @@ void Module_Resolver::init(ccstr current_module_filepath) {
             add_path(import_path, path);
         }
     } while (ch != '\0');
+
+    if (module_path == NULL)
+        panic("Sorry, currently only modules are supported.");
 }
 
 void Module_Resolver::cleanup() {

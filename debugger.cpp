@@ -6,21 +6,23 @@
 #include "go.hpp"
 
 #if OS_WIN
-
 #include "win32.hpp"
-
 #elif OS_LINUX
-
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
-
 #endif
 
-#define DEBUGGER_LOG 0
+#define DBG_DEBUG 1
+
+#if DBG_DEBUG
+#define dbg_print(fmt, ...) print("[dbg] " fmt, ##__VA_ARGS__)
+#else
+#define dbg_print(fmt, ...)
+#endif
 
 Json_Navigator Packet::js() {
     Json_Navigator ret;
@@ -112,6 +114,10 @@ List<Dbg_Location>* Debugger::get_stackframe(i32 goroutine_id) {
         auto locals_idx = js.get(location_idx, ".Locals");
         if (locals_idx != -1)
             loc->locals = save_list_of_vars(js, locals_idx);
+
+        auto args_idx = js.get(location_idx, ".Arguments");
+        if (args_idx != -1)
+            loc->args = save_list_of_vars(js, args_idx);
     }
 
     return ret;
@@ -241,8 +247,7 @@ Packet* Debugger::send_packet(ccstr packet_name, lambda f, bool read) {
         });
 
         auto data = r.finish();
-        if (DEBUGGER_LOG)
-            print("[\"send\"]\n%s", data);
+		dbg_print("[\"send\"]\n%s", data);
 
         for (u32 i = 0; data[i] != '\0'; i++)
             write1(data[i]);
@@ -311,13 +316,11 @@ bool Debugger::read_packet(Packet* p) {
 
     if (run()) {
         SCOPED_FRAME();
-        if (DEBUGGER_LOG)
-            print("[\"recv\"]\n%s", our_format_json(p->string));
+		dbg_print("[\"recv\"]\n%s", our_format_json(p->string));
         return true;
     }
 
-    if (DEBUGGER_LOG)
-        print("[\"recv\"]\n\"<error: unable to read packet>\"");
+	dbg_print("[\"recv\"]\n\"<error: unable to read packet>\"");
     return false;
 }
 
@@ -627,7 +630,7 @@ bool Debugger::start() {
     dlv_proc.dont_use_stdout = true;
     dlv_proc.dir = world.current_path;
     dlv_proc.create_new_console = true;
-    dlv_proc.run("dlv exec --headless main.exe --listen=127.0.0.1:1234");
+    dlv_proc.run(our_sprintf("dlv exec --headless %s --listen=127.0.0.1:1234", world.settings.debug_binary_path));
 
     /*
     // read the first line
