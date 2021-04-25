@@ -5,7 +5,7 @@
 World world;
 
 bool is_ignored_by_git(ccstr path, bool isdir) {
-    auto git_repo = world.wksp.git_repo;
+    auto git_repo = world.git_repo;
     if (git_repo == NULL) return false;
 
     SCOPED_FRAME();
@@ -30,45 +30,6 @@ bool is_ignored_by_git(ccstr path, bool isdir) {
         return (bool)ignored;
     return false;
 }
-
-/*
-void fill_file_tree(ccstr path) {
-    SCOPED_MEM(&world.file_tree_mem);
-    world.file_tree_mem.reset();
-
-    auto &files = world.file_tree;
-    files.init();
-
-    u32 depth = 0;
-    fn<void(ccstr, i32)> recur = [&](ccstr path, i32 parent) {
-        list_directory(path, [&](Dir_Entry *ent) {
-            auto fullpath = path_join(path, ent->name);
-            if (is_ignored_by_git(fullpath, ent->type & FILE_TYPE_DIRECTORY))
-                return;
-
-            if (parent != -1) files[parent].num_children++;
-
-            auto file_idx = files.len;
-            auto file = files.append();
-            file->name = our_strcpy(ent->name);
-            file->depth = depth;
-            file->parent = parent;
-            file->state.open = false;
-
-            if (ent->type & FILE_TYPE_DIRECTORY) {
-                file->num_children = 0;
-                depth++;
-                recur(fullpath, file_idx);
-                depth--;
-            } else {
-                file->num_children = -1;
-            }
-        });
-    };
-
-    recur(path, -1);
-}
-*/
 
 void World::fill_file_tree() {
     SCOPED_MEM(&file_tree_mem);
@@ -107,7 +68,7 @@ void World::fill_file_tree() {
         });
     };
 
-    recur(wksp.path, file_tree);
+    recur(path, file_tree);
 }
 
 bool copy_file(ccstr src, ccstr dest) {
@@ -143,7 +104,7 @@ void shell(ccstr s, ccstr dir) {
 
 void prepare_workspace() {
     auto p = [&](ccstr f) {
-        return path_join(TEST_PATH, f);
+        return path_join(world.path, f);
     };
 
     if (!copy_file(p("main.go.bak"), p("main.go")))
@@ -153,8 +114,31 @@ void prepare_workspace() {
     delete_rm_rf(p("go.mod"));
     delete_rm_rf(p("go.sum"));
 
-    shell("go mod init github.com/invrainbow/life", TEST_PATH);
-    shell("go mod tidy", TEST_PATH);
+    shell("go mod init github.com/invrainbow/life", world.path);
+    shell("go mod tidy", world.path);
+}
+
+void World::init_workspace() {
+    resizing_pane = -1;
+
+    panes.init(LIST_FIXED, _countof(_panes), _panes);
+
+#if 0
+    strcpy_safe(path, _countof(path), normalize_path_sep("c:/users/brandon/cryptopals"));
+#else
+    Select_File_Opts opts;
+    opts.buf = path;
+    opts.bufsize = _countof(path);
+    opts.folder = true;
+    opts.save = false;
+    let_user_select_file(&opts);
+#endif
+
+    git_buf root = {0};
+    if (git_repository_discover(&root, path, 0, NULL) == 0) {
+        git_repository_open(&git_repo, root.ptr);
+        git_buf_free(&root);
+    }
 }
 
 void World::init() {
@@ -205,7 +189,7 @@ void World::init() {
 
     wnd_debugger.current_location = -1;
 
-    wksp.init();
+    init_workspace();
     indexer.init();
     nvim.init();
     dbg.init();
@@ -242,18 +226,20 @@ void World::start_background_threads() {
 }
 
 Pane* World::get_current_pane() {
-    return wksp.get_current_pane();
+    if (panes.len == 0) return NULL;
+
+    return &panes[current_pane];
 }
 
 Editor* World::get_current_editor() {
-    auto pane = wksp.get_current_pane();
+    auto pane = get_current_pane();
     if (pane == NULL) return NULL;
 
     return pane->get_current_editor();
 }
 
 Editor* World::find_editor(find_editor_func f) {
-    for (auto&& pane : wksp.panes)
+    for (auto&& pane : panes)
         For (pane.editors)
             if (f(&it))
                 return &it;

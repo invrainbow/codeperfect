@@ -603,8 +603,6 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
         verts.init(LIST_FIXED, 6 * 128, alloc_array(Vert, 6 * 128));
     }
 
-    auto& wksp = world.wksp;
-
     boxf status_area = {0};
     boxf panes_area = get_panes_area(&status_area);
     boxf sidebar_area = get_sidebar_area();
@@ -762,7 +760,7 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                                 } else {
                                     SCOPED_FRAME();
                                     auto rel_path = file_tree_node_to_path(it);
-                                    auto full_path = path_join(world.wksp.path, rel_path);
+                                    auto full_path = path_join(world.path, rel_path);
                                     world.get_current_pane()->focus_editor(full_path);
                                 }
                             }
@@ -838,7 +836,7 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
 
                         if (mouse_flags & MOUSE_CLICKED) {
                             SCOPED_FRAME();
-                            auto path = path_join(world.wksp.path, it->filename);
+                            auto path = path_join(world.path, it->filename);
                             auto pos = new_cur2(it->match_col, it->row-1);
                             world.get_current_pane()->focus_editor(path, pos);
                         }
@@ -867,9 +865,9 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
     }
 
     // Draw panes.
-    for (u32 current_pane = 0; current_pane < wksp.panes.len; current_pane++) {
-        auto &pane = wksp.panes[current_pane];
-        auto is_pane_selected = (current_pane == wksp.current_pane);
+    for (u32 current_pane = 0; current_pane < world.panes.len; current_pane++) {
+        auto &pane = world.panes[current_pane];
+        auto is_pane_selected = (current_pane == world.current_pane);
 
         pane_area.w = pane.width;
         pane_area.h = panes_area.h;
@@ -900,7 +898,7 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
             if (editor.is_untitled) {
                 label = "<untitled>";
             } else {
-                auto wksp_path = make_path(wksp.path);
+                auto wksp_path = make_path(world.path);
                 auto file_path = make_path(editor.filepath);
 
                 if (wksp_path->contains(file_path)) {
@@ -1314,8 +1312,8 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
 
         float offset = panes_area.x;
 
-        for (u32 i = 0; i < world.wksp.panes.len - 1; i++) {
-            offset += world.wksp.panes[i].width;
+        for (u32 i = 0; i < world.panes.len - 1; i++) {
+            offset += world.panes[i].width;
 
             boxf b;
             b.w = 4;
@@ -1326,9 +1324,9 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
             if (get_mouse_flags(b) & MOUSE_HOVER) {
                 draw_rect(b, rgba(COLOR_WHITE));
                 if (world.ui.mouse_down[GLFW_MOUSE_BUTTON_LEFT]) {
-                    world.wksp.resizing_pane = i;
+                    world.resizing_pane = i;
                 } else {
-                    world.wksp.resizing_pane = -1;
+                    world.resizing_pane = -1;
                 }
             } else {
                 draw_rect(b, rgba(COLOR_MEDIUM_GREY));
@@ -1589,13 +1587,13 @@ void UI::recalculate_view_sizes(bool force) {
     auto new_sizes = alloc_list<vec2f>();
 
     float total = 0;
-    For (world.wksp.panes) total += it.width;
+    For (world.panes) total += it.width;
 
     boxf pane_area;
     pane_area.pos = {0, 0};
     pane_area.h = panes_area.h;
 
-    For (world.wksp.panes) {
+    For (world.panes) {
         it.width = it.width / total * panes_area.w;
         pane_area.w = it.width;
 
@@ -1630,8 +1628,8 @@ void UI::recalculate_view_sizes(bool force) {
     editor_sizes.len = 0;
     For (*new_sizes) editor_sizes.append(&it);
 
-    for (u32 i = 0; i < world.wksp.panes.len; i++) {
-        for (auto&& editor : world.wksp.panes[i].editors) {
+    for (u32 i = 0; i < world.panes.len; i++) {
+        for (auto&& editor : world.panes[i].editors) {
             editor.view.w = (i32)((editor_sizes[i].x - EDITOR_MARGIN_X) / world.font.width);
             editor.view.h = (i32)((editor_sizes[i].y - EDITOR_MARGIN_Y) / world.font.height / LINE_HEIGHT);
         }

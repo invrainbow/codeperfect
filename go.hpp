@@ -8,7 +8,6 @@
 #include "tree_sitter_crap.hpp"
 
 extern "C" TSLanguage *tree_sitter_go();
-extern const char TEST_PATH[];
 
 // mirrors tree-sitter/src/go.h
 enum Ts_Field_Type {

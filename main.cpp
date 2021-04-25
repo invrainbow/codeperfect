@@ -498,7 +498,7 @@ void send_nvim_keys(ccstr s) {
 void run_proc_the_normal_way(Process* proc, ccstr cmd) {
     proc->cleanup();
     proc->init();
-    proc->dir = world.wksp.path;
+    proc->dir = world.path;
     proc->run(cmd);
 }
 
@@ -533,7 +533,7 @@ void init_open_file() {
     wnd->filtered_results = alloc_list<int>();
 
     fn<void(ccstr)> fill_files = [&](ccstr path) {
-        auto thispath = path_join(world.wksp.path, path);
+        auto thispath = path_join(world.path, path);
         list_directory(thispath, [&](Dir_Entry *entry) {
             bool isdir = (entry->type == DIRENT_DIR);
 
@@ -700,7 +700,7 @@ int main() {
     glfwGetWindowContentScale(world.window, &world.display_scale.x, &world.display_scale.y);
 
     // now that we have world.display_size, we can call wksp.activate_pane
-    world.wksp.activate_pane(0);
+    world.activate_pane(0);
 
     t.log("more shit");
 
@@ -783,11 +783,11 @@ int main() {
         world.ui.mouse_pos.x = x;
         world.ui.mouse_pos.y = y;
 
-        if (world.wksp.resizing_pane != -1) {
-            auto i = world.wksp.resizing_pane;
+        if (world.resizing_pane != -1) {
+            auto i = world.resizing_pane;
 
-            auto& pane1 = world.wksp.panes[i];
-            auto& pane2 = world.wksp.panes[i+1];
+            auto& pane1 = world.panes[i];
+            auto& pane2 = world.panes[i+1];
             auto delta = world.ui.mouse_delta.x;
 
             if (delta < (100 - pane1.width))
@@ -914,7 +914,7 @@ int main() {
                     if (wnd.filtered_results->len == 0) break;
 
                     auto relpath = wnd.filepaths->at(wnd.filtered_results->at(wnd.selection));
-                    auto filepath = path_join(world.wksp.path, relpath);
+                    auto filepath = path_join(world.path, relpath);
                     auto pane = world.get_current_pane();
 
                     pane->focus_editor(filepath);
@@ -1091,16 +1091,16 @@ int main() {
 
                     switch (key) {
                     case GLFW_KEY_1:
-                        world.wksp.activate_pane(0);
+                        world.activate_pane(0);
                         break;
                     case GLFW_KEY_2:
-                        world.wksp.activate_pane(1);
+                        world.activate_pane(1);
                         break;
                     case GLFW_KEY_3:
-                        world.wksp.activate_pane(2);
+                        world.activate_pane(2);
                         break;
                     case GLFW_KEY_4:
-                        world.wksp.activate_pane(3);
+                        world.activate_pane(3);
                         break;
                     case GLFW_KEY_R:
                     case GLFW_KEY_O:
@@ -1254,12 +1254,12 @@ int main() {
                             auto editor = pane->get_current_editor();
                             if (editor == NULL) {
                                 // can't close the last pane
-                                if (world.wksp.panes.len <= 1) break;
+                                if (world.panes.len <= 1) break;
 
                                 pane->cleanup();
-                                world.wksp.panes.remove(world.wksp.current_pane);
-                                if (world.wksp.current_pane >= world.wksp.panes.len)
-                                    world.wksp.activate_pane(world.wksp.panes.len - 1);
+                                world.panes.remove(world.current_pane);
+                                if (world.current_pane >= world.panes.len)
+                                    world.activate_pane(world.panes.len - 1);
                             } else {
                                 if (editor->buf.dirty) {
                                     auto result = ask_user_yes_no_cancel(
@@ -1699,7 +1699,7 @@ int main() {
     double last_time = glfwGetTime();
     i64 last_frame_time = current_time_in_nanoseconds();
 
-    // init_with_file_at_location(path_join(world.wksp.path, "sync/sync.go"), new_cur2(10, 11));
+    // init_with_file_at_location(path_join(world.path, "sync/sync.go"), new_cur2(10, 11));
 
     while (!glfwWindowShouldClose(world.window)) {
         world.frame_mem.reset();
@@ -1915,7 +1915,7 @@ int main() {
                 ImGui::MenuItem("ImGui metrics", NULL, &world.windows_open.im_metrics);
                 ImGui::MenuItem("Editor AST viewer", NULL, &world.wnd_editor_tree.show);
                 ImGui::MenuItem("Editor toplevels viewer", NULL, &world.wnd_editor_toplevels.show);
-                ImGui::MenuItem("Brandon Hsiao Roll Your Own IDE Construction Set", NULL, &world.wnd_style_editor.show);
+                ImGui::MenuItem("Roll Your Own IDE Construction Set", NULL, &world.wnd_style_editor.show);
                 ImGui::MenuItem("Replace line numbers with bytecounts", NULL, &world.replace_line_numbers_with_bytecounts);
                 ImGui::EndMenu();
             }
@@ -2238,7 +2238,7 @@ int main() {
                     world.wnd_add_file_or_folder.show = false;
 
                     if (strlen(wnd.name) > 0) {
-                        auto dest = wnd.location_is_root ? world.wksp.path : path_join(world.wksp.path, wnd.location);
+                        auto dest = wnd.location_is_root ? world.path : path_join(world.path, wnd.location);
                         auto path = path_join(dest, wnd.name);
 
                         if (wnd.folder) {
@@ -2281,6 +2281,8 @@ int main() {
                 ImGui::SliderFloat("autocomplete_item_padding_y", &settings.autocomplete_item_padding_y, 0.0, 20.0f, "%.0f");
                 ImGui::SliderFloat("error_list_item_padding_x", &settings.error_list_item_padding_x, 0.0, 20.0f, "%.0f");
                 ImGui::SliderFloat("error_list_item_padding_y", &settings.error_list_item_padding_y, 0.0, 20.0f, "%.0f");
+                ImGui::SliderFloat("tabs_offset", &settings.tabs_offset, 0.0, 20.0f, "%.0f");
+                ImGui::SliderFloat("scrolloff", &settings.scrolloff, 0.0, 20.0f, "%.0f");
 
                 ImGui::End();
             }

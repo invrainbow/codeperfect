@@ -10,9 +10,6 @@
 // TODO: dynamically determine this
 static const char GOROOT[] = "c:\\go";
 static const char GOPATH[] = "c:\\users\\brandon\\go";
-// const char TEST_PATH[] = "c:\\users\\brandon\\beego";
-const char TEST_PATH[] = "c:\\users\\brandon\\cryptopals";
-// const char TEST_PATH[] = "c:\\users\\brandon\\life";
 
 // -----
 
@@ -330,7 +327,7 @@ either:
 // @Write
 // Should only be called from main thread.
 void Go_Indexer::reload_all_dirty_files() {
-    For (world.wksp.panes) {
+    For (world.panes) {
         For (it.editors) {
             if (!it.index_dirty) continue;
             it.index_dirty = false;
@@ -363,7 +360,7 @@ bool is_git_folder(ccstr path) {
 }
 
 Editor *get_open_editor(ccstr filepath) {
-    For (world.wksp.panes)
+    For (world.panes)
         For (it.editors)
             if (are_filepaths_same_file(it.filepath, filepath))
                 return &it;
@@ -414,7 +411,7 @@ void Go_Indexer::background_thread() {
 
     {
         SCOPED_MEM(&thread_mem);
-        module_resolver.init(TEST_PATH);
+        module_resolver.init(world.path);
         package_lookup.init();
         package_queue.init();
         already_enqueued_packages.init();
@@ -481,7 +478,7 @@ void Go_Indexer::background_thread() {
         print("reading...");
 
         Index_Stream s;
-        if (s.open(path_join(TEST_PATH, "db"), FILE_MODE_READ, FILE_OPEN_EXISTING) != FILE_RESULT_SUCCESS) break;
+        if (s.open(path_join(world.path, "db"), FILE_MODE_READ, FILE_OPEN_EXISTING) != FILE_RESULT_SUCCESS) break;
         defer { s.cleanup(); };
 
         {
@@ -498,7 +495,7 @@ void Go_Indexer::background_thread() {
     {
         SCOPED_MEM(&final_mem);
         if (index.current_path == NULL)
-            index.current_path = our_strcpy(TEST_PATH);
+            index.current_path = our_strcpy(world.path);
         if (index.current_import_path == NULL)
             index.current_import_path = our_strcpy(get_workspace_import_path());
         if (index.packages == NULL)
@@ -604,7 +601,7 @@ void Go_Indexer::background_thread() {
             start_writing();
 
             module_resolver.cleanup();
-            module_resolver.init(TEST_PATH);
+            module_resolver.init(world.path);
             invalidate_packages_with_outdated_hash();
         }
 
@@ -963,12 +960,12 @@ void Go_Indexer::background_thread() {
 
             {
                 Index_Stream s;
-                if (s.open(path_join(TEST_PATH, "db.tmp"), FILE_MODE_WRITE, FILE_CREATE_NEW) != FILE_RESULT_SUCCESS) break;
+                if (s.open(path_join(world.path, "db.tmp"), FILE_MODE_WRITE, FILE_CREATE_NEW) != FILE_RESULT_SUCCESS) break;
                 defer { s.cleanup(); };
                 write_object<Go_Index>(&index, &s);
             }
 
-            if (!move_file_atomically(path_join(TEST_PATH, "db.tmp"), path_join(TEST_PATH, "db"))) {
+            if (!move_file_atomically(path_join(world.path, "db.tmp"), path_join(world.path, "db"))) {
                 error("unable to move db.tmp to db, error: %s", get_last_error());
             }
         } while (0);
@@ -2264,11 +2261,11 @@ void Go_Indexer::init() {
         strcpy_safe(current_exe_path, _countof(current_exe_path), path);
     }
 
-    gohelper_proc.dir = TEST_PATH;
+    gohelper_proc.dir = world.path;
     gohelper_proc.use_stdin = true;
     gohelper_proc.run(path_join(current_exe_path, "helper", "helper.exe"));
 
-    wksp_watch.init(TEST_PATH);
+    wksp_watch.init(world.path);
 
     flag_lock.init();
     lock.init();

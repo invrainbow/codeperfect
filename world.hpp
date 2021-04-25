@@ -111,7 +111,19 @@ struct World {
     File_Tree_Node *file_tree;
     u64 next_build_id;
 
-    Workspace wksp; // in the future, multiple workspaces?
+    char path[MAX_PATH];
+
+    Pane _panes[MAX_PANES];
+    List<Pane> panes;
+    u32 current_pane;
+
+    i32 resizing_pane; // if this value is i, we're resizing the border between i and i+1
+
+    git_repository *git_repo;
+
+    void activate_pane(u32 idx);
+    void init_workspace();
+
     bool replace_line_numbers_with_bytecounts;
 
     struct {

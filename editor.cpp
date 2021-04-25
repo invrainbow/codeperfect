@@ -385,37 +385,11 @@ Editor* Pane::get_current_editor() {
     return &editors[current_editor];
 }
 
-void Workspace::init() {
-    ptr0(this);
-
-    resizing_pane = -1;
-
-    panes.init(LIST_FIXED, _countof(_panes), _panes);
-
-#if 1
-    // strcpy_safe(path, _countof(path), normalize_path_sep("c:/users/brandon/ide/helper"));
-    strcpy_safe(path, _countof(path), normalize_path_sep(TEST_PATH));
-#else
-    Select_File_Opts opts;
-    opts.buf = path;
-    opts.bufsize = _countof(path);
-    opts.folder = true;
-    opts.save = false;
-    let_user_select_file(&opts);
-#endif
-
-    git_buf root = {0};
-    if (git_repository_discover(&root, path, 0, NULL) == 0) {
-        git_repository_open(&git_repo, root.ptr);
-        git_buf_free(&root);
-    }
-}
-
-void Workspace::activate_pane(u32 idx) {
+void World::activate_pane(u32 idx) {
     if (idx > panes.len) return;
 
     if (idx == panes.len) {
-        auto panes_width = ui.get_panes_area().w;
+        auto panes_width = ::ui.get_panes_area().w;
 
         float new_width = panes_width;
         if (panes.len > 0)
@@ -444,12 +418,6 @@ void Workspace::activate_pane(u32 idx) {
             world.nvim.set_current_window(editor);
         */
     }
-}
-
-Pane* Workspace::get_current_pane() {
-    if (panes.len == 0) return NULL;
-
-    return &panes[current_pane];
 }
 
 bool Editor::is_nvim_ready() {
@@ -961,7 +929,7 @@ void Editor::handle_save(bool about_to_close) {
         opts.bufsize = _countof(filepath);
         opts.folder = false;
         opts.save = true;
-        opts.starting_folder = our_strcpy(TEST_PATH);
+        opts.starting_folder = our_strcpy(world.path);
         if (!let_user_select_file(&opts)) return;
 
         is_untitled = false;
@@ -993,7 +961,7 @@ void go_to_error(int index) {
 
     SCOPED_FRAME();
 
-    auto path = path_join(world.wksp.path, error.file);
+    auto path = path_join(world.path, error.file);
     auto pos = new_cur2(error.col-1, error.row-1);
 
     auto editor = world.find_editor([&](Editor *it) -> bool {

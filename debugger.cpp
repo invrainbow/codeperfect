@@ -378,7 +378,7 @@ List<Breakpoint>* Debugger::list_breakpoints() {
 
         auto start = MEM->sp;
 
-        auto wksp_path = get_normalized_path(world.wksp.path);
+        auto wksp_path = get_normalized_path(world.path);
         auto full_path = get_normalized_path(js.str(js.get(it, ".file")));
         auto relative_path = get_path_relative_to(full_path, wksp_path);
 
@@ -625,7 +625,7 @@ bool Debugger::start() {
     dlv_proc.init();
     // dlv_proc.use_stdin = true;
     dlv_proc.dont_use_stdout = true;
-    dlv_proc.dir = TEST_PATH;
+    dlv_proc.dir = world.path;
     dlv_proc.create_new_console = true;
     dlv_proc.run("dlv exec --headless main.exe --listen=127.0.0.1:1234");
 
