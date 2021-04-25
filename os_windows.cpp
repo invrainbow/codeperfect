@@ -196,7 +196,12 @@ bool Process::can_read() {
 
 bool Process::read1(char* ch) {
     DWORD n = 0;
-    return ReadFile(stdout_r, ch, 1, &n, NULL) && (n == 1);
+    bool ret = (ReadFile(stdout_r, ch, 1, &n, NULL) && (n == 1));
+    if (!ret) {
+        error("error reading from process: %s", get_last_error());
+        print("another line to break on");
+    }
+    return ret;
 }
 
 bool Process::writestr(ccstr s, s32 len) {

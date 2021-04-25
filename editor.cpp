@@ -477,18 +477,9 @@ void Editor::cleanup() {
 
     if (nvim_data.win_id != 0) {
         auto &nv = world.nvim;
-        auto msgid = nv.start_request_message("nvim_win_close", 2);
-        nv.save_request(NVIM_REQ_POST_INSERT_DOTREPEAT_CLOSE_NEW_WIN, msgid, id);
+        nv.start_request_message("nvim_win_close", 2);
         nv.writer.write_int(nvim_data.win_id);
         nv.writer.write_bool(true);
-        nv.end_message();
-    }
-
-    if (nvim_data.post_insert_win_id != 0) {
-        auto &nv = world.nvim;
-        auto msgid = nv.start_request_message("nvim_win_close", 2);
-        nv.save_request(NVIM_REQ_POST_INSERT_DOTREPEAT_CLOSE_NEW_WIN, msgid, id);
-        nv.writer.write_int(nvim_data.post_insert_win_id);
         nv.end_message();
     }
 
@@ -921,10 +912,12 @@ void Editor::format_on_save(bool write_to_nvim) {
     proc.run("goimports");
     saving = true;
 
-    For (buf.lines) {
-        // TODO(unicode)
+    // TODO(unicode)
+    for (u32 i = 0; i < buf.lines.len; i++) {
+        auto &it = buf.lines[i];
         For (it) proc.write1((char)it);
-        proc.write1('\n');
+        if (i != buf.lines.len - 1 || it.len != 0)
+            proc.write1('\n');
     }
     proc.done_writing();
 

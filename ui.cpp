@@ -867,8 +867,8 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
     }
 
     // Draw panes.
-    u32 current_pane = 0;
-    for (auto && pane : wksp.panes) {
+    for (u32 current_pane = 0; current_pane < wksp.panes.len; current_pane++) {
+        auto &pane = wksp.panes[current_pane];
         auto is_pane_selected = (current_pane == wksp.current_pane);
 
         pane_area.w = pane.width;
@@ -1017,9 +1017,7 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                 });
             }
 
-            if (world.nvim.waiting_focus_window == editor->id) {
-                // TODO
-            } else {
+            if (editor->is_nvim_ready()) {
                 auto &buf = editor->buf;
                 auto &view = editor->view;
 
@@ -1040,7 +1038,7 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
 
                 auto draw_cursor = [&]() {
                     actual_cursor_position = cur_pos;    // save position where cursor is drawn for later use
-                    bool insert_cursor = (world.nvim.mode == VI_INSERT && !world.nvim.exiting_insert_mode);
+                    bool insert_cursor = (world.nvim.mode == VI_INSERT && is_pane_selected && !world.nvim.exiting_insert_mode);
                     draw_background(insert_cursor, rgba(COLOR_LIME));
                 };
 
@@ -1304,7 +1302,6 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
             }
         }
 
-        current_pane++;
         pane_area.x += pane_area.w;
     }
 

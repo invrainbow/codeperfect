@@ -80,7 +80,7 @@ ccstr nvim_request_type_str(Nvim_Request_Type type) {
     switch (type) {
     define_str_case(NVIM_REQ_GET_API_INFO);
     define_str_case(NVIM_REQ_CREATE_BUF);
-    define_str_case(NVIM_REQ_OPEN_WIN);
+    define_str_case(NVIM_REQ_CREATE_WIN);
     define_str_case(NVIM_REQ_BUF_ATTACH);
     define_str_case(NVIM_REQ_UI_ATTACH);
     define_str_case(NVIM_REQ_SET_CURRENT_WIN);
@@ -126,6 +126,27 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
             }
 
             switch (req->type) {
+            case NVIM_REQ_DOTREPEAT_CREATE_BUF:
+                {
+                    dotrepeat_buf_id = event->response.buf.object_id;
+
+                    auto msgid = start_request_message("nvim_open_win", 3);
+                    save_request(NVIM_REQ_DOTREPEAT_CREATE_WIN, msgid, 0);
+
+                    writer.write_int(event->response.buf.object_id);
+                    writer.write_bool(true);
+                    writer.write_map(3);
+                    writer.write_string("external"); writer.write_bool(true);
+                    writer.write_string("width"); writer.write_int(100);
+                    writer.write_string("height"); writer.write_int(100);
+                    end_message();
+                }
+                break;
+
+            case NVIM_REQ_DOTREPEAT_CREATE_WIN:
+                dotrepeat_win_id = event->response.win.object_id;
+                break;
+
             case NVIM_REQ_GOTO_EXTMARK:
                 {
                     auto &data = event->response.goto_extmark;
@@ -200,56 +221,12 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                     end_message();
 
                     // move cursor
-                    editor->nvim_data.post_insert_original_cur = editor->cur;
+                    auto old_cur = editor->cur;
                     {
                         auto cur = editor->cur;
-                        if (cur.x > 0) cur.x--; // simulate the "back 1" that vim normally does when exiting insert mode
-                        nvim_print("sending move_cursor to %s", format_pos(cur));
+                        if (cur.x > 0) cur.x--;
                         editor->raw_move_cursor(cur);
                     }
-
-                    auto msgid = start_request_message("nvim_win_set_cursor", 2);
-                    save_request(NVIM_REQ_POST_INSERT_MOVE_CURSOR, msgid, editor->id);
-                    writer.write_int(editor->nvim_data.win_id);
-                    {
-                        writer.write_array(2);
-                        writer.write_int(editor->cur.y + 1);
-                        writer.write_int(editor->cur.x);
-                    }
-                    end_message();
-                }
-                break;
-
-            case NVIM_REQ_POST_INSERT_MOVE_CURSOR:
-                {
-                    auto msgid = start_request_message("nvim_create_buf", 2);
-                    save_request(NVIM_REQ_POST_INSERT_DOTREPEAT_CREATE_BUF, msgid, editor->id);
-                    writer.write_bool(false);
-                    writer.write_bool(true);
-                    end_message();
-                }
-                break;
-
-            case NVIM_REQ_POST_INSERT_DOTREPEAT_CREATE_BUF:
-                {
-                    editor->nvim_data.post_insert_buf_id = event->response.buf.object_id;
-
-                    auto msgid = start_request_message("nvim_open_win", 3);
-                    save_request(NVIM_REQ_POST_INSERT_DOTREPEAT_OPEN_WIN, msgid, editor->id);
-
-                    writer.write_int(event->response.buf.object_id);
-                    writer.write_bool(true);
-                    writer.write_map(3);
-                    writer.write_string("external"); writer.write_bool(true);
-                    writer.write_string("width"); writer.write_int(100);
-                    writer.write_string("height"); writer.write_int(100);
-                    end_message();
-                }
-                break;
-
-            case NVIM_REQ_POST_INSERT_DOTREPEAT_OPEN_WIN:
-                {
-                    editor->nvim_data.post_insert_win_id = event->response.win.object_id;
 
                     u32 delete_len = 0;
                     {
@@ -266,86 +243,117 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                         }
                     }
 
-                    editor->nvim_data.post_insert_delete_len = delete_len;
-
-                    auto msgid = start_request_message("nvim_buf_set_lines", 5);
-                    save_request(NVIM_REQ_POST_INSERT_DOTREPEAT_SET_LINES, msgid, editor->id);
-                    writer.write_int(editor->nvim_data.post_insert_buf_id);
-                    writer.write_int(0);
-                    writer.write_int(0);
-                    writer.write_bool(false);
-                    writer.write_array(1);
-                    writer.write1(MP_OP_STRING);
-                    writer.write4(delete_len);
-                    for (u32 i = 0; i < delete_len; i++)
-                        writer.write1('x');
-                    end_message();
-                }
-                break;
-
-            case NVIM_REQ_POST_INSERT_DOTREPEAT_SET_LINES:
-                {
-                    auto msgid = start_request_message("nvim_win_set_cursor", 2);
-                    save_request(NVIM_REQ_POST_INSERT_DOTREPEAT_SET_CURSOR, msgid, editor->id);
-                    writer.write_int(editor->nvim_data.post_insert_win_id);
+                    auto msgid = start_request_message("nvim_call_atomic", 1);
+                    save_request(NVIM_REQ_POST_INSERT_DOTREPEAT_REPLAY, msgid, editor->id);
                     {
-                        writer.write_array(2);
-                        writer.write_int(1);
-                        writer.write_int(editor->nvim_data.post_insert_delete_len);
+                        writer.write_array(5);
+
+                        {
+                            writer.write_array(2);
+                            writer.write_string("nvim_win_set_cursor");
+                            {
+                                writer.write_array(2);
+                                writer.write_int(editor->nvim_data.win_id);
+                                {
+                                    writer.write_array(2);
+                                    writer.write_int(editor->cur.y + 1);
+                                    writer.write_int(editor->cur.x);
+                                }
+                            }
+                        }
+
+                        {
+                            writer.write_array(2);
+                            writer.write_string("nvim_set_current_win");
+                            {
+                                writer.write_array(1);
+                                writer.write_int(dotrepeat_win_id);
+                            }
+                        }
+
+                        {
+                            writer.write_array(2);
+                            writer.write_string("nvim_buf_set_lines");
+                            {
+                                writer.write_array(5);
+                                writer.write_int(dotrepeat_buf_id);
+                                writer.write_int(0);
+                                writer.write_int(-1);
+                                writer.write_bool(false);
+                                {
+                                    writer.write_array(1);
+                                    writer.write1(MP_OP_STRING);
+                                    writer.write4(delete_len);
+                                    for (u32 i = 0; i < delete_len; i++)
+                                        writer.write1('x');
+                                }
+                            }
+                        }
+
+                        {
+                            writer.write_array(2);
+                            writer.write_string("nvim_win_set_cursor");
+                            {
+                                writer.write_array(2);
+                                writer.write_int(dotrepeat_win_id);
+                                {
+                                    writer.write_array(2);
+                                    writer.write_int(1);
+                                    writer.write_int(delete_len);
+                                }
+                            }
+                        }
+
+                        {
+                            Text_Renderer r;
+                            r.init();
+                            for (u32 i = 0; i < delete_len; i++)
+                                r.writestr("<BS>");
+
+                            auto it = editor->buf.iter(editor->nvim_insert.backspaced_to);
+                            while (it.pos < old_cur) {
+                                // wait, does this take utf-8?
+                                auto ch = it.next();
+                                if (ch == '<')
+                                    r.writestr("<LT>");
+                                else
+                                    r.writechar((char)ch);
+                            }
+
+                            writer.write_array(2);
+                            writer.write_string("nvim_input");
+                            {
+                                writer.write_array(1);
+                                writer.write_string(r.finish());
+                            }
+                        }
                     }
+
                     end_message();
                 }
                 break;
 
-            case NVIM_REQ_POST_INSERT_DOTREPEAT_SET_CURSOR:
+            case NVIM_REQ_POST_INSERT_DOTREPEAT_REPLAY:
+                start_request_message("nvim_call_atomic", 1);
+                writer.write_array(2);
                 {
-                    Text_Renderer r;
-                    r.init();
-                    for (u32 i = 0; i < editor->nvim_data.post_insert_delete_len; i++)
-                        r.writestr("<BS>");
-
-                    auto it = editor->buf.iter(editor->nvim_insert.backspaced_to);
-
-                    // wait, does this take utf-8?
-                    while (it.pos < editor->nvim_data.post_insert_original_cur) {
-                        auto ch = it.next();
-                        if (ch == '<')
-                            r.writestr("<LT>");
-                        else
-                            r.writechar((char)ch);
+                    writer.write_array(2);
+                    writer.write_string("nvim_set_current_win");
+                    {
+                        writer.write_array(1);
+                        writer.write_int(editor->nvim_data.win_id);
                     }
-
-                    auto msgid = start_request_message("nvim_input", 1);
-                    save_request(NVIM_REQ_POST_INSERT_DOTREPEAT_INPUT, msgid, editor->id);
-                    writer.write_string(r.finish());
-                    end_message();
                 }
-                break;
 
-            case NVIM_REQ_POST_INSERT_DOTREPEAT_INPUT:
                 {
-                    auto msgid = start_request_message("nvim_set_current_win", 1);
-                    save_request(NVIM_REQ_POST_INSERT_DOTREPEAT_RESTORE_WIN, msgid, editor->id);
-                    writer.write_int(editor->nvim_data.win_id);
-                    end_message();
+                    writer.write_array(2);
+                    writer.write_string("nvim_input");
+                    {
+                        writer.write_array(1);
+                        // don't move the cursor back one; we handle that
+                        writer.write_string("<C-O>:stopinsert<CR>");
+                    }
                 }
-                break;
-
-            case NVIM_REQ_POST_INSERT_DOTREPEAT_RESTORE_WIN:
-                {
-                    auto msgid = start_request_message("nvim_win_close", 2);
-                    save_request(NVIM_REQ_POST_INSERT_DOTREPEAT_CLOSE_NEW_WIN, msgid, editor->id);
-                    writer.write_int(editor->nvim_data.post_insert_win_id);
-                    writer.write_bool(true);
-                    end_message();
-                }
-                break;
-
-            case NVIM_REQ_POST_INSERT_DOTREPEAT_CLOSE_NEW_WIN:
-                nvim_print("sending escape", format_pos(editor->cur));
-                // send the <esc> key that we delayed
-                start_request_message("nvim_input", 1);
-                writer.write_string("<Esc>");
                 end_message();
                 break;
 
@@ -365,57 +373,67 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 editor->nvim_data.buf_id = event->response.buf.object_id;
 
                 {
-                    auto msgid = start_request_message("nvim_buf_attach", 3);
+                    auto msgid = start_request_message("nvim_call_atomic", 1);
                     save_request(NVIM_REQ_BUF_ATTACH, msgid, editor->id);
 
-                    writer.write_int(event->response.buf.object_id);
-                    writer.write_bool(false);
-                    writer.write_map(0);
-                    end_message();
-                }
+                    writer.write_array(7); // TODO
 
-                {
-                    start_request_message("nvim_buf_set_lines", 5);
-
-                    writer.write_int(event->response.buf.object_id);
-                    writer.write_int(0);
-                    writer.write_int(-1);
-                    writer.write_bool(false);
-
-                    writer.write_array(editor->buf.lines.len);
-                    For (editor->buf.lines) {
-                        writer.write1(MP_OP_STRING);
-                        writer.write4(it.len);
-                        For (it) writer.write1(it);
+                    {
+                        writer.write_array(2);
+                        writer.write_string("nvim_buf_attach");
+                        {
+                            writer.write_array(3);
+                            writer.write_int(event->response.buf.object_id);
+                            writer.write_bool(false);
+                            writer.write_map(0);
+                        }
                     }
 
-                    // editor->buf.clear();
-                    end_message();
-                }
+                    {
+                        writer.write_array(2);
+                        writer.write_string("nvim_buf_set_lines");
+                        {
+                            writer.write_array(5);
 
-                {
+                            writer.write_int(event->response.buf.object_id);
+                            writer.write_int(0);
+                            writer.write_int(-1);
+                            writer.write_bool(false);
+
+                            writer.write_array(editor->buf.lines.len);
+                            For (editor->buf.lines) {
+                                writer.write1(MP_OP_STRING);
+                                writer.write4(it.len);
+                                For (it) writer.write1(it);
+                            }
+                        }
+                    }
+
                     typedef fn<void()> write_value_func;
                     auto set_option = [&](ccstr key, write_value_func f) {
-                        start_request_message("nvim_buf_set_option", 3);
-                        writer.write_int(event->response.buf.object_id);
-                        writer.write_string(key);
-                        f();
-                        end_message();
+                        writer.write_array(2);
+                        writer.write_string("nvim_buf_set_option");
+                        {
+                            writer.write_array(3);
+                            writer.write_int(event->response.buf.object_id);
+                            writer.write_string(key);
+                            f();
+                        }
                     };
 
-                    set_option("scrolloff",  [&]() { writer.write_int(100); });
                     set_option("shiftwidth", [&]() { writer.write_int(4); });
                     set_option("tabstop",    [&]() { writer.write_int(4); });
                     set_option("expandtab",  [&]() { writer.write_bool(false); });
-                    set_option("wrap",       [&]() { writer.write_bool(false); });
                     set_option("autoindent", [&]() { writer.write_bool(true); });
                     set_option("filetype",   [&]() { writer.write_string("go"); });
                     // how to do equiv. of `filetype indent plugin on'?
+
+                    end_message();
                 }
 
                 {
                     auto msgid = start_request_message("nvim_open_win", 3);
-                    save_request(NVIM_REQ_OPEN_WIN, msgid, editor->id);
+                    save_request(NVIM_REQ_CREATE_WIN, msgid, editor->id);
 
                     writer.write_int(event->response.buf.object_id);
                     writer.write_bool(false);
@@ -432,7 +450,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 if (editor->id == waiting_focus_window)
                     waiting_focus_window = 0;
                 break;
-            case NVIM_REQ_OPEN_WIN:
+            case NVIM_REQ_CREATE_WIN:
                 editor->nvim_data.win_id = event->response.win.object_id;
                 if (waiting_focus_window == editor->id)
                     set_current_window(editor);
@@ -818,27 +836,8 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 editor->nvim_data.grid_topline = args.topline;
 
                 nvim_print("got cursor change to %s", format_pos(new_cur2((u32)args.curcol, (u32)args.curline)));
-
-                /*
-                Here is the situation. Through testing, I've found that when
-                you exit insert mode, cursor change is sent before mode change.
-
-                So we're going to keep ignoring cursor change notifications in
-                insert mode, and the notification that moves the cursor 1 back
-                after leaving insert mode will be ignored (since it comes
-                before mode change, we will still be in insert mode).  Then we
-                will move the cursor back 1 *manually.*
-
-                If the cursor-before-mode order changes, we will need to fix
-                this. It's also possible this is a race condition that so far
-                has happened to put the cursor-change notification first?
-                Fucking hell, this is why async APIs (and APIs in general) are
-                gay.
-                */
                 if (mode != VI_INSERT)
                     editor->raw_move_cursor(new_cur2((u32)args.curcol, (u32)args.curline));
-                else
-                    nvim_print("in insert mode, ignoring cursor change");
 
                 if (!editor->nvim_data.got_initial_cur) {
                     nvim_print("got_initial_cur = false, setting to true & calling handle_editor_on_ready()");
@@ -867,11 +866,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
 }
 
 void Nvim::run_event_loop() {
-    auto before_exit = [&]() {
-        nvim_print("exiting...");
-    };
-
-#define ASSERT(x) if (!(x)) { before_exit(); return; }
+#define ASSERT(x) if (!(x)) { panic("nvim crashed"); }
 #define CHECKOK() ASSERT(reader.ok)
 
     {
@@ -896,8 +891,15 @@ void Nvim::run_event_loop() {
         end_message();
     }
 
+    {
+        auto msgid = start_request_message("nvim_create_buf", 2);
+        save_request(NVIM_REQ_DOTREPEAT_CREATE_BUF, msgid, 0);
+        writer.write_bool(false);
+        writer.write_bool(true);
+        end_message();
+    }
+
     while (true) {
-        auto type = reader.peek_type();
         s32 msglen = reader.read_array(); CHECKOK();
         auto msgtype = (MprpcMessageType)reader.read_int(); CHECKOK();
 
@@ -1239,11 +1241,11 @@ void Nvim::run_event_loop() {
                     if (reader.peek_type() == MP_STRING) {
                         auto error_str = reader.read_string(); CHECKOK();
                         SCOPED_FRAME();
-                        nvim_print("error in response for msgid %d: %d", msgid, error_str);
+                        nvim_print("error in response for msgid %d, reqtype = %d: %d", msgid, req_type, error_str);
                     } else {
                         auto type = reader.peek_type();
                         reader.skip_object(); CHECKOK();
-                        nvim_print("error in response for msgid %d: (error was not a string, instead was %s)", msgid, mptype_str(type));
+                        nvim_print("error in response for msgid %d, reqtype = %d: (error was not a string, instead was %s)", msgid, req_type, mptype_str(type));
                     }
                     reader.skip_object();
                     delete_request_by_msgid(msgid);
@@ -1272,6 +1274,26 @@ void Nvim::run_event_loop() {
                     });
                 };
 
+                auto read_atomic_call_response = [&](fn<void()> f) {
+                    auto arrlen = reader.read_array(); CHECKOK();
+                    ASSERT(arrlen == 2);
+
+                    f(); // read response
+
+                    if (reader.peek_type() == MP_NIL) {
+                        reader.read_nil(); CHECKOK();
+                    } else {
+                        auto arrlen = reader.read_array(); CHECKOK();
+                        ASSERT(arrlen == 3);
+
+                        auto index = reader.read_int(); CHECKOK();
+                        reader.skip_object(); CHECKOK();
+                        auto err = reader.read_string(); CHECKOK();
+
+                        nvim_print("nvim_call_atomic call #%d had error: %s", index, err);
+                    }
+                };
+
                 switch (req_type) {
                 case NVIM_REQ_POST_INSERT_GETCHANGEDTICK:
                     {
@@ -1296,7 +1318,7 @@ void Nvim::run_event_loop() {
                     break;
 
                 case NVIM_REQ_CREATE_BUF:
-                case NVIM_REQ_POST_INSERT_DOTREPEAT_CREATE_BUF:
+                case NVIM_REQ_DOTREPEAT_CREATE_BUF:
                     {
                         if (reader.peek_type() != MP_EXT) {
                             reader.skip_object(); CHECKOK(); // check if this path ever gets hit
@@ -1343,10 +1365,7 @@ void Nvim::run_event_loop() {
 
                 case NVIM_REQ_CREATE_EXTMARKS_SET_EXTMARKS:
                 case NVIM_REQ_CREATE_EDITOR_EXTMARKS:
-                    {
-                        auto arrlen = reader.read_array(); CHECKOK();
-                        ASSERT(arrlen == 2);
-
+                    read_atomic_call_response([&]() {
                         auto responses_len = reader.read_array(); CHECKOK();
                         add_response_event([&](Nvim_Message *m) {
                             auto extmarks = alloc_list<u32>(responses_len);
@@ -1354,24 +1373,19 @@ void Nvim::run_event_loop() {
                                 extmarks->append(reader.read_int());
                             m->response.extmarks = extmarks;
                         });
-
-                        if (reader.peek_type() == MP_NIL) {
-                            reader.read_nil();
-                        } else {
-                            auto arrlen = reader.read_array();
-                            ASSERT(arrlen == 3);
-
-                            auto index = reader.read_int();
-                            reader.skip_object();
-                            auto err = reader.read_string();
-
-                            nvim_print("nvim_call_atomic call #%d had error: %s", index, err);
-                        }
-                    }
+                    });
                     break;
 
-                case NVIM_REQ_OPEN_WIN:
-                case NVIM_REQ_POST_INSERT_DOTREPEAT_OPEN_WIN:
+                case NVIM_REQ_POST_INSERT_DOTREPEAT_REPLAY:
+                case NVIM_REQ_BUF_ATTACH:
+                    read_atomic_call_response([&]() {
+                        reader.skip_object(); CHECKOK();
+                        add_response_event([&](Nvim_Message*) {});
+                    });
+                    break;
+
+                case NVIM_REQ_CREATE_WIN:
+                case NVIM_REQ_DOTREPEAT_CREATE_WIN:
                     {
                         if (reader.peek_type() != MP_EXT) {
                             reader.skip_object(); CHECKOK(); // check if this path ever gets hit

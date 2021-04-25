@@ -10,8 +10,8 @@
 // TODO: dynamically determine this
 static const char GOROOT[] = "c:\\go";
 static const char GOPATH[] = "c:\\users\\brandon\\go";
-const char TEST_PATH[] = "c:\\users\\brandon\\beego";
-// const char TEST_PATH[] = "c:\\users\\brandon\\cryptopals";
+// const char TEST_PATH[] = "c:\\users\\brandon\\beego";
+const char TEST_PATH[] = "c:\\users\\brandon\\cryptopals";
 // const char TEST_PATH[] = "c:\\users\\brandon\\life";
 
 // -----
@@ -1369,7 +1369,7 @@ u64 Go_Indexer::hash_package(ccstr resolved_package_path) {
     {
         SCOPED_FRAME();
 
-        auto files = list_source_files(resolved_package_path, false);
+        auto files = list_source_files(resolved_package_path, true);
         if (files == NULL) return 0;
         For (*files)
             ret ^= hash_file(path_join(resolved_package_path, it));

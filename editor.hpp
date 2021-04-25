@@ -66,9 +66,6 @@ struct Editor {
         cur2 move_cursor_to;
         int grid_topline;
 
-        u32 post_insert_buf_id;
-        u32 post_insert_win_id;
-        u32 post_insert_delete_len;
         cur2 post_insert_original_cur;
     } nvim_data;
 

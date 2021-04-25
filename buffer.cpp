@@ -216,6 +216,8 @@ void Buffer::read(Buffer_Read_Func f) {
                 line->append(uch);
         }
     }
+
+    dirty = false;
 }
 
 void Buffer::read(FILE* f) {

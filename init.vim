@@ -4,6 +4,7 @@ set autoindent
 set noexpandtab
 set startofline
 set scrolloff=100
+set nowrap
 
 " called from ide when opening/creating new file to reset undo tree
 function! IdeClearUndo(bufId)

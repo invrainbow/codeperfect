@@ -1120,6 +1120,7 @@ int main() {
                         break;
                     case GLFW_KEY_E:
                         if (editor == NULL) break;
+                        if (world.nvim.mode == VI_INSERT) break;
                         if (relu_sub(editor->cur.y, settings.scrolloff) < editor->view.y + 1) {
                             if (editor->view.y + 1 < editor->buf.lines.len) {
                                 editor->view.y++;
