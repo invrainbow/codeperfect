@@ -593,6 +593,14 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
     case MPRPC_NOTIFICATION:
         nvim_print("received NOTIFICATION event, notification type = %s", nvim_notification_type_str(event->notification.type));
         switch (event->notification.type) {
+        case NVIM_NOTIF_GRID_CLEAR:
+            {
+                auto &args = event->notification.grid_line;
+                auto editor = find_editor_by_grid(args.grid);
+                if (editor == NULL) break;
+                mem0(editor->highlights, sizeof(editor->highlights));
+            }
+            break;
         case NVIM_NOTIF_GRID_LINE:
             {
                 auto &args = event->notification.grid_line;
@@ -612,9 +620,10 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                         auto def = hl_defs.find([&](Hl_Def *it) { return it->id == last_hl; });
                         last_hltype = def == NULL ? HL_NONE : def->type;
                     }
-                    for (u32 i = 0; (i < (it.reps != 0 ? it.reps : 1)) && (col + i < NVIM_DEFAULT_WIDTH); i++)
+                    for (u32 i = 0; (i < (it.reps != 0 ? it.reps : 1)) && col < NVIM_DEFAULT_WIDTH; i++) {
                         editor->highlights[args.row][col] = last_hltype;
-                    col += (it.reps != 0 ? it.reps : 1);
+                        col++;
+                    }
                 }
             }
             break;
@@ -660,11 +669,13 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                     return HL_NONE;
                 };
 
-                auto hl_type = get_hl_type();
-                if (hl_type != HL_NONE) {
-                    auto def = hl_defs.find_or_append([&](Hl_Def *it) { return it->id == args.id; });
+                auto def = hl_defs.find_or_append([&](Hl_Def *it) { return it->id == args.id; });
+                auto hltype = get_hl_type();
+                if (hltype != HL_NONE) {
                     def->id = args.id;
-                    def->type = hl_type;
+                    def->type = hltype;
+                } else {
+                    hl_defs.remove(def);
                 }
             }
             break;
@@ -1084,6 +1095,13 @@ void Nvim::run_event_loop() {
                                     m->notification.type = NVIM_NOTIF_WIN_POS;
                                     m->notification.win_pos.grid = grid;
                                     m->notification.win_pos.window = *window;
+                                });
+                            } else if (streq(op, "grid_clear")) {
+                                ASSERT(args_len == 1);
+                                auto grid = reader.read_int(); CHECKOK();
+                                add_event([&](Nvim_Message *m) {
+                                    m->notification.type = NVIM_NOTIF_GRID_CLEAR;
+                                    m->notification.grid_clear.grid = grid;
                                 });
                             } else if (streq(op, "grid_line")) {
                                 ASSERT(args_len == 4);

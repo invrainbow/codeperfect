@@ -368,6 +368,7 @@ enum Nvim_Notification_Type {
     NVIM_NOTIF_CMDLINE_SHOW,
     NVIM_NOTIF_GRID_LINE,
     NVIM_NOTIF_GRID_SCROLL,
+    NVIM_NOTIF_GRID_CLEAR,
     NVIM_NOTIF_HL_ATTR_DEFINE,
 
     NVIM_NOTIF_CUSTOM_REVEAL_LINE,
@@ -449,6 +450,10 @@ struct Nvim_Message {
                     ccstr firstc;
                     ccstr prompt;
                 } cmdline_show;
+
+                struct {
+                    int grid;
+                } grid_clear;
 
                 struct {
                     int grid;
