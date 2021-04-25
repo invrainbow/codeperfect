@@ -929,7 +929,7 @@ void Editor::handle_save(bool about_to_close) {
         opts.bufsize = _countof(filepath);
         opts.folder = false;
         opts.save = true;
-        opts.starting_folder = our_strcpy(world.path);
+        opts.starting_folder = our_strcpy(world.current_path);
         if (!let_user_select_file(&opts)) return;
 
         is_untitled = false;
@@ -961,7 +961,7 @@ void go_to_error(int index) {
 
     SCOPED_FRAME();
 
-    auto path = path_join(world.path, error.file);
+    auto path = path_join(world.current_path, error.file);
     auto pos = new_cur2(error.col-1, error.row-1);
 
     auto editor = world.find_editor([&](Editor *it) -> bool {

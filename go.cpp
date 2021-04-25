@@ -411,7 +411,7 @@ void Go_Indexer::background_thread() {
 
     {
         SCOPED_MEM(&thread_mem);
-        module_resolver.init(world.path);
+        module_resolver.init(world.current_path);
         package_lookup.init();
         package_queue.init();
         already_enqueued_packages.init();
@@ -478,7 +478,7 @@ void Go_Indexer::background_thread() {
         print("reading...");
 
         Index_Stream s;
-        if (s.open(path_join(world.path, "db"), FILE_MODE_READ, FILE_OPEN_EXISTING) != FILE_RESULT_SUCCESS) break;
+        if (s.open(path_join(world.current_path, "db"), FILE_MODE_READ, FILE_OPEN_EXISTING) != FILE_RESULT_SUCCESS) break;
         defer { s.cleanup(); };
 
         {
@@ -495,7 +495,7 @@ void Go_Indexer::background_thread() {
     {
         SCOPED_MEM(&final_mem);
         if (index.current_path == NULL)
-            index.current_path = our_strcpy(world.path);
+            index.current_path = our_strcpy(world.current_path);
         if (index.current_import_path == NULL)
             index.current_import_path = our_strcpy(get_workspace_import_path());
         if (index.packages == NULL)
@@ -601,7 +601,7 @@ void Go_Indexer::background_thread() {
             start_writing();
 
             module_resolver.cleanup();
-            module_resolver.init(world.path);
+            module_resolver.init(world.current_path);
             invalidate_packages_with_outdated_hash();
         }
 
@@ -960,12 +960,12 @@ void Go_Indexer::background_thread() {
 
             {
                 Index_Stream s;
-                if (s.open(path_join(world.path, "db.tmp"), FILE_MODE_WRITE, FILE_CREATE_NEW) != FILE_RESULT_SUCCESS) break;
+                if (s.open(path_join(world.current_path, "db.tmp"), FILE_MODE_WRITE, FILE_CREATE_NEW) != FILE_RESULT_SUCCESS) break;
                 defer { s.cleanup(); };
                 write_object<Go_Index>(&index, &s);
             }
 
-            if (!move_file_atomically(path_join(world.path, "db.tmp"), path_join(world.path, "db"))) {
+            if (!move_file_atomically(path_join(world.current_path, "db.tmp"), path_join(world.current_path, "db"))) {
                 error("unable to move db.tmp to db, error: %s", get_last_error());
             }
         } while (0);
@@ -2261,11 +2261,11 @@ void Go_Indexer::init() {
         strcpy_safe(current_exe_path, _countof(current_exe_path), path);
     }
 
-    gohelper_proc.dir = world.path;
+    gohelper_proc.dir = world.current_path;
     gohelper_proc.use_stdin = true;
     gohelper_proc.run(path_join(current_exe_path, "helper", "helper.exe"));
 
-    wksp_watch.init(world.path);
+    wksp_watch.init(world.current_path);
 
     flag_lock.init();
     lock.init();

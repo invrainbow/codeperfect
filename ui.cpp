@@ -760,7 +760,7 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                                 } else {
                                     SCOPED_FRAME();
                                     auto rel_path = file_tree_node_to_path(it);
-                                    auto full_path = path_join(world.path, rel_path);
+                                    auto full_path = path_join(world.current_path, rel_path);
                                     world.get_current_pane()->focus_editor(full_path);
                                 }
                             }
@@ -836,7 +836,7 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
 
                         if (mouse_flags & MOUSE_CLICKED) {
                             SCOPED_FRAME();
-                            auto path = path_join(world.path, it->filename);
+                            auto path = path_join(world.current_path, it->filename);
                             auto pos = new_cur2(it->match_col, it->row-1);
                             world.get_current_pane()->focus_editor(path, pos);
                         }
@@ -898,7 +898,7 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
             if (editor.is_untitled) {
                 label = "<untitled>";
             } else {
-                auto wksp_path = make_path(world.path);
+                auto wksp_path = make_path(world.current_path);
                 auto file_path = make_path(editor.filepath);
 
                 if (wksp_path->contains(file_path)) {

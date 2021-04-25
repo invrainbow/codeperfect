@@ -472,7 +472,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
 
                     auto calls = alloc_list<Call>();
 
-                    auto editor_path = get_path_relative_to(editor->filepath, world.path);
+                    auto editor_path = get_path_relative_to(editor->filepath, world.current_path);
                     for (u32 i = 0; i < b.errors.len; i++) {
                         auto &it = b.errors[i];
 
@@ -535,7 +535,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                     For (world.panes) {
                         For (it.editors) {
                             auto editor = it;
-                            auto path = get_path_relative_to(it.filepath, world.path);
+                            auto path = get_path_relative_to(it.filepath, world.current_path);
                             for (u32 i = 0; i < b.errors.len; i++) {
                                 auto &it = b.errors[i];
                                 if (!it.valid) continue;

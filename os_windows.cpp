@@ -196,12 +196,7 @@ bool Process::can_read() {
 
 bool Process::read1(char* ch) {
     DWORD n = 0;
-    bool ret = (ReadFile(stdout_r, ch, 1, &n, NULL) && (n == 1));
-    if (!ret) {
-        error("error reading from process: %s", get_last_error());
-        print("another line to break on");
-    }
-    return ret;
+    return ReadFile(stdout_r, ch, 1, &n, NULL) && (n == 1);
 }
 
 bool Process::writestr(ccstr s, s32 len) {
@@ -273,32 +268,25 @@ void kill_thread(Thread_Handle h) {
 }
 
 void Lock::init() {
-    ptr0(this);
-    mutex = CreateMutex(NULL, FALSE, NULL);
+    InitializeCriticalSection(&lock);
 }
 
 void Lock::cleanup() {
-    CloseHandle(mutex);
+    DeleteCriticalSection(&lock);
 }
 
 bool Lock::try_enter() {
-    auto res = WaitForSingleObject(mutex, 0);
-    if (res == WAIT_ABANDONED)
-        panic("mutex abandoned");
-    return res == WAIT_OBJECT_0;
+    return TryEnterCriticalSection(&lock);
 }
 
 bool Lock::enter() {
-    auto res = WaitForSingleObject(mutex, INFINITE);
-    if (res != WAIT_OBJECT_0) {
-        print("res: %d", res);
-        panic("failed to enter mutex");
-    }
+    EnterCriticalSection(&lock);
     return true;
 }
 
 bool Lock::leave() {
-    return ReleaseMutex(mutex);
+    LeaveCriticalSection(&lock);
+    return true;
 }
 
 void File::cleanup() {

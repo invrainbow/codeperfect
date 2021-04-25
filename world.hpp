@@ -111,7 +111,7 @@ struct World {
     File_Tree_Node *file_tree;
     u64 next_build_id;
 
-    char path[MAX_PATH];
+    char current_path[MAX_PATH];
 
     Pane _panes[MAX_PANES];
     List<Pane> panes;

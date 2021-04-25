@@ -498,7 +498,7 @@ void send_nvim_keys(ccstr s) {
 void run_proc_the_normal_way(Process* proc, ccstr cmd) {
     proc->cleanup();
     proc->init();
-    proc->dir = world.path;
+    proc->dir = world.current_path;
     proc->run(cmd);
 }
 
@@ -533,7 +533,7 @@ void init_open_file() {
     wnd->filtered_results = alloc_list<int>();
 
     fn<void(ccstr)> fill_files = [&](ccstr path) {
-        auto thispath = path_join(world.path, path);
+        auto thispath = path_join(world.current_path, path);
         list_directory(thispath, [&](Dir_Entry *entry) {
             bool isdir = (entry->type == DIRENT_DIR);
 
@@ -914,7 +914,7 @@ int main() {
                     if (wnd.filtered_results->len == 0) break;
 
                     auto relpath = wnd.filepaths->at(wnd.filtered_results->at(wnd.selection));
-                    auto filepath = path_join(world.path, relpath);
+                    auto filepath = path_join(world.current_path, relpath);
                     auto pane = world.get_current_pane();
 
                     pane->focus_editor(filepath);
@@ -1699,7 +1699,7 @@ int main() {
     double last_time = glfwGetTime();
     i64 last_frame_time = current_time_in_nanoseconds();
 
-    // init_with_file_at_location(path_join(world.path, "sync/sync.go"), new_cur2(10, 11));
+    // init_with_file_at_location(path_join(world.current_path, "sync/sync.go"), new_cur2(10, 11));
 
     while (!glfwWindowShouldClose(world.window)) {
         world.frame_mem.reset();
@@ -2238,7 +2238,7 @@ int main() {
                     world.wnd_add_file_or_folder.show = false;
 
                     if (strlen(wnd.name) > 0) {
-                        auto dest = wnd.location_is_root ? world.path : path_join(world.path, wnd.location);
+                        auto dest = wnd.location_is_root ? world.current_path : path_join(world.current_path, wnd.location);
                         auto path = path_join(dest, wnd.name);
 
                         if (wnd.folder) {

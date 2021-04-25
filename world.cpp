@@ -68,7 +68,7 @@ void World::fill_file_tree() {
         });
     };
 
-    recur(path, file_tree);
+    recur(current_path, file_tree);
 }
 
 bool copy_file(ccstr src, ccstr dest) {
@@ -104,7 +104,7 @@ void shell(ccstr s, ccstr dir) {
 
 void prepare_workspace() {
     auto p = [&](ccstr f) {
-        return path_join(world.path, f);
+        return path_join(world.current_path, f);
     };
 
     if (!copy_file(p("main.go.bak"), p("main.go")))
@@ -114,8 +114,8 @@ void prepare_workspace() {
     delete_rm_rf(p("go.mod"));
     delete_rm_rf(p("go.sum"));
 
-    shell("go mod init github.com/invrainbow/life", world.path);
-    shell("go mod tidy", world.path);
+    shell("go mod init github.com/invrainbow/life", world.current_path);
+    shell("go mod tidy", world.current_path);
 }
 
 void World::init_workspace() {
@@ -124,18 +124,18 @@ void World::init_workspace() {
     panes.init(LIST_FIXED, _countof(_panes), _panes);
 
 #if 0
-    strcpy_safe(path, _countof(path), normalize_path_sep("c:/users/brandon/cryptopals"));
+    strcpy_safe(current_path, _countof(current_path), normalize_path_sep("c:/users/brandon/cryptopals"));
 #else
     Select_File_Opts opts;
-    opts.buf = path;
-    opts.bufsize = _countof(path);
+    opts.buf = current_path;
+    opts.bufsize = _countof(current_path);
     opts.folder = true;
     opts.save = false;
     let_user_select_file(&opts);
 #endif
 
     git_buf root = {0};
-    if (git_repository_discover(&root, path, 0, NULL) == 0) {
+    if (git_repository_discover(&root, current_path, 0, NULL) == 0) {
         git_repository_open(&git_repo, root.ptr);
         git_buf_free(&root);
     }

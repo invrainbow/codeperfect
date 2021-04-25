@@ -98,9 +98,7 @@ bool are_filepaths_equal(ccstr a, ccstr b);
 
 struct Lock {
 #if OS_WIN
-    // CRITICAL_SECTION lock;
-    // bool count;
-    HANDLE mutex;
+    CRITICAL_SECTION lock;
 #elif OS_LINUX
     pthread_mutex_t lock;
 #endif
