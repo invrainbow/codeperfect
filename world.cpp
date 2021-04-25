@@ -247,6 +247,6 @@ Editor* World::find_editor(find_editor_func f) {
 }
 
 Editor* World::find_editor_by_id(u32 id) {
-    auto is_match = [&](Editor* it) -> bool { return it->id == id; };
+    auto is_match = [&](auto it) { return it->id == id; };
     return find_editor(is_match);
 }

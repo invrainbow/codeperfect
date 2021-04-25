@@ -15,13 +15,13 @@
 #endif
 
 Editor* find_editor_by_window(u32 win_id) {
-    return world.find_editor([&](Editor* it) {
+    return world.find_editor([&](auto it) {
         return it->nvim_data.win_id == win_id;
     });
 }
 
 Editor* find_editor_by_buffer(u32 buf_id) {
-    return world.find_editor([&](Editor* it) {
+    return world.find_editor([&](auto it) {
         return it->nvim_data.buf_id == buf_id;
     });
 }
@@ -29,7 +29,7 @@ Editor* find_editor_by_buffer(u32 buf_id) {
 void Nvim::assoc_grid_with_window(u32 grid, u32 win) {
     auto& table = grid_to_window;
 
-    auto pair = table.find_or_append([&](Grid_Window_Pair* it) { return it->grid == grid; });
+    auto pair = table.find_or_append([&](auto it) { return it->grid == grid; });
     assert(pair != NULL);
 
     pair->grid = grid;
@@ -39,7 +39,7 @@ void Nvim::assoc_grid_with_window(u32 grid, u32 win) {
 Editor* Nvim::find_editor_by_grid(u32 grid) {
     auto& table = grid_to_window;
 
-    auto pair = table.find([&](Grid_Window_Pair* it) { return it->grid == grid; });
+    auto pair = table.find([&](auto it) { return it->grid == grid; });
     if (pair == NULL) return NULL;
 
     return find_editor_by_window(pair->win);
@@ -617,7 +617,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 For (*args.cells) {
                     if (it.hl != -1 && it.hl != last_hl) {
                         last_hl = it.hl;
-                        auto def = hl_defs.find([&](Hl_Def *it) { return it->id == last_hl; });
+                        auto def = hl_defs.find([&](auto it) { return it->id == last_hl; });
                         last_hltype = def == NULL ? HL_NONE : def->type;
                     }
                     for (u32 i = 0; (i < (it.reps != 0 ? it.reps : 1)) && col < NVIM_DEFAULT_WIDTH; i++) {
@@ -1276,7 +1276,7 @@ void Nvim::run_event_loop() {
                 // grab associated editor, break if we can't find it
                 Editor* editor = NULL;
                 if (req_editor_id != 0) {
-                    auto is_match = [&](Editor* it) -> bool { return it->id == req_editor_id; };
+                    auto is_match = [&](auto it) { return it->id == req_editor_id; };
                     editor = world.find_editor(is_match);
                     if (editor == NULL) {
                         reader.skip_object();

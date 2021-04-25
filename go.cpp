@@ -299,7 +299,7 @@ ccstr Ghetto_Parser::get_package_name() {
 
 // @Write
 Go_File *get_ready_file_in_package(Go_Package *pkg, ccstr filename) {
-    auto file = pkg->files->find([&](Go_File *it) { return streq(filename, it->filename); });
+    auto file = pkg->files->find([&](auto it) { return streq(filename, it->filename); });
 
     if (file == NULL) {
         file = pkg->files->append();
@@ -359,7 +359,7 @@ void Go_Indexer::reload_all_dirty_files() {
 bool is_git_folder(ccstr path) {
     SCOPED_FRAME();
     auto pathlist = make_path(path);
-    return pathlist->parts->find([&](ccstr *it) { return streqi(*it, ".git"); }) != NULL;
+    return pathlist->parts->find([&](auto it) { return streqi(*it, ".git"); }) != NULL;
 }
 
 Editor *get_open_editor(ccstr filepath) {
@@ -635,7 +635,7 @@ void Go_Indexer::background_thread() {
                 if (pkg->files == NULL) return;
 
                 auto filename = our_basename(filepath);
-                auto file = pkg->files->find([&](Go_File *it) { return streq(filename, it->filename); });
+                auto file = pkg->files->find([&](auto it) { return streq(filename, it->filename); });
                 if (file == NULL) return;
 
                 {
@@ -818,9 +818,7 @@ void Go_Indexer::background_thread() {
                                 if (pkg == NULL) break;
 
                                 auto filename = our_basename(event.filepath);
-                                auto file = pkg->files->find([&](Go_File *it) -> bool {
-                                    return streq(filename, it->filename);
-                                });
+                                auto file = pkg->files->find([&](auto it) { return streq(filename, it->filename); });
 
                                 if (file == NULL) break;
 
@@ -1119,7 +1117,7 @@ Go_Package *Go_Indexer::find_package_in_index(ccstr import_path) {
 
     /*
     if (index.packages == NULL) return NULL;
-    return index.packages->find([&](Go_Package *it) -> bool {
+    return index.packages->find([&](auto it) {
         return streq(it->import_path, import_path);
     });
     */

@@ -178,12 +178,12 @@ struct Pool {
 
     void restore(Pool_Block *block, s32 pos) {
         if (block != curr) {
-            auto pblock = used_blocks.find([&](Pool_Block **it) -> bool {
+            auto pblock = used_blocks.find([&](auto it) -> bool {
                 return *it == block;
             });
 
             if (pblock == NULL) {
-                pblock = obsolete_blocks.find([&](Pool_Block **it) -> bool {
+                pblock = obsolete_blocks.find([&](auto it) -> bool {
                     return *it == block;
                 });
                 assert(pblock != NULL);

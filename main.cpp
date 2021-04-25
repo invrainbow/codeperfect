@@ -1392,7 +1392,7 @@ int main() {
 
                             auto &dbg = world.dbg;
 
-                            auto bkpt = dbg.breakpoints.find([&](Client_Breakpoint *it) -> bool {
+                            auto bkpt = dbg.breakpoints.find([&](auto it) -> bool {
                                 return are_breakpoints_same(file, lineno, it->file, it->line);
                             });
 

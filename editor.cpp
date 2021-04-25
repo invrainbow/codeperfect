@@ -964,7 +964,7 @@ void go_to_error(int index) {
     auto path = path_join(world.current_path, error.file);
     auto pos = new_cur2(error.col-1, error.row-1);
 
-    auto editor = world.find_editor([&](Editor *it) -> bool {
+    auto editor = world.find_editor([&](auto it) {
         return are_filepaths_equal(path, it->filepath);
     });
 

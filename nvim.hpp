@@ -607,9 +607,7 @@ struct Nvim {
     }
 
     Nvim_Request *find_request_by_msgid(u32 msgid) {
-        return requests.find([&](Nvim_Request* it) -> bool {
-            return it->msgid == msgid;
-        });
+        return requests.find([&](auto it) { return it->msgid == msgid; });
     }
 
     void delete_request_by_msgid(u32 msgid) {
