@@ -204,8 +204,8 @@ void World::init() {
     windows_open.build_and_debug = false;
     windows_open.im_metrics = false;
 
-    strcpy_safe(world.settings.build_command, _countof(world.settings.build_command), "go build -o main.exe --gcflags=\"all=-N -l\" hello.go");
-    strcpy_safe(world.settings.debug_binary_path, _countof(world.settings.debug_binary_path), "main.exe");
+    strcpy_safe(world.settings.build_command, _countof(world.settings.build_command), "go test -c main.exe --gcflags=\"all=-N -l\" github.com/invrainbow/delve_client_testing/");
+    strcpy_safe(world.settings.debug_binary_path, _countof(world.settings.debug_binary_path), ".test.exe");
 
     {
         SCOPED_MEM(&ui_mem);

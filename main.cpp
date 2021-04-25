@@ -931,11 +931,6 @@ int main() {
             return editor->trigger_escape();
         };
 
-        // TODO: all these operations that add or remove a single character in
-        // buf could definitely be optimized, I believe right now even for
-        // single char changes, it destroys the whole line, creates a new line,
-        // and copies it over.
-
         auto handle_enter = [&](ccstr nvim_string) {
             if (editor == NULL) return;
             if (world.nvim.mode != VI_INSERT) {
