@@ -126,7 +126,7 @@ void World::init_workspace() {
 #if 0
     strcpy_safe(current_path, _countof(current_path), normalize_path_sep("c:/users/brandon/cryptopals"));
 #else
-    Select_File_Opts opts;
+    Select_File_Opts opts = {0};
     opts.buf = current_path;
     opts.bufsize = _countof(current_path);
     opts.folder = true;

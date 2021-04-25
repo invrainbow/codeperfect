@@ -298,6 +298,9 @@ struct Frame {
         pos = pool->sp;
     }
 
+    Frame(Pool *mem) { init(mem); }
+    Frame() { init(MEM); }
+
     void restore() {
         pool->restore(block, pos);
     }
@@ -305,8 +308,8 @@ struct Frame {
 
 struct Scoped_Frame {
     Frame frame;
-    Scoped_Frame() { frame.init(MEM); };
-    Scoped_Frame(Pool *mem) { frame.init(mem); };
+    Scoped_Frame() : frame(MEM) {}
+    Scoped_Frame(Pool *mem) : frame(mem) {}
     ~Scoped_Frame() { frame.restore(); }
 };
 
