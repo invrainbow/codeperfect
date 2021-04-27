@@ -7,5 +7,3 @@ void *uthash_malloc_stub(s32 size);
 #undef uthash_free
 #define uthash_malloc(sz) uthash_malloc_stub(sz)
 #define uthash_free(ptr, sz)
-
-

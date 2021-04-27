@@ -183,7 +183,6 @@ void Editor::reload_file(bool because_of_file_watcher) {
         nv.end_message();
     }
 
-
     if (tree != NULL) {
         cur2 new_end = new_cur2((i32)buf.lines.last()->len, buf.lines.len-1);
 

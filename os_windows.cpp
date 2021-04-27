@@ -456,7 +456,6 @@ bool delete_rm_rf(ccstr path) {
     return true;
 }
 
-
 int _cmp_trampoline(void *param, const void *a, const void *b) {
     return (*(compare_func*)param)(a, b);
 }
