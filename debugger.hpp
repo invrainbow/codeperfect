@@ -79,43 +79,38 @@ struct Client_Breakpoint {
     ccstr file;
     u32 line;
     bool pending;
+    int dlv_id;
 };
 
-enum DbgState {
-    DBGSTATE_INACTIVE = 0,
-    DBGSTATE_STARTING,
-    DBGSTATE_RUNNING,
-    DBGSTATE_PAUSED,
+enum Dlv_State {
+    DLV_STATE_INACTIVE = 0,
+    DLV_STATE_STARTING,
+    DLV_STATE_RUNNING,
+    DLV_STATE_PAUSED,
 };
 
-enum Dbg_Call_Type {
-    DBGCALL_SET_BREAKPOINT = 1,
-    DBGCALL_UNSET_BREAKPOINT,
-    DBGCALL_CONTINUE_RUNNING,
-    DBGCALL_STEP_INTO,
-    DBGCALL_STEP_OVER,
-    DBGCALL_STEP_OUT,
-    DBGCALL_RUN_UNTIL,
-    DBGCALL_CHANGE_VARIABLE,
-    DBGCALL_EVAL_WATCHES,
-    DBGCALL_EVAL_SINGLE_WATCH,
-    DBGCALL_START,
-    DBGCALL_BREAK_ALL,
-    DBGCALL_STOP,
+enum Dlv_Call_Type {
+    DLVC_TOGGLE_BREAKPOINT = 1,
+    DLVC_CONTINUE_RUNNING,
+    DLVC_STEP_INTO,
+    DLVC_STEP_OVER,
+    DLVC_STEP_OUT,
+    DLVC_RUN_UNTIL,
+    DLVC_CHANGE_VARIABLE,
+    DLVC_EVAL_WATCHES,
+    DLVC_EVAL_SINGLE_WATCH,
+    DLVC_START,
+    DLVC_BREAK_ALL,
+    DLVC_STOP,
 };
 
-struct Dbg_Call {
-    Dbg_Call_Type type;
+struct Dlv_Call {
+    Dlv_Call_Type type;
     union {
         struct {
             ccstr filename;
             u32 lineno;
-        } set_breakpoint;
-
-        struct {
-            ccstr filename;
-            u32 lineno;
-        } unset_breakpoint;
+        } toggle_breakpoint;
 
         struct {
             u32 frame_id;
@@ -136,7 +131,7 @@ struct Dbg_Call {
 };
 
 // https://godoc.org/reflect#Kind
-enum GoReflectKind {
+enum Go_Reflect_Kind {
     GO_KIND_INVALID = 0,
     GO_KIND_BOOL,
     GO_KIND_INT,
@@ -166,46 +161,70 @@ enum GoReflectKind {
     GO_KIND_UNSAFEPOINTER,
 };
 
-struct Dbg_Var {
+struct Dlv_Var {
     ccstr name;
-    GoReflectKind gotype;
+    Go_Reflect_Kind gotype;
     ccstr gotype_name;
     ccstr value; // do we need anything deeper than this?
-    List<Dbg_Var>* children;
+    List<Dlv_Var>* children;
     u32 delve_reported_number_of_children;
+    // bool incomplete;
 };
 
-enum Dbg_WatchState {
+enum Dlv_Watch_State {
     DBGWATCH_PENDING,
     DBGWATCH_READY,
     DBGWATCH_ERROR,
 };
 
-struct Dbg_Watch {
+struct Dlv_Watch {
     char expr[256];
-    Dbg_WatchState state;
-    Dbg_Var value;
+    Dlv_Watch_State state;
+    Dlv_Var value;
 };
 
-struct Dbg_Location {
+enum Dlv_Freshness {
+    DLVF_FRESH,
+    DLVF_OUTDATED,
+    DLVF_NEEDFILL,
+};
+
+struct Dlv_Frame {
     ccstr filepath;
     u32 lineno;
     ccstr func_name;
-    List<Dbg_Var>* locals;
-    List<Dbg_Var>* args;
+    List<Dlv_Var> *locals;
+    List<Dlv_Var> *args;
+    Dlv_Freshness freshness;
+};
+
+struct Dlv_Goroutine {
+    u32 id;
+    List<Dlv_Frame> *frames;
+
+    ccstr curr_file;
+    u32 curr_line;
+    ccstr curr_func_name;
+    int status; // TODO: make enum type; i don't know what this is yet
+    int thread_id;
+    bool breakpoint_hit;
+    Dlv_Freshness freshness;
 };
 
 struct Debugger {
     Pool mem;
-    Pool loop_mem;
+    Pool loop_mem;   // throwaway memory for miscellaneous operations inside loop
+    Pool state_mem;  // memory for holding state info; torn down & rebuilt every time state changes.
+    Pool breakpoints_mem;
+    Pool watches_mem;
 
     Lock lock;
     List<Client_Breakpoint> breakpoints;
-    List<Dbg_Watch> watches;
+    List<Dlv_Watch> watches;
     Thread_Handle thread;
     Json_Renderer* rend;
 
-    List<Dbg_Call> calls;
+    List<Dlv_Call> calls;
     Lock calls_lock;
     Pool calls_mem;
 
@@ -214,12 +233,13 @@ struct Debugger {
     int conn;
     int packetid;
 
-    DbgState state_flag;
+    Dlv_State state_flag;
     struct {
-        ccstr file_stopped_at;
-        u32 line_stopped_at;
-        List<Dbg_Location>* stackframe;
+        List<Dlv_Goroutine> goroutines;
+        i32 current_goroutine_id;
+        i32 current_frame;
     } state;
+    bool waiting_for_dlv_state;
 
     // Debugger has no cleanup method, because it's meant to run for the
     // program's entire lifespan.
@@ -233,29 +253,38 @@ struct Debugger {
     bool write1(u8 ch);
     Packet* send_packet(ccstr packet_name, lambda f, bool read = true);
     bool read_packet(Packet* p);
+
     Packet* set_breakpoint(ccstr filename, u32 lineno);
-    bool unset_breakpoint(ccstr filename, u32 lineno);
+    bool unset_breakpoint(int id);
+
     void send_command(ccstr command, bool read);
     void exec_continue(bool read);
     void exec_step_into(bool read);
     void exec_step_out(bool read);
     void exec_step_over(bool read);
     void exec_halt(bool read);
+
     bool find_breakpoint(ccstr filename, u32 line, Breakpoint* out);
     bool can_read();
     List<Breakpoint>* list_breakpoints();
-    bool eval_expression(ccstr expression, i32 goroutine_id, i32 frame_id, Dbg_Var* out);
+    bool eval_expression(ccstr expression, i32 goroutine_id, i32 frame_id, Dlv_Var* out);
     i32 get_current_goroutine_id();
-    List<Dbg_Location>* get_stackframe(i32 goroutine_id = -1);
 
-    List<Dbg_Var>* save_list_of_vars(Json_Navigator js, i32 idx);
-    void save_single_var(Json_Navigator js, i32 idx, Dbg_Var* out);
+    List<Dlv_Var>* save_list_of_vars(Json_Navigator js, i32 idx);
+    void save_single_var(Json_Navigator js, i32 idx, Dlv_Var* out);
     void start_loop();
     void run_loop();
     void surface_error(ccstr msg);
 
-    void push_call(Dbg_Call_Type type, fn<void(Dbg_Call *call)> f);
-    void push_call(Dbg_Call_Type type);
+    void push_call(Dlv_Call_Type type, fn<void(Dlv_Call *call)> f);
+    void push_call(Dlv_Call_Type type);
+
+    void fetch_stackframe(Dlv_Goroutine *goroutine);
+    void fetch_variables(int goroutine_id, int frame_idx, Dlv_Frame *frame);
+    bool fetch_goroutines();
+    void handle_new_state(Packet *p);
+    void pause_and_resume(fn<void()> f);
+    void halt_when_already_running();
 };
 
 void debugger_loop_thread(void*);

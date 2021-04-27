@@ -561,17 +561,6 @@ enum {
     OUR_MOD_CTRL = 1 << 3,
 };
 
-void init_with_file_at_location(ccstr path, cur2 cur) {
-    SCOPED_FRAME();
-
-    world.get_current_pane()->focus_editor(path);
-
-    auto editor = world.get_current_editor();
-    while (!editor->is_nvim_ready()) continue;
-
-    world.get_current_editor()->move_cursor(cur);
-}
-
 struct Timer {
     u64 time;
 
@@ -1033,15 +1022,16 @@ int main() {
                     case GLFW_KEY_BACKSPACE: handle_backspace("<S-Backspace>"); break;
                     case GLFW_KEY_ESCAPE: if (!handle_escape()) send_nvim_keys("<S-Esc>"); break;
                     case GLFW_KEY_F5:
-                        if (world.dbg.state_flag == DBGSTATE_INACTIVE) break;
-                        world.dbg.push_call(DBGCALL_STOP);
+                        if (world.dbg.state_flag == DLV_STATE_INACTIVE) break;
+                        world.dbg.push_call(DLVC_STOP);
                         break;
                     case GLFW_KEY_F11:
-                        if (world.dbg.state_flag != DBGSTATE_PAUSED) break;
-                        world.dbg.push_call(DBGCALL_STEP_OUT);
+                        if (world.dbg.state_flag != DLV_STATE_PAUSED) break;
+                        world.dbg.push_call(DLVC_STEP_OUT);
                         break;
-
-
+                    case GLFW_KEY_F10:
+                        // TODO
+                        break;
                     }
                     break;
                 }
@@ -1369,63 +1359,29 @@ int main() {
                         break;
                     case GLFW_KEY_F5:
                         switch (world.dbg.state_flag) {
-                        case DBGSTATE_PAUSED:
-                            world.dbg.push_call(DBGCALL_CONTINUE_RUNNING);
+                        case DLV_STATE_PAUSED:
+                            world.dbg.push_call(DLVC_CONTINUE_RUNNING);
                             break;
 
-                        case DBGSTATE_INACTIVE:
-                            world.dbg.push_call(DBGCALL_START);
+                        case DLV_STATE_INACTIVE:
+                            world.dbg.push_call(DLVC_START);
                             break;
                         }
                         break;
                     case GLFW_KEY_F9:
-                        {
-                            if (editor == NULL) break;
-
-                            ccstr file = editor->filepath;
-                            auto lineno = editor->cur.y + 1;
-
-                            auto &dbg = world.dbg;
-
-                            auto bkpt = dbg.breakpoints.find([&](auto it) -> bool {
-                                return are_breakpoints_same(file, lineno, it->file, it->line);
-                            });
-
-                            if (bkpt == NULL) {
-                                auto it = dbg.breakpoints.append();
-                                it->file = file;
-                                it->line = lineno;
-                                it->pending = true;
-
-                                if (dbg.state_flag != DBGSTATE_INACTIVE) {
-                                    dbg.push_call(DBGCALL_SET_BREAKPOINT, [&](Dbg_Call *call) {
-                                        call->set_breakpoint.filename = file;
-                                        call->set_breakpoint.lineno = lineno;
-                                    });
-                                }
-                            } else {
-                                dbg.breakpoints.remove(bkpt);
-                                if (dbg.state_flag != DBGSTATE_INACTIVE) {
-                                    dbg.unset_breakpoint(file, lineno);
-                                    dbg.push_call(DBGCALL_UNSET_BREAKPOINT, [&](Dbg_Call *call) {
-                                        call->unset_breakpoint.filename = our_strcpy(file);
-                                        call->unset_breakpoint.lineno = lineno;
-                                    });
-                                }
-                            }
-                        }
+                        if (editor == NULL) break;
+                        world.dbg.push_call(DLVC_TOGGLE_BREAKPOINT, [&](auto call) {
+                            call->toggle_breakpoint.filename = our_strcpy(editor->filepath);
+                            call->toggle_breakpoint.lineno = editor->cur.y + 1;
+                        });
                         break;
                     case GLFW_KEY_F10:
-                        {
-                            if (world.dbg.state_flag != DBGSTATE_PAUSED) break;
-                            world.dbg.push_call(DBGCALL_STEP_OVER);
-                        }
+                        if (world.dbg.state_flag != DLV_STATE_PAUSED) break;
+                        world.dbg.push_call(DLVC_STEP_OVER);
                         break;
                     case GLFW_KEY_F11:
-                        {
-                            if (world.dbg.state_flag != DBGSTATE_PAUSED) break;
-                            world.dbg.push_call(DBGCALL_STEP_INTO);
-                        }
+                        if (world.dbg.state_flag != DLV_STATE_PAUSED) break;
+                        world.dbg.push_call(DLVC_STEP_INTO);
                         break;
                     default:
                         done = false;
@@ -1673,6 +1629,7 @@ int main() {
     i64 last_frame_time = current_time_in_nanoseconds();
 
     // init_with_file_at_location(path_join(world.current_path, "sync/sync.go"), new_cur2(10, 11));
+    world.get_current_pane()->focus_editor(path_join(world.current_path, "01test\\frob_test.go"), new_cur2(1, 7));
 
     while (!glfwWindowShouldClose(world.window)) {
         world.frame_mem.reset();
@@ -1832,45 +1789,69 @@ int main() {
 
                 ImGui::Separator();
 
-                if (ImGui::MenuItem("Run", "F5")) {
+                if (ImGui::MenuItem("Project Settings")) {
+                    world.windows_open.settings = true;
+                }
+
+                ImGui::EndMenu();
+            }
+
+            if (ImGui::BeginMenu("Debug")) {
+                auto can_run = [&]() {
                     switch (world.dbg.state_flag) {
-                    case DBGSTATE_PAUSED:
-                        world.dbg.push_call(DBGCALL_CONTINUE_RUNNING);
+                    case DLV_STATE_PAUSED:
+                    case DLV_STATE_INACTIVE:
+                        return true;
+                    }
+                    return false;
+                };
+
+                if (ImGui::MenuItem("Run", "F5", false, can_run())) {
+                    switch (world.dbg.state_flag) {
+                    case DLV_STATE_PAUSED:
+                        world.dbg.push_call(DLVC_CONTINUE_RUNNING);
                         break;
 
-                    case DBGSTATE_INACTIVE:
-                        world.dbg.push_call(DBGCALL_START);
+                    case DLV_STATE_INACTIVE:
+                        world.dbg.push_call(DLVC_START);
                         break;
                     }
                 }
 
-                if (ImGui::MenuItem("Break All")) {
-                    world.dbg.push_call(DBGCALL_BREAK_ALL);
+                if (ImGui::MenuItem("Break All", NULL, false, world.dbg.state_flag == DLV_STATE_RUNNING)) {
+                    world.dbg.push_call(DLVC_BREAK_ALL);
                 }
 
-                if (ImGui::MenuItem("Stop Debugging", "Shift+F5")) {
-                    world.dbg.push_call(DBGCALL_STOP);
+                if (ImGui::MenuItem("Stop Debugging", "Shift+F5", false, world.dbg.state_flag != DLV_STATE_INACTIVE)) {
+                    world.dbg.push_call(DLVC_STOP);
                 }
 
-                if (ImGui::MenuItem("Step Over", "F10")) {
-                    world.dbg.push_call(DBGCALL_STEP_OVER);
+                if (ImGui::MenuItem("Step Over", "F10", false, world.dbg.state_flag == DLV_STATE_PAUSED)) {
+                    world.dbg.push_call(DLVC_STEP_OVER);
                 }
 
-                if (ImGui::MenuItem("Step Into", "F11")) {
-                    world.dbg.push_call(DBGCALL_STEP_INTO);
+                if (ImGui::MenuItem("Step Into", "F11", false, world.dbg.state_flag == DLV_STATE_PAUSED)) {
+                    world.dbg.push_call(DLVC_STEP_INTO);
                 }
 
-                if (ImGui::MenuItem("Step Out", "Shift+F11")) {
-                    world.dbg.push_call(DBGCALL_STEP_OUT);
+                if (ImGui::MenuItem("Step Out", "Shift+F11", false, world.dbg.state_flag == DLV_STATE_PAUSED)) {
+                    world.dbg.push_call(DLVC_STEP_OUT);
                 }
 
-                if (ImGui::MenuItem("Run to Cursor", "Shift+F10")) {
+                if (ImGui::MenuItem("Run to Cursor", "Shift+F10", false, world.dbg.state_flag == DLV_STATE_PAUSED)) {
+                    // TODO
                 }
 
                 ImGui::Separator();
 
-                if (ImGui::MenuItem("Settings")) {
-                    world.windows_open.settings = true;
+                if (ImGui::MenuItem("Toggle Breakpoint", "F9")) {
+                    auto editor = world.get_current_editor();
+                    if (editor != NULL) {
+                        world.dbg.push_call(DLVC_TOGGLE_BREAKPOINT, [&](auto call) {
+                            call->toggle_breakpoint.filename = our_strcpy(editor->filepath);
+                            call->toggle_breakpoint.lineno = editor->cur.y + 1;
+                        });
+                    }
                 }
 
                 ImGui::EndMenu();
@@ -1934,9 +1915,11 @@ int main() {
 
                 ImGui::PushFont(world.ui.im_font_mono);
 
-                ImGui::InputText("##search_for_file", wnd.query, _countof(wnd.query));
                 if (ImGui::IsWindowAppearing())
                     ImGui::SetKeyboardFocusHere();
+
+                ImGui::InputText("##search_for_file", wnd.query, _countof(wnd.query));
+
                 if (ImGui::IsItemEdited())
                     filter_files();
 
@@ -1953,165 +1936,141 @@ int main() {
                 ImGui::End();
             }
 
-            if (world.dbg.state_flag != DBGSTATE_INACTIVE) {
+            if (world.dbg.state_flag != DLV_STATE_INACTIVE) {
                 ImGui::Begin("Debugger");
                 ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
 
-                static float w = 200.0f;
+                world.wnd_debugger.focused = ImGui::IsWindowFocused();
+
+                auto &dbg = world.dbg;
+                auto &state = dbg.state;
+                auto &wnd = world.wnd_debugger;
+
+                // static float w = 200.0f;
                 static float h = 300.0f;
 
-                ImGui::BeginChild("child1", ImVec2(w, 0), true);
-                {
-                    if (ImGui::CollapsingHeader("Call Stack", ImGuiTreeNodeFlags_DefaultOpen)) {
-                        u32 i = 0;
-                        if (world.dbg.state.stackframe != NULL) {
-                            For (*world.dbg.state.stackframe) {
-                                // ImGuiTreeNodeFlags_Bullet
-                                auto tree_flags = ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+                ImGui::Columns(2);
 
-                                if (world.wnd_debugger.current_location == i)
-                                    tree_flags |= ImGuiTreeNodeFlags_Selected;
+                if (ImGui::CollapsingHeader("Call Stack", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    ImGui::PushFont(world.ui.im_font_mono);
+                    for (int i = 0; i < state.goroutines.len; i++) {
+                        auto &it = state.goroutines[i];
 
-                                ImGui::TreeNodeEx((void*)(uptr)i, tree_flags, "%s (%s:%d)", it.func_name, our_basename(it.filepath), it.lineno);
-                                if (ImGui::IsItemClicked()) {
-                                    world.wnd_debugger.current_location = i;
-                                    world.dbg.push_call(DBGCALL_EVAL_WATCHES, [&](auto call) {
-                                        call->eval_watches.frame_id = i;
-                                    });
-                                }
+                        auto tree_flags = ImGuiTreeNodeFlags_SpanAvailWidth;
 
-                                i++;
-                            }
+                        /*
+                        if (world.wnd_debugger.current_location == i)
+                            tree_flags |= ImGuiTreeNodeFlags_Selected;
+                        */
+
+                        auto open = ImGui::TreeNodeEx(
+                            (void*)(uptr)i,
+                            tree_flags,
+                            "%s (%s)",
+                            it.curr_func_name,
+                            it.breakpoint_hit ? "BREAKPOINT HIT" : "PAUSED"
+                        );
+
+                        if (ImGui::IsItemClicked()) {
+                            /*
+                            world.wnd_debugger.current_location = i;
+                            world.dbg.push_call(DBGCALL_EVAL_WATCHES, [&](auto call) {
+                                call->eval_watches.frame_id = i;
+                            });
+                            */
                         }
-                    }
-                }
-                ImGui::EndChild();
 
-                ImGui::SameLine();
+                        if (open) {
+                            if (it.freshness == DLVF_FRESH) {
+                                for (int j = 0; j < it.frames->len; j++) {
+                                    auto &frame = it.frames->items[j];
 
-                ImGui::InvisibleButton("vsplitter", ImVec2(8.0f, -1));
-                if (ImGui::IsItemActive())
-                    w += ImGui::GetIO().MouseDelta.x;
-
-                ImGui::SameLine();
-
-                ImGui::BeginGroup();
-                {
-                    ImGui::BeginChild("child2", ImVec2(0, h), true);
-                    {
-                        fn<void(Dbg_Var*)> render_var;
-                        int k = 0;
-                        ImGuiTreeNodeFlags tree_flags = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
-                        render_var = [&](Dbg_Var* var) {
-                            bool recurse = false;
-
-                            {
-                                SCOPED_FRAME();
-                                auto str_id = our_sprintf("%d-%d", world.wnd_debugger.current_location, k++);
-
-                                if (var->children == NULL || var->children->len == 0)
-                                    ImGui::TreeNodeEx(str_id, tree_flags, "%s = %s", var->name, var->value);
-                                else
-                                    recurse = ImGui::TreeNode(str_id, "%s = %s", var->name, var->value);
-                            }
-
-                            if (recurse) {
-                                For (*var->children)
-                                    render_var(&it);
-                                ImGui::TreePop();
-                            }
-                        };
-
-                        if (ImGui::CollapsingHeader("Local Variables", ImGuiTreeNodeFlags_DefaultOpen)) {
-                            if (world.wnd_debugger.current_location != -1) {
-                                auto& loc = world.dbg.state.stackframe->at(world.wnd_debugger.current_location);
-                                if (loc.locals != NULL) {
-                                    For (*loc.locals)
-                                        render_var(&it);
-                                } else {
-                                    ImGui::Text("This location has no local variables.");
+                                    ImGui::TreeNodeEx(
+                                        &frame,
+                                        ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen,
+                                        "%s (%s:%d)",
+                                        frame.func_name,
+                                        our_basename(frame.filepath),
+                                        frame.lineno
+                                    );
+                                    if (ImGui::IsItemClicked()) {
+                                        wnd.current_goroutine = i;
+                                        wnd.current_frame = j;
+                                    }
                                 }
                             } else {
-                                ImGui::Text("Select a location in the call stack to view the variables there.");
+                                ImGui::Text("Loading...");
                             }
-                        }
 
-                        if (ImGui::CollapsingHeader("Arguments", ImGuiTreeNodeFlags_DefaultOpen)) {
-                            if (world.wnd_debugger.current_location != -1) {
-                                auto& loc = world.dbg.state.stackframe->at(world.wnd_debugger.current_location);
-                                if (loc.args != NULL) {
-                                    For (*loc.args)
-                                        render_var(&it);
-                                } else {
-                                    ImGui::Text("This location has no arguments.");
-                                }
-                            } else {
-                                ImGui::Text("Select a location in the call stack to view the variables there.");
-                            }
+                            ImGui::TreePop();
                         }
                     }
-                    ImGui::EndChild();
-
-                    ImGui::InvisibleButton("hsplitter", ImVec2(-1, 8.0f));
-                    if (ImGui::IsItemActive())
-                        h += ImGui::GetIO().MouseDelta.y;
-
-                    ImGui::BeginChild("child3", ImVec2(0, 0), true);
-                    {
-                        if (ImGui::CollapsingHeader("Watches", ImGuiTreeNodeFlags_DefaultOpen)) {
-                            For (world.dbg.watches) {
-                                ImGui::Text("%s", it.expr);
-                                switch (it.state) {
-                                    case DBGWATCH_ERROR:
-                                        ImGui::Text("<error reading>");
-                                        break;
-                                    case DBGWATCH_PENDING:
-                                        ImGui::Text("Waiting...");
-                                        break;
-                                    case DBGWATCH_READY:
-                                        ImGui::Text("%s", it.value.value);
-                                        break;
-                                }
-                                ImGui::NewLine();
-                            }
-
-                            static char expr_buffer[256];
-
-                            if (ImGui::Button("Add Watch...")) {
-                                expr_buffer[0] = '\0';
-                                ImGui::OpenPopup("Add Watch");
-                            }
-
-                            if (ImGui::BeginPopupModal("Add Watch", &world.wnd_debugger.show_add_watch, ImGuiWindowFlags_AlwaysAutoResize)) {
-                                ImGui::InputText("Expression", expr_buffer, IM_ARRAYSIZE(expr_buffer));
-                                if (ImGui::Button("OK", ImVec2(120, 0))) {
-                                    auto watch = world.dbg.watches.append();
-                                    strncpy(watch->expr, expr_buffer, _countof(watch->expr));
-                                    watch->state = DBGWATCH_PENDING;
-
-                                    if (world.dbg.state_flag == DBGSTATE_PAUSED)
-                                        if (world.wnd_debugger.current_location != -1) {
-                                            world.dbg.push_call(DBGCALL_EVAL_SINGLE_WATCH, [&](auto call) {
-                                                call->eval_single_watch.frame_id = world.wnd_debugger.current_location;
-                                                call->eval_single_watch.watch_id = world.dbg.watches.len - 1;
-                                            });
-                                        }
-
-                                    ImGui::CloseCurrentPopup();
-                                }
-                                ImGui::SetItemDefaultFocus();
-                                ImGui::SameLine();
-                                if (ImGui::Button("Cancel", ImVec2(120, 0))) {
-                                    ImGui::CloseCurrentPopup();
-                                }
-
-                                ImGui::EndPopup();
-                            }
-                        }
-                    }
-                    ImGui::EndChild();
+                    ImGui::PopFont();
                 }
-                ImGui::EndGroup();
+
+                ImGui::NextColumn();
+
+
+                ImGuiTabBarFlags tab_bar_flags = ImGuiTabBarFlags_None;
+                if (ImGui::BeginTabBar("MyTabBar", tab_bar_flags))
+                {
+                    fn<void(Dlv_Var*)> render_var = [&](Dlv_Var* var) {
+                        bool recurse = false;
+
+                        {
+                            SCOPED_FRAME();
+                            if (var->children == NULL || var->children->len == 0)
+                                ImGui::TreeNodeEx(var, ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen, "%s = %s", var->name, var->value);
+                            else
+                                recurse = ImGui::TreeNode(var, "%s = %s", var->name, var->value);
+                        }
+
+                        if (recurse) {
+                            For (*var->children)
+                                render_var(&it);
+                            ImGui::TreePop();
+                        }
+                    };
+
+                    if (ImGui::BeginTabItem("Local Variables"))
+                    {
+                        ImGui::PushFont(world.ui.im_font_mono);
+                        if (wnd.current_goroutine != -1 && wnd.current_frame != -1) {
+                            auto frame = state.goroutines[wnd.current_goroutine].frames->at(wnd.current_frame);
+                            if (frame.freshness == DLVF_FRESH) {
+                                if (frame.locals != NULL)
+                                    For (*frame.locals)
+                                        render_var(&it);
+                                if (frame.args != NULL)
+                                    For (*frame.args)
+                                        render_var(&it);
+                            } else {
+                                ImGui::Text("Loading...");
+                            }
+                        }
+                        ImGui::PopFont();
+                        ImGui::EndTabItem();
+                    }
+
+                    if (ImGui::BeginTabItem("Watches"))
+                    {
+                        ImGui::PushFont(world.ui.im_font_mono);
+
+                        ImGui::Text("@Incomplete: watches go here");
+
+                        ImGui::PopFont();
+                        ImGui::EndTabItem();
+                    }
+
+                    if (ImGui::BeginTabItem("Global Variables"))
+                    {
+                        ImGui::PushFont(world.ui.im_font_mono);
+                        ImGui::Text("@Incomplete: global vars go here");
+                        ImGui::PopFont();
+                        ImGui::EndTabItem();
+                    }
+                    ImGui::EndTabBar();
+                }
 
                 ImGui::PopStyleVar();
                 ImGui::End();
@@ -2308,7 +2267,16 @@ int main() {
             } while (0);
 
             world.ui.mouse_captured_by_imgui = io.WantCaptureMouse;
-            world.ui.keyboard_captured_by_imgui = io.WantCaptureKeyboard || ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow);
+
+            auto is_keyboard_captured_by_imgui = [&]() -> bool {
+                if (io.WantCaptureKeyboard) return true;
+                if (ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow))
+                    if (!world.wnd_debugger.focused)
+                        return true;
+                return false;
+            };
+
+            world.ui.keyboard_captured_by_imgui = is_keyboard_captured_by_imgui();
 
             ImGui::Render();
         }

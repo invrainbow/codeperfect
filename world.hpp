@@ -294,8 +294,9 @@ struct World {
     } wnd_im_demo;
 
     struct {
-        i32 current_location;
-        bool show_add_watch;
+        bool focused;
+        int current_goroutine;
+        int current_frame;
     } wnd_debugger;
 
     struct {

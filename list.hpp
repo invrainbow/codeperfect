@@ -78,13 +78,14 @@ struct List {
         len = 0;
     }
 
-    bool append(T* t) {
-        auto newitem = append();
-        if (newitem != NULL) {
-            memcpy(newitem, t, sizeof(T));
-            return true;
-        }
-        return false;
+    T* append(T* t) {
+        if (!ensure_cap(len + 1))
+            return NULL;
+
+        auto ret = items + len;
+        memcpy(ret, t, sizeof(T));
+        len++;
+        return ret;
     }
 
     bool append(T t) { return append(&t); }

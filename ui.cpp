@@ -1050,7 +1050,7 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
 
                     alloc_list(&breakpoints_for_this_editor, len);
                     For (world.dbg.breakpoints) {
-                        if (streq(it.file, editor->filepath)) {
+                        if (are_filepaths_equal(it.file, editor->filepath)) {
                             auto p = breakpoints_for_this_editor.append();
                             memcpy(p, &it, sizeof(it));
                         }
@@ -1063,6 +1063,17 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
 
                 int next_hl = (highlights.len > 0 ? 0 : -1);
 
+                auto get_current_goroutine = [&]() -> Dlv_Goroutine * {
+                    if (world.dbg.state_flag != DLV_STATE_PAUSED) return NULL;
+
+                    auto &s = world.dbg.state;
+                    if (s.current_goroutine_id == -1) return NULL;
+
+                    return s.goroutines.find([&](auto it) { return it->id == s.current_goroutine_id; });
+                };
+
+                auto current_goroutine = get_current_goroutine();
+
                 auto relative_y = 0;
                 for (u32 y = view.y; y < view.y + view.h; y++, relative_y++) {
                     if (y >= buf.lines.len) break;
@@ -1070,10 +1081,11 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                     auto line = &buf.lines[y];
 
                     auto is_stopped_at_this_line = [&]() -> bool {
-                        if (world.dbg.state_flag == DBGSTATE_PAUSED)
-                            if (streq(world.dbg.state.file_stopped_at, editor->filepath))
-                                if (world.dbg.state.line_stopped_at == y + 1)
-                                    return true;
+                        if (world.dbg.state_flag == DLV_STATE_PAUSED)
+                            if (current_goroutine != NULL)
+                                if (are_filepaths_equal(current_goroutine->curr_file, editor->filepath))
+                                    if (current_goroutine->curr_line == y + 1)
+                                        return true;
                         return false;
                     };
 
@@ -1089,7 +1101,7 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                     } else {
                         For (breakpoints_for_this_editor) {
                             if (it.line == y + 1) {
-                                bool inactive = (it.pending || world.dbg.state_flag == DBGSTATE_INACTIVE);
+                                bool inactive = (it.pending || world.dbg.state_flag == DLV_STATE_INACTIVE);
                                 draw_rect(line_box, rgba(COLOR_DARK_RED, inactive ? 0.5 : 1.0));
                                 break;
                             }
@@ -1316,12 +1328,16 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
             offset += world.panes[i].width;
 
             boxf b;
-            b.w = 4;
+            b.w = 2;
             b.h = panes_area.h;
-            b.x = panes_area.x + offset - 2;
+            b.x = panes_area.x + offset - 1;
             b.y = panes_area.y;
 
-            if (get_mouse_flags(b) & MOUSE_HOVER) {
+            boxf hitbox = b;
+            hitbox.x -= 4;
+            hitbox.w += 8;
+
+            if (get_mouse_flags(hitbox) & MOUSE_HOVER) {
                 draw_rect(b, rgba(COLOR_WHITE));
                 if (world.ui.mouse_down[GLFW_MOUSE_BUTTON_LEFT]) {
                     world.resizing_pane = i;
@@ -1329,7 +1345,7 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                     world.resizing_pane = -1;
                 }
             } else {
-                draw_rect(b, rgba(COLOR_MEDIUM_GREY));
+                draw_rect(b, rgba(COLOR_DARK_GREY));
             }
         }
     }
@@ -1413,6 +1429,18 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
             }
         }
 
+        switch (world.dbg.state_flag) {
+        case DLV_STATE_PAUSED:
+            draw_status_piece(LEFT, "PAUSED", rgba("#800000"), rgba(COLOR_WHITE));
+            break;
+        case DLV_STATE_STARTING:
+            draw_status_piece(LEFT, "STARTING", rgba("#888822"), rgba(COLOR_WHITE));
+            break;
+        case DLV_STATE_RUNNING:
+            draw_status_piece(LEFT, "RUNNING", rgba("#008000"), rgba(COLOR_WHITE));
+            break;
+        }
+
         if (world.indexer.ready)
             draw_status_piece(RIGHT, "INDEX READY", rgba("#008800"), rgba("#cceecc"));
         else
@@ -1423,27 +1451,6 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
             auto cur = curr_editor->cur;
             draw_status_piece(RIGHT, our_sprintf("%d,%d", cur.y+1, cur.x+1), rgba(COLOR_WHITE, 0.0), rgba("#aaaaaa"));
         }
-    }
-
-    auto get_debugger_state_string = [&]() -> ccstr {
-        switch (world.dbg.state_flag) {
-        case DBGSTATE_PAUSED: return "PAUSED";
-        case DBGSTATE_STARTING: return "STARTING";
-        case DBGSTATE_RUNNING: return "RUNNING";
-        }
-        return NULL;
-    };
-
-    auto state_str = get_debugger_state_string();
-    if (state_str != NULL) {
-        boxf b;
-        b.w = (font->width * strlen(state_str));
-        b.h = font->height;
-        b.x = world.display_size.x - 10 - b.w;
-        b.y = world.display_size.y - 10 - b.h;
-
-        draw_rect(b, rgba(COLOR_DARK_RED));
-        draw_string(b.pos, state_str, rgba(COLOR_WHITE));
     }
 
     if (world.error_list.show) {

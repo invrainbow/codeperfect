@@ -1,3 +1,17 @@
+/*
+when we get a new state
+    state contains the "current goroutine" if there is one
+    list all goroutines
+    if there is a "current goroutine," open it
+
+when a goroutine is opened
+    call stacktrace and save frames
+
+when a frame is opened
+    list local vars
+    list function arguments
+*/
+
 #include "debugger.hpp"
 
 #include "world.hpp"
@@ -31,11 +45,11 @@ Json_Navigator Packet::js() {
     return ret;
 }
 
-void Debugger::push_call(Dbg_Call_Type type) {
-    push_call(type, [&](Dbg_Call*) {});
+void Debugger::push_call(Dlv_Call_Type type) {
+    push_call(type, [&](Dlv_Call*) {});
 }
 
-void Debugger::push_call(Dbg_Call_Type type, fn<void(Dbg_Call *call)> f) {
+void Debugger::push_call(Dlv_Call_Type type, fn<void(Dlv_Call *call)> f) {
     SCOPED_LOCK(&calls_lock);
     SCOPED_MEM(&calls_mem);
 
@@ -52,7 +66,7 @@ bool Debugger::find_breakpoint(ccstr filename, u32 line, Breakpoint* out) {
         return false;
 
     For (*breakpoints)
-        if (streq(it.file, filename))
+        if (are_filepaths_equal(it.file, filename))
             if (it.line == line)
                 return memcpy(out, &it, sizeof(Breakpoint)), true;
 
@@ -67,20 +81,27 @@ i32 Debugger::get_current_goroutine_id() {
     return idx == -1 ? -1 : js.num(idx);
 }
 
-List<Dbg_Var>* Debugger::save_list_of_vars(Json_Navigator js, i32 idx) {
+List<Dlv_Var>* Debugger::save_list_of_vars(Json_Navigator js, i32 idx) {
     auto len = js.array_length(idx);
     if (len == 0) return NULL;
 
-    auto ret = alloc_list<Dbg_Var>(len);
+    List<Dlv_Var> *ret = NULL;
+    {
+        SCOPED_MEM(&state_mem);
+        ret = alloc_list<Dlv_Var>(len);
+    }
+
     for (u32 i = 0; i < len; i++)
         save_single_var(js, js.get(idx, i), ret->append());
     return ret;
 }
 
-void Debugger::save_single_var(Json_Navigator js, i32 idx, Dbg_Var* dest) {
+void Debugger::save_single_var(Json_Navigator js, i32 idx, Dlv_Var* dest) {
+    SCOPED_MEM(&state_mem);
+
     dest->name = js.str(js.get(idx, ".name"));
     dest->value = js.str(js.get(idx, ".value"));
-    dest->gotype = (GoReflectKind)js.num(js.get(idx, ".kind"));
+    dest->gotype = (Go_Reflect_Kind)js.num(js.get(idx, ".kind"));
     dest->gotype_name = js.str(js.get(idx, "realType"));
     dest->children = save_list_of_vars(js, js.get(idx, ".children"));
 
@@ -88,55 +109,42 @@ void Debugger::save_single_var(Json_Navigator js, i32 idx, Dbg_Var* dest) {
         dest->delve_reported_number_of_children = js.get(idx, ".len");
 }
 
-List<Dbg_Location>* Debugger::get_stackframe(i32 goroutine_id) {
-    if (goroutine_id == -1) goroutine_id = get_current_goroutine_id();
-    if (goroutine_id == -1) return NULL;
-
+void Debugger::fetch_stackframe(Dlv_Goroutine *goroutine) {
     auto resp = send_packet("Stacktrace", [&]() {
-        rend->field("id", goroutine_id);
-        rend->field("depth", 50);
+        rend->field("id", (int)goroutine->id);
+        rend->field("depth", 1);
         rend->field("full", false);
-        rend->field("cfg", [&]() {
-            rend->obj([&]() {
-                rend->field("followPointers", true);
-                rend->field("maxVariableRecurse", 2);
-                rend->field("maxStringLen", 64);
-                rend->field("maxArrayValues", 64);
-                rend->field("maxStructFields", -1);
-            });
-        });
     });
 
     auto js = resp->js();
 
     auto locations_idx = js.get(0, ".result.Locations");
-    if (locations_idx == -1) return NULL;
+    if (locations_idx == -1) return;
 
     auto locations_len = js.array_length(locations_idx);
-    auto ret = alloc_list<Dbg_Location>(locations_len);
 
-    for (u32 i = 0; i < locations_len; i++) {
-        auto location_idx = js.get(locations_idx, i);
-        if (location_idx == -1) continue;
-
-        auto loc = ret->append();
-        loc->filepath = js.str(js.get(location_idx, ".file"));
-        loc->lineno = js.num(js.get(location_idx, ".line"));
-        loc->func_name = js.str(js.get(location_idx, ".function.name"));
-
-        auto locals_idx = js.get(location_idx, ".Locals");
-        if (locals_idx != -1)
-            loc->locals = save_list_of_vars(js, locals_idx);
-
-        auto args_idx = js.get(location_idx, ".Arguments");
-        if (args_idx != -1)
-            loc->args = save_list_of_vars(js, args_idx);
+    {
+        SCOPED_MEM(&state_mem);
+        goroutine->frames = alloc_list<Dlv_Frame>();
     }
 
-    return ret;
+    for (u32 i = 0; i < locations_len; i++) {
+        auto it = js.get(locations_idx, i);
+
+        {
+            SCOPED_MEM(&state_mem);
+            auto frame = goroutine->frames->append();
+            frame->filepath  = js.str(js.get(it, ".file"));
+            frame->lineno    = js.num(js.get(it, ".line"));
+            frame->func_name = js.str(js.get(it, ".function.name"));
+            frame->freshness = DLVF_NEEDFILL;
+        }
+    }
+
+    goroutine->freshness = DLVF_FRESH;
 }
 
-bool Debugger::eval_expression(ccstr expression, i32 goroutine_id, i32 frame_id, Dbg_Var* out) {
+bool Debugger::eval_expression(ccstr expression, i32 goroutine_id, i32 frame_id, Dlv_Var* out) {
     if (goroutine_id == -1) goroutine_id = get_current_goroutine_id();
     if (goroutine_id == -1) return false;
 
@@ -207,6 +215,9 @@ void Debugger::init() {
 
     mem.init();
     loop_mem.init();
+    state_mem.init();
+    breakpoints_mem.init();
+    watches_mem.init();
 
     SCOPED_MEM(&mem);
 
@@ -332,7 +343,7 @@ bool Debugger::read_packet(Packet* p) {
 
     if (run()) {
         SCOPED_FRAME();
-		dbg_print("[\"recv\"]\n%s", our_format_json(p->string));
+		dbg_print("[\"recv\"]\n%s", p->string); // our_format_json(p->string));
         return true;
     }
 
@@ -340,28 +351,60 @@ bool Debugger::read_packet(Packet* p) {
     return false;
 }
 
+void Debugger::halt_when_already_running() {
+    exec_halt(true);
+
+    // Since we were already running, when we call halt, we're going to get
+    // two State responses, one for the original command that made us run
+    // in the first place, and one from the halt. Swallow the second response.
+
+    Packet p = {0};
+    if (read_packet(&p))
+        handle_new_state(&p);
+    else
+        state_flag = DLV_STATE_PAUSED;
+}
+
+void Debugger::pause_and_resume(fn<void()> f) {
+    bool was_running = (state_flag == DLV_STATE_RUNNING);
+
+    if (was_running)
+        halt_when_already_running();
+
+    f();
+
+    if (was_running) {
+        state_flag = DLV_STATE_RUNNING;
+        exec_continue(false);
+    }
+}
+
 Packet* Debugger::set_breakpoint(ccstr filename, u32 lineno) {
-    return send_packet("CreateBreakpoint", [&]() {
-        rend->field("Breakpoint", [&]() {
-            rend->obj([&]() {
-                rend->field("file", filename);
-                rend->field("line", (int)lineno);
+    Packet *ret = NULL;
+
+    pause_and_resume([&]() {
+        ret = send_packet("CreateBreakpoint", [&]() {
+            rend->field("Breakpoint", [&]() {
+                rend->obj([&]() {
+                    rend->field("file", filename);
+                    rend->field("line", (int)lineno);
+                });
             });
         });
     });
+
+    return ret;
 }
 
 bool are_breakpoints_same(ccstr file1, u32 line1, ccstr file2, u32 line2) {
-    return streq(file1, file2) && (line1 == line2);
+    return are_filepaths_equal(file1, file2) && (line1 == line2);
 }
 
-bool Debugger::unset_breakpoint(ccstr filename, u32 lineno) {
-    Breakpoint bp;
-    if (!find_breakpoint(filename, lineno, &bp)) return false;
-
-    SCOPED_FRAME();
-    send_packet("ClearBreakpoint", [&]() {
-        rend->field("Id", (int)bp.id);
+bool Debugger::unset_breakpoint(int id) {
+    pause_and_resume([&]() {
+        send_packet("ClearBreakpoint", [&]() {
+            rend->field("Id", id);
+        });
     });
     return true;
 }
@@ -396,13 +439,9 @@ List<Breakpoint>* Debugger::list_breakpoints() {
         auto id = js.num(js.get(it, ".id"));
         if (id < 0) continue;
 
-        auto start = MEM->sp;
-
-        auto wksp_path = get_normalized_path(world.current_path);
-        auto full_path = get_normalized_path(js.str(js.get(it, ".file")));
+        auto wksp_path = normalize_path_sep(world.current_path);
+        auto full_path = normalize_path_sep(js.str(js.get(it, ".file")));
         auto relative_path = get_path_relative_to(full_path, wksp_path);
-
-        MEM->sp = start + strlen(relative_path) + 1;
 
         auto bp = ret->append();
         ptr0(bp);
@@ -415,7 +454,7 @@ List<Breakpoint>* Debugger::list_breakpoints() {
         bp->is_goroutine = js.boolean(js.get(it, ".goroutine"));
         bp->is_tracepoint = js.boolean(js.get(it, ".continue"));
         bp->is_at_return_in_traced_function = js.boolean(js.get(it, ".traceReturn"));
-        bp->num_stackframes = js.num(js.get(it, ".stackframe"));
+        bp->num_stackframes = js.num(js.get(it, ".stacktrace"));
 
         {
             auto idx = js.get(it, ".addrs");
@@ -462,10 +501,10 @@ bool Json_Navigator::parse(ccstr s) {
 
     auto is_jsmn_error = [&](int result) -> bool {
         switch (result) {
-            case JSMN_ERROR_INVAL:
-            case JSMN_ERROR_NOMEM:
-            case JSMN_ERROR_PART:
-                return true;
+        case JSMN_ERROR_INVAL:
+        case JSMN_ERROR_NOMEM:
+        case JSMN_ERROR_PART:
+            return true;
         }
         return false;
     };
@@ -474,11 +513,14 @@ bool Json_Navigator::parse(ccstr s) {
     if (is_jsmn_error(num_toks))
         return false;
 
+    Frame frame;
+
     tokens = alloc_list<jsmntok_t>(num_toks);
     tokens->len = num_toks;
 
-    // TODO: if it failed, free the list of tokens we just alloc'd
-    return !is_jsmn_error(parse_json_with_jsmn(string, tokens->items, num_toks));
+    bool ret = !is_jsmn_error(parse_json_with_jsmn(string, tokens->items, num_toks));
+    if (!ret) frame.restore();
+    return ret;
 }
 
 int Json_Navigator::advance_node(int i) {
@@ -489,10 +531,21 @@ int Json_Navigator::advance_node(int i) {
 }
 
 bool Json_Navigator::match(int i, ccstr s) {
+    SCOPED_FRAME();
+
     auto tok = tokens->at(i);
     if (tok.type != JSMN_STRING)
         return false;
 
+    auto newlen = tok.end - tok.start;
+    auto buf = alloc_array(char, newlen + 1);
+    for (u32 i = 0; i < newlen; i++)
+        buf[i] = string[tok.start + i];;
+    buf[newlen] = '\0';
+
+    return streq(buf, s);
+
+    /*
     auto len = strlen(s);
     if (tok.end - tok.start != len)
         return false;
@@ -501,6 +554,7 @@ bool Json_Navigator::match(int i, ccstr s) {
         if (string[tok.start + j] != s[j])
             return false;
     return true;
+    */
 }
 
 Json_Key Json_Navigator::key(int i) {
@@ -721,43 +775,52 @@ void Debugger::run_loop() {
             SCOPED_LOCK(&calls_lock);
             For (calls) {
                 switch (it.type) {
-                case DBGCALL_STOP:
+                case DLVC_STOP:
+                    if (state_flag == DLV_STATE_RUNNING)
+                        halt_when_already_running();
+
                     {
                         SCOPED_FRAME();
                         send_packet("Detach", [&]() {
                             rend->field("Kill", true);
                         });
                     }
+
+                    stop();
+                    state_flag = DLV_STATE_INACTIVE;
+                    loop_mem.reset();
                     break;
 
-                case DBGCALL_START:
+                case DLVC_START:
                     {
-                        // TODO: initialize everything else we need to for the debugger.
-                        // should this even go in debugger_loop_thread? or like inside the key callback?
-                        world.wnd_debugger.current_location = -1;
+                        world.wnd_debugger.current_goroutine = -1;
+                        world.wnd_debugger.current_frame = -1;
 
                         ptr0(&state);
-                        state_flag = DBGSTATE_STARTING;
+                        state_flag = DLV_STATE_STARTING;
                         packetid = 0;
 
                         if (!start()) {
-                            state_flag = DBGSTATE_INACTIVE;
+                            state_flag = DLV_STATE_INACTIVE;
                             break;
                         }
 
                         {
                             SCOPED_LOCK(&lock);
                             For (breakpoints) {
-                                set_breakpoint(it.file, it.line);
+                                auto js = set_breakpoint(it.file, it.line)->js();
+                                auto idx = js.get(0, ".result.Breakpoint.id");
+                                if (idx != -1)
+                                    it.dlv_id = js.num(idx);
                                 it.pending = false;
                             }
                         }
                         exec_continue(false);
-                        state_flag = DBGSTATE_RUNNING;
+                        state_flag = DLV_STATE_RUNNING;
                     }
                     break;
 
-                case DBGCALL_EVAL_SINGLE_WATCH:
+                case DLVC_EVAL_SINGLE_WATCH:
                     {
                         auto& params = it.eval_single_watch;
 
@@ -769,7 +832,7 @@ void Debugger::run_loop() {
                             watch.state = DBGWATCH_READY;
                     }
                     break;
-                case DBGCALL_EVAL_WATCHES:
+                case DLVC_EVAL_WATCHES:
                     {
                         auto& params = it.eval_watches;
 
@@ -787,101 +850,254 @@ void Debugger::run_loop() {
                             it.state = (results[i++] ? DBGWATCH_READY : DBGWATCH_ERROR);
                     }
                     break;
-                case DBGCALL_SET_BREAKPOINT:
+                case DLVC_TOGGLE_BREAKPOINT:
                     {
-                        auto& params = it.set_breakpoint;
+                        auto &args = it.toggle_breakpoint;
 
-                        auto resp = set_breakpoint(params.filename, params.lineno);
-                        if (resp == NULL) {
-                            surface_error("Unable to set breakpoint.");
-                            break;
-                        }
+                        auto bkpt = breakpoints.find([&](auto it) {
+                            return are_breakpoints_same(args.filename, args.lineno, it->file, it->line);
+                        });
 
-                        auto find_func = [&](auto bp) {
-                            return are_breakpoints_same(bp->file, bp->line, params.filename, params.lineno);
-                        };
-
-                        auto js = resp->js();
-                        if (js.get(0, ".result.Breakpoint.id") == -1) {
-                            surface_error("Unable to set breakpoint.");
-                            breakpoints.remove(find_func);
-                        } else {
-                            auto bkpt = breakpoints.find(find_func);
-                            if (bkpt != NULL) {
-                                bkpt->pending = false;
-                            } else {
-                                // TODO: error -- this shouldn't happen
+                        if (bkpt == NULL) {
+                            Client_Breakpoint b;
+                            {
+                                SCOPED_MEM(&breakpoints_mem);
+                                b.file = our_strcpy(args.filename);
                             }
+                            b.line = args.lineno;
+                            b.pending = true;
+                            bkpt = breakpoints.append(&b);
+
+                            if (state_flag != DLV_STATE_INACTIVE) {
+                                auto js = set_breakpoint(bkpt->file, bkpt->line)->js();
+                                bkpt->dlv_id = js.num(js.get(0, ".result.Breakpoint.id"));
+                            }
+
+                            bkpt->pending = false;
+                        } else {
+                            if (state_flag != DLV_STATE_INACTIVE)
+                                unset_breakpoint(bkpt->dlv_id);
+                            breakpoints.remove(bkpt);
+                            if (breakpoints.len == 0)
+                                breakpoints_mem.reset();
                         }
                     }
                     break;
-                case DBGCALL_UNSET_BREAKPOINT:
-                    unset_breakpoint(
-                        it.unset_breakpoint.filename,
-                        it.unset_breakpoint.lineno
-                    );
+                case DLVC_BREAK_ALL:
+                    if (state_flag == DLV_STATE_RUNNING)
+                        halt_when_already_running();
                     break;
-                case DBGCALL_BREAK_ALL:
-                    exec_halt(false);
+                case DLVC_CONTINUE_RUNNING:
+                    if (state_flag == DLV_STATE_PAUSED) {
+                        state_flag = DLV_STATE_RUNNING;
+                        exec_continue(false);
+                    }
                     break;
-                case DBGCALL_CONTINUE_RUNNING:
-                    state_flag = DBGSTATE_RUNNING;
-                    exec_continue(false);
+                case DLVC_STEP_INTO:
+                    if (state_flag == DLV_STATE_PAUSED) {
+                        state_flag = DLV_STATE_RUNNING;
+                        exec_step_into(false);
+                    }
                     break;
-                case DBGCALL_STEP_INTO:
-                    state_flag = DBGSTATE_RUNNING;
-                    exec_step_into(false);
+                case DLVC_STEP_OVER:
+                    if (state_flag == DLV_STATE_PAUSED) {
+                        state_flag = DLV_STATE_RUNNING;
+                        exec_step_over(false);
+                    }
                     break;
-                case DBGCALL_STEP_OVER:
-                    state_flag = DBGSTATE_RUNNING;
-                    exec_step_over(false);
+                case DLVC_STEP_OUT:
+                    if (state_flag == DLV_STATE_PAUSED) {
+                        state_flag = DLV_STATE_RUNNING;
+                        exec_step_out(false);
+                    }
                     break;
-                case DBGCALL_STEP_OUT:
-                    state_flag = DBGSTATE_RUNNING;
-                    exec_step_out(false);
-                    break;
-                case DBGCALL_RUN_UNTIL: break;
-                case DBGCALL_CHANGE_VARIABLE: break;
+                case DLVC_RUN_UNTIL: break;
+                case DLVC_CHANGE_VARIABLE: break;
                 }
             }
             calls.len = 0;
             calls_mem.reset();
         }
 
-        if (state_flag != DBGSTATE_RUNNING) continue;
+        if (state_flag != DLV_STATE_RUNNING) continue;
         if (!can_read()) continue;
 
         Packet p;
         if (!read_packet(&p)) {
             stop();
-            state_flag = DBGSTATE_INACTIVE;
+            state_flag = DLV_STATE_INACTIVE;
             loop_mem.reset();
             continue;
         }
 
-        // FIXME: memory is going to overflow here with all of our js.str(...) calls without freeing
+        // TODO: there needs to be a SCOPED_FRAME here, or loop_mem will grow
+        handle_new_state(&p);
+    }
+}
 
-        auto js = p.js();
+void Debugger::handle_new_state(Packet *p) {
+    if (p == NULL) return;
 
-        auto is_exited = js.boolean(js.get(0, ".result.State.exited"));
-        if (is_exited) {
-            stop();
-            state_flag = DBGSTATE_INACTIVE;
-            loop_mem.reset();
-            continue;
+    auto js = p->js();
+
+    if (js.boolean(js.get(0, ".result.State.exited"))) {
+        stop();
+        state_flag = DLV_STATE_INACTIVE;
+        loop_mem.reset();
+        return;
+    }
+
+    if (js.boolean(js.get(0, ".result.State.Running"))) {
+        state_flag = DLV_STATE_RUNNING;
+        return;
+    }
+
+    ptr0(&state);
+
+    state.current_goroutine_id = -1;
+    state.current_frame = 0;
+
+    auto current_goroutine_idx = js.get(0, ".result.State.currentGoroutine");
+    if (current_goroutine_idx != -1)
+        state.current_goroutine_id = js.num(js.get(current_goroutine_idx, ".id"));
+
+    struct Goroutine_With_Bkpt {
+        int goroutine_id;
+        ccstr breakpoint_file;
+        u32 breakpoint_line;
+        ccstr breakpoint_func_name;
+    };
+
+    List<Goroutine_With_Bkpt> goroutines_with_breakpoint;
+    goroutines_with_breakpoint.init();
+
+    auto threads_idx = js.get(0, ".result.State.Threads");
+    if (threads_idx != -1) {
+        auto threads_len = js.array_length(threads_idx);
+        for (int i = 0; i < threads_len; i++) {
+            auto it = js.get(threads_idx, i);
+
+            auto bpidx = js.get(it, ".breakPoint");
+            if (bpidx != -1) {
+                auto entry = goroutines_with_breakpoint.append();
+                entry->goroutine_id = js.num(js.get(it, ".goroutineID"));
+                entry->breakpoint_file = js.str(js.get(bpidx, ".file"));
+                entry->breakpoint_line = js.num(js.get(bpidx, ".line"));
+                entry->breakpoint_func_name = js.str(js.get(bpidx, ".functionName"));
+            }
+        }
+    }
+
+    // TODO: when we halt, current_goroutine_id may (often seems to) be unset
+
+    {
+        state_mem.reset();
+        SCOPED_MEM(&state_mem);
+        fetch_goroutines();
+        state_flag = DLV_STATE_PAUSED;
+    }
+
+    For (state.goroutines) {
+        auto entry = goroutines_with_breakpoint.find([&](auto g) { return g->goroutine_id == it.id; });
+        if (entry != NULL) {
+            SCOPED_MEM(&state_mem);
+            it.curr_file = entry->breakpoint_file;
+            it.curr_line = entry->breakpoint_line;
+            it.curr_func_name = entry->breakpoint_func_name;
+            it.breakpoint_hit = true;
+        }
+    }
+}
+
+void Debugger::fetch_variables(int goroutine_id, int frame_idx, Dlv_Frame *frame) {
+    Json_Navigator js;
+
+    js = send_packet("ListLocalVars", [&]() {
+        rend->field("Scope", [&]() {
+            rend->obj([&]() {
+                rend->field("GoroutineId", goroutine_id);
+                rend->field("Frame", frame_idx);
+                rend->field("DeferredCall", 0);
+            });
+        });
+        rend->field("Cfg", [&]() {
+            rend->obj([&]() {
+                rend->field("followPointers", true);
+                rend->field("maxVariableRecurse", 2);
+                rend->field("maxStringLen", 64);
+                rend->field("maxArrayValues", 64);
+                rend->field("maxStructFields", -1);
+            });
+        });
+    })->js();
+
+    auto vars_idx = js.get(0, ".result.Variables");
+    if (vars_idx != -1)
+        frame->locals = save_list_of_vars(js, vars_idx);
+
+    js = send_packet("ListFunctionArgs", [&]() {
+        rend->field("Scope", [&]() {
+            rend->obj([&]() {
+                rend->field("GoroutineId", goroutine_id);
+                rend->field("Frame", frame_idx);
+                rend->field("DeferredCall", 0);
+            });
+        });
+        rend->field("Cfg", [&]() {
+            rend->obj([&]() {
+                rend->field("followPointers", true);
+                rend->field("maxVariableRecurse", 2);
+                rend->field("maxStringLen", 64);
+                rend->field("maxArrayValues", 64);
+                rend->field("maxStructFields", -1);
+            });
+        });
+    })->js();
+
+    vars_idx = js.get(0, ".result.Args");
+    if (vars_idx != -1)
+        frame->locals = save_list_of_vars(js, vars_idx);
+
+    frame->freshness = DLVF_FRESH;
+}
+
+bool Debugger::fetch_goroutines() {
+    // get goroutines
+    auto resp = send_packet("ListGoroutines", [&]() {
+        rend->field("Start", 0);
+        rend->field("Count", 0);
+    });
+    auto js = resp->js();
+
+    auto goroutines_idx = js.get(0, ".result.Goroutines");
+    if (goroutines_idx == -1) return false;
+
+    auto goroutines_len = js.array_length(goroutines_idx);
+    if (goroutines_len == 0) return false;
+
+    {
+        SCOPED_MEM(&state_mem);
+        state.goroutines.init();
+    }
+
+    for (u32 i = 0; i < goroutines_len; i++) {
+        auto it = js.get(goroutines_idx, i);
+        auto goroutine = state.goroutines.append();
+
+        {
+            SCOPED_MEM(&state_mem);
+            goroutine->id = js.num(js.get(it, ".id"));
+            goroutine->curr_file = js.str(js.get(it, ".userCurrentLoc.file"));
+            goroutine->curr_line = js.num(js.get(it, ".userCurrentLoc.line"));
+            goroutine->curr_func_name = js.str(js.get(it, ".userCurrentLoc.function.name"));
+            goroutine->status = js.num(js.get(it, ".status"));
+            goroutine->thread_id = js.num(js.get(it, ".threadID"));
+            goroutine->freshness = DLVF_NEEDFILL;
         }
 
-        // auto is_recording = js.boolean(js.get(0, ".result.State.Recording"));
-        auto is_running = js.boolean(js.get(0, ".result.State.Running"));
-
-        // debugger hit breakpoint
-        if (!is_running) {
-            state.stackframe = get_stackframe();
-            state.file_stopped_at = get_normalized_path(js.str(js.get(0, ".result.State.currentThread.file")));
-            state.line_stopped_at = js.num(js.get(0, ".result.State.currentThread.line"));
-            state_flag = DBGSTATE_PAUSED;
-        } else {
-            state_flag = DBGSTATE_RUNNING;
+        if (goroutine->id == state.current_goroutine_id) {
+            fetch_stackframe(goroutine);
+            fetch_variables(goroutine->id, state.current_frame, &goroutine->frames->items[0]);
         }
     }
 }
