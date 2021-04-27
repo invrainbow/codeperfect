@@ -12,7 +12,7 @@ cl /MP /MDd /nologo /EHsc /w /std:c++latest /DEBUG /Zi /Fe:ide.exe^
     /Iw:\tree-sitter\include^
     /Iw:\tree-sitter\src^
     main.cpp buffer.cpp common.cpp debugger.cpp editor.cpp go.cpp^
-    imgui.cpp imgui_demo.cpp imgui_draw.cpp imgui_widgets.cpp list.cpp^
+    imgui.cpp imgui_tables.cpp imgui_demo.cpp imgui_draw.cpp imgui_widgets.cpp list.cpp^
     nvim.cpp os.cpp os_windows.cpp meow_hash.cpp hash.cpp^
     settings.cpp tests.cpp ui.cpp utils.cpp veramono.cpp world.cpp^
     impl.cpp fzy_match.cpp mem.cpp tree-sitter/src/lib.c^
