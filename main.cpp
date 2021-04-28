@@ -1629,7 +1629,7 @@ int main() {
     i64 last_frame_time = current_time_in_nanoseconds();
 
     // init_with_file_at_location(path_join(world.current_path, "sync/sync.go"), new_cur2(10, 11));
-    world.get_current_pane()->focus_editor(path_join(world.current_path, "01test\\frob_test.go"), new_cur2(1, 7));
+    world.get_current_pane()->focus_editor(path_join(world.current_path, "04simbp/main.go"), new_cur2(1, 8));
 
     while (!glfwWindowShouldClose(world.window)) {
         world.frame_mem.reset();
@@ -1946,56 +1946,54 @@ int main() {
                 auto &state = dbg.state;
                 auto &wnd = world.wnd_debugger;
 
-                // static float w = 200.0f;
-                static float h = 300.0f;
-
                 ImGui::Columns(2);
 
                 if (ImGui::CollapsingHeader("Call Stack", ImGuiTreeNodeFlags_DefaultOpen)) {
                     ImGui::PushFont(world.ui.im_font_mono);
                     for (int i = 0; i < state.goroutines.len; i++) {
-                        auto &it = state.goroutines[i];
+                        auto &goroutine = state.goroutines[i];
 
-                        auto tree_flags = ImGuiTreeNodeFlags_SpanAvailWidth;
+                        int tree_flags = ImGuiTreeNodeFlags_OpenOnArrow;
 
-                        /*
-                        if (world.wnd_debugger.current_location == i)
-                            tree_flags |= ImGuiTreeNodeFlags_Selected;
-                        */
+                        bool is_current = (state.current_goroutine_id == goroutine.id);
+                        if (is_current) {
+                            tree_flags |= ImGuiTreeNodeFlags_Bullet;
+                            ImGui::SetNextItemOpen(true);
+                            ImGui::PushStyleColor(ImGuiCol_Text, (ImVec4)ImColor(255, 100, 100));
+                        }
 
                         auto open = ImGui::TreeNodeEx(
                             (void*)(uptr)i,
                             tree_flags,
                             "%s (%s)",
-                            it.curr_func_name,
-                            it.breakpoint_hit ? "BREAKPOINT HIT" : "PAUSED"
+                            goroutine.curr_func_name,
+                            goroutine.breakpoint_hit ? "BREAKPOINT HIT" : "PAUSED"
                         );
 
+                        if (is_current)
+                            ImGui::PopStyleColor();
+
                         if (ImGui::IsItemClicked()) {
-                            /*
-                            world.wnd_debugger.current_location = i;
-                            world.dbg.push_call(DBGCALL_EVAL_WATCHES, [&](auto call) {
-                                call->eval_watches.frame_id = i;
+                            world.dbg.push_call(DLVC_SET_CURRENT_GOROUTINE, [&](auto call) {
+                                call->set_current_goroutine.goroutine_id = goroutine.id;
                             });
-                            */
                         }
 
                         if (open) {
-                            if (it.freshness == DLVF_FRESH) {
-                                for (int j = 0; j < it.frames->len; j++) {
-                                    auto &frame = it.frames->items[j];
+                            if (goroutine.fresh) {
+                                for (int j = 0; j < goroutine.frames->len; j++) {
+                                    auto &frame = goroutine.frames->items[j];
 
-                                    ImGui::TreeNodeEx(
-                                        &frame,
-                                        ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen,
-                                        "%s (%s:%d)",
-                                        frame.func_name,
-                                        our_basename(frame.filepath),
-                                        frame.lineno
-                                    );
+                                    int tree_flags = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+                                    if (state.current_goroutine_id == goroutine.id && state.current_frame == j)
+                                        tree_flags |= ImGuiTreeNodeFlags_Selected;
+
+                                    ImGui::TreeNodeEx(&frame, tree_flags, "%s (%s:%d)", frame.func_name, our_basename(frame.filepath), frame.lineno);
                                     if (ImGui::IsItemClicked()) {
-                                        wnd.current_goroutine = i;
-                                        wnd.current_frame = j;
+                                        world.dbg.push_call(DLVC_SET_CURRENT_FRAME, [&](auto call) {
+                                            call->set_current_frame.goroutine_id = goroutine.id;
+                                            call->set_current_frame.frame_id = j;
+                                        });
                                     }
                                 }
                             } else {
@@ -2010,19 +2008,21 @@ int main() {
 
                 ImGui::NextColumn();
 
-
-                ImGuiTabBarFlags tab_bar_flags = ImGuiTabBarFlags_None;
-                if (ImGui::BeginTabBar("MyTabBar", tab_bar_flags))
+                if (ImGui::BeginTabBar("MyTabBar", ImGuiTabBarFlags_None))
                 {
                     fn<void(Dlv_Var*)> render_var = [&](Dlv_Var* var) {
                         bool recurse = false;
 
+                        auto var_name = var->name;
+                        if (var->flags & DLV_VAR_SHADOWED)
+                            var_name = our_sprintf("(%s)", var_name);
+
                         {
                             SCOPED_FRAME();
                             if (var->children == NULL || var->children->len == 0)
-                                ImGui::TreeNodeEx(var, ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen, "%s = %s", var->name, var->value);
+                                ImGui::TreeNodeEx(var, ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen, "%s = %s", var_name, var->value);
                             else
-                                recurse = ImGui::TreeNode(var, "%s = %s", var->name, var->value);
+                                recurse = ImGui::TreeNode(var, "%s = %s", var_name, var->value);
                         }
 
                         if (recurse) {
@@ -2035,19 +2035,40 @@ int main() {
                     if (ImGui::BeginTabItem("Local Variables"))
                     {
                         ImGui::PushFont(world.ui.im_font_mono);
-                        if (wnd.current_goroutine != -1 && wnd.current_frame != -1) {
-                            auto frame = state.goroutines[wnd.current_goroutine].frames->at(wnd.current_frame);
-                            if (frame.freshness == DLVF_FRESH) {
-                                if (frame.locals != NULL)
-                                    For (*frame.locals)
-                                        render_var(&it);
-                                if (frame.args != NULL)
-                                    For (*frame.args)
-                                        render_var(&it);
-                            } else {
-                                ImGui::Text("Loading...");
+
+                        bool loading = false;
+                        bool done = false;
+                        do {
+                            if (dbg.state_flag != DLV_STATE_PAUSED) break;
+                            if (state.current_goroutine_id == -1 || state.current_frame == -1) break;
+
+                            auto goroutine = state.goroutines.find([&](auto it) { return it->id == state.current_goroutine_id; });
+                            if (goroutine == NULL) break;
+
+                            loading = true;
+
+                            if (!goroutine->fresh) break;
+                            if (state.current_frame >= goroutine->frames->len) break;
+
+                            auto frame = &goroutine->frames->items[state.current_frame];
+                            if (!frame->fresh) break;
+
+                            if (frame->locals != NULL)
+                                For (*frame->locals)
+                                    render_var(&it);
+                            if (frame->args != NULL)
+                                For (*frame->args)
+                                    render_var(&it);
+
+                            if ((frame->locals == NULL || frame->locals->len == 0) && (frame->args == NULL || frame->args->len == 0)) {
+                                ImGui::Text("No variables to show here.");
                             }
-                        }
+                            done = true;
+                        } while (0);
+
+                        if (!done && loading)
+                            ImGui::Text("Loading...");
+
                         ImGui::PopFont();
                         ImGui::EndTabItem();
                     }

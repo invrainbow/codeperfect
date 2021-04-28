@@ -112,6 +112,7 @@ const vec3f COLOR_RED = rgb_hex("#ff8888");
 const vec3f COLOR_LIGHT_BLUE = rgb_hex("#6699dd");
 const vec3f COLOR_DARK_RED = rgb_hex("#880000");
 const vec3f COLOR_DARK_YELLOW = rgb_hex("#6b6d0a");
+const vec3f COLOR_DARKER_YELLOW = rgb_hex("#2b2d00");
 const vec3f COLOR_BLACK = rgb_hex("#000000");
 const vec3f COLOR_BG = rgb_hex("#181818");
 const vec3f COLOR_LIGHT_GREY = rgb_hex("#eeeeee");
@@ -1063,16 +1064,24 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
 
                 int next_hl = (highlights.len > 0 ? 0 : -1);
 
-                auto get_current_goroutine = [&]() -> Dlv_Goroutine * {
-                    if (world.dbg.state_flag != DLV_STATE_PAUSED) return NULL;
+                auto goroutines_hit = alloc_list<Dlv_Goroutine*>();
+                u32 current_goroutine_id = 0;
+                Dlv_Goroutine *current_goroutine = NULL;
+                bool is_current_goroutine_on_current_file = false;
 
-                    auto &s = world.dbg.state;
-                    if (s.current_goroutine_id == -1) return NULL;
-
-                    return s.goroutines.find([&](auto it) { return it->id == s.current_goroutine_id; });
-                };
-
-                auto current_goroutine = get_current_goroutine();
+                if (world.dbg.state_flag == DLV_STATE_PAUSED) {
+                    current_goroutine_id = world.dbg.state.current_goroutine_id;
+                    For (world.dbg.state.goroutines) {
+                        if (it.breakpoint_hit)
+                            if (are_filepaths_equal(it.curr_file, editor->filepath))
+                                goroutines_hit->append(&it);
+                        if (it.id == current_goroutine_id) {
+                            current_goroutine = &it;
+                            if (are_filepaths_equal(it.curr_file, editor->filepath))
+                                is_current_goroutine_on_current_file = true;
+                        }
+                    }
+                }
 
                 auto relative_y = 0;
                 for (u32 y = view.y; y < view.y + view.h; y++, relative_y++) {
@@ -1080,13 +1089,33 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
 
                     auto line = &buf.lines[y];
 
-                    auto is_stopped_at_this_line = [&]() -> bool {
-                        if (world.dbg.state_flag == DLV_STATE_PAUSED)
-                            if (current_goroutine != NULL)
-                                if (are_filepaths_equal(current_goroutine->curr_file, editor->filepath))
-                                    if (current_goroutine->curr_line == y + 1)
-                                        return true;
-                        return false;
+                    enum {
+                        BREAKPOINT_NONE,
+                        BREAKPOINT_CURRENT_GOROUTINE,
+                        BREAKPOINT_OTHER_GOROUTINE,
+                        BREAKPOINT_ACTIVE,
+                        BREAKPOINT_INACTIVE,
+                    };
+
+                    auto find_breakpoint_stopped_at_this_line = [&]() -> int {
+                        if (world.dbg.state_flag == DLV_STATE_PAUSED) {
+                            if (is_current_goroutine_on_current_file)
+                                if (current_goroutine->curr_line == y + 1)
+                                    return BREAKPOINT_CURRENT_GOROUTINE;
+
+                            For (*goroutines_hit)
+                                if (it->curr_line == y + 1)
+                                    return BREAKPOINT_OTHER_GOROUTINE;
+                        }
+
+                        For (breakpoints_for_this_editor) {
+                            if (it.line == y + 1) {
+                                bool inactive = (it.pending || world.dbg.state_flag == DLV_STATE_INACTIVE);
+                                return inactive ?  BREAKPOINT_ACTIVE : BREAKPOINT_INACTIVE;
+                            }
+                        }
+
+                        return BREAKPOINT_NONE;
                     };
 
                     boxf line_box = {
@@ -1096,17 +1125,15 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                         (float)font->height - 1,
                     };
 
-                    if (is_stopped_at_this_line()) {
+                    auto bptype = find_breakpoint_stopped_at_this_line();
+                    if (bptype == BREAKPOINT_CURRENT_GOROUTINE)
                         draw_rect(line_box, rgba(COLOR_DARK_YELLOW));
-                    } else {
-                        For (breakpoints_for_this_editor) {
-                            if (it.line == y + 1) {
-                                bool inactive = (it.pending || world.dbg.state_flag == DLV_STATE_INACTIVE);
-                                draw_rect(line_box, rgba(COLOR_DARK_RED, inactive ? 0.5 : 1.0));
-                                break;
-                            }
-                        }
-                    }
+                    else if (bptype == BREAKPOINT_OTHER_GOROUTINE)
+                        draw_rect(line_box, rgba(COLOR_DARKER_YELLOW));
+                    else if (bptype == BREAKPOINT_ACTIVE)
+                        draw_rect(line_box, rgba(COLOR_DARK_RED, 1.0));
+                    else if (bptype == BREAKPOINT_INACTIVE)
+                        draw_rect(line_box, rgba(COLOR_DARK_RED, 0.5));
 
                     auto line_number_width = get_line_number_width(editor);
 

@@ -102,6 +102,8 @@ enum Dlv_Call_Type {
     DLVC_START,
     DLVC_BREAK_ALL,
     DLVC_STOP,
+    DLVC_SET_CURRENT_FRAME,
+    DLVC_SET_CURRENT_GOROUTINE,
 };
 
 struct Dlv_Call {
@@ -111,6 +113,15 @@ struct Dlv_Call {
             ccstr filename;
             u32 lineno;
         } toggle_breakpoint;
+
+        struct {
+            u32 goroutine_id;
+            u32 frame_id;
+        } set_current_frame;
+
+        struct {
+            u32 goroutine_id;
+        } set_current_goroutine;
 
         struct {
             u32 frame_id;
@@ -161,13 +172,24 @@ enum Go_Reflect_Kind {
     GO_KIND_UNSAFEPOINTER,
 };
 
+enum {
+	DLV_VAR_ESCAPED = 1 << 0,
+	DLV_VAR_SHADOWED = 1 << 1,
+	DLV_VAR_CONSTANT  = 1 << 2,
+	DLV_VAR_ARGUMENT = 1 << 3,
+	DLV_VAR_RETURNARGUMENT = 1 << 4,
+	DLV_VAR_FAKEADDRESS = 1 << 5,
+};
+
 struct Dlv_Var {
     ccstr name;
+    int flags;
     Go_Reflect_Kind gotype;
     ccstr gotype_name;
     ccstr value; // do we need anything deeper than this?
     List<Dlv_Var>* children;
     u32 delve_reported_number_of_children;
+    bool is_shadowed;
     // bool incomplete;
 };
 
@@ -183,19 +205,13 @@ struct Dlv_Watch {
     Dlv_Var value;
 };
 
-enum Dlv_Freshness {
-    DLVF_FRESH,
-    DLVF_OUTDATED,
-    DLVF_NEEDFILL,
-};
-
 struct Dlv_Frame {
     ccstr filepath;
     u32 lineno;
     ccstr func_name;
     List<Dlv_Var> *locals;
     List<Dlv_Var> *args;
-    Dlv_Freshness freshness;
+    bool fresh;
 };
 
 struct Dlv_Goroutine {
@@ -208,7 +224,7 @@ struct Dlv_Goroutine {
     int status; // TODO: make enum type; i don't know what this is yet
     int thread_id;
     bool breakpoint_hit;
-    Dlv_Freshness freshness;
+    bool fresh;
 };
 
 struct Debugger {
@@ -257,7 +273,7 @@ struct Debugger {
     Packet* set_breakpoint(ccstr filename, u32 lineno);
     bool unset_breakpoint(int id);
 
-    void send_command(ccstr command, bool read);
+    void send_command(ccstr command, bool read, int goroutine_id = -1);
     void exec_continue(bool read);
     void exec_step_into(bool read);
     void exec_step_out(bool read);
@@ -285,6 +301,8 @@ struct Debugger {
     void handle_new_state(Packet *p);
     void pause_and_resume(fn<void()> f);
     void halt_when_already_running();
+    void select_frame(u32 goroutine_id, u32 frame_id);
+    void set_current_goroutine(u32 goroutine_id);
 };
 
 void debugger_loop_thread(void*);
