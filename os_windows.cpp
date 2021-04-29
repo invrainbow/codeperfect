@@ -723,4 +723,13 @@ Ask_User_Result ask_user_yes_no_cancel(void* parent_window, ccstr text, ccstr ti
     return ASKUSER_ERROR;
 }
 
+Ask_User_Result ask_user_yes_no(void* parent_window, ccstr text, ccstr title) {
+    int ret = MessageBoxA((HWND)parent_window, text, title, MB_YESNO | MB_ICONWARNING | MB_TOPMOST);
+    switch (ret) {
+    case IDYES: return ASKUSER_YES;
+    case IDNO: return ASKUSER_NO;
+    }
+    return ASKUSER_ERROR;
+}
+
 #endif

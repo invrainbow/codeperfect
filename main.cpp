@@ -581,6 +581,17 @@ void* get_native_window_handle(GLFWwindow *window) {
 #endif
 }
 
+void prompt_delete_all_breakpoints() {
+    auto res = ask_user_yes_no(
+        get_native_window_handle(world.window),
+        "Are you sure you want to delete all breakpoints?",
+        NULL
+    );
+
+    if (res != ASKUSER_YES) return;
+    world.dbg.push_call(DLVC_DELETE_ALL_BREAKPOINTS);
+}
+
 int main() {
     Timer t;
     t.init();
@@ -1032,6 +1043,8 @@ int main() {
                     case GLFW_KEY_F10:
                         // TODO
                         break;
+                    case GLFW_KEY_F9:
+                        prompt_delete_all_breakpoints();
                     }
                     break;
                 }
@@ -1854,6 +1867,10 @@ int main() {
                     }
                 }
 
+                if (ImGui::MenuItem("Delete All Breakpoints", "Shift+F9")) {
+                    prompt_delete_all_breakpoints();
+                }
+
                 ImGui::EndMenu();
             }
 
@@ -2011,23 +2028,125 @@ int main() {
                 if (ImGui::BeginTabBar("MyTabBar", ImGuiTabBarFlags_None))
                 {
                     fn<void(Dlv_Var*)> render_var = [&](Dlv_Var* var) {
-                        bool recurse = false;
+                        SCOPED_FRAME();
+
+                        ImGui::TableNextRow();
+                        ImGui::TableNextColumn();
 
                         auto var_name = var->name;
                         if (var->flags & DLV_VAR_SHADOWED)
                             var_name = our_sprintf("(%s)", var_name);
 
+                        bool open = false;
+
                         {
                             SCOPED_FRAME();
                             if (var->children == NULL || var->children->len == 0)
-                                ImGui::TreeNodeEx(var, ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen, "%s = %s", var_name, var->value);
+                                ImGui::TreeNodeEx(var, ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen, "%s", var_name);
                             else
-                                recurse = ImGui::TreeNode(var, "%s = %s", var_name, var->value);
+                                open = ImGui::TreeNode(var, "%s", var_name);
                         }
 
-                        if (recurse) {
+                        ImGui::TableNextColumn();
+
+                        switch (var->kind) {
+                        case GO_KIND_BOOL:
+                        case GO_KIND_INT:
+                        case GO_KIND_INT8:
+                        case GO_KIND_INT16:
+                        case GO_KIND_INT32:
+                        case GO_KIND_INT64:
+                        case GO_KIND_UINT:
+                        case GO_KIND_UINT8:
+                        case GO_KIND_UINT16:
+                        case GO_KIND_UINT32:
+                        case GO_KIND_UINT64:
+                        case GO_KIND_UINTPTR:
+                        case GO_KIND_FLOAT32:
+                        case GO_KIND_FLOAT64:
+                        case GO_KIND_COMPLEX64:
+                        case GO_KIND_COMPLEX128:
+                            ImGui::Text(var->value);
+                            break;
+
+                        case GO_KIND_INVALID: // i don't think this should even happen
+                            ImGui::Text("<invalid>");
+                            break;
+
+                        case GO_KIND_ARRAY:
+                        case GO_KIND_SLICE:
+                            ImGui::Text("0x%" PRIx64 " (Len = %d, Cap = %d)", var->address, var->len, var->cap);
+                            break;
+
+                        case GO_KIND_STRUCT:
+                        case GO_KIND_INTERFACE:
+                            ImGui::Text("0x%" PRIx64, var->address);
+                            break;
+
+                        case GO_KIND_MAP:
+                            ImGui::Text("0x%" PRIx64 " (Len = %d)", var->address, var->len);
+
+                        case GO_KIND_STRING:
+                            {
+                                Text_Renderer r;
+                                r.init();
+
+                                for (int i = 0, len = strlen(var->value); i < len; i++) {
+                                    auto ch = var->value[i];
+                                    switch (ch) {
+                                      case '\"':
+                                        r.writestr("\\\"");
+                                        break;
+                                      case '\'':
+                                        r.writestr("\\\'");
+                                        break;
+                                      case '\\':
+                                        r.writestr("\\\\");
+                                        break;
+                                      case '\a':
+                                        r.writestr("\\a");
+                                        break;
+                                      case '\b':
+                                        r.writestr("\\b");
+                                        break;
+                                      case '\n':
+                                        r.writestr("\\n");
+                                        break;
+                                      case '\t':
+                                        r.writestr("\\t");
+                                        break;
+                                      default:
+                                        if (iscntrl(ch))
+                                            r.writestr("\\%03o", ch);
+                                        else
+                                            r.writechar(ch);
+                                        break;
+                                    }
+                                }
+
+                                ImGui::Text("\"%s\"", r.finish());
+                            }
+                            break;
+
+                        case GO_KIND_UNSAFEPOINTER:
+                        case GO_KIND_CHAN:
+                        case GO_KIND_FUNC:
+                        case GO_KIND_PTR:
+                            ImGui::Text("0x%" PRIx64, var->address);
+                            break;
+                        }
+
+                        ImGui::TableNextColumn();
+                        ImGui::Text("%s", var->kind_name);
+
+                        if (open) {
                             For (*var->children)
                                 render_var(&it);
+
+                            if (var->incomplete()) {
+                                // TODO: render "load more" button
+                            }
+
                             ImGui::TreePop();
                         }
                     };
@@ -2036,38 +2155,47 @@ int main() {
                     {
                         ImGui::PushFont(world.ui.im_font_mono);
 
-                        bool loading = false;
-                        bool done = false;
-                        do {
-                            if (dbg.state_flag != DLV_STATE_PAUSED) break;
-                            if (state.current_goroutine_id == -1 || state.current_frame == -1) break;
+                        auto flags = ImGuiTableFlags_BordersV | ImGuiTableFlags_BordersOuterH | ImGuiTableFlags_Resizable | ImGuiTableFlags_RowBg | ImGuiTableFlags_NoBordersInBody;
+                        if (ImGui::BeginTable("vars", 3, flags)) {
+                            ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_NoHide);
+                            ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_NoHide);
+                            ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_NoHide);
 
-                            auto goroutine = state.goroutines.find([&](auto it) { return it->id == state.current_goroutine_id; });
-                            if (goroutine == NULL) break;
+                            bool loading = false;
+                            bool done = false;
+                            do {
+                                if (dbg.state_flag != DLV_STATE_PAUSED) break;
+                                if (state.current_goroutine_id == -1 || state.current_frame == -1) break;
 
-                            loading = true;
+                                auto goroutine = state.goroutines.find([&](auto it) { return it->id == state.current_goroutine_id; });
+                                if (goroutine == NULL) break;
 
-                            if (!goroutine->fresh) break;
-                            if (state.current_frame >= goroutine->frames->len) break;
+                                loading = true;
 
-                            auto frame = &goroutine->frames->items[state.current_frame];
-                            if (!frame->fresh) break;
+                                if (!goroutine->fresh) break;
+                                if (state.current_frame >= goroutine->frames->len) break;
 
-                            if (frame->locals != NULL)
-                                For (*frame->locals)
-                                    render_var(&it);
-                            if (frame->args != NULL)
-                                For (*frame->args)
-                                    render_var(&it);
+                                auto frame = &goroutine->frames->items[state.current_frame];
+                                if (!frame->fresh) break;
 
-                            if ((frame->locals == NULL || frame->locals->len == 0) && (frame->args == NULL || frame->args->len == 0)) {
-                                ImGui::Text("No variables to show here.");
-                            }
-                            done = true;
-                        } while (0);
+                                if (frame->locals != NULL)
+                                    For (*frame->locals)
+                                        render_var(&it);
+                                if (frame->args != NULL)
+                                    For (*frame->args)
+                                        render_var(&it);
 
-                        if (!done && loading)
-                            ImGui::Text("Loading...");
+                                if ((frame->locals == NULL || frame->locals->len == 0) && (frame->args == NULL || frame->args->len == 0)) {
+                                    ImGui::Text("No variables to show here.");
+                                }
+                                done = true;
+                            } while (0);
+
+                            if (!done && loading)
+                                ImGui::Text("Loading...");
+
+                            ImGui::EndTable();
+                        }
 
                         ImGui::PopFont();
                         ImGui::EndTabItem();

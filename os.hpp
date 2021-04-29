@@ -290,3 +290,4 @@ enum Ask_User_Result {
 };
 
 Ask_User_Result ask_user_yes_no_cancel(void* parent_window, ccstr text, ccstr title);
+Ask_User_Result ask_user_yes_no(void* parent_window, ccstr text, ccstr title);

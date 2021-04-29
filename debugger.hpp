@@ -44,6 +44,7 @@ struct Json_Navigator {
     ccstr str(i32 i, u32* plen);
     ccstr str(i32 i);
     i32 num(i32 i);
+    u64 num_u64(i32 i);
     bool boolean(i32 i);
 };
 
@@ -104,6 +105,7 @@ enum Dlv_Call_Type {
     DLVC_STOP,
     DLVC_SET_CURRENT_FRAME,
     DLVC_SET_CURRENT_GOROUTINE,
+    DLVC_DELETE_ALL_BREAKPOINTS,
 };
 
 struct Dlv_Call {
@@ -184,13 +186,16 @@ enum {
 struct Dlv_Var {
     ccstr name;
     int flags;
-    Go_Reflect_Kind gotype;
-    ccstr gotype_name;
+    Go_Reflect_Kind kind;
+    ccstr kind_name;
+    int len;
+    int cap;
     ccstr value; // do we need anything deeper than this?
     List<Dlv_Var>* children;
-    u32 delve_reported_number_of_children;
     bool is_shadowed;
-    // bool incomplete;
+    u64 address;
+
+    bool incomplete() { return len > (children == NULL ? 0 : children->len); }
 };
 
 enum Dlv_Watch_State {
