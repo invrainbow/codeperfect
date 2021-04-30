@@ -161,6 +161,7 @@ struct Dlv_Var {
     bool is_shadowed;
     u64 address;
     bool only_addr; // for interface types
+    ccstr unreadable_description;
 
     bool incomplete();
 };

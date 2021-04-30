@@ -2028,6 +2028,9 @@ int main() {
                 if (ImGui::BeginTabBar("MyTabBar", ImGuiTabBarFlags_None))
                 {
                     auto var_value_as_string = [&](Dlv_Var *var) -> ccstr {
+                        if (var->unreadable_description != NULL)
+                            return our_sprintf("<unreadable: %s>", var->unreadable_description);
+
                         switch (var->kind) {
                         case GO_KIND_INVALID: // i don't think this should even happen
                             return "<invalid>";
