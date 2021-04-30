@@ -1067,6 +1067,7 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                 auto goroutines_hit = alloc_list<Dlv_Goroutine*>();
                 u32 current_goroutine_id = 0;
                 Dlv_Goroutine *current_goroutine = NULL;
+                Dlv_Frame *current_frame = NULL;
                 bool is_current_goroutine_on_current_file = false;
 
                 if (world.dbg.state_flag == DLV_STATE_PAUSED) {
@@ -1077,8 +1078,14 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                                 goroutines_hit->append(&it);
                         if (it.id == current_goroutine_id) {
                             current_goroutine = &it;
-                            if (are_filepaths_equal(it.curr_file, editor->filepath))
-                                is_current_goroutine_on_current_file = true;
+                            if (current_goroutine->fresh) {
+                                current_frame = &current_goroutine->frames->at(world.dbg.state.current_frame);
+                                if (are_filepaths_equal(it.curr_file, current_frame->filepath))
+                                    is_current_goroutine_on_current_file = true;
+                            } else {
+                                if (are_filepaths_equal(it.curr_file, current_goroutine->curr_file))
+                                    is_current_goroutine_on_current_file = true;
+                            }
                         }
                     }
                 }
@@ -1099,9 +1106,13 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
 
                     auto find_breakpoint_stopped_at_this_line = [&]() -> int {
                         if (world.dbg.state_flag == DLV_STATE_PAUSED) {
-                            if (is_current_goroutine_on_current_file)
-                                if (current_goroutine->curr_line == y + 1)
+                            if (is_current_goroutine_on_current_file) {
+                                if (current_frame != NULL) {
+                                    if (current_frame->lineno == y + 1)
+                                        return BREAKPOINT_CURRENT_GOROUTINE;
+                                } else if (current_goroutine->curr_line == y + 1)
                                     return BREAKPOINT_CURRENT_GOROUTINE;
+                            }
 
                             For (*goroutines_hit)
                                 if (it->curr_line == y + 1)

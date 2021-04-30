@@ -237,6 +237,7 @@ enum Save_Var_Mode {
     SAVE_VAR_NORMAL,
     SAVE_VAR_CHILDREN_APPEND,
     SAVE_VAR_CHILDREN_OVERWRITE,
+    SAVE_VAR_VALUE_APPEND,
 };
 
 struct Debugger {

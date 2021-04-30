@@ -2054,37 +2054,23 @@ int main() {
                                 for (int i = 0, len = strlen(var->value); i < len; i++) {
                                     auto ch = var->value[i];
                                     switch (ch) {
-                                      case '\"':
-                                        r.writestr("\\\"");
-                                        break;
-                                      case '\'':
-                                        r.writestr("\\\'");
-                                        break;
-                                      case '\\':
-                                        r.writestr("\\\\");
-                                        break;
-                                      case '\a':
-                                        r.writestr("\\a");
-                                        break;
-                                      case '\b':
-                                        r.writestr("\\b");
-                                        break;
-                                      case '\n':
-                                        r.writestr("\\n");
-                                        break;
-                                      case '\t':
-                                        r.writestr("\\t");
-                                        break;
+                                      case '\"': r.writestr("\\\""); break;
+                                      case '\'': r.writestr("\\\'"); break;
+                                      case '\\': r.writestr("\\\\"); break;
+                                      case '\a': r.writestr("\\a"); break;
+                                      case '\b': r.writestr("\\b"); break;
+                                      case '\n': r.writestr("\\n"); break;
+                                      case '\t': r.writestr("\\t"); break;
                                       default:
                                         if (iscntrl(ch))
-                                            r.writestr("\\%03o", ch);
+                                            r.write("\\%03o", ch);
                                         else
                                             r.writechar(ch);
                                         break;
                                     }
                                 }
 
-                                return our_sprintf("\"%s\"", r.finish());
+                                return our_sprintf("\"%s%s\"", r.finish(), var->incomplete() ? "..." : "");
                             }
 
                         case GO_KIND_UNSAFEPOINTER:
@@ -2127,10 +2113,10 @@ int main() {
                         }
 
                         ImGui::TableNextColumn();
-                        ImGui::Text("%s", var_value_as_string(var));
+                        ImGui::TextWrapped("%s", var_value_as_string(var));
 
                         ImGui::TableNextColumn();
-                        ImGui::Text("%s", var->kind_name);
+                        ImGui::TextWrapped("%s", var->kind_name);
 
                         if (open) {
                             if (var->kind == GO_KIND_MAP) {
@@ -2169,7 +2155,7 @@ int main() {
                     {
                         ImGui::PushFont(world.ui.im_font_mono);
 
-                        auto flags = ImGuiTableFlags_BordersV | ImGuiTableFlags_BordersOuterH | ImGuiTableFlags_Resizable;
+                        auto flags = ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable;
                         if (ImGui::BeginTable("vars", 3, flags)) {
                             ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_NoHide);
                             ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_NoHide);
