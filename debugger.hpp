@@ -106,41 +106,7 @@ enum Dlv_Call_Type {
     DLVC_SET_CURRENT_FRAME,
     DLVC_SET_CURRENT_GOROUTINE,
     DLVC_DELETE_ALL_BREAKPOINTS,
-};
-
-struct Dlv_Call {
-    Dlv_Call_Type type;
-    union {
-        struct {
-            ccstr filename;
-            u32 lineno;
-        } toggle_breakpoint;
-
-        struct {
-            u32 goroutine_id;
-            u32 frame_id;
-        } set_current_frame;
-
-        struct {
-            u32 goroutine_id;
-        } set_current_goroutine;
-
-        struct {
-            u32 frame_id;
-        } eval_watches;
-
-        struct {
-            u32 frame_id;
-            u32 watch_id;
-        } eval_single_watch;
-
-        struct {} continue_running;
-        struct {} step_info;
-        struct {} step_over;
-        struct {} step_out;
-        struct {} run_until;
-        struct {} change_variable;
-    };
+    DLVC_VAR_LOAD_MORE,
 };
 
 // https://godoc.org/reflect#Kind
@@ -194,8 +160,9 @@ struct Dlv_Var {
     List<Dlv_Var>* children;
     bool is_shadowed;
     u64 address;
+    bool only_addr; // for interface types
 
-    bool incomplete() { return len > (children == NULL ? 0 : children->len); }
+    bool incomplete();
 };
 
 enum Dlv_Watch_State {
@@ -232,6 +199,45 @@ struct Dlv_Goroutine {
     bool fresh;
 };
 
+struct Dlv_Call {
+    Dlv_Call_Type type;
+    union {
+        struct {
+            ccstr filename;
+            u32 lineno;
+        } toggle_breakpoint;
+
+        struct {
+            u32 goroutine_id;
+            u32 frame_id;
+        } set_current_frame;
+
+        struct {
+            u32 goroutine_id;
+        } set_current_goroutine;
+
+        struct {
+            u32 frame_id;
+        } eval_watches;
+
+        struct {
+            u32 frame_id;
+            u32 watch_id;
+        } eval_single_watch;
+
+        struct {
+            int state_id;
+            Dlv_Var *var;
+        } var_load_more;
+    };
+};
+
+enum Save_Var_Mode {
+    SAVE_VAR_NORMAL,
+    SAVE_VAR_CHILDREN_APPEND,
+    SAVE_VAR_CHILDREN_OVERWRITE,
+};
+
 struct Debugger {
     Pool mem;
     Pool loop_mem;   // throwaway memory for miscellaneous operations inside loop
@@ -253,6 +259,8 @@ struct Debugger {
     Process dlv_proc;
     int conn;
     int packetid;
+
+    int state_id;
 
     Dlv_State state_flag;
     struct {
@@ -288,11 +296,11 @@ struct Debugger {
     bool find_breakpoint(ccstr filename, u32 line, Breakpoint* out);
     bool can_read();
     List<Breakpoint>* list_breakpoints();
-    bool eval_expression(ccstr expression, i32 goroutine_id, i32 frame_id, Dlv_Var* out);
+    bool eval_expression(ccstr expression, i32 goroutine_id, i32 frame_id, Dlv_Var* out, Save_Var_Mode save_mode = SAVE_VAR_NORMAL);
     i32 get_current_goroutine_id();
 
-    List<Dlv_Var>* save_list_of_vars(Json_Navigator js, i32 idx);
-    void save_single_var(Json_Navigator js, i32 idx, Dlv_Var* out);
+    void save_list_of_vars(Json_Navigator js, i32 idx, List<Dlv_Var>* out);
+    void save_single_var(Json_Navigator js, i32 idx, Dlv_Var* out, Save_Var_Mode save_mode = SAVE_VAR_NORMAL);
     void start_loop();
     void run_loop();
     void surface_error(ccstr msg);

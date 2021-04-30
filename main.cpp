@@ -1642,7 +1642,7 @@ int main() {
     i64 last_frame_time = current_time_in_nanoseconds();
 
     // init_with_file_at_location(path_join(world.current_path, "sync/sync.go"), new_cur2(10, 11));
-    world.get_current_pane()->focus_editor(path_join(world.current_path, "04simbp/main.go"), new_cur2(1, 8));
+    world.get_current_pane()->focus_editor(path_join(world.current_path, "12to18vars/main.go"), new_cur2(1, 8));
 
     while (!glfwWindowShouldClose(world.window)) {
         world.frame_mem.reset();
@@ -2027,64 +2027,21 @@ int main() {
 
                 if (ImGui::BeginTabBar("MyTabBar", ImGuiTabBarFlags_None))
                 {
-                    fn<void(Dlv_Var*)> render_var = [&](Dlv_Var* var) {
-                        SCOPED_FRAME();
-
-                        ImGui::TableNextRow();
-                        ImGui::TableNextColumn();
-
-                        auto var_name = var->name;
-                        if (var->flags & DLV_VAR_SHADOWED)
-                            var_name = our_sprintf("(%s)", var_name);
-
-                        bool open = false;
-
-                        {
-                            SCOPED_FRAME();
-                            if (var->children == NULL || var->children->len == 0)
-                                ImGui::TreeNodeEx(var, ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen, "%s", var_name);
-                            else
-                                open = ImGui::TreeNode(var, "%s", var_name);
-                        }
-
-                        ImGui::TableNextColumn();
-
+                    auto var_value_as_string = [&](Dlv_Var *var) -> ccstr {
                         switch (var->kind) {
-                        case GO_KIND_BOOL:
-                        case GO_KIND_INT:
-                        case GO_KIND_INT8:
-                        case GO_KIND_INT16:
-                        case GO_KIND_INT32:
-                        case GO_KIND_INT64:
-                        case GO_KIND_UINT:
-                        case GO_KIND_UINT8:
-                        case GO_KIND_UINT16:
-                        case GO_KIND_UINT32:
-                        case GO_KIND_UINT64:
-                        case GO_KIND_UINTPTR:
-                        case GO_KIND_FLOAT32:
-                        case GO_KIND_FLOAT64:
-                        case GO_KIND_COMPLEX64:
-                        case GO_KIND_COMPLEX128:
-                            ImGui::Text(var->value);
-                            break;
-
                         case GO_KIND_INVALID: // i don't think this should even happen
-                            ImGui::Text("<invalid>");
-                            break;
+                            return "<invalid>";
 
                         case GO_KIND_ARRAY:
                         case GO_KIND_SLICE:
-                            ImGui::Text("0x%" PRIx64 " (Len = %d, Cap = %d)", var->address, var->len, var->cap);
-                            break;
+                            return our_sprintf("0x%" PRIx64 " (Len = %d, Cap = %d)", var->address, var->len, var->cap);
 
                         case GO_KIND_STRUCT:
                         case GO_KIND_INTERFACE:
-                            ImGui::Text("0x%" PRIx64, var->address);
-                            break;
+                            return our_sprintf("0x%" PRIx64, var->address);
 
                         case GO_KIND_MAP:
-                            ImGui::Text("0x%" PRIx64 " (Len = %d)", var->address, var->len);
+                            return our_sprintf("0x%" PRIx64 " (Len = %d)", var->address, var->len);
 
                         case GO_KIND_STRING:
                             {
@@ -2124,26 +2081,80 @@ int main() {
                                     }
                                 }
 
-                                ImGui::Text("\"%s\"", r.finish());
+                                return our_sprintf("\"%s\"", r.finish());
                             }
-                            break;
 
                         case GO_KIND_UNSAFEPOINTER:
                         case GO_KIND_CHAN:
                         case GO_KIND_FUNC:
                         case GO_KIND_PTR:
-                            ImGui::Text("0x%" PRIx64, var->address);
-                            break;
+                            return our_sprintf("0x%" PRIx64, var->address);
+
+                        default:
+                            return var->value;
                         }
+                    };
+
+                    fn<void(Dlv_Var*, Dlv_Var*, int)> render_var = [&](Dlv_Var *var, Dlv_Var *key, int index_key) {
+                        SCOPED_FRAME();
+
+                        ImGui::TableNextRow();
+                        ImGui::TableNextColumn();
+
+                        ccstr var_name = NULL;
+                        if (index_key != -1) {
+                            var_name = our_sprintf("[%d]", index_key);
+                        } else if (key != NULL) {
+                            var_name = our_sprintf("[%s]", var_value_as_string(key));
+                        } else {
+                            var_name = var->name;
+                            if (var->flags & DLV_VAR_SHADOWED)
+                                var_name = our_sprintf("(%s)", var_name);
+                        }
+
+                        bool open = false;
+
+                        {
+                            SCOPED_FRAME();
+                            int tree_flags = ImGuiTreeNodeFlags_SpanFullWidth;
+                            bool leaf = ((var->children == NULL || var->children->len == 0) && !var->incomplete());
+                            if (leaf)
+                                tree_flags |= ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+                            open = ImGui::TreeNodeEx(var, tree_flags, "%s", var_name) && !leaf;
+                        }
+
+                        ImGui::TableNextColumn();
+                        ImGui::Text("%s", var_value_as_string(var));
 
                         ImGui::TableNextColumn();
                         ImGui::Text("%s", var->kind_name);
 
                         if (open) {
-                            For (*var->children)
-                                render_var(&it);
+                            if (var->kind == GO_KIND_MAP) {
+                                for (int k = 0; k < var->children->len; k += 2) {
+                                    auto key = var->children->at(k);
+                                    auto value = var->children->at(k+1);
+                                    render_var(&value, &key, -1);
+                                }
+                            } else {
+                                bool isarr = (var->kind == GO_KIND_ARRAY || var->kind == GO_KIND_SLICE);
+                                for (int k = 0; k < var->children->len; k++)
+                                    render_var(&var->children->at(k), NULL, isarr ? k : -1);
+                            }
 
                             if (var->incomplete()) {
+                                ImGui::TableNextRow();
+                                ImGui::TableNextColumn();
+
+                                if (ImGui::SmallButton("Load more...")) {
+                                    dbg.push_call(DLVC_VAR_LOAD_MORE, [&](Dlv_Call *it) {
+                                        it->var_load_more.state_id = dbg.state_id;
+                                        it->var_load_more.var = var;
+                                    });
+                                }
+
+                                ImGui::TableNextColumn();
+                                ImGui::TableNextColumn();
                                 // TODO: render "load more" button
                             }
 
@@ -2155,14 +2166,16 @@ int main() {
                     {
                         ImGui::PushFont(world.ui.im_font_mono);
 
-                        auto flags = ImGuiTableFlags_BordersV | ImGuiTableFlags_BordersOuterH | ImGuiTableFlags_Resizable | ImGuiTableFlags_RowBg | ImGuiTableFlags_NoBordersInBody;
+                        auto flags = ImGuiTableFlags_BordersV | ImGuiTableFlags_BordersOuterH | ImGuiTableFlags_Resizable;
                         if (ImGui::BeginTable("vars", 3, flags)) {
                             ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_NoHide);
                             ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_NoHide);
                             ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_NoHide);
+                            ImGui::TableHeadersRow();
 
                             bool loading = false;
                             bool done = false;
+
                             do {
                                 if (dbg.state_flag != DLV_STATE_PAUSED) break;
                                 if (state.current_goroutine_id == -1 || state.current_frame == -1) break;
@@ -2180,10 +2193,10 @@ int main() {
 
                                 if (frame->locals != NULL)
                                     For (*frame->locals)
-                                        render_var(&it);
+                                        render_var(&it, NULL, -1);
                                 if (frame->args != NULL)
                                     For (*frame->args)
-                                        render_var(&it);
+                                        render_var(&it, NULL, -1);
 
                                 if ((frame->locals == NULL || frame->locals->len == 0) && (frame->args == NULL || frame->args->len == 0)) {
                                     ImGui::Text("No variables to show here.");
