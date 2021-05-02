@@ -107,6 +107,9 @@ enum Dlv_Call_Type {
     DLVC_SET_CURRENT_GOROUTINE,
     DLVC_DELETE_ALL_BREAKPOINTS,
     DLVC_VAR_LOAD_MORE,
+    DLVC_CREATE_WATCH,
+    DLVC_EDIT_WATCH,
+    DLVC_DELETE_WATCH,
 };
 
 // https://godoc.org/reflect#Kind
@@ -174,8 +177,14 @@ enum Dlv_Watch_State {
 
 struct Dlv_Watch {
     char expr[256];
+    char expr_tmp[256];
+    bool editing;
+    bool open_before_editing;
+    bool edit_first_frame;
     Dlv_Watch_State state;
     Dlv_Var value;
+    bool fresh;
+    bool deleted;
 };
 
 struct Dlv_Frame {
@@ -210,7 +219,7 @@ struct Dlv_Call {
 
         struct {
             u32 goroutine_id;
-            u32 frame_id;
+            u32 frame;
         } set_current_frame;
 
         struct {
@@ -218,11 +227,11 @@ struct Dlv_Call {
         } set_current_goroutine;
 
         struct {
-            u32 frame_id;
+            u32 frame;
         } eval_watches;
 
         struct {
-            u32 frame_id;
+            u32 frame;
             u32 watch_id;
         } eval_single_watch;
 
@@ -230,6 +239,19 @@ struct Dlv_Call {
             int state_id;
             Dlv_Var *var;
         } var_load_more;
+
+        struct {
+            ccstr expression;
+        } create_watch;
+
+        struct {
+            ccstr expression;
+            int watch_idx;
+        } edit_watch;
+
+        struct {
+            int watch_idx;
+        } delete_watch;
     };
 };
 
@@ -298,7 +320,8 @@ struct Debugger {
     bool find_breakpoint(ccstr filename, u32 line, Breakpoint* out);
     bool can_read();
     List<Breakpoint>* list_breakpoints();
-    bool eval_expression(ccstr expression, i32 goroutine_id, i32 frame_id, Dlv_Var* out, Save_Var_Mode save_mode = SAVE_VAR_NORMAL);
+    bool eval_expression(ccstr expression, i32 goroutine_id, i32 frame, Dlv_Var* out, Save_Var_Mode save_mode = SAVE_VAR_NORMAL);
+    void eval_watch(Dlv_Watch *watch, int goroutine_id, int frame);
     i32 get_current_goroutine_id();
 
     void save_list_of_vars(Json_Navigator js, i32 idx, List<Dlv_Var>* out);
@@ -311,12 +334,12 @@ struct Debugger {
     void push_call(Dlv_Call_Type type);
 
     void fetch_stackframe(Dlv_Goroutine *goroutine);
-    void fetch_variables(int goroutine_id, int frame_idx, Dlv_Frame *frame);
+    void fetch_variables(int goroutine_id, int frame, Dlv_Frame *dlvframe);
     bool fetch_goroutines();
     void handle_new_state(Packet *p);
     void pause_and_resume(fn<void()> f);
     void halt_when_already_running();
-    void select_frame(u32 goroutine_id, u32 frame_id);
+    void select_frame(u32 goroutine_id, u32 frame);
     void set_current_goroutine(u32 goroutine_id);
 };
 

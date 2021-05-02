@@ -176,7 +176,20 @@ void Debugger::fetch_stackframe(Dlv_Goroutine *goroutine) {
     goroutine->fresh = true;
 }
 
-bool Debugger::eval_expression(ccstr expression, i32 goroutine_id, i32 frame_id, Dlv_Var* out, Save_Var_Mode save_mode) {
+void Debugger::eval_watch(Dlv_Watch *watch, int goroutine_id, int frame) {
+    // TODO: is there any difference between these two flags?
+    watch->fresh = false;
+    watch->state = DBGWATCH_PENDING;
+
+    if (eval_expression(watch->expr, goroutine_id, frame, &watch->value, SAVE_VAR_NORMAL))
+        watch->state = DBGWATCH_READY;
+    else
+        watch->state = DBGWATCH_ERROR;
+
+    watch->fresh = true;
+}
+
+bool Debugger::eval_expression(ccstr expression, i32 goroutine_id, i32 frame, Dlv_Var* out, Save_Var_Mode save_mode) {
     if (goroutine_id == -1) goroutine_id = get_current_goroutine_id();
     if (goroutine_id == -1) return false;
 
@@ -185,7 +198,7 @@ bool Debugger::eval_expression(ccstr expression, i32 goroutine_id, i32 frame_id,
         rend->field("Scope", [&]() {
             rend->obj([&]() {
                 rend->field("goroutineID", goroutine_id);
-                rend->field("frame", frame_id);
+                rend->field("frame", frame);
             });
         });
         rend->field("Cfg", [&]() {
@@ -814,12 +827,12 @@ void Debugger::set_current_goroutine(u32 goroutine_id) {
     send_command("switchGoroutine", true, goroutine_id);
 }
 
-void Debugger::select_frame(u32 goroutine_id, u32 frame_id) {
+void Debugger::select_frame(u32 goroutine_id, u32 frame) {
     auto old_goroutine_id = state.current_goroutine_id;
 
     state.current_frame = 0;
     state.current_goroutine_id = goroutine_id;
-    state.current_frame = frame_id;
+    state.current_frame = frame;
 
     if (old_goroutine_id != goroutine_id)
         set_current_goroutine(goroutine_id);
@@ -828,11 +841,11 @@ void Debugger::select_frame(u32 goroutine_id, u32 frame_id) {
     if (!goroutine->fresh)
         fetch_stackframe(goroutine);
 
-    auto frame = &goroutine->frames->items[frame_id];
-    if (!frame->fresh)
-        fetch_variables(goroutine_id, frame_id, frame);
+    auto dlvframe = &goroutine->frames->items[frame];
+    if (!dlvframe->fresh)
+        fetch_variables(goroutine_id, frame, dlvframe);
 
-    // TODO: evaluate watches.
+    For (watches) eval_watch(&it, goroutine_id, frame);
 }
 
 void Debugger::run_loop() {
@@ -845,6 +858,55 @@ void Debugger::run_loop() {
             SCOPED_LOCK(&calls_lock);
             For (calls) {
                 switch (it.type) {
+                case DLVC_CREATE_WATCH:
+                    {
+                        auto &args = it.create_watch;
+
+                        auto watch = watches.append();
+                        watch->fresh = false;
+                        watch->state = DBGWATCH_PENDING;
+
+                        {
+                            SCOPED_MEM(&watches_mem);
+                            strcpy_safe(watch->expr, _countof(watch->expr), args.expression);
+                            strcpy_safe(watch->expr_tmp, _countof(watch->expr_tmp), args.expression);
+                        }
+
+                        if (state_flag == DLV_STATE_PAUSED)
+                            eval_watch(watch, state.current_goroutine_id, state.current_frame);
+                    }
+                    break;
+                case DLVC_EDIT_WATCH:
+                    {
+                        auto &args = it.edit_watch;
+
+                        auto watch = &watches[args.watch_idx];
+
+                        watch->fresh = false;
+                        watch->state = DBGWATCH_PENDING;
+                        watch->editing = false;
+
+                        {
+                            SCOPED_MEM(&watches_mem);
+                            strcpy_safe(watch->expr, _countof(watch->expr), args.expression);
+                            strcpy_safe(watch->expr_tmp, _countof(watch->expr_tmp), args.expression);
+                        }
+
+                        if (state_flag == DLV_STATE_PAUSED)
+                            eval_watch(watch, state.current_goroutine_id, state.current_frame);
+                    }
+                    break;
+                case DLVC_DELETE_WATCH:
+                    {
+                        auto &args = it.delete_watch;
+                        watches.remove(args.watch_idx);
+                        if (watches.len == 0) {
+                            watches_mem.cleanup();
+                            watches_mem.init();
+                        }
+                    }
+                    break;
+
                 case DLVC_VAR_LOAD_MORE:
                     {
                         auto &args = it.var_load_more;
@@ -908,7 +970,7 @@ void Debugger::run_loop() {
                 case DLVC_SET_CURRENT_FRAME:
                     {
                         auto &args = it.set_current_frame;
-                        select_frame(args.goroutine_id, args.frame_id);
+                        select_frame(args.goroutine_id, args.frame);
                         /*
                         function select_frame:
                             load vars and watches
@@ -997,22 +1059,7 @@ void Debugger::run_loop() {
                     }
                     break;
 #if 0
-                case DLVC_EVAL_SINGLE_WATCH:
-                    {
-                        auto& params = it.eval_single_watch;
-
-                        auto& watch = watches[params.watch_id];
-                        watch.state = DBGWATCH_PENDING;
-                        if (!eval_expression(watch.expr, -1, params.frame_id, &watch.value))
-                            watch.state = DBGWATCH_ERROR;
-                        else
-                            watch.state = DBGWATCH_READY;
-                    }
-                    break;
-                case DLVC_EVAL_WATCHES:
-                    {
                         auto& params = it.eval_watches;
-
                         For (watches)
                             it.state = DBGWATCH_PENDING;
 
@@ -1020,7 +1067,7 @@ void Debugger::run_loop() {
 
                         u32 i = 0;
                         For (watches)
-                            results[i++] = eval_expression(it.expr, -1, params.frame_id, &it.value);
+                            results[i++] = eval_expression(it.expr, -1, params.frame, &it.value);
 
                         i = 0;
                         For (watches)
@@ -1185,6 +1232,8 @@ void Debugger::handle_new_state(Packet *p) {
         state_flag = DLV_STATE_PAUSED;
     }
 
+    select_frame(state.current_goroutine_id, state.current_frame);
+
     For (state.goroutines) {
         auto entry = goroutines_with_breakpoint.find([&](auto g) { return g->goroutine_id == it.id; });
         if (entry != NULL) {
@@ -1196,22 +1245,23 @@ void Debugger::handle_new_state(Packet *p) {
         }
     }
 
-    // when halting, there won't be a current goroutine
-    if (state.current_goroutine_id == -1)
-        select_frame(state.goroutines[0].id, 0);
+    int goroutine_id = state.current_goroutine_id;
+    if (goroutine_id == -1) // halting
+        goroutine_id = state.goroutines[0].id;
+    select_frame(goroutine_id, state.current_frame);
 }
 
-void Debugger::fetch_variables(int goroutine_id, int frame_idx, Dlv_Frame *frame) {
+void Debugger::fetch_variables(int goroutine_id, int frame, Dlv_Frame *dlvframe) {
     Json_Navigator js;
 
-    frame->locals = NULL;
-    frame->args = NULL;
+    dlvframe->locals = NULL;
+    dlvframe->args = NULL;
 
     js = send_packet("ListLocalVars", [&]() {
         rend->field("Scope", [&]() {
             rend->obj([&]() {
                 rend->field("GoroutineId", goroutine_id);
-                rend->field("Frame", frame_idx);
+                rend->field("Frame", frame);
                 rend->field("DeferredCall", 0);
             });
         });
@@ -1228,15 +1278,15 @@ void Debugger::fetch_variables(int goroutine_id, int frame_idx, Dlv_Frame *frame
 
     auto vars_idx = js.get(0, ".result.Variables");
     if (vars_idx != -1) {
-        frame->locals = alloc_list<Dlv_Var>();
-        save_list_of_vars(js, vars_idx, frame->locals);
+        dlvframe->locals = alloc_list<Dlv_Var>();
+        save_list_of_vars(js, vars_idx, dlvframe->locals);
     }
 
     js = send_packet("ListFunctionArgs", [&]() {
         rend->field("Scope", [&]() {
             rend->obj([&]() {
                 rend->field("GoroutineId", goroutine_id);
-                rend->field("Frame", frame_idx);
+                rend->field("Frame", frame);
                 rend->field("DeferredCall", 0);
             });
         });
@@ -1253,11 +1303,11 @@ void Debugger::fetch_variables(int goroutine_id, int frame_idx, Dlv_Frame *frame
 
     vars_idx = js.get(0, ".result.Args");
     if (vars_idx != -1) {
-        frame->args = alloc_list<Dlv_Var>();
-        save_list_of_vars(js, vars_idx, frame->args);
+        dlvframe->args = alloc_list<Dlv_Var>();
+        save_list_of_vars(js, vars_idx, dlvframe->args);
     }
 
-    frame->fresh = true;
+    dlvframe->fresh = true;
 }
 
 bool Debugger::fetch_goroutines() {
@@ -1292,11 +1342,6 @@ bool Debugger::fetch_goroutines() {
             goroutine->status = js.num(js.get(it, ".status"));
             goroutine->thread_id = js.num(js.get(it, ".threadID"));
             goroutine->fresh = false;
-        }
-
-        if (goroutine->id == state.current_goroutine_id) {
-            fetch_stackframe(goroutine);
-            fetch_variables(goroutine->id, state.current_frame, &goroutine->frames->items[0]);
         }
     }
 }

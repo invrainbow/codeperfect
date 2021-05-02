@@ -297,6 +297,7 @@ struct World {
         bool focused;
         int current_goroutine;
         int current_frame;
+        char new_watch_buf[256];
     } wnd_debugger;
 
     struct {

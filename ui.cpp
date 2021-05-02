@@ -1073,9 +1073,6 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                 if (world.dbg.state_flag == DLV_STATE_PAUSED) {
                     current_goroutine_id = world.dbg.state.current_goroutine_id;
                     For (world.dbg.state.goroutines) {
-                        if (it.breakpoint_hit)
-                            if (are_filepaths_equal(it.curr_file, editor->filepath))
-                                goroutines_hit->append(&it);
                         if (it.id == current_goroutine_id) {
                             current_goroutine = &it;
                             if (current_goroutine->fresh) {
@@ -1086,6 +1083,9 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                                 if (are_filepaths_equal(it.curr_file, current_goroutine->curr_file))
                                     is_current_goroutine_on_current_file = true;
                             }
+                        } else if (it.breakpoint_hit) {
+                            if (are_filepaths_equal(it.curr_file, editor->filepath))
+                                goroutines_hit->append(&it);
                         }
                     }
                 }
