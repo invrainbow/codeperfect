@@ -2150,8 +2150,7 @@ int main() {
     double last_time = glfwGetTime();
     i64 last_frame_time = current_time_in_nanoseconds();
 
-    // init_with_file_at_location(path_join(world.current_path, "sync/sync.go"), new_cur2(10, 11));
-    world.get_current_pane()->focus_editor(path_join(world.current_path, "12to18vars/main.go"), new_cur2(1, 8));
+    world.get_current_pane()->focus_editor(path_join(world.current_path, "21autogen/main.go"), new_cur2(1, 8));
 
     while (!glfwWindowShouldClose(world.window)) {
         world.frame_mem.reset();
@@ -2175,6 +2174,12 @@ int main() {
                         auto editor = world.find_editor_by_id(it.reload_editor_id);
                         if (editor == NULL) break;
                         editor->reload_file(true);
+                    }
+                    break;
+                case MTM_GOTO_FILEPOS:
+                    {
+                        auto &args = it.goto_filepos;
+                        world.get_current_pane()->focus_editor(args.file, args.pos);
                     }
                     break;
                 }

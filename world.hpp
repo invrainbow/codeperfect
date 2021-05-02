@@ -57,6 +57,7 @@ struct File_Tree_Node {
 enum Main_Thread_Message_Type {
     MTM_NVIM_MESSAGE,
     MTM_RELOAD_EDITOR,
+    MTM_GOTO_FILEPOS,
 };
 
 struct Main_Thread_Message {
@@ -65,6 +66,10 @@ struct Main_Thread_Message {
     union {
         Nvim_Message nvim_message;
         u32 reload_editor_id;
+        struct {
+            ccstr file;
+            cur2 pos;
+        } goto_filepos;
     };
 };
 

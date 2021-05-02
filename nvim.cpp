@@ -918,7 +918,7 @@ void Nvim::run_event_loop() {
         ASSERT(msglen == expected_len);
 
         auto add_event = [&](fn<void(Nvim_Message*)> f) {
-            world.add_event([&](Main_Thread_Message *msg) {
+            world.add_event([&](auto msg) {
                 msg->type = MTM_NVIM_MESSAGE;
                 msg->nvim_message.type = msgtype;
                 f(&msg->nvim_message);
