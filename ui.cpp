@@ -80,8 +80,6 @@ bool UI::init_sprite_texture() {
     }
 }
 
-#define LINE_HEIGHT 1.2
-
 vec3f rgb_hex(ccstr s) {
     if (s[0] == '#') s++;
 
@@ -975,7 +973,7 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
 
         // draw editor
         if (pane.editors.len > 0) {
-            vec2f cur_pos = editor_area.pos + new_vec2f(EDITOR_MARGIN_X, EDITOR_MARGIN_Y);
+            vec2f cur_pos = editor_area.pos + new_vec2f(settings.editor_margin_x, settings.editor_margin_y);
             cur_pos.y += font->offset_y;
 
             auto editor = pane.get_current_editor();
@@ -1222,8 +1220,8 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                     if (editor->cur == new_cur2(line->len, y))
                         draw_cursor();
 
-                    cur_pos.x = editor_area.x + EDITOR_MARGIN_X;
-                    cur_pos.y += font->height * LINE_HEIGHT;
+                    cur_pos.x = editor_area.x + settings.editor_margin_x;
+                    cur_pos.y += font->height * settings.line_height;
                 }
 
                 do {
@@ -1261,8 +1259,8 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                         // menu.y = min(actual_cursor_position.y - font->offset_y + font->height, world.window_size.y - menu.h);
 
                         {
-                            auto y1 = actual_cursor_position.y - font->offset_y;
-                            auto y2 = actual_cursor_position.y - font->offset_y + font->height;
+                            auto y1 = actual_cursor_position.y - font->offset_y - settings.autocomplete_menu_margin_y;
+                            auto y2 = actual_cursor_position.y - font->offset_y + (font->height * settings.line_height) + settings.autocomplete_menu_margin_y;
 
                             if (y2 + menu.h < world.window_size.y) {
                                 menu.y = y2;
@@ -1339,13 +1337,18 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                     if (hint.gotype == NULL) break;
 
                     boxf bg;
-                    bg.w = font->width * strlen(hint.help_text);
-                    bg.h = font->height;
+                    bg.w = font->width * strlen(hint.help_text) + settings.parameter_hint_padding_x * 2;
+                    bg.h = font->height + settings.parameter_hint_padding_y * 2;
                     bg.x = min(actual_parameter_hint_start.x, world.window_size.x - bg.w);
-                    bg.y = min(actual_parameter_hint_start.y - font->offset_y - font->height, world.window_size.y - bg.h);
+                    bg.y = min(actual_parameter_hint_start.y - font->offset_y - bg.h - settings.parameter_hint_margin_y, world.window_size.y - bg.h);
 
-                    draw_bordered_rect_outer(bg, rgba(COLOR_DARK_GREY), rgba(COLOR_WHITE), 1);
-                    draw_string(bg.pos, hint.help_text, rgba(COLOR_WHITE));
+                    draw_bordered_rect_outer(bg, rgba(COLOR_DARK_GREY), rgba(COLOR_WHITE), 1, 4);
+
+                    auto text_pos = bg.pos;
+                    text_pos.x += settings.parameter_hint_padding_x;
+                    text_pos.y += settings.parameter_hint_padding_y;
+
+                    draw_string(text_pos, hint.help_text, rgba(COLOR_WHITE));
                 } while (0);
             }
         }
@@ -1675,8 +1678,8 @@ void UI::recalculate_view_sizes(bool force) {
 
     for (u32 i = 0; i < world.panes.len; i++) {
         for (auto&& editor : world.panes[i].editors) {
-            editor.view.w = (i32)((editor_sizes[i].x - EDITOR_MARGIN_X) / world.font.width);
-            editor.view.h = (i32)((editor_sizes[i].y - EDITOR_MARGIN_Y) / world.font.height / LINE_HEIGHT);
+            editor.view.w = (i32)((editor_sizes[i].x - settings.editor_margin_x) / world.font.width);
+            editor.view.h = (i32)((editor_sizes[i].y - settings.editor_margin_y) / world.font.height / settings.line_height);
         }
     }
 }

@@ -565,12 +565,11 @@ struct Type_Renderer : public Text_Renderer {
 
                 auto result = sig.result;
                 if (result != NULL && result->len > 0) {
-                    if (result->len == 1 && result->at(0).name == NULL) {
-                        write(" ");
+                    write(" ");
+                    if (result->len == 1 && result->at(0).name == NULL)
                         write_type(result->at(0).gotype);
-                    } else {
+                    else
                         write_params(result);
-                    }
                 }
             }
             break;

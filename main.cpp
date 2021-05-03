@@ -445,13 +445,19 @@ void render_ts_cursor(TSTreeCursor *curr) {
         pop(depth);
         last_depth = depth;
 
-        auto flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth;
+        auto flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
+
+        if (node->child_count == 0)
+            flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_Bullet;
 
         auto type_str = ts_ast_type_str(node->type);
         if (type_str == NULL)
             type_str = "(unknown)";
         else
             type_str += strlen("TS_");
+
+        if (node->anon)
+            ImGui::PushStyleColor(ImGuiCol_Text, (ImVec4)ImColor(128, 128, 128));
 
         auto field_type_str = ts_field_type_str(field_type);
         if (field_type_str == NULL)
@@ -473,6 +479,9 @@ void render_ts_cursor(TSTreeCursor *curr) {
                 format_pos(node->start),
                 format_pos(node->end)
             );
+
+        if (node->anon)
+            ImGui::PopStyleColor();
 
         if (ImGui::IsItemClicked()) {
             auto editor = world.get_current_editor();
@@ -2150,7 +2159,7 @@ int main() {
     double last_time = glfwGetTime();
     i64 last_frame_time = current_time_in_nanoseconds();
 
-    world.get_current_pane()->focus_editor(path_join(world.current_path, "21autogen/main.go"), new_cur2(1, 8));
+    // world.get_current_pane()->focus_editor(path_join(world.current_path, "21autogen/main.go"), new_cur2(1, 8));
 
     while (!glfwWindowShouldClose(world.window)) {
         world.frame_mem.reset();

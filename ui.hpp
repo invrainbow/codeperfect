@@ -83,9 +83,6 @@ struct Vert {
     i32 texture_id;
 };
 
-const auto EDITOR_MARGIN_X = 5.0;
-const auto EDITOR_MARGIN_Y = 5.0;
-
 #define ROUND_TL (1 << 0)
 #define ROUND_BL (1 << 1)
 #define ROUND_TR (1 << 2)
