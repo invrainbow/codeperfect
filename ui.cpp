@@ -1000,7 +1000,7 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
 
                     if (node_end < start) return WALK_SKIP_CHILDREN;
                     if (node_start > end) return WALK_ABORT;
-                    if (node->child_count != 0) return WALK_CONTINUE;
+                    // if (node->child_count != 0) return WALK_CONTINUE;
 
                     vec3f color = {0};
                     if (get_type_color(node, editor, &color)) {
@@ -1363,7 +1363,7 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
         // glfwSetCursor(wnd, world.ui.cursors[ImGuiMouseCursor_ResizeEW]);
         // glfwSetCursor(wnd, world.ui.cursors[ImGuiMouseCursor_Arrow]);
 
-        float offset = panes_area.x;
+        float offset = 0;
 
         for (u32 i = 0; i < world.panes.len - 1; i++) {
             offset += world.panes[i].width;
