@@ -985,13 +985,16 @@ bool Go_Indexer::start_background_thread() {
 Parsed_File *Go_Indexer::parse_file(ccstr filepath, bool use_latest) {
     Parsed_File *ret = NULL;
 
-    auto editor = get_open_editor(filepath);
-    if (editor != NULL && use_latest) {
+    if (use_latest) {
+        auto editor = get_open_editor(filepath);
+        if (editor == NULL) return NULL;
+
         auto it = alloc_object(Parser_It);
         it->init(&editor->buf);
 
         ret = alloc_object(Parsed_File);
         ret->tree_belongs_to_editor = true;
+        ret->editor_parser = editor->parser;
         ret->it = it;
         ret->tree = ts_tree_copy(editor->tree);
     } else {
@@ -1015,6 +1018,7 @@ Parsed_File *Go_Indexer::parse_file(ccstr filepath, bool use_latest) {
 
         ret = alloc_object(Parsed_File);
         ret->tree_belongs_to_editor = false;
+        ret->editor_parser = NULL;
         ret->it = pinput.it;
         ret->tree = tree;
     }
@@ -1032,7 +1036,7 @@ Ast_Node *new_ast_node(TSNode node, Parser_It *it) {
 void Go_Indexer::free_parsed_file(Parsed_File *file) {
     if (file->it != NULL) file->it->cleanup();
 
-    // do we even need to free tree, if we're using our custom pool memory?
+    // do we even need to/can we even free tree, if we're using our custom pool memory?
     /*
     if (file->tree != NULL)
         if (!file->tree_belongs_to_editor)
@@ -1764,12 +1768,81 @@ bool is_expression_node(Ast_Node *node) {
     return false;
 }
 
+char go_tsinput_buffer[1024];
+
+bool Go_Indexer::truncate_parsed_file(Parsed_File *pf, cur2 end_pos, char char_to_append) {
+    if (!pf->tree_belongs_to_editor) return false;
+    if (pf->it->type != IT_BUFFER) return false;
+
+    auto buf = pf->it->buffer_params.it.buf;
+    auto eof_pos = new_cur2((i32)buf->lines.last()->len, (i32)buf->lines.len - 1);
+
+    TSInputEdit edit = {0};
+    edit.start_byte = buf->cur_to_offset(buf->inc_cur(end_pos));
+    edit.start_point = cur_to_tspoint(buf->inc_cur(end_pos));
+    edit.old_end_byte = buf->cur_to_offset(eof_pos);
+    edit.old_end_point = cur_to_tspoint(eof_pos);
+    edit.new_end_byte = edit.start_byte;
+    edit.new_end_point = edit.start_point;
+
+    ts_tree_edit(pf->tree, &edit);
+
+    auto it = &pf->it->buffer_params.it;
+    it->has_fake_end = true;
+    it->fake_end = end_pos;
+    it->fake_end_offset = buf->cur_to_offset(it->fake_end);
+
+    if (char_to_append != 0) {
+        it->append_char_to_end = true;
+        it->char_to_append_to_end = char_to_append;
+    }
+
+    TSInput input;
+    input.payload = it;
+    input.encoding = TSInputEncodingUTF8;
+
+    input.read = [](void *p, uint32_t off, TSPoint pos, uint32_t *read) -> const char* {
+        auto it = (Buffer_It*)p;
+
+        if (it->has_fake_end && off > it->fake_end_offset) {
+            it->pos = it->fake_end;
+            it->pos.x += (it->fake_end_offset - off);
+        } else {
+            it->pos = it->buf->offset_to_cur(off);
+        }
+
+        u32 n = 0;
+
+        while (!it->eof()) {
+            auto uch = it->next();
+            if (uch == 0) break;
+
+            auto size = uchar_size(uch);
+            if (n + size + 1 > _countof(go_tsinput_buffer)) break;
+
+            uchar_to_cstr(uch, &go_tsinput_buffer[n], &size);
+            n += size;
+        }
+
+        *read = n;
+        go_tsinput_buffer[n] = '\0';
+        return go_tsinput_buffer;
+    };
+
+    pf->tree = ts_parser_parse(pf->editor_parser, pf->tree, input);
+    pf->root = new_ast_node(ts_tree_root_node(pf->tree), pf->it);
+    return true;
+}
+
 bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period, Autocomplete *out) {
     reload_all_dirty_files();
 
     auto pf = parse_file(filepath, true);
     if (pf == NULL) return false;
     defer { free_parsed_file(pf); };
+
+    if (!truncate_parsed_file(pf, pos, 0)) return false;
+    defer { ts_tree_delete(pf->tree); };
 
     auto intelligently_move_cursor_backwards = [&]() -> cur2 {
         auto it = alloc_object(Parser_It);
@@ -2025,7 +2098,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
 
             /* to read imports from the index:
             auto pkg = find_up_to_date_package(ctx.import_path);
-            auto check = [&](Go_File *it) { return streq(it->filename, ctx.filename); };
+            auto check = [&](auto it) { return streq(it->filename, ctx.filename); };
             auto file = pkg->files->find(check);
             For (*file->imports) it.package_name; */
 
@@ -2054,6 +2127,9 @@ Parameter_Hint *Go_Indexer::parameter_hint(ccstr filepath, cur2 pos, bool trigge
     if (pf == NULL) return NULL;
     defer { free_parsed_file(pf); };
 
+    if (!truncate_parsed_file(pf, pos, ')')) return NULL;
+    defer { ts_tree_delete(pf->tree); };
+
     auto go_back_until_non_space = [&]() -> cur2 {
         auto it = alloc_object(Parser_It);
         memcpy(it, pf->it, sizeof(Parser_It));
@@ -2067,12 +2143,20 @@ Parameter_Hint *Go_Indexer::parameter_hint(ccstr filepath, cur2 pos, bool trigge
 
     find_nodes_containing_pos(pf->root, go_back_until_non_space(), false, [&](Ast_Node *node) -> Walk_Action {
         switch (node->type) {
+        case TS_TYPE_CONVERSION_EXPRESSION:
         case TS_CALL_EXPRESSION:
             {
                 if (cmp_pos_to_node(pos, node) != 0) return WALK_ABORT;
 
-                auto func = node->field(TSF_FUNCTION);
-                auto args = node->field(TSF_ARGUMENTS);
+                Ast_Node *func = NULL, *args = NULL;
+
+                if (node->type == TS_TYPE_CONVERSION_EXPRESSION) {
+                    func = node->field(TSF_TYPE);
+                    args = node->field(TSF_OPERAND);
+                } else {
+                    func = node->field(TSF_FUNCTION);
+                    args = node->field(TSF_ARGUMENTS);
+                }
 
                 if (cmp_pos_to_node(pos, args) < 0) break;
                 if (func->null || args->null) break;

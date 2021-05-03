@@ -830,6 +830,7 @@ struct Parsed_File {
     TSTree *tree;
     Parser_It *it;
     bool tree_belongs_to_editor;
+    TSParser *editor_parser;
 };
 
 typedef fn<Walk_Action(Ast_Node *node, Ts_Field_Type field_type, int depth)> Walk_TS_Callback;
@@ -1139,10 +1140,10 @@ struct Go_Indexer {
     u64 hash_file(ccstr filepath);
     void start_writing();
     void stop_writing();
-
     ccstr gohelper_readline();
     int gohelper_readint();
     ccstr gohelper_run(Gohelper_Op op, ...);
+    bool truncate_parsed_file(Parsed_File *pf, cur2 end_pos, char char_to_append);
 };
 
 struct Scoped_Write {

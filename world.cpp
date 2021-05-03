@@ -124,7 +124,7 @@ void World::init_workspace() {
     panes.init(LIST_FIXED, _countof(_panes), _panes);
 
 #if 1
-    strcpy_safe(current_path, _countof(current_path), normalize_path_sep("c:/users/brandon/delve_client_testing"));
+    strcpy_safe(current_path, _countof(current_path), normalize_path_sep("c:/users/brandon/cryptopals"));
 #else
     Select_File_Opts opts = {0};
     opts.buf = current_path;

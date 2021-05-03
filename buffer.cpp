@@ -28,7 +28,6 @@ s32 uchar_size(uchar c) {
     if (c <= 0xffff) return 3;
     return 4;
 }
-
 uchar Buffer_It::get(cur2 _pos) {
     auto old = pos;
     pos = _pos;
@@ -37,11 +36,21 @@ uchar Buffer_It::get(cur2 _pos) {
 }
 
 bool Buffer_It::eof() {
+    if (has_fake_end) {
+        auto new_end = fake_end;
+        if (append_char_to_end) new_end.x++;
+        return pos > new_end;
+    }
+
     if (buf->lines.len == 0) return true;
-    return (y == buf->lines.len - 1 && x == buf->lines[y].len);
+    if (y == buf->lines.len - 1 && x == buf->lines[y].len) return true;
+    if (y > buf->lines.len - 1) return true;
+    return false;
 }
 
 uchar Buffer_It::peek() {
+    if (has_fake_end && append_char_to_end && pos == fake_end)
+        return char_to_append_to_end;
     if (x == buf->lines[y].len)
         return '\n';
     return buf->lines[y][x];
@@ -373,7 +382,7 @@ void Buffer::remove(cur2 start, cur2 end) {
 }
 
 Buffer_It Buffer::iter(cur2 c) {
-    Buffer_It it;
+    Buffer_It it = {0};
     it.buf = this;
     it.pos = c;
     return it;
