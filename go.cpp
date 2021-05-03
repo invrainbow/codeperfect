@@ -1778,8 +1778,8 @@ bool Go_Indexer::truncate_parsed_file(Parsed_File *pf, cur2 end_pos, char char_t
     auto eof_pos = new_cur2((i32)buf->lines.last()->len, (i32)buf->lines.len - 1);
 
     TSInputEdit edit = {0};
-    edit.start_byte = buf->cur_to_offset(buf->inc_cur(end_pos));
-    edit.start_point = cur_to_tspoint(buf->inc_cur(end_pos));
+    edit.start_byte = buf->cur_to_offset(end_pos);
+    edit.start_point = cur_to_tspoint(end_pos);
     edit.old_end_byte = buf->cur_to_offset(eof_pos);
     edit.old_end_point = cur_to_tspoint(eof_pos);
     edit.new_end_byte = edit.start_byte;
@@ -1804,9 +1804,9 @@ bool Go_Indexer::truncate_parsed_file(Parsed_File *pf, cur2 end_pos, char char_t
     input.read = [](void *p, uint32_t off, TSPoint pos, uint32_t *read) -> const char* {
         auto it = (Buffer_It*)p;
 
-        if (it->has_fake_end && off > it->fake_end_offset) {
+        if (it->has_fake_end && off >= it->fake_end_offset) {
             it->pos = it->fake_end;
-            it->pos.x += (it->fake_end_offset - off);
+            it->pos.x += (off - it->fake_end_offset);
         } else {
             it->pos = it->buf->offset_to_cur(off);
         }
