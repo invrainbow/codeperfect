@@ -35,7 +35,8 @@ void Editor::update_lines(int firstline, int lastline, List<uchar*> *new_lines, 
 
     auto start_cur = new_cur2(0, (i32)firstline);
     auto old_end_cur = new_cur2(0, (i32)lastline);
-    if (lastline == buf.lines.len) {
+
+    if (lastline == buf.lines.len && buf.lines.len > 0) {
         start_cur = buf.dec_cur(start_cur);
         old_end_cur = new_cur2((i32)buf.lines.last()->len, (i32)buf.lines.len - 1);
     }
