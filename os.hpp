@@ -75,7 +75,7 @@ struct Process {
 
     void cleanup();
     bool run(ccstr _cmd);
-    Process_Status status(bool allow_non_zero_exit_code = false);
+    Process_Status status();
     bool peek(char *ch);
     bool can_read();
     bool read1(char* ch);

@@ -109,15 +109,13 @@ bool Process::run(ccstr _cmd) {
     return true;
 }
 
-Process_Status Process::status(bool allow_non_zero_exit_code) {
+Process_Status Process::status() {
     int status;
     auto w = waitpid(pid, &status, WNOHANG);
     if (w == -1) return PROCESS_ERROR;
 
     if (WIFEXITED(status)) {
-        auto exit_code = WEXITSTATUS(status);
-        if (!allow_non_zero_exit_code && exit_code != 0)
-            return PROCESS_ERROR;
+        exit_code = WEXITSTATUS(status);
         return PROCESS_DONE;
     }
 

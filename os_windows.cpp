@@ -160,7 +160,7 @@ bool Process::run(ccstr _cmd) {
     return true;
 }
 
-Process_Status Process::status(bool allow_non_zero_exit_code) {
+Process_Status Process::status() {
     switch (WaitForSingleObject(proc, 0)) {
         case WAIT_TIMEOUT:
             return PROCESS_WAITING;
