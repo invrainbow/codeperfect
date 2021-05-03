@@ -1244,7 +1244,7 @@ int main() {
         // assert(ui_font != NULL, "unable to load UI font");
         // world.ui.im_font_ui = io.Fonts->AddFontFromMemoryTTF(ui_font, len, UI_FONT_SIZE);
 
-        world.ui.im_font_ui = io.Fonts->AddFontFromFileTTF("FiraSans-Regular.ttf", UI_FONT_SIZE);
+        world.ui.im_font_ui = io.Fonts->AddFontFromFileTTF("fonts/FiraSans-Regular.ttf", UI_FONT_SIZE);
         assert(world.ui.im_font_ui != NULL, "unable to load UI font");
 
         // auto mono_font = read_font_data_from_first_found(&len, "Courier New", "Consolas", "Menlo", "Courier New");
