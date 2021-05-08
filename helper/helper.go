@@ -22,6 +22,7 @@ const (
     OpStartBuild
     OpGetBuildStatus
     OpStopBuild
+    OpGetGoEnvVars
 )
 
 func write(x interface{}) {
@@ -162,6 +163,11 @@ loop:
         case OpStopBuild:
             stopBuild()
             write("true")
+
+        case OpGetGoEnvVars:
+            write("true")
+            write(ctx.GOPATH)
+            write(ctx.GOROOT)
 
 		default:
 			break loop

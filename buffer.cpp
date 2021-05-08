@@ -226,6 +226,7 @@ void Buffer::read(Buffer_Read_Func f) {
         }
     }
 
+    (*bytecounts.last())++;
     dirty = false;
 }
 

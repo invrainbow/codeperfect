@@ -692,11 +692,11 @@ struct Debugger_UI {
                     for (int i = 0; i < args->indent; i++)
                         ImGui::Indent();
 
-                    if (leaf) ImGui::Unindent(ImGui::GetTreeNodeToLabelSpacing());
+                    // if (leaf) ImGui::Unindent(ImGui::GetTreeNodeToLabelSpacing());
 
                     open = ImGui::TreeNodeEx(var, tree_flags, "%s", watch->expr) && !leaf;
 
-                    if (leaf) ImGui::Indent(ImGui::GetTreeNodeToLabelSpacing());
+                    // if (leaf) ImGui::Indent(ImGui::GetTreeNodeToLabelSpacing());
 
                     if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && ImGui::IsItemHovered(ImGuiHoveredFlags_None)) {
                         watch->editing = true;
@@ -745,7 +745,7 @@ struct Debugger_UI {
                 ImGui::TextWrapped("%s", var_value_as_string(var));
             ImGui::TableNextColumn();
             if (watch == NULL || watch->state != DBGWATCH_ERROR) {
-                if (var->kind_name[0] == '\0') {
+                if (var->kind_name == NULL || var->kind_name[0] == '\0') {
                     switch (var->kind) {
                     case GO_KIND_BOOL: ImGui::TextWrapped("bool"); break;
                     case GO_KIND_INT: ImGui::TextWrapped("int"); break;
@@ -773,6 +773,7 @@ struct Debugger_UI {
                     case GO_KIND_STRING: ImGui::TextWrapped("string"); break;
                     case GO_KIND_STRUCT: ImGui::TextWrapped("<struct>"); break;
                     case GO_KIND_UNSAFEPOINTER: ImGui::TextWrapped("unsafe.Pointer"); break;
+                    default: ImGui::TextWrapped("<unknown>"); break;
                     }
                 } else {
                     ImGui::TextWrapped("%s", var->kind_name);
@@ -1433,9 +1434,7 @@ int main() {
 
                     auto relpath = wnd.filepaths->at(wnd.filtered_results->at(wnd.selection));
                     auto filepath = path_join(world.current_path, relpath);
-                    auto pane = world.get_current_pane();
-
-                    pane->focus_editor(filepath);
+                    world.focus_editor(filepath);
                     break;
                 }
                 break;
@@ -1672,14 +1671,14 @@ int main() {
                                 text[i] = clipboard_contents[i];
 
                             editor->start_change();
-                            editor->buf.insert(editor->cur, text, len);
+                            {
+                                editor->buf.insert(editor->cur, text, len);
+                                auto cur = editor->cur;
+                                for (u32 i = 0; i < len; i++)
+                                    cur = editor->buf.inc_cur(cur);
+                                editor->raw_move_cursor(cur);
+                            }
                             editor->end_change();
-
-                            auto cur = editor->cur;
-                            for (u32 i = 0; i < len; i++)
-                                cur = editor->buf.inc_cur(cur);
-
-                            editor->raw_move_cursor(cur);
                         } else {
                             send_nvim_keys("<C-v>");
                         }
@@ -1716,7 +1715,7 @@ int main() {
 
                             auto target = editor;
                             if (!streq(editor->filepath, result->file))
-                                target = world.get_current_pane()->focus_editor(result->file);
+                                target = world.focus_editor(result->file);
 
                             if (target == NULL) break;
 
@@ -1970,7 +1969,7 @@ int main() {
                                 editor->raw_move_cursor(new_cur2(ac_start.x + len, ac_start.y));
 
                                 // clear autocomplete
-                                ac.ac.results = NULL;
+                                ptr0(&ac.ac);
 
                                 // update buffer
                                 if (world.nvim.mode != VI_INSERT) {
@@ -2159,7 +2158,7 @@ int main() {
     double last_time = glfwGetTime();
     i64 last_frame_time = current_time_in_nanoseconds();
 
-    // world.get_current_pane()->focus_editor(path_join(world.current_path, "21autogen/main.go"), new_cur2(1, 8));
+    // world.focus_editor(path_join(world.current_path, "21autogen/main.go"), new_cur2(1, 8));
 
     while (!glfwWindowShouldClose(world.window)) {
         world.frame_mem.reset();
@@ -2188,7 +2187,7 @@ int main() {
                 case MTM_GOTO_FILEPOS:
                     {
                         auto &args = it.goto_filepos;
-                        world.get_current_pane()->focus_editor(args.file, args.pos);
+                        world.focus_editor(args.file, args.pos);
                     }
                     break;
                 }

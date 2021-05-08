@@ -564,6 +564,7 @@ enum Godecl_Type {
     GODECL_FUNC, // should we have GODECL_METHOD too? can just check gotype->func_recv
     GODECL_FIELD,
     GODECL_SHORTVAR,
+    // GODECL_RANGE,
 };
 
 ccstr godecl_type_str(Godecl_Type type);
@@ -668,6 +669,7 @@ enum Gotype_Type {
     GOTYPE_LAZY_ID,
     GOTYPE_LAZY_SEL,
     GOTYPE_LAZY_ONE_OF_MULTI,
+    GOTYPE_LAZY_RANGE,
 };
 
 ccstr gotype_type_str(Gotype_Type type);
@@ -734,6 +736,11 @@ struct Gotype {
         Gotype *lazy_dereference_base;
         Gotype *lazy_reference_base;
         Gotype *lazy_arrow_base;
+
+        struct {
+            Gotype *lazy_range_base;
+            bool lazy_range_is_index;
+        };
 
         struct {
             Gotype *lazy_one_of_multi_base;
@@ -856,12 +863,15 @@ struct Module_Resolver {
         ccstr value; // only leaves have values
     };
 
+    ccstr goroot;
+    ccstr gopath;
+
     Pool mem;
     Node *root_import_to_resolved;
     Node *root_resolved_to_import;
     ccstr module_path;
 
-    void init(ccstr current_module_filepath);
+    void init(ccstr current_module_filepath, ccstr _goroot, ccstr _gopath);
     void cleanup();
 
     Node *goto_child(Node *node, ccstr name, bool create_if_not_found) {
@@ -1035,6 +1045,7 @@ enum Gohelper_Op {
     GH_OP_START_BUILD,
     GH_OP_GET_BUILD_STATUS,
     GH_OP_STOP_BUILD,
+    GH_OP_GET_GO_ENV_VARS,
 };
 
 enum {
@@ -1043,6 +1054,9 @@ enum {
 };
 
 struct Go_Indexer {
+    ccstr goroot;
+    ccstr gopath;
+
     Pool mem;        // mem that exists for lifetime of Go_Indexer
     Pool final_mem;  // memory that holds the final value of this->index`
     Pool ui_mem;     // memory used by UI when it calls jump to definition, etc.
@@ -1123,7 +1137,7 @@ struct Go_Indexer {
     Go_Package *find_up_to_date_package(ccstr import_path);
     void import_spec_to_decl(Ast_Node *spec_node, Godecl *decl);
     List<Goresult> *get_possible_dot_completions(Ast_Node *operand_node, bool *was_package, Go_Ctx *ctx);
-    bool assignment_to_decls(List<Ast_Node*> *lhs, List<Ast_Node*> *rhs, New_Godecl_Func new_godecl);
+    bool assignment_to_decls(List<Ast_Node*> *lhs, List<Ast_Node*> *rhs, New_Godecl_Func new_godecl, bool range = false);
     Gotype *new_primitive_type(ccstr name);
     Goresult *evaluate_type(Gotype *gotype, Go_Ctx *ctx);
     Gotype *expr_to_gotype(Ast_Node *expr);

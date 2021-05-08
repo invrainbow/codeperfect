@@ -7,12 +7,6 @@
 #include "editor.hpp"
 #include "meow_hash.hpp"
 
-// TODO: dynamically determine this
-static const char GOROOT[] = "c:\\go";
-static const char GOPATH[] = "c:\\users\\brandon\\go";
-
-// -----
-
 s32 num_index_stream_opens = 0;
 s32 num_index_stream_closes = 0;
 
@@ -102,12 +96,15 @@ ccstr Index_Stream::readstr() {
     return s;
 }
 
-void Module_Resolver::init(ccstr current_module_filepath) {
+void Module_Resolver::init(ccstr current_module_filepath, ccstr _goroot, ccstr _gopath) {
     ptr0(this);
 
     mem.init();
 
     SCOPED_MEM(&mem);
+
+    goroot = our_strcpy(_goroot);
+    gopath = our_strcpy(_gopath);
 
     root_import_to_resolved = alloc_object(Node);
     root_resolved_to_import = alloc_object(Node);
@@ -136,14 +133,14 @@ void Module_Resolver::init(ccstr current_module_filepath) {
             auto import_path = parts->at(0);
             auto version = parts->at(1);
             auto subpath = normalize_path_in_module_cache(our_sprintf("%s@%s", import_path, version));
-            auto path = path_join(GOPATH, "pkg/mod", subpath);
+            auto path = path_join(gopath, "pkg/mod", subpath);
             add_path(import_path, path);
         } else if (parts->len == 5) {
             auto import_path = parts->at(0);
             auto new_import_path = parts->at(3);
             auto version = parts->at(4);
             auto subpath = normalize_path_in_module_cache(our_sprintf("%s@%s", new_import_path, version));
-            auto path = path_join(GOPATH, "pkg/mod", subpath);
+            auto path = path_join(gopath, "pkg/mod", subpath);
             add_path(import_path, path);
         }
     } while (ch != '\0');
@@ -414,7 +411,7 @@ void Go_Indexer::background_thread() {
 
     {
         SCOPED_MEM(&thread_mem);
-        module_resolver.init(world.current_path);
+        module_resolver.init(world.current_path, goroot, gopath);
         package_lookup.init();
         package_queue.init();
         already_enqueued_packages.init();
@@ -604,7 +601,7 @@ void Go_Indexer::background_thread() {
             start_writing();
 
             module_resolver.cleanup();
-            module_resolver.init(world.current_path);
+            module_resolver.init(world.current_path, goroot, gopath);
             invalidate_packages_with_outdated_hash();
         }
 
@@ -1148,7 +1145,7 @@ ccstr Go_Indexer::find_import_path_referred_to_by_id(ccstr id, Go_Ctx *ctx) {
         if (streq(it.filename, ctx->filename)) {
             For (*it.imports)
                 if (it.package_name != NULL && streq(it.package_name, id))
-                        return it.import_path;
+                    return it.import_path;
             break;
         }
     }
@@ -1205,6 +1202,7 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
         case TS_SHORT_VAR_DECLARATION:
         case TS_CONST_DECLARATION:
         case TS_VAR_DECLARATION:
+        case TS_RANGE_CLAUSE:
             {
                 scope_ops_decls->len = 0;
                 node_to_decls(node, scope_ops_decls, filename);
@@ -1509,7 +1507,7 @@ ccstr Go_Indexer::get_package_path(ccstr import_path) {
     auto ret = module_resolver.resolve_import(import_path);
     if (ret != NULL) return ret;
 
-    auto path = path_join(GOROOT, "src", import_path);
+    auto path = path_join(goroot, "src", import_path);
     if (check_path(path) != CPR_DIRECTORY) return NULL;
     bool is_package = false;
     list_directory(path, [&](Dir_Entry *ent) {
@@ -2316,12 +2314,12 @@ ccstr Go_Indexer::filepath_to_import_path(ccstr path_str) {
     if (ret != NULL) return ret;
 
     auto path = make_path(path_str);
-    auto goroot = make_path(GOROOT);
+    auto goroot_path = make_path(goroot);
 
-    if (!goroot->contains(path)) return NULL;
+    if (!goroot_path->contains(path)) return NULL;
 
-    auto parts = alloc_list<ccstr>(path->parts->len - goroot->parts->len);
-    for (u32 i = goroot->parts->len; i < path->parts->len; i++)
+    auto parts = alloc_list<ccstr>(path->parts->len - goroot_path->parts->len);
+    for (u32 i = goroot_path->parts->len; i < path->parts->len; i++)
         parts->append(path->parts->at(i));
 
     Path p;
@@ -2349,6 +2347,13 @@ void Go_Indexer::init() {
     gohelper_proc.dir = world.current_path;
     gohelper_proc.use_stdin = true;
     gohelper_proc.run(path_join(current_exe_path, "helper", "helper.exe"));
+
+    {
+        auto resp = gohelper_run(GH_OP_GET_GO_ENV_VARS, NULL);
+        our_assert(streq(resp, "true"), "unable to get GOPATH and GOROOT");
+        gopath = our_strcpy(gohelper_readline());
+        goroot = our_strcpy(gohelper_readline());
+    }
 
     wksp_watch.init(world.current_path);
 
@@ -2641,6 +2646,7 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node) {
         break;
 
     case TS_FUNCTION_TYPE:
+    case TS_FUNC_LITERAL:
         ret = new_gotype(GOTYPE_FUNC);
         if (!node_func_to_gotype_sig(node->field(TSF_PARAMETERS), node->field(TSF_RESULT), &ret->func_sig))
             ret = NULL;
@@ -2665,33 +2671,51 @@ void Go_Indexer::import_spec_to_decl(Ast_Node *spec_node, Godecl *decl) {
         decl->import_path = path_node->string();
 }
 
-bool Go_Indexer::assignment_to_decls(List<Ast_Node*> *lhs, List<Ast_Node*> *rhs, New_Godecl_Func new_godecl) {
+bool Go_Indexer::assignment_to_decls(List<Ast_Node*> *lhs, List<Ast_Node*> *rhs, New_Godecl_Func new_godecl, bool range) {
     if (lhs->len == 0 || rhs->len == 0) return false;
 
     if (rhs->len == 1) {
-        auto multi_type = expr_to_gotype(rhs->at(0));
+        if (range) {
+            auto range_base = expr_to_gotype(rhs->at(0));
 
-        u32 index = 0;
-        For (*lhs) {
-            defer { index++; };
+            for (int i = 0; i < 2 && i < lhs->len; i++) {
+                auto id = lhs->at(i);
+                if (id == NULL) continue;
+                if (id->type != TS_IDENTIFIER) continue;
 
-            if (it->type != TS_IDENTIFIER) continue;
+                auto gotype = new_gotype(GOTYPE_LAZY_RANGE);
+                gotype->lazy_range_base = range_base;
+                gotype->lazy_range_is_index = (i == 0);
 
-            auto name = it->string();
-            if (streq(name, "_")) continue;
+                auto decl = new_godecl();
+                decl->name = id->string();
+                decl->name_start = id->start;
+                decl->gotype = gotype;
+            }
+        } else {
+            auto multi_type = expr_to_gotype(rhs->at(0));
 
-            auto gotype = new_gotype(GOTYPE_LAZY_ONE_OF_MULTI);
-            gotype->lazy_one_of_multi_base = multi_type;
-            gotype->lazy_one_of_multi_index = index;
-            gotype->lazy_one_of_multi_is_single = (lhs->len == 1);
+            u32 index = 0;
+            For (*lhs) {
+                defer { index++; };
 
-            auto decl = new_godecl();
-            decl->name = it->string();
-            decl->name_start = it->start;
-            decl->gotype = gotype;
+                if (it->type != TS_IDENTIFIER) continue;
+
+                auto name = it->string();
+                if (streq(name, "_")) continue;
+
+                auto gotype = new_gotype(GOTYPE_LAZY_ONE_OF_MULTI);
+                gotype->lazy_one_of_multi_base = multi_type;
+                gotype->lazy_one_of_multi_index = index;
+                gotype->lazy_one_of_multi_is_single = (lhs->len == 1);
+
+                auto decl = new_godecl();
+                decl->name = it->string();
+                decl->name_start = it->start;
+                decl->gotype = gotype;
+            }
+            return true;
         }
-        return true;
-
     }
 
     if (lhs->len == rhs->len) {
@@ -2763,6 +2787,7 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
             decl->type = GODECL_FUNC;
             decl->spec_start = node->start;
             decl->name = name->string();
+            decl->name_start = name->start;
             decl->gotype = gotype;
             save_decl(decl);
         }
@@ -2864,6 +2889,32 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
                 for (u32 i = old_len; i < results->len; i++)
                     save_decl(results->items + i);
             }
+        }
+        break;
+
+    case TS_RANGE_CLAUSE:
+        {
+            auto left = node->field(TSF_LEFT);
+            auto right = node->field(TSF_RIGHT);
+            if (left->type != TS_EXPRESSION_LIST) break;
+
+            auto lhs = alloc_list<Ast_Node*>(left->child_count);
+            auto rhs = alloc_list<Ast_Node*>(1);
+
+            FOR_NODE_CHILDREN (left) lhs->append(it);
+            rhs->append(right);
+
+            auto new_godecl = [&]() -> Godecl * {
+                auto decl = new_result();
+                decl->spec_start = node->start;
+                decl->type = GODECL_VAR; // do we need GODECL_RANGE?
+                return decl;
+            };
+
+            auto old_len = results->len;
+            assignment_to_decls(lhs, rhs, new_godecl, true);
+            for (u32 i = old_len; i < results->len; i++)
+                save_decl(results->items + i);
         }
         break;
 
@@ -3016,13 +3067,48 @@ Gotype *Go_Indexer::expr_to_gotype(Ast_Node *expr) {
         ret->lazy_id_name = expr->string();
         ret->lazy_id_pos = expr->start;
         return ret;
+
+    case TS_FUNC_LITERAL:
+        return node_to_gotype(expr);
     }
 
     return NULL;
 }
 
 Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
+    if (gotype == NULL) return NULL;
+
     switch (gotype->type) {
+    case GOTYPE_LAZY_RANGE:
+        {
+            auto res = evaluate_type(gotype->lazy_range_base, ctx);
+            if (res == NULL) return NULL;
+
+            res = resolve_type(res->gotype, res->ctx);
+            res = unpointer_type(res->gotype, res->ctx);
+
+            auto base_type = res->gotype;
+            if (base_type->type == GOTYPE_MULTI)
+                if (base_type->multi_types != NULL && base_type->multi_types->len == 1)
+                    base_type = base_type->multi_types->at(0);
+
+            switch (res->gotype->type) {
+            case GOTYPE_MAP:
+                if (gotype->lazy_range_is_index)
+                    return make_goresult(res->gotype->map_key, res->ctx);
+                return make_goresult(res->gotype->map_value, res->ctx);
+            case GOTYPE_SLICE:
+                if (gotype->lazy_range_is_index)
+                    return make_goresult(new_primitive_type("int"), NULL);
+                return make_goresult(res->gotype->slice_base, res->ctx);
+            case GOTYPE_ARRAY:
+                if (gotype->lazy_range_is_index)
+                    return make_goresult(new_primitive_type("int"), NULL);
+                return make_goresult(res->gotype->array_base, res->ctx);
+            }
+            return NULL;
+        }
+
     case GOTYPE_LAZY_INDEX:
         {
             auto res = evaluate_type(gotype->lazy_index_base, ctx);
@@ -3031,18 +3117,23 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
             res = resolve_type(res->gotype, res->ctx);
             res = unpointer_type(res->gotype, res->ctx);
 
-            auto operand_type = res->gotype;
-            switch (operand_type->type) {
-            case GOTYPE_ARRAY: return evaluate_type(operand_type->array_base, res->ctx);
-            case GOTYPE_SLICE: return evaluate_type(operand_type->slice_base, res->ctx);
+            auto base_type = res->gotype;
+
+            if (base_type->type == GOTYPE_MULTI)
+                if (base_type->multi_types != NULL && base_type->multi_types->len == 1)
+                    base_type = base_type->multi_types->at(0);
+
+            switch (base_type->type) {
+            case GOTYPE_ARRAY: return evaluate_type(base_type->array_base, res->ctx);
+            case GOTYPE_SLICE: return evaluate_type(base_type->slice_base, res->ctx);
             case GOTYPE_ID:
-                if (streq(operand_type->id_name, "string"))
+                if (streq(base_type->id_name, "string"))
                     return make_goresult(new_primitive_type("rune"), NULL);
                 break;
             case GOTYPE_MAP:
                 {
                     auto ret = new_gotype(GOTYPE_ASSERTION);
-                    ret->assertion_base = operand_type->map_value;
+                    ret->assertion_base = base_type->map_value;
                     return make_goresult(ret, res->ctx);
                 }
             }
@@ -3752,6 +3843,9 @@ Gotype *Gotype::copy() {
     case GOTYPE_LAZY_ONE_OF_MULTI:
         ret->lazy_one_of_multi_base = copy_object(lazy_one_of_multi_base);
         break;
+    case GOTYPE_LAZY_RANGE:
+        ret->lazy_range_base = copy_object(lazy_range_base);
+        break;
     }
     return ret;
 }
@@ -3927,6 +4021,9 @@ void Gotype::read(Index_Stream *s) {
     case GOTYPE_LAZY_ONE_OF_MULTI:
         READ_OBJ(lazy_one_of_multi_base);
         break;
+    case GOTYPE_LAZY_RANGE:
+        READ_OBJ(lazy_range_base);
+        break;
     }
 }
 
@@ -4060,6 +4157,9 @@ void Gotype::write(Index_Stream *s) {
         break;
     case GOTYPE_LAZY_ONE_OF_MULTI:
         WRITE_OBJ(lazy_one_of_multi_base);
+        break;
+    case GOTYPE_LAZY_RANGE:
+        WRITE_OBJ(lazy_range_base);
         break;
     }
 }

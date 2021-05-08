@@ -38,6 +38,7 @@ void Editor::update_lines(int firstline, int lastline, List<uchar*> *new_lines, 
 
     if (lastline == buf.lines.len && buf.lines.len > 0) {
         start_cur = buf.dec_cur(start_cur);
+        start_cur = buf.dec_cur(start_cur);
         old_end_cur = new_cur2((i32)buf.lines.last()->len, (i32)buf.lines.len - 1);
     }
 
@@ -385,41 +386,6 @@ Editor* Pane::get_current_editor() {
     return &editors[current_editor];
 }
 
-void World::activate_pane(u32 idx) {
-    if (idx > panes.len) return;
-
-    if (idx == panes.len) {
-        auto panes_width = ::ui.get_panes_area().w;
-
-        float new_width = panes_width;
-        if (panes.len > 0)
-            new_width /= panes.len;
-
-        auto pane = panes.append();
-        pane->init();
-        pane->width = new_width;
-    }
-
-    if (current_pane != idx) {
-        auto e = world.get_current_editor();
-        if (e != NULL) e->trigger_escape();
-    }
-
-    current_pane = idx;
-
-    if (world.use_nvim) {
-        auto pane = get_current_pane();
-        if (pane->current_editor != -1)
-            pane->focus_editor_by_index(pane->current_editor);
-
-        /*
-        auto editor = pane->get_current_editor();
-        if (editor != NULL)
-            world.nvim.set_current_window(editor);
-        */
-    }
-}
-
 bool Editor::is_nvim_ready() {
     return world.nvim.is_ui_attached
         && nvim_data.is_buf_attached
@@ -460,6 +426,9 @@ void Editor::cleanup() {
 // basically the rule is, if autocomplete comes up empty ON FIRST OPEN, then keep it closed
 
 void Editor::trigger_autocomplete(bool triggered_by_dot) {
+    auto old_type = autocomplete.ac.type;
+    auto old_keyword_start = autocomplete.ac.keyword_start_position;
+
     ptr0(&autocomplete);
 
     SCOPED_MEM(&world.indexer.ui_mem);
@@ -469,10 +438,9 @@ void Editor::trigger_autocomplete(bool triggered_by_dot) {
     if (!world.indexer.lock.try_enter()) return;
     defer { world.indexer.lock.leave(); };
 
-    bool was_already_open = (autocomplete.ac.results != NULL);
-
     Autocomplete ac = {0};
     if (!world.indexer.autocomplete(filepath, cur, triggered_by_dot, &ac)) return;
+    if (old_type != AUTOCOMPLETE_NONE && old_keyword_start != ac.keyword_start_position) return;
 
     {
         // use autocomplete_mem
@@ -499,7 +467,7 @@ void Editor::trigger_autocomplete(bool triggered_by_dot) {
             if (fzy_has_match(prefix, results->at(i).name))
                 autocomplete.filtered_results->append(i);
 
-        if (!was_already_open && autocomplete.filtered_results->len == 0) {
+        if (autocomplete.filtered_results->len == 0) {
             autocomplete.ac.results = NULL;
             return;
         }
@@ -721,6 +689,11 @@ void Editor::end_change() {
     if (end < curr_change.start_byte) {
         curr_change.start_byte = end;
         curr_change.start_point = cur_to_tspoint(cur);
+    } else if (curr_change.start_byte > 0) {
+        auto start = tspoint_to_cur(curr_change.start_point);
+        start = buf.dec_cur(start);
+        curr_change.start_point = cur_to_tspoint(start);
+        curr_change.start_byte = cur_to_offset(start);
     }
 
     curr_change.new_end_byte = end;
@@ -883,7 +856,7 @@ void Editor::format_on_save(bool write_to_nvim) {
     for (u32 i = 0; i < buf.lines.len; i++) {
         auto &it = buf.lines[i];
         For (it) proc.write1((char)it);
-        if (i != buf.lines.len - 1 || it.len != 0)
+        if (i != buf.lines.len - 1)
             proc.write1('\n');
     }
     proc.done_writing();
@@ -971,11 +944,11 @@ void go_to_error(int index) {
     // when editor opens, get all existing errors and set marks
 
     if (editor == NULL || error.nvim_extmark == 0) {
-        world.get_current_pane()->focus_editor(path, pos);
+        world.focus_editor(path, pos);
         return;
     }
 
-    world.get_current_pane()->focus_editor(path);
+    world.focus_editor(path);
 
     auto &nv = world.nvim;
     auto msgid = nv.start_request_message("nvim_buf_get_extmark_by_id", 4);

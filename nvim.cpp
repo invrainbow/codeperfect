@@ -759,10 +759,12 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 nvim_print("updating lines...");
                 if (!skip) editor->update_lines(args.firstline, args.lastline, args.lines, args.line_lengths);
 
-                if (!editor->nvim_data.got_initial_lines) {
-                    nvim_print("got_initial_lines = false, setting to true & calling handle_editor_on_ready()");
-                    editor->nvim_data.got_initial_lines = true;
-                    handle_editor_on_ready(editor);
+                if (editor != NULL) {
+                    if (!editor->nvim_data.got_initial_lines) {
+                        nvim_print("got_initial_lines = false, setting to true & calling handle_editor_on_ready()");
+                        editor->nvim_data.got_initial_lines = true;
+                        handle_editor_on_ready(editor);
+                    }
                 }
             }
             break;
@@ -847,7 +849,22 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 editor->nvim_data.grid_topline = args.topline;
 
                 nvim_print("got cursor change to %s", format_pos(new_cur2((u32)args.curcol, (u32)args.curline)));
-                if (mode != VI_INSERT)
+
+                auto should_move_cursor = [&]() -> bool {
+                    if (mode != VI_INSERT) return true;
+
+                    auto &cur = editor->cur;
+                    auto &buf = editor->buf;
+
+                    // if this a necessary post-insert corrective cursor change
+                    if (cur.x > buf.lines[cur.y].len)
+                        if (args.curline == cur.y && args.curcol <= buf.lines[cur.y].len)
+                            return true;
+
+                    return false;
+                };
+
+                if (should_move_cursor())
                     editor->raw_move_cursor(new_cur2((u32)args.curcol, (u32)args.curline));
 
                 if (!editor->nvim_data.got_initial_cur) {
@@ -1314,6 +1331,7 @@ void Nvim::run_event_loop() {
 
                 switch (req_type) {
                 case NVIM_REQ_POST_INSERT_GETCHANGEDTICK:
+                case NVIM_REQ_POST_SAVE_GETCHANGEDTICK:
                     {
                         auto changedtick = reader.read_int(); CHECKOK();
                         add_response_event([&](Nvim_Message *m) {

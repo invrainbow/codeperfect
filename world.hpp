@@ -317,6 +317,9 @@ struct World {
     void add_event(fn<void(Main_Thread_Message*)> f);
     Editor* find_editor_by_id(u32 id);
     void fill_file_tree();
+
+    Editor *focus_editor(ccstr path);
+    Editor *focus_editor(ccstr path, cur2 pos);
 };
 
 extern World world;

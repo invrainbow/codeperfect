@@ -241,12 +241,16 @@ bool get_type_color(Ast_Node *node, Editor *editor, vec3f *out) {
                 "fallthrough", "break", "continue", "goto", "return",
                 "go", "defer", "if", "else",
                 "for", "range", "switch", "case",
-                "default", "select", "new", "make",
+                "default", "select", "new", "make", "iota",
             };
 
             ccstr keywords2[] = {
-                "int", "append", "len", "string", "rune", "bool",
-                "byte", "copy", "float32", "float64", "error",
+                "append", "cap", "close", "complex", "copy", "delete", "imag",
+                "len", "make", "new", "panic", "real", "recover", "bool",
+                "byte", "complex128", "complex64", "error", "float32",
+                "float64", "int", "int16", "int32", "int64", "int8", "rune",
+                "string", "uint", "uint16", "uint32", "uint64", "uint8",
+                "uintptr",
             };
 
             char keyword[16] = {0};
@@ -760,7 +764,7 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                                     SCOPED_FRAME();
                                     auto rel_path = file_tree_node_to_path(it);
                                     auto full_path = path_join(world.current_path, rel_path);
-                                    world.get_current_pane()->focus_editor(full_path);
+                                    world.focus_editor(full_path);
                                 }
                             }
 
@@ -837,7 +841,7 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                             SCOPED_FRAME();
                             auto path = path_join(world.current_path, it->filename);
                             auto pos = new_cur2(it->match_col, it->row-1);
-                            world.get_current_pane()->focus_editor(path, pos);
+                            world.focus_editor(path, pos);
                         }
 
                         auto str = our_sprintf("%s:%d:%d ", it->filename, it->row, it->match_col+1);
@@ -864,6 +868,7 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
     }
 
     // Draw panes.
+    draw_rect(panes_area, rgba(COLOR_BG));
     for (u32 current_pane = 0; current_pane < world.panes.len; current_pane++) {
         auto &pane = world.panes[current_pane];
         auto is_pane_selected = (current_pane == world.current_pane);
@@ -1036,7 +1041,11 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                 auto draw_cursor = [&]() {
                     actual_cursor_position = cur_pos;    // save position where cursor is drawn for later use
                     bool insert_cursor = (world.nvim.mode == VI_INSERT && is_pane_selected && !world.nvim.exiting_insert_mode);
-                    draw_background(insert_cursor, rgba(COLOR_LIME));
+
+                    if (current_pane == world.current_pane)
+                        draw_background(insert_cursor, rgba(COLOR_LIME));
+                    else
+                        draw_background(insert_cursor, rgba(COLOR_LIME, 0.3));
                 };
 
                 List<Client_Breakpoint> breakpoints_for_this_editor;
@@ -1075,14 +1084,14 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                             current_goroutine = &it;
                             if (current_goroutine->fresh) {
                                 current_frame = &current_goroutine->frames->at(world.dbg.state.current_frame);
-                                if (are_filepaths_equal(it.curr_file, current_frame->filepath))
+                                if (are_filepaths_equal(editor->filepath, current_frame->filepath))
                                     is_current_goroutine_on_current_file = true;
                             } else {
-                                if (are_filepaths_equal(it.curr_file, current_goroutine->curr_file))
+                                if (are_filepaths_equal(editor->filepath, current_goroutine->curr_file))
                                     is_current_goroutine_on_current_file = true;
                             }
                         } else if (it.breakpoint_hit) {
-                            if (are_filepaths_equal(it.curr_file, editor->filepath))
+                            if (are_filepaths_equal(editor->filepath, editor->filepath))
                                 goroutines_hit->append(&it);
                         }
                     }
@@ -1182,7 +1191,7 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
 
                         if (editor->cur == new_cur2(x, y)) {
                             draw_cursor();
-                            if (world.nvim.mode != VI_INSERT)
+                            if (world.nvim.mode != VI_INSERT && current_pane == world.current_pane)
                                 text_color = COLOR_BLACK;
                         } else {
                             auto topline = editor->nvim_data.grid_topline;

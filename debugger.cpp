@@ -142,7 +142,7 @@ void Debugger::save_single_var(Json_Navigator js, i32 idx, Dlv_Var* out, Save_Va
 void Debugger::fetch_stackframe(Dlv_Goroutine *goroutine) {
     auto resp = send_packet("Stacktrace", [&]() {
         rend->field("id", (int)goroutine->id);
-        rend->field("depth", 1);
+        rend->field("depth", 50);
         rend->field("full", false);
     });
 
@@ -840,6 +840,8 @@ void Debugger::select_frame(u32 goroutine_id, u32 frame) {
         set_current_goroutine(goroutine_id);
 
     auto goroutine = state.goroutines.find([&](auto it) { return it->id == goroutine_id; });
+    if (goroutine == NULL) return;
+
     if (!goroutine->fresh)
         fetch_stackframe(goroutine);
 
@@ -849,11 +851,13 @@ void Debugger::select_frame(u32 goroutine_id, u32 frame) {
 
     For (watches) eval_watch(&it, goroutine_id, frame);
 
-    world.add_event([&](auto msg) {
-        msg->type = MTM_GOTO_FILEPOS;
-        msg->goto_filepos.file = our_strcpy(dlvframe->filepath);
-        msg->goto_filepos.pos = new_cur2((i32)0, (i32)dlvframe->lineno - 1);
-    });
+    if (!exiting) {
+        world.add_event([&](auto msg) {
+            msg->type = MTM_GOTO_FILEPOS;
+            msg->goto_filepos.file = our_strcpy(dlvframe->filepath);
+            msg->goto_filepos.pos = new_cur2((i32)0, (i32)dlvframe->lineno - 1);
+        });
+    }
 }
 
 void Debugger::run_loop() {
@@ -1010,6 +1014,7 @@ void Debugger::run_loop() {
                     }
                     break;
                 case DLVC_STOP:
+                    exiting = true;
                     if (state_flag == DLV_STATE_RUNNING)
                         halt_when_already_running();
 
@@ -1036,6 +1041,7 @@ void Debugger::run_loop() {
 
                             state_flag = DLV_STATE_STARTING;
                             packetid = 0;
+                            exiting = false;
                         }
 
                         if (!start()) {

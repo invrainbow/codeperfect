@@ -93,7 +93,7 @@ void shell(ccstr s, ccstr dir) {
     while (p.status() == PROCESS_WAITING) continue;
 
     if (p.exit_code != 0) {
-        print("go build helper/helper.go failed with exit code %d, output below:", p.exit_code);
+        print("`%s` code %d, output below:", p.exit_code);
         char ch;
         while (p.read1(&ch)) {
             printf("%c", ch);
@@ -202,8 +202,8 @@ void World::init() {
     windows_open.build_and_debug = false;
     windows_open.im_metrics = false;
 
-    strcpy_safe(world.settings.build_command, _countof(world.settings.build_command), "go build --gcflags=\"all=-N -l\" github.com/invrainbow/delve_client_testing/21autogen");
-    strcpy_safe(world.settings.debug_binary_path, _countof(world.settings.debug_binary_path), "21autogen.exe");
+    strcpy_safe(world.settings.build_command, _countof(world.settings.build_command), "go build --gcflags=\"all=-N -l\" github.com/invrainbow/cryptopals");
+    strcpy_safe(world.settings.debug_binary_path, _countof(world.settings.debug_binary_path), "cryptopals.exe");
 
     {
         SCOPED_MEM(&ui_mem);
@@ -247,4 +247,57 @@ Editor* World::find_editor(find_editor_func f) {
 Editor* World::find_editor_by_id(u32 id) {
     auto is_match = [&](auto it) { return it->id == id; };
     return find_editor(is_match);
+}
+
+Editor *World::focus_editor(ccstr path) {
+    return focus_editor(path, new_cur2(-1, -1));
+}
+
+Editor *World::focus_editor(ccstr path, cur2 pos) {
+    for (auto&& pane : panes) {
+        for (u32 i = 0; i < pane.editors.len; i++) {
+            auto &it = pane.editors[i];
+            if (are_filepaths_same_file(path, it.filepath)) {
+                activate_pane((&pane) - panes.items);
+                pane.focus_editor_by_index(i, pos);
+                return &it;
+            }
+        }
+    }
+    return get_current_pane()->focus_editor(path, pos);
+}
+
+void World::activate_pane(u32 idx) {
+    if (idx > panes.len) return;
+
+    if (idx == panes.len) {
+        auto panes_width = ::ui.get_panes_area().w;
+
+        float new_width = panes_width;
+        if (panes.len > 0)
+            new_width /= panes.len;
+
+        auto pane = panes.append();
+        pane->init();
+        pane->width = new_width;
+    }
+
+    if (current_pane != idx) {
+        auto e = world.get_current_editor();
+        if (e != NULL) e->trigger_escape();
+    }
+
+    current_pane = idx;
+
+    if (world.use_nvim) {
+        auto pane = get_current_pane();
+        if (pane->current_editor != -1)
+            pane->focus_editor_by_index(pane->current_editor);
+
+        /*
+        auto editor = pane->get_current_editor();
+        if (editor != NULL)
+            world.nvim.set_current_window(editor);
+        */
+    }
 }

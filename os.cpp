@@ -71,10 +71,9 @@ ccstr fs_event_type_str(Fs_Event_Type t) {
     return NULL;
 }
 
-// until we find an os that is case insensiive
 bool are_filepaths_equal(ccstr a, ccstr b) {
-    auto a2 = normalize_path_sep(a);
-    auto b2 = normalize_path_sep(b);
+    auto a2 = normalize_path_sep(get_canon_path(a));
+    auto b2 = normalize_path_sep(get_canon_path(b));
 
 #if FILEPATHS_CASE_SENSITIVE
     return streq(a2, b2);

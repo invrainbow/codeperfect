@@ -7,8 +7,6 @@
 #include "utils.hpp"
 #include "list.hpp"
 
-const char DELVE_PATH[] = "/Users/user/go/bin/dlv";
-
 ccstr jsmn_type_str(int type);
 
 enum Json_KeyType {
@@ -287,6 +285,7 @@ struct Debugger {
     int state_id;
 
     Dlv_State state_flag;
+    bool exiting;
     struct {
         List<Dlv_Goroutine> goroutines;
         i32 current_goroutine_id;
