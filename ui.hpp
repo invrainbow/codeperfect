@@ -4,6 +4,7 @@
 #include "stb_truetype.h"
 #include "stb_image.h"
 #include "stb_rect_pack.h"
+#include "imgui.h"
 #include "common.hpp"
 #include "editor.hpp"
 #include "list.hpp"
@@ -132,6 +133,21 @@ struct UI {
 
     bool clipping;
     boxf current_clip;
+    boxf panes_area;
+
+    ImGuiID dock_main_id;
+    ImGuiID dock_sidebar_id;
+    ImGuiID dock_bottom_id;
+    ImGuiID dock_bottom_right_id;
+    bool dock_initialized;
+
+    struct {
+        int id;
+        int id_last_frame;
+        u64 start_time;
+        ImGuiMouseCursor cursor;
+        bool ready;
+    } hover;
 
     void init();
     bool init_sprite_texture();
@@ -144,10 +160,11 @@ struct UI {
     void draw_char(vec2f* pos, char ch, vec4f color);
     vec2f draw_string(vec2f pos, ccstr s, vec4f color);
     float get_text_width(ccstr s);
-    boxf get_sidebar_area();
     boxf get_build_results_area();
-    boxf get_panes_area(boxf *pstatus_area = NULL);
-    void draw_everything(GLuint vao, GLuint vbo, GLuint program);
+    boxf get_panes_area();
+    boxf get_status_area();
+    void draw_everything();
+    void end_frame();
     void get_tabs_and_editor_area(boxf* pane_area, boxf* ptabs_area, boxf* peditor_area);
     void recalculate_view_sizes(bool force = false);
     i32 get_current_resize_area(boxf* out);
@@ -156,9 +173,12 @@ struct UI {
     void draw_image(Sprites_Image_Type image_id, boxf b);
     // void draw_image_masked(Sprites_Image_Type image_id, boxf b, vec4f color);
     void flush_images();
-    boxf get_viewport_area();
     void start_clip(boxf b);
     void end_clip();
+    void render_ts_cursor(TSTreeCursor *curr);
+    void render_godecl(Godecl *decl);
+    void render_gotype(Gotype *gotype, ccstr field = NULL);
+    bool test_hover(boxf area, int id, ImGuiMouseCursor cursor = ImGuiMouseCursor_Arrow);
 };
 
 extern UI ui;
@@ -176,9 +196,15 @@ extern const vec3f COLOR_DARK_GREY;
 extern const vec3f COLOR_MEDIUM_DARK_GREY;
 extern const vec3f COLOR_MEDIUM_GREY;
 extern const vec3f COLOR_LIME;
+extern const vec3f COLOR_BG;
 
 extern const vec3f COLOR_THEME_1;
 extern const vec3f COLOR_THEME_2;
 extern const vec3f COLOR_THEME_3;
 extern const vec3f COLOR_THEME_4;
 extern const vec3f COLOR_THEME_5;
+
+enum {
+    HOVERID_PANE_RESIZERS = 1000,
+    HOVERID_TABS = 2000,
+};

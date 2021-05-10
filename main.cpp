@@ -152,78 +152,6 @@ void main(void) {
 }
 )";
 
-void do_build(void*) {
-    auto& indexer = world.indexer;
-    auto& b = world.build;
-
-    world.error_list.show = true;
-
-    SCOPED_MEM(&b.mem);
-
-    b.id = world.next_build_id++;
-
-    {
-        SCOPED_LOCK(&indexer.gohelper_lock);
-
-        indexer.gohelper_run(GH_OP_START_BUILD, world.settings.build_command, NULL);
-        if (indexer.gohelper_returned_error) {
-            b.done = true;
-            b.build_itself_had_error = true;
-            return;
-        }
-    }
-
-    for (;; sleep_milliseconds(100)) {
-        SCOPED_LOCK(&indexer.gohelper_lock);
-
-        auto resp = indexer.gohelper_run(GH_OP_GET_BUILD_STATUS, NULL);
-        if (indexer.gohelper_returned_error) {
-            b.done = true;
-            b.build_itself_had_error = true;
-            return;
-        }
-
-        if (!streq(resp, "done")) continue;
-
-        auto len = indexer.gohelper_readint();
-
-        for (u32 i = 0; i < len; i++) {
-            auto err = b.errors.append();
-
-            err->message = indexer.gohelper_readline();
-            err->valid = (bool)indexer.gohelper_readint();
-
-            if (err->valid) {
-                err->file = indexer.gohelper_readline();
-                err->row = indexer.gohelper_readint();
-                err->col = indexer.gohelper_readint();
-                auto is_vcol = indexer.gohelper_readint();
-            }
-        }
-
-        b.current_error = -1;
-        b.done = true;
-        b.creating_extmarks = true;
-        world.error_list.show = true;
-
-        {
-            auto &nv = world.nvim;
-            auto msgid = nv.start_request_message("nvim_create_namespace", 1);
-            nv.save_request(NVIM_REQ_CREATE_EXTMARKS_CREATE_NAMESPACE, msgid, 0);
-            nv.writer.write_string(our_sprintf("build-%d", world.build.id));
-            nv.end_message();
-        }
-
-        break;
-    }
-}
-
-void kick_off_build() {
-    world.build.cleanup();
-    world.build.init();
-    world.build.thread = create_thread(do_build, NULL);
-}
-
 GLint compile_program(cstr vert_code, cstr frag_code) {
     auto compile_shader = [](cstr code, u32 type) -> GLuint {
         GLuint shader = glCreateShader(type);
@@ -288,213 +216,6 @@ void new_ortho_matrix(float* mat, float l, float r, float b, float t) {
     mat[15] = 1;
 }
 
-void render_godecl(Godecl *decl);
-void render_gotype(Gotype *gotype, ccstr field = NULL);
-
-void render_godecl(Godecl *decl) {
-    auto flags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth;
-    if (ImGui::TreeNodeEx(decl, flags, "%s", godecl_type_str(decl->type))) {
-        ImGui::Text("decl_start: %s", format_pos(decl->decl_start));
-        ImGui::Text("spec_start: %s", format_pos(decl->spec_start));
-        ImGui::Text("name_start: %s", format_pos(decl->name_start));
-        ImGui::Text("name: %s", decl->name);
-
-        switch (decl->type) {
-        case GODECL_IMPORT:
-            ImGui::Text("import_path: %s", decl->import_path);
-            break;
-        case GODECL_VAR:
-        case GODECL_CONST:
-        case GODECL_TYPE:
-        case GODECL_FUNC:
-        case GODECL_FIELD:
-        case GODECL_SHORTVAR:
-            render_gotype(decl->gotype);
-            break;
-        }
-        ImGui::TreePop();
-    }
-}
-
-void render_gotype(Gotype *gotype, ccstr field) {
-    if (gotype == NULL) return;
-
-    auto flags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth;
-    bool is_open = false;
-
-    if (field == NULL)
-        is_open = ImGui::TreeNodeEx(gotype, flags, "%s", gotype_type_str(gotype->type));
-    else
-        is_open = ImGui::TreeNodeEx(gotype, flags, "%s: %s", field, gotype_type_str(gotype->type));
-
-    if (is_open) {
-        switch (gotype->type) {
-        case GOTYPE_ID:
-            ImGui::Text("name: %s", gotype->id_name);
-            ImGui::Text("pos: %s", format_pos(gotype->id_pos));
-            break;
-        case GOTYPE_SEL:
-            ImGui::Text("package: %s", gotype->sel_name);
-            ImGui::Text("sel: %s", gotype->sel_sel);
-            break;
-        case GOTYPE_MAP:
-            render_gotype(gotype->map_key, "key");
-            render_gotype(gotype->map_value, "value");
-            break;
-        case GOTYPE_STRUCT:
-        case GOTYPE_INTERFACE:
-            {
-                auto specs = gotype->type == GOTYPE_STRUCT ? gotype->struct_specs : gotype->interface_specs;
-                for (u32 i = 0; i < specs->len; i++) {
-                    auto it = &specs->items[i];
-                    if (ImGui::TreeNodeEx(it, flags, "spec %d", i)) {
-                        ImGui::Text("is_embedded: %d", it->is_embedded);
-                        ImGui::Text("tag: %s", it->tag);
-                        if (it->is_embedded)
-                            render_gotype(it->embedded_type);
-                        else
-                            render_godecl(it->field);
-                        ImGui::TreePop();
-                    }
-                }
-            }
-            break;
-        case GOTYPE_POINTER: render_gotype(gotype->pointer_base, "base"); break;
-        case GOTYPE_SLICE: render_gotype(gotype->slice_base, "base"); break;
-        case GOTYPE_ARRAY: render_gotype(gotype->array_base, "base"); break;
-        case GOTYPE_LAZY_INDEX: render_gotype(gotype->lazy_index_base, "base"); break;
-        case GOTYPE_LAZY_CALL: render_gotype(gotype->lazy_call_base, "base"); break;
-        case GOTYPE_LAZY_DEREFERENCE: render_gotype(gotype->lazy_dereference_base, "base"); break;
-        case GOTYPE_LAZY_REFERENCE: render_gotype(gotype->lazy_reference_base, "base"); break;
-        case GOTYPE_LAZY_ARROW: render_gotype(gotype->lazy_arrow_base, "base"); break;
-        case GOTYPE_VARIADIC: render_gotype(gotype->variadic_base, "base"); break;
-        case GOTYPE_ASSERTION: render_gotype(gotype->assertion_base, "base"); break;
-
-        case GOTYPE_CHAN:
-            render_gotype(gotype->chan_base, "base"); break;
-            ImGui::Text("direction: %d", gotype->chan_direction);
-            break;
-
-        case GOTYPE_FUNC:
-            if (gotype->func_sig.params == NULL) {
-                ImGui::Text("params: NULL");
-            } else if (ImGui::TreeNodeEx(&gotype->func_sig.params, flags, "params:")) {
-                For (*gotype->func_sig.params)
-                    render_godecl(&it);
-                ImGui::TreePop();
-            }
-
-            if (gotype->func_sig.result == NULL) {
-                ImGui::Text("result: NULL");
-            } else if (ImGui::TreeNodeEx(&gotype->func_sig.result, flags, "result:")) {
-                For (*gotype->func_sig.result)
-                    render_godecl(&it);
-                ImGui::TreePop();
-            }
-
-            render_gotype(gotype->func_recv);
-            break;
-
-        case GOTYPE_MULTI:
-            For (*gotype->multi_types) render_gotype(it);
-            break;
-
-        case GOTYPE_RANGE:
-            render_gotype(gotype->range_base, "base");
-            ImGui::Text("type: %d", gotype->range_type);
-            break;
-
-        case GOTYPE_LAZY_ID:
-            ImGui::Text("name: %s", gotype->lazy_id_name);
-            ImGui::Text("pos: %s", format_pos(gotype->lazy_id_pos));
-            break;
-
-        case GOTYPE_LAZY_SEL:
-            render_gotype(gotype->lazy_sel_base, "base");
-            ImGui::Text("sel: %s", gotype->lazy_sel_sel);
-            break;
-
-        case GOTYPE_LAZY_ONE_OF_MULTI:
-            render_gotype(gotype->lazy_one_of_multi_base, "base");
-            ImGui::Text("index: %d", gotype->lazy_one_of_multi_index);
-            break;
-        }
-        ImGui::TreePop();
-    }
-}
-
-void render_ts_cursor(TSTreeCursor *curr) {
-    int last_depth = 0;
-    bool last_open = false;
-
-    auto pop = [&](int new_depth) {
-        if (new_depth > last_depth) return;
-
-        if (last_open)
-            ImGui::TreePop();
-        for (i32 i = 0; i < last_depth - new_depth; i++)
-            ImGui::TreePop();
-    };
-
-    walk_ts_cursor(curr, false, [&](Ast_Node *node, Ts_Field_Type field_type, int depth) -> Walk_Action {
-        if (node->anon && !world.wnd_ast_vis.show_anon_nodes)
-            return WALK_SKIP_CHILDREN;
-
-        // auto changed = ts_node_has_changes(node->node);
-
-        pop(depth);
-        last_depth = depth;
-
-        auto flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
-
-        if (node->child_count == 0)
-            flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_Bullet;
-
-        auto type_str = ts_ast_type_str(node->type);
-        if (type_str == NULL)
-            type_str = "(unknown)";
-        else
-            type_str += strlen("TS_");
-
-        if (node->anon)
-            ImGui::PushStyleColor(ImGuiCol_Text, (ImVec4)ImColor(128, 128, 128));
-
-        auto field_type_str = ts_field_type_str(field_type);
-        if (field_type_str == NULL)
-            last_open = ImGui::TreeNodeEx(
-                node->id,
-                flags,
-                "%s, start = %s, end = %s",
-                type_str,
-                format_pos(node->start),
-                format_pos(node->end)
-            );
-        else
-            last_open = ImGui::TreeNodeEx(
-                node->id,
-                flags,
-                "(%s) %s, start = %s, end = %s",
-                field_type_str + strlen("TSF_"),
-                type_str,
-                format_pos(node->start),
-                format_pos(node->end)
-            );
-
-        if (node->anon)
-            ImGui::PopStyleColor();
-
-        if (ImGui::IsItemClicked()) {
-            auto editor = world.get_current_editor();
-            if (editor != NULL)
-                editor->move_cursor(node->start);
-        }
-
-        return last_open ? WALK_CONTINUE : WALK_SKIP_CHILDREN;
-    });
-
-    pop(0);
-}
-
 #define MAX_RETRIES 5
 
 void send_nvim_keys(ccstr s) {
@@ -502,64 +223,6 @@ void send_nvim_keys(ccstr s) {
     nv.start_request_message("nvim_input", 1);
     nv.writer.write_string(s);
     nv.end_message();
-}
-
-void run_proc_the_normal_way(Process* proc, ccstr cmd) {
-    proc->cleanup();
-    proc->init();
-    proc->dir = world.current_path;
-    proc->run(cmd);
-}
-
-void filter_files() {
-    auto wnd = &world.wnd_open_file;
-
-    wnd->filtered_results->len = 0;
-
-    u32 i = 0;
-    For (*wnd->filepaths) {
-        if (fzy_has_match(wnd->query, it))
-            wnd->filtered_results->append(i);
-        i++;
-    }
-
-    wnd->filtered_results->sort([&](int *ia, int *ib) {
-        auto a = fzy_match(wnd->query, wnd->filepaths->at(*ia));
-        auto b = fzy_match(wnd->query, wnd->filepaths->at(*ib));
-        return a < b ? 1 : (a > b ? -1 : 0);  // reverse
-    });
-}
-
-void init_open_file() {
-    SCOPED_MEM(&world.open_file_mem);
-    world.open_file_mem.reset();
-
-    auto wnd = &world.wnd_open_file;
-    ptr0(wnd);
-
-    wnd->show = true;
-    wnd->filepaths = alloc_list<ccstr>();
-    wnd->filtered_results = alloc_list<int>();
-
-    fn<void(ccstr)> fill_files = [&](ccstr path) {
-        auto thispath = path_join(world.current_path, path);
-        list_directory(thispath, [&](Dir_Entry *entry) {
-            bool isdir = (entry->type == DIRENT_DIR);
-
-            auto fullpath = path_join(thispath, entry->name);
-            if (is_ignored_by_git(fullpath, isdir)) return;
-
-            if (isdir && streq(path, "") && streq(entry->name, ".ide")) return;
-
-            auto relpath = path[0] == '\0' ? our_strcpy(entry->name) : path_join(path, entry->name);
-            if (isdir)
-                fill_files(relpath);
-            else
-                wnd->filepaths->append(relpath);
-        });
-    };
-
-    fill_files("");
 }
 
 enum {
@@ -581,533 +244,6 @@ struct Timer {
         auto curr = current_time_in_nanoseconds();
         print("%dms: %s", (curr - time) / 1000000, s);
         time = curr;
-    }
-};
-
-void* get_native_window_handle(GLFWwindow *window) {
-#if OS_WIN
-    return (void*)glfwGetWin32Window(window);
-#endif
-}
-
-void prompt_delete_all_breakpoints() {
-    auto res = ask_user_yes_no(
-        get_native_window_handle(world.window),
-        "Are you sure you want to delete all breakpoints?",
-        NULL
-    );
-
-    if (res != ASKUSER_YES) return;
-    world.dbg.push_call(DLVC_DELETE_ALL_BREAKPOINTS);
-}
-
-struct Debugger_UI {
-    enum Index_Type {
-        INDEX_NONE,
-        INDEX_ARRAY,
-        INDEX_MAP,
-    };
-
-    struct Render_Args {
-        Dlv_Var *var;
-        Index_Type index_type;
-        union {
-            int index;
-            Dlv_Var *key;
-        };
-        Dlv_Watch *watch;
-        bool is_child;
-        int indent;
-        int watch_index;
-    };
-
-    void render_var(Render_Args *args) {
-        SCOPED_FRAME();
-
-        ImGui::TableNextRow();
-        ImGui::TableNextColumn();
-
-        bool open = false;
-        auto var = args->var;
-        auto watch = args->watch;
-
-        {
-            SCOPED_FRAME();
-
-            int tree_flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_NoTreePushOnOpen;
-            bool leaf = true;
-
-            if (var != NULL) {
-                switch (var->kind) {
-                case GO_KIND_ARRAY:
-                case GO_KIND_CHAN: // ???
-                case GO_KIND_FUNC: // ???
-                case GO_KIND_INTERFACE:
-                case GO_KIND_MAP:
-                case GO_KIND_PTR:
-                case GO_KIND_SLICE:
-                case GO_KIND_STRUCT:
-                case GO_KIND_UNSAFEPOINTER: // ???
-                    leaf = false;
-                    break;
-                case GO_KIND_STRING:
-                    if (var->incomplete())
-                        leaf = false;
-                    break;
-                }
-            }
-
-            if (leaf)
-                tree_flags |= ImGuiTreeNodeFlags_Leaf;
-
-            if (watch != NULL && !args->is_child) {
-                if (watch->editing) {
-                    ImGui::PushStyleColor(ImGuiCol_FrameBg, 0);
-                    ImGui::SetNextItemWidth(-FLT_MIN);
-                    if (watch->edit_first_frame) {
-                        watch->edit_first_frame = false;
-                        ImGui::SetKeyboardFocusHere();
-                    }
-                    bool changed = ImGui::InputText(
-                        our_sprintf("##newwatch%x", (int)(void*)watch),
-                        watch->expr_tmp,
-                        _countof(watch->expr_tmp),
-                        ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll
-                    );
-                    ImGui::PopStyleColor();
-
-                    if (changed || ImGui::IsItemDeactivated()) {
-                        if (watch->expr_tmp[0] != '\0') {
-                            world.dbg.push_call(DLVC_EDIT_WATCH, [&](auto it) {
-                                it->edit_watch.expression = our_strcpy(watch->expr_tmp);
-                                it->edit_watch.watch_idx = args->watch_index;
-                            });
-                        } else {
-                            world.dbg.push_call(DLVC_DELETE_WATCH, [&](auto it) {
-                                it->delete_watch.watch_idx = args->watch_index;
-                            });
-                        }
-                    }
-                } else {
-                    for (int i = 0; i < args->indent; i++)
-                        ImGui::Indent();
-
-                    // if (leaf) ImGui::Unindent(ImGui::GetTreeNodeToLabelSpacing());
-
-                    open = ImGui::TreeNodeEx(var, tree_flags, "%s", watch->expr) && !leaf;
-
-                    // if (leaf) ImGui::Indent(ImGui::GetTreeNodeToLabelSpacing());
-
-                    if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && ImGui::IsItemHovered(ImGuiHoveredFlags_None)) {
-                        watch->editing = true;
-                        watch->open_before_editing = open;
-                        watch->edit_first_frame = true;
-                    }
-
-                    for (int i = 0; i < args->indent; i++)
-                        ImGui::Unindent();
-                }
-            } else {
-                ccstr var_name = NULL;
-                switch (args->index_type) {
-                case INDEX_NONE:
-                    var_name = var->name;
-                    if (var->is_shadowed)
-                        var_name = our_sprintf("(%s)", var_name);
-                    break;
-                case INDEX_ARRAY:
-                    var_name = our_sprintf("[%d]", args->index);
-                    break;
-                case INDEX_MAP:
-                    var_name = our_sprintf("[%s]", var_value_as_string(args->key));
-                    break;
-                }
-
-                for (int i = 0; i < args->indent; i++)
-                    ImGui::Indent();
-
-                if (leaf) ImGui::Unindent(ImGui::GetTreeNodeToLabelSpacing());
-
-                open = ImGui::TreeNodeEx(var, tree_flags, "%s", var_name) && !leaf;
-
-                if (leaf) ImGui::Indent(ImGui::GetTreeNodeToLabelSpacing());
-
-                for (int i = 0; i < args->indent; i++)
-                    ImGui::Unindent();
-            }
-        }
-
-        if (watch == NULL || watch->fresh) {
-            ImGui::TableNextColumn();
-            if (watch != NULL && watch->state == DBGWATCH_ERROR)
-                ImGui::Text("<unable to read>");
-            else
-                ImGui::TextWrapped("%s", var_value_as_string(var));
-            ImGui::TableNextColumn();
-            if (watch == NULL || watch->state != DBGWATCH_ERROR) {
-                if (var->kind_name == NULL || var->kind_name[0] == '\0') {
-                    switch (var->kind) {
-                    case GO_KIND_BOOL: ImGui::TextWrapped("bool"); break;
-                    case GO_KIND_INT: ImGui::TextWrapped("int"); break;
-                    case GO_KIND_INT8: ImGui::TextWrapped("int8"); break;
-                    case GO_KIND_INT16: ImGui::TextWrapped("int16"); break;
-                    case GO_KIND_INT32: ImGui::TextWrapped("int32"); break;
-                    case GO_KIND_INT64: ImGui::TextWrapped("int64"); break;
-                    case GO_KIND_UINT: ImGui::TextWrapped("uint"); break;
-                    case GO_KIND_UINT8: ImGui::TextWrapped("uint8"); break;
-                    case GO_KIND_UINT16: ImGui::TextWrapped("uint16"); break;
-                    case GO_KIND_UINT32: ImGui::TextWrapped("uint32"); break;
-                    case GO_KIND_UINT64: ImGui::TextWrapped("uint64"); break;
-                    case GO_KIND_UINTPTR: ImGui::TextWrapped("uintptr"); break;
-                    case GO_KIND_FLOAT32: ImGui::TextWrapped("float32"); break;
-                    case GO_KIND_FLOAT64: ImGui::TextWrapped("float64"); break;
-                    case GO_KIND_COMPLEX64: ImGui::TextWrapped("complex64"); break;
-                    case GO_KIND_COMPLEX128: ImGui::TextWrapped("complex128"); break;
-                    case GO_KIND_ARRAY: ImGui::TextWrapped("<array>"); break;
-                    case GO_KIND_CHAN: ImGui::TextWrapped("<chan>"); break;
-                    case GO_KIND_FUNC: ImGui::TextWrapped("<func>"); break;
-                    case GO_KIND_INTERFACE: ImGui::TextWrapped("<interface>"); break;
-                    case GO_KIND_MAP: ImGui::TextWrapped("<map>"); break;
-                    case GO_KIND_PTR: ImGui::TextWrapped("<pointer>"); break;
-                    case GO_KIND_SLICE: ImGui::TextWrapped("<slice>"); break;
-                    case GO_KIND_STRING: ImGui::TextWrapped("string"); break;
-                    case GO_KIND_STRUCT: ImGui::TextWrapped("<struct>"); break;
-                    case GO_KIND_UNSAFEPOINTER: ImGui::TextWrapped("unsafe.Pointer"); break;
-                    default: ImGui::TextWrapped("<unknown>"); break;
-                    }
-                } else {
-                    ImGui::TextWrapped("%s", var->kind_name);
-                }
-            }
-        } else {
-            ImGui::TableNextColumn();
-            if (watch != NULL && !watch->fresh) {
-                // TODO: grey out
-                ImGui::TextWrapped("Reading...");
-            }
-            ImGui::TableNextColumn();
-        }
-
-        if (open) {
-            if (args->watch == NULL || args->watch->fresh) {
-                if (var->children != NULL) {
-                    if (var->kind == GO_KIND_MAP) {
-                        for (int k = 0; k < var->children->len; k += 2) {
-                            Render_Args a;
-                            a.watch = args->watch;
-                            a.watch_index = args->watch_index;
-                            a.is_child = true;
-                            a.var = &var->children->at(k+1);
-                            a.index_type = INDEX_MAP;
-                            a.key = &var->children->at(k);
-                            a.indent = args->indent + 1;
-                            render_var(&a);
-                        }
-                    } else {
-                        bool isarr = (var->kind == GO_KIND_ARRAY || var->kind == GO_KIND_SLICE);
-                        for (int k = 0; k < var->children->len; k++) {
-                            Render_Args a;
-                            a.watch = args->watch;
-                            a.watch_index = args->watch_index;
-                            a.is_child = true;
-                            a.var = &var->children->at(k);
-                            if (isarr) {
-                                a.index_type = INDEX_ARRAY;
-                                a.index = k;
-                            } else {
-                                a.index_type = INDEX_NONE;
-                            }
-                            a.indent = args->indent + 1;
-                            render_var(&a);
-                        }
-                    }
-                }
-
-                if (var->incomplete()) {
-                    ImGui::TableNextRow();
-                    ImGui::TableNextColumn();
-
-                    if (ImGui::SmallButton("Load more...")) {
-                        world.dbg.push_call(DLVC_VAR_LOAD_MORE, [&](Dlv_Call *it) {
-                            it->var_load_more.state_id = world.dbg.state_id;
-                            it->var_load_more.var = var;
-                        });
-                    }
-
-                    ImGui::TableNextColumn();
-                    ImGui::TableNextColumn();
-                    // TODO: render "load more" button
-                }
-            }
-        }
-    }
-
-    ccstr var_value_as_string(Dlv_Var *var) {
-        if (var->unreadable_description != NULL)
-            return our_sprintf("<unreadable: %s>", var->unreadable_description);
-
-        switch (var->kind) {
-        case GO_KIND_INVALID: // i don't think this should even happen
-            return "<invalid>";
-
-        case GO_KIND_ARRAY:
-        case GO_KIND_SLICE:
-            return our_sprintf("0x%" PRIx64 " (Len = %d, Cap = %d)", var->address, var->len, var->cap);
-
-        case GO_KIND_STRUCT:
-        case GO_KIND_INTERFACE:
-            return our_sprintf("0x%" PRIx64, var->address);
-
-        case GO_KIND_MAP:
-            return our_sprintf("0x%" PRIx64 " (Len = %d)", var->address, var->len);
-
-        case GO_KIND_STRING:
-            {
-                Text_Renderer r;
-                r.init();
-
-                for (int i = 0, len = strlen(var->value); i < len; i++) {
-                    auto ch = var->value[i];
-                    switch (ch) {
-                      case '\"': r.writestr("\\\""); break;
-                      case '\'': r.writestr("\\\'"); break;
-                      case '\\': r.writestr("\\\\"); break;
-                      case '\a': r.writestr("\\a"); break;
-                      case '\b': r.writestr("\\b"); break;
-                      case '\n': r.writestr("\\n"); break;
-                      case '\t': r.writestr("\\t"); break;
-                      default:
-                        if (iscntrl(ch))
-                            r.write("\\%03o", ch);
-                        else
-                            r.writechar(ch);
-                        break;
-                    }
-                }
-
-                return our_sprintf("\"%s%s\"", r.finish(), var->incomplete() ? "..." : "");
-            }
-
-        case GO_KIND_UNSAFEPOINTER:
-        case GO_KIND_CHAN:
-        case GO_KIND_FUNC:
-        case GO_KIND_PTR:
-            return our_sprintf("0x%" PRIx64, var->address);
-
-        default:
-            return var->value;
-        }
-    }
-
-    void draw() {
-        ImGui::Begin("Debugger");
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
-
-        world.wnd_debugger.focused = ImGui::IsWindowFocused();
-
-        auto &dbg = world.dbg;
-        auto &state = dbg.state;
-        auto &wnd = world.wnd_debugger;
-
-        ImGui::Columns(2);
-
-        if (ImGui::CollapsingHeader("Call Stack", ImGuiTreeNodeFlags_DefaultOpen)) {
-            ImGui::PushFont(world.ui.im_font_mono);
-            for (int i = 0; i < state.goroutines.len; i++) {
-                auto &goroutine = state.goroutines[i];
-
-                int tree_flags = ImGuiTreeNodeFlags_OpenOnArrow;
-
-                bool is_current = (state.current_goroutine_id == goroutine.id);
-                if (is_current) {
-                    tree_flags |= ImGuiTreeNodeFlags_Bullet;
-                    ImGui::SetNextItemOpen(true);
-                    ImGui::PushStyleColor(ImGuiCol_Text, (ImVec4)ImColor(255, 100, 100));
-                }
-
-                auto open = ImGui::TreeNodeEx(
-                    (void*)(uptr)i,
-                    tree_flags,
-                    "%s (%s)",
-                    goroutine.curr_func_name,
-                    goroutine.breakpoint_hit ? "BREAKPOINT HIT" : "PAUSED"
-                );
-
-                if (is_current)
-                    ImGui::PopStyleColor();
-
-                if (ImGui::IsItemClicked()) {
-                    world.dbg.push_call(DLVC_SET_CURRENT_GOROUTINE, [&](auto call) {
-                        call->set_current_goroutine.goroutine_id = goroutine.id;
-                    });
-                }
-
-                if (open) {
-                    if (goroutine.fresh) {
-                        for (int j = 0; j < goroutine.frames->len; j++) {
-                            auto &frame = goroutine.frames->items[j];
-
-                            int tree_flags = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
-                            if (state.current_goroutine_id == goroutine.id && state.current_frame == j)
-                                tree_flags |= ImGuiTreeNodeFlags_Selected;
-
-                            ImGui::TreeNodeEx(&frame, tree_flags, "%s (%s:%d)", frame.func_name, our_basename(frame.filepath), frame.lineno);
-                            if (ImGui::IsItemClicked()) {
-                                world.dbg.push_call(DLVC_SET_CURRENT_FRAME, [&](auto call) {
-                                    call->set_current_frame.goroutine_id = goroutine.id;
-                                    call->set_current_frame.frame = j;
-                                });
-                            }
-                        }
-                    } else {
-                        ImGui::Text("Loading...");
-                    }
-
-                    ImGui::TreePop();
-                }
-            }
-            ImGui::PopFont();
-        }
-
-        ImGui::NextColumn();
-
-        if (ImGui::BeginTabBar("MyTabBar", ImGuiTabBarFlags_None)) {
-            if (ImGui::BeginTabItem("Local Variables")) {
-                ImGui::PushFont(world.ui.im_font_mono);
-
-                auto flags = ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable;
-                if (ImGui::BeginTable("vars", 3, flags)) {
-                    ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_NoHide);
-                    ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_NoHide);
-                    ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_NoHide);
-                    ImGui::TableHeadersRow();
-
-                    bool loading = false;
-                    bool done = false;
-                    Dlv_Frame *frame = NULL;
-
-                    do {
-                        if (dbg.state_flag != DLV_STATE_PAUSED) break;
-                        if (state.current_goroutine_id == -1 || state.current_frame == -1) break;
-
-                        auto goroutine = state.goroutines.find([&](auto it) { return it->id == state.current_goroutine_id; });
-                        if (goroutine == NULL) break;
-
-                        loading = true;
-
-                        if (!goroutine->fresh) break;
-                        if (state.current_frame >= goroutine->frames->len) break;
-
-                        frame = &goroutine->frames->items[state.current_frame];
-                        if (!frame->fresh) {
-                            frame = NULL;
-                            break;
-                        }
-
-                        if (frame->locals != NULL) {
-                            For (*frame->locals) {
-                                Render_Args a = {0};
-                                a.var = &it;
-                                a.is_child = false;
-                                a.watch = NULL;
-                                a.index = INDEX_NONE;
-                                render_var(&a);
-                            }
-                        }
-
-                        if (frame->args != NULL) {
-                            For (*frame->args) {
-                                Render_Args a = {0};
-                                a.var = &it;
-                                a.is_child = false;
-                                a.watch = NULL;
-                                a.index = INDEX_NONE;
-                                render_var(&a);
-                            }
-                        }
-                    } while (0);
-
-                    ImGui::EndTable();
-
-                    if (frame == NULL && loading)
-                        ImGui::Text("Loading...");
-                    if (frame != NULL)
-                        if ((frame->locals == NULL || frame->locals->len == 0) && (frame->args == NULL || frame->args->len == 0))
-                            ImGui::Text("No variables to show here.");
-                }
-
-                ImGui::PopFont();
-                ImGui::EndTabItem();
-            }
-
-            if (ImGui::BeginTabItem("Watches")) {
-                ImGui::PushFont(world.ui.im_font_mono);
-
-                auto flags = ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable;
-                if (ImGui::BeginTable("vars", 3, flags)) {
-                    ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_NoHide);
-                    ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_NoHide);
-                    ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_NoHide);
-                    ImGui::TableHeadersRow();
-
-                    for (int k = 0; k < world.dbg.watches.len; k++) {
-                        auto &it = world.dbg.watches[k];
-                        if (it.deleted) continue;
-
-                        Render_Args a = {0};
-                        a.var = &it.value;
-                        a.is_child = false;
-                        a.watch = &it;
-                        a.index = INDEX_NONE;
-                        a.watch_index = k;
-                        render_var(&a);
-                    }
-
-                    {
-                        // render an extra row for adding new watches
-
-                        ImGui::TableNextRow();
-                        ImGui::TableNextColumn(); // name
-
-                        ImGui::PushStyleColor(ImGuiCol_FrameBg, 0);
-                        ImGui::SetNextItemWidth(-FLT_MIN);
-                        bool changed = ImGui::InputText(
-                            "##newwatch",
-                            world.wnd_debugger.new_watch_buf,
-                            _countof(world.wnd_debugger.new_watch_buf),
-                            ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll
-                        );
-                        ImGui::PopStyleColor();
-                        if (changed || ImGui::IsItemDeactivated())
-                            if (world.wnd_debugger.new_watch_buf[0] != '\0') {
-                                dbg.push_call(DLVC_CREATE_WATCH, [&](auto it) {
-                                    it->create_watch.expression = our_strcpy(world.wnd_debugger.new_watch_buf);
-                                });
-                                world.wnd_debugger.new_watch_buf[0] = '\0';
-                            }
-
-                        ImGui::TableNextColumn(); // value
-                        ImGui::TableNextColumn(); // type
-                    }
-
-                    ImGui::EndTable();
-                }
-
-                ImGui::PopFont();
-                ImGui::EndTabItem();
-            }
-
-            if (ImGui::BeginTabItem("Global Variables")) {
-                ImGui::PushFont(world.ui.im_font_mono);
-                ImGui::Text("@Incomplete: global vars go here");
-                ImGui::PopFont();
-                ImGui::EndTabItem();
-            }
-            ImGui::EndTabBar();
-        }
-
-        ImGui::PopStyleVar();
-        ImGui::End();
     }
 };
 
@@ -1135,10 +271,11 @@ int main() {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_MAXIMIZED, GLFW_TRUE);
 
     t.log("window hints");
 
-    world.window = glfwCreateWindow(420, 420, WINDOW_TITLE, NULL, NULL);
+    world.window = glfwCreateWindow(1280, 720, WINDOW_TITLE, NULL, NULL);
     if (world.window == NULL)
         return error("could not create window"), EXIT_FAILURE;
 
@@ -1160,6 +297,7 @@ int main() {
     ImGui::CreateContext();
 
     ImGuiIO& io = ImGui::GetIO();
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     // ImGuI::StyleColorsLight();
 
     io.BackendFlags |= ImGuiBackendFlags_HasMouseCursors;
@@ -1208,10 +346,6 @@ int main() {
         return EXIT_FAILURE;
 
     t.log("fill out a bunch of shit");
-
-    // window sizing crap
-    glfwSetWindowSize(world.window, 1280, 720);
-    glfwSetWindowPos(world.window, 50, 50);
 
     // grab window_size, display_size, and display_scale
     glfwGetWindowSize(world.window, (i32*)&world.window_size.x, (i32*)&world.window_size.y);
@@ -1338,23 +472,6 @@ int main() {
         auto add_dy = [&](i32* offset) {
             *offset = (dy > 0 ? (*offset + dy) : relu_sub(*offset, -dy));
         };
-
-        if (ui.get_sidebar_area().contains(world.ui.mouse_pos) && world.sidebar.view != SIDEBAR_CLOSED) {
-            switch (world.sidebar.view) {
-            case SIDEBAR_FILE_EXPLORER:
-                add_dy(&world.file_explorer.scroll_offset);
-                break;
-            case SIDEBAR_SEARCH_RESULTS:
-                add_dy(&world.search_results.scroll_offset);
-                break;
-            }
-
-            return;
-        }
-
-        if (ui.get_build_results_area().contains(world.ui.mouse_pos)) {
-            add_dy(&world.wnd_build_and_debug.scroll_offset);
-        }
 
         /*
         {
@@ -1856,10 +973,7 @@ int main() {
                         world.windows_open.search_and_replace ^= 1;
                         break;
                     case GLFW_KEY_E:
-                        if (world.sidebar.view == SIDEBAR_FILE_EXPLORER)
-                            world.sidebar.view = SIDEBAR_CLOSED;
-                        else
-                            world.sidebar.view = SIDEBAR_FILE_EXPLORER;
+                        world.file_explorer.show ^= 1;
                         break;
                     case GLFW_KEY_TAB:
                         {
@@ -2062,25 +1176,22 @@ int main() {
     glDisable(GL_CULL_FACE);
     glDisable(GL_DEPTH_TEST);
 
-    GLuint vao, vbo;
-    glGenVertexArrays(1, &vao);
-    glBindVertexArray(vao);
-    glGenBuffers(1, &vbo);
+    glGenVertexArrays(1, &world.ui.vao);
+    glBindVertexArray(world.ui.vao);
+    glGenBuffers(1, &world.ui.vbo);
 
-    GLuint im_vao, im_vbo, im_vebo;
-    glGenVertexArrays(1, &im_vao);
-    glBindVertexArray(im_vao);
-    glGenBuffers(1, &im_vbo);
-    glGenBuffers(1, &im_vebo);
+    glGenVertexArrays(1, &world.ui.im_vao);
+    glBindVertexArray(world.ui.im_vao);
+    glGenBuffers(1, &world.ui.im_vbo);
+    glGenBuffers(1, &world.ui.im_vebo);
 
-    GLuint fbo;
-    glGenFramebuffers(1, &fbo);
+    glGenFramebuffers(1, &world.ui.fbo);
 
     {
         // set opengl program attributes
         glUseProgram(world.ui.program);
-        glBindVertexArray(vao);
-        glBindBuffer(GL_ARRAY_BUFFER, vbo);
+        glBindVertexArray(world.ui.vao);
+        glBindBuffer(GL_ARRAY_BUFFER, world.ui.vbo);
 
         i32 loc;
 
@@ -2119,8 +1230,8 @@ int main() {
     {
         // set imgui program attributes
         glUseProgram(world.ui.im_program);
-        glBindVertexArray(im_vao);
-        glBindBuffer(GL_ARRAY_BUFFER, im_vbo);
+        glBindVertexArray(world.ui.im_vao);
+        glBindBuffer(GL_ARRAY_BUFFER, world.ui.im_vbo);
 
         i32 loc;
 
@@ -2158,7 +1269,7 @@ int main() {
     double last_time = glfwGetTime();
     i64 last_frame_time = current_time_in_nanoseconds();
 
-    // world.focus_editor(path_join(world.current_path, "21autogen/main.go"), new_cur2(1, 8));
+    // world.focus_editor(path_join(world.current_path, "main.go"), new_cur2(1, 8));
 
     while (!glfwWindowShouldClose(world.window)) {
         world.frame_mem.reset();
@@ -2225,7 +1336,7 @@ int main() {
                     }
                     */
 
-                    world.sidebar.view = SIDEBAR_SEARCH_RESULTS;
+                    world.search_results.show = true;
                     proc.cleanup();
                     break;
                 }
@@ -2248,7 +1359,7 @@ int main() {
         }
 
         glDisable(GL_SCISSOR_TEST);
-        glClearColor(COLOR_WHITE.r, COLOR_WHITE.g, COLOR_WHITE.b, 1.0);
+        glClearColor(COLOR_BG.r, COLOR_BG.g, COLOR_BG.b, 1.0);
         glClear(GL_COLOR_BUFFER_BIT);
 
         {
@@ -2287,439 +1398,31 @@ int main() {
 
             if (cur_changed && cur_enabled) {
                 ImGuiMouseCursor cur = ImGui::GetMouseCursor();
-                if (io.MouseDrawCursor || cur == ImGuiMouseCursor_None) {
-                    glfwSetInputMode(world.window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
-                } else {
-                    glfwSetInputMode(world.window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-                    glfwSetCursor(world.window, world.ui.cursors[cur] ? world.ui.cursors[cur] : world.ui.cursors[ImGuiMouseCursor_Arrow]);
-                }
-            }
-        }
 
-        // start rendering imgui
-        ImGui::NewFrame();
-
-        // draw menubar first, so we can get its height (which we need for UI)
-        if (ImGui::BeginMainMenuBar()) {
-            world.ui.menubar_height = ImGui::GetWindowSize().y;
-
-            if (ImGui::BeginMenu("File")) {
-                if (ImGui::MenuItem("Open file...", "Ctrl+P")) {
-                    if (!world.wnd_open_file.show) {
-                        world.wnd_open_file.show = true;
-                        init_open_file();
-                    }
-                }
-                ImGui::Separator();
-                if (ImGui::MenuItem("Exit...", "Alt+F4")) {
-                    glfwSetWindowShouldClose(world.window, true);
-                }
-                ImGui::EndMenu();
-            }
-
-            if (ImGui::BeginMenu("Project")) {
-                if (ImGui::MenuItem("Build", "Ctrl+Shift+B")) {
-                    kick_off_build();
-                }
-
-                ImGui::Separator();
-
-                if (ImGui::MenuItem("Project Settings")) {
-                    world.windows_open.settings = true;
-                }
-
-                ImGui::EndMenu();
-            }
-
-            if (ImGui::BeginMenu("Debug")) {
-                auto can_run = [&]() {
-                    switch (world.dbg.state_flag) {
-                    case DLV_STATE_PAUSED:
-                    case DLV_STATE_INACTIVE:
-                        return true;
-                    }
-                    return false;
+                auto lookup_cursor = [&](ImGuiMouseCursor cur) {
+                    auto ret = world.ui.cursors[cur];
+                    if (ret == NULL)
+                        ret = world.ui.cursors[ImGuiMouseCursor_Arrow];
+                    return ret;
                 };
 
-                if (ImGui::MenuItem("Run", "F5", false, can_run())) {
-                    switch (world.dbg.state_flag) {
-                    case DLV_STATE_PAUSED:
-                        world.dbg.push_call(DLVC_CONTINUE_RUNNING);
-                        break;
-
-                    case DLV_STATE_INACTIVE:
-                        world.dbg.push_call(DLVC_START);
-                        break;
-                    }
-                }
-
-                if (ImGui::MenuItem("Break All", NULL, false, world.dbg.state_flag == DLV_STATE_RUNNING)) {
-                    world.dbg.push_call(DLVC_BREAK_ALL);
-                }
-
-                if (ImGui::MenuItem("Stop Debugging", "Shift+F5", false, world.dbg.state_flag != DLV_STATE_INACTIVE)) {
-                    world.dbg.push_call(DLVC_STOP);
-                }
-
-                if (ImGui::MenuItem("Step Over", "F10", false, world.dbg.state_flag == DLV_STATE_PAUSED)) {
-                    world.dbg.push_call(DLVC_STEP_OVER);
-                }
-
-                if (ImGui::MenuItem("Step Into", "F11", false, world.dbg.state_flag == DLV_STATE_PAUSED)) {
-                    world.dbg.push_call(DLVC_STEP_INTO);
-                }
-
-                if (ImGui::MenuItem("Step Out", "Shift+F11", false, world.dbg.state_flag == DLV_STATE_PAUSED)) {
-                    world.dbg.push_call(DLVC_STEP_OUT);
-                }
-
-                if (ImGui::MenuItem("Run to Cursor", "Shift+F10", false, world.dbg.state_flag == DLV_STATE_PAUSED)) {
-                    // TODO
-                }
-
-                ImGui::Separator();
-
-                if (ImGui::MenuItem("Toggle Breakpoint", "F9")) {
-                    auto editor = world.get_current_editor();
-                    if (editor != NULL) {
-                        world.dbg.push_call(DLVC_TOGGLE_BREAKPOINT, [&](auto call) {
-                            call->toggle_breakpoint.filename = our_strcpy(editor->filepath);
-                            call->toggle_breakpoint.lineno = editor->cur.y + 1;
-                        });
-                    }
-                }
-
-                if (ImGui::MenuItem("Delete All Breakpoints", "Shift+F9")) {
-                    prompt_delete_all_breakpoints();
-                }
-
-                ImGui::EndMenu();
-            }
-
-            if (ImGui::BeginMenu("Developer")) {
-                ImGui::MenuItem("ImGui demo", NULL, &world.windows_open.im_demo);
-                ImGui::MenuItem("ImGui metrics", NULL, &world.windows_open.im_metrics);
-                ImGui::MenuItem("Editor AST viewer", NULL, &world.wnd_editor_tree.show);
-                ImGui::MenuItem("Editor toplevels viewer", NULL, &world.wnd_editor_toplevels.show);
-                ImGui::MenuItem("Roll Your Own IDE Construction Set", NULL, &world.wnd_style_editor.show);
-                ImGui::MenuItem("Replace line numbers with bytecounts", NULL, &world.replace_line_numbers_with_bytecounts);
-                ImGui::EndMenu();
-            }
-
-            if (ImGui::BeginMenu("Go")) {
-                if (ImGui::MenuItem("Reload go.mod")) {
-                    atomic_set_flag(
-                        &world.indexer.flag_lock,
-                        &world.indexer.flag_handle_gomod_changed
-                    );
-                }
-
-                if (ImGui::MenuItem("Re-index everything")) {
-                    atomic_set_flag(
-                        &world.indexer.flag_lock,
-                        &world.indexer.flag_reindex_everything
-                    );
-                }
-
-                ImGui::EndMenu();
-            }
-
-            ImGui::EndMainMenuBar();
-        }
-
-        {
-            if (world.windows_open.settings) {
-                ImGui::Begin("Project Settings", &world.windows_open.settings, ImGuiWindowFlags_AlwaysAutoResize);
-                if (ImGui::IsWindowFocused)
-
-                ImGui::InputText("Build command", world.settings.build_command, _countof(world.settings.build_command));
-                ImGui::InputText("Debug binary path", world.settings.debug_binary_path, _countof(world.settings.debug_binary_path));
-
-                ImGui::End();
-            }
-
-            if (world.windows_open.im_demo)
-                ImGui::ShowDemoWindow(&world.windows_open.im_demo);
-
-            if (world.windows_open.im_metrics)
-                ImGui::ShowMetricsWindow(&world.windows_open.im_metrics);
-
-            if (world.wnd_open_file.show) {
-                auto& wnd = world.wnd_open_file;
-                ImGui::Begin("Open File", &world.wnd_open_file.show, ImGuiWindowFlags_AlwaysAutoResize);
-
-                wnd.focused = ImGui::IsWindowFocused();
-
-                ImGui::Text("Search for file:");
-
-                ImGui::PushFont(world.ui.im_font_mono);
-
-                if (ImGui::IsWindowAppearing())
-                    ImGui::SetKeyboardFocusHere();
-
-                ImGui::InputText("##search_for_file", wnd.query, _countof(wnd.query));
-
-                if (ImGui::IsItemEdited())
-                    filter_files();
-
-                for (u32 i = 0; i < wnd.filtered_results->len; i++) {
-                    auto it = wnd.filepaths->at(wnd.filtered_results->at(i));
-                    if (i == wnd.selection)
-                        ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.5f, 1.0f), "%s", it);
-                    else
-                        ImGui::Text("%s", it);
-                }
-
-                ImGui::PopFont();
-
-                ImGui::End();
-            }
-
-            if (world.dbg.state_flag != DLV_STATE_INACTIVE) {
-                Debugger_UI ui;
-                ui.draw();
-
-            }
-
-            if (world.windows_open.search_and_replace) {
-                auto& wnd = world.wnd_search_and_replace;
-
-                ImGui::Begin("Search and Replace", &world.windows_open.search_and_replace, ImGuiWindowFlags_AlwaysAutoResize);
-
-                ImGui::Text("Search for:");
-                ImGui::InputText("##find", wnd.find_str, _countof(wnd.find_str));
-                ImGui::Text("Replace with:");
-                ImGui::InputText("##replace", wnd.replace_str, _countof(wnd.replace_str));
-
-                ImGui::Separator();
-
-                ImGui::Checkbox("Case-sensitive", &wnd.case_sensitive);
-                ImGui::SameLine();
-                ImGui::Checkbox("Use regular expression", &wnd.use_regex);
-
-                ImGui::Separator();
-
-                if (ImGui::Button("Search for All")) {
-                    world.search_results.mem.cleanup();
-                    run_proc_the_normal_way(
-                        &world.jobs.search.proc,
-                        our_sprintf("ag --ackmate %s %s \"%s\"", wnd.use_regex ? "" : "-Q", wnd.case_sensitive ? "-s" : "", wnd.find_str)
-                    );
-                    world.jobs.flag_search = true;
-                }
-
-                ImGui::SameLine();
-
-                if (ImGui::Button("Replace All")) {
-                    // TODO: some kind of permanent settings system
-                    // so we can save things like "don't show this popup again"
-                    ImGui::OpenPopup("Really replace?");
-                }
-
-                if (world.jobs.search_and_replace.signal_done) {
-                    world.jobs.search_and_replace.signal_done = false;
-                    ImGui::OpenPopup("Done");
-                }
-
-                ImGui::SetNextWindowSize(ImVec2(450, -1));
-                if (ImGui::BeginPopupModal("Really replace?", NULL, ImGuiWindowFlags_NoResize)) {
-                    ImGui::TextWrapped("Pressing this button will automatically, irreversibly perform the text replacement you requested.");
-                    ImGui::TextWrapped("If you make a mistake, we trust your version control system will save you.");
-                    ImGui::TextWrapped("To preview your changes before replacing, click Find All first.");
-                    ImGui::TextWrapped("We won't show this warning again.");
-                    ImGui::NewLine();
-                    if (ImGui::Button("Ok, replace all")) {
-                        run_proc_the_normal_way(
-                            &world.jobs.search_and_replace.proc,
-                            our_sprintf("ag -g \"\" | xargs sed -i \"s/%s/%s/g\"", wnd.find_str, wnd.replace_str)
-                        );
-                        world.jobs.flag_search_and_replace = true;
-                        ImGui::CloseCurrentPopup();
-                    }
-
-                    ImGui::SameLine();
-                    if (ImGui::Button("Cancel")) {
-                        ImGui::CloseCurrentPopup();
-                    }
-
-                    ImGui::EndPopup();
-                }
-
-                ImGui::SetNextWindowSize(ImVec2(450, -1));
-                if (ImGui::BeginPopupModal("Done", NULL, ImGuiWindowFlags_NoResize)) {
-                    ImGui::TextWrapped("Replace operation has completed.");
-                    ImGui::NewLine();
-                    if (ImGui::Button("Ok")) {
-                        ImGui::CloseCurrentPopup();
-                    }
-                    ImGui::EndPopup();
-                }
-
-                ImGui::End();
-            }
-
-            if (world.wnd_add_file_or_folder.show) {
-                auto &wnd = world.wnd_add_file_or_folder;
-
-                auto label = our_sprintf(
-                    "Add %s to %s",
-                    wnd.folder ? "folder" : "file",
-                    wnd.location_is_root ? "workspace root" : wnd.location
-                );
-
-                ImGui::Begin(label, &wnd.show, ImGuiWindowFlags_AlwaysAutoResize);
-
-                ImGui::Text("Name:");
-                ImGui::InputText("##add_file", wnd.name, IM_ARRAYSIZE(wnd.name));
-
-                if (ImGui::Button("Add")) {
-                    world.wnd_add_file_or_folder.show = false;
-
-                    if (strlen(wnd.name) > 0) {
-                        auto dest = wnd.location_is_root ? world.current_path : path_join(world.current_path, wnd.location);
-                        auto path = path_join(dest, wnd.name);
-
-                        if (wnd.folder) {
-                            CreateDirectoryA(path, NULL);
-                        } else {
-                            // need to share, or else we have race condition
-                            // with fsevent handler in
-                            // Go_Indexer::background_thread() trying to read
-                            auto h = CreateFileA(path, 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
-                            if (h != INVALID_HANDLE_VALUE) CloseHandle(h);
-                        }
-
-                        world.fill_file_tree();
-                    }
-                }
-                ImGui::End();
-            }
-
-            if (world.wnd_style_editor.show) {
-                ImGui::Begin("Style Editor", &world.wnd_style_editor.show, ImGuiWindowFlags_AlwaysAutoResize);
-
-                ImGui::SliderFloat("status_padding_x", &settings.status_padding_x, 0.0, 20.0f, "%.0f");
-                ImGui::SliderFloat("status_padding_y", &settings.status_padding_y, 0.0, 20.0f, "%.0f");
-                ImGui::SliderFloat("line_number_margin_left", &settings.line_number_margin_left, 0.0, 20.0f, "%.0f");
-                ImGui::SliderFloat("line_number_margin_right", &settings.line_number_margin_right, 0.0, 20.0f, "%.0f");
-                ImGui::SliderFloat("sidebar_padding_x", &settings.sidebar_padding_x, 0.0, 20.0f, "%.0f");
-                ImGui::SliderFloat("sidebar_padding_y", &settings.sidebar_padding_y, 0.0, 20.0f, "%.0f");
-                ImGui::SliderFloat("sidebar_item_padding_x", &settings.sidebar_item_padding_x, 0.0, 20.0f, "%.0f");
-                ImGui::SliderFloat("sidebar_item_padding_y", &settings.sidebar_item_padding_y, 0.0, 20.0f, "%.0f");
-                ImGui::SliderFloat("filetree_item_margin", &settings.filetree_item_margin, 0.0, 20.0f, "%.0f");
-                ImGui::SliderFloat("filetree_item_padding_y", &settings.filetree_item_padding_y, 0.0, 20.0f, "%.0f");
-                ImGui::SliderFloat("filetree_space_between_items", &settings.filetree_space_between_items, 0.0, 20.0f, "%.0f");
-                ImGui::SliderFloat("filetree_button_size", &settings.filetree_button_size, 0.0, 20.0f, "%.0f");
-                ImGui::SliderFloat("filetree_buttons_area_padding_x", &settings.filetree_buttons_area_padding_x, 0.0, 20.0f, "%.0f");
-                ImGui::SliderFloat("filetree_buttons_area_padding_y", &settings.filetree_buttons_area_padding_y, 0.0, 20.0f, "%.0f");
-                ImGui::SliderFloat("filetree_button_margin_x", &settings.filetree_button_margin_x, 0.0, 20.0f, "%.0f");
-                ImGui::SliderFloat("filetree_button_padding", &settings.filetree_button_padding, 0.0, 20.0f, "%.0f");
-                ImGui::SliderFloat("autocomplete_menu_padding", &settings.autocomplete_menu_padding, 0.0, 20.0f, "%.0f");
-                ImGui::SliderFloat("autocomplete_item_padding_x", &settings.autocomplete_item_padding_x, 0.0, 20.0f, "%.0f");
-                ImGui::SliderFloat("autocomplete_item_padding_y", &settings.autocomplete_item_padding_y, 0.0, 20.0f, "%.0f");
-                ImGui::SliderFloat("error_list_item_padding_x", &settings.error_list_item_padding_x, 0.0, 20.0f, "%.0f");
-                ImGui::SliderFloat("error_list_item_padding_y", &settings.error_list_item_padding_y, 0.0, 20.0f, "%.0f");
-                ImGui::SliderFloat("tabs_offset", &settings.tabs_offset, 0.0, 20.0f, "%.0f");
-                ImGui::SliderFloat("scrolloff", &settings.scrolloff, 0.0, 20.0f, "%.0f");
-
-                ImGui::End();
-            }
-
-            do {
-                auto editor = world.get_current_editor();
-                if (editor == NULL) break;
-
-                auto tree = editor->tree;
-                if (tree == NULL) break;
-
-                if (world.wnd_editor_tree.show) {
-                    ImGui::Begin("AST", &world.wnd_editor_tree.show, 0);
-                    ImGui::Checkbox("show anon?", &world.wnd_ast_vis.show_anon_nodes);
-                    ts_tree_cursor_reset(&editor->cursor, ts_tree_root_node(tree));
-                    render_ts_cursor(&editor->cursor);
-                    ImGui::End();
-                }
-
-                if (world.wnd_editor_toplevels.show) {
-                    ImGui::Begin("Toplevels", &world.wnd_editor_toplevels.show, 0);
-
-                    List<Godecl> decls;
-                    decls.init();
-
-                    Parser_It it = {0};
-                    it.init(&editor->buf);
-
-                    Ast_Node node = {0};
-                    node.init(ts_tree_root_node(tree), &it);
-
-                    FOR_NODE_CHILDREN (&node) {
-                        switch (it->type) {
-                        case TS_VAR_DECLARATION:
-                        case TS_CONST_DECLARATION:
-                        case TS_FUNCTION_DECLARATION:
-                        case TS_METHOD_DECLARATION:
-                        case TS_TYPE_DECLARATION:
-                        case TS_SHORT_VAR_DECLARATION:
-                            decls.len = 0;
-                            world.indexer.node_to_decls(it, &decls, NULL);
-                            For (decls) render_godecl(&it);
-                            break;
-                        }
-                    }
-
-                    ImGui::End();
-                }
-            } while (0);
-
-            world.ui.mouse_captured_by_imgui = io.WantCaptureMouse;
-
-            auto is_keyboard_captured_by_imgui = [&]() -> bool {
-                if (io.WantCaptureKeyboard) return true;
-                if (ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow))
-                    if (!world.wnd_debugger.focused)
-                        return true;
-                return false;
-            };
-
-            world.ui.keyboard_captured_by_imgui = is_keyboard_captured_by_imgui();
-
-            ImGui::Render();
-        }
-
-        ui.draw_everything(vao, vbo, world.ui.program);
-
-        {
-            // draw imgui buffers
-            ImDrawData* draw_data = ImGui::GetDrawData();
-            draw_data->ScaleClipRects(ImVec2(world.display_scale.x, world.display_scale.y));
-
-            glViewport(0, 0, world.display_size.x, world.display_size.y);
-            glUseProgram(world.ui.im_program);
-            glBindVertexArray(im_vao);
-            glBindFramebuffer(GL_FRAMEBUFFER, 0);
-            glEnable(GL_SCISSOR_TEST);
-
-            for (i32 i = 0; i < draw_data->CmdListsCount; i++) {
-                const ImDrawList* cmd_list = draw_data->CmdLists[i];
-                const ImDrawIdx* offset = 0;
-
-                glBindBuffer(GL_ARRAY_BUFFER, im_vbo);
-                glBufferData(GL_ARRAY_BUFFER, cmd_list->VtxBuffer.Size * sizeof(ImDrawVert), cmd_list->VtxBuffer.Data, GL_STREAM_DRAW);
-                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, im_vebo);
-                glBufferData(GL_ELEMENT_ARRAY_BUFFER, cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx), cmd_list->IdxBuffer.Data, GL_STREAM_DRAW);
-
-                i32 elem_size = sizeof(ImDrawIdx) == 2 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT;
-
-                for (i32 j = 0; j < cmd_list->CmdBuffer.Size; j++) {
-                    const ImDrawCmd* cmd = &cmd_list->CmdBuffer[j];
-                    glScissor(cmd->ClipRect.x, (world.display_size.y - cmd->ClipRect.w), (cmd->ClipRect.z - cmd->ClipRect.x), (cmd->ClipRect.w - cmd->ClipRect.y));
-                    glDrawElements(GL_TRIANGLES, cmd->ElemCount, elem_size, offset);
-                    offset += cmd->ElemCount;
+                if (io.MouseDrawCursor || cur == ImGuiMouseCursor_None) {
+                    glfwSetInputMode(world.window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
+                } else if (cur != ImGuiMouseCursor_Arrow) {
+                    glfwSetInputMode(world.window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+                    glfwSetCursor(world.window, lookup_cursor(cur));
+                } else if (ui.hover.ready && ui.hover.cursor != ImGuiMouseCursor_Arrow) {
+                    glfwSetCursor(world.window, lookup_cursor(ui.hover.cursor));
+                } else {
+                    glfwSetCursor(world.window, lookup_cursor(ImGuiMouseCursor_Arrow));
                 }
             }
         }
 
+        ui.draw_everything();
         glfwPollEvents();
+        ui.end_frame(); // end frame after polling events, so our event callbacks have access to imgui
+
         glfwSwapBuffers(world.window);
 
         {

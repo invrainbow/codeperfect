@@ -26,12 +26,6 @@ struct Search_Result {
     ccstr filename;
 };
 
-enum Sidebar_View {
-    SIDEBAR_CLOSED,
-    SIDEBAR_FILE_EXPLORER,
-    SIDEBAR_SEARCH_RESULTS,
-};
-
 // TODO: define init/cleanup routines for find and replace, and for build
 
 struct Build_Error {
@@ -142,14 +136,9 @@ struct World {
     } error_list;
 
     struct {
-        Sidebar_View view;
-        float width;
-    } sidebar;
-
-    struct {
+        bool show;
         Pool mem;
         List<Search_Result*> results;
-        i32 scroll_offset;
 
         void init() {
             mem.init("search_results");
@@ -202,7 +191,8 @@ struct World {
     } build;
 
     struct {
-        i32 scroll_offset;
+        bool show;
+        // i32 scroll_offset;
         i32 selection;
         // char buf[256];
         // bool adding_something;
@@ -230,6 +220,13 @@ struct World {
     } jobs;
 
     struct {
+        GLuint vao;
+        GLuint vbo;
+        GLuint im_vao;
+        GLuint im_vbo;
+        GLuint im_vebo;
+        GLuint fbo;
+
         GLint program;
         GLint im_program;
         cur2 mouse_pos;
@@ -277,6 +274,7 @@ struct World {
         u32 selection;
         List<ccstr> *filepaths;
         List<int> *filtered_results;
+        bool first_open_focus_twice_done;
     } wnd_open_file;
 
     struct {
@@ -328,3 +326,9 @@ extern World world;
 
 bool is_ignored_by_git(ccstr path, bool isdir);
 
+void init_open_file();
+void kick_off_build();
+void prompt_delete_all_breakpoints();
+void filter_files();
+void run_proc_the_normal_way(Process* proc, ccstr cmd);
+void* get_native_window_handle(GLFWwindow *window);

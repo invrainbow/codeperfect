@@ -1,3 +1,5 @@
+#include "imgui.h"
+#include "imgui_internal.h"
 #include "ui.hpp"
 #include "common.hpp"
 #include "world.hpp"
@@ -103,6 +105,10 @@ vec4f rgba(vec3f color, float alpha) {
 
 vec4f rgba(ccstr hex, float alpha) {
     return rgba(rgb_hex(hex), alpha);
+}
+
+ImVec4 to_imcolor(vec4f color) {
+    return (ImVec4)ImColor(color.r, color.g, color.b, color.a);
 }
 
 const vec3f COLOR_WHITE = rgb_hex("#ffffff");
@@ -278,6 +284,212 @@ bool get_type_color(Ast_Node *node, Editor *editor, vec3f *out) {
     return false;
 }
 
+void UI::render_godecl(Godecl *decl) {
+    auto flags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth;
+    if (ImGui::TreeNodeEx(decl, flags, "%s", godecl_type_str(decl->type))) {
+        ImGui::Text("decl_start: %s", format_pos(decl->decl_start));
+        ImGui::Text("spec_start: %s", format_pos(decl->spec_start));
+        ImGui::Text("name_start: %s", format_pos(decl->name_start));
+        ImGui::Text("name: %s", decl->name);
+
+        switch (decl->type) {
+        case GODECL_IMPORT:
+            ImGui::Text("import_path: %s", decl->import_path);
+            break;
+        case GODECL_VAR:
+        case GODECL_CONST:
+        case GODECL_TYPE:
+        case GODECL_FUNC:
+        case GODECL_FIELD:
+        case GODECL_SHORTVAR:
+            render_gotype(decl->gotype);
+            break;
+        }
+        ImGui::TreePop();
+    }
+}
+
+void UI::render_gotype(Gotype *gotype, ccstr field) {
+    if (gotype == NULL) return;
+
+    auto flags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth;
+    bool is_open = false;
+
+    if (field == NULL)
+        is_open = ImGui::TreeNodeEx(gotype, flags, "%s", gotype_type_str(gotype->type));
+    else
+        is_open = ImGui::TreeNodeEx(gotype, flags, "%s: %s", field, gotype_type_str(gotype->type));
+
+    if (is_open) {
+        switch (gotype->type) {
+        case GOTYPE_ID:
+            ImGui::Text("name: %s", gotype->id_name);
+            ImGui::Text("pos: %s", format_pos(gotype->id_pos));
+            break;
+        case GOTYPE_SEL:
+            ImGui::Text("package: %s", gotype->sel_name);
+            ImGui::Text("sel: %s", gotype->sel_sel);
+            break;
+        case GOTYPE_MAP:
+            render_gotype(gotype->map_key, "key");
+            render_gotype(gotype->map_value, "value");
+            break;
+        case GOTYPE_STRUCT:
+        case GOTYPE_INTERFACE:
+            {
+                auto specs = gotype->type == GOTYPE_STRUCT ? gotype->struct_specs : gotype->interface_specs;
+                for (u32 i = 0; i < specs->len; i++) {
+                    auto it = &specs->items[i];
+                    if (ImGui::TreeNodeEx(it, flags, "spec %d", i)) {
+                        ImGui::Text("is_embedded: %d", it->is_embedded);
+                        ImGui::Text("tag: %s", it->tag);
+                        if (it->is_embedded)
+                            render_gotype(it->embedded_type);
+                        else
+                            render_godecl(it->field);
+                        ImGui::TreePop();
+                    }
+                }
+            }
+            break;
+        case GOTYPE_POINTER: render_gotype(gotype->pointer_base, "base"); break;
+        case GOTYPE_SLICE: render_gotype(gotype->slice_base, "base"); break;
+        case GOTYPE_ARRAY: render_gotype(gotype->array_base, "base"); break;
+        case GOTYPE_LAZY_INDEX: render_gotype(gotype->lazy_index_base, "base"); break;
+        case GOTYPE_LAZY_CALL: render_gotype(gotype->lazy_call_base, "base"); break;
+        case GOTYPE_LAZY_DEREFERENCE: render_gotype(gotype->lazy_dereference_base, "base"); break;
+        case GOTYPE_LAZY_REFERENCE: render_gotype(gotype->lazy_reference_base, "base"); break;
+        case GOTYPE_LAZY_ARROW: render_gotype(gotype->lazy_arrow_base, "base"); break;
+        case GOTYPE_VARIADIC: render_gotype(gotype->variadic_base, "base"); break;
+        case GOTYPE_ASSERTION: render_gotype(gotype->assertion_base, "base"); break;
+
+        case GOTYPE_CHAN:
+            render_gotype(gotype->chan_base, "base"); break;
+            ImGui::Text("direction: %d", gotype->chan_direction);
+            break;
+
+        case GOTYPE_FUNC:
+            if (gotype->func_sig.params == NULL) {
+                ImGui::Text("params: NULL");
+            } else if (ImGui::TreeNodeEx(&gotype->func_sig.params, flags, "params:")) {
+                For (*gotype->func_sig.params)
+                    render_godecl(&it);
+                ImGui::TreePop();
+            }
+
+            if (gotype->func_sig.result == NULL) {
+                ImGui::Text("result: NULL");
+            } else if (ImGui::TreeNodeEx(&gotype->func_sig.result, flags, "result:")) {
+                For (*gotype->func_sig.result)
+                    render_godecl(&it);
+                ImGui::TreePop();
+            }
+
+            render_gotype(gotype->func_recv);
+            break;
+
+        case GOTYPE_MULTI:
+            For (*gotype->multi_types) render_gotype(it);
+            break;
+
+        case GOTYPE_RANGE:
+            render_gotype(gotype->range_base, "base");
+            ImGui::Text("type: %d", gotype->range_type);
+            break;
+
+        case GOTYPE_LAZY_ID:
+            ImGui::Text("name: %s", gotype->lazy_id_name);
+            ImGui::Text("pos: %s", format_pos(gotype->lazy_id_pos));
+            break;
+
+        case GOTYPE_LAZY_SEL:
+            render_gotype(gotype->lazy_sel_base, "base");
+            ImGui::Text("sel: %s", gotype->lazy_sel_sel);
+            break;
+
+        case GOTYPE_LAZY_ONE_OF_MULTI:
+            render_gotype(gotype->lazy_one_of_multi_base, "base");
+            ImGui::Text("index: %d", gotype->lazy_one_of_multi_index);
+            break;
+        }
+        ImGui::TreePop();
+    }
+}
+
+
+void UI::render_ts_cursor(TSTreeCursor *curr) {
+    int last_depth = 0;
+    bool last_open = false;
+
+    auto pop = [&](int new_depth) {
+        if (new_depth > last_depth) return;
+
+        if (last_open)
+            ImGui::TreePop();
+        for (i32 i = 0; i < last_depth - new_depth; i++)
+            ImGui::TreePop();
+    };
+
+    walk_ts_cursor(curr, false, [&](Ast_Node *node, Ts_Field_Type field_type, int depth) -> Walk_Action {
+        if (node->anon && !world.wnd_ast_vis.show_anon_nodes)
+            return WALK_SKIP_CHILDREN;
+
+        // auto changed = ts_node_has_changes(node->node);
+
+        pop(depth);
+        last_depth = depth;
+
+        auto flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
+
+        if (node->child_count == 0)
+            flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_Bullet;
+
+        auto type_str = ts_ast_type_str(node->type);
+        if (type_str == NULL)
+            type_str = "(unknown)";
+        else
+            type_str += strlen("TS_");
+
+        if (node->anon)
+            ImGui::PushStyleColor(ImGuiCol_Text, (ImVec4)ImColor(128, 128, 128));
+
+        auto field_type_str = ts_field_type_str(field_type);
+        if (field_type_str == NULL)
+            last_open = ImGui::TreeNodeEx(
+                node->id,
+                flags,
+                "%s, start = %s, end = %s",
+                type_str,
+                format_pos(node->start),
+                format_pos(node->end)
+            );
+        else
+            last_open = ImGui::TreeNodeEx(
+                node->id,
+                flags,
+                "(%s) %s, start = %s, end = %s",
+                field_type_str + strlen("TSF_"),
+                type_str,
+                format_pos(node->start),
+                format_pos(node->end)
+            );
+
+        if (node->anon)
+            ImGui::PopStyleColor();
+
+        if (ImGui::IsMouseDoubleClicked(0) && ImGui::IsItemHovered(ImGuiHoveredFlags_None)) {
+            auto editor = world.get_current_editor();
+            if (editor != NULL)
+                editor->move_cursor(node->start);
+        }
+
+        return last_open ? WALK_CONTINUE : WALK_SKIP_CHILDREN;
+    });
+
+    pop(0);
+}
+
+
 void UI::init() {
     ptr0(this);
     font = &world.font;
@@ -295,6 +507,10 @@ void UI::init() {
         rect->w = w;
         rect->h = h;
     }
+
+    // make sure panes_area is nonzero, so that panes can be initialized
+    panes_area.w = 1;
+    panes_area.h = 1;
 }
 
 void UI::flush_verts() {
@@ -485,49 +701,13 @@ float UI::get_text_width(ccstr s) {
     return x;
 }
 
-boxf UI::get_viewport_area() {
-    boxf b = {0};
-    b.size = world.window_size;
-    b.y += world.ui.menubar_height;
-    b.h -= world.ui.menubar_height;
+boxf UI::get_status_area() {
+    boxf b;
+    b.w = world.window_size.x;
+    b.h = font->height + settings.status_padding_y * 2;
+    b.x = 0;
+    b.y = world.window_size.y - b.h;
     return b;
-}
-
-boxf UI::get_sidebar_area() {
-    auto viewport_area = get_viewport_area();
-
-    boxf sidebar_area = {0};
-    sidebar_area.pos = viewport_area.pos;
-
-    if (world.sidebar.view != SIDEBAR_CLOSED) {
-        sidebar_area.h = viewport_area.h;
-        sidebar_area.w = world.sidebar.width;
-    }
-
-    sidebar_area.h -= get_build_results_area().h;
-    return sidebar_area;
-}
-
-boxf UI::get_panes_area(boxf *pstatus_area) {
-    auto panes_area = get_viewport_area();
-
-    auto sidebar_area = get_sidebar_area();
-    panes_area.x += sidebar_area.w;
-    panes_area.w -= sidebar_area.w;
-
-    panes_area.h -= get_build_results_area().h;
-
-    boxf status_area;
-    status_area.h = font->height + settings.status_padding_y * 2;
-    status_area.w = panes_area.w;
-    status_area.x = panes_area.x;
-    status_area.y = panes_area.y + panes_area.h - status_area.h;
-
-    panes_area.h -= status_area.h;
-
-    if (pstatus_area != NULL)
-        *pstatus_area = status_area;
-    return panes_area;
 }
 
 int UI::get_mouse_flags(boxf area) {
@@ -596,276 +776,1147 @@ ccstr file_tree_node_to_path(File_Tree_Node *node) {
     return r.finish();
 }
 
-void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
+struct Debugger_UI {
+    enum Index_Type {
+        INDEX_NONE,
+        INDEX_ARRAY,
+        INDEX_MAP,
+    };
+
+    struct Render_Args {
+        Dlv_Var *var;
+        Index_Type index_type;
+        union {
+            int index;
+            Dlv_Var *key;
+        };
+        Dlv_Watch *watch;
+        bool is_child;
+        int indent;
+        int watch_index;
+    };
+
+    UI *ui;
+
+    void init(UI *_ui) {
+        ui = _ui;
+    }
+
+    void render_var(Render_Args *args) {
+        SCOPED_FRAME();
+
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+
+        bool open = false;
+        auto var = args->var;
+        auto watch = args->watch;
+
+        {
+            SCOPED_FRAME();
+
+            int tree_flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+            bool leaf = true;
+
+            if (var != NULL) {
+                switch (var->kind) {
+                case GO_KIND_ARRAY:
+                case GO_KIND_CHAN: // ???
+                case GO_KIND_FUNC: // ???
+                case GO_KIND_INTERFACE:
+                case GO_KIND_MAP:
+                case GO_KIND_PTR:
+                case GO_KIND_SLICE:
+                case GO_KIND_STRUCT:
+                case GO_KIND_UNSAFEPOINTER: // ???
+                    leaf = false;
+                    break;
+                case GO_KIND_STRING:
+                    if (var->incomplete())
+                        leaf = false;
+                    break;
+                }
+            }
+
+            if (leaf)
+                tree_flags |= ImGuiTreeNodeFlags_Leaf;
+
+            if (watch != NULL && !args->is_child) {
+                if (watch->editing) {
+                    ImGui::PushStyleColor(ImGuiCol_FrameBg, 0);
+                    ImGui::SetNextItemWidth(-FLT_MIN);
+                    if (watch->edit_first_frame) {
+                        watch->edit_first_frame = false;
+                        ImGui::SetKeyboardFocusHere();
+                    }
+                    bool changed = ImGui::InputText(
+                        our_sprintf("##newwatch%x", (int)(void*)watch),
+                        watch->expr_tmp,
+                        _countof(watch->expr_tmp),
+                        ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll
+                    );
+                    ImGui::PopStyleColor();
+
+                    if (changed || ImGui::IsItemDeactivated()) {
+                        if (watch->expr_tmp[0] != '\0') {
+                            world.dbg.push_call(DLVC_EDIT_WATCH, [&](auto it) {
+                                it->edit_watch.expression = our_strcpy(watch->expr_tmp);
+                                it->edit_watch.watch_idx = args->watch_index;
+                            });
+                        } else {
+                            world.dbg.push_call(DLVC_DELETE_WATCH, [&](auto it) {
+                                it->delete_watch.watch_idx = args->watch_index;
+                            });
+                        }
+                    }
+                } else {
+                    for (int i = 0; i < args->indent; i++)
+                        ImGui::Indent();
+
+                    // if (leaf) ImGui::Unindent(ImGui::GetTreeNodeToLabelSpacing());
+
+                    open = ImGui::TreeNodeEx(var, tree_flags, "%s", watch->expr) && !leaf;
+
+                    // if (leaf) ImGui::Indent(ImGui::GetTreeNodeToLabelSpacing());
+
+                    if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && ImGui::IsItemHovered(ImGuiHoveredFlags_None)) {
+                        watch->editing = true;
+                        watch->open_before_editing = open;
+                        watch->edit_first_frame = true;
+                    }
+
+                    for (int i = 0; i < args->indent; i++)
+                        ImGui::Unindent();
+                }
+            } else {
+                ccstr var_name = NULL;
+                switch (args->index_type) {
+                case INDEX_NONE:
+                    var_name = var->name;
+                    if (var->is_shadowed)
+                        var_name = our_sprintf("(%s)", var_name);
+                    break;
+                case INDEX_ARRAY:
+                    var_name = our_sprintf("[%d]", args->index);
+                    break;
+                case INDEX_MAP:
+                    var_name = our_sprintf("[%s]", var_value_as_string(args->key));
+                    break;
+                }
+
+                for (int i = 0; i < args->indent; i++)
+                    ImGui::Indent();
+
+                if (leaf) ImGui::Unindent(ImGui::GetTreeNodeToLabelSpacing());
+
+                open = ImGui::TreeNodeEx(var, tree_flags, "%s", var_name) && !leaf;
+
+                if (leaf) ImGui::Indent(ImGui::GetTreeNodeToLabelSpacing());
+
+                for (int i = 0; i < args->indent; i++)
+                    ImGui::Unindent();
+            }
+        }
+
+        if (watch == NULL || watch->fresh) {
+            ImGui::TableNextColumn();
+            if (watch != NULL && watch->state == DBGWATCH_ERROR)
+                ImGui::Text("<unable to read>");
+            else
+                ImGui::TextWrapped("%s", var_value_as_string(var));
+            ImGui::TableNextColumn();
+            if (watch == NULL || watch->state != DBGWATCH_ERROR) {
+                if (var->kind_name == NULL || var->kind_name[0] == '\0') {
+                    switch (var->kind) {
+                    case GO_KIND_BOOL: ImGui::TextWrapped("bool"); break;
+                    case GO_KIND_INT: ImGui::TextWrapped("int"); break;
+                    case GO_KIND_INT8: ImGui::TextWrapped("int8"); break;
+                    case GO_KIND_INT16: ImGui::TextWrapped("int16"); break;
+                    case GO_KIND_INT32: ImGui::TextWrapped("int32"); break;
+                    case GO_KIND_INT64: ImGui::TextWrapped("int64"); break;
+                    case GO_KIND_UINT: ImGui::TextWrapped("uint"); break;
+                    case GO_KIND_UINT8: ImGui::TextWrapped("uint8"); break;
+                    case GO_KIND_UINT16: ImGui::TextWrapped("uint16"); break;
+                    case GO_KIND_UINT32: ImGui::TextWrapped("uint32"); break;
+                    case GO_KIND_UINT64: ImGui::TextWrapped("uint64"); break;
+                    case GO_KIND_UINTPTR: ImGui::TextWrapped("uintptr"); break;
+                    case GO_KIND_FLOAT32: ImGui::TextWrapped("float32"); break;
+                    case GO_KIND_FLOAT64: ImGui::TextWrapped("float64"); break;
+                    case GO_KIND_COMPLEX64: ImGui::TextWrapped("complex64"); break;
+                    case GO_KIND_COMPLEX128: ImGui::TextWrapped("complex128"); break;
+                    case GO_KIND_ARRAY: ImGui::TextWrapped("<array>"); break;
+                    case GO_KIND_CHAN: ImGui::TextWrapped("<chan>"); break;
+                    case GO_KIND_FUNC: ImGui::TextWrapped("<func>"); break;
+                    case GO_KIND_INTERFACE: ImGui::TextWrapped("<interface>"); break;
+                    case GO_KIND_MAP: ImGui::TextWrapped("<map>"); break;
+                    case GO_KIND_PTR: ImGui::TextWrapped("<pointer>"); break;
+                    case GO_KIND_SLICE: ImGui::TextWrapped("<slice>"); break;
+                    case GO_KIND_STRING: ImGui::TextWrapped("string"); break;
+                    case GO_KIND_STRUCT: ImGui::TextWrapped("<struct>"); break;
+                    case GO_KIND_UNSAFEPOINTER: ImGui::TextWrapped("unsafe.Pointer"); break;
+                    default: ImGui::TextWrapped("<unknown>"); break;
+                    }
+                } else {
+                    ImGui::TextWrapped("%s", var->kind_name);
+                }
+            }
+        } else {
+            ImGui::TableNextColumn();
+            if (watch != NULL && !watch->fresh) {
+                // TODO: grey out
+                ImGui::TextWrapped("Reading...");
+            }
+            ImGui::TableNextColumn();
+        }
+
+        if (open) {
+            if (args->watch == NULL || args->watch->fresh) {
+                if (var->children != NULL) {
+                    if (var->kind == GO_KIND_MAP) {
+                        for (int k = 0; k < var->children->len; k += 2) {
+                            Render_Args a;
+                            a.watch = args->watch;
+                            a.watch_index = args->watch_index;
+                            a.is_child = true;
+                            a.var = &var->children->at(k+1);
+                            a.index_type = INDEX_MAP;
+                            a.key = &var->children->at(k);
+                            a.indent = args->indent + 1;
+                            render_var(&a);
+                        }
+                    } else {
+                        bool isarr = (var->kind == GO_KIND_ARRAY || var->kind == GO_KIND_SLICE);
+                        for (int k = 0; k < var->children->len; k++) {
+                            Render_Args a;
+                            a.watch = args->watch;
+                            a.watch_index = args->watch_index;
+                            a.is_child = true;
+                            a.var = &var->children->at(k);
+                            if (isarr) {
+                                a.index_type = INDEX_ARRAY;
+                                a.index = k;
+                            } else {
+                                a.index_type = INDEX_NONE;
+                            }
+                            a.indent = args->indent + 1;
+                            render_var(&a);
+                        }
+                    }
+                }
+
+                if (var->incomplete()) {
+                    ImGui::TableNextRow();
+                    ImGui::TableNextColumn();
+
+                    if (ImGui::SmallButton("Load more...")) {
+                        world.dbg.push_call(DLVC_VAR_LOAD_MORE, [&](Dlv_Call *it) {
+                            it->var_load_more.state_id = world.dbg.state_id;
+                            it->var_load_more.var = var;
+                        });
+                    }
+
+                    ImGui::TableNextColumn();
+                    ImGui::TableNextColumn();
+                    // TODO: render "load more" button
+                }
+            }
+        }
+    }
+
+    ccstr var_value_as_string(Dlv_Var *var) {
+        if (var->unreadable_description != NULL)
+            return our_sprintf("<unreadable: %s>", var->unreadable_description);
+
+        switch (var->kind) {
+        case GO_KIND_INVALID: // i don't think this should even happen
+            return "<invalid>";
+
+        case GO_KIND_ARRAY:
+        case GO_KIND_SLICE:
+            return our_sprintf("0x%" PRIx64 " (Len = %d, Cap = %d)", var->address, var->len, var->cap);
+
+        case GO_KIND_STRUCT:
+        case GO_KIND_INTERFACE:
+            return our_sprintf("0x%" PRIx64, var->address);
+
+        case GO_KIND_MAP:
+            return our_sprintf("0x%" PRIx64 " (Len = %d)", var->address, var->len);
+
+        case GO_KIND_STRING:
+            {
+                Text_Renderer r;
+                r.init();
+
+                for (int i = 0, len = strlen(var->value); i < len; i++) {
+                    auto ch = var->value[i];
+                    switch (ch) {
+                      case '\"': r.writestr("\\\""); break;
+                      case '\'': r.writestr("\\\'"); break;
+                      case '\\': r.writestr("\\\\"); break;
+                      case '\a': r.writestr("\\a"); break;
+                      case '\b': r.writestr("\\b"); break;
+                      case '\n': r.writestr("\\n"); break;
+                      case '\t': r.writestr("\\t"); break;
+                      default:
+                        if (iscntrl(ch))
+                            r.write("\\%03o", ch);
+                        else
+                            r.writechar(ch);
+                        break;
+                    }
+                }
+
+                return our_sprintf("\"%s%s\"", r.finish(), var->incomplete() ? "..." : "");
+            }
+
+        case GO_KIND_UNSAFEPOINTER:
+        case GO_KIND_CHAN:
+        case GO_KIND_FUNC:
+        case GO_KIND_PTR:
+            return our_sprintf("0x%" PRIx64, var->address);
+
+        default:
+            return var->value;
+        }
+    }
+
+    void draw() {
+        world.wnd_debugger.focused = ImGui::IsWindowFocused();
+
+        auto &dbg = world.dbg;
+        auto &state = dbg.state;
+        auto &wnd = world.wnd_debugger;
+
+        {
+            ImGui::SetNextWindowDockID(ui->dock_bottom_id, ImGuiCond_Once);
+            ImGui::Begin("Call Stack");
+            ImGui::PushFont(world.ui.im_font_mono);
+            for (int i = 0; i < state.goroutines.len; i++) {
+                auto &goroutine = state.goroutines[i];
+
+                int tree_flags = ImGuiTreeNodeFlags_OpenOnArrow;
+
+                bool is_current = (state.current_goroutine_id == goroutine.id);
+                if (is_current) {
+                    tree_flags |= ImGuiTreeNodeFlags_Bullet;
+                    ImGui::SetNextItemOpen(true);
+                    ImGui::PushStyleColor(ImGuiCol_Text, (ImVec4)ImColor(255, 100, 100));
+                }
+
+                auto open = ImGui::TreeNodeEx(
+                    (void*)(uptr)i,
+                    tree_flags,
+                    "%s (%s)",
+                    goroutine.curr_func_name,
+                    goroutine.breakpoint_hit ? "BREAKPOINT HIT" : "PAUSED"
+                );
+
+                if (is_current)
+                    ImGui::PopStyleColor();
+
+                if (ImGui::IsItemClicked()) {
+                    world.dbg.push_call(DLVC_SET_CURRENT_GOROUTINE, [&](auto call) {
+                        call->set_current_goroutine.goroutine_id = goroutine.id;
+                    });
+                }
+
+                if (open) {
+                    if (goroutine.fresh) {
+                        for (int j = 0; j < goroutine.frames->len; j++) {
+                            auto &frame = goroutine.frames->items[j];
+
+                            int tree_flags = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+                            if (state.current_goroutine_id == goroutine.id && state.current_frame == j)
+                                tree_flags |= ImGuiTreeNodeFlags_Selected;
+
+                            ImGui::TreeNodeEx(&frame, tree_flags, "%s (%s:%d)", frame.func_name, our_basename(frame.filepath), frame.lineno);
+                            if (ImGui::IsItemClicked()) {
+                                world.dbg.push_call(DLVC_SET_CURRENT_FRAME, [&](auto call) {
+                                    call->set_current_frame.goroutine_id = goroutine.id;
+                                    call->set_current_frame.frame = j;
+                                });
+                            }
+                        }
+                    } else {
+                        ImGui::Text("Loading...");
+                    }
+
+                    ImGui::TreePop();
+                }
+            }
+            ImGui::PopFont();
+            ImGui::End();
+        }
+
+        {
+            ImGui::SetNextWindowDockID(ui->dock_bottom_right_id, ImGuiCond_Once);
+            ImGui::Begin("Local Variables");
+            ImGui::PushFont(world.ui.im_font_mono);
+
+            auto flags = ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable;
+            if (ImGui::BeginTable("vars", 3, flags)) {
+                ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_NoHide);
+                ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_NoHide);
+                ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_NoHide);
+                ImGui::TableHeadersRow();
+
+                bool loading = false;
+                bool done = false;
+                Dlv_Frame *frame = NULL;
+
+                do {
+                    if (dbg.state_flag != DLV_STATE_PAUSED) break;
+                    if (state.current_goroutine_id == -1 || state.current_frame == -1) break;
+
+                    auto goroutine = state.goroutines.find([&](auto it) { return it->id == state.current_goroutine_id; });
+                    if (goroutine == NULL) break;
+
+                    loading = true;
+
+                    if (!goroutine->fresh) break;
+                    if (state.current_frame >= goroutine->frames->len) break;
+
+                    frame = &goroutine->frames->items[state.current_frame];
+                    if (!frame->fresh) {
+                        frame = NULL;
+                        break;
+                    }
+
+                    if (frame->locals != NULL) {
+                        For (*frame->locals) {
+                            Render_Args a = {0};
+                            a.var = &it;
+                            a.is_child = false;
+                            a.watch = NULL;
+                            a.index = INDEX_NONE;
+                            render_var(&a);
+                        }
+                    }
+
+                    if (frame->args != NULL) {
+                        For (*frame->args) {
+                            Render_Args a = {0};
+                            a.var = &it;
+                            a.is_child = false;
+                            a.watch = NULL;
+                            a.index = INDEX_NONE;
+                            render_var(&a);
+                        }
+                    }
+                } while (0);
+
+                ImGui::EndTable();
+
+                if (frame == NULL && loading)
+                    ImGui::Text("Loading...");
+                if (frame != NULL)
+                    if ((frame->locals == NULL || frame->locals->len == 0) && (frame->args == NULL || frame->args->len == 0))
+                        ImGui::Text("No variables to show here.");
+            }
+
+            ImGui::PopFont();
+            ImGui::End();
+        }
+
+        {
+            ImGui::SetNextWindowDockID(ui->dock_bottom_right_id, ImGuiCond_Once);
+            ImGui::Begin("Watches");
+            ImGui::PushFont(world.ui.im_font_mono);
+
+            auto flags = ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable;
+            if (ImGui::BeginTable("vars", 3, flags)) {
+                ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_NoHide);
+                ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_NoHide);
+                ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_NoHide);
+                ImGui::TableHeadersRow();
+
+                for (int k = 0; k < world.dbg.watches.len; k++) {
+                    auto &it = world.dbg.watches[k];
+                    if (it.deleted) continue;
+
+                    Render_Args a = {0};
+                    a.var = &it.value;
+                    a.is_child = false;
+                    a.watch = &it;
+                    a.index = INDEX_NONE;
+                    a.watch_index = k;
+                    render_var(&a);
+                }
+
+                {
+                    // render an extra row for adding new watches
+
+                    ImGui::TableNextRow();
+                    ImGui::TableNextColumn(); // name
+
+                    ImGui::PushStyleColor(ImGuiCol_FrameBg, 0);
+                    ImGui::SetNextItemWidth(-FLT_MIN);
+                    bool changed = ImGui::InputText(
+                        "##newwatch",
+                        world.wnd_debugger.new_watch_buf,
+                        _countof(world.wnd_debugger.new_watch_buf),
+                        ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll
+                    );
+                    ImGui::PopStyleColor();
+                    if (changed || ImGui::IsItemDeactivated())
+                        if (world.wnd_debugger.new_watch_buf[0] != '\0') {
+                            dbg.push_call(DLVC_CREATE_WATCH, [&](auto it) {
+                                it->create_watch.expression = our_strcpy(world.wnd_debugger.new_watch_buf);
+                            });
+                            world.wnd_debugger.new_watch_buf[0] = '\0';
+                        }
+
+                    ImGui::TableNextColumn(); // value
+                    ImGui::TableNextColumn(); // type
+                }
+
+                ImGui::EndTable();
+            }
+
+            ImGui::PopFont();
+            ImGui::End();
+        }
+
+        {
+            ImGui::SetNextWindowDockID(ui->dock_bottom_right_id, ImGuiCond_Once);
+            ImGui::Begin("Global Variables");
+            ImGui::PushFont(world.ui.im_font_mono);
+            ImGui::Text("@Incomplete: global vars go here");
+            ImGui::PopFont();
+            ImGui::End();
+        }
+    }
+};
+
+void UI::draw_everything() {
+    hover.id_last_frame = hover.id;
+    hover.id = 0;
+    hover.cursor = ImGuiMouseCursor_Arrow;
+
+    ImGuiIO& io = ImGui::GetIO();
+
+    // start rendering imgui
+    ImGui::NewFrame();
+
+    // draw the main dockspace
+    {
+        const ImGuiViewport* viewport = ImGui::GetMainViewport();
+
+        auto dock_size = viewport->WorkSize;
+        dock_size.y -= get_status_area().h;
+
+        ImGui::SetNextWindowPos(viewport->WorkPos);
+        ImGui::SetNextWindowSize(dock_size);
+        ImGui::SetNextWindowViewport(viewport->ID);
+        ImGui::SetNextWindowBgAlpha(0.0f);
+
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+
+        auto window_flags = ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar
+            | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove
+            | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
+
+        ImGui::Begin("main_dockspace", NULL, window_flags);
+
+        ImGuiID dockspace_id = ImGui::GetID("main_dockspace");
+
+        // set up dock layout
+        if (!dock_initialized) {
+            ImGui::DockBuilderRemoveNode(dockspace_id);
+            ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
+            ImGui::DockBuilderSetNodeSize(dockspace_id, dock_size);
+
+            dock_main_id = dockspace_id;
+            dock_sidebar_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Left, 0.20f, NULL, &dock_main_id);
+            dock_bottom_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Down, 0.20f, NULL, &dock_main_id);
+            dock_bottom_right_id = ImGui::DockBuilderSplitNode(dock_bottom_id, ImGuiDir_Right, 0.66f, NULL, &dock_bottom_id);
+
+            /*
+            ImGui::DockBuilderDockWindow("Call Stack", dock_bottom_id);
+            ImGui::DockBuilderDockWindow("Build Results", dock_bottom_id);
+
+            ImGui::DockBuilderDockWindow("Watches", dock_bottom_right_id);
+            ImGui::DockBuilderDockWindow("Local Variables", dock_bottom_right_id);
+            ImGui::DockBuilderDockWindow("Global Variables", dock_bottom_right_id);
+
+            ImGui::DockBuilderDockWindow("File Explorer", dock_sidebar_id);
+            ImGui::DockBuilderDockWindow("Search Results", dock_sidebar_id);
+            */
+
+            ImGui::DockBuilderFinish(dockspace_id);
+            dock_initialized = true;
+        }
+
+        auto dock_flags = ImGuiDockNodeFlags_NoDockingInCentralNode | ImGuiDockNodeFlags_PassthruCentralNode;
+        ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), dock_flags);
+
+        {
+            // get panes_area
+            auto node = ImGui::DockBuilderGetCentralNode(dockspace_id);
+            if (node != NULL) {
+                panes_area.x = node->Pos.x;
+                panes_area.y = node->Pos.y;
+                panes_area.w = node->Size.x;
+                panes_area.h = node->Size.y;
+            } else {
+                panes_area.w = 1;
+                panes_area.h = 1;
+            }
+        }
+
+        ImGui::End();
+
+        ImGui::PopStyleVar(3);
+    }
+
+    // draw menubar first, so we can get its height (which we need for UI)
+    if (ImGui::BeginMainMenuBar()) {
+        world.ui.menubar_height = ImGui::GetWindowSize().y;
+
+        if (ImGui::BeginMenu("File")) {
+            if (ImGui::MenuItem("Open file...", "Ctrl+P")) {
+                if (!world.wnd_open_file.show) {
+                    world.wnd_open_file.show = true;
+                    init_open_file();
+                }
+            }
+            ImGui::Separator();
+            if (ImGui::MenuItem("Exit...", "Alt+F4")) {
+                glfwSetWindowShouldClose(world.window, true);
+            }
+            ImGui::EndMenu();
+        }
+
+        if (ImGui::BeginMenu("Project")) {
+            if (ImGui::MenuItem("Build", "Ctrl+Shift+B")) {
+                kick_off_build();
+            }
+
+            ImGui::Separator();
+
+            if (ImGui::MenuItem("Project Settings")) {
+                world.windows_open.settings = true;
+            }
+
+            ImGui::EndMenu();
+        }
+
+        if (ImGui::BeginMenu("Debug")) {
+            auto can_run = [&]() {
+                switch (world.dbg.state_flag) {
+                case DLV_STATE_PAUSED:
+                case DLV_STATE_INACTIVE:
+                    return true;
+                }
+                return false;
+            };
+
+            if (ImGui::MenuItem("Run", "F5", false, can_run())) {
+                switch (world.dbg.state_flag) {
+                case DLV_STATE_PAUSED:
+                    world.dbg.push_call(DLVC_CONTINUE_RUNNING);
+                    break;
+
+                case DLV_STATE_INACTIVE:
+                    world.dbg.push_call(DLVC_START);
+                    break;
+                }
+            }
+
+            if (ImGui::MenuItem("Break All", NULL, false, world.dbg.state_flag == DLV_STATE_RUNNING)) {
+                world.dbg.push_call(DLVC_BREAK_ALL);
+            }
+
+            if (ImGui::MenuItem("Stop Debugging", "Shift+F5", false, world.dbg.state_flag != DLV_STATE_INACTIVE)) {
+                world.dbg.push_call(DLVC_STOP);
+            }
+
+            if (ImGui::MenuItem("Step Over", "F10", false, world.dbg.state_flag == DLV_STATE_PAUSED)) {
+                world.dbg.push_call(DLVC_STEP_OVER);
+            }
+
+            if (ImGui::MenuItem("Step Into", "F11", false, world.dbg.state_flag == DLV_STATE_PAUSED)) {
+                world.dbg.push_call(DLVC_STEP_INTO);
+            }
+
+            if (ImGui::MenuItem("Step Out", "Shift+F11", false, world.dbg.state_flag == DLV_STATE_PAUSED)) {
+                world.dbg.push_call(DLVC_STEP_OUT);
+            }
+
+            if (ImGui::MenuItem("Run to Cursor", "Shift+F10", false, world.dbg.state_flag == DLV_STATE_PAUSED)) {
+                // TODO
+            }
+
+            ImGui::Separator();
+
+            if (ImGui::MenuItem("Toggle Breakpoint", "F9")) {
+                auto editor = world.get_current_editor();
+                if (editor != NULL) {
+                    world.dbg.push_call(DLVC_TOGGLE_BREAKPOINT, [&](auto call) {
+                        call->toggle_breakpoint.filename = our_strcpy(editor->filepath);
+                        call->toggle_breakpoint.lineno = editor->cur.y + 1;
+                    });
+                }
+            }
+
+            if (ImGui::MenuItem("Delete All Breakpoints", "Shift+F9")) {
+                prompt_delete_all_breakpoints();
+            }
+
+            ImGui::EndMenu();
+        }
+
+        if (ImGui::BeginMenu("Developer")) {
+            ImGui::MenuItem("ImGui demo", NULL, &world.windows_open.im_demo);
+            ImGui::MenuItem("ImGui metrics", NULL, &world.windows_open.im_metrics);
+            ImGui::MenuItem("Editor AST viewer", NULL, &world.wnd_editor_tree.show);
+            ImGui::MenuItem("Editor toplevels viewer", NULL, &world.wnd_editor_toplevels.show);
+            ImGui::MenuItem("Roll Your Own IDE Construction Set", NULL, &world.wnd_style_editor.show);
+            ImGui::MenuItem("Replace line numbers with bytecounts", NULL, &world.replace_line_numbers_with_bytecounts);
+            ImGui::EndMenu();
+        }
+
+        if (ImGui::BeginMenu("Go")) {
+            if (ImGui::MenuItem("Reload go.mod")) {
+                atomic_set_flag(
+                    &world.indexer.flag_lock,
+                    &world.indexer.flag_handle_gomod_changed
+                );
+            }
+
+            if (ImGui::MenuItem("Re-index everything")) {
+                atomic_set_flag(
+                    &world.indexer.flag_lock,
+                    &world.indexer.flag_reindex_everything
+                );
+            }
+
+            ImGui::EndMenu();
+        }
+
+        ImGui::EndMainMenuBar();
+    }
+
+    if (world.error_list.show) {
+        ImGui::SetNextWindowDockID(dock_bottom_id, ImGuiCond_Once);
+        ImGui::Begin("Build Results", &world.error_list.show);
+
+        if (world.build.ready()) {
+            if (world.build.errors.len == 0) {
+                ImGui::TextColored(to_imcolor(rgba(COLOR_GREEN)), "Build was successful!");
+            } else {
+                ImGui::PushFont(world.ui.im_font_mono);
+
+                for (int i = 0; i < world.build.errors.len; i++) {
+                    auto &it = world.build.errors[i];
+
+                    if (!it.valid) {
+                        ImGui::TextColored(to_imcolor(rgba(COLOR_MEDIUM_GREY)), "%s", it.message);
+                        continue;
+                    }
+
+                    auto flags = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen | ImGuiTreeNodeFlags_SpanFullWidth;
+                    if (i == world.build.current_error)
+                        flags |= ImGuiTreeNodeFlags_Selected;
+
+                    ImGui::Unindent(ImGui::GetTreeNodeToLabelSpacing());
+                    ImGui::TreeNodeEx(&it, flags, "%s:%d:%d: %s", it.file, it.row, it.col, it.message);
+                    ImGui::Indent(ImGui::GetTreeNodeToLabelSpacing());
+
+                    if (ImGui::IsItemClicked()) {
+                        world.build.current_error = i;
+                        go_to_error(i);
+                    }
+                }
+
+                ImGui::PopFont();
+            }
+        } else {
+            ImGui::Text("Building...");
+        }
+
+        ImGui::End();
+    }
+
+    if (world.search_results.show) {
+        ImGui::SetNextWindowDockID(dock_sidebar_id, ImGuiCond_Always);
+        ImGui::Begin("Search Results", &world.search_results.show);
+
+        For (world.search_results.results) {
+            SCOPED_FRAME();
+
+            auto flags = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_SpanFullWidth;
+            ImGui::TreeNodeEx(it, flags, "%s:%d:%d %s", it->filename, it->row, it->match_col+1, it->preview);
+            if (ImGui::IsItemClicked()) {
+                SCOPED_FRAME();
+                auto path = path_join(world.current_path, it->filename);
+                auto pos = new_cur2(it->match_col, it->row-1);
+                world.focus_editor(path, pos);
+            }
+
+            // use following to highlight match
+            /*
+            len = strlen(it->preview);
+            for (u32 i = 0; i < len && pos.x < sidebar_area.w; i++) {
+                auto color = rgba(COLOR_WHITE);
+                if (it->match_col_in_preview <= i && i < it->match_col_in_preview + it->match_len)
+                    color = rgba(COLOR_LIME);
+                draw_char(&pos, it->preview[i], color);
+            }
+            */
+        }
+
+        ImGui::End();
+    }
+
+    if (world.file_explorer.show) {
+        ImGui::SetNextWindowDockID(dock_sidebar_id, ImGuiCond_Once);
+        ImGui::Begin("File Explorer");
+
+        auto open_add_file_or_folder = [&](bool folder) {
+            world.wnd_add_file_or_folder.show = true;
+
+            File_Tree_Node *node = NULL;
+
+            auto is_root = [&]() {
+                if (world.file_explorer.selection == -1) return true;
+
+                node = get_file_tree_node_from_index(world.file_explorer.selection);
+                if (node->is_directory) return false;
+
+                node = node->parent;
+                return (node->parent == NULL);
+            };
+
+            auto &wnd = world.wnd_add_file_or_folder;
+
+            wnd.location_is_root = is_root();
+            if (!wnd.location_is_root) {
+                strcpy_safe(
+                    wnd.location,
+                    _countof(wnd.location),
+                    file_tree_node_to_path(node)
+                );
+            }
+
+            wnd.folder = folder;
+        };
+
+        if (ImGui::Button("Add file")) {
+            open_add_file_or_folder(false);
+        }
+        if (ImGui::Button("Add folder")) {
+            open_add_file_or_folder(true);
+        }
+        if (ImGui::Button("Refresh")) {
+            // TODO: probably make this async task
+            world.fill_file_tree();
+        }
+
+        // draw files area
+        {
+            auto stack = alloc_list<File_Tree_Node*>();
+            for (auto child = world.file_tree->children; child != NULL; child = child->next)
+                stack->append(child);
+
+            for (u32 i = 0; stack->len > 0; i++) {
+                auto it = *stack->last();
+                stack->len--;
+
+                auto flags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+                if (!it->is_directory)
+                    flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_Bullet;
+
+                // world.file_explorer.selection == i
+                // it->is_directory
+
+                for (u32 j = 0; j < it->depth; j++) ImGui::Indent();
+
+                bool open = false;
+                if (ImGui::TreeNodeEx(it, flags, "%s", it->name) && it->is_directory)
+                    open = true;
+
+                for (u32 j = 0; j < it->depth; j++) ImGui::Unindent();
+
+                if (ImGui::IsItemClicked()) {
+                    world.file_explorer.selection = i;
+                    if (!it->is_directory) {
+                        SCOPED_FRAME();
+                        auto rel_path = file_tree_node_to_path(it);
+                        auto full_path = path_join(world.current_path, rel_path);
+                        world.focus_editor(full_path);
+                    }
+                }
+
+                if (it->is_directory && open) {
+                    SCOPED_FRAME();
+                    auto children = alloc_list<File_Tree_Node*>();
+                    for (auto curr = it->children; curr != NULL; curr = curr->next)
+                        children->append(curr);
+                    for (i32 i = children->len-1; i >= 0; i--)
+                        stack->append(children->at(i));
+                }
+            }
+        }
+
+        ImGui::End();
+    }
+
+    if (world.windows_open.settings) {
+        ImGui::Begin("Project Settings", &world.windows_open.settings, ImGuiWindowFlags_AlwaysAutoResize);
+
+        ImGui::InputText("Build command", world.settings.build_command, _countof(world.settings.build_command));
+        ImGui::InputText("Debug binary path", world.settings.debug_binary_path, _countof(world.settings.debug_binary_path));
+
+        ImGui::End();
+    }
+
+    if (world.windows_open.im_demo)
+        ImGui::ShowDemoWindow(&world.windows_open.im_demo);
+
+    if (world.windows_open.im_metrics)
+        ImGui::ShowMetricsWindow(&world.windows_open.im_metrics);
+
+    if (world.wnd_open_file.show) {
+        auto& wnd = world.wnd_open_file;
+        ImGui::Begin("Open File", &world.wnd_open_file.show, ImGuiWindowFlags_AlwaysAutoResize);
+
+        wnd.focused = ImGui::IsWindowFocused();
+
+        ImGui::Text("Search for file:");
+
+        ImGui::PushFont(world.ui.im_font_mono);
+
+        if (ImGui::IsWindowAppearing()) {
+            ImGui::SetKeyboardFocusHere();
+        } else if (!wnd.first_open_focus_twice_done) {
+            wnd.first_open_focus_twice_done = true;
+            ImGui::SetKeyboardFocusHere();
+        }
+
+        ImGui::InputText("##search_for_file", wnd.query, _countof(wnd.query));
+
+        if (ImGui::IsItemEdited())
+            filter_files();
+
+        for (u32 i = 0; i < wnd.filtered_results->len; i++) {
+            auto it = wnd.filepaths->at(wnd.filtered_results->at(i));
+            if (i == wnd.selection)
+                ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.5f, 1.0f), "%s", it);
+            else
+                ImGui::Text("%s", it);
+        }
+
+        ImGui::PopFont();
+
+        ImGui::End();
+    }
+
+    if (world.dbg.state_flag != DLV_STATE_INACTIVE) {
+        Debugger_UI dui;
+        dui.init(this);
+        dui.draw();
+    }
+
+    if (world.windows_open.search_and_replace) {
+        auto& wnd = world.wnd_search_and_replace;
+
+        ImGui::Begin("Search and Replace", &world.windows_open.search_and_replace, ImGuiWindowFlags_AlwaysAutoResize);
+
+        ImGui::Text("Search for:");
+        ImGui::InputText("##find", wnd.find_str, _countof(wnd.find_str));
+        ImGui::Text("Replace with:");
+        ImGui::InputText("##replace", wnd.replace_str, _countof(wnd.replace_str));
+
+        ImGui::Separator();
+
+        ImGui::Checkbox("Case-sensitive", &wnd.case_sensitive);
+        ImGui::SameLine();
+        ImGui::Checkbox("Use regular expression", &wnd.use_regex);
+
+        ImGui::Separator();
+
+        if (ImGui::Button("Search for All")) {
+            world.search_results.mem.cleanup();
+            run_proc_the_normal_way(
+                &world.jobs.search.proc,
+                our_sprintf("ag --ackmate %s %s \"%s\"", wnd.use_regex ? "" : "-Q", wnd.case_sensitive ? "-s" : "", wnd.find_str)
+            );
+            world.jobs.flag_search = true;
+        }
+
+        ImGui::SameLine();
+
+        if (ImGui::Button("Replace All")) {
+            // TODO: some kind of permanent settings system
+            // so we can save things like "don't show this popup again"
+            ImGui::OpenPopup("Really replace?");
+        }
+
+        if (world.jobs.search_and_replace.signal_done) {
+            world.jobs.search_and_replace.signal_done = false;
+            ImGui::OpenPopup("Done");
+        }
+
+        ImGui::SetNextWindowSize(ImVec2(450, -1));
+        if (ImGui::BeginPopupModal("Really replace?", NULL, ImGuiWindowFlags_NoResize)) {
+            ImGui::TextWrapped("Pressing this button will automatically, irreversibly perform the text replacement you requested.");
+            ImGui::TextWrapped("If you make a mistake, we trust your version control system will save you.");
+            ImGui::TextWrapped("To preview your changes before replacing, click Find All first.");
+            ImGui::TextWrapped("We won't show this warning again.");
+            ImGui::NewLine();
+            if (ImGui::Button("Ok, replace all")) {
+                run_proc_the_normal_way(
+                    &world.jobs.search_and_replace.proc,
+                    our_sprintf("ag -g \"\" | xargs sed -i \"s/%s/%s/g\"", wnd.find_str, wnd.replace_str)
+                );
+                world.jobs.flag_search_and_replace = true;
+                ImGui::CloseCurrentPopup();
+            }
+
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel")) {
+                ImGui::CloseCurrentPopup();
+            }
+
+            ImGui::EndPopup();
+        }
+
+        ImGui::SetNextWindowSize(ImVec2(450, -1));
+        if (ImGui::BeginPopupModal("Done", NULL, ImGuiWindowFlags_NoResize)) {
+            ImGui::TextWrapped("Replace operation has completed.");
+            ImGui::NewLine();
+            if (ImGui::Button("Ok")) {
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
+
+        ImGui::End();
+    }
+
+    if (world.wnd_add_file_or_folder.show) {
+        auto &wnd = world.wnd_add_file_or_folder;
+
+        auto label = our_sprintf(
+            "Add %s to %s",
+            wnd.folder ? "folder" : "file",
+            wnd.location_is_root ? "workspace root" : wnd.location
+        );
+
+        ImGui::Begin(label, &wnd.show, ImGuiWindowFlags_AlwaysAutoResize);
+
+        ImGui::Text("Name:");
+        ImGui::InputText("##add_file", wnd.name, IM_ARRAYSIZE(wnd.name));
+
+        if (ImGui::Button("Add")) {
+            world.wnd_add_file_or_folder.show = false;
+
+            if (strlen(wnd.name) > 0) {
+                auto dest = wnd.location_is_root ? world.current_path : path_join(world.current_path, wnd.location);
+                auto path = path_join(dest, wnd.name);
+
+                if (wnd.folder) {
+                    CreateDirectoryA(path, NULL);
+                } else {
+                    // need to share, or else we have race condition
+                    // with fsevent handler in
+                    // Go_Indexer::background_thread() trying to read
+                    auto h = CreateFileA(path, 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+                    if (h != INVALID_HANDLE_VALUE) CloseHandle(h);
+                }
+
+                world.fill_file_tree();
+            }
+        }
+        ImGui::End();
+    }
+
+    if (world.wnd_style_editor.show) {
+        ImGui::Begin("Style Editor", &world.wnd_style_editor.show, ImGuiWindowFlags_AlwaysAutoResize);
+
+        ImGui::SliderFloat("status_padding_x", &settings.status_padding_x, 0.0, 20.0f, "%.0f");
+        ImGui::SliderFloat("status_padding_y", &settings.status_padding_y, 0.0, 20.0f, "%.0f");
+        ImGui::SliderFloat("line_number_margin_left", &settings.line_number_margin_left, 0.0, 20.0f, "%.0f");
+        ImGui::SliderFloat("line_number_margin_right", &settings.line_number_margin_right, 0.0, 20.0f, "%.0f");
+        ImGui::SliderFloat("autocomplete_menu_padding", &settings.autocomplete_menu_padding, 0.0, 20.0f, "%.0f");
+        ImGui::SliderFloat("autocomplete_item_padding_x", &settings.autocomplete_item_padding_x, 0.0, 20.0f, "%.0f");
+        ImGui::SliderFloat("autocomplete_item_padding_y", &settings.autocomplete_item_padding_y, 0.0, 20.0f, "%.0f");
+        ImGui::SliderFloat("tabs_offset", &settings.tabs_offset, 0.0, 20.0f, "%.0f");
+        ImGui::SliderInt("scrolloff", &settings.scrolloff, 0, 20);
+
+        ImGui::End();
+    }
+
+    do {
+        auto editor = world.get_current_editor();
+        if (editor == NULL) break;
+
+        auto tree = editor->tree;
+        if (tree == NULL) break;
+
+        if (world.wnd_editor_tree.show) {
+            ImGui::Begin("AST", &world.wnd_editor_tree.show, 0);
+            ImGui::Checkbox("show anon?", &world.wnd_ast_vis.show_anon_nodes);
+            ts_tree_cursor_reset(&editor->cursor, ts_tree_root_node(tree));
+            render_ts_cursor(&editor->cursor);
+            ImGui::End();
+        }
+
+        if (world.wnd_editor_toplevels.show) {
+            ImGui::Begin("Toplevels", &world.wnd_editor_toplevels.show, 0);
+
+            List<Godecl> decls;
+            decls.init();
+
+            Parser_It it = {0};
+            it.init(&editor->buf);
+
+            Ast_Node node = {0};
+            node.init(ts_tree_root_node(tree), &it);
+
+            FOR_NODE_CHILDREN (&node) {
+                switch (it->type) {
+                case TS_VAR_DECLARATION:
+                case TS_CONST_DECLARATION:
+                case TS_FUNCTION_DECLARATION:
+                case TS_METHOD_DECLARATION:
+                case TS_TYPE_DECLARATION:
+                case TS_SHORT_VAR_DECLARATION:
+                    decls.len = 0;
+                    world.indexer.node_to_decls(it, &decls, NULL);
+                    For (decls) render_godecl(&it);
+                    break;
+                }
+            }
+
+            ImGui::End();
+        }
+    } while (0);
+
+    world.ui.mouse_captured_by_imgui = io.WantCaptureMouse;
+    world.ui.keyboard_captured_by_imgui = io.WantCaptureKeyboard;
+
+    ImGui::Render();
+
     {
         // prepare opengl for drawing shit
         glViewport(0, 0, world.display_size.x, world.display_size.y);
-        glUseProgram(program);
-        glBindVertexArray(vao); // bind my vertex array & buffers
-        glBindBuffer(GL_ARRAY_BUFFER, vbo);
+        glUseProgram(world.ui.program);
+        glBindVertexArray(world.ui.vao); // bind my vertex array & buffers
+        glBindBuffer(GL_ARRAY_BUFFER, world.ui.vbo);
         verts.init(LIST_FIXED, 6 * 128, alloc_array(Vert, 6 * 128));
     }
 
-    boxf status_area = {0};
-    boxf panes_area = get_panes_area(&status_area);
-    boxf sidebar_area = get_sidebar_area();
+    boxf status_area = get_status_area();
+    // boxf panes_area = get_panes_area();
 
     boxf pane_area;
     pane_area.pos = panes_area.pos;
 
-    if (world.sidebar.view != SIDEBAR_CLOSED) {
-        draw_rect(sidebar_area, rgba(COLOR_BG));
-
-        {
-            boxf line;
-            line.x = sidebar_area.x + sidebar_area.w - 1;
-            line.y = sidebar_area.y;
-            line.h = sidebar_area.h;
-            line.w = 2;
-            draw_rect(line, rgba(COLOR_DARK_GREY));
-        }
-
-        sidebar_area.x += settings.sidebar_padding_x;
-        sidebar_area.w -= settings.sidebar_padding_x * 2;
-
-        switch (world.sidebar.view) {
-        case SIDEBAR_FILE_EXPLORER:
-            {
-                u32 depth = 0;
-
-                boxf buttons_area = sidebar_area;
-                buttons_area.h = settings.filetree_button_size + (settings.filetree_button_padding * 2) + (settings.filetree_buttons_area_padding_y * 2);
-
-                // draw buttons area
-                {
-                    int num_buttons = 3;
-                    int button_idx = 0;
-                    boxf button_area;
-
-                    button_area.x = buttons_area.x + buttons_area.w - settings.filetree_buttons_area_padding_x - settings.filetree_button_size - settings.filetree_button_padding;
-                    button_area.y = buttons_area.y + settings.filetree_buttons_area_padding_y;
-                    button_area.w = settings.filetree_button_size + (settings.filetree_button_padding * 2);
-                    button_area.h = settings.filetree_button_size + (settings.filetree_button_padding * 2);
-
-                    // call this from right to left
-                    auto draw_button = [&](Sprites_Image_Type image_id) -> bool {
-                        auto mouse_flags = get_mouse_flags(button_area);
-                        if (mouse_flags & MOUSE_HOVER)
-                            draw_rounded_rect(button_area, rgba(COLOR_WHITE, 0.2), 2, ROUND_ALL);
-
-                        boxf icon_area = button_area;
-                        icon_area.x += settings.filetree_button_padding;
-                        icon_area.y += settings.filetree_button_padding;
-                        icon_area.w -= settings.filetree_button_padding * 2;
-                        icon_area.h -= settings.filetree_button_padding * 2;
-                        draw_image(image_id, icon_area);
-
-                        button_area.pos.x -= settings.filetree_button_margin_x;
-                        button_area.pos.x -= settings.filetree_button_size;
-                        button_area.pos.x -= settings.filetree_button_padding * 2;
-                        return (mouse_flags & MOUSE_CLICKED);
-                    };
-
-                    if (draw_button(SIMAGE_REFRESH)) {
-                        // TODO: probably make this async task
-                        world.fill_file_tree();
-                    }
-
-                    auto open_add_file_or_folder = [&](bool folder) {
-                        world.wnd_add_file_or_folder.show = true;
-
-                        File_Tree_Node *node = NULL;
-
-                        auto is_root = [&]() {
-                            if (world.file_explorer.selection == -1) return true;
-
-                            node = get_file_tree_node_from_index(world.file_explorer.selection);
-                            if (node->is_directory) return false;
-
-                            node = node->parent;
-                            return (node->parent == NULL);
-                        };
-
-                        auto &wnd = world.wnd_add_file_or_folder;
-
-                        wnd.location_is_root = is_root();
-                        if (!wnd.location_is_root) {
-                            strcpy_safe(
-                                wnd.location,
-                                _countof(wnd.location),
-                                file_tree_node_to_path(node)
-                            );
-                        }
-
-                        wnd.folder = folder;
-                    };
-
-                    if (draw_button(SIMAGE_ADD_FOLDER))
-                        open_add_file_or_folder(true);
-                    if (draw_button(SIMAGE_ADD))
-                        open_add_file_or_folder(false);
-                }
-
-                boxf files_area = sidebar_area;
-                files_area.h -= buttons_area.h;
-                files_area.y += buttons_area.h;
-
-                // draw files area
-                {
-                    start_clip(files_area);
-                    defer { end_clip(); };
-
-                    boxf row_area;
-                    row_area.pos = files_area.pos;
-                    row_area.y -= world.file_explorer.scroll_offset;
-                    row_area.y += settings.filetree_item_margin;
-                    row_area.w = files_area.w;
-                    row_area.h = font->height;
-                    row_area.h += settings.filetree_item_padding_y * 2;
-
-                    auto stack = alloc_list<File_Tree_Node*>();
-                    for (auto child = world.file_tree->children; child != NULL; child = child->next)
-                        stack->append(child);
-
-                    for (u32 i = 0; stack->len > 0 && row_area.y <= files_area.y + files_area.h; i++, row_area.y += row_area.h + settings.filetree_space_between_items) {
-                        auto it = *stack->last();
-                        stack->len--;
-
-                        if (world.file_explorer.selection == i)
-                            draw_rounded_rect(row_area, rgba(COLOR_DARK_GREY), 4, ROUND_ALL);
-
-                        auto is_row_visible = [&]() {
-                            auto sb_top = files_area.y;
-                            auto sb_bot = files_area.y + files_area.h;
-
-                            auto row_top = row_area.y;
-                            auto row_bot = row_area.y + row_area.h;
-
-                            return (
-                                sb_top <= row_top && row_top <= sb_bot
-                                || sb_top <= row_bot && row_bot <= sb_bot
-                            );
-                        };
-
-                        if (is_row_visible()) {
-                            SCOPED_FRAME();
-
-                            int mouse_flags = get_mouse_flags(row_area);
-
-                            if (mouse_flags & MOUSE_HOVER)
-                                draw_rounded_rect(row_area, rgba(COLOR_DARK_GREY), 4, ROUND_ALL);
-
-                            if (mouse_flags & MOUSE_CLICKED) {
-                                world.file_explorer.selection = i;
-
-                                if (it->is_directory) {
-                                    it->open = !it->open;
-                                } else {
-                                    SCOPED_FRAME();
-                                    auto rel_path = file_tree_node_to_path(it);
-                                    auto full_path = path_join(world.current_path, rel_path);
-                                    world.focus_editor(full_path);
-                                }
-                            }
-
-                            boxf text_area = row_area;
-                            text_area.x += settings.sidebar_item_padding_x + it->depth * 20;
-                            text_area.w -= settings.sidebar_item_padding_x * 2;
-                            text_area.y += settings.sidebar_item_padding_y;
-                            text_area.h -= settings.sidebar_item_padding_y * 2;
-
-                            boxf icon_area;
-                            icon_area.pos = text_area.pos;
-                            icon_area.w = text_area.h;
-                            icon_area.h = text_area.h;
-
-                            text_area.x += (icon_area.w + 5);
-                            text_area.w -= (icon_area.w + 5);
-
-                            // draw_image(SIMAGE_FOLDER, icon_area);
-                            draw_image(it->is_directory ? SIMAGE_FOLDER : SIMAGE_SOURCE_FILE, icon_area);
-
-                            auto label = (cstr)our_strcpy(it->name);
-                            auto avail_chars = (int)(text_area.w / font->width);
-                            if (avail_chars < strlen(label))
-                                label[avail_chars] = '\0';
-
-                            draw_string(text_area.pos, label, rgba(COLOR_WHITE));
-                        }
-
-                        if (it->is_directory && it->open) {
-                            SCOPED_FRAME();
-                            auto children = alloc_list<File_Tree_Node*>();
-                            for (auto curr = it->children; curr != NULL; curr = curr->next)
-                                children->append(curr);
-                            for (i32 i = children->len-1; i >= 0; i--)
-                                stack->append(children->at(i));
-                        }
-                    }
-                }
-
-                boxf sep_area = buttons_area;
-                sep_area.y += buttons_area.h;
-                sep_area.h = 1;
-                // should we do this?
-                sep_area.x -= settings.sidebar_padding_x;
-                sep_area.w += settings.sidebar_padding_x * 2;
-                draw_rect(sep_area, rgba(COLOR_WHITE, 0.2));
-            }
-            break;
-        case SIDEBAR_SEARCH_RESULTS:
-            {
-                vec2f pos;
-                pos.x = 0;
-                pos.y = sidebar_area.y - world.search_results.scroll_offset;
-                pos.y += font->offset_y;
-
-                For (world.search_results.results) {
-                    if (pos.y >= sidebar_area.y) {
-                        SCOPED_FRAME();
-
-                        pos.x = 0;
-
-                        boxf line_area;
-                        line_area.pos = pos;
-                        line_area.y -= font->offset_y;
-                        line_area.w = sidebar_area.w;
-                        line_area.h = font->height;
-
-                        auto mouse_flags = get_mouse_flags(line_area);
-
-                        if (mouse_flags & MOUSE_HOVER)
-                            draw_rect(line_area, rgba(COLOR_DARK_GREY));
-
-                        if (mouse_flags & MOUSE_CLICKED) {
-                            SCOPED_FRAME();
-                            auto path = path_join(world.current_path, it->filename);
-                            auto pos = new_cur2(it->match_col, it->row-1);
-                            world.focus_editor(path, pos);
-                        }
-
-                        auto str = our_sprintf("%s:%d:%d ", it->filename, it->row, it->match_col+1);
-                        auto len = strlen(str);
-
-                        for (u32 i = 0; i < len && pos.x < sidebar_area.w; i++)
-                            draw_char(&pos, str[i], rgba(COLOR_WHITE));
-
-                        len = strlen(it->preview);
-                        for (u32 i = 0; i < len && pos.x < sidebar_area.w; i++) {
-                            auto color = rgba(COLOR_WHITE);
-                            if (it->match_col_in_preview <= i && i < it->match_col_in_preview + it->match_len)
-                                color = rgba(COLOR_LIME);
-                            draw_char(&pos, it->preview[i], color);
-                        }
-                    }
-
-                    pos.y += font->height;
-                    if (pos.y > sidebar_area.h) break;
-                }
-            }
-            break;
-        }
-    }
+    int editor_index;
 
     // Draw panes.
     draw_rect(panes_area, rgba(COLOR_BG));
@@ -893,6 +1944,8 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
         // draw tabs
         u32 tab_id = 0;
         for (auto&& editor : pane.editors) {
+            defer { editor_index++; };
+
             SCOPED_FRAME();
 
             bool is_selected = (tab_id == pane.current_editor);
@@ -937,20 +1990,20 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                     pane.tabs_offset += ((tab.x + tab.w) - (tabs_area.x + tabs_area.w - margin));
             }
 
-            auto mouse_flags = get_mouse_flags(tab);
+            auto is_hovered = test_hover(tab, HOVERID_TABS + editor_index);
 
             vec3f tab_color = COLOR_MEDIUM_DARK_GREY;
             if (is_selected)
                 tab_color = COLOR_BG;
-            else if (mouse_flags & MOUSE_HOVER)
+            else if (is_hovered)
                 tab_color = COLOR_DARK_GREY;
 
             draw_rounded_rect(tab, rgba(tab_color), 4, ROUND_TL | ROUND_TR);
             draw_string(tab.pos + tab_padding, label, rgba(is_selected ? COLOR_WHITE : COLOR_LIGHT_GREY));
 
+            auto mouse_flags = get_mouse_flags(tab);
             if (mouse_flags & MOUSE_CLICKED)
                 pane.focus_editor_by_index(tab_id);
-
             if (mouse_flags & MOUSE_MCLICKED)
                 tab_to_remove = tab_id;
 
@@ -1193,7 +2246,7 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
                             draw_cursor();
                             if (world.nvim.mode != VI_INSERT && current_pane == world.current_pane)
                                 text_color = COLOR_BLACK;
-                        } else {
+                        } else if (world.nvim.mode != VI_INSERT) {
                             auto topline = editor->nvim_data.grid_topline;
                             if (topline <= y && y < topline + NVIM_DEFAULT_HEIGHT) {
                                 auto hl = editor->highlights[y - topline][vx];
@@ -1368,10 +2421,6 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
     {
         // Draw pane resizers.
 
-        // TODO: set cursors. For reference:
-        // glfwSetCursor(wnd, world.ui.cursors[ImGuiMouseCursor_ResizeEW]);
-        // glfwSetCursor(wnd, world.ui.cursors[ImGuiMouseCursor_Arrow]);
-
         float offset = 0;
 
         for (u32 i = 0; i < world.panes.len - 1; i++) {
@@ -1387,13 +2436,9 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
             hitbox.x -= 4;
             hitbox.w += 8;
 
-            if (get_mouse_flags(hitbox) & MOUSE_HOVER) {
+            if (test_hover(hitbox, HOVERID_PANE_RESIZERS + i, ImGuiMouseCursor_ResizeEW)) {
                 draw_rect(b, rgba(COLOR_WHITE));
-                if (world.ui.mouse_down[GLFW_MOUSE_BUTTON_LEFT]) {
-                    world.resizing_pane = i;
-                } else {
-                    world.resizing_pane = -1;
-                }
+                world.resizing_pane = world.ui.mouse_down[GLFW_MOUSE_BUTTON_LEFT] ? i : -1;
             } else {
                 draw_rect(b, rgba(COLOR_DARK_GREY));
             }
@@ -1502,91 +2547,43 @@ void UI::draw_everything(GLuint vao, GLuint vbo, GLuint program) {
             draw_status_piece(RIGHT, our_sprintf("%d,%d", cur.y+1, cur.x+1), rgba(COLOR_WHITE, 0.0), rgba("#aaaaaa"));
         }
     }
+}
 
-    if (world.error_list.show) {
-        boxf build_results_area = get_build_results_area();
-        draw_rect(build_results_area, rgba(COLOR_DARK_GREY));
+void UI::end_frame() {
+    flush_verts();
 
-        boxf row_area;
-        row_area.x = build_results_area.x;
-        row_area.y = build_results_area.y;
-        row_area.h = font->height + settings.error_list_item_padding_y * 2;
-        row_area.w = build_results_area.w;
+    ImGui::EndFrame();
 
-        if (world.build.ready()) {
-            if (world.build.errors.len == 0) {
-                auto pos = row_area.pos;
-                pos.x += settings.error_list_item_padding_x;
-                pos.y += settings.error_list_item_padding_y;
-                draw_string(pos, "Build was successful!", rgba(COLOR_GREEN));
-            } else {
-                row_area.y -= world.wnd_build_and_debug.scroll_offset;
+    {
+        // draw imgui buffers
+        ImDrawData* draw_data = ImGui::GetDrawData();
+        draw_data->ScaleClipRects(ImVec2(world.display_scale.x, world.display_scale.y));
 
-                start_clip(build_results_area);
-                defer { end_clip(); };
+        glViewport(0, 0, world.display_size.x, world.display_size.y);
+        glUseProgram(world.ui.im_program);
+        glBindVertexArray(world.ui.im_vao);
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glEnable(GL_SCISSOR_TEST);
 
-                int index = 0;
-                For (world.build.errors) {
-                    defer {
-                        row_area.y += row_area.h;
-                        index++;
-                    };
+        for (i32 i = 0; i < draw_data->CmdListsCount; i++) {
+            const ImDrawList* cmd_list = draw_data->CmdLists[i];
+            const ImDrawIdx* offset = 0;
 
-                    if (index == world.build.current_error) {
-                        if (row_area.y + row_area.h > build_results_area.y + build_results_area.h) {
-                            auto delta = (row_area.y + row_area.h) - (build_results_area.y + build_results_area.h);
-                            world.wnd_build_and_debug.scroll_offset += delta;
-                        }
-                        if (row_area.y < build_results_area.y) {
-                            world.wnd_build_and_debug.scroll_offset -= (build_results_area.y - row_area.y);
-                        }
-                    }
+            glBindBuffer(GL_ARRAY_BUFFER, world.ui.im_vbo);
+            glBufferData(GL_ARRAY_BUFFER, cmd_list->VtxBuffer.Size * sizeof(ImDrawVert), cmd_list->VtxBuffer.Data, GL_STREAM_DRAW);
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, world.ui.im_vebo);
+            glBufferData(GL_ELEMENT_ARRAY_BUFFER, cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx), cmd_list->IdxBuffer.Data, GL_STREAM_DRAW);
 
-                    if (row_area.y > build_results_area.y + build_results_area.h) continue;
+            i32 elem_size = sizeof(ImDrawIdx) == 2 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT;
 
-                    auto mouse_flags = get_mouse_flags(row_area);
-
-                    vec3f text_color = COLOR_WHITE;
-
-                    if (it.valid && mouse_flags & MOUSE_HOVER)
-                        draw_rect(row_area, rgba(COLOR_MEDIUM_GREY));
-
-                    if (index == world.build.current_error) {
-                        draw_rect(row_area, rgba(COLOR_LIGHT_GREY));
-                        text_color = COLOR_BLACK;
-                    }
-
-                    if (it.valid && mouse_flags & MOUSE_CLICKED) {
-                        world.build.current_error = index;
-                        go_to_error(index);
-                    }
-
-                    if (row_area.y + row_area.h > build_results_area.y) {
-                        SCOPED_FRAME();
-                        auto pos = row_area.pos;
-                        pos.x += settings.error_list_item_padding_x;
-                        pos.y += settings.error_list_item_padding_y;
-
-                        if (it.valid) {
-                            auto s = our_sprintf("%s:%d:%d: %s", it.file, it.row, it.col, it.message);
-                            draw_string(pos, s, rgba(text_color));
-                        } else {
-                            auto s = our_sprintf("%s", it.message);
-                            draw_string(pos, s, rgba(COLOR_MEDIUM_GREY));
-                        }
-                    }
-                }
+            for (i32 j = 0; j < cmd_list->CmdBuffer.Size; j++) {
+                const ImDrawCmd* cmd = &cmd_list->CmdBuffer[j];
+                glScissor(cmd->ClipRect.x, (world.display_size.y - cmd->ClipRect.w), (cmd->ClipRect.z - cmd->ClipRect.x), (cmd->ClipRect.w - cmd->ClipRect.y));
+                glDrawElements(GL_TRIANGLES, cmd->ElemCount, elem_size, offset);
+                offset += cmd->ElemCount;
             }
-        } else {
-            auto pos = row_area.pos;
-            pos.x += settings.error_list_item_padding_x;
-            pos.y += settings.error_list_item_padding_y;
-            draw_string(pos, "Building...", rgba(COLOR_MEDIUM_GREY));
         }
     }
-
-    // TODO: draw 'search anywhere' window
-    flush_verts();
 
     recalculate_view_sizes();
 }
@@ -1604,21 +2601,6 @@ void UI::draw_image(Sprites_Image_Type image_id, boxf b) {
         draw_quad(b, uv, {1.0, 1.0, 1.0, 1.0}, DRAW_IMAGE_MASK, TEXTURE_IMAGES);
     else
         draw_quad(b, uv, {0}, DRAW_IMAGE, TEXTURE_IMAGES);
-}
-
-boxf UI::get_build_results_area() {
-    boxf b;
-    b.x = 0;
-    b.y = world.window_size.y;
-    b.w = world.window_size.x;
-    b.h = 0;
-
-    if (world.error_list.show) {
-        b.y -= world.error_list.height;
-        b.h += world.error_list.height;
-    }
-
-    return b;
 }
 
 void UI::get_tabs_and_editor_area(boxf* pane_area, boxf* ptabs_area, boxf* peditor_area) {
@@ -1640,7 +2622,7 @@ void UI::get_tabs_and_editor_area(boxf* pane_area, boxf* ptabs_area, boxf* pedit
 }
 
 void UI::recalculate_view_sizes(bool force) {
-    boxf panes_area = get_panes_area();
+    // boxf panes_area = get_panes_area();
     auto new_sizes = alloc_list<vec2f>();
 
     float total = 0;
@@ -1693,3 +2675,24 @@ void UI::recalculate_view_sizes(bool force) {
     }
 }
 
+const u64 WINDOWS_RESIZE_FROM_EDGES_FEEDBACK_TIMER = 40000000;
+
+bool UI::test_hover(boxf area, int id, ImGuiMouseCursor cursor) {
+    if (!(get_mouse_flags(area) & MOUSE_HOVER))
+        return false;
+
+    hover.id = id;
+    hover.cursor = cursor;
+
+    auto now = current_time_in_nanoseconds();
+
+    if (id != hover.id_last_frame) {
+        hover.start_time = now;
+        hover.ready = false;
+    }
+
+    if (now - hover.start_time > WINDOWS_RESIZE_FROM_EDGES_FEEDBACK_TIMER)
+        hover.ready = true;
+
+    return hover.ready;
+}

@@ -2169,6 +2169,11 @@ Parameter_Hint *Go_Indexer::parameter_hint(ccstr filepath, cur2 pos, bool trigge
                 auto prev = node->prev_all();
                 if (!prev->null) {
                     func_expr = prev;
+                    if (func_expr->type == TS_ERROR) {
+                        func_expr = func_expr->child();
+                        for (Ast_Node *next; (next = func_expr->next()) != NULL;)
+                            func_expr = next;
+                    }
                     call_args_start = node->start;
                 } else {
                     auto parent = node->parent();

@@ -39,7 +39,7 @@ bool Buffer_It::eof() {
     if (has_fake_end) {
         auto new_end = fake_end;
         if (append_char_to_end) new_end.x++;
-        return pos > new_end;
+        return pos >= new_end;
     }
 
     if (buf->lines.len == 0) return true;
