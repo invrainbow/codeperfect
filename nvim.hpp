@@ -373,6 +373,7 @@ enum Nvim_Notification_Type {
 
     NVIM_NOTIF_CUSTOM_REVEAL_LINE,
     NVIM_NOTIF_CUSTOM_MOVE_CURSOR,
+    NVIM_NOTIF_CUSTOM_JUMP,
 };
 
 enum Screen_Pos {
@@ -425,6 +426,10 @@ struct Nvim_Message {
                 struct {
                     Screen_Pos screen_pos;
                 } custom_move_cursor;
+
+                struct {
+                    bool forward;
+                } custom_jump;
 
                 struct {
                     ccstr mode_name;

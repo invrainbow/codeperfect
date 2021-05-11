@@ -7,7 +7,7 @@ set scrolloff=100
 set nowrap
 
 " called from ide when opening/creating new file to reset undo tree
-function! IdeClearUndo(bufId)
+function! IDE__ClearUndo(bufId)
     let oldlevels = &undolevels
     call nvim_buf_set_option(a:bufId, 'undolevels', -1)
     call nvim_buf_set_lines(a:bufId, 0, 0, 0, [])
@@ -15,12 +15,12 @@ function! IdeClearUndo(bufId)
     unlet oldlevels
 endfunction
 
-function! IdeNotify(cmd, ...) abort
+function! NotifyIDE(cmd, ...) abort
     call rpcnotify(g:channel_id, 'custom_notification', a:cmd, a:000)
 endfunction
 
 function s:reveal(where, resetCursor)
-    call IdeNotify('reveal_line', a:where, a:resetCursor)
+    call NotifyIDE('reveal_line', a:where, a:resetCursor)
 endfunction
 
 nnoremap z<CR> <Cmd>call <SID>reveal(0, 1)<CR>
@@ -39,7 +39,7 @@ xnoremap zb <Cmd>call <SID>reveal(2, 0)<CR>
 function s:moveCursor(to)
     " register jumplist in vim
     normal! m'
-    call IdeNotify('move_cursor', a:to)
+    call NotifyIDE('move_cursor', a:to)
 endfunction
 
 nnoremap H <Cmd>call <SID>moveCursor(0)<CR>
@@ -48,6 +48,14 @@ nnoremap M <Cmd>call <SID>moveCursor(1)<CR>
 xnoremap M <Cmd>call <SID>moveCursor(1)<CR>
 nnoremap L <Cmd>call <SID>moveCursor(2)<CR>
 xnoremap L <Cmd>call <SID>moveCursor(2)<CR>
+
+function s:jump(direction)
+    call NotifyIDE('jump', a:direction)
+endfunction
+
+nnoremap <C-o> <Cmd>call <SID>jump(0)<CR>
+nnoremap <C-i> <Cmd>call <SID>jump(1)<CR>
+nnoremap <Tab> <Cmd>call <SID>jump(1)<CR>
 
 scriptencoding utf-8
 
@@ -107,7 +115,7 @@ function s:forceLocalOptions()
     setlocal nolazyredraw
 endfunction
 
-augroup VscodeForceOptions
+augroup IDE
     autocmd!
     autocmd BufEnter,FileType * call <SID>forceLocalOptions()
 augroup END

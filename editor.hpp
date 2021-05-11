@@ -120,6 +120,7 @@ struct Editor {
     bool trigger_escape();
     void format_on_save(bool write_to_nvim = true);
     void handle_save(bool about_to_close = false);
+    bool is_current_editor();
 };
 
 struct Pane {

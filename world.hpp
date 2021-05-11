@@ -67,6 +67,46 @@ struct Main_Thread_Message {
     };
 };
 
+struct Jumplist_Location {
+    int editor_id;
+    cur2 pos;
+};
+
+struct Jumplist {
+    Jumplist_Location buf[128]; // can expand this arbitrarily
+    int start;
+    int end;
+    int p;
+    bool empty;
+    bool disable;
+
+    int inc(int i) { return i == _countof(buf)-1 ? 0 : i+1; }
+    int dec(int i) { return i == 0 ? _countof(buf)-1 : i-1; }
+
+    void init() {
+        ptr0(this);
+        start = 0;
+        end = 0;
+        p = 0;
+        empty = true;
+        disable = false;
+    }
+
+    void add(int editor_id, cur2 pos, bool bypass_duplicate_check = false);
+
+    Jumplist_Location* go_backward() {
+        if (p == start) return NULL;
+        p = dec(p);
+        return &buf[p];
+    }
+
+    Jumplist_Location* go_forward() {
+        if (p == end) return NULL;
+        p = inc(p);
+        return &buf[p];
+    }
+};
+
 struct World {
     Pool world_mem;
     Pool frame_mem;
@@ -79,6 +119,8 @@ struct World {
     Pool build_index_mem;
     Pool ui_mem;
     Pool message_queue_mem;
+
+    Jumplist jumplist;
 
     Fridge<Chunk0> chunk0_fridge;
     Fridge<Chunk1> chunk1_fridge;
@@ -318,6 +360,7 @@ struct World {
 
     Editor *focus_editor(ccstr path);
     Editor *focus_editor(ccstr path, cur2 pos);
+    Editor* focus_editor_by_id(int editor_id, cur2 pos);
 };
 
 extern World world;

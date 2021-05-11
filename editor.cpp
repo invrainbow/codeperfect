@@ -7,10 +7,24 @@
 #include "tree_sitter_crap.hpp"
 #include "settings.hpp"
 
+bool Editor::is_current_editor() {
+    auto current_editor = world.get_current_editor();
+    if (current_editor != NULL)
+        if (current_editor->id == id)
+            return true;
+    return false;
+}
+
 void Editor::raw_move_cursor(cur2 c) {
     if (c.y == -1) c = buf.offset_to_cur(c.x);
-
     if (c.y < 0 || c.y >= buf.lines.len) return;
+    // does this work? update: nope
+    // if (c.x < 0 || c.y > buf.lines[c.y].len) return;
+
+    if (is_current_editor()) {
+        // print("jumplist.add from Editor::raw_move_cursor");
+        world.jumplist.add(id, c);
+    }
 
     cur = c;
 
@@ -369,6 +383,9 @@ Editor *Pane::focus_editor_by_index(u32 idx, cur2 pos) {
             editor.nvim_data.need_initial_pos_set = true;
             editor.nvim_data.initial_pos = pos;
         }
+    } else {
+        // print("jumplist.add from Pane::focus_editor_by_index");
+        world.jumplist.add(editor.id, editor.cur);
     }
 
     world.nvim.waiting_focus_window = editor.id;
@@ -409,11 +426,23 @@ void Editor::cleanup() {
     if (tree != NULL)
         ts_tree_delete(tree); // i remember this being super slow, is it still if it's just one tree?
 
+    auto &nv = world.nvim;
+
     if (nvim_data.win_id != 0) {
-        auto &nv = world.nvim;
         nv.start_request_message("nvim_win_close", 2);
         nv.writer.write_int(nvim_data.win_id);
         nv.writer.write_bool(true);
+        nv.end_message();
+    }
+
+    if (nvim_data.buf_id != 0) {
+        nv.start_request_message("nvim_buf_delete", 2);
+        nv.writer.write_int(nvim_data.buf_id);
+        {
+            nv.writer.write_map(2);
+            nv.writer.write_string("force"); nv.writer.write_bool(true);
+            nv.writer.write_string("unload"); nv.writer.write_bool(false);
+        }
         nv.end_message();
     }
 

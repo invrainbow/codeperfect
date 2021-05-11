@@ -456,3 +456,41 @@ void run_proc_the_normal_way(Process* proc, ccstr cmd) {
     proc->run(cmd);
 }
 
+Editor* World::focus_editor_by_id(int editor_id, cur2 pos) {
+    For (panes) {
+        for (int j = 0; j < it.editors.len; j++) {
+            auto &editor = it.editors[j];
+            if (editor.id == editor_id) {
+                activate_pane((&it) - panes.items);
+                it.focus_editor_by_index(j, pos);
+                return &editor;
+            }
+        }
+    }
+    return NULL;
+}
+
+void Jumplist::add(int editor_id, cur2 pos, bool bypass_duplicate_check) {
+    if (disable) return;
+
+    auto editor = world.find_editor_by_id(editor_id);
+    if (editor == NULL) return;
+
+    if (!bypass_duplicate_check)
+        if (editor->is_current_editor() && editor->cur == pos)
+            return;
+
+    print("jumplist add: %s %s", editor->filepath, format_pos(pos));
+
+    if (empty) {
+        empty = false;
+    } else {
+        if (inc(p) == start)
+            start = inc(start);
+        end = p = inc(p);
+    }
+
+    buf[p].editor_id = editor_id;
+    buf[p].pos = pos;
+}
+
