@@ -1310,7 +1310,7 @@ void UI::draw_everything() {
         ImGui::SetNextWindowViewport(viewport->ID);
         ImGui::SetNextWindowBgAlpha(0.0f);
 
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(2, 2));
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
 
@@ -1445,9 +1445,11 @@ void UI::draw_everything() {
                 world.dbg.push_call(DLVC_STEP_OUT);
             }
 
+            /*
             if (ImGui::MenuItem("Run to Cursor", "Shift+F10", false, world.dbg.state_flag == DLV_STATE_PAUSED)) {
                 // TODO
             }
+            */
 
             ImGui::Separator();
 
@@ -1575,9 +1577,15 @@ void UI::draw_everything() {
         ImGui::SetNextWindowDockID(dock_sidebar_id, ImGuiCond_Once);
         ImGui::Begin("File Explorer");
 
-        auto open_add_file_or_folder = [&](bool folder) {
-            world.wnd_add_file_or_folder.show = true;
+        static struct {
+            bool is_adding_folder;
+            bool location_is_root;
+            char location[256];
+            char name[256];
+        } state = {0};
 
+        /*
+        auto open_add_file_or_folder = [&](bool folder) {
             File_Tree_Node *node = NULL;
 
             auto is_root = [&]() {
@@ -1590,30 +1598,80 @@ void UI::draw_everything() {
                 return (node->parent == NULL);
             };
 
-            auto &wnd = world.wnd_add_file_or_folder;
-
-            wnd.location_is_root = is_root();
-            if (!wnd.location_is_root) {
+            state.location_is_root = is_root();
+            if (!state.location_is_root) {
                 strcpy_safe(
-                    wnd.location,
-                    _countof(wnd.location),
+                    state.location,
+                    _countof(state.location),
                     file_tree_node_to_path(node)
                 );
             }
 
-            wnd.folder = folder;
+            state.is_adding_folder = folder;
+            ImGui::OpenPopup("###add_file_or_folder_popup");
         };
 
         if (ImGui::Button("Add file")) {
             open_add_file_or_folder(false);
         }
+
+        ImGui::SameLine();
+
         if (ImGui::Button("Add folder")) {
             open_add_file_or_folder(true);
         }
+
+        ImGui::SameLine();
+        */
+
         if (ImGui::Button("Refresh")) {
             // TODO: probably make this async task
             world.fill_file_tree();
         }
+
+        /*
+        {
+            auto label = our_sprintf(
+                "Add %s to %s###add_file_or_folder_popup",
+                state.is_adding_folder ? "folder" : "file",
+                state.location_is_root ? "workspace root" : state.location
+            );
+
+            ImGui::SetNextWindowSize(ImVec2(450, -1));
+            if (ImGui::BeginPopupModal(label, NULL, ImGuiWindowFlags_NoResize)) {
+                ImGui::Text("Name:");
+                ImGui::InputText("##add_file", state.name, IM_ARRAYSIZE(state.name));
+
+                if (ImGui::Button("Add")) {
+                    world.wnd_add_file_or_folder.show = false;
+
+                    if (strlen(state.name) > 0) {
+                        auto dest = state.location_is_root ? world.current_path : path_join(world.current_path, state.location);
+                        auto path = path_join(dest, state.name);
+
+                        if (state.is_adding_folder) {
+                            CreateDirectoryA(path, NULL);
+                        } else {
+                            // need to share, or else we have race condition
+                            // with fsevent handler in
+                            // Go_Indexer::background_thread() trying to read
+                            auto h = CreateFileA(path, 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+                            if (h != INVALID_HANDLE_VALUE) CloseHandle(h);
+                        }
+
+                        world.fill_file_tree();
+                    }
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Cancel")) {
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::EndPopup();
+            }
+        }
+        */
+
+        ImGui::Separator();
 
         // draw files area
         {
@@ -1628,14 +1686,15 @@ void UI::draw_everything() {
                 auto flags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_NoTreePushOnOpen;
                 if (!it->is_directory)
                     flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_Bullet;
+                if (world.file_explorer.selection == i)
+                    flags |= ImGuiTreeNodeFlags_Selected;
 
-                // world.file_explorer.selection == i
                 // it->is_directory
 
                 for (u32 j = 0; j < it->depth; j++) ImGui::Indent();
 
                 bool open = false;
-                if (ImGui::TreeNodeEx(it, flags, "%s", it->name) && it->is_directory)
+                if (ImGui::TreeNodeEx(it, flags, "%s%s", it->name, it->is_directory ? "/" : "") && it->is_directory)
                     open = true;
 
                 for (u32 j = 0; j < it->depth; j++) ImGui::Unindent();
@@ -1797,43 +1856,6 @@ void UI::draw_everything() {
         ImGui::End();
     }
 
-    if (world.wnd_add_file_or_folder.show) {
-        auto &wnd = world.wnd_add_file_or_folder;
-
-        auto label = our_sprintf(
-            "Add %s to %s",
-            wnd.folder ? "folder" : "file",
-            wnd.location_is_root ? "workspace root" : wnd.location
-        );
-
-        ImGui::Begin(label, &wnd.show, ImGuiWindowFlags_AlwaysAutoResize);
-
-        ImGui::Text("Name:");
-        ImGui::InputText("##add_file", wnd.name, IM_ARRAYSIZE(wnd.name));
-
-        if (ImGui::Button("Add")) {
-            world.wnd_add_file_or_folder.show = false;
-
-            if (strlen(wnd.name) > 0) {
-                auto dest = wnd.location_is_root ? world.current_path : path_join(world.current_path, wnd.location);
-                auto path = path_join(dest, wnd.name);
-
-                if (wnd.folder) {
-                    CreateDirectoryA(path, NULL);
-                } else {
-                    // need to share, or else we have race condition
-                    // with fsevent handler in
-                    // Go_Indexer::background_thread() trying to read
-                    auto h = CreateFileA(path, 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
-                    if (h != INVALID_HANDLE_VALUE) CloseHandle(h);
-                }
-
-                world.fill_file_tree();
-            }
-        }
-        ImGui::End();
-    }
-
     if (world.wnd_style_editor.show) {
         ImGui::Begin("Style Editor", &world.wnd_style_editor.show, ImGuiWindowFlags_AlwaysAutoResize);
 
@@ -1928,9 +1950,10 @@ void UI::draw_everything() {
         pane_area.h = panes_area.h;
 
         boxf tabs_area, editor_area;
-        get_tabs_and_editor_area(&pane_area, &tabs_area, &editor_area);
+        get_tabs_and_editor_area(&pane_area, &tabs_area, &editor_area, pane.editors.len > 0);
 
-        draw_rect(tabs_area, rgba(is_pane_selected ? COLOR_MEDIUM_GREY : COLOR_DARK_GREY));
+        if (pane.editors.len > 0)
+            draw_rect(tabs_area, rgba(is_pane_selected ? COLOR_MEDIUM_GREY : COLOR_DARK_GREY));
         draw_rect(editor_area, rgba(COLOR_BG));
 
         vec2 tab_padding = { 15, 5 };
@@ -2603,20 +2626,26 @@ void UI::draw_image(Sprites_Image_Type image_id, boxf b) {
         draw_quad(b, uv, {0}, DRAW_IMAGE, TEXTURE_IMAGES);
 }
 
-void UI::get_tabs_and_editor_area(boxf* pane_area, boxf* ptabs_area, boxf* peditor_area) {
+void UI::get_tabs_and_editor_area(boxf* pane_area, boxf* ptabs_area, boxf* peditor_area, bool has_tabs) {
     boxf tabs_area, editor_area;
 
-    tabs_area.pos = pane_area->pos;
-    tabs_area.w = pane_area->w;
-    tabs_area.h = 30; // ???
+    if (has_tabs) {
+        tabs_area.pos = pane_area->pos;
+        tabs_area.w = pane_area->w;
+        tabs_area.h = 30; // ???
+    }
 
     editor_area.pos = pane_area->pos;
-    editor_area.y += tabs_area.h;
+    if (has_tabs)
+        editor_area.y += tabs_area.h;
     editor_area.w = pane_area->w;
-    editor_area.h = pane_area->h - tabs_area.h;
+    editor_area.h = pane_area->h;
+    if (has_tabs)
+        editor_area.h -= tabs_area.h;
 
-    if (ptabs_area != NULL)
-        memcpy(ptabs_area, &tabs_area, sizeof(boxf));
+    if (has_tabs)
+        if (ptabs_area != NULL)
+            memcpy(ptabs_area, &tabs_area, sizeof(boxf));
     if (peditor_area != NULL)
         memcpy(peditor_area, &editor_area, sizeof(boxf));
 }
@@ -2642,7 +2671,7 @@ void UI::recalculate_view_sizes(bool force) {
             line_number_width = get_line_number_width(editor);
 
         boxf editor_area;
-        get_tabs_and_editor_area(&pane_area, NULL, &editor_area);
+        get_tabs_and_editor_area(&pane_area, NULL, &editor_area, it.editors.len > 0);
         editor_area.w -= ((line_number_width * font->width) + settings.line_number_margin_left + settings.line_number_margin_right);
         new_sizes->append(editor_area.size);
 

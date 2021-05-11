@@ -165,7 +165,7 @@ struct UI {
     boxf get_status_area();
     void draw_everything();
     void end_frame();
-    void get_tabs_and_editor_area(boxf* pane_area, boxf* ptabs_area, boxf* peditor_area);
+    void get_tabs_and_editor_area(boxf* pane_area, boxf* ptabs_area, boxf* peditor_area, bool has_tabs);
     void recalculate_view_sizes(bool force = false);
     i32 get_current_resize_area(boxf* out);
     int get_mouse_flags(boxf area);
