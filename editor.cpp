@@ -344,7 +344,7 @@ bool Editor::trigger_escape() {
 
     if (autocomplete.ac.results != NULL) {
         handled = true;
-        autocomplete.ac.results = NULL;
+        ptr0(&autocomplete.ac);
     }
 
     if (parameter_hint.gotype != NULL) {
