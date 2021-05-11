@@ -891,7 +891,7 @@ struct Module_Resolver {
     }
 
     void add_to_root(Node *root, ccstr key, ccstr value) {
-        print("adding %s -> %s", key, value);
+        //print("adding %s -> %s", key, value);
 
         auto path = make_path(key);
         auto curr = root;
@@ -1176,7 +1176,7 @@ struct Scoped_Write {
 #define SCOPED_WRITE() Scoped_Write GENSYM(SCOPED_WRITE)(this)
 
 void walk_ast_node(Ast_Node *node, bool abstract_only, Walk_TS_Callback cb);
-void find_nodes_containing_pos(Ast_Node *root, cur2 pos, bool abstract_only, fn<Walk_Action(Ast_Node *it)> callback);
+void find_nodes_containing_pos(Ast_Node *root, cur2 pos, bool abstract_only, fn<Walk_Action(Ast_Node *it)> callback, bool end_inclusive = false);
 
 Ast_Node *new_ast_node(TSNode node, Parser_It *it);
 

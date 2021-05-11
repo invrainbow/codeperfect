@@ -7,6 +7,14 @@
 #include "editor.hpp"
 #include "meow_hash.hpp"
 
+#define GO_DEBUG 0
+
+#if GO_DEBUG
+#define go_print(fmt, ...) print("[go] " fmt, ##__VA_ARGS__)
+#else
+#define go_print(fmt, ...)
+#endif
+
 s32 num_index_stream_opens = 0;
 s32 num_index_stream_closes = 0;
 
@@ -475,7 +483,7 @@ void Go_Indexer::background_thread() {
     // ===
 
     do {
-        print("reading...");
+        go_print("reading...");
 
         Index_Stream s;
         if (s.open(path_join(world.current_path, "db"), FILE_MODE_READ, FILE_OPEN_EXISTING) != FILE_RESULT_SUCCESS) break;
@@ -486,7 +494,7 @@ void Go_Indexer::background_thread() {
             memcpy(&index, read_object<Go_Index>(&s), sizeof(Go_Index));
         }
 
-        print("successfully read index from disk, final_mem.size = %d", final_mem.mem_allocated);
+        go_print("successfully read index from disk, final_mem.size = %d", final_mem.mem_allocated);
     } while (0);
 
     // initialize index
@@ -622,9 +630,9 @@ void Go_Indexer::background_thread() {
             if (is_git_folder(event.filepath)) continue;
 
             if (event.type == FSEVENT_RENAME)
-                print("%s: %s -> %s", fs_event_type_str(event.type), event.filepath, event.new_filepath);
+                go_print("%s: %s -> %s", fs_event_type_str(event.type), event.filepath, event.new_filepath);
             else
-                print("%s: %s", fs_event_type_str(event.type), event.filepath);
+                go_print("%s: %s", fs_event_type_str(event.type), event.filepath);
 
             auto handle_gofile_deleted = [&](ccstr filepath) {
                 auto pkg = find_package_in_index(filepath_to_import_path(our_dirname(filepath)));
@@ -870,7 +878,7 @@ void Go_Indexer::background_thread() {
                 continue;
             }
 
-            print("processing %s -> %s", import_path, resolved_path);
+            go_print("processing %s -> %s", import_path, resolved_path);
 
             pkg->status = GPS_UPDATING;
 
@@ -950,7 +958,7 @@ void Go_Indexer::background_thread() {
         do {
             if (!should_write()) break;
 
-            print("writing index to disk");
+            go_print("writing index to disk");
 
             // Set last_write_time, even if the write operation itself later fails.
             // This way we're not stuck trying over and over to write.
@@ -1042,15 +1050,24 @@ void Go_Indexer::free_parsed_file(Parsed_File *file) {
 }
 
 // returns -1 if pos before ast, 0 if inside, 1 if after
-i32 cmp_pos_to_node(cur2 pos, Ast_Node *node) {
+i32 cmp_pos_to_node(cur2 pos, Ast_Node *node, bool end_inclusive = false) {
     if (pos.y == -1) {
         if (pos.x < node->start_byte) return -1;
-        if (pos.x >= node->end_byte) return 1;
+
+        if (end_inclusive) {
+            if (pos.x > node->end_byte) return 1;
+        } else {
+            if (pos.x >= node->end_byte) return 1;
+        }
         return 0;
     }
 
     if (pos < node->start) return -1;
-    if (pos >= node->end) return 1;
+    if (end_inclusive) {
+        if (pos > node->end) return 1;
+    } else {
+        if (pos >= node->end) return 1;
+    }
     return 0;
 }
 
@@ -1066,9 +1083,9 @@ void walk_ast_node(Ast_Node *node, bool abstract_only, Walk_TS_Callback cb) {
 }
 
 // @Functional
-void find_nodes_containing_pos(Ast_Node *root, cur2 pos, bool abstract_only, fn<Walk_Action(Ast_Node *it)> callback) {
+void find_nodes_containing_pos(Ast_Node *root, cur2 pos, bool abstract_only, fn<Walk_Action(Ast_Node *it)> callback, bool end_inclusive) {
     walk_ast_node(root, abstract_only, [&](Ast_Node *node, Ts_Field_Type, int) -> Walk_Action {
-        int res = cmp_pos_to_node(pos, node);
+        int res = cmp_pos_to_node(pos, node, end_inclusive);
         if (res < 0) return WALK_ABORT;
         if (res > 0) return WALK_SKIP_CHILDREN;
         return callback(node);
@@ -1839,7 +1856,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
     if (pf == NULL) return false;
     defer { free_parsed_file(pf); };
 
-    if (!truncate_parsed_file(pf, pos, 0)) return false;
+    if (!truncate_parsed_file(pf, pos, '_')) return false;
     defer { ts_tree_delete(pf->tree); };
 
     auto intelligently_move_cursor_backwards = [&]() -> cur2 {
@@ -1975,7 +1992,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
             return WALK_ABORT;
         }
         return WALK_CONTINUE;
-    });
+    }); // , true);
 
     List<AC_Result> *ac_results = NULL;
 
