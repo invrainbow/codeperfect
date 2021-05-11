@@ -326,7 +326,7 @@ struct Debugger {
     void save_list_of_vars(Json_Navigator js, i32 idx, List<Dlv_Var>* out);
     void save_single_var(Json_Navigator js, i32 idx, Dlv_Var* out, Save_Var_Mode save_mode = SAVE_VAR_NORMAL);
     void start_loop();
-    void run_loop();
+    void do_everything();
     void surface_error(ccstr msg);
 
     void push_call(Dlv_Call_Type type, fn<void(Dlv_Call *call)> f);
