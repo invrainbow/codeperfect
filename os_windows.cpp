@@ -100,17 +100,19 @@ void Process::cleanup() {
     close_and_null_handle(&proc);
 }
 
-// this is by far the stupidest bug ever
-// https://devblogs.microsoft.com/oldnewthing/20200306-00/?p=103538
-CRITICAL_SECTION global_create_process_lock;
-void init_global_create_process_lock() {
-    InitializeCriticalSection(&global_create_process_lock);
-}
-int _ = (init_global_create_process_lock(), 0);
-
 bool Process::run(ccstr _cmd) {
-    EnterCriticalSection(&global_create_process_lock);
-    defer { LeaveCriticalSection(&global_create_process_lock); };
+    // this is by far the stupidest bug ever
+    // https://devblogs.microsoft.com/oldnewthing/20200306-00/?p=103538
+    static CRITICAL_SECTION create_process_lock;
+    static bool initialized = false;
+
+    if (!initialized) {
+        InitializeCriticalSection(&create_process_lock);
+        initialized = true;
+    }
+
+    EnterCriticalSection(&create_process_lock);
+    defer { LeaveCriticalSection(&create_process_lock); };
 
     cmd = _cmd;
 
@@ -730,6 +732,10 @@ Ask_User_Result ask_user_yes_no(void* parent_window, ccstr text, ccstr title) {
     case IDNO: return ASKUSER_NO;
     }
     return ASKUSER_ERROR;
+}
+
+void tell_user(void* parent_window, ccstr text, ccstr title) {
+    MessageBoxA((HWND)parent_window, text, title, MB_OK | MB_ICONWARNING | MB_TOPMOST);
 }
 
 #endif
