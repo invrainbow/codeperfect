@@ -256,3 +256,17 @@ bool iszero(T* p) {
 
 void atomic_set_flag(Lock *lock, bool *p);
 bool atomic_check_flag(Lock *lock, bool *p);
+
+struct Timer {
+    u64 time;
+
+    void init() {
+        time = current_time_in_nanoseconds();
+    }
+
+    void log(ccstr s) {
+        auto curr = current_time_in_nanoseconds();
+        print("%dms: %s", (curr - time) / 1000000, s);
+        time = curr;
+    }
+};

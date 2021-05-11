@@ -53,7 +53,7 @@ TODO:
 #define UI_FONT_SIZE 15
 #define FRAME_RATE_CAP 60
 
-static const char WINDOW_TITLE[] = "i need to think of a name";
+static const char WINDOW_TITLE[] = "CodePerfect 95";
 
 char vert_shader[] = R"(
 #version 410
@@ -233,31 +233,13 @@ enum {
     OUR_MOD_CTRL = 1 << 3,
 };
 
-struct Timer {
-    u64 time;
-
-    void init() {
-        time = current_time_in_nanoseconds();
-    }
-
-    void log(ccstr s) {
-        auto curr = current_time_in_nanoseconds();
-        print("%dms: %s", (curr - time) / 1000000, s);
-        time = curr;
-    }
-};
-
 int main() {
     Timer t;
     t.init();
 
     if (run_tests()) return EXIT_SUCCESS;
 
-    t.log("run_tests");
-
     world.init();
-
-    t.log("world.init");
 
     SCOPED_MEM(&world.frame_mem);
 
@@ -265,21 +247,15 @@ int main() {
         return error("glfwInit failed"), EXIT_FAILURE;
     defer { glfwTerminate(); };
 
-    t.log("glfw init");
-
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_MAXIMIZED, GLFW_TRUE);
 
-    t.log("window hints");
-
     world.window = glfwCreateWindow(1280, 720, WINDOW_TITLE, NULL, NULL);
     if (world.window == NULL)
         return error("could not create window"), EXIT_FAILURE;
-
-    t.log("actually create the window");
 
     glfwMakeContextCurrent(world.window);
 
@@ -292,13 +268,34 @@ int main() {
 
     glfwSwapInterval(0);
 
-    t.log("random shit");
-
     ImGui::CreateContext();
 
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-    // ImGuI::StyleColorsLight();
+    // ImGui::StyleColorsLight();
+
+    auto &style = ImGui::GetStyle();
+    style.WindowPadding = ImVec2(7, 7);
+    style.FramePadding = ImVec2(7, 2);
+    style.CellPadding = ImVec2(4, 2);
+    style.ItemSpacing = ImVec2(7, 3);
+    style.ItemInnerSpacing = ImVec2(3, 3);
+    style.TouchExtraPadding = ImVec2(0, 0);
+    style.IndentSpacing = 8;
+    style.ScrollbarSize = 8;
+    style.GrabMinSize = 8;
+
+    style.WindowRounding = 3;
+    style.ChildRounding = 0;
+    style.FrameRounding = 2;
+    style.PopupRounding = 0;
+    style.ScrollbarRounding = 2;
+    style.GrabRounding = 2;
+    style.LogSliderDeadzone = 4;
+    style.TabRounding = 2;
+
+    style.Colors[ImGuiCol_WindowBg] = ImColor(23, 23, 23);
+    style.Colors[ImGuiCol_Text] = ImColor(227, 227, 227);
 
     io.BackendFlags |= ImGuiBackendFlags_HasMouseCursors;
     io.BackendFlags |= ImGuiBackendFlags_HasSetMousePos;
@@ -345,8 +342,6 @@ int main() {
     if (world.ui.im_program == -1)
         return EXIT_FAILURE;
 
-    t.log("fill out a bunch of shit");
-
     // grab window_size, display_size, and display_scale
     glfwGetWindowSize(world.window, (i32*)&world.window_size.x, (i32*)&world.window_size.y);
     glfwGetFramebufferSize(world.window, (i32*)&world.display_size.x, (i32*)&world.display_size.y);
@@ -354,8 +349,6 @@ int main() {
 
     // now that we have world.display_size, we can call wksp.activate_pane
     world.activate_pane(0);
-
-    t.log("more shit");
 
     // initialize & bind textures
     glGenTextures(__TEXTURE_COUNT__, world.ui.textures);
@@ -368,8 +361,6 @@ int main() {
 
     ui.init_sprite_texture();
 
-    t.log("textures");
-
     {
         SCOPED_FRAME();
 
@@ -377,9 +368,9 @@ int main() {
 
         // auto ui_font = read_font_data_from_first_found(&len, "Segoe UI");
         // assert(ui_font != NULL, "unable to load UI font");
-        // world.ui.im_font_ui = io.Fonts->AddFontFromMemoryTTF(ui_font, len, UI_FONT_SIZE);
+        // world.ui.im_font_ui = io.Fonts->AddFontFromMemoryTTF(ui_font, len, 16);
 
-        world.ui.im_font_ui = io.Fonts->AddFontFromFileTTF("fonts/FiraSans-Regular.ttf", UI_FONT_SIZE);
+        world.ui.im_font_ui = io.Fonts->AddFontFromFileTTF("fonts/OpenSans-SemiBold.ttf", 16);
         assert(world.ui.im_font_ui != NULL, "unable to load UI font");
 
         // auto mono_font = read_font_data_from_first_found(&len, "Courier New", "Consolas", "Menlo", "Courier New");
@@ -405,8 +396,6 @@ int main() {
         // i don't think this is needed
         // io.Fonts->TexID = (void*)TEXTURE_FONT_IMGUI;
     }
-
-    t.log("init fonts");
 
     glfwSetWindowSizeCallback(world.window, [](GLFWwindow* wnd, i32 w, i32 h) {
         world.window_size.x = w;
@@ -518,40 +507,69 @@ int main() {
 
         if (world.wnd_open_file.show && world.wnd_open_file.focused) {
             auto &wnd = world.wnd_open_file;
+
+            auto go_up = [&]() {
+                if (wnd.filtered_results->len == 0) return;
+
+                if (wnd.selection == 0)
+                    wnd.selection = wnd.filtered_results->len - 1;
+                else
+                    wnd.selection--;
+            };
+
+            auto go_down = [&]() {
+                if (wnd.filtered_results->len == 0) return;
+
+                wnd.selection++;
+                wnd.selection %= wnd.filtered_results->len;
+            };
+
             switch (ev) {
             case GLFW_PRESS:
             case GLFW_REPEAT:
-                switch (key) {
-                case GLFW_KEY_DOWN:
-                    wnd.selection++;
-                    wnd.selection %= wnd.filtered_results->len;
-                    break;
-                case GLFW_KEY_UP:
-                    if (wnd.selection == 0)
-                        wnd.selection = wnd.filtered_results->len - 1;
-                    else
-                        wnd.selection--;
-                    break;
-                case GLFW_KEY_BACKSPACE:
-                    {
-                        auto &wnd = world.wnd_open_file;
-                        if (wnd.query[0] != '\0')
-                            wnd.query[strlen(wnd.query) - 1] = '\0';
-                        if (strlen(wnd.query) >= 3)
-                            filter_files();
+                switch (nmod) {
+                case OUR_MOD_CTRL:
+                    switch (key) {
+                    case GLFW_KEY_J: go_down(); break;
+                    case GLFW_KEY_K: go_up(); break;
                     }
                     break;
-                case GLFW_KEY_ESCAPE:
-                    world.wnd_open_file.show = false;
-                    break;
-                case GLFW_KEY_ENTER:
-                    world.wnd_open_file.show = false;
+                case OUR_MOD_NONE:
+                    switch (key) {
+                    case GLFW_KEY_J:
+                        if (nmod == OUR_MOD_CTRL) go_down();
+                        break;
+                    case GLFW_KEY_K:
+                        if (nmod == OUR_MOD_CTRL) go_up();
+                        break;
+                    case GLFW_KEY_DOWN:
+                        go_down();
+                        break;
+                    case GLFW_KEY_UP:
+                        go_up();
+                        break;
+                    case GLFW_KEY_BACKSPACE:
+                        {
+                            auto &wnd = world.wnd_open_file;
+                            if (wnd.query[0] != '\0')
+                                wnd.query[strlen(wnd.query) - 1] = '\0';
+                            if (strlen(wnd.query) >= 3)
+                                filter_files();
+                        }
+                        break;
+                    case GLFW_KEY_ESCAPE:
+                        world.wnd_open_file.show = false;
+                        break;
+                    case GLFW_KEY_ENTER:
+                        world.wnd_open_file.show = false;
 
-                    if (wnd.filtered_results->len == 0) break;
+                        if (wnd.filtered_results->len == 0) break;
 
-                    auto relpath = wnd.filepaths->at(wnd.filtered_results->at(wnd.selection));
-                    auto filepath = path_join(world.current_path, relpath);
-                    world.focus_editor(filepath);
+                        auto relpath = wnd.filepaths->at(wnd.filtered_results->at(wnd.selection));
+                        auto filepath = path_join(world.current_path, relpath);
+                        world.focus_editor(filepath);
+                        break;
+                    }
                     break;
                 }
                 break;
@@ -853,9 +871,11 @@ int main() {
                         }
                     case GLFW_KEY_SLASH:
                         {
-                            auto ed = world.get_current_editor();
-                            if (ed == NULL) break;
-                            ed->trigger_parameter_hint(false);
+                            auto &nv = world.nvim;
+                            nv.start_request_message("nvim_exec", 2);
+                            nv.writer.write_string("nohlsearch");
+                            nv.writer.write_bool(false);
+                            nv.end_message();
                         }
                         break;
                     case GLFW_KEY_SPACE:
@@ -986,6 +1006,13 @@ int main() {
                             else
                                 idx = pane->current_editor - 1;
                             pane->focus_editor_by_index(idx);
+                        }
+                        break;
+                    case GLFW_KEY_SPACE:
+                        {
+                            auto ed = world.get_current_editor();
+                            if (ed == NULL) break;
+                            ed->trigger_parameter_hint(false);
                         }
                         break;
                     }
@@ -1158,7 +1185,7 @@ int main() {
                 } else {
                     ed->type_char_in_insert_mode(ch);
                 }
-            } else {
+            } else if (ch != ':') {
                 if (ch == '<') {
                     send_nvim_keys("<LT>");
                 } else {
@@ -1168,8 +1195,6 @@ int main() {
             }
         }
     });
-
-    t.log("set random callbacks");
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -1256,15 +1281,13 @@ int main() {
         glUniform1i(loc, TEXTURE_FONT_IMGUI);
     }
 
-    t.log("opengl shit");
-
     // Wait until all the OpenGL crap is initialized. I don't know why, but
     // creating background threads that run while glfwCreateWindow() is called
     // results in intermittent crashes. No fucking idea why. I hate
     // programming.
     world.start_background_threads();
 
-    t.log("start background threads");
+    t.log("initialize everything");
 
     double last_time = glfwGetTime();
     i64 last_frame_time = current_time_in_nanoseconds();

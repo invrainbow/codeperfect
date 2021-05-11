@@ -131,7 +131,7 @@ void World::init_workspace() {
     panes.init(LIST_FIXED, _countof(_panes), _panes);
 
 #if 1
-    strcpy_safe(current_path, _countof(current_path), normalize_path_sep("c:/users/brandon/cryptopals"));
+    strcpy_safe(current_path, _countof(current_path), normalize_path_sep("c:/users/brandon/delve_client_testing"));
 #else
     Select_File_Opts opts = {0};
     opts.buf = current_path;
@@ -208,8 +208,10 @@ void World::init() {
     windows_open.build_and_debug = false;
     windows_open.im_metrics = false;
 
-    strcpy_safe(world.settings.build_command, _countof(world.settings.build_command), "go build --gcflags=\"all=-N -l\" github.com/invrainbow/cryptopals");
-    strcpy_safe(world.settings.debug_binary_path, _countof(world.settings.debug_binary_path), "cryptopals.exe");
+    jumplist.init();
+
+    strcpy_safe(world.settings.build_command, _countof(world.settings.build_command), "go build --gcflags=\"all=-N -l\" github.com/invrainbow/delve_client_testing/21autogen");
+    strcpy_safe(world.settings.debug_binary_path, _countof(world.settings.debug_binary_path), "21autogen.exe");
 
     {
         SCOPED_MEM(&ui_mem);
