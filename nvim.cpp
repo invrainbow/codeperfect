@@ -692,13 +692,13 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
 
                 switch (event->notification.custom_move_cursor.screen_pos) {
                 case SCREEN_POS_TOP:
-                    y = view.y + min(view.h - 1, settings.scrolloff);
+                    y = view.y + min(view.h - 1, options.scrolloff);
                     break;
                 case SCREEN_POS_MIDDLE:
                     y = view.y + (view.h / 2);
                     break;
                 case SCREEN_POS_BOTTOM:
-                    y = view.y + relu_sub(view.h, 1 + settings.scrolloff);
+                    y = view.y + relu_sub(view.h, 1 + options.scrolloff);
                     break;
                 }
 
@@ -740,13 +740,13 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
 
                 switch (event->notification.custom_reveal_line.screen_pos) {
                 case SCREEN_POS_TOP:
-                    view.y = relu_sub(y, settings.scrolloff);
+                    view.y = relu_sub(y, options.scrolloff);
                     break;
                 case SCREEN_POS_MIDDLE:
                     view.y = relu_sub(y, view.h / 2);
                     break;
                 case SCREEN_POS_BOTTOM:
-                    view.y = relu_sub(y + settings.scrolloff + 1, view.h);
+                    view.y = relu_sub(y + options.scrolloff + 1, view.h);
                     break;
                 }
 

@@ -347,7 +347,6 @@ void _error(ccstr fmt, ...);
 #define strneqi(a, b, n) (strncmpi(a, b, n) == 0)
 #define print(fmt, ...) printf(fmt "\n", ##__VA_ARGS__)
 #define error(fmt, ...) _error("error: " fmt "\n", ##__VA_ARGS__)
-#define panic(err) throw Panic_Exception(err)
 #define mem0(ptr, n) memset(ptr, 0, n)
 #define ptr0(ptr) memset(ptr, 0, sizeof(*ptr))
 #define For(arr) for (auto &&it : arr)
@@ -361,3 +360,5 @@ bool str_starts_with(ccstr a, ccstr pre);
 
 extern s32 global_mem_allocated;
 extern const u64 MAX_U64;
+
+void panic(ccstr s);

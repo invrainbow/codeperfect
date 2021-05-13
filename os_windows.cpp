@@ -715,8 +715,8 @@ void *read_font_data_from_first_found(s32 *plen, ...) {
     return font_data;
 }
 
-Ask_User_Result ask_user_yes_no_cancel(void* parent_window, ccstr text, ccstr title) {
-    int ret = MessageBoxA((HWND)parent_window, text, title, MB_YESNOCANCEL | MB_ICONEXCLAMATION | MB_TOPMOST);
+Ask_User_Result ask_user_yes_no_cancel(ccstr text, ccstr title) {
+    int ret = MessageBoxA((HWND)get_native_window_handle(), text, title, MB_YESNOCANCEL | MB_ICONEXCLAMATION | MB_TOPMOST);
     switch (ret) {
     case IDYES: return ASKUSER_YES;
     case IDNO: return ASKUSER_NO;
@@ -725,8 +725,8 @@ Ask_User_Result ask_user_yes_no_cancel(void* parent_window, ccstr text, ccstr ti
     return ASKUSER_ERROR;
 }
 
-Ask_User_Result ask_user_yes_no(void* parent_window, ccstr text, ccstr title) {
-    int ret = MessageBoxA((HWND)parent_window, text, title, MB_YESNO | MB_ICONWARNING | MB_TOPMOST);
+Ask_User_Result ask_user_yes_no(ccstr text, ccstr title) {
+    int ret = MessageBoxA((HWND)get_native_window_handle(), text, title, MB_YESNO | MB_ICONWARNING | MB_TOPMOST);
     switch (ret) {
     case IDYES: return ASKUSER_YES;
     case IDNO: return ASKUSER_NO;
@@ -734,8 +734,8 @@ Ask_User_Result ask_user_yes_no(void* parent_window, ccstr text, ccstr title) {
     return ASKUSER_ERROR;
 }
 
-void tell_user(void* parent_window, ccstr text, ccstr title) {
-    MessageBoxA((HWND)parent_window, text, title, MB_OK | MB_ICONWARNING | MB_TOPMOST);
+void tell_user(ccstr text, ccstr title) {
+    MessageBoxA((HWND)get_native_window_handle(), text, title, MB_OK | MB_ICONWARNING | MB_TOPMOST);
 }
 
 #endif

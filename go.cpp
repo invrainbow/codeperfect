@@ -104,15 +104,14 @@ ccstr Index_Stream::readstr() {
     return s;
 }
 
-void Module_Resolver::init(ccstr current_module_filepath, ccstr _goroot, ccstr _gopath) {
+void Module_Resolver::init(ccstr current_module_filepath, ccstr _gomodcache) {
     ptr0(this);
 
     mem.init();
 
     SCOPED_MEM(&mem);
 
-    goroot = our_strcpy(_goroot);
-    gopath = our_strcpy(_gopath);
+    gomodcache = our_strcpy(_gomodcache);
 
     root_import_to_resolved = alloc_object(Node);
     root_resolved_to_import = alloc_object(Node);
@@ -141,14 +140,14 @@ void Module_Resolver::init(ccstr current_module_filepath, ccstr _goroot, ccstr _
             auto import_path = parts->at(0);
             auto version = parts->at(1);
             auto subpath = normalize_path_in_module_cache(our_sprintf("%s@%s", import_path, version));
-            auto path = path_join(gopath, "pkg/mod", subpath);
+            auto path = path_join(gomodcache, subpath);
             add_path(import_path, path);
         } else if (parts->len == 5) {
             auto import_path = parts->at(0);
             auto new_import_path = parts->at(3);
             auto version = parts->at(4);
             auto subpath = normalize_path_in_module_cache(our_sprintf("%s@%s", new_import_path, version));
-            auto path = path_join(gopath, "pkg/mod", subpath);
+            auto path = path_join(gomodcache, subpath);
             add_path(import_path, path);
         }
     } while (ch != '\0');
@@ -419,7 +418,7 @@ void Go_Indexer::background_thread() {
 
     {
         SCOPED_MEM(&thread_mem);
-        module_resolver.init(world.current_path, goroot, gopath);
+        module_resolver.init(world.current_path, gomodcache);
         package_lookup.init();
         package_queue.init();
         already_enqueued_packages.init();
@@ -609,7 +608,7 @@ void Go_Indexer::background_thread() {
             start_writing();
 
             module_resolver.cleanup();
-            module_resolver.init(world.current_path, goroot, gopath);
+            module_resolver.init(world.current_path, gomodcache);
             invalidate_packages_with_outdated_hash();
         }
 
@@ -1129,6 +1128,8 @@ Gotype *Go_Indexer::new_primitive_type(ccstr name) {
 }
 
 Go_Package *Go_Indexer::find_package_in_index(ccstr import_path) {
+    if (import_path == NULL) return NULL;
+
     bool found = false;
     auto ret = package_lookup.get(import_path, &found);
     return found ? ret : NULL;
@@ -2366,15 +2367,24 @@ void Go_Indexer::init() {
         strcpy_safe(current_exe_path, _countof(current_exe_path), path);
     }
 
-    gohelper_proc.dir = world.current_path;
+    gohelper_proc.init();
+    gohelper_proc.dir = path_join(current_exe_path, "helper");
     gohelper_proc.use_stdin = true;
-    gohelper_proc.run(path_join(current_exe_path, "helper", "helper.exe"));
+    gohelper_proc.run("go run helper.go");
 
     {
         auto resp = gohelper_run(GH_OP_GET_GO_ENV_VARS, NULL);
-        our_assert(streq(resp, "true"), "unable to get GOPATH and GOROOT");
+        our_assert(streq(resp, "true"), "unable to get GOPATH, GOROOT, and GOMODCACHE");
         gopath = our_strcpy(gohelper_readline());
         goroot = our_strcpy(gohelper_readline());
+        gomodcache = our_strcpy(gohelper_readline());
+
+        Process proc;
+    }
+
+    {
+        auto resp = gohelper_run(GH_OP_SET_DIRECTORY, world.current_path, NULL);
+        our_assert(streq(resp, "true"), "unable to set directory");
     }
 
     wksp_watch.init(world.current_path);

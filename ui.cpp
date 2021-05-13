@@ -1376,27 +1376,67 @@ void UI::draw_everything() {
         world.ui.menubar_height = ImGui::GetWindowSize().y;
 
         if (ImGui::BeginMenu("File")) {
-            if (ImGui::MenuItem("Open file...", "Ctrl+P")) {
-                if (!world.wnd_open_file.show) {
-                    world.wnd_open_file.show = true;
-                    init_open_file();
-                }
+            if (ImGui::MenuItem("New File", "Ctrl+N")) {
+                world.get_current_pane()->open_empty_editor();
             }
+
             ImGui::Separator();
-            if (ImGui::MenuItem("Exit...", "Alt+F4")) {
+            if (ImGui::MenuItem("Exit", "Alt+F4")) {
                 glfwSetWindowShouldClose(world.window, true);
             }
             ImGui::EndMenu();
         }
 
+        if (ImGui::BeginMenu("Edit")) {
+            if (ImGui::MenuItem("Find Everywhere...", "Ctrl+Shift+F")) {
+                // TODO
+            }
+            if (ImGui::MenuItem("Find and Replace Everywhere...", "Ctrl+Shift+H")) {
+                // TODO
+            }
+            ImGui::EndMenu();
+        }
+
+        if (ImGui::BeginMenu("View")) {
+            ImGui::MenuItem("File Explorer", "Ctrl+Shift+E", &world.file_explorer.show);
+            ImGui::MenuItem("Error List", NULL, &world.error_list.show);
+            ImGui::EndMenu();
+        }
+
+        if (ImGui::BeginMenu("Go")) {
+            if (ImGui::MenuItem("Go to File...", "Ctrl+P")) {
+                if (!world.wnd_open_file.show) {
+                    world.wnd_open_file.show = true;
+                    init_open_file();
+                }
+            }
+            if (ImGui::MenuItem("Go to Next Item", "Alt+]")) {
+                go_to_next_error(1);
+            }
+            if (ImGui::MenuItem("Go to Previous Item", "Alt+[")) {
+                go_to_next_error(-1);
+            }
+            ImGui::EndMenu();
+        }
+
         if (ImGui::BeginMenu("Project")) {
+            if (ImGui::MenuItem("Add New File...")) {
+                // TODO
+            }
+
+            if (ImGui::MenuItem("Add New Folder...")) {
+                // TODO
+            }
+
+            ImGui::Separator();
+
             if (ImGui::MenuItem("Build", "Ctrl+Shift+B")) {
                 kick_off_build();
             }
 
             ImGui::Separator();
 
-            if (ImGui::MenuItem("Project Settings")) {
+            if (ImGui::MenuItem("Project Settings...")) {
                 world.windows_open.settings = true;
             }
 
@@ -1413,7 +1453,7 @@ void UI::draw_everything() {
                 return false;
             };
 
-            if (ImGui::MenuItem("Run", "F5", false, can_run())) {
+            if (ImGui::MenuItem("Start Debugging", "F5", false, can_run())) {
                 switch (world.dbg.state_flag) {
                 case DLV_STATE_PAUSED:
                     world.dbg.push_call(DLVC_CONTINUE_RUNNING);
@@ -1423,6 +1463,19 @@ void UI::draw_everything() {
                     world.dbg.push_call(DLVC_START);
                     break;
                 }
+            }
+
+            auto can_debug_test_under_cursor = [&]() -> bool {
+                auto editor = world.get_current_editor();
+                if (editor == NULL) return false;
+
+                if (!editor->is_go_file) return false;
+                if (editor->tree == NULL) return false;
+                return true;
+            };
+
+            if (ImGui::MenuItem("Debug Test Under Cursor", "F6", false, can_debug_test_under_cursor())) {
+                // TODO
             }
 
             if (ImGui::MenuItem("Break All", NULL, false, world.dbg.state_flag == DLV_STATE_RUNNING)) {
@@ -1470,17 +1523,20 @@ void UI::draw_everything() {
             ImGui::EndMenu();
         }
 
-        if (ImGui::BeginMenu("Developer")) {
-            ImGui::MenuItem("ImGui demo", NULL, &world.windows_open.im_demo);
-            ImGui::MenuItem("ImGui metrics", NULL, &world.windows_open.im_metrics);
-            ImGui::MenuItem("Editor AST viewer", NULL, &world.wnd_editor_tree.show);
-            ImGui::MenuItem("Editor toplevels viewer", NULL, &world.wnd_editor_toplevels.show);
-            ImGui::MenuItem("Roll Your Own IDE Construction Set", NULL, &world.wnd_style_editor.show);
-            ImGui::MenuItem("Replace line numbers with bytecounts", NULL, &world.replace_line_numbers_with_bytecounts);
-            ImGui::EndMenu();
-        }
+        if (ImGui::BeginMenu("Tools")) {
+            if (io.KeyAlt) {
+                if (ImGui::BeginMenu("Developer")) {
+                    ImGui::MenuItem("ImGui demo", NULL, &world.windows_open.im_demo);
+                    ImGui::MenuItem("ImGui metrics", NULL, &world.windows_open.im_metrics);
+                    ImGui::MenuItem("Editor AST viewer", NULL, &world.wnd_editor_tree.show);
+                    ImGui::MenuItem("Editor toplevels viewer", NULL, &world.wnd_editor_toplevels.show);
+                    ImGui::MenuItem("Roll Your Own IDE Construction Set", NULL, &world.wnd_style_editor.show);
+                    ImGui::MenuItem("Replace line numbers with bytecounts", NULL, &world.replace_line_numbers_with_bytecounts);
+                    ImGui::EndMenu();
+                }
+                ImGui::Separator();
+            }
 
-        if (ImGui::BeginMenu("Go")) {
             if (ImGui::MenuItem("Reload go.mod")) {
                 atomic_set_flag(
                     &world.indexer.flag_lock,
@@ -1495,10 +1551,30 @@ void UI::draw_everything() {
                 );
             }
 
+            ImGui::Separator();
+
+            if (ImGui::MenuItem("Options...")) {
+                if (world.wnd_options.show) {
+                    ImGui::Begin("Options");
+                    ImGui::SetWindowFocus();
+                    ImGui::End();
+                } else {
+                    world.wnd_options.show = true;
+                }
+            }
+
             ImGui::EndMenu();
         }
 
         ImGui::EndMainMenuBar();
+    }
+
+    if (world.wnd_options.show) {
+        ImGui::Begin("Options", &world.wnd_options.show, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking);
+
+        ImGui::SliderInt("Scroll offset", &options.scrolloff, 0, 10);
+
+        ImGui::End();
     }
 
     if (world.error_list.show) {
@@ -1535,8 +1611,10 @@ void UI::draw_everything() {
 
                 ImGui::PopFont();
             }
-        } else {
+        } else if (world.build.started) {
             ImGui::Text("Building...");
+        } else {
+            ImGui::Text("No build in progress.");
         }
 
         ImGui::End();
@@ -1575,7 +1653,7 @@ void UI::draw_everything() {
 
     if (world.file_explorer.show) {
         ImGui::SetNextWindowDockID(dock_sidebar_id, ImGuiCond_Once);
-        ImGui::Begin("File Explorer");
+        ImGui::Begin("File Explorer", &world.file_explorer.show);
 
         static struct {
             bool is_adding_folder;
@@ -1867,7 +1945,6 @@ void UI::draw_everything() {
         ImGui::SliderFloat("autocomplete_item_padding_x", &settings.autocomplete_item_padding_x, 0.0, 20.0f, "%.0f");
         ImGui::SliderFloat("autocomplete_item_padding_y", &settings.autocomplete_item_padding_y, 0.0, 20.0f, "%.0f");
         ImGui::SliderFloat("tabs_offset", &settings.tabs_offset, 0.0, 20.0f, "%.0f");
-        ImGui::SliderInt("scrolloff", &settings.scrolloff, 0, 20);
 
         ImGui::End();
     }

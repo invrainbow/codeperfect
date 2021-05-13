@@ -144,3 +144,4 @@ struct Pane {
 bool check_file_dimensions(ccstr path);
 
 void go_to_error(int index);
+void go_to_next_error(int direction);

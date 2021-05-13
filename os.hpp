@@ -289,6 +289,6 @@ enum Ask_User_Result {
     ASKUSER_CANCEL,
 };
 
-Ask_User_Result ask_user_yes_no_cancel(void* parent_window, ccstr text, ccstr title);
-Ask_User_Result ask_user_yes_no(void* parent_window, ccstr text, ccstr title);
-void tell_user(void* parent_window, ccstr text, ccstr title);
+Ask_User_Result ask_user_yes_no_cancel(ccstr text, ccstr title);
+Ask_User_Result ask_user_yes_no(ccstr text, ccstr title);
+void tell_user(ccstr text, ccstr title);

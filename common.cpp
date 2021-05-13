@@ -1,4 +1,6 @@
 #include "common.hpp"
+#include "os.hpp"
+#include "world.hpp"
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -96,3 +98,8 @@ bool boxf::contains(vec2f point) {
 }
 
 s32 global_mem_allocated = 0;
+
+void panic(ccstr s) {
+	tell_user(s, "An error has occurred");
+	throw Panic_Exception(s); // TODO: replace with exit(0)
+}

@@ -863,15 +863,14 @@ struct Module_Resolver {
         ccstr value; // only leaves have values
     };
 
-    ccstr goroot;
-    ccstr gopath;
+    ccstr gomodcache;
 
     Pool mem;
     Node *root_import_to_resolved;
     Node *root_resolved_to_import;
     ccstr module_path;
 
-    void init(ccstr current_module_filepath, ccstr _goroot, ccstr _gopath);
+    void init(ccstr current_module_filepath, ccstr _gomodcache);
     void cleanup();
 
     Node *goto_child(Node *node, ccstr name, bool create_if_not_found) {
@@ -1039,6 +1038,7 @@ struct Ghetto_Parser {
 
 enum Gohelper_Op {
     GH_OP_INVALID = 0,
+    GH_OP_SET_DIRECTORY,
     GH_OP_CHECK_INCLUDED_IN_BUILD,
     GH_OP_RESOLVE_IMPORT_PATH,
     GH_OP_TEST,
@@ -1056,6 +1056,7 @@ enum {
 struct Go_Indexer {
     ccstr goroot;
     ccstr gopath;
+    ccstr gomodcache;
 
     Pool mem;        // mem that exists for lifetime of Go_Indexer
     Pool final_mem;  // memory that holds the final value of this->index`

@@ -200,6 +200,7 @@ struct World {
 
         u64 id;
         bool done;
+        bool started;
         List<Build_Error> errors;
         u64 nvim_namespace_id;
         int current_error;
@@ -299,6 +300,10 @@ struct World {
 
     struct {
         bool show;
+    } wnd_options;
+
+    struct {
+        bool show;
     } wnd_editor_toplevels;
 
     struct {
@@ -374,4 +379,4 @@ void kick_off_build();
 void prompt_delete_all_breakpoints();
 void filter_files();
 void run_proc_the_normal_way(Process* proc, ccstr cmd);
-void* get_native_window_handle(GLFWwindow *window);
+void* get_native_window_handle();

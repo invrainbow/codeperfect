@@ -131,7 +131,7 @@ void World::init_workspace() {
     panes.init(LIST_FIXED, _countof(_panes), _panes);
 
 #if 1
-    strcpy_safe(current_path, _countof(current_path), normalize_path_sep("c:/users/brandon/delve_client_testing"));
+    strcpy_safe(current_path, _countof(current_path), normalize_path_sep("c:/users/brandon/ide/payments"));
 #else
     Select_File_Opts opts = {0};
     opts.buf = current_path;
@@ -210,8 +210,8 @@ void World::init() {
 
     jumplist.init();
 
-    strcpy_safe(world.settings.build_command, _countof(world.settings.build_command), "go build --gcflags=\"all=-N -l\" github.com/invrainbow/delve_client_testing/21autogen");
-    strcpy_safe(world.settings.debug_binary_path, _countof(world.settings.debug_binary_path), "21autogen.exe");
+    strcpy_safe(world.settings.build_command, _countof(world.settings.build_command), "go build --gcflags=\"all=-N -l\" github.com/invrainbow/ide/payments");
+    strcpy_safe(world.settings.debug_binary_path, _countof(world.settings.debug_binary_path), "payments.exe");
 
     {
         SCOPED_MEM(&ui_mem);
@@ -355,6 +355,7 @@ void kick_off_build() {
         SCOPED_MEM(&b.mem);
 
         b.id = world.next_build_id++;
+        b.started = true;
 
         {
             SCOPED_LOCK(&indexer.gohelper_lock);
@@ -373,6 +374,7 @@ void kick_off_build() {
             auto resp = indexer.gohelper_run(GH_OP_GET_BUILD_STATUS, NULL);
             if (indexer.gohelper_returned_error) {
                 b.done = true;
+                b.started = false;
                 b.build_itself_had_error = true;
                 return;
             }
@@ -397,6 +399,7 @@ void kick_off_build() {
 
             b.current_error = -1;
             b.done = true;
+            b.started = false;
             b.creating_extmarks = true;
             world.error_list.show = true;
 
@@ -415,15 +418,14 @@ void kick_off_build() {
     world.build.thread = create_thread(do_build, NULL);
 }
 
-void* get_native_window_handle(GLFWwindow *window) {
+void* get_native_window_handle() {
 #if OS_WIN
-    return (void*)glfwGetWin32Window(window);
+    return (void*)glfwGetWin32Window(world.window);
 #endif
 }
 
 void prompt_delete_all_breakpoints() {
     auto res = ask_user_yes_no(
-        get_native_window_handle(world.window),
         "Are you sure you want to delete all breakpoints?",
         NULL
     );

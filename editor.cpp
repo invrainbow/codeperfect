@@ -38,10 +38,10 @@ void Editor::raw_move_cursor(cur2 c) {
         view.x = vx;
     if (vx >= view.x + view.w)
        view.x = vx - view.w + 1;
-    if (relu_sub(cur.y, settings.scrolloff) < view.y)
-        view.y = relu_sub(cur.y, settings.scrolloff);
-    if (cur.y + settings.scrolloff >= view.y + view.h)
-        view.y = cur.y + settings.scrolloff - view.h + 1;
+    if (relu_sub(cur.y, options.scrolloff) < view.y)
+        view.y = relu_sub(cur.y, options.scrolloff);
+    if (cur.y + options.scrolloff >= view.y + view.h)
+        view.y = cur.y + options.scrolloff - view.h + 1;
 }
 
 void Editor::update_lines(int firstline, int lastline, List<uchar*> *new_lines, List<s32> *line_lengths) {
@@ -234,9 +234,9 @@ bool Editor::load_file(ccstr new_filepath) {
         is_untitled = true;
         uchar tmp = 0;
         buf.insert_line(0, &tmp, 0);
+        buf.dirty = false;
     }
 
-    // TODO: when untitled file is saved, set is_go_file
     is_go_file = (new_filepath != NULL && str_ends_with(new_filepath, ".go"));
 
     if (world.use_nvim) {
@@ -445,8 +445,6 @@ void Editor::cleanup() {
         }
         nv.end_message();
     }
-
-    // TODO: delete extmarks (or do they autodelete when buf is deleted?)
 
     buf.cleanup();
     mem.cleanup();
@@ -944,7 +942,10 @@ void Editor::handle_save(bool about_to_close) {
         disable_file_watcher_until = current_time_in_nanoseconds() + (2 * 1000000000);
 
         FILE* f = fopen(filepath, "w");
-        if (f == NULL) return; // TODO: display error
+        if (f == NULL) {
+            tell_user("Unable to save file.", "Error");
+            return;
+        }
         defer { fclose(f); };
 
         buf.write(f);
@@ -987,4 +988,20 @@ void go_to_error(int index) {
     nv.writer.write_int(error.nvim_extmark);
     nv.writer.write_map(0);
     nv.end_message();
+}
+
+void go_to_next_error(int direction) {
+    auto &b = world.build;
+    if (!b.ready() || b.errors.len == 0) return;
+
+    auto old = b.current_error;
+    do {
+        b.current_error += direction;
+        if (b.current_error < 0)
+            b.current_error = b.errors.len - 1;
+        if (b.current_error >= b.errors.len)
+            b.current_error = 0;
+    } while (b.current_error != old && !b.errors[b.current_error].valid);
+
+    go_to_error(b.current_error);
 }

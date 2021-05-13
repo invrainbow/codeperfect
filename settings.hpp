@@ -1,5 +1,7 @@
 #pragma once
 
+// this is a stupid name but i'm too lazy to refactor
+// it should be called "constants"
 struct Settings {
     // styling
     float status_padding_x = 6;
@@ -14,8 +16,6 @@ struct Settings {
 
     float tabs_offset = 50;
 
-    int scrolloff = 2;
-
     float parameter_hint_margin_y = 4;
     float parameter_hint_padding_x = 2;
     float parameter_hint_padding_y = 2;
@@ -24,4 +24,10 @@ struct Settings {
     float line_height = 1.2;
 };
 
+struct Options {
+	int scrolloff = 2;
+	// ???
+};
+
 extern Settings settings;
+extern Options options;

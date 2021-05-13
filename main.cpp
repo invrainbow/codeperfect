@@ -714,21 +714,7 @@ int main() {
                 switch (key) {
                 case GLFW_KEY_LEFT_BRACKET:
                 case GLFW_KEY_RIGHT_BRACKET:
-                    {
-                        auto &b = world.build;
-                        if (!b.ready() || b.errors.len == 0) break;
-
-                        auto old = b.current_error;
-                        do {
-                            b.current_error += (key == GLFW_KEY_LEFT_BRACKET ? -1 : 1);
-                            if (b.current_error < 0)
-                                b.current_error = b.errors.len - 1;
-                            if (b.current_error >= b.errors.len)
-                                b.current_error = 0;
-                        } while (b.current_error != old && !b.errors[b.current_error].valid);
-
-                        go_to_error(b.current_error);
-                    }
+                    go_to_next_error(key == GLFW_KEY_LEFT_BRACKET ? -1 : 1);
                     break;
                 }
                 break;
@@ -774,17 +760,17 @@ int main() {
                         if (editor == NULL) break;
                         if (editor->view.y > 0) {
                             editor->view.y--;
-                            if (editor->cur.y + settings.scrolloff >= editor->view.y + editor->view.h)
-                                editor->move_cursor(new_cur2(editor->cur.x, editor->view.y + editor->view.h - 1 - settings.scrolloff));
+                            if (editor->cur.y + options.scrolloff >= editor->view.y + editor->view.h)
+                                editor->move_cursor(new_cur2(editor->cur.x, editor->view.y + editor->view.h - 1 - options.scrolloff));
                         }
                         break;
                     case GLFW_KEY_E:
                         if (editor == NULL) break;
                         if (world.nvim.mode == VI_INSERT) break;
-                        if (relu_sub(editor->cur.y, settings.scrolloff) < editor->view.y + 1) {
+                        if (relu_sub(editor->cur.y, options.scrolloff) < editor->view.y + 1) {
                             if (editor->view.y + 1 < editor->buf.lines.len) {
                                 editor->view.y++;
-                                editor->move_cursor(new_cur2(editor->cur.x, editor->view.y + settings.scrolloff));
+                                editor->move_cursor(new_cur2(editor->cur.x, editor->view.y + options.scrolloff));
                             }
                         } else {
                             editor->view.y++;
@@ -925,7 +911,6 @@ int main() {
                             } else {
                                 if (editor->buf.dirty) {
                                     auto result = ask_user_yes_no_cancel(
-                                        get_native_window_handle(world.window),
                                         our_sprintf("Do you want to save your changes to %s?", our_basename(editor->filepath)),
                                         "Your changes will be lost if you don't."
                                     );
