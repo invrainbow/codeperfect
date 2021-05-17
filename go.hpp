@@ -1040,12 +1040,22 @@ enum Gohelper_Op {
     GH_OP_INVALID = 0,
     GH_OP_SET_DIRECTORY,
     GH_OP_CHECK_INCLUDED_IN_BUILD,
-    GH_OP_RESOLVE_IMPORT_PATH,
-    GH_OP_TEST,
     GH_OP_START_BUILD,
     GH_OP_GET_BUILD_STATUS,
     GH_OP_STOP_BUILD,
     GH_OP_GET_GO_ENV_VARS,
+};
+
+struct Gohelper {
+    Process proc;
+    bool returned_error;
+    Lock lock;
+
+    void init(ccstr cmd, ccstr path);
+    void cleanup();
+    ccstr readline();
+    int readint();
+    ccstr run(Gohelper_Op op, ...);
 };
 
 enum {
@@ -1062,14 +1072,14 @@ struct Go_Indexer {
     Pool final_mem;  // memory that holds the final value of this->index`
     Pool ui_mem;     // memory used by UI when it calls jump to definition, etc.
 
+    Gohelper gohelper_static;
+    Gohelper gohelper_dynamic;
+
     Pool scoped_table_mem;
 
     Go_Index index;
 
     char current_exe_path[MAX_PATH];
-    Process gohelper_proc;
-    bool gohelper_returned_error;
-    Lock gohelper_lock;
 
     Thread_Handle bgthread;
 
@@ -1108,7 +1118,6 @@ struct Go_Indexer {
     void process_package(ccstr import_path);
 
     bool is_file_included_in_build(ccstr path);
-    ccstr run_gohelper_command(Gohelper_Op op, ...);
     List<ccstr>* list_source_files(ccstr dirpath, bool include_tests);
     ccstr get_package_name(ccstr path);
     ccstr get_package_path(ccstr import_path);
@@ -1155,9 +1164,7 @@ struct Go_Indexer {
     u64 hash_file(ccstr filepath);
     void start_writing();
     void stop_writing();
-    ccstr gohelper_readline();
-    int gohelper_readint();
-    ccstr gohelper_run(Gohelper_Op op, ...);
+
     bool truncate_parsed_file(Parsed_File *pf, cur2 end_pos, char char_to_append);
 };
 

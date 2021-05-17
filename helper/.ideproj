@@ -1,0 +1,4 @@
+build_command
+go build --gcflags="all=-N -l" github.com/invrainbow/ide/helper/static_helper
+debug_binary_path
+static_helper.exe

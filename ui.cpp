@@ -1277,6 +1277,7 @@ struct Debugger_UI {
             ImGui::End();
         }
 
+        /*
         {
             ImGui::SetNextWindowDockID(ui->dock_bottom_right_id, ImGuiCond_Once);
             ImGui::Begin("Global Variables");
@@ -1285,8 +1286,31 @@ struct Debugger_UI {
             ImGui::PopFont();
             ImGui::End();
         }
+        */
     }
 };
+
+void open_add_file_or_folder(bool folder) {
+    File_Tree_Node *node = NULL;
+    auto &wnd = world.wnd_add_file_or_folder;
+
+    auto is_root = [&]() {
+        if (world.file_explorer.selection == -1) return true;
+
+        node = get_file_tree_node_from_index(world.file_explorer.selection);
+        if (node->is_directory) return false;
+
+        node = node->parent;
+        return (node->parent == NULL);
+    };
+
+    wnd.location_is_root = is_root();
+    if (!wnd.location_is_root)
+        strcpy_safe(wnd.location, _countof(wnd.location), file_tree_node_to_path(node));
+
+    wnd.folder = folder;
+    wnd.show = true;
+}
 
 void UI::draw_everything() {
     hover.id_last_frame = hover.id;
@@ -1380,6 +1404,23 @@ void UI::draw_everything() {
                 world.get_current_pane()->open_empty_editor();
             }
 
+            {
+                auto editor = world.get_current_editor();
+                bool clicked = false;
+
+                if (editor != NULL) {
+                    if (editor->is_untitled)
+                        clicked = ImGui::MenuItem("Save untitled file...###save_file", "Ctrl+S");
+                    else
+                        clicked = ImGui::MenuItem(our_sprintf("Save %s...###save_file", our_basename(editor->filepath)), "Ctrl+S");
+                } else {
+                    ImGui::MenuItem("Save file...###save_file", "Ctrl+S", false, false);
+                }
+
+                if (clicked && editor != NULL)
+                    editor->handle_save();
+            }
+
             ImGui::Separator();
             if (ImGui::MenuItem("Exit", "Alt+F4")) {
                 glfwSetWindowShouldClose(world.window, true);
@@ -1421,11 +1462,11 @@ void UI::draw_everything() {
 
         if (ImGui::BeginMenu("Project")) {
             if (ImGui::MenuItem("Add New File...")) {
-                // TODO
+                open_add_file_or_folder(false);
             }
 
             if (ImGui::MenuItem("Add New Folder...")) {
-                // TODO
+                open_add_file_or_folder(true);
             }
 
             ImGui::Separator();
@@ -1437,7 +1478,10 @@ void UI::draw_everything() {
             ImGui::Separator();
 
             if (ImGui::MenuItem("Project Settings...")) {
-                world.windows_open.settings = true;
+                auto &wnd = world.wnd_project_settings;
+                ptr0(&wnd.tmp);
+                wnd.tmp.copy(&project_settings);
+                wnd.show = true;
             }
 
             ImGui::EndMenu();
@@ -1553,6 +1597,7 @@ void UI::draw_everything() {
 
             ImGui::Separator();
 
+            /*
             if (ImGui::MenuItem("Options...")) {
                 if (world.wnd_options.show) {
                     ImGui::Begin("Options");
@@ -1562,6 +1607,7 @@ void UI::draw_everything() {
                     world.wnd_options.show = true;
                 }
             }
+            */
 
             ImGui::EndMenu();
         }
@@ -1569,6 +1615,7 @@ void UI::draw_everything() {
         ImGui::EndMainMenuBar();
     }
 
+    /*
     if (world.wnd_options.show) {
         ImGui::Begin("Options", &world.wnd_options.show, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking);
 
@@ -1576,6 +1623,7 @@ void UI::draw_everything() {
 
         ImGui::End();
     }
+    */
 
     if (world.error_list.show) {
         ImGui::SetNextWindowDockID(dock_bottom_id, ImGuiCond_Once);
@@ -1651,43 +1699,59 @@ void UI::draw_everything() {
         ImGui::End();
     }
 
+    if (world.wnd_add_file_or_folder.show) {
+        auto &wnd = world.wnd_add_file_or_folder;
+
+        auto label = our_sprintf(
+            "Add %s to %s",
+            wnd.folder ? "folder" : "file",
+            wnd.location_is_root ? "workspace root" : wnd.location
+        );
+
+        ImGui::SetNextWindowSize(ImVec2(450, -1));
+        ImGui::Begin(label, &world.wnd_add_file_or_folder.show, ImGuiWindowFlags_AlwaysAutoResize);
+
+        ImGui::Text("Name:");
+
+        if (ImGui::IsWindowAppearing())
+            ImGui::SetKeyboardFocusHere();
+
+        ImGui::InputText("##add_file", wnd.name, IM_ARRAYSIZE(wnd.name));
+
+        if (ImGui::Button("Add")) {
+            world.wnd_add_file_or_folder.show = false;
+
+            if (strlen(wnd.name) > 0) {
+                auto dest = wnd.location_is_root ? world.current_path : path_join(world.current_path, wnd.location);
+                auto path = path_join(dest, wnd.name);
+
+                if (wnd.folder) {
+                    CreateDirectoryA(path, NULL);
+                } else {
+                    // need to share, or else we have race condition
+                    // with fsevent handler in
+                    // Go_Indexer::background_thread() trying to read
+                    auto h = CreateFileA(path, 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+                    if (h != INVALID_HANDLE_VALUE) CloseHandle(h);
+                }
+
+                world.fill_file_tree();
+            }
+        }
+
+        ImGui::SameLine();
+
+        if (ImGui::Button("Cancel")) {
+            ImGui::CloseCurrentPopup();
+        }
+
+        ImGui::End();
+    }
+
+
     if (world.file_explorer.show) {
         ImGui::SetNextWindowDockID(dock_sidebar_id, ImGuiCond_Once);
         ImGui::Begin("File Explorer", &world.file_explorer.show);
-
-        static struct {
-            bool is_adding_folder;
-            bool location_is_root;
-            char location[256];
-            char name[256];
-        } state = {0};
-
-        /*
-        auto open_add_file_or_folder = [&](bool folder) {
-            File_Tree_Node *node = NULL;
-
-            auto is_root = [&]() {
-                if (world.file_explorer.selection == -1) return true;
-
-                node = get_file_tree_node_from_index(world.file_explorer.selection);
-                if (node->is_directory) return false;
-
-                node = node->parent;
-                return (node->parent == NULL);
-            };
-
-            state.location_is_root = is_root();
-            if (!state.location_is_root) {
-                strcpy_safe(
-                    state.location,
-                    _countof(state.location),
-                    file_tree_node_to_path(node)
-                );
-            }
-
-            state.is_adding_folder = folder;
-            ImGui::OpenPopup("###add_file_or_folder_popup");
-        };
 
         if (ImGui::Button("Add file")) {
             open_add_file_or_folder(false);
@@ -1700,54 +1764,11 @@ void UI::draw_everything() {
         }
 
         ImGui::SameLine();
-        */
 
         if (ImGui::Button("Refresh")) {
             // TODO: probably make this async task
             world.fill_file_tree();
         }
-
-        /*
-        {
-            auto label = our_sprintf(
-                "Add %s to %s###add_file_or_folder_popup",
-                state.is_adding_folder ? "folder" : "file",
-                state.location_is_root ? "workspace root" : state.location
-            );
-
-            ImGui::SetNextWindowSize(ImVec2(450, -1));
-            if (ImGui::BeginPopupModal(label, NULL, ImGuiWindowFlags_NoResize)) {
-                ImGui::Text("Name:");
-                ImGui::InputText("##add_file", state.name, IM_ARRAYSIZE(state.name));
-
-                if (ImGui::Button("Add")) {
-                    world.wnd_add_file_or_folder.show = false;
-
-                    if (strlen(state.name) > 0) {
-                        auto dest = state.location_is_root ? world.current_path : path_join(world.current_path, state.location);
-                        auto path = path_join(dest, state.name);
-
-                        if (state.is_adding_folder) {
-                            CreateDirectoryA(path, NULL);
-                        } else {
-                            // need to share, or else we have race condition
-                            // with fsevent handler in
-                            // Go_Indexer::background_thread() trying to read
-                            auto h = CreateFileA(path, 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
-                            if (h != INVALID_HANDLE_VALUE) CloseHandle(h);
-                        }
-
-                        world.fill_file_tree();
-                    }
-                }
-                ImGui::SameLine();
-                if (ImGui::Button("Cancel")) {
-                    ImGui::CloseCurrentPopup();
-                }
-                ImGui::EndPopup();
-            }
-        }
-        */
 
         ImGui::Separator();
 
@@ -1761,9 +1782,13 @@ void UI::draw_everything() {
                 auto it = *stack->last();
                 stack->len--;
 
-                auto flags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+                auto flags = ImGuiTreeNodeFlags_DefaultOpen
+                    | ImGuiTreeNodeFlags_OpenOnArrow
+                    | ImGuiTreeNodeFlags_OpenOnDoubleClick
+                    // | ImGuiTreeNodeFlags_SpanAvailWidth
+                    | ImGuiTreeNodeFlags_NoTreePushOnOpen;
                 if (!it->is_directory)
-                    flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_Bullet;
+                    flags |= ImGuiTreeNodeFlags_Leaf; // | ImGuiTreeNodeFlags_Bullet;
                 if (world.file_explorer.selection == i)
                     flags |= ImGuiTreeNodeFlags_Selected;
 
@@ -1772,8 +1797,9 @@ void UI::draw_everything() {
                 for (u32 j = 0; j < it->depth; j++) ImGui::Indent();
 
                 bool open = false;
-                if (ImGui::TreeNodeEx(it, flags, "%s%s", it->name, it->is_directory ? "/" : "") && it->is_directory)
-                    open = true;
+                if (ImGui::TreeNodeEx(it, flags, "%s%s", it->name, it->is_directory ? "/" : ""))
+                    if (it->is_directory)
+                        open = true;
 
                 for (u32 j = 0; j < it->depth; j++) ImGui::Unindent();
 
@@ -1801,11 +1827,30 @@ void UI::draw_everything() {
         ImGui::End();
     }
 
-    if (world.windows_open.settings) {
-        ImGui::Begin("Project Settings", &world.windows_open.settings, ImGuiWindowFlags_AlwaysAutoResize);
+    if (world.wnd_project_settings.show) {
+        auto &wnd = world.wnd_project_settings;
 
-        ImGui::InputText("Build command", world.settings.build_command, _countof(world.settings.build_command));
-        ImGui::InputText("Debug binary path", world.settings.debug_binary_path, _countof(world.settings.debug_binary_path));
+        ImGui::Begin("Project Settings", &wnd.show, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking);
+
+        ImGui::Text("Build command");
+        ImGui::InputText("##build_command", wnd.tmp.build_command, _countof(wnd.tmp.build_command));
+
+        ImGui::Text("Debug binary path");
+        ImGui::InputText("##debug_binary_path", wnd.tmp.debug_binary_path, _countof(wnd.tmp.debug_binary_path));
+
+        ImGui::NewLine();
+
+        if (ImGui::Button("Save")) {
+            project_settings.copy(&wnd.tmp);
+            project_settings.write(path_join(world.current_path, ".ideproj"));
+            world.wnd_project_settings.show = false;
+        }
+
+        ImGui::SameLine();
+
+        if (ImGui::Button("Cancel")) {
+            world.wnd_project_settings.show = false;
+        }
 
         ImGui::End();
     }
@@ -2366,7 +2411,7 @@ void UI::draw_everything() {
 
                         uchar uch = line->at(x);
                         if (uch == '\t') {
-                            auto chars = TAB_SIZE - ((vx - view.x) % TAB_SIZE);
+                            auto chars = options.tabsize - ((vx - view.x) % options.tabsize);
                             cur_pos.x += font->width * chars;
                             vx += chars;
                         } else {

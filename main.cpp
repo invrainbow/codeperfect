@@ -281,8 +281,8 @@ int main() {
     style.ItemSpacing = ImVec2(7, 3);
     style.ItemInnerSpacing = ImVec2(3, 3);
     style.TouchExtraPadding = ImVec2(0, 0);
-    style.IndentSpacing = 8;
-    style.ScrollbarSize = 8;
+    style.IndentSpacing = 21;
+    style.ScrollbarSize = 11;
     style.GrabMinSize = 8;
 
     style.WindowRounding = 3;
@@ -1170,7 +1170,7 @@ int main() {
                 } else {
                     ed->type_char_in_insert_mode(ch);
                 }
-            } else if (ch != ':') {
+            } else { // if (world.nvim.mode == VI_REPLACE || ch != ':') {
                 if (ch == '<') {
                     send_nvim_keys("<LT>");
                 } else {

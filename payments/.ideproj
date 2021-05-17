@@ -1,0 +1,4 @@
+build_command
+go build --gcflags="all=-N -l" github.com/invrainbow/ide/payments
+debug_binary_path
+payments.exe

@@ -7,7 +7,7 @@
 #include "editor.hpp"
 #include "meow_hash.hpp"
 
-#define GO_DEBUG 0
+#define GO_DEBUG 1
 
 #if GO_DEBUG
 #define go_print(fmt, ...) print("[go] " fmt, ##__VA_ARGS__)
@@ -322,6 +322,60 @@ Go_File *get_ready_file_in_package(Go_Package *pkg, ccstr filename) {
 
     return file;
 }
+
+ccstr Gohelper::readline() {
+    auto ret = alloc_list<char>();
+    char ch;
+    while (true) {
+        our_assert(proc.read1(&ch), "gohelper crashed, we can't do anything anymore");
+        if (ch == '\n') break;
+        ret->append(ch);
+    }
+    ret->append('\0');
+    return ret->items;
+}
+
+int Gohelper::readint() {
+    return atoi(readline());
+}
+
+ccstr Gohelper::run(Gohelper_Op op, ...) {
+    va_list vl;
+    va_start(vl, op);
+
+    proc.writestr(our_sprintf("%d", op));
+    proc.write1('\n');
+
+    ccstr param = NULL;
+    while ((param = va_arg(vl, ccstr)) != NULL) {
+        proc.writestr(param);
+        proc.write1('\n');
+    }
+
+    auto read_line = [&]() -> ccstr {
+        auto ret = alloc_list<char>();
+        char ch;
+        while (true) {
+            our_assert(proc.read1(&ch), "gohelper crashed, we can't do anything anymore");
+            if (ch == '\n') break;
+            ret->append(ch);
+        }
+        ret->append('\0');
+        return ret->items;
+    };
+
+    auto ret = readline();
+    if (streq(ret, "error")) {
+        returned_error = true;
+        auto errmsg = readline();
+        error("gohelper returned error for op %d: %s", op, errmsg);
+        return errmsg;
+    }
+
+    returned_error = false;
+    return ret;
+}
+
 
 /*
 granularize our background thread loop
@@ -1397,66 +1451,12 @@ u64 Go_Indexer::hash_package(ccstr resolved_package_path) {
 }
 
 bool Go_Indexer::is_file_included_in_build(ccstr path) {
-    SCOPED_LOCK(&gohelper_lock);
+    SCOPED_LOCK(&gohelper_dynamic.lock);
 
-    auto resp = gohelper_run(GH_OP_CHECK_INCLUDED_IN_BUILD, path, NULL);
-    if (gohelper_returned_error) return false;
+    auto resp = gohelper_dynamic.run(GH_OP_CHECK_INCLUDED_IN_BUILD, path, NULL);
+    if (gohelper_dynamic.returned_error) return false;
 
     return streq(resp, "true");
-}
-
-ccstr Go_Indexer::gohelper_readline() {
-    auto ret = alloc_list<char>();
-    char ch;
-    while (true) {
-        our_assert(gohelper_proc.read1(&ch), "gohelper crashed, we can't do anything anymore");
-        if (ch == '\n') break;
-        ret->append(ch);
-    }
-    ret->append('\0');
-    return ret->items;
-}
-
-int Go_Indexer::gohelper_readint() {
-    auto line = gohelper_readline();
-    return atoi(line);
-}
-
-ccstr Go_Indexer::gohelper_run(Gohelper_Op op, ...) {
-    va_list vl;
-    va_start(vl, op);
-
-    gohelper_proc.writestr(our_sprintf("%d", op));
-    gohelper_proc.write1('\n');
-
-    ccstr param = NULL;
-    while ((param = va_arg(vl, ccstr)) != NULL) {
-        gohelper_proc.writestr(param);
-        gohelper_proc.write1('\n');
-    }
-
-    auto read_line = [&]() -> ccstr {
-        auto ret = alloc_list<char>();
-        char ch;
-        while (true) {
-            our_assert(gohelper_proc.read1(&ch), "gohelper crashed, we can't do anything anymore");
-            if (ch == '\n') break;
-            ret->append(ch);
-        }
-        ret->append('\0');
-        return ret->items;
-    };
-
-    auto ret = gohelper_readline();
-    if (streq(ret, "error")) {
-        gohelper_returned_error = true;
-        auto errmsg = gohelper_readline();
-        error("gohelper returned error for op %d: %s", op, errmsg);
-        return errmsg;
-    }
-
-    gohelper_returned_error = false;
-    return ret;
 }
 
 List<ccstr>* Go_Indexer::list_source_files(ccstr dirpath, bool include_tests) {
@@ -2350,6 +2350,23 @@ ccstr Go_Indexer::filepath_to_import_path(ccstr path_str) {
     return p.str();
 }
 
+void Gohelper::init(ccstr cmd, ccstr dir) {
+    lock.init();
+
+    proc.init();
+    proc.dir = dir;
+    proc.use_stdin = true;
+    proc.run(cmd);
+
+    auto resp = run(GH_OP_SET_DIRECTORY, world.current_path, NULL);
+    our_assert(streq(resp, "true"), "Unable to set directory.");
+}
+
+void Gohelper::cleanup() {
+    proc.cleanup();
+    lock.cleanup();
+}
+
 void Go_Indexer::init() {
     ptr0(this);
 
@@ -2367,31 +2384,21 @@ void Go_Indexer::init() {
         strcpy_safe(current_exe_path, _countof(current_exe_path), path);
     }
 
-    gohelper_proc.init();
-    gohelper_proc.dir = path_join(current_exe_path, "helper");
-    gohelper_proc.use_stdin = true;
-    gohelper_proc.run("go run helper.go");
+    gohelper_dynamic.init("go run dynamic_helper/main.go", path_join(current_exe_path, "helper"));
+    gohelper_static.init("static_helper.exe", path_join(current_exe_path, "helper"));
 
     {
-        auto resp = gohelper_run(GH_OP_GET_GO_ENV_VARS, NULL);
+        auto resp = gohelper_dynamic.run(GH_OP_GET_GO_ENV_VARS, NULL);
         our_assert(streq(resp, "true"), "unable to get GOPATH, GOROOT, and GOMODCACHE");
-        gopath = our_strcpy(gohelper_readline());
-        goroot = our_strcpy(gohelper_readline());
-        gomodcache = our_strcpy(gohelper_readline());
-
-        Process proc;
-    }
-
-    {
-        auto resp = gohelper_run(GH_OP_SET_DIRECTORY, world.current_path, NULL);
-        our_assert(streq(resp, "true"), "unable to set directory");
+        gopath = our_strcpy(gohelper_dynamic.readline());
+        goroot = our_strcpy(gohelper_dynamic.readline());
+        gomodcache = our_strcpy(gohelper_dynamic.readline());
     }
 
     wksp_watch.init(world.current_path);
 
     flag_lock.init();
     lock.init();
-    gohelper_lock.init();
 
     start_writing();
 }
@@ -2417,14 +2424,15 @@ void Go_Indexer::cleanup() {
         bgthread = NULL;
     }
 
-    gohelper_proc.cleanup();
+    gohelper_static.cleanup();
+    gohelper_dynamic.cleanup();
+
     mem.cleanup();
     final_mem.cleanup();
     ui_mem.cleanup();
     scoped_table_mem.cleanup();
     flag_lock.cleanup();
     lock.cleanup();
-    gohelper_lock.cleanup();
 }
 
 List<Godecl> *Go_Indexer::parameter_list_to_fields(Ast_Node *params) {
@@ -2724,30 +2732,49 @@ bool Go_Indexer::assignment_to_decls(List<Ast_Node*> *lhs, List<Ast_Node*> *rhs,
                 decl->name_start = id->start;
                 decl->gotype = gotype;
             }
-        } else {
-            auto multi_type = expr_to_gotype(rhs->at(0));
-
-            u32 index = 0;
-            For (*lhs) {
-                defer { index++; };
-
-                if (it->type != TS_IDENTIFIER) continue;
-
-                auto name = it->string();
-                if (streq(name, "_")) continue;
-
-                auto gotype = new_gotype(GOTYPE_LAZY_ONE_OF_MULTI);
-                gotype->lazy_one_of_multi_base = multi_type;
-                gotype->lazy_one_of_multi_index = index;
-                gotype->lazy_one_of_multi_is_single = (lhs->len == 1);
-
-                auto decl = new_godecl();
-                decl->name = it->string();
-                decl->name_start = it->start;
-                decl->gotype = gotype;
-            }
             return true;
         }
+
+        auto multi_type = expr_to_gotype(rhs->at(0));
+
+        /*
+        if (multi_type == NULL || multi_type->type != GOTYPE_MULTI) {
+            if (lhs->len != 1) {
+                // TODO: are there legitimate cases where this will happen?
+                return false;
+            }
+
+            auto it = lhs->at(0);
+
+            auto decl = new_godecl();
+            decl->name = it->string();
+            decl->name_start = it->start;
+            decl->gotype = multi_type;
+            return true;
+        }
+        */
+
+        u32 index = 0;
+        For (*lhs) {
+            defer { index++; };
+
+            if (it->type != TS_IDENTIFIER) continue;
+
+            auto name = it->string();
+            if (streq(name, "_")) continue;
+
+            auto gotype = new_gotype(GOTYPE_LAZY_ONE_OF_MULTI);
+            gotype->lazy_one_of_multi_base = multi_type;
+            gotype->lazy_one_of_multi_index = index;
+            gotype->lazy_one_of_multi_is_single = (lhs->len == 1);
+
+            auto decl = new_godecl();
+            decl->name = it->string();
+            decl->name_start = it->start;
+            decl->gotype = gotype;
+        }
+
+        return true;
     }
 
     if (lhs->len == rhs->len) {
@@ -3185,6 +3212,9 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
             auto result = res->gotype->func_sig.result;
             if (result == NULL) return NULL;
 
+            if (result->len == 1)
+                return make_goresult(result->at(0).gotype, res->ctx);
+
             auto ret = new_gotype(GOTYPE_MULTI);
             ret->multi_types = alloc_list<Gotype*>(result->len);
             For (*result) ret->multi_types->append(it.gotype);
@@ -3266,9 +3296,12 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
             results.init();
             list_fields_and_methods(res, resolved_res, &results);
 
-            For (results)
+            // look backwards, so that overridden methods are found first
+            for (int i = results.len - 1; i >= 0; i--) {
+                auto &it = results[i];
                 if (streq(it.decl->name, gotype->lazy_sel_sel))
                     return evaluate_type(it.decl->gotype, it.ctx);
+            }
         }
         break;
 

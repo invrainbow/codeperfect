@@ -18,8 +18,16 @@ bool Editor::is_current_editor() {
 void Editor::raw_move_cursor(cur2 c) {
     if (c.y == -1) c = buf.offset_to_cur(c.x);
     if (c.y < 0 || c.y >= buf.lines.len) return;
+    if (c.x < 0) return;
+
     // does this work? update: nope
-    // if (c.x < 0 || c.y > buf.lines[c.y].len) return;
+    auto line_len = buf.lines[c.y].len;
+    if (c.x > line_len) {
+        if (world.nvim.mode == VI_INSERT)
+            c.x = line_len;
+        else
+            c.x = relu_sub(line_len, 1);
+    }
 
     if (is_current_editor()) {
         // print("jumplist.add from Editor::raw_move_cursor");
@@ -32,7 +40,7 @@ void Editor::raw_move_cursor(cur2 c) {
 
     u32 vx = 0;
     for (u32 i = 0; i < c.x; i++)
-        vx += line[i] == '\t' ? TAB_SIZE : 1;
+        vx += line[i] == '\t' ? options.tabsize : 1;
 
     if (vx < view.x)
         view.x = vx;
@@ -445,6 +453,8 @@ void Editor::cleanup() {
         }
         nv.end_message();
     }
+
+    world.jumplist.purge_editor(id);
 
     buf.cleanup();
     mem.cleanup();

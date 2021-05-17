@@ -166,12 +166,14 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 editor->saving = false;
                 editor->buf.dirty = false;
                 {
+                    /*
                     auto cur = req->post_save_setlines.cur;
                     if (cur.y >= editor->buf.lines.len) {
                         cur.y = editor->buf.lines.len-1;
                         cur.x = relu_sub(editor->buf.lines[cur.y].len, 1);
                     }
                     editor->move_cursor(cur);
+                    */
                 }
                 break;
 

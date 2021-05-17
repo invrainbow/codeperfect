@@ -141,6 +141,11 @@ void World::init_workspace() {
     let_user_select_file(&opts);
 #endif
 
+    project_settings.read(path_join(current_path, ".ideproj"));
+
+    if (project_settings.build_command[0] == '\0')
+        strcpy_safe(project_settings.build_command, _countof(project_settings.build_command), "go build --gcflags=\"all=-N -l\" ");
+
     git_buf root = {0};
     if (git_repository_discover(&root, current_path, 0, NULL) == 0) {
         git_repository_open(&git_repo, root.ptr);
@@ -209,9 +214,6 @@ void World::init() {
     windows_open.im_metrics = false;
 
     jumplist.init();
-
-    strcpy_safe(world.settings.build_command, _countof(world.settings.build_command), "go build --gcflags=\"all=-N -l\" github.com/invrainbow/ide/payments");
-    strcpy_safe(world.settings.debug_binary_path, _countof(world.settings.debug_binary_path), "payments.exe");
 
     {
         SCOPED_MEM(&ui_mem);
@@ -358,10 +360,10 @@ void kick_off_build() {
         b.started = true;
 
         {
-            SCOPED_LOCK(&indexer.gohelper_lock);
+            SCOPED_LOCK(&indexer.gohelper_static.lock);
 
-            indexer.gohelper_run(GH_OP_START_BUILD, world.settings.build_command, NULL);
-            if (indexer.gohelper_returned_error) {
+            indexer.gohelper_static.run(GH_OP_START_BUILD, project_settings.build_command, NULL);
+            if (indexer.gohelper_static.returned_error) {
                 b.done = true;
                 b.build_itself_had_error = true;
                 return;
@@ -369,10 +371,10 @@ void kick_off_build() {
         }
 
         for (;; sleep_milliseconds(100)) {
-            SCOPED_LOCK(&indexer.gohelper_lock);
+            SCOPED_LOCK(&indexer.gohelper_static.lock);
 
-            auto resp = indexer.gohelper_run(GH_OP_GET_BUILD_STATUS, NULL);
-            if (indexer.gohelper_returned_error) {
+            auto resp = indexer.gohelper_static.run(GH_OP_GET_BUILD_STATUS, NULL);
+            if (indexer.gohelper_static.returned_error) {
                 b.done = true;
                 b.started = false;
                 b.build_itself_had_error = true;
@@ -381,19 +383,19 @@ void kick_off_build() {
 
             if (!streq(resp, "done")) continue;
 
-            auto len = indexer.gohelper_readint();
+            auto len = indexer.gohelper_static.readint();
 
             for (u32 i = 0; i < len; i++) {
                 auto err = b.errors.append();
 
-                err->message = indexer.gohelper_readline();
-                err->valid = (bool)indexer.gohelper_readint();
+                err->message = indexer.gohelper_static.readline();
+                err->valid = (bool)indexer.gohelper_static.readint();
 
                 if (err->valid) {
-                    err->file = indexer.gohelper_readline();
-                    err->row = indexer.gohelper_readint();
-                    err->col = indexer.gohelper_readint();
-                    auto is_vcol = indexer.gohelper_readint();
+                    err->file = indexer.gohelper_static.readline();
+                    err->row = indexer.gohelper_static.readint();
+                    err->col = indexer.gohelper_static.readint();
+                    auto is_vcol = indexer.gohelper_static.readint();
                 }
             }
 

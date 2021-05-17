@@ -13,6 +13,7 @@
 #include "utils.hpp"
 #include "imgui.h"
 #include "mem.hpp"
+#include "settings.hpp"
 
 typedef fn<bool(Editor* e)> find_editor_func;
 
@@ -105,6 +106,10 @@ struct Jumplist {
         p = inc(p);
         return &buf[p];
     }
+
+    void purge_editor(int editor_id)  {
+        // TODO
+    }
 };
 
 struct World {
@@ -168,9 +173,9 @@ struct World {
     bool replace_line_numbers_with_bytecounts;
 
     struct {
-        char build_command[MAX_PATH];
-        char debug_binary_path[MAX_PATH];
-    } settings;
+        bool show;
+        Project_Settings tmp;
+    } wnd_project_settings;
 
     struct {
         bool show;
@@ -291,7 +296,6 @@ struct World {
         bool im_metrics;
         bool search_and_replace;
         bool build_and_debug;
-        bool settings;
     } windows_open;
 
     struct {
@@ -369,8 +373,6 @@ struct World {
 };
 
 extern World world;
-
-#define TAB_SIZE 4 // TODO
 
 bool is_ignored_by_git(ccstr path, bool isdir);
 

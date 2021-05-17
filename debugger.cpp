@@ -760,7 +760,13 @@ bool Debugger::start() {
     dlv_proc.dont_use_stdout = true;
     dlv_proc.dir = world.current_path;
     dlv_proc.create_new_console = true;
-    if (!dlv_proc.run(our_sprintf("dlv exec --headless %s --listen=127.0.0.1:1234", world.settings.debug_binary_path)))
+
+    if (project_settings.debug_binary_path[0] == '\0') {
+        tell_user("Please enter a path to the binary you want to debug under Project -> Project Settings.", NULL);
+        return false;
+    }
+
+    if (!dlv_proc.run(our_sprintf("dlv exec --headless %s --listen=127.0.0.1:1234", project_settings.debug_binary_path)))
         return false;
 
     /*

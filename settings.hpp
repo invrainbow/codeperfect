@@ -1,21 +1,20 @@
 #pragma once
 
+#include "common.hpp"
+#include "os.hpp"
+
 // this is a stupid name but i'm too lazy to refactor
 // it should be called "constants"
 struct Settings {
-    // styling
     float status_padding_x = 6;
     float status_padding_y = 3;
     float line_number_margin_left = 4;
     float line_number_margin_right = 10;
-    // float icon_size = 16;
     float autocomplete_menu_padding = 4;
     float autocomplete_menu_margin_y = 4;
     float autocomplete_item_padding_x = 6;
     float autocomplete_item_padding_y = 2;
-
     float tabs_offset = 50;
-
     float parameter_hint_margin_y = 4;
     float parameter_hint_padding_x = 2;
     float parameter_hint_padding_y = 2;
@@ -26,8 +25,18 @@ struct Settings {
 
 struct Options {
 	int scrolloff = 2;
-	// ???
+    int tabsize = 4;
+};
+
+struct Project_Settings {
+    char build_command[256];
+    char debug_binary_path[MAX_PATH];
+
+    void copy(Project_Settings *other);
+    void read(ccstr file);
+    void write(ccstr file);
 };
 
 extern Settings settings;
 extern Options options;
+extern Project_Settings project_settings;
