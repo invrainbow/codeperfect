@@ -502,8 +502,11 @@ struct Ast_Node {
     bool eq(Ast_Node *other) { return ts_node_eq(node, other->node); }
     Ast_Node *field(Ts_Field_Type f) { return dup(ts_node_child_by_field_id(node, f)); }
 
-    TSNode _skip_comment(TSNode x, bool forward) {
-        auto next_func = forward ? ts_node_next_named_sibling : ts_node_prev_named_sibling;
+    TSNode _skip_comment(TSNode x, bool forward, bool named) {
+        auto next_func = forward
+            ? (named ? ts_node_next_named_sibling : ts_node_next_sibling)
+            : (named ? ts_node_prev_named_sibling : ts_node_prev_sibling);
+
         while (!ts_node_is_null(x) && ts_node_symbol(x) == TS_COMMENT)
             x = next_func(x);
         return x;
@@ -513,37 +516,37 @@ struct Ast_Node {
 
     Ast_Node *child() {
         auto ret = ts_node_named_child(node, 0);
-        ret = _skip_comment(ret, true);
+        ret = _skip_comment(ret, true, true);
         return dup(ret);
     }
 
     Ast_Node *next() {
         auto ret = ts_node_next_named_sibling(node);
-        ret = _skip_comment(ret, true);
+        ret = _skip_comment(ret, true, true);
         return dup(ret);
     }
 
     Ast_Node *prev() {
         auto ret = ts_node_prev_named_sibling(node);
-        ret = _skip_comment(ret, false);
+        ret = _skip_comment(ret, false, true);
         return dup(ret);
     }
 
     Ast_Node *child_all() {
         auto ret = ts_node_child(node, 0);
-        ret = _skip_comment(ret, true);
+        ret = _skip_comment(ret, true, false);
         return dup(ret);
     }
 
     Ast_Node *next_all() {
         auto ret = ts_node_next_sibling(node);
-        ret = _skip_comment(ret, true);
+        ret = _skip_comment(ret, true, false);
         return dup(ret);
     }
 
     Ast_Node *prev_all() {
         auto ret = ts_node_prev_sibling(node);
-        ret = _skip_comment(ret, false);
+        ret = _skip_comment(ret, false, false);
         return dup(ret);
     }
 
@@ -1165,7 +1168,7 @@ struct Go_Indexer {
     void start_writing();
     void stop_writing();
 
-    bool truncate_parsed_file(Parsed_File *pf, cur2 end_pos, char char_to_append);
+    bool truncate_parsed_file(Parsed_File *pf, cur2 end_pos, ccstr chars_to_append);
 };
 
 struct Scoped_Write {

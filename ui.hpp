@@ -179,6 +179,11 @@ struct UI {
     void render_godecl(Godecl *decl);
     void render_gotype(Gotype *gotype, ccstr field = NULL);
     bool test_hover(boxf area, int id, ImGuiMouseCursor cursor = ImGuiMouseCursor_Arrow);
+    void open_project_settings();
+
+    void imgui_small_newline();
+    void imgui_input_text_full(ccstr label, char *buf, int count);
+    void imgui_with_disabled(bool disable, fn<void()> f);
 };
 
 extern UI ui;

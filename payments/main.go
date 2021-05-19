@@ -143,6 +143,7 @@ func main() {
 		body, err := ioutil.ReadAll(c.Request.Body)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{})
+
 			log.Printf("ioutil.Readall: %v", err)
 			return
 		}
@@ -241,5 +242,5 @@ func main() {
 		}
 	})
 
-	r.Run()
+	r.Run(":8080")
 }

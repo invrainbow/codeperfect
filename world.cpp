@@ -143,8 +143,10 @@ void World::init_workspace() {
 
     project_settings.read(path_join(current_path, ".ideproj"));
 
+    /*
     if (project_settings.build_command[0] == '\0')
         strcpy_safe(project_settings.build_command, _countof(project_settings.build_command), "go build --gcflags=\"all=-N -l\" ");
+    */
 
     git_buf root = {0};
     if (git_repository_discover(&root, current_path, 0, NULL) == 0) {
@@ -344,28 +346,32 @@ void init_open_file() {
     fill_files("");
 }
 
-void kick_off_build() {
+void kick_off_build(Build_Profile *build_profile) {
+    if (build_profile == NULL)
+        build_profile = project_settings.get_active_build_profile();
+
     world.build.cleanup();
     world.build.init();
 
-    auto do_build = [](void*) {
+    auto do_build = [](void* param) {
+        auto build_profile = (Build_Profile*)param;
+        auto build = &world.build;
+
         auto& indexer = world.indexer;
-        auto& b = world.build;
 
-        world.error_list.show = true;
+        SCOPED_MEM(&build->mem);
 
-        SCOPED_MEM(&b.mem);
-
-        b.id = world.next_build_id++;
-        b.started = true;
+        build->id = world.next_build_id++;
+        build->started = true;
 
         {
             SCOPED_LOCK(&indexer.gohelper_static.lock);
 
-            indexer.gohelper_static.run(GH_OP_START_BUILD, project_settings.build_command, NULL);
+            // TODO: do this
+            indexer.gohelper_static.run(GH_OP_START_BUILD, build_profile->cmd, NULL);
             if (indexer.gohelper_static.returned_error) {
-                b.done = true;
-                b.build_itself_had_error = true;
+                build->done = true;
+                build->build_itself_had_error = true;
                 return;
             }
         }
@@ -375,9 +381,9 @@ void kick_off_build() {
 
             auto resp = indexer.gohelper_static.run(GH_OP_GET_BUILD_STATUS, NULL);
             if (indexer.gohelper_static.returned_error) {
-                b.done = true;
-                b.started = false;
-                b.build_itself_had_error = true;
+                build->done = true;
+                build->started = false;
+                build->build_itself_had_error = true;
                 return;
             }
 
@@ -386,7 +392,7 @@ void kick_off_build() {
             auto len = indexer.gohelper_static.readint();
 
             for (u32 i = 0; i < len; i++) {
-                auto err = b.errors.append();
+                auto err = build->errors.append();
 
                 err->message = indexer.gohelper_static.readline();
                 err->valid = (bool)indexer.gohelper_static.readint();
@@ -399,11 +405,13 @@ void kick_off_build() {
                 }
             }
 
-            b.current_error = -1;
-            b.done = true;
-            b.started = false;
-            b.creating_extmarks = true;
-            world.error_list.show = true;
+            build->current_error = -1;
+            build->done = true;
+            build->started = false;
+            build->creating_extmarks = true;
+
+            if (build->errors.len == 0)
+                world.error_list.show = false;
 
             {
                 auto &nv = world.nvim;
@@ -417,7 +425,8 @@ void kick_off_build() {
         }
     };
 
-    world.build.thread = create_thread(do_build, NULL);
+
+    world.build.thread = create_thread(do_build, build_profile);
 }
 
 void* get_native_window_handle() {
@@ -500,3 +509,9 @@ void Jumplist::add(int editor_id, cur2 pos, bool bypass_duplicate_check) {
     buf[p].pos = pos;
 }
 
+bool is_build_debug_free() {
+    if (world.build.started) return false;
+    if (world.dbg.state_flag != DLV_STATE_INACTIVE) return false;
+
+    return true;
+}

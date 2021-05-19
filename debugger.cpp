@@ -415,13 +415,15 @@ void Debugger::halt_when_already_running() {
 void Debugger::pause_and_resume(fn<void()> f) {
     bool was_running = (state_flag == DLV_STATE_RUNNING);
 
-    if (was_running)
-        halt_when_already_running();
+    if (was_running) {
+        exec_halt(true);
+        Packet p = {0};
+        read_packet(&p);
+    }
 
     f();
 
     if (was_running) {
-        state_flag = DLV_STATE_RUNNING;
         exec_continue(false);
     }
 }
@@ -755,19 +757,112 @@ void Debugger::surface_error(ccstr msg) {
 bool Debugger::start() {
     conn = -1;
 
+    auto debug_profile = project_settings.get_active_debug_profile();
+
+    /*
+    to build test:
+
+        go test -c ${import_path} -o ${binary_name} --gcflags=\"all=-N -l\"
+
+    to build normally:
+
+        go build -o ${binary_name} --gcflags=\"all=-N -l\"
+    */
+
+    ccstr binary_path = NULL;
+    ccstr test_function_name = NULL;
+
+    auto get_current_editor_package_path = [&]() -> ccstr {
+        auto editor = world.get_current_editor();
+        if (editor == NULL) return NULL;
+        if (!path_contains_in_subtree(world.current_path, editor->filepath)) return NULL;
+
+        auto root_module_path = world.indexer.module_resolver.module_path;
+        auto subpath = get_path_relative_to(our_dirname(editor->filepath), world.current_path);
+
+        return normalize_path_sep(path_join(root_module_path, subpath), '/');
+    };
+
+    // TODO: we need to "lock" debug and build functions
+    switch (debug_profile->type) {
+    case DEBUG_TEST_PACKAGE:
+    case DEBUG_TEST_CURRENT_FUNCTION:
+    case DEBUG_RUN_PACKAGE:
+        {
+            auto use_current_package = [&]() -> bool {
+                switch (debug_profile->type) {
+                case DEBUG_TEST_CURRENT_FUNCTION:
+                    return true;
+                case DEBUG_TEST_PACKAGE:
+                    return debug_profile->test_package.use_current_package;
+                case DEBUG_RUN_PACKAGE:
+                    return debug_profile->run_package.use_current_package;
+                }
+                return false;
+            };
+
+            ccstr package_path = NULL;
+            if (use_current_package())
+                package_path = get_current_editor_package_path();
+            else if (debug_profile->type == DEBUG_TEST_PACKAGE)
+                package_path = debug_profile->test_package.package_path;
+            else if (debug_profile->type == DEBUG_RUN_PACKAGE)
+                package_path = debug_profile->run_package.package_path;
+
+            if (package_path == NULL || package_path[0] == '\0')
+                return false;
+
+            if (debug_profile->type == DEBUG_TEST_CURRENT_FUNCTION) {
+                test_function_name = "TestBlah"; // TODO
+            }
+
+            ccstr cmd = NULL;
+            if (debug_profile->type == DEBUG_RUN_PACKAGE)
+                cmd = our_sprintf("go build -o debug_bin.exe --gcflags=\"all=-N -l\" %s", package_path);
+            else
+                cmd = our_sprintf("go test -c %s -o debug_bin.exe --gcflags=\"all=-N -l\"", package_path);
+
+            Build_Profile build_profile = {0};
+            strcpy_safe(build_profile.label, _countof(build_profile.label), "temp");
+            strcpy_safe(build_profile.cmd, _countof(build_profile.cmd), cmd);
+
+            world.error_list.show = true;
+            kick_off_build(&build_profile);
+            while (!world.build.done) continue;
+
+            if (world.build.errors.len > 0 || world.build.build_itself_had_error) {
+                return false;
+            }
+
+            binary_path = "debug_bin.exe";
+        }
+        break;
+
+    case DEBUG_RUN_BINARY:
+        if (debug_profile->run_binary.binary_path[0] == '\0') {
+            tell_user("Please enter a path to the binary you want to debug under Project -> Project Settings.", NULL);
+            return false;
+        }
+
+        binary_path = debug_profile->run_binary.binary_path;
+        break;
+    }
+
+    if (binary_path == NULL || binary_path[0] == '\0') {
+        tell_user("Unable to find binary to debug.", NULL); // probably be more specific later
+        return false;
+    }
+
     dlv_proc.init();
-    // dlv_proc.use_stdin = true;
     dlv_proc.dont_use_stdout = true;
     dlv_proc.dir = world.current_path;
     dlv_proc.create_new_console = true;
 
-    if (project_settings.debug_binary_path[0] == '\0') {
-        tell_user("Please enter a path to the binary you want to debug under Project -> Project Settings.", NULL);
-        return false;
-    }
+    ccstr dlv_cmd = our_sprintf("dlv exec --headless --listen=127.0.0.1:1234 %s", binary_path);
+    if (debug_profile->type == DEBUG_TEST_CURRENT_FUNCTION)
+        dlv_cmd = our_sprintf("%s -- -run %s", test_function_name);
 
-    if (!dlv_proc.run(our_sprintf("dlv exec --headless %s --listen=127.0.0.1:1234", project_settings.debug_binary_path)))
-        return false;
+    if (!dlv_proc.run(dlv_cmd)) return false;
 
     /*
     // read the first line

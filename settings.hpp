@@ -2,6 +2,7 @@
 
 #include "common.hpp"
 #include "os.hpp"
+#include "list.hpp"
 
 // this is a stupid name but i'm too lazy to refactor
 // it should be called "constants"
@@ -28,11 +29,59 @@ struct Options {
     int tabsize = 4;
 };
 
+struct Build_Profile {
+    char label[256];
+    char cmd[256];
+};
+
+enum Debug_Type {
+    DEBUG_TEST_PACKAGE,
+    DEBUG_TEST_CURRENT_FUNCTION,
+    DEBUG_RUN_PACKAGE,
+    DEBUG_RUN_BINARY,
+    // DEBUG_ATTACH,
+};
+
+struct Debug_Profile {
+    Debug_Type type;
+    bool is_builtin;
+
+    char label[256];
+
+    union {
+        struct {
+            char binary_path[256];
+        } run_binary;
+
+        struct {
+            bool use_current_package;
+            char package_path[256];
+        } test_package;
+
+        struct {
+            bool use_current_package;
+            char package_path[256];
+        } run_package;
+    };
+
+    char args[256];
+};
+
+// TODO: disable editing build/debug profiles when build/debugger is running
 struct Project_Settings {
-    char build_command[256];
-    char debug_binary_path[MAX_PATH];
+    Build_Profile build_profiles[16];
+    Debug_Profile debug_profiles[16];
+    int build_profiles_len;
+    int debug_profiles_len;
+
+    int active_build_profile;
+    int active_debug_profile;
+
+    Build_Profile *get_active_build_profile();
+    Debug_Profile *get_active_debug_profile();
 
     void copy(Project_Settings *other);
+    void load_defaults();
     void read(ccstr file);
     void write(ccstr file);
 };

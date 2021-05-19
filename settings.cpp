@@ -57,23 +57,60 @@ void write_setting(File *f, ccstr key, ccstr value) {
 // --- main code
 
 void Project_Settings::copy(Project_Settings *other) {
-    copy_settings_string(build_command, other->build_command, strlen(other->build_command));
-    copy_settings_string(debug_binary_path, other->debug_binary_path, strlen(other->debug_binary_path));
+    memcpy(this, other, sizeof(*this));
+}
+
+void Project_Settings::load_defaults() {
+    ptr0(this);
+
+    // This is designed so that debug/build profiles is never empty, and
+    // active_debug_profile/active_build_profile always points to a valid file.
+
+    active_debug_profile = 1; // can't select "test function under cursor" as default profile
+
+    {
+        auto bp = &build_profiles[build_profiles_len++];
+        strcpy_safe(bp->label, _countof(bp->label), "Build Project");
+        strcpy_safe(bp->cmd, _countof(bp->cmd), "go build <write your package here>");
+    }
+
+    {
+        auto dp = &debug_profiles[debug_profiles_len++];
+        dp->type = DEBUG_TEST_CURRENT_FUNCTION;
+        dp->is_builtin = true;
+        strcpy_safe(dp->label, _countof(dp->label), "Test Function Under Cursor");
+    }
+
+    {
+        auto dp = &debug_profiles[debug_profiles_len++];
+        dp->type = DEBUG_TEST_PACKAGE;
+        strcpy_safe(dp->label, _countof(dp->label), "Test Package");
+        dp->test_package.use_current_package = true;
+    }
+
+    {
+        auto dp = &debug_profiles[debug_profiles_len++];
+        dp->type = DEBUG_RUN_PACKAGE;
+        strcpy_safe(dp->label, _countof(dp->label), "Run Package");
+        dp->run_package.use_current_package = true;
+    }
+
+    {
+        auto dp = &debug_profiles[debug_profiles_len++];
+        dp->type = DEBUG_RUN_BINARY;
+        strcpy_safe(dp->label, _countof(dp->label), "Run Binary");
+    }
 }
 
 void Project_Settings::read(ccstr file) {
     File f;
-    if (f.init(file, FILE_MODE_READ, FILE_OPEN_EXISTING) != FILE_RESULT_SUCCESS)
+    if (f.init(file, FILE_MODE_READ, FILE_OPEN_EXISTING) != FILE_RESULT_SUCCESS) {
+        load_defaults();
         return;
+    }
     defer { f.cleanup(); };
 
-    read_settings(&f, [&](ccstr key, int klen, ccstr val, int vlen) {
-        if (streq(key, "build_command")) {
-            copy_settings_string(build_command, val, vlen);
-        } else if (streq(key, "debug_binary_path")) {
-            copy_settings_string(debug_binary_path, val, vlen);
-        }
-    });
+    f.read((char*)this, sizeof(*this));
 }
 
 void Project_Settings::write(ccstr file) {
@@ -82,6 +119,13 @@ void Project_Settings::write(ccstr file) {
         return;
     defer { f.cleanup(); };
 
-    write_setting(&f, "build_command", build_command);
-    write_setting(&f, "debug_binary_path", debug_binary_path);
+    f.write((char*)this, sizeof(*this));
+}
+
+Build_Profile *Project_Settings::get_active_build_profile() {
+    return &build_profiles[active_build_profile];
+}
+
+Debug_Profile *Project_Settings::get_active_debug_profile() {
+    return &debug_profiles[active_debug_profile];
 }

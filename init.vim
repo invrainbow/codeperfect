@@ -56,9 +56,11 @@ endfunction
 nnoremap <C-o> <Cmd>call <SID>jump(0)<CR>
 nnoremap <C-i> <Cmd>call <SID>jump(1)<CR>
 nnoremap <Tab> <Cmd>call <SID>jump(1)<CR>
-nnoremap : <nop>
 nnoremap Q <nop>
 nnoremap K <nop>
+
+nnoremap : <nop>
+nnoremap <F1> :
 
 scriptencoding utf-8
 

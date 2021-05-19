@@ -49,13 +49,14 @@
   }
 
   code {
-    @apply rounded-md px-1 py-0.5 bg-gray-200 text-sm;
+    @apply rounded-md px-1.5 py-0.5 bg-gray-200;
+    font-size: 82.5%;
   }
 }
 
 @layer components {
   .main-button {
-    @apply rounded-md bg-blue-600 text-white text-sm font-medium py-1.5 px-4;
+    @apply rounded-md bg-blue-600 text-white text-sm font-semibold py-1.5 px-4;
     @apply decoration-clone bg-gradient-to-b from-blue-500 to-blue-700;
   }
 }

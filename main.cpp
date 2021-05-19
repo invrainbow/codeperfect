@@ -253,7 +253,7 @@ int main() {
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_MAXIMIZED, GLFW_TRUE);
 
-    world.window = glfwCreateWindow(1280, 720, WINDOW_TITLE, NULL, NULL);
+    world.window = glfwCreateWindow(1280, 720, our_sprintf("%s [%s]", WINDOW_TITLE, world.current_path), NULL, NULL);
     if (world.window == NULL)
         return error("could not create window"), EXIT_FAILURE;
 
@@ -972,6 +972,7 @@ int main() {
 
                     switch (key) {
                     case GLFW_KEY_B:
+                        world.error_list.show = true;
                         kick_off_build();
                         break;
                     case GLFW_KEY_F:

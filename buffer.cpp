@@ -38,7 +38,8 @@ uchar Buffer_It::get(cur2 _pos) {
 bool Buffer_It::eof() {
     if (has_fake_end) {
         auto new_end = fake_end;
-        if (append_char_to_end) new_end.x++;
+        if (append_chars_to_end)
+            new_end.x += strlen(chars_to_append_to_end);
         return pos >= new_end;
     }
 
@@ -49,8 +50,8 @@ bool Buffer_It::eof() {
 }
 
 uchar Buffer_It::peek() {
-    if (has_fake_end && append_char_to_end && pos == fake_end)
-        return char_to_append_to_end;
+    if (has_fake_end && append_chars_to_end && pos >= fake_end)
+        return chars_to_append_to_end[pos.x - fake_end.x];
     if (x == buf->lines[y].len)
         return '\n';
     return buf->lines[y][x];

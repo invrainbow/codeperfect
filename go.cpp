@@ -1786,7 +1786,7 @@ bool is_expression_node(Ast_Node *node) {
 
 char go_tsinput_buffer[1024];
 
-bool Go_Indexer::truncate_parsed_file(Parsed_File *pf, cur2 end_pos, char char_to_append) {
+bool Go_Indexer::truncate_parsed_file(Parsed_File *pf, cur2 end_pos, ccstr chars_to_append) {
     if (!pf->tree_belongs_to_editor) return false;
     if (pf->it->type != IT_BUFFER) return false;
 
@@ -1808,9 +1808,9 @@ bool Go_Indexer::truncate_parsed_file(Parsed_File *pf, cur2 end_pos, char char_t
     it->fake_end = end_pos;
     it->fake_end_offset = buf->cur_to_offset(it->fake_end);
 
-    if (char_to_append != 0) {
-        it->append_char_to_end = true;
-        it->char_to_append_to_end = char_to_append;
+    if (chars_to_append != 0) {
+        it->append_chars_to_end = true;
+        it->chars_to_append_to_end = chars_to_append;
     }
 
     TSInput input;
@@ -1857,7 +1857,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
     if (pf == NULL) return false;
     defer { free_parsed_file(pf); };
 
-    if (!truncate_parsed_file(pf, pos, '_')) return false;
+    if (!truncate_parsed_file(pf, pos, "_}}}}}}}}}}}")) return false;
     defer { ts_tree_delete(pf->tree); };
 
     auto intelligently_move_cursor_backwards = [&]() -> cur2 {
@@ -2143,7 +2143,7 @@ Parameter_Hint *Go_Indexer::parameter_hint(ccstr filepath, cur2 pos, bool trigge
     if (pf == NULL) return NULL;
     defer { free_parsed_file(pf); };
 
-    if (!truncate_parsed_file(pf, pos, ')')) return NULL;
+    if (!truncate_parsed_file(pf, pos, ")}}}}}}}}")) return NULL;
     defer { ts_tree_delete(pf->tree); };
 
     auto go_back_until_non_space = [&]() -> cur2 {

@@ -460,8 +460,6 @@ void ImGui::ShowDemoWindow(bool* p_open)
             ImGui::SameLine(); HelpMarker("Drag from window title bar or their tab to dock/undock. Hold SHIFT to disable docking.\n\nDrag from window menu button (upper-left button) to undock an entire node (all windows).");
             if (io.ConfigFlags & ImGuiConfigFlags_DockingEnable)
             {
-                ImGui::Indent();
-                ImGui::Checkbox("io.ConfigDockingNoSplit", &io.ConfigDockingNoSplit);
                 ImGui::SameLine(); HelpMarker("Simplified docking mode: disable window splitting, so docking is limited to merging multiple windows together into tab-bars.");
                 ImGui::Checkbox("io.ConfigDockingAlwaysTabBar", &io.ConfigDockingAlwaysTabBar);
                 ImGui::SameLine(); HelpMarker("Create a docking node and tab-bar on single floating windows.");

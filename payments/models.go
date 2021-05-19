@@ -18,13 +18,12 @@ type User struct {
 var db *gorm.DB
 
 func initDB() {
-	dsn := "host=localhost user=gorm password=gorm dbname=gorm port=9920 sslmode=disable TimeZone=US/Pacific"
+	dsn := "host=localhost user=brandon password=brandon dbname=brandon port=5432 sslmode=disable TimeZone=US/Pacific"
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		panic(err)
 	}
 
-	db.LogMode(true)
-	db.AutoMigrate(&User)
-	// TODO: automigrate others
+	// db.LogMode(true)
+	db.AutoMigrate(&User{})
 }

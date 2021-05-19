@@ -112,6 +112,44 @@ struct Jumplist {
     }
 };
 
+struct Build {
+    Pool mem;
+
+    u64 id;
+    bool done;
+    bool started;
+    List<Build_Error> errors;
+    u64 nvim_namespace_id;
+    int current_error;
+    bool build_itself_had_error;
+    Thread_Handle thread;
+    i32 scroll_offset;
+    u32 selection;
+    bool creating_extmarks;
+
+    bool ready() {
+        return done && !creating_extmarks;
+    }
+
+    void init() {
+        ptr0(this);
+        mem.init("build");
+
+        SCOPED_MEM(&mem);
+
+        errors.init();
+    }
+
+    void cleanup() {
+        if (thread != NULL) {
+            kill_thread(thread);
+            close_thread_handle(thread);
+            // TODO: delete nvim namespace and extmarks
+        }
+        mem.cleanup();
+    }
+};
+
 struct World {
     Pool world_mem;
     Pool frame_mem;
@@ -124,6 +162,7 @@ struct World {
     Pool build_index_mem;
     Pool ui_mem;
     Pool message_queue_mem;
+    Pool project_settings_mem;
 
     Jumplist jumplist;
 
@@ -175,6 +214,12 @@ struct World {
     struct {
         bool show;
         Project_Settings tmp;
+        int current_debug_profile;
+        int current_build_profile;
+        int tmp_debug_profile_type;
+
+        bool focus_debug_profiles;
+        bool focus_build_profiles;
     } wnd_project_settings;
 
     struct {
@@ -200,43 +245,7 @@ struct World {
         }
     } search_results;
 
-    struct {
-        Pool mem;
-
-        u64 id;
-        bool done;
-        bool started;
-        List<Build_Error> errors;
-        u64 nvim_namespace_id;
-        int current_error;
-        bool build_itself_had_error;
-        Thread_Handle thread;
-        i32 scroll_offset;
-        u32 selection;
-        bool creating_extmarks;
-
-        bool ready() {
-            return done && !creating_extmarks;
-        }
-
-        void init() {
-            ptr0(this);
-            mem.init("build");
-
-            SCOPED_MEM(&mem);
-
-            errors.init();
-        }
-
-        void cleanup() {
-            if (thread != NULL) {
-                kill_thread(thread);
-                close_thread_handle(thread);
-                // TODO: delete nvim namespace and extmarks
-            }
-            mem.cleanup();
-        }
-    } build;
+    Build build;
 
     struct {
         bool show;
@@ -286,7 +295,6 @@ struct World {
         bool mouse_just_pressed[ImGuiMouseButton_COUNT];
         GLFWcursor* cursors[ImGuiMouseCursor_COUNT];
         GLuint textures[__TEXTURE_COUNT__];
-        float menubar_height;
         bool mouse_captured_by_imgui;
         bool keyboard_captured_by_imgui;
     } ui;
@@ -377,8 +385,9 @@ extern World world;
 bool is_ignored_by_git(ccstr path, bool isdir);
 
 void init_open_file();
-void kick_off_build();
+void kick_off_build(Build_Profile *build_profile = NULL);
 void prompt_delete_all_breakpoints();
 void filter_files();
 void run_proc_the_normal_way(Process* proc, ccstr cmd);
 void* get_native_window_handle();
+bool is_build_debug_free();

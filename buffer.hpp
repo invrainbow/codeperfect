@@ -19,8 +19,8 @@ struct Buffer_It {
     bool has_fake_end;
     cur2 fake_end;
     int fake_end_offset;
-    bool append_char_to_end;
-    char char_to_append_to_end;
+    bool append_chars_to_end;
+    ccstr chars_to_append_to_end;
 
     bool eof();
     uchar peek();

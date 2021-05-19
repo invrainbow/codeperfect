@@ -15,7 +15,7 @@ const ProductName = "CodePerfect 95"
 
 const SendEmailFrom = "brhs.again@gmail.com"
 
-var NewLicenseKeyTplHtml = fmt.Sprintf(`
+const NewLicenseKeyTplHtml = fmt.Sprintf(`
 Thanks for buying %s! Here's your download link:
 
 <a href="{{.DownloadLink}}">{{.DownloadLink}}</a>
@@ -28,7 +28,7 @@ Best,
 The %s Team
 `, ProductName, ProductName)
 
-var NewLicenseKeyTplText = fmt.Sprintf(`
+const NewLicenseKeyTplText = fmt.Sprintf(`
 {{.Name}},
 
 Thanks for buying %s! Here's your download link:

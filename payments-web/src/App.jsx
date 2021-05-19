@@ -103,7 +103,7 @@ function Home() {
         </p>
       </Section>
 
-      <div className="flex space-x-8">
+      <div className="space-x-8 flex mb-32">
         <div className="w-1/4">
           {["Autocomplete", "Debugging", "Some other demo", "Another demo"].map(
             (name, idx) => (
@@ -170,11 +170,9 @@ function Beta() {
   };
 
   return (
-    <div className="max-w-3xl my-28 mx-auto">
-      <p className="text-xl font-medium">Before you sign up...</p>
-      <p>
-        {IDE_NAME} costs <b>$10/month</b>.
-      </p>
+    <div className="max-w-2xl my-12">
+      <p className="text-xl font-semibold">Before you sign up...</p>
+      <p>{IDE_NAME} costs $10/month.</p>
       <p>
         It's in very early beta. We're still building out large chunks of
         functionality. We're releasing it now because we use it every day
@@ -188,7 +186,8 @@ function Beta() {
         <li>Only Go 1.16+ is supported.</li>
         <li>
           Your project must be module-aware, and consist of a single module,
-          located at your project's root folder.
+          located at your project's root folder. More specifically,{" "}
+          <code>go list -mod=mod -m all</code> must work from your root folder.
         </li>
         <li>
           You can only edit using Vim keybindings. Arrow keys and clicking (in
@@ -203,10 +202,10 @@ function Beta() {
         </li>
       </ul>
       <p>
-        Despite these limitations, everyone on the development team already uses{" "}
-        {IDE_NAME} for day-to-day Go programming. We still need to escape-hatch
-        into other tools every now and then, and you will too. As we approach
-        feature completeness, your escape-hatch frequency will go down to zero.
+        Despite these limitations, {IDE_NAME} is ready for day-to-day,
+        bread-and-butter Go programming. Everyone on the development team uses
+        it. You still need to escape-hatch into other tools every now and then,
+        but as we approach feature completeness, this will happen less and less.
       </p>
       <p>The following features are working:</p>
       <ul className="thick-list">
@@ -224,9 +223,9 @@ function Beta() {
         <li>Debug individual tests</li>
       </ul>
       <p>
-        If your situation is compatible with this, you can start using a power
-        tool today that allows you to develop Go programs at lightning speed.
-        We're also developing new features rapidly &mdash; see what's on the{" "}
+        If this sounds compatible with your setup, {IDE_NAME} will allow you to
+        start developing Go programs at lightning speed today. We're also
+        developing new features rapidly &mdash; check out the{" "}
         <Link to="/roadmap">roadmap</Link>.
       </p>
       <p className="mt-8">
@@ -245,7 +244,7 @@ function Beta() {
 function Roadmap() {
   return (
     <div>
-      <h2 className="text-lg font-medium">Roadmap</h2>
+      <h2 className="text-lg font-semibold">Roadmap</h2>
       <ul className="thick-list">
         <li>
           macOS and Linux support. The bulk of our code is cross-platform.
@@ -271,7 +270,7 @@ function Roadmap() {
 function About() {
   return (
     <div>
-      <h2 className="text-lg font-medium">About</h2>
+      <h2 className="text-lg font-semibold">About</h2>
       <p>{IDE_NAME} is created by Brandon Hsiao.</p>
     </div>
   );
@@ -286,6 +285,24 @@ function PaymentSuccess() {
   return <div>Thanks! Please check your email for details.</div>;
 }
 
+function Docs() {
+  return (
+    <div className="max-w-2xl my-12">
+      <h2 className="text-lg font-semibold">Docs</h2>
+      <p>Blah blah blah.</p>
+    </div>
+  );
+}
+
+function Philosophy() {
+  return (
+    <div className="max-w-2xl my-12">
+      <h2 className="text-lg font-semibold">Philosophy</h2>
+      <p>Blah blah blah.</p>
+    </div>
+  );
+}
+
 function App() {
   return (
     <Router>
@@ -294,60 +311,67 @@ function App() {
         <title>{IDE_NAME}</title>
       </Helmet>
 
-      <div className="max-w-5xl mx-auto mt-8 leading-relaxed text-gray-800">
-        <div className="flex justify-between mb-8 items-center border-b border-gray-200 pb-4">
-          <div>
-            <div>
-              <Link to="/" className="text-lg font-bold text-black">
-                {IDE_NAME}
-              </Link>
-            </div>
-          </div>
+      <div className="py-6 leading-relaxed text-gray-800">
+        <div className="px-4 max-w-6xl mx-auto flex justify-between mb-8 items-center pb-4">
+          <Link to="/" className="text-lg font-bold text-black">
+            {IDE_NAME}
+          </Link>
           <div className="flex items-baseline">
+            <Link className="mr-5" to="/philosophy">
+              Philosophy
+            </Link>
             <Link className="mr-5" to="/docs">
               Documentation
             </Link>
             <Link className="mr-5" to="/pricing">
               Pricing
             </Link>
-
             <Link className="main-button" to="/beta">
               Join Beta
             </Link>
           </div>
         </div>
-        <Switch>
-          <Route path="/docs">blah blah</Route>
-          <Route path="/pricing">
-            <Pricing />
-          </Route>
-          <Route path="/beta">
-            <Beta />
-          </Route>
-          <Route path="/payment-canceled">
-            <PaymentCanceled />
-          </Route>
-          <Route path="/payment-success">
-            <PaymentSuccess />
-          </Route>
-          <Route path="/roadmap">
-            <Roadmap />
-          </Route>
-          <Route exact path="/">
-            <Home />
-          </Route>
-        </Switch>
-        <div className="flex justify-between mt-48 mb-12 text-sm pt-4 border-t border-gray-100">
-          <div class="text-gray-400">
-            &copy; {CURRENT_YEAR} {IDE_NAME}
-          </div>
-          <div className="flex space-x-4">
-            <a
-              className="text-gray-400"
-              href="mailto:support@codeperfect95.com"
-            >
-              Contact
-            </a>
+        <div className="px-4 max-w-6xl mx-auto">
+          <Switch>
+            <Route path="/docs">
+              <Docs />
+            </Route>
+            <Route path="/philosophy">
+              <Philosophy />
+            </Route>
+            <Route path="/pricing">
+              <Pricing />
+            </Route>
+            <Route path="/beta">
+              <Beta />
+            </Route>
+            <Route path="/payment-canceled">
+              <PaymentCanceled />
+            </Route>
+            <Route path="/payment-success">
+              <PaymentSuccess />
+            </Route>
+            <Route path="/roadmap">
+              <Roadmap />
+            </Route>
+            <Route exact path="/">
+              <Home />
+            </Route>
+          </Switch>
+        </div>
+        <div className="mt-8 text-sm pt-4">
+          <div className="px-4 max-w-6xl mx-auto flex justify-between">
+            <div class="text-gray-400">
+              &copy; {CURRENT_YEAR} {IDE_NAME}
+            </div>
+            <div className="flex space-x-4">
+              <a
+                className="text-gray-400"
+                href="mailto:support@codeperfect95.com"
+              >
+                Contact
+              </a>
+            </div>
           </div>
         </div>
       </div>

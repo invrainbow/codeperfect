@@ -10,6 +10,8 @@
 #include <math.h>
 #include "tree_sitter_crap.hpp"
 
+#include <GLFW/glfw3.h>
+
 UI ui;
 
 ccstr image_filenames[] = {
@@ -1150,6 +1152,8 @@ struct Debugger_UI {
 
         {
             ImGui::SetNextWindowDockID(ui->dock_bottom_right_id, ImGuiCond_Once);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+
             ImGui::Begin("Local Variables");
             ImGui::PushFont(world.ui.im_font_mono);
 
@@ -1216,10 +1220,14 @@ struct Debugger_UI {
 
             ImGui::PopFont();
             ImGui::End();
+
+            ImGui::PopStyleVar();
         }
 
         {
             ImGui::SetNextWindowDockID(ui->dock_bottom_right_id, ImGuiCond_Once);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+
             ImGui::Begin("Watches");
             ImGui::PushFont(world.ui.im_font_mono);
 
@@ -1275,6 +1283,8 @@ struct Debugger_UI {
 
             ImGui::PopFont();
             ImGui::End();
+
+            ImGui::PopStyleVar();
         }
 
         /*
@@ -1310,6 +1320,42 @@ void open_add_file_or_folder(bool folder) {
 
     wnd.folder = folder;
     wnd.show = true;
+}
+
+void UI::imgui_small_newline() {
+    ImGui::Dummy(ImVec2(0.0f, ImGui::GetFrameHeightWithSpacing() * 1/4));
+}
+
+void UI::imgui_input_text_full(ccstr label, char *buf, int count) {
+    ImGui::PushItemWidth(-1);
+    ImGui::Text("%s", label);
+    ImGui::InputText(our_sprintf("###%s", label), buf, count);
+    ImGui::PopItemWidth();
+}
+
+#define imgui_input_text_full_fixbuf(x, y) imgui_input_text_full(x, y, _countof(y))
+
+void UI::open_project_settings() {
+    auto &wnd = world.wnd_project_settings;
+    if (wnd.show) return;
+
+    ptr0(&wnd.tmp);
+    wnd.tmp.copy(&project_settings);
+    wnd.show = true;
+}
+
+void UI::imgui_with_disabled(bool disable, fn<void()> f) {
+    if (disable) {
+        ImGui::PushItemFlag(ImGuiItemFlags_Disabled, true);
+        ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * 0.5f);
+    }
+
+    f();
+
+    if (disable) {
+        ImGui::PopItemFlag();
+        ImGui::PopStyleVar();
+    }
 }
 
 void UI::draw_everything() {
@@ -1395,10 +1441,7 @@ void UI::draw_everything() {
         ImGui::PopStyleVar(3);
     }
 
-    // draw menubar first, so we can get its height (which we need for UI)
     if (ImGui::BeginMainMenuBar()) {
-        world.ui.menubar_height = ImGui::GetWindowSize().y;
-
         if (ImGui::BeginMenu("File")) {
             if (ImGui::MenuItem("New File", "Ctrl+N")) {
                 world.get_current_pane()->open_empty_editor();
@@ -1429,11 +1472,11 @@ void UI::draw_everything() {
         }
 
         if (ImGui::BeginMenu("Edit")) {
-            if (ImGui::MenuItem("Find Everywhere...", "Ctrl+Shift+F")) {
-                // TODO
+            if (ImGui::MenuItem("Search...", "Ctrl+Shift+F")) {
+                tell_user("Sorry, this hasn't been implemented yet.", "Not Implemented");
             }
-            if (ImGui::MenuItem("Find and Replace Everywhere...", "Ctrl+Shift+H")) {
-                // TODO
+            if (ImGui::MenuItem("Search and Replace...", "Ctrl+Shift+H")) {
+                tell_user("Sorry, this hasn't been implemented yet.", "Not Implemented");
             }
             ImGui::EndMenu();
         }
@@ -1469,19 +1512,38 @@ void UI::draw_everything() {
                 open_add_file_or_folder(true);
             }
 
+
             ImGui::Separator();
 
+            if (ImGui::MenuItem("Project Settings...")) {
+                open_project_settings();
+            }
+
+            ImGui::EndMenu();
+        }
+
+        if (ImGui::BeginMenu("Build")) {
             if (ImGui::MenuItem("Build", "Ctrl+Shift+B")) {
+                world.error_list.show = true;
                 kick_off_build();
             }
 
             ImGui::Separator();
 
-            if (ImGui::MenuItem("Project Settings...")) {
-                auto &wnd = world.wnd_project_settings;
-                ptr0(&wnd.tmp);
-                wnd.tmp.copy(&project_settings);
-                wnd.show = true;
+            if (ImGui::BeginMenu("Select Active Build Profile..."))  {
+                for (int i = 0; i < project_settings.build_profiles_len; i++) {
+                    auto &it = project_settings.build_profiles[i];
+                    if (ImGui::MenuItem(it.label, NULL, project_settings.active_build_profile == i, true)) {
+                        project_settings.active_build_profile = i;
+                        project_settings.write(path_join(world.current_path, ".ideproj"));
+                    }
+                }
+                ImGui::EndMenu();
+            }
+
+            if (ImGui::MenuItem("Build Profiles...")) {
+                open_project_settings();
+                world.wnd_project_settings.focus_build_profiles = true;
             }
 
             ImGui::EndMenu();
@@ -1564,6 +1626,24 @@ void UI::draw_everything() {
                 prompt_delete_all_breakpoints();
             }
 
+            ImGui::Separator();
+
+            if (ImGui::BeginMenu("Select Active Debug Profile..."))  {
+                for (int i = 1; i < project_settings.debug_profiles_len; i++) {
+                    auto &it = project_settings.debug_profiles[i];
+                    if (ImGui::MenuItem(it.label, NULL, project_settings.active_debug_profile == i, true)) {
+                        project_settings.active_debug_profile = i;
+                        project_settings.write(path_join(world.current_path, ".ideproj"));
+                    }
+                }
+                ImGui::EndMenu();
+            }
+
+            if (ImGui::MenuItem("Debug Profiles...")) {
+                open_project_settings();
+                world.wnd_project_settings.focus_debug_profiles = true;
+            }
+
             ImGui::EndMenu();
         }
 
@@ -1595,9 +1675,8 @@ void UI::draw_everything() {
                 );
             }
 
-            ImGui::Separator();
-
             /*
+            ImGui::Separator();
             if (ImGui::MenuItem("Options...")) {
                 if (world.wnd_options.show) {
                     ImGui::Begin("Options");
@@ -1618,9 +1697,7 @@ void UI::draw_everything() {
     /*
     if (world.wnd_options.show) {
         ImGui::Begin("Options", &world.wnd_options.show, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking);
-
         ImGui::SliderInt("Scroll offset", &options.scrolloff, 0, 10);
-
         ImGui::End();
     }
     */
@@ -1628,6 +1705,8 @@ void UI::draw_everything() {
     if (world.error_list.show) {
         ImGui::SetNextWindowDockID(dock_bottom_id, ImGuiCond_Once);
         ImGui::Begin("Build Results", &world.error_list.show);
+
+        static Build_Error *menu_current_error = NULL;
 
         if (world.build.ready()) {
             if (world.build.errors.len == 0) {
@@ -1643,6 +1722,7 @@ void UI::draw_everything() {
                         continue;
                     }
 
+                    /*
                     auto flags = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen | ImGuiTreeNodeFlags_SpanFullWidth;
                     if (i == world.build.current_error)
                         flags |= ImGuiTreeNodeFlags_Selected;
@@ -1650,8 +1730,31 @@ void UI::draw_everything() {
                     ImGui::Unindent(ImGui::GetTreeNodeToLabelSpacing());
                     ImGui::TreeNodeEx(&it, flags, "%s:%d:%d: %s", it.file, it.row, it.col, it.message);
                     ImGui::Indent(ImGui::GetTreeNodeToLabelSpacing());
+                    */
 
-                    if (ImGui::IsItemClicked()) {
+                    auto label = our_sprintf("%s:%d:%d: %s", it.file, it.row, it.col, it.message);
+                    auto wrap_width = ImGui::GetContentRegionAvail().x;
+                    auto text_size = ImVec2(wrap_width, ImGui::CalcTextSize(label, NULL, false, wrap_width).y);
+                    auto pos = ImGui::GetCursorScreenPos();
+
+                    bool clicked = ImGui::Selectable(our_sprintf("##hidden_%d", i), i == world.build.current_error, 0, text_size);
+                    ImGui::GetWindowDrawList()->AddText(NULL, 0.0f, pos, ImGui::GetColorU32(ImGuiCol_Text), label, NULL, wrap_width);
+
+                    if (ImGui::BeginPopupContextItem()) {
+                        if (ImGui::Selectable("Copy to clipboard")) {
+                            glfwSetClipboardString(world.window, label);
+                        }
+                        ImGui::EndPopup();
+                    }
+
+                    /*
+                    if (ImGui::IsMouseReleased(ImGuiMouseButton_Right) && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup)) {
+                        menu_current_error = &it;
+                        ImGui::OpenPopup("error list menu");
+                    }
+                    */
+
+                    if (clicked) {
                         world.build.current_error = i;
                         go_to_error(i);
                     }
@@ -1832,24 +1935,168 @@ void UI::draw_everything() {
 
         ImGui::Begin("Project Settings", &wnd.show, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking);
 
-        ImGui::Text("Build command");
-        ImGui::InputText("##build_command", wnd.tmp.build_command, _countof(wnd.tmp.build_command));
+        auto &tmp = wnd.tmp;
 
-        ImGui::Text("Debug binary path");
-        ImGui::InputText("##debug_binary_path", wnd.tmp.debug_binary_path, _countof(wnd.tmp.debug_binary_path));
+        if (ImGui::BeginTabBar("MyTabBar", ImGuiTabBarFlags_None)) {
+            int flags = ImGuiTabItemFlags_None;
+            if (wnd.focus_debug_profiles) {
+                flags |= ImGuiTabItemFlags_SetSelected;
+                wnd.focus_debug_profiles = false;
+            }
 
-        ImGui::NewLine();
+            if (ImGui::BeginTabItem("Debug Profiles", NULL, flags)) {
+                {
+                    ImGui::BeginChild("left pane", ImVec2(200, 300), true);
 
-        if (ImGui::Button("Save")) {
-            project_settings.copy(&wnd.tmp);
-            project_settings.write(path_join(world.current_path, ".ideproj"));
-            world.wnd_project_settings.show = false;
+                    for (int i = 0; i < tmp.debug_profiles_len; i++) {
+                        auto &it = tmp.debug_profiles[i];
+                        if (ImGui::Selectable(it.label, wnd.current_debug_profile == i))
+                            wnd.current_debug_profile = i;
+                    }
+
+                    ImGui::EndChild();
+                }
+
+                ImGui::SameLine();
+
+                {
+                    ImGui::BeginChild("right pane", ImVec2(400, 300));
+
+                    auto &dp = tmp.debug_profiles[wnd.current_debug_profile];
+
+                    if (dp.is_builtin) {
+                        if (dp.type == DEBUG_TEST_CURRENT_FUNCTION) {
+                            ImGuiStyle &style = ImGui::GetStyle();
+                            ImGui::PushStyleColor(ImGuiCol_Text, style.Colors[ImGuiCol_TextDisabled]);
+                            ImGui::TextWrapped("This is a built-in debug profile, used for the Debug Test Under Cursor command. It can't be changed, except to add command-line arguments.");
+                            ImGui::PopStyleColor();
+                            imgui_small_newline();
+                        }
+                    }
+
+                    imgui_with_disabled(dp.is_builtin, [&]() {
+                        imgui_input_text_full_fixbuf("Name", dp.label);
+                    });
+
+                    imgui_small_newline();
+
+                    const char* labels[] = {
+                        "Test Package",
+                        "Test Function Under Cursor",
+                        "Run Package",
+                        "Run Binary",
+                    };
+
+                    imgui_with_disabled(dp.is_builtin, [&]() {
+                        ImGui::Text("Type");
+                        ImGui::PushItemWidth(-1);
+                        ImGui::Combo("##dp_type", (int*)&dp.type, labels, _countof(labels));
+                        ImGui::PopItemWidth();
+                    });
+
+                    imgui_small_newline();
+
+                    switch (dp.type) {
+                    case DEBUG_TEST_PACKAGE:
+                        ImGui::Checkbox("Use package of current file", &dp.test_package.use_current_package);
+
+                        imgui_small_newline();
+
+                        imgui_with_disabled(dp.test_package.use_current_package, [&]() {
+                            imgui_input_text_full_fixbuf("Package path", dp.test_package.package_path);
+                        });
+
+                        imgui_small_newline();
+                        break;
+
+                    case DEBUG_TEST_CURRENT_FUNCTION:
+                        break;
+
+                    case DEBUG_RUN_PACKAGE:
+                        ImGui::Checkbox("Use package of current file", &dp.run_package.use_current_package);
+                        imgui_small_newline();
+
+                        imgui_with_disabled(dp.run_package.use_current_package, [&]() {
+                            imgui_input_text_full_fixbuf("Package path", dp.run_package.package_path);
+                        });
+
+                        imgui_small_newline();
+                        break;
+
+                    case DEBUG_RUN_BINARY:
+                        imgui_input_text_full_fixbuf("Binary path", dp.run_binary.binary_path);
+                        imgui_small_newline();
+                        break;
+                    }
+
+                    imgui_input_text_full_fixbuf("Additional arguments", dp.args);
+
+                    ImGui::EndChild();
+                }
+
+                ImGui::EndTabItem();
+            }
+
+            flags = ImGuiTabItemFlags_None;
+            if (wnd.focus_build_profiles) {
+                flags |= ImGuiTabItemFlags_SetSelected;
+                wnd.focus_build_profiles = false;
+            }
+
+            if (ImGui::BeginTabItem("Build Profiles", NULL, flags)) {
+                {
+                    ImGui::BeginChild("left pane", ImVec2(200, 300), true);
+
+                    for (int i = 0; i < tmp.build_profiles_len; i++) {
+                        auto &it = tmp.build_profiles[i];
+                        if (ImGui::Selectable(it.label, wnd.current_build_profile == i))
+                            wnd.current_build_profile = i;
+                    }
+
+                    ImGui::EndChild();
+                }
+
+                ImGui::SameLine();
+
+                {
+                    ImGui::BeginChild("right pane", ImVec2(400, 300));
+
+                    auto &dp = tmp.build_profiles[wnd.current_build_profile];
+
+                    imgui_input_text_full_fixbuf("Name", dp.label);
+                    imgui_small_newline();
+                    imgui_input_text_full_fixbuf("Build command", dp.cmd);
+
+                    ImGui::EndChild();
+                }
+
+                ImGui::EndTabItem();
+            }
+
+            ImGui::EndTabBar();
         }
 
-        ImGui::SameLine();
+        ImGui::Separator();
 
-        if (ImGui::Button("Cancel")) {
-            world.wnd_project_settings.show = false;
+        {
+            ImGuiStyle &style = ImGui::GetStyle();
+
+            float button1_w = ImGui::CalcTextSize("Save").x + style.FramePadding.x * 2.f;
+            float button2_w = ImGui::CalcTextSize("Cancel").x + style.FramePadding.x * 2.f;
+            float width_needed = button1_w + style.ItemSpacing.x + button2_w;
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - width_needed);
+
+            if (ImGui::Button("Save")) {
+                project_settings.copy(&wnd.tmp);
+                project_settings.write(path_join(world.current_path, ".ideproj"));
+                world.wnd_project_settings.show = false;
+            }
+
+            ImGui::SameLine();
+
+            if (ImGui::Button("Cancel")) {
+                world.wnd_project_settings.show = false;
+            }
         }
 
         ImGui::End();
@@ -1896,7 +2143,10 @@ void UI::draw_everything() {
         ImGui::End();
     }
 
-    if (world.dbg.state_flag != DLV_STATE_INACTIVE) {
+    // Don't show the debugger UI if we're still starting up, because we're
+    // still building, and the build could fail.  Might regret this, can always
+    // change later.
+    if (world.dbg.state_flag != DLV_STATE_INACTIVE && world.dbg.state_flag != DLV_STATE_STARTING) {
         Debugger_UI dui;
         dui.init(this);
         dui.draw();

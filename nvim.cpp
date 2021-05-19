@@ -356,7 +356,8 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                     {
                         writer.write_array(1);
                         // don't move the cursor back one; we handle that
-                        writer.write_string("<C-O>:stopinsert<CR>");
+                        // <F1> is remapped to ':', because ':' is mapped to <nop>
+                        writer.write_string("<C-O><F1>stopinsert<CR>");
                     }
                 }
                 end_message();
