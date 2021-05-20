@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/invrainbow/ide/payments"
 )
 
 func TestBlah(t *testing.T) {
@@ -15,12 +17,12 @@ func TestBlah(t *testing.T) {
 }
 
 func TestGenerateLicenseKey(t *testing.T) {
-	key, err := generateLicenseKey()
+	key, err := main.GenerateLicenseKey()
 	if err != nil {
 		t.Errorf("error while generating license key: %v", err)
 	}
 
-	validateKey := func(key string) bool {
+	validateKey := func() bool {
 		if len(key) != 35 {
 			return false
 		}
@@ -42,6 +44,8 @@ func TestGenerateLicenseKey(t *testing.T) {
 				return false
 			}
 		}
+
+		return true
 	}
 
 	if !validateKey() {

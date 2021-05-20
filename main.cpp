@@ -1014,12 +1014,15 @@ int main() {
                     case GLFW_KEY_F12:
                         world.windows_open.im_demo ^= 1;
                         break;
+                    case GLFW_KEY_F6:
+                        if (world.dbg.state_flag == DLV_STATE_INACTIVE)
+                            world.dbg.push_call(DLVC_DEBUG_TEST_UNDER_CURSOR);
+                        break;
                     case GLFW_KEY_F5:
                         switch (world.dbg.state_flag) {
                         case DLV_STATE_PAUSED:
                             world.dbg.push_call(DLVC_CONTINUE_RUNNING);
                             break;
-
                         case DLV_STATE_INACTIVE:
                             world.dbg.push_call(DLVC_START);
                             break;

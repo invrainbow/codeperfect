@@ -754,10 +754,8 @@ void Debugger::surface_error(ccstr msg) {
     // TODO: surface some kind of error, how do?
 }
 
-bool Debugger::start() {
+bool Debugger::start(Debug_Profile *debug_profile) {
     conn = -1;
-
-    auto debug_profile = project_settings.get_active_debug_profile();
 
     /*
     to build test:
@@ -771,17 +769,6 @@ bool Debugger::start() {
 
     ccstr binary_path = NULL;
     ccstr test_function_name = NULL;
-
-    auto get_current_editor_package_path = [&]() -> ccstr {
-        auto editor = world.get_current_editor();
-        if (editor == NULL) return NULL;
-        if (!path_contains_in_subtree(world.current_path, editor->filepath)) return NULL;
-
-        auto root_module_path = world.indexer.module_resolver.module_path;
-        auto subpath = get_path_relative_to(our_dirname(editor->filepath), world.current_path);
-
-        return normalize_path_sep(path_join(root_module_path, subpath), '/');
-    };
 
     // TODO: we need to "lock" debug and build functions
     switch (debug_profile->type) {
@@ -802,8 +789,54 @@ bool Debugger::start() {
             };
 
             ccstr package_path = NULL;
+
+            auto get_info_from_current_editor = [&]() {
+                auto editor = world.get_current_editor();
+                if (editor == NULL) return;
+                if (!editor->is_go_file) return;
+
+                if (debug_profile->type == DEBUG_TEST_CURRENT_FUNCTION)
+                    if (!str_ends_with(editor->filepath, "_test.go"))
+                        return;
+
+                if (!path_contains_in_subtree(world.current_path, editor->filepath)) return;
+
+                auto root_module_path = world.indexer.module_resolver.module_path;
+                auto subpath = get_path_relative_to(our_dirname(editor->filepath), world.current_path);
+                package_path = normalize_path_sep(path_join(root_module_path, subpath), '/');
+
+                if (debug_profile->type == DEBUG_TEST_CURRENT_FUNCTION) {
+                    if (editor->tree != NULL) {
+                        Parser_It it;
+                        it.init(&editor->buf);
+                        auto root_node = new_ast_node(ts_tree_root_node(editor->tree), &it);
+
+                        find_nodes_containing_pos(root_node, editor->cur, true, [&](auto it) -> Walk_Action {
+                            if (it->type == TS_SOURCE_FILE)
+                                return WALK_CONTINUE;
+
+                            if (it->type == TS_FUNCTION_DECLARATION) {
+                                auto name = it->field(TSF_NAME);
+                                if (!name->null) {
+                                    auto func_name = name->string();
+                                    if (str_starts_with(func_name, "Test"))
+                                        test_function_name = func_name;
+                                }
+                            }
+
+                            return WALK_ABORT;
+                        });
+                    }
+                }
+            };
+
+            auto get_current_test_function = [&]() -> ccstr {
+                auto editor = world.get_current_editor();
+                if (editor == NULL) return NULL;
+            };
+
             if (use_current_package())
-                package_path = get_current_editor_package_path();
+                get_info_from_current_editor();
             else if (debug_profile->type == DEBUG_TEST_PACKAGE)
                 package_path = debug_profile->test_package.package_path;
             else if (debug_profile->type == DEBUG_RUN_PACKAGE)
@@ -812,9 +845,9 @@ bool Debugger::start() {
             if (package_path == NULL || package_path[0] == '\0')
                 return false;
 
-            if (debug_profile->type == DEBUG_TEST_CURRENT_FUNCTION) {
-                test_function_name = "TestBlah"; // TODO
-            }
+            if (debug_profile->type == DEBUG_TEST_CURRENT_FUNCTION)
+                if (test_function_name == NULL || test_function_name[0] == '\0')
+                    return false;
 
             ccstr cmd = NULL;
             if (debug_profile->type == DEBUG_RUN_PACKAGE)
@@ -860,7 +893,7 @@ bool Debugger::start() {
 
     ccstr dlv_cmd = our_sprintf("dlv exec --headless --listen=127.0.0.1:1234 %s", binary_path);
     if (debug_profile->type == DEBUG_TEST_CURRENT_FUNCTION)
-        dlv_cmd = our_sprintf("%s -- -run %s", test_function_name);
+        dlv_cmd = our_sprintf("%s -- -test.run %s", dlv_cmd, test_function_name);
 
     if (!dlv_proc.run(dlv_cmd)) return false;
 
@@ -1128,6 +1161,7 @@ void Debugger::do_everything() {
                 break;
 
             case DLVC_START:
+            case DLVC_DEBUG_TEST_UNDER_CURSOR:
                 {
                     {
                         SCOPED_LOCK(&lock);
@@ -1141,7 +1175,27 @@ void Debugger::do_everything() {
                         exiting = false;
                     }
 
-                    if (!start()) {
+                    Debug_Profile *debug_profile = NULL;
+                    if (it.type == DLVC_DEBUG_TEST_UNDER_CURSOR) {
+                        for (int i = 0; i < project_settings.debug_profiles_len; i++) {
+                            auto &it = project_settings.debug_profiles[i];
+                            if (it.is_builtin && it.type == DEBUG_TEST_CURRENT_FUNCTION) {
+                                debug_profile = &it;
+                                break;
+                            }
+                        }
+                    } else {
+                        debug_profile = project_settings.get_active_debug_profile();
+                    }
+
+                    if (debug_profile == NULL) {
+                        // TODO: tell user what went wrong
+                        // we need a way of calling tell_user from any thread
+                        // right now i'm not sure if anything goes wrong if we call it outside main thread
+                        break;
+                    }
+
+                    if (!start(debug_profile)) {
                         SCOPED_LOCK(&lock);
                         state_flag = DLV_STATE_INACTIVE;
                         loop_mem.reset();
@@ -1323,7 +1377,6 @@ void Debugger::handle_new_state(Packet *p) {
         state_mem.reset();
         SCOPED_MEM(&state_mem);
         fetch_goroutines();
-        state_flag = DLV_STATE_PAUSED;
     }
 
     select_frame(state.current_goroutine_id, state.current_frame);
@@ -1343,6 +1396,8 @@ void Debugger::handle_new_state(Packet *p) {
     if (goroutine_id == -1) // halting
         goroutine_id = state.goroutines[0].id;
     select_frame(goroutine_id, state.current_frame);
+
+    state_flag = DLV_STATE_PAUSED;
 }
 
 void Debugger::fetch_variables(int goroutine_id, int frame, Dlv_Frame *dlvframe) {
@@ -1363,9 +1418,9 @@ void Debugger::fetch_variables(int goroutine_id, int frame, Dlv_Frame *dlvframe)
             rend->obj([&]() {
                 rend->field("followPointers", true);
                 rend->field("maxVariableRecurse", 2);
-                rend->field("maxStringLen", 64);
-                rend->field("maxArrayValues", 64);
-                rend->field("maxStructFields", -1);
+                rend->field("maxStringLen", 128);
+                rend->field("maxArrayValues", 32);
+                rend->field("maxStructFields", 32);
             });
         });
     })->js();
@@ -1388,9 +1443,9 @@ void Debugger::fetch_variables(int goroutine_id, int frame, Dlv_Frame *dlvframe)
             rend->obj([&]() {
                 rend->field("followPointers", true);
                 rend->field("maxVariableRecurse", 2);
-                rend->field("maxStringLen", 64);
-                rend->field("maxArrayValues", 64);
-                rend->field("maxStructFields", -1);
+                rend->field("maxStringLen", 128);
+                rend->field("maxArrayValues", 32);
+                rend->field("maxStructFields", 32);
             });
         });
     })->js();

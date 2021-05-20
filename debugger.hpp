@@ -6,6 +6,7 @@
 #include "os.hpp"
 #include "utils.hpp"
 #include "list.hpp"
+#include "settings.hpp"
 
 ccstr jsmn_type_str(int type);
 
@@ -99,6 +100,7 @@ enum Dlv_Call_Type {
     DLVC_EVAL_WATCHES,
     DLVC_EVAL_SINGLE_WATCH,
     DLVC_START,
+    DLVC_DEBUG_TEST_UNDER_CURSOR,
     DLVC_BREAK_ALL,
     DLVC_STOP,
     DLVC_SET_CURRENT_FRAME,
@@ -298,7 +300,7 @@ struct Debugger {
 
     void init();
     void cleanup();
-    bool start();
+    bool start(Debug_Profile *debug_profile);
     void stop();
 
     u8 read1();

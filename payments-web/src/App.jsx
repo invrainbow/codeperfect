@@ -1,3 +1,5 @@
+/* global Stripe */
+
 import React from "react";
 import { BrowserRouter as Router, Switch, Route, Link } from "react-router-dom";
 import ideScreenshotImage from "./ide.png";
@@ -9,8 +11,13 @@ import bear3Image from "./bear3.jpg";
 import bear4Image from "./bear4.jpg";
 
 const IDE_NAME = "CodePerfect 95";
-
+const API_BASE = "http://localhost:8080";
 const CURRENT_YEAR = new Date().getFullYear();
+const STRIPE_PRICE_ID = "price_1IrHFLBpL0Zd3zdOjGoBlmZF";
+const STRIPE_PUB_KEY =
+  "pk_test_51IqLcpBpL0Zd3zdOPzAZQbYjpmD47ethoqtcFGwiJBLdovijF8G0hBTA8FylfnRnQ8aXoPVC2DmNMHpndiV1YtJr00UU0XCWnt";
+
+const stripe = Stripe(STRIPE_PUB_KEY);
 
 function Bear({ index }) {
   const BEAR_URLS = [bear1Image, bear2Image, bear3Image, bear4Image];
@@ -22,6 +29,10 @@ function Bear({ index }) {
       style={{ backgroundImage: `url('${url}')` }}
     />
   );
+}
+
+function Title(props) {
+  return <h2 className="text-lg font-semibold" {...props} />;
 }
 
 function Section({ bearIndex, children }) {
@@ -165,8 +176,20 @@ function Pricing() {
 function Beta() {
   const [disabled, setDisabled] = React.useState(false);
 
-  const onBuy = () => {
+  const onBuy = async () => {
     setDisabled(true);
+    try {
+      const resp = await fetch(`${API_BASE}/checkout`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ price_id: STRIPE_PRICE_ID }),
+      });
+      const data = await resp.json();
+      stripe.redirectToCheckout({ sessionId: data.session_id });
+    } catch (err) {
+      setDisabled(false);
+      alert(err);
+    }
   };
 
   return (
@@ -228,7 +251,7 @@ function Beta() {
         developing new features rapidly &mdash; check out the{" "}
         <Link to="/roadmap">roadmap</Link>.
       </p>
-      <p className="mt-8">
+      <p className="my-8">
         <button
           onClick={onBuy}
           className="main-button text-lg px-8 py-4 disabled:opacity-50"
@@ -237,6 +260,49 @@ function Beta() {
           Buy {IDE_NAME}
         </button>
       </p>
+      <p>
+        If you're interested in {IDE_NAME} but it's not a fit right now, you can
+        also subscribe to email updates below.
+      </p>
+      <form
+        action="https://gmail.us6.list-manage.com/subscribe/post?u=530176c3897958e56302043ed&amp;id=cb045d5e14"
+        className="mt-8"
+        method="post"
+        name="mc-embedded-subscribe-form"
+        target="_blank"
+        novalidate
+      >
+        <input
+          type="email"
+          defaultValue=""
+          name="EMAIL"
+          placeholder="Email address"
+          required
+          className="border border-black-400 py-1.5 px-2.5 rounded-md text-sm mr-2"
+        />
+        <div
+          style={{ position: "absolute", left: "-5000px" }}
+          aria-hidden="true"
+        >
+          <input
+            type="text"
+            name="b_530176c3897958e56302043ed_cb045d5e14"
+            tabindex="-1"
+            value=""
+          />
+        </div>
+        <input
+          className="main-button from-gray-200 to-gray-300 text-gray-600"
+          role="button"
+          type="submit"
+          value="Subscribe"
+          name="subscribe"
+        />
+        <p className="text-xs text-gray-400 mt-1">
+          (We'll only send you product updates; we won't spam you or share your
+          email.)
+        </p>
+      </form>
     </div>
   );
 }
@@ -244,7 +310,7 @@ function Beta() {
 function Roadmap() {
   return (
     <div>
-      <h2 className="text-lg font-semibold">Roadmap</h2>
+      <Title>Roadmap</Title>
       <ul className="thick-list">
         <li>
           macOS and Linux support. The bulk of our code is cross-platform.
@@ -270,7 +336,7 @@ function Roadmap() {
 function About() {
   return (
     <div>
-      <h2 className="text-lg font-semibold">About</h2>
+      <Title>About</Title>
       <p>{IDE_NAME} is created by Brandon Hsiao.</p>
     </div>
   );
@@ -278,17 +344,43 @@ function About() {
 */
 
 function PaymentCanceled() {
-  return <div>Your payment was canceled.</div>;
+  return (
+    <div>
+      <Title>Your payment was canceled.</Title>
+      <p>
+        If you didn't mean to cancel it, you can{" "}
+        <Link to="/beta">try again</Link>.
+      </p>
+      <p>
+        If you believe the payment went through and you were charged, please{" "}
+        <a href="mailto:support@codeperfect95.com">email us</a>.
+      </p>
+      <p>
+        Otherwise, <Link to="/">click here</Link> to return to the main page.
+      </p>
+    </div>
+  );
 }
 
 function PaymentSuccess() {
-  return <div>Thanks! Please check your email for details.</div>;
+  return (
+    <div>
+      <Title>Your payment went through!</Title>
+      <p>Please check your email for the download link and your license key.</p>
+      <p>
+        If the email doesn't come, please check your spam folder and wait a few
+        minutes. If it still doesn't come, please do not purchase a second time
+        &mdash; two subscriptions will be created. Instead,{" "}
+        <a href="mailto:support@codeperfect95.com">email us</a>.
+      </p>
+    </div>
+  );
 }
 
 function Docs() {
   return (
     <div className="max-w-2xl my-12">
-      <h2 className="text-lg font-semibold">Docs</h2>
+      <Title>Docs</Title>
       <p>Blah blah blah.</p>
     </div>
   );
@@ -297,7 +389,7 @@ function Docs() {
 function Philosophy() {
   return (
     <div className="max-w-2xl my-12">
-      <h2 className="text-lg font-semibold">Philosophy</h2>
+      <Title>Philosophy</Title>
       <p>Blah blah blah.</p>
     </div>
   );
@@ -361,7 +453,7 @@ function App() {
         </div>
         <div className="mt-8 text-sm pt-4">
           <div className="px-4 max-w-6xl mx-auto flex justify-between">
-            <div class="text-gray-400">
+            <div className="text-gray-400">
               &copy; {CURRENT_YEAR} {IDE_NAME}
             </div>
             <div className="flex space-x-4">

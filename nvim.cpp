@@ -186,7 +186,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                     auto req2 = save_request(NVIM_REQ_POST_SAVE_SETLINES, msgid, editor->id);
                     req2->post_save_setlines.cur = req->post_save_getchangedtick.cur;
 
-                    writer.write_int(event->response.buf.object_id);
+                    writer.write_int(editor->nvim_data.buf_id);
                     writer.write_int(0);
                     writer.write_int(-1);
                     writer.write_bool(false);

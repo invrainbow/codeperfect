@@ -1093,59 +1093,63 @@ struct Debugger_UI {
             ImGui::SetNextWindowDockID(ui->dock_bottom_id, ImGuiCond_Once);
             ImGui::Begin("Call Stack");
             ImGui::PushFont(world.ui.im_font_mono);
-            for (int i = 0; i < state.goroutines.len; i++) {
-                auto &goroutine = state.goroutines[i];
 
-                int tree_flags = ImGuiTreeNodeFlags_OpenOnArrow;
+            if (world.dbg.state_flag == DLV_STATE_PAUSED) {
+                for (int i = 0; i < state.goroutines.len; i++) {
+                    auto &goroutine = state.goroutines[i];
 
-                bool is_current = (state.current_goroutine_id == goroutine.id);
-                if (is_current) {
-                    tree_flags |= ImGuiTreeNodeFlags_Bullet;
-                    ImGui::SetNextItemOpen(true);
-                    ImGui::PushStyleColor(ImGuiCol_Text, (ImVec4)ImColor(255, 100, 100));
-                }
+                    int tree_flags = ImGuiTreeNodeFlags_OpenOnArrow;
 
-                auto open = ImGui::TreeNodeEx(
-                    (void*)(uptr)i,
-                    tree_flags,
-                    "%s (%s)",
-                    goroutine.curr_func_name,
-                    goroutine.breakpoint_hit ? "BREAKPOINT HIT" : "PAUSED"
-                );
-
-                if (is_current)
-                    ImGui::PopStyleColor();
-
-                if (ImGui::IsItemClicked()) {
-                    world.dbg.push_call(DLVC_SET_CURRENT_GOROUTINE, [&](auto call) {
-                        call->set_current_goroutine.goroutine_id = goroutine.id;
-                    });
-                }
-
-                if (open) {
-                    if (goroutine.fresh) {
-                        for (int j = 0; j < goroutine.frames->len; j++) {
-                            auto &frame = goroutine.frames->items[j];
-
-                            int tree_flags = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
-                            if (state.current_goroutine_id == goroutine.id && state.current_frame == j)
-                                tree_flags |= ImGuiTreeNodeFlags_Selected;
-
-                            ImGui::TreeNodeEx(&frame, tree_flags, "%s (%s:%d)", frame.func_name, our_basename(frame.filepath), frame.lineno);
-                            if (ImGui::IsItemClicked()) {
-                                world.dbg.push_call(DLVC_SET_CURRENT_FRAME, [&](auto call) {
-                                    call->set_current_frame.goroutine_id = goroutine.id;
-                                    call->set_current_frame.frame = j;
-                                });
-                            }
-                        }
-                    } else {
-                        ImGui::Text("Loading...");
+                    bool is_current = (state.current_goroutine_id == goroutine.id);
+                    if (is_current) {
+                        tree_flags |= ImGuiTreeNodeFlags_Bullet;
+                        ImGui::SetNextItemOpen(true);
+                        ImGui::PushStyleColor(ImGuiCol_Text, (ImVec4)ImColor(255, 100, 100));
                     }
 
-                    ImGui::TreePop();
+                    auto open = ImGui::TreeNodeEx(
+                        (void*)(uptr)i,
+                        tree_flags,
+                        "%s (%s)",
+                        goroutine.curr_func_name,
+                        goroutine.breakpoint_hit ? "BREAKPOINT HIT" : "PAUSED"
+                    );
+
+                    if (is_current)
+                        ImGui::PopStyleColor();
+
+                    if (ImGui::IsItemClicked()) {
+                        world.dbg.push_call(DLVC_SET_CURRENT_GOROUTINE, [&](auto call) {
+                            call->set_current_goroutine.goroutine_id = goroutine.id;
+                        });
+                    }
+
+                    if (open) {
+                        if (goroutine.fresh) {
+                            for (int j = 0; j < goroutine.frames->len; j++) {
+                                auto &frame = goroutine.frames->items[j];
+
+                                int tree_flags = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+                                if (state.current_goroutine_id == goroutine.id && state.current_frame == j)
+                                    tree_flags |= ImGuiTreeNodeFlags_Selected;
+
+                                ImGui::TreeNodeEx(&frame, tree_flags, "%s (%s:%d)", frame.func_name, our_basename(frame.filepath), frame.lineno);
+                                if (ImGui::IsItemClicked()) {
+                                    world.dbg.push_call(DLVC_SET_CURRENT_FRAME, [&](auto call) {
+                                        call->set_current_frame.goroutine_id = goroutine.id;
+                                        call->set_current_frame.frame = j;
+                                    });
+                                }
+                            }
+                        } else {
+                            ImGui::Text("Loading...");
+                        }
+
+                        ImGui::TreePop();
+                    }
                 }
             }
+
             ImGui::PopFont();
             ImGui::End();
         }
@@ -1157,65 +1161,67 @@ struct Debugger_UI {
             ImGui::Begin("Local Variables");
             ImGui::PushFont(world.ui.im_font_mono);
 
-            auto flags = ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable;
-            if (ImGui::BeginTable("vars", 3, flags)) {
-                ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_NoHide);
-                ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_NoHide);
-                ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_NoHide);
-                ImGui::TableHeadersRow();
+            if (world.dbg.state_flag == DLV_STATE_PAUSED) {
+                auto flags = ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable;
+                if (ImGui::BeginTable("vars", 3, flags)) {
+                    ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_NoHide);
+                    ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_NoHide);
+                    ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_NoHide);
+                    ImGui::TableHeadersRow();
 
-                bool loading = false;
-                bool done = false;
-                Dlv_Frame *frame = NULL;
+                    bool loading = false;
+                    bool done = false;
+                    Dlv_Frame *frame = NULL;
 
-                do {
-                    if (dbg.state_flag != DLV_STATE_PAUSED) break;
-                    if (state.current_goroutine_id == -1 || state.current_frame == -1) break;
+                    do {
+                        if (dbg.state_flag != DLV_STATE_PAUSED) break;
+                        if (state.current_goroutine_id == -1 || state.current_frame == -1) break;
 
-                    auto goroutine = state.goroutines.find([&](auto it) { return it->id == state.current_goroutine_id; });
-                    if (goroutine == NULL) break;
+                        auto goroutine = state.goroutines.find([&](auto it) { return it->id == state.current_goroutine_id; });
+                        if (goroutine == NULL) break;
 
-                    loading = true;
+                        loading = true;
 
-                    if (!goroutine->fresh) break;
-                    if (state.current_frame >= goroutine->frames->len) break;
+                        if (!goroutine->fresh) break;
+                        if (state.current_frame >= goroutine->frames->len) break;
 
-                    frame = &goroutine->frames->items[state.current_frame];
-                    if (!frame->fresh) {
-                        frame = NULL;
-                        break;
-                    }
-
-                    if (frame->locals != NULL) {
-                        For (*frame->locals) {
-                            Render_Args a = {0};
-                            a.var = &it;
-                            a.is_child = false;
-                            a.watch = NULL;
-                            a.index = INDEX_NONE;
-                            render_var(&a);
+                        frame = &goroutine->frames->items[state.current_frame];
+                        if (!frame->fresh) {
+                            frame = NULL;
+                            break;
                         }
-                    }
 
-                    if (frame->args != NULL) {
-                        For (*frame->args) {
-                            Render_Args a = {0};
-                            a.var = &it;
-                            a.is_child = false;
-                            a.watch = NULL;
-                            a.index = INDEX_NONE;
-                            render_var(&a);
+                        if (frame->locals != NULL) {
+                            For (*frame->locals) {
+                                Render_Args a = {0};
+                                a.var = &it;
+                                a.is_child = false;
+                                a.watch = NULL;
+                                a.index = INDEX_NONE;
+                                render_var(&a);
+                            }
                         }
-                    }
-                } while (0);
 
-                ImGui::EndTable();
+                        if (frame->args != NULL) {
+                            For (*frame->args) {
+                                Render_Args a = {0};
+                                a.var = &it;
+                                a.is_child = false;
+                                a.watch = NULL;
+                                a.index = INDEX_NONE;
+                                render_var(&a);
+                            }
+                        }
+                    } while (0);
 
-                if (frame == NULL && loading)
-                    ImGui::Text("Loading...");
-                if (frame != NULL)
-                    if ((frame->locals == NULL || frame->locals->len == 0) && (frame->args == NULL || frame->args->len == 0))
-                        ImGui::Text("No variables to show here.");
+                    ImGui::EndTable();
+
+                    if (frame == NULL && loading)
+                        ImGui::Text("Loading...");
+                    if (frame != NULL)
+                        if ((frame->locals == NULL || frame->locals->len == 0) && (frame->args == NULL || frame->args->len == 0))
+                            ImGui::Text("No variables to show here.");
+                }
             }
 
             ImGui::PopFont();
@@ -1231,54 +1237,56 @@ struct Debugger_UI {
             ImGui::Begin("Watches");
             ImGui::PushFont(world.ui.im_font_mono);
 
-            auto flags = ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable;
-            if (ImGui::BeginTable("vars", 3, flags)) {
-                ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_NoHide);
-                ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_NoHide);
-                ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_NoHide);
-                ImGui::TableHeadersRow();
+            if (world.dbg.state_flag == DLV_STATE_PAUSED) {
+                auto flags = ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable;
+                if (ImGui::BeginTable("vars", 3, flags)) {
+                    ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_NoHide);
+                    ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_NoHide);
+                    ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_NoHide);
+                    ImGui::TableHeadersRow();
 
-                for (int k = 0; k < world.dbg.watches.len; k++) {
-                    auto &it = world.dbg.watches[k];
-                    if (it.deleted) continue;
+                    for (int k = 0; k < world.dbg.watches.len; k++) {
+                        auto &it = world.dbg.watches[k];
+                        if (it.deleted) continue;
 
-                    Render_Args a = {0};
-                    a.var = &it.value;
-                    a.is_child = false;
-                    a.watch = &it;
-                    a.index = INDEX_NONE;
-                    a.watch_index = k;
-                    render_var(&a);
+                        Render_Args a = {0};
+                        a.var = &it.value;
+                        a.is_child = false;
+                        a.watch = &it;
+                        a.index = INDEX_NONE;
+                        a.watch_index = k;
+                        render_var(&a);
+                    }
+
+                    {
+                        // render an extra row for adding new watches
+
+                        ImGui::TableNextRow();
+                        ImGui::TableNextColumn(); // name
+
+                        ImGui::PushStyleColor(ImGuiCol_FrameBg, 0);
+                        ImGui::SetNextItemWidth(-FLT_MIN);
+                        bool changed = ImGui::InputText(
+                            "##newwatch",
+                            world.wnd_debugger.new_watch_buf,
+                            _countof(world.wnd_debugger.new_watch_buf),
+                            ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll
+                        );
+                        ImGui::PopStyleColor();
+                        if (changed || ImGui::IsItemDeactivated())
+                            if (world.wnd_debugger.new_watch_buf[0] != '\0') {
+                                dbg.push_call(DLVC_CREATE_WATCH, [&](auto it) {
+                                    it->create_watch.expression = our_strcpy(world.wnd_debugger.new_watch_buf);
+                                });
+                                world.wnd_debugger.new_watch_buf[0] = '\0';
+                            }
+
+                        ImGui::TableNextColumn(); // value
+                        ImGui::TableNextColumn(); // type
+                    }
+
+                    ImGui::EndTable();
                 }
-
-                {
-                    // render an extra row for adding new watches
-
-                    ImGui::TableNextRow();
-                    ImGui::TableNextColumn(); // name
-
-                    ImGui::PushStyleColor(ImGuiCol_FrameBg, 0);
-                    ImGui::SetNextItemWidth(-FLT_MIN);
-                    bool changed = ImGui::InputText(
-                        "##newwatch",
-                        world.wnd_debugger.new_watch_buf,
-                        _countof(world.wnd_debugger.new_watch_buf),
-                        ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll
-                    );
-                    ImGui::PopStyleColor();
-                    if (changed || ImGui::IsItemDeactivated())
-                        if (world.wnd_debugger.new_watch_buf[0] != '\0') {
-                            dbg.push_call(DLVC_CREATE_WATCH, [&](auto it) {
-                                it->create_watch.expression = our_strcpy(world.wnd_debugger.new_watch_buf);
-                            });
-                            world.wnd_debugger.new_watch_buf[0] = '\0';
-                        }
-
-                    ImGui::TableNextColumn(); // value
-                    ImGui::TableNextColumn(); // type
-                }
-
-                ImGui::EndTable();
             }
 
             ImGui::PopFont();
@@ -1550,34 +1558,46 @@ void UI::draw_everything() {
         }
 
         if (ImGui::BeginMenu("Debug")) {
-            auto can_run = [&]() {
-                switch (world.dbg.state_flag) {
-                case DLV_STATE_PAUSED:
-                case DLV_STATE_INACTIVE:
-                    return true;
-                }
-                return false;
-            };
-
-            if (ImGui::MenuItem("Start Debugging", "F5", false, can_run())) {
-                switch (world.dbg.state_flag) {
-                case DLV_STATE_PAUSED:
+            if (world.dbg.state_flag == DLV_STATE_PAUSED) {
+                if (ImGui::MenuItem("Continue", "F5", false)) {
                     world.dbg.push_call(DLVC_CONTINUE_RUNNING);
-                    break;
-
-                case DLV_STATE_INACTIVE:
+                }
+            } else {
+                if (ImGui::MenuItem("Start Debugging", "F5", false, world.dbg.state_flag == DLV_STATE_INACTIVE)) {
                     world.dbg.push_call(DLVC_START);
-                    break;
                 }
             }
 
             auto can_debug_test_under_cursor = [&]() -> bool {
+                if (world.dbg.state_flag != DLV_STATE_INACTIVE) return false;
+
                 auto editor = world.get_current_editor();
                 if (editor == NULL) return false;
-
                 if (!editor->is_go_file) return false;
+                if (!str_ends_with(editor->filepath, "_test.go")) return false;
+                if (!path_contains_in_subtree(world.current_path, editor->filepath)) return false;
                 if (editor->tree == NULL) return false;
-                return true;
+
+                bool ret = false;
+
+                Parser_It it;
+                it.init(&editor->buf);
+                auto root_node = new_ast_node(ts_tree_root_node(editor->tree), &it);
+
+                find_nodes_containing_pos(root_node, editor->cur, true, [&](auto it) -> Walk_Action {
+                    if (it->type == TS_SOURCE_FILE)
+                        return WALK_CONTINUE;
+
+                    if (it->type == TS_FUNCTION_DECLARATION) {
+                        auto name = it->field(TSF_NAME);
+                        if (!name->null)
+                            ret = str_starts_with(name->string(), "Test");
+                    }
+
+                    return WALK_ABORT;
+                });
+
+                return ret;
             };
 
             if (ImGui::MenuItem("Debug Test Under Cursor", "F6", false, can_debug_test_under_cursor())) {
@@ -2474,26 +2494,21 @@ void UI::draw_everything() {
                 vec2f actual_cursor_position = { -1, -1 };
                 vec2f actual_parameter_hint_start = { -1, -1 };
 
-                auto draw_background = [&](bool insert_cursor, vec4f color) {
+                auto draw_background = [&](bool is_insert_cursor, vec4f color) {
                     boxf b;
                     b.x = cur_pos.x;
                     b.y = cur_pos.y - font->offset_y;
                     b.h = (float)font->height;
-                    if (insert_cursor)
-                        b.w = 2;
-                    else
-                        b.w = (float)font->width;
+                    b.w = is_insert_cursor ? 2 : (float)font->width;
                     draw_rect(b, color);
                 };
 
                 auto draw_cursor = [&]() {
-                    actual_cursor_position = cur_pos;    // save position where cursor is drawn for later use
-                    bool insert_cursor = (world.nvim.mode == VI_INSERT && is_pane_selected && !world.nvim.exiting_insert_mode);
+                    if (current_pane != world.current_pane) return;
 
-                    if (current_pane == world.current_pane)
-                        draw_background(insert_cursor, rgba(COLOR_LIME));
-                    else
-                        draw_background(insert_cursor, rgba(COLOR_LIME, 0.3));
+                    actual_cursor_position = cur_pos;    // save position where cursor is drawn for later use
+                    bool is_insert_cursor = (world.nvim.mode == VI_INSERT && is_pane_selected && !world.nvim.exiting_insert_mode);
+                    draw_background(is_insert_cursor, rgba(COLOR_LIME));
                 };
 
                 List<Client_Breakpoint> breakpoints_for_this_editor;

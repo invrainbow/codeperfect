@@ -9,48 +9,32 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+
 	"github.com/stripe/stripe-go/v72"
 	"github.com/stripe/stripe-go/v72/checkout/session"
 
 	// "github.com/stripe/stripe-go/v72/customer"
 	"github.com/stripe/stripe-go/v72/webhook"
-	"gorm.io/gorm"
 
-	"github.com/aws/aws-sdk-go/aws"
-	// "github.com/aws/aws-sdk-go/aws/awserr"
-	awsSession "github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/ses"
+	"gorm.io/gorm"
 )
 
-var sesClient *ses.SES
-
-func initSesClient() {
-	sess, err := awsSession.NewSession(&aws.Config{
-		Region: aws.String("us-west-2")},
-	)
-	if err != nil {
-		panic(err)
-	}
-	sesClient = ses.New(sess)
-}
+const StripeAPIKey = "sk_test_51IqLcpBpL0Zd3zdOMyMwr4CfzffzCVaFmsD1tPMLvlHGzQmUv2qCjYv6Oai5hmpF0j9BbCWXHDgLhTie7hU4YhMX00Ba9jADiH"
+const StripeWebhookSecret = "whsec_IOO7B9EaYAGkWZyNHbRu11NFrGxvYYm1"
 
 func init() {
-	stripe.Key = os.Getenv("STRIPE_API_KEY")
-	// "sk_test_51IqLcpBpL0Zd3zdOMyMwr4CfzffzCVaFmsD1tPMLvlHGzQmUv2qCjYv6Oai5hmpF0j9BbCWXHDgLhTie7hU4YhMX00Ba9jADiH"
-
-	initDB()
-	initSesClient()
+	stripe.Key = StripeAPIKey
 }
 
 type CheckoutPost struct {
 	PriceID string `json:"price_id" binding:"required"`
 }
 
-func generateLicenseKey() (string, error) {
+func GenerateLicenseKey() (string, error) {
 	b := make([]byte, 16)
 	n, err := rand.Read(b)
 	if err != nil {
@@ -69,49 +53,17 @@ func generateLicenseKey() (string, error) {
 	return strings.Join(parts, "-"), nil
 }
 
-func sendEmail(to, html, text, subject string) error {
-	makeContent := func(body string) *ses.Content {
-		return &ses.Content{
-			Charset: aws.String("UTF-8"),
-			Data:    aws.String(body),
-		}
-	}
-
-	input := &ses.SendEmailInput{
-		Destination: &ses.Destination{
-			CcAddresses: []*string{},
-			ToAddresses: []*string{
-				aws.String(to),
-			},
-		},
-		Message: &ses.Message{
-			Body: &ses.Body{
-				Html: makeContent(html),
-				Text: makeContent(text),
-			},
-			Subject: makeContent(subject),
-		},
-		Source: aws.String(SendEmailFrom),
-		// Uncomment to use a configuration set
-		//ConfigurationSetName: aws.String(ConfigurationSet),
-	}
-
-	_, err := sesClient.SendEmail(input)
-	if err != nil {
-		log.Printf("error while sending email to %v: %v", to, err)
-	}
-	return err
-}
-
 func main() {
 	r := gin.Default()
+
+	r.Use(cors.Default())
 
 	r.POST("/checkout", func(c *gin.Context) {
 		var data CheckoutPost
 		c.BindJSON(&data)
 
-		successUrl := "http://localhost:3000/payment_success"
-		cancelUrl := "http://localhost:3000/payment_canceled"
+		successUrl := "http://localhost:3000/payment-success"
+		cancelUrl := "http://localhost:3000/payment-canceled"
 
 		params := &stripe.CheckoutSessionParams{
 			SuccessURL:         &successUrl,
@@ -143,12 +95,11 @@ func main() {
 		body, err := ioutil.ReadAll(c.Request.Body)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{})
-
 			log.Printf("ioutil.Readall: %v", err)
 			return
 		}
 
-		event, err := webhook.ConstructEvent(body, c.Request.Header.Get("Stripe-Signature"), os.Getenv("STRIPE_WEBHOOK_SECRET"))
+		event, err := webhook.ConstructEvent(body, c.Request.Header.Get("Stripe-Signature"), StripeWebhookSecret)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{})
 			log.Printf("webhook.ConstructEvent: %v", err)
@@ -158,8 +109,7 @@ func main() {
 		log.Printf("event: %v", event.Type)
 
 		switch event.Type {
-		case "customer.subscription.created":
-		case "customer.subscription.updated":
+		case "customer.subscription.created", "customer.subscription.updated":
 			var sub stripe.Subscription
 			err := json.Unmarshal(event.Data.Raw, &sub)
 			if err != nil {
@@ -180,8 +130,7 @@ func main() {
 			var user User
 			res := db.First(&user, "stripe_customer_id = ? AND stripe_subscription_id = ?", cus.ID, sub.ID)
 			if errors.Is(res.Error, gorm.ErrRecordNotFound) {
-
-				licenseKey, err := generateLicenseKey()
+				licenseKey, err := GenerateLicenseKey()
 				if err != nil {
 					log.Printf("generateLicenseKey: %v", err)
 					break
@@ -196,6 +145,12 @@ func main() {
 			oldStatus := user.StripeSubscriptionStatus
 
 			user.Email = cus.Email
+
+			// DEBUG: stripe's fixture shit doesn't generate an email
+			if user.Email == "" {
+				user.Email = "brhs.again@gmail.com"
+			}
+
 			user.StripeSubscriptionStatus = string(sub.Status)
 			db.Save(&user)
 
@@ -223,7 +178,7 @@ func main() {
 						break
 					}
 
-					sendEmail(
+					SendEmail(
 						user.Email,
 						emailHtml,
 						emailText,
