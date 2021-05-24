@@ -83,13 +83,6 @@ void Project_Settings::load_defaults() {
 
     {
         auto dp = &debug_profiles[debug_profiles_len++];
-        dp->type = DEBUG_TEST_PACKAGE;
-        strcpy_safe(dp->label, _countof(dp->label), "Test Package");
-        dp->test_package.use_current_package = true;
-    }
-
-    {
-        auto dp = &debug_profiles[debug_profiles_len++];
         dp->type = DEBUG_RUN_PACKAGE;
         strcpy_safe(dp->label, _countof(dp->label), "Run Package");
         dp->run_package.use_current_package = true;
@@ -99,6 +92,13 @@ void Project_Settings::load_defaults() {
         auto dp = &debug_profiles[debug_profiles_len++];
         dp->type = DEBUG_RUN_BINARY;
         strcpy_safe(dp->label, _countof(dp->label), "Run Binary");
+    }
+
+    {
+        auto dp = &debug_profiles[debug_profiles_len++];
+        dp->type = DEBUG_TEST_PACKAGE;
+        strcpy_safe(dp->label, _countof(dp->label), "Test Package");
+        dp->test_package.use_current_package = true;
     }
 }
 

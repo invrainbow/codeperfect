@@ -814,47 +814,8 @@ int main() {
                             editor->handle_save();
                         break;
                     case GLFW_KEY_G:
-                        {
-                            if (editor == NULL) break;
-
-                            SCOPED_MEM(&world.indexer.ui_mem);
-                            defer { world.indexer.ui_mem.reset(); };
-
-                            Jump_To_Definition_Result *result = NULL;
-
-                            {
-                                if (!world.indexer.ready) return; // strictly we can just call try_enter(), but want consistency with UI, which is based on `ready`
-                                if (!world.indexer.lock.try_enter()) return;
-                                defer { world.indexer.lock.leave(); };
-
-                                result = world.indexer.jump_to_definition(editor->filepath, new_cur2(editor->cur_to_offset(editor->cur), -1));
-                                if (result == NULL) {
-                                    error("unable to jump to definition");
-                                    return;
-                                }
-                            }
-
-                            auto target = editor;
-                            if (!streq(editor->filepath, result->file))
-                                target = world.focus_editor(result->file);
-
-                            if (target == NULL) break;
-
-                            auto pos = result->pos;
-                            if (world.use_nvim) {
-                                if (target->is_nvim_ready()) {
-                                    if (pos.y == -1) pos = target->offset_to_cur(pos.x);
-                                    target->move_cursor(pos);
-                                } else {
-                                    target->nvim_data.initial_pos = pos;
-                                    target->nvim_data.need_initial_pos_set = true;
-                                }
-                            } else {
-                                if (pos.y == -1) pos = target->offset_to_cur(pos.x);
-                                target->move_cursor(pos);
-                            }
-                            break;
-                        }
+                        handle_goto_definition();
+                        break;
                     case GLFW_KEY_SLASH:
                         {
                             auto &nv = world.nvim;

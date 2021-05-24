@@ -10,28 +10,48 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-
 	"github.com/stripe/stripe-go/v72"
+	portalsession "github.com/stripe/stripe-go/v72/billingportal/session"
 	"github.com/stripe/stripe-go/v72/checkout/session"
-
-	// "github.com/stripe/stripe-go/v72/customer"
+	"github.com/stripe/stripe-go/v72/sub"
 	"github.com/stripe/stripe-go/v72/webhook"
-
 	"gorm.io/gorm"
 )
 
 const StripeAPIKey = "sk_test_51IqLcpBpL0Zd3zdOMyMwr4CfzffzCVaFmsD1tPMLvlHGzQmUv2qCjYv6Oai5hmpF0j9BbCWXHDgLhTie7hU4YhMX00Ba9jADiH"
 const StripeWebhookSecret = "whsec_IOO7B9EaYAGkWZyNHbRu11NFrGxvYYm1"
 
-func init() {
-	stripe.Key = StripeAPIKey
+const S3Bucket = "codeperfect95" // fix this
+
+const (
+	FooA = iota
+	FooB
+	FooC
+	FooD
+	FooE
+	FooF
+)
+
+type VersionInfo struct {
+	Version  int
+	Checksum string
+	S3Key    string
 }
 
-type CheckoutPost struct {
-	PriceID string `json:"price_id" binding:"required"`
+var CurrentVersionInfo = VersionInfo{
+	Version:  1,
+	Checksum: "eb129b345c239d08446c41d22ff7367b5cbb4440bdc1484b5cebdd3d610d8414",
+	S3Key:    "v1/ide.exe",
+}
+
+func init() {
+	stripe.Key = StripeAPIKey
 }
 
 func GenerateLicenseKey() (string, error) {
@@ -53,14 +73,74 @@ func GenerateLicenseKey() (string, error) {
 	return strings.Join(parts, "-"), nil
 }
 
+func randomGlueCode() {
+	subscription, err := sub.Get("sub_JWJf9lW5jyXUQD", nil)
+	if err != nil {
+		log.Printf("sub.Get: %v", err)
+		return
+	}
+
+	fmt.Printf("status is %s", subscription.Status)
+	return
+}
+
 func main() {
+	// randomGlueCode()
+	// return
+
 	r := gin.Default()
 
 	r.Use(cors.Default())
 
+	validateLicenseKey := func(c *gin.Context, allowInactive bool) *User {
+		key := c.PostForm("license_key")
+
+		var user User
+		res := db.First(&user, "license_key = ?", key)
+		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
+			c.JSON(401, gin.H{"error": "bad_key"})
+			return nil
+		}
+
+		if !allowInactive {
+			if user.StripeSubscriptionStatus != string(stripe.SubscriptionStatusActive) {
+				c.JSON(401, gin.H{"error": "trial_expired"})
+				return nil
+			}
+		}
+
+		return &user
+	}
+
+	r.POST("/version", func(c *gin.Context) {
+		if user := validateLicenseKey(c, false); user == nil {
+			return
+		}
+		c.JSON(200, gin.H{"version": CurrentVersionInfo.Version})
+	})
+
+	r.POST("/download", func(c *gin.Context) {
+		if user := validateLicenseKey(c, false); user == nil {
+			return
+		}
+		req, _ := s3Client.GetObjectRequest(&s3.GetObjectInput{
+			Bucket: aws.String(S3Bucket),
+			Key:    aws.String(CurrentVersionInfo.S3Key),
+		})
+		url, err := req.Presign(15 * time.Minute)
+		if err != nil {
+			c.JSON(400, gin.H{"error": "unable_to_generate_download_link"})
+			return
+		}
+		c.JSON(200, gin.H{
+			"version":       CurrentVersionInfo.Version,
+			"checksum":      CurrentVersionInfo.Checksum,
+			"download_link": url,
+		})
+	})
+
 	r.POST("/checkout", func(c *gin.Context) {
-		var data CheckoutPost
-		c.BindJSON(&data)
+		priceID := c.PostForm("price_id")
 
 		successUrl := "http://localhost:3000/payment-success"
 		cancelUrl := "http://localhost:3000/payment-canceled"
@@ -72,7 +152,7 @@ func main() {
 			Mode:               stripe.String(string(stripe.CheckoutSessionModeSubscription)),
 			LineItems: []*stripe.CheckoutSessionLineItemParams{
 				&stripe.CheckoutSessionLineItemParams{
-					Price:    stripe.String(data.PriceID),
+					Price:    stripe.String(priceID),
 					Quantity: stripe.Int64(1),
 				},
 			},
@@ -88,6 +168,24 @@ func main() {
 
 		c.JSON(200, gin.H{
 			"session_id": sess.ID,
+		})
+	})
+
+	r.POST("/portal", func(c *gin.Context) {
+		user := validateLicenseKey(c, true)
+		if user == nil {
+			return
+		}
+
+		returnUrl := "http://localhost:3000/portal-return"
+		params := &stripe.BillingPortalSessionParams{
+			Customer:  stripe.String(user.StripeCustomerID),
+			ReturnURL: stripe.String(returnUrl),
+		}
+		ps, _ := portalsession.New(params)
+
+		c.JSON(200, gin.H{
+			"portal_url": ps.URL,
 		})
 	})
 
@@ -109,26 +207,18 @@ func main() {
 		log.Printf("event: %v", event.Type)
 
 		switch event.Type {
-		case "customer.subscription.created", "customer.subscription.updated":
-			var sub stripe.Subscription
-			err := json.Unmarshal(event.Data.Raw, &sub)
+		case "customer.subscription.created", "customer.subscription.updated", "customer.subscription.deleted":
+			var subscription stripe.Subscription
+			err := json.Unmarshal(event.Data.Raw, &subscription)
 			if err != nil {
 				log.Printf("json.Unmarshal: %v", err)
 				break
 			}
 
-			// does this work? does webhook.ConstructEvent automatically fetch this?
-			cus := sub.Customer
-			/*
-				cus, err := customer.Get(sub.Customer, nil)
-				if err != nil {
-					log.Printf("customer.Get: %v", err)
-					break
-				}
-			*/
+			cus := subscription.Customer
 
 			var user User
-			res := db.First(&user, "stripe_customer_id = ? AND stripe_subscription_id = ?", cus.ID, sub.ID)
+			res := db.First(&user, "stripe_customer_id = ?", cus.ID)
 			if errors.Is(res.Error, gorm.ErrRecordNotFound) {
 				licenseKey, err := GenerateLicenseKey()
 				if err != nil {
@@ -137,7 +227,7 @@ func main() {
 				}
 
 				user.StripeCustomerID = cus.ID
-				user.StripeSubscriptionID = sub.ID
+				user.StripeSubscriptionID = subscription.ID
 				user.LicenseKey = licenseKey
 				db.Create(&user)
 			}
@@ -151,42 +241,59 @@ func main() {
 				user.Email = "brhs.again@gmail.com"
 			}
 
-			user.StripeSubscriptionStatus = string(sub.Status)
+			user.StripeSubscriptionStatus = string(subscription.Status)
+			user.StripeSubscriptionID = subscription.ID
 			db.Save(&user)
 
 			if user.Email == "" {
-				log.Printf("error: user email doesn't exist? cus id = %v, sub id = %v", cus.ID, sub.ID)
+				log.Printf("error: user email doesn't exist? cus id = %v, sub id = %v", cus.ID, subscription.ID)
 				break
 			}
 
 			if oldStatus != user.StripeSubscriptionStatus {
 				if user.StripeSubscriptionStatus == "active" { // nonactive -> active
-					args := &NewLicenseKeyArgs{
-						DownloadLink: "https://google.com",
-						LicenseKey:   user.LicenseKey,
-					}
+					if oldStatus == "canceled" { // just got reactivated
+						args := &SubscriptionRenewedArgs{
+							DownloadLink: "https://codeperfect95.com/download",
+							LicenseKey:   user.LicenseKey,
+						}
 
-					emailHtml, err := RenderTemplate(NewLicenseKeyTplHtml, &args)
-					if err != nil {
-						log.Printf("RenderTemplate: %v", err)
-						break
-					}
+						text, html, err := RenderTemplates(SubscriptionRenewedText, SubscriptionRenewedHtml, args)
+						if err != nil {
+							log.Printf("RenderTemplates: %v", err)
+							break
+						}
 
-					emailText, err := RenderTemplate(NewLicenseKeyTplText, &args)
-					if err != nil {
-						log.Printf("RenderTemplate: %v", err)
-						break
-					}
+						subject := fmt.Sprintf("%s: Subscription reactivated", ProductName)
+						SendEmail(user.Email, html, text, subject)
+					} else {
+						args := &NewLicenseKeyArgs{
+							DownloadLink: "https://codeperfect95.com/download",
+							LicenseKey:   user.LicenseKey,
+						}
 
-					SendEmail(
-						user.Email,
-						emailHtml,
-						emailText,
-						fmt.Sprintf("%s download and license key", ProductName),
-					)
+						text, html, err := RenderTemplates(NewLicenseKeyText, NewLicenseKeyHtml, args)
+						if err != nil {
+							log.Printf("RenderTemplates: %v", err)
+							break
+						}
+
+						subject := fmt.Sprintf("%s: Download and license key", ProductName)
+						SendEmail(user.Email, html, text, subject)
+					}
 				} else if oldStatus == "active" { // active -> nonactive
-					// TODO: email user about their shit not working
-					// send them to portal
+					args := &SubscriptionEndedArgs{
+						LicenseKey: user.LicenseKey,
+					}
+
+					text, html, err := RenderTemplates(SubscriptionEndedText, SubscriptionEndedHtml, args)
+					if err != nil {
+						log.Printf("RenderTemplates: %v", err)
+						break
+					}
+
+					subject := fmt.Sprintf("%s: Subscription canceled", ProductName)
+					SendEmail(user.Email, html, text, subject)
 				}
 			}
 

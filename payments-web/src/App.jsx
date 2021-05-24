@@ -4,6 +4,7 @@ import React from "react";
 import { BrowserRouter as Router, Switch, Route, Link } from "react-router-dom";
 import ideScreenshotImage from "./ide.png";
 import { Helmet } from "react-helmet";
+import cx from "classnames";
 
 import bear1Image from "./bear1.jpg";
 import bear2Image from "./bear2.jpg";
@@ -28,6 +29,17 @@ function Bear({ index }) {
       className="overflow-hidden rounded-md border-solid border-8 border-gray-100 h-80 bg-center bg-cover bg-no-repeat"
       style={{ backgroundImage: `url('${url}')` }}
     />
+  );
+}
+
+function WallOfText({ title, children }) {
+  return (
+    <div className="bg-gray-100 p-8 rounded-sm">
+      <div className="max-w-2xl bg-white p-8 mx-auto rounded-sm shadow-sm text-sm">
+        <Title>{title}</Title>
+        {children}
+      </div>
+    </div>
   );
 }
 
@@ -79,38 +91,59 @@ function Home() {
       </Section>
 
       <Section bearIndex={1}>
-        <div className="text-2xl mb-4">
-          Complete Vim keybindings, out of the box
-        </div>
+        <div className="text-2xl mb-4">A full-fledged IDE, as fast as Vim.</div>
+        <p>Today, IDEs are powerful but slow, Vim fast but limited.</p>
         <p>
-          Our Vim keybindings aren't a plugin. They're built into the core of
-          the application and designed to work seamlessly with everything else.
+          {IDE_NAME} brings the best of both worlds: everything you need to
+          effectively develop Go applications &mdash; jump to definition,
+          autocomplete, parameter hints, auto format, build, integrated
+          debugger, and more &mdash; at lightning speed.
         </p>
         <p>
-          We're big Vim users ourselves, and designed {IDE_NAME} with
-          first-class Vim support from the beginning. It feels like real Vim.
+          No more waiting on Goland's garbage collector. No more hacking plugins
+          together in ~/.vimrc.
         </p>
       </Section>
 
       <Section bearIndex={2}>
-        <div className="text-2xl mb-4">No language server overhead</div>
+        <div className="text-2xl mb-4">No more language server overhead.</div>
         <p>
           {IDE_NAME}'s intellisense is hand-written, extensively tested, and
           designed for speed and reliability.
         </p>
         <p>
-          We don't do things like send a JSON packet over a socket every
-          keystroke. And you'll never need to restart your IDE when gopls
-          crashes.
+          We'll never do things like send a JSON packet over a socket every
+          keystroke. And you'll never need to restart your IDE because gopls
+          crashed.
         </p>
       </Section>
 
       <Section bearIndex={3}>
-        <div className="text-2xl mb-4">A full-fledged IDE, as fast as Vim.</div>
+        <div className="text-2xl mb-4">
+          Feature-complete Vim keybindings, out of the box.
+        </div>
         <p>
-          {IDE_NAME} includes everything you need to effectively develop Go
-          applications: autocomplete, parameter hints, auto format, build,
-          integrated debugger &mdash; all at lightning speed.
+          Our Vim keybindings aren't a plugin added as an afterthought. They're
+          built into the core of the application and designed to work seamlessly
+          with everything else.
+        </p>
+        <p>
+          We're big Vim users ourselves, and designed {IDE_NAME} with
+          first-class Vim support from the beginning. It basically feels like
+          real Vim.
+        </p>
+      </Section>
+
+      <Section bearIndex={4}>
+        <div className="text-2xl mb-4">Designed to perfection.</div>
+        <p>
+          Programs sometimes seem written by people who don't use it themselves.
+          "How did they not catch this bug that happens when I do something
+          extremely basic?"
+        </p>
+        <p>
+          We use {IDE_NAME} ourselves every single day, so we built it to work
+          seamlessly, down to every micro-interaction.
         </p>
       </Section>
 
@@ -120,9 +153,16 @@ function Home() {
             (name, idx) => (
               <div
                 key={name}
-                className={`hover:bg-gray-100 border-b p-4 cursor-pointer ${
-                  idx === 0 ? "border-t" : ""
-                }`}
+                className={cx(
+                  "rounded-md",
+                  "py-2",
+                  "px-4",
+                  "select-none",
+                  "cursor-pointer",
+                  idx === 0 && "bg-gray-200",
+                  idx !== 0 && "hover:bg-gray-100"
+                )}
+                style={{ marginBottom: "1px" }}
               >
                 {name}
               </div>
@@ -157,11 +197,11 @@ function Pricing() {
           per seat.
         </div>
         <div className="my-10">
-          <Link className="main-button text-lg" to="/beta">
+          <Link className="main-button text-xl py-3 px-6 rounded-lg" to="/beta">
             Join Beta
           </Link>
         </div>
-        <p className="text-sm text-gray-500">
+        <p className="text-s">
           If you're buying licenses for your team,{" "}
           <a className="underline" href="mailto:enterprise@codeperfect95.com">
             ask
@@ -173,18 +213,175 @@ function Pricing() {
   );
 }
 
+function Terms() {
+  return (
+    <WallOfText title="Terms of Service">
+      <p>
+        This website provides you with information about the IDE and a means for
+        you to subscribe to our services, which allow you to use the IDE for as
+        long as your subscription is active.
+      </p>
+      <p>
+        The IDE is an application that lets you write Go applications. In
+        exchange for paying a monthly rate, we provide you with a license to use
+        it.
+      </p>
+    </WallOfText>
+  );
+}
+
+function Privacy() {
+  return (
+    <WallOfText title="Privacy Policy">
+      <p>
+        When you sign up, we collect your name, email, and credit card
+        information. We use this information to bill you and send you emails
+        with updates about your payment status (for example, if your card
+        fails).
+      </p>
+      <p>
+        When you sign up for our newsletter we collect your name and email. We
+        use this to send you updates about new product features.
+      </p>
+      <p>
+        The IDE contacts the server to authenticate your license key and to
+        install automatic updates. This exposes your IP address to us. We won't
+        share it with anyone, unless required to by law.
+      </p>
+    </WallOfText>
+  );
+}
+
+// I'm just going to use POST and form data for everything. Do not talk to me
+// about REST or any stupid shit like that or I'll fire you.
+async function talkToServer(endpoint, params) {
+  const makeFormData = (obj) => {
+    const ret = new URLSearchParams();
+    Object.keys(obj).forEach((key) => {
+      ret.append(key, obj[key]);
+    });
+    return ret;
+  };
+  const resp = await fetch(`${API_BASE}/${endpoint}`, {
+    method: "POST",
+    body: makeFormData(params),
+  });
+  return await resp.json();
+}
+
+function Portal() {
+  const [disabled, setDisabled] = React.useState(false);
+  const [licenseKey, setLicenseKey] = React.useState(
+    "ba26c910-e37e71e3-5e07eaf4-4b844592"
+  );
+
+  const onSubmit = async (e) => {
+    e.preventDefault();
+    setDisabled(true);
+    try {
+      const data = await talkToServer("portal", {
+        license_key: licenseKey,
+      });
+
+      if (!data.portal_url) {
+        alert("Invalid license key.");
+        return;
+      }
+
+      window.location.href = data.portal_url;
+    } finally {
+      setDisabled(false);
+    }
+  };
+
+  return (
+    <WallOfText title="Portal Login">
+      <p>
+        Please enter your license key to sign in to the portal. It should be in
+        the email that sent you here.
+      </p>
+      <form onSubmit={onSubmit}>
+        <input
+          type="text"
+          value={licenseKey}
+          onChange={(e) => setLicenseKey(e.target.value)}
+          placeholder="License key"
+          className="border border-black-400 py-1.5 px-2.5 rounded-md text-sm mr-2 font-mono"
+        />
+        <button
+          className="main-button from-gray-200 to-gray-300 text-gray-600"
+          disabled={disabled}
+          type="submit"
+        >
+          Log in to portal
+        </button>
+      </form>
+    </WallOfText>
+  );
+}
+
+// const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function Download() {
+  const [disabled, setDisabled] = React.useState(false);
+  const [licenseKey, setLicenseKey] = React.useState(
+    "ba26c910-e37e71e3-5e07eaf4-4b844592"
+  );
+
+  const onSubmit = async (e) => {
+    e.preventDefault();
+    setDisabled(true);
+    try {
+      const data = await talkToServer("download", {
+        license_key: licenseKey,
+      });
+
+      if (!data.download_link) {
+        alert("Invalid license key.");
+        return;
+      }
+
+      window.location.href = data.download_link;
+    } finally {
+      setDisabled(false);
+    }
+  };
+
+  return (
+    <WallOfText title="Download">
+      <p>
+        Please enter your license key to continue to the download. It should be
+        in the email you got.
+      </p>
+      <form onSubmit={onSubmit}>
+        <input
+          type="text"
+          value={licenseKey}
+          onChange={(e) => setLicenseKey(e.target.value)}
+          placeholder="License key"
+          className="border border-black-400 py-1.5 px-2.5 rounded-md text-sm mr-2 font-mono"
+        />
+        <button
+          className="main-button from-gray-200 to-gray-300 text-gray-600"
+          type="submit"
+          disabled={disabled}
+        >
+          Download
+        </button>
+      </form>
+    </WallOfText>
+  );
+}
+
 function Beta() {
   const [disabled, setDisabled] = React.useState(false);
 
   const onBuy = async () => {
     setDisabled(true);
     try {
-      const resp = await fetch(`${API_BASE}/checkout`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ price_id: STRIPE_PRICE_ID }),
+      const data = await talkToServer("checkout", {
+        price_id: STRIPE_PRICE_ID,
       });
-      const data = await resp.json();
       stripe.redirectToCheckout({ sessionId: data.session_id });
     } catch (err) {
       setDisabled(false);
@@ -193,68 +390,65 @@ function Beta() {
   };
 
   return (
-    <div className="max-w-2xl my-12">
-      <p className="text-xl font-semibold">Before you sign up...</p>
+    <WallOfText title="Before you sign up...">
       <p>{IDE_NAME} costs $10/month.</p>
       <p>
-        It's in very early beta. We're still building out large chunks of
-        functionality. We're releasing it now because we use it every day
-        ourselves, and realized we'd crossed the threshold of getting more than
-        $10/mo of utility from it. That said, it currently has several
-        limitations. Please read them carefully to make sure we're compatible
-        with your needs.
+        It's still in early beta. Large chunks of functionality remain to be
+        built. We're releasing it now because we use it every day ourselves, and
+        realized we'd crossed the threshold of getting $10+ of monthly utility
+        from it. That said, it currently has several limitations. Please read
+        them carefully to make sure we're compatible with your needs.
       </p>
       <ul className="thick-list">
         <li>Only Windows is supported.</li>
-        <li>Only Go 1.16+ is supported.</li>
+        <li>Only Go 1.13+ is supported.</li>
         <li>
           Your project must be module-aware, and consist of a single module,
           located at your project's root folder. More specifically,{" "}
           <code>go list -mod=mod -m all</code> must work from your root folder.
         </li>
         <li>
-          You can only edit using Vim keybindings. Arrow keys and clicking (in
-          the editor) don't work. We're big Vim users.
+          Only editing via Vim keys. Arrow keys, clicking, and scrolling don't
+          work in the editor yet.
         </li>
-        <li>No Find (and Replace) Everywhere.</li>
+        <li>No project-wide Search/Search and Replace.</li>
         <li>No built-in terminal.</li>
         <li>No WSL support.</li>
         <li>
           No Vim commands. Importantly, this means no{" "}
-          <code>:%s/find/replace</code>. (Normal <code>/search</code> works.)
+          <code>:%s/find/replace</code>. (<code>/search</code> works.)
         </li>
       </ul>
       <p>
         Despite these limitations, {IDE_NAME} is ready for day-to-day,
-        bread-and-butter Go programming. Everyone on the development team uses
-        it. You still need to escape-hatch into other tools every now and then,
-        but as we approach feature completeness, this will happen less and less.
+        bread-and-butter Go programming (everyone on the dev team uses it). The
+        following features are working:
       </p>
-      <p>The following features are working:</p>
       <ul className="thick-list">
         <li>Automatically index your code and its dependencies in real-time</li>
-        <li>Autocomplete (member + keyword)</li>
+        <li>Autocomplete (member & keyword)</li>
         <li>Parameter hints (show function signature on call)</li>
         <li>Jump to definition</li>
-        <li>Auto format on save (with goimports)</li>
+        <li>
+          Auto format on save (with <code>goimports</code>)
+        </li>
         <li>Vim keybindings</li>
         <li>
           Debugging with call stack, breakpoints, local variables, and watches
         </li>
+        <li>Debug tests (package-wide &amp; individual tests)</li>
         <li>Building, navigating between errors</li>
         <li>Fuzzy file picker</li>
-        <li>Debug individual tests</li>
       </ul>
       <p>
         If this sounds compatible with your setup, {IDE_NAME} will allow you to
-        start developing Go programs at lightning speed today. We're also
-        developing new features rapidly &mdash; check out the{" "}
-        <Link to="/roadmap">roadmap</Link>.
+        start developing Go programs at lightning speed today. We're also{" "}
+        <Link to="/roadmap">developing new features rapidly</Link>.
       </p>
       <p className="my-8">
         <button
           onClick={onBuy}
-          className="main-button text-lg px-8 py-4 disabled:opacity-50"
+          className="main-button text-lg px-8 py-4"
           disabled={disabled}
         >
           Buy {IDE_NAME}
@@ -303,19 +497,19 @@ function Beta() {
           email.)
         </p>
       </form>
-    </div>
+    </WallOfText>
   );
 }
 
 function Roadmap() {
   return (
-    <div>
-      <Title>Roadmap</Title>
-      <ul className="thick-list">
+    <WallOfText title="Roadmap">
+      <p>Here are things we're looking to add in the immediate future.</p>
+      <ul className="roadmap-list text-gray-500">
         <li>
           macOS and Linux support. The bulk of our code is cross-platform.
           There's about 200 lines of OS-specific code that needs to be
-          implemented (and tested) for each new OS.
+          implemented (easy) and tested (hard) for each new OS.
         </li>
         <li>Make the editor usable for non-Vim users.</li>
         <li>Git integration.</li>
@@ -326,9 +520,9 @@ function Roadmap() {
           of declared symbols instead of files.
         </li>
         <li>Improved details in autocomplete menu.</li>
-        <li>(add more stuff here)</li>
+        <li>Find all usages.</li>
       </ul>
-    </div>
+    </WallOfText>
   );
 }
 
@@ -379,19 +573,9 @@ function PaymentSuccess() {
 
 function Docs() {
   return (
-    <div className="max-w-2xl my-12">
-      <Title>Docs</Title>
-      <p>Blah blah blah.</p>
-    </div>
-  );
-}
-
-function Philosophy() {
-  return (
-    <div className="max-w-2xl my-12">
-      <Title>Philosophy</Title>
-      <p>Blah blah blah.</p>
-    </div>
+    <WallOfText title="Documentation">
+      <p>TODO</p>
+    </WallOfText>
   );
 }
 
@@ -409,9 +593,6 @@ function App() {
             {IDE_NAME}
           </Link>
           <div className="flex items-baseline">
-            <Link className="mr-5" to="/philosophy">
-              Philosophy
-            </Link>
             <Link className="mr-5" to="/docs">
               Documentation
             </Link>
@@ -425,11 +606,20 @@ function App() {
         </div>
         <div className="px-4 max-w-6xl mx-auto">
           <Switch>
+            <Route path="/download">
+              <Download />
+            </Route>
+            <Route path="/portal">
+              <Portal />
+            </Route>
+            <Route path="/terms">
+              <Terms />
+            </Route>
+            <Route path="/privacy">
+              <Privacy />
+            </Route>
             <Route path="/docs">
               <Docs />
-            </Route>
-            <Route path="/philosophy">
-              <Philosophy />
             </Route>
             <Route path="/pricing">
               <Pricing />
@@ -457,6 +647,12 @@ function App() {
               &copy; {CURRENT_YEAR} {IDE_NAME}
             </div>
             <div className="flex space-x-4">
+              <Link to="/terms" className="text-gray-400">
+                Terms of Service
+              </Link>
+              <Link className="text-gray-400" to="/privacy">
+                Privacy Policy
+              </Link>
               <a
                 className="text-gray-400"
                 href="mailto:support@codeperfect95.com"

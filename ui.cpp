@@ -909,23 +909,74 @@ struct Debugger_UI {
                 for (int i = 0; i < args->indent; i++)
                     ImGui::Indent();
 
-                if (leaf) ImGui::Unindent(ImGui::GetTreeNodeToLabelSpacing());
+                // if (leaf) ImGui::Unindent(ImGui::GetTreeNodeToLabelSpacing());
 
                 open = ImGui::TreeNodeEx(var, tree_flags, "%s", var_name) && !leaf;
 
-                if (leaf) ImGui::Indent(ImGui::GetTreeNodeToLabelSpacing());
+                // if (leaf) ImGui::Indent(ImGui::GetTreeNodeToLabelSpacing());
 
                 for (int i = 0; i < args->indent; i++)
                     ImGui::Unindent();
             }
         }
 
+        if (var->incomplete()) {
+            for (int i = 0; i < args->indent; i++)
+                ImGui::Indent();
+            ImGui::Indent(ImGui::GetTreeNodeToLabelSpacing());
+
+            ImGui::PushFont(world.ui.im_font_ui);
+            bool clicked = ImGui::SmallButton("Load more...");
+            ImGui::PopFont();
+
+            if (clicked) {
+                world.dbg.push_call(DLVC_VAR_LOAD_MORE, [&](Dlv_Call *it) {
+                    it->var_load_more.state_id = world.dbg.state_id;
+                    it->var_load_more.var = var;
+                });
+            }
+
+            for (int i = 0; i < args->indent; i++)
+                ImGui::Unindent();
+            ImGui::Unindent(ImGui::GetTreeNodeToLabelSpacing());
+        }
+
         if (watch == NULL || watch->fresh) {
             ImGui::TableNextColumn();
-            if (watch != NULL && watch->state == DBGWATCH_ERROR)
-                ImGui::Text("<unable to read>");
-            else
-                ImGui::TextWrapped("%s", var_value_as_string(var));
+
+            ccstr value_label = NULL;
+            ccstr underlying_value = NULL;
+
+            auto muted = (watch != NULL && watch->state == DBGWATCH_ERROR);
+            if (muted) {
+                value_label ="<unable to read>";
+                underlying_value = value_label;
+            } else {
+                value_label = var_value_as_string(var);
+                if (var->kind == GO_KIND_STRING) {
+                    auto len = strlen(value_label) - 2;
+                    auto buf = alloc_array(char, len+1);
+                    strncpy(buf, value_label+1, len);
+                    buf[len] = '\0';
+                    underlying_value = buf;
+                } else {
+                    underlying_value = value_label;
+                }
+            }
+
+            ImGuiStyle &style = ImGui::GetStyle();
+
+            if (muted) ImGui::PushStyleColor(ImGuiCol_Text, style.Colors[ImGuiCol_TextDisabled]);
+            ImGui::TextWrapped("%s", value_label);
+            if (muted) ImGui::PopStyleColor();
+
+            if (ImGui::BeginPopupContextItem("dbg_copyvalue")) {
+                if (ImGui::Selectable("Copy")) {
+                    glfwSetClipboardString(world.window, underlying_value);
+                }
+                ImGui::EndPopup();
+            }
+
             ImGui::TableNextColumn();
             if (watch == NULL || watch->state != DBGWATCH_ERROR) {
                 if (var->kind_name == NULL || var->kind_name[0] == '\0') {
@@ -971,55 +1022,37 @@ struct Debugger_UI {
             ImGui::TableNextColumn();
         }
 
-        if (open) {
-            if (args->watch == NULL || args->watch->fresh) {
-                if (var->children != NULL) {
-                    if (var->kind == GO_KIND_MAP) {
-                        for (int k = 0; k < var->children->len; k += 2) {
-                            Render_Args a;
-                            a.watch = args->watch;
-                            a.watch_index = args->watch_index;
-                            a.is_child = true;
-                            a.var = &var->children->at(k+1);
-                            a.index_type = INDEX_MAP;
-                            a.key = &var->children->at(k);
-                            a.indent = args->indent + 1;
-                            render_var(&a);
-                        }
-                    } else {
-                        bool isarr = (var->kind == GO_KIND_ARRAY || var->kind == GO_KIND_SLICE);
-                        for (int k = 0; k < var->children->len; k++) {
-                            Render_Args a;
-                            a.watch = args->watch;
-                            a.watch_index = args->watch_index;
-                            a.is_child = true;
-                            a.var = &var->children->at(k);
-                            if (isarr) {
-                                a.index_type = INDEX_ARRAY;
-                                a.index = k;
-                            } else {
-                                a.index_type = INDEX_NONE;
-                            }
-                            a.indent = args->indent + 1;
-                            render_var(&a);
-                        }
+        if (open && (watch == NULL || (watch->fresh && watch->state != DBGWATCH_ERROR))) {
+            if (var->children != NULL) {
+                if (var->kind == GO_KIND_MAP) {
+                    for (int k = 0; k < var->children->len; k += 2) {
+                        Render_Args a;
+                        a.watch = watch;
+                        a.watch_index = args->watch_index;
+                        a.is_child = true;
+                        a.var = &var->children->at(k+1);
+                        a.index_type = INDEX_MAP;
+                        a.key = &var->children->at(k);
+                        a.indent = args->indent + 1;
+                        render_var(&a);
                     }
-                }
-
-                if (var->incomplete()) {
-                    ImGui::TableNextRow();
-                    ImGui::TableNextColumn();
-
-                    if (ImGui::SmallButton("Load more...")) {
-                        world.dbg.push_call(DLVC_VAR_LOAD_MORE, [&](Dlv_Call *it) {
-                            it->var_load_more.state_id = world.dbg.state_id;
-                            it->var_load_more.var = var;
-                        });
+                } else {
+                    bool isarr = (var->kind == GO_KIND_ARRAY || var->kind == GO_KIND_SLICE);
+                    for (int k = 0; k < var->children->len; k++) {
+                        Render_Args a;
+                        a.watch = watch;
+                        a.watch_index = args->watch_index;
+                        a.is_child = true;
+                        a.var = &var->children->at(k);
+                        if (isarr) {
+                            a.index_type = INDEX_ARRAY;
+                            a.index = k;
+                        } else {
+                            a.index_type = INDEX_NONE;
+                        }
+                        a.indent = args->indent + 1;
+                        render_var(&a);
                     }
-
-                    ImGui::TableNextColumn();
-                    ImGui::TableNextColumn();
-                    // TODO: render "load more" button
                 }
             }
         }
@@ -1050,6 +1083,8 @@ struct Debugger_UI {
                 r.init();
 
                 for (int i = 0, len = strlen(var->value); i < len; i++) {
+                    r.writechar(var->value[i]);
+                    /*
                     auto ch = var->value[i];
                     switch (ch) {
                       case '\"': r.writestr("\\\""); break;
@@ -1066,6 +1101,7 @@ struct Debugger_UI {
                             r.writechar(ch);
                         break;
                     }
+                    */
                 }
 
                 return our_sprintf("\"%s%s\"", r.finish(), var->incomplete() ? "..." : "");
@@ -1094,7 +1130,7 @@ struct Debugger_UI {
             ImGui::Begin("Call Stack");
             ImGui::PushFont(world.ui.im_font_mono);
 
-            if (world.dbg.state_flag == DLV_STATE_PAUSED) {
+            if (world.dbg.state_flag == DLV_STATE_PAUSED && !world.dbg.exiting) {
                 for (int i = 0; i < state.goroutines.len; i++) {
                     auto &goroutine = state.goroutines[i];
 
@@ -1156,9 +1192,13 @@ struct Debugger_UI {
 
         {
             ImGui::SetNextWindowDockID(ui->dock_bottom_right_id, ImGuiCond_Once);
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
 
-            ImGui::Begin("Local Variables");
+            {
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+                ImGui::Begin("Local Variables");
+                ImGui::PopStyleVar();
+            }
+
             ImGui::PushFont(world.ui.im_font_mono);
 
             if (world.dbg.state_flag == DLV_STATE_PAUSED) {
@@ -1226,15 +1266,17 @@ struct Debugger_UI {
 
             ImGui::PopFont();
             ImGui::End();
-
-            ImGui::PopStyleVar();
         }
 
         {
             ImGui::SetNextWindowDockID(ui->dock_bottom_right_id, ImGuiCond_Once);
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
 
-            ImGui::Begin("Watches");
+            {
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+                ImGui::Begin("Watches");
+                ImGui::PopStyleVar();
+            }
+
             ImGui::PushFont(world.ui.im_font_mono);
 
             if (world.dbg.state_flag == DLV_STATE_PAUSED) {
@@ -1291,8 +1333,6 @@ struct Debugger_UI {
 
             ImGui::PopFont();
             ImGui::End();
-
-            ImGui::PopStyleVar();
         }
 
         /*
@@ -1388,15 +1428,19 @@ void UI::draw_everything() {
         ImGui::SetNextWindowViewport(viewport->ID);
         ImGui::SetNextWindowBgAlpha(0.0f);
 
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(2, 2));
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-
         auto window_flags = ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar
             | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove
             | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
 
-        ImGui::Begin("main_dockspace", NULL, window_flags);
+        {
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(2, 2));
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+            /**/
+            ImGui::Begin("main_dockspace", NULL, window_flags);
+            /**/
+            ImGui::PopStyleVar(3);
+        }
 
         ImGuiID dockspace_id = ImGui::GetID("main_dockspace");
 
@@ -1445,11 +1489,12 @@ void UI::draw_everything() {
         }
 
         ImGui::End();
-
-        ImGui::PopStyleVar(3);
     }
 
     if (ImGui::BeginMainMenuBar()) {
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 8));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(7, 5));
+
         if (ImGui::BeginMenu("File")) {
             if (ImGui::MenuItem("New File", "Ctrl+N")) {
                 world.get_current_pane()->open_empty_editor();
@@ -1711,6 +1756,7 @@ void UI::draw_everything() {
             ImGui::EndMenu();
         }
 
+        ImGui::PopStyleVar(2);
         ImGui::EndMainMenuBar();
     }
 
@@ -1761,7 +1807,7 @@ void UI::draw_everything() {
                     ImGui::GetWindowDrawList()->AddText(NULL, 0.0f, pos, ImGui::GetColorU32(ImGuiCol_Text), label, NULL, wrap_width);
 
                     if (ImGui::BeginPopupContextItem()) {
-                        if (ImGui::Selectable("Copy to clipboard")) {
+                        if (ImGui::Selectable("Copy")) {
                             glfwSetClipboardString(world.window, label);
                         }
                         ImGui::EndPopup();
@@ -1832,7 +1878,7 @@ void UI::draw_everything() {
         );
 
         ImGui::SetNextWindowSize(ImVec2(450, -1));
-        ImGui::Begin(label, &world.wnd_add_file_or_folder.show, ImGuiWindowFlags_AlwaysAutoResize);
+        ImGui::Begin(label, &world.wnd_add_file_or_folder.show, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking);
 
         ImGui::Text("Name:");
 
@@ -1919,10 +1965,10 @@ void UI::draw_everything() {
 
                 for (u32 j = 0; j < it->depth; j++) ImGui::Indent();
 
-                bool open = false;
+                it->open = false;
                 if (ImGui::TreeNodeEx(it, flags, "%s%s", it->name, it->is_directory ? "/" : ""))
                     if (it->is_directory)
-                        open = true;
+                        it->open = true;
 
                 for (u32 j = 0; j < it->depth; j++) ImGui::Unindent();
 
@@ -1936,7 +1982,7 @@ void UI::draw_everything() {
                     }
                 }
 
-                if (it->is_directory && open) {
+                if (it->is_directory && it->open) {
                     SCOPED_FRAME();
                     auto children = alloc_list<File_Tree_Node*>();
                     for (auto curr = it->children; curr != NULL; curr = curr->next)

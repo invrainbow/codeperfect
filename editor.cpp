@@ -415,7 +415,8 @@ bool Editor::is_nvim_ready() {
     return world.nvim.is_ui_attached
         && nvim_data.is_buf_attached
         && (nvim_data.buf_id != 0)
-        && (nvim_data.win_id != 0);
+        && (nvim_data.win_id != 0)
+        && nvim_data.got_initial_lines;
 }
 
 void Editor::init() {
@@ -803,14 +804,18 @@ void Editor::type_char_in_insert_mode(char ch) {
             auto root_node = new_ast_node(ts_tree_root_node(tree), &it);
 
             Ast_Node *rbrace_node = alloc_object(Ast_Node);
+            bool rbrace_found = false;
 
             find_nodes_containing_pos(root_node, rbrace_pos, false, [&](Ast_Node *it) {
                 if (it->type == brace_type) {
                     memcpy(rbrace_node, it, sizeof(Ast_Node));
+                    rbrace_found = true;
                     return WALK_ABORT;
                 }
                 return WALK_CONTINUE;
             });
+
+            if (!rbrace_found) break;
 
             auto walk_upwards = [&](Ast_Node *curr) -> Ast_Node * {
                 while (true) {
@@ -1002,7 +1007,16 @@ void go_to_error(int index) {
 
 void go_to_next_error(int direction) {
     auto &b = world.build;
-    if (!b.ready() || b.errors.len == 0) return;
+
+    bool has_valid = false;
+    For (b.errors) {
+        if (it.valid) {
+            has_valid = true;
+            break;
+        }
+    }
+
+    if (!b.ready() || !has_valid) return;
 
     auto old = b.current_error;
     do {

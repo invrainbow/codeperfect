@@ -59,6 +59,12 @@ nnoremap <Tab> <Cmd>call <SID>jump(1)<CR>
 nnoremap Q <nop>
 nnoremap K <nop>
 
+function s:goToDefinition()
+    call NotifyIDE('go_to_definition')
+endfunction
+
+nnoremap gd <Cmd>call <SID>goToDefinition()<CR>
+
 nnoremap : <nop>
 nnoremap <F1> :
 

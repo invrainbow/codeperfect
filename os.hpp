@@ -292,3 +292,4 @@ enum Ask_User_Result {
 Ask_User_Result ask_user_yes_no_cancel(ccstr text, ccstr title);
 Ask_User_Result ask_user_yes_no(ccstr text, ccstr title);
 void tell_user(ccstr text, ccstr title);
+ccstr get_executable_path();

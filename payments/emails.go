@@ -7,22 +7,8 @@ import (
 	"text/template"
 
 	"github.com/aws/aws-sdk-go/aws"
-	// "github.com/aws/aws-sdk-go/aws/awserr"
-	awsSession "github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ses"
 )
-
-var sesClient *ses.SES
-
-func init() {
-	sess, err := awsSession.NewSession(&aws.Config{
-		Region: aws.String("us-east-2")},
-	)
-	if err != nil {
-		panic(err)
-	}
-	sesClient = ses.New(sess)
-}
 
 func SendEmail(to, html, text, subject string) error {
 	makeContent := func(body string) *ses.Content {
@@ -67,7 +53,7 @@ const ProductName = "CodePerfect 95"
 
 const SendEmailFrom = "brhs.again@gmail.com"
 
-var NewLicenseKeyTplHtml = fmt.Sprintf(`
+var NewLicenseKeyHtml = fmt.Sprintf(`
 <p>Thanks for buying %s! Here's your download link:</p>
 
 <p><a href="{{.DownloadLink}}">{{.DownloadLink}}</a></p>
@@ -80,7 +66,7 @@ var NewLicenseKeyTplHtml = fmt.Sprintf(`
 The %s Team</p>
 `, ProductName, ProductName)
 
-var NewLicenseKeyTplText = fmt.Sprintf(`
+var NewLicenseKeyText = fmt.Sprintf(`
 Thanks for buying %s! Here's your download link:
 
 {{.DownloadLink}}
@@ -93,16 +79,108 @@ Best,
 The %s Team
 `, ProductName, ProductName)
 
-func RenderTemplate(text string, data interface{}) (string, error) {
+type SubscriptionRenewedArgs struct {
+	DownloadLink string
+	LicenseKey   string
+}
+
+var SubscriptionRenewedHtml = fmt.Sprintf(`
+<p>Your subscription has been reactivated! Here are your download link and
+license key, in case you need them again:</p>
+
+<p>Download link:<br>
+<a href="{{.DownloadLink}}">{{.DownloadLink}}</a></p>
+
+<p>License key:<br>
+<code>{{.LicenseKey}}</code></p>
+
+<p>Best,<br>
+The %s Team</p>
+`, ProductName)
+
+var SubscriptionRenewedText = fmt.Sprintf(`
+Your subscription has been reactivated! Here are your download link and license
+key, in case you need them again:
+
+Download link:
+{{.DownloadLink}}
+
+License key:
+{{.LicenseKey}}
+
+Best,
+The %s Team
+`, ProductName)
+
+type SubscriptionEndedArgs struct {
+	LicenseKey string
+}
+
+var SubscriptionEndedHtml = fmt.Sprintf(`
+<p>Your %s subscription has ended.</p>
+
+<p>If this was because you canceled it, we're sorry to see you go! We'd love to
+hear your feedback at <a
+href="mailto:support@codeperfect95.com">support@codeperfect95.com</a> if you
+have any.</p>
+
+<p>If this comes as a surprise to you, possibly your card stopped working.
+Please log in to our payment portal to update your payment method:</p>
+
+<p><a
+href="https://codeperfect95.com/portal">https://codeperfect95.com/portal</a></p>
+
+<p>You'll need your license key, which is:</p>
+
+<pre>{{.LicenseKey}}</pre>
+
+<p>Best,<br>
+The %s Team</p>
+`, ProductName, ProductName)
+
+var SubscriptionEndedText = fmt.Sprintf(`
+Your %s subscription has ended.
+
+If this was because canceled it, we're sorry to see you go! We'd love to
+hear your feedback at support@codeperfect95.com if you have any.
+
+If this comes as a surprise to you, it might be because your card stopped
+working. Please log in to our payment portal to update your payment method:
+
+https://codeperfect95.com/portal
+
+You'll need your license key, which is:
+
+    {{.LicenseKey}}
+
+Best,
+The %s Team
+`, ProductName, ProductName)
+
+func RenderTemplate(text string, args interface{}) (string, error) {
 	tpl, err := template.New("some_name").Parse(text)
 	if err != nil {
 		return "", err
 	}
 
 	var buf bytes.Buffer
-	if err := tpl.Execute(&buf, data); err != nil {
+	if err := tpl.Execute(&buf, args); err != nil {
 		return "", err
 	}
 
 	return buf.String(), nil
+}
+
+func RenderTemplates(textTemplate, htmlTemplate string, args interface{}) (string, string, error) {
+	text, err := RenderTemplate(textTemplate, args)
+	if err != nil {
+		return "", "", err
+	}
+
+	html, err := RenderTemplate(htmlTemplate, args)
+	if err != nil {
+		return "", "", err
+	}
+
+	return text, html, nil
 }

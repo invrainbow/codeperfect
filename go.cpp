@@ -554,12 +554,20 @@ void Go_Indexer::background_thread() {
     // ===
 
     {
+        bool reset_index = false;
+
         SCOPED_MEM(&final_mem);
-        if (index.current_path == NULL)
-            index.current_path = our_strcpy(world.current_path);
-        if (index.current_import_path == NULL)
-            index.current_import_path = our_strcpy(get_workspace_import_path());
-        if (index.packages == NULL)
+        if (index.current_path != NULL && !streq(index.current_path, world.current_path))
+            reset_index = true;
+
+        auto workspace_import_path = get_workspace_import_path();
+        if (index.current_import_path != NULL && !streq(index.current_import_path, workspace_import_path))
+            reset_index = true;
+
+        index.current_path = our_strcpy(world.current_path);
+        index.current_import_path = our_strcpy(workspace_import_path);
+
+        if (index.packages == NULL || reset_index)
             index.packages = alloc_list<Go_Package>();
     }
 
@@ -2379,13 +2387,12 @@ void Go_Indexer::init() {
 
     {
         SCOPED_FRAME();
-        GetModuleFileNameA(NULL, current_exe_path, _countof(current_exe_path));
-        auto path = our_dirname(current_exe_path);
-        strcpy_safe(current_exe_path, _countof(current_exe_path), path);
+        strcpy_safe(current_exe_path, _countof(current_exe_path), our_dirname(get_executable_path()));
     }
 
-    gohelper_dynamic.init("go run dynamic_helper/main.go", path_join(current_exe_path, "helper"));
-    gohelper_static.init("static_helper.exe", path_join(current_exe_path, "helper"));
+    // gohelper_dynamic.init("go run dynamic_helper/main.go", path_join(current_exe_path, "helpers"));
+    gohelper_dynamic.init("dynamic_helper.exe", path_join(current_exe_path, "helpers"));
+    gohelper_static.init("static_helper.exe", path_join(current_exe_path, "helpers"));
 
     {
         auto resp = gohelper_dynamic.run(GH_OP_GET_GO_ENV_VARS, NULL);
@@ -2876,77 +2883,83 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
     case TS_PARAMETER_LIST:
     case TS_CONST_DECLARATION:
     case TS_VAR_DECLARATION:
-        FOR_NODE_CHILDREN(node) {
-            auto spec = it;
-            auto type_node = spec->field(TSF_TYPE);
-            auto value_node = spec->field(TSF_VALUE);
+        {
+            Gotype *copied_iota_type = NULL;
 
-            if (type_node->null && value_node->null) continue;
+            // TODO: handle iota
 
-            Gotype *type_node_gotype = NULL;
-            if (!type_node->null) {
-                type_node_gotype = node_to_gotype(type_node);
-                if (type_node_gotype == NULL) continue;
+            FOR_NODE_CHILDREN(node) {
+                auto spec = it;
+                auto type_node = spec->field(TSF_TYPE);
+                auto value_node = spec->field(TSF_VALUE);
 
-                if (node->type == TS_PARAMETER_LIST && spec->type == TS_VARIADIC_PARAMETER_DECLARATION) {
-                    auto t = new_gotype(GOTYPE_VARIADIC);
-                    t->variadic_base = type_node_gotype;
-                    type_node_gotype = t;
-                }
+                if (type_node->null && value_node->null) continue;
 
-                FOR_NODE_CHILDREN (spec) {
-                    if (it->eq(type_node) || it->eq(value_node)) break;
+                Gotype *type_node_gotype = NULL;
+                if (!type_node->null) {
+                    type_node_gotype = node_to_gotype(type_node);
+                    if (type_node_gotype == NULL) continue;
 
-                    auto decl = new_result();
-
-                    switch (node->type) {
-                    case TS_PARAMETER_LIST: decl->type = GODECL_FIELD; break;
-                    case TS_CONST_DECLARATION: decl->type = GODECL_CONST; break;
-                    case TS_VAR_DECLARATION: decl->type = GODECL_VAR; break;
+                    if (node->type == TS_PARAMETER_LIST && spec->type == TS_VARIADIC_PARAMETER_DECLARATION) {
+                        auto t = new_gotype(GOTYPE_VARIADIC);
+                        t->variadic_base = type_node_gotype;
+                        type_node_gotype = t;
                     }
 
-                    decl->spec_start = spec->start;
-                    decl->name = it->string();
-                    decl->name_start = it->start;
-                    decl->gotype = type_node_gotype;
-                    save_decl(decl);
-                }
-            } else {
-                our_assert(value_node->type == TS_EXPRESSION_LIST, "rhs must be a TS_EXPRESSION_LIST");
+                    FOR_NODE_CHILDREN (spec) {
+                        if (it->eq(type_node) || it->eq(value_node)) break;
 
-                u32 lhs_count = 0;
-                FOR_NODE_CHILDREN (spec) {
-                    if (it->eq(type_node) || it->eq(value_node)) break;
-                    lhs_count++;
-                }
+                        auto decl = new_result();
 
-                auto lhs = alloc_list<Ast_Node*>(lhs_count);
-                auto rhs = alloc_list<Ast_Node*>(value_node->child_count);
+                        switch (node->type) {
+                        case TS_PARAMETER_LIST: decl->type = GODECL_FIELD; break;
+                        case TS_CONST_DECLARATION: decl->type = GODECL_CONST; break;
+                        case TS_VAR_DECLARATION: decl->type = GODECL_VAR; break;
+                        }
 
-                FOR_NODE_CHILDREN (spec) {
-                    if (it->eq(type_node) || it->eq(value_node)) break;
-                    lhs->append(it);
-                }
+                        decl->spec_start = spec->start;
+                        decl->name = it->string();
+                        decl->name_start = it->start;
+                        decl->gotype = type_node_gotype;
+                        save_decl(decl);
+                    }
+                } else {
+                    our_assert(value_node->type == TS_EXPRESSION_LIST, "rhs must be a TS_EXPRESSION_LIST");
 
-                FOR_NODE_CHILDREN (value_node) rhs->append(it);
-
-                auto new_godecl = [&]() -> Godecl * {
-                    auto decl = new_result();
-                    decl->spec_start = spec->start;
-
-                    switch (node->type) {
-                    case TS_PARAMETER_LIST: decl->type = GODECL_FIELD; break;
-                    case TS_CONST_DECLARATION: decl->type = GODECL_CONST; break;
-                    case TS_VAR_DECLARATION: decl->type = GODECL_VAR; break;
+                    u32 lhs_count = 0;
+                    FOR_NODE_CHILDREN (spec) {
+                        if (it->eq(type_node) || it->eq(value_node)) break;
+                        lhs_count++;
                     }
 
-                    return decl;
-                };
+                    auto lhs = alloc_list<Ast_Node*>(lhs_count);
+                    auto rhs = alloc_list<Ast_Node*>(value_node->child_count);
 
-                auto old_len = results->len;
-                assignment_to_decls(lhs, rhs, new_godecl);
-                for (u32 i = old_len; i < results->len; i++)
-                    save_decl(results->items + i);
+                    FOR_NODE_CHILDREN (spec) {
+                        if (it->eq(type_node) || it->eq(value_node)) break;
+                        lhs->append(it);
+                    }
+
+                    FOR_NODE_CHILDREN (value_node) rhs->append(it);
+
+                    auto new_godecl = [&]() -> Godecl * {
+                        auto decl = new_result();
+                        decl->spec_start = spec->start;
+
+                        switch (node->type) {
+                        case TS_PARAMETER_LIST: decl->type = GODECL_FIELD; break;
+                        case TS_CONST_DECLARATION: decl->type = GODECL_CONST; break;
+                        case TS_VAR_DECLARATION: decl->type = GODECL_VAR; break;
+                        }
+
+                        return decl;
+                    };
+
+                    auto old_len = results->len;
+                    assignment_to_decls(lhs, rhs, new_godecl);
+                    for (u32 i = old_len; i < results->len; i++)
+                        save_decl(results->items + i);
+                }
             }
         }
         break;
@@ -3376,6 +3389,8 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
 
     default: return make_goresult(gotype, ctx);
     }
+
+    return NULL;
 }
 
 Goresult *make_goresult_from_pointer(void *ptr, Go_Ctx *ctx) {

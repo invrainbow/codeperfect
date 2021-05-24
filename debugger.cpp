@@ -111,12 +111,108 @@ void Debugger::save_list_of_vars(Json_Navigator js, i32 idx, List<Dlv_Var> *out)
         save_single_var(js, js.get(idx, i), out->append());
 }
 
+ccstr parse_json_string(ccstr s) {
+    Frame frame;
+
+    u32 i = 0;
+    u32 len = strlen(s);
+
+    List<char> chars;
+    chars.init(LIST_POOL, len);
+
+    while (i < len) {
+        if (s[i] != '\\') {
+            chars.append(s[i++]);
+            continue;
+        }
+
+        if (i+2 > len) goto fail;
+
+        int seqlen = 2;
+
+        switch (s[i+1]) {
+        case 'b': chars.append('\b'); break;
+        case 'f': chars.append('\f'); break;
+        case 'n': chars.append('\n'); break;
+        case 'r': chars.append('\r'); break;
+        case 't': chars.append('\t'); break;
+        case '\"': chars.append('\"'); break;
+        case '\\': chars.append('\\'); break;
+        case '/': chars.append('/'); break;
+        case 'u':
+            {
+                if (i+6 > len) goto fail;
+
+                auto parse_hex4 = [&](ccstr s, bool *ok) -> u32 {
+                    u32 h = 0;
+                    for (u32 i = 0; i < 4; i++) {
+                        if (i > 0) h = h << 4;
+
+                        if ((s[i] >= '0') && (s[i] <= '9'))
+                            h += (unsigned int) s[i] - '0';
+                        else if ((s[i] >= 'A') && (s[i] <= 'F'))
+                            h += (unsigned int) 10 + s[i] - 'A';
+                        else if ((s[i] >= 'a') && (s[i] <= 'f'))
+                            h += (unsigned int) 10 + s[i] - 'a';
+                        else {
+                            *ok = false;
+                            return 0;
+                        }
+                    }
+
+                    *ok = true;
+                    return h;
+                };
+
+                bool ok = false;
+
+                auto codepoint = parse_hex4(&s[i+2], &ok);
+                if (!ok) goto fail;
+                if (codepoint >= 0xDC00 && codepoint <= 0xDFFF) goto fail;
+
+                seqlen = 6;
+                if (codepoint >= 0xD800 && codepoint <= 0xDBFF) {
+                    auto j = i+6;
+                    if (j+6 > len) goto fail;
+                    if (s[j] != '\\' || s[j+1] != 'u') goto fail;
+
+                    auto second = parse_hex4(&s[j+2], &ok);
+                    if (!ok) goto fail;
+                    if (second < 0xDC00 || second > 0xDFFF) goto fail;
+
+                    codepoint = 0x10000 + (((codepoint & 0x3FF) << 10) | (second & 0x3FF));
+                    seqlen = 12;
+                }
+
+                char utf8_chars[4];
+                s32 utf8_len = 0;
+                uchar_to_cstr(codepoint, utf8_chars, &utf8_len);
+                if (utf8_len == 0) goto fail;
+                for (u32 j = 0; j < utf8_len; j++)
+                    chars.append(utf8_chars[j]);
+            }
+            break;
+        default:
+            goto fail;
+        }
+
+        i += seqlen;
+    }
+
+    chars.append('\0');
+    return chars.items;
+
+fail:
+    frame.restore();
+    return NULL;
+}
+
 void Debugger::save_single_var(Json_Navigator js, i32 idx, Dlv_Var* out, Save_Var_Mode save_mode) {
     SCOPED_MEM(&state_mem);
 
     if (save_mode == SAVE_VAR_NORMAL) {
         out->name = js.str(js.get(idx, ".name"));
-        out->value = js.str(js.get(idx, ".value"));
+        out->value = parse_json_string(js.str(js.get(idx, ".value")));
         out->kind = (Go_Reflect_Kind)js.num(js.get(idx, ".kind"));
         out->len = js.num(js.get(idx, ".len"));
         out->cap = js.num(js.get(idx, ".cap"));
@@ -403,7 +499,7 @@ void Debugger::halt_when_already_running() {
 
     // Since we were already running, when we call halt, we're going to get
     // two State responses, one for the original command that made us run
-    // in the first place, and one from the halt. Swallow the second response.
+    // in the first place, and one from the halt. Swallow the first response.
 
     Packet p = {0};
     if (read_packet(&p))

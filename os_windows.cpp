@@ -738,4 +738,10 @@ void tell_user(ccstr text, ccstr title) {
     MessageBoxA((HWND)get_native_window_handle(), text, title, MB_OK | MB_ICONWARNING | MB_TOPMOST);
 }
 
+ccstr get_executable_path() {
+    auto ret = alloc_array(char, MAX_PATH+1);
+    GetModuleFileNameA(NULL, ret, MAX_PATH+1);
+    return ret;
+}
+
 #endif

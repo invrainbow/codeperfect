@@ -685,6 +685,9 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 }
             }
             break;
+        case NVIM_NOTIF_CUSTOM_GOTO_DEFINITION:
+            handle_goto_definition();
+            break;
         case NVIM_NOTIF_CUSTOM_MOVE_CURSOR:
             {
                 auto editor = world.get_current_editor();
@@ -785,6 +788,18 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                     if (!editor->nvim_data.got_initial_lines) {
                         nvim_print("got_initial_lines = false, setting to true & calling handle_editor_on_ready()");
                         editor->nvim_data.got_initial_lines = true;
+
+                        // set initial pos, but don't clear need_initial_pos_set 
+                        // we're still going to set it in handle_editor_on_ready
+                        // we're just setting it early here to speed up file load times
+                        if (editor->nvim_data.need_initial_pos_set) {
+                            nvim_print("need initial pos set, setting...");
+                            auto pos = editor->nvim_data.initial_pos;
+                            if (pos.y == -1)
+                                pos = editor->offset_to_cur(pos.x);
+                            editor->raw_move_cursor(pos);
+                        }
+
                         handle_editor_on_ready(editor);
                     }
                 }
@@ -993,6 +1008,11 @@ void Nvim::run_event_loop() {
                             msg->notification.type = NVIM_NOTIF_CUSTOM_REVEAL_LINE;
                             msg->notification.custom_reveal_line.screen_pos = screen_pos;
                             msg->notification.custom_reveal_line.reset_cursor = reset_cursor;
+                        });
+                    } else if (streq(cmd, "go_to_definition")) {
+                        ASSERT(num_args == 0);
+                        add_event([&](auto msg) {
+                            msg->notification.type = NVIM_NOTIF_CUSTOM_GOTO_DEFINITION;
                         });
                     } else if (streq(cmd, "jump")) {
                         ASSERT(num_args == 1);

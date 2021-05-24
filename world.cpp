@@ -54,6 +54,9 @@ void World::fill_file_tree() {
             if (is_ignored_by_git(fullpath, ent->type & FILE_TYPE_DIRECTORY))
                 return;
 
+            if (streq(ent->name, ".ideproj")) return;
+            if (str_ends_with(ent->name, ".exe")) return;
+
             auto file = alloc_object(File_Tree_Node);
             file->name = our_strcpy(ent->name);
             file->is_directory = (ent->type & FILE_TYPE_DIRECTORY);
@@ -130,7 +133,7 @@ void World::init_workspace() {
 
     panes.init(LIST_FIXED, _countof(_panes), _panes);
 
-#if 1
+#if 0
     strcpy_safe(current_path, _countof(current_path), normalize_path_sep("c:/users/brandon/ide/payments"));
 #else
     Select_File_Opts opts = {0};
@@ -155,11 +158,48 @@ void World::init_workspace() {
     }
 }
 
+bool check_license_key() {
+    SCOPED_FRAME();
+
+    Process proc;
+    proc.init();
+    proc.dir = path_join(our_dirname(get_executable_path()), "helpers");
+    proc.run("license_check.exe");
+    defer { proc.cleanup(); };
+
+    while (proc.status() == PROCESS_WAITING)
+        continue;
+
+    return (proc.exit_code == EXIT_SUCCESS);
+}
+
+bool check_go_version() {
+    SCOPED_FRAME();
+
+    Process proc;
+    proc.init();
+    proc.dir = path_join(our_dirname(get_executable_path()), "helpers");
+    proc.run("go run version_check/main.go");
+    defer { proc.cleanup(); };
+
+    while (proc.status() == PROCESS_WAITING)
+        continue;
+
+    if (proc.exit_code != EXIT_SUCCESS) return false;
+
+    char ch = 0;
+    List<char> output;
+    output.init();
+
+    while (proc.read1(&ch))
+        output.append(ch);
+    output.append('\0');
+
+    return streq(output.items, "true");
+}
+
 void World::init() {
     ptr0(this);
-
-    git_libgit2_init();
-    fzy_init();
 
 #define init_mem(x) x.init(#x)
     init_mem(world_mem);
@@ -185,6 +225,15 @@ void World::init() {
     chunk5_fridge.init(16);
     chunk6_fridge.init(8);
 
+    while (!check_license_key()) {
+        // TODO: prompt user for key
+    }
+
+    if (!check_go_version()) {
+        tell_user("Please make sure Go version 1.16+ is installed and accessible through your PATH.", NULL);
+        exit(1);
+    }
+
     {
         // do we need world_mem anywhere else?
         // i assume we will have other things that "orchestrate" world
@@ -194,8 +243,10 @@ void World::init() {
 
     message_queue_lock.init();
 
-    // prepare_workspace();
+    git_libgit2_init();
+    fzy_init();
 
+    // prepare_workspace();
     // build helper
     // shell("go build helper.go", "w:/helper");
 
@@ -495,7 +546,7 @@ void Jumplist::add(int editor_id, cur2 pos, bool bypass_duplicate_check) {
         if (editor->is_current_editor() && editor->cur == pos)
             return;
 
-    print("jumplist add: %s %s", editor->filepath, format_pos(pos));
+    // print("jumplist add: %s %s", editor->filepath, format_pos(pos));
 
     if (empty) {
         empty = false;
@@ -514,4 +565,46 @@ bool is_build_debug_free() {
     if (world.dbg.state_flag != DLV_STATE_INACTIVE) return false;
 
     return true;
+}
+
+void handle_goto_definition() {
+    auto editor = world.get_current_editor();
+    if (editor == NULL) return;
+
+    SCOPED_MEM(&world.indexer.ui_mem);
+    defer { world.indexer.ui_mem.reset(); };
+
+    Jump_To_Definition_Result *result = NULL;
+
+    {
+        if (!world.indexer.ready) return; // strictly we can just call try_enter(), but want consistency with UI, which is based on `ready`
+        if (!world.indexer.lock.try_enter()) return;
+        defer { world.indexer.lock.leave(); };
+
+        result = world.indexer.jump_to_definition(editor->filepath, new_cur2(editor->cur_to_offset(editor->cur), -1));
+        if (result == NULL) {
+            error("unable to jump to definition");
+            return;
+        }
+    }
+
+    auto target = editor;
+    if (!streq(editor->filepath, result->file))
+        target = world.focus_editor(result->file);
+
+    if (target == NULL) return;
+
+    auto pos = result->pos;
+    if (world.use_nvim) {
+        if (target->is_nvim_ready()) {
+            if (pos.y == -1) pos = target->offset_to_cur(pos.x);
+            target->move_cursor(pos);
+        } else {
+            target->nvim_data.initial_pos = pos;
+            target->nvim_data.need_initial_pos_set = true;
+        }
+    } else {
+        if (pos.y == -1) pos = target->offset_to_cur(pos.x);
+        target->move_cursor(pos);
+    }
 }

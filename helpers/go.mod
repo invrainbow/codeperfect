@@ -1,4 +1,4 @@
-module github.com/invrainbow/ide/helper
+module github.com/invrainbow/ide/helpers
 
 go 1.16
 
