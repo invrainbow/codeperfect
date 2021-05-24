@@ -27,16 +27,7 @@ import (
 const StripeAPIKey = "sk_test_51IqLcpBpL0Zd3zdOMyMwr4CfzffzCVaFmsD1tPMLvlHGzQmUv2qCjYv6Oai5hmpF0j9BbCWXHDgLhTie7hU4YhMX00Ba9jADiH"
 const StripeWebhookSecret = "whsec_IOO7B9EaYAGkWZyNHbRu11NFrGxvYYm1"
 
-const S3Bucket = "codeperfect95" // fix this
-
-const (
-	FooA = iota
-	FooB
-	FooC
-	FooD
-	FooE
-	FooF
-)
+const S3Bucket = "codeperfect95"
 
 type VersionInfo struct {
 	Version  int
