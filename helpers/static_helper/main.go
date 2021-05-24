@@ -6,7 +6,8 @@ import (
 	"os/exec"
 
 	"github.com/google/shlex"
-	"github.com/invrainbow/ide/helpers"
+	"github.com/invrainbow/ide/helpers/helperlib"
+	"github.com/invrainbow/ide/helpers/lib"
 	"github.com/reviewdog/errorformat"
 )
 
@@ -14,6 +15,13 @@ type GoBuild struct {
 	done   bool
 	errors []*errorformat.Entry
 	cmd    *exec.Cmd
+}
+
+func BoolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 func main() {
@@ -27,22 +35,23 @@ func main() {
 		currentBuild = nil
 	}
 
-	helpers.MainLoop(func(op int) {
-		switch op {
-		case helpers.OpSetDirectory:
-			helpers.HandleOpSetDirectory()
+	helperlib.InitScanner()
+	for {
+		switch helperlib.ReadLine() {
+		case "set_directory":
+			helperlib.HandleSetDirectory()
 
-		case helpers.OpStartBuild:
+		case "start_build":
 			stopBuild()
 
-			parts, err := shlex.Split(helpers.ReadLine())
+			parts, err := shlex.Split(helperlib.ReadLine())
 			if err != nil {
-				helpers.WriteError(err)
+				helperlib.WriteError(err)
 				break
 			}
 
 			if len(parts) == 0 {
-				helpers.WriteError(fmt.Errorf("Build command was empty."))
+				helperlib.WriteError(fmt.Errorf("Build command was empty."))
 				break
 			}
 
@@ -75,37 +84,40 @@ func main() {
 				b.done = true
 			}(currentBuild)
 
-			helpers.Write(true)
+			helperlib.Write(true)
 
-		case helpers.OpGetBuildStatus:
+		case "get_build_status":
 			if currentBuild == nil {
-				helpers.Write("inactive")
+				helperlib.Write("inactive")
 				break
 			}
 
 			if currentBuild.done {
-				helpers.Write("done")
-				helpers.Write(len(currentBuild.errors))
+				helperlib.Write("done")
+				helperlib.Write(len(currentBuild.errors))
 				for _, ent := range currentBuild.errors {
-					helpers.Write(ent.Text)
-					helpers.Write(helpers.BoolToInt(ent.Valid))
+					helperlib.Write(ent.Text)
+					helperlib.Write(BoolToInt(ent.Valid))
 					if ent.Valid {
-						helpers.Write(ent.Filename)
-						helpers.Write(ent.Lnum)
-						helpers.Write(ent.Col)
-						helpers.Write(helpers.BoolToInt(ent.Vcol))
+						helperlib.Write(ent.Filename)
+						helperlib.Write(ent.Lnum)
+						helperlib.Write(ent.Col)
+						helperlib.Write(BoolToInt(ent.Vcol))
 					}
 				}
 			} else {
-				helpers.Write("running")
+				helperlib.Write("running")
 			}
 
-		case helpers.OpStopBuild:
+		case "stop_build":
 			stopBuild()
-			helpers.Write(true)
+			helperlib.Write(true)
 
-		default:
-			return
+		case "go_init":
+			helperlib.Write(true)
+			helperlib.Write(lib.GetShellOutput("go env GOPATH"))
+			helperlib.Write(lib.GetShellOutput("go env GOROOT"))
+			helperlib.Write(lib.GetShellOutput("go env GOMODCACHE"))
 		}
-	})
+	}
 }

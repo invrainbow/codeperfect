@@ -4,34 +4,27 @@ import (
 	"go/build"
 	"path/filepath"
 
-	"github.com/invrainbow/ide/helpers"
+	"github.com/invrainbow/ide/helpers/helperlib"
 )
 
 func main() {
-	ctx := build.Default
+	helperlib.InitScanner()
+	for {
+		switch helperlib.ReadLine() {
+		case "set_directory":
+			helperlib.HandleSetDirectory()
 
-	helpers.MainLoop(func(op int) {
-		switch op {
-		case helpers.OpSetDirectory:
-			helpers.HandleOpSetDirectory()
+		case "check_go_version":
+			helperlib.Write(isCompatible)
 
-		case helpers.OpCheckIncludedInBuild:
-			path := helpers.ReadLine()
-			match, err := ctx.MatchFile(filepath.Dir(path), filepath.Base(path))
+		case "check_included_in_build":
+			path := helperlib.ReadLine()
+			match, err := build.Default.MatchFile(filepath.Dir(path), filepath.Base(path))
 			if err != nil {
-				helpers.WriteError(err)
+				helperlib.WriteError(err)
 			} else {
-				helpers.Write(match)
+				helperlib.Write(match)
 			}
-
-		case helpers.OpGetGoEnvVars:
-			helpers.Write(true)
-			helpers.Write(helpers.GetShellOutput("go env GOPATH"))
-			helpers.Write(helpers.GetShellOutput("go env GOROOT"))
-			helpers.Write(helpers.GetShellOutput("go env GOMODCACHE"))
-
-		default:
-			return
 		}
-	})
+	}
 }

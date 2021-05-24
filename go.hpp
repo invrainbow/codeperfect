@@ -1039,16 +1039,6 @@ struct Ghetto_Parser {
     bool match_token_to_string(ccstr str);
 };
 
-enum Gohelper_Op {
-    GH_OP_INVALID = 0,
-    GH_OP_SET_DIRECTORY,
-    GH_OP_CHECK_INCLUDED_IN_BUILD,
-    GH_OP_START_BUILD,
-    GH_OP_GET_BUILD_STATUS,
-    GH_OP_STOP_BUILD,
-    GH_OP_GET_GO_ENV_VARS,
-};
-
 struct Gohelper {
     Process proc;
     bool returned_error;
@@ -1058,7 +1048,7 @@ struct Gohelper {
     void cleanup();
     ccstr readline();
     int readint();
-    ccstr run(Gohelper_Op op, ...);
+    ccstr run(ccstr op, ...);
 };
 
 enum {

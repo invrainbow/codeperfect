@@ -40,7 +40,9 @@ test.go
 # remedybg debug session
 *.rdbg
 
-# created by our own ide
+# artifacts created by our own ide
 .ide
 db
 db.tmp
+.idelicense
+.ideversion

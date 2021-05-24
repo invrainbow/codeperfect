@@ -1,46 +1,20 @@
-package helpers
+package lib
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/google/shlex"
 )
-
-const (
-	OpInvalid = iota
-	OpSetDirectory
-	OpCheckIncludedInBuild
-	OpStartBuild
-	OpGetBuildStatus
-	OpStopBuild
-	OpGetGoEnvVars
-)
-
-var scanner *bufio.Scanner
-
-func Write(x interface{}) {
-	fmt.Println(x)
-}
-
-func WriteError(x error) {
-	Write("error")
-	Write(strings.ReplaceAll(x.Error(), "\n", "\\n"))
-}
-
-func BoolToInt(b bool) int {
-	if b {
-		return 1
-	}
-	return 0
-}
 
 func GetShellOutput(cmd string) string {
 	parts, err := shlex.Split(cmd)
@@ -52,41 +26,6 @@ func GetShellOutput(cmd string) string {
 		return ""
 	}
 	return strings.TrimSpace(string(out))
-}
-
-func ReadLine() string {
-	if !scanner.Scan() {
-		panic("unable to read line")
-	}
-	return scanner.Text()
-}
-
-func InitScanner() {
-	scanner = bufio.NewScanner(os.Stdin)
-}
-
-func HandleOpSetDirectory() {
-	path := ReadLine()
-
-	if err := os.Chdir(path); err != nil {
-		WriteError(err)
-		return
-	}
-
-	Write(true)
-}
-
-func MainLoop(f func(op int)) {
-	InitScanner()
-
-	for {
-		op, err := strconv.Atoi(ReadLine())
-		if err != nil {
-			WriteError(err)
-			break
-		}
-		f(op)
-	}
 }
 
 // read file located in same folder as executable
@@ -124,6 +63,7 @@ func UnmarshalAndCloseHttpResp(resp *http.Response, out interface{}) error {
 }
 
 const ServerBase = "http://localhost:8080"
+
 // const ServerBase = "https://api.codeperfect95.com"
 
 func CallServer(endpoint string, licenseKey string, params url.Values, out interface{}) error {
@@ -140,7 +80,7 @@ func CallServer(endpoint string, licenseKey string, params url.Values, out inter
 
 func GetLatestVer(licenseKey string) (int, error) {
 	var data map[string]interface{}
-	if err := helpers.CallServer("version", licenseKey, url.Values{}, &data); err != nil {
+	if err := CallServer("version", licenseKey, url.Values{}, &data); err != nil {
 		return 0, err
 	}
 

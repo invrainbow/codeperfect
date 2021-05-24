@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/invrainbow/ide/helpers"
+	"github.com/invrainbow/ide/helpers/lib"
 )
 
 var LicenseKey string
@@ -25,14 +25,14 @@ type DownloadInfo struct {
 
 func GetDownloadInfo(licenseKey string) (*DownloadInfo, error) {
 	var data DownloadInfo
-	if err := helpers.CallServer("download", licenseKey, url.Values{}, &data); err != nil {
+	if err := lib.CallServer("download", licenseKey, url.Values{}, &data); err != nil {
 		return nil, err
 	}
 	return &data, nil
 }
 
 func ReadVersion() (int, error) {
-	contents, err := helpers.ReadFileFromExeFolder(".ideversion")
+	contents, err := lib.ReadFileFromExeFolder(".ideversion")
 	if err != nil {
 		// if the file just doesn't exist, don't count it as an error
 		if os.IsNotExist(err) {
@@ -87,7 +87,7 @@ func WriteVersion(version int, checksum string) error {
 }
 
 func TryDownloadingShit() {
-	licenseKey, err := helpers.GetLicenseKey()
+	licenseKey, err := lib.GetLicenseKey()
 	if err != nil {
 		return
 	}
@@ -96,7 +96,7 @@ func TryDownloadingShit() {
 		return
 	}
 
-	serverVersion, err := helpers.GetLatestVer(licenseKey)
+	serverVersion, err := lib.GetLatestVer(licenseKey)
 	if err != nil {
 		return
 	}

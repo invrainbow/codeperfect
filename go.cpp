@@ -339,11 +339,11 @@ int Gohelper::readint() {
     return atoi(readline());
 }
 
-ccstr Gohelper::run(Gohelper_Op op, ...) {
+ccstr Gohelper::run(ccstr op, ...) {
     va_list vl;
     va_start(vl, op);
 
-    proc.writestr(our_sprintf("%d", op));
+    proc.writestr(op);
     proc.write1('\n');
 
     ccstr param = NULL;
@@ -1461,7 +1461,7 @@ u64 Go_Indexer::hash_package(ccstr resolved_package_path) {
 bool Go_Indexer::is_file_included_in_build(ccstr path) {
     SCOPED_LOCK(&gohelper_dynamic.lock);
 
-    auto resp = gohelper_dynamic.run(GH_OP_CHECK_INCLUDED_IN_BUILD, path, NULL);
+    auto resp = gohelper_dynamic.run("check_included_in_build", path, NULL);
     if (gohelper_dynamic.returned_error) return false;
 
     return streq(resp, "true");
@@ -2366,7 +2366,7 @@ void Gohelper::init(ccstr cmd, ccstr dir) {
     proc.use_stdin = true;
     proc.run(cmd);
 
-    auto resp = run(GH_OP_SET_DIRECTORY, world.current_path, NULL);
+    auto resp = run("set_directory", world.current_path, NULL);
     our_assert(streq(resp, "true"), "Unable to set directory.");
 }
 
@@ -2390,16 +2390,27 @@ void Go_Indexer::init() {
         strcpy_safe(current_exe_path, _countof(current_exe_path), our_dirname(get_executable_path()));
     }
 
-    // gohelper_dynamic.init("go run dynamic_helper/main.go", path_join(current_exe_path, "helpers"));
-    gohelper_dynamic.init("dynamic_helper.exe", path_join(current_exe_path, "helpers"));
+    gohelper_dynamic.init("go run github.com/invrainbow/ide/helpers/dynamic_helper", path_join(current_exe_path, "helpers"));
     gohelper_static.init("static_helper.exe", path_join(current_exe_path, "helpers"));
 
     {
-        auto resp = gohelper_dynamic.run(GH_OP_GET_GO_ENV_VARS, NULL);
-        our_assert(streq(resp, "true"), "unable to get GOPATH, GOROOT, and GOMODCACHE");
-        gopath = our_strcpy(gohelper_dynamic.readline());
-        goroot = our_strcpy(gohelper_dynamic.readline());
-        gomodcache = our_strcpy(gohelper_dynamic.readline());
+        auto resp = gohelper_static.run("go_init", NULL);
+        if (!streq(resp, "true")) {
+            tell_user("Unable to read GOPATH, GOROOT, and GOMODCACHE.", NULL);
+            exit(1);
+        }
+
+        gopath = our_strcpy(gohelper_static.readline());
+        goroot = our_strcpy(gohelper_static.readline());
+        gomodcache = our_strcpy(gohelper_static.readline());
+    }
+
+    {
+        auto resp = gohelper_dynamic.run("check_go_version", NULL);
+        if (!streq(resp, "true")) {
+            tell_user("Please make sure Go version 1.16+ is installed and accessible through your PATH.", NULL);
+            exit(1);
+        }
     }
 
     wksp_watch.init(world.current_path);

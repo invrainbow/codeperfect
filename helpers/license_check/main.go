@@ -4,23 +4,22 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/invrainbow/ide/helpers"
+	"github.com/invrainbow/ide/helpers/lib"
 )
 
-func main() {
-    fail := func(s string) {
-        fmt.Printf("%s", s)
-        os.Exit(1)
-    }
+func fail(s string) {
+	fmt.Printf("%s", s)
+	os.Exit(1)
+}
 
-	licenseKey, err := helpers.GetLicenseKey()
+func main() {
+	licenseKey, err := lib.GetLicenseKey()
 	if err != nil {
 		fail("Unable to read license key.")
 	}
 
 	// make a basic call to the server and see if license key authenticates
-	_, err := helpers.GetLatestVer(licenseKey)
-	if err != nil {
+	if _, err := lib.GetLatestVer(licenseKey); err != nil {
 		fail("Invalid license key.")
 	}
 }

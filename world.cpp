@@ -163,7 +163,7 @@ bool check_license_key() {
 
     Process proc;
     proc.init();
-    proc.dir = path_join(our_dirname(get_executable_path()), "helpers");
+    // proc.dir = path_join(our_dirname(get_executable_path()), "helpers");
     proc.run("license_check.exe");
     defer { proc.cleanup(); };
 
@@ -171,31 +171,6 @@ bool check_license_key() {
         continue;
 
     return (proc.exit_code == EXIT_SUCCESS);
-}
-
-bool check_go_version() {
-    SCOPED_FRAME();
-
-    Process proc;
-    proc.init();
-    proc.dir = path_join(our_dirname(get_executable_path()), "helpers");
-    proc.run("go run version_check/main.go");
-    defer { proc.cleanup(); };
-
-    while (proc.status() == PROCESS_WAITING)
-        continue;
-
-    if (proc.exit_code != EXIT_SUCCESS) return false;
-
-    char ch = 0;
-    List<char> output;
-    output.init();
-
-    while (proc.read1(&ch))
-        output.append(ch);
-    output.append('\0');
-
-    return streq(output.items, "true");
 }
 
 void World::init() {
@@ -225,14 +200,31 @@ void World::init() {
     chunk5_fridge.init(16);
     chunk6_fridge.init(8);
 
-    while (!check_license_key()) {
-        // TODO: prompt user for key
-    }
+#if 1
+    for (bool first = true; !check_license_key(); first = false) {
+        if (first)
+            tell_user("Please select your license keyfile.", "License key required");
+        else
+            tell_user("Sorry, that keyfile was invalid. Please select another one.", "License key required");
 
-    if (!check_go_version()) {
-        tell_user("Please make sure Go version 1.16+ is installed and accessible through your PATH.", NULL);
-        exit(1);
+        char buf[MAX_PATH];
+
+        Select_File_Opts opts = {0};
+        opts.buf = buf;
+        opts.bufsize = _countof(buf);
+        opts.folder = false;
+        opts.save = false;
+
+        if (!let_user_select_file(&opts))
+            exit(1); // should we be like, "no license key selected"?
+
+        auto executable_dir = our_dirname(get_executable_path());
+        if (!copy_file(buf, path_join(executable_dir, ".idelicense"), true)) {
+            tell_user("Unable to load license keyfile.", NULL);
+            exit(1);
+        }
     }
+#endif
 
     {
         // do we need world_mem anywhere else?
@@ -419,7 +411,7 @@ void kick_off_build(Build_Profile *build_profile) {
             SCOPED_LOCK(&indexer.gohelper_static.lock);
 
             // TODO: do this
-            indexer.gohelper_static.run(GH_OP_START_BUILD, build_profile->cmd, NULL);
+            indexer.gohelper_static.run("start_build", build_profile->cmd, NULL);
             if (indexer.gohelper_static.returned_error) {
                 build->done = true;
                 build->build_itself_had_error = true;
@@ -430,7 +422,7 @@ void kick_off_build(Build_Profile *build_profile) {
         for (;; sleep_milliseconds(100)) {
             SCOPED_LOCK(&indexer.gohelper_static.lock);
 
-            auto resp = indexer.gohelper_static.run(GH_OP_GET_BUILD_STATUS, NULL);
+            auto resp = indexer.gohelper_static.run("get_build_status", NULL);
             if (indexer.gohelper_static.returned_error) {
                 build->done = true;
                 build->started = false;
@@ -481,6 +473,8 @@ void kick_off_build(Build_Profile *build_profile) {
 }
 
 void* get_native_window_handle() {
+    if (world.window == NULL) return NULL;
+
 #if OS_WIN
     return (void*)glfwGetWin32Window(world.window);
 #endif
