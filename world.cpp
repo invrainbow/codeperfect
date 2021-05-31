@@ -133,15 +133,15 @@ void World::init_workspace() {
 
     panes.init(LIST_FIXED, _countof(_panes), _panes);
 
-#if 0
-    strcpy_safe(current_path, _countof(current_path), normalize_path_sep("c:/users/brandon/ide/payments"));
-#else
+#if 1 // RELEASE_BUILD
     Select_File_Opts opts = {0};
     opts.buf = current_path;
     opts.bufsize = _countof(current_path);
     opts.folder = true;
     opts.save = false;
     let_user_select_file(&opts);
+#else
+    strcpy_safe(current_path, _countof(current_path), normalize_path_sep("c:/users/brandon/ide/payments"));
 #endif
 
     project_settings.read(path_join(current_path, ".ideproj"));
@@ -200,7 +200,7 @@ void World::init() {
     chunk5_fridge.init(16);
     chunk6_fridge.init(8);
 
-#if 1
+#if RELEASE_BUILD
     for (bool first = true; !check_license_key(); first = false) {
         if (first)
             tell_user("Please select your license keyfile.", "License key required");
@@ -223,6 +223,13 @@ void World::init() {
             tell_user("Unable to load license keyfile.", NULL);
             exit(1);
         }
+    }
+#endif
+
+#if RELEASE_BUILD
+    {
+        auto executable_dir = our_dirname(get_executable_path());
+        set_run_on_computer_startup("CodePerfect95_Autoupdate", path_join(executable_dir, "autoupdate.exe"));
     }
 #endif
 
@@ -348,7 +355,6 @@ void World::activate_pane(u32 idx) {
         auto pane = get_current_pane();
         if (pane->current_editor != -1)
             pane->focus_editor_by_index(pane->current_editor);
-
         /*
         auto editor = pane->get_current_editor();
         if (editor != NULL)

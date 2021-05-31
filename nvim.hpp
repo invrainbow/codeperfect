@@ -386,6 +386,7 @@ enum Screen_Pos {
 struct Grid_Cell {
     int hl;
     int reps;
+    ccstr text;
 };
 
 struct Nvim_Message {
@@ -560,6 +561,7 @@ struct Nvim {
     void write_request_header(u32 msgid, ccstr method, u32 params_length);
     void write_response_header(u32 msgid);
     void write_notification_header(ccstr method, u32 params_length);
+    void write_line(Line *line);
 
     Nvim_Request* save_request(Nvim_Request_Type type, u32 msgid, u32 editor_id) {
         auto req = requests.append();

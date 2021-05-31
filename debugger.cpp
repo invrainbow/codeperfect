@@ -185,8 +185,7 @@ ccstr parse_json_string(ccstr s) {
                 }
 
                 char utf8_chars[4];
-                s32 utf8_len = 0;
-                uchar_to_cstr(codepoint, utf8_chars, &utf8_len);
+                auto utf8_len = uchar_to_cstr(codepoint, utf8_chars);
                 if (utf8_len == 0) goto fail;
                 for (u32 j = 0; j < utf8_len; j++)
                     chars.append(utf8_chars[j]);

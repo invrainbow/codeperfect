@@ -3,7 +3,10 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"go/format"
+	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/google/shlex"
 	"github.com/invrainbow/ide/helpers/helperlib"
@@ -118,6 +121,34 @@ func main() {
 			helperlib.Write(lib.GetShellOutput("go env GOPATH"))
 			helperlib.Write(lib.GetShellOutput("go env GOROOT"))
 			helperlib.Write(lib.GetShellOutput("go env GOMODCACHE"))
+
+		case "autoformat":
+			lines := helperlib.ReadInt()
+			buf := []byte{}
+
+			for i := 0; i < lines; i++ {
+				buf = append(buf, []byte(helperlib.ReadLine())...)
+				if i+1 < lines {
+					buf = append(buf, '\n')
+				}
+			}
+
+			os.WriteFile("old", buf, 0666)
+
+			newSource, err := format.Source(buf)
+			if err != nil {
+				helperlib.WriteError(err)
+				break
+			}
+
+			os.WriteFile("new", newSource, 0666)
+
+			newLines := strings.Split(string(newSource), "\n")
+
+			helperlib.Write(len(newLines))
+			for _, line := range newLines {
+				helperlib.Write(line)
+			}
 		}
 	}
 }

@@ -1,8 +1,9 @@
 #include "buffer.hpp"
 #include "common.hpp"
 #include "world.hpp"
+#include "unicode.hpp"
 
-void uchar_to_cstr(uchar c, cstr out, s32* pn) {
+s32 uchar_to_cstr(uchar c, cstr out) {
     u32 k = 0;
     if (c <= 0x7f) {
         out[k++] = (u8)c;
@@ -19,7 +20,7 @@ void uchar_to_cstr(uchar c, cstr out, s32* pn) {
         out[k++] = (u8)(0b10000000 | ((c % 0b111111000000) >> 6));
         out[k++] = (u8)(0b10000000 | (c & 0b111111));
     }
-    *pn = k;
+    return k;
 }
 
 s32 uchar_size(uchar c) {
@@ -28,6 +29,7 @@ s32 uchar_size(uchar c) {
     if (c <= 0xffff) return 3;
     return 4;
 }
+
 uchar Buffer_It::get(cur2 _pos) {
     auto old = pos;
     pos = _pos;
@@ -183,7 +185,7 @@ void Buffer::copy_from(Buffer *other) {
     read([&](char *out) -> bool {
         if (pos >= count) {
             if (it.eof()) return false;
-            uchar_to_cstr(it.next(), tmp, &count);
+            count = uchar_to_cstr(it.next(), tmp);
             pos = 0;
         }
         *out = tmp[pos++];
@@ -231,19 +233,15 @@ void Buffer::read(Buffer_Read_Func f) {
     dirty = false;
 }
 
-void Buffer::read(FILE* f) {
-    read([&](char* out) -> bool {
-        return !feof(f) && fread(out, 1, 1, f) == 1;
-    });
+void Buffer::read(File *f) {
+    read([&](char* out) { return f->read(out, 1); });
 }
 
-void Buffer::write(FILE* f) {
+void Buffer::write(File *f) {
     auto write_char = [&](uchar ch) {
         char buf[4];
-        s32 count;
-
-        uchar_to_cstr(ch, buf, &count);
-        fwrite(buf, 1, count, f);
+        auto count = uchar_to_cstr(ch, buf);
+        f->write(buf, count);
     };
 
     bool first = true;
@@ -424,6 +422,69 @@ i32 Buffer::cur_to_offset(cur2 c) {
     return ret;
 }
 
+u32 Buffer::idx_gr_to_cp(int y, int off) {
+    auto &line = lines[y];
+
+    Grapheme_Clusterer gc;
+    gc.init();
+
+    int idx = 0;
+    gc.feed(line[idx]);
+
+    for (int i = 0; i < off; i++) {
+        idx++;
+        while (idx < line.len && !gc.feed(line[idx]))
+            idx++;
+    }
+
+    return idx; // is this right? lol
+}
+
+u32 Buffer::idx_cp_to_byte(int y, int off) {
+    auto &line = lines[y];
+    int ret = 0;
+
+    for (int i = 0; i < off; i++)
+        ret += uchar_size(line[i]);
+    return ret;
+}
+
+u32 Buffer::idx_byte_to_gr(int y, int off) {
+    auto &line = lines[y];
+    int k = 0;
+    u32 x = 0;
+
+    Grapheme_Clusterer gc;
+    gc.init();
+    gc.feed(line[k]);
+
+    for (; k < line.len; x++) {
+        int size = uchar_size(line[k++]);
+        while (k < line.len && !gc.feed(line[k])) {
+            size += uchar_size(line[k]);
+            k++;
+        }
+
+        if (off < size) return x;
+        off -= size;
+    }
+
+    assert(off == 0);
+    return x;
+}
+
+u32 Buffer::idx_byte_to_cp(int y, int off) {
+    auto &line = lines[y];
+    for (u32 x = 0; x < line.len; x++) {
+        auto size = uchar_size(line[x]);
+        if (off < size) return x;
+        off -= size;
+    }
+
+    assert(off == 0);
+    return lines[y].len;
+}
+
 cur2 Buffer::offset_to_cur(i32 off) {
     cur2 ret;
     ret.x = -1;
@@ -433,18 +494,7 @@ cur2 Buffer::offset_to_cur(i32 off) {
         auto& it = bytecounts[y];
         if (off < it) {
             ret.y = y;
-            for (u32 x = 0; x < lines[y].len; x++) {
-                auto size = uchar_size(lines[y][x]);
-                if (off < size) {
-                    ret.x = x;
-                    break;
-                }
-                off -= size;
-            }
-            if (ret.x == -1) {
-                assert(off == 0);
-                ret.x = lines[y].len;
-            }
+            ret.x = idx_byte_to_cp(y, off);
             break;
         }
         off -= it;

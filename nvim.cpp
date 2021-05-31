@@ -4,6 +4,7 @@
 #include "utils.hpp"
 #include "go.hpp"
 #include "settings.hpp"
+#include "unicode.hpp"
 // #include <strsafe.h>
 
 #define NVIM_DEBUG 0
@@ -106,6 +107,30 @@ ccstr nvim_notification_type_str(Nvim_Notification_Type type) {
     return NULL;
 }
 
+void Nvim::write_line(Line *line) {
+    writer.write1(MP_OP_STRING);
+
+    int len = 0;
+    for (int i = 0; i < line->len; i++)
+        len += uchar_size(line->at(i));
+
+    writer.write4(len);
+
+    for (int i = 0; i < line->len; i++) {
+        char buf[4];
+        auto size = uchar_to_cstr(line->at(i), buf);
+        for (int j = 0; j < size; j++)
+            writer.write1(buf[j]);
+    }
+
+    /*
+    writer.write1(MP_OP_STRING);
+    writer.write4(line->len);
+    for (int i = 0; i < line->len; i++)
+        writer.write1(line->at(i));
+    */
+}
+
 // TODO: also need to remove request from queue once it's been processed
 void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
     switch (event->type) {
@@ -192,11 +217,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                     writer.write_bool(false);
 
                     writer.write_array(editor->buf.lines.len);
-                    For (editor->buf.lines) {
-                        writer.write1(MP_OP_STRING);
-                        writer.write4(it.len);
-                        For (it) writer.write1(it);
-                    }
+                    For (editor->buf.lines) write_line(&it);
                     end_message();
                 }
                 break;
@@ -217,36 +238,22 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                     writer.write_int(start.y + 1);
                     writer.write_bool(false);
                     writer.write_array(cur.y - backspaced_to.y + 1);
-                    for (u32 y = backspaced_to.y; y <= cur.y; y++) {
-                        auto& line = editor->buf.lines[y];
-                        writer.write1(MP_OP_STRING);
-                        writer.write4(line.len);
-                        For (line) writer.write1(it);
-                    }
+                    for (u32 y = backspaced_to.y; y <= cur.y; y++)
+                        write_line(&editor->buf.lines[y]);
                     end_message();
 
                     // move cursor
                     auto old_cur = editor->cur;
                     {
                         auto cur = editor->cur;
-                        if (cur.x > 0) cur.x--;
+                        if (cur.x > 0) {
+                            int gr_idx = editor->buf.idx_cp_to_gr(cur.y, cur.x);
+                            cur.x = editor->buf.idx_gr_to_cp(cur.y, relu_sub(gr_idx, 1));
+                        }
                         editor->raw_move_cursor(cur);
                     }
 
-                    u32 delete_len = 0;
-                    {
-                        auto del_start = editor->nvim_insert.backspaced_to;
-                        auto del_end = editor->nvim_insert.start;
-                        auto& buf = editor->buf;
-
-                        for (u32 y = del_start.y; y <= del_end.y; y++) {
-                            delete_len += buf.lines[y].len + 1;
-                            if (y == del_start.y)
-                                delete_len -= del_start.x;
-                            if (y == del_end.y)
-                                delete_len -= (buf.lines[y].len + 1 - del_end.x);
-                        }
-                    }
+                    u32 delete_len = editor->nvim_insert.deleted_graphemes;
 
                     auto msgid = start_request_message("nvim_call_atomic", 1);
                     save_request(NVIM_REQ_POST_INSERT_DOTREPEAT_REPLAY, msgid, editor->id);
@@ -262,7 +269,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                                 {
                                     writer.write_array(2);
                                     writer.write_int(editor->cur.y + 1);
-                                    writer.write_int(editor->cur.x);
+                                    writer.write_int(editor->buf.idx_cp_to_byte(editor->cur.y, editor->cur.x));
                                 }
                             }
                         }
@@ -319,10 +326,14 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                             while (it.pos < old_cur) {
                                 // wait, does this take utf-8?
                                 auto ch = it.next();
-                                if (ch == '<')
+                                if (ch == '<') {
                                     r.writestr("<LT>");
-                                else
-                                    r.writechar((char)ch);
+                                } else {
+                                    char buf[4];
+                                    auto len = uchar_to_cstr(ch, buf);
+                                    for (int i = 0; i < len; i++)
+                                        r.writechar(buf[i]);
+                                }
                             }
 
                             writer.write_array(2);
@@ -407,11 +418,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                             writer.write_bool(false);
 
                             writer.write_array(editor->buf.lines.len);
-                            For (editor->buf.lines) {
-                                writer.write1(MP_OP_STRING);
-                                writer.write4(it.len);
-                                For (it) writer.write1(it);
-                            }
+                            For (editor->buf.lines) write_line(&it);
                         }
                     }
 
@@ -611,22 +618,38 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
             {
                 auto &args = event->notification.grid_line;
 
+                {
+                    SCOPED_FRAME();
+
+                    Text_Renderer r;
+                    r.init();
+                    for (int i = 0; i < args.cells->len; i++) {
+                        auto &it = args.cells->at(i);
+                        r.write("(%d x %d)", it.hl, it.reps);
+                        if (i+1 < args.cells->len)
+                            r.writestr(", ");
+                    }
+                    nvim_print("grid line %d:%d: %s", args.row, args.col, r.finish());
+                }
+
                 auto editor = find_editor_by_grid(args.grid);
                 if (editor == NULL) break;
-
-                // args.row, args.col
 
                 i32 last_hl = -1;
                 Hl_Type last_hltype = HL_NONE;
                 auto col = args.col;
 
                 For (*args.cells) {
+                    if (streq(it.text, "")) continue;
+
                     if (it.hl != -1 && it.hl != last_hl) {
                         last_hl = it.hl;
                         auto def = hl_defs.find([&](auto it) { return it->id == last_hl; });
                         last_hltype = def == NULL ? HL_NONE : def->type;
                     }
-                    for (u32 i = 0; (i < (it.reps != 0 ? it.reps : 1)) && col < NVIM_DEFAULT_WIDTH; i++) {
+
+                    int reps = (!streq(it.text, "\t") && it.reps != 0) ? it.reps : 1;
+                    for (u32 i = 0; i < reps && col < NVIM_DEFAULT_WIDTH; i++) {
                         editor->highlights[args.row][col] = last_hltype;
                         col++;
                     }
@@ -665,7 +688,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
             {
                 auto &args = event->notification.hl_attr_define;
 
-                nvim_print("got hl def for: %s", args.hi_name);
+                nvim_print("hl def: %d = %s", args.id, args.hi_name);
 
                 auto get_hl_type = [&]() -> Hl_Type {
                     if (streq(args.hi_name, "IncSearch")) return HL_INCSEARCH;
@@ -789,7 +812,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                         nvim_print("got_initial_lines = false, setting to true & calling handle_editor_on_ready()");
                         editor->nvim_data.got_initial_lines = true;
 
-                        // set initial pos, but don't clear need_initial_pos_set 
+                        // set initial pos, but don't clear need_initial_pos_set
                         // we're still going to set it in handle_editor_on_ready
                         // we're just setting it early here to speed up file load times
                         if (editor->nvim_data.need_initial_pos_set) {
@@ -854,6 +877,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                     if (mode == VI_INSERT) {
                         editor->nvim_insert.start = editor->cur;
                         editor->nvim_insert.backspaced_to = editor->cur;
+                        editor->nvim_insert.deleted_graphemes = 0;
                     } else if (mode == VI_NORMAL) {
                         if (editor->nvim_data.waiting_for_move_cursor) {
                             editor->nvim_data.waiting_for_move_cursor = false;
@@ -887,6 +911,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
 
                 nvim_print("got cursor change to %s", format_pos(new_cur2((u32)args.curcol, (u32)args.curline)));
 
+                /*
                 auto should_move_cursor = [&]() -> bool {
                     if (mode != VI_INSERT) return true;
 
@@ -903,6 +928,13 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
 
                 if (should_move_cursor())
                     editor->raw_move_cursor(new_cur2((u32)args.curcol, (u32)args.curline));
+                */
+
+                {
+                    auto y = (u32)args.curline;
+                    auto x = editor->buf.idx_byte_to_cp(y, args.curcol);
+                    editor->raw_move_cursor(new_cur2(x, y));
+                }
 
                 if (!editor->nvim_data.got_initial_cur) {
                     nvim_print("got_initial_cur = false, setting to true & calling handle_editor_on_ready()");
@@ -1009,6 +1041,13 @@ void Nvim::run_event_loop() {
                             msg->notification.custom_reveal_line.screen_pos = screen_pos;
                             msg->notification.custom_reveal_line.reset_cursor = reset_cursor;
                         });
+                    } else if (streq(cmd, "visual_update")) {
+                        ASSERT(num_args == 4);
+                        auto ys = reader.read_int(); CHECKOK();
+                        auto xs = reader.read_int(); CHECKOK();
+                        auto ye = reader.read_int(); CHECKOK();
+                        auto xe = reader.read_int(); CHECKOK();
+                        print("%d:%d to %d:%d", ys, xs, ye, xe);
                     } else if (streq(cmd, "go_to_definition")) {
                         ASSERT(num_args == 0);
                         add_event([&](auto msg) {
@@ -1053,11 +1092,22 @@ void Nvim::run_event_loop() {
                             auto len = strlen(line);
                             {
                                 SCOPED_MEM(&messages_mem);
+
+                                s32 ulen = 0;
                                 auto unicode_line = alloc_array(uchar, len);
-                                for (u32 i = 0; i < len; i++)
-                                    unicode_line[i] = line[i];
+                                Cstr_To_Ustr conv;
+                                bool found = false;
+
+                                conv.init();
+
+                                for (u32 i = 0; i < len; i++) {
+                                    auto uch = conv.feed(line[i], &found);
+                                    if (found)
+                                        unicode_line[ulen++] = uch;
+                                }
+
                                 lines->append(unicode_line);
-                                line_lengths->append(len);
+                                line_lengths->append(ulen);
                             }
                         }
 
@@ -1188,9 +1238,7 @@ void Nvim::run_event_loop() {
                                         auto cell_len = reader.read_array();
                                         ASSERT(1 <= cell_len && cell_len <= 3);
 
-                                        // skip character (we don't care)
-                                        ASSERT(reader.peek_type() == MP_STRING);
-                                        reader.skip_object(); CHECKOK();
+                                        auto text = reader.read_string(); CHECKOK();
 
                                         // read highlight id & reps
                                         i32 hl = -1, reps = 0;
@@ -1204,6 +1252,7 @@ void Nvim::run_event_loop() {
                                         auto cell = cells->append();
                                         cell->hl = hl;
                                         cell->reps = reps;
+                                        cell->text = text;
                                     }
 
                                     m->notification.grid_line.cells = cells;

@@ -18,7 +18,7 @@ enum Texture_Id {
 };
 
 struct Font {
-    stbtt_packedchar char_info['~' - ' ' + 1];
+    stbtt_packedchar char_info['~' - ' ' + 1 + 1];
 
     i32 tex_size;
     i32 offset_y;
@@ -44,6 +44,11 @@ struct Font {
         stbtt_PackSetOversampling(&context, 2, 2);
 
         if (!stbtt_PackFontRange(&context, font_data, 0, (float)height, ' ', '~' - ' ' + 1, char_info)) {
+            error("stbtt_PackFontRange failed");
+            return false;
+        }
+
+        if (!stbtt_PackFontRange(&context, font_data, 0, (float)height, 0xfffd, 1, &char_info[_countof(char_info) - 1])) {
             error("stbtt_PackFontRange failed");
             return false;
         }
@@ -157,7 +162,7 @@ struct UI {
     void draw_rect(boxf b, vec4f color);
     void draw_rounded_rect(boxf b, vec4f color, float radius, int round_flags);
     void draw_bordered_rect_outer(boxf b, vec4f color, vec4f border_color, int border_width, float radius = 0);
-    void draw_char(vec2f* pos, char ch, vec4f color);
+    void draw_char(vec2f* pos, uchar ch, vec4f color);
     vec2f draw_string(vec2f pos, ccstr s, vec4f color);
     float get_text_width(ccstr s);
     boxf get_build_results_area();

@@ -1,3 +1,5 @@
+scriptencoding utf-8
+
 set clipboard=unnamed
 set ignorecase
 set autoindent
@@ -68,8 +70,6 @@ nnoremap gd <Cmd>call <SID>goToDefinition()<CR>
 nnoremap : <nop>
 nnoremap <F1> :
 
-scriptencoding utf-8
-
 set shortmess=filnxtToOFI
 set nowrap
 set mouse=a
@@ -90,7 +90,6 @@ set bufhidden=hide
 set noautowrite
 set norelativenumber
 set nonumber
-set list
 syntax on
 set signcolumn=no
 
@@ -120,7 +119,6 @@ function s:forceLocalOptions()
     setlocal noautowrite
     setlocal nonumber
     setlocal norelativenumber
-    setlocal list
     setlocal nofoldenable
     setlocal foldmethod=manual
     setlocal nolazyredraw
@@ -130,3 +128,14 @@ augroup IDE
     autocmd!
     autocmd BufEnter,FileType * call <SID>forceLocalOptions()
 augroup END
+
+function s:sendVisualSelection()
+    let m = mode()
+    if m ==# "v" || m ==# "V" || m ==# "^V"
+        let [row_s, col_s] = getpos("'<")[1:2]
+        let [row_e, col_e] = getpos("'>")[1:2]
+        call NotifyIDE('visual_update', row_s, col_s, row_e, col_e)
+    endif
+endfunction
+
+" autocmd CursorMoved * call <SID>sendVisualSelection()

@@ -72,6 +72,7 @@ struct Editor {
     struct {
         cur2 start;
         cur2 backspaced_to;
+        u32 deleted_graphemes;
         u32 skip_changedticks_until;
     } nvim_insert;
 
@@ -121,6 +122,7 @@ struct Editor {
     void format_on_save(bool write_to_nvim = true);
     void handle_save(bool about_to_close = false);
     bool is_current_editor();
+    void backspace_in_insert_mode(int graphemes_to_erase, int codepoints_to_erase);
 };
 
 struct Pane {

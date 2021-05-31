@@ -370,17 +370,40 @@ int main() {
         // assert(ui_font != NULL, "unable to load UI font");
         // world.ui.im_font_ui = io.Fonts->AddFontFromMemoryTTF(ui_font, len, 16);
 
-        world.ui.im_font_ui = io.Fonts->AddFontFromFileTTF("fonts/OpenSans-SemiBold.ttf", 16);
+        ImVector<ImWchar> ranges;
+        ImFontGlyphRangesBuilder builder;
+        builder.AddRanges(io.Fonts->GetGlyphRangesDefault());
+        // builder.AddRanges(io.Fonts->GetGlyphRangesJapanese());
+        // builder.AddRanges(io.Fonts->GetGlyphRangesKorean());
+        // builder.AddRanges(io.Fonts->GetGlyphRangesChineseFull());
+        // builder.AddRanges(io.Fonts->GetGlyphRangesChineseSimplifiedCommon());
+        // builder.AddRanges(io.Fonts->GetGlyphRangesCyrillic());
+        builder.BuildRanges(&ranges);
+
+        ImFontConfig config;
+        config.MergeMode = true;
+
+        world.ui.im_font_ui = io.Fonts->AddFontFromFileTTF("fonts/OpenSans-SemiBold.ttf", 16, NULL, ranges.Data);
         assert(world.ui.im_font_ui != NULL, "unable to load UI font");
 
-        // auto mono_font = read_font_data_from_first_found(&len, "Courier New", "Consolas", "Menlo", "Courier New");
-        // assert(mono_font != NULL, "unable to load code font");
+        // io.Fonts->AddFontFromFileTTF("fonts/NotoSansCJKjp-Regular.otf", 16, &config, ranges.Data);
+        // io.Fonts->AddFontFromFileTTF("fonts/NotoSansCJKkr-Regular.otf", 16, &config, ranges.Data);
+        // io.Fonts->AddFontFromFileTTF("fonts/NotoSansCJKsc-Regular.otf", 16, &config, ranges.Data);
+        // io.Fonts->AddFontFromFileTTF("fonts/NotoSansCJKtc-Regular.otf", 16, &config, ranges.Data);
 
-        if (!world.font.init((u8*)vera_mono_ttf, CODE_FONT_SIZE, TEXTURE_FONT))
-            panic("unable to load code font");
-
-        world.ui.im_font_mono = io.Fonts->AddFontFromMemoryTTF(vera_mono_ttf, vera_mono_ttf_len, CODE_FONT_SIZE);
+        world.ui.im_font_mono = io.Fonts->AddFontFromFileTTF("fonts/LiberationMono-Regular.ttf", CODE_FONT_SIZE, NULL, ranges.Data);
         assert(world.ui.im_font_mono != NULL, "unable to load code font");
+
+        {
+            auto mono_font_ef = read_entire_file("fonts/LiberationMono-Regular.ttf");
+            assert(mono_font_ef != NULL, "unable to load mono font");
+            defer { free_entire_file(mono_font_ef); };
+
+            if (!world.font.init((u8*)mono_font_ef->data, CODE_FONT_SIZE, TEXTURE_FONT))
+                panic("unable to load code font");
+        }
+
+        io.Fonts->Build();
 
         // init imgui texture
         u8* pixels;
@@ -392,9 +415,6 @@ int main() {
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-
-        // i don't think this is needed
-        // io.Fonts->TexID = (void*)TEXTURE_FONT_IMGUI;
     }
 
     glfwSetWindowSizeCallback(world.window, [](GLFWwindow* wnd, i32 w, i32 h) {
@@ -658,14 +678,18 @@ int main() {
 
             editor->start_change();
 
-            auto buf = &editor->buf;
-            auto back1 = buf->dec_cur(editor->cur);
-            buf->remove(back1, editor->cur);
-
-            editor->raw_move_cursor(back1);
-
-            if (editor->cur < editor->nvim_insert.backspaced_to)
-                editor->nvim_insert.backspaced_to = editor->cur;
+            // if we're at beginning of line
+            if (editor->cur.x == 0) {
+                auto back1 = editor->buf.dec_cur(editor->cur);
+                editor->buf.remove(back1, editor->cur);
+                if (back1 < editor->nvim_insert.backspaced_to) {
+                    editor->nvim_insert.backspaced_to = back1;
+                    editor->nvim_insert.deleted_graphemes++;
+                }
+                editor->raw_move_cursor(back1);
+            } else {
+                editor->backspace_in_insert_mode(1, 0); // erase one grapheme
+            }
 
             editor->end_change();
 
@@ -785,17 +809,30 @@ int main() {
                             auto len = strlen(clipboard_contents);
                             if (len == 0) break;
 
+                            Cstr_To_Ustr conv;
+                            conv.init();
+
+                            for (int i = 0; i < len; i++)
+                                conv.count(clipboard_contents[i]);
+
+                            auto ulen = conv.len;
+
                             SCOPED_FRAME();
 
-                            auto text = alloc_array(uchar, len);
-                            for (u32 i = 0; i < len; i++)
-                                text[i] = clipboard_contents[i];
+                            auto text = alloc_array(uchar, ulen);
+                            conv.init();
+                            for (u32 i = 0, j = 0; i < len; i++) {
+                                bool found = false;
+                                auto uch = conv.feed(clipboard_contents[i], &found);
+                                if (found)
+                                    text[j++] = uch;
+                            }
 
                             editor->start_change();
                             {
-                                editor->buf.insert(editor->cur, text, len);
+                                editor->buf.insert(editor->cur, text, ulen);
                                 auto cur = editor->cur;
-                                for (u32 i = 0; i < len; i++)
+                                for (u32 i = 0; i < ulen; i++)
                                     cur = editor->buf.inc_cur(cur);
                                 editor->raw_move_cursor(cur);
                             }
@@ -1077,13 +1114,7 @@ int main() {
                                     {
                                         nv.writer.write_array(1); // replacement
                                         auto& line = buf.lines[ac_start.y];
-                                        {
-                                            // write a single string.
-                                            nv.writer.write1(MP_OP_STRING);
-                                            nv.writer.write4(line.len);
-                                            for (u32 i = 0; i < line.len; i++)
-                                                nv.writer.write1((char)line[i]);
-                                        }
+                                        nv.write_line(&line);
                                     }
                                     nv.end_message();
                                 }

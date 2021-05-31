@@ -4,6 +4,7 @@
 #include "common.hpp"
 #include "world.hpp"
 #include "go.hpp"
+#include "unicode.hpp"
 #include "settings.hpp"
 
 #define _USE_MATH_DEFINES // what the fuck is this lol
@@ -677,20 +678,48 @@ void UI::draw_bordered_rect_outer(boxf b, vec4f color, vec4f border_color, int b
 }
 
 // advances pos forward
-void UI::draw_char(vec2f* pos, char ch, vec4f color) {
+void UI::draw_char(vec2f* pos, uchar ch, vec4f color) {
     stbtt_aligned_quad q;
-    stbtt_GetPackedQuad(font->char_info, font->tex_size, font->tex_size, ch - ' ', &pos->x, &pos->y, &q, 0);
+    stbtt_GetPackedQuad(
+        font->char_info, font->tex_size, font->tex_size,
+        ch == 0xfffd ? _countof(font->char_info) - 1 : ch - ' ',
+        &pos->x, &pos->y, &q, 0
+    );
+
     if (q.x1 > q.x0) {
         boxf box = { q.x0, q.y0, q.x1 - q.x0, q.y1 - q.y0 };
         boxf uv = { q.s0, q.t0, q.s1 - q.s0, q.t1 - q.t0 };
         draw_quad(box, uv, color, DRAW_FONT_MASK);
     }
+
+    /*
+        boxf b;
+        b.pos = *pos;
+        b.w = font->width;
+        b.h = font->height;
+        b.y -= font->offset_y;
+        draw_rect(b, color);
+        pos->x += font->width;
+    */
 }
 
 vec2f UI::draw_string(vec2f pos, ccstr s, vec4f color) {
     pos.y += font->offset_y;
-    for (u32 i = 0, len = strlen(s); i < len; i++)
-        draw_char(&pos, s[i], color);
+
+    Cstr_To_Ustr conv;
+    conv.init();
+
+    for (u32 i = 0, len = strlen(s); i < len; i++) {
+        bool found;
+        auto uch = conv.feed(s[i], &found);
+        if (found) {
+            if (uch < 0x7f)
+                draw_char(&pos, uch, color);
+            else
+                draw_char(&pos, '?', color);
+        }
+    }
+
     pos.y -= font->offset_y;
     return pos;
 }
@@ -698,8 +727,18 @@ vec2f UI::draw_string(vec2f pos, ccstr s, vec4f color) {
 float UI::get_text_width(ccstr s) {
     float x = 0, y = 0;
     stbtt_aligned_quad q;
-    for (u32 i = 0, len = strlen(s); i < len; i++)
-        stbtt_GetPackedQuad(font->char_info, font->tex_size, font->tex_size, s[i] - ' ', &x, &y, &q, 0);
+    Cstr_To_Ustr conv;
+    bool found;
+
+    conv.init();
+    for (u32 i = 0, len = strlen(s); i < len; i++) {
+        auto uch = conv.feed(s[i], &found);
+        if (found) {
+            if (uch > 0x7f) uch = '?';
+            stbtt_GetPackedQuad(font->char_info, font->tex_size, font->tex_size, uch - ' ', &x, &y, &q, 0);
+        }
+    }
+
     return x;
 }
 
@@ -1078,34 +1117,7 @@ struct Debugger_UI {
             return our_sprintf("0x%" PRIx64 " (Len = %d)", var->address, var->len);
 
         case GO_KIND_STRING:
-            {
-                Text_Renderer r;
-                r.init();
-
-                for (int i = 0, len = strlen(var->value); i < len; i++) {
-                    r.writechar(var->value[i]);
-                    /*
-                    auto ch = var->value[i];
-                    switch (ch) {
-                      case '\"': r.writestr("\\\""); break;
-                      case '\'': r.writestr("\\\'"); break;
-                      case '\\': r.writestr("\\\\"); break;
-                      case '\a': r.writestr("\\a"); break;
-                      case '\b': r.writestr("\\b"); break;
-                      case '\n': r.writestr("\\n"); break;
-                      case '\t': r.writestr("\\t"); break;
-                      default:
-                        if (iscntrl(ch))
-                            r.write("\\%03o", ch);
-                        else
-                            r.writechar(ch);
-                        break;
-                    }
-                    */
-                }
-
-                return our_sprintf("\"%s%s\"", r.finish(), var->incomplete() ? "..." : "");
-            }
+            return our_sprintf("\"%s%s\"", var->value, var->incomplete() ? "..." : "");
 
         case GO_KIND_UNSAFEPOINTER:
         case GO_KIND_CHAN:
@@ -1714,15 +1726,12 @@ void UI::draw_everything() {
 
         if (ImGui::BeginMenu("Tools")) {
             if (io.KeyAlt) {
-                if (ImGui::BeginMenu("Developer")) {
-                    ImGui::MenuItem("ImGui demo", NULL, &world.windows_open.im_demo);
-                    ImGui::MenuItem("ImGui metrics", NULL, &world.windows_open.im_metrics);
-                    ImGui::MenuItem("Editor AST viewer", NULL, &world.wnd_editor_tree.show);
-                    ImGui::MenuItem("Editor toplevels viewer", NULL, &world.wnd_editor_toplevels.show);
-                    ImGui::MenuItem("Roll Your Own IDE Construction Set", NULL, &world.wnd_style_editor.show);
-                    ImGui::MenuItem("Replace line numbers with bytecounts", NULL, &world.replace_line_numbers_with_bytecounts);
-                    ImGui::EndMenu();
-                }
+                ImGui::MenuItem("ImGui demo", NULL, &world.windows_open.im_demo);
+                ImGui::MenuItem("ImGui metrics", NULL, &world.windows_open.im_metrics);
+                ImGui::MenuItem("Editor AST viewer", NULL, &world.wnd_editor_tree.show);
+                ImGui::MenuItem("Editor toplevels viewer", NULL, &world.wnd_editor_toplevels.show);
+                ImGui::MenuItem("Roll Your Own IDE Construction Set", NULL, &world.wnd_style_editor.show);
+                ImGui::MenuItem("Replace line numbers with bytecounts", NULL, &world.replace_line_numbers_with_bytecounts);
                 ImGui::Separator();
             }
 
@@ -2182,8 +2191,6 @@ void UI::draw_everything() {
 
         ImGui::Text("Search for file:");
 
-        ImGui::PushFont(world.ui.im_font_mono);
-
         if (ImGui::IsWindowAppearing()) {
             ImGui::SetKeyboardFocusHere();
         } else if (!wnd.first_open_focus_twice_done) {
@@ -2203,8 +2210,6 @@ void UI::draw_everything() {
             else
                 ImGui::Text("%s", it);
         }
-
-        ImGui::PopFont();
 
         ImGui::End();
     }
@@ -2540,21 +2545,25 @@ void UI::draw_everything() {
                 vec2f actual_cursor_position = { -1, -1 };
                 vec2f actual_parameter_hint_start = { -1, -1 };
 
-                auto draw_background = [&](bool is_insert_cursor, vec4f color) {
-                    boxf b;
-                    b.x = cur_pos.x;
-                    b.y = cur_pos.y - font->offset_y;
-                    b.h = (float)font->height;
-                    b.w = is_insert_cursor ? 2 : (float)font->width;
-                    draw_rect(b, color);
-                };
-
-                auto draw_cursor = [&]() {
+                auto draw_cursor = [&](int chars) {
                     if (current_pane != world.current_pane) return;
 
                     actual_cursor_position = cur_pos;    // save position where cursor is drawn for later use
                     bool is_insert_cursor = (world.nvim.mode == VI_INSERT && is_pane_selected && !world.nvim.exiting_insert_mode);
-                    draw_background(is_insert_cursor, rgba(COLOR_LIME));
+
+                    auto pos = cur_pos;
+                    pos.y -= font->offset_y;
+
+                    boxf b;
+                    b.pos = pos;
+                    b.h = (float)font->height;
+                    b.w = is_insert_cursor ? 2 : ((float)font->width * chars);
+
+                    auto py = font->height * (settings.line_height - 1.0) / 2;
+                    b.y -= py;
+                    b.h += py * 2;
+
+                    draw_rect(b, rgba(COLOR_LIME));
                 };
 
                 List<Client_Breakpoint> breakpoints_for_this_editor;
@@ -2574,7 +2583,7 @@ void UI::draw_everything() {
                     }
                 }
 
-                if (buf.lines.len == 0) draw_cursor();
+                if (buf.lines.len == 0) draw_cursor(1);
 
                 auto &hint = editor->parameter_hint;
 
@@ -2681,8 +2690,40 @@ void UI::draw_everything() {
                         cur_pos.x += settings.line_number_margin_right;
                     }
 
+                    Grapheme_Clusterer gc;
+                    gc.init();
+
+                    int cp_idx = 0;
+                    gc.feed(line->at(cp_idx)); // feed first character for GB1
+
+                    // jump {view.x} clusters
+                    for (int i = 0; i < view.x && cp_idx < line->len; i++) {
+                        cp_idx++;
+                        while (cp_idx < line->len && !gc.feed(line->at(cp_idx)))
+                            cp_idx++;
+                    }
+
                     for (u32 x = view.x, vx = view.x; vx < view.x + view.w; x++) {
-                        if (x >= line->len) break;
+                        if (cp_idx >= line->len) break;
+
+                        auto curr_cp_idx = cp_idx;
+
+                        int curr_cp = line->at(cp_idx++);
+                        int grapheme_cpsize = 1;
+
+                        // grab another cluster
+                        while (cp_idx < line->len && !gc.feed(line->at(cp_idx))) {
+                            cp_idx++;
+                            grapheme_cpsize++;
+                        }
+
+                        int glyph_width = 0;
+                        if (grapheme_cpsize == 1 && curr_cp == '\t')
+                            glyph_width = options.tabsize - ((vx - view.x) % options.tabsize);
+                        else
+                            glyph_width = our_wcwidth(curr_cp);
+
+                        if (glyph_width == -1) glyph_width = 1;
 
                         vec3f text_color = COLOR_WHITE;
 
@@ -2698,35 +2739,59 @@ void UI::draw_everything() {
                                 text_color = hl.color;
                         }
 
-                        if (editor->cur == new_cur2(x, y)) {
-                            draw_cursor();
+                        if (editor->cur == new_cur2((u32)curr_cp_idx, (u32)y)) {
+                            draw_cursor(glyph_width);
                             if (world.nvim.mode != VI_INSERT && current_pane == world.current_pane)
                                 text_color = COLOR_BLACK;
                         } else if (world.nvim.mode != VI_INSERT) {
                             auto topline = editor->nvim_data.grid_topline;
                             if (topline <= y && y < topline + NVIM_DEFAULT_HEIGHT) {
-                                auto hl = editor->highlights[y - topline][vx];
-                                switch (hl) {
-                                case HL_INCSEARCH:
-                                    draw_background(false, rgba("#553333"));
-                                    break;
-                                case HL_SEARCH:
-                                    draw_background(false, rgba("#994444"));
-                                    break;
-                                case HL_VISUAL:
-                                    draw_background(false, rgba("#335533"));
-                                    break;
+                                for (int i = 0; i < glyph_width && vx+i < _countof(editor->highlights[y - topline]); i++) {
+                                    auto draw_highlight = [&](vec4f color) {
+                                        boxf b;
+                                        b.pos = cur_pos;
+                                        b.x += font->width * i;
+                                        b.y -= font->offset_y;
+                                        b.w = font->width;
+                                        b.h = font->height;
+
+                                        auto py = font->height * (settings.line_height - 1.0) / 2;
+                                        b.y -= py;
+                                        b.h += py * 2;
+
+                                        draw_rect(b, color);
+                                    };
+
+                                    auto hl = editor->highlights[y - topline][vx + i];
+                                    switch (hl) {
+                                    case HL_INCSEARCH:
+                                        draw_highlight(rgba("#553333"));
+                                        break;
+                                    case HL_SEARCH:
+                                        draw_highlight(rgba("#994444"));
+                                        break;
+                                    case HL_VISUAL:
+                                        draw_highlight(rgba("#335533"));
+                                        break;
+                                    }
                                 }
                             }
                         }
 
-                        uchar uch = line->at(x);
+                        uchar uch = curr_cp;
                         if (uch == '\t') {
                             auto chars = options.tabsize - ((vx - view.x) % options.tabsize);
                             cur_pos.x += font->width * chars;
                             vx += chars;
+                        } else if (grapheme_cpsize > 1 || uch > 0x7f) {
+                            auto pos = cur_pos;
+                            pos.x += (font->width * glyph_width) / 2 - (font->width / 2);
+                            draw_char(&pos, 0xfffd, rgba(text_color));
+
+                            cur_pos.x += font->width * glyph_width;
+                            vx += glyph_width;
                         } else {
-                            draw_char(&cur_pos, (char)uch, rgba(text_color));
+                            draw_char(&cur_pos, uch, rgba(text_color));
                             vx++;
                         }
 
@@ -2736,7 +2801,7 @@ void UI::draw_everything() {
                     }
 
                     if (editor->cur == new_cur2(line->len, y))
-                        draw_cursor();
+                        draw_cursor(1);
 
                     cur_pos.x = editor_area.x + settings.editor_margin_x;
                     cur_pos.y += font->height * settings.line_height;

@@ -9,10 +9,37 @@
 #include <shlobj.h>
 #include <stdlib.h>
 #include <search.h>
+#include <pathcch.h>
+
+// stupid character conversion functions
+// =====================================
+
+wchar_t* to_wide(ccstr s, int slen = -1) {
+    auto len = MultiByteToWideChar(CP_UTF8, 0, s, slen, NULL, 0);
+    if (len == 0) return NULL;
+
+    auto ret = alloc_array(wchar_t, len);
+    if (MultiByteToWideChar(CP_UTF8, 0, s, slen, ret, len) != len) return NULL;
+    return ret;
+}
+
+ccstr to_utf8(const wchar_t *s, int slen = -1) {
+    auto len = WideCharToMultiByte(CP_UTF8, 0, s, slen, NULL, 0, NULL, NULL);
+    if (len == 0) return NULL;
+
+    auto ret = alloc_array(char, len);
+    if (WideCharToMultiByte(CP_UTF8, 0, s, slen, ret, len, NULL, NULL) != len) return NULL;
+    return ret;
+}
+
+// actual code that does things -__-
+// =================================
 
 Check_Path_Result check_path(ccstr path) {
-    WIN32_FIND_DATAA find_data;
-    HANDLE h = FindFirstFileA(path, &find_data);
+    SCOPED_FRAME();
+
+    WIN32_FIND_DATAW find_data;
+    HANDLE h = FindFirstFileW(to_wide(path), &find_data);
     if (h != INVALID_HANDLE_VALUE) {
         FindClose(h);
         if (find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
@@ -22,36 +49,43 @@ Check_Path_Result check_path(ccstr path) {
     return CPR_NONEXISTENT;
 }
 
-char* get_win32_error(DWORD error) {
-    if (error == -1) error = GetLastError();
+ccstr get_win32_error(DWORD errcode) {
+    if (errcode == -1) errcode = GetLastError();
 
-    char* str = NULL;
-    FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&str, 0, NULL);
-    return str;
+    wchar_t *str = NULL;
+    if (FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, errcode, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPWSTR)&str, 0, NULL) == 0)
+        return NULL;
+    defer { LocalFree(str); };
+
+    return to_utf8(str);
 }
 
-char* get_winsock_error() {
-    char* str = NULL;
-    FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, WSAGetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&str, 0, NULL);
-    return str;
-}
-
-u32 get_normalized_path(ccstr path, char *buf, u32 len) {
-    HANDLE f = CreateFileA(path, 0, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+ccstr get_normalized_path(ccstr path) {
+    HANDLE f = CreateFileW(to_wide(path), 0, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if (f == INVALID_HANDLE_VALUE) return 0;
 
     defer { CloseHandle(f); };
 
-    auto result = GetFinalPathNameByHandleA(f, buf, len, FILE_NAME_NORMALIZED);
-    if (result > 0 && buf != NULL && result + 1 <= len) {
-        memmove(buf, buf + 4, sizeof(char) * (result - 4 + 1));
-        return result - 4;
+    auto len = GetFinalPathNameByHandleW(f, NULL, 0, FILE_NAME_NORMALIZED);
+    if (len == 0) return NULL;
+
+    Frame frame;
+
+    auto buf = alloc_array(wchar_t, len);
+    if (GetFinalPathNameByHandleW(f, buf, len, FILE_NAME_NORMALIZED) == 0) {
+        frame.restore();
+        print("GetFinalPathNameByHandleW: %s", get_last_error());
+        return NULL;
     }
-    return result;
+
+    memmove(buf, buf + 4, sizeof(wchar_t) * (len - 4 + 1));
+    return to_utf8(buf);
 }
 
 bool get_win32_file_info(ccstr path, BY_HANDLE_FILE_INFORMATION* out) {
-    HANDLE h = CreateFileA(path, 0, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    SCOPED_FRAME();
+
+    HANDLE h = CreateFileW(to_wide(path), 0, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if (h == INVALID_HANDLE_VALUE)
         return false;
     defer { CloseHandle(h); };
@@ -129,7 +163,7 @@ bool Process::run(ccstr _cmd) {
     SetHandleInformation(stdin_w, HANDLE_FLAG_INHERIT, 0);
 
     PROCESS_INFORMATION pi = { 0 };
-    STARTUPINFOA si = { 0 };
+    STARTUPINFOW si = { 0 };
 
     si.cb = sizeof(si);
     if (!dont_use_stdout) {
@@ -145,9 +179,13 @@ bool Process::run(ccstr _cmd) {
 
         // auto args = our_sprintf("cmd /S /K \"start cmd /S /K \"%s\"\"", cmd);
         auto args = our_sprintf("cmd /S /C %s\"%s\"", keep_open_after_exit ? "/K " : "", cmd);
-        print("(Process::run) %s", args);
-        if (!CreateProcessA(NULL, (LPSTR)args, NULL, NULL, TRUE, create_new_console ? CREATE_NEW_CONSOLE : 0, NULL, dir, &si, &pi)) {
-            error("(CreateProcessA) error: %s", get_win32_error());
+        print("Process::run: %s", args);
+
+        auto wargs = to_wide(args);
+        auto wdir = to_wide(dir);
+
+        if (!CreateProcessW(NULL, wargs, NULL, NULL, TRUE, create_new_console ? CREATE_NEW_CONSOLE : 0, NULL, wdir, &si, &pi)) {
+            error("CreateProcessW: %s", get_win32_error());
             return false;
         }
     }
@@ -221,22 +259,24 @@ void Process::done_writing() {
 }
 
 bool list_directory(ccstr folder, list_directory_cb cb) {
-    WIN32_FIND_DATAA find_data;
+    WIN32_FIND_DATAW find_data;
 
-    auto find = FindFirstFileA(path_join(folder, "*"), &find_data);
+    auto find = FindFirstFileW(to_wide(path_join(folder, "*")), &find_data);
     if (find == INVALID_HANDLE_VALUE) return false;
     defer { FindClose(find); };
 
     do {
-        if (streq(find_data.cFileName, ".")) continue;
-        if (streq(find_data.cFileName, "..")) continue;
+        auto filename = to_utf8(find_data.cFileName);
+
+        if (streq(filename, ".")) continue;
+        if (streq(filename, "..")) continue;
 
         Dir_Entry info;
         info.type = (find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ? DIRENT_DIR : DIRENT_FILE);
-        strcpy_s(info.name, _countof(info.name), find_data.cFileName);
+        strcpy_safe(info.name, _countof(info.name), filename);
 
         cb(&info);
-    } while (FindNextFileA(find, &find_data));
+    } while (FindNextFileW(find, &find_data));
 
     return true;
 }
@@ -308,7 +348,11 @@ File_Result File::init(ccstr path, u32 mode, File_Open_Mode open_mode) {
     if (mode & FILE_MODE_READ) win32_mode |= GENERIC_READ;
     if (mode & FILE_MODE_WRITE) win32_mode |= GENERIC_WRITE;
 
-    h = CreateFileA(path, win32_mode, 0, NULL, get_win32_open_mode(), FILE_ATTRIBUTE_NORMAL, NULL);
+    {
+        SCOPED_FRAME();
+        h = CreateFileW(to_wide(path), win32_mode, 0, NULL, get_win32_open_mode(), FILE_ATTRIBUTE_NORMAL, NULL);
+    }
+
     if (h != INVALID_HANDLE_VALUE) return FILE_RESULT_SUCCESS;
     if (GetLastError() == ERROR_FILE_EXISTS) return FILE_RESULT_ALREADY_EXISTS;
 
@@ -345,15 +389,6 @@ void sleep_milliseconds(u32 milliseconds) {
     Sleep((DWORD)milliseconds);
 }
 
-wchar_t* ansi_to_unicode(ccstr s) {
-    auto len = MultiByteToWideChar(CP_UTF8, 0, s, -1, NULL, 0);
-    if (len == 0) return NULL;
-
-    auto ret = alloc_array(wchar_t, len);
-    if (MultiByteToWideChar(CP_UTF8, 0, s, -1, ret, len) != len) return NULL;
-    return ret;
-}
-
 bool let_user_select_file(Select_File_Opts* opts) {
     SCOPED_FRAME();
 
@@ -377,7 +412,7 @@ bool let_user_select_file(Select_File_Opts* opts) {
     defer { if (default_folder != NULL) default_folder->Release(); };
 
     if (opts->starting_folder != NULL) {
-        if (FAILED(SHCreateItemFromParsingName(ansi_to_unicode(opts->starting_folder), NULL, IID_IShellItem, (void**)&default_folder)))
+        if (FAILED(SHCreateItemFromParsingName(to_wide(opts->starting_folder), NULL, IID_IShellItem, (void**)&default_folder)))
             return false;
         if (FAILED(dialog->SetDefaultFolder(default_folder)))
             return false;
@@ -390,26 +425,24 @@ bool let_user_select_file(Select_File_Opts* opts) {
     if (FAILED(hr)) return false;
     defer { item->Release(); };
 
-    PWSTR path;
-    if (FAILED(item->GetDisplayName(SIGDN_FILESYSPATH, &path))) return false;
-    defer { CoTaskMemFree(path); };
+    PWSTR wpath;
+    if (FAILED(item->GetDisplayName(SIGDN_FILESYSPATH, &wpath))) return false;
+    defer { CoTaskMemFree(wpath); };
 
-    u32 i = 0;
-    for (; i < opts->bufsize - 1 && path[i] != '\0'; i++)
-        opts->buf[i] = (char)path[i];
-    opts->buf[i] = '\0';
+    strcpy_safe(opts->buf, opts->bufsize, to_utf8(wpath));
     return true;
 }
 
 bool copy_file(ccstr src, ccstr dest, bool overwrite) {
-    return CopyFileA(src, dest, !overwrite);
+    SCOPED_FRAME();
+    return CopyFileW(to_wide(src), to_wide(dest), !overwrite);
 }
 
 bool ensure_directory_exists(ccstr path) {
     SCOPED_FRAME();
 
     auto newpath = normalize_path_sep(path);
-    auto res = SHCreateDirectoryExA(NULL, (ccstr)newpath, NULL);
+    auto res = SHCreateDirectoryExW(NULL, to_wide(newpath), NULL);
 
     switch (res) {
     case ERROR_ALREADY_EXISTS:
@@ -439,7 +472,7 @@ bool delete_rm_rf(ccstr path) {
 
     {
         SCOPED_FRAME();
-        auto wpath = ansi_to_unicode(path);
+        auto wpath = to_wide(path);
         hr = SHCreateItemFromParsingName(wpath, NULL, IID_PPV_ARGS(&item));
     }
 
@@ -479,23 +512,26 @@ u64 _get_file_size(HANDLE f) {
 }
 
 u64 get_file_size(ccstr path) {
-    HANDLE f = CreateFileA(path, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    HANDLE f = CreateFileW(to_wide(path), GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if (f == INVALID_HANDLE_VALUE) return GET_FILE_SIZE_ERROR;
     defer { CloseHandle(f); };
     return _get_file_size(f);
 }
 
 ccstr rel_to_abs_path(ccstr path) {
-    auto len = GetFullPathNameA(path, 0, NULL, NULL);
+    auto wpath = to_wide(path);
+
+    auto len = GetFullPathNameW(wpath, 0, NULL, NULL);
     if (len == 0) return NULL;
 
     Frame frame;
-    auto ret = alloc_array(char, len);
-    if (GetFullPathNameA(path, len, ret, NULL) != len) {
+    auto ret = alloc_array(wchar_t, len);
+    if (GetFullPathNameW(wpath, len, ret, NULL) != len) {
         frame.restore();
         return NULL;
     }
-    return ret;
+
+    return to_utf8(ret);
 }
 
 const s32 FS_WATCHER_BUFSIZE = 1024 * 32;
@@ -504,7 +540,7 @@ bool Fs_Watcher::init(ccstr _path) {
     ptr0(this);
 
     path = _path;
-    dir_handle = CreateFileA(path, FILE_LIST_DIRECTORY, FILE_SHARE_WRITE | FILE_SHARE_READ | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED, NULL);
+    dir_handle = CreateFileW(to_wide(path), FILE_LIST_DIRECTORY, FILE_SHARE_WRITE | FILE_SHARE_READ | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED, NULL);
     if (dir_handle == INVALID_HANDLE_VALUE) {
         print("unable to create file for fswatcher: %s", get_last_error());
         return false;
@@ -551,13 +587,7 @@ bool Fs_Watcher::next_event(Fs_Event *event) {
     }
 
     auto copy_file_name = [&](FILE_NOTIFY_INFORMATION *info, char *dest, s32 destsize) {
-        // support unicode later
-        // and to be honest maybe our string class should just handle seamless ansi/unicode transition lol
-        auto len = info->FileNameLength / sizeof(WCHAR);
-        u32 i = 0;
-        for (; i < len && i < destsize-1; i++)
-            dest[i] = (char)info->FileName[i];
-        dest[i] = 0;
+        strcpy_safe(dest, destsize, to_utf8(info->FileName, info->FileNameLength / sizeof(WCHAR)));
     };
 
     auto info = (FILE_NOTIFY_INFORMATION*)((u8*)buf + offset);
@@ -599,7 +629,7 @@ bool Fs_Watcher::next_event(Fs_Event *event) {
 }
 
 Entire_File *read_entire_file(ccstr path) {
-    HANDLE f = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    HANDLE f = CreateFileW(to_wide(path), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if (f == INVALID_HANDLE_VALUE) return NULL;
     defer { CloseHandle(f); };
 
@@ -629,46 +659,64 @@ void free_entire_file(Entire_File *file) {
 ccstr get_path_relative_to(ccstr full, ccstr base) {
     Frame frame;
 
-    auto full2 = normalize_path_sep(full);
-    auto base2 = normalize_path_sep(base);
-    auto buf = alloc_array(char, MAX_PATH+1);
+    auto full2 = to_wide(normalize_path_sep(full));
+    auto base2 = to_wide(normalize_path_sep(base));
+    auto buf = alloc_array(wchar_t, MAX_PATH+1);
 
-    if (!PathRelativePathToA(buf, base2, FILE_ATTRIBUTE_DIRECTORY, full2, 0)) {
+    if (!PathRelativePathToW(buf, base2, FILE_ATTRIBUTE_DIRECTORY, full2, 0)) {
         frame.restore();
         return NULL;
     }
 
-    // remove the "./" or ".\\" at the beginning
-    if (buf[0] == '.' && is_sep(buf[1])) buf += 2;
-
-    return buf;
+    auto ret = to_utf8(buf);
+    if (ret[0] == '.' && is_sep(ret[1])) ret += 2; // remove "./" or ".\\" at beginning
+    return ret;
 }
 
 ccstr get_canon_path(ccstr path) {
+    auto len = strlen(path);
+
     Frame frame;
-    auto ret = alloc_array(char, MAX_PATH+1);
-    if (!PathCanonicalizeA(ret, path)) {
+    auto ret = alloc_array(wchar_t, len+1);
+    if (!PathCchCanonicalizeEx(ret, len+1, to_wide(path), PATHCCH_ALLOW_LONG_PATHS)) {
         frame.restore();
         return NULL;
     }
-    return ret;
+
+    return to_utf8(ret);
 }
 
 bool move_file_atomically(ccstr src, ccstr dest) {
     SCOPED_FRAME();
 
-    auto h = CreateFile(dest, GENERIC_WRITE, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+    auto wsrc = to_wide(src);
+    auto wdest = to_wide(dest);
+
+    // the file has to exist
+    auto h = CreateFileW(wdest, GENERIC_WRITE, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
     if (h != INVALID_HANDLE_VALUE)
         CloseHandle(h);
 
-    return ReplaceFileA(dest, src, NULL, REPLACEFILE_IGNORE_MERGE_ERRORS, NULL, NULL);
+    return ReplaceFileW(wdest, wsrc, NULL, REPLACEFILE_IGNORE_MERGE_ERRORS, NULL, NULL);
 }
 
-void *read_font_data_from_name(s32 *len, ccstr name) {
-    auto hfont = CreateFontA(
+int charset_to_win32_enum(Charset_Type t) {
+    switch (t) {
+    case CS_ENGLISH: return ANSI_CHARSET; 
+    case CS_CHINESE_SIM: return GB2312_CHARSET;
+    case CS_CHINESE_TRAD: return CHINESEBIG5_CHARSET;
+    case CS_KOREAN: return HANGUL_CHARSET;
+    case CS_JAPANESE: return SHIFTJIS_CHARSET;
+    case CS_CYRILLIC: return RUSSIAN_CHARSET;
+    }
+    return DEFAULT_CHARSET;
+}
+
+void *read_font_data_from_name(s32 *len, ccstr name, Charset_Type charset) {
+    auto hfont = CreateFontW(
         0, 0, 0, 0, 0, 0, 0, 0,
-        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH,
-        name
+        charset_to_win32_enum(charset), OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH,
+        to_wide(name)
     );
     if (hfont == NULL) return NULL;
     defer { DeleteObject(hfont); };
@@ -693,7 +741,7 @@ void *read_font_data_from_name(s32 *len, ccstr name) {
     return ret;
 }
 
-void *read_font_data_from_first_found(s32 *plen, ...) {
+void *read_font_data_from_first_found(s32 *plen, Charset_Type charset, ...) {
     va_list vl;
     va_start(vl, plen);
 
@@ -703,7 +751,7 @@ void *read_font_data_from_first_found(s32 *plen, ...) {
     ccstr curr = NULL;
     while ((curr = va_arg(vl, ccstr)) != NULL) {
         Frame frame;
-        font_data = read_font_data_from_name(&len, curr);
+        font_data = read_font_data_from_name(&len, curr, charset);
         if (font_data != NULL) break;
         frame.restore();
     }
@@ -715,8 +763,12 @@ void *read_font_data_from_first_found(s32 *plen, ...) {
     return font_data;
 }
 
-Ask_User_Result ask_user_yes_no_cancel(ccstr text, ccstr title) {
-    int ret = MessageBoxA((HWND)get_native_window_handle(), text, title, MB_YESNOCANCEL | MB_ICONEXCLAMATION | MB_TOPMOST);
+Ask_User_Result message_box(ccstr text, ccstr title, int flags) {
+    SCOPED_FRAME();
+
+    auto wnd = (HWND)get_native_window_handle();
+    auto ret = MessageBoxW(wnd, to_wide(text), to_wide(title), flags);
+
     switch (ret) {
     case IDYES: return ASKUSER_YES;
     case IDNO: return ASKUSER_NO;
@@ -725,23 +777,51 @@ Ask_User_Result ask_user_yes_no_cancel(ccstr text, ccstr title) {
     return ASKUSER_ERROR;
 }
 
+Ask_User_Result ask_user_yes_no_cancel(ccstr text, ccstr title) {
+    return message_box(text, title, MB_YESNOCANCEL | MB_ICONEXCLAMATION | MB_TOPMOST);
+}
+
 Ask_User_Result ask_user_yes_no(ccstr text, ccstr title) {
-    int ret = MessageBoxA((HWND)get_native_window_handle(), text, title, MB_YESNO | MB_ICONWARNING | MB_TOPMOST);
-    switch (ret) {
-    case IDYES: return ASKUSER_YES;
-    case IDNO: return ASKUSER_NO;
-    }
-    return ASKUSER_ERROR;
+    return message_box(text, title, MB_YESNO | MB_ICONWARNING | MB_TOPMOST);
 }
 
 void tell_user(ccstr text, ccstr title) {
-    MessageBoxA((HWND)get_native_window_handle(), text, title, MB_OK | MB_ICONWARNING | MB_TOPMOST);
+    message_box(text, title, MB_OK | MB_ICONWARNING | MB_TOPMOST);
 }
 
 ccstr get_executable_path() {
-    auto ret = alloc_array(char, MAX_PATH+1);
-    GetModuleFileNameA(NULL, ret, MAX_PATH+1);
-    return ret;
+    for (int len = MAX_PATH;; len *= 1.5) {
+        Frame frame;
+
+        auto ret = alloc_array(wchar_t, len+1);
+        auto result = GetModuleFileNameW(NULL, ret, len+1);
+        if (result == 0) {
+            frame.restore();
+            return NULL;
+        }
+
+        if (GetLastError() == ERROR_INSUFFICIENT_BUFFER) {
+            frame.restore();
+            continue;
+        }
+
+        return to_utf8(ret);
+    }
+}
+
+bool set_run_on_computer_startup(ccstr key, ccstr exepath) {
+    HKEY hkey = NULL;
+    auto subkey = L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run";
+
+    auto res = RegCreateKeyExW(HKEY_CURRENT_USER, subkey, 0, NULL, 0, KEY_SET_VALUE, NULL, &hkey, NULL);
+    if (res != ERROR_SUCCESS) {
+        error("RegCreateKeyEx: %s", get_win32_error(res));
+        return false;
+    }
+    defer { RegCloseKey(hkey); };
+
+    auto wpath = to_wide(exepath);
+    return RegSetValueExW(hkey, to_wide(key), 0, REG_SZ, (BYTE*)wpath, wcslen(wpath)+1) == ERROR_SUCCESS;
 }
 
 #endif

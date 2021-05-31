@@ -15,6 +15,8 @@
 #include "mem.hpp"
 #include "settings.hpp"
 
+#define RELEASE_BUILD 0
+
 typedef fn<bool(Editor* e)> find_editor_func;
 
 struct Search_Result {

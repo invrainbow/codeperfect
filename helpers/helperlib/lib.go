@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -27,6 +28,15 @@ func ReadLine() string {
 		panic("unable to read line")
 	}
 	return scanner.Text()
+}
+
+func ReadInt() int {
+	line := ReadLine()
+	i, err := strconv.Atoi(line)
+	if err != nil {
+		panic("return to read int")
+	}
+	return i
 }
 
 func HandleSetDirectory() {

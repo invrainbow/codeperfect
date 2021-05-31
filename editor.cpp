@@ -39,8 +39,10 @@ void Editor::raw_move_cursor(cur2 c) {
     auto& line = buf.lines[c.y];
 
     u32 vx = 0;
-    for (u32 i = 0; i < c.x; i++)
+    for (u32 i = 0; i < c.x; i++) {
+        // TODO: determine vx correctly
         vx += line[i] == '\t' ? options.tabsize : 1;
+    }
 
     if (vx < view.x)
         view.x = vx;
@@ -118,8 +120,7 @@ void Editor::update_tree() {
             auto size = uchar_size(uch);
             if (n + size + 1 > _countof(editor->tsinput_buffer)) break;
 
-            uchar_to_cstr(uch, &editor->tsinput_buffer[n], &size);
-            n += size;
+            n += uchar_to_cstr(uch, &editor->tsinput_buffer[n]);
         }
 
         *read = n;
@@ -149,7 +150,7 @@ void Editor::move_cursor(cur2 c) {
         {
             nv.writer.write_array(2);
             nv.writer.write_int(c.y + 1);
-            nv.writer.write_int(c.x);
+            nv.writer.write_int(buf.idx_cp_to_byte(c.y, c.x));
         }
         nv.end_message();
     }
@@ -165,12 +166,12 @@ void Editor::reload_file(bool because_of_file_watcher) {
     if (because_of_file_watcher && disable_file_watcher_until > current_time_in_nanoseconds())
         return;
 
-    auto f = fopen(filepath, "r");
-    if (f == NULL) {
-        error("unable to open %s for reading: %s", filepath, strerror(errno));
+    File f;
+    if (f.init(filepath, FILE_MODE_READ, FILE_OPEN_EXISTING) != FILE_RESULT_SUCCESS) {
+        error("unable to open %s for reading: %s", filepath, get_last_error());
         return;
     }
-    defer { fclose(f); };
+    defer { f.cleanup(); };
 
     TSInputEdit tsedit = {0};
 
@@ -187,7 +188,7 @@ void Editor::reload_file(bool because_of_file_watcher) {
     if (buf.initialized)
         buf.cleanup();
     buf.init(&mem);
-    buf.read(f);
+    buf.read(&f);
 
     if (world.use_nvim) {
         nvim_data.got_initial_lines = false;
@@ -199,11 +200,7 @@ void Editor::reload_file(bool because_of_file_watcher) {
         nv.writer.write_int(-1);
         nv.writer.write_bool(false);
         nv.writer.write_array(buf.lines.len);
-        For (buf.lines) {
-            nv.writer.write1(MP_OP_STRING);
-            nv.writer.write4(it.len);
-            For (it) nv.writer.write1(it);
-        }
+        For (buf.lines) nv.write_line(&it);
         nv.end_message();
     }
 
@@ -228,16 +225,18 @@ bool Editor::load_file(ccstr new_filepath) {
 
     FILE* f = NULL;
     if (new_filepath != NULL) {
-        u32 result = get_normalized_path(new_filepath, filepath, _countof(filepath));
-        if (result == 0)
+        auto path = get_normalized_path(new_filepath);
+        if (path == NULL)
             return error("unable to normalize filepath"), false;
-        if (result + 1 > _countof(filepath))
-            return error("filepath too big"), false;
-        f = fopen(filepath, "r");
-        if (f == NULL)
-            return error("unable to open %s for reading: %s", filepath, strerror(errno)), false;
-        defer { fclose(f); };
-        buf.read(f);
+
+        strcpy_safe(filepath, _countof(filepath), path);
+
+        File f;
+        if (f.init(filepath, FILE_MODE_READ, FILE_OPEN_EXISTING) != FILE_RESULT_SUCCESS)
+            return error("unable to open %s for reading: %s", filepath, get_last_error()), false;
+        defer { f.cleanup(); };
+
+        buf.read(&f);
     } else {
         is_untitled = true;
         uchar tmp = 0;
@@ -270,12 +269,12 @@ Editor* Pane::open_empty_editor() {
 }
 
 bool Editor::save_file() {
-    FILE* f = fopen(filepath, "w");
-    if (f == NULL)
+    File f;
+    if (f.init(filepath, FILE_MODE_WRITE, FILE_CREATE_NEW) != FILE_RESULT_SUCCESS)
         return error("unable to open %s for writing", filepath), false;
-    defer { fclose(f); };
+    defer { f.cleanup(); };
 
-    buf.write(f);
+    buf.write(&f);
     return true;
 }
 
@@ -746,6 +745,8 @@ void Editor::type_char_in_insert_mode(char ch) {
     type_char(ch);
     end_change();
 
+    if (!is_go_file) return;
+
     // at this point, tree is up to date! we can simply walk, don't need to re-parse :)
 
     bool did_autocomplete = false;
@@ -868,14 +869,24 @@ void Editor::type_char_in_insert_mode(char ch) {
                     break;
             }
 
-            auto start = new_cur2(0, rbrace_pos.y);
-            if (start < nvim_insert.backspaced_to)
-                nvim_insert.backspaced_to = start;
-
             start_change();
-            buf.remove(start, rbrace_pos);
-            buf.insert(start, indentation->items, indentation->len);
-            cur = new_cur2(indentation->len + 1, rbrace_pos.y);
+
+            // backspace to start of line
+            backspace_in_insert_mode(0, cur.x);
+
+            // insert indentation
+            auto pos = cur;
+            buf.insert(pos, indentation->items, indentation->len);
+            pos.x += indentation->len;
+
+            // insert the brace
+            uchar uch = ch;
+            buf.insert(pos, &uch, 1);
+            pos.x++;
+
+            // move cursor after everything we typed
+            raw_move_cursor(pos);
+
             end_change();
         }
     }
@@ -884,9 +895,37 @@ void Editor::type_char_in_insert_mode(char ch) {
     if (!did_parameter_hint) update_parameter_hint();
 }
 
+void Editor::backspace_in_insert_mode(int graphemes_to_erase, int codepoints_to_erase) {
+    auto start = cur;
+
+    if (graphemes_to_erase > 0) {
+        // we have the current cursor as cp index
+        // we want to move it back by one gr index
+        // and then convert that back to cp index
+        // what the fuck lmao, is backspace going to be this expensive?
+        int gr_idx = buf.idx_cp_to_gr(start.y, start.x);
+        start.x = buf.idx_gr_to_cp(start.y, relu_sub(gr_idx, graphemes_to_erase));
+    } else if (codepoints_to_erase > 0) {
+        start.x -= codepoints_to_erase;
+    }
+
+    if (start < nvim_insert.backspaced_to) {
+        // this assumse start and nvim_insert.backspaced_to are on same line
+        int gr_end = buf.idx_cp_to_gr(nvim_insert.backspaced_to.y, nvim_insert.backspaced_to.x);
+        int gr_start = buf.idx_cp_to_gr(start.y, start.x);
+        nvim_insert.deleted_graphemes += (gr_end - gr_start);
+
+        nvim_insert.backspaced_to = start;
+    }
+
+    buf.remove(start, cur);
+    raw_move_cursor(start);
+}
+
 void Editor::format_on_save(bool write_to_nvim) {
     auto old_cur = cur;
 
+    /*
     auto &proc = goimports_proc;
     proc.cleanup();
     proc.init();
@@ -911,6 +950,58 @@ void Editor::format_on_save(bool write_to_nvim) {
     while (proc.status() == PROCESS_WAITING) continue;
     bool success = (proc.exit_code == 0);
     proc.cleanup();
+    */
+
+    Buffer swapbuf = {0};
+    bool success = true;
+
+    auto& gh = world.indexer.gohelper_static;
+    {
+        SCOPED_LOCK(&gh.lock);
+
+        gh.proc.writestr("autoformat\n");
+        gh.proc.writestr(our_sprintf("%d\n", buf.lines.len));
+
+        for (int i = 0; i < buf.lines.len; i++) {
+            For (buf.lines[i]) {
+                char tmp[4];
+                auto n = uchar_to_cstr(it, tmp);
+                for (u32 j = 0; j < n; j++)
+                    gh.proc.write1(tmp[j]);
+            }
+            gh.proc.write1('\n');
+        }
+
+        auto resp = gh.readline();
+        if (streq(resp, "error")) {
+            auto err = gh.readline();
+            print("autoformat error: %s", err);
+            success = false;
+        } else {
+            u32 lines = atoi(resp);
+            if (lines == 0) {
+                success = false;
+            } else {
+                int curr = 0;
+
+                swapbuf.init(MEM);
+                swapbuf.read([&](char *out) -> bool {
+                    if (curr >= lines) return false;
+
+                    if (!gh.proc.read1(out)) {
+                        success = false;
+                        return false;
+                    }
+
+                    if (*out == '\n')
+                        if (++curr == lines)
+                            return false;
+
+                    return true;
+                });
+            }
+        }
+    }
 
     if (success) {
         buf.copy_from(&swapbuf);
@@ -956,14 +1047,14 @@ void Editor::handle_save(bool about_to_close) {
     {
         disable_file_watcher_until = current_time_in_nanoseconds() + (2 * 1000000000);
 
-        FILE* f = fopen(filepath, "w");
-        if (f == NULL) {
+        File f;
+        if (f.init(filepath, FILE_MODE_WRITE, FILE_CREATE_NEW) != FILE_RESULT_SUCCESS) {
             tell_user("Unable to save file.", "Error");
             return;
         }
-        defer { fclose(f); };
+        defer { f.cleanup(); };
 
-        buf.write(f);
+        buf.write(&f);
         buf.dirty = false;
     }
 

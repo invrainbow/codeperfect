@@ -118,7 +118,6 @@ struct Scoped_Lock {
 
 #define SCOPED_LOCK(lock) Scoped_Lock GENSYM(SCOPED_LOCk)(lock)
 
-u32 get_normalized_path(ccstr path, char *buf, u32 len);
 ccstr get_normalized_path(ccstr path);
 
 enum Check_Path_Result {
@@ -132,16 +131,15 @@ Check_Path_Result check_path(ccstr path);
 #if OS_WIN
 
 struct Win32_Error {
-    char* str;
-    Win32_Error(char *_str) { str = _str; }
+    ccstr str;
+    Win32_Error(ccstr _str) { str = _str; }
     ~Win32_Error() { if (str != NULL) LocalFree((HLOCAL)str); }
 };
 
-#define get_last_error() Win32_Error(get_win32_error()).str
-#define get_socket_error() Win32_Error(get_winsock_error()).str
+#define get_last_error() get_win32_error()
+#define get_socket_error() get_win32_error(WSAGetLastError())
 
-char* get_win32_error(DWORD error = -1);
-char* get_winsock_error();
+ccstr get_win32_error(DWORD error = -1);
 
 #elif OS_LINUX
 
@@ -279,8 +277,17 @@ ccstr get_canon_path(ccstr path);
 
 bool move_file_atomically(ccstr src, ccstr dest);
 
-void *read_font_data_from_name(s32 *len, ccstr name);
-void *read_font_data_from_first_found(s32 *plen, ...);
+enum Charset_Type {
+    CS_ENGLISH,
+    CS_CHINESE_SIM,
+    CS_CHINESE_TRAD,
+    CS_KOREAN,
+    CS_JAPANESE,
+    CS_CYRILLIC,
+};
+
+void *read_font_data_from_name(s32 *len, ccstr name, Charset_Type charset);
+void *read_font_data_from_first_found(s32 *plen, Charset_Type charset, ...);
 
 enum Ask_User_Result {
     ASKUSER_ERROR = 0,
@@ -293,3 +300,4 @@ Ask_User_Result ask_user_yes_no_cancel(ccstr text, ccstr title);
 Ask_User_Result ask_user_yes_no(ccstr text, ccstr title);
 void tell_user(ccstr text, ccstr title);
 ccstr get_executable_path();
+bool set_run_on_computer_startup(ccstr key, ccstr path_to_exe);

@@ -4,12 +4,14 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+
 	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"strings"
+
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -75,6 +77,26 @@ func randomGlueCode() {
 	return
 }
 
+func ValidateLicenseKey(c *gin.Context, allowInactive bool) *User {
+	key := c.PostForm("license_key")
+
+	var user User
+	res := db.First(&user, "license_key = ?", key)
+	if errors.Is(res.Error, gorm.ErrRecordNotFound) {
+		c.JSON(401, gin.H{"error": "bad_key"})
+		return nil
+	}
+
+	if !allowInactive {
+		if user.StripeSubscriptionStatus != string(stripe.SubscriptionStatusActive) {
+			c.JSON(401, gin.H{"error": "trial_expired"})
+			return nil
+		}
+	}
+
+	return &user
+}
+
 func main() {
 	// randomGlueCode()
 	// return
@@ -83,35 +105,15 @@ func main() {
 
 	r.Use(cors.Default())
 
-	validateLicenseKey := func(c *gin.Context, allowInactive bool) *User {
-		key := c.PostForm("license_key")
-
-		var user User
-		res := db.First(&user, "license_key = ?", key)
-		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
-			c.JSON(401, gin.H{"error": "bad_key"})
-			return nil
-		}
-
-		if !allowInactive {
-			if user.StripeSubscriptionStatus != string(stripe.SubscriptionStatusActive) {
-				c.JSON(401, gin.H{"error": "trial_expired"})
-				return nil
-			}
-		}
-
-		return &user
-	}
-
 	r.POST("/version", func(c *gin.Context) {
-		if user := validateLicenseKey(c, false); user == nil {
+		if user := ValidateLicenseKey(c, false); user == nil {
 			return
 		}
 		c.JSON(200, gin.H{"version": CurrentVersionInfo.Version})
 	})
 
 	r.POST("/download", func(c *gin.Context) {
-		if user := validateLicenseKey(c, false); user == nil {
+		if user := ValidateLicenseKey(c, false); user == nil {
 			return
 		}
 		req, _ := s3Client.GetObjectRequest(&s3.GetObjectInput{

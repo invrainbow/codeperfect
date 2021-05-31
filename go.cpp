@@ -196,9 +196,7 @@ const char* read_from_parser_input(void *p, uint32_t off, TSPoint pos, uint32_t 
         } else if (it->type == IT_BUFFER) {
             auto size = uchar_size(uch);
             if (n + size + 1 > bufsize) break;
-
-            uchar_to_cstr(uch, &buf[n], &size);
-            n += size;
+            n += uchar_to_cstr(uch, &buf[n]);
         }
     }
 
@@ -340,6 +338,8 @@ int Gohelper::readint() {
 }
 
 ccstr Gohelper::run(ccstr op, ...) {
+    SCOPED_LOCK(&lock);
+
     va_list vl;
     va_start(vl, op);
 
@@ -1844,8 +1844,7 @@ bool Go_Indexer::truncate_parsed_file(Parsed_File *pf, cur2 end_pos, ccstr chars
             auto size = uchar_size(uch);
             if (n + size + 1 > _countof(go_tsinput_buffer)) break;
 
-            uchar_to_cstr(uch, &go_tsinput_buffer[n], &size);
-            n += size;
+            n += uchar_to_cstr(uch, &go_tsinput_buffer[n]);
         }
 
         *read = n;
