@@ -18,8 +18,10 @@ wchar_t* to_wide(ccstr s, int slen = -1) {
     auto len = MultiByteToWideChar(CP_UTF8, 0, s, slen, NULL, 0);
     if (len == 0) return NULL;
 
-    auto ret = alloc_array(wchar_t, len);
+    auto ret = alloc_array(wchar_t, len + 1);
     if (MultiByteToWideChar(CP_UTF8, 0, s, slen, ret, len) != len) return NULL;
+
+    ret[len] = L'\0';
     return ret;
 }
 
@@ -27,8 +29,10 @@ ccstr to_utf8(const wchar_t *s, int slen = -1) {
     auto len = WideCharToMultiByte(CP_UTF8, 0, s, slen, NULL, 0, NULL, NULL);
     if (len == 0) return NULL;
 
-    auto ret = alloc_array(char, len);
+    auto ret = alloc_array(char, len+1);
     if (WideCharToMultiByte(CP_UTF8, 0, s, slen, ret, len, NULL, NULL) != len) return NULL;
+
+    ret[len] = '\0';
     return ret;
 }
 

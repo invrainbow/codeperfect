@@ -3,8 +3,8 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"go/format"
-	"os"
+	// "go/format"
+	// "os"
 	"os/exec"
 	"strings"
 
@@ -12,6 +12,8 @@ import (
 	"github.com/invrainbow/ide/helpers/helperlib"
 	"github.com/invrainbow/ide/helpers/lib"
 	"github.com/reviewdog/errorformat"
+
+	"golang.org/x/tools/imports"
 )
 
 type GoBuild struct {
@@ -36,6 +38,13 @@ func main() {
 		}
 		currentBuild.cmd.Process.Kill()
 		currentBuild = nil
+	}
+
+    goimportsOptions := &imports.Options{
+		TabWidth:  8,
+		TabIndent: true,
+		Comments:  true,
+		Fragment:  true,
 	}
 
 	helperlib.InitScanner()
@@ -133,15 +142,15 @@ func main() {
 				}
 			}
 
-			os.WriteFile("old", buf, 0666)
-
-			newSource, err := format.Source(buf)
+			// newSource, err := format.Source(buf)
+            newSource, err := imports.Process("<standard input>", buf, goimportsOptions)
 			if err != nil {
-				helperlib.WriteError(err)
+                // don't write the error, it might have multiple lines
+                // need to modify this to return syntax errors
+				// helperlib.WriteError(err)
+                helperlib.WriteError(fmt.Errorf("unable to format"))
 				break
 			}
-
-			os.WriteFile("new", newSource, 0666)
 
 			newLines := strings.Split(string(newSource), "\n")
 

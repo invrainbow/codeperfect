@@ -227,10 +227,12 @@ void World::init() {
 #endif
 
 #if RELEASE_BUILD
+    /*
     {
         auto executable_dir = our_dirname(get_executable_path());
         set_run_on_computer_startup("CodePerfect95_Autoupdate", path_join(executable_dir, "autoupdate.exe"));
     }
+    */
 #endif
 
     {

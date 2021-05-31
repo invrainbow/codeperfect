@@ -39,7 +39,7 @@ TODO:
 #include "settings.hpp"
 
 #include "imgui.h"
-#include "veramono.hpp"
+#include "fonts.hpp"
 
 #if OS_WIN
 #define GLFW_EXPOSE_NATIVE_WIN32
@@ -366,42 +366,14 @@ int main() {
 
         s32 len = 0;
 
-        // auto ui_font = read_font_data_from_first_found(&len, "Segoe UI");
-        // assert(ui_font != NULL, "unable to load UI font");
-        // world.ui.im_font_ui = io.Fonts->AddFontFromMemoryTTF(ui_font, len, 16);
-
-        ImVector<ImWchar> ranges;
-        ImFontGlyphRangesBuilder builder;
-        builder.AddRanges(io.Fonts->GetGlyphRangesDefault());
-        // builder.AddRanges(io.Fonts->GetGlyphRangesJapanese());
-        // builder.AddRanges(io.Fonts->GetGlyphRangesKorean());
-        // builder.AddRanges(io.Fonts->GetGlyphRangesChineseFull());
-        // builder.AddRanges(io.Fonts->GetGlyphRangesChineseSimplifiedCommon());
-        // builder.AddRanges(io.Fonts->GetGlyphRangesCyrillic());
-        builder.BuildRanges(&ranges);
-
-        ImFontConfig config;
-        config.MergeMode = true;
-
-        world.ui.im_font_ui = io.Fonts->AddFontFromFileTTF("fonts/OpenSans-SemiBold.ttf", 16, NULL, ranges.Data);
+        world.ui.im_font_ui = io.Fonts->AddFontFromMemoryTTF(open_sans_ttf, open_sans_ttf_len, 16);
         assert(world.ui.im_font_ui != NULL, "unable to load UI font");
 
-        // io.Fonts->AddFontFromFileTTF("fonts/NotoSansCJKjp-Regular.otf", 16, &config, ranges.Data);
-        // io.Fonts->AddFontFromFileTTF("fonts/NotoSansCJKkr-Regular.otf", 16, &config, ranges.Data);
-        // io.Fonts->AddFontFromFileTTF("fonts/NotoSansCJKsc-Regular.otf", 16, &config, ranges.Data);
-        // io.Fonts->AddFontFromFileTTF("fonts/NotoSansCJKtc-Regular.otf", 16, &config, ranges.Data);
-
-        world.ui.im_font_mono = io.Fonts->AddFontFromFileTTF("fonts/LiberationMono-Regular.ttf", CODE_FONT_SIZE, NULL, ranges.Data);
+        world.ui.im_font_mono = io.Fonts->AddFontFromMemoryTTF(vera_mono_ttf, vera_mono_ttf_len, CODE_FONT_SIZE);
         assert(world.ui.im_font_mono != NULL, "unable to load code font");
 
-        {
-            auto mono_font_ef = read_entire_file("fonts/LiberationMono-Regular.ttf");
-            assert(mono_font_ef != NULL, "unable to load mono font");
-            defer { free_entire_file(mono_font_ef); };
-
-            if (!world.font.init((u8*)mono_font_ef->data, CODE_FONT_SIZE, TEXTURE_FONT))
-                panic("unable to load code font");
-        }
+        if (!world.font.init((u8*)vera_mono_ttf, CODE_FONT_SIZE, TEXTURE_FONT))
+            panic("unable to load code font");
 
         io.Fonts->Build();
 
@@ -1281,7 +1253,7 @@ int main() {
         SCOPED_MEM(&world.frame_mem);
 
         {
-            // Process messages in nvim queue.
+            // Process messages.
             SCOPED_LOCK(&world.message_queue_lock);
 
             For (world.message_queue) {
