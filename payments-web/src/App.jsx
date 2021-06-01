@@ -21,7 +21,7 @@ const stripe = Stripe(STRIPE_PUB_KEY);
 function WallOfText({ title, children }) {
   return (
     <div className="bg-gray-100 p-8 rounded-sm">
-      <div className="max-w-2xl bg-white p-8 mx-auto rounded-sm shadow-sm text-sm">
+      <div className="max-w-3xl bg-white p-8 mx-auto rounded-sm shadow-sm text-sm leading-relaxed">
         <Title>{title}</Title>
         {children}
       </div>
@@ -196,23 +196,23 @@ function Home() {
 
 function Pricing() {
   return (
-    <div>
-      <div className="text-center my-36">
-        <div className="text-3xl mb-5">
+    <div className="border-t border-b rounded-sm">
+      <div className="text-center my-24">
+        <div className="text-xl">
           {IDE_NAME} is{" "}
           <b className="decoration-clone bg-clip-text bg-gradient-to-b from-blue-400 to-blue-700 text-transparent">
-            $10/month
+            $5 per month
           </b>{" "}
           per seat.
         </div>
-        <div className="my-10">
+        <div className="my-8">
           <Link className="main-button text-xl py-3 px-6 rounded-lg" to="/beta">
             Join Beta
           </Link>
         </div>
-        <p className="text-s">
+        <p className="text-sm text-gray-400">
           If you're buying licenses for your team,{" "}
-          <a className="underline" href="mailto:enterprise@codeperfect95.com">
+          <a className="underline text-gray-600" href="mailto:enterprise@codeperfect95.com">
             ask
           </a>{" "}
           for a bulk discount.
@@ -400,11 +400,11 @@ function Beta() {
 
   return (
     <WallOfText title="Before you sign up...">
-      <p>{IDE_NAME} costs $10/month.</p>
+      <p>{IDE_NAME} costs $5/month.</p>
       <p>
         It's still in early beta. Large chunks of functionality remain to be
         built. We're releasing it now because we use it every day ourselves, and
-        realized we'd crossed the threshold of getting $10+ of monthly utility
+        realized we'd crossed the threshold of getting $5+ of monthly utility
         from it. That said, it currently has several limitations. Please read
         them carefully to make sure we're compatible with your needs.
       </p>
@@ -454,7 +454,7 @@ function Beta() {
         start developing Go programs at lightning speed today. We're also{" "}
         <Link to="/roadmap">developing new features rapidly</Link>.
       </p>
-      <p className="my-8">
+      <p className="my-8 text-center">
         <button
           onClick={onBuy}
           className="main-button text-lg px-8 py-4"
@@ -469,7 +469,7 @@ function Beta() {
       </p>
       <form
         action="https://gmail.us6.list-manage.com/subscribe/post?u=530176c3897958e56302043ed&amp;id=cb045d5e14"
-        className="mt-8"
+        className="mt-4 text-center"
         method="post"
         name="mc-embedded-subscribe-form"
         target="_blank"
@@ -500,7 +500,7 @@ function Beta() {
           value="Subscribe"
           name="subscribe"
         />
-        <p className="text-xs text-gray-400 mt-1">
+        <p className="text-xs text-gray-400 mt-4">
           (We'll only send you product updates; we won't spam you or share your
           email.)
         </p>
@@ -529,6 +529,7 @@ function Roadmap() {
         </li>
         <li>Improved details in autocomplete menu.</li>
         <li>Find all usages.</li>
+        <li>Automatic refactoring.</li>
       </ul>
     </WallOfText>
   );
@@ -547,8 +548,7 @@ function About() {
 
 function PaymentCanceled() {
   return (
-    <div>
-      <Title>Your payment was canceled.</Title>
+    <WallOfText title="Your payment was canceled.">
       <p>
         If you didn't mean to cancel it, you can{" "}
         <Link to="/beta">try again</Link>.
@@ -560,14 +560,13 @@ function PaymentCanceled() {
       <p>
         Otherwise, <Link to="/">click here</Link> to return to the main page.
       </p>
-    </div>
+    </WallOfText>
   );
 }
 
 function PaymentSuccess() {
   return (
-    <div>
-      <Title>Your payment went through!</Title>
+    <WallOfText title="Your payment went through!">
       <p>Please check your email for the download link and your license key.</p>
       <p>
         If the email doesn't come, please check your spam folder and wait a few
@@ -575,7 +574,7 @@ function PaymentSuccess() {
         &mdash; two subscriptions will be created. Instead,{" "}
         <a href="mailto:support@codeperfect95.com">email us</a>.
       </p>
-    </div>
+    </WallOfText>
   );
 }
 
@@ -596,15 +595,15 @@ function App() {
       </Helmet>
 
       <div className="py-6 leading-relaxed text-gray-800">
-        <div className="px-4 max-w-6xl mx-auto flex justify-between mb-8 items-center pb-4">
+        <div className="px-4 max-w-6xl mx-auto flex justify-between items-center">
           <Link to="/" className="text-lg font-bold text-black">
             {IDE_NAME}
           </Link>
-          <div className="flex items-baseline">
-            <Link className="mr-5" to="/docs">
+          <div className="flex items-baseline space-x-6">
+            <Link to="/docs">
               Documentation
             </Link>
-            <Link className="mr-5" to="/pricing">
+            <Link to="/pricing">
               Pricing
             </Link>
             <Link className="main-button" to="/beta">
@@ -612,7 +611,7 @@ function App() {
             </Link>
           </div>
         </div>
-        <div className="px-4 max-w-6xl mx-auto">
+        <div className="my-4 px-4 max-w-6xl mx-auto">
           <Switch>
             <Route path="/download">
               <Download />
@@ -649,7 +648,7 @@ function App() {
             </Route>
           </Switch>
         </div>
-        <div className="mt-8 text-sm pt-4">
+        <div className="text-sm">
           <div className="px-4 max-w-6xl mx-auto flex justify-between">
             <div className="text-gray-400">
               &copy; {CURRENT_YEAR} {IDE_NAME}

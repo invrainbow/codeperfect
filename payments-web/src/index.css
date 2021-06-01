@@ -72,6 +72,6 @@
     @apply pl-0;
   }
   .roadmap-list li {
-    @apply p-3 rounded-lg border border-gray-200 mb-3 list-none ml-0;
+    @apply py-3 border-t last:border-b border-gray-100 list-none ml-0;
   }
 }
