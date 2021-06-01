@@ -682,7 +682,7 @@ ccstr get_canon_path(ccstr path) {
 
     Frame frame;
     auto ret = alloc_array(wchar_t, len+1);
-    if (!PathCchCanonicalizeEx(ret, len+1, to_wide(path), PATHCCH_ALLOW_LONG_PATHS)) {
+    if (FAILED(PathCchCanonicalizeEx(ret, len+1, to_wide(path), PATHCCH_ALLOW_LONG_PATHS))) {
         frame.restore();
         return NULL;
     }

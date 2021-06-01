@@ -6,10 +6,8 @@ import ideScreenshotImage from "./ide.png";
 import { Helmet } from "react-helmet";
 import cx from "classnames";
 
-import bear1Image from "./bear1.jpg";
-import bear2Image from "./bear2.jpg";
-import bear3Image from "./bear3.jpg";
-import bear4Image from "./bear4.jpg";
+import gif60fps from "./60fps.gif";
+import gifVim from "./vim.gif";
 
 const IDE_NAME = "CodePerfect 95";
 const API_BASE = "http://localhost:8080";
@@ -19,18 +17,6 @@ const STRIPE_PUB_KEY =
   "pk_test_51IqLcpBpL0Zd3zdOPzAZQbYjpmD47ethoqtcFGwiJBLdovijF8G0hBTA8FylfnRnQ8aXoPVC2DmNMHpndiV1YtJr00UU0XCWnt";
 
 const stripe = Stripe(STRIPE_PUB_KEY);
-
-function Bear({ index }) {
-  const BEAR_URLS = [bear1Image, bear2Image, bear3Image, bear4Image];
-  const url = BEAR_URLS[index % BEAR_URLS.length];
-
-  return (
-    <div
-      className="overflow-hidden rounded-md border-solid border-8 border-gray-100 h-80 bg-center bg-cover bg-no-repeat"
-      style={{ backgroundImage: `url('${url}')` }}
-    />
-  );
-}
 
 function WallOfText({ title, children }) {
   return (
@@ -43,25 +29,33 @@ function WallOfText({ title, children }) {
   );
 }
 
-function Title(props) {
-  return <h2 className="text-lg font-semibold" {...props} />;
+function Title({ children, ...props }) {
+  return (
+    <h2 className="text-lg font-semibold" {...props}>
+      {children}
+    </h2>
+  );
 }
 
-function Section({ bearIndex, children }) {
+function NiceImage({ className, ...props }) {
   return (
-    <div className="space-x-14 flex items-center mb-32">
-      {bearIndex % 2 !== 0 && (
-        <div className="w-3/5">
-          <Bear index={bearIndex} />
-        </div>
-      )}
-      <div className="w-2/5 leading-relaxed">{children}</div>
-      {bearIndex % 2 === 0 && (
-        <div className="w-3/5">
-          <Bear index={bearIndex} />
-        </div>
-      )}
+    <div>
+      <img
+        className={`overflow-hidden rounded-md border-solid border-8 border-gray-100 w-auto max-w-none ${
+          className || ""
+        }`}
+        {...props}
+      />
     </div>
+  );
+}
+
+function Section({ className, ...props }) {
+  return (
+    <div
+      className={`space-x-14 flex items-center mb-32 ${className || ""}`}
+      {...props}
+    />
   );
 }
 
@@ -75,76 +69,91 @@ function Home() {
         <img alt="" className="max-w-auto" src={ideScreenshotImage} />
       </div>
 
-      <Section bearIndex={0}>
-        <div className="text-2xl mb-4">
-          No Electron. No JavaScript. No garbage collection.
+      <Section>
+        <div className="leading-relaxed">
+          <div className="text-2xl mb-4">
+            No Electron. No JavaScript. No garbage collection.
+          </div>
+          <p>
+            {IDE_NAME} is written in C++ and designed to run at 60 FPS. Every
+            keystroke responds instantly.
+          </p>
+          <p>
+            Modern laptop CPUs perform over two billion operations per second.
+            None of your apps should ever lag. {IDE_NAME} never does.
+          </p>
         </div>
-        <p>
-          {IDE_NAME} is written in C++ and designed to run at 144 FPS. Every
-          keystroke responds instantly.
-        </p>
-        <p>
-          Modern laptop CPUs perform over two billion operations per second.
-          None of your applications have any excuse for ever lagging. So{" "}
-          {IDE_NAME} never does.
-        </p>
+        <NiceImage src={gif60fps} className="h-80" />
       </Section>
 
-      <Section bearIndex={1}>
-        <div className="text-2xl mb-4">A full-fledged IDE, as fast as Vim.</div>
-        <p>Today, IDEs are powerful but slow, Vim fast but limited.</p>
-        <p>
-          {IDE_NAME} brings the best of both worlds: everything you need to
-          effectively develop Go applications &mdash; jump to definition,
-          autocomplete, parameter hints, auto format, build, integrated
-          debugger, and more &mdash; at lightning speed.
-        </p>
-        <p>
-          No more waiting on Goland's garbage collector. No more hacking plugins
-          together in ~/.vimrc.
-        </p>
-      </Section>
-
-      <Section bearIndex={2}>
-        <div className="text-2xl mb-4">No more language server overhead.</div>
-        <p>
-          {IDE_NAME}'s intellisense is hand-written, extensively tested, and
-          designed for speed and reliability.
-        </p>
-        <p>
-          We'll never do things like send a JSON packet over a socket every
-          keystroke. And you'll never need to restart your IDE because gopls
-          crashed.
-        </p>
-      </Section>
-
-      <Section bearIndex={3}>
-        <div className="text-2xl mb-4">
-          Feature-complete Vim keybindings, out of the box.
+      <Section>
+        <NiceImage src={gif60fps} className="h-72" />
+        <div className="leading-relaxed">
+          <div className="text-2xl mb-4">
+            A full-fledged IDE, as fast as Vim.
+          </div>
+          <p>Today, IDEs are powerful but slow, Vim fast but limited.</p>
+          <p>
+            {IDE_NAME} brings the best of both worlds: everything you need to
+            effectively develop in Go &mdash; jump to definition, autocomplete,
+            parameter hints, auto format, build, integrated debugger, and more
+            &mdash; at lightning speed.
+          </p>
+          <p>
+            No more waiting on Goland's garbage collector. No more hacking
+            plugins together in ~/.vimrc.
+          </p>
         </div>
-        <p>
-          Our Vim keybindings aren't a plugin added as an afterthought. They're
-          built into the core of the application and designed to work seamlessly
-          with everything else.
-        </p>
-        <p>
-          We're big Vim users ourselves, and designed {IDE_NAME} with
-          first-class Vim support from the beginning. It basically feels like
-          real Vim.
-        </p>
       </Section>
 
-      <Section bearIndex={4}>
-        <div className="text-2xl mb-4">Designed to perfection.</div>
-        <p>
-          Programs sometimes seem written by people who don't use it themselves.
-          "How did they not catch this bug that happens when I do something
-          extremely basic?"
-        </p>
-        <p>
-          We use {IDE_NAME} ourselves every single day, so we built it to work
-          seamlessly, down to every micro-interaction.
-        </p>
+      <Section>
+        <div className="leading-relaxed">
+          <div className="text-2xl mb-4">No more language server overhead.</div>
+          <p>
+            {IDE_NAME}'s intellisense is hand-written, extensively tested, and
+            designed for speed and reliability.
+          </p>
+          <p>
+            We'll never do things like send a JSON packet over a socket every
+            keystroke. And you'll never need to restart your IDE because gopls
+            crashed.
+          </p>
+        </div>
+        <NiceImage src={gif60fps} className="h-72" />
+      </Section>
+
+      <Section>
+        <NiceImage src={gifVim} className="h-96" />
+        <div className="leading-relaxed">
+          <div className="text-2xl mb-4">
+            Feature-complete Vim keybindings, out of the box.
+          </div>
+          <p>
+            Our Vim keybindings aren't a plugin added as an afterthought.
+            They're built into the core of the application and designed to work
+            seamlessly with everything else.
+          </p>
+          <p>
+            We're big Vim users ourselves, and designed {IDE_NAME} with
+            first-class Vim support from the beginning. It basically feels like
+            real Vim.
+          </p>
+        </div>
+      </Section>
+
+      <Section className="bg-gradient-to-b from-gray-700 to-gray-800 p-20 rounded-xl text-gray-300 text-lg">
+        <div className="leading-relaxed max-w-xl mx-auto">
+          <p className="mb-6">{IDE_NAME} is designed to perfection.</p>
+          <p className="mb-6">
+            It sometimes seems like people who build apps don't actually use the
+            app themselves. "How did they not catch this bug that happens when I
+            do something extremely basic?"
+          </p>
+          <p className="mb-6">
+            We use {IDE_NAME} ourselves every single day, so we built it to work
+            seamlessly, down to every micro-interaction.
+          </p>
+        </div>
       </Section>
 
       <div className="space-x-8 flex mb-32">
@@ -487,7 +496,6 @@ function Beta() {
         </div>
         <input
           className="main-button from-gray-200 to-gray-300 text-gray-600"
-          role="button"
           type="submit"
           value="Subscribe"
           name="subscribe"

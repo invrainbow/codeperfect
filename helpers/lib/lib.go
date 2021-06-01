@@ -62,9 +62,8 @@ func UnmarshalAndCloseHttpResp(resp *http.Response, out interface{}) error {
 	return nil
 }
 
-const ServerBase = "http://localhost:8080"
-
-// const ServerBase = "https://api.codeperfect95.com"
+// const ServerBase = "http://localhost:8080"
+const ServerBase = "https://api.codeperfect95.com"
 
 func CallServer(endpoint string, licenseKey string, params url.Values, out interface{}) error {
 	params["license_key"] = []string{licenseKey}
@@ -91,4 +90,15 @@ func GetLatestVer(licenseKey string) (int, error) {
 	}
 
 	return int(ret), nil
+}
+
+func AuthLicenseKey(licenseKey string) error {
+	var data map[string]interface{}
+	if err := CallServer("auth", licenseKey, url.Values{}, &data); err != nil {
+		return err
+	}
+	if ret, ok := data["version"].(bool); ok && ret {
+		return nil
+	}
+	return fmt.Errorf("Unable to authenticate license key.")
 }

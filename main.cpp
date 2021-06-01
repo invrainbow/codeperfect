@@ -51,7 +51,7 @@ TODO:
 #define MAX_PATH 260
 #define CODE_FONT_SIZE 14
 #define UI_FONT_SIZE 15
-#define FRAME_RATE_CAP 60
+#define FRAME_RATE_CAP 144
 
 static const char WINDOW_TITLE[] = "CodePerfect 95";
 
