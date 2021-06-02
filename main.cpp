@@ -1396,7 +1396,9 @@ int main() {
         }
 
         ui.draw_everything();
+
         glfwPollEvents();
+
         ui.end_frame(); // end frame after polling events, so our event callbacks have access to imgui
 
         glfwSwapBuffers(world.window);
