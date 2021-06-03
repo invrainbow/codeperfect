@@ -10,6 +10,7 @@
       "Helvetica Neue", sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    background: #151515;
   }
 
   code {
@@ -22,7 +23,7 @@
   }
 
   a {
-    @apply text-blue-600;
+    @apply text-gray-200 underline;
     @apply inline-block;
   }
 
@@ -52,7 +53,8 @@
   }
 
   code {
-    @apply rounded-md px-1 py-0.5 bg-gray-200 text-xs;
+    @apply rounded-md px-1 py-0.5 bg-gray-600 text-gray-200;
+    font-size: 82.5%;
   }
 }
 
@@ -60,7 +62,7 @@
   .main-button {
     @apply rounded-md bg-blue-600 text-white text-sm font-semibold py-1.5 px-4;
     @apply decoration-clone bg-gradient-to-b from-blue-500 to-blue-700;
-    @apply disabled:opacity-50;
+    @apply disabled:opacity-50 no-underline outline-none;
   }
 }
 
@@ -72,6 +74,11 @@
     @apply pl-0;
   }
   .roadmap-list li {
-    @apply py-3 border-t last:border-b border-gray-100 list-none ml-0;
+    @apply py-3 border-t last:border-b border-gray-700 list-none ml-0;
+  }
+
+  .nice-image {
+    @apply rounded-md border-solid border-4 w-auto drop-shadow-md;
+    border-color: #242424;
   }
 }

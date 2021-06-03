@@ -2,26 +2,35 @@
 
 import React from "react";
 import { BrowserRouter as Router, Switch, Route, Link } from "react-router-dom";
-import ideScreenshotImage from "./ide.png";
 import { Helmet } from "react-helmet";
 import cx from "classnames";
+import _ from "lodash";
 
+// images
+import ideScreenshotImage from "./ide.png";
 import gif60fps from "./60fps.gif";
 import gifVim from "./vim.gif";
+import pngIntellisense from "./intellisense.png";
 
 const IDE_NAME = "CodePerfect 95";
-const API_BASE = "http://localhost:8080";
-const CURRENT_YEAR = new Date().getFullYear();
-const STRIPE_PRICE_ID = "price_1IrHFLBpL0Zd3zdOjGoBlmZF";
-const STRIPE_PUB_KEY =
-  "pk_test_51IqLcpBpL0Zd3zdOPzAZQbYjpmD47ethoqtcFGwiJBLdovijF8G0hBTA8FylfnRnQ8aXoPVC2DmNMHpndiV1YtJr00UU0XCWnt";
+const DOMAIN = "codeperfect95.com";
+const SUPPORT_EMAIL = `support@${DOMAIN}`;
+const ENTERPRISE_EMAIL = `enterprise@${DOMAIN}`;
 
-const stripe = Stripe(STRIPE_PUB_KEY);
+const API_BASE = "http://localhost:8080";
+
+const CURRENT_YEAR = new Date().getFullYear();
+
+// const STRIPE_PRICE_ID = "price_1IrHFLBpL0Zd3zdOjGoBlmZF";
+// const STRIPE_PUB_KEY =
+//   "pk_test_51IqLcpBpL0Zd3zdOPzAZQbYjpmD47ethoqtcFGwiJBLdovijF8G0hBTA8FylfnRnQ8aXoPVC2DmNMHpndiV1YtJr00UU0XCWnt";
+
+// const stripe = Stripe(STRIPE_PUB_KEY);
 
 function WallOfText({ title, children }) {
   return (
-    <div className="bg-gray-100 p-8 rounded-sm">
-      <div className="max-w-3xl bg-white p-8 mx-auto rounded-sm shadow-sm text-sm leading-relaxed">
+    <div className="border border-gray-700 p-12 rounded-sm my-8">
+      <div className="max-w-3xl mx-auto leading-relaxed text-gray-200">
         <Title>{title}</Title>
         {children}
       </div>
@@ -41,9 +50,8 @@ function NiceImage({ className, ...props }) {
   return (
     <div>
       <img
-        className={`overflow-hidden rounded-md border-solid border-8 border-gray-100 w-auto max-w-none ${
-          className || ""
-        }`}
+        alt=""
+        className={cx("overflow-hidden nice-image max-w-none", className)}
         {...props}
       />
     </div>
@@ -53,29 +61,49 @@ function NiceImage({ className, ...props }) {
 function Section({ className, ...props }) {
   return (
     <div
-      className={`space-x-14 flex items-center mb-32 ${className || ""}`}
+      className={cx("space-x-14 flex mb-32 items-center", className)}
       {...props}
     />
   );
 }
 
+const IDE_FEATURES = _.shuffle([
+  "Auto Completion",
+  "Integrated Debugger",
+  "Integrated Build",
+  "Auto Format",
+  "Parameter Hints",
+  "Go To Definition",
+  "Vim Keybindings",
+  "Fuzzy File Search",
+  "GPU-Based Renderer",
+  "Highly Optimized Core",
+  "Debug Tests",
+  "Instant Startup",
+  "Syntax Highlighting",
+]);
+
 function Home() {
   return (
     <div>
       <div className="my-28">
-        <div className="text-center mb-12 text-4xl font-bold">
-          A Blazing Fast Golang IDE
+        <div className="text-center mb-12 text-5xl font-light text-white">
+          A Blazing Fast IDE for Go
         </div>
-        <img alt="" className="max-w-auto" src={ideScreenshotImage} />
+        <img
+          alt=""
+          className="nice-image max-w-auto"
+          src={ideScreenshotImage}
+        />
       </div>
 
       <Section>
         <div className="leading-relaxed">
-          <div className="text-2xl mb-4">
+          <div className="text-2xl mb-4 text-gray-200">
             No Electron. No JavaScript. No garbage collection.
           </div>
           <p>
-            {IDE_NAME} is written in C++ and designed to run at 60 FPS. Every
+            {IDE_NAME} is written in C++ and designed to run at 144 FPS. Every
             keystroke responds instantly.
           </p>
           <p>
@@ -87,20 +115,30 @@ function Home() {
       </Section>
 
       <Section>
-        <NiceImage src={gif60fps} className="h-72" />
-        <div className="leading-relaxed">
-          <div className="text-2xl mb-4">
+        <div className="flex flex-wrap gap-4 w-3/5 select-none">
+          {IDE_FEATURES.map((feature, i) => (
+            <div
+              key={i}
+              className="font-semibold w-28 h-24 rounded-lg text-gray-400 text-center flex justify-center items-center text-sm p-4 transform hover:scale-110 transition-all"
+              style={{ background: "#282828" }}
+            >
+              <span>{feature}</span>
+            </div>
+          ))}
+        </div>
+        <div className="leading-relaxed flex-1">
+          <div className="text-2xl mb-4 text-gray-200">
             A full-fledged IDE, as fast as Vim.
           </div>
-          <p>Today, IDEs are powerful but slow, Vim fast but limited.</p>
           <p>
-            {IDE_NAME} brings the best of both worlds: everything you need to
-            effectively develop in Go &mdash; jump to definition, autocomplete,
-            parameter hints, auto format, build, integrated debugger, and more
-            &mdash; at lightning speed.
+            Today, IDEs are powerful but slow, while Vim is fast but limited.
           </p>
           <p>
-            No more waiting on Goland's garbage collector. No more hacking
+            {IDE_NAME} brings the best of both worlds: everything you need to
+            effectively develop in Go, at lightning speed.
+          </p>
+          <p>
+            No more waiting on GoLand's garbage collector. No more hacking
             plugins together in ~/.vimrc.
           </p>
         </div>
@@ -108,7 +146,9 @@ function Home() {
 
       <Section>
         <div className="leading-relaxed">
-          <div className="text-2xl mb-4">No more language server overhead.</div>
+          <div className="text-2xl mb-4 text-gray-200">
+            No more language server overhead.
+          </div>
           <p>
             {IDE_NAME}'s intellisense is hand-written, extensively tested, and
             designed for speed and reliability.
@@ -119,14 +159,14 @@ function Home() {
             crashed.
           </p>
         </div>
-        <NiceImage src={gif60fps} className="h-72" />
+        <NiceImage src={pngIntellisense} className="h-auto" />
       </Section>
 
       <Section>
         <NiceImage src={gifVim} className="h-96" />
         <div className="leading-relaxed">
-          <div className="text-2xl mb-4">
-            Feature-complete Vim keybindings, out of the box.
+          <div className="text-2xl mb-4 text-gray-200">
+            Complete Vim keybindings, out of the box.
           </div>
           <p>
             Our Vim keybindings aren't a plugin added as an afterthought.
@@ -141,47 +181,22 @@ function Home() {
         </div>
       </Section>
 
-      <Section className="bg-gradient-to-b from-gray-700 to-gray-800 p-20 rounded-xl text-gray-300 text-lg">
-        <div className="leading-relaxed max-w-xl mx-auto">
-          <p className="mb-6">{IDE_NAME} is designed to perfection.</p>
-          <p className="mb-6">
-            It sometimes seems like people who build apps don't actually use the
-            app themselves. "How did they not catch this bug that happens when I
-            do something extremely basic?"
-          </p>
-          <p className="mb-6">
-            We use {IDE_NAME} ourselves every single day, so we built it to work
-            seamlessly, down to every micro-interaction.
-          </p>
-        </div>
-      </Section>
+      <p className="text-center mb-8">
+        Watch a demo of {IDE_NAME} being used to solve{" "}
+        <a target="_blank" rel="noreferrer" href="https://cryptopals.com">
+          Cryptopals
+        </a>
+        .
+      </p>
 
-      <div className="space-x-8 flex mb-32">
-        <div className="w-1/4">
-          {["Autocomplete", "Debugging", "Some other demo", "Another demo"].map(
-            (name, idx) => (
-              <div
-                key={name}
-                className={cx(
-                  "rounded-md",
-                  "py-2",
-                  "px-4",
-                  "select-none",
-                  "cursor-pointer",
-                  idx === 0 && "bg-gray-200",
-                  idx !== 0 && "hover:bg-gray-100"
-                )}
-                style={{ marginBottom: "1px" }}
-              >
-                {name}
-              </div>
-            )
-          )}
-        </div>
-        <div className="w-3/4">
+      <div className="mx-auto" style={{ maxWidth: "600px" }}>
+        <div
+          className="mb-32 relative w-full h-0"
+          style={{ paddingBottom: "56.25%" }}
+        >
           <iframe
             width="100%"
-            height="420"
+            className="absolute top-0 left-0 w-full h-full"
             src="https://www.youtube.com/embed/dQw4w9WgXcQ"
             title="YouTube video player"
             frameborder="0"
@@ -189,34 +204,6 @@ function Home() {
             allowfullscreen
           ></iframe>
         </div>
-      </div>
-    </div>
-  );
-}
-
-function Pricing() {
-  return (
-    <div className="border-t border-b rounded-sm">
-      <div className="text-center my-24">
-        <div className="text-xl">
-          {IDE_NAME} is{" "}
-          <b className="decoration-clone bg-clip-text bg-gradient-to-b from-blue-400 to-blue-700 text-transparent">
-            $5 per month
-          </b>{" "}
-          per seat.
-        </div>
-        <div className="my-8">
-          <Link className="main-button text-xl py-3 px-6 rounded-lg" to="/beta">
-            Join Beta
-          </Link>
-        </div>
-        <p className="text-sm text-gray-400">
-          If you're buying licenses for your team,{" "}
-          <a className="underline text-gray-600" href="mailto:enterprise@codeperfect95.com">
-            ask
-          </a>{" "}
-          for a bulk discount.
-        </p>
       </div>
     </div>
   );
@@ -385,127 +372,169 @@ function Download() {
 function Beta() {
   const [disabled, setDisabled] = React.useState(false);
 
-  const onBuy = async () => {
-    setDisabled(true);
-    try {
-      const data = await talkToServer("checkout", {
-        price_id: STRIPE_PRICE_ID,
-      });
-      stripe.redirectToCheckout({ sessionId: data.session_id });
-    } catch (err) {
-      setDisabled(false);
-      alert(err);
-    }
-  };
+  // const onBuy = async () => {
+  //   setDisabled(true);
+  //   try {
+  //     const data = await talkToServer("checkout", {
+  //       price_id: STRIPE_PRICE_ID,
+  //     });
+  //     stripe.redirectToCheckout({ sessionId: data.session_id });
+  //   } catch (err) {
+  //     setDisabled(false);
+  //     alert(err);
+  //   }
+  // };
 
   return (
-    <WallOfText title="Before you sign up...">
-      <p>{IDE_NAME} costs $5/month.</p>
-      <p>
-        It's still in early beta. Large chunks of functionality remain to be
-        built. We're releasing it now because we use it every day ourselves, and
-        realized we'd crossed the threshold of getting $5+ of monthly utility
-        from it. That said, it currently has several limitations. Please read
-        them carefully to make sure we're compatible with your needs.
-      </p>
-      <ul className="thick-list">
-        <li>Only Windows is supported.</li>
-        <li>Only Go 1.13+ is supported.</li>
-        <li>
-          Your project must be module-aware, and consist of a single module,
-          located at your project's root folder. More specifically,{" "}
-          <code>go list -mod=mod -m all</code> must work from your root folder.
-        </li>
-        <li>
-          Only editing via Vim keys. Arrow keys, clicking, and scrolling don't
-          work in the editor yet.
-        </li>
-        <li>No project-wide Search/Search and Replace.</li>
-        <li>No built-in terminal.</li>
-        <li>No WSL support.</li>
-        <li>
-          No Vim commands. Importantly, this means no{" "}
-          <code>:%s/find/replace</code>. (<code>/search</code> works.)
-        </li>
-      </ul>
-      <p>
-        Despite these limitations, {IDE_NAME} is ready for day-to-day,
-        bread-and-butter Go programming (everyone on the dev team uses it). The
-        following features are working:
-      </p>
-      <ul className="thick-list">
-        <li>Automatically index your code and its dependencies in real-time</li>
-        <li>Autocomplete (member & keyword)</li>
-        <li>Parameter hints (show function signature on call)</li>
-        <li>Jump to definition</li>
-        <li>
-          Auto format on save (with <code>goimports</code>)
-        </li>
-        <li>Vim keybindings</li>
-        <li>
-          Debugging with call stack, breakpoints, local variables, and watches
-        </li>
-        <li>Debug tests (package-wide &amp; individual tests)</li>
-        <li>Building, navigating between errors</li>
-        <li>Fuzzy file picker</li>
-      </ul>
-      <p>
-        If this sounds compatible with your setup, {IDE_NAME} will allow you to
-        start developing Go programs at lightning speed today. We're also{" "}
-        <Link to="/roadmap">developing new features rapidly</Link>.
-      </p>
-      <p className="my-8 text-center">
-        <button
-          onClick={onBuy}
-          className="main-button text-lg px-8 py-4"
-          disabled={disabled}
-        >
-          Buy {IDE_NAME}
-        </button>
-      </p>
-      <p>
-        If you're interested in {IDE_NAME} but it's not a fit right now, you can
-        also subscribe to email updates below.
-      </p>
-      <form
-        action="https://gmail.us6.list-manage.com/subscribe/post?u=530176c3897958e56302043ed&amp;id=cb045d5e14"
-        className="mt-4 text-center"
-        method="post"
-        name="mc-embedded-subscribe-form"
-        target="_blank"
-        novalidate
-      >
-        <input
-          type="email"
-          defaultValue=""
-          name="EMAIL"
-          placeholder="Email address"
-          required
-          className="border border-black-400 py-1.5 px-2.5 rounded-md text-sm mr-2"
-        />
-        <div
-          style={{ position: "absolute", left: "-5000px" }}
-          aria-hidden="true"
+    <div className="border-t border-b py-12" style={{ borderColor: "#282828" }}>
+      <div className="text-center">
+        <div className="text-2xl mb-0">
+          {IDE_NAME} is <b className="text-white">$10/month</b> per seat.
+        </div>
+        {/* <p className="mt-3 text-sm text-gray-400">
+          If you're buying licenses for your team,{" "}
+          <a
+            className="underline text-gray-300"
+            href={`mailto:${ENTERPRISE_EMAIL}`}
+          >
+            ask
+          </a>{" "}
+          for a bulk discount.
+        </p> */}
+      </div>
+
+      <div className="max-w-2xl mx-auto mt-8">
+        <Title>Before you sign up...</Title>
+        <p>
+          {IDE_NAME} is still in early beta. We're releasing it now because we
+          use it every day ourselves, and realized we were getting more than $10
+          of monthly utility from it. That said, there are currently several
+          large limitations:
+        </p>
+        <ul className="thick-list">
+          <li>Windows only (Windows 10).</li>
+          <li>Go 1.13+ only.</li>
+          <li>
+            Your project must be module-aware, and consist of a single module,
+            located at your project's root folder. I.e.{" "}
+            <code>go list -mod=mod -m all</code> must work from your root
+            folder.
+          </li>
+          <li>
+            Editing via Vim keys only. Arrow keys, clicking, and scrolling don't
+            work in the editor yet.
+          </li>
+          <li>No project-wide Search/Search and Replace.</li>
+          <li>No built-in terminal.</li>
+          <li>No WSL support.</li>
+          <li>No support for symlinks (undefined behavior).</li>
+          <li>
+            Slow when opening extremely large workspaces (e.g. the{" "}
+            <a href="https://github.com/kubernetes/kubernetes">kubernetes</a>{" "}
+            repo).
+          </li>
+          <li>
+            No Vim commands. Importantly, no <code>:%s/search/replace</code>. (
+            <code>/search</code> works.)
+          </li>
+        </ul>
+        <p>
+          Nevertheless, {IDE_NAME} is ready for day-to-day, bread-and-butter Go
+          programming. Everyone on the dev team uses it. The following are
+          working:
+        </p>
+        <ul className="thick-list">
+          <li>
+            Automatically index your code and its dependencies in real-time
+          </li>
+          <li>Autocomplete (member & keyword)</li>
+          <li>Parameter hints (show function signature on call)</li>
+          <li>Jump to definition</li>
+          <li>
+            Auto format on save (with <code>goimports</code>)
+          </li>
+          <li>Vim keybindings</li>
+          <li>
+            Debugging with call stack, breakpoints, local variables, and watches
+          </li>
+          <li>Debug tests (package-wide &amp; individual tests)</li>
+          <li>Building, navigating between errors</li>
+          <li>Fuzzy file picker</li>
+          <li>Extremely optimized core</li>
+        </ul>
+        <p>
+          If this sounds compatible with your setup, {IDE_NAME} will allow you
+          to start developing Go programs at lightning speed today. We're also{" "}
+          <Link to="/roadmap">steadily developing new features</Link>.
+        </p>
+        <p className="my-8 text-center">
+          {/* <button
+            onClick={onBuy}
+            className="main-button text-lg px-8 py-4"
+            disabled={disabled}
+
+            Sign up
+          </button> */}
+          <a
+            className="main-button text-lg px-8 py-4"
+            href="https://967gb74hmbf.typeform.com/to/nVtqlzdj"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Request Access
+          </a>
+        </p>
+        <p>
+          If you're interested in {IDE_NAME} but it's not a fit right now, you
+          can also subscribe to email updates below.
+        </p>
+        <form
+          action="https://gmail.us6.list-manage.com/subscribe/post?u=530176c3897958e56302043ed&amp;id=cb045d5e14"
+          className="mt-8 text-center p-6 rounded-md shadow-md"
+          style={{
+            border: "solid 1px #444",
+          }}
+          method="post"
+          name="mc-embedded-subscribe-form"
+          target="_blank"
+          novalidate
         >
           <input
-            type="text"
-            name="b_530176c3897958e56302043ed_cb045d5e14"
-            tabindex="-1"
-            value=""
+            type="email"
+            defaultValue=""
+            name="EMAIL"
+            placeholder="Email address"
+            required
+            className="py-1.5 px-2.5 rounded-md text-sm mr-2"
+            style={{
+              background: "#222",
+              border: "solid 1px #555",
+            }}
           />
-        </div>
-        <input
-          className="main-button from-gray-200 to-gray-300 text-gray-600"
-          type="submit"
-          value="Subscribe"
-          name="subscribe"
-        />
-        <p className="text-xs text-gray-400 mt-4">
-          (We'll only send you product updates; we won't spam you or share your
-          email.)
-        </p>
-      </form>
-    </WallOfText>
+          <div
+            style={{ position: "absolute", left: "-5000px" }}
+            aria-hidden="true"
+          >
+            <input
+              type="text"
+              name="b_530176c3897958e56302043ed_cb045d5e14"
+              tabindex="-1"
+              value=""
+            />
+          </div>
+          <button
+            className="main-button from-gray-200 to-gray-300 text-gray-600"
+            type="submit"
+          >
+            Subscribe
+          </button>
+          <p className="text-xs text-gray-400 mt-4">
+            (We'll only send you product updates; we won't spam you or share
+            your email.)
+          </p>
+        </form>
+      </div>
+    </div>
   );
 }
 
@@ -513,23 +542,21 @@ function Roadmap() {
   return (
     <WallOfText title="Roadmap">
       <p>Here are things we're looking to add in the immediate future.</p>
-      <ul className="roadmap-list text-gray-500">
-        <li>
-          macOS and Linux support. The bulk of our code is cross-platform.
-          There's about 200 lines of OS-specific code that needs to be
-          implemented (easy) and tested (hard) for each new OS.
-        </li>
+      <ul className="roadmap-list text-gray-400">
+        <li>macOS and Linux support.</li>
         <li>Make the editor usable for non-Vim users.</li>
         <li>Git integration.</li>
         <li>A more sophisticated file browser.</li>
         <li>WSL support.</li>
         <li>
-          Go to symbol &mdash; like fuzzy file picker, but you're picking names
-          of declared symbols instead of files.
+          Go to symbol &mdash; like fuzzy file picker, but for names of declared
+          identifiers instead of files.
         </li>
         <li>Improved details in autocomplete menu.</li>
         <li>Find all usages.</li>
         <li>Automatic refactoring.</li>
+        <li>Support symlinks.</li>
+        <li>Support large repositories.</li>
       </ul>
     </WallOfText>
   );
@@ -555,7 +582,7 @@ function PaymentCanceled() {
       </p>
       <p>
         If you believe the payment went through and you were charged, please{" "}
-        <a href="mailto:support@codeperfect95.com">email us</a>.
+        <a href={`mailto:${SUPPORT_EMAIL}`}>email us</a>.
       </p>
       <p>
         Otherwise, <Link to="/">click here</Link> to return to the main page.
@@ -572,16 +599,8 @@ function PaymentSuccess() {
         If the email doesn't come, please check your spam folder and wait a few
         minutes. If it still doesn't come, please do not purchase a second time
         &mdash; two subscriptions will be created. Instead,{" "}
-        <a href="mailto:support@codeperfect95.com">email us</a>.
+        <a href={`mailto:${SUPPORT_EMAIL}`}>email us</a>.
       </p>
-    </WallOfText>
-  );
-}
-
-function Docs() {
-  return (
-    <WallOfText title="Documentation">
-      <p>TODO</p>
     </WallOfText>
   );
 }
@@ -594,20 +613,14 @@ function App() {
         <title>{IDE_NAME}</title>
       </Helmet>
 
-      <div className="py-6 leading-relaxed text-gray-800">
+      <div className="py-6 leading-relaxed text-gray-400">
         <div className="px-4 max-w-6xl mx-auto flex justify-between items-center">
-          <Link to="/" className="text-lg font-bold text-black">
+          <Link to="/" className="text-lg font-bold text-white no-underline">
             {IDE_NAME}
           </Link>
           <div className="flex items-baseline space-x-6">
-            <Link to="/docs">
-              Documentation
-            </Link>
-            <Link to="/pricing">
-              Pricing
-            </Link>
             <Link className="main-button" to="/beta">
-              Join Beta
+              Request Access
             </Link>
           </div>
         </div>
@@ -624,12 +637,6 @@ function App() {
             </Route>
             <Route path="/privacy">
               <Privacy />
-            </Route>
-            <Route path="/docs">
-              <Docs />
-            </Route>
-            <Route path="/pricing">
-              <Pricing />
             </Route>
             <Route path="/beta">
               <Beta />
@@ -653,16 +660,19 @@ function App() {
             <div className="text-gray-400">
               &copy; {CURRENT_YEAR} {IDE_NAME}
             </div>
-            <div className="flex space-x-4">
-              <Link to="/terms" className="text-gray-400">
+            <div className="flex space-x-6">
+              <Link to="/roadmap" className="text-gray-400 no-underline">
+                Roadmap
+              </Link>
+              <Link to="/terms" className="text-gray-400 no-underline">
                 Terms of Service
               </Link>
-              <Link className="text-gray-400" to="/privacy">
+              <Link className="text-gray-400 no-underline" to="/privacy">
                 Privacy Policy
               </Link>
               <a
-                className="text-gray-400"
-                href="mailto:support@codeperfect95.com"
+                className="text-gray-400 no-underline"
+                href={`mailto:${SUPPORT_EMAIL}`}
               >
                 Contact
               </a>
