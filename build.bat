@@ -4,7 +4,7 @@ rem just make sure ide.exe isn't running
 rem remedybg.exe stop-debugging
 taskkill /F /IM ide.exe
 
-cl /MP /MDd /nologo /EHsc /w /std:c++latest /DEBUG /Zi /utf-8 /Fe:ide.exe^
+cl /MP /MDd /nologo /EHsc /w /std:c++latest /DEBUG /Zi /utf-8 /Fe:bin\ide.exe^
     /DGLEW_STATIC^
     /Iw:\packages\glfw.3.3.2\build\native\include^
     /Iw:\packages\glew.1.9.0.1\build\native\include^

@@ -2389,7 +2389,7 @@ void Go_Indexer::init() {
         strcpy_safe(current_exe_path, _countof(current_exe_path), our_dirname(get_executable_path()));
     }
 
-    gohelper_dynamic.init("go run github.com/invrainbow/ide/helpers/dynamic_helper", path_join(current_exe_path, "helpers"));
+    gohelper_dynamic.init("go run ./dynamic_helper", path_join(current_exe_path, "helpers"));
     gohelper_static.init("static_helper.exe", path_join(current_exe_path, "helpers"));
 
     {

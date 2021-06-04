@@ -70,14 +70,16 @@ void Nvim::handle_editor_on_ready(Editor *editor) {
     // nvim_buf_lines_event)
     editor->buf.dirty = false;
 
-    // clear undo history
-    auto msgid = start_request_message("nvim_call_function", 2);
-    save_request(NVIM_REQ_FILEOPEN_CLEAR_UNDO, msgid, editor->id);
+    {
+        // clear undo history
+        auto msgid = start_request_message("nvim_call_function", 2);
+        save_request(NVIM_REQ_FILEOPEN_CLEAR_UNDO, msgid, editor->id);
 
-    writer.write_string("IDE__ClearUndo");
-    writer.write_array(1);
-    writer.write_int(editor->nvim_data.buf_id);
-    end_message();
+        writer.write_string("IDE__ClearUndo");
+        writer.write_array(1);
+        writer.write_int(editor->nvim_data.buf_id);
+        end_message();
+    }
 }
 
 ccstr nvim_request_type_str(Nvim_Request_Type type) {
@@ -384,6 +386,13 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 writer.write_string("channel_id");
                 writer.write_int(event->response.channel_id);
                 end_message();
+
+                {
+                    start_request_message("nvim_input", 1);
+                    writer.write_string("<Enter>");
+                    end_message();
+                }
+
                 break;
 
             case NVIM_REQ_CREATE_BUF:
@@ -524,6 +533,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
             case NVIM_REQ_BUF_ATTACH:
                 editor->nvim_data.is_buf_attached = true;
                 break;
+
             case NVIM_REQ_UI_ATTACH:
                 is_ui_attached = true;
                 break;
@@ -936,11 +946,13 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                     editor->raw_move_cursor(new_cur2(x, y));
                 }
 
+                /*
                 if (!editor->nvim_data.got_initial_cur) {
                     nvim_print("got_initial_cur = false, setting to true & calling handle_editor_on_ready()");
                     editor->nvim_data.got_initial_cur = true;
                     handle_editor_on_ready(editor);
                 }
+                */
             }
             break;
 
@@ -1607,10 +1619,11 @@ void Nvim::start_running() {
 
     nvim_proc.init();
     nvim_proc.use_stdin = true;
-    nvim_proc.dir = "c:/users/brandon/ide"; // TODO
+    nvim_proc.dir = our_dirname(get_executable_path());
 
     // TODO: get full path of init.vim
-    nvim_proc.run("nvim -u ./init.vim -i NONE -N --embed --headless");
+    // nvim_proc.run("nvim -u init.vim -i NONE -N --embed --headless");
+    nvim_proc.run("nvim -u init.vim -i NONE -N --embed --headless");
 
     reader.proc = &nvim_proc;
     reader.offset = 0;

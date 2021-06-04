@@ -925,33 +925,6 @@ void Editor::backspace_in_insert_mode(int graphemes_to_erase, int codepoints_to_
 void Editor::format_on_save(bool write_to_nvim) {
     auto old_cur = cur;
 
-    /*
-    auto &proc = goimports_proc;
-    proc.cleanup();
-    proc.init();
-    proc.use_stdin = true;
-    proc.run("goimports");
-    saving = true;
-
-    // TODO(unicode)
-    for (u32 i = 0; i < buf.lines.len; i++) {
-        auto &it = buf.lines[i];
-        For (it) proc.write1((char)it);
-        if (i != buf.lines.len - 1)
-            proc.write1('\n');
-    }
-    proc.done_writing();
-
-    Buffer swapbuf;
-    swapbuf.init(MEM);
-    swapbuf.read([&](char* out) { return proc.read1(out); });
-    defer { swapbuf.cleanup(); };
-
-    while (proc.status() == PROCESS_WAITING) continue;
-    bool success = (proc.exit_code == 0);
-    proc.cleanup();
-    */
-
     Buffer swapbuf = {0};
     bool success = true;
 

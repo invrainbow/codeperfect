@@ -1,29 +1,53 @@
 package main
 
 import (
+	"bufio"
+	"fmt"
 	"go/build"
+	"os"
 	"path/filepath"
-
-	"github.com/invrainbow/ide/helpers/helperlib"
+	"strings"
 )
 
+var scanner *bufio.Scanner = bufio.NewScanner(os.Stdin)
+
+func Write(x interface{}) {
+	fmt.Println(x)
+}
+
+func WriteError(x error) {
+	Write("error")
+	Write(strings.ReplaceAll(x.Error(), "\n", "\\n"))
+}
+
+func ReadLine() string {
+	if !scanner.Scan() {
+		panic("unable to read line")
+	}
+	return scanner.Text()
+}
+
 func main() {
-	helperlib.InitScanner()
 	for {
-		switch helperlib.ReadLine() {
+		switch ReadLine() {
 		case "set_directory":
-			helperlib.HandleSetDirectory()
+			path := ReadLine()
+			if err := os.Chdir(path); err != nil {
+				WriteError(err)
+                break
+			}
+			Write(true)
 
 		case "check_go_version":
-			helperlib.Write(isCompatible)
+			Write(isCompatible)
 
 		case "check_included_in_build":
-			path := helperlib.ReadLine()
+			path := ReadLine()
 			match, err := build.Default.MatchFile(filepath.Dir(path), filepath.Base(path))
 			if err != nil {
-				helperlib.WriteError(err)
+				WriteError(err)
 			} else {
-				helperlib.Write(match)
+				Write(match)
 			}
 		}
 	}

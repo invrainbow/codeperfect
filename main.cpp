@@ -902,9 +902,7 @@ int main() {
                                     pane->focus_editor_by_index(new_idx);
                                 }
 
-                                world.nvim.start_request_message("nvim_input", 1);
-                                world.nvim.writer.write_string("<Esc>");
-                                world.nvim.end_message();
+                                send_nvim_keys("<Esc>");
                             }
                         }
                         break;

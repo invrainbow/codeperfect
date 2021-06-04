@@ -90,7 +90,7 @@ set bufhidden=hide
 set noautowrite
 set norelativenumber
 set nonumber
-syntax on
+" syntax on
 set signcolumn=no
 
 set statusline=
