@@ -1,4 +1,4 @@
-/* global Stripe */
+// /* global Stripe */
 
 import React from "react";
 import { BrowserRouter as Router, Switch, Route, Link } from "react-router-dom";
@@ -13,11 +13,10 @@ import gifVim from "./vim.gif";
 import pngIntellisense from "./intellisense.png";
 
 const IDE_NAME = "CodePerfect 95";
-const DOMAIN = "codeperfect95.com";
-const SUPPORT_EMAIL = `support@${DOMAIN}`;
-const ENTERPRISE_EMAIL = `enterprise@${DOMAIN}`;
+const SUPPORT_EMAIL = "support@codeperfect95.com";
 
 const API_BASE = "http://localhost:8080";
+// const API_BASE = "https://api.codeperfect95.com";
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -30,7 +29,7 @@ const CURRENT_YEAR = new Date().getFullYear();
 function WallOfText({ title, children }) {
   return (
     <div className="border border-gray-700 p-12 rounded-sm my-8">
-      <div className="max-w-3xl mx-auto leading-relaxed text-gray-200">
+      <div className="max-w-2xl mx-auto leading-relaxed text-gray-200">
         <Title>{title}</Title>
         {children}
       </div>
@@ -78,9 +77,10 @@ const IDE_FEATURES = _.shuffle([
   "Fuzzy File Search",
   "GPU-Based Renderer",
   "Highly Optimized Core",
-  "Debug Tests",
+  // "Debug Tests",
   "Instant Startup",
   "Syntax Highlighting",
+  // "Navigate Errors",
 ]);
 
 function Home() {
@@ -114,13 +114,13 @@ function Home() {
         <NiceImage src={gif60fps} className="h-80" />
       </Section>
 
-      <Section>
-        <div className="flex flex-wrap gap-4 w-3/5 select-none">
+      <Section className="space-x-20">
+        <div className="grid grid-cols-4 gap-6 select-none max-w-xl">
           {IDE_FEATURES.map((feature, i) => (
             <div
               key={i}
-              className="font-semibold w-28 h-24 rounded-lg text-gray-400 text-center flex justify-center items-center text-sm p-4 transform hover:scale-110 transition-all"
-              style={{ background: "#282828" }}
+              className="font-semibold w-auto h-24 rounded-lg text-gray-500 hover:text-gray-400 text-center flex justify-center items-center text-sm p-4 transform hover:scale-110 transition-all shadow-sm"
+              style={{ background: "#1d1d1d", border: "solid 1px #2f2f2f" }}
             >
               <span>{feature}</span>
             </div>
@@ -128,7 +128,7 @@ function Home() {
         </div>
         <div className="leading-relaxed flex-1">
           <div className="text-2xl mb-4 text-gray-200">
-            A full-fledged IDE, as fast as Vim.
+            A batteries-included IDE, as fast as Vim.
           </div>
           <p>
             Today, IDEs are powerful but slow, while Vim is fast but limited.
@@ -138,8 +138,8 @@ function Home() {
             effectively develop in Go, at lightning speed.
           </p>
           <p>
-            No more waiting on GoLand's garbage collector. No more hacking
-            plugins together in ~/.vimrc.
+            No more waiting on GoLand's garbage collector. No more hacking Vim
+            plugins together.
           </p>
         </div>
       </Section>
@@ -370,7 +370,7 @@ function Download() {
 }
 
 function Beta() {
-  const [disabled, setDisabled] = React.useState(false);
+  // const [disabled, setDisabled] = React.useState(false);
 
   // const onBuy = async () => {
   //   setDisabled(true);
@@ -387,152 +387,144 @@ function Beta() {
 
   return (
     <div className="border-t border-b py-12" style={{ borderColor: "#282828" }}>
-      <div className="text-center">
-        <div className="text-2xl mb-0">
-          {IDE_NAME} is <b className="text-white">$10/month</b> per seat.
-        </div>
-        {/* <p className="mt-3 text-sm text-gray-400">
-          If you're buying licenses for your team,{" "}
-          <a
-            className="underline text-gray-300"
-            href={`mailto:${ENTERPRISE_EMAIL}`}
-          >
-            ask
-          </a>{" "}
-          for a bulk discount.
-        </p> */}
-      </div>
-
-      <div className="max-w-2xl mx-auto mt-8">
-        <Title>Before you sign up...</Title>
-        <p>
-          {IDE_NAME} is still in early beta. We're releasing it now because we
-          use it every day ourselves, and realized we were getting more than $10
-          of monthly utility from it. That said, there are currently several
-          large limitations:
-        </p>
-        <ul className="thick-list">
-          <li>Windows only (Windows 10).</li>
-          <li>Go 1.13+ only.</li>
-          <li>
-            Your project must be module-aware, and consist of a single module,
-            located at your project's root folder. I.e.{" "}
-            <code>go list -mod=mod -m all</code> must work from your root
-            folder.
-          </li>
-          <li>
-            Editing via Vim keys only. Arrow keys, clicking, and scrolling don't
-            work in the editor yet.
-          </li>
-          <li>No project-wide Search/Search and Replace.</li>
-          <li>No built-in terminal.</li>
-          <li>No WSL support.</li>
-          <li>No support for symlinks (undefined behavior).</li>
-          <li>
-            Slow when opening extremely large workspaces (e.g. the{" "}
-            <a href="https://github.com/kubernetes/kubernetes">kubernetes</a>{" "}
-            repo).
-          </li>
-          <li>
-            No Vim commands. Importantly, no <code>:%s/search/replace</code>. (
-            <code>/search</code> works.)
-          </li>
-        </ul>
-        <p>
-          Nevertheless, {IDE_NAME} is ready for day-to-day, bread-and-butter Go
-          programming. Everyone on the dev team uses it. The following are
-          working:
-        </p>
-        <ul className="thick-list">
-          <li>
-            Automatically index your code and its dependencies in real-time
-          </li>
-          <li>Autocomplete (member & keyword)</li>
-          <li>Parameter hints (show function signature on call)</li>
-          <li>Jump to definition</li>
-          <li>
-            Auto format on save (with <code>goimports</code>)
-          </li>
-          <li>Vim keybindings</li>
-          <li>
-            Debugging with call stack, breakpoints, local variables, and watches
-          </li>
-          <li>Debug tests (package-wide &amp; individual tests)</li>
-          <li>Building, navigating between errors</li>
-          <li>Fuzzy file picker</li>
-          <li>Extremely optimized core</li>
-        </ul>
-        <p>
-          If this sounds compatible with your setup, {IDE_NAME} will allow you
-          to start developing Go programs at lightning speed today. We're also{" "}
-          <Link to="/roadmap">steadily developing new features</Link>.
-        </p>
-        <p className="my-8 text-center">
-          {/* <button
-            onClick={onBuy}
-            className="main-button text-lg px-8 py-4"
-            disabled={disabled}
-
-            Sign up
-          </button> */}
-          <a
-            className="main-button text-lg px-8 py-4"
-            href="https://967gb74hmbf.typeform.com/to/nVtqlzdj"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Request Access
-          </a>
-        </p>
-        <p>
-          If you're interested in {IDE_NAME} but it's not a fit right now, you
-          can also subscribe to email updates below.
-        </p>
-        <form
-          action="https://gmail.us6.list-manage.com/subscribe/post?u=530176c3897958e56302043ed&amp;id=cb045d5e14"
-          className="mt-8 text-center p-6 rounded-md shadow-md"
-          style={{
-            border: "solid 1px #444",
-          }}
-          method="post"
-          name="mc-embedded-subscribe-form"
-          target="_blank"
-          novalidate
-        >
-          <input
-            type="email"
-            defaultValue=""
-            name="EMAIL"
-            placeholder="Email address"
-            required
-            className="py-1.5 px-2.5 rounded-md text-sm mr-2"
-            style={{
-              background: "#222",
-              border: "solid 1px #555",
-            }}
-          />
-          <div
-            style={{ position: "absolute", left: "-5000px" }}
-            aria-hidden="true"
-          >
-            <input
-              type="text"
-              name="b_530176c3897958e56302043ed_cb045d5e14"
-              tabindex="-1"
-              value=""
-            />
-          </div>
-          <button
-            className="main-button from-gray-200 to-gray-300 text-gray-600"
-            type="submit"
-          >
-            Subscribe
-          </button>
-          <p className="text-xs text-gray-400 mt-4">
-            (We'll only send you product updates; we won't spam you or share
-            your email.)
+      <div className="flex space-x-8">
+        <div className="max-w-2xl mx-auto">
+          <Title>Before you sign up...</Title>
+          <p>
+            {IDE_NAME} is still in early beta. We're releasing it now because we
+            use it every day ourselves, and realized we were getting more than
+            $10 of monthly utility from it. That said, there are currently
+            several large limitations:
           </p>
-        </form>
+          <ul className="thick-list">
+            <li>Windows only (Windows 10).</li>
+            <li>Go 1.13+ only.</li>
+            <li>
+              Your project must be module-aware, and consist of a single module,
+              located at your project's root folder. I.e.{" "}
+              <code>go list -mod=mod -m all</code> must work from your root
+              folder.
+            </li>
+            <li>
+              Editing via Vim keys only. Arrow keys, clicking, and scrolling
+              don't work in the editor yet.
+            </li>
+            <li>No project-wide Search/Search and Replace.</li>
+            <li>No built-in terminal.</li>
+            <li>No WSL support.</li>
+            <li>No support for symlinks (undefined behavior).</li>
+            <li>
+              Slow when opening extremely large workspaces (e.g. the{" "}
+              <a href="https://github.com/kubernetes/kubernetes">kubernetes</a>{" "}
+              repo).
+            </li>
+            <li>
+              No Vim commands. Importantly, no <code>:%s/search/replace</code>.
+              (<code>/search</code> works.)
+            </li>
+          </ul>
+          <p>
+            Nevertheless, {IDE_NAME} is ready for day-to-day, bread-and-butter
+            Go programming. Everyone on the dev team uses it. The following are
+            working:
+          </p>
+          <ul className="thick-list">
+            <li>
+              Automatically index your code and its dependencies in real-time
+            </li>
+            <li>Autocomplete (member & keyword)</li>
+            <li>Parameter hints (show function signature on call)</li>
+            <li>Jump to definition</li>
+            <li>
+              Auto format on save (with <code>goimports</code>)
+            </li>
+            <li>Vim keybindings</li>
+            <li>
+              Debugging with call stack, breakpoints, local variables, and
+              watches
+            </li>
+            <li>Debug tests (package-wide &amp; individual tests)</li>
+            <li>Building, navigating between errors</li>
+            <li>Fuzzy file picker</li>
+            <li>Extremely optimized core</li>
+          </ul>
+          <p>
+            If this sounds compatible with your setup, {IDE_NAME} will allow you
+            to start developing Go programs at lightning speed today. We're also{" "}
+            <Link to="/roadmap">steadily developing new features</Link>.
+          </p>
+        </div>
+        <div className="sticky top-4 self-start border border-gray-700 rounded-md shadow-lg">
+          <div className="text-center border-b border-gray-700 p-4">
+            {IDE_NAME} is <b className="text-white">$10/month</b> per seat.
+          </div>
+
+          <div
+            className="text-center border-b border-gray-700 p-4"
+            style={{ background: "#111" }}
+          >
+            {/* <button
+                onClick={onBuy}
+                className="main-button text-lg px-8 py-4"
+                disabled={disabled}
+                Sign up
+              </button> */}
+            <a
+              className="main-button text-lg px-8 py-3 w-auto block"
+              href="https://967gb74hmbf.typeform.com/to/nVtqlzdj"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Request Access
+            </a>
+          </div>
+          <div className="p-4">
+            <p className="my-4 text-sm">
+              If you're interested in {IDE_NAME} but it's not a fit right now,
+              you can also subscribe to email updates.
+            </p>
+            <form
+              action="https://gmail.us6.list-manage.com/subscribe/post?u=530176c3897958e56302043ed&amp;id=cb045d5e14"
+              className="text-center"
+              method="post"
+              name="mc-embedded-subscribe-form"
+              target="_blank"
+              novalidate
+            >
+              <div className="flex">
+                <input
+                  type="email"
+                  defaultValue=""
+                  name="EMAIL"
+                  placeholder="Email address"
+                  required
+                  className="py-1.5 px-2.5 rounded-md text-sm mr-2 flex-grow"
+                  style={{
+                    background: "#222",
+                    border: "solid 1px #555",
+                  }}
+                />
+                <div
+                  style={{ position: "absolute", left: "-5000px" }}
+                  aria-hidden="true"
+                >
+                  <input
+                    type="text"
+                    name="b_530176c3897958e56302043ed_cb045d5e14"
+                    tabindex="-1"
+                    value=""
+                  />
+                </div>
+                <button
+                  className="main-button from-gray-200 to-gray-300 text-gray-600"
+                  type="submit"
+                >
+                  Subscribe
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       </div>
     </div>
   );

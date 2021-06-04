@@ -63,6 +63,7 @@
     @apply rounded-md bg-blue-600 text-white text-sm font-semibold py-1.5 px-4;
     @apply decoration-clone bg-gradient-to-b from-blue-500 to-blue-700;
     @apply disabled:opacity-50 no-underline outline-none;
+    @apply opacity-90 hover:opacity-100;
   }
 }
 
@@ -74,7 +75,7 @@
     @apply pl-0;
   }
   .roadmap-list li {
-    @apply py-3 border-t last:border-b border-gray-700 list-none ml-0;
+    @apply py-2 list-none ml-0;
   }
 
   .nice-image {
