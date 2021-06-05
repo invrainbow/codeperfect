@@ -90,9 +90,6 @@
     border-color: #555;
   }
 
-  .wall-of-text {
-    @apply border-t border-b md:border border-gray-700 py-5 md:p-12 md:rounded-sm leading-relaxed;
-  }
   .wall-of-text h3 {
     @apply mt-5 text-gray-300 font-semibold;
   }
