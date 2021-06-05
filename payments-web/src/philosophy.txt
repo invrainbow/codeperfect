@@ -19,7 +19,7 @@ Why? Why is software so slow? Is it an inherent limitation? Is there a physical
 law about transistors or something that says software can't surpass a certain
 speed?
 
-Crazy thing is, software used to be fast.  [Visual C++
+Crazy thing is, software used to be fast. [Visual C++
 6](https://twitter.com/rogerclark/status/1247299730314416128) opens instantly.
 Why doesn't Visual Studio? Why don't any of my programs? Why does Slack take
 five seconds to start?
@@ -63,18 +63,17 @@ of work analyzing some source code. How many operations is that?
 I'll leave the Fermi estimates as an exercise for the reader. But whatever the
 actual cost, is it even anywhere *in the ballpark* of a billion operations?
 
-I mean, I guess Jetbrains is telling me a billion operations isn't enough,
-right? Presumably the reason GoLand lags is that I gave it too many things to
-do, and not enough CPU cycles. If I had a faster computer, and my demands were
-more reasonable, and I didn't ask it to do something as shockingly Herculean as
-rendering images, editing a buffer, and analyzing source code, then it would be
-able to do its job. Right?
+I guess what Jetbrains is telling me is that a billion operations isn't enough,
+right? Presumably GoLand lags because I gave it too much to do and not
+enough CPU cycles to do it; if I had a faster computer, and I didn't expect it
+to perform such unreasonably Herculean tasks as rendering images, editing a
+buffer, and parsing source code, then it would be able to do its job. Right?
 
 This is the state of software today. If you gave me a billion dollars to build
-a bridge, and after spending it all I failed to produce a bridge, you'd be very
-upset with me. But when you give a program a billion CPU cycles, and after
-spending them it fails to draw 60 pictures, that's regarded as the normal,
-inevitable state of software in 2021.
+a bridge, and after spending it all I failed to produce a bridge, you'd lose
+your patience with me. But when you give a program a billion CPU cycles, and
+after spending them it fails to draw 60 pictures, that's regarded as the
+normal, inevitable state of software in 2021.
 
 <br>
 
@@ -95,34 +94,32 @@ argue. A strong ecosystem of libraries means faster time to market. Electron
 means we don't have to worry about platform-specific APIs, and we can use all
 the web technologies we're already familiar with. Yay!
 
-This is how a billion cycles get squandered. Think about what Mr. Patagonia is
-doing. He's compiling his program into a website, opening it in (basically)
-Chrome, which loads *a whole virtual machine*, and does a bunch of stuff.
-That's before his program even does anything. Then his program sits inside the
-land of JavaScript, where everything is a callback, no one cares about memory
-usage, and garbage collection runs around all day running on full blast.
+This is how a billion cycles get squandered. Before that program even does
+anything, first it's compiled into a website and loaded into Chrome, which loads
+*a whole virtual machine* and does a bunch of stuff. Then the program sits
+inside the land of JavaScript, where everything is a callback, no one cares
+about memory usage, and garbage collection runs around all day running on full
+blast.
 
 All this just to draw 60 pictures, modify an in-memory buffer, and parse some
 source code.
 
-We think there's a better way. We like [Mike Acton's
-advice](https://www.youtube.com/watch?v=rX0ItVEVjHc): your program should solve
-*the actual problem it's trying to solve,* and do nothing else. In this case,
-the problem is how to render pictures, edit a buffer, and parse source code. So
-we're going to build a picture rendering, buffer editing, source code parsing
-program:
+We think there's a better way. Per [Mike
+Acton](https://www.youtube.com/watch?v=rX0ItVEVjHc), what is the *actual
+problem we're trying to solve?* The problem is how to render pictures, edit a
+buffer, and parse source code. So we're going to build that:
 
  *  How do you draw pictures? Using the GPU. The GPU is very good at drawing.
     Something like OpenGL would work.
 
- *  How do you maintain a buffer? An in-memory array. Arrays work.
+ *  How do you maintain a buffer? An in-memory array. Arrays are great.
 
  *  How do you parse source code? A recursive descent parser will take source
     code and produce source trees.
 
 That was the first version of ${IDE_NAME}. It was literally a C program,
 crammed into `main()`, that read a file into memory, rendered it onto the
-screen, accepted keystrokes, and parsed Go source files into trees.  And you
+screen, accepted keystrokes, and parsed Go source files into trees. And you
 would not believe *how blistering fast* it was. I think at that point it was
 rendering over 1,000 FPS.
 
@@ -149,7 +146,7 @@ things like autocomplete, parameter hints, jump to definition.
 
 Our priority right now is keeping our bugtracker empty, and steadily adding in
 more features. We want to make autocomplete more helpful by displaying more
-info about each item, and add automatic refactoring.  At this point it's
+info about each item, and add automatic refactoring. At this point it's
 product work: we have the core technology to understand and manipulate Go
 source trees. Our job now is to build out a good user experience.
 
@@ -194,5 +191,4 @@ computing things that are actually useful to you. That's our goal.
 ### Related Links
 
  * [The Thirty Million Line Problem](https://caseymuratori.com/blog_0031)
- * [Preventing the Collapse of
-   Civilization](https://www.youtube.com/watch?v=ZSRHeXYDLko)
+ * [Preventing the Collapse of Civilization](https://www.youtube.com/watch?v=ZSRHeXYDLko)

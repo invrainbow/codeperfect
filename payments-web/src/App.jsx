@@ -756,34 +756,34 @@ function App() {
             </div>
             <div className="flex flex-col sm:flex-row space-x-0 sm:space-x-8 mt-2 sm:mt-0">
               <div className="text-left sm:text-right">
-                <div className="mt-1">
+                <div className="mb-1">
                   <Link to="/beta" className="text-gray-400 no-underline">
                     Request Access
                   </Link>
                 </div>
-                <div className="mt-1">
+                <div className="mb-1">
                   <Link to="/philosophy" className="text-gray-400 no-underline">
                     Philosophy
                   </Link>
                 </div>
-                <div className="mt-1">
+                <div className="mb-1">
                   <Link to="/roadmap" className="text-gray-400 no-underline">
                     Roadmap
                   </Link>
                 </div>
               </div>
               <div className="text-left sm:text-right">
-                <div className="mt-1">
+                <div className="mb-1">
                   <Link to="/terms" className="text-gray-400 no-underline">
                     Terms of Service
                   </Link>
                 </div>
-                <div className="mt-1">
+                <div className="mb-1">
                   <Link className="text-gray-400 no-underline" to="/privacy">
                     Privacy Policy
                   </Link>
                 </div>
-                <div className="mt-1">
+                <div className="mb-1">
                   <a
                     className="text-gray-400 no-underline"
                     href={`mailto:${SUPPORT_EMAIL}`}
