@@ -40,7 +40,7 @@ function WallOfText({ title, children }) {
   return (
     <div className="wall-of-text border-t border-b md:border border-gray-700 py-5 md:p-12 md:rounded-sm leading-normal">
       <div className="md:max-w-2xl md:mx-auto">
-        <Title>{title}</Title>
+        {title && <Title>{title}</Title>}
         {children}
       </div>
     </div>
@@ -49,7 +49,7 @@ function WallOfText({ title, children }) {
 
 function Title({ children, ...props }) {
   return (
-    <h2 className="text-lg font-semibold text-gray-200" {...props}>
+    <h2 className="text-xl font-semibold text-gray-200" {...props}>
       {children}
     </h2>
   );
@@ -418,13 +418,16 @@ function Philosophy() {
     run();
   }, []);
 
+  if (!text) return null;
+
   return (
-    <WallOfText title={`The ${IDE_NAME} Philosophy`}>
-      {text ? (
-        <ReactMarkdown rehypePlugins={[rehypeRaw]} children={text} />
-      ) : (
-        "Loading..."
-      )}
+    <WallOfText>
+      <Title>The {IDE_NAME} Philosophy</Title>
+      <div className="text-sm mt-1 mb-8 text-gray-600">
+        Published on <b className="text-gray-500">June 5, 2021</b> by{" "}
+        <b className="text-gray-500">Brandon Hsiao</b>
+      </div>
+      <ReactMarkdown rehypePlugins={[rehypeRaw]} children={text} />
     </WallOfText>
   );
 }
@@ -605,6 +608,59 @@ function Beta() {
   );
 }
 
+function Question({ q, children }) {
+  return (
+    <div className="mt-10">
+      <div className="font-bold text-gray-200">{q}</div>
+      {children}
+    </div>
+  );
+}
+
+function FAQ() {
+  return (
+    <WallOfText title="Frequently Asked Questions">
+      <Question q={`What does ${IDE_NAME} mean?`}>
+        <p>
+          It's a retro name. It hearkens back to a time when software was fast
+          and started up instantly, despite running on hardware orders of
+          magnitude slower than we have now.
+        </p>
+      </Question>
+
+      <Question q="How is it so fast?">
+        <p>
+          We touch on this in{" "}
+          <Link to="/philosophy">The CodePerfect 95 Philosophy</Link>, but
+          basically we think hard about what the computer actually needs to do,
+          and then write the most straightforward, fewest-CPU-cycles code to do
+          that. This is in contrast to the popular model of software
+          development, where one mindlessly glues abstractions together without
+          reckoning with costs.
+        </p>
+        <p>
+          Concretely, we use custom memory allocators, a GPU-based renderer, a
+          simple array-based buffer (instead of super crazy data structures),
+          in-memory data storage wherever we can, and so on. There isn't any one
+          thing that makes {IDE_NAME} fast though, it's the combination of a
+          tapestry of careful decisions.
+        </p>
+      </Question>
+      <Question q="What's your business model?">
+        <p>
+          We charge a monthly subscription fee for you to use the IDE. Right now
+          that fee is $10/mo.
+        </p>
+        <p>
+          In the future we may very well raise the price. To show appreciation
+          for early adopters, when you sign up we'll lock in your monthly rate
+          for a year.
+        </p>
+      </Question>
+    </WallOfText>
+  );
+}
+
 function Roadmap() {
   return (
     <WallOfText title="Roadmap">
@@ -700,6 +756,12 @@ function App() {
           <div className="flex items-baseline space-x-6">
             <Link
               className="no-underline text-sm font-bold text-gray-300 hidden sm:inline-block"
+              to="/faq"
+            >
+              FAQ
+            </Link>
+            <Link
+              className="no-underline text-sm font-bold text-gray-300 hidden sm:inline-block"
               to="/philosophy"
             >
               Philosophy
@@ -741,6 +803,9 @@ function App() {
             <Route path="/payment-success">
               <PaymentSuccess />
             </Route>
+            <Route path="/faq">
+              <FAQ />
+            </Route>
             <Route path="/roadmap">
               <Roadmap />
             </Route>
@@ -769,6 +834,11 @@ function App() {
                 <div className="mb-1">
                   <Link to="/roadmap" className="text-gray-400 no-underline">
                     Roadmap
+                  </Link>
+                </div>
+                <div className="mb-1">
+                  <Link to="/faq" className="text-gray-400 no-underline">
+                    FAQ
                   </Link>
                 </div>
               </div>

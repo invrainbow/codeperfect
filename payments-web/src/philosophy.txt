@@ -5,13 +5,13 @@ time to talk about the goals of the project.
 
 ### Slow
 
-I'm a fast computer user. I use keyboard shortcuts for everything and type 160
-wpm. At some point, I started noticing that most of the programs I use are too
-slow to keep up with me. They take forever to start up, freeze for no reason,
-and lag when I type stuff.
+I use my computer really fast. I use keyboard shortcuts for everything and type
+160 wpm. At some point, I started noticing that most of the programs I use are
+too slow to keep up with me. They take forever to start up, freeze for no
+reason, and lag when I type stuff.
 
 Then it occurred to me that software today in general is just slow. It manages
-to stay usable because the hardware is so fast. But I think everyone knows what
+to stay usable because the hardware it runs on is so fast. But I think everyone knows what
 I'm talking about. Almost all major applications take relatively forever to
 start up, freeze randomly, and lag randomly.
 
@@ -19,10 +19,10 @@ Why? Why is software so slow? Is it an inherent limitation? Is there a physical
 law about transistors or something that says software can't surpass a certain
 speed?
 
-Crazy thing is, software used to be fast. [Visual C++
-6](https://twitter.com/rogerclark/status/1247299730314416128) opens instantly.
-Why doesn't Visual Studio? Why don't any of my programs? Why does Slack take
-five seconds to start?
+Crazy thing is, software used to be fast.
+Visual C++ 6.0 [opens instantly](https://twitter.com/rogerclark/status/1247299730314416128).
+Why doesn't Visual Studio? Why don't any of my programs? Why
+does Slack take five seconds to start?
 
 I don't know how Slack works. Maybe some fundamental law of math prevents Slack
 from starting up in under 5 seconds. I don't know. What I do know is how an IDE
@@ -48,7 +48,7 @@ do is analyze it from first principles. If you're building batteries, you might
 break down the battery into its constituent parts and add up the cost of each
 part. If your battery costs more than that, somewhere you're leaking money.
 
-My Mac has a 3 GHz Intel Core i5.
+My $1,000 Mac mini has a 3 GHz Intel Core i5.
 
 3 GHz means it performs 3 billion operations per second. Each operation is
 something like copying a number, grabbing an instruction, adding something
@@ -63,17 +63,17 @@ of work analyzing some source code. How many operations is that?
 I'll leave the Fermi estimates as an exercise for the reader. But whatever the
 actual cost, is it even anywhere *in the ballpark* of a billion operations?
 
-I guess what Jetbrains is telling me is that a billion operations isn't enough,
-right? Presumably GoLand lags because I gave it too much to do and not
-enough CPU cycles to do it; if I had a faster computer, and I didn't expect it
-to perform such unreasonably Herculean tasks as rendering images, editing a
-buffer, and parsing source code, then it would be able to do its job. Right?
+I guess what Jetbrains is saying is that a billion operations isn't enough.
+Presumably GoLand lags because it has too much to do and not enough CPU
+cycles to do it; if it had more CPU cycles, and we didn't expect it to perform
+such unreasonably Herculean tasks as rendering images, editing a buffer, and
+parsing source code, then it would be able to do its job. Right?
 
-This is the state of software today. If you gave me a billion dollars to build
-a bridge, and after spending it all I failed to produce a bridge, you'd lose
-your patience with me. But when you give a program a billion CPU cycles, and
-after spending them it fails to draw 60 pictures, that's regarded as the
-normal, inevitable state of software in 2021.
+This is the state of software today. If you gave someone a billion dollars to
+build a bridge, and after spending it all he failed to produce a bridge, you'd
+lose your patience. But when you give a program a billion CPU cycles, and after
+spending them it fails to draw 60 pictures, that's regarded as the normal,
+inevitable state of software in 2021.
 
 <br>
 
@@ -139,14 +139,14 @@ your source code.
 3. Add in the rest of Jetbrains piecemeal, while making sure the core stays
 fast.
 
-We're about halfway through 2 right now. At its core the IDE is a text editor
-that deeply understands Go. It has a complete mental model about your code and
-can answer any question. Using that database of knowledge, we've implemented
-things like autocomplete, parameter hints, jump to definition.
+We're about halfway through 2. At its core the IDE is a text editor that deeply
+understands Go. It has a complete mental model about your code and can answer
+any question. Using that database of knowledge, we've implemented things like
+autocomplete, parameter hints, jump to definition.
 
 Our priority right now is keeping our bugtracker empty, and steadily adding in
 more features. We want to make autocomplete more helpful by displaying more
-info about each item, and add automatic refactoring. At this point it's
+info about each item, for example, and add automatic refactoring. At this point it's
 product work: we have the core technology to understand and manipulate Go
 source trees. Our job now is to build out a good user experience.
 
@@ -166,29 +166,30 @@ through them.
 
 ### Moore's Law
 
-Strangely enough, the benefits of Moore's law have, historically speaking,
-mostly gone to developers. Computers are way faster now, but software is not
-way better. Where did those CPU cycles all go? Mostly towards "improving" the
-developer experience. Developers now write JavaScript and Python instead of C,
-and use React and Electron instead of drawing their own UI. That has its
-legitimate uses. This website was built in React. But we think it would be nice
-if, at least some of the time, the benefits of Moore's law were forwarded on to
-the users.
+In recent history the benefits of Moore's law have mostly gone to developers.
+Computers have gotten way faster, but software has not gotten way better.
+Where did those extra CPU cycles all go? Apparently, developers took them all.
+All those cycles went towards letting developers write
+JavaScript/React/Electron apps instead of drawing their own UI in C.
 
-The incredible thing is that there's no reason they can't be. There's nothing
-an IDE does that requires a quantum computer. We're not factoring giant primes
-or something. The fact that our programs are so slow is merely an unfortunate
-collective decision on the part of engineers to prioritize their preferences
-over benefiting users. There's a supercomputer on your desk, and most of its
-cycles are going towards supporting the massively expensive choices made by
-developers.
+That has its legitimate uses. This website was built in React. But we think it
+would be nice if, at least some of the time, the benefits of Moore's law were
+forwarded on to users. And there's no reason they can't be. IDEs don't do
+anything that requires super insane, Large Hadron Collider, quantum computing
+levels of power. We're not factoring giant primes or banging subatomic
+particles together. We are building a text editor plus parser.
 
-We could instead repurpose those cycles towards benefiting you, the user, and
-computing things that are actually useful to you. That's our goal.
+That our IDEs are so slow is an unfortunate collective decision by engineers to
+prioritize their preferences over benefiting users. There's a supercomputer
+right on your desk, and most of its cycles are going towards supporting
+developers' massively expensive choices. We could instead repurpose those
+cycles towards benefiting you, the user, and computing things that are actually
+useful to you. That's our goal.
 
 <br>
 
 ### Related Links
 
- * [The Thirty Million Line Problem](https://caseymuratori.com/blog_0031)
- * [Preventing the Collapse of Civilization](https://www.youtube.com/watch?v=ZSRHeXYDLko)
+ * [The Thirty Million Line Problem](https://caseymuratori.com/blog_0031), Casey Muratori
+ * [Preventing the Collapse of Civilization](https://www.youtube.com/watch?v=ZSRHeXYDLko), Jonathan Blow
+ * [Data-Oriented Design and C++](https://www.youtube.com/watch?v=rX0ItVEVjHc), Mike Acton
