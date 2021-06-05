@@ -410,11 +410,10 @@ function Philosophy() {
 
   React.useEffect(() => {
     async function run() {
-      console.log(philosophyEssay);
-      const resp = await fetch(philosophyEssay);
-      const text = await resp.text();
-      const newText = text.replaceAll("${IDE_NAME}", IDE_NAME);
-      setText(newText);
+      const text = await (await fetch(philosophyEssay)).text();
+
+      // eslint-disable-next-line no-template-curly-in-string
+      setText(text.replaceAll("${IDE_NAME}", IDE_NAME));
     }
     run();
   }, []);
