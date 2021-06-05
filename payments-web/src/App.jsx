@@ -748,7 +748,7 @@ function App() {
         <title>{IDE_NAME}</title>
       </Helmet>
 
-      <div className="p-6 md:p-12 leading-relaxed text-gray-400 w-full lg:max-w-screen-lg lg:mx-auto">
+      <div className="p-6 md:p-12 leading-relaxed text-gray-400 w-full lg:max-w-screen-xl lg:mx-auto">
         <div className="mx-auto pb-4 flex justify-between items-center">
           <Link to="/" className="font-bold text-white no-underline">
             {IDE_NAME}
