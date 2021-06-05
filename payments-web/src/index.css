@@ -5,8 +5,8 @@
 @layer base {
   body {
     margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
-      "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans",
+    font-family: "Oxygen", -apple-system, BlinkMacSystemFont, "Segoe UI",
+      "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans",
       "Helvetica Neue", sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -24,7 +24,7 @@
 
   a {
     @apply text-gray-200 underline;
-    @apply inline-block;
+    @apply inline-block break-words;
   }
 
   p,
@@ -49,7 +49,7 @@
   li {
     @apply list-disc;
     @apply list-outside;
-    @apply ml-8;
+    @apply ml-4;
   }
 
   code {
@@ -75,11 +75,16 @@
     @apply pl-0;
   }
   .roadmap-list li {
-    @apply py-2 list-none ml-0;
+    @apply py-1.5 list-none ml-0;
+  }
+  .nice-image {
+    @apply md:rounded-md border md:border-4 md:w-auto drop-shadow-md;
+    border-color: #555;
   }
 
-  .nice-image {
-    @apply rounded-md border-solid border-4 w-auto drop-shadow-md;
-    border-color: #242424;
+  @media (min-width: 640px) {
+    .nice-image {
+      border-color: #242424;
+    }
   }
 }

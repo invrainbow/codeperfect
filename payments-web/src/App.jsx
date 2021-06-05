@@ -1,16 +1,24 @@
 // /* global Stripe */
 
 import React from "react";
-import { BrowserRouter as Router, Switch, Route, Link } from "react-router-dom";
+import {
+  BrowserRouter as Router,
+  Switch,
+  Route,
+  Link,
+  useLocation,
+} from "react-router-dom";
 import { Helmet } from "react-helmet";
 import cx from "classnames";
 import _ from "lodash";
+import { PlayIcon } from "@heroicons/react/solid";
 
 // images
 import ideScreenshotImage from "./ide.png";
 import gif60fps from "./60fps.gif";
 import gifVim from "./vim.gif";
 import pngIntellisense from "./intellisense.png";
+import pngVideoScreenshot from "./video-screenshot.png";
 
 const IDE_NAME = "CodePerfect 95";
 const SUPPORT_EMAIL = "support@codeperfect95.com";
@@ -28,8 +36,8 @@ const CURRENT_YEAR = new Date().getFullYear();
 
 function WallOfText({ title, children }) {
   return (
-    <div className="border border-gray-700 p-12 rounded-sm my-8">
-      <div className="max-w-2xl mx-auto leading-relaxed text-gray-200">
+    <div className="border-t border-b md:border border-gray-700 py-5 md:p-12 md:rounded-sm">
+      <div className="md:max-w-2xl md:mx-auto leading-relaxed text-gray-200">
         <Title>{title}</Title>
         {children}
       </div>
@@ -47,12 +55,8 @@ function Title({ children, ...props }) {
 
 function NiceImage({ className, ...props }) {
   return (
-    <div>
-      <img
-        alt=""
-        className={cx("overflow-hidden nice-image max-w-none", className)}
-        {...props}
-      />
+    <div className={cx("flex items-center justify-center", className)}>
+      <img alt="" className="overflow-hidden nice-image w-full" {...props} />
     </div>
   );
 }
@@ -60,7 +64,10 @@ function NiceImage({ className, ...props }) {
 function Section({ className, ...props }) {
   return (
     <div
-      className={cx("space-x-14 flex mb-32 items-center", className)}
+      className={cx(
+        "mb-24 md:gap-14 flex flex-col md:flex-row md:mb-32 md:items-center",
+        className
+      )}
       {...props}
     />
   );
@@ -86,8 +93,8 @@ const IDE_FEATURES = _.shuffle([
 function Home() {
   return (
     <div>
-      <div className="my-28">
-        <div className="text-center mb-12 text-5xl font-light text-white">
+      <div className="mt-8 mb-24 sm:my-24 md:my-32">
+        <div className="leading-tight text-center mb-6 md:mb-12 text-4xl md:text-5xl font-medium text-white">
           A Blazing Fast IDE for Go
         </div>
         <img
@@ -97,36 +104,25 @@ function Home() {
         />
       </div>
 
-      <Section>
-        <div className="leading-relaxed">
-          <div className="text-2xl mb-4 text-gray-200">
+      <Section className="md:block lg:flex">
+        <div className="leading-relaxed mb-4 md:flex md:flex-row lg:block md:gap-8 md:mb-4 lg:w-1/3">
+          <div className="text-2xl mb-4 text-gray-200 md:w-4/12 lg:w-full">
             No Electron. No JavaScript. No garbage collection.
           </div>
-          <p>
+          <p className="md:w-4/12 lg:w-full md:mt-0 lg:mt-4">
             {IDE_NAME} is written in C++ and designed to run at 144 FPS. Every
             keystroke responds instantly.
           </p>
-          <p>
-            Modern laptop CPUs perform over two billion operations per second.
-            None of your apps should ever lag. {IDE_NAME} never does.
+          <p className="md:w-4/12 lg:w-full md:mt-0 lg:mt-4">
+            Modern laptop CPUs perform billions of ops/second. None of your apps
+            should ever lag. {IDE_NAME} never does.
           </p>
         </div>
-        <NiceImage src={gif60fps} className="h-80" />
+        <NiceImage src={gif60fps} className="lg:w-2/3" />
       </Section>
 
-      <Section className="space-x-20">
-        <div className="grid grid-cols-4 gap-6 select-none max-w-xl">
-          {IDE_FEATURES.map((feature, i) => (
-            <div
-              key={i}
-              className="font-semibold w-auto h-24 rounded-lg text-gray-500 hover:text-gray-400 text-center flex justify-center items-center text-sm p-4 transform hover:scale-110 transition-all shadow-sm"
-              style={{ background: "#1d1d1d", border: "solid 1px #2f2f2f" }}
-            >
-              <span>{feature}</span>
-            </div>
-          ))}
-        </div>
-        <div className="leading-relaxed flex-1">
+      <Section className="md:flex-row-reverse">
+        <div className="leading-relaxed md:w-5/12">
           <div className="text-2xl mb-4 text-gray-200">
             A batteries-included IDE, as fast as Vim.
           </div>
@@ -142,29 +138,64 @@ function Home() {
             plugins together.
           </p>
         </div>
+        <div className="md:w-7/12 mt-8 md:mt-0 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-4 gap-3 md:gap-6 select-none">
+          {IDE_FEATURES.map((feature, i) => (
+            <div
+              key={i}
+              className="font-semibold h-16 md:h-20 lg:h-28 rounded-lg text-gray-400 hover:text-gray-300 text-center flex justify-center items-center text-xs lg:text-sm p-4 transform hover:scale-110 transition-all shadow-sm"
+              style={{ background: "#1d1d1d", border: "solid 1px #555" }}
+            >
+              <span>{feature}</span>
+            </div>
+          ))}
+        </div>
       </Section>
 
-      <Section>
-        <div className="leading-relaxed">
-          <div className="text-2xl mb-4 text-gray-200">
-            No more language server overhead.
+      <div className="block md:hidden">
+        <Section>
+          <div className="leading-relaxed md:flex md:flex-row md:gap-8 md:mb-12">
+            <div className="text-2xl mb-4 text-gray-200 md:w-1/3">
+              A toolkit that understands Go as a first language.
+            </div>
+            <p className="md:w-1/3 md:mt-0">
+              {IDE_NAME}'s intellisense is hand-written, extensively tested, and
+              designed for speed and reliability.
+            </p>
+            <p className="md:w-1/3 md:mt-0">
+              No more sending a JSON packet over a socket every keystroke. No
+              more restarting your IDE because gopls crashed.
+            </p>
           </div>
-          <p>
+          {/* <NiceImage src={pngIntellisense} className="md:h-auto" /> */}
+        </Section>
+      </div>
+
+      <div className="hidden md:block relative rounded-md overflow-hidden border-gray-500 border mb-24 md:mb-32">
+        <div
+          className="leading-relaxed md:gap-8 absolute top-8 left-0 w-5/12 z-20 p-8 drop-shadow rounded-tr-md rounded-br-md"
+          style={{ background: "rgba(0, 0, 0, 0.5)" }}
+        >
+          <div className="text-2xl mb-4 text-gray-200">
+            A toolkit that understands Go as a first language.
+          </div>
+          <p className="">
             {IDE_NAME}'s intellisense is hand-written, extensively tested, and
             designed for speed and reliability.
           </p>
-          <p>
-            We'll never do things like send a JSON packet over a socket every
-            keystroke. And you'll never need to restart your IDE because gopls
-            crashed.
+          <p className="">
+            No more sending a JSON packet over a socket every keystroke. No more
+            restarting your IDE because gopls crashed.
           </p>
         </div>
-        <NiceImage src={pngIntellisense} className="h-auto" />
-      </Section>
+        <img
+          src={pngIntellisense}
+          alt=""
+          className="relative z-10 w-full opacity-40"
+        />
+      </div>
 
-      <Section>
-        <NiceImage src={gifVim} className="h-96" />
-        <div className="leading-relaxed">
+      <Section className="md:flex-row-reverse">
+        <div className="leading-relaxed mb-4 md:mb-0 md:w-5/12">
           <div className="text-2xl mb-4 text-gray-200">
             Complete Vim keybindings, out of the box.
           </div>
@@ -179,9 +210,10 @@ function Home() {
             real Vim.
           </p>
         </div>
+        <NiceImage src={gifVim} className="md:w-7/12" />
       </Section>
 
-      <p className="text-center mb-8">
+      <p className="text-center mb-6">
         Watch a demo of {IDE_NAME} being used to solve{" "}
         <a target="_blank" rel="noreferrer" href="https://cryptopals.com">
           Cryptopals
@@ -189,21 +221,23 @@ function Home() {
         .
       </p>
 
-      <div className="mx-auto" style={{ maxWidth: "600px" }}>
-        <div
-          className="mb-32 relative w-full h-0"
-          style={{ paddingBottom: "56.25%" }}
+      <div className="mx-auto mb-16 md:mb-32 md:w-3/4">
+        <a
+          className="relative border shadow-md group"
+          style={{ borderColor: "#888" }}
+          rel="noreferrer"
+          target="_blank"
+          href="https://www.youtube.com/watch?v=9Q0YFHHLG-g"
         >
-          <iframe
-            width="100%"
-            className="absolute top-0 left-0 w-full h-full"
-            src="https://www.youtube.com/embed/dQw4w9WgXcQ"
-            title="YouTube video player"
-            frameborder="0"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowfullscreen
-          ></iframe>
-        </div>
+          <div className="absolute z-10 flex justify-center items-center w-full h-full">
+            <PlayIcon className="group-hover:opacity-70 h-16 w-16 text-white drop-shadow opacity-50" />
+          </div>
+          <img
+            alt=""
+            src={pngVideoScreenshot}
+            className="relative z-0 block opacity-30"
+          />
+        </a>
       </div>
     </div>
   );
@@ -386,9 +420,90 @@ function Beta() {
   // };
 
   return (
-    <div className="border-t border-b py-12" style={{ borderColor: "#282828" }}>
-      <div className="flex space-x-8">
-        <div className="max-w-2xl mx-auto">
+    <div
+      className="border-t border-b py-4 md:py-12"
+      style={{ borderColor: "#282828" }}
+    >
+      <div
+        className="relative md:grid md:space-x-12"
+        style={{ "grid-template-columns": "33% 67%" }}
+      >
+        <div
+          className="sticky top-4 mb-4 md:top-4 md:self-start border border-gray-700 rounded-md shadow-md overflow-hidden"
+          style={{ background: "#151515" }}
+        >
+          <div className="text-sm text-center md:text-lg md:border-b border-gray-700 pb-2 md:pt-4 p-4 md:p-4">
+            <b className="text-white">$10/month</b> per seat
+          </div>
+
+          <div
+            className="text-center md:border-b md:border-gray-700 pt-0 md:pt-4 p-4"
+            style={{ background: "#111" }}
+          >
+            {/* <button
+                onClick={onBuy}
+                className="main-button text-lg px-8 py-4"
+                disabled={disabled}
+                Sign up
+              </button> */}
+            <a
+              className="main-button text-md md:text-lg py-2 px-4 md:px-8 md:py-3 w-auto block"
+              href="https://967gb74hmbf.typeform.com/to/nVtqlzdj"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Request Access
+            </a>
+          </div>
+          <div className="p-4 md:block hidden">
+            <p className="md:block my-4 text-sm">
+              If you're interested in {IDE_NAME} but it's not a fit right now,
+              you can also subscribe to email updates.
+            </p>
+            <form
+              action="https://gmail.us6.list-manage.com/subscribe/post?u=530176c3897958e56302043ed&amp;id=cb045d5e14"
+              className="text-center"
+              method="post"
+              name="mc-embedded-subscribe-form"
+              target="_blank"
+              novalidate
+            >
+              <div className="flex flex-col lg:flex-row">
+                <input
+                  type="email"
+                  defaultValue=""
+                  name="EMAIL"
+                  placeholder="Email address"
+                  required
+                  className="py-1.5 px-2.5 rounded-md text-sm lg:mr-2 flex-grow"
+                  style={{
+                    background: "#222",
+                    border: "solid 1px #555",
+                  }}
+                />
+                <div
+                  style={{ position: "absolute", left: "-5000px" }}
+                  aria-hidden="true"
+                >
+                  <input
+                    type="text"
+                    name="b_530176c3897958e56302043ed_cb045d5e14"
+                    tabindex="-1"
+                    value=""
+                  />
+                </div>
+                <button
+                  className="mt-2 lg:mt-0 main-button from-gray-200 to-gray-300 text-gray-600"
+                  type="submit"
+                >
+                  Subscribe
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <div className="">
           <Title>Before you sign up...</Title>
           <p>
             {IDE_NAME} is still in early beta. We're releasing it now because we
@@ -422,17 +537,22 @@ function Beta() {
               No Vim commands. Importantly, no <code>:%s/search/replace</code>.
               (<code>/search</code> works.)
             </li>
+            <li>
+              Vim macros work, but when repeated (e.g. <code>200@@</code>) they
+              start to slow down.
+            </li>
           </ul>
           <p>
-            Nevertheless, {IDE_NAME} is ready for day-to-day, bread-and-butter
-            Go programming. Everyone on the dev team uses it. The following are
-            working:
+            Obviously, these limitations are not part of our eventual vision.
+            We're working hard to remove them. But in the meantime, {IDE_NAME}{" "}
+            is ready for day-to-day, bread-and-butter Go programming. Everyone
+            on the dev team uses it. The following core features are working:
           </p>
           <ul className="thick-list">
             <li>
               Automatically index your code and its dependencies in real-time
             </li>
-            <li>Autocomplete (member & keyword)</li>
+            <li>Autocomplete (member &amp; keyword)</li>
             <li>Parameter hints (show function signature on call)</li>
             <li>Jump to definition</li>
             <li>
@@ -453,77 +573,6 @@ function Beta() {
             to start developing Go programs at lightning speed today. We're also{" "}
             <Link to="/roadmap">steadily developing new features</Link>.
           </p>
-        </div>
-        <div className="sticky top-4 self-start border border-gray-700 rounded-md shadow-lg">
-          <div className="text-center border-b border-gray-700 p-4">
-            {IDE_NAME} is <b className="text-white">$10/month</b> per seat.
-          </div>
-
-          <div
-            className="text-center border-b border-gray-700 p-4"
-            style={{ background: "#111" }}
-          >
-            {/* <button
-                onClick={onBuy}
-                className="main-button text-lg px-8 py-4"
-                disabled={disabled}
-                Sign up
-              </button> */}
-            <a
-              className="main-button text-lg px-8 py-3 w-auto block"
-              href="https://967gb74hmbf.typeform.com/to/nVtqlzdj"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Request Access
-            </a>
-          </div>
-          <div className="p-4">
-            <p className="my-4 text-sm">
-              If you're interested in {IDE_NAME} but it's not a fit right now,
-              you can also subscribe to email updates.
-            </p>
-            <form
-              action="https://gmail.us6.list-manage.com/subscribe/post?u=530176c3897958e56302043ed&amp;id=cb045d5e14"
-              className="text-center"
-              method="post"
-              name="mc-embedded-subscribe-form"
-              target="_blank"
-              novalidate
-            >
-              <div className="flex">
-                <input
-                  type="email"
-                  defaultValue=""
-                  name="EMAIL"
-                  placeholder="Email address"
-                  required
-                  className="py-1.5 px-2.5 rounded-md text-sm mr-2 flex-grow"
-                  style={{
-                    background: "#222",
-                    border: "solid 1px #555",
-                  }}
-                />
-                <div
-                  style={{ position: "absolute", left: "-5000px" }}
-                  aria-hidden="true"
-                >
-                  <input
-                    type="text"
-                    name="b_530176c3897958e56302043ed_cb045d5e14"
-                    tabindex="-1"
-                    value=""
-                  />
-                </div>
-                <button
-                  className="main-button from-gray-200 to-gray-300 text-gray-600"
-                  type="submit"
-                >
-                  Subscribe
-                </button>
-              </div>
-            </form>
-          </div>
         </div>
       </div>
     </div>
@@ -597,17 +646,28 @@ function PaymentSuccess() {
   );
 }
 
+function ScrollToTop() {
+  const { pathname } = useLocation();
+
+  React.useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+
+  return null;
+}
+
 function App() {
   return (
     <Router>
+      <ScrollToTop />
       <Helmet>
         <meta charSet="utf-8" />
         <title>{IDE_NAME}</title>
       </Helmet>
 
-      <div className="py-6 leading-relaxed text-gray-400">
-        <div className="px-4 max-w-6xl mx-auto flex justify-between items-center">
-          <Link to="/" className="text-lg font-bold text-white no-underline">
+      <div className="p-6 md:p-12 leading-relaxed text-gray-400 w-full lg:max-w-screen-xl lg:mx-auto">
+        <div className="mx-auto pb-4 flex justify-between items-center">
+          <Link to="/" className="font-bold text-white no-underline">
             {IDE_NAME}
           </Link>
           <div className="flex items-baseline space-x-6">
@@ -616,7 +676,7 @@ function App() {
             </Link>
           </div>
         </div>
-        <div className="my-4 px-4 max-w-6xl mx-auto">
+        <div className="">
           <Switch>
             <Route path="/download">
               <Download />
@@ -647,12 +707,15 @@ function App() {
             </Route>
           </Switch>
         </div>
-        <div className="text-sm">
-          <div className="px-4 max-w-6xl mx-auto flex justify-between">
+        <div className="text-sm pt-4">
+          <div className="lg:max-w-screen-xl lg:mx-auto flex flex-col md:flex-row justify-between">
             <div className="text-gray-400">
               &copy; {CURRENT_YEAR} {IDE_NAME}
             </div>
-            <div className="flex space-x-6">
+            <div className="flex flex-col md:flex-row space-x-0 md:space-x-6 mt-2 md:mt-0">
+              <Link to="/beta" className="text-gray-400 no-underline">
+                Request Access
+              </Link>
               <Link to="/roadmap" className="text-gray-400 no-underline">
                 Roadmap
               </Link>
