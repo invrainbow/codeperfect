@@ -1,3 +1,8 @@
+Today ${IDE_NAME} launched. I want to take some time to talk about our
+motivations for working on it, and where the project is headed.
+
+<br><br>
+
 I type super fast and use keyboard shortcuts for everything. Because of this, I
 noticed early on that my IDE was often failing to keep up with me. It would
 take forever to start up, and freeze and lag when I typed.
@@ -24,7 +29,6 @@ programs to be slow. But I know how an IDE works. All an IDE really needs to do
 is (a) let you edit a text buffer, (b) parse your source files, and (c) build
 an understanding of your code and provide you with intellisense. What's hard
 about that? Why is my IDE slow?
-
 
 <br><br>
 

@@ -50,7 +50,7 @@ function WallOfText({ title, children }) {
 
 function Title({ children, ...props }) {
   return (
-    <h2 className="text-xl font-semibold text-gray-200" {...props}>
+    <h2 className="text-xl font-bold text-gray-200" {...props}>
       {children}
     </h2>
   );
@@ -97,7 +97,7 @@ function Home() {
   return (
     <div>
       <div className="mt-8 mb-24 sm:my-24 md:my-32">
-        <div className="leading-tight text-center mb-6 md:mb-12 text-4xl md:text-5xl font-medium text-white">
+        <div className="leading-tight text-center mb-6 md:mb-12 text-4xl md:text-5xl font-light text-white">
           A Blazing Fast IDE for Go
         </div>
         <img
@@ -109,7 +109,7 @@ function Home() {
 
       <Section className="md:block lg:flex">
         <div className="leading-relaxed mb-4 md:flex md:flex-row lg:block md:gap-8 md:mb-4 lg:w-1/3">
-          <div className="text-2xl mb-4 text-gray-200 md:w-4/12 lg:w-full">
+          <div className="text-2xl mb-4 text-gray-200 md:w-4/12 lg:w-full font-light">
             No Electron. No JavaScript. No garbage collection.
           </div>
           <p className="md:w-4/12 lg:w-full md:mt-0 lg:mt-4">
@@ -126,7 +126,7 @@ function Home() {
 
       <Section className="md:flex-row-reverse">
         <div className="leading-relaxed md:w-5/12">
-          <div className="text-2xl mb-4 text-gray-200">
+          <div className="text-2xl mb-4 text-gray-200 font-light">
             A batteries-included IDE, as fast as Vim.
           </div>
           <p>
@@ -157,7 +157,7 @@ function Home() {
       <div className="block md:hidden">
         <Section>
           <div className="leading-relaxed md:flex md:flex-row md:gap-8 md:mb-12">
-            <div className="text-2xl mb-4 text-gray-200 md:w-1/3">
+            <div className="text-2xl mb-4 text-gray-200 md:w-1/3 font-light">
               A toolkit that understands Go as a first language.
             </div>
             <p className="md:w-1/3 md:mt-0">
@@ -178,7 +178,7 @@ function Home() {
           className="leading-relaxed md:gap-8 absolute top-8 left-0 w-5/12 z-20 p-8 drop-shadow rounded-tr-md rounded-br-md"
           style={{ background: "rgba(0, 0, 0, 0.5)" }}
         >
-          <div className="text-2xl mb-4 text-gray-200">
+          <div className="text-2xl mb-4 text-gray-200 font-light">
             A toolkit that understands Go as a first language.
           </div>
           <p className="">
@@ -200,7 +200,7 @@ function Home() {
 
       <Section className="md:flex-row-reverse">
         <div className="leading-relaxed mb-4 md:mb-0 md:w-5/12">
-          <div className="text-2xl mb-4 text-gray-200">
+          <div className="text-2xl mb-4 text-gray-200 font-light">
             Complete Vim keybindings, out of the box.
           </div>
           <p>
