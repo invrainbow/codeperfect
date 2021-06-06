@@ -754,6 +754,7 @@ function App() {
             {IDE_NAME}
           </Link>
           <div className="flex items-baseline space-x-6">
+            {/*
             <Link
               className="no-underline text-sm font-bold text-gray-300 hidden sm:inline-block"
               to="/faq"
@@ -766,6 +767,7 @@ function App() {
             >
               Philosophy
             </Link>
+            */}
             <Link
               className="no-underline text-sm font-bold text-gray-300 hidden sm:inline-block"
               to="/roadmap"
@@ -826,21 +828,25 @@ function App() {
                     Request Access
                   </Link>
                 </div>
+                {/*
                 <div className="mb-1">
                   <Link to="/philosophy" className="text-gray-400 no-underline">
                     Philosophy
                   </Link>
                 </div>
+                */}
                 <div className="mb-1">
                   <Link to="/roadmap" className="text-gray-400 no-underline">
                     Roadmap
                   </Link>
                 </div>
+                {/*
                 <div className="mb-1">
                   <Link to="/faq" className="text-gray-400 no-underline">
                     FAQ
                   </Link>
                 </div>
+                */}
               </div>
               <div className="text-left sm:text-right">
                 <div className="mb-1">
