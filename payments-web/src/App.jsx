@@ -534,7 +534,7 @@ function Beta() {
           </div>
         </div>
 
-        <div className="">
+        <div>
           <Title>Before you sign up...</Title>
           <p>
             {IDE_NAME} is still in early beta. We're releasing it now because we
@@ -748,7 +748,7 @@ function App() {
         <title>{IDE_NAME}</title>
       </Helmet>
 
-      <div className="p-6 md:p-12 leading-relaxed text-gray-400 w-full lg:max-w-screen-xl lg:mx-auto">
+      <div className="p-6 md:p-12 text-gray-400 w-full lg:max-w-screen-xl lg:mx-auto">
         <div className="mx-auto pb-4 flex justify-between items-center">
           <Link
             to="/"
