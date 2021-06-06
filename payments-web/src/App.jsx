@@ -29,6 +29,7 @@ const SUPPORT_EMAIL = "support@codeperfect95.com";
 const API_BASE = "http://localhost:8080";
 // const API_BASE = "https://api.codeperfect95.com";
 const CURRENT_YEAR = new Date().getFullYear();
+const CURRENT_PRICE = 5;
 
 // const STRIPE_PRICE_ID = "price_1IrHFLBpL0Zd3zdOjGoBlmZF";
 // const STRIPE_PUB_KEY =
@@ -164,11 +165,11 @@ function Home() {
               designed for speed and reliability.
             </p>
             <p className="md:w-1/3 md:mt-0">
-              No more sending a JSON packet over a socket every keystroke. No
-              more restarting your IDE because gopls crashed.
+              No more language server madness. No more sending a JSON packet
+              over a socket every keystroke. No more restarting your IDE because
+              gopls crashed.
             </p>
           </div>
-          {/* <NiceImage src={pngIntellisense} className="md:h-auto" /> */}
         </Section>
       </div>
 
@@ -185,8 +186,9 @@ function Home() {
             designed for speed and reliability.
           </p>
           <p className="">
-            No more sending a JSON packet over a socket every keystroke. No more
-            restarting your IDE because gopls crashed.
+            No more language server madness. No more sending a JSON packet over
+            a socket every keystroke. No more restarting your IDE because gopls
+            crashed.
           </p>
         </div>
         <img
@@ -424,7 +426,7 @@ function Philosophy() {
     <WallOfText>
       <Title>The {IDE_NAME} Philosophy</Title>
       <div className="text-sm mt-1 mb-8 text-gray-600">
-        Published on <b className="text-gray-500">June 5, 2021</b> by{" "}
+        Published <b className="text-gray-500">June 5, 2021</b> by{" "}
         <b className="text-gray-500">Brandon Hsiao</b>
       </div>
       <ReactMarkdown rehypePlugins={[rehypeRaw]} children={text} />
@@ -462,7 +464,7 @@ function Beta() {
           style={{ background: "#151515" }}
         >
           <div className="text-sm text-center md:text-lg md:border-b border-gray-700 pb-2 md:pt-4 p-4 md:p-4">
-            <b className="text-white">$10/month</b> per seat
+            <b className="text-white">${CURRENT_PRICE}/month</b> per seat
           </div>
 
           <div
@@ -536,9 +538,9 @@ function Beta() {
           <Title>Before you sign up...</Title>
           <p>
             {IDE_NAME} is still in early beta. We're releasing it now because we
-            use it every day ourselves, and realized we were getting more than
-            $10 of monthly utility from it. That said, there are currently
-            several large limitations:
+            use it every day ourselves, and realized we were getting more than $
+            {CURRENT_PRICE} of monthly utility from it. That said, there are
+            currently several large limitations:
           </p>
           <ul className="thick-list">
             <li>Windows only (Windows 10).</li>
@@ -630,26 +632,24 @@ function FAQ() {
 
       <Question q="How is it so fast?">
         <p>
-          We touch on this in{" "}
-          <Link to="/philosophy">The CodePerfect 95 Philosophy</Link>, but
-          basically we think hard about what the computer actually needs to do,
-          and then write the most straightforward, fewest-CPU-cycles code to do
-          that. This is in contrast to the popular model of software
-          development, where one mindlessly glues abstractions together without
-          reckoning with costs.
+          We think hard about what the computer actually needs to do, and then
+          write the most straightforward, fewest-CPU-cycles code to do that.
+          This is in contrast to the popular model of software development,
+          where one mindlessly glues abstractions together without reckoning
+          with costs.
         </p>
         <p>
-          Concretely, we use custom memory allocators, a GPU-based renderer, a
-          simple array-based buffer (instead of super crazy data structures),
-          in-memory data storage wherever we can, and so on. There isn't any one
-          thing that makes {IDE_NAME} fast though, it's the combination of a
-          tapestry of careful decisions.
+          To give a concrete answer, we use custom memory allocators, a
+          GPU-based renderer, a simple array-based buffer (instead of super
+          crazy data structures), in-memory data storage wherever we can, and
+          many other things. There isn't any one thing that makes {IDE_NAME}{" "}
+          fast&mdash;it's the combination of a tapestry of careful decisions.
         </p>
       </Question>
       <Question q="What's your business model?">
         <p>
           We charge a monthly subscription fee for you to use the IDE. Right now
-          that fee is $10/mo.
+          that fee is ${CURRENT_PRICE}/mo.
         </p>
         <p>
           In the future we may very well raise the price. To show appreciation
@@ -750,11 +750,13 @@ function App() {
 
       <div className="p-6 md:p-12 leading-relaxed text-gray-400 w-full lg:max-w-screen-xl lg:mx-auto">
         <div className="mx-auto pb-4 flex justify-between items-center">
-          <Link to="/" className="font-bold text-white no-underline">
+          <Link
+            to="/"
+            className="font-bold text-white no-underline whitespace-nowrap"
+          >
             {IDE_NAME}
           </Link>
           <div className="flex items-baseline space-x-6">
-            {/*
             <Link
               className="no-underline text-sm font-bold text-gray-300 hidden sm:inline-block"
               to="/faq"
@@ -767,14 +769,13 @@ function App() {
             >
               Philosophy
             </Link>
-            */}
             <Link
               className="no-underline text-sm font-bold text-gray-300 hidden sm:inline-block"
               to="/roadmap"
             >
               Roadmap
             </Link>
-            <Link className="main-button" to="/beta">
+            <Link className="main-button whitespace-nowrap" to="/beta">
               Request Access
             </Link>
           </div>
@@ -828,25 +829,21 @@ function App() {
                     Request Access
                   </Link>
                 </div>
-                {/*
                 <div className="mb-1">
                   <Link to="/philosophy" className="text-gray-400 no-underline">
                     Philosophy
                   </Link>
                 </div>
-                */}
                 <div className="mb-1">
                   <Link to="/roadmap" className="text-gray-400 no-underline">
                     Roadmap
                   </Link>
                 </div>
-                {/*
                 <div className="mb-1">
                   <Link to="/faq" className="text-gray-400 no-underline">
                     FAQ
                   </Link>
                 </div>
-                */}
               </div>
               <div className="text-left sm:text-right">
                 <div className="mb-1">

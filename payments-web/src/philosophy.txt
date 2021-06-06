@@ -1,146 +1,151 @@
-CodePerfect 95 is a new IDE for Go. Today we launched, and I want to take some
-time to talk about the goals of the project.
+I type super fast and use keyboard shortcuts for everything.
+Because of this, I noticed early on that my IDE was often failing to keep up with me.
+It would take forever to start up, and freeze and lag when I typed.
 
-<br>
+Then it occurred to me: software today in general is just slow. Almost all the
+software I use takes forever to start up, and freezes and lags randomly. I don't
+[seem](https://www.google.com/search?q=site%3Areddit.com+vscode+slow)
+[to](https://www.google.com/search?q=site%3Areddit.com+jetbrains+slow)
+[be](https://www.google.com/search?q=site%3Areddit.com+visual+studio+slow)
+alone. Nor is the phenomenon
+[limited](https://www.google.com/search?q=site%3Areddit.com+slack+slow) 
+[to](https://www.google.com/search?q=site%3Areddit.com+notion+slow) 
+[IDEs](https://www.google.com/search?q=site%3Areddit.com+figma+slow).
 
-### Slow
+Why? Why is modern software so slow? Is there a physical law about transistors
+or something that prevents software from surpassing a certain speed?
 
-I use my computer really fast. I use keyboard shortcuts for everything and type
-160 wpm. At some point, I started noticing that most of the programs I use are
-too slow to keep up with me. They take forever to start up, freeze for no
-reason, and lag when I type stuff.
-
-Then it occurred to me that software today in general is just slow. It manages
-to stay usable because the hardware it runs on is so fast. But I think everyone
-knows what I'm talking about. Almost all major applications take relatively
-forever to start up, and freeze and lag randomly.
-
-Why? Why is software so slow? Is there a physical law about transistors or
-something that prevents software from surpassing a certain speed?
-
-The crazy thing is, software used to be fast.  Visual C++ 6.0 [opens
-instantly](https://twitter.com/rogerclark/status/1247299730314416128).  Why
+Software used to be fast. Visual C++ 6.0 [opens
+instantly](https://twitter.com/rogerclark/status/1247299730314416128). Why
 doesn't Visual Studio? Why don't any of my programs?
 
-I don't know how other programs work. Maybe some fundamental law of math forces
-them to take 5 seconds to start up. I don't know. What I do know is how an IDE
-works. So let's talk about an IDE.
+I can't say how most programs work. Maybe some fundamental law of math forces
+most programs to be slow. But I know how an IDE works. All an IDE really needs
+to do is (a) let you edit a text buffer, (b) parse your source files, and (c)
+build an understanding of your code so it can provide you with intellisense.
+What's hard about that? Why is my IDE slow?
 
-All an IDE needs to do is load files into a buffer, which it renders and allows
-you to edit. In the background, it reads your source files, and builds an
-understanding of them into some kind of database. As you're typing, it queries
-that database and give you answers in real time, like "what's the type of this
-identifier?" and "what fields does this object have?"
+<br><br>
 
-The crazy thing is, that's basically it. There's more an IDE can do, of course.
-But if I could trade today's IDEs that supposedly do a whole bunch of
-things in exchange for an IDE that simply does the things above, super fast,
-I'd take the super fast one. I don't think I'm the only one.
+My Mac mini has a 3 GHz Intel Core i5. That 3 GHz means it performs 3 billion
+operations per second. Each operation is something like copying a number,
+grabbing an instruction, adding two numbers &mdash; some processor primitive.
+Let's generously give two thirds to the operating system. So every second, we
+get a budget of a billion operations, and we have to spend it correctly to get
+a fast, working IDE.
 
-<br>
+How many cycles would our IDE need in order to do its job? Draw 60 images,
+process any edits I made in the last second, and do a second's worth of work
+analyzing some source code. How many operations is that?
 
-### A Billion Operations
+Is the true number anywhere *close* to a billion?
 
-Let's go back to first principles. My $1,000 Mac mini has a 3 GHz Intel Core
-i5.  3 GHz means it performs 3 billion operations per second. Each operation is
-something like copying a number, grabbing an instruction, adding something
-&mdash; some processor primitive. So we get a budget of 3 billion operations
-per second, and we have to spend it correctly to get a fast, working IDE.
-
-Let's generously donate 2/3 of that to the OS. We'll take a billion a second.
-What would our IDE need in order to do its job? Render 60 images, send them to
-the monitor, process any edits I made in the last second, and do a second's
-worth of work analyzing some source code. How many operations is that?
-
-I'll leave the Fermi estimates as an exercise for the reader. But whatever the
-actual cost, is it even anywhere in the ballpark of a billion operations?
+I'd feel pretty confident saying that judging by the math, IDEs should be at
+least ten times faster than they currently are, and never lag. If you break
+down what an IDE needs to do into individual tasks, and add up the number of
+cycles each task roughly takes, I'd feel pretty silly proposing that an IDE
+needs more than 100 million cycles per second to do its job.
 
 If you gave someone a billion dollars to build a bridge, and after spending it
 all he failed to produce a bridge, you'd lose your patience. But when you give
 a program a billion CPU cycles, and after spending them it fails to draw 60
 pictures, that's regarded as the normal, inevitable state of software in 2021.
 
-<br>
+<br><br>
 
-### Switching To a Happier Timeline
+So why does this happen?
 
-Let's start over. What would it take to build that IDE?
+Hardware isn't the issue. Hardware is plenty fast. Our computers are
+supercomputers by yesterday's standards. The issue is how we spend those CPU
+cycles.
 
-Hardware isn't the issue. The hardware is plenty fast. Our computers are
-supercomputers by the standards of yesteryear. The issue is how we spend those
-CPU cycles.
+What gets measured gets improved. What doesn't, doesn't. I think that's the
+problem. We don't really count CPU cycles anymore. It isn't any one thing that
+makes software slow. We've just stopped caring about the speed of software altogether,
+exceptly as barely an afterthought.
 
-Say you work at a company and your team is considering building an IDE. What
-will probably happen? Current fashions would suggest writing the app in
+Imagine you work at a company and your team is considering building an IDE.
+What would probably happen? Current fashions would suggest writing the app in
 JavaScript using Electron. Writing it in JavaScript will mean lots of people to
-hire, someone will argue. A strong ecosystem of libraries means faster time to
-market. Electron means we don't have to worry about platform-specific APIs, and
-we can use all the web technologies we're already familiar with. Yay!
+hire, your coworker will argue. A strong ecosystem of libraries means faster
+time to market. Electron means we don't have to worry about platform-specific
+APIs, and we can use all the web technologies we're already familiar with. Yay!
 
-This is how a billion cycles get squandered. Before that program even does
-anything, first it's compiled into a website and loaded into Chrome, which
-loads *a whole virtual machine* and does a bunch of stuff. Then the program
-sits inside the land of JavaScript, where everything is a callback, no one
-cares about memory usage, and garbage collection runs around all day running on
-full blast.
+What's happening under the hood? Before that IDE even does anything, it's
+compiled into a website and loaded into Chrome, which loads *an entire virtual
+machine* and does a bunch of crazy stuff. Then the IDE sits inside the
+JavaScript runtime, where everything is a callback, no one cares about memory
+usage, and garbage collection runs around all day running on full blast. I have
+no trouble believing you could spend a billion cycles in a second like this.
+
+Notice that the issue isn't even any particular slow thing Electron does. It's
+that all of these slow things are done before any consideration fo speed is
+even made.  By the time users start complaining the IDE is slow, all the
+assumptions have already been locked in place.  Say the team brings in an
+optimization specialist to fix things. What can he do? Profile, measure,
+optimize. But the issue probably isn't even any individual function that's
+slow. It's the whole environment and paradigm the IDE lives in.
 
 All this just to draw 60 pictures, modify an in-memory buffer, and parse some
 source code.
 
-We think there's a better way. All of this is unnecessary. What are we actually
-trying to do?  Render pictures; edit a buffer; parse source code. So let's do
-that:
+<br><br>
 
- *  Draw pictures: Use the GPU.
- *  Buffer: Represent files in an in-memory array.
- *  Parse source code: Use a recursive descent parser.
+${IDE_NAME} is our attempt to start over. Our approach is simple: we count CPU
+cycles. We don't write any code that doesn't directly do something we want to
+do.
 
-The first version of ${IDE_NAME} was literally a C program, crammed into
-`main()`, that read a file into an array in memory, rendered it onto the
-screen, accepted keystrokes, and parsed Go source files into trees. You would
-not believe *how blistering fast* it was. I think at that point it was
-rendering over 1,000 FPS.
+What are we *actually* trying to do? Not much: draw some pictures, edit a
+buffer, parse some source code. So let's just do that.
 
-That's ${IDE_NAME}. To this day, at its core it's a blistering fast renderer, text
-editor, and Go source analyzer. Everything else is built on top of that.
+ *  Draw pictures: use the GPU, something like OpenGL.
+ *  Buffer: in-memory array.
+ *  Parse source code: recursive descent parser.
 
-<br>
+The first version of ${IDE_NAME} was literally a C/OpenGL program, practically
+a single giant `main()` function, that read a file into an array in memory, rendered
+it, processed keystrokes, and parsed your Go source files in the background.
+You would not believe *how blistering fast* it was. I think it
+was rendering over 1,000 FPS.
 
-### The Plan
+${IDE_NAME} today is essentially the same program. At its core it's a
+blistering fast renderer, text editor, and Go source analyzer. Everything else
+is built on top of that.
 
-The overall plan is to
+<br><br>
 
-1. Build a tiny, super fast core comprising a text editor and parser.
-2. Use and extend that core to provide specific useful features.
-3. Add in the rest of Jetbrains piecemeal, while making sure the core stays
-fast.
+The long-term plan is:
 
-We're about halfway through 2. Right now the IDE is basically a text editor
-that deeply understands Go. It has a complete mental model about your code and
-can answer any question about it. We've used that model to implement things
-like autocomplete, parameter hints, and jump to definition.
+1. Build a tiny, super fast core consisting of a text editor and parser.
 
-Our priority right now is keeping our bug count low and steadily adding in
-more features. We want to make autocomplete more helpful by displaying more
-info about each item, for example, and add automatic refactoring. At this point
-it's product work: we have the core technology to understand and manipulate Go
-source trees. Our job now is to build out a good user experience.
+2. Build enough useful features on top of that core to be just barely usable as
+an IDE, while still cutting out all superfluous CPU cycles. This is like our
+MVP.
 
-We built the IDE to only support a subset of use cases initially. Right now,
-only Windows is supported, and your project has to be a single module. As we
-grow, we'll be expanding to cover other cases (Mac support is a high priority)
-without sacrificing that lightning fast core.
+3. Build the rest of Jetbrains piecemeal, while cutting out all superfluous CPU cycles.
 
-We've also tried to avoid premature optimization of edge cases. So ${IDE_NAME}
-works very well in 95% of cases, but will flounder in the 5% of cases we didn't
-handle. For instance, it currently freezes up for a few seconds when opening
-super large directories. But this isn't an inherent limitation; we just haven't
-handled that case yet. There are lots of cases like that, and we're working
-through them.
+We're just about done with 2. Right now the IDE is basically a text editor that
+understands Go. It has a complete mental model about your code and can answer
+any question about it. Using that we've implemented things like autocomplete,
+parameter hints, and jump to definition. The IDE is usable enough to function
+as a daily driver.
 
-<br>
+Our priority right now is to stay on top of bugs, and start building out the
+rest of the features an IDE needs. We want to improve autocomplete by
+displaying more info about each item, for example, and add automatic
+refactoring. At this point, most of the work is product work.  We have the core
+technology to understand and manipulate Go source trees; our job now is to
+implement high-level features and build a good UX.
 
-### Moore's Law
+The IDE is very much unfinished.  Right now it only works on Windows; your
+project has to be a single module; it freezes when opening super huge
+directories. But as long as we continue building the IDE with our bottom-up
+approach, starting from a small, super fast core and steadily building atop it
+without leaking CPU cycles, all of these problems are temporary. We have a lot
+of work to do. But we're not *fundamentally* limited in our speed the way we
+would be without our fast core.
+
+<br><br>
 
 In recent history the benefits of Moore's law have mostly gone to developers.
 Computers have gotten way faster, but software has not gotten way better.
@@ -148,21 +153,21 @@ Where did those extra CPU cycles all go? Apparently, developers took them all.
 All those cycles went towards letting developers write
 JavaScript/React/Electron apps instead of drawing their own UI in C.
 
-That has its legitimate uses. This website was built in React. But we think it
-would be nice if, at least some of the time, the benefits of Moore's law were
-forwarded on to users. And there's no reason they can't be. IDEs don't do
-anything that requires super insane, Large Hadron Collider, quantum computing
-levels of power. We're not factoring giant primes or banging subatomic
-particles together. We are building a text editor plus parser.
+That has its legitimate uses. This website was built in React. But we think
+that at least some of the time, the benefits of Moore's law ought to be passed
+on to users. And there's no reason they can't be. IDEs don't do anything that
+requires super insane, quantum computing, Large Hadron Collider levels of
+power. We're not factoring humongous prime numbers or something. We
+are just building a text editor plus parser.
 
-That our IDEs are so slow is an unfortunate collective decision by engineers to
+That our IDEs are so slow is mostly an unfortunate collective decision by engineers to
 prioritize their preferences over benefiting users. There's a supercomputer
 right on your desk, and most of its cycles are going towards supporting
 developers' massively expensive choices. We could instead repurpose those
 cycles towards benefiting you, the user, and computing things that are actually
 useful to you. That's our goal.
 
-<br>
+<br><br>
 
 ### Related Links
 
