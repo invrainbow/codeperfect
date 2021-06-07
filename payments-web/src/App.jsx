@@ -483,7 +483,7 @@ function Beta() {
               target="_blank"
               rel="noreferrer"
             >
-              Request Access
+              Join Beta
             </a>
           </div>
           <div className="p-4 md:block hidden">
@@ -776,7 +776,7 @@ function App() {
               Roadmap
             </Link>
             <Link className="main-button whitespace-nowrap" to="/beta">
-              Request Access
+              Join Beta
             </Link>
           </div>
         </div>
@@ -826,7 +826,7 @@ function App() {
               <div className="text-left sm:text-right">
                 <div className="mb-1">
                   <Link to="/beta" className="text-gray-400 no-underline">
-                    Request Access
+                    Join Beta
                   </Link>
                 </div>
                 <div className="mb-1">
