@@ -303,52 +303,12 @@ function Beta() {
             >
               Join Beta
             </a>
-          </div>
-          <div className="p-4 md:block hidden">
-            <p className="md:block my-4 text-sm">
-              If you're interested in {IDE_NAME} but it's not a fit right now,
-              you can also subscribe to email updates.
+            <p className="text-left md:block mt-4 text-sm">
+              Note: if you're interested but your setup isn't supported, please
+              fill out the form anyway - we're rapidly adding support for
+              various things (macOS/Linux is high on our list), and we'll notify
+              you when we roll out support.
             </p>
-            <form
-              action="https://gmail.us6.list-manage.com/subscribe/post?u=530176c3897958e56302043ed&amp;id=cb045d5e14"
-              className="text-center"
-              method="post"
-              name="mc-embedded-subscribe-form"
-              target="_blank"
-              novalidate
-            >
-              <div className="flex flex-col lg:flex-row">
-                <input
-                  type="email"
-                  defaultValue=""
-                  name="EMAIL"
-                  placeholder="Email address"
-                  required
-                  className="py-1.5 px-2.5 rounded-md text-sm lg:mr-2 flex-grow"
-                  style={{
-                    background: "#222",
-                    border: "solid 1px #555",
-                  }}
-                />
-                <div
-                  style={{ position: "absolute", left: "-5000px" }}
-                  aria-hidden="true"
-                >
-                  <input
-                    type="text"
-                    name="b_530176c3897958e56302043ed_cb045d5e14"
-                    tabindex="-1"
-                    value=""
-                  />
-                </div>
-                <button
-                  className="mt-2 lg:mt-0 main-button from-gray-200 to-gray-300 text-gray-600"
-                  type="submit"
-                >
-                  Subscribe
-                </button>
-              </div>
-            </form>
           </div>
         </div>
 
