@@ -1,7 +1,4 @@
-// /* global Stripe */
-
 import React from "react";
-import ReactMarkdown from "react-markdown";
 import {
   BrowserRouter as Router,
   Switch,
@@ -13,7 +10,6 @@ import { Helmet } from "react-helmet";
 import cx from "classnames";
 import _ from "lodash";
 import { PlayIcon } from "@heroicons/react/solid";
-import rehypeRaw from "rehype-raw";
 
 // static assets
 import ideScreenshotImage from "./ide.png";
@@ -21,21 +17,12 @@ import gif60fps from "./60fps.gif";
 import gifVim from "./vim.gif";
 import pngIntellisense from "./intellisense.png";
 import pngVideoScreenshot from "./video-screenshot.png";
-import philosophyEssay from "./philosophy.txt";
 
 // constants
 const IDE_NAME = "CodePerfect 95";
 const SUPPORT_EMAIL = "support@codeperfect95.com";
-const API_BASE = "http://localhost:8080";
-// const API_BASE = "https://api.codeperfect95.com";
 const CURRENT_YEAR = new Date().getFullYear();
 const CURRENT_PRICE = 5;
-
-// const STRIPE_PRICE_ID = "price_1IrHFLBpL0Zd3zdOjGoBlmZF";
-// const STRIPE_PUB_KEY =
-//   "pk_test_51IqLcpBpL0Zd3zdOPzAZQbYjpmD47ethoqtcFGwiJBLdovijF8G0hBTA8FylfnRnQ8aXoPVC2DmNMHpndiV1YtJr00UU0XCWnt";
-
-// const stripe = Stripe(STRIPE_PUB_KEY);
 
 function WallOfText({ title, children }) {
   return (
@@ -286,170 +273,7 @@ function Privacy() {
   );
 }
 
-// I'm just going to use POST and form data for everything. Do not talk to me
-// about REST or any stupid shit like that or I'll fire you.
-async function talkToServer(endpoint, params) {
-  const makeFormData = (obj) => {
-    const ret = new URLSearchParams();
-    Object.keys(obj).forEach((key) => {
-      ret.append(key, obj[key]);
-    });
-    return ret;
-  };
-  const resp = await fetch(`${API_BASE}/${endpoint}`, {
-    method: "POST",
-    body: makeFormData(params),
-  });
-  return await resp.json();
-}
-
-function Portal() {
-  const [disabled, setDisabled] = React.useState(false);
-  const [licenseKey, setLicenseKey] = React.useState(
-    "ba26c910-e37e71e3-5e07eaf4-4b844592"
-  );
-
-  const onSubmit = async (e) => {
-    e.preventDefault();
-    setDisabled(true);
-    try {
-      const data = await talkToServer("portal", {
-        license_key: licenseKey,
-      });
-
-      if (!data.portal_url) {
-        alert("Invalid license key.");
-        return;
-      }
-
-      window.location.href = data.portal_url;
-    } finally {
-      setDisabled(false);
-    }
-  };
-
-  return (
-    <WallOfText title="Portal Login">
-      <p>
-        Please enter your license key to sign in to the portal. It should be in
-        the email that sent you here.
-      </p>
-      <form onSubmit={onSubmit}>
-        <input
-          type="text"
-          value={licenseKey}
-          onChange={(e) => setLicenseKey(e.target.value)}
-          placeholder="License key"
-          className="border border-black-400 py-1.5 px-2.5 rounded-md text-sm mr-2 font-mono"
-        />
-        <button
-          className="main-button from-gray-200 to-gray-300 text-gray-600"
-          disabled={disabled}
-          type="submit"
-        >
-          Log in to portal
-        </button>
-      </form>
-    </WallOfText>
-  );
-}
-
-// const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-function Download() {
-  const [disabled, setDisabled] = React.useState(false);
-  const [licenseKey, setLicenseKey] = React.useState(
-    "ba26c910-e37e71e3-5e07eaf4-4b844592"
-  );
-
-  const onSubmit = async (e) => {
-    e.preventDefault();
-    setDisabled(true);
-    try {
-      const data = await talkToServer("download", {
-        license_key: licenseKey,
-      });
-
-      if (!data.download_link) {
-        alert("Invalid license key.");
-        return;
-      }
-
-      window.location.href = data.download_link;
-    } finally {
-      setDisabled(false);
-    }
-  };
-
-  return (
-    <WallOfText title="Download">
-      <p>
-        Please enter your license key to continue to the download. It should be
-        in the email you got.
-      </p>
-      <form onSubmit={onSubmit}>
-        <input
-          type="text"
-          value={licenseKey}
-          onChange={(e) => setLicenseKey(e.target.value)}
-          placeholder="License key"
-          className="border border-black-400 py-1.5 px-2.5 rounded-md text-sm mr-2 font-mono"
-        />
-        <button
-          className="main-button from-gray-200 to-gray-300 text-gray-600"
-          type="submit"
-          disabled={disabled}
-        >
-          Download
-        </button>
-      </form>
-    </WallOfText>
-  );
-}
-
-function Philosophy() {
-  const [text, setText] = React.useState(null);
-
-  React.useEffect(() => {
-    async function run() {
-      const text = await (await fetch(philosophyEssay)).text();
-
-      // eslint-disable-next-line no-template-curly-in-string
-      setText(text.replaceAll("${IDE_NAME}", IDE_NAME));
-    }
-    run();
-  }, []);
-
-  if (!text) return null;
-
-  return (
-    <WallOfText>
-      <Title>The {IDE_NAME} Philosophy</Title>
-      <div className="text-sm mt-1 mb-8 text-gray-600">
-        Published <b className="font-semibold text-gray-500">June 5, 2021</b> by{" "}
-        <b className="font-semibold text-gray-500">Brandon Hsiao</b>
-      </div>
-      <ReactMarkdown rehypePlugins={[rehypeRaw]} children={text} />
-    </WallOfText>
-  );
-}
-
 function Beta() {
-  // const [disabled, setDisabled] = React.useState(false);
-
-  // const onBuy = async () => {
-  //   setDisabled(true);
-  //   try {
-  //     const data = await talkToServer("checkout", {
-  //       price_id: STRIPE_PRICE_ID,
-  //     });
-  //     stripe.redirectToCheckout({ sessionId: data.session_id });
-  //   } catch (err) {
-  //     setDisabled(false);
-  //     alert(err);
-  //   }
-  // };
-
   return (
     <div
       className="border-t border-b py-4 md:py-12"
@@ -471,15 +295,9 @@ function Beta() {
             className="text-center md:border-b md:border-gray-700 pt-0 md:pt-4 p-4"
             style={{ background: "#111" }}
           >
-            {/* <button
-                onClick={onBuy}
-                className="main-button text-lg px-8 py-4"
-                disabled={disabled}
-                Sign up
-              </button> */}
             <a
               className="main-button text-md md:text-lg py-2 px-4 md:px-8 md:py-3 w-auto block"
-              href="https://967gb74hmbf.typeform.com/to/nVtqlzdj"
+              href="https://airtable.com/shraN38Z2jqQJVqbk"
               target="_blank"
               rel="noreferrer"
             >
@@ -602,129 +420,18 @@ function Beta() {
           <p>
             If this sounds compatible with your setup, {IDE_NAME} will allow you
             to start developing Go programs at lightning speed today. We're also{" "}
-            <Link to="/roadmap">steadily developing new features</Link>.
+            <a
+              target="_blank"
+              rel="noreferrer"
+              href="https://www.notion.so/53c8fbc9b3074236b8b7649f4593b6c7?v=d1af3ea58cd346eeba9f4eb65d801a89"
+            >
+              steadily developing new features
+            </a>
+            .
           </p>
         </div>
       </div>
     </div>
-  );
-}
-
-function Question({ q, children }) {
-  return (
-    <div className="mt-10">
-      <div className="font-semibold text-gray-200">{q}</div>
-      {children}
-    </div>
-  );
-}
-
-function FAQ() {
-  return (
-    <WallOfText title="Frequently Asked Questions">
-      <Question q={`What does ${IDE_NAME} mean?`}>
-        <p>
-          It's a retro name. It hearkens back to a time when software was fast
-          and started up instantly, despite running on hardware orders of
-          magnitude slower than we have now.
-        </p>
-      </Question>
-
-      <Question q="How is it so fast?">
-        <p>
-          We think hard about what the computer actually needs to do, and then
-          write the most straightforward, fewest-CPU-cycles code to do that.
-          This is in contrast to the popular model of software development,
-          where one mindlessly glues abstractions together without reckoning
-          with costs.
-        </p>
-        <p>
-          To give a concrete answer, we use custom memory allocators, a
-          GPU-based renderer, a simple array-based buffer (instead of super
-          crazy data structures), in-memory data storage wherever we can, and
-          many other things. There isn't any one thing that makes {IDE_NAME}{" "}
-          fast&mdash;it's the combination of a tapestry of careful decisions.
-        </p>
-      </Question>
-      <Question q="What's your business model?">
-        <p>
-          We charge a monthly subscription fee for you to use the IDE. Right now
-          that fee is ${CURRENT_PRICE}/mo.
-        </p>
-        <p>
-          In the future we may very well raise the price. To show appreciation
-          for early adopters, when you sign up we'll lock in your monthly rate
-          for a year.
-        </p>
-      </Question>
-    </WallOfText>
-  );
-}
-
-function Roadmap() {
-  return (
-    <WallOfText title="Roadmap">
-      <p>Here are things we're looking to add in the immediate future.</p>
-      <ul className="roadmap-list text-gray-400">
-        <li>macOS and Linux support.</li>
-        <li>Make the editor usable for non-Vim users.</li>
-        <li>Git integration.</li>
-        <li>A more sophisticated file browser.</li>
-        <li>WSL support.</li>
-        <li>
-          Go to symbol &mdash; like fuzzy file picker, but for names of declared
-          identifiers instead of files.
-        </li>
-        <li>Improved details in autocomplete menu.</li>
-        <li>Find all usages.</li>
-        <li>Automatic refactoring.</li>
-        <li>Support symlinks.</li>
-        <li>Support large repositories.</li>
-      </ul>
-    </WallOfText>
-  );
-}
-
-/*
-function About() {
-  return (
-    <div>
-      <Title>About</Title>
-      <p>{IDE_NAME} is created by Brandon Hsiao.</p>
-    </div>
-  );
-}
-*/
-
-function PaymentCanceled() {
-  return (
-    <WallOfText title="Your payment was canceled.">
-      <p>
-        If you didn't mean to cancel it, you can{" "}
-        <Link to="/beta">try again</Link>.
-      </p>
-      <p>
-        If you believe the payment went through and you were charged, please{" "}
-        <a href={`mailto:${SUPPORT_EMAIL}`}>email us</a>.
-      </p>
-      <p>
-        Otherwise, <Link to="/">click here</Link> to return to the main page.
-      </p>
-    </WallOfText>
-  );
-}
-
-function PaymentSuccess() {
-  return (
-    <WallOfText title="Your payment went through!">
-      <p>Please check your email for the download link and your license key.</p>
-      <p>
-        If the email doesn't come, please check your spam folder and wait a few
-        minutes. If it still doesn't come, please do not purchase a second time
-        &mdash; two subscriptions will be created. Instead,{" "}
-        <a href={`mailto:${SUPPORT_EMAIL}`}>email us</a>.
-      </p>
-    </WallOfText>
   );
 }
 
@@ -757,24 +464,30 @@ function App() {
             {IDE_NAME}
           </Link>
           <div className="flex items-baseline space-x-6">
-            <Link
+            <a
               className="no-underline text-sm font-semibold text-gray-300 hidden sm:inline-block"
-              to="/faq"
+              href="https://www.notion.so/CodePerfect-95-FAQs-9f227faf607e47c19e33a44e82a6a8a9"
+              target="_blank"
+              rel="noreferrer"
             >
               FAQ
-            </Link>
-            <Link
+            </a>
+            <a
+              target="_blank"
+              rel="noreferrer"
               className="no-underline text-sm font-semibold text-gray-300 hidden sm:inline-block"
-              to="/philosophy"
+              href="https://www.notion.so/The-CodePerfect-95-Philosophy-5014f8f69cad4ef6b964ebc25fdc0b31"
             >
               Philosophy
-            </Link>
-            <Link
+            </a>
+            <a
+              target="_blank"
+              rel="noreferrer"
               className="no-underline text-sm font-semibold text-gray-300 hidden sm:inline-block"
-              to="/roadmap"
+              href="https://www.notion.so/53c8fbc9b3074236b8b7649f4593b6c7?v=d1af3ea58cd346eeba9f4eb65d801a89"
             >
               Roadmap
-            </Link>
+            </a>
             <Link className="main-button whitespace-nowrap" to="/beta">
               Join Beta
             </Link>
@@ -782,35 +495,14 @@ function App() {
         </div>
         <div className="">
           <Switch>
-            <Route path="/download">
-              <Download />
-            </Route>
-            <Route path="/portal">
-              <Portal />
-            </Route>
             <Route path="/terms">
               <Terms />
             </Route>
             <Route path="/privacy">
               <Privacy />
             </Route>
-            <Route path="/philosophy">
-              <Philosophy />
-            </Route>
             <Route path="/beta">
               <Beta />
-            </Route>
-            <Route path="/payment-canceled">
-              <PaymentCanceled />
-            </Route>
-            <Route path="/payment-success">
-              <PaymentSuccess />
-            </Route>
-            <Route path="/faq">
-              <FAQ />
-            </Route>
-            <Route path="/roadmap">
-              <Roadmap />
             </Route>
             <Route exact path="/">
               <Home />
@@ -830,19 +522,34 @@ function App() {
                   </Link>
                 </div>
                 <div className="mb-1">
-                  <Link to="/philosophy" className="text-gray-400 no-underline">
+                  <a
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-gray-400 no-underline"
+                    href="https://www.notion.so/The-CodePerfect-95-Philosophy-5014f8f69cad4ef6b964ebc25fdc0b31"
+                  >
                     Philosophy
-                  </Link>
+                  </a>
                 </div>
                 <div className="mb-1">
-                  <Link to="/roadmap" className="text-gray-400 no-underline">
+                  <a
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-gray-400 no-underline"
+                    href="https://www.notion.so/53c8fbc9b3074236b8b7649f4593b6c7?v=d1af3ea58cd346eeba9f4eb65d801a89"
+                  >
                     Roadmap
-                  </Link>
+                  </a>
                 </div>
                 <div className="mb-1">
-                  <Link to="/faq" className="text-gray-400 no-underline">
+                  <a
+                    rel="noreferrer"
+                    target="_blank"
+                    href="https://www.notion.so/CodePerfect-95-FAQs-9f227faf607e47c19e33a44e82a6a8a9"
+                    className="text-gray-400 no-underline"
+                  >
                     FAQ
-                  </Link>
+                  </a>
                 </div>
               </div>
               <div className="text-left sm:text-right">

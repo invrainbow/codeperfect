@@ -23,7 +23,7 @@
   }
 
   a {
-    @apply text-gray-200 underline;
+    @apply text-gray-300 underline;
     @apply inline-block break-words;
   }
 
