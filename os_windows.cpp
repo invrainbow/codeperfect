@@ -828,4 +828,8 @@ bool set_run_on_computer_startup(ccstr key, ccstr exepath) {
     return RegSetValueExW(hkey, to_wide(key), 0, REG_SZ, (BYTE*)wpath, wcslen(wpath)+1) == ERROR_SUCCESS;
 }
 
+bool xplat_chdir(ccstr dir) {
+    return SetCurrentDirectory(dir);
+}
+
 #endif

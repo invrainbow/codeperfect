@@ -301,3 +301,5 @@ Ask_User_Result ask_user_yes_no(ccstr text, ccstr title);
 void tell_user(ccstr text, ccstr title);
 ccstr get_executable_path();
 bool set_run_on_computer_startup(ccstr key, ccstr path_to_exe);
+
+bool xplat_chdir(ccstr dir);

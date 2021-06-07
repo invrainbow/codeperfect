@@ -144,6 +144,8 @@ void World::init_workspace() {
     strcpy_safe(current_path, _countof(current_path), normalize_path_sep("c:/users/brandon/ide/payments"));
 #endif
 
+    xplat_chdir(current_path);
+
     project_settings.read(path_join(current_path, ".ideproj"));
 
     /*

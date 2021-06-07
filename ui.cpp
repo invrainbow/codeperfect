@@ -1887,6 +1887,8 @@ void UI::draw_everything() {
         );
 
         ImGui::SetNextWindowSize(ImVec2(450, -1));
+        ImGui::SetNextWindowPos(ImVec2(world.window_size.x, world.window_size.y), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+
         ImGui::Begin(label, &world.wnd_add_file_or_folder.show, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking);
 
         ImGui::Text("Name:");
