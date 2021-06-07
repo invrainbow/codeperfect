@@ -68,7 +68,7 @@ The issue is how we spend those CPU cycles. A famous maxim says that what gets
 measured gets improved. What doesn't, doesn't. I think that's the problem. We
 just don't really count CPU cycles anymore. There isn't any single thing that
 makes software slow. We've just stopped caring about the speed of software
-altogether, exceptly as barely an afterthought.
+altogether, except as barely an afterthought.
 
 Imagine you work at a company considering building an IDE. What would probably
 happen? Current fashions would suggest writing the app in JavaScript using
