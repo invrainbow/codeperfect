@@ -426,8 +426,8 @@ function Philosophy() {
     <WallOfText>
       <Title>The {IDE_NAME} Philosophy</Title>
       <div className="text-sm mt-1 mb-8 text-gray-600">
-        Published <b className="text-gray-500">June 5, 2021</b> by{" "}
-        <b className="text-gray-500">Brandon Hsiao</b>
+        Published <b className="font-semibold text-gray-500">June 5, 2021</b> by{" "}
+        <b className="font-semibold text-gray-500">Brandon Hsiao</b>
       </div>
       <ReactMarkdown rehypePlugins={[rehypeRaw]} children={text} />
     </WallOfText>
@@ -613,7 +613,7 @@ function Beta() {
 function Question({ q, children }) {
   return (
     <div className="mt-10">
-      <div className="font-bold text-gray-200">{q}</div>
+      <div className="font-semibold text-gray-200">{q}</div>
       {children}
     </div>
   );
@@ -758,19 +758,19 @@ function App() {
           </Link>
           <div className="flex items-baseline space-x-6">
             <Link
-              className="no-underline text-sm font-bold text-gray-300 hidden sm:inline-block"
+              className="no-underline text-sm font-semibold text-gray-300 hidden sm:inline-block"
               to="/faq"
             >
               FAQ
             </Link>
             <Link
-              className="no-underline text-sm font-bold text-gray-300 hidden sm:inline-block"
+              className="no-underline text-sm font-semibold text-gray-300 hidden sm:inline-block"
               to="/philosophy"
             >
               Philosophy
             </Link>
             <Link
-              className="no-underline text-sm font-bold text-gray-300 hidden sm:inline-block"
+              className="no-underline text-sm font-semibold text-gray-300 hidden sm:inline-block"
               to="/roadmap"
             >
               Roadmap
