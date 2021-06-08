@@ -304,10 +304,10 @@ function Beta() {
               Join Beta
             </a>
             <p className="text-left md:block mt-4 text-sm">
-              Note: if you're interested but your setup isn't supported, please
-              fill out the form anyway - we're rapidly adding support for
-              various things (macOS/Linux is high on our list), and we'll notify
-              you when we roll out support.
+              Note: We are rapidly adding support for various things -
+              macOS/Linux is high on our list. So if you're interested but your
+              setup isn't supported, if you fill out the form anyway, we'll
+              notify you when we roll out support.
             </p>
           </div>
         </div>
