@@ -700,11 +700,12 @@ int UI::get_mouse_flags(boxf area) {
     int ret = 0;
     if (contains_mouse()) {
         ret |= MOUSE_HOVER;
-        if (world.ui.mouse_down[GLFW_MOUSE_BUTTON_LEFT])
+
+        if (ImGui::IsMouseClicked(0))
             ret |= MOUSE_CLICKED;
-        if (world.ui.mouse_down[GLFW_MOUSE_BUTTON_RIGHT])
+        if (ImGui::IsMouseClicked(1))
             ret |= MOUSE_RCLICKED;
-        if (world.ui.mouse_down[GLFW_MOUSE_BUTTON_MIDDLE])
+        if (ImGui::IsMouseClicked(2))
             ret |= MOUSE_MCLICKED;
     }
     return ret;
