@@ -1042,7 +1042,6 @@ struct Ghetto_Parser {
 struct Gohelper {
     Process proc;
     bool returned_error;
-    Lock lock;
 
     void init(ccstr cmd, ccstr path);
     void cleanup();
@@ -1065,7 +1064,6 @@ struct Go_Indexer {
     Pool final_mem;  // memory that holds the final value of this->index`
     Pool ui_mem;     // memory used by UI when it calls jump to definition, etc.
 
-    Gohelper gohelper_static;
     Gohelper gohelper_dynamic;
 
     Pool scoped_table_mem;
@@ -1237,3 +1235,39 @@ void write_list(L arr, Index_Stream *s) {
 }
 
 ccstr format_pos(cur2 pos);
+
+typedef struct _GH_Build_Error {
+    char* text;
+    int32_t is_valid;
+    char *filename;
+    int32_t line;
+    int32_t col;
+    int32_t is_vcol;
+} GH_Build_Error;
+
+typedef signed char GoInt8;
+typedef unsigned char GoUint8;
+typedef short GoInt16;
+typedef unsigned short GoUint16;
+typedef int GoInt32;
+typedef unsigned int GoUint32;
+typedef long long GoInt64;
+typedef unsigned long long GoUint64;
+typedef GoInt64 GoInt;
+typedef GoUint64 GoUint;
+typedef size_t GoUintptr;
+typedef float GoFloat32;
+typedef double GoFloat64;
+
+extern GoUint8 (*GHStartBuild)(char* cmdstr);
+extern void (*GHStopBuild)();
+extern void (*GHFreeBuildStatus)(void* p, GoInt lines);
+extern GH_Build_Error* (*GHGetBuildStatus)(GoInt* pstatus, GoInt* plines);
+extern char* (*GHGetGoEnv)(char* name);
+extern void (*GHFmtStart)();
+extern void (*GHFmtAddLine)(char* line);
+extern char* (*GHFmtFinish)();
+extern void (*GHFree)(void* p);
+extern GoUint8 (*GHCheckLicense)();
+
+void init_gohelper_crap();

@@ -926,75 +926,58 @@ void Editor::format_on_save(bool write_to_nvim) {
     auto old_cur = cur;
 
     Buffer swapbuf = {0};
-    bool success = true;
+    bool success = false;
 
-    auto& gh = world.indexer.gohelper_static;
-    {
-        SCOPED_LOCK(&gh.lock);
+    GHFmtStart();
 
-        gh.proc.writestr("autoformat\n");
-        gh.proc.writestr(our_sprintf("%d\n", buf.lines.len));
+    for (int i = 0; i < buf.lines.len; i++) {
+        SCOPED_FRAME();
 
-        for (int i = 0; i < buf.lines.len; i++) {
-            For (buf.lines[i]) {
-                char tmp[4];
-                auto n = uchar_to_cstr(it, tmp);
-                for (u32 j = 0; j < n; j++)
-                    gh.proc.write1(tmp[j]);
-            }
-            gh.proc.write1('\n');
+        List<char> line;
+        line.init();
+
+        For (buf.lines[i]) {
+            char tmp[4];
+            auto n = uchar_to_cstr(it, tmp);
+            for (u32 j = 0; j < n; j++)
+                line.append(tmp[j]);
         }
 
-        auto resp = gh.readline();
-        if (streq(resp, "error")) {
-            auto err = gh.readline();
-            print("autoformat error: %s", err);
-            success = false;
-        } else {
-            u32 lines = atoi(resp);
-            if (lines == 0) {
-                success = false;
-            } else {
-                int curr = 0;
-
-                swapbuf.init(MEM);
-                swapbuf.read([&](char *out) -> bool {
-                    if (curr >= lines) return false;
-
-                    if (!gh.proc.read1(out)) {
-                        success = false;
-                        return false;
-                    }
-
-                    if (*out == '\n')
-                        if (++curr == lines)
-                            return false;
-
-                    return true;
-                });
-            }
-        }
+        line.append('\0');
+        GHFmtAddLine(line.items);
     }
 
-    if (success) {
-        buf.copy_from(&swapbuf);
-
-        if (tree != NULL) {
-            ts_tree_delete(tree);
-            tree = NULL;
-        }
-        update_tree();
-
-        if (write_to_nvim) {
-            auto &nv = world.nvim;
-            auto msgid = nv.start_request_message("nvim_buf_get_changedtick", 1);
-            auto req = nv.save_request(NVIM_REQ_POST_SAVE_GETCHANGEDTICK, msgid, id);
-            req->post_save_getchangedtick.cur = old_cur;
-            nv.writer.write_int(nvim_data.buf_id);
-            nv.end_message();
-        }
-    } else {
+    auto new_contents = GHFmtFinish();
+    if (new_contents == NULL) {
         saving = false;
+        return;
+    }
+
+    int curr = 0;
+    swapbuf.init(MEM);
+    swapbuf.read([&](char *out) -> bool {
+        if (new_contents[curr] != '\0') {
+            *out = new_contents[curr++];
+            return true;
+        }
+        return false;
+    });
+
+    buf.copy_from(&swapbuf);
+
+    if (tree != NULL) {
+        ts_tree_delete(tree);
+        tree = NULL;
+    }
+    update_tree();
+
+    if (write_to_nvim) {
+        auto &nv = world.nvim;
+        auto msgid = nv.start_request_message("nvim_buf_get_changedtick", 1);
+        auto req = nv.save_request(NVIM_REQ_POST_SAVE_GETCHANGEDTICK, msgid, id);
+        req->post_save_getchangedtick.cur = old_cur;
+        nv.writer.write_int(nvim_data.buf_id);
+        nv.end_message();
     }
 }
 

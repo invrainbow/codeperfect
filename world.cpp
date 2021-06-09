@@ -42,6 +42,8 @@ void World::fill_file_tree() {
     SCOPED_MEM(&file_tree_mem);
     file_tree_mem.reset();
 
+    file_explorer.selection = NULL;
+
     file_tree = alloc_object(File_Tree_Node);
     file_tree->is_directory = true;
     file_tree->depth = -1;
@@ -49,6 +51,8 @@ void World::fill_file_tree() {
     u32 depth = 0;
 
     fn<void(ccstr, File_Tree_Node*)> recur = [&](ccstr path, File_Tree_Node *parent) {
+        File_Tree_Node *last_child = parent->children;
+
         list_directory(path, [&](Dir_Entry *ent) {
             auto fullpath = path_join(path, ent->name);
             if (is_ignored_by_git(fullpath, ent->type & FILE_TYPE_DIRECTORY))
@@ -65,9 +69,15 @@ void World::fill_file_tree() {
             file->children = NULL;
             file->depth = depth;
             file->open = false;
-            file->next = parent->children;
+            file->next = NULL;
 
-            parent->children = file;
+            if (last_child == NULL) {
+                parent->children = last_child = file;
+            } else {
+                last_child->next = file;
+                last_child = file;
+            }
+
             parent->num_children++;
 
             if (file->is_directory) {
@@ -133,7 +143,7 @@ void World::init_workspace() {
 
     panes.init(LIST_FIXED, _countof(_panes), _panes);
 
-#if 1 // RELEASE_BUILD
+#if 0 // RELEASE_BUILD
     Select_File_Opts opts = {0};
     opts.buf = current_path;
     opts.bufsize = _countof(current_path);
@@ -141,7 +151,8 @@ void World::init_workspace() {
     opts.save = false;
     let_user_select_file(&opts);
 #else
-    strcpy_safe(current_path, _countof(current_path), normalize_path_sep("c:/users/brandon/ide/payments"));
+    // strcpy_safe(current_path, _countof(current_path), normalize_path_sep("c:/users/brandon/hugo"));
+    strcpy_safe(current_path, _countof(current_path), normalize_path_sep("c:/users/brandon/cryptopals_challenge"));
 #endif
 
     xplat_chdir(current_path);
@@ -158,21 +169,6 @@ void World::init_workspace() {
         git_repository_open(&git_repo, root.ptr);
         git_buf_free(&root);
     }
-}
-
-bool check_license_key() {
-    SCOPED_FRAME();
-
-    Process proc;
-    proc.init();
-    // proc.dir = path_join(our_dirname(get_executable_path()), "helpers");
-    proc.run("license_check.exe");
-    defer { proc.cleanup(); };
-
-    while (proc.status() == PROCESS_WAITING)
-        continue;
-
-    return (proc.exit_code == EXIT_SUCCESS);
 }
 
 void World::init() {
@@ -202,8 +198,10 @@ void World::init() {
     chunk5_fridge.init(16);
     chunk6_fridge.init(8);
 
+    init_gohelper_crap();
+
 #if RELEASE_BUILD
-    for (bool first = true; !check_license_key(); first = false) {
+    for (bool first = true; !GHCheckLicense(); first = false) {
         if (first)
             tell_user("Please select your license keyfile.", "License key required");
         else
@@ -263,7 +261,7 @@ void World::init() {
     fill_file_tree();
 
     error_list.height = 125;
-    file_explorer.selection = -1;
+    file_explorer.selection = NULL;
 
     windows_open.search_and_replace = false;
     windows_open.build_and_debug = false;
@@ -378,25 +376,21 @@ void init_open_file() {
     wnd->filepaths = alloc_list<ccstr>();
     wnd->filtered_results = alloc_list<int>();
 
-    fn<void(ccstr)> fill_files = [&](ccstr path) {
-        auto thispath = path_join(world.current_path, path);
-        list_directory(thispath, [&](Dir_Entry *entry) {
-            bool isdir = (entry->type == DIRENT_DIR);
+    fn<void(File_Tree_Node*, ccstr)> fill_files = [&](auto node, auto path) {
+        for (auto it = node->children; it != NULL; it = it->next) {
+            auto isdir = it->is_directory;
 
-            auto fullpath = path_join(thispath, entry->name);
-            if (is_ignored_by_git(fullpath, isdir)) return;
+            if (isdir && node->parent == NULL && streq(it->name, ".ide")) return;
 
-            if (isdir && streq(path, "") && streq(entry->name, ".ide")) return;
-
-            auto relpath = path[0] == '\0' ? our_strcpy(entry->name) : path_join(path, entry->name);
+            auto relpath = path[0] == '\0' ? our_strcpy(it->name) : path_join(path, it->name);
             if (isdir)
-                fill_files(relpath);
+                fill_files(it, relpath);
             else
                 wnd->filepaths->append(relpath);
-        });
+        }
     };
 
-    fill_files("");
+    fill_files(world.file_tree, "");
 }
 
 void kick_off_build(Build_Profile *build_profile) {
@@ -417,44 +411,37 @@ void kick_off_build(Build_Profile *build_profile) {
         build->id = world.next_build_id++;
         build->started = true;
 
-        {
-            SCOPED_LOCK(&indexer.gohelper_static.lock);
-
-            // TODO: do this
-            indexer.gohelper_static.run("start_build", build_profile->cmd, NULL);
-            if (indexer.gohelper_static.returned_error) {
-                build->done = true;
-                build->build_itself_had_error = true;
-                return;
-            }
+        if (!GHStartBuild((char*)build_profile->cmd)) {
+            build->done = true;
+            build->build_itself_had_error = true;
+            return;
         }
 
+        enum {
+            GH_BUILD_INACTIVE = 0,
+            GH_BUILD_DONE,
+            GH_BUILD_RUNNING,
+        };
+
         for (;; sleep_milliseconds(100)) {
-            SCOPED_LOCK(&indexer.gohelper_static.lock);
+            GoInt num_errors = 0;
+            GoInt status = 0;
+            auto errors = GHGetBuildStatus(&status, &num_errors);
+            defer { if (errors != NULL) GHFreeBuildStatus(errors, num_errors); };
 
-            auto resp = indexer.gohelper_static.run("get_build_status", NULL);
-            if (indexer.gohelper_static.returned_error) {
-                build->done = true;
-                build->started = false;
-                build->build_itself_had_error = true;
-                return;
-            }
+            if (status != GH_BUILD_DONE) continue;
 
-            if (!streq(resp, "done")) continue;
-
-            auto len = indexer.gohelper_static.readint();
-
-            for (u32 i = 0; i < len; i++) {
+            for (u32 i = 0; i < num_errors; i++) {
                 auto err = build->errors.append();
 
-                err->message = indexer.gohelper_static.readline();
-                err->valid = (bool)indexer.gohelper_static.readint();
+                err->message = our_strcpy(errors[i].text);
+                err->valid = errors[i].is_valid;
 
                 if (err->valid) {
-                    err->file = indexer.gohelper_static.readline();
-                    err->row = indexer.gohelper_static.readint();
-                    err->col = indexer.gohelper_static.readint();
-                    auto is_vcol = indexer.gohelper_static.readint();
+                    err->file = our_strcpy(errors[i].filename);
+                    err->row = errors[i].line;
+                    err->col = errors[i].col;
+                    // errors[i].is_vcol;
                 }
             }
 
@@ -477,7 +464,6 @@ void kick_off_build(Build_Profile *build_profile) {
             break;
         }
     };
-
 
     world.build.thread = create_thread(do_build, build_profile);
 }

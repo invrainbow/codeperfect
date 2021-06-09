@@ -40,5 +40,4 @@ downloaded from github, copy `${path_to_libgit2}/build/Debug` into
 packages/libgit/lib, and `${path_to_libgit2}/include` into
 packages/libgit/includelib.
 
-
-
+Create a bin folder, put a copy of nvim.exe inside.

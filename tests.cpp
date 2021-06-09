@@ -2,8 +2,7 @@
 #include "mem.hpp"
 #include "editor.hpp"
 #include "buffer.hpp"
-
-const char PATH[] = "c:\\users\\brandon\\beego\\task\\task.go";
+#include "go.hpp"
 
 bool run_tests() {
     return false;

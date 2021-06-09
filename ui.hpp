@@ -155,7 +155,6 @@ struct UI {
     } hover;
 
     void init();
-    bool init_sprite_texture();
     void flush_verts();
     void draw_triangle(vec2f a, vec2f b, vec2f c, vec2f uva, vec2f uvb, vec2f uvc, vec4f color, Draw_Mode mode, Texture_Id texture = TEXTURE_FONT);
     void draw_quad(boxf b, boxf uv, vec4f color, Draw_Mode mode, Texture_Id texture = TEXTURE_FONT);

@@ -8,10 +8,12 @@
 /gotest
 *.ilk
 *.exe
+*.dll
 *.pdb
 *.obj
 *.lib
 *.exp
+bin/
 
 # clangd index
 .clangd
@@ -48,3 +50,6 @@ db.tmp
 .ideversion
 
 .DS_Store
+
+# we don't actually use this, we write our own function defs in go.hpp
+gohelper.h  

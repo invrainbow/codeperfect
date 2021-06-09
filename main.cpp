@@ -359,8 +359,6 @@ int main() {
     // from here, if we want to modify a texture, just set the active texture
     // are we going to run out of texture units?
 
-    ui.init_sprite_texture();
-
     {
         SCOPED_FRAME();
 

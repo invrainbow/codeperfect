@@ -15,23 +15,6 @@
 
 UI ui;
 
-ccstr image_filenames[] = {
-    "images/add.png",
-    "images/folder.png",
-    "images/add-folder.png",
-    "images/refresh.png",
-    "images/source-file.png",
-};
-
-// true means "should use DRAW_IMAGE_MASK"
-bool image_mask_types[] = {
-    true,
-    false,
-    true,
-    true,
-    true,
-};
-
 int get_line_number_width(Editor *editor) {
     auto &buf = editor->buf;
 
@@ -45,44 +28,6 @@ int get_line_number_width(Editor *editor) {
     }
 
     return (int)log10(maxval) + 1;
-}
-
-bool UI::init_sprite_texture() {
-    sprite_tex_size = 1024;
-
-    glActiveTexture(GL_TEXTURE0 + TEXTURE_IMAGES);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-
-    {
-        SCOPED_FRAME();
-
-        stbrp_context context;
-        s32 node_count = 4096 * 2;
-        auto nodes = alloc_array(stbrp_node, node_count);
-
-        stbrp_init_target(&context, 4096, 4096, nodes, node_count);
-        if (!stbrp_pack_rects(&context, sprite_rects.items, sprite_rects.len))
-            return false;
-
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, sprite_tex_size, sprite_tex_size, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-
-        u32 i = 0;
-        For (sprite_rects) {
-            int w = 0, h = 0, chans = 0;
-            auto data = stbi_load(image_filenames[i], &w, &h, &chans, STBI_rgb_alpha);
-            assert(chans == 4);
-
-            if (data == NULL) return false;
-            defer { stbi_image_free(data); };
-
-            assert(it.w == w);
-            assert(it.h == h);
-
-            glTexSubImage2D(GL_TEXTURE_2D, 0, it.x, it.y, w, h, GL_RGBA, GL_UNSIGNED_BYTE, data);
-            i++;
-        }
-    }
 }
 
 vec3f rgb_hex(ccstr s) {
@@ -498,19 +443,6 @@ void UI::init() {
     font = &world.font;
     editor_sizes.init(LIST_FIXED, _countof(_editor_sizes), _editor_sizes);
 
-    sprite_rects.init();
-
-    For (image_filenames) {
-        int w = 0, h = 0, comp = 0;
-        auto data = stbi_load(it, &w, &h, &comp, STBI_rgb_alpha);
-        assert(data != NULL);
-        defer { stbi_image_free(data); };
-
-        auto rect = sprite_rects.append();
-        rect->w = w;
-        rect->h = h;
-    }
-
     // make sure panes_area is nonzero, so that panes can be initialized
     panes_area.w = 1;
     panes_area.h = 1;
@@ -776,30 +708,6 @@ int UI::get_mouse_flags(boxf area) {
             ret |= MOUSE_MCLICKED;
     }
     return ret;
-}
-
-File_Tree_Node *get_file_tree_node_from_index(int idx) {
-    auto stack = alloc_list<File_Tree_Node*>();
-    for (auto child = world.file_tree->children; child != NULL; child = child->next)
-        stack->append(child);
-
-    for (u32 i = 0; stack->len > 0; i++) {
-        auto it = *stack->last();
-        if (i == idx) return it;
-
-        stack->len--;
-
-        if (it->is_directory && it->open) {
-            SCOPED_FRAME();
-            auto children = alloc_list<File_Tree_Node*>();
-            for (auto curr = it->children; curr != NULL; curr = curr->next)
-                children->append(curr);
-            for (i32 i = children->len-1; i >= 0; i--)
-                stack->append(children->at(i));
-        }
-    }
-
-    return NULL;
 }
 
 ccstr file_tree_node_to_path(File_Tree_Node *node) {
@@ -1365,9 +1273,9 @@ void open_add_file_or_folder(bool folder) {
     auto &wnd = world.wnd_add_file_or_folder;
 
     auto is_root = [&]() {
-        if (world.file_explorer.selection == -1) return true;
+        node = world.file_explorer.selection;
 
-        node = get_file_tree_node_from_index(world.file_explorer.selection);
+        if (node == NULL) return true;
         if (node->is_directory) return false;
 
         node = node->parent;
@@ -1576,7 +1484,6 @@ void UI::draw_everything() {
             if (ImGui::MenuItem("Add New Folder...")) {
                 open_add_file_or_folder(true);
             }
-
 
             ImGui::Separator();
 
@@ -1887,7 +1794,7 @@ void UI::draw_everything() {
         );
 
         ImGui::SetNextWindowSize(ImVec2(450, -1));
-        ImGui::SetNextWindowPos(ImVec2(world.window_size.x, world.window_size.y), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+        ImGui::SetNextWindowPos(ImVec2(world.window_size.x/2, world.window_size.y/2), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
 
         ImGui::Begin(label, &world.wnd_add_file_or_folder.show, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking);
 
@@ -1922,7 +1829,7 @@ void UI::draw_everything() {
         ImGui::SameLine();
 
         if (ImGui::Button("Cancel")) {
-            ImGui::CloseCurrentPopup();
+            world.wnd_add_file_or_folder.show = false;
         }
 
         ImGui::End();
@@ -1954,25 +1861,18 @@ void UI::draw_everything() {
 
         // draw files area
         {
-            auto stack = alloc_list<File_Tree_Node*>();
-            for (auto child = world.file_tree->children; child != NULL; child = child->next)
-                stack->append(child);
+            SCOPED_FRAME();
 
-            for (u32 i = 0; stack->len > 0; i++) {
-                auto it = *stack->last();
-                stack->len--;
-
-                auto flags = ImGuiTreeNodeFlags_DefaultOpen
-                    | ImGuiTreeNodeFlags_OpenOnArrow
+            fn<void(File_Tree_Node*)> draw = [&](auto it) {
+                auto flags = ImGuiTreeNodeFlags_OpenOnArrow
                     | ImGuiTreeNodeFlags_OpenOnDoubleClick
-                    // | ImGuiTreeNodeFlags_SpanAvailWidth
                     | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+                    // | ImGuiTreeNodeFlags_SpanAvailWidth
+
                 if (!it->is_directory)
                     flags |= ImGuiTreeNodeFlags_Leaf; // | ImGuiTreeNodeFlags_Bullet;
-                if (world.file_explorer.selection == i)
+                if (world.file_explorer.selection == it)
                     flags |= ImGuiTreeNodeFlags_Selected;
-
-                // it->is_directory
 
                 for (u32 j = 0; j < it->depth; j++) ImGui::Indent();
 
@@ -1984,7 +1884,10 @@ void UI::draw_everything() {
                 for (u32 j = 0; j < it->depth; j++) ImGui::Unindent();
 
                 if (ImGui::IsItemClicked()) {
-                    world.file_explorer.selection = i;
+                    world.file_explorer.selection = it;
+                }
+
+                if (ImGui::IsMouseDoubleClicked(0) && ImGui::IsItemHovered(ImGuiHoveredFlags_None)) {
                     if (!it->is_directory) {
                         SCOPED_FRAME();
                         auto rel_path = file_tree_node_to_path(it);
@@ -1993,15 +1896,13 @@ void UI::draw_everything() {
                     }
                 }
 
-                if (it->is_directory && it->open) {
-                    SCOPED_FRAME();
-                    auto children = alloc_list<File_Tree_Node*>();
-                    for (auto curr = it->children; curr != NULL; curr = curr->next)
-                        children->append(curr);
-                    for (i32 i = children->len-1; i >= 0; i--)
-                        stack->append(children->at(i));
-                }
-            }
+                if (it->is_directory && it->open)
+                    for (auto child = it->children; child != NULL; child = child->next)
+                        draw(child);
+            };
+
+            for (auto child = world.file_tree->children; child != NULL; child = child->next)
+                draw(child);
         }
 
         ImGui::End();
@@ -2205,12 +2106,17 @@ void UI::draw_everything() {
         if (ImGui::IsItemEdited())
             filter_files();
 
-        for (u32 i = 0; i < wnd.filtered_results->len; i++) {
-            auto it = wnd.filepaths->at(wnd.filtered_results->at(i));
-            if (i == wnd.selection)
-                ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.5f, 1.0f), "%s", it);
-            else
-                ImGui::Text("%s", it);
+        {
+            ImGui::PushFont(world.ui.im_font_mono);
+            defer { ImGui::PopFont(); };
+
+            for (u32 i = 0; i < wnd.filtered_results->len && i < 20; i++) {
+                auto it = wnd.filepaths->at(wnd.filtered_results->at(i));
+                if (i == wnd.selection)
+                    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.5f, 1.0f), "%s", it);
+                else
+                    ImGui::Text("%s", it);
+            }
         }
 
         ImGui::End();
@@ -3109,21 +3015,6 @@ void UI::end_frame() {
     }
 
     recalculate_view_sizes();
-}
-
-void UI::draw_image(Sprites_Image_Type image_id, boxf b) {
-    auto rect = &sprite_rects[image_id];
-
-    boxf uv;
-    uv.x = rect->x / sprite_tex_size;
-    uv.y = rect->y / sprite_tex_size;
-    uv.w = rect->w / sprite_tex_size;
-    uv.h = rect->h / sprite_tex_size;
-
-    if (image_mask_types[image_id])
-        draw_quad(b, uv, {1.0, 1.0, 1.0, 1.0}, DRAW_IMAGE_MASK, TEXTURE_IMAGES);
-    else
-        draw_quad(b, uv, {0}, DRAW_IMAGE, TEXTURE_IMAGES);
 }
 
 void UI::get_tabs_and_editor_area(boxf* pane_area, boxf* ptabs_area, boxf* peditor_area, bool has_tabs) {

@@ -27,6 +27,15 @@ func ReadLine() string {
 	return scanner.Text()
 }
 
+func CheckGoVersion(tag string) bool {
+	for _, it := range build.Default.ReleaseTags {
+		if it == tag {
+			return true
+		}
+	}
+	return false
+}
+
 func main() {
 	for {
 		switch ReadLine() {
@@ -34,12 +43,12 @@ func main() {
 			path := ReadLine()
 			if err := os.Chdir(path); err != nil {
 				WriteError(err)
-                break
+				break
 			}
 			Write(true)
 
 		case "check_go_version":
-			Write(isCompatible)
+			Write(CheckGoVersion("go1.16"))
 
 		case "check_included_in_build":
 			path := ReadLine()

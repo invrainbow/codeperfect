@@ -706,7 +706,7 @@ bool move_file_atomically(ccstr src, ccstr dest) {
 
 int charset_to_win32_enum(Charset_Type t) {
     switch (t) {
-    case CS_ENGLISH: return ANSI_CHARSET; 
+    case CS_ENGLISH: return ANSI_CHARSET;
     case CS_CHINESE_SIM: return GB2312_CHARSET;
     case CS_CHINESE_TRAD: return CHINESEBIG5_CHARSET;
     case CS_KOREAN: return HANGUL_CHARSET;

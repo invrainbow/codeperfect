@@ -6,6 +6,7 @@
 #include "set.hpp"
 #include "editor.hpp"
 #include "meow_hash.hpp"
+#include <stdlib.h>
 
 #define GO_DEBUG 1
 
@@ -338,8 +339,6 @@ int Gohelper::readint() {
 }
 
 ccstr Gohelper::run(ccstr op, ...) {
-    SCOPED_LOCK(&lock);
-
     va_list vl;
     va_start(vl, op);
 
@@ -1459,8 +1458,6 @@ u64 Go_Indexer::hash_package(ccstr resolved_package_path) {
 }
 
 bool Go_Indexer::is_file_included_in_build(ccstr path) {
-    SCOPED_LOCK(&gohelper_dynamic.lock);
-
     auto resp = gohelper_dynamic.run("check_included_in_build", path, NULL);
     if (gohelper_dynamic.returned_error) return false;
 
@@ -2358,8 +2355,6 @@ ccstr Go_Indexer::filepath_to_import_path(ccstr path_str) {
 }
 
 void Gohelper::init(ccstr cmd, ccstr dir) {
-    lock.init();
-
     proc.init();
     proc.dir = dir;
     proc.use_stdin = true;
@@ -2371,7 +2366,6 @@ void Gohelper::init(ccstr cmd, ccstr dir) {
 
 void Gohelper::cleanup() {
     proc.cleanup();
-    lock.cleanup();
 }
 
 void Go_Indexer::init() {
@@ -2389,19 +2383,18 @@ void Go_Indexer::init() {
         strcpy_safe(current_exe_path, _countof(current_exe_path), our_dirname(get_executable_path()));
     }
 
-    gohelper_dynamic.init("go run ./dynamic_helper", path_join(current_exe_path, "helpers"));
-    gohelper_static.init("static_helper.exe", path_join(current_exe_path, "helpers"));
+    gohelper_dynamic.init("go run dynamic_helper.go", current_exe_path);
+
+    auto get_env = [&](ccstr var) -> ccstr {
+        auto ret = GHGetGoEnv((char*)var);
+        defer { GHFree(ret); };
+        return our_strcpy(ret);
+    };
 
     {
-        auto resp = gohelper_static.run("go_init", NULL);
-        if (!streq(resp, "true")) {
-            tell_user("Unable to read GOPATH, GOROOT, and GOMODCACHE.", NULL);
-            exit(1);
-        }
-
-        gopath = our_strcpy(gohelper_static.readline());
-        goroot = our_strcpy(gohelper_static.readline());
-        gomodcache = our_strcpy(gohelper_static.readline());
+        gopath = get_env("GOPATH");
+        goroot = get_env("GOROOT");
+        gomodcache = get_env("GOMODCACHE");
     }
 
     {
@@ -2441,7 +2434,6 @@ void Go_Indexer::cleanup() {
         bgthread = NULL;
     }
 
-    gohelper_static.cleanup();
     gohelper_dynamic.cleanup();
 
     mem.cleanup();
@@ -4317,4 +4309,44 @@ ccstr godecl_type_str(Godecl_Type type) {
     define_str_case(GODECL_SHORTVAR);
     }
     return NULL;
+}
+
+GoUint8 (*GHStartBuild)(char* cmdstr);
+void (*GHStopBuild)();
+void (*GHFreeBuildStatus)(void* p, GoInt lines);
+GH_Build_Error* (*GHGetBuildStatus)(GoInt* pstatus, GoInt* plines);
+char* (*GHGetGoEnv)(char* name);
+void (*GHFmtStart)();
+void (*GHFmtAddLine)(char* line);
+char* (*GHFmtFinish)();
+void (*GHFree)(void* p);
+GoUint8 (*GHCheckLicense)();
+
+void init_gohelper_crap() {
+#if OS_WIN
+    auto dll = LoadLibraryW(L"gohelper.dll");
+    if (dll == NULL) panic("unable to load gohelper");
+
+    GHStartBuild = (decltype(GHStartBuild))GetProcAddress(dll, "GHStartBuild");
+    GHStopBuild = (decltype(GHStopBuild))GetProcAddress(dll, "GHStopBuild");
+    GHFreeBuildStatus = (decltype(GHFreeBuildStatus))GetProcAddress(dll, "GHFreeBuildStatus");
+    GHGetBuildStatus = (decltype(GHGetBuildStatus))GetProcAddress(dll, "GHGetBuildStatus");
+    GHGetGoEnv = (decltype(GHGetGoEnv))GetProcAddress(dll, "GHGetGoEnv");
+    GHFmtStart = (decltype(GHFmtStart))GetProcAddress(dll, "GHFmtStart");
+    GHFmtAddLine = (decltype(GHFmtAddLine))GetProcAddress(dll, "GHFmtAddLine");
+    GHFmtFinish = (decltype(GHFmtFinish))GetProcAddress(dll, "GHFmtFinish");
+    GHFree = (decltype(GHFree))GetProcAddress(dll, "GHFree");
+    GHCheckLicense = (decltype(GHCheckLicense))GetProcAddress(dll, "GHCheckLicense");
+
+    if (GHStartBuild == NULL) panic("couldn't load GHStartBuild");
+    if (GHStopBuild == NULL) panic("couldn't load GHStopBuild");
+    if (GHFreeBuildStatus == NULL) panic("couldn't load GHFreeBuildStatus");
+    if (GHGetBuildStatus == NULL) panic("couldn't load GHGetBuildStatus");
+    if (GHGetGoEnv == NULL) panic("couldn't load GHGetGoEnv");
+    if (GHFmtStart == NULL) panic("couldn't load GHFmtStart");
+    if (GHFmtAddLine == NULL) panic("couldn't load GHFmtAddLine");
+    if (GHFmtFinish == NULL) panic("couldn't load GHFmtFinish");
+    if (GHFree == NULL) panic("couldn't load GHFree");
+    if (GHCheckLicense == NULL) panic("couldn't load GHCheckLicense");
+#endif
 }

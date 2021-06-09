@@ -251,8 +251,7 @@ struct World {
 
     struct {
         bool show;
-        // i32 scroll_offset;
-        i32 selection;
+        File_Tree_Node *selection;
         // char buf[256];
         // bool adding_something;
         // bool thing_being_added_is_file;
