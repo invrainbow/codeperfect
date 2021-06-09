@@ -42,6 +42,7 @@ void World::fill_file_tree() {
     SCOPED_MEM(&file_tree_mem);
     file_tree_mem.reset();
 
+    // invalidate pointer
     file_explorer.selection = NULL;
 
     file_tree = alloc_object(File_Tree_Node);
@@ -151,8 +152,8 @@ void World::init_workspace() {
     opts.save = false;
     let_user_select_file(&opts);
 #else
-    // strcpy_safe(current_path, _countof(current_path), normalize_path_sep("c:/users/brandon/hugo"));
-    strcpy_safe(current_path, _countof(current_path), normalize_path_sep("c:/users/brandon/cryptopals_challenge"));
+    strcpy_safe(current_path, _countof(current_path), normalize_path_sep("c:/users/brandon/hugo"));
+    // strcpy_safe(current_path, _countof(current_path), normalize_path_sep("c:/users/brandon/cryptopals_challenge"));
 #endif
 
     xplat_chdir(current_path);
@@ -597,4 +598,11 @@ void handle_goto_definition() {
         if (pos.y == -1) pos = target->offset_to_cur(pos.x);
         target->move_cursor(pos);
     }
+}
+
+void save_all_unsaved_files() {
+    for (auto&& pane : world.panes)
+        For (pane.editors)
+            if (!it.is_untitled)
+                it.handle_save(false);
 }

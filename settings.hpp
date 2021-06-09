@@ -16,9 +16,9 @@ struct Settings {
     float autocomplete_item_padding_x = 6;
     float autocomplete_item_padding_y = 2;
     float tabs_offset = 50;
-    float parameter_hint_margin_y = 4;
-    float parameter_hint_padding_x = 2;
-    float parameter_hint_padding_y = 2;
+    float parameter_hint_margin_y = 6;
+    float parameter_hint_padding_x = 4;
+    float parameter_hint_padding_y = 4;
     float editor_margin_x = 5;
     float editor_margin_y = 5;
     float line_height = 1.2;

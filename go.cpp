@@ -212,7 +212,7 @@ void Ghetto_Parser::init(Parser_It* _it, ccstr _filepath) {
     filepath = _filepath;
 }
 
-bool isid(int c) { return (isalnum(c) || c == '_'); }
+bool isident(int c) { return isalnum(c) || c == '_'; }
 
 void Ghetto_Parser::lex() {
     // tok.start_before_leading_whitespace = it->get_pos();
@@ -245,9 +245,9 @@ void Ghetto_Parser::lex() {
             break;
         }
 
-        if (!isid(ch)) return TOK_ILLEGAL;
+        if (!isident(ch)) return TOK_ILLEGAL;
 
-        while (isid(it->peek()))
+        while (isident(it->peek()))
             it->next();
         return TOK_ID;
     };
@@ -1753,10 +1753,6 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 p
     auto ret = alloc_object(Jump_To_Definition_Result);
     *ret = result;
     return ret;
-}
-
-bool isident(int c) {
-    return isalnum(c) || c == '_';
 }
 
 bool is_expression_node(Ast_Node *node) {

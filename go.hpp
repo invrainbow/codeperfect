@@ -1022,6 +1022,8 @@ struct Token {
     cur2 end;
 };
 
+bool isident(int c);
+
 // We used to have a full on parser that was designed to and could mostly parse
 // the whole go language, but it was shit and it kept running into problems and
 // crashing. But it had the advantage over tree-sitter that it could parse a

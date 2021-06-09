@@ -752,22 +752,18 @@ int main() {
                         break;
                     case GLFW_KEY_Y:
                         if (editor == NULL) break;
+                        if (world.nvim.mode == VI_INSERT) break;
                         if (editor->view.y > 0) {
                             editor->view.y--;
-                            if (editor->cur.y + options.scrolloff >= editor->view.y + editor->view.h)
-                                editor->move_cursor(new_cur2(editor->cur.x, editor->view.y + editor->view.h - 1 - options.scrolloff));
+                            editor->ensure_cursor_on_screen();
                         }
                         break;
                     case GLFW_KEY_E:
                         if (editor == NULL) break;
                         if (world.nvim.mode == VI_INSERT) break;
-                        if (relu_sub(editor->cur.y, options.scrolloff) < editor->view.y + 1) {
-                            if (editor->view.y + 1 < editor->buf.lines.len) {
-                                editor->view.y++;
-                                editor->move_cursor(new_cur2(editor->cur.x, editor->view.y + options.scrolloff));
-                            }
-                        } else {
+                        if (editor->view.y + 1 < editor->buf.lines.len) {
                             editor->view.y++;
+                            editor->ensure_cursor_on_screen();
                         }
                         break;
                     case GLFW_KEY_V:
@@ -939,6 +935,7 @@ int main() {
                     switch (key) {
                     case GLFW_KEY_B:
                         world.error_list.show = true;
+                        save_all_unsaved_files();
                         kick_off_build();
                         break;
                     case GLFW_KEY_F:
@@ -990,6 +987,7 @@ int main() {
                             world.dbg.push_call(DLVC_CONTINUE_RUNNING);
                             break;
                         case DLV_STATE_INACTIVE:
+                            save_all_unsaved_files();
                             world.dbg.push_call(DLVC_START);
                             break;
                         }
@@ -1063,6 +1061,9 @@ int main() {
 
                                 // move cursor forward
                                 editor->raw_move_cursor(new_cur2(ac_start.x + len, ac_start.y));
+
+                                // clear out last_closed_autocomplete
+                                editor->last_closed_autocomplete = new_cur2(-1, -1);
 
                                 // clear autocomplete
                                 ptr0(&ac.ac);

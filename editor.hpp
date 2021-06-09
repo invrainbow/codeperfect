@@ -14,9 +14,22 @@ const int AUTOCOMPLETE_WINDOW_ITEMS = 10;
 
 #define MAX_BREAKPOINTS 128
 
+enum {
+    HINT_NAME,
+    HINT_NORMAL,
+};
+
 struct Client_Parameter_Hint {
     Gotype *gotype; // save this here in case we need it later
     ccstr help_text;
+
+    struct Token_Change {
+        int token;
+        int index;
+    };
+
+    List<Token_Change> token_changes;
+
     cur2 start;
     // u32 current_param;
     bool closed;
@@ -51,6 +64,9 @@ struct Editor {
     bool saving;
     Process goimports_proc;
     char highlights[NVIM_DEFAULT_HEIGHT][NVIM_DEFAULT_WIDTH];
+
+    // need to reset this when backspacing past it and when accepting an auto
+    cur2 last_closed_autocomplete;
 
     struct {
         bool is_buf_attached;
@@ -123,6 +139,7 @@ struct Editor {
     void handle_save(bool about_to_close = false);
     bool is_current_editor();
     void backspace_in_insert_mode(int graphemes_to_erase, int codepoints_to_erase);
+    void ensure_cursor_on_screen();
 };
 
 struct Pane {

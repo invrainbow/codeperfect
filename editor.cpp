@@ -54,6 +54,15 @@ void Editor::raw_move_cursor(cur2 c) {
         view.y = cur.y + options.scrolloff - view.h + 1;
 }
 
+void Editor::ensure_cursor_on_screen() {
+    if (relu_sub(cur.y, options.scrolloff) < view.y)
+        move_cursor(new_cur2(cur.x, view.y + options.scrolloff));
+    if (cur.y + options.scrolloff >= view.y + view.h)
+        move_cursor(new_cur2(cur.x, view.y + view.h - 1 - options.scrolloff));
+
+    // TODO: handle x too
+}
+
 void Editor::update_lines(int firstline, int lastline, List<uchar*> *new_lines, List<s32> *line_lengths) {
     if (lastline == -1) lastline = buf.lines.len;
 
@@ -352,6 +361,14 @@ bool Editor::trigger_escape() {
     if (autocomplete.ac.results != NULL) {
         handled = true;
         ptr0(&autocomplete.ac);
+
+        {
+            auto c = cur;
+            auto &line = buf.lines[c.y];
+            while (c.x > 0 && isident(line[c.x-1])) c.x--;
+            if (c.x < cur.x)
+                last_closed_autocomplete = c;
+        }
     }
 
     if (parameter_hint.gotype != NULL) {
@@ -478,6 +495,8 @@ void Editor::trigger_autocomplete(bool triggered_by_dot) {
     Autocomplete ac = {0};
     if (!world.indexer.autocomplete(filepath, cur, triggered_by_dot, &ac)) return;
     if (old_type != AUTOCOMPLETE_NONE && old_keyword_start != ac.keyword_start_position) return;
+
+    last_closed_autocomplete = new_cur2(-1, -1);
 
     {
         // use autocomplete_mem
@@ -614,17 +633,61 @@ void Editor::trigger_parameter_hint(bool triggered_by_paren) {
 
         auto hint = world.indexer.parameter_hint(filepath, cur, triggered_by_paren);
         if (hint == NULL) return;
+        if (hint->gotype->type != GOTYPE_FUNC) return;
 
         {
             SCOPED_MEM(&world.parameter_hint_mem);
             world.parameter_hint_mem.reset();
 
+            parameter_hint.token_changes.init();
             parameter_hint.gotype = hint->gotype->copy();
             parameter_hint.start = hint->call_args_start;
 
             Type_Renderer rend;
             rend.init();
-            rend.write_type(parameter_hint.gotype, true);
+
+            auto add_token_change = [&](int token) {
+                auto c = parameter_hint.token_changes.append();
+                c->token = token;
+                c->index = rend.chars.len;
+            };
+
+            {
+                auto t = parameter_hint.gotype;
+                auto params = t->func_sig.params;
+                auto result = t->func_sig.result;
+
+                // write params
+                rend.write("(");
+                for (u32 i = 0; i < params->len; i++) {
+                    auto &it = params->at(i);
+
+                    add_token_change(HINT_NAME);
+                    rend.write("%s ", it.name);
+                    add_token_change(HINT_NORMAL);
+                    rend.write_type(it.gotype);
+                    if (i < params->len - 1)
+                        rend.write(", ");
+                }
+                rend.write(")");
+
+                // write result
+                if (result != NULL && result->len > 0) {
+                    rend.write(" ");
+                    if (result->len == 1 && result->at(0).name == NULL)
+                        rend.write_type(result->at(0).gotype);
+                    else {
+                        rend.write("(");
+                        for (u32 i = 0; i < result->len; i++) {
+                            rend.write_type(result->at(i).gotype);
+                            if (i < result->len - 1)
+                                rend.write(", ");
+                        }
+                        rend.write(")");
+                    }
+                }
+            }
+
             parameter_hint.help_text = rend.finish();
         }
     }
@@ -672,8 +735,8 @@ void Editor::update_parameter_hint() {
         if (cur < hint.start) return true;
 
         auto root = new_ast_node(ts_tree_root_node(tree), NULL);
-
         bool ret = false;
+
         find_nodes_containing_pos(root, hint.start, true, [&](Ast_Node *it) -> Walk_Action {
             if (it->start == hint.start)
                 if (it->type == TS_ARGUMENT_LIST)
@@ -889,6 +952,29 @@ void Editor::type_char_in_insert_mode(char ch) {
 
             end_change();
         }
+    default:
+        {
+            if (autocomplete.ac.results != NULL) break;
+            if (!isident(ch)) break;
+
+            auto c = cur;
+            auto &line = buf.lines[c.y];
+
+            while (c.x > 0 && isident(line[c.x-1]))
+                c.x--;
+
+            if (c == cur) break; // technically can't happen, i believe
+
+            // c is now start of identifier
+
+            if (last_closed_autocomplete == c) break;
+
+            // don't open autocomplete before 3 chars
+            if (cur.x - c.x < 3) break;
+
+            trigger_autocomplete(false);
+        }
+        break;
     }
 
     if (!did_autocomplete) update_autocomplete();
@@ -920,6 +1006,8 @@ void Editor::backspace_in_insert_mode(int graphemes_to_erase, int codepoints_to_
 
     buf.remove(start, cur);
     raw_move_cursor(start);
+
+    last_closed_autocomplete = new_cur2(-1, -1);
 }
 
 void Editor::format_on_save(bool write_to_nvim) {
@@ -963,7 +1051,9 @@ void Editor::format_on_save(bool write_to_nvim) {
         return false;
     });
 
+    auto dirty = buf.dirty;
     buf.copy_from(&swapbuf);
+    buf.dirty = dirty;
 
     if (tree != NULL) {
         ts_tree_delete(tree);
@@ -982,6 +1072,8 @@ void Editor::format_on_save(bool write_to_nvim) {
 }
 
 void Editor::handle_save(bool about_to_close) {
+    saving = true;
+
     bool untitled = is_untitled;
 
     if (untitled) {

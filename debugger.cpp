@@ -35,7 +35,7 @@ when a frame is opened
 #include <netdb.h>
 #endif
 
-#define DBG_DEBUG 1
+#define DBG_DEBUG 0
 
 #if DBG_DEBUG
 #define dbg_print(fmt, ...) print("[dbg] " fmt, ##__VA_ARGS__)

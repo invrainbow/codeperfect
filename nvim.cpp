@@ -190,8 +190,13 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 break;
 
             case NVIM_REQ_POST_SAVE_SETLINES:
-                editor->saving = false;
-                editor->buf.dirty = false;
+                {
+                    auto was_saving = editor->saving;
+                    editor->saving = false;
+                    if (was_saving)
+                        editor->buf.dirty = false;
+                }
+
                 {
                     /*
                     auto cur = req->post_save_setlines.cur;

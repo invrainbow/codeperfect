@@ -60,7 +60,7 @@ ImVec4 to_imcolor(vec4f color) {
 }
 
 const vec3f COLOR_WHITE = rgb_hex("#ffffff");
-const vec3f COLOR_RED = rgb_hex("#ff8888");
+const vec3f COLOR_RED = rgb_hex("#ff5555");
 const vec3f COLOR_LIGHT_BLUE = rgb_hex("#6699dd");
 const vec3f COLOR_DARK_RED = rgb_hex("#880000");
 const vec3f COLOR_DARK_YELLOW = rgb_hex("#6b6d0a");
@@ -1498,6 +1498,7 @@ void UI::draw_everything() {
         if (ImGui::BeginMenu("Build")) {
             if (ImGui::MenuItem("Build", "Ctrl+Shift+B")) {
                 world.error_list.show = true;
+                save_all_unsaved_files();
                 kick_off_build();
             }
 
@@ -1529,6 +1530,7 @@ void UI::draw_everything() {
                 }
             } else {
                 if (ImGui::MenuItem("Start Debugging", "F5", false, world.dbg.state_flag == DLV_STATE_INACTIVE)) {
+                    save_all_unsaved_files();
                     world.dbg.push_call(DLVC_START);
                 }
             }
@@ -2556,7 +2558,7 @@ void UI::draw_everything() {
                         For (breakpoints_for_this_editor) {
                             if (it.line == y + 1) {
                                 bool inactive = (it.pending || world.dbg.state_flag == DLV_STATE_INACTIVE);
-                                return inactive ?  BREAKPOINT_ACTIVE : BREAKPOINT_INACTIVE;
+                                return inactive ? BREAKPOINT_INACTIVE : BREAKPOINT_ACTIVE;
                             }
                         }
 
@@ -2567,8 +2569,12 @@ void UI::draw_everything() {
                         cur_pos.x,
                         cur_pos.y - font->offset_y,
                         (float)editor_area.w,
-                        (float)font->height - 1,
+                        (float)font->height,
                     };
+
+                    auto py = font->height * (settings.line_height - 1.0) / 2;
+                    line_box.y -= py;
+                    line_box.h += py * 2;
 
                     auto bptype = find_breakpoint_stopped_at_this_line();
                     if (bptype == BREAKPOINT_CURRENT_GOROUTINE)
@@ -2576,15 +2582,11 @@ void UI::draw_everything() {
                     else if (bptype == BREAKPOINT_OTHER_GOROUTINE)
                         draw_rect(line_box, rgba(COLOR_DARKER_YELLOW));
                     else if (bptype == BREAKPOINT_ACTIVE)
-                        draw_rect(line_box, rgba(COLOR_DARK_RED, 1.0));
+                        draw_rect(line_box, rgba(COLOR_RED, 0.5));
                     else if (bptype == BREAKPOINT_INACTIVE)
-                        draw_rect(line_box, rgba(COLOR_DARK_RED, 0.5));
+                        draw_rect(line_box, rgba(COLOR_RED, 0.3));
 
                     auto line_number_width = get_line_number_width(editor);
-
-                    auto is_cursor_match = [&](cur2 cur, i32 x, i32 y) -> bool {
-                        if (cur.y != y) return false;
-                    };
 
                     {
                         cur_pos.x += settings.line_number_margin_left;
@@ -2840,7 +2842,26 @@ void UI::draw_everything() {
                     text_pos.x += settings.parameter_hint_padding_x;
                     text_pos.y += settings.parameter_hint_padding_y;
 
-                    draw_string(text_pos, hint.help_text, rgba(COLOR_WHITE));
+                    text_pos.y += font->offset_y;
+
+                    {
+                        u32 len = strlen(hint.help_text);
+                        vec4f color = rgba(COLOR_WHITE);
+                        int j = 0;
+
+                        for (u32 i = 0; i < len; i++) {
+                            if (j < hint.token_changes.len) {
+                                if (i == hint.token_changes[j].index) {
+                                    switch (hint.token_changes[j].token) {
+                                    case HINT_NAME: color = rgba(COLOR_RED); break;
+                                    case HINT_NORMAL: color = rgba(COLOR_WHITE); break;
+                                    }
+                                    j++;
+                                }
+                            }
+                            draw_char(&text_pos, hint.help_text[i], color);
+                        }
+                    }
                 } while (0);
             }
         }
@@ -2939,7 +2960,7 @@ void UI::draw_everything() {
 
                 auto command = our_sprintf("%s%s", get_title(), cmd.content.items);
                 draw_status_piece(LEFT, command, rgba("#888833"), rgba("#cccc88"));
-            } else {
+            } else if (world.get_current_editor() != NULL) {
                 ccstr mode_str = NULL;
                 switch (world.nvim.mode) {
                 case VI_NORMAL: mode_str = "NORMAL"; break;
@@ -3092,6 +3113,7 @@ void UI::recalculate_view_sizes(bool force) {
         for (auto&& editor : world.panes[i].editors) {
             editor.view.w = (i32)((editor_sizes[i].x - settings.editor_margin_x) / world.font.width);
             editor.view.h = (i32)((editor_sizes[i].y - settings.editor_margin_y) / world.font.height / settings.line_height);
+            editor.ensure_cursor_on_screen();
         }
     }
 }
