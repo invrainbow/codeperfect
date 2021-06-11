@@ -9,14 +9,14 @@ import {
 import { Helmet } from "react-helmet";
 import cx from "classnames";
 import _ from "lodash";
-import { PlayIcon } from "@heroicons/react/solid";
+// import { PlayIcon } from "@heroicons/react/solid";
 
 // static assets
 import ideScreenshotImage from "./ide.png";
 import gif60fps from "./60fps.gif";
 import gifVim from "./vim.gif";
 import pngIntellisense from "./intellisense.png";
-import pngVideoScreenshot from "./video-screenshot.png";
+// import pngVideoScreenshot from "./video-screenshot.png";
 
 // constants
 const IDE_NAME = "CodePerfect 95";
@@ -204,6 +204,7 @@ function Home() {
         <NiceImage src={gifVim} className="md:w-7/12" />
       </Section>
 
+      {/*
       <p className="text-center mb-6">
         Watch a demo of {IDE_NAME} being used to solve{" "}
         <a target="_blank" rel="noreferrer" href="https://cryptopals.com">
@@ -211,7 +212,6 @@ function Home() {
         </a>
         .
       </p>
-
       <div className="mx-auto mb-16 md:mb-32 md:w-3/4">
         <a
           className="relative border shadow-md group"
@@ -230,6 +230,7 @@ function Home() {
           />
         </a>
       </div>
+      */}
     </div>
   );
 }
