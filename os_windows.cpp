@@ -117,8 +117,9 @@ u64 current_time_in_nanoseconds() {
 
     LARGE_INTEGER now;
     QueryPerformanceCounter(&now);
-    now.QuadPart *= 1000000000;
-    return now.QuadPart / freq.QuadPart;
+
+    double fac = (double)1000000000 / (double)freq.QuadPart;
+    return (u64)(now.QuadPart * fac);
 }
 
 void close_and_null_handle(HANDLE* ph) {
@@ -392,6 +393,10 @@ bool File::write(char *buf, s32 size, s32 *bytes_written) {
     if (bytes_written != NULL)
         *bytes_written = (s32)n;
     return (n == size);
+}
+
+void max_out_clock_frequency() {
+    timeBeginPeriod(1);
 }
 
 void sleep_milliseconds(u32 milliseconds) {

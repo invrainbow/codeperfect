@@ -243,6 +243,8 @@ int main() {
 
     SCOPED_MEM(&world.frame_mem);
 
+    max_out_clock_frequency();
+
     if (!glfwInit())
         return error("glfwInit failed"), EXIT_FAILURE;
     defer { glfwTerminate(); };
@@ -1241,12 +1243,13 @@ int main() {
 
     t.log("initialize everything");
 
-    double last_time = glfwGetTime();
-    i64 last_frame_time = current_time_in_nanoseconds();
+    auto last_frame_time = current_time_in_nanoseconds();
 
     // world.focus_editor(path_join(world.current_path, "main.go"), new_cur2(1, 8));
 
     while (!glfwWindowShouldClose(world.window)) {
+        auto frame_start_time = current_time_in_nanoseconds();
+
         world.frame_mem.reset();
 
         SCOPED_MEM(&world.frame_mem);
@@ -1346,9 +1349,9 @@ int main() {
             io.DisplaySize = ImVec2((float)world.window_size.x, (float)world.window_size.y);
             io.DisplayFramebufferScale = ImVec2(world.display_scale.x, world.display_scale.y);
 
-            double new_time = glfwGetTime();
-            io.DeltaTime = last_time > 0.0 ? (float)(new_time - last_time) : (float)(1.0f / 60.0f);
-            last_time = new_time;
+            auto now = current_time_in_nanoseconds();
+            io.DeltaTime = (double)(now - last_frame_time) / (double)1000000000;
+            last_frame_time = now;
 
             io.MousePos = ImVec2(-FLT_MAX, -FLT_MAX);
             if (glfwGetWindowAttrib(world.window, GLFW_FOCUSED)) {
@@ -1404,11 +1407,9 @@ int main() {
 
         {
             // wait until next frame
-            auto curr = current_time_in_nanoseconds();
-            auto remaining = (1000000000.f / FRAME_RATE_CAP) - (curr - last_frame_time);
-            if (remaining > 0)
-                sleep_milliseconds((u32)(remaining / 1000000.0f));
-            last_frame_time = curr;
+            auto budget = (1000.f / FRAME_RATE_CAP);
+            auto spent = (current_time_in_nanoseconds() - frame_start_time) / 1000000.f;
+            if (budget > spent) sleep_milliseconds((u32)(budget - spent));
         }
     }
 

@@ -200,6 +200,7 @@ struct File {
     u32 seek(u32 pos);
 };
 
+void max_out_clock_frequency();
 void sleep_milliseconds(u32 milliseconds);
 
 struct Select_File_Opts {
