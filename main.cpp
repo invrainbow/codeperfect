@@ -1405,7 +1405,7 @@ int main() {
 
         glfwSwapBuffers(world.window);
 
-        {
+        if (!world.turn_off_framerate_cap) {
             // wait until next frame
             auto budget = (1000.f / FRAME_RATE_CAP);
             auto spent = (current_time_in_nanoseconds() - frame_start_time) / 1000000.f;

@@ -212,6 +212,7 @@ struct World {
     void init_workspace();
 
     bool replace_line_numbers_with_bytecounts;
+    bool turn_off_framerate_cap;
 
     struct {
         bool show;

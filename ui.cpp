@@ -1642,6 +1642,7 @@ void UI::draw_everything() {
                 ImGui::MenuItem("Editor toplevels viewer", NULL, &world.wnd_editor_toplevels.show);
                 ImGui::MenuItem("Roll Your Own IDE Construction Set", NULL, &world.wnd_style_editor.show);
                 ImGui::MenuItem("Replace line numbers with bytecounts", NULL, &world.replace_line_numbers_with_bytecounts);
+                ImGui::MenuItem("Turn off framerate cap", NULL, &world.turn_off_framerate_cap);
                 ImGui::Separator();
             }
 
