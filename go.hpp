@@ -9,6 +9,9 @@
 
 extern "C" TSLanguage *tree_sitter_go();
 
+extern const char GO_INDEX_MAGIC_BYTES[3];
+extern const int GO_INDEX_VERSION;
+
 // mirrors tree-sitter/src/go.h
 enum Ts_Field_Type {
     TSF_ALIAS = 1,
@@ -253,25 +256,33 @@ enum Ts_Ast_Type {
 ccstr ts_field_type_str(Ts_Field_Type type);
 ccstr ts_ast_type_str(Ts_Ast_Type type);
 
+struct Go_Index;
+
 struct Index_Stream {
-    File f;
-    u32 offset;
+    // File f;
+    i64 offset;
     ccstr path;
     bool ok;
+    File_Mapping *fm;
 
-    File_Result open(ccstr _path, u32 access, File_Open_Mode open_mode);
-    bool seek(u32 offset);
+    bool open(ccstr _path, bool write = false, File_Open_Mode open_mode = FILE_OPEN_EXISTING);
     void cleanup();
+
     bool writen(void* buf, int n);
     bool write1(i8 x);
     bool write2(i16 x);
     bool write4(i32 x);
     bool writestr(ccstr s);
+    void finish_writing();
+
     void readn(void* buf, s32 n);
     char read1();
     i16 read2();
     i32 read4();
     ccstr readstr();
+
+    Go_Index *read_index();
+    void write_index(Go_Index *index);
 };
 
 enum It_Type {
@@ -285,7 +296,7 @@ struct Parser_It {
 
     union {
         struct {
-            Entire_File *ef; // TODO: unicode
+            File_Mapping *fm; // TODO: unicode
             cur2 pos;
         } mmap_params;
 
@@ -294,10 +305,10 @@ struct Parser_It {
         } buffer_params;
     };
 
-    void init(Entire_File *ef) {
+    void init(File_Mapping *fm) {
         ptr0(this);
         type = IT_MMAP;
-        mmap_params.ef = ef;
+        mmap_params.fm = fm;
         mmap_params.pos = new_cur2(0, 0);
     }
 
@@ -308,12 +319,12 @@ struct Parser_It {
     }
 
     void cleanup() {
-        if (type == IT_MMAP) free_entire_file(mmap_params.ef);
+        if (type == IT_MMAP) mmap_params.fm->cleanup();
     }
 
     uchar peek() {
         switch (type) {
-        case IT_MMAP: return mmap_params.ef->data[mmap_params.pos.x];
+        case IT_MMAP: return mmap_params.fm->data[mmap_params.pos.x];
         case IT_BUFFER: return buffer_params.it.peek();
         }
         return 0;
@@ -356,7 +367,7 @@ struct Parser_It {
 
     bool eof() {
         switch (type) {
-        case IT_MMAP: return (mmap_params.pos.x == mmap_params.ef->len);
+        case IT_MMAP: return (mmap_params.pos.x == mmap_params.fm->len);
         case IT_BUFFER: return buffer_params.it.eof();
         }
         return false;
@@ -807,6 +818,10 @@ struct Go_File {
 
     u64 hash;
 
+    void cleanup() {
+        pool.cleanup();
+    }
+
     // Go_File *copy();
     void read(Index_Stream *s);
     void write(Index_Stream *s);
@@ -819,6 +834,12 @@ struct Go_Package {
     ccstr package_name;
     List<Go_File> *files;
     u64 hash;
+    bool checked_for_outdated_hash;
+
+    void cleanup_files() {
+        For (*files) it.cleanup();
+        files->len = 0;
+    }
 
     Go_Package *copy();
     void read(Index_Stream *s);
@@ -1089,6 +1110,7 @@ struct Go_Indexer {
     Lock flag_lock;
     bool flag_handle_gomod_changed;
     bool flag_reindex_everything;
+    bool flag_cleanup_unused_memory;
 
     Lock lock;
     bool ready;
@@ -1100,6 +1122,8 @@ struct Go_Indexer {
 
     void init();
     void cleanup();
+    bool is_flag_set(bool *p);
+    void set_flag(bool *p);
 
     Jump_To_Definition_Result* jump_to_definition(ccstr filepath, cur2 pos);
     bool autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period, Autocomplete *out);
@@ -1268,8 +1292,9 @@ extern GH_Build_Error* (*GHGetBuildStatus)(GoInt* pstatus, GoInt* plines);
 extern char* (*GHGetGoEnv)(char* name);
 extern void (*GHFmtStart)();
 extern void (*GHFmtAddLine)(char* line);
-extern char* (*GHFmtFinish)();
+extern char* (*GHFmtFinish)(GoInt fmtType);
 extern void (*GHFree)(void* p);
-extern GoUint8 (*GHCheckLicense)();
+extern GoUint8 (*GHGitIgnoreInit)(char* repo);
+extern GoUint8 (*GHGitIgnoreCheckFile)(char* file);
 
 void init_gohelper_crap();

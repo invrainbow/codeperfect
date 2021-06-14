@@ -38,3 +38,27 @@ bool are_filepaths_equal(ccstr a, ccstr b) {
     return streqi(a2, b2);
 #endif
 }
+
+File_Mapping *map_file_into_memory(ccstr path) {
+    Frame frame;
+
+    auto fm = alloc_object(File_Mapping);
+    if (!fm->init(path)) {
+        frame.restore();
+        return NULL;
+    }
+
+    return fm;
+}
+
+File_Mapping *map_file_into_memory(ccstr path, File_Mapping_Opts *opts) {
+    Frame frame;
+
+    auto fm = alloc_object(File_Mapping);
+    if (!fm->init(path, opts)) {
+        frame.restore();
+        return NULL;
+    }
+
+    return fm;
+}

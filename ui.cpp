@@ -1646,17 +1646,15 @@ void UI::draw_everything() {
             }
 
             if (ImGui::MenuItem("Reload go.mod")) {
-                atomic_set_flag(
-                    &world.indexer.flag_lock,
-                    &world.indexer.flag_handle_gomod_changed
-                );
+                world.indexer.set_flag(&world.indexer.flag_handle_gomod_changed);
+            }
+
+            if (ImGui::MenuItem("Cleanup unused memory")) {
+                world.indexer.set_flag(&world.indexer.flag_cleanup_unused_memory);
             }
 
             if (ImGui::MenuItem("Re-index everything")) {
-                atomic_set_flag(
-                    &world.indexer.flag_lock,
-                    &world.indexer.flag_reindex_everything
-                );
+                world.indexer.set_flag(&world.indexer.flag_reindex_everything);
             }
 
             /*

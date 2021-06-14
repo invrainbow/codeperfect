@@ -17,6 +17,12 @@ function! IDE__ClearUndo(bufId)
     unlet oldlevels
 endfunction
 
+function! IDE__SetFiletypeGo()
+    " set filetype=go
+    " filetype on
+    " filetype indent on
+endfunction
+
 function! NotifyIDE(cmd, ...) abort
     call rpcnotify(g:channel_id, 'custom_notification', a:cmd, a:000)
 endfunction
@@ -101,16 +107,45 @@ set modelines=0
 set nofoldenable
 set foldmethod=manual
 
-" Turn on auto-indenting
-set autoindent
-set smartindent
-
 set inccommand=
 
 " lazyredraw breaks the movement
 set nolazyredraw
 
+function! GoIndent(lnum)
+    let l:prevlnum = prevnonblank(a:lnum-1)
+    if l:prevlnum == 0
+        return 0
+    endif
+
+    let l:prevl = substitute(getline(l:prevlnum), '//.*$', '', '')
+    let l:thisl = substitute(getline(a:lnum), '//.*$', '', '')
+    let l:previ = indent(l:prevlnum)
+
+    let l:ind = l:previ
+    if l:prevl =~ '[({]\s*$'
+        let l:ind += shiftwidth()
+    endif
+    if l:prevl =~# '^\s*\(case .*\|default\):$'
+        let l:ind += shiftwidth()
+    endif
+    if l:thisl =~ '^\s*[)}]'
+        let l:ind -= shiftwidth()
+    endif
+    if l:thisl =~# '^\s*\(case .*\|default\):$'
+        let l:ind -= shiftwidth()
+    endif
+    return l:ind
+endfunction
+
 function s:forceLocalOptions()
+    " set filetype=go
+    " filetype on
+    " filetype indent on
+    setlocal autoindent
+    setlocal indentexpr=GoIndent(v:lnum)
+    setlocal indentkeys+=<:>,0=},0=)
+
     setlocal nowrap
     setlocal conceallevel=0
     setlocal scrolloff=100

@@ -1,0 +1,11 @@
+ - instead of calling invalidate_packages_with_outdated_hash() up front,
+   periodically check a small batch of packages every loop
+
+   wait, but how do packages get outdated?
+
+ - figure out why it's eating so much cpu/gpu
+
+ - sometimes we have a bug where nvim gives us a cursor (NVIM_NOTIF_WIN_VIEWPORT) whose x value is too large
+   causing editor->buf.idx_byte_to_cp() to crash
+
+ - don't activate autocomplete if we're inside a comment.

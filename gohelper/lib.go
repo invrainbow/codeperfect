@@ -99,6 +99,21 @@ func AuthLicenseKey(licenseKey string) error {
 	}
 	if ret, ok := data["version"].(bool); ok && ret {
 		return nil
+
 	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 	return fmt.Errorf("Unable to authenticate license key.")
 }

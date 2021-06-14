@@ -19,8 +19,11 @@ import "C"
 import (
 	"bytes"
 	"fmt"
+	"go/format"
 	"os/exec"
 	"unsafe"
+
+	"github.com/denormal/go-gitignore"
 
 	"github.com/google/shlex"
 	"github.com/reviewdog/errorformat"
@@ -121,16 +124,16 @@ const (
 
 //export GHFreeBuildStatus
 func GHFreeBuildStatus(p unsafe.Pointer, n int) {
-	errors := (*[1<<30]C.GH_Build_Error)(p)
-    for i := 0; i < n; i++ {
-        it := &errors[i]
+	errors := (*[1 << 30]C.GH_Build_Error)(p)
+	for i := 0; i < n; i++ {
+		it := &errors[i]
 
-        C.free(unsafe.Pointer(it.text))
-        if it.is_valid != 0 {
-            C.free(unsafe.Pointer(it.filename))
-        }
-    }
-    C.free(p)
+		C.free(unsafe.Pointer(it.text))
+		if it.is_valid != 0 {
+			C.free(unsafe.Pointer(it.filename))
+		}
+	}
+	C.free(p)
 }
 
 //export GHGetBuildStatus
@@ -177,7 +180,7 @@ func GHGetGoEnv(name *C.char) *C.char {
 
 //export GHFree
 func GHFree(p unsafe.Pointer) {
-    C.free(p)
+	C.free(p)
 }
 
 var autofmtBuffer []byte = nil
@@ -193,15 +196,30 @@ func GHFmtAddLine(line *C.char) {
 	autofmtBuffer = append(autofmtBuffer, '\n')
 }
 
+const (
+	FmtGoFmt     = 0
+	FmtGoImports = 1
+)
+
 //export GHFmtFinish
-func GHFmtFinish() *C.char {
+func GHFmtFinish(fmtType int) *C.char {
 	buflen := len(autofmtBuffer)
 	if buflen > 0 {
 		autofmtBuffer = autofmtBuffer[:buflen-1]
 	}
 
-	// newSource, err := format.Source(buf)
-	newSource, err := imports.Process("<standard input>", autofmtBuffer, goimportsOptions)
+	var newSource []byte
+	var err error
+
+	if fmtType == 0 {
+		newSource, err = format.Source(autofmtBuffer)
+	} else if fmtType == 1 {
+		newSource, err = imports.Process("<standard input>", autofmtBuffer, goimportsOptions)
+	} else {
+		LastError = fmt.Errorf("Invalid format type.")
+		return nil
+	}
+
 	if err != nil {
 		LastError = fmt.Errorf("unable to format")
 		return nil
@@ -212,55 +230,76 @@ func GHFmtFinish() *C.char {
 
 //export GHCheckLicense
 func GHCheckLicense() bool {
-    return true
+	return true
 	/*
-	const GracePeriod = time.Hour * 24 * 7
+		const GracePeriod = time.Hour * 24 * 7
 
-	exit := func(s string) {
-		fmt.Printf("%s", s)
-		os.Exit(0)
-	}
+		exit := func(s string) {
+			fmt.Printf("%s", s)
+			os.Exit(0)
+		}
 
-	readLastSuccess := func() (time.Time, error) {
-		unixTimestamp, err := nil, foo() // TODO
+		readLastSuccess := func() (time.Time, error) {
+			unixTimestamp, err := nil, foo() // TODO
+			if err != nil {
+				return time.Time{}, err
+			}
+			return time.Unix(unixTimestamp, 0), nil
+			return time.Now(), nil
+		}
+
+		writeLastSuccess := func(t time.Time) error {
+			// TODO: do something with t.Unix()
+			return nil
+		}
+
+		licenseKey, err := GetLicenseKey()
 		if err != nil {
-			return time.Time{}, err
+			exit("no_license_key_found")
 		}
-		return time.Unix(unixTimestamp, 0), nil
-		return time.Now(), nil
-	}
 
-	writeLastSuccess := func(t time.Time) error {
-		// TODO: do something with t.Unix()
-		return nil
-	}
-
-	licenseKey, err := GetLicenseKey()
-	if err != nil {
-		exit("no_license_key_found")
-	}
-
-	if err := AuthLicenseKey(licenseKey); err == nil {
-		writeLastSuccess(time.Now())
-		exit("ok")
-	}
-
-	lastSuccess, err := readLastSuccess()
-	if err == nil {
-		if time.Since(lastSuccess) < GracePeriod {
-			exit("grace_period")
+		if err := AuthLicenseKey(licenseKey); err == nil {
+			writeLastSuccess(time.Now())
+			exit("ok")
 		}
-	}
 
-	exit("fail")
+		lastSuccess, err := readLastSuccess()
+		if err == nil {
+			if time.Since(lastSuccess) < GracePeriod {
+				exit("grace_period")
+			}
+		}
+
+		exit("fail")
 	*/
 }
 
-/*
-case "go_init":
-    "go env GOPATH"
-    "go env GOROOT"
-    "go env GOMODCACHE"
-*/
+type GitignoreChecker struct {
+	ignore gitignore.GitIgnore
+}
+
+var gitignoreChecker *GitignoreChecker
+
+//export GHGitIgnoreInit
+func GHGitIgnoreInit(repo *C.char) bool {
+	ignore, err := gitignore.NewRepository(C.GoString(repo))
+	if err != nil {
+        LastError = err
+        return false
+	}
+
+	gitignoreChecker = &GitignoreChecker{
+		ignore: ignore,
+	}
+
+    return true
+}
+
+//export GHGitIgnoreCheckFile
+func GHGitIgnoreCheckFile(file *C.char) bool {
+	return gitignoreChecker.ignore.Ignore(C.GoString(file))
+}
+
+// ---
 
 func main() {}

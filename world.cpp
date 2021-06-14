@@ -11,7 +11,13 @@
 
 World world;
 
+#define UNREFERENCED_PARAMETER(x) x
+
 bool is_ignored_by_git(ccstr path, bool isdir) {
+    UNREFERENCED_PARAMETER(isdir);
+
+    return GHGitIgnoreCheckFile((char*)path); 
+#if 0
     auto git_repo = world.git_repo;
     if (git_repo == NULL) return false;
 
@@ -36,6 +42,7 @@ bool is_ignored_by_git(ccstr path, bool isdir) {
     if (git_ignore_path_is_ignored(&ignored, git_repo, relpath) == 0)
         return (bool)ignored;
     return false;
+#endif
 }
 
 void World::fill_file_tree() {
@@ -93,17 +100,18 @@ void World::fill_file_tree() {
 }
 
 bool copy_file(ccstr src, ccstr dest) {
-    auto ef = read_entire_file(src);
-    if (ef == NULL) return false;
-    defer { free_entire_file(ef); };
+    auto fm = map_file_into_memory(src);
+    if (fm == NULL) return false;
+    defer { fm->cleanup(); };
 
+    // TODO: map this into memory too?
     File f;
     if (f.init(dest, FILE_MODE_WRITE, FILE_CREATE_NEW) != FILE_RESULT_SUCCESS)
         return false;
     defer { f.cleanup(); };
 
     s32 ret = 0;
-    return f.write((char*)ef->data, ef->len, &ret) && (ret == ef->len);
+    return f.write((char*)fm->data, fm->len, &ret) && (ret == fm->len);
 }
 
 void shell(ccstr s, ccstr dir) {
@@ -152,10 +160,12 @@ void World::init_workspace() {
     opts.save = false;
     let_user_select_file(&opts);
 #else
-    strcpy_safe(current_path, _countof(current_path), normalize_path_sep("c:/users/brandon/hugo"));
+    // strcpy_safe(current_path, _countof(current_path), normalize_path_sep("c:/users/brandon/dev/ide/gohelper"));
+    strcpy_safe(current_path, _countof(current_path), normalize_path_sep("c:/users/brandon/dev/hugo"));
     // strcpy_safe(current_path, _countof(current_path), normalize_path_sep("c:/users/brandon/cryptopals_challenge"));
 #endif
 
+    GHGitIgnoreInit(current_path);
     xplat_chdir(current_path);
 
     project_settings.read(path_join(current_path, ".ideproj"));

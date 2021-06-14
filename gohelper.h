@@ -92,8 +92,10 @@ extern __declspec(dllexport) char* GHGetGoEnv(char* name);
 extern __declspec(dllexport) void GHFree(void* p);
 extern __declspec(dllexport) void GHFmtStart();
 extern __declspec(dllexport) void GHFmtAddLine(char* line);
-extern __declspec(dllexport) char* GHFmtFinish();
+extern __declspec(dllexport) char* GHFmtFinish(GoInt fmtType);
 extern __declspec(dllexport) GoUint8 GHCheckLicense();
+extern __declspec(dllexport) GoUint8 GHGitIgnoreInit(char* repo);
+extern __declspec(dllexport) GoUint8 GHGitIgnoreCheckFile(char* file);
 
 #ifdef __cplusplus
 }

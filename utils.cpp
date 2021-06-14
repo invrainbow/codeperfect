@@ -153,7 +153,9 @@ void Path::goto_child(ccstr child) {
     parts->append(child);
 }
 
-ccstr Path::str() {
+ccstr Path::str(char sep) {
+    if (sep == 0) sep = PATH_SEP;
+
     auto len = 0;
     For (*parts) len += strlen(it);
     len += parts->len - 1;
@@ -169,7 +171,7 @@ ccstr Path::str() {
         k += len;
 
         if (i + 1 < parts->len)
-            ret[k++] = PATH_SEP;
+            ret[k++] = sep;
     }
 
     ret[k] = '\0';
@@ -179,16 +181,4 @@ ccstr Path::str() {
 bool path_contains_in_subtree(ccstr base_path, ccstr full_path) {
     SCOPED_FRAME();
     return make_path(base_path)->contains(make_path(full_path));
-}
-
-void atomic_set_flag(Lock *lock, bool *p) {
-    SCOPED_LOCK(lock);
-    *p = true;
-}
-
-bool atomic_check_flag(Lock *lock, bool *p) {
-    SCOPED_LOCK(lock);
-    auto ret = *p;
-    if (ret) *p = false;
-    return ret;
 }

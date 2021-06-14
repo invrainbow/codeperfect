@@ -24,6 +24,11 @@ cl /MP /MDd /nologo /EHsc /w /std:c++latest /DEBUG /Zi /utf-8 /Fe:bin\ide.exe^
     /LIBPATH:w:\packages\zlib-msvc14-x64.1.2.11.7795\build\native\lib_debug^
     gdi32.lib ole32.lib shell32.lib opengl32.lib glew.lib glfw3.lib ws2_32.lib shlwapi.lib git2.lib^
     advapi32.lib winhttp.lib rpcrt4.lib crypt32.lib zlibstaticd.lib pathcch.lib gohelper.lib
+if %errorlevel% neq 0 exit /b %errorlevel%
 
 copy /Y init.vim bin\init.vim
+
+if %errorlevel% neq 0 exit /b %errorlevel%
+
 copy /Y dynamic_helper.go bin\dynamic_helper.go
+if %errorlevel% neq 0 exit /b %errorlevel%

@@ -16,39 +16,41 @@
 #define go_print(fmt, ...)
 #endif
 
+const char GO_INDEX_MAGIC_BYTES[3] = {0x49, 0xfa, 0x98};
+const int GO_INDEX_VERSION = 1;
+
 s32 num_index_stream_opens = 0;
 s32 num_index_stream_closes = 0;
 
-File_Result Index_Stream::open(ccstr _path, u32 access, File_Open_Mode open_mode) {
+bool Index_Stream::open(ccstr _path, bool write, File_Open_Mode open_mode) {
     ptr0(this);
 
     path = _path;
     offset = 0;
     ok = true;
 
-    auto ret = f.init(path, access, open_mode);
-    if (ret == FILE_RESULT_SUCCESS)
-        num_index_stream_opens++;
-    return ret;
+    File_Mapping_Opts opts = {0};
+    opts.write = write;
+    opts.open_mode = open_mode;
+    if (write) opts.initial_size = 1024;
+
+    fm = map_file_into_memory(path, &opts);
+    return fm != NULL;
 }
 
 void Index_Stream::cleanup() {
     num_index_stream_closes++;
-    f.cleanup();
-}
-
-bool Index_Stream::seek(u32 _offset) {
-    offset = f.seek(_offset);
-    return true; // ???
+    fm->cleanup();
 }
 
 bool Index_Stream::writen(void *buf, int n) {
-    s32 written = 0;
-    if (f.write((char*)buf, n, &written)) {
-        offset += written;
-        return true;
-    }
-    return false;
+    if (offset + n > fm->len)
+        if (!fm->resize(fm->len * 2))
+            return false;
+
+    memcpy(&fm->data[offset], buf, n);
+    offset += n;
+    return true;
 }
 
 bool Index_Stream::write1(i8 x) { return writen(&x, 1); }
@@ -63,9 +65,19 @@ bool Index_Stream::writestr(ccstr s) {
     return true;
 }
 
+void Index_Stream::finish_writing() {
+    fm->finish_writing(offset);
+}
+
 void Index_Stream::readn(void *buf, s32 n) {
-    ok = f.read((char*)buf, n);
-    if (ok) offset += n;
+    if (offset + n > fm->len) {
+        ok = false;
+        return;
+    }
+
+    memcpy(buf, &fm->data[offset], n);
+    offset += n;
+    ok = true;
 }
 
 char Index_Stream::read1() {
@@ -105,6 +117,43 @@ ccstr Index_Stream::readstr() {
     return s;
 }
 
+Go_Index *Index_Stream::read_index() {
+    char magic_bytes[sizeof(GO_INDEX_MAGIC_BYTES)];
+    readn(magic_bytes, _countof(magic_bytes));
+    if (!ok) {
+        go_print("unable to read magic bytes");
+        return NULL;
+    }
+
+    if (memcmp(magic_bytes, GO_INDEX_MAGIC_BYTES, sizeof(GO_INDEX_MAGIC_BYTES)) != 0) {
+        go_print("magic bytes incorrect");
+        ok = false;
+        return NULL;
+    }
+
+    auto ver = read4();
+    if (!ok) {
+        go_print("unable to read index version");
+        return NULL;
+    }
+
+    if (ver != GO_INDEX_VERSION) {
+        go_print("index version mismatch, got %d, expected %d", ver, GO_INDEX_VERSION);
+        ok = false;
+        return NULL;
+    }
+
+    return read_object<Go_Index>(this);
+}
+
+void Index_Stream::write_index(Go_Index *index) {
+    writen((void*)GO_INDEX_MAGIC_BYTES, sizeof(GO_INDEX_MAGIC_BYTES));
+    write4(GO_INDEX_VERSION);
+    write_object<Go_Index>(index, this);
+
+    finish_writing();
+}
+
 void Module_Resolver::init(ccstr current_module_filepath, ccstr _gomodcache) {
     ptr0(this);
 
@@ -120,6 +169,7 @@ void Module_Resolver::init(ccstr current_module_filepath, ccstr _gomodcache) {
     Process proc;
     proc.init();
     proc.dir = current_module_filepath;
+    proc.skip_shell = true;
     if (!proc.run("go list -mod=mod -m all")) return;
     defer { proc.cleanup(); };
 
@@ -304,12 +354,11 @@ ccstr Ghetto_Parser::get_package_name() {
 Go_File *get_ready_file_in_package(Go_Package *pkg, ccstr filename) {
     auto file = pkg->files->find([&](auto it) { return streq(filename, it->filename); });
 
-    if (file == NULL) {
+    if (file == NULL)
         file = pkg->files->append();
-        file->pool.init("file pool", 1024); // tweak this
-    } else {
-        file->pool.reset(); // should we cleanup/init instead?
-    }
+    else
+        file->pool.cleanup();
+    file->pool.init("file pool", 512); // tweak this
 
     {
         SCOPED_MEM(&file->pool);
@@ -351,23 +400,11 @@ ccstr Gohelper::run(ccstr op, ...) {
         proc.write1('\n');
     }
 
-    auto read_line = [&]() -> ccstr {
-        auto ret = alloc_list<char>();
-        char ch;
-        while (true) {
-            our_assert(proc.read1(&ch), "gohelper crashed, we can't do anything anymore");
-            if (ch == '\n') break;
-            ret->append(ch);
-        }
-        ret->append('\0');
-        return ret->items;
-    };
-
     auto ret = readline();
     if (streq(ret, "error")) {
         returned_error = true;
         auto errmsg = readline();
-        error("gohelper returned error for op %d: %s", op, errmsg);
+        error("gohelper returned error for op %s: %s", op, errmsg);
         return errmsg;
     }
 
@@ -519,18 +556,6 @@ void Go_Indexer::background_thread() {
         return true;
     };
 
-    auto invalidate_packages_with_outdated_hash = [&]() {
-        For (*index.packages) {
-            if (it.status != GPS_READY) continue;
-            // if hash has changed, mark outdated & queue for re-processing
-            auto package_path = get_package_path(it.import_path);
-            if (it.hash == hash_package(package_path)) continue;
-
-            it.status = GPS_OUTDATED;
-            enqueue_package(it.import_path);
-        }
-    };
-
     // try to read in index from disk
     // ===
 
@@ -538,12 +563,23 @@ void Go_Indexer::background_thread() {
         go_print("reading...");
 
         Index_Stream s;
-        if (s.open(path_join(world.current_path, "db"), FILE_MODE_READ, FILE_OPEN_EXISTING) != FILE_RESULT_SUCCESS) break;
+        if (!s.open(path_join(world.current_path, "db"))) {
+            go_print("no db found (or couldn't open)");
+            break;
+        }
+
         defer { s.cleanup(); };
 
         {
             SCOPED_MEM(&final_mem);
-            memcpy(&index, read_object<Go_Index>(&s), sizeof(Go_Index));
+
+            auto obj = s.read_index();
+            if (!s.ok) {
+                go_print("unable to read index");
+                break;
+            }
+
+            memcpy(&index, obj, sizeof(Go_Index));
         }
 
         go_print("successfully read index from disk, final_mem.size = %d", final_mem.mem_allocated);
@@ -640,10 +676,9 @@ void Go_Indexer::background_thread() {
         }
     }
 
-    // enqueue packages with outdated hash
+    // mark all packages for outdated hash check
     // ===
-
-    invalidate_packages_with_outdated_hash();
+    For (*index.packages) it.checked_for_outdated_hash = false;
 
     // main loop
     // ===
@@ -652,28 +687,25 @@ void Go_Indexer::background_thread() {
     u64 last_write_time = 0;
     u64 last_hash_check = MAX_U64;
 
+    go_print("loop running");
+
     for (;; sleep_milliseconds(100)) {
         bool force_write_this_time = false;
 
         // process handle_gomod_changed request
         // ---
 
-        auto is_set = [&](bool *p) -> bool {
-            SCOPED_LOCK(&flag_lock);
-            auto ret = *p;
-            if (ret) *p = false;
-            return ret;
-        };
-
-        if (is_set(&flag_handle_gomod_changed)) {
+        if (is_flag_set(&flag_handle_gomod_changed)) {
             start_writing();
 
             module_resolver.cleanup();
             module_resolver.init(world.current_path, gomodcache);
-            invalidate_packages_with_outdated_hash();
+
+            // mark all packages for outdated hash check
+            For (*index.packages) it.checked_for_outdated_hash = false;
         }
 
-        if (is_set(&flag_reindex_everything)) {
+        if (is_flag_set(&flag_reindex_everything)) {
             // TODO: i'll write this when it's needed
         }
 
@@ -689,11 +721,6 @@ void Go_Indexer::background_thread() {
 
             if (is_git_folder(event.filepath)) continue;
 
-            if (event.type == FSEVENT_RENAME)
-                go_print("%s: %s -> %s", fs_event_type_str(event.type), event.filepath, event.new_filepath);
-            else
-                go_print("%s: %s", fs_event_type_str(event.type), event.filepath);
-
             auto handle_gofile_deleted = [&](ccstr filepath) {
                 auto pkg = find_package_in_index(filepath_to_import_path(our_dirname(filepath)));
                 if (pkg == NULL) return;
@@ -705,6 +732,7 @@ void Go_Indexer::background_thread() {
 
                 {
                     SCOPED_WRITE();
+                    file->cleanup();
                     pkg->files->remove(file);
                 }
             };
@@ -749,6 +777,8 @@ void Go_Indexer::background_thread() {
                 */
             };
 
+            bool is_directory = false;
+
             switch (event.type) {
             case FSEVENT_DELETE:
                 {
@@ -757,7 +787,9 @@ void Go_Indexer::background_thread() {
                     auto pkg = find_package_in_index(filepath_to_import_path(filepath));
                     if (pkg != NULL) {
                         SCOPED_WRITE();
+                        pkg->cleanup_files();
                         index.packages->remove(pkg);
+                        is_directory = true;
                     } else if (str_ends_with(event.filepath, ".go")) {
                         // try treating filepath as a file
                         handle_gofile_deleted(filepath);
@@ -770,7 +802,10 @@ void Go_Indexer::background_thread() {
                     auto filepath = path_join(index.current_path, event.filepath);
 
                     // what does FSEVENT_CHANGE on CPR_DIRECTORY mean?
-                    if (check_path(filepath) != CPR_FILE) break;
+                    if (check_path(filepath) != CPR_FILE) {
+                        is_directory = true;
+                        break;
+                    }
 
                     if (!str_ends_with(filepath, ".go")) break;
 
@@ -785,6 +820,8 @@ void Go_Indexer::background_thread() {
                     switch (check_path(filepath)) {
                     case CPR_DIRECTORY:
                         {
+                            is_directory = true;
+
                             // at this point, there will already exist a folder full of files
                             // FSEVENT_CREATE events won't be created for the individual files.
 
@@ -803,7 +840,8 @@ void Go_Indexer::background_thread() {
                             }
 
                             pkg->status = GPS_UPDATING;
-                            pkg->files->len = 0;
+
+                            pkg->cleanup_files();
 
                             auto source_files = list_source_files(filepath, false);
                             if (source_files != NULL) {
@@ -832,6 +870,7 @@ void Go_Indexer::background_thread() {
 
                             fill_package_hash(pkg);
                             pkg->status = GPS_READY;
+                            pkg->checked_for_outdated_hash = true;
                         }
                         break;
                     case CPR_FILE:
@@ -850,6 +889,8 @@ void Go_Indexer::background_thread() {
                     switch (check_path(filepath)) {
                     case CPR_DIRECTORY:
                         {
+                            is_directory = true;
+
                             auto import_path = filepath_to_import_path(filepath);
                             auto pkg = find_package_in_index(import_path);
 
@@ -900,6 +941,14 @@ void Go_Indexer::background_thread() {
                 }
                 break;
             }
+
+            if (event.type == FSEVENT_RENAME) {
+                if (is_directory || str_ends_with(event.new_filepath, ".go") || str_ends_with(event.filepath, ".go"))
+                    go_print("%s: %s -> %s", fs_event_type_str(event.type), event.filepath, event.new_filepath);
+            } else {
+                if (is_directory || str_ends_with(event.filepath, ".go"))
+                    go_print("%s: %s", fs_event_type_str(event.type), event.filepath);
+            }
         }
 
         // process items in queue
@@ -942,6 +991,8 @@ void Go_Indexer::background_thread() {
 
             pkg->status = GPS_UPDATING;
 
+            pkg->cleanup_files();
+
             auto source_files = list_source_files(resolved_path, false);
             if (source_files != NULL) {
                 For (*source_files) {
@@ -970,30 +1021,68 @@ void Go_Indexer::background_thread() {
 
             fill_package_hash(pkg);
             pkg->status = GPS_READY;
+            pkg->checked_for_outdated_hash = true;
         }
 
         if (package_queue.len == 0) {
-            if (queue_had_stuff)
-                force_write_this_time = true;
-            if (!ready)
-                stop_writing();
+            for (int i = 0, num_checked = 0; i < index.packages->len && num_checked < 10; i++) {
+                auto &it = index.packages->at(i);
+
+                if (it.status != GPS_READY) continue;
+                if (it.checked_for_outdated_hash) continue;
+
+                num_checked++;
+                it.checked_for_outdated_hash = true;
+
+                // if hash has changed, mark outdated & queue for re-processing
+                auto package_path = get_package_path(it.import_path);
+                if (it.hash == hash_package(package_path)) continue;
+
+                it.status = GPS_OUTDATED;
+                enqueue_package(it.package_name);
+            }
+
+            // if package queue is still empty
+            if (package_queue.len == 0) {
+                if (!ready)
+                    stop_writing();
+                if (queue_had_stuff)
+                    force_write_this_time = true;
+            }
         }
 
         // clean up memory if it's getting out of control
         // ---
 
         // clean up every 50 megabytes
-        if (final_mem.mem_allocated - last_final_mem_allocated > 1024 * 1024 * 50) {
+        if (is_flag_set(&flag_cleanup_unused_memory) || final_mem.mem_allocated - last_final_mem_allocated > 1024 * 1024 * 50) {
+            go_print("starting copy");
+
             Pool new_pool;
             new_pool.init();
 
+            Go_Index *new_index = NULL;
+
+            Timer t;
+            t.init();
+
             {
                 SCOPED_MEM(&new_pool);
-                memcpy(&index, index.copy(), sizeof(index));
+                new_index = index.copy();
             }
 
-            final_mem.cleanup();
-            memcpy(&final_mem, &new_pool, sizeof(Pool));
+            t.log("copy");
+
+            {
+                SCOPED_WRITE();
+
+                memcpy(&index, new_index, sizeof(index));
+                final_mem.cleanup();
+                memcpy(&final_mem, &new_pool, sizeof(Pool));
+            }
+
+            t.log("write");
+
             last_final_mem_allocated = final_mem.mem_allocated;
         }
 
@@ -1024,16 +1113,27 @@ void Go_Indexer::background_thread() {
             // This way we're not stuck trying over and over to write.
             last_write_time = time;
 
+            Timer t;
+            t.init();
+
             {
                 Index_Stream s;
-                if (s.open(path_join(world.current_path, "db.tmp"), FILE_MODE_WRITE, FILE_CREATE_NEW) != FILE_RESULT_SUCCESS) break;
+                if (!s.open(path_join(world.current_path, "db.tmp"), true, FILE_CREATE_NEW)) break;
                 defer { s.cleanup(); };
+
+                s.writen((void*)GO_INDEX_MAGIC_BYTES, sizeof(GO_INDEX_MAGIC_BYTES));
+                s.write4(GO_INDEX_VERSION);
                 write_object<Go_Index>(&index, &s);
+                s.finish_writing();
             }
+
+            t.log("write index");
 
             if (!move_file_atomically(path_join(world.current_path, "db.tmp"), path_join(world.current_path, "db"))) {
                 error("unable to move db.tmp to db, error: %s", get_last_error());
             }
+
+            t.log("atomically move file over");
         } while (0);
     }
 }
@@ -1063,11 +1163,11 @@ Parsed_File *Go_Indexer::parse_file(ccstr filepath, bool use_latest) {
         ret->it = it;
         ret->tree = ts_tree_copy(editor->tree);
     } else {
-        auto ef = read_entire_file(filepath);
-        if (ef == NULL) return NULL;
+        auto fm = map_file_into_memory(filepath);
+        if (fm == NULL) return NULL;
 
         auto it = alloc_object(Parser_It);
-        it->init(ef);
+        it->init(fm);
 
         Parser_Input pinput;
         pinput.indexer = this;
@@ -1428,13 +1528,13 @@ void Go_Indexer::handle_error(ccstr err) {
 }
 
 u64 Go_Indexer::hash_file(ccstr filepath) {
-    auto f = read_entire_file(filepath);
-    if (f == NULL) return 0;
-    defer { free_entire_file(f); };
+    auto fm = map_file_into_memory(filepath);
+    if (fm == NULL) return 0;
+    defer { fm->cleanup(); };
 
     u64 ret = 0;
     auto name = our_basename(filepath);
-    ret ^= meow_hash(f->data, f->len);
+    ret ^= meow_hash(fm->data, fm->len);
     ret ^= meow_hash((void*)name, strlen(name));
     return ret;
 }
@@ -1459,9 +1559,19 @@ u64 Go_Indexer::hash_package(ccstr resolved_package_path) {
 
 bool Go_Indexer::is_file_included_in_build(ccstr path) {
     auto resp = gohelper_dynamic.run("check_included_in_build", path, NULL);
-    if (gohelper_dynamic.returned_error) return false;
+    return !gohelper_dynamic.returned_error && streq(resp, "true");
+}
 
-    return streq(resp, "true");
+void Go_Indexer::set_flag(bool *p) {
+    SCOPED_LOCK(&flag_lock);
+    *p = true;
+}
+
+bool Go_Indexer::is_flag_set(bool *p) {
+    SCOPED_LOCK(&flag_lock);
+    auto ret = *p;
+    if (ret) *p = false;
+    return ret;
 }
 
 List<ccstr>* Go_Indexer::list_source_files(ccstr dirpath, bool include_tests) {
@@ -1489,18 +1599,17 @@ ccstr Go_Indexer::get_package_name_from_file(ccstr filepath) {
     {
         SCOPED_FRAME();
 
-        auto ef = read_entire_file(filepath);
-        if (ef == NULL) return NULL;
+        auto fm = map_file_into_memory(filepath);
+        if (fm == NULL) return NULL;
 
         auto it = alloc_object(Parser_It);
-        it->init(ef);
+        it->init(fm);
+        defer { it->cleanup(); };
 
         Ghetto_Parser p;
         p.init(it, filepath);
         auto name = p.get_package_name();
-        if (name == NULL) {
-            return NULL;
-        }
+        if (name == NULL) return NULL;
 
         strcpy_safe(buf, _countof(buf), name);
     }
@@ -1530,7 +1639,7 @@ ccstr Go_Indexer::get_package_path(ccstr import_path) {
     auto ret = module_resolver.resolve_import(import_path);
     if (ret != NULL) return ret;
 
-    auto path = path_join(goroot, "src", import_path);
+    auto path = path_join(goroot, import_path);
     if (check_path(path) != CPR_DIRECTORY) return NULL;
     bool is_package = false;
     list_directory(path, [&](Dir_Entry *ent) {
@@ -1733,14 +1842,14 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 p
     if (result.file == NULL) return NULL;
 
     if (result.pos.y == -1) {
-        auto ef = read_entire_file(result.file);
-        if (ef == NULL) return NULL;
-        defer { free_entire_file(ef); };
+        auto fm = map_file_into_memory(result.file);
+        if (fm == NULL) return NULL;
+        defer { fm->cleanup(); };
 
         cur2 newpos = {0};
-        for (u32 i = 0; i < ef->len && i < result.pos.x; i++) {
-            if (ef->data[i] == '\r') continue;
-            if (ef->data[i] == '\n') {
+        for (u32 i = 0; i < fm->len && i < result.pos.x; i++) {
+            if (fm->data[i] == '\r') continue;
+            if (fm->data[i] == '\n') {
                 newpos.y++;
                 newpos.x = 0;
                 continue;
@@ -2347,17 +2456,15 @@ ccstr Go_Indexer::filepath_to_import_path(ccstr path_str) {
 
     Path p;
     p.init(parts);
-    return p.str();
+    return p.str('/');
 }
 
 void Gohelper::init(ccstr cmd, ccstr dir) {
     proc.init();
     proc.dir = dir;
     proc.use_stdin = true;
+    proc.skip_shell = true;
     proc.run(cmd);
-
-    auto resp = run("set_directory", world.current_path, NULL);
-    our_assert(streq(resp, "true"), "Unable to set directory.");
 }
 
 void Gohelper::cleanup() {
@@ -2380,6 +2487,10 @@ void Go_Indexer::init() {
     }
 
     gohelper_dynamic.init("go run dynamic_helper.go", current_exe_path);
+    if (!streq(gohelper_dynamic.readline(), "true")) {
+        tell_user("Please make sure Go version 1.16+ is installed and accessible through your PATH.", NULL);
+        exit(1);
+    }
 
     auto get_env = [&](ccstr var) -> ccstr {
         auto ret = GHGetGoEnv((char*)var);
@@ -2388,17 +2499,9 @@ void Go_Indexer::init() {
     };
 
     {
-        gopath = get_env("GOPATH");
-        goroot = get_env("GOROOT");
+        gopath = path_join(get_env("GOPATH"), "src");
+        goroot = path_join(get_env("GOROOT"), "src");
         gomodcache = get_env("GOMODCACHE");
-    }
-
-    {
-        auto resp = gohelper_dynamic.run("check_go_version", NULL);
-        if (!streq(resp, "true")) {
-            tell_user("Please make sure Go version 1.16+ is installed and accessible through your PATH.", NULL);
-            exit(1);
-        }
     }
 
     wksp_watch.init(world.current_path);
@@ -3933,17 +4036,24 @@ Go_Package *Go_Package::copy() {
     ret->import_path = our_strcpy(import_path);
     ret->package_name = our_strcpy(package_name);
 
-    // leave files alone, since they have their own pool.
-    // just copy the list over, and re-point the list pools
     auto new_files = alloc_object(List<Go_File>);
     new_files->init(LIST_POOL, max(ret->files->len, 1));
     For (*ret->files) {
-        auto new_file = new_files->append();
-        memcpy(new_file, &it, sizeof(Go_File));
+        auto gofile = new_files->append();
+        memcpy(gofile, &it, sizeof(Go_File));
 
-        new_file->scope_ops->pool = &new_file->pool;
-        new_file->decls->pool = &new_file->pool;
-        new_file->imports->pool = &new_file->pool;
+        Pool new_pool;
+        new_pool.init("file pool", 512);
+
+        {
+            SCOPED_MEM(&new_pool);
+            gofile->scope_ops = copy_list(gofile->scope_ops);
+            gofile->decls = copy_list(gofile->decls);
+            gofile->imports = copy_list(gofile->imports);
+        }
+
+        gofile->cleanup();
+        gofile->pool = new_pool;
     }
     ret->files = new_files;
 
@@ -4314,35 +4424,42 @@ GH_Build_Error* (*GHGetBuildStatus)(GoInt* pstatus, GoInt* plines);
 char* (*GHGetGoEnv)(char* name);
 void (*GHFmtStart)();
 void (*GHFmtAddLine)(char* line);
-char* (*GHFmtFinish)();
+char* (*GHFmtFinish)(GoInt fmtType);
 void (*GHFree)(void* p);
 GoUint8 (*GHCheckLicense)();
+GoUint8 (*GHGitIgnoreInit)(char* repo);
+GoUint8 (*GHGitIgnoreCheckFile)(char* file);
+
+#if OS_WIN
+
+auto gohelper_dll = LoadLibraryW(L"gohelper.dll");
+
+// TODO: can we get an implicit template with auto? that would be cool
+template<typename T>
+void load_dll_func(T &func, ccstr name) {
+    auto addr = GetProcAddress(gohelper_dll, name);
+    if (addr == NULL) panic(our_sprintf("couldn't load %s", name));
+
+    func = (T)addr;
+}
 
 void init_gohelper_crap() {
-#if OS_WIN
-    auto dll = LoadLibraryW(L"gohelper.dll");
-    if (dll == NULL) panic("unable to load gohelper");
+    if (gohelper_dll == NULL) panic("unable to load gohelper");
 
-    GHStartBuild = (decltype(GHStartBuild))GetProcAddress(dll, "GHStartBuild");
-    GHStopBuild = (decltype(GHStopBuild))GetProcAddress(dll, "GHStopBuild");
-    GHFreeBuildStatus = (decltype(GHFreeBuildStatus))GetProcAddress(dll, "GHFreeBuildStatus");
-    GHGetBuildStatus = (decltype(GHGetBuildStatus))GetProcAddress(dll, "GHGetBuildStatus");
-    GHGetGoEnv = (decltype(GHGetGoEnv))GetProcAddress(dll, "GHGetGoEnv");
-    GHFmtStart = (decltype(GHFmtStart))GetProcAddress(dll, "GHFmtStart");
-    GHFmtAddLine = (decltype(GHFmtAddLine))GetProcAddress(dll, "GHFmtAddLine");
-    GHFmtFinish = (decltype(GHFmtFinish))GetProcAddress(dll, "GHFmtFinish");
-    GHFree = (decltype(GHFree))GetProcAddress(dll, "GHFree");
-    GHCheckLicense = (decltype(GHCheckLicense))GetProcAddress(dll, "GHCheckLicense");
-
-    if (GHStartBuild == NULL) panic("couldn't load GHStartBuild");
-    if (GHStopBuild == NULL) panic("couldn't load GHStopBuild");
-    if (GHFreeBuildStatus == NULL) panic("couldn't load GHFreeBuildStatus");
-    if (GHGetBuildStatus == NULL) panic("couldn't load GHGetBuildStatus");
-    if (GHGetGoEnv == NULL) panic("couldn't load GHGetGoEnv");
-    if (GHFmtStart == NULL) panic("couldn't load GHFmtStart");
-    if (GHFmtAddLine == NULL) panic("couldn't load GHFmtAddLine");
-    if (GHFmtFinish == NULL) panic("couldn't load GHFmtFinish");
-    if (GHFree == NULL) panic("couldn't load GHFree");
-    if (GHCheckLicense == NULL) panic("couldn't load GHCheckLicense");
-#endif
+#define load(x) load_dll_func(x, #x)
+    load(GHStartBuild);
+    load(GHStopBuild);
+    load(GHFreeBuildStatus);
+    load(GHGetBuildStatus);
+    load(GHGetGoEnv);
+    load(GHFmtStart);
+    load(GHFmtAddLine);
+    load(GHFmtFinish);
+    load(GHFree);
+    load(GHCheckLicense);
+    load(GHGitIgnoreInit);
+    load(GHGitIgnoreCheckFile);
+#undef load
 }
+
+#endif // OS_WIN

@@ -407,7 +407,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                     auto msgid = start_request_message("nvim_call_atomic", 1);
                     save_request(NVIM_REQ_BUF_ATTACH, msgid, editor->id);
 
-                    writer.write_array(7); // TODO
+                    writer.write_array(7);
 
                     {
                         writer.write_array(2);
@@ -449,6 +449,8 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                     };
 
                     set_option("shiftwidth", [&]() { writer.write_int(4); });
+                    // set_option("smartcase", [&]() { writer.write_int(true); });
+                    // set_option("smartindent", [&]() { writer.write_int(true); });
                     set_option("tabstop",    [&]() { writer.write_int(4); });
                     set_option("expandtab",  [&]() { writer.write_bool(false); });
                     set_option("autoindent", [&]() { writer.write_bool(true); });
@@ -835,7 +837,8 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                             auto pos = editor->nvim_data.initial_pos;
                             if (pos.y == -1)
                                 pos = editor->offset_to_cur(pos.x);
-                            editor->raw_move_cursor(pos);
+                            // editor->raw_move_cursor(pos);
+                            // editor->move_cursor(pos);
                         }
 
                         handle_editor_on_ready(editor);
@@ -951,13 +954,11 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                     editor->raw_move_cursor(new_cur2(x, y));
                 }
 
-                /*
                 if (!editor->nvim_data.got_initial_cur) {
                     nvim_print("got_initial_cur = false, setting to true & calling handle_editor_on_ready()");
                     editor->nvim_data.got_initial_cur = true;
                     handle_editor_on_ready(editor);
                 }
-                */
             }
             break;
 
@@ -1625,6 +1626,7 @@ void Nvim::start_running() {
     nvim_proc.init();
     nvim_proc.use_stdin = true;
     nvim_proc.dir = our_dirname(get_executable_path());
+    nvim_proc.skip_shell = true;
 
     // TODO: get full path of init.vim
     // nvim_proc.run("nvim -u init.vim -i NONE -N --embed --headless");

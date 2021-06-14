@@ -7,6 +7,11 @@
 #include "tree_sitter_crap.hpp"
 #include "settings.hpp"
 
+enum {
+    GH_FMT_GOFMT = 0,
+    GH_FMT_GOIMPORTS = 0,
+};
+
 bool Editor::is_current_editor() {
     auto current_editor = world.get_current_editor();
     if (current_editor != NULL)
@@ -56,9 +61,9 @@ void Editor::raw_move_cursor(cur2 c) {
 
 void Editor::ensure_cursor_on_screen() {
     if (relu_sub(cur.y, options.scrolloff) < view.y)
-        move_cursor(new_cur2(cur.x, view.y + options.scrolloff));
+        move_cursor(new_cur2(cur.x, min(view.y + options.scrolloff, view.y + view.h)));
     if (cur.y + options.scrolloff >= view.y + view.h)
-        move_cursor(new_cur2(cur.x, view.y + view.h - 1 - options.scrolloff));
+        move_cursor(new_cur2((u32)cur.x, (u32)relu_sub(view.y + view.h,  1 + options.scrolloff)));
 
     // TODO: handle x too
 }
@@ -479,54 +484,77 @@ void Editor::cleanup() {
 
 // basically the rule is, if autocomplete comes up empty ON FIRST OPEN, then keep it closed
 
-void Editor::trigger_autocomplete(bool triggered_by_dot) {
-    auto old_type = autocomplete.ac.type;
-    auto old_keyword_start = autocomplete.ac.keyword_start_position;
+void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typing_ident, char typed_ident_char) {
+    bool ok = false;
+    defer {
+        if (!ok) {
+            auto c = cur;
+            auto &line = buf.lines[c.y];
+            while (c.x > 0 && isident(line[c.x-1])) c.x--;
+            if (c.x < cur.x)
+                last_closed_autocomplete = c;
+        }
+    };
 
-    ptr0(&autocomplete);
+    bool dont_recompute = (autocomplete.ac.results != NULL && triggered_by_typing_ident);
+    if (dont_recompute) {
+        SCOPED_MEM(&world.autocomplete_mem);
+        autocomplete.ac.prefix = our_sprintf("%s%c", autocomplete.ac.prefix, typed_ident_char);
+    } else {
+        auto old_type = autocomplete.ac.type;
+        auto old_keyword_start = autocomplete.ac.keyword_start_position;
 
-    SCOPED_MEM(&world.indexer.ui_mem);
-    defer { world.indexer.ui_mem.reset(); };
+        ptr0(&autocomplete);
 
-    if (!world.indexer.ready) return; // strictly we can just call try_enter(), but want consistency with UI, which is based on `ready`
-    if (!world.indexer.lock.try_enter()) return;
-    defer { world.indexer.lock.leave(); };
+        SCOPED_MEM(&world.indexer.ui_mem);
+        defer { world.indexer.ui_mem.reset(); };
 
-    Autocomplete ac = {0};
-    if (!world.indexer.autocomplete(filepath, cur, triggered_by_dot, &ac)) return;
-    if (old_type != AUTOCOMPLETE_NONE && old_keyword_start != ac.keyword_start_position) return;
+        if (!world.indexer.ready) return; // strictly we can just call try_enter(), but want consistency with UI, which is based on `ready`
+        if (!world.indexer.lock.try_enter()) return;
+        defer { world.indexer.lock.leave(); };
 
-    last_closed_autocomplete = new_cur2(-1, -1);
+        Autocomplete ac = {0};
+        if (!world.indexer.autocomplete(filepath, cur, triggered_by_dot, &ac)) return;
+
+        if (old_type != AUTOCOMPLETE_NONE && old_keyword_start != ac.keyword_start_position)
+            if (!triggered_by_dot)
+                return;
+
+        last_closed_autocomplete = new_cur2(-1, -1);
+
+        {
+            // use autocomplete_mem
+            world.autocomplete_mem.reset();
+            SCOPED_MEM(&world.autocomplete_mem);
+
+            // copy results
+            auto new_results = alloc_list<AC_Result>(ac.results->len);
+            For (*ac.results) new_results->append()->name = our_strcpy(it.name);
+
+            // copy ac over to autocomplete.ac
+            memcpy(&autocomplete.ac, &ac, sizeof(Autocomplete));
+            autocomplete.filtered_results = alloc_list<int>();
+            autocomplete.ac.prefix = our_strcpy(ac.prefix);
+            autocomplete.ac.results = new_results;
+        }
+    }
 
     {
-        // use autocomplete_mem
-        world.autocomplete_mem.reset();
-        SCOPED_MEM(&world.autocomplete_mem);
-
-        // copy results
-        auto new_results = alloc_list<AC_Result>(ac.results->len);
-        For (*ac.results) new_results->append()->name = our_strcpy(it.name);
-
-        // copy ac over to autocomplete.ac
-        memcpy(&autocomplete.ac, &ac, sizeof(Autocomplete));
-        autocomplete.filtered_results = alloc_list<int>();
-        autocomplete.ac.prefix = our_strcpy(ac.prefix);
-        autocomplete.ac.results = new_results;
-
         auto prefix = autocomplete.ac.prefix;
         auto results = autocomplete.ac.results;
 
-        // OPTIMIZATION: if we added characters to prefix, then we only need to
-        // search through the existing filtered results
+        autocomplete.filtered_results->len = 0;
 
         for (int i = 0; i < results->len; i++)
             if (fzy_has_match(prefix, results->at(i).name))
                 autocomplete.filtered_results->append(i);
 
+        /*
         if (autocomplete.filtered_results->len == 0) {
-            autocomplete.ac.results = NULL;
+            ptr0(&autocomplete);
             return;
         }
+        */
 
         autocomplete.filtered_results->sort([&](int *ia, int *ib) -> int {
             auto a = fzy_match(prefix, autocomplete.ac.results->at(*ia).name);
@@ -534,6 +562,9 @@ void Editor::trigger_autocomplete(bool triggered_by_dot) {
             return a < b ? 1 : (a > b ? -1 : 0); // reverse
         });
     }
+
+    ok = true;
+    return;
 }
 
 struct Type_Renderer : public Text_Renderer {
@@ -699,33 +730,6 @@ void Editor::type_char(char ch) {
     raw_move_cursor(buf.inc_cur(cur));
 }
 
-void Editor::update_autocomplete() {
-    if (autocomplete.ac.results == NULL) return;
-
-    trigger_autocomplete(false);
-
-    /*
-    auto& ac = autocomplete.ac;
-
-    auto passed_start = [&]() {
-        auto& ac = autocomplete.ac;
-        if (ac.type == AUTOCOMPLETE_PACKAGE_EXPORTS || ac.type == AUTOCOMPLETE_STRUCT_FIELDS)
-            return cur <= ac.keyword_start_position;
-        return cur < ac.keyword_start_position;
-    };
-
-    auto passed_end = [&]() {
-        auto id = parse_autocomplete_id(&autocomplete.ac);
-        return id != NULL && cur > id->end;
-    };
-
-    if (passed_start() || passed_end())
-        autocomplete.ac.results = NULL;
-    else
-        filter_autocomplete_results(&autocomplete.ac);
-    */
-}
-
 void Editor::update_parameter_hint() {
     // reset parameter hint when cursor goes before hint start
     auto& hint = parameter_hint;
@@ -815,9 +819,11 @@ void Editor::type_char_in_insert_mode(char ch) {
     bool did_autocomplete = false;
     bool did_parameter_hint = false;
 
+    bool is_ident = false;
+
     switch (ch) {
     case '.':
-        trigger_autocomplete(true);
+        trigger_autocomplete(true, false);
         did_autocomplete = true;
         break;
     case '(':
@@ -957,6 +963,8 @@ void Editor::type_char_in_insert_mode(char ch) {
             if (autocomplete.ac.results != NULL) break;
             if (!isident(ch)) break;
 
+            is_ident = true;
+
             auto c = cur;
             auto &line = buf.lines[c.y];
 
@@ -972,13 +980,23 @@ void Editor::type_char_in_insert_mode(char ch) {
             // don't open autocomplete before 3 chars
             if (cur.x - c.x < 3) break;
 
-            trigger_autocomplete(false);
+            did_autocomplete = true;
+            trigger_autocomplete(false, false);
         }
         break;
     }
 
-    if (!did_autocomplete) update_autocomplete();
+    if (!did_autocomplete) {
+        if (autocomplete.ac.results != NULL)
+            trigger_autocomplete(false, isident, ch);
+    }
+
     if (!did_parameter_hint) update_parameter_hint();
+}
+
+void Editor::update_autocomplete(bool triggered_by_ident) {
+    if (autocomplete.ac.results != NULL)
+        trigger_autocomplete(false, triggered_by_ident);
 }
 
 void Editor::backspace_in_insert_mode(int graphemes_to_erase, int codepoints_to_erase) {
@@ -1035,7 +1053,7 @@ void Editor::format_on_save(bool write_to_nvim) {
         GHFmtAddLine(line.items);
     }
 
-    auto new_contents = GHFmtFinish();
+    auto new_contents = GHFmtFinish(GH_FMT_GOFMT);
     if (new_contents == NULL) {
         saving = false;
         return;

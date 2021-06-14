@@ -7,8 +7,52 @@
 bool run_tests() {
     return false;
 
-    // world.init();
-    // return true;
+    world.init();
+    // test_read_write_index();
+
+    system("pause");
+    return true;
+}
+
+bool test_read_write_index() {
+    Timer t;
+    t.init();
+
+    Go_Index *index = NULL;
+
+    {
+        Index_Stream s;
+        if (!s.open("W:\\test_db_from_hugo")) return false;
+        defer { s.cleanup(); };
+        index = s.read_index();
+        if (!s.ok) return false;
+    }
+
+    t.log("read from index");
+
+    {
+        Index_Stream s;
+        if (!s.open("W:\\test_db_copy", true, FILE_CREATE_NEW)) return false;
+        defer { s.cleanup(); };
+        s.write_index(index);
+        s.finish_writing();
+    }
+
+    t.log("write out to index");
+    t.total();
+
+    {
+        Index_Stream s;
+        if (!s.open("W:\\test_db_copy")) return false;
+        defer { s.cleanup(); };
+        index = s.read_index();
+        if (!s.ok) return false;
+
+        print("break here and inspect index");
+    }
+
+    t.log("read index back in");
+    return true;
 }
 
 void clear_screen() {

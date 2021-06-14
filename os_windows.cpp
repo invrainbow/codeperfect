@@ -181,15 +181,19 @@ bool Process::run(ccstr _cmd) {
     {
         SCOPED_FRAME();
 
-        // auto args = our_sprintf("cmd /S /K \"start cmd /S /K \"%s\"\"", cmd);
-        auto args = our_sprintf("cmd /S /C %s\"%s\"", keep_open_after_exit ? "/K " : "", cmd);
-        print("Process::run: %s", args);
+        wchar_t *wargs = NULL;
+        if (skip_shell) {
+            wargs = to_wide(cmd);
+        } else {
+            // auto args = our_sprintf("cmd /S /K \"start cmd /S /K \"%s\"\"", cmd);
+            auto args = our_sprintf("cmd /S /C %s\"%s\"", keep_open_after_exit ? "/K " : "", cmd);
+            print("Process::run: %s", args);
+            wargs = to_wide(args);
+        }
 
-        auto wargs = to_wide(args);
         auto wdir = to_wide(dir);
-
         if (!CreateProcessW(NULL, wargs, NULL, NULL, TRUE, create_new_console ? CREATE_NEW_CONSOLE : 0, NULL, wdir, &si, &pi)) {
-            error("CreateProcessW: %s", get_win32_error());
+            error("CreateProcessW: %s", get_last_error());
             return false;
         }
     }
@@ -217,7 +221,7 @@ Process_Status Process::status() {
             }
         case WAIT_FAILED:
             {
-                print("process error: %s", get_win32_error());
+                error("process error: %s", get_last_error());
             }
             return PROCESS_ERROR;
     }
@@ -339,7 +343,7 @@ void File::cleanup() {
     CloseHandle(h);
 }
 
-File_Result File::init(ccstr path, u32 mode, File_Open_Mode open_mode) {
+HANDLE create_win32_file_handle(ccstr path, int access, File_Open_Mode open_mode) {
     auto get_win32_open_mode = [&]() {
         switch (open_mode) {
             case FILE_OPEN_EXISTING: return OPEN_EXISTING;
@@ -349,18 +353,19 @@ File_Result File::init(ccstr path, u32 mode, File_Open_Mode open_mode) {
     };
 
     DWORD win32_mode = 0;
-    if (mode & FILE_MODE_READ) win32_mode |= GENERIC_READ;
-    if (mode & FILE_MODE_WRITE) win32_mode |= GENERIC_WRITE;
+    if (access & FILE_MODE_READ) win32_mode |= GENERIC_READ;
+    if (access & FILE_MODE_WRITE) win32_mode |= GENERIC_WRITE | GENERIC_READ;
 
-    {
-        SCOPED_FRAME();
-        h = CreateFileW(to_wide(path), win32_mode, 0, NULL, get_win32_open_mode(), FILE_ATTRIBUTE_NORMAL, NULL);
-    }
+    SCOPED_FRAME();
+    return CreateFileW(to_wide(path), win32_mode, 0, NULL, get_win32_open_mode(), FILE_ATTRIBUTE_NORMAL, NULL);
+}
 
+File_Result File::init(ccstr path, int access, File_Open_Mode open_mode) {
+    h = create_win32_file_handle(path, access, open_mode);
     if (h != INVALID_HANDLE_VALUE) return FILE_RESULT_SUCCESS;
     if (GetLastError() == ERROR_FILE_EXISTS) return FILE_RESULT_ALREADY_EXISTS;
 
-    print("%s", get_last_error());
+    print("File::init: error opening %s: %s", path, get_last_error());
     return FILE_RESULT_FAILURE;
 }
 
@@ -455,7 +460,7 @@ bool ensure_directory_exists(ccstr path) {
         return true;
     }
 
-    print("ensure_directory_exists error: %s", Win32_Error(get_win32_error(res)).str);
+    error("ensure_directory_exists: %s", get_specific_error(res));
     return false;
 }
 
@@ -632,32 +637,120 @@ bool Fs_Watcher::next_event(Fs_Event *event) {
     return true;
 }
 
-Entire_File *read_entire_file(ccstr path) {
-    HANDLE f = CreateFileW(to_wide(path), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (f == INVALID_HANDLE_VALUE) return NULL;
-    defer { CloseHandle(f); };
+bool File_Mapping::create_actual_file_mapping(bool write, LARGE_INTEGER size) {
+    if (size.HighPart > 0) {
+        // TODO: handle this. Everywhere else in the code is set up to handle
+        // 64-bit sizes, but because MapViewOfFile only lets you map a 32-bit
+        // sized portion at a time, we need to write the unmap/remap logic.
+        panic("File to be mapped is too big.");
+    }
 
-    LARGE_INTEGER size;
-    if (!GetFileSizeEx(f, &size)) return NULL;
-    if (size.HighPart > 0) return NULL;
+    bool ok = false;
 
-    auto flen = size.LowPart;
+    mapping = CreateFileMapping(file, 0, write ? PAGE_READWRITE : PAGE_READONLY, size.HighPart, size.LowPart, NULL);
+    if (mapping == NULL) {
+        error("CreateFileMapping: %s", get_last_error());
+        return false;
+    }
 
-    HANDLE map = CreateFileMapping(f, 0, PAGE_READONLY, 0, flen, NULL);
-    if (map == NULL) return NULL;
-    defer { CloseHandle(map); };
+    defer {
+        if (!ok) {
+            CloseHandle(mapping);
+            mapping = NULL;
+        }
+    };
 
-    auto buf = MapViewOfFile(map, FILE_SHARE_READ, 0, 0, flen);
-    if (buf == NULL) return NULL;
+    data = (u8*)MapViewOfFile(mapping, write ? FILE_MAP_WRITE : FILE_MAP_READ, 0, 0, size.LowPart);
+    if (data == NULL) return false;
 
-    auto ret = alloc_object(Entire_File);
-    ret->data = (u8*)buf;
-    ret->len = flen;
-    return ret;
+    len = size.LowPart;
+
+    ok = true;
+    return true;
 }
 
-void free_entire_file(Entire_File *file) {
-    UnmapViewOfFile(file->data);
+bool File_Mapping::init(ccstr path) {
+    File_Mapping_Opts opts = {0};
+    opts.write = false;
+    opts.open_mode = FILE_OPEN_EXISTING;
+    return init(path, &opts);
+}
+
+bool File_Mapping::init(ccstr path, File_Mapping_Opts *_opts) {
+    bool ok = false;
+
+    memcpy(&opts, _opts, sizeof(opts));
+
+    file = create_win32_file_handle(path, opts.write ? FILE_MODE_WRITE : FILE_MODE_READ, opts.open_mode);
+    if (file == INVALID_HANDLE_VALUE) return false;
+
+    defer {
+        if (!ok) {
+            CloseHandle(file);
+            file = NULL;
+        }
+    };
+
+    LARGE_INTEGER size = {0};
+    if (opts.initial_size > 0) {
+        size.QuadPart = opts.initial_size;
+    } else {
+        if (!GetFileSizeEx(file, &size)) return false;
+    }
+
+    if (!create_actual_file_mapping(opts.write, size))
+        return false;
+
+    ok = true;
+    return true;
+}
+
+bool File_Mapping::resize(i64 newlen) {
+    if (opts.write) {
+        if (!flush(len)) return false;
+
+        UnmapViewOfFile(data); data = NULL;
+        CloseHandle(mapping); mapping = NULL;
+    }
+
+    LARGE_INTEGER li;
+    li.QuadPart = newlen;
+    return create_actual_file_mapping(opts.write, li);
+}
+
+bool File_Mapping::flush(i64 bytes_to_flush) {
+    if (!FlushViewOfFile(data, bytes_to_flush)) return false;
+}
+
+bool File_Mapping::finish_writing(i64 final_size) {
+    if (!flush(final_size)) return false;
+
+    UnmapViewOfFile(data); data = NULL;
+    CloseHandle(mapping); mapping = NULL;
+
+    LARGE_INTEGER li;
+    li.QuadPart = final_size;
+
+    PLONG hi = li.HighPart == 0 ? NULL : &li.HighPart;
+
+    if (SetFilePointer(file, li.LowPart, hi, FILE_BEGIN) == INVALID_SET_FILE_POINTER)
+        return false;
+
+    if (!SetEndOfFile(file)) {
+        error("SetEndOfFile: %s", get_last_error());
+        return false;
+    }
+
+    return true;
+}
+
+void File_Mapping::cleanup() {
+    if (data != NULL)
+        UnmapViewOfFile(data);
+    if (mapping != NULL)
+        CloseHandle(mapping);
+    if (file != NULL)
+        CloseHandle(file);
 }
 
 ccstr get_path_relative_to(ccstr full, ccstr base) {
@@ -819,7 +912,7 @@ bool set_run_on_computer_startup(ccstr key, ccstr exepath) {
 
     auto res = RegCreateKeyExW(HKEY_CURRENT_USER, subkey, 0, NULL, 0, KEY_SET_VALUE, NULL, &hkey, NULL);
     if (res != ERROR_SUCCESS) {
-        error("RegCreateKeyEx: %s", get_win32_error(res));
+        error("RegCreateKeyEx: %s", get_specific_error(res));
         return false;
     }
     defer { RegCloseKey(hkey); };

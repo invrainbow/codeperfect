@@ -119,13 +119,13 @@ struct Editor {
     Buffer_It iter();
     Buffer_It iter(cur2 _cur);
 
-    void trigger_autocomplete(bool triggered_by_dot);
+    void trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typing_ident, char typed_ident_char = 0);
     void filter_autocomplete_results(Autocomplete* ac);
     void trigger_parameter_hint(bool triggered_by_paren);
 
     void type_char(char ch);
     void type_char_in_insert_mode(char ch);
-    void update_autocomplete();
+    void update_autocomplete(bool triggered_by_ident);
     void update_parameter_hint();
 
     void start_change();

@@ -109,7 +109,7 @@ struct Path {
 
     void init(List<ccstr> *parts);
     bool contains(Path *path);
-    ccstr str();
+    ccstr str(char sep = 0);
 
     bool goto_parent();
     void goto_child(ccstr child);
@@ -254,19 +254,24 @@ bool iszero(T* p) {
     return true;
 }
 
-void atomic_set_flag(Lock *lock, bool *p);
-bool atomic_check_flag(Lock *lock, bool *p);
-
 struct Timer {
     u64 time;
+    u64 start;
 
     void init() {
         time = current_time_in_nanoseconds();
+        start = time;
     }
 
     void log(ccstr s) {
         auto curr = current_time_in_nanoseconds();
-        print("%dms: %s", (curr - time) / 1000000, s);
+        print("%s: %dms", s, (curr - time) / 1000000);
+        time = curr;
+    }
+
+    void total() {
+        auto curr = current_time_in_nanoseconds();
+        print("TOTAL: %dms", (curr - start) / 1000000);
         time = curr;
     }
 };

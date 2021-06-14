@@ -51,6 +51,7 @@ struct Process {
     bool dont_use_stdout; // inverted because by default we want to use stdout
     bool create_new_console;
     bool keep_open_after_exit;
+    bool skip_shell; // don't run command through a shell
 
 #if OS_WIN
     HANDLE stdin_w;
@@ -130,13 +131,8 @@ Check_Path_Result check_path(ccstr path);
 
 #if OS_WIN
 
-struct Win32_Error {
-    ccstr str;
-    Win32_Error(ccstr _str) { str = _str; }
-    ~Win32_Error() { if (str != NULL) LocalFree((HLOCAL)str); }
-};
-
 #define get_last_error() get_win32_error()
+#define get_specific_error(x) get_win32_error(x)
 #define get_socket_error() get_win32_error(WSAGetLastError())
 
 ccstr get_win32_error(DWORD error = -1);
@@ -197,7 +193,7 @@ struct File {
     FILE *f;
 #endif
 
-    File_Result init(ccstr path, u32 mode, File_Open_Mode open_mode);
+    File_Result init(ccstr path, int access, File_Open_Mode open_mode);
     void cleanup();
     bool read(char *buf, s32 size, s32 *bytes_read = NULL);
     bool write(char *buf, s32 size, s32 *bytes_written = NULL);
@@ -229,13 +225,34 @@ void *xplat_binary_search(const void *key, void *list, s32 num, s32 size, compar
 
 u64 get_file_size(ccstr file);
 
-struct Entire_File {
-    u8 *data;
-    s32 len;
+struct File_Mapping_Opts {
+    bool write;
+    File_Open_Mode open_mode;
+    i64 initial_size;
 };
 
-Entire_File *read_entire_file(ccstr path);
-void free_entire_file(Entire_File *file);
+struct File_Mapping {
+    u8 *data;
+    i64 len;
+    File_Mapping_Opts opts;
+
+#if OS_WIN
+    HANDLE file;
+    HANDLE mapping;
+    bool create_actual_file_mapping(bool write, LARGE_INTEGER size);
+#endif
+
+    bool init(ccstr path, File_Mapping_Opts *opts);
+    bool init(ccstr path);
+    bool flush(i64 bytes_to_flush);
+    bool finish_writing(i64 final_size);
+    bool resize(i64 newlen);
+    void cleanup();
+};
+
+File_Mapping *map_file_into_memory(ccstr path);
+File_Mapping *map_file_into_memory(ccstr path, File_Mapping_Opts *opts);
+
 ccstr rel_to_abs_path(ccstr path);
 
 enum Fs_Event_Type {

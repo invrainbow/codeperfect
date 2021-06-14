@@ -663,7 +663,7 @@ int main() {
 
             editor->end_change();
 
-            editor->update_autocomplete();
+            editor->update_autocomplete(false);
             editor->update_parameter_hint();
         };
 
@@ -832,7 +832,7 @@ int main() {
                         {
                             auto ed = world.get_current_editor();
                             if (ed == NULL) break;
-                            ed->trigger_autocomplete(false);
+                            ed->trigger_autocomplete(false, false);
                         }
                         break;
                     case GLFW_KEY_J:
@@ -1127,6 +1127,8 @@ int main() {
 
         auto ed = world.get_current_editor();
         if (ed == NULL) return;
+
+        if (ch > 127) return;
 
         if (isprint(ch)) {
             if (world.nvim.mode == VI_INSERT) {

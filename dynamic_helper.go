@@ -37,19 +37,14 @@ func CheckGoVersion(tag string) bool {
 }
 
 func main() {
+	versionOk := CheckGoVersion("go1.16")
+	Write(versionOk)
+	if !versionOk {
+		return
+	}
+
 	for {
 		switch ReadLine() {
-		case "set_directory":
-			path := ReadLine()
-			if err := os.Chdir(path); err != nil {
-				WriteError(err)
-				break
-			}
-			Write(true)
-
-		case "check_go_version":
-			Write(CheckGoVersion("go1.16"))
-
 		case "check_included_in_build":
 			path := ReadLine()
 			match, err := build.Default.MatchFile(filepath.Dir(path), filepath.Base(path))
