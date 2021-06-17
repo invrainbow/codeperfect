@@ -514,7 +514,13 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
         defer { world.indexer.lock.leave(); };
 
         Autocomplete ac = {0};
+
+        Timer t;
+        t.init();
+
         if (!world.indexer.autocomplete(filepath, cur, triggered_by_dot, &ac)) return;
+
+        t.log("world.indexer.autocomplete");
 
         if (old_type != AUTOCOMPLETE_NONE && old_keyword_start != ac.keyword_start_position)
             if (!triggered_by_dot)
@@ -545,9 +551,14 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
 
         autocomplete.filtered_results->len = 0;
 
+        Timer t;
+        t.init("autocomplete");
+
         for (int i = 0; i < results->len; i++)
             if (fzy_has_match(prefix, results->at(i).name))
                 autocomplete.filtered_results->append(i);
+
+        t.log("matching");
 
         /*
         if (autocomplete.filtered_results->len == 0) {
@@ -556,11 +567,24 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
         }
         */
 
+        auto scores = alloc_array(double, results->len);
+        auto scores_saved = alloc_array(bool, results->len);
+
+        auto get_score = [&](int i) {
+            if (!scores_saved[i]) {
+                scores[i] = fzy_match(prefix, autocomplete.ac.results->at(i).name);
+                scores_saved[i] = true;
+            }
+            return scores[i];
+        };
+
         autocomplete.filtered_results->sort([&](int *ia, int *ib) -> int {
-            auto a = fzy_match(prefix, autocomplete.ac.results->at(*ia).name);
-            auto b = fzy_match(prefix, autocomplete.ac.results->at(*ib).name);
+            auto a = get_score(*ia);
+            auto b = get_score(*ib);
             return a < b ? 1 : (a > b ? -1 : 0); // reverse
         });
+
+        t.log("scoring");
     }
 
     ok = true;
@@ -742,9 +766,9 @@ void Editor::update_parameter_hint() {
         bool ret = false;
 
         find_nodes_containing_pos(root, hint.start, true, [&](Ast_Node *it) -> Walk_Action {
-            if (it->start == hint.start)
-                if (it->type == TS_ARGUMENT_LIST)
-                    if (cur >= it->end) {
+            if (it->start() == hint.start)
+                if (it->type() == TS_ARGUMENT_LIST)
+                    if (cur >= it->end()) {
                         ret = true;
                         return WALK_ABORT;
                     }
@@ -877,7 +901,7 @@ void Editor::type_char_in_insert_mode(char ch) {
             bool rbrace_found = false;
 
             find_nodes_containing_pos(root_node, rbrace_pos, false, [&](Ast_Node *it) {
-                if (it->type == brace_type) {
+                if (it->type() == brace_type) {
                     memcpy(rbrace_node, it, sizeof(Ast_Node));
                     rbrace_found = true;
                     return WALK_ABORT;
@@ -909,17 +933,17 @@ void Editor::type_char_in_insert_mode(char ch) {
                 if (node->is_missing()) return;
 
                 SCOPED_FRAME();
-                auto children = alloc_list<Ast_Node*>(node->all_child_count);
+                auto children = alloc_list<Ast_Node*>(node->all_child_count());
                 FOR_ALL_NODE_CHILDREN (node) children->append(it);
                 for (; children->len > 0; children->len--)
                     process_node(*children->last());
 
-                if (node->type == brace_type)
+                if (node->type() == brace_type)
                     depth++;
-                if (node->type == other_brace_type) {
+                if (node->type() == other_brace_type) {
                     depth--;
                     if (depth == 0) {
-                        lbrace_line = node->start.y;
+                        lbrace_line = node->start().y;
                         return;
                     }
                 }

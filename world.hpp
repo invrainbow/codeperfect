@@ -152,6 +152,13 @@ struct Build {
     }
 };
 
+/*
+struct Index_Log {
+
+
+};
+*/
+
 struct World {
     Pool world_mem;
     Pool frame_mem;
@@ -164,7 +171,7 @@ struct World {
     Pool build_index_mem;
     Pool ui_mem;
     Pool message_queue_mem;
-    Pool project_settings_mem;
+    Pool index_log_mem;
 
     Jumplist jumplist;
 
@@ -213,6 +220,11 @@ struct World {
 
     bool replace_line_numbers_with_bytecounts;
     bool turn_off_framerate_cap;
+
+    struct {
+        bool show;
+        List<ccstr> lines;
+    } wnd_index_log;
 
     struct {
         bool show;

@@ -540,7 +540,16 @@ ccstr rel_to_abs_path(ccstr path) {
 
     Frame frame;
     auto ret = alloc_array(wchar_t, len);
-    if (GetFullPathNameW(wpath, len, ret, NULL) != len) {
+
+    auto copied = GetFullPathNameW(wpath, len, ret, NULL);
+    if (copied == 0) {
+        error("GetFullPathNameW: %s", get_last_error());
+        frame.restore();
+        return NULL;
+    }
+
+    if (copied > len) {
+        error("GetFullPathNameW: needed %d, current len is %d", copied, len);
         frame.restore();
         return NULL;
     }

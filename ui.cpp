@@ -80,7 +80,7 @@ const vec3f COLOR_THEME_4 = rgb_hex("eca895");
 const vec3f COLOR_THEME_5 = rgb_hex("e8918c");
 
 bool get_type_color(Ast_Node *node, Editor *editor, vec3f *out) {
-    switch (node->type) {
+    switch (node->type()) {
     case TS_PACKAGE:
     case TS_IMPORT:
     case TS_CONST:
@@ -186,7 +186,7 @@ bool get_type_color(Ast_Node *node, Editor *editor, vec3f *out) {
     case TS_PACKAGE_IDENTIFIER:
     case TS_TYPE_IDENTIFIER:
         {
-            auto len = node->end_byte - node->start_byte;
+            auto len = node->end_byte() - node->start_byte();
             if (len >= 16) break;
 
             ccstr keywords1[] = {
@@ -208,8 +208,8 @@ bool get_type_color(Ast_Node *node, Editor *editor, vec3f *out) {
             };
 
             char keyword[16] = {0};
-            auto it = editor->iter(node->start);
-            for (u32 i = 0; i < _countof(keyword) && it.pos != node->end; i++)
+            auto it = editor->iter(node->start());
+            for (u32 i = 0; i < _countof(keyword) && it.pos != node->end(); i++)
                 keyword[i] = it.next();
 
             For (keywords1) {
@@ -379,7 +379,7 @@ void UI::render_ts_cursor(TSTreeCursor *curr) {
     };
 
     walk_ts_cursor(curr, false, [&](Ast_Node *node, Ts_Field_Type field_type, int depth) -> Walk_Action {
-        if (node->anon && !world.wnd_ast_vis.show_anon_nodes)
+        if (node->anon() && !world.wnd_ast_vis.show_anon_nodes)
             return WALK_SKIP_CHILDREN;
 
         // auto changed = ts_node_has_changes(node->node);
@@ -389,46 +389,46 @@ void UI::render_ts_cursor(TSTreeCursor *curr) {
 
         auto flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
 
-        if (node->child_count == 0)
+        if (node->child_count() == 0)
             flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_Bullet;
 
-        auto type_str = ts_ast_type_str(node->type);
+        auto type_str = ts_ast_type_str(node->type());
         if (type_str == NULL)
             type_str = "(unknown)";
         else
             type_str += strlen("TS_");
 
-        if (node->anon)
+        if (node->anon())
             ImGui::PushStyleColor(ImGuiCol_Text, (ImVec4)ImColor(128, 128, 128));
 
         auto field_type_str = ts_field_type_str(field_type);
         if (field_type_str == NULL)
             last_open = ImGui::TreeNodeEx(
-                node->id,
+                node->id(),
                 flags,
                 "%s, start = %s, end = %s",
                 type_str,
-                format_pos(node->start),
-                format_pos(node->end)
+                format_pos(node->start()),
+                format_pos(node->end())
             );
         else
             last_open = ImGui::TreeNodeEx(
-                node->id,
+                node->id(),
                 flags,
                 "(%s) %s, start = %s, end = %s",
                 field_type_str + strlen("TSF_"),
                 type_str,
-                format_pos(node->start),
-                format_pos(node->end)
+                format_pos(node->start()),
+                format_pos(node->end())
             );
 
-        if (node->anon)
+        if (node->anon())
             ImGui::PopStyleColor();
 
         if (ImGui::IsMouseDoubleClicked(0) && ImGui::IsItemHovered(ImGuiHoveredFlags_None)) {
             auto editor = world.get_current_editor();
             if (editor != NULL)
-                editor->move_cursor(node->start);
+                editor->move_cursor(node->start());
         }
 
         return last_open ? WALK_CONTINUE : WALK_SKIP_CHILDREN;
@@ -1552,10 +1552,10 @@ void UI::draw_everything() {
                 auto root_node = new_ast_node(ts_tree_root_node(editor->tree), &it);
 
                 find_nodes_containing_pos(root_node, editor->cur, true, [&](auto it) -> Walk_Action {
-                    if (it->type == TS_SOURCE_FILE)
+                    if (it->type() == TS_SOURCE_FILE)
                         return WALK_CONTINUE;
 
-                    if (it->type == TS_FUNCTION_DECLARATION) {
+                    if (it->type() == TS_FUNCTION_DECLARATION) {
                         auto name = it->field(TSF_NAME);
                         if (!name->null)
                             ret = str_starts_with(name->string(), "Test");
@@ -1635,17 +1635,6 @@ void UI::draw_everything() {
         }
 
         if (ImGui::BeginMenu("Tools")) {
-            if (io.KeyAlt) {
-                ImGui::MenuItem("ImGui demo", NULL, &world.windows_open.im_demo);
-                ImGui::MenuItem("ImGui metrics", NULL, &world.windows_open.im_metrics);
-                ImGui::MenuItem("Editor AST viewer", NULL, &world.wnd_editor_tree.show);
-                ImGui::MenuItem("Editor toplevels viewer", NULL, &world.wnd_editor_toplevels.show);
-                ImGui::MenuItem("Roll Your Own IDE Construction Set", NULL, &world.wnd_style_editor.show);
-                ImGui::MenuItem("Replace line numbers with bytecounts", NULL, &world.replace_line_numbers_with_bytecounts);
-                ImGui::MenuItem("Turn off framerate cap", NULL, &world.turn_off_framerate_cap);
-                ImGui::Separator();
-            }
-
             if (ImGui::MenuItem("Reload go.mod")) {
                 world.indexer.set_flag(&world.indexer.flag_handle_gomod_changed);
             }
@@ -1656,6 +1645,17 @@ void UI::draw_everything() {
 
             if (ImGui::MenuItem("Re-index everything")) {
                 world.indexer.set_flag(&world.indexer.flag_reindex_everything);
+            }
+
+            if (io.KeyAlt) {
+                ImGui::Separator();
+                ImGui::MenuItem("ImGui demo", NULL, &world.windows_open.im_demo);
+                ImGui::MenuItem("ImGui metrics", NULL, &world.windows_open.im_metrics);
+                ImGui::MenuItem("Editor AST viewer", NULL, &world.wnd_editor_tree.show);
+                ImGui::MenuItem("Editor toplevels viewer", NULL, &world.wnd_editor_toplevels.show);
+                ImGui::MenuItem("Roll Your Own IDE Construction Set", NULL, &world.wnd_style_editor.show);
+                ImGui::MenuItem("Replace line numbers with bytecounts", NULL, &world.replace_line_numbers_with_bytecounts);
+                ImGui::MenuItem("Turn off framerate cap", NULL, &world.turn_off_framerate_cap);
             }
 
             /*
@@ -1685,6 +1685,24 @@ void UI::draw_everything() {
         ImGui::End();
     }
     */
+
+    if (world.wnd_index_log.show) {
+        ImGui::SetNextWindowDockID(dock_bottom_id, ImGuiCond_Once);
+        ImGui::Begin("Index Log", &world.wnd_index_log.show);
+
+        ImGui::PushFont(world.ui.im_font_mono);
+
+        For (world.wnd_index_log.lines) {
+            ImGui::Text("%s", it);
+        }
+
+        if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
+            ImGui::SetScrollHereY(1.0f);
+
+        ImGui::PopFont();
+
+        ImGui::End();
+    }
 
     if (world.error_list.show) {
         ImGui::SetNextWindowDockID(dock_bottom_id, ImGuiCond_Once);
@@ -2105,14 +2123,18 @@ void UI::draw_everything() {
 
         ImGui::InputText("##search_for_file", wnd.query, _countof(wnd.query));
 
-        if (ImGui::IsItemEdited())
-            filter_files();
+        if (ImGui::IsItemEdited()) {
+            if (strlen(wnd.query) >= 2)
+                filter_files();
+            else
+                wnd.filtered_results->len = 0; // maybe use logic from filter_files
+        }
 
         {
             ImGui::PushFont(world.ui.im_font_mono);
             defer { ImGui::PopFont(); };
 
-            for (u32 i = 0; i < wnd.filtered_results->len && i < 20; i++) {
+            for (u32 i = 0; i < wnd.filtered_results->len && i < settings.open_file_max_results; i++) {
                 auto it = wnd.filepaths->at(wnd.filtered_results->at(i));
                 if (i == wnd.selection)
                     ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.5f, 1.0f), "%s", it);
@@ -2253,7 +2275,7 @@ void UI::draw_everything() {
             node.init(ts_tree_root_node(tree), &it);
 
             FOR_NODE_CHILDREN (&node) {
-                switch (it->type) {
+                switch (it->type()) {
                 case TS_VAR_DECLARATION:
                 case TS_CONST_DECLARATION:
                 case TS_FUNCTION_DECLARATION:
@@ -2429,12 +2451,12 @@ void UI::draw_everything() {
                 auto end = new_cur2(0, editor->view.y + editor->view.h);
 
                 walk_ts_cursor(&editor->cursor, false, [&](Ast_Node *node, Ts_Field_Type, int depth) -> Walk_Action {
-                    auto node_start = node->start;
-                    auto node_end = node->end;
+                    auto node_start = node->start();
+                    auto node_end = node->end();
 
                     if (node_end < start) return WALK_SKIP_CHILDREN;
                     if (node_start > end) return WALK_ABORT;
-                    // if (node->child_count != 0) return WALK_CONTINUE;
+                    // if (node->child_count() != 0) return WALK_CONTINUE;
 
                     vec3f color = {0};
                     if (get_type_color(node, editor, &color)) {
@@ -2688,6 +2710,10 @@ void UI::draw_everything() {
                             }
                         }
 
+                        if (hint.gotype != NULL)
+                            if (new_cur2(x, y) == hint.start)
+                                actual_parameter_hint_start = cur_pos;
+
                         uchar uch = curr_cp;
                         if (uch == '\t') {
                             auto chars = options.tabsize - ((vx - view.x) % options.tabsize);
@@ -2704,10 +2730,6 @@ void UI::draw_everything() {
                             draw_char(&cur_pos, uch, rgba(text_color));
                             vx++;
                         }
-
-                        if (hint.gotype != NULL)
-                            if (new_cur2(x, y) == hint.start)
-                                actual_parameter_hint_start = cur_pos;
                     }
 
                     if (editor->cur == new_cur2(line->len, y))
@@ -2898,38 +2920,43 @@ void UI::draw_everything() {
     {
         draw_rect(status_area, rgba("#252525"));
 
-        boxf str_area_l;
-        str_area_l.pos = status_area.pos;
-        str_area_l.h = status_area.h;
+        float status_area_left = status_area.x;
+        float status_area_right = status_area.x + status_area.w;
 
-        boxf str_area_r;
-        str_area_r.pos = status_area.pos;
-        str_area_r.x += status_area.w;
-        str_area_r.h = status_area.h;
+        enum { LEFT = 0, RIGHT = 1 };
 
-        enum {
-            LEFT = 0,
-            RIGHT = 1,
+        auto get_status_piece_rect = [&](int dir, ccstr s) -> boxf {
+            boxf ret = {0};
+            ret.y = status_area.y;
+            ret.h = status_area.h;
+            ret.w = font->width * strlen(s) + (settings.status_padding_x * 2);
+
+            if (dir == RIGHT)
+                ret.x = status_area_right - ret.w;
+            else
+                ret.x = status_area_left;
+
+            return ret;
         };
 
-        auto draw_status_piece = [&](int dir, ccstr s, vec4f bgcolor, vec4f fgcolor) {
-            auto str_area = dir == RIGHT ? &str_area_r : &str_area_l;
+        // returns mouse flags
+        auto draw_status_piece = [&](int dir, ccstr s, vec4f bgcolor, vec4f fgcolor) -> int {
+            auto rect = get_status_piece_rect(dir, s);
+            draw_rect(rect, bgcolor);
 
-            str_area->w = font->width * strlen(s) + (settings.status_padding_x * 2);
             if (dir == RIGHT)
-                str_area->x -= str_area->w;
+                status_area_right -= rect.w;
+            else
+                status_area_left += rect.w;
 
-            draw_rect(*str_area, bgcolor);
-
-            boxf text_area = *str_area;
+            boxf text_area = rect;
             text_area.x += settings.status_padding_x;
             text_area.y += settings.status_padding_y;
             text_area.w -= (settings.status_padding_x * 2);
             text_area.h -= (settings.status_padding_y * 2);
             draw_string(text_area.pos, s, fgcolor);
 
-            if (dir == LEFT)
-                str_area->x += str_area->w;
+            return get_mouse_flags(rect);
         };
 
         if (world.use_nvim) {
@@ -2986,10 +3013,20 @@ void UI::draw_everything() {
             break;
         }
 
-        if (world.indexer.ready)
-            draw_status_piece(RIGHT, "INDEX READY", rgba("#008800"), rgba("#cceecc"));
-        else
-            draw_status_piece(RIGHT, "INDEXING IN PROGRESS", rgba("#880000"), rgba("#eecccc"));
+        int index_mouse_flags = 0;
+        if (world.indexer.ready) {
+            auto mouse_flags = get_mouse_flags(get_status_piece_rect(RIGHT, "INDEX READY"));
+            auto opacity = mouse_flags & MOUSE_HOVER ? 1.0 : 0.8;
+            index_mouse_flags = draw_status_piece(RIGHT, "INDEX READY", rgba("#008800", opacity), rgba("#cceecc", opacity));
+        } else {
+            auto mouse_flags = get_mouse_flags(get_status_piece_rect(RIGHT, "INDEXING..."));
+            auto opacity = mouse_flags & MOUSE_HOVER ? 1.0 : 0.8;
+            index_mouse_flags = draw_status_piece(RIGHT, "INDEXING...", rgba("#880000", opacity), rgba("#eecccc", opacity));
+        }
+
+        if (index_mouse_flags & MOUSE_CLICKED) {
+            world.wnd_index_log.show ^= 1;
+        }
 
         auto curr_editor = world.get_current_editor();
         if (curr_editor != NULL) {

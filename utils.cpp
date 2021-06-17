@@ -71,18 +71,23 @@ ccstr our_basename(ccstr path) {
 #endif
 }
 
-ccstr our_sprintf(ccstr fmt, ...) {
-    va_list args, args2;
-    va_start(args, fmt);
+ccstr our_vsprintf(ccstr fmt, va_list args) {
+    va_list args2;
     va_copy(args2, args);
 
     auto len = vsnprintf(NULL, 0, fmt, args);
     auto buf = alloc_array(char, (len + 1));
-
     vsnprintf(buf, len + 1, fmt, args2);
+    return buf;
+}
+
+ccstr our_sprintf(ccstr fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+
+    auto buf = our_vsprintf(fmt, args);
 
     va_end(args);
-    va_end(args2);
     return buf;
 }
 

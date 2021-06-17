@@ -4,11 +4,66 @@
 #include "buffer.hpp"
 #include "go.hpp"
 
+bool test_indexing_speed() {
+    auto &gi = world.indexer;
+
+    gi.module_resolver.init(world.current_path, gi.gomodcache);
+
+    gi.index.current_path = our_strcpy(world.current_path);
+    gi.index.current_import_path = our_strcpy(gi.get_workspace_import_path());
+    gi.index.packages = alloc_list<Go_Package>();
+    gi.package_lookup.init();
+
+    use_pool_for_tree_sitter = true;
+
+    ccstr import_path = "github.com/gogo/protobuf/proto";
+    auto resolved_path = gi.get_package_path(import_path);
+
+    Go_Package *pkg = NULL;
+
+    {
+        SCOPED_MEM(&gi.final_mem);
+        pkg = gi.index.packages->append();
+        pkg->files = alloc_list<Go_File>();
+        pkg->import_path = our_strcpy(import_path);
+        gi.package_lookup.set(pkg->import_path, pkg);
+    }
+
+    Timer t;
+    t.init();
+
+    {
+        auto filename = "table_marshal.go";
+
+        SCOPED_FRAME();
+
+        auto filepath = path_join(resolved_path, filename);
+
+        auto pf = gi.parse_file(filepath);
+        if (pf == NULL) return false;
+        defer { gi.free_parsed_file(pf); };
+
+        t.log("parse file");
+
+        auto file = get_ready_file_in_package(pkg, filename);
+
+        t.log("create file");
+
+        ccstr package_name = NULL;
+        gi.process_tree_into_gofile(file, pf->root, filepath, &package_name, true);
+
+        t.log("process tree");
+    }
+
+    return true;
+}
+
 bool run_tests() {
     return false;
 
     world.init();
     // test_read_write_index();
+    test_indexing_speed();
 
     system("pause");
     return true;

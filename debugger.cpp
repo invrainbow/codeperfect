@@ -907,10 +907,10 @@ bool Debugger::start(Debug_Profile *debug_profile) {
                         auto root_node = new_ast_node(ts_tree_root_node(editor->tree), &it);
 
                         find_nodes_containing_pos(root_node, editor->cur, true, [&](auto it) -> Walk_Action {
-                            if (it->type == TS_SOURCE_FILE)
+                            if (it->type() == TS_SOURCE_FILE)
                                 return WALK_CONTINUE;
 
-                            if (it->type == TS_FUNCTION_DECLARATION) {
+                            if (it->type() == TS_FUNCTION_DECLARATION) {
                                 auto name = it->field(TSF_NAME);
                                 if (!name->null) {
                                     auto func_name = name->string();

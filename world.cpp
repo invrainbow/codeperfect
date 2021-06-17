@@ -16,7 +16,7 @@ World world;
 bool is_ignored_by_git(ccstr path, bool isdir) {
     UNREFERENCED_PARAMETER(isdir);
 
-    return GHGitIgnoreCheckFile((char*)path); 
+    return GHGitIgnoreCheckFile((char*)path);
 #if 0
     auto git_repo = world.git_repo;
     if (git_repo == NULL) return false;
@@ -66,6 +66,7 @@ void World::fill_file_tree() {
             if (is_ignored_by_git(fullpath, ent->type & FILE_TYPE_DIRECTORY))
                 return;
 
+            if (streq(ent->name, ".git")) return;
             if (streq(ent->name, ".ideproj")) return;
             if (str_ends_with(ent->name, ".exe")) return;
 
@@ -161,8 +162,9 @@ void World::init_workspace() {
     let_user_select_file(&opts);
 #else
     // strcpy_safe(current_path, _countof(current_path), normalize_path_sep("c:/users/brandon/dev/ide/gohelper"));
-    strcpy_safe(current_path, _countof(current_path), normalize_path_sep("c:/users/brandon/dev/hugo"));
-    // strcpy_safe(current_path, _countof(current_path), normalize_path_sep("c:/users/brandon/cryptopals_challenge"));
+    // strcpy_safe(current_path, _countof(current_path), normalize_path_sep("c:/users/brandon/dev/hugo"));
+    strcpy_safe(current_path, _countof(current_path), normalize_path_sep("c:/users/brandon/dev/kubernetes"));
+    // strcpy_safe(current_path, _countof(current_path), normalize_path_sep("c:/users/brandon/dev/cryptopals_challenge"));
 #endif
 
     GHGitIgnoreInit(current_path);
@@ -196,6 +198,7 @@ void World::init() {
     init_mem(build_index_mem);
     init_mem(ui_mem);
     init_mem(message_queue_mem);
+    init_mem(index_log_mem);
 #undef init_mem
 
     // use frame_mem as the default mem
@@ -251,6 +254,11 @@ void World::init() {
         // i assume we will have other things that "orchestrate" world
         SCOPED_MEM(&world_mem);
         message_queue.init();
+    }
+
+    {
+        SCOPED_MEM(&index_log_mem);
+        wnd_index_log.lines.init();
     }
 
     message_queue_lock.init();
@@ -502,6 +510,9 @@ void filter_files() {
 
     wnd->filtered_results->len = 0;
 
+    Timer t;
+    t.init("filter_files");
+
     u32 i = 0;
     For (*wnd->filepaths) {
         if (fzy_has_match(wnd->query, it))
@@ -509,11 +520,26 @@ void filter_files() {
         i++;
     }
 
-    wnd->filtered_results->sort([&](int *ia, int *ib) {
-        auto a = fzy_match(wnd->query, wnd->filepaths->at(*ia));
-        auto b = fzy_match(wnd->query, wnd->filepaths->at(*ib));
+    t.log("matching");
+
+    auto scores = alloc_array(double, wnd->filepaths->len);
+    auto scores_saved = alloc_array(bool, wnd->filepaths->len);
+
+    auto get_score = [&](int i) {
+        if (!scores_saved[i]) {
+            scores[i] = fzy_match(wnd->query, wnd->filepaths->at(i));
+            scores_saved[i] = true;
+        }
+        return scores[i];
+    };
+
+    wnd->filtered_results->sort([&](int *pa, int *pb) {
+        auto a = get_score(*pa);
+        auto b = get_score(*pb);
         return a < b ? 1 : (a > b ? -1 : 0);  // reverse
     });
+
+    t.log("scoring");
 }
 
 void run_proc_the_normal_way(Process* proc, ccstr cmd) {

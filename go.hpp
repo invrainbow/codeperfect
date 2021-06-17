@@ -424,8 +424,6 @@ enum Walk_Action {
 ccstr _path_join(ccstr a, ...);
 #define path_join(...) _path_join(__VA_ARGS__, NULL)
 
-ccstr get_package_name_from_file(ccstr filepath);
-
 /*
 enum Import_Location {
     IMPLOC_GOPATH = 0,
@@ -461,18 +459,7 @@ struct Go_Indexer;
 struct Ast_Node {
     TSNode node;
     Parser_It *it;
-
-    cur2 start;
-    cur2 end;
-    u32 start_byte;
-    u32 end_byte;
-    Ts_Ast_Type type;
     bool null;
-    ccstr name;
-    const void* id;
-    bool anon;
-    int child_count;
-    int all_child_count;
 
     Ast_Node *dup(TSNode new_node);
     ccstr string();
@@ -482,21 +469,21 @@ struct Ast_Node {
 
         node = _node;
         it = _it;
-
         null = ts_node_is_null(node);
-        if (!null) {
-            start = tspoint_to_cur(ts_node_start_point(node));
-            end = tspoint_to_cur(ts_node_end_point(node));
-            start_byte = ts_node_start_byte(node);
-            end_byte = ts_node_end_byte(node);
-            type = (Ts_Ast_Type)ts_node_symbol(node);
-            name = ts_node_type(node);
-            id = node.id;
-            anon = !ts_node_is_named(node);
-            child_count = ts_node_named_child_count(node);
-            all_child_count = ts_node_child_count(node);
-        }
     }
+
+    cur2 start() { return null ? new_cur2(0, 0) : tspoint_to_cur(ts_node_start_point(node)); }
+    cur2 end() { return null ? new_cur2(0, 0) : tspoint_to_cur(ts_node_end_point(node)); }
+    u32 start_byte() { return null ? 0 : ts_node_start_byte(node); }
+    u32 end_byte() { return null ? 0 : ts_node_end_byte(node); }
+    Ts_Ast_Type type() { return (Ts_Ast_Type)(null ? 0 : ts_node_symbol(node)); }
+    ccstr name() { return null ? NULL : ts_node_type(node); }
+    const void* id() { return null ? NULL : node.id; }
+    bool anon() { return null ? false : !ts_node_is_named(node); }
+    int child_count() { return null ? 0 : ts_node_named_child_count(node); }
+    int all_child_count() { return null ? 0 : ts_node_child_count(node); }
+    bool is_missing() { return null ? false : ts_node_is_missing(node); }
+    Ast_Node *parent() { return null ? NULL : dup(ts_node_parent(node)); }
 
     Ast_Node *source_node() {
         auto curr = node;
@@ -522,8 +509,6 @@ struct Ast_Node {
             x = next_func(x);
         return x;
     }
-
-    Ast_Node *parent() { return dup(ts_node_parent(node)); }
 
     Ast_Node *child() {
         auto ret = ts_node_named_child(node, 0);
@@ -559,10 +544,6 @@ struct Ast_Node {
         auto ret = ts_node_prev_sibling(node);
         ret = _skip_comment(ret, false, false);
         return dup(ret);
-    }
-
-    bool is_missing() {
-        return ts_node_is_missing(node);
     }
 };
 
@@ -1045,23 +1026,6 @@ struct Token {
 
 bool isident(int c);
 
-// We used to have a full on parser that was designed to and could mostly parse
-// the whole go language, but it was shit and it kept running into problems and
-// crashing. But it had the advantage over tree-sitter that it could parse a
-// single rule instead of the whole file. So we're going to use part of it to
-// parse just the package declaration from files, for get_package_name().
-struct Ghetto_Parser {
-    Parser_It* it;
-    Token tok;
-    ccstr filepath; // for debugging purposes
-
-    void init(Parser_It* _it, ccstr _filepath = NULL);
-    void lex();
-    ccstr get_package_name();
-    ccstr get_token_string();
-    bool match_token_to_string(ccstr str);
-};
-
 struct Gohelper {
     Process proc;
     bool returned_error;
@@ -1077,6 +1041,8 @@ enum {
     LISTDECLS_PUBLIC_ONLY = 1 << 0,
     LISTDECLS_EXCLUDE_METHODS = 1 << 1,
 };
+
+Go_File *get_ready_file_in_package(Go_Package *pkg, ccstr filename);
 
 struct Go_Indexer {
     ccstr goroot;
@@ -1138,13 +1104,12 @@ struct Go_Indexer {
     List<ccstr>* list_source_files(ccstr dirpath, bool include_tests);
     ccstr get_package_name(ccstr path);
     ccstr get_package_path(ccstr import_path);
-    Resolved_Import* resolve_import(ccstr import_path);
+    // Resolved_Import* resolve_import(ccstr import_path);
     Parsed_File *parse_file(ccstr filepath, bool use_latest = false);
     void free_parsed_file(Parsed_File *file);
     ccstr get_workspace_import_path();
     void handle_error(ccstr err);
     u64 hash_package(ccstr resolved_package_path);
-    ccstr get_package_name_from_file(ccstr filepath);
     ccstr get_filepath_from_ctx(Go_Ctx *ctx);
     Goresult *resolve_type(Gotype *type, Go_Ctx *ctx);
     Goresult *unpointer_type(Gotype *type, Go_Ctx *ctx);
@@ -1157,8 +1122,8 @@ struct Go_Indexer {
     Gotype *new_gotype(Gotype_Type type);
     Goresult *find_decl_in_package(ccstr id, ccstr import_path);
     List<Goresult> *list_package_decls(ccstr import_path, int flags = 0);
-    Resolved_Import *check_potential_resolved_import(ccstr filepath);
     Go_Package *find_package_in_index(ccstr import_path);
+    ccstr get_import_package_name(Go_Import *it);
     ccstr find_import_path_referred_to_by_id(ccstr id, Go_Ctx *ctx);
     Pool *get_final_mem();
     Go_Package *find_up_to_date_package(ccstr import_path);
@@ -1172,7 +1137,8 @@ struct Go_Indexer {
         Go_File *file,
         Ast_Node *root,
         ccstr filename,
-        ccstr *package_name
+        ccstr *package_name,
+        bool time = false
     );
     void iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> cb, ccstr filename);
     void reload_all_dirty_files();

@@ -9,6 +9,7 @@ ccstr our_format_json(ccstr s);
 ccstr our_strcpy(ccstr s);
 ccstr our_dirname(ccstr path);
 ccstr our_basename(ccstr path);
+ccstr our_vsprintf(ccstr fmt, va_list args);
 ccstr our_sprintf(ccstr fmt, ...);
 ccstr our_strcat(ccstr a, ccstr b);
 
@@ -257,21 +258,36 @@ bool iszero(T* p) {
 struct Timer {
     u64 time;
     u64 start;
+    ccstr name;
 
-    void init() {
+    void init(ccstr _name = NULL) {
+        ptr0(this);
+
+        name = _name;
         time = current_time_in_nanoseconds();
         start = time;
     }
 
+    ccstr make_label(ccstr s) {
+        if (name == NULL)
+            return s;
+        return our_sprintf("[%s] %s", name, s);
+    }
+
     void log(ccstr s) {
+        print("%s: %dus", make_label(s), read_time() / 1000);
+    }
+
+    i64 read_time() {
         auto curr = current_time_in_nanoseconds();
-        print("%s: %dms", s, (curr - time) / 1000000);
+        auto ret = curr - time;
         time = curr;
+        return ret;
     }
 
     void total() {
         auto curr = current_time_in_nanoseconds();
-        print("TOTAL: %dms", (curr - start) / 1000000);
+        print("%s: %dus", make_label("TOTAL"), (curr - start) / 1000);
         time = curr;
     }
 };

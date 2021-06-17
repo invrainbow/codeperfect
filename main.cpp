@@ -504,7 +504,7 @@ int main() {
                 if (wnd.filtered_results->len == 0) return;
 
                 if (wnd.selection == 0)
-                    wnd.selection = wnd.filtered_results->len - 1;
+                    wnd.selection = min(wnd.filtered_results->len, settings.open_file_max_results) - 1;
                 else
                     wnd.selection--;
             };
@@ -513,7 +513,7 @@ int main() {
                 if (wnd.filtered_results->len == 0) return;
 
                 wnd.selection++;
-                wnd.selection %= wnd.filtered_results->len;
+                wnd.selection %= min(wnd.filtered_results->len, settings.open_file_max_results);
             };
 
             switch (ev) {
@@ -528,27 +528,8 @@ int main() {
                     break;
                 case OUR_MOD_NONE:
                     switch (key) {
-                    case GLFW_KEY_J:
-                        if (nmod == OUR_MOD_CTRL) go_down();
-                        break;
-                    case GLFW_KEY_K:
-                        if (nmod == OUR_MOD_CTRL) go_up();
-                        break;
-                    case GLFW_KEY_DOWN:
-                        go_down();
-                        break;
-                    case GLFW_KEY_UP:
-                        go_up();
-                        break;
-                    case GLFW_KEY_BACKSPACE:
-                        {
-                            auto &wnd = world.wnd_open_file;
-                            if (wnd.query[0] != '\0')
-                                wnd.query[strlen(wnd.query) - 1] = '\0';
-                            if (strlen(wnd.query) >= 3)
-                                filter_files();
-                        }
-                        break;
+                    case GLFW_KEY_DOWN: go_down(); break;
+                    case GLFW_KEY_UP: go_up(); break;
                     case GLFW_KEY_ESCAPE:
                         world.wnd_open_file.show = false;
                         break;
