@@ -11,38 +11,8 @@
 
 World world;
 
-#define UNREFERENCED_PARAMETER(x) x
-
-bool is_ignored_by_git(ccstr path, bool isdir) {
-    UNREFERENCED_PARAMETER(isdir);
-
+bool is_ignored_by_git(ccstr path) {
     return GHGitIgnoreCheckFile((char*)path);
-#if 0
-    auto git_repo = world.git_repo;
-    if (git_repo == NULL) return false;
-
-    SCOPED_FRAME();
-
-    // get path relative to repo root
-    auto relpath = get_path_relative_to(path, git_repository_workdir(git_repo));
-    if (relpath == NULL) return false;
-
-    // if it's a directory, libgit2 requires a slash to be at the end
-    if (isdir)
-        if (!is_sep(relpath[strlen(relpath)-1]))
-            relpath = our_sprintf("%s/", relpath, PATH_SEP);
-
-    // libgit2 requires forward slashes
-    relpath = normalize_path_sep(relpath, '/');
-
-    // get rid of "./" at beginning, it breaks libgit2
-    if (str_starts_with(relpath, "./")) relpath += 2;
-
-    int ignored = 0;
-    if (git_ignore_path_is_ignored(&ignored, git_repo, relpath) == 0)
-        return (bool)ignored;
-    return false;
-#endif
 }
 
 void World::fill_file_tree() {
@@ -63,7 +33,7 @@ void World::fill_file_tree() {
 
         list_directory(path, [&](Dir_Entry *ent) {
             auto fullpath = path_join(path, ent->name);
-            if (is_ignored_by_git(fullpath, ent->type & FILE_TYPE_DIRECTORY))
+            if (is_ignored_by_git(fullpath))
                 return;
 
             if (streq(ent->name, ".git")) return;
@@ -154,7 +124,7 @@ void World::init_workspace() {
     panes.init(LIST_FIXED, _countof(_panes), _panes);
 
 #if 0 // RELEASE_BUILD
-    Select_File_Opts opts = {0};
+    Select_File_Opts opts; ptr0(&opts);
     opts.buf = current_path;
     opts.bufsize = _countof(current_path);
     opts.folder = true;
@@ -176,12 +146,6 @@ void World::init_workspace() {
     if (project_settings.build_command[0] == '\0')
         strcpy_safe(project_settings.build_command, _countof(project_settings.build_command), "go build --gcflags=\"all=-N -l\" ");
     */
-
-    git_buf root = {0};
-    if (git_repository_discover(&root, current_path, 0, NULL) == 0) {
-        git_repository_open(&git_repo, root.ptr);
-        git_buf_free(&root);
-    }
 }
 
 void World::init() {
@@ -223,7 +187,7 @@ void World::init() {
 
         char buf[MAX_PATH];
 
-        Select_File_Opts opts = {0};
+        Select_File_Opts opts; ptr0(&opts);
         opts.buf = buf;
         opts.bufsize = _countof(buf);
         opts.folder = false;
@@ -263,7 +227,6 @@ void World::init() {
 
     message_queue_lock.init();
 
-    git_libgit2_init();
     fzy_init();
 
     // prepare_workspace();

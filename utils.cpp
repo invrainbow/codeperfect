@@ -4,7 +4,7 @@
 
 #if OS_WIN
 #include <shlwapi.h>
-#elif OS_LINUX
+#elif OS_MAC
 #include <libgen.h>
 #endif
 
@@ -45,7 +45,7 @@ ccstr our_strcpy(ccstr s) {
 }
 
 ccstr our_dirname(ccstr path) {
-#ifdef _WIN32
+#if OS_WIN
     auto s = (char*)our_strcpy(path);
     auto len = strlen(s);
     if (is_sep(s[len-1]))
@@ -55,17 +55,17 @@ ccstr our_dirname(ccstr path) {
     _splitpath(s, ret, NULL, NULL, NULL);
     _splitpath(s, NULL, ret + strlen(ret), NULL, NULL);
     return ret;
-#else
+#elif OS_MAC
     return dirname((char*)our_strcpy(path));
 #endif
 }
 
 ccstr our_basename(ccstr path) {
-#ifdef _WIN32
+#if OS_WIN
     auto ret = (cstr)our_strcpy(path);
     PathStripPathA(ret);
     return (ccstr)ret;
-#else
+#elif OS_MAC
     auto ret = our_strcpy(path);
     return basename((char*)our_strcpy(ret));
 #endif

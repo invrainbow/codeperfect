@@ -38,7 +38,7 @@ void fzy_init() {
 int fzy_has_match(const char *needle, const char *haystack) {
     while (*needle) {
         char nch = *needle++;
-        const char accept[3] = {nch, toupper(nch), 0};
+        const char accept[3] = {nch, (char)toupper(nch), 0};
         if (!(haystack = strpbrk(haystack, accept))) {
             return 0;
         }
@@ -80,10 +80,10 @@ static void setup_match_struct(struct match_struct *match, const char *needle, c
     }
 
     for (int i = 0; i < match->needle_len; i++)
-        match->lower_needle[i] = tolower(needle[i]);
+        match->lower_needle[i] = (char)tolower(needle[i]);
 
     for (int i = 0; i < match->haystack_len; i++)
-        match->lower_haystack[i] = tolower(haystack[i]);
+        match->lower_haystack[i] = (char)tolower(haystack[i]);
 
     precompute_bonus(haystack, match->match_bonus);
 }

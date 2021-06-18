@@ -61,7 +61,7 @@ void Editor::raw_move_cursor(cur2 c) {
 
 void Editor::ensure_cursor_on_screen() {
     if (relu_sub(cur.y, options.scrolloff) < view.y)
-        move_cursor(new_cur2(cur.x, min(view.y + options.scrolloff, view.y + view.h)));
+        move_cursor(new_cur2((u32)cur.x, (u32)min(view.y + options.scrolloff, view.y + view.h)));
     if (cur.y + options.scrolloff >= view.y + view.h)
         move_cursor(new_cur2((u32)cur.x, (u32)relu_sub(view.y + view.h,  1 + options.scrolloff)));
 
@@ -80,7 +80,7 @@ void Editor::update_lines(int firstline, int lastline, List<uchar*> *new_lines, 
         old_end_cur = new_cur2((i32)buf.lines.last()->len, (i32)buf.lines.len - 1);
     }
 
-    TSInputEdit tsedit = {0};
+    TSInputEdit tsedit; ptr0(&tsedit);
 
     if (is_go_file && tree != NULL) {
         tsedit.start_byte = cur_to_offset(start_cur);
@@ -187,7 +187,7 @@ void Editor::reload_file(bool because_of_file_watcher) {
     }
     defer { f.cleanup(); };
 
-    TSInputEdit tsedit = {0};
+    TSInputEdit tsedit; ptr0(&tsedit);
 
     if (tree != NULL) {
         cur2 start = new_cur2(0, 0);
@@ -513,7 +513,7 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
         if (!world.indexer.lock.try_enter()) return;
         defer { world.indexer.lock.leave(); };
 
-        Autocomplete ac = {0};
+        Autocomplete ac; ptr0(&ac);
 
         Timer t;
         t.init();
@@ -1055,7 +1055,7 @@ void Editor::backspace_in_insert_mode(int graphemes_to_erase, int codepoints_to_
 void Editor::format_on_save(bool write_to_nvim) {
     auto old_cur = cur;
 
-    Buffer swapbuf = {0};
+    Buffer swapbuf; ptr0(&swapbuf);
     bool success = false;
 
     GHFmtStart();

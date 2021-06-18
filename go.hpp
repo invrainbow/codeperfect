@@ -9,7 +9,7 @@
 
 extern "C" TSLanguage *tree_sitter_go();
 
-extern const char GO_INDEX_MAGIC_BYTES[3];
+extern const unsigned char GO_INDEX_MAGIC_BYTES[3];
 extern const int GO_INDEX_VERSION;
 
 // mirrors tree-sitter/src/go.h

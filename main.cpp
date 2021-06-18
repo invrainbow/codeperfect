@@ -367,10 +367,10 @@ int main() {
         s32 len = 0;
 
         world.ui.im_font_ui = io.Fonts->AddFontFromMemoryTTF(open_sans_ttf, open_sans_ttf_len, 16);
-        assert(world.ui.im_font_ui != NULL, "unable to load UI font");
+        our_assert(world.ui.im_font_ui != NULL, "unable to load UI font");
 
         world.ui.im_font_mono = io.Fonts->AddFontFromMemoryTTF(vera_mono_ttf, vera_mono_ttf_len, CODE_FONT_SIZE);
-        assert(world.ui.im_font_mono != NULL, "unable to load code font");
+        our_assert(world.ui.im_font_mono != NULL, "unable to load code font");
 
         if (!world.font.init((u8*)vera_mono_ttf, CODE_FONT_SIZE, TEXTURE_FONT))
             panic("unable to load code font");
@@ -1181,7 +1181,7 @@ int main() {
         glUniformMatrix4fv(loc, 1, GL_FALSE, (float*)ortho_projection);
 
         for (u32 i = 0; i < __TEXTURE_COUNT__; i++) {
-            char key[] = {'t', 'e', 'x', '0' + i, '\0'};
+            char key[] = {'t', 'e', 'x', (char)('0' + i), '\0'};
             loc = glGetUniformLocation(world.ui.program, key);
             glUniform1i(loc, i);
         }

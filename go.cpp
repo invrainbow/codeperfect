@@ -33,7 +33,7 @@ void index_print(ccstr fmt, ...) {
     go_print("%s", msg);
 }
 
-const char GO_INDEX_MAGIC_BYTES[3] = {0x49, 0xfa, 0x98};
+const unsigned char GO_INDEX_MAGIC_BYTES[3] = {0x49, 0xfa, 0x98};
 const int GO_INDEX_VERSION = 1;
 
 s32 num_index_stream_opens = 0;
@@ -46,7 +46,7 @@ bool Index_Stream::open(ccstr _path, bool write, File_Open_Mode open_mode) {
     offset = 0;
     ok = true;
 
-    File_Mapping_Opts opts = {0};
+    File_Mapping_Opts opts; ptr0(&opts);
     opts.write = write;
     opts.open_mode = open_mode;
     if (write) opts.initial_size = 1024;
@@ -1705,11 +1705,11 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 p
 
     auto file = pf->root;
 
-    Go_Ctx ctx = {0};
+    Go_Ctx ctx; ptr0(&ctx);
     ctx.import_path = filepath_to_import_path(our_dirname(filepath));
     ctx.filename = our_basename(filepath);
 
-    Jump_To_Definition_Result result = {0};
+    Jump_To_Definition_Result result; ptr0(&result);
 
     t.log("setup shit");
 
@@ -1788,7 +1788,7 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 p
         if (fm == NULL) return NULL;
         defer { fm->cleanup(); };
 
-        cur2 newpos = {0};
+        cur2 newpos; ptr0(&newpos);
         for (u32 i = 0; i < fm->len && i < result.pos.x; i++) {
             if (fm->data[i] == '\r') continue;
             if (fm->data[i] == '\n') {
@@ -1850,7 +1850,7 @@ bool Go_Indexer::truncate_parsed_file(Parsed_File *pf, cur2 end_pos, ccstr chars
     auto buf = pf->it->buffer_params.it.buf;
     auto eof_pos = new_cur2((i32)buf->lines.last()->len, (i32)buf->lines.len - 1);
 
-    TSInputEdit edit = {0};
+    TSInputEdit edit; ptr0(&edit);
     edit.start_byte = buf->cur_to_offset(end_pos);
     edit.start_point = cur_to_tspoint(end_pos);
     edit.old_end_byte = buf->cur_to_offset(eof_pos);
@@ -1945,7 +1945,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
     auto import_path = filepath_to_import_path(our_dirname(filepath));
     if (import_path == NULL) return false;
 
-    Go_Ctx ctx = {0};
+    Go_Ctx ctx; ptr0(&ctx);
     ctx.import_path = import_path;
     ctx.filename = our_basename(filepath);
 
@@ -1963,7 +1963,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
 
     Current_Situation situation = FOUND_JACK_SHIT;
     Ast_Node *expr_to_analyze = NULL;
-    cur2 keyword_start = {0};
+    cur2 keyword_start; ptr0(&keyword_start);
     ccstr prefix = NULL;
 
     // i believe right now there are three possibilities:
@@ -2253,7 +2253,7 @@ Parameter_Hint *Go_Indexer::parameter_hint(ccstr filepath, cur2 pos, bool trigge
 
     if (func_expr == NULL) return NULL;
 
-    Go_Ctx ctx = {0};
+    Go_Ctx ctx; ptr0(&ctx);
     ctx.import_path = filepath_to_import_path(our_dirname(filepath));
     ctx.filename = our_basename(filepath);
 

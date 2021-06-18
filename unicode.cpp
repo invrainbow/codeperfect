@@ -794,7 +794,7 @@ bool Grapheme_Clusterer::feed(int codepoint) {
     auto nextprop = get_codepoint_property(codepoint);
     bool isbreak = false;
 
-    Gr_Next next = {0};
+    Gr_Next next; ptr0(&next);
     if (grapheme_transition(state, nextprop, &next)) {
         state = next.state;
         isbreak = next.isbreak;
@@ -802,11 +802,11 @@ bool Grapheme_Clusterer::feed(int codepoint) {
         Gr_Next notfound = {GR_ANY, true, 0};
         Gr_Next *next = &notfound;
 
-        Gr_Next any_prop_next = {0};
+        Gr_Next any_prop_next; ptr0(&any_prop_next);
         if (grapheme_transition(state, PR_ANY, &any_prop_next))
             next = &any_prop_next;
 
-        Gr_Next any_state_next = {0};
+        Gr_Next any_state_next; ptr0(&any_state_next);
         if (grapheme_transition(GR_ANY, nextprop, &any_state_next))
             if (any_state_next.rule >= next->rule)
                 next = &any_state_next;

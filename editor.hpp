@@ -1,6 +1,5 @@
 #pragma once
 
-#include <git2.h>
 #include "list.hpp"
 #include "buffer.hpp"
 #include "go.hpp"

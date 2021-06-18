@@ -18,13 +18,16 @@
 #endif
 
 #if OS_WIN
-#include "win32.hpp"
+#   include "win32.hpp"
+#elif OS_MAC
+#   include "pthread.h"
+#   include "errno.h"
 #endif
 
 #if OS_WIN
 #define PATH_SEP '\\'
 #else
-#define PATH_SEP = '/'
+#define PATH_SEP '/'
 #endif
 
 #if OS_LINUX
@@ -60,7 +63,7 @@ struct Process {
     HANDLE stdout_r;
     DWORD pid;
     HANDLE proc;
-#elif OS_LINUX
+#elif OS_MAC
     int stdin_pipe[2];
     int stdout_pipe[2];
     int pid;
@@ -100,7 +103,7 @@ bool are_filepaths_equal(ccstr a, ccstr b);
 struct Lock {
 #if OS_WIN
     CRITICAL_SECTION lock;
-#elif OS_LINUX
+#elif OS_MAC
     pthread_mutex_t lock;
 #endif
 
@@ -137,7 +140,7 @@ Check_Path_Result check_path(ccstr path);
 
 ccstr get_win32_error(DWORD error = -1);
 
-#elif OS_LINUX
+#elif OS_MAC
 
 #define get_last_error() strerror(errno)
 #define get_socket_error() strerror(errno)
@@ -189,7 +192,7 @@ enum File_Result {
 struct File {
 #if OS_WIN
     HANDLE h;
-#elif OS_LINUX
+#elif OS_MAC
     FILE *f;
 #endif
 
@@ -321,3 +324,6 @@ ccstr get_executable_path();
 bool set_run_on_computer_startup(ccstr key, ccstr path_to_exe);
 
 bool xplat_chdir(ccstr dir);
+
+bool create_directory(ccstr path);
+bool touch_file(ccstr path);

@@ -26,7 +26,8 @@ when a frame is opened
 
 #if OS_WIN
 #include "win32.hpp"
-#elif OS_LINUX
+#elif OS_MAC
+#include <inttypes.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/ioctl.h>
@@ -500,7 +501,7 @@ void Debugger::halt_when_already_running() {
     // two State responses, one for the original command that made us run
     // in the first place, and one from the halt. Swallow the first response.
 
-    Packet p = {0};
+    Packet p; ptr0(&p);
     if (read_packet(&p))
         handle_new_state(&p);
     else
@@ -512,7 +513,7 @@ void Debugger::pause_and_resume(fn<void()> f) {
 
     if (was_running) {
         exec_halt(true);
-        Packet p = {0};
+        Packet p; ptr0(&p);
         read_packet(&p);
     }
 
@@ -950,7 +951,7 @@ bool Debugger::start(Debug_Profile *debug_profile) {
             else
                 cmd = our_sprintf("go test -c %s -o debug_bin.exe --gcflags=\"all=-N -l\"", package_path);
 
-            Build_Profile build_profile = {0};
+            Build_Profile build_profile; ptr0(&build_profile);
             strcpy_safe(build_profile.label, _countof(build_profile.label), "temp");
             strcpy_safe(build_profile.cmd, _countof(build_profile.cmd), cmd);
 

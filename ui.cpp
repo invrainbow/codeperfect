@@ -13,6 +13,10 @@
 
 #include <GLFW/glfw3.h>
 
+#if OS_MAC
+#include <inttypes.h>
+#endif
+
 UI ui;
 
 int get_line_number_width(Editor *editor) {
@@ -559,7 +563,7 @@ void UI::draw_rounded_rect(boxf b, vec4f color, float radius, int round_flags) {
     draw_rect(center, color);
 
     auto draw_rounded_corner = [&](vec2f center, float start_rad, float end_rad) {
-        vec2f zero = {0};
+        vec2f zeroval; ptr0(&zeroval);
 
         float increment = (end_rad - start_rad) / max(3, (int)(radius / 5));
         for (float angle = start_rad; angle < end_rad; angle += increment) {
@@ -569,7 +573,7 @@ void UI::draw_rounded_rect(boxf b, vec4f color, float radius, int round_flags) {
             vec2f v1 = {center.x + radius * cos(ang1), center.y - radius * sin(ang1)};
             vec2f v2 = {center.x + radius * cos(ang2), center.y - radius * sin(ang2)};
 
-            draw_triangle(center, v1, v2, zero, zero, zero, color, DRAW_SOLID);
+            draw_triangle(center, v1, v2, zeroval, zeroval, zeroval, color, DRAW_SOLID);
         }
     };
 
@@ -800,7 +804,7 @@ struct Debugger_UI {
                         ImGui::SetKeyboardFocusHere();
                     }
                     bool changed = ImGui::InputText(
-                        our_sprintf("##newwatch%x", (int)(void*)watch),
+                        our_sprintf("##newwatch%x", (iptr)(void*)watch),
                         watch->expr_tmp,
                         _countof(watch->expr_tmp),
                         ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll
@@ -1154,7 +1158,7 @@ struct Debugger_UI {
 
                         if (frame->locals != NULL) {
                             For (*frame->locals) {
-                                Render_Args a = {0};
+                                Render_Args a; ptr0(&a);
                                 a.var = &it;
                                 a.is_child = false;
                                 a.watch = NULL;
@@ -1165,7 +1169,7 @@ struct Debugger_UI {
 
                         if (frame->args != NULL) {
                             For (*frame->args) {
-                                Render_Args a = {0};
+                                Render_Args a; ptr0(&a);
                                 a.var = &it;
                                 a.is_child = false;
                                 a.watch = NULL;
@@ -1212,7 +1216,7 @@ struct Debugger_UI {
                         auto &it = world.dbg.watches[k];
                         if (it.deleted) continue;
 
-                        Render_Args a = {0};
+                        Render_Args a; ptr0(&a);
                         a.var = &it.value;
                         a.is_child = false;
                         a.watch = &it;
@@ -1833,13 +1837,9 @@ void UI::draw_everything() {
                 auto path = path_join(dest, wnd.name);
 
                 if (wnd.folder) {
-                    CreateDirectoryA(path, NULL);
+                    create_directory(path);
                 } else {
-                    // need to share, or else we have race condition
-                    // with fsevent handler in
-                    // Go_Indexer::background_thread() trying to read
-                    auto h = CreateFileA(path, 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
-                    if (h != INVALID_HANDLE_VALUE) CloseHandle(h);
+                    touch_file(path);
                 }
 
                 world.fill_file_tree();
@@ -2268,10 +2268,10 @@ void UI::draw_everything() {
             List<Godecl> decls;
             decls.init();
 
-            Parser_It it = {0};
+            Parser_It it; ptr0(&it);
             it.init(&editor->buf);
 
-            Ast_Node node = {0};
+            Ast_Node node; ptr0(&node);
             node.init(ts_tree_root_node(tree), &it);
 
             FOR_NODE_CHILDREN (&node) {
@@ -2458,7 +2458,7 @@ void UI::draw_everything() {
                     if (node_start > end) return WALK_ABORT;
                     // if (node->child_count() != 0) return WALK_CONTINUE;
 
-                    vec3f color = {0};
+                    vec3f color; ptr0(&color);
                     if (get_type_color(node, editor, &color)) {
                         auto hl = highlights.append();
                         hl->start = node_start;
@@ -2926,7 +2926,7 @@ void UI::draw_everything() {
         enum { LEFT = 0, RIGHT = 1 };
 
         auto get_status_piece_rect = [&](int dir, ccstr s) -> boxf {
-            boxf ret = {0};
+            boxf ret; ptr0(&ret);
             ret.y = status_area.y;
             ret.h = status_area.h;
             ret.w = font->width * strlen(s) + (settings.status_padding_x * 2);

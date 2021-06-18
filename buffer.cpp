@@ -175,7 +175,7 @@ void Buffer::cleanup() {
 }
 
 void Buffer::copy_from(Buffer *other) {
-    Buffer_It it = {0};
+    Buffer_It it; ptr0(&it);
     it.buf = other;
 
     char tmp[4];
@@ -382,7 +382,7 @@ void Buffer::remove(cur2 start, cur2 end) {
 }
 
 Buffer_It Buffer::iter(cur2 c) {
-    Buffer_It it = {0};
+    Buffer_It it; ptr0(&it);
     it.buf = this;
     it.pos = c;
     return it;

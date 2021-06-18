@@ -9,7 +9,8 @@
 
 #include <stdexcept>
 #include <functional>
-#include <windows.h>
+
+// #include <windows.h>
 
 const u64 MAX_U64 = (u64)(-1);
 
@@ -102,4 +103,11 @@ s32 global_mem_allocated = 0;
 void panic(ccstr s) {
 	tell_user(s, "An error has occurred");
 	throw Panic_Exception(s); // TODO: replace with exit(0)
+}
+
+bool streqi(ccstr a, ccstr b) {
+    for(; *a != '\0' || *b != '\0'; a++, b++)
+        if (tolower(*a) != tolower(*b))
+            return false;
+    return true;
 }

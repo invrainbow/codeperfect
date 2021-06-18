@@ -1,6 +1,6 @@
 #include "os.hpp"
 
-#ifdef OS_WIN // whole file is windows only
+#if OS_WIN // whole file is windows only
 
 #include "win32.hpp"
 #include "world.hpp"
@@ -938,5 +938,18 @@ bool set_run_on_computer_startup(ccstr key, ccstr exepath) {
 bool xplat_chdir(ccstr dir) {
     return SetCurrentDirectory(dir);
 }
+
+bool create_directory(ccstr path) {
+    return CreateDirectoryA(path, NULL);
+}
+
+bool touch_file(ccstr path) {
+    auto h = CreateFileA(path, 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (h == INVALID_HANDLE_VALUE) return false;
+
+    CloseHandle(h);
+    return true;
+}
+
 
 #endif
