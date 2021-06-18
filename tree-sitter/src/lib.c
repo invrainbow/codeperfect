@@ -3,6 +3,8 @@
 // The following directories must be added to the include path:
 //   - include
 
+#include <stdlib.h>
+
 #define _POSIX_C_SOURCE 200112L
 
 void* ts_interop_malloc(size_t size);
