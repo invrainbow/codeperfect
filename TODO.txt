@@ -9,3 +9,10 @@
    causing editor->buf.idx_byte_to_cp() to crash
 
  - don't activate autocomplete if we're inside a comment.
+
+MACOS PORT:
+
+ - use make to build in parallel
+ - figure out why it's crashing
+ - debug issues, get main workflow working
+ - add filesystem watching

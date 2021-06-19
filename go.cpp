@@ -8,6 +8,12 @@
 #include "meow_hash.hpp"
 #include <stdlib.h>
 
+#if OS_WIN
+#include <windows.h>
+#elif OS_MAC
+#include <dlfcn.h>
+#endif
+
 #define GO_DEBUG 1
 
 #if GO_DEBUG
@@ -2478,6 +2484,8 @@ void Go_Indexer::cleanup() {
     scoped_table_mem.cleanup();
     flag_lock.cleanup();
     lock.cleanup();
+
+    wksp_watch.cleanup();
 }
 
 List<Godecl> *Go_Indexer::parameter_list_to_fields(Ast_Node *params) {
@@ -4368,15 +4376,19 @@ GoUint8 (*GHGitIgnoreInit)(char* repo);
 GoUint8 (*GHGitIgnoreCheckFile)(char* file);
 
 #if OS_WIN
+#   define load_dll(x) LoadLibraryW(L##x)
+#   define get_func_address(dll, name) GetProcAddress(dll, name)
+#elif OS_MAC
+#   define load_dll(x) dlopen(x, RTLD_NOW);
+#   define get_func_address(dll, name) dlsym(dll, name)
+#endif
 
-auto gohelper_dll = LoadLibraryW(L"gohelper.dll");
+auto gohelper_dll = load_dll("gohelper.dll");
 
-// TODO: can we get an implicit template with auto? that would be cool
 template<typename T>
 void load_dll_func(T &func, ccstr name) {
-    auto addr = GetProcAddress(gohelper_dll, name);
+    auto addr = get_func_address(gohelper_dll, name);
     if (addr == NULL) panic(our_sprintf("couldn't load %s", name));
-
     func = (T)addr;
 }
 
@@ -4398,5 +4410,3 @@ void init_gohelper_crap() {
     load(GHGitIgnoreCheckFile);
 #undef load
 }
-
-#endif // OS_WIN

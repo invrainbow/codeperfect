@@ -110,8 +110,8 @@ struct Lock {
     void init();
     void cleanup();
     bool try_enter();
-    bool enter();
-    bool leave();
+    void enter();
+    void leave();
 };
 
 struct Scoped_Lock {
@@ -188,6 +188,7 @@ enum File_Result {
 };
 
 #define FILE_SEEK_END (u32)(-1)
+#define FILE_SEEK_ERROR (u32)(-1)
 
 struct File {
 #if OS_WIN
@@ -243,11 +244,20 @@ struct File_Mapping {
 #if OS_WIN
     HANDLE file;
     HANDLE mapping;
-    bool create_actual_file_mapping(bool write, LARGE_INTEGER size);
+    bool create_actual_file_mapping(LARGE_INTEGER size);
+#elif OS_MAC
+    int fd;
+    bool create_actual_file_mapping(i64 size);
 #endif
 
+    bool init(ccstr path) {
+        File_Mapping_Opts opts = {0};
+        opts.write = false;
+        opts.open_mode = FILE_OPEN_EXISTING;
+        return init(path, &opts);
+    }
+
     bool init(ccstr path, File_Mapping_Opts *opts);
-    bool init(ccstr path);
     bool flush(i64 bytes_to_flush);
     bool finish_writing(i64 final_size);
     bool resize(i64 newlen);
@@ -282,12 +292,14 @@ struct Fs_Watcher {
     ccstr path;
     HANDLE dir_handle;
     OVERLAPPED ol;
+
+    bool initiate_wait();
+#elif OS_MAC
+    int put_something_here_so_struct_isnt_empty;
 #endif
 
     bool init(ccstr _path);
     void cleanup();
-
-    bool initiate_wait();
     bool next_event(Fs_Event *event);
 };
 

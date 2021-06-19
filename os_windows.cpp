@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <search.h>
 #include <pathcch.h>
+#include <cwalk.h>
 
 // stupid character conversion functions
 // =====================================
@@ -330,14 +331,12 @@ bool Lock::try_enter() {
     return TryEnterCriticalSection(&lock);
 }
 
-bool Lock::enter() {
+void Lock::enter() {
     EnterCriticalSection(&lock);
-    return true;
 }
 
-bool Lock::leave() {
+void Lock::leave() {
     LeaveCriticalSection(&lock);
-    return true;
 }
 
 void File::cleanup() {
@@ -373,7 +372,9 @@ File_Result File::init(ccstr path, int access, File_Open_Mode open_mode) {
 u32 File::seek(u32 pos) {
     if (pos == FILE_SEEK_END)
         return SetFilePointer(h, 0, NULL, FILE_END);
-    return SetFilePointer(h, pos, NULL, FILE_BEGIN);
+    auto ret = SetFilePointer(h, pos, NULL, FILE_BEGIN);
+    if (ret == INVALID_SET_FILE_POINTER) return FILE_SEEK_ERROR;
+    return ret;
 }
 
 bool File::read(char *buf, s32 size, s32 *bytes_read) {
@@ -651,7 +652,7 @@ bool Fs_Watcher::next_event(Fs_Event *event) {
     return true;
 }
 
-bool File_Mapping::create_actual_file_mapping(bool write, LARGE_INTEGER size) {
+bool File_Mapping::create_actual_file_mapping(LARGE_INTEGER size) {
     if (size.HighPart > 0) {
         // TODO: handle this. Everywhere else in the code is set up to handle
         // 64-bit sizes, but because MapViewOfFile only lets you map a 32-bit
@@ -661,7 +662,7 @@ bool File_Mapping::create_actual_file_mapping(bool write, LARGE_INTEGER size) {
 
     bool ok = false;
 
-    mapping = CreateFileMapping(file, 0, write ? PAGE_READWRITE : PAGE_READONLY, size.HighPart, size.LowPart, NULL);
+    mapping = CreateFileMapping(file, 0, opts.write ? PAGE_READWRITE : PAGE_READONLY, size.HighPart, size.LowPart, NULL);
     if (mapping == NULL) {
         error("CreateFileMapping: %s", get_last_error());
         return false;
@@ -674,7 +675,7 @@ bool File_Mapping::create_actual_file_mapping(bool write, LARGE_INTEGER size) {
         }
     };
 
-    data = (u8*)MapViewOfFile(mapping, write ? FILE_MAP_WRITE : FILE_MAP_READ, 0, 0, size.LowPart);
+    data = (u8*)MapViewOfFile(mapping, opts.write ? FILE_MAP_WRITE : FILE_MAP_READ, 0, 0, size.LowPart);
     if (data == NULL) return false;
 
     len = size.LowPart;
@@ -683,14 +684,9 @@ bool File_Mapping::create_actual_file_mapping(bool write, LARGE_INTEGER size) {
     return true;
 }
 
-bool File_Mapping::init(ccstr path) {
-    File_Mapping_Opts opts = {0};
-    opts.write = false;
-    opts.open_mode = FILE_OPEN_EXISTING;
-    return init(path, &opts);
-}
-
 bool File_Mapping::init(ccstr path, File_Mapping_Opts *_opts) {
+    ptr0(this);
+
     bool ok = false;
 
     memcpy(&opts, _opts, sizeof(opts));
@@ -712,7 +708,7 @@ bool File_Mapping::init(ccstr path, File_Mapping_Opts *_opts) {
         if (!GetFileSizeEx(file, &size)) return false;
     }
 
-    if (!create_actual_file_mapping(opts.write, size))
+    if (!create_actual_file_mapping(size))
         return false;
 
     ok = true;
@@ -729,7 +725,7 @@ bool File_Mapping::resize(i64 newlen) {
 
     LARGE_INTEGER li;
     li.QuadPart = newlen;
-    return create_actual_file_mapping(opts.write, li);
+    return create_actual_file_mapping(li);
 }
 
 bool File_Mapping::flush(i64 bytes_to_flush) {
@@ -950,6 +946,5 @@ bool touch_file(ccstr path) {
     CloseHandle(h);
     return true;
 }
-
 
 #endif

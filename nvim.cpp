@@ -1630,7 +1630,7 @@ void Nvim::start_running() {
 
     // TODO: get full path of init.vim
     // nvim_proc.run("nvim -u init.vim -i NONE -N --embed --headless");
-    nvim_proc.run("nvim -u init.vim -i NONE -N --embed --headless");
+    nvim_proc.run(our_sprintf(".%cnvim -u init.vim -i NONE -N --embed --headless", PATH_SEP));
 
     reader.proc = &nvim_proc;
     reader.offset = 0;
