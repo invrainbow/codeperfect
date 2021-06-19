@@ -1,4 +1,4 @@
-#include "go.h"
+#include "treesitter_go.hpp"
 
 static const char *ts_symbol_names[] = {
   [ts_builtin_sym_end] = "end",

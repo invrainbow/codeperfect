@@ -27,4 +27,3 @@ void ts_interop_free(void *p);
 #include "./subtree.c"
 #include "./tree_cursor.c"
 #include "./tree.c"
-#include "./go.c"

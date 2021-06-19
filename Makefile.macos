@@ -1,0 +1,30 @@
+CC = clang++
+
+CFLAGS = -std=c++17
+CFLAGS += `pkg-config --cflags gtk+-3.0`
+CFLAGS += `pkg-config --cflags glfw3`
+CFLAGS += `pkg-config --cflags glew`
+CFLAGS += -g -mavx -maes -w
+
+LDFLAGS = -ldl -lcwalk
+LDFLAGS += `pkg-config --libs gtk+-3.0`
+LDFLAGS += `pkg-config --libs glfw3`
+LDFLAGS += `pkg-config --cflags --libs glew`
+LDFLAGS += `pkg-config --cflags --libs tree-sitter`
+LDFLAGS += -framework CoreVideo -framework OpenGL
+LDFLAGS += -framework IOKit -framework Cocoa
+LDFLAGS += -framework Carbon
+
+SOURCE_DIR= .
+SOURCE_FILES=$(wildcard $(SOURCE_DIR)/*.cpp)
+OBJECT_DIR= ./obj
+OBJECT_FILES=$(patsubst $(SOURCE_DIR)/%.cpp,$(OBJECT_DIR)/%.o,$(SOURCE_FILES))
+BINARY_DIR=./bin
+
+$(OBJECT_DIR)/%.o: $(SOURCE_DIR)/%.cpp
+	$(CC) $(CFLAGS) -c -o $@ $<
+ 
+$(BINARY_DIR)/ide: $(OBJECT_FILES)
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(OBJECT_FILES)
+
+# all: bin/ide

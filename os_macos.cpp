@@ -346,7 +346,6 @@ bool copy_file(ccstr src, ccstr dest, bool overwrite) {
     return std::filesystem::copy_file(src, dest, flags);
 }
 
-
 /*
     if (type & MB_YESNO)
         dialog = gtk_message_dialog_new(NULL, 0, GTK_MESSAGE_QUESTION, GTK_BUTTONS_YES_NO, text );
@@ -355,6 +354,8 @@ bool copy_file(ccstr src, ccstr dest, bool overwrite) {
 */
 
 Ask_User_Result do_gtk_dialog(ccstr text, ccstr title, fn<void(GtkDialog*)> f) {
+    if (!gtk_init_check(NULL, NULL)) return ASKUSER_ERROR;
+
     auto dialog = gtk_message_dialog_new(NULL, GTK_DIALOG_MODAL, GTK_MESSAGE_QUESTION, GTK_BUTTONS_NONE, text);
 
     f(GTK_DIALOG(dialog));
@@ -546,8 +547,11 @@ ccstr get_path_relative_to(ccstr full, ccstr base) {
 }
 
 bool File_Mapping::create_actual_file_mapping(i64 size) {
-    // TODO: handle write, create with correct flags
-    data = (u8*)mmap(0, len, PROT_READ, MAP_PRIVATE, fd, 0);
+    if (opts.write)
+        data = (u8*)mmap(0, len, PROT_READ, MAP_PRIVATE, fd, 0);
+    else
+        data = (u8*)mmap(0, len, PROT_WRITE, MAP_SHARED, fd, 0);
+
     if (data == MAP_FAILED) {
         data = NULL;
         return false;
