@@ -13,6 +13,7 @@
 MACOS PORT:
 
  - use make to build in parallel
+ - figure out debugger situation
  - figure out why it's crashing
- - debug issues, get main workflow working
+ - debug rest of issues, get main workflow working
  - add filesystem watching
