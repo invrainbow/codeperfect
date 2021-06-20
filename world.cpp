@@ -81,8 +81,7 @@ bool copy_file(ccstr src, ccstr dest) {
         return false;
     defer { f.cleanup(); };
 
-    s32 ret = 0;
-    return f.write((char*)fm->data, fm->len, &ret) && (ret == fm->len);
+    return f.write((char*)fm->data, fm->len);
 }
 
 void shell(ccstr s, ccstr dir) {
@@ -133,8 +132,9 @@ void World::init_workspace() {
 #else
     // strcpy_safe(current_path, _countof(current_path), normalize_path_sep("c:/users/brandon/dev/ide/gohelper"));
     // strcpy_safe(current_path, _countof(current_path), normalize_path_sep("c:/users/brandon/dev/hugo"));
-    strcpy_safe(current_path, _countof(current_path), normalize_path_sep("c:/users/brandon/dev/kubernetes"));
+    // strcpy_safe(current_path, _countof(current_path), normalize_path_sep("c:/users/brandon/dev/kubernetes"));
     // strcpy_safe(current_path, _countof(current_path), normalize_path_sep("c:/users/brandon/dev/cryptopals_challenge"));
+    strcpy_safe(current_path, _countof(current_path), "/Users/brandon/dev/hugo");
 #endif
 
     GHGitIgnoreInit(current_path);

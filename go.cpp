@@ -45,7 +45,7 @@ const int GO_INDEX_VERSION = 1;
 s32 num_index_stream_opens = 0;
 s32 num_index_stream_closes = 0;
 
-bool Index_Stream::open(ccstr _path, bool write, File_Open_Mode open_mode) {
+bool Index_Stream::open(ccstr _path, bool write) {
     ptr0(this);
 
     path = _path;
@@ -54,7 +54,6 @@ bool Index_Stream::open(ccstr _path, bool write, File_Open_Mode open_mode) {
 
     File_Mapping_Opts opts; ptr0(&opts);
     opts.write = write;
-    opts.open_mode = open_mode;
     if (write) opts.initial_size = 1024;
 
     fm = map_file_into_memory(path, &opts);
@@ -1085,7 +1084,7 @@ void Go_Indexer::background_thread() {
 
             {
                 Index_Stream s;
-                if (!s.open(path_join(world.current_path, "db.tmp"), true, FILE_CREATE_NEW)) {
+                if (!s.open(path_join(world.current_path, "db.tmp"), true)) {
                     index_print("Unable to open database file for writing.");
                     break;
                 }
@@ -2151,9 +2150,13 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
             Go_File *gofile = NULL;
 
             auto pkg = find_up_to_date_package(ctx.import_path);
-            auto check = [&](auto it) { return streq(it->filename, ctx.filename); };
-            auto file = pkg->files->find(check);
-            For (*file->imports) add_result(get_import_package_name(&it));
+            if (pkg != NULL) {
+                auto check = [&](auto it) { return streq(it->filename, ctx.filename); };
+                auto file = pkg->files->find(check);
+                For (*file->imports) add_result(get_import_package_name(&it));
+            } else {
+                print("break");
+            }
 
             auto results = list_package_decls(ctx.import_path, LISTDECLS_EXCLUDE_METHODS);
             if (results != NULL)
@@ -4376,14 +4379,14 @@ GoUint8 (*GHGitIgnoreInit)(char* repo);
 GoUint8 (*GHGitIgnoreCheckFile)(char* file);
 
 #if OS_WIN
-#   define load_dll(x) LoadLibraryW(L##x)
+#   define load_dll(x) LoadLibraryW(L"gohelper.dll")
 #   define get_func_address(dll, name) GetProcAddress(dll, name)
 #elif OS_MAC
-#   define load_dll(x) dlopen(x, RTLD_NOW);
+#   define load_dll(x) dlopen("gohelper.dylib", RTLD_NOW);
 #   define get_func_address(dll, name) dlsym(dll, name)
 #endif
 
-auto gohelper_dll = load_dll("gohelper.dll");
+auto gohelper_dll = load_dll(gohelper_dll);
 
 template<typename T>
 void load_dll_func(T &func, ccstr name) {

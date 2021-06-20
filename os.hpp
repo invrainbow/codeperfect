@@ -142,7 +142,7 @@ ccstr get_win32_error(DWORD error = -1);
 
 #elif OS_MAC
 
-#define get_last_error() strerror(errno)
+#define get_last_error() our_sprintf("(%d) %s", errno, strerror(errno))
 #define get_socket_error() strerror(errno)
 
 #endif
@@ -194,13 +194,13 @@ struct File {
 #if OS_WIN
     HANDLE h;
 #elif OS_MAC
-    FILE *f;
+    int fd;
 #endif
 
     File_Result init(ccstr path, int access, File_Open_Mode open_mode);
     void cleanup();
-    bool read(char *buf, s32 size, s32 *bytes_read = NULL);
-    bool write(char *buf, s32 size, s32 *bytes_written = NULL);
+    bool read(char *buf, s32 size);
+    bool write(char *buf, s32 size);
     u32 seek(u32 pos);
 };
 
@@ -232,7 +232,7 @@ u64 get_file_size(ccstr file);
 
 struct File_Mapping_Opts {
     bool write;
-    File_Open_Mode open_mode;
+    // File_Open_Mode open_mode;
     i64 initial_size;
 };
 
@@ -253,7 +253,6 @@ struct File_Mapping {
     bool init(ccstr path) {
         File_Mapping_Opts opts = {0};
         opts.write = false;
-        opts.open_mode = FILE_OPEN_EXISTING;
         return init(path, &opts);
     }
 

@@ -87,7 +87,7 @@ void close_pipe_handle(int *fd) {
 }
 
 bool Process::run(ccstr _cmd) {
-    ptr0(this);
+    cmd = _cmd;
 
     auto err = [&](ccstr s) -> bool {
         perror(s);
@@ -95,8 +95,9 @@ bool Process::run(ccstr _cmd) {
         return false;
     };
 
-    if (pipe(stdin_pipe) < 0) return err("allocating pipe for child input redirect");
+    // create_new_console, keep_open_after_exit, and skip_shell are ignored.
 
+    if (pipe(stdin_pipe) < 0) return err("allocating pipe for child input redirect");
     if (pipe(stdout_pipe) < 0) return err("allocating pipe for child output redirect");
 
     pid = fork();
@@ -115,8 +116,9 @@ bool Process::run(ccstr _cmd) {
         close_pipe_handle(&stdin_pipe[PIPE_READ]);
         close_pipe_handle(&stdout_pipe[PIPE_WRITE]);
 
-        // run our command
-        exit(execlp("/bin/bash", "bash", "-c", "echo 8", NULL));
+        if (dir != NULL) chdir(dir);
+
+        exit(execlp("/bin/bash", "bash", "-c", cmd, NULL));
     }
 
     // used by child only
@@ -168,7 +170,8 @@ bool Process::can_read() {
 bool Process::read1(char* out) {
     if (peek_buffer_full) {
         peek_buffer_full = false;
-        return peek_buffer;
+        *out = peek_buffer;
+        return true;
     }
 
     char ch = 0;
@@ -269,49 +272,55 @@ void Lock::leave() {
 File_Result File::init(ccstr path, int access, File_Open_Mode open_mode) {
     char open_mode_str[5] = {0};
 
-    {
-        u32 i = 0;
+    int flags = 0;
+    if (access & FILE_MODE_READ) flags |= O_RDONLY;
+    if (access & FILE_MODE_WRITE) flags |= O_WRONLY;
+    if (open_mode == FILE_CREATE_NEW)
+        flags |= (O_CREAT | O_TRUNC);
 
-        // TODO: fill based on open_mode
-        if (access & FILE_MODE_READ) open_mode_str[i++] = 'r';
-        if (access & FILE_MODE_WRITE) open_mode_str[i++] = 'w';
+    int mode = 0;
+    if (flags & O_CREAT)
+        mode = 0644;
 
-        open_mode_str[i] = '\0';
-    }
-
-    f = fopen(path, open_mode_str);
-    if (f == NULL) return FILE_RESULT_FAILURE;
+    fd = open(path, flags, mode);
+    if (fd == -1) return FILE_RESULT_FAILURE;
 
     // TODO: handle the FILE_RESULT_ALREADY_EXISTS case.
-
     return FILE_RESULT_SUCCESS;
 }
 
 void File::cleanup() {
-    fclose(f);
+    close(fd);
 }
 
 u32 File::seek(u32 pos) {
-    auto result = (pos == FILE_SEEK_END) ? fseek(f, 0, SEEK_END) : fseek(f, pos, SEEK_SET);
-    if (result != 0) return FILE_SEEK_ERROR;
-
-    auto ret = ftell(f);
+    auto ret = (pos == FILE_SEEK_END ? lseek(fd, 0, SEEK_END) : lseek(fd, pos, SEEK_SET));
     if (ret == -1) return FILE_SEEK_ERROR;
     return ret;
 }
 
-bool File::read(char *buf, s32 size, s32 *bytes_read) {
-    auto n = fread(buf, 1, size, f);
-    if (n == 0) return false;
-    if (bytes_read != NULL) *bytes_read = n;
-    return (n == size);
+bool File::read(char *buf, s32 size) {
+    int off = 0;
+
+    while (off < size) {
+        auto n = ::read(fd, buf + off, size - off);
+        if (n == -1 || n == 0) return false;
+        off += n;
+    }
+
+    return true;
 }
 
-bool File::write(char *buf, s32 size, s32 *bytes_written) {
-    auto n = fwrite(buf, 1, size, f);
-    if (n == 0) return false;
-    if (bytes_written != NULL) *bytes_written = n;
-    return (n == size);
+bool File::write(char *buf, s32 size) {
+    int off = 0;
+
+    while (off < size) {
+        auto n = ::write(fd, buf + off, size - off);
+        if (n == -1 || n == 0) return false;
+        off += n;
+    }
+
+    return true;
 }
 
 bool let_user_select_file(Select_File_Opts* opts) {
@@ -547,12 +556,16 @@ ccstr get_path_relative_to(ccstr full, ccstr base) {
 }
 
 bool File_Mapping::create_actual_file_mapping(i64 size) {
-    if (opts.write)
-        data = (u8*)mmap(0, len, PROT_READ, MAP_PRIVATE, fd, 0);
-    else
-        data = (u8*)mmap(0, len, PROT_WRITE, MAP_SHARED, fd, 0);
+    if (opts.write) {
+        lseek(fd, size-1, SEEK_SET);
+        write(fd, "", 1);
+        data = (u8*)mmap(0, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    } else {
+        data = (u8*)mmap(0, size, PROT_READ, MAP_PRIVATE, fd, 0);
+    }
 
     if (data == MAP_FAILED) {
+        error("create_actual_file_mapping: %s", get_last_error());
         data = NULL;
         return false;
     }
@@ -567,18 +580,20 @@ bool File_Mapping::init(ccstr path, File_Mapping_Opts *_opts) {
 
     memcpy(&opts, _opts, sizeof(opts));
 
-    int flags = 0;
-    flags |= (opts.write ? O_WRONLY : O_RDONLY);
-    if (opts.open_mode == FILE_CREATE_NEW)
-        flags |= (O_CREAT | O_TRUNC);
-
-    fd = open(path, flags);
-    if (fd == -1) return false;
+    fd = opts.write ? open(path, O_CREAT|O_RDWR|O_TRUNC, 0644) : open(path, O_RDONLY);
+    if (fd == -1) {
+        error("file_mapping::init > open: %s", get_last_error());
+        return false;
+    }
     defer { if (!ok) { close(fd); fd = -1; } };
 
-    struct stat statbuf;
-    if (stat(path, &statbuf) != 0) return false;
-    len = statbuf.st_size;
+    if (opts.write) {
+        len = opts.initial_size;
+    } else {
+        struct stat statbuf;
+        if (stat(path, &statbuf) != 0) return false;
+        len = statbuf.st_size;
+    }
 
     if (!create_actual_file_mapping(len)) return false;
 
@@ -635,7 +650,7 @@ void Fs_Watcher::cleanup() {
 
 bool Fs_Watcher::next_event(Fs_Event *event) {
     // TODO
-    return true;
+    return false;
 }
 
 #endif

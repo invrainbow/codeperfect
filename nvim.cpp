@@ -1592,8 +1592,8 @@ void Nvim::write_notification_header(ccstr method, u32 params_length) {
 void Nvim::init() {
     ptr0(this);
 
-    mem.init();
-    loop_mem.init();
+    mem.init("nvim::mem");
+    loop_mem.init("nvim::loop_mem");
     started_messages_mem.init();
 
     request_id = 0;
@@ -1602,11 +1602,11 @@ void Nvim::init() {
 
     requests_lock.init();
     requests.init();
-    requests_mem.init();
+    requests_mem.init("nvim::requests_mem");
 
     messages_lock.init();
     message_queue.init();
-    messages_mem.init();
+    messages_mem.init("nvim::messages_mem");
 
     grid_to_window.init();
     chars_after_exiting_insert_mode.init();

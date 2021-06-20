@@ -1,30 +1,26 @@
 CC = clang++
+CFLAGS = -std=c++17 -g -mavx -maes -w `pkg-config --cflags gtk+-3.0 glfw3 glew`
+LDFLAGS = -ldl -lcwalk `pkg-config --libs glfw3 glew gtk+-3.0` -framework OpenGL
 
-CFLAGS = -std=c++17
-CFLAGS += `pkg-config --cflags gtk+-3.0`
-CFLAGS += `pkg-config --cflags glfw3`
-CFLAGS += `pkg-config --cflags glew`
-CFLAGS += -g -mavx -maes -w
+SRC_FILES = $(wildcard *.cpp)
+OBJ_FILES = $(patsubst %.cpp,obj/%.o,$(SRC_FILES))
+DEP_FILES = $(patsubst %.cpp,obj/%.d,$(SRC_FILES))
 
-LDFLAGS = -ldl -lcwalk
-LDFLAGS += `pkg-config --libs gtk+-3.0`
-LDFLAGS += `pkg-config --libs glfw3`
-LDFLAGS += `pkg-config --cflags --libs glew`
-LDFLAGS += `pkg-config --cflags --libs tree-sitter`
-LDFLAGS += -framework CoreVideo -framework OpenGL
-LDFLAGS += -framework IOKit -framework Cocoa
-LDFLAGS += -framework Carbon
+.PHONY: all clean
 
-SOURCE_DIR= .
-SOURCE_FILES=$(wildcard $(SOURCE_DIR)/*.cpp)
-OBJECT_DIR= ./obj
-OBJECT_FILES=$(patsubst $(SOURCE_DIR)/%.cpp,$(OBJECT_DIR)/%.o,$(SOURCE_FILES))
-BINARY_DIR=./bin
+all: bin/ide
 
-$(OBJECT_DIR)/%.o: $(SOURCE_DIR)/%.cpp
-	$(CC) $(CFLAGS) -c -o $@ $<
- 
-$(BINARY_DIR)/ide: $(OBJECT_FILES)
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(OBJECT_FILES)
+clean:
+	rm $(OBJ_FILES) $(DEP_FILES) bin/ide
 
-# all: bin/ide
+bin/ide: $(OBJ_FILES) obj/treesitter.o
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(OBJ_FILES) obj/treesitter.o
+
+-include $(DEP_FILES)
+
+$(OBJ_FILES): obj/%.o: %.cpp Makefile.macos
+	$(CC) $(CFLAGS) -MMD -MP -c -o $@ $<
+
+obj/treesitter.o: tree-sitter/src/lib.c
+	# copied from tree-sitter's makefile
+	clang -g -MMD -MP -O3 -Wall -Wextra -Werror -std=gnu99 -fPIC -Itree-sitter/src -Itree-sitter/include -c -o $@ $<

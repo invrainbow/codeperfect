@@ -265,7 +265,7 @@ struct Index_Stream {
     bool ok;
     File_Mapping *fm;
 
-    bool open(ccstr _path, bool write = false, File_Open_Mode open_mode = FILE_OPEN_EXISTING);
+    bool open(ccstr _path, bool write = false);
     void cleanup();
 
     bool writen(void* buf, int n);
@@ -962,7 +962,7 @@ struct Module_Resolver {
     }
 
     ccstr resolve_import(ccstr import_path) {
-        return convert_path(root_import_to_resolved, import_path, '\\');
+        return convert_path(root_import_to_resolved, import_path, PATH_SEP);
     }
 
     ccstr resolved_path_to_import_path(ccstr resolved_path) {

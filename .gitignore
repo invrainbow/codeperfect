@@ -2,18 +2,19 @@
 *.pyc
 .venv/
 
-# binary files
+# binary & object files
 *.o
-/raven
 /gotest
 *.ilk
 *.exe
 *.dll
+*.dylib
 *.pdb
 *.obj
 *.lib
 *.exp
 bin/
+obj/
 
 # clangd index
 .clangd
@@ -37,7 +38,7 @@ __debug_bin
 log.txt
 
 # during debugging, parse errors cause the current file to get dumped here
-test.go
+/test.go
 
 # remedybg debug session
 *.rdbg
@@ -49,7 +50,9 @@ db.tmp
 .idelicense
 .ideversion
 
+# macos
 .DS_Store
 
 # we don't actually use this, we write our own function defs in go.hpp
 gohelper.h  
+

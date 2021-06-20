@@ -84,18 +84,18 @@ typedef struct { void *data; GoInt len; GoInt cap; } GoSlice;
 extern "C" {
 #endif
 
-extern __declspec(dllexport) GoUint8 GHStartBuild(char* cmdstr);
-extern __declspec(dllexport) void GHStopBuild();
-extern __declspec(dllexport) void GHFreeBuildStatus(void* p, GoInt n);
-extern __declspec(dllexport) GH_Build_Error* GHGetBuildStatus(GoInt* pstatus, GoInt* plines);
-extern __declspec(dllexport) char* GHGetGoEnv(char* name);
-extern __declspec(dllexport) void GHFree(void* p);
-extern __declspec(dllexport) void GHFmtStart();
-extern __declspec(dllexport) void GHFmtAddLine(char* line);
-extern __declspec(dllexport) char* GHFmtFinish(GoInt fmtType);
-extern __declspec(dllexport) GoUint8 GHCheckLicense();
-extern __declspec(dllexport) GoUint8 GHGitIgnoreInit(char* repo);
-extern __declspec(dllexport) GoUint8 GHGitIgnoreCheckFile(char* file);
+extern GoUint8 GHStartBuild(char* cmdstr);
+extern void GHStopBuild();
+extern void GHFreeBuildStatus(void* p, GoInt n);
+extern GH_Build_Error* GHGetBuildStatus(GoInt* pstatus, GoInt* plines);
+extern char* GHGetGoEnv(char* name);
+extern void GHFree(void* p);
+extern void GHFmtStart();
+extern void GHFmtAddLine(char* line);
+extern char* GHFmtFinish(GoInt fmtType);
+extern GoUint8 GHCheckLicense();
+extern GoUint8 GHGitIgnoreInit(char* repo);
+extern GoUint8 GHGitIgnoreCheckFile(char* file);
 
 #ifdef __cplusplus
 }

@@ -377,22 +377,18 @@ u32 File::seek(u32 pos) {
     return ret;
 }
 
-bool File::read(char *buf, s32 size, s32 *bytes_read) {
+// TODO: do we need to call Read/WriteFile() in a loop, like we call read/write() in os_macos.cpp?
+
+bool File::read(char *buf, s32 size) {
     DWORD n = 0;
 
     if (!ReadFile(h, buf, size, &n, NULL)) return false;
-
-    if (bytes_read != NULL)
-        *bytes_read = (s32)n;
     return (n == size);
 }
 
-bool File::write(char *buf, s32 size, s32 *bytes_written) {
+bool File::write(char *buf, s32 size) {
     DWORD n = 0;
     if (!WriteFile(h, buf, size, &n, NULL)) return false;
-
-    if (bytes_written != NULL)
-        *bytes_written = (s32)n;
     return (n == size);
 }
 
@@ -691,7 +687,12 @@ bool File_Mapping::init(ccstr path, File_Mapping_Opts *_opts) {
 
     memcpy(&opts, _opts, sizeof(opts));
 
-    file = create_win32_file_handle(path, opts.write ? FILE_MODE_WRITE : FILE_MODE_READ, opts.open_mode);
+    file = create_win32_file_handle(
+        path,
+        opts.write ? FILE_MODE_WRITE : FILE_MODE_READ,
+        opts.write ? FILE_CREATE_NEW : FILE_OPEN_EXISTING
+    );
+
     if (file == INVALID_HANDLE_VALUE) return false;
 
     defer {

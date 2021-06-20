@@ -87,7 +87,7 @@ bool test_read_write_index() {
 
     {
         Index_Stream s;
-        if (!s.open("W:\\test_db_copy", true, FILE_CREATE_NEW)) return false;
+        if (!s.open("W:\\test_db_copy", true)) return false;
         defer { s.cleanup(); };
         s.write_index(index);
         s.finish_writing();
