@@ -130,11 +130,23 @@ void World::init_workspace() {
     opts.save = false;
     let_user_select_file(&opts);
 #else
-    // strcpy_safe(current_path, _countof(current_path), normalize_path_sep("c:/users/brandon/dev/ide/gohelper"));
-    // strcpy_safe(current_path, _countof(current_path), normalize_path_sep("c:/users/brandon/dev/hugo"));
-    // strcpy_safe(current_path, _countof(current_path), normalize_path_sep("c:/users/brandon/dev/kubernetes"));
-    // strcpy_safe(current_path, _countof(current_path), normalize_path_sep("c:/users/brandon/dev/cryptopals_challenge"));
-    strcpy_safe(current_path, _countof(current_path), "/Users/brandon/dev/hugo");
+    {
+        SCOPED_FRAME();
+
+        File f;
+        f.init(".idedefaultfolder", FILE_MODE_READ, FILE_OPEN_EXISTING);
+        defer { f.cleanup(); };
+
+        List<char> chars;
+        chars.init();
+
+        char ch;
+        while (f.read(&ch, 1) && ch != '\0' && ch != '\r' && ch != '\n')
+            chars.append(ch);
+
+        chars.append('\0');
+        strcpy_safe(current_path, _countof(current_path), normalize_path_sep(chars.items));
+    }
 #endif
 
     GHGitIgnoreInit(current_path);

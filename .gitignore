@@ -43,12 +43,13 @@ log.txt
 # remedybg debug session
 *.rdbg
 
-# artifacts created by our own ide
+# artifacts of our own ide
 .ide
 db
 db.tmp
 .idelicense
 .ideversion
+.idedefaultfolder
 
 # macos
 .DS_Store

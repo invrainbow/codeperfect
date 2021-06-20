@@ -27,7 +27,6 @@ when a frame is opened
 #if OS_WIN
 #include "win32.hpp"
 #elif OS_MAC
-#include <inttypes.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/ioctl.h>
@@ -35,6 +34,8 @@ when a frame is opened
 #include <netinet/in.h>
 #include <netdb.h>
 #endif
+
+#include <inttypes.h>
 
 #define DBG_DEBUG 0
 

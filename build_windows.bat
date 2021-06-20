@@ -11,7 +11,7 @@ cl /MP /MDd /nologo /EHsc /w /std:c++latest /DEBUG /Zi /utf-8 /Fe:bin\ide.exe^
     /Iw:\packages\libgit2\include^
     /Iw:\tree-sitter\include^
     /Iw:\tree-sitter\src^
-    *.cpp tree-sitter/src/lib.c^
+    *.cpp treesitter_go.c tree-sitter/src/lib.c^
     /link /NOLOGO /IGNORE:4099^
     /NODEFAULTLIB:MSVCRT /NODEFAULTLIB:LIBCMTD^
     /LIBPATH:W:\packages\glfw.3.3.2\build\native\lib\static\v142\x64^

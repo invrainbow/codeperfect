@@ -12,10 +12,7 @@
 #include "tree_sitter_crap.hpp"
 
 #include <GLFW/glfw3.h>
-
-#if OS_MAC
 #include <inttypes.h>
-#endif
 
 UI ui;
 

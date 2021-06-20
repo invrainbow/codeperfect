@@ -10,7 +10,6 @@
 #include <stdlib.h>
 #include <search.h>
 #include <pathcch.h>
-#include <cwalk.h>
 
 // stupid character conversion functions
 // =====================================

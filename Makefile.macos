@@ -13,14 +13,17 @@ all: bin/ide
 clean:
 	rm $(OBJ_FILES) $(DEP_FILES) bin/ide
 
-bin/ide: $(OBJ_FILES) obj/treesitter.o
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(OBJ_FILES) obj/treesitter.o
+bin/ide: $(OBJ_FILES) obj/treesitter_lib.o obj/treesitter_go.o
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(OBJ_FILES) obj/treesitter_lib.o obj/treesitter_go.o
 
 -include $(DEP_FILES)
 
 $(OBJ_FILES): obj/%.o: %.cpp Makefile.macos
 	$(CC) $(CFLAGS) -MMD -MP -c -o $@ $<
 
-obj/treesitter.o: tree-sitter/src/lib.c
+obj/treesitter_lib.o: tree-sitter/src/lib.c
 	# copied from tree-sitter's makefile
+	clang -g -MMD -MP -O3 -Wall -Wextra -Werror -std=gnu99 -fPIC -Itree-sitter/src -Itree-sitter/include -c -o $@ $<
+
+obj/treesitter_go.o: treesitter_go.c
 	clang -g -MMD -MP -O3 -Wall -Wextra -Werror -std=gnu99 -fPIC -Itree-sitter/src -Itree-sitter/include -c -o $@ $<

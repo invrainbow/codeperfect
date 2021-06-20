@@ -1628,9 +1628,13 @@ void Nvim::start_running() {
     nvim_proc.dir = our_dirname(get_executable_path());
     nvim_proc.skip_shell = true;
 
-    // TODO: get full path of init.vim
-    // nvim_proc.run("nvim -u init.vim -i NONE -N --embed --headless");
-    nvim_proc.run(our_sprintf(".%cnvim -u init.vim -i NONE -N --embed --headless", PATH_SEP));
+#if OS_WIN
+    nvim_proc.run("nvim.exe -u init.vim -i NONE -N --embed --headless");
+#elif OS_MAC
+    nvim_proc.run("./nvim -u init.vim -i NONE -N --embed --headless");
+#else
+#error "only windows and mac supported right now"
+#endif
 
     reader.proc = &nvim_proc;
     reader.offset = 0;
