@@ -156,6 +156,18 @@ uchar Cstr_To_Ustr::feed(u8 ch, bool* found) {
     return 0;
 }
 
+ccstr Buffer::get_text(cur2 start, cur2 end) {
+    auto ret = alloc_list<char>();
+    char tmp[4];
+
+    for (auto it = iter(start); it.pos < end; it.next())
+        for (int i = 0, n = uchar_to_cstr(it.peek(), tmp); i < n; i++)
+            ret->append(tmp[i]);
+
+    ret->append('\0');
+    return ret->items;
+}
+
 void Buffer::init(Pool *_mem) {
     mem = _mem;
     {

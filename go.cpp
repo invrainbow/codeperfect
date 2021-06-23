@@ -1005,7 +1005,7 @@ void Go_Indexer::background_thread() {
                 if (it.hash == hash_package(package_path)) continue;
 
                 it.status = GPS_OUTDATED;
-                enqueue_package(it.package_name);
+                enqueue_package(it.import_path);
             }
 
             // if package queue is still empty
@@ -1065,7 +1065,7 @@ void Go_Indexer::background_thread() {
             if (package_queue.len > 0) return false;
 
             auto ten_minutes_in_ns = (u64)10 * 60 * 1000 * 1000 * 1000;
-            if (time - last_write_time >= ten_minutes_in_ns) return true;
+            if (last_write_time == 0 || time - last_write_time >= ten_minutes_in_ns) return true;
 
             return false;
         };
@@ -1653,23 +1653,132 @@ Goresult *Go_Indexer::find_decl_of_id(ccstr id_to_find, cur2 id_pos, Go_Ctx *ctx
     return find_decl_in_package(id_to_find, ctx->import_path);
 }
 
-List<Goresult> *Go_Indexer::get_possible_dot_completions(Ast_Node *operand_node, bool *was_package, Go_Ctx *ctx) {
-    switch (operand_node->type()) {
+ccstr Go_Indexer::get_package_referred_to_by_ast(Ast_Node *node, Go_Ctx *ctx) {
+    switch (node->type()) {
     case TS_IDENTIFIER:
     case TS_FIELD_IDENTIFIER:
     case TS_PACKAGE_IDENTIFIER:
     case TS_TYPE_IDENTIFIER:
-        do {
-            auto import_path = find_import_path_referred_to_by_id(operand_node->string(), ctx);
-            if (import_path == NULL) break;
-
-            auto ret = list_package_decls(import_path, LISTDECLS_PUBLIC_ONLY | LISTDECLS_EXCLUDE_METHODS);
-            if (ret != NULL)  {
-                *was_package = true;
-                return ret;
-            }
-        } while (0);
+        auto import_path = find_import_path_referred_to_by_id(node->string(), ctx);
+        if (import_path != NULL) return import_path;
         break;
+    }
+    return NULL;
+}
+
+List<Postfix_Completion_Type> *Go_Indexer::get_postfix_completions(Ast_Node *operand_node, Go_Ctx *ctx) {
+    auto import_path = get_package_referred_to_by_ast(operand_node, ctx);
+    if (import_path != NULL) {
+        // TODO: do something special with packages
+        return NULL;
+    }
+
+    List<Postfix_Completion_Type> *ret = NULL;
+
+    auto try_based_on_gotype = [&]() -> bool {
+        auto gotype = expr_to_gotype(operand_node);
+        if (gotype == NULL) return false;
+
+        auto res = evaluate_type(gotype, ctx);
+        if (res == NULL) return false;
+
+        auto resolved_res = resolve_type(res->gotype, res->ctx);
+        if (resolved_res == NULL) return false;
+
+        auto basetype = resolved_res->gotype;
+        switch (basetype->type) {
+        case GOTYPE_SLICE:
+        case GOTYPE_ARRAY:
+        case GOTYPE_MAP:
+            ret = alloc_list<Postfix_Completion_Type>();
+            ret->append(PFC_APPEND);
+            ret->append(PFC_LEN);
+            ret->append(PFC_CAP);
+            ret->append(PFC_FOR);
+            ret->append(PFC_FORKEY);
+            ret->append(PFC_FORVALUE);
+            ret->append(PFC_EMPTY);
+            ret->append(PFC_IFNIL);
+            ret->append(PFC_IFNOTNIL);
+            ret->append(PFC_NIL);
+            ret->append(PFC_NOTNIL);
+            return true;
+
+        case GOTYPE_STRUCT:
+        case GOTYPE_INTERFACE:
+            ret = alloc_list<Postfix_Completion_Type>();
+            ret->append(PFC_IFNIL);
+            ret->append(PFC_IFNOTNIL);
+            ret->append(PFC_NIL);
+            ret->append(PFC_NOTNIL);
+            return true;
+        }
+
+        return false;
+    };
+
+    auto try_based_on_identifier = [&]() {
+        switch (operand_node->type()) {
+        case TS_PACKAGE_IDENTIFIER:
+        case TS_TYPE_IDENTIFIER:
+        case TS_IDENTIFIER:
+        case TS_FIELD_IDENTIFIER:
+            break;
+        default:
+            return false;
+        }
+
+        auto id = operand_node->string();
+
+        // add everything (until we find a reason not to)
+        ret = alloc_list<Postfix_Completion_Type>();
+        ret->append(PFC_APPEND);
+        ret->append(PFC_LEN);
+        ret->append(PFC_CAP);
+        ret->append(PFC_FOR);
+        ret->append(PFC_FORKEY);
+        ret->append(PFC_FORVALUE);
+        ret->append(PFC_NIL);
+        ret->append(PFC_NOTNIL);
+        ret->append(PFC_NOT);
+        ret->append(PFC_EMPTY);
+        ret->append(PFC_IFEMPTY);
+        ret->append(PFC_IF);
+        ret->append(PFC_IFNOT);
+        ret->append(PFC_IFNIL);
+        ret->append(PFC_IFNOTNIL);
+        ret->append(PFC_CHECK);
+        ret->append(PFC_DEFSTRUCT);
+        ret->append(PFC_DEFINTERFACE);
+        ret->append(PFC_SWITCH);
+        return true;
+    };
+
+    if (try_based_on_gotype()) return ret;
+    if (try_based_on_identifier()) return ret;
+
+    ret = alloc_list<Postfix_Completion_Type>();
+    ret->append(PFC_LEN);
+    ret->append(PFC_CAP);
+    ret->append(PFC_NIL);
+    ret->append(PFC_NOTNIL);
+    ret->append(PFC_NOT);
+    ret->append(PFC_IF);
+    ret->append(PFC_IFNOT);
+    ret->append(PFC_IFNIL);
+    ret->append(PFC_IFNOTNIL);
+    ret->append(PFC_SWITCH);
+    return ret;
+}
+
+List<Goresult> *Go_Indexer::get_dot_completions(Ast_Node *operand_node, bool *was_package, Go_Ctx *ctx) {
+    auto import_path = get_package_referred_to_by_ast(operand_node, ctx);
+    if (import_path != NULL) {
+        auto ret = list_package_decls(import_path, LISTDECLS_PUBLIC_ONLY | LISTDECLS_EXCLUDE_METHODS);
+        if (ret != NULL) {
+            *was_package = true;
+            return ret;
+        }
     }
 
     auto gotype = expr_to_gotype(operand_node);
@@ -1748,7 +1857,7 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 p
                 auto operand_node = node->field(node->type() == TS_QUALIFIED_TYPE ? TSF_PACKAGE : TSF_OPERAND);
 
                 bool dontcare;
-                auto results = get_possible_dot_completions(operand_node, &dontcare, &ctx);
+                auto results = get_dot_completions(operand_node, &dontcare, &ctx);
                 if (results != NULL) {
                     auto sel_name = sel_node->string();
                     For (*results) {
@@ -1911,6 +2020,32 @@ bool Go_Indexer::truncate_parsed_file(Parsed_File *pf, cur2 end_pos, ccstr chars
     return true;
 }
 
+ccstr get_postfix_completion_name(Postfix_Completion_Type type) {
+    switch (type) {
+    case PFC_ASSIGNAPPEND: return "aappend!";
+    case PFC_APPEND: return "append!";
+    case PFC_LEN: return "len!";
+    case PFC_CAP: return "cap!";
+    case PFC_FOR: return "for!";
+    case PFC_FORKEY: return "forkey!";
+    case PFC_FORVALUE: return "forvalue!";
+    case PFC_NIL: return "nil!";
+    case PFC_NOTNIL: return "notnil!";
+    case PFC_NOT: return "not!";
+    case PFC_EMPTY: return "empty!";
+    case PFC_IFEMPTY: return "ifempty!";
+    case PFC_IF: return "if!";
+    case PFC_IFNOT: return "ifnot!";
+    case PFC_IFNIL: return "ifnil!";
+    case PFC_IFNOTNIL: return "ifnotnil!";
+    case PFC_CHECK: return "check!";
+    case PFC_DEFSTRUCT: return "defstruct!";
+    case PFC_DEFINTERFACE: return "definterface!";
+    case PFC_SWITCH: return "switch!";
+    }
+    return NULL;
+}
+
 bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period, Autocomplete *out) {
     Timer t;
     t.init("autocomplete");
@@ -2066,16 +2201,62 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
     t.log("find current node");
 
     List<AC_Result> *ac_results = NULL;
+    Gotype *expr_to_analyze_gotype = NULL;
 
     auto try_dot_complete = [&](Ast_Node *expr_to_analyze) -> bool {
         bool was_package = false;
-        auto results = get_possible_dot_completions(expr_to_analyze, &was_package, &ctx);
-        if (results == NULL || results->len == 0) return false;
 
-        ac_results = alloc_list<AC_Result>(results->len);
-        For (*results) ac_results->append()->name = it.decl->name;
+        auto init_results = [&]() {
+            if (ac_results == NULL)
+                ac_results = alloc_list<AC_Result>();
+        };
 
-        out->type = (was_package ? AUTOCOMPLETE_PACKAGE_EXPORTS : AUTOCOMPLETE_FIELDS_AND_METHODS);
+        // try normal dot completions
+        do {
+            auto results = get_dot_completions(expr_to_analyze, &was_package, &ctx);
+            if (results == NULL || results->len == 0) break;
+
+            init_results();
+            For (*results) {
+                auto r = ac_results->append();
+                r->name = it.decl->name;
+                r->type = ACR_DOTCOMPLETE;
+            }
+        } while (0);
+
+        // try postfix completions
+        do {
+            auto results = get_postfix_completions(expr_to_analyze, &ctx);
+            if (results == NULL || results->len == 0) break;
+
+            init_results();
+            For (*results) {
+                auto name = get_postfix_completion_name(it);
+                if (name != NULL) {
+                    auto r = ac_results->append();
+                    r->name = name;
+                    r->type = ACR_POSTFIX;
+                    r->postfix_operation = it;
+                }
+            }
+        } while (0);
+
+        if (ac_results == NULL) return false;
+
+        do {
+            auto gotype = expr_to_gotype(expr_to_analyze);
+            if (gotype == NULL) break;
+
+            auto res = evaluate_type(gotype, &ctx);
+            if (res == NULL) break;
+
+            auto resolved_res = resolve_type(res->gotype, res->ctx);
+            if (resolved_res == NULL) break;
+
+            expr_to_analyze_gotype = resolved_res->gotype;
+        } while (0);
+
+        out->type = AUTOCOMPLETE_DOT_COMPLETE;
         return true;
     };
 
@@ -2149,14 +2330,16 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
             // probably should write like a "get current gofile" function
             Go_File *gofile = NULL;
 
-            auto pkg = find_up_to_date_package(ctx.import_path);
-            if (pkg != NULL) {
+            do {
+                auto pkg = find_up_to_date_package(ctx.import_path);
+                if (pkg == NULL) break;
+
                 auto check = [&](auto it) { return streq(it->filename, ctx.filename); };
                 auto file = pkg->files->find(check);
+                if (file == NULL) break;
+
                 For (*file->imports) add_result(get_import_package_name(&it));
-            } else {
-                print("break");
-            }
+            } while (0);
 
             auto results = list_package_decls(ctx.import_path, LISTDECLS_EXCLUDE_METHODS);
             if (results != NULL)
@@ -2171,7 +2354,15 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
 
     t.log("generate results");
 
-    out->keyword_start_position = keyword_start;
+    if (expr_to_analyze != NULL) {
+        out->operand_start = expr_to_analyze->start();
+        out->operand_end = expr_to_analyze->end();
+        out->operand_gotype = expr_to_analyze_gotype;
+    }
+
+    out->keyword_start = keyword_start;
+    out->keyword_end = pos;
+
     out->results = ac_results;
     out->prefix = prefix;
 

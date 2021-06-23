@@ -905,9 +905,28 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 }
 
                 if (mode != VI_INSERT && exiting_insert_mode) {
-                    start_request_message("nvim_input", 1);
-                    writer.write_string(chars_after_exiting_insert_mode.items, chars_after_exiting_insert_mode.len);
-                    end_message();
+                    auto &gohere = editor->go_here_after_escape;
+                    if (gohere.x != -1 && gohere.y != -1) {
+                        ccstr insert_cmd = "i";
+                        if (gohere.x == editor->buf.lines[gohere.y].len)
+                            insert_cmd = "a";
+
+                        gohere.x--;
+                        editor->move_cursor(gohere);
+                        gohere.x = -1;
+                        gohere.y = -1;
+
+                        // enter insert mode after
+                        start_request_message("nvim_input", 1);
+                        writer.write_string(insert_cmd);
+                        end_message();
+
+                        // just lose the extra chars
+                    } else {
+                        start_request_message("nvim_input", 1);
+                        writer.write_string(chars_after_exiting_insert_mode.items, chars_after_exiting_insert_mode.len);
+                        end_message();
+                    }
 
                     chars_after_exiting_insert_mode.len = 0;
                     exiting_insert_mode = false;

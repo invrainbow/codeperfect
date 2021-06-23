@@ -364,6 +364,10 @@ struct Nvim_Request {
         } post_save_getchangedtick;
 
         struct {
+            cur2 go_here_after;
+        } post_insert_getchangedtick;
+
+        struct {
             List<u32> *error_indexes;
         } create_extmarks;
     };

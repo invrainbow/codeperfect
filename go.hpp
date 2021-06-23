@@ -397,22 +397,71 @@ struct Parser_It {
     }
 };
 
+enum AC_Result_Type {
+    ACR_DOTCOMPLETE, // TODO: differentiate further in the future
+    ACR_POSTFIX,
+    // TODO: other types, like autocompleting "fmt.Printf" when only "ftP" has been typed as a lone keyword
+};
+
+enum Postfix_Completion_Type {
+    PFC_APPEND,
+    PFC_LEN,
+    PFC_CAP,
+
+    PFC_ASSIGNAPPEND,
+
+    PFC_FOR,
+    PFC_FORKEY,
+    PFC_FORVALUE,
+
+    PFC_NIL,
+    PFC_NOTNIL,
+    PFC_NOT,
+
+    PFC_EMPTY,
+    PFC_IFEMPTY,
+    PFC_IFNOTEMPTY,
+
+    PFC_IF,
+    PFC_IFNOT,
+    PFC_IFNIL,
+    PFC_IFNOTNIL,
+
+    PFC_CHECK,
+
+    PFC_DEFSTRUCT,
+    PFC_DEFINTERFACE,
+    PFC_SWITCH,
+};
+
 struct AC_Result {
     ccstr name;
+    AC_Result_Type type;
+
+    union {
+        Postfix_Completion_Type postfix_operation;
+    };
 };
 
 enum Autocomplete_Type {
     AUTOCOMPLETE_NONE = 0,
-    AUTOCOMPLETE_FIELDS_AND_METHODS,
-    AUTOCOMPLETE_PACKAGE_EXPORTS,
+    AUTOCOMPLETE_DOT_COMPLETE,
     AUTOCOMPLETE_IDENTIFIER,
 };
 
+struct Gotype;
+
 struct Autocomplete {
+    Autocomplete_Type type;
     List<AC_Result>* results;
     ccstr prefix;
-    Autocomplete_Type type;
-    cur2 keyword_start_position;
+    cur2 keyword_start;
+    cur2 keyword_end;
+
+    // only for AUTOCOMPLETE_DOT_COMPLETE
+    cur2 operand_start; 
+    cur2 operand_end;
+    Gotype *operand_gotype;
 };
 
 enum Walk_Action {
@@ -1124,11 +1173,13 @@ struct Go_Indexer {
     List<Goresult> *list_package_decls(ccstr import_path, int flags = 0);
     Go_Package *find_package_in_index(ccstr import_path);
     ccstr get_import_package_name(Go_Import *it);
+    ccstr get_package_referred_to_by_ast(Ast_Node *node, Go_Ctx *ctx);
     ccstr find_import_path_referred_to_by_id(ccstr id, Go_Ctx *ctx);
     Pool *get_final_mem();
     Go_Package *find_up_to_date_package(ccstr import_path);
     void import_spec_to_decl(Ast_Node *spec_node, Godecl *decl);
-    List<Goresult> *get_possible_dot_completions(Ast_Node *operand_node, bool *was_package, Go_Ctx *ctx);
+    List<Postfix_Completion_Type> *get_postfix_completions(Ast_Node *operand_node, Go_Ctx *ctx);
+    List<Goresult> *get_dot_completions(Ast_Node *operand_node, bool *was_package, Go_Ctx *ctx);
     bool assignment_to_decls(List<Ast_Node*> *lhs, List<Ast_Node*> *rhs, New_Godecl_Func new_godecl, bool range = false);
     Gotype *new_primitive_type(ccstr name);
     Goresult *evaluate_type(Gotype *gotype, Go_Ctx *ctx);
@@ -1147,8 +1198,8 @@ struct Go_Indexer {
     u64 hash_file(ccstr filepath);
     void start_writing();
     void stop_writing();
-
     bool truncate_parsed_file(Parsed_File *pf, cur2 end_pos, ccstr chars_to_append);
+
 };
 
 struct Scoped_Write {

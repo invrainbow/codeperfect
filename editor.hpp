@@ -34,6 +34,20 @@ struct Client_Parameter_Hint {
     bool closed;
 };
 
+struct Postfix_Info {
+    bool in_progress;
+    List<cur2> insert_positions;
+    cur2 _insert_positions[16];
+    int current_insert_position;
+
+    void start() {
+        ptr0(this);
+
+        in_progress = true;
+        insert_positions.init(LIST_FIXED, _countof(_insert_positions), _insert_positions);
+    }
+};
+
 struct Pane;
 
 struct Editor {
@@ -63,6 +77,10 @@ struct Editor {
     bool saving;
     Process goimports_proc;
     char highlights[NVIM_DEFAULT_HEIGHT][NVIM_DEFAULT_WIDTH];
+
+    cur2 go_here_after_escape;
+
+    List<Postfix_Info> postfix_stack;
 
     // need to reset this when backspacing past it and when accepting an auto
     cur2 last_closed_autocomplete;
@@ -117,6 +135,7 @@ struct Editor {
     int get_indent_of_line(int y);
     Buffer_It iter();
     Buffer_It iter(cur2 _cur);
+    void perform_autocomplete(AC_Result *result);
 
     void trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typing_ident, char typed_ident_char = 0);
     void filter_autocomplete_results(Autocomplete* ac);
@@ -133,12 +152,14 @@ struct Editor {
     void apply_edits(List<TSInputEdit> *edits);
     void reload_file(bool because_of_file_watcher = false);
     void update_lines(int firstline, int lastline, List<uchar*> *lines, List<s32> *line_lengths);
-    bool trigger_escape();
+    bool trigger_escape(cur2 go_here_after = {-1, -1});
     void format_on_save(bool write_to_nvim = true);
     void handle_save(bool about_to_close = false);
     bool is_current_editor();
     void backspace_in_insert_mode(int graphemes_to_erase, int codepoints_to_erase);
     void ensure_cursor_on_screen();
+    void insert_text_in_insert_mode(ccstr s);
+    ccstr get_autoindent(int for_y);
 };
 
 struct Pane {

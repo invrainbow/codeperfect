@@ -2832,10 +2832,15 @@ void UI::draw_everything() {
 
                             {
                                 SCOPED_FRAME();
-                                auto str = ac.ac.results->at(idx).name;
+                                auto result = ac.ac.results->at(idx);
 
+                                auto actual_color = color;
+                                if (result.type == ACR_POSTFIX)
+                                    actual_color = new_vec3f(1.0, 0.8, 0.8);
+
+                                auto str = result.name;
                                 auto pos = menu_pos + new_vec2f(settings.autocomplete_item_padding_x, settings.autocomplete_item_padding_y);
-                                draw_string(pos, str, rgba(color));
+                                draw_string(pos, str, rgba(actual_color));
                             }
 
                             menu_pos.y += font->height + settings.autocomplete_item_padding_y * 2;

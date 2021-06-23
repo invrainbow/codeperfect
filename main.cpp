@@ -564,53 +564,11 @@ int main() {
             }
 
             editor->start_change();
-
             editor->type_char('\n');
-
-            auto cur = editor->cur;
-            auto y = max(0, cur.y-1);
-            while (true) {
-                auto& line = editor->buf.lines[y];
-                for (u32 x = 0; x < line.len; x++)
-                    if (!isspace(line[x]))
-                        goto done;
-                if (y == 0) break;
-                y--;
-            }
-        done:
-
-            auto& line = editor->buf.lines[y];
-            u32 copy_spaces_until = 0;
-            {
-                u32 x = 0;
-                for (; x < line.len; x++)
-                    if (!isspace(line[x]))
-                        break;
-                if (x == line.len)  // all spaces
-                    x = 0;
-                copy_spaces_until = x;
-            }
-
-            // copy first `copy_spaces_until` chars of line y
-            for (u32 x = 0; x < copy_spaces_until; x++)
-                editor->type_char(line[x]);
-
-            if (editor->is_go_file) {
-                for (i32 x = line.len-1; x >= 0; x--) {
-                    if (!isspace(line[x])) {
-                        switch (line[x]) {
-                        case '{':
-                        case '(':
-                        case '[':
-                            editor->type_char('\t');
-                            break;
-                        }
-                        break;
-                    }
-                }
-            }
-
             editor->end_change();
+
+            auto indent_chars = editor->get_autoindent(editor->cur.y);
+            editor->insert_text_in_insert_mode(indent_chars);
         };
 
         auto handle_tab = [&](ccstr nvim_string) {
@@ -703,7 +661,23 @@ int main() {
                     if (world.use_nvim) {
                         handled = true;
                         switch (key) {
-                        case GLFW_KEY_ENTER: handle_enter("<C-Enter>"); break;
+                        case GLFW_KEY_ENTER:
+                            /*
+                            if (world.nvim.mode == VI_INSERT && editor->postfix_stack.len > 0) {
+                                auto pf = editor->postfix_stack.last();
+                                our_assert(pf->current_insert_position < pf->insert_positions.len, "went past last error position");
+
+                                auto pos = pf->insert_positions[pf->current_insert_position++];
+                                editor->trigger_escape(pos);
+
+                                if (pf->current_insert_position == pf->insert_positions.len)
+                                    editor->postfix_stack.len--;
+                            } else {
+                                handle_enter("<C-Enter>");
+                            }
+                            */
+                            handle_enter("<C-Enter>");
+                            break;
                         case GLFW_KEY_BACKSPACE: handle_backspace("<C-Backspace>"); break;
                         case GLFW_KEY_ESCAPE: if (!handle_escape()) send_nvim_keys("<C-Esc>"); break;
                         default: handled = false; break;
@@ -752,40 +726,8 @@ int main() {
                     case GLFW_KEY_V:
                         if (world.nvim.mode == VI_INSERT) {
                             auto clipboard_contents = glfwGetClipboardString(world.window);
-                            if (clipboard_contents == NULL)
-                                break;
-
-                            auto len = strlen(clipboard_contents);
-                            if (len == 0) break;
-
-                            Cstr_To_Ustr conv;
-                            conv.init();
-
-                            for (int i = 0; i < len; i++)
-                                conv.count(clipboard_contents[i]);
-
-                            auto ulen = conv.len;
-
-                            SCOPED_FRAME();
-
-                            auto text = alloc_array(uchar, ulen);
-                            conv.init();
-                            for (u32 i = 0, j = 0; i < len; i++) {
-                                bool found = false;
-                                auto uch = conv.feed(clipboard_contents[i], &found);
-                                if (found)
-                                    text[j++] = uch;
-                            }
-
-                            editor->start_change();
-                            {
-                                editor->buf.insert(editor->cur, text, ulen);
-                                auto cur = editor->cur;
-                                for (u32 i = 0; i < ulen; i++)
-                                    cur = editor->buf.inc_cur(cur);
-                                editor->raw_move_cursor(cur);
-                            }
-                            editor->end_change();
+                            if (clipboard_contents == NULL) break;
+                            editor->insert_text_in_insert_mode(clipboard_contents);
                         } else {
                             send_nvim_keys("<C-v>");
                         }
@@ -1013,64 +955,8 @@ int main() {
                                 auto idx = ac.filtered_results->at(ac.selection);
                                 auto& result = ac.ac.results->at(idx);
 
-                                // grab len & save name
-                                auto len = strlen(result.name);
-                                auto name = alloc_array(uchar, len);
-                                for (u32 i = 0; i < len; i++)
-                                    name[i] = (uchar)result.name[i];
+                                editor->perform_autocomplete(&result);
 
-                                // figure out where insertion starts and ends
-                                auto ac_start = editor->cur;
-                                ac_start.x -= strlen(ac.ac.prefix);
-                                auto ac_end = ac_start;
-                                ac_end.x += len;
-
-                                // perform the edit
-                                buf.remove(ac_start, editor->cur);
-                                buf.insert(ac_start, name, len);
-
-                                // tell tree-sitter about the edit
-                                if (editor->is_go_file) {
-                                    TSInputEdit tsedit = {0};
-                                    tsedit.start_byte = editor->cur_to_offset(ac_start);
-                                    tsedit.start_point = cur_to_tspoint(ac_start);
-                                    tsedit.old_end_byte = editor->cur_to_offset(editor->cur);
-                                    tsedit.old_end_point = cur_to_tspoint(editor->cur);
-                                    tsedit.new_end_byte = editor->cur_to_offset(ac_end);
-                                    tsedit.new_end_point = cur_to_tspoint(ac_end);
-                                    ts_tree_edit(editor->tree, &tsedit);
-                                    editor->update_tree();
-                                }
-
-                                // move cursor forward
-                                editor->raw_move_cursor(new_cur2(ac_start.x + len, ac_start.y));
-
-                                // clear out last_closed_autocomplete
-                                editor->last_closed_autocomplete = new_cur2(-1, -1);
-
-                                // clear autocomplete
-                                ptr0(&ac.ac);
-
-                                // update buffer
-                                if (world.nvim.mode != VI_INSERT) {
-                                    auto& nv = world.nvim;
-                                    auto msgid = nv.start_request_message("nvim_buf_set_lines", 5);
-                                    {
-                                        auto req = nv.save_request(NVIM_REQ_AUTOCOMPLETE_SETBUF, msgid, editor->id);
-                                        req->autocomplete_setbuf.target_cursor = ac_end;
-                                    }
-                                    nv.writer.write_int(editor->nvim_data.buf_id); // buffer
-                                    nv.writer.write_int(ac_end.y); // start
-                                    nv.writer.write_int(ac_end.y + 1); // end
-                                    nv.writer.write_bool(false); // strict_indexing
-                                    {
-                                        nv.writer.write_array(1); // replacement
-                                        auto& line = buf.lines[ac_start.y];
-                                        nv.write_line(&line);
-                                    }
-                                    nv.end_message();
-                                }
-                                break;
                             } else {
                                 if (key == GLFW_KEY_TAB)
                                     handle_tab("<Tab>");

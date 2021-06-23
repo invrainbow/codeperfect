@@ -88,6 +88,8 @@ struct Buffer {
     u32 idx_gr_to_byte(int y, int off) { return idx_cp_to_byte(y, idx_gr_to_cp(y, off)); }
     u32 idx_cp_to_gr(int y, int off) { return idx_byte_to_gr(y, idx_cp_to_byte(y, off)); }
     u32 idx_byte_to_cp(int y, int off);
+
+    ccstr get_text(cur2 start, cur2 end);
 };
 
 s32 uchar_size(uchar c);

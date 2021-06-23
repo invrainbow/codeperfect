@@ -12,6 +12,457 @@ enum {
     GH_FMT_GOIMPORTS = 0,
 };
 
+ccstr Editor::get_autoindent(int for_y) {
+    auto y = relu_sub(for_y, 1);
+
+    while (true) {
+        auto& line = buf.lines[y];
+        for (u32 x = 0; x < line.len; x++)
+            if (!isspace(line[x]))
+                goto done;
+        if (y == 0) break;
+        y--;
+    }
+done:
+
+    auto& line = buf.lines[y];
+    u32 copy_spaces_until = 0;
+    {
+        u32 x = 0;
+        for (; x < line.len; x++)
+            if (line[x] != ' ' && line[x] != '\t')
+                break;
+        if (x == line.len)  // all spaces
+            x = 0;
+        copy_spaces_until = x;
+    }
+
+    auto ret = alloc_list<char>(copy_spaces_until + 1);
+
+    // copy first `copy_spaces_until` chars of line y
+    for (u32 x = 0; x < copy_spaces_until; x++)
+        ret->append((char)line[x]); // has to be ' ' or '\t'
+
+    if (is_go_file) {
+        for (i32 x = line.len-1; x >= 0; x--) {
+            if (isspace(line[x])) continue;
+
+            switch (line[x]) {
+            case '{':
+            case '(':
+            case '[':
+                ret->append('\t');
+                break;
+            }
+            break;
+        }
+    }
+
+    ret->append('\0');
+    return ret->items;
+}
+
+void Editor::insert_text_in_insert_mode(ccstr s) {
+    auto len = strlen(s);
+    if (len == 0) return;
+
+    Cstr_To_Ustr conv;
+    conv.init();
+
+    for (int i = 0; i < len; i++)
+        conv.count(s[i]);
+
+    auto ulen = conv.len;
+
+    SCOPED_FRAME();
+
+    auto text = alloc_array(uchar, ulen);
+    conv.init();
+    for (u32 i = 0, j = 0; i < len; i++) {
+        bool found = false;
+        auto uch = conv.feed(s[i], &found);
+        if (found)
+            text[j++] = uch;
+    }
+
+    start_change();
+    {
+        buf.insert(cur, text, ulen);
+        auto c = cur;
+        for (u32 i = 0; i < ulen; i++)
+            c = buf.inc_cur(c);
+        raw_move_cursor(c);
+    }
+    end_change();
+}
+
+void Editor::perform_autocomplete(AC_Result *result) {
+    auto& ac = autocomplete.ac;
+
+    switch (result->type) {
+    case ACR_POSTFIX:
+        {
+            // TODO: this currently only works for insert mode; support normal mode
+            // also what if we just forced you to be in insert mode for autocomplete lol
+
+            // remove everything but the operator
+            {
+                start_change();
+                raw_move_cursor(ac.operand_end);
+                buf.remove(ac.operand_end, ac.keyword_end);
+                end_change();
+            }
+
+            // nice little dsl here lol
+
+            ccstr autoindent_chars = NULL;
+            ccstr operand_text = NULL;
+            Postfix_Info *curr_postfix = NULL;
+
+            auto insert_text = [&](ccstr fmt, ...) {
+                SCOPED_FRAME();
+
+                va_list vl;
+                va_start(vl, fmt);
+                insert_text_in_insert_mode(our_vsprintf(fmt, vl));
+                va_end(vl);
+            };
+
+            auto save_autoindent = [&]() {
+                auto& line = buf.lines[cur.y];
+                u32 copy_spaces_until = 0;
+                {
+                    u32 x = 0;
+                    for (; x < line.len; x++)
+                        if (line[x] != ' ' && line[x] != '\t')
+                            break;
+                    if (x == line.len)  // all spaces
+                        x = 0;
+                    copy_spaces_until = x;
+                }
+
+                auto ret = alloc_list<char>(copy_spaces_until + 1);
+
+                // copy first `copy_spaces_until` chars of line y
+                for (u32 x = 0; x < copy_spaces_until; x++)
+                    ret->append((char)line[x]); // has to be ' ' or '\t'
+
+                ret->append('\0');
+                autoindent_chars = ret->items;
+            };
+
+            auto insert_autoindent = [&](int add = 0) {
+                SCOPED_FRAME();
+
+                insert_text("%s", autoindent_chars);
+
+                if (add > 0) {
+                    ccstr tabs = "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t";
+                    if (add >= strlen(tabs)) panic("not enough tabs");
+                    insert_text("%.*s", add, tabs);
+                }
+            };
+
+            auto insert_newline = [&](int add_indent = 0) {
+                insert_text("\n");
+                insert_autoindent(add_indent);
+            };
+
+            auto record_position = [&]() {
+                curr_postfix->insert_positions.append(cur);
+            };
+
+            auto initialize_everything = [&]() {
+                operand_text = buf.get_text(ac.operand_start, ac.operand_end);
+
+                start_change();
+                raw_move_cursor(ac.operand_start);
+                buf.remove(ac.operand_start, ac.operand_end);
+                end_change();
+
+                curr_postfix = postfix_stack.append();
+                curr_postfix->start();
+            };
+
+            bool notfound = false;
+
+            switch (result->postfix_operation) {
+            case PFC_ASSIGNAPPEND:
+                initialize_everything();
+                insert_text("%s = append(%s, ", operand_text);
+                record_position();
+                insert_text(")");
+                record_position();
+                break;
+
+            case PFC_APPEND:
+                initialize_everything();
+                insert_text("append(%s, ", operand_text);
+                record_position();
+                insert_text(")");
+                record_position();
+                break;
+
+            case PFC_LEN:
+                initialize_everything();
+                insert_text("len(%s)", operand_text);
+                break;
+
+            case PFC_CAP:
+                initialize_everything();
+                insert_text("cap(%s)", operand_text);
+                break;
+
+            case PFC_NIL:
+                initialize_everything();
+                insert_text("%s == nil", operand_text);
+                break;
+
+            case PFC_NOTNIL:
+                initialize_everything();
+                insert_text("%s != nil", operand_text);
+                break;
+
+            case PFC_NOT:
+                initialize_everything();
+                insert_text("!%s", operand_text);
+                break;
+
+            case PFC_EMPTY:
+                initialize_everything();
+                insert_text("%s == nil || len(%s) == 0", operand_text);
+                break;
+
+            case PFC_IF:
+                initialize_everything();
+                insert_text("if %s {", operand_text);
+                save_autoindent();
+                insert_newline(1);
+                record_position();
+                insert_newline(0);
+                insert_text("}");
+                record_position();
+                break;
+
+            case PFC_IFEMPTY:
+                initialize_everything();
+                insert_text("if %s == nil || %s.len == 0 {", operand_text, operand_text);
+                save_autoindent();
+                insert_newline(1);
+                record_position();
+                insert_newline(0);
+                insert_text("}");
+                record_position();
+                break;
+
+            case PFC_IFNOTEMPTY:
+                initialize_everything();
+                insert_text("if %s != nil && %s.len != 0 {", operand_text, operand_text);
+                save_autoindent();
+                insert_newline(1);
+                record_position();
+                insert_newline(0);
+                insert_text("}");
+                record_position();
+                break;
+
+            case PFC_IFNOT:
+                initialize_everything();
+                insert_text("if !%s {", operand_text);
+                save_autoindent();
+                insert_newline(1);
+                record_position();
+                insert_newline(0);
+                insert_text("}");
+                record_position();
+                break;
+
+            case PFC_IFNIL:
+                initialize_everything();
+                insert_text("if %s == nil {", operand_text);
+                save_autoindent();
+                insert_newline(1);
+                record_position();
+                insert_newline(0);
+                insert_text("}");
+                record_position();
+                break;
+
+            case PFC_IFNOTNIL:
+                initialize_everything();
+                insert_text("if %s != nil {", operand_text);
+                save_autoindent();
+                insert_newline(1);
+                record_position();
+                insert_newline(0);
+                insert_text("}");
+                record_position();
+                break;
+
+            case PFC_SWITCH:
+                initialize_everything();
+                insert_text("switch %s {", operand_text);
+                save_autoindent();
+                insert_newline(1);
+                record_position();
+                insert_newline(0);
+                insert_text("}");
+                record_position();
+                break;
+
+            case PFC_DEFSTRUCT:
+                initialize_everything();
+                insert_text("type %s struct {", operand_text);
+                save_autoindent();
+                insert_newline(1);
+                record_position();
+                insert_newline(0);
+                insert_text("}");
+                record_position();
+                break;
+
+            case PFC_DEFINTERFACE:
+                initialize_everything();
+                insert_text("type %s interface {", operand_text);
+                save_autoindent();
+                insert_newline(1);
+                record_position();
+                insert_newline(0);
+                insert_text("}");
+                record_position();
+                break;
+
+            case PFC_FOR:
+            case PFC_FORKEY:
+            case PFC_FORVALUE:
+                {
+                    ccstr keyname = "key";
+                    ccstr valuename = "val";
+
+                    auto gotype = ac.operand_gotype;
+                    if (gotype != NULL)
+                        if (gotype->type == GOTYPE_SLICE || gotype->type == GOTYPE_ARRAY) {
+                            keyname = "i";
+                            valuename = "val";
+                        }
+
+                    if (result->postfix_operation == PFC_FORKEY) valuename = "_";
+                    if (result->postfix_operation == PFC_FORVALUE) keyname = "_";
+
+                    initialize_everything();
+                    insert_text("for %s, %s := range %s {", keyname, valuename, operand_text);
+                    save_autoindent();
+                    insert_newline(1);
+                    record_position();
+                    insert_newline(0);
+                    insert_text("}");
+                    record_position();
+                }
+                break;
+
+            case PFC_CHECK:
+                {
+                    /*
+                    this causes x().check! to become
+
+                        foo, err := x
+                        if err != nil {
+                            return 0, err
+                        }
+
+                    we need to automatically deduce the names of variables returned by x()
+                    as well as the return type of current function
+
+                    fair bit of work, but nothing too hard. do this tomorrow
+                    */
+                }
+                break;
+
+            default:
+                notfound = true;
+                break;
+            }
+
+            if (notfound) break;
+
+            if (curr_postfix != NULL) {
+                if (curr_postfix->insert_positions.len > 1) {
+                    trigger_escape(curr_postfix->insert_positions[0]);
+                    curr_postfix->current_insert_position++;
+                } else {
+                    postfix_stack.len--;
+                }
+            }
+
+            // clear autocomplete
+            ptr0(&ac);
+        }
+        break;
+
+    case ACR_DOTCOMPLETE:
+        {
+            // grab len & save name
+            auto len = strlen(result->name);
+            auto name = alloc_array(uchar, len);
+            for (u32 i = 0; i < len; i++)
+                name[i] = (uchar)result->name[i];
+
+            // figure out where insertion starts and ends
+            auto ac_start = cur;
+            ac_start.x -= strlen(ac.prefix);
+            auto ac_end = ac_start;
+            ac_end.x += len;
+
+            // perform the edit
+            buf.remove(ac_start, cur);
+            buf.insert(ac_start, name, len);
+
+            // tell tree-sitter about the edit
+            if (is_go_file) {
+                TSInputEdit tsedit = {0};
+                tsedit.start_byte = cur_to_offset(ac_start);
+                tsedit.start_point = cur_to_tspoint(ac_start);
+                tsedit.old_end_byte = cur_to_offset(cur);
+                tsedit.old_end_point = cur_to_tspoint(cur);
+                tsedit.new_end_byte = cur_to_offset(ac_end);
+                tsedit.new_end_point = cur_to_tspoint(ac_end);
+                ts_tree_edit(tree, &tsedit);
+                update_tree();
+            }
+
+            // move cursor forward
+            raw_move_cursor(new_cur2(ac_start.x + len, ac_start.y));
+
+            // clear out last_closed_autocomplete
+            last_closed_autocomplete = new_cur2(-1, -1);
+
+            // clear autocomplete
+            ptr0(&ac);
+
+            // update buffer
+            if (world.nvim.mode != VI_INSERT) {
+                auto& nv = world.nvim;
+                auto msgid = nv.start_request_message("nvim_buf_set_lines", 5);
+                {
+                    auto req = nv.save_request(NVIM_REQ_AUTOCOMPLETE_SETBUF, msgid, id);
+                    req->autocomplete_setbuf.target_cursor = ac_end;
+                }
+                nv.writer.write_int(nvim_data.buf_id); // buffer
+                nv.writer.write_int(ac_end.y); // start
+                nv.writer.write_int(ac_end.y + 1); // end
+                nv.writer.write_bool(false); // strict_indexing
+                {
+                    nv.writer.write_array(1); // replacement
+                    auto& line = buf.lines[ac_start.y];
+                    nv.write_line(&line);
+                }
+                nv.end_message();
+            }
+        }
+        break;
+    }
+}
+
 bool Editor::is_current_editor() {
     auto current_editor = world.get_current_editor();
     if (current_editor != NULL)
@@ -360,7 +811,10 @@ Editor *Pane::focus_editor_by_index(u32 idx) {
     return focus_editor_by_index(idx, new_cur2(-1, -1));
 }
 
-bool Editor::trigger_escape() {
+bool Editor::trigger_escape(cur2 go_here_after) {
+    if (go_here_after.x == -1 && go_here_after.y == -1)
+        postfix_stack.len = 0;
+
     bool handled = false;
 
     if (autocomplete.ac.results != NULL) {
@@ -384,11 +838,15 @@ bool Editor::trigger_escape() {
     if (world.nvim.mode == VI_INSERT) {
         auto& nv = world.nvim;
         auto msgid = nv.start_request_message("nvim_buf_get_changedtick", 1);
-        nv.save_request(NVIM_REQ_POST_INSERT_GETCHANGEDTICK, msgid, id);
+
+        auto req = nv.save_request(NVIM_REQ_POST_INSERT_GETCHANGEDTICK, msgid, id);
+
         nv.writer.write_int(nvim_data.buf_id);
         nv.end_message();
 
         handled = true;
+
+        go_here_after_escape = go_here_after;
         nv.exiting_insert_mode = true;
     }
 
@@ -448,6 +906,7 @@ void Editor::init() {
     SCOPED_MEM(&mem);
 
     parser = new_ts_parser();
+    postfix_stack.init();
 }
 
 void Editor::cleanup() {
@@ -496,13 +955,13 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
         }
     };
 
-    bool dont_recompute = (autocomplete.ac.results != NULL && triggered_by_typing_ident);
-    if (dont_recompute) {
+    if (autocomplete.ac.results != NULL && triggered_by_typing_ident) {
         SCOPED_MEM(&world.autocomplete_mem);
         autocomplete.ac.prefix = our_sprintf("%s%c", autocomplete.ac.prefix, typed_ident_char);
+        autocomplete.ac.keyword_end.x++;
     } else {
         auto old_type = autocomplete.ac.type;
-        auto old_keyword_start = autocomplete.ac.keyword_start_position;
+        auto old_keyword_start = autocomplete.ac.keyword_start;
 
         ptr0(&autocomplete);
 
@@ -522,7 +981,7 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
 
         t.log("world.indexer.autocomplete");
 
-        if (old_type != AUTOCOMPLETE_NONE && old_keyword_start != ac.keyword_start_position)
+        if (old_type != AUTOCOMPLETE_NONE && old_keyword_start != ac.keyword_start)
             if (!triggered_by_dot)
                 return;
 
@@ -535,7 +994,11 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
 
             // copy results
             auto new_results = alloc_list<AC_Result>(ac.results->len);
-            For (*ac.results) new_results->append()->name = our_strcpy(it.name);
+            For (*ac.results) {
+                auto r = new_results->append();
+                memcpy(r, &it, sizeof(it));
+                r->name = our_strcpy(it.name);
+            }
 
             // copy ac over to autocomplete.ac
             memcpy(&autocomplete.ac, &ac, sizeof(Autocomplete));
@@ -751,7 +1214,11 @@ void Editor::trigger_parameter_hint(bool triggered_by_paren) {
 void Editor::type_char(char ch) {
     uchar uch = ch;
     buf.insert(cur, &uch, 1);
-    raw_move_cursor(buf.inc_cur(cur));
+
+    auto old_cur = cur;
+    auto new_cur = buf.inc_cur(cur);
+
+    raw_move_cursor(new_cur);
 }
 
 void Editor::update_parameter_hint() {
@@ -982,6 +1449,8 @@ void Editor::type_char_in_insert_mode(char ch) {
 
             end_change();
         }
+        break;
+
     default:
         {
             if (autocomplete.ac.results != NULL) break;
@@ -1038,7 +1507,7 @@ void Editor::backspace_in_insert_mode(int graphemes_to_erase, int codepoints_to_
     }
 
     if (start < nvim_insert.backspaced_to) {
-        // this assumse start and nvim_insert.backspaced_to are on same line
+        // this assumes start and nvim_insert.backspaced_to are on same line
         int gr_end = buf.idx_cp_to_gr(nvim_insert.backspaced_to.y, nvim_insert.backspaced_to.x);
         int gr_start = buf.idx_cp_to_gr(start.y, start.x);
         nvim_insert.deleted_graphemes += (gr_end - gr_start);

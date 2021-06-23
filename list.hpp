@@ -2,6 +2,7 @@
 
 #include "common.hpp"
 #include <stdlib.h>
+#include <math.h>
 
 enum List_Mode {
     LIST_UNINITIALIZED = 0,
@@ -28,7 +29,7 @@ struct List {
     void *pool;  // for LIST_POOL. can't include Pool because it depends on List
 
     void init() {
-        init(LIST_POOL, 32);
+        init(LIST_POOL, 16);
     }
 
     void init(List_Mode _mode, s32 _cap, T* _items = NULL) {

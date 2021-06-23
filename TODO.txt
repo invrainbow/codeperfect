@@ -1,3 +1,5 @@
+ - we need to make trigger_escape(go_here_after) faster
+
  - instead of calling invalidate_packages_with_outdated_hash() up front,
    periodically check a small batch of packages every loop
 
