@@ -392,54 +392,10 @@ void init_goto_symbol() {
     SCOPED_MEM(&world.goto_symbol_mem);
     world.goto_symbol_mem.reset();
 
-    auto &wnd = world.wnd_goto_symbol;
-    ptr0(&wnd);
-
-    wnd.show = true;
-    wnd.symbols = alloc_list<ccstr>();
-    wnd.filtered_results = alloc_list<int>();
-
     if (!world.indexer.lock.try_enter()) return;
     defer { world.indexer.lock.leave(); };
 
-    auto base_path = make_path(world.indexer.index.current_import_path);
-
-    For (*world.indexer.index.packages) {
-        {
-            SCOPED_FRAME();
-            if (!base_path->contains(make_path(it.import_path)))
-                continue;
-        }
-
-        auto pkgname = it.package_name;
-        For (*it.files) {
-            For (*it.decls) {
-                auto getrecv = [&]() -> ccstr {
-                    if (it.type != GODECL_FUNC) return NULL;
-                    if (it.gotype == NULL) return NULL;
-                    if (it.gotype->type != GOTYPE_FUNC) return NULL;
-
-                    auto recv = it.gotype->func_recv;
-                    if (recv == NULL) return NULL;
-
-                    recv = world.indexer.unpointer_type(recv, NULL)->gotype;
-                    if (recv->type != GOTYPE_ID) return NULL;
-
-                    return recv->id_name;
-                };
-
-                ccstr name = NULL;
-
-                auto recvname = getrecv();
-                if (recvname != NULL)
-                    name = our_sprintf("%s.%s.%s", pkgname, recvname, it.name);
-                else
-                    name = our_sprintf("%s.%s", pkgname, it.name);
-
-                wnd.symbols->append(name);
-            }
-        }
-    }
+    world.indexer.fill_goto_symbol();
 }
 
 void kick_off_build(Build_Profile *build_profile) {

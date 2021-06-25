@@ -1201,7 +1201,7 @@ struct Go_Indexer {
     void stop_writing();
     bool truncate_parsed_file(Parsed_File *pf, cur2 end_pos, ccstr chars_to_append);
     Gotype *get_closest_function(ccstr filepath, cur2 pos);
-
+    void fill_goto_symbol();
 };
 
 struct Scoped_Write {

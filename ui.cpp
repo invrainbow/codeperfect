@@ -2182,7 +2182,7 @@ void UI::draw_everything() {
 
     if (world.wnd_goto_file.show) {
         auto& wnd = world.wnd_goto_file;
-        ImGui::Begin("Open File", &world.wnd_goto_file.show, ImGuiWindowFlags_AlwaysAutoResize);
+        ImGui::Begin("Go To File", &world.wnd_goto_file.show, ImGuiWindowFlags_AlwaysAutoResize);
 
         wnd.focused = ImGui::IsWindowFocused();
 
@@ -2222,7 +2222,7 @@ void UI::draw_everything() {
 
     if (world.wnd_goto_symbol.show) {
         auto& wnd = world.wnd_goto_symbol;
-        ImGui::Begin("Open Symbol", &world.wnd_goto_symbol.show, ImGuiWindowFlags_AlwaysAutoResize);
+        ImGui::Begin("Go To Symbol", &world.wnd_goto_symbol.show, ImGuiWindowFlags_AlwaysAutoResize);
 
         wnd.focused = ImGui::IsWindowFocused();
 

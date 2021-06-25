@@ -2101,6 +2101,56 @@ Gotype *Go_Indexer::get_closest_function(ccstr filepath, cur2 pos) {
     return ret;
 }
 
+void Go_Indexer::fill_goto_symbol() {
+    reload_all_dirty_files();
+
+    auto &wnd = world.wnd_goto_symbol;
+    ptr0(&wnd);
+
+    wnd.show = true;
+    wnd.symbols = alloc_list<ccstr>();
+    wnd.filtered_results = alloc_list<int>();
+
+    auto base_path = make_path(index.current_import_path);
+
+    For (*index.packages) {
+        {
+            SCOPED_FRAME();
+            if (!base_path->contains(make_path(it.import_path)))
+                continue;
+        }
+
+        auto pkgname = it.package_name;
+        For (*it.files) {
+            For (*it.decls) {
+                auto getrecv = [&]() -> ccstr {
+                    if (it.type != GODECL_FUNC) return NULL;
+                    if (it.gotype == NULL) return NULL;
+                    if (it.gotype->type != GOTYPE_FUNC) return NULL;
+
+                    auto recv = it.gotype->func_recv;
+                    if (recv == NULL) return NULL;
+
+                    recv = unpointer_type(recv, NULL)->gotype;
+                    if (recv->type != GOTYPE_ID) return NULL;
+
+                    return recv->id_name;
+                };
+
+                ccstr name = NULL;
+
+                auto recvname = getrecv();
+                if (recvname != NULL)
+                    name = our_sprintf("%s.%s.%s", pkgname, recvname, it.name);
+                else
+                    name = our_sprintf("%s.%s", pkgname, it.name);
+
+                wnd.symbols->append(name);
+            }
+        }
+    }
+}
+
 bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period, Autocomplete *out) {
     Timer t;
     t.init("autocomplete");
