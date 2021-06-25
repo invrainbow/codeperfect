@@ -22,6 +22,9 @@
 #define go_print(fmt, ...)
 #endif
 
+const unsigned char GO_INDEX_MAGIC_BYTES[3] = {0x49, 0xfa, 0x98};
+const int GO_INDEX_VERSION = 2;
+
 void index_print(ccstr fmt, ...) {
     va_list args;
     va_start(args, fmt);
@@ -38,9 +41,6 @@ void index_print(ccstr fmt, ...) {
     auto msg = our_vsprintf(fmt, args);
     go_print("%s", msg);
 }
-
-const unsigned char GO_INDEX_MAGIC_BYTES[3] = {0x49, 0xfa, 0x98};
-const int GO_INDEX_VERSION = 1;
 
 s32 num_index_stream_opens = 0;
 s32 num_index_stream_closes = 0;
@@ -1484,6 +1484,7 @@ void Go_Indexer::process_tree_into_gofile(
             auto decl = alloc_object(Godecl);
             decl->file = filename;
             decl->decl_start = decl_node->start();
+            decl->decl_end = decl_node->end();
             import_spec_to_decl(it, decl);
 
             // import
@@ -1673,7 +1674,7 @@ List<Postfix_Completion_Type> *Go_Indexer::get_postfix_completions(Ast_Node *ope
         return NULL;
     }
 
-    List<Postfix_Completion_Type> *ret = NULL;
+    auto ret = alloc_list<Postfix_Completion_Type>();
 
     auto try_based_on_gotype = [&]() -> bool {
         auto gotype = expr_to_gotype(operand_node);
@@ -1686,11 +1687,15 @@ List<Postfix_Completion_Type> *Go_Indexer::get_postfix_completions(Ast_Node *ope
         if (resolved_res == NULL) return false;
 
         auto basetype = resolved_res->gotype;
+
+        if (basetype->type == GOTYPE_MULTI)
+            if (basetype->multi_types->len == 1)
+                basetype = basetype->multi_types->at(0);
+
         switch (basetype->type) {
         case GOTYPE_SLICE:
         case GOTYPE_ARRAY:
         case GOTYPE_MAP:
-            ret = alloc_list<Postfix_Completion_Type>();
             ret->append(PFC_APPEND);
             ret->append(PFC_LEN);
             ret->append(PFC_CAP);
@@ -1706,12 +1711,22 @@ List<Postfix_Completion_Type> *Go_Indexer::get_postfix_completions(Ast_Node *ope
 
         case GOTYPE_STRUCT:
         case GOTYPE_INTERFACE:
-            ret = alloc_list<Postfix_Completion_Type>();
             ret->append(PFC_IFNIL);
             ret->append(PFC_IFNOTNIL);
             ret->append(PFC_NIL);
             ret->append(PFC_NOTNIL);
             return true;
+
+        case GOTYPE_MULTI:
+            if (operand_node->type() == TS_CALL_EXPRESSION) {
+                For (*basetype->multi_types) {
+                    if (it->type == GOTYPE_ID && streq(it->id_name, "error")) {
+                        // ret->append(PFC_CHECK);
+                        break;
+                    }
+                }
+            }
+            break; // don't return true
         }
 
         return false;
@@ -1731,7 +1746,6 @@ List<Postfix_Completion_Type> *Go_Indexer::get_postfix_completions(Ast_Node *ope
         auto id = operand_node->string();
 
         // add everything (until we find a reason not to)
-        ret = alloc_list<Postfix_Completion_Type>();
         ret->append(PFC_APPEND);
         ret->append(PFC_LEN);
         ret->append(PFC_CAP);
@@ -1757,7 +1771,6 @@ List<Postfix_Completion_Type> *Go_Indexer::get_postfix_completions(Ast_Node *ope
     if (try_based_on_gotype()) return ret;
     if (try_based_on_identifier()) return ret;
 
-    ret = alloc_list<Postfix_Completion_Type>();
     ret->append(PFC_LEN);
     ret->append(PFC_CAP);
     ret->append(PFC_NIL);
@@ -2044,6 +2057,48 @@ ccstr get_postfix_completion_name(Postfix_Completion_Type type) {
     case PFC_SWITCH: return "switch!";
     }
     return NULL;
+
+}
+
+Gotype *Go_Indexer::get_closest_function(ccstr filepath, cur2 pos) {
+    auto import_path = filepath_to_import_path(our_dirname(filepath));
+    if (import_path == NULL) return NULL;
+
+    Go_Ctx ctx; ptr0(&ctx);
+    ctx.import_path = import_path;
+    ctx.filename = our_basename(filepath);
+
+    auto pkg = find_up_to_date_package(ctx.import_path);
+    if (pkg == NULL) return NULL;
+
+    auto check = [&](Go_File *it) { return streq(it->filename, ctx.filename); };
+    auto file = pkg->files->find(check);
+    if (file == NULL) return NULL;
+
+    auto scope_ops = file->scope_ops;
+
+    SCOPED_FRAME_WITH_MEM(&scoped_table_mem);
+
+    Scoped_Table<Godecl*> table;
+    {
+        SCOPED_MEM(&scoped_table_mem);
+        table.init();
+    }
+    defer { table.cleanup(); };
+
+    Gotype *ret = NULL;
+
+    For (*scope_ops) {
+        if (it.pos > pos) break;
+
+        if (it.type == GSOP_DECL)
+            if (it.decl->decl_start <= pos && pos < it.decl->decl_end)
+                if (it.decl->type != GODECL_IMPORT)
+                    if (it.decl->gotype != NULL && it.decl->gotype->type == GOTYPE_FUNC)
+                        ret = it.decl->gotype;
+    }
+
+    return ret;
 }
 
 bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period, Autocomplete *out) {
@@ -2715,6 +2770,7 @@ List<Godecl> *Go_Indexer::parameter_list_to_fields(Ast_Node *params) {
             auto field = ret->append();
             field->type = GODECL_FIELD;
             field->decl_start = param_node->start();
+            field->decl_end = param_node->end();
             field->spec_start = param_node->start();
             field->name_start = it->start();
             field->name = it->string();
@@ -2731,6 +2787,7 @@ List<Godecl> *Go_Indexer::parameter_list_to_fields(Ast_Node *params) {
             auto field = ret->append();
             field->type = GODECL_FIELD;
             field->decl_start = param_node->start();
+            field->decl_end = param_node->end();
             field->spec_start = param_node->start();
             field->name_start = param_node->start();
             field->name = "_";
@@ -2760,6 +2817,7 @@ bool Go_Indexer::node_func_to_gotype_sig(Ast_Node *params, Ast_Node *result, Go_
             auto field = sig->result->append();
             field->type = GODECL_FIELD;
             field->decl_start = result->start();
+            field->decl_end = result->end();
             field->spec_start = result->start();
             field->name = NULL;
             field->gotype = node_to_gotype(result);
@@ -2880,6 +2938,7 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node) {
                         field->name_start = it->start();
                         field->spec_start = field_node->start();
                         field->decl_start = field_node->start();
+                        field->decl_end = field_node->end();
 
                         spec->field = field;
                     }
@@ -3058,6 +3117,7 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
         auto decl = results->append();
         decl->file = filename;
         decl->decl_start = node->start();
+        decl->decl_end = node->end();
         return decl;
     };
 

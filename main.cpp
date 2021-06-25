@@ -497,8 +497,8 @@ int main() {
         if (mod & GLFW_MOD_ALT)
             nmod |= OUR_MOD_ALT;
 
-        if (world.wnd_open_file.show && world.wnd_open_file.focused) {
-            auto &wnd = world.wnd_open_file;
+        if (world.wnd_goto_file.show && world.wnd_goto_file.focused) {
+            auto &wnd = world.wnd_goto_file;
 
             auto go_up = [&]() {
                 if (wnd.filtered_results->len == 0) return;
@@ -531,10 +531,10 @@ int main() {
                     case GLFW_KEY_DOWN: go_down(); break;
                     case GLFW_KEY_UP: go_up(); break;
                     case GLFW_KEY_ESCAPE:
-                        world.wnd_open_file.show = false;
+                        world.wnd_goto_file.show = false;
                         break;
                     case GLFW_KEY_ENTER:
-                        world.wnd_open_file.show = false;
+                        world.wnd_goto_file.show = false;
 
                         if (wnd.filtered_results->len == 0) break;
 
@@ -639,8 +639,11 @@ int main() {
 
             case OUR_MOD_ALT | OUR_MOD_SHIFT:
                 switch (key) {
+                case GLFW_KEY_O:
+                    editor->format_on_save(GH_FMT_GOIMPORTS);
+                    break;
                 case GLFW_KEY_F:
-                    editor->format_on_save();
+                    editor->format_on_save(GH_FMT_GOFMT);
                     break;
                 }
                 break;
@@ -732,10 +735,15 @@ int main() {
                             send_nvim_keys("<C-v>");
                         }
                         break;
+                    case GLFW_KEY_T:
+                        world.wnd_goto_symbol.show ^= 1;
+                        if (world.wnd_goto_symbol.show)
+                            init_goto_symbol();
+                        break;
                     case GLFW_KEY_P:
-                        world.wnd_open_file.show ^= 1;
-                        if (world.wnd_open_file.show)
-                            init_open_file();
+                        world.wnd_goto_file.show ^= 1;
+                        if (world.wnd_goto_file.show)
+                            init_goto_file();
                         break;
                     case GLFW_KEY_S:
                         if (editor != NULL)

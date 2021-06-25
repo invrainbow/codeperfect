@@ -163,7 +163,8 @@ struct World {
     Pool frame_mem;
     Pool autocomplete_mem;
     Pool parameter_hint_mem;
-    Pool open_file_mem;
+    Pool goto_file_mem;
+    Pool goto_symbol_mem;
     Pool scratch_mem;
     Pool file_tree_mem;
     Pool build_mem;
@@ -340,12 +341,25 @@ struct World {
     struct {
         bool show;
         bool focused;
+        bool first_open_focus_twice_done;
+
         char query[MAX_PATH];
         u32 selection;
         List<ccstr> *filepaths;
         List<int> *filtered_results;
+    } wnd_goto_file;
+
+    struct {
+        bool show;
+
+        bool focused;
         bool first_open_focus_twice_done;
-    } wnd_open_file;
+
+        char query[MAX_PATH];
+        u32 selection;
+        List<ccstr> *symbols;
+        List<int> *filtered_results;
+    } wnd_goto_symbol;
 
     struct {
         bool show_anon_nodes;
@@ -395,10 +409,13 @@ extern World world;
 
 bool is_ignored_by_git(ccstr path, bool isdir);
 
-void init_open_file();
+void init_goto_file();
+void init_goto_symbol();
+void filter_files();
+void filter_symbols();
+
 void kick_off_build(Build_Profile *build_profile = NULL);
 void prompt_delete_all_breakpoints();
-void filter_files();
 void run_proc_the_normal_way(Process* proc, ccstr cmd);
 void* get_native_window_handle();
 bool is_build_debug_free();

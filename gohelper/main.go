@@ -211,9 +211,9 @@ func GHFmtFinish(fmtType int) *C.char {
 	var newSource []byte
 	var err error
 
-	if fmtType == 0 {
+	if fmtType == FmtGoFmt {
 		newSource, err = format.Source(autofmtBuffer)
-	} else if fmtType == 1 {
+	} else if fmtType == FmtGoImports {
 		newSource, err = imports.Process("<standard input>", autofmtBuffer, goimportsOptions)
 	} else {
 		LastError = fmt.Errorf("Invalid format type.")

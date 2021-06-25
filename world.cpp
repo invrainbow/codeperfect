@@ -169,7 +169,8 @@ void World::init() {
     init_mem(file_tree_mem);
     init_mem(autocomplete_mem);
     init_mem(parameter_hint_mem);
-    init_mem(open_file_mem);
+    init_mem(goto_file_mem);
+    init_mem(goto_symbol_mem);
     init_mem(scratch_mem);
     init_mem(build_index_mem);
     init_mem(ui_mem);
@@ -359,16 +360,16 @@ void World::activate_pane(u32 idx) {
     }
 }
 
-void init_open_file() {
-    SCOPED_MEM(&world.open_file_mem);
-    world.open_file_mem.reset();
+void init_goto_file() {
+    SCOPED_MEM(&world.goto_file_mem);
+    world.goto_file_mem.reset();
 
-    auto wnd = &world.wnd_open_file;
-    ptr0(wnd);
+    auto &wnd = world.wnd_goto_file;
+    ptr0(&wnd);
 
-    wnd->show = true;
-    wnd->filepaths = alloc_list<ccstr>();
-    wnd->filtered_results = alloc_list<int>();
+    wnd.show = true;
+    wnd.filepaths = alloc_list<ccstr>();
+    wnd.filtered_results = alloc_list<int>();
 
     fn<void(File_Tree_Node*, ccstr)> fill_files = [&](auto node, auto path) {
         for (auto it = node->children; it != NULL; it = it->next) {
@@ -380,11 +381,65 @@ void init_open_file() {
             if (isdir)
                 fill_files(it, relpath);
             else
-                wnd->filepaths->append(relpath);
+                wnd.filepaths->append(relpath);
         }
     };
 
     fill_files(world.file_tree, "");
+}
+
+void init_goto_symbol() {
+    SCOPED_MEM(&world.goto_symbol_mem);
+    world.goto_symbol_mem.reset();
+
+    auto &wnd = world.wnd_goto_symbol;
+    ptr0(&wnd);
+
+    wnd.show = true;
+    wnd.symbols = alloc_list<ccstr>();
+    wnd.filtered_results = alloc_list<int>();
+
+    if (!world.indexer.lock.try_enter()) return;
+    defer { world.indexer.lock.leave(); };
+
+    auto base_path = make_path(world.indexer.index.current_import_path);
+
+    For (*world.indexer.index.packages) {
+        {
+            SCOPED_FRAME();
+            if (!base_path->contains(make_path(it.import_path)))
+                continue;
+        }
+
+        auto pkgname = it.package_name;
+        For (*it.files) {
+            For (*it.decls) {
+                auto getrecv = [&]() -> ccstr {
+                    if (it.type != GODECL_FUNC) return NULL;
+                    if (it.gotype == NULL) return NULL;
+                    if (it.gotype->type != GOTYPE_FUNC) return NULL;
+
+                    auto recv = it.gotype->func_recv;
+                    if (recv == NULL) return NULL;
+
+                    recv = world.indexer.unpointer_type(recv, NULL)->gotype;
+                    if (recv->type != GOTYPE_ID) return NULL;
+
+                    return recv->id_name;
+                };
+
+                ccstr name = NULL;
+
+                auto recvname = getrecv();
+                if (recvname != NULL)
+                    name = our_sprintf("%s.%s.%s", pkgname, recvname, it.name);
+                else
+                    name = our_sprintf("%s.%s", pkgname, it.name);
+
+                wnd.symbols->append(name);
+            }
+        }
+    }
 }
 
 void kick_off_build(Build_Profile *build_profile) {
@@ -481,34 +536,71 @@ void prompt_delete_all_breakpoints() {
 }
 
 void filter_files() {
-    auto wnd = &world.wnd_open_file;
+    auto &wnd = world.wnd_goto_file;
 
-    wnd->filtered_results->len = 0;
+    wnd.filtered_results->len = 0;
 
     Timer t;
     t.init("filter_files");
 
     u32 i = 0;
-    For (*wnd->filepaths) {
-        if (fzy_has_match(wnd->query, it))
-            wnd->filtered_results->append(i);
+    For (*wnd.filepaths) {
+        if (fzy_has_match(wnd.query, it))
+            wnd.filtered_results->append(i);
         i++;
     }
 
     t.log("matching");
 
-    auto scores = alloc_array(double, wnd->filepaths->len);
-    auto scores_saved = alloc_array(bool, wnd->filepaths->len);
+    auto scores = alloc_array(double, wnd.filepaths->len);
+    auto scores_saved = alloc_array(bool, wnd.filepaths->len);
 
     auto get_score = [&](int i) {
         if (!scores_saved[i]) {
-            scores[i] = fzy_match(wnd->query, wnd->filepaths->at(i));
+            scores[i] = fzy_match(wnd.query, wnd.filepaths->at(i));
             scores_saved[i] = true;
         }
         return scores[i];
     };
 
-    wnd->filtered_results->sort([&](int *pa, int *pb) {
+    wnd.filtered_results->sort([&](int *pa, int *pb) {
+        auto a = get_score(*pa);
+        auto b = get_score(*pb);
+        return a < b ? 1 : (a > b ? -1 : 0);  // reverse
+    });
+
+    t.log("scoring");
+}
+
+void filter_symbols() {
+    auto &wnd = world.wnd_goto_symbol;
+
+    wnd.filtered_results->len = 0;
+
+    Timer t;
+    t.init("filter_symbols");
+
+    u32 i = 0;
+    For (*wnd.symbols) {
+        if (fzy_has_match(wnd.query, it))
+            wnd.filtered_results->append(i);
+        i++;
+    }
+
+    t.log("matching");
+
+    auto scores = alloc_array(double, wnd.symbols->len);
+    auto scores_saved = alloc_array(bool, wnd.symbols->len);
+
+    auto get_score = [&](int i) {
+        if (!scores_saved[i]) {
+            scores[i] = fzy_match(wnd.query, wnd.symbols->at(i));
+            scores_saved[i] = true;
+        }
+        return scores[i];
+    };
+
+    wnd.filtered_results->sort([&](int *pa, int *pb) {
         auto a = get_score(*pa);
         auto b = get_score(*pb);
         return a < b ? 1 : (a > b ? -1 : 0);  // reverse

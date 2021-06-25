@@ -622,13 +622,14 @@ struct Godecl {
 
     ccstr file; // only guaranteed to be set on toplevels
     cur2 decl_start;
+    cur2 decl_end;
     cur2 spec_start;
     cur2 name_start;
     ccstr name;
 
     union {
         Gotype *gotype;
-        ccstr import_path; // for GOTYPE_IMPORT
+        ccstr import_path; // for GODECL_IMPORT
     };
 
     Godecl *copy();
@@ -1199,6 +1200,7 @@ struct Go_Indexer {
     void start_writing();
     void stop_writing();
     bool truncate_parsed_file(Parsed_File *pf, cur2 end_pos, ccstr chars_to_append);
+    Gotype *get_closest_function(ccstr filepath, cur2 pos);
 
 };
 

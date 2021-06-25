@@ -7,11 +7,6 @@
 #include "tree_sitter_crap.hpp"
 #include "settings.hpp"
 
-enum {
-    GH_FMT_GOFMT = 0,
-    GH_FMT_GOIMPORTS = 0,
-};
-
 ccstr Editor::get_autoindent(int for_y) {
     auto y = relu_sub(for_y, 1);
 
@@ -362,19 +357,68 @@ void Editor::perform_autocomplete(AC_Result *result) {
 
             case PFC_CHECK:
                 {
-                    /*
-                    this causes x().check! to become
+                    print("man this is super hard");
 
-                        foo, err := x
-                        if err != nil {
-                            return 0, err
+                    if (ac.operand_gotype->type != GOTYPE_MULTI) break;
+
+                    int error_found_at = -1;
+                    auto multi_types = ac.operand_gotype->multi_types;
+
+                    for (int i = 0; i < multi_types->len; i++) {
+                        auto it = multi_types->at(i);
+                        if (it->type == GOTYPE_ID && streq(it->id_name, "error")) {
+                            error_found_at = i;
+                            break;
+                        }
+                    }
+
+                    if (error_found_at == -1) break;
+
+                    initialize_everything();
+
+                    int varcount = 0;
+                    for (int i = 0; i < multi_types->len; i++) {
+                        auto it = multi_types->at(i);
+                        if (i == error_found_at) {
+                            insert_text("err");
+                        } else {
+                            if (varcount == 0)
+                                insert_text("val");
+                            else
+                                insert_text("val%d", varcount);
+                            varcount++;
                         }
 
-                    we need to automatically deduce the names of variables returned by x()
-                    as well as the return type of current function
+                        if (i + 1 < multi_types->len)
+                            insert_text(",");
+                        insert_text(" ");
+                    }
 
-                    fair bit of work, but nothing too hard. do this tomorrow
-                    */
+                    insert_text("= %s", operand_text);
+                    save_autoindent();
+                    insert_newline();
+                    insert_text("if err != nil {");
+                    insert_newline(1);
+                    insert_text("return ");
+
+                    {
+                        do {
+                            // get gotype of current function
+                            auto functype = world.indexer.get_closest_function(filepath, cur);
+                            if (functype == NULL) break;
+
+                            auto result = functype->func_sig.result;
+                            if (result == NULL) break;
+                            if (result->len == 0) break;
+
+                            // TODO: generate zero values
+                            // TODO i'm too lazy to do this lol
+                        } while (0);
+                    }
+
+                    insert_text("return err"); // TODO: deduce return type of current function
+                    insert_newline(0);
+                    insert_text("}");
                 }
                 break;
 
@@ -1521,7 +1565,7 @@ void Editor::backspace_in_insert_mode(int graphemes_to_erase, int codepoints_to_
     last_closed_autocomplete = new_cur2(-1, -1);
 }
 
-void Editor::format_on_save(bool write_to_nvim) {
+void Editor::format_on_save(int fmt_type, bool write_to_nvim) {
     auto old_cur = cur;
 
     Buffer swapbuf; ptr0(&swapbuf);
@@ -1546,7 +1590,7 @@ void Editor::format_on_save(bool write_to_nvim) {
         GHFmtAddLine(line.items);
     }
 
-    auto new_contents = GHFmtFinish(GH_FMT_GOFMT);
+    auto new_contents = GHFmtFinish(fmt_type);
     if (new_contents == NULL) {
         saving = false;
         return;
@@ -1562,9 +1606,9 @@ void Editor::format_on_save(bool write_to_nvim) {
         return false;
     });
 
-    auto dirty = buf.dirty;
+    /// auto was_dirty = buf.dirty;
     buf.copy_from(&swapbuf);
-    buf.dirty = dirty;
+    buf.dirty = true;
 
     if (tree != NULL) {
         ts_tree_delete(tree);
@@ -1600,7 +1644,7 @@ void Editor::handle_save(bool about_to_close) {
         is_go_file = str_ends_with(filepath, ".go");
     }
 
-    format_on_save(!about_to_close);
+    format_on_save(GH_FMT_GOFMT, !about_to_close);
 
     // save to disk
     {

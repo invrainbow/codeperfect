@@ -1464,9 +1464,15 @@ void UI::draw_everything() {
 
         if (ImGui::BeginMenu("Go")) {
             if (ImGui::MenuItem("Go to File...", "Ctrl+P")) {
-                if (!world.wnd_open_file.show) {
-                    world.wnd_open_file.show = true;
-                    init_open_file();
+                if (!world.wnd_goto_file.show) {
+                    world.wnd_goto_file.show = true;
+                    init_goto_file();
+                }
+            }
+            if (ImGui::MenuItem("Go to Symbol...", "Ctrl+P")) {
+                if (!world.wnd_goto_symbol.show) {
+                    world.wnd_goto_symbol.show = true;
+                    init_goto_symbol();
                 }
             }
             if (ImGui::MenuItem("Go to Next Item", "Alt+]")) {
@@ -1519,6 +1525,77 @@ void UI::draw_everything() {
             if (ImGui::MenuItem("Build Profiles...")) {
                 open_project_settings();
                 world.wnd_project_settings.focus_build_profiles = true;
+            }
+
+            ImGui::EndMenu();
+        }
+
+        if (ImGui::BeginMenu("Format")) {
+            auto editor = world.get_current_editor();
+
+            if (ImGui::MenuItem("Format File", NULL, false, editor != NULL)) {
+                if (editor != NULL)
+                    editor->format_on_save(GH_FMT_GOFMT);
+            }
+
+            if (ImGui::MenuItem("Format File and Organize Imports", NULL, false, editor != NULL)) {
+                if (editor != NULL)
+                    editor->format_on_save(GH_FMT_GOIMPORTS);
+            }
+
+            if (ImGui::MenuItem("Format Selection", NULL, false, editor != NULL)) {
+                // TODO
+            }
+
+            ImGui::EndMenu();
+        }
+
+        if (ImGui::BeginMenu("Refactor")) {
+            auto can_rename_id_under_cursor = [&]() -> bool {
+#if 0
+                auto editor = world.get_current_editor();
+                if (editor == NULL) return false;
+                if (!editor->is_go_file) return false;
+                if (editor->tree == NULL) return false;
+
+                Parser_It it;
+                it.init(&editor->buf);
+                auto root_node = new_ast_node(ts_tree_root_node(editor->tree), &it);
+
+                find_nodes_containing_pos(root_node, editor->cur, true, [&](auto it) -> Walk_Action {
+                    switch (it->type()) {
+                    case TS_TYPE_DECLARATION:
+                        break;
+                    case TS_PARAMETER_LIST:
+                        break;
+                    case TS_SHORT_VAR_DECLARATION:
+                        break;
+                    case TS_CONST_DECLARATION:
+                        break;
+                    case TS_VAR_DECLARATION:
+                        break;
+                    case TS_RANGE_CLAUSE:
+                        break;
+                    default:
+                        return WALK_CONTINUE;
+                    }
+
+                    if (it->type() == TS_FUNCTION_DECLARATION) {
+                        auto name = it->field(TSF_NAME);
+                        if (!name->null)
+                            ret = str_starts_with(name->string(), "Test");
+                    }
+
+                    return WALK_ABORT;
+                });
+#endif
+
+                return true; // ???
+            };
+
+            if (ImGui::MenuItem("Rename...", NULL, false, can_rename_id_under_cursor())) {
+
+                // ???
             }
 
             ImGui::EndMenu();
@@ -2103,9 +2180,9 @@ void UI::draw_everything() {
     if (world.windows_open.im_metrics)
         ImGui::ShowMetricsWindow(&world.windows_open.im_metrics);
 
-    if (world.wnd_open_file.show) {
-        auto& wnd = world.wnd_open_file;
-        ImGui::Begin("Open File", &world.wnd_open_file.show, ImGuiWindowFlags_AlwaysAutoResize);
+    if (world.wnd_goto_file.show) {
+        auto& wnd = world.wnd_goto_file;
+        ImGui::Begin("Open File", &world.wnd_goto_file.show, ImGuiWindowFlags_AlwaysAutoResize);
 
         wnd.focused = ImGui::IsWindowFocused();
 
@@ -2133,6 +2210,46 @@ void UI::draw_everything() {
 
             for (u32 i = 0; i < wnd.filtered_results->len && i < settings.open_file_max_results; i++) {
                 auto it = wnd.filepaths->at(wnd.filtered_results->at(i));
+                if (i == wnd.selection)
+                    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.5f, 1.0f), "%s", it);
+                else
+                    ImGui::Text("%s", it);
+            }
+        }
+
+        ImGui::End();
+    }
+
+    if (world.wnd_goto_symbol.show) {
+        auto& wnd = world.wnd_goto_symbol;
+        ImGui::Begin("Open Symbol", &world.wnd_goto_symbol.show, ImGuiWindowFlags_AlwaysAutoResize);
+
+        wnd.focused = ImGui::IsWindowFocused();
+
+        ImGui::Text("Search for symbol:");
+
+        if (ImGui::IsWindowAppearing()) {
+            ImGui::SetKeyboardFocusHere();
+        } else if (!wnd.first_open_focus_twice_done) {
+            wnd.first_open_focus_twice_done = true;
+            ImGui::SetKeyboardFocusHere();
+        }
+
+        ImGui::InputText("##search_for_symbol", wnd.query, _countof(wnd.query));
+
+        if (ImGui::IsItemEdited()) {
+            if (strlen(wnd.query) >= 2)
+                filter_symbols();
+            else
+                wnd.filtered_results->len = 0;
+        }
+
+        {
+            ImGui::PushFont(world.ui.im_font_mono);
+            defer { ImGui::PopFont(); };
+
+            for (u32 i = 0; i < wnd.filtered_results->len && i < settings.open_file_max_results; i++) {
+                auto it = wnd.symbols->at(wnd.filtered_results->at(i));
                 if (i == wnd.selection)
                     ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.5f, 1.0f), "%s", it);
                 else
