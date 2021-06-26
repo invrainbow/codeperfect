@@ -1,0 +1,71 @@
+{{ define "main" }}
+  <div class="flex relative space-x-8">
+    <div class="w-48 sticky top-4 left-0 self-start">
+      <nav class="">
+				{{ $currentPage := . -}}
+				{{ range .Site.Menus.docs -}}
+					<div class="mb-6">
+						<h3 class="font-bold mb-1">{{ .Name }}</h3>
+						{{ if .HasChildren -}}
+							<ul>
+								{{ range .Children -}}
+									{{- $active := or ($currentPage.IsMenuCurrent "docs" .) ($currentPage.HasMenuCurrent "docs" .) -}}
+									{{- $active = or $active (eq $currentPage.Section .Identifier) -}}
+									<li>
+										<a
+											class="docs-link{{ if $active }} active{{ end }}"
+											href="{{ .URL | relURL }}"
+											>{{ .Name }}</a
+										>
+									</li>
+								{{ end -}}
+							</ul>
+						</div>
+					{{ end -}}
+				{{ end -}}
+      </nav>
+    </div>
+
+    <main class="flex-grow w-auto">
+      {{ if .Site.Params.options.breadCrumb -}}
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb">
+            {{ partial "main/breadcrumb" . -}}
+            <li class="inline">{{ .Title }}</li>
+          </ol>
+        </nav>
+      {{ end }}
+
+      <h1>{{ .Title }}</h1>
+      <p class="lead">{{ .Params.lead | safeHTML }}</p>
+
+      {{ .Content | replaceRE "(<h[2-9] id=\"([^\"]+)\".+)(</h[2-9]+>)" `${1}<a href="#${2}" class="anchor" aria-hidden="true">#</a> ${3}` | safeHTML }}
+
+      {{ if or .Prev .Next -}}
+        <div class="flex justify-between mt-12">
+          <!-- https://www.feliciano.tech/blog/custom-sort-hugo-single-pages/ -->
+          {{ $pages := where site.RegularPages "Section" .Section -}}
+          {{ with $pages.Next . -}}
+            <a href="{{ .RelPermalink }}">
+              &larr; {{ .Title }}
+            </a>
+          {{ end -}}
+          {{ with $pages.Prev . -}}
+            <a class="ms-auto" href="{{ .RelPermalink }}">
+              {{ .Title }} &rarr;
+            </a>
+          {{ end -}}
+        </div>
+      {{ end -}}
+    </main>
+
+    <nav class="sticky top-4 right-0 self-start w-48 bg-gray-100 p-2">
+			{{ if ne .Params.toc false -}}
+				<div class="page-links">
+					<h3>On this page</h3>
+					{{ .TableOfContents }}
+				</div>
+			{{ end -}}
+    </nav>
+  </div>
+{{ end }}

@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="{{ .Site.LanguageCode | default "en" }}">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="x-ua-compatible" content="ie=edge" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, shrink-to-fit=no"
+    />
+
+    {{ if eq (hugo.Environment) "development" -}}
+      {{ $options := (dict "targetPath" "app.css" "enableSourceMap" true "includePaths" (slice "node_modules")) -}}
+      {{ $css := resources.Get "scss/app.scss" | toCSS $options | postCSS (dict "config" "config/postcss.config.js") -}}
+      <link rel="stylesheet" href="{{ $css.RelPermalink }}">
+    {{ else -}}
+      {{ $options := (dict "targetPath" "app.css" "outputStyle" "compressed" "includePaths" (slice "node_modules")) -}}
+      {{ $css := resources.Get "scss/app.scss" | toCSS $options | postCSS (dict "config" "config/postcss.config.js") -}}
+      {{ $secureCSS := $css | resources.Fingerprint "sha512" -}}
+      <link rel="stylesheet" href="{{ $secureCSS.Permalink }}" integrity="{{ $secureCSS.Data.Integrity }}" crossorigin="anonymous">
+    {{ end -}}
+
+    {{ if eq (hugo.Environment) "development" -}}
+      {{ $options := (dict "targetPath" "defaults.css" "enableSourceMap" true "includePaths" (slice "node_modules")) -}}
+      {{ $css := resources.Get "scss/defaults.scss" | toCSS $options | postCSS (dict "config" "config/postcss.config.js") -}}
+      <link rel="stylesheet" href="{{ $css.RelPermalink }}">
+    {{ else -}}
+      {{ $options := (dict "targetPath" "defaults.css" "outputStyle" "compressed" "includePaths" (slice "node_modules")) -}}
+      {{ $css := resources.Get "scss/defaults.scss" | toCSS $options | postCSS (dict "config" "config/postcss.config.js") -}}
+      {{ $secureCSS := $css | resources.Fingerprint "sha512" -}}
+      <link rel="stylesheet" href="{{ $secureCSS.Permalink }}" integrity="{{ $secureCSS.Data.Integrity }}" crossorigin="anonymous">
+    {{ end -}}
+
+    <noscript><style>img.lazyload { display: none; }</style></noscript>
+  </head>
+
+  {{ if eq .Kind "home" -}}
+    {{ .Scratch.Set "class" "home" -}}
+  {{ else if eq .Kind "404" -}}
+    {{ .Scratch.Set "class" "error404" -}}
+  {{ else if eq .Kind "page" -}}
+    {{ .Scratch.Set "class" .Type -}}
+    {{ .Scratch.Add "class" " single" -}}
+  {{ else -}}
+    {{ .Scratch.Set "class" .Type -}}
+    {{ .Scratch.Add "class" " list" -}}
+  {{ end -}}
+  <body>
+    <header class="py-4 border-b border-gray-200">
+      <div class="max-w-screen-xl mx-auto flex justify-between">
+        <a class="font-bold" href="{{ "/" | relURL }}">{{ .Site.Params.Title }}</a>
+
+        {{ if .Site.Params.options.flexSearch -}}
+          <form class="navbar-form flex-grow-1 order-7 order-md-3">
+            <input id="userinput" class="" type="search" placeholder="Search docs..." aria-label="Search docs..." autocomplete="off">
+            <div id="suggestions" class="shadow bg-white rounded"></div>
+          </form>
+        {{ end -}}
+      </div>
+    </header>
+
+    <div class="max-w-screen-xl mx-auto py-8">
+      {{ block "main" . }}{{ end }}
+    </div>
+
+    <footer class="py-4 border-t border-gray-200">
+      <div class="max-w-screen-xl mx-auto flex justify-between text-gray-600 text-sm">
+        <span>&copy; CodePerfect 95</span>
+        <span>
+          {{ range .Site.Menus.footer -}}
+            <a class="ml-4" href="{{ .URL | relURL }}">{{ .Name }}</a>
+          {{ end -}}
+        </span>
+      </div>
+    </footer>
+
+
+
+  </body>
+</html>

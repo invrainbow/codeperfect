@@ -1,0 +1,11 @@
+[[docs]]
+  name = "Introduction"
+  weight = 10
+  identifier = "introduction"
+  url = "/docs/introduction/"
+
+[[docs]]
+  name = "Help"
+  weight = 60
+  identifier = "help"
+  url = "/docs/help/"
