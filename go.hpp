@@ -473,21 +473,6 @@ enum Walk_Action {
 ccstr _path_join(ccstr a, ...);
 #define path_join(...) _path_join(__VA_ARGS__, NULL)
 
-/*
-enum Import_Location {
-    IMPLOC_GOPATH = 0,
-    IMPLOC_GOROOT = 1,
-    IMPLOC_GOMOD = 2,
-    IMPLOC_VENDOR = 3,
-};
-*/
-
-struct Resolved_Import {
-    ccstr path;
-    ccstr package_name;
-    // Import_Location location_type;
-};
-
 enum Index_Event_Type {
     INDEX_EVENT_FETCH_IMPORTS,
     INDEX_EVENT_REINDEX_PACKAGE,
@@ -1141,6 +1126,7 @@ struct Go_Indexer {
     bool is_flag_set(bool *p);
     void set_flag(bool *p);
 
+    Jump_To_Definition_Result* jump_to_symbol(ccstr symbol);
     Jump_To_Definition_Result* jump_to_definition(ccstr filepath, cur2 pos);
     bool autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period, Autocomplete *out);
     Parameter_Hint *parameter_hint(ccstr filepath, cur2 pos, bool triggered_by_paren);
@@ -1154,10 +1140,8 @@ struct Go_Indexer {
     List<ccstr>* list_source_files(ccstr dirpath, bool include_tests);
     ccstr get_package_name(ccstr path);
     ccstr get_package_path(ccstr import_path);
-    // Resolved_Import* resolve_import(ccstr import_path);
     Parsed_File *parse_file(ccstr filepath, bool use_latest = false);
     void free_parsed_file(Parsed_File *file);
-    ccstr get_workspace_import_path();
     void handle_error(ccstr err);
     u64 hash_package(ccstr resolved_package_path);
     ccstr get_filepath_from_ctx(Go_Ctx *ctx);

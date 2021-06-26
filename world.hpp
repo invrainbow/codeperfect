@@ -419,5 +419,6 @@ void prompt_delete_all_breakpoints();
 void run_proc_the_normal_way(Process* proc, ccstr cmd);
 void* get_native_window_handle();
 bool is_build_debug_free();
+void goto_jump_to_definition_result(Jump_To_Definition_Result *result);
 void handle_goto_definition();
 void save_all_unsaved_files();

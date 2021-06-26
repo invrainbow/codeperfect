@@ -212,7 +212,7 @@ bool list_directory(ccstr folder, list_directory_cb cb) {
         Dir_Entry info;
         info.type = (ent->d_type == DT_DIR ? DIRENT_DIR : DIRENT_FILE);
         strcpy_safe(info.name, _countof(info.name), ent->d_name);
-        cb(&info);
+        if (!cb(&info)) break;
     }
 
     return true;

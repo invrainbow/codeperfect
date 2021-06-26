@@ -161,7 +161,8 @@ struct Dir_Entry {
     char name[MAX_PATH];
 };
 
-typedef fn<void(Dir_Entry*)> list_directory_cb;
+typedef fn<bool(Dir_Entry*)> list_directory_cb;
+
 bool list_directory(ccstr path, list_directory_cb cb);
 
 // TODO: group these into a struct?

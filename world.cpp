@@ -32,38 +32,40 @@ void World::fill_file_tree() {
         File_Tree_Node *last_child = parent->children;
 
         list_directory(path, [&](Dir_Entry *ent) {
-            auto fullpath = path_join(path, ent->name);
-            if (is_ignored_by_git(fullpath))
-                return;
+            do {
+                auto fullpath = path_join(path, ent->name);
+                if (is_ignored_by_git(fullpath)) break;
+                if (streq(ent->name, ".git")) break;
+                if (streq(ent->name, ".ideproj")) break;
+                if (str_ends_with(ent->name, ".exe")) break;
 
-            if (streq(ent->name, ".git")) return;
-            if (streq(ent->name, ".ideproj")) return;
-            if (str_ends_with(ent->name, ".exe")) return;
+                auto file = alloc_object(File_Tree_Node);
+                file->name = our_strcpy(ent->name);
+                file->is_directory = (ent->type & FILE_TYPE_DIRECTORY);
+                file->num_children = 0;
+                file->parent = parent;
+                file->children = NULL;
+                file->depth = depth;
+                file->open = false;
+                file->next = NULL;
 
-            auto file = alloc_object(File_Tree_Node);
-            file->name = our_strcpy(ent->name);
-            file->is_directory = (ent->type & FILE_TYPE_DIRECTORY);
-            file->num_children = 0;
-            file->parent = parent;
-            file->children = NULL;
-            file->depth = depth;
-            file->open = false;
-            file->next = NULL;
+                if (last_child == NULL) {
+                    parent->children = last_child = file;
+                } else {
+                    last_child->next = file;
+                    last_child = file;
+                }
 
-            if (last_child == NULL) {
-                parent->children = last_child = file;
-            } else {
-                last_child->next = file;
-                last_child = file;
-            }
+                parent->num_children++;
 
-            parent->num_children++;
+                if (file->is_directory) {
+                    depth++;
+                    recur(fullpath, file);
+                    depth--;
+                }
+            } while (0);
 
-            if (file->is_directory) {
-                depth++;
-                recur(fullpath, file);
-                depth--;
-            }
+            return true;
         });
     };
 
@@ -392,6 +394,7 @@ void init_goto_symbol() {
     SCOPED_MEM(&world.goto_symbol_mem);
     world.goto_symbol_mem.reset();
 
+    if (!world.indexer.ready) return;
     if (!world.indexer.lock.try_enter()) return;
     defer { world.indexer.lock.leave(); };
 
@@ -617,6 +620,28 @@ bool is_build_debug_free() {
     return true;
 }
 
+void goto_jump_to_definition_result(Jump_To_Definition_Result *result) {
+    auto target = world.get_current_editor();
+    if (target == NULL || !streq(target->filepath, result->file))
+        target = world.focus_editor(result->file);
+
+    if (target == NULL) return;
+
+    auto pos = result->pos;
+    if (world.use_nvim) {
+        if (target->is_nvim_ready()) {
+            if (pos.y == -1) pos = target->offset_to_cur(pos.x);
+            target->move_cursor(pos);
+        } else {
+            target->nvim_data.initial_pos = pos;
+            target->nvim_data.need_initial_pos_set = true;
+        }
+    } else {
+        if (pos.y == -1) pos = target->offset_to_cur(pos.x);
+        target->move_cursor(pos);
+    }
+}
+
 void handle_goto_definition() {
     auto editor = world.get_current_editor();
     if (editor == NULL) return;
@@ -638,25 +663,7 @@ void handle_goto_definition() {
         }
     }
 
-    auto target = editor;
-    if (!streq(editor->filepath, result->file))
-        target = world.focus_editor(result->file);
-
-    if (target == NULL) return;
-
-    auto pos = result->pos;
-    if (world.use_nvim) {
-        if (target->is_nvim_ready()) {
-            if (pos.y == -1) pos = target->offset_to_cur(pos.x);
-            target->move_cursor(pos);
-        } else {
-            target->nvim_data.initial_pos = pos;
-            target->nvim_data.need_initial_pos_set = true;
-        }
-    } else {
-        if (pos.y == -1) pos = target->offset_to_cur(pos.x);
-        target->move_cursor(pos);
-    }
+    goto_jump_to_definition_result(result);
 }
 
 void save_all_unsaved_files() {

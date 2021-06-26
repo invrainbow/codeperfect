@@ -62,3 +62,12 @@ File_Mapping *map_file_into_memory(ccstr path, File_Mapping_Opts *opts) {
 
     return fm;
 }
+
+/*
+bool list_directory(ccstr path, list_directory_cb_void cb) {
+    list_directory(path, [&](Dir_Entry *it) -> bool {
+        cb(it);
+        return true;
+    });
+}
+*/

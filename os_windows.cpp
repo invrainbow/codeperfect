@@ -284,7 +284,7 @@ bool list_directory(ccstr folder, list_directory_cb cb) {
         info.type = (find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ? DIRENT_DIR : DIRENT_FILE);
         strcpy_safe(info.name, _countof(info.name), filename);
 
-        cb(&info);
+        if (!cb(&info)) break;
     } while (FindNextFileW(find, &find_data));
 
     return true;

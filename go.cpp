@@ -550,7 +550,7 @@ void Go_Indexer::background_thread() {
         if (index.current_path != NULL && !streq(index.current_path, world.current_path))
             reset_index = true;
 
-        auto workspace_import_path = get_workspace_import_path();
+        auto workspace_import_path = module_resolver.module_path;
         if (index.current_import_path != NULL && !streq(index.current_import_path, workspace_import_path))
             reset_index = true;
 
@@ -591,19 +591,23 @@ void Go_Indexer::background_thread() {
             bool is_go_package = false;
 
             list_directory(resolved_path, [&](Dir_Entry *ent) {
-                if (ent->type == DIRENT_FILE) {
-                    if (!already_in_index && !is_go_package)
-                        if (str_ends_with(ent->name, ".go"))
-                            if (is_file_included_in_build(path_join(resolved_path, ent->name)))
-                                is_go_package = true;
-                    return;
-                }
+                do {
+                    if (ent->type == DIRENT_FILE) {
+                        if (!already_in_index && !is_go_package)
+                            if (str_ends_with(ent->name, ".go"))
+                                if (is_file_included_in_build(path_join(resolved_path, ent->name)))
+                                    is_go_package = true;
+                        break;
+                    }
 
-                if (streq(ent->name, "vendor")) return;
-                if (streq(ent->name, ".git")) return;
+                    if (streq(ent->name, "vendor")) break;
+                    if (streq(ent->name, ".git")) break;
 
-                import_paths_queue->append(normalize_path_sep(path_join(import_path, ent->name), '/'));
-                resolved_paths_queue->append(path_join(resolved_path, ent->name));
+                    import_paths_queue->append(normalize_path_sep(path_join(import_path, ent->name), '/'));
+                    resolved_paths_queue->append(path_join(resolved_path, ent->name));
+                } while (0);
+
+                return true;
             });
 
             if (!already_in_index) {
@@ -1287,7 +1291,7 @@ Go_Package_Status Go_Indexer::get_package_status(ccstr import_path) {
 ccstr Go_Indexer::get_import_package_name(Go_Import *it) {
     if (it->package_name_type == GPN_EXPLICIT)
         if (it->package_name != NULL)
-            return it->import_path;
+            return it->package_name;
 
     auto pkg = find_up_to_date_package(it->import_path);
     if (pkg != NULL)
@@ -1570,17 +1574,21 @@ bool Go_Indexer::is_flag_set(bool *p) {
 List<ccstr>* Go_Indexer::list_source_files(ccstr dirpath, bool include_tests) {
     auto ret = alloc_list<ccstr>();
 
-    auto save_gofiles = [&](Dir_Entry *ent) {
-        if (ent->type == DIRENT_DIR) return;
-        if (!str_ends_with(ent->name, ".go")) return;
-        if (str_ends_with(ent->name, "_test.go") && !include_tests) return;
+    auto save_gofiles = [&](Dir_Entry *ent) -> bool {
+        do {
+            if (ent->type == DIRENT_DIR) break;
+            if (!str_ends_with(ent->name, ".go")) break;
+            if (str_ends_with(ent->name, "_test.go") && !include_tests) break;
 
-        {
-            SCOPED_FRAME();
-            if (!is_file_included_in_build(path_join(dirpath, ent->name))) return;
-        }
+            {
+                SCOPED_FRAME();
+                if (!is_file_included_in_build(path_join(dirpath, ent->name))) break;
+            }
 
-        ret->append(our_strcpy(ent->name));
+            ret->append(our_strcpy(ent->name));
+        } while (0);
+
+        return true;
     };
 
     return list_directory(dirpath, save_gofiles) ? ret : NULL;
@@ -1593,17 +1601,16 @@ ccstr Go_Indexer::get_package_path(ccstr import_path) {
     auto path = path_join(goroot, import_path);
     if (check_path(path) != CPR_DIRECTORY) return NULL;
     bool is_package = false;
-    list_directory(path, [&](Dir_Entry *ent) {
-        if (!is_package)
-            if (ent->type == DIRENT_FILE)
-                if (str_ends_with(ent->name, ".go"))
-                    is_package = true;
+
+    list_directory(path, [&](Dir_Entry *ent) -> bool {
+        if (ent->type == DIRENT_FILE)
+            if (str_ends_with(ent->name, ".go")) {
+                is_package = true;
+                return false;
+            }
+        return true;
     });
     return is_package ? path : NULL;
-}
-
-ccstr Go_Indexer::get_workspace_import_path() {
-    return module_resolver.module_path;
 }
 
 Goresult *Go_Indexer::find_decl_of_id(ccstr id_to_find, cur2 id_pos, Go_Ctx *ctx, Go_Import **single_import) {
@@ -1816,6 +1823,74 @@ List<Goresult> *Go_Indexer::get_dot_completions(Ast_Node *operand_node, bool *wa
 
     *was_package = false;
     return results;
+}
+
+Jump_To_Definition_Result* Go_Indexer::jump_to_symbol(ccstr symbol) {
+    reload_all_dirty_files();
+
+    char* pkgname = NULL;
+    ccstr rest = NULL;
+
+    {
+        auto dot = strchr(symbol, '.');
+        rest = dot+1;
+
+        auto len = dot - symbol;
+        pkgname = alloc_array(char, len+1);
+        strncpy(pkgname, symbol, len);
+        pkgname[len] = '\0';
+    }
+
+    auto get_godecl_recvname = [&](Godecl *it) -> ccstr {
+        if (it->type != GODECL_FUNC) return NULL;
+        if (it->gotype == NULL) return NULL;
+        if (it->gotype->type != GOTYPE_FUNC) return NULL;
+
+        auto recv = it->gotype->func_recv;
+        if (recv == NULL) return NULL;
+
+        recv = unpointer_type(recv, NULL)->gotype;
+        if (recv->type != GOTYPE_ID) return NULL;
+
+        return recv->id_name;
+    };
+
+    auto base_path = make_path(index.current_import_path);
+
+    For (*index.packages) {
+        {
+            SCOPED_FRAME();
+            if (!base_path->contains(make_path(it.import_path)))
+                continue;
+        }
+
+        if (!streq(it.package_name, pkgname)) continue;
+
+        auto import_path = it.import_path;
+        For (*it.files) {
+            auto filename = it.filename;
+            For (*it.decls) {
+                auto key = it.name;
+                auto recvname = get_godecl_recvname(&it);
+                if (recvname != NULL)
+                    key = our_sprintf("%s.%s", recvname, it.name);
+
+                if (!streq(key, rest)) continue;
+
+                Go_Ctx ctx; ptr0(&ctx);
+                ctx.filename = filename;
+                ctx.import_path = import_path;
+                auto filepath = get_filepath_from_ctx(&ctx);
+
+                auto ret = alloc_object(Jump_To_Definition_Result);
+                ret->file = filepath;
+                ret->pos = it.name_start;
+                return ret;
+            }
+        }
+    }
+
+    return NULL;
 }
 
 Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 pos) {

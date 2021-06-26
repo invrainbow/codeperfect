@@ -550,6 +550,66 @@ int main() {
             return;
         }
 
+        if (world.wnd_goto_symbol.show && world.wnd_goto_symbol.focused) {
+            auto &wnd = world.wnd_goto_symbol;
+
+            auto go_up = [&]() {
+                if (wnd.filtered_results->len == 0) return;
+
+                if (wnd.selection == 0)
+                    wnd.selection = min(wnd.filtered_results->len, settings.open_file_max_results) - 1;
+                else
+                    wnd.selection--;
+            };
+
+            auto go_down = [&]() {
+                if (wnd.filtered_results->len == 0) return;
+
+                wnd.selection++;
+                wnd.selection %= min(wnd.filtered_results->len, settings.open_file_max_results);
+            };
+
+            switch (ev) {
+            case GLFW_PRESS:
+            case GLFW_REPEAT:
+                switch (nmod) {
+                case OUR_MOD_CTRL:
+                    switch (key) {
+                    case GLFW_KEY_J: go_down(); break;
+                    case GLFW_KEY_K: go_up(); break;
+                    }
+                    break;
+                case OUR_MOD_NONE:
+                    switch (key) {
+                    case GLFW_KEY_DOWN: go_down(); break;
+                    case GLFW_KEY_UP: go_up(); break;
+                    case GLFW_KEY_ESCAPE: wnd.show = false; break;
+
+                    case GLFW_KEY_ENTER:
+                        {
+                            wnd.show = false;
+
+                            if (wnd.filtered_results->len == 0) break;
+
+                            if (!world.indexer.ready) break;
+                            if (!world.indexer.lock.try_enter()) return;
+                            defer { world.indexer.lock.leave(); };
+
+                            auto symbol = wnd.symbols->at(wnd.filtered_results->at(wnd.selection));
+                            auto result = world.indexer.jump_to_symbol(symbol);
+                            if (result == NULL) break;
+
+                            goto_jump_to_definition_result(result);
+                        }
+                        break;
+                    }
+                    break;
+                }
+                break;
+            }
+            return;
+        }
+
         auto editor = world.get_current_editor();
 
         auto handle_escape = [&]() -> bool {
