@@ -2515,10 +2515,18 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                 if (pkg == NULL) break;
 
                 auto check = [&](auto it) { return streq(it->filename, ctx.filename); };
-                auto file = pkg->files->find(check);
-                if (file == NULL) break;
+                gofile = pkg->files->find(check);
+                if (gofile == NULL) break;
 
-                For (*file->imports) add_result(get_import_package_name(&it));
+                For (*gofile->imports) {
+                    auto pkgname = get_import_package_name(&it);
+                    add_result(pkgname);
+
+                    auto results = list_package_decls(it.import_path, LISTDECLS_EXCLUDE_METHODS);
+                    if (results != NULL)
+                        For (*results)
+                            add_result(our_sprintf("%s.%s", pkgname, it.decl->name));
+                }
             } while (0);
 
             auto results = list_package_decls(ctx.import_path, LISTDECLS_EXCLUDE_METHODS);
@@ -3309,16 +3317,70 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
     case TS_CONST_DECLARATION:
     case TS_VAR_DECLARATION:
         {
-            Gotype *copied_iota_type = NULL;
-
-            // TODO: handle iota
+            List<Gotype*> *saved_iota_types = NULL;
 
             FOR_NODE_CHILDREN(node) {
                 auto spec = it;
                 auto type_node = spec->field(TSF_TYPE);
                 auto value_node = spec->field(TSF_VALUE);
 
-                if (type_node->null && value_node->null) continue;
+                // !type && !value      try to used saved iota expression
+                // !type && value       infer types from values, try to save iota
+                // type && value        save type from type, try to save iota
+                // type && !value       save type from type
+
+                if (type_node->null && value_node->null) {
+                    do {
+                        if (saved_iota_types == NULL) break;
+
+                        auto ntype = node->type();
+                        if (ntype != TS_CONST_DECLARATION && ntype != TS_VAR_DECLARATION)
+                            break;
+
+                        int i = 0;
+                        FOR_NODE_CHILDREN (spec) {
+                            if (i >= saved_iota_types->len) break;
+                            auto saved_gotype = saved_iota_types->at(i++);
+
+                            auto decl = new_result();
+                            decl->type = (ntype == TS_CONST_DECLARATION ?  GODECL_CONST : GODECL_VAR);
+                            decl->spec_start = spec->start();
+                            decl->name = it->string();
+                            decl->name_start = it->start();
+                            decl->gotype = saved_gotype;
+                            save_decl(decl);
+                        }
+                    } while (0);
+
+                    continue;
+                }
+
+                // at this point, !type_node->null || !value_node->null
+
+                auto has_iota = [&](Ast_Node *node) -> bool {
+                    bool ret = false;
+                    walk_ast_node(node, true, [&](Ast_Node *it, Ts_Field_Type, int) -> Walk_Action {
+                        switch (it->type()) {
+                        case TS_IDENTIFIER:
+                        case TS_FIELD_IDENTIFIER:
+                        case TS_PACKAGE_IDENTIFIER:
+                        case TS_TYPE_IDENTIFIER:
+                            if (streq(it->string(), "iota")) {
+                                ret = true;
+                                return WALK_ABORT;
+                            }
+                            break;
+                        }
+                        return WALK_CONTINUE;
+                    });
+                    return ret;
+                };
+
+                bool should_save_iota_types = (
+                    saved_iota_types == NULL
+                    && !value_node->null
+                    && has_iota(value_node)
+                );
 
                 Gotype *type_node_gotype = NULL;
                 if (!type_node->null) {
@@ -3330,6 +3392,9 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
                         t->variadic_base = type_node_gotype;
                         type_node_gotype = t;
                     }
+
+                    if (should_save_iota_types)
+                        saved_iota_types = alloc_list<Gotype*>();
 
                     FOR_NODE_CHILDREN (spec) {
                         if (it->eq(type_node) || it->eq(value_node)) break;
@@ -3347,6 +3412,9 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
                         decl->name_start = it->start();
                         decl->gotype = type_node_gotype;
                         save_decl(decl);
+
+                        if (should_save_iota_types)
+                            saved_iota_types->append(type_node_gotype);
                     }
                 } else {
                     our_assert(value_node->type() == TS_EXPRESSION_LIST, "rhs must be a TS_EXPRESSION_LIST");
@@ -3380,10 +3448,17 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
                         return decl;
                     };
 
+                    if (should_save_iota_types)
+                        saved_iota_types = alloc_list<Gotype*>();
+
                     auto old_len = results->len;
                     assignment_to_decls(lhs, rhs, new_godecl);
-                    for (u32 i = old_len; i < results->len; i++)
-                        save_decl(results->items + i);
+                    for (u32 i = old_len; i < results->len; i++) {
+                        auto it = results->items + i;
+                        save_decl(it);
+                        if (should_save_iota_types)
+                            saved_iota_types->append(it->gotype);
+                    }
                 }
             }
         }

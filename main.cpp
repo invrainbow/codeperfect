@@ -1277,10 +1277,6 @@ int main() {
 
         {
             // Send info to UI and ImGui.
-
-            // TODO: Send info to UI.
-
-            // TODO: do we need to do this every frame?
             io.DisplaySize = ImVec2((float)world.window_size.x, (float)world.window_size.y);
             io.DisplayFramebufferScale = ImVec2(world.display_scale.x, world.display_scale.y);
 
