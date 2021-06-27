@@ -611,6 +611,7 @@ struct Godecl {
     cur2 spec_start;
     cur2 name_start;
     ccstr name;
+    bool is_embedded; // for GODECL_FIELD
 
     union {
         Gotype *gotype;
@@ -629,13 +630,9 @@ struct Go_Func_Sig {
 
 // used for or interfaces too
 struct Go_Struct_Spec {
-    bool is_embedded;
+    // bool is_embedded; // use field->name == NULL instead
     ccstr tag;
-
-    union {
-        Godecl *field;
-        Gotype *embedded_type;
-    };
+    Godecl *field;
 
     Go_Struct_Spec *copy();
     void read(Index_Stream *s);

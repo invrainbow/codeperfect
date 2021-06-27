@@ -290,12 +290,8 @@ void UI::render_gotype(Gotype *gotype, ccstr field) {
                 for (u32 i = 0; i < specs->len; i++) {
                     auto it = &specs->items[i];
                     if (ImGui::TreeNodeEx(it, flags, "spec %d", i)) {
-                        ImGui::Text("is_embedded: %d", it->is_embedded);
                         ImGui::Text("tag: %s", it->tag);
-                        if (it->is_embedded)
-                            render_gotype(it->embedded_type);
-                        else
-                            render_godecl(it->field);
+                        render_godecl(it->field);
                         ImGui::TreePop();
                     }
                 }

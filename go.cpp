@@ -23,7 +23,7 @@
 #endif
 
 const unsigned char GO_INDEX_MAGIC_BYTES[3] = {0x49, 0xfa, 0x98};
-const int GO_INDEX_VERSION = 2;
+const int GO_INDEX_VERSION = 4;
 
 void index_print(ccstr fmt, ...) {
     va_list args;
@@ -2685,16 +2685,18 @@ void Go_Indexer::list_fields_and_methods(Goresult *type_res, Goresult *resolved_
     case GOTYPE_STRUCT:
     case GOTYPE_INTERFACE:
         {
-            // technically point the same place, but want to be semantically correct
+            // technically point the the same place in memeory, but want to be semantically correct
             auto specs = resolved_type->type == GOTYPE_STRUCT ? resolved_type->struct_specs : resolved_type->interface_specs;
             For (*specs) {
-                if (it.is_embedded) {
-                    auto res = resolve_type(it.embedded_type, resolved_type_res->ctx);
+                // recursively list methods for embedded fields
+                if (it.field->is_embedded) {
+                    auto embedded_type = it.field->gotype;
+                    auto res = resolve_type(embedded_type, resolved_type_res->ctx);
                     if (res == NULL) continue;
-                    list_fields_and_methods(make_goresult(it.embedded_type, resolved_type_res->ctx), res, ret);
-                } else {
-                    ret->append(make_goresult(it.field, resolved_type_res->ctx));
+                    list_fields_and_methods(make_goresult(embedded_type, resolved_type_res->ctx), res, ret);
                 }
+
+                ret->append(make_goresult(it.field, resolved_type_res->ctx));
             }
         }
         break;
@@ -3045,7 +3047,10 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node) {
 
                 auto tag_node = field_node->field(TSF_TAG);
                 auto type_node = field_node->field(TSF_TYPE);
+                if (type_node->null) continue;
+
                 auto field_type = node_to_gotype(type_node);
+                if (field_type == NULL) continue;
 
                 bool names_found = false;
                 FOR_NODE_CHILDREN (field_node) {
@@ -3057,13 +3062,6 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node) {
                     FOR_NODE_CHILDREN (field_node) {
                         if (it->eq(type_node)) break;
 
-                        auto spec = ret->struct_specs->append();
-
-                        if (!tag_node->null)
-                            spec->tag = tag_node->string();
-
-                        spec->is_embedded = false;
-
                         auto field = alloc_object(Godecl);
                         field->type = GODECL_FIELD;
                         field->gotype = field_type;
@@ -3073,14 +3071,39 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node) {
                         field->decl_start = field_node->start();
                         field->decl_end = field_node->end();
 
+                        auto spec = ret->struct_specs->append();
                         spec->field = field;
+                        if (!tag_node->null)
+                            spec->tag = tag_node->string();
                     }
                 } else {
+                    auto unptr_type = unpointer_type(field_type, NULL)->gotype;
+                    ccstr field_name = NULL;
+
+                    switch (unptr_type->type) {
+                    case GOTYPE_SEL:
+                        field_name = unptr_type->sel_sel;
+                        break;
+                    case GOTYPE_ID:
+                        field_name = unptr_type->id_name;
+                        break;
+                    }
+
+                    if (field_name == NULL) continue;
+
+                    auto field = alloc_object(Godecl);
+                    field->type = GODECL_FIELD;
+                    field->is_embedded = true;
+                    field->gotype = field_type;
+                    field->spec_start = type_node->start();
+                    field->decl_start = type_node->start();
+                    field->decl_end = type_node->end();
+                    field->name = field_name;
+
                     auto spec = ret->struct_specs->append();
+                    spec->field = field;
                     if (!tag_node->null)
                         spec->tag = tag_node->string();
-                    spec->is_embedded = true;
-                    spec->embedded_type = field_type;
                 }
             }
         }
@@ -3102,23 +3125,32 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node) {
 
             FOR_NODE_CHILDREN (speclist_node) {
                 auto spec = ret->interface_specs->append();
-                if (it->type() == TS_METHOD_SPEC) {
-                    spec->is_embedded = false;
+                auto field = alloc_object(Godecl);
+                spec->field = field;
 
-                    auto field = alloc_object(Godecl);
+                if (it->type() == TS_METHOD_SPEC) {
+                    auto name_node = it->field(TSF_NAME);
+
                     field->type = GODECL_FIELD;
-                    field->name = it->field(TSF_NAME)->string();
+                    field->name = name_node->string();
                     field->gotype = new_gotype(GOTYPE_FUNC);
+                    field->decl_start = it->start();
+                    field->decl_end =  it->end();
+                    field->spec_start = it->start();
+                    field->name_start = name_node->start();
+
                     node_func_to_gotype_sig(
                         it->field(TSF_PARAMETERS),
                         it->field(TSF_RESULT),
                         &field->gotype->func_sig
                     );
-
-                    spec->field = field;
                 } else {
-                    spec->is_embedded = true;
-                    spec->embedded_type = node_to_gotype(it);
+                    field->type = GODECL_FIELD;
+                    field->name = NULL; // embedded
+                    field->gotype = node_to_gotype(it);
+                    field->spec_start = it->start();
+                    field->decl_start = it->start();
+                    field->decl_end = it->end();
                 }
             }
         }
@@ -4343,10 +4375,7 @@ Godecl *Godecl::copy() {
 Go_Struct_Spec *Go_Struct_Spec::copy() {
     auto ret = clone(this);
     ret->tag = our_strcpy(tag);
-    if (is_embedded)
-        ret->embedded_type = copy_object(embedded_type);
-    else
-        ret->field = copy_object(field);
+    ret->field = copy_object(field);
     return ret;
 }
 
@@ -4514,10 +4543,7 @@ void Godecl::read(Index_Stream *s) {
 
 void Go_Struct_Spec::read(Index_Stream *s) {
     READ_STR(tag);
-    if (is_embedded)
-        READ_OBJ(embedded_type);
-    else
-        READ_OBJ(field);
+    READ_OBJ(field);
 }
 
 void Go_Import::read(Index_Stream *s) {
@@ -4659,10 +4685,7 @@ void Godecl::write(Index_Stream *s) {
 
 void Go_Struct_Spec::write(Index_Stream *s) {
     WRITE_STR(tag);
-    if (is_embedded)
-        WRITE_OBJ(embedded_type);
-    else
-        WRITE_OBJ(field);
+    WRITE_OBJ(field);
 }
 
 void Go_Import::write(Index_Stream *s) {
