@@ -1,19 +1,19 @@
 {{ define "main" }}
-  <div class="flex relative space-x-8">
-    <div class="w-48 sticky top-4 left-0 self-start">
+  <div class="grid relative" style="grid-template-columns: 250px auto 200px">
+    <div class="py-8 pr-8">
       <nav class="">
 				{{ $currentPage := . -}}
 				{{ range .Site.Menus.docs -}}
-					<div class="mb-6">
-						<h3 class="font-bold mb-1">{{ .Name }}</h3>
+					<div class="mb-8 leading-8">
+						<h3 class="mb-2 font-bold text-gray-500 uppercase text-sm tracking-wide">{{ .Name }}</h3>
 						{{ if .HasChildren -}}
-							<ul>
+							<ul class="p-0">
 								{{ range .Children -}}
 									{{- $active := or ($currentPage.IsMenuCurrent "docs" .) ($currentPage.HasMenuCurrent "docs" .) -}}
 									{{- $active = or $active (eq $currentPage.Section .Identifier) -}}
-									<li>
+									<li class="list-none">
 										<a
-											class="docs-link{{ if $active }} active{{ end }}"
+											class="{{ if $active }}active{{ end }} text-gray-300 hover:text-gray-200"
 											href="{{ .URL | relURL }}"
 											>{{ .Name }}</a
 										>
@@ -26,7 +26,8 @@
       </nav>
     </div>
 
-    <main class="flex-grow w-auto">
+    <main class="flex-grow w-auto p-8 h-full border-l border-gray-700">
+      <!--
       {{ if .Site.Params.options.breadCrumb -}}
         <nav aria-label="breadcrumb">
           <ol class="breadcrumb">
@@ -35,34 +36,41 @@
           </ol>
         </nav>
       {{ end }}
+      -->
 
-      <h1>{{ .Title }}</h1>
-      <p class="lead">{{ .Params.lead | safeHTML }}</p>
+      <h1 class="mb-4">{{ .Title }}</h1>
+      <p class="lead text-xl leading-relaxed text-gray-400 mb-10">{{ .Params.lead | safeHTML }}</p>
 
-      {{ .Content | replaceRE "(<h[2-9] id=\"([^\"]+)\".+)(</h[2-9]+>)" `${1}<a href="#${2}" class="anchor" aria-hidden="true">#</a> ${3}` | safeHTML }}
+      {{ .Content | replaceRE "(<h[2-9] id=\"([^\"]+)\".+)(</h[2-9]+>)" `<a href="#${2}" class="anchor" aria-hidden="true">${1}${3}</a>` | safeHTML }}
 
       {{ if or .Prev .Next -}}
-        <div class="flex justify-between mt-12">
+        <div class="flex justify-between mt-20">
           <!-- https://www.feliciano.tech/blog/custom-sort-hugo-single-pages/ -->
           {{ $pages := where site.RegularPages "Section" .Section -}}
-          {{ with $pages.Next . -}}
-            <a href="{{ .RelPermalink }}">
-              &larr; {{ .Title }}
-            </a>
-          {{ end -}}
-          {{ with $pages.Prev . -}}
-            <a class="ms-auto" href="{{ .RelPermalink }}">
-              {{ .Title }} &rarr;
-            </a>
-          {{ end -}}
+
+          <span>
+            {{ with $pages.Next . -}}
+              <a href="{{ .RelPermalink }}" class="border border-gray-500 py-2 px-4 rounded-md shadow-sm text-gray-400 hover:text-gray-200 hover:border-gray-400 select-none">
+                &larr; {{ .Title }}
+              </a>
+            {{ end -}}
+          </span>
+
+          <span>
+            {{ with $pages.Prev . -}}
+              <a href="{{ .RelPermalink }}" class="border border-gray-500 py-2 px-4 rounded-md shadow-sm text-gray-400 hover:text-gray-200 hover:border-gray-400 select-none">
+                {{ .Title }} &rarr;
+              </a>
+            {{ end -}}
+          </span>
         </div>
       {{ end -}}
     </main>
 
-    <nav class="sticky top-4 right-0 self-start w-48 bg-gray-100 p-2">
+    <nav class="py-8">
 			{{ if ne .Params.toc false -}}
-				<div class="page-links">
-					<h3>On this page</h3>
+				<div class="sticky top-8 right-0 page-links leading-7 pl-6 border-l border-gray-700">
+					<h3 class="mb-2">On this page</h3>
 					{{ .TableOfContents }}
 				</div>
 			{{ end -}}

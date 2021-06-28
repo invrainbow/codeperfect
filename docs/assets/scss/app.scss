@@ -1,3 +1,86 @@
 @import "node_modules/tailwindcss/base";
 @import "node_modules/tailwindcss/components";
 @import "node_modules/tailwindcss/utilities";
+
+@import url("https://fonts.googleapis.com/css2?family=Oxygen:wght@300;400;700&display=swap");
+@import url('https://fonts.googleapis.com/css2?family=Crimson+Text:wght@400;600&display=swap');
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", "Oxygen", -apple-system, BlinkMacSystemFont, "Roboto",
+    "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: #151515;
+  @apply text-gray-300;
+}
+
+pre, code {
+  border-radius: 8px;
+  background: #111;
+  border: solid 1px #444;
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
+}
+
+code {
+  font-size: 85%;
+  border-radius: 4px;
+  padding: 1px 4px;
+  display: inline-block;
+}
+
+pre {
+  padding: 0.75rem;
+}
+
+pre > code {
+  background: none;
+  border: 0;
+  padding: 0;
+}
+
+h1,
+h2,
+h3 {
+  font-weight: bold;
+}
+
+h1 { font-size: 250%; @apply text-gray-100 }
+h2 { font-size: 170%; @apply text-gray-200 }
+h3 { font-size: 110%; @apply text-gray-300 }
+
+h1, h2 {
+  font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, "Roboto",
+    "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
+    sans-serif;
+}
+h1, h2, h3, p, ul, ol, blockquote, pre {
+  margin-bottom: 1.5rem;
+}
+h1, h2, h3 {
+  &:first-child {
+    line-height: 1;
+  }
+}
+
+ul, ol {
+  padding-left: 2.25rem;
+  li {
+    list-style-type: disc;
+  }
+}
+
+#TableOfContents {
+  ul {
+    margin: 0;
+    margin-left: 1.5rem;
+    padding-left: 0;
+    li {
+      list-style-type: none;
+    }
+  }
+  & > ul {
+    margin-left: 0;
+  }
+}

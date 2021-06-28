@@ -1,0 +1,22 @@
+# Overview
+ - Getting started
+
+# Building
+
+# Debugging
+
+# Auto format
+
+# Code Intelligence
+ - Automatic completion
+ - Jump to definition
+ - Parameter hints
+ - Postfix completion
+
+# Navigating
+ - Go to file
+ - Go to declaration
+
+# Refactoring
+ - Rename a declaration
+ - Generate Rename a declaration
