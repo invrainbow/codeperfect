@@ -37,14 +37,12 @@
 
       <main class="flex-grow w-auto p-8 h-full border-l border-gray-700">
         <!--
-        {{ if .Site.Params.options.breadCrumb -}}
-          <nav aria-label="breadcrumb">
-            <ol class="breadcrumb">
-              {{ partial "main/breadcrumb" . -}}
-              <li class="inline">{{ .Title }}</li>
-            </ol>
-          </nav>
-        {{ end }}
+        <nav aria-label="breadcrumb">
+          <div class="breadcrumb">
+            {{ partial "main/breadcrumb" . -}}
+            <span class="inline">{{ .Title }}</span>
+          </div>
+        </nav>
         -->
 
         <h1 class="mb-4">{{ .Title }}</h1>

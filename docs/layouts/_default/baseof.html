@@ -33,29 +33,26 @@
     {{ .Scratch.Set "class" .Type -}}
     {{ .Scratch.Add "class" " list" -}}
   {{ end -}}
+
   <body>
-    <header class="py-4">
+    <header class="py-6">
       <div class="max-w-screen-xl px-4 mx-auto flex justify-between">
         <a class="font-bold text-white text-lg" href="/">
           CodePerfect 95
           <span class="font-bold text-gray-400 text-base ml-1">Docs</span>
         </a>
 
-        {{ if .Site.Params.options.flexSearch -}}
-          <form class="flex-grow-1">
-            <input id="userinput" class="w-64 text-sm bg-transparent border border-gray-700 rounded-md py-1 px-3 outline-none focus:border-gray-400" type="text" placeholder="Search docs..." autocomplete="off">
-            <div id="suggestions" class="shadow rounded"></div>
-          </form>
-        {{ end -}}
+        <form class="flex-grow-1">
+          <input id="userinput" class="w-64 text-sm bg-transparent border border-gray-700 rounded-md py-1 px-3 outline-none focus:border-gray-400" type="text" placeholder="Search docs..." autocomplete="off">
+          <div id="suggestions" class="shadow rounded"></div>
+        </form>
       </div>
     </header>
 
-    <div>
-      {{ block "main" . }}{{ end }}
-    </div>
+    <div>{{ block "main" . }}{{ end }}</div>
 
-    <footer class="py-4">
-      <div class="max-w-screen-xl mx-auto flex justify-between text-gray-600 text-sm">
+    <footer class="py-6">
+      <div class="max-w-screen-xl px-4 mx-auto flex justify-between text-gray-600 text-sm">
         <span>&copy; CodePerfect 95</span>
         <span>
           {{ range .Site.Menus.footer -}}
@@ -64,8 +61,6 @@
         </span>
       </div>
     </footer>
-
-
 
   </body>
 </html>

@@ -26,8 +26,9 @@ pre, code {
 
 code {
   font-size: 85%;
-  border-radius: 4px;
-  padding: 1px 4px;
+  border-radius: 6px;
+  line-height: 1;
+  padding: 3px 6px;
   display: inline-block;
 }
 
@@ -84,4 +85,19 @@ ul, ol {
   & > ul {
     margin-left: 0;
   }
+}
+
+kbd {
+  border-radius: 8px;
+  background: #111;
+  border: solid 1px #444;
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 85%;
+  line-height: 1;
+  padding: 4px 6px;
+  display: inline-block;
+}
+
+img {
+  @apply border bg-gray-700 border-gray-600 rounded-md overflow-hidden shadow-sm;
 }
