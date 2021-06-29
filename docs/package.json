@@ -30,7 +30,6 @@
     "hugo-installer": "^3.0.1",
     "instant.page": "^5.1",
     "lazysizes": "^5.3",
-    "markdownlint-cli": "^0.27",
     "mermaid": "^8.10.2",
     "purgecss-whitelister": "^2.4",
     "shx": "^0.3.3",

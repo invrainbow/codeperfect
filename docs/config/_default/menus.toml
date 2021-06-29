@@ -1,11 +1,53 @@
 [[docs]]
-  name = "Overview"
-  weight = 10
-  identifier = "overview"
-  url = "/docs/Overview/"
+name = "Overview"
+weight = 10
+identifier = "overview"
+url = "/overview"
 
 [[docs]]
-  name = "Help"
-  weight = 60
-  identifier = "help"
-  url = "/docs/help/"
+name = "Building"
+weight = 20
+identifier = "building"
+url = "/building"
+
+[[docs]]
+name = "Debugging"
+weight = 30
+identifier = "debugging"
+url = "/debugging"
+
+[[docs]]
+name = "Editor"
+weight = 40
+identifier = "editor"
+url = "/editor"
+
+[[docs]]
+name = "Code Intelligence"
+weight = 50
+identifier = "code-intelligence"
+url = "/code-intelligence"
+
+[[docs]]
+name = "Navigation"
+weight = 60
+identifier = "navigation"
+url = "/navigation"
+
+[[docs]]
+name = "Refactoring"
+weight = 70
+identifier = "refactoring"
+url = "/refactoring"
+
+[[docs]]
+name = "Commands"
+weight = 80
+identifier = "commands"
+url = "/commands"
+
+[[docs]]
+name = "Productivity"
+weight = 90
+identifier = "productivity"
+url = "/productivity"

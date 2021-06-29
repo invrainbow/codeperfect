@@ -10,6 +10,7 @@ body {
   font-family: "Segoe UI", "Oxygen", -apple-system, BlinkMacSystemFont, "Roboto",
     "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
     sans-serif;
+  line-height: 1.8;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background: #151515;
@@ -46,9 +47,9 @@ h3 {
   font-weight: bold;
 }
 
-h1 { font-size: 250%; @apply text-gray-100 }
-h2 { font-size: 170%; @apply text-gray-200 }
-h3 { font-size: 110%; @apply text-gray-300 }
+h1 { font-size: 250%; }
+h2 { font-size: 170%; }
+h3 { font-size: 110%; }
 
 h1, h2 {
   font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, "Roboto",

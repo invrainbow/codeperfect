@@ -1,8 +1,15 @@
 {{ define "main" }}
-  <div class="text-center p-8">
-    what the fuck lmao write something here
-    <br>
-    <br>
-    <a href="{{ "docs/overview/getting-started/" | relURL }}">Get Started</a>
+  <div class="text-center p-8 py-36">
+    <div>
+      Welcome the docs for CodePerfect 95.
+    </div>
+    <div class="mt-8">
+      <a
+        class="select-none inline-block py-3 px-6 border-gray-400 border rounded-md shadow-sm text-xl"
+        href="{{ "docs/overview/getting-started/" | relURL }}"
+      >
+        Get Started
+      </a>
+    </div>
   </div>
 {{ end }}
