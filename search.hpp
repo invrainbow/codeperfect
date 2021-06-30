@@ -7,19 +7,22 @@
 #include "list.hpp"
 
 struct Search_Result {
-    u32 match_col;
-    u32 match_col_in_preview;
-    u32 match_len;
+    ccstr match;
+    s32 match_len;
+    cur2 match_start;
+    cur2 match_end;
+
     ccstr preview;
-    u32 row;
-    u32 results_in_row;
+    s32 preview_len;
+    cur2 preview_start;
+    cur2 preview_end;
+
     ccstr filename;
 };
 
 struct Search_Opts {
     bool case_sensitive;
     bool literal;
-
 };
 
 struct Searcher {
@@ -48,7 +51,7 @@ struct Searcher {
     void precompute_crap_for_literal_search();
     void precompute_crap_for_regex_search();
     int boyer_moore_strnstr(ccstr buf, int off, s32 slen);
-    int search_buf(ccstr buf, s32 buflen);
+    void search_buf(ccstr buf, s32 buflen, ccstr filename);
 
     inline bool chars_eq(char a, char b) {
         if (opts.case_sensitive)

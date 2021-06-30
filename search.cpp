@@ -19,7 +19,7 @@ int Searcher::boyer_moore_strnstr(ccstr buf, int off, s32 slen) {
     return -1;
 }
 
-int Searcher::search_buf(ccstr buf, s32 buflen) {
+void Searcher::search_buf(ccstr buf, s32 buflen, ccstr filename) {
     s32 buf_offset = 0;
 
     struct Temp_Match {
@@ -28,13 +28,6 @@ int Searcher::search_buf(ccstr buf, s32 buflen) {
     };
 
     auto matches = alloc_list<Temp_Match>();
-
-    auto add_match = [&](int start, int end) {
-        auto m = matches->append();
-        m->start = start;
-        m->end = end;
-        return m;
-    };
 
     if (opts.literal) {
         while (buf_offset < buflen) {
@@ -60,8 +53,66 @@ int Searcher::search_buf(ccstr buf, s32 buflen) {
         }
     }
 
-    // we've got matches, now what?
-    return 0;
+    if (matches->len == 0) return;
+
+    int curr_match = 0;
+    int line = 0;
+    int col = 0;
+
+    Search_Result *sr = NULL;
+    int matchoff = 0;
+
+    SCOPED_LOCK(&lock);
+
+    // convert temp matches into search results
+    for (int i = 0; i < buflen; i++) {
+        auto it = buf[i];
+
+        auto &nextmatch = matches->at(curr_match);
+        if (i == nextmatch.start) {
+            matchoff = i;
+
+            sr = search_results.append();
+            sr->filename = filename;
+            sr->match_start = new_cur2(col, line);
+        }
+
+        if (i == nextmatch.end) {
+            sr->match_len = i - matchoff;
+            sr->match_end = new_cur2(col, line);
+            sr->match = our_strncpy(&buf[matchoff], sr->match_len);
+
+            sr->preview_start = sr->match_start;
+            sr->preview_end = sr->match_end;
+            sr->preview_len = sr->match_len;
+
+            auto prevoff = matchoff;
+
+            int to_left = min((80 - sr->preview_len) / 2, min(sr->preview_start.x, 10));
+
+            prevoff -= to_left;
+            sr->preview_start.x -= to_left;
+            sr->preview_len += to_left;
+
+            int to_right = 0;
+            for (int k = i; sr->preview_len < 80 && buf[k] != '\n' && k < buflen; k++)
+                to_right++;
+
+            sr->preview_len += to_right;
+            sr->preview_end.x += to_right;
+            sr->preview = our_strncpy(&buf[prevoff], sr->preview_len);
+
+            if (++curr_match >= matches->len)
+                break;
+        }
+
+        if (it == '\n') {
+            line++;
+            col = 0;
+        } else {
+            col++;
+        }
+    }
 }
 
 void Searcher::precompute_crap_for_literal_search() {
@@ -113,7 +164,7 @@ void Searcher::precompute_crap_for_regex_search() {
 
     // TODO: surface error
     /*
-    die("Bad regex! pcre_compile() failed at position %i: %s\nIf you meant to search for a literal string, run ag with -Q",
+    die("Bad regex! pcre_compile() failed at position %i: %s",
         pcre_err_offset,
         pcre_err);
     */
@@ -180,5 +231,4 @@ void Searcher::init(ccstr _query, Search_Opts *_opts) {
         // TODO: handle error
         in_progress = false;
     }
-
 }
