@@ -178,6 +178,7 @@ void World::init() {
     init_mem(ui_mem);
     init_mem(message_queue_mem);
     init_mem(index_log_mem);
+    init_mem(search_mem);
 #undef init_mem
 
     // use frame_mem as the default mem

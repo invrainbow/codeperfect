@@ -1851,29 +1851,17 @@ void UI::draw_everything() {
         ImGui::SetNextWindowDockID(dock_sidebar_id, ImGuiCond_Always);
         ImGui::Begin("Search Results", &world.search_results.show);
 
-        For (world.search_results.results) {
-            SCOPED_FRAME();
-
-            auto flags = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_SpanFullWidth;
-            ImGui::TreeNodeEx(it, flags, "%s:%d:%d %s", it->filename, it->row, it->match_col+1, it->preview);
-            if (ImGui::IsItemClicked()) {
-                SCOPED_FRAME();
-                auto path = path_join(world.current_path, it->filename);
-                auto pos = new_cur2(it->match_col, it->row-1);
-                world.focus_editor(path, pos);
-            }
-
-            // use following to highlight match
-            /*
-            len = strlen(it->preview);
-            for (u32 i = 0; i < len && pos.x < sidebar_area.w; i++) {
-                auto color = rgba(COLOR_WHITE);
-                if (it->match_col_in_preview <= i && i < it->match_col_in_preview + it->match_len)
-                    color = rgba(COLOR_LIME);
-                draw_char(&pos, it->preview[i], color);
-            }
-            */
+        // TODO
+        // use following to highlight match
+        /*
+        len = strlen(it->preview);
+        for (u32 i = 0; i < len && pos.x < sidebar_area.w; i++) {
+            auto color = rgba(COLOR_WHITE);
+            if (it->match_col_in_preview <= i && i < it->match_col_in_preview + it->match_len)
+                color = rgba(COLOR_LIME);
+            draw_char(&pos, it->preview[i], color);
         }
+        */
 
         ImGui::End();
     }
@@ -2284,59 +2272,13 @@ void UI::draw_everything() {
         ImGui::Separator();
 
         if (ImGui::Button("Search for All")) {
-            world.search_results.mem.cleanup();
-            run_proc_the_normal_way(
-                &world.jobs.search.proc,
-                our_sprintf("ag --ackmate %s %s \"%s\"", wnd.use_regex ? "" : "-Q", wnd.case_sensitive ? "-s" : "", wnd.find_str)
-            );
-            world.jobs.flag_search = true;
+            // TODO
         }
 
         ImGui::SameLine();
 
         if (ImGui::Button("Replace All")) {
-            // TODO: some kind of permanent settings system
-            // so we can save things like "don't show this popup again"
-            ImGui::OpenPopup("Really replace?");
-        }
-
-        if (world.jobs.search_and_replace.signal_done) {
-            world.jobs.search_and_replace.signal_done = false;
-            ImGui::OpenPopup("Done");
-        }
-
-        ImGui::SetNextWindowSize(ImVec2(450, -1));
-        if (ImGui::BeginPopupModal("Really replace?", NULL, ImGuiWindowFlags_NoResize)) {
-            ImGui::TextWrapped("Pressing this button will automatically, irreversibly perform the text replacement you requested.");
-            ImGui::TextWrapped("If you make a mistake, we trust your version control system will save you.");
-            ImGui::TextWrapped("To preview your changes before replacing, click Find All first.");
-            ImGui::TextWrapped("We won't show this warning again.");
-            ImGui::NewLine();
-            if (ImGui::Button("Ok, replace all")) {
-                run_proc_the_normal_way(
-                    &world.jobs.search_and_replace.proc,
-                    our_sprintf("ag -g \"\" | xargs sed -i \"s/%s/%s/g\"", wnd.find_str, wnd.replace_str)
-                );
-                world.jobs.flag_search_and_replace = true;
-                ImGui::CloseCurrentPopup();
-            }
-
-            ImGui::SameLine();
-            if (ImGui::Button("Cancel")) {
-                ImGui::CloseCurrentPopup();
-            }
-
-            ImGui::EndPopup();
-        }
-
-        ImGui::SetNextWindowSize(ImVec2(450, -1));
-        if (ImGui::BeginPopupModal("Done", NULL, ImGuiWindowFlags_NoResize)) {
-            ImGui::TextWrapped("Replace operation has completed.");
-            ImGui::NewLine();
-            if (ImGui::Button("Ok")) {
-                ImGui::CloseCurrentPopup();
-            }
-            ImGui::EndPopup();
+            // TODO
         }
 
         ImGui::End();

@@ -1221,56 +1221,6 @@ int main() {
             world.message_queue.len = 0;
         }
 
-        {
-            // Check jobs.
-
-            if (world.jobs.flag_search) {
-                auto& job = world.jobs.search;
-                auto& proc = job.proc;
-                auto& search_results = world.search_results;
-
-                switch (proc.status()) {
-                case PROCESS_ERROR:
-                    world.jobs.flag_search = false;
-                    search_results.cleanup();
-                    proc.cleanup();
-                    break;
-                case PROCESS_DONE:
-                    world.jobs.flag_search = false;
-                    search_results.cleanup();
-                    search_results.init();
-
-                    /*
-                    General_Parser parser;
-                    parser.init(&proc);
-                    {
-                        SCOPED_MEM(&search_results.pool);
-                        parser.parse_find_results();
-                    }
-                    */
-
-                    world.search_results.show = true;
-                    proc.cleanup();
-                    break;
-                }
-            }
-
-            if (world.jobs.flag_search_and_replace) {
-                auto& job = world.jobs.search_and_replace;
-                auto& proc = job.proc;
-
-                switch (proc.status()) {
-                case PROCESS_DONE:
-                    job.signal_done = true;
-                    // fallthrough
-                case PROCESS_ERROR:
-                    world.jobs.flag_search_and_replace = false;
-                    proc.cleanup();
-                    break;
-                }
-            }
-        }
-
         glDisable(GL_SCISSOR_TEST);
         glClearColor(COLOR_BG.r, COLOR_BG.g, COLOR_BG.b, 1.0);
         glClear(GL_COLOR_BUFFER_BIT);
