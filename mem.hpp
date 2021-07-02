@@ -157,6 +157,10 @@ struct Pool {
         obsolete_blocks.len = 0;
         curr = NULL;
         mem_allocated = 0;
+
+        obsolete_blocks.cleanup();
+        used_blocks.cleanup();
+        unused_blocks.cleanup();
     }
 
     void request_new_block() {

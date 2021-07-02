@@ -946,7 +946,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
 
                 editor->nvim_data.grid_topline = args.topline;
 
-                nvim_print("got cursor change to %s", format_pos(new_cur2((u32)args.curcol, (u32)args.curline)));
+                nvim_print("got cursor change to %s", format_cur(new_cur2((u32)args.curcol, (u32)args.curline)));
 
                 /*
                 auto should_move_cursor = [&]() -> bool {

@@ -1260,7 +1260,7 @@ void write_list(L arr, Index_Stream *s) {
     For (*arr) write_object(&it, s);
 }
 
-ccstr format_pos(cur2 pos);
+ccstr format_cur(cur2 c);
 
 typedef struct _GH_Build_Error {
     char* text;

@@ -5,19 +5,28 @@
 #include "os.hpp"
 #include "common.hpp"
 #include "list.hpp"
+#include "mem.hpp"
 
 struct Search_Result {
     ccstr match;
     s32 match_len;
     cur2 match_start;
     cur2 match_end;
+    s32 match_off;
 
     ccstr preview;
     s32 preview_len;
     cur2 preview_start;
     cur2 preview_end;
 
-    ccstr filename;
+    int match_offset_in_preview;
+
+    List<ccstr> *groups;
+};
+
+struct Search_File {
+    ccstr filepath;
+    List<Search_Result> *results;
 };
 
 struct Search_Opts {
@@ -25,9 +34,23 @@ struct Search_Opts {
     bool literal;
 };
 
-struct Searcher {
-    bool in_progress;
+enum Searcher_State {
+    SEARCH_NOTHING_HAPPENING = 0,
+    SEARCH_SEARCH_IN_PROGRESS,
+    SEARCH_REPLACE_IN_PROGRESS,
+    SEARCH_DONE,
+};
 
+struct Searcher {
+    Pool mem; // orchestration
+    Pool final_mem; // results
+
+    bool mem_active;
+    bool final_mem_active;
+
+    Searcher_State state;
+
+    Search_Opts opts;
     ccstr query;
     s32 qlen;
 
@@ -39,19 +62,18 @@ struct Searcher {
     pcre *re;
     pcre_extra *re_extra;
 
-    Search_Opts opts;
-
-    List<Search_Result> search_results;
-    Thread_Handle thread;
     List<ccstr> file_queue;
-    Lock lock;
+    List<Search_File> search_results;
+    Thread_Handle thread;
 
-    void init(ccstr query, Search_Opts *_opts);
-    void search_file(ccstr path); 
-    void precompute_crap_for_literal_search();
-    void precompute_crap_for_regex_search();
-    int boyer_moore_strnstr(ccstr buf, int off, s32 slen);
-    void search_buf(ccstr buf, s32 buflen, ccstr filename);
+    bool cleaned_up; // don't clean up twice
+
+    void init();
+    void cleanup(bool keep_final);
+    void worker();
+    ccstr boyer_moore_strnstr(ccstr s, s32 slen);
+    bool start_search(ccstr query, Search_Opts *_opts);
+    bool perform_replace(ccstr replace_with);
 
     inline bool chars_eq(char a, char b) {
         if (opts.case_sensitive)
@@ -74,3 +96,5 @@ struct Searcher {
         return i;
     }
 };
+
+bool is_binary(ccstr buf, s32 len);

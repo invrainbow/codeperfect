@@ -236,9 +236,9 @@ bool get_type_color(Ast_Node *node, Editor *editor, vec3f *out) {
 void UI::render_godecl(Godecl *decl) {
     auto flags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth;
     if (ImGui::TreeNodeEx(decl, flags, "%s", godecl_type_str(decl->type))) {
-        ImGui::Text("decl_start: %s", format_pos(decl->decl_start));
-        ImGui::Text("spec_start: %s", format_pos(decl->spec_start));
-        ImGui::Text("name_start: %s", format_pos(decl->name_start));
+        ImGui::Text("decl_start: %s", format_cur(decl->decl_start));
+        ImGui::Text("spec_start: %s", format_cur(decl->spec_start));
+        ImGui::Text("name_start: %s", format_cur(decl->name_start));
         ImGui::Text("name: %s", decl->name);
 
         switch (decl->type) {
@@ -273,7 +273,7 @@ void UI::render_gotype(Gotype *gotype, ccstr field) {
         switch (gotype->type) {
         case GOTYPE_ID:
             ImGui::Text("name: %s", gotype->id_name);
-            ImGui::Text("pos: %s", format_pos(gotype->id_pos));
+            ImGui::Text("pos: %s", format_cur(gotype->id_pos));
             break;
         case GOTYPE_SEL:
             ImGui::Text("package: %s", gotype->sel_name);
@@ -344,7 +344,7 @@ void UI::render_gotype(Gotype *gotype, ccstr field) {
 
         case GOTYPE_LAZY_ID:
             ImGui::Text("name: %s", gotype->lazy_id_name);
-            ImGui::Text("pos: %s", format_pos(gotype->lazy_id_pos));
+            ImGui::Text("pos: %s", format_cur(gotype->lazy_id_pos));
             break;
 
         case GOTYPE_LAZY_SEL:
@@ -405,8 +405,8 @@ void UI::render_ts_cursor(TSTreeCursor *curr) {
                 flags,
                 "%s, start = %s, end = %s",
                 type_str,
-                format_pos(node->start()),
-                format_pos(node->end())
+                format_cur(node->start()),
+                format_cur(node->end())
             );
         else
             last_open = ImGui::TreeNodeEx(
@@ -415,8 +415,8 @@ void UI::render_ts_cursor(TSTreeCursor *curr) {
                 "(%s) %s, start = %s, end = %s",
                 field_type_str + strlen("TSF_"),
                 type_str,
-                format_pos(node->start()),
-                format_pos(node->end())
+                format_cur(node->start()),
+                format_cur(node->end())
             );
 
         if (node->anon())

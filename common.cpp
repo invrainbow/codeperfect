@@ -32,8 +32,7 @@ cur2 new_cur2(i32 x, i32 y) {
 
 cur2 new_cur2(u32 x, u32 y) { return new_cur2((i32)x, (i32)y); }
 
-vec2f new_vec2f(float x, float y) {
-    vec2f v;
+vec2f new_vec2f(float x, float y) { vec2f v;
     v.x = x;
     v.y = y;
     return v;

@@ -249,10 +249,10 @@ void Module_Resolver::cleanup() {
 
 // -----
 
-ccstr format_pos(cur2 pos) {
-    if (pos.y == -1)
-        return our_sprintf("%d", pos);
-    return our_sprintf("%d:%d", pos.y, pos.x);
+ccstr format_cur(cur2 c) {
+    if (c.y == -1)
+        return our_sprintf("%d", c.x);
+    return our_sprintf("%d:%d", c.y, c.x);
 }
 
 struct Parser_Input {

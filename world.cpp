@@ -600,7 +600,7 @@ void Jumplist::add(int editor_id, cur2 pos, bool bypass_duplicate_check) {
         if (editor->is_current_editor() && editor->cur == pos)
             return;
 
-    // print("jumplist add: %s %s", editor->filepath, format_pos(pos));
+    // print("jumplist add: %s %s", editor->filepath, format_cur(pos));
 
     if (empty) {
         empty = false;
