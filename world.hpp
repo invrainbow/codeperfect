@@ -13,20 +13,11 @@
 #include "imgui.h"
 #include "mem.hpp"
 #include "settings.hpp"
+#include "search.hpp"
 
 #define RELEASE_BUILD 0
 
 typedef fn<bool(Editor* e)> find_editor_func;
-
-struct Search_Result {
-    u32 match_col;
-    u32 match_col_in_preview;
-    u32 match_len;
-    ccstr preview;
-    u32 row;
-    u32 results_in_row;
-    ccstr filename;
-};
 
 // TODO: define init/cleanup routines for find and replace, and for build
 
@@ -172,6 +163,7 @@ struct World {
     Pool ui_mem;
     Pool message_queue_mem;
     Pool index_log_mem;
+    Pool search_mem;
 
     Jumplist jumplist;
 
@@ -190,6 +182,8 @@ struct World {
 
     Lock message_queue_lock;
     List<Main_Thread_Message> message_queue;
+
+    Searcher searcher;
 
     Go_Indexer indexer;
 
@@ -242,20 +236,7 @@ struct World {
 
     struct {
         bool show;
-        Pool mem;
-        List<Search_Result*> results;
-
-        void init() {
-            mem.init("search_results");
-            {
-                SCOPED_MEM(&mem);
-                results.init();
-            }
-        }
-
-        void cleanup() {
-            mem.cleanup();
-        }
+        // what else?
     } search_results;
 
     Build build;
@@ -267,26 +248,6 @@ struct World {
         // bool adding_something;
         // bool thing_being_added_is_file;
     } file_explorer;
-
-    struct {
-        union {
-            struct {
-                bool flag_search_and_replace : 1;
-                bool flag_search : 1;
-                bool flag_build;
-            };
-            u64 mask;
-        };
-
-        struct {
-            Process proc;
-            bool signal_done;
-        } search_and_replace;
-
-        struct {
-            Process proc;
-        } search;
-    } jobs;
 
     struct {
         GLuint vao;
@@ -314,9 +275,16 @@ struct World {
     struct Windows_Open {
         bool im_demo;
         bool im_metrics;
-        bool search_and_replace;
-        bool build_and_debug;
     } windows_open;
+
+    struct {
+        bool show;
+        bool replace;
+        char find_str[256];
+        char replace_str[256];
+        bool use_regex;
+        bool case_sensitive;
+    } wnd_search_and_replace;
 
     struct {
         bool show;
@@ -364,13 +332,6 @@ struct World {
     struct {
         bool show_anon_nodes;
     } wnd_ast_vis;
-
-    struct {
-        char find_str[256];
-        char replace_str[256];
-        bool use_regex;
-        bool case_sensitive;
-    } wnd_search_and_replace;
 
     struct {
         i32 scroll_offset;
@@ -422,3 +383,4 @@ bool is_build_debug_free();
 void goto_jump_to_definition_result(Jump_To_Definition_Result *result);
 void handle_goto_definition();
 void save_all_unsaved_files();
+void start_search_job(ccstr query);

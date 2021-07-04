@@ -126,6 +126,14 @@ enum {
     // support double click somehow?
 };
 
+enum {
+    OUR_MOD_NONE = 0,
+    OUR_MOD_CMD = 1 << 0,
+    OUR_MOD_SHIFT = 1 << 1,
+    OUR_MOD_ALT = 1 << 2,
+    OUR_MOD_CTRL = 1 << 3,
+};
+
 struct UI {
     Font* font;
     List<Vert> verts;
@@ -186,8 +194,11 @@ struct UI {
     void open_project_settings();
 
     void imgui_small_newline();
-    void imgui_input_text_full(ccstr label, char *buf, int count);
+    bool imgui_input_text_full(ccstr label, char *buf, int count, int flags = 0);
+    bool imgui_input_special_key_pressed(int key);
+    bool imgui_input_key_pressed(int key);
     void imgui_with_disabled(bool disable, fn<void()> f);
+    u32 imgui_get_keymods();
 };
 
 extern UI ui;

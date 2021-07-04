@@ -7,6 +7,7 @@
 
 ccstr our_format_json(ccstr s);
 ccstr our_strcpy(ccstr s);
+ccstr our_strncpy(ccstr s, int n);
 ccstr our_dirname(ccstr path);
 ccstr our_basename(ccstr path);
 ccstr our_vsprintf(ccstr fmt, va_list args);

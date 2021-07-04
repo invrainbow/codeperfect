@@ -1,6 +1,6 @@
 CC = clang++
 CFLAGS = -std=c++17 -g -mavx -maes -w `pkg-config --cflags gtk+-3.0 glfw3 glew`
-LDFLAGS = -ldl -lcwalk `pkg-config --libs glfw3 glew gtk+-3.0` -framework OpenGL
+LDFLAGS = -ldl -lcwalk -lpcre `pkg-config --libs glfw3 glew gtk+-3.0` -framework OpenGL
 
 SRC_FILES = $(wildcard *.cpp)
 OBJ_FILES = $(patsubst %.cpp,obj/%.o,$(SRC_FILES))

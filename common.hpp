@@ -161,14 +161,14 @@ struct vec3 {
         };
     };
 
-    cstr str();
+    ccstr str();
 };
 
 struct vec2f {
     float x;
     float y;
 
-    cstr str();
+    ccstr str();
 
     vec2f operator+(vec2f v) {
         vec2f ret;
@@ -236,7 +236,7 @@ struct vec3f {
         };
     };
 
-    cstr str();
+    ccstr str();
 };
 
 struct vec4f {
@@ -289,7 +289,7 @@ struct vec4f {
         };
     };
 
-    cstr str();
+    ccstr str();
 };
 
 struct box {
@@ -306,7 +306,7 @@ struct box {
         };
     };
 
-    cstr str();
+    ccstr str();
 };
 
 struct boxf {
@@ -323,7 +323,7 @@ struct boxf {
         };
     };
 
-    cstr str();
+    ccstr str();
     bool contains(vec2f point);
 };
 

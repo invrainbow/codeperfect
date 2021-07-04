@@ -22,7 +22,8 @@ struct Settings {
     float editor_margin_x = 5;
     float editor_margin_y = 5;
     float line_height = 1.2;
-    int open_file_max_results = 20;
+    int goto_file_max_results = 20;
+    int goto_symbol_max_results = 20;
 };
 
 struct Options {

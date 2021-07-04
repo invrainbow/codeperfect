@@ -11,7 +11,7 @@
 bool strcpy_safe(cstr buf, s32 count, ccstr src) {
     auto len = strlen(src);
     if (count < len + 1) return false;
-    strncpy(buf, src, len +1);
+    strncpy(buf, src, len + 1);
     return true;
 }
 
@@ -41,6 +41,15 @@ ccstr our_strcpy(ccstr s) {
     auto len = strlen(s);
     auto ret = alloc_array(char, len + 1);
     memcpy(ret, s, sizeof(char) * (len + 1));
+    return (ccstr)ret;
+}
+
+ccstr our_strncpy(ccstr s, int n) {
+    if (s == NULL) return NULL;
+
+    auto ret = alloc_array(char, n + 1);
+    memcpy(ret, s, sizeof(char) * n);
+    ret[n] = '\0';
     return (ccstr)ret;
 }
 

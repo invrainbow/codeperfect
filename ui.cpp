@@ -236,9 +236,9 @@ bool get_type_color(Ast_Node *node, Editor *editor, vec3f *out) {
 void UI::render_godecl(Godecl *decl) {
     auto flags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth;
     if (ImGui::TreeNodeEx(decl, flags, "%s", godecl_type_str(decl->type))) {
-        ImGui::Text("decl_start: %s", format_pos(decl->decl_start));
-        ImGui::Text("spec_start: %s", format_pos(decl->spec_start));
-        ImGui::Text("name_start: %s", format_pos(decl->name_start));
+        ImGui::Text("decl_start: %s", format_cur(decl->decl_start));
+        ImGui::Text("spec_start: %s", format_cur(decl->spec_start));
+        ImGui::Text("name_start: %s", format_cur(decl->name_start));
         ImGui::Text("name: %s", decl->name);
 
         switch (decl->type) {
@@ -273,7 +273,7 @@ void UI::render_gotype(Gotype *gotype, ccstr field) {
         switch (gotype->type) {
         case GOTYPE_ID:
             ImGui::Text("name: %s", gotype->id_name);
-            ImGui::Text("pos: %s", format_pos(gotype->id_pos));
+            ImGui::Text("pos: %s", format_cur(gotype->id_pos));
             break;
         case GOTYPE_SEL:
             ImGui::Text("package: %s", gotype->sel_name);
@@ -344,7 +344,7 @@ void UI::render_gotype(Gotype *gotype, ccstr field) {
 
         case GOTYPE_LAZY_ID:
             ImGui::Text("name: %s", gotype->lazy_id_name);
-            ImGui::Text("pos: %s", format_pos(gotype->lazy_id_pos));
+            ImGui::Text("pos: %s", format_cur(gotype->lazy_id_pos));
             break;
 
         case GOTYPE_LAZY_SEL:
@@ -405,8 +405,8 @@ void UI::render_ts_cursor(TSTreeCursor *curr) {
                 flags,
                 "%s, start = %s, end = %s",
                 type_str,
-                format_pos(node->start()),
-                format_pos(node->end())
+                format_cur(node->start()),
+                format_cur(node->end())
             );
         else
             last_open = ImGui::TreeNodeEx(
@@ -415,8 +415,8 @@ void UI::render_ts_cursor(TSTreeCursor *curr) {
                 "(%s) %s, start = %s, end = %s",
                 field_type_str + strlen("TSF_"),
                 type_str,
-                format_pos(node->start()),
-                format_pos(node->end())
+                format_cur(node->start()),
+                format_cur(node->end())
             );
 
         if (node->anon())
@@ -1292,11 +1292,17 @@ void UI::imgui_small_newline() {
     ImGui::Dummy(ImVec2(0.0f, ImGui::GetFrameHeightWithSpacing() * 1/4));
 }
 
-void UI::imgui_input_text_full(ccstr label, char *buf, int count) {
+bool UI::imgui_input_text_full(ccstr label, char *buf, int count, int flags) {
     ImGui::PushItemWidth(-1);
-    ImGui::Text("%s", label);
-    ImGui::InputText(our_sprintf("###%s", label), buf, count);
+    {
+        ImGui::PushFont(world.ui.im_font_ui);
+        ImGui::Text("%s", label);
+        ImGui::PopFont();
+    }
+    auto ret = ImGui::InputText(our_sprintf("###%s", label), buf, count, flags);
     ImGui::PopItemWidth();
+
+    return ret;
 }
 
 #define imgui_input_text_full_fixbuf(x, y) imgui_input_text_full(x, y, _countof(y))
@@ -1322,6 +1328,25 @@ void UI::imgui_with_disabled(bool disable, fn<void()> f) {
         ImGui::PopItemFlag();
         ImGui::PopStyleVar();
     }
+}
+
+bool UI::imgui_input_special_key_pressed(int key) {
+    return imgui_input_key_pressed(ImGui::GetKeyIndex(key));
+}
+
+bool UI::imgui_input_key_pressed(int key) {
+    return ImGui::IsKeyPressed(tolower(key)) || ImGui::IsKeyPressed(toupper(key));
+}
+
+u32 UI::imgui_get_keymods() {
+    auto &io = ImGui::GetIO();
+
+    u32 ret = 0;
+    if (io.KeySuper) ret |= OUR_MOD_CMD;
+    if (io.KeyCtrl) ret |= OUR_MOD_CTRL;
+    if (io.KeyShift) ret |= OUR_MOD_SHIFT;
+    if (io.KeyAlt) ret |= OUR_MOD_ALT;
+    return ret;
 }
 
 void UI::draw_everything() {
@@ -1444,10 +1469,12 @@ void UI::draw_everything() {
 
         if (ImGui::BeginMenu("Edit")) {
             if (ImGui::MenuItem("Search...", "Ctrl+Shift+F")) {
-                tell_user("Sorry, this hasn't been implemented yet.", "Not Implemented");
+                world.wnd_search_and_replace.show = true;
+                world.wnd_search_and_replace.replace = false;
             }
             if (ImGui::MenuItem("Search and Replace...", "Ctrl+Shift+H")) {
-                tell_user("Sorry, this hasn't been implemented yet.", "Not Implemented");
+                world.wnd_search_and_replace.show = true;
+                world.wnd_search_and_replace.replace = true;
             }
             ImGui::EndMenu();
         }
@@ -1847,37 +1874,6 @@ void UI::draw_everything() {
         ImGui::End();
     }
 
-    if (world.search_results.show) {
-        ImGui::SetNextWindowDockID(dock_sidebar_id, ImGuiCond_Always);
-        ImGui::Begin("Search Results", &world.search_results.show);
-
-        For (world.search_results.results) {
-            SCOPED_FRAME();
-
-            auto flags = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_SpanFullWidth;
-            ImGui::TreeNodeEx(it, flags, "%s:%d:%d %s", it->filename, it->row, it->match_col+1, it->preview);
-            if (ImGui::IsItemClicked()) {
-                SCOPED_FRAME();
-                auto path = path_join(world.current_path, it->filename);
-                auto pos = new_cur2(it->match_col, it->row-1);
-                world.focus_editor(path, pos);
-            }
-
-            // use following to highlight match
-            /*
-            len = strlen(it->preview);
-            for (u32 i = 0; i < len && pos.x < sidebar_area.w; i++) {
-                auto color = rgba(COLOR_WHITE);
-                if (it->match_col_in_preview <= i && i < it->match_col_in_preview + it->match_len)
-                    color = rgba(COLOR_LIME);
-                draw_char(&pos, it->preview[i], color);
-            }
-            */
-        }
-
-        ImGui::End();
-    }
-
     if (world.wnd_add_file_or_folder.show) {
         auto &wnd = world.wnd_add_file_or_folder;
 
@@ -2178,6 +2174,21 @@ void UI::draw_everything() {
 
     if (world.wnd_goto_file.show) {
         auto& wnd = world.wnd_goto_file;
+
+        auto go_up = [&]() {
+            if (wnd.filtered_results->len == 0) return;
+            if (wnd.selection == 0)
+                wnd.selection = min(wnd.filtered_results->len, settings.goto_file_max_results) - 1;
+            else
+                wnd.selection--;
+        };
+
+        auto go_down = [&]() {
+            if (wnd.filtered_results->len == 0) return;
+            wnd.selection++;
+            wnd.selection %= min(wnd.filtered_results->len, settings.goto_file_max_results);
+        };
+
         ImGui::Begin("Go To File", &world.wnd_goto_file.show, ImGuiWindowFlags_AlwaysAutoResize);
 
         wnd.focused = ImGui::IsWindowFocused();
@@ -2191,7 +2202,27 @@ void UI::draw_everything() {
             ImGui::SetKeyboardFocusHere();
         }
 
-        ImGui::InputText("##search_for_file", wnd.query, _countof(wnd.query));
+        if (ImGui::InputText("##search_for_file", wnd.query, _countof(wnd.query), ImGuiInputTextFlags_EnterReturnsTrue)) {
+            if (wnd.filtered_results->len > 0) {
+                auto relpath = wnd.filepaths->at(wnd.filtered_results->at(wnd.selection));
+                auto filepath = path_join(world.current_path, relpath);
+                world.focus_editor(filepath);
+            }
+            world.wnd_goto_file.show = false;
+        }
+
+        auto mods = imgui_get_keymods();
+        switch (mods) {
+        case OUR_MOD_NONE:
+            if (imgui_input_special_key_pressed(ImGuiKey_DownArrow)) go_down();
+            if (imgui_input_special_key_pressed(ImGuiKey_UpArrow)) go_up();
+            if (imgui_input_special_key_pressed(ImGuiKey_Escape)) wnd.show = false;
+            break;
+        case OUR_MOD_CTRL:
+            if (imgui_input_key_pressed('j')) go_down();
+            if (imgui_input_key_pressed('k')) go_up();
+            break;
+        }
 
         if (ImGui::IsItemEdited()) {
             if (strlen(wnd.query) >= 2)
@@ -2204,7 +2235,7 @@ void UI::draw_everything() {
             ImGui::PushFont(world.ui.im_font_mono);
             defer { ImGui::PopFont(); };
 
-            for (u32 i = 0; i < wnd.filtered_results->len && i < settings.open_file_max_results; i++) {
+            for (u32 i = 0; i < wnd.filtered_results->len && i < settings.goto_file_max_results; i++) {
                 auto it = wnd.filepaths->at(wnd.filtered_results->at(i));
                 if (i == wnd.selection)
                     ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.5f, 1.0f), "%s", it);
@@ -2218,7 +2249,35 @@ void UI::draw_everything() {
 
     if (world.wnd_goto_symbol.show) {
         auto& wnd = world.wnd_goto_symbol;
+
+        auto go_up = [&]() {
+            if (wnd.filtered_results->len == 0) return;
+            if (wnd.selection == 0)
+                wnd.selection = min(wnd.filtered_results->len, settings.goto_symbol_max_results) - 1;
+            else
+                wnd.selection--;
+        };
+
+        auto go_down = [&]() {
+            if (wnd.filtered_results->len == 0) return;
+            wnd.selection++;
+            wnd.selection %= min(wnd.filtered_results->len, settings.goto_file_max_results);
+        };
+
         ImGui::Begin("Go To Symbol", &world.wnd_goto_symbol.show, ImGuiWindowFlags_AlwaysAutoResize);
+
+        auto mods = imgui_get_keymods();
+        switch (mods) {
+        case OUR_MOD_NONE:
+            if (imgui_input_special_key_pressed(ImGuiKey_DownArrow)) go_down();
+            if (imgui_input_special_key_pressed(ImGuiKey_UpArrow)) go_up();
+            if (imgui_input_special_key_pressed(ImGuiKey_Escape)) wnd.show = false;
+            break;
+        case OUR_MOD_CTRL:
+            if (imgui_input_key_pressed('j')) go_down();
+            if (imgui_input_key_pressed('k')) go_up();
+            break;
+        }
 
         wnd.focused = ImGui::IsWindowFocused();
 
@@ -2244,7 +2303,7 @@ void UI::draw_everything() {
             ImGui::PushFont(world.ui.im_font_mono);
             defer { ImGui::PopFont(); };
 
-            for (u32 i = 0; i < wnd.filtered_results->len && i < settings.open_file_max_results; i++) {
+            for (u32 i = 0; i < wnd.filtered_results->len && i < settings.goto_file_max_results; i++) {
                 auto it = wnd.symbols->at(wnd.filtered_results->at(i));
                 if (i == wnd.selection)
                     ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.5f, 1.0f), "%s", it);
@@ -2265,78 +2324,196 @@ void UI::draw_everything() {
         dui.draw();
     }
 
-    if (world.windows_open.search_and_replace) {
+    if (world.wnd_search_and_replace.show) {
         auto& wnd = world.wnd_search_and_replace;
 
-        ImGui::Begin("Search and Replace", &world.windows_open.search_and_replace, ImGuiWindowFlags_AlwaysAutoResize);
+        ImGui::SetNextWindowDockID(dock_sidebar_id, ImGuiCond_Once);
 
-        ImGui::Text("Search for:");
-        ImGui::InputText("##find", wnd.find_str, _countof(wnd.find_str));
-        ImGui::Text("Replace with:");
-        ImGui::InputText("##replace", wnd.replace_str, _countof(wnd.replace_str));
+        ImGui::Begin(
+            our_sprintf("%s##search_and_replace", wnd.replace ? "Search and Replace" : "Search"),
+            &wnd.show, ImGuiWindowFlags_AlwaysAutoResize
+        );
 
-        ImGui::Separator();
+        bool entered = false;
 
-        ImGui::Checkbox("Case-sensitive", &wnd.case_sensitive);
+        ImGui::PushFont(world.ui.im_font_mono);
+        {
+            if (imgui_input_text_full("Search for", wnd.find_str, _countof(wnd.find_str), ImGuiInputTextFlags_EnterReturnsTrue))
+                entered = true;
+
+            if (ImGui::IsWindowAppearing())
+                ImGui::SetKeyboardFocusHere();
+
+            if (wnd.replace)
+                if (imgui_input_text_full("Replace with", wnd.replace_str, _countof(wnd.replace_str), ImGuiInputTextFlags_EnterReturnsTrue))
+                    entered = true;
+        }
+        ImGui::PopFont();
+
+        imgui_small_newline();
+
+        if (ImGui::Checkbox("Case-sensitive", &wnd.case_sensitive))
+            entered = true;
+
         ImGui::SameLine();
-        ImGui::Checkbox("Use regular expression", &wnd.use_regex);
+        if (ImGui::Checkbox("Use regular expression", &wnd.use_regex))
+            entered = true;
 
-        ImGui::Separator();
+        imgui_small_newline();
 
-        if (ImGui::Button("Search for All")) {
-            world.search_results.mem.cleanup();
-            run_proc_the_normal_way(
-                &world.jobs.search.proc,
-                our_sprintf("ag --ackmate %s %s \"%s\"", wnd.use_regex ? "" : "-Q", wnd.case_sensitive ? "-s" : "", wnd.find_str)
-            );
-            world.jobs.flag_search = true;
+        if (entered) {
+            auto &s = world.searcher;
+
+            s.cleanup();
+            s.init();
+
+            Search_Opts opts;
+            opts.case_sensitive = wnd.case_sensitive;
+            opts.literal = !wnd.use_regex;
+
+            s.start_search(wnd.find_str, &opts);
         }
 
-        ImGui::SameLine();
-
-        if (ImGui::Button("Replace All")) {
-            // TODO: some kind of permanent settings system
-            // so we can save things like "don't show this popup again"
-            ImGui::OpenPopup("Really replace?");
-        }
-
-        if (world.jobs.search_and_replace.signal_done) {
-            world.jobs.search_and_replace.signal_done = false;
-            ImGui::OpenPopup("Done");
-        }
-
-        ImGui::SetNextWindowSize(ImVec2(450, -1));
-        if (ImGui::BeginPopupModal("Really replace?", NULL, ImGuiWindowFlags_NoResize)) {
-            ImGui::TextWrapped("Pressing this button will automatically, irreversibly perform the text replacement you requested.");
-            ImGui::TextWrapped("If you make a mistake, we trust your version control system will save you.");
-            ImGui::TextWrapped("To preview your changes before replacing, click Find All first.");
-            ImGui::TextWrapped("We won't show this warning again.");
-            ImGui::NewLine();
-            if (ImGui::Button("Ok, replace all")) {
-                run_proc_the_normal_way(
-                    &world.jobs.search_and_replace.proc,
-                    our_sprintf("ag -g \"\" | xargs sed -i \"s/%s/%s/g\"", wnd.find_str, wnd.replace_str)
-                );
-                world.jobs.flag_search_and_replace = true;
-                ImGui::CloseCurrentPopup();
-            }
-
+        switch (world.searcher.state) {
+        case SEARCH_SEARCH_IN_PROGRESS:
+            ImGui::Text("Searching...");
             ImGui::SameLine();
             if (ImGui::Button("Cancel")) {
-                ImGui::CloseCurrentPopup();
+                // TODO
             }
+            break;
+        case SEARCH_SEARCH_DONE:
+            {
+                if (wnd.replace)
+                    if (ImGui::Button("Perform Replacement"))
+                        world.searcher.start_replace(wnd.replace_str);
 
-            ImGui::EndPopup();
+                int index = 0;
+
+                For (world.searcher.search_results) {
+                    ImGui::Text("%s", get_path_relative_to(it.filepath, world.current_path));
+
+                    ImGui::Indent();
+                    ImGui::PushFont(world.ui.im_font_mono);
+
+                    auto filepath = it.filepath;
+
+                    For (*it.results) {
+                        auto availwidth = ImGui::GetContentRegionAvail().x;
+                        auto text_size = ImVec2(availwidth, ImGui::CalcTextSize("blah").y);
+                        auto drawpos = ImGui::GetCursorScreenPos();
+
+                        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(ImColor(60, 60, 60)));
+
+                        bool clicked = ImGui::Selectable(
+                            our_sprintf("##search_result_%d", index++),
+                            false,
+                            0, // flags
+                            text_size
+                        );
+
+                        ImGui::PopStyleColor();
+
+                        auto draw_text = [&](ccstr s, int len, bool strikethrough = false) {
+                            auto text = our_sprintf("%.*s", len, s);
+                            auto size = ImGui::CalcTextSize(text);
+
+                            auto drawlist = ImGui::GetWindowDrawList();
+                            drawlist->AddText(drawpos, ImGui::GetColorU32(ImGuiCol_Text), text);
+
+                            if (strikethrough) {
+                                ImVec2 a = drawpos, b = drawpos;
+                                b.y += size.y/2;
+                                a.y += size.y/2;
+                                b.x += size.x;
+                                // ImGui::GetFontSize() / 2
+                                drawlist->AddLine(a, b, ImGui::GetColorU32(ImGuiCol_Text), 1.0f);
+                            }
+
+                            drawpos.x += ImGui::CalcTextSize(text).x;
+                        };
+
+                        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(ImColor(148, 148, 148)));
+
+                        draw_text(it.preview, it.match_offset_in_preview);
+
+                        if (wnd.replace) {
+                            // draw old
+                            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(ImColor(255, 180, 180)));
+                            draw_text(it.match, it.match_len, true);
+                            ImGui::PopStyleColor();
+
+                            // draw new
+                            auto newtext = world.searcher.get_replacement_text(&it, wnd.replace_str);
+                            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(ImColor(180, 255, 180)));
+                            draw_text(newtext, strlen(newtext));
+                            ImGui::PopStyleColor();
+                        } else {
+                            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(ImColor(255, 255, 255)));
+                            draw_text(it.match, it.match_len);
+                            ImGui::PopStyleColor();
+                        }
+
+                        draw_text(
+                            &it.preview[it.match_offset_in_preview + it.match_len],
+                            it.preview_len - it.match_offset_in_preview - it.match_len
+                        );
+
+                        defer { ImGui::PopStyleColor(); };
+
+                        if (clicked) {
+                            world.focus_editor(filepath, it.match_start);
+                        }
+
+                        /* struct Search_Result {
+                            ccstr match;
+                            s32 match_len;
+                            cur2 match_start;
+                            cur2 match_end;
+                            s32 match_off;
+                            ccstr preview;
+                            s32 preview_len;
+                            cur2 preview_start;
+                            cur2 preview_end;
+                            int match_offset_in_preview;
+                            List<ccstr> *groups;
+                        }; */
+                    }
+
+                    ImGui::PopFont();
+                    ImGui::Unindent();
+                }
+            }
+            break;
+        case SEARCH_REPLACE_IN_PROGRESS:
+            ImGui::Text("Replacing...");
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel")) {
+                // TODO
+            }
+            break;
+        case SEARCH_REPLACE_DONE:
+            ImGui::Text("Done!"); // TODO: show # files replaced, i guess, and undo button
+            break;
+        case SEARCH_NOTHING_HAPPENING:
+            break;
         }
 
-        ImGui::SetNextWindowSize(ImVec2(450, -1));
-        if (ImGui::BeginPopupModal("Done", NULL, ImGuiWindowFlags_NoResize)) {
-            ImGui::TextWrapped("Replace operation has completed.");
-            ImGui::NewLine();
-            if (ImGui::Button("Ok")) {
-                ImGui::CloseCurrentPopup();
-            }
-            ImGui::EndPopup();
+        if (world.search_results.show) {
+            ImGui::SetNextWindowDockID(dock_sidebar_id, ImGuiCond_Always);
+            ImGui::Begin("Search Results", &world.search_results.show);
+
+            // TODO
+            // use following to highlight match
+            /* len = strlen(it->preview);
+            for (u32 i = 0; i < len && pos.x < sidebar_area.w; i++) {
+                auto color = rgba(COLOR_WHITE);
+                if (it->match_col_in_preview <= i && i < it->match_col_in_preview + it->match_len)
+                    color = rgba(COLOR_LIME);
+                draw_char(&pos, it->preview[i], color);
+            } */
+
+            ImGui::End();
         }
 
         ImGui::End();
@@ -2458,29 +2635,12 @@ void UI::draw_everything() {
 
             bool is_selected = (tab_id == pane.current_editor);
 
-            ccstr label = NULL;
+            ccstr label = "<untitled>";
+            if (!editor.is_untitled)
+                label = get_path_relative_to(editor.filepath, world.current_path);
 
-            if (editor.is_untitled) {
-                label = "<untitled>";
-            } else {
-                auto wksp_path = make_path(world.current_path);
-                auto file_path = make_path(editor.filepath);
-
-                if (wksp_path->contains(file_path)) {
-                    Text_Renderer r;
-                    r.init();
-                    for (int i = wksp_path->parts->len; i < file_path->parts->len; i++) {
-                        r.writestr(file_path->parts->at(i));
-                        if (i + 1 < file_path->parts->len)
-                            r.writechar(PATH_SEP);
-                    }
-                    label = r.finish();
-                } else {
-                    label = file_path->str();
-                }
-            }
-
-            label = our_sprintf("%s%s", label, editor.buf.dirty ? "*" : "");
+            if (editor.buf.dirty)
+                label = our_sprintf("%s*", label);
 
             auto text_width = get_text_width(label);
 

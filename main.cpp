@@ -225,14 +225,6 @@ void send_nvim_keys(ccstr s) {
     nv.end_message();
 }
 
-enum {
-    OUR_MOD_NONE = 0,
-    OUR_MOD_CMD = 1 << 0,
-    OUR_MOD_SHIFT = 1 << 1,
-    OUR_MOD_ALT = 1 << 2,
-    OUR_MOD_CTRL = 1 << 3,
-};
-
 int main() {
     Timer t;
     t.init();
@@ -487,134 +479,9 @@ int main() {
         io.KeyAlt = io.KeysDown[GLFW_KEY_LEFT_ALT] || io.KeysDown[GLFW_KEY_RIGHT_ALT];
         io.KeySuper = io.KeysDown[GLFW_KEY_LEFT_SUPER] || io.KeysDown[GLFW_KEY_RIGHT_SUPER];
 
-        u32 nmod = 0; // normalized mod
-        if (mod & GLFW_MOD_SUPER)
-            nmod |= OUR_MOD_CMD;
-        if (mod & GLFW_MOD_CONTROL)
-            nmod |= OUR_MOD_CTRL;
-        if (mod & GLFW_MOD_SHIFT)
-            nmod |= OUR_MOD_SHIFT;
-        if (mod & GLFW_MOD_ALT)
-            nmod |= OUR_MOD_ALT;
-
-        if (world.wnd_goto_file.show && world.wnd_goto_file.focused) {
-            auto &wnd = world.wnd_goto_file;
-
-            auto go_up = [&]() {
-                if (wnd.filtered_results->len == 0) return;
-
-                if (wnd.selection == 0)
-                    wnd.selection = min(wnd.filtered_results->len, settings.open_file_max_results) - 1;
-                else
-                    wnd.selection--;
-            };
-
-            auto go_down = [&]() {
-                if (wnd.filtered_results->len == 0) return;
-
-                wnd.selection++;
-                wnd.selection %= min(wnd.filtered_results->len, settings.open_file_max_results);
-            };
-
-            switch (ev) {
-            case GLFW_PRESS:
-            case GLFW_REPEAT:
-                switch (nmod) {
-                case OUR_MOD_CTRL:
-                    switch (key) {
-                    case GLFW_KEY_J: go_down(); break;
-                    case GLFW_KEY_K: go_up(); break;
-                    }
-                    break;
-                case OUR_MOD_NONE:
-                    switch (key) {
-                    case GLFW_KEY_DOWN: go_down(); break;
-                    case GLFW_KEY_UP: go_up(); break;
-                    case GLFW_KEY_ESCAPE:
-                        world.wnd_goto_file.show = false;
-                        break;
-                    case GLFW_KEY_ENTER:
-                        world.wnd_goto_file.show = false;
-
-                        if (wnd.filtered_results->len == 0) break;
-
-                        auto relpath = wnd.filepaths->at(wnd.filtered_results->at(wnd.selection));
-                        auto filepath = path_join(world.current_path, relpath);
-                        world.focus_editor(filepath);
-                        break;
-                    }
-                    break;
-                }
-                break;
-            }
-            return;
-        }
-
-        if (world.wnd_goto_symbol.show && world.wnd_goto_symbol.focused) {
-            auto &wnd = world.wnd_goto_symbol;
-
-            auto go_up = [&]() {
-                if (wnd.filtered_results->len == 0) return;
-
-                if (wnd.selection == 0)
-                    wnd.selection = min(wnd.filtered_results->len, settings.open_file_max_results) - 1;
-                else
-                    wnd.selection--;
-            };
-
-            auto go_down = [&]() {
-                if (wnd.filtered_results->len == 0) return;
-
-                wnd.selection++;
-                wnd.selection %= min(wnd.filtered_results->len, settings.open_file_max_results);
-            };
-
-            switch (ev) {
-            case GLFW_PRESS:
-            case GLFW_REPEAT:
-                switch (nmod) {
-                case OUR_MOD_CTRL:
-                    switch (key) {
-                    case GLFW_KEY_J: go_down(); break;
-                    case GLFW_KEY_K: go_up(); break;
-                    }
-                    break;
-                case OUR_MOD_NONE:
-                    switch (key) {
-                    case GLFW_KEY_DOWN: go_down(); break;
-                    case GLFW_KEY_UP: go_up(); break;
-                    case GLFW_KEY_ESCAPE: wnd.show = false; break;
-
-                    case GLFW_KEY_ENTER:
-                        {
-                            wnd.show = false;
-
-                            if (wnd.filtered_results->len == 0) break;
-
-                            if (!world.indexer.ready) break;
-                            if (!world.indexer.lock.try_enter()) return;
-                            defer { world.indexer.lock.leave(); };
-
-                            auto symbol = wnd.symbols->at(wnd.filtered_results->at(wnd.selection));
-                            auto result = world.indexer.jump_to_symbol(symbol);
-                            if (result == NULL) break;
-
-                            goto_jump_to_definition_result(result);
-                        }
-                        break;
-                    }
-                    break;
-                }
-                break;
-            }
-            return;
-        }
+        if (world.ui.keyboard_captured_by_imgui) return;
 
         auto editor = world.get_current_editor();
-
-        auto handle_escape = [&]() -> bool {
-            return editor->trigger_escape();
-        };
 
         auto handle_enter = [&](ccstr nvim_string) {
             if (editor == NULL) return;
@@ -671,14 +538,14 @@ int main() {
         switch (ev) {
         case GLFW_PRESS:
         case GLFW_REPEAT:
-            switch (nmod) {
+            switch (ui.imgui_get_keymods()) {
             case OUR_MOD_SHIFT:
                 if (world.use_nvim) {
                     switch (key) {
                     case GLFW_KEY_ENTER: handle_enter("<S-Enter>"); break;
                     case GLFW_KEY_TAB: handle_tab("<S-Tab>"); break;
                     case GLFW_KEY_BACKSPACE: handle_backspace("<S-Backspace>"); break;
-                    case GLFW_KEY_ESCAPE: if (!handle_escape()) send_nvim_keys("<S-Esc>"); break;
+                    case GLFW_KEY_ESCAPE: if (!editor->trigger_escape()) send_nvim_keys("<S-Esc>"); break;
                     case GLFW_KEY_F5:
                         if (world.dbg.state_flag == DLV_STATE_INACTIVE) break;
                         world.dbg.push_call(DLVC_STOP);
@@ -688,7 +555,7 @@ int main() {
                         world.dbg.push_call(DLVC_STEP_OUT);
                         break;
                     case GLFW_KEY_F10:
-                        // TODO
+                        // TODO: run to cursor
                         break;
                     case GLFW_KEY_F9:
                         prompt_delete_all_breakpoints();
@@ -742,7 +609,7 @@ int main() {
                             handle_enter("<C-Enter>");
                             break;
                         case GLFW_KEY_BACKSPACE: handle_backspace("<C-Backspace>"); break;
-                        case GLFW_KEY_ESCAPE: if (!handle_escape()) send_nvim_keys("<C-Esc>"); break;
+                        case GLFW_KEY_ESCAPE: if (!editor->trigger_escape()) send_nvim_keys("<C-Esc>"); break;
                         default: handled = false; break;
                         }
                     }
@@ -917,7 +784,7 @@ int main() {
                         handled = true;
                         switch (key) {
                         case GLFW_KEY_ENTER: handle_enter("<C-S-Enter>"); break;
-                        case GLFW_KEY_ESCAPE: if (!handle_escape()) send_nvim_keys("<C-S-Esc>"); break;
+                        case GLFW_KEY_ESCAPE: if (!editor->trigger_escape()) send_nvim_keys("<C-S-Esc>"); break;
                         case GLFW_KEY_BACKSPACE: handle_backspace("<C-S-Backspace>"); break;
                         default: handled = false; break;
                         }
@@ -932,7 +799,12 @@ int main() {
                         kick_off_build();
                         break;
                     case GLFW_KEY_F:
-                        world.windows_open.search_and_replace ^= 1;
+                        world.wnd_search_and_replace.show = true;
+                        world.wnd_search_and_replace.replace = false;
+                        break;
+                    case GLFW_KEY_H:
+                        world.wnd_search_and_replace.show = true;
+                        world.wnd_search_and_replace.replace = true;
                         break;
                     case GLFW_KEY_E:
                         world.file_explorer.show ^= 1;
@@ -1034,7 +906,7 @@ int main() {
                             break;
                         }
                     case GLFW_KEY_ESCAPE:
-                        if (!handle_escape()) send_nvim_keys("<Esc>");
+                        if (!editor->trigger_escape()) send_nvim_keys("<Esc>");
                         break;
                     }
                     break;
@@ -1219,56 +1091,6 @@ int main() {
 
             world.message_queue_mem.reset();
             world.message_queue.len = 0;
-        }
-
-        {
-            // Check jobs.
-
-            if (world.jobs.flag_search) {
-                auto& job = world.jobs.search;
-                auto& proc = job.proc;
-                auto& search_results = world.search_results;
-
-                switch (proc.status()) {
-                case PROCESS_ERROR:
-                    world.jobs.flag_search = false;
-                    search_results.cleanup();
-                    proc.cleanup();
-                    break;
-                case PROCESS_DONE:
-                    world.jobs.flag_search = false;
-                    search_results.cleanup();
-                    search_results.init();
-
-                    /*
-                    General_Parser parser;
-                    parser.init(&proc);
-                    {
-                        SCOPED_MEM(&search_results.pool);
-                        parser.parse_find_results();
-                    }
-                    */
-
-                    world.search_results.show = true;
-                    proc.cleanup();
-                    break;
-                }
-            }
-
-            if (world.jobs.flag_search_and_replace) {
-                auto& job = world.jobs.search_and_replace;
-                auto& proc = job.proc;
-
-                switch (proc.status()) {
-                case PROCESS_DONE:
-                    job.signal_done = true;
-                    // fallthrough
-                case PROCESS_ERROR:
-                    world.jobs.flag_search_and_replace = false;
-                    proc.cleanup();
-                    break;
-                }
-            }
         }
 
         glDisable(GL_SCISSOR_TEST);
