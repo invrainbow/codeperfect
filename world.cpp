@@ -261,10 +261,6 @@ void World::init() {
     error_list.height = 125;
     file_explorer.selection = NULL;
 
-    windows_open.search_and_replace = false;
-    windows_open.build_and_debug = false;
-    windows_open.im_metrics = false;
-
     jumplist.init();
 
     {
@@ -622,6 +618,9 @@ bool is_build_debug_free() {
 }
 
 void goto_jump_to_definition_result(Jump_To_Definition_Result *result) {
+    world.focus_editor(result->file, result->pos);
+
+    /*
     auto target = world.get_current_editor();
     if (target == NULL || !streq(target->filepath, result->file))
         target = world.focus_editor(result->file);
@@ -641,6 +640,7 @@ void goto_jump_to_definition_result(Jump_To_Definition_Result *result) {
         if (pos.y == -1) pos = target->offset_to_cur(pos.x);
         target->move_cursor(pos);
     }
+    */
 }
 
 void handle_goto_definition() {

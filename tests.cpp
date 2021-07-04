@@ -4,13 +4,14 @@
 #include "buffer.hpp"
 #include "go.hpp"
 
+#if 0
 void test_search() {
     // shit to test:
     //   - [x] normal search
     //   - [x] regex search
     //   - [x] normal search and replace
     //   - [x] regex search and replace
-    //   - [ ] regex search with group replace
+    //   - [x] regex search with group replace
     //   - [ ] filter by files
     //   - [ ] undo
 
@@ -22,7 +23,7 @@ void test_search() {
 
     Searcher s;
     s.init();
-    s.start_search("git(.*?)fork", &opts);
+    s.start_search("git(.*?)fork", "|$0|", &opts);
 
     while (s.state == SEARCH_SEARCH_IN_PROGRESS)
         continue;
@@ -55,21 +56,19 @@ void test_search() {
 
     print("found %d total", total);
 
-    s.perform_replace("|$0|");
+    s.start_replace();
 }
-
-bool run_tests() {
-    world.init();
-
-    test_search();
-    // test_read_write_index();
-
-#if OS_WIN
-    system("pause");
-#else
-    system("read -p \"Press enter to exit: \"");
 #endif
 
+bool run_tests() {
+    return false;
+
+    world.init();
+
+    // test_search();
+    // test_read_write_index();
+
+    system(OS_WIN ? "pause" : "read -p \"Press enter to exit: \"");
     return true;
 }
 

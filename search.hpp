@@ -37,8 +37,9 @@ struct Search_Opts {
 enum Searcher_State {
     SEARCH_NOTHING_HAPPENING = 0,
     SEARCH_SEARCH_IN_PROGRESS,
+    SEARCH_SEARCH_DONE,
     SEARCH_REPLACE_IN_PROGRESS,
-    SEARCH_DONE,
+    SEARCH_REPLACE_DONE,
 };
 
 struct Searcher {
@@ -53,27 +54,32 @@ struct Searcher {
     Search_Opts opts;
     ccstr query;
     s32 qlen;
+    ccstr replace_with;
 
-    // for literal matching
+    // search
     s32 *find_skip;
     s32 *alpha_skip;
-
-    // for regex-based matching
     pcre *re;
     pcre_extra *re_extra;
-
     List<ccstr> file_queue;
+
+    // for replace
     List<Search_File> search_results;
+
     Thread_Handle thread;
 
     bool cleaned_up; // don't clean up twice
 
     void init();
-    void cleanup(bool keep_final);
-    void worker();
-    ccstr boyer_moore_strnstr(ccstr s, s32 slen);
-    bool start_search(ccstr query, Search_Opts *_opts);
-    bool perform_replace(ccstr replace_with);
+    void cleanup();
+    void cleanup_search();
+
+    bool start_search(ccstr _query, Search_Opts *_opts);
+    void search_worker();
+
+    ccstr get_replacement_text(Search_Result *sr, ccstr replace_text);
+    bool start_replace(ccstr _replace_with);
+    void replace_worker();
 
     inline bool chars_eq(char a, char b) {
         if (opts.case_sensitive)

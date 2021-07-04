@@ -1,21 +1,7 @@
 #include "search.hpp"
 #include "world.hpp"
 
-ccstr Searcher::boyer_moore_strnstr(ccstr s, s32 slen) {
-    int i;
-    s32 pos = qlen - 1;
-
-    while (pos < slen) {
-        for (i = qlen - 1; i >= 0 && chars_eq(s[pos], query[i]); pos--, i--) {
-        }
-
-        if (i < 0) return s + pos + 1;
-
-        pos += max(alpha_skip[(unsigned char)s[pos]], find_skip[i]);
-    }
-
-    return NULL;
-}
+#define PREVIEW_LEN 40
 
 void Searcher::init() {
     ptr0(this);
@@ -33,12 +19,7 @@ void Searcher::init() {
 // 2) thread completes
 //     - clear everything but final
 
-void Searcher::cleanup(bool keep_final) {
-    if (mem_active) {
-        mem.cleanup();
-        mem_active = false;
-    }
-
+void Searcher::cleanup_search() {
     if (thread != NULL) {
         kill_thread(thread);
         close_thread_handle(thread);
@@ -54,16 +35,25 @@ void Searcher::cleanup(bool keep_final) {
         pcre_free(re_extra);
         re_extra = NULL;
     }
-
-    if (!keep_final) {
-        if (final_mem_active) {
-            final_mem.cleanup();
-            final_mem_active = false;
-        }
-    }
 }
 
-void Searcher::worker() {
+void Searcher::cleanup() {
+    cleanup_search();
+
+    if (mem_active) {
+        mem.cleanup();
+        mem_active = false;
+    }
+
+    if (final_mem_active) {
+        final_mem.cleanup();
+        final_mem_active = false;
+    }
+
+    state = SEARCH_NOTHING_HAPPENING;
+}
+
+void Searcher::search_worker() {
     while (file_queue.len > 0) {
         auto filepath = *file_queue.last();
         file_queue.len--;
@@ -77,7 +67,7 @@ void Searcher::worker() {
 
         if (is_binary(buf, buflen)) continue;
 
-        int buf_offset = 0;
+        int bufoff = 0;
 
         struct Temp_Match {
             int start, end;
@@ -89,44 +79,51 @@ void Searcher::worker() {
         auto matches = alloc_list<Temp_Match>();
 
         if (opts.literal) {
-            while (buf_offset < buflen) {
-                auto match = boyer_moore_strnstr(&buf[buf_offset], buflen - buf_offset);
-                if (match == NULL)
-                    break;
+            while (bufoff < buflen) {
+                bool found = false;
 
-                buf_offset = match - buf;
+                // boyer moore
+                for (int k, i = bufoff + qlen - 1; i < buflen; i += max(alpha_skip[(u8)buf[i]], find_skip[k])) {
+                    for (k = qlen - 1; k >= 0 && chars_eq(buf[i], query[k]); k--)
+                        i--;
 
-                auto m = matches->append();
-                m->start = buf_offset;
-                m->end = buf_offset + qlen;
-
-                buf_offset += qlen;
-            }
-        } else {
-            int offset_vector[3 * 17]; // full match + 16 possible groups
-            while (buf_offset < buflen) {
-                int results = pcre_exec(re, re_extra, buf, buflen, buf_offset, 0, offset_vector, _countof(offset_vector));
-                if (results <= 0) break;
-
-                auto m = matches->append();
-                m->start = offset_vector[0];
-                m->end = offset_vector[1];
-
-                if (results > 1) {
-                    m->group_starts = alloc_list<int>();
-                    m->group_ends = alloc_list<int>();
-
-                    for (int i = 1; i < results; i++) {
-                        auto group_start = offset_vector[2*i + 0];
-                        auto group_end = offset_vector[2*i + 1];
-
-                        m->group_starts->append(group_start);
-                        m->group_ends->append(group_end);
+                    if (k < 0) {
+                        bufoff = i+1;
+                        found = true;
+                        break;
                     }
                 }
 
-                buf_offset = offset_vector[1];
-                // TODO: if (offset_vector[0] == offset_vector[1]) buf_offset++;
+                if (!found) break;
+
+                auto m = matches->append();
+                m->start = bufoff;
+                m->end = bufoff + qlen;
+
+                bufoff += qlen;
+            }
+        } else {
+            int offvec[3 * 17]; // full match + 16 possible groups
+
+            while (bufoff < buflen) {
+                int results = pcre_exec(re, re_extra, buf, buflen, bufoff, 0, offvec, _countof(offvec));
+                if (results <= 0) break;
+
+                auto m = matches->append();
+                m->start = offvec[0];
+                m->end = offvec[1];
+
+                if (results > 1) {
+                    m->group_starts = alloc_list<int>(results);
+                    m->group_ends = alloc_list<int>(results);
+                    for (int i = 1; i < results; i++) {
+                        m->group_starts->append(offvec[2*i + 0]);
+                        m->group_ends->append(offvec[2*i + 1]);
+                    }
+                }
+
+                bufoff = offvec[1];
+                // TODO: if (offvec[0] == offvec[1]) bufoff++;
             }
         }
 
@@ -186,15 +183,15 @@ void Searcher::worker() {
 
                 auto prevoff = sr->match_off;
 
-                int to_left = min((80 - sr->preview_len) / 2, min(sr->preview_start.x, 10));
+                int to_left = min((PREVIEW_LEN - sr->preview_len) / 2, min(sr->preview_start.x, 10));
 
                 prevoff -= to_left;
                 sr->preview_start.x -= to_left;
-                sr->match_offset_in_preview += to_left; 
+                sr->match_offset_in_preview += to_left;
                 sr->preview_len += to_left;
 
                 int to_right = 0;
-                for (int k = i; sr->preview_len < 80 && buf[k] != '\n' && k < buflen; k++)
+                for (int k = i; sr->preview_len < PREVIEW_LEN && buf[k] != '\n' && k < buflen; k++)
                     to_right++;
 
                 sr->preview_len += to_right;
@@ -214,12 +211,11 @@ void Searcher::worker() {
         }
     }
 
-    state = SEARCH_DONE;
-
+    state = SEARCH_SEARCH_DONE;
     close_thread_handle(thread);
     thread = NULL;
 
-    cleanup(true);
+    cleanup_search();
 }
 
 bool is_binary(ccstr buf, s32 len) {
@@ -266,9 +262,10 @@ bool Searcher::start_search(ccstr _query, Search_Opts *_opts) {
     SCOPED_MEM(&mem);
 
     state = SEARCH_SEARCH_IN_PROGRESS;
+    opts = *_opts;
+
     query = our_strcpy(_query);
     qlen = strlen(query);
-    opts = *_opts;
 
     file_queue.init();
 
@@ -362,22 +359,87 @@ bool Searcher::start_search(ccstr _query, Search_Opts *_opts) {
 
     auto fun = [](void *param) {
         auto s = (Searcher*)param;
-
         SCOPED_MEM(&s->mem);
-        s->worker();
+        s->search_worker();
     };
 
     thread = create_thread(fun, this);
     return (thread != NULL);
 }
 
-bool Searcher::perform_replace(ccstr replace_with) {
+bool Searcher::start_replace(ccstr _replace_with) {
+    SCOPED_MEM(&mem);
+    replace_with = our_strcpy(_replace_with);
+
+    auto fun = [](void *param) {
+        auto s = (Searcher*)param;
+        SCOPED_MEM(&s->mem);
+        s->replace_worker();
+    };
+
+    thread = create_thread(fun, this);
+    return (thread != NULL);
+}
+
+ccstr Searcher::get_replacement_text(Search_Result *sr, ccstr replace_text) {
+    if (opts.literal) return replace_text;
+
+    auto chars = alloc_list<char>();
+    auto rlen = strlen(replace_text);
+
+    int k = 0;
+    while (k < rlen) {
+        bool is_dollar_replacement = false;
+
+        do {
+            if (sr->groups == NULL) break;
+            if (replace_text[k] != '$') break;
+            if (k+1 >= rlen) break;
+            if (!isdigit(replace_text[k+1])) break;
+
+            Frame frame;
+
+            auto k2 = k + 1;
+            auto tmp = alloc_list<char>();
+            for(; k2 < rlen && isdigit(replace_text[k2]); k2++)
+                tmp->append(replace_text[k2]);
+            tmp->append('\0');
+
+            ccstr groupstr = NULL;
+
+            int group = atoi(tmp->items);
+            if (group == 0) {
+                groupstr = sr->match;
+            } else if (group-1 < sr->groups->len) {
+                groupstr = sr->groups->at(group-1);
+            } else {
+                frame.restore();
+                break;
+            }
+
+            for (auto p = groupstr; *p != '\0'; p++)
+                chars->append(*p);
+
+            k = k2;
+            is_dollar_replacement = true;
+        } while (0);
+
+        if (!is_dollar_replacement) {
+            chars->append(replace_text[k]);
+            k++;
+        }
+    }
+
+    chars->append('\0');
+    return chars->items;
+}
+
+void Searcher::replace_worker() {
     int off = 0;
-    auto replace_len = strlen(replace_with);
 
     For (search_results) {
         // would these ever happen
-        if (it.filepath == NULL) continue; 
+        if (it.filepath == NULL) continue;
         if (it.results == NULL || it.results->len == 0) continue;
 
 #if 0
@@ -416,53 +478,9 @@ bool Searcher::perform_replace(ccstr replace_with) {
 
         while (index < fmr->len) {
             if (nextmatch != NULL && index == nextmatch->match_off) {
-                if (opts.literal) {
-                    for (int k = 0; k < replace_len; k++)
-                        write(replace_with[k]);
-                } else {
-                    int k = 0;
-                    while (k < replace_len) {
-                        bool is_dollar_replacement = false;
-
-                        do {
-                            if (nextmatch->groups == NULL) break;
-                            if (replace_with[k] != '$') break;
-                            if (k+1 >= replace_len) break;
-                            if (!isdigit(replace_with[k+1])) break;
-
-                            Frame frame;
-
-                            auto k2 = k + 1;
-                            auto tmp = alloc_list<char>();
-                            for(; k2 < replace_len && isdigit(replace_with[k2]); k2++)
-                                tmp->append(replace_with[k2]);
-                            tmp->append('\0');
-
-                            ccstr groupstr = NULL;
-
-                            int group = atoi(tmp->items);
-                            if (group == 0) {
-                                groupstr = nextmatch->match;
-                            } else if (group-1 < nextmatch->groups->len) {
-                                groupstr = nextmatch->groups->at(group-1);
-                            } else {
-                                frame.restore();
-                                break;
-                            }
-
-                            for (auto p = groupstr; *p != '\0'; p++)
-                                write(*p);
-
-                            k = k2;
-                            is_dollar_replacement = true;
-                        } while (0);
-
-                        if (!is_dollar_replacement) {
-                            write(replace_with[k]);
-                            k++;
-                        }
-                    }
-                }
+                auto newtext = get_replacement_text(nextmatch, replace_with);
+                for (auto p = newtext; *p != '\0'; p++)
+                    write(*p);
 
                 result_index++;
                 index += nextmatch->match_len;
@@ -482,4 +500,8 @@ bool Searcher::perform_replace(ccstr replace_with) {
 
         move_file_atomically(".search_and_replace.tmp", it.filepath);
     }
+
+    state = SEARCH_REPLACE_DONE;
+    close_thread_handle(thread);
+    thread = NULL;
 }

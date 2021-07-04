@@ -1344,14 +1344,13 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
             if (!cb(&op)) return WALK_ABORT;
         }
 
-        switch (node->type()) {
+        auto node_type = node->type();
+        switch (node_type) {
         case TS_IF_STATEMENT:
         case TS_FOR_STATEMENT:
         case TS_TYPE_SWITCH_STATEMENT:
         case TS_EXPRESSION_SWITCH_STATEMENT:
         case TS_BLOCK:
-        case TS_METHOD_DECLARATION:
-        case TS_FUNCTION_DECLARATION:
             {
                 open_scopes.append(depth);
 
@@ -1362,6 +1361,8 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
             }
             break;
 
+        case TS_METHOD_DECLARATION:
+        case TS_FUNCTION_DECLARATION:
         case TS_TYPE_DECLARATION:
         case TS_PARAMETER_LIST:
         case TS_SHORT_VAR_DECLARATION:
@@ -1369,6 +1370,15 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
         case TS_VAR_DECLARATION:
         case TS_RANGE_CLAUSE:
             {
+                if (node_type == TS_METHOD_DECLARATION || node_type == TS_FUNCTION_DECLARATION) {
+                    open_scopes.append(depth);
+
+                    Go_Scope_Op op;
+                    op.type = GSOP_OPEN_SCOPE;
+                    op.pos = node->start();
+                    if (!cb(&op)) return WALK_ABORT;
+                }
+
                 scope_ops_decls->len = 0;
                 node_to_decls(node, scope_ops_decls, filename);
 
@@ -1392,6 +1402,7 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
  - adds scope ops to the right entry in package->files
  - adds import paths to individual_imports
 */
+
 // @Write
 void Go_Indexer::process_tree_into_gofile(
     Go_File *file,
@@ -1690,10 +1701,10 @@ List<Postfix_Completion_Type> *Go_Indexer::get_postfix_completions(Ast_Node *ope
         auto res = evaluate_type(gotype, ctx);
         if (res == NULL) return false;
 
-        auto resolved_res = resolve_type(res->gotype, res->ctx);
-        if (resolved_res == NULL) return false;
+        auto rres = resolve_type(res->gotype, res->ctx);
+        if (rres == NULL) return false;
 
-        auto basetype = resolved_res->gotype;
+        auto basetype = rres->gotype;
 
         if (basetype->type == GOTYPE_MULTI)
             if (basetype->multi_types->len == 1)
@@ -1728,8 +1739,8 @@ List<Postfix_Completion_Type> *Go_Indexer::get_postfix_completions(Ast_Node *ope
             if (operand_node->type() == TS_CALL_EXPRESSION) {
                 For (*basetype->multi_types) {
                     if (it->type == GOTYPE_ID && streq(it->id_name, "error")) {
-                        // ret->append(PFC_CHECK);
-                        break;
+                        ret->append(PFC_CHECK);
+                        return true;
                     }
                 }
             }
@@ -1807,11 +1818,11 @@ List<Goresult> *Go_Indexer::get_dot_completions(Ast_Node *operand_node, bool *wa
     auto res = evaluate_type(gotype, ctx);
     if (res == NULL) return NULL;
 
-    auto resolved_res = resolve_type(res->gotype, res->ctx);
-    if (resolved_res == NULL) return NULL;
+    auto rres = resolve_type(res->gotype, res->ctx);
+    if (rres == NULL) return NULL;
 
     auto tmp = alloc_list<Goresult>();
-    list_fields_and_methods(res, resolved_res, tmp);
+    list_fields_and_methods(res, rres, tmp);
 
     auto results = alloc_list<Goresult>();
     For (*tmp) {
@@ -2136,43 +2147,30 @@ ccstr get_postfix_completion_name(Postfix_Completion_Type type) {
 }
 
 Gotype *Go_Indexer::get_closest_function(ccstr filepath, cur2 pos) {
-    auto import_path = filepath_to_import_path(our_dirname(filepath));
-    if (import_path == NULL) return NULL;
+    reload_all_dirty_files();
 
-    Go_Ctx ctx; ptr0(&ctx);
-    ctx.import_path = import_path;
-    ctx.filename = our_basename(filepath);
+    auto pf = parse_file(filepath, true);
+    if (pf == NULL) return NULL;
+    defer { free_parsed_file(pf); };
 
-    auto pkg = find_up_to_date_package(ctx.import_path);
-    if (pkg == NULL) return NULL;
-
-    auto check = [&](Go_File *it) { return streq(it->filename, ctx.filename); };
-    auto file = pkg->files->find(check);
-    if (file == NULL) return NULL;
-
-    auto scope_ops = file->scope_ops;
-
-    SCOPED_FRAME_WITH_MEM(&scoped_table_mem);
-
-    Scoped_Table<Godecl*> table;
-    {
-        SCOPED_MEM(&scoped_table_mem);
-        table.init();
-    }
-    defer { table.cleanup(); };
+    if (!truncate_parsed_file(pf, pos, "_}}}}}}}}}}}}}}}}}")) return NULL;
+    defer { ts_tree_delete(pf->tree); };
 
     Gotype *ret = NULL;
 
-    For (*scope_ops) {
-        if (it.pos > pos) break;
+    auto cb = [&](Go_Scope_Op *it) -> bool {
+        if (it->pos > pos) return false;
 
-        if (it.type == GSOP_DECL)
-            if (it.decl->decl_start <= pos && pos < it.decl->decl_end)
-                if (it.decl->type != GODECL_IMPORT)
-                    if (it.decl->gotype != NULL && it.decl->gotype->type == GOTYPE_FUNC)
-                        ret = it.decl->gotype;
-    }
+        if (it->type == GSOP_DECL)
+            if (it->decl->decl_start <= pos && pos < it->decl->decl_end)
+                if (it->decl->type != GODECL_IMPORT)
+                    if (it->decl->gotype != NULL && it->decl->gotype->type == GOTYPE_FUNC)
+                        ret = it->decl->gotype;
 
+        return true;
+    };
+
+    iterate_over_scope_ops(pf->root, cb, our_basename(filepath));
     return ret;
 }
 
@@ -2238,7 +2236,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
     if (pf == NULL) return false;
     defer { free_parsed_file(pf); };
 
-    if (!truncate_parsed_file(pf, pos, "_}}}}}}}}}}}")) return false;
+    if (!truncate_parsed_file(pf, pos, "_}}}}}}}}}}}}}}}}}")) return false;
     defer { ts_tree_delete(pf->tree); };
 
     auto intelligently_move_cursor_backwards = [&]() -> cur2 {
@@ -2430,10 +2428,10 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
             auto res = evaluate_type(gotype, &ctx);
             if (res == NULL) break;
 
-            auto resolved_res = resolve_type(res->gotype, res->ctx);
-            if (resolved_res == NULL) break;
+            auto rres = resolve_type(res->gotype, res->ctx);
+            if (rres == NULL) break;
 
-            expr_to_analyze_gotype = resolved_res->gotype;
+            expr_to_analyze_gotype = rres->gotype;
         } while (0);
 
         out->type = AUTOCOMPLETE_DOT_COMPLETE;
@@ -2569,7 +2567,7 @@ Parameter_Hint *Go_Indexer::parameter_hint(ccstr filepath, cur2 pos, bool trigge
     if (pf == NULL) return NULL;
     defer { free_parsed_file(pf); };
 
-    if (!truncate_parsed_file(pf, pos, ")}}}}}}}}")) return NULL;
+    if (!truncate_parsed_file(pf, pos, ")}}}}}}}}}}}}}}}}")) return NULL;
     defer { ts_tree_delete(pf->tree); };
 
     auto go_back_until_non_space = [&]() -> cur2 {
@@ -3834,12 +3832,12 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
             auto res = evaluate_type(gotype->lazy_sel_base, ctx);
             if (res == NULL) return NULL;
 
-            auto resolved_res = resolve_type(res->gotype, res->ctx);
-            resolved_res = unpointer_type(resolved_res->gotype, resolved_res->ctx);
+            auto rres = resolve_type(res->gotype, res->ctx);
+            rres = unpointer_type(rres->gotype, rres->ctx);
 
             List<Goresult> results;
             results.init();
-            list_fields_and_methods(res, resolved_res, &results);
+            list_fields_and_methods(res, rres, &results);
 
             // look backwards, so that overridden methods are found first
             for (int i = results.len - 1; i >= 0; i--) {

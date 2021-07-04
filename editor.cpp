@@ -357,8 +357,6 @@ void Editor::perform_autocomplete(AC_Result *result) {
 
             case PFC_CHECK:
                 {
-                    print("man this is super hard");
-
                     if (ac.operand_gotype->type != GOTYPE_MULTI) break;
 
                     int error_found_at = -1;
@@ -394,14 +392,17 @@ void Editor::perform_autocomplete(AC_Result *result) {
                         insert_text(" ");
                     }
 
-                    insert_text("= %s", operand_text);
+                    // TODO: make this smarter, like if we're already using err, either
+                    // make it a = instead of :=, or use a different name.
+                    insert_text(":= %s", operand_text);
                     save_autoindent();
                     insert_newline();
                     insert_text("if err != nil {");
                     insert_newline(1);
-                    insert_text("return ");
 
                     {
+                        bool ok = false;
+
                         do {
                             // get gotype of current function
                             auto functype = world.indexer.get_closest_function(filepath, cur);
@@ -411,14 +412,65 @@ void Editor::perform_autocomplete(AC_Result *result) {
                             if (result == NULL) break;
                             if (result->len == 0) break;
 
-                            // TODO: generate zero values
-                            // TODO i'm too lazy to do this lol
+                            bool error_found = false;
+                            auto &ind = world.indexer;
+
+                            auto get_zero_value_of_gotype = [&](Gotype *gotype) -> ccstr {
+                                if (gotype == NULL) return NULL;
+
+                                Go_Ctx ctx; ptr0(&ctx);
+                                ctx.import_path = ind.filepath_to_import_path(our_dirname(filepath));
+                                ctx.filename = our_basename(filepath);
+
+                                auto res = ind.evaluate_type(gotype, &ctx);
+                                if (res == NULL) return NULL;
+
+                                auto rres = ind.resolve_type(res->gotype, res->ctx);
+                                if (rres == NULL) return NULL;
+
+                                gotype = rres->gotype;
+
+                                // TODO: check for aliases of error
+                                if (gotype->type == GOTYPE_ID) {
+                                    ccstr int_types[] = {
+                                        "byte", "complex128", "complex64", "float32", "float64",
+                                        "int", "int16", "int32", "int64", "int8",
+                                        "rune", "uint", "uint16", "uint32", "uint64",
+                                        "uint8", "uintptr",
+                                    };
+
+                                    For (int_types)
+                                        if (streq(gotype->id_name, it))
+                                            return "0";
+
+                                    if (streq(gotype->id_name, "bool")) return "false";
+                                    if (streq(gotype->id_name, "string")) return "\"\"";
+                                    if (!error_found && streq(gotype->id_name, "error")) return "err";
+                                }
+
+                                return NULL;
+                            };
+
+                            insert_text("return ");
+
+                            for (int i = 0; i < result->len; i++) {
+                                auto &it = result->at(i);
+                                auto val = get_zero_value_of_gotype(it.gotype);
+
+                                if (i > 0)
+                                    insert_text(", ");
+                                insert_text(val == NULL ? "nil" : val);
+                            }
+
+                            ok = true;
                         } while (0);
+
+                        if (!ok) insert_text("// sorry, couldn't deduce return type");
                     }
 
-                    insert_text("return err"); // TODO: deduce return type of current function
                     insert_newline(0);
                     insert_text("}");
+                    insert_newline(0);
                 }
                 break;
 

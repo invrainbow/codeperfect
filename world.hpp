@@ -275,9 +275,16 @@ struct World {
     struct Windows_Open {
         bool im_demo;
         bool im_metrics;
-        bool search_and_replace;
-        bool build_and_debug;
     } windows_open;
+
+    struct {
+        bool show;
+        bool replace;
+        char find_str[256];
+        char replace_str[256];
+        bool use_regex;
+        bool case_sensitive;
+    } wnd_search_and_replace;
 
     struct {
         bool show;
@@ -325,13 +332,6 @@ struct World {
     struct {
         bool show_anon_nodes;
     } wnd_ast_vis;
-
-    struct {
-        char find_str[256];
-        char replace_str[256];
-        bool use_regex;
-        bool case_sensitive;
-    } wnd_search_and_replace;
 
     struct {
         i32 scroll_offset;
