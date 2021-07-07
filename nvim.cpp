@@ -61,9 +61,6 @@ void Nvim::handle_editor_on_ready(Editor *editor) {
         if (pos.y == -1)
             pos = editor->offset_to_cur(pos.x);
         editor->move_cursor(pos);
-    } else {
-        // print("jumplist.add from Nvim::handle_editor_on_ready");
-        world.jumplist.add(editor->id, editor->cur, true);
     }
 
     // clear dirty indicator (it'll be set after we filled buf during
@@ -478,6 +475,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
             case NVIM_REQ_SET_CURRENT_WIN:
                 if (editor->id == waiting_focus_window)
                     waiting_focus_window = 0;
+                current_win_id = editor->id;
                 break;
             case NVIM_REQ_CREATE_WIN:
                 editor->nvim_data.win_id = event->response.win.object_id;
@@ -763,17 +761,10 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
         case NVIM_NOTIF_CUSTOM_JUMP:
             {
                 auto forward = event->notification.custom_jump.forward;
-                nvim_print("jumping %s", forward ? "forward" : "backward");
-
-                auto &jl = world.jumplist;
-
-                jl.disable = true;
-                defer { jl.disable = false; };
-
-                auto loc = forward ? jl.go_forward() : jl.go_backward();
-                if (loc == NULL) break;
-
-                world.focus_editor_by_id(loc->editor_id, loc->pos);
+                if (forward)
+                    world.history.go_forward();
+                else
+                    world.history.go_backward();
             }
             break;
         case NVIM_NOTIF_CUSTOM_REVEAL_LINE:

@@ -398,7 +398,8 @@ struct Parser_It {
 };
 
 enum AC_Result_Type {
-    ACR_DOTCOMPLETE, // TODO: differentiate further in the future
+    ACR_BUILTIN,
+    ACR_DECLARATION,
     ACR_POSTFIX,
     // TODO: other types, like autocompleting "fmt.Printf" when only "ftP" has been typed as a lone keyword
 };
@@ -434,13 +435,22 @@ enum Postfix_Completion_Type {
     PFC_SWITCH,
 };
 
+struct Gotype;
+struct Godecl;
+
 struct AC_Result {
     ccstr name;
     AC_Result_Type type;
 
     union {
         Postfix_Completion_Type postfix_operation;
+
+        Godecl *declaration_godecl;
+        ccstr declaration_import_path;
+        ccstr declaration_filename;
     };
+
+    AC_Result* copy();
 };
 
 enum Autocomplete_Type {
@@ -448,8 +458,6 @@ enum Autocomplete_Type {
     AUTOCOMPLETE_DOT_COMPLETE,
     AUTOCOMPLETE_IDENTIFIER,
 };
-
-struct Gotype;
 
 struct Autocomplete {
     Autocomplete_Type type;
@@ -1126,7 +1134,7 @@ struct Go_Indexer {
     Jump_To_Definition_Result* jump_to_symbol(ccstr symbol);
     Jump_To_Definition_Result* jump_to_definition(ccstr filepath, cur2 pos);
     bool autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period, Autocomplete *out);
-    Parameter_Hint *parameter_hint(ccstr filepath, cur2 pos, bool triggered_by_paren);
+    Parameter_Hint *parameter_hint(ccstr filepath, cur2 pos);
 
     void run_background_thread2();
     ccstr filepath_to_import_path(ccstr filepath);

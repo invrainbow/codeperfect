@@ -1,9 +1,12 @@
 #pragma once
 
-#include "common.hpp"
-#include "editor.hpp"
+#include <math.h>
+
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
+
+#include "common.hpp"
+#include "editor.hpp"
 #include "ui.hpp"
 #include "os.hpp"
 #include "go.hpp"
@@ -60,48 +63,28 @@ struct Main_Thread_Message {
     };
 };
 
-struct Jumplist_Location {
+struct History_Loc {
     int editor_id;
     cur2 pos;
 };
 
-struct Jumplist {
-    Jumplist_Location buf[128]; // can expand this arbitrarily
+struct History {
+    History_Loc ring[128];
     int start;
-    int end;
-    int p;
-    bool empty;
-    bool disable;
+    int top;
+    int curr;
+    bool navigating_in_progress;
 
-    int inc(int i) { return i == _countof(buf)-1 ? 0 : i+1; }
-    int dec(int i) { return i == 0 ? _countof(buf)-1 : i-1; }
+    void init() { ptr0(this); }
 
-    void init() {
-        ptr0(this);
-        start = 0;
-        end = 0;
-        p = 0;
-        empty = true;
-        disable = false;
-    }
+    void push(int editor_id, cur2 pos, bool force = false);
+    void actually_go(History_Loc *it);
+    bool go_forward();
+    bool go_backward();
+    void remove_editor_from_history(int editor_id);
 
-    void add(int editor_id, cur2 pos, bool bypass_duplicate_check = false);
-
-    Jumplist_Location* go_backward() {
-        if (p == start) return NULL;
-        p = dec(p);
-        return &buf[p];
-    }
-
-    Jumplist_Location* go_forward() {
-        if (p == end) return NULL;
-        p = inc(p);
-        return &buf[p];
-    }
-
-    void purge_editor(int editor_id)  {
-        // TODO
-    }
+    int inc(int i) { return i == _countof(ring) - 1 ? 0 : i + 1; }
+    int dec(int i) { return i == 0 ? _countof(ring) - 1 : i - 1; }
 };
 
 struct Build {
@@ -142,13 +125,6 @@ struct Build {
     }
 };
 
-/*
-struct Index_Log {
-
-
-};
-*/
-
 struct World {
     Pool world_mem;
     Pool frame_mem;
@@ -164,8 +140,6 @@ struct World {
     Pool message_queue_mem;
     Pool index_log_mem;
     Pool search_mem;
-
-    Jumplist jumplist;
 
     Fridge<Chunk0> chunk0_fridge;
     Fridge<Chunk1> chunk1_fridge;
@@ -206,6 +180,8 @@ struct World {
     u32 current_pane;
 
     i32 resizing_pane; // if this value is i, we're resizing the border between i and i+1
+
+    History history;
 
     void activate_pane(u32 idx);
     void init_workspace();
@@ -284,6 +260,9 @@ struct World {
         char replace_str[256];
         bool use_regex;
         bool case_sensitive;
+
+        bool focus_bool;
+
     } wnd_search_and_replace;
 
     struct {

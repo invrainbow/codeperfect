@@ -495,13 +495,81 @@ void Editor::perform_autocomplete(AC_Result *result) {
         }
         break;
 
-    case ACR_DOTCOMPLETE:
+    case ACR_BUILTIN:
+    case ACR_DECLARATION:
         {
+            bool is_function = false;
+
+            auto modify_string = [&](ccstr s) -> ccstr {
+                switch (result->type) {
+                case ACR_BUILTIN:
+                    {
+                        ccstr builtins_with_space[] = {
+                            "package", "import", "const", "var", "func",
+                            "type", "struct", "interface", "map", "chan",
+                            "fallthrough", "break", "continue", "goto",
+                            "go", "defer", "if", "else",
+                            "for", "select", "switch",
+                        };
+
+                        For (builtins_with_space)
+                            if (streq(s, it))
+                                return our_sprintf("%s ", s);
+
+                        ccstr builtins_with_paren[] = {
+                            "append", "cap", "close", "copy",
+                            "len", "make", "new", "panic", "recover",
+                            "range", "new", "make"
+                        };
+
+                        For (builtins_with_paren) {
+                            if (streq(s, it)) {
+                                is_function = true;
+                                return our_sprintf("%s(", s);
+                            }
+                        }
+                    }
+                    break;
+
+                case ACR_DECLARATION:
+                    {
+                        auto godecl = result->declaration_godecl;
+                        if (godecl == NULL) break;
+
+                        if (!world.indexer.ready) break;
+                        if (!world.indexer.lock.try_enter()) break;
+                        defer { world.indexer.lock.leave(); };
+
+                        Go_Ctx ctx;
+                        ctx.import_path = result->declaration_import_path;
+                        ctx.import_path = result->declaration_filename;
+
+                        auto res = world.indexer.evaluate_type(godecl->gotype, &ctx);
+                        if (res == NULL) break;
+
+                        auto rres = world.indexer.resolve_type(res->gotype, res->ctx);
+                        if (rres == NULL) break;
+
+                        auto gotype = rres->gotype;
+                        if (gotype->type != GOTYPE_FUNC) break;
+
+                        // it's a func, add a '('
+                        is_function = true;
+                        return our_sprintf("%s(", s);
+                    }
+                    break;
+                }
+
+                return s;
+            };
+
+            auto fullstring = modify_string(result->name);
+
             // grab len & save name
-            auto len = strlen(result->name);
+            auto len = strlen(fullstring);
             auto name = alloc_array(uchar, len);
             for (u32 i = 0; i < len; i++)
-                name[i] = (uchar)result->name[i];
+                name[i] = (uchar)fullstring[i];
 
             // figure out where insertion starts and ends
             auto ac_start = cur;
@@ -554,6 +622,8 @@ void Editor::perform_autocomplete(AC_Result *result) {
                 }
                 nv.end_message();
             }
+
+            if (is_function) trigger_parameter_hint();
         }
         break;
     }
@@ -567,23 +637,17 @@ bool Editor::is_current_editor() {
     return false;
 }
 
-void Editor::raw_move_cursor(cur2 c) {
+void Editor::raw_move_cursor(cur2 c, bool dont_add_to_history) {
     if (c.y == -1) c = buf.offset_to_cur(c.x);
     if (c.y < 0 || c.y >= buf.lines.len) return;
     if (c.x < 0) return;
 
-    // does this work? update: nope
     auto line_len = buf.lines[c.y].len;
     if (c.x > line_len) {
         if (world.nvim.mode == VI_INSERT)
             c.x = line_len;
         else
             c.x = relu_sub(line_len, 1);
-    }
-
-    if (is_current_editor()) {
-        // print("jumplist.add from Editor::raw_move_cursor");
-        world.jumplist.add(id, c);
     }
 
     cur = c;
@@ -604,6 +668,11 @@ void Editor::raw_move_cursor(cur2 c) {
         view.y = relu_sub(cur.y, options.scrolloff);
     if (cur.y + options.scrolloff >= view.y + view.h)
         view.y = cur.y + options.scrolloff - view.h + 1;
+
+    if (!dont_add_to_history && (!nvim_data.is_navigating_to || c != nvim_data.navigating_to_pos)) {
+        world.history.push(id, c);
+        nvim_data.is_navigating_to = false;
+    }
 }
 
 void Editor::ensure_cursor_on_screen() {
@@ -966,15 +1035,14 @@ Editor *Pane::focus_editor_by_index(u32 idx, cur2 pos) {
             editor.nvim_data.need_initial_pos_set = true;
             editor.nvim_data.initial_pos = pos;
         }
-    } else {
-        // print("jumplist.add from Pane::focus_editor_by_index");
-        world.jumplist.add(editor.id, editor.cur);
     }
 
-    world.nvim.waiting_focus_window = editor.id;
-
-    if (editor.nvim_data.win_id != 0)
-        world.nvim.set_current_window(&editor);
+    if (world.nvim.current_win_id != editor.id) {
+        if (editor.nvim_data.win_id != 0)
+            world.nvim.set_current_window(&editor);
+        else
+            world.nvim.waiting_focus_window = editor.id;
+    }
 
     return &editor;
 }
@@ -1030,8 +1098,6 @@ void Editor::cleanup() {
         }
         nv.end_message();
     }
-
-    world.jumplist.purge_editor(id);
 
     buf.cleanup();
     mem.cleanup();
@@ -1092,8 +1158,7 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
             auto new_results = alloc_list<AC_Result>(ac.results->len);
             For (*ac.results) {
                 auto r = new_results->append();
-                memcpy(r, &it, sizeof(it));
-                r->name = our_strcpy(it.name);
+                memcpy(r, it.copy(), sizeof(AC_Result));
             }
 
             // copy ac over to autocomplete.ac
@@ -1234,7 +1299,7 @@ struct Type_Renderer : public Text_Renderer {
     }
 };
 
-void Editor::trigger_parameter_hint(bool triggered_by_paren) {
+void Editor::trigger_parameter_hint() {
     ptr0(&parameter_hint);
 
     {
@@ -1245,7 +1310,7 @@ void Editor::trigger_parameter_hint(bool triggered_by_paren) {
         if (!world.indexer.lock.try_enter()) return;
         defer { world.indexer.lock.leave(); };
 
-        auto hint = world.indexer.parameter_hint(filepath, cur, triggered_by_paren);
+        auto hint = world.indexer.parameter_hint(filepath, cur);
         if (hint == NULL) return;
         if (hint->gotype->type != GOTYPE_FUNC) return;
 
@@ -1406,15 +1471,18 @@ void Editor::type_char_in_insert_mode(char ch) {
     bool did_autocomplete = false;
     bool did_parameter_hint = false;
 
-    bool is_ident = false;
+    if (!isident(ch) && autocomplete.ac.results != NULL)
+        ptr0(&autocomplete);
 
     switch (ch) {
     case '.':
         trigger_autocomplete(true, false);
         did_autocomplete = true;
         break;
+
+    case ',':
     case '(':
-        trigger_parameter_hint(true);
+        trigger_parameter_hint();
         did_parameter_hint = true;
         break;
 
@@ -1546,39 +1614,34 @@ void Editor::type_char_in_insert_mode(char ch) {
             end_change();
         }
         break;
-
-    default:
-        {
-            if (autocomplete.ac.results != NULL) break;
-            if (!isident(ch)) break;
-
-            is_ident = true;
-
-            auto c = cur;
-            auto &line = buf.lines[c.y];
-
-            while (c.x > 0 && isident(line[c.x-1]))
-                c.x--;
-
-            if (c == cur) break; // technically can't happen, i believe
-
-            // c is now start of identifier
-
-            if (last_closed_autocomplete == c) break;
-
-            // don't open autocomplete before 3 chars
-            if (cur.x - c.x < 3) break;
-
-            did_autocomplete = true;
-            trigger_autocomplete(false, false);
-        }
-        break;
     }
 
-    if (!did_autocomplete) {
+    do {
+        if (!isident(ch)) break;
+        if (autocomplete.ac.results != NULL) break;
+
+        auto c = cur;
+        auto &line = buf.lines[c.y];
+
+        while (c.x > 0 && isident(line[c.x-1]))
+            c.x--;
+
+        if (c == cur) break; // technically can't happen, i believe
+
+        // c is now start of identifier
+
+        if (last_closed_autocomplete == c) break;
+
+        // don't open autocomplete before 3 chars
+        if (cur.x - c.x < 3) break;
+
+        did_autocomplete = true;
+        trigger_autocomplete(false, false);
+    } while (0);
+
+    if (!did_autocomplete)
         if (autocomplete.ac.results != NULL)
             trigger_autocomplete(false, isident, ch);
-    }
 
     if (!did_parameter_hint) update_parameter_hint();
 }

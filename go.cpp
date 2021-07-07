@@ -2398,7 +2398,8 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
             For (*results) {
                 auto r = ac_results->append();
                 r->name = it.decl->name;
-                r->type = ACR_DOTCOMPLETE;
+                r->type = ACR_DECLARATION;
+                r->declaration_godecl = it.decl;
             }
         } while (0);
 
@@ -2466,16 +2467,21 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
             seen_strings.init();
             ac_results = alloc_list<AC_Result>();
 
-            auto add_result = [&](ccstr name) {
-                if (name == NULL) return;
-                if (seen_strings.has(name)) return;
+            auto add_result = [&](ccstr name, AC_Result_Type type = ACR_DECLARATION) -> AC_Result* {
+                if (name == NULL) return NULL;
+                if (seen_strings.has(name)) return NULL;
 
-                ac_results->append()->name = name;
+                auto res = ac_results->append();
+                res->name = name;
+                res->type = type;
+
                 seen_strings.add(name);
+
+                return res;
             };
 
             SCOPED_FRAME_WITH_MEM(&scoped_table_mem);
-            Scoped_Table<bool> table;
+            Scoped_Table<Godecl*> table;
             {
                 SCOPED_MEM(&scoped_table_mem);
                 table.init();
@@ -2483,10 +2489,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
             defer { table.cleanup(); };
 
             iterate_over_scope_ops(pf->root, [&](Go_Scope_Op *it) -> bool {
-                if (it->pos > pos) {
-                    // iterate over hash table
-                    return false;
-                }
+                if (it->pos > pos) return false;
 
                 switch (it->type) {
                 case GSOP_OPEN_SCOPE:
@@ -2496,14 +2499,18 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                     table.pop_scope();
                     break;
                 case GSOP_DECL:
-                    table.set(it->decl->name, true);
+                    table.set(it->decl->name, it->decl);
                     break;
                 }
                 return true;
             }, ctx.filename);
 
             auto entries = table.entries();
-            For (*entries) add_result(it->name);
+            For (*entries) {
+                auto result = add_result(it->name, ACR_DECLARATION);
+                if (result != NULL)
+                    result->declaration_godecl = it->value;
+            }
 
             // probably should write like a "get current gofile" function
             Go_File *gofile = NULL;
@@ -2518,19 +2525,48 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
 
                 For (*gofile->imports) {
                     auto pkgname = get_import_package_name(&it);
-                    add_result(pkgname);
+                    add_result(pkgname, ACR_DECLARATION);
 
                     auto results = list_package_decls(it.import_path, LISTDECLS_EXCLUDE_METHODS);
-                    if (results != NULL)
-                        For (*results)
-                            add_result(our_sprintf("%s.%s", pkgname, it.decl->name));
+                    if (results != NULL) {
+                        For (*results) {
+                            auto result = add_result(our_sprintf("%s.%s", pkgname, it.decl->name));
+                            if (result != NULL)
+                                result->declaration_godecl = it.decl;
+                        }
+                    }
+
                 }
             } while (0);
 
             auto results = list_package_decls(ctx.import_path, LISTDECLS_EXCLUDE_METHODS);
-            if (results != NULL)
-                For (*results)
-                    add_result(it.decl->name);
+            if (results != NULL) {
+                For (*results) {
+                    auto result = add_result(it.decl->name);
+                    if (result != NULL)
+                        result->declaration_godecl = it.decl;
+                }
+            }
+
+            ccstr globals[] = {
+                // keywords
+                "package", "import", "const", "var", "func",
+                "type", "struct", "interface", "map", "chan",
+                "fallthrough", "break", "continue", "goto", "return",
+                "go", "defer", "if", "else",
+                "for", "range", "switch", "case",
+                "default", "select", "new", "make", "iota",
+
+                // builtins
+                "append", "cap", "close", "complex", "copy", "delete", "imag",
+                "len", "make", "new", "panic", "real", "recover", "bool",
+                "byte", "complex128", "complex64", "error", "float32",
+                "float64", "int", "int16", "int32", "int64", "int8", "rune",
+                "string", "uint", "uint16", "uint32", "uint64", "uint8",
+                "uintptr",
+            };
+
+            For (globals) add_result(it, ACR_BUILTIN);
 
             if (ac_results->len == 0) return false;
             out->type = AUTOCOMPLETE_IDENTIFIER;
@@ -2555,7 +2591,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
     return true;
 }
 
-Parameter_Hint *Go_Indexer::parameter_hint(ccstr filepath, cur2 pos, bool triggered_by_paren) {
+Parameter_Hint *Go_Indexer::parameter_hint(ccstr filepath, cur2 pos) {
     Timer t;
     t.init("parameter_hint");
 
@@ -4357,6 +4393,19 @@ List<T> *copy_list(List<T> *arr) {
 
 // -----
 // actual code that tells us how to copy objects
+
+AC_Result *AC_Result::copy() {
+    auto ret = clone(this);
+
+    ret->name = our_strcpy(name);
+    switch (type) {
+    case ACR_DECLARATION:
+        declaration_godecl = copy_object(declaration_godecl);
+        break;
+    }
+
+    return ret;
+}
 
 Godecl *Godecl::copy() {
     auto ret = clone(this);

@@ -134,6 +134,12 @@ enum {
     OUR_MOD_CTRL = 1 << 3,
 };
 
+#if OS_MAC
+#define OUR_MOD_PRIMARY OUR_MOD_CMD
+#else
+#define OUR_MOD_PRIMARY OUR_MOD_CTRL
+#endif
+
 struct UI {
     Font* font;
     List<Vert> verts;
@@ -198,6 +204,7 @@ struct UI {
     bool imgui_input_special_key_pressed(int key);
     bool imgui_input_key_pressed(int key);
     void imgui_with_disabled(bool disable, fn<void()> f);
+    bool imgui_is_window_focusing(bool *b);
     u32 imgui_get_keymods();
 };
 

@@ -105,6 +105,9 @@ struct Editor {
         int grid_topline;
 
         cur2 post_insert_original_cur;
+
+        bool is_navigating_to;
+        cur2 navigating_to_pos;
     } nvim_data;
 
     struct {
@@ -129,7 +132,7 @@ struct Editor {
     Client_Parameter_Hint parameter_hint;
 
     void update_tree();
-    void raw_move_cursor(cur2 c);
+    void raw_move_cursor(cur2 c, bool dont_add_to_history = false);
     void move_cursor(cur2 c);
     void reset_state();
     bool load_file(ccstr new_filepath);
@@ -144,7 +147,7 @@ struct Editor {
 
     void trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typing_ident, char typed_ident_char = 0);
     void filter_autocomplete_results(Autocomplete* ac);
-    void trigger_parameter_hint(bool triggered_by_paren);
+    void trigger_parameter_hint();
 
     void type_char(char ch);
     void type_char_in_insert_mode(char ch);

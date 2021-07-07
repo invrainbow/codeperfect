@@ -15,6 +15,96 @@ bool is_ignored_by_git(ccstr path) {
     return GHGitIgnoreCheckFile((char*)path);
 }
 
+void History::push(int editor_id, cur2 pos, bool force) {
+    if (navigating_in_progress) return;
+
+    auto should_push = [&]() -> bool {
+        if (curr == start) return true;
+
+        auto &it = ring[dec(curr)];
+        if (it.editor_id != editor_id) return true;
+
+        auto delta = abs((int)pos.y - (int)it.pos.y);
+        return delta >= 10;
+    };
+
+    if (!force && !should_push()) return;
+
+    ring[curr].editor_id = editor_id;
+    ring[curr].pos = pos;
+
+    top = curr = inc(curr);
+    if (curr == start)
+        start = inc(start);
+}
+
+void History::actually_go(History_Loc *it) {
+    auto editor = world.find_editor_by_id(it->editor_id);
+    if (editor == NULL) return;
+    if (!editor->is_nvim_ready()) return;
+
+    editor->nvim_data.is_navigating_to = true;
+    editor->nvim_data.navigating_to_pos = it->pos;
+    world.focus_editor_by_id(it->editor_id, it->pos);
+}
+
+bool History::go_forward() {
+    if (curr == top) return false;
+
+    curr = inc(curr);
+    actually_go(&ring[dec(curr)]);
+    return true;
+}
+
+bool History::go_backward() {
+    if (curr == start) return false;
+
+    {
+        auto editor = world.get_current_editor();
+        auto &it = ring[dec(curr)];
+
+        if (editor == NULL || it.editor_id != editor->id || it.pos != editor->cur) {
+            if (editor != NULL) {
+                push(editor->id, editor->cur, true);
+                curr = dec(curr);
+            }
+
+            actually_go(&it);
+            return true;
+        }
+    }
+
+    if (dec(curr) == start) return false;
+
+    curr = dec(curr);
+    actually_go(&ring[dec(curr)]);
+    return true;
+}
+
+void History::remove_editor_from_history(int editor_id) {
+    int i = start, j = start;
+
+    for (; i != curr; i = inc(i)) {
+        if (ring[i].editor_id != editor_id) {
+            if (i != j)
+                memcpy(&ring[j], &ring[i], sizeof(ring[j]));
+            j = inc(j);
+        }
+    }
+
+    curr = j;
+
+    for (; i != top; i = inc(i))  {
+        if (ring[i].editor_id != editor_id) {
+            if (i != j)
+                memcpy(&ring[j], &ring[i], sizeof(ring[j]));
+            j = inc(j);
+        }
+    }
+
+    top = j;
+}
+
 void World::fill_file_tree() {
     SCOPED_MEM(&file_tree_mem);
     file_tree_mem.reset();
@@ -255,13 +345,12 @@ void World::init() {
     indexer.init();
     nvim.init();
     dbg.init();
+    history.init();
 
     fill_file_tree();
 
     error_list.height = 125;
     file_explorer.selection = NULL;
-
-    jumplist.init();
 
     {
         SCOPED_MEM(&ui_mem);
@@ -584,30 +673,6 @@ Editor* World::focus_editor_by_id(int editor_id, cur2 pos) {
         }
     }
     return NULL;
-}
-
-void Jumplist::add(int editor_id, cur2 pos, bool bypass_duplicate_check) {
-    if (disable) return;
-
-    auto editor = world.find_editor_by_id(editor_id);
-    if (editor == NULL) return;
-
-    if (!bypass_duplicate_check)
-        if (editor->is_current_editor() && editor->cur == pos)
-            return;
-
-    // print("jumplist add: %s %s", editor->filepath, format_cur(pos));
-
-    if (empty) {
-        empty = false;
-    } else {
-        if (inc(p) == start)
-            start = inc(start);
-        end = p = inc(p);
-    }
-
-    buf[p].editor_id = editor_id;
-    buf[p].pos = pos;
 }
 
 bool is_build_debug_free() {

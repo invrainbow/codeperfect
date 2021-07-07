@@ -557,6 +557,7 @@ struct Nvim {
     List<char> chars_after_exiting_insert_mode;
     u32 dotrepeat_buf_id;
     u32 dotrepeat_win_id;
+    u32 current_win_id;
 
     List<ccstr> started_messages;
     Pool started_messages_mem;

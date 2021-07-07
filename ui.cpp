@@ -233,6 +233,12 @@ bool get_type_color(Ast_Node *node, Editor *editor, vec3f *out) {
     return false;
 }
 
+bool UI::imgui_is_window_focusing(bool *b) {
+    auto old_focus = *b;
+    *b = ImGui::IsWindowFocused();
+    return !old_focus && *b;
+}
+
 void UI::render_godecl(Godecl *decl) {
     auto flags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth;
     if (ImGui::TreeNodeEx(decl, flags, "%s", godecl_type_str(decl->type))) {
@@ -2191,7 +2197,7 @@ void UI::draw_everything() {
 
         ImGui::Begin("Go To File", &world.wnd_goto_file.show, ImGuiWindowFlags_AlwaysAutoResize);
 
-        wnd.focused = ImGui::IsWindowFocused();
+        auto is_focusing = imgui_is_window_focusing(&wnd.focused);
 
         ImGui::Text("Search for file:");
 
@@ -2199,6 +2205,8 @@ void UI::draw_everything() {
             ImGui::SetKeyboardFocusHere();
         } else if (!wnd.first_open_focus_twice_done) {
             wnd.first_open_focus_twice_done = true;
+            ImGui::SetKeyboardFocusHere();
+        } else if (is_focusing) {
             ImGui::SetKeyboardFocusHere();
         }
 
@@ -2209,6 +2217,7 @@ void UI::draw_everything() {
                 world.focus_editor(filepath);
             }
             world.wnd_goto_file.show = false;
+            ImGui::SetWindowFocus(NULL);
         }
 
         auto mods = imgui_get_keymods();
@@ -2218,7 +2227,7 @@ void UI::draw_everything() {
             if (imgui_input_special_key_pressed(ImGuiKey_UpArrow)) go_up();
             if (imgui_input_special_key_pressed(ImGuiKey_Escape)) wnd.show = false;
             break;
-        case OUR_MOD_CTRL:
+        case OUR_MOD_PRIMARY:
             if (imgui_input_key_pressed('j')) go_down();
             if (imgui_input_key_pressed('k')) go_up();
             break;
@@ -2273,13 +2282,13 @@ void UI::draw_everything() {
             if (imgui_input_special_key_pressed(ImGuiKey_UpArrow)) go_up();
             if (imgui_input_special_key_pressed(ImGuiKey_Escape)) wnd.show = false;
             break;
-        case OUR_MOD_CTRL:
+        case OUR_MOD_PRIMARY:
             if (imgui_input_key_pressed('j')) go_down();
             if (imgui_input_key_pressed('k')) go_up();
             break;
         }
 
-        wnd.focused = ImGui::IsWindowFocused();
+        auto is_focusing = imgui_is_window_focusing(&wnd.focused);
 
         ImGui::Text("Search for symbol:");
 
@@ -2288,9 +2297,28 @@ void UI::draw_everything() {
         } else if (!wnd.first_open_focus_twice_done) {
             wnd.first_open_focus_twice_done = true;
             ImGui::SetKeyboardFocusHere();
+        } else if (is_focusing) {
+            ImGui::SetKeyboardFocusHere();
         }
 
-        ImGui::InputText("##search_for_symbol", wnd.query, _countof(wnd.query));
+        if (ImGui::InputText("##search_for_symbol", wnd.query, _countof(wnd.query), ImGuiInputTextFlags_EnterReturnsTrue)) {
+            wnd.show = false;
+            ImGui::SetWindowFocus(NULL);
+
+            do {
+                if (wnd.filtered_results->len == 0) break;
+                if (!world.indexer.ready) break;
+
+                if (!world.indexer.lock.try_enter()) break;
+                defer { world.indexer.lock.leave(); };
+
+                auto symbol = wnd.symbols->at(wnd.filtered_results->at(wnd.selection));
+                auto result = world.indexer.jump_to_symbol(symbol);
+                if (result == NULL) break;
+
+                goto_jump_to_definition_result(result);
+            } while (0);
+        }
 
         if (ImGui::IsItemEdited()) {
             if (strlen(wnd.query) >= 2)
@@ -2330,19 +2358,21 @@ void UI::draw_everything() {
         ImGui::SetNextWindowDockID(dock_sidebar_id, ImGuiCond_Once);
 
         ImGui::Begin(
-            our_sprintf("%s##search_and_replace", wnd.replace ? "Search and Replace" : "Search"),
+            our_sprintf("%s###search_and_replace", wnd.replace ? "Search and Replace" : "Search"),
             &wnd.show, ImGuiWindowFlags_AlwaysAutoResize
         );
+
+        bool is_focusing = imgui_is_window_focusing(&wnd.focus_bool);
 
         bool entered = false;
 
         ImGui::PushFont(world.ui.im_font_mono);
         {
+            if (is_focusing || ImGui::IsWindowAppearing())
+                ImGui::SetKeyboardFocusHere();
+
             if (imgui_input_text_full("Search for", wnd.find_str, _countof(wnd.find_str), ImGuiInputTextFlags_EnterReturnsTrue))
                 entered = true;
-
-            if (ImGui::IsWindowAppearing())
-                ImGui::SetKeyboardFocusHere();
 
             if (wnd.replace)
                 if (imgui_input_text_full("Replace with", wnd.replace_str, _countof(wnd.replace_str), ImGuiInputTextFlags_EnterReturnsTrue))
@@ -3110,6 +3140,8 @@ void UI::draw_everything() {
                                 auto actual_color = color;
                                 if (result.type == ACR_POSTFIX)
                                     actual_color = new_vec3f(1.0, 0.8, 0.8);
+                                if (result.type == ACR_BUILTIN)
+                                    actual_color = new_vec3f(0.8, 1.0, 0.8);
 
                                 auto str = result.name;
                                 auto pos = menu_pos + new_vec2f(settings.autocomplete_item_padding_x, settings.autocomplete_item_padding_y);
