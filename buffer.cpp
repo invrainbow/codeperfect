@@ -168,20 +168,32 @@ ccstr Buffer::get_text(cur2 start, cur2 end) {
     return ret->items;
 }
 
-void Buffer::init(Pool *_mem) {
+void Buffer::init(Pool *_mem, bool _use_tree) {
     mem = _mem;
+    use_tree = _use_tree;
+
     {
         SCOPED_MEM(mem);
         lines.init(LIST_POOL, 128);
         bytecounts.init(LIST_POOL, 128);
     }
+
     initialized = true;
     dirty = false;
+
+    if (use_tree)
+        parser = new_ts_parser();
 }
 
 void Buffer::cleanup() {
     if (initialized) {
         clear();
+
+        if (parser != NULL)
+            ts_parser_delete(parser);
+        if (tree != NULL)
+            ts_tree_delete(tree);
+
         initialized = false;
     }
 }
@@ -243,6 +255,14 @@ void Buffer::read(Buffer_Read_Func f) {
 
     (*bytecounts.last())++;
     dirty = false;
+
+    if (use_tree) {
+        if (tree != NULL) {
+            ts_tree_delete(tree);
+            tree = NULL;
+        }
+        update_tree();
+    }
 }
 
 void Buffer::read(File *f) {
@@ -267,7 +287,7 @@ void Buffer::write(File *f) {
     }
 }
 
-void Buffer::delete_lines(u32 y1, u32 y2) {
+void Buffer::internal_delete_lines(u32 y1, u32 y2) {
     if (y2 > lines.len) y2 = lines.len;
 
     for (u32 y = y1; y < y2; y++)
@@ -284,7 +304,7 @@ void Buffer::delete_lines(u32 y1, u32 y2) {
 }
 
 void Buffer::clear() {
-    delete_lines(0, lines.len);
+    internal_delete_lines(0, lines.len);
     dirty = true;
 }
 
@@ -294,7 +314,7 @@ s32 get_bytecount(Line *line) {
     return bc + 1;
 }
 
-void Buffer::insert_line(u32 y, uchar* text, s32 len) {
+void Buffer::internal_insert_line(u32 y, uchar* text, s32 len) {
     lines.ensure_cap(lines.len + 1);
     bytecounts.ensure_cap(bytecounts.len + 1);
 
@@ -316,13 +336,21 @@ void Buffer::insert_line(u32 y, uchar* text, s32 len) {
     dirty = true;
 }
 
-void Buffer::append_line(uchar* text, s32 len) {
-    insert_line(lines.len, text, len);
+void Buffer::internal_append_line(uchar* text, s32 len) {
+    internal_insert_line(lines.len, text, len);
     dirty = true;
 }
 
 void Buffer::insert(cur2 start, uchar* text, s32 len) {
     i32 x = start.x, y = start.y;
+
+    TSInputEdit tsedit = {0};
+    if (use_tree) {
+        tsedit.start_byte = cur_to_offset(start);
+        tsedit.start_point = cur_to_tspoint(start);
+        tsedit.old_end_byte = cur_to_offset(start);
+        tsedit.old_end_point = cur_to_tspoint(start);
+    }
 
     bool has_newline = false;
     for (u32 i = 0; i < len; i++) {
@@ -333,7 +361,7 @@ void Buffer::insert(cur2 start, uchar* text, s32 len) {
     }
 
     if (y == lines.len)
-        append_line(NULL, 0);
+        internal_append_line(NULL, 0);
 
     auto line = &lines[y];
     s32 total_len = line->len + len;
@@ -348,12 +376,12 @@ void Buffer::insert(cur2 start, uchar* text, s32 len) {
         if (line->len > x)
             memcpy(&buf[x+len], &line->items[x], sizeof(uchar) * (line->len - x));
 
-        delete_lines(y, y + 1);
+        internal_delete_lines(y, y + 1);
 
         u32 last = 0;
         for (u32 i = 0; i <= total_len; i++) {
             if (i == total_len || buf[i] == '\n') {
-                insert_line(y++, buf + last, i - last);
+                internal_insert_line(y++, buf + last, i - last);
                 last = i + 1;
             }
         }
@@ -369,12 +397,68 @@ void Buffer::insert(cur2 start, uchar* text, s32 len) {
         bytecounts[y] += bc;
     }
 
+    auto end = start;
+    for (int i = 0; i < len; i++) {
+        if (text[i] == '\n') {
+            end.x = 0;
+            end.y++;
+        } else {
+            end.x++;
+        }
+    }
+
+    if (use_tree) {
+        tsedit.new_end_byte = cur_to_offset(end);
+        tsedit.new_end_point = cur_to_tspoint(end);
+        ts_tree_edit(tree, &tsedit);
+        update_tree();
+    }
+
     dirty = true;
+}
+
+void Buffer::update_tree() {
+    TSInput input;
+    input.payload = this;
+    input.encoding = TSInputEncodingUTF8;
+
+    input.read = [](void *p, uint32_t off, TSPoint pos, uint32_t *read) -> const char* {
+        auto buf = (Buffer*)p;
+        auto it = buf->iter(buf->offset_to_cur(off));
+        u32 n = 0;
+
+        while (!it.eof()) {
+            auto uch = it.next();
+            if (uch == 0) break;
+
+            auto size = uchar_size(uch);
+            if (n + size + 1 > _countof(buf->tsinput_buffer)) break;
+
+            n += uchar_to_cstr(uch, &buf->tsinput_buffer[n]);
+        }
+
+        *read = n;
+        buf->tsinput_buffer[n] = '\0';
+        return buf->tsinput_buffer;
+    };
+
+    tree = ts_parser_parse(parser, tree, input);
+    tree_dirty = true;
 }
 
 void Buffer::remove(cur2 start, cur2 end) {
     i32 x1 = start.x, y1 = start.y;
     i32 x2 = end.x, y2 = end.y;
+
+    TSInputEdit tsedit = {0};
+    if (use_tree) {
+        tsedit.start_byte = cur_to_offset(start);
+        tsedit.start_point = cur_to_tspoint(start);
+        tsedit.old_end_byte = cur_to_offset(end);
+        tsedit.old_end_point = cur_to_tspoint(end);
+        tsedit.new_end_byte = tsedit.start_byte;
+        tsedit.new_end_point = tsedit.start_point;
+    }
 
     if (y1 == y2) {
         // TODO: If we can shrink the line, should we?
@@ -387,10 +471,15 @@ void Buffer::remove(cur2 start, cur2 end) {
         lines[y1].len = new_len;
         if (y2 < lines.len)
             memcpy(lines[y1].items + x1, lines[y2].items + x2, sizeof(uchar) * (lines[y2].len - x2));
-        delete_lines(y1 + 1, min(lines.len, y2 + 1));
+        internal_delete_lines(y1 + 1, min(lines.len, y2 + 1));
     }
     bytecounts[y1] = get_bytecount(&lines[y1]);
     dirty = true;
+
+    if (use_tree) {
+        ts_tree_edit(tree, &tsedit);
+        update_tree();
+    }
 }
 
 Buffer_It Buffer::iter(cur2 c) {

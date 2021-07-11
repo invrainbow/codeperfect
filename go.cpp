@@ -23,7 +23,7 @@
 #endif
 
 const unsigned char GO_INDEX_MAGIC_BYTES[3] = {0x49, 0xfa, 0x98};
-const int GO_INDEX_VERSION = 4;
+const int GO_INDEX_VERSION = 7;
 
 void index_print(ccstr fmt, ...) {
     va_list args;
@@ -392,7 +392,7 @@ void Go_Indexer::reload_all_dirty_files() {
 
             auto iter = alloc_object(Parser_It);
             iter->init(&it.buf);
-            auto root_node = new_ast_node(ts_tree_root_node(it.tree), iter);
+            auto root_node = new_ast_node(ts_tree_root_node(it.buf.tree), iter);
 
             ccstr package_name = NULL;
             process_tree_into_gofile(file, root_node, it.filepath, &package_name);
@@ -441,6 +441,239 @@ void Go_Indexer::replace_package_name(Go_Package *pkg, ccstr package_name) {
     {
         SCOPED_MEM(&final_mem);
         pkg->package_name = our_strcpy(package_name);
+    }
+}
+
+void Go_Indexer::init_builtins(Go_Package *pkg) {
+    pkg->package_name = "@builtins";
+
+    ccstr fake_filename = "this is a fake file";
+
+    auto f = get_ready_file_in_package(pkg, fake_filename);
+    f->hash = CUSTOM_HASH_BUILTINS;
+
+    auto add_builtin = [&](Godecl_Type decl_type, Gotype_Builtin_Type type, ccstr name) -> Gotype * {
+        SCOPED_MEM(&final_mem);
+
+        auto gotype = new_gotype(GOTYPE_BUILTIN);
+        gotype->builtin_type = type;
+
+        auto decl = f->decls->append();
+        decl->type = decl_type;
+        decl->name = our_strcpy(name);
+        decl->file = fake_filename;
+        decl->gotype = gotype;
+
+        return gotype;
+    };
+
+    add_builtin(GODECL_TYPE, GO_BUILTIN_COMPLEXTYPE, "ComplexType");
+    add_builtin(GODECL_TYPE, GO_BUILTIN_FLOATTYPE, "FloatType");
+    add_builtin(GODECL_TYPE, GO_BUILTIN_INTEGERTYPE, "IntegerType");
+    add_builtin(GODECL_TYPE, GO_BUILTIN_TYPE, "Type");
+    add_builtin(GODECL_TYPE, GO_BUILTIN_TYPE1, "Type1");
+
+    add_builtin(GODECL_TYPE, GO_BUILTIN_BOOL, "bool");
+    add_builtin(GODECL_TYPE, GO_BUILTIN_BYTE, "byte");
+    add_builtin(GODECL_TYPE, GO_BUILTIN_COMPLEX128, "complex128");
+    add_builtin(GODECL_TYPE, GO_BUILTIN_COMPLEX64, "complex64");
+    add_builtin(GODECL_TYPE, GO_BUILTIN_ERROR, "error");
+    add_builtin(GODECL_TYPE, GO_BUILTIN_FLOAT32, "float32");
+    add_builtin(GODECL_TYPE, GO_BUILTIN_FLOAT64, "float64");
+    add_builtin(GODECL_TYPE, GO_BUILTIN_INT, "int");
+    add_builtin(GODECL_TYPE, GO_BUILTIN_INT16, "int16");
+    add_builtin(GODECL_TYPE, GO_BUILTIN_INT32, "int32");
+    add_builtin(GODECL_TYPE, GO_BUILTIN_INT64, "int64");
+    add_builtin(GODECL_TYPE, GO_BUILTIN_INT8, "int8");
+    add_builtin(GODECL_TYPE, GO_BUILTIN_RUNE, "rune");
+    add_builtin(GODECL_TYPE, GO_BUILTIN_STRING, "string");
+    add_builtin(GODECL_TYPE, GO_BUILTIN_UINT, "uint");
+    add_builtin(GODECL_TYPE, GO_BUILTIN_UINT16, "uint16");
+    add_builtin(GODECL_TYPE, GO_BUILTIN_UINT32, "uint32");
+    add_builtin(GODECL_TYPE, GO_BUILTIN_UINT64, "uint64");
+    add_builtin(GODECL_TYPE, GO_BUILTIN_UINT8, "uint8");
+    add_builtin(GODECL_TYPE, GO_BUILTIN_UINTPTR, "uintptr");
+
+    {
+        Gotype *func_type = NULL;
+
+        auto start = [&](Gotype *recv = NULL) {
+            func_type = new_gotype(GOTYPE_FUNC);
+            func_type->func_recv = recv;
+            func_type->func_sig.params = alloc_list<Godecl>();
+            func_type->func_sig.result = alloc_list<Godecl>();
+        };
+
+        auto add_param = [&](ccstr name, Gotype *gotype) {
+            auto decl = func_type->func_sig.params->append();
+            decl->type = GODECL_FIELD;
+            decl->name = name;
+            decl->gotype = gotype;
+        };
+
+        auto add_result = [&](Gotype *gotype) {
+            auto decl = func_type->func_sig.result->append();
+            decl->type = GODECL_FIELD;
+            decl->name = NULL;
+            decl->gotype = gotype;
+        };
+
+        auto save = [&](Gotype_Builtin_Type type, ccstr name) {
+            auto gotype = add_builtin(GODECL_FUNC, type, name);
+
+            SCOPED_MEM(&final_mem);
+            gotype->builtin_underlying_type = func_type->copy();
+        };
+
+        auto builtin = [&](ccstr name) -> Gotype * {
+            auto decl = f->decls->find([&](auto it) { return streq(it->name, name); });
+            if (decl == NULL) return NULL;
+            return decl->gotype;
+        };
+
+        auto slice = [&](Gotype *base) -> Gotype * {
+            auto ret = new_gotype(GOTYPE_SLICE);
+            ret->slice_base = base;
+            return ret;
+        };
+
+        auto variadic = [&](Gotype *base) -> Gotype * {
+            auto ret = new_gotype(GOTYPE_VARIADIC);
+            ret->variadic_base = base;
+            return ret;
+        };
+
+        auto chan = [&](Gotype *base, Chan_Direction direction) -> Gotype * {
+            auto ret = new_gotype(GOTYPE_SLICE);
+            ret->chan_base = base;
+            ret->chan_direction = direction;
+            return ret;
+        };
+
+        auto map = [&](Gotype *key, Gotype *value) -> Gotype * {
+            auto ret = new_gotype(GOTYPE_MAP);
+            ret->map_key = key;
+            ret->map_value = value;
+            return ret;
+        };
+
+        auto pointer = [&](Gotype *base) -> Gotype * {
+            auto ret = new_gotype(GOTYPE_POINTER);
+            ret->pointer_base = base;
+            return ret;
+        };
+
+        // error interface
+        {
+            SCOPED_MEM(&final_mem);
+
+            start();
+            add_result(builtin("string"));
+
+            auto field = alloc_object(Godecl);
+            field->type = GODECL_FIELD;
+            field->name = "Error";
+            field->gotype = func_type->copy();
+
+            auto error_interface = new_gotype(GOTYPE_INTERFACE);
+            error_interface->interface_specs = alloc_list<Go_Struct_Spec>(1);
+            error_interface->interface_specs = alloc_list<Go_Struct_Spec>(1);
+
+            auto spec = error_interface->interface_specs->append();
+            spec->field = field;
+
+            auto error_type = builtin("error");
+            error_type->builtin_underlying_type = error_interface;
+        }
+
+        // func append(slice []Type, elems ...Type) []Type
+        start();
+        add_param("slice", slice(builtin("Type")));
+        add_param("elems", variadic(builtin("Type")));
+        add_result(slice(builtin("Type")));
+        save(GO_BUILTIN_APPEND, "append");
+
+        // func cap(v Type) int
+        start();
+        add_param("v", builtin("Type"));
+        add_result(builtin("int"));
+        save(GO_BUILTIN_CAP, "cap");
+
+        // func close(c chan<- Type)
+        start();
+        add_param("c", chan(builtin("Type"), CHAN_SEND));
+        save(GO_BUILTIN_CLOSE, "close");
+
+        // func complex(r, i FloatType) ComplexType
+        start();
+        add_param("r", builtin("FloatType"));
+        add_param("i", builtin("FloatType"));
+        add_result(builtin("ComplexType"));
+        save(GO_BUILTIN_CAP, "complex");
+
+        // func copy(dst, src []Type) int
+        start();
+        add_param("dst", slice(builtin("Type")));
+        add_param("src", slice(builtin("Type")));
+        add_result(builtin("int"));
+        save(GO_BUILTIN_COPY, "copy");
+
+        // func delete(m map[Type]Type1, key Type)
+        start();
+        add_param("m", map(builtin("Type"), builtin("Type1")));
+        add_param("key", builtin("Type"));
+        save(GO_BUILTIN_DELETE, "delete");
+
+        // func imag(c ComplexType) FloatType
+        start();
+        add_param("c", builtin("ComplexType"));
+        add_result(builtin("FloatType"));
+        save(GO_BUILTIN_IMAG, "imag");
+
+        // func len(v Type) int
+        start();
+        add_param("v", builtin("Type"));
+        add_result(builtin("int"));
+        save(GO_BUILTIN_LEN, "len");
+
+        // func make(t Type, size ...IntegerType) Type
+        start();
+        add_param("t", builtin("Type"));
+        add_param("size", variadic(builtin("IntegerType")));
+        add_result(builtin("Type"));
+        save(GO_BUILTIN_MAKE, "make");
+
+        // func new(Type) *Type
+        start();
+        add_param(NULL, builtin("Type"));
+        add_result(pointer(builtin("Type")));
+        save(GO_BUILTIN_NEW, "new");
+
+        // func panic(v interface{})
+        start();
+        add_param("v", new_gotype(GOTYPE_INTERFACE));
+        save(GO_BUILTIN_PANIC, "panic");
+
+        // func print(args ...Type)
+        start();
+        add_param("args", variadic(builtin("Type")));
+        save(GO_BUILTIN_PRINT, "print");
+
+        // func println(args ...Type)
+        start();
+        add_param("args", variadic(builtin("Type")));
+        save(GO_BUILTIN_PRINTLN, "println");
+
+        // func real(c ComplexType) FloatType
+        start();
+        add_param("c", builtin("ComplexType"));
+        add_result(builtin("FloatType"));
+        save(GO_BUILTIN_REAL, "real");
+
+        // func recover() interface{}
+        start();
+        add_result(new_gotype(GOTYPE_INTERFACE));
+        save(GO_BUILTIN_RECOVER, "recover");
     }
 }
 
@@ -616,6 +849,12 @@ void Go_Indexer::background_thread() {
             }
         }
     }
+
+    // queue up builtins
+    // ===
+
+    if (find_up_to_date_package("@builtins") == NULL)
+        enqueue_package("@builtins");
 
     // if we have any ready packages, see if they have any imports that were missed
     // ===
@@ -949,41 +1188,44 @@ void Go_Indexer::background_thread() {
             t.init();
 
             pkg->status = GPS_UPDATING;
-
             pkg->cleanup_files();
 
-            bool include_tests = false;
-            /*
-            {
-                SCOPED_FRAME();
-                if (make_path(module_resolver.module_path)->contains(make_path(import_path)))
-                    include_tests = true;
-            }
-            */
-
-            auto source_files = list_source_files(resolved_path, include_tests);
-            if (source_files != NULL) {
-                For (*source_files) {
-                    auto filename = it;
-
-                    // TODO: refactor this block too, pretty sure we're doing same
-                    // thing somewhere else
-
+            if (streq(import_path, "@builtins")) {
+                init_builtins(pkg);
+            } else {
+                bool include_tests = false;
+                /*
+                {
                     SCOPED_FRAME();
+                    if (make_path(module_resolver.module_path)->contains(make_path(import_path)))
+                        include_tests = true;
+                }
+                */
 
-                    auto filepath = path_join(resolved_path, filename);
+                auto source_files = list_source_files(resolved_path, include_tests);
+                if (source_files != NULL) {
+                    For (*source_files) {
+                        auto filename = it;
 
-                    auto pf = parse_file(filepath);
-                    if (pf == NULL) continue;
-                    defer { free_parsed_file(pf); };
+                        // TODO: refactor this block too, pretty sure we're doing same
+                        // thing somewhere else
 
-                    auto file = get_ready_file_in_package(pkg, filename);
+                        SCOPED_FRAME();
 
-                    ccstr package_name = NULL;
-                    process_tree_into_gofile(file, pf->root, filepath, &package_name);
-                    replace_package_name(pkg, package_name);
+                        auto filepath = path_join(resolved_path, filename);
 
-                    enqueue_imports_from_file(file);
+                        auto pf = parse_file(filepath);
+                        if (pf == NULL) continue;
+                        defer { free_parsed_file(pf); };
+
+                        auto file = get_ready_file_in_package(pkg, filename);
+
+                        ccstr package_name = NULL;
+                        process_tree_into_gofile(file, pf->root, filepath, &package_name);
+                        replace_package_name(pkg, package_name);
+
+                        enqueue_imports_from_file(file);
+                    }
                 }
             }
 
@@ -1131,9 +1373,9 @@ Parsed_File *Go_Indexer::parse_file(ccstr filepath, bool use_latest) {
 
         ret = alloc_object(Parsed_File);
         ret->tree_belongs_to_editor = true;
-        ret->editor_parser = editor->parser;
+        ret->editor_parser = editor->buf.parser;
         ret->it = it;
-        ret->tree = ts_tree_copy(editor->tree);
+        ret->tree = ts_tree_copy(editor->buf.tree);
     } else {
         auto fm = map_file_into_memory(filepath);
         if (fm == NULL) return NULL;
@@ -1478,48 +1720,12 @@ void Go_Indexer::process_tree_into_gofile(
 
         imports_seen = true;
 
-        auto speclist_node = decl_node->child();
-        FOR_NODE_CHILDREN (speclist_node) {
-            Ast_Node *name_node = NULL;
-            Ast_Node *path_node = NULL;
+        import_decl_to_goimports(decl_node, filename, file->imports);
 
-            if (it->type() == TS_IMPORT_SPEC) {
-                path_node = it->field(TSF_PATH);
-                name_node = it->field(TSF_NAME);
-            } else if (it->type() == TS_INTERPRETED_STRING_LITERAL) {
-                path_node = it;
-                name_node = NULL;
-            } else {
-                continue;
-            }
-
-            auto new_import_path = parse_go_string(path_node->string());
-
-            // decl
-            auto decl = alloc_object(Godecl);
-            decl->file = filename;
-            decl->decl_start = decl_node->start();
-            decl->decl_end = decl_node->end();
-            import_spec_to_decl(it, decl);
-
-            // import
-            auto imp = file->imports->append();
-            imp->decl = decl;
-            imp->import_path = new_import_path;
-            if (name_node == NULL || name_node->null)
-                imp->package_name_type = GPN_IMPLICIT;
-            else if (name_node->type() == TS_DOT)
-                imp->package_name_type = GPN_DOT;
-            else if (name_node->type() == TS_BLANK_IDENTIFIER)
-                imp->package_name_type = GPN_BLANK;
-            else
-                imp->package_name_type = GPN_EXPLICIT;
-
-            if (imp->package_name_type == GPN_EXPLICIT)
-                imp->package_name = name_node->string();
-
-            {
-                SCOPED_MEM(&file->pool);
+        {
+            SCOPED_MEM(&file->pool);
+            for (int i = 0; i < file->imports->len; i++) {
+                auto imp = &file->imports->items[i];
                 memcpy(imp, imp->copy(), sizeof(Go_Import));
             }
         }
@@ -1528,6 +1734,49 @@ void Go_Indexer::process_tree_into_gofile(
     if (time) t.log("get import info");
 
     file->hash = hash_file(filepath);
+}
+
+void Go_Indexer::import_decl_to_goimports(Ast_Node *decl_node, ccstr filename, List<Go_Import> *out) {
+    auto speclist_node = decl_node->child();
+    FOR_NODE_CHILDREN (speclist_node) {
+        Ast_Node *name_node = NULL;
+        Ast_Node *path_node = NULL;
+
+        if (it->type() == TS_IMPORT_SPEC) {
+            path_node = it->field(TSF_PATH);
+            name_node = it->field(TSF_NAME);
+        } else if (it->type() == TS_INTERPRETED_STRING_LITERAL) {
+            path_node = it;
+            name_node = NULL;
+        } else {
+            continue;
+        }
+
+        auto new_import_path = parse_go_string(path_node->string());
+
+        // decl
+        auto decl = alloc_object(Godecl);
+        decl->file = filename;
+        decl->decl_start = decl_node->start();
+        decl->decl_end = decl_node->end();
+        import_spec_to_decl(it, decl);
+
+        // import
+        auto imp = out->append();
+        imp->decl = decl;
+        imp->import_path = new_import_path;
+        if (name_node == NULL || name_node->null)
+            imp->package_name_type = GPN_IMPLICIT;
+        else if (name_node->type() == TS_DOT)
+            imp->package_name_type = GPN_DOT;
+        else if (name_node->type() == TS_BLANK_IDENTIFIER)
+            imp->package_name_type = GPN_BLANK;
+        else
+            imp->package_name_type = GPN_EXPLICIT;
+
+        if (imp->package_name_type == GPN_EXPLICIT)
+            imp->package_name = name_node->string();
+    }
 }
 
 void Go_Indexer::handle_error(ccstr err) {
@@ -1549,6 +1798,9 @@ u64 Go_Indexer::hash_file(ccstr filepath) {
 
 u64 Go_Indexer::hash_package(ccstr resolved_package_path) {
     if (resolved_package_path == NULL) return 0;
+
+    if (streq(resolved_package_path, "@builtins"))
+        return CUSTOM_HASH_BUILTINS;
 
     u64 ret = 0;
     ret ^= meow_hash((void*)resolved_package_path, strlen(resolved_package_path));
@@ -1669,7 +1921,13 @@ Goresult *Go_Indexer::find_decl_of_id(ccstr id_to_find, cur2 id_pos, Go_Ctx *ctx
         }
     }
 
-    return find_decl_in_package(id_to_find, ctx->import_path);
+    auto ret = find_decl_in_package(id_to_find, ctx->import_path);
+    if (ret != NULL) return ret;
+
+    ret = find_decl_in_package(id_to_find, "@builtins");
+    if (ret != NULL) return ret;
+
+    return NULL;
 }
 
 ccstr Go_Indexer::get_package_referred_to_by_ast(Ast_Node *node, Go_Ctx *ctx) {
@@ -2400,6 +2658,8 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                 r->name = it.decl->name;
                 r->type = ACR_DECLARATION;
                 r->declaration_godecl = it.decl;
+                r->declaration_import_path = it.ctx->import_path;
+                r->declaration_filename = it.ctx->filename;
             }
         } while (0);
 
@@ -2467,13 +2727,13 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
             seen_strings.init();
             ac_results = alloc_list<AC_Result>();
 
-            auto add_result = [&](ccstr name, AC_Result_Type type = ACR_DECLARATION) -> AC_Result* {
+            auto add_declaration_result = [&](ccstr name) -> AC_Result* {
                 if (name == NULL) return NULL;
                 if (seen_strings.has(name)) return NULL;
 
                 auto res = ac_results->append();
                 res->name = name;
-                res->type = type;
+                res->type = ACR_DECLARATION;
 
                 seen_strings.add(name);
 
@@ -2507,9 +2767,12 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
 
             auto entries = table.entries();
             For (*entries) {
-                auto result = add_result(it->name, ACR_DECLARATION);
-                if (result != NULL)
-                    result->declaration_godecl = it->value;
+                auto r = add_declaration_result(it->name);
+                if (r != NULL) {
+                    r->declaration_godecl = it->value;
+                    r->declaration_import_path = ctx.import_path;
+                    r->declaration_filename = ctx.filename;
+                }
             }
 
             // probably should write like a "get current gofile" function
@@ -2525,48 +2788,80 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
 
                 For (*gofile->imports) {
                     auto pkgname = get_import_package_name(&it);
-                    add_result(pkgname, ACR_DECLARATION);
+                    auto import_path = it.import_path;
 
                     auto results = list_package_decls(it.import_path, LISTDECLS_EXCLUDE_METHODS);
                     if (results != NULL) {
                         For (*results) {
-                            auto result = add_result(our_sprintf("%s.%s", pkgname, it.decl->name));
-                            if (result != NULL)
+                            if (it.decl->name == NULL || !isupper(it.decl->name[0]))
+                                continue;
+
+                            auto result = add_declaration_result(our_sprintf("%s.%s", pkgname, it.decl->name));
+                            if (result != NULL) {
                                 result->declaration_godecl = it.decl;
+                                result->declaration_import_path = it.ctx->import_path;
+                                result->declaration_filename = it.ctx->filename;
+
+                                // wait, is this guaranteed to just always be declaration_import_path
+                                result->declaration_package = import_path;
+                            }
                         }
                     }
-
                 }
             } while (0);
 
             auto results = list_package_decls(ctx.import_path, LISTDECLS_EXCLUDE_METHODS);
             if (results != NULL) {
                 For (*results) {
-                    auto result = add_result(it.decl->name);
-                    if (result != NULL)
+                    auto result = add_declaration_result(it.decl->name);
+                    if (result != NULL) {
                         result->declaration_godecl = it.decl;
+                        result->declaration_import_path = it.ctx->import_path;
+                        result->declaration_filename = it.ctx->filename;
+                    }
                 }
             }
 
-            ccstr globals[] = {
-                // keywords
+            For (*index.packages) {
+                if (it.status != GPS_READY) continue;
+                if (it.import_path == NULL) continue;
+                if (it.package_name == NULL) continue;
+
+                auto res = ac_results->append();
+                res->name = it.package_name;
+                res->type = ACR_IMPORT;
+                res->import_path = it.import_path;
+            }
+
+            ccstr keywords[] = {
                 "package", "import", "const", "var", "func",
                 "type", "struct", "interface", "map", "chan",
                 "fallthrough", "break", "continue", "goto", "return",
                 "go", "defer", "if", "else",
                 "for", "range", "switch", "case",
                 "default", "select", "new", "make", "iota",
-
-                // builtins
-                "append", "cap", "close", "complex", "copy", "delete", "imag",
-                "len", "make", "new", "panic", "real", "recover", "bool",
-                "byte", "complex128", "complex64", "error", "float32",
-                "float64", "int", "int16", "int32", "int64", "int8", "rune",
-                "string", "uint", "uint16", "uint32", "uint64", "uint8",
-                "uintptr",
             };
 
-            For (globals) add_result(it, ACR_BUILTIN);
+            For (keywords) {
+                auto res = ac_results->append();
+                res->name = it;
+                res->type = ACR_KEYWORD;
+            }
+
+            // add builtins
+            {
+                auto results = list_package_decls("@builtins", LISTDECLS_EXCLUDE_METHODS);
+                if (results != NULL) {
+                    For (*results) {
+                        auto res = add_declaration_result(it.decl->name); // i think this is enough?
+                        if (res != NULL) {
+                            res->declaration_godecl = it.decl;
+                            res->declaration_import_path = it.ctx->import_path;
+                            res->declaration_filename = it.ctx->filename;
+                        }
+                    }
+                }
+            }
 
             if (ac_results->len == 0) return false;
             out->type = AUTOCOMPLETE_IDENTIFIER;
@@ -2684,7 +2979,11 @@ Parameter_Hint *Go_Indexer::parameter_hint(ccstr filepath, cur2 pos) {
 
     auto res = evaluate_type(gotype, &ctx);
     if (res == NULL) return NULL;
-    if (res->gotype->type != GOTYPE_FUNC) return NULL;
+
+    auto rres = resolve_type(res->gotype, res->ctx);
+    if (rres == NULL) return NULL;
+
+    if (rres->gotype->type != GOTYPE_FUNC) return NULL;
 
     // should we try to "normalize" the types in res?  like say we have
     // packages foo and bar bar calls a func foo.Func foo includes package blah
@@ -2694,7 +2993,7 @@ Parameter_Hint *Go_Indexer::parameter_hint(ccstr filepath, cur2 pos) {
     t.log("get type of function");
 
     auto hint = alloc_object(Parameter_Hint);
-    hint->gotype = res->gotype->copy();
+    hint->gotype = rres->gotype->copy();
     hint->call_args_start = call_args_start;
 
     t.total();
@@ -3973,6 +4272,11 @@ Goresult *make_goresult(Godecl *decl, Go_Ctx *ctx) { return make_goresult_from_p
 
 Goresult *Go_Indexer::resolve_type(Gotype *type, Go_Ctx *ctx) {
     switch (type->type) {
+    case GOTYPE_BUILTIN: // pending decision: should we do this here?
+        if (type->builtin_underlying_type == NULL)
+            break;
+        return resolve_type(type->builtin_underlying_type, ctx);
+
     case GOTYPE_POINTER:
         {
             auto res = resolve_type(type->pointer_base, ctx);
@@ -4400,7 +4704,13 @@ AC_Result *AC_Result::copy() {
     ret->name = our_strcpy(name);
     switch (type) {
     case ACR_DECLARATION:
-        declaration_godecl = copy_object(declaration_godecl);
+        ret->declaration_godecl = copy_object(declaration_godecl);
+        ret->declaration_import_path = our_strcpy(declaration_import_path);
+        ret->declaration_filename = our_strcpy(declaration_filename);
+        ret->declaration_package = our_strcpy(declaration_package);
+        break;
+    case ACR_IMPORT:
+        ret->import_path = our_strcpy(import_path);
         break;
     }
 
@@ -4473,6 +4783,9 @@ Gotype *Gotype::copy() {
         break;
     case GOTYPE_RANGE:
         ret->range_base = copy_object(range_base);
+        break;
+    case GOTYPE_BUILTIN:
+        ret->builtin_underlying_type = copy_object(builtin_underlying_type);
         break;
     case GOTYPE_LAZY_INDEX:
         ret->lazy_index_base = copy_object(lazy_index_base);
@@ -4656,6 +4969,9 @@ void Gotype::read(Index_Stream *s) {
     case GOTYPE_RANGE:
         READ_OBJ(range_base);
         break;
+    case GOTYPE_BUILTIN:
+        READ_OBJ(builtin_underlying_type);
+        break;
     case GOTYPE_LAZY_INDEX:
         READ_OBJ(lazy_index_base);
         break;
@@ -4789,6 +5105,9 @@ void Gotype::write(Index_Stream *s) {
         break;
     case GOTYPE_RANGE:
         WRITE_OBJ(range_base);
+        break;
+    case GOTYPE_BUILTIN:
+        WRITE_OBJ(builtin_underlying_type);
         break;
     case GOTYPE_LAZY_INDEX:
         WRITE_OBJ(lazy_index_base);

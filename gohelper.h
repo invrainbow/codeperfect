@@ -33,7 +33,6 @@ typedef struct _GH_Build_Error {
     int32_t is_vcol;
 } GH_Build_Error;
 
-
 #line 1 "cgo-generated-wrapper"
 
 
@@ -91,7 +90,6 @@ extern GH_Build_Error* GHGetBuildStatus(GoInt* pstatus, GoInt* plines);
 extern char* GHGetGoEnv(char* name);
 extern void GHFree(void* p);
 extern void GHFmtStart();
-extern void GHFmtAddLine(char* line);
 extern char* GHFmtFinish(GoInt fmtType);
 extern GoUint8 GHCheckLicense();
 extern GoUint8 GHGitIgnoreInit(char* repo);

@@ -68,11 +68,7 @@ struct Editor {
     char filepath[MAX_PATH];
     bool is_untitled;
 
-    TSParser *parser;
-    TSTree *tree;
-    TSTreeCursor cursor;
-    char tsinput_buffer[128];
-    TSInputEdit curr_change;
+    // TSInputEdit curr_change;
 
     // is this file "dirty" from the perspective of the index?
     bool index_dirty;
@@ -110,10 +106,21 @@ struct Editor {
         cur2 navigating_to_pos;
     } nvim_data;
 
+    struct Insert_Change {
+        cur2 start; // line
+        cur2 end;
+        List<Line> lines;
+    };
+
     struct {
+        Pool mem;
+
+        // current change
         cur2 start;
-        cur2 backspaced_to;
+        cur2 old_end;
         u32 deleted_graphemes;
+
+        List<Insert_Change> other_changes;
         u32 skip_changedticks_until;
     } nvim_insert;
 
@@ -168,6 +175,7 @@ struct Editor {
     void ensure_cursor_on_screen();
     void insert_text_in_insert_mode(ccstr s);
     ccstr get_autoindent(int for_y);
+    void add_change_in_insert_mode(cur2 start, cur2 old_end, cur2 new_end);
 };
 
 struct Pane {

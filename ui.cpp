@@ -385,6 +385,9 @@ void UI::render_ts_cursor(TSTreeCursor *curr) {
         if (node->anon() && !world.wnd_ast_vis.show_anon_nodes)
             return WALK_SKIP_CHILDREN;
 
+        if (node->type() == TS_COMMENT && !world.wnd_ast_vis.show_comments)
+            return WALK_SKIP_CHILDREN;
+
         // auto changed = ts_node_has_changes(node->node);
 
         pop(depth);
@@ -1650,13 +1653,13 @@ void UI::draw_everything() {
                 if (!editor->is_go_file) return false;
                 if (!str_ends_with(editor->filepath, "_test.go")) return false;
                 if (!path_contains_in_subtree(world.current_path, editor->filepath)) return false;
-                if (editor->tree == NULL) return false;
+                if (editor->buf.tree == NULL) return false;
 
                 bool ret = false;
 
                 Parser_It it;
                 it.init(&editor->buf);
-                auto root_node = new_ast_node(ts_tree_root_node(editor->tree), &it);
+                auto root_node = new_ast_node(ts_tree_root_node(editor->buf.tree), &it);
 
                 find_nodes_containing_pos(root_node, editor->cur, true, [&](auto it) -> Walk_Action {
                     if (it->type() == TS_SOURCE_FILE)
@@ -2568,14 +2571,19 @@ void UI::draw_everything() {
         auto editor = world.get_current_editor();
         if (editor == NULL) break;
 
-        auto tree = editor->tree;
+        auto tree = editor->buf.tree;
         if (tree == NULL) break;
 
         if (world.wnd_editor_tree.show) {
             ImGui::Begin("AST", &world.wnd_editor_tree.show, 0);
+
             ImGui::Checkbox("show anon?", &world.wnd_ast_vis.show_anon_nodes);
-            ts_tree_cursor_reset(&editor->cursor, ts_tree_root_node(tree));
-            render_ts_cursor(&editor->cursor);
+            ImGui::SameLine();
+            ImGui::Checkbox("show comments?", &world.wnd_ast_vis.show_comments);
+
+            ts_tree_cursor_reset(&editor->buf.cursor, ts_tree_root_node(tree));
+            render_ts_cursor(&editor->buf.cursor);
+
             ImGui::End();
         }
 
@@ -2744,13 +2752,13 @@ void UI::draw_everything() {
             highlights.init();
 
             // generate editor highlights
-            if (editor->tree != NULL) {
-                ts_tree_cursor_reset(&editor->cursor, ts_tree_root_node(editor->tree));
+            if (editor->buf.tree != NULL) {
+                ts_tree_cursor_reset(&editor->buf.cursor, ts_tree_root_node(editor->buf.tree));
 
                 auto start = new_cur2(0, editor->view.y);
                 auto end = new_cur2(0, editor->view.y + editor->view.h);
 
-                walk_ts_cursor(&editor->cursor, false, [&](Ast_Node *node, Ts_Field_Type, int depth) -> Walk_Action {
+                walk_ts_cursor(&editor->buf.cursor, false, [&](Ast_Node *node, Ts_Field_Type, int depth) -> Walk_Action {
                     auto node_start = node->start();
                     auto node_end = node->end();
 
@@ -3140,8 +3148,12 @@ void UI::draw_everything() {
                                 auto actual_color = color;
                                 if (result.type == ACR_POSTFIX)
                                     actual_color = new_vec3f(1.0, 0.8, 0.8);
+                                if (result.type == ACR_KEYWORD)
+                                    actual_color = new_vec3f(1.0, 1.0, 0.8);
+                                /*
                                 if (result.type == ACR_BUILTIN)
                                     actual_color = new_vec3f(0.8, 1.0, 0.8);
+                                */
 
                                 auto str = result.name;
                                 auto pos = menu_pos + new_vec2f(settings.autocomplete_item_padding_x, settings.autocomplete_item_padding_y);

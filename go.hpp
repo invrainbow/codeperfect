@@ -12,6 +12,11 @@ extern "C" TSLanguage *tree_sitter_go();
 extern const unsigned char GO_INDEX_MAGIC_BYTES[3];
 extern const int GO_INDEX_VERSION;
 
+enum {
+    CUSTOM_HASH_BUILTINS = 1,
+    // other custom packages? can't imagine there will be anything else
+};
+
 // mirrors tree-sitter/src/go.h
 enum Ts_Field_Type {
     TSF_ALIAS = 1,
@@ -398,9 +403,10 @@ struct Parser_It {
 };
 
 enum AC_Result_Type {
-    ACR_BUILTIN,
     ACR_DECLARATION,
+    ACR_KEYWORD,
     ACR_POSTFIX,
+    ACR_IMPORT,
     // TODO: other types, like autocompleting "fmt.Printf" when only "ftP" has been typed as a lone keyword
 };
 
@@ -445,9 +451,15 @@ struct AC_Result {
     union {
         Postfix_Completion_Type postfix_operation;
 
-        Godecl *declaration_godecl;
-        ccstr declaration_import_path;
-        ccstr declaration_filename;
+        struct {
+            Godecl *declaration_godecl;
+            ccstr declaration_import_path;
+            ccstr declaration_filename;
+            bool declaration_is_builtin;
+            ccstr declaration_package; // if the decl is "foo.bar", this will be "foo"
+        };
+
+        ccstr import_path;
     };
 
     AC_Result* copy();
@@ -467,7 +479,7 @@ struct Autocomplete {
     cur2 keyword_end;
 
     // only for AUTOCOMPLETE_DOT_COMPLETE
-    cur2 operand_start; 
+    cur2 operand_start;
     cur2 operand_end;
     Gotype *operand_gotype;
 };
@@ -677,6 +689,52 @@ enum Range_Type {
     RANGE_MAP,
 };
 
+enum Gotype_Builtin_Type {
+    // functions
+    GO_BUILTIN_APPEND,  // func append(slice []Type, elems ...Type) []Type
+    GO_BUILTIN_CAP,     // func cap(v Type) int
+    GO_BUILTIN_CLOSE,   // func close(c chan<- Type)
+    GO_BUILTIN_COMPLEX, // func complex(r, i FloatType) ComplexType
+    GO_BUILTIN_COPY,    // func copy(dst, src []Type) int
+    GO_BUILTIN_DELETE,  // func delete(m map[Type]Type1, key Type)
+    GO_BUILTIN_IMAG,    // func imag(c ComplexType) FloatType
+    GO_BUILTIN_LEN,     // func len(v Type) int
+    GO_BUILTIN_MAKE,    // func make(t Type, size ...IntegerType) Type
+    GO_BUILTIN_NEW,     // func new(Type) *Type
+    GO_BUILTIN_PANIC,   // func panic(v interface{})
+    GO_BUILTIN_PRINT,   // func print(args ...Type)
+    GO_BUILTIN_PRINTLN, // func println(args ...Type)
+    GO_BUILTIN_REAL,    // func real(c ComplexType) FloatType
+    GO_BUILTIN_RECOVER, // func recover() interface{}
+
+    // types
+    GO_BUILTIN_COMPLEXTYPE,
+    GO_BUILTIN_FLOATTYPE,
+    GO_BUILTIN_INTEGERTYPE,
+    GO_BUILTIN_TYPE,
+    GO_BUILTIN_TYPE1,
+    GO_BUILTIN_BOOL,
+    GO_BUILTIN_BYTE,
+    GO_BUILTIN_COMPLEX128,
+    GO_BUILTIN_COMPLEX64,
+    GO_BUILTIN_ERROR,
+    GO_BUILTIN_FLOAT32,
+    GO_BUILTIN_FLOAT64,
+    GO_BUILTIN_INT,
+    GO_BUILTIN_INT16,
+    GO_BUILTIN_INT32,
+    GO_BUILTIN_INT64,
+    GO_BUILTIN_INT8,
+    GO_BUILTIN_RUNE,
+    GO_BUILTIN_STRING,
+    GO_BUILTIN_UINT,
+    GO_BUILTIN_UINT16,
+    GO_BUILTIN_UINT32,
+    GO_BUILTIN_UINT64,
+    GO_BUILTIN_UINT8,
+    GO_BUILTIN_UINTPTR,
+};
+
 enum Gotype_Type {
     GOTYPE_ID,
     GOTYPE_SEL,
@@ -692,6 +750,8 @@ enum Gotype_Type {
     GOTYPE_VARIADIC,
     GOTYPE_ASSERTION,
     GOTYPE_RANGE,
+
+    GOTYPE_BUILTIN,
 
     _GOTYPE_LAZY_MARKER_, // #define IS_LAZY_TYPE(x) (x > _GOTYPE_LAZY_MARKER_)
 
@@ -713,6 +773,11 @@ struct Gotype {
     Gotype_Type type;
 
     union {
+        struct {
+            Gotype_Builtin_Type builtin_type;
+            Gotype *builtin_underlying_type;
+        };
+
         struct {
             ccstr id_name;
             cur2 id_pos;
@@ -1002,10 +1067,16 @@ struct Module_Resolver {
     }
 
     ccstr resolve_import(ccstr import_path) {
+        if (streq(import_path, "@builtins"))
+            return import_path;
+
         return convert_path(root_import_to_resolved, import_path, PATH_SEP);
     }
 
     ccstr resolved_path_to_import_path(ccstr resolved_path) {
+        if (streq(resolved_path, "@builtins"))
+            return resolved_path;
+
         return convert_path(root_resolved_to_import, resolved_path, '/');
     }
 };
@@ -1191,6 +1262,8 @@ struct Go_Indexer {
     bool truncate_parsed_file(Parsed_File *pf, cur2 end_pos, ccstr chars_to_append);
     Gotype *get_closest_function(ccstr filepath, cur2 pos);
     void fill_goto_symbol();
+    void init_builtins(Go_Package *pkg);
+    void import_decl_to_goimports(Ast_Node *decl_node, ccstr filename, List<Go_Import> *out);
 };
 
 struct Scoped_Write {

@@ -12,7 +12,6 @@ typedef struct _GH_Build_Error {
     int32_t col;
     int32_t is_vcol;
 } GH_Build_Error;
-
 */
 import "C"
 
@@ -53,13 +52,6 @@ func stopBuild() {
 	}
 	currentBuild.cmd.Process.Kill()
 	currentBuild = nil
-}
-
-var goimportsOptions = &imports.Options{
-	TabWidth:  8,
-	TabIndent: true,
-	Comments:  true,
-	Fragment:  true,
 }
 
 var LastError error
@@ -191,6 +183,7 @@ func GHFmtStart() {
 }
 
 //export GHFmtAddLine
+
 func GHFmtAddLine(line *C.char) {
 	autofmtBuffer = append(autofmtBuffer, []byte(C.GoString(line))...)
 	autofmtBuffer = append(autofmtBuffer, '\n')
@@ -214,7 +207,13 @@ func GHFmtFinish(fmtType int) *C.char {
 	if fmtType == FmtGoFmt {
 		newSource, err = format.Source(autofmtBuffer)
 	} else if fmtType == FmtGoImports {
-		newSource, err = imports.Process("<standard input>", autofmtBuffer, goimportsOptions)
+		newSource, err = imports.Process("<standard input>", autofmtBuffer, &imports.Options{
+			TabWidth:   8,
+			TabIndent:  true,
+			Comments:   true,
+			Fragment:   true,
+			FormatOnly: true,
+		})
 	} else {
 		LastError = fmt.Errorf("Invalid format type.")
 		return nil
@@ -284,15 +283,15 @@ var gitignoreChecker *GitignoreChecker
 func GHGitIgnoreInit(repo *C.char) bool {
 	ignore, err := gitignore.NewRepository(C.GoString(repo))
 	if err != nil {
-        LastError = err
-        return false
+		LastError = err
+		return false
 	}
 
 	gitignoreChecker = &GitignoreChecker{
 		ignore: ignore,
 	}
 
-    return true
+	return true
 }
 
 //export GHGitIgnoreCheckFile

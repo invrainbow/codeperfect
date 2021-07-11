@@ -6,13 +6,13 @@
 #include "os.hpp"
 #include "editor.hpp"
 
-enum NvimExtType {
+enum Nvim_Ext_Type {
     NVIM_EXT_BUFFER,
     NVIM_EXT_WINDOW,
     NVIM_EXT_TABPAGE,
 };
 
-enum MpType {
+enum Mp_Type {
     MP_UNKNOWN = -1,
     MP_BOOL,
     MP_INT,
@@ -24,9 +24,9 @@ enum MpType {
     MP_EXT,
 };
 
-ccstr mptype_str(MpType type);
+ccstr mptype_str(Mp_Type type);
 
-enum MpOpcode {
+enum Mp_Opcode {
     MP_OP_NIL = 0xc0,
     MP_OP_TRUE = 0xc3,
     MP_OP_FALSE = 0xc2,
@@ -90,7 +90,7 @@ struct Mp_Writer {
 };
 
 struct Ext_Info {
-    NvimExtType type;
+    Nvim_Ext_Type type;
     // for now all the extension types just have an int
     u32 object_id;
 };
@@ -189,7 +189,7 @@ struct Mp_Reader {
         return ch;
     }
 
-    MpType peek_type() {
+    Mp_Type peek_type() {
         u8 b = peek();
         if (!ok)
             return MP_UNKNOWN;
@@ -332,11 +332,9 @@ enum Nvim_Request_Type {
     NVIM_REQ_DOTREPEAT_CREATE_BUF,
     NVIM_REQ_DOTREPEAT_CREATE_WIN,
 
-    NVIM_REQ_POST_INSERT_GETCHANGEDTICK,
     NVIM_REQ_POST_INSERT_DOTREPEAT_REPLAY,
-
-    NVIM_REQ_POST_SAVE_GETCHANGEDTICK,
     NVIM_REQ_POST_SAVE_SETLINES,
+    // NVIM_REQ_AUTOIMPORT_SETLINES,
 
     NVIM_REQ_GOTO_EXTMARK,
 
@@ -408,7 +406,6 @@ struct Nvim_Message {
         struct {
             u32 msgid;
             union {
-                int changedtick;
                 int channel_id;
                 Ext_Info buf;
                 Ext_Info win;
@@ -558,6 +555,7 @@ struct Nvim {
     u32 dotrepeat_buf_id;
     u32 dotrepeat_win_id;
     u32 current_win_id;
+    int changedtick;
 
     List<ccstr> started_messages;
     Pool started_messages_mem;

@@ -80,15 +80,11 @@ void Editor::insert_text_in_insert_mode(ccstr s) {
             text[j++] = uch;
     }
 
-    start_change();
-    {
-        buf.insert(cur, text, ulen);
-        auto c = cur;
-        for (u32 i = 0; i < ulen; i++)
-            c = buf.inc_cur(c);
-        raw_move_cursor(c);
-    }
-    end_change();
+    buf.insert(cur, text, ulen);
+    auto c = cur;
+    for (u32 i = 0; i < ulen; i++)
+        c = buf.inc_cur(c);
+    raw_move_cursor(c);
 }
 
 void Editor::perform_autocomplete(AC_Result *result) {
@@ -101,12 +97,8 @@ void Editor::perform_autocomplete(AC_Result *result) {
             // also what if we just forced you to be in insert mode for autocomplete lol
 
             // remove everything but the operator
-            {
-                start_change();
-                raw_move_cursor(ac.operand_end);
-                buf.remove(ac.operand_end, ac.keyword_end);
-                end_change();
-            }
+            raw_move_cursor(ac.operand_end);
+            buf.remove(ac.operand_end, ac.keyword_end);
 
             // nice little dsl here lol
 
@@ -170,10 +162,8 @@ void Editor::perform_autocomplete(AC_Result *result) {
             auto initialize_everything = [&]() {
                 operand_text = buf.get_text(ac.operand_start, ac.operand_end);
 
-                start_change();
                 raw_move_cursor(ac.operand_start);
                 buf.remove(ac.operand_start, ac.operand_end);
-                end_change();
 
                 curr_postfix = postfix_stack.append();
                 curr_postfix->start();
@@ -495,14 +485,18 @@ void Editor::perform_autocomplete(AC_Result *result) {
         }
         break;
 
-    case ACR_BUILTIN:
+    case ACR_KEYWORD:
     case ACR_DECLARATION:
+    case ACR_IMPORT:
         {
             bool is_function = false;
 
             auto modify_string = [&](ccstr s) -> ccstr {
                 switch (result->type) {
-                case ACR_BUILTIN:
+                case ACR_IMPORT:
+                    return our_sprintf("%s.", s);
+
+                case ACR_KEYWORD:
                     {
                         ccstr builtins_with_space[] = {
                             "package", "import", "const", "var", "func",
@@ -515,19 +509,6 @@ void Editor::perform_autocomplete(AC_Result *result) {
                         For (builtins_with_space)
                             if (streq(s, it))
                                 return our_sprintf("%s ", s);
-
-                        ccstr builtins_with_paren[] = {
-                            "append", "cap", "close", "copy",
-                            "len", "make", "new", "panic", "recover",
-                            "range", "new", "make"
-                        };
-
-                        For (builtins_with_paren) {
-                            if (streq(s, it)) {
-                                is_function = true;
-                                return our_sprintf("%s(", s);
-                            }
-                        }
                     }
                     break;
 
@@ -542,7 +523,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
 
                         Go_Ctx ctx;
                         ctx.import_path = result->declaration_import_path;
-                        ctx.import_path = result->declaration_filename;
+                        ctx.filename = result->declaration_filename;
 
                         auto res = world.indexer.evaluate_type(godecl->gotype, &ctx);
                         if (res == NULL) break;
@@ -563,6 +544,11 @@ void Editor::perform_autocomplete(AC_Result *result) {
                 return s;
             };
 
+            // this whole section is basically, like, "how do we replace text
+            // and make sure nvim/ts are in sync"
+            //
+            // refactor this out somehow, we're already starting to copy paste
+
             auto fullstring = modify_string(result->name);
 
             // grab len & save name
@@ -571,28 +557,12 @@ void Editor::perform_autocomplete(AC_Result *result) {
             for (u32 i = 0; i < len; i++)
                 name[i] = (uchar)fullstring[i];
 
-            // figure out where insertion starts and ends
             auto ac_start = cur;
             ac_start.x -= strlen(ac.prefix);
-            auto ac_end = ac_start;
-            ac_end.x += len;
 
             // perform the edit
             buf.remove(ac_start, cur);
             buf.insert(ac_start, name, len);
-
-            // tell tree-sitter about the edit
-            if (is_go_file) {
-                TSInputEdit tsedit = {0};
-                tsedit.start_byte = cur_to_offset(ac_start);
-                tsedit.start_point = cur_to_tspoint(ac_start);
-                tsedit.old_end_byte = cur_to_offset(cur);
-                tsedit.old_end_point = cur_to_tspoint(cur);
-                tsedit.new_end_byte = cur_to_offset(ac_end);
-                tsedit.new_end_point = cur_to_tspoint(ac_end);
-                ts_tree_edit(tree, &tsedit);
-                update_tree();
-            }
 
             // move cursor forward
             raw_move_cursor(new_cur2(ac_start.x + len, ac_start.y));
@@ -603,30 +573,151 @@ void Editor::perform_autocomplete(AC_Result *result) {
             // clear autocomplete
             ptr0(&ac);
 
-            // update buffer
-            if (world.nvim.mode != VI_INSERT) {
-                auto& nv = world.nvim;
-                auto msgid = nv.start_request_message("nvim_buf_set_lines", 5);
-                {
-                    auto req = nv.save_request(NVIM_REQ_AUTOCOMPLETE_SETBUF, msgid, id);
-                    req->autocomplete_setbuf.target_cursor = ac_end;
-                }
-                nv.writer.write_int(nvim_data.buf_id); // buffer
-                nv.writer.write_int(ac_end.y); // start
-                nv.writer.write_int(ac_end.y + 1); // end
-                nv.writer.write_bool(false); // strict_indexing
-                {
-                    nv.writer.write_array(1); // replacement
-                    auto& line = buf.lines[ac_start.y];
-                    nv.write_line(&line);
-                }
-                nv.end_message();
-            }
-
             if (is_function) trigger_parameter_hint();
+
+            auto see_if_we_need_autoimport = [&]() -> ccstr {
+                if (result->type == ACR_IMPORT)
+                    return result->import_path;
+                if (result->type == ACR_DECLARATION)
+                    return result->declaration_package;
+                return NULL;
+            };
+
+            auto import_to_add = see_if_we_need_autoimport();
+            if (import_to_add != NULL) {
+                auto iter = alloc_object(Parser_It);
+                iter->init(&buf);
+                auto root = new_ast_node(ts_tree_root_node(buf.tree), iter);
+
+                Ast_Node *imports_node = NULL;
+
+                FOR_NODE_CHILDREN (root) {
+                    if (it->type() == TS_IMPORT_DECLARATION) {
+                        imports_node = it;
+                        break;
+                    }
+                }
+
+                do {
+                    if (imports_node == NULL) break;
+                    if (cur <= imports_node->end()) break;
+
+                    auto imports = alloc_list<Go_Import>();
+                    world.indexer.import_decl_to_goimports(imports_node, NULL, imports);
+
+                    auto imp = imports->find([&](auto it) { return streq(it->import_path, import_to_add); });
+                    if (imp != NULL) break;
+
+                    Text_Renderer rend;
+                    rend.init();
+                    rend.write("import (\n");
+                    rend.write("\"%s\"\n", import_to_add);
+
+                    For (*imports) {
+                        switch (it.package_name_type) {
+                        case GPN_IMPLICIT:
+                            rend.write("\"%s\"", it.import_path);
+                            break;
+                        case GPN_EXPLICIT:
+                            rend.write("%s \"%s\"", it.package_name, it.import_path);
+                            break;
+                        case GPN_BLANK:
+                            rend.write("_ \"%s\"", it.import_path);
+                            break;
+                        case GPN_DOT:
+                            rend.write(". \"%s\"", it.import_path);
+                            break;
+                        }
+                        rend.write("\n");
+                    }
+
+                    rend.write(")");
+
+                    GHFmtStart();
+                    GHFmtAddLine(rend.finish());
+                    GHFmtAddLine("");
+
+                    auto new_contents = GHFmtFinish(GH_FMT_GOIMPORTS);
+                    if (new_contents == NULL) break;
+
+                    auto new_contents_len = strlen(new_contents);
+                    if (new_contents_len == 0) break;
+
+                    if (new_contents[new_contents_len-1] == '\n') {
+                        new_contents[new_contents_len-1] = '\0';
+                        new_contents_len--;
+                    }
+
+                    {
+                        auto start = imports_node->start();
+                        auto old_end = imports_node->end();
+
+                        if (old_end.y >= nvim_insert.start.y) break;
+
+                        auto chars = alloc_list<uchar>();
+                        auto new_end = start;
+
+                        Cstr_To_Ustr conv;
+                        conv.init();
+
+                        for (auto p = new_contents; *p != '\0'; p++) {
+                            bool found = false;
+                            auto uch = conv.feed(*p, &found);
+                            if (found) {
+                                chars->append(uch);
+
+                                if (uch == '\n') {
+                                    new_end.x = 0;
+                                    new_end.y++;
+                                } else {
+                                    new_end.x++;
+                                }
+                            }
+                        }
+
+                        // perform the edit
+                        buf.remove(start, old_end);
+                        buf.insert(start, chars->items, chars->len);
+
+                        add_change_in_insert_mode(start, old_end, new_end);
+                    }
+
+                    // do something with new_contents
+                } while (0);
+
+                trigger_autocomplete(true, false);
+            }
         }
         break;
     }
+}
+
+void Editor::add_change_in_insert_mode(cur2 start, cur2 old_end, cur2 new_end) {
+    auto &nvi = nvim_insert;
+
+    auto change = nvi.other_changes.append();
+    change->start = start;
+    change->end = old_end;
+
+    {
+        SCOPED_MEM(&nvi.mem);
+
+        change->lines.init(LIST_POOL, new_end.y - start.y + 1);
+        for (int i = start.y; i <= new_end.y; i++) {
+            auto line = change->lines.append();
+            line->init(LIST_POOL, buf.lines[i].len);
+            line->len = buf.lines[i].len;
+            memcpy(line->items, buf.lines[i].items, sizeof(uchar) * line->len);
+        }
+    }
+
+    if (old_end.y >= nvim_insert.start.y)
+        panic("can only add changes in insert mode before current change");
+
+    auto dy = new_end.y - old_end.y;
+    nvim_insert.start.y += dy;
+    nvim_insert.old_end.y += dy;
+    raw_move_cursor(new_cur2(cur.x, cur.y + dy), true);
 }
 
 bool Editor::is_current_editor() {
@@ -687,6 +778,7 @@ void Editor::ensure_cursor_on_screen() {
 void Editor::update_lines(int firstline, int lastline, List<uchar*> *new_lines, List<s32> *line_lengths) {
     if (lastline == -1) lastline = buf.lines.len;
 
+    /*
     auto start_cur = new_cur2(0, (i32)firstline);
     auto old_end_cur = new_cur2(0, (i32)lastline);
 
@@ -696,22 +788,23 @@ void Editor::update_lines(int firstline, int lastline, List<uchar*> *new_lines, 
         old_end_cur = new_cur2((i32)buf.lines.last()->len, (i32)buf.lines.len - 1);
     }
 
-    TSInputEdit tsedit; ptr0(&tsedit);
-
     if (is_go_file && tree != NULL) {
         tsedit.start_byte = cur_to_offset(start_cur);
         tsedit.start_point = cur_to_tspoint(start_cur);
         tsedit.old_end_byte = cur_to_offset(old_end_cur);
         tsedit.old_end_point = cur_to_tspoint(old_end_cur);
     }
+    */
 
-    buf.delete_lines(firstline, lastline);
+    buf.remove(new_cur2(0, firstline), new_cur2(0, lastline));
     for (u32 i = 0; i < new_lines->len; i++) {
-        auto line = new_lines->at(i);
-        auto len = line_lengths->at(i);
-        buf.insert_line(firstline + i, line, len);
+        cur2 c = new_cur2((i32)0, (i32)(firstline + i));
+        uchar newline = '\n';
+        buf.insert(c, &newline, 1);
+        buf.insert(c, new_lines->at(i), line_lengths->at(i));
     }
 
+    /*
     if (is_go_file) {
         if (tree != NULL) {
             auto new_end_cur = new_cur2(0, firstline + new_lines->len);
@@ -729,37 +822,7 @@ void Editor::update_lines(int firstline, int lastline, List<uchar*> *new_lines, 
 
         update_tree();
     }
-}
-
-void Editor::update_tree() {
-    if (!is_go_file) return;
-
-    TSInput input;
-    input.payload = this;
-    input.encoding = TSInputEncodingUTF8;
-
-    input.read = [](void *p, uint32_t off, TSPoint pos, uint32_t *read) -> const char* {
-        Editor *editor = (Editor*)p;
-        auto it = editor->buf.iter(editor->offset_to_cur(off));
-        u32 n = 0;
-
-        while (!it.eof()) {
-            auto uch = it.next();
-            if (uch == 0) break;
-
-            auto size = uchar_size(uch);
-            if (n + size + 1 > _countof(editor->tsinput_buffer)) break;
-
-            n += uchar_to_cstr(uch, &editor->tsinput_buffer[n]);
-        }
-
-        *read = n;
-        editor->tsinput_buffer[n] = '\0';
-        return editor->tsinput_buffer;
-    };
-
-    tree = ts_parser_parse(parser, tree, input);
-    index_dirty = true;
+    */
 }
 
 void Editor::move_cursor(cur2 c) {
@@ -803,21 +866,9 @@ void Editor::reload_file(bool because_of_file_watcher) {
     }
     defer { f.cleanup(); };
 
-    TSInputEdit tsedit; ptr0(&tsedit);
-
-    if (tree != NULL) {
-        cur2 start = new_cur2(0, 0);
-        cur2 old_end = new_cur2((i32)buf.lines.last()->len, buf.lines.len-1);
-
-        tsedit.start_byte = cur_to_offset(start);
-        tsedit.start_point = cur_to_tspoint(start);
-        tsedit.old_end_byte = cur_to_offset(old_end);
-        tsedit.old_end_point = cur_to_tspoint(old_end);
-    }
-
     if (buf.initialized)
         buf.cleanup();
-    buf.init(&mem);
+    buf.init(&mem, is_go_file);
     buf.read(&f);
 
     if (world.use_nvim) {
@@ -833,17 +884,6 @@ void Editor::reload_file(bool because_of_file_watcher) {
         For (buf.lines) nv.write_line(&it);
         nv.end_message();
     }
-
-    if (tree != NULL) {
-        cur2 new_end = new_cur2((i32)buf.lines.last()->len, buf.lines.len-1);
-
-        tsedit.new_end_byte = cur_to_offset(new_end);
-        tsedit.new_end_point = cur_to_tspoint(new_end);
-
-        ts_tree_edit(tree, &tsedit);
-    }
-
-    update_tree();
 }
 
 bool Editor::load_file(ccstr new_filepath) {
@@ -851,7 +891,9 @@ bool Editor::load_file(ccstr new_filepath) {
 
     if (buf.initialized)
         buf.cleanup();
-    buf.init(&mem);
+
+    is_go_file = (new_filepath != NULL && str_ends_with(new_filepath, ".go"));
+    buf.init(&mem, is_go_file);
 
     FILE* f = NULL;
     if (new_filepath != NULL) {
@@ -869,12 +911,10 @@ bool Editor::load_file(ccstr new_filepath) {
         buf.read(&f);
     } else {
         is_untitled = true;
-        uchar tmp = 0;
-        buf.insert_line(0, &tmp, 0);
+        uchar tmp = '\0';
+        buf.insert(new_cur2(0, 0), &tmp, 0);
         buf.dirty = false;
     }
-
-    is_go_file = (new_filepath != NULL && str_ends_with(new_filepath, ".go"));
 
     if (world.use_nvim) {
         auto& nv = world.nvim;
@@ -886,7 +926,6 @@ bool Editor::load_file(ccstr new_filepath) {
         nv.end_message();
     }
 
-    update_tree();
     return true;
 }
 
@@ -1001,13 +1040,175 @@ bool Editor::trigger_escape(cur2 go_here_after) {
     }
 
     if (world.nvim.mode == VI_INSERT) {
-        auto& nv = world.nvim;
+        auto &nv = world.nvim;
+        auto &writer = nv.writer;
+
+        /*
         auto msgid = nv.start_request_message("nvim_buf_get_changedtick", 1);
-
         auto req = nv.save_request(NVIM_REQ_POST_INSERT_GETCHANGEDTICK, msgid, id);
-
         nv.writer.write_int(nvim_data.buf_id);
         nv.end_message();
+        */
+
+        {
+            // skip next update from nvim
+            nvim_insert.skip_changedticks_until = nv.changedtick + nvim_insert.other_changes.len + 1;
+
+            auto start = nvim_insert.start;
+            auto old_end = nvim_insert.old_end;
+
+            // set new lines
+            nv.start_request_message("nvim_call_atomic", 1);
+            {
+                writer.write_array(nvim_insert.other_changes.len + 1);
+
+                For (nvim_insert.other_changes) {
+                    writer.write_array(2);
+                    writer.write_string("nvim_buf_set_lines");
+                    {
+                        writer.write_array(5);
+                        {
+                            writer.write_int(nvim_data.buf_id);
+                            writer.write_int(it.start.y);
+                            writer.write_int(it.end.y + 1);
+                            writer.write_bool(false);
+                            writer.write_array(it.lines.len);
+                            {
+                                For (it.lines) nv.write_line(&it);
+                            }
+                        }
+                    }
+                }
+
+                writer.write_array(2);
+                writer.write_string("nvim_buf_set_lines");
+                {
+                    writer.write_array(5);
+                    {
+
+                        writer.write_int(nvim_data.buf_id);
+                        writer.write_int(start.y);
+                        writer.write_int(old_end.y + 1);
+                        writer.write_bool(false);
+                        writer.write_array(cur.y - start.y + 1);
+                        {
+                            for (u32 y = start.y; y <= cur.y; y++)
+                                nv.write_line(&buf.lines[y]);
+                        }
+                    }
+                }
+            }
+            nv.end_message();
+
+            // reset other_changes and mem
+            nvim_insert.other_changes.len = 0;
+            nvim_insert.mem.reset();
+
+            // move cursor
+            auto old_cur = cur;
+            {
+                auto c = cur;
+                if (c.x > 0) {
+                    int gr_idx = buf.idx_cp_to_gr(c.y, c.x);
+                    c.x = buf.idx_gr_to_cp(c.y, relu_sub(gr_idx, 1));
+                }
+                raw_move_cursor(c);
+            }
+
+            u32 delete_len = nvim_insert.deleted_graphemes;
+
+            auto msgid = nv.start_request_message("nvim_call_atomic", 1);
+            nv.save_request(NVIM_REQ_POST_INSERT_DOTREPEAT_REPLAY, msgid, id);
+            {
+                writer.write_array(5);
+
+                {
+                    writer.write_array(2);
+                    writer.write_string("nvim_win_set_cursor");
+                    {
+                        writer.write_array(2);
+                        writer.write_int(nvim_data.win_id);
+                        {
+                            writer.write_array(2);
+                            writer.write_int(cur.y + 1);
+                            writer.write_int(buf.idx_cp_to_byte(cur.y, cur.x));
+                        }
+                    }
+                }
+
+                {
+                    writer.write_array(2);
+                    writer.write_string("nvim_set_current_win");
+                    {
+                        writer.write_array(1);
+                        writer.write_int(nv.dotrepeat_win_id);
+                    }
+                }
+
+                {
+                    writer.write_array(2);
+                    writer.write_string("nvim_buf_set_lines");
+                    {
+                        writer.write_array(5);
+                        writer.write_int(nv.dotrepeat_buf_id);
+                        writer.write_int(0);
+                        writer.write_int(-1);
+                        writer.write_bool(false);
+                        {
+                            writer.write_array(1);
+                            writer.write1(MP_OP_STRING);
+                            writer.write4(delete_len);
+                            for (u32 i = 0; i < delete_len; i++)
+                                writer.write1('x');
+                        }
+                    }
+                }
+
+                {
+                    writer.write_array(2);
+                    writer.write_string("nvim_win_set_cursor");
+                    {
+                        writer.write_array(2);
+                        writer.write_int(nv.dotrepeat_win_id);
+                        {
+                            writer.write_array(2);
+                            writer.write_int(1);
+                            writer.write_int(delete_len);
+                        }
+                    }
+                }
+
+                {
+                    Text_Renderer r;
+                    r.init();
+                    for (u32 i = 0; i < delete_len; i++)
+                        r.writestr("<BS>");
+
+                    auto it = buf.iter(nvim_insert.start);
+                    while (it.pos < old_cur) {
+                        // wait, does this take utf-8?
+                        auto ch = it.next();
+                        if (ch == '<') {
+                            r.writestr("<LT>");
+                        } else {
+                            char buf[4];
+                            auto len = uchar_to_cstr(ch, buf);
+                            for (int i = 0; i < len; i++)
+                                r.writechar(buf[i]);
+                        }
+                    }
+
+                    writer.write_array(2);
+                    writer.write_string("nvim_input");
+                    {
+                        writer.write_array(1);
+                        writer.write_string(r.finish());
+                    }
+                }
+            }
+
+            nv.end_message();
+        }
 
         handled = true;
 
@@ -1067,18 +1268,17 @@ void Editor::init() {
     id = ++world.next_editor_id;
 
     mem.init("editor mem");
-    SCOPED_MEM(&mem);
 
-    parser = new_ts_parser();
-    postfix_stack.init();
+    {
+        SCOPED_MEM(&mem);
+        postfix_stack.init();
+        nvim_insert.other_changes.init();
+    }
+
+    nvim_insert.mem.init("nvim_insert mem");
 }
 
 void Editor::cleanup() {
-    if (parser != NULL)
-        ts_parser_delete(parser);
-    if (tree != NULL)
-        ts_tree_delete(tree); // i remember this being super slow, is it still if it's just one tree?
-
     auto &nv = world.nvim;
 
     if (nvim_data.win_id != 0) {
@@ -1218,6 +1418,35 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
 struct Type_Renderer : public Text_Renderer {
     void write_type(Gotype *t, bool parameter_hint_root = false) {
         switch (t->type) {
+        case GOTYPE_BUILTIN:
+            switch (t->builtin_type) {
+            case GO_BUILTIN_COMPLEXTYPE: write("ComplexType"); break;
+            case GO_BUILTIN_FLOATTYPE: write("FloatType"); break;
+            case GO_BUILTIN_INTEGERTYPE: write("IntegerType"); break;
+            case GO_BUILTIN_TYPE: write("Type"); break;
+            case GO_BUILTIN_TYPE1: write("Type1"); break;
+            case GO_BUILTIN_BOOL: write("bool"); break;
+            case GO_BUILTIN_BYTE: write("byte"); break;
+            case GO_BUILTIN_COMPLEX128: write("complex128"); break;
+            case GO_BUILTIN_COMPLEX64: write("complex64"); break;
+            case GO_BUILTIN_ERROR: write("error"); break;
+            case GO_BUILTIN_FLOAT32: write("float32"); break;
+            case GO_BUILTIN_FLOAT64: write("float64"); break;
+            case GO_BUILTIN_INT: write("int"); break;
+            case GO_BUILTIN_INT16: write("int16"); break;
+            case GO_BUILTIN_INT32: write("int32"); break;
+            case GO_BUILTIN_INT64: write("int64"); break;
+            case GO_BUILTIN_INT8: write("int8"); break;
+            case GO_BUILTIN_RUNE: write("rune"); break;
+            case GO_BUILTIN_STRING: write("string"); break;
+            case GO_BUILTIN_UINT: write("uint"); break;
+            case GO_BUILTIN_UINT16: write("uint16"); break;
+            case GO_BUILTIN_UINT32: write("uint32"); break;
+            case GO_BUILTIN_UINT64: write("uint64"); break;
+            case GO_BUILTIN_UINT8: write("uint8"); break;
+            case GO_BUILTIN_UINTPTR: write("uintptr"); break;
+            }
+            break;
         case GOTYPE_ID:
             write("%s", t->id_name);
             break;
@@ -1390,7 +1619,7 @@ void Editor::update_parameter_hint() {
     auto should_close_hints = [&]() {
         if (cur < hint.start) return true;
 
-        auto root = new_ast_node(ts_tree_root_node(tree), NULL);
+        auto root = new_ast_node(ts_tree_root_node(buf.tree), NULL);
         bool ret = false;
 
         find_nodes_containing_pos(root, hint.start, true, [&](Ast_Node *it) -> Walk_Action {
@@ -1426,43 +1655,28 @@ void Editor::update_parameter_hint() {
     }
 }
 
-void Editor::start_change() {
-    if (!is_go_file) return;
+/*
+// start_change()
+curr_change.start_point = cur_to_tspoint(cur);
+curr_change.old_end_point = curr_change.start_point;
 
-    ptr0(&curr_change);
+// end_change()
+auto end = cur_to_offset(cur);
+if (end < curr_change.start_byte) {
+    curr_change.start_byte = end;
     curr_change.start_point = cur_to_tspoint(cur);
-    curr_change.start_byte = cur_to_offset(cur);
-
-    curr_change.old_end_point = curr_change.start_point;
-    curr_change.old_end_byte = curr_change.start_byte;
+} else if (curr_change.start_byte > 0) {
+    auto start = tspoint_to_cur(curr_change.start_point);
+    start = buf.dec_cur(start);
+    curr_change.start_point = cur_to_tspoint(start);
+    curr_change.start_byte = cur_to_offset(start);
 }
-
-void Editor::end_change() {
-    if (!is_go_file) return;
-
-    auto end = cur_to_offset(cur);
-
-    if (end < curr_change.start_byte) {
-        curr_change.start_byte = end;
-        curr_change.start_point = cur_to_tspoint(cur);
-    } else if (curr_change.start_byte > 0) {
-        auto start = tspoint_to_cur(curr_change.start_point);
-        start = buf.dec_cur(start);
-        curr_change.start_point = cur_to_tspoint(start);
-        curr_change.start_byte = cur_to_offset(start);
-    }
-
-    curr_change.new_end_byte = end;
-    curr_change.new_end_point = cur_to_tspoint(cur);
-
-    ts_tree_edit(tree, &curr_change);
-    update_tree();
-}
+curr_change.new_end_byte = end;
+curr_change.new_end_point = cur_to_tspoint(cur);
+*/
 
 void Editor::type_char_in_insert_mode(char ch) {
-    start_change();
     type_char(ch);
-    end_change();
 
     if (!is_go_file) return;
 
@@ -1526,7 +1740,7 @@ void Editor::type_char_in_insert_mode(char ch) {
             Parser_It it;
             it.init(&buf);
 
-            auto root_node = new_ast_node(ts_tree_root_node(tree), &it);
+            auto root_node = new_ast_node(ts_tree_root_node(buf.tree), &it);
 
             Ast_Node *rbrace_node = alloc_object(Ast_Node);
             bool rbrace_found = false;
@@ -1593,8 +1807,6 @@ void Editor::type_char_in_insert_mode(char ch) {
                     break;
             }
 
-            start_change();
-
             // backspace to start of line
             backspace_in_insert_mode(0, cur.x);
 
@@ -1610,8 +1822,6 @@ void Editor::type_char_in_insert_mode(char ch) {
 
             // move cursor after everything we typed
             raw_move_cursor(pos);
-
-            end_change();
         }
         break;
     }
@@ -1665,13 +1875,13 @@ void Editor::backspace_in_insert_mode(int graphemes_to_erase, int codepoints_to_
         start.x -= codepoints_to_erase;
     }
 
-    if (start < nvim_insert.backspaced_to) {
-        // this assumes start and nvim_insert.backspaced_to are on same line
-        int gr_end = buf.idx_cp_to_gr(nvim_insert.backspaced_to.y, nvim_insert.backspaced_to.x);
+    if (start < nvim_insert.start) {
+        // this assumes start and nvim_insert.start are on same line
+        int gr_end = buf.idx_cp_to_gr(nvim_insert.start.y, nvim_insert.start.x);
         int gr_start = buf.idx_cp_to_gr(start.y, start.x);
         nvim_insert.deleted_graphemes += (gr_end - gr_start);
 
-        nvim_insert.backspaced_to = start;
+        nvim_insert.start = start;
     }
 
     buf.remove(start, cur);
@@ -1712,7 +1922,7 @@ void Editor::format_on_save(int fmt_type, bool write_to_nvim) {
     }
 
     int curr = 0;
-    swapbuf.init(MEM);
+    swapbuf.init(MEM, false);
     swapbuf.read([&](char *out) -> bool {
         if (new_contents[curr] != '\0') {
             *out = new_contents[curr++];
@@ -1725,18 +1935,24 @@ void Editor::format_on_save(int fmt_type, bool write_to_nvim) {
     buf.copy_from(&swapbuf);
     buf.dirty = true;
 
-    if (tree != NULL) {
-        ts_tree_delete(tree);
-        tree = NULL;
-    }
-    update_tree();
-
     if (write_to_nvim) {
         auto &nv = world.nvim;
-        auto msgid = nv.start_request_message("nvim_buf_get_changedtick", 1);
-        auto req = nv.save_request(NVIM_REQ_POST_SAVE_GETCHANGEDTICK, msgid, id);
-        req->post_save_getchangedtick.cur = old_cur;
-        nv.writer.write_int(nvim_data.buf_id);
+        auto &writer = nv.writer;
+
+        // skip next update from nvim
+        nvim_insert.skip_changedticks_until = nv.changedtick;
+
+        auto msgid = nv.start_request_message("nvim_buf_set_lines", 5);
+        auto req = nv.save_request(NVIM_REQ_POST_SAVE_SETLINES, msgid, id);
+        req->post_save_setlines.cur = old_cur;
+
+        writer.write_int(nvim_data.buf_id);
+        writer.write_int(0);
+        writer.write_int(-1);
+        writer.write_bool(false);
+
+        writer.write_array(buf.lines.len);
+        For (buf.lines) nv.write_line(&it);
         nv.end_message();
     }
 }

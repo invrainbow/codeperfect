@@ -401,7 +401,7 @@ int main() {
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
     }
 
-    glfwSetWindowSizeCallback(world.window, [](GLFWwindow* wnd, i32 w, i32 h) {
+    glfwSetWindowSizeCallback(world.window, [](GLFWwindow*, i32 w, i32 h) {
         world.window_size.x = w;
         world.window_size.y = h;
 
@@ -413,7 +413,7 @@ int main() {
         glUniformMatrix4fv(glGetUniformLocation(world.ui.im_program, "projection"), 1, GL_FALSE, (float*)projection);
     });
 
-    glfwSetFramebufferSizeCallback(world.window, [](GLFWwindow* wnd, i32 w, i32 h) {
+    glfwSetFramebufferSizeCallback(world.window, [](GLFWwindow*, i32 w, i32 h) {
         world.display_size.x = w;
         world.display_size.y = h;
 
@@ -423,7 +423,7 @@ int main() {
         glUniformMatrix4fv(glGetUniformLocation(world.ui.program, "projection"), 1, GL_FALSE, (float*)projection);
     });
 
-    glfwSetCursorPosCallback(world.window, [](GLFWwindow* wnd, double x, double y) {
+    glfwSetCursorPosCallback(world.window, [](GLFWwindow*, double x, double y) {
         world.ui.mouse_delta.x = x - world.ui.mouse_pos.x;
         world.ui.mouse_delta.y = y - world.ui.mouse_pos.y;
         world.ui.mouse_pos.x = x;
@@ -446,7 +446,7 @@ int main() {
         }
     });
 
-    glfwSetMouseButtonCallback(world.window, [](GLFWwindow* wnd, int button, int action, int mods) {
+    glfwSetMouseButtonCallback(world.window, [](GLFWwindow*, int button, int action, int mods) {
         // Don't set world.ui.mouse_down here. We set it based on
         // world.ui.mouse_just_pressed and some additional logic below, while
         // we're setting io.MouseDown for ImGui.
@@ -455,7 +455,7 @@ int main() {
             world.ui.mouse_just_pressed[button] = true;
     });
 
-    glfwSetScrollCallback(world.window, [](GLFWwindow* wnd, double dx, double dy) {
+    glfwSetScrollCallback(world.window, [](GLFWwindow*, double dx, double dy) {
         ImGuiIO& io = ImGui::GetIO();
         io.MouseWheelH += (float)dx;
         io.MouseWheel += (float)dy;
@@ -485,13 +485,11 @@ int main() {
         */
     });
 
-    glfwSetWindowContentScaleCallback(world.window, [](GLFWwindow* wnd, float xscale, float yscale) {
+    glfwSetWindowContentScaleCallback(world.window, [](GLFWwindow*, float xscale, float yscale) {
         world.display_scale = { xscale, yscale };
     });
 
-    glfwSetKeyCallback(world.window, [](GLFWwindow* wnd, i32 key, i32 scan, i32 ev, i32 mod) {
-        print("key = %d, ev = %d, mod = %d", key, ev, mod);
-
+    glfwSetKeyCallback(world.window, [](GLFWwindow*, i32 key, i32 scan, i32 ev, i32 mod) {
         ImGuiIO& io = ImGui::GetIO();
         if (ev == GLFW_PRESS) io.KeysDown[key] = true;
         if (ev == GLFW_RELEASE) io.KeysDown[key] = false;
@@ -651,9 +649,7 @@ int main() {
                 return;
             }
 
-            editor->start_change();
             editor->type_char('\n');
-            editor->end_change();
 
             auto indent_chars = editor->get_autoindent(editor->cur.y);
             editor->insert_text_in_insert_mode(indent_chars);
@@ -675,22 +671,18 @@ int main() {
                 return;
             }
 
-            editor->start_change();
-
             // if we're at beginning of line
             if (editor->cur.x == 0) {
                 auto back1 = editor->buf.dec_cur(editor->cur);
                 editor->buf.remove(back1, editor->cur);
-                if (back1 < editor->nvim_insert.backspaced_to) {
-                    editor->nvim_insert.backspaced_to = back1;
+                if (back1 < editor->nvim_insert.start) {
+                    editor->nvim_insert.start = back1;
                     editor->nvim_insert.deleted_graphemes++;
                 }
                 editor->raw_move_cursor(back1);
             } else {
                 editor->backspace_in_insert_mode(1, 0); // erase one grapheme
             }
-
-            editor->end_change();
 
             editor->update_autocomplete(false);
             editor->update_parameter_hint();

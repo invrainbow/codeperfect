@@ -310,6 +310,7 @@ struct World {
 
     struct {
         bool show_anon_nodes;
+        bool show_comments;
     } wnd_ast_vis;
 
     struct {

@@ -4,6 +4,7 @@
 #include "list.hpp"
 #include "mem.hpp"
 #include "os.hpp"
+#include "tree_sitter_crap.hpp"
 
 struct Buffer;
 
@@ -60,21 +61,31 @@ struct Buffer {
 
     bool initialized;
     bool dirty;
+    bool use_tree;
+    TSTree *tree;
+    TSTreeCursor cursor;
+    bool tree_dirty;
+
+    TSParser *parser;
+    char tsinput_buffer[128];
 
     void copy_from(Buffer *other);
-    void init(Pool *_mem);
+    void init(Pool *_mem, bool use_tree);
     void cleanup();
     void read(Buffer_Read_Func f);
     void read(File* f);
     void write(File* f);
-    void delete_lines(u32 y1, u32 y2);
     void clear();
-    void insert_line(u32 y, uchar* text, s32 len);
-    void append_line(uchar* text, s32 len);
     uchar* alloc_temp_array(s32 size);
     void free_temp_array(uchar* buf, s32 size);
     void insert(cur2 start, uchar* text, s32 len);
     void remove(cur2 start, cur2 end);
+    void update_tree();
+
+    void internal_append_line(uchar* text, s32 len);
+    void internal_delete_lines(u32 y1, u32 y2);
+    void internal_insert_line(u32 y, uchar* text, s32 len);
+
     Buffer_It iter(cur2 c);
     cur2 inc_cur(cur2 c);
     cur2 dec_cur(cur2 c);

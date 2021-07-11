@@ -903,10 +903,10 @@ bool Debugger::start(Debug_Profile *debug_profile) {
                 package_path = normalize_path_sep(path_join(root_module_path, subpath), '/');
 
                 if (debug_profile->type == DEBUG_TEST_CURRENT_FUNCTION) {
-                    if (editor->tree != NULL) {
+                    if (editor->buf.tree != NULL) {
                         Parser_It it;
                         it.init(&editor->buf);
-                        auto root_node = new_ast_node(ts_tree_root_node(editor->tree), &it);
+                        auto root_node = new_ast_node(ts_tree_root_node(editor->buf.tree), &it);
 
                         find_nodes_containing_pos(root_node, editor->cur, true, [&](auto it) -> Walk_Action {
                             if (it->type() == TS_SOURCE_FILE)
