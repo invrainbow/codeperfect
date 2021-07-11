@@ -52,7 +52,7 @@ func main() {
 	type Row struct {
 		Files   int `json:"nFiles"`
 		Blank   int `json:"blank"`
-		Comment int `json:"commen"`
+		Comment int `json:"comment"`
 		Code    int `json:"code"`
 	}
 
