@@ -183,7 +183,6 @@ func GHFmtStart() {
 }
 
 //export GHFmtAddLine
-
 func GHFmtAddLine(line *C.char) {
 	autofmtBuffer = append(autofmtBuffer, []byte(C.GoString(line))...)
 	autofmtBuffer = append(autofmtBuffer, '\n')

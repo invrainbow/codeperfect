@@ -564,39 +564,45 @@ struct Ast_Node {
         return x;
     }
 
-    Ast_Node *child() {
+    Ast_Node *child(bool skip_comment = true) {
         auto ret = ts_node_named_child(node, 0);
-        ret = _skip_comment(ret, true, true);
+        if (skip_comment)
+            ret = _skip_comment(ret, true, true);
         return dup(ret);
     }
 
-    Ast_Node *next() {
+    Ast_Node *next(bool skip_comment = true) {
         auto ret = ts_node_next_named_sibling(node);
-        ret = _skip_comment(ret, true, true);
+        if (skip_comment)
+            ret = _skip_comment(ret, true, true);
         return dup(ret);
     }
 
-    Ast_Node *prev() {
+    Ast_Node *prev(bool skip_comment = true) {
         auto ret = ts_node_prev_named_sibling(node);
-        ret = _skip_comment(ret, false, true);
+        if (skip_comment)
+            ret = _skip_comment(ret, false, true);
         return dup(ret);
     }
 
-    Ast_Node *child_all() {
+    Ast_Node *child_all(bool skip_comment = true) {
         auto ret = ts_node_child(node, 0);
-        ret = _skip_comment(ret, true, false);
+        if (skip_comment)
+            ret = _skip_comment(ret, true, false);
         return dup(ret);
     }
 
-    Ast_Node *next_all() {
+    Ast_Node *next_all(bool skip_comment = true) {
         auto ret = ts_node_next_sibling(node);
-        ret = _skip_comment(ret, true, false);
+        if (skip_comment)
+            ret = _skip_comment(ret, true, false);
         return dup(ret);
     }
 
-    Ast_Node *prev_all() {
+    Ast_Node *prev_all(bool skip_comment = true) {
         auto ret = ts_node_prev_sibling(node);
-        ret = _skip_comment(ret, false, false);
+        if (skip_comment)
+            ret = _skip_comment(ret, false, false);
         return dup(ret);
     }
 };

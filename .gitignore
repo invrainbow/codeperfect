@@ -56,4 +56,3 @@ db.tmp
 
 # we don't actually use this, we write our own function defs in go.hpp
 gohelper.h  
-

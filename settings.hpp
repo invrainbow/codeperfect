@@ -15,6 +15,8 @@ struct Settings {
     float autocomplete_menu_margin_y = 4;
     float autocomplete_item_padding_x = 6;
     float autocomplete_item_padding_y = 2;
+    float autocomplete_preview_width_in_chars = 40;
+    float autocomplete_preview_padding = 6;
     float tabs_offset = 50;
     float parameter_hint_margin_y = 6;
     float parameter_hint_padding_x = 4;

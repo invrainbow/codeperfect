@@ -406,6 +406,8 @@ void UI::render_ts_cursor(TSTreeCursor *curr) {
 
         if (node->anon())
             ImGui::PushStyleColor(ImGuiCol_Text, (ImVec4)ImColor(128, 128, 128));
+        if (node->type() == TS_COMMENT)
+            ImGui::PushStyleColor(ImGuiCol_Text, (ImVec4)ImColor(100, 130, 100));
 
         auto field_type_str = ts_field_type_str(field_type);
         if (field_type_str == NULL)
@@ -429,6 +431,8 @@ void UI::render_ts_cursor(TSTreeCursor *curr) {
             );
 
         if (node->anon())
+            ImGui::PopStyleColor();
+        if (node->type() == TS_COMMENT)
             ImGui::PopStyleColor();
 
         if (ImGui::IsMouseDoubleClicked(0) && ImGui::IsItemHovered(ImGuiHoveredFlags_None)) {
@@ -3059,7 +3063,7 @@ void UI::draw_everything() {
                     s32 max_len = 0;
                     s32 num_items = min(ac.filtered_results->len, AUTOCOMPLETE_WINDOW_ITEMS);
 
-                    For(*ac.filtered_results) {
+                    For (*ac.filtered_results) {
                         auto len = strlen(ac.ac.results->at(it).name);
                         if (len > max_len)
                             max_len = len;
@@ -3074,9 +3078,24 @@ void UI::draw_everything() {
 
                     if (num_items > 0) {
                         boxf menu;
+                        float preview_width = settings.autocomplete_preview_width_in_chars * font->width;
 
-                        menu.w = (font->width * max_len) + (settings.autocomplete_item_padding_x * 2) + (settings.autocomplete_menu_padding * 2);
-                        menu.h = (font->height * num_items) + (settings.autocomplete_item_padding_y * 2 * num_items) + (settings.autocomplete_menu_padding * 2);
+                        menu.w = (
+                            // options
+                            (font->width * max_len)
+                            + (settings.autocomplete_item_padding_x * 2)
+                            + (settings.autocomplete_menu_padding * 2)
+
+                            // preview
+                            + preview_width
+                            + (settings.autocomplete_menu_padding * 2)
+                        );
+
+                        menu.h = (
+                            (font->height * num_items)
+                            + (settings.autocomplete_item_padding_y * 2 * num_items)
+                            + (settings.autocomplete_menu_padding * 2)
+                        );
 
                         // menu.x = min(actual_cursor_position.x - strlen(ac.ac.prefix) * font->width, world.window_size.x - menu.w);
                         // menu.y = min(actual_cursor_position.y - font->offset_y + font->height, world.window_size.y - menu.h);
@@ -3123,44 +3142,90 @@ void UI::draw_everything() {
                             }
                         }
 
-                        draw_bordered_rect_outer(menu, rgba(COLOR_BLACK), rgba(COLOR_LIGHT_GREY), 1, 4);
+                        draw_bordered_rect_outer(menu, rgba(COLOR_BLACK), rgba(COLOR_DARK_GREY), 1, 4);
 
-                        auto menu_pos = menu.pos + new_vec2f(settings.autocomplete_menu_padding, settings.autocomplete_menu_padding);
+                        // --- draw the actual stuff inside the menu
+
+                        boxf preview_area = menu;
+                        preview_area.w = preview_width + (settings.autocomplete_menu_padding * 2);
+                        preview_area.x += (menu.w - preview_area.w);
+
+                        boxf items_area = menu;
+                        items_area.w = menu.w - preview_area.w;
+
+                        float menu_padding = settings.autocomplete_menu_padding;
+                        auto items_pos = items_area.pos + new_vec2f(menu_padding, menu_padding);
+
+                        {
+                            boxf sep;
+                            sep.w = 1;
+                            sep.h = items_area.h;
+                            sep.x = items_area.x + items_area.w - 1;
+                            sep.y = items_area.y;
+                            draw_rect(sep, rgba(COLOR_DARK_GREY));
+                        }
 
                         for (int i = ac.view; i < ac.view + num_items; i++) {
                             auto idx = ac.filtered_results->at(i);
 
-                            vec3f color = new_vec3f(1.0, 1.0, 1.0);
+                            vec3f color = COLOR_WHITE;
 
                             if (i == ac.selection) {
                                 boxf b;
-                                b.pos = menu_pos;
+                                b.pos = items_pos;
                                 b.h = font->height + (settings.autocomplete_item_padding_y * 2);
-                                b.w = menu.w - (settings.autocomplete_menu_padding * 2);
+                                b.w = items_area.w - (settings.autocomplete_menu_padding * 2);
                                 draw_rounded_rect(b, rgba(COLOR_DARK_GREY), 4, ROUND_ALL);
-                                // color = new_vec3f(0.0, 0.0, 0.0);
                             }
 
                             {
                                 SCOPED_FRAME();
-                                auto result = ac.ac.results->at(idx);
+                                auto &result = ac.ac.results->at(idx);
 
                                 auto actual_color = color;
                                 if (result.type == ACR_POSTFIX)
                                     actual_color = new_vec3f(1.0, 0.8, 0.8);
-                                if (result.type == ACR_KEYWORD)
+                                else if (result.type == ACR_KEYWORD)
                                     actual_color = new_vec3f(1.0, 1.0, 0.8);
-                                /*
-                                if (result.type == ACR_BUILTIN)
+                                else if (result.type == ACR_DECLARATION && result.declaration_is_builtin)
                                     actual_color = new_vec3f(0.8, 1.0, 0.8);
-                                */
+
+                                // add icon based on type
+                                // show a bit more helpful info (like inline signature for funcs)
+                                // show extended info on a panel to the right
 
                                 auto str = result.name;
-                                auto pos = menu_pos + new_vec2f(settings.autocomplete_item_padding_x, settings.autocomplete_item_padding_y);
+                                auto pos = items_pos + new_vec2f(settings.autocomplete_item_padding_x, settings.autocomplete_item_padding_y);
                                 draw_string(pos, str, rgba(actual_color));
                             }
 
-                            menu_pos.y += font->height + settings.autocomplete_item_padding_y * 2;
+                            items_pos.y += font->height + settings.autocomplete_item_padding_y * 2;
+                        }
+
+                        auto preview_padding = settings.autocomplete_preview_padding;
+                        auto preview_pos = preview_area.pos + new_vec2f(preview_padding, preview_padding);
+
+                        // is this ever a thing?
+                        if (ac.selection != -1) {
+                            auto idx = ac.filtered_results->at(ac.selection);
+                            auto &result = ac.ac.results->at(idx);
+
+                            auto color = rgba(COLOR_WHITE);
+
+                            switch (result.type) {
+                            case ACR_POSTFIX:
+                                draw_string(preview_pos, "postfix", color);
+                                break;
+                            case ACR_KEYWORD:
+                                draw_string(preview_pos, "keyword", color);
+                                break;
+                            case ACR_DECLARATION:
+                                draw_string(preview_pos, "declaration", color);
+                                break;
+                            case ACR_IMPORT:
+                                draw_string(preview_pos, "import", color);
+                                break;
+                            }
                         }
                     }
                 } while (0);

@@ -1639,6 +1639,10 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
     });
 }
 
+void Go_Indexer::get_preceding_comment(Ast_Node* it) {
+    // TODO
+}
+
 /*
  - adds decls to package->decls
  - adds scope ops to the right entry in package->files
