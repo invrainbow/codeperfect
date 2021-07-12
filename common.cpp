@@ -99,7 +99,7 @@ bool boxf::contains(vec2f point) {
 
 s32 global_mem_allocated = 0;
 
-void panic(ccstr s) {
+void our_panic(ccstr s) {
 	tell_user(s, "An error has occurred");
 	throw Panic_Exception(s); // TODO: replace with exit(0)
 }

@@ -37,6 +37,8 @@
 #endif
 
 #include "common.hpp"
+#include "list.hpp"
+#include "mem.hpp"
 
 enum Process_Status {
     PROCESS_WAITING,
@@ -285,20 +287,35 @@ struct Fs_Event {
 };
 
 struct Fs_Watcher {
+    ccstr path;
+
 #if OS_WIN
     FILE_NOTIFY_INFORMATION *buf;
     bool has_more;
     s32 offset;
-    ccstr path;
     HANDLE dir_handle;
     OVERLAPPED ol;
 
     bool initiate_wait();
 #elif OS_MAC
-    int put_something_here_so_struct_isnt_empty;
+    void* stream;
+    Thread_Handle thread;
+    List<Fs_Event> events;
+    int curr;
+    Lock lock;
+    Pool mem;
+
+    void handle_event(size_t count, ccstr *paths, void *_flags);
+    void run_thread();
 #endif
 
-    bool init(ccstr _path);
+    bool init(ccstr _path) {
+        ptr0(this);
+        path = _path;
+        return platform_specific_init();
+    }
+
+    bool platform_specific_init();
     void cleanup();
     bool next_event(Fs_Event *event);
 };

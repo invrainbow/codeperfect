@@ -145,7 +145,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
 
                 if (add > 0) {
                     ccstr tabs = "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t";
-                    if (add >= strlen(tabs)) panic("not enough tabs");
+                    if (add >= strlen(tabs)) our_panic("not enough tabs");
                     insert_text("%.*s", add, tabs);
                 }
             };
@@ -712,7 +712,7 @@ void Editor::add_change_in_insert_mode(cur2 start, cur2 old_end, cur2 new_end) {
     }
 
     if (old_end.y >= nvim_insert.start.y)
-        panic("can only add changes in insert mode before current change");
+        our_panic("can only add changes in insert mode before current change");
 
     auto dy = new_end.y - old_end.y;
     nvim_insert.start.y += dy;
@@ -778,7 +778,6 @@ void Editor::ensure_cursor_on_screen() {
 void Editor::update_lines(int firstline, int lastline, List<uchar*> *new_lines, List<s32> *line_lengths) {
     if (lastline == -1) lastline = buf.lines.len;
 
-    /*
     auto start_cur = new_cur2(0, (i32)firstline);
     auto old_end_cur = new_cur2(0, (i32)lastline);
 
@@ -788,47 +787,36 @@ void Editor::update_lines(int firstline, int lastline, List<uchar*> *new_lines, 
         old_end_cur = new_cur2((i32)buf.lines.last()->len, (i32)buf.lines.len - 1);
     }
 
-    if (is_go_file && tree != NULL) {
-        tsedit.start_byte = cur_to_offset(start_cur);
-        tsedit.start_point = cur_to_tspoint(start_cur);
-        tsedit.old_end_byte = cur_to_offset(old_end_cur);
-        tsedit.old_end_point = cur_to_tspoint(old_end_cur);
-    }
-    */
+    buf.internal_start_edit(start_cur, old_end_cur);
 
-    buf.remove(new_cur2(0, firstline), new_cur2(0, lastline));
+    buf.internal_delete_lines(firstline, lastline);
     for (u32 i = 0; i < new_lines->len; i++) {
-        cur2 c = new_cur2((i32)0, (i32)(firstline + i));
-        uchar newline = '\n';
-        buf.insert(c, &newline, 1);
-        buf.insert(c, new_lines->at(i), line_lengths->at(i));
+        auto line = new_lines->at(i);
+        auto len = line_lengths->at(i);
+        buf.internal_insert_line(firstline + i, line, len);
     }
 
-    /*
-    if (is_go_file) {
-        if (tree != NULL) {
-            auto new_end_cur = new_cur2(0, firstline + new_lines->len);
-            if (firstline + new_lines->len == buf.lines.len) {
-                if (buf.lines.len == 0)
-                    new_end_cur = new_cur2(0, 0);
-                else
-                    new_end_cur = new_cur2((i32)buf.lines.last()->len, (i32)buf.lines.len - 1);
-            }
+    if (buf.lines.len == 0)
+        buf.internal_append_line(NULL, 0);
 
-            tsedit.new_end_byte = cur_to_offset(new_end_cur);
-            tsedit.new_end_point = cur_to_tspoint(new_end_cur);
-            ts_tree_edit(tree, &tsedit);
-        }
-
-        update_tree();
+    auto new_end_cur = new_cur2(0, firstline + new_lines->len);
+    if (firstline + new_lines->len == buf.lines.len) {
+        if (buf.lines.len == 0)
+            new_end_cur = new_cur2(0, 0);
+        else
+            new_end_cur = new_cur2((i32)buf.lines.last()->len, (i32)buf.lines.len - 1);
     }
-    */
+
+    buf.internal_finish_edit(new_end_cur);
 }
 
 void Editor::move_cursor(cur2 c) {
     if (world.nvim.mode == VI_INSERT) {
         nvim_data.waiting_for_move_cursor = true;
         nvim_data.move_cursor_to = c;
+
+        // clear out last_closed_autocomplete
+        last_closed_autocomplete = new_cur2(-1, -1);
 
         trigger_escape();
         return;
@@ -852,6 +840,7 @@ void Editor::move_cursor(cur2 c) {
 void Editor::reset_state() {
     cur.x = 0;
     cur.y = 0;
+    last_closed_autocomplete = new_cur2(-1, -1);
 }
 
 // I'm just going to make this a separate function from load_file(), since it is doing mostly a different thing.
@@ -1052,7 +1041,7 @@ bool Editor::trigger_escape(cur2 go_here_after) {
 
         {
             // skip next update from nvim
-            nvim_insert.skip_changedticks_until = nv.changedtick + nvim_insert.other_changes.len + 1;
+            nvim_insert.skip_changedticks_until = nvim_data.changedtick + nvim_insert.other_changes.len + 1;
 
             auto start = nvim_insert.start;
             auto old_end = nvim_insert.old_end;
@@ -1303,9 +1292,33 @@ void Editor::cleanup() {
     mem.cleanup();
 }
 
+bool Editor::cur_is_inside_comment_or_string() {
+    auto root = new_ast_node(ts_tree_root_node(buf.tree), NULL);
+    bool ret = false;
+
+    find_nodes_containing_pos(root, cur, false, [&](auto it) -> Walk_Action {
+        switch (it->type()) {
+        case TS_RAW_STRING_LITERAL:
+        case TS_INTERPRETED_STRING_LITERAL:
+        case TS_COMMENT:
+            ret = true;
+            return WALK_ABORT;
+        }
+        return WALK_CONTINUE;
+
+    }, true);
+
+    return ret;
+}
+
 // basically the rule is, if autocomplete comes up empty ON FIRST OPEN, then keep it closed
 
 void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typing_ident, char typed_ident_char) {
+
+    if (cur_is_inside_comment_or_string()) {
+        return;
+    }
+
     bool ok = false;
     defer {
         if (!ok) {
@@ -1622,7 +1635,7 @@ void Editor::update_parameter_hint() {
         auto root = new_ast_node(ts_tree_root_node(buf.tree), NULL);
         bool ret = false;
 
-        find_nodes_containing_pos(root, hint.start, true, [&](Ast_Node *it) -> Walk_Action {
+        find_nodes_containing_pos(root, hint.start, true, [&](auto it) -> Walk_Action {
             if (it->start() == hint.start)
                 if (it->type() == TS_ARGUMENT_LIST)
                     if (cur >= it->end()) {
@@ -1745,7 +1758,7 @@ void Editor::type_char_in_insert_mode(char ch) {
             Ast_Node *rbrace_node = alloc_object(Ast_Node);
             bool rbrace_found = false;
 
-            find_nodes_containing_pos(root_node, rbrace_pos, false, [&](Ast_Node *it) {
+            find_nodes_containing_pos(root_node, rbrace_pos, false, [&](auto it) {
                 if (it->type() == brace_type) {
                     memcpy(rbrace_node, it, sizeof(Ast_Node));
                     rbrace_found = true;
@@ -1756,7 +1769,7 @@ void Editor::type_char_in_insert_mode(char ch) {
 
             if (!rbrace_found) break;
 
-            auto walk_upwards = [&](Ast_Node *curr) -> Ast_Node * {
+            auto walk_upwards = [&](auto curr) -> Ast_Node * {
                 while (true) {
                     // try to get prev
                     auto prev = curr->prev_all();
@@ -1940,7 +1953,7 @@ void Editor::format_on_save(int fmt_type, bool write_to_nvim) {
         auto &writer = nv.writer;
 
         // skip next update from nvim
-        nvim_insert.skip_changedticks_until = nv.changedtick;
+        nvim_insert.skip_changedticks_until = nvim_data.changedtick + 1;
 
         auto msgid = nv.start_request_message("nvim_buf_set_lines", 5);
         auto req = nv.save_request(NVIM_REQ_POST_SAVE_SETLINES, msgid, id);

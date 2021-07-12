@@ -372,7 +372,7 @@ void Debugger::init() {
 #if OS_WIN
     WSADATA wsa;
     if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
-        panic("WSAStartup failed");
+        our_panic("WSAStartup failed");
 #endif
 }
 

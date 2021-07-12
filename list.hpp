@@ -51,14 +51,14 @@ struct List {
             cap = _cap;
             items = (T*)our_malloc(sizeof(T) * cap);
             if (items == NULL)
-                panic("unable to our_malloc for array");
+                our_panic("unable to our_malloc for array");
             global_mem_allocated += sizeof(T) * cap;
             mem0(items, sizeof(T) * cap);
             break;
         case LIST_CHUNK:
             items = (T*)alloc_chunk_stub(_cap, &cap);
             if (items == NULL)
-                panic("unable to alloc chunk for array");
+                our_panic("unable to alloc chunk for array");
             break;
         }
     }

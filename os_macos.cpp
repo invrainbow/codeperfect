@@ -17,6 +17,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <ftw.h>
+#include <CoreServices/CoreServices.h>
 
 // for places where i can't be fucked to learn the linux
 // way of doing things, just use c++ stdlib (requires c++17)
@@ -143,7 +144,7 @@ Process_Status Process::status() {
 
 bool Process::peek(char *ch) {
     if (peek_buffer_full)
-        panic("can only peek 1 character at a time");
+        our_panic("can only peek 1 character at a time");
 
     if (!read1(&peek_buffer)) return false;
 
@@ -638,19 +639,100 @@ void File_Mapping::cleanup() {
     }
 }
 
-bool Fs_Watcher::init(ccstr _path) {
-    ptr0(this);
-    // TODO
-    return true;
+void Fs_Watcher::handle_event(size_t count, ccstr *paths, void *_flags) {
+    auto flags = (FSEventStreamEventFlags*)_flags;
+
+    SCOPED_LOCK(&lock);
+
+    for (size_t i = 0; i < count; i++) {
+        auto path = paths[i];
+        auto flag = flags[i];
+
+        Fs_Event_Type type; ptr0(&type);
+        if (flag & kFSEventStreamEventFlagItemCreated)
+            type = FSEVENT_CREATE;
+        else if (flag & kFSEventStreamEventFlagItemModified)
+            type = FSEVENT_CHANGE;
+        else if (flag & kFSEventStreamEventFlagItemRemoved)
+            type = FSEVENT_DELETE;
+        else if (flag & kFSEventStreamEventFlagItemRenamed)
+            type = FSEVENT_RENAME;
+        else
+            continue;
+
+        auto ev = events.append();
+        ev->type = type;
+        strcpy_safe(ev->filepath, _countof(ev->filepath), paths[i]);
+
+        if (ev->type == FSEVENT_RENAME) {
+            // TODO: get new name somehow?
+        }
+    }
+}
+
+void Fs_Watcher::run_thread() {
+    FSEventStreamContext context = {0};
+    context.info = this;
+
+    auto paths = CFArrayCreateMutable(NULL, 0, &kCFTypeArrayCallBacks);
+    CFStringRef pathref = CFStringCreateWithCString(kCFAllocatorDefault, path, kCFStringEncodingUTF8);
+    CFArrayAppendValue(paths, pathref);
+    CFRelease(pathref);
+
+    auto callback = [](auto, auto param, auto num, auto paths, auto flags, auto) {
+        ((Fs_Watcher*)param)->handle_event(num, (ccstr*)paths, (void*)flags);
+    };
+
+    // for now uncommenting kFSEventStreamCreateFlagIgnoreSelf so file changes via the ide are picked up
+    // but in the future we really should just manually trigger the filechange callback when we are saving a file
+    stream = (void*)FSEventStreamCreate(
+        kCFAllocatorDefault, callback, &context,
+        paths, kFSEventStreamEventIdSinceNow, 0.5,
+        /* kFSEventStreamCreateFlagIgnoreSelf | */ kFSEventStreamCreateFlagNoDefer | kFSEventStreamCreateFlagFileEvents
+    );
+
+    FSEventStreamScheduleWithRunLoop((FSEventStreamRef)stream, CFRunLoopGetCurrent(), kCFRunLoopDefaultMode);
+    auto success = FSEventStreamStart((FSEventStreamRef)stream);
+    print("%d", success);
+    CFRunLoopRun();
+}
+
+bool Fs_Watcher::platform_specific_init() {
+    mem.init("fs_watcher mem");
+
+    {
+        SCOPED_MEM(&mem);
+        events.init();
+    }
+
+    auto fun = [](auto param) { ((Fs_Watcher*)param)->run_thread(); };
+    thread = create_thread(fun, this);
+    return thread != NULL;
 }
 
 void Fs_Watcher::cleanup() {
-    // TODO
+    if (thread != NULL) {
+        kill_thread(thread);
+        close_thread_handle(thread);
+        thread = NULL;
+    }
+
+    mem.cleanup();
 }
 
 bool Fs_Watcher::next_event(Fs_Event *event) {
-    // TODO
-    return false;
+    SCOPED_LOCK(&lock);
+
+    if (curr >= events.len) {
+        curr = 0;
+        mem.reset();
+        SCOPED_MEM(&mem);
+        events.init();
+        return false;
+    }
+
+    memcpy(event, &events[curr++], sizeof(Fs_Event));
+    return true;
 }
 
 #endif

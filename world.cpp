@@ -189,7 +189,7 @@ void shell(ccstr s, ccstr dir) {
         while (p.read1(&ch)) {
             printf("%c", ch);
         }
-        panic("askldjfhalkfh");
+        our_panic("askldjfhalkfh");
     }
 }
 
@@ -199,7 +199,7 @@ void prepare_workspace() {
     };
 
     if (!copy_file(p("main.go.bak"), p("main.go")))
-        panic("failed to copy main.go.bak");
+        our_panic("failed to copy main.go.bak");
 
     delete_rm_rf(p("db.tmp"));
     delete_rm_rf(p("go.mod"));

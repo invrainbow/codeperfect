@@ -239,7 +239,7 @@ void Module_Resolver::init(ccstr current_module_filepath, ccstr _gomodcache) {
 
     if (module_path == NULL) {
         // TODO
-        panic("Sorry, currently only modules are supported.");
+        our_panic("Sorry, currently only modules are supported.");
     }
 }
 
@@ -974,7 +974,7 @@ void Go_Indexer::background_thread() {
                     update on save
                 */
             };
-
+            
             bool is_directory = false;
 
             switch (event.type) {
@@ -1139,7 +1139,7 @@ void Go_Indexer::background_thread() {
                 break;
             }
 
-            if (event.type == FSEVENT_RENAME) {
+            if (event.type == FSEVENT_RENAME && event.new_filepath != NULL) {
                 if (is_directory || str_ends_with(event.new_filepath, ".go") || str_ends_with(event.filepath, ".go"))
                     index_print("Filesystem event: %s: %s -> %s", fs_event_type_str(event.type), event.filepath, event.new_filepath);
             } else {
@@ -1639,9 +1639,11 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
     });
 }
 
+/*
 void Go_Indexer::get_preceding_comment(Ast_Node* it) {
     // TODO
 }
+*/
 
 /*
  - adds decls to package->decls
@@ -2188,7 +2190,7 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 p
 
     t.log("setup shit");
 
-    find_nodes_containing_pos(file, pos, false, [&](Ast_Node *node) -> Walk_Action {
+    find_nodes_containing_pos(file, pos, false, [&](auto node) -> Walk_Action {
         auto contains_pos = [&](Ast_Node *node) -> bool {
             return cmp_pos_to_node(pos, node) == 0;
         };
@@ -2554,7 +2556,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
 
     t.log("setup shit");
 
-    find_nodes_containing_pos(pf->root, intelligently_move_cursor_backwards(), false, [&](Ast_Node *node) -> Walk_Action {
+    find_nodes_containing_pos(pf->root, intelligently_move_cursor_backwards(), false, [&](auto node) -> Walk_Action {
         switch (node->type()) {
         case TS_QUALIFIED_TYPE:
         case TS_SELECTOR_EXPRESSION:
@@ -2918,7 +2920,7 @@ Parameter_Hint *Go_Indexer::parameter_hint(ccstr filepath, cur2 pos) {
 
     t.log("prepare shit");
 
-    find_nodes_containing_pos(pf->root, go_back_until_non_space(), false, [&](Ast_Node *node) -> Walk_Action {
+    find_nodes_containing_pos(pf->root, go_back_until_non_space(), false, [&](auto node) -> Walk_Action {
         switch (node->type()) {
         case TS_TYPE_CONVERSION_EXPRESSION:
         case TS_CALL_EXPRESSION:
@@ -3190,6 +3192,8 @@ void Go_Indexer::stop_writing() {
     ready = true;
 }
 
+// i don't think this is actually called right now...
+// we're just letting the OS reclaim all this shit when the program exits
 void Go_Indexer::cleanup() {
     if (bgthread != NULL) {
         kill_thread(bgthread);
@@ -4493,10 +4497,6 @@ ccstr ts_ast_type_str(Ts_Ast_Type type) {
     define_str_case(TS_GT_EQ);
     define_str_case(TS_AMP_AMP);
     define_str_case(TS_PIPE_PIPE);
-    define_str_case(TS_RAW_STRING_LITERAL);
-    define_str_case(TS_DQUOTE);
-    define_str_case(TS_INTERPRETED_STRING_LITERAL_TOKEN1);
-    define_str_case(TS_ESCAPE_SEQUENCE);
     define_str_case(TS_INT_LITERAL);
     define_str_case(TS_FLOAT_LITERAL);
     define_str_case(TS_IMAGINARY_LITERAL);
@@ -4505,6 +4505,8 @@ ccstr ts_ast_type_str(Ts_Ast_Type type) {
     define_str_case(TS_TRUE);
     define_str_case(TS_FALSE);
     define_str_case(TS_COMMENT);
+    define_str_case(TS_RAW_STRING_LITERAL);
+    define_str_case(TS_INTERPRETED_STRING_LITERAL);
     define_str_case(TS_SOURCE_FILE);
     define_str_case(TS_PACKAGE_CLAUSE);
     define_str_case(TS_IMPORT_DECLARATION);
@@ -4591,7 +4593,6 @@ ccstr ts_ast_type_str(Ts_Ast_Type type) {
     define_str_case(TS_UNARY_EXPRESSION);
     define_str_case(TS_BINARY_EXPRESSION);
     define_str_case(TS_QUALIFIED_TYPE);
-    define_str_case(TS_INTERPRETED_STRING_LITERAL);
     define_str_case(TS_SOURCE_FILE_REPEAT1);
     define_str_case(TS_IMPORT_SPEC_LIST_REPEAT1);
     define_str_case(TS_CONST_DECLARATION_REPEAT1);
@@ -4610,7 +4611,6 @@ ccstr ts_ast_type_str(Ts_Ast_Type type) {
     define_str_case(TS_SELECT_STATEMENT_REPEAT1);
     define_str_case(TS_ARGUMENT_LIST_REPEAT1);
     define_str_case(TS_LITERAL_VALUE_REPEAT1);
-    define_str_case(TS_INTERPRETED_STRING_LITERAL_REPEAT1);
     define_str_case(TS_FIELD_IDENTIFIER);
     define_str_case(TS_LABEL_NAME);
     define_str_case(TS_PACKAGE_IDENTIFIER);
@@ -5235,12 +5235,12 @@ auto gohelper_dll = load_dll(gohelper_dll);
 template<typename T>
 void load_dll_func(T &func, ccstr name) {
     auto addr = get_func_address(gohelper_dll, name);
-    if (addr == NULL) panic(our_sprintf("couldn't load %s", name));
+    if (addr == NULL) our_panic(our_sprintf("couldn't load %s", name));
     func = (T)addr;
 }
 
 void init_gohelper_crap() {
-    if (gohelper_dll == NULL) panic("unable to load gohelper");
+    if (gohelper_dll == NULL) our_panic("unable to load gohelper");
 
 #define load(x) load_dll_func(x, #x)
     load(GHStartBuild);

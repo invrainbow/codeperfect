@@ -354,7 +354,7 @@ void _error(ccstr fmt, ...);
 #define ptr0(ptr) memset(ptr, 0, sizeof(*ptr))
 #define For(arr) for (auto &&it : arr)
 #define define_str_case(x) case x: return #x
-#define our_assert(x, s) if (!(x)) panic(s)
+#define our_assert(x, s) if (!(x)) our_panic(s)
 
 bool streqi(ccstr a, ccstr b);
 
@@ -366,4 +366,4 @@ bool str_starts_with(ccstr a, ccstr pre);
 extern s32 global_mem_allocated;
 extern const u64 MAX_U64;
 
-void panic(ccstr s);
+void our_panic(ccstr s);

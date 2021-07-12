@@ -124,7 +124,7 @@ Process_Status Process::status() {
 
 bool Process::peek(char *ch) {
     if (peek_buffer_full)
-        panic("can only peek 1 character at a time");
+        our_panic("can only peek 1 character at a time");
 
     if (!read1(&peek_buffer)) return false;
 

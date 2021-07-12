@@ -373,6 +373,7 @@ struct Nvim_Request {
 
 enum Nvim_Notification_Type {
     NVIM_NOTIF_BUF_LINES,
+    NVIM_NOTIF_BUF_CHANGEDTICK,
     NVIM_NOTIF_MODE_CHANGE,
     NVIM_NOTIF_WIN_VIEWPORT,
     NVIM_NOTIF_WIN_POS,
@@ -429,6 +430,11 @@ struct Nvim_Message {
                     List<uchar*> *lines;
                     List<s32> *line_lengths;
                 } buf_lines;
+
+                struct {
+                    Ext_Info buf;
+                    int changedtick;
+                } buf_changedtick;
 
                 struct {
                     Screen_Pos screen_pos;
@@ -555,7 +561,6 @@ struct Nvim {
     u32 dotrepeat_buf_id;
     u32 dotrepeat_win_id;
     u32 current_win_id;
-    int changedtick;
 
     List<ccstr> started_messages;
     Pool started_messages_mem;
@@ -588,7 +593,7 @@ struct Nvim {
         requests_lock.enter();
 
         if (started_messages.len > 0)
-            panic("message already in progress");
+            our_panic("message already in progress");
 
         {
             SCOPED_MEM(&started_messages_mem);
@@ -604,7 +609,7 @@ struct Nvim {
         requests_lock.enter();
 
         if (started_messages.len > 0)
-            panic("message already in progress");
+            our_panic("message already in progress");
 
         {
             SCOPED_MEM(&started_messages_mem);
@@ -616,7 +621,7 @@ struct Nvim {
 
     void end_message() {
         if (started_messages.len == 0)
-            panic("ending message when none is open???");
+            our_panic("ending message when none is open???");
 
         started_messages.len--;
         if (started_messages.len == 0)

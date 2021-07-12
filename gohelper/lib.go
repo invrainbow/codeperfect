@@ -101,19 +101,5 @@ func AuthLicenseKey(licenseKey string) error {
 		return nil
 
 	}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 	return fmt.Errorf("Unable to authenticate license key.")
 }

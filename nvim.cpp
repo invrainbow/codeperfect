@@ -649,18 +649,35 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 }
             }
             break;
+        case NVIM_NOTIF_BUF_CHANGEDTICK:
+            {
+                auto &args = event->notification.buf_changedtick;
+
+                auto editor = find_editor_by_buffer(args.buf.object_id);
+                if (editor == NULL) break;
+
+                if (args.changedtick > editor->nvim_data.changedtick) {
+                    editor->nvim_data.changedtick = args.changedtick;
+                    print("changedtick: %d", editor->nvim_data.changedtick);
+                }
+            }
+            break;
         case NVIM_NOTIF_BUF_LINES:
             {
                 auto &args = event->notification.buf_lines;
-                if (args.changedtick > changedtick)
-                    changedtick = args.changedtick;
 
                 auto editor = find_editor_by_buffer(args.buf.object_id);
+                if (editor == NULL) break;
+
+                if (args.changedtick > editor->nvim_data.changedtick) {
+                    editor->nvim_data.changedtick = args.changedtick;
+                    print("changedtick: %d", editor->nvim_data.changedtick);
+                }
+
                 auto is_change_empty = (args.firstline == args.lastline && args.lines->len == 0);
 
                 bool skip = (
-                    editor == NULL
-                    || !editor->nvim_data.got_initial_lines
+                    !editor->nvim_data.got_initial_lines
                     || args.changedtick <= editor->nvim_insert.skip_changedticks_until
                     || is_change_empty
                 );
@@ -668,25 +685,23 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 nvim_print("updating lines...");
                 if (!skip) editor->update_lines(args.firstline, args.lastline, args.lines, args.line_lengths);
 
-                if (editor != NULL) {
-                    if (!editor->nvim_data.got_initial_lines) {
-                        nvim_print("got_initial_lines = false, setting to true & calling handle_editor_on_ready()");
-                        editor->nvim_data.got_initial_lines = true;
+                if (!editor->nvim_data.got_initial_lines) {
+                    nvim_print("got_initial_lines = false, setting to true & calling handle_editor_on_ready()");
+                    editor->nvim_data.got_initial_lines = true;
 
-                        // set initial pos, but don't clear need_initial_pos_set
-                        // we're still going to set it in handle_editor_on_ready
-                        // we're just setting it early here to speed up file load times
-                        if (editor->nvim_data.need_initial_pos_set) {
-                            nvim_print("need initial pos set, setting...");
-                            auto pos = editor->nvim_data.initial_pos;
-                            if (pos.y == -1)
-                                pos = editor->offset_to_cur(pos.x);
-                            // editor->raw_move_cursor(pos);
-                            // editor->move_cursor(pos);
-                        }
-
-                        handle_editor_on_ready(editor);
+                    // set initial pos, but don't clear need_initial_pos_set
+                    // we're still going to set it in handle_editor_on_ready
+                    // we're just setting it early here to speed up file load times
+                    if (editor->nvim_data.need_initial_pos_set) {
+                        nvim_print("need initial pos set, setting...");
+                        auto pos = editor->nvim_data.initial_pos;
+                        if (pos.y == -1)
+                            pos = editor->offset_to_cur(pos.x);
+                        // editor->raw_move_cursor(pos);
+                        // editor->move_cursor(pos);
                     }
+
+                    handle_editor_on_ready(editor);
                 }
             }
             break;
@@ -839,12 +854,12 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
         print("---");
         for (i32 i = started_messages.len - 1; i >= 0; i--)
             print("%s", started_messages[i]);
-        panic("message not closed");
+        our_panic("message not closed");
     }
 }
 
 void Nvim::run_event_loop() {
-#define ASSERT(x) if (!(x)) { panic("nvim crashed"); }
+#define ASSERT(x) if (!(x)) { our_panic("nvim crashed"); }
 #define CHECKOK() ASSERT(reader.ok)
 
     {
@@ -949,6 +964,17 @@ void Nvim::run_event_loop() {
                             msg->notification.custom_move_cursor.screen_pos = screen_pos;
                         });
                     }
+                } else if (streq(method, "nvim_buf_changedtick_event")) {
+                    SCOPED_FRAME();
+
+                    auto buf = reader.read_ext(); CHECKOK();
+                    auto changedtick = reader.read_int(); CHECKOK();
+
+                    add_event([&](auto msg) {
+                        msg->notification.type = NVIM_NOTIF_BUF_CHANGEDTICK;
+                        msg->notification.buf_changedtick.buf = *buf;
+                        msg->notification.buf_changedtick.changedtick = changedtick;
+                    });
                 } else if (streq(method, "nvim_buf_lines_event")) {
                     SCOPED_FRAME();
 
@@ -1350,7 +1376,7 @@ void Nvim::run_event_loop() {
                             row = reader.read_int(); CHECKOK();
                             col = reader.read_int(); CHECKOK();
                         } else {
-                            panic(our_sprintf("got array with %d items from nvim_buf_get_extmark_by_id", arr_len));
+                            our_panic(our_sprintf("got array with %d items from nvim_buf_get_extmark_by_id", arr_len));
                         }
 
                         add_response_event([&](auto m) {

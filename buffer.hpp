@@ -68,6 +68,7 @@ struct Buffer {
 
     TSParser *parser;
     char tsinput_buffer[128];
+    TSInputEdit tsedit;
 
     void copy_from(Buffer *other);
     void init(Pool *_mem, bool use_tree);
@@ -78,13 +79,17 @@ struct Buffer {
     void clear();
     uchar* alloc_temp_array(s32 size);
     void free_temp_array(uchar* buf, s32 size);
-    void insert(cur2 start, uchar* text, s32 len);
-    void remove(cur2 start, cur2 end);
+
     void update_tree();
 
     void internal_append_line(uchar* text, s32 len);
     void internal_delete_lines(u32 y1, u32 y2);
     void internal_insert_line(u32 y, uchar* text, s32 len);
+    void internal_start_edit(cur2 start, cur2 end);
+    void internal_finish_edit(cur2 new_end);
+
+    void insert(cur2 start, uchar* text, s32 len);
+    void remove(cur2 start, cur2 end);
 
     Buffer_It iter(cur2 c);
     cur2 inc_cur(cur2 c);

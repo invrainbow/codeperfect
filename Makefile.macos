@@ -13,8 +13,10 @@ all: bin/ide
 clean:
 	rm $(OBJ_FILES) $(DEP_FILES) bin/ide
 
-bin/ide: $(OBJ_FILES) obj/treesitter_lib.o obj/treesitter_go.o
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(OBJ_FILES) obj/treesitter_lib.o obj/treesitter_go.o
+bin/ide: $(OBJ_FILES) obj/treesitter_lib.o obj/treesitter_go.o obj/treesitter_go_scanner.o
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
+
+# $(OBJ_FILES) obj/treesitter_lib.o obj/treesitter_go.o ob
 
 -include $(DEP_FILES)
 
@@ -23,7 +25,10 @@ $(OBJ_FILES): obj/%.o: %.cpp Makefile.macos
 
 obj/treesitter_lib.o: tree-sitter/src/lib.c
 	# copied from tree-sitter's makefile
-	clang -g -MMD -MP -O3 -Wall -Wextra -Werror -std=gnu99 -fPIC -Itree-sitter/src -Itree-sitter/include -c -o $@ $<
+	clang -g -O0 -MMD -MP -Wall -Wextra -Werror -std=gnu99 -fPIC -Itree-sitter/src -Itree-sitter/include -c -o $@ $<
 
-obj/treesitter_go.o: treesitter_go.c
-	clang -g -MMD -MP -O3 -Wall -Wextra -Werror -std=gnu99 -fPIC -Itree-sitter/src -Itree-sitter/include -c -o $@ $<
+obj/treesitter_go.o: tree-sitter-go/src/parser.c
+	clang -g -O0 -MMD -MP -Wall -Wextra -Werror -std=gnu99 -fPIC -Itree-sitter/src -Itree-sitter/include -c -o $@ $<
+
+obj/treesitter_go_scanner.o: tree-sitter-go/src/scanner.c
+	clang -g -O0 -MMD -MP -w -std=gnu99 -fPIC -Itree-sitter/src -Itree-sitter/include -c -o $@ $<

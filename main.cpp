@@ -385,7 +385,7 @@ int main() {
         our_assert(world.ui.im_font_mono != NULL, "unable to load code font");
 
         if (!world.font.init((u8*)vera_mono_ttf, CODE_FONT_SIZE, TEXTURE_FONT))
-            panic("unable to load code font");
+            our_panic("unable to load code font");
 
         io.Fonts->Build();
 

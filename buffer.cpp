@@ -233,7 +233,7 @@ void Buffer::read(Buffer_Read_Func f) {
         line = lines.append();
         bc = bytecounts.append();
 
-        if (line == NULL) panic("unable to insert new line");
+        if (line == NULL) our_panic("unable to insert new line");
 
         line->init(LIST_CHUNK, CHUNK0);
         *bc = 0;
@@ -300,6 +300,7 @@ void Buffer::internal_delete_lines(u32 y1, u32 y2) {
 
     lines.len -= (y2 - y1);
     bytecounts.len -= (y2 - y1);
+
     dirty = true;
 }
 
@@ -344,13 +345,7 @@ void Buffer::internal_append_line(uchar* text, s32 len) {
 void Buffer::insert(cur2 start, uchar* text, s32 len) {
     i32 x = start.x, y = start.y;
 
-    TSInputEdit tsedit = {0};
-    if (use_tree) {
-        tsedit.start_byte = cur_to_offset(start);
-        tsedit.start_point = cur_to_tspoint(start);
-        tsedit.old_end_byte = cur_to_offset(start);
-        tsedit.old_end_point = cur_to_tspoint(start);
-    }
+    internal_start_edit(start, start);
 
     bool has_newline = false;
     for (u32 i = 0; i < len; i++) {
@@ -407,13 +402,7 @@ void Buffer::insert(cur2 start, uchar* text, s32 len) {
         }
     }
 
-    if (use_tree) {
-        tsedit.new_end_byte = cur_to_offset(end);
-        tsedit.new_end_point = cur_to_tspoint(end);
-        ts_tree_edit(tree, &tsedit);
-        update_tree();
-    }
-
+    internal_finish_edit(end);
     dirty = true;
 }
 
@@ -446,19 +435,31 @@ void Buffer::update_tree() {
     tree_dirty = true;
 }
 
+void Buffer::internal_start_edit(cur2 start, cur2 end) {
+    if (!use_tree) return;
+
+    ptr0(&tsedit);
+    tsedit.start_byte = cur_to_offset(start);
+    tsedit.start_point = cur_to_tspoint(start);
+    tsedit.old_end_byte = cur_to_offset(end);
+    tsedit.old_end_point = cur_to_tspoint(end);
+}
+
+void Buffer::internal_finish_edit(cur2 new_end) {
+    if (!use_tree) return;
+
+    tsedit.new_end_byte = cur_to_offset(new_end);
+    tsedit.new_end_point = cur_to_tspoint(new_end);
+
+    ts_tree_edit(tree, &tsedit);
+    update_tree();
+}
+
 void Buffer::remove(cur2 start, cur2 end) {
     i32 x1 = start.x, y1 = start.y;
     i32 x2 = end.x, y2 = end.y;
 
-    TSInputEdit tsedit = {0};
-    if (use_tree) {
-        tsedit.start_byte = cur_to_offset(start);
-        tsedit.start_point = cur_to_tspoint(start);
-        tsedit.old_end_byte = cur_to_offset(end);
-        tsedit.old_end_point = cur_to_tspoint(end);
-        tsedit.new_end_byte = tsedit.start_byte;
-        tsedit.new_end_point = tsedit.start_point;
-    }
+    internal_start_edit(start, end);
 
     if (y1 == y2) {
         // TODO: If we can shrink the line, should we?
@@ -476,10 +477,7 @@ void Buffer::remove(cur2 start, cur2 end) {
     bytecounts[y1] = get_bytecount(&lines[y1]);
     dirty = true;
 
-    if (use_tree) {
-        ts_tree_edit(tree, &tsedit);
-        update_tree();
-    }
+    internal_finish_edit(start);
 }
 
 Buffer_It Buffer::iter(cur2 c) {

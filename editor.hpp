@@ -104,6 +104,8 @@ struct Editor {
 
         bool is_navigating_to;
         cur2 navigating_to_pos;
+
+        int changedtick;
     } nvim_data;
 
     struct Insert_Change {
@@ -176,6 +178,7 @@ struct Editor {
     void insert_text_in_insert_mode(ccstr s);
     ccstr get_autoindent(int for_y);
     void add_change_in_insert_mode(cur2 start, cur2 old_end, cur2 new_end);
+    bool cur_is_inside_comment_or_string();
 };
 
 struct Pane {

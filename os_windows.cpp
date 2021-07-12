@@ -555,10 +555,7 @@ ccstr rel_to_abs_path(ccstr path) {
 
 const s32 FS_WATCHER_BUFSIZE = 1024 * 32;
 
-bool Fs_Watcher::init(ccstr _path) {
-    ptr0(this);
-
-    path = _path;
+bool Fs_Watcher::platform_specific_init() {
     dir_handle = CreateFileW(to_wide(path), FILE_LIST_DIRECTORY, FILE_SHARE_WRITE | FILE_SHARE_READ | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED, NULL);
     if (dir_handle == INVALID_HANDLE_VALUE) {
         print("unable to create file for fswatcher: %s", get_last_error());
@@ -652,7 +649,7 @@ bool File_Mapping::create_actual_file_mapping(LARGE_INTEGER size) {
         // TODO: handle this. Everywhere else in the code is set up to handle
         // 64-bit sizes, but because MapViewOfFile only lets you map a 32-bit
         // sized portion at a time, we need to write the unmap/remap logic.
-        panic("File to be mapped is too big.");
+        our_panic("File to be mapped is too big.");
     }
 
     bool ok = false;
