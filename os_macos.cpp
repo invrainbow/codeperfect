@@ -645,9 +645,7 @@ void Fs_Watcher::handle_event(size_t count, ccstr *paths, void *_flags) {
     SCOPED_LOCK(&lock);
 
     for (size_t i = 0; i < count; i++) {
-        auto path = paths[i];
         auto flag = flags[i];
-
         Fs_Event_Type type; ptr0(&type);
         if (flag & kFSEventStreamEventFlagItemCreated)
             type = FSEVENT_CREATE;
@@ -662,7 +660,7 @@ void Fs_Watcher::handle_event(size_t count, ccstr *paths, void *_flags) {
 
         auto ev = events.append();
         ev->type = type;
-        strcpy_safe(ev->filepath, _countof(ev->filepath), paths[i]);
+        strcpy_safe(ev->filepath, _countof(ev->filepath), get_path_relative_to(paths[i], path));
 
         if (ev->type == FSEVENT_RENAME) {
             // TODO: get new name somehow?
@@ -705,7 +703,12 @@ bool Fs_Watcher::platform_specific_init() {
         events.init();
     }
 
-    auto fun = [](auto param) { ((Fs_Watcher*)param)->run_thread(); };
+    auto fun = [](auto param) {
+        auto obj = (Fs_Watcher*)param;
+        SCOPED_MEM(&obj->mem);
+        obj->run_thread();
+    };
+
     thread = create_thread(fun, this);
     return thread != NULL;
 }

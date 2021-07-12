@@ -71,7 +71,6 @@ struct Editor {
     // TSInputEdit curr_change;
 
     // is this file "dirty" from the perspective of the index?
-    bool index_dirty;
     bool is_go_file;
     u64 disable_file_watcher_until;
 

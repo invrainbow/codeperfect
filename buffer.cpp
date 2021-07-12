@@ -169,6 +169,8 @@ ccstr Buffer::get_text(cur2 start, cur2 end) {
 }
 
 void Buffer::init(Pool *_mem, bool _use_tree) {
+    ptr0(this);
+
     mem = _mem;
     use_tree = _use_tree;
 

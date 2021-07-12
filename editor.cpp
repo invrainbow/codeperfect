@@ -685,7 +685,8 @@ void Editor::perform_autocomplete(AC_Result *result) {
                     // do something with new_contents
                 } while (0);
 
-                trigger_autocomplete(true, false);
+                if (result->type == ACR_IMPORT)
+                    trigger_autocomplete(true, false);
             }
         }
         break;
@@ -1629,23 +1630,12 @@ void Editor::update_parameter_hint() {
     auto& hint = parameter_hint;
     if (hint.gotype == NULL) return;
 
-    auto should_close_hints = [&]() {
-        if (cur < hint.start) return true;
+    auto should_close_hints = [&]() -> bool {
+        if (!world.indexer.ready) return true;
+        if (!world.indexer.lock.try_enter()) return true;
+        defer { world.indexer.lock.leave(); };
 
-        auto root = new_ast_node(ts_tree_root_node(buf.tree), NULL);
-        bool ret = false;
-
-        find_nodes_containing_pos(root, hint.start, true, [&](auto it) -> Walk_Action {
-            if (it->start() == hint.start)
-                if (it->type() == TS_ARGUMENT_LIST)
-                    if (cur >= it->end()) {
-                        ret = true;
-                        return WALK_ABORT;
-                    }
-            return WALK_CONTINUE;
-        });
-
-        return ret;
+        return !world.indexer.check_if_still_in_parameter_hint(filepath, cur, hint.start);
     };
 
     if (should_close_hints()) {

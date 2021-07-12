@@ -373,8 +373,8 @@ void Go_Indexer::reload_all_dirty_files() {
             Timer t;
             t.init(our_sprintf("reload %s", our_basename(it.filepath)));
 
-            if (!it.index_dirty) continue;
-            it.index_dirty = false;
+            if (!it.buf.tree_dirty) continue;
+            it.buf.tree_dirty = false;
 
             SCOPED_FRAME();
 
@@ -493,6 +493,8 @@ void Go_Indexer::init_builtins(Go_Package *pkg) {
     add_builtin(GODECL_TYPE, GO_BUILTIN_UINT64, "uint64");
     add_builtin(GODECL_TYPE, GO_BUILTIN_UINT8, "uint8");
     add_builtin(GODECL_TYPE, GO_BUILTIN_UINTPTR, "uintptr");
+
+    // TODO: add true, false, nil (i can't be fucked right now lol)
 
     {
         Gotype *func_type = NULL;
@@ -936,14 +938,6 @@ void Go_Indexer::background_thread() {
             };
 
             auto handle_gofile_created = [&](ccstr filepath) {
-                auto editor = get_open_editor(filepath);
-                if (editor != NULL) {
-                    world.add_event([&](Main_Thread_Message *msg) {
-                        msg->type = MTM_RELOAD_EDITOR;
-                        msg->reload_editor_id = editor->id;
-                    });
-                }
-
                 auto pkg = find_package_in_index(filepath_to_import_path(our_dirname(filepath)));
                 if (pkg == NULL) return;
 
@@ -952,7 +946,17 @@ void Go_Indexer::background_thread() {
 
                 auto pf = parse_file(filepath);
                 if (pf == NULL) return;
-                defer { free_parsed_file(pf); };
+                defer {
+                    free_parsed_file(pf);
+
+                    auto editor = get_open_editor(filepath);
+                    if (editor != NULL) {
+                        world.add_event([&](Main_Thread_Message *msg) {
+                            msg->type = MTM_RELOAD_EDITOR;
+                            msg->reload_editor_id = editor->id;
+                        });
+                    }
+                };
 
                 start_writing();
 
@@ -974,7 +978,7 @@ void Go_Indexer::background_thread() {
                     update on save
                 */
             };
-            
+
             bool is_directory = false;
 
             switch (event.type) {
@@ -1336,9 +1340,7 @@ void Go_Indexer::background_thread() {
                 }
                 defer { s.cleanup(); };
 
-                s.writen((void*)GO_INDEX_MAGIC_BYTES, sizeof(GO_INDEX_MAGIC_BYTES));
-                s.write4(GO_INDEX_VERSION);
-                write_object<Go_Index>(&index, &s);
+                s.write_index(&index);
                 s.finish_writing();
             }
 
@@ -2540,7 +2542,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
         FOUND_DOT_COMPLETE,
         FOUND_DOT_COMPLETE_NEED_CRAWL,
         FOUND_LONE_IDENTIFIER,
-        FOUND_PROBLEM_NEED_TO_EXIT,
+        JUST_EXIT,
     };
 
     Current_Situation situation = FOUND_JACK_SHIT;
@@ -2636,9 +2638,18 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                 }
             }
             return WALK_ABORT;
+
+        case TS_INT_LITERAL:
+        case TS_FLOAT_LITERAL:
+        case TS_IMAGINARY_LITERAL:
+        case TS_RUNE_LITERAL:
+        case TS_RAW_STRING_LITERAL:
+        case TS_INTERPRETED_STRING_LITERAL:
+            situation = JUST_EXIT;
+            return WALK_ABORT;
         }
         return WALK_CONTINUE;
-    }); // , true);
+    }, true);
 
     t.log("find current node");
 
@@ -2706,7 +2717,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
     };
 
     switch (situation) {
-    case FOUND_PROBLEM_NEED_TO_EXIT:
+    case JUST_EXIT:
         return false;
     case FOUND_DOT_COMPLETE_NEED_CRAWL:
         for (auto expr = expr_to_analyze; !try_dot_complete(expr);) {
@@ -2890,6 +2901,71 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
     out->prefix = prefix;
 
     return true;
+}
+
+bool Go_Indexer::check_if_still_in_parameter_hint(ccstr filepath, cur2 cur, cur2 hint_start) {
+    if (cur < hint_start) return false;
+
+    reload_all_dirty_files();
+
+    auto pf = parse_file(filepath, true);
+    if (pf == NULL) return NULL;
+    defer { free_parsed_file(pf); };
+
+    // try to close string if we're in one
+
+    char string_close_char = 0;
+
+    find_nodes_containing_pos(pf->root, cur, true, [&](auto it) -> Walk_Action {
+        switch (it->type()) {
+        case TS_RAW_STRING_LITERAL:
+        case TS_INTERPRETED_STRING_LITERAL:
+            {
+                auto get_char_at_pos = [&](cur2 p) -> uchar {
+                    auto old = pf->it->get_pos();
+                    defer { pf->it->set_pos(old); };
+
+                    pf->it->set_pos(p);
+                    return pf->it->peek();
+                };
+
+                auto start_pos = it->start();
+                auto start_ch = get_char_at_pos(start_pos);
+                if (start_ch == '"' || start_ch == '`') {
+                    auto end_pos = it->end();
+                    auto last_pos = new_cur2((i32)relu_sub(end_pos.x, 1), (i32)end_pos.y);
+
+                    auto last_ch = get_char_at_pos(last_pos);
+                    if (!(cur == end_pos && last_ch == start_ch && last_pos != start_pos))
+                        string_close_char = start_ch;
+                }
+            }
+            return WALK_ABORT;
+        }
+        return WALK_CONTINUE;
+    }, true);
+
+    ccstr suffix = "";
+    if (string_close_char != 0)
+        suffix = our_sprintf("%c", string_close_char);
+    suffix = our_sprintf("%s)}}}}}}}}}}}}}}}}", suffix);
+
+    if (!truncate_parsed_file(pf, cur, suffix)) return NULL;
+    defer { ts_tree_delete(pf->tree); };
+
+    bool ret = false;
+
+    find_nodes_containing_pos(pf->root, hint_start, true, [&](auto it) -> Walk_Action {
+        if (it->start() == hint_start)
+            if (it->type() == TS_ARGUMENT_LIST)
+                if (cur < it->end()) {
+                    ret = true;
+                    return WALK_ABORT;
+                }
+        return WALK_CONTINUE;
+    });
+
+    return ret;
 }
 
 Parameter_Hint *Go_Indexer::parameter_hint(ccstr filepath, cur2 pos) {

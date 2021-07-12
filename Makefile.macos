@@ -25,10 +25,10 @@ $(OBJ_FILES): obj/%.o: %.cpp Makefile.macos
 
 obj/treesitter_lib.o: tree-sitter/src/lib.c
 	# copied from tree-sitter's makefile
-	clang -g -O0 -MMD -MP -Wall -Wextra -Werror -std=gnu99 -fPIC -Itree-sitter/src -Itree-sitter/include -c -o $@ $<
+	clang -g -MMD -MP -Wall -Wextra -Werror -std=gnu99 -fPIC -Itree-sitter/src -Itree-sitter/include -c -o $@ $<
 
 obj/treesitter_go.o: tree-sitter-go/src/parser.c
-	clang -g -O0 -MMD -MP -Wall -Wextra -Werror -std=gnu99 -fPIC -Itree-sitter/src -Itree-sitter/include -c -o $@ $<
+	clang -g -MMD -MP -Wall -Wextra -Werror -std=gnu99 -fPIC -Itree-sitter/src -Itree-sitter/include -c -o $@ $<
 
 obj/treesitter_go_scanner.o: tree-sitter-go/src/scanner.c
-	clang -g -O0 -MMD -MP -w -std=gnu99 -fPIC -Itree-sitter/src -Itree-sitter/include -c -o $@ $<
+	clang -g -MMD -MP -w -std=gnu99 -fPIC -Itree-sitter/src -Itree-sitter/include -c -o $@ $<

@@ -28,7 +28,7 @@ int get_line_number_width(Editor *editor) {
         maxval = buf.lines.len;
     }
 
-    return (int)log10(maxval) + 1;
+    return max(4, (int)log10(maxval) + 1);
 }
 
 vec3f rgb_hex(ccstr s) {
