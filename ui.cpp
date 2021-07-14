@@ -1770,6 +1770,26 @@ void UI::draw_everything() {
                 ImGui::MenuItem("Roll Your Own IDE Construction Set", NULL, &world.wnd_style_editor.show);
                 ImGui::MenuItem("Replace line numbers with bytecounts", NULL, &world.replace_line_numbers_with_bytecounts);
                 ImGui::MenuItem("Turn off framerate cap", NULL, &world.turn_off_framerate_cap);
+
+                if (ImGui::MenuItem("Show message box (OK)")) {
+                    tell_user("Sorry, that keyfile was invalid. Please select another one.", "License key required");
+                }
+
+                if (ImGui::MenuItem("Show message box (Yes/No)")) {
+                    auto res = ask_user_yes_no_cancel(
+                        "Do you want to save your changes to main.go?",
+                        "Your changes will be lost if you don't."
+                    );
+                    print("%d", res);
+                }
+
+                if (ImGui::MenuItem("Show message box (Yes/No/Cancel)")) {
+                    auto res = ask_user_yes_no(
+                        "Are you sure you want to delete all breakpoints?",
+                        NULL
+                    );
+                    print("%d", res);
+                }
             }
 
             /*
@@ -2697,7 +2717,9 @@ void UI::draw_everything() {
 
                 margin = (tab_id == pane.editors.len - 1) ? 5 : settings.tabs_offset;
                 if (tab.x + tab.w > tabs_area.x + tabs_area.w - margin)
-                    pane.tabs_offset += ((tab.x + tab.w) - (tabs_area.x + tabs_area.w - margin));
+                    // if it would make the other constraint fail, don't do it
+                    if (!(tab.x - ((tab.x + tab.w) - (tabs_area.x + tabs_area.w - margin)) < tabs_area.x + margin))
+                        pane.tabs_offset += ((tab.x + tab.w) - (tabs_area.x + tabs_area.w - margin));
             }
 
             auto is_hovered = test_hover(tab, HOVERID_TABS + editor_index);

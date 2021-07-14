@@ -298,12 +298,10 @@ struct Fs_Watcher {
 
     bool initiate_wait();
 #elif OS_MAC
+    Pool mem;
     void* stream;
-    Thread_Handle thread;
     List<Fs_Event> events;
     int curr;
-    Lock lock;
-    Pool mem;
 
     void handle_event(size_t count, ccstr *paths, void *_flags);
     void run_thread();
@@ -327,6 +325,7 @@ ccstr get_canon_path(ccstr path);
 
 bool move_file_atomically(ccstr src, ccstr dest);
 
+/*
 enum Charset_Type {
     CS_ENGLISH,
     CS_CHINESE_SIM,
@@ -338,6 +337,7 @@ enum Charset_Type {
 
 void *read_font_data_from_name(s32 *len, ccstr name, Charset_Type charset);
 void *read_font_data_from_first_found(s32 *plen, Charset_Type charset, ...);
+*/
 
 enum Ask_User_Result {
     ASKUSER_ERROR = 0,
@@ -356,3 +356,5 @@ bool xplat_chdir(ccstr dir);
 
 bool create_directory(ccstr path);
 bool touch_file(ccstr path);
+
+void init_platform_specific_crap();

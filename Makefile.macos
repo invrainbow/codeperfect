@@ -1,6 +1,6 @@
 CC = clang++
-CFLAGS = -std=c++17 -g -mavx -maes -w `pkg-config --cflags gtk+-3.0 glfw3 glew`
-LDFLAGS = -ldl -lcwalk -lpcre `pkg-config --libs glfw3 glew gtk+-3.0` -framework OpenGL
+CFLAGS = -std=c++17 -g -mavx -maes -w `pkg-config --cflags glfw3 glew`
+LDFLAGS = -ldl -lcwalk -lpcre `pkg-config --libs glfw3 glew` -framework OpenGL -framework Cocoa
 
 SRC_FILES = $(wildcard *.cpp)
 OBJ_FILES = $(patsubst %.cpp,obj/%.o,$(SRC_FILES))
@@ -13,15 +13,17 @@ all: bin/ide
 clean:
 	rm $(OBJ_FILES) $(DEP_FILES) bin/ide
 
-bin/ide: $(OBJ_FILES) obj/treesitter_lib.o obj/treesitter_go.o obj/treesitter_go_scanner.o
+bin/ide: $(OBJ_FILES) obj/treesitter_lib.o obj/treesitter_go.o obj/treesitter_go_scanner.o obj/os_macos_mm.o
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 
 # $(OBJ_FILES) obj/treesitter_lib.o obj/treesitter_go.o ob
-
--include $(DEP_FILES)
+# -include $(DEP_FILES)
 
 $(OBJ_FILES): obj/%.o: %.cpp Makefile.macos
 	$(CC) $(CFLAGS) -MMD -MP -c -o $@ $<
+
+obj/os_macos_mm.o: os_macos.mm
+	$(CC) $(CFLAGS) -c -o $@ $<
 
 obj/treesitter_lib.o: tree-sitter/src/lib.c
 	# copied from tree-sitter's makefile

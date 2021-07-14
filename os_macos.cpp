@@ -7,7 +7,6 @@
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <gtk/gtk.h>
 #include <mach-o/dyld.h>
 #include <mach/mach_time.h>
 #include <string.h>
@@ -48,10 +47,6 @@ bool are_filepaths_same_file(ccstr path1, ccstr path2) {
     if (stat(path2, &b) == -1) return false;
 
     return a.st_dev == b.st_dev && a.st_ino == b.st_ino;
-}
-
-void max_out_clock_frequency() {
-    // nothing to do here for macos
 }
 
 u64 current_time_in_nanoseconds() {
@@ -324,87 +319,11 @@ bool File::write(char *buf, s32 size) {
     return true;
 }
 
-bool let_user_select_file(Select_File_Opts* opts) {
-    if (!gtk_init_check(NULL, NULL)) return false;
-
-    auto get_action = [&]() -> GtkFileChooserAction {
-        if (opts->folder)
-            return GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER;
-        if (opts->save)
-            return GTK_FILE_CHOOSER_ACTION_OPEN;
-        return GTK_FILE_CHOOSER_ACTION_SAVE;
-    };
-
-    auto dialog = gtk_file_chooser_dialog_new("Open File", NULL, get_action(), "_Cancel", GTK_RESPONSE_CANCEL, "_Open", GTK_RESPONSE_ACCEPT, NULL);
-    defer { gtk_widget_destroy(dialog); };
-
-    auto res = gtk_dialog_run(GTK_DIALOG(dialog));
-    if (res != GTK_RESPONSE_ACCEPT) return false;
-
-    auto filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
-    if (filename == NULL) return false;
-    defer { g_free(filename); };
-
-    strcpy_safe(opts->buf, opts->bufsize, filename);
-    return true;
-}
-
 bool copy_file(ccstr src, ccstr dest, bool overwrite) {
     auto flags = std::filesystem::copy_options::skip_existing;
     if (overwrite)
         flags = std::filesystem::copy_options::overwrite_existing;
     return std::filesystem::copy_file(src, dest, flags);
-}
-
-/*
-    if (type & MB_YESNO)
-        dialog = gtk_message_dialog_new(NULL, 0, GTK_MESSAGE_QUESTION, GTK_BUTTONS_YES_NO, text );
-    else
-        dialog = gtk_message_dialog_new(NULL, 0, GTK_MESSAGE_INFO, GTK_BUTTONS_OK, text );
-*/
-
-Ask_User_Result do_gtk_dialog(ccstr text, ccstr title, fn<void(GtkDialog*)> f) {
-    if (!gtk_init_check(NULL, NULL)) return ASKUSER_ERROR;
-
-    auto dialog = gtk_message_dialog_new(NULL, GTK_DIALOG_MODAL, GTK_MESSAGE_QUESTION, GTK_BUTTONS_NONE, text);
-
-    f(GTK_DIALOG(dialog));
-
-    gtk_window_set_title(GTK_WINDOW(dialog), title);
-    auto result = gtk_dialog_run(GTK_DIALOG(dialog));
-    gtk_widget_destroy(GTK_WIDGET(dialog));
-
-    if (result == GTK_RESPONSE_DELETE_EVENT) return ASKUSER_NO;
-
-    switch (result) {
-    case ASKUSER_YES:
-    case ASKUSER_NO:
-    case ASKUSER_CANCEL:
-        return (Ask_User_Result)result;
-    }
-
-    return ASKUSER_ERROR;
-}
-
-Ask_User_Result ask_user_yes_no_cancel(ccstr text, ccstr title) {
-    return do_gtk_dialog(text, title, [&](auto dialog) {
-        gtk_dialog_add_button(dialog, "Yes", ASKUSER_YES);
-        gtk_dialog_add_button(dialog, "No", ASKUSER_NO);
-        gtk_dialog_add_button(dialog, "Cancel", ASKUSER_CANCEL);
-    });
-}
-
-Ask_User_Result ask_user_yes_no(ccstr text, ccstr title) {
-    return do_gtk_dialog(text, title, [&](auto dialog) {
-        gtk_dialog_add_button(dialog, "Yes", ASKUSER_YES);
-        gtk_dialog_add_button(dialog, "No", ASKUSER_NO);
-    });
-}
-
-void tell_user(ccstr text, ccstr title) {
-    do_gtk_dialog(text, title, [&](auto dialog) {
-        gtk_dialog_add_button(dialog, "OK", ASKUSER_YES);
-    });
 }
 
 ccstr get_executable_path() {
@@ -642,8 +561,6 @@ void File_Mapping::cleanup() {
 void Fs_Watcher::handle_event(size_t count, ccstr *paths, void *_flags) {
     auto flags = (FSEventStreamEventFlags*)_flags;
 
-    SCOPED_LOCK(&lock);
-
     for (size_t i = 0; i < count; i++) {
         auto flag = flags[i];
         Fs_Event_Type type; ptr0(&type);
@@ -668,7 +585,14 @@ void Fs_Watcher::handle_event(size_t count, ccstr *paths, void *_flags) {
     }
 }
 
-void Fs_Watcher::run_thread() {
+bool Fs_Watcher::platform_specific_init() {
+    mem.init("fs_watcher mem");
+
+    {
+        SCOPED_MEM(&mem);
+        events.init();
+    }
+
     FSEventStreamContext context = {0};
     context.info = this;
 
@@ -690,48 +614,31 @@ void Fs_Watcher::run_thread() {
     );
 
     FSEventStreamScheduleWithRunLoop((FSEventStreamRef)stream, CFRunLoopGetCurrent(), kCFRunLoopDefaultMode);
-    auto success = FSEventStreamStart((FSEventStreamRef)stream);
-    print("%d", success);
-    CFRunLoopRun();
-}
-
-bool Fs_Watcher::platform_specific_init() {
-    mem.init("fs_watcher mem");
-
-    {
-        SCOPED_MEM(&mem);
-        events.init();
-    }
-
-    auto fun = [](auto param) {
-        auto obj = (Fs_Watcher*)param;
-        SCOPED_MEM(&obj->mem);
-        obj->run_thread();
-    };
-
-    thread = create_thread(fun, this);
-    return thread != NULL;
+    return FSEventStreamStart((FSEventStreamRef)stream);
 }
 
 void Fs_Watcher::cleanup() {
-    if (thread != NULL) {
-        kill_thread(thread);
-        close_thread_handle(thread);
-        thread = NULL;
+    if (stream != NULL) {
+        FSEventStreamStop((FSEventStreamRef)stream);
+        FSEventStreamUnscheduleFromRunLoop((FSEventStreamRef)stream, CFRunLoopGetCurrent(), kCFRunLoopDefaultMode);
+        FSEventStreamRelease((FSEventStreamRef)stream);
     }
 
     mem.cleanup();
 }
 
 bool Fs_Watcher::next_event(Fs_Event *event) {
-    SCOPED_LOCK(&lock);
-
     if (curr >= events.len) {
         curr = 0;
-        mem.reset();
-        SCOPED_MEM(&mem);
-        events.init();
-        return false;
+        {
+            mem.reset();
+            SCOPED_MEM(&mem);
+            events.init();
+        }
+
+        CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0, true);
+        if (events.len == 0)
+            return false;
     }
 
     memcpy(event, &events[curr++], sizeof(Fs_Event));

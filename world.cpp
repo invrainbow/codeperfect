@@ -4,7 +4,10 @@
 
 #if OS_WIN
 #define GLFW_EXPOSE_NATIVE_WIN32
+#elif OS_MAC
+#define GLFW_EXPOSE_NATIVE_COCOA
 #endif
+
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <GLFW/glfw3native.h>
@@ -214,7 +217,7 @@ void World::init_workspace() {
 
     panes.init(LIST_FIXED, _countof(_panes), _panes);
 
-#if 0 // RELEASE_BUILD
+#if 1 // RELEASE_BUILD
     Select_File_Opts opts; ptr0(&opts);
     opts.buf = current_path;
     opts.bufsize = _countof(current_path);
@@ -567,6 +570,10 @@ void* get_native_window_handle() {
 
 #if OS_WIN
     return (void*)glfwGetWin32Window(world.window);
+#elif OS_MAC
+    return (void*)glfwGetCocoaWindow(world.window);
+#else
+    return NULL;
 #endif
 }
 

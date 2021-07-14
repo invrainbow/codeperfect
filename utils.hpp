@@ -72,11 +72,11 @@ struct Json_Renderer : public Text_Renderer {
         write("null");
     }
 
-    void field(ccstr key, int value) { field(key, [&]() { prim(value); }); }
-    void field(ccstr key, float value) { field(key, [&]() { prim(value); }); }
-    void field(ccstr key, ccstr value) { field(key, [&]() { prim(value); }); }
-    void field(ccstr key, bool value) { field(key, [&]() { prim(value); }); }
-    void field(ccstr key, void* value) { field(key, [&]() { prim(value); }); }
+    void field(ccstr key, int value) { field(key, (lambda)([&]() { prim(value); })); }
+    void field(ccstr key, float value) { field(key, (lambda)([&]() { prim(value); })); }
+    void field(ccstr key, ccstr value) { field(key, (lambda)([&]() { prim(value); })); }
+    void field(ccstr key, bool value) { field(key, (lambda)([&]() { prim(value); })); }
+    void field(ccstr key, void* value) { field(key, (lambda)([&]() { prim(value); })); }
 
     void field(ccstr key, lambda value) {
         prim(key);

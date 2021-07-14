@@ -43,7 +43,10 @@ TODO:
 
 #if OS_WIN
 #define GLFW_EXPOSE_NATIVE_WIN32
+#elif OS_MAC
+#define GLFW_EXPOSE_NATIVE_COCOA
 #endif
+
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <GLFW/glfw3native.h>
@@ -255,7 +258,7 @@ int main() {
 
     SCOPED_MEM(&world.frame_mem);
 
-    max_out_clock_frequency();
+    init_platform_specific_crap();
 
     if (!glfwInit())
         return error("glfwInit failed"), EXIT_FAILURE;
@@ -935,8 +938,8 @@ int main() {
                         } else {
                             if (editor->buf.dirty) {
                                 auto result = ask_user_yes_no_cancel(
-                                    our_sprintf("Do you want to save your changes to %s?", our_basename(editor->filepath)),
-                                    "Your changes will be lost if you don't."
+                                    "Your changes will be lost if you don't.",
+                                    our_sprintf("Do you want to save your changes to %s?", our_basename(editor->filepath))
                                 );
                                 if (result == ASKUSER_CANCEL)
                                     break;

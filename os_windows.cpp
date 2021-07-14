@@ -11,6 +11,11 @@
 #include <search.h>
 #include <pathcch.h>
 
+void init_platform_specific_crap() {
+    // max out clock frequency
+    timeBeginPeriod(1);
+}
+
 // stupid character conversion functions
 // =====================================
 
@@ -389,10 +394,6 @@ bool File::write(char *buf, s32 size) {
     DWORD n = 0;
     if (!WriteFile(h, buf, size, &n, NULL)) return false;
     return (n == size);
-}
-
-void max_out_clock_frequency() {
-    timeBeginPeriod(1);
 }
 
 void sleep_milliseconds(u32 milliseconds) {
