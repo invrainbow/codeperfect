@@ -21,7 +21,7 @@ NSAlert *make_nsalert(ccstr text, ccstr title) {
 int run_nsalert(NSAlert *alert) {
     [[alert window] setLevel:NSModalPanelWindowLevel];
 
-    auto wnd = (NSWindow*)get_native_window_handle();
+    auto wnd = (__bridge NSWindow*)get_native_window_handle();
     if (wnd == NULL) return [alert runModal];
 
     __block int ret = -1;
@@ -88,33 +88,34 @@ bool let_user_select_file(Select_File_Opts* opts) {
             [opendlg setAllowsMultipleSelection:NO];
 
             if (opts->folder) {
-                [dialog setCanChooseDirectories:YES];
-                [dialog setCanCreateDirectories:YES];
-                [dialog setCanChooseFiles:NO];
+                [opendlg setCanChooseDirectories:YES];
+                [opendlg setCanCreateDirectories:YES];
+                [opendlg setCanChooseFiles:NO];
             }
 
             dialog = (NSSavePanel*)opendlg;
         }
 
         defer {
-            auto wnd = (NSWindow*)get_native_window_handle();
-            [wnd makeKeyAndOrderFront:nil];
+            auto wnd = (__bridge NSWindow*)get_native_window_handle();
+            if (wnd != nil) {
+                [wnd makeKeyAndOrderFront:nil];
+            }
         };
 
         {
             auto path = opts->starting_folder;
-            if (path == NULL || path[0] == '\0')
-                return false;
-
-            auto str = [NSString stringWithUTF8String:path];
-            auto url = [NSURL fileURLWithPath:str isDirectory:YES];
-            [dialog setDirectoryURL:url];    
+            if (path != NULL && path[0] != '\0') {
+                auto str = [NSString stringWithUTF8String:path];
+                auto url = [NSURL fileURLWithPath:str isDirectory:YES];
+                [dialog setDirectoryURL:url];
+            }
         }
 
         if ([dialog runModal] != NSModalResponseOK)
             return false;
 
-        auto path = [[dialog URL] path]; 
+        auto path = [[dialog URL] path];
         auto pathstr = [path UTF8String];
         auto pathlen = [path lengthOfBytesUsingEncoding:NSUTF8StringEncoding];
 

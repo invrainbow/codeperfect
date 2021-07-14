@@ -217,13 +217,13 @@ void World::init_workspace() {
 
     panes.init(LIST_FIXED, _countof(_panes), _panes);
 
-#if 1 // RELEASE_BUILD
+#if 0 // RELEASE_BUILD
     Select_File_Opts opts; ptr0(&opts);
     opts.buf = current_path;
     opts.bufsize = _countof(current_path);
     opts.folder = true;
     opts.save = false;
-    let_user_select_file(&opts);
+    if (!let_user_select_file(&opts)) exit(0);
 #else
     {
         SCOPED_FRAME();

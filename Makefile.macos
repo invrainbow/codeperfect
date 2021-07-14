@@ -23,7 +23,7 @@ $(OBJ_FILES): obj/%.o: %.cpp Makefile.macos
 	$(CC) $(CFLAGS) -MMD -MP -c -o $@ $<
 
 obj/os_macos_mm.o: os_macos.mm
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) -fobjc-arc -c -o $@ $<
 
 obj/treesitter_lib.o: tree-sitter/src/lib.c
 	# copied from tree-sitter's makefile
