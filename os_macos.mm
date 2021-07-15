@@ -1,4 +1,6 @@
-#import <Cocoa/Cocoa.h>
+#include <AppKit/AppKit.h>
+#include <Availability.h>
+#include <Cocoa/Cocoa.h>
 #include "os.hpp"
 #include "utils.hpp"
 
@@ -74,7 +76,9 @@ void tell_user(ccstr text, ccstr title) {
 
 bool let_user_select_file(Select_File_Opts* opts) {
     @autoreleasepool {
-        NSSavePanel *dialog = nil;
+        NSSavePanel *panel = nil;
+        NSWindow *keyWindow = [[NSApplication sharedApplication] keyWindow];
+        // [[NSApplication sharedApplication] setActivationPolicy:NSApplicationActivationPolicyRegular];
 
         if (opts->save) {
             if (opts->folder) return false;
@@ -82,7 +86,7 @@ bool let_user_select_file(Select_File_Opts* opts) {
             auto savedlg = [NSSavePanel savePanel];
             [savedlg setExtensionHidden:NO];
 
-            dialog = (NSSavePanel*)savedlg;
+            panel = (NSSavePanel*)savedlg;
         } else {
             NSOpenPanel *opendlg = [NSOpenPanel openPanel];
             [opendlg setAllowsMultipleSelection:NO];
@@ -93,37 +97,47 @@ bool let_user_select_file(Select_File_Opts* opts) {
                 [opendlg setCanChooseFiles:NO];
             }
 
-            dialog = (NSSavePanel*)opendlg;
+            panel = (NSSavePanel*)opendlg;
         }
 
-        defer {
-            auto wnd = (__bridge NSWindow*)get_native_window_handle();
-            if (wnd != nil) {
-                [wnd makeKeyAndOrderFront:nil];
-            }
-        };
+		[panel setLevel:CGShieldingWindowLevel()];
 
         {
             auto path = opts->starting_folder;
             if (path != NULL && path[0] != '\0') {
                 auto str = [NSString stringWithUTF8String:path];
                 auto url = [NSURL fileURLWithPath:str isDirectory:YES];
-                [dialog setDirectoryURL:url];
+                [panel setDirectoryURL:url];
             }
         }
 
-        if ([dialog runModal] != NSModalResponseOK)
-            return false;
+        int result = -1;
 
-        auto path = [[dialog URL] path];
+        auto wnd = (__bridge NSWindow*)get_native_window_handle();
+        if (wnd == nil) {
+            result = [panel runModal];
+        } else {
+            __block int ret = -1;
+            [panel beginSheetModalForWindow:wnd
+                          completionHandler:^(NSModalResponse response) {
+                              ret = response;
+                              [NSApp stopModal];
+                          }];
+            [NSApp runModalForWindow:wnd];
+            result = ret;
+        }
+
+        [keyWindow makeKeyAndOrderFront:nil];
+
+        if (result != NSModalResponseOK) return false;
+
+        auto path = [[panel URL] path];
         auto pathstr = [path UTF8String];
         auto pathlen = [path lengthOfBytesUsingEncoding:NSUTF8StringEncoding];
 
-        if (pathlen + 1 <= opts->bufsize) {
-            strcpy_safe(opts->buf, opts->bufsize, pathstr);
-            return true;
-        }
-        return false;
+        if (pathlen + 1 > opts->bufsize) return false;
+
+        strcpy_safe(opts->buf, opts->bufsize, pathstr);
+        return true;
     }
 }
-

@@ -254,10 +254,6 @@ int main() {
 
     if (run_tests()) return EXIT_SUCCESS;
 
-    world.init();
-
-    SCOPED_MEM(&world.frame_mem);
-
     init_platform_specific_crap();
 
     if (!glfwInit())
@@ -269,10 +265,18 @@ int main() {
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_MAXIMIZED, GLFW_TRUE);
+    // glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
 
-    world.window = glfwCreateWindow(1280, 720, our_sprintf("%s - %s", WINDOW_TITLE, world.current_path), NULL, NULL);
-    if (world.window == NULL)
+    auto window = glfwCreateWindow(1280, 720, WINDOW_TITLE, NULL, NULL);
+    if (window == NULL)
         return error("could not create window"), EXIT_FAILURE;
+
+    // on macos, this requires glfw crap to be done
+    world.init(window);
+    SCOPED_MEM(&world.frame_mem);
+
+    world.window = window;
+    glfwSetWindowTitle(world.window, our_sprintf("%s - %s", WINDOW_TITLE, world.current_path));
 
     glfwMakeContextCurrent(world.window);
 

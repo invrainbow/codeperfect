@@ -332,8 +332,9 @@ struct World {
         bool show;
     } wnd_style_editor;
 
-    void init();
+    void init(GLFWwindow *_wnd);
     void start_background_threads();
+
     Pane* get_current_pane();
     Editor* get_current_editor();
     Editor* find_editor(find_editor_func f);

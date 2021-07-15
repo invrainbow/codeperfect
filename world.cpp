@@ -217,7 +217,7 @@ void World::init_workspace() {
 
     panes.init(LIST_FIXED, _countof(_panes), _panes);
 
-#if 0 // RELEASE_BUILD
+#if 1 // RELEASE_BUILD
     Select_File_Opts opts; ptr0(&opts);
     opts.buf = current_path;
     opts.bufsize = _countof(current_path);
@@ -255,8 +255,10 @@ void World::init_workspace() {
     */
 }
 
-void World::init() {
+void World::init(GLFWwindow *_wnd) {
     ptr0(this);
+
+    window = _wnd;
 
 #define init_mem(x) x.init(#x)
     init_mem(world_mem);
@@ -286,41 +288,6 @@ void World::init() {
     chunk6_fridge.init(8);
 
     init_gohelper_crap();
-
-#if RELEASE_BUILD
-    for (bool first = true; !GHCheckLicense(); first = false) {
-        if (first)
-            tell_user("Please select your license keyfile.", "License key required");
-        else
-            tell_user("Sorry, that keyfile was invalid. Please select another one.", "License key required");
-
-        char buf[MAX_PATH];
-
-        Select_File_Opts opts; ptr0(&opts);
-        opts.buf = buf;
-        opts.bufsize = _countof(buf);
-        opts.folder = false;
-        opts.save = false;
-
-        if (!let_user_select_file(&opts))
-            exit(1); // should we be like, "no license key selected"?
-
-        auto executable_dir = our_dirname(get_executable_path());
-        if (!copy_file(buf, path_join(executable_dir, ".idelicense"), true)) {
-            tell_user("Unable to load license keyfile.", NULL);
-            exit(1);
-        }
-    }
-#endif
-
-#if RELEASE_BUILD
-    /*
-    {
-        auto executable_dir = our_dirname(get_executable_path());
-        set_run_on_computer_startup("CodePerfect95_Autoupdate", path_join(executable_dir, "autoupdate.exe"));
-    }
-    */
-#endif
 
     {
         // do we need world_mem anywhere else?
