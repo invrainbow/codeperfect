@@ -89,7 +89,7 @@ struct List {
         return ret;
     }
 
-    bool append(T t) { return append(&t); }
+    bool append(T t) { return append(&t) != NULL; }
 
     T* append() {
         if (!ensure_cap(len + 1))
@@ -156,6 +156,7 @@ struct List {
             {
                 s32 chunksize;
                 auto chunk = (T*)alloc_chunk_stub(new_cap, &chunksize);
+                if (chunk == NULL) return false;
 
                 memcpy(chunk, items, sizeof(T) * len);
                 free_chunk_stub((uchar*)items, cap);

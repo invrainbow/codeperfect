@@ -32,9 +32,8 @@ done:
         copy_spaces_until = x;
     }
 
-    auto ret = alloc_list<char>(copy_spaces_until + 1);
-
     // copy first `copy_spaces_until` chars of line y
+    auto ret = alloc_list<char>();
     for (u32 x = 0; x < copy_spaces_until; x++)
         ret->append((char)line[x]); // has to be ' ' or '\t'
 
@@ -844,22 +843,60 @@ void Editor::reset_state() {
     last_closed_autocomplete = new_cur2(-1, -1);
 }
 
+bool check_file(File_Mapping *fm) {
+    cur2 pos = new_cur2(0, 0);
+
+    for (int i = 0; i < fm->len; i++) {
+        if (fm->data[i] == '\n') {
+            pos.y++;
+            pos.x = 0;
+            if (pos.y > 65000) {
+                tell_user("Sorry, we're not yet able to open files that have more than 65,000 lines.", "Unable to open file.");
+                return false;
+            }
+        } else {
+            pos.x++;
+            if (pos.x > CHUNKMAX) {
+                tell_user(
+                    our_sprintf("Sorry, we're not yet able to open files containing lines with more than %d characters.", CHUNKMAX),
+                    "Unable to open file."
+                );
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
 // I'm just going to make this a separate function from load_file(), since it is doing mostly a different thing.
 void Editor::reload_file(bool because_of_file_watcher) {
     if (because_of_file_watcher && disable_file_watcher_until > current_time_in_nanoseconds())
         return;
 
-    File f;
-    if (f.init(filepath, FILE_MODE_READ, FILE_OPEN_EXISTING) != FILE_RESULT_SUCCESS) {
-        error("unable to open %s for reading: %s", filepath, get_last_error());
+    auto fm = map_file_into_memory(filepath);
+    if (fm == NULL) {
+        // don't error here
+        // tell_user(our_sprintf("Unable to open %s for reading: %s", filepath, get_last_error()), "Error opening file");
         return;
     }
-    defer { f.cleanup(); };
+    defer { fm->cleanup(); };
+
+    if (is_binary((ccstr)fm->data, fm->len)) {
+        auto res = ask_user_yes_no(
+            "This file appears to be a binary file. Attempting to open it as text could have adverse results. Do you still want to try?",
+            "Binary file encountered",
+            "Open", "Don't Open"
+        );
+        if (res != ASKUSER_YES) return;
+    }
+
+    if (!check_file(fm)) return;
 
     if (buf.initialized)
         buf.cleanup();
     buf.init(&mem, is_go_file);
-    buf.read(&f);
+    buf.read(fm);
 
     if (world.use_nvim) {
         nvim_data.got_initial_lines = false;
@@ -893,12 +930,22 @@ bool Editor::load_file(ccstr new_filepath) {
 
         strcpy_safe(filepath, _countof(filepath), path);
 
-        File f;
-        if (f.init(filepath, FILE_MODE_READ, FILE_OPEN_EXISTING) != FILE_RESULT_SUCCESS)
-            return error("unable to open %s for reading: %s", filepath, get_last_error()), false;
-        defer { f.cleanup(); };
+        auto fm = map_file_into_memory(filepath);
+        if (fm == NULL) {
+            tell_user(our_sprintf("Unable to open %s for reading: %s", filepath, get_last_error()), "Error opening file");
+            return false;
+        }
+        defer { fm->cleanup(); };
 
-        buf.read(&f);
+        if (is_binary((ccstr)fm->data, fm->len)) {
+            if (ask_user_yes_no("This file appears to be a binary file. Attempting to open it as text could have adverse results. Do you still want to try?", "Binary file encountered", "Open", "Don't Open") != ASKUSER_YES) {
+                return false;
+            }
+        }
+
+        if (!check_file(fm)) return false;
+
+        buf.read(fm);
     } else {
         is_untitled = true;
         uchar tmp = '\0';
@@ -922,7 +969,13 @@ bool Editor::load_file(ccstr new_filepath) {
 Editor* Pane::open_empty_editor() {
     auto ed = editors.append();
     ed->init();
-    ed->load_file(NULL);
+
+    if (!ed->load_file(NULL)) {
+        ed->cleanup();
+        editors.len--;
+        return NULL;
+    }
+
     ui.recalculate_view_sizes(true);
     return focus_editor_by_index(editors.len - 1);
 }
@@ -996,7 +1049,12 @@ Editor* Pane::focus_editor(ccstr path, cur2 pos) {
 
     auto ed = editors.append();
     ed->init();
-    ed->load_file(path);
+    if (!ed->load_file(path)) {
+        ed->cleanup();
+        editors.len--;
+        return NULL;
+    }
+
     ui.recalculate_view_sizes(true);
     return focus_editor_by_index(editors.len - 1, pos);
 }
@@ -1976,6 +2034,9 @@ void Editor::handle_save(bool about_to_close) {
 
         is_untitled = false;
         is_go_file = str_ends_with(filepath, ".go");
+
+        if (is_go_file)
+            buf.enable_tree();
     }
 
     format_on_save(GH_FMT_GOFMT, !about_to_close);
@@ -2021,7 +2082,7 @@ void go_to_error(int index) {
         return;
     }
 
-    world.focus_editor(path);
+    if (world.focus_editor(path) == NULL) return;
 
     auto &nv = world.nvim;
     auto msgid = nv.start_request_message("nvim_buf_get_extmark_by_id", 4);

@@ -222,6 +222,7 @@ bool let_user_select_file(Select_File_Opts* opts);
 bool copy_file(ccstr src, ccstr dest, bool overwrite);
 bool ensure_directory_exists(ccstr path);
 bool delete_rm_rf(ccstr path);
+bool delete_file(ccstr path);
 
 ccstr normalize_path_sep(ccstr path, char sep = 0);
 bool is_sep(char ch);
@@ -346,8 +347,8 @@ enum Ask_User_Result {
     ASKUSER_CANCEL,
 };
 
-Ask_User_Result ask_user_yes_no_cancel(ccstr text, ccstr title);
-Ask_User_Result ask_user_yes_no(ccstr text, ccstr title);
+Ask_User_Result ask_user_yes_no_cancel(ccstr text, ccstr title, ccstr yeslabel, ccstr nolabel);
+Ask_User_Result ask_user_yes_no(ccstr text, ccstr title, ccstr yeslabel, ccstr nolabel, bool cancel = false);
 void tell_user(ccstr text, ccstr title);
 ccstr get_executable_path();
 bool set_run_on_computer_startup(ccstr key, ccstr path_to_exe);

@@ -361,6 +361,10 @@ bool delete_rm_rf(ccstr path) {
     return nftw(path, unlink_cb, 64, FTW_DEPTH | FTW_PHYS) == 0;
 }
 
+bool delete_file(ccstr path) {
+    return (remove(path) == 0);
+}
+
 ccstr get_canon_path(ccstr path) {
     auto new_path = alloc_list<ccstr>();
 

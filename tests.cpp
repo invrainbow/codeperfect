@@ -63,7 +63,7 @@ void test_search() {
 bool run_tests() {
     return false;
 
-    world.init();
+    world.init(NULL);
 
     // test_search();
     // test_read_write_index();

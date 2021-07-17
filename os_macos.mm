@@ -34,33 +34,41 @@ int run_nsalert(NSAlert *alert) {
                   }];
 
     [NSApp runModalForWindow:wnd];
+    [wnd makeKeyAndOrderFront:nil];
     return ret;
 }
 
-Ask_User_Result ask_user_yes_no_cancel(ccstr text, ccstr title) {
+Ask_User_Result ask_user_yes_no(ccstr text, ccstr title, ccstr yeslabel, ccstr nolabel, bool cancel) {
     @autoreleasepool {
         auto alert = make_nsalert(text, title);
-        [alert addButtonWithTitle:@"Yes"];
-        [alert addButtonWithTitle:@"No"];
-        [alert addButtonWithTitle:@"Cancel"];
+        int i = 0;
+
+        {
+            auto btn = [alert addButtonWithTitle:[NSString stringWithUTF8String:yeslabel]];
+            [btn setKeyEquivalent:@"\r"];
+            [btn highlight:YES];
+            [btn setTag:i++];
+        }
+
+        {
+            auto btn = [alert addButtonWithTitle:[NSString stringWithUTF8String:nolabel]];
+            [btn setTag:i++];
+            if (!cancel) {
+                [btn setKeyEquivalent:@"\e"];
+            }
+        }
+
+        if (cancel) {
+            auto btn = [alert addButtonWithTitle:@"Cancel"];
+            [btn setKeyEquivalent:@"\e"];
+            [btn setTag:i++];
+        }
 
         int sel = run_nsalert(alert);
-        if (sel == NSAlertFirstButtonReturn) return ASKUSER_YES;
-        if (sel == NSAlertSecondButtonReturn) return ASKUSER_NO;
-        if (sel == NSAlertThirdButtonReturn) return ASKUSER_CANCEL;
-        return ASKUSER_ERROR;
-    }
-}
-
-Ask_User_Result ask_user_yes_no(ccstr text, ccstr title) {
-    @autoreleasepool {
-        auto alert = make_nsalert(text, title);
-        [alert addButtonWithTitle:@"Yes"];
-        [alert addButtonWithTitle:@"No"];
-
-        int sel = run_nsalert(alert);
-        if (sel == NSAlertFirstButtonReturn) return ASKUSER_YES;
-        if (sel == NSAlertSecondButtonReturn) return ASKUSER_NO;
+        print("sel: %d", sel);
+        if (sel == 0) return ASKUSER_YES;
+        if (sel == 1) return ASKUSER_NO;
+        if (sel == 2 && cancel) return ASKUSER_CANCEL;
         return ASKUSER_ERROR;
     }
 }
@@ -77,7 +85,7 @@ void tell_user(ccstr text, ccstr title) {
 bool let_user_select_file(Select_File_Opts* opts) {
     @autoreleasepool {
         NSSavePanel *panel = nil;
-        NSWindow *keyWindow = [[NSApplication sharedApplication] keyWindow];
+        // NSWindow *keyWindow = [[NSApplication sharedApplication] keyWindow];
         // [[NSApplication sharedApplication] setActivationPolicy:NSApplicationActivationPolicyRegular];
 
         if (opts->save) {
@@ -114,6 +122,7 @@ bool let_user_select_file(Select_File_Opts* opts) {
         int result = -1;
 
         auto wnd = (__bridge NSWindow*)get_native_window_handle();
+
         if (wnd == nil) {
             result = [panel runModal];
         } else {
@@ -127,7 +136,7 @@ bool let_user_select_file(Select_File_Opts* opts) {
             result = ret;
         }
 
-        [keyWindow makeKeyAndOrderFront:nil];
+        [wnd makeKeyAndOrderFront:nil];
 
         if (result != NSModalResponseOK) return false;
 

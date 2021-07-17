@@ -6,6 +6,7 @@
 #include "go.hpp"
 #include "unicode.hpp"
 #include "settings.hpp"
+#include "IconsFontAwesome5.h"
 
 #define _USE_MATH_DEFINES // what the fuck is this lol
 #include <math.h>
@@ -15,6 +16,20 @@
 #include <inttypes.h>
 
 UI ui;
+
+namespace ImGui {
+    bool OurBeginPopupContextItem(const char* str_id = NULL, ImGuiPopupFlags popup_flags = 1) {
+        ImGuiWindow* window = GImGui->CurrentWindow;
+        if (window->SkipItems)
+            return false;
+        ImGuiID id = str_id ? window->GetID(str_id) : window->DC.LastItemId; // If user hasn't passed an ID, we can use the LastItemID. Using LastItemID as a Popup ID won't conflict!
+        IM_ASSERT(id != 0);                                                  // You cannot pass a NULL str_id if the last item has no identifier (e.g. a Text() item)
+        int mouse_button = (popup_flags & ImGuiPopupFlags_MouseButtonMask_);
+        if (IsMouseReleased(mouse_button) && IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup))
+            OpenPopupEx(id, popup_flags);
+        return BeginPopupEx(id, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoSavedSettings);
+    }
+}
 
 int get_line_number_width(Editor *editor) {
     auto &buf = editor->buf;
@@ -928,7 +943,7 @@ struct Debugger_UI {
             ImGui::TextWrapped("%s", value_label);
             if (muted) ImGui::PopStyleColor();
 
-            if (ImGui::BeginPopupContextItem("dbg_copyvalue")) {
+            if (ImGui::OurBeginPopupContextItem("dbg_copyvalue")) {
                 if (ImGui::Selectable("Copy")) {
                     glfwSetClipboardString(world.window, underlying_value);
                 }
@@ -1299,6 +1314,7 @@ void open_add_file_or_folder(bool folder) {
 
     wnd.folder = folder;
     wnd.show = true;
+    wnd.name[0] = '\0';
 }
 
 void UI::imgui_small_newline() {
@@ -1343,11 +1359,11 @@ void UI::imgui_with_disabled(bool disable, fn<void()> f) {
     }
 }
 
-bool UI::imgui_input_special_key_pressed(int key) {
-    return imgui_input_key_pressed(ImGui::GetKeyIndex(key));
+bool UI::imgui_special_key_pressed(int key) {
+    return imgui_key_pressed(ImGui::GetKeyIndex(key));
 }
 
-bool UI::imgui_input_key_pressed(int key) {
+bool UI::imgui_key_pressed(int key) {
     return ImGui::IsKeyPressed(tolower(key)) || ImGui::IsKeyPressed(toupper(key));
 }
 
@@ -1776,17 +1792,21 @@ void UI::draw_everything() {
                 }
 
                 if (ImGui::MenuItem("Show message box (Yes/No)")) {
-                    auto res = ask_user_yes_no_cancel(
-                        "Do you want to save your changes to main.go?",
-                        "Your changes will be lost if you don't."
+                    auto res = ask_user_yes_no(
+                        "Are you sure you want to delete all breakpoints?",
+                        NULL,
+                        "Delete",
+                        "Don't Delete"
                     );
                     print("%d", res);
                 }
 
                 if (ImGui::MenuItem("Show message box (Yes/No/Cancel)")) {
-                    auto res = ask_user_yes_no(
-                        "Are you sure you want to delete all breakpoints?",
-                        NULL
+                    auto res = ask_user_yes_no_cancel(
+                        "Do you want to save your changes to main.go?",
+                        "Your changes will be lost if you don't.",
+                        "Save",
+                        "Don't Save"
                     );
                     print("%d", res);
                 }
@@ -1876,7 +1896,7 @@ void UI::draw_everything() {
                     bool clicked = ImGui::Selectable(our_sprintf("##hidden_%d", i), i == world.build.current_error, 0, text_size);
                     ImGui::GetWindowDrawList()->AddText(NULL, 0.0f, pos, ImGui::GetColorU32(ImGuiCol_Text), label, NULL, wrap_width);
 
-                    if (ImGui::BeginPopupContextItem()) {
+                    if (ImGui::OurBeginPopupContextItem()) {
                         if (ImGui::Selectable("Copy")) {
                             glfwSetClipboardString(world.window, label);
                         }
@@ -1916,19 +1936,25 @@ void UI::draw_everything() {
             wnd.location_is_root ? "workspace root" : wnd.location
         );
 
-        ImGui::SetNextWindowSize(ImVec2(450, -1));
+        ImGui::SetNextWindowSize(ImVec2(300, -1));
         ImGui::SetNextWindowPos(ImVec2(world.window_size.x/2, world.window_size.y/2), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
 
         ImGui::Begin(label, &world.wnd_add_file_or_folder.show, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking);
 
-        ImGui::Text("Name:");
-
-        if (ImGui::IsWindowAppearing())
+        auto is_focusing = imgui_is_window_focusing(&wnd.focused);
+        if (ImGui::IsWindowAppearing()) {
             ImGui::SetKeyboardFocusHere();
+        } else if (!wnd.first_open_focus_twice_done) {
+            wnd.first_open_focus_twice_done = true;
+            ImGui::SetKeyboardFocusHere();
+        } else if (is_focusing) {
+            ImGui::SetKeyboardFocusHere();
+        }
 
-        ImGui::InputText("##add_file", wnd.name, IM_ARRAYSIZE(wnd.name));
+        // close the window when we unfocus
+        if (!wnd.focused) wnd.show = false;
 
-        if (ImGui::Button("Add")) {
+        if (imgui_input_text_full("Name", wnd.name, _countof(wnd.name), ImGuiInputTextFlags_EnterReturnsTrue)) {
             world.wnd_add_file_or_folder.show = false;
 
             if (strlen(wnd.name) > 0) {
@@ -1954,24 +1980,27 @@ void UI::draw_everything() {
         ImGui::End();
     }
 
-
     if (world.file_explorer.show) {
-        ImGui::SetNextWindowDockID(dock_sidebar_id, ImGuiCond_Once);
-        ImGui::Begin("File Explorer", &world.file_explorer.show);
+        auto &wnd = world.file_explorer;
 
-        if (ImGui::Button("Add file")) {
+        ImGui::SetNextWindowDockID(dock_sidebar_id, ImGuiCond_Once);
+        ImGui::Begin("File Explorer", &wnd.show);
+
+        auto is_focusing = imgui_is_window_focusing(&wnd.focused);
+
+        if (ImGui::Button(ICON_FA_FILE)) {
             open_add_file_or_folder(false);
         }
 
         ImGui::SameLine();
 
-        if (ImGui::Button("Add folder")) {
+        if (ImGui::Button(ICON_FA_FOLDER_PLUS)) {
             open_add_file_or_folder(true);
         }
 
         ImGui::SameLine();
 
-        if (ImGui::Button("Refresh")) {
+        if (ImGui::Button(ICON_FA_SYNC_ALT)) {
             // TODO: probably make this async task
             world.fill_file_tree();
         }
@@ -1983,36 +2012,136 @@ void UI::draw_everything() {
             SCOPED_FRAME();
 
             fn<void(File_Tree_Node*)> draw = [&](auto it) {
-                auto flags = ImGuiTreeNodeFlags_OpenOnArrow
-                    | ImGuiTreeNodeFlags_OpenOnDoubleClick
-                    | ImGuiTreeNodeFlags_NoTreePushOnOpen;
-                    // | ImGuiTreeNodeFlags_SpanAvailWidth
+                auto flags = ImGuiTreeNodeFlags_OpenOnDoubleClick
+                    | ImGuiTreeNodeFlags_NoTreePushOnOpen
+                    | ImGuiTreeNodeFlags_Leaf
+                    | ImGuiTreeNodeFlags_SpanAvailWidth;
 
-                if (!it->is_directory)
-                    flags |= ImGuiTreeNodeFlags_Leaf; // | ImGuiTreeNodeFlags_Bullet;
-                if (world.file_explorer.selection == it)
+                if (wnd.selection == it)
                     flags |= ImGuiTreeNodeFlags_Selected;
 
+                ImGui::Unindent(ImGui::GetTreeNodeToLabelSpacing());
                 for (u32 j = 0; j < it->depth; j++) ImGui::Indent();
 
-                it->open = false;
-                if (ImGui::TreeNodeEx(it, flags, "%s%s", it->name, it->is_directory ? "/" : ""))
-                    if (it->is_directory)
-                        it->open = true;
-
-                for (u32 j = 0; j < it->depth; j++) ImGui::Unindent();
-
-                if (ImGui::IsItemClicked()) {
-                    world.file_explorer.selection = it;
+                ccstr icon = NULL;
+                if (it->is_directory) {
+                    icon = it->open ? ICON_FA_CHEVRON_DOWN : ICON_FA_CHEVRON_RIGHT;
+                } else {
+                    icon = ICON_FA_FILE;
                 }
 
-                if (ImGui::IsMouseDoubleClicked(0) && ImGui::IsItemHovered(ImGuiHoveredFlags_None)) {
+                ImGui::TreeNodeEx(it, flags, "%s %s%s", icon, it->name, it->is_directory ? "/" : "");
+
+                auto open_file = [&]() {
+                    SCOPED_FRAME();
+                    auto rel_path = file_tree_node_to_path(it);
+                    auto full_path = path_join(world.current_path, rel_path);
+                    world.focus_editor(full_path);
+                };
+
+                if (ImGui::OurBeginPopupContextItem(NULL)) {
+                    // wnd.selection = it;
+
                     if (!it->is_directory) {
+                        if (ImGui::Selectable("Open")) {
+                            open_file();
+                        }
+                    }
+
+                    if (ImGui::Selectable("Rename")) {
+                        ImGui::OpenPopup("file_explorer_rename_file");
+                    }
+
+                    if (ImGui::Selectable("Delete")) {
                         SCOPED_FRAME();
                         auto rel_path = file_tree_node_to_path(it);
                         auto full_path = path_join(world.current_path, rel_path);
-                        world.focus_editor(full_path);
+                        if (it->is_directory)
+                            delete_rm_rf(full_path);
+                        else
+                            delete_file(full_path);
+                        world.fill_file_tree();
                     }
+
+                    /*
+                    if (ImGui::Selectable("Cut")) {
+                        wnd.last_file_cut = it;
+                        wnd.last_file_copied = NULL;
+                    }
+
+                    if (ImGui::Selectable("Copy")) {
+                        wnd.last_file_copied = it;
+                        wnd.last_file_cut = NULL;
+                    }
+
+                    if (ImGui::Selectable("Paste")) {
+                        File_Tree_Node *src = wnd.last_file_copied;
+                        bool cut = false;
+                        if (src == NULL) {
+                            src = wnd.last_file_cut;
+                            cut = true;
+                        }
+
+                        if (src != NULL) {
+                            auto dest = it;
+                            if (!dest->is_directory) dest = dest->parent;
+
+                            ccstr srcpath = file_tree_node_to_path(src);
+                            ccstr destpath = NULL;
+
+                            // if we're copying to the same place
+                            if (src->parent == dest)
+                                destpath = path_join(file_tree_node_to_path(dest), our_sprintf("copy of %s", src->name));
+                            else
+                                destpath = path_join(file_tree_node_to_path(dest), src->name);
+
+                            srcpath = path_join(world.current_path, srcpath);
+                            destpath = path_join(world.current_path, destpath);
+
+                            if (src->is_directory) {
+
+                                // ???
+                                ///
+                            } else {
+                                if (cut)
+                                    move_file_atomically(sc)
+                                else
+                                    copy_file(srcpath, destpath, true);
+                            }
+                        }
+                    }
+                    */
+
+                    ImGui::Separator();
+
+                    if (ImGui::Selectable("Copy relative path")) {
+                        SCOPED_FRAME();
+                        auto rel_path = file_tree_node_to_path(it);
+                        glfwSetClipboardString(world.window, rel_path);
+                    }
+
+                    if (ImGui::Selectable("Copy absolute path")) {
+                        SCOPED_FRAME();
+                        auto rel_path = file_tree_node_to_path(it);
+                        auto full_path = path_join(world.current_path, rel_path);
+                        glfwSetClipboardString(world.window, full_path);
+                    }
+
+                    ImGui::EndPopup();
+                }
+
+                for (u32 j = 0; j < it->depth; j++) ImGui::Unindent();
+                ImGui::Indent(ImGui::GetTreeNodeToLabelSpacing());
+
+                if (ImGui::IsItemClicked(0) || ImGui::IsItemClicked(1)) {
+                    wnd.selection = it;
+                }
+
+                if (ImGui::IsMouseDoubleClicked(0) && ImGui::IsItemHovered(ImGuiHoveredFlags_None)) {
+                    if (it->is_directory)
+                        it->open ^= 1;
+                    else
+                        open_file();
                 }
 
                 if (it->is_directory && it->open)
@@ -2020,9 +2149,50 @@ void UI::draw_everything() {
                         draw(child);
             };
 
+            if (ImGui::BeginPopup("file_explorer_rename_file")) {
+                ImGui::Text("shit goes here");
+                ImGui::EndPopup();
+            }
+
             for (auto child = world.file_tree->children; child != NULL; child = child->next)
                 draw(child);
         }
+
+        if (wnd.focused) {
+            auto mods = imgui_get_keymods();
+            switch (mods) {
+            case OUR_MOD_NONE:
+                if (imgui_special_key_pressed(ImGuiKey_DownArrow)) {
+                    if (wnd.selection != NULL) {
+                        auto getnext = [&]() -> File_Tree_Node * {
+                            auto curr = wnd.selection;
+                            if (curr->children != NULL && curr->open)
+                                return curr->children;
+                            if (curr->next != NULL)
+                                return curr->next;
+                            if (curr->parent != NULL) {
+                                curr = curr->parent;
+                                if (curr->next != NULL)
+                                    return curr->next;
+                            }
+                            return NULL;
+                        };
+                        auto next = getnext();
+                        if (next != NULL)
+                            wnd.selection = next;
+                    } else {
+                        auto curr = world.file_tree->children;
+                        if (curr != NULL)
+                            wnd.selection = curr;
+                    }
+                }
+                if (imgui_special_key_pressed(ImGuiKey_UpArrow)) {
+                    // TODO
+                }
+                break;
+            }
+        }
+
 
         ImGui::End();
     }
@@ -2222,11 +2392,12 @@ void UI::draw_everything() {
             wnd.selection %= min(wnd.filtered_results->len, settings.goto_file_max_results);
         };
 
-        ImGui::Begin("Go To File", &world.wnd_goto_file.show, ImGuiWindowFlags_AlwaysAutoResize);
+        ImGui::SetNextWindowSize(ImVec2(500, -1));
+        ImGui::SetNextWindowPos(ImVec2(world.window_size.x/2, 150), ImGuiCond_Always, ImVec2(0.5f, 0));
+
+        ImGui::Begin("Go To File", &world.wnd_goto_file.show, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking);
 
         auto is_focusing = imgui_is_window_focusing(&wnd.focused);
-
-        ImGui::Text("Search for file:");
 
         if (ImGui::IsWindowAppearing()) {
             ImGui::SetKeyboardFocusHere();
@@ -2237,7 +2408,10 @@ void UI::draw_everything() {
             ImGui::SetKeyboardFocusHere();
         }
 
-        if (ImGui::InputText("##search_for_file", wnd.query, _countof(wnd.query), ImGuiInputTextFlags_EnterReturnsTrue)) {
+        // close the window when we unfocus
+        if (!wnd.focused) wnd.show = false;
+
+        if (imgui_input_text_full("Search for file:", wnd.query, _countof(wnd.query), ImGuiInputTextFlags_EnterReturnsTrue)) {
             if (wnd.filtered_results->len > 0) {
                 auto relpath = wnd.filepaths->at(wnd.filtered_results->at(wnd.selection));
                 auto filepath = path_join(world.current_path, relpath);
@@ -2247,17 +2421,19 @@ void UI::draw_everything() {
             ImGui::SetWindowFocus(NULL);
         }
 
-        auto mods = imgui_get_keymods();
-        switch (mods) {
-        case OUR_MOD_NONE:
-            if (imgui_input_special_key_pressed(ImGuiKey_DownArrow)) go_down();
-            if (imgui_input_special_key_pressed(ImGuiKey_UpArrow)) go_up();
-            if (imgui_input_special_key_pressed(ImGuiKey_Escape)) wnd.show = false;
-            break;
-        case OUR_MOD_PRIMARY:
-            if (imgui_input_key_pressed('j')) go_down();
-            if (imgui_input_key_pressed('k')) go_up();
-            break;
+        if (wnd.focused) {
+            auto mods = imgui_get_keymods();
+            switch (mods) {
+            case OUR_MOD_NONE:
+                if (imgui_special_key_pressed(ImGuiKey_DownArrow)) go_down();
+                if (imgui_special_key_pressed(ImGuiKey_UpArrow)) go_up();
+                if (imgui_special_key_pressed(ImGuiKey_Escape)) wnd.show = false;
+                break;
+            case OUR_MOD_PRIMARY:
+                if (imgui_key_pressed('j')) go_down();
+                if (imgui_key_pressed('k')) go_up();
+                break;
+            }
         }
 
         if (ImGui::IsItemEdited()) {
@@ -2272,6 +2448,8 @@ void UI::draw_everything() {
             defer { ImGui::PopFont(); };
 
             for (u32 i = 0; i < wnd.filtered_results->len && i < settings.goto_file_max_results; i++) {
+                if (i == 0) imgui_small_newline();
+
                 auto it = wnd.filepaths->at(wnd.filtered_results->at(i));
                 if (i == wnd.selection)
                     ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.5f, 1.0f), "%s", it);
@@ -2305,13 +2483,13 @@ void UI::draw_everything() {
         auto mods = imgui_get_keymods();
         switch (mods) {
         case OUR_MOD_NONE:
-            if (imgui_input_special_key_pressed(ImGuiKey_DownArrow)) go_down();
-            if (imgui_input_special_key_pressed(ImGuiKey_UpArrow)) go_up();
-            if (imgui_input_special_key_pressed(ImGuiKey_Escape)) wnd.show = false;
+            if (imgui_special_key_pressed(ImGuiKey_DownArrow)) go_down();
+            if (imgui_special_key_pressed(ImGuiKey_UpArrow)) go_up();
+            if (imgui_special_key_pressed(ImGuiKey_Escape)) wnd.show = false;
             break;
         case OUR_MOD_PRIMARY:
-            if (imgui_input_key_pressed('j')) go_down();
-            if (imgui_input_key_pressed('k')) go_up();
+            if (imgui_key_pressed('j')) go_down();
+            if (imgui_key_pressed('k')) go_up();
             break;
         }
 
@@ -2698,8 +2876,18 @@ void UI::draw_everything() {
             bool is_selected = (tab_id == pane.current_editor);
 
             ccstr label = "<untitled>";
-            if (!editor.is_untitled)
-                label = get_path_relative_to(editor.filepath, world.current_path);
+            if (!editor.is_untitled) {
+                auto &ind = world.indexer;
+                if (ind.goroot != NULL && path_contains_in_subtree(ind.goroot, editor.filepath)) {
+                    label = get_path_relative_to(editor.filepath, ind.goroot);
+                    label = our_sprintf("$GOROOT/%s", label);
+                } else if (ind.gomodcache != NULL && path_contains_in_subtree(ind.gomodcache, editor.filepath)) {
+                    label = get_path_relative_to(editor.filepath, ind.gomodcache);
+                    label = our_sprintf("$GOMODCACHE/%s", label);
+                } else {
+                    label = get_path_relative_to(editor.filepath, world.current_path);
+                }
+            }
 
             if (editor.buf.dirty)
                 label = our_sprintf("%s*", label);

@@ -69,10 +69,14 @@ uchar* alloc_chunk(s32 needed, s32* new_size) {
         }
     }
 
+    return NULL;
+
+    /*
     auto size = (int)sizes[_countof(sizes) - 1]; // last largest size
     while (size < needed) size *= 2;
     *new_size = size;
     return (uchar*)our_malloc(sizeof(uchar) * size);
+    */
 }
 
 void free_chunk(uchar* buf, s32 cap) {

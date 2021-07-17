@@ -882,11 +882,9 @@ Ask_User_Result message_box(ccstr text, ccstr title, int flags) {
     return ASKUSER_ERROR;
 }
 
-Ask_User_Result ask_user_yes_no_cancel(ccstr text, ccstr title) {
-    return message_box(text, title, MB_YESNOCANCEL | MB_ICONEXCLAMATION | MB_TOPMOST);
-}
-
-Ask_User_Result ask_user_yes_no(ccstr text, ccstr title) {
+Ask_User_Result ask_user_yes_no(ccstr text, ccstr title, ccstr, ccstr, bool cancel) {
+    if (cancel)
+        return message_box(text, title, MB_YESNOCANCEL | MB_ICONEXCLAMATION | MB_TOPMOST);
     return message_box(text, title, MB_YESNO | MB_ICONWARNING | MB_TOPMOST);
 }
 

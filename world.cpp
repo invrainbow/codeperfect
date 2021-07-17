@@ -112,8 +112,10 @@ void World::fill_file_tree() {
     SCOPED_MEM(&file_tree_mem);
     file_tree_mem.reset();
 
-    // invalidate pointer
+    // invalidate pointers
     file_explorer.selection = NULL;
+    file_explorer.last_file_copied = NULL;
+    file_explorer.last_file_cut = NULL;
 
     file_tree = alloc_object(File_Tree_Node);
     file_tree->is_directory = true;
@@ -217,7 +219,7 @@ void World::init_workspace() {
 
     panes.init(LIST_FIXED, _countof(_panes), _panes);
 
-#if 1 // RELEASE_BUILD
+#if 0
     Select_File_Opts opts; ptr0(&opts);
     opts.buf = current_path;
     opts.bufsize = _countof(current_path);
@@ -547,7 +549,9 @@ void* get_native_window_handle() {
 void prompt_delete_all_breakpoints() {
     auto res = ask_user_yes_no(
         "Are you sure you want to delete all breakpoints?",
-        NULL
+        NULL,
+        "Delete",
+        "Don't Delete"
     );
 
     if (res != ASKUSER_YES) return;
@@ -657,7 +661,8 @@ bool is_build_debug_free() {
 }
 
 void goto_jump_to_definition_result(Jump_To_Definition_Result *result) {
-    world.focus_editor(result->file, result->pos);
+    auto editor = world.focus_editor(result->file, result->pos);
+    if (editor == NULL) return; // TODO
 
     /*
     auto target = world.get_current_editor();

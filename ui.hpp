@@ -201,8 +201,8 @@ struct UI {
 
     void imgui_small_newline();
     bool imgui_input_text_full(ccstr label, char *buf, int count, int flags = 0);
-    bool imgui_input_special_key_pressed(int key);
-    bool imgui_input_key_pressed(int key);
+    bool imgui_special_key_pressed(int key);
+    bool imgui_key_pressed(int key);
     void imgui_with_disabled(bool disable, fn<void()> f);
     bool imgui_is_window_focusing(bool *b);
     u32 imgui_get_keymods();

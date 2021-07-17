@@ -37,6 +37,7 @@ TODO:
 #include "tests.hpp"
 #include "fzy_match.h"
 #include "settings.hpp"
+#include "IconsFontAwesome5.h"
 
 #include "imgui.h"
 #include "fonts.hpp"
@@ -53,7 +54,8 @@ TODO:
 
 #define MAX_PATH 260
 #define CODE_FONT_SIZE 14
-#define UI_FONT_SIZE 15
+#define UI_FONT_SIZE 16
+#define ICON_FONT_SIZE 11
 #define FRAME_RATE_CAP 144
 
 static const char WINDOW_TITLE[] = "CodePerfect 95";
@@ -385,8 +387,20 @@ int main() {
 
         s32 len = 0;
 
-        world.ui.im_font_ui = io.Fonts->AddFontFromMemoryTTF(open_sans_ttf, open_sans_ttf_len, 16);
+        world.ui.im_font_ui = io.Fonts->AddFontFromMemoryTTF(open_sans_ttf, open_sans_ttf_len, UI_FONT_SIZE);
         our_assert(world.ui.im_font_ui != NULL, "unable to load UI font");
+
+        {
+            // merge font awesome into main font
+            ImFontConfig config;
+            config.MergeMode = true;
+            config.GlyphMinAdvanceX = ICON_FONT_SIZE;
+
+            ImWchar icon_ranges[] = { ICON_MIN_FA, ICON_MAX_FA, 0 };
+
+            io.Fonts->AddFontFromMemoryTTF(fa_regular_400_ttf, fa_regular_400_ttf_len, ICON_FONT_SIZE, &config, icon_ranges);
+            io.Fonts->AddFontFromMemoryTTF(fa_solid_900_ttf, fa_solid_900_ttf_len, ICON_FONT_SIZE, &config, icon_ranges);
+        }
 
         world.ui.im_font_mono = io.Fonts->AddFontFromMemoryTTF(vera_mono_ttf, vera_mono_ttf_len, CODE_FONT_SIZE);
         our_assert(world.ui.im_font_mono != NULL, "unable to load code font");
@@ -591,8 +605,18 @@ int main() {
                 world.wnd_search_and_replace.replace = true;
                 break;
             case GLFW_KEY_E:
-                // TODO: set focus? or just a toggle
-                world.file_explorer.show ^= 1;
+                {
+                    auto &wnd = world.file_explorer;
+                    if (wnd.show) {
+                        if (!wnd.focused) {
+                            ImGui::SetWindowFocus("File Explorer");
+                        } else {
+                            wnd.show = false;
+                        }
+                    } else {
+                        wnd.show = true;
+                    }
+                }
                 break;
             }
             break;
@@ -656,7 +680,7 @@ int main() {
                 return;
             }
 
-            editor->type_char('\n');
+            editor->type_char_in_insert_mode('\n');
 
             auto indent_chars = editor->get_autoindent(editor->cur.y);
             editor->insert_text_in_insert_mode(indent_chars);
@@ -867,24 +891,24 @@ int main() {
                 switch (key) {
                 case GLFW_KEY_BACKSPACE: handle_backspace("<Backspace>"); break;
 
-                case GLFW_KEY_TAB:
                 case GLFW_KEY_ENTER:
+                    handle_enter("<Enter>");
+                    break;
+
+                case GLFW_KEY_TAB:
                     {
                         auto& ac = editor->autocomplete;
-                        if (ac.ac.results != NULL && ac.filtered_results->len > 0) {
-                            auto idx = ac.filtered_results->at(ac.selection);
-                            auto& result = ac.ac.results->at(idx);
-
-                            editor->perform_autocomplete(&result);
-
-                        } else {
-                            if (key == GLFW_KEY_TAB)
-                                handle_tab("<Tab>");
-                            else
-                                handle_enter("<Enter>");
+                        if (ac.ac.results == NULL || ac.filtered_results->len == 0) {
+                            handle_tab("<Tab>");
+                            break;
                         }
-                        break;
+
+                        auto idx = ac.filtered_results->at(ac.selection);
+                        auto& result = ac.ac.results->at(idx);
+                        editor->perform_autocomplete(&result);
                     }
+                    break;
+
                 case GLFW_KEY_ESCAPE:
                     if (!editor->trigger_escape()) send_nvim_keys("<Esc>");
                     break;
@@ -943,7 +967,9 @@ int main() {
                             if (editor->buf.dirty) {
                                 auto result = ask_user_yes_no_cancel(
                                     "Your changes will be lost if you don't.",
-                                    our_sprintf("Do you want to save your changes to %s?", our_basename(editor->filepath))
+                                    our_sprintf("Do you want to save your changes to %s?", our_basename(editor->filepath)),
+                                    "Save",
+                                    "Don't Save"
                                 );
                                 if (result == ASKUSER_CANCEL)
                                     break;
@@ -989,6 +1015,7 @@ int main() {
             io.AddInputCharacter((u16)ch);
 
         if (world.ui.keyboard_captured_by_imgui) return;
+        if (ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow)) return;
 
         auto ed = world.get_current_editor();
         if (ed == NULL) return;
@@ -1107,8 +1134,6 @@ int main() {
     t.log("initialize everything");
 
     auto last_frame_time = current_time_in_nanoseconds();
-
-    // world.focus_editor(path_join(world.current_path, "main.go"), new_cur2(1, 8));
 
     while (!glfwWindowShouldClose(world.window)) {
         auto frame_start_time = current_time_in_nanoseconds();

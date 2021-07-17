@@ -219,10 +219,13 @@ struct World {
 
     struct {
         bool show;
+        bool focused;
         File_Tree_Node *selection;
         // char buf[256];
         // bool adding_something;
         // bool thing_being_added_is_file;
+        File_Tree_Node *last_file_copied;
+        File_Tree_Node *last_file_cut;
     } file_explorer;
 
     struct {
@@ -283,6 +286,8 @@ struct World {
         char location[MAX_PATH];
         bool location_is_root;
         bool folder;
+        bool focused;
+        bool first_open_focus_twice_done;
     } wnd_add_file_or_folder;
 
     struct {

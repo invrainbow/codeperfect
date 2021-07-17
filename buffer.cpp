@@ -172,7 +172,6 @@ void Buffer::init(Pool *_mem, bool _use_tree) {
     ptr0(this);
 
     mem = _mem;
-    use_tree = _use_tree;
 
     {
         SCOPED_MEM(mem);
@@ -183,8 +182,16 @@ void Buffer::init(Pool *_mem, bool _use_tree) {
     initialized = true;
     dirty = false;
 
-    if (use_tree)
-        parser = new_ts_parser();
+    if (_use_tree)
+        enable_tree();
+}
+
+void Buffer::enable_tree() {
+    if (use_tree) return; // already enabled
+
+    use_tree = true;
+    parser = new_ts_parser();
+    update_tree();
 }
 
 void Buffer::cleanup() {
@@ -219,7 +226,7 @@ void Buffer::copy_from(Buffer *other) {
     });
 }
 
-void Buffer::read(Buffer_Read_Func f) {
+bool Buffer::read(Buffer_Read_Func f) {
     // Expects buf to be empty.
 
     char ch;
@@ -231,27 +238,33 @@ void Buffer::read(Buffer_Read_Func f) {
     Line *line = NULL;
     u32 *bc = NULL;
 
-    auto insert_new_line = [&]() {
+    auto insert_new_line = [&]() -> bool {
         line = lines.append();
         bc = bytecounts.append();
 
-        if (line == NULL) our_panic("unable to insert new line");
+        // make this check more robust/at the right place?
+        if (line == NULL) return false;
 
         line->init(LIST_CHUNK, CHUNK0);
         *bc = 0;
+        return true;
     };
 
-    insert_new_line();
+    if (!insert_new_line()) return false;
+
     conv.init();
     while (f(&ch)) {
         uchar uch = conv.feed(ch, &found);
         (*bc)++;
 
         if (found) {
-            if (uch == '\n') // TODO: handle \r
-                insert_new_line();
-            else
-                line->append(uch);
+            if (uch == '\n') { // TODO: handle \r
+                if (!insert_new_line())
+                    return false;
+            } else {
+                if (!line->append(uch))
+                    return false;
+            }
         }
     }
 
@@ -267,8 +280,15 @@ void Buffer::read(Buffer_Read_Func f) {
     }
 }
 
-void Buffer::read(File *f) {
-    read([&](char* out) { return f->read(out, 1); });
+bool Buffer::read(File_Mapping *fm) {
+    int i = 0;
+
+    return read([&](char* out) {
+        if (i >= fm->len) return false;
+
+        *out = fm->data[i++];
+        return true;
+    });
 }
 
 void Buffer::write(File *f) {

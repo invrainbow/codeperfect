@@ -71,3 +71,8 @@ bool list_directory(ccstr path, list_directory_cb_void cb) {
     });
 }
 */
+
+Ask_User_Result ask_user_yes_no_cancel(ccstr text, ccstr title, ccstr yeslabel, ccstr nolabel) {
+    return ask_user_yes_no(text, title, yeslabel, nolabel, true);
+}
+

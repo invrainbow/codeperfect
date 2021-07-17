@@ -73,13 +73,13 @@ struct Buffer {
     void copy_from(Buffer *other);
     void init(Pool *_mem, bool use_tree);
     void cleanup();
-    void read(Buffer_Read_Func f);
-    void read(File* f);
+    bool read(Buffer_Read_Func f);
+    bool read(File_Mapping* fm);
     void write(File* f);
     void clear();
     uchar* alloc_temp_array(s32 size);
     void free_temp_array(uchar* buf, s32 size);
-
+    void enable_tree();
     void update_tree();
 
     void internal_append_line(uchar* text, s32 len);

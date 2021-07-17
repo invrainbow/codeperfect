@@ -2843,6 +2843,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                 if (it.status != GPS_READY) continue;
                 if (it.import_path == NULL) continue;
                 if (it.package_name == NULL) continue;
+                if (str_starts_with(it.package_name, "internal/")) continue;
 
                 auto res = ac_results->append();
                 res->name = it.package_name;
