@@ -1016,7 +1016,7 @@ Buffer_It Editor::iter(cur2 _cur) { return buf.iter(_cur); }
 void Pane::init() {
     ptr0(this);
     editors.init(LIST_MALLOC, 8);
-    current_editor = -1;
+    set_current_editor(-1);
 }
 
 void Pane::cleanup() {
@@ -1267,13 +1267,42 @@ bool Editor::trigger_escape(cur2 go_here_after) {
     return handled;
 }
 
+void Pane::set_current_editor(u32 idx) {
+    current_editor = idx;
+
+    auto focus_current_editor_in_file_explorer = [&]() {
+        auto ed = world.get_current_editor();
+        if (ed == NULL) return;
+
+        auto edpath = make_path(get_path_relative_to(ed->filepath, world.current_path));
+        auto node = world.file_tree;
+        For (*edpath->parts) {
+            File_Tree_Node *next = NULL;
+            for (auto child = node->children; child != NULL; child = child->next) {
+                if (streqi(child->name, it)) {
+                    next = child;
+                    break;
+                }
+            }
+            if (next == NULL) return;
+            node = next;
+        }
+
+        world.file_explorer.selection = node;
+        for (auto it = node->parent; it != NULL && it->parent != NULL; it = it->parent)
+            it->open = true;
+    };
+
+    focus_current_editor_in_file_explorer();
+}
+
 Editor *Pane::focus_editor_by_index(u32 idx, cur2 pos) {
     if (current_editor != idx) {
         auto e = world.get_current_editor();
         if (e != NULL) e->trigger_escape();
     }
 
-    current_editor = idx;
+    set_current_editor(idx);
 
     auto &editor = editors[idx];
 

@@ -1619,7 +1619,7 @@ void UI::draw_everything() {
             }
 
             if (ImGui::MenuItem("Format Selection", NULL, false, editor != NULL)) {
-                // TODO
+                // how do we even get the visual selection?
             }
 
             ImGui::EndMenu();
@@ -3004,14 +3004,14 @@ void UI::draw_everything() {
             pane.editors.remove(tab_to_remove);
 
             if (pane.editors.len == 0)
-                pane.current_editor = -1;
+                pane.set_current_editor(-1);
             else if (pane.current_editor == tab_to_remove) {
                 auto new_idx = pane.current_editor;
                 if (new_idx >= pane.editors.len)
                     new_idx = pane.editors.len - 1;
                 pane.focus_editor_by_index(new_idx);
             } else if (pane.current_editor > tab_to_remove) {
-                pane.current_editor--;
+                pane.set_current_editor(pane.current_editor - 1);
             }
         }
 

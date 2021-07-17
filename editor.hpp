@@ -194,6 +194,7 @@ struct Pane {
     Editor* focus_editor_by_index(u32 index, cur2 pos);
     Editor* get_current_editor();
     Editor* open_empty_editor();
+    void set_current_editor(u32 idx);
 };
 
 #define MAX_PANES 4

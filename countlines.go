@@ -36,7 +36,7 @@ func main() {
 			continue
 		}
 
-		if name == "fonts.cpp" {
+		if name == "fonts.cpp" || name == "fonts.hpp" {
 			continue
 		}
 
