@@ -148,6 +148,7 @@ void World::fill_file_tree() {
                     parent->children = last_child = file;
                 } else {
                     last_child->next = file;
+                    file->prev = last_child;
                     last_child = file;
                 }
 

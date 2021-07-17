@@ -40,6 +40,7 @@ struct File_Tree_Node {
     i32 depth;
     File_Tree_Node *parent;
     File_Tree_Node *children;
+    File_Tree_Node *prev;
     File_Tree_Node *next;
     bool open;
 };

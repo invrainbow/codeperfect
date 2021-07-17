@@ -653,6 +653,12 @@ bool File_Mapping::create_actual_file_mapping(LARGE_INTEGER size) {
         our_panic("File to be mapped is too big.");
     }
 
+    if (size.LowPart == 0) {
+        data = NULL;
+        len = 0;
+        return true;
+    }
+
     bool ok = false;
 
     mapping = CreateFileMapping(file, 0, opts.write ? PAGE_READWRITE : PAGE_READONLY, size.HighPart, size.LowPart, NULL);
@@ -714,6 +720,8 @@ bool File_Mapping::init(ccstr path, File_Mapping_Opts *_opts) {
 }
 
 bool File_Mapping::resize(i64 newlen) {
+    if (newlen == 0) return false;
+
     if (opts.write) {
         if (!flush(len)) return false;
 

@@ -7,6 +7,7 @@
 #include "unicode.hpp"
 #include "settings.hpp"
 #include "IconsFontAwesome5.h"
+#include "IconsMaterialDesign.h"
 
 #define _USE_MATH_DEFINES // what the fuck is this lol
 #include <math.h>
@@ -14,6 +15,9 @@
 
 #include <GLFW/glfw3.h>
 #include <inttypes.h>
+
+void delete_file_tree_node(File_Tree_Node *it);
+void open_file_tree_node(File_Tree_Node *it);
 
 UI ui;
 
@@ -1378,6 +1382,25 @@ u32 UI::imgui_get_keymods() {
     return ret;
 }
 
+void delete_file_tree_node(File_Tree_Node *it) {
+    SCOPED_FRAME();
+    auto rel_path = file_tree_node_to_path(it);
+    auto full_path = path_join(world.current_path, rel_path);
+    if (it->is_directory)
+        delete_rm_rf(full_path);
+    else
+        delete_file(full_path);
+    world.fill_file_tree();
+}
+
+void open_file_tree_node(File_Tree_Node *it) {
+    SCOPED_FRAME();
+    auto rel_path = file_tree_node_to_path(it);
+    auto full_path = path_join(world.current_path, rel_path);
+    if (world.focus_editor(full_path) != NULL)
+        ImGui::SetWindowFocus(NULL);
+}
+
 void UI::draw_everything() {
     hover.id_last_frame = hover.id;
     hover.id = 0;
@@ -1939,7 +1962,7 @@ void UI::draw_everything() {
         ImGui::SetNextWindowSize(ImVec2(300, -1));
         ImGui::SetNextWindowPos(ImVec2(world.window_size.x/2, world.window_size.y/2), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
 
-        ImGui::Begin(label, &world.wnd_add_file_or_folder.show, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking);
+        ImGui::Begin(our_sprintf("%s###add_file_or_folder", label), &world.wnd_add_file_or_folder.show, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking);
 
         auto is_focusing = imgui_is_window_focusing(&wnd.focused);
         if (ImGui::IsWindowAppearing()) {
@@ -1988,19 +2011,25 @@ void UI::draw_everything() {
 
         auto is_focusing = imgui_is_window_focusing(&wnd.focused);
 
-        if (ImGui::Button(ICON_FA_FILE)) {
+        auto imgui_icon_button = [&](ccstr icon) -> bool {
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4, 2));
+            auto ret = ImGui::Button(icon);
+            ImGui::PopStyleVar();
+        };
+
+        if (imgui_icon_button(ICON_MD_NOTE_ADD)) {
             open_add_file_or_folder(false);
         }
 
-        ImGui::SameLine();
+        ImGui::SameLine(0.0, 4.0f);
 
-        if (ImGui::Button(ICON_FA_FOLDER_PLUS)) {
+        if (imgui_icon_button(ICON_MD_CREATE_NEW_FOLDER)) {
             open_add_file_or_folder(true);
         }
 
-        ImGui::SameLine();
+        ImGui::SameLine(0.0, 4.0f);
 
-        if (ImGui::Button(ICON_FA_SYNC_ALT)) {
+        if (imgui_icon_button(ICON_MD_REFRESH)) {
             // TODO: probably make this async task
             world.fill_file_tree();
         }
@@ -2025,26 +2054,31 @@ void UI::draw_everything() {
 
                 ccstr icon = NULL;
                 if (it->is_directory) {
-                    icon = it->open ? ICON_FA_CHEVRON_DOWN : ICON_FA_CHEVRON_RIGHT;
+                    icon = it->open ? ICON_MD_EXPAND_MORE : ICON_MD_CHEVRON_RIGHT;
                 } else {
-                    icon = ICON_FA_FILE;
+                    icon = ICON_MD_DESCRIPTION;
                 }
 
-                ImGui::TreeNodeEx(it, flags, "%s %s%s", icon, it->name, it->is_directory ? "/" : "");
+                {
+                    bool mute = !it->is_directory && !str_ends_with(it->name, ".go");
+                    ImGuiStyle &style = ImGui::GetStyle();
 
-                auto open_file = [&]() {
-                    SCOPED_FRAME();
-                    auto rel_path = file_tree_node_to_path(it);
-                    auto full_path = path_join(world.current_path, rel_path);
-                    world.focus_editor(full_path);
-                };
+                    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.3, 0.3, 0.3, 1.0));
+                    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.3, 0.3, 0.3, 1.0));
+                    if (mute) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.6, 0.6, 0.6, 1.0));
+
+                    ImGui::TreeNodeEx(it, flags, "%s %s%s", icon, it->name, it->is_directory ? "/" : "");
+
+                    if (mute) ImGui::PopStyleColor();
+                    ImGui::PopStyleColor(2);
+                }
 
                 if (ImGui::OurBeginPopupContextItem(NULL)) {
                     // wnd.selection = it;
 
                     if (!it->is_directory) {
                         if (ImGui::Selectable("Open")) {
-                            open_file();
+                            open_file_tree_node(it);
                         }
                     }
 
@@ -2053,14 +2087,7 @@ void UI::draw_everything() {
                     }
 
                     if (ImGui::Selectable("Delete")) {
-                        SCOPED_FRAME();
-                        auto rel_path = file_tree_node_to_path(it);
-                        auto full_path = path_join(world.current_path, rel_path);
-                        if (it->is_directory)
-                            delete_rm_rf(full_path);
-                        else
-                            delete_file(full_path);
-                        world.fill_file_tree();
+                        delete_file_tree_node(it);
                     }
 
                     /*
@@ -2141,7 +2168,7 @@ void UI::draw_everything() {
                     if (it->is_directory)
                         it->open ^= 1;
                     else
-                        open_file();
+                        open_file_tree_node(it);
                 }
 
                 if (it->is_directory && it->open)
@@ -2162,32 +2189,71 @@ void UI::draw_everything() {
             auto mods = imgui_get_keymods();
             switch (mods) {
             case OUR_MOD_NONE:
-                if (imgui_special_key_pressed(ImGuiKey_DownArrow)) {
-                    if (wnd.selection != NULL) {
-                        auto getnext = [&]() -> File_Tree_Node * {
-                            auto curr = wnd.selection;
-                            if (curr->children != NULL && curr->open)
-                                return curr->children;
+                if (imgui_special_key_pressed(ImGuiKey_DownArrow) || imgui_key_pressed('j')) {
+                    auto getnext = [&]() -> File_Tree_Node * {
+                        auto curr = wnd.selection;
+                        if (curr == NULL) return world.file_tree->children;
+
+                        if (curr->children != NULL && curr->open)
+                            return curr->children;
+                        if (curr->next != NULL)
+                            return curr->next;
+
+                        while (curr->parent != NULL) {
+                            curr = curr->parent;
                             if (curr->next != NULL)
                                 return curr->next;
-                            if (curr->parent != NULL) {
-                                curr = curr->parent;
-                                if (curr->next != NULL)
-                                    return curr->next;
-                            }
-                            return NULL;
-                        };
-                        auto next = getnext();
-                        if (next != NULL)
-                            wnd.selection = next;
-                    } else {
-                        auto curr = world.file_tree->children;
-                        if (curr != NULL)
-                            wnd.selection = curr;
-                    }
+                        }
+
+                        return NULL;
+                    };
+
+                    auto next = getnext();
+                    if (next != NULL)
+                        wnd.selection = next;
                 }
-                if (imgui_special_key_pressed(ImGuiKey_UpArrow)) {
-                    // TODO
+                if (imgui_special_key_pressed(ImGuiKey_LeftArrow) || imgui_key_pressed('h')) {
+                    auto curr = wnd.selection;
+                    if (curr != NULL)
+                        if (curr->is_directory)
+                            curr->open = false;
+                }
+                if (imgui_special_key_pressed(ImGuiKey_RightArrow) || imgui_key_pressed('l')) {
+                    auto curr = wnd.selection;
+                    if (curr != NULL)
+                        if (curr->is_directory)
+                            curr->open = true;
+                }
+                if (imgui_special_key_pressed(ImGuiKey_UpArrow) || imgui_key_pressed('k')) {
+                    auto curr = wnd.selection;
+                    if (curr != NULL) {
+                        if (curr->prev != NULL) {
+                            curr = curr->prev;
+                            // as long as curr has children, keep grabbing the last child
+                            while (curr->is_directory && curr->open && curr->children != NULL) {
+                                curr = curr->children;
+                                while (curr->next != NULL)
+                                    curr = curr->next;
+                            }
+                        } else {
+                            curr = curr->parent;
+                            if (curr->parent == NULL) // if we're at the root
+                                curr = NULL; // don't set selection to root
+                        }
+                    }
+
+                    if (curr != NULL)
+                        wnd.selection = curr;
+                }
+                break;
+            case OUR_MOD_PRIMARY:
+                if (imgui_special_key_pressed(ImGuiKey_Delete) || imgui_special_key_pressed(ImGuiKey_Backspace)) {
+                    auto curr = wnd.selection;
+                    if (curr != NULL) delete_file_tree_node(curr);
+                }
+                if (imgui_special_key_pressed(ImGuiKey_Enter)) {
+                    auto curr = wnd.selection;
+                    if (curr != NULL) open_file_tree_node(curr);
                 }
                 break;
             }

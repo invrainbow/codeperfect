@@ -38,6 +38,7 @@ TODO:
 #include "fzy_match.h"
 #include "settings.hpp"
 #include "IconsFontAwesome5.h"
+#include "IconsMaterialDesign.h"
 
 #include "imgui.h"
 #include "fonts.hpp"
@@ -55,7 +56,7 @@ TODO:
 #define MAX_PATH 260
 #define CODE_FONT_SIZE 14
 #define UI_FONT_SIZE 16
-#define ICON_FONT_SIZE 11
+#define ICON_FONT_SIZE 15
 #define FRAME_RATE_CAP 144
 
 static const char WINDOW_TITLE[] = "CodePerfect 95";
@@ -395,11 +396,16 @@ int main() {
             ImFontConfig config;
             config.MergeMode = true;
             config.GlyphMinAdvanceX = ICON_FONT_SIZE;
+            config.GlyphOffset.y = 3;
 
+            /*
             ImWchar icon_ranges[] = { ICON_MIN_FA, ICON_MAX_FA, 0 };
-
             io.Fonts->AddFontFromMemoryTTF(fa_regular_400_ttf, fa_regular_400_ttf_len, ICON_FONT_SIZE, &config, icon_ranges);
             io.Fonts->AddFontFromMemoryTTF(fa_solid_900_ttf, fa_solid_900_ttf_len, ICON_FONT_SIZE, &config, icon_ranges);
+            */
+
+            ImWchar icon_ranges[] = { ICON_MIN_MD, ICON_MAX_MD, 0 };
+            io.Fonts->AddFontFromMemoryTTF(material_icons_regular_ttf, material_icons_regular_ttf_len, ICON_FONT_SIZE, &config, icon_ranges);
         }
 
         world.ui.im_font_mono = io.Fonts->AddFontFromMemoryTTF(vera_mono_ttf, vera_mono_ttf_len, CODE_FONT_SIZE);
@@ -558,16 +564,11 @@ int main() {
         case OUR_MOD_PRIMARY:
             switch (key) {
             case GLFW_KEY_1:
-                world.activate_pane(0);
-                break;
             case GLFW_KEY_2:
-                world.activate_pane(1);
-                break;
             case GLFW_KEY_3:
-                world.activate_pane(2);
-                break;
             case GLFW_KEY_4:
-                world.activate_pane(3);
+                world.activate_pane(key - GLFW_KEY_1);
+                ImGui::SetWindowFocus(NULL);
                 break;
             case GLFW_KEY_T:
                 world.wnd_goto_symbol.show ^= 1;
@@ -668,6 +669,7 @@ int main() {
         }
 
         if (world.ui.keyboard_captured_by_imgui) return;
+        if (ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow)) return;
 
         // handle non-global keys
 

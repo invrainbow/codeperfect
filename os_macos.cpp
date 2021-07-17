@@ -519,7 +519,9 @@ bool File_Mapping::init(ccstr path, File_Mapping_Opts *_opts) {
         len = statbuf.st_size;
     }
 
-    if (!create_actual_file_mapping(len)) return false;
+    if (len > 0)
+        if (!create_actual_file_mapping(len))
+            return false;
 
     ok = true;
     return true;
@@ -539,6 +541,8 @@ bool File_Mapping::finish_writing(i64 final_size) {
 }
 
 bool File_Mapping::resize(i64 newlen) {
+    if (newlen == 0) return false;
+
     if (opts.write) {
         if (!flush(len)) return false;
         munmap(data, len); data = NULL;
