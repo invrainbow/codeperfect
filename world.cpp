@@ -123,6 +123,8 @@ void World::fill_file_tree() {
 
     u32 depth = 0;
 
+    GHGitIgnoreInit(current_path);
+
     fn<void(ccstr, File_Tree_Node*)> recur = [&](ccstr path, File_Tree_Node *parent) {
         File_Tree_Node *last_child = parent->children;
 

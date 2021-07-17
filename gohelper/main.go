@@ -295,7 +295,8 @@ func GHGitIgnoreInit(repo *C.char) bool {
 
 //export GHGitIgnoreCheckFile
 func GHGitIgnoreCheckFile(file *C.char) bool {
-	return gitignoreChecker.ignore.Ignore(C.GoString(file))
+    match := gitignoreChecker.ignore.Match(C.GoString(file))
+    return match != nil && match.Ignore()
 }
 
 // ---

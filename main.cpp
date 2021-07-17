@@ -438,6 +438,11 @@ int main() {
         new_ortho_matrix(projection, 0, w, h, 0);
         glUseProgram(world.ui.im_program);
         glUniformMatrix4fv(glGetUniformLocation(world.ui.im_program, "projection"), 1, GL_FALSE, (float*)projection);
+
+        // clear frame
+        glClearColor(COLOR_BG.r, COLOR_BG.g, COLOR_BG.b, 1.0);
+        glClear(GL_COLOR_BUFFER_BIT);
+        glfwSwapBuffers(world.window);
     });
 
     glfwSetFramebufferSizeCallback(world.window, [](GLFWwindow*, i32 w, i32 h) {
@@ -448,6 +453,11 @@ int main() {
         new_ortho_matrix(projection, 0, w, h, 0);
         glUseProgram(world.ui.program);
         glUniformMatrix4fv(glGetUniformLocation(world.ui.program, "projection"), 1, GL_FALSE, (float*)projection);
+
+        // clear frame
+        glClearColor(COLOR_BG.r, COLOR_BG.g, COLOR_BG.b, 1.0);
+        glClear(GL_COLOR_BUFFER_BIT);
+        glfwSwapBuffers(world.window);
     });
 
     glfwSetCursorPosCallback(world.window, [](GLFWwindow*, double x, double y) {

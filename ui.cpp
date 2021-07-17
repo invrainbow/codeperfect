@@ -254,7 +254,7 @@ bool get_type_color(Ast_Node *node, Editor *editor, vec3f *out) {
 
 bool UI::imgui_is_window_focusing(bool *b) {
     auto old_focus = *b;
-    *b = ImGui::IsWindowFocused();
+    *b = ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows);
     return !old_focus && *b;
 }
 
@@ -1402,6 +1402,8 @@ void open_file_tree_node(File_Tree_Node *it) {
 }
 
 void UI::draw_everything() {
+    verts.len = 0;
+
     hover.id_last_frame = hover.id;
     hover.id = 0;
     hover.cursor = ImGuiMouseCursor_Arrow;
@@ -1953,16 +1955,27 @@ void UI::draw_everything() {
     if (world.wnd_add_file_or_folder.show) {
         auto &wnd = world.wnd_add_file_or_folder;
 
-        auto label = our_sprintf(
-            "Add %s to %s",
-            wnd.folder ? "folder" : "file",
-            wnd.location_is_root ? "workspace root" : wnd.location
-        );
+        auto label = our_sprintf("Add %s", wnd.folder ? "Folder" : "File");
 
         ImGui::SetNextWindowSize(ImVec2(300, -1));
         ImGui::SetNextWindowPos(ImVec2(world.window_size.x/2, world.window_size.y/2), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
 
         ImGui::Begin(our_sprintf("%s###add_file_or_folder", label), &world.wnd_add_file_or_folder.show, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking);
+
+        ImGui::Text("Destination");
+
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(ImColor(140, 194, 248)));
+        ImGui::PushFont(world.ui.im_font_mono);
+
+        if (wnd.location_is_root)
+            ImGui::Text("$WORKSPACE");
+        else
+            ImGui::Text("$WORKSPACE/%s", wnd.location);
+
+        ImGui::PopStyleColor();
+        ImGui::PopFont();
+
+        imgui_small_newline();
 
         auto is_focusing = imgui_is_window_focusing(&wnd.focused);
         if (ImGui::IsWindowAppearing()) {
@@ -1977,7 +1990,11 @@ void UI::draw_everything() {
         // close the window when we unfocus
         if (!wnd.focused) wnd.show = false;
 
-        if (imgui_input_text_full("Name", wnd.name, _countof(wnd.name), ImGuiInputTextFlags_EnterReturnsTrue)) {
+        ImGui::PushFont(world.ui.im_font_mono);
+        bool entered = imgui_input_text_full("Name", wnd.name, _countof(wnd.name), ImGuiInputTextFlags_EnterReturnsTrue);
+        ImGui::PopFont();
+
+        if (entered) {
             world.wnd_add_file_or_folder.show = false;
 
             if (strlen(wnd.name) > 0) {
@@ -2006,8 +2023,14 @@ void UI::draw_everything() {
     if (world.file_explorer.show) {
         auto &wnd = world.file_explorer;
 
+        auto old_item_spacing = ImGui::GetStyle().ItemSpacing;
+
         ImGui::SetNextWindowDockID(dock_sidebar_id, ImGuiCond_Once);
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
+
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
         ImGui::Begin("File Explorer", &wnd.show);
+        ImGui::PopStyleVar();
 
         auto is_focusing = imgui_is_window_focusing(&wnd.focused);
 
@@ -2015,48 +2038,57 @@ void UI::draw_everything() {
             ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4, 2));
             auto ret = ImGui::Button(icon);
             ImGui::PopStyleVar();
+            return ret;
         };
 
-        if (imgui_icon_button(ICON_MD_NOTE_ADD)) {
-            open_add_file_or_folder(false);
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.15, 0.15, 0.15, 1.0));
+        {
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 4));
+
+            ImGuiStyle &style = ImGui::GetStyle();
+            float child_height = ImGui::GetTextLineHeight() + (style.FramePadding.y * 2.0f) + (style.WindowPadding.y * 2.0f);
+            ImGui::BeginChild("child2", ImVec2(0, child_height), false, ImGuiWindowFlags_AlwaysUseWindowPadding);
+
+            ImGui::PopStyleVar();
+
+            if (imgui_icon_button(ICON_MD_NOTE_ADD)) {
+                open_add_file_or_folder(false);
+            }
+
+            ImGui::SameLine(0.0, 4.0f);
+
+            if (imgui_icon_button(ICON_MD_CREATE_NEW_FOLDER)) {
+                open_add_file_or_folder(true);
+            }
+
+            ImGui::SameLine(0.0, 4.0f);
+
+            if (imgui_icon_button(ICON_MD_REFRESH)) {
+                // TODO: probably make this async task
+                world.fill_file_tree();
+            }
+
+            ImGui::EndChild();
         }
+        ImGui::PopStyleColor();
 
-        ImGui::SameLine(0.0, 4.0f);
-
-        if (imgui_icon_button(ICON_MD_CREATE_NEW_FOLDER)) {
-            open_add_file_or_folder(true);
-        }
-
-        ImGui::SameLine(0.0, 4.0f);
-
-        if (imgui_icon_button(ICON_MD_REFRESH)) {
-            // TODO: probably make this async task
-            world.fill_file_tree();
-        }
-
-        ImGui::Separator();
-
-        // draw files area
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 4));
+        ImGui::BeginChild("child3", ImVec2(0,0), true);
+        ImGui::PopStyleVar();
         {
             SCOPED_FRAME();
 
             fn<void(File_Tree_Node*)> draw = [&](auto it) {
-                auto flags = ImGuiTreeNodeFlags_OpenOnDoubleClick
-                    | ImGuiTreeNodeFlags_NoTreePushOnOpen
-                    | ImGuiTreeNodeFlags_Leaf
-                    | ImGuiTreeNodeFlags_SpanAvailWidth;
-
-                if (wnd.selection == it)
-                    flags |= ImGuiTreeNodeFlags_Selected;
-
-                ImGui::Unindent(ImGui::GetTreeNodeToLabelSpacing());
                 for (u32 j = 0; j < it->depth; j++) ImGui::Indent();
 
                 ccstr icon = NULL;
                 if (it->is_directory) {
-                    icon = it->open ? ICON_MD_EXPAND_MORE : ICON_MD_CHEVRON_RIGHT;
+                    icon = ICON_MD_FOLDER;
                 } else {
-                    icon = ICON_MD_DESCRIPTION;
+                    if (str_ends_with(it->name, ".go"))
+                        icon = ICON_MD_CODE;
+                    else
+                        icon = ICON_MD_DESCRIPTION;
                 }
 
                 {
@@ -2065,15 +2097,27 @@ void UI::draw_everything() {
 
                     ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.3, 0.3, 0.3, 1.0));
                     ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.3, 0.3, 0.3, 1.0));
-                    if (mute) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.6, 0.6, 0.6, 1.0));
+                    if (mute) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5, 0.5, 0.5, 1.0));
+                    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 4));
 
-                    ImGui::TreeNodeEx(it, flags, "%s %s%s", icon, it->name, it->is_directory ? "/" : "");
+                    ccstr label = NULL;
+                    if (it->is_directory)
+                        label = our_sprintf("%s %s %s", icon, it->name, it->open ? ICON_MD_EXPAND_MORE : ICON_MD_CHEVRON_RIGHT);
+                    else
+                        label = our_sprintf("%s %s", icon, it->name);
 
+                    ImGui::PushID(it);
+                    ImGui::Selectable(label, wnd.selection == it, ImGuiSelectableFlags_AllowDoubleClick);
+                    ImGui::PopID();
+
+                    ImGui::PopStyleVar();
                     if (mute) ImGui::PopStyleColor();
                     ImGui::PopStyleColor(2);
                 }
 
                 if (ImGui::OurBeginPopupContextItem(NULL)) {
+                    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, old_item_spacing);
+
                     // wnd.selection = it;
 
                     if (!it->is_directory) {
@@ -2154,11 +2198,11 @@ void UI::draw_everything() {
                         glfwSetClipboardString(world.window, full_path);
                     }
 
+                    ImGui::PopStyleVar();
                     ImGui::EndPopup();
                 }
 
                 for (u32 j = 0; j < it->depth; j++) ImGui::Unindent();
-                ImGui::Indent(ImGui::GetTreeNodeToLabelSpacing());
 
                 if (ImGui::IsItemClicked(0) || ImGui::IsItemClicked(1)) {
                     wnd.selection = it;
@@ -2184,6 +2228,8 @@ void UI::draw_everything() {
             for (auto child = world.file_tree->children; child != NULL; child = child->next)
                 draw(child);
         }
+        ImGui::EndChild();
+        // ImGui::PopStyleVar();
 
         if (wnd.focused) {
             auto mods = imgui_get_keymods();
@@ -2259,8 +2305,8 @@ void UI::draw_everything() {
             }
         }
 
-
         ImGui::End();
+        ImGui::PopStyleVar();
     }
 
     if (world.wnd_project_settings.show) {
