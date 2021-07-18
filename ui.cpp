@@ -3400,7 +3400,7 @@ void UI::draw_everything() {
 
                     if (num_items > 0) {
                         boxf menu;
-                        float preview_width = settings.autocomplete_preview_width_in_chars * font->width;
+                        // float preview_width = settings.autocomplete_preview_width_in_chars * font->width;
 
                         menu.w = (
                             // options
@@ -3409,8 +3409,8 @@ void UI::draw_everything() {
                             + (settings.autocomplete_menu_padding * 2)
 
                             // preview
-                            + preview_width
-                            + (settings.autocomplete_menu_padding * 2)
+                            // + preview_width
+                            // + (settings.autocomplete_menu_padding * 2)
                         );
 
                         menu.h = (
@@ -3468,12 +3468,12 @@ void UI::draw_everything() {
 
                         // --- draw the actual stuff inside the menu
 
-                        boxf preview_area = menu;
-                        preview_area.w = preview_width + (settings.autocomplete_menu_padding * 2);
-                        preview_area.x += (menu.w - preview_area.w);
+                        // boxf preview_area = menu;
+                        // preview_area.w = preview_width + (settings.autocomplete_menu_padding * 2);
+                        // preview_area.x += (menu.w - preview_area.w);
 
                         boxf items_area = menu;
-                        items_area.w = menu.w - preview_area.w;
+                        items_area.w = menu.w; // - preview_area.w;
 
                         float menu_padding = settings.autocomplete_menu_padding;
                         auto items_pos = items_area.pos + new_vec2f(menu_padding, menu_padding);
@@ -3524,15 +3524,22 @@ void UI::draw_everything() {
                             items_pos.y += font->height + settings.autocomplete_item_padding_y * 2;
                         }
 
-                        auto preview_padding = settings.autocomplete_preview_padding;
-                        auto preview_pos = preview_area.pos + new_vec2f(preview_padding, preview_padding);
+                        // auto preview_padding = settings.autocomplete_preview_padding;
+                        // auto preview_pos = preview_area.pos + new_vec2f(preview_padding, preview_padding);
 
+                        /*
                         // is this ever a thing?
                         if (ac.selection != -1) {
                             auto idx = ac.filtered_results->at(ac.selection);
                             auto &result = ac.ac.results->at(idx);
 
                             auto color = rgba(COLOR_WHITE);
+
+                            preview_drawable_area = preview_area;
+                            preview_drawable_area.x += preview_padding;
+                            preview_drawable_area.y += preview_padding;
+                            preview_drawable_area.w -= preview_padding * 2;
+                            preview_drawable_area.h -= preview_padding * 2;
 
                             switch (result.type) {
                             case ACR_POSTFIX:
@@ -3542,6 +3549,9 @@ void UI::draw_everything() {
                                 draw_string(preview_pos, "keyword", color);
                                 break;
                             case ACR_DECLARATION:
+                                `type` result.name result.declaration_godecl->gotype
+
+                                comment here
                                 draw_string(preview_pos, "declaration", color);
                                 break;
                             case ACR_IMPORT:
@@ -3549,6 +3559,7 @@ void UI::draw_everything() {
                                 break;
                             }
                         }
+                        */
                     }
                 } while (0);
 

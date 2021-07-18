@@ -1,11 +1,17 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/boltdb/bolt"
 	"github.com/gin-gonic/gin"
+
+	stripe "github.com/stripe/stripe-go/v72"
+	"github.com/stripe/stripe-go/v72/subscriptions"
+	"github.com/stripe/stripe-go/v72/webhook"
 )
 
 /*
@@ -16,13 +22,10 @@ keysrev: cus_id -> key
 emails: email -> cus_id
 */
 
-type AuthBody struct {
-	Email      string `json:"email"`
-	LicenseKey string `json:"license_key"`
-}
+const AdminPassword = os.Getenv("ADMIN_PASSWORD")
 
-func sendError(c *gin.Context, statusCode int, message string) {
-	c.JSON(statusCode, gin.H{
+func sendError(c *gin.Context, message string) {
+	c.JSON(http.StatusBadRequest, gin.H{
 		"error": message,
 	})
 }
@@ -31,13 +34,46 @@ func main() {
 	defer cleanupDB()
 
 	r := gin.Default()
-	r.GET("/auth", func(c *gin.Context) {
-		var params AuthBody
-		if c.ShouldBindJSON(&params) != nil {
-			sendError(c, http.StatusBadRequest, "Invalid data.")
+
+	type AuthBody struct {
+		Email      string `json:"email"`
+		LicenseKey string `json:"license_key"`
+	}
+
+	r.POST("/auth", func(c *gin.Context) {
+		var body AuthBody
+		if c.ShouldBindJSON(&body) != nil {
+			sendError(c, "Invalid data.")
 			return
 		}
 
-		params.Email
+		cusIdFromEmail, found := boltGet("emails", body.Email)
+		if !found {
+			sendError(c, "Email not found.")
+		}
+
+		cusIdFromKey, found := boltGet("keys", body.LicenseKey)
+		if !found || (cusIdFromEmail != cusIdFromKey) {
+			sendError(c, "Invalid license key.")
+			return
+		}
+
+		stripeStatus, found := boltGet("stripe_statuses", body.Email)
+		if !found || stripeStatus != stripe.SubscriptionStatusActive {
+			sendError(c, "Your subscription has expired. Please contact support for details.")
+		}
+
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	/*
+		type CreateNewUserBody struct {
+			Email string `json:"email"`
+			Email string `json:"email"`
+		}
+	*/
+
+	r.POST("/create-new-user", func(c *gin.Context) {
+		c.Request.Body
 	})
 }

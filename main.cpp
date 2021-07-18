@@ -818,13 +818,8 @@ int main() {
                     }
                     break;
                 case GLFW_KEY_V:
-                    if (world.nvim.mode == VI_INSERT) {
-                        auto clipboard_contents = glfwGetClipboardString(world.window);
-                        if (clipboard_contents == NULL) break;
-                        editor->insert_text_in_insert_mode(clipboard_contents);
-                    } else {
+                    if (world.nvim.mode != VI_INSERT)
                         send_nvim_keys("<C-v>");
-                    }
                     break;
                 case GLFW_KEY_G:
                     handle_goto_definition();
@@ -934,77 +929,85 @@ int main() {
         switch (ui.imgui_get_keymods()) {
         case OUR_MOD_PRIMARY:
             switch (key) {
-                case GLFW_KEY_S:
-                    if (editor != NULL)
-                        editor->handle_save();
+            case GLFW_KEY_V:
+                if (world.nvim.mode == VI_INSERT) {
+                    auto clipboard_contents = glfwGetClipboardString(world.window);
+                    if (clipboard_contents == NULL) break;
+                    editor->insert_text_in_insert_mode(clipboard_contents);
+                }
+                break;
+
+            case GLFW_KEY_S:
+                if (editor != NULL)
+                    editor->handle_save();
+                break;
+            case GLFW_KEY_J:
+            case GLFW_KEY_K:
+                {
+                    auto ed = world.get_current_editor();
+                    if (ed == NULL) return;
+
+                    auto &ac = ed->autocomplete;
+
+                    if (ac.ac.results != NULL) {
+                        int delta = (key == GLFW_KEY_J ? 1 : -1);
+                        if (ac.selection == 0 && delta == -1)
+                            ac.selection = ac.filtered_results->len - 1;
+                        else
+                            ac.selection = (ac.selection + delta) % ac.filtered_results->len;
+
+                        if (ac.selection >= ac.view + AUTOCOMPLETE_WINDOW_ITEMS)
+                            ac.view = ac.selection - AUTOCOMPLETE_WINDOW_ITEMS + 1;
+                        if (ac.selection < ac.view)
+                            ac.view = ac.selection;
+                    }
+
                     break;
-                case GLFW_KEY_J:
-                case GLFW_KEY_K:
-                    {
-                        auto ed = world.get_current_editor();
-                        if (ed == NULL) return;
+                }
+            case GLFW_KEY_W:
+                {
+                    auto pane = world.get_current_pane();
+                    if (pane == NULL) break;
 
-                        auto &ac = ed->autocomplete;
+                    auto editor = pane->get_current_editor();
+                    if (editor == NULL) {
+                        // can't close the last pane
+                        if (world.panes.len <= 1) break;
 
-                        if (ac.ac.results != NULL) {
-                            int delta = (key == GLFW_KEY_J ? 1 : -1);
-                            if (ac.selection == 0 && delta == -1)
-                                ac.selection = ac.filtered_results->len - 1;
-                            else
-                                ac.selection = (ac.selection + delta) % ac.filtered_results->len;
-
-                            if (ac.selection >= ac.view + AUTOCOMPLETE_WINDOW_ITEMS)
-                                ac.view = ac.selection - AUTOCOMPLETE_WINDOW_ITEMS + 1;
-                            if (ac.selection < ac.view)
-                                ac.view = ac.selection;
+                        pane->cleanup();
+                        world.panes.remove(world.current_pane);
+                        if (world.current_pane >= world.panes.len)
+                            world.activate_pane(world.panes.len - 1);
+                    } else {
+                        if (editor->buf.dirty) {
+                            auto result = ask_user_yes_no_cancel(
+                                "Your changes will be lost if you don't.",
+                                our_sprintf("Do you want to save your changes to %s?", our_basename(editor->filepath)),
+                                "Save",
+                                "Don't Save"
+                            );
+                            if (result == ASKUSER_CANCEL)
+                                break;
+                            else if (result == ASKUSER_YES)
+                                editor->handle_save(true);
                         }
 
-                        break;
-                    }
-                case GLFW_KEY_W:
-                    {
-                        auto pane = world.get_current_pane();
-                        if (pane == NULL) break;
+                        editor->cleanup();
 
-                        auto editor = pane->get_current_editor();
-                        if (editor == NULL) {
-                            // can't close the last pane
-                            if (world.panes.len <= 1) break;
-
-                            pane->cleanup();
-                            world.panes.remove(world.current_pane);
-                            if (world.current_pane >= world.panes.len)
-                                world.activate_pane(world.panes.len - 1);
-                        } else {
-                            if (editor->buf.dirty) {
-                                auto result = ask_user_yes_no_cancel(
-                                    "Your changes will be lost if you don't.",
-                                    our_sprintf("Do you want to save your changes to %s?", our_basename(editor->filepath)),
-                                    "Save",
-                                    "Don't Save"
-                                );
-                                if (result == ASKUSER_CANCEL)
-                                    break;
-                                else if (result == ASKUSER_YES)
-                                    editor->handle_save(true);
-                            }
-
-                            editor->cleanup();
-
-                            pane->editors.remove(pane->current_editor);
-                            if (pane->editors.len == 0)
-                                pane->current_editor = -1;
-                            else {
-                                auto new_idx = pane->current_editor;
-                                if (new_idx >= pane->editors.len)
-                                    new_idx = pane->editors.len - 1;
-                                pane->focus_editor_by_index(new_idx);
-                            }
-
-                            send_nvim_keys("<Esc>");
+                        pane->editors.remove(pane->current_editor);
+                        if (pane->editors.len == 0)
+                            pane->current_editor = -1;
+                        else {
+                            auto new_idx = pane->current_editor;
+                            if (new_idx >= pane->editors.len)
+                                new_idx = pane->editors.len - 1;
+                            pane->focus_editor_by_index(new_idx);
                         }
+
+                        send_nvim_keys("<Esc>");
                     }
-                    break;
+                }
+                break;
             }
         }
     });
