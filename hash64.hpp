@@ -2,4 +2,4 @@
 
 #include "common.hpp"
 
-u64 meow_hash(void *data, s32 len);
+u64 hash64(void *data, s32 len);

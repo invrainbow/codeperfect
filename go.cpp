@@ -5,7 +5,7 @@
 #include "os.hpp"
 #include "set.hpp"
 #include "editor.hpp"
-#include "meow_hash.hpp"
+#include "hash64.hpp"
 #include <stdlib.h>
 
 #if OS_WIN
@@ -23,7 +23,7 @@
 #endif
 
 const unsigned char GO_INDEX_MAGIC_BYTES[3] = {0x49, 0xfa, 0x98};
-const int GO_INDEX_VERSION = 7;
+const int GO_INDEX_VERSION = 8;
 
 void index_print(ccstr fmt, ...) {
     va_list args;
@@ -1464,6 +1464,7 @@ void find_nodes_containing_pos(Ast_Node *root, cur2 pos, bool abstract_only, fn<
         int res = cmp_pos_to_node(pos, node, end_inclusive);
         if (res < 0) return WALK_ABORT;
         if (res > 0) return WALK_SKIP_CHILDREN;
+
         return callback(node);
     });
 }
@@ -1799,8 +1800,8 @@ u64 Go_Indexer::hash_file(ccstr filepath) {
 
     u64 ret = 0;
     auto name = our_basename(filepath);
-    ret ^= meow_hash(fm->data, fm->len);
-    ret ^= meow_hash((void*)name, strlen(name));
+    ret ^= hash64(fm->data, fm->len);
+    ret ^= hash64((void*)name, strlen(name));
     return ret;
 }
 
@@ -1811,7 +1812,7 @@ u64 Go_Indexer::hash_package(ccstr resolved_package_path) {
         return CUSTOM_HASH_BUILTINS;
 
     u64 ret = 0;
-    ret ^= meow_hash((void*)resolved_package_path, strlen(resolved_package_path));
+    ret ^= hash64((void*)resolved_package_path, strlen(resolved_package_path));
 
     {
         SCOPED_FRAME();
@@ -2546,9 +2547,15 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
     };
 
     Current_Situation situation = FOUND_JACK_SHIT;
-    Ast_Node *expr_to_analyze = NULL;
+    Ast_Node *expr_to_analyze = NULL; 
     cur2 keyword_start; ptr0(&keyword_start);
     ccstr prefix = NULL;
+
+    auto copy_node = [&](Ast_Node *node) -> Ast_Node* {
+        auto ret = alloc_object(Ast_Node);
+        memcpy(ret, node, sizeof(Ast_Node));
+        return ret;
+    };
 
     // i believe right now there are three possibilities:
     //
@@ -2600,7 +2607,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                     return WALK_ABORT;
                 }
 
-                expr_to_analyze = operand_node;
+                expr_to_analyze = copy_node(operand_node);
                 situation = FOUND_DOT_COMPLETE;
             }
             return WALK_ABORT;
@@ -2609,7 +2616,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
         case TS_TYPE_IDENTIFIER:
         case TS_IDENTIFIER:
         case TS_FIELD_IDENTIFIER:
-            expr_to_analyze = node;
+            expr_to_analyze = copy_node(node);
             situation = FOUND_LONE_IDENTIFIER;
             keyword_start = node->start();
             prefix = our_strcpy(node->string());
@@ -2620,7 +2627,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
             {
                 auto prev = node->prev();
                 if (!prev->null) {
-                    expr_to_analyze = prev;
+                    expr_to_analyze = copy_node(prev);
                     situation = FOUND_DOT_COMPLETE;
                     keyword_start = pos;
                     prefix = "";
@@ -2629,7 +2636,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                     if (!parent->null && parent->type() == TS_ERROR) {
                         auto expr = parent->prev();
                         if (!expr->null) {
-                            expr_to_analyze = expr;
+                            expr_to_analyze = copy_node(expr);
                             situation = FOUND_DOT_COMPLETE_NEED_CRAWL;
                             keyword_start = pos;
                             prefix = "";
