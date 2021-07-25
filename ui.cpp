@@ -1298,12 +1298,24 @@ struct Debugger_UI {
     }
 };
 
-void open_add_file_or_folder(bool folder) {
+void open_rename(File_Tree_Node *target) {
+    auto &wnd = world.wnd_rename_file_or_folder;
+
+    wnd.show = true;
+    wnd.target = target;
+
+    strcpy_safe(wnd.location, _countof(wnd.location), file_tree_node_to_path(target));
+    strcpy_safe(wnd.name, _countof(wnd.name), target->name);
+}
+
+void open_add_file_or_folder(bool folder, File_Tree_Node *dest = NULL) {
+    if (dest == NULL) dest = world.file_explorer.selection;
+
     File_Tree_Node *node = NULL;
     auto &wnd = world.wnd_add_file_or_folder;
 
     auto is_root = [&]() {
-        node = world.file_explorer.selection;
+        node = dest;
 
         if (node == NULL) return true;
         if (node->is_directory) return false;
@@ -1316,6 +1328,7 @@ void open_add_file_or_folder(bool folder) {
     if (!wnd.location_is_root)
         strcpy_safe(wnd.location, _countof(wnd.location), file_tree_node_to_path(node));
 
+    wnd.dest = node;
     wnd.folder = folder;
     wnd.show = true;
     wnd.name[0] = '\0';
@@ -1390,7 +1403,14 @@ void delete_file_tree_node(File_Tree_Node *it) {
         delete_rm_rf(full_path);
     else
         delete_file(full_path);
-    world.fill_file_tree();
+
+    // delete `it` from file tree
+    if (it->parent != NULL && it->parent->children == it)
+        it->parent->children = it->next;
+    if (it->prev != NULL)
+        it->prev->next = it->next;
+    if (it->next != NULL)
+        it->next->prev = it->prev;
 }
 
 void open_file_tree_node(File_Tree_Node *it) {
@@ -1593,7 +1613,7 @@ void UI::draw_everything() {
                     auto &it = project_settings.build_profiles[i];
                     if (ImGui::MenuItem(it.label, NULL, project_settings.active_build_profile == i, true)) {
                         project_settings.active_build_profile = i;
-                        project_settings.write(path_join(world.current_path, ".ideproj"));
+                        project_settings.write(path_join(world.current_path, ".cp95proj"));
                     }
                 }
                 ImGui::EndMenu();
@@ -1671,7 +1691,6 @@ void UI::draw_everything() {
             };
 
             if (ImGui::MenuItem("Rename...", NULL, false, can_rename_id_under_cursor())) {
-
                 // ???
             }
 
@@ -1775,7 +1794,7 @@ void UI::draw_everything() {
                     auto &it = project_settings.debug_profiles[i];
                     if (ImGui::MenuItem(it.label, NULL, project_settings.active_debug_profile == i, true)) {
                         project_settings.active_debug_profile = i;
-                        project_settings.write(path_join(world.current_path, ".ideproj"));
+                        project_settings.write(path_join(world.current_path, ".cp95proj"));
                     }
                 }
                 ImGui::EndMenu();
@@ -1790,16 +1809,12 @@ void UI::draw_everything() {
         }
 
         if (ImGui::BeginMenu("Tools")) {
-            if (ImGui::MenuItem("Reload go.mod")) {
-                world.indexer.set_flag(&world.indexer.flag_handle_gomod_changed);
+            if (ImGui::MenuItem("Refresh index")) {
+                world.indexer.set_flag(&world.indexer.flag_rescan_index);
             }
 
-            if (ImGui::MenuItem("Cleanup unused memory")) {
-                world.indexer.set_flag(&world.indexer.flag_cleanup_unused_memory);
-            }
-
-            if (ImGui::MenuItem("Re-index everything")) {
-                world.indexer.set_flag(&world.indexer.flag_reindex_everything);
+            if (ImGui::MenuItem("Obliterate and recreate index")) {
+                world.indexer.set_flag(&world.indexer.flag_obliterate_and_recreate_index);
             }
 
             if (io.KeyAlt) {
@@ -1811,6 +1826,12 @@ void UI::draw_everything() {
                 ImGui::MenuItem("Roll Your Own IDE Construction Set", NULL, &world.wnd_style_editor.show);
                 ImGui::MenuItem("Replace line numbers with bytecounts", NULL, &world.replace_line_numbers_with_bytecounts);
                 ImGui::MenuItem("Turn off framerate cap", NULL, &world.turn_off_framerate_cap);
+
+                if (ImGui::MenuItem("Cleanup unused memory")) {
+                    world.indexer.set_flag(&world.indexer.flag_cleanup_unused_memory);
+                }
+
+                ImGui::Separator();
 
                 if (ImGui::MenuItem("Show message box (OK)")) {
                     tell_user("Sorry, that keyfile was invalid. Please select another one.", "License key required");
@@ -1952,15 +1973,71 @@ void UI::draw_everything() {
         ImGui::End();
     }
 
-    if (world.wnd_add_file_or_folder.show) {
-        auto &wnd = world.wnd_add_file_or_folder;
-
-        auto label = our_sprintf("Add %s", wnd.folder ? "Folder" : "File");
+    if (world.wnd_rename_file_or_folder.show) {
+        auto &wnd = world.wnd_rename_file_or_folder;
 
         ImGui::SetNextWindowSize(ImVec2(300, -1));
         ImGui::SetNextWindowPos(ImVec2(world.window_size.x/2, world.window_size.y/2), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
 
-        ImGui::Begin(our_sprintf("%s###add_file_or_folder", label), &world.wnd_add_file_or_folder.show, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking);
+        auto label = our_sprintf("Rename %s", wnd.target->is_directory ? "folder" : "file");
+        ImGui::Begin(our_sprintf("%s###add_file_or_folder", label), &wnd.show, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking);
+
+        ImGui::Text("Renaming");
+
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(ImColor(140, 194, 248)));
+        ImGui::PushFont(world.ui.im_font_mono);
+        ImGui::Text("%s", wnd.location);
+        ImGui::PopStyleColor();
+        ImGui::PopFont();
+
+        imgui_small_newline();
+
+        auto is_focusing = imgui_is_window_focusing(&wnd.focused);
+        if (ImGui::IsWindowAppearing()) {
+            ImGui::SetKeyboardFocusHere();
+        } else if (!wnd.first_open_focus_twice_done) {
+            wnd.first_open_focus_twice_done = true;
+            ImGui::SetKeyboardFocusHere();
+        } else if (is_focusing) {
+            ImGui::SetKeyboardFocusHere();
+        }
+
+        // close the window when we unfocus
+        if (!wnd.focused) wnd.show = false;
+
+        ImGui::PushFont(world.ui.im_font_mono);
+        bool entered = imgui_input_text_full("Name", wnd.name, _countof(wnd.name), ImGuiInputTextFlags_EnterReturnsTrue);
+        ImGui::PopFont();
+
+        if (entered) {
+            wnd.show = false;
+
+            if (strlen(wnd.name) > 0) {
+                // TODO: perform rename here and update file tree
+                /*
+                auto dest = wnd.location_is_root ? world.current_path : path_join(world.current_path, wnd.location);
+                auto path = path_join(dest, wnd.name);
+
+                if (wnd.folder) {
+                    create_directory(path);
+                } else {
+                    touch_file(path);
+                }
+                */
+            }
+        }
+
+        ImGui::End();
+    }
+
+    if (world.wnd_add_file_or_folder.show) {
+        auto &wnd = world.wnd_add_file_or_folder;
+
+        ImGui::SetNextWindowSize(ImVec2(300, -1));
+        ImGui::SetNextWindowPos(ImVec2(world.window_size.x/2, world.window_size.y/2), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+
+        auto label = our_sprintf("Add %s", wnd.folder ? "Folder" : "File");
+        ImGui::Begin(our_sprintf("%s###add_file_or_folder", label), &wnd.show, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking);
 
         ImGui::Text("Destination");
 
@@ -1968,9 +2045,9 @@ void UI::draw_everything() {
         ImGui::PushFont(world.ui.im_font_mono);
 
         if (wnd.location_is_root)
-            ImGui::Text("$WORKSPACE");
+            ImGui::Text("(workspace root)");
         else
-            ImGui::Text("$WORKSPACE/%s", wnd.location);
+            ImGui::Text("%s", wnd.location);
 
         ImGui::PopStyleColor();
         ImGui::PopFont();
@@ -1995,26 +2072,22 @@ void UI::draw_everything() {
         ImGui::PopFont();
 
         if (entered) {
-            world.wnd_add_file_or_folder.show = false;
+            wnd.show = false;
 
             if (strlen(wnd.name) > 0) {
                 auto dest = wnd.location_is_root ? world.current_path : path_join(world.current_path, wnd.location);
                 auto path = path_join(dest, wnd.name);
 
-                if (wnd.folder) {
-                    create_directory(path);
-                } else {
-                    touch_file(path);
+                auto ok = wnd.folder ? create_directory(path) : touch_file(path);
+                if (ok) {
+                    auto node = world.add_file_tree_child(wnd.dest);
+                    {
+                        SCOPED_MEM(&world.file_tree_mem);
+                        node->is_directory = wnd.folder;
+                        node->name = our_strcpy(wnd.name);
+                    }
                 }
-
-                world.fill_file_tree();
             }
-        }
-
-        ImGui::SameLine();
-
-        if (ImGui::Button("Cancel")) {
-            world.wnd_add_file_or_folder.show = false;
         }
 
         ImGui::End();
@@ -2095,9 +2168,12 @@ void UI::draw_everything() {
                     bool mute = !it->is_directory && !str_ends_with(it->name, ".go");
                     ImGuiStyle &style = ImGui::GetStyle();
 
-                    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.3, 0.3, 0.3, 1.0));
-                    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.3, 0.3, 0.3, 1.0));
-                    if (mute) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5, 0.5, 0.5, 1.0));
+                    if (wnd.selection != it) {
+                        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.2, 0.2, 0.2, 1.0));
+                        ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.2, 0.2, 0.2, 1.0));
+                        if (mute)
+                            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5, 0.5, 0.5, 1.0));
+                    }
                     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 4));
 
                     ccstr label = NULL;
@@ -2111,8 +2187,11 @@ void UI::draw_everything() {
                     ImGui::PopID();
 
                     ImGui::PopStyleVar();
-                    if (mute) ImGui::PopStyleColor();
-                    ImGui::PopStyleColor(2);
+                    if (wnd.selection != it) {
+                        ImGui::PopStyleColor(2);
+                        if (mute)
+                            ImGui::PopStyleColor();
+                    }
                 }
 
                 if (ImGui::OurBeginPopupContextItem(NULL)) {
@@ -2127,11 +2206,21 @@ void UI::draw_everything() {
                     }
 
                     if (ImGui::Selectable("Rename")) {
-                        ImGui::OpenPopup("file_explorer_rename_file");
+                        open_rename(it);
                     }
 
                     if (ImGui::Selectable("Delete")) {
                         delete_file_tree_node(it);
+                    }
+
+                    ImGui::Separator();
+
+                    if (ImGui::Selectable("Add new file...")) {
+                        open_add_file_or_folder(false, it);
+                    }
+
+                    if (ImGui::Selectable("Add new folder...")) {
+                        open_add_file_or_folder(true, it);
                     }
 
                     /*
@@ -2467,7 +2556,7 @@ void UI::draw_everything() {
 
             if (ImGui::Button("Save")) {
                 project_settings.copy(&wnd.tmp);
-                project_settings.write(path_join(world.current_path, ".ideproj"));
+                project_settings.write(path_join(world.current_path, ".cp95proj"));
                 world.wnd_project_settings.show = false;
             }
 
@@ -3391,6 +3480,10 @@ void UI::draw_everything() {
                             max_len = len;
                     }
 
+                    int max_desc_len = 40;
+
+                    max_len += max_desc_len + 5; // leave space for hints
+
                     /*
                     OK SO BASICALLY
                     first try to put it in bottom
@@ -3500,9 +3593,10 @@ void UI::draw_everything() {
                                 draw_rounded_rect(b, rgba(COLOR_DARK_GREY), 4, ROUND_ALL);
                             }
 
+                            auto &result = ac.ac.results->at(idx);
+
                             {
                                 SCOPED_FRAME();
-                                auto &result = ac.ac.results->at(idx);
 
                                 auto actual_color = color;
                                 if (result.type == ACR_POSTFIX)
@@ -3519,6 +3613,110 @@ void UI::draw_everything() {
                                 auto str = result.name;
                                 auto pos = items_pos + new_vec2f(settings.autocomplete_item_padding_x, settings.autocomplete_item_padding_y);
                                 draw_string(pos, str, rgba(actual_color));
+                            }
+
+                            {
+                                SCOPED_FRAME();
+
+                                auto render_type = [&](Gotype *gotype) -> ccstr {
+                                    if (gotype == NULL) return "";
+
+                                    Type_Renderer rend;
+                                    rend.init();
+                                    rend.write_type(gotype, false);
+                                    return rend.finish();
+                                };
+
+                                auto render_description = [&]() -> ccstr {
+                                    switch (result.type) {
+                                    case ACR_DECLARATION:
+                                        {
+                                            auto decl = result.declaration_godecl;
+                                            switch (decl->type) {
+                                            case GODECL_IMPORT:
+                                                // is this even possible here?
+                                                // handle either way
+                                                return our_sprintf("\"%s\"", decl->import_path);
+                                            case GODECL_TYPE:
+                                            case GODECL_VAR:
+                                            case GODECL_CONST:
+                                            case GODECL_SHORTVAR:
+                                            case GODECL_FUNC:
+                                            case GODECL_FIELD:
+                                                return render_type(result.declaration_evaluated_gotype);
+                                            }
+                                        }
+                                        break;
+                                    case ACR_KEYWORD:
+                                        if (streq(result.name, "package")) return "Declare package";
+                                        if (streq(result.name, "import")) return "Declare import";
+                                        if (streq(result.name, "const")) return "Declare constant";
+                                        if (streq(result.name, "var")) return "Declare variable";
+                                        if (streq(result.name, "func")) return "Declare function";
+                                        if (streq(result.name, "type")) return "Declare type";
+                                        if (streq(result.name, "struct")) return "Declare struct type";
+                                        if (streq(result.name, "interface")) return "Declare interface type";
+                                        if (streq(result.name, "map")) return "Declare map type";
+                                        if (streq(result.name, "chan")) return "Declare channel type";
+                                        if (streq(result.name, "fallthrough")) return "Fall through to next case";
+                                        if (streq(result.name, "break")) return "Break out";
+                                        if (streq(result.name, "continue")) return "Continue to next iteration";
+                                        if (streq(result.name, "goto")) return "Go to label";
+                                        if (streq(result.name, "return")) return "Return from function";
+                                        if (streq(result.name, "go")) return "Spawn goroutine";
+                                        if (streq(result.name, "defer")) return "Defer statement to end of function";
+                                        if (streq(result.name, "if")) return "Begin branching conditional";
+                                        if (streq(result.name, "else")) return "Specify else clause";
+                                        if (streq(result.name, "for")) return "Declare loop";
+                                        if (streq(result.name, "range")) return "Iterate over collection";
+                                        if (streq(result.name, "switch")) return "Match expression against values";
+                                        if (streq(result.name, "case")) return "Declare case";
+                                        if (streq(result.name, "default")) return "Declare the default case";
+                                        if (streq(result.name, "select")) return "Wait for a number of channels";
+                                        if (streq(result.name, "new")) return "Allocate new instance of type";
+                                        if (streq(result.name, "make")) return "Make new instance of type";
+                                        if (streq(result.name, "iota")) return "Counter in variable declaration";
+                                    case ACR_POSTFIX:
+                                        switch (result.postfix_operation) {
+                                        case PFC_ASSIGNAPPEND: return "append and assign";
+                                        case PFC_APPEND: return "append";
+                                        case PFC_LEN: return "len";
+                                        case PFC_CAP: return "cap";
+                                        case PFC_FOR: return "iterate over collection";
+                                        case PFC_FORKEY: return "iterate over keys";
+                                        case PFC_FORVALUE: return "iterate over values";
+                                        case PFC_NIL: return "nil";
+                                        case PFC_NOTNIL: return "not nil";
+                                        case PFC_NOT: return "not";
+                                        case PFC_EMPTY: return "empty";
+                                        case PFC_IFEMPTY: return "check if empty";
+                                        case PFC_IF: return "check if true";
+                                        case PFC_IFNOT: return "check if false";
+                                        case PFC_IFNIL: return "check if nil";
+                                        case PFC_IFNOTNIL: return "check if not nil";
+                                        case PFC_CHECK: return "check returned error";
+                                        case PFC_DEFSTRUCT: return "define a struct";
+                                        case PFC_DEFINTERFACE: return "define an interface";
+                                        case PFC_SWITCH: return "switch on expression";
+                                        }
+                                        break;
+                                    case ACR_IMPORT:
+                                        return our_sprintf("\"%s\"", result.import_path);
+                                    }
+                                    return "";
+                                };
+
+                                auto desc = render_description();
+                                auto desclen = strlen(desc);
+
+                                auto pos = items_pos + new_vec2f(settings.autocomplete_item_padding_x, settings.autocomplete_item_padding_y);
+                                pos.x += (items_area.w - (settings.autocomplete_item_padding_x*2) - (settings.autocomplete_menu_padding*2));
+                                pos.x -= font->width * min(max_desc_len, desclen);
+
+                                if (desclen > max_desc_len)
+                                    desc = our_sprintf("%.*s...", max_desc_len-3, desc);
+
+                                draw_string(pos, desc, rgba(new_vec3f(0.5, 0.5, 0.5)));
                             }
 
                             items_pos.y += font->height + settings.autocomplete_item_padding_y * 2;

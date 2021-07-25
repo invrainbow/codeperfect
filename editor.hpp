@@ -203,3 +203,7 @@ bool check_file_dimensions(ccstr path);
 
 void go_to_error(int index);
 void go_to_next_error(int direction);
+
+struct Type_Renderer : public Text_Renderer {
+    void write_type(Gotype *t, bool parameter_hint_root = false);
+};

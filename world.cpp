@@ -108,6 +108,84 @@ void History::remove_editor_from_history(int editor_id) {
     top = j;
 }
 
+int compare_file_tree_nodes(File_Tree_Node *a, File_Tree_Node *b) {
+    auto score_node = [](File_Tree_Node *it) -> int {
+        if (it->is_directory) return 0;
+        if (str_ends_with(it->name, ".go")) return 1;
+        return 2;
+    };
+
+    auto sa = score_node(a);
+    auto sb = score_node(b);
+    if (sa < sb) return -1;
+    if (sa > sb) return 1;
+    return strcmpi(a->name, b->name);
+}
+
+File_Tree_Node *World::add_file_tree_child(File_Tree_Node *parent) {
+    File_Tree_Node *node = NULL;
+
+    {
+        SCOPED_MEM(&file_tree_mem);
+
+        node = alloc_object(File_Tree_Node);
+        node->num_children = 0;
+        node->depth = parent->depth + 1;
+        node->parent = parent;
+        node->children = NULL;
+        node->prev = NULL;
+    }
+
+    node->next = parent->children;
+    parent->children->prev = node;
+    parent->children = node;
+    parent->num_children++;
+    parent->children = world.sort_file_tree_nodes(parent->children);
+}
+
+File_Tree_Node *World::sort_file_tree_nodes(File_Tree_Node *nodes) {
+    if (nodes == NULL || nodes->next == NULL) return nodes;
+
+    int len = 0;
+    for (auto it = nodes; it != NULL; it = it->next)
+        len++;
+
+    File_Tree_Node *a = nodes, *b = nodes;
+    for (int i = 0; i < len/2; i++)
+        b = b->next;
+    b->prev->next = NULL;
+    b->prev = NULL;
+
+    a = sort_file_tree_nodes(a);
+    b = sort_file_tree_nodes(b);
+
+    File_Tree_Node *ret = NULL, *curr = NULL;
+
+    while (a != NULL && b != NULL) {
+        File_Tree_Node **ptr = (compare_file_tree_nodes(a, b) <= 0 ? &a : &b);
+        if (ret == NULL) {
+            ret = *ptr;
+        } else {
+            curr->next = *ptr;
+            (*ptr)->prev = curr;
+        }
+        curr = *ptr;
+        *ptr = (*ptr)->next;
+    }
+
+    if (a != NULL) {
+        curr->next = a;
+        a->prev = curr;
+    }
+
+    if (b != NULL) {
+        curr->next = b;
+        b->prev = curr;
+    }
+
+    return ret;
+}
+
 void World::fill_file_tree() {
     SCOPED_MEM(&file_tree_mem);
     file_tree_mem.reset();
@@ -133,7 +211,7 @@ void World::fill_file_tree() {
                 auto fullpath = path_join(path, ent->name);
                 if (is_ignored_by_git(fullpath)) break;
                 if (streq(ent->name, ".git")) break;
-                if (streq(ent->name, ".ideproj")) break;
+                if (streq(ent->name, ".cp95proj")) break;
                 if (str_ends_with(ent->name, ".exe")) break;
 
                 auto file = alloc_object(File_Tree_Node);
@@ -165,6 +243,8 @@ void World::fill_file_tree() {
 
             return true;
         });
+
+        parent->children = sort_file_tree_nodes(parent->children);
     };
 
     recur(current_path, file_tree);
@@ -234,7 +314,7 @@ void World::init_workspace() {
         SCOPED_FRAME();
 
         File f;
-        f.init(".idedefaultfolder", FILE_MODE_READ, FILE_OPEN_EXISTING);
+        f.init(".cp95defaultfolder", FILE_MODE_READ, FILE_OPEN_EXISTING);
         defer { f.cleanup(); };
 
         List<char> chars;
@@ -252,7 +332,7 @@ void World::init_workspace() {
     GHGitIgnoreInit(current_path);
     xplat_chdir(current_path);
 
-    project_settings.read(path_join(current_path, ".ideproj"));
+    project_settings.read(path_join(current_path, ".cp95proj"));
 
     /*
     if (project_settings.build_command[0] == '\0')
@@ -438,7 +518,7 @@ void init_goto_file() {
         for (auto it = node->children; it != NULL; it = it->next) {
             auto isdir = it->is_directory;
 
-            if (isdir && node->parent == NULL && streq(it->name, ".ide")) return;
+            if (isdir && node->parent == NULL && streq(it->name, ".cp95")) return;
 
             auto relpath = path[0] == '\0' ? our_strcpy(it->name) : path_join(path, it->name);
             if (isdir)

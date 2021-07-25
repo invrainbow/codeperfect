@@ -4,3 +4,6 @@ imstb_*
 *.vcxproj*
 *.sln
 packages.config
+tree-sitter-go
+tree-sitter
+stb_*

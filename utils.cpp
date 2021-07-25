@@ -1,6 +1,7 @@
 #include "utils.hpp"
 #include "os.hpp"
 #include "world.hpp"
+#include "stb_sprintf.h"
 
 #if OS_WIN
 #include <shlwapi.h>
@@ -84,9 +85,9 @@ ccstr our_vsprintf(ccstr fmt, va_list args) {
     va_list args2;
     va_copy(args2, args);
 
-    auto len = vsnprintf(NULL, 0, fmt, args);
+    auto len = stbsp_vsnprintf(NULL, 0, fmt, args);
     auto buf = alloc_array(char, (len + 1));
-    vsnprintf(buf, len + 1, fmt, args2);
+    stbsp_vsnprintf(buf, len + 1, fmt, args2);
     return buf;
 }
 

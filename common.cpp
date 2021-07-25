@@ -104,9 +104,11 @@ void our_panic(ccstr s) {
 	throw Panic_Exception(s); // TODO: replace with exit(0)
 }
 
+/*
 bool streqi(ccstr a, ccstr b) {
     for(; *a != '\0' || *b != '\0'; a++, b++)
         if (tolower(*a) != tolower(*b))
             return false;
     return true;
 }
+*/

@@ -449,6 +449,7 @@ struct AC_Result {
 
         struct {
             Godecl *declaration_godecl;
+            Gotype *declaration_evaluated_gotype;
             ccstr declaration_import_path;
             ccstr declaration_filename;
             bool declaration_is_builtin;
@@ -1183,8 +1184,8 @@ struct Go_Indexer {
     Fs_Watcher wksp_watch;
 
     Lock flag_lock;
-    bool flag_handle_gomod_changed;
-    bool flag_reindex_everything;
+    bool flag_rescan_index;
+    bool flag_obliterate_and_recreate_index;
     bool flag_cleanup_unused_memory;
 
     Lock lock;

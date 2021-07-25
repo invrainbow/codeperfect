@@ -289,7 +289,17 @@ struct World {
         bool folder;
         bool focused;
         bool first_open_focus_twice_done;
+        File_Tree_Node *dest;
     } wnd_add_file_or_folder;
+
+    struct {
+        bool show;
+        char name[MAX_PATH];
+        char location[MAX_PATH];
+        File_Tree_Node *target;
+        bool focused;
+        bool first_open_focus_twice_done;
+    } wnd_rename_file_or_folder;
 
     struct {
         bool show;
@@ -347,6 +357,8 @@ struct World {
     void add_event(fn<void(Main_Thread_Message*)> f);
     Editor* find_editor_by_id(u32 id);
     void fill_file_tree();
+    File_Tree_Node *sort_file_tree_nodes(File_Tree_Node *nodes);
+    File_Tree_Node *add_file_tree_child(File_Tree_Node *parent);
 
     Editor *focus_editor(ccstr path);
     Editor *focus_editor(ccstr path, cur2 pos);

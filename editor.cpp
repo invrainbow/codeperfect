@@ -1516,118 +1516,125 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
     return;
 }
 
-struct Type_Renderer : public Text_Renderer {
-    void write_type(Gotype *t, bool parameter_hint_root = false) {
-        switch (t->type) {
-        case GOTYPE_BUILTIN:
-            switch (t->builtin_type) {
-            case GO_BUILTIN_COMPLEXTYPE: write("ComplexType"); break;
-            case GO_BUILTIN_FLOATTYPE: write("FloatType"); break;
-            case GO_BUILTIN_INTEGERTYPE: write("IntegerType"); break;
-            case GO_BUILTIN_TYPE: write("Type"); break;
-            case GO_BUILTIN_TYPE1: write("Type1"); break;
-            case GO_BUILTIN_BOOL: write("bool"); break;
-            case GO_BUILTIN_BYTE: write("byte"); break;
-            case GO_BUILTIN_COMPLEX128: write("complex128"); break;
-            case GO_BUILTIN_COMPLEX64: write("complex64"); break;
-            case GO_BUILTIN_ERROR: write("error"); break;
-            case GO_BUILTIN_FLOAT32: write("float32"); break;
-            case GO_BUILTIN_FLOAT64: write("float64"); break;
-            case GO_BUILTIN_INT: write("int"); break;
-            case GO_BUILTIN_INT16: write("int16"); break;
-            case GO_BUILTIN_INT32: write("int32"); break;
-            case GO_BUILTIN_INT64: write("int64"); break;
-            case GO_BUILTIN_INT8: write("int8"); break;
-            case GO_BUILTIN_RUNE: write("rune"); break;
-            case GO_BUILTIN_STRING: write("string"); break;
-            case GO_BUILTIN_UINT: write("uint"); break;
-            case GO_BUILTIN_UINT16: write("uint16"); break;
-            case GO_BUILTIN_UINT32: write("uint32"); break;
-            case GO_BUILTIN_UINT64: write("uint64"); break;
-            case GO_BUILTIN_UINT8: write("uint8"); break;
-            case GO_BUILTIN_UINTPTR: write("uintptr"); break;
-            }
-            break;
-        case GOTYPE_ID:
-            write("%s", t->id_name);
-            break;
-        case GOTYPE_SEL:
-            write("%s.%s", t->sel_name, t->sel_sel);
-            break;
-        case GOTYPE_MAP:
-            write("map[");
-            write_type(t->map_key);
-            write("]");
-            write_type(t->map_value);
-            break;
-        case GOTYPE_STRUCT:
-            write("struct");
-            break;
-        case GOTYPE_INTERFACE:
-            write("interface");
-            break;
-        case GOTYPE_VARIADIC:
-            write("...");
-            write_type(t->variadic_base);
-            break;
-        case GOTYPE_POINTER:
-            write("*");
-            write_type(t->pointer_base);
-            break;
-        case GOTYPE_FUNC:
-            {
-                if (!parameter_hint_root)
-                    write("func");
+bool is_goident_empty(ccstr name) {
+    return (name == NULL || name[0] == '\0' || streq(name, "_"));
+}
 
-                auto write_params = [&](List<Godecl> *params) {
-                    write("(");
-
-                    u32 i = 0;
-                    For (*params) {
-                        write("%s ", it.name);
-                        write_type(it.gotype);
-                        if (i < params->len - 1)
-                            write(", ");
-                        i++;
-                    }
-
-                    write(")");
-                };
-
-                auto &sig = t->func_sig;
-                write_params(sig.params);
-
-                auto result = sig.result;
-                if (result != NULL && result->len > 0) {
-                    write(" ");
-                    if (result->len == 1 && result->at(0).name == NULL)
-                        write_type(result->at(0).gotype);
-                    else
-                        write_params(result);
-                }
-            }
-            break;
-        case GOTYPE_SLICE:
-            write("[]");
-            write_type(t->slice_base);
-            break;
-        case GOTYPE_ARRAY:
-            write("[]");
-            write_type(t->array_base);
-            break;
-        case GOTYPE_CHAN:
-            if (t->chan_direction == CHAN_RECV)
-                write("<-");
-            write("chan");
-            write_type(t->chan_base);
-            if (t->chan_direction == CHAN_SEND)
-                write("<-");
-            break;
-        case GOTYPE_MULTI:
-            write("(multi type?)");
+void Type_Renderer::write_type(Gotype *t, bool parameter_hint_root) {
+    switch (t->type) {
+    case GOTYPE_BUILTIN:
+        switch (t->builtin_type) {
+        case GO_BUILTIN_COMPLEXTYPE: write("ComplexType"); break;
+        case GO_BUILTIN_FLOATTYPE: write("FloatType"); break;
+        case GO_BUILTIN_INTEGERTYPE: write("IntegerType"); break;
+        case GO_BUILTIN_TYPE: write("Type"); break;
+        case GO_BUILTIN_TYPE1: write("Type1"); break;
+        case GO_BUILTIN_BOOL: write("bool"); break;
+        case GO_BUILTIN_BYTE: write("byte"); break;
+        case GO_BUILTIN_COMPLEX128: write("complex128"); break;
+        case GO_BUILTIN_COMPLEX64: write("complex64"); break;
+        case GO_BUILTIN_ERROR: write("error"); break;
+        case GO_BUILTIN_FLOAT32: write("float32"); break;
+        case GO_BUILTIN_FLOAT64: write("float64"); break;
+        case GO_BUILTIN_INT: write("int"); break;
+        case GO_BUILTIN_INT16: write("int16"); break;
+        case GO_BUILTIN_INT32: write("int32"); break;
+        case GO_BUILTIN_INT64: write("int64"); break;
+        case GO_BUILTIN_INT8: write("int8"); break;
+        case GO_BUILTIN_RUNE: write("rune"); break;
+        case GO_BUILTIN_STRING: write("string"); break;
+        case GO_BUILTIN_UINT: write("uint"); break;
+        case GO_BUILTIN_UINT16: write("uint16"); break;
+        case GO_BUILTIN_UINT32: write("uint32"); break;
+        case GO_BUILTIN_UINT64: write("uint64"); break;
+        case GO_BUILTIN_UINT8: write("uint8"); break;
+        case GO_BUILTIN_UINTPTR: write("uintptr"); break;
         }
+        break;
+    case GOTYPE_ID:
+        write("%s", t->id_name);
+        break;
+    case GOTYPE_SEL:
+        write("%s.%s", t->sel_name, t->sel_sel);
+        break;
+    case GOTYPE_MAP:
+        write("map[");
+        write_type(t->map_key);
+        write("]");
+        write_type(t->map_value);
+        break;
+    case GOTYPE_STRUCT:
+        write("struct");
+        break;
+    case GOTYPE_INTERFACE:
+        write("interface");
+        break;
+    case GOTYPE_VARIADIC:
+        write("...");
+        write_type(t->variadic_base);
+        break;
+    case GOTYPE_POINTER:
+        write("*");
+        write_type(t->pointer_base);
+        break;
+    case GOTYPE_FUNC:
+        {
+            if (!parameter_hint_root)
+                write("func");
+
+            auto write_params = [&](List<Godecl> *params, bool is_result) {
+                write("(");
+
+                u32 i = 0;
+                For (*params) {
+                    if (is_goident_empty(it.name)) {
+                        if (!is_result)
+                            write("_ ");
+                    } else {
+                        write("%s ", it.name);
+                    }
+                    write_type(it.gotype);
+                    if (i < params->len - 1)
+                        write(", ");
+                    i++;
+                }
+
+                write(")");
+            };
+
+            auto &sig = t->func_sig;
+            write_params(sig.params, false);
+
+            auto result = sig.result;
+            if (result != NULL && result->len > 0) {
+                write(" ");
+                if (result->len == 1 && is_goident_empty(result->at(0).name))
+                    write_type(result->at(0).gotype);
+                else
+                    write_params(result, true);
+            }
+        }
+        break;
+    case GOTYPE_SLICE:
+        write("[]");
+        write_type(t->slice_base);
+        break;
+    case GOTYPE_ARRAY:
+        write("[]");
+        write_type(t->array_base);
+        break;
+    case GOTYPE_CHAN:
+        if (t->chan_direction == CHAN_RECV)
+            write("<-");
+        write("chan");
+        write_type(t->chan_base);
+        if (t->chan_direction == CHAN_SEND)
+            write("<-");
+        break;
+    case GOTYPE_MULTI:
+        write("(multi type?)");
     }
-};
+}
 
 void Editor::trigger_parameter_hint() {
     ptr0(&parameter_hint);
@@ -1683,11 +1690,13 @@ void Editor::trigger_parameter_hint() {
                 // write result
                 if (result != NULL && result->len > 0) {
                     rend.write(" ");
-                    if (result->len == 1 && result->at(0).name == NULL)
+                    if (result->len == 1 && is_goident_empty(result->at(0).name))
                         rend.write_type(result->at(0).gotype);
                     else {
                         rend.write("(");
                         for (u32 i = 0; i < result->len; i++) {
+                            if (!is_goident_empty(result->at(i).name))
+                                rend.write("%s ", result->at(i).name);
                             rend.write_type(result->at(i).gotype);
                             if (i < result->len - 1)
                                 rend.write(", ");
@@ -2061,6 +2070,11 @@ void Editor::handle_save(bool about_to_close) {
         opts.starting_folder = our_strcpy(world.current_path);
         if (!let_user_select_file(&opts)) return;
 
+        if (!path_contains_in_subtree(world.current_path, filepath)) {
+            tell_user("Unable to save file outside workspace.", "Error");
+            return;
+        }
+
         is_untitled = false;
         is_go_file = str_ends_with(filepath, ".go");
 
@@ -2085,7 +2099,38 @@ void Editor::handle_save(bool about_to_close) {
         buf.dirty = false;
     }
 
-    if (untitled) world.fill_file_tree();
+    if (untitled) {
+        auto find_node = [&]() -> File_Tree_Node * {
+            auto curr = world.file_tree;
+            auto subpath = get_path_relative_to(filepath, world.current_path);
+            auto parts = make_path(subpath)->parts;
+
+            if (parts->len == 0) return NULL;
+            parts->len--; // chop off last, we want dirname
+
+            For (*parts) {
+                bool found = false;
+                for (auto child = curr->children; curr != NULL; curr = curr->next) {
+                    if (streq(child->name, it)) {
+                        curr = child;
+                        found = true;
+                    }
+                }
+                if (!found) return NULL;
+            }
+            return curr;
+        };
+
+        auto node = find_node();
+        if (node != NULL) {
+            auto child = world.add_file_tree_child(node);
+            {
+                SCOPED_MEM(&world.file_tree_mem);
+                child->is_directory = false;
+                child->name = our_strcpy(our_basename(filepath));
+            }
+        }
+    }
 }
 
 void go_to_error(int index) {

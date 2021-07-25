@@ -23,7 +23,7 @@
 #endif
 
 const unsigned char GO_INDEX_MAGIC_BYTES[3] = {0x49, 0xfa, 0x98};
-const int GO_INDEX_VERSION = 8;
+const int GO_INDEX_VERSION = 9;
 
 void index_print(ccstr fmt, ...) {
     va_list args;
@@ -753,7 +753,7 @@ void Go_Indexer::background_thread() {
         index_print("Reading existing database...");
 
         Index_Stream s;
-        if (!s.open(path_join(world.current_path, "db"))) {
+        if (!s.open(path_join(world.current_path, ".cp95db"))) {
             index_print("No database found (or couldn't open).");
             break;
         }
@@ -803,82 +803,85 @@ void Go_Indexer::background_thread() {
         For (*index.packages)
             package_lookup.set(it.import_path, &it);
 
-    // make sure workspace is in index or queue
-    // ===
+    auto rescan_everything = [&]() {
+        // make sure workspace is in index or queue
+        // ===
+        {
+            SCOPED_FRAME();
 
-    {
-        SCOPED_FRAME();
+            auto import_paths_queue = alloc_list<ccstr>();
+            auto resolved_paths_queue = alloc_list<ccstr>();
 
-        auto import_paths_queue = alloc_list<ccstr>();
-        auto resolved_paths_queue = alloc_list<ccstr>();
+            import_paths_queue->append(index.current_import_path);
+            resolved_paths_queue->append(index.current_path);
 
-        import_paths_queue->append(index.current_import_path);
-        resolved_paths_queue->append(index.current_path);
+            while (import_paths_queue->len > 0) {
+                auto import_path = *import_paths_queue->last();
+                auto resolved_path = *resolved_paths_queue->last();
 
-        while (import_paths_queue->len > 0) {
-            auto import_path = *import_paths_queue->last();
-            auto resolved_path = *resolved_paths_queue->last();
+                import_paths_queue->len--;
+                resolved_paths_queue->len--;
 
-            import_paths_queue->len--;
-            resolved_paths_queue->len--;
+                bool already_in_index = (find_up_to_date_package(import_path) != NULL);
+                bool is_go_package = false;
 
-            bool already_in_index = (find_up_to_date_package(import_path) != NULL);
-            bool is_go_package = false;
+                list_directory(resolved_path, [&](Dir_Entry *ent) {
+                    do {
+                        if (ent->type == DIRENT_FILE) {
+                            if (!already_in_index && !is_go_package)
+                                if (str_ends_with(ent->name, ".go"))
+                                    if (is_file_included_in_build(path_join(resolved_path, ent->name)))
+                                        is_go_package = true;
+                            break;
+                        }
 
-            list_directory(resolved_path, [&](Dir_Entry *ent) {
-                do {
-                    if (ent->type == DIRENT_FILE) {
-                        if (!already_in_index && !is_go_package)
-                            if (str_ends_with(ent->name, ".go"))
-                                if (is_file_included_in_build(path_join(resolved_path, ent->name)))
-                                    is_go_package = true;
-                        break;
-                    }
+                        if (streq(ent->name, "vendor")) break;
+                        if (streq(ent->name, ".git")) break;
 
-                    if (streq(ent->name, "vendor")) break;
-                    if (streq(ent->name, ".git")) break;
+                        import_paths_queue->append(normalize_path_sep(path_join(import_path, ent->name), '/'));
+                        resolved_paths_queue->append(path_join(resolved_path, ent->name));
+                    } while (0);
 
-                    import_paths_queue->append(normalize_path_sep(path_join(import_path, ent->name), '/'));
-                    resolved_paths_queue->append(path_join(resolved_path, ent->name));
-                } while (0);
+                    return true;
+                });
 
-                return true;
-            });
-
-            if (!already_in_index) {
-                if (is_go_package || streq(import_path, index.current_import_path))
-                    enqueue_package(import_path);
+                if (!already_in_index) {
+                    if (is_go_package || streq(import_path, index.current_import_path))
+                        enqueue_package(import_path);
+                }
             }
         }
-    }
 
-    // queue up builtins
-    // ===
+        // queue up builtins
+        // ===
 
-    if (find_up_to_date_package("@builtins") == NULL)
-        enqueue_package("@builtins");
+        if (find_up_to_date_package("@builtins") == NULL)
+            enqueue_package("@builtins");
 
-    // if we have any ready packages, see if they have any imports that were missed
-    // ===
+        // if we have any ready packages, see if they have any imports that were missed
+        // ===
 
-    {
-        SCOPED_FRAME();
+        {
+            SCOPED_FRAME();
 
-        For (*index.packages) {
-            if (it.status != GPS_READY) {
-                enqueue_package(it.import_path);
-                continue;
+            For (*index.packages) {
+                if (it.status != GPS_READY) {
+                    enqueue_package(it.import_path);
+                    continue;
+                }
+
+                if (it.files != NULL)
+                    For (*it.files)
+                        enqueue_imports_from_file(&it);
             }
-
-            if (it.files != NULL)
-                For (*it.files)
-                    enqueue_imports_from_file(&it);
         }
-    }
 
-    // mark all packages for outdated hash check
-    // ===
-    For (*index.packages) it.checked_for_outdated_hash = false;
+        // mark all packages for outdated hash check
+        // ===
+        For (*index.packages) it.checked_for_outdated_hash = false;
+    };
+
+    rescan_everything(); // kick off rescan
 
     // main loop
     // ===
@@ -895,18 +898,17 @@ void Go_Indexer::background_thread() {
         // process handle_gomod_changed request
         // ---
 
-        if (is_flag_set(&flag_handle_gomod_changed)) {
+        if (is_flag_set(&flag_rescan_index)) {
             start_writing();
 
             module_resolver.cleanup();
             module_resolver.init(world.current_path, gomodcache);
 
-            // mark all packages for outdated hash check
-            For (*index.packages) it.checked_for_outdated_hash = false;
+            rescan_everything();
         }
 
-        if (is_flag_set(&flag_reindex_everything)) {
-            // TODO: i'll write this when it's needed
+        if (is_flag_set(&flag_obliterate_and_recreate_index)) {
+            // TODO
         }
 
         // process filesystem events
@@ -1334,7 +1336,7 @@ void Go_Indexer::background_thread() {
 
             {
                 Index_Stream s;
-                if (!s.open(path_join(world.current_path, "db.tmp"), true)) {
+                if (!s.open(path_join(world.current_path, ".cp95db.tmp"), true)) {
                     index_print("Unable to open database file for writing.");
                     break;
                 }
@@ -1344,7 +1346,7 @@ void Go_Indexer::background_thread() {
                 s.finish_writing();
             }
 
-            if (!move_file_atomically(path_join(world.current_path, "db.tmp"), path_join(world.current_path, "db"))) {
+            if (!move_file_atomically(path_join(world.current_path, ".cp95db.tmp"), path_join(world.current_path, ".cp95db"))) {
                 index_print("Unable to commit new database file, error: %s", get_last_error());
                 break;
             }
@@ -2547,7 +2549,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
     };
 
     Current_Situation situation = FOUND_JACK_SHIT;
-    Ast_Node *expr_to_analyze = NULL; 
+    Ast_Node *expr_to_analyze = NULL;
     cur2 keyword_start; ptr0(&keyword_start);
     ccstr prefix = NULL;
 
@@ -2684,6 +2686,10 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                 r->declaration_godecl = it.decl;
                 r->declaration_import_path = it.ctx->import_path;
                 r->declaration_filename = it.ctx->filename;
+
+                auto res = evaluate_type(it.decl->gotype, it.ctx);
+                if (res != NULL)
+                    r->declaration_evaluated_gotype = res->gotype;
             }
         } while (0);
 
@@ -2796,6 +2802,10 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                     r->declaration_godecl = it->value;
                     r->declaration_import_path = ctx.import_path;
                     r->declaration_filename = ctx.filename;
+
+                    auto res = evaluate_type(it->value->gotype, &ctx);
+                    if (res != NULL)
+                        r->declaration_evaluated_gotype = res->gotype;
                 }
             }
 
@@ -2828,6 +2838,10 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
 
                                 // wait, is this guaranteed to just always be declaration_import_path
                                 result->declaration_package = import_path;
+
+                                auto res = evaluate_type(it.decl->gotype, it.ctx);
+                                if (res != NULL)
+                                    result->declaration_evaluated_gotype = res->gotype;
                             }
                         }
                     }
@@ -2842,6 +2856,10 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                         result->declaration_godecl = it.decl;
                         result->declaration_import_path = it.ctx->import_path;
                         result->declaration_filename = it.ctx->filename;
+
+                        auto res = evaluate_type(it.decl->gotype, it.ctx);
+                        if (res != NULL)
+                            result->declaration_evaluated_gotype = res->gotype;
                     }
                 }
             }
@@ -2883,6 +2901,10 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                             res->declaration_godecl = it.decl;
                             res->declaration_import_path = it.ctx->import_path;
                             res->declaration_filename = it.ctx->filename;
+
+                            auto gores = evaluate_type(it.decl->gotype, it.ctx);
+                            if (gores != NULL)
+                                res->declaration_evaluated_gotype = gores->gotype;
                         }
                     }
                 }
@@ -4026,6 +4048,15 @@ Gotype *Go_Indexer::expr_to_gotype(Ast_Node *expr) {
     Gotype *ret = NULL; // so we don't have to declare inside switch
 
     switch (expr->type()) {
+    case TS_INT_LITERAL: return new_primitive_type("int");
+    case TS_FLOAT_LITERAL: return new_primitive_type("float64");
+    case TS_IMAGINARY_LITERAL: return new_primitive_type("complex128");
+    case TS_RUNE_LITERAL: return new_primitive_type("rune");
+
+    case TS_RAW_STRING_LITERAL:
+    case TS_INTERPRETED_STRING_LITERAL:
+        return new_primitive_type("string");
+
     case TS_UNARY_EXPRESSION:
         switch (expr->field(TSF_OPERATOR)->type()) {
         // case TS_RANGE: // idk even what to do here
@@ -4793,6 +4824,7 @@ AC_Result *AC_Result::copy() {
     switch (type) {
     case ACR_DECLARATION:
         ret->declaration_godecl = copy_object(declaration_godecl);
+        ret->declaration_evaluated_gotype = copy_object(declaration_evaluated_gotype);
         ret->declaration_import_path = our_strcpy(declaration_import_path);
         ret->declaration_filename = our_strcpy(declaration_filename);
         ret->declaration_package = our_strcpy(declaration_package);
