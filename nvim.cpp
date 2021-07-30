@@ -60,6 +60,9 @@ void Nvim::handle_editor_on_ready(Editor *editor) {
         auto pos = editor->nvim_data.initial_pos;
         if (pos.y == -1)
             pos = editor->offset_to_cur(pos.x);
+
+        editor->view.x = 0;
+        editor->view.y = relu_sub(pos.y, 10);
         editor->move_cursor(pos);
     }
 
@@ -656,10 +659,8 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 auto editor = find_editor_by_buffer(args.buf.object_id);
                 if (editor == NULL) break;
 
-                if (args.changedtick > editor->nvim_data.changedtick) {
+                if (args.changedtick > editor->nvim_data.changedtick)
                     editor->nvim_data.changedtick = args.changedtick;
-                    print("changedtick: %d", editor->nvim_data.changedtick);
-                }
             }
             break;
         case NVIM_NOTIF_BUF_LINES:
@@ -669,10 +670,8 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 auto editor = find_editor_by_buffer(args.buf.object_id);
                 if (editor == NULL) break;
 
-                if (args.changedtick > editor->nvim_data.changedtick) {
+                if (args.changedtick > editor->nvim_data.changedtick)
                     editor->nvim_data.changedtick = args.changedtick;
-                    print("changedtick: %d", editor->nvim_data.changedtick);
-                }
 
                 auto is_change_empty = (args.firstline == args.lastline && args.lines->len == 0);
 
@@ -770,7 +769,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                         if (gohere.x == editor->buf.lines[gohere.y].len)
                             insert_cmd = "a";
 
-                        gohere.x--;
+                        // gohere.x--;
                         editor->move_cursor(gohere);
                         gohere.x = -1;
                         gohere.y = -1;
@@ -849,13 +848,6 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
         }
         break;
     }
-
-    if (started_messages.len > 0) {
-        print("---");
-        for (i32 i = started_messages.len - 1; i >= 0; i--)
-            print("%s", started_messages[i]);
-        our_panic("message not closed");
-    }
 }
 
 void Nvim::run_event_loop() {
@@ -900,7 +892,7 @@ void Nvim::run_event_loop() {
         ASSERT(msglen == expected_len);
 
         auto add_event = [&](fn<void(Nvim_Message*)> f) {
-            world.add_event([&](auto msg) {
+            world.message_queue.add([&](auto msg) {
                 msg->type = MTM_NVIM_MESSAGE;
                 msg->nvim_message.type = msgtype;
                 f(&msg->nvim_message);
@@ -998,7 +990,7 @@ void Nvim::run_event_loop() {
                             auto line = reader.read_string(); CHECKOK();
                             auto len = strlen(line);
                             {
-                                SCOPED_MEM(&messages_mem);
+                                // SCOPED_MEM(&messages_mem);
 
                                 s32 ulen = 0;
                                 auto unicode_line = alloc_array(uchar, len);
@@ -1484,18 +1476,12 @@ void Nvim::init() {
     requests.init();
     requests_mem.init("nvim::requests_mem");
 
-    messages_lock.init();
-    message_queue.init();
-    messages_mem.init("nvim::messages_mem");
-
     grid_to_window.init();
     chars_after_exiting_insert_mode.init();
 
     cmdline.content.init();
     cmdline.firstc.init();
     cmdline.prompt.init();
-
-    started_messages.init();
 
     hl_defs.init();
 }
@@ -1542,7 +1528,6 @@ void Nvim::cleanup() {
 
     mem.cleanup();
     loop_mem.cleanup();
-    messages_mem.cleanup();
 }
 
 ccstr Mp_Reader::read_string() {

@@ -329,7 +329,7 @@ bool Searcher::start_search(ccstr _query, Search_Opts *_opts) {
     }
 
     {
-        List<File_Tree_Node *> stack;
+        List<FT_Node*> stack;
         List<ccstr> stackpaths;
 
         stack.init();

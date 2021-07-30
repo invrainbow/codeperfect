@@ -251,6 +251,12 @@ void goto_previous_tab() {
     pane->focus_editor_by_index(idx);
 }
 
+bool is_git_folder(ccstr path) {
+    SCOPED_FRAME();
+    auto pathlist = make_path(path);
+    return pathlist->parts->find([&](auto it) { return streqi(*it, ".git"); }) != NULL;
+}
+
 int main() {
     Timer t;
     t.init();
@@ -604,10 +610,18 @@ int main() {
                 kick_off_build();
                 break;
             case GLFW_KEY_F:
-                if (world.wnd_search_and_replace.show)
-                    ImGui::SetWindowFocus("###search_and_replace");
-                world.wnd_search_and_replace.show = true;
-                world.wnd_search_and_replace.replace = false;
+                {
+                    auto &wnd = world.wnd_search_and_replace;
+                    if (wnd.show) {
+                        if (wnd.focus_bool) {
+                            wnd.focus_textbox = true;
+                        } else {
+                            ImGui::SetWindowFocus("###search_and_replace");
+                        }
+                    }
+                    wnd.show = true;
+                    wnd.replace = false;
+                }
                 break;
             case GLFW_KEY_H:
                 if (world.wnd_search_and_replace.show)
@@ -1158,10 +1172,11 @@ int main() {
         SCOPED_MEM(&world.frame_mem);
 
         {
-            // Process messages.
-            SCOPED_LOCK(&world.message_queue_lock);
+            // Process message queue.
+            auto messages = world.message_queue.start();
+            defer { world.message_queue.end(); };
 
-            For (world.message_queue) {
+            For (*messages) {
                 switch (it.type) {
                 case MTM_NVIM_MESSAGE:
                     {
@@ -1184,9 +1199,82 @@ int main() {
                     break;
                 }
             }
+        }
 
-            world.message_queue_mem.reset();
-            world.message_queue.len = 0;
+        // Process filesystem changes.
+
+        {
+            Fs_Event event;
+            for (u32 items_processed = 0; items_processed < 10 && world.fswatch.next_event(&event); items_processed++) {
+                if (is_git_folder(event.filepath)) continue;
+
+                bool is_directory = false;
+
+                ccstr filepath = NULL;
+                if (event.filepath[0] != '\0')
+                    path_join(world.current_path, event.filepath);
+
+                switch (event.type) {
+                case FSEVENT_DELETE:
+                    {
+                        if (filepath == NULL) break;
+                        world.indexer.message_queue.add([&](auto msg) {
+                            msg->type = GOMSG_FILEPATH_DELETED;
+                            msg->filepath = our_strcpy(filepath);
+                        });
+
+                        auto node = world.find_ft_node(event.filepath);
+                        if (node != NULL)
+                            world.delete_ft_node(node);
+                    }
+                    break;
+
+                case FSEVENT_CHANGE:
+                    {
+                        if (filepath == NULL) break;
+                        world.indexer.message_queue.add([&](auto msg) {
+                            msg->type = GOMSG_FILEPATH_CHANGED;
+                            msg->filepath = our_strcpy(filepath);
+                        });
+                    }
+                    break;
+
+                case FSEVENT_CREATE:
+                    {
+                        if (filepath == NULL) break;
+                        world.indexer.message_queue.add([&](auto msg) {
+                            msg->type = GOMSG_FILEPATH_CREATED;
+                            msg->filepath = our_strcpy(filepath);
+                        });
+                    }
+                    break;
+
+                case FSEVENT_RENAME:
+                    {
+                        // this is really stupid, but rename events are unreliable
+                        // so we're just going to queue up both old and new
+
+                        ccstr paths[] = {event.filepath, event.new_filepath};
+                        For (paths) {
+                            if (it[0] == '\0') continue;
+
+                            auto fullpath = path_join(world.current_path, it);
+                            world.indexer.message_queue.add([&](auto msg) {
+                                msg->type = GOMSG_FILEPATH_RENAMED;
+                                msg->filepath = our_strcpy(fullpath);
+                            });
+                        }
+                    }
+                    break;
+                }
+
+                if (event.type == FSEVENT_RENAME && event.new_filepath != NULL) {
+                    print("Filesystem event: %s: %s -> %s", fs_event_type_str(event.type), event.filepath, event.new_filepath);
+                } else {
+                    if (is_directory || str_ends_with(event.filepath, ".go"))
+                        print("Filesystem event: %s: %s", fs_event_type_str(event.type), event.filepath);
+                }
+            }
         }
 
         glDisable(GL_SCISSOR_TEST);

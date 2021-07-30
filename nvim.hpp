@@ -536,7 +536,7 @@ struct Nvim {
     // memory
     Pool mem;
     Pool loop_mem;
-    Pool messages_mem;
+    // Pool messages_mem;
     Pool requests_mem;
 
     // orchestration
@@ -547,8 +547,6 @@ struct Nvim {
     u32 request_id;
     Thread_Handle event_loop_thread;
     List<Nvim_Request> requests;
-    List<Nvim_Message> message_queue;
-    Lock messages_lock;
     List<Hl_Def> hl_defs;
 
     // state
@@ -562,7 +560,6 @@ struct Nvim {
     u32 dotrepeat_win_id;
     u32 current_win_id;
 
-    List<ccstr> started_messages;
     Pool started_messages_mem;
 
     struct {
@@ -592,14 +589,6 @@ struct Nvim {
     u32 start_request_message(ccstr method, u32 params_length) {
         requests_lock.enter();
 
-        if (started_messages.len > 0)
-            our_panic("message already in progress");
-
-        {
-            SCOPED_MEM(&started_messages_mem);
-            started_messages.append(our_strcpy(method));
-        }
-
         auto msgid = request_id++;
         write_request_header(msgid, method, params_length);
         return msgid;
@@ -607,26 +596,10 @@ struct Nvim {
 
     void start_response_message(u32 msgid) {
         requests_lock.enter();
-
-        if (started_messages.len > 0)
-            our_panic("message already in progress");
-
-        {
-            SCOPED_MEM(&started_messages_mem);
-            started_messages.append(our_sprintf("response for msgid %d", msgid));
-        }
-
         write_response_header(msgid);
     }
 
     void end_message() {
-        if (started_messages.len == 0)
-            our_panic("ending message when none is open???");
-
-        started_messages.len--;
-        if (started_messages.len == 0)
-            started_messages_mem.reset();
-
         writer.flush();
         requests_lock.leave();
     }

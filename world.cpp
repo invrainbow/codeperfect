@@ -19,8 +19,6 @@ bool is_ignored_by_git(ccstr path) {
 }
 
 void History::push(int editor_id, cur2 pos, bool force) {
-    if (navigating_in_progress) return;
-
     auto should_push = [&]() -> bool {
         if (curr == start) return true;
 
@@ -31,7 +29,15 @@ void History::push(int editor_id, cur2 pos, bool force) {
         return delta >= 10;
     };
 
-    if (!force && !should_push()) return;
+    if (!force && !should_push()) {
+        return;
+    }
+
+    {
+        auto editor = world.find_editor_by_id(editor_id);
+        print("pushing %s:%s, force = %d", our_basename(editor->filepath), format_cur(pos), force);
+    }
+
 
     ring[curr].editor_id = editor_id;
     ring[curr].pos = pos;
@@ -46,8 +52,10 @@ void History::actually_go(History_Loc *it) {
     if (editor == NULL) return;
     if (!editor->is_nvim_ready()) return;
 
-    editor->nvim_data.is_navigating_to = true;
-    editor->nvim_data.navigating_to_pos = it->pos;
+    world.navigating_to = true;
+    world.navigating_to_pos = it->pos;
+    world.navigating_to_editor = it->editor_id;
+
     world.focus_editor_by_id(it->editor_id, it->pos);
 }
 
@@ -62,6 +70,7 @@ bool History::go_forward() {
 bool History::go_backward() {
     if (curr == start) return false;
 
+    /*
     {
         auto editor = world.get_current_editor();
         auto &it = ring[dec(curr)];
@@ -76,6 +85,7 @@ bool History::go_backward() {
             return true;
         }
     }
+    */
 
     if (dec(curr) == start) return false;
 
@@ -108,84 +118,6 @@ void History::remove_editor_from_history(int editor_id) {
     top = j;
 }
 
-int compare_file_tree_nodes(File_Tree_Node *a, File_Tree_Node *b) {
-    auto score_node = [](File_Tree_Node *it) -> int {
-        if (it->is_directory) return 0;
-        if (str_ends_with(it->name, ".go")) return 1;
-        return 2;
-    };
-
-    auto sa = score_node(a);
-    auto sb = score_node(b);
-    if (sa < sb) return -1;
-    if (sa > sb) return 1;
-    return strcmpi(a->name, b->name);
-}
-
-File_Tree_Node *World::add_file_tree_child(File_Tree_Node *parent) {
-    File_Tree_Node *node = NULL;
-
-    {
-        SCOPED_MEM(&file_tree_mem);
-
-        node = alloc_object(File_Tree_Node);
-        node->num_children = 0;
-        node->depth = parent->depth + 1;
-        node->parent = parent;
-        node->children = NULL;
-        node->prev = NULL;
-    }
-
-    node->next = parent->children;
-    parent->children->prev = node;
-    parent->children = node;
-    parent->num_children++;
-    parent->children = world.sort_file_tree_nodes(parent->children);
-}
-
-File_Tree_Node *World::sort_file_tree_nodes(File_Tree_Node *nodes) {
-    if (nodes == NULL || nodes->next == NULL) return nodes;
-
-    int len = 0;
-    for (auto it = nodes; it != NULL; it = it->next)
-        len++;
-
-    File_Tree_Node *a = nodes, *b = nodes;
-    for (int i = 0; i < len/2; i++)
-        b = b->next;
-    b->prev->next = NULL;
-    b->prev = NULL;
-
-    a = sort_file_tree_nodes(a);
-    b = sort_file_tree_nodes(b);
-
-    File_Tree_Node *ret = NULL, *curr = NULL;
-
-    while (a != NULL && b != NULL) {
-        File_Tree_Node **ptr = (compare_file_tree_nodes(a, b) <= 0 ? &a : &b);
-        if (ret == NULL) {
-            ret = *ptr;
-        } else {
-            curr->next = *ptr;
-            (*ptr)->prev = curr;
-        }
-        curr = *ptr;
-        *ptr = (*ptr)->next;
-    }
-
-    if (a != NULL) {
-        curr->next = a;
-        a->prev = curr;
-    }
-
-    if (b != NULL) {
-        curr->next = b;
-        b->prev = curr;
-    }
-
-    return ret;
-}
-
 void World::fill_file_tree() {
     SCOPED_MEM(&file_tree_mem);
     file_tree_mem.reset();
@@ -195,7 +127,7 @@ void World::fill_file_tree() {
     file_explorer.last_file_copied = NULL;
     file_explorer.last_file_cut = NULL;
 
-    file_tree = alloc_object(File_Tree_Node);
+    file_tree = alloc_object(FT_Node);
     file_tree->is_directory = true;
     file_tree->depth = -1;
 
@@ -203,8 +135,8 @@ void World::fill_file_tree() {
 
     GHGitIgnoreInit(current_path);
 
-    fn<void(ccstr, File_Tree_Node*)> recur = [&](ccstr path, File_Tree_Node *parent) {
-        File_Tree_Node *last_child = parent->children;
+    fn<void(ccstr, FT_Node*)> recur = [&](ccstr path, FT_Node *parent) {
+        FT_Node *last_child = parent->children;
 
         list_directory(path, [&](Dir_Entry *ent) {
             do {
@@ -214,7 +146,7 @@ void World::fill_file_tree() {
                 if (streq(ent->name, ".cp95proj")) break;
                 if (str_ends_with(ent->name, ".exe")) break;
 
-                auto file = alloc_object(File_Tree_Node);
+                auto file = alloc_object(FT_Node);
                 file->name = our_strcpy(ent->name);
                 file->is_directory = (ent->type & FILE_TYPE_DIRECTORY);
                 file->num_children = 0;
@@ -244,7 +176,7 @@ void World::fill_file_tree() {
             return true;
         });
 
-        parent->children = sort_file_tree_nodes(parent->children);
+        parent->children = sort_ft_nodes(parent->children);
     };
 
     recur(current_path, file_tree);
@@ -302,7 +234,7 @@ void World::init_workspace() {
 
     panes.init(LIST_FIXED, _countof(_panes), _panes);
 
-#if 0
+#if 1
     Select_File_Opts opts; ptr0(&opts);
     opts.buf = current_path;
     opts.bufsize = _countof(current_path);
@@ -356,7 +288,6 @@ void World::init(GLFWwindow *_wnd) {
     init_mem(scratch_mem);
     init_mem(build_index_mem);
     init_mem(ui_mem);
-    init_mem(message_queue_mem);
     init_mem(index_log_mem);
     init_mem(search_mem);
 #undef init_mem
@@ -386,8 +317,6 @@ void World::init(GLFWwindow *_wnd) {
         wnd_index_log.lines.init();
     }
 
-    message_queue_lock.init();
-
     fzy_init();
 
     // prepare_workspace();
@@ -411,12 +340,8 @@ void World::init(GLFWwindow *_wnd) {
         SCOPED_MEM(&ui_mem);
         ::ui.init();
     }
-}
 
-void World::add_event(fn<void(Main_Thread_Message*)> f) {
-    SCOPED_LOCK(&message_queue_lock);
-    SCOPED_MEM(&message_queue_mem);
-    f(message_queue.append());
+    fswatch.init(current_path);
 }
 
 void World::start_background_threads() {
@@ -514,7 +439,7 @@ void init_goto_file() {
     wnd.filepaths = alloc_list<ccstr>();
     wnd.filtered_results = alloc_list<int>();
 
-    fn<void(File_Tree_Node*, ccstr)> fill_files = [&](auto node, auto path) {
+    fn<void(FT_Node*, ccstr)> fill_files = [&](auto node, auto path) {
         for (auto it = node->children; it != NULL; it = it->next) {
             auto isdir = it->is_directory;
 
@@ -647,7 +572,7 @@ void filter_files() {
     wnd.filtered_results->len = 0;
 
     Timer t;
-    t.init("filter_files");
+    // t.init("filter_files");
 
     u32 i = 0;
     For (*wnd.filepaths) {
@@ -656,7 +581,7 @@ void filter_files() {
         i++;
     }
 
-    t.log("matching");
+    // t.log("matching");
 
     auto scores = alloc_array(double, wnd.filepaths->len);
     auto scores_saved = alloc_array(bool, wnd.filepaths->len);
@@ -675,7 +600,7 @@ void filter_files() {
         return a < b ? 1 : (a > b ? -1 : 0);  // reverse
     });
 
-    t.log("scoring");
+    // t.log("scoring");
 }
 
 void filter_symbols() {
@@ -800,3 +725,135 @@ void save_all_unsaved_files() {
             if (!it.is_untitled)
                 it.handle_save(false);
 }
+
+void World::delete_ft_node(FT_Node *it) {
+    SCOPED_FRAME();
+    auto rel_path = world.ft_node_to_path(it);
+    auto full_path = path_join(world.current_path, rel_path);
+    if (it->is_directory)
+        delete_rm_rf(full_path);
+    else
+        delete_file(full_path);
+
+    // delete `it` from file tree
+    if (it->parent != NULL && it->parent->children == it)
+        it->parent->children = it->next;
+    if (it->prev != NULL)
+        it->prev->next = it->next;
+    if (it->next != NULL)
+        it->next->prev = it->prev;
+}
+
+ccstr World::ft_node_to_path(FT_Node *node) {
+    auto path = alloc_list<FT_Node*>();
+    for (auto curr = node; curr != NULL; curr = curr->parent)
+        path->append(curr);
+    path->len--; // remove root
+
+    Text_Renderer r;
+    r.init();
+    for (i32 j = path->len - 1; j >= 0; j--) {
+        r.write("%s", path->at(j)->name);
+        if (j != 0) r.write("/");
+    }
+    return r.finish();
+}
+
+
+FT_Node *World::find_ft_node(ccstr relpath) {
+    auto path = make_path(relpath);
+    auto node = world.file_tree;
+    For (*path->parts) {
+        FT_Node *next = NULL;
+        for (auto child = node->children; child != NULL; child = child->next) {
+            if (streqi(child->name, it)) {
+                next = child;
+                break;
+            }
+        }
+        if (next == NULL) return NULL;
+        node = next;
+    }
+    return node;
+}
+
+int World::compare_ft_nodes(FT_Node *a, FT_Node *b) {
+    auto score_node = [](FT_Node *it) -> int {
+        if (it->is_directory) return 0;
+        if (str_ends_with(it->name, ".go")) return 1;
+        return 2;
+    };
+
+    auto sa = score_node(a);
+    auto sb = score_node(b);
+    if (sa < sb) return -1;
+    if (sa > sb) return 1;
+    return strcmpi(a->name, b->name);
+}
+
+void World::add_ft_node(FT_Node *parent, fn<void(FT_Node* it)> cb) {
+    FT_Node *node = NULL;
+
+    {
+        SCOPED_MEM(&file_tree_mem);
+
+        node = alloc_object(FT_Node);
+        node->num_children = 0;
+        node->depth = parent->depth + 1;
+        node->parent = parent;
+        node->children = NULL;
+        node->prev = NULL;
+        cb(node);
+    }
+
+    node->next = parent->children;
+    if (parent->children != NULL)
+        parent->children->prev = node;
+    parent->children = node;
+    parent->num_children++;
+    parent->children = world.sort_ft_nodes(parent->children);
+}
+
+FT_Node *World::sort_ft_nodes(FT_Node *nodes) {
+    if (nodes == NULL || nodes->next == NULL) return nodes;
+
+    int len = 0;
+    for (auto it = nodes; it != NULL; it = it->next)
+        len++;
+
+    FT_Node *a = nodes, *b = nodes;
+    for (int i = 0; i < len/2; i++)
+        b = b->next;
+    b->prev->next = NULL;
+    b->prev = NULL;
+
+    a = sort_ft_nodes(a);
+    b = sort_ft_nodes(b);
+
+    FT_Node *ret = NULL, *curr = NULL;
+
+    while (a != NULL && b != NULL) {
+        FT_Node **ptr = (compare_ft_nodes(a, b) <= 0 ? &a : &b);
+        if (ret == NULL) {
+            ret = *ptr;
+        } else {
+            curr->next = *ptr;
+            (*ptr)->prev = curr;
+        }
+        curr = *ptr;
+        *ptr = (*ptr)->next;
+    }
+
+    if (a != NULL) {
+        curr->next = a;
+        a->prev = curr;
+    }
+
+    if (b != NULL) {
+        curr->next = b;
+        b->prev = curr;
+    }
+
+    return ret;
+}
+

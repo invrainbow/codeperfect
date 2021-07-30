@@ -1084,7 +1084,7 @@ void Debugger::select_frame(u32 goroutine_id, u32 frame) {
     For (watches) eval_watch(&it, goroutine_id, frame);
 
     if (!exiting) {
-        world.add_event([&](auto msg) {
+        world.message_queue.add([&](auto msg) {
             msg->type = MTM_GOTO_FILEPOS;
             msg->goto_filepos.file = our_strcpy(dlvframe->filepath);
             msg->goto_filepos.pos = new_cur2((i32)0, (i32)dlvframe->lineno - 1);

@@ -173,7 +173,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
             switch (result->postfix_operation) {
             case PFC_ASSIGNAPPEND:
                 initialize_everything();
-                insert_text("%s = append(%s, ", operand_text);
+                insert_text("%s = append(%s, ", operand_text, operand_text);
                 record_position();
                 insert_text(")");
                 record_position();
@@ -513,6 +513,9 @@ void Editor::perform_autocomplete(AC_Result *result) {
 
                 case ACR_DECLARATION:
                     {
+                        if (result->declaration_is_struct_literal_field)
+                            return our_sprintf("%s: ", s);
+
                         auto godecl = result->declaration_godecl;
                         if (godecl == NULL) break;
 
@@ -760,10 +763,27 @@ void Editor::raw_move_cursor(cur2 c, bool dont_add_to_history) {
     if (cur.y + options.scrolloff >= view.y + view.h)
         view.y = cur.y + options.scrolloff - view.h + 1;
 
-    if (!dont_add_to_history && (!nvim_data.is_navigating_to || c != nvim_data.navigating_to_pos)) {
-        world.history.push(id, c);
-        nvim_data.is_navigating_to = false;
+    auto is_navigating_here = [&]() -> bool {
+        return nvim_data.is_navigating
+            && nvim_data.navigating_to_pos == c
+            && nvim_data.navigating_to_editor == id;
+    };
+
+    bool push_to_history = true;
+
+    if (world.navigating_to) {
+        if (world.navigating_to_editor == id) {
+            if (world.navigating_to_pos == c)
+                push_to_history = false;
+            else
+                world.navigating_to = false;
+        }
     }
+
+    if (push_to_history)
+        if (!dont_add_to_history)
+            if (world.get_current_editor() == this)
+                world.history.push(id, c);
 }
 
 void Editor::ensure_cursor_on_screen() {
@@ -1039,14 +1059,6 @@ Editor* Pane::focus_editor(ccstr path, cur2 pos) {
         i++;
     }
 
-    /*
-    TODO: check this elsewhere
-    if (!check_file_dimensions(path)) {
-        error("Unfortunately, we currently don't support files with more than 65,000 lines, or lines with more than 65,000 characters.");
-        return NULL;
-    }
-    */
-
     auto ed = editors.append();
     ed->init();
     if (!ed->load_file(path)) {
@@ -1133,7 +1145,6 @@ bool Editor::trigger_escape(cur2 go_here_after) {
                 {
                     writer.write_array(5);
                     {
-
                         writer.write_int(nvim_data.buf_id);
                         writer.write_int(start.y);
                         writer.write_int(old_end.y + 1);
@@ -1270,23 +1281,13 @@ bool Editor::trigger_escape(cur2 go_here_after) {
 void Pane::set_current_editor(u32 idx) {
     current_editor = idx;
 
-    auto focus_current_editor_in_file_explorer = [&]() {
-        auto ed = world.get_current_editor();
-        if (ed == NULL) return;
+    auto ed = world.get_current_editor();
+    if (ed == NULL) return;
 
-        auto edpath = make_path(get_path_relative_to(ed->filepath, world.current_path));
-        auto node = world.file_tree;
-        For (*edpath->parts) {
-            File_Tree_Node *next = NULL;
-            for (auto child = node->children; child != NULL; child = child->next) {
-                if (streqi(child->name, it)) {
-                    next = child;
-                    break;
-                }
-            }
-            if (next == NULL) return;
-            node = next;
-        }
+    auto focus_current_editor_in_file_explorer = [&]() {
+        auto edpath = get_path_relative_to(ed->filepath, world.current_path);
+        auto node = world.find_ft_node(edpath);
+        if (node == NULL) return;
 
         world.file_explorer.selection = node;
         for (auto it = node->parent; it != NULL && it->parent != NULL; it = it->parent)
@@ -1308,6 +1309,9 @@ Editor *Pane::focus_editor_by_index(u32 idx, cur2 pos) {
 
     if (pos.x != -1) {
         if (editor.is_nvim_ready()) {
+            // TODO: handle the term being off screen
+            editor.view.x = 0;
+            editor.view.y = relu_sub(pos.y, 10);
             editor.move_cursor(pos);
         } else {
             editor.nvim_data.need_initial_pos_set = true;
@@ -2099,36 +2103,45 @@ void Editor::handle_save(bool about_to_close) {
         buf.dirty = false;
     }
 
-    if (untitled) {
-        auto find_node = [&]() -> File_Tree_Node * {
-            auto curr = world.file_tree;
-            auto subpath = get_path_relative_to(filepath, world.current_path);
-            auto parts = make_path(subpath)->parts;
+    auto find_node = [&]() -> FT_Node * {
+        auto curr = world.file_tree;
+        auto subpath = get_path_relative_to(filepath, world.current_path);
+        auto parts = make_path(subpath)->parts;
 
-            if (parts->len == 0) return NULL;
-            parts->len--; // chop off last, we want dirname
+        if (parts->len == 0) return NULL;
+        parts->len--; // chop off last, we want dirname
 
-            For (*parts) {
-                bool found = false;
-                for (auto child = curr->children; curr != NULL; curr = curr->next) {
-                    if (streq(child->name, it)) {
-                        curr = child;
-                        found = true;
-                    }
+        For (*parts) {
+            bool found = false;
+            for (auto child = curr->children; child != NULL; child = child->next) {
+                if (streq(child->name, it)) {
+                    curr = child;
+                    found = true;
+                    break;
                 }
-                if (!found) return NULL;
             }
-            return curr;
-        };
+            if (!found) return NULL;
+        }
+        return curr;
+    };
 
-        auto node = find_node();
-        if (node != NULL) {
-            auto child = world.add_file_tree_child(node);
-            {
-                SCOPED_MEM(&world.file_tree_mem);
-                child->is_directory = false;
-                child->name = our_strcpy(our_basename(filepath));
+    auto node = find_node();
+    if (node != NULL) {
+        bool child_exists = false;
+        auto filename = our_basename(filepath);
+
+        for (auto child = node->children; child != NULL; child = child->next) {
+            if (streq(child->name, filename)) {
+                child_exists = true;
+                break;
             }
+        }
+
+        if (!child_exists) {
+            world.add_ft_node(node, [&](auto child) {
+                child->is_directory = false;
+                child->name = our_strcpy(filename);
+            });
         }
     }
 }

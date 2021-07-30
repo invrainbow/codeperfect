@@ -21,6 +21,7 @@ obj/
 
 # debugging crap
 *.dSYM
+coredumps/
 
 # misc
 imgui.ini

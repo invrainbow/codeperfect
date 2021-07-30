@@ -454,6 +454,7 @@ struct AC_Result {
             ccstr declaration_filename;
             bool declaration_is_builtin;
             ccstr declaration_package; // if the decl is "foo.bar", this will be "foo"
+            bool declaration_is_struct_literal_field;
         };
 
         ccstr import_path;
@@ -891,6 +892,7 @@ struct Go_Scope_Op {
     Go_Scope_Op_Type type;
     cur2 pos;
     Godecl *decl;
+    int decl_scope_depth;
 
     Go_Scope_Op *copy();
     void read(Index_Stream *s);
@@ -1158,6 +1160,26 @@ enum {
 
 Go_File *get_ready_file_in_package(Go_Package *pkg, ccstr filename);
 
+enum Go_Message_Type {
+    GOMSG_RESCAN_INDEX,
+    GOMSG_OBLITERATE_AND_RECREATE_INDEX,
+    GOMSG_CLEANUP_UNUSED_MEMORY,
+
+    GOMSG_FILEPATH_DELETED,
+    GOMSG_FILEPATH_CREATED,
+    GOMSG_FILEPATH_CHANGED,
+    GOMSG_FILEPATH_RENAMED,
+
+};
+
+struct Go_Message {
+    Go_Message_Type type;
+
+    union {
+        ccstr filepath; // for GOMSG_FILEPATH_*
+    };
+};
+
 struct Go_Indexer {
     ccstr goroot;
     ccstr gopath;
@@ -1180,13 +1202,7 @@ struct Go_Indexer {
     Module_Resolver module_resolver;
     Scoped_Table<Go_Package*> package_lookup;
 
-    // List<ccstr> files_to_ignore_fsevents_on;
-    Fs_Watcher wksp_watch;
-
-    Lock flag_lock;
-    bool flag_rescan_index;
-    bool flag_obliterate_and_recreate_index;
-    bool flag_cleanup_unused_memory;
+    Message_Queue<Go_Message> message_queue;
 
     Lock lock;
     bool ready;
@@ -1198,8 +1214,6 @@ struct Go_Indexer {
 
     void init();
     void cleanup();
-    bool is_flag_set(bool *p);
-    void set_flag(bool *p);
 
     Jump_To_Definition_Result* jump_to_symbol(ccstr symbol);
     Jump_To_Definition_Result* jump_to_definition(ccstr filepath, cur2 pos);
@@ -1225,6 +1239,7 @@ struct Go_Indexer {
     List<Godecl> *parameter_list_to_fields(Ast_Node *params);
     Gotype *node_to_gotype(Ast_Node *node);
     Goresult *find_decl_of_id(ccstr id, cur2 id_pos, Go_Ctx *ctx, Go_Import **single_import = NULL);
+    void list_struct_fields(Goresult *type, List<Goresult> *ret);
     void list_fields_and_methods(Goresult *type_res, Goresult *resolved_type_res, List<Goresult> *ret);
     bool node_func_to_gotype_sig(Ast_Node *params, Ast_Node *result, Go_Func_Sig *sig);
     void node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr filename, Pool *target_pool = NULL);

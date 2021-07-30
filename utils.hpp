@@ -292,3 +292,33 @@ struct Timer {
         time = curr;
     }
 };
+
+template<typename T>
+struct Message_Queue {
+    Pool mem;
+    Lock lock;
+    List<T> messages;
+
+    void init() {
+        mem.init();
+        lock.init();
+        messages.init();
+    }
+
+    List<T> *start() {
+        lock.enter();
+        return &messages;
+    }
+
+    void end() {
+        mem.reset();
+        messages.len = 0;
+        lock.leave();
+    }
+
+    void add(fn<void(T *t)> f) {
+        SCOPED_LOCK(&lock);
+        SCOPED_MEM(&mem);
+        f(messages.append());
+    }
+};

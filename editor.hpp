@@ -101,8 +101,9 @@ struct Editor {
 
         cur2 post_insert_original_cur;
 
-        bool is_navigating_to;
+        bool is_navigating;
         cur2 navigating_to_pos;
+        int navigating_to_editor;
 
         int changedtick;
     } nvim_data;

@@ -33,15 +33,15 @@ struct Build_Error {
     u64 nvim_extmark;
 };
 
-struct File_Tree_Node {
+struct FT_Node {
     bool is_directory;
     ccstr name;
     i32 num_children;
     i32 depth;
-    File_Tree_Node *parent;
-    File_Tree_Node *children;
-    File_Tree_Node *prev;
-    File_Tree_Node *next;
+    FT_Node *parent;
+    FT_Node *children;
+    FT_Node *prev;
+    FT_Node *next;
     bool open;
 };
 
@@ -49,6 +49,9 @@ enum Main_Thread_Message_Type {
     MTM_NVIM_MESSAGE,
     MTM_RELOAD_EDITOR,
     MTM_GOTO_FILEPOS,
+
+    MTM_FILETREE_DELETE,
+    MTM_FILETREE_CREATE,
 };
 
 struct Main_Thread_Message {
@@ -138,7 +141,6 @@ struct World {
     Pool build_mem;
     Pool build_index_mem;
     Pool ui_mem;
-    Pool message_queue_mem;
     Pool index_log_mem;
     Pool search_mem;
 
@@ -155,8 +157,7 @@ struct World {
     vec2 display_size;
     vec2f display_scale;
 
-    Lock message_queue_lock;
-    List<Main_Thread_Message> message_queue;
+    Message_Queue<Main_Thread_Message> message_queue;
 
     Searcher searcher;
 
@@ -171,7 +172,7 @@ struct World {
 
     u32 next_editor_id;
 
-    File_Tree_Node *file_tree;
+    FT_Node *file_tree;
     u64 next_build_id;
 
     char current_path[MAX_PATH];
@@ -184,11 +185,17 @@ struct World {
 
     History history;
 
+    bool navigating_to;
+    cur2 navigating_to_pos;
+    int navigating_to_editor;
+
     void activate_pane(u32 idx);
     void init_workspace();
 
     bool replace_line_numbers_with_bytecounts;
     bool turn_off_framerate_cap;
+
+    Fs_Watcher fswatch;
 
     struct {
         bool show;
@@ -221,12 +228,12 @@ struct World {
     struct {
         bool show;
         bool focused;
-        File_Tree_Node *selection;
+        FT_Node *selection;
         // char buf[256];
         // bool adding_something;
         // bool thing_being_added_is_file;
-        File_Tree_Node *last_file_copied;
-        File_Tree_Node *last_file_cut;
+        FT_Node *last_file_copied;
+        FT_Node *last_file_cut;
     } file_explorer;
 
     struct {
@@ -264,9 +271,8 @@ struct World {
         char replace_str[256];
         bool use_regex;
         bool case_sensitive;
-
         bool focus_bool;
-
+        bool focus_textbox;
     } wnd_search_and_replace;
 
     struct {
@@ -289,14 +295,14 @@ struct World {
         bool folder;
         bool focused;
         bool first_open_focus_twice_done;
-        File_Tree_Node *dest;
+        FT_Node *dest;
     } wnd_add_file_or_folder;
 
     struct {
         bool show;
         char name[MAX_PATH];
         char location[MAX_PATH];
-        File_Tree_Node *target;
+        FT_Node *target;
         bool focused;
         bool first_open_focus_twice_done;
     } wnd_rename_file_or_folder;
@@ -354,15 +360,20 @@ struct World {
     Pane* get_current_pane();
     Editor* get_current_editor();
     Editor* find_editor(find_editor_func f);
-    void add_event(fn<void(Main_Thread_Message*)> f);
     Editor* find_editor_by_id(u32 id);
     void fill_file_tree();
-    File_Tree_Node *sort_file_tree_nodes(File_Tree_Node *nodes);
-    File_Tree_Node *add_file_tree_child(File_Tree_Node *parent);
 
     Editor *focus_editor(ccstr path);
     Editor *focus_editor(ccstr path, cur2 pos);
     Editor* focus_editor_by_id(int editor_id, cur2 pos);
+
+
+    FT_Node *sort_ft_nodes(FT_Node *nodes);
+    void add_ft_node(FT_Node *parent, fn<void(FT_Node* it)> cb);
+    int compare_ft_nodes(FT_Node *a, FT_Node *b);
+    FT_Node *find_ft_node(ccstr relpath);
+    void delete_ft_node(FT_Node *it);
+    ccstr ft_node_to_path(FT_Node *node);
 };
 
 extern World world;

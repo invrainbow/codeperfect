@@ -14,7 +14,7 @@
 #include <dlfcn.h>
 #endif
 
-#define GO_DEBUG 1
+#define GO_DEBUG 0
 
 #if GO_DEBUG
 #define go_print(fmt, ...) print("[go] " fmt, ##__VA_ARGS__)
@@ -23,7 +23,7 @@
 #endif
 
 const unsigned char GO_INDEX_MAGIC_BYTES[3] = {0x49, 0xfa, 0x98};
-const int GO_INDEX_VERSION = 9;
+const int GO_INDEX_VERSION = 10;
 
 void index_print(ccstr fmt, ...) {
     va_list args;
@@ -403,12 +403,6 @@ void Go_Indexer::reload_all_dirty_files() {
     }
 }
 
-bool is_git_folder(ccstr path) {
-    SCOPED_FRAME();
-    auto pathlist = make_path(path);
-    return pathlist->parts->find([&](auto it) { return streqi(*it, ".git"); }) != NULL;
-}
-
 Editor *get_open_editor(ccstr filepath) {
     For (world.panes)
         For (it.editors)
@@ -746,6 +740,146 @@ void Go_Indexer::background_thread() {
         return true;
     };
 
+    auto handle_gofile_created = [&](ccstr filepath, bool from_internal = false) {
+        auto pkg = find_package_in_index(filepath_to_import_path(our_dirname(filepath)));
+        if (pkg == NULL) return;
+
+        auto filename = our_basename(filepath);
+        auto file = get_ready_file_in_package(pkg, filename);
+
+        auto pf = parse_file(filepath);
+        if (pf == NULL) return;
+        defer {
+            free_parsed_file(pf);
+
+            auto editor = get_open_editor(filepath);
+            if (editor != NULL) {
+                world.message_queue.add([&](auto msg) {
+                    msg->type = MTM_RELOAD_EDITOR;
+                    msg->reload_editor_id = editor->id;
+                });
+            }
+        };
+
+        start_writing();
+
+        ccstr package_name = NULL;
+        process_tree_into_gofile(file, pf->root, filepath, &package_name);
+        replace_package_name(pkg, package_name);
+
+        // queue up any new imports
+        enqueue_imports_from_file(file);
+
+        // rehash package
+        fill_package_hash(pkg);
+
+        /*
+        if file changed from outside
+            update index
+            if editor exists, reload it, discard changes
+        if file changed from editor
+            update on save
+        */
+    };
+
+    auto handle_file_or_folder_renamed = [&](ccstr filepath) {
+        if (!path_contains_in_subtree(index.current_path, filepath))
+            return;
+
+        auto pkg = find_package_in_index(filepath_to_import_path(filepath));
+        if (pkg == NULL) {
+            if (!str_ends_with(filepath, ".go")) return;
+            pkg = find_package_in_index(filepath_to_import_path(our_dirname(filepath)));
+        }
+
+        if (pkg == NULL) return;
+
+        pkg->checked_for_outdated_hash = true;
+        pkg->status = GPS_OUTDATED;
+        enqueue_package(pkg->import_path);
+    };
+
+    auto handle_folder_created = [&](ccstr filepath) {
+        // at this point, there will already exist a folder full of files
+        // FSEVENT_CREATE events won't be created for the individual files.
+
+        auto import_path = filepath_to_import_path(filepath);
+        auto pkg = find_package_in_index(import_path);
+
+        start_writing();
+
+        if (pkg == NULL) {
+            SCOPED_MEM(&final_mem);
+            pkg = index.packages->append();
+            pkg->status = GPS_OUTDATED;
+            pkg->files = alloc_list<Go_File>();
+            pkg->import_path = our_strcpy(import_path);
+            package_lookup.set(pkg->import_path, pkg);
+        }
+
+        pkg->status = GPS_UPDATING;
+
+        pkg->cleanup_files();
+
+        auto source_files = list_source_files(filepath, false);
+        if (source_files != NULL) {
+            For (*source_files) {
+                Pool tmp_mem;
+                tmp_mem.init();
+                defer { tmp_mem.cleanup(); };
+
+                SCOPED_MEM(&tmp_mem);
+
+                auto full_filepath = path_join(filepath, it);
+
+                auto pf = parse_file(full_filepath);
+                if (pf == NULL) continue;
+                defer { free_parsed_file(pf); };
+
+                auto file = get_ready_file_in_package(pkg, it);
+
+                ccstr package_name = NULL;
+                process_tree_into_gofile(file, pf->root, full_filepath, &package_name);
+                replace_package_name(pkg, package_name);
+
+                enqueue_imports_from_file(file);
+            }
+        }
+
+        fill_package_hash(pkg);
+        pkg->status = GPS_READY;
+        pkg->checked_for_outdated_hash = true;
+    };
+
+    auto handle_file_or_folder_deleted = [&](ccstr filepath) {
+        // try treating filepath as a directory
+        auto pkg = find_package_in_index(filepath_to_import_path(filepath));
+        if (pkg != NULL) {
+            SCOPED_WRITE();
+            pkg->cleanup_files();
+            index.packages->remove(pkg);
+            return;
+        }
+
+        if (str_ends_with(filepath, ".go")) {
+            auto pkg = find_package_in_index(filepath_to_import_path(our_dirname(filepath)));
+            if (pkg == NULL) return;
+            if (pkg->files == NULL) return;
+
+            auto filename = our_basename(filepath);
+            auto file = pkg->files->find([&](auto it) { return streq(filename, it->filename); });
+            if (file == NULL) return;
+
+            {
+                SCOPED_WRITE();
+                file->cleanup();
+                pkg->files->remove(file);
+            }
+        }
+    };
+
+    // random shit
+
     // try to read in index from disk
     // ===
 
@@ -894,264 +1028,62 @@ void Go_Indexer::background_thread() {
 
     for (;; sleep_milliseconds(100)) {
         bool force_write_this_time = false;
+        bool cleanup_unused_memory_this_time = false;
 
-        // process handle_gomod_changed request
+        // process messages from main thread
         // ---
 
-        if (is_flag_set(&flag_rescan_index)) {
-            start_writing();
-
-            module_resolver.cleanup();
-            module_resolver.init(world.current_path, gomodcache);
-
-            rescan_everything();
-        }
-
-        if (is_flag_set(&flag_obliterate_and_recreate_index)) {
-            // TODO
-        }
-
-        // process filesystem events
-        // ---
-
-        Fs_Event event;
-        for (u32 items_processed = 0; items_processed < 10 && wksp_watch.next_event(&event); items_processed++) {
-            Pool scratch_mem;
-            scratch_mem.init("scratch_mem");
-            defer { scratch_mem.cleanup(); };
-            SCOPED_MEM(&scratch_mem);
-
-            if (is_git_folder(event.filepath)) continue;
-
-            auto handle_gofile_deleted = [&](ccstr filepath) {
-                auto pkg = find_package_in_index(filepath_to_import_path(our_dirname(filepath)));
-                if (pkg == NULL) return;
-                if (pkg->files == NULL) return;
-
-                auto filename = our_basename(filepath);
-                auto file = pkg->files->find([&](auto it) { return streq(filename, it->filename); });
-                if (file == NULL) return;
-
-                {
-                    SCOPED_WRITE();
-                    file->cleanup();
-                    pkg->files->remove(file);
-                }
-            };
-
-            auto handle_gofile_created = [&](ccstr filepath) {
-                auto pkg = find_package_in_index(filepath_to_import_path(our_dirname(filepath)));
-                if (pkg == NULL) return;
-
-                auto filename = our_basename(event.filepath);
-                auto file = get_ready_file_in_package(pkg, filename);
-
-                auto pf = parse_file(filepath);
-                if (pf == NULL) return;
-                defer {
-                    free_parsed_file(pf);
-
-                    auto editor = get_open_editor(filepath);
-                    if (editor != NULL) {
-                        world.add_event([&](Main_Thread_Message *msg) {
-                            msg->type = MTM_RELOAD_EDITOR;
-                            msg->reload_editor_id = editor->id;
-                        });
-                    }
-                };
-
+        auto process_message = [&](auto msg) {
+            switch (msg->type) {
+            case GOMSG_RESCAN_INDEX:
                 start_writing();
 
-                ccstr package_name = NULL;
-                process_tree_into_gofile(file, pf->root, event.filepath, &package_name);
-                replace_package_name(pkg, package_name);
+                module_resolver.cleanup();
+                module_resolver.init(world.current_path, gomodcache);
 
-                // queue up any new imports
-                enqueue_imports_from_file(file);
+                rescan_everything();
+                break;
 
-                // rehash package
-                fill_package_hash(pkg);
+            case GOMSG_OBLITERATE_AND_RECREATE_INDEX:
+                // TODO
+                break;
 
-                /*
-                if file changed from outside
-                    update index
-                    if editor exists, reload it, discard changes
-                if file changed from editor
-                    update on save
-                */
-            };
+            case GOMSG_CLEANUP_UNUSED_MEMORY:
+                cleanup_unused_memory_this_time = true;
+                break;
 
-            bool is_directory = false;
+            case GOMSG_FILEPATH_DELETED:
+                handle_file_or_folder_deleted(msg->filepath);
+                break;
 
-            switch (event.type) {
-            case FSEVENT_DELETE:
-                {
-                    auto filepath = path_join(index.current_path, event.filepath);
-                    // try treating filepath as a directory
-                    auto pkg = find_package_in_index(filepath_to_import_path(filepath));
-                    if (pkg != NULL) {
-                        SCOPED_WRITE();
-                        pkg->cleanup_files();
-                        index.packages->remove(pkg);
-                        is_directory = true;
-                    } else if (str_ends_with(event.filepath, ".go")) {
-                        // try treating filepath as a file
-                        handle_gofile_deleted(filepath);
-                    }
+            case GOMSG_FILEPATH_CHANGED:
+                if (check_path(msg->filepath) != CPR_FILE) break;
+                if (!str_ends_with(msg->filepath, ".go")) break;
+                handle_gofile_created(msg->filepath);
+                break;
+
+            case GOMSG_FILEPATH_CREATED:
+                switch (check_path(msg->filepath)) {
+                case CPR_DIRECTORY:
+                    handle_folder_created(msg->filepath);
+                    break;
+                case CPR_FILE:
+                    if (!str_ends_with(msg->filepath, ".go")) break;
+                    handle_gofile_created(msg->filepath);
+                    break;
                 }
                 break;
 
-            case FSEVENT_CHANGE:
-                {
-                    auto filepath = path_join(index.current_path, event.filepath);
-
-                    // what does FSEVENT_CHANGE on CPR_DIRECTORY mean?
-                    auto cpr = check_path(filepath);
-                    if (cpr == CPR_DIRECTORY) is_directory = true;
-                    if (cpr != CPR_FILE) break;
-
-                    if (!str_ends_with(filepath, ".go")) break;
-
-                    // handled same way as file creation
-                    handle_gofile_created(filepath);
-                }
-                break;
-
-            case FSEVENT_CREATE:
-                {
-                    auto filepath = path_join(index.current_path, event.filepath);
-                    switch (check_path(filepath)) {
-                    case CPR_DIRECTORY:
-                        {
-                            is_directory = true;
-
-                            // at this point, there will already exist a folder full of files
-                            // FSEVENT_CREATE events won't be created for the individual files.
-
-                            auto import_path = filepath_to_import_path(filepath);
-                            auto pkg = find_package_in_index(import_path);
-
-                            start_writing();
-
-                            if (pkg == NULL) {
-                                SCOPED_MEM(&final_mem);
-                                pkg = index.packages->append();
-                                pkg->status = GPS_OUTDATED;
-                                pkg->files = alloc_list<Go_File>();
-                                pkg->import_path = our_strcpy(import_path);
-                                package_lookup.set(pkg->import_path, pkg);
-                            }
-
-                            pkg->status = GPS_UPDATING;
-
-                            pkg->cleanup_files();
-
-                            auto source_files = list_source_files(filepath, false);
-                            if (source_files != NULL) {
-                                For (*source_files) {
-                                    Pool tmp_mem;
-                                    tmp_mem.init();
-                                    defer { tmp_mem.cleanup(); };
-
-                                    SCOPED_MEM(&tmp_mem);
-
-                                    auto full_filepath = path_join(filepath, it);
-
-                                    auto pf = parse_file(full_filepath);
-                                    if (pf == NULL) continue;
-                                    defer { free_parsed_file(pf); };
-
-                                    auto file = get_ready_file_in_package(pkg, it);
-
-                                    ccstr package_name = NULL;
-                                    process_tree_into_gofile(file, pf->root, full_filepath, &package_name);
-                                    replace_package_name(pkg, package_name);
-
-                                    enqueue_imports_from_file(file);
-                                }
-                            }
-
-                            fill_package_hash(pkg);
-                            pkg->status = GPS_READY;
-                            pkg->checked_for_outdated_hash = true;
-                        }
-                        break;
-                    case CPR_FILE:
-                        {
-                            if (!str_ends_with(filepath, ".go")) break;
-                            handle_gofile_created(filepath);
-                        }
-                        break;
-                    }
-                }
-                break;
-
-            case FSEVENT_RENAME:
-                {
-                    auto filepath = path_join(index.current_path, event.new_filepath);
-                    switch (check_path(filepath)) {
-                    case CPR_DIRECTORY:
-                        {
-                            is_directory = true;
-
-                            auto import_path = filepath_to_import_path(filepath);
-                            auto pkg = find_package_in_index(import_path);
-
-                            package_lookup.remove(pkg->import_path);
-                            package_lookup.set(pkg->import_path, pkg);
-
-                            auto new_filepath = path_join(index.current_path, event.new_filepath);
-                            auto new_import_path = filepath_to_import_path(new_filepath);
-
-                            {
-                                SCOPED_WRITE();
-                                SCOPED_MEM(&final_mem);
-                                pkg->import_path = our_strcpy(new_import_path);
-                            }
-                        }
-                        break;
-                    case CPR_FILE:
-                        {
-                            bool old_is_gofile = str_ends_with(event.filepath, ".go");
-                            bool new_is_gofile = str_ends_with(event.new_filepath, ".go");
-
-                            if (old_is_gofile && !new_is_gofile) {
-                                // same as deleting
-                                handle_gofile_deleted(path_join(index.current_path, event.filepath));
-                            } else if (!old_is_gofile && new_is_gofile) {
-                                // same as creating
-                                handle_gofile_created(filepath);
-                            } else if (old_is_gofile && new_is_gofile) {
-                                auto old_filepath = path_join(index.current_path, event.filepath);
-                                auto pkg = find_package_in_index(filepath_to_import_path(our_dirname(old_filepath)));
-                                if (pkg == NULL) break;
-
-                                auto filename = our_basename(event.filepath);
-                                auto file = pkg->files->find([&](auto it) { return streq(filename, it->filename); });
-
-                                if (file == NULL) break;
-
-                                {
-                                    SCOPED_WRITE();
-                                    SCOPED_MEM(&final_mem);
-                                    file->filename = our_basename(event.new_filepath);
-                                    file->hash = hash_file(event.new_filepath);
-                                }
-                            }
-                        }
-                        break;
-                    }
-                }
+            case GOMSG_FILEPATH_RENAMED:
+                handle_file_or_folder_renamed(msg->filepath);
                 break;
             }
+        };
 
-            if (event.type == FSEVENT_RENAME && event.new_filepath != NULL) {
-                if (is_directory || str_ends_with(event.new_filepath, ".go") || str_ends_with(event.filepath, ".go"))
-                    index_print("Filesystem event: %s: %s -> %s", fs_event_type_str(event.type), event.filepath, event.new_filepath);
-            } else {
-                if (is_directory || str_ends_with(event.filepath, ".go"))
-                    index_print("Filesystem event: %s: %s", fs_event_type_str(event.type), event.filepath);
-            }
+        {
+            auto msgs = message_queue.start();
+            For (*msgs) process_message(&it);
+            message_queue.end();
         }
 
         // process items in queue
@@ -1273,7 +1205,7 @@ void Go_Indexer::background_thread() {
         // ---
 
         // clean up every 50 megabytes
-        if (is_flag_set(&flag_cleanup_unused_memory) || final_mem.mem_allocated - last_final_mem_allocated > 1024 * 1024 * 50) {
+        if (cleanup_unused_memory_this_time || final_mem.mem_allocated - last_final_mem_allocated > 1024 * 1024 * 50) {
             index_print("Cleaning up unused memory...");
 
             Pool new_pool;
@@ -1633,6 +1565,7 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
                     Go_Scope_Op op;
                     op.type = GSOP_DECL;
                     op.decl = &scope_ops_decls->items[i];
+                    op.decl_scope_depth = open_scopes.len;
                     op.pos = scope_ops_decls->items[i].decl_start;
                     if (!cb(&op)) return WALK_ABORT;
                 }
@@ -1833,18 +1766,6 @@ bool Go_Indexer::is_file_included_in_build(ccstr path) {
     return !gohelper_dynamic.returned_error && streq(resp, "true");
 }
 
-void Go_Indexer::set_flag(bool *p) {
-    SCOPED_LOCK(&flag_lock);
-    *p = true;
-}
-
-bool Go_Indexer::is_flag_set(bool *p) {
-    SCOPED_LOCK(&flag_lock);
-    auto ret = *p;
-    if (ret) *p = false;
-    return ret;
-}
-
 List<ccstr>* Go_Indexer::list_source_files(ccstr dirpath, bool include_tests) {
     auto ret = alloc_list<ccstr>();
 
@@ -1904,12 +1825,22 @@ Goresult *Go_Indexer::find_decl_of_id(ccstr id_to_find, cur2 id_pos, Go_Ctx *ctx
             }
             defer { table.cleanup(); };
 
+
             For (*scope_ops) {
                 if (it.pos > id_pos) break;
                 switch (it.type) {
-                case GSOP_OPEN_SCOPE: table.push_scope(); break;
-                case GSOP_CLOSE_SCOPE: table.pop_scope(); break;
-                case GSOP_DECL: table.set(it.decl->name, it.decl); break;
+                case GSOP_OPEN_SCOPE:
+                    table.push_scope();
+                    break;
+                case GSOP_CLOSE_SCOPE:
+                    table.pop_scope();
+                    break;
+                case GSOP_DECL:
+                    if (it.decl->decl_start < id_pos && it.decl->decl_end > id_pos)
+                        if (it.decl_scope_depth == table.frames.len)
+                            break;
+                    table.set(it.decl->name, it.decl);
+                    break;
                 }
             }
 
@@ -1983,6 +1914,14 @@ List<Postfix_Completion_Type> *Go_Indexer::get_postfix_completions(Ast_Node *ope
         case GOTYPE_SLICE:
         case GOTYPE_ARRAY:
         case GOTYPE_MAP:
+            switch (operand_node->type()) {
+            case TS_PACKAGE_IDENTIFIER:
+            case TS_TYPE_IDENTIFIER:
+            case TS_IDENTIFIER:
+            case TS_FIELD_IDENTIFIER:
+                ret->append(PFC_ASSIGNAPPEND);
+                break;
+            }
             ret->append(PFC_APPEND);
             ret->append(PFC_LEN);
             ret->append(PFC_CAP);
@@ -2033,6 +1972,7 @@ List<Postfix_Completion_Type> *Go_Indexer::get_postfix_completions(Ast_Node *ope
         auto id = operand_node->string();
 
         // add everything (until we find a reason not to)
+        ret->append(PFC_ASSIGNAPPEND);
         ret->append(PFC_APPEND);
         ret->append(PFC_LEN);
         ret->append(PFC_CAP);
@@ -2246,13 +2186,63 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 p
         case TS_IDENTIFIER:
         case TS_FIELD_IDENTIFIER:
             {
-                auto res = find_decl_of_id(node->string(), node->start(), &ctx);
-                if (res != NULL) {
-                    result.file = get_filepath_from_ctx(res->ctx);
-                    if (res->decl->name != NULL)
-                        result.pos = res->decl->name_start;
+                auto is_struct_field_in_literal = [&]() -> Ast_Node *{
+                    auto p = node->parent();
+                    if (p->null) return NULL;
+                    if (p->type() != TS_KEYED_ELEMENT) return NULL;
+
+                    // field must be first child
+                    if (!node->prev()->null) return NULL;
+
+                    p = p->parent();
+                    if (p->null) return NULL;
+                    if (p->type() != TS_LITERAL_VALUE) return NULL;
+
+                    p = p->parent();
+                    if (p->null) return NULL;
+                    if (p->type() != TS_COMPOSITE_LITERAL) return NULL;
+
+                    return p;
+                };
+
+                Goresult *declres = NULL;
+
+                auto comp_literal = is_struct_field_in_literal();
+                if (comp_literal != NULL) {
+                    do {
+                        auto p = comp_literal->field(TSF_TYPE);
+                        if (p->null) break;
+
+                        auto gotype = expr_to_gotype(p);
+                        if (gotype == NULL) break;
+
+                        auto res = evaluate_type(gotype, &ctx);
+                        if (res == NULL) break;
+
+                        auto rres = resolve_type(res->gotype, res->ctx);
+                        if (rres == NULL) break;
+
+                        auto tmp = alloc_list<Goresult>();
+                        list_struct_fields(rres, tmp);
+
+                        auto name = node->string();
+                        For (*tmp) {
+                            if (streq(it.decl->name, name)) {
+                                declres = &it;
+                                break;
+                            }
+                        }
+                    } while (0);
+                } else {
+                    declres = find_decl_of_id(node->string(), node->start(), &ctx);
+                }
+
+                if (declres != NULL) {
+                    result.file = get_filepath_from_ctx(declres->ctx);
+                    if (declres->decl->name != NULL)
+                        result.pos = declres->decl->name_start;
                     else
-                        result.pos = res->decl->spec_start;
+                        result.pos = declres->decl->spec_start;
                 }
             }
             return WALK_ABORT;
@@ -2552,6 +2542,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
     Ast_Node *expr_to_analyze = NULL;
     cur2 keyword_start; ptr0(&keyword_start);
     ccstr prefix = NULL;
+    Ast_Node *lone_identifier_struct_literal = NULL;
 
     auto copy_node = [&](Ast_Node *node) -> Ast_Node* {
         auto ret = alloc_object(Ast_Node);
@@ -2623,6 +2614,27 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
             keyword_start = node->start();
             prefix = our_strcpy(node->string());
             ((cstr)prefix)[pos.x - node->start().x] = '\0';
+            {
+                auto get_struct_literal_type = [&]() -> Ast_Node* {
+                    auto curr = node->parent();
+                    if (curr->null) return NULL;
+                    switch (curr->type() != TS_KEYED_ELEMENT && curr->type() != TS_ELEMENT) return NULL;
+
+                    curr = curr->parent();
+                    if (curr->null) return NULL;
+                    if (curr->type() != TS_LITERAL_VALUE) return NULL;
+
+                    curr = curr->parent();
+                    if (curr->null) return NULL;
+                    if (curr->type() != TS_COMPOSITE_LITERAL) return NULL;
+
+                    curr = curr->field(TSF_TYPE);
+                    if (curr->null) return NULL;
+
+                    return copy_node(curr);
+                };
+                lone_identifier_struct_literal = get_struct_literal_type();
+            }
             return WALK_ABORT;
 
         case TS_ANON_DOT:
@@ -2847,6 +2859,42 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                     }
                 }
             } while (0);
+
+            if (lone_identifier_struct_literal != NULL) {
+                auto gotype = expr_to_gotype(lone_identifier_struct_literal);
+                if (gotype == NULL) return NULL;
+
+                auto res = evaluate_type(gotype, &ctx);
+                if (res == NULL) return NULL;
+
+                auto rres = resolve_type(res->gotype, res->ctx);
+                if (rres == NULL) return NULL;
+
+                auto tmp = alloc_list<Goresult>();
+                list_struct_fields(rres, tmp);
+
+                For (*tmp) {
+                    if (!streq(it.ctx->import_path, ctx.import_path))
+                        if (!isupper(it.decl->name[0]))
+                            continue;
+
+                    if (it.decl->type != GODECL_FIELD) continue;
+                    if (it.decl->is_embedded) continue;
+
+                    auto res = ac_results->append();
+                    res->type = ACR_DECLARATION;
+                    res->name = it.decl->name;
+
+                    res->declaration_godecl = it.decl;
+                    res->declaration_import_path = it.ctx->import_path;
+                    res->declaration_filename = it.ctx->filename;
+                    res->declaration_is_builtin = false;
+                    res->declaration_is_struct_literal_field = true;
+
+                    // struct field gotypes are already evaluated, i believe
+                    res->declaration_evaluated_gotype = it.decl->gotype;
+                }
+            }
 
             auto results = list_package_decls(ctx.import_path, LISTDECLS_EXCLUDE_METHODS);
             if (results != NULL) {
@@ -3112,6 +3160,26 @@ Parameter_Hint *Go_Indexer::parameter_hint(ccstr filepath, cur2 pos) {
     return hint;
 }
 
+void Go_Indexer::list_struct_fields(Goresult *type, List<Goresult> *ret) {
+    auto t = type->gotype;
+    switch (t->type) {
+    case GOTYPE_POINTER:
+        list_struct_fields(make_goresult(t->pointer_base, type->ctx), ret);
+        break;
+    case GOTYPE_STRUCT:
+        For (*t->struct_specs) {
+            // recursively list methods for embedded fields
+            if (it.field->is_embedded) {
+                auto res = resolve_type(it.field->gotype, type->ctx);
+                if (res != NULL)
+                    list_struct_fields(res, ret);
+            }
+            ret->append(make_goresult(it.field, type->ctx));
+        }
+        break;
+    }
+}
+
 void Go_Indexer::list_fields_and_methods(Goresult *type_res, Goresult *resolved_type_res, List<Goresult> *ret) {
     // list fields of resolved type
     // ----------------------------
@@ -3253,6 +3321,8 @@ void Go_Indexer::init() {
 
     SCOPED_MEM(&mem);
 
+    message_queue.init();
+
     {
         SCOPED_FRAME();
         strcpy_safe(current_exe_path, _countof(current_exe_path), our_dirname(get_executable_path()));
@@ -3276,9 +3346,6 @@ void Go_Indexer::init() {
         gomodcache = get_env("GOMODCACHE");
     }
 
-    wksp_watch.init(world.current_path);
-
-    flag_lock.init();
     lock.init();
 
     start_writing();
@@ -3313,10 +3380,7 @@ void Go_Indexer::cleanup() {
     final_mem.cleanup();
     ui_mem.cleanup();
     scoped_table_mem.cleanup();
-    flag_lock.cleanup();
     lock.cleanup();
-
-    wksp_watch.cleanup();
 }
 
 List<Godecl> *Go_Indexer::parameter_list_to_fields(Ast_Node *params) {
@@ -4281,6 +4345,7 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
                 case GODECL_VAR:
                 case GODECL_CONST:
                 case GODECL_FUNC:
+                case GODECL_TYPE: // this wasn't added before, why?
                     return evaluate_type(ext_decl->gotype, res->ctx);
                 default:
                     return NULL;
