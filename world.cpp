@@ -18,9 +18,22 @@ bool is_ignored_by_git(ccstr path) {
     return GHGitIgnoreCheckFile((char*)path);
 }
 
+void History::actually_push(int editor_id, cur2 pos, bool force, bool capturing_editor_last) {
+    auto editor = world.find_editor_by_id(editor_id);
+    print("pushing %s:%s, force = %d, capture_editor_last = %d", our_basename(editor->filepath), format_cur(pos), force, capturing_editor_last);
+
+    ring[curr].editor_id = editor_id;
+    ring[curr].pos = pos;
+
+    top = curr = inc(curr);
+    if (curr == start)
+        start = inc(start);
+}
+
 void History::push(int editor_id, cur2 pos, bool force) {
     auto should_push = [&]() -> bool {
         if (curr == start) return true;
+        if (curr < top) return true;
 
         auto &it = ring[dec(curr)];
         if (it.editor_id != editor_id) return true;
@@ -33,18 +46,22 @@ void History::push(int editor_id, cur2 pos, bool force) {
         return;
     }
 
-    {
-        auto editor = world.find_editor_by_id(editor_id);
-        print("pushing %s:%s, force = %d", our_basename(editor->filepath), format_cur(pos), force);
-    }
+    // if there's something in history
+    do {
+        if (curr == start) break;
 
+        auto &prev = ring[dec(curr)];
+        if (prev.editor_id == editor_id) break;
 
-    ring[curr].editor_id = editor_id;
-    ring[curr].pos = pos;
+        auto prev_editor = world.find_editor_by_id(prev.editor_id);
+        if (prev_editor == NULL) break;
 
-    top = curr = inc(curr);
-    if (curr == start)
-        start = inc(start);
+        if (prev_editor->cur == prev.pos) break;
+
+        actually_push(prev_editor->id, prev_editor->cur, false, true);
+    } while (0);
+
+    actually_push(editor_id, pos, force, false);
 }
 
 void History::actually_go(History_Loc *it) {
@@ -70,14 +87,13 @@ bool History::go_forward() {
 bool History::go_backward() {
     if (curr == start) return false;
 
-    /*
     {
         auto editor = world.get_current_editor();
         auto &it = ring[dec(curr)];
 
         if (editor == NULL || it.editor_id != editor->id || it.pos != editor->cur) {
             if (editor != NULL) {
-                push(editor->id, editor->cur, true);
+                actually_push(editor->id, editor->cur, false, false);
                 curr = dec(curr);
             }
 
@@ -85,7 +101,6 @@ bool History::go_backward() {
             return true;
         }
     }
-    */
 
     if (dec(curr) == start) return false;
 
@@ -609,7 +624,7 @@ void filter_symbols() {
     wnd.filtered_results->len = 0;
 
     Timer t;
-    t.init("filter_symbols");
+    // t.init("filter_symbols");
 
     u32 i = 0;
     For (*wnd.symbols) {
@@ -618,7 +633,7 @@ void filter_symbols() {
         i++;
     }
 
-    t.log("matching");
+    // t.log("matching");
 
     auto scores = alloc_array(double, wnd.symbols->len);
     auto scores_saved = alloc_array(bool, wnd.symbols->len);
@@ -637,7 +652,7 @@ void filter_symbols() {
         return a < b ? 1 : (a > b ? -1 : 0);  // reverse
     });
 
-    t.log("scoring");
+    // t.log("scoring");
 }
 
 void run_proc_the_normal_way(Process* proc, ccstr cmd) {
@@ -671,6 +686,10 @@ bool is_build_debug_free() {
 void goto_jump_to_definition_result(Jump_To_Definition_Result *result) {
     auto editor = world.focus_editor(result->file, result->pos);
     if (editor == NULL) return; // TODO
+
+    // TODO: handle the term being off screen to the right
+    editor->view.x = 0;
+    editor->view.y = relu_sub(result->pos.y, 10);
 
     /*
     auto target = world.get_current_editor();

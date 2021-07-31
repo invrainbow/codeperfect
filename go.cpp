@@ -14,7 +14,7 @@
 #include <dlfcn.h>
 #endif
 
-#define GO_DEBUG 0
+#define GO_DEBUG 1
 
 #if GO_DEBUG
 #define go_print(fmt, ...) print("[go] " fmt, ##__VA_ARGS__)
@@ -23,7 +23,7 @@
 #endif
 
 const unsigned char GO_INDEX_MAGIC_BYTES[3] = {0x49, 0xfa, 0x98};
-const int GO_INDEX_VERSION = 10;
+const int GO_INDEX_VERSION = 12;
 
 void index_print(ccstr fmt, ...) {
     va_list args;
@@ -803,52 +803,17 @@ void Go_Indexer::background_thread() {
         // at this point, there will already exist a folder full of files
         // FSEVENT_CREATE events won't be created for the individual files.
 
-        auto import_path = filepath_to_import_path(filepath);
-        auto pkg = find_package_in_index(import_path);
-
         start_writing();
 
-        if (pkg == NULL) {
-            SCOPED_MEM(&final_mem);
-            pkg = index.packages->append();
+        auto import_path = filepath_to_import_path(filepath);
+
+        auto pkg = find_package_in_index(import_path);
+        if (pkg != NULL) {
+            pkg->checked_for_outdated_hash = false;
             pkg->status = GPS_OUTDATED;
-            pkg->files = alloc_list<Go_File>();
-            pkg->import_path = our_strcpy(import_path);
-            package_lookup.set(pkg->import_path, pkg);
         }
 
-        pkg->status = GPS_UPDATING;
-
-        pkg->cleanup_files();
-
-        auto source_files = list_source_files(filepath, false);
-        if (source_files != NULL) {
-            For (*source_files) {
-                Pool tmp_mem;
-                tmp_mem.init();
-                defer { tmp_mem.cleanup(); };
-
-                SCOPED_MEM(&tmp_mem);
-
-                auto full_filepath = path_join(filepath, it);
-
-                auto pf = parse_file(full_filepath);
-                if (pf == NULL) continue;
-                defer { free_parsed_file(pf); };
-
-                auto file = get_ready_file_in_package(pkg, it);
-
-                ccstr package_name = NULL;
-                process_tree_into_gofile(file, pf->root, full_filepath, &package_name);
-                replace_package_name(pkg, package_name);
-
-                enqueue_imports_from_file(file);
-            }
-        }
-
-        fill_package_hash(pkg);
-        pkg->status = GPS_READY;
-        pkg->checked_for_outdated_hash = true;
+        enqueue_package(import_path);
     };
 
     auto handle_file_or_folder_deleted = [&](ccstr filepath) {
@@ -1131,7 +1096,6 @@ void Go_Indexer::background_thread() {
             if (streq(import_path, "@builtins")) {
                 init_builtins(pkg);
             } else {
-                bool include_tests = false;
                 /*
                 {
                     SCOPED_FRAME();
@@ -1140,7 +1104,10 @@ void Go_Indexer::background_thread() {
                 }
                 */
 
-                auto source_files = list_source_files(resolved_path, include_tests);
+                ccstr package_name = NULL;
+                ccstr test_package_name = NULL;
+
+                auto source_files = list_source_files(resolved_path, true);
                 if (source_files != NULL) {
                     For (*source_files) {
                         auto filename = it;
@@ -1158,13 +1125,27 @@ void Go_Indexer::background_thread() {
 
                         auto file = get_ready_file_in_package(pkg, filename);
 
-                        ccstr package_name = NULL;
-                        process_tree_into_gofile(file, pf->root, filepath, &package_name);
-                        replace_package_name(pkg, package_name);
+                        ccstr pkgname = NULL;
+                        process_tree_into_gofile(file, pf->root, filepath, &pkgname);
+
+                        if (pkgname != NULL) {
+                            SCOPED_MEM(&final_mem);
+                            if (str_ends_with(filename, "_test.go")) {
+                                if (test_package_name == NULL)
+                                    test_package_name = our_strcpy(pkgname);
+                            } else {
+                                if (package_name == NULL)
+                                    package_name = our_strcpy(pkgname);
+                            }
+                        }
 
                         enqueue_imports_from_file(file);
                     }
                 }
+
+                if (package_name == NULL)
+                    package_name = test_package_name;
+                replace_package_name(pkg, package_name);
             }
 
             fill_package_hash(pkg);
@@ -2452,6 +2433,8 @@ void Go_Indexer::fill_goto_symbol() {
                 continue;
         }
 
+        auto pkg = &it;
+
         auto pkgname = it.package_name;
         For (*it.files) {
             For (*it.decls) {
@@ -2476,6 +2459,10 @@ void Go_Indexer::fill_goto_symbol() {
                     name = our_sprintf("%s.%s.%s", pkgname, recvname, it.name);
                 else
                     name = our_sprintf("%s.%s", pkgname, it.name);
+
+                if (!isident(name[0])) {
+                    break;
+                }
 
                 wnd.symbols->append(name);
             }

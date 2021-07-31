@@ -187,10 +187,10 @@ func GHFmtAddLine(line *C.char) {
 	autofmtBuffer = append(autofmtBuffer, []byte(C.GoString(line))...)
 	autofmtBuffer = append(autofmtBuffer, '\n')
 }
-
 const (
-	FmtGoFmt     = 0
-	FmtGoImports = 1
+	FmtGoFmt                   = 0
+	FmtGoImports               = 1
+	FmtGoImportsWithAutoImport = 2
 )
 
 //export GHFmtFinish
@@ -212,6 +212,14 @@ func GHFmtFinish(fmtType int) *C.char {
 			Comments:   true,
 			Fragment:   true,
 			FormatOnly: true,
+		})
+	} else if fmtType == FmtGoImports {
+		newSource, err = imports.Process("<standard input>", autofmtBuffer, &imports.Options{
+			TabWidth:   8,
+			TabIndent:  true,
+			Comments:   true,
+			Fragment:   true,
+			FormatOnly: false,
 		})
 	} else {
 		LastError = fmt.Errorf("Invalid format type.")
@@ -295,8 +303,8 @@ func GHGitIgnoreInit(repo *C.char) bool {
 
 //export GHGitIgnoreCheckFile
 func GHGitIgnoreCheckFile(file *C.char) bool {
-    match := gitignoreChecker.ignore.Match(C.GoString(file))
-    return match != nil && match.Ignore()
+	match := gitignoreChecker.ignore.Match(C.GoString(file))
+	return match != nil && match.Ignore()
 }
 
 // ---

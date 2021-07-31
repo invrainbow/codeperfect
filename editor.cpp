@@ -1309,9 +1309,6 @@ Editor *Pane::focus_editor_by_index(u32 idx, cur2 pos) {
 
     if (pos.x != -1) {
         if (editor.is_nvim_ready()) {
-            // TODO: handle the term being off screen
-            editor.view.x = 0;
-            editor.view.y = relu_sub(pos.y, 10);
             editor.move_cursor(pos);
         } else {
             editor.nvim_data.need_initial_pos_set = true;
@@ -1382,6 +1379,8 @@ void Editor::cleanup() {
 
     buf.cleanup();
     mem.cleanup();
+
+    world.history.remove_editor_from_history(id);
 }
 
 bool Editor::cur_is_inside_comment_or_string() {
@@ -2086,7 +2085,7 @@ void Editor::handle_save(bool about_to_close) {
             buf.enable_tree();
     }
 
-    format_on_save(GH_FMT_GOFMT, !about_to_close);
+    format_on_save(GH_FMT_GOIMPORTS, !about_to_close);
 
     // save to disk
     {

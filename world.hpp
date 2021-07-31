@@ -81,6 +81,7 @@ struct History {
 
     void init() { ptr0(this); }
 
+    void actually_push(int editor_id, cur2 pos, bool force, bool capturing_editor_last);
     void push(int editor_id, cur2 pos, bool force = false);
     void actually_go(History_Loc *it);
     bool go_forward();

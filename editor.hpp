@@ -16,6 +16,7 @@ const int AUTOCOMPLETE_WINDOW_ITEMS = 10;
 enum {
     GH_FMT_GOFMT = 0,
     GH_FMT_GOIMPORTS = 1,
+    GH_FMT_GOIMPORTS_WITH_AUTOIMPORT = 2,
 };
 
 enum {

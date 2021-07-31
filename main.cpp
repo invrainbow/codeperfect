@@ -761,10 +761,10 @@ int main() {
         case OUR_MOD_ALT | OUR_MOD_SHIFT:
             switch (key) {
             case GLFW_KEY_O:
-                editor->format_on_save(GH_FMT_GOIMPORTS);
+                editor->format_on_save(GH_FMT_GOIMPORTS_WITH_AUTOIMPORT);
                 break;
             case GLFW_KEY_F:
-                editor->format_on_save(GH_FMT_GOFMT);
+                editor->format_on_save(GH_FMT_GOIMPORTS);
                 break;
             }
             break;

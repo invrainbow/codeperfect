@@ -2826,7 +2826,7 @@ void UI::draw_everything() {
                         // allow up to 100 to finish the results in current file
                         if (index > 500) {
                             didnt_finish = true;
-                            break; 
+                            break;
                         }
 
                         auto availwidth = ImGui::GetContentRegionAvail().x;
