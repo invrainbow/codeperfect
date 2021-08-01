@@ -484,7 +484,6 @@ void UI::flush_verts() {
     verts.len = 0;
 }
 
-/*
 void UI::start_clip(boxf b) {
     flush_verts();
     glEnable(GL_SCISSOR_TEST);
@@ -498,7 +497,6 @@ void UI::end_clip() {
     glDisable(GL_SCISSOR_TEST);
     clipping = false;
 }
-*/
 
 void UI::draw_triangle(vec2f a, vec2f b, vec2f c, vec2f uva, vec2f uvb, vec2f uvc, vec4f color, Draw_Mode mode, Texture_Id texture) {
     if (verts.len + 3 >= verts.cap)
@@ -3045,6 +3043,9 @@ void UI::draw_everything() {
         tab.x -= pane.tabs_offset;
 
         i32 tab_to_remove = -1;
+        boxf current_tab;
+
+        start_clip(tabs_area); // will become problem once we have popups on tabs
 
         // draw tabs
         u32 tab_id = 0;
@@ -3079,6 +3080,8 @@ void UI::draw_everything() {
 
             // Now `tab` is filled out, and I can do my logic to make sure it's visible on screen
             if (tab_id == pane.current_editor) {
+                current_tab = tab;
+
                 auto margin = tab_id == 0 ? 5 : settings.tabs_offset;
                 if (tab.x < tabs_area.x + margin)
                     pane.tabs_offset -= (tabs_area.x + margin - tab.x);
@@ -3109,6 +3112,18 @@ void UI::draw_everything() {
 
             tab.pos.x += tab.w + 5;
             tab_id++;
+        }
+
+        end_clip(); // tabs_area
+
+        // if tabs are off screen, see if we can move them back
+        if (pane.tabs_offset > 0) {
+            auto margin = (pane.current_editor == pane.editors.len - 1) ? 5 : settings.tabs_offset;
+            auto space_avail = min(
+                relu_sub(tabs_area.x + tabs_area.w, (current_tab.x + current_tab.w + margin)),
+                pane.tabs_offset
+            );
+            pane.tabs_offset -= space_avail;
         }
 
         if (tab_to_remove != -1) {

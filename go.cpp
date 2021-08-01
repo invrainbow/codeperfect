@@ -2788,7 +2788,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                     table.pop_scope();
                     break;
                 case GSOP_DECL:
-                    table.set(it->decl->name, it->decl);
+                    table.set(it->decl->name, it->decl->copy());
                     break;
                 }
                 return true;
@@ -3250,8 +3250,6 @@ void Go_Indexer::list_fields_and_methods(Goresult *type_res, Goresult *resolved_
         ret->append(make_goresult(decl, ctx));
     }
 }
-
-#define EVENT_DEBOUNCE_DELAY_MS 3000 // wait 3 seconds (arbitrary)
 
 ccstr remove_ats_from_path(ccstr s) {
     auto path = make_path(s);
@@ -4315,6 +4313,7 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
     case GOTYPE_LAZY_SEL:
         {
             do {
+                if (gotype->lazy_sel_base == NULL) break;
                 if (gotype->lazy_sel_base->type != GOTYPE_LAZY_ID) break;
 
                 auto base = gotype->lazy_sel_base;
@@ -4363,69 +4362,54 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
             auto res = evaluate_type(gotype->lazy_one_of_multi_base, ctx);
             if (res == NULL) return NULL;
 
-            if (res->gotype->type != GOTYPE_MULTI) {
-                // means we got foo := bar (lhs.len == 1, rhs.len == 1), just return type of bar here
-                if (gotype->lazy_one_of_multi_is_single)
-                    return res;
-                return NULL;
-            }
+            bool is_single = gotype->lazy_one_of_multi_is_single;
+            int index = gotype->lazy_one_of_multi_index;
+            Gotype *base = gotype->lazy_one_of_multi_base;
 
-            auto ret = res->gotype->multi_types->at(gotype->lazy_one_of_multi_index);
-            return evaluate_type(ret, res->ctx);
-
-            // TODO: there's some other logic here around other multi types
-            /*
-            auto res = infer_type(rhs->at(0), ctx);
-            if (res == NULL) return false;
-            auto gotype = res->gotype;
-            auto ln = lhs->len;
-
-            switch (gotype->type) {
+            switch (res->gotype->type) {
             case GOTYPE_MULTI:
-                if (ln != gotype->multi_types->len) return false;
-                for (int i = 0; i < ln; i++)
-                    add_new_result(lhs->at(i), gotype->multi_types->at(i), res->ctx);
-                break;
+                return evaluate_type(res->gotype->multi_types->at(index), res->ctx);
+
             case GOTYPE_ASSERTION:
-                if (ln != 1 && ln != 2) return false;
-                add_new_result(lhs->at(0), gotype->assertion_base, res->ctx);
-                if (ln == 2)
-                    add_new_result(lhs->at(1), new_primitive_type("bool"), res->ctx);
+                if (index == 0)
+                    return evaluate_type(res->gotype->assertion_base, res->ctx);
+                if (index == 1)
+                    return make_goresult(new_primitive_type("bool"), res->ctx);
                 break;
+
             case GOTYPE_RANGE:
-                switch (gotype->range_base->type) {
+                switch (res->gotype->range_base->type) {
                 case GOTYPE_MAP:
-                    if (ln != 1 && ln != 2) return false;
-                    add_new_result(lhs->at(0), gotype->range_base->map_key, res->ctx);
-                    if (ln == 2)
-                        add_new_result(lhs->at(0), gotype->range_base->map_value, res->ctx);
+                    if (index == 0)
+                        return evaluate_type(res->gotype->range_base->map_key, res->ctx);
+                    if (index == 1)
+                        return evaluate_type(res->gotype->range_base->map_value, res->ctx);
                     break;
+
                 case GOTYPE_ARRAY:
                 case GOTYPE_SLICE:
-                    if (ln != 2) return false;
-                    add_new_result(lhs->at(0), new_primitive_type("int"), res->ctx);
-                    add_new_result(
-                        lhs->at(1),
-                        gotype->type == GOTYPE_ARRAY ? gotype->array_base : gotype->slice_base,
-                        res->ctx
-                    );
+                    if (index == 0)
+                        return make_goresult(new_primitive_type("int"), res->ctx);
+                    if (index == 1) {
+                        auto base = res->gotype->type == GOTYPE_ARRAY ? res->gotype->array_base : res->gotype->slice_base;
+                        return evaluate_type(base, res->ctx);
+                    }
                     break;
+
                 case GOTYPE_ID:
-                    if (!streq(gotype->id_name, "string") || ln != 2) return false;
-                    add_new_result(lhs->at(0), new_primitive_type("int"), res->ctx);
-                    add_new_result(lhs->at(1), new_primitive_type("rune"), res->ctx);
+                    if (!streq(res->gotype->id_name, "string")) break;
+                    if (index == 0)
+                        return make_goresult(new_primitive_type("int"), res->ctx);
+                    if (index == 1)
+                        return make_goresult(new_primitive_type("rune"), res->ctx);
                     break;
-                default:
-                    return false;
                 }
                 break;
-            default:
-                return false;
             }
 
-            return true;
-            */
+            if (gotype->lazy_one_of_multi_is_single) return res;
         }
+        break;
 
     default: return make_goresult(gotype, ctx);
     }

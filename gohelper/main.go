@@ -213,7 +213,7 @@ func GHFmtFinish(fmtType int) *C.char {
 			Fragment:   true,
 			FormatOnly: true,
 		})
-	} else if fmtType == FmtGoImports {
+	} else if fmtType == FmtGoImportsWithAutoImport {
 		newSource, err = imports.Process("<standard input>", autofmtBuffer, &imports.Options{
 			TabWidth:   8,
 			TabIndent:  true,
