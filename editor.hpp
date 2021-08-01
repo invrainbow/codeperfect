@@ -185,7 +185,7 @@ struct Editor {
 struct Pane {
     List<Editor> editors;
     u32 current_editor;
-    float width;
+    double width;
     float tabs_offset;
 
     void init();

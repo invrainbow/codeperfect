@@ -386,7 +386,7 @@ void UI::render_gotype(Gotype *gotype, ccstr field) {
 }
 
 
-void UI::render_ts_cursor(TSTreeCursor *curr) {
+void UI::render_ts_cursor(TSTreeCursor *curr, cur2 open_cur) {
     int last_depth = 0;
     bool last_open = false;
 
@@ -426,6 +426,11 @@ void UI::render_ts_cursor(TSTreeCursor *curr) {
             ImGui::PushStyleColor(ImGuiCol_Text, (ImVec4)ImColor(128, 128, 128));
         if (node->type() == TS_COMMENT)
             ImGui::PushStyleColor(ImGuiCol_Text, (ImVec4)ImColor(100, 130, 100));
+
+        if (open_cur.x != -1) {
+            bool open = node->start() <= open_cur && open_cur < node->end();
+            ImGui::SetNextItemOpen(open, ImGuiCond_Always);
+        }
 
         auto field_type_str = ts_field_type_str(field_type);
         if (field_type_str == NULL)
@@ -487,7 +492,13 @@ void UI::flush_verts() {
 void UI::start_clip(boxf b) {
     flush_verts();
     glEnable(GL_SCISSOR_TEST);
+
+    b.x *= world.display_scale.x;
+    b.y *= world.display_scale.y;
+    b.w *= world.display_scale.x;
+    b.h *= world.display_scale.y;
     glScissor(b.x, world.display_size.y - (b.y + b.h), b.w, b.h);
+
     clipping = true;
     current_clip = b;
 }
@@ -2952,14 +2963,21 @@ void UI::draw_everything() {
         if (tree == NULL) break;
 
         if (world.wnd_editor_tree.show) {
-            ImGui::Begin("AST", &world.wnd_editor_tree.show, 0);
+            auto &wnd = world.wnd_editor_tree;
+
+            ImGui::Begin("AST", &wnd.show, 0);
 
             ImGui::Checkbox("show anon?", &world.wnd_ast_vis.show_anon_nodes);
             ImGui::SameLine();
             ImGui::Checkbox("show comments?", &world.wnd_ast_vis.show_comments);
+            ImGui::SameLine();
+
+            cur2 open_cur = new_cur2(-1, -1);
+            if (ImGui::Button("go to cursor"))
+                open_cur = editor->cur;
 
             ts_tree_cursor_reset(&editor->buf.cursor, ts_tree_root_node(tree));
-            render_ts_cursor(&editor->buf.cursor);
+            render_ts_cursor(&editor->buf.cursor, open_cur);
 
             ImGui::End();
         }
@@ -3479,11 +3497,18 @@ void UI::draw_everything() {
 
             if (test_hover(hitbox, HOVERID_PANE_RESIZERS + i, ImGuiMouseCursor_ResizeEW)) {
                 draw_rect(b, rgba(COLOR_WHITE));
-                world.resizing_pane = world.ui.mouse_down[GLFW_MOUSE_BUTTON_LEFT] ? i : -1;
+                if (world.ui.mouse_down[GLFW_MOUSE_BUTTON_LEFT])
+                    if (world.resizing_pane == -1)
+                        world.resizing_pane = i;
+            } else if (world.resizing_pane == i) {
+                draw_rect(b, rgba(COLOR_WHITE));
             } else {
                 draw_rect(b, rgba(COLOR_DARK_GREY));
             }
         }
+
+        if (!world.ui.mouse_down[GLFW_MOUSE_BUTTON_LEFT])
+            world.resizing_pane = -1;
     }
 
     // now go back and draw things that go on top, like autocomplete and param hints

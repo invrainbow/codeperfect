@@ -47,7 +47,6 @@ struct FT_Node {
 
 enum Main_Thread_Message_Type {
     MTM_NVIM_MESSAGE,
-    MTM_RELOAD_EDITOR,
     MTM_GOTO_FILEPOS,
 
     MTM_FILETREE_DELETE,
@@ -278,6 +277,8 @@ struct World {
 
     struct {
         bool show;
+        // bool move;
+        // cur2 move_to_cur;
     } wnd_editor_tree;
 
     struct {
@@ -362,12 +363,12 @@ struct World {
     Editor* get_current_editor();
     Editor* find_editor(find_editor_func f);
     Editor* find_editor_by_id(u32 id);
+    Editor* find_editor_by_filepath(ccstr filepath);
     void fill_file_tree();
 
     Editor *focus_editor(ccstr path);
     Editor *focus_editor(ccstr path, cur2 pos);
     Editor* focus_editor_by_id(int editor_id, cur2 pos);
-
 
     FT_Node *sort_ft_nodes(FT_Node *nodes);
     void add_ft_node(FT_Node *parent, fn<void(FT_Node* it)> cb);

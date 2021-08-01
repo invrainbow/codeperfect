@@ -403,14 +403,6 @@ void Go_Indexer::reload_all_dirty_files() {
     }
 }
 
-Editor *get_open_editor(ccstr filepath) {
-    For (world.panes)
-        For (it.editors)
-            if (are_filepaths_same_file(it.filepath, filepath))
-                return &it;
-    return NULL;
-}
-
 /*
 The procedure is:
 
@@ -749,17 +741,7 @@ void Go_Indexer::background_thread() {
 
         auto pf = parse_file(filepath);
         if (pf == NULL) return;
-        defer {
-            free_parsed_file(pf);
-
-            auto editor = get_open_editor(filepath);
-            if (editor != NULL) {
-                world.message_queue.add([&](auto msg) {
-                    msg->type = MTM_RELOAD_EDITOR;
-                    msg->reload_editor_id = editor->id;
-                });
-            }
-        };
+        defer { free_parsed_file(pf); };
 
         start_writing();
 
@@ -1282,7 +1264,7 @@ Parsed_File *Go_Indexer::parse_file(ccstr filepath, bool use_latest) {
     Parsed_File *ret = NULL;
 
     if (use_latest) {
-        auto editor = get_open_editor(filepath);
+        auto editor = world.find_editor_by_filepath(filepath);
         if (editor == NULL) return NULL;
 
         auto it = alloc_object(Parser_It);
@@ -2605,7 +2587,9 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                 auto get_struct_literal_type = [&]() -> Ast_Node* {
                     auto curr = node->parent();
                     if (curr->null) return NULL;
-                    switch (curr->type() != TS_KEYED_ELEMENT && curr->type() != TS_ELEMENT) return NULL;
+                    if (curr->type() != TS_KEYED_ELEMENT && curr->type() != TS_ELEMENT) return NULL;
+
+                    if (!node->prev()->null) return NULL; // must be key, not value
 
                     curr = curr->parent();
                     if (curr->null) return NULL;
@@ -2847,15 +2831,17 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                 }
             } while (0);
 
-            if (lone_identifier_struct_literal != NULL) {
-                auto gotype = expr_to_gotype(lone_identifier_struct_literal);
-                if (gotype == NULL) return NULL;
+            do {
+                if (lone_identifier_struct_literal == NULL) break;
+
+                auto gotype = node_to_gotype(lone_identifier_struct_literal);
+                if (gotype == NULL) break;
 
                 auto res = evaluate_type(gotype, &ctx);
-                if (res == NULL) return NULL;
+                if (res == NULL) break;
 
                 auto rres = resolve_type(res->gotype, res->ctx);
-                if (rres == NULL) return NULL;
+                if (rres == NULL) break;
 
                 auto tmp = alloc_list<Goresult>();
                 list_struct_fields(rres, tmp);
@@ -2881,7 +2867,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                     // struct field gotypes are already evaluated, i believe
                     res->declaration_evaluated_gotype = it.decl->gotype;
                 }
-            }
+            } while (0);
 
             auto results = list_package_decls(ctx.import_path, LISTDECLS_EXCLUDE_METHODS);
             if (results != NULL) {

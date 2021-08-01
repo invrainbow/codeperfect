@@ -391,6 +391,13 @@ Editor* World::find_editor_by_id(u32 id) {
     return find_editor(is_match);
 }
 
+Editor* World::find_editor_by_filepath(ccstr filepath) {
+    auto is_match = [&](auto it) {
+        return are_filepaths_same_file(it->filepath, filepath);
+    };
+    return find_editor(is_match);
+}
+
 Editor *World::focus_editor(ccstr path) {
     return focus_editor(path, new_cur2(-1, -1));
 }
@@ -875,4 +882,3 @@ FT_Node *World::sort_ft_nodes(FT_Node *nodes) {
 
     return ret;
 }
-

@@ -475,9 +475,16 @@ int main() {
         if (world.resizing_pane != -1) {
             auto i = world.resizing_pane;
 
+            float leftoff = 0;
+            for (int j = 0; j < i; j++)
+                leftoff += world.panes[j].width;
+
             auto& pane1 = world.panes[i];
             auto& pane2 = world.panes[i+1];
-            auto delta = world.ui.mouse_delta.x;
+
+            // leftoff += pane1.width;
+            auto desired_width = relu_sub(x, leftoff);
+            auto delta = desired_width - pane1.width;
 
             if (delta < (100 - pane1.width))
                 delta = 100 - pane1.width;
@@ -1184,13 +1191,6 @@ int main() {
                         nv.handle_message_from_main_thread(&it.nvim_message);
                     }
                     break;
-                case MTM_RELOAD_EDITOR:
-                    {
-                        auto editor = world.find_editor_by_id(it.reload_editor_id);
-                        if (editor == NULL) break;
-                        editor->reload_file(true);
-                    }
-                    break;
                 case MTM_GOTO_FILEPOS:
                     {
                         auto &args = it.goto_filepos;
@@ -1212,7 +1212,7 @@ int main() {
 
                 ccstr filepath = NULL;
                 if (event.filepath[0] != '\0')
-                    path_join(world.current_path, event.filepath);
+                    filepath = path_join(world.current_path, event.filepath);
 
                 switch (event.type) {
                 case FSEVENT_DELETE:
@@ -1236,6 +1236,10 @@ int main() {
                             msg->type = GOMSG_FILEPATH_CHANGED;
                             msg->filepath = our_strcpy(filepath);
                         });
+
+                        auto editor = world.find_editor_by_filepath(filepath);
+                        if (editor != NULL)
+                            editor->reload_file(true);
                     }
                     break;
 
