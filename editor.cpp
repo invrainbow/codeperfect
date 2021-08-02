@@ -1289,7 +1289,9 @@ void Pane::set_current_editor(u32 idx) {
         auto node = world.find_ft_node(edpath);
         if (node == NULL) return;
 
+        world.file_explorer.scroll_to = node;
         world.file_explorer.selection = node;
+
         for (auto it = node->parent; it != NULL && it->parent != NULL; it = it->parent)
             it->open = true;
     };

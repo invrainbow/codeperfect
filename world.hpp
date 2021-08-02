@@ -234,6 +234,7 @@ struct World {
         // bool thing_being_added_is_file;
         FT_Node *last_file_copied;
         FT_Node *last_file_cut;
+        FT_Node *scroll_to;
     } file_explorer;
 
     struct {

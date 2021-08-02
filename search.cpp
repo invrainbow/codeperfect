@@ -54,7 +54,18 @@ void Searcher::cleanup() {
 }
 
 void Searcher::search_worker() {
-    while (file_queue.len > 0) {
+    int total_results = 0;
+
+    struct Temp_Match {
+        int start, end;
+
+        List<int> *group_starts;
+        List<int> *group_ends;
+    };
+
+    auto matches = alloc_list<Temp_Match>();
+
+    while (file_queue.len > 0 && total_results < 1000) {
         auto filepath = *file_queue.last();
         file_queue.len--;
 
@@ -69,14 +80,7 @@ void Searcher::search_worker() {
 
         int bufoff = 0;
 
-        struct Temp_Match {
-            int start, end;
-
-            List<int> *group_starts;
-            List<int> *group_ends;
-        };
-
-        auto matches = alloc_list<Temp_Match>();
+        matches->len = 0;
 
         if (opts.literal) {
             while (bufoff < buflen) {
@@ -95,6 +99,7 @@ void Searcher::search_worker() {
                 }
 
                 if (!found) break;
+                if (matches->len + total_results > 1000) break;
 
                 auto m = matches->append();
                 m->start = bufoff;
@@ -109,21 +114,26 @@ void Searcher::search_worker() {
                 int results = pcre_exec(re, re_extra, buf, buflen, bufoff, 0, offvec, _countof(offvec));
                 if (results <= 0) break;
 
-                auto m = matches->append();
-                m->start = offvec[0];
-                m->end = offvec[1];
+                if (matches->len + total_results > 1000) break;
 
-                if (results > 1) {
-                    m->group_starts = alloc_list<int>(results);
-                    m->group_ends = alloc_list<int>(results);
-                    for (int i = 1; i < results; i++) {
-                        m->group_starts->append(offvec[2*i + 0]);
-                        m->group_ends->append(offvec[2*i + 1]);
+                // don't include empty results
+                if (offvec[0] != offvec[1]) {
+                    auto m = matches->append();
+                    m->start = offvec[0];
+                    m->end = offvec[1];
+
+                    if (results > 1) {
+                        m->group_starts = alloc_list<int>(results);
+                        m->group_ends = alloc_list<int>(results);
+                        for (int i = 1; i < results; i++) {
+                            m->group_starts->append(offvec[2*i + 0]);
+                            m->group_ends->append(offvec[2*i + 1]);
+                        }
                     }
                 }
 
                 bufoff = offvec[1];
-                // TODO: if (offvec[0] == offvec[1]) bufoff++;
+                if (offvec[0] == offvec[1]) bufoff++;
             }
         }
 
@@ -141,6 +151,7 @@ void Searcher::search_worker() {
         auto sf = search_results.append();
         sf->filepath = final_filepath;
         sf->results = alloc_list<Search_Result>(matches->len);
+        sf->results = alloc_list<Search_Result>(matches->len);
 
         Search_Result *sr = NULL;
 
@@ -150,6 +161,8 @@ void Searcher::search_worker() {
 
             auto &nextmatch = matches->at(curr_match);
             if (i == nextmatch.start) {
+                if (total_results++ > 1000) break;
+
                 sr = sf->results->append();
                 sr->match_start = pos;
                 sr->match_off = i;

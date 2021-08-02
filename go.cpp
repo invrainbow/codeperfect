@@ -1138,7 +1138,10 @@ void Go_Indexer::background_thread() {
         }
 
         if (package_queue.len == 0) {
-            for (int i = 0, num_checked = 0; i < index.packages->len && num_checked < 10; i++) {
+            int i = 0;
+            int num_checked = 0;
+
+            for (; i < index.packages->len && num_checked < 50; i++) {
                 auto &it = index.packages->at(i);
 
                 if (it.status != GPS_READY) continue;
@@ -1149,14 +1152,14 @@ void Go_Indexer::background_thread() {
 
                 // if hash has changed, mark outdated & queue for re-processing
                 auto package_path = get_package_path(it.import_path);
+                if (package_path == NULL) continue;
                 if (it.hash == hash_package(package_path)) continue;
 
                 it.status = GPS_OUTDATED;
                 enqueue_package(it.import_path);
             }
 
-            // if package queue is still empty
-            if (package_queue.len == 0) {
+            if (i == index.packages->len && package_queue.len == 0) {
                 if (!ready)
                     stop_writing();
                 if (queue_had_stuff)

@@ -2063,7 +2063,8 @@ void UI::draw_everything() {
 
                 auto ok = wnd.folder ? create_directory(path) : touch_file(path);
                 if (ok) {
-                    world.add_ft_node(wnd.dest, [&](auto child) {
+                    auto dest = wnd.location_is_root ? world.file_tree : wnd.dest;
+                    world.add_ft_node(dest, [&](auto child) {
                         child->is_directory = wnd.folder;
                         child->name = our_strcpy(wnd.name);
                     });
@@ -2162,6 +2163,9 @@ void UI::draw_everything() {
                         label = our_sprintf("%s %s %s", icon, it->name, it->open ? ICON_MD_EXPAND_MORE : ICON_MD_CHEVRON_RIGHT);
                     else
                         label = our_sprintf("%s %s", icon, it->name);
+
+                    if (it == wnd.scroll_to)
+                        ImGui::SetScrollHereY();
 
                     ImGui::PushID(it);
                     ImGui::Selectable(label, wnd.selection == it, ImGuiSelectableFlags_AllowDoubleClick);
@@ -2374,6 +2378,8 @@ void UI::draw_everything() {
                 break;
             }
         }
+
+        wnd.scroll_to = NULL;
 
         ImGui::End();
         ImGui::PopStyleVar();
@@ -2790,13 +2796,15 @@ void UI::draw_everything() {
             auto &s = world.searcher;
 
             s.cleanup();
-            s.init();
+            if (wnd.find_str[0] != '\0') {
+                s.init();
 
-            Search_Opts opts;
-            opts.case_sensitive = wnd.case_sensitive;
-            opts.literal = !wnd.use_regex;
+                Search_Opts opts;
+                opts.case_sensitive = wnd.case_sensitive;
+                opts.literal = !wnd.use_regex;
 
-            s.start_search(wnd.find_str, &opts);
+                s.start_search(wnd.find_str, &opts);
+            }
         }
 
         switch (world.searcher.state) {
