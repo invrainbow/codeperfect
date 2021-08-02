@@ -2888,11 +2888,28 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                 }
             }
 
+            // TODO: how about only grabbing packages that are in current
+            // workspace or are immediate deps?
             For (*index.packages) {
                 if (it.status != GPS_READY) continue;
                 if (it.import_path == NULL) continue;
                 if (it.package_name == NULL) continue;
-                if (str_starts_with(it.package_name, "internal/")) continue;
+
+
+                if (!path_contains_in_subtree(index.current_import_path, it.import_path)) {
+                    auto parts = make_path(it.import_path)->parts;
+                    bool internal = false;
+
+                    For (*parts) {
+                        if (streq(it, "internal")) {
+                            internal = true;
+                            break;
+                        }
+                    }
+
+                    if (internal)
+                        break;
+                }
 
                 auto res = ac_results->append();
                 res->name = it.package_name;
@@ -3047,6 +3064,7 @@ Parameter_Hint *Go_Indexer::parameter_hint(ccstr filepath, cur2 pos) {
 
     Ast_Node *func_expr = NULL;
     cur2 call_args_start;
+    int current_param = -1;
 
     t.log("prepare shit");
 
@@ -3072,6 +3090,21 @@ Parameter_Hint *Go_Indexer::parameter_hint(ccstr filepath, cur2 pos) {
 
                 func_expr = func;
                 call_args_start = args->start();
+
+                if (node->type() == TS_TYPE_CONVERSION_EXPRESSION) {
+                    if (cmp_pos_to_node(pos, args, true) == 0)
+                        current_param = 0;
+                } else {
+                    int i = 0;
+                    FOR_NODE_CHILDREN(args) {
+                        if (cmp_pos_to_node(pos, it, true) == 0) {
+                            current_param = i;
+                            break;
+                        }
+                        i++;
+                    }
+                }
+
                 // don't abort, if there's a deeper func_expr we want to use that one
             }
             break;
@@ -3131,6 +3164,7 @@ Parameter_Hint *Go_Indexer::parameter_hint(ccstr filepath, cur2 pos) {
     auto hint = alloc_object(Parameter_Hint);
     hint->gotype = rres->gotype->copy();
     hint->call_args_start = call_args_start;
+    hint->current_param = current_param;
 
     t.total();
     return hint;

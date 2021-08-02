@@ -208,16 +208,18 @@ bool get_type_color(Ast_Node *node, Editor *editor, vec3f *out) {
             auto len = node->end_byte() - node->start_byte();
             if (len >= 16) break;
 
-            ccstr keywords1[] = {
+            ccstr keywords[] = {
                 "package", "import", "const", "var", "func",
-                "type", "struct", "interface", "map", "chan",
+                "type", "struct", "interface",
                 "fallthrough", "break", "continue", "goto", "return",
                 "go", "defer", "if", "else",
                 "for", "range", "switch", "case",
                 "default", "select", "new", "make", "iota",
             };
 
-            ccstr keywords2[] = {
+            ccstr builtins[] = {
+                "map", "chan", // technically keywords, but look better here
+
                 "append", "cap", "close", "complex", "copy", "delete", "imag",
                 "len", "make", "new", "panic", "real", "recover", "bool",
                 "byte", "complex128", "complex64", "error", "float32",
@@ -226,20 +228,20 @@ bool get_type_color(Ast_Node *node, Editor *editor, vec3f *out) {
                 "uintptr",
             };
 
-            char keyword[16] = {0};
+            char token[16] = {0};
             auto it = editor->iter(node->start());
-            for (u32 i = 0; i < _countof(keyword) && it.pos != node->end(); i++)
-                keyword[i] = it.next();
+            for (u32 i = 0; i < _countof(token) && it.pos != node->end(); i++)
+                token[i] = it.next();
 
-            For (keywords1) {
-                if (streq(it, keyword)) {
+            For (keywords) {
+                if (streq(it, token)) {
                     *out = COLOR_THEME_1;
                     return true;
                 }
             }
 
-            For (keywords2) {
-                if (streq(it, keyword)) {
+            For (builtins) {
+                if (streq(it, token)) {
                     *out = COLOR_THEME_5;
                     return true;
                 }
@@ -3847,20 +3849,24 @@ void UI::draw_everything() {
 
             {
                 u32 len = strlen(hint.help_text);
-                vec4f color = rgba(COLOR_WHITE);
+                vec3f color = COLOR_MEDIUM_DARK_GREY;
+                float opacity = 1.0;
+
                 int j = 0;
 
                 for (u32 i = 0; i < len; i++) {
-                    if (j < hint.token_changes.len) {
-                        if (i == hint.token_changes[j].index) {
-                            switch (hint.token_changes[j].token) {
-                            case HINT_NAME: color = rgba(COLOR_RED); break;
-                            case HINT_NORMAL: color = rgba(COLOR_WHITE); break;
-                            }
-                            j++;
+                    while (j < hint.token_changes.len && i == hint.token_changes[j].index) {
+                        switch (hint.token_changes[j].token) {
+                        case HINT_CURRENT_PARAM: opacity = 1.0; break;
+                        case HINT_NOT_CURRENT_PARAM: opacity = 0.4; break;
+                        case HINT_NAME: color = COLOR_WHITE; break;
+                        case HINT_TYPE: color = COLOR_THEME_5; break;
+                        case HINT_NORMAL: color = COLOR_MEDIUM_DARK_GREY; break;
                         }
+
+                        j++;
                     }
-                    draw_char(&text_pos, hint.help_text[i], color);
+                    draw_char(&text_pos, hint.help_text[i], rgba(color, opacity));
                 }
             }
         } while (0);

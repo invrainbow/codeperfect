@@ -1678,15 +1678,25 @@ void Editor::trigger_parameter_hint() {
                 auto params = t->func_sig.params;
                 auto result = t->func_sig.result;
 
+                add_token_change(hint->current_param == -1 ? HINT_CURRENT_PARAM : HINT_NOT_CURRENT_PARAM);
+
                 // write params
                 rend.write("(");
                 for (u32 i = 0; i < params->len; i++) {
                     auto &it = params->at(i);
 
+                    if (i == hint->current_param)
+                        add_token_change(HINT_CURRENT_PARAM);
+
                     add_token_change(HINT_NAME);
                     rend.write("%s ", it.name);
-                    add_token_change(HINT_NORMAL);
+                    add_token_change(HINT_TYPE);
                     rend.write_type(it.gotype);
+                    add_token_change(HINT_NORMAL);
+
+                    if (i == hint->current_param)
+                        add_token_change(HINT_NOT_CURRENT_PARAM);
+
                     if (i < params->len - 1)
                         rend.write(", ");
                 }
@@ -1695,14 +1705,19 @@ void Editor::trigger_parameter_hint() {
                 // write result
                 if (result != NULL && result->len > 0) {
                     rend.write(" ");
-                    if (result->len == 1 && is_goident_empty(result->at(0).name))
+                    if (result->len == 1 && is_goident_empty(result->at(0).name)) {
+                        add_token_change(HINT_TYPE);
                         rend.write_type(result->at(0).gotype);
-                    else {
+                    } else {
                         rend.write("(");
                         for (u32 i = 0; i < result->len; i++) {
-                            if (!is_goident_empty(result->at(i).name))
+                            if (!is_goident_empty(result->at(i).name)) {
+                                add_token_change(HINT_NAME);
                                 rend.write("%s ", result->at(i).name);
+                            }
+                            add_token_change(HINT_TYPE);
                             rend.write_type(result->at(i).gotype);
+                            add_token_change(HINT_NORMAL);
                             if (i < result->len - 1)
                                 rend.write(", ");
                         }

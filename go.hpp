@@ -961,6 +961,7 @@ void walk_ts_cursor(TSTreeCursor *curr, bool abstract_only, Walk_TS_Callback cb)
 struct Parameter_Hint {
     Gotype *gotype;
     cur2 call_args_start;
+    int current_param;
 };
 
 struct Jump_To_Definition_Result {
