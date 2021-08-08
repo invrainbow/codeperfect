@@ -732,6 +732,8 @@ bool Editor::is_current_editor() {
 }
 
 void Editor::raw_move_cursor(cur2 c, bool dont_add_to_history) {
+    print("[cocks] raw_move_cursor %s", format_cur(c));
+
     if (c.y == -1) c = buf.offset_to_cur(c.x);
     if (c.y < 0 || c.y >= buf.lines.len) return;
     if (c.x < 0) return;
@@ -831,6 +833,8 @@ void Editor::update_lines(int firstline, int lastline, List<uchar*> *new_lines, 
 }
 
 void Editor::move_cursor(cur2 c) {
+    print("[cocks] move_cursor %s", format_cur(c));
+
     if (world.nvim.mode == VI_INSERT) {
         nvim_data.waiting_for_move_cursor = true;
         nvim_data.move_cursor_to = c;
@@ -934,6 +938,7 @@ void Editor::reload_file(bool because_of_file_watcher) {
 }
 
 bool Editor::load_file(ccstr new_filepath) {
+    print("[cocks] loading file...");
     reset_state();
 
     if (buf.initialized)
@@ -976,6 +981,7 @@ bool Editor::load_file(ccstr new_filepath) {
     if (world.use_nvim) {
         auto& nv = world.nvim;
         auto msgid = nv.start_request_message("nvim_create_buf", 2);
+        print("[cocks] creating buf");
         nv.save_request(NVIM_REQ_CREATE_BUF, msgid, id);
 
         nv.writer.write_bool(false);
@@ -1117,10 +1123,15 @@ bool Editor::trigger_escape(cur2 go_here_after) {
             auto start = nvim_insert.start;
             auto old_end = nvim_insert.old_end;
 
+            u32 delete_len = nvim_insert.deleted_graphemes;
+
+            post_insert_dotrepeat_time = current_time_in_nanoseconds();
+
             // set new lines
-            nv.start_request_message("nvim_call_atomic", 1);
+            auto msgid = nv.start_request_message("nvim_call_atomic", 1);
+            nv.save_request(NVIM_REQ_POST_INSERT_DOTREPEAT_REPLAY, msgid, id);
             {
-                writer.write_array(nvim_insert.other_changes.len + 1);
+                writer.write_array(nvim_insert.other_changes.len + 8);
 
                 For (nvim_insert.other_changes) {
                     writer.write_array(2);
@@ -1156,42 +1167,28 @@ bool Editor::trigger_escape(cur2 go_here_after) {
                         }
                     }
                 }
-            }
-            nv.end_message();
 
-            // reset other_changes and mem
-            nvim_insert.other_changes.len = 0;
-            nvim_insert.mem.reset();
-
-            // move cursor
-            auto old_cur = cur;
-            {
-                auto c = cur;
-                if (c.x > 0) {
-                    int gr_idx = buf.idx_cp_to_gr(c.y, c.x);
-                    c.x = buf.idx_gr_to_cp(c.y, relu_sub(gr_idx, 1));
+                writer.write_array(2);
+                writer.write_string("nvim_win_set_cursor");
+                {
+                    writer.write_array(2);
+                    {
+                        writer.write_int(nvim_data.win_id);
+                        writer.write_array(2);
+                        {
+                            nv.writer.write_int(cur.y + 1);
+                            nv.writer.write_int(buf.idx_cp_to_byte(cur.y, cur.x));
+                        }
+                    }
                 }
-                raw_move_cursor(c);
-            }
-
-            u32 delete_len = nvim_insert.deleted_graphemes;
-
-            auto msgid = nv.start_request_message("nvim_call_atomic", 1);
-            nv.save_request(NVIM_REQ_POST_INSERT_DOTREPEAT_REPLAY, msgid, id);
-            {
-                writer.write_array(5);
 
                 {
                     writer.write_array(2);
-                    writer.write_string("nvim_win_set_cursor");
+                    writer.write_string("nvim_set_option");
                     {
                         writer.write_array(2);
-                        writer.write_int(nvim_data.win_id);
-                        {
-                            writer.write_array(2);
-                            writer.write_int(cur.y + 1);
-                            writer.write_int(buf.idx_cp_to_byte(cur.y, cur.x));
-                        }
+                        writer.write_string("eventignore");
+                        writer.write_string("BufWinEnter,BufEnter,BufLeave");
                     }
                 }
 
@@ -1201,6 +1198,16 @@ bool Editor::trigger_escape(cur2 go_here_after) {
                     {
                         writer.write_array(1);
                         writer.write_int(nv.dotrepeat_win_id);
+                    }
+                }
+
+                {
+                    writer.write_array(2);
+                    writer.write_string("nvim_set_option");
+                    {
+                        writer.write_array(2);
+                        writer.write_string("eventignore");
+                        writer.write_string("");
                     }
                 }
 
@@ -1240,11 +1247,12 @@ bool Editor::trigger_escape(cur2 go_here_after) {
                 {
                     Text_Renderer r;
                     r.init();
+
                     for (u32 i = 0; i < delete_len; i++)
                         r.writestr("<BS>");
 
                     auto it = buf.iter(nvim_insert.start);
-                    while (it.pos < old_cur) {
+                    while (it.pos < cur) {
                         // wait, does this take utf-8?
                         auto ch = it.next();
                         if (ch == '<') {
@@ -1267,6 +1275,20 @@ bool Editor::trigger_escape(cur2 go_here_after) {
             }
 
             nv.end_message();
+
+            // move cursor
+            {
+                auto c = cur;
+                if (c.x > 0) {
+                    int gr_idx = buf.idx_cp_to_gr(c.y, c.x);
+                    c.x = buf.idx_gr_to_cp(c.y, relu_sub(gr_idx, 1));
+                }
+                raw_move_cursor(c);
+            }
+
+            // reset other_changes and mem
+            nvim_insert.other_changes.len = 0;
+            nvim_insert.mem.reset();
         }
 
         handled = true;
@@ -1315,6 +1337,7 @@ Editor *Pane::focus_editor_by_index(u32 idx, cur2 pos) {
         } else {
             editor.nvim_data.need_initial_pos_set = true;
             editor.nvim_data.initial_pos = pos;
+            editor.raw_move_cursor(pos);
         }
     }
 
@@ -1340,7 +1363,8 @@ bool Editor::is_nvim_ready() {
         && nvim_data.is_buf_attached
         && (nvim_data.buf_id != 0)
         && (nvim_data.win_id != 0)
-        && nvim_data.got_initial_lines;
+        && nvim_data.got_initial_lines
+        && nvim_data.got_initial_cur;
 }
 
 void Editor::init() {
@@ -1526,6 +1550,8 @@ bool is_goident_empty(ccstr name) {
 }
 
 void Type_Renderer::write_type(Gotype *t, bool parameter_hint_root) {
+    if (t == NULL) return;
+
     switch (t->type) {
     case GOTYPE_BUILTIN:
         switch (t->builtin_type) {
@@ -1654,79 +1680,18 @@ void Editor::trigger_parameter_hint() {
 
         auto hint = world.indexer.parameter_hint(filepath, cur);
         if (hint == NULL) return;
-        if (hint->gotype->type != GOTYPE_FUNC) return;
+        if (hint->gotype->type != GOTYPE_FUNC) {
+            hint->gotype = NULL;
+            return;
+        }
 
         {
             SCOPED_MEM(&world.parameter_hint_mem);
             world.parameter_hint_mem.reset();
 
-            parameter_hint.token_changes.init();
             parameter_hint.gotype = hint->gotype->copy();
+            parameter_hint.current_param = hint->current_param;
             parameter_hint.start = hint->call_args_start;
-
-            Type_Renderer rend;
-            rend.init();
-
-            auto add_token_change = [&](int token) {
-                auto c = parameter_hint.token_changes.append();
-                c->token = token;
-                c->index = rend.chars.len;
-            };
-
-            {
-                auto t = parameter_hint.gotype;
-                auto params = t->func_sig.params;
-                auto result = t->func_sig.result;
-
-                add_token_change(hint->current_param == -1 ? HINT_CURRENT_PARAM : HINT_NOT_CURRENT_PARAM);
-
-                // write params
-                rend.write("(");
-                for (u32 i = 0; i < params->len; i++) {
-                    auto &it = params->at(i);
-
-                    if (i == hint->current_param)
-                        add_token_change(HINT_CURRENT_PARAM);
-
-                    add_token_change(HINT_NAME);
-                    rend.write("%s ", it.name);
-                    add_token_change(HINT_TYPE);
-                    rend.write_type(it.gotype);
-                    add_token_change(HINT_NORMAL);
-
-                    if (i == hint->current_param)
-                        add_token_change(HINT_NOT_CURRENT_PARAM);
-
-                    if (i < params->len - 1)
-                        rend.write(", ");
-                }
-                rend.write(")");
-
-                // write result
-                if (result != NULL && result->len > 0) {
-                    rend.write(" ");
-                    if (result->len == 1 && is_goident_empty(result->at(0).name)) {
-                        add_token_change(HINT_TYPE);
-                        rend.write_type(result->at(0).gotype);
-                    } else {
-                        rend.write("(");
-                        for (u32 i = 0; i < result->len; i++) {
-                            if (!is_goident_empty(result->at(i).name)) {
-                                add_token_change(HINT_NAME);
-                                rend.write("%s ", result->at(i).name);
-                            }
-                            add_token_change(HINT_TYPE);
-                            rend.write_type(result->at(i).gotype);
-                            add_token_change(HINT_NORMAL);
-                            if (i < result->len - 1)
-                                rend.write(", ");
-                        }
-                        rend.write(")");
-                    }
-                }
-            }
-
-            parameter_hint.help_text = rend.finish();
         }
     }
 }
@@ -1757,20 +1722,55 @@ void Editor::update_parameter_hint() {
     if (should_close_hints()) {
         hint.gotype = NULL;
     } else {
-        /*
-        hint.current_param = -1;
-        with_parser_at_location(filepath, hint.start, [&](Parser* p) {
-            auto call_args = p->parse_call_args();
-            u32 idx = 0;
-            For (call_args->call_args.args->list) {
-                if (cur <= it->end) {
-                    hint.current_param = idx;
-                    break;
-                }
-                idx++;
+        Parser_It it;
+        it.init(&buf);
+        auto root_node = new_ast_node(ts_tree_root_node(buf.tree), &it);
+
+        Parsed_File pf;
+        pf.root = root_node;
+        pf.tree = buf.tree;
+        pf.it = &it;
+        pf.tree_belongs_to_editor = true;
+        pf.editor_parser = buf.parser;
+
+        if (!world.indexer.truncate_parsed_file(&pf, cur, "_)}}}}}}}}}}}}}}}}")) return;
+
+        Ast_Node *arglist = NULL;
+
+        find_nodes_containing_pos(pf.root, cur, false, [&](auto it) {
+            if (it->type() == TS_ARGUMENT_LIST) {
+                if (arglist == NULL)
+                    arglist = alloc_object(Ast_Node);
+                memcpy(arglist, it, sizeof(Ast_Node));
             }
+            return WALK_CONTINUE;
         });
-        */
+
+        if (arglist == NULL) return;
+
+        auto commas = alloc_list<cur2>();
+
+        FOR_ALL_NODE_CHILDREN (arglist) {
+            if (it->type() == TS_COMMA)
+                commas->append(it->start());
+        }
+
+        // not even gonna bother binary searching lol
+
+        int current_param = -1;
+        for (int i = 0; i < commas->len; i++) {
+            auto pos = commas->at(i);
+            if (cur <= pos)
+                current_param = i;
+        }
+        if (current_param == -1)
+            current_param = commas->len;
+
+        auto num_params = hint.gotype->func_sig.params->len;
+        if (current_param > num_params - 1)
+            current_param = num_params - 1;
+
+        hint.current_param = current_param;
     }
 }
 
@@ -1813,10 +1813,16 @@ void Editor::type_char_in_insert_mode(char ch) {
         did_autocomplete = true;
         break;
 
-    case ',':
     case '(':
         trigger_parameter_hint();
         did_parameter_hint = true;
+        break;
+
+    case ',':
+        if (parameter_hint.gotype == NULL) {
+            trigger_parameter_hint();
+            did_parameter_hint = true;
+        }
         break;
 
     case '}':
@@ -2162,7 +2168,7 @@ void Editor::handle_save(bool about_to_close) {
     }
 }
 
-void go_to_error(int index) {
+void goto_error(int index) {
     auto &b = world.build;
     if (index < 0 || index >= b.errors.len) return;
 
@@ -2181,11 +2187,13 @@ void go_to_error(int index) {
     // when editor opens, get all existing errors and set marks
 
     if (editor == NULL || error.nvim_extmark == 0) {
-        world.focus_editor(path, pos);
+        goto_file_and_pos(path, pos);
         return;
     }
 
-    if (world.focus_editor(path) == NULL) return;
+    auto ed = world.focus_editor(path);
+    ImGui::SetWindowFocus(NULL);
+    if (ed == NULL) return;
 
     auto &nv = world.nvim;
     auto msgid = nv.start_request_message("nvim_buf_get_extmark_by_id", 4);
@@ -2197,7 +2205,7 @@ void go_to_error(int index) {
     nv.end_message();
 }
 
-void go_to_next_error(int direction) {
+void goto_next_error(int direction) {
     auto &b = world.build;
 
     bool has_valid = false;
@@ -2219,5 +2227,5 @@ void go_to_next_error(int direction) {
             b.current_error = 0;
     } while (b.current_error != old && !b.errors[b.current_error].valid);
 
-    go_to_error(b.current_error);
+    goto_error(b.current_error);
 }

@@ -47,24 +47,9 @@ Editor* Nvim::find_editor_by_grid(u32 grid) {
 }
 
 void Nvim::handle_editor_on_ready(Editor *editor) {
-    nvim_print("handle_editor_on_ready() called...");
-
     if (!editor->is_nvim_ready()) return;
 
-    nvim_print("nvim is ready!");
-
-    if (editor->nvim_data.need_initial_pos_set) {
-        nvim_print("need initial pos set, setting...");
-
-        editor->nvim_data.need_initial_pos_set = false;
-        auto pos = editor->nvim_data.initial_pos;
-        if (pos.y == -1)
-            pos = editor->offset_to_cur(pos.x);
-
-        editor->view.x = 0;
-        editor->view.y = relu_sub(pos.y, 10);
-        editor->move_cursor(pos);
-    }
+    nvim_print("[cocks] nvim is ready!");
 
     // clear dirty indicator (it'll be set after we filled buf during
     // nvim_buf_lines_event)
@@ -179,6 +164,8 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 {
                     auto &data = event->response.goto_extmark;
                     if (!data.ok) break;
+
+                    // ImGui::SetWindowFocus(NULL);
                     editor->move_cursor(data.pos);
                 }
                 break;
@@ -207,29 +194,41 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 }
                 break;
 
-            case NVIM_REQ_POST_INSERT_DOTREPEAT_REPLAY:
-                start_request_message("nvim_call_atomic", 1);
-                writer.write_array(2);
-                {
-                    writer.write_array(2);
-                    writer.write_string("nvim_set_current_win");
-                    {
-                        writer.write_array(1);
-                        writer.write_int(editor->nvim_data.win_id);
-                    }
-                }
+            case NVIM_REQ_COCKS:
+                break;
 
+            case NVIM_REQ_POST_INSERT_DOTREPEAT_REPLAY:
                 {
+                    auto msgid = start_request_message("nvim_call_atomic", 1);
+                    save_request(NVIM_REQ_COCKS, msgid, editor->id);
+
+                    u64 diff = current_time_in_nanoseconds() - post_insert_dotrepeat_time;
+                    print("postinsert dotrepeat took %llu ns", diff);
+                    post_insert_dotrepeat_time = current_time_in_nanoseconds();
+
                     writer.write_array(2);
-                    writer.write_string("nvim_input");
                     {
-                        writer.write_array(1);
-                        // don't move the cursor back one; we handle that
-                        // <F1> is remapped to ':', because ':' is mapped to <nop>
-                        writer.write_string("<C-O><F1>stopinsert<CR>");
+                        writer.write_array(2);
+                        writer.write_string("nvim_set_current_win");
+                        {
+                            writer.write_array(1);
+                            writer.write_int(editor->nvim_data.win_id);
+                        }
                     }
+
+                    {
+                        writer.write_array(2);
+                        writer.write_string("nvim_input");
+                        {
+                            writer.write_array(1);
+                            // don't move the cursor back one; we handle that
+                            // <F1> is remapped to ':', because ':' is mapped to <nop>
+                            // writer.write_string("<C-O>:stopinsert<CR>");
+                            writer.write_string("<Esc>");
+                        }
+                    }
+                    end_message();
                 }
-                end_message();
                 break;
 
             case NVIM_REQ_AUTOCOMPLETE_SETBUF:
@@ -253,6 +252,8 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
 
             case NVIM_REQ_CREATE_BUF:
                 editor->nvim_data.buf_id = event->response.buf.object_id;
+
+                print("[cocks] create_buf came back, attaching, setting lines, setting options, and opening win");
 
                 {
                     auto msgid = start_request_message("nvim_call_atomic", 1);
@@ -335,6 +336,17 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 editor->nvim_data.win_id = event->response.win.object_id;
                 if (waiting_focus_window == editor->id)
                     set_current_window(editor);
+
+                if (editor->nvim_data.need_initial_pos_set) {
+                    nvim_print("need initial pos set, setting...");
+                    auto pos = editor->nvim_data.initial_pos;
+                    if (pos.y == -1)
+                        pos = editor->offset_to_cur(pos.x);
+                    // editor->raw_move_cursor(pos);
+                    editor->move_cursor(pos);
+                }
+
+                handle_editor_on_ready(editor);
 
                 {
                     auto &b = world.build;
@@ -665,6 +677,8 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
             break;
         case NVIM_NOTIF_BUF_LINES:
             {
+                print("[cocks] got lines");
+
                 auto &args = event->notification.buf_lines;
 
                 auto editor = find_editor_by_buffer(args.buf.object_id);
@@ -687,19 +701,6 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 if (!editor->nvim_data.got_initial_lines) {
                     nvim_print("got_initial_lines = false, setting to true & calling handle_editor_on_ready()");
                     editor->nvim_data.got_initial_lines = true;
-
-                    // set initial pos, but don't clear need_initial_pos_set
-                    // we're still going to set it in handle_editor_on_ready
-                    // we're just setting it early here to speed up file load times
-                    if (editor->nvim_data.need_initial_pos_set) {
-                        nvim_print("need initial pos set, setting...");
-                        auto pos = editor->nvim_data.initial_pos;
-                        if (pos.y == -1)
-                            pos = editor->offset_to_cur(pos.x);
-                        // editor->raw_move_cursor(pos);
-                        // editor->move_cursor(pos);
-                    }
-
                     handle_editor_on_ready(editor);
                 }
             }
@@ -731,10 +732,18 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
             {
                 auto &args = event->notification.mode_change;
 
+                print("[cocks] mode changed to %s", args.mode_name);
+
                 nvim_print("mode: %s", args.mode_name);
 
-                if (streq(args.mode_name, "normal"))
+                if (streq(args.mode_name, "normal")) {
                     mode = VI_NORMAL;
+
+                    if (post_insert_dotrepeat_time != 0) {
+                        print("postinsert mode change took %llu ns", current_time_in_nanoseconds() - post_insert_dotrepeat_time);
+                        post_insert_dotrepeat_time = 0;
+                    }
+                }
                 else if (streq(args.mode_name, "insert"))
                     mode = VI_INSERT;
                 else if (streq(args.mode_name, "replace"))
@@ -780,9 +789,20 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                         end_message();
 
                         // just lose the extra chars
-                    } else {
+                    } else if (chars_after_exiting_insert_mode.len > 0) {
                         start_request_message("nvim_input", 1);
-                        writer.write_string(chars_after_exiting_insert_mode.items, chars_after_exiting_insert_mode.len);
+
+                        Text_Renderer rend;
+                        rend.init();
+
+                        For (chars_after_exiting_insert_mode) {
+                            if (it == '\b')
+                                rend.write("<Backspace>");
+                            else
+                                rend.writechar(it);
+                        }
+
+                        writer.write_string(rend.chars.items, rend.chars.len);
                         end_message();
                     }
 
@@ -804,14 +824,12 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
 
                 editor->nvim_data.grid_topline = args.topline;
 
-                nvim_print("got cursor change to %s", format_cur(new_cur2((u32)args.curcol, (u32)args.curline)));
-
                 /*
                 auto should_move_cursor = [&]() -> bool {
                     if (mode != VI_INSERT) return true;
 
                     auto &cur = editor->cur;
-                    auto &buf = editor->buf;
+                    // auto &buf = editor->buf;
 
                     // if this a necessary post-insert corrective cursor change
                     if (cur.x > buf.lines[cur.y].len)
@@ -825,16 +843,33 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                     editor->raw_move_cursor(new_cur2((u32)args.curcol, (u32)args.curline));
                 */
 
-                {
-                    auto y = (u32)args.curline;
-                    auto x = editor->buf.idx_byte_to_cp(y, args.curcol);
-                    editor->raw_move_cursor(new_cur2(x, y));
-                }
+                auto y = (u32)args.curline;
+                auto x = editor->buf.idx_byte_to_cp(y, args.curcol);
+                auto new_cur = new_cur2(x, y);
 
                 if (!editor->nvim_data.got_initial_cur) {
-                    nvim_print("got_initial_cur = false, setting to true & calling handle_editor_on_ready()");
-                    editor->nvim_data.got_initial_cur = true;
-                    handle_editor_on_ready(editor);
+                    bool set = false;
+
+                    if (editor->nvim_data.need_initial_pos_set) {
+                        auto pos = editor->nvim_data.initial_pos;
+                        if (pos.y == -1)
+                            pos = editor->offset_to_cur(pos.x);
+
+                        if (new_cur == pos)
+                            set = true;
+                    } else {
+                        set = true;
+                    }
+
+                    if (set) {
+                        editor->nvim_data.got_initial_cur = true;
+                        handle_editor_on_ready(editor);
+                    }
+                }
+
+                if (editor->is_nvim_ready()) {
+                    if (mode != VI_INSERT)
+                        editor->raw_move_cursor(new_cur);
                 }
             }
             break;
@@ -900,6 +935,12 @@ void Nvim::run_event_loop() {
         };
 
         switch (msgtype) {
+        case MPRPC_REQUEST: nvim_print("[received] MPRPC_REQUEST"); break;
+        case MPRPC_RESPONSE: nvim_print("[received] MPRPC_RESPONSE"); break;
+        case MPRPC_NOTIFICATION: nvim_print("[received] MPRPC_NOTIFICATION"); break;
+        }
+
+        switch (msgtype) {
         case MPRPC_NOTIFICATION:
             {
                 auto method = reader.read_string(); CHECKOK();
@@ -936,7 +977,7 @@ void Nvim::run_event_loop() {
                         auto ye = reader.read_int(); CHECKOK();
                         auto xe = reader.read_int(); CHECKOK();
                         print("%d:%d to %d:%d", ys, xs, ye, xe);
-                    } else if (streq(cmd, "go_to_definition")) {
+                    } else if (streq(cmd, "goto_definition")) {
                         ASSERT(num_args == 0);
                         add_event([&](auto msg) {
                             msg->notification.type = NVIM_NOTIF_CUSTOM_GOTO_DEFINITION;

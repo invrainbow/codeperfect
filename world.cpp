@@ -14,6 +14,8 @@
 
 World world;
 
+u64 post_insert_dotrepeat_time = 0;
+
 bool is_ignored_by_git(ccstr path) {
     return GHGitIgnoreCheckFile((char*)path);
 }
@@ -690,35 +692,19 @@ bool is_build_debug_free() {
     return true;
 }
 
-void goto_jump_to_definition_result(Jump_To_Definition_Result *result) {
-    auto editor = world.focus_editor(result->file, result->pos);
+void goto_file_and_pos(ccstr file, cur2 pos) {
+    auto editor = world.focus_editor(file, pos);
     if (editor == NULL) return; // TODO
 
     // TODO: handle the term being off screen to the right
     editor->view.x = 0;
-    editor->view.y = relu_sub(result->pos.y, 10);
+    editor->view.y = relu_sub(pos.y, 10);
 
-    /*
-    auto target = world.get_current_editor();
-    if (target == NULL || !streq(target->filepath, result->file))
-        target = world.focus_editor(result->file);
+    ImGui::SetWindowFocus(NULL);
+}
 
-    if (target == NULL) return;
-
-    auto pos = result->pos;
-    if (world.use_nvim) {
-        if (target->is_nvim_ready()) {
-            if (pos.y == -1) pos = target->offset_to_cur(pos.x);
-            target->move_cursor(pos);
-        } else {
-            target->nvim_data.initial_pos = pos;
-            target->nvim_data.need_initial_pos_set = true;
-        }
-    } else {
-        if (pos.y == -1) pos = target->offset_to_cur(pos.x);
-        target->move_cursor(pos);
-    }
-    */
+void goto_jump_to_definition_result(Jump_To_Definition_Result *result) {
+    goto_file_and_pos(result->file, result->pos);
 }
 
 void handle_goto_definition() {

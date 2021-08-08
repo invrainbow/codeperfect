@@ -495,11 +495,13 @@ void UI::start_clip(boxf b) {
     flush_verts();
     glEnable(GL_SCISSOR_TEST);
 
-    b.x *= world.display_scale.x;
-    b.y *= world.display_scale.y;
-    b.w *= world.display_scale.x;
-    b.h *= world.display_scale.y;
-    glScissor(b.x, world.display_size.y - (b.y + b.h), b.w, b.h);
+    boxf bs;
+    memcpy(&bs, &b, sizeof(boxf));
+    bs.x *= world.display_scale.x;
+    bs.y *= world.display_scale.y;
+    bs.w *= world.display_scale.x;
+    bs.h *= world.display_scale.y;
+    glScissor(bs.x, world.display_size.y - (bs.y + bs.h), bs.w, bs.h);
 
     clipping = true;
     current_clip = b;
@@ -1552,10 +1554,10 @@ void UI::draw_everything() {
                 }
             }
             if (ImGui::MenuItem("Go to Next Item", "Alt+]")) {
-                go_to_next_error(1);
+                goto_next_error(1);
             }
             if (ImGui::MenuItem("Go to Previous Item", "Alt+[")) {
-                go_to_next_error(-1);
+                goto_next_error(-1);
             }
             ImGui::EndMenu();
         }
@@ -1943,7 +1945,7 @@ void UI::draw_everything() {
 
                     if (clicked) {
                         world.build.current_error = i;
-                        go_to_error(i);
+                        goto_error(i);
                     }
                 }
 
@@ -2764,15 +2766,21 @@ void UI::draw_everything() {
         ImGui::PushFont(world.ui.im_font_mono);
         {
             auto should_focus_textbox = [&]() -> bool {
-                if (wnd.focus_textbox) {
-                    wnd.focus_textbox = false;
+                if (wnd.focus_textbox == 1) {
+                    wnd.focus_textbox = 2;
+                    return true;
+                }
+                if (wnd.focus_textbox == 2) {
+                    wnd.focus_textbox = 0;
                     return true;
                 }
                 return false;
             };
 
-            if (is_focusing || ImGui::IsWindowAppearing() || should_focus_textbox())
+            if (ImGui::IsWindowAppearing() || should_focus_textbox()) {
                 ImGui::SetKeyboardFocusHere();
+                ImGui::SetScrollHereY();
+            }
 
             if (imgui_input_text_full("Search for", wnd.find_str, _countof(wnd.find_str), ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll))
                 entered = true;
@@ -2805,6 +2813,7 @@ void UI::draw_everything() {
                 opts.case_sensitive = wnd.case_sensitive;
                 opts.literal = !wnd.use_regex;
 
+                wnd.selection = -1;
                 s.start_search(wnd.find_str, &opts);
             }
         }
@@ -2828,6 +2837,9 @@ void UI::draw_everything() {
                 int result_index = 0;
                 bool didnt_finish = false;
 
+                Search_Result *current_result = NULL;
+                ccstr current_filepath = NULL;
+
                 For (world.searcher.search_results) {
                     if (index > 400) {
                         didnt_finish = true;
@@ -2842,6 +2854,8 @@ void UI::draw_everything() {
                     auto filepath = it.filepath;
 
                     For (*it.results) {
+                        defer { index++; };
+
                         // allow up to 100 to finish the results in current file
                         if (index > 500) {
                             didnt_finish = true;
@@ -2855,11 +2869,16 @@ void UI::draw_everything() {
                         ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(ImColor(60, 60, 60)));
 
                         bool clicked = ImGui::Selectable(
-                            our_sprintf("##search_result_%d", index++),
-                            false,
-                            0, // flags
+                            our_sprintf("##search_result_%d", index),
+                            index == wnd.selection,
+                            ImGuiSelectableFlags_AllowDoubleClick,
                             text_size
                         );
+
+                        if (index == wnd.selection) {
+                            current_result = &it;
+                            current_filepath = filepath;
+                        }
 
                         ImGui::PopStyleColor();
 
@@ -2911,13 +2930,34 @@ void UI::draw_everything() {
                         ImGui::PopStyleColor();
 
                         if (clicked) {
-                            ImGui::SetWindowFocus(NULL);
-                            world.focus_editor(filepath, it.match_start);
+                            if (ImGui::IsMouseDoubleClicked(0))
+                                goto_file_and_pos(filepath, it.match_start);
+                            else
+                                wnd.selection = index;
                         }
                     }
 
                     ImGui::PopFont();
                     ImGui::Unindent();
+                }
+
+                if (wnd.focus_bool && !world.ui.keyboard_captured_by_imgui) {
+                    auto mods = imgui_get_keymods();
+                    switch (mods) {
+                    case OUR_MOD_NONE:
+                        if (imgui_special_key_pressed(ImGuiKey_DownArrow) || imgui_key_pressed('j')) {
+                            if (wnd.selection < index-1)
+                                wnd.selection++;
+                        }
+                        if (imgui_special_key_pressed(ImGuiKey_UpArrow) || imgui_key_pressed('k')) {
+                            if (wnd.selection > 0)
+                                wnd.selection--;
+                        }
+                        if (imgui_special_key_pressed(ImGuiKey_Enter))
+                            if (current_result != NULL)
+                                goto_file_and_pos(current_filepath, current_result->match_start);
+                        break;
+                    }
                 }
 
                 if (didnt_finish) {
@@ -2937,14 +2977,6 @@ void UI::draw_everything() {
             break;
         case SEARCH_NOTHING_HAPPENING:
             break;
-        }
-
-        if (world.search_results.show) {
-            ImGui::SetNextWindowDockID(dock_sidebar_id, ImGuiCond_Always);
-            ImGui::Begin("Search Results", &world.search_results.show);
-            // wait what's going on herek
-
-            ImGui::End();
         }
 
         ImGui::End();
@@ -3415,7 +3447,7 @@ void UI::draw_everything() {
 
                         if (editor->cur == new_cur2((u32)curr_cp_idx, (u32)y)) {
                             draw_cursor(glyph_width);
-                            if (world.nvim.mode != VI_INSERT && current_pane == world.current_pane)
+                            if ((world.nvim.mode != VI_INSERT) || (world.nvim.exiting_insert_mode) && current_pane == world.current_pane)
                                 text_color = COLOR_BLACK;
                         } else if (world.nvim.mode != VI_INSERT) {
                             auto topline = editor->nvim_data.grid_topline;
@@ -3480,7 +3512,6 @@ void UI::draw_everything() {
                     cur_pos.x = editor_area.x + settings.editor_margin_x;
                     cur_pos.y += font->height * settings.line_height;
                 }
-
             }
         }
 
@@ -3833,8 +3864,85 @@ void UI::draw_everything() {
             auto &hint = editor->parameter_hint;
             if (hint.gotype == NULL) break;
 
+            struct Token_Change {
+                int token;
+                int index;
+            };
+
+            List<Token_Change> token_changes;
+
+            ccstr help_text = NULL;
+
+            {
+                token_changes.init();
+
+                Type_Renderer rend;
+                rend.init();
+
+                auto add_token_change = [&](int token) {
+                    auto c = token_changes.append();
+                    c->token = token;
+                    c->index = rend.chars.len;
+                };
+
+                {
+                    auto t = hint.gotype;
+                    auto params = t->func_sig.params;
+                    auto result = t->func_sig.result;
+
+                    add_token_change(hint.current_param == -1 ? HINT_CURRENT_PARAM : HINT_NOT_CURRENT_PARAM);
+
+                    // write params
+                    rend.write("(");
+                    for (u32 i = 0; i < params->len; i++) {
+                        auto &it = params->at(i);
+
+                        if (i == hint.current_param)
+                            add_token_change(HINT_CURRENT_PARAM);
+
+                        add_token_change(HINT_NAME);
+                        rend.write("%s ", it.name);
+                        add_token_change(HINT_TYPE);
+                        rend.write_type(it.gotype);
+                        add_token_change(HINT_NORMAL);
+
+                        if (i == hint.current_param)
+                            add_token_change(HINT_NOT_CURRENT_PARAM);
+
+                        if (i < params->len - 1)
+                            rend.write(", ");
+                    }
+                    rend.write(")");
+
+                    // write result
+                    if (result != NULL && result->len > 0) {
+                        rend.write(" ");
+                        if (result->len == 1 && is_goident_empty(result->at(0).name)) {
+                            add_token_change(HINT_TYPE);
+                            rend.write_type(result->at(0).gotype);
+                        } else {
+                            rend.write("(");
+                            for (u32 i = 0; i < result->len; i++) {
+                                if (!is_goident_empty(result->at(i).name)) {
+                                    add_token_change(HINT_NAME);
+                                    rend.write("%s ", result->at(i).name);
+                                }
+                                add_token_change(HINT_TYPE);
+                                rend.write_type(result->at(i).gotype);
+                                add_token_change(HINT_NORMAL);
+                                if (i < result->len - 1)
+                                    rend.write(", ");
+                            }
+                            rend.write(")");
+                        }
+                    }
+                }
+
+                help_text = rend.finish();
+            }
+
             boxf bg;
-            bg.w = font->width * strlen(hint.help_text) + settings.parameter_hint_padding_x * 2;
+            bg.w = font->width * strlen(help_text) + settings.parameter_hint_padding_x * 2;
             bg.h = font->height + settings.parameter_hint_padding_y * 2;
             bg.x = min(actual_parameter_hint_start.x, world.window_size.x - bg.w);
             bg.y = min(actual_parameter_hint_start.y - font->offset_y - bg.h - settings.parameter_hint_margin_y, world.window_size.y - bg.h);
@@ -3848,15 +3956,15 @@ void UI::draw_everything() {
             text_pos.y += font->offset_y;
 
             {
-                u32 len = strlen(hint.help_text);
+                u32 len = strlen(help_text);
                 vec3f color = COLOR_MEDIUM_DARK_GREY;
                 float opacity = 1.0;
 
                 int j = 0;
 
                 for (u32 i = 0; i < len; i++) {
-                    while (j < hint.token_changes.len && i == hint.token_changes[j].index) {
-                        switch (hint.token_changes[j].token) {
+                    while (j < token_changes.len && i == token_changes[j].index) {
+                        switch (token_changes[j].token) {
                         case HINT_CURRENT_PARAM: opacity = 1.0; break;
                         case HINT_NOT_CURRENT_PARAM: opacity = 0.4; break;
                         case HINT_NAME: color = COLOR_WHITE; break;
@@ -3866,7 +3974,7 @@ void UI::draw_everything() {
 
                         j++;
                     }
-                    draw_char(&text_pos, hint.help_text[i], rgba(color, opacity));
+                    draw_char(&text_pos, help_text[i], rgba(color, opacity));
                 }
             }
         } while (0);

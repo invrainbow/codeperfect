@@ -63,7 +63,6 @@ struct Searcher {
     pcre_extra *re_extra;
     List<ccstr> file_queue;
 
-    // for replace
     List<Search_File> search_results;
 
     Thread_Handle thread;

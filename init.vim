@@ -1,5 +1,9 @@
 scriptencoding utf-8
 
+set ttimeout
+set ttimeoutlen=100
+set timeoutlen=3000
+
 set clipboard=unnamed
 set ignorecase
 set autoindent
@@ -15,12 +19,6 @@ function! IDE__ClearUndo(bufId)
     call nvim_buf_set_lines(a:bufId, 0, 0, 0, [])
     call nvim_buf_set_option(a:bufId, 'undolevels', oldlevels)
     unlet oldlevels
-endfunction
-
-function! IDE__SetFiletypeGo()
-    " set filetype=go
-    " filetype on
-    " filetype indent on
 endfunction
 
 function! NotifyIDE(cmd, ...) abort
@@ -68,13 +66,13 @@ nnoremap Q <nop>
 nnoremap K <nop>
 
 function s:goToDefinition()
-    call NotifyIDE('go_to_definition')
+    call NotifyIDE('goto_definition')
 endfunction
 
 nnoremap gd <Cmd>call <SID>goToDefinition()<CR>
 
-nnoremap : <nop>
-nnoremap <F1> :
+" nnoremap : <nop>
+" nnoremap <F1> :
 
 set shortmess=filnxtToOFI
 set nowrap
@@ -96,14 +94,18 @@ set bufhidden=hide
 set noautowrite
 set norelativenumber
 set nonumber
+" set listchars=tab:❥♥
+" set list
 " syntax on
 set signcolumn=no
 
 set statusline=
 set laststatus=0
 set noruler
+
 set nomodeline
 set modelines=0
+
 set nofoldenable
 set foldmethod=manual
 
@@ -142,9 +144,10 @@ function s:forceLocalOptions()
     " set filetype=go
     " filetype on
     " filetype indent on
-    setlocal autoindent
-    setlocal indentexpr=GoIndent(v:lnum)
-    setlocal indentkeys+=<:>,0=},0=)
+
+    " setlocal autoindent
+    " setlocal indentexpr=GoIndent(v:lnum)
+    " setlocal indentkeys+=<:>,0=},0=)
 
     setlocal nowrap
     setlocal conceallevel=0
@@ -174,3 +177,6 @@ function s:sendVisualSelection()
 endfunction
 
 " autocmd CursorMoved * call <SID>sendVisualSelection()
+
+vnoremap < <gv
+vnoremap > >gv

@@ -579,7 +579,7 @@ int main() {
             switch (key) {
             case GLFW_KEY_LEFT_BRACKET:
             case GLFW_KEY_RIGHT_BRACKET:
-                go_to_next_error(key == GLFW_KEY_LEFT_BRACKET ? -1 : 1);
+                goto_next_error(key == GLFW_KEY_LEFT_BRACKET ? -1 : 1);
                 break;
             }
             break;
@@ -620,11 +620,8 @@ int main() {
                 {
                     auto &wnd = world.wnd_search_and_replace;
                     if (wnd.show) {
-                        if (wnd.focus_bool) {
-                            wnd.focus_textbox = true;
-                        } else {
-                            ImGui::SetWindowFocus("###search_and_replace");
-                        }
+                        ImGui::SetWindowFocus("###search_and_replace");
+                        wnd.focus_textbox = 1;
                     }
                     wnd.show = true;
                     wnd.replace = false;
@@ -735,21 +732,25 @@ int main() {
                 return;
             }
 
-            // if we're at beginning of line
-            if (editor->cur.x == 0) {
-                auto back1 = editor->buf.dec_cur(editor->cur);
-                editor->buf.remove(back1, editor->cur);
-                if (back1 < editor->nvim_insert.start) {
-                    editor->nvim_insert.start = back1;
-                    editor->nvim_insert.deleted_graphemes++;
-                }
-                editor->raw_move_cursor(back1);
+            if (world.nvim.exiting_insert_mode) {
+                world.nvim.chars_after_exiting_insert_mode.append('\b');
             } else {
-                editor->backspace_in_insert_mode(1, 0); // erase one grapheme
-            }
+                // if we're at beginning of line
+                if (editor->cur.x == 0) {
+                    auto back1 = editor->buf.dec_cur(editor->cur);
+                    editor->buf.remove(back1, editor->cur);
+                    if (back1 < editor->nvim_insert.start) {
+                        editor->nvim_insert.start = back1;
+                        editor->nvim_insert.deleted_graphemes++;
+                    }
+                    editor->raw_move_cursor(back1);
+                } else {
+                    editor->backspace_in_insert_mode(1, 0); // erase one grapheme
+                }
 
-            editor->update_autocomplete(false);
-            editor->update_parameter_hint();
+                editor->update_autocomplete(false);
+                editor->update_parameter_hint();
+            }
         };
 
         switch (ui.imgui_get_keymods()) {
@@ -1171,6 +1172,11 @@ int main() {
 
     auto last_frame_time = current_time_in_nanoseconds();
 
+    // world.focus_editor("main.go");
+    // world.focus_editor(path_join(world.indexer.goroot, "time/time.go"));
+    // world.focus_editor(path_join(world.indexer.goroot, "database/sql/sql.go"));
+    // world.focus_editor(path_join(world.indexer.gomodcache, "github.com/davecgh/go-spew@v1.1.1/spew/dump.go"));
+
     while (!glfwWindowShouldClose(world.window)) {
         auto frame_start_time = current_time_in_nanoseconds();
 
@@ -1194,7 +1200,7 @@ int main() {
                 case MTM_GOTO_FILEPOS:
                     {
                         auto &args = it.goto_filepos;
-                        world.focus_editor(args.file, args.pos);
+                        goto_file_and_pos(args.file, args.pos);
                     }
                     break;
                 }
@@ -1222,7 +1228,6 @@ int main() {
                             msg->type = GOMSG_FILEPATH_DELETED;
                             msg->filepath = our_strcpy(filepath);
                         });
-
                         auto node = world.find_ft_node(event.filepath);
                         if (node != NULL)
                             world.delete_ft_node(node);

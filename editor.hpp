@@ -30,17 +30,11 @@ enum {
 
 struct Client_Parameter_Hint {
     Gotype *gotype; // save this here in case we need it later
-    ccstr help_text;
+    int current_param;
 
-    struct Token_Change {
-        int token;
-        int index;
-    };
-
-    List<Token_Change> token_changes;
+    // ccstr help_text;
 
     cur2 start;
-    // u32 current_param;
     bool closed;
 };
 
@@ -207,9 +201,11 @@ struct Pane {
 
 bool check_file_dimensions(ccstr path);
 
-void go_to_error(int index);
-void go_to_next_error(int direction);
+void goto_error(int index);
+void goto_next_error(int direction);
 
 struct Type_Renderer : public Text_Renderer {
     void write_type(Gotype *t, bool parameter_hint_root = false);
 };
+
+bool is_goident_empty(ccstr name);

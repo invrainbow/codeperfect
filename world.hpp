@@ -218,11 +218,6 @@ struct World {
         float height;
     } error_list;
 
-    struct {
-        bool show;
-        // what else?
-    } search_results;
-
     Build build;
 
     struct {
@@ -273,7 +268,8 @@ struct World {
         bool use_regex;
         bool case_sensitive;
         bool focus_bool;
-        bool focus_textbox;
+        int focus_textbox;
+        int selection;
     } wnd_search_and_replace;
 
     struct {
@@ -393,7 +389,10 @@ void prompt_delete_all_breakpoints();
 void run_proc_the_normal_way(Process* proc, ccstr cmd);
 void* get_native_window_handle();
 bool is_build_debug_free();
+void goto_file_and_pos(ccstr file, cur2 pos);
 void goto_jump_to_definition_result(Jump_To_Definition_Result *result);
 void handle_goto_definition();
 void save_all_unsaved_files();
 void start_search_job(ccstr query);
+
+extern u64 post_insert_dotrepeat_time;

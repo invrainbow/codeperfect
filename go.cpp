@@ -799,6 +799,7 @@ void Go_Indexer::background_thread() {
     };
 
     auto handle_file_or_folder_deleted = [&](ccstr filepath) {
+        /*
         // try treating filepath as a directory
         auto pkg = find_package_in_index(filepath_to_import_path(filepath));
         if (pkg != NULL) {
@@ -823,6 +824,7 @@ void Go_Indexer::background_thread() {
                 pkg->files->remove(file);
             }
         }
+        */
     };
 
     // random shit
@@ -2001,6 +2003,8 @@ List<Goresult> *Go_Indexer::get_dot_completions(Ast_Node *operand_node, bool *wa
 
     auto results = alloc_list<Goresult>();
     For (*tmp) {
+        if (it.decl->name == NULL) continue;
+
         if (!streq(it.ctx->import_path, ctx->import_path))
             if (!isupper(it.decl->name[0]))
                 continue;
@@ -2891,10 +2895,9 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
             // TODO: how about only grabbing packages that are in current
             // workspace or are immediate deps?
             For (*index.packages) {
-                if (it.status != GPS_READY) continue;
                 if (it.import_path == NULL) continue;
+                if (it.status != GPS_READY) continue;
                 if (it.package_name == NULL) continue;
-
 
                 if (!path_contains_in_subtree(index.current_import_path, it.import_path)) {
                     auto parts = make_path(it.import_path)->parts;
@@ -2907,8 +2910,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                         }
                     }
 
-                    if (internal)
-                        break;
+                    if (internal) continue;
                 }
 
                 auto res = ac_results->append();
@@ -3051,7 +3053,7 @@ Parameter_Hint *Go_Indexer::parameter_hint(ccstr filepath, cur2 pos) {
     if (pf == NULL) return NULL;
     defer { free_parsed_file(pf); };
 
-    if (!truncate_parsed_file(pf, pos, ")}}}}}}}}}}}}}}}}")) return NULL;
+    if (!truncate_parsed_file(pf, pos, "_)}}}}}}}}}}}}}}}}")) return NULL;
     defer { ts_tree_delete(pf->tree); };
 
     auto go_back_until_non_space = [&]() -> cur2 {
@@ -4374,8 +4376,9 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
             // look backwards, so that overridden methods are found first
             for (int i = results.len - 1; i >= 0; i--) {
                 auto &it = results[i];
-                if (streq(it.decl->name, gotype->lazy_sel_sel))
-                    return evaluate_type(it.decl->gotype, it.ctx);
+                if (it.decl->name != NULL)
+                    if (streq(it.decl->name, gotype->lazy_sel_sel))
+                        return evaluate_type(it.decl->gotype, it.ctx);
             }
         }
         break;
