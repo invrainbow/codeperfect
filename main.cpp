@@ -475,7 +475,7 @@ int main() {
         if (world.resizing_pane != -1) {
             auto i = world.resizing_pane;
 
-            float leftoff = 0;
+            float leftoff = ui.panes_area.x;
             for (int j = 0; j < i; j++)
                 leftoff += world.panes[j].width;
 

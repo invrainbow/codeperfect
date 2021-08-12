@@ -32,6 +32,8 @@ struct Search_File {
 struct Search_Opts {
     bool case_sensitive;
     bool literal;
+    ccstr include;
+    ccstr exclude;
 };
 
 enum Searcher_State {
@@ -55,6 +57,9 @@ struct Searcher {
     ccstr query;
     s32 qlen;
     ccstr replace_with;
+
+    List<ccstr> *include_parts;
+    List<ccstr> *exclude_parts;
 
     // search
     s32 *find_skip;

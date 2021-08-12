@@ -23,7 +23,7 @@
 #endif
 
 const unsigned char GO_INDEX_MAGIC_BYTES[3] = {0x49, 0xfa, 0x98};
-const int GO_INDEX_VERSION = 12;
+const int GO_INDEX_VERSION = 13;
 
 void index_print(ccstr fmt, ...) {
     va_list args;
@@ -1495,9 +1495,9 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
         switch (node_type) {
         case TS_IF_STATEMENT:
         case TS_FOR_STATEMENT:
-        case TS_TYPE_SWITCH_STATEMENT:
         case TS_EXPRESSION_SWITCH_STATEMENT:
         case TS_BLOCK:
+        case TS_TYPE_SWITCH_STATEMENT:
             {
                 open_scopes.append(depth);
 
@@ -1505,6 +1505,49 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
                 op.type = GSOP_OPEN_SCOPE;
                 op.pos = node->start();
                 if (!cb(&op)) return WALK_ABORT;
+            }
+            break;
+
+        case TS_TYPE_CASE:
+        case TS_DEFAULT_CASE:
+            {
+                auto parent = node->parent();
+                if (parent->null) break;
+                if (parent->type() != TS_TYPE_SWITCH_STATEMENT) break;
+
+                auto alias = parent->field(TSF_ALIAS);
+                if (alias->null) break;
+                if (alias->type() != TS_EXPRESSION_LIST) break;
+
+                FOR_NODE_CHILDREN (alias) {
+                    if (it->type() != TS_IDENTIFIER) break;
+
+                    auto decl = alloc_object(Godecl);
+                    decl->name = our_strcpy(it->string());
+                    decl->type = GODECL_TYPECASE;
+                    decl->decl_start = node->start();
+                    decl->decl_end = node->start();
+                    decl->spec_start = node->start();
+                    decl->name_start = it->start();
+                    decl->name_end = it->end();
+
+                    Gotype *gotype = NULL;
+                    if (node_type == TS_TYPE_CASE && node->child_count() > 1) {
+                        gotype = node_to_gotype(node->child());
+                    } else {
+                        gotype = new_gotype(GOTYPE_INTERFACE);
+                        gotype->interface_specs = alloc_list<Go_Struct_Spec>(0);
+                    }
+
+                    decl->gotype = gotype;
+
+                    Go_Scope_Op op;
+                    op.type = GSOP_DECL;
+                    op.decl = decl;
+                    op.decl_scope_depth = open_scopes.len;
+                    op.pos = decl->decl_start;
+                    if (!cb(&op)) return WALK_ABORT;
+                }
             }
             break;
 
@@ -1793,7 +1836,6 @@ Goresult *Go_Indexer::find_decl_of_id(ccstr id_to_find, cur2 id_pos, Go_Ctx *ctx
             }
             defer { table.cleanup(); };
 
-
             For (*scope_ops) {
                 if (it.pos > id_pos) break;
                 switch (it.type) {
@@ -1804,9 +1846,10 @@ Goresult *Go_Indexer::find_decl_of_id(ccstr id_to_find, cur2 id_pos, Go_Ctx *ctx
                     table.pop_scope();
                     break;
                 case GSOP_DECL:
-                    if (it.decl->decl_start < id_pos && it.decl->decl_end > id_pos)
+                    if (it.decl->decl_start <= id_pos && id_pos < it.decl->decl_end)
                         if (it.decl_scope_depth == table.frames.len)
-                            break;
+                            if (!(it.decl->name_start <= id_pos && id_pos < it.decl->name_end))
+                                break;
                     table.set(it.decl->name, it.decl);
                     break;
                 }
@@ -1980,6 +2023,37 @@ List<Postfix_Completion_Type> *Go_Indexer::get_postfix_completions(Ast_Node *ope
 }
 
 List<Goresult> *Go_Indexer::get_dot_completions(Ast_Node *operand_node, bool *was_package, Go_Ctx *ctx) {
+    auto try_as_type = [&]() -> List<Goresult> * {
+        auto gotype = expr_to_gotype(operand_node);
+        if (gotype == NULL) return NULL;
+
+        auto res = evaluate_type(gotype, ctx);
+        if (res == NULL) return NULL;
+
+        auto rres = resolve_type(res->gotype, res->ctx);
+        if (rres == NULL) return NULL;
+
+        auto tmp = alloc_list<Goresult>();
+        list_fields_and_methods(res, rres, tmp);
+
+        auto results = alloc_list<Goresult>();
+        For (*tmp) {
+            if (it.decl->name == NULL) continue;
+
+            if (!streq(it.ctx->import_path, ctx->import_path))
+                if (!isupper(it.decl->name[0]))
+                    continue;
+            results->append(&it);
+        }
+        return results;
+    };
+
+    auto ret = try_as_type();
+    if (ret != NULL) {
+        *was_package = false;
+        return ret;
+    }
+
     auto import_path = get_package_referred_to_by_ast(operand_node, ctx);
     if (import_path != NULL) {
         auto ret = list_package_decls(import_path, LISTDECLS_PUBLIC_ONLY | LISTDECLS_EXCLUDE_METHODS);
@@ -1989,31 +2063,9 @@ List<Goresult> *Go_Indexer::get_dot_completions(Ast_Node *operand_node, bool *wa
         }
     }
 
-    auto gotype = expr_to_gotype(operand_node);
-    if (gotype == NULL) return NULL;
-
-    auto res = evaluate_type(gotype, ctx);
-    if (res == NULL) return NULL;
-
-    auto rres = resolve_type(res->gotype, res->ctx);
-    if (rres == NULL) return NULL;
-
-    auto tmp = alloc_list<Goresult>();
-    list_fields_and_methods(res, rres, tmp);
-
-    auto results = alloc_list<Goresult>();
-    For (*tmp) {
-        if (it.decl->name == NULL) continue;
-
-        if (!streq(it.ctx->import_path, ctx->import_path))
-            if (!isupper(it.decl->name[0]))
-                continue;
-        results->append(&it);
-    }
-
-    *was_package = false;
-    return results;
+    return NULL;
 }
+
 
 Jump_To_Definition_Result* Go_Indexer::jump_to_symbol(ccstr symbol) {
     reload_all_dirty_files();
@@ -2302,18 +2354,18 @@ bool Go_Indexer::truncate_parsed_file(Parsed_File *pf, cur2 end_pos, ccstr chars
 
     ts_tree_edit(pf->tree, &edit);
 
-    auto it = &pf->it->buffer_params.it;
-    it->has_fake_end = true;
-    it->fake_end = end_pos;
-    it->fake_end_offset = buf->cur_to_offset(it->fake_end);
+    auto &it = pf->it->buffer_params.it;
+    it.has_fake_end = true;
+    it.fake_end = end_pos;
+    it.fake_end_offset = buf->cur_to_offset(it.fake_end);
 
     if (chars_to_append != 0) {
-        it->append_chars_to_end = true;
-        it->chars_to_append_to_end = chars_to_append;
+        it.append_chars_to_end = true;
+        it.chars_to_append_to_end = chars_to_append;
     }
 
     TSInput input;
-    input.payload = it;
+    input.payload = &it;
     input.encoding = TSInputEncodingUTF8;
 
     input.read = [](void *p, uint32_t off, TSPoint pos, uint32_t *read) -> const char* {
@@ -2760,6 +2812,32 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                 return res;
             };
 
+            // workspace or are immediate deps?
+            For (*index.packages) {
+                if (it.import_path == NULL) continue;
+                if (it.status != GPS_READY) continue;
+                if (it.package_name == NULL) continue;
+
+                if (!path_contains_in_subtree(index.current_import_path, it.import_path)) {
+                    auto parts = make_path(it.import_path)->parts;
+                    bool internal = false;
+
+                    For (*parts) {
+                        if (streq(it, "internal")) {
+                            internal = true;
+                            break;
+                        }
+                    }
+
+                    if (internal) continue;
+                }
+
+                auto res = ac_results->append();
+                res->name = it.package_name;
+                res->type = ACR_IMPORT;
+                res->import_path = it.import_path;
+            }
+
             SCOPED_FRAME_WITH_MEM(&scoped_table_mem);
             Scoped_Table<Godecl*> table;
             {
@@ -2819,6 +2897,11 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                         For (*results) {
                             if (it.decl->name == NULL || !isupper(it.decl->name[0]))
                                 continue;
+
+                            if (strlen(it.decl->name) >= 5)
+                                if (str_starts_with(it.decl->name, "Test"))
+                                    if (isupper(it.decl->name[4]))
+                                        continue;
 
                             auto result = add_declaration_result(our_sprintf("%s.%s", pkgname, it.decl->name));
                             if (result != NULL) {
@@ -2890,33 +2973,6 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                             result->declaration_evaluated_gotype = res->gotype;
                     }
                 }
-            }
-
-            // TODO: how about only grabbing packages that are in current
-            // workspace or are immediate deps?
-            For (*index.packages) {
-                if (it.import_path == NULL) continue;
-                if (it.status != GPS_READY) continue;
-                if (it.package_name == NULL) continue;
-
-                if (!path_contains_in_subtree(index.current_import_path, it.import_path)) {
-                    auto parts = make_path(it.import_path)->parts;
-                    bool internal = false;
-
-                    For (*parts) {
-                        if (streq(it, "internal")) {
-                            internal = true;
-                            break;
-                        }
-                    }
-
-                    if (internal) continue;
-                }
-
-                auto res = ac_results->append();
-                res->name = it.package_name;
-                res->type = ACR_IMPORT;
-                res->import_path = it.import_path;
             }
 
             ccstr keywords[] = {
@@ -3429,6 +3485,7 @@ List<Godecl> *Go_Indexer::parameter_list_to_fields(Ast_Node *params) {
             field->decl_end = param_node->end();
             field->spec_start = param_node->start();
             field->name_start = it->start();
+            field->name_end = it->end();
             field->name = it->string();
             field->gotype = node_to_gotype(type_node);
 
@@ -3446,6 +3503,7 @@ List<Godecl> *Go_Indexer::parameter_list_to_fields(Ast_Node *params) {
             field->decl_end = param_node->end();
             field->spec_start = param_node->start();
             field->name_start = param_node->start();
+            field->name_end = param_node->start();
             field->name = "_";
             field->gotype = node_to_gotype(type_node);
 
@@ -3588,6 +3646,7 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node) {
                         field->gotype = field_type;
                         field->name = it->string();
                         field->name_start = it->start();
+                        field->name_end = it->end();
                         field->spec_start = field_node->start();
                         field->decl_start = field_node->start();
                         field->decl_end = field_node->end();
@@ -3659,6 +3718,7 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node) {
                     field->decl_end =  it->end();
                     field->spec_start = it->start();
                     field->name_start = name_node->start();
+                    field->name_end = name_node->end();
 
                     node_func_to_gotype_sig(
                         it->field(TSF_PARAMETERS),
@@ -3696,6 +3756,7 @@ void Go_Indexer::import_spec_to_decl(Ast_Node *spec_node, Godecl *decl) {
     if (!name_node->null) {
         decl->name = name_node->string();
         decl->name_start = name_node->start();
+        decl->name_end = name_node->end();
     }
 
     auto path_node = spec_node->field(TSF_PATH);
@@ -3722,6 +3783,7 @@ bool Go_Indexer::assignment_to_decls(List<Ast_Node*> *lhs, List<Ast_Node*> *rhs,
                 auto decl = new_godecl();
                 decl->name = id->string();
                 decl->name_start = id->start();
+                decl->name_end = id->end();
                 decl->gotype = gotype;
             }
             return true;
@@ -3741,6 +3803,7 @@ bool Go_Indexer::assignment_to_decls(List<Ast_Node*> *lhs, List<Ast_Node*> *rhs,
             auto decl = new_godecl();
             decl->name = it->string();
             decl->name_start = it->start();
+            decl->name_end = it->end();
             decl->gotype = multi_type;
             return true;
         }
@@ -3763,6 +3826,7 @@ bool Go_Indexer::assignment_to_decls(List<Ast_Node*> *lhs, List<Ast_Node*> *rhs,
             auto decl = new_godecl();
             decl->name = it->string();
             decl->name_start = it->start();
+            decl->name_end = it->end();
             decl->gotype = gotype;
         }
 
@@ -3786,6 +3850,7 @@ bool Go_Indexer::assignment_to_decls(List<Ast_Node*> *lhs, List<Ast_Node*> *rhs,
             auto decl = new_godecl();
             decl->name = name_node->string();
             decl->name_start = name_node->start();
+            decl->name_end = name_node->end();
             decl->gotype = gotype;
         }
 
@@ -3840,6 +3905,7 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
             decl->spec_start = node->start();
             decl->name = name->string();
             decl->name_start = name->start();
+            decl->name_end = name->end();
             decl->gotype = gotype;
             save_decl(decl);
         }
@@ -3861,6 +3927,7 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
             decl->spec_start = spec->start();
             decl->name = name_node->string();
             decl->name_start = name_node->start();
+            decl->name_end = name_node->end();
             decl->gotype = gotype;
             save_decl(decl);
         }
@@ -3900,6 +3967,7 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
                             decl->spec_start = spec->start();
                             decl->name = it->string();
                             decl->name_start = it->start();
+                            decl->name_end = it->end();
                             decl->gotype = saved_gotype;
                             save_decl(decl);
                         }
@@ -3963,6 +4031,7 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
                         decl->spec_start = spec->start();
                         decl->name = it->string();
                         decl->name_start = it->start();
+                        decl->name_end = it->end();
                         decl->gotype = type_node_gotype;
                         save_decl(decl);
 
@@ -4331,6 +4400,7 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
         {
             auto res = find_decl_of_id(gotype->lazy_id_name, gotype->lazy_id_pos, ctx);
             if (res == NULL) return NULL;
+            if (res->decl->type == GODECL_IMPORT) return NULL;
             if (res->decl->gotype == NULL) return NULL;
             return evaluate_type(res->decl->gotype, res->ctx);
         }

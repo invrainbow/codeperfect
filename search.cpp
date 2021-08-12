@@ -287,6 +287,9 @@ bool Searcher::start_search(ccstr _query, Search_Opts *_opts) {
         search_results.init();
     }
 
+    if (opts.include == NULL) include_parts = make_path(opts.include)->parts;
+    if (opts.exclude == NULL) exclude_parts = make_path(opts.exclude)->parts;
+
     // precompute shit
     if (opts.literal) {
         // generate find skip
@@ -365,6 +368,8 @@ bool Searcher::start_search(ccstr _query, Search_Opts *_opts) {
                     stackpaths.append(fullpath);
                 }
             } else {
+                // if (include_parts == NULL || pattern_matches(include_parts, fullpath))
+                //     if (exclude_parts == NULL || !pattern_matches(exclude_parts, fullpath))
                 file_queue.append(fullpath);
             }
         }

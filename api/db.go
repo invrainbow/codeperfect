@@ -4,6 +4,13 @@ import (
 	"github.com/boltdb/bolt"
 )
 
+var allBuckets = []string{
+	"stripe_statuses", // email -> stripe_status
+	"emails",          // email -> cus_id
+	"keys",            // license_key -> cus_id
+	"keysr",           // cus_id -> license_key
+}
+
 func b(x interface{}) []byte {
 	return []byte(x)
 }
@@ -18,12 +25,7 @@ func init() {
 
 	// ensure buckets exist
 	db.Update(func(tx *bolt.Tx) error {
-		buckets := []string{
-			"stripe_statuses",
-			"keys",
-			"keysr",
-		}
-		for _, val := range buckets {
+		for _, val := range allBuckets {
 			val, err := tx.CreateBucketIfNotExists(b(val))
 			if err != nil {
 				log.Fatal(err)

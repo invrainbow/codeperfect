@@ -201,9 +201,6 @@ struct Pane {
 
 bool check_file_dimensions(ccstr path);
 
-void goto_error(int index);
-void goto_next_error(int direction);
-
 struct Type_Renderer : public Text_Renderer {
     void write_type(Gotype *t, bool parameter_hint_root = false);
 };

@@ -86,6 +86,7 @@ struct History {
     bool go_forward();
     bool go_backward();
     void remove_editor_from_history(int editor_id);
+    void save_latest();
 
     int inc(int i) { return i == _countof(ring) - 1 ? 0 : i + 1; }
     int dec(int i) { return i == 0 ? _countof(ring) - 1 : i - 1; }
@@ -102,9 +103,10 @@ struct Build {
     int current_error;
     bool build_itself_had_error;
     Thread_Handle thread;
-    i32 scroll_offset;
+    // i32 scroll_offset;
     u32 selection;
     bool creating_extmarks;
+    int scroll_to;
 
     bool ready() {
         return done && !creating_extmarks;
@@ -117,6 +119,7 @@ struct Build {
         SCOPED_MEM(&mem);
 
         errors.init();
+        scroll_to = -1;
     }
 
     void cleanup() {
@@ -394,5 +397,7 @@ void goto_jump_to_definition_result(Jump_To_Definition_Result *result);
 void handle_goto_definition();
 void save_all_unsaved_files();
 void start_search_job(ccstr query);
+void goto_error(int index);
+void goto_next_error(int direction);
 
 extern u64 post_insert_dotrepeat_time;

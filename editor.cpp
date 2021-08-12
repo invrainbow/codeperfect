@@ -1417,6 +1417,11 @@ bool Editor::cur_is_inside_comment_or_string() {
         switch (it->type()) {
         case TS_RAW_STRING_LITERAL:
         case TS_INTERPRETED_STRING_LITERAL:
+            if (cur == it->start() || cur == it->end())
+                break;
+            ret = true;
+            return WALK_ABORT;
+
         case TS_COMMENT:
             ret = true;
             return WALK_ABORT;
@@ -1499,6 +1504,14 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
         }
     }
 
+    ccstr wksp_import_path = NULL;
+    if (world.indexer.ready & world.indexer.lock.try_enter()) {
+        defer { world.indexer.lock.leave(); };
+
+        // only needs to live for duration of function
+        wksp_import_path = our_strcpy(world.indexer.index.current_import_path);
+    }
+
     {
         auto prefix = autocomplete.ac.prefix;
         auto results = autocomplete.ac.results;
@@ -1521,21 +1534,74 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
         }
         */
 
-        auto scores = alloc_array(double, results->len);
+        struct Score {
+            double fzy_score;
+            AC_Result_Type result_type;
+            bool is_struct_literal;
+            double import_score;
+        };
+
+        auto compare_scores = [&](Score *a, Score *b) -> int {
+            // ACR_DECLARATION comes before ACR_POSTFIX
+            if (autocomplete.ac.type == AUTOCOMPLETE_DOT_COMPLETE) {
+                auto at = a->result_type;
+                auto bt = b->result_type;
+
+                if (at != bt)
+                    if (at == ACR_POSTFIX || bt == ACR_POSTFIX)
+                        return at == ACR_POSTFIX ? -1 : 1;
+            }
+
+            if (a->is_struct_literal != b->is_struct_literal)
+                return a->is_struct_literal ? 1 : -1;
+
+            if (a->fzy_score != b->fzy_score)
+                return a->fzy_score > b->fzy_score ? 1 : -1;
+
+            if (a->result_type == ACR_IMPORT && b->result_type == ACR_IMPORT)
+                if (a->import_score != b->import_score)
+                    return a > b ? 1 : -1;
+
+            return 0;
+        };
+
+        auto scores = alloc_array(Score, results->len);
         auto scores_saved = alloc_array(bool, results->len);
 
-        auto get_score = [&](int i) {
+        auto get_score = [&](int i) -> Score* {
             if (!scores_saved[i]) {
-                scores[i] = fzy_match(prefix, autocomplete.ac.results->at(i).name);
+                auto &result = autocomplete.ac.results->at(i);
+
+                auto &score = scores[i];
+                ptr0(&score);
+
+                score.fzy_score = fzy_match(prefix, result.name);
+                score.result_type = result.type;
+
+                if (result.type == ACR_DECLARATION)
+                    if (result.declaration_is_struct_literal_field)
+                        score.is_struct_literal = true;
+
+                if (result.type == ACR_IMPORT) {
+                    // figure out score
+
+                    score.import_score = 1;
+
+                    // for now it's just prioritizing imports in workspace
+                    if (wksp_import_path != NULL)
+                        if (path_contains_in_subtree(wksp_import_path, result.import_path))
+                            score.import_score = 2;
+                }
+
                 scores_saved[i] = true;
             }
-            return scores[i];
+
+            return &scores[i];
         };
 
         autocomplete.filtered_results->sort([&](int *ia, int *ib) -> int {
-            auto a = get_score(*ia);
-            auto b = get_score(*ib);
-            return a < b ? 1 : (a > b ? -1 : 0); // reverse
+            // reverse
+            return -compare_scores(get_score(*ia), get_score(*ib));
         });
 
         t.log("scoring");
@@ -1724,11 +1790,13 @@ void Editor::update_parameter_hint() {
     } else {
         Parser_It it;
         it.init(&buf);
-        auto root_node = new_ast_node(ts_tree_root_node(buf.tree), &it);
+
+        auto tree = ts_tree_copy(buf.tree);
+        auto root_node = new_ast_node(ts_tree_root_node(tree), &it);
 
         Parsed_File pf;
         pf.root = root_node;
-        pf.tree = buf.tree;
+        pf.tree = tree;
         pf.it = &it;
         pf.tree_belongs_to_editor = true;
         pf.editor_parser = buf.parser;
@@ -2166,66 +2234,4 @@ void Editor::handle_save(bool about_to_close) {
             });
         }
     }
-}
-
-void goto_error(int index) {
-    auto &b = world.build;
-    if (index < 0 || index >= b.errors.len) return;
-
-    auto &error = b.errors[index];
-
-    SCOPED_FRAME();
-
-    auto path = path_join(world.current_path, error.file);
-    auto pos = new_cur2(error.col-1, error.row-1);
-
-    auto editor = world.find_editor([&](auto it) {
-        return are_filepaths_equal(path, it->filepath);
-    });
-
-    // when build finishes, set marks on existing editors
-    // when editor opens, get all existing errors and set marks
-
-    if (editor == NULL || error.nvim_extmark == 0) {
-        goto_file_and_pos(path, pos);
-        return;
-    }
-
-    auto ed = world.focus_editor(path);
-    ImGui::SetWindowFocus(NULL);
-    if (ed == NULL) return;
-
-    auto &nv = world.nvim;
-    auto msgid = nv.start_request_message("nvim_buf_get_extmark_by_id", 4);
-    nv.save_request(NVIM_REQ_GOTO_EXTMARK, msgid, editor->id);
-    nv.writer.write_int(editor->nvim_data.buf_id);
-    nv.writer.write_int(b.nvim_namespace_id);
-    nv.writer.write_int(error.nvim_extmark);
-    nv.writer.write_map(0);
-    nv.end_message();
-}
-
-void goto_next_error(int direction) {
-    auto &b = world.build;
-
-    bool has_valid = false;
-    For (b.errors) {
-        if (it.valid) {
-            has_valid = true;
-            break;
-        }
-    }
-
-    if (!b.ready() || !has_valid) return;
-
-    auto old = b.current_error;
-    do {
-        b.current_error += direction;
-        if (b.current_error < 0)
-            b.current_error = b.errors.len - 1;
-        if (b.current_error >= b.errors.len)
-            b.current_error = 0;
-    } while (b.current_error != old && !b.errors[b.current_error].valid);
-
-    goto_error(b.current_error);
 }

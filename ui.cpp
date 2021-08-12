@@ -1897,6 +1897,10 @@ void UI::draw_everything() {
 
         static Build_Error *menu_current_error = NULL;
 
+        if (ImGui::IsWindowAppearing()) {
+            ImGui::SetWindowFocus(NULL);
+        }
+
         if (world.build.ready()) {
             if (world.build.errors.len == 0) {
                 ImGui::TextColored(to_imcolor(rgba(COLOR_GREEN)), "Build was successful!");
@@ -1920,6 +1924,11 @@ void UI::draw_everything() {
                     ImGui::TreeNodeEx(&it, flags, "%s:%d:%d: %s", it.file, it.row, it.col, it.message);
                     ImGui::Indent(ImGui::GetTreeNodeToLabelSpacing());
                     */
+
+                    if (i == world.build.scroll_to) {
+                        ImGui::SetScrollHereY();
+                        world.build.scroll_to = -1;
+                    }
 
                     auto label = our_sprintf("%s:%d:%d: %s", it.file, it.row, it.col, it.message);
                     auto wrap_width = ImGui::GetContentRegionAvail().x;
@@ -2168,8 +2177,10 @@ void UI::draw_everything() {
                     else
                         label = our_sprintf("%s %s", icon, it->name);
 
-                    if (it == wnd.scroll_to)
+                    if (it == wnd.scroll_to) {
                         ImGui::SetScrollHereY();
+                        wnd.scroll_to = NULL;
+                    }
 
                     ImGui::PushID(it);
                     ImGui::Selectable(label, wnd.selection == it, ImGuiSelectableFlags_AllowDoubleClick);
@@ -2901,6 +2912,13 @@ void UI::draw_everything() {
                             drawpos.x += ImGui::CalcTextSize(text).x;
                         };
 
+                        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(ImColor(200, 178, 178)));
+                        {
+                            auto s = our_sprintf("%d:%d ", it.match_start.y+1, it.match_start.x+1);
+                            draw_text(s, strlen(s));
+                        }
+                        ImGui::PopStyleColor();
+
                         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(ImColor(178, 178, 178)));
 
                         draw_text(it.preview, it.match_offset_in_preview);
@@ -3070,15 +3088,18 @@ void UI::draw_everything() {
     }
 
     boxf status_area = get_status_area();
-    // boxf panes_area = get_panes_area();
 
     boxf pane_area;
     pane_area.pos = panes_area.pos;
 
     int editor_index;
 
-    vec2f actual_cursor_positions[16] = { -1 };
-    vec2f actual_parameter_hint_start = { -1 };
+    For (actual_cursor_positions) {
+        it.x = -1;
+        it.y = -1;
+    }
+    actual_parameter_hint_start.x = -1;
+    actual_parameter_hint_start.y = -1;
 
     // Draw panes.
     draw_rect(panes_area, rgba(COLOR_BG));
@@ -3447,7 +3468,7 @@ void UI::draw_everything() {
 
                         if (editor->cur == new_cur2((u32)curr_cp_idx, (u32)y)) {
                             draw_cursor(glyph_width);
-                            if ((world.nvim.mode != VI_INSERT) || (world.nvim.exiting_insert_mode) && current_pane == world.current_pane)
+                            if ((world.nvim.mode != VI_INSERT || world.nvim.exiting_insert_mode) && current_pane == world.current_pane)
                                 text_color = COLOR_BLACK;
                         } else if (world.nvim.mode != VI_INSERT) {
                             auto topline = editor->nvim_data.grid_topline;
@@ -3552,7 +3573,168 @@ void UI::draw_everything() {
             world.resizing_pane = -1;
     }
 
+    {
+        draw_rect(status_area, rgba("#252525"));
+
+        float status_area_left = status_area.x;
+        float status_area_right = status_area.x + status_area.w;
+
+        enum { LEFT = 0, RIGHT = 1 };
+
+        auto get_status_piece_rect = [&](int dir, ccstr s) -> boxf {
+            boxf ret; ptr0(&ret);
+            ret.y = status_area.y;
+            ret.h = status_area.h;
+            ret.w = font->width * strlen(s) + (settings.status_padding_x * 2);
+
+            if (dir == RIGHT)
+                ret.x = status_area_right - ret.w;
+            else
+                ret.x = status_area_left;
+
+            return ret;
+        };
+
+        // returns mouse flags
+        auto draw_status_piece = [&](int dir, ccstr s, vec4f bgcolor, vec4f fgcolor) -> int {
+            auto rect = get_status_piece_rect(dir, s);
+            draw_rect(rect, bgcolor);
+
+            if (dir == RIGHT)
+                status_area_right -= rect.w;
+            else
+                status_area_left += rect.w;
+
+            boxf text_area = rect;
+            text_area.x += settings.status_padding_x;
+            text_area.y += settings.status_padding_y;
+            text_area.w -= (settings.status_padding_x * 2);
+            text_area.h -= (settings.status_padding_y * 2);
+            draw_string(text_area.pos, s, fgcolor);
+
+            return get_mouse_flags(rect);
+        };
+
+        if (world.use_nvim) {
+            auto should_show_cmd = [&]() -> bool {
+                auto &nv = world.nvim;
+                if (nv.mode != VI_CMDLINE) return false;
+                if (nv.cmdline.content.len > 0) return true;
+                if (nv.cmdline.firstc.len > 0) return true;
+                if (nv.cmdline.prompt.len > 0) return true;
+                return false;
+            };
+
+            if (should_show_cmd()) {
+                auto &cmd = world.nvim.cmdline;
+
+                auto get_title = [&]() -> ccstr {
+                    if (cmd.prompt.len > 1)
+                        return cmd.prompt.items;
+                    if (streq(cmd.firstc.items, "/"))
+                        return "Forward search: ";
+                    if (streq(cmd.firstc.items, "?"))
+                        return "Backward search: ";
+                    if (streq(cmd.firstc.items, ":"))
+                        return "Command: ";
+                    return cmd.firstc.items;
+                };
+
+                auto command = our_sprintf("%s%s", get_title(), cmd.content.items);
+                draw_status_piece(LEFT, command, rgba("#888833"), rgba("#cccc88"));
+            } else if (world.get_current_editor() != NULL) {
+                ccstr mode_str = NULL;
+                switch (world.nvim.mode) {
+                case VI_NORMAL: mode_str = "NORMAL"; break;
+                case VI_VISUAL: mode_str = "VISUAL"; break;
+                case VI_INSERT: mode_str = "INSERT"; break;
+                case VI_REPLACE: mode_str = "REPLACE"; break;
+                case VI_OPERATOR: mode_str = "OPERATOR"; break;
+                case VI_CMDLINE: mode_str = "CMDLINE"; break;
+                default: mode_str = "UNKNOWN"; break;
+                }
+                draw_status_piece(LEFT, mode_str, rgba("#666666"), rgba("aaaaaa"));
+            }
+        }
+
+        switch (world.dbg.state_flag) {
+        case DLV_STATE_PAUSED:
+            draw_status_piece(LEFT, "PAUSED", rgba("#800000"), rgba(COLOR_WHITE));
+            break;
+        case DLV_STATE_STARTING:
+            draw_status_piece(LEFT, "STARTING", rgba("#888822"), rgba(COLOR_WHITE));
+            break;
+        case DLV_STATE_RUNNING:
+            draw_status_piece(LEFT, "RUNNING", rgba("#008000"), rgba(COLOR_WHITE));
+            break;
+        }
+
+        int index_mouse_flags = 0;
+        if (world.indexer.ready) {
+            auto mouse_flags = get_mouse_flags(get_status_piece_rect(RIGHT, "INDEX READY"));
+            auto opacity = mouse_flags & MOUSE_HOVER ? 1.0 : 0.8;
+            index_mouse_flags = draw_status_piece(RIGHT, "INDEX READY", rgba("#008800", opacity), rgba("#cceecc", opacity));
+        } else {
+            auto mouse_flags = get_mouse_flags(get_status_piece_rect(RIGHT, "INDEXING..."));
+            auto opacity = mouse_flags & MOUSE_HOVER ? 1.0 : 0.8;
+            index_mouse_flags = draw_status_piece(RIGHT, "INDEXING...", rgba("#880000", opacity), rgba("#eecccc", opacity));
+        }
+
+        if (index_mouse_flags & MOUSE_CLICKED) {
+            world.wnd_index_log.show ^= 1;
+        }
+
+        auto curr_editor = world.get_current_editor();
+        if (curr_editor != NULL) {
+            auto cur = curr_editor->cur;
+            draw_status_piece(RIGHT, our_sprintf("%d,%d", cur.y+1, cur.x+1), rgba(COLOR_WHITE, 0.0), rgba("#aaaaaa"));
+        }
+    }
+}
+
+void UI::end_frame() {
+    flush_verts();
+
+    ImGui::EndFrame();
+
+    {
+        // draw imgui buffers
+        ImDrawData* draw_data = ImGui::GetDrawData();
+        draw_data->ScaleClipRects(ImVec2(world.display_scale.x, world.display_scale.y));
+
+        glViewport(0, 0, world.display_size.x, world.display_size.y);
+        glUseProgram(world.ui.im_program);
+        glBindVertexArray(world.ui.im_vao);
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glEnable(GL_SCISSOR_TEST);
+
+        for (i32 i = 0; i < draw_data->CmdListsCount; i++) {
+            const ImDrawList* cmd_list = draw_data->CmdLists[i];
+            const ImDrawIdx* offset = 0;
+
+            glBindBuffer(GL_ARRAY_BUFFER, world.ui.im_vbo);
+            glBufferData(GL_ARRAY_BUFFER, cmd_list->VtxBuffer.Size * sizeof(ImDrawVert), cmd_list->VtxBuffer.Data, GL_STREAM_DRAW);
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, world.ui.im_vebo);
+            glBufferData(GL_ELEMENT_ARRAY_BUFFER, cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx), cmd_list->IdxBuffer.Data, GL_STREAM_DRAW);
+
+            i32 elem_size = sizeof(ImDrawIdx) == 2 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT;
+
+            for (i32 j = 0; j < cmd_list->CmdBuffer.Size; j++) {
+                const ImDrawCmd* cmd = &cmd_list->CmdBuffer[j];
+                glScissor(cmd->ClipRect.x, (world.display_size.y - cmd->ClipRect.w), (cmd->ClipRect.z - cmd->ClipRect.x), (cmd->ClipRect.w - cmd->ClipRect.y));
+                glDrawElements(GL_TRIANGLES, cmd->ElemCount, elem_size, offset);
+                offset += cmd->ElemCount;
+            }
+        }
+    }
+
     // now go back and draw things that go on top, like autocomplete and param hints
+    glViewport(0, 0, world.display_size.x, world.display_size.y);
+    glUseProgram(world.ui.program);
+    glBindVertexArray(world.ui.vao); // bind my vertex array & buffers
+    glBindBuffer(GL_ARRAY_BUFFER, world.ui.vbo);
+    glDisable(GL_SCISSOR_TEST);
+
     for (u32 current_pane = 0; current_pane < world.panes.len; current_pane++) {
         auto &pane = world.panes[current_pane];
         if (pane.editors.len == 0) continue;
@@ -3690,6 +3872,8 @@ void UI::draw_everything() {
                             actual_color = new_vec3f(1.0, 1.0, 0.8);
                         else if (result.type == ACR_DECLARATION && result.declaration_is_builtin)
                             actual_color = new_vec3f(0.8, 1.0, 0.8);
+                        else if (result.type == ACR_DECLARATION && result.declaration_is_struct_literal_field)
+                            actual_color = new_vec3f(1.0, 1.0, 0.8);
 
                         // add icon based on type
                         // show a bit more helpful info (like inline signature for funcs)
@@ -3980,162 +4164,10 @@ void UI::draw_everything() {
         } while (0);
     }
 
-    {
-        draw_rect(status_area, rgba("#252525"));
-
-        float status_area_left = status_area.x;
-        float status_area_right = status_area.x + status_area.w;
-
-        enum { LEFT = 0, RIGHT = 1 };
-
-        auto get_status_piece_rect = [&](int dir, ccstr s) -> boxf {
-            boxf ret; ptr0(&ret);
-            ret.y = status_area.y;
-            ret.h = status_area.h;
-            ret.w = font->width * strlen(s) + (settings.status_padding_x * 2);
-
-            if (dir == RIGHT)
-                ret.x = status_area_right - ret.w;
-            else
-                ret.x = status_area_left;
-
-            return ret;
-        };
-
-        // returns mouse flags
-        auto draw_status_piece = [&](int dir, ccstr s, vec4f bgcolor, vec4f fgcolor) -> int {
-            auto rect = get_status_piece_rect(dir, s);
-            draw_rect(rect, bgcolor);
-
-            if (dir == RIGHT)
-                status_area_right -= rect.w;
-            else
-                status_area_left += rect.w;
-
-            boxf text_area = rect;
-            text_area.x += settings.status_padding_x;
-            text_area.y += settings.status_padding_y;
-            text_area.w -= (settings.status_padding_x * 2);
-            text_area.h -= (settings.status_padding_y * 2);
-            draw_string(text_area.pos, s, fgcolor);
-
-            return get_mouse_flags(rect);
-        };
-
-        if (world.use_nvim) {
-            auto should_show_cmd = [&]() -> bool {
-                auto &nv = world.nvim;
-                if (nv.mode != VI_CMDLINE) return false;
-                if (nv.cmdline.content.len > 0) return true;
-                if (nv.cmdline.firstc.len > 0) return true;
-                if (nv.cmdline.prompt.len > 0) return true;
-                return false;
-            };
-
-            if (should_show_cmd()) {
-                auto &cmd = world.nvim.cmdline;
-
-                auto get_title = [&]() -> ccstr {
-                    if (cmd.prompt.len > 1)
-                        return cmd.prompt.items;
-                    if (streq(cmd.firstc.items, "/"))
-                        return "Forward search: ";
-                    if (streq(cmd.firstc.items, "?"))
-                        return "Backward search: ";
-                    if (streq(cmd.firstc.items, ":"))
-                        return "Command: ";
-                    return cmd.firstc.items;
-                };
-
-                auto command = our_sprintf("%s%s", get_title(), cmd.content.items);
-                draw_status_piece(LEFT, command, rgba("#888833"), rgba("#cccc88"));
-            } else if (world.get_current_editor() != NULL) {
-                ccstr mode_str = NULL;
-                switch (world.nvim.mode) {
-                case VI_NORMAL: mode_str = "NORMAL"; break;
-                case VI_VISUAL: mode_str = "VISUAL"; break;
-                case VI_INSERT: mode_str = "INSERT"; break;
-                case VI_REPLACE: mode_str = "REPLACE"; break;
-                case VI_OPERATOR: mode_str = "OPERATOR"; break;
-                case VI_CMDLINE: mode_str = "CMDLINE"; break;
-                default: mode_str = "UNKNOWN"; break;
-                }
-                draw_status_piece(LEFT, mode_str, rgba("#666666"), rgba("aaaaaa"));
-            }
-        }
-
-        switch (world.dbg.state_flag) {
-        case DLV_STATE_PAUSED:
-            draw_status_piece(LEFT, "PAUSED", rgba("#800000"), rgba(COLOR_WHITE));
-            break;
-        case DLV_STATE_STARTING:
-            draw_status_piece(LEFT, "STARTING", rgba("#888822"), rgba(COLOR_WHITE));
-            break;
-        case DLV_STATE_RUNNING:
-            draw_status_piece(LEFT, "RUNNING", rgba("#008000"), rgba(COLOR_WHITE));
-            break;
-        }
-
-        int index_mouse_flags = 0;
-        if (world.indexer.ready) {
-            auto mouse_flags = get_mouse_flags(get_status_piece_rect(RIGHT, "INDEX READY"));
-            auto opacity = mouse_flags & MOUSE_HOVER ? 1.0 : 0.8;
-            index_mouse_flags = draw_status_piece(RIGHT, "INDEX READY", rgba("#008800", opacity), rgba("#cceecc", opacity));
-        } else {
-            auto mouse_flags = get_mouse_flags(get_status_piece_rect(RIGHT, "INDEXING..."));
-            auto opacity = mouse_flags & MOUSE_HOVER ? 1.0 : 0.8;
-            index_mouse_flags = draw_status_piece(RIGHT, "INDEXING...", rgba("#880000", opacity), rgba("#eecccc", opacity));
-        }
-
-        if (index_mouse_flags & MOUSE_CLICKED) {
-            world.wnd_index_log.show ^= 1;
-        }
-
-        auto curr_editor = world.get_current_editor();
-        if (curr_editor != NULL) {
-            auto cur = curr_editor->cur;
-            draw_status_piece(RIGHT, our_sprintf("%d,%d", cur.y+1, cur.x+1), rgba(COLOR_WHITE, 0.0), rgba("#aaaaaa"));
-        }
-    }
-}
-
-void UI::end_frame() {
     flush_verts();
 
-    ImGui::EndFrame();
-
-    {
-        // draw imgui buffers
-        ImDrawData* draw_data = ImGui::GetDrawData();
-        draw_data->ScaleClipRects(ImVec2(world.display_scale.x, world.display_scale.y));
-
-        glViewport(0, 0, world.display_size.x, world.display_size.y);
-        glUseProgram(world.ui.im_program);
-        glBindVertexArray(world.ui.im_vao);
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        glEnable(GL_SCISSOR_TEST);
-
-        for (i32 i = 0; i < draw_data->CmdListsCount; i++) {
-            const ImDrawList* cmd_list = draw_data->CmdLists[i];
-            const ImDrawIdx* offset = 0;
-
-            glBindBuffer(GL_ARRAY_BUFFER, world.ui.im_vbo);
-            glBufferData(GL_ARRAY_BUFFER, cmd_list->VtxBuffer.Size * sizeof(ImDrawVert), cmd_list->VtxBuffer.Data, GL_STREAM_DRAW);
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, world.ui.im_vebo);
-            glBufferData(GL_ELEMENT_ARRAY_BUFFER, cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx), cmd_list->IdxBuffer.Data, GL_STREAM_DRAW);
-
-            i32 elem_size = sizeof(ImDrawIdx) == 2 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT;
-
-            for (i32 j = 0; j < cmd_list->CmdBuffer.Size; j++) {
-                const ImDrawCmd* cmd = &cmd_list->CmdBuffer[j];
-                glScissor(cmd->ClipRect.x, (world.display_size.y - cmd->ClipRect.w), (cmd->ClipRect.z - cmd->ClipRect.x), (cmd->ClipRect.w - cmd->ClipRect.y));
-                glDrawElements(GL_TRIANGLES, cmd->ElemCount, elem_size, offset);
-                offset += cmd->ElemCount;
-            }
-        }
-    }
-
     recalculate_view_sizes();
+
 }
 
 void UI::get_tabs_and_editor_area(boxf* pane_area, boxf* ptabs_area, boxf* peditor_area, bool has_tabs) {
@@ -4163,7 +4195,6 @@ void UI::get_tabs_and_editor_area(boxf* pane_area, boxf* ptabs_area, boxf* pedit
 }
 
 void UI::recalculate_view_sizes(bool force) {
-    // boxf panes_area = get_panes_area();
     auto new_sizes = alloc_list<vec2f>();
 
     float total = 0;

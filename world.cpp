@@ -93,6 +93,8 @@ bool History::go_backward() {
         auto editor = world.get_current_editor();
         auto &it = ring[dec(curr)];
 
+        // handle the case of: open file a, open file b, move down 4 lines (something < threshold),
+        // go back, go forward, cursor will now be on line 0 instead of line 4
         if (editor == NULL || it.editor_id != editor->id || it.pos != editor->cur) {
             if (editor != NULL) {
                 actually_push(editor->id, editor->cur, false, false);
@@ -109,6 +111,19 @@ bool History::go_backward() {
     curr = dec(curr);
     actually_go(&ring[dec(curr)]);
     return true;
+}
+
+void History::save_latest() {
+    auto editor = world.get_current_editor();
+    if (editor == NULL) return;
+
+    if (curr == start) return; // does this ever happen?
+
+    auto &it = ring[dec(curr)];
+    if (it.editor_id == editor->id && it.pos == editor->cur)
+        return;
+
+    actually_push(editor->id, editor->cur, false, false);
 }
 
 void History::remove_editor_from_history(int editor_id) {
@@ -704,6 +719,7 @@ void goto_file_and_pos(ccstr file, cur2 pos) {
 }
 
 void goto_jump_to_definition_result(Jump_To_Definition_Result *result) {
+    world.history.save_latest();
     goto_file_and_pos(result->file, result->pos);
 }
 
@@ -867,4 +883,68 @@ FT_Node *World::sort_ft_nodes(FT_Node *nodes) {
     }
 
     return ret;
+}
+
+void goto_error(int index) {
+    auto &b = world.build;
+    if (index < 0 || index >= b.errors.len) return;
+
+    auto &error = b.errors[index];
+
+    SCOPED_FRAME();
+
+    auto path = path_join(world.current_path, error.file);
+    auto pos = new_cur2(error.col-1, error.row-1);
+
+    auto editor = world.find_editor([&](auto it) {
+        return are_filepaths_equal(path, it->filepath);
+    });
+
+    // when build finishes, set marks on existing editors
+    // when editor opens, get all existing errors and set marks
+
+    if (editor == NULL || error.nvim_extmark == 0) {
+        goto_file_and_pos(path, pos);
+        return;
+    }
+
+    auto ed = world.focus_editor(path);
+    ImGui::SetWindowFocus(NULL);
+    if (ed == NULL) return;
+
+    b.scroll_to = index;
+
+    auto &nv = world.nvim;
+    auto msgid = nv.start_request_message("nvim_buf_get_extmark_by_id", 4);
+    nv.save_request(NVIM_REQ_GOTO_EXTMARK, msgid, editor->id);
+    nv.writer.write_int(editor->nvim_data.buf_id);
+    nv.writer.write_int(b.nvim_namespace_id);
+    nv.writer.write_int(error.nvim_extmark);
+    nv.writer.write_map(0);
+    nv.end_message();
+}
+
+void goto_next_error(int direction) {
+    auto &b = world.build;
+
+    bool has_valid = false;
+    For (b.errors) {
+        if (it.valid) {
+            has_valid = true;
+            break;
+        }
+    }
+
+    if (!b.ready() || !has_valid) return;
+
+    auto old = b.current_error;
+    do {
+        b.current_error += direction;
+        if (b.current_error < 0)
+            b.current_error = b.errors.len - 1;
+        if (b.current_error >= b.errors.len)
+            b.current_error = 0;
+    } while (b.current_error != old && !b.errors[b.current_error].valid);
+
+    goto_error(b.current_error);
 }

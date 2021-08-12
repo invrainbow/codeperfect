@@ -160,6 +160,10 @@ struct UI {
     ImGuiID dock_bottom_right_id;
     bool dock_initialized;
 
+    // for drawing
+    vec2f actual_cursor_positions[16];
+    vec2f actual_parameter_hint_start;
+
     struct {
         int id;
         int id_last_frame;

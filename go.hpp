@@ -617,6 +617,7 @@ enum Godecl_Type {
     GODECL_FUNC, // should we have GODECL_METHOD too? can just check gotype->func_recv
     GODECL_FIELD,
     GODECL_SHORTVAR,
+    GODECL_TYPECASE,
     // GODECL_RANGE,
 };
 
@@ -634,6 +635,7 @@ struct Godecl {
     cur2 decl_end;
     cur2 spec_start;
     cur2 name_start;
+    cur2 name_end;
     ccstr name;
     bool is_embedded; // for GODECL_FIELD
 
@@ -886,13 +888,20 @@ enum Go_Scope_Op_Type {
     GSOP_OPEN_SCOPE,
     GSOP_CLOSE_SCOPE,
     GSOP_DECL,
+    GSOP_OPEN_SWITCH_TYPE_SCOPE,
 };
 
 struct Go_Scope_Op {
     Go_Scope_Op_Type type;
     cur2 pos;
-    Godecl *decl;
-    int decl_scope_depth;
+    union {
+        struct {
+            Godecl *decl;
+            int decl_scope_depth;
+        };
+
+        Gotype *gotype;
+    };
 
     Go_Scope_Op *copy();
     void read(Index_Stream *s);
