@@ -28,9 +28,15 @@ Create a bin folder, put a copy of nvim.exe inside.
 
 ### macOS setup
 
-Install brew, then run:
+Install brew. Install dependencies:
 
-    brew install glfw3 glew pcre
+    brew install glfw3 glew pcre go coreutils
+    ./macos_install_cwalk.sh
 
-Install cwalk into system -- no brew, you need to do it manually. Follow
-instructions in cwalk's docs, then `sudo make install` after `make`.
+Build:
+
+    ./build_macos.sh
+
+Run:
+
+    bin/ide
