@@ -30,8 +30,7 @@ Create a bin folder, put a copy of nvim.exe inside.
 
 Install brew. Install dependencies:
 
-    brew install glfw3 glew pcre go coreutils
-    ./macos_install_cwalk.sh
+    ./macos_install_dependencies.sh
 
 Build:
 
