@@ -473,6 +473,11 @@ void Buffer::internal_finish_edit(cur2 new_end) {
     tsedit.new_end_byte = cur_to_offset(new_end);
     tsedit.new_end_point = cur_to_tspoint(new_end);
 
+    // everything before start_point is unaffected
+    // everything after old_end_point is added by (new_end_point - old_end_point)
+    // everything between start_point and old_end_point... i guess is unchanged?
+    // tsedit.start_point, tsedit.old_end_point, tsedit.new_end_point
+
     ts_tree_edit(tree, &tsedit);
     update_tree();
 }
@@ -630,3 +635,152 @@ cur2 Buffer::offset_to_cur(i32 off) {
 
     return ret;
 }
+
+// ============
+
+int Mark_Tree::get_height(Mark_Node *root) {
+    return root == NULL ? 0 : root->height;
+}
+
+int Mark_Tree::get_balance(Mark_Node *root) {
+    return root == NULL ? 0 : (get_height(root->left) - get_height(root->right));
+}
+
+Mark_Node *Mark_Tree::find_node(Mark_Node *root, cur2 pos) {
+    if (root == NULL) return NULL;
+    if (root->pos == pos) return root;
+
+    return find_node(pos < root->pos ? root->left : root->right, pos);
+}
+
+Mark *Mark_Tree::insert_mark(Mark_Type type, cur2 pos) {
+    auto mark = world.mark_fridge.alloc();
+    mark->type = type;
+
+    auto node = find_node(root, pos);
+    if (node == NULL) {
+        auto node = world.mark_node_fridge.alloc();
+        node->pos = pos;
+        root = internal_insert_node(root, pos, node);
+    }
+
+    mark->node = node;
+    mark->next = node->marks;
+    node->marks = mark;
+    return mark;
+}
+
+void Mark_Tree::recalc_height(Mark_Node *root) {
+    root->height = 1 + max(get_height(root->left), get_height(root->right));
+}
+
+Mark_Node* Mark_Tree::rotate_right(Mark_Node *root) {
+    auto y = root->left;
+    root->left = y->right;
+    y->right = root;
+
+    recalc_height(root);
+    recalc_height(y);
+    return y;
+}
+
+Mark_Node* Mark_Tree::rotate_left(Mark_Node *root) {
+    auto y = root->right;
+    root->right = y->left;
+    y->left = root;
+
+    recalc_height(root);
+    recalc_height(y);
+    return y;
+}
+
+// precond: pos doesn't exist in root
+Mark_Node *Mark_Tree::internal_insert_node(Mark_Node *root, cur2 pos, Mark_Node *node) {
+    if (root == NULL) return node;
+
+    if (pos < root->pos)
+        root->left = internal_insert_node(root->left, pos, node);
+    else
+        root->right = internal_insert_node(root->right, pos, node);
+
+    recalc_height(root);
+
+    auto balance = get_balance(root);
+    if (balance > 1) {
+        if (pos >= root->left->pos)
+            root->left = rotate_left(root->left);
+        return rotate_right(root);
+    }
+    if (balance < -1) {
+        if (pos < root->right->pos)
+            root->right = rotate_right(root->right);
+        return rotate_left(root);
+    }
+    return root;
+}
+
+void Mark_Tree::delete_mark(Mark *mark) {
+    auto node = mark->node;
+
+    // remove `mark` from `node->marks`
+    Mark *last = NULL;
+    for (auto it = node->marks; it != NULL; it = it->next) {
+        if (it == mark) {
+            if (last == NULL)
+               node->marks = it->next;
+            else
+               last->next = mark->next;
+        }
+        last = it;
+    }
+
+    if (node->marks == NULL)
+        root = internal_delete_node(root, mark->node->pos);
+
+    world.mark_fridge.free(mark);
+}
+
+Mark_Node *Mark_Tree::internal_delete_node(Mark_Node *root, cur2 pos) {
+    if (root == NULL) return root;
+
+    if (pos < root->pos)
+        root->left = internal_delete_node(root->left, pos);
+    else if (pos > root->pos)
+        root->right = internal_delete_node(root->right, pos);
+    else {
+        if (root->left == NULL) {
+            auto ret = root->right;
+            world.mark_node_fridge.free(root);
+            return ret;
+        }
+        if (root->right == NULL) {
+            auto ret = root->left;
+            world.mark_node_fridge.free(root);
+            return ret;
+        }
+
+        auto min = root->right;
+        while (min->left != NULL)
+            min = min->left;
+
+        root->marks = min->marks;
+        root->pos = min->pos;
+        root->right = internal_delete_node(root->right, min->pos);
+    }
+
+    recalc_height(root);
+
+    auto balance = get_balance(root);
+    if (balance > 1) {
+        if (get_balance(root->left) < 0)
+            root->left = rotate_left(root->left);
+        return rotate_right(root);
+    }
+    if (balance < -1) {
+        if (get_balance(root->right) > 0)
+            root->right = rotate_right(root->right);
+        return rotate_left(root);
+    }
+    return root;
+}
+

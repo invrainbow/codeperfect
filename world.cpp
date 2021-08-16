@@ -327,6 +327,9 @@ void World::init(GLFWwindow *_wnd) {
     // use frame_mem as the default mem
     MEM = &frame_mem;
 
+    mark_fridge.init(512);
+    mark_node_fridge.init(512);
+
     chunk0_fridge.init(512);
     chunk1_fridge.init(256);
     chunk2_fridge.init(128);

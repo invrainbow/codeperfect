@@ -53,6 +53,58 @@ s32 uchar_to_cstr(uchar c, cstr out);
 
 typedef fn<bool(char*)> Buffer_Read_Func;
 
+// actually, should we just build in a way where this doesn't need to be known
+enum Mark_Type {
+    MARK_BUILD_ERROR,
+};
+
+struct Mark_Node;
+
+struct Mark {
+    Mark_Type type;
+    Mark_Node *node;
+    Mark *next;
+    bool invalidated; // does this go on mark on node? i think mark?
+
+    cur2 pos() { return node->pos; }
+};
+
+struct Mark_Node {
+    // data assoc'd with each node
+    cur2 pos;
+    Mark *marks; // linked list of mark pointers
+
+    // internal
+    Mark_Node *left;
+    Mark_Node *right;
+    int height;
+};
+
+// where do i use this?
+// c-o/i
+// build errors
+// search results
+
+// AVL tree for keeping track of marks.
+struct Mark_Tree {
+    Mark_Node *root;
+
+    void init() { ptr0(this); }
+
+    Mark *insert_mark(Mark_Type type, cur2 pos);
+    void delete_mark(Mark *mark);
+
+    Mark_Node *find_node(Mark_Node *root, cur2 pos);
+    int get_height(Mark_Node *root);
+    int get_balance(Mark_Node *root);
+    void recalc_height(Mark_Node *root);
+    Mark_Node* rotate_right(Mark_Node *root);
+    Mark_Node* rotate_left(Mark_Node *root);
+
+    Mark_Node *internal_insert_node(Mark_Node *root, cur2 pos, Mark_Node *node);
+    Mark_Node *internal_delete_node(Mark_Node *root, cur2 pos);
+};
+
 struct Buffer {
     Pool *mem;
 
@@ -109,3 +161,6 @@ struct Buffer {
 };
 
 s32 uchar_size(uchar c);
+
+
+
