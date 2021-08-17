@@ -184,6 +184,9 @@ void Buffer::init(Pool *_mem, bool _use_tree) {
 
     if (_use_tree)
         enable_tree();
+
+
+    mark_tree.init();
 }
 
 void Buffer::enable_tree() {
@@ -195,16 +198,17 @@ void Buffer::enable_tree() {
 }
 
 void Buffer::cleanup() {
-    if (initialized) {
-        clear();
+    if (!initialized) return;
 
-        if (parser != NULL)
-            ts_parser_delete(parser);
-        if (tree != NULL)
-            ts_tree_delete(tree);
+    clear();
+    if (parser != NULL)
+        ts_parser_delete(parser);
+    if (tree != NULL)
+        ts_tree_delete(tree);
 
-        initialized = false;
-    }
+    mark_tree.cleanup();
+
+    initialized = false;
 }
 
 void Buffer::copy_from(Buffer *other) {
@@ -638,6 +642,26 @@ cur2 Buffer::offset_to_cur(i32 off) {
 
 // ============
 
+void cleanup_mark_node(Mark_Node *node) {
+    if (node == NULL) return;
+
+    cleanup_mark_node(node->left);
+    cleanup_mark_node(node->right);
+
+    auto it = node->marks;
+    while (it != NULL) {
+        auto next = it->next;
+        world.mark_fridge.free(it);   
+        it = next;
+    }
+
+    world.mark_node_fridge.free(node);
+}
+
+void Mark_Tree::cleanup() {
+    cleanup_mark_node(root);
+}
+
 int Mark_Tree::get_height(Mark_Node *root) {
     return root == NULL ? 0 : root->height;
 }
@@ -659,12 +683,13 @@ Mark *Mark_Tree::insert_mark(Mark_Type type, cur2 pos) {
 
     auto node = find_node(root, pos);
     if (node == NULL) {
-        auto node = world.mark_node_fridge.alloc();
+        node = world.mark_node_fridge.alloc();
         node->pos = pos;
         root = internal_insert_node(root, pos, node);
     }
 
     mark->node = node;
+    mark->tree = this;
     mark->next = node->marks;
     node->marks = mark;
     return mark;
@@ -698,10 +723,15 @@ Mark_Node* Mark_Tree::rotate_left(Mark_Node *root) {
 Mark_Node *Mark_Tree::internal_insert_node(Mark_Node *root, cur2 pos, Mark_Node *node) {
     if (root == NULL) return node;
 
-    if (pos < root->pos)
+    if (pos < root->pos) {
+        auto old = root->left;
         root->left = internal_insert_node(root->left, pos, node);
-    else
+        if (old == NULL) node->parent = root;
+    } else {
+        auto old = root->right;
         root->right = internal_insert_node(root->right, pos, node);
+        if (old == NULL) node->parent = root;
+    }
 
     recalc_height(root);
 
@@ -730,6 +760,7 @@ void Mark_Tree::delete_mark(Mark *mark) {
                node->marks = it->next;
             else
                last->next = mark->next;
+            break;
         }
         last = it;
     }
@@ -750,11 +781,13 @@ Mark_Node *Mark_Tree::internal_delete_node(Mark_Node *root, cur2 pos) {
     else {
         if (root->left == NULL) {
             auto ret = root->right;
+            ret->parent = root->parent;
             world.mark_node_fridge.free(root);
             return ret;
         }
         if (root->right == NULL) {
             auto ret = root->left;
+            ret->parent = root->parent;
             world.mark_node_fridge.free(root);
             return ret;
         }
@@ -784,3 +817,11 @@ Mark_Node *Mark_Tree::internal_delete_node(Mark_Node *root, cur2 pos) {
     return root;
 }
 
+cur2 Mark::pos() {
+    auto ret = node->pos;
+    /*
+    for (auto it = node; it != NULL; it = it->parent)
+        ret += it->offset;
+    */
+    return ret;
+}

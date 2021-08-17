@@ -336,12 +336,6 @@ enum Nvim_Request_Type {
     NVIM_REQ_POST_SAVE_SETLINES,
     // NVIM_REQ_AUTOIMPORT_SETLINES,
 
-    NVIM_REQ_GOTO_EXTMARK,
-
-    NVIM_REQ_CREATE_EXTMARKS_CREATE_NAMESPACE,
-    NVIM_REQ_CREATE_EXTMARKS_SET_EXTMARKS,
-    NVIM_REQ_CREATE_EDITOR_EXTMARKS,
-
     NVIM_REQ_COCKS,
 };
 
@@ -366,10 +360,6 @@ struct Nvim_Request {
         struct {
             cur2 go_here_after;
         } post_insert_getchangedtick;
-
-        struct {
-            List<u32> *error_indexes;
-        } create_extmarks;
     };
 };
 
@@ -412,11 +402,6 @@ struct Nvim_Message {
                 int channel_id;
                 Ext_Info buf;
                 Ext_Info win;
-                struct {
-                    bool ok;
-                    cur2 pos;
-                } goto_extmark;
-                List<u32> *extmarks;
                 u32 namespace_id;
             };
         } response;

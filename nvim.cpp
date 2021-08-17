@@ -49,8 +49,6 @@ Editor* Nvim::find_editor_by_grid(u32 grid) {
 void Nvim::handle_editor_on_ready(Editor *editor) {
     if (!editor->is_nvim_ready()) return;
 
-    nvim_print("[cocks] nvim is ready!");
-
     // clear dirty indicator (it'll be set after we filled buf during
     // nvim_buf_lines_event)
     editor->buf.dirty = false;
@@ -160,16 +158,6 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 dotrepeat_win_id = event->response.win.object_id;
                 break;
 
-            case NVIM_REQ_GOTO_EXTMARK:
-                {
-                    auto &data = event->response.goto_extmark;
-                    if (!data.ok) break;
-
-                    // ImGui::SetWindowFocus(NULL);
-                    editor->move_cursor(data.pos);
-                }
-                break;
-
             case NVIM_REQ_FILEOPEN_CLEAR_UNDO:
                 editor->buf.dirty = false;
                 break;
@@ -194,13 +182,9 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 }
                 break;
 
-            case NVIM_REQ_COCKS:
-                break;
-
             case NVIM_REQ_POST_INSERT_DOTREPEAT_REPLAY:
                 {
-                    auto msgid = start_request_message("nvim_call_atomic", 1);
-                    save_request(NVIM_REQ_COCKS, msgid, editor->id);
+                    start_request_message("nvim_call_atomic", 1);
 
                     u64 diff = current_time_in_nanoseconds() - post_insert_dotrepeat_time;
                     print("postinsert dotrepeat took %llu ns", diff);
@@ -252,8 +236,6 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
 
             case NVIM_REQ_CREATE_BUF:
                 editor->nvim_data.buf_id = event->response.buf.object_id;
-
-                print("[cocks] create_buf came back, attaching, setting lines, setting options, and opening win");
 
                 {
                     auto msgid = start_request_message("nvim_call_atomic", 1);
@@ -347,59 +329,6 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 }
 
                 handle_editor_on_ready(editor);
-
-                {
-                    auto &b = world.build;
-                    if (!b.ready()) break;
-
-                    List<u32> *error_indexes = NULL;
-                    {
-                        SCOPED_MEM(&requests_mem);
-                        error_indexes = alloc_list<u32>();
-                    }
-
-                    struct Call {
-                        u32 buf_id;
-                        cur2 pos;
-                    };
-
-                    auto calls = alloc_list<Call>();
-
-                    auto editor_path = get_path_relative_to(editor->filepath, world.current_path);
-                    for (u32 i = 0; i < b.errors.len; i++) {
-                        auto &it = b.errors[i];
-
-                        if (it.nvim_extmark != 0) continue;
-                        if (!it.valid) continue;
-                        if (!are_filepaths_equal(editor_path, it.file)) continue;
-
-                        error_indexes->append(i);
-
-                        auto call = calls->append();
-                        call->buf_id = editor->nvim_data.buf_id;
-                        call->pos = new_cur2(it.col - 1, it.row - 1);
-                    }
-
-                    auto msgid = start_request_message("nvim_call_atomic", 1);
-                    auto req = save_request(NVIM_REQ_CREATE_EDITOR_EXTMARKS, msgid, 0);
-                    defer { end_message(); };
-
-                    writer.write_array(calls->len);
-                    For (*calls) {
-                        writer.write_array(2);
-                        writer.write_string("nvim_buf_set_extmark");
-                        {
-                            writer.write_array(5);
-                            writer.write_int(it.buf_id);
-                            writer.write_int(b.nvim_namespace_id);
-                            writer.write_int(it.pos.y);
-                            writer.write_int(it.pos.x);
-                            writer.write_map(0);
-                        }
-                    }
-
-                    req->create_extmarks.error_indexes = error_indexes;
-                }
                 break;
             case NVIM_REQ_BUF_ATTACH:
                 editor->nvim_data.is_buf_attached = true;
@@ -407,79 +336,6 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
 
             case NVIM_REQ_UI_ATTACH:
                 is_ui_attached = true;
-                break;
-
-            case NVIM_REQ_CREATE_EXTMARKS_CREATE_NAMESPACE:
-                {
-                    auto &b = world.build;
-                    b.nvim_namespace_id = event->response.namespace_id;
-
-                    List<u32> *error_indexes = NULL;
-                    {
-                        SCOPED_MEM(&requests_mem);
-                        error_indexes = alloc_list<u32>();
-                    }
-
-                    struct Call {
-                        cur2 pos;
-                        u32 buf_id;
-                    };
-
-                    auto calls = alloc_list<Call>();
-                    For (world.panes) {
-                        For (it.editors) {
-                            auto editor = it;
-                            auto path = get_path_relative_to(it.filepath, world.current_path);
-                            for (u32 i = 0; i < b.errors.len; i++) {
-                                auto &it = b.errors[i];
-                                if (!it.valid) continue;
-                                if (!are_filepaths_equal(path, it.file)) continue;
-
-                                error_indexes->append(i);
-                                auto call = calls->append();
-                                call->pos = new_cur2(it.col - 1, it.row - 1);
-                                call->buf_id = editor.nvim_data.buf_id;
-                            }
-                        }
-                    }
-
-                    auto msgid = start_request_message("nvim_call_atomic", 1);
-                    auto req2 = save_request(NVIM_REQ_CREATE_EXTMARKS_SET_EXTMARKS, msgid, 0);
-                    defer { end_message(); };
-
-                    writer.write_array(calls->len);
-                    For (*calls) {
-                        writer.write_array(2);
-                        writer.write_string("nvim_buf_set_extmark");
-                        {
-                            writer.write_array(5);
-                            writer.write_int(it.buf_id);
-                            writer.write_int(b.nvim_namespace_id);
-                            writer.write_int(it.pos.y);
-                            writer.write_int(it.pos.x);
-                            writer.write_map(0);
-                        }
-                    }
-
-                    req2->create_extmarks.error_indexes = error_indexes;
-                }
-                break;
-
-            case NVIM_REQ_CREATE_EXTMARKS_SET_EXTMARKS:
-            case NVIM_REQ_CREATE_EDITOR_EXTMARKS:
-                {
-                    auto error_indexes = req->create_extmarks.error_indexes;
-                    auto items_to_process = min(error_indexes->len, event->response.extmarks->len);
-
-                    for (u32 i = 0; i < items_to_process; i++) {
-                        auto &err = world.build.errors[error_indexes->at(i)];
-                        auto extmark = event->response.extmarks->at(i);
-                        err.nvim_extmark = extmark;
-                    }
-
-                    if (req->type == NVIM_REQ_CREATE_EXTMARKS_SET_EXTMARKS)
-                        world.build.creating_extmarks = false;
-                }
                 break;
             }
         }
@@ -677,8 +533,6 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
             break;
         case NVIM_NOTIF_BUF_LINES:
             {
-                print("[cocks] got lines");
-
                 auto &args = event->notification.buf_lines;
 
                 auto editor = find_editor_by_buffer(args.buf.object_id);
@@ -731,8 +585,6 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
         case NVIM_NOTIF_MODE_CHANGE:
             {
                 auto &args = event->notification.mode_change;
-
-                print("[cocks] mode changed to %s", args.mode_name);
 
                 nvim_print("mode: %s", args.mode_name);
 
@@ -1395,50 +1247,6 @@ void Nvim::run_event_loop() {
                             m->response.buf = *buf;
                         });
                     }
-                    break;
-
-                case NVIM_REQ_GOTO_EXTMARK:
-                    {
-                        bool ok = true;
-                        u32 row = 0, col = 0;
-
-                        auto arr_len = reader.read_array(); CHECKOK();
-                        if (arr_len == 0) {
-                            ok = false;
-                        } else if (arr_len == 2) {
-                            row = reader.read_int(); CHECKOK();
-                            col = reader.read_int(); CHECKOK();
-                        } else {
-                            our_panic(our_sprintf("got array with %d items from nvim_buf_get_extmark_by_id", arr_len));
-                        }
-
-                        add_response_event([&](auto m) {
-                            m->response.goto_extmark.ok = ok;
-                            m->response.goto_extmark.pos = new_cur2(col, row);
-                        });
-                    }
-                    break;
-
-                case NVIM_REQ_CREATE_EXTMARKS_CREATE_NAMESPACE:
-                    {
-                        auto namespace_id = reader.read_int(); CHECKOK();
-                        add_response_event([&](auto m) {
-                            m->response.namespace_id = namespace_id;
-                        });
-                    }
-                    break;
-
-                case NVIM_REQ_CREATE_EXTMARKS_SET_EXTMARKS:
-                case NVIM_REQ_CREATE_EDITOR_EXTMARKS:
-                    read_atomic_call_response([&]() {
-                        auto responses_len = reader.read_array(); CHECKOK();
-                        add_response_event([&](auto m) {
-                            auto extmarks = alloc_list<u32>(responses_len);
-                            for (u32 i = 0; i < responses_len; i++)
-                                extmarks->append(reader.read_int());
-                            m->response.extmarks = extmarks;
-                        });
-                    });
                     break;
 
                 case NVIM_REQ_POST_INSERT_DOTREPEAT_REPLAY:

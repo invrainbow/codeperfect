@@ -31,6 +31,8 @@ func sendError(c *gin.Context, message string) {
 }
 
 func main() {
+	some random error lol
+
 	defer cleanupDB()
 
 	r := gin.Default()

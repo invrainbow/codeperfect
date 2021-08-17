@@ -564,19 +564,24 @@ void kick_off_build(Build_Profile *build_profile) {
             build->current_error = -1;
             build->done = true;
             build->started = false;
-            build->creating_extmarks = true;
 
             if (build->errors.len == 0)
                 world.error_list.show = false;
 
-            {
-                auto &nv = world.nvim;
-                auto msgid = nv.start_request_message("nvim_create_namespace", 1);
-                nv.save_request(NVIM_REQ_CREATE_EXTMARKS_CREATE_NAMESPACE, msgid, 0);
-                nv.writer.write_string(our_sprintf("build-%d", world.build.id));
-                nv.end_message();
-            }
+            For (world.panes) {
+                For (it.editors) {
+                    auto &editor = it;
+                    auto path = get_path_relative_to(it.filepath, world.current_path);
 
+                    For (build->errors) {
+                        if (!it.valid) continue;
+                        if (!are_filepaths_equal(path, it.file)) continue;
+
+                        auto pos = new_cur2(it.col - 1, it.row - 1);
+                        it.mark = editor.buf.mark_tree.insert_mark(MARK_BUILD_ERROR, pos);
+                    }
+                }
+            }
             break;
         }
     };
@@ -906,25 +911,14 @@ void goto_error(int index) {
     // when build finishes, set marks on existing editors
     // when editor opens, get all existing errors and set marks
 
-    if (editor == NULL || error.nvim_extmark == 0) {
+    if (editor == NULL || error.mark == NULL) {
         goto_file_and_pos(path, pos);
         return;
     }
 
-    auto ed = world.focus_editor(path);
+    world.focus_editor_by_id(editor->id, error.mark->pos());
     ImGui::SetWindowFocus(NULL);
-    if (ed == NULL) return;
-
     b.scroll_to = index;
-
-    auto &nv = world.nvim;
-    auto msgid = nv.start_request_message("nvim_buf_get_extmark_by_id", 4);
-    nv.save_request(NVIM_REQ_GOTO_EXTMARK, msgid, editor->id);
-    nv.writer.write_int(editor->nvim_data.buf_id);
-    nv.writer.write_int(b.nvim_namespace_id);
-    nv.writer.write_int(error.nvim_extmark);
-    nv.writer.write_map(0);
-    nv.end_message();
 }
 
 void goto_next_error(int direction) {

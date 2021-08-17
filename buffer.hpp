@@ -58,25 +58,30 @@ enum Mark_Type {
     MARK_BUILD_ERROR,
 };
 
+struct Mark_Tree;
 struct Mark_Node;
 
 struct Mark {
     Mark_Type type;
+    Mark_Tree *tree;
     Mark_Node *node;
     Mark *next;
     bool invalidated; // does this go on mark on node? i think mark?
 
-    cur2 pos() { return node->pos; }
+    cur2 pos();
+    void cleanup();
 };
 
 struct Mark_Node {
     // data assoc'd with each node
     cur2 pos;
     Mark *marks; // linked list of mark pointers
+    int offset;
 
     // internal
     Mark_Node *left;
     Mark_Node *right;
+    Mark_Node *parent;
     int height;
 };
 
@@ -90,6 +95,7 @@ struct Mark_Tree {
     Mark_Node *root;
 
     void init() { ptr0(this); }
+    void cleanup();
 
     Mark *insert_mark(Mark_Type type, cur2 pos);
     void delete_mark(Mark *mark);
@@ -110,6 +116,7 @@ struct Buffer {
 
     List<Line> lines;
     List<u32> bytecounts;
+    Mark_Tree mark_tree;
 
     bool initialized;
     bool dirty;

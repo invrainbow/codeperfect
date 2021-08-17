@@ -30,7 +30,7 @@ struct Build_Error {
     ccstr file;
     u32 row;
     u32 col;
-    u64 nvim_extmark;
+    Mark *mark; // ???
 };
 
 struct FT_Node {
@@ -105,11 +105,10 @@ struct Build {
     Thread_Handle thread;
     // i32 scroll_offset;
     u32 selection;
-    bool creating_extmarks;
     int scroll_to;
 
     bool ready() {
-        return done && !creating_extmarks;
+        return done;
     }
 
     void init() {
@@ -126,8 +125,12 @@ struct Build {
         if (thread != NULL) {
             kill_thread(thread);
             close_thread_handle(thread);
-            // TODO: delete nvim namespace and extmarks
         }
+
+        For (errors)
+            if (it.mark != NULL)
+                it.mark->tree->delete_mark(it.mark);
+
         mem.cleanup();
     }
 };

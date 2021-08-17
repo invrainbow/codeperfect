@@ -8,7 +8,6 @@ TODO:
     2) where the source of truth should be stored
 - (mac) running processes from different folder (e.g. for ctrl+p) only works in tmux???
 */
-
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>

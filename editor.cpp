@@ -732,8 +732,6 @@ bool Editor::is_current_editor() {
 }
 
 void Editor::raw_move_cursor(cur2 c, bool dont_add_to_history) {
-    print("[cocks] raw_move_cursor %s", format_cur(c));
-
     if (c.y == -1) c = buf.offset_to_cur(c.x);
     if (c.y < 0 || c.y >= buf.lines.len) return;
     if (c.x < 0) return;
@@ -833,8 +831,6 @@ void Editor::update_lines(int firstline, int lastline, List<uchar*> *new_lines, 
 }
 
 void Editor::move_cursor(cur2 c) {
-    print("[cocks] move_cursor %s", format_cur(c));
-
     if (world.nvim.mode == VI_INSERT) {
         nvim_data.waiting_for_move_cursor = true;
         nvim_data.move_cursor_to = c;
@@ -938,7 +934,6 @@ void Editor::reload_file(bool because_of_file_watcher) {
 }
 
 bool Editor::load_file(ccstr new_filepath) {
-    print("[cocks] loading file...");
     reset_state();
 
     if (buf.initialized)
@@ -981,12 +976,25 @@ bool Editor::load_file(ccstr new_filepath) {
     if (world.use_nvim) {
         auto& nv = world.nvim;
         auto msgid = nv.start_request_message("nvim_create_buf", 2);
-        print("[cocks] creating buf");
         nv.save_request(NVIM_REQ_CREATE_BUF, msgid, id);
 
         nv.writer.write_bool(false);
         nv.writer.write_bool(true);
         nv.end_message();
+    }
+
+    auto &b = world.build;
+    if (b.ready()) {
+        auto editor_path = get_path_relative_to(filepath, world.current_path);
+        For (b.errors) {
+            if (it.mark != NULL) continue;
+            if (!it.valid) continue;
+            if (!are_filepaths_equal(editor_path, it.file)) continue;
+
+            // create mark
+            auto pos = new_cur2(it.col - 1, it.row - 1);
+            it.mark = buf.mark_tree.insert_mark(MARK_BUILD_ERROR, pos);
+        }
     }
 
     return true;
