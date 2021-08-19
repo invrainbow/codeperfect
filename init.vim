@@ -140,33 +140,6 @@ function! GoIndent(lnum)
     return l:ind
 endfunction
 
-function s:forceLocalOptions()
-    " set filetype=go
-    " filetype on
-    " filetype indent on
-
-    " setlocal autoindent
-    " setlocal indentexpr=GoIndent(v:lnum)
-    " setlocal indentkeys+=<:>,0=},0=)
-
-    setlocal nowrap
-    setlocal conceallevel=0
-    setlocal scrolloff=100
-    setlocal hidden
-    setlocal bufhidden=hide
-    setlocal noautowrite
-    setlocal nonumber
-    setlocal norelativenumber
-    setlocal nofoldenable
-    setlocal foldmethod=manual
-    setlocal nolazyredraw
-endfunction
-
-augroup IDE
-    autocmd!
-    autocmd BufEnter,FileType * call <SID>forceLocalOptions()
-augroup END
-
 function s:sendVisualSelection()
     let m = mode()
     if m ==# "v" || m ==# "V" || m ==# "^V"

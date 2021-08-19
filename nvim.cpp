@@ -259,7 +259,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                     auto msgid = start_request_message("nvim_call_atomic", 1);
                     save_request(NVIM_REQ_BUF_ATTACH, msgid, editor->id);
 
-                    writer.write_array(7);
+                    writer.write_array(8);
 
                     {
                         writer.write_array(2);
@@ -300,14 +300,12 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                         }
                     };
 
-                    set_option("shiftwidth", [&]() { writer.write_int(4); });
-                    // set_option("smartcase", [&]() { writer.write_int(true); });
-                    // set_option("smartindent", [&]() { writer.write_int(true); });
-                    set_option("tabstop",    [&]() { writer.write_int(4); });
                     set_option("expandtab",  [&]() { writer.write_bool(false); });
-                    set_option("autoindent", [&]() { writer.write_bool(true); });
-                    set_option("filetype",   [&]() { writer.write_string("go"); });
-                    // how to do equiv. of `filetype indent plugin on'?
+                    set_option("tabstop",    [&]() { writer.write_int(4); });
+                    set_option("shiftwidth", [&]() { writer.write_int(4); });
+                    set_option("modifiable", [&]() { writer.write_bool(true); });
+                    set_option("buftype",    [&]() { writer.write_string("nofile"); });
+                    set_option("buflisted",  [&]() { writer.write_bool(true); });
 
                     end_message();
                 }
@@ -318,10 +316,11 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
 
                     writer.write_int(event->response.buf.object_id);
                     writer.write_bool(false);
-                    writer.write_map(5);
-                    writer.write_string("relative"); writer.write_string("win");
-                    writer.write_string("row"); writer.write_int(0);
-                    writer.write_string("col"); writer.write_int(0);
+                    writer.write_map(3);
+                    // writer.write_string("relative"); writer.write_string("win");
+                    // writer.write_string("row"); writer.write_int(0);
+                    // writer.write_string("col"); writer.write_int(0);
+                    writer.write_string("external"); writer.write_bool(true);
                     writer.write_string("width"); writer.write_int(NVIM_DEFAULT_WIDTH);
                     writer.write_string("height"); writer.write_int(NVIM_DEFAULT_HEIGHT);
                     end_message();
