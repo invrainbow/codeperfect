@@ -18,16 +18,6 @@ bool is_sep(char ch) {
     return ch == '/' || ch == '\\';
 }
 
-ccstr fs_event_type_str(Fs_Event_Type t) {
-    switch (t) {
-    define_str_case(FSEVENT_CHANGE);
-    define_str_case(FSEVENT_DELETE);
-    define_str_case(FSEVENT_CREATE);
-    define_str_case(FSEVENT_RENAME);
-    }
-    return NULL;
-}
-
 bool are_filepaths_equal(ccstr a, ccstr b) {
     auto a2 = normalize_path_sep(get_canon_path(a));
     auto b2 = normalize_path_sep(get_canon_path(b));

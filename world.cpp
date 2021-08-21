@@ -1,6 +1,7 @@
 #include "world.hpp"
 #include "ui.hpp"
 #include "fzy_match.h"
+#include "set.hpp"
 
 #if OS_WIN
 #define GLFW_EXPOSE_NATIVE_WIN32
@@ -787,8 +788,39 @@ ccstr World::ft_node_to_path(FT_Node *node) {
     return r.finish();
 }
 
+FT_Node *World::find_or_create_ft_node(ccstr relpath, bool is_directory) {
+    auto ret = find_ft_node(relpath);
+    if (ret != NULL) return ret;
+    
+    auto parent = find_ft_node(our_dirname(relpath));
+    if (parent == NULL) return NULL;
+
+
+    {
+        SCOPED_MEM(&world.file_tree_mem);
+
+        auto ret = alloc_object(FT_Node);
+        ret->is_directory = true;
+        ret->name = our_basename(relpath);
+        ret->depth = parent->depth + 1;
+        ret->num_children = 0;
+        ret->parent = parent;
+        ret->children = NULL;
+        ret->prev = NULL;
+        ret->open = parent->open;
+
+        ret->next = parent->children;
+        parent->children->prev = ret;
+        parent->children = ret;
+        parent->children = world.sort_ft_nodes(parent->children);
+
+        return ret;
+    }
+}
 
 FT_Node *World::find_ft_node(ccstr relpath) {
+    if (streq(relpath, ".")) relpath = "";
+
     auto path = make_path(relpath);
     auto node = world.file_tree;
     For (*path->parts) {
@@ -947,4 +979,109 @@ void goto_next_error(int direction) {
     } while (b.current_error != old && !b.errors[b.current_error].valid);
 
     goto_error(b.current_error);
+}
+
+void reload_file_subtree(ccstr relpath) {
+    if (streq(relpath, ".")) relpath = "";
+
+    auto node = world.find_or_create_ft_node(relpath, true);
+    if (node == NULL) return;
+
+    auto path = path_join(world.current_path, relpath);
+
+    String_Set current_items;    current_items.init();
+    String_Set new_files;        new_files.init();
+    String_Set new_directories;  new_directories.init();
+
+    for (auto it = node->children; it != NULL; it = it->next)
+        current_items.add(it->name);
+
+    list_directory(path, [&](Dir_Entry *ent) {
+        do {
+            auto fullpath = path_join(path, ent->name);
+            if (is_ignored_by_git(fullpath)) break;
+            if (streq(ent->name, ".git")) break;
+            if (streq(ent->name, ".cp95proj")) break;
+            if (str_ends_with(ent->name, ".exe")) break;
+
+            auto name = our_strcpy(ent->name);
+            if (ent->type & FILE_TYPE_DIRECTORY)
+                new_directories.add(name);
+            else
+                new_files.add(name);
+        } while (0);
+
+        return true;
+    });
+
+    For (*current_items.items()) {
+        // TODO: check for type mismatch (e.g. used to be file, now is a directory)
+
+        if (new_files.has(it))  {
+            current_items.remove(it);
+            new_files.remove(it);
+        } else if (new_directories.has(it))  {
+            current_items.remove(it);
+            new_directories.remove(it);
+        }
+    }
+
+    // current_items contains stale items we want to delete
+    // new_files and new_directories contain new items we want to add
+
+    {
+        FT_Node *head = NULL, *curr = NULL;
+
+        auto add_child = [&](FT_Node *it) {
+            if (head == NULL)
+                head = it;
+            else
+                curr->next = it;
+
+            it->prev = curr;
+            curr = it;
+        };
+
+        for (auto it = node->children; it != NULL; it = it->next)
+            if (!current_items.has(it->name))
+                add_child(it);
+
+        For (*new_files.items()) {
+            SCOPED_MEM(&world.file_tree_mem);
+
+            auto child = alloc_object(FT_Node);
+            child->name = our_strcpy(it);
+            child->is_directory = false;
+            child->num_children = 0;
+            child->parent = node;
+            child->children = NULL;
+            child->depth = node->depth + 1;
+            child->open = false;
+            add_child(child);
+        }
+
+        For (*new_directories.items()) {
+            SCOPED_MEM(&world.file_tree_mem);
+
+            // TODO: recurse into directory
+
+            auto child = alloc_object(FT_Node);
+            child->name = our_strcpy(it);
+            child->is_directory = true;
+            child->num_children = 0;
+            child->parent = node;
+            child->children = NULL;
+            child->depth = node->depth + 1;
+            child->open = node->open;
+            add_child(child);
+        }
+
+        if (curr != NULL) curr->next = NULL;
+
+        node->children = world.sort_ft_nodes(head);
+    }
+
+    // now delete all items in `current_items`
+    // and add/recurse/process all items in `new_files` and `new_directories`
+    // parent->children = sort_ft_nodes(parent->children);
 }

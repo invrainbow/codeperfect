@@ -57,7 +57,7 @@ TODO:
 #define CODE_FONT_SIZE 14
 #define UI_FONT_SIZE 16
 #define ICON_FONT_SIZE 15
-#define FRAME_RATE_CAP 144
+#define FRAME_RATE_CAP 60
 
 static const char WINDOW_TITLE[] = "CodePerfect 95";
 
@@ -1213,76 +1213,20 @@ int main() {
             Fs_Event event;
             for (u32 items_processed = 0; items_processed < 10 && world.fswatch.next_event(&event); items_processed++) {
                 if (is_git_folder(event.filepath)) continue;
+                if (event.filepath[0] == '\0') continue;
 
-                bool is_directory = false;
+                auto filepath = (ccstr)event.filepath;
+                auto res = check_path(path_join(world.current_path, filepath));
+                if (res != CPR_DIRECTORY)
+                    filepath = our_dirname(filepath);
+                reload_file_subtree(filepath);
 
-                ccstr filepath = NULL;
-                if (event.filepath[0] != '\0')
-                    filepath = path_join(world.current_path, event.filepath);
+                world.indexer.message_queue.add([&](auto msg) {
+                    msg->type = GOMSG_FSEVENT;
+                    msg->fsevent_filepath = our_strcpy(filepath);
+                });
 
-                switch (event.type) {
-                case FSEVENT_DELETE:
-                    {
-                        if (filepath == NULL) break;
-                        world.indexer.message_queue.add([&](auto msg) {
-                            msg->type = GOMSG_FILEPATH_DELETED;
-                            msg->filepath = our_strcpy(filepath);
-                        });
-                        auto node = world.find_ft_node(event.filepath);
-                        if (node != NULL)
-                            world.delete_ft_node(node);
-                    }
-                    break;
-
-                case FSEVENT_CHANGE:
-                    {
-                        if (filepath == NULL) break;
-                        world.indexer.message_queue.add([&](auto msg) {
-                            msg->type = GOMSG_FILEPATH_CHANGED;
-                            msg->filepath = our_strcpy(filepath);
-                        });
-
-                        auto editor = world.find_editor_by_filepath(filepath);
-                        if (editor != NULL)
-                            editor->reload_file(true);
-                    }
-                    break;
-
-                case FSEVENT_CREATE:
-                    {
-                        if (filepath == NULL) break;
-                        world.indexer.message_queue.add([&](auto msg) {
-                            msg->type = GOMSG_FILEPATH_CREATED;
-                            msg->filepath = our_strcpy(filepath);
-                        });
-                    }
-                    break;
-
-                case FSEVENT_RENAME:
-                    {
-                        // this is really stupid, but rename events are unreliable
-                        // so we're just going to queue up both old and new
-
-                        ccstr paths[] = {event.filepath, event.new_filepath};
-                        For (paths) {
-                            if (it[0] == '\0') continue;
-
-                            auto fullpath = path_join(world.current_path, it);
-                            world.indexer.message_queue.add([&](auto msg) {
-                                msg->type = GOMSG_FILEPATH_RENAMED;
-                                msg->filepath = our_strcpy(fullpath);
-                            });
-                        }
-                    }
-                    break;
-                }
-
-                if (event.type == FSEVENT_RENAME && event.new_filepath != NULL) {
-                    print("Filesystem event: %s: %s -> %s", fs_event_type_str(event.type), event.filepath, event.new_filepath);
-                } else {
-                    if (is_directory || str_ends_with(event.filepath, ".go"))
-                        print("Filesystem event: %s: %s", fs_event_type_str(event.type), event.filepath);
-                }
+                print("fsevent: %s", event.filepath);
             }
         }
 

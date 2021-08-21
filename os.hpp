@@ -272,19 +272,8 @@ File_Mapping *map_file_into_memory(ccstr path, File_Mapping_Opts *opts);
 
 ccstr rel_to_abs_path(ccstr path);
 
-enum Fs_Event_Type {
-    FSEVENT_CHANGE,
-    FSEVENT_DELETE,
-    FSEVENT_CREATE,
-    FSEVENT_RENAME,
-};
-
-ccstr fs_event_type_str(Fs_Event_Type t);
-
 struct Fs_Event {
-    Fs_Event_Type type;
     char filepath[MAX_PATH];
-    char new_filepath[MAX_PATH];
 };
 
 struct Fs_Watcher {
@@ -300,11 +289,14 @@ struct Fs_Watcher {
     bool initiate_wait();
 #elif OS_MAC
     Pool mem;
-    void* stream;
     List<Fs_Event> events;
     int curr;
 
-    void handle_event(size_t count, ccstr *paths, void *_flags);
+    void* stream;     // FSEventStreamRef
+    void* context;    // FSEventStreamContext
+    void* run_loop;   // CFRunLoopRef
+
+    void handle_event(size_t count, ccstr *paths);
     void run_thread();
 #endif
 

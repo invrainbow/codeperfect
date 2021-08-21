@@ -374,6 +374,7 @@ struct World {
     void add_ft_node(FT_Node *parent, fn<void(FT_Node* it)> cb);
     int compare_ft_nodes(FT_Node *a, FT_Node *b);
     FT_Node *find_ft_node(ccstr relpath);
+    FT_Node *find_or_create_ft_node(ccstr relpath, bool is_directory);
     void delete_ft_node(FT_Node *it);
     ccstr ft_node_to_path(FT_Node *node);
 };
@@ -399,5 +400,6 @@ void save_all_unsaved_files();
 void start_search_job(ccstr query);
 void goto_error(int index);
 void goto_next_error(int direction);
+void reload_file_subtree(ccstr path);
 
 extern u64 post_insert_dotrepeat_time;
