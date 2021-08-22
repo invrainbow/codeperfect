@@ -1174,19 +1174,14 @@ enum Go_Message_Type {
     GOMSG_RESCAN_INDEX,
     GOMSG_OBLITERATE_AND_RECREATE_INDEX,
     GOMSG_CLEANUP_UNUSED_MEMORY,
-
-    GOMSG_FILEPATH_DELETED,
-    GOMSG_FILEPATH_CREATED,
-    GOMSG_FILEPATH_CHANGED,
-    GOMSG_FILEPATH_RENAMED,
-
+    GOMSG_FSEVENT,
 };
 
 struct Go_Message {
     Go_Message_Type type;
 
     union {
-        ccstr filepath; // for GOMSG_FILEPATH_*
+        ccstr fsevent_filepath; // for GOMSG_FSEVENT
     };
 };
 

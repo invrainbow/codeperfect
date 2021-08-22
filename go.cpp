@@ -704,6 +704,13 @@ void Go_Indexer::background_thread() {
         already_enqueued_packages.add(import_path);
     };
 
+    auto mark_package_for_reprocessing = [&](ccstr import_path) {
+        auto pkg = find_package_in_index(import_path);
+        if (pkg != NULL)
+            pkg->status = GPS_OUTDATED;
+        enqueue_package(import_path);
+    };
+
     auto pop_package_from_queue = [&]() -> ccstr {
         auto import_path = *package_queue.last();
         package_queue.len--;
@@ -732,99 +739,39 @@ void Go_Indexer::background_thread() {
         return true;
     };
 
-    auto handle_gofile_created = [&](ccstr filepath, bool from_internal = false) {
-        auto pkg = find_package_in_index(filepath_to_import_path(our_dirname(filepath)));
-        if (pkg == NULL) return;
-
-        auto filename = our_basename(filepath);
-        auto file = get_ready_file_in_package(pkg, filename);
-
-        auto pf = parse_file(filepath);
-        if (pf == NULL) return;
-        defer { free_parsed_file(pf); };
-
-        start_writing();
-
-        ccstr package_name = NULL;
-        process_tree_into_gofile(file, pf->root, filepath, &package_name);
-        replace_package_name(pkg, package_name);
-
-        // queue up any new imports
-        enqueue_imports_from_file(file);
-
-        // rehash package
-        fill_package_hash(pkg);
-
-        /*
-        if file changed from outside
-            update index
-            if editor exists, reload it, discard changes
-        if file changed from editor
-            update on save
-        */
-    };
-
-    auto handle_file_or_folder_renamed = [&](ccstr filepath) {
-        if (!path_contains_in_subtree(index.current_path, filepath))
-            return;
-
-        auto pkg = find_package_in_index(filepath_to_import_path(filepath));
-        if (pkg == NULL) {
-            if (!str_ends_with(filepath, ".go")) return;
-            pkg = find_package_in_index(filepath_to_import_path(our_dirname(filepath)));
-        }
-
-        if (pkg == NULL) return;
-
-        pkg->checked_for_outdated_hash = true;
-        pkg->status = GPS_OUTDATED;
-        enqueue_package(pkg->import_path);
-    };
-
-    auto handle_folder_created = [&](ccstr filepath) {
-        // at this point, there will already exist a folder full of files
-        // FSEVENT_CREATE events won't be created for the individual files.
-
-        start_writing();
+    auto handle_fsevent = [&](ccstr filepath) {
+        filepath = path_join(index.current_path, filepath);
 
         auto import_path = filepath_to_import_path(filepath);
+        auto res = check_path(filepath);
 
-        auto pkg = find_package_in_index(import_path);
-        if (pkg != NULL) {
-            pkg->checked_for_outdated_hash = false;
-            pkg->status = GPS_OUTDATED;
-        }
-
-        enqueue_package(import_path);
-    };
-
-    auto handle_file_or_folder_deleted = [&](ccstr filepath) {
-        /*
-        // try treating filepath as a directory
-        auto pkg = find_package_in_index(filepath_to_import_path(filepath));
-        if (pkg != NULL) {
-            SCOPED_WRITE();
-            pkg->cleanup_files();
-            index.packages->remove(pkg);
-            return;
-        }
-
-        if (str_ends_with(filepath, ".go")) {
-            auto pkg = find_package_in_index(filepath_to_import_path(our_dirname(filepath)));
-            if (pkg == NULL) return;
-            if (pkg->files == NULL) return;
-
-            auto filename = our_basename(filepath);
-            auto file = pkg->files->find([&](auto it) { return streq(filename, it->filename); });
-            if (file == NULL) return;
-
+        switch (res) {
+        case CPR_DIRECTORY:
+            start_writing();
+            mark_package_for_reprocessing(import_path);
+            break;
+        case CPR_FILE:
+            start_writing();
+            mark_package_for_reprocessing(our_dirname(import_path));
+            break;
+        case CPR_NONEXISTENT:
             {
-                SCOPED_WRITE();
-                file->cleanup();
-                pkg->files->remove(file);
+                auto pkg = find_package_in_index(import_path);
+                if (pkg != NULL) {
+                    SCOPED_WRITE();
+                    pkg->cleanup_files();
+                    index.packages->remove(pkg);
+                    break;
+                }
+
+                pkg = find_package_in_index(our_dirname(import_path));
+                if (pkg != NULL) {
+                    start_writing();
+                    mark_package_for_reprocessing(pkg->import_path);
+                }
             }
+            break;
         }
-        */
     };
 
     // random shit
@@ -1001,30 +948,8 @@ void Go_Indexer::background_thread() {
                 cleanup_unused_memory_this_time = true;
                 break;
 
-            case GOMSG_FILEPATH_DELETED:
-                handle_file_or_folder_deleted(msg->filepath);
-                break;
-
-            case GOMSG_FILEPATH_CHANGED:
-                if (check_path(msg->filepath) != CPR_FILE) break;
-                if (!str_ends_with(msg->filepath, ".go")) break;
-                handle_gofile_created(msg->filepath);
-                break;
-
-            case GOMSG_FILEPATH_CREATED:
-                switch (check_path(msg->filepath)) {
-                case CPR_DIRECTORY:
-                    handle_folder_created(msg->filepath);
-                    break;
-                case CPR_FILE:
-                    if (!str_ends_with(msg->filepath, ".go")) break;
-                    handle_gofile_created(msg->filepath);
-                    break;
-                }
-                break;
-
-            case GOMSG_FILEPATH_RENAMED:
-                handle_file_or_folder_renamed(msg->filepath);
+            case GOMSG_FSEVENT:
+                handle_fsevent(msg->fsevent_filepath);
                 break;
             }
         };
@@ -1157,8 +1082,7 @@ void Go_Indexer::background_thread() {
                 if (package_path == NULL) continue;
                 if (it.hash == hash_package(package_path)) continue;
 
-                it.status = GPS_OUTDATED;
-                enqueue_package(it.import_path);
+                mark_package_for_reprocessing(it.import_path);
             }
 
             if (i == index.packages->len && package_queue.len == 0) {

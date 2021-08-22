@@ -287,8 +287,8 @@ bool Searcher::start_search(ccstr _query, Search_Opts *_opts) {
         search_results.init();
     }
 
-    if (opts.include == NULL) include_parts = make_path(opts.include)->parts;
-    if (opts.exclude == NULL) exclude_parts = make_path(opts.exclude)->parts;
+    if (opts.include != NULL) include_parts = make_path(opts.include)->parts;
+    if (opts.exclude != NULL) exclude_parts = make_path(opts.exclude)->parts;
 
     // precompute shit
     if (opts.literal) {
