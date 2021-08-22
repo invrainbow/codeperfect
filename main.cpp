@@ -1219,14 +1219,22 @@ int main() {
                 auto res = check_path(path_join(world.current_path, filepath));
                 if (res != CPR_DIRECTORY)
                     filepath = our_dirname(filepath);
+
                 reload_file_subtree(filepath);
 
-                world.indexer.message_queue.add([&](auto msg) {
-                    msg->type = GOMSG_FSEVENT;
-                    msg->fsevent_filepath = our_strcpy(filepath);
-                });
+                if (streq(filepath, "."))
+                    filepath = "";
 
-                print("fsevent: %s", event.filepath);
+                auto editor = world.find_editor_by_filepath(filepath);
+                if (editor != NULL)
+                    editor->reload_file(true);
+
+                if (res == CPR_DIRECTORY || str_ends_with(event.filepath, ".go")) {
+                    world.indexer.message_queue.add([&](auto msg) {
+                        msg->type = GOMSG_FSEVENT;
+                        msg->fsevent_filepath = our_strcpy(filepath);
+                    });
+                }
             }
         }
 

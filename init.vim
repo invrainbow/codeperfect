@@ -149,6 +149,21 @@ function s:sendVisualSelection()
     endif
 endfunction
 
+function s:forceLocalOptions()
+    " set filetype=go
+    " filetype on
+    " filetype indent on
+    "
+    setlocal autoindent
+    setlocal indentexpr=GoIndent(v:lnum)
+    setlocal indentkeys+=<:>,0=},0=)
+endfunction
+
+augroup IDE
+    autocmd!
+    autocmd BufEnter,FileType * call <SID>forceLocalOptions()
+augroup END
+
 " autocmd CursorMoved * call <SID>sendVisualSelection()
 
 vnoremap < <gv

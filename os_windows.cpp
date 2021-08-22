@@ -603,14 +603,14 @@ bool Fs_Watcher::next_event(Fs_Event *event) {
         has_more = true;
     }
 
-    auto copy_file_name = [&](FILE_NOTIFY_INFORMATION *info, char *dest, s32 destsize) {
-        strcpy_safe(dest, destsize, to_utf8(info->FileName, info->FileNameLength / sizeof(WCHAR)));
-    };
-
     auto info = (FILE_NOTIFY_INFORMATION*)((u8*)buf + offset);
 
     ptr0(event);
-    copy_file_name(info, event->filepath, _countof(event->filepath));
+    strcpy_safe(
+        event->filepath,
+        _countof(event->filepath),
+        to_utf8(info->FileName, info->FileNameLength / sizeof(WCHAR)),
+    );
 
     if (info->NextEntryOffset == 0)
         has_more = false;

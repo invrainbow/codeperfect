@@ -568,8 +568,11 @@ void File_Mapping::cleanup() {
 
 void Fs_Watcher::handle_event(size_t count, ccstr *paths) {
     for (size_t i = 0; i < count; i++) {
+        auto relpath = get_path_relative_to(paths[i], path);
+        if (streq(relpath, ".")) relpath = "";
+
         auto ev = events.append();
-        strcpy_safe(ev->filepath, _countof(ev->filepath), get_path_relative_to(paths[i], path));
+        strcpy_safe(ev->filepath, _countof(ev->filepath), relpath);
     }
 }
 

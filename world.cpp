@@ -819,8 +819,6 @@ FT_Node *World::find_or_create_ft_node(ccstr relpath, bool is_directory) {
 }
 
 FT_Node *World::find_ft_node(ccstr relpath) {
-    if (streq(relpath, ".")) relpath = "";
-
     auto path = make_path(relpath);
     auto node = world.file_tree;
     For (*path->parts) {
@@ -982,8 +980,6 @@ void goto_next_error(int direction) {
 }
 
 void reload_file_subtree(ccstr relpath) {
-    if (streq(relpath, ".")) relpath = "";
-
     auto node = world.find_or_create_ft_node(relpath, true);
     if (node == NULL) return;
 

@@ -704,6 +704,13 @@ void Go_Indexer::background_thread() {
         already_enqueued_packages.add(import_path);
     };
 
+    auto mark_package_for_reprocessing = [&](ccstr import_path) {
+        auto pkg = find_package_in_index(import_path);
+        if (pkg != NULL)
+            pkg->status = GPS_OUTDATED;
+        enqueue_package(import_path);
+    };
+
     auto pop_package_from_queue = [&]() -> ccstr {
         auto import_path = *package_queue.last();
         package_queue.len--;
@@ -733,32 +740,38 @@ void Go_Indexer::background_thread() {
     };
 
     auto handle_fsevent = [&](ccstr filepath) {
-        /*
-        // try treating filepath as a directory
-        auto pkg = find_package_in_index(filepath_to_import_path(filepath));
-        if (pkg != NULL) {
-            SCOPED_WRITE();
-            pkg->cleanup_files();
-            index.packages->remove(pkg);
-            return;
-        }
+        filepath = path_join(index.current_path, filepath);
 
-        if (str_ends_with(filepath, ".go")) {
-            auto pkg = find_package_in_index(filepath_to_import_path(our_dirname(filepath)));
-            if (pkg == NULL) return;
-            if (pkg->files == NULL) return;
+        auto import_path = filepath_to_import_path(filepath);
+        auto res = check_path(filepath);
 
-            auto filename = our_basename(filepath);
-            auto file = pkg->files->find([&](auto it) { return streq(filename, it->filename); });
-            if (file == NULL) return;
-
+        switch (res) {
+        case CPR_DIRECTORY:
+            start_writing();
+            mark_package_for_reprocessing(import_path);
+            break;
+        case CPR_FILE:
+            start_writing();
+            mark_package_for_reprocessing(our_dirname(import_path));
+            break;
+        case CPR_NONEXISTENT:
             {
-                SCOPED_WRITE();
-                file->cleanup();
-                pkg->files->remove(file);
+                auto pkg = find_package_in_index(import_path);
+                if (pkg != NULL) {
+                    SCOPED_WRITE();
+                    pkg->cleanup_files();
+                    index.packages->remove(pkg);
+                    break;
+                }
+
+                pkg = find_package_in_index(our_dirname(import_path));
+                if (pkg != NULL) {
+                    start_writing();
+                    mark_package_for_reprocessing(pkg->import_path);
+                }
             }
+            break;
         }
-        */
     };
 
     // random shit
@@ -1069,8 +1082,7 @@ void Go_Indexer::background_thread() {
                 if (package_path == NULL) continue;
                 if (it.hash == hash_package(package_path)) continue;
 
-                it.status = GPS_OUTDATED;
-                enqueue_package(it.import_path);
+                mark_package_for_reprocessing(it.import_path);
             }
 
             if (i == index.packages->len && package_queue.len == 0) {
