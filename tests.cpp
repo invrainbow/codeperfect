@@ -5,6 +5,23 @@
 #include "go.hpp"
 
 #if 0
+void test_mark_tree() {
+    Mark_Tree mt;  mt.init();
+
+    mt.insert_mark(MARK_BUILD_ERROR, new_cur2(2, 4));
+    mt.insert_mark(MARK_BUILD_ERROR, new_cur2(8, 4));
+    mt.insert_mark(MARK_BUILD_ERROR, new_cur2(12, 4));
+
+    cur2 start = new_cur2(0, 1);
+    cur2 old_end = new_cur2(0, 1);
+    cur2 new_end = new_cur2(0, 2);
+
+    mt.edit_tree_delete(start, old_end);
+    mt.edit_tree_insert(start, new_end);
+}
+#endif
+
+#if 0
 void test_search() {
     // shit to test:
     //   - [x] normal search
@@ -63,8 +80,10 @@ void test_search() {
 bool run_tests() {
     return false;
 
+    init_platform_specific_crap();
     world.init(NULL);
 
+    // test_mark_tree();
     // test_search();
     // test_read_write_index();
 

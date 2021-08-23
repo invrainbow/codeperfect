@@ -268,12 +268,17 @@ void World::init_workspace() {
     panes.init(LIST_FIXED, _countof(_panes), _panes);
 
 #if 1
-    Select_File_Opts opts; ptr0(&opts);
-    opts.buf = current_path;
-    opts.bufsize = _countof(current_path);
-    opts.folder = true;
-    opts.save = false;
-    if (!let_user_select_file(&opts)) exit(0);
+    // if testing
+    if (world.window == NULL) {
+        strcpy_safe(current_path, _countof(current_path), "/Users/bh/ide/api");
+    } else {
+        Select_File_Opts opts; ptr0(&opts);
+        opts.buf = current_path;
+        opts.bufsize = _countof(current_path);
+        opts.folder = true;
+        opts.save = false;
+        if (!let_user_select_file(&opts)) exit(0);
+    }
 #else
     {
         SCOPED_FRAME();

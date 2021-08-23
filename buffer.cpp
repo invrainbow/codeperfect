@@ -462,8 +462,8 @@ void Buffer::update_tree() {
 }
 
 void Buffer::internal_start_edit(cur2 start, cur2 end) {
-    if (!use_tree) return;
-
+    // we use the tsedit for other things, right now for mark tree calculations.
+    // so create it even if !use_tree, it's not only used for the tree.
     ptr0(&tsedit);
     tsedit.start_byte = cur_to_offset(start);
     tsedit.start_point = cur_to_tspoint(start);
@@ -472,18 +472,29 @@ void Buffer::internal_start_edit(cur2 start, cur2 end) {
 }
 
 void Buffer::internal_finish_edit(cur2 new_end) {
-    if (!use_tree) return;
-
     tsedit.new_end_byte = cur_to_offset(new_end);
     tsedit.new_end_point = cur_to_tspoint(new_end);
 
-    // everything before start_point is unaffected
-    // everything after old_end_point is added by (new_end_point - old_end_point)
-    // everything between start_point and old_end_point... i guess is unchanged?
-    // tsedit.start_point, tsedit.old_end_point, tsedit.new_end_point
+    if (use_tree) {
+        ts_tree_edit(tree, &tsedit);
+        update_tree();
+    }
 
-    ts_tree_edit(tree, &tsedit);
-    update_tree();
+    internal_update_mark_tree();
+}
+
+void Buffer::internal_update_mark_tree() {
+    if (mark_tree.root == NULL) return;
+
+    mark_tree.edit_tree_delete(
+        tspoint_to_cur(tsedit.start_point),
+        tspoint_to_cur(tsedit.old_end_point)
+    );
+
+    mark_tree.edit_tree_insert(
+        tspoint_to_cur(tsedit.start_point),
+        tspoint_to_cur(tsedit.new_end_point)
+    );
 }
 
 void Buffer::remove(cur2 start, cur2 end) {
@@ -651,7 +662,7 @@ void cleanup_mark_node(Mark_Node *node) {
     auto it = node->marks;
     while (it != NULL) {
         auto next = it->next;
-        world.mark_fridge.free(it);   
+        world.mark_fridge.free(it);
         it = next;
     }
 
@@ -670,11 +681,35 @@ int Mark_Tree::get_balance(Mark_Node *root) {
     return root == NULL ? 0 : (get_height(root->left) - get_height(root->right));
 }
 
+Mark_Node *Mark_Tree::succ(Mark_Node *node) {
+    if (node->right != NULL) {
+        auto ret = node->right;
+        while (ret->left != NULL)
+            ret = ret->left;
+        return ret;
+    }
+
+    for (; node->parent != NULL; node = node->parent)
+        if (node->isleft)
+            return node->parent;
+    return NULL;
+}
+
 Mark_Node *Mark_Tree::find_node(Mark_Node *root, cur2 pos) {
     if (root == NULL) return NULL;
     if (root->pos == pos) return root;
 
-    return find_node(pos < root->pos ? root->left : root->right, pos);
+    auto child = pos < root->pos ? root->left : root->right;
+    if (child == NULL)
+        return root;
+    return find_node(child, pos);
+}
+
+Mark_Node *Mark_Tree::insert_node(cur2 pos) {
+    auto node = world.mark_node_fridge.alloc();
+    node->pos = pos;
+    root = internal_insert_node(root, pos, node);
+    return node;
 }
 
 Mark *Mark_Tree::insert_mark(Mark_Type type, cur2 pos) {
@@ -682,11 +717,8 @@ Mark *Mark_Tree::insert_mark(Mark_Type type, cur2 pos) {
     mark->type = type;
 
     auto node = find_node(root, pos);
-    if (node == NULL) {
-        node = world.mark_node_fridge.alloc();
-        node->pos = pos;
-        root = internal_insert_node(root, pos, node);
-    }
+    if (node == NULL || node->pos != pos)
+        node = insert_node(pos);
 
     mark->node = node;
     mark->tree = this;
@@ -701,8 +733,17 @@ void Mark_Tree::recalc_height(Mark_Node *root) {
 
 Mark_Node* Mark_Tree::rotate_right(Mark_Node *root) {
     auto y = root->left;
+    y->parent = NULL;
+
     root->left = y->right;
+    if (root->left != NULL) {
+        root->left->parent = root;
+        root->left->isleft = true;
+    }
+
     y->right = root;
+    y->right->parent = y;
+    y->right->isleft = false;
 
     recalc_height(root);
     recalc_height(y);
@@ -711,8 +752,17 @@ Mark_Node* Mark_Tree::rotate_right(Mark_Node *root) {
 
 Mark_Node* Mark_Tree::rotate_left(Mark_Node *root) {
     auto y = root->right;
+    y->parent = NULL;
+
     root->right = y->left;
+    if (root->right != NULL) {
+        root->right->parent = root;
+        root->right->isleft = false;
+    }
+
     y->left = root;
+    y->left->parent = y;
+    y->left->isleft = true;
 
     recalc_height(root);
     recalc_height(y);
@@ -721,16 +771,25 @@ Mark_Node* Mark_Tree::rotate_left(Mark_Node *root) {
 
 // precond: pos doesn't exist in root
 Mark_Node *Mark_Tree::internal_insert_node(Mark_Node *root, cur2 pos, Mark_Node *node) {
-    if (root == NULL) return node;
+    if (root == NULL) {
+        recalc_height(node);
+        return node;
+    }
 
     if (pos < root->pos) {
         auto old = root->left;
         root->left = internal_insert_node(root->left, pos, node);
-        if (old == NULL) node->parent = root;
+        if (old == NULL) {
+            node->parent = root;
+            node->isleft = true;
+        }
     } else {
         auto old = root->right;
         root->right = internal_insert_node(root->right, pos, node);
-        if (old == NULL) node->parent = root;
+        if (old == NULL) {
+            node->parent = root;
+            node->isleft = false;
+        }
     }
 
     recalc_height(root);
@@ -766,9 +825,13 @@ void Mark_Tree::delete_mark(Mark *mark) {
     }
 
     if (node->marks == NULL)
-        root = internal_delete_node(root, mark->node->pos);
+        delete_node(mark->node->pos);
 
     world.mark_fridge.free(mark);
+}
+
+void Mark_Tree::delete_node(cur2 pos) {
+    root = internal_delete_node(root, pos);
 }
 
 Mark_Node *Mark_Tree::internal_delete_node(Mark_Node *root, cur2 pos) {
@@ -779,15 +842,18 @@ Mark_Node *Mark_Tree::internal_delete_node(Mark_Node *root, cur2 pos) {
     else if (pos > root->pos)
         root->right = internal_delete_node(root->right, pos);
     else {
-        if (root->left == NULL) {
-            auto ret = root->right;
-            ret->parent = root->parent;
-            world.mark_node_fridge.free(root);
-            return ret;
-        }
-        if (root->right == NULL) {
-            auto ret = root->left;
-            ret->parent = root->parent;
+        if (root->left == NULL || root->right == NULL) {
+            Mark_Node *ret = NULL;
+            bool isleft = false;
+
+            if (root->left == NULL) ret = root->right;
+            if (root->right == NULL) ret = root->left;
+
+            if (ret != NULL) {
+                ret->parent = root->parent;
+                ret->isleft = root->isleft;
+            }
+
             world.mark_node_fridge.free(root);
             return ret;
         }
@@ -817,11 +883,88 @@ Mark_Node *Mark_Tree::internal_delete_node(Mark_Node *root, cur2 pos) {
     return root;
 }
 
-cur2 Mark::pos() {
-    auto ret = node->pos;
-    /*
-    for (auto it = node; it != NULL; it = it->parent)
-        ret += it->offset;
-    */
-    return ret;
+void Mark_Tree::edit_tree_delete(cur2 start, cur2 end) {
+    // delete:
+    //  for point between (start, end)
+    //      point.x = start.x
+    //      point.y = start.y
+    //
+    //  for point > end:
+    //      if point.y == end.y
+    //          point.x - end.x + start.x
+    //          point.y = start.y
+    //      else
+    //          point.y -= (end.y - start.y)
+
+    if (start == end) return;
+
+    auto nstart = find_node(root, start);
+    if (nstart == NULL) return;
+
+    auto it = nstart;
+    if (it->pos < start)
+        it = succ(it);
+
+    // if there are any marks between start and end, we'll need
+    // to set them to end. so here we would do nstart->insert_node(start).
+    // but dont actually create it until we need to
+    if (nstart->pos != start)
+        nstart = NULL;
+
+    for (; it != NULL && it->pos < end; it = succ(it)) {
+        auto mark = it->marks;
+        while (mark != NULL) {
+            auto next = mark->next;
+
+            if (nstart == NULL)
+                nstart = insert_node(start);
+
+            mark->node = nstart;
+            mark->next = nstart->marks;
+            nstart->marks = mark;
+
+            mark->next = next;
+        }
+        delete_node(it->pos);
+    }
+
+    auto nend = find_node(root, end);
+    if (nend->pos < end)
+        nend = succ(nend);
+
+    for (auto it = nend; it != NULL; it = succ(it)) {
+        if (it->pos.y == end.y)  {
+            it->pos.x = it->pos.x - end.x + start.x;
+            it->pos.y = start.y;
+        } else {
+            it->pos.y -= (end.y - start.y);
+        }
+    }
 }
+
+void Mark_Tree::edit_tree_insert(cur2 start, cur2 end) {
+    // insert(start, end)
+    //  for point > start
+    //      if point.y == start.y
+    //          point.x = point.x - start.x + end.x
+    //          point.y = end.y
+    //      else
+    //          point.y += (end.y - start.y)
+
+    if (start == end) return;
+
+    auto node = find_node(root, start);
+    if (node->pos < start)
+        node = succ(node);
+
+    for (; node != NULL; node = succ(node)) {
+        if (node->pos.y == start.y) {
+            node->pos.x = node->pos.x - start.x + end.x;
+            node->pos.y = end.y;
+        } else {
+            node->pos.y += (end.y - start.y);
+        }
+    }
+}
+
+cur2 Mark::pos() { return node->pos; }

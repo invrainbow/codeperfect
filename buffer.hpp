@@ -69,7 +69,6 @@ struct Mark {
     bool invalidated; // does this go on mark on node? i think mark?
 
     cur2 pos();
-    void cleanup();
 };
 
 struct Mark_Node {
@@ -82,6 +81,7 @@ struct Mark_Node {
     Mark_Node *left;
     Mark_Node *right;
     Mark_Node *parent;
+    bool isleft;
     int height;
 };
 
@@ -106,9 +106,15 @@ struct Mark_Tree {
     void recalc_height(Mark_Node *root);
     Mark_Node* rotate_right(Mark_Node *root);
     Mark_Node* rotate_left(Mark_Node *root);
+    Mark_Node *succ(Mark_Node *node);
+    Mark_Node *insert_node(cur2 pos);
+    void delete_node(cur2 pos);
 
     Mark_Node *internal_insert_node(Mark_Node *root, cur2 pos, Mark_Node *node);
     Mark_Node *internal_delete_node(Mark_Node *root, cur2 pos);
+
+    void edit_tree_delete(cur2 start, cur2 end);
+    void edit_tree_insert(cur2 start, cur2 end);
 };
 
 struct Buffer {
@@ -146,6 +152,7 @@ struct Buffer {
     void internal_insert_line(u32 y, uchar* text, s32 len);
     void internal_start_edit(cur2 start, cur2 end);
     void internal_finish_edit(cur2 new_end);
+    void internal_update_mark_tree();
 
     void insert(cur2 start, uchar* text, s32 len);
     void remove(cur2 start, cur2 end);
@@ -168,6 +175,3 @@ struct Buffer {
 };
 
 s32 uchar_size(uchar c);
-
-
-
