@@ -32,8 +32,6 @@ void test_search() {
     //   - [ ] filter by files
     //   - [ ] undo
 
-    SCOPED_MEM(&world.search_mem);
-
     Search_Opts opts;
     opts.case_sensitive = true;
     opts.literal = false;

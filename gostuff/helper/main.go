@@ -1,4 +1,18 @@
-package main
+package helper
+
+import (
+	"bytes"
+	"fmt"
+	"go/format"
+	"os"
+	"os/exec"
+	"unsafe"
+
+	"github.com/denormal/go-gitignore"
+	"github.com/google/shlex"
+	"github.com/reviewdog/errorformat"
+	"golang.org/x/tools/imports"
+)
 
 /*
 #include <stdint.h>
@@ -15,20 +29,6 @@ typedef struct _GH_Build_Error {
 */
 import "C"
 
-import (
-	"bytes"
-	"fmt"
-	"go/format"
-	"os/exec"
-	"unsafe"
-
-	"github.com/denormal/go-gitignore"
-
-	"github.com/google/shlex"
-	"github.com/reviewdog/errorformat"
-	"golang.org/x/tools/imports"
-)
-
 type GoBuild struct {
 	done   bool
 	errors []*errorformat.Entry
@@ -41,8 +41,6 @@ func BoolToInt(b bool) int {
 	}
 	return 0
 }
-
-// err := os.Chdir(dir)
 
 var currentBuild *GoBuild = nil
 
@@ -187,6 +185,7 @@ func GHFmtAddLine(line *C.char) {
 	autofmtBuffer = append(autofmtBuffer, []byte(C.GoString(line))...)
 	autofmtBuffer = append(autofmtBuffer, '\n')
 }
+
 const (
 	FmtGoFmt                   = 0
 	FmtGoImports               = 1
@@ -234,50 +233,34 @@ func GHFmtFinish(fmtType int) *C.char {
 	return C.CString(string(newSource))
 }
 
-//export GHCheckLicense
-func GHCheckLicense() bool {
-	return true
-	/*
-		const GracePeriod = time.Hour * 24 * 7
+var authAndUpdateChan = make(chan error)
 
-		exit := func(s string) {
-			fmt.Printf("%s", s)
-			os.Exit(0)
-		}
+//export GHAuthAndUpdate
+func GHAuthAndUpdate() {
+	go AuthAndUpdate(authAndUpdateChan)
+}
 
-		readLastSuccess := func() (time.Time, error) {
-			unixTimestamp, err := nil, foo() // TODO
-			if err != nil {
-				return time.Time{}, err
-			}
-			return time.Unix(unixTimestamp, 0), nil
-			return time.Now(), nil
-		}
+func readAuthAndUpdate() (error, bool) {
+	select {
+	case err := <-authAndUpdateChan:
+		return err, true
+	default:
+		return nil, false
+	}
+}
 
-		writeLastSuccess := func(t time.Time) error {
-			// TODO: do something with t.Unix()
-			return nil
-		}
+//export GHAuthAndUpdateReadStatus
+func GHAuthAndUpdateReadStatus() *C.char {
+	err, got := readAuthAndUpdate()
+	if !got {
+		return nil
+	}
 
-		licenseKey, err := GetLicenseKey()
-		if err != nil {
-			exit("no_license_key_found")
-		}
-
-		if err := AuthLicenseKey(licenseKey); err == nil {
-			writeLastSuccess(time.Now())
-			exit("ok")
-		}
-
-		lastSuccess, err := readLastSuccess()
-		if err == nil {
-			if time.Since(lastSuccess) < GracePeriod {
-				exit("grace_period")
-			}
-		}
-
-		exit("fail")
-	*/
+	// caller needs to GHFree
+	if err == nil {
+		return C.CString("")
+	}
+	return C.CString(err.Error())
 }
 
 type GitignoreChecker struct {
@@ -307,6 +290,7 @@ func GHGitIgnoreCheckFile(file *C.char) bool {
 	return match != nil && match.Ignore()
 }
 
-// ---
-
-func main() {}
+//export GHRenameFileOrDirectory
+func GHRenameFileOrDirectory(oldpath, newpath *C.char) bool {
+	return os.Rename(C.GoString(oldpath), C.GoString(newpath)) == nil
+}

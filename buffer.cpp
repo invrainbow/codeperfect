@@ -733,7 +733,9 @@ void Mark_Tree::recalc_height(Mark_Node *root) {
 
 Mark_Node* Mark_Tree::rotate_right(Mark_Node *root) {
     auto y = root->left;
-    y->parent = NULL;
+
+    y->parent = root->parent;
+    y->isleft = root->isleft;
 
     root->left = y->right;
     if (root->left != NULL) {
@@ -752,7 +754,9 @@ Mark_Node* Mark_Tree::rotate_right(Mark_Node *root) {
 
 Mark_Node* Mark_Tree::rotate_left(Mark_Node *root) {
     auto y = root->right;
-    y->parent = NULL;
+
+    y->parent = root->parent;
+    y->isleft = root->isleft;
 
     root->right = y->left;
     if (root->right != NULL) {
@@ -884,6 +888,7 @@ Mark_Node *Mark_Tree::internal_delete_node(Mark_Node *root, cur2 pos) {
 }
 
 void Mark_Tree::edit_tree_delete(cur2 start, cur2 end) {
+    /*
     // delete:
     //  for point between (start, end)
     //      point.x = start.x
@@ -923,7 +928,7 @@ void Mark_Tree::edit_tree_delete(cur2 start, cur2 end) {
             mark->next = nstart->marks;
             nstart->marks = mark;
 
-            mark->next = next;
+            mark = next;
         }
         delete_node(it->pos);
     }
@@ -940,6 +945,7 @@ void Mark_Tree::edit_tree_delete(cur2 start, cur2 end) {
             it->pos.y -= (end.y - start.y);
         }
     }
+    */
 }
 
 void Mark_Tree::edit_tree_insert(cur2 start, cur2 end) {
@@ -951,6 +957,7 @@ void Mark_Tree::edit_tree_insert(cur2 start, cur2 end) {
     //      else
     //          point.y += (end.y - start.y)
 
+    /*
     if (start == end) return;
 
     auto node = find_node(root, start);
@@ -965,6 +972,8 @@ void Mark_Tree::edit_tree_insert(cur2 start, cur2 end) {
             node->pos.y += (end.y - start.y);
         }
     }
+    */
 }
 
 cur2 Mark::pos() { return node->pos; }
+void Mark::cleanup() { tree->delete_mark(this); }

@@ -1613,12 +1613,12 @@ void UI::draw_everything() {
 
             if (ImGui::MenuItem("Format File", NULL, false, editor != NULL)) {
                 if (editor != NULL)
-                    editor->format_on_save(GH_FMT_GOFMT);
+                    editor->format_on_save(GH_FMT_GOIMPORTS);
             }
 
             if (ImGui::MenuItem("Format File and Organize Imports", NULL, false, editor != NULL)) {
                 if (editor != NULL)
-                    editor->format_on_save(GH_FMT_GOIMPORTS);
+                    editor->format_on_save(GH_FMT_GOIMPORTS_WITH_AUTOIMPORT);
             }
 
             if (ImGui::MenuItem("Format Selection", NULL, false, editor != NULL)) {
@@ -2009,17 +2009,12 @@ void UI::draw_everything() {
             wnd.show = false;
 
             if (strlen(wnd.name) > 0) {
-                // TODO: perform rename here and update file tree
-                /*
-                auto dest = wnd.location_is_root ? world.current_path : path_join(world.current_path, wnd.location);
-                auto path = path_join(dest, wnd.name);
+                auto oldpath = path_join(world.current_path, wnd.location);
+                auto newpath = path_join(our_dirname(oldpath), wnd.name);
 
-                if (wnd.folder) {
-                    create_directory(path);
-                } else {
-                    touch_file(path);
-                }
-                */
+                // TODO: handle wnd.name having a slash in it
+                GHRenameFileOrDirectory((char*)oldpath, (char*)newpath);
+                reload_file_subtree(our_dirname(wnd.location));
             }
         }
 
@@ -2820,7 +2815,7 @@ void UI::draw_everything() {
             if (wnd.find_str[0] != '\0') {
                 s.init();
 
-                Search_Opts opts;
+                Search_Opts opts; ptr0(&opts);
                 opts.case_sensitive = wnd.case_sensitive;
                 opts.literal = !wnd.use_regex;
 
@@ -2948,10 +2943,15 @@ void UI::draw_everything() {
                         ImGui::PopStyleColor();
 
                         if (clicked) {
-                            if (ImGui::IsMouseDoubleClicked(0))
-                                goto_file_and_pos(filepath, it.match_start);
-                            else
+                            if (ImGui::IsMouseDoubleClicked(0)) {
+                                auto pos = it.match_start;
+                                if (it.mark_start != NULL)
+                                    pos = it.mark_start->pos();
+
+                                goto_file_and_pos(filepath, pos);
+                            } else {
                                 wnd.selection = index;
+                            }
                         }
                     }
 
@@ -3164,14 +3164,16 @@ void UI::draw_everything() {
                 current_tab = tab;
 
                 auto margin = tab_id == 0 ? 5 : settings.tabs_offset;
-                if (tab.x < tabs_area.x + margin)
+                if (tab.x < tabs_area.x + margin) {
                     pane.tabs_offset -= (tabs_area.x + margin - tab.x);
+                }
 
                 margin = (tab_id == pane.editors.len - 1) ? 5 : settings.tabs_offset;
                 if (tab.x + tab.w > tabs_area.x + tabs_area.w - margin)
                     // if it would make the other constraint fail, don't do it
-                    if (!(tab.x - ((tab.x + tab.w) - (tabs_area.x + tabs_area.w - margin)) < tabs_area.x + margin))
+                    if (!(tab.x - ((tab.x + tab.w) - (tabs_area.x + tabs_area.w - margin)) < tabs_area.x + margin)) {
                         pane.tabs_offset += ((tab.x + tab.w) - (tabs_area.x + tabs_area.w - margin));
+                    }
             }
 
             auto is_hovered = test_hover(tab, HOVERID_TABS + editor_index);
@@ -3204,6 +3206,12 @@ void UI::draw_everything() {
                 relu_sub(tabs_area.x + tabs_area.w, (current_tab.x + current_tab.w + margin)),
                 pane.tabs_offset
             );
+            /*
+            auto space_avail = relu_sub(
+                tabs_area.x + tabs_area.w,
+                (current_tab.x + current_tab.w + margin)
+            );
+            */
             pane.tabs_offset -= space_avail;
         }
 

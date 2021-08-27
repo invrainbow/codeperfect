@@ -129,7 +129,7 @@ struct Build {
 
         For (errors)
             if (it.mark != NULL)
-                it.mark->tree->delete_mark(it.mark);
+                it.mark->cleanup();
 
         mem.cleanup();
     }
@@ -148,7 +148,6 @@ struct World {
     Pool build_index_mem;
     Pool ui_mem;
     Pool index_log_mem;
-    Pool search_mem;
 
     Fridge<Mark> mark_fridge;
     Fridge<Mark_Node> mark_node_fridge;
@@ -204,6 +203,9 @@ struct World {
     bool turn_off_framerate_cap;
 
     Fs_Watcher fswatch;
+
+    bool auth_update_done;
+    u64 auth_update_last_check;
 
     struct {
         bool show;

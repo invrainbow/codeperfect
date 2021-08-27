@@ -283,6 +283,8 @@ int main() {
     world.init(window);
     SCOPED_MEM(&world.frame_mem);
 
+    GHAuthAndUpdate(); // kicks off auth/authupdate shit in the background
+
     world.window = window;
     glfwSetWindowTitle(world.window, our_sprintf("%s - %s", WINDOW_TITLE, world.current_path));
 
@@ -1177,6 +1179,20 @@ int main() {
     // world.focus_editor(path_join(world.indexer.gomodcache, "github.com/davecgh/go-spew@v1.1.1/spew/dump.go"));
 
     while (!glfwWindowShouldClose(world.window)) {
+        /*
+        auto now = current_time_in_nanoseconds() / 1000000;
+        if (now - world.auth_update_last_check > 3000) { // 3 seconds
+            auto status = GHAuthAndUpdateReadStatus();
+            if (status != NULL) {
+                if (status[0] != '\0')
+                    our_panic(status);
+                world.auth_update_done = true;
+                GHFree(status);
+            }
+            world.auth_update_last_check = now;
+        }
+        */
+
         auto frame_start_time = current_time_in_nanoseconds();
 
         world.frame_mem.reset();
@@ -1294,10 +1310,9 @@ int main() {
             }
         }
 
-        ui.draw_everything();
-
         glfwPollEvents();
 
+        ui.draw_everything();
         ui.end_frame(); // end frame after polling events, so our event callbacks have access to imgui
 
         glfwSwapBuffers(world.window);

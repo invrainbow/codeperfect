@@ -238,8 +238,8 @@ struct Mp_Reader {
         auto b = read1();
         if (ok) {
             if (b >> 4 == 0b1001) return b & 0b00001111;
-            if (b == 0xdc) return read2();
-            if (b == 0xdd) return read4();
+            if (b == 0xdc) return (s32)(u16)read2();
+            if (b == 0xdd) return (s32)(u32)read4();
             ok = false;
         }
         return 0;
@@ -249,8 +249,8 @@ struct Mp_Reader {
         auto b = read1();
         if (ok) {
             if (b >> 4 == 0b1000) return b & 0b00001111;
-            if (b == 0xde) return read2();
-            if (b == 0xdf) return read4();
+            if (b == 0xde) return (s32)(u16)read2();
+            if (b == 0xdf) return (s32)(u32)read4();
             ok = false;
         }
         return 0;

@@ -23,7 +23,6 @@ cl /MP /MDd /nologo /EHsc /w /std:c++latest /DEBUG /Zi /utf-8 /Fe:bin\ide.exe^
 if %errorlevel% neq 0 exit /b %errorlevel%
 
 copy /Y init.vim bin\init.vim
-
 if %errorlevel% neq 0 exit /b %errorlevel%
 
 copy /Y dynamic_helper.go bin\dynamic_helper.go

@@ -14,7 +14,7 @@ DEP_FILES = $(patsubst %.cpp,obj/%.d,$(SRC_FILES))
 
 .PHONY: all clean
 
-all: bin/ide
+all: bin/ide bin/gohelper.dylib
 
 clean:
 	rm $(OBJ_FILES) $(DEP_FILES) bin/ide
@@ -32,3 +32,9 @@ obj/objclibs.o: os_macos.mm
 
 obj/clibs.o: clibs.c
 	clang $(CFLAGS) -std=gnu99 -fPIC -c -o $@ $<
+
+GOSTUFF_DIRS = $(shell find gostuff/ -type d)
+GOSTUFF_DIRS = $(shell find gostuff/ -type f -name '*')
+
+bin/gohelper.dylib: gostuff/ $(GOSTUFF_DIRS) $(GOSTUFF_FILES)
+	gostuff/build_helper_macos.sh

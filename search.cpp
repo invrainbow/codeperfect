@@ -38,6 +38,15 @@ void Searcher::cleanup_search() {
 }
 
 void Searcher::cleanup() {
+    For (search_results) {
+        if (it.results == NULL) continue;
+        For (*it.results) {
+            if (it.mark_start != NULL)  it.mark_start->cleanup();
+            if (it.mark_end != NULL)    it.mark_end->cleanup();
+        }
+    }
+    search_results.len = 0;
+
     cleanup_search();
 
     if (mem_active) {
@@ -151,9 +160,10 @@ void Searcher::search_worker() {
         auto sf = search_results.append();
         sf->filepath = final_filepath;
         sf->results = alloc_list<Search_Result>(matches->len);
-        sf->results = alloc_list<Search_Result>(matches->len);
 
         Search_Result *sr = NULL;
+
+        auto editor = world.find_editor_by_filepath(sf->filepath);
 
         // convert temp matches into search results
         for (int i = 0; i < buflen; i++) {
@@ -210,6 +220,12 @@ void Searcher::search_worker() {
                 sr->preview_len += to_right;
                 sr->preview_end.x += to_right;
                 sr->preview = our_strncpy(&buf[prevoff], sr->preview_len);
+
+                if (editor != NULL) {
+                    sr->mark_start = editor->buf.mark_tree.insert_mark(MARK_SEARCH_RESULT, sr->match_start);
+                    // do we need one for end too?
+                    sr->mark_end = editor->buf.mark_tree.insert_mark(MARK_SEARCH_RESULT, sr->match_end);
+                }
 
                 if (++curr_match >= matches->len)
                     break;

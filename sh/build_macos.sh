@@ -11,6 +11,6 @@ else
 fi
 
 cp dynamic_helper.go bin/dynamic_helper.go
+cp init.vim bin/init.vim
 
-[ -f "bin/gohelper.dylib" ] || gohelper/build_macos.sh
 [ -f "bin/nvim" ] || cp "$(grealpath $(which nvim))" bin/nvim

@@ -56,26 +56,27 @@ typedef fn<bool(char*)> Buffer_Read_Func;
 // actually, should we just build in a way where this doesn't need to be known
 enum Mark_Type {
     MARK_BUILD_ERROR,
+    MARK_SEARCH_RESULT,
 };
 
 struct Mark_Tree;
 struct Mark_Node;
 
 struct Mark {
-    Mark_Type type;
+    Mark_Type type; // is this even necessary?
     Mark_Tree *tree;
     Mark_Node *node;
     Mark *next;
     bool invalidated; // does this go on mark on node? i think mark?
 
     cur2 pos();
+    void cleanup();
 };
 
 struct Mark_Node {
     // data assoc'd with each node
     cur2 pos;
     Mark *marks; // linked list of mark pointers
-    int offset;
 
     // internal
     Mark_Node *left;

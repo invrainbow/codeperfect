@@ -6,6 +6,7 @@
 #include "common.hpp"
 #include "list.hpp"
 #include "mem.hpp"
+#include "buffer.hpp"
 
 struct Search_Result {
     ccstr match;
@@ -20,6 +21,9 @@ struct Search_Result {
     cur2 preview_end;
 
     int match_offset_in_preview;
+
+    Mark *mark_start;
+    Mark *mark_end;
 
     List<ccstr> *groups;
 };

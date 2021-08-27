@@ -23,7 +23,7 @@
 #endif
 
 const unsigned char GO_INDEX_MAGIC_BYTES[3] = {0x49, 0xfa, 0x98};
-const int GO_INDEX_VERSION = 13;
+const int GO_INDEX_VERSION = 14;
 
 void index_print(ccstr fmt, ...) {
     va_list args;
@@ -248,6 +248,23 @@ void Module_Resolver::cleanup() {
 }
 
 // -----
+
+bool is_name_private(ccstr name) {
+    if (!isupper(name[0]))
+        return true;
+
+    if (strlen(name) >= 5)
+        if (str_starts_with(name, "Test"))
+            if (isupper(name[4]))
+                return true;
+
+    if (strlen(name) >= 8)
+        if (str_starts_with(name, "Example"))
+            if (isupper(name[7]))
+                return true;
+
+    return false;
+}
 
 ccstr format_cur(cur2 c) {
     if (c.y == -1)
@@ -721,10 +738,11 @@ void Go_Indexer::background_thread() {
     auto enqueue_imports_from_file = [&](Go_File *file) {
         if (file->imports == NULL) return;
         For (*file->imports) {
-            if (already_enqueued_packages.has(it.import_path))
-                continue;
-            if (get_package_status(it.import_path) != GPS_READY)
-                enqueue_package(it.import_path);
+            if (it.import_path == NULL) continue;
+            if (already_enqueued_packages.has(it.import_path)) continue;
+            if (get_package_status(it.import_path) == GPS_READY) continue;
+
+            enqueue_package(it.import_path);
         }
     };
 
@@ -1483,6 +1501,7 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
         case TS_CONST_DECLARATION:
         case TS_VAR_DECLARATION:
         case TS_RANGE_CLAUSE:
+        case TS_RECEIVE_STATEMENT:
             {
                 if (node_type == TS_METHOD_DECLARATION || node_type == TS_FUNCTION_DECLARATION) {
                     open_scopes.append(depth);
@@ -1491,6 +1510,18 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
                     op.type = GSOP_OPEN_SCOPE;
                     op.pos = node->start();
                     if (!cb(&op)) return WALK_ABORT;
+                }
+
+                if (node_type == TS_RECEIVE_STATEMENT) {
+                    bool ok = false;
+                    do {
+                        auto parent = node->parent();
+                        if (parent->null) continue; 
+                        if (parent->type() != TS_COMMUNICATION_CASE) continue;
+                        ok = true;
+                    } while (0);
+
+                    if (!ok) return WALK_ABORT;
                 }
 
                 scope_ops_decls->len = 0;
@@ -1504,6 +1535,13 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
                     op.pos = scope_ops_decls->items[i].decl_start;
                     if (!cb(&op)) return WALK_ABORT;
                 }
+            }
+            break;
+
+            {
+
+
+
             }
             break;
         }
@@ -1632,6 +1670,7 @@ void Go_Indexer::import_decl_to_goimports(Ast_Node *decl_node, ccstr filename, L
         }
 
         auto new_import_path = parse_go_string(path_node->string());
+        if (new_import_path == NULL) continue;
 
         // decl
         auto decl = alloc_object(Godecl);
@@ -2819,13 +2858,8 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                     auto results = list_package_decls(it.import_path, LISTDECLS_EXCLUDE_METHODS);
                     if (results != NULL) {
                         For (*results) {
-                            if (it.decl->name == NULL || !isupper(it.decl->name[0]))
-                                continue;
-
-                            if (strlen(it.decl->name) >= 5)
-                                if (str_starts_with(it.decl->name, "Test"))
-                                    if (isupper(it.decl->name[4]))
-                                        continue;
+                            if (it.decl->name == NULL) continue;
+                            if (is_name_private(it.decl->name)) continue;
 
                             auto result = add_declaration_result(our_sprintf("%s.%s", pkgname, it.decl->name));
                             if (result != NULL) {
@@ -3651,7 +3685,8 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node) {
                     );
                 } else {
                     field->type = GODECL_FIELD;
-                    field->name = NULL; // embedded
+                    field->name = NULL;
+                    field->is_embedded = true;
                     field->gotype = node_to_gotype(it);
                     field->spec_start = it->start();
                     field->decl_start = it->start();
@@ -3802,7 +3837,8 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
         memcpy(decl, decl->copy(), sizeof(Godecl));
     };
 
-    switch (node->type()) {
+    auto node_type = node->type();
+    switch (node_type) {
     case TS_FUNCTION_DECLARATION:
     case TS_METHOD_DECLARATION:
         {
@@ -4036,19 +4072,52 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
         }
         break;
 
+    case TS_RECEIVE_STATEMENT:
     case TS_SHORT_VAR_DECLARATION:
         {
-            auto left = node->field(TSF_LEFT);
-            auto right = node->field(TSF_RIGHT);
+            List<Ast_Node*> *lhs = NULL;
+            List<Ast_Node*> *rhs = NULL;
+            
+            if (node_type == TS_RECEIVE_STATEMENT) {
+                bool isdecl = false;
+                FOR_ALL_NODE_CHILDREN (node) {
+                    if (it->type() == TS_COLON_EQ) {
+                        isdecl = true;
+                        break;
+                    }
+                }
 
-            if (left->type() != TS_EXPRESSION_LIST) break;
-            if (right->type() != TS_EXPRESSION_LIST) break;
+                if (!isdecl) break;
 
-            auto lhs = alloc_list<Ast_Node*>(left->child_count());
-            auto rhs = alloc_list<Ast_Node*>(right->child_count());
+                auto left = node->field(TSF_LEFT);
+                if (left->null) break;
+                if (left->type() != TS_EXPRESSION_LIST) break;
 
-            FOR_NODE_CHILDREN (left) lhs->append(it);
-            FOR_NODE_CHILDREN (right) rhs->append(it);
+                auto right = node->field(TSF_RIGHT);
+                if (right->null) break;
+                if (!is_expression_node(right)) break;
+
+                lhs = alloc_list<Ast_Node*>(left->child_count());
+                FOR_NODE_CHILDREN (left) lhs->append(it);
+
+                rhs = alloc_list<Ast_Node*>(1);
+                rhs->append(right);
+            } else {
+                auto left = node->field(TSF_LEFT);
+                auto right = node->field(TSF_RIGHT);
+
+                if (left->null) break;
+                if (right->null) break;
+
+                if (left->type() != TS_EXPRESSION_LIST) break;
+                if (right->type() != TS_EXPRESSION_LIST) break;
+
+                lhs = alloc_list<Ast_Node*>(left->child_count());
+                rhs = alloc_list<Ast_Node*>(right->child_count());
+
+                FOR_NODE_CHILDREN (left) lhs->append(it);
+                FOR_NODE_CHILDREN (right) rhs->append(it);
+            }
 
             auto new_godecl = [&]() -> Godecl * {
                 auto decl = new_result();
@@ -4061,6 +4130,7 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
             assignment_to_decls(lhs, rhs, new_godecl);
             for (u32 i = old_len; i < results->len; i++)
                 save_decl(results->items + i);
+
         }
         break;
     }
@@ -4080,8 +4150,10 @@ List<Goresult> *Go_Indexer::list_package_decls(ccstr import_path, int flags) {
 
     For (*pkg->files) {
         For (*it.decls) {
+            if (it.name == NULL) continue;
+
             if (flags & LISTDECLS_PUBLIC_ONLY)
-                if (!(it.name != NULL && isupper(it.name[0])))
+                if (is_name_private(it.name))
                     continue;
 
             if (flags & LISTDECLS_EXCLUDE_METHODS)
@@ -4115,6 +4187,9 @@ Gotype *Go_Indexer::expr_to_gotype(Ast_Node *expr) {
     Gotype *ret = NULL; // so we don't have to declare inside switch
 
     switch (expr->type()) {
+    case TS_PARENTHESIZED_EXPRESSION:
+        return expr_to_gotype(expr->child());
+
     case TS_INT_LITERAL: return new_primitive_type("int");
     case TS_FLOAT_LITERAL: return new_primitive_type("float64");
     case TS_IMAGINARY_LITERAL: return new_primitive_type("complex128");
@@ -4153,6 +4228,22 @@ Gotype *Go_Indexer::expr_to_gotype(Ast_Node *expr) {
         return new_primitive_type("int");
 
     case TS_CALL_EXPRESSION:
+        // detect make(...) calls
+        do {
+            auto func = expr->field(TSF_FUNCTION);
+            if (func->type() != TS_IDENTIFIER) break;
+            if (!streq(func->string(), "make")) break;
+
+            auto args = expr->field(TSF_ARGUMENTS);
+            if (args->null) break;
+            if (args->type() != TS_ARGUMENT_LIST) break;
+
+            auto firstarg = args->child();
+            if (firstarg->null) break;
+
+            return node_to_gotype(firstarg);
+        } while (0);
+
         ret = new_gotype(GOTYPE_LAZY_CALL);
         ret->lazy_call_base = expr_to_gotype(expr->field(TSF_FUNCTION));
         return ret;
@@ -5390,9 +5481,11 @@ void (*GHFmtStart)();
 void (*GHFmtAddLine)(char* line);
 char* (*GHFmtFinish)(GoInt fmtType);
 void (*GHFree)(void* p);
-GoUint8 (*GHCheckLicense)();
 GoUint8 (*GHGitIgnoreInit)(char* repo);
 GoUint8 (*GHGitIgnoreCheckFile)(char* file);
+void (*GHAuthAndUpdate)();
+char* (*GHAuthAndUpdateReadStatus)();
+bool (*GHRenameFileOrDirectory)(char* oldpath, char* newpath);
 
 #if OS_WIN
 #   define load_dll(x) LoadLibraryW(L"gohelper.dll")
@@ -5424,8 +5517,10 @@ void init_gohelper_crap() {
     load(GHFmtAddLine);
     load(GHFmtFinish);
     load(GHFree);
-    load(GHCheckLicense);
     load(GHGitIgnoreInit);
     load(GHGitIgnoreCheckFile);
+    load(GHAuthAndUpdate);
+    load(GHAuthAndUpdateReadStatus);
+    load(GHRenameFileOrDirectory);
 #undef load
 }

@@ -327,7 +327,6 @@ void World::init(GLFWwindow *_wnd) {
     init_mem(build_index_mem);
     init_mem(ui_mem);
     init_mem(index_log_mem);
-    init_mem(search_mem);
 #undef init_mem
 
     // use frame_mem as the default mem
@@ -804,7 +803,7 @@ ccstr World::ft_node_to_path(FT_Node *node) {
 FT_Node *World::find_or_create_ft_node(ccstr relpath, bool is_directory) {
     auto ret = find_ft_node(relpath);
     if (ret != NULL) return ret;
-    
+
     auto parent = find_ft_node(our_dirname(relpath));
     if (parent == NULL) return NULL;
 
