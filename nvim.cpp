@@ -719,8 +719,8 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 }
 
                 if (editor->is_nvim_ready()) {
-                    if (mode != VI_INSERT)
-                        editor->raw_move_cursor(new_cur);
+                    // if (mode != VI_INSERT || new_cur != editor->cur)
+                    editor->raw_move_cursor(new_cur);
                 }
             }
             break;

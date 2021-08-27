@@ -43,6 +43,8 @@ func main() {
 		names = append(names, name)
 	}
 
+	fmt.Printf("%s\n", strings.Join(names, " "))
+
 	cmd := exec.Command("cloc", append([]string{"--json"}, names...)...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
