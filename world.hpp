@@ -69,6 +69,9 @@ struct Main_Thread_Message {
 struct History_Loc {
     int editor_id;
     cur2 pos;
+    Mark *mark; // do we even need pos then?
+
+    void cleanup();
 };
 
 struct History {

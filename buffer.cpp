@@ -800,7 +800,7 @@ Mark_Node *Mark_Tree::internal_insert_node(Mark_Node *root, cur2 pos, Mark_Node 
 
     auto balance = get_balance(root);
     if (balance > 1) {
-        if (pos >= root->left->pos)
+        if (pos > root->left->pos)
             root->left = rotate_left(root->left);
         return rotate_right(root);
     }
@@ -829,7 +829,7 @@ void Mark_Tree::delete_mark(Mark *mark) {
     }
 
     if (node->marks == NULL)
-        delete_node(mark->node->pos);
+        delete_node(node->pos);
 
     world.mark_fridge.free(mark);
 }

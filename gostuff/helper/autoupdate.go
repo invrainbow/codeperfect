@@ -177,7 +177,7 @@ func ActuallyAuthAndUpdate() error {
 
 	req := &models.AuthRequest{
 		OS:             runtime.GOOS,
-		CurrentVersion: versions.CurrentVersion - 1,
+		CurrentVersion: versions.CurrentVersion,
 	}
 
 	fmt.Printf("%v\n", req)

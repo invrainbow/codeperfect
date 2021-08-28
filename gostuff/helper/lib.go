@@ -35,6 +35,8 @@ func IsTestMode() bool {
 	return strings.HasSuffix(os.Args[0], ".test")
 }
 
+var DebugModeFlag = false
+
 func IsDebugMode() bool {
-	return os.Getenv("DEBUG") == "1"
+	return DebugModeFlag || os.Getenv("DEBUG") == "1"
 }

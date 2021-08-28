@@ -11,14 +11,11 @@ import (
 	"github.com/invrainbow/ide/gostuff/models"
 )
 
-var ServerBase = "https://api.codeperfect95.com"
-
-func init() {
-	if IsTestMode() {
-		ServerBase = "http://localhost:8080"
+func GetServerBase() string {
+	if IsTestMode() || IsDebugMode() {
+		return "http://localhost:8080"
 	}
-
-	fmt.Printf("serverbase: %v\n", ServerBase)
+	return "https://api.codeperfect95.com"
 }
 
 func CallServer(endpoint string, license *License, params interface{}, out interface{}) error {
@@ -27,7 +24,7 @@ func CallServer(endpoint string, license *License, params interface{}, out inter
 		return err
 	}
 
-	url := fmt.Sprintf("%s/%s", ServerBase, endpoint)
+	url := fmt.Sprintf("%s/%s", GetServerBase(), endpoint)
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(buf))
 	req.Header.Set("X-Email", license.Email)
 	req.Header.Set("X-License-Key", license.LicenseKey)

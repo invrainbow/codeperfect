@@ -25,12 +25,18 @@ void History::actually_push(int editor_id, cur2 pos, bool force, bool capturing_
     auto editor = world.find_editor_by_id(editor_id);
     print("pushing %s:%s, force = %d, capture_editor_last = %d", our_basename(editor->filepath), format_cur(pos), force, capturing_editor_last);
 
+    for (int i = curr; i < top; i = inc(i))
+        ring[i].cleanup();
+
     ring[curr].editor_id = editor_id;
-    ring[curr].pos = pos;
+    ring[curr].pos = pos; // do we even need this anymore?
+    ring[curr].mark = editor->buf.mark_tree.insert_mark(MARK_HISTORY, pos);
 
     top = curr = inc(curr);
-    if (curr == start)
+    if (curr == start) {
+        ring[start].cleanup();
         start = inc(start);
+    }
 }
 
 void History::push(int editor_id, cur2 pos, bool force) {
@@ -72,11 +78,13 @@ void History::actually_go(History_Loc *it) {
     if (editor == NULL) return;
     if (!editor->is_nvim_ready()) return;
 
+    auto pos = it->mark->pos(); // it->pos
+
     world.navigating_to = true;
-    world.navigating_to_pos = it->pos;
+    world.navigating_to_pos = pos;
     world.navigating_to_editor = it->editor_id;
 
-    world.focus_editor_by_id(it->editor_id, it->pos);
+    world.focus_editor_by_id(it->editor_id, pos);
 }
 
 bool History::go_forward() {
@@ -131,24 +139,35 @@ void History::remove_editor_from_history(int editor_id) {
     int i = start, j = start;
 
     for (; i != curr; i = inc(i)) {
-        if (ring[i].editor_id != editor_id) {
-            if (i != j)
-                memcpy(&ring[j], &ring[i], sizeof(ring[j]));
-            j = inc(j);
+        if (ring[i].editor_id == editor_id) {
+            ring[i].cleanup();
+            continue;
         }
+        if (i != j)
+            memcpy(&ring[j], &ring[i], sizeof(ring[j]));
+        j = inc(j);
     }
 
     curr = j;
 
     for (; i != top; i = inc(i))  {
-        if (ring[i].editor_id != editor_id) {
-            if (i != j)
-                memcpy(&ring[j], &ring[i], sizeof(ring[j]));
-            j = inc(j);
+        if (ring[i].editor_id == editor_id) {
+            ring[i].cleanup();
+            continue;
         }
+        if (i != j)
+            memcpy(&ring[j], &ring[i], sizeof(ring[j]));
+        j = inc(j);
     }
 
     top = j;
+}
+
+void History_Loc::cleanup() {
+    if (mark != NULL) {
+        mark->cleanup();
+        mark = NULL;
+    }
 }
 
 void World::fill_file_tree() {

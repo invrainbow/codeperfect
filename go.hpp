@@ -1400,5 +1400,6 @@ extern GoUint8 (*GHGitIgnoreCheckFile)(char* file);
 extern void (*GHAuthAndUpdate)();
 extern char* (*GHAuthAndUpdateReadStatus)();
 extern bool (*GHRenameFileOrDirectory)(char* oldpath, char* newpath);
+extern void (*GHEnableDebugMode)();
 
 void init_gohelper_crap();

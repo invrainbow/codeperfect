@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/gin-gonic/gin"
 	"github.com/invrainbow/ide/gostuff/models"
 	"github.com/invrainbow/ide/gostuff/versions"
@@ -81,10 +80,8 @@ func Run() {
 		}
 
 		if resp.NeedAutoupdate {
-			filename := fmt.Sprintf("%v_v%v.zip", req.OS, versions.CurrentVersion)
-			spew.Dump(filename)
+			filename := fmt.Sprintf("update/%v_v%v.zip", req.OS, versions.CurrentVersion)
 			presignedUrl, err := GetPresignedURL("codeperfect95", filename)
-			spew.Dump(presignedUrl)
 			if err != nil {
 				sendServerError(c, "error while creating presigned url: %v", err)
 				return

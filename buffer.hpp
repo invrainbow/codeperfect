@@ -57,6 +57,7 @@ typedef fn<bool(char*)> Buffer_Read_Func;
 enum Mark_Type {
     MARK_BUILD_ERROR,
     MARK_SEARCH_RESULT,
+    MARK_HISTORY,
 };
 
 struct Mark_Tree;

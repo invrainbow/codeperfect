@@ -1,39 +1,32 @@
 #!/bin/bash
 set -e
 
-mkdir -p obj bin
+VERSION="$(grep CurrentVersion gostuff/versions/versions.go | rev | cut -d' ' -f 1 | rev)"
 
-export RELEASE=1
+# build again
+RELEASE=1 sh/build_macos.sh
 
-cpu_name="$(sysctl -n machdep.cpu.brand_string)"
-if [ "$cpu_name" = "Apple M1" ]; then
-    arch -arm64 make -j 9 -f Makefile.macos
-else
-    make -j 5 -f Makefile.macos
-fi
+# clean up bin folder
+rm -f build/bin/.DS_Store
 
-cp dynamic_helper.go bin/dynamic_helper.go
-cp init.vim bin/init.vim
-cp "$(grealpath $(which nvim))" bin/nvim
-
-rm -rf dist
-mkdir dist
-cp -R bin/ dist/bin/
-
-pushd gostuff
-go build -o ../launcher github.com/invrainbow/ide/gostuff/cmd/launcher
-popd
-
-mv launcher dist/
-rm -rf dist.zip
-zip -r dist.zip dist/
-
-current-version() {
-    grep CurrentVersion gostuff/versions/versions.go | rev | cut -d' ' -f 1 | rev
+package_app() {
+    APPNAME="CodePerfect.app"
+    rm -rf "${APPNAME}"
+    mkdir -p "${APPNAME}/Contents/MacOS"
+    cp -R ../build/bin/ "${APPNAME}/Contents/MacOS/bin/"
+    cp ../build/launcher "${APPNAME}/Contents/MacOS/CodePerfect"
+    zip -r app.zip CodePerfect.app/
+    aws s3 cp app.zip "s3://codeperfect95/app/darwin_v${VERSION}.zip"
 }
 
-aws s3 cp dist.zip "s3://codeperfect95/darwin_v$(current-version).zip"
+package_update() {
+    zip -j -r update.zip ../build/bin/ 
+    aws s3 cp update.zip "s3://codeperfect95/update/darwin_v${VERSION}.zip"
+}
 
-
-
-
+mkdir scratch
+pushd scratch
+package_app
+package_update
+popd
+rm -rf scratch

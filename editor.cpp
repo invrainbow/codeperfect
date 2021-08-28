@@ -1411,10 +1411,21 @@ void Editor::cleanup() {
         nv.end_message();
     }
 
-    buf.cleanup();
-    mem.cleanup();
+    // we need an easier system of removing all references to editor
+    // and its marks when the editor closes
+
+    if (world.build.ready()) {
+        For (world.build.errors) {
+            if (it.mark != NULL)
+                if (it.mark->tree == &buf.mark_tree)
+                    it.mark = NULL;
+        }
+    }
 
     world.history.remove_editor_from_history(id);
+
+    buf.cleanup();
+    mem.cleanup();
 }
 
 bool Editor::cur_is_inside_comment_or_string() {

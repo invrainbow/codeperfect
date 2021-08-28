@@ -13,8 +13,9 @@
 *.obj
 *.lib
 *.exp
-bin/
+build/
 obj/
+scratch/
 
 # clangd index
 .clangd

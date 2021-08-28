@@ -294,3 +294,8 @@ func GHGitIgnoreCheckFile(file *C.char) bool {
 func GHRenameFileOrDirectory(oldpath, newpath *C.char) bool {
 	return os.Rename(C.GoString(oldpath), C.GoString(newpath)) == nil
 }
+
+//export GHEnableDebugMode
+func GHEnableDebugMode() {
+	DebugModeFlag = true
+}

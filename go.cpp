@@ -5486,13 +5486,16 @@ GoUint8 (*GHGitIgnoreCheckFile)(char* file);
 void (*GHAuthAndUpdate)();
 char* (*GHAuthAndUpdateReadStatus)();
 bool (*GHRenameFileOrDirectory)(char* oldpath, char* newpath);
+void (*GHEnableDebugMode)();
 
 #if OS_WIN
 #   define load_dll(x) LoadLibraryW(L"gohelper.dll")
 #   define get_func_address(dll, name) GetProcAddress(dll, name)
+#   define dll_error() get_last_error()
 #elif OS_MAC
 #   define load_dll(x) dlopen("gohelper.dylib", RTLD_NOW);
 #   define get_func_address(dll, name) dlsym(dll, name)
+#   define dll_error() dlerror()
 #endif
 
 auto gohelper_dll = load_dll(gohelper_dll);
@@ -5500,7 +5503,7 @@ auto gohelper_dll = load_dll(gohelper_dll);
 template<typename T>
 void load_dll_func(T &func, ccstr name) {
     auto addr = get_func_address(gohelper_dll, name);
-    if (addr == NULL) our_panic(our_sprintf("couldn't load %s", name));
+    if (addr == NULL) our_panic(our_sprintf("couldn't load %s: %s", name, dll_error()));
     func = (T)addr;
 }
 
@@ -5522,5 +5525,6 @@ void init_gohelper_crap() {
     load(GHAuthAndUpdate);
     load(GHAuthAndUpdateReadStatus);
     load(GHRenameFileOrDirectory);
+    load(GHEnableDebugMode);
 #undef load
 }

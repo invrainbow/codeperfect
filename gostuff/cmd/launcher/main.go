@@ -2,12 +2,15 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/invrainbow/ide/gostuff/launcher"
 )
 
 func main() {
 	if err := launcher.Run(); err != nil {
-		println(err)
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+		return
 	}
 }
