@@ -5,12 +5,9 @@
 @layer base {
   body {
     margin: 0;
-    font-family: "Segoe UI", "Oxygen", -apple-system, BlinkMacSystemFont,
-      "Roboto", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans",
-      "Helvetica Neue", sans-serif;
+    font-family: "Cabin", sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    background: #151515;
   }
 
   code {
@@ -79,15 +76,8 @@
   .thick-list li {
     @apply mb-3;
   }
-  .roadmap-list {
-    @apply pl-0;
-  }
-  .roadmap-list li {
-    @apply py-1.5 list-none ml-0;
-  }
   .nice-image {
-    @apply md:rounded-md border md:border-4 md:w-auto drop-shadow-md;
-    border-color: #555;
+    @apply md:rounded-md md:w-auto drop-shadow-md;
   }
 
   .wall-of-text h3 {
