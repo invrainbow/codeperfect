@@ -1189,7 +1189,7 @@ int main() {
             if (status != NULL) {
                 if (status[0] != '\0') {
 #ifdef DEBUG_MODE
-                    tell_user(status, "error during auth and update");
+                    print("error during auth and update: %s", status);
 #else
                     our_panic(status);
 #endif
