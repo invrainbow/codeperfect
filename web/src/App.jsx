@@ -128,7 +128,7 @@ function Home() {
           {IDE_FEATURES.map((feature, i) => (
             <div
               key={i}
-              className="leading-tight font-semibold h-16 md:h-20 lg:h-20 rounded-lg text-gray-500 hover:text-gray-600 text-center flex justify-center items-center p-4 transform hover:scale-110 transition-all shadow-sm"
+              className="text-sm md:text-md leading-tight font-semibold h-16 md:h-20 lg:h-20 rounded-lg text-gray-500 hover:text-gray-600 text-center flex justify-center items-center p-4 transform hover:scale-110 transition-all shadow-sm"
               style={{ background: "#eee" }}
             >
               <span>{feature}</span>
@@ -197,11 +197,11 @@ function PricingBox({ title, price, subprice, children }) {
   };
   */
   return (
-    <div className="p-6 w-1/3 rounded-md text-center border border-gray-400 shadow-sm">
-      <h1 className="font-bold text-gray-700 text-lg mb-2">{title}</h1>
+    <div className="p-4 md:p-6 w-auto md:w-1/3 rounded-md text-center border border-gray-400 shadow-sm">
+      <h1 className="font-bold text-gray-700 text-lg">{title}</h1>
       <div className="font-bold text-black text-2xl">{price}</div>
       <div className="font-normal text-gray-400">{subprice}</div>
-      <div className="border-dashed border-t border-gray-300 mt-6 pt-6 text-gray-500 text-left">
+      <div className="border-dashed border-t border-gray-300 mt-4 pt-4 md:mt-6 md:pt-6 text-gray-500 text-left">
         {children}
       </div>
     </div>
@@ -212,7 +212,7 @@ function Pricing() {
   return (
     <div className="pricing my-16">
       <h1 className="text-center text-black text-4xl mb-12">Pricing</h1>
-      <div className="flex space-between space-x-8 mx-auto max-w-5xl">
+      <div className="flex flex-col md:flex-row space-between space-y-8 space-x-0 md:space-y-0 md:space-x-8 mx-auto max-w-5xl">
         <PricingBox
           title="Individual Plan"
           tier="individual"
