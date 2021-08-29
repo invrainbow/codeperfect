@@ -1,12 +1,12 @@
 {{ define "main" }}
-  <div class="border-t border-b border-gray-700">
+  <div class="border-t border-b border-gray-300">
     <div class="px-4 grid relative max-w-screen-xl mx-auto" style="grid-template-columns: 250px auto 200px">
       <div class="py-8 pr-8">
         <nav class="">
           {{ $currentPage := . -}}
           {{ range .Site.Menus.docs -}}
             <div class="mb-8 leading-7">
-              <h3 class="mb-2 font-bold text-gray-500 uppercase text-sm tracking-wide">{{ .Name }}</h3>
+              <h3 class="mb-2 font-bold text-gray-400 uppercase text-xs tracking-wide">{{ .Name }}</h3>
               {{ if .HasChildren -}}
                 <ul class="p-0">
                   {{ range .Children -}}
@@ -16,11 +16,11 @@
                       <a
                         class="
                           {{ if $active }}
-                            text-white
+                            text-black
                             font-bold
                           {{ else }}
-                            text-gray-400
-                            hover:text-gray-200
+                            text-gray-600
+                            hover:text-gray-800
                           {{ end }}
                         "
                         href="{{ .URL | relURL }}"
@@ -35,7 +35,7 @@
         </nav>
       </div>
 
-      <main class="flex-grow w-auto p-8 h-full border-l border-gray-700">
+      <main class="flex-grow w-auto p-8 h-full border-l border-gray-300">
         <!--
         <nav aria-label="breadcrumb">
           <div class="breadcrumb">
@@ -76,7 +76,7 @@
 
       <nav class="py-8">
         {{ if ne .Params.toc false -}}
-          <div class="sticky top-8 right-0 page-links leading-7 pl-6 border-l border-gray-700">
+          <div class="sticky top-8 right-0 page-links leading-7 pl-6 border-l border-gray-300">
             <h3 class="mb-2">On this page</h3>
             {{ .TableOfContents }}
           </div>
