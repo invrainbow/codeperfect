@@ -188,12 +188,14 @@ function Home() {
   );
 }
 
-function PricingBox({ tier, title, price, subprice, children }) {
+function PricingBox({ title, price, subprice, children }) {
+  /*
   const bgclasses = {
     individual: "bg-gray-100",
     company: "bg-gray-200",
     premium: "bg-gray-300",
   };
+  */
   return (
     <div className="p-6 w-1/3 rounded-md text-center border border-gray-400 shadow-sm">
       <h1 className="font-bold text-gray-700 text-lg mb-2">{title}</h1>
