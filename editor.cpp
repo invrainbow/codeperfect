@@ -591,46 +591,50 @@ void Editor::perform_autocomplete(AC_Result *result) {
                 iter->init(&buf);
                 auto root = new_ast_node(ts_tree_root_node(buf.tree), iter);
 
+                Ast_Node *package_node = NULL;
                 Ast_Node *imports_node = NULL;
 
                 FOR_NODE_CHILDREN (root) {
-                    if (it->type() == TS_IMPORT_DECLARATION) {
+                    if (it->type() == TS_PACKAGE_CLAUSE) {
+                        package_node = it;
+                    } else if (it->type() == TS_IMPORT_DECLARATION) {
                         imports_node = it;
                         break;
                     }
                 }
 
                 do {
-                    if (imports_node == NULL) break;
-                    if (cur <= imports_node->end()) break;
-
-                    auto imports = alloc_list<Go_Import>();
-                    world.indexer.import_decl_to_goimports(imports_node, NULL, imports);
-
-                    auto imp = imports->find([&](auto it) { return streq(it->import_path, import_to_add); });
-                    if (imp != NULL) break;
+                    if (imports_node == NULL && package_node == NULL) break;
 
                     Text_Renderer rend;
                     rend.init();
                     rend.write("import (\n");
                     rend.write("\"%s\"\n", import_to_add);
 
-                    For (*imports) {
-                        switch (it.package_name_type) {
-                        case GPN_IMPLICIT:
-                            rend.write("\"%s\"", it.import_path);
-                            break;
-                        case GPN_EXPLICIT:
-                            rend.write("%s \"%s\"", it.package_name, it.import_path);
-                            break;
-                        case GPN_BLANK:
-                            rend.write("_ \"%s\"", it.import_path);
-                            break;
-                        case GPN_DOT:
-                            rend.write(". \"%s\"", it.import_path);
-                            break;
+                    if (imports_node != NULL && cur > imports_node->end()) {
+                        auto imports = alloc_list<Go_Import>();
+                        world.indexer.import_decl_to_goimports(imports_node, NULL, imports);
+
+                        auto imp = imports->find([&](auto it) { return streq(it->import_path, import_to_add); });
+                        if (imp != NULL) break;
+
+                        For (*imports) {
+                            switch (it.package_name_type) {
+                            case GPN_IMPLICIT:
+                                rend.write("\"%s\"", it.import_path);
+                                break;
+                            case GPN_EXPLICIT:
+                                rend.write("%s \"%s\"", it.package_name, it.import_path);
+                                break;
+                            case GPN_BLANK:
+                                rend.write("_ \"%s\"", it.import_path);
+                                break;
+                            case GPN_DOT:
+                                rend.write(". \"%s\"", it.import_path);
+                                break;
+                            }
+                            rend.write("\n");
                         }
-                        rend.write("\n");
                     }
 
                     rend.write(")");
@@ -650,39 +654,48 @@ void Editor::perform_autocomplete(AC_Result *result) {
                         new_contents_len--;
                     }
 
-                    {
-                        auto start = imports_node->start();
-                        auto old_end = imports_node->end();
-
+                    cur2 start, old_end, new_end;
+                    if (imports_node != NULL) {
+                        start = imports_node->start();
+                        old_end = imports_node->end();
                         if (old_end.y >= nvim_insert.start.y) break;
+                    } else {
+                        start = package_node->end();
+                        old_end = package_node->end();
+                    }
+                    new_end = start;
 
-                        auto chars = alloc_list<uchar>();
-                        auto new_end = start;
+                    auto chars = alloc_list<uchar>();
+                    if (imports_node == NULL) {
+                        // add two newlines, it's going after the package decl
+                        chars->append('\n');
+                        chars->append('\n');
+                        new_end.x = 0;
+                        new_end.y += 2;
+                    }
 
-                        Cstr_To_Ustr conv;
-                        conv.init();
+                    Cstr_To_Ustr conv; conv.init();
+                    for (auto p = new_contents; *p != '\0'; p++) {
+                        bool found = false;
+                        auto uch = conv.feed(*p, &found);
+                        if (found) {
+                            chars->append(uch);
 
-                        for (auto p = new_contents; *p != '\0'; p++) {
-                            bool found = false;
-                            auto uch = conv.feed(*p, &found);
-                            if (found) {
-                                chars->append(uch);
-
-                                if (uch == '\n') {
-                                    new_end.x = 0;
-                                    new_end.y++;
-                                } else {
-                                    new_end.x++;
-                                }
+                            if (uch == '\n') {
+                                new_end.x = 0;
+                                new_end.y++;
+                            } else {
+                                new_end.x++;
                             }
                         }
-
-                        // perform the edit
-                        buf.remove(start, old_end);
-                        buf.insert(start, chars->items, chars->len);
-
-                        add_change_in_insert_mode(start, old_end, new_end);
                     }
+
+                    // perform the edit
+                    if (start != old_end)
+                        buf.remove(start, old_end);
+                    buf.insert(start, chars->items, chars->len);
+
+                    add_change_in_insert_mode(start, old_end, new_end);
 
                     // do something with new_contents
                 } while (0);
