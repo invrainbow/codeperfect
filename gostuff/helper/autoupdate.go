@@ -15,7 +15,6 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/invrainbow/codeperfect/gostuff/models"
 	"github.com/invrainbow/codeperfect/gostuff/versions"
 )
@@ -193,8 +192,7 @@ func ActuallyAuthAndUpdate() error {
 		if err != nil {
 			return err
 		}
-		spew.Dump(tmpfile.Name())
-		// defer os.Remove(tmpfile.Name())
+		defer os.Remove(tmpfile.Name())
 
 		if err := DownloadFile(resp.DownloadURL, tmpfile); err != nil {
 			return err

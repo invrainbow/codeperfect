@@ -13,5 +13,5 @@ var ValidOSes = map[string]bool{
 }
 
 var VersionHashes = map[int]string{
-	1: "hurrdurr",
+	1: "hurrdurr", // set this at release
 }
