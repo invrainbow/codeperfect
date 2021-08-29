@@ -1,4 +1,4 @@
-module github.com/invrainbow/ide/gostuff
+module github.com/invrainbow/codeperfect/gostuff
 
 go 1.16
 

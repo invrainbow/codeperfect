@@ -7,8 +7,8 @@ import (
 	"os"
 
 	"github.com/gin-gonic/gin"
-	"github.com/invrainbow/ide/gostuff/models"
-	"github.com/invrainbow/ide/gostuff/versions"
+	"github.com/invrainbow/codeperfect/gostuff/models"
+	"github.com/invrainbow/codeperfect/gostuff/versions"
 	"gorm.io/gorm"
 )
 

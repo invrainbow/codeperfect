@@ -8,7 +8,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/invrainbow/ide/gostuff/models"
+	"github.com/invrainbow/codeperfect/gostuff/models"
 )
 
 func GetServerBase() string {

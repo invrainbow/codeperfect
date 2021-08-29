@@ -16,8 +16,8 @@ import (
 	"strings"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/invrainbow/ide/gostuff/models"
-	"github.com/invrainbow/ide/gostuff/versions"
+	"github.com/invrainbow/codeperfect/gostuff/models"
+	"github.com/invrainbow/codeperfect/gostuff/versions"
 )
 
 type License struct {

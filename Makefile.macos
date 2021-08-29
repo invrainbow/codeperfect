@@ -44,10 +44,10 @@ GOSTUFF_DIRS = $(shell find gostuff/ -type d)
 GOSTUFF_FILES = $(shell find gostuff/ -type f -name '*')
 
 build/bin/gohelper.dylib: gostuff/ $(GOSTUFF_DIRS) $(GOSTUFF_FILES)
-	cd gostuff; go build $(GOFLAGS) -o ../build/bin/gohelper.dylib -buildmode=c-shared github.com/invrainbow/ide/gostuff/cmd/helper
+	cd gostuff; go build $(GOFLAGS) -o ../build/bin/gohelper.dylib -buildmode=c-shared github.com/invrainbow/codeperfect/gostuff/cmd/helper
 
 build/launcher: gostuff/ $(GOSTUFF_DIRS) $(GOSTUFF_FILES)
-	cd gostuff; go build $(GOFLAGS) -o ../build/launcher github.com/invrainbow/ide/gostuff/cmd/launcher
+	cd gostuff; go build $(GOFLAGS) -o ../build/launcher github.com/invrainbow/codeperfect/gostuff/cmd/launcher
 
 build/bin/dynamic_helper.go: dynamic_helper.go
 	cp dynamic_helper.go build/bin/dynamic_helper.go

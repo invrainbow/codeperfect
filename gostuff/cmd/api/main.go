@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/invrainbow/ide/gostuff/api"
+	"github.com/invrainbow/codeperfect/gostuff/api"
 )
 
 func main() {

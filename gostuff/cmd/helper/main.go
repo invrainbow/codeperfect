@@ -1,5 +1,5 @@
 package main
 
-import _ "github.com/invrainbow/ide/gostuff/helper"
+import _ "github.com/invrainbow/codeperfect/gostuff/helper"
 
 func main() {}

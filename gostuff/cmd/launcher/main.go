@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/invrainbow/ide/gostuff/launcher"
+	"github.com/invrainbow/codeperfect/gostuff/launcher"
 )
 
 func main() {

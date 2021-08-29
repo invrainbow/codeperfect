@@ -6,5 +6,5 @@ if [ "${RELEASE}" = 1 ]; then
 fi
 
 pushd gostuff
-go build -o ../build/launcher github.com/invrainbow/ide/gostuff/cmd/launcher
+go build -o ../build/launcher github.com/invrainbow/codeperfect/gostuff/cmd/launcher
 popd
