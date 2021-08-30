@@ -1790,13 +1790,13 @@ void UI::draw_everything() {
         }
 
         if (ImGui::BeginMenu("Tools")) {
-            if (ImGui::MenuItem("Rescan index")) {
+            if (ImGui::MenuItem("Rescan Index")) {
                 world.indexer.message_queue.add([&](auto msg) {
                     msg->type = GOMSG_RESCAN_INDEX;
                 });
             }
 
-            if (ImGui::MenuItem("Obliterate and recreate index")) {
+            if (ImGui::MenuItem("Obliterate and Recreate Index")) {
                 world.indexer.message_queue.add([&](auto msg) {
                     msg->type = GOMSG_OBLITERATE_AND_RECREATE_INDEX;
                 });
@@ -1804,13 +1804,13 @@ void UI::draw_everything() {
 
             if (io.KeyAlt) {
                 ImGui::Separator();
-                ImGui::MenuItem("ImGui demo", NULL, &world.windows_open.im_demo);
-                ImGui::MenuItem("ImGui metrics", NULL, &world.windows_open.im_metrics);
-                ImGui::MenuItem("Editor AST viewer", NULL, &world.wnd_editor_tree.show);
-                ImGui::MenuItem("Editor toplevels viewer", NULL, &world.wnd_editor_toplevels.show);
+                ImGui::MenuItem("ImGui Demo", NULL, &world.windows_open.im_demo);
+                ImGui::MenuItem("ImGui Metrics", NULL, &world.windows_open.im_metrics);
+                ImGui::MenuItem("Editor AST Viewer", NULL, &world.wnd_editor_tree.show);
+                ImGui::MenuItem("Editor Toplevels Viewer", NULL, &world.wnd_editor_toplevels.show);
                 ImGui::MenuItem("Roll Your Own IDE Construction Set", NULL, &world.wnd_style_editor.show);
-                ImGui::MenuItem("Replace line numbers with bytecounts", NULL, &world.replace_line_numbers_with_bytecounts);
-                ImGui::MenuItem("Turn off framerate cap", NULL, &world.turn_off_framerate_cap);
+                ImGui::MenuItem("Replace Line Numbers with Bytecounts", NULL, &world.replace_line_numbers_with_bytecounts);
+                ImGui::MenuItem("Disable Framerate Cap", NULL, &world.turn_off_framerate_cap);
 
                 if (ImGui::MenuItem("Cleanup unused memory")) {
                     world.indexer.message_queue.add([&](auto msg) {
