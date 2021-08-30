@@ -328,6 +328,7 @@ function App() {
             {IDE_NAME}
           </Link>
           <div className="flex items-baseline space-x-6">
+            {/*
             <a
               className="no-underline font-semibold text-gray-600 hidden sm:inline-block"
               href="https://docs.codeperfect95.com"
@@ -336,6 +337,7 @@ function App() {
             >
               Docs
             </a>
+            */}
 
             <Link
               className="no-underline font-semibold text-gray-600 hidden sm:inline-block"
@@ -388,6 +390,7 @@ function App() {
                   </a>
                 </div>
                 <div className="mb-1">
+                  {/*
                   <a
                     target="_blank"
                     rel="noreferrer"
@@ -396,6 +399,7 @@ function App() {
                   >
                     Docs
                   </a>
+                  */}
                 </div>
                 <div className="mb-1">
                   <Link to="/pricing" className="text-gray-500 no-underline">
