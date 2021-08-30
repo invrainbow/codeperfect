@@ -21,6 +21,16 @@ a {
   &:hover {
     text-decoration: underline;
   }
+  &.anchor {
+    &:hover {
+      text-decoration: none;
+    }
+    h1,
+    h2,
+    h3 {
+      margin-bottom: 1rem;
+    }
+  }
   h1,
   h2,
   h3 {
@@ -105,13 +115,6 @@ li {
     &:last-child {
       margin-bottom: 1rem;
     }
-  }
-}
-a.anchor {
-  h1,
-  h2,
-  h3 {
-    margin-bottom: 1rem;
   }
 }
 h1,
