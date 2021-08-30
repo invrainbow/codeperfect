@@ -1,39 +1,37 @@
 {{ define "main" }}
   <div class="border-t border-b border-gray-300">
-    <div class="px-4 grid relative max-w-screen-xl mx-auto" style="grid-template-columns: 250px auto 200px">
-      <div class="py-8 pr-8">
-        <nav class="">
-          {{ $currentPage := . -}}
-          {{ range .Site.Menus.docs -}}
-            <div class="mb-8 leading-7">
-              <h3 class="mb-2 font-bold text-gray-400 uppercase text-xs tracking-wide">{{ .Name }}</h3>
-              {{ if .HasChildren -}}
-                <ul class="p-0">
-                  {{ range .Children -}}
-                    {{- $active := or ($currentPage.IsMenuCurrent "docs" .) ($currentPage.HasMenuCurrent "docs" .) -}}
-                    {{- $active = or $active (eq $currentPage.Section .Identifier) -}}
-                    <li class="list-none">
-                      <a
-                        class="
-                          {{ if $active }}
-                            text-black
-                            font-bold
-                          {{ else }}
-                            text-gray-600
-                            hover:text-gray-800
-                          {{ end }}
-                        "
-                        href="{{ .URL | relURL }}"
-                        >{{ .Name }}</a
-                      >
-                    </li>
-                  {{ end -}}
-                </ul>
-              </div>
-            {{ end -}}
+    <div class="grid relative max-w-screen-xl mx-auto" style="grid-template-columns: 250px auto 250px">
+      <nav class="p-8">
+        {{ $currentPage := . -}}
+        {{ range .Site.Menus.docs -}}
+          <div class="mb-8 last:mb-0 leading-7">
+            <h3 class="mb-2 font-bold text-gray-400 uppercase text-xs tracking-wide">{{ .Name }}</h3>
+            {{ if .HasChildren -}}
+              <ul class="p-0">
+                {{ range .Children -}}
+                  {{- $active := or ($currentPage.IsMenuCurrent "docs" .) ($currentPage.HasMenuCurrent "docs" .) -}}
+                  {{- $active = or $active (eq $currentPage.Section .Identifier) -}}
+                  <li class="list-none">
+                    <a
+                      class="
+                        {{ if $active }}
+                          text-black
+                          font-bold
+                        {{ else }}
+                          text-gray-600
+                          hover:text-gray-800
+                        {{ end }}
+                      "
+                      href="{{ .URL | relURL }}"
+                      >{{ .Name }}</a
+                    >
+                  </li>
+                {{ end -}}
+              </ul>
+            </div>
           {{ end -}}
-        </nav>
-      </div>
+        {{ end -}}
+      </nav>
 
       <main class="flex-grow w-auto p-8 h-full border-l border-gray-300">
         <!--
@@ -57,7 +55,7 @@
 
             <span>
               {{ with $pages.Next . -}}
-                <a href="{{ .RelPermalink }}" class="border border-gray-500 py-2 px-4 rounded-md shadow-sm text-gray-400 hover:text-gray-200 hover:border-gray-400 select-none">
+                <a href="{{ .RelPermalink }}" class="hover:no-underline border border-gray-400 py-2 px-4 rounded-md shadow-sm text-gray-400 hover:text-gray-600 hover:border-gray-500 select-none">
                   &larr; {{ .Title }}
                 </a>
               {{ end -}}
@@ -65,7 +63,7 @@
 
             <span>
               {{ with $pages.Prev . -}}
-                <a href="{{ .RelPermalink }}" class="border border-gray-500 py-2 px-4 rounded-md shadow-sm text-gray-400 hover:text-gray-200 hover:border-gray-400 select-none">
+                <a href="{{ .RelPermalink }}" class="hover:no-underline border border-gray-400 py-2 px-4 rounded-md shadow-sm text-gray-400 hover:text-gray-600 hover:border-gray-500 select-none">
                   {{ .Title }} &rarr;
                 </a>
               {{ end -}}
@@ -76,7 +74,7 @@
 
       <nav class="py-8">
         {{ if ne .Params.toc false -}}
-          <div class="sticky top-8 right-0 page-links leading-7 pl-6 border-l border-gray-300">
+          <div class="sticky top-8 right-0 page-links leading-7 pl-6 pr-2 border-l border-gray-300">
             <h3 class="mb-2">On this page</h3>
             {{ .TableOfContents }}
           </div>

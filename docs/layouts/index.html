@@ -1,15 +1,5 @@
 {{ define "main" }}
-  <div class="text-center p-8 py-36">
-    <div>
-      Welcome the docs for CodePerfect 95.
-    </div>
-    <div class="mt-8">
-      <a
-        class="select-none inline-block py-3 px-6 border-gray-400 border rounded-md shadow-sm text-xl"
-        href="{{ "overview/getting-started/" | relURL }}"
-      >
-        Get Started
-      </a>
-    </div>
-  </div>
+<script>
+  window.location.replace("/overview/getting-started");
+</script>
 {{ end }}

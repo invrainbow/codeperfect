@@ -1,11 +1,13 @@
 module.exports = {
-  purge: ['layouts/**/*.html'],
+  purge: ["layouts/**/*.html"],
   darkMode: false, // or 'media' or 'class'
   theme: {
     extend: {},
   },
   variants: {
-    extend: {},
+    extend: {
+      margin: ["last"],
+    },
   },
   plugins: [],
-}
+};

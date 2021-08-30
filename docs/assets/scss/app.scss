@@ -3,33 +3,58 @@
 @import "node_modules/tailwindcss/utilities";
 
 @import url("https://fonts.googleapis.com/css2?family=Cabin:wght@300;400;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
 
 body {
   margin: 0;
   font-family: "Cabin", sans-serif;
-  line-height: 1.8;
+  font-size: 16px;
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   color: #333;
 }
 
-pre,
+a {
+  color: #29f;
+  text-decoration: none;
+  &:hover {
+    text-decoration: underline;
+  }
+  h1,
+  h2,
+  h3 {
+    color: black;
+  }
+  &.logo {
+    &:hover {
+      text-decoration: none;
+    }
+  }
+}
+
+nav a:hover {
+  text-decoration: none;
+}
+
 code {
-  border-radius: 8px;
-  background: #eee;
-  color: #666;
+  line-height: 1;
+  border-radius: 6px;
+  display: inline-block;
+  padding: 3px 5px;
+  vertical-align: middle;
+  background: #eef2ee;
+  color: #383;
+  font-size: 12px;
   font-family: "SF Mono", Menlo, Consolas, monospace;
 }
 
-code {
-  font-size: 85%;
-  border-radius: 6px;
-  line-height: 1;
-  padding: 3px 6px;
-  display: inline-block;
-}
-
 pre {
+  border-radius: 8px;
+  background: #eee;
+  color: #666;
+  font-size: 12px;
+  font-family: "SF Mono", Menlo, Consolas, monospace;
   padding: 0.75rem;
 }
 
@@ -46,10 +71,10 @@ h3 {
 }
 
 h1 {
-  font-size: 250%;
+  font-size: 200%;
 }
 h2 {
-  font-size: 170%;
+  font-size: 130%;
 }
 h3 {
   font-size: 110%;
@@ -57,9 +82,9 @@ h3 {
 
 h1,
 h2 {
-  font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, "Roboto", "Ubuntu",
-    "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+  font-family: "Inter", sans-serif;
 }
+
 h1,
 h2,
 h3,
@@ -67,23 +92,52 @@ p,
 ul,
 ol,
 blockquote,
+table,
 pre {
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+li {
+  p,
+  blockquote {
+    &:last-child {
+      margin-bottom: 1rem;
+    }
+  }
+}
+a.anchor {
+  h1,
+  h2,
+  h3 {
+    margin-bottom: 1rem;
+  }
 }
 h1,
 h2,
 h3 {
+  color: black;
   &:first-child {
     line-height: 1;
   }
+}
+blockquote {
+  padding-left: 10px;
+  margin-left: 0;
+  border-left: solid 4px #eee;
+  color: #666;
 }
 
 ul,
 ol {
   padding-left: 2.25rem;
-  li {
-    list-style-type: disc;
-  }
+}
+ul li {
+  list-style-type: disc;
+}
+ol li {
+  list-style-type: decimal;
 }
 
 #TableOfContents {
@@ -101,16 +155,62 @@ ol {
 }
 
 kbd {
-  border-radius: 8px;
-  background: #eee;
-  border: solid 1px #aaa;
-  font-family: "SF Mono", Menlo, Consolas, monospace;
-  font-size: 85%;
-  line-height: 1;
-  padding: 4px 6px;
   display: inline-block;
+  background: rgb(246, 248, 250);
+  border: 1px solid rgba(175, 184, 193, 0.2);
+  border-radius: 6px;
+  box-shadow: inset 0 -1px 0 rgba(175, 184, 193, 0.2);
+  color: rgb(36, 41, 47);
+  display: inline-block;
+  font-family: "Inter", sans-serif;
+  font-weight: 500;
+  font-size: 13px;
+  line-height: 12px;
+  padding: 3px 5px;
+  vertical-align: middle;
+  & + kbd {
+    margin-left: 2px;
+  }
 }
 
 img {
   @apply border bg-gray-700 border-gray-600 rounded-md overflow-hidden shadow-sm;
+}
+
+main {
+  h2 {
+    margin-top: 2rem;
+  }
+}
+
+hr {
+  margin: 1rem 0;
+  border: 0;
+  border-bottom: solid 1px #eee;
+}
+
+table {
+  border-collapse: collapse;
+  display: block;
+  border: solid 1px #aaa;
+  max-width: 400px;
+  tr {
+    &:not(:last-child) {
+      border-bottom: solid 1px #e2e2e2;
+    }
+  }
+  td,
+  th {
+    padding: 6px 15px;
+    &:first-child {
+      border-right: solid 1px #e2e2e2;
+      white-space: nowrap;
+    }
+    &:last-child {
+      width: 100%;
+    }
+  }
+  thead {
+    display: none;
+  }
 }

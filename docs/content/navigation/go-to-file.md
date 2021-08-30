@@ -12,8 +12,11 @@ CodePerfect lets you fuzzy-search for a file and open it. To do this, press
 
 ![](/go-to-file.png)
 
-Keyboard shortcuts:
+## Keyboard Shortcuts
 
- * <kbd>^J</kbd> or <kbd>Down</kbd> to go down
- * <kbd>^K</kbd> or <kbd>Up</kbd> to go up
- * <kbd>Enter</kbd> to select a file
+| Description              | Key                                            |
+| ------------------------ | ---------------------------------------------- |
+| Toggle Go To File window | <kbd>⌘P</kbd>                                  |
+| Move cursor down         | <kbd>Ctrl</kbd><kbd>J</kbd> or <kbd>Down</kbd> |
+| Move cursor up           | <kbd>Ctrl</kbd><kbd>K</kbd> or <kbd>Up</kbd>   |
+| Select file              | <kbd>Enter</kbd>                               |

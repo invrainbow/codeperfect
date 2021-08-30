@@ -14,12 +14,15 @@ press <kbd>⌘T</kbd>.
 
 This lets you fuzzy-search for any symbol in your code, with each symbol keyed
 as `package.identifier`. Method declarations are keyed as
-`package.receiver.method`. Because of the flexibility of fuzzy search, you
-can search for just the `identifier`, the entire `package.identifier`, or any
-fuzzy substring.
+`package.receiver.method`. Because of the flexibility of fuzzy search, you can
+search for just the `identifier`, the entire `package.identifier`, the initials of each word, or any fuzzy
+substring.
 
-Keyboard shortcuts:
+## Keyboard Shortcuts
 
- * <kbd>^J</kbd> or <kbd>Down</kbd> to go down
- * <kbd>^K</kbd> or <kbd>Up</kbd> to go up
- * <kbd>Enter</kbd> to select a file
+| Description                | Key                                            |
+| -------------------------- | ---------------------------------------------- |
+| Toggle Go To Symbol window | <kbd>⌘T</kbd>                                  |
+| Move cursor down           | <kbd>Ctrl</kbd><kbd>J</kbd> or <kbd>Down</kbd> |
+| Move cursor up             | <kbd>Ctrl</kbd><kbd>K</kbd> or <kbd>Up</kbd>   |
+| Select symbol              | <kbd>Enter</kbd>                               |
