@@ -78,6 +78,9 @@ h1,
 h2,
 h3 {
   font-weight: bold;
+  code {
+    font-size: 1em;
+  }
 }
 
 h1 {
@@ -87,7 +90,7 @@ h2 {
   font-size: 130%;
 }
 h3 {
-  font-size: 110%;
+  font-size: 115%;
 }
 
 h1,
@@ -204,6 +207,7 @@ table {
   }
   td,
   th {
+    vertical-align: top;
     padding: 6px 15px;
     &:first-child {
       border-right: solid 1px #e2e2e2;
@@ -215,5 +219,19 @@ table {
   }
   thead {
     display: none;
+  }
+  &.postfixes {
+    max-width: 500px;
+    td {
+      text-align: left;
+      pre {
+        padding: 0.5rem;
+      }
+      &:first-child {
+        code {
+          font-weight: bold;
+        }
+      }
+    }
   }
 }

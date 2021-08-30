@@ -40,18 +40,18 @@
   url = "/navigation"
 
 
-[[docs]]
-  name = "Refactoring"
-  weight = 70
-  identifier = "refactoring"
-  url = "/refactoring"
+# [[docs]]
+#   name = "Refactoring"
+#   weight = 70
+#   identifier = "refactoring"
+#   url = "/refactoring"
 
 
-[[docs]]
-  name = "Commands"
-  weight = 80
-  identifier = "commands"
-  url = "/commands"
+# [[docs]]
+#   name = "Commands"
+#   weight = 80
+#   identifier = "commands"
+#   url = "/commands"
 
 
 [[docs]]
