@@ -66,5 +66,14 @@
       </div>
     </footer>
 
+    <script>
+      var pat = new RegExp("█", "gi");
+      document.body.innerHTML = document.body.innerHTML.replace(
+        pat, function(matched) {
+          return "<span class=\"caret\">" + matched + "</span>";
+        }
+      );
+    </script>
+
   </body>
 </html>

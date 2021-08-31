@@ -31,9 +31,8 @@ integration is a key feature for us.
 
   - Accordingly, custom .vimrc files are also unsupported at this time.
 
-- Macros _work_, but if you try to use them on a massive scale, they might freeze.
-  I.e. pressing <kbd>@@</kbd> a few times is fine, but doing <kbd>1000@@</kbd> may not work,
-  depending on the macro. It's high on our priority list.
+- Macros work on a small scale; pressing <kbd>@@</kbd> a few times is fine;
+  but doing <kbd>1000@@</kbd> may freeze, depending on the macro.
 
 - Clipboard integration works out of the box. <kbd>d</kbd>, <kbd>c</kbd>, and <kbd>y</kbd> all copy to the
   clipboard. <kbd>p</kbd> pastes from the clipboard.

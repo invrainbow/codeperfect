@@ -20,9 +20,9 @@ substring.
 
 ## Keyboard Shortcuts
 
-| Description                | Key                                            |
-| -------------------------- | ---------------------------------------------- |
-| Toggle Go To Symbol window | <kbd>⌘T</kbd>                                  |
-| Move cursor down           | <kbd>Ctrl</kbd><kbd>J</kbd> or <kbd>Down</kbd> |
-| Move cursor up             | <kbd>Ctrl</kbd><kbd>K</kbd> or <kbd>Up</kbd>   |
-| Select symbol              | <kbd>Enter</kbd>                               |
+| Command                  | macOS                                       | Windows                                        |
+| ------------------------ | ------------------------------------------- | ---------------------------------------------- |
+| Toggle Go To File window | <kbd>⌘</kbd><kbd>T</kbd>                    | <kbd>Ctrl</kbd><kbd>T</kbd>                    |
+| Move cursor down         | <kbd>⌘</kbd><kbd>J</kbd> or <kbd>Down</kbd> | <kbd>Ctrl</kbd><kbd>J</kbd> or <kbd>Down</kbd> |
+| Move cursor up           | <kbd>⌘</kbd><kbd>K</kbd> or <kbd>Up</kbd>   | <kbd>Ctrl</kbd><kbd>K</kbd> or <kbd>Up</kbd>   |
+| Select file              | <kbd>Enter</kbd>                            | <kbd>Enter</kbd>                               |

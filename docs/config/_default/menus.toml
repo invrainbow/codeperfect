@@ -4,41 +4,35 @@
   identifier = "overview"
   url = "/overview"
 
-
-[[docs]]
-  name = "Building"
-  weight = 20
-  identifier = "building"
-  url = "/building"
-
-
-[[docs]]
-  name = "Debugging"
-  weight = 30
-  identifier = "debugging"
-  url = "/debugging"
-
-
-[[docs]]
-  name = "Editor"
-  weight = 40
-  identifier = "editor"
-  url = "/editor"
-
-
-[[docs]]
-  name = "Code Intelligence"
-  weight = 50
-  identifier = "code-intelligence"
-  url = "/code-intelligence"
-
-
 [[docs]]
   name = "Navigation"
-  weight = 60
+  weight = 20
   identifier = "navigation"
   url = "/navigation"
 
+[[docs]]
+  name = "Editor"
+  weight = 30
+  identifier = "editor"
+  url = "/editor"
+
+[[docs]]
+  name = "Building"
+  weight = 40
+  identifier = "building"
+  url = "/building"
+
+[[docs]]
+  name = "Debugging"
+  weight = 50
+  identifier = "debugging"
+  url = "/debugging"
+
+[[docs]]
+  name = "Code Intelligence"
+  weight = 60
+  identifier = "code-intelligence"
+  url = "/code-intelligence"
 
 # [[docs]]
 #   name = "Refactoring"
@@ -46,16 +40,14 @@
 #   identifier = "refactoring"
 #   url = "/refactoring"
 
-
 # [[docs]]
 #   name = "Commands"
 #   weight = 80
 #   identifier = "commands"
 #   url = "/commands"
 
-
-[[docs]]
-  name = "Productivity"
-  weight = 90
-  identifier = "productivity"
-  url = "/productivity"
+# [[docs]]
+#   name = "Productivity"
+#   weight = 90
+#   identifier = "productivity"
+#   url = "/productivity"

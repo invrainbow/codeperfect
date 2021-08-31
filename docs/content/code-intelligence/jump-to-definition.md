@@ -12,6 +12,6 @@ put your cursor over it, and press <kbd>gd</kbd> or <kbd>⌘G</kbd>.
 
 ## Keyboard Shortcuts
 
-| Description        | Key                            |
-| ------------------ | ------------------------------ |
-| Jump to definition | <kbd>gd</kbd> or <kbd>⌘G</kbd> |
+| Command            | macOS                                     | Windows                                      |
+| ------------------ | ----------------------------------------- | -------------------------------------------- |
+| Jump to definition | <kbd>gd</kbd> or <kbd>⌘</kbd><kbd>G</kbd> | <kbd>gd</kbd> or <kbd>Ctrl</kbd><kbd>G</kbd> |
