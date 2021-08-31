@@ -79,7 +79,6 @@ struct History {
     int start;
     int top;
     int curr;
-    bool navigating_in_progress;
 
     void init() { ptr0(this); }
 
@@ -195,9 +194,17 @@ struct World {
 
     History history;
 
-    bool navigating_to;
-    cur2 navigating_to_pos;
-    int navigating_to_editor;
+    struct Navigation_Dest {
+        int editor_id;
+        cur2 pos;
+    };
+
+    Navigation_Dest _navigation_queue[256];
+    List<Navigation_Dest> navigation_queue;
+
+    // bool navigating_to;
+    // cur2 navigating_to_pos;
+    // int navigating_to_editor;
 
     void activate_pane(u32 idx);
     void init_workspace();

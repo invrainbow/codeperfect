@@ -80,9 +80,10 @@ void History::actually_go(History_Loc *it) {
 
     auto pos = it->mark->pos(); // it->pos
 
-    world.navigating_to = true;
-    world.navigating_to_pos = pos;
-    world.navigating_to_editor = it->editor_id;
+    world.navigation_queue.len = 0;
+    auto dest = world.navigation_queue.append();
+    dest->editor_id = it->editor_id;
+    dest->pos = pos;
 
     world.focus_editor_by_id(it->editor_id, pos);
 }
@@ -389,6 +390,8 @@ void World::init(GLFWwindow *_wnd) {
     nvim.init();
     dbg.init();
     history.init();
+
+    navigation_queue.init(LIST_FIXED, _countof(_navigation_queue), _navigation_queue);
 
     fill_file_tree();
 

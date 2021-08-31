@@ -784,12 +784,25 @@ void Editor::raw_move_cursor(cur2 c, bool dont_add_to_history) {
 
     bool push_to_history = true;
 
-    if (world.navigating_to) {
-        if (world.navigating_to_editor == id) {
-            if (world.navigating_to_pos == c)
+    // what the fuck is this stupid pyramid of shit
+    auto &nq = world.navigation_queue;
+    if (nq.len > 0) {
+        auto &top = nq[0];
+        if (top.editor_id == id) {
+            if (top.pos == c) {
                 push_to_history = false;
-            else
-                world.navigating_to = false;
+            } else {
+                nq.remove(&nq[0]);
+                if (nq.len > 0) {
+                    auto top = nq[0];
+                    if (top.editor_id == id) {
+                        if (top.pos == c)
+                            push_to_history = false;
+                        else
+                            nq.len = 0;
+                    }
+                }
+            }
         }
     }
 
