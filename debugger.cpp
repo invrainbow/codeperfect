@@ -12,7 +12,7 @@ when a frame is opened
     list function arguments
 
 3: let's users specify a --log-output parameter
-9. displays a warning when stepping through a stale executable	
+9. displays a warning when stepping through a stale executable
 10. setting a breakpoint on a function should result in the breakpoint being after the prologue
 20. the debugger should run fast even in presence of very deep stacks, a large number of goroutines or very large variables
 */

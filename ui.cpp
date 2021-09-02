@@ -402,10 +402,10 @@ void UI::render_ts_cursor(TSTreeCursor *curr, cur2 open_cur) {
     };
 
     walk_ts_cursor(curr, false, [&](Ast_Node *node, Ts_Field_Type field_type, int depth) -> Walk_Action {
-        if (node->anon() && !world.wnd_ast_vis.show_anon_nodes)
+        if (node->anon() && !world.wnd_editor_tree.show_anon_nodes)
             return WALK_SKIP_CHILDREN;
 
-        if (node->type() == TS_COMMENT && !world.wnd_ast_vis.show_comments)
+        if (node->type() == TS_COMMENT && !world.wnd_editor_tree.show_comments)
             return WALK_SKIP_CHILDREN;
 
         // auto changed = ts_node_has_changes(node->node);
@@ -1809,6 +1809,7 @@ void UI::draw_everything() {
                 ImGui::MenuItem("Editor AST Viewer", NULL, &world.wnd_editor_tree.show);
                 ImGui::MenuItem("Editor Toplevels Viewer", NULL, &world.wnd_editor_toplevels.show);
                 ImGui::MenuItem("Roll Your Own IDE Construction Set", NULL, &world.wnd_style_editor.show);
+                ImGui::MenuItem("Mark Edit Viewer", NULL, &world.wnd_mark_edit_viewer.show);
                 ImGui::MenuItem("Replace Line Numbers with Bytecounts", NULL, &world.replace_line_numbers_with_bytecounts);
                 ImGui::MenuItem("Disable Framerate Cap", NULL, &world.turn_off_framerate_cap);
 
@@ -3000,6 +3001,22 @@ void UI::draw_everything() {
         ImGui::End();
     }
 
+    if (world.wnd_mark_edit_viewer.show) {
+        ImGui::Begin("Mark Edit Viewer", &world.wnd_mark_edit_viewer.show, ImGuiWindowFlags_AlwaysAutoResize);
+
+        auto editor = world.get_current_editor();
+        if (editor != NULL) {
+            For (editor->buf.mark_tree.edits) {
+                ImGui::Text("start = %s, oldend = %s, newend = %s", 
+                            format_cur(it.start),
+                            format_cur(it.old_end),
+                            format_cur(it.new_end));
+            }
+        }
+
+        ImGui::End();
+    }
+
     if (world.wnd_style_editor.show) {
         ImGui::Begin("Style Editor", &world.wnd_style_editor.show, ImGuiWindowFlags_AlwaysAutoResize);
 
@@ -3027,9 +3044,9 @@ void UI::draw_everything() {
 
             ImGui::Begin("AST", &wnd.show, 0);
 
-            ImGui::Checkbox("show anon?", &world.wnd_ast_vis.show_anon_nodes);
+            ImGui::Checkbox("show anon?", &wnd.show_anon_nodes);
             ImGui::SameLine();
-            ImGui::Checkbox("show comments?", &world.wnd_ast_vis.show_comments);
+            ImGui::Checkbox("show comments?", &wnd.show_comments);
             ImGui::SameLine();
 
             cur2 open_cur = new_cur2(-1, -1);

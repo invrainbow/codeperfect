@@ -294,6 +294,9 @@ struct World {
 
     struct {
         bool show;
+        bool show_anon_nodes;
+        bool show_comments;
+
         // bool move;
         // cur2 move_to_cur;
     } wnd_editor_tree;
@@ -350,11 +353,6 @@ struct World {
     } wnd_goto_symbol;
 
     struct {
-        bool show_anon_nodes;
-        bool show_comments;
-    } wnd_ast_vis;
-
-    struct {
         i32 scroll_offset;
         // ???
     } wnd_build_and_debug;
@@ -372,6 +370,10 @@ struct World {
     struct {
         bool show;
     } wnd_style_editor;
+
+    struct {
+        bool show;
+    } wnd_mark_edit_viewer;
 
     void init(GLFWwindow *_wnd);
     void start_background_threads();

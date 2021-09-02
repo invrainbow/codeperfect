@@ -1,13 +1,46 @@
-#include "tests.hpp"
-#include "mem.hpp"
-#include "editor.hpp"
 #include "buffer.hpp"
+#include "common.hpp"
+#include "debugger.hpp"
+#include "editor.hpp"
 #include "go.hpp"
+#include "mem.hpp"
+#include "nvim.hpp"
+#include "os.hpp"
+#include "world.hpp"
+#include "diff.hpp"
 
-#if 0
+void test_diff() {
+    auto run = [&](ccstr a, ccstr b) {
+        print("diff \"%s\" \"%s\"", a, b);
+
+        auto al = alloc_list<uchar>();
+        auto bl = alloc_list<uchar>();
+        for (auto p = a; *p != '\0'; p++) al->append(*p);
+        for (auto p = b; *p != '\0'; p++) bl->append(*p);
+
+        auto diffs = diff_main(new_dstr(al), new_dstr(bl));
+        For (*diffs) {
+            switch (it.type) {
+            case DIFF_INSERT: print(" - [insert] %s", it.s.str()); break;
+            case DIFF_DELETE: print(" - [delete] %s", it.s.str()); break;
+            case DIFF_SAME: print(" - [same] %s", it.s.str()); break;
+            }
+        }
+    };
+
+    run("loldongs", "dongs");
+    run("cocks", "roflcockter");
+    run("good dog", "bad dog");
+}
+
 void test_mark_tree() {
-    Mark_Tree mt;  mt.init();
+    Buffer buf;
+    buf.init(&world.frame_mem, false);
+    buf.read_data("loldongs", -1);
 
+    Mark_Tree mt;  mt.init(&buf);
+
+    /*
     auto m1 = mt.insert_mark(MARK_BUILD_ERROR, new_cur2(2, 4));
     auto m2 = mt.insert_mark(MARK_BUILD_ERROR, new_cur2(8, 4));
     auto m3 = mt.insert_mark(MARK_BUILD_ERROR, new_cur2(12, 4));
@@ -16,127 +49,28 @@ void test_mark_tree() {
     cur2 old_end = new_cur2(0, 1);
     cur2 new_end = new_cur2(0, 2);
 
-    mt.edit_tree_delete(start, old_end);
-    mt.edit_tree_insert(start, new_end);
+    mt.apply_edit(start, old_end, new_end);
 
 	m1->cleanup();
 	m2->cleanup();
 	m3->cleanup();
+    */
 
 	print("break here");
 }
-#endif
 
-#if 0
-void test_search() {
-    // shit to test:
-    //   - [x] normal search
-    //   - [x] regex search
-    //   - [x] normal search and replace
-    //   - [x] regex search and replace
-    //   - [x] regex search with group replace
-    //   - [ ] filter by files
-    //   - [ ] undo
-
-    Search_Opts opts;
-    opts.case_sensitive = true;
-    opts.literal = false;
-
-    Searcher s;
-    s.init();
-    s.start_search("git(.*?)fork", "|$0|", &opts);
-
-    while (s.state == SEARCH_SEARCH_IN_PROGRESS)
-        continue;
-
-    int total = 0;
-
-    For (s.search_results) {
-        print("=== %s ===", it.filepath);
-
-        if (it.results == NULL) continue;
-
-        For (*it.results) {
-            print(
-                "\t%s to %s (len = %d): %s",
-                format_cur(it.match_start),
-                format_cur(it.match_end),
-                it.match_len,
-                it.match
-            );
-
-            auto groups = it.groups;
-            for (int i = 0; i < groups->len; i++) {
-                auto it = groups->at(i);
-                print("\t\tmatch #%d: %s", i + 1, it);
-            }
-        }
-
-        total += it.results->len;
-    }
-
-    print("found %d total", total);
-
-    s.start_replace();
-}
-#endif
-
-bool run_tests() {
-    return false;
-
+int main(int argc, char *argv[]) {
     init_platform_specific_crap();
     world.init(NULL);
 
-    // test_mark_tree();
-    // test_search();
-    // test_read_write_index();
+    auto match = [&](ccstr s) -> bool {
+        if (argc <= 1) return true;
+        return streq(argv[1], s);
+    };
 
-    system(OS_WIN ? "pause" : "read -p \"Press enter to exit: \"");
-    return true;
+    if (match("diff")) test_diff();
+    if (match("mark_tree")) test_mark_tree();
+
+    return 0;
 }
 
-bool test_read_write_index() {
-    Timer t;
-    t.init();
-
-    Go_Index *index = NULL;
-
-    {
-        Index_Stream s;
-        if (!s.open("W:\\test_db_from_hugo")) return false;
-        defer { s.cleanup(); };
-        index = s.read_index();
-        if (!s.ok) return false;
-    }
-
-    t.log("read from index");
-
-    {
-        Index_Stream s;
-        if (!s.open("W:\\test_db_copy", true)) return false;
-        defer { s.cleanup(); };
-        s.write_index(index);
-        s.finish_writing();
-    }
-
-    t.log("write out to index");
-    t.total();
-
-    {
-        Index_Stream s;
-        if (!s.open("W:\\test_db_copy")) return false;
-        defer { s.cleanup(); };
-        index = s.read_index();
-        if (!s.ok) return false;
-
-        print("break here and inspect index");
-    }
-
-    t.log("read index back in");
-    return true;
-}
-
-void compiler_dont_optimize_me_away() {
-    print("%d", world.frame_mem.owns_address((void*)0x49fa98));
-    print("%d", world.frame_mem.recount_total_allocated());
-}

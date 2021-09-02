@@ -4,7 +4,7 @@ set -e
 VERSION="$(grep CurrentVersion gostuff/versions/versions.go | rev | cut -d' ' -f 1 | rev)"
 
 # build again
-RELEASE=1 sh/build_macos.sh
+RELEASE=1 sh/build_macos
 
 # clean up bin folder
 rm -f build/bin/.DS_Store

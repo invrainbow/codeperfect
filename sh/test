@@ -1,0 +1,9 @@
+#!/bin/bash
+set -e
+
+# honestly, this should be handled by make.
+mkdir -p obj build/bin  
+
+sh/make build/bin/test
+cd build/bin
+./test $@

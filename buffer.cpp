@@ -2,6 +2,7 @@
 #include "common.hpp"
 #include "world.hpp"
 #include "unicode.hpp"
+#include "diff.hpp"
 
 s32 uchar_to_cstr(uchar c, cstr out) {
     u32 k = 0;
@@ -185,8 +186,9 @@ void Buffer::init(Pool *_mem, bool _use_tree) {
     if (_use_tree)
         enable_tree();
 
-
-    mark_tree.init();
+    mark_tree.init(this);
+    edit_buffer_old.init();
+    edit_buffer_new.init();
 }
 
 void Buffer::enable_tree() {
@@ -284,15 +286,21 @@ bool Buffer::read(Buffer_Read_Func f) {
     }
 }
 
-bool Buffer::read(File_Mapping *fm) {
+bool Buffer::read_data(char *data, int len) {
+    if (len == -1) len = strlen(data);
+
     int i = 0;
-
     return read([&](char* out) {
-        if (i >= fm->len) return false;
-
-        *out = fm->data[i++];
-        return true;
+        if (i < len) {
+            *out = data[i++];
+            return true;
+        }
+        return false;
     });
+}
+
+bool Buffer::read(File_Mapping *fm) {
+    return read_data((char*)fm->data, fm->len);
 }
 
 void Buffer::write(File *f) {
@@ -469,6 +477,13 @@ void Buffer::internal_start_edit(cur2 start, cur2 end) {
     tsedit.start_point = cur_to_tspoint(start);
     tsedit.old_end_byte = cur_to_offset(end);
     tsedit.old_end_point = cur_to_tspoint(end);
+
+    edit_buffer_old.len = 0;
+    edit_buffer_new.len = 0;
+
+    auto it = iter(start);
+    while (it.pos < end)
+        edit_buffer_old.append(it.next());
 }
 
 void Buffer::internal_finish_edit(cur2 new_end) {
@@ -486,15 +501,59 @@ void Buffer::internal_finish_edit(cur2 new_end) {
 void Buffer::internal_update_mark_tree() {
     if (mark_tree.root == NULL) return;
 
-    mark_tree.edit_tree_delete(
-        tspoint_to_cur(tsedit.start_point),
-        tspoint_to_cur(tsedit.old_end_point)
-    );
+    {
+        auto start = tspoint_to_cur(tsedit.start_point);
+        auto end = tspoint_to_cur(tsedit.new_end_point);
 
-    mark_tree.edit_tree_insert(
-        tspoint_to_cur(tsedit.start_point),
-        tspoint_to_cur(tsedit.new_end_point)
-    );
+        auto it = iter(start);
+        while (it.pos < end)
+            edit_buffer_new.append(it.next());
+    }
+
+    auto a = new_dstr(&edit_buffer_old);
+    auto b = new_dstr(&edit_buffer_new);
+
+    auto start = tspoint_to_cur(tsedit.start_point);
+    auto oldend = tspoint_to_cur(tsedit.old_end_point);
+    auto newend = tspoint_to_cur(tsedit.new_end_point);
+
+    auto diffs = diff_main(a, b);
+    if (diffs == NULL) {
+        mark_tree.apply_edit(start, oldend, newend);
+        return;
+    }
+
+    auto advance_cur = [&](cur2 c, DString s) -> cur2 {
+        for (int i = 0, len = s.len(); i < len; i++) {
+            if (s.get(i) == '\n') {
+                c.y++;
+                c.x = 0;
+            } else {
+                c.x++;
+            }
+        }
+        return c;
+    };
+
+    auto cur = start;
+
+    For (*diffs) {
+        switch (it.type) {
+        case DIFF_DELETE:
+            mark_tree.apply_edit(cur, advance_cur(cur, it.s), cur);
+            break;
+        case DIFF_INSERT:
+            {
+                auto end = advance_cur(cur, it.s);
+                mark_tree.apply_edit(cur, cur, end);
+                cur = end;
+            }
+            break;
+        case DIFF_SAME:
+            cur = advance_cur(cur, it.s);
+            break;
+        }
+    }
 }
 
 void Buffer::remove(cur2 start, cur2 end) {
@@ -671,6 +730,7 @@ void cleanup_mark_node(Mark_Node *node) {
 
 void Mark_Tree::cleanup() {
     cleanup_mark_node(root);
+    mem.cleanup();
 }
 
 int Mark_Tree::get_height(Mark_Node *root) {
@@ -887,92 +947,69 @@ Mark_Node *Mark_Tree::internal_delete_node(Mark_Node *root, cur2 pos) {
     return root;
 }
 
-void Mark_Tree::edit_tree_delete(cur2 start, cur2 end) {
-    /*
-    // delete:
-    //  for point between (start, end)
-    //      point.x = start.x
-    //      point.y = start.y
-    //
-    //  for point > end:
-    //      if point.y == end.y
-    //          point.x - end.x + start.x
-    //          point.y = start.y
-    //      else
-    //          point.y -= (end.y - start.y)
+void Mark_Tree::apply_edit(cur2 start, cur2 old_end, cur2 new_end) {
+    auto e = edits.append();
+    e->start = start;
+    e->old_end = old_end;
+    e->new_end = new_end;
 
-    if (start == end) return;
+    if (start == old_end && old_end == new_end)
+        return;
+
+    /*
+     *   for pos where (start < pos < old_end)
+     *      if pos < new_end
+     *          invalidate marks
+     *      else
+     *          set pos to new_end
+     *
+     *   for pos where (pos >= old_end)
+     *      if pos.y == old_end.y
+     *         pos.y = new_end.y
+     *         pos.x = pos.x - old_end.x + new_end.x
+     *      else
+     *         pos.y += (new_end.y - old_end.y)
+     */
 
     auto nstart = find_node(root, start);
     if (nstart == NULL) return;
 
     auto it = nstart;
-    if (it->pos < start)
-        it = succ(it);
+    if (it->pos < start) it = succ(it);
 
-    // if there are any marks between start and end, we'll need
-    // to set them to end. so here we would do nstart->insert_node(start).
-    // but dont actually create it until we need to
-    if (nstart->pos != start)
-        nstart = NULL;
+    Mark *orphan_marks = NULL;
 
-    for (; it != NULL && it->pos < end; it = succ(it)) {
-        auto mark = it->marks;
-        while (mark != NULL) {
-            auto next = mark->next;
-
-            if (nstart == NULL)
-                nstart = insert_node(start);
-
-            mark->node = nstart;
-            mark->next = nstart->marks;
-            nstart->marks = mark;
-
-            mark = next;
-        }
-        delete_node(it->pos);
-    }
-
-    auto nend = find_node(root, end);
-    if (nend->pos < end)
-        nend = succ(nend);
-
-    for (auto it = nend; it != NULL; it = succ(it)) {
-        if (it->pos.y == end.y)  {
-            it->pos.x = it->pos.x - end.x + start.x;
-            it->pos.y = start.y;
+    for (; it != NULL && it->pos < old_end; it = succ(it)) {
+        if (it->pos < new_end) {
+            for (auto mark = it->marks; mark != NULL; mark = mark->next)
+                mark->invalidated = true;
         } else {
-            it->pos.y -= (end.y - start.y);
+            Mark *next = NULL;
+            for (auto mark = it->marks; mark != NULL; mark = next) {
+                mark->next = orphan_marks;
+                orphan_marks = mark;
+            }
+            delete_node(it->pos);
         }
     }
-    */
-}
 
-void Mark_Tree::edit_tree_insert(cur2 start, cur2 end) {
-    // insert(start, end)
-    //  for point > start
-    //      if point.y == start.y
-    //          point.x = point.x - start.x + end.x
-    //          point.y = end.y
-    //      else
-    //          point.y += (end.y - start.y)
-
-    /*
-    if (start == end) return;
-
-    auto node = find_node(root, start);
-    if (node->pos < start)
-        node = succ(node);
-
-    for (; node != NULL; node = succ(node)) {
-        if (node->pos.y == start.y) {
-            node->pos.x = node->pos.x - start.x + end.x;
-            node->pos.y = end.y;
+    for (; it != NULL; it = succ(it)) {
+        if (it->pos.y == old_end.y) {
+            it->pos.y = new_end.y;
+            it->pos.x = it->pos.x + new_end.x - old_end.x;
         } else {
-            node->pos.y += (end.y - start.y);
+            it->pos.y = it->pos.y + new_end.y - old_end.y;
         }
     }
-    */
+
+    if (orphan_marks != NULL) {
+        auto nend = insert_node(new_end);
+        for (auto mark = orphan_marks; mark != NULL; mark = mark->next) {
+            mark->node = nend;
+            mark->next = nend->marks;
+            nend->marks = mark;
+        }
+    }
 }
 
 cur2 Mark::pos() { return node->pos; }

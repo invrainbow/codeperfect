@@ -1,0 +1,6 @@
+#!/bin/bash
+set -e
+
+mkdir -p obj build/bin
+sh/make
+[ -f "build/bin/nvim" ] || cp "$(grealpath $(which nvim))" build/bin/nvim

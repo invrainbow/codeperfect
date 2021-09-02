@@ -1,13 +1,3 @@
-/*
-TODO:
-- indent is fucked up when creating an untitled buffer (but it works after we save, quit, re-run, reopen file)
-- settings system
-- investigate open source licenses for all the crap we're using
-- we have a lot of ambiguity around:
-    1) how to sync data with delve
-    2) where the source of truth should be stored
-- (mac) running processes from different folder (e.g. for ctrl+p) only works in tmux???
-*/
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -33,7 +23,6 @@ TODO:
 #include "world.hpp"
 #include "nvim.hpp"
 #include "ui.hpp"
-#include "tests.hpp"
 #include "fzy_match.h"
 #include "settings.hpp"
 #include "IconsFontAwesome5.h"
@@ -259,8 +248,6 @@ bool is_git_folder(ccstr path) {
 int main() {
     Timer t;
     t.init();
-
-    if (run_tests()) return EXIT_SUCCESS;
 
     init_platform_specific_crap();
 

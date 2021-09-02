@@ -1516,7 +1516,7 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
                     bool ok = false;
                     do {
                         auto parent = node->parent();
-                        if (parent->null) continue; 
+                        if (parent->null) continue;
                         if (parent->type() != TS_COMMUNICATION_CASE) continue;
                         ok = true;
                     } while (0);
@@ -4077,7 +4077,7 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
         {
             List<Ast_Node*> *lhs = NULL;
             List<Ast_Node*> *rhs = NULL;
-            
+
             if (node_type == TS_RECEIVE_STATEMENT) {
                 bool isdecl = false;
                 FOR_ALL_NODE_CHILDREN (node) {
@@ -5489,26 +5489,27 @@ bool (*GHRenameFileOrDirectory)(char* oldpath, char* newpath);
 void (*GHEnableDebugMode)();
 
 #if OS_WIN
-#   define load_dll(x) LoadLibraryW(L"gohelper.dll")
-#   define get_func_address(dll, name) GetProcAddress(dll, name)
+#   define dll_load_library(x) LoadLibraryW(L"gohelper.dll")
+#   define dll_get_func(dll, name) GetProcAddress(dll, name)
 #   define dll_error() get_last_error()
 #elif OS_MAC
-#   define load_dll(x) dlopen("gohelper.dylib", RTLD_NOW);
-#   define get_func_address(dll, name) dlsym(dll, name)
+#   define dll_load_library(x) dlopen("gohelper.dylib", RTLD_NOW);
+#   define dll_get_func(dll, name) dlsym(dll, name)
 #   define dll_error() dlerror()
 #endif
 
-auto gohelper_dll = load_dll(gohelper_dll);
+auto gohelper_dll = dll_load_library(gohelper_dll);
 
 template<typename T>
 void load_dll_func(T &func, ccstr name) {
-    auto addr = get_func_address(gohelper_dll, name);
+    auto addr = dll_get_func(gohelper_dll, name);
     if (addr == NULL) our_panic(our_sprintf("couldn't load %s: %s", name, dll_error()));
     func = (T)addr;
 }
 
 void init_gohelper_crap() {
-    if (gohelper_dll == NULL) our_panic("unable to load gohelper");
+    if (gohelper_dll == NULL)
+         our_panic(our_sprintf("unable to load gohelper: %s", dll_error()));
 
 #define load(x) load_dll_func(x, #x)
     load(GHStartBuild);

@@ -604,7 +604,7 @@ bool Fs_Watcher::platform_specific_init() {
         (CFAllocatorRef)NULL,
         callback,
         (FSEventStreamContext*)context,
-        paths, 
+        paths,
         kFSEventStreamEventIdSinceNow,
         0.5,
         kFSEventStreamCreateFlagNoDefer | kFSEventStreamCreateFlagFileEvents

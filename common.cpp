@@ -100,11 +100,11 @@ bool boxf::contains(vec2f point) {
 s32 global_mem_allocated = 0;
 
 void our_panic(ccstr s) {
-	tell_user(s, "An error has occurred");
 #ifdef DEBUG_MODE
     // throw exception so we can debug it
 	throw Panic_Exception(s);
 #else
+	tell_user(s, "An error has occurred");
     exit(1);
 #endif
 }

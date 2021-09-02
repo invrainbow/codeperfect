@@ -16,6 +16,7 @@
 build/
 obj/
 scratch/
+test-bin
 
 # clangd index
 .clangd

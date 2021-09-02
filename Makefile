@@ -15,23 +15,26 @@ endif
 LDFLAGS = -ldl -lcwalk -lpcre -framework OpenGL -framework Cocoa -L/opt/homebrew/lib
 LDFLAGS += `pkg-config --libs glfw3 glew`
 
-SRC_FILES := $(wildcard *.cpp)
+SRC_FILES := $(filter-out tests.cpp, $(wildcard *.cpp))
 OBJ_FILES = $(patsubst %.cpp,obj/%.o,$(SRC_FILES))
 DEP_FILES = $(patsubst %.cpp,obj/%.d,$(SRC_FILES))
 
-.PHONY: all clean
+.PHONY: all
 
 all: build/bin/ide build/bin/gohelper.dylib build/launcher build/bin/dynamic_helper.go build/bin/int.vim
 
-clean:
-	rm $(OBJ_FILES) $(DEP_FILES) build/bin/ide
+build/bin/test: $(filter-out obj/main.o, $(OBJ_FILES)) obj/objclibs.o obj/clibs.o obj/tests.o
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 
 build/bin/ide: $(OBJ_FILES) obj/objclibs.o obj/clibs.o
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 
 -include $(DEP_FILES)
 
-$(OBJ_FILES): obj/%.o: %.cpp Makefile.macos
+$(OBJ_FILES): obj/%.o: %.cpp Makefile
+	$(CC) $(CFLAGS) -MMD -MP -c -o $@ $<
+
+obj/tests.o: tests.cpp Makefile
 	$(CC) $(CFLAGS) -MMD -MP -c -o $@ $<
 
 obj/objclibs.o: os_macos.mm

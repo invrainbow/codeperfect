@@ -87,6 +87,8 @@ struct Mark_Node {
     int height;
 };
 
+struct Buffer;
+
 // where do i use this?
 // c-o/i
 // build errors
@@ -95,8 +97,29 @@ struct Mark_Node {
 // AVL tree for keeping track of marks.
 struct Mark_Tree {
     Mark_Node *root;
+    Buffer *buf;
 
-    void init() { ptr0(this); }
+    struct Edit {
+        cur2 start;
+        cur2 old_end;
+        cur2 new_end;
+    };
+
+    Pool mem;
+    List<Edit> edits;
+
+    void init(Buffer *_buf) {
+        ptr0(this);
+        buf = _buf;
+
+        // TODO: remove mem and edits after we're done debugging this shit
+        mem.init();
+        {
+            SCOPED_MEM(&mem);
+            edits.init();
+        }
+    }
+
     void cleanup();
 
     Mark *insert_mark(Mark_Type type, cur2 pos);
@@ -114,9 +137,7 @@ struct Mark_Tree {
 
     Mark_Node *internal_insert_node(Mark_Node *root, cur2 pos, Mark_Node *node);
     Mark_Node *internal_delete_node(Mark_Node *root, cur2 pos);
-
-    void edit_tree_delete(cur2 start, cur2 end);
-    void edit_tree_insert(cur2 start, cur2 end);
+    void apply_edit(cur2 start, cur2 old_end, cur2 new_end);
 };
 
 struct Buffer {
@@ -136,11 +157,14 @@ struct Buffer {
     TSParser *parser;
     char tsinput_buffer[128];
     TSInputEdit tsedit;
+    List<uchar> edit_buffer_old;
+    List<uchar> edit_buffer_new;
 
     void copy_from(Buffer *other);
     void init(Pool *_mem, bool use_tree);
     void cleanup();
     bool read(Buffer_Read_Func f);
+    bool read_data(char *data, int len);
     bool read(File_Mapping* fm);
     void write(File* f);
     void clear();
