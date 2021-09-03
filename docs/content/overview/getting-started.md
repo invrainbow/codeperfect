@@ -44,10 +44,11 @@ background. You don't need to do anything.
 Right now CodePerfect can only open modules. Your project must be organized as
 a single module, with `go.mod` placed at the root of your workspace.
 
-When you open CodePerfect, it will prompt you for a directory to open. Please
-select your workspace &mdash; again, the folder with a `go.mod` at its root.
+When you open CodePerfect, it will prompt you for a directory to open. Select
+your workspace &mdash; the folder with a `go.mod` at its root.
 
-Once your folder is opened, a red INDEXING indicator will appear in the bottom right:
+Once your folder is opened, a red INDEXING indicator will appear in the bottom
+right:
 
 ## Starting a Project
 
