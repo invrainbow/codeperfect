@@ -178,6 +178,8 @@ void Buffer::init(Pool *_mem, bool _use_tree) {
         SCOPED_MEM(mem);
         lines.init(LIST_POOL, 128);
         bytecounts.init(LIST_POOL, 128);
+        edit_buffer_old.init();
+        edit_buffer_new.init();
     }
 
     initialized = true;
@@ -187,8 +189,6 @@ void Buffer::init(Pool *_mem, bool _use_tree) {
         enable_tree();
 
     mark_tree.init(this);
-    edit_buffer_old.init();
-    edit_buffer_new.init();
 }
 
 void Buffer::enable_tree() {

@@ -910,6 +910,19 @@ int main() {
                 auto cur = editor->cur;
 
                 switch (key) {
+                case GLFW_KEY_LEFT: send_nvim_keys("<Left>"); break;
+                case GLFW_KEY_RIGHT: send_nvim_keys("<Right>"); break;
+
+                case GLFW_KEY_DOWN:
+                case GLFW_KEY_UP:
+                    if (!move_autocomplete_cursor(editor, key == GLFW_KEY_DOWN ? 1 : -1)) {
+                        if (key == GLFW_KEY_DOWN)
+                            send_nvim_keys("<Down>");
+                        else
+                            send_nvim_keys("<Up>");
+                    }
+                    break;
+
                 case GLFW_KEY_BACKSPACE: handle_backspace("<Backspace>"); break;
 
                 case GLFW_KEY_ENTER:
@@ -960,22 +973,7 @@ int main() {
                 {
                     auto ed = world.get_current_editor();
                     if (ed == NULL) return;
-
-                    auto &ac = ed->autocomplete;
-
-                    if (ac.ac.results != NULL) {
-                        int delta = (key == GLFW_KEY_J ? 1 : -1);
-                        if (ac.selection == 0 && delta == -1)
-                            ac.selection = ac.filtered_results->len - 1;
-                        else
-                            ac.selection = (ac.selection + delta) % ac.filtered_results->len;
-
-                        if (ac.selection >= ac.view + AUTOCOMPLETE_WINDOW_ITEMS)
-                            ac.view = ac.selection - AUTOCOMPLETE_WINDOW_ITEMS + 1;
-                        if (ac.selection < ac.view)
-                            ac.view = ac.selection;
-                    }
-
+                    move_autocomplete_cursor(ed, key == GLFW_KEY_J ? 1 : -1);
                     break;
                 }
             case GLFW_KEY_W:

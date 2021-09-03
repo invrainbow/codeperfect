@@ -1104,3 +1104,19 @@ void reload_file_subtree(ccstr relpath) {
     // and add/recurse/process all items in `new_files` and `new_directories`
     // parent->children = sort_ft_nodes(parent->children);
 }
+
+bool move_autocomplete_cursor(Editor *ed, int direction) {
+    auto &ac = ed->autocomplete;
+    if (ac.ac.results == NULL) return false;
+
+    if (ac.selection == 0 && direction == -1)
+        ac.selection = ac.filtered_results->len - 1;
+    else
+        ac.selection = (ac.selection + direction) % ac.filtered_results->len;
+
+    if (ac.selection >= ac.view + AUTOCOMPLETE_WINDOW_ITEMS)
+        ac.view = ac.selection - AUTOCOMPLETE_WINDOW_ITEMS + 1;
+    if (ac.selection < ac.view)
+        ac.view = ac.selection;
+    return true;
+}
