@@ -236,11 +236,11 @@ function Pricing() {
         <PricingBox
           title="Premium Plan"
           tier="premium"
-          price="$250/user/year"
-          subprice="Yearly commitment required"
+          price="$20/user/month"
+          subprice="or $200/user/year"
         >
-          Comes with priority support as well as support for custom requests,
-          such as custom billing.
+          Same as company plan, but also comes with priority support. Please{" "}
+          <a href="mailto:support@codeperfect95.com">contact us</a> for details.
         </PricingBox>
       </div>
       <div className="mt-16 text-center">

@@ -1,5 +1,5 @@
 ---
-title: "Panes and tabs"
+title: "Panes and Tabs"
 menu:
   docs:
     parent: "editor"

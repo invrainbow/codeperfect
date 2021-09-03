@@ -1,5 +1,5 @@
 ---
-title: "Vim keybindings"
+title: "Vim Keybindings"
 menu:
   docs:
     parent: "editor"

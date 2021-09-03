@@ -1,5 +1,5 @@
 ---
-title: "Go to file"
+title: "Go to File"
 menu:
   docs:
     parent: "navigation"

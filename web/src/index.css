@@ -20,7 +20,7 @@
   }
 
   a {
-    @apply text-gray-300 underline;
+    @apply text-gray-600 underline;
     @apply inline-block break-words;
   }
 
