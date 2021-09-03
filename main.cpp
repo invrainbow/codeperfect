@@ -246,6 +246,7 @@ bool is_git_folder(ccstr path) {
 }
 
 int main() {
+
     Timer t;
     t.init();
 

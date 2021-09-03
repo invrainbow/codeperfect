@@ -192,7 +192,7 @@ void Module_Resolver::init(ccstr current_module_filepath, ccstr _gomodcache) {
     proc.init();
     proc.dir = current_module_filepath;
     proc.skip_shell = true;
-    if (!proc.run("go list -mod=mod -m all")) return;
+    if (!proc.run(our_sprintf("%s/go list -mod=mod -m all", world.go_binary_path))) return;
     defer { proc.cleanup(); };
 
     List<char> line;
@@ -204,6 +204,8 @@ void Module_Resolver::init(ccstr current_module_filepath, ccstr _gomodcache) {
         for (ch = '\0'; proc.read1(&ch) && ch != '\n'; ch = '\0')
             line.append(ch);
         line.append('\0');
+
+        print("%s", line.items);
 
         ccstr import_path = NULL;
         ccstr resolved_path = NULL;
@@ -801,7 +803,7 @@ void Go_Indexer::background_thread() {
         index_print("Reading existing database...");
 
         Index_Stream s;
-        if (!s.open(path_join(world.current_path, ".cp95db"))) {
+        if (!s.open(path_join(world.current_path, ".cpdb"))) {
             index_print("No database found (or couldn't open).");
             break;
         }
@@ -1178,7 +1180,7 @@ void Go_Indexer::background_thread() {
 
             {
                 Index_Stream s;
-                if (!s.open(path_join(world.current_path, ".cp95db.tmp"), true)) {
+                if (!s.open(path_join(world.current_path, ".cpdb.tmp"), true)) {
                     index_print("Unable to open database file for writing.");
                     break;
                 }
@@ -1188,7 +1190,7 @@ void Go_Indexer::background_thread() {
                 s.finish_writing();
             }
 
-            if (!move_file_atomically(path_join(world.current_path, ".cp95db.tmp"), path_join(world.current_path, ".cp95db"))) {
+            if (!move_file_atomically(path_join(world.current_path, ".cpdb.tmp"), path_join(world.current_path, ".cpdb"))) {
                 index_print("Unable to commit new database file, error: %s", get_last_error());
                 break;
             }
@@ -3352,10 +3354,10 @@ void Go_Indexer::init() {
         strcpy_safe(current_exe_path, _countof(current_exe_path), our_dirname(get_executable_path()));
     }
 
-    gohelper_dynamic.init("go run dynamic_helper.go", current_exe_path);
-    if (!streq(gohelper_dynamic.readline(), "true")) {
-        tell_user("Please make sure Go version 1.16+ is installed and accessible through your PATH.", NULL);
-        exit(1);
+    gohelper_dynamic.init(our_sprintf("%s/go run dynamic_helper.go", world.go_binary_path), current_exe_path);
+    auto resp = gohelper_dynamic.readline();
+    if (!streq(resp, "true")) {
+        our_panic(our_sprintf("Please make sure Go version 1.16+ is installed and accessible through your PATH, resp = %s", resp));
     }
 
     auto get_env = [&](ccstr var) -> ccstr {
@@ -5487,6 +5489,8 @@ void (*GHAuthAndUpdate)();
 char* (*GHAuthAndUpdateReadStatus)();
 bool (*GHRenameFileOrDirectory)(char* oldpath, char* newpath);
 void (*GHEnableDebugMode)();
+GoInt (*GHGetVersion)();
+char* (*GHGetGoBinaryPath)();
 
 #if OS_WIN
 #   define dll_load_library(x) LoadLibraryW(L"gohelper.dll")
@@ -5507,7 +5511,7 @@ void load_dll_func(T &func, ccstr name) {
     func = (T)addr;
 }
 
-void init_gohelper_crap() {
+void load_gohelper() {
     if (gohelper_dll == NULL)
          our_panic(our_sprintf("unable to load gohelper: %s", dll_error()));
 
@@ -5527,5 +5531,11 @@ void init_gohelper_crap() {
     load(GHAuthAndUpdateReadStatus);
     load(GHRenameFileOrDirectory);
     load(GHEnableDebugMode);
+    load(GHGetVersion);
+    load(GHGetGoBinaryPath);
 #undef load
+
+    gh_version = GHGetVersion();
 }
+
+int gh_version = 0;

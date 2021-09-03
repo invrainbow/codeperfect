@@ -1559,6 +1559,9 @@ void UI::draw_everything() {
             if (ImGui::MenuItem("Go to Previous Item", "Alt+[")) {
                 goto_next_error(-1);
             }
+            if (ImGui::MenuItem("Go to Definition", "Ctrl+G")) {
+                handle_goto_definition();
+            }
             ImGui::EndMenu();
         }
 
@@ -1594,7 +1597,7 @@ void UI::draw_everything() {
                     auto &it = project_settings.build_profiles[i];
                     if (ImGui::MenuItem(it.label, NULL, project_settings.active_build_profile == i, true)) {
                         project_settings.active_build_profile = i;
-                        project_settings.write(path_join(world.current_path, ".cp95proj"));
+                        project_settings.write(path_join(world.current_path, ".cpproj"));
                     }
                 }
                 ImGui::EndMenu();
@@ -1775,7 +1778,7 @@ void UI::draw_everything() {
                     auto &it = project_settings.debug_profiles[i];
                     if (ImGui::MenuItem(it.label, NULL, project_settings.active_debug_profile == i, true)) {
                         project_settings.active_debug_profile = i;
-                        project_settings.write(path_join(world.current_path, ".cp95proj"));
+                        project_settings.write(path_join(world.current_path, ".cpproj"));
                     }
                 }
                 ImGui::EndMenu();
@@ -1862,6 +1865,17 @@ void UI::draw_everything() {
             ImGui::EndMenu();
         }
 
+        if (ImGui::BeginMenu("Help")) {
+            if (ImGui::MenuItem("About")) {
+                world.wnd_about.show = true;
+            }
+
+            ImGui::Separator();
+            ImGui::MenuItem(our_sprintf("Version %d", gh_version), NULL, false, false);
+
+            ImGui::EndMenu();
+        }
+
         ImGui::PopStyleVar(2);
         ImGui::EndMainMenuBar();
     }
@@ -1873,6 +1887,13 @@ void UI::draw_everything() {
         ImGui::End();
     }
     */
+
+    if (world.wnd_about.show) {
+        auto &wnd = world.wnd_about;
+        ImGui::Begin("About", &wnd.show, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking);
+        ImGui::Text("Nothing here yet.");
+        ImGui::End();
+    }
 
     if (world.wnd_index_log.show) {
         ImGui::SetNextWindowDockID(dock_bottom_id, ImGuiCond_Once);
@@ -2554,7 +2575,7 @@ void UI::draw_everything() {
 
             if (ImGui::Button("Save")) {
                 project_settings.copy(&wnd.tmp);
-                project_settings.write(path_join(world.current_path, ".cp95proj"));
+                project_settings.write(path_join(world.current_path, ".cpproj"));
                 world.wnd_project_settings.show = false;
             }
 

@@ -10,6 +10,7 @@ import (
 
 	"github.com/denormal/go-gitignore"
 	"github.com/google/shlex"
+	"github.com/invrainbow/codeperfect/gostuff/versions"
 	"github.com/reviewdog/errorformat"
 	"golang.org/x/tools/imports"
 )
@@ -48,7 +49,9 @@ func stopBuild() {
 	if currentBuild == nil {
 		return
 	}
-	currentBuild.cmd.Process.Kill()
+	if currentBuild.cmd.Process != nil {
+		currentBuild.cmd.Process.Kill()
+	}
 	currentBuild = nil
 }
 
@@ -298,4 +301,14 @@ func GHRenameFileOrDirectory(oldpath, newpath *C.char) bool {
 //export GHEnableDebugMode
 func GHEnableDebugMode() {
 	DebugModeFlag = true
+}
+
+//export GHGetVersion
+func GHGetVersion() int {
+	return versions.CurrentVersion
+}
+
+//export GHGetGoBinaryPath
+func GHGetGoBinaryPath() *C.char {
+	return C.CString(config.GoBinaryPath)
 }

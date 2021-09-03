@@ -1401,5 +1401,9 @@ extern void (*GHAuthAndUpdate)();
 extern char* (*GHAuthAndUpdateReadStatus)();
 extern bool (*GHRenameFileOrDirectory)(char* oldpath, char* newpath);
 extern void (*GHEnableDebugMode)();
+extern GoInt (*GHGetVersion)();
+extern char* (*GHGetGoBinaryPath)();
 
-void init_gohelper_crap();
+void load_gohelper();
+
+extern int gh_version;

@@ -184,6 +184,7 @@ struct World {
     FT_Node *file_tree;
     u64 next_build_id;
 
+    char go_binary_path[MAX_PATH];
     char current_path[MAX_PATH];
 
     Pane _panes[MAX_PANES];
@@ -221,6 +222,10 @@ struct World {
         bool show;
         List<ccstr> lines;
     } wnd_index_log;
+
+    struct {
+        bool show;
+    } wnd_about;
 
     struct {
         bool show;

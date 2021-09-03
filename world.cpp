@@ -196,7 +196,7 @@ void World::fill_file_tree() {
                 auto fullpath = path_join(path, ent->name);
                 if (is_ignored_by_git(fullpath)) break;
                 if (streq(ent->name, ".git")) break;
-                if (streq(ent->name, ".cp95proj")) break;
+                if (streq(ent->name, ".cpproj")) break;
                 if (str_ends_with(ent->name, ".exe")) break;
 
                 auto file = alloc_object(FT_Node);
@@ -304,7 +304,7 @@ void World::init_workspace() {
         SCOPED_FRAME();
 
         File f;
-        f.init(".cp95defaultfolder", FILE_MODE_READ, FILE_OPEN_EXISTING);
+        f.init(".cpdefaultfolder", FILE_MODE_READ, FILE_OPEN_EXISTING);
         defer { f.cleanup(); };
 
         List<char> chars;
@@ -322,7 +322,7 @@ void World::init_workspace() {
     GHGitIgnoreInit(current_path);
     xplat_chdir(current_path);
 
-    project_settings.read(path_join(current_path, ".cp95proj"));
+    project_settings.read(path_join(current_path, ".cpproj"));
 
     /*
     if (project_settings.build_command[0] == '\0')
@@ -352,6 +352,22 @@ void World::init(GLFWwindow *_wnd) {
     // use frame_mem as the default mem
     MEM = &frame_mem;
 
+    /*
+    auto get_path = [&]() -> ccstr {
+        Process proc;
+        defer { proc.cleanup(); };
+        proc.run("echo $PATH");
+
+        Text_Renderer r;
+        r.init();
+        char ch;
+        while (proc.read1(&ch)) r.writechar(ch);
+        return r.finish();
+    };
+
+    tell_user(our_sprintf("PATH = %s", get_path()), NULL);
+    */
+
     mark_fridge.init(512);
     mark_node_fridge.init(512);
 
@@ -363,7 +379,15 @@ void World::init(GLFWwindow *_wnd) {
     chunk5_fridge.init(16);
     chunk6_fridge.init(8);
 
-    init_gohelper_crap();
+    load_gohelper();
+
+    {
+        auto go_binary_path = GHGetGoBinaryPath();
+        if (go_binary_path == NULL)
+            our_panic("Please set your Go binary path in ~/.cpconfig.");
+        defer { GHFree(go_binary_path); };
+        strcpy_safe(world.go_binary_path, _countof(world.go_binary_path), go_binary_path);
+    }
 
     {
         // do we need world_mem anywhere else?
@@ -512,7 +536,7 @@ void init_goto_file() {
         for (auto it = node->children; it != NULL; it = it->next) {
             auto isdir = it->is_directory;
 
-            if (isdir && node->parent == NULL && streq(it->name, ".cp95")) return;
+            // if (isdir && node->parent == NULL && streq(it->name, ".cp")) return;
 
             auto relpath = path[0] == '\0' ? our_strcpy(it->name) : path_join(path, it->name);
             if (isdir)
@@ -1020,7 +1044,7 @@ void reload_file_subtree(ccstr relpath) {
             auto fullpath = path_join(path, ent->name);
             if (is_ignored_by_git(fullpath)) break;
             if (streq(ent->name, ".git")) break;
-            if (streq(ent->name, ".cp95proj")) break;
+            if (streq(ent->name, ".cpproj")) break;
             if (str_ends_with(ent->name, ".exe")) break;
 
             auto name = our_strcpy(ent->name);

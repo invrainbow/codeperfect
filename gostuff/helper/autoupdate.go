@@ -49,7 +49,7 @@ func ReadLicense() *License {
 
 	fmt.Printf("homedir: %s\n", homedir)
 
-	licensefile := path.Join(homedir, ".cp95license")
+	licensefile := path.Join(homedir, ".cplicense")
 	fmt.Printf("licensefile: %s\n", licensefile)
 	buf, err := os.ReadFile(licensefile)
 	if err != nil {
@@ -68,7 +68,7 @@ func ReadLicense() *License {
 on startup:
     read license file
     if doesn't exist
-        die("pls put license file in ~/.cp95license")
+        die("pls put license file in ~/.cplicense")
 
     auth_fail = false
     if offline
@@ -171,7 +171,7 @@ func AuthAndUpdate(out chan error) {
 func ActuallyAuthAndUpdate() error {
 	license := ReadLicense()
 	if license == nil {
-		return fmt.Errorf("Unable to read license. Please make sure your license file exists at ~/.cp95license. Sorry, we're working on a better UI.")
+		return fmt.Errorf("Unable to read license. Please make sure your license file exists at ~/.cplicense. Sorry, we're working on a better UI.")
 	}
 
 	req := &models.AuthRequest{

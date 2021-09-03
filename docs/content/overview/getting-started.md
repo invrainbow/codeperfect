@@ -15,7 +15,7 @@ Please refer to the instructions for your OS.
 
 1. Download CodePerfect.zip (provided to you). Unzip this anywhere.
 
-2. Download the .cp95license file (provided to you), and place it in your
+2. Download the .cplicense file (provided to you), and place it in your
    home directory. You can open this directory by pressing <kbd>Win+R</kbd>
    and typing in `%USERPROFILE%`.
 
@@ -26,7 +26,7 @@ Please refer to the instructions for your OS.
 
 1. Download CodePerfect.app.zip. Unzip this and drag CodePerfect.app into your Applications folder.
 
-2. Download the .cp95license file (provided to you), and move it to ~/.cp95license.
+2. Download the .cplicense file (provided to you), and move it to ~/.cplicense.
 
 3. Run CodePerfect.app.
 

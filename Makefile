@@ -7,7 +7,7 @@ CFLAGS += $(if $(filter $(shell uname -m), arm64), -DCPU_ARM64,)
 
 ifeq (${RELEASE}, 1)
 	GOFLAGS += -ldflags "-s -w"
-	CFLAGS += -DRELEASE_MODE -O3 else
+	CFLAGS += -DRELEASE_MODE -O3
 else
 	CFLAGS += -DDEBUG_MODE -g
 endif
