@@ -44,8 +44,6 @@ struct Fridge {
         global_mem_allocated += next_block->size;
 
         head = (Elem*)((u8*)next_block + sizeof(Fridge_Block));
-		if ((void*)head == (void*)(0x2))
-			print("break here");
         for (i32 i = 0; i < blocksize - 1; i++)
             head[i].next = &head[i + 1];
         head[blocksize - 1].next = NULL;
@@ -61,15 +59,7 @@ struct Fridge {
         }
 
         T* ret = (T*)head;
-
-		if ((void*)head->next == (void*)(0x2))
-			print("break here");
-
         head = head->next;
-
-		if ((void*)head == (void*)(0x2))
-			print("break here");
-
         mem0(ret, sizeof(T));
         return ret;
     }
@@ -77,12 +67,7 @@ struct Fridge {
     void free(T* obj) {
         Elem* el = (Elem*)obj;
         el->next = head;
-		if ((void*)el->next == (void*)(0x2))
-			print("break here");
-
         head = el;
-		if ((void*)head == (void*)(0x2))
-			print("break here");
     }
 };
 

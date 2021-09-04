@@ -880,7 +880,7 @@ void Mark_Tree::delete_mark(Mark *mark) {
     for (auto it = node->marks; it != NULL; it = it->next) {
         if (it == mark) {
             if (last == NULL)
-               node->marks = it->next;
+               node->marks = mark->next;
             else
                last->next = mark->next;
             break;
@@ -927,6 +927,8 @@ Mark_Node *Mark_Tree::internal_delete_node(Mark_Node *root, cur2 pos) {
             min = min->left;
 
         root->marks = min->marks;
+        for (auto it = root->marks; it != NULL; it = it->next)
+            it->node = root;
         root->pos = min->pos;
         root->right = internal_delete_node(root->right, min->pos);
     }
@@ -986,6 +988,7 @@ void Mark_Tree::apply_edit(cur2 start, cur2 old_end, cur2 new_end) {
         } else {
             Mark *next = NULL;
             for (auto mark = it->marks; mark != NULL; mark = next) {
+                next = mark->next;
                 mark->next = orphan_marks;
                 orphan_marks = mark;
             }
