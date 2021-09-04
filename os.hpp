@@ -173,6 +173,7 @@ typedef void (*Thread_Callback)(void*);
 Thread_Handle create_thread(Thread_Callback callback, void* param);
 void close_thread_handle(Thread_Handle h);
 void kill_thread(Thread_Handle h);
+void exit_thread(int retval);
 
 enum {
     FILE_MODE_READ = 1 << 0,

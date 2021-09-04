@@ -218,6 +218,17 @@ vec3f rgb_hex(ccstr s);
 vec4f rgba(vec3f color, float alpha = 1.0);
 vec4f rgba(ccstr hex, float alpha = 1.0);
 
+extern const vec3f COLOR_JBLOW_BG;
+extern const vec3f COLOR_JBLOW_FG;
+extern const vec3f COLOR_JBLOW_GREEN;
+extern const vec3f COLOR_JBLOW_BLUE_STRING;
+extern const vec3f COLOR_JBLOW_BLUE_NUMBER;
+extern const vec3f COLOR_JBLOW_CYAN;
+extern const vec3f COLOR_JBLOW_WHITE;
+extern const vec3f COLOR_JBLOW_YELLOW;
+extern const vec3f COLOR_JBLOW_SEARCH;
+extern const vec3f COLOR_JBLOW_VISUAL;
+
 extern const vec3f COLOR_WHITE;
 extern const vec3f COLOR_DARK_RED;
 extern const vec3f COLOR_DARK_YELLOW;
@@ -227,13 +238,6 @@ extern const vec3f COLOR_DARK_GREY;
 extern const vec3f COLOR_MEDIUM_DARK_GREY;
 extern const vec3f COLOR_MEDIUM_GREY;
 extern const vec3f COLOR_LIME;
-extern const vec3f COLOR_BG;
-
-extern const vec3f COLOR_THEME_1;
-extern const vec3f COLOR_THEME_2;
-extern const vec3f COLOR_THEME_3;
-extern const vec3f COLOR_THEME_4;
-extern const vec3f COLOR_THEME_5;
 
 enum {
     HOVERID_PANE_RESIZERS = 1000,

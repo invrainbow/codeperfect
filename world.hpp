@@ -51,6 +51,8 @@ enum Main_Thread_Message_Type {
 
     MTM_FILETREE_DELETE,
     MTM_FILETREE_CREATE,
+
+    MTM_PANIC,
 };
 
 struct Main_Thread_Message {
@@ -63,6 +65,7 @@ struct Main_Thread_Message {
             ccstr file;
             cur2 pos;
         } goto_filepos;
+        ccstr panic_message;
     };
 };
 
@@ -137,6 +140,12 @@ struct Build {
     }
 };
 
+struct Wnd {
+    bool show;
+    bool focused;
+    bool first_open_focus_twice_done;
+};
+
 struct World {
     Pool world_mem;
     Pool frame_mem;
@@ -195,6 +204,8 @@ struct World {
 
     History history;
 
+    bool darkmode;
+
     struct Navigation_Dest {
         int editor_id;
         cur2 pos;
@@ -218,17 +229,14 @@ struct World {
     bool auth_update_done;
     u64 auth_update_last_check;
 
-    struct {
-        bool show;
+    struct : Wnd {
         List<ccstr> lines;
     } wnd_index_log;
 
-    struct {
-        bool show;
+    struct : Wnd {
     } wnd_about;
 
-    struct {
-        bool show;
+    struct : Wnd {
         Project_Settings tmp;
         int current_debug_profile;
         int current_build_profile;
@@ -238,16 +246,13 @@ struct World {
         bool focus_build_profiles;
     } wnd_project_settings;
 
-    struct {
-        bool show;
+    struct : Wnd {
         float height;
     } error_list;
 
     Build build;
 
-    struct {
-        bool show;
-        bool focused;
+    struct : Wnd {
         FT_Node *selection;
         // char buf[256];
         // bool adding_something;
@@ -285,72 +290,51 @@ struct World {
         bool im_metrics;
     } windows_open;
 
-    struct {
-        bool show;
+    struct : Wnd {
         bool replace;
         char find_str[256];
         char replace_str[256];
         bool use_regex;
         bool case_sensitive;
-        bool focus_bool;
         int focus_textbox;
         int selection;
     } wnd_search_and_replace;
 
-    struct {
-        bool show;
+    struct : Wnd {
         bool show_anon_nodes;
         bool show_comments;
-
         // bool move;
         // cur2 move_to_cur;
     } wnd_editor_tree;
 
-    struct {
-        bool show;
+    struct : Wnd {
     } wnd_options;
 
-    struct {
-        bool show;
+    struct : Wnd {
     } wnd_editor_toplevels;
 
-    struct {
-        bool show;
+    struct : Wnd {
         char name[MAX_PATH];
         char location[MAX_PATH];
         bool location_is_root;
         bool folder;
-        bool focused;
-        bool first_open_focus_twice_done;
         FT_Node *dest;
     } wnd_add_file_or_folder;
 
-    struct {
-        bool show;
+    struct : Wnd {
         char name[MAX_PATH];
         char location[MAX_PATH];
         FT_Node *target;
-        bool focused;
-        bool first_open_focus_twice_done;
     } wnd_rename_file_or_folder;
 
-    struct {
-        bool show;
-        bool focused;
-        bool first_open_focus_twice_done;
-
+    struct : Wnd {
         char query[MAX_PATH];
         u32 selection;
         List<ccstr> *filepaths;
         List<int> *filtered_results;
     } wnd_goto_file;
 
-    struct {
-        bool show;
-
-        bool focused;
-        bool first_open_focus_twice_done;
-
+    struct : Wnd {
         char query[MAX_PATH];
         u32 selection;
         List<ccstr> *symbols;
@@ -363,21 +347,16 @@ struct World {
     } wnd_build_and_debug;
 
     struct {
-    } wnd_im_demo;
-
-    struct {
         bool focused;
         int current_goroutine;
         int current_frame;
         char new_watch_buf[256];
     } wnd_debugger;
 
-    struct {
-        bool show;
+    struct : Wnd {
     } wnd_style_editor;
 
-    struct {
-        bool show;
+    struct : Wnd {
     } wnd_mark_edit_viewer;
 
     void init(GLFWwindow *_wnd);

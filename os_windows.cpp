@@ -323,6 +323,10 @@ void kill_thread(Thread_Handle h) {
     TerminateThread(h, 0);
 }
 
+void exit_thread(int retval) {
+    ExitThread(retval);
+}
+
 void Lock::init() {
     InitializeCriticalSection(&lock);
 }

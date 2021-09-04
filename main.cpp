@@ -246,6 +246,7 @@ bool is_git_folder(ccstr path) {
 }
 
 int main() {
+    is_main_thread = true;
 
     Timer t;
     t.init();
@@ -439,7 +440,8 @@ int main() {
         glUniformMatrix4fv(glGetUniformLocation(world.ui.im_program, "projection"), 1, GL_FALSE, (float*)projection);
 
         // clear frame
-        glClearColor(COLOR_BG.r, COLOR_BG.g, COLOR_BG.b, 1.0);
+        auto bgcolor = COLOR_JBLOW_BG;
+        glClearColor(bgcolor.r, bgcolor.g, bgcolor.b, 1.0);
         glClear(GL_COLOR_BUFFER_BIT);
         glfwSwapBuffers(world.window);
     });
@@ -454,7 +456,8 @@ int main() {
         glUniformMatrix4fv(glGetUniformLocation(world.ui.program, "projection"), 1, GL_FALSE, (float*)projection);
 
         // clear frame
-        glClearColor(COLOR_BG.r, COLOR_BG.g, COLOR_BG.b, 1.0);
+        auto bgcolor = COLOR_JBLOW_BG;
+        glClearColor(bgcolor.r, bgcolor.g, bgcolor.b, 1.0);
         glClear(GL_COLOR_BUFFER_BIT);
         glfwSwapBuffers(world.window);
     });
@@ -1199,6 +1202,10 @@ int main() {
 
             For (*messages) {
                 switch (it.type) {
+                case MTM_PANIC:
+                    our_panic(it.panic_message);
+                    break;
+
                 case MTM_NVIM_MESSAGE:
                     {
                         auto &nv = world.nvim;
@@ -1247,7 +1254,8 @@ int main() {
         }
 
         glDisable(GL_SCISSOR_TEST);
-        glClearColor(COLOR_BG.r, COLOR_BG.g, COLOR_BG.b, 1.0);
+        auto bgcolor = COLOR_JBLOW_BG;
+        glClearColor(bgcolor.r, bgcolor.g, bgcolor.b, 1.0);
         glClear(GL_COLOR_BUFFER_BIT);
 
         {

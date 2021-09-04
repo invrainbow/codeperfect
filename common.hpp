@@ -364,8 +364,6 @@ void _error(ccstr fmt, ...);
 #define define_str_case(x) case x: return #x
 #define our_assert(x, s) if (!(x)) our_panic(s)
 
-// bool streqi(ccstr a, ccstr b);
-
 void* our_malloc(size_t size);
 void our_free(void* p);
 bool str_ends_with(ccstr a, ccstr suf);
@@ -375,3 +373,5 @@ extern s32 global_mem_allocated;
 extern const u64 MAX_U64;
 
 void our_panic(ccstr s);
+
+extern thread_local bool is_main_thread;

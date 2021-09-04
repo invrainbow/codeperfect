@@ -70,6 +70,14 @@ vec4f rgba(vec3f color, float alpha) {
     return ret;
 }
 
+vec3f color_darken(vec3f color, float amount) {
+    vec3f ret;
+    ret.r = color.r * (1 - amount);
+    ret.g = color.g * (1 - amount);
+    ret.b = color.b * (1 - amount);
+    return ret;
+}
+
 vec4f rgba(ccstr hex, float alpha) {
     return rgba(rgb_hex(hex), alpha);
 }
@@ -78,6 +86,37 @@ ImVec4 to_imcolor(vec4f color) {
     return (ImVec4)ImColor(color.r, color.g, color.b, color.a);
 }
 
+/*
+const vec3f COLOR_SOLARIZED_0 = rgb_hex("#073642"); // normal
+const vec3f COLOR_SOLARIZED_1 = rgb_hex("#dc322f");
+const vec3f COLOR_SOLARIZED_2 = rgb_hex("#859900");
+const vec3f COLOR_SOLARIZED_3 = rgb_hex("#b58900");
+const vec3f COLOR_SOLARIZED_4 = rgb_hex("#268bd2");
+const vec3f COLOR_SOLARIZED_5 = rgb_hex("#d33682");
+const vec3f COLOR_SOLARIZED_6 = rgb_hex("#2aa198");
+const vec3f COLOR_SOLARIZED_7 = rgb_hex("#eee8d5");
+
+const vec3f COLOR_SOLARIZED_B0 = rgb_hex("#002b36"); // bright
+const vec3f COLOR_SOLARIZED_B1 = rgb_hex("#cb4b16");
+const vec3f COLOR_SOLARIZED_B2 = rgb_hex("#586e75");
+const vec3f COLOR_SOLARIZED_B3 = rgb_hex("#657b83");
+const vec3f COLOR_SOLARIZED_B4 = rgb_hex("#839496");
+const vec3f COLOR_SOLARIZED_B5 = rgb_hex("#6c71c4");
+const vec3f COLOR_SOLARIZED_B6 = rgb_hex("#93a1a1");
+const vec3f COLOR_SOLARIZED_B7 = rgb_hex("#fdf6e3");
+*/
+
+const vec3f COLOR_JBLOW_BG = rgb_hex("#042327");
+const vec3f COLOR_JBLOW_FG = rgb_hex("#d6b48b");
+const vec3f COLOR_JBLOW_GREEN = rgb_hex("#31B72C");
+const vec3f COLOR_JBLOW_BLUE_STRING = rgb_hex("#2ca198");
+const vec3f COLOR_JBLOW_BLUE_NUMBER = rgb_hex("#70c5bf");
+const vec3f COLOR_JBLOW_CYAN = rgb_hex("#9DE3C0");
+const vec3f COLOR_JBLOW_WHITE = rgb_hex("#ffffff");
+const vec3f COLOR_JBLOW_YELLOW = rgb_hex("#dfdfaf");
+const vec3f COLOR_JBLOW_SEARCH = rgb_hex("#143337");
+const vec3f COLOR_JBLOW_VISUAL = rgb_hex("#888888");
+
 const vec3f COLOR_WHITE = rgb_hex("#ffffff");
 const vec3f COLOR_RED = rgb_hex("#ff5555");
 const vec3f COLOR_LIGHT_BLUE = rgb_hex("#6699dd");
@@ -85,20 +124,14 @@ const vec3f COLOR_DARK_RED = rgb_hex("#880000");
 const vec3f COLOR_DARK_YELLOW = rgb_hex("#6b6d0a");
 const vec3f COLOR_DARKER_YELLOW = rgb_hex("#2b2d00");
 const vec3f COLOR_BLACK = rgb_hex("#000000");
-const vec3f COLOR_BG = rgb_hex("#181818");
 const vec3f COLOR_LIGHT_GREY = rgb_hex("#eeeeee");
 const vec3f COLOR_DARK_GREY = rgb_hex("#333333");
 const vec3f COLOR_MEDIUM_DARK_GREY = rgb_hex("#585858");
 const vec3f COLOR_MEDIUM_GREY = rgb_hex("#888888");
 const vec3f COLOR_LIME = rgb_hex("#22ff22");
 const vec3f COLOR_GREEN = rgb_hex("#88dd88");
-const vec3f COLOR_THEME_1 = rgb_hex("fd3f5c");
-const vec3f COLOR_THEME_2 = rgb_hex("fbd19b");
-const vec3f COLOR_THEME_3 = rgb_hex("edb891");
-const vec3f COLOR_THEME_4 = rgb_hex("eca895");
-const vec3f COLOR_THEME_5 = rgb_hex("e8918c");
 
-bool get_type_color(Ast_Node *node, Editor *editor, vec3f *out) {
+bool get_type_color(Ast_Node *node, Editor *editor, vec4f *out) {
     switch (node->type()) {
     case TS_PACKAGE:
     case TS_IMPORT:
@@ -106,10 +139,6 @@ bool get_type_color(Ast_Node *node, Editor *editor, vec3f *out) {
     case TS_VAR:
     case TS_FUNC:
     case TS_TYPE:
-    case TS_STRUCT:
-    case TS_INTERFACE:
-    case TS_MAP:
-    case TS_CHAN:
     case TS_FALLTHROUGH:
     case TS_BREAK:
     case TS_CONTINUE:
@@ -127,7 +156,14 @@ bool get_type_color(Ast_Node *node, Editor *editor, vec3f *out) {
     case TS_SELECT:
     case TS_NEW:
     case TS_MAKE:
-        *out = COLOR_THEME_1;
+        *out = rgba(COLOR_JBLOW_WHITE);
+        return true;
+
+    case TS_STRUCT:
+    case TS_INTERFACE:
+    case TS_MAP:
+    case TS_CHAN:
+        *out = rgba(COLOR_JBLOW_CYAN);
         return true;
 
     case TS_PLUS:
@@ -178,7 +214,7 @@ bool get_type_color(Ast_Node *node, Editor *editor, vec3f *out) {
     case TS_GT_EQ:
     case TS_AMP_AMP:
     case TS_PIPE_PIPE:
-        *out = COLOR_MEDIUM_GREY;
+        *out = rgba(COLOR_JBLOW_FG, 0.75);
         return true;
 
     case TS_INT_LITERAL:
@@ -188,16 +224,16 @@ bool get_type_color(Ast_Node *node, Editor *editor, vec3f *out) {
     case TS_NIL:
     case TS_TRUE:
     case TS_FALSE:
-        *out = COLOR_THEME_2;
+        *out = rgba(COLOR_JBLOW_BLUE_NUMBER);
         return true;
 
     case TS_COMMENT:
-        *out = COLOR_THEME_3;
+        *out = rgba(COLOR_JBLOW_GREEN);
         return true;
 
     case TS_INTERPRETED_STRING_LITERAL:
     case TS_RAW_STRING_LITERAL:
-        *out = COLOR_THEME_4;
+        *out = rgba(COLOR_JBLOW_BLUE_STRING);
         return true;
 
     case TS_IDENTIFIER:
@@ -217,15 +253,17 @@ bool get_type_color(Ast_Node *node, Editor *editor, vec3f *out) {
                 "default", "select", "new", "make", "iota",
             };
 
-            ccstr builtins[] = {
-                "map", "chan", // technically keywords, but look better here
+            ccstr builtin_types[] = {
+                // technically keywords, but look better here
+                "map", "chan", "bool", "byte", "complex128", "complex64",
+                "error", "float32", "float64", "int", "int16", "int32",
+                "int64", "int8", "rune", "string", "uint", "uint16", "uint32",
+                "uint64", "uint8", "uintptr",
+            };
 
+            ccstr builtin_others[] = {
                 "append", "cap", "close", "complex", "copy", "delete", "imag",
-                "len", "make", "new", "panic", "real", "recover", "bool",
-                "byte", "complex128", "complex64", "error", "float32",
-                "float64", "int", "int16", "int32", "int64", "int8", "rune",
-                "string", "uint", "uint16", "uint32", "uint64", "uint8",
-                "uintptr",
+                "len", "make", "new", "panic", "real", "recover",
             };
 
             char token[16] = {0};
@@ -235,14 +273,21 @@ bool get_type_color(Ast_Node *node, Editor *editor, vec3f *out) {
 
             For (keywords) {
                 if (streq(it, token)) {
-                    *out = COLOR_THEME_1;
+                    *out = rgba(COLOR_JBLOW_WHITE);
                     return true;
                 }
             }
 
-            For (builtins) {
+            For (builtin_types) {
                 if (streq(it, token)) {
-                    *out = COLOR_THEME_5;
+                    *out = rgba(COLOR_JBLOW_CYAN);
+                    return true;
+                }
+            }
+
+            For (builtin_others) {
+                if (streq(it, token)) {
+                    *out = rgba(COLOR_JBLOW_WHITE);
                     return true;
                 }
             }
@@ -1805,6 +1850,12 @@ void UI::draw_everything() {
                 });
             }
 
+            ImGui::Separator();
+
+            ImGui::MenuItem("Dark Mode", NULL, &world.darkmode);
+
+            ImGui::Separator();
+
             if (io.KeyAlt) {
                 ImGui::Separator();
                 ImGui::MenuItem("ImGui Demo", NULL, &world.windows_open.im_demo);
@@ -2787,7 +2838,7 @@ void UI::draw_everything() {
             &wnd.show, ImGuiWindowFlags_AlwaysAutoResize
         );
 
-        bool is_focusing = imgui_is_window_focusing(&wnd.focus_bool);
+        bool is_focusing = imgui_is_window_focusing(&wnd.focused);
 
         bool entered = false;
 
@@ -2981,7 +3032,7 @@ void UI::draw_everything() {
                     ImGui::Unindent();
                 }
 
-                if (wnd.focus_bool && !world.ui.keyboard_captured_by_imgui) {
+                if (wnd.focused && !world.ui.keyboard_captured_by_imgui) {
                     auto mods = imgui_get_keymods();
                     switch (mods) {
                     case OUR_MOD_NONE:
@@ -3140,7 +3191,7 @@ void UI::draw_everything() {
     actual_parameter_hint_start.y = -1;
 
     // Draw panes.
-    draw_rect(panes_area, rgba(COLOR_BG));
+    draw_rect(panes_area, rgba(COLOR_JBLOW_BG));
     for (u32 current_pane = 0; current_pane < world.panes.len; current_pane++) {
         auto &pane = world.panes[current_pane];
         auto is_pane_selected = (current_pane == world.current_pane);
@@ -3153,7 +3204,7 @@ void UI::draw_everything() {
 
         if (pane.editors.len > 0)
             draw_rect(tabs_area, rgba(is_pane_selected ? COLOR_MEDIUM_GREY : COLOR_DARK_GREY));
-        draw_rect(editor_area, rgba(COLOR_BG));
+        draw_rect(editor_area, rgba(COLOR_JBLOW_BG));
 
         vec2 tab_padding = { 15, 5 };
 
@@ -3218,7 +3269,7 @@ void UI::draw_everything() {
 
             vec3f tab_color = COLOR_MEDIUM_DARK_GREY;
             if (is_selected)
-                tab_color = COLOR_BG;
+                tab_color = COLOR_JBLOW_BG;
             else if (is_hovered)
                 tab_color = COLOR_DARK_GREY;
 
@@ -3281,7 +3332,7 @@ void UI::draw_everything() {
             struct Highlight {
                 cur2 start;
                 cur2 end;
-                vec3f color;
+                vec4f color;
             };
 
             List<Highlight> highlights;
@@ -3302,7 +3353,7 @@ void UI::draw_everything() {
                     if (node_start > end) return WALK_ABORT;
                     // if (node->child_count() != 0) return WALK_CONTINUE;
 
-                    vec3f color; ptr0(&color);
+                    vec4f color; ptr0(&color);
                     if (get_type_color(node, editor, &color)) {
                         auto hl = highlights.append();
                         hl->start = node_start;
@@ -3498,7 +3549,7 @@ void UI::draw_everything() {
 
                         if (glyph_width == -1) glyph_width = 1;
 
-                        vec3f text_color = COLOR_WHITE;
+                        vec4f text_color = rgba(COLOR_JBLOW_FG);
 
                         if (next_hl != -1) {
                             auto curr = new_cur2(x, y);
@@ -3515,7 +3566,7 @@ void UI::draw_everything() {
                         if (editor->cur == new_cur2((u32)curr_cp_idx, (u32)y)) {
                             draw_cursor(glyph_width);
                             if ((world.nvim.mode != VI_INSERT || world.nvim.exiting_insert_mode) && current_pane == world.current_pane)
-                                text_color = COLOR_BLACK;
+                                text_color = rgba(COLOR_BLACK);
                         } else if (world.nvim.mode != VI_INSERT) {
                             auto topline = editor->nvim_data.grid_topline;
                             if (topline <= y && y < topline + NVIM_DEFAULT_HEIGHT) {
@@ -3538,13 +3589,16 @@ void UI::draw_everything() {
                                     auto hl = editor->highlights[y - topline][vx + i];
                                     switch (hl) {
                                     case HL_INCSEARCH:
-                                        draw_highlight(rgba("#553333"));
+                                        draw_highlight(rgba(COLOR_JBLOW_FG));
+                                        text_color = rgba(COLOR_JBLOW_BG);
                                         break;
                                     case HL_SEARCH:
-                                        draw_highlight(rgba("#994444"));
+                                        draw_highlight(rgba(COLOR_JBLOW_SEARCH));
+                                        text_color = rgba(COLOR_JBLOW_YELLOW);
                                         break;
                                     case HL_VISUAL:
-                                        draw_highlight(rgba("#335533"));
+                                        draw_highlight(rgba(COLOR_JBLOW_VISUAL));
+                                        text_color = rgba(COLOR_JBLOW_YELLOW);
                                         break;
                                     }
                                 }
@@ -3563,12 +3617,12 @@ void UI::draw_everything() {
                         } else if (grapheme_cpsize > 1 || uch > 0x7f) {
                             auto pos = cur_pos;
                             pos.x += (font->width * glyph_width) / 2 - (font->width / 2);
-                            draw_char(&pos, 0xfffd, rgba(text_color));
+                            draw_char(&pos, 0xfffd, text_color);
 
                             cur_pos.x += font->width * glyph_width;
                             vx += glyph_width;
                         } else {
-                            draw_char(&cur_pos, uch, rgba(text_color));
+                            draw_char(&cur_pos, uch, text_color);
                             vx++;
                         }
                     }
@@ -4177,7 +4231,7 @@ void UI::end_frame() {
             bg.x = min(actual_parameter_hint_start.x, world.window_size.x - bg.w);
             bg.y = min(actual_parameter_hint_start.y - font->offset_y - bg.h - settings.parameter_hint_margin_y, world.window_size.y - bg.h);
 
-            draw_bordered_rect_outer(bg, rgba(COLOR_DARK_GREY), rgba(COLOR_WHITE), 1, 4);
+            draw_bordered_rect_outer(bg, rgba(color_darken(COLOR_JBLOW_BG, 0.1), 1.0), rgba(COLOR_JBLOW_WHITE, 0.8), 1, 4);
 
             auto text_pos = bg.pos;
             text_pos.x += settings.parameter_hint_padding_x;
@@ -4187,7 +4241,7 @@ void UI::end_frame() {
 
             {
                 u32 len = strlen(help_text);
-                vec3f color = COLOR_MEDIUM_DARK_GREY;
+                vec4f color = rgba(COLOR_JBLOW_FG, 0.75);
                 float opacity = 1.0;
 
                 int j = 0;
@@ -4196,15 +4250,15 @@ void UI::end_frame() {
                     while (j < token_changes.len && i == token_changes[j].index) {
                         switch (token_changes[j].token) {
                         case HINT_CURRENT_PARAM: opacity = 1.0; break;
-                        case HINT_NOT_CURRENT_PARAM: opacity = 0.4; break;
-                        case HINT_NAME: color = COLOR_WHITE; break;
-                        case HINT_TYPE: color = COLOR_THEME_5; break;
-                        case HINT_NORMAL: color = COLOR_MEDIUM_DARK_GREY; break;
+                        case HINT_NOT_CURRENT_PARAM: opacity = 0.5; break;
+                        case HINT_NAME: color = rgba(COLOR_JBLOW_FG); break;
+                        case HINT_TYPE: color = rgba(COLOR_JBLOW_CYAN); break;
+                        case HINT_NORMAL: color = rgba(COLOR_JBLOW_FG, 0.75); break;
                         }
 
                         j++;
                     }
-                    draw_char(&text_pos, help_text[i], rgba(color, opacity));
+                    draw_char(&text_pos, help_text[i], rgba(color.rgb, color.a * opacity));
                 }
             }
         } while (0);

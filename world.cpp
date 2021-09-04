@@ -25,7 +25,7 @@ void History::actually_push(int editor_id, cur2 pos, bool force, bool capturing_
     auto editor = world.find_editor_by_id(editor_id);
     print("pushing %s:%s, force = %d, capture_editor_last = %d", our_basename(editor->filepath), format_cur(pos), force, capturing_editor_last);
 
-    for (int i = curr; i < top; i = inc(i))
+    for (int i = curr; i != top; i = inc(i))
         ring[i].cleanup();
 
     ring[curr].editor_id = editor_id;
@@ -42,7 +42,7 @@ void History::actually_push(int editor_id, cur2 pos, bool force, bool capturing_
 void History::push(int editor_id, cur2 pos, bool force) {
     auto should_push = [&]() -> bool {
         if (curr == start) return true;
-        if (curr < top) return true;
+        if (curr != top) return true;
 
         auto &it = ring[dec(curr)];
         if (it.editor_id != editor_id) return true;

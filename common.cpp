@@ -1,6 +1,7 @@
 #include "common.hpp"
 #include "os.hpp"
 #include "world.hpp"
+#include "utils.hpp"
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -9,6 +10,8 @@
 
 #include <stdexcept>
 #include <functional>
+
+thread_local bool is_main_thread = false;
 
 // #include <windows.h>
 
@@ -104,16 +107,15 @@ void our_panic(ccstr s) {
     // throw exception so we can debug it
 	throw Panic_Exception(s);
 #else
-	tell_user(s, "An error has occurred");
-    exit(1);
+    if (is_main_thread) {
+        tell_user(s, "An error has occurred");
+        exit(1);
+    } else {
+        world.message_queue.add([&](auto msg) {
+            msg->type = MTM_PANIC;
+            msg->panic_message = our_strcpy(s);
+        });
+        exit_thread(1);
+    }
 #endif
 }
-
-/*
-bool streqi(ccstr a, ccstr b) {
-    for(; *a != '\0' || *b != '\0'; a++, b++)
-        if (tolower(*a) != tolower(*b))
-            return false;
-    return true;
-}
-*/
