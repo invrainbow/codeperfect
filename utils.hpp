@@ -260,11 +260,13 @@ struct Timer {
     u64 time;
     u64 start;
     ccstr name;
+    bool enabled;
 
-    void init(ccstr _name = NULL) {
+    void init(ccstr _name = NULL, bool _enabled = true) {
         ptr0(this);
 
         name = _name;
+        enabled = _enabled;
         time = current_time_in_nanoseconds();
         start = time;
     }
@@ -276,6 +278,8 @@ struct Timer {
     }
 
     void log(ccstr s) {
+        if (!enabled) return;
+
         print("%s: %dus", make_label(s), read_time() / 1000);
     }
 
@@ -287,6 +291,8 @@ struct Timer {
     }
 
     void total() {
+        if (!enabled) return;
+
         auto curr = current_time_in_nanoseconds();
         print("%s: %dus", make_label("TOTAL"), (curr - start) / 1000);
         time = curr;

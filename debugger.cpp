@@ -300,7 +300,7 @@ bool Debugger::eval_expression(ccstr expression, i32 goroutine_id, i32 frame, Dl
             rend->obj([&]() {
                 rend->field("followPointers", true);
                 rend->field("maxVariableRecurse", 1);
-                rend->field("maxStringLen", 256);
+                rend->field("maxStringLen", 64);
                 rend->field("maxArrayValues", 64);
                 rend->field("maxStructFields", -1);
             });
@@ -1062,6 +1062,8 @@ void Debugger::set_current_goroutine(u32 goroutine_id) {
 }
 
 void Debugger::select_frame(u32 goroutine_id, u32 frame) {
+    Timer t; t.init("select_frame", step_over_time != 0);
+
     auto old_goroutine_id = state.current_goroutine_id;
 
     state.current_frame = 0;
@@ -1071,17 +1073,25 @@ void Debugger::select_frame(u32 goroutine_id, u32 frame) {
     if (old_goroutine_id != goroutine_id)
         set_current_goroutine(goroutine_id);
 
+    t.log("set_current_goroutine");
+
     auto goroutine = state.goroutines.find([&](auto it) { return it->id == goroutine_id; });
     if (goroutine == NULL) return;
 
     if (!goroutine->fresh)
         fetch_stackframe(goroutine);
 
+    t.log("fetch_stackframe");
+
     auto dlvframe = &goroutine->frames->items[frame];
     if (!dlvframe->fresh)
         fetch_variables(goroutine_id, frame, dlvframe);
 
+    t.log("fetch_variables");
+
     For (watches) eval_watch(&it, goroutine_id, frame);
+
+    t.log("eval_watch");
 
     if (!exiting) {
         world.message_queue.add([&](auto msg) {
@@ -1375,6 +1385,7 @@ void Debugger::do_everything() {
                 if (state_flag == DLV_STATE_PAUSED) {
                     state_flag = DLV_STATE_RUNNING;
                     exec_step_over(false);
+                    step_over_time = current_time_in_nanoseconds();
                 }
                 break;
             case DLVC_STEP_OUT:
@@ -1402,11 +1413,26 @@ void Debugger::do_everything() {
         return;
     }
 
+    u64 start = 0;
+    if (step_over_time != 0) {
+        auto time_elapsed = current_time_in_nanoseconds() - step_over_time;
+        print("response after step over took %d ms", time_elapsed / 1000000);
+        start = current_time_in_nanoseconds();
+    }
+
     // TODO: there needs to be a SCOPED_FRAME here, or loop_mem will grow
     handle_new_state(&p);
+
+    if (step_over_time != 0) {
+        auto time_elapsed = current_time_in_nanoseconds() - start;
+        print("handle new state took %d ms", time_elapsed / 1000000);
+        step_over_time = 0;
+    }
 }
 
 void Debugger::handle_new_state(Packet *p) {
+    Timer t; t.init("step_over", step_over_time != 0);
+
     // this might lock up main thread
     SCOPED_LOCK(&lock);
 
@@ -1431,6 +1457,8 @@ void Debugger::handle_new_state(Packet *p) {
     if (js.boolean(js.get(0, ".result.State.NextInProgress"))) {
         send_packet("CancelNext", [&]() {});
     }
+
+    t.log("check shit");
 
     ptr0(&state);
 
@@ -1470,13 +1498,18 @@ void Debugger::handle_new_state(Packet *p) {
         print("found %d threads with breakpoints", goroutines_with_breakpoint.len);
     }
 
+    t.log("checking threads");
+
     {
         state_mem.reset();
         SCOPED_MEM(&state_mem);
         fetch_goroutines();
     }
 
+    t.log("fetch goroutines");
+
     select_frame(state.current_goroutine_id, state.current_frame);
+    t.log("select frame");
 
     For (state.goroutines) {
         auto entry = goroutines_with_breakpoint.find([&](auto g) { return g->goroutine_id == it.id; });
@@ -1489,15 +1522,21 @@ void Debugger::handle_new_state(Packet *p) {
         }
     }
 
+    t.log("do more shit");
+
     int goroutine_id = state.current_goroutine_id;
     if (goroutine_id == -1) // halting
         goroutine_id = state.goroutines[0].id;
     select_frame(goroutine_id, state.current_frame);
 
+    t.log("select frame again");
+
     state_flag = DLV_STATE_PAUSED;
 }
 
 void Debugger::fetch_variables(int goroutine_id, int frame, Dlv_Frame *dlvframe) {
+    Timer t; t.init("fetch_variables", step_over_time != 0);
+
     Json_Navigator js;
 
     dlvframe->locals = NULL;
@@ -1514,13 +1553,15 @@ void Debugger::fetch_variables(int goroutine_id, int frame, Dlv_Frame *dlvframe)
         rend->field("Cfg", [&]() {
             rend->obj([&]() {
                 rend->field("followPointers", true);
-                rend->field("maxVariableRecurse", 2);
-                rend->field("maxStringLen", 128);
-                rend->field("maxArrayValues", 32);
-                rend->field("maxStructFields", 32);
+                rend->field("maxVariableRecurse", 1);
+                rend->field("maxStringLen", 64);
+                rend->field("maxArrayValues", 64);
+                rend->field("maxStructFields", -1);
             });
         });
     })->js();
+
+    t.log("ListLocalVars");
 
     auto vars_idx = js.get(0, ".result.Variables");
     if (vars_idx != -1) {
@@ -1539,10 +1580,10 @@ void Debugger::fetch_variables(int goroutine_id, int frame, Dlv_Frame *dlvframe)
         rend->field("Cfg", [&]() {
             rend->obj([&]() {
                 rend->field("followPointers", true);
-                rend->field("maxVariableRecurse", 2);
-                rend->field("maxStringLen", 128);
-                rend->field("maxArrayValues", 32);
-                rend->field("maxStructFields", 32);
+                rend->field("maxVariableRecurse", 1);
+                rend->field("maxStringLen", 64);
+                rend->field("maxArrayValues", 64);
+                rend->field("maxStructFields", -1);
             });
         });
     })->js();
@@ -1552,6 +1593,8 @@ void Debugger::fetch_variables(int goroutine_id, int frame, Dlv_Frame *dlvframe)
         dlvframe->args = alloc_list<Dlv_Var>();
         save_list_of_vars(js, vars_idx, dlvframe->args);
     }
+
+    t.log("ListFunctionArgs");
 
     dlvframe->fresh = true;
 }

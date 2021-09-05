@@ -279,6 +279,8 @@ struct Debugger {
     Lock calls_lock;
     Pool calls_mem;
 
+    u64 step_over_time;
+
     // per session stuff
     Process dlv_proc;
     int conn;
