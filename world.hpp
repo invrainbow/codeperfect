@@ -149,6 +149,9 @@ struct Wnd {
     bool first_open_focus_twice_done;
 };
 
+#define INDEX_LOG_CAP 64 // 512
+#define INDEX_LOG_MAXLEN 256
+
 struct World {
     Pool world_mem;
     Pool frame_mem;
@@ -161,7 +164,6 @@ struct World {
     Pool build_mem;
     Pool build_index_mem;
     Pool ui_mem;
-    Pool index_log_mem;
 
     Fridge<Mark> mark_fridge;
     Fridge<Mark_Node> mark_node_fridge;
@@ -233,7 +235,10 @@ struct World {
     u64 auth_update_last_check;
 
     struct : Wnd {
-        List<ccstr> lines;
+        // ring buffer
+        char buf[INDEX_LOG_CAP][INDEX_LOG_MAXLEN];
+        int start;
+        int len;
     } wnd_index_log;
 
     struct : Wnd {

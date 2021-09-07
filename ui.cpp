@@ -2114,13 +2114,16 @@ void UI::draw_everything() {
     }
 
     if (world.wnd_index_log.show) {
+        auto &wnd = world.wnd_index_log;
+
         ImGui::SetNextWindowDockID(dock_bottom_id, ImGuiCond_Once);
-        ImGui::Begin("Index Log", &world.wnd_index_log.show);
+        ImGui::Begin("Index Log", &wnd.show);
 
         ImGui::PushFont(world.ui.im_font_mono);
 
-        For (world.wnd_index_log.lines) {
-            ImGui::Text("%s", it);
+        for (int i = wnd.start, j = 0; j < wnd.len; j++) {
+            ImGui::Text(wnd.buf[i]);
+            i = (i + 1) % INDEX_LOG_CAP;
         }
 
         if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY())

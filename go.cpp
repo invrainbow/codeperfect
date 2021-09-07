@@ -29,16 +29,25 @@ void index_print(ccstr fmt, ...) {
     va_list args;
     va_start(args, fmt);
 
-    /*
-    {
-        SCOPED_MEM(&world.index_log_mem);
-        auto msg = our_vsprintf(fmt, args);
-        world.wnd_index_log.lines.append(msg);
-        go_print("%s", msg);
-    }
-    */
-
     auto msg = our_vsprintf(fmt, args);
+
+    {
+        auto &wnd = world.wnd_index_log;
+
+        int index = -1;
+        if (wnd.len < INDEX_LOG_CAP) {
+            index = wnd.len++;
+        } else {
+            index = wnd.start;
+            wnd.start = (wnd.start + 1) % INDEX_LOG_CAP;
+        }
+
+        char *dest = wnd.buf[index];
+        if (strlen(msg) > INDEX_LOG_MAXLEN - 1)
+            msg = our_sprintf("%.*s...", INDEX_LOG_MAXLEN - 1 - 3, msg);
+        strcpy_safe(dest, INDEX_LOG_MAXLEN, msg);
+    }
+
     go_print("%s", msg);
 }
 

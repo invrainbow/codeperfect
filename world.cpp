@@ -346,7 +346,6 @@ void World::init(GLFWwindow *_wnd) {
     init_mem(scratch_mem);
     init_mem(build_index_mem);
     init_mem(ui_mem);
-    init_mem(index_log_mem);
 #undef init_mem
 
     // use frame_mem as the default mem
@@ -394,11 +393,6 @@ void World::init(GLFWwindow *_wnd) {
         // i assume we will have other things that "orchestrate" world
         SCOPED_MEM(&world_mem);
         message_queue.init();
-    }
-
-    {
-        SCOPED_MEM(&index_log_mem);
-        wnd_index_log.lines.init();
     }
 
     fzy_init();
