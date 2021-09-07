@@ -868,6 +868,7 @@ struct Debugger_UI {
         bool is_child;
         int indent;
         int watch_index;
+        int locals_index;
     };
 
     UI *ui;
@@ -886,10 +887,18 @@ struct Debugger_UI {
         auto var = args->var;
         auto watch = args->watch;
 
+        Dlv_Var** selection = NULL;
+        if (watch != NULL)
+            selection = &world.wnd_debugger.watch_selection;
+        else
+            selection = &world.wnd_debugger.locals_selection;
+
         {
             SCOPED_FRAME();
 
             int tree_flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+            if (*selection == var)
+                tree_flags |= ImGuiTreeNodeFlags_Selected;
             bool leaf = true;
 
             if (var != NULL) {
@@ -914,6 +923,8 @@ struct Debugger_UI {
 
             if (leaf)
                 tree_flags |= ImGuiTreeNodeFlags_Leaf;
+
+            ccstr final_var_name = NULL;
 
             if (watch != NULL && !args->is_child) {
                 if (watch->editing) {
@@ -949,15 +960,10 @@ struct Debugger_UI {
 
                     // if (leaf) ImGui::Unindent(ImGui::GetTreeNodeToLabelSpacing());
 
+                    final_var_name = watch->expr;
                     open = ImGui::TreeNodeEx(var, tree_flags, "%s", watch->expr) && !leaf;
 
                     // if (leaf) ImGui::Indent(ImGui::GetTreeNodeToLabelSpacing());
-
-                    if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && ImGui::IsItemHovered(ImGuiHoveredFlags_None)) {
-                        watch->editing = true;
-                        watch->open_before_editing = open;
-                        watch->edit_first_frame = true;
-                    }
 
                     for (int i = 0; i < args->indent; i++)
                         ImGui::Unindent();
@@ -977,6 +983,7 @@ struct Debugger_UI {
                     var_name = our_sprintf("[%s]", var_value_as_string(args->key));
                     break;
                 }
+                final_var_name = var_name;
 
                 for (int i = 0; i < args->indent; i++)
                     ImGui::Indent();
@@ -989,6 +996,92 @@ struct Debugger_UI {
 
                 for (int i = 0; i < args->indent; i++)
                     ImGui::Unindent();
+
+            }
+
+            if (final_var_name != NULL) {
+                if (ImGui::OurBeginPopupContextItem(our_sprintf("dbg_copyvalue_%lld", (uptr)var))) {
+                    if (ImGui::Selectable("Copy Name")) {
+                        glfwSetClipboardString(world.window, final_var_name);
+                    }
+                    ImGui::EndPopup();
+                }
+            }
+
+            // Assumes the last thing drawn was the TreeNode.
+
+            if (*selection == var) {
+                if (watch != NULL) {
+                    auto delete_pressed = [&]() -> bool {
+                        if (ui->imgui_get_keymods() == OUR_MOD_NONE) {
+                            if (ui->imgui_special_key_pressed(ImGuiKey_Backspace))
+                                return true;
+                            if (ui->imgui_special_key_pressed(ImGuiKey_Delete))
+                                return true;
+                        }
+                        return false;
+                    };
+
+                    if (!watch->editing && delete_pressed()) {
+                        auto old_len =world.dbg.watches.len;
+
+                        world.dbg.push_call(DLVC_DELETE_WATCH, [&](auto it) {
+                            it->delete_watch.watch_idx = args->watch_index;
+                        });
+
+                        if (watch != NULL) {
+                            auto next = args->watch_index;
+                            if (next >= old_len-1)
+                                next--;
+                            if (next < old_len-1)
+                                *selection = &world.dbg.watches[next].value;
+                        } else {
+                            do {
+                                auto &state = world.dbg.state;
+                                auto goroutine = state.goroutines.find([&](auto it) { return it->id == state.current_goroutine_id; });
+                                if (goroutine == NULL)
+                                    break;
+                                if (state.current_frame >= goroutine->frames->len)
+                                    break;
+                                auto frame = &goroutine->frames->items[state.current_frame];
+
+                                auto next = args->locals_index;
+                                if (next >= frame->locals->len + frame->args->len)
+                                    next--;
+                                if (next >= frame->locals->len + frame->args->len)
+                                    break;
+
+                                if (next < frame->locals->len) {
+                                    *selection = &frame->locals->at(next);
+                                } else {
+                                    next -= frame->locals->len;
+                                    *selection = &frame->args->at(next);
+                                }
+
+                            } while (0);
+                        }
+                    }
+                }
+
+                if (ui->imgui_get_keymods() == OUR_MOD_PRIMARY && ui->imgui_key_pressed('c')) {
+                    // ???
+                }
+            }
+
+            if (watch != NULL) {
+                if (!args->is_child) {
+                    if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && ImGui::IsItemHovered(ImGuiHoveredFlags_None)) {
+                        watch->editing = true;
+                        watch->open_before_editing = open;
+                        watch->edit_first_frame = true;
+                    }
+                }
+            }
+
+            if (watch == NULL || !watch->editing) {
+                if (ImGui::IsItemClicked()) {
+                    *selection = var;
+                }
             }
         }
 
@@ -1042,47 +1135,66 @@ struct Debugger_UI {
             ImGui::TextWrapped("%s", value_label);
             if (muted) ImGui::PopStyleColor();
 
-            if (ImGui::OurBeginPopupContextItem("dbg_copyvalue")) {
-                if (ImGui::Selectable("Copy")) {
-                    glfwSetClipboardString(world.window, underlying_value);
-                }
+            bool copy = false;
+
+            if (*selection == var)
+                if (ui->imgui_get_keymods() == OUR_MOD_PRIMARY)
+                    if (ui->imgui_key_pressed('c'))
+                        copy = true;
+
+            if (ImGui::OurBeginPopupContextItem(our_sprintf("dbg_copyvalue_%lld", (uptr)var))) {
+                if (ImGui::Selectable("Copy Value"))
+                    copy = true;
                 ImGui::EndPopup();
             }
 
+            if (copy) glfwSetClipboardString(world.window, underlying_value);
+
             ImGui::TableNextColumn();
             if (watch == NULL || watch->state != DBGWATCH_ERROR) {
-                if (var->kind_name == NULL || var->kind_name[0] == '\0') {
+                ccstr type_name = NULL;
+                if (var->type == NULL || var->type[0] == '\0') {
                     switch (var->kind) {
-                    case GO_KIND_BOOL: ImGui::TextWrapped("bool"); break;
-                    case GO_KIND_INT: ImGui::TextWrapped("int"); break;
-                    case GO_KIND_INT8: ImGui::TextWrapped("int8"); break;
-                    case GO_KIND_INT16: ImGui::TextWrapped("int16"); break;
-                    case GO_KIND_INT32: ImGui::TextWrapped("int32"); break;
-                    case GO_KIND_INT64: ImGui::TextWrapped("int64"); break;
-                    case GO_KIND_UINT: ImGui::TextWrapped("uint"); break;
-                    case GO_KIND_UINT8: ImGui::TextWrapped("uint8"); break;
-                    case GO_KIND_UINT16: ImGui::TextWrapped("uint16"); break;
-                    case GO_KIND_UINT32: ImGui::TextWrapped("uint32"); break;
-                    case GO_KIND_UINT64: ImGui::TextWrapped("uint64"); break;
-                    case GO_KIND_UINTPTR: ImGui::TextWrapped("uintptr"); break;
-                    case GO_KIND_FLOAT32: ImGui::TextWrapped("float32"); break;
-                    case GO_KIND_FLOAT64: ImGui::TextWrapped("float64"); break;
-                    case GO_KIND_COMPLEX64: ImGui::TextWrapped("complex64"); break;
-                    case GO_KIND_COMPLEX128: ImGui::TextWrapped("complex128"); break;
-                    case GO_KIND_ARRAY: ImGui::TextWrapped("<array>"); break;
-                    case GO_KIND_CHAN: ImGui::TextWrapped("<chan>"); break;
-                    case GO_KIND_FUNC: ImGui::TextWrapped("<func>"); break;
-                    case GO_KIND_INTERFACE: ImGui::TextWrapped("<interface>"); break;
-                    case GO_KIND_MAP: ImGui::TextWrapped("<map>"); break;
-                    case GO_KIND_PTR: ImGui::TextWrapped("<pointer>"); break;
-                    case GO_KIND_SLICE: ImGui::TextWrapped("<slice>"); break;
-                    case GO_KIND_STRING: ImGui::TextWrapped("string"); break;
-                    case GO_KIND_STRUCT: ImGui::TextWrapped("<struct>"); break;
-                    case GO_KIND_UNSAFEPOINTER: ImGui::TextWrapped("unsafe.Pointer"); break;
-                    default: ImGui::TextWrapped("<unknown>"); break;
+                    case GO_KIND_BOOL: type_name = "bool"; break;
+                    case GO_KIND_INT: type_name = "int"; break;
+                    case GO_KIND_INT8: type_name = "int8"; break;
+                    case GO_KIND_INT16: type_name = "int16"; break;
+                    case GO_KIND_INT32: type_name = "int32"; break;
+                    case GO_KIND_INT64: type_name = "int64"; break;
+                    case GO_KIND_UINT: type_name = "uint"; break;
+                    case GO_KIND_UINT8: type_name = "uint8"; break;
+                    case GO_KIND_UINT16: type_name = "uint16"; break;
+                    case GO_KIND_UINT32: type_name = "uint32"; break;
+                    case GO_KIND_UINT64: type_name = "uint64"; break;
+                    case GO_KIND_UINTPTR: type_name = "uintptr"; break;
+                    case GO_KIND_FLOAT32: type_name = "float32"; break;
+                    case GO_KIND_FLOAT64: type_name = "float64"; break;
+                    case GO_KIND_COMPLEX64: type_name = "complex64"; break;
+                    case GO_KIND_COMPLEX128: type_name = "complex128"; break;
+                    case GO_KIND_ARRAY: type_name = "<array>"; break;
+                    case GO_KIND_CHAN: type_name = "<chan>"; break;
+                    case GO_KIND_FUNC: type_name = "<func>"; break;
+                    case GO_KIND_INTERFACE: type_name = "<interface>"; break;
+                    case GO_KIND_MAP: type_name = "<map>"; break;
+                    case GO_KIND_PTR: type_name = "<pointer>"; break;
+                    case GO_KIND_SLICE: type_name = "<slice>"; break;
+                    case GO_KIND_STRING: type_name = "string"; break;
+                    case GO_KIND_STRUCT: type_name = "<struct>"; break;
+                    case GO_KIND_UNSAFEPOINTER: type_name = "unsafe.Pointer"; break;
+                    default: type_name = "<unknown>"; break;
                     }
                 } else {
-                    ImGui::TextWrapped("%s", var->kind_name);
+                    type_name = var->type;
+                }
+
+                if (type_name != NULL) {
+                    ImGui::TextWrapped("%s", type_name);
+                    if (ImGui::OurBeginPopupContextItem(our_sprintf("dbg_copyvalue_%lld", (uptr)var))) {
+                        if (ImGui::Selectable("Copy Type")) {
+                            glfwSetClipboardString(world.window, type_name);
+                        }
+                        ImGui::EndPopup();
+                    }
                 }
             }
         } else {
@@ -1276,13 +1388,16 @@ struct Debugger_UI {
                             break;
                         }
 
+                        int index = 0;
+
                         if (frame->locals != NULL) {
                             For (*frame->locals) {
                                 Render_Args a; ptr0(&a);
                                 a.var = &it;
                                 a.is_child = false;
                                 a.watch = NULL;
-                                a.index = INDEX_NONE;
+                                a.index_type = INDEX_NONE;
+                                a.locals_index = index++;
                                 render_var(&a);
                             }
                         }
@@ -1293,7 +1408,8 @@ struct Debugger_UI {
                                 a.var = &it;
                                 a.is_child = false;
                                 a.watch = NULL;
-                                a.index = INDEX_NONE;
+                                a.index_type = INDEX_NONE;
+                                a.locals_index = index++;
                                 render_var(&a);
                             }
                         }
@@ -1340,7 +1456,7 @@ struct Debugger_UI {
                         a.var = &it.value;
                         a.is_child = false;
                         a.watch = &it;
-                        a.index = INDEX_NONE;
+                        a.index_type = INDEX_NONE;
                         a.watch_index = k;
                         render_var(&a);
                     }
@@ -1661,52 +1777,6 @@ void UI::draw_everything() {
             ImGui::EndMenu();
         }
 
-        if (ImGui::BeginMenu("Project")) {
-            if (ImGui::MenuItem("Add New File...")) {
-                open_add_file_or_folder(false);
-            }
-
-            if (ImGui::MenuItem("Add New Folder...")) {
-                open_add_file_or_folder(true);
-            }
-
-            ImGui::Separator();
-
-            if (ImGui::MenuItem("Project Settings...")) {
-                open_project_settings();
-            }
-
-            ImGui::EndMenu();
-        }
-
-        if (ImGui::BeginMenu("Build")) {
-            if (ImGui::MenuItem("Build", "Ctrl+Shift+B")) {
-                world.error_list.show = true;
-                save_all_unsaved_files();
-                kick_off_build();
-            }
-
-            ImGui::Separator();
-
-            if (ImGui::BeginMenu("Select Active Build Profile..."))  {
-                for (int i = 0; i < project_settings.build_profiles_len; i++) {
-                    auto &it = project_settings.build_profiles[i];
-                    if (ImGui::MenuItem(it.label, NULL, project_settings.active_build_profile == i, true)) {
-                        project_settings.active_build_profile = i;
-                        project_settings.write(path_join(world.current_path, ".cpproj"));
-                    }
-                }
-                ImGui::EndMenu();
-            }
-
-            if (ImGui::MenuItem("Build Profiles...")) {
-                open_project_settings();
-                world.wnd_project_settings.focus_build_profiles = true;
-            }
-
-            ImGui::EndMenu();
-        }
-
         if (ImGui::BeginMenu("Format")) {
             auto editor = world.get_current_editor();
 
@@ -1772,6 +1842,53 @@ void UI::draw_everything() {
 
             if (ImGui::MenuItem("Rename...", NULL, false, can_rename_id_under_cursor())) {
                 // ???
+            }
+
+            ImGui::EndMenu();
+        }
+
+
+        if (ImGui::BeginMenu("Project")) {
+            if (ImGui::MenuItem("Add New File...")) {
+                open_add_file_or_folder(false);
+            }
+
+            if (ImGui::MenuItem("Add New Folder...")) {
+                open_add_file_or_folder(true);
+            }
+
+            ImGui::Separator();
+
+            if (ImGui::MenuItem("Project Settings...")) {
+                open_project_settings();
+            }
+
+            ImGui::EndMenu();
+        }
+
+        if (ImGui::BeginMenu("Build")) {
+            if (ImGui::MenuItem("Build", "Ctrl+Shift+B")) {
+                world.error_list.show = true;
+                save_all_unsaved_files();
+                kick_off_build();
+            }
+
+            ImGui::Separator();
+
+            if (ImGui::BeginMenu("Select Active Build Profile..."))  {
+                for (int i = 0; i < project_settings.build_profiles_len; i++) {
+                    auto &it = project_settings.build_profiles[i];
+                    if (ImGui::MenuItem(it.label, NULL, project_settings.active_build_profile == i, true)) {
+                        project_settings.active_build_profile = i;
+                        project_settings.write(path_join(world.current_path, ".cpproj"));
+                    }
+                }
+                ImGui::EndMenu();
+            }
+
+            if (ImGui::MenuItem("Build Profiles...")) {
+                open_project_settings();
+                world.wnd_project_settings.focus_build_profiles = true;
             }
 
             ImGui::EndMenu();
@@ -1901,12 +2018,10 @@ void UI::draw_everything() {
                 });
             }
 
-            ImGui::Separator();
+            // ImGui::Separator();
+            // ImGui::MenuItem("Dark Mode", NULL, &world.darkmode);
 
-            ImGui::MenuItem("Dark Mode", NULL, &world.darkmode);
-
-            ImGui::Separator();
-
+#ifndef RELEASE_MODE
             if (io.KeyAlt) {
                 ImGui::Separator();
                 ImGui::MenuItem("ImGui Demo", NULL, &world.windows_open.im_demo);
@@ -1950,6 +2065,7 @@ void UI::draw_everything() {
                     print("%d", res);
                 }
             }
+#endif
 
             /*
             ImGui::Separator();
@@ -2009,6 +2125,66 @@ void UI::draw_everything() {
 
         if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
             ImGui::SetScrollHereY(1.0f);
+
+        ImGui::PopFont();
+
+        ImGui::End();
+    }
+
+    if (world.wnd_debug_output.show) {
+        auto &wnd = world.wnd_debug_output;
+
+        ImGui::SetNextWindowDockID(dock_bottom_id, ImGuiCond_Once);
+        ImGui::Begin("Debug Output", &wnd.show);
+
+        ImGui::PushFont(world.ui.im_font_mono);
+
+        auto &lines = world.dbg.stdout_lines; 
+        for (int i = 0; i < lines.len; i++) {
+            auto &it = lines[i];
+
+            auto wrap_width = ImGui::GetContentRegionAvail().x;
+            auto text_size = ImVec2(wrap_width, ImGui::CalcTextSize(it, NULL, false, wrap_width).y);
+            auto pos = ImGui::GetCursorScreenPos();
+
+            bool clicked = ImGui::Selectable(our_sprintf("##debug_output_hidden_%d", i), i == wnd.selection, 0, text_size);
+            ImGui::GetWindowDrawList()->AddText(NULL, 0.0f, pos, ImGui::GetColorU32(ImGuiCol_Text), it, NULL, wrap_width);
+
+            if (clicked) {
+                wnd.selection = i;
+            }
+
+            bool copy = false;
+
+            if (ImGui::OurBeginPopupContextItem()) {
+                if (ImGui::Selectable("Copy")) {
+                    copy = true;
+                }
+                if (ImGui::Selectable("Copy All")) {
+                    auto output = alloc_list<char>();
+                    For (lines) {
+                        for (auto p = it; *p != '\0'; p++) {
+                            output->append(*p);
+                        }
+                        output->append('\n');
+                    }
+                    output->len--; // remove last '\n'
+                    output->append('\0');
+                    glfwSetClipboardString(world.window, output->items);
+                }
+                ImGui::EndPopup();
+            }
+
+            if (i == wnd.selection) {
+                if (imgui_get_keymods() == OUR_MOD_PRIMARY)
+                    if (imgui_key_pressed('c'))
+                        copy = true;
+            }
+
+            if (copy) {
+                glfwSetClipboardString(world.window, it);
+            }
+        }
 
         ImGui::PopFont();
 
@@ -3572,10 +3748,16 @@ void UI::draw_everything() {
                     gc.feed(line->at(cp_idx)); // feed first character for GB1
 
                     // jump {view.x} clusters
-                    for (int i = 0; i < view.x && cp_idx < line->len; i++) {
-                        cp_idx++;
-                        while (cp_idx < line->len && !gc.feed(line->at(cp_idx)))
+                    for (int i = 0; i < view.x && cp_idx < line->len;) {
+                        if (line->at(cp_idx) == '\t') {
                             cp_idx++;
+                            i += options.tabsize - (i % options.tabsize);
+                        } else {
+                            cp_idx++;
+                            while (cp_idx < line->len && !gc.feed(line->at(cp_idx)))
+                                cp_idx++;
+                            i++;
+                        }
                     }
 
                     for (u32 x = view.x, vx = view.x; vx < view.x + view.w; x++) {
@@ -3594,7 +3776,7 @@ void UI::draw_everything() {
 
                         int glyph_width = 0;
                         if (grapheme_cpsize == 1 && curr_cp == '\t')
-                            glyph_width = options.tabsize - ((vx - view.x) % options.tabsize);
+                            glyph_width = options.tabsize - (vx % options.tabsize);
                         else
                             glyph_width = our_wcwidth(curr_cp);
 
@@ -3662,7 +3844,7 @@ void UI::draw_everything() {
 
                         uchar uch = curr_cp;
                         if (uch == '\t') {
-                            auto chars = options.tabsize - ((vx - view.x) % options.tabsize);
+                            auto chars = options.tabsize - (vx % options.tabsize);
                             cur_pos.x += font->width * chars;
                             vx += chars;
                         } else if (grapheme_cpsize > 1 || uch > 0x7f) {
@@ -3904,6 +4086,9 @@ void UI::end_frame() {
 
             For (*ac.filtered_results) {
                 auto len = strlen(ac.ac.results->at(it).name);
+                if (len > AUTOCOMPLETE_TRUNCATE_LENGTH)
+                    len = AUTOCOMPLETE_TRUNCATE_LENGTH + 3;
+
                 if (len > max_len)
                     max_len = len;
             }
@@ -4031,6 +4216,9 @@ void UI::end_frame() {
                         // show extended info on a panel to the right
 
                         auto str = (cstr)our_strcpy(result.name);
+                        if (strlen(str) > AUTOCOMPLETE_TRUNCATE_LENGTH)
+                            str = (cstr)our_sprintf("%.*s...", AUTOCOMPLETE_TRUNCATE_LENGTH, str);
+
                         auto pos = items_pos + new_vec2f(settings.autocomplete_item_padding_x, settings.autocomplete_item_padding_y);
 
                         auto avail_width = items_area.w - settings.autocomplete_item_padding_x * 2;
@@ -4394,7 +4582,13 @@ void UI::recalculate_view_sizes(bool force) {
         for (auto&& editor : world.panes[i].editors) {
             editor.view.w = (i32)((editor_sizes[i].x - settings.editor_margin_x) / world.font.width);
             editor.view.h = (i32)((editor_sizes[i].y - settings.editor_margin_y) / world.font.height / settings.line_height);
-            editor.ensure_cursor_on_screen();
+
+            // Previously we called editor.ensure_cursor_on_screen(), but that
+            // moves the *cursor* onto the screen. But often when the user
+            // builds, their current cursor position is significant and we
+            // don't want to move it. Instead we should move the *view* so the
+            // cursor is on the screen.
+            editor.ensure_cursor_on_screen_by_moving_view();
         }
     }
 }

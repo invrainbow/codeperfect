@@ -1202,6 +1202,9 @@ int main() {
 
             For (*messages) {
                 switch (it.type) {
+                case MTM_ADD_DEBUGGER_STDOUT_LINE:
+                    // it.debugger_stdout_line;
+
                 case MTM_PANIC:
                     our_panic(it.panic_message);
                     break;

@@ -53,6 +53,8 @@ enum Main_Thread_Message_Type {
     MTM_FILETREE_CREATE,
 
     MTM_PANIC,
+
+    MTM_ADD_DEBUGGER_STDOUT_LINE,
 };
 
 struct Main_Thread_Message {
@@ -66,6 +68,7 @@ struct Main_Thread_Message {
             cur2 pos;
         } goto_filepos;
         ccstr panic_message;
+        ccstr debugger_stdout_line;
     };
 };
 
@@ -234,6 +237,10 @@ struct World {
     } wnd_index_log;
 
     struct : Wnd {
+        int selection;
+    } wnd_debug_output;
+
+    struct : Wnd {
     } wnd_about;
 
     struct : Wnd {
@@ -351,6 +358,8 @@ struct World {
         int current_goroutine;
         int current_frame;
         char new_watch_buf[256];
+        Dlv_Var *watch_selection;
+        Dlv_Var *locals_selection;
     } wnd_debugger;
 
     struct : Wnd {

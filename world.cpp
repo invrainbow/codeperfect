@@ -616,8 +616,9 @@ void kick_off_build(Build_Profile *build_profile) {
             build->done = true;
             build->started = false;
 
-            if (build->errors.len == 0)
-                world.error_list.show = false;
+            if (build->errors.len == 0) {
+                // world.error_list.show = false;
+            }
 
             For (world.panes) {
                 For (it.editors) {
@@ -770,9 +771,7 @@ void goto_file_and_pos(ccstr file, cur2 pos) {
     auto editor = world.focus_editor(file, pos);
     if (editor == NULL) return; // TODO
 
-    // TODO: handle the term being off screen to the right
-    editor->view.x = 0;
-    editor->view.y = relu_sub(pos.y, 10);
+    editor->ensure_cursor_on_screen_by_moving_view();
 
     ImGui::SetWindowFocus(NULL);
 }

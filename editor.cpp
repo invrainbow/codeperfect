@@ -763,8 +763,11 @@ void Editor::raw_move_cursor(cur2 c, bool dont_add_to_history) {
 
     u32 vx = 0;
     for (u32 i = 0; i < c.x; i++) {
-        // TODO: determine vx correctly
-        vx += line[i] == '\t' ? options.tabsize : 1;
+        // TODO: determine vx correctly with graphemes and shit
+        if (line[i] == '\t')
+            vx += options.tabsize - (vx % options.tabsize);
+        else
+            vx++;
     }
 
     if (vx < view.x)
@@ -812,13 +815,22 @@ void Editor::raw_move_cursor(cur2 c, bool dont_add_to_history) {
                 world.history.push(id, c);
 }
 
+void Editor::ensure_cursor_on_screen_by_moving_view() {
+    if (cur.y + options.scrolloff >= view.y + view.h)
+        view.y = relu_sub(cur.y + options.scrolloff + 1, view.h);
+    if (cur.y - options.scrolloff < view.y)
+        view.y = relu_sub(cur.y, options.scrolloff + 1);
+
+    // TODO: handle x
+}
+
 void Editor::ensure_cursor_on_screen() {
     if (relu_sub(cur.y, options.scrolloff) < view.y)
         move_cursor(new_cur2((u32)cur.x, (u32)min(view.y + options.scrolloff, view.y + view.h)));
     if (cur.y + options.scrolloff >= view.y + view.h)
         move_cursor(new_cur2((u32)cur.x, (u32)relu_sub(view.y + view.h,  1 + options.scrolloff)));
 
-    // TODO: handle x too
+    // TODO: handle x
 }
 
 void Editor::update_lines(int firstline, int lastline, List<uchar*> *new_lines, List<s32> *line_lengths) {

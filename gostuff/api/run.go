@@ -50,8 +50,14 @@ func authUser(c *gin.Context, email, licenseKey string) *models.User {
 	return &user
 }
 
+func blah(x *gin.Engine) {
+	y := x
+	fmt.Printf("%v\n", y)
+}
+
 func Run() {
 	r := gin.Default()
+	blah(r)
 
 	r.POST("/auth", func(c *gin.Context) {
 		var req models.AuthRequest

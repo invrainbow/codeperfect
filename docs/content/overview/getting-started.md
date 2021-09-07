@@ -24,9 +24,9 @@ Please refer to the instructions for your OS.
 
 ### macOS
 
-1. Download CodePerfect.app.zip. Unzip this and drag CodePerfect.app into your Applications folder.
+1. Download CodePerfect.app.zip (provided to you). Unzip this and drag CodePerfect.app into your Applications folder.
 
-2. Download the .cplicense file (provided to you), and move it to ~/.cplicense.
+2. Download the .cplicense file (provided to you), and move it to `~/.cplicense`.
 
 3. Run CodePerfect.app.
 
@@ -34,28 +34,55 @@ On all platforms, please do not change or move any of files or directories
 inside the unzipped application. The autoupdater depends explicitly on the
 existing directory structure.
 
-## Automatic Updates
+## Configuration
 
-CodePerfect automatically and unintrusively keeps itself up to date in the
-background. You don't need to do anything.
+In general, CodePerfect tries to require as little configuration as possible.
+Currently we just need to know where Go is installed. Create the file
+`~/.cpconfig` with the following contents:
+
+```
+{
+  "go_binary_path": "..."
+}
+```
+
+Replace the `...` with the **folder containing the `go` binary**, not the
+binary itself. So if `go` is located at /usr/local/bin/go, write:
+
+```
+{
+  "go_binary_path": "/usr/local/bin"
+}
+```
 
 ## Opening a Project
 
 Right now CodePerfect can only open modules. Your project must be organized as
 a single module, with `go.mod` placed at the root of your workspace.
 
-When you open CodePerfect, it will prompt you for a directory to open. Select
-your workspace &mdash; the folder with a `go.mod` at its root.
-
-Once your folder is opened, a red INDEXING indicator will appear in the bottom
-right:
+When you open CodePerfect, it prompts you for a directory to open. Select your
+workspace, the folder with a `go.mod` at its root.
 
 ## Starting a Project
 
 CodePerfect doesn't provide any sort of project creation wizard. It just knows
-how to read directories containing a Go module. To create a new project, use
-`go mod init <module_path>` as usual to initialize a module inside a
-directory, then open that directory with CodePerfect.
+how to read Go modules. To start a new project, just initialize a module the
+usual way:
+
+```
+$ go mod init <module_path>
+```
+
+CodePerfect relies on `go list -mod=mod -m all` to find your dependencies. If
+you have un-downloaded dependencies, it'll interfere with the output. So if
+you're opening an existing project, make sure all dependencies have been
+downloaded:
+
+```
+$ go mod download
+```
+
+(Use `go mod tidy` if you're on an older version of Go.)
 
 ## Indexing
 
@@ -95,3 +122,8 @@ bug to us!):
 - If that doesn't work, you can go to <cite>Tools</cite> > <cite>Obliterate and Recreate Index</cite>.
   This will completely re-index everything (the process that took place when
   you opened the folder for the first time).
+
+## Automatic Updates
+
+CodePerfect automatically and unintrusively keeps itself up to date in the
+background. You don't need to do anything.

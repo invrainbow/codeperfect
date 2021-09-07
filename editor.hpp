@@ -174,6 +174,7 @@ struct Editor {
     bool is_current_editor();
     void backspace_in_insert_mode(int graphemes_to_erase, int codepoints_to_erase);
     void ensure_cursor_on_screen();
+    void ensure_cursor_on_screen_by_moving_view();
     void insert_text_in_insert_mode(ccstr s);
     ccstr get_autoindent(int for_y);
     void add_change_in_insert_mode(cur2 start, cur2 old_end, cur2 new_end);

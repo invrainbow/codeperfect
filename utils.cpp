@@ -169,6 +169,8 @@ void Path::goto_child(ccstr child) {
 }
 
 ccstr Path::str(char sep) {
+    if (parts->len == 0) return "";
+
     if (sep == 0) sep = PATH_SEP;
 
     auto len = 0;
@@ -196,4 +198,26 @@ ccstr Path::str(char sep) {
 bool path_contains_in_subtree(ccstr base_path, ccstr full_path) {
     SCOPED_FRAME();
     return make_path(base_path)->contains(make_path(full_path));
+}
+
+// this is slow, but whatever
+ccstr str_replace(ccstr s, ccstr find, ccstr replace) {
+    int i = 0, len = strlen(s);
+    int flen = strlen(find);
+    int rlen = strlen(replace);
+    auto ret = alloc_list<char>();
+
+    while (i < len) {
+        if (str_starts_with(&s[i], find)) {
+            for (int j = 0; j < rlen; j++)
+                ret->append(replace[j]);
+            i += flen;
+            continue;
+        }
+        ret->append(s[i]);
+        i++;
+    }
+
+    ret->append('\0');
+    return ret->items;
 }

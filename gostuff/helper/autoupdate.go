@@ -217,6 +217,11 @@ func ActuallyAuthAndUpdate() error {
 			exepath = path
 		}
 
+        // TODO:
+        // destroy newbintmp if it exists
+        // unzip to newbintmp instead
+        // move newbintmp to newbin
+
 		if err := Unzip(tmpfile.Name(), path.Join(path.Dir(path.Dir(exepath)), "newbin")); err != nil {
 			return err
 		}

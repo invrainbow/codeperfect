@@ -69,10 +69,10 @@ u64 current_time_in_nanoseconds() {
 
 // TODO: fill all this shit out
 void Process::cleanup() {
-    close(stdin_pipe[PIPE_READ]);
-    close(stdin_pipe[PIPE_WRITE]);
-    close(stdout_pipe[PIPE_READ]);
-    close(stdout_pipe[PIPE_WRITE]);
+    close(stdin_pipe_read);
+    close(stdin_pipe_write);
+    close(stdout_pipe_read);
+    close(stdout_pipe_write);
 }
 
 void close_pipe_handle(int *fd) {
@@ -91,7 +91,8 @@ bool Process::run(ccstr _cmd) {
         return false;
     };
 
-    // create_new_console, keep_open_after_exit, and skip_shell are ignored.
+    // create_new_console, keep_open_after_exit, skip_shell, and
+    // dont_use_stdout are ignored.
 
     if (pipe(stdin_pipe) < 0) return err("allocating pipe for child input redirect");
     if (pipe(stdout_pipe) < 0) return err("allocating pipe for child output redirect");
@@ -101,16 +102,16 @@ bool Process::run(ccstr _cmd) {
 
     if (pid == 0) {
         // used by parent only
-        close_pipe_handle(&stdin_pipe[PIPE_WRITE]);
-        close_pipe_handle(&stdout_pipe[PIPE_READ]);
+        close_pipe_handle(&stdin_pipe_write);
+        close_pipe_handle(&stdout_pipe_read);
 
-        if (dup2(stdin_pipe[PIPE_READ], STDIN_FILENO) == -1) exit(errno);
-        if (dup2(stdout_pipe[PIPE_WRITE], STDOUT_FILENO) == -1) exit(errno);
-        if (dup2(stdout_pipe[PIPE_WRITE], STDERR_FILENO) == -1) exit(errno);
+        if (dup2(stdin_pipe_read, STDIN_FILENO) == -1) exit(errno);
+        if (dup2(stdout_pipe_write, STDOUT_FILENO) == -1) exit(errno);
+        if (dup2(stdout_pipe_write, STDERR_FILENO) == -1) exit(errno);
 
         // we've duplicated, don't need anymore
-        close_pipe_handle(&stdin_pipe[PIPE_READ]);
-        close_pipe_handle(&stdout_pipe[PIPE_WRITE]);
+        close_pipe_handle(&stdin_pipe_read);
+        close_pipe_handle(&stdout_pipe_write);
 
         if (dir != NULL) chdir(dir);
 
@@ -118,8 +119,8 @@ bool Process::run(ccstr _cmd) {
     }
 
     // used by child only
-    close_pipe_handle(&stdin_pipe[PIPE_READ]);
-    close_pipe_handle(&stdout_pipe[PIPE_WRITE]);
+    close_pipe_handle(&stdin_pipe_read);
+    close_pipe_handle(&stdout_pipe_write);
 
     return true;
 }
@@ -153,7 +154,7 @@ bool Process::can_read() {
 
     fd_set fs;
     FD_ZERO(&fs);
-    FD_SET(stdout_pipe[PIPE_READ], &fs);
+    FD_SET(stdout_pipe_read, &fs);
 
     auto ret = select(FD_SETSIZE, &fs, NULL, NULL, &timeout);
     if (ret == -1) {
@@ -171,7 +172,7 @@ bool Process::read1(char* out) {
     }
 
     char ch = 0;
-    if (read(stdout_pipe[PIPE_READ], &ch, 1) == 1) {
+    if (read(stdout_pipe_read, &ch, 1) == 1) {
         *out = ch;
         return true;
     }
@@ -179,12 +180,12 @@ bool Process::read1(char* out) {
 }
 
 bool Process::write1(char ch) {
-    return (write(stdin_pipe[PIPE_WRITE], &ch, 1) == 1);
+    return (write(stdin_pipe_write, &ch, 1) == 1);
 }
 
 bool Process::writestr(ccstr s, s32 len) {
     if (len == 0) len = strlen(s);
-    return (write(stdin_pipe[PIPE_WRITE], s, len) == len);
+    return (write(stdin_pipe_write, s, len) == len);
 }
 
 void Process::flush() {
@@ -192,7 +193,7 @@ void Process::flush() {
 }
 
 void Process::done_writing() {
-    close_pipe_handle(&stdin_pipe[PIPE_WRITE]);
+    close_pipe_handle(&stdin_pipe_write);
 }
 
 bool list_directory(ccstr folder, list_directory_cb cb) {

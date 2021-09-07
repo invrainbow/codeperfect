@@ -151,11 +151,11 @@ ccstr parse_json_string(ccstr s) {
                         if (i > 0) h = h << 4;
 
                         if ((s[i] >= '0') && (s[i] <= '9'))
-                            h += (unsigned int) s[i] - '0';
+                            h += (u32)s[i] - '0';
                         else if ((s[i] >= 'A') && (s[i] <= 'F'))
-                            h += (unsigned int) 10 + s[i] - 'A';
+                            h += (u32)10 + s[i] - 'A';
                         else if ((s[i] >= 'a') && (s[i] <= 'f'))
-                            h += (unsigned int) 10 + s[i] - 'a';
+                            h += (u32)10 + s[i] - 'a';
                         else {
                             *ok = false;
                             return 0;
@@ -218,7 +218,9 @@ void Debugger::save_single_var(Json_Navigator js, i32 idx, Dlv_Var* out, Save_Va
         out->len = js.num(js.get(idx, ".len"));
         out->cap = js.num(js.get(idx, ".cap"));
         out->address = js.num_u64(js.get(idx, ".addr"));
-        out->kind_name = js.str(js.get(idx, ".realType"));
+        out->type = js.str(js.get(idx, ".type"));
+        out->type = str_replace(out->type, "\\u003c", "<");
+        out->real_type = js.str(js.get(idx, ".realType"));
         out->flags = js.num(js.get(idx, ".flags"));
         out->only_addr = js.boolean(js.get(idx, ".onlyAddr"));
 
@@ -358,9 +360,11 @@ void Debugger::init() {
     state_mem.init();
     breakpoints_mem.init();
     watches_mem.init();
+    stdout_mem.init();
 
     SCOPED_MEM(&mem);
 
+    stdout_line_buffer.init();
     lock.init();
     breakpoints.init();
     watches.init();
@@ -838,9 +842,13 @@ bool Json_Navigator::boolean(i32 i) {
 void Debugger::start_loop() {
     auto func = [](void *param) {
         auto dbg = (Debugger*)param;
-        SCOPED_MEM(&dbg->loop_mem);
-        MEM->reset();
-        while (true) dbg->do_everything();
+
+        while (true) {
+            SCOPED_MEM(&dbg->loop_mem);
+            MEM->reset();
+
+            dbg->do_everything();
+        }
     };
 
     SCOPED_MEM(&mem);
@@ -984,15 +992,33 @@ bool Debugger::start(Debug_Profile *debug_profile) {
     }
 
     dlv_proc.init();
-    dlv_proc.dont_use_stdout = true;
+    // dlv_proc.dont_use_stdout = true;
     dlv_proc.dir = world.current_path;
-    dlv_proc.create_new_console = true;
+    // dlv_proc.create_new_console = true;
 
     ccstr dlv_cmd = our_sprintf("dlv exec --headless --listen=127.0.0.1:1234 %s", binary_path);
     if (debug_profile->type == DEBUG_TEST_CURRENT_FUNCTION)
-        dlv_cmd = our_sprintf("%s -- -test.run %s", dlv_cmd, test_function_name);
+        dlv_cmd = our_sprintf("%s -- -test.v -test.run %s", dlv_cmd, test_function_name);
 
     if (!dlv_proc.run(dlv_cmd)) return false;
+
+    {
+        stdout_mem.cleanup();
+        stdout_mem.init();
+        stdout_line_buffer.len = 0;
+
+        {
+            SCOPED_MEM(&stdout_mem);
+            stdout_lines.init();
+        }
+
+        auto callback = [](void *param) {
+            ((Debugger*)param)->pipe_stdout_into_our_buffer();
+        };
+
+        pipe_stdout_thread = create_thread(callback, this);
+        if (pipe_stdout_thread == NULL) return false;
+    }
 
     /*
     // read the first line
@@ -1047,12 +1073,48 @@ bool Debugger::start(Debug_Profile *debug_profile) {
     if (resp == NULL)
         return error("unable to set API version"), false;
 
+    world.wnd_debug_output.selection = -1;
+    world.wnd_debug_output.show = true;
+
     return true;
+}
+
+// This is meant to be called from a separate thread. All it does is
+// continuously stream all the data from dlv_proc stdout into our buffer.
+void Debugger::pipe_stdout_into_our_buffer() {
+    auto &p = dlv_proc;
+
+    while (true) {
+        if (!p.can_read()) continue;
+
+        char ch = 0;
+        if (!p.read1(&ch)) break;
+        if (ch == 0) break;
+
+        if (ch == '\n') {
+            stdout_line_buffer.append('\0');
+            {
+                SCOPED_MEM(&stdout_mem);
+                stdout_lines.append(our_strcpy(stdout_line_buffer.items));
+            }
+            stdout_line_buffer.len = 0;
+        } else {
+            stdout_line_buffer.append(ch);
+        }
+    }
 }
 
 void Debugger::stop() {
     if (conn != 0 && conn != -1)
         close_stub(conn);
+
+    if (pipe_stdout_thread != NULL) {
+        kill_thread(pipe_stdout_thread);
+        pipe_stdout_thread = NULL;
+    }
+
+    // stdout_mem.cleanup();
+
     dlv_proc.cleanup();
 }
 
@@ -1168,7 +1230,7 @@ void Debugger::do_everything() {
                     case GO_KIND_STRUCT:
                     case GO_KIND_INTERFACE:
                         eval_expression(
-                            our_sprintf("*(*%s)(0x%" PRIx64 ")", var->kind_name, var->address),
+                            our_sprintf("*(*\"%s\")(0x%" PRIx64 ")", var->type, var->address),
                             state.current_goroutine_id,
                             state.current_frame,
                             var,
@@ -1182,7 +1244,7 @@ void Debugger::do_everything() {
                         {
                             auto offset = var->kind == GO_KIND_STRING ? strlen(var->value) : var->children->len;
                             eval_expression(
-                                our_sprintf("(*(*%s)(0x%" PRIx64 "))[%d:]", var->kind_name, var->address, offset),
+                                our_sprintf("(*(*\"%s\")(0x%" PRIx64 "))[%d:]", var->type, var->address, offset),
                                 state.current_goroutine_id,
                                 state.current_frame,
                                 var,
@@ -1193,7 +1255,7 @@ void Debugger::do_everything() {
 
                     case GO_KIND_MAP:
                         eval_expression(
-                            our_sprintf("(*(*%s)(0x%" PRIx64 "))[%d:]", var->kind_name, var->address, var->children->len / 2),
+                            our_sprintf("(*(*\"%s\")(0x%" PRIx64 "))[%d:]", var->type, var->address, var->children->len / 2),
                             state.current_goroutine_id,
                             state.current_frame,
                             var,
@@ -1420,7 +1482,6 @@ void Debugger::do_everything() {
         start = current_time_in_nanoseconds();
     }
 
-    // TODO: there needs to be a SCOPED_FRAME here, or loop_mem will grow
     handle_new_state(&p);
 
     if (step_over_time != 0) {

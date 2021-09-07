@@ -156,7 +156,8 @@ struct Dlv_Var {
     ccstr name;
     int flags;
     Go_Reflect_Kind kind;
-    ccstr kind_name;
+    ccstr type;
+    ccstr real_type;
     int len;
     int cap;
     ccstr value; // do we need anything deeper than this?
@@ -268,6 +269,7 @@ struct Debugger {
     Pool state_mem;  // memory for holding state info; torn down & rebuilt every time state changes.
     Pool breakpoints_mem;
     Pool watches_mem;
+    Pool stdout_mem;
 
     Lock lock;
     List<Client_Breakpoint> breakpoints;
@@ -296,6 +298,12 @@ struct Debugger {
         i32 current_frame;
     } state;
     bool waiting_for_dlv_state;
+
+    // shit for piping stuff out of stdout
+    Thread_Handle pipe_stdout_thread;
+    List<ccstr> stdout_lines;
+    List<char> stdout_line_buffer;
+    bool stop_piping_stdout;
 
     // Debugger has no cleanup method, because it's meant to run for the
     // program's entire lifespan.
@@ -344,6 +352,8 @@ struct Debugger {
     void halt_when_already_running();
     void select_frame(u32 goroutine_id, u32 frame);
     void set_current_goroutine(u32 goroutine_id);
+
+    void pipe_stdout_into_our_buffer();
 };
 
 void debugger_loop_thread(void*);

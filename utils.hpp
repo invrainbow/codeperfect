@@ -15,6 +15,7 @@ ccstr our_sprintf(ccstr fmt, ...);
 ccstr our_strcat(ccstr a, ccstr b);
 
 bool strcpy_safe(cstr buf, s32 count, ccstr src);
+ccstr str_replace(ccstr s, ccstr find, ccstr replace);
 
 struct Text_Renderer {
     List<char> chars;

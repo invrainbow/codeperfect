@@ -906,6 +906,9 @@ Mark_Node *Mark_Tree::internal_delete_node(Mark_Node *root, cur2 pos) {
     else if (pos > root->pos)
         root->right = internal_delete_node(root->right, pos);
     else {
+        if (root->marks != NULL)
+            our_panic("trying to delete a node that still has marks");
+
         if (root->left == NULL || root->right == NULL) {
             Mark_Node *ret = NULL;
             bool isleft = false;
@@ -930,6 +933,8 @@ Mark_Node *Mark_Tree::internal_delete_node(Mark_Node *root, cur2 pos) {
         for (auto it = root->marks; it != NULL; it = it->next)
             it->node = root;
         root->pos = min->pos;
+        min->marks = NULL;
+
         root->right = internal_delete_node(root->right, min->pos);
     }
 
@@ -988,10 +993,13 @@ void Mark_Tree::apply_edit(cur2 start, cur2 old_end, cur2 new_end) {
         } else {
             Mark *next = NULL;
             for (auto mark = it->marks; mark != NULL; mark = next) {
+                mark->node = NULL;
                 next = mark->next;
+
                 mark->next = orphan_marks;
                 orphan_marks = mark;
             }
+            it->marks = NULL;
             delete_node(it->pos);
         }
     }
@@ -1007,7 +1015,9 @@ void Mark_Tree::apply_edit(cur2 start, cur2 old_end, cur2 new_end) {
 
     if (orphan_marks != NULL) {
         auto nend = insert_node(new_end);
-        for (auto mark = orphan_marks; mark != NULL; mark = mark->next) {
+        Mark *next = NULL;
+        for (auto mark = orphan_marks; mark != NULL; mark = next) {
+            next = mark->next;
             mark->node = nend;
             mark->next = nend->marks;
             nend->marks = mark;

@@ -46,8 +46,6 @@ enum Process_Status {
     PROCESS_DONE,
 };
 
-enum Pipe_Direction { PIPE_READ = 0, PIPE_WRITE = 1 };
-
 struct Process {
     // all these options are getting really hairy...
     ccstr cmd;
@@ -66,8 +64,18 @@ struct Process {
     DWORD pid;
     HANDLE proc;
 #elif OS_MAC
-    int stdin_pipe[2];
-    int stdout_pipe[2];
+    union {
+        struct {
+            int stdin_pipe[2];
+            int stdout_pipe[2];
+        };
+        struct {
+            int stdin_pipe_read;
+            int stdin_pipe_write;
+            int stdout_pipe_read;
+            int stdout_pipe_write;
+        };
+    };
     int pid;
     char peek_buffer;
     bool peek_buffer_full;
