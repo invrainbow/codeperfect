@@ -406,16 +406,6 @@ function App() {
                     Pricing
                   </Link>
                 </div>
-                <div className="mb-1">
-                  <a
-                    rel="noreferrer"
-                    target="_blank"
-                    href="https://www.notion.so/CodePerfect-95-FAQs-9f227faf607e47c19e33a44e82a6a8a9"
-                    className="text-gray-500 no-underline"
-                  >
-                    FAQ
-                  </a>
-                </div>
               </div>
               <div className="text-left sm:text-right">
                 <div className="mb-1">
