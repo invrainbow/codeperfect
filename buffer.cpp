@@ -891,6 +891,7 @@ void Mark_Tree::delete_mark(Mark *mark) {
     if (node->marks == NULL)
         delete_node(node->pos);
 
+    ptr0(mark); // surface the error earlier
     world.mark_fridge.free(mark);
 }
 

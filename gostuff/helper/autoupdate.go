@@ -8,12 +8,15 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/invrainbow/codeperfect/gostuff/models"
 	"github.com/invrainbow/codeperfect/gostuff/versions"
@@ -168,10 +171,71 @@ func AuthAndUpdate(out chan error) {
 	out <- ActuallyAuthAndUpdate()
 }
 
+type AuthUpdateError struct {
+	RequiresExit bool
+	Message      string
+}
+
+func (a AuthUpdateError) Error() string {
+	return a.Message
+}
+
+func NewAuthUpdateError(exit bool, format string, args ...interface{}) *AuthUpdateError {
+	return &AuthUpdateError{
+		RequiresExit: exit,
+		Message:      fmt.Sprintf(format, args...),
+	}
+}
+
+func NewUnknownError(err error) *AuthUpdateError {
+	return NewAuthUpdateError(
+		false,
+		"An unexpected error has occurred:\n\n%s\n\nThe program will continue to run, but please report this error to us if possible. Thanks!",
+		err.Error(),
+	)
+}
+
+const MessageInternetOffline = `
+It appears your internet is offline, or for some reason we're not able to connect to the server to authenticate your license key.
+
+The program will continue to run for a grace period of a week -- please just rerun CodePerfect at some point with an internet connection. Thanks!
+`
+
+const MessageTrialEnded = `
+Your trial has ended. Please contact support@codeperfect95.com to activate your subscription.
+
+The program will continue to run for a grace period of 3 days.
+`
+
+const MessageInvalidCreds = `
+We were unable to authenticate your credentials. Please contact support@codeperfect95.com if you believe this was in error.
+
+The program will continue to run for a grace period of 24 hours.
+`
+
+func handleGracePeriod(message string, days int) {
+	EnqueueMessage(message, false)
+
+	getLastSuccessfulAuthTime := func() time.Time {
+        return time.Now()
+
+        /*
+		configDir, err := os.UserConfigDir()
+		if err != nil {
+			// asldjflsajfl
+		}
+        */
+	}
+
+	if time.Since(getLastSuccessfulAuthTime()) > time.Hour*time.Duration(24*days) {
+		EnqueueMessage("The grace period has ended. Please contact support@codeperfect95.com to renew your subscription.", true)
+	}
+}
+
 func ActuallyAuthAndUpdate() error {
 	license := ReadLicense()
 	if license == nil {
-		return fmt.Errorf("Unable to read license. Please make sure your license file exists at ~/.cplicense. Sorry, we're working on a better UI.")
+		return NewAuthUpdateError(true, "Unable to read license. Please make sure your license file exists at ~/.cplicense. Sorry, we're working on a better UI.")
 	}
 
 	req := &models.AuthRequest{
@@ -179,31 +243,42 @@ func ActuallyAuthAndUpdate() error {
 		CurrentVersion: versions.CurrentVersion,
 	}
 
-	fmt.Printf("%v\n", req)
-
 	var resp models.AuthResponse
 	if err := CallServer("auth", license, req, &resp); err != nil {
-		// TODO: handle grace period
-		return err
+		switch e := err.(type) {
+		case net.Error, *net.OpError, syscall.Errno:
+			handleGracePeriod(MessageInternetOffline, 7)
+			return nil
+		case *ServerError:
+			switch e.Code {
+			case models.ErrorUserNoLongerActive:
+				handleGracePeriod(MessageTrialEnded, 3)
+				return nil
+			case models.ErrorEmailNotFound, models.ErrorInvalidLicenseKey:
+				handleGracePeriod(MessageInvalidCreds, 1)
+				return nil
+			}
+		}
+		return NewUnknownError(err)
 	}
 
 	if resp.NeedAutoupdate {
 		tmpfile, err := os.CreateTemp("", "update.zip")
 		if err != nil {
-			return err
+			return NewUnknownError(err)
 		}
 		defer os.Remove(tmpfile.Name())
 
 		if err := DownloadFile(resp.DownloadURL, tmpfile); err != nil {
-			return err
+			return NewUnknownError(err)
 		}
 
 		hash, err := GetFileSHAHash(tmpfile.Name())
 		if err != nil {
-			return err
+			return NewUnknownError(err)
 		}
 		if hash != resp.DownloadHash {
-			return fmt.Errorf("hash mismatch:\n - got: %s\n - expected: %s\n", hash, resp.DownloadHash)
+			return NewUnknownError(fmt.Errorf("hash mismatch:\n - got: %s\n - expected: %s\n", hash, resp.DownloadHash))
 		}
 
 		var exepath string
@@ -212,18 +287,18 @@ func ActuallyAuthAndUpdate() error {
 		} else {
 			path, err := os.Executable()
 			if err != nil {
-				return err
+				return NewUnknownError(err)
 			}
 			exepath = path
 		}
 
-        // TODO:
-        // destroy newbintmp if it exists
-        // unzip to newbintmp instead
-        // move newbintmp to newbin
+		// TODO:
+		// destroy newbintmp if it exists
+		// unzip to newbintmp instead
+		// move newbintmp to newbin
 
 		if err := Unzip(tmpfile.Name(), path.Join(path.Dir(path.Dir(exepath)), "newbin")); err != nil {
-			return err
+			return NewUnknownError(err)
 		}
 	}
 

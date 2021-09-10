@@ -2006,13 +2006,13 @@ void UI::draw_everything() {
         }
 
         if (ImGui::BeginMenu("Tools")) {
-            if (ImGui::MenuItem("Rescan Index")) {
+            if (ImGui::MenuItem("Rescan Index", NULL, false, world.indexer.ready)) {
                 world.indexer.message_queue.add([&](auto msg) {
                     msg->type = GOMSG_RESCAN_INDEX;
                 });
             }
 
-            if (ImGui::MenuItem("Obliterate and Recreate Index")) {
+            if (ImGui::MenuItem("Obliterate and Recreate Index", NULL, false, world.indexer.ready)) {
                 world.indexer.message_queue.add([&](auto msg) {
                     msg->type = GOMSG_OBLITERATE_AND_RECREATE_INDEX;
                 });
@@ -2142,7 +2142,7 @@ void UI::draw_everything() {
 
         ImGui::PushFont(world.ui.im_font_mono);
 
-        auto &lines = world.dbg.stdout_lines; 
+        auto &lines = world.dbg.stdout_lines;
         for (int i = 0; i < lines.len; i++) {
             auto &it = lines[i];
 
@@ -3309,7 +3309,7 @@ void UI::draw_everything() {
         auto editor = world.get_current_editor();
         if (editor != NULL) {
             For (editor->buf.mark_tree.edits) {
-                ImGui::Text("start = %s, oldend = %s, newend = %s", 
+                ImGui::Text("start = %s, oldend = %s, newend = %s",
                             format_cur(it.start),
                             format_cur(it.old_end),
                             format_cur(it.new_end));
@@ -3503,6 +3503,12 @@ void UI::draw_everything() {
             else if (is_hovered)
                 tab_color = COLOR_DARK_GREY;
 
+            /*
+            if (!is_selected) {
+                print("is_hovered: %d", is_hovered);
+            }
+            */
+
             draw_rounded_rect(tab, rgba(tab_color), 4, ROUND_TL | ROUND_TR);
             draw_string(tab.pos + tab_padding, label, rgba(is_selected ? COLOR_WHITE : COLOR_LIGHT_GREY));
 
@@ -3521,7 +3527,7 @@ void UI::draw_everything() {
         // if tabs are off screen, see if we can move them back
         if (pane.tabs_offset > 0) {
             auto margin = (pane.current_editor == pane.editors.len - 1) ? 5 : settings.tabs_offset;
-            auto space_avail = min(
+            auto space_avail = fmin(
                 relu_sub(tabs_area.x + tabs_area.w, (current_tab.x + current_tab.w + margin)),
                 pane.tabs_offset
             );
@@ -4128,8 +4134,8 @@ void UI::end_frame() {
                     + (settings.autocomplete_menu_padding * 2)
                 );
 
-                // menu.x = min(actual_cursor_position.x - strlen(ac.ac.prefix) * font->width, world.window_size.x - menu.w);
-                // menu.y = min(actual_cursor_position.y - font->offset_y + font->height, world.window_size.y - menu.h);
+                // menu.x = fmin(actual_cursor_position.x - strlen(ac.ac.prefix) * font->width, world.window_size.x - menu.w);
+                // menu.y = fmin(actual_cursor_position.y - font->offset_y + font->height, world.window_size.y - menu.h);
 
                 {
                     auto y1 = actual_cursor_position.y - font->offset_y - settings.autocomplete_menu_margin_y;
@@ -4470,8 +4476,8 @@ void UI::end_frame() {
             boxf bg;
             bg.w = font->width * strlen(help_text) + settings.parameter_hint_padding_x * 2;
             bg.h = font->height + settings.parameter_hint_padding_y * 2;
-            bg.x = min(actual_parameter_hint_start.x, world.window_size.x - bg.w);
-            bg.y = min(actual_parameter_hint_start.y - font->offset_y - bg.h - settings.parameter_hint_margin_y, world.window_size.y - bg.h);
+            bg.x = fmin(actual_parameter_hint_start.x, world.window_size.x - bg.w);
+            bg.y = fmin(actual_parameter_hint_start.y - font->offset_y - bg.h - settings.parameter_hint_margin_y, world.window_size.y - bg.h);
 
             draw_bordered_rect_outer(bg, rgba(color_darken(COLOR_JBLOW_BG, 0.1), 1.0), rgba(COLOR_JBLOW_WHITE, 0.8), 1, 4);
 

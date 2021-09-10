@@ -761,18 +761,18 @@ bool is_build_debug_free() {
     return true;
 }
 
-void goto_file_and_pos(ccstr file, cur2 pos) {
+void goto_file_and_pos(ccstr file, cur2 pos, Ensure_Cursor_Mode mode) {
     auto editor = world.focus_editor(file, pos);
     if (editor == NULL) return; // TODO
 
-    editor->ensure_cursor_on_screen_by_moving_view();
+    editor->ensure_cursor_on_screen_by_moving_view(mode);
 
     ImGui::SetWindowFocus(NULL);
 }
 
 void goto_jump_to_definition_result(Jump_To_Definition_Result *result) {
     world.history.save_latest();
-    goto_file_and_pos(result->file, result->pos);
+    goto_file_and_pos(result->file, result->pos, ECM_GOTO_DEF);
 }
 
 void handle_goto_definition() {

@@ -837,8 +837,11 @@ void Go_Indexer::background_thread() {
     // initialize index
     // ===
 
-    {
+    auto init_index = [&](bool force_reset_index) {
         bool reset_index = false;
+
+        if (force_reset_index)
+            reset_index = true;
 
         SCOPED_MEM(&final_mem);
         if (index.current_path != NULL && !streq(index.current_path, world.current_path))
@@ -853,7 +856,9 @@ void Go_Indexer::background_thread() {
 
         if (index.packages == NULL || reset_index)
             index.packages = alloc_list<Go_Package>();
-    }
+    };
+
+    init_index(false);
 
     // add existing packages to package lookup table
     // ===
@@ -970,7 +975,12 @@ void Go_Indexer::background_thread() {
                 break;
 
             case GOMSG_OBLITERATE_AND_RECREATE_INDEX:
-                // TODO
+                start_writing();
+                delete_file(path_join(world.current_path, ".cpdb"));
+                final_mem.reset();
+                init_index(true);
+                package_lookup.clear();
+                rescan_everything();
                 break;
 
             case GOMSG_CLEANUP_UNUSED_MEMORY:
@@ -2812,6 +2822,8 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                 res->import_path = it.import_path;
             }
 
+            t.log("iterate over packages");
+
             SCOPED_FRAME_WITH_MEM(&scoped_table_mem);
             Scoped_Table<Godecl*> table;
             {
@@ -2837,6 +2849,8 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                 return true;
             }, ctx.filename);
 
+            t.log("iterate over scope ops");
+
             auto entries = table.entries();
             For (*entries) {
                 auto r = add_declaration_result(it->name);
@@ -2850,6 +2864,8 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                         r->declaration_evaluated_gotype = res->gotype;
                 }
             }
+
+            t.log("iterate over table entries");
 
             // probably should write like a "get current gofile" function
             Go_File *gofile = NULL;
@@ -2867,10 +2883,14 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                     auto import_path = it.import_path;
 
                     auto results = list_package_decls(it.import_path, LISTDECLS_EXCLUDE_METHODS);
+
                     if (results != NULL) {
+                        int count = 0;
                         For (*results) {
                             if (it.decl->name == NULL) continue;
                             if (is_name_private(it.decl->name)) continue;
+
+                            if (count++ > 500) break;
 
                             auto result = add_declaration_result(our_sprintf("%s.%s", pkgname, it.decl->name));
                             if (result != NULL) {
@@ -2889,6 +2909,8 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                     }
                 }
             } while (0);
+
+            t.log("crazy shit");
 
             do {
                 if (lone_identifier_struct_literal == NULL) break;
@@ -2928,6 +2950,8 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                 }
             } while (0);
 
+            t.log("more crazy shit part 2");
+
             auto results = list_package_decls(ctx.import_path, LISTDECLS_EXCLUDE_METHODS);
             if (results != NULL) {
                 For (*results) {
@@ -2943,6 +2967,8 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                     }
                 }
             }
+
+            t.log("list package decls");
 
             ccstr keywords[] = {
                 "package", "import", "const", "var", "func",
@@ -2978,13 +3004,15 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                 }
             }
 
+            t.log("add keywords & builtins");
+
             if (ac_results->len == 0) return false;
             out->type = AUTOCOMPLETE_IDENTIFIER;
         }
         break;
     }
 
-    t.log("generate results");
+    t.log("done generating results");
 
     if (expr_to_analyze != NULL) {
         out->operand_start = expr_to_analyze->start();

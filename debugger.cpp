@@ -1165,6 +1165,14 @@ void Debugger::select_frame(u32 goroutine_id, u32 frame) {
 }
 
 void Debugger::do_everything() {
+    bool read_something = false;
+
+    defer {
+        if (!read_something) {
+            sleep_milliseconds(100);
+        }
+    };
+
     {
         SCOPED_LOCK(&calls_lock);
         For (calls) {
@@ -1466,6 +1474,8 @@ void Debugger::do_everything() {
 
     if (state_flag != DLV_STATE_RUNNING) return;
     if (!can_read()) return;
+
+    read_something = true;
 
     Packet p;
     if (!read_packet(&p)) {

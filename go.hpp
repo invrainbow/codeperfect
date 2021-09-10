@@ -1205,6 +1205,8 @@ struct Go_Indexer {
     Thread_Handle bgthread;
 
     Module_Resolver module_resolver;
+
+    // why am i even using a scoped_table here?
     Scoped_Table<Go_Package*> package_lookup;
 
     Message_Queue<Go_Message> message_queue;

@@ -14,15 +14,16 @@ import (
 
 var AdminPassword = os.Getenv("ADMIN_PASSWORD")
 
-func sendError(c *gin.Context, format string, args ...interface{}) {
+func sendError(c *gin.Context, code int, args ...interface{}) {
 	err := &models.ErrorResponse{
-		Error: fmt.Sprintf(format, args...),
+		Code:  code,
+		Error: models.ErrorMessages[code],
 	}
 	c.JSON(http.StatusBadRequest, err)
 }
 
 func sendServerError(c *gin.Context, format string, args ...interface{}) {
-	sendError(c, "Internal server error.")
+	sendError(c, models.ErrorInternal)
 	fmt.Printf("%s\n", fmt.Sprintf(format, args...))
 }
 
@@ -30,7 +31,7 @@ func authUser(c *gin.Context, email, licenseKey string) *models.User {
 	var user models.User
 	if res := db.First(&user, "email = ?", email); res.Error != nil {
 		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
-			sendError(c, "Email not found.")
+			sendError(c, models.ErrorEmailNotFound)
 		} else {
 			sendServerError(c, "error while grabbing user: %v", res.Error)
 		}
@@ -38,21 +39,16 @@ func authUser(c *gin.Context, email, licenseKey string) *models.User {
 	}
 
 	if !user.IsActive {
-		sendError(c, "User is no longer active.")
+		sendError(c, models.ErrorUserNoLongerActive)
 		return nil
 	}
 
 	if user.LicenseKey != licenseKey {
-		sendError(c, "Invalid license key.")
+		sendError(c, models.ErrorInvalidLicenseKey)
 		return nil
 	}
 
 	return &user
-}
-
-func blah(x *gin.Engine) {
-	y := x
-	fmt.Printf("%v\n", y)
 }
 
 func Run() {

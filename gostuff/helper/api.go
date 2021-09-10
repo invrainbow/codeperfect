@@ -18,6 +18,20 @@ func GetServerBase() string {
 	return "https://api.codeperfect95.com"
 }
 
+type ServerError struct {
+	Code    int
+	Message string
+}
+
+func (se *ServerError) Error() string {
+	return se.Message
+}
+
+func IsServerError(err error) bool {
+	_, ok := err.(*ServerError)
+	return ok
+}
+
 func CallServer(endpoint string, license *License, params interface{}, out interface{}) error {
 	buf, err := json.Marshal(params)
 	if err != nil {
@@ -47,7 +61,10 @@ func CallServer(endpoint string, license *License, params interface{}, out inter
 		if err := json.Unmarshal(body, &errResp); err != nil {
 			return err
 		}
-		return fmt.Errorf("%s", errResp.Error)
+		return &ServerError{
+			Code:    errResp.Code,
+			Message: errResp.Error,
+		}
 	}
 
 	if err := json.Unmarshal(body, out); err != nil {

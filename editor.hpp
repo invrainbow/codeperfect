@@ -54,6 +54,11 @@ struct Postfix_Info {
 
 struct Pane;
 
+enum Ensure_Cursor_Mode {
+    ECM_NONE,
+    ECM_GOTO_DEF,
+};
+
 struct Editor {
     u32 id;
     Pool mem;
@@ -174,7 +179,7 @@ struct Editor {
     bool is_current_editor();
     void backspace_in_insert_mode(int graphemes_to_erase, int codepoints_to_erase);
     void ensure_cursor_on_screen();
-    void ensure_cursor_on_screen_by_moving_view();
+    void ensure_cursor_on_screen_by_moving_view(Ensure_Cursor_Mode mode = ECM_NONE);
     void insert_text_in_insert_mode(ccstr s);
     ccstr get_autoindent(int for_y);
     void add_change_in_insert_mode(cur2 start, cur2 old_end, cur2 new_end);

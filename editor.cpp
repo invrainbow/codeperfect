@@ -815,11 +815,16 @@ void Editor::raw_move_cursor(cur2 c, bool dont_add_to_history) {
                 world.history.push(id, c);
 }
 
-void Editor::ensure_cursor_on_screen_by_moving_view() {
+void Editor::ensure_cursor_on_screen_by_moving_view(Ensure_Cursor_Mode mode) {
     if (cur.y + options.scrolloff >= view.y + view.h)
         view.y = relu_sub(cur.y + options.scrolloff + 1, view.h);
     if (cur.y - options.scrolloff < view.y)
         view.y = relu_sub(cur.y, options.scrolloff + 1);
+
+    if (mode == ECM_GOTO_DEF) {
+        if (cur.y > view.y + view.h * 2 / 5)
+            view.y += cur.y - (view.y + view.h * 2 / 5);
+    }
 
     // TODO: handle x
 }
