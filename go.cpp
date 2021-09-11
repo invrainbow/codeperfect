@@ -274,6 +274,11 @@ bool is_name_private(ccstr name) {
             if (isupper(name[7]))
                 return true;
 
+    if (strlen(name) >= 10)
+        if (str_starts_with(name, "Benchmark"))
+            if (isupper(name[9]))
+                return true;
+
     return false;
 }
 
@@ -5511,7 +5516,7 @@ ccstr godecl_type_str(Godecl_Type type) {
     return NULL;
 }
 
-GoUint8 (*GHStartBuild)(char* cmdstr);
+GoBool (*GHStartBuild)(char* cmdstr);
 void (*GHStopBuild)();
 void (*GHFreeBuildStatus)(void* p, GoInt lines);
 GH_Build_Error* (*GHGetBuildStatus)(GoInt* pstatus, GoInt* plines);
@@ -5520,14 +5525,15 @@ void (*GHFmtStart)();
 void (*GHFmtAddLine)(char* line);
 char* (*GHFmtFinish)(GoInt fmtType);
 void (*GHFree)(void* p);
-GoUint8 (*GHGitIgnoreInit)(char* repo);
-GoUint8 (*GHGitIgnoreCheckFile)(char* file);
+GoBool (*GHGitIgnoreInit)(char* repo);
+GoBool (*GHGitIgnoreCheckFile)(char* file);
 void (*GHAuthAndUpdate)();
-char* (*GHAuthAndUpdateReadStatus)();
-bool (*GHRenameFileOrDirectory)(char* oldpath, char* newpath);
+GoBool (*GHRenameFileOrDirectory)(char* oldpath, char* newpath);
 void (*GHEnableDebugMode)();
 GoInt (*GHGetVersion)();
 char* (*GHGetGoBinaryPath)();
+GoBool (*GHGetMessage)(void* p);
+void (*GHFreeMessage)(void* p);
 
 #if OS_WIN
 #   define dll_load_library(x) LoadLibraryW(L"gohelper.dll")
@@ -5565,11 +5571,12 @@ void load_gohelper() {
     load(GHGitIgnoreInit);
     load(GHGitIgnoreCheckFile);
     load(GHAuthAndUpdate);
-    load(GHAuthAndUpdateReadStatus);
     load(GHRenameFileOrDirectory);
     load(GHEnableDebugMode);
     load(GHGetVersion);
     load(GHGetGoBinaryPath);
+    load(GHGetMessage);
+    load(GHFreeMessage);
 #undef load
 
     gh_version = GHGetVersion();

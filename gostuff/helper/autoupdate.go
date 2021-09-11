@@ -14,6 +14,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -167,17 +168,9 @@ func Unzip(src string, dest string) error {
 	return nil
 }
 
-func AuthAndUpdate(out chan error) {
-	out <- ActuallyAuthAndUpdate()
-}
-
 type AuthUpdateError struct {
 	RequiresExit bool
 	Message      string
-}
-
-func (a AuthUpdateError) Error() string {
-	return a.Message
 }
 
 func NewAuthUpdateError(exit bool, format string, args ...interface{}) *AuthUpdateError {
@@ -185,14 +178,6 @@ func NewAuthUpdateError(exit bool, format string, args ...interface{}) *AuthUpda
 		RequiresExit: exit,
 		Message:      fmt.Sprintf(format, args...),
 	}
-}
-
-func NewUnknownError(err error) *AuthUpdateError {
-	return NewAuthUpdateError(
-		false,
-		"An unexpected error has occurred:\n\n%s\n\nThe program will continue to run, but please report this error to us if possible. Thanks!",
-		err.Error(),
-	)
 }
 
 const MessageInternetOffline = `
@@ -213,29 +198,93 @@ We were unable to authenticate your credentials. Please contact support@codeperf
 The program will continue to run for a grace period of 24 hours.
 `
 
+func pushPanic(msg string) {
+	globalMQ.Push(msg, "Authentication error", true)
+}
+
+func pushWarning(msg string) {
+	globalMQ.Push(msg, "Authentication", false)
+}
+
+func pushUnknownError(err error) {
+	if DebugModeFlag {
+		fmt.Printf("%v\n", err)
+	}
+	pushWarning("An unexpected error has occurred:\n\n%s\n\nThe program will continue to run, but please report this error to us if possible. Thanks!")
+}
+
+// tolsa = "time of last successful auth"
+func getTolsaPath() (string, error) {
+    configdir, err := os.UserConfigDir()
+    if err != nil {
+        return "", err
+    }
+
+    appdir := path.Join(configdir, "CodePerfect")
+    if err := os.MkdirAll(appdir, os.ModePerm); err != nil {
+        return "", err
+    }
+
+    return path.Join(appdir, ".tolsa"), nil
+}
+
+// don't return error, we don't care
+func writeTime(filepath string, t time.Time) {
+    timestr := strconv.FormatInt(t.Unix(), 10)
+    os.WriteFile(filepath, []byte(timestr), os.ModePerm)
+}
+
 func handleGracePeriod(message string, days int) {
-	EnqueueMessage(message, false)
+	pushWarning(message)
 
-	getLastSuccessfulAuthTime := func() time.Time {
-        return time.Now()
+	getLastSuccessfulAuthTime := func() (time.Time, error) {
+		zero := time.Time{}
 
-        /*
-		configDir, err := os.UserConfigDir()
+		timepath, err := getTolsaPath()
+        if err != nil {
+            return zero, err
+        }
+
+		content, err := os.ReadFile(timepath)
 		if err != nil {
-			// asldjflsajfl
+			if os.IsNotExist(err) {
+                now := time.Now()
+                writeTime(timepath, now)
+                return now, nil
+			}
+			return zero, err
 		}
-        */
+
+		n, err := strconv.ParseInt(string(content), 10, 64)
+		if err != nil {
+			return zero, err
+		}
+
+		return time.Unix(n, 0), nil
 	}
 
-	if time.Since(getLastSuccessfulAuthTime()) > time.Hour*time.Duration(24*days) {
-		EnqueueMessage("The grace period has ended. Please contact support@codeperfect95.com to renew your subscription.", true)
+	isGracePeriodStillGood := func() bool {
+		lastTime, err := getLastSuccessfulAuthTime()
+		if err != nil {
+			// surface err?
+			return false
+		}
+		if time.Since(lastTime) > time.Hour*time.Duration(24*days) {
+			return false
+		}
+		return true
+	}
+
+	if !isGracePeriodStillGood() {
+		pushPanic("The grace period has ended. Please contact support@codeperfect95.com to renew your subscription.")
 	}
 }
 
-func ActuallyAuthAndUpdate() error {
+func AuthAndUpdate() {
 	license := ReadLicense()
 	if license == nil {
-		return NewAuthUpdateError(true, "Unable to read license. Please make sure your license file exists at ~/.cplicense. Sorry, we're working on a better UI.")
+		pushPanic("Unable to read license. Please place your license file at ~/.cplicense.")
+		return
 	}
 
 	req := &models.AuthRequest{
@@ -248,37 +297,49 @@ func ActuallyAuthAndUpdate() error {
 		switch e := err.(type) {
 		case net.Error, *net.OpError, syscall.Errno:
 			handleGracePeriod(MessageInternetOffline, 7)
-			return nil
+			return
 		case *ServerError:
 			switch e.Code {
 			case models.ErrorUserNoLongerActive:
 				handleGracePeriod(MessageTrialEnded, 3)
-				return nil
+				return
 			case models.ErrorEmailNotFound, models.ErrorInvalidLicenseKey:
 				handleGracePeriod(MessageInvalidCreds, 1)
-				return nil
+				return
 			}
 		}
-		return NewUnknownError(err)
+		pushUnknownError(err)
+		return
 	}
+
+    // after a successful auth call, update tolsa
+    timepath, err := getTolsaPath()
+    if err != nil {
+        pushUnknownError(err)
+    }
+    writeTime(timepath, time.Now())
 
 	if resp.NeedAutoupdate {
 		tmpfile, err := os.CreateTemp("", "update.zip")
 		if err != nil {
-			return NewUnknownError(err)
+			pushUnknownError(err)
+			return
 		}
 		defer os.Remove(tmpfile.Name())
 
 		if err := DownloadFile(resp.DownloadURL, tmpfile); err != nil {
-			return NewUnknownError(err)
+			pushUnknownError(err)
+			return
 		}
 
 		hash, err := GetFileSHAHash(tmpfile.Name())
 		if err != nil {
-			return NewUnknownError(err)
+			pushUnknownError(err)
+			return
 		}
 		if hash != resp.DownloadHash {
-			return NewUnknownError(fmt.Errorf("hash mismatch:\n - got: %s\n - expected: %s\n", hash, resp.DownloadHash))
+			pushUnknownError(fmt.Errorf("hash mismatch:\n - got: %s\n - expected: %s\n", hash, resp.DownloadHash))
+			return
 		}
 
 		var exepath string
@@ -287,7 +348,8 @@ func ActuallyAuthAndUpdate() error {
 		} else {
 			path, err := os.Executable()
 			if err != nil {
-				return NewUnknownError(err)
+				pushUnknownError(err)
+				return
 			}
 			exepath = path
 		}
@@ -298,11 +360,12 @@ func ActuallyAuthAndUpdate() error {
 		// move newbintmp to newbin
 
 		if err := Unzip(tmpfile.Name(), path.Join(path.Dir(path.Dir(exepath)), "newbin")); err != nil {
-			return NewUnknownError(err)
+			pushUnknownError(err)
+			return
 		}
 	}
 
-	return nil
+	return
 }
 
 /*

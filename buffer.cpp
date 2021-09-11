@@ -711,6 +711,7 @@ cur2 Buffer::offset_to_cur(i32 off) {
 }
 
 // ============
+// mark_tree_marker
 
 void cleanup_mark_node(Mark_Node *node) {
     if (node == NULL) return;
@@ -766,9 +767,16 @@ Mark_Node *Mark_Tree::find_node(Mark_Node *root, cur2 pos) {
 }
 
 Mark_Node *Mark_Tree::insert_node(cur2 pos) {
-    auto node = world.mark_node_fridge.alloc();
+    auto node = find_node(root, pos);
+    if (node != NULL && node->pos == pos)
+        return node;
+
+    node = world.mark_node_fridge.alloc();
     node->pos = pos;
     root = internal_insert_node(root, pos, node);
+
+    check_ordering();
+
     return node;
 }
 
@@ -776,10 +784,7 @@ Mark *Mark_Tree::insert_mark(Mark_Type type, cur2 pos) {
     auto mark = world.mark_fridge.alloc();
     mark->type = type;
 
-    auto node = find_node(root, pos);
-    if (node == NULL || node->pos != pos)
-        node = insert_node(pos);
-
+    auto node = insert_node(pos);
     mark->node = node;
     mark->tree = this;
     mark->next = node->marks;
@@ -840,6 +845,8 @@ Mark_Node *Mark_Tree::internal_insert_node(Mark_Node *root, cur2 pos, Mark_Node 
         return node;
     }
 
+    if (root->pos == pos) our_panic("trying to insert duplicate pos");
+
     if (pos < root->pos) {
         auto old = root->left;
         root->left = internal_insert_node(root->left, pos, node);
@@ -897,6 +904,7 @@ void Mark_Tree::delete_mark(Mark *mark) {
 
 void Mark_Tree::delete_node(cur2 pos) {
     root = internal_delete_node(root, pos);
+    check_ordering();
 }
 
 Mark_Node *Mark_Tree::internal_delete_node(Mark_Node *root, cur2 pos) {
@@ -987,6 +995,8 @@ void Mark_Tree::apply_edit(cur2 start, cur2 old_end, cur2 new_end) {
 
     Mark *orphan_marks = NULL;
 
+    check_ordering();
+
     for (; it != NULL && it->pos < old_end; it = succ(it)) {
         if (it->pos < new_end) {
             for (auto mark = it->marks; mark != NULL; mark = mark->next)
@@ -1005,6 +1015,8 @@ void Mark_Tree::apply_edit(cur2 start, cur2 old_end, cur2 new_end) {
         }
     }
 
+    check_ordering();
+
     for (; it != NULL; it = succ(it)) {
         if (it->pos.y == old_end.y) {
             it->pos.y = new_end.y;
@@ -1013,6 +1025,8 @@ void Mark_Tree::apply_edit(cur2 start, cur2 old_end, cur2 new_end) {
             it->pos.y = it->pos.y + new_end.y - old_end.y;
         }
     }
+
+    check_ordering();
 
     if (orphan_marks != NULL) {
         auto nend = insert_node(new_end);
@@ -1024,7 +1038,29 @@ void Mark_Tree::apply_edit(cur2 start, cur2 old_end, cur2 new_end) {
             nend->marks = mark;
         }
     }
+
+    check_ordering();
+}
+
+void Mark_Tree::check_ordering() {
+    auto min = root;
+    while (min->left != NULL)
+        min = min->left;
+
+    // o(n). we need this for now, don't have this in final ver.
+    cur2 last = {-1, -1};
+    for (auto it = min; it != NULL; it = succ(it)) {
+        if (last.x != -1) {
+            if (last >= it->pos) {
+                our_panic("out of order (or duplicate)");
+            }
+        }
+        last = it->pos;
+    }
 }
 
 cur2 Mark::pos() { return node->pos; }
 void Mark::cleanup() { tree->delete_mark(this); }
+
+// ============
+// mark_tree_marker

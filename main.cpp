@@ -1172,21 +1172,13 @@ int main() {
     // world.focus_editor(path_join(world.indexer.gomodcache, "github.com/davecgh/go-spew@v1.1.1/spew/dump.go"));
 
     while (!glfwWindowShouldClose(world.window)) {
-        auto now = current_time_in_nanoseconds() / 1000000;
-        if (now - world.auth_update_last_check > 3000) { // 3 seconds
-            auto status = GHAuthAndUpdateReadStatus();
-            if (status != NULL) {
-                if (status[0] != '\0') {
-#ifdef DEBUG_MODE
-                    print("error during auth and update: %s", status);
-#else
-                    our_panic(status);
-#endif
-                }
-                world.auth_update_done = true;
-                GHFree(status);
+        {
+            GH_Message msg; ptr0(&msg);
+            if (GHGetMessage(&msg)) {
+                tell_user(msg.text, msg.title);
+                if (msg.is_panic)
+                    return EXIT_FAILURE;
             }
-            world.auth_update_last_check = now;
         }
 
         auto frame_start_time = current_time_in_nanoseconds();

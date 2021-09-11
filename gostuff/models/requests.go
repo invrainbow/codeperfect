@@ -5,6 +5,9 @@ const (
 	ErrorEmailNotFound
 	ErrorUserNoLongerActive
 	ErrorInvalidLicenseKey
+	ErrorInvalidData
+	ErrorInvalidOS
+	ErrorInvalidVersion
 )
 
 var ErrorMessages = map[int]string{
@@ -12,6 +15,9 @@ var ErrorMessages = map[int]string{
 	ErrorEmailNotFound:      "Email not found.",
 	ErrorUserNoLongerActive: "User is no longer active.",
 	ErrorInvalidLicenseKey:  "Invalid license key.",
+	ErrorInvalidData:        "Invalid data.",
+	ErrorInvalidOS:          "Invalid OS.",
+	ErrorInvalidVersion:     "Invalid version.",
 }
 
 type ErrorResponse struct {

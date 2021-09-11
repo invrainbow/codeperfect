@@ -53,12 +53,11 @@ func authUser(c *gin.Context, email, licenseKey string) *models.User {
 
 func Run() {
 	r := gin.Default()
-	blah(r)
 
 	r.POST("/auth", func(c *gin.Context) {
 		var req models.AuthRequest
 		if c.ShouldBindJSON(&req) != nil {
-			sendError(c, "Invalid data.")
+			sendError(c, models.ErrorInvalidData)
 			return
 		}
 
@@ -68,11 +67,11 @@ func Run() {
 		}
 
 		if !versions.ValidOSes[req.OS] {
-			sendError(c, "Invalid OS.")
+			sendError(c, models.ErrorInvalidOS)
 			return
 		}
 		if req.CurrentVersion > versions.CurrentVersion {
-			sendError(c, "Invalid version.")
+			sendError(c, models.ErrorInvalidVersion)
 			return
 		}
 

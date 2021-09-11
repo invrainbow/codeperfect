@@ -1374,6 +1374,12 @@ typedef struct _GH_Build_Error {
     int32_t is_vcol;
 } GH_Build_Error;
 
+typedef struct _GH_Message {
+	char* text;
+	char* title;
+	int32_t is_panic;
+} GH_Message;
+
 typedef signed char GoInt8;
 typedef unsigned char GoUint8;
 typedef short GoInt16;
@@ -1387,8 +1393,9 @@ typedef GoUint64 GoUint;
 typedef size_t GoUintptr;
 typedef float GoFloat32;
 typedef double GoFloat64;
+typedef GoUint8 GoBool;
 
-extern GoUint8 (*GHStartBuild)(char* cmdstr);
+extern GoBool (*GHStartBuild)(char* cmdstr);
 extern void (*GHStopBuild)();
 extern void (*GHFreeBuildStatus)(void* p, GoInt lines);
 extern GH_Build_Error* (*GHGetBuildStatus)(GoInt* pstatus, GoInt* plines);
@@ -1397,14 +1404,15 @@ extern void (*GHFmtStart)();
 extern void (*GHFmtAddLine)(char* line);
 extern char* (*GHFmtFinish)(GoInt fmtType);
 extern void (*GHFree)(void* p);
-extern GoUint8 (*GHGitIgnoreInit)(char* repo);
-extern GoUint8 (*GHGitIgnoreCheckFile)(char* file);
+extern GoBool (*GHGitIgnoreInit)(char* repo);
+extern GoBool (*GHGitIgnoreCheckFile)(char* file);
 extern void (*GHAuthAndUpdate)();
-extern char* (*GHAuthAndUpdateReadStatus)();
-extern bool (*GHRenameFileOrDirectory)(char* oldpath, char* newpath);
+extern GoBool (*GHRenameFileOrDirectory)(char* oldpath, char* newpath);
 extern void (*GHEnableDebugMode)();
 extern GoInt (*GHGetVersion)();
 extern char* (*GHGetGoBinaryPath)();
+extern GoBool (*GHGetMessage)(void* p);
+extern void (*GHFreeMessage)(void* p);
 
 void load_gohelper();
 

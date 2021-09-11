@@ -27,6 +27,12 @@ typedef struct _GH_Build_Error {
     int32_t col;
     int32_t is_vcol;
 } GH_Build_Error;
+
+typedef struct _GH_Message {
+	char* text;
+	char* title;
+	int32_t is_panic;
+} GH_Message;
 */
 import "C"
 
@@ -49,10 +55,13 @@ func stopBuild() {
 	if currentBuild == nil {
 		return
 	}
-	if currentBuild.cmd.Process != nil {
-		currentBuild.cmd.Process.Kill()
-	}
+
+	proc := currentBuild.cmd.Process
 	currentBuild = nil
+
+	if proc != nil {
+		proc.Kill()
+	}
 }
 
 var LastError error
@@ -236,34 +245,9 @@ func GHFmtFinish(fmtType int) *C.char {
 	return C.CString(string(newSource))
 }
 
-var authAndUpdateChan = make(chan error)
-
 //export GHAuthAndUpdate
 func GHAuthAndUpdate() {
-	go AuthAndUpdate(authAndUpdateChan)
-}
-
-func readAuthAndUpdate() (error, bool) {
-	select {
-	case err := <-authAndUpdateChan:
-		return err, true
-	default:
-		return nil, false
-	}
-}
-
-//export GHAuthAndUpdateReadStatus
-func GHAuthAndUpdateReadStatus() *C.char {
-	err, got := readAuthAndUpdate()
-	if !got {
-		return nil
-	}
-
-	// caller needs to GHFree
-	if err == nil {
-		return C.CString("")
-	}
-	return C.CString(err.Error())
+	go AuthAndUpdate()
 }
 
 type GitignoreChecker struct {
@@ -311,4 +295,24 @@ func GHGetVersion() int {
 //export GHGetGoBinaryPath
 func GHGetGoBinaryPath() *C.char {
 	return C.CString(config.GoBinaryPath)
+}
+
+//export GHGetMessage
+func GHGetMessage(p unsafe.Pointer) bool {
+	msg := globalMQ.Pop()
+	if msg == nil {
+		return false
+	}
+
+	out := (*C.GH_Message)(p)
+	out.text = C.CString(msg.Text)
+	out.title = C.CString(msg.Title)
+	out.is_panic = C.int32_t(BoolToInt(msg.IsPanic))
+	return true
+}
+
+//export GHFreeMessage
+func GHFreeMessage(p unsafe.Pointer) {
+	out := (*C.GH_Message)(p)
+	C.free(unsafe.Pointer(out.text))
 }

@@ -138,6 +138,8 @@ struct Mark_Tree {
     Mark_Node *internal_insert_node(Mark_Node *root, cur2 pos, Mark_Node *node);
     Mark_Node *internal_delete_node(Mark_Node *root, cur2 pos);
     void apply_edit(cur2 start, cur2 old_end, cur2 new_end);
+
+    void check_ordering();
 };
 
 struct Buffer {
