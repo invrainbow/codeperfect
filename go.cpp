@@ -773,6 +773,27 @@ void Go_Indexer::background_thread() {
         return true;
     };
 
+    auto is_go_package = [&](ccstr path) -> bool {
+        bool ret = false;
+        list_directory(path, [&](auto it) {
+            if (it->type == DIRENT_FILE)
+                if (str_ends_with(it->name, ".go"))
+                    if (is_file_included_in_build(path_join(path, it->name))) {
+                        ret = true;
+                        return false;
+                    }
+            return true;
+        });
+        return ret;
+    };
+
+    auto remove_package = [&](Go_Package *pkg) {
+        SCOPED_WRITE();
+        pkg->cleanup_files();
+        index.packages->remove(pkg);
+        package_lookup.remove(pkg->import_path);
+    };
+
     auto handle_fsevent = [&](ccstr filepath) {
         filepath = path_join(index.current_path, filepath);
 
@@ -782,19 +803,19 @@ void Go_Indexer::background_thread() {
         switch (res) {
         case CPR_DIRECTORY:
             start_writing();
-            mark_package_for_reprocessing(import_path);
+            if (is_go_package(filepath))
+                mark_package_for_reprocessing(import_path);
             break;
         case CPR_FILE:
             start_writing();
-            mark_package_for_reprocessing(our_dirname(import_path));
+            if (is_go_package(our_dirname(filepath)))
+                mark_package_for_reprocessing(our_dirname(import_path));
             break;
         case CPR_NONEXISTENT:
             {
                 auto pkg = find_package_in_index(import_path);
                 if (pkg != NULL) {
-                    SCOPED_WRITE();
-                    pkg->cleanup_files();
-                    index.packages->remove(pkg);
+                    remove_package(pkg);
                     break;
                 }
 
@@ -1124,7 +1145,16 @@ void Go_Indexer::background_thread() {
                 // if hash has changed, mark outdated & queue for re-processing
                 auto package_path = get_package_path(it.import_path);
                 if (package_path == NULL) continue;
-                if (it.hash == hash_package(package_path)) continue;
+
+                auto hash = hash_package(package_path);
+
+                // path no longer exists, so remove it
+                if (hash == 0) {
+                    remove_package(&it);
+                    continue;
+                }
+
+                if (it.hash == hash) continue;
 
                 mark_package_for_reprocessing(it.import_path);
             }

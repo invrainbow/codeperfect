@@ -937,6 +937,7 @@ struct Go_Package {
     bool checked_for_outdated_hash;
 
     void cleanup_files() {
+        if (files == NULL) return;
         For (*files) it.cleanup();
         files->len = 0;
     }
