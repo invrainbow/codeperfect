@@ -242,6 +242,9 @@ struct World {
     } wnd_index_log;
 
     struct : Wnd {
+    } wnd_mouse_pos;
+
+    struct : Wnd {
         int selection;
     } wnd_debug_output;
 
@@ -284,8 +287,8 @@ struct World {
 
         GLint program;
         GLint im_program;
-        cur2 mouse_pos;
-        cur2f mouse_delta;
+        vec2f mouse_pos;
+        // vec2f mouse_delta;
         ImFont *im_font_mono;
         ImFont *im_font_ui;
         double scroll_buffer;

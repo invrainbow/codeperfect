@@ -215,23 +215,23 @@ func pushUnknownError(err error) {
 
 // tolsa = "time of last successful auth"
 func getTolsaPath() (string, error) {
-    configdir, err := os.UserConfigDir()
-    if err != nil {
-        return "", err
-    }
+	configdir, err := os.UserConfigDir()
+	if err != nil {
+		return "", err
+	}
 
-    appdir := path.Join(configdir, "CodePerfect")
-    if err := os.MkdirAll(appdir, os.ModePerm); err != nil {
-        return "", err
-    }
+	appdir := path.Join(configdir, "CodePerfect")
+	if err := os.MkdirAll(appdir, os.ModePerm); err != nil {
+		return "", err
+	}
 
-    return path.Join(appdir, ".tolsa"), nil
+	return path.Join(appdir, ".tolsa"), nil
 }
 
 // don't return error, we don't care
 func writeTime(filepath string, t time.Time) {
-    timestr := strconv.FormatInt(t.Unix(), 10)
-    os.WriteFile(filepath, []byte(timestr), os.ModePerm)
+	timestr := strconv.FormatInt(t.Unix(), 10)
+	os.WriteFile(filepath, []byte(timestr), os.ModePerm)
 }
 
 func handleGracePeriod(message string, days int) {
@@ -241,16 +241,16 @@ func handleGracePeriod(message string, days int) {
 		zero := time.Time{}
 
 		timepath, err := getTolsaPath()
-        if err != nil {
-            return zero, err
-        }
+		if err != nil {
+			return zero, err
+		}
 
 		content, err := os.ReadFile(timepath)
 		if err != nil {
 			if os.IsNotExist(err) {
-                now := time.Now()
-                writeTime(timepath, now)
-                return now, nil
+				now := time.Now()
+				writeTime(timepath, now)
+				return now, nil
 			}
 			return zero, err
 		}
@@ -312,12 +312,12 @@ func AuthAndUpdate() {
 		return
 	}
 
-    // after a successful auth call, update tolsa
-    timepath, err := getTolsaPath()
-    if err != nil {
-        pushUnknownError(err)
-    }
-    writeTime(timepath, time.Now())
+	// after a successful auth call, update tolsa
+	timepath, err := getTolsaPath()
+	if err != nil {
+		pushUnknownError(err)
+	}
+	writeTime(timepath, time.Now())
 
 	if resp.NeedAutoupdate {
 		tmpfile, err := os.CreateTemp("", "update.zip")

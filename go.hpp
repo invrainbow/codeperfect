@@ -1226,6 +1226,8 @@ struct Go_Indexer {
     Jump_To_Definition_Result* jump_to_definition(ccstr filepath, cur2 pos);
     bool autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period, Autocomplete *out);
     Parameter_Hint *parameter_hint(ccstr filepath, cur2 pos);
+    List<ccstr> *list_missing_imports(ccstr filepath);
+    ccstr find_best_import(ccstr package_name, List<ccstr> *identifiers);
 
     void run_background_thread2();
     ccstr filepath_to_import_path(ccstr filepath);
@@ -1275,6 +1277,7 @@ struct Go_Indexer {
     );
     void iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> cb, ccstr filename);
     void reload_all_dirty_files();
+    void reload_editor_if_dirty(void *editor);
     Go_Package_Status get_package_status(ccstr import_path);
     void replace_package_name(Go_Package *pkg, ccstr package_name);
     u64 hash_file(ccstr filepath);
@@ -1402,7 +1405,7 @@ extern GH_Build_Error* (*GHGetBuildStatus)(GoInt* pstatus, GoInt* plines);
 extern char* (*GHGetGoEnv)(char* name);
 extern void (*GHFmtStart)();
 extern void (*GHFmtAddLine)(char* line);
-extern char* (*GHFmtFinish)(GoInt fmtType);
+extern char* (*GHFmtFinish)(GoBool sortImports);
 extern void (*GHFree)(void* p);
 extern GoBool (*GHGitIgnoreInit)(char* repo);
 extern GoBool (*GHGitIgnoreCheckFile)(char* file);

@@ -398,43 +398,52 @@ either:
         - honestly, wouldn't this slow things down?
 */
 
+
+void Go_Indexer::reload_editor_if_dirty(void *editor) {
+    auto it = (Editor*)editor;
+
+    Timer t;
+    t.init(our_sprintf("reload %s", our_basename(it->filepath)));
+
+    if (!it->buf.tree_dirty) return;
+    it->buf.tree_dirty = false;
+
+    SCOPED_FRAME();
+
+    auto filename = our_basename(it->filepath);
+
+    auto import_path = filepath_to_import_path(our_dirname(it->filepath));
+    auto pkg = find_package_in_index(import_path);
+    if (pkg == NULL) return;
+
+    t.log("get package");
+
+    auto file = get_ready_file_in_package(pkg, filename);
+
+    t.log("get file");
+
+    auto iter = alloc_object(Parser_It);
+    iter->init(&it->buf);
+    auto root_node = new_ast_node(ts_tree_root_node(it->buf.tree), iter);
+
+    ccstr package_name = NULL;
+    process_tree_into_gofile(file, root_node, it->filepath, &package_name);
+    replace_package_name(pkg, package_name);
+
+    t.log("process tree");
+}
+
+
 // @Write
 // Should only be called from main thread.
 void Go_Indexer::reload_all_dirty_files() {
     For (world.panes) {
         For (it.editors) {
-            Timer t;
-            t.init(our_sprintf("reload %s", our_basename(it.filepath)));
-
-            if (!it.buf.tree_dirty) continue;
-            it.buf.tree_dirty = false;
-
-            SCOPED_FRAME();
-
-            auto filename = our_basename(it.filepath);
-
-            auto import_path = filepath_to_import_path(our_dirname(it.filepath));
-            auto pkg = find_package_in_index(import_path);
-            if (pkg == NULL) continue;
-
-            t.log("get package");
-
-            auto file = get_ready_file_in_package(pkg, filename);
-
-            t.log("get file");
-
-            auto iter = alloc_object(Parser_It);
-            iter->init(&it.buf);
-            auto root_node = new_ast_node(ts_tree_root_node(it.buf.tree), iter);
-
-            ccstr package_name = NULL;
-            process_tree_into_gofile(file, root_node, it.filepath, &package_name);
-            replace_package_name(pkg, package_name);
-
-            t.log("process tree");
+            reload_editor_if_dirty(&it);
         }
     }
 }
+
 
 /*
 The procedure is:
@@ -1795,6 +1804,7 @@ ccstr Go_Indexer::get_package_path(ccstr import_path) {
 
     auto path = path_join(goroot, import_path);
     if (check_path(path) != CPR_DIRECTORY) return NULL;
+
     bool is_package = false;
 
     list_directory(path, [&](Dir_Entry *ent) -> bool {
@@ -1805,6 +1815,7 @@ ccstr Go_Indexer::get_package_path(ccstr import_path) {
             }
         return true;
     });
+
     return is_package ? path : NULL;
 }
 
@@ -2122,6 +2133,214 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_symbol(ccstr symbol) {
     }
 
     return NULL;
+}
+
+List<ccstr> *Go_Indexer::list_missing_imports(ccstr filepath) {
+    Timer t; t.init("list_missing_imports");
+
+    auto editor = world.find_editor_by_filepath(filepath);
+    if (editor != NULL)
+        reload_editor_if_dirty(editor);
+
+    t.log("reload");
+
+    auto pf = parse_file(filepath, true);
+    if (pf == NULL) return NULL;
+    defer { free_parsed_file(pf); };
+
+    t.log("parse_file");
+
+    Go_Ctx ctx; ptr0(&ctx);
+    ctx.import_path = filepath_to_import_path(our_dirname(filepath));
+    ctx.filename = our_basename(filepath);
+
+    String_Set package_refs; package_refs.init();
+    String_Set full_refs; full_refs.init();
+
+    struct Ref {
+        Ast_Node *node;
+        ccstr package;
+        ccstr sel;
+    };
+
+    List<Ref> refs; refs.init();
+
+    walk_ast_node(pf->root, true, [&](auto it, auto, auto) {
+        Ast_Node *x = NULL, *sel = NULL;
+
+        switch (it->type()) {
+        case TS_QUALIFIED_TYPE:
+            x = it->field(TSF_PACKAGE);
+            sel = it->field(TSF_NAME); // TODO: this is wrong, look at astviewer
+            break;
+
+        case TS_SELECTOR_EXPRESSION:
+            x = it->field(TSF_OPERAND);
+            sel = it->field(TSF_FIELD);
+
+            switch (x->type()) {
+            case TS_IDENTIFIER:
+            case TS_FIELD_IDENTIFIER:
+            case TS_PACKAGE_IDENTIFIER:
+            case TS_TYPE_IDENTIFIER:
+                break;
+            default:
+                return WALK_CONTINUE;
+            }
+            break;
+
+        default:
+            return WALK_CONTINUE;
+        }
+
+        if (x->null || sel->null) return WALK_CONTINUE;
+
+        auto node = alloc_object(Ast_Node);
+        memcpy(node, x, sizeof(Ast_Node));
+
+        auto r = refs.append();
+        r->node = node;
+        r->package = x->string();
+        r->sel = sel->string();
+    });
+
+    t.log("list all references");
+
+    auto has_decl = [&](Ast_Node *expr) {
+        auto res = find_decl_of_id(expr->string(), expr->start(), &ctx);
+        return res != NULL && res->decl->type != GODECL_IMPORT;
+    };
+
+    struct Ref_Package {
+        ccstr name;
+        List<ccstr> sels;
+    };
+
+    auto pkgs = alloc_list<Ref_Package>();
+
+    For (refs) {
+        auto &ref = it;
+        if (has_decl(ref.node)) continue;
+
+        auto pkg = pkgs->find([&](auto it) { return streq(it->name, ref.package); });
+        if (pkg == NULL) {
+            pkg = pkgs->append();
+            pkg->name = ref.package;
+            pkg->sels.init();
+        }
+
+        if (pkg->sels.find([&](auto it) { return streq(*it , ref.sel); }) == NULL)
+            pkg->sels.append(ref.sel);
+    }
+
+    t.log("sort into packages");
+
+    auto gopkg = find_up_to_date_package(ctx.import_path);
+    if (gopkg == NULL) return NULL;
+
+    auto check = [&](Go_File *it) { return streq(it->filename, ctx.filename); };
+    auto gofile = gopkg->files->find(check);
+    if (gofile == NULL) return NULL;
+
+    String_Set existing_package_names; existing_package_names.init();
+
+    if (gofile->imports != NULL) {
+        For (*gofile->imports) {
+            auto package_name = get_import_package_name(&it);
+            if (package_name != NULL)
+                existing_package_names.add(package_name);
+        }
+    }
+
+    t.log("get existing imports");
+
+    auto ret = alloc_list<ccstr>();
+    For (*pkgs) {
+        if (existing_package_names.has(it.name)) continue;
+
+        print("unaccounted package: %s", it.name);
+
+        auto import_path = find_best_import(it.name, &it.sels);
+        if (import_path != NULL)
+            ret->append(import_path);
+    }
+
+    t.log("list unaccounted-for imports");
+
+    t.total();
+
+    return ret;
+}
+
+ccstr Go_Indexer::find_best_import(ccstr package_name, List<ccstr> *identifiers) {
+    List<Go_Package*> candidates; candidates.init();
+    List<int> indexes; indexes.init();
+
+    For (*index.packages) {
+        if (it.package_name != NULL && streq(it.package_name, package_name)) {
+            candidates.append(&it);
+            indexes.append(indexes.len);
+        }
+    }
+
+    if (candidates.len == 0) return NULL;
+
+    String_Set all_identifiers; all_identifiers.init();
+    For (*identifiers) all_identifiers.add(it);
+
+    struct Score {
+        bool in_goroot;
+        bool in_workspace;
+        int matching_idents;
+    };
+
+    List<Score> scores; scores.init();
+
+    for (int i = 0; i < candidates.len; i++) {
+        auto it = candidates[i];
+
+        auto &score = scores[i];
+        ptr0(&score);
+
+        if (it->files != NULL) {
+            For (*it->files) {
+                if (it.decls == NULL) continue;
+                For (*it.decls) {
+                    if (it.type == GODECL_FUNC)
+                        if (it.gotype->func_recv == NULL)
+                            continue;
+                    if (all_identifiers.has(it.name))
+                        score.matching_idents++;
+                }
+            }
+        }
+
+        if (path_contains_in_subtree(index.current_import_path, it->import_path))
+            score.in_workspace = true;
+
+        auto package_path = get_package_path(it->import_path);
+        if (path_contains_in_subtree(package_path, goroot))
+            score.in_goroot = true;
+    };
+    
+    auto compare_scores = [&](Score *a, Score *b) {
+        if (a->matching_idents != b->matching_idents)
+            return a->matching_idents - b->matching_idents;
+
+        if (a->in_workspace != b->in_workspace)
+            return a->in_workspace ? 1 : -1;
+
+        if (a->in_goroot != b->in_goroot)
+            return a->in_goroot ? 1 : -1;
+
+        return 0;
+    };
+
+    indexes.sort([&](auto a, auto b) {
+        return -compare_scores(&scores[*a], &scores[*b]);
+    });
+
+    return candidates[indexes[0]]->import_path;
 }
 
 Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 pos) {
@@ -2883,12 +3102,42 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                 gofile = pkg->files->find(check);
                 if (gofile == NULL) break;
 
+                Parser_It it = *pf->it;
+                it.set_pos(keyword_start);
+
+                bool has_three_letters = true;
+                char first_three_letters[3];
+
+                for (int i = 0; i < 3; i++) {
+                    if (it.get_pos() == pos) {
+                        has_three_letters = false;
+                        break;
+                    }
+                    first_three_letters[i] = it.next();
+                }
+
+                if (!has_three_letters) break;
+
                 For (*gofile->imports) {
                     auto pkgname = get_import_package_name(&it);
+                    if (pkgname == NULL) continue;
+
                     auto import_path = it.import_path;
 
-                    auto results = list_package_decls(it.import_path, LISTDECLS_EXCLUDE_METHODS);
+                    if (import_path == NULL) continue;
 
+                    auto fuzzy_matches_first_three_letters = [&]() -> bool {
+                        int i = 0;
+                        for (int j = 0, len = strlen(import_path); j < len; j++)
+                            if (import_path[j] == first_three_letters[i])
+                                if (++i == 3)
+                                    return true;
+                        return false;
+                    };
+
+                    if (!fuzzy_matches_first_three_letters()) continue;
+
+                    auto results = list_package_decls(it.import_path, LISTDECLS_EXCLUDE_METHODS);
                     if (results != NULL) {
                         int count = 0;
                         For (*results) {
@@ -5523,7 +5772,7 @@ GH_Build_Error* (*GHGetBuildStatus)(GoInt* pstatus, GoInt* plines);
 char* (*GHGetGoEnv)(char* name);
 void (*GHFmtStart)();
 void (*GHFmtAddLine)(char* line);
-char* (*GHFmtFinish)(GoInt fmtType);
+char* (*GHFmtFinish)(GoBool sortImports);
 void (*GHFree)(void* p);
 GoBool (*GHGitIgnoreInit)(char* repo);
 GoBool (*GHGitIgnoreCheckFile)(char* file);

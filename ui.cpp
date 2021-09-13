@@ -1786,8 +1786,12 @@ void UI::draw_everything() {
             }
 
             if (ImGui::MenuItem("Format File and Organize Imports", NULL, false, editor != NULL)) {
-                if (editor != NULL)
-                    editor->format_on_save(GH_FMT_GOIMPORTS_WITH_AUTOIMPORT);
+                if (editor != NULL) {
+                    if (editor->optimize_imports())
+                        editor->format_on_save(GH_FMT_GOIMPORTS);
+                    else
+                        editor->format_on_save(GH_FMT_GOIMPORTS_WITH_AUTOIMPORT);
+                }
             }
 
             if (ImGui::MenuItem("Format Selection", NULL, false, editor != NULL)) {
@@ -2028,6 +2032,7 @@ void UI::draw_everything() {
                 ImGui::MenuItem("ImGui Metrics", NULL, &world.windows_open.im_metrics);
                 ImGui::MenuItem("Editor AST Viewer", NULL, &world.wnd_editor_tree.show);
                 ImGui::MenuItem("Editor Toplevels Viewer", NULL, &world.wnd_editor_toplevels.show);
+                ImGui::MenuItem("Mouse Pos Display", NULL, &world.wnd_mouse_pos.show);
                 ImGui::MenuItem("Roll Your Own IDE Construction Set", NULL, &world.wnd_style_editor.show);
                 ImGui::MenuItem("Mark Edit Viewer", NULL, &world.wnd_mark_edit_viewer.show);
                 ImGui::MenuItem("Replace Line Numbers with Bytecounts", NULL, &world.replace_line_numbers_with_bytecounts);
@@ -3395,8 +3400,6 @@ void UI::draw_everything() {
     world.ui.mouse_captured_by_imgui = io.WantCaptureMouse;
     world.ui.keyboard_captured_by_imgui = io.WantCaptureKeyboard;
 
-    ImGui::Render();
-
     {
         // prepare opengl for drawing shit
         glViewport(0, 0, world.display_size.x, world.display_size.y);
@@ -3411,7 +3414,7 @@ void UI::draw_everything() {
     boxf pane_area;
     pane_area.pos = panes_area.pos;
 
-    int editor_index;
+    int editor_index = 0;
 
     For (actual_cursor_positions) {
         it.x = -1;
@@ -3419,6 +3422,12 @@ void UI::draw_everything() {
     }
     actual_parameter_hint_start.x = -1;
     actual_parameter_hint_start.y = -1;
+
+    if (world.wnd_mouse_pos.show) {
+        // always show this
+        ImGui::Begin("Mouse Pos", &world.wnd_mouse_pos.show);
+        ImGui::End();
+    }
 
     // Draw panes.
     draw_rect(panes_area, rgba(COLOR_JBLOW_BG));
@@ -3446,6 +3455,21 @@ void UI::draw_everything() {
         boxf current_tab;
 
         start_clip(tabs_area); // will become problem once we have popups on tabs
+
+        if (current_pane == 0) {
+            if (world.wnd_mouse_pos.show) {
+                ImGui::Begin("Mouse Pos", &world.wnd_mouse_pos.show);
+                ImGui::Text("mouse_pos = (%.4f, %.4f)", world.ui.mouse_pos.x, world.ui.mouse_pos.y);
+                ImGui::Text(
+                    "tabs_area: pos = (%.4f, %.4f), size = (%.4f, %.4f)",
+                    tabs_area.x,
+                    tabs_area.y,
+                    tabs_area.w,
+                    tabs_area.h
+                );
+                ImGui::End();
+            }
+        }
 
         // draw tabs
         u32 tab_id = 0;
@@ -3496,6 +3520,29 @@ void UI::draw_everything() {
             }
 
             auto is_hovered = test_hover(tab, HOVERID_TABS + editor_index);
+            if (world.wnd_mouse_pos.show) {
+                ImGui::Begin("Mouse Pos", &world.wnd_mouse_pos.show);
+
+                ImGui::Separator();
+                ImGui::Text("Tab %d: pos = (%.4f,%.4f), size = (%.4f,%.4f)",
+                            editor_index,
+                            tab.x, tab.y,
+                            tab.w, tab.h);
+
+                if (is_hovered)
+                    ImGui::Text("hovered: pos = (%.4f, %.4f), size = (%.4f, %.4f)", tab.x, tab.y, tab.w, tab.h);
+                else
+                    ImGui::Text("not hovered");
+
+                /*
+                if (get_mouse_flags(tab) & MOUSE_HOVER)
+                    ImGui::Text("hover flag set");
+                else
+                    ImGui::Text("hover flag not set");
+                */
+
+                ImGui::End();
+            }
 
             vec3f tab_color = COLOR_MEDIUM_DARK_GREY;
             if (is_selected)
@@ -4037,7 +4084,7 @@ void UI::draw_everything() {
 void UI::end_frame() {
     flush_verts();
 
-    ImGui::EndFrame();
+    ImGui::Render();
 
     {
         // draw imgui buffers

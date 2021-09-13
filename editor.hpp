@@ -174,6 +174,7 @@ struct Editor {
     void reload_file(bool because_of_file_watcher = false);
     void update_lines(int firstline, int lastline, List<uchar*> *lines, List<s32> *line_lengths);
     bool trigger_escape(cur2 go_here_after = {-1, -1});
+    bool optimize_imports();
     void format_on_save(int fmt_type, bool write_to_nvim = true);
     void handle_save(bool about_to_close = false);
     bool is_current_editor();

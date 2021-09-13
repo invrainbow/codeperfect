@@ -6,6 +6,7 @@
 #include "fzy_match.h"
 #include "tree_sitter_crap.hpp"
 #include "settings.hpp"
+#include "set.hpp"
 
 ccstr Editor::get_autoindent(int for_y) {
     auto y = relu_sub(for_y, 1);
@@ -1475,7 +1476,7 @@ bool Editor::cur_is_inside_comment_or_string() {
     auto root = new_ast_node(ts_tree_root_node(buf.tree), NULL);
     bool ret = false;
 
-    find_nodes_containing_pos(root, cur, false, [&](auto it) -> Walk_Action {
+    find_nodes_containing_pos(root, cur, false, [&](auto it) {
         switch (it->type()) {
         case TS_RAW_STRING_LITERAL:
         case TS_INTERPRETED_STRING_LITERAL:
@@ -2143,6 +2144,131 @@ void Editor::backspace_in_insert_mode(int graphemes_to_erase, int codepoints_to_
     raw_move_cursor(start);
 
     last_closed_autocomplete = new_cur2(-1, -1);
+}
+
+// TODO: change to bool
+bool Editor::optimize_imports() {
+    SCOPED_MEM(&world.indexer.ui_mem);
+    defer { world.indexer.ui_mem.reset(); };
+
+    if (!world.indexer.ready) return false;
+    if (!world.indexer.lock.try_enter()) return false;
+    defer { world.indexer.lock.leave(); };
+
+    auto imports = world.indexer.list_missing_imports(filepath);
+    if (imports == NULL) return false;
+    if (imports->len == 0) return false;
+
+    // add imports into the file
+    do {
+        auto iter = alloc_object(Parser_It);
+        iter->init(&buf);
+        auto root = new_ast_node(ts_tree_root_node(buf.tree), iter);
+
+        Ast_Node *package_node = NULL;
+        Ast_Node *imports_node = NULL;
+
+        FOR_NODE_CHILDREN (root) {
+            if (it->type() == TS_PACKAGE_CLAUSE) {
+                package_node = it;
+            } else if (it->type() == TS_IMPORT_DECLARATION) {
+                imports_node = it;
+                break;
+            }
+        }
+
+        if (imports_node == NULL && package_node == NULL) break;
+
+        Text_Renderer rend;
+        rend.init();
+        rend.write("import (\n");
+
+        if (imports_node != NULL) {
+            auto imports = alloc_list<Go_Import>();
+            world.indexer.import_decl_to_goimports(imports_node, NULL, imports);
+
+            For (*imports) {
+                switch (it.package_name_type) {
+                case GPN_IMPLICIT:
+                    rend.write("\"%s\"", it.import_path);
+                    break;
+                case GPN_EXPLICIT:
+                    rend.write("%s \"%s\"", it.package_name, it.import_path);
+                    break;
+                case GPN_BLANK:
+                    rend.write("_ \"%s\"", it.import_path);
+                    break;
+                case GPN_DOT:
+                    rend.write(". \"%s\"", it.import_path);
+                    break;
+                }
+                rend.write("\n");
+            }
+        }
+
+        For (*imports) {
+            rend.write("\"%s\"", it);
+            rend.write("\n");
+        }
+
+        rend.write(")");
+
+        GHFmtStart();
+        GHFmtAddLine(rend.finish());
+        GHFmtAddLine("");
+
+        auto new_contents = GHFmtFinish(GH_FMT_GOIMPORTS);
+        if (new_contents == NULL) break;
+
+        auto new_contents_len = strlen(new_contents);
+        if (new_contents_len == 0) break;
+
+        if (new_contents[new_contents_len-1] == '\n') {
+            new_contents[new_contents_len-1] = '\0';
+            new_contents_len--;
+        }
+
+        cur2 start, old_end, new_end;
+        if (imports_node != NULL) {
+            start = imports_node->start();
+            old_end = imports_node->end();
+        } else {
+            start = package_node->end();
+            old_end = package_node->end();
+        }
+        new_end = start;
+
+        auto chars = alloc_list<uchar>();
+        if (imports_node == NULL) {
+            // add two newlines, it's going after the package decl
+            chars->append('\n');
+            chars->append('\n');
+            new_end.x = 0;
+            new_end.y += 2;
+        }
+
+        Cstr_To_Ustr conv; conv.init();
+        for (auto p = new_contents; *p != '\0'; p++) {
+            bool found = false;
+            auto uch = conv.feed(*p, &found);
+            if (found) {
+                chars->append(uch);
+
+                if (uch == '\n') {
+                    new_end.x = 0;
+                    new_end.y++;
+                } else {
+                    new_end.x++;
+                }
+            }
+        }
+
+        if (start != old_end)
+            buf.remove(start, old_end);
+        buf.insert(start, chars->items, chars->len);
+    } while (0);
+
+    return true;
 }
 
 void Editor::format_on_save(int fmt_type, bool write_to_nvim) {

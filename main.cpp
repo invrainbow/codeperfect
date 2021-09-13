@@ -463,8 +463,8 @@ int main() {
     });
 
     glfwSetCursorPosCallback(world.window, [](GLFWwindow*, double x, double y) {
-        world.ui.mouse_delta.x = x - world.ui.mouse_pos.x;
-        world.ui.mouse_delta.y = y - world.ui.mouse_pos.y;
+        // world.ui.mouse_delta.x = x - world.ui.mouse_pos.x;
+        // world.ui.mouse_delta.y = y - world.ui.mouse_pos.y;
         world.ui.mouse_pos.x = x;
         world.ui.mouse_pos.y = y;
 
@@ -765,7 +765,10 @@ int main() {
         case OUR_MOD_ALT | OUR_MOD_SHIFT:
             switch (key) {
             case GLFW_KEY_O:
-                editor->format_on_save(GH_FMT_GOIMPORTS_WITH_AUTOIMPORT);
+                if (editor->optimize_imports())
+                    editor->format_on_save(GH_FMT_GOIMPORTS);
+                else
+                    editor->format_on_save(GH_FMT_GOIMPORTS_WITH_AUTOIMPORT);
                 break;
             case GLFW_KEY_F:
                 editor->format_on_save(GH_FMT_GOIMPORTS);

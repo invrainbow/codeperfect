@@ -997,10 +997,11 @@ void Mark_Tree::apply_edit(cur2 start, cur2 old_end, cur2 new_end) {
 
     check_ordering();
 
-    for (; it != NULL && it->pos < old_end; it = succ(it)) {
+    while (it != NULL && it->pos < old_end) {
         if (it->pos < new_end) {
             for (auto mark = it->marks; mark != NULL; mark = mark->next)
                 mark->invalidated = true;
+            it = succ(it);
         } else {
             Mark *next = NULL;
             for (auto mark = it->marks; mark != NULL; mark = next) {
@@ -1011,7 +1012,14 @@ void Mark_Tree::apply_edit(cur2 start, cur2 old_end, cur2 new_end) {
                 orphan_marks = mark;
             }
             it->marks = NULL;
+
             delete_node(it->pos);
+
+            // after deleting the node, go to the next node after it->pos
+            auto old_pos = it->pos;
+            it = find_node(root, it->pos);
+            if (it->pos < old_pos)
+                it = succ(it);
         }
     }
 
@@ -1044,6 +1052,8 @@ void Mark_Tree::apply_edit(cur2 start, cur2 old_end, cur2 new_end) {
 
 void Mark_Tree::check_ordering() {
     auto min = root;
+    if (min == NULL) return;
+
     while (min->left != NULL)
         min = min->left;
 
