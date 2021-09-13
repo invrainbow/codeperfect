@@ -47,7 +47,7 @@ Currently we just need to know where Go is installed. Create the file
 ```
 
 Replace the `...` with the **folder containing the `go` binary**, not the
-binary itself. So if `go` is located at /usr/local/bin/go, write:
+binary itself. So if `go` is located at `/usr/local/bin/go`, write:
 
 ```
 {
