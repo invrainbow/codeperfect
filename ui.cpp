@@ -1780,12 +1780,12 @@ void UI::draw_everything() {
         if (ImGui::BeginMenu("Format")) {
             auto editor = world.get_current_editor();
 
-            if (ImGui::MenuItem("Format File", NULL, false, editor != NULL)) {
+            if (ImGui::MenuItem("Format File", "Alt+Shift+F", false, editor != NULL)) {
                 if (editor != NULL)
                     editor->format_on_save(GH_FMT_GOIMPORTS);
             }
 
-            if (ImGui::MenuItem("Format File and Organize Imports", NULL, false, editor != NULL)) {
+            if (ImGui::MenuItem("Format File and Organize Imports", "Alt+Shift+O", false, editor != NULL)) {
                 if (editor != NULL) {
                     if (editor->optimize_imports())
                         editor->format_on_save(GH_FMT_GOIMPORTS);

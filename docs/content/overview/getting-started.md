@@ -58,10 +58,10 @@ binary itself. So if `go` is located at /usr/local/bin/go, write:
 ## Opening a Project
 
 Right now CodePerfect can only open modules. Your project must be organized as
-a single module, with `go.mod` placed at the root of your workspace.
+a single module, with `go.mod` placed at the root of your project fodler.
 
 When you open CodePerfect, it prompts you for a directory to open. Select your
-workspace, the folder with a `go.mod` at its root.
+project folder (with a `go.mod` at its root).
 
 ## Starting a Project
 
@@ -103,27 +103,25 @@ For the most part, the indexer just runs automagically in the background.
 However, there is one case where it needs your assistance: when you add a
 dependency.
 
-After adding a dependency (i.e. both adding it to your codebase as an import,
-and downloading it with `go get`), let the indexer know by going to
-<cite>Tools</cite> &gt; <cite>Rescan Index</cite>. This does a quick scan,
-checks for any new packages, and parses them. (It doesn't rebuild the whole
-index.)
+After adding a dependency &mdash; adding it to your codebase as an
+import, and downloading it with `go get` &mdash; go to <cite>Tools</cite> &gt;
+<cite>Rescan Index</cite>. This scans for new packages and parses them. (It
+doesn't rebuild the whole index.)
 
 ## Troubleshooting the Indexer
 
 If the index is ever broken or out of sync (e.g. it's giving you incorrect
-results), there are two immediate actions you can take (and please report the
-bug to us!):
+results), there are two fixes you can apply. (And please report the bug to us!)
 
-- First, close and restart the IDE. On startup, it does a scan to
-  see if any packages are missing or have changed, and processes them. 90%
-  of the time, this should fix your problem.
+- Close and restart the IDE. On startup, it scans to see if any packages are
+  missing or have changed, and processes them. 90% of the time, this should fix
+  your problem.
 
-- If that doesn't work, you can go to <cite>Tools</cite> > <cite>Obliterate and Recreate Index</cite>.
-  This will completely re-index everything (the process that took place when
-  you opened the folder for the first time).
+- If that doesn't work, you can go to <cite>Tools</cite> > <cite>Obliterate and
+  Recreate Index</cite>. This will completely re-index everything (the process
+  that took place when you opened the folder for the first time).
 
 ## Automatic Updates
 
-CodePerfect automatically and unintrusively keeps itself up to date in the
-background. You don't need to do anything.
+CodePerfect automatically, unintrusively keeps itself up-to-date in the
+background.

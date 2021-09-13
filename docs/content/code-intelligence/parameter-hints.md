@@ -7,14 +7,12 @@ weight: 30
 toc: true
 ---
 
-When you open a function call by typing `(`, if CodePerfect detects that the
-thing preceding it is a function, it will read its signature and show it to
-you:
+When you open a function call by typing `(`, if the thing preceding it is a
+function, CodePerfect will show you its signature:
 
 ![](/parameter-hint.png)
 
-If the parameter hint has been closed, and you type a `,` with your cursor
-inside a function call, it will also re-open the hint.
+When you type a `,` inside a function call, it will re-open the hint.
 
 ## Keyboard Shortcuts
 
