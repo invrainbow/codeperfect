@@ -4,7 +4,7 @@
       <nav class="p-8">
         {{ $currentPage := . -}}
         {{ range .Site.Menus.docs -}}
-          <div class="mb-8 last:mb-0 leading-7">
+          <div class="mb-8 last:mb-0 leading-6">
             <h3 class="mb-2 font-bold text-gray-400 uppercase text-xs tracking-wide">{{ .Name }}</h3>
             {{ if .HasChildren -}}
               <ul class="p-0">
@@ -74,7 +74,7 @@
 
       <nav class="py-8">
         {{ if ne .Params.toc false -}}
-          <div class="sticky top-8 right-0 page-links leading-7 pl-6 pr-2 border-l border-gray-300">
+          <div class="sticky top-8 right-0 page-links leading-6 pl-6 pr-2 border-l border-gray-300">
             <h3 class="mb-2">On this page</h3>
             {{ .TableOfContents }}
           </div>

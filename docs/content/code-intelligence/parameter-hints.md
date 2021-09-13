@@ -1,5 +1,5 @@
 ---
-title: "Parameter hints"
+title: "Parameter Hints"
 menu:
   docs:
     parent: "code-intelligence"

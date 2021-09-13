@@ -1,5 +1,5 @@
 ---
-title: "Step through program"
+title: "Step Through Program"
 menu:
   docs:
     parent: "debugging"

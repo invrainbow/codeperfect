@@ -1,5 +1,5 @@
 ---
-title: "Examine program state"
+title: "Examine Program State"
 menu:
   docs:
     parent: "debugging"

@@ -1,5 +1,5 @@
 ---
-title: "Go to definition"
+title: "Go to Definition"
 menu:
   docs:
     parent: "code-intelligence"
@@ -12,6 +12,6 @@ put your cursor over it, and go to <cite>Go</cite> &gt; <cite>Go to Definition</
 
 ## Keyboard Shortcuts
 
-| Command            | macOS                                                      | Windows                                                       |
-| ------------------ | ---------------------------------------------------------- | ------------------------------------------------------------- |
-| Jump to definition | <kbd>gd</kbd> (in Normal mode) or <kbd>⌘</kbd><kbd>G</kbd> | <kbd>gd</kbd> (in Normal mode) or <kbd>Ctrl</kbd><kbd>G</kbd> |
+| Command          | macOS                                                      | Windows                                                       |
+| ---------------- | ---------------------------------------------------------- | ------------------------------------------------------------- |
+| Go to Definition | <kbd>gd</kbd> (in Normal mode) or <kbd>⌘</kbd><kbd>G</kbd> | <kbd>gd</kbd> (in Normal mode) or <kbd>Ctrl</kbd><kbd>G</kbd> |

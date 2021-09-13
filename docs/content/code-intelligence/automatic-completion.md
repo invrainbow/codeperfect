@@ -1,5 +1,5 @@
 ---
-title: "Automatic completion"
+title: "Automatic Completion"
 menu:
   docs:
     parent: "code-intelligence"
