@@ -673,7 +673,7 @@ u32 Buffer::idx_byte_to_gr(int y, int off) {
     return x;
 }
 
-u32 Buffer::idx_byte_to_cp(int y, int off) {
+u32 Buffer::idx_byte_to_cp(int y, int off, bool nocrash) {
     auto &line = lines[y];
     for (u32 x = 0; x < line.len; x++) {
         auto size = uchar_size(line[x]);
@@ -681,7 +681,7 @@ u32 Buffer::idx_byte_to_cp(int y, int off) {
         off -= size;
     }
 
-    assert(off == 0);
+    if (!nocrash) assert(off == 0);
     return lines[y].len;
 }
 
@@ -1018,7 +1018,7 @@ void Mark_Tree::apply_edit(cur2 start, cur2 old_end, cur2 new_end) {
             // after deleting the node, go to the next node after it->pos
             auto old_pos = it->pos;
             it = find_node(root, it->pos);
-            if (it->pos < old_pos)
+            if (it != NULL && it->pos < old_pos)
                 it = succ(it);
         }
     }

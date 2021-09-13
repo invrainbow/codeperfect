@@ -522,7 +522,6 @@ void init_goto_file() {
     auto &wnd = world.wnd_goto_file;
     ptr0(&wnd);
 
-    wnd.show = true;
     wnd.filepaths = alloc_list<ccstr>();
     wnd.filtered_results = alloc_list<int>();
 
@@ -541,6 +540,7 @@ void init_goto_file() {
     };
 
     fill_files(world.file_tree, "");
+    wnd.show = true;
 }
 
 void init_goto_symbol() {
@@ -552,6 +552,7 @@ void init_goto_symbol() {
     defer { world.indexer.lock.leave(); };
 
     world.indexer.fill_goto_symbol();
+    world.wnd_goto_symbol.show = true;
 }
 
 void kick_off_build(Build_Profile *build_profile) {

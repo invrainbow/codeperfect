@@ -695,7 +695,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 */
 
                 auto y = (u32)args.curline;
-                auto x = editor->buf.idx_byte_to_cp(y, args.curcol);
+                auto x = editor->buf.idx_byte_to_cp(y, args.curcol, true);
                 auto new_cur = new_cur2(x, y);
 
                 if (!editor->nvim_data.got_initial_cur) {

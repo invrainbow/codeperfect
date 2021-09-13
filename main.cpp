@@ -590,13 +590,15 @@ int main() {
                 ImGui::SetWindowFocus(NULL);
                 break;
             case GLFW_KEY_T:
-                world.wnd_goto_symbol.show ^= 1;
                 if (world.wnd_goto_symbol.show)
+                    world.wnd_goto_symbol.show = false;
+                else
                     init_goto_symbol();
                 break;
             case GLFW_KEY_P:
-                world.wnd_goto_file.show ^= 1;
                 if (world.wnd_goto_file.show)
+                    world.wnd_goto_file.show = false;
+                else
                     init_goto_file();
                 break;
             case GLFW_KEY_N:
