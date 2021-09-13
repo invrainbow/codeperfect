@@ -27,7 +27,7 @@ coredumps/
 
 # misc
 imgui.ini
-.vscode
+# .vscode
 .vs/
 
 # visual studio crap

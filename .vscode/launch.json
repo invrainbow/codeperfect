@@ -1,0 +1,40 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "debug",
+            "program": "build/bin/ide",
+            "args": [],
+            "cwd": "${workspaceFolder}/build/bin",
+            "expressions": "native"
+        },
+        {
+            "type": "lldb",
+            "request": "custom",
+            "name": "coredump",
+            "initCommands": [
+                "target create -c ${input:coreFileName}"
+            ],
+            "cwd": "${workspaceFolder}/build/bin",
+            "expressions": "native"
+        },
+        {
+            "type": "lldb",
+            "request": "attach",
+            "name": "attach",
+            "program": "build/bin/ide",
+            "args": [],
+            "cwd": "${workspaceFolder}/build/bin",
+            "expressions": "native"
+        },
+    ],
+    "inputs": [
+        {
+            "id": "coreFileName",
+            "type": "promptString",
+            "description": "Enter core file path"
+        }
+    ]
+}
