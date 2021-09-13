@@ -84,7 +84,7 @@ function Home() {
   return (
     <div>
       <div className="mt-8 mb-24 sm:my-24 md:my-32">
-        <div className="leading-tight text-center mb-2 text-4xl md:text-5xl font-light text-black">
+        <div className="leading-tight text-center mb-2 text-4xl md:text-5xl font-bold text-black">
           The Fastest IDE for Go
         </div>
         <div className="mb-6 md:mb-12 text-lg text-gray-400 text-center">
@@ -99,7 +99,7 @@ function Home() {
 
       <Section className="md:block lg:flex">
         <div className="leading-relaxed mb-4 md:flex md:flex-row lg:block md:gap-8 md:mb-4 lg:w-1/3">
-          <h2 className="text-2xl mb-4 text-gray-700 md:w-4/12 lg:w-full font-light">
+          <h2 className="text-2xl mb-4 text-gray-700 md:w-4/12 lg:w-full font-medium">
             No Electron. No JavaScript. No garbage collection.
           </h2>
           <p className="md:w-4/12 lg:w-full md:mt-0 lg:mt-4">
@@ -140,7 +140,7 @@ function Home() {
       <div className="block md:hidden">
         <Section>
           <div className="leading-relaxed md:flex md:flex-row md:gap-8 md:mb-12">
-            <div className="text-2xl mb-4 text-gray-700 md:w-1/3 font-light">
+            <div className="text-2xl mb-4 text-gray-700 md:w-1/3 font-medium">
               Tools that understand Go as a first language.
             </div>
             <p className="md:w-1/3 md:mt-0">
@@ -156,7 +156,7 @@ function Home() {
           className="leading-relaxed md:gap-8 w-5/12 z-20 relative p-8 drop-shadow rounded-md my-12 mx-auto"
           style={{ background: "rgba(0, 0, 0, 0.75)" }}
         >
-          <div className="text-2xl mb-4 text-white font-light">
+          <div className="text-2xl mb-4 text-white font-medium">
             Tools that understand Go as a first language.
           </div>
           <p className="text-white">
@@ -173,7 +173,7 @@ function Home() {
 
       <Section className="md:flex-row-reverse">
         <div className="leading-relaxed mb-4 md:mb-0 md:w-5/12">
-          <div className="text-2xl mb-4 text-gray-700 font-light">
+          <div className="text-2xl mb-4 text-gray-700 font-medium">
             Complete Vim keybindings, out of the box.
           </div>
           <p>
@@ -197,12 +197,18 @@ function PricingBox({ title, price, subprice, children }) {
   };
   */
   return (
-    <div className="p-4 md:p-6 w-auto md:w-1/3 rounded-md text-center border border-gray-400 shadow-sm">
-      <h1 className="font-bold text-gray-700 text-lg">{title}</h1>
-      <div className="font-bold text-black text-2xl">{price}</div>
-      <div className="font-normal text-gray-400">{subprice}</div>
-      <div className="border-dashed border-t border-gray-300 mt-4 pt-4 md:mt-6 md:pt-6 text-gray-500 text-left">
-        {children}
+    <div className="w-auto md:w-1/3 rounded-lg text-center overflow-hidden bg-white border">
+      <div className="p-6">
+        <h1 className="font-bold text-gray-700 text-lg mb-2">{title}</h1>
+        <div className="font-bold text-black text-2xl">{price}</div>
+        <div className="mt-1">
+          <span className="rounded-full bg-gray-100 text-gray-600 leading-4 py-0.5 px-2 inline-block font-medium text-sm">
+            {subprice}
+          </span>
+        </div>
+      </div>
+      <div className="border-t p-6">
+        <div className="text-gray-500 text-left">{children}</div>
       </div>
     </div>
   );
@@ -211,37 +217,42 @@ function PricingBox({ title, price, subprice, children }) {
 function Pricing() {
   return (
     <div className="pricing my-16">
-      <h1 className="text-center text-black text-4xl mb-12">Pricing</h1>
-      <div className="flex flex-col md:flex-row space-between space-y-8 space-x-0 md:space-y-0 md:space-x-8 mx-auto max-w-5xl">
-        <PricingBox
-          title="Individual Plan"
-          tier="individual"
-          price="$5/mo"
-          subprice="or $50/year"
-        >
-          Commercial use is allowed, but a company cannot pay for this, and you
-          cannot expense the purchase.
-        </PricingBox>
+      <h1 className="text-center text-black font-bold text-4xl mb-12">
+        Pricing
+      </h1>
+      <div className="">
+        <div className="max-w-5xl flex flex-col md:flex-row space-between space-y-8 space-x-0 md:space-y-0 md:space-x-12 mx-auto">
+          <PricingBox
+            title="Individual Plan"
+            tier="individual"
+            price="$5/mo"
+            subprice="or $50/year"
+          >
+            Commercial use is allowed, but a company cannot pay for this, and
+            you cannot expense the purchase.
+          </PricingBox>
 
-        <PricingBox
-          title="Company Plan"
-          price="$10/user/mo"
-          tier="company"
-          subprice="or $100/user/year"
-        >
-          For companies buying licenses for its employees. Most users choose
-          this plan in order to expense the purchase.
-        </PricingBox>
+          <PricingBox
+            title="Company Plan"
+            price="$10/user/mo"
+            tier="company"
+            subprice="or $100/user/year"
+          >
+            For companies buying licenses for its employees. Most users choose
+            this plan in order to expense the purchase.
+          </PricingBox>
 
-        <PricingBox
-          title="Premium Plan"
-          tier="premium"
-          price="$20/user/month"
-          subprice="or $200/user/year"
-        >
-          Same as company plan, but also comes with priority support. Please{" "}
-          <a href="mailto:support@codeperfect95.com">contact us</a> for details.
-        </PricingBox>
+          <PricingBox
+            title="Premium Plan"
+            tier="premium"
+            price="$20/user/month"
+            subprice="or $200/user/year"
+          >
+            Same as company plan, but also comes with priority support.{" "}
+            <a href="mailto:support@codeperfect95.com">Contact us</a> for
+            details.
+          </PricingBox>
+        </div>
       </div>
       <div className="mt-16 text-center">
         <p className="text-xl mb-0">Ready to get started?</p>
@@ -252,7 +263,7 @@ function Pricing() {
             className="main-button font-bold text-xl px-6 py-3 whitespace-nowrap"
             href="https://airtable.com/shraN38Z2jqQJVqbk"
           >
-            Join Beta
+            Request Access
           </a>
         </p>
       </div>
@@ -377,9 +388,9 @@ function App() {
             <div className="text-gray-500">
               &copy; {CURRENT_YEAR} {IDE_NAME}
             </div>
-            <div className="flex flex-col sm:flex-row space-x-0 sm:space-x-8 mt-2 sm:mt-0">
-              <div className="text-left sm:text-right">
-                <div className="mb-1">
+            <div className="flex flex-col sm:flex-row space-x-0 sm:space-x-12 mt-2 sm:mt-0">
+              <div className="text-left">
+                <div>
                   <a
                     target="_blank"
                     rel="noreferrer"
@@ -389,7 +400,7 @@ function App() {
                     Join Beta
                   </a>
                 </div>
-                <div className="mb-1">
+                <div>
                   {/*
                   <a
                     target="_blank"
@@ -401,24 +412,24 @@ function App() {
                   </a>
                   */}
                 </div>
-                <div className="mb-1">
+                <div>
                   <Link to="/pricing" className="text-gray-500 no-underline">
                     Pricing
                   </Link>
                 </div>
               </div>
-              <div className="text-left sm:text-right">
-                <div className="mb-1">
+              <div className="text-left">
+                <div>
                   <Link to="/terms" className="text-gray-500 no-underline">
                     Terms of Service
                   </Link>
                 </div>
-                <div className="mb-1">
+                <div>
                   <Link className="text-gray-500 no-underline" to="/privacy">
                     Privacy Policy
                   </Link>
                 </div>
-                <div className="mb-1">
+                <div>
                   <a
                     className="text-gray-500 no-underline"
                     href={`mailto:${SUPPORT_EMAIL}`}

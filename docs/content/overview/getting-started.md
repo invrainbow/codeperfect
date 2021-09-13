@@ -7,7 +7,7 @@ weight: 10
 toc: true
 ---
 
-## Installing and Running
+## Installing and running
 
 Please refer to the instructions for your OS.
 
@@ -47,7 +47,7 @@ Currently we just need to know where Go is installed. Create the file
 ```
 
 Replace the `...` with the **folder containing the `go` binary**, not the
-binary itself. So if `go` is located at /usr/local/bin/go, write:
+binary itself. So if `go` is located at `/usr/local/bin/go`, write:
 
 ```
 {
@@ -55,7 +55,7 @@ binary itself. So if `go` is located at /usr/local/bin/go, write:
 }
 ```
 
-## Opening a Project
+## Opening a project
 
 Right now CodePerfect can only open modules. Your project must be organized as
 a single module, with `go.mod` placed at the root of your project fodler.
@@ -108,7 +108,7 @@ import, and downloading it with `go get` &mdash; go to <cite>Tools</cite> &gt;
 <cite>Rescan Index</cite>. This scans for new packages and parses them. (It
 doesn't rebuild the whole index.)
 
-## Troubleshooting the Indexer
+## Troubleshooting the indexer
 
 If the index is ever broken or out of sync (e.g. it's giving you incorrect
 results), there are two fixes you can apply. (And please report the bug to us!)
@@ -121,7 +121,7 @@ results), there are two fixes you can apply. (And please report the bug to us!)
   Recreate Index</cite>. This will completely re-index everything (the process
   that took place when you opened the folder for the first time).
 
-## Automatic Updates
+## Automatic updates
 
 CodePerfect automatically, unintrusively keeps itself up-to-date in the
 background.

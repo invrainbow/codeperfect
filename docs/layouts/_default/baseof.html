@@ -38,7 +38,7 @@
 
   <body>
     <header class="p-4">
-      <div class="max-w-screen-xl px-4 mx-auto flex justify-between">
+      <div class="max-w-screen-xl px-8 mx-auto flex justify-between">
         <a class="logo font-bold text-black text-lg" href="/">
           CodePerfect 95
           <span class="font-bold text-gray-400 text-base ml-1">Docs</span>
@@ -55,8 +55,8 @@
 
     <div>{{ block "main" . }}{{ end }}</div>
 
-    <footer class="py-6">
-      <div class="max-w-screen-xl px-4 mx-auto flex justify-between text-gray-600 text-sm">
+    <footer class="p-4 py-6">
+      <div class="max-w-screen-xl px-8 mx-auto flex justify-between text-gray-600 text-sm">
         <span>&copy; CodePerfect 95</span>
         <span>
           {{ range .Site.Menus.footer -}}

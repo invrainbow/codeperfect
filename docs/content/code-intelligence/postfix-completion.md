@@ -1,5 +1,5 @@
 ---
-title: "Postfix completion"
+title: "Postfix Completion"
 menu:
   docs:
     parent: "code-intelligence"
