@@ -16,6 +16,8 @@
 World world;
 
 u64 post_insert_dotrepeat_time = 0;
+int gargc = 0;
+char **gargv = NULL;
 
 bool is_ignored_by_git(ccstr path) {
     return GHGitIgnoreCheckFile((char*)path);
@@ -291,6 +293,8 @@ void World::init_workspace() {
     // if testing
     if (world.window == NULL) {
         strcpy_safe(current_path, _countof(current_path), "/Users/bh/ide/api");
+    } else if (gargc >= 2) {
+        strcpy_safe(current_path, _countof(current_path), gargv[1]);
     } else {
         Select_File_Opts opts; ptr0(&opts);
         opts.buf = current_path;
@@ -1138,3 +1142,4 @@ bool move_autocomplete_cursor(Editor *ed, int direction) {
         ac.view = ac.selection;
     return true;
 }
+

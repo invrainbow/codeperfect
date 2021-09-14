@@ -425,3 +425,6 @@ void reload_file_subtree(ccstr path);
 extern u64 post_insert_dotrepeat_time;
 
 bool move_autocomplete_cursor(Editor *ed, int direction);
+
+extern int gargc;
+extern char **gargv;

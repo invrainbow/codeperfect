@@ -245,7 +245,10 @@ bool is_git_folder(ccstr path) {
     return pathlist->parts->find([&](auto it) { return streqi(*it, ".git"); }) != NULL;
 }
 
-int main() {
+int main(int argc, char **argv) {
+    gargc = argc;
+    gargv = argv;
+
     is_main_thread = true;
 
     Timer t;
