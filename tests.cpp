@@ -59,6 +59,219 @@ void test_mark_tree() {
 	print("break here");
 }
 
+enum Mtf_Action_Type {
+    MTF_INSERT_MARK,
+    MTF_DELETE_MARK,
+    MTF_APPLY_EDIT,
+};
+
+struct Mtf_Action {
+    Mtf_Action_Type type;
+
+    union {
+        cur2 insert_mark_pos;
+        int delete_mark_index;
+
+        struct {
+            cur2 edit_start;
+            cur2 edit_old_end;
+            cur2 edit_new_end;
+        };
+    };
+};
+
+const cur2 NOBOUND = {-1, -1};
+
+struct Mark_Tree_Fuzzer {
+    List<Mark*> marks;
+    List<Mtf_Action> actions;
+    Mark_Tree tree;
+    bool print_flag;
+
+    void init() {
+        ptr0(this);
+
+        marks.init();
+        actions.init();
+        tree.init(NULL);
+    }
+
+    // assume 100x100 grid
+    cur2 random_pos(cur2 lo, cur2 hi) {
+        if (lo == NOBOUND) lo = new_cur2(0, 0);
+        if (hi == NOBOUND) hi = new_cur2(100, 100);
+
+        int rangesize = (hi.y - lo.y - 1) * 100 + (100 - lo.x) + hi.x;
+        int r = rand() % rangesize;
+
+        lo.x += r;
+        if (lo.x > 100) {
+            lo.x -= 100;
+            lo.y += (lo.x / 100) + 1;
+            lo.x = lo.x % 100;
+        }
+        return lo;
+    }
+
+    void print_action(Mtf_Action *a) {
+        switch (a->type) {
+        case MTF_INSERT_MARK:
+            print("insert mark: %s", format_cur(a->insert_mark_pos));
+            break;
+        case MTF_DELETE_MARK:
+            print(
+                "delete mark: index %d, pos = %s",
+                a->delete_mark_index,
+                format_cur(marks[a->delete_mark_index]->pos())
+            );
+            break;
+        case MTF_APPLY_EDIT:
+            print(
+                "edit: start = %s, oldend = %s, newend = %s",
+                format_cur(a->edit_start),
+                format_cur(a->edit_old_end),
+                format_cur(a->edit_new_end)
+            );
+            break;
+        }
+    }
+
+    void execute_action(Mtf_Action *a) {
+        if (print_flag) print_action(a);
+
+        switch (a->type) {
+        case MTF_INSERT_MARK:
+            marks.append(tree.insert_mark(MARK_TEST, a->insert_mark_pos));
+            break;
+        case MTF_DELETE_MARK:
+            marks[a->delete_mark_index]->cleanup();
+            marks.remove(a->delete_mark_index);
+            break;
+        case MTF_APPLY_EDIT:
+            tree.apply_edit(a->edit_start, a->edit_old_end, a->edit_new_end);
+            break;
+        }
+    }
+
+    void generate_random_action(Mtf_Action *a) {
+        auto r = rand() % 100;
+        if (r < 33) {
+            // insert
+            a->type = MTF_INSERT_MARK;
+            a->insert_mark_pos = random_pos(NOBOUND, NOBOUND);
+        } else if (r < 66) {
+            // delete
+            if (marks.len > 0) {
+                a->type = MTF_DELETE_MARK;
+                a->delete_mark_index = rand() % marks.len;
+            } else {
+                generate_random_action(a);
+            }
+            return;
+        } else {
+            // apply edit
+            a->type = MTF_APPLY_EDIT;
+            a->edit_start = random_pos(NOBOUND, NOBOUND);
+
+            r = rand() % 100;
+            if (r < 33) {
+                // pure delete
+                a->edit_new_end = a->edit_start;
+                a->edit_old_end = random_pos(a->edit_start, NOBOUND);
+            } else if (r < 66) {
+                // pure insert
+                a->edit_old_end = a->edit_start;
+                a->edit_new_end = random_pos(a->edit_start, NOBOUND);
+            } else {
+                a->edit_old_end = random_pos(a->edit_start, NOBOUND);
+                a->edit_new_end = random_pos(a->edit_start, NOBOUND);
+            }
+        }
+    }
+
+    bool run() {
+        File f;
+        if (f.init("mark_tree_fuzzer_output", FILE_MODE_WRITE, FILE_CREATE_NEW) != FILE_RESULT_SUCCESS)
+            return false;
+        defer { f.cleanup(); };
+
+        int offset = 0;
+        int count = 0;
+
+        our_assert(f.write((char*)&count, sizeof(count)), "f.write");
+        offset += sizeof(count);
+
+        for (int i = 0; i < 1000000; i++) {
+            auto a = actions.append();
+            generate_random_action(a);
+            count++;
+
+            // write the action
+            our_assert(f.write((char*)a, sizeof(*a)), "f.write");
+            offset += sizeof(*a);
+
+            // write the count at the beginning
+            f.seek(0);
+            our_assert(f.write((char*)&count, sizeof(count)), "f.write");
+            f.seek(offset);
+
+            // run
+            execute_action(a);
+        }
+
+        return true;
+    }
+
+    bool replay() {
+        // read actions
+        {
+            File f;
+            if (f.init("mark_tree_fuzzer_output", FILE_MODE_READ, FILE_OPEN_EXISTING) != FILE_RESULT_SUCCESS)
+                return false;
+            defer { f.cleanup(); };
+
+            int len = 0;
+            our_assert(f.read((char*)&len, sizeof(len)), "f.read");
+
+            actions.ensure_cap(len);
+            our_assert(f.read((char*)actions.items, sizeof(Mtf_Action) * len), "f.read");
+            actions.len = len;
+        }
+
+        for (int i = 0; i < actions.len-1; i++)
+            execute_action(&actions[i]);
+
+        // execute the last action
+        execute_action(actions.last());
+
+        return true;
+    }
+};
+
+void test_mark_tree_fuzz() {
+    Pool pool;
+    pool.init();
+    defer { pool.cleanup(); };
+    SCOPED_MEM(&pool);
+
+    Mark_Tree_Fuzzer mtf;
+    mtf.init();
+    mtf.print_flag = false;
+    our_assert(mtf.run(), "mtf.run");
+}
+
+void test_mark_tree_fuzz_replay() {
+    Pool pool;
+    pool.init();
+    defer { pool.cleanup(); };
+    SCOPED_MEM(&pool);
+
+    Mark_Tree_Fuzzer mtf;
+    mtf.init();
+    mtf.print_flag = false;
+    our_assert(mtf.replay(), "mtf.replay");
+}
+
 int main(int argc, char *argv[]) {
     init_platform_specific_crap();
     world.init(NULL);
@@ -70,6 +283,8 @@ int main(int argc, char *argv[]) {
 
     if (match("diff")) test_diff();
     if (match("mark_tree")) test_mark_tree();
+    if (match("mtf")) test_mark_tree_fuzz();
+    if (match("mtf_replay")) test_mark_tree_fuzz_replay();
 
     return 0;
 }

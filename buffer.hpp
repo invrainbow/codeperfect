@@ -58,6 +58,7 @@ enum Mark_Type {
     MARK_BUILD_ERROR,
     MARK_SEARCH_RESULT,
     MARK_HISTORY,
+    MARK_TEST,
 };
 
 struct Mark_Tree;
@@ -122,23 +123,23 @@ struct Mark_Tree {
 
     void cleanup();
 
+    // public api
     Mark *insert_mark(Mark_Type type, cur2 pos);
     void delete_mark(Mark *mark);
+    void apply_edit(cur2 start, cur2 old_end, cur2 new_end);
 
+    // internal shit
     Mark_Node *find_node(Mark_Node *root, cur2 pos);
+    Mark_Node *insert_node(cur2 pos);
+    void delete_node(cur2 pos);
+    Mark_Node *succ(Mark_Node *node);
     int get_height(Mark_Node *root);
     int get_balance(Mark_Node *root);
     void recalc_height(Mark_Node *root);
     Mark_Node* rotate_right(Mark_Node *root);
     Mark_Node* rotate_left(Mark_Node *root);
-    Mark_Node *succ(Mark_Node *node);
-    Mark_Node *insert_node(cur2 pos);
-    void delete_node(cur2 pos);
-
     Mark_Node *internal_insert_node(Mark_Node *root, cur2 pos, Mark_Node *node);
     Mark_Node *internal_delete_node(Mark_Node *root, cur2 pos);
-    void apply_edit(cur2 start, cur2 old_end, cur2 new_end);
-
     void check_ordering();
 };
 

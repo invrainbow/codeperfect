@@ -1013,12 +1013,12 @@ void Mark_Tree::apply_edit(cur2 start, cur2 old_end, cur2 new_end) {
             }
             it->marks = NULL;
 
-            delete_node(it->pos);
+            auto curr = it->pos;
+            delete_node(curr);
 
-            // after deleting the node, go to the next node after it->pos
-            auto old_pos = it->pos;
-            it = find_node(root, it->pos);
-            if (it != NULL && it->pos < old_pos)
+            // after deleting the node, go to the next node
+            it = find_node(root, curr);
+            if (it != NULL && it->pos < curr)
                 it = succ(it);
         }
     }
