@@ -1085,7 +1085,10 @@ void Debugger::pipe_stdout_into_our_buffer() {
     auto &p = dlv_proc;
 
     while (true) {
-        if (!p.can_read()) continue;
+        if (!p.can_read()) {
+            sleep_milliseconds(50);
+            continue;
+        }
 
         char ch = 0;
         if (!p.read1(&ch)) break;

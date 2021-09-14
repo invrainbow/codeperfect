@@ -206,11 +206,17 @@ func pushWarning(msg string) {
 	globalMQ.Push(msg, "Authentication", false)
 }
 
-func pushUnknownError(err error) {
+func pushUnknownError(desc string ,err error) {
 	if DebugModeFlag {
 		fmt.Printf("%v\n", err)
 	}
-	pushWarning("An unexpected error has occurred:\n\n%s\n\nThe program will continue to run, but please report this error to us if possible. Thanks!")
+	pushWarning(
+        fmt.Sprintf(
+            "%s: An unexpected error has occurred:\n\n%v\n\nThe program will continue to run, but please report this error to us if possible. Thanks!",
+            desc,
+            err,
+        ),
+    )
 }
 
 // tolsa = "time of last successful auth"
@@ -308,37 +314,37 @@ func AuthAndUpdate() {
 				return
 			}
 		}
-		pushUnknownError(err)
+		pushUnknownError("auth", err)
 		return
 	}
 
 	// after a successful auth call, update tolsa
 	timepath, err := getTolsaPath()
 	if err != nil {
-		pushUnknownError(err)
+		pushUnknownError("time", err)
 	}
 	writeTime(timepath, time.Now())
 
 	if resp.NeedAutoupdate {
 		tmpfile, err := os.CreateTemp("", "update.zip")
 		if err != nil {
-			pushUnknownError(err)
+			pushUnknownError("CreateTemp", err)
 			return
 		}
 		defer os.Remove(tmpfile.Name())
 
 		if err := DownloadFile(resp.DownloadURL, tmpfile); err != nil {
-			pushUnknownError(err)
+			pushUnknownError("DownloadFile", err)
 			return
 		}
 
 		hash, err := GetFileSHAHash(tmpfile.Name())
 		if err != nil {
-			pushUnknownError(err)
+			pushUnknownError("SHA", err)
 			return
 		}
 		if hash != resp.DownloadHash {
-			pushUnknownError(fmt.Errorf("hash mismatch:\n - got: %s\n - expected: %s\n", hash, resp.DownloadHash))
+			pushUnknownError("hash mismatch", fmt.Errorf("got %s, expected %s", hash, resp.DownloadHash))
 			return
 		}
 
@@ -348,7 +354,7 @@ func AuthAndUpdate() {
 		} else {
 			path, err := os.Executable()
 			if err != nil {
-				pushUnknownError(err)
+				pushUnknownError("executable", err)
 				return
 			}
 			exepath = path
@@ -360,7 +366,7 @@ func AuthAndUpdate() {
 		// move newbintmp to newbin
 
 		if err := Unzip(tmpfile.Name(), path.Join(path.Dir(path.Dir(exepath)), "newbin")); err != nil {
-			pushUnknownError(err)
+			pushUnknownError("unzip", err)
 			return
 		}
 	}

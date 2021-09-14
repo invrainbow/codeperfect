@@ -6,7 +6,16 @@
             "request": "launch",
             "name": "debug",
             "program": "build/bin/ide",
-            "args": [],
+            "args": ["/Users/bh/sheetrocks"],
+            "cwd": "${workspaceFolder}/build/bin",
+            "expressions": "native"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "test",
+            "program": "build/bin/test",
+            "args": ["${input:testName}"],
             "cwd": "${workspaceFolder}/build/bin",
             "expressions": "native"
         },
@@ -32,9 +41,14 @@
     ],
     "inputs": [
         {
+            "id": "testName",
+            "type": "promptString",
+            "description": "Test name"
+        },
+        {
             "id": "coreFileName",
             "type": "promptString",
-            "description": "Enter core file path"
+            "description": "Corefile path"
         }
     ]
 }
