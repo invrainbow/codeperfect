@@ -20,6 +20,6 @@ Errors](/building/navigating-errors) for more information.
 
 ## Keyboard Shortcuts
 
-| Command     | macOS                                | Windows                                 |
-| ----------- | ------------------------------------ | --------------------------------------- |
-| Start Build | <kbd>⌘</kbd><kbd>⇧</kbd><kbd>B</kbd> | <kbd>Ctrl</kbd><kbd>⇧</kbd><kbd>B</kbd> |
+| Command     | macOS                                | Windows                                     |
+| ----------- | ------------------------------------ | ------------------------------------------- |
+| Start Build | <kbd>⌘</kbd><kbd>⇧</kbd><kbd>B</kbd> | <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>B</kbd> |
