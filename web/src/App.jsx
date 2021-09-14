@@ -9,20 +9,19 @@ import {
 import { Helmet } from "react-helmet";
 import cx from "classnames";
 import _ from "lodash";
-// import { PlayIcon } from "@heroicons/react/solid";
 
 // static assets
 import ideScreenshotImage from "./ide.png";
 import gif60fps from "./60fps.gif";
 import gifVim from "./vim.gif";
 import pngIntellisense from "./intellisense.png";
-// import pngVideoScreenshot from "./video-screenshot.png";
 
 // constants
-const IDE_NAME = "CodePerfect 95";
-const IDE_NAME_SHORT = "CodePerfect";
+const NAME = "CodePerfect 95";
+const NAME_SHORT = "CodePerfect";
 const SUPPORT_EMAIL = "support@codeperfect95.com";
 const CURRENT_YEAR = new Date().getFullYear();
+const BETA_SIGNUP_LINK = "https://airtable.com/shraN38Z2jqQJVqbk";
 
 function WallOfText({ title, children }) {
   return (
@@ -74,10 +73,8 @@ const IDE_FEATURES = _.shuffle([
   "Fuzzy File Search",
   "GPU-Based Renderer",
   "Highly Optimized Core",
-  // "Debug Tests",
   "Instant Startup",
   "Syntax Highlighting",
-  // "Navigate Errors",
 ]);
 
 function Home() {
@@ -103,7 +100,7 @@ function Home() {
             No Electron. No JavaScript. No garbage collection.
           </h2>
           <p className="md:w-4/12 lg:w-full md:mt-0 lg:mt-4">
-            {IDE_NAME_SHORT} is written in C++ and designed to run at 144 FPS.
+            {NAME_SHORT} is written in C++ and designed to run at 144 FPS.
             Every keystroke responds instantly.
           </p>
         </div>
@@ -117,7 +114,7 @@ function Home() {
           </h2>
           <p>
             Today, IDEs are powerful but slow, while Vim is fast but limited.{" "}
-            {IDE_NAME_SHORT} brings the best of both worlds: everything you need
+            {NAME_SHORT} brings the best of both worlds: everything you need
             to effectively develop in Go, at lightning speed.
           </p>
           <p>
@@ -144,7 +141,7 @@ function Home() {
               Tools that understand Go as a first language.
             </div>
             <p className="md:w-1/3 md:mt-0">
-              {IDE_NAME_SHORT}'s intellisense is hand-written, extensively
+              {NAME_SHORT}'s intellisense is hand-written, extensively
               tested, and designed for speed and reliability.
             </p>
           </div>
@@ -160,7 +157,7 @@ function Home() {
             Tools that understand Go as a first language.
           </div>
           <p className="text-white">
-            {IDE_NAME_SHORT}'s intellisense is hand-written, extensively tested,
+            {NAME_SHORT}'s intellisense is hand-written, extensively tested,
             and designed for speed and reliability.
           </p>
         </div>
@@ -189,13 +186,6 @@ function Home() {
 }
 
 function PricingBox({ title, price, subprice, children }) {
-  /*
-  const bgclasses = {
-    individual: "bg-gray-100",
-    company: "bg-gray-200",
-    premium: "bg-gray-300",
-  };
-  */
   return (
     <div className="w-auto md:w-1/3 rounded-lg text-center overflow-hidden bg-white border">
       <div className="p-6">
@@ -261,7 +251,7 @@ function Pricing() {
             target="_blank"
             rel="noreferrer"
             className="main-button font-bold text-xl px-6 py-3 whitespace-nowrap"
-            href="https://airtable.com/shraN38Z2jqQJVqbk"
+            href={BETA_SIGNUP_LINK}
           >
             Request Access
           </a>
@@ -327,7 +317,7 @@ function App() {
 
       <Helmet>
         <meta charSet="utf-8" />
-        <title>{IDE_NAME}</title>
+        <title>{NAME}</title>
       </Helmet>
 
       <div className="p-6 md:p-12 text-gray-500 w-full lg:max-w-screen-xl lg:mx-auto">
@@ -336,10 +326,9 @@ function App() {
             to="/"
             className="font-bold text-black no-underline whitespace-nowrap"
           >
-            {IDE_NAME}
+            {NAME}
           </Link>
           <div className="flex items-baseline space-x-6">
-            {/*
             <a
               className="no-underline font-semibold text-gray-600 hidden sm:inline-block"
               href="https://docs.codeperfect95.com"
@@ -348,7 +337,6 @@ function App() {
             >
               Docs
             </a>
-            */}
 
             <Link
               className="no-underline font-semibold text-gray-600 hidden sm:inline-block"
@@ -361,7 +349,7 @@ function App() {
               target="_blank"
               rel="noreferrer"
               className="main-button whitespace-nowrap"
-              href="https://airtable.com/shraN38Z2jqQJVqbk"
+              href={BETA_SIGNUP_LINK}
             >
               Join Beta
             </a>
@@ -386,7 +374,7 @@ function App() {
         <div className="pt-4">
           <div className="lg:max-w-screen-xl lg:mx-auto flex flex-col sm:flex-row justify-between">
             <div className="text-gray-500">
-              &copy; {CURRENT_YEAR} {IDE_NAME}
+              &copy; {CURRENT_YEAR} {NAME}
             </div>
             <div className="flex flex-col sm:flex-row space-x-0 sm:space-x-12 mt-2 sm:mt-0">
               <div className="text-left">
@@ -395,13 +383,12 @@ function App() {
                     target="_blank"
                     rel="noreferrer"
                     className="text-gray-500 no-underline"
-                    href="https://airtable.com/shraN38Z2jqQJVqbk"
+                    href={BETA_SIGNUP_LINK}
                   >
                     Join Beta
                   </a>
                 </div>
                 <div>
-                  {/*
                   <a
                     target="_blank"
                     rel="noreferrer"
@@ -410,7 +397,6 @@ function App() {
                   >
                     Docs
                   </a>
-                  */}
                 </div>
                 <div>
                   <Link to="/pricing" className="text-gray-500 no-underline">
