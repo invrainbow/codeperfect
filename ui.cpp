@@ -2126,9 +2126,31 @@ void UI::draw_everything() {
 
         ImGui::PushFont(world.ui.im_font_mono);
 
-        for (int i = wnd.start, j = 0; j < wnd.len; j++) {
+        auto window = ImGui::GetCurrentContext()->CurrentWindow;
+        auto unclipped_rect = window->ClipRect;
+        int i = wnd.start, k = 0;
+
+        // coarse clipping
+        {
+            auto pos = ImGui::GetCursorScreenPos();
+            for (; k < wnd.len; k++, i = (i + 1) % INDEX_LOG_CAP) {
+                auto w = ImGui::GetContentRegionAvail().x;
+                auto h = ImGui::CalcTextSize(wnd.buf[i], NULL, false, w).y;
+                if (pos.y + h >= unclipped_rect.Min.y)
+                    break;
+                pos.y += h;
+            }
+        }
+
+        for (; k < wnd.len; k++, i = (i + 1) % INDEX_LOG_CAP) {
+            auto pos = ImGui::GetCursorScreenPos();
+            if (pos.y > unclipped_rect.Max.y) {
+                auto w = ImGui::GetContentRegionAvail().x;
+                auto h = ImGui::CalcTextSize(wnd.buf[i], NULL, false, w).y;
+                ImGui::SetCursorScreenPos(ImVec2(pos.x, pos.y + h));
+                continue;
+            }
             ImGui::Text(wnd.buf[i]);
-            i = (i + 1) % INDEX_LOG_CAP;
         }
 
         if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
@@ -2148,26 +2170,52 @@ void UI::draw_everything() {
         ImGui::PushFont(world.ui.im_font_mono);
 
         auto &lines = world.dbg.stdout_lines;
-        for (int i = 0; i < lines.len; i++) {
+        int i = 0;
+
+        auto window = ImGui::GetCurrentContext()->CurrentWindow;
+        auto unclipped_rect = window->ClipRect;
+
+        // coarse clipping
+        {
+            auto pos = ImGui::GetCursorScreenPos();
+            for (; i < lines.len; i++) {
+                auto &it = lines[i];
+                auto wrap_width = ImGui::GetContentRegionAvail().x;
+                auto text_size = ImVec2(wrap_width, ImGui::CalcTextSize(it, NULL, false, wrap_width).y);
+
+                if (pos.y + text_size.y >= unclipped_rect.Min.y)
+                    break;
+
+                pos.y += text_size.y;
+            }
+        }
+
+        for (; i < lines.len; i++) {
             auto &it = lines[i];
 
+            auto pos = ImGui::GetCursorScreenPos();
             auto wrap_width = ImGui::GetContentRegionAvail().x;
             auto text_size = ImVec2(wrap_width, ImGui::CalcTextSize(it, NULL, false, wrap_width).y);
-            auto pos = ImGui::GetCursorScreenPos();
+
+            if (pos.y > unclipped_rect.Max.y) {
+                ImGui::SetCursorScreenPos(ImVec2(pos.x, pos.y + text_size.y));
+                continue;
+            }
 
             bool clicked = ImGui::Selectable(our_sprintf("##debug_output_hidden_%d", i), i == wnd.selection, 0, text_size);
             ImGui::GetWindowDrawList()->AddText(NULL, 0.0f, pos, ImGui::GetColorU32(ImGuiCol_Text), it, NULL, wrap_width);
 
-            if (clicked) {
-                wnd.selection = i;
-            }
+            if (clicked) wnd.selection = i;
 
             bool copy = false;
 
             if (ImGui::OurBeginPopupContextItem()) {
+                defer { ImGui::EndPopup(); };
+
                 if (ImGui::Selectable("Copy")) {
                     copy = true;
                 }
+
                 if (ImGui::Selectable("Copy All")) {
                     auto output = alloc_list<char>();
                     For (lines) {
@@ -2180,18 +2228,19 @@ void UI::draw_everything() {
                     output->append('\0');
                     glfwSetClipboardString(world.window, output->items);
                 }
-                ImGui::EndPopup();
+
+                if (ImGui::Selectable("Clear")) {
+                    // TODO
+                    break;
+                }
             }
 
-            if (i == wnd.selection) {
+            if (i == wnd.selection)
                 if (imgui_get_keymods() == OUR_MOD_PRIMARY)
                     if (imgui_key_pressed('c'))
                         copy = true;
-            }
 
-            if (copy) {
-                glfwSetClipboardString(world.window, it);
-            }
+            if (copy) glfwSetClipboardString(world.window, it);
         }
 
         ImGui::PopFont();
