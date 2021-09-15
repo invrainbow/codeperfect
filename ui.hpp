@@ -5,6 +5,7 @@
 #include "stb_image.h"
 #include "stb_rect_pack.h"
 #include "imgui.h"
+#include "imgui_internal.h"
 #include "common.hpp"
 #include "editor.hpp"
 #include "list.hpp"

@@ -614,6 +614,7 @@ int main(int argc, char **argv) {
             switch (key) {
             case GLFW_KEY_B:
                 world.error_list.show = true;
+                world.error_list.cmd_focus = true;
                 save_all_unsaved_files();
                 kick_off_build();
                 break;

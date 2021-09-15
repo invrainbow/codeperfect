@@ -147,6 +147,9 @@ struct Wnd {
     bool show;
     bool focused;
     bool first_open_focus_twice_done;
+
+    // "commands"
+    bool cmd_focus;
 };
 
 #define INDEX_LOG_CAP 64 // 512
@@ -239,6 +242,7 @@ struct World {
         char buf[INDEX_LOG_CAP][INDEX_LOG_MAXLEN];
         int start;
         int len;
+        bool cmd_scroll_to_end;
     } wnd_index_log;
 
     struct : Wnd {

@@ -46,6 +46,8 @@ void index_print(ccstr fmt, ...) {
         if (strlen(msg) > INDEX_LOG_MAXLEN - 1)
             msg = our_sprintf("%.*s...", INDEX_LOG_MAXLEN - 1 - 3, msg);
         strcpy_safe(dest, INDEX_LOG_MAXLEN, msg);
+
+        wnd.cmd_scroll_to_end = true;
     }
 
     go_print("%s", msg);

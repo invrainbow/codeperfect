@@ -1,4 +1,5 @@
 #include "imgui.h"
+#define IMGUI_DEFINE_MATH_OPERATORS
 #include "imgui_internal.h"
 #include "ui.hpp"
 #include "common.hpp"
@@ -1614,6 +1615,66 @@ void open_ft_node(FT_Node *it) {
         ImGui::SetWindowFocus(NULL);
 }
 
+struct Coarse_Clipper {
+    ImVec2 pos;
+    ImRect unclipped_rect;
+    float last_line_height;
+    bool before;
+
+    void init() {
+        before = true;
+        unclipped_rect = get_window_clip_area();
+        pos = ImGui::GetCursorScreenPos();
+    }
+
+    ImRect get_window_clip_area() {
+        auto g = ImGui::GetCurrentContext();
+        auto window = g->CurrentWindow;
+        auto ret = window->ClipRect;
+
+        // I don't know and don't care what this does. It's ripped from imgui.cpp
+        // and makes my code "just work."
+        if (g->NavMoveRequest)
+            ret.Add(g->NavScoringRect);
+        if (g->NavJustMovedToId && window->NavLastIds[0] == g->NavJustMovedToId)
+            ret.Add(ImRect(window->Pos + window->NavRectRel[0].Min, window->Pos + window->NavRectRel[0].Max));
+
+        return ret;
+    }
+
+    bool add(float h) {
+        if (before) {
+            if (pos.y + h >= unclipped_rect.Min.y) {
+                ImGui::SetCursorScreenPos(pos);
+                before = false;
+                return false;
+            }
+            pos.y += h;
+            return true;
+        }
+
+        last_line_height = h;
+
+        if (pos.y > unclipped_rect.Max.y) {
+            pos.y += h;
+            return false;
+        }
+
+        return true;
+    }
+
+    void finish() {
+        auto g = ImGui::GetCurrentContext();
+        ImGuiWindow* window = g->CurrentWindow;
+        window->DC.CursorPos.y = pos.y;
+
+        window->DC.CursorPos.y = pos.y;
+        window->DC.CursorMaxPos.y = ImMax(window->DC.CursorMaxPos.y, pos.y);
+        window->DC.CursorPosPrevLine.y = window->DC.CursorPos.y - last_line_height;
+        window->DC.PrevLineSize.y = last_line_height;
+    }
+};
+
 void UI::draw_everything() {
     verts.len = 0;
 
@@ -1873,6 +1934,7 @@ void UI::draw_everything() {
         if (ImGui::BeginMenu("Build")) {
             if (ImGui::MenuItem("Build", "Ctrl+Shift+B")) {
                 world.error_list.show = true;
+                world.error_list.cmd_focus = true;
                 save_all_unsaved_files();
                 kick_off_build();
             }
@@ -2126,35 +2188,32 @@ void UI::draw_everything() {
 
         ImGui::PushFont(world.ui.im_font_mono);
 
-        auto window = ImGui::GetCurrentContext()->CurrentWindow;
-        auto unclipped_rect = window->ClipRect;
         int i = wnd.start, k = 0;
+        Coarse_Clipper cc; cc.init();
 
-        // coarse clipping
-        {
-            auto pos = ImGui::GetCursorScreenPos();
-            for (; k < wnd.len; k++, i = (i + 1) % INDEX_LOG_CAP) {
-                auto w = ImGui::GetContentRegionAvail().x;
-                auto h = ImGui::CalcTextSize(wnd.buf[i], NULL, false, w).y;
-                if (pos.y + h >= unclipped_rect.Min.y)
-                    break;
-                pos.y += h;
-            }
+        for (; k < wnd.len; k++, i = (i + 1) % INDEX_LOG_CAP) {
+            auto h = ImGui::CalcTextSize(wnd.buf[i]).y;
+            if (!cc.add(h)) break;
         }
 
         for (; k < wnd.len; k++, i = (i + 1) % INDEX_LOG_CAP) {
-            auto pos = ImGui::GetCursorScreenPos();
-            if (pos.y > unclipped_rect.Max.y) {
-                auto w = ImGui::GetContentRegionAvail().x;
-                auto h = ImGui::CalcTextSize(wnd.buf[i], NULL, false, w).y;
-                ImGui::SetCursorScreenPos(ImVec2(pos.x, pos.y + h));
-                continue;
-            }
+            auto h = ImGui::CalcTextSize(wnd.buf[i]).y;
+            if (!cc.add(h)) continue;
+
             ImGui::Text(wnd.buf[i]);
         }
 
-        if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
-            ImGui::SetScrollHereY(1.0f);
+        cc.finish();
+
+        // TODO: handle this "scroll to end but not if user scrolled up
+        // manually" shit
+        /*
+        if (wnd.cmd_scroll_to_end) {
+            wnd.cmd_scroll_to_end = false;
+            if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
+                ImGui::SetScrollHereY(1.0f);
+        }
+        */
 
         ImGui::PopFont();
 
@@ -2167,43 +2226,37 @@ void UI::draw_everything() {
         ImGui::SetNextWindowDockID(dock_bottom_id, ImGuiCond_Once);
         ImGui::Begin("Debug Output", &wnd.show);
 
+        if (wnd.cmd_focus) {
+            ImGui::SetWindowFocus();
+            wnd.cmd_focus = false;
+        }
+
         ImGui::PushFont(world.ui.im_font_mono);
 
         auto &lines = world.dbg.stdout_lines;
         int i = 0;
 
-        auto window = ImGui::GetCurrentContext()->CurrentWindow;
-        auto unclipped_rect = window->ClipRect;
+        Coarse_Clipper cc; cc.init();
 
-        // coarse clipping
-        {
-            auto pos = ImGui::GetCursorScreenPos();
-            for (; i < lines.len; i++) {
-                auto &it = lines[i];
-                auto wrap_width = ImGui::GetContentRegionAvail().x;
-                auto text_size = ImVec2(wrap_width, ImGui::CalcTextSize(it, NULL, false, wrap_width).y);
+        for (; i < lines.len; i++) {
+            auto &it = lines[i];
+            auto w = ImGui::GetContentRegionAvail().x;
+            auto h = ImGui::CalcTextSize(it, NULL, false, w).y;
 
-                if (pos.y + text_size.y >= unclipped_rect.Min.y)
-                    break;
-
-                pos.y += text_size.y;
-            }
+            if (!cc.add(h)) break;
         }
 
         for (; i < lines.len; i++) {
             auto &it = lines[i];
 
             auto pos = ImGui::GetCursorScreenPos();
-            auto wrap_width = ImGui::GetContentRegionAvail().x;
-            auto text_size = ImVec2(wrap_width, ImGui::CalcTextSize(it, NULL, false, wrap_width).y);
+            auto wrapw = ImGui::GetContentRegionAvail().x;
+            auto text_size = ImVec2(wrapw, ImGui::CalcTextSize(it, NULL, false, wrapw).y);
 
-            if (pos.y > unclipped_rect.Max.y) {
-                ImGui::SetCursorScreenPos(ImVec2(pos.x, pos.y + text_size.y));
-                continue;
-            }
+            if (!cc.add(text_size.y)) continue;
 
             bool clicked = ImGui::Selectable(our_sprintf("##debug_output_hidden_%d", i), i == wnd.selection, 0, text_size);
-            ImGui::GetWindowDrawList()->AddText(NULL, 0.0f, pos, ImGui::GetColorU32(ImGuiCol_Text), it, NULL, wrap_width);
+            ImGui::GetWindowDrawList()->AddText(NULL, 0.0f, pos, ImGui::GetColorU32(ImGuiCol_Text), it, NULL, wrapw);
 
             if (clicked) wnd.selection = i;
 
@@ -2243,6 +2296,8 @@ void UI::draw_everything() {
             if (copy) glfwSetClipboardString(world.window, it);
         }
 
+        cc.finish();
+
         ImGui::PopFont();
 
         ImGui::End();
@@ -2256,6 +2311,11 @@ void UI::draw_everything() {
 
         if (ImGui::IsWindowAppearing()) {
             ImGui::SetWindowFocus(NULL);
+        }
+
+        if (world.error_list.cmd_focus) {
+            ImGui::SetWindowFocus();
+            world.error_list.cmd_focus = false;
         }
 
         if (world.build.ready()) {

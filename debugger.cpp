@@ -965,6 +965,7 @@ bool Debugger::start(Debug_Profile *debug_profile) {
             strcpy_safe(build_profile.cmd, _countof(build_profile.cmd), cmd);
 
             world.error_list.show = true;
+            world.error_list.cmd_focus = true;
             kick_off_build(&build_profile);
             while (!world.build.done) continue;
 
@@ -1075,6 +1076,7 @@ bool Debugger::start(Debug_Profile *debug_profile) {
 
     world.wnd_debug_output.selection = -1;
     world.wnd_debug_output.show = true;
+    world.wnd_debug_output.cmd_focus = true;
 
     return true;
 }

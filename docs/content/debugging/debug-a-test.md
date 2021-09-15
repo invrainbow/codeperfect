@@ -19,7 +19,7 @@ profile. Add any additional command-line arguments if needed.
 To debug the test, move your cursor into the test function, not the function
 being tested. If you a have a function `Sum()` and a `TestSum()` test, move
 your cursor into the `TestSum()` function (anywhere inside). Then go to
-<cite>Debug</cite> &gt; </cite>Debug Test Under Cursor</cite>.
+<cite>Debug</cite> &gt; <cite>Debug Test Under Cursor</cite>.
 
 ## Debug all tests in a package
 

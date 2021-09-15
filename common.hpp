@@ -13,6 +13,8 @@
 #include <inttypes.h>
 #endif
 
+#include "defer.hpp"
+
 // tools for macros
 #define TOKENPASTE0(a, b) a##b
 #define TOKENPASTE(a, b) TOKENPASTE0(a, b)
@@ -21,25 +23,6 @@
 template <typename T> using fn = std::function<T>;
 
 typedef fn<void()> lambda;
-
-// defer macro
-template <typename F> struct Defer {
-    Defer(F f) : f(f) {};
-    ~Defer() { f(); }
-    F f;
-};
-template <typename F> Defer<F> make_defer(F f) { return Defer<F>(f); };
-struct defer_dummy {};
-template <typename F> Defer<F> operator+(defer_dummy, F&& f) {
-    return make_defer<F>(f);
-}
-#define defer auto GENSYM(defer) = defer_dummy() + [&]()
-
-struct Run_Function {};
-template <typename F> int operator+(Run_Function, F&& f) {
-    f();
-    return 0;
-};
 
 // typedefs & aliases
 typedef size_t s32;

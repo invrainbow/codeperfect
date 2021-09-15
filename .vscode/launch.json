@@ -6,7 +6,7 @@
             "request": "launch",
             "name": "debug",
             "program": "build/bin/ide",
-            "args": ["/Users/bh/sheetrocks"],
+            "args": ["/Users/bh/ide/gostuff"],
             "cwd": "${workspaceFolder}/build/bin",
             "expressions": "native"
         },

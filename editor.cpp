@@ -215,7 +215,21 @@ void Editor::perform_autocomplete(AC_Result *result) {
 
             case PFC_EMPTY:
                 initialize_everything();
-                insert_text("%s == nil || len(%s) == 0", operand_text);
+                {
+                    auto is_string = [&]() -> bool {
+                        auto gotype = ac.operand_gotype;
+                        if (gotype != NULL)
+                            if (gotype->type == GOTYPE_BUILTIN)
+                                if (gotype->builtin_type == GO_BUILTIN_STRING)
+                                    return true;
+                        return false;
+                    };
+
+                    if (is_string())
+                        insert_text("%s == \"\"", operand_text);
+                    else
+                        insert_text("%s == nil || len(%s) == 0", operand_text, operand_text);
+                }
                 break;
 
             case PFC_IF:

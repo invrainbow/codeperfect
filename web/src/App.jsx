@@ -80,11 +80,11 @@ const IDE_FEATURES = _.shuffle([
 function Home() {
   return (
     <div>
-      <div className="mt-8 mb-24 sm:my-24 md:my-32">
+      <div className="mt-8 mb-24 sm:my-24 md:my-32 md:mt-24">
         <div className="leading-tight text-center mb-2 text-4xl md:text-5xl font-bold text-black">
           The Fastest IDE for Go
         </div>
-        <div className="mb-6 md:mb-12 text-lg text-gray-400 text-center">
+        <div className="mb-6 md:mb-20 text-lg text-gray-400 text-center">
           With Windows and macOS support
         </div>
         <img
