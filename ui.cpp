@@ -4025,6 +4025,37 @@ void UI::draw_everything() {
                         }
                     }
 
+                    if (line->len == 0) {
+                        auto topline = editor->nvim_data.grid_topline;
+                        if (topline <= y && y < topline + NVIM_DEFAULT_HEIGHT) {
+                            auto draw_highlight = [&](vec4f color) {
+                                boxf b;
+                                b.pos = cur_pos;
+                                b.y -= font->offset_y;
+                                b.w = font->width;
+                                b.h = font->height;
+
+                                auto py = font->height * (settings.line_height - 1.0) / 2;
+                                b.y -= py;
+                                b.h += py * 2;
+
+                                draw_rect(b, color);
+                            };
+
+                            switch (editor->highlights[y - topline][0]) {
+                            case HL_INCSEARCH:
+                                draw_highlight(rgba(COLOR_JBLOW_FG));
+                                break;
+                            case HL_SEARCH:
+                                draw_highlight(rgba(COLOR_JBLOW_SEARCH));
+                                break;
+                            case HL_VISUAL:
+                                draw_highlight(rgba(COLOR_JBLOW_VISUAL));
+                                break;
+                            }
+                        }
+                    }
+
                     if (editor->cur == new_cur2(line->len, y))
                         draw_cursor(1);
 
