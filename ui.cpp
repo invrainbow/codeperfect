@@ -3362,8 +3362,8 @@ void UI::draw_everything() {
                         if (clicked) {
                             if (ImGui::IsMouseDoubleClicked(0)) {
                                 auto pos = it.match_start;
-                                if (it.mark_start != NULL)
-                                    pos = it.mark_start->pos();
+                                if (it.mark_start.valid)
+                                    pos = it.mark_start.pos();
 
                                 goto_file_and_pos(filepath, pos);
                             } else {

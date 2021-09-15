@@ -6,7 +6,7 @@
             "request": "launch",
             "name": "debug",
             "program": "build/bin/ide",
-            "args": ["/Users/bh/ide/gostuff"],
+            "args": ["/Users/brandon/sheetrocks"],
             "cwd": "${workspaceFolder}/build/bin",
             "expressions": "native"
         },
@@ -50,5 +50,5 @@
             "type": "promptString",
             "description": "Corefile path"
         }
-    ]
+    ],
 }

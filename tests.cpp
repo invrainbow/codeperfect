@@ -83,7 +83,7 @@ struct Mtf_Action {
 const cur2 NOBOUND = {-1, -1};
 
 struct Mark_Tree_Fuzzer {
-    List<Mark*> marks;
+    List<Mark> marks;
     List<Mtf_Action> actions;
     Mark_Tree tree;
     bool print_flag;
@@ -122,7 +122,7 @@ struct Mark_Tree_Fuzzer {
             print(
                 "delete mark: index %d, pos = %s",
                 a->delete_mark_index,
-                format_cur(marks[a->delete_mark_index]->pos())
+                format_cur(marks[a->delete_mark_index].pos())
             );
             break;
         case MTF_APPLY_EDIT:
@@ -141,10 +141,10 @@ struct Mark_Tree_Fuzzer {
 
         switch (a->type) {
         case MTF_INSERT_MARK:
-            marks.append(tree.insert_mark(MARK_TEST, a->insert_mark_pos));
+            tree.insert_mark(MARK_TEST, a->insert_mark_pos, marks.append());
             break;
         case MTF_DELETE_MARK:
-            marks[a->delete_mark_index]->cleanup();
+            marks[a->delete_mark_index].cleanup();
             marks.remove(a->delete_mark_index);
             break;
         case MTF_APPLY_EDIT:

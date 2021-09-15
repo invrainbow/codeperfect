@@ -1045,13 +1045,13 @@ bool Editor::load_file(ccstr new_filepath) {
     if (b.ready()) {
         auto editor_path = get_path_relative_to(filepath, world.current_path);
         For (b.errors) {
-            if (it.mark != NULL) continue;
+            if (it.mark.valid) continue;
             if (!it.valid) continue;
             if (!are_filepaths_equal(editor_path, it.file)) continue;
 
             // create mark
             auto pos = new_cur2(it.col - 1, it.row - 1);
-            it.mark = buf.mark_tree.insert_mark(MARK_BUILD_ERROR, pos);
+            buf.mark_tree.insert_mark(MARK_BUILD_ERROR, pos, &it.mark);
         }
     }
 
@@ -1467,17 +1467,6 @@ void Editor::cleanup() {
             nv.writer.write_string("unload"); nv.writer.write_bool(false);
         }
         nv.end_message();
-    }
-
-    // we need an easier system of removing all references to editor
-    // and its marks when the editor closes
-
-    if (world.build.ready()) {
-        For (world.build.errors) {
-            if (it.mark != NULL)
-                if (it.mark->tree == &buf.mark_tree)
-                    it.mark = NULL;
-        }
     }
 
     world.history.remove_editor_from_history(id);

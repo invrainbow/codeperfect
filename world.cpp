@@ -32,7 +32,7 @@ void History::actually_push(int editor_id, cur2 pos, bool force, bool capturing_
 
     ring[curr].editor_id = editor_id;
     ring[curr].pos = pos; // do we even need this anymore?
-    ring[curr].mark = editor->buf.mark_tree.insert_mark(MARK_HISTORY, pos);
+    editor->buf.mark_tree.insert_mark(MARK_HISTORY, pos, &ring[curr].mark);
 
     top = curr = inc(curr);
     if (curr == start) {
@@ -80,7 +80,7 @@ void History::actually_go(History_Loc *it) {
     if (editor == NULL) return;
     if (!editor->is_nvim_ready()) return;
 
-    auto pos = it->mark->pos(); // it->pos
+    auto pos = it->mark.pos(); // it->pos
 
     world.navigation_queue.len = 0;
     auto dest = world.navigation_queue.append();
@@ -167,10 +167,7 @@ void History::remove_editor_from_history(int editor_id) {
 }
 
 void History_Loc::cleanup() {
-    if (mark != NULL) {
-        mark->cleanup();
-        mark = NULL;
-    }
+    if (mark.valid) mark.cleanup();
 }
 
 void World::fill_file_tree() {
@@ -371,7 +368,6 @@ void World::init(GLFWwindow *_wnd) {
     tell_user(our_sprintf("PATH = %s", get_path()), NULL);
     */
 
-    mark_fridge.init(512);
     mark_node_fridge.init(512);
 
     chunk0_fridge.init(512);
@@ -629,7 +625,7 @@ void kick_off_build(Build_Profile *build_profile) {
                         if (!are_filepaths_equal(path, it.file)) continue;
 
                         auto pos = new_cur2(it.col - 1, it.row - 1);
-                        it.mark = editor.buf.mark_tree.insert_mark(MARK_BUILD_ERROR, pos);
+                        editor.buf.mark_tree.insert_mark(MARK_BUILD_ERROR, pos, &it.mark);
                     }
                 }
             }
@@ -989,12 +985,12 @@ void goto_error(int index) {
     // when build finishes, set marks on existing editors
     // when editor opens, get all existing errors and set marks
 
-    if (editor == NULL || error.mark == NULL) {
+    if (editor == NULL || !error.mark.valid) {
         goto_file_and_pos(path, pos);
         return;
     }
 
-    world.focus_editor_by_id(editor->id, error.mark->pos());
+    world.focus_editor_by_id(editor->id, error.mark.pos());
     ImGui::SetWindowFocus(NULL);
     b.scroll_to = index;
 }

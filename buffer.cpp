@@ -719,11 +719,10 @@ void cleanup_mark_node(Mark_Node *node) {
     cleanup_mark_node(node->left);
     cleanup_mark_node(node->right);
 
-    auto it = node->marks;
-    while (it != NULL) {
-        auto next = it->next;
-        world.mark_fridge.free(it);
-        it = next;
+    for (auto it = node->marks; it != NULL; it = it->next) {
+        if (it == it->next)
+            our_panic("infinite loop");
+        it->valid = false;
     }
 
     world.mark_node_fridge.free(node);
@@ -780,16 +779,16 @@ Mark_Node *Mark_Tree::insert_node(cur2 pos) {
     return node;
 }
 
-Mark *Mark_Tree::insert_mark(Mark_Type type, cur2 pos) {
-    auto mark = world.mark_fridge.alloc();
+void Mark_Tree::insert_mark(Mark_Type type, cur2 pos, Mark *mark) {
     mark->type = type;
+    mark->tree = this;
+    mark->valid = true;
 
     auto node = insert_node(pos);
     mark->node = node;
-    mark->tree = this;
     mark->next = node->marks;
+    if (mark->next == mark) our_panic("infinite loop");
     node->marks = mark;
-    return mark;
 }
 
 void Mark_Tree::recalc_height(Mark_Node *root) {
@@ -888,8 +887,10 @@ void Mark_Tree::delete_mark(Mark *mark) {
         if (it == mark) {
             if (last == NULL)
                node->marks = mark->next;
-            else
+            else {
                last->next = mark->next;
+               if (last->next == last) our_panic("infinite loop");
+            }
             break;
         }
         last = it;
@@ -898,8 +899,9 @@ void Mark_Tree::delete_mark(Mark *mark) {
     if (node->marks == NULL)
         delete_node(node->pos);
 
-    ptr0(mark); // surface the error earlier
-    world.mark_fridge.free(mark);
+    mark->valid = false;
+    // ptr0(mark); // surface the error earlier
+    // world.mark_fridge.free(mark);
 }
 
 void Mark_Tree::delete_node(cur2 pos) {
@@ -999,8 +1001,6 @@ void Mark_Tree::apply_edit(cur2 start, cur2 old_end, cur2 new_end) {
 
     while (it != NULL && it->pos < old_end) {
         if (it->pos < new_end) {
-            for (auto mark = it->marks; mark != NULL; mark = mark->next)
-                mark->invalidated = true;
             it = succ(it);
         } else {
             Mark *next = NULL;
@@ -1009,6 +1009,8 @@ void Mark_Tree::apply_edit(cur2 start, cur2 old_end, cur2 new_end) {
                 next = mark->next;
 
                 mark->next = orphan_marks;
+                if (mark->next == mark) our_panic("infinite loop");
+
                 orphan_marks = mark;
             }
             it->marks = NULL;
@@ -1043,6 +1045,7 @@ void Mark_Tree::apply_edit(cur2 start, cur2 old_end, cur2 new_end) {
             next = mark->next;
             mark->node = nend;
             mark->next = nend->marks;
+            if (mark->next == mark) our_panic("infinite loop");
             nend->marks = mark;
         }
     }
@@ -1070,7 +1073,7 @@ void Mark_Tree::check_ordering() {
 }
 
 cur2 Mark::pos() { return node->pos; }
-void Mark::cleanup() { tree->delete_mark(this); }
+void Mark::cleanup() { if (valid) tree->delete_mark(this); }
 
 // ============
 // mark_tree_marker

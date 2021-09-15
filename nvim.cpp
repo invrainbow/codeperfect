@@ -706,7 +706,15 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                         if (pos.y == -1)
                             pos = editor->offset_to_cur(pos.x);
 
-                        if (new_cur == pos)
+                        auto is_pos_even_valid = [&]() -> bool {
+                            auto &buf = editor->buf;
+                            if (0 <= pos.y && pos.y < buf.lines.len)
+                                if (0 <= pos.x && pos.x < buf.lines[pos.y].len)
+                                    return true;
+                            return false;
+                        };
+
+                        if (new_cur == pos || !is_pos_even_valid())
                             set = true;
                     } else {
                         set = true;

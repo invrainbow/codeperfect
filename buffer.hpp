@@ -69,7 +69,7 @@ struct Mark {
     Mark_Tree *tree;
     Mark_Node *node;
     Mark *next;
-    bool invalidated; // does this go on mark on node? i think mark?
+    bool valid;
 
     cur2 pos();
     void cleanup();
@@ -124,7 +124,7 @@ struct Mark_Tree {
     void cleanup();
 
     // public api
-    Mark *insert_mark(Mark_Type type, cur2 pos);
+    void insert_mark(Mark_Type type, cur2 pos, Mark *out);
     void delete_mark(Mark *mark);
     void apply_edit(cur2 start, cur2 old_end, cur2 new_end);
 
