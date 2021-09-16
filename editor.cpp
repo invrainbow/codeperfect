@@ -1055,6 +1055,21 @@ bool Editor::load_file(ccstr new_filepath) {
         }
     }
 
+    // fill in search results
+    if (world.searcher.state == SEARCH_SEARCH_DONE) {
+        For (world.searcher.search_results) {
+            if (!are_filepaths_equal(it.filepath, filepath)) continue;
+
+            For (*it.results) {
+                if (it.mark_start.valid) our_panic("this shouldn't be happening");
+                if (it.mark_end.valid) our_panic("this shouldn't be happening");
+
+                buf.mark_tree.insert_mark(MARK_SEARCH_RESULT, it.match_start, &it.mark_start);
+                buf.mark_tree.insert_mark(MARK_SEARCH_RESULT, it.match_end, &it.mark_end);
+            }
+        }
+    }
+
     return true;
 }
 

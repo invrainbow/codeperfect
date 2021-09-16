@@ -774,7 +774,7 @@ Mark_Node *Mark_Tree::insert_node(cur2 pos) {
     node->pos = pos;
     root = internal_insert_node(root, pos, node);
 
-    check_ordering();
+    check_tree_integrity();
 
     return node;
 }
@@ -784,11 +784,15 @@ void Mark_Tree::insert_mark(Mark_Type type, cur2 pos, Mark *mark) {
     mark->tree = this;
     mark->valid = true;
 
+    check_tree_integrity();
+
     auto node = insert_node(pos);
     mark->node = node;
     mark->next = node->marks;
     if (mark->next == mark) our_panic("infinite loop");
     node->marks = mark;
+
+    check_tree_integrity();
 }
 
 void Mark_Tree::recalc_height(Mark_Node *root) {
@@ -880,10 +884,14 @@ Mark_Node *Mark_Tree::internal_insert_node(Mark_Node *root, cur2 pos, Mark_Node 
 
 void Mark_Tree::delete_mark(Mark *mark) {
     auto node = mark->node;
+    bool found = false;
+
+    check_tree_integrity();
 
     // remove `mark` from `node->marks`
     Mark *last = NULL;
     for (auto it = node->marks; it != NULL; it = it->next) {
+        found = true;
         if (it == mark) {
             if (last == NULL)
                node->marks = mark->next;
@@ -896,6 +904,11 @@ void Mark_Tree::delete_mark(Mark *mark) {
         last = it;
     }
 
+    check_tree_integrity();
+
+    if (!found)
+        our_panic("trying to delete mark not found in its node");
+
     if (node->marks == NULL)
         delete_node(node->pos);
 
@@ -905,8 +918,9 @@ void Mark_Tree::delete_mark(Mark *mark) {
 }
 
 void Mark_Tree::delete_node(cur2 pos) {
+    check_tree_integrity();
     root = internal_delete_node(root, pos);
-    check_ordering();
+    check_tree_integrity();
 }
 
 Mark_Node *Mark_Tree::internal_delete_node(Mark_Node *root, cur2 pos) {
@@ -997,14 +1011,26 @@ void Mark_Tree::apply_edit(cur2 start, cur2 old_end, cur2 new_end) {
 
     Mark *orphan_marks = NULL;
 
-    check_ordering();
+    check_tree_integrity();
 
     while (it != NULL && it->pos < old_end) {
         if (it->pos < new_end) {
             it = succ(it);
         } else {
+            for (auto mark = it->marks; mark != NULL; mark = mark->next)
+                if (mark == mark->next)
+                    our_panic("infinite loop");
+
             Mark *next = NULL;
+
+            if (it->marks == orphan_marks)
+                our_panic("why is this happening?");
+
+            int i = 0;
             for (auto mark = it->marks; mark != NULL; mark = next) {
+                if (orphan_marks == mark)
+                    our_panic("why is this happening?");
+
                 mark->node = NULL;
                 next = mark->next;
 
@@ -1012,6 +1038,7 @@ void Mark_Tree::apply_edit(cur2 start, cur2 old_end, cur2 new_end) {
                 if (mark->next == mark) our_panic("infinite loop");
 
                 orphan_marks = mark;
+                i++;
             }
             it->marks = NULL;
 
@@ -1025,7 +1052,7 @@ void Mark_Tree::apply_edit(cur2 start, cur2 old_end, cur2 new_end) {
         }
     }
 
-    check_ordering();
+    check_tree_integrity();
 
     for (; it != NULL; it = succ(it)) {
         if (it->pos.y == old_end.y) {
@@ -1036,7 +1063,7 @@ void Mark_Tree::apply_edit(cur2 start, cur2 old_end, cur2 new_end) {
         }
     }
 
-    check_ordering();
+    check_tree_integrity();
 
     if (orphan_marks != NULL) {
         auto nend = insert_node(new_end);
@@ -1050,7 +1077,46 @@ void Mark_Tree::apply_edit(cur2 start, cur2 old_end, cur2 new_end) {
         }
     }
 
+    check_tree_integrity();
+}
+
+void Mark_Tree::check_mark_cycle(Mark_Node *root) {
+    if (root == NULL) return;
+
+    for (auto mark = root->marks; mark != NULL; mark = mark->next)
+        if (mark == mark->next)
+            our_panic("mark cycle detected");
+
+    check_mark_cycle(root->left);
+    check_mark_cycle(root->right);
+}
+
+void Mark_Tree::check_duplicate_marks_helper(Mark_Node *root, List<Mark*> *seen) {
+    if (root == NULL) return;
+
+    check_duplicate_marks_helper(root->left, seen);
+    check_duplicate_marks_helper(root->right, seen);
+
+    for (auto m = root->marks; m != NULL; m = m->next) {
+        if (seen->find([&](auto it) { return *it == m; }) != NULL)
+            our_panic("duplicate mark");
+        seen->append(m);
+    }
+}
+
+void Mark_Tree::check_duplicate_marks() {
+    SCOPED_FRAME();
+
+    // if this gets too slow, use a set
+    List<Mark*> seen; seen.init();
+
+    check_duplicate_marks_helper(root, &seen);
+}
+
+void Mark_Tree::check_tree_integrity() {
     check_ordering();
+    check_mark_cycle(root);
+    // check_duplicate_marks();
 }
 
 void Mark_Tree::check_ordering() {

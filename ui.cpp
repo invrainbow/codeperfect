@@ -21,6 +21,22 @@ void open_ft_node(FT_Node *it);
 
 UI ui;
 
+ccstr format_key(int mods, ccstr key) {
+    List<ccstr> parts; parts.init();
+
+    if (mods & KEYMOD_CMD)   parts.append("Cmd");
+    if (mods & KEYMOD_SHIFT) parts.append("Shift");
+    if (mods & KEYMOD_ALT)   parts.append("Alt");
+    if (mods & KEYMOD_CTRL)  parts.append("Ctrl");
+
+    Text_Renderer rend; rend.init();
+    For (parts) {
+        rend.write("%s + ", it);
+    }
+    rend.write("%s", key);
+    return rend.finish();
+}
+
 bool Font::init(u8* font_data, u32 font_size, int texture_id) {
     height = font_size;
     tex_size = (i32)pow(2.0f, (i32)log2(sqrt((float)height * height * 8 * 8 * 128)) + 1);
@@ -1014,7 +1030,7 @@ struct Debugger_UI {
             if (*selection == var) {
                 if (watch != NULL) {
                     auto delete_pressed = [&]() -> bool {
-                        if (ui->imgui_get_keymods() == OUR_MOD_NONE) {
+                        if (ui->imgui_get_keymods() == KEYMOD_NONE) {
                             if (ui->imgui_special_key_pressed(ImGuiKey_Backspace))
                                 return true;
                             if (ui->imgui_special_key_pressed(ImGuiKey_Delete))
@@ -1064,7 +1080,7 @@ struct Debugger_UI {
                     }
                 }
 
-                if (ui->imgui_get_keymods() == OUR_MOD_PRIMARY && ui->imgui_key_pressed('c')) {
+                if (ui->imgui_get_keymods() == KEYMOD_PRIMARY && ui->imgui_key_pressed('c')) {
                     // ???
                 }
             }
@@ -1139,7 +1155,7 @@ struct Debugger_UI {
             bool copy = false;
 
             if (*selection == var)
-                if (ui->imgui_get_keymods() == OUR_MOD_PRIMARY)
+                if (ui->imgui_get_keymods() == KEYMOD_PRIMARY)
                     if (ui->imgui_key_pressed('c'))
                         copy = true;
 
@@ -1600,10 +1616,10 @@ u32 UI::imgui_get_keymods() {
     auto &io = ImGui::GetIO();
 
     u32 ret = 0;
-    if (io.KeySuper) ret |= OUR_MOD_CMD;
-    if (io.KeyCtrl) ret |= OUR_MOD_CTRL;
-    if (io.KeyShift) ret |= OUR_MOD_SHIFT;
-    if (io.KeyAlt) ret |= OUR_MOD_ALT;
+    if (io.KeySuper) ret |= KEYMOD_CMD;
+    if (io.KeyCtrl) ret |= KEYMOD_CTRL;
+    if (io.KeyShift) ret |= KEYMOD_SHIFT;
+    if (io.KeyAlt) ret |= KEYMOD_ALT;
     return ret;
 }
 
@@ -1767,7 +1783,7 @@ void UI::draw_everything() {
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(7, 5));
 
         if (ImGui::BeginMenu("File")) {
-            if (ImGui::MenuItem("New File", "Ctrl+N")) {
+            if (ImGui::MenuItem("New File", format_key(KEYMOD_PRIMARY, "N"))) {
                 world.get_current_pane()->open_empty_editor();
             }
 
@@ -1777,11 +1793,11 @@ void UI::draw_everything() {
 
                 if (editor != NULL) {
                     if (editor->is_untitled)
-                        clicked = ImGui::MenuItem("Save untitled file...###save_file", "Ctrl+S");
+                        clicked = ImGui::MenuItem("Save untitled file...###save_file", format_key(KEYMOD_PRIMARY, "S"));
                     else
-                        clicked = ImGui::MenuItem(our_sprintf("Save %s...###save_file", our_basename(editor->filepath)), "Ctrl+S");
+                        clicked = ImGui::MenuItem(our_sprintf("Save %s...###save_file", our_basename(editor->filepath)), format_key(KEYMOD_PRIMARY, "S"));
                 } else {
-                    ImGui::MenuItem("Save file...###save_file", "Ctrl+S", false, false);
+                    ImGui::MenuItem("Save file...###save_file", format_key(KEYMOD_PRIMARY, "S"), false, false);
                 }
 
                 if (clicked && editor != NULL)
@@ -1789,18 +1805,18 @@ void UI::draw_everything() {
             }
 
             ImGui::Separator();
-            if (ImGui::MenuItem("Exit", "Alt+F4")) {
+            if (ImGui::MenuItem("Exit", format_key(KEYMOD_ALT, "F4"))) {
                 glfwSetWindowShouldClose(world.window, true);
             }
             ImGui::EndMenu();
         }
 
         if (ImGui::BeginMenu("Edit")) {
-            if (ImGui::MenuItem("Search...", "Ctrl+Shift+F")) {
+            if (ImGui::MenuItem("Search...", format_key(KEYMOD_PRIMARY | KEYMOD_SHIFT, "F"))) {
                 world.wnd_search_and_replace.show = true;
                 world.wnd_search_and_replace.replace = false;
             }
-            if (ImGui::MenuItem("Search and Replace...", "Ctrl+Shift+H")) {
+            if (ImGui::MenuItem("Search and Replace...", format_key(KEYMOD_PRIMARY | KEYMOD_SHIFT, "H"))) {
                 world.wnd_search_and_replace.show = true;
                 world.wnd_search_and_replace.replace = true;
             }
@@ -1808,31 +1824,31 @@ void UI::draw_everything() {
         }
 
         if (ImGui::BeginMenu("View")) {
-            ImGui::MenuItem("File Explorer", "Ctrl+Shift+E", &world.file_explorer.show);
+            ImGui::MenuItem("File Explorer", format_key(KEYMOD_PRIMARY | KEYMOD_SHIFT, "E"), &world.file_explorer.show);
             ImGui::MenuItem("Error List", NULL, &world.error_list.show);
             ImGui::EndMenu();
         }
 
         if (ImGui::BeginMenu("Go")) {
-            if (ImGui::MenuItem("Go to File...", "Ctrl+P")) {
+            if (ImGui::MenuItem("Go to File...", format_key(KEYMOD_PRIMARY, "P"))) {
                 if (!world.wnd_goto_file.show) {
                     world.wnd_goto_file.show = true;
                     init_goto_file();
                 }
             }
-            if (ImGui::MenuItem("Go to Symbol...", "Ctrl+P")) {
+            if (ImGui::MenuItem("Go to Symbol...", format_key(KEYMOD_PRIMARY, "T"))) {
                 if (!world.wnd_goto_symbol.show) {
                     world.wnd_goto_symbol.show = true;
                     init_goto_symbol();
                 }
             }
-            if (ImGui::MenuItem("Go to Next Item", "Alt+]")) {
+            if (ImGui::MenuItem("Go to Next Item", format_key(KEYMOD_ALT, "]"))) {
                 goto_next_error(1);
             }
-            if (ImGui::MenuItem("Go to Previous Item", "Alt+[")) {
+            if (ImGui::MenuItem("Go to Previous Item", format_key(KEYMOD_ALT, "["))) {
                 goto_next_error(-1);
             }
-            if (ImGui::MenuItem("Go to Definition", "Ctrl+G")) {
+            if (ImGui::MenuItem("Go to Definition", format_key(KEYMOD_PRIMARY, "G"))) {
                 handle_goto_definition();
             }
             ImGui::EndMenu();
@@ -1841,12 +1857,12 @@ void UI::draw_everything() {
         if (ImGui::BeginMenu("Format")) {
             auto editor = world.get_current_editor();
 
-            if (ImGui::MenuItem("Format File", "Alt+Shift+F", false, editor != NULL)) {
+            if (ImGui::MenuItem("Format File", format_key(KEYMOD_ALT | KEYMOD_SHIFT, "F"), false, editor != NULL)) {
                 if (editor != NULL)
                     editor->format_on_save(GH_FMT_GOIMPORTS);
             }
 
-            if (ImGui::MenuItem("Format File and Organize Imports", "Alt+Shift+O", false, editor != NULL)) {
+            if (ImGui::MenuItem("Format File and Organize Imports", format_key(KEYMOD_ALT | KEYMOD_SHIFT, "O"), false, editor != NULL)) {
                 if (editor != NULL) {
                     if (editor->optimize_imports())
                         editor->format_on_save(GH_FMT_GOIMPORTS);
@@ -1932,7 +1948,7 @@ void UI::draw_everything() {
         }
 
         if (ImGui::BeginMenu("Build")) {
-            if (ImGui::MenuItem("Build", "Ctrl+Shift+B")) {
+            if (ImGui::MenuItem("Build", format_key(KEYMOD_PRIMARY | KEYMOD_SHIFT, "B"))) {
                 world.error_list.show = true;
                 world.error_list.cmd_focus = true;
                 save_all_unsaved_files();
@@ -2012,31 +2028,31 @@ void UI::draw_everything() {
                 world.dbg.push_call(DLVC_BREAK_ALL);
             }
 
-            if (ImGui::MenuItem("Stop Debugging", "Shift+F5", false, world.dbg.state_flag != DLV_STATE_INACTIVE)) {
+            if (ImGui::MenuItem("Stop Debugging", format_key(KEYMOD_SHIFT, "F5"), false, world.dbg.state_flag != DLV_STATE_INACTIVE)) {
                 world.dbg.push_call(DLVC_STOP);
             }
 
-            if (ImGui::MenuItem("Step Over", "F10", false, world.dbg.state_flag == DLV_STATE_PAUSED)) {
+            if (ImGui::MenuItem("Step Over", format_key(KEYMOD_NONE, "F10"), false, world.dbg.state_flag == DLV_STATE_PAUSED)) {
                 world.dbg.push_call(DLVC_STEP_OVER);
             }
 
-            if (ImGui::MenuItem("Step Into", "F11", false, world.dbg.state_flag == DLV_STATE_PAUSED)) {
+            if (ImGui::MenuItem("Step Into", format_key(KEYMOD_NONE, "F11"), false, world.dbg.state_flag == DLV_STATE_PAUSED)) {
                 world.dbg.push_call(DLVC_STEP_INTO);
             }
 
-            if (ImGui::MenuItem("Step Out", "Shift+F11", false, world.dbg.state_flag == DLV_STATE_PAUSED)) {
+            if (ImGui::MenuItem("Step Out", format_key(KEYMOD_SHIFT, "F11"), false, world.dbg.state_flag == DLV_STATE_PAUSED)) {
                 world.dbg.push_call(DLVC_STEP_OUT);
             }
 
             /*
-            if (ImGui::MenuItem("Run to Cursor", "Shift+F10", false, world.dbg.state_flag == DLV_STATE_PAUSED)) {
+            if (ImGui::MenuItem("Run to Cursor", format_key(KEYMOD_SHIFT, "F10"), false, world.dbg.state_flag == DLV_STATE_PAUSED)) {
                 // TODO
             }
             */
 
             ImGui::Separator();
 
-            if (ImGui::MenuItem("Toggle Breakpoint", "F9")) {
+            if (ImGui::MenuItem("Toggle Breakpoint", format_key(KEYMOD_NONE, "F9"))) {
                 auto editor = world.get_current_editor();
                 if (editor != NULL) {
                     world.dbg.push_call(DLVC_TOGGLE_BREAKPOINT, [&](auto call) {
@@ -2046,7 +2062,7 @@ void UI::draw_everything() {
                 }
             }
 
-            if (ImGui::MenuItem("Delete All Breakpoints", "Shift+F9")) {
+            if (ImGui::MenuItem("Delete All Breakpoints", format_key(KEYMOD_SHIFT, "F9"))) {
                 prompt_delete_all_breakpoints();
             }
 
@@ -2289,7 +2305,7 @@ void UI::draw_everything() {
             }
 
             if (i == wnd.selection)
-                if (imgui_get_keymods() == OUR_MOD_PRIMARY)
+                if (imgui_get_keymods() == KEYMOD_PRIMARY)
                     if (imgui_key_pressed('c'))
                         copy = true;
 
@@ -2735,7 +2751,7 @@ void UI::draw_everything() {
         if (wnd.focused) {
             auto mods = imgui_get_keymods();
             switch (mods) {
-            case OUR_MOD_NONE:
+            case KEYMOD_NONE:
                 if (imgui_special_key_pressed(ImGuiKey_DownArrow) || imgui_key_pressed('j')) {
                     auto getnext = [&]() -> FT_Node * {
                         auto curr = wnd.selection;
@@ -2793,7 +2809,7 @@ void UI::draw_everything() {
                         wnd.selection = curr;
                 }
                 break;
-            case OUR_MOD_PRIMARY:
+            case KEYMOD_PRIMARY:
                 if (imgui_special_key_pressed(ImGuiKey_Delete) || imgui_special_key_pressed(ImGuiKey_Backspace)) {
                     auto curr = wnd.selection;
                     if (curr != NULL) world.delete_ft_node(curr);
@@ -3039,12 +3055,12 @@ void UI::draw_everything() {
         if (wnd.focused) {
             auto mods = imgui_get_keymods();
             switch (mods) {
-            case OUR_MOD_NONE:
+            case KEYMOD_NONE:
                 if (imgui_special_key_pressed(ImGuiKey_DownArrow)) go_down();
                 if (imgui_special_key_pressed(ImGuiKey_UpArrow)) go_up();
                 if (imgui_special_key_pressed(ImGuiKey_Escape)) wnd.show = false;
                 break;
-            case OUR_MOD_PRIMARY:
+            case KEYMOD_PRIMARY:
                 if (imgui_key_pressed('j')) go_down();
                 if (imgui_key_pressed('k')) go_up();
                 break;
@@ -3097,12 +3113,12 @@ void UI::draw_everything() {
 
         auto mods = imgui_get_keymods();
         switch (mods) {
-        case OUR_MOD_NONE:
+        case KEYMOD_NONE:
             if (imgui_special_key_pressed(ImGuiKey_DownArrow)) go_down();
             if (imgui_special_key_pressed(ImGuiKey_UpArrow)) go_up();
             if (imgui_special_key_pressed(ImGuiKey_Escape)) wnd.show = false;
             break;
-        case OUR_MOD_PRIMARY:
+        case KEYMOD_PRIMARY:
             if (imgui_key_pressed('j')) go_down();
             if (imgui_key_pressed('k')) go_up();
             break;
@@ -3326,7 +3342,11 @@ void UI::draw_everything() {
 
                         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(ImColor(200, 178, 178)));
                         {
-                            auto s = our_sprintf("%d:%d ", it.match_start.y+1, it.match_start.x+1);
+                            auto pos = it.match_start;
+                            if (it.mark_start.valid)
+                                pos = it.mark_start.pos();
+
+                            auto s = our_sprintf("%d:%d ", pos.y+1, pos.x+1);
                             draw_text(s, strlen(s));
                         }
                         ImGui::PopStyleColor();
@@ -3379,7 +3399,7 @@ void UI::draw_everything() {
                 if (wnd.focused && !world.ui.keyboard_captured_by_imgui) {
                     auto mods = imgui_get_keymods();
                     switch (mods) {
-                    case OUR_MOD_NONE:
+                    case KEYMOD_NONE:
                         if (imgui_special_key_pressed(ImGuiKey_DownArrow) || imgui_key_pressed('j')) {
                             if (wnd.selection < index-1)
                                 wnd.selection++;

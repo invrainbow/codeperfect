@@ -553,7 +553,7 @@ int main(int argc, char **argv) {
         // handle global keys
 
         switch (ui.imgui_get_keymods()) {
-        case OUR_MOD_SHIFT:
+        case KEYMOD_SHIFT:
             if (world.use_nvim) {
                 switch (key) {
                 case GLFW_KEY_F5:
@@ -574,7 +574,7 @@ int main(int argc, char **argv) {
             }
             break;
 
-        case OUR_MOD_ALT:
+        case KEYMOD_ALT:
             switch (key) {
             case GLFW_KEY_LEFT_BRACKET:
             case GLFW_KEY_RIGHT_BRACKET:
@@ -583,7 +583,7 @@ int main(int argc, char **argv) {
             }
             break;
 
-        case OUR_MOD_PRIMARY:
+        case KEYMOD_PRIMARY:
             switch (key) {
             case GLFW_KEY_1:
             case GLFW_KEY_2:
@@ -610,7 +610,7 @@ int main(int argc, char **argv) {
             }
             break;
 
-        case OUR_MOD_PRIMARY | OUR_MOD_SHIFT:
+        case KEYMOD_PRIMARY | KEYMOD_SHIFT:
             switch (key) {
             case GLFW_KEY_B:
                 world.error_list.show = true;
@@ -652,7 +652,7 @@ int main(int argc, char **argv) {
             }
             break;
 
-        case OUR_MOD_NONE:
+        case KEYMOD_NONE:
             switch (key) {
             case GLFW_KEY_F12:
                 world.windows_open.im_demo ^= 1;
@@ -756,7 +756,7 @@ int main(int argc, char **argv) {
         };
 
         switch (ui.imgui_get_keymods()) {
-        case OUR_MOD_SHIFT:
+        case KEYMOD_SHIFT:
             if (world.use_nvim) {
                 switch (key) {
                 case GLFW_KEY_ENTER: handle_enter("<S-Enter>"); break;
@@ -768,7 +768,7 @@ int main(int argc, char **argv) {
             }
             break;
 
-        case OUR_MOD_ALT | OUR_MOD_SHIFT:
+        case KEYMOD_ALT | KEYMOD_SHIFT:
             switch (key) {
             case GLFW_KEY_O:
                 if (editor->optimize_imports())
@@ -782,7 +782,7 @@ int main(int argc, char **argv) {
             }
             break;
 
-        case OUR_MOD_CTRL:
+        case KEYMOD_CTRL:
             {
                 bool handled = false;
 
@@ -871,7 +871,7 @@ int main(int argc, char **argv) {
             }
             break;
 
-        case OUR_MOD_CMD | OUR_MOD_SHIFT:
+        case KEYMOD_CMD | KEYMOD_SHIFT:
             switch (key) {
 #if OS_MAC
             case GLFW_KEY_LEFT_BRACKET:
@@ -884,7 +884,7 @@ int main(int argc, char **argv) {
             }
             break;
 
-        case OUR_MOD_CTRL | OUR_MOD_SHIFT:
+        case KEYMOD_CTRL | KEYMOD_SHIFT:
             {
                 bool handled = false;
                 if (world.use_nvim) {
@@ -915,7 +915,7 @@ int main(int argc, char **argv) {
                 }
                 break;
             }
-        case OUR_MOD_NONE:
+        case KEYMOD_NONE:
             {
                 if (editor == NULL) break;
 
@@ -964,10 +964,10 @@ int main(int argc, char **argv) {
             }
         }
 
-        // separate switch for OUR_MOD_PRIMARY
+        // separate switch for KEYMOD_PRIMARY
 
         switch (ui.imgui_get_keymods()) {
-        case OUR_MOD_PRIMARY:
+        case KEYMOD_PRIMARY:
             switch (key) {
             case GLFW_KEY_V:
                 if (world.nvim.mode == VI_INSERT) {
@@ -1005,15 +1005,14 @@ int main(int argc, char **argv) {
                             world.activate_pane(world.panes.len - 1);
                     } else {
                         if (editor->buf.dirty) {
-                            auto result = ask_user_yes_no_cancel(
-                                "Your changes will be lost if you don't.",
-                                our_sprintf("Do you want to save your changes to %s?", our_basename(editor->filepath)),
-                                "Save",
-                                "Don't Save"
-                            );
+                            auto title = "Your changes will be lost if you don't.";
+                            auto filename  = editor->is_untitled ? "(untitled)" : our_basename(editor->filepath);
+                            auto msg = our_sprintf("Do you want to save your changes to %s?", filename);
+
+                            auto result = ask_user_yes_no_cancel(title, msg, "Save", "Don't Save");
                             if (result == ASKUSER_CANCEL)
                                 break;
-                            else if (result == ASKUSER_YES)
+                            if (result == ASKUSER_YES)
                                 editor->handle_save(true);
                         }
 
@@ -1043,12 +1042,12 @@ int main(int argc, char **argv) {
         };
 
         u32 nmod = 0; // normalized mod
-        if (pressed(GLFW_KEY_LEFT_SUPER, GLFW_KEY_RIGHT_SUPER)) nmod |= OUR_MOD_CMD;
-        if (pressed(GLFW_KEY_LEFT_CONTROL, GLFW_KEY_RIGHT_SUPER)) nmod |= OUR_MOD_CTRL;
-        if (pressed(GLFW_KEY_LEFT_SHIFT, GLFW_KEY_RIGHT_SHIFT)) nmod |= OUR_MOD_SHIFT;
-        if (pressed(GLFW_KEY_LEFT_ALT, GLFW_KEY_RIGHT_ALT)) nmod |= OUR_MOD_ALT;
+        if (pressed(GLFW_KEY_LEFT_SUPER, GLFW_KEY_RIGHT_SUPER)) nmod |= KEYMOD_CMD;
+        if (pressed(GLFW_KEY_LEFT_CONTROL, GLFW_KEY_RIGHT_SUPER)) nmod |= KEYMOD_CTRL;
+        if (pressed(GLFW_KEY_LEFT_SHIFT, GLFW_KEY_RIGHT_SHIFT)) nmod |= KEYMOD_SHIFT;
+        if (pressed(GLFW_KEY_LEFT_ALT, GLFW_KEY_RIGHT_ALT)) nmod |= KEYMOD_ALT;
 
-        if (nmod == OUR_MOD_CTRL) return;
+        if (nmod == KEYMOD_CTRL) return;
 
         ImGuiIO& io = ImGui::GetIO();
         if (ch > 0 && ch < 0x10000)

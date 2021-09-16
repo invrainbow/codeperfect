@@ -140,7 +140,12 @@ struct Mark_Tree {
     Mark_Node* rotate_left(Mark_Node *root);
     Mark_Node *internal_insert_node(Mark_Node *root, cur2 pos, Mark_Node *node);
     Mark_Node *internal_delete_node(Mark_Node *root, cur2 pos);
+
     void check_ordering();
+    void check_mark_cycle(Mark_Node *root);
+    void check_duplicate_marks();
+    void check_tree_integrity();
+    void check_duplicate_marks_helper(Mark_Node *root, List<Mark*> *seen);
 };
 
 struct Buffer {

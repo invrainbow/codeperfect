@@ -83,7 +83,8 @@ struct Mtf_Action {
 const cur2 NOBOUND = {-1, -1};
 
 struct Mark_Tree_Fuzzer {
-    List<Mark> marks;
+    Fridge<Mark> mark_fridge;
+    List<Mark*> marks;
     List<Mtf_Action> actions;
     Mark_Tree tree;
     bool print_flag;
@@ -94,6 +95,11 @@ struct Mark_Tree_Fuzzer {
         marks.init();
         actions.init();
         tree.init(NULL);
+        mark_fridge.init(512);
+    }
+
+    void cleanup() {
+        mark_fridge.cleanup();
     }
 
     // assume 100x100 grid
@@ -122,7 +128,7 @@ struct Mark_Tree_Fuzzer {
             print(
                 "delete mark: index %d, pos = %s",
                 a->delete_mark_index,
-                format_cur(marks[a->delete_mark_index].pos())
+                format_cur(marks[a->delete_mark_index]->pos())
             );
             break;
         case MTF_APPLY_EDIT:
@@ -141,10 +147,15 @@ struct Mark_Tree_Fuzzer {
 
         switch (a->type) {
         case MTF_INSERT_MARK:
-            tree.insert_mark(MARK_TEST, a->insert_mark_pos, marks.append());
+            {
+                auto mark = mark_fridge.alloc();
+                tree.insert_mark(MARK_TEST, a->insert_mark_pos, mark);
+                marks.append(mark);
+            }
             break;
         case MTF_DELETE_MARK:
-            marks[a->delete_mark_index].cleanup();
+            marks[a->delete_mark_index]->cleanup();
+            mark_fridge.free(marks[a->delete_mark_index]);
             marks.remove(a->delete_mark_index);
             break;
         case MTF_APPLY_EDIT:
@@ -201,7 +212,10 @@ struct Mark_Tree_Fuzzer {
         our_assert(f.write((char*)&count, sizeof(count)), "f.write");
         offset += sizeof(count);
 
-        for (int i = 0; i < 1000000; i++) {
+        for (int i = 0; i < 100000; i++) {
+            if (i % 1000 == 0)
+                print("running action #%d", i);
+
             auto a = actions.append();
             generate_random_action(a);
             count++;
@@ -238,11 +252,12 @@ struct Mark_Tree_Fuzzer {
             actions.len = len;
         }
 
-        for (int i = 0; i < actions.len-1; i++)
+        for (int i = 0; i < actions.len-2; i++)
             execute_action(&actions[i]);
 
-        // execute the last action
-        execute_action(actions.last());
+        // execute the last 2 action
+        execute_action(&actions[actions.len-2]);
+        execute_action(&actions[actions.len-1]);
 
         return true;
     }
@@ -256,6 +271,8 @@ void test_mark_tree_fuzz() {
 
     Mark_Tree_Fuzzer mtf;
     mtf.init();
+    defer { mtf.cleanup(); };
+
     mtf.print_flag = false;
     our_assert(mtf.run(), "mtf.run");
 }
@@ -268,6 +285,8 @@ void test_mark_tree_fuzz_replay() {
 
     Mark_Tree_Fuzzer mtf;
     mtf.init();
+    defer { mtf.cleanup(); };
+
     mtf.print_flag = false;
     our_assert(mtf.replay(), "mtf.replay");
 }

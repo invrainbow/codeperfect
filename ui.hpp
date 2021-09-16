@@ -77,17 +77,17 @@ enum {
 };
 
 enum {
-    OUR_MOD_NONE = 0,
-    OUR_MOD_CMD = 1 << 0,
-    OUR_MOD_SHIFT = 1 << 1,
-    OUR_MOD_ALT = 1 << 2,
-    OUR_MOD_CTRL = 1 << 3,
+    KEYMOD_NONE = 0,
+    KEYMOD_CMD = 1 << 0,
+    KEYMOD_SHIFT = 1 << 1,
+    KEYMOD_ALT = 1 << 2,
+    KEYMOD_CTRL = 1 << 3,
 };
 
 #if OS_MAC
-#define OUR_MOD_PRIMARY OUR_MOD_CMD
+#define KEYMOD_PRIMARY KEYMOD_CMD
 #else
-#define OUR_MOD_PRIMARY OUR_MOD_CTRL
+#define KEYMOD_PRIMARY KEYMOD_CTRL
 #endif
 
 struct UI {

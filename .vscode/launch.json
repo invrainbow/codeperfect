@@ -6,7 +6,7 @@
             "request": "launch",
             "name": "debug",
             "program": "build/bin/ide",
-            "args": ["/Users/brandon/sheetrocks"],
+            "args": ["/Users/bh/sheetrocks"],
             "cwd": "${workspaceFolder}/build/bin",
             "expressions": "native"
         },
@@ -43,7 +43,8 @@
         {
             "id": "testName",
             "type": "promptString",
-            "description": "Test name"
+            "description": "Test name",
+            "default": "mtf_replay",
         },
         {
             "id": "coreFileName",
