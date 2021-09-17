@@ -954,11 +954,18 @@ bool Debugger::start(Debug_Profile *debug_profile) {
                 if (test_function_name == NULL || test_function_name[0] == '\0')
                     return false;
 
+            ccstr binary_name = NULL;
+#if OS_WIN
+            binary_name = "__debug_bin.exe";
+#else
+            binary_name = "__debug_bin";
+#endif
+
             ccstr cmd = NULL;
             if (debug_profile->type == DEBUG_RUN_PACKAGE)
-                cmd = our_sprintf("go build -o debug_bin.exe --gcflags=\"all=-N -l\" %s", package_path);
+                cmd = our_sprintf("go build -o %s --gcflags=\"all=-N -l\" %s", binary_name, package_path);
             else
-                cmd = our_sprintf("go test -c %s -o debug_bin.exe --gcflags=\"all=-N -l\"", package_path);
+                cmd = our_sprintf("go test -c %s -o %s --gcflags=\"all=-N -l\"", binary_name, package_path);
 
             Build_Profile build_profile; ptr0(&build_profile);
             strcpy_safe(build_profile.label, _countof(build_profile.label), "temp");
@@ -973,7 +980,7 @@ bool Debugger::start(Debug_Profile *debug_profile) {
                 return false;
             }
 
-            binary_path = "debug_bin.exe";
+            binary_path = binary_name;
         }
         break;
 
