@@ -1097,47 +1097,6 @@ struct Module_Resolver {
     }
 };
 
-// i guess for now don't allow we shouldln't a
-enum Indexer_Task_Type {
-    ITT_REANALYZE_FILE,
-    ITT_GOMOD_CHANGED,
-    // ITT_UPDATE_EDITOR_TREE,
-};
-
-/*
-start keeping track of "is index ready"
-
-when gomod changes, use the algorithm to go through all existing packages and
-recrawl what we need
-
-as a file is edited, we already keep the tree updated
-
-so when autocomplete or param hints are triggered.... i guess we re-analyze the
-tree to get the decls?
-
-    (to be honest what really needs to happen is we need to use the same algorithm
-    that tree-sitter uses to implement incremental parsing, to do incremental
-    analysis
-
-    THIS IS WHY YOU UNDERSTAND CONCEPTS YOURSELF & WRITE YOUR OWN CODE INSTEAD OF
-    USING "LIBRARIES" LIKE A FUCKING JETBRAINS EMPLOYEE DORK)
-*/
-
-struct Indexer_Task {
-    Indexer_Task_Type type;
-
-    union {
-        struct {
-            ccstr reanalyze_file_filename;
-            // file_saved
-        };
-
-        struct {
-            // gomod_changed
-        };
-    };
-};
-
 enum Tok_Type {
     TOK_ILLEGAL,
     TOK_EOF,
@@ -1192,7 +1151,7 @@ struct Go_Indexer {
     ccstr gomodcache;
 
     Pool mem;        // mem that exists for lifetime of Go_Indexer
-    Pool final_mem;  // memory that holds the final value of this->index`
+    Pool final_mem;  // memory that holds the final value of `this->index`
     Pool ui_mem;     // memory used by UI when it calls jump to definition, etc.
 
     Gohelper gohelper_dynamic;
@@ -1230,11 +1189,8 @@ struct Go_Indexer {
     List<ccstr> *list_missing_imports(ccstr filepath);
     ccstr find_best_import(ccstr package_name, List<ccstr> *identifiers);
 
-    void run_background_thread2();
     ccstr filepath_to_import_path(ccstr filepath);
-    void temp();
     void process_package(ccstr import_path);
-
     bool is_file_included_in_build(ccstr path);
     List<ccstr>* list_source_files(ccstr dirpath, bool include_tests);
     ccstr get_package_name(ccstr path);
@@ -1291,21 +1247,6 @@ struct Go_Indexer {
     void import_decl_to_goimports(Ast_Node *decl_node, ccstr filename, List<Go_Import> *out);
     bool check_if_still_in_parameter_hint(ccstr filepath, cur2 cur, cur2 hint_start);
 };
-
-struct Scoped_Write {
-    Go_Indexer *p;
-
-    Scoped_Write(Go_Indexer *_p) {
-        p = _p;
-        p->start_writing();
-    }
-
-    ~Scoped_Write() {
-        p->stop_writing();
-    }
-};
-
-#define SCOPED_WRITE() Scoped_Write GENSYM(SCOPED_WRITE)(this)
 
 void walk_ast_node(Ast_Node *node, bool abstract_only, Walk_TS_Callback cb);
 void find_nodes_containing_pos(Ast_Node *root, cur2 pos, bool abstract_only, fn<Walk_Action(Ast_Node *it)> callback, bool end_inclusive = false);

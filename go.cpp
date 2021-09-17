@@ -799,10 +799,12 @@ void Go_Indexer::background_thread() {
     };
 
     auto remove_package = [&](Go_Package *pkg) {
-        SCOPED_WRITE();
+        start_writing();
+        defer { stop_writing(); };
+
         pkg->cleanup_files();
-        index.packages->remove(pkg);
         package_lookup.remove(pkg->import_path);
+        index.packages->remove(pkg);
     };
 
     auto handle_fsevent = [&](ccstr filepath) {
@@ -900,9 +902,13 @@ void Go_Indexer::background_thread() {
     // add existing packages to package lookup table
     // ===
 
-    if (index.packages != NULL)
-        For (*index.packages)
+    if (index.packages != NULL) {
+        For (*index.packages) {
+            if (package_lookup.get(it.import_path) != NULL)
+                print("duplicate entry detected");
             package_lookup.set(it.import_path, &it);
+        }
+    }
 
     auto rescan_everything = [&]() {
         // make sure workspace is in index or queue
@@ -993,6 +999,7 @@ void Go_Indexer::background_thread() {
 
     index_print("Entering main loop...");
 
+    bool force_write_after_checking_hashes = false;
     for (;; sleep_milliseconds(100)) {
         bool force_write_this_time = false;
         bool cleanup_unused_memory_this_time = false;
@@ -1144,6 +1151,9 @@ void Go_Indexer::background_thread() {
             int i = 0;
             int num_checked = 0;
 
+            if (queue_had_stuff)
+                force_write_after_checking_hashes = true;
+
             for (; i < index.packages->len && num_checked < 50; i++) {
                 auto &it = index.packages->at(i);
 
@@ -1173,8 +1183,10 @@ void Go_Indexer::background_thread() {
             if (i == index.packages->len && package_queue.len == 0) {
                 if (!ready)
                     stop_writing();
-                if (queue_had_stuff)
+                if (force_write_after_checking_hashes) {
                     force_write_this_time = true;
+                    force_write_after_checking_hashes = false;
+                }
             }
         }
 
@@ -1201,7 +1213,8 @@ void Go_Indexer::background_thread() {
             t.log("copy");
 
             {
-                SCOPED_WRITE();
+                start_writing();
+                defer { stop_writing(); };
 
                 memcpy(&index, new_index, sizeof(index));
                 final_mem.cleanup();
@@ -2354,7 +2367,7 @@ ccstr Go_Indexer::find_best_import(ccstr package_name, List<ccstr> *identifiers)
         if (path_contains_in_subtree(package_path, goroot))
             score.in_goroot = true;
     };
-    
+
     auto compare_scores = [&](Score *a, Score *b) {
         if (a->matching_idents != b->matching_idents)
             return a->matching_idents - b->matching_idents;
