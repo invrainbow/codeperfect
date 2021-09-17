@@ -1957,6 +1957,13 @@ void UI::draw_everything() {
 
             ImGui::Separator();
 
+            if (ImGui::BeginMenu("Windows...")) {
+                ImGui::MenuItem("Build Results", NULL, &world.error_list.show);
+                ImGui::EndMenu();
+            }
+
+            ImGui::Separator();
+
             if (ImGui::BeginMenu("Select Active Build Profile..."))  {
                 for (int i = 0; i < project_settings.build_profiles_len; i++) {
                     auto &it = project_settings.build_profiles[i];
@@ -2064,6 +2071,14 @@ void UI::draw_everything() {
 
             if (ImGui::MenuItem("Delete All Breakpoints", format_key(KEYMOD_SHIFT, "F9"))) {
                 prompt_delete_all_breakpoints();
+            }
+
+            ImGui::Separator();
+
+            if (ImGui::BeginMenu("Windows..."))  {
+                ImGui::MenuItem("Debug Output", NULL, &world.wnd_debug_output.show);
+
+                ImGui::EndMenu();
             }
 
             ImGui::Separator();

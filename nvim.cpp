@@ -623,38 +623,40 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 }
 
                 if (mode != VI_INSERT && exiting_insert_mode) {
-                    auto &gohere = editor->go_here_after_escape;
-                    if (gohere.x != -1 && gohere.y != -1) {
-                        ccstr insert_cmd = "i";
-                        if (gohere.x == editor->buf.lines[gohere.y].len)
-                            insert_cmd = "a";
+                    if (editor != NULL) {
+                        auto &gohere = editor->go_here_after_escape;
+                        if (gohere.x != -1 && gohere.y != -1) {
+                            ccstr insert_cmd = "i";
+                            if (gohere.x == editor->buf.lines[gohere.y].len)
+                                insert_cmd = "a";
 
-                        // gohere.x--;
-                        editor->move_cursor(gohere);
-                        gohere.x = -1;
-                        gohere.y = -1;
+                            // gohere.x--;
+                            editor->move_cursor(gohere);
+                            gohere.x = -1;
+                            gohere.y = -1;
 
-                        // enter insert mode after
-                        start_request_message("nvim_input", 1);
-                        writer.write_string(insert_cmd);
-                        end_message();
+                            // enter insert mode after
+                            start_request_message("nvim_input", 1);
+                            writer.write_string(insert_cmd);
+                            end_message();
 
-                        // just lose the extra chars
-                    } else if (chars_after_exiting_insert_mode.len > 0) {
-                        start_request_message("nvim_input", 1);
+                            // just lose the extra chars
+                        } else if (chars_after_exiting_insert_mode.len > 0) {
+                            start_request_message("nvim_input", 1);
 
-                        Text_Renderer rend;
-                        rend.init();
+                            Text_Renderer rend;
+                            rend.init();
 
-                        For (chars_after_exiting_insert_mode) {
-                            if (it == '\b')
-                                rend.write("<Backspace>");
-                            else
-                                rend.writechar(it);
+                            For (chars_after_exiting_insert_mode) {
+                                if (it == '\b')
+                                    rend.write("<Backspace>");
+                                else
+                                    rend.writechar(it);
+                            }
+
+                            writer.write_string(rend.chars.items, rend.chars.len);
+                            end_message();
                         }
-
-                        writer.write_string(rend.chars.items, rend.chars.len);
-                        end_message();
                     }
 
                     chars_after_exiting_insert_mode.len = 0;
