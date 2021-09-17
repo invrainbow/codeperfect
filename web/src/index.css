@@ -80,10 +80,6 @@
   .thick-list li {
     @apply mb-3;
   }
-  .nice-image {
-    @apply md:rounded-md md:w-auto drop-shadow-md;
-  }
-
   .wall-of-text h3 {
     @apply mt-5 text-gray-300 font-semibold;
   }

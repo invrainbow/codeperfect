@@ -45,7 +45,7 @@ function Title({ children, ...props }) {
 function NiceImage({ className, ...props }) {
   return (
     <div className={cx("flex items-center justify-center", className)}>
-      <img alt="" className="overflow-hidden nice-image w-full" {...props} />
+      <img alt="" className="overflow-hidden w-full" {...props} />
     </div>
   );
 }
@@ -89,7 +89,7 @@ function Home() {
         </div>
         <img
           alt=""
-          className="nice-image max-w-auto"
+          className="max-w-auto border border-gray-500 rounded-2xl"
           src={ideScreenshotImage}
         />
       </div>
