@@ -5,7 +5,7 @@ Settings settings;
 Options options;
 Project_Settings project_settings;
 
-// --- utiltiies
+// --- utilities
 
 char* read_line(File *f, int *len) {
     auto ret = alloc_list<char>();
