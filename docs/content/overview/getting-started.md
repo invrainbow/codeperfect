@@ -13,9 +13,9 @@ Please refer to the instructions for your OS.
 
 ### Windows
 
-1. Download CodePerfect.zip (provided to you). Unzip this anywhere.
+1. Download the .zip file provided to you. Unzip it anywhere.
 
-2. Download the .cplicense file (provided to you), and place it in your
+2. Download the .cplicense file provided to you, and place it in your
    home directory. You can open this directory by pressing <kbd>Win+R</kbd>
    and typing in `%USERPROFILE%`.
 
@@ -24,11 +24,13 @@ Please refer to the instructions for your OS.
 
 ### macOS
 
-1. Download CodePerfect.app.zip (provided to you). Unzip this and drag CodePerfect.app into your Applications folder.
+1. Download the .zip file provided to you. Unzip it and drag CodePerfect.app into your Applications folder.
 
-2. Download the .cplicense file (provided to you), and move it to `~/.cplicense`.
+2. Download the .cplicense file provided to you, and move it to `~/.cplicense`.
 
 3. Run CodePerfect.app.
+
+### Install notes
 
 On all platforms, please do not change or move any of files or directories
 inside the unzipped application. The autoupdater depends explicitly on the
