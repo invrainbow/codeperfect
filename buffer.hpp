@@ -75,6 +75,8 @@ struct Mark {
     void cleanup();
 };
 
+bool is_mark_valid(Mark *mark);
+
 struct Mark_Node {
     // data assoc'd with each node
     cur2 pos;

@@ -1045,13 +1045,13 @@ bool Editor::load_file(ccstr new_filepath) {
     if (b.ready()) {
         auto editor_path = get_path_relative_to(filepath, world.current_path);
         For (b.errors) {
-            if (it.mark.valid) continue;
+            if (is_mark_valid(it.mark)) continue;
             if (!it.valid) continue;
             if (!are_filepaths_equal(editor_path, it.file)) continue;
 
             // create mark
             auto pos = new_cur2(it.col - 1, it.row - 1);
-            buf.mark_tree.insert_mark(MARK_BUILD_ERROR, pos, &it.mark);
+            buf.mark_tree.insert_mark(MARK_BUILD_ERROR, pos, it.mark);
         }
     }
 
@@ -1061,11 +1061,11 @@ bool Editor::load_file(ccstr new_filepath) {
             if (!are_filepaths_equal(it.filepath, filepath)) continue;
 
             For (*it.results) {
-                if (it.mark_start.valid) our_panic("this shouldn't be happening");
-                if (it.mark_end.valid) our_panic("this shouldn't be happening");
+                if (is_mark_valid(it.mark_start)) our_panic("this shouldn't be happening");
+                if (is_mark_valid(it.mark_end)) our_panic("this shouldn't be happening");
 
-                buf.mark_tree.insert_mark(MARK_SEARCH_RESULT, it.match_start, &it.mark_start);
-                buf.mark_tree.insert_mark(MARK_SEARCH_RESULT, it.match_end, &it.mark_end);
+                buf.mark_tree.insert_mark(MARK_SEARCH_RESULT, it.match_start, it.mark_start);
+                buf.mark_tree.insert_mark(MARK_SEARCH_RESULT, it.match_end, it.mark_end);
             }
         }
     }

@@ -100,6 +100,7 @@ struct Mark_Tree_Fuzzer {
 
     void cleanup() {
         mark_fridge.cleanup();
+        tree.cleanup();
     }
 
     // assume 100x100 grid
@@ -212,8 +213,8 @@ struct Mark_Tree_Fuzzer {
         our_assert(f.write((char*)&count, sizeof(count)), "f.write");
         offset += sizeof(count);
 
-        for (int i = 0; i < 100000; i++) {
-            if (i % 1000 == 0)
+        for (int i = 0; i < 1000; i++) {
+            if (i % 200 == 0)
                 print("running action #%d", i);
 
             auto a = actions.append();
@@ -231,6 +232,19 @@ struct Mark_Tree_Fuzzer {
 
             // run
             execute_action(a);
+
+            // ensure marks is still good
+            For (marks) {
+                bool found = false;
+                for (auto m = it->node->marks; m != NULL; m = m->next) {
+                    if (m == it) {
+                        found = true;
+                        break;
+                    }
+                }
+
+                if (!found) our_panic("mark got detached from its node somehow");
+            }
         }
 
         return true;
@@ -269,12 +283,17 @@ void test_mark_tree_fuzz() {
     defer { pool.cleanup(); };
     SCOPED_MEM(&pool);
 
-    Mark_Tree_Fuzzer mtf;
-    mtf.init();
-    defer { mtf.cleanup(); };
+    for (int i = 0; i < 1000; i++) {
+        pool.reset();
+        print("trial %d", i);
 
-    mtf.print_flag = false;
-    our_assert(mtf.run(), "mtf.run");
+        Mark_Tree_Fuzzer mtf;
+        mtf.init();
+        defer { mtf.cleanup(); };
+
+        mtf.print_flag = false;
+        our_assert(mtf.run(), "mtf.run");
+    }
 }
 
 void test_mark_tree_fuzz_replay() {

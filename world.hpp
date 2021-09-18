@@ -30,7 +30,7 @@ struct Build_Error {
     ccstr file;
     u32 row;
     u32 col;
-    Mark mark;
+    Mark *mark;
 };
 
 struct FT_Node {
@@ -75,7 +75,7 @@ struct Main_Thread_Message {
 struct History_Loc {
     int editor_id;
     cur2 pos;
-    Mark mark; // do we even need pos then?
+    Mark *mark; // do we even need pos then?
 
     void cleanup();
 };
@@ -129,18 +129,7 @@ struct Build {
         scroll_to = -1;
     }
 
-    void cleanup() {
-        if (thread != NULL) {
-            kill_thread(thread);
-            close_thread_handle(thread);
-        }
-
-        For (errors)
-            if (it.mark.valid)
-                it.mark.cleanup();
-
-        mem.cleanup();
-    }
+    void cleanup();
 };
 
 struct Wnd {
@@ -168,6 +157,7 @@ struct World {
     Pool build_index_mem;
     Pool ui_mem;
 
+    Fridge<Mark> mark_fridge;
     Fridge<Mark_Node> mark_node_fridge;
     Fridge<Chunk0> chunk0_fridge;
     Fridge<Chunk1> chunk1_fridge;

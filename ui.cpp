@@ -3358,8 +3358,8 @@ void UI::draw_everything() {
                         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(ImColor(200, 178, 178)));
                         {
                             auto pos = it.match_start;
-                            if (it.mark_start.valid)
-                                pos = it.mark_start.pos();
+                            if (is_mark_valid(it.mark_start))
+                                pos = it.mark_start->pos();
 
                             auto s = our_sprintf("%d:%d ", pos.y+1, pos.x+1);
                             draw_text(s, strlen(s));
@@ -3397,8 +3397,8 @@ void UI::draw_everything() {
                         if (clicked) {
                             if (ImGui::IsMouseDoubleClicked(0)) {
                                 auto pos = it.match_start;
-                                if (it.mark_start.valid)
-                                    pos = it.mark_start.pos();
+                                if (is_mark_valid(it.mark_start))
+                                    pos = it.mark_start->pos();
 
                                 goto_file_and_pos(filepath, pos);
                             } else {

@@ -891,8 +891,8 @@ void Mark_Tree::delete_mark(Mark *mark) {
     // remove `mark` from `node->marks`
     Mark *last = NULL;
     for (auto it = node->marks; it != NULL; it = it->next) {
-        found = true;
         if (it == mark) {
+            found = true;
             if (last == NULL)
                node->marks = mark->next;
             else {
@@ -1116,7 +1116,7 @@ void Mark_Tree::check_duplicate_marks() {
 void Mark_Tree::check_tree_integrity() {
     check_ordering();
     check_mark_cycle(root);
-    // check_duplicate_marks();
+    check_duplicate_marks();
 }
 
 void Mark_Tree::check_ordering() {
@@ -1140,6 +1140,10 @@ void Mark_Tree::check_ordering() {
 
 cur2 Mark::pos() { return node->pos; }
 void Mark::cleanup() { if (valid) tree->delete_mark(this); }
+
+bool is_mark_valid(Mark *mark) {
+    return mark != NULL && mark->valid;
+}
 
 // ============
 // mark_tree_marker

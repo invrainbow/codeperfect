@@ -41,8 +41,11 @@ void Searcher::cleanup() {
     For (search_results) {
         if (it.results == NULL) continue;
         For (*it.results) {
-            it.mark_start.cleanup();
-            it.mark_end.cleanup();
+            it.mark_start->cleanup();
+            it.mark_end->cleanup();
+
+            world.mark_fridge.free(it.mark_start);
+            world.mark_fridge.free(it.mark_end);
         }
     }
     search_results.len = 0;
@@ -221,10 +224,12 @@ void Searcher::search_worker() {
                 sr->preview_end.x += to_right;
                 sr->preview = our_strncpy(&buf[prevoff], sr->preview_len);
 
+                sr->mark_start = world.mark_fridge.alloc();
+                sr->mark_end = world.mark_fridge.alloc();
+
                 if (editor != NULL) {
-                    // do we need one for end too?
-                    editor->buf.mark_tree.insert_mark(MARK_SEARCH_RESULT, sr->match_start, &sr->mark_start);
-                    editor->buf.mark_tree.insert_mark(MARK_SEARCH_RESULT, sr->match_end, &sr->mark_end);
+                    editor->buf.mark_tree.insert_mark(MARK_SEARCH_RESULT, sr->match_start, sr->mark_start);
+                    editor->buf.mark_tree.insert_mark(MARK_SEARCH_RESULT, sr->match_end, sr->mark_end);
                 }
 
                 if (++curr_match >= matches->len)

@@ -22,8 +22,8 @@ struct Search_Result {
 
     int match_offset_in_preview;
 
-    Mark mark_start;
-    Mark mark_end;
+    Mark *mark_start;
+    Mark *mark_end;
 
     List<ccstr> *groups;
 };
