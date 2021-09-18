@@ -8,9 +8,9 @@ type Version struct {
 }
 
 var ValidOSes = map[string]bool{
-	"darwin":  true,
-	"windows": true,
+	"darwin":     true,
+	"darwin_arm": true,
+	"windows":    true,
 }
 
-var VersionHashes = map[int]string{
-}
+var VersionHashes = map[int]string{}

@@ -11,6 +11,7 @@ type User struct {
 	IsActive        bool
 	StripeCusId     string
 	StripeCusStatus string
+	DownloadCode    string
 }
 
 // users email license_key stripe_cus_id stripe_cus_status

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/invrainbow/codeperfect/gostuff/models"
 	"github.com/invrainbow/codeperfect/gostuff/versions"
@@ -14,7 +15,7 @@ import (
 
 var AdminPassword = os.Getenv("ADMIN_PASSWORD")
 
-func sendError(c *gin.Context, code int, args ...interface{}) {
+func sendError(c *gin.Context, code int) {
 	err := &models.ErrorResponse{
 		Code:  code,
 		Error: models.ErrorMessages[code],
@@ -51,8 +52,62 @@ func authUser(c *gin.Context, email, licenseKey string) *models.User {
 	return &user
 }
 
+func authUserByCode(c *gin.Context, code string) *models.User {
+	var user models.User
+	if res := db.First(&user, "download_code = ?", code); res.Error != nil {
+		sendError(c, models.ErrorInvalidDownloadCode)
+		return nil
+	}
+
+	if !user.IsActive {
+		sendError(c, models.ErrorUserNoLongerActive)
+		return nil
+	}
+
+	return &user
+}
+
+func MustGetDownloadLink(c *gin.Context, os string) string {
+	if !versions.ValidOSes[os] {
+		sendError(c, models.ErrorInvalidOS)
+		return ""
+	}
+
+	filename := fmt.Sprintf("app/%v_v%v.zip", os, versions.CurrentVersion)
+	presignedUrl, err := GetPresignedURL("codeperfect95", filename)
+	if err != nil {
+		sendServerError(c, "error while creating presigned url: %v", err)
+		return ""
+	}
+
+	return presignedUrl
+}
+
 func Run() {
 	r := gin.Default()
+	r.Use(cors.Default())
+
+	r.POST("/download", func(c *gin.Context) {
+		var req models.DownloadRequest
+		if c.ShouldBindJSON(&req) != nil {
+			sendError(c, models.ErrorInvalidData)
+			return
+		}
+
+		user := authUserByCode(c, req.Code)
+		if user == nil {
+			return
+		}
+
+		presignedUrl := MustGetDownloadLink(c, req.OS)
+		if presignedUrl == "" {
+			return
+		}
+
+		c.JSON(http.StatusOK, &models.DownloadResponse{
+			URL: presignedUrl,
+		})
+	})
 
 	r.POST("/auth", func(c *gin.Context) {
 		var req models.AuthRequest
@@ -66,10 +121,6 @@ func Run() {
 			return
 		}
 
-		if !versions.ValidOSes[req.OS] {
-			sendError(c, models.ErrorInvalidOS)
-			return
-		}
 		if req.CurrentVersion > versions.CurrentVersion {
 			sendError(c, models.ErrorInvalidVersion)
 			return
@@ -81,10 +132,8 @@ func Run() {
 		}
 
 		if resp.NeedAutoupdate {
-			filename := fmt.Sprintf("update/%v_v%v.zip", req.OS, versions.CurrentVersion)
-			presignedUrl, err := GetPresignedURL("codeperfect95", filename)
-			if err != nil {
-				sendServerError(c, "error while creating presigned url: %v", err)
+			presignedUrl := MustGetDownloadLink(c, req.OS)
+			if presignedUrl == "" {
 				return
 			}
 

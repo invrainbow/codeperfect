@@ -1,20 +1,20 @@
-import React from "react";
-import {
-  BrowserRouter as Router,
-  Switch,
-  Route,
-  Link,
-  useLocation,
-} from "react-router-dom";
-import { Helmet } from "react-helmet";
 import cx from "classnames";
 import _ from "lodash";
-
+import React from "react";
+import { Helmet } from "react-helmet";
+import {
+  BrowserRouter as Router,
+  Link,
+  Route,
+  Switch,
+  useHistory,
+  useLocation,
+} from "react-router-dom";
+import gif60fps from "./60fps.gif";
 // static assets
 import ideScreenshotImage from "./ide.png";
-import gif60fps from "./60fps.gif";
-import gifVim from "./vim.gif";
 import pngIntellisense from "./intellisense.png";
+import gifVim from "./vim.gif";
 
 // constants
 const NAME = "CodePerfect 95";
@@ -22,6 +22,11 @@ const NAME_SHORT = "CodePerfect";
 const SUPPORT_EMAIL = "support@codeperfect95.com";
 const CURRENT_YEAR = new Date().getFullYear();
 const BETA_SIGNUP_LINK = "https://airtable.com/shraN38Z2jqQJVqbk";
+
+let API_BASE = "https://api.codeperfect95.com";
+if (process.env.NODE_ENV === "development") {
+  API_BASE = "http://localhost:8080";
+}
 
 function WallOfText({ title, children }) {
   return (
@@ -100,8 +105,8 @@ function Home() {
             No Electron. No JavaScript. No garbage collection.
           </h2>
           <p className="md:w-4/12 lg:w-full md:mt-0 lg:mt-4">
-            {NAME_SHORT} is written in C++ and designed to run at 144 FPS.
-            Every keystroke responds instantly.
+            {NAME_SHORT} is written in C++ and designed to run at 144 FPS. Every
+            keystroke responds instantly.
           </p>
         </div>
         <NiceImage src={gif60fps} className="lg:w-2/3" />
@@ -114,8 +119,8 @@ function Home() {
           </h2>
           <p>
             Today, IDEs are powerful but slow, while Vim is fast but limited.{" "}
-            {NAME_SHORT} brings the best of both worlds: everything you need
-            to effectively develop in Go, at lightning speed.
+            {NAME_SHORT} brings the best of both worlds: everything you need to
+            effectively develop in Go, at lightning speed.
           </p>
           <p>
             No more waiting on GoLand. No more hacking Vim plugins together.
@@ -141,8 +146,8 @@ function Home() {
               Tools that understand Go as a first language.
             </div>
             <p className="md:w-1/3 md:mt-0">
-              {NAME_SHORT}'s intellisense is hand-written, extensively
-              tested, and designed for speed and reliability.
+              {NAME_SHORT}'s intellisense is hand-written, extensively tested,
+              and designed for speed and reliability.
             </p>
           </div>
         </Section>
@@ -157,8 +162,8 @@ function Home() {
             Tools that understand Go as a first language.
           </div>
           <p className="text-white">
-            {NAME_SHORT}'s intellisense is hand-written, extensively tested,
-            and designed for speed and reliability.
+            {NAME_SHORT}'s intellisense is hand-written, extensively tested, and
+            designed for speed and reliability.
           </p>
         </div>
         <img
@@ -199,6 +204,87 @@ function PricingBox({ title, price, subprice, children }) {
       </div>
       <div className="border-t p-6">
         <div className="text-gray-500 text-left">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function Download() {
+  const history = useHistory();
+  const [code, setCode] = React.useState(null);
+  const [done, setDone] = React.useState(false);
+
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const theCode = params.get("code");
+    if (!theCode) {
+      history.push("/");
+    }
+    setCode(theCode);
+  }, [history, setCode]);
+
+  const onDownload = React.useCallback(
+    async (os) => {
+      try {
+        const resp = await fetch(`${API_BASE}/download`, {
+          method: "POST",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ os, code }),
+        });
+        const data = await resp.json();
+        if (data.url) {
+          window.location = data.url;
+          setDone(true);
+          return;
+        }
+      } catch (err) {}
+      history.push("/");
+    },
+    [code, history, setDone]
+  );
+
+  return (
+    <div className="download my-12">
+      <h1 className="text-center text-black font-bold text-4xl mb-12">
+        Download
+      </h1>
+      <div className="text-center">
+        {!done ? (
+          <div>
+            <div className="text-lg">Please select your OS.</div>
+            <div className="mt-4">
+              <button
+                className="main-button whitespace-nowrap mx-1.5"
+                onClick={() => onDownload("darwin")}
+              >
+                Mac (Intel)
+              </button>
+              <button
+                onClick={() => onDownload("darwin_arm")}
+                className="main-button whitespace-nowrap mx-1.5"
+              >
+                Mac (ARM)
+              </button>
+              <button
+                onClick={() => onDownload("windows")}
+                className="main-button whitespace-nowrap mx-1.5"
+              >
+                Windows
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div>
+            Thanks! Please see{" "}
+            <a href="https://docs.codeperfect95.com/overview/getting-started/">
+              Getting Started
+            </a>{" "}
+            in our docs to install and start using CodePerfect.
+          </div>
+        )}
       </div>
     </div>
   );
@@ -357,6 +443,9 @@ function App() {
         </div>
         <div className="">
           <Switch>
+            <Route path="/download">
+              <Download />
+            </Route>
             <Route path="/pricing">
               <Pricing />
             </Route>
