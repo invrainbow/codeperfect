@@ -65,7 +65,7 @@ struct Mark_Tree;
 struct Mark_Node;
 
 struct Mark {
-    Mark_Type type; // is this even necessary?
+    Mark_Type type;
     Mark_Tree *tree;
     Mark_Node *node;
     Mark *next;

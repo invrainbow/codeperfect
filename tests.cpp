@@ -83,7 +83,6 @@ struct Mtf_Action {
 const cur2 NOBOUND = {-1, -1};
 
 struct Mark_Tree_Fuzzer {
-    Fridge<Mark> mark_fridge;
     List<Mark*> marks;
     List<Mtf_Action> actions;
     Mark_Tree tree;
@@ -95,12 +94,11 @@ struct Mark_Tree_Fuzzer {
         marks.init();
         actions.init();
         tree.init(NULL);
-        mark_fridge.init(512);
     }
 
     void cleanup() {
-        mark_fridge.cleanup();
         tree.cleanup();
+        For (marks) world.mark_fridge.free(it);
     }
 
     // assume 100x100 grid
@@ -149,14 +147,14 @@ struct Mark_Tree_Fuzzer {
         switch (a->type) {
         case MTF_INSERT_MARK:
             {
-                auto mark = mark_fridge.alloc();
+                auto mark = world.mark_fridge.alloc();
                 tree.insert_mark(MARK_TEST, a->insert_mark_pos, mark);
                 marks.append(mark);
             }
             break;
         case MTF_DELETE_MARK:
             marks[a->delete_mark_index]->cleanup();
-            mark_fridge.free(marks[a->delete_mark_index]);
+            world.mark_fridge.free(marks[a->delete_mark_index]);
             marks.remove(a->delete_mark_index);
             break;
         case MTF_APPLY_EDIT:
@@ -213,9 +211,11 @@ struct Mark_Tree_Fuzzer {
         our_assert(f.write((char*)&count, sizeof(count)), "f.write");
         offset += sizeof(count);
 
-        for (int i = 0; i < 1000; i++) {
-            if (i % 200 == 0)
+        for (int i = 0; i < 10000; i++) {
+            /*
+            if (i % 2000 == 0)
                 print("running action #%d", i);
+                */
 
             auto a = actions.append();
             generate_random_action(a);
@@ -233,8 +233,10 @@ struct Mark_Tree_Fuzzer {
             // run
             execute_action(a);
 
+            /*
             // ensure marks is still good
             For (marks) {
+                // check that mark node contains the mark
                 bool found = false;
                 for (auto m = it->node->marks; m != NULL; m = m->next) {
                     if (m == it) {
@@ -242,9 +244,17 @@ struct Mark_Tree_Fuzzer {
                         break;
                     }
                 }
-
                 if (!found) our_panic("mark got detached from its node somehow");
+
+                // check that mark node is still in root
+                auto node = it->node;
+                while (node->parent != NULL)
+                    node = node->parent;
+                if (tree.root != node)
+                    our_panic("mark node is detached from root!");
             }
+            */
+
         }
 
         return true;
@@ -283,7 +293,7 @@ void test_mark_tree_fuzz() {
     defer { pool.cleanup(); };
     SCOPED_MEM(&pool);
 
-    for (int i = 0; i < 1000; i++) {
+    for (int i = 0; i < 10000; i++) {
         pool.reset();
         print("trial %d", i);
 

@@ -2,9 +2,10 @@
 
 set -e
 
-brew install glfw3 glew pcre go coreutils
+brew install glfw3 glew pcre go coreutils cmake pkg-config xxhash
 
 TMPDIR="/tmp/cwalk-for-cp"
+rm -rf "$TMPDIR"
 git clone https://github.com/likle/cwalk "$TMPDIR"
 mkdir -p "$TMPDIR/build"
 cd "$TMPDIR/build"

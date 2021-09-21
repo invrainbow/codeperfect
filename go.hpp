@@ -1356,6 +1356,10 @@ extern GoBool (*GHRenameFileOrDirectory)(char* oldpath, char* newpath);
 extern void (*GHEnableDebugMode)();
 extern GoInt (*GHGetVersion)();
 extern char* (*GHGetGoBinaryPath)();
+extern char* (*GHGetDelvePath)();
+extern char* (*GHGetGoroot)();
+extern char* (*GHGetGopath)();
+extern char* (*GHGetGomodcache)();
 extern GoBool (*GHGetMessage)(void* p);
 extern void (*GHFreeMessage)(void* p);
 

@@ -203,7 +203,7 @@ void Module_Resolver::init(ccstr current_module_filepath, ccstr _gomodcache) {
     proc.init();
     proc.dir = current_module_filepath;
     proc.skip_shell = true;
-    if (!proc.run(our_sprintf("%s/go list -mod=mod -m all", world.go_binary_path))) return;
+    if (!proc.run(our_sprintf("%s list -mod=mod -m all", world.go_binary_path))) return;
     defer { proc.cleanup(); };
 
     List<char> line;
@@ -767,7 +767,9 @@ void Go_Indexer::background_thread() {
         For (*file->imports) {
             if (it.import_path == NULL) continue;
             if (already_enqueued_packages.has(it.import_path)) continue;
-            if (get_package_status(it.import_path) == GPS_READY) continue;
+
+            auto pkg = find_package_in_index(it.import_path);
+            if (pkg != NULL && pkg->status == GPS_READY) continue;
 
             enqueue_package(it.import_path);
         }
@@ -1450,11 +1452,6 @@ Go_Package *Go_Indexer::find_up_to_date_package(ccstr import_path) {
         if (pkg->status != GPS_OUTDATED)
             return pkg;
     return NULL;
-}
-
-Go_Package_Status Go_Indexer::get_package_status(ccstr import_path) {
-    auto pkg = find_package_in_index(import_path);
-    return pkg == NULL ? GPS_OUTDATED : pkg->status;
 }
 
 ccstr Go_Indexer::get_import_package_name(Go_Import *it) {
@@ -3690,22 +3687,43 @@ void Go_Indexer::init() {
         strcpy_safe(current_exe_path, _countof(current_exe_path), our_dirname(get_executable_path()));
     }
 
-    gohelper_dynamic.init(our_sprintf("%s/go run dynamic_helper.go", world.go_binary_path), current_exe_path);
+    gohelper_dynamic.init(our_sprintf("%s run dynamic_helper.go", world.go_binary_path), current_exe_path);
     auto resp = gohelper_dynamic.readline();
     if (!streq(resp, "true")) {
         our_panic(our_sprintf("Please make sure Go version 1.16+ is installed and accessible through your PATH, resp = %s", resp));
     }
 
+    auto copystr = [&](ccstr s) {
+        auto ret = our_strcpy(s);
+        GHFree((void*)s);
+        return ret;
+    };
+
     auto get_env = [&](ccstr var) -> ccstr {
-        auto ret = GHGetGoEnv((char*)var);
-        defer { GHFree(ret); };
-        return our_strcpy(ret);
+        return copystr(GHGetGoEnv((char*)var));
     };
 
     {
-        gopath = path_join(get_env("GOPATH"), "src");
-        goroot = path_join(get_env("GOROOT"), "src");
-        gomodcache = get_env("GOMODCACHE");
+        gopath = copystr(GHGetGopath());
+        if (gopath == NULL || gopath[0] == '\0')
+            gopath = get_env("GOPATH");
+        if (gopath == NULL || gopath[0] == '\0')
+            our_panic("Unable to detect GOPATH. Please add it to ~/.cpconfig.");
+
+        goroot = copystr(GHGetGoroot());
+        if (goroot == NULL || goroot[0] == '\0')
+            goroot = get_env("GOROOT");
+        if (goroot == NULL || goroot[0] == '\0')
+            our_panic("Unable to detect GOROOT. Please add it to ~/.cpconfig.");
+
+        gopath = path_join(gopath, "src");
+        goroot = path_join(goroot, "src");
+
+        gomodcache = copystr(GHGetGomodcache());
+        if (gomodcache == NULL || gomodcache[0] == '\0')
+            gomodcache = get_env("GOMODCACHE");
+        if (gomodcache == NULL || gomodcache[0] == '\0')
+            our_panic("Unable to detect GOMODCACHE. Please add it to ~/.cpconfig.");
     }
 
     lock.init();
@@ -5826,6 +5844,10 @@ GoBool (*GHRenameFileOrDirectory)(char* oldpath, char* newpath);
 void (*GHEnableDebugMode)();
 GoInt (*GHGetVersion)();
 char* (*GHGetGoBinaryPath)();
+char* (*GHGetDelvePath)();
+char* (*GHGetGoroot)();
+char* (*GHGetGopath)();
+char* (*GHGetGomodcache)();
 GoBool (*GHGetMessage)(void* p);
 void (*GHFreeMessage)(void* p);
 
@@ -5869,6 +5891,10 @@ void load_gohelper() {
     load(GHEnableDebugMode);
     load(GHGetVersion);
     load(GHGetGoBinaryPath);
+    load(GHGetDelvePath);
+    load(GHGetGopath);
+    load(GHGetGoroot);
+    load(GHGetGomodcache);
     load(GHGetMessage);
     load(GHFreeMessage);
 #undef load

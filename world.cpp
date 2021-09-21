@@ -24,22 +24,32 @@ bool is_ignored_by_git(ccstr path) {
 }
 
 void History::actually_push(int editor_id, cur2 pos, bool force, bool capturing_editor_last) {
+    check_marks();
+
     auto editor = world.find_editor_by_id(editor_id);
     print("pushing %s:%s, force = %d, capture_editor_last = %d", our_basename(editor->filepath), format_cur(pos), force, capturing_editor_last);
 
+    check_marks();
+
     for (int i = curr; i != top; i = inc(i))
         ring[i].cleanup();
+
+    check_marks();
 
     ring[curr].editor_id = editor_id;
     ring[curr].pos = pos; // do we even need this anymore?
     ring[curr].mark = world.mark_fridge.alloc();
     editor->buf.mark_tree.insert_mark(MARK_HISTORY, pos, ring[curr].mark);
 
+    check_marks();
+
     top = curr = inc(curr);
     if (curr == start) {
         ring[start].cleanup();
         start = inc(start);
     }
+
+    check_marks();
 }
 
 void History::push(int editor_id, cur2 pos, bool force) {
@@ -58,6 +68,8 @@ void History::push(int editor_id, cur2 pos, bool force) {
         return;
     }
 
+    check_marks();
+
     // if there's something in history
     do {
         if (curr == start) break;
@@ -73,13 +85,21 @@ void History::push(int editor_id, cur2 pos, bool force) {
         actually_push(prev_editor->id, prev_editor->cur, false, true);
     } while (0);
 
+    check_marks();
+
     actually_push(editor_id, pos, force, false);
+
+    check_marks();
 }
 
 void History::actually_go(History_Loc *it) {
+    check_marks();
+
     auto editor = world.find_editor_by_id(it->editor_id);
     if (editor == NULL) return;
     if (!editor->is_nvim_ready()) return;
+
+    check_marks();
 
     auto pos = it->mark->pos(); // it->pos
 
@@ -88,18 +108,54 @@ void History::actually_go(History_Loc *it) {
     dest->editor_id = it->editor_id;
     dest->pos = pos;
 
+    check_marks();
+
     world.focus_editor_by_id(it->editor_id, pos);
+
+    check_marks();
 }
 
 bool History::go_forward() {
+    check_marks();
+
     if (curr == top) return false;
+
+    check_marks();
 
     curr = inc(curr);
     actually_go(&ring[dec(curr)]);
+    check_marks();
     return true;
 }
 
+void History::check_marks(int upper) {
+    if (upper == -1) upper = top;
+
+    for (auto i = start; i != upper; i = inc(i)) {
+        auto it = ring[i].mark;
+
+        // check that mark node contains the mark
+        bool found = false;
+        for (auto m = it->node->marks; m != NULL; m = m->next) {
+            if (m == it) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) our_panic("mark got detached from its node somehow");
+
+        // check that mark node is still in root
+        auto node = it->node;
+        while (node->parent != NULL)
+            node = node->parent;
+        if (it->tree->root != node)
+            our_panic("mark node is detached from root!");
+    }
+}
+
 bool History::go_backward() {
+    check_marks();
+
     if (curr == start) return false;
 
     {
@@ -114,15 +170,27 @@ bool History::go_backward() {
                 curr = dec(curr);
             }
 
+            check_marks();
+
             actually_go(&it);
+
+            check_marks();
+
             return true;
         }
     }
 
+    check_marks();
+
     if (dec(curr) == start) return false;
+
+    check_marks();
 
     curr = dec(curr);
     actually_go(&ring[dec(curr)]);
+
+    check_marks();
+
     return true;
 }
 
@@ -136,11 +204,15 @@ void History::save_latest() {
     if (it.editor_id == editor->id && it.pos == editor->cur)
         return;
 
+    check_marks();
     actually_push(editor->id, editor->cur, false, false);
+    check_marks();
 }
 
 void History::remove_editor_from_history(int editor_id) {
     int i = start, j = start;
+
+    check_marks();
 
     for (; i != curr; i = inc(i)) {
         if (ring[i].editor_id == editor_id) {
@@ -152,7 +224,9 @@ void History::remove_editor_from_history(int editor_id) {
         j = inc(j);
     }
 
+
     curr = j;
+    check_marks(j);
 
     for (; i != top; i = inc(i))  {
         if (ring[i].editor_id == editor_id) {
@@ -165,11 +239,17 @@ void History::remove_editor_from_history(int editor_id) {
     }
 
     top = j;
+    check_marks();
 }
 
 void History_Loc::cleanup() {
+    if (mark == NULL) {
+        return;
+    }
+
     mark->cleanup();
     world.mark_fridge.free(mark);
+    mark = NULL;
 }
 
 void World::fill_file_tree() {
@@ -389,6 +469,14 @@ void World::init(GLFWwindow *_wnd) {
             our_panic("Please set your Go binary path in ~/.cpconfig.");
         defer { GHFree(go_binary_path); };
         strcpy_safe(world.go_binary_path, _countof(world.go_binary_path), go_binary_path);
+    }
+
+    {
+        auto delve_path = GHGetDelvePath();
+        if (delve_path != NULL) {
+            defer { GHFree(delve_path); };
+            strcpy_safe(world.delve_path, _countof(world.delve_path), delve_path);
+        }
     }
 
     {
@@ -1154,6 +1242,7 @@ void Build::cleanup() {
         it.mark->cleanup();
         world.mark_fridge.free(it.mark);
     }
+    errors.len = 0;
 
     mem.cleanup();
 }

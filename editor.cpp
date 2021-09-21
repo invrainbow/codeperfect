@@ -1376,6 +1376,7 @@ bool Editor::trigger_escape(cur2 go_here_after) {
 
         go_here_after_escape = go_here_after;
         nv.exiting_insert_mode = true;
+        nv.editor_that_triggered_escape = id;
     }
 
     return handled;

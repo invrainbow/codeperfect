@@ -190,7 +190,10 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                     print("postinsert dotrepeat took %llu ns", diff);
                     post_insert_dotrepeat_time = current_time_in_nanoseconds();
 
-                    writer.write_array(2);
+                    auto curr_editor = world.get_current_editor();
+
+                    writer.write_array(curr_editor != editor ? 3 : 2);
+
                     {
                         writer.write_array(2);
                         writer.write_string("nvim_set_current_win");
@@ -211,6 +214,16 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                             writer.write_string("<Esc>");
                         }
                     }
+
+                    if (curr_editor != editor) {
+                        writer.write_array(2);
+                        writer.write_string("nvim_set_current_win");
+                        {
+                            writer.write_array(1);
+                            writer.write_int(curr_editor->nvim_data.win_id);
+                        }
+                    }
+
                     end_message();
                 }
                 break;
@@ -623,6 +636,13 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 }
 
                 if (mode != VI_INSERT && exiting_insert_mode) {
+                    if (editor_that_triggered_escape != 0) {
+                        auto ed = world.find_editor_by_id(editor_that_triggered_escape);
+                        if (ed != NULL)
+                            editor = ed;
+                        editor_that_triggered_escape = 0;
+                    }
+
                     if (editor != NULL) {
                         auto &gohere = editor->go_here_after_escape;
                         if (gohere.x != -1 && gohere.y != -1) {

@@ -293,9 +293,15 @@ func GHGetVersion() int {
 }
 
 //export GHGetGoBinaryPath
-func GHGetGoBinaryPath() *C.char {
-	return C.CString(config.GoBinaryPath)
-}
+func GHGetGoBinaryPath() *C.char { return C.CString(config.GoBinaryPath) }
+//export GHGetDelvePath
+func GHGetDelvePath() *C.char { return C.CString(config.DelvePath) }
+//export GHGetGopath
+func GHGetGopath() *C.char { return C.CString(config.Gopath) }
+//export GHGetGoroot
+func GHGetGoroot() *C.char { return C.CString(config.Goroot) }
+//export GHGetGomodcache
+func GHGetGomodcache() *C.char { return C.CString(config.Gomodcache) }
 
 //export GHGetMessage
 func GHGetMessage(p unsafe.Pointer) bool {

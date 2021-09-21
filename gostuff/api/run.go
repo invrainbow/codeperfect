@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/invrainbow/codeperfect/gostuff/db"
 	"github.com/invrainbow/codeperfect/gostuff/models"
 	"github.com/invrainbow/codeperfect/gostuff/versions"
 	"gorm.io/gorm"
@@ -30,7 +31,7 @@ func sendServerError(c *gin.Context, format string, args ...interface{}) {
 
 func authUser(c *gin.Context, email, licenseKey string) *models.User {
 	var user models.User
-	if res := db.First(&user, "email = ?", email); res.Error != nil {
+	if res := db.Db.First(&user, "email = ?", email); res.Error != nil {
 		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
 			sendError(c, models.ErrorEmailNotFound)
 		} else {
@@ -54,7 +55,7 @@ func authUser(c *gin.Context, email, licenseKey string) *models.User {
 
 func authUserByCode(c *gin.Context, code string) *models.User {
 	var user models.User
-	if res := db.First(&user, "download_code = ?", code); res.Error != nil {
+	if res := db.Db.First(&user, "download_code = ?", code); res.Error != nil {
 		sendError(c, models.ErrorInvalidDownloadCode)
 		return nil
 	}

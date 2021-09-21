@@ -95,6 +95,7 @@ struct History {
     bool go_backward();
     void remove_editor_from_history(int editor_id);
     void save_latest();
+    void check_marks(int upper = -1);
 
     int inc(int i) { return i == _countof(ring) - 1 ? 0 : i + 1; }
     int dec(int i) { return i == 0 ? _countof(ring) - 1 : i - 1; }
@@ -191,6 +192,7 @@ struct World {
     u64 next_build_id;
 
     char go_binary_path[MAX_PATH];
+    char delve_path[MAX_PATH];
     char current_path[MAX_PATH];
 
     Pane _panes[MAX_PANES];
@@ -239,6 +241,7 @@ struct World {
 
     struct : Wnd {
         int selection;
+        bool cmd_scroll_to_end;
     } wnd_debug_output;
 
     struct : Wnd {

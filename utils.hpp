@@ -143,8 +143,10 @@ struct Scoped_Table {
     Pool *mem;
 
     void clear() {
+        List<ccstr> keys; keys.init();
         auto ents = entries();
-        For (*ents) remove(it->name);
+        For (*ents) keys.append(it->name);
+        For (keys) remove(it);
     }
 
     List<Table_Entry*> *entries() {

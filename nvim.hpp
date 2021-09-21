@@ -546,6 +546,7 @@ struct Nvim {
     u32 dotrepeat_buf_id;
     u32 dotrepeat_win_id;
     u32 current_win_id;
+    u32 editor_that_triggered_escape;
 
     Pool started_messages_mem;
 

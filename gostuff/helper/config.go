@@ -2,14 +2,17 @@ package helper
 
 import (
 	"encoding/json"
-    "fmt"
+	"fmt"
 	"os"
 	"path"
 )
 
 type Config struct {
 	GoBinaryPath string `json:"go_binary_path"`
-	// TODO: more to come
+	DelvePath    string `json:"delve_path"`
+    Goroot string `json:"goroot"`
+    Gopath string `json:"gopath"`
+    Gomodcache string `json:"gomodcache"`
 }
 
 var config *Config
@@ -21,16 +24,16 @@ func init() {
 	}
 	config = conf
 
-    // update path with gobinarypath
-    if config.GoBinaryPath != "" {
-        path := os.Getenv("PATH")
-        if path == "" {
-            path = config.GoBinaryPath
-        } else {
-            path = fmt.Sprintf("%s:%s", config.GoBinaryPath, path)
-        }
-        os.Setenv("PATH", path)
-    }
+	// update path with gobinarypath
+	if config.GoBinaryPath != "" {
+		path := os.Getenv("PATH")
+		if path == "" {
+			path = config.GoBinaryPath
+		} else {
+			path = fmt.Sprintf("%s:%s", config.GoBinaryPath, path)
+		}
+		os.Setenv("PATH", path)
+	}
 }
 
 func readConfig() (*Config, error) {

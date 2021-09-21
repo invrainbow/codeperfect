@@ -2219,32 +2219,19 @@ void UI::draw_everything() {
 
         ImGui::PushFont(world.ui.im_font_mono);
 
-        int i = wnd.start, k = 0;
-        Coarse_Clipper cc; cc.init();
-
-        for (; k < wnd.len; k++, i = (i + 1) % INDEX_LOG_CAP) {
-            auto h = ImGui::CalcTextSize(wnd.buf[i]).y;
-            if (!cc.add(h)) break;
+        ImGuiListClipper clipper;
+        clipper.Begin(wnd.len);
+        while (clipper.Step()) {
+            for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++) {
+                ImGui::Text(wnd.buf[(wnd.start + i) % INDEX_LOG_CAP]);
+            }
         }
 
-        for (; k < wnd.len; k++, i = (i + 1) % INDEX_LOG_CAP) {
-            auto h = ImGui::CalcTextSize(wnd.buf[i]).y;
-            if (!cc.add(h)) continue;
-
-            ImGui::Text(wnd.buf[i]);
-        }
-
-        cc.finish();
-
-        // TODO: handle this "scroll to end but not if user scrolled up
-        // manually" shit
-        /*
         if (wnd.cmd_scroll_to_end) {
             wnd.cmd_scroll_to_end = false;
             if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
                 ImGui::SetScrollHereY(1.0f);
         }
-        */
 
         ImGui::PopFont();
 
@@ -2265,69 +2252,47 @@ void UI::draw_everything() {
         ImGui::PushFont(world.ui.im_font_mono);
 
         auto &lines = world.dbg.stdout_lines;
-        int i = 0;
 
-        Coarse_Clipper cc; cc.init();
+        ImGuiListClipper clipper;
+        clipper.Begin(lines.len);
+        while (clipper.Step()) {
+            for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++) {
+                auto &it = lines[i];
 
-        for (; i < lines.len; i++) {
-            auto &it = lines[i];
-            auto w = ImGui::GetContentRegionAvail().x;
-            auto h = ImGui::CalcTextSize(it, NULL, false, w).y;
+                ImGui::Text("%s", it);
+                if (ImGui::OurBeginPopupContextItem(our_sprintf("##debug_output_hidden_%d", i))) {
+                    defer { ImGui::EndPopup(); };
 
-            if (!cc.add(h)) break;
-        }
-
-        for (; i < lines.len; i++) {
-            auto &it = lines[i];
-
-            auto pos = ImGui::GetCursorScreenPos();
-            auto wrapw = ImGui::GetContentRegionAvail().x;
-            auto text_size = ImVec2(wrapw, ImGui::CalcTextSize(it, NULL, false, wrapw).y);
-
-            if (!cc.add(text_size.y)) continue;
-
-            bool clicked = ImGui::Selectable(our_sprintf("##debug_output_hidden_%d", i), i == wnd.selection, 0, text_size);
-            ImGui::GetWindowDrawList()->AddText(NULL, 0.0f, pos, ImGui::GetColorU32(ImGuiCol_Text), it, NULL, wrapw);
-
-            if (clicked) wnd.selection = i;
-
-            bool copy = false;
-
-            if (ImGui::OurBeginPopupContextItem()) {
-                defer { ImGui::EndPopup(); };
-
-                if (ImGui::Selectable("Copy")) {
-                    copy = true;
-                }
-
-                if (ImGui::Selectable("Copy All")) {
-                    auto output = alloc_list<char>();
-                    For (lines) {
-                        for (auto p = it; *p != '\0'; p++) {
-                            output->append(*p);
-                        }
-                        output->append('\n');
+                    if (ImGui::Selectable("Copy")) {
+                        glfwSetClipboardString(world.window, it);
                     }
-                    output->len--; // remove last '\n'
-                    output->append('\0');
-                    glfwSetClipboardString(world.window, output->items);
-                }
 
-                if (ImGui::Selectable("Clear")) {
-                    // TODO
-                    break;
+                    if (ImGui::Selectable("Copy All")) {
+                        auto output = alloc_list<char>();
+                        For (lines) {
+                            for (auto p = it; *p != '\0'; p++) {
+                                output->append(*p);
+                            }
+                            output->append('\n');
+                        }
+                        output->len--; // remove last '\n'
+                        output->append('\0');
+                        glfwSetClipboardString(world.window, output->items);
+                    }
+
+                    if (ImGui::Selectable("Clear")) {
+                        // TODO
+                        break;
+                    }
                 }
             }
-
-            if (i == wnd.selection)
-                if (imgui_get_keymods() == KEYMOD_PRIMARY)
-                    if (imgui_key_pressed('c'))
-                        copy = true;
-
-            if (copy) glfwSetClipboardString(world.window, it);
         }
 
-        cc.finish();
+        if (wnd.cmd_scroll_to_end) {
+            wnd.cmd_scroll_to_end = false;
+            if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
+                ImGui::SetScrollHereY(1.0f);
+        }
 
         ImGui::PopFont();
 

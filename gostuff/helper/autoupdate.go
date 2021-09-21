@@ -206,17 +206,17 @@ func pushWarning(msg string) {
 	globalMQ.Push(msg, "Authentication", false)
 }
 
-func pushUnknownError(desc string ,err error) {
+func pushUnknownError(desc string, err error) {
 	if DebugModeFlag {
 		fmt.Printf("%v\n", err)
 	}
 	pushWarning(
-        fmt.Sprintf(
-            "%s: An unexpected error has occurred:\n\n%v\n\nThe program will continue to run, but please report this error to us if possible. Thanks!",
-            desc,
-            err,
-        ),
-    )
+		fmt.Sprintf(
+			"%s: An unexpected error has occurred:\n\n%v\n\nThe program will continue to run, but please report this error to us if possible. Thanks!",
+			desc,
+			err,
+		),
+	)
 }
 
 // tolsa = "time of last successful auth"

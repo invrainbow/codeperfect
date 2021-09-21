@@ -48,8 +48,19 @@ Currently we just need to know where Go is installed. Create the file
 }
 ```
 
-Replace the `...` with the **folder containing the `go` binary**, not the
-binary itself. So if `go` is located at `/usr/local/bin/go`, write:
+Set `go_binary_path` to the path to your `go` binary, e.g. `/usr/local/bin/go`.
+
+This might be all you need for now. Sometimes, CodePerfect is unable to detect GOPATH, GOROOT, and GOMODCACHE. If that happens you'll need to configure them manually. Add the following fields:
+
+```
+{
+  "gopath": "..."
+  "goroot": "..."
+  "gomodcache": "..."
+}
+```
+
+Replace these with the values of `go env GOPATH`, `go env GOROOT`, and `go env GOMODCACHE`.
 
 ```
 {

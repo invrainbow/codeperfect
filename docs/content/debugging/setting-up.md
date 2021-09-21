@@ -10,6 +10,23 @@ toc: true
 
 CodePerfect comes with an integrated debugger, allowing you to debug your programs directly from inside CodePerfect.
 
+## Prerequisites
+
+CodePerfect integrates the Delve debugger, so you'll need to
+[install](https://github.com/go-delve/delve/blob/master/Documentation/installation/README.md)
+the latest version.
+
+Open ~/.cpconfig and add the `delve_path` field:
+
+```
+{
+  "delve_path": "..."
+}
+```
+
+Replace `delve_path` with the full path of your Delve binary. Get this value
+using `which delve` on Mac, and `where delve` on Windows.
+
 ## Configuring the Debugger
 
 To get started, go to <cite>Debug</cite> &gt; <cite>Debug Profiles</cite>.

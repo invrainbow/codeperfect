@@ -8,5 +8,6 @@ cmd="make"
 if [ "$cpu_name" = "Apple M1" ]; then
     cmd="arch -arm64 $cmd"
 fi
+echo "$cmd"
 
 $cmd -j $nprocs $@

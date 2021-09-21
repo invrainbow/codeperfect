@@ -12,6 +12,8 @@ else
 	CFLAGS += -DDEBUG_MODE -g
 endif
 
+$(info $$CFLAGS is [${CFLAGS}])
+
 LDFLAGS = -ldl -lcwalk -lpcre -framework OpenGL -framework Cocoa -L/opt/homebrew/lib
 LDFLAGS += `pkg-config --libs glfw3 glew`
 

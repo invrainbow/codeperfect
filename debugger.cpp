@@ -1004,7 +1004,12 @@ bool Debugger::start(Debug_Profile *debug_profile) {
     dlv_proc.dir = world.current_path;
     // dlv_proc.create_new_console = true;
 
-    ccstr dlv_cmd = our_sprintf("dlv exec --headless --listen=127.0.0.1:1234 %s", binary_path);
+    if (world.delve_path[0] == '\0') {
+        tell_user("Please set your Delve binary path in ~/.cpconfig, and restart CodePerfect.", NULL);
+        return false;
+    }
+
+    ccstr dlv_cmd = our_sprintf("%s exec --headless --listen=127.0.0.1:1234 %s", world.delve_path, binary_path);
     if (debug_profile->type == DEBUG_TEST_CURRENT_FUNCTION)
         dlv_cmd = our_sprintf("%s -- -test.v -test.run %s", dlv_cmd, test_function_name);
 
@@ -1028,7 +1033,6 @@ bool Debugger::start(Debug_Profile *debug_profile) {
         if (pipe_stdout_thread == NULL) return false;
     }
 
-    /*
     // read the first line
     char ch = 0;
     do {
@@ -1036,7 +1040,6 @@ bool Debugger::start(Debug_Profile *debug_profile) {
         printf("%c", ch);
     } while (ch != '\n');
     printf("\n");
-    */
 
     auto server = "127.0.0.1";
     auto port = "1234";
@@ -1108,6 +1111,7 @@ void Debugger::pipe_stdout_into_our_buffer() {
             {
                 SCOPED_MEM(&stdout_mem);
                 stdout_lines.append(our_strcpy(stdout_line_buffer.items));
+                world.wnd_debug_output.cmd_scroll_to_end = true;
             }
             stdout_line_buffer.len = 0;
         } else {
