@@ -28,6 +28,7 @@ coredumps/
 
 # misc
 imgui.ini
+
 # .vscode
 .vs/
 
@@ -48,12 +49,11 @@ log.txt
 *.rdbg
 
 # artifacts of our own ide
-.ide
-db
-db.tmp
-.idelicense
-.ideversion
-.idedefaultfolder
+.cpdb
+.cpdb.tmp
+.cpproj
+.cplicense
+.cpdefaultfolder
 
 # macos
 .DS_Store
