@@ -1878,6 +1878,7 @@ void UI::draw_everything() {
             ImGui::EndMenu();
         }
 
+        /*
         if (ImGui::BeginMenu("Refactor")) {
             auto can_rename_id_under_cursor = [&]() -> bool {
 #if 0
@@ -1927,6 +1928,7 @@ void UI::draw_everything() {
 
             ImGui::EndMenu();
         }
+        */
 
 
         if (ImGui::BeginMenu("Project")) {
@@ -2185,10 +2187,6 @@ void UI::draw_everything() {
             if (ImGui::MenuItem("About")) {
                 world.wnd_about.show = true;
             }
-
-            ImGui::Separator();
-            ImGui::MenuItem(our_sprintf("Version %d", gh_version), NULL, false, false);
-
             ImGui::EndMenu();
         }
 
@@ -2196,18 +2194,10 @@ void UI::draw_everything() {
         ImGui::EndMainMenuBar();
     }
 
-    /*
-    if (world.wnd_options.show) {
-        ImGui::Begin("Options", &world.wnd_options.show, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking);
-        ImGui::SliderInt("Scroll offset", &options.scrolloff, 0, 10);
-        ImGui::End();
-    }
-    */
-
     if (world.wnd_about.show) {
         auto &wnd = world.wnd_about;
         ImGui::Begin("About", &wnd.show, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking);
-        ImGui::Text("Nothing here yet.");
+        ImGui::Text("CodePerfect 95    Build %d", gh_version);
         ImGui::End();
     }
 
