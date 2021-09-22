@@ -24,8 +24,6 @@ bool is_ignored_by_git(ccstr path) {
 }
 
 void History::actually_push(int editor_id, cur2 pos, bool force, bool capturing_editor_last) {
-    check_marks();
-
     auto editor = world.find_editor_by_id(editor_id);
     print("pushing %s:%s, force = %d, capture_editor_last = %d", our_basename(editor->filepath), format_cur(pos), force, capturing_editor_last);
 
@@ -34,14 +32,10 @@ void History::actually_push(int editor_id, cur2 pos, bool force, bool capturing_
     for (int i = curr; i != top; i = inc(i))
         ring[i].cleanup();
 
-    check_marks();
-
     ring[curr].editor_id = editor_id;
     ring[curr].pos = pos; // do we even need this anymore?
     ring[curr].mark = world.mark_fridge.alloc();
     editor->buf.mark_tree.insert_mark(MARK_HISTORY, pos, ring[curr].mark);
-
-    check_marks();
 
     top = curr = inc(curr);
     if (curr == start) {
