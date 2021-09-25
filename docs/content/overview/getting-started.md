@@ -7,6 +7,16 @@ weight: 10
 toc: true
 ---
 
+## Prerequisites
+
+CodePerfect requires Go version 1.13 or higher to be installed. You can install
+Go a number of ways: from their [website](https://golang.org/dl/), using
+[Homebrew](https://formulae.brew.sh/formula/go) on Mac, or using
+[Chocolatey](https://community.chocolatey.org/packages/golang) on Windows.
+
+CodePerfect supports any installation method, so long as it gets installed and
+CodePerfect can find the `go` binary.
+
 ## Installing and running
 
 Please refer to the instructions for your OS.

@@ -10,12 +10,12 @@ toc: true
 CodePerfect supports Vim keybindings out of the box. We aim to support the
 entire feature set of Vim, so officially the answer to "which keys are supported?" is "all of them."
 
-However, some Vim features are tricky. Below are a list of things to note.
-Please note that any bugs here are high on our task list &mdash; Vim
-integration is a key feature for us.
+However, some Vim features are tricky. Below are a list of things to note.  Any
+bugs here are high priority on our list; Vim integration is a key feature for
+us.
 
 - First and foremost, there's no way to turn Vim keybindings off. Currently
-  they are baked into the application. We're working on disabling it and adding
+  they're baked into the application. We're working on adding an option to disable it and add
   normal editing keybindings.
 
 - Colon `:command`s are not currently supported. Sorry, we know this is an important

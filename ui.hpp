@@ -9,6 +9,7 @@
 #include "common.hpp"
 #include "editor.hpp"
 #include "list.hpp"
+#include "debugger.hpp"
 #include <GL/glew.h>
 
 enum Texture_Id {
@@ -90,6 +91,27 @@ enum {
 #define KEYMOD_PRIMARY KEYMOD_CTRL
 #endif
 
+enum Dbg_Index_Type {
+    INDEX_NONE,
+    INDEX_ARRAY,
+    INDEX_MAP,
+};
+
+struct Draw_Debugger_Var_Args {
+    Dlv_Var *var;
+    Dbg_Index_Type index_type;
+    union {
+        int index;
+        Dlv_Var *key;
+    };
+    Dlv_Watch *watch;
+    bool some_watch_being_edited;
+    bool is_child;
+    int indent;
+    int watch_index;
+    int locals_index;
+};
+
 struct UI {
     Font* font;
     List<Vert> verts;
@@ -121,6 +143,12 @@ struct UI {
         ImGuiMouseCursor cursor;
         bool ready;
     } hover;
+
+    bool dbg_editing_new_watch;
+
+    void draw_debugger();
+    ccstr var_value_as_string(Dlv_Var *var);
+    void draw_debugger_var(Draw_Debugger_Var_Args *args);
 
     void init();
     void flush_verts();
@@ -160,6 +188,10 @@ struct UI {
     void imgui_with_disabled(bool disable, fn<void()> f);
     bool imgui_is_window_focusing(bool *b);
     u32 imgui_get_keymods();
+
+
+
+
 };
 
 extern UI ui;

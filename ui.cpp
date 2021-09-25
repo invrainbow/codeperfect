@@ -867,664 +867,654 @@ int UI::get_mouse_flags(boxf area) {
     return ret;
 }
 
-struct Debugger_UI {
-    enum Index_Type {
-        INDEX_NONE,
-        INDEX_ARRAY,
-        INDEX_MAP,
-    };
+void UI::draw_debugger_var(Draw_Debugger_Var_Args *args) {
+    SCOPED_FRAME();
 
-    struct Render_Args {
-        Dlv_Var *var;
-        Index_Type index_type;
-        union {
-            int index;
-            Dlv_Var *key;
-        };
-        Dlv_Watch *watch;
-        bool is_child;
-        int indent;
-        int watch_index;
-        int locals_index;
-    };
+    ImGui::TableNextRow();
+    ImGui::TableNextColumn();
 
-    UI *ui;
+    bool open = false;
+    auto var = args->var;
+    auto watch = args->watch;
 
-    void init(UI *_ui) {
-        ui = _ui;
-    }
+    Dlv_Var** selection = NULL;
+    if (watch != NULL)
+        selection = &world.wnd_debugger.watch_selection;
+    else
+        selection = &world.wnd_debugger.locals_selection;
 
-    void render_var(Render_Args *args) {
+    {
         SCOPED_FRAME();
 
-        ImGui::TableNextRow();
-        ImGui::TableNextColumn();
+        int tree_flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+        if (*selection == var)
+            tree_flags |= ImGuiTreeNodeFlags_Selected;
+        bool leaf = true;
 
-        bool open = false;
-        auto var = args->var;
-        auto watch = args->watch;
-
-        Dlv_Var** selection = NULL;
-        if (watch != NULL)
-            selection = &world.wnd_debugger.watch_selection;
-        else
-            selection = &world.wnd_debugger.locals_selection;
-
-        {
-            SCOPED_FRAME();
-
-            int tree_flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_NoTreePushOnOpen;
-            if (*selection == var)
-                tree_flags |= ImGuiTreeNodeFlags_Selected;
-            bool leaf = true;
-
-            if (var != NULL) {
-                switch (var->kind) {
-                case GO_KIND_ARRAY:
-                case GO_KIND_CHAN: // ???
-                case GO_KIND_FUNC: // ???
-                case GO_KIND_INTERFACE:
-                case GO_KIND_MAP:
-                case GO_KIND_PTR:
-                case GO_KIND_SLICE:
-                case GO_KIND_STRUCT:
-                case GO_KIND_UNSAFEPOINTER: // ???
+        if (var != NULL) {
+            switch (var->kind) {
+            case GO_KIND_ARRAY:
+            case GO_KIND_CHAN: // ???
+            case GO_KIND_FUNC: // ???
+            case GO_KIND_INTERFACE:
+            case GO_KIND_MAP:
+            case GO_KIND_PTR:
+            case GO_KIND_SLICE:
+            case GO_KIND_STRUCT:
+            case GO_KIND_UNSAFEPOINTER: // ???
+                leaf = false;
+                break;
+            case GO_KIND_STRING:
+                if (var->incomplete())
                     leaf = false;
-                    break;
-                case GO_KIND_STRING:
-                    if (var->incomplete())
-                        leaf = false;
-                    break;
-                }
+                break;
             }
+        }
 
-            if (leaf)
-                tree_flags |= ImGuiTreeNodeFlags_Leaf;
+        if (leaf)
+            tree_flags |= ImGuiTreeNodeFlags_Leaf;
 
-            ccstr final_var_name = NULL;
+        ccstr final_var_name = NULL;
 
-            if (watch != NULL && !args->is_child) {
-                if (watch->editing) {
-                    ImGui::PushStyleColor(ImGuiCol_FrameBg, 0);
-                    ImGui::SetNextItemWidth(-FLT_MIN);
-                    if (watch->edit_first_frame) {
-                        watch->edit_first_frame = false;
-                        ImGui::SetKeyboardFocusHere();
+        if (watch != NULL && !args->is_child) {
+            if (watch->editing) {
+                ImGui::PushStyleColor(ImGuiCol_FrameBg, 0);
+                ImGui::SetNextItemWidth(-FLT_MIN);
+                if (watch->edit_first_frame) {
+                    watch->edit_first_frame = false;
+                    ImGui::SetKeyboardFocusHere();
+                }
+                bool changed = ImGui::InputText(
+                    our_sprintf("##newwatch%x", (iptr)(void*)watch),
+                    watch->expr_tmp,
+                    _countof(watch->expr_tmp),
+                    ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll
+                );
+                ImGui::PopStyleColor();
+
+                if (changed || ImGui::IsItemDeactivated()) {
+                    if (watch->expr_tmp[0] != '\0') {
+                        world.dbg.push_call(DLVC_EDIT_WATCH, [&](auto it) {
+                            it->edit_watch.expression = our_strcpy(watch->expr_tmp);
+                            it->edit_watch.watch_idx = args->watch_index;
+                        });
+                    } else {
+                        world.dbg.push_call(DLVC_DELETE_WATCH, [&](auto it) {
+                            it->delete_watch.watch_idx = args->watch_index;
+                        });
                     }
-                    bool changed = ImGui::InputText(
-                        our_sprintf("##newwatch%x", (iptr)(void*)watch),
-                        watch->expr_tmp,
-                        _countof(watch->expr_tmp),
-                        ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll
-                    );
-                    ImGui::PopStyleColor();
-
-                    if (changed || ImGui::IsItemDeactivated()) {
-                        if (watch->expr_tmp[0] != '\0') {
-                            world.dbg.push_call(DLVC_EDIT_WATCH, [&](auto it) {
-                                it->edit_watch.expression = our_strcpy(watch->expr_tmp);
-                                it->edit_watch.watch_idx = args->watch_index;
-                            });
-                        } else {
-                            world.dbg.push_call(DLVC_DELETE_WATCH, [&](auto it) {
-                                it->delete_watch.watch_idx = args->watch_index;
-                            });
-                        }
-                    }
-                } else {
-                    for (int i = 0; i < args->indent; i++)
-                        ImGui::Indent();
-
-                    // if (leaf) ImGui::Unindent(ImGui::GetTreeNodeToLabelSpacing());
-
-                    final_var_name = watch->expr;
-                    open = ImGui::TreeNodeEx(var, tree_flags, "%s", watch->expr) && !leaf;
-
-                    // if (leaf) ImGui::Indent(ImGui::GetTreeNodeToLabelSpacing());
-
-                    for (int i = 0; i < args->indent; i++)
-                        ImGui::Unindent();
                 }
             } else {
-                ccstr var_name = NULL;
-                switch (args->index_type) {
-                case INDEX_NONE:
-                    var_name = var->name;
-                    if (var->is_shadowed)
-                        var_name = our_sprintf("(%s)", var_name);
-                    break;
-                case INDEX_ARRAY:
-                    var_name = our_sprintf("[%d]", args->index);
-                    break;
-                case INDEX_MAP:
-                    var_name = our_sprintf("[%s]", var_value_as_string(args->key));
-                    break;
-                }
-                final_var_name = var_name;
-
                 for (int i = 0; i < args->indent; i++)
                     ImGui::Indent();
 
                 // if (leaf) ImGui::Unindent(ImGui::GetTreeNodeToLabelSpacing());
 
-                open = ImGui::TreeNodeEx(var, tree_flags, "%s", var_name) && !leaf;
+                final_var_name = watch->expr;
+                open = ImGui::TreeNodeEx(var, tree_flags, "%s", watch->expr) && !leaf;
 
                 // if (leaf) ImGui::Indent(ImGui::GetTreeNodeToLabelSpacing());
 
                 for (int i = 0; i < args->indent; i++)
                     ImGui::Unindent();
+            }
+        } else {
+            ccstr var_name = NULL;
+            switch (args->index_type) {
+            case INDEX_NONE:
+                var_name = var->name;
+                if (var->is_shadowed)
+                    var_name = our_sprintf("(%s)", var_name);
+                break;
+            case INDEX_ARRAY:
+                var_name = our_sprintf("[%d]", args->index);
+                break;
+            case INDEX_MAP:
+                var_name = our_sprintf("[%s]", var_value_as_string(args->key));
+                break;
+            }
+            final_var_name = var_name;
 
+            for (int i = 0; i < args->indent; i++)
+                ImGui::Indent();
+
+            // if (leaf) ImGui::Unindent(ImGui::GetTreeNodeToLabelSpacing());
+
+            open = ImGui::TreeNodeEx(var, tree_flags, "%s", var_name) && !leaf;
+
+            // if (leaf) ImGui::Indent(ImGui::GetTreeNodeToLabelSpacing());
+
+            for (int i = 0; i < args->indent; i++)
+                ImGui::Unindent();
+
+        }
+
+        if (final_var_name != NULL) {
+            if (ImGui::OurBeginPopupContextItem(our_sprintf("dbg_copyvalue_%lld", (uptr)var))) {
+                if (ImGui::Selectable("Copy Name")) {
+                    glfwSetClipboardString(world.window, final_var_name);
+                }
+                ImGui::EndPopup();
+            }
+        }
+
+        // Assumes the last thing drawn was the TreeNode.
+
+        if (*selection == var) {
+            if (watch != NULL) {
+                auto delete_that_fucker = [&]() -> bool {
+                    if (args->some_watch_being_edited) return false;
+                    if (dbg_editing_new_watch) return false;
+
+                    if (imgui_get_keymods() == KEYMOD_NONE) {
+                        if (imgui_special_key_pressed(ImGuiKey_Backspace))
+                            return true;
+                        if (imgui_special_key_pressed(ImGuiKey_Delete))
+                            return true;
+                    }
+
+                    return false;
+                };
+
+                if (delete_that_fucker()) {
+                    auto old_len = world.dbg.watches.len;
+
+                    world.dbg.push_call(DLVC_DELETE_WATCH, [&](auto it) {
+                        it->delete_watch.watch_idx = args->watch_index;
+                    });
+
+                    if (watch != NULL) {
+                        auto next = args->watch_index;
+                        if (next >= old_len-1)
+                            next--;
+                        if (next < old_len-1)
+                            *selection = &world.dbg.watches[next].value;
+                    } else {
+                        do {
+                            auto &state = world.dbg.state;
+                            auto goroutine = state.goroutines.find([&](auto it) { return it->id == state.current_goroutine_id; });
+                            if (goroutine == NULL)
+                                break;
+                            if (state.current_frame >= goroutine->frames->len)
+                                break;
+                            auto frame = &goroutine->frames->items[state.current_frame];
+
+                            auto next = args->locals_index;
+                            if (next >= frame->locals->len + frame->args->len)
+                                next--;
+                            if (next >= frame->locals->len + frame->args->len)
+                                break;
+
+                            if (next < frame->locals->len) {
+                                *selection = &frame->locals->at(next);
+                            } else {
+                                next -= frame->locals->len;
+                                *selection = &frame->args->at(next);
+                            }
+
+                        } while (0);
+                    }
+                }
             }
 
-            if (final_var_name != NULL) {
+            if (imgui_get_keymods() == KEYMOD_PRIMARY && imgui_key_pressed('c')) {
+                // ???
+            }
+        }
+
+        if (watch != NULL) {
+            if (!args->is_child) {
+                if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && ImGui::IsItemHovered(ImGuiHoveredFlags_None)) {
+                    watch->editing = true;
+                    watch->open_before_editing = open;
+                    watch->edit_first_frame = true;
+                }
+            }
+        }
+
+        if (watch == NULL || !watch->editing) {
+            if (ImGui::IsItemClicked()) {
+                *selection = var;
+            }
+        }
+    }
+
+    if (var->incomplete()) {
+        for (int i = 0; i < args->indent; i++)
+            ImGui::Indent();
+        ImGui::Indent(ImGui::GetTreeNodeToLabelSpacing());
+
+        ImGui::PushFont(world.ui.im_font_ui);
+        bool clicked = ImGui::SmallButton("Load more...");
+        ImGui::PopFont();
+
+        if (clicked) {
+            world.dbg.push_call(DLVC_VAR_LOAD_MORE, [&](Dlv_Call *it) {
+                it->var_load_more.state_id = world.dbg.state_id;
+                it->var_load_more.var = var;
+            });
+        }
+
+        for (int i = 0; i < args->indent; i++)
+            ImGui::Unindent();
+        ImGui::Unindent(ImGui::GetTreeNodeToLabelSpacing());
+    }
+
+    if (watch == NULL || watch->fresh) {
+        ImGui::TableNextColumn();
+
+        ccstr value_label = NULL;
+        ccstr underlying_value = NULL;
+
+        auto muted = (watch != NULL && watch->state == DBGWATCH_ERROR);
+        if (muted) {
+            value_label ="<unable to read>";
+            underlying_value = value_label;
+        } else {
+            value_label = var_value_as_string(var);
+            if (var->kind == GO_KIND_STRING) {
+                auto len = strlen(value_label) - 2;
+                auto buf = alloc_array(char, len+1);
+                strncpy(buf, value_label+1, len);
+                buf[len] = '\0';
+                underlying_value = buf;
+            } else {
+                underlying_value = value_label;
+            }
+        }
+
+        ImGuiStyle &style = ImGui::GetStyle();
+
+        if (muted) ImGui::PushStyleColor(ImGuiCol_Text, style.Colors[ImGuiCol_TextDisabled]);
+        ImGui::TextWrapped("%s", value_label);
+        if (muted) ImGui::PopStyleColor();
+
+        bool copy = false;
+
+        if (*selection == var)
+            if (imgui_get_keymods() == KEYMOD_PRIMARY)
+                if (imgui_key_pressed('c'))
+                    copy = true;
+
+        if (ImGui::OurBeginPopupContextItem(our_sprintf("dbg_copyvalue_%lld", (uptr)var))) {
+            if (ImGui::Selectable("Copy Value"))
+                copy = true;
+            ImGui::EndPopup();
+        }
+
+        if (copy) glfwSetClipboardString(world.window, underlying_value);
+
+        ImGui::TableNextColumn();
+        if (watch == NULL || watch->state != DBGWATCH_ERROR) {
+            ccstr type_name = NULL;
+            if (var->type == NULL || var->type[0] == '\0') {
+                switch (var->kind) {
+                case GO_KIND_BOOL: type_name = "bool"; break;
+                case GO_KIND_INT: type_name = "int"; break;
+                case GO_KIND_INT8: type_name = "int8"; break;
+                case GO_KIND_INT16: type_name = "int16"; break;
+                case GO_KIND_INT32: type_name = "int32"; break;
+                case GO_KIND_INT64: type_name = "int64"; break;
+                case GO_KIND_UINT: type_name = "uint"; break;
+                case GO_KIND_UINT8: type_name = "uint8"; break;
+                case GO_KIND_UINT16: type_name = "uint16"; break;
+                case GO_KIND_UINT32: type_name = "uint32"; break;
+                case GO_KIND_UINT64: type_name = "uint64"; break;
+                case GO_KIND_UINTPTR: type_name = "uintptr"; break;
+                case GO_KIND_FLOAT32: type_name = "float32"; break;
+                case GO_KIND_FLOAT64: type_name = "float64"; break;
+                case GO_KIND_COMPLEX64: type_name = "complex64"; break;
+                case GO_KIND_COMPLEX128: type_name = "complex128"; break;
+                case GO_KIND_ARRAY: type_name = "<array>"; break;
+                case GO_KIND_CHAN: type_name = "<chan>"; break;
+                case GO_KIND_FUNC: type_name = "<func>"; break;
+                case GO_KIND_INTERFACE: type_name = "<interface>"; break;
+                case GO_KIND_MAP: type_name = "<map>"; break;
+                case GO_KIND_PTR: type_name = "<pointer>"; break;
+                case GO_KIND_SLICE: type_name = "<slice>"; break;
+                case GO_KIND_STRING: type_name = "string"; break;
+                case GO_KIND_STRUCT: type_name = "<struct>"; break;
+                case GO_KIND_UNSAFEPOINTER: type_name = "unsafe.Pointer"; break;
+                default: type_name = "<unknown>"; break;
+                }
+            } else {
+                type_name = var->type;
+            }
+
+            if (type_name != NULL) {
+                ImGui::TextWrapped("%s", type_name);
                 if (ImGui::OurBeginPopupContextItem(our_sprintf("dbg_copyvalue_%lld", (uptr)var))) {
-                    if (ImGui::Selectable("Copy Name")) {
-                        glfwSetClipboardString(world.window, final_var_name);
+                    if (ImGui::Selectable("Copy Type")) {
+                        glfwSetClipboardString(world.window, type_name);
                     }
                     ImGui::EndPopup();
                 }
             }
-
-            // Assumes the last thing drawn was the TreeNode.
-
-            if (*selection == var) {
-                if (watch != NULL) {
-                    auto delete_pressed = [&]() -> bool {
-                        if (ui->imgui_get_keymods() == KEYMOD_NONE) {
-                            if (ui->imgui_special_key_pressed(ImGuiKey_Backspace))
-                                return true;
-                            if (ui->imgui_special_key_pressed(ImGuiKey_Delete))
-                                return true;
-                        }
-                        return false;
-                    };
-
-                    if (!watch->editing && delete_pressed()) {
-                        auto old_len =world.dbg.watches.len;
-
-                        world.dbg.push_call(DLVC_DELETE_WATCH, [&](auto it) {
-                            it->delete_watch.watch_idx = args->watch_index;
-                        });
-
-                        if (watch != NULL) {
-                            auto next = args->watch_index;
-                            if (next >= old_len-1)
-                                next--;
-                            if (next < old_len-1)
-                                *selection = &world.dbg.watches[next].value;
-                        } else {
-                            do {
-                                auto &state = world.dbg.state;
-                                auto goroutine = state.goroutines.find([&](auto it) { return it->id == state.current_goroutine_id; });
-                                if (goroutine == NULL)
-                                    break;
-                                if (state.current_frame >= goroutine->frames->len)
-                                    break;
-                                auto frame = &goroutine->frames->items[state.current_frame];
-
-                                auto next = args->locals_index;
-                                if (next >= frame->locals->len + frame->args->len)
-                                    next--;
-                                if (next >= frame->locals->len + frame->args->len)
-                                    break;
-
-                                if (next < frame->locals->len) {
-                                    *selection = &frame->locals->at(next);
-                                } else {
-                                    next -= frame->locals->len;
-                                    *selection = &frame->args->at(next);
-                                }
-
-                            } while (0);
-                        }
-                    }
-                }
-
-                if (ui->imgui_get_keymods() == KEYMOD_PRIMARY && ui->imgui_key_pressed('c')) {
-                    // ???
-                }
-            }
-
-            if (watch != NULL) {
-                if (!args->is_child) {
-                    if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && ImGui::IsItemHovered(ImGuiHoveredFlags_None)) {
-                        watch->editing = true;
-                        watch->open_before_editing = open;
-                        watch->edit_first_frame = true;
-                    }
-                }
-            }
-
-            if (watch == NULL || !watch->editing) {
-                if (ImGui::IsItemClicked()) {
-                    *selection = var;
-                }
-            }
         }
-
-        if (var->incomplete()) {
-            for (int i = 0; i < args->indent; i++)
-                ImGui::Indent();
-            ImGui::Indent(ImGui::GetTreeNodeToLabelSpacing());
-
-            ImGui::PushFont(world.ui.im_font_ui);
-            bool clicked = ImGui::SmallButton("Load more...");
-            ImGui::PopFont();
-
-            if (clicked) {
-                world.dbg.push_call(DLVC_VAR_LOAD_MORE, [&](Dlv_Call *it) {
-                    it->var_load_more.state_id = world.dbg.state_id;
-                    it->var_load_more.var = var;
-                });
-            }
-
-            for (int i = 0; i < args->indent; i++)
-                ImGui::Unindent();
-            ImGui::Unindent(ImGui::GetTreeNodeToLabelSpacing());
+    } else {
+        ImGui::TableNextColumn();
+        if (watch != NULL && !watch->fresh) {
+            // TODO: grey out
+            ImGui::TextWrapped("Reading...");
         }
+        ImGui::TableNextColumn();
+    }
 
-        if (watch == NULL || watch->fresh) {
-            ImGui::TableNextColumn();
-
-            ccstr value_label = NULL;
-            ccstr underlying_value = NULL;
-
-            auto muted = (watch != NULL && watch->state == DBGWATCH_ERROR);
-            if (muted) {
-                value_label ="<unable to read>";
-                underlying_value = value_label;
+    if (open && (watch == NULL || (watch->fresh && watch->state != DBGWATCH_ERROR))) {
+        if (var->children != NULL) {
+            if (var->kind == GO_KIND_MAP) {
+                for (int k = 0; k < var->children->len; k += 2) {
+                    Draw_Debugger_Var_Args a;
+                    a.watch = watch;
+                    a.some_watch_being_edited = args->some_watch_being_edited;
+                    a.watch_index = args->watch_index;
+                    a.is_child = true;
+                    a.var = &var->children->at(k+1);
+                    a.index_type = INDEX_MAP;
+                    a.key = &var->children->at(k);
+                    a.indent = args->indent + 1;
+                    draw_debugger_var(&a);
+                }
             } else {
-                value_label = var_value_as_string(var);
-                if (var->kind == GO_KIND_STRING) {
-                    auto len = strlen(value_label) - 2;
-                    auto buf = alloc_array(char, len+1);
-                    strncpy(buf, value_label+1, len);
-                    buf[len] = '\0';
-                    underlying_value = buf;
-                } else {
-                    underlying_value = value_label;
-                }
-            }
-
-            ImGuiStyle &style = ImGui::GetStyle();
-
-            if (muted) ImGui::PushStyleColor(ImGuiCol_Text, style.Colors[ImGuiCol_TextDisabled]);
-            ImGui::TextWrapped("%s", value_label);
-            if (muted) ImGui::PopStyleColor();
-
-            bool copy = false;
-
-            if (*selection == var)
-                if (ui->imgui_get_keymods() == KEYMOD_PRIMARY)
-                    if (ui->imgui_key_pressed('c'))
-                        copy = true;
-
-            if (ImGui::OurBeginPopupContextItem(our_sprintf("dbg_copyvalue_%lld", (uptr)var))) {
-                if (ImGui::Selectable("Copy Value"))
-                    copy = true;
-                ImGui::EndPopup();
-            }
-
-            if (copy) glfwSetClipboardString(world.window, underlying_value);
-
-            ImGui::TableNextColumn();
-            if (watch == NULL || watch->state != DBGWATCH_ERROR) {
-                ccstr type_name = NULL;
-                if (var->type == NULL || var->type[0] == '\0') {
-                    switch (var->kind) {
-                    case GO_KIND_BOOL: type_name = "bool"; break;
-                    case GO_KIND_INT: type_name = "int"; break;
-                    case GO_KIND_INT8: type_name = "int8"; break;
-                    case GO_KIND_INT16: type_name = "int16"; break;
-                    case GO_KIND_INT32: type_name = "int32"; break;
-                    case GO_KIND_INT64: type_name = "int64"; break;
-                    case GO_KIND_UINT: type_name = "uint"; break;
-                    case GO_KIND_UINT8: type_name = "uint8"; break;
-                    case GO_KIND_UINT16: type_name = "uint16"; break;
-                    case GO_KIND_UINT32: type_name = "uint32"; break;
-                    case GO_KIND_UINT64: type_name = "uint64"; break;
-                    case GO_KIND_UINTPTR: type_name = "uintptr"; break;
-                    case GO_KIND_FLOAT32: type_name = "float32"; break;
-                    case GO_KIND_FLOAT64: type_name = "float64"; break;
-                    case GO_KIND_COMPLEX64: type_name = "complex64"; break;
-                    case GO_KIND_COMPLEX128: type_name = "complex128"; break;
-                    case GO_KIND_ARRAY: type_name = "<array>"; break;
-                    case GO_KIND_CHAN: type_name = "<chan>"; break;
-                    case GO_KIND_FUNC: type_name = "<func>"; break;
-                    case GO_KIND_INTERFACE: type_name = "<interface>"; break;
-                    case GO_KIND_MAP: type_name = "<map>"; break;
-                    case GO_KIND_PTR: type_name = "<pointer>"; break;
-                    case GO_KIND_SLICE: type_name = "<slice>"; break;
-                    case GO_KIND_STRING: type_name = "string"; break;
-                    case GO_KIND_STRUCT: type_name = "<struct>"; break;
-                    case GO_KIND_UNSAFEPOINTER: type_name = "unsafe.Pointer"; break;
-                    default: type_name = "<unknown>"; break;
-                    }
-                } else {
-                    type_name = var->type;
-                }
-
-                if (type_name != NULL) {
-                    ImGui::TextWrapped("%s", type_name);
-                    if (ImGui::OurBeginPopupContextItem(our_sprintf("dbg_copyvalue_%lld", (uptr)var))) {
-                        if (ImGui::Selectable("Copy Type")) {
-                            glfwSetClipboardString(world.window, type_name);
-                        }
-                        ImGui::EndPopup();
-                    }
-                }
-            }
-        } else {
-            ImGui::TableNextColumn();
-            if (watch != NULL && !watch->fresh) {
-                // TODO: grey out
-                ImGui::TextWrapped("Reading...");
-            }
-            ImGui::TableNextColumn();
-        }
-
-        if (open && (watch == NULL || (watch->fresh && watch->state != DBGWATCH_ERROR))) {
-            if (var->children != NULL) {
-                if (var->kind == GO_KIND_MAP) {
-                    for (int k = 0; k < var->children->len; k += 2) {
-                        Render_Args a;
-                        a.watch = watch;
-                        a.watch_index = args->watch_index;
-                        a.is_child = true;
-                        a.var = &var->children->at(k+1);
-                        a.index_type = INDEX_MAP;
-                        a.key = &var->children->at(k);
-                        a.indent = args->indent + 1;
-                        render_var(&a);
-                    }
-                } else {
-                    bool isarr = (var->kind == GO_KIND_ARRAY || var->kind == GO_KIND_SLICE);
-                    for (int k = 0; k < var->children->len; k++) {
-                        Render_Args a;
-                        a.watch = watch;
-                        a.watch_index = args->watch_index;
-                        a.is_child = true;
-                        a.var = &var->children->at(k);
-                        if (isarr) {
-                            a.index_type = INDEX_ARRAY;
-                            a.index = k;
-                        } else {
-                            a.index_type = INDEX_NONE;
-                        }
-                        a.indent = args->indent + 1;
-                        render_var(&a);
-                    }
-                }
-            }
-        }
-    }
-
-    ccstr var_value_as_string(Dlv_Var *var) {
-        if (var->unreadable_description != NULL)
-            return our_sprintf("<unreadable: %s>", var->unreadable_description);
-
-        switch (var->kind) {
-        case GO_KIND_INVALID: // i don't think this should even happen
-            return "<invalid>";
-
-        case GO_KIND_ARRAY:
-        case GO_KIND_SLICE:
-            return our_sprintf("0x%" PRIx64 " (Len = %d, Cap = %d)", var->address, var->len, var->cap);
-
-        case GO_KIND_STRUCT:
-        case GO_KIND_INTERFACE:
-            return our_sprintf("0x%" PRIx64, var->address);
-
-        case GO_KIND_MAP:
-            return our_sprintf("0x%" PRIx64 " (Len = %d)", var->address, var->len);
-
-        case GO_KIND_STRING:
-            return our_sprintf("\"%s%s\"", var->value, var->incomplete() ? "..." : "");
-
-        case GO_KIND_UNSAFEPOINTER:
-        case GO_KIND_CHAN:
-        case GO_KIND_FUNC:
-        case GO_KIND_PTR:
-            return our_sprintf("0x%" PRIx64, var->address);
-
-        default:
-            return var->value;
-        }
-    }
-
-    void draw() {
-        world.wnd_debugger.focused = ImGui::IsWindowFocused();
-
-        auto &dbg = world.dbg;
-        auto &state = dbg.state;
-        auto &wnd = world.wnd_debugger;
-
-        {
-            ImGui::SetNextWindowDockID(ui->dock_bottom_id, ImGuiCond_Once);
-            ImGui::Begin("Call Stack");
-            ImGui::PushFont(world.ui.im_font_mono);
-
-            if (world.dbg.state_flag == DLV_STATE_PAUSED && !world.dbg.exiting) {
-                for (int i = 0; i < state.goroutines.len; i++) {
-                    auto &goroutine = state.goroutines[i];
-
-                    int tree_flags = ImGuiTreeNodeFlags_OpenOnArrow;
-
-                    bool is_current = (state.current_goroutine_id == goroutine.id);
-                    if (is_current) {
-                        tree_flags |= ImGuiTreeNodeFlags_Bullet;
-                        ImGui::SetNextItemOpen(true);
-                        ImGui::PushStyleColor(ImGuiCol_Text, (ImVec4)ImColor(255, 100, 100));
-                    }
-
-                    auto open = ImGui::TreeNodeEx(
-                        (void*)(uptr)i,
-                        tree_flags,
-                        "%s (%s)",
-                        goroutine.curr_func_name,
-                        goroutine.breakpoint_hit ? "BREAKPOINT HIT" : "PAUSED"
-                    );
-
-                    if (is_current)
-                        ImGui::PopStyleColor();
-
-                    if (ImGui::IsItemClicked()) {
-                        world.dbg.push_call(DLVC_SET_CURRENT_GOROUTINE, [&](auto call) {
-                            call->set_current_goroutine.goroutine_id = goroutine.id;
-                        });
-                    }
-
-                    if (open) {
-                        if (goroutine.fresh) {
-                            for (int j = 0; j < goroutine.frames->len; j++) {
-                                auto &frame = goroutine.frames->items[j];
-
-                                int tree_flags = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
-                                if (state.current_goroutine_id == goroutine.id && state.current_frame == j)
-                                    tree_flags |= ImGuiTreeNodeFlags_Selected;
-
-                                ImGui::TreeNodeEx(&frame, tree_flags, "%s (%s:%d)", frame.func_name, our_basename(frame.filepath), frame.lineno);
-                                if (ImGui::IsItemClicked()) {
-                                    world.dbg.push_call(DLVC_SET_CURRENT_FRAME, [&](auto call) {
-                                        call->set_current_frame.goroutine_id = goroutine.id;
-                                        call->set_current_frame.frame = j;
-                                    });
-                                }
-                            }
-                        } else {
-                            ImGui::Text("Loading...");
-                        }
-
-                        ImGui::TreePop();
-                    }
-                }
-            }
-
-            ImGui::PopFont();
-            ImGui::End();
-        }
-
-        {
-            ImGui::SetNextWindowDockID(ui->dock_bottom_right_id, ImGuiCond_Once);
-
-            {
-                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-                ImGui::Begin("Local Variables");
-                ImGui::PopStyleVar();
-            }
-
-            ImGui::PushFont(world.ui.im_font_mono);
-
-            if (world.dbg.state_flag == DLV_STATE_PAUSED) {
-                auto flags = ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable;
-                if (ImGui::BeginTable("vars", 3, flags)) {
-                    ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_NoHide);
-                    ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_NoHide);
-                    ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_NoHide);
-                    ImGui::TableHeadersRow();
-
-                    bool loading = false;
-                    bool done = false;
-                    Dlv_Frame *frame = NULL;
-
-                    do {
-                        if (dbg.state_flag != DLV_STATE_PAUSED) break;
-                        if (state.current_goroutine_id == -1 || state.current_frame == -1) break;
-
-                        auto goroutine = state.goroutines.find([&](auto it) { return it->id == state.current_goroutine_id; });
-                        if (goroutine == NULL) break;
-
-                        loading = true;
-
-                        if (!goroutine->fresh) break;
-                        if (state.current_frame >= goroutine->frames->len) break;
-
-                        frame = &goroutine->frames->items[state.current_frame];
-                        if (!frame->fresh) {
-                            frame = NULL;
-                            break;
-                        }
-
-                        int index = 0;
-
-                        if (frame->locals != NULL) {
-                            For (*frame->locals) {
-                                Render_Args a; ptr0(&a);
-                                a.var = &it;
-                                a.is_child = false;
-                                a.watch = NULL;
-                                a.index_type = INDEX_NONE;
-                                a.locals_index = index++;
-                                render_var(&a);
-                            }
-                        }
-
-                        if (frame->args != NULL) {
-                            For (*frame->args) {
-                                Render_Args a; ptr0(&a);
-                                a.var = &it;
-                                a.is_child = false;
-                                a.watch = NULL;
-                                a.index_type = INDEX_NONE;
-                                a.locals_index = index++;
-                                render_var(&a);
-                            }
-                        }
-                    } while (0);
-
-                    ImGui::EndTable();
-
-                    if (frame == NULL && loading)
-                        ImGui::Text("Loading...");
-                    if (frame != NULL)
-                        if ((frame->locals == NULL || frame->locals->len == 0) && (frame->args == NULL || frame->args->len == 0))
-                            ImGui::Text("No variables to show here.");
-                }
-            }
-
-            ImGui::PopFont();
-            ImGui::End();
-        }
-
-        {
-            ImGui::SetNextWindowDockID(ui->dock_bottom_right_id, ImGuiCond_Once);
-
-            {
-                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-                ImGui::Begin("Watches");
-                ImGui::PopStyleVar();
-            }
-
-            ImGui::PushFont(world.ui.im_font_mono);
-
-            if (world.dbg.state_flag == DLV_STATE_PAUSED) {
-                auto flags = ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable;
-                if (ImGui::BeginTable("vars", 3, flags)) {
-                    ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_NoHide);
-                    ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_NoHide);
-                    ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_NoHide);
-                    ImGui::TableHeadersRow();
-
-                    for (int k = 0; k < world.dbg.watches.len; k++) {
-                        auto &it = world.dbg.watches[k];
-                        if (it.deleted) continue;
-
-                        Render_Args a; ptr0(&a);
-                        a.var = &it.value;
-                        a.is_child = false;
-                        a.watch = &it;
+                bool isarr = (var->kind == GO_KIND_ARRAY || var->kind == GO_KIND_SLICE);
+                for (int k = 0; k < var->children->len; k++) {
+                    Draw_Debugger_Var_Args a;
+                    a.watch = watch;
+                    a.some_watch_being_edited = args->some_watch_being_edited;
+                    a.watch_index = args->watch_index;
+                    a.is_child = true;
+                    a.var = &var->children->at(k);
+                    if (isarr) {
+                        a.index_type = INDEX_ARRAY;
+                        a.index = k;
+                    } else {
                         a.index_type = INDEX_NONE;
-                        a.watch_index = k;
-                        render_var(&a);
                     }
-
-                    {
-                        // render an extra row for adding new watches
-
-                        ImGui::TableNextRow();
-                        ImGui::TableNextColumn(); // name
-
-                        ImGui::PushStyleColor(ImGuiCol_FrameBg, 0);
-                        ImGui::SetNextItemWidth(-FLT_MIN);
-                        bool changed = ImGui::InputText(
-                            "##newwatch",
-                            world.wnd_debugger.new_watch_buf,
-                            _countof(world.wnd_debugger.new_watch_buf),
-                            ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll
-                        );
-                        ImGui::PopStyleColor();
-                        if (changed || ImGui::IsItemDeactivated())
-                            if (world.wnd_debugger.new_watch_buf[0] != '\0') {
-                                dbg.push_call(DLVC_CREATE_WATCH, [&](auto it) {
-                                    it->create_watch.expression = our_strcpy(world.wnd_debugger.new_watch_buf);
-                                });
-                                world.wnd_debugger.new_watch_buf[0] = '\0';
-                            }
-
-                        ImGui::TableNextColumn(); // value
-                        ImGui::TableNextColumn(); // type
-                    }
-
-                    ImGui::EndTable();
+                    a.indent = args->indent + 1;
+                    draw_debugger_var(&a);
                 }
             }
-
-            ImGui::PopFont();
-            ImGui::End();
         }
-
-        /*
-        {
-            ImGui::SetNextWindowDockID(ui->dock_bottom_right_id, ImGuiCond_Once);
-            ImGui::Begin("Global Variables");
-            ImGui::PushFont(world.ui.im_font_mono);
-            ImGui::Text("@Incomplete: global vars go here");
-            ImGui::PopFont();
-            ImGui::End();
-        }
-        */
     }
-};
+}
+
+ccstr UI::var_value_as_string(Dlv_Var *var) {
+    if (var->unreadable_description != NULL)
+        return our_sprintf("<unreadable: %s>", var->unreadable_description);
+
+    switch (var->kind) {
+    case GO_KIND_INVALID: // i don't think this should even happen
+        return "<invalid>";
+
+    case GO_KIND_ARRAY:
+    case GO_KIND_SLICE:
+        return our_sprintf("0x%" PRIx64 " (Len = %d, Cap = %d)", var->address, var->len, var->cap);
+
+    case GO_KIND_STRUCT:
+    case GO_KIND_INTERFACE:
+        return our_sprintf("0x%" PRIx64, var->address);
+
+    case GO_KIND_MAP:
+        return our_sprintf("0x%" PRIx64 " (Len = %d)", var->address, var->len);
+
+    case GO_KIND_STRING:
+        return our_sprintf("\"%s%s\"", var->value, var->incomplete() ? "..." : "");
+
+    case GO_KIND_UNSAFEPOINTER:
+    case GO_KIND_CHAN:
+    case GO_KIND_FUNC:
+    case GO_KIND_PTR:
+        return our_sprintf("0x%" PRIx64, var->address);
+
+    default:
+        return var->value;
+    }
+}
+
+void UI::draw_debugger() {
+    world.wnd_debugger.focused = ImGui::IsWindowFocused();
+
+    auto &dbg = world.dbg;
+    auto &state = dbg.state;
+    auto &wnd = world.wnd_debugger;
+
+    {
+        ImGui::SetNextWindowDockID(dock_bottom_id, ImGuiCond_Once);
+        ImGui::Begin("Call Stack");
+        ImGui::PushFont(world.ui.im_font_mono);
+
+        if (world.dbg.state_flag == DLV_STATE_PAUSED && !world.dbg.exiting) {
+            for (int i = 0; i < state.goroutines.len; i++) {
+                auto &goroutine = state.goroutines[i];
+
+                int tree_flags = ImGuiTreeNodeFlags_OpenOnArrow;
+
+                bool is_current = (state.current_goroutine_id == goroutine.id);
+                if (is_current) {
+                    tree_flags |= ImGuiTreeNodeFlags_Bullet;
+                    ImGui::SetNextItemOpen(true);
+                    ImGui::PushStyleColor(ImGuiCol_Text, (ImVec4)ImColor(255, 100, 100));
+                }
+
+                auto open = ImGui::TreeNodeEx(
+                    (void*)(uptr)i,
+                    tree_flags,
+                    "%s (%s)",
+                    goroutine.curr_func_name,
+                    goroutine.breakpoint_hit ? "BREAKPOINT HIT" : "PAUSED"
+                );
+
+                if (is_current)
+                    ImGui::PopStyleColor();
+
+                if (ImGui::IsItemClicked()) {
+                    world.dbg.push_call(DLVC_SET_CURRENT_GOROUTINE, [&](auto call) {
+                        call->set_current_goroutine.goroutine_id = goroutine.id;
+                    });
+                }
+
+                if (open) {
+                    if (goroutine.fresh) {
+                        for (int j = 0; j < goroutine.frames->len; j++) {
+                            auto &frame = goroutine.frames->items[j];
+
+                            int tree_flags = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+                            if (state.current_goroutine_id == goroutine.id && state.current_frame == j)
+                                tree_flags |= ImGuiTreeNodeFlags_Selected;
+
+                            ImGui::TreeNodeEx(&frame, tree_flags, "%s (%s:%d)", frame.func_name, our_basename(frame.filepath), frame.lineno);
+                            if (ImGui::IsItemClicked()) {
+                                world.dbg.push_call(DLVC_SET_CURRENT_FRAME, [&](auto call) {
+                                    call->set_current_frame.goroutine_id = goroutine.id;
+                                    call->set_current_frame.frame = j;
+                                });
+                            }
+                        }
+                    } else {
+                        ImGui::Text("Loading...");
+                    }
+
+                    ImGui::TreePop();
+                }
+            }
+        }
+
+        ImGui::PopFont();
+        ImGui::End();
+    }
+
+    {
+        ImGui::SetNextWindowDockID(dock_bottom_right_id, ImGuiCond_Once);
+
+        {
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+            ImGui::Begin("Local Variables");
+            ImGui::PopStyleVar();
+        }
+
+        ImGui::PushFont(world.ui.im_font_mono);
+
+        if (world.dbg.state_flag == DLV_STATE_PAUSED) {
+            auto flags = ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable;
+            if (ImGui::BeginTable("vars", 3, flags)) {
+                ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_NoHide);
+                ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_NoHide);
+                ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_NoHide);
+                ImGui::TableHeadersRow();
+
+                bool loading = false;
+                bool done = false;
+                Dlv_Frame *frame = NULL;
+
+                do {
+                    if (dbg.state_flag != DLV_STATE_PAUSED) break;
+                    if (state.current_goroutine_id == -1 || state.current_frame == -1) break;
+
+                    auto goroutine = state.goroutines.find([&](auto it) { return it->id == state.current_goroutine_id; });
+                    if (goroutine == NULL) break;
+
+                    loading = true;
+
+                    if (!goroutine->fresh) break;
+                    if (state.current_frame >= goroutine->frames->len) break;
+
+                    frame = &goroutine->frames->items[state.current_frame];
+                    if (!frame->fresh) {
+                        frame = NULL;
+                        break;
+                    }
+
+                    int index = 0;
+
+                    if (frame->locals != NULL) {
+                        For (*frame->locals) {
+                            Draw_Debugger_Var_Args a; ptr0(&a);
+                            a.var = &it;
+                            a.is_child = false;
+                            a.watch = NULL;
+                            a.index_type = INDEX_NONE;
+                            a.locals_index = index++;
+                            draw_debugger_var(&a);
+                        }
+                    }
+
+                    if (frame->args != NULL) {
+                        For (*frame->args) {
+                            Draw_Debugger_Var_Args a; ptr0(&a);
+                            a.var = &it;
+                            a.is_child = false;
+                            a.watch = NULL;
+                            a.index_type = INDEX_NONE;
+                            a.locals_index = index++;
+                            draw_debugger_var(&a);
+                        }
+                    }
+                } while (0);
+
+                ImGui::EndTable();
+
+                if (frame == NULL && loading)
+                    ImGui::Text("Loading...");
+                if (frame != NULL)
+                    if ((frame->locals == NULL || frame->locals->len == 0) && (frame->args == NULL || frame->args->len == 0))
+                        ImGui::Text("No variables to show here.");
+            }
+        }
+
+        ImGui::PopFont();
+        ImGui::End();
+    }
+
+    {
+        ImGui::SetNextWindowDockID(dock_bottom_right_id, ImGuiCond_Once);
+
+        {
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+            ImGui::Begin("Watches");
+            ImGui::PopStyleVar();
+        }
+
+        ImGui::PushFont(world.ui.im_font_mono);
+
+        if (world.dbg.state_flag == DLV_STATE_PAUSED) {
+            auto flags = ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable;
+            if (ImGui::BeginTable("vars", 3, flags)) {
+                ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_NoHide);
+                ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_NoHide);
+                ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_NoHide);
+                ImGui::TableHeadersRow();
+
+                bool some_watch_being_edited = false;
+                For (world.dbg.watches) {
+                    if (it.editing) {
+                        some_watch_being_edited = true;
+                        break;
+                    }
+                }
+
+                for (int k = 0; k < world.dbg.watches.len; k++) {
+                    auto &it = world.dbg.watches[k];
+                    if (it.deleted) continue;
+
+                    Draw_Debugger_Var_Args a; ptr0(&a);
+                    a.var = &it.value;
+                    a.is_child = false;
+                    a.watch = &it;
+                    a.some_watch_being_edited = some_watch_being_edited;
+                    a.index_type = INDEX_NONE;
+                    a.watch_index = k;
+                    draw_debugger_var(&a);
+                }
+
+                {
+                    // render an extra row for adding new watches
+
+                    ImGui::TableNextRow();
+                    ImGui::TableNextColumn(); // name
+
+                    ImGui::PushStyleColor(ImGuiCol_FrameBg, 0);
+                    ImGui::SetNextItemWidth(-FLT_MIN);
+                    bool changed = ImGui::InputText(
+                        "##newwatch",
+                        world.wnd_debugger.new_watch_buf,
+                        _countof(world.wnd_debugger.new_watch_buf),
+                        ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll
+                    );
+                    ImGui::PopStyleColor();
+
+                    if (changed || ImGui::IsItemDeactivated())
+                        if (world.wnd_debugger.new_watch_buf[0] != '\0') {
+                            dbg.push_call(DLVC_CREATE_WATCH, [&](auto it) {
+                                it->create_watch.expression = our_strcpy(world.wnd_debugger.new_watch_buf);
+                            });
+                            world.wnd_debugger.new_watch_buf[0] = '\0';
+                        }
+
+                    dbg_editing_new_watch = ImGui::IsItemFocused();
+
+                    ImGui::TableNextColumn(); // value
+                    ImGui::TableNextColumn(); // type
+                }
+
+                ImGui::EndTable();
+            }
+        }
+
+        ImGui::PopFont();
+        ImGui::End();
+    }
+
+    /*
+    {
+        ImGui::SetNextWindowDockID(dock_bottom_right_id, ImGuiCond_Once);
+        ImGui::Begin("Global Variables");
+        ImGui::PushFont(world.ui.im_font_mono);
+        ImGui::Text("@Incomplete: global vars go here");
+        ImGui::PopFont();
+        ImGui::End();
+    }
+    */
+}
 
 void open_rename(FT_Node *target) {
     auto &wnd = world.wnd_rename_file_or_folder;
@@ -3153,9 +3143,7 @@ void UI::draw_everything() {
     // still building, and the build could fail.  Might regret this, can always
     // change later.
     if (world.dbg.state_flag != DLV_STATE_INACTIVE && world.dbg.state_flag != DLV_STATE_STARTING) {
-        Debugger_UI dui;
-        dui.init(this);
-        dui.draw();
+        draw_debugger();
     }
 
     if (world.wnd_search_and_replace.show) {

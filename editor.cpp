@@ -760,6 +760,10 @@ bool Editor::is_current_editor() {
 }
 
 void Editor::raw_move_cursor(cur2 c, bool dont_add_to_history) {
+    if (!is_main_thread) {
+        our_panic("can't call this from outside main thread");
+    }
+
     if (c.y == -1) c = buf.offset_to_cur(c.x);
     if (c.y < 0 || c.y >= buf.lines.len) return;
     if (c.x < 0) return;
@@ -1061,8 +1065,11 @@ bool Editor::load_file(ccstr new_filepath) {
             if (!are_filepaths_equal(it.filepath, filepath)) continue;
 
             For (*it.results) {
-                if (is_mark_valid(it.mark_start)) our_panic("this shouldn't be happening");
-                if (is_mark_valid(it.mark_end)) our_panic("this shouldn't be happening");
+                if (it.mark_start == NULL) our_panic("mark_start was null");
+                if (it.mark_end == NULL) our_panic("mark_end was null");
+
+                if (it.mark_start->valid) our_panic("this shouldn't be happening");
+                if (it.mark_end->valid) our_panic("this shouldn't be happening");
 
                 buf.mark_tree.insert_mark(MARK_SEARCH_RESULT, it.match_start, it.mark_start);
                 buf.mark_tree.insert_mark(MARK_SEARCH_RESULT, it.match_end, it.mark_end);

@@ -25,7 +25,7 @@ import (
 
 type License struct {
 	Email      string `json:"email"`
-	LicenseKey string `json:"license_key"`
+	LicenseKey string `json:"key"`
 }
 
 func DownloadFile(url string, f *os.File) error {

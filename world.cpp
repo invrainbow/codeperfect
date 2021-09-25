@@ -87,13 +87,9 @@ void History::push(int editor_id, cur2 pos, bool force) {
 }
 
 void History::actually_go(History_Loc *it) {
-    check_marks();
-
     auto editor = world.find_editor_by_id(it->editor_id);
     if (editor == NULL) return;
     if (!editor->is_nvim_ready()) return;
-
-    check_marks();
 
     auto pos = it->mark->pos(); // it->pos
 
@@ -102,11 +98,7 @@ void History::actually_go(History_Loc *it) {
     dest->editor_id = it->editor_id;
     dest->pos = pos;
 
-    check_marks();
-
     world.focus_editor_by_id(it->editor_id, pos);
-
-    check_marks();
 }
 
 bool History::go_forward() {
@@ -444,6 +436,8 @@ void World::init(GLFWwindow *_wnd) {
     tell_user(our_sprintf("PATH = %s", get_path()), NULL);
     */
 
+    global_mark_tree_lock.init();
+
     mark_fridge.init(512);
     mark_node_fridge.init(512);
 
@@ -679,19 +673,20 @@ void kick_off_build(Build_Profile *build_profile) {
             if (status != GH_BUILD_DONE) continue;
 
             for (u32 i = 0; i < num_errors; i++) {
-                auto err = build->errors.append();
+                Build_Error err;
 
-                err->message = our_strcpy(errors[i].text);
-                err->valid = errors[i].is_valid;
+                err.message = our_strcpy(errors[i].text);
+                err.valid = errors[i].is_valid;
 
-                if (err->valid) {
-                    err->file = our_strcpy(errors[i].filename);
-                    err->row = errors[i].line;
-                    err->col = errors[i].col;
+                if (err.valid) {
+                    err.file = our_strcpy(errors[i].filename);
+                    err.row = errors[i].line;
+                    err.col = errors[i].col;
                     // errors[i].is_vcol;
                 }
 
-                err->mark = world.mark_fridge.alloc();
+                err.mark = world.mark_fridge.alloc();
+                build->errors.append(&err);
             }
 
             build->current_error = -1;

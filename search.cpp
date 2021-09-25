@@ -160,13 +160,10 @@ void Searcher::search_worker() {
             final_filepath = our_strcpy(filepath);
         }
 
-        auto sf = search_results.append();
-        sf->filepath = final_filepath;
-        sf->results = alloc_list<Search_Result>(matches->len);
+        auto editor = world.find_editor_by_filepath(final_filepath);
 
-        Search_Result *sr = NULL;
-
-        auto editor = world.find_editor_by_filepath(sf->filepath);
+        Search_Result sr; ptr0(&sr);
+        auto results = alloc_list<Search_Result>(matches->len);
 
         // convert temp matches into search results
         for (int i = 0; i < buflen; i++) {
@@ -176,20 +173,19 @@ void Searcher::search_worker() {
             if (i == nextmatch.start) {
                 if (total_results++ > 1000) break;
 
-                sr = sf->results->append();
-                sr->match_start = pos;
-                sr->match_off = i;
+                sr.match_start = pos;
+                sr.match_off = i;
 
                 if (nextmatch.group_starts != NULL) {
                     SCOPED_MEM(&final_mem);
 
-                    sr->groups = alloc_list<ccstr>(nextmatch.group_starts->len);
+                    sr.groups = alloc_list<ccstr>(nextmatch.group_starts->len);
                     for (int i = 0; i < nextmatch.group_starts->len; i++) {
                         auto start = nextmatch.group_starts->at(i);
                         auto end = nextmatch.group_ends->at(i);
 
                         auto group = our_strncpy(&buf[start], end-start);
-                        sr->groups->append(group);
+                        sr.groups->append(group);
                     }
                 }
             }
@@ -197,40 +193,43 @@ void Searcher::search_worker() {
             if (i == nextmatch.end) {
                 SCOPED_MEM(&final_mem);
 
-                sr->match_len = i - sr->match_off;
-                sr->match_end = pos;
-                sr->match = our_strncpy(&buf[sr->match_off], sr->match_len);
+                sr.match_len = i - sr.match_off;
+                sr.match_end = pos;
+                sr.match = our_strncpy(&buf[sr.match_off], sr.match_len);
 
-                sr->preview_start = sr->match_start;
-                sr->preview_end = sr->match_end;
-                sr->preview_len = sr->match_len;
+                sr.preview_start = sr.match_start;
+                sr.preview_end = sr.match_end;
+                sr.preview_len = sr.match_len;
 
-                sr->match_offset_in_preview = 0;
+                sr.match_offset_in_preview = 0;
 
-                auto prevoff = sr->match_off;
+                auto prevoff = sr.match_off;
 
-                int to_left = min((PREVIEW_LEN - sr->preview_len) / 2, min(sr->preview_start.x, 10));
+                int to_left = min((PREVIEW_LEN - sr.preview_len) / 2, min(sr.preview_start.x, 10));
 
                 prevoff -= to_left;
-                sr->preview_start.x -= to_left;
-                sr->match_offset_in_preview += to_left;
-                sr->preview_len += to_left;
+                sr.preview_start.x -= to_left;
+                sr.match_offset_in_preview += to_left;
+                sr.preview_len += to_left;
 
                 int to_right = 0;
-                for (int k = i; sr->preview_len < PREVIEW_LEN && buf[k] != '\n' && k < buflen; k++)
+                for (int k = i; sr.preview_len < PREVIEW_LEN && buf[k] != '\n' && k < buflen; k++)
                     to_right++;
 
-                sr->preview_len += to_right;
-                sr->preview_end.x += to_right;
-                sr->preview = our_strncpy(&buf[prevoff], sr->preview_len);
+                sr.preview_len += to_right;
+                sr.preview_end.x += to_right;
+                sr.preview = our_strncpy(&buf[prevoff], sr.preview_len);
 
-                sr->mark_start = world.mark_fridge.alloc();
-                sr->mark_end = world.mark_fridge.alloc();
+                sr.mark_start = world.mark_fridge.alloc();
+                sr.mark_end = world.mark_fridge.alloc();
 
                 if (editor != NULL) {
-                    editor->buf.mark_tree.insert_mark(MARK_SEARCH_RESULT, sr->match_start, sr->mark_start);
-                    editor->buf.mark_tree.insert_mark(MARK_SEARCH_RESULT, sr->match_end, sr->mark_end);
+                    // what do we do here?
+                    editor->buf.mark_tree.insert_mark(MARK_SEARCH_RESULT, sr.match_start, sr.mark_start);
+                    editor->buf.mark_tree.insert_mark(MARK_SEARCH_RESULT, sr.match_end, sr.mark_end);
                 }
+
+                results->append(&sr);
 
                 if (++curr_match >= matches->len)
                     break;
@@ -243,6 +242,11 @@ void Searcher::search_worker() {
                 pos.x++;
             }
         }
+
+        Search_File sf;
+        sf.filepath = final_filepath;
+        sf.results = results;
+        search_results.append(&sf);
     }
 
     state = SEARCH_SEARCH_DONE;

@@ -205,6 +205,8 @@ struct World {
 
     bool darkmode;
 
+    Lock global_mark_tree_lock;
+
     struct Navigation_Dest {
         int editor_id;
         cur2 pos;

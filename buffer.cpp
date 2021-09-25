@@ -713,6 +713,9 @@ cur2 Buffer::offset_to_cur(i32 off) {
 // ============
 // mark_tree_marker
 
+// if this gets to be too slow, switch to per-tree lock
+Lock global_mark_tree_lock;
+
 void cleanup_mark_node(Mark_Node *node) {
     if (node == NULL) return;
 
@@ -780,6 +783,9 @@ Mark_Node *Mark_Tree::insert_node(cur2 pos) {
 }
 
 void Mark_Tree::insert_mark(Mark_Type type, cur2 pos, Mark *mark) {
+    world.global_mark_tree_lock.enter();
+    defer { world.global_mark_tree_lock.leave(); };
+
     mark->type = type;
     mark->tree = this;
     mark->valid = true;
@@ -883,6 +889,9 @@ Mark_Node *Mark_Tree::internal_insert_node(Mark_Node *root, cur2 pos, Mark_Node 
 }
 
 void Mark_Tree::delete_mark(Mark *mark) {
+    world.global_mark_tree_lock.enter();
+    defer { world.global_mark_tree_lock.leave(); };
+
     auto node = mark->node;
     bool found = false;
 
@@ -980,6 +989,9 @@ Mark_Node *Mark_Tree::internal_delete_node(Mark_Node *root, cur2 pos) {
 }
 
 void Mark_Tree::apply_edit(cur2 start, cur2 old_end, cur2 new_end) {
+    world.global_mark_tree_lock.enter();
+    defer { world.global_mark_tree_lock.leave(); };
+
     auto e = edits.append();
     e->start = start;
     e->old_end = old_end;
