@@ -5,9 +5,9 @@
             "type": "lldb",
             "request": "launch",
             "name": "debug",
-            "program": "${workspaceFolder}/scratch/CodePerfect.app/Contents/MacOS/bin/ide",
-            "args": ["/Users/brandon/ide/gostuff"],
-            "cwd": "${workspaceFolder}/scratch/CodePerfect.app/Contents/MacOS/bin",
+            "program": "build/bin/ide",
+            "args": ["/Users/brandon/sheetrocks"],
+            "cwd": "${workspaceFolder}/build/bin",
             "expressions": "native"
         },
         {

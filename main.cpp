@@ -1209,6 +1209,10 @@ int main(int argc, char **argv) {
                     our_panic(it.panic_message);
                     break;
 
+                case MTM_TELL_USER:
+                    tell_user(it.tell_user_text, it.tell_user_title);
+                    break;
+
                 case MTM_NVIM_MESSAGE:
                     {
                         auto &nv = world.nvim;
@@ -1216,10 +1220,7 @@ int main(int argc, char **argv) {
                     }
                     break;
                 case MTM_GOTO_FILEPOS:
-                    {
-                        auto &args = it.goto_filepos;
-                        goto_file_and_pos(args.file, args.pos);
-                    }
+                    goto_file_and_pos(it.goto_file, it.goto_pos);
                     break;
                 }
             }

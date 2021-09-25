@@ -53,6 +53,7 @@ enum Main_Thread_Message_Type {
     MTM_FILETREE_CREATE,
 
     MTM_PANIC,
+    MTM_TELL_USER,
 
     MTM_ADD_DEBUGGER_STDOUT_LINE,
 };
@@ -64,10 +65,14 @@ struct Main_Thread_Message {
         Nvim_Message nvim_message;
         u32 reload_editor_id;
         struct {
-            ccstr file;
-            cur2 pos;
-        } goto_filepos;
+            ccstr goto_file;
+            cur2 goto_pos;
+        };
         ccstr panic_message;
+        struct {
+            ccstr tell_user_text;
+            ccstr tell_user_title;
+        };
         ccstr debugger_stdout_line;
     };
 };

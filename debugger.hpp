@@ -340,6 +340,7 @@ struct Debugger {
     void start_loop();
     void do_everything();
     void surface_error(ccstr msg);
+    void send_tell_user(ccstr text, ccstr title);
 
     void push_call(Dlv_Call_Type type, fn<void(Dlv_Call *call)> f);
     void push_call(Dlv_Call_Type type);

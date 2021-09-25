@@ -986,7 +986,7 @@ bool Debugger::start(Debug_Profile *debug_profile) {
 
     case DEBUG_RUN_BINARY:
         if (debug_profile->run_binary.binary_path[0] == '\0') {
-            tell_user("Please enter a path to the binary you want to debug under Project -> Project Settings.", NULL);
+            send_tell_user("Please enter a path to the binary you want to debug under Project -> Project Settings.", NULL);
             return false;
         }
 
@@ -995,7 +995,7 @@ bool Debugger::start(Debug_Profile *debug_profile) {
     }
 
     if (binary_path == NULL || binary_path[0] == '\0') {
-        tell_user("Unable to find binary to debug.", NULL); // probably be more specific later
+        send_tell_user("Unable to find binary to debug.", NULL); // probably be more specific later
         return false;
     }
 
@@ -1005,7 +1005,7 @@ bool Debugger::start(Debug_Profile *debug_profile) {
     // dlv_proc.create_new_console = true;
 
     if (world.delve_path[0] == '\0') {
-        tell_user("Please set your Delve binary path in ~/.cpconfig, and restart CodePerfect.", NULL);
+        send_tell_user("Please set your Delve binary path in ~/.cpconfig, and restart CodePerfect.", NULL);
         return false;
     }
 
@@ -1091,6 +1091,14 @@ bool Debugger::start(Debug_Profile *debug_profile) {
     return true;
 }
 
+void Debugger::send_tell_user(ccstr text, ccstr title) {
+    world.message_queue.add([&](auto msg) {
+        msg->type = MTM_TELL_USER;
+        msg->tell_user_text = text;
+        msg->tell_user_title = title;
+    });
+}
+
 // This is meant to be called from a separate thread. All it does is
 // continuously stream all the data from dlv_proc stdout into our buffer.
 void Debugger::pipe_stdout_into_our_buffer() {
@@ -1174,8 +1182,8 @@ void Debugger::select_frame(u32 goroutine_id, u32 frame) {
     if (!exiting) {
         world.message_queue.add([&](auto msg) {
             msg->type = MTM_GOTO_FILEPOS;
-            msg->goto_filepos.file = our_strcpy(dlvframe->filepath);
-            msg->goto_filepos.pos = new_cur2((i32)0, (i32)dlvframe->lineno - 1);
+            msg->goto_file = our_strcpy(dlvframe->filepath);
+            msg->goto_pos = new_cur2((i32)0, (i32)dlvframe->lineno - 1);
         });
     }
 }
@@ -1382,9 +1390,8 @@ void Debugger::do_everything() {
                     }
 
                     if (debug_profile == NULL) {
-                        // TODO: tell user what went wrong
-                        // we need a way of calling tell_user from any thread
-                        // right now i'm not sure if anything goes wrong if we call it outside main thread
+                        // be more specific?
+                        send_tell_user("Unable to find debug profile.", "Error");
                         break;
                     }
 
