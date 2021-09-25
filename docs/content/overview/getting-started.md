@@ -50,7 +50,7 @@ existing directory structure.
 
 In general, CodePerfect tries to require as little configuration as possible.
 Currently we just need to know where Go is installed. Create the file
-`~/.cpconfig` with the following contents:
+`~/.cpconfig` with the following JSON contents:
 
 ```
 {
@@ -64,8 +64,8 @@ This might be all you need for now. Sometimes, CodePerfect is unable to detect G
 
 ```
 {
-  "gopath": "..."
-  "goroot": "..."
+  "gopath": "...",
+  "goroot": "...",
   "gomodcache": "..."
 }
 ```

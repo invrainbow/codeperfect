@@ -2,6 +2,8 @@ import cx from "classnames";
 import _ from "lodash";
 import React from "react";
 import { Helmet } from "react-helmet";
+import { AiOutlineCheck, AiOutlineClose } from "react-icons/ai";
+import { FaApple, FaLinux, FaWindows } from "react-icons/fa";
 import {
   BrowserRouter as Router,
   Link,
@@ -14,6 +16,7 @@ import gif60fps from "./60fps.gif";
 // static assets
 import ideScreenshotImage from "./ide.png";
 import pngIntellisense from "./intellisense.png";
+import logoImage from "./logo.png";
 import gifVim from "./vim.gif";
 
 // constants
@@ -36,6 +39,15 @@ function WallOfText({ title, children }) {
         {children}
       </div>
     </div>
+  );
+}
+
+function Icon({ icon }) {
+  const C = icon;
+  return (
+    <span className="relative -top-0.5">
+      <C />
+    </span>
   );
 }
 
@@ -190,41 +202,68 @@ function Home() {
   );
 }
 
-function PricingBox({ title, price, subprice, children }) {
+function PricingBox({
+  title,
+  monthly,
+  yearly,
+  isYearly,
+  children,
+  unit,
+  cta,
+  link,
+}) {
   return (
-    <div className="w-auto md:w-1/3 rounded-lg text-center overflow-hidden bg-white border">
-      <div className="p-6">
-        <h1 className="font-bold text-gray-700 text-lg mb-2">{title}</h1>
-        <div className="font-bold text-black text-2xl">{price}</div>
-        <div className="mt-1">
-          <span className="rounded-full bg-gray-100 text-gray-600 leading-4 py-0.5 px-2 inline-block font-medium text-sm">
-            {subprice}
-          </span>
+    <div
+      className={cx(
+        "w-auto md:w-1/3 rounded-lg overflow-hidden p-8",
+        "border border-gray-200 shadow-sm"
+      )}
+    >
+      <h1 className="font-bold text-gray-700 text-lg mb-2">{title}</h1>
+      <div className="flex items-end">
+        <div className="font-medium text-black text-5xl">
+          ${isYearly ? yearly : monthly}
+        </div>
+        <div className="leading-tight text-xs pb-1 ml-2">
+          {unit && <div>per {unit}</div>}
+          <div>per {isYearly ? "year" : "month"}</div>
         </div>
       </div>
-      <div className="border-t p-6">
-        <div className="text-gray-500 text-left">{children}</div>
-      </div>
+      <div className="text-gray-500 text-left my-6">{children}</div>
+      <a target="_blank" rel="noreferrer" href={link} className="main-button">
+        {cta}
+      </a>
     </div>
+  );
+}
+
+function DownloadButton({ onClick, icon, children, disabled }) {
+  return (
+    <button
+      className="main-button download-button"
+      disabled={disabled}
+      onClick={onClick}
+    >
+      <span className="mr-2">
+        <Icon icon={icon} />
+      </span>
+      {children}
+    </button>
   );
 }
 
 function Download() {
   const history = useHistory();
-  const [code, setCode] = React.useState(null);
   const [done, setDone] = React.useState(false);
-
-  React.useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const theCode = params.get("code");
-    if (!theCode) {
-      history.push("/");
-    }
-    setCode(theCode);
-  }, [history, setCode]);
 
   const onDownload = React.useCallback(
     async (os) => {
+      const code = new URLSearchParams(window.location.search).get("code");
+      if (!code) {
+        history.push("/");
+        return;
+      }
+
       try {
         const resp = await fetch(`${API_BASE}/download`, {
           method: "POST",
@@ -241,39 +280,48 @@ function Download() {
           return;
         }
       } catch (err) {}
+
       history.push("/");
     },
-    [code, history, setDone]
+    [history, setDone]
   );
 
   return (
-    <div className="download my-12">
-      <h1 className="text-center text-black font-bold text-4xl mb-12">
+    <div className="download my-4 py-20 bg-gray-100 rounded-md">
+      <h1 className="text-center text-black font-bold text-4xl mb-8">
         Download
       </h1>
       <div className="text-center">
         {!done ? (
           <div>
             <div className="text-lg">Please select your OS.</div>
-            <div className="mt-4">
-              <button
-                className="main-button whitespace-nowrap mx-1.5"
+            <div className="mt-6">
+              <DownloadButton
                 onClick={() => onDownload("darwin")}
+                icon={FaApple}
               >
-                Mac (Intel)
-              </button>
-              <button
-                onClick={() => onDownload("darwin_arm")}
-                className="main-button whitespace-nowrap mx-1.5"
+                Mac &ndash; Intel
+              </DownloadButton>
+              <DownloadButton
+                onClick={() => onDownload("darwin-arm")}
+                icon={FaApple}
               >
-                Mac (ARM)
-              </button>
-              <button
+                Mac &ndash; M1
+              </DownloadButton>
+              <DownloadButton
+                disabled
                 onClick={() => onDownload("windows")}
-                className="main-button whitespace-nowrap mx-1.5"
+                icon={FaWindows}
               >
                 Windows
-              </button>
+              </DownloadButton>
+              <DownloadButton
+                disabled
+                onClick={() => onDownload("linux")}
+                icon={FaLinux}
+              >
+                Linux
+              </DownloadButton>
             </div>
           </div>
         ) : (
@@ -291,46 +339,100 @@ function Download() {
 }
 
 function Pricing() {
+  const [yearly, setYearly] = React.useState(false);
+
   return (
     <div className="pricing my-16">
-      <h1 className="text-center text-black font-bold text-4xl mb-12">
+      <h1 className="text-center text-black font-bold text-4xl mb-8">
         Pricing
       </h1>
-      <div className="">
+      <div className="text-center">
+        <span className="relative inline-block text-sm">
+          <button
+            onClick={() => setYearly(false)}
+            className={cx(
+              "left-0 inline-block rounded-full py-1 px-3 font-medium cursor-pointer outline-none",
+              !yearly ? "bg-gray-200 text-black" : "text-gray-400"
+            )}
+          >
+            Monthly
+          </button>
+          <button
+            onClick={() => setYearly(true)}
+            className={cx(
+              "left-0 inline-block rounded-full py-1 px-4 font-medium cursor-pointer outline-none",
+              yearly ? "bg-gray-200 text-black" : "text-gray-400"
+            )}
+          >
+            Annual
+          </button>
+        </span>
+      </div>
+      <div className="mt-8">
         <div className="max-w-5xl flex flex-col md:flex-row space-between space-y-8 space-x-0 md:space-y-0 md:space-x-12 mx-auto">
           <PricingBox
-            title="Individual Plan"
-            tier="individual"
-            price="$5/mo"
-            subprice="or $50/year"
+            title="Personal"
+            monthly={5}
+            yearly={45}
+            isYearly={yearly}
+            cta="Request access"
+            link={BETA_SIGNUP_LINK}
           >
-            Commercial use is allowed, but a company cannot pay for this, and
-            you cannot expense the purchase.
+            <div className="">
+              <Icon icon={AiOutlineCheck} /> Commercial use allowed
+            </div>
+            <div className="">
+              <Icon icon={AiOutlineCheck} /> All features unlocked
+            </div>
+            <div className="text-red-600">
+              <Icon icon={AiOutlineClose} /> Company cannot pay
+            </div>
+            <div className="text-red-600">
+              <Icon icon={AiOutlineClose} /> Purchase cannot be expensed
+            </div>
           </PricingBox>
-
           <PricingBox
-            title="Company Plan"
-            price="$10/user/mo"
-            tier="company"
-            subprice="or $100/user/year"
+            title="Team"
+            monthly={10}
+            yearly={90}
+            unit={"user"}
+            isYearly={yearly}
+            cta="Request access"
+            link={BETA_SIGNUP_LINK}
           >
-            For companies buying licenses for its employees. Most users choose
-            this plan in order to expense the purchase.
+            <div className="">
+              <Icon icon={AiOutlineCheck} /> All features in Personal
+            </div>
+            <div className="">
+              <Icon icon={AiOutlineCheck} /> Company can pay
+            </div>
+            <div className="">
+              <Icon icon={AiOutlineCheck} /> Purchase can be expensed
+            </div>
           </PricingBox>
-
           <PricingBox
-            title="Premium Plan"
-            tier="premium"
-            price="$20/user/month"
-            subprice="or $200/user/year"
+            title="Premium"
+            monthly={20}
+            yearly={180}
+            unit={"user"}
+            isYearly={yearly}
+            cta="Contact sales"
+            link="mailto:sales@codeperfect95.com"
           >
-            Same as company plan, but also comes with priority support.{" "}
-            <a href="mailto:support@codeperfect95.com">Contact us</a> for
-            details.
+            <div className="">
+              <Icon icon={AiOutlineCheck} /> All features in Team
+            </div>
+            <div className="">
+              <Icon icon={AiOutlineCheck} /> Priority support
+            </div>
+            <div className="">
+              <Icon icon={AiOutlineCheck} /> Custom requests &amp; integrations
+            </div>
           </PricingBox>
         </div>
       </div>
-      <div className="mt-16 text-center">
+      {/*
+      <div className="pt-16 mt-16 border-t border-gray-200 text-center">
         <p className="text-xl mb-0">Ready to get started?</p>
         <p>
           <a
@@ -343,6 +445,7 @@ function Pricing() {
           </a>
         </p>
       </div>
+      */}
     </div>
   );
 }
@@ -410,8 +513,13 @@ function App() {
         <div className="mx-auto pb-4 flex justify-between items-center">
           <Link
             to="/"
-            className="font-bold text-black no-underline whitespace-nowrap"
+            className="font-bold text-lg text-black no-underline whitespace-nowrap flex items-center"
           >
+            <img
+              alt="logo"
+              className="inline-block w-auto h-16 inline-block mr-4"
+              src={logoImage}
+            />
             {NAME}
           </Link>
           <div className="flex items-baseline space-x-6">

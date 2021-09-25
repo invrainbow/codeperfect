@@ -64,15 +64,39 @@
     @apply rounded-md px-1 py-0.5 bg-gray-600 text-gray-200;
     font-size: 82.5%;
   }
+
+  button {
+    outline: none !important;
+  }
+  svg {
+    display: inline-block;
+  }
 }
 
 @layer components {
   .main-button {
-    background: #222;
+    background: #444;
+    border: solid 1px #333;
     color: white;
-    @apply rounded-md text-sm font-medium;
-    @apply py-1.5 px-4;
+    @apply rounded font-medium shadow-sm;
+    @apply py-2 px-5;
     @apply disabled:opacity-50 no-underline outline-none;
+  }
+  .main-button:hover {
+    background: #666;
+  }
+  .download-button {
+    @apply bg-gray-50 border border-gray-300 font-medium text-gray-500 shadow-md whitespace-nowrap mx-2.5 py-2 px-4 text-lg w-40;
+  }
+  .download-button:hover {
+    @apply bg-gray-50;
+  }
+  .download-button:hover:not(:disabled) {
+    background: white;
+  }
+  .download-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 }
 
