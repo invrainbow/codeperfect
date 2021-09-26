@@ -72,12 +72,6 @@ This might be all you need for now. Sometimes, CodePerfect is unable to detect G
 
 Replace these with the values of `go env GOPATH`, `go env GOROOT`, and `go env GOMODCACHE`.
 
-```
-{
-  "go_binary_path": "/usr/local/bin"
-}
-```
-
 ## Opening a project
 
 Right now CodePerfect can only open modules. Your project must be organized as
