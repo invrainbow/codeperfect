@@ -520,7 +520,7 @@ function App() {
               className="inline-block w-auto h-16 inline-block mr-4"
               src={logoImage}
             />
-            {NAME}
+            <span className="hidden md:inline-block">{NAME}</span>
           </Link>
           <div className="flex items-baseline space-x-6">
             <a
