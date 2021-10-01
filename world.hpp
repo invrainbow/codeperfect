@@ -93,12 +93,12 @@ struct History {
 
     void init() { ptr0(this); }
 
-    void actually_push(int editor_id, cur2 pos, bool force, bool capturing_editor_last);
-    void push(int editor_id, cur2 pos, bool force = false);
+    void actually_push(int editor_id, cur2 pos);
+    void push(int editor_id, cur2 pos);
     void actually_go(History_Loc *it);
     bool go_forward();
     bool go_backward();
-    void remove_editor_from_history(int editor_id);
+    void remove_invalid_marks();
     void save_latest();
     void check_marks(int upper = -1);
 

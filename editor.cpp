@@ -1492,10 +1492,10 @@ void Editor::cleanup() {
         nv.end_message();
     }
 
-    world.history.remove_editor_from_history(id);
-
     buf.cleanup();
     mem.cleanup();
+
+    world.history.remove_invalid_marks();
 }
 
 bool Editor::cur_is_inside_comment_or_string() {

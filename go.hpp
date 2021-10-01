@@ -1173,6 +1173,7 @@ struct Go_Indexer {
 
     Lock lock;
     bool ready;
+    int open_starts;
 
     // ---
 

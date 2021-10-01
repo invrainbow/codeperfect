@@ -800,13 +800,25 @@ void Go_Indexer::background_thread() {
         return ret;
     };
 
+    auto rebuild_package_lookup = [&]() {
+        package_lookup.clear();
+
+        if (index.packages == NULL) return;
+
+        For (*index.packages) {
+            if (package_lookup.get(it.import_path) != NULL)
+                print("duplicate entry detected");
+            package_lookup.set(it.import_path, &it);
+        }
+    };
+
     auto remove_package = [&](Go_Package *pkg) {
         start_writing();
         defer { stop_writing(); };
 
         pkg->cleanup_files();
-        package_lookup.remove(pkg->import_path);
         index.packages->remove(pkg);
+        rebuild_package_lookup();
     };
 
     auto handle_fsevent = [&](ccstr filepath) {
@@ -900,17 +912,7 @@ void Go_Indexer::background_thread() {
     };
 
     init_index(false);
-
-    // add existing packages to package lookup table
-    // ===
-
-    if (index.packages != NULL) {
-        For (*index.packages) {
-            if (package_lookup.get(it.import_path) != NULL)
-                print("duplicate entry detected");
-            package_lookup.set(it.import_path, &it);
-        }
-    }
+    rebuild_package_lookup();
 
     auto rescan_everything = [&]() {
         // make sure workspace is in index or queue
@@ -1058,89 +1060,86 @@ void Go_Indexer::background_thread() {
 
             auto import_path = pop_package_from_queue();
 
+            auto resolved_path = get_package_path(import_path);
+            if (resolved_path == NULL) {
+                // This means this package is one of our dependencies, but it
+                // has not been added to go.mod yet, so we can't resolve it.
+                continue;
+            }
+
             auto pkg = find_package_in_index(import_path);
-            if (pkg != NULL) {
-                if (pkg->status == GPS_READY) continue;
-            } else {
+            if (pkg != NULL)
+                if (pkg->status == GPS_READY) // already been processed
+                    continue;
+
+            // we defer this, because in case we don't find any files,
+            // we don't actually want to create the package
+            auto create_package_if_null = [&]() {
+                if (pkg != NULL) return;
+
                 SCOPED_MEM(&final_mem);
                 pkg = index.packages->append();
                 pkg->status = GPS_OUTDATED;
                 pkg->files = alloc_list<Go_File>();
                 pkg->import_path = our_strcpy(import_path);
                 package_lookup.set(pkg->import_path, pkg);
-            }
-
-            auto resolved_path = get_package_path(import_path);
-            if (resolved_path == NULL) {
-                // This means this package is one of our dependencies, but it
-                // has not been added to go.mod yet, so we can't resolve it.
-                // Mark the package as ready for now. When it is eventually
-                // added and go.mod is changed, it will be invalidated.
-                pkg->status = GPS_READY;
-                pkg->hash = 0;
-                continue;
-            }
+            };
 
             Timer t;
             t.init();
 
+            if (streq(import_path, "@builtins")) {
+                create_package_if_null();
+                init_builtins(pkg);
+                continue;
+            } 
+
+            auto source_files = list_source_files(resolved_path, true);
+            if (source_files == NULL) continue;
+            if (source_files->len == 0) continue;
+
+            create_package_if_null();
+
             pkg->status = GPS_UPDATING;
             pkg->cleanup_files();
 
-            if (streq(import_path, "@builtins")) {
-                init_builtins(pkg);
-            } else {
-                /*
-                {
-                    SCOPED_FRAME();
-                    if (make_path(module_resolver.module_path)->contains(make_path(import_path)))
-                        include_tests = true;
-                }
-                */
+            ccstr package_name = NULL;
+            ccstr test_package_name = NULL;
 
-                ccstr package_name = NULL;
-                ccstr test_package_name = NULL;
+            For (*source_files) {
+                auto filename = it;
 
-                auto source_files = list_source_files(resolved_path, true);
-                if (source_files != NULL) {
-                    For (*source_files) {
-                        auto filename = it;
+                // TODO: refactor, pretty sure we're doing same thing elsewhere
 
-                        // TODO: refactor this block too, pretty sure we're doing same
-                        // thing somewhere else
+                SCOPED_FRAME();
 
-                        SCOPED_FRAME();
+                auto filepath = path_join(resolved_path, filename);
 
-                        auto filepath = path_join(resolved_path, filename);
+                auto pf = parse_file(filepath);
+                if (pf == NULL) continue;
+                defer { free_parsed_file(pf); };
 
-                        auto pf = parse_file(filepath);
-                        if (pf == NULL) continue;
-                        defer { free_parsed_file(pf); };
+                auto file = get_ready_file_in_package(pkg, filename);
 
-                        auto file = get_ready_file_in_package(pkg, filename);
+                ccstr pkgname = NULL;
+                process_tree_into_gofile(file, pf->root, filepath, &pkgname);
 
-                        ccstr pkgname = NULL;
-                        process_tree_into_gofile(file, pf->root, filepath, &pkgname);
-
-                        if (pkgname != NULL) {
-                            SCOPED_MEM(&final_mem);
-                            if (str_ends_with(filename, "_test.go")) {
-                                if (test_package_name == NULL)
-                                    test_package_name = our_strcpy(pkgname);
-                            } else {
-                                if (package_name == NULL)
-                                    package_name = our_strcpy(pkgname);
-                            }
-                        }
-
-                        enqueue_imports_from_file(file);
+                if (pkgname != NULL) {
+                    SCOPED_MEM(&final_mem);
+                    if (str_ends_with(filename, "_test.go")) {
+                        if (test_package_name == NULL)
+                            test_package_name = our_strcpy(pkgname);
+                    } else {
+                        if (package_name == NULL)
+                            package_name = our_strcpy(pkgname);
                     }
                 }
 
-                if (package_name == NULL)
-                    package_name = test_package_name;
-                replace_package_name(pkg, package_name);
+                enqueue_imports_from_file(file);
             }
+
+            if (package_name == NULL) package_name = test_package_name;
+            replace_package_name(pkg, package_name);
 
             fill_package_hash(pkg);
             pkg->status = GPS_READY;
@@ -1153,8 +1152,12 @@ void Go_Indexer::background_thread() {
             int i = 0;
             int num_checked = 0;
 
-            if (queue_had_stuff)
+            if (queue_had_stuff) {
+                index_print("Scanning packages for changes...");
                 force_write_after_checking_hashes = true;
+            }
+
+            auto to_remove = alloc_list<int>();
 
             for (; i < index.packages->len && num_checked < 50; i++) {
                 auto &it = index.packages->at(i);
@@ -1165,24 +1168,38 @@ void Go_Indexer::background_thread() {
                 num_checked++;
                 it.checked_for_outdated_hash = true;
 
-                // if hash has changed, mark outdated & queue for re-processing
+                // if this is a duplicate, remove
+                auto true_copy = package_lookup.get(it.import_path);
+                if (true_copy != NULL && true_copy != &it) {
+                    // are we ever gonna have to handle true_copy == NULL?
+                    to_remove->append(i);
+                    continue;
+                }
+
                 auto package_path = get_package_path(it.import_path);
                 if (package_path == NULL) continue;
 
                 auto hash = hash_package(package_path);
-
-                // path no longer exists, so remove it
                 if (hash == 0) {
-                    remove_package(&it);
+                    // path no longer exists, so remove it
+                    to_remove->append(i);
                     continue;
                 }
-
                 if (it.hash == hash) continue;
 
+                // hash changed, mark outdated & queue for re-processing
                 mark_package_for_reprocessing(it.import_path);
             }
 
-            if (i == index.packages->len && package_queue.len == 0) {
+            bool done = (i == index.packages->len && package_queue.len == 0);
+
+            int offset = 0;
+            For (*to_remove) {
+                remove_package(&index.packages->at(it - offset));
+                offset++;
+            }
+
+            if (done) {
                 if (!ready)
                     stop_writing();
                 if (force_write_after_checking_hashes) {
@@ -1240,8 +1257,11 @@ void Go_Indexer::background_thread() {
             // a write when we clear out the queue
             if (package_queue.len > 0) return false;
 
-            auto ten_minutes_in_ns = (u64)10 * 60 * 1000 * 1000 * 1000;
-            if (last_write_time == 0 || time - last_write_time >= ten_minutes_in_ns) return true;
+            if (last_write_time != 0) {
+                auto ten_minutes_in_ns = (u64)10 * 60 * 1000 * 1000 * 1000;
+                if (time - last_write_time >= ten_minutes_in_ns)
+                    return true;
+            }
 
             return false;
         };
@@ -3732,17 +3752,22 @@ void Go_Indexer::init() {
 }
 
 void Go_Indexer::start_writing() {
-    if (!ready) return;
+    if (ready) {
+        lock.enter();
+        ready = false;
+    }
 
-    ready = false;
-    lock.enter();
+    open_starts++;
 }
 
 void Go_Indexer::stop_writing() {
-    if (ready) return;
+    if (open_starts == 0)
+        our_panic("extra stop_writing called");
 
-    lock.leave();
-    ready = true;
+    if (--open_starts == 0) {
+        lock.leave();
+        ready = true;
+    }
 }
 
 // i don't think this is actually called right now...

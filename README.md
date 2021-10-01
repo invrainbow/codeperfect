@@ -39,3 +39,15 @@ Build:
 Run:
 
     bin/ide
+
+### other info
+
+list of threads:
+
+ * build
+ * dbg: pipe to stdout
+ * dbg: background thread
+ * search: search
+ * search: replace
+ * go
+ * neovim

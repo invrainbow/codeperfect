@@ -733,7 +733,7 @@ void cleanup_mark_node(Mark_Node *node) {
 
 void Mark_Tree::cleanup() {
     cleanup_mark_node(root);
-    mem.cleanup();
+    // mem.cleanup();
 }
 
 int Mark_Tree::get_height(Mark_Node *root) {
@@ -991,11 +991,6 @@ Mark_Node *Mark_Tree::internal_delete_node(Mark_Node *root, cur2 pos) {
 void Mark_Tree::apply_edit(cur2 start, cur2 old_end, cur2 new_end) {
     world.global_mark_tree_lock.enter();
     defer { world.global_mark_tree_lock.leave(); };
-
-    auto e = edits.append();
-    e->start = start;
-    e->old_end = old_end;
-    e->new_end = new_end;
 
     if (start == old_end && old_end == new_end)
         return;
