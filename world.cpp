@@ -24,6 +24,8 @@ bool is_ignored_by_git(ccstr path) {
 }
 
 void History::actually_push(int editor_id, cur2 pos) {
+    assert_main_thread();
+
     auto editor = world.find_editor_by_id(editor_id);
 
     check_marks();
@@ -86,6 +88,8 @@ void History::push(int editor_id, cur2 pos) {
 }
 
 void History::actually_go(History_Loc *it) {
+    assert_main_thread();
+
     auto editor = world.find_editor_by_id(it->editor_id);
     if (editor == NULL) return;
     if (!editor->is_nvim_ready()) return;
@@ -101,6 +105,7 @@ void History::actually_go(History_Loc *it) {
 }
 
 bool History::go_forward() {
+    assert_main_thread();
     check_marks();
 
     if (curr == top) return false;
@@ -140,6 +145,7 @@ void History::check_marks(int upper) {
 }
 
 bool History::go_backward() {
+    assert_main_thread();
     check_marks();
 
     if (curr == start) return false;
@@ -181,6 +187,8 @@ bool History::go_backward() {
 }
 
 void History::save_latest() {
+    assert_main_thread();
+
     auto editor = world.get_current_editor();
     if (editor == NULL) return;
 
@@ -196,6 +204,8 @@ void History::save_latest() {
 }
 
 void History::remove_invalid_marks() {
+    assert_main_thread();
+
     int i = start, j = start;
 
     check_marks();

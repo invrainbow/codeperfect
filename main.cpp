@@ -1179,7 +1179,16 @@ int main(int argc, char **argv) {
     // world.focus_editor(path_join(world.indexer.goroot, "database/sql/sql.go"));
     // world.focus_editor(path_join(world.indexer.gomodcache, "github.com/davecgh/go-spew@v1.1.1/spew/dump.go"));
 
+    u32 frame_index = 0;
     while (!glfwWindowShouldClose(world.window)) {
+        if (world.randomly_move_cursor_around) {
+            if (world.get_current_editor() != NULL) {
+                if (frame_index++ % 3 == 0) {
+                    send_nvim_keys(rand() % 2 == 0 ? "{" : "}");
+                }
+            }
+        }
+
         {
             GH_Message msg; ptr0(&msg);
             if (GHGetMessage(&msg)) {

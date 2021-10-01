@@ -2113,15 +2113,15 @@ void UI::draw_everything() {
 #ifndef RELEASE_MODE
             if (io.KeyAlt) {
                 ImGui::Separator();
-                ImGui::MenuItem("ImGui Demo", NULL, &world.windows_open.im_demo);
-                ImGui::MenuItem("ImGui Metrics", NULL, &world.windows_open.im_metrics);
-                ImGui::MenuItem("Editor AST Viewer", NULL, &world.wnd_editor_tree.show);
-                ImGui::MenuItem("Editor Toplevels Viewer", NULL, &world.wnd_editor_toplevels.show);
-                ImGui::MenuItem("Mouse Pos Display", NULL, &world.wnd_mouse_pos.show);
-                ImGui::MenuItem("Roll Your Own IDE Construction Set", NULL, &world.wnd_style_editor.show);
-                ImGui::MenuItem("Mark Edit Viewer", NULL, &world.wnd_mark_edit_viewer.show);
-                ImGui::MenuItem("Replace Line Numbers with Bytecounts", NULL, &world.replace_line_numbers_with_bytecounts);
-                ImGui::MenuItem("Disable Framerate Cap", NULL, &world.turn_off_framerate_cap);
+                ImGui::MenuItem("ImGui demo", NULL, &world.windows_open.im_demo);
+                ImGui::MenuItem("ImGui metrics", NULL, &world.windows_open.im_metrics);
+                ImGui::MenuItem("AST viewer", NULL, &world.wnd_editor_tree.show);
+                ImGui::MenuItem("Toplevels viewer", NULL, &world.wnd_editor_toplevels.show);
+                ImGui::MenuItem("Show mouse position", NULL, &world.wnd_mouse_pos.show);
+                ImGui::MenuItem("Style editor", NULL, &world.wnd_style_editor.show);
+                ImGui::MenuItem("Replace line numbers with bytecounts", NULL, &world.replace_line_numbers_with_bytecounts);
+                ImGui::MenuItem("Randomly move cursor around", NULL, &world.randomly_move_cursor_around);
+                ImGui::MenuItem("Disable framerate cap", NULL, &world.turn_off_framerate_cap);
 
                 if (ImGui::MenuItem("Cleanup unused memory")) {
                     world.indexer.message_queue.add([&](auto msg) {
