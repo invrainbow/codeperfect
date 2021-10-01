@@ -229,6 +229,7 @@ struct World {
 
     bool replace_line_numbers_with_bytecounts;
     bool turn_off_framerate_cap;
+    bool randomly_move_cursor_around;
 
     Fs_Watcher fswatch;
 
@@ -375,9 +376,6 @@ struct World {
 
     struct : Wnd {
     } wnd_style_editor;
-
-    struct : Wnd {
-    } wnd_mark_edit_viewer;
 
     void init(GLFWwindow *_wnd);
     void start_background_threads();

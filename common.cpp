@@ -119,3 +119,7 @@ void our_panic(ccstr s) {
     }
 #endif
 }
+
+void assert_main_thread() {
+    assert(is_main_thread);
+}

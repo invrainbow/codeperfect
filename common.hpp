@@ -358,3 +358,4 @@ extern const u64 MAX_U64;
 void our_panic(ccstr s);
 
 extern thread_local bool is_main_thread;
+void assert_main_thread();

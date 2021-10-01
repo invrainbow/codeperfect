@@ -5,8 +5,8 @@
             "type": "lldb",
             "request": "launch",
             "name": "debug",
-            "program": "build/bin/ide",
-            "args": ["/Users/brandon/sheetrocks"],
+            "program": "${workspaceFolder}/build/bin/ide",
+            "args": ["/Users/brandon/kubernetes"],
             "cwd": "${workspaceFolder}/build/bin",
             "expressions": "native"
         },
