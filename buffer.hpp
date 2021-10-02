@@ -108,19 +108,9 @@ struct Mark_Tree {
         cur2 new_end;
     };
 
-    Pool mem;
-    List<Edit> edits;
-
     void init(Buffer *_buf) {
         ptr0(this);
         buf = _buf;
-
-        // TODO: remove mem and edits after we're done debugging this shit
-        mem.init();
-        {
-            SCOPED_MEM(&mem);
-            edits.init();
-        }
     }
 
     void cleanup();

@@ -23,11 +23,10 @@ bool is_ignored_by_git(ccstr path) {
     return GHGitIgnoreCheckFile((char*)path);
 }
 
-void History::actually_push(int editor_id, cur2 pos, bool force, bool capturing_editor_last) {
+void History::actually_push(int editor_id, cur2 pos) {
     assert_main_thread();
 
     auto editor = world.find_editor_by_id(editor_id);
-    print("pushing %s:%s, force = %d, capture_editor_last = %d", our_basename(editor->filepath), format_cur(pos), force, capturing_editor_last);
 
     check_marks();
 
@@ -48,7 +47,7 @@ void History::actually_push(int editor_id, cur2 pos, bool force, bool capturing_
     check_marks();
 }
 
-void History::push(int editor_id, cur2 pos, bool force) {
+void History::push(int editor_id, cur2 pos) {
     auto should_push = [&]() -> bool {
         if (curr == start) return true;
         if (curr != top) return true;
@@ -60,7 +59,7 @@ void History::push(int editor_id, cur2 pos, bool force) {
         return delta >= 10;
     };
 
-    if (!force && !should_push()) {
+    if (!should_push()) {
         return;
     }
 
@@ -78,12 +77,12 @@ void History::push(int editor_id, cur2 pos, bool force) {
 
         if (prev_editor->cur == prev.pos) break;
 
-        actually_push(prev_editor->id, prev_editor->cur, false, true);
+        actually_push(prev_editor->id, prev_editor->cur);
     } while (0);
 
     check_marks();
 
-    actually_push(editor_id, pos, force, false);
+    actually_push(editor_id, pos);
 
     check_marks();
 }
@@ -124,6 +123,7 @@ void History::check_marks(int upper) {
 
     for (auto i = start; i != upper; i = inc(i)) {
         auto it = ring[i].mark;
+        if (!is_mark_valid(it)) continue;
 
         // check that mark node contains the mark
         bool found = false;
@@ -158,7 +158,7 @@ bool History::go_backward() {
         // go back, go forward, cursor will now be on line 0 instead of line 4
         if (editor == NULL || it.editor_id != editor->id || it.pos != editor->cur) {
             if (editor != NULL) {
-                actually_push(editor->id, editor->cur, false, false);
+                actually_push(editor->id, editor->cur);
                 curr = dec(curr);
             }
 
@@ -199,11 +199,11 @@ void History::save_latest() {
         return;
 
     check_marks();
-    actually_push(editor->id, editor->cur, false, false);
+    actually_push(editor->id, editor->cur);
     check_marks();
 }
 
-void History::remove_editor_from_history(int editor_id) {
+void History::remove_invalid_marks() {
     assert_main_thread();
 
     int i = start, j = start;
@@ -211,10 +211,8 @@ void History::remove_editor_from_history(int editor_id) {
     check_marks();
 
     for (; i != curr; i = inc(i)) {
-        if (ring[i].editor_id == editor_id) {
-            ring[i].cleanup();
+        if (!is_mark_valid(ring[i].mark))
             continue;
-        }
         if (i != j)
             memcpy(&ring[j], &ring[i], sizeof(ring[j]));
         j = inc(j);
@@ -225,10 +223,8 @@ void History::remove_editor_from_history(int editor_id) {
     check_marks(j);
 
     for (; i != top; i = inc(i))  {
-        if (ring[i].editor_id == editor_id) {
-            ring[i].cleanup();
+        if (!is_mark_valid(ring[i].mark))
             continue;
-        }
         if (i != j)
             memcpy(&ring[j], &ring[i], sizeof(ring[j]));
         j = inc(j);

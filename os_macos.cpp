@@ -409,7 +409,7 @@ ccstr rel_to_abs_path(ccstr path) {
     Frame frame;
     auto ret = alloc_array(char, len+1);
 
-    if (cwk_path_get_absolute(cwd, path, NULL, 0) == 0) {
+    if (cwk_path_get_absolute(cwd, path, ret, len+1) == 0) {
         frame.restore();
         return NULL;
     }

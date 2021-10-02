@@ -73,6 +73,8 @@ struct Debug_Profile {
 
 // TODO: disable editing build/debug profiles when build/debugger is running
 struct Project_Settings {
+    bool search_vendor_before_modcache;
+
     Build_Profile build_profiles[16];
     Debug_Profile debug_profiles[16];
     int build_profiles_len;
