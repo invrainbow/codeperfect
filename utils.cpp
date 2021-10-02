@@ -54,7 +54,8 @@ ccstr our_strncpy(ccstr s, int n) {
     return (ccstr)ret;
 }
 
-ccstr our_dirname(ccstr path) {
+// why isn't this in os.hpp, btw? (along with our_basename)
+ccstr _our_dirname(ccstr path) {
 #if OS_WIN
     auto s = (char*)our_strcpy(path);
     auto len = strlen(s);
@@ -68,6 +69,12 @@ ccstr our_dirname(ccstr path) {
 #elif OS_MAC
     return dirname((char*)our_strcpy(path));
 #endif
+}
+
+ccstr our_dirname(ccstr path) {
+    auto ret = _our_dirname(path);
+    if (streq(ret, ".")) ret = "";
+    return ret;
 }
 
 ccstr our_basename(ccstr path) {

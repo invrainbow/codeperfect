@@ -3395,22 +3395,6 @@ void UI::draw_everything() {
         ImGui::End();
     }
 
-    if (world.wnd_mark_edit_viewer.show) {
-        ImGui::Begin("Mark Edit Viewer", &world.wnd_mark_edit_viewer.show, ImGuiWindowFlags_AlwaysAutoResize);
-
-        auto editor = world.get_current_editor();
-        if (editor != NULL) {
-            For (editor->buf.mark_tree.edits) {
-                ImGui::Text("start = %s, oldend = %s, newend = %s",
-                            format_cur(it.start),
-                            format_cur(it.old_end),
-                            format_cur(it.new_end));
-            }
-        }
-
-        ImGui::End();
-    }
-
     if (world.wnd_style_editor.show) {
         ImGui::Begin("Style Editor", &world.wnd_style_editor.show, ImGuiWindowFlags_AlwaysAutoResize);
 
