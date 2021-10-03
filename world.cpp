@@ -36,7 +36,7 @@ void History::actually_push(int editor_id, cur2 pos) {
     ring[curr].editor_id = editor_id;
     ring[curr].pos = pos; // do we even need this anymore?
     ring[curr].mark = world.mark_fridge.alloc();
-    editor->buf.mark_tree.insert_mark(MARK_HISTORY, pos, ring[curr].mark);
+    editor->buf->mark_tree.insert_mark(MARK_HISTORY, pos, ring[curr].mark);
 
     top = curr = inc(curr);
     if (curr == start) {
@@ -713,7 +713,7 @@ void kick_off_build(Build_Profile *build_profile) {
                         if (!are_filepaths_equal(path, it.file)) continue;
 
                         auto pos = new_cur2(it.col - 1, it.row - 1);
-                        editor.buf.mark_tree.insert_mark(MARK_BUILD_ERROR, pos, it.mark);
+                        editor.buf->mark_tree.insert_mark(MARK_BUILD_ERROR, pos, it.mark);
                     }
                 }
             }

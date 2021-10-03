@@ -158,15 +158,11 @@ GLint compile_program(cstr vert_code, cstr frag_code) {
 
         char log[512];
         glGetShaderInfoLog(shader, 512, NULL, log);
-        fprintf(stderr, "failed to build shader, error: %s", log);
-        return 0;
+        our_panic(our_sprintf("failed to build shader, error: %s", log));
     };
 
     auto vert = compile_shader(vert_code, GL_VERTEX_SHADER);
-    if (vert == 0) return -1;
-
     auto frag = compile_shader(frag_code, GL_FRAGMENT_SHADER);
-    if (frag == 0) return -1;
 
     GLint id = glCreateProgram();
     glAttachShader(id, vert);
@@ -524,10 +520,10 @@ int main(int argc, char **argv) {
             if (world.ui.scroll_buffer <= -FACTOR || world.ui.scroll_buffer >= FACTOR) {
                 auto y = ed.cur.y;
                 if (world.ui.scroll_buffer > 0)
-                    y = min(ed.buf.lines.len - 1, y + world.ui.scroll_buffer / FACTOR);
+                    y = min(ed.buf->lines.len - 1, y + world.ui.scroll_buffer / FACTOR);
                 else
                     y = relu_sub(y, -world.ui.scroll_buffer / FACTOR);
-                ed.move_cursor({(i32)min(ed.cur.x, ed.buf.lines[y].len), y});
+                ed.move_cursor({(i32)min(ed.cur.x, ed.buf->lines[y].len), y});
                 world.ui.scroll_buffer = fmod(world.ui.scroll_buffer, FACTOR);
             }
         }
@@ -739,8 +735,8 @@ int main(int argc, char **argv) {
             } else {
                 // if we're at beginning of line
                 if (editor->cur.x == 0) {
-                    auto back1 = editor->buf.dec_cur(editor->cur);
-                    editor->buf.remove(back1, editor->cur);
+                    auto back1 = editor->buf->dec_cur(editor->cur);
+                    editor->buf->remove(back1, editor->cur);
                     if (back1 < editor->nvim_insert.start) {
                         editor->nvim_insert.start = back1;
                         editor->nvim_insert.deleted_graphemes++;
@@ -839,7 +835,7 @@ int main(int argc, char **argv) {
                 case GLFW_KEY_E:
                     if (editor == NULL) break;
                     if (world.nvim.mode == VI_INSERT) break;
-                    if (editor->view.y + 1 < editor->buf.lines.len) {
+                    if (editor->view.y + 1 < editor->buf->lines.len) {
                         editor->view.y++;
                         editor->ensure_cursor_on_screen();
                     }
@@ -1004,7 +1000,7 @@ int main(int argc, char **argv) {
                         if (world.current_pane >= world.panes.len)
                             world.activate_pane(world.panes.len - 1);
                     } else {
-                        if (editor->buf.dirty) {
+                        if (editor->buf->dirty) {
                             auto title = "Your changes will be lost if you don't.";
                             auto filename  = editor->is_untitled ? "(untitled)" : our_basename(editor->filepath);
                             auto msg = our_sprintf("Do you want to save your changes to %s?", filename);

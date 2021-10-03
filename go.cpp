@@ -23,7 +23,7 @@
 #endif
 
 const unsigned char GO_INDEX_MAGIC_BYTES[3] = {0x49, 0xfa, 0x98};
-const int GO_INDEX_VERSION = 14;
+const int GO_INDEX_VERSION = 15;
 
 void index_print(ccstr fmt, ...) {
     va_list args;
@@ -407,8 +407,8 @@ void Go_Indexer::reload_editor_if_dirty(void *editor) {
     Timer t;
     t.init(our_sprintf("reload %s", our_basename(it->filepath)));
 
-    if (!it->buf.tree_dirty) return;
-    it->buf.tree_dirty = false;
+    if (!it->buf->tree_dirty) return;
+    it->buf->tree_dirty = false;
 
     SCOPED_FRAME();
 
@@ -425,8 +425,8 @@ void Go_Indexer::reload_editor_if_dirty(void *editor) {
     t.log("get file");
 
     auto iter = alloc_object(Parser_It);
-    iter->init(&it->buf);
-    auto root_node = new_ast_node(ts_tree_root_node(it->buf.tree), iter);
+    iter->init(it->buf);
+    auto root_node = new_ast_node(ts_tree_root_node(it->buf->tree), iter);
 
     ccstr package_name = NULL;
     process_tree_into_gofile(file, root_node, it->filepath, &package_name);
@@ -491,7 +491,6 @@ void Go_Indexer::init_builtins(Go_Package *pkg) {
         auto decl = f->decls->append();
         decl->type = decl_type;
         decl->name = our_strcpy(name);
-        decl->file = fake_filename;
         decl->gotype = gotype;
 
         return gotype;
@@ -1317,13 +1316,13 @@ Parsed_File *Go_Indexer::parse_file(ccstr filepath, bool use_latest) {
         if (editor == NULL) return NULL;
 
         auto it = alloc_object(Parser_It);
-        it->init(&editor->buf);
+        it->init(editor->buf);
 
         ret = alloc_object(Parsed_File);
         ret->tree_belongs_to_editor = true;
-        ret->editor_parser = editor->buf.parser;
+        ret->editor_parser = editor->buf->parser;
         ret->it = it;
-        ret->tree = ts_tree_copy(editor->buf.tree);
+        ret->tree = ts_tree_copy(editor->buf->tree);
     } else {
         auto fm = map_file_into_memory(filepath);
         if (fm == NULL) return NULL;
@@ -1771,7 +1770,6 @@ void Go_Indexer::import_decl_to_goimports(Ast_Node *decl_node, ccstr filename, L
 
         // decl
         auto decl = alloc_object(Godecl);
-        decl->file = filename;
         decl->decl_start = decl_node->start();
         decl->decl_end = decl_node->end();
         import_spec_to_decl(it, decl);
@@ -3637,11 +3635,7 @@ void Go_Indexer::list_fields_and_methods(Goresult *type_res, Goresult *resolved_
         if (recv->type != GOTYPE_ID) continue;
         if (!streq(recv->id_name, type_name)) continue;
 
-        auto ctx = alloc_object(Go_Ctx);
-        ctx->import_path = target_import_path;
-        ctx->filename = decl->file;
-
-        ret->append(make_goresult(decl, ctx));
+        ret->append(make_goresult(decl, it.ctx));
     }
 }
 
@@ -4206,7 +4200,6 @@ bool Go_Indexer::assignment_to_decls(List<Ast_Node*> *lhs, List<Ast_Node*> *rhs,
 void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr filename, Pool *target_pool) {
     auto new_result = [&]() -> Godecl * {
         auto decl = results->append();
-        decl->file = filename;
         decl->decl_start = node->start();
         decl->decl_end = node->end();
         return decl;
@@ -4530,12 +4523,18 @@ List<Goresult> *Go_Indexer::list_package_decls(ccstr import_path, int flags) {
     auto ret = alloc_list<Goresult>();
 
     For (*pkg->files) {
+        auto filename = it.filename;
+
         For (*it.decls) {
             if (it.name == NULL) continue;
 
-            if (flags & LISTDECLS_PUBLIC_ONLY)
+            if (flags & LISTDECLS_PUBLIC_ONLY) {
+                if (streq(it.name, "ShaderSource"))
+                    print("break here");
                 if (is_name_private(it.name))
                     continue;
+            }
+
 
             if (flags & LISTDECLS_EXCLUDE_METHODS)
                 if (it.type == GODECL_FUNC && it.gotype->func_recv != NULL)
@@ -4543,7 +4542,7 @@ List<Goresult> *Go_Indexer::list_package_decls(ccstr import_path, int flags) {
 
             auto ctx = alloc_object(Go_Ctx);
             ctx->import_path = import_path;
-            ctx->filename = it.file;
+            ctx->filename = filename;
             ret->append(make_goresult(&it, ctx));
         }
     }
@@ -5368,7 +5367,6 @@ AC_Result *AC_Result::copy() {
 Godecl *Godecl::copy() {
     auto ret = clone(this);
 
-    ret->file = our_strcpy(file);
     ret->name = our_strcpy(name);
     if (type == GODECL_IMPORT)
         ret->import_path = our_strcpy(import_path);
@@ -5540,7 +5538,6 @@ Go_Index *Go_Index::copy() {
 // ---
 
 void Godecl::read(Index_Stream *s) {
-    READ_STR(file);
     READ_STR(name);
 
     if (type == GODECL_IMPORT)
@@ -5685,7 +5682,6 @@ void Go_Index::read(Index_Stream *s) {
 #define WRITE_LIST(x) write_list<decltype(x)>(x, s)
 
 void Godecl::write(Index_Stream *s) {
-    WRITE_STR(file);
     WRITE_STR(name);
 
     if (type == GODECL_IMPORT)

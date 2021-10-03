@@ -12,7 +12,7 @@ ccstr Editor::get_autoindent(int for_y) {
     auto y = relu_sub(for_y, 1);
 
     while (true) {
-        auto& line = buf.lines[y];
+        auto& line = buf->lines[y];
         for (u32 x = 0; x < line.len; x++)
             if (!isspace(line[x]))
                 goto done;
@@ -21,7 +21,7 @@ ccstr Editor::get_autoindent(int for_y) {
     }
 done:
 
-    auto& line = buf.lines[y];
+    auto& line = buf->lines[y];
     u32 copy_spaces_until = 0;
     {
         u32 x = 0;
@@ -80,10 +80,10 @@ void Editor::insert_text_in_insert_mode(ccstr s) {
             text[j++] = uch;
     }
 
-    buf.insert(cur, text, ulen);
+    buf->insert(cur, text, ulen);
     auto c = cur;
     for (u32 i = 0; i < ulen; i++)
-        c = buf.inc_cur(c);
+        c = buf->inc_cur(c);
     raw_move_cursor(c);
 }
 
@@ -98,7 +98,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
 
             // remove everything but the operator
             raw_move_cursor(ac.operand_end);
-            buf.remove(ac.operand_end, ac.keyword_end);
+            buf->remove(ac.operand_end, ac.keyword_end);
 
             // nice little dsl here lol
 
@@ -116,7 +116,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
             };
 
             auto save_autoindent = [&]() {
-                auto& line = buf.lines[cur.y];
+                auto& line = buf->lines[cur.y];
                 u32 copy_spaces_until = 0;
                 {
                     u32 x = 0;
@@ -160,10 +160,10 @@ void Editor::perform_autocomplete(AC_Result *result) {
             };
 
             auto initialize_everything = [&]() {
-                operand_text = buf.get_text(ac.operand_start, ac.operand_end);
+                operand_text = buf->get_text(ac.operand_start, ac.operand_end);
 
                 raw_move_cursor(ac.operand_start);
-                buf.remove(ac.operand_start, ac.operand_end);
+                buf->remove(ac.operand_start, ac.operand_end);
 
                 curr_postfix = postfix_stack.append();
                 curr_postfix->start();
@@ -578,8 +578,8 @@ void Editor::perform_autocomplete(AC_Result *result) {
             ac_start.x -= strlen(ac.prefix);
 
             // perform the edit
-            buf.remove(ac_start, cur);
-            buf.insert(ac_start, name, len);
+            buf->remove(ac_start, cur);
+            buf->insert(ac_start, name, len);
 
             // move cursor forward
             raw_move_cursor(new_cur2(ac_start.x + len, ac_start.y));
@@ -603,8 +603,8 @@ void Editor::perform_autocomplete(AC_Result *result) {
             auto import_to_add = see_if_we_need_autoimport();
             if (import_to_add != NULL) {
                 auto iter = alloc_object(Parser_It);
-                iter->init(&buf);
-                auto root = new_ast_node(ts_tree_root_node(buf.tree), iter);
+                iter->init(buf);
+                auto root = new_ast_node(ts_tree_root_node(buf->tree), iter);
 
                 Ast_Node *package_node = NULL;
                 Ast_Node *imports_node = NULL;
@@ -707,8 +707,8 @@ void Editor::perform_autocomplete(AC_Result *result) {
 
                     // perform the edit
                     if (start != old_end)
-                        buf.remove(start, old_end);
-                    buf.insert(start, chars->items, chars->len);
+                        buf->remove(start, old_end);
+                    buf->insert(start, chars->items, chars->len);
 
                     add_change_in_insert_mode(start, old_end, new_end);
 
@@ -736,9 +736,9 @@ void Editor::add_change_in_insert_mode(cur2 start, cur2 old_end, cur2 new_end) {
         change->lines.init(LIST_POOL, new_end.y - start.y + 1);
         for (int i = start.y; i <= new_end.y; i++) {
             auto line = change->lines.append();
-            line->init(LIST_POOL, buf.lines[i].len);
-            line->len = buf.lines[i].len;
-            memcpy(line->items, buf.lines[i].items, sizeof(uchar) * line->len);
+            line->init(LIST_POOL, buf->lines[i].len);
+            line->len = buf->lines[i].len;
+            memcpy(line->items, buf->lines[i].items, sizeof(uchar) * line->len);
         }
     }
 
@@ -764,11 +764,11 @@ void Editor::raw_move_cursor(cur2 c, bool dont_add_to_history) {
         our_panic("can't call this from outside main thread");
     }
 
-    if (c.y == -1) c = buf.offset_to_cur(c.x);
-    if (c.y < 0 || c.y >= buf.lines.len) return;
+    if (c.y == -1) c = buf->offset_to_cur(c.x);
+    if (c.y < 0 || c.y >= buf->lines.len) return;
     if (c.x < 0) return;
 
-    auto line_len = buf.lines[c.y].len;
+    auto line_len = buf->lines[c.y].len;
     if (c.x > line_len) {
         if (world.nvim.mode == VI_INSERT)
             c.x = line_len;
@@ -778,7 +778,7 @@ void Editor::raw_move_cursor(cur2 c, bool dont_add_to_history) {
 
     cur = c;
 
-    auto& line = buf.lines[c.y];
+    auto& line = buf->lines[c.y];
 
     u32 vx = 0;
     for (u32 i = 0; i < c.x; i++) {
@@ -858,38 +858,38 @@ void Editor::ensure_cursor_on_screen() {
 }
 
 void Editor::update_lines(int firstline, int lastline, List<uchar*> *new_lines, List<s32> *line_lengths) {
-    if (lastline == -1) lastline = buf.lines.len;
+    if (lastline == -1) lastline = buf->lines.len;
 
     auto start_cur = new_cur2(0, (i32)firstline);
     auto old_end_cur = new_cur2(0, (i32)lastline);
 
-    if (lastline == buf.lines.len && buf.lines.len > 0) {
-        start_cur = buf.dec_cur(start_cur);
-        start_cur = buf.dec_cur(start_cur);
-        old_end_cur = new_cur2((i32)buf.lines.last()->len, (i32)buf.lines.len - 1);
+    if (lastline == buf->lines.len && buf->lines.len > 0) {
+        start_cur = buf->dec_cur(start_cur);
+        start_cur = buf->dec_cur(start_cur);
+        old_end_cur = new_cur2((i32)buf->lines.last()->len, (i32)buf->lines.len - 1);
     }
 
-    buf.internal_start_edit(start_cur, old_end_cur);
+    buf->internal_start_edit(start_cur, old_end_cur);
 
-    buf.internal_delete_lines(firstline, lastline);
+    buf->internal_delete_lines(firstline, lastline);
     for (u32 i = 0; i < new_lines->len; i++) {
         auto line = new_lines->at(i);
         auto len = line_lengths->at(i);
-        buf.internal_insert_line(firstline + i, line, len);
+        buf->internal_insert_line(firstline + i, line, len);
     }
 
-    if (buf.lines.len == 0)
-        buf.internal_append_line(NULL, 0);
+    if (buf->lines.len == 0)
+        buf->internal_append_line(NULL, 0);
 
     auto new_end_cur = new_cur2(0, firstline + new_lines->len);
-    if (firstline + new_lines->len == buf.lines.len) {
-        if (buf.lines.len == 0)
+    if (firstline + new_lines->len == buf->lines.len) {
+        if (buf->lines.len == 0)
             new_end_cur = new_cur2(0, 0);
         else
-            new_end_cur = new_cur2((i32)buf.lines.last()->len, (i32)buf.lines.len - 1);
+            new_end_cur = new_cur2((i32)buf->lines.last()->len, (i32)buf->lines.len - 1);
     }
 
-    buf.internal_finish_edit(new_end_cur);
+    buf->internal_finish_edit(new_end_cur);
 }
 
 void Editor::move_cursor(cur2 c) {
@@ -913,7 +913,7 @@ void Editor::move_cursor(cur2 c) {
         {
             nv.writer.write_array(2);
             nv.writer.write_int(c.y + 1);
-            nv.writer.write_int(buf.idx_cp_to_byte(c.y, c.x));
+            nv.writer.write_int(buf->idx_cp_to_byte(c.y, c.x));
         }
         nv.end_message();
     }
@@ -975,10 +975,10 @@ void Editor::reload_file(bool because_of_file_watcher) {
 
     if (!check_file(fm)) return;
 
-    if (buf.initialized)
-        buf.cleanup();
-    buf.init(&mem, is_go_file);
-    buf.read(fm);
+    if (buf->initialized)
+        buf->cleanup();
+    buf->init(&mem, is_go_file);
+    buf->read(fm);
 
     if (world.use_nvim) {
         nvim_data.got_initial_lines = false;
@@ -989,8 +989,8 @@ void Editor::reload_file(bool because_of_file_watcher) {
         nv.writer.write_int(0);
         nv.writer.write_int(-1);
         nv.writer.write_bool(false);
-        nv.writer.write_array(buf.lines.len);
-        For (buf.lines) nv.write_line(&it);
+        nv.writer.write_array(buf->lines.len);
+        For (buf->lines) nv.write_line(&it);
         nv.end_message();
     }
 }
@@ -998,11 +998,11 @@ void Editor::reload_file(bool because_of_file_watcher) {
 bool Editor::load_file(ccstr new_filepath) {
     reset_state();
 
-    if (buf.initialized)
-        buf.cleanup();
+    if (buf->initialized)
+        buf->cleanup();
 
     is_go_file = (new_filepath != NULL && str_ends_with(new_filepath, ".go"));
-    buf.init(&mem, is_go_file);
+    buf->init(&mem, is_go_file);
 
     FILE* f = NULL;
     if (new_filepath != NULL) {
@@ -1027,12 +1027,12 @@ bool Editor::load_file(ccstr new_filepath) {
 
         if (!check_file(fm)) return false;
 
-        buf.read(fm);
+        buf->read(fm);
     } else {
         is_untitled = true;
         uchar tmp = '\0';
-        buf.insert(new_cur2(0, 0), &tmp, 0);
-        buf.dirty = false;
+        buf->insert(new_cur2(0, 0), &tmp, 0);
+        buf->dirty = false;
     }
 
     if (world.use_nvim) {
@@ -1055,7 +1055,7 @@ bool Editor::load_file(ccstr new_filepath) {
 
             // create mark
             auto pos = new_cur2(it.col - 1, it.row - 1);
-            buf.mark_tree.insert_mark(MARK_BUILD_ERROR, pos, it.mark);
+            buf->mark_tree.insert_mark(MARK_BUILD_ERROR, pos, it.mark);
         }
     }
 
@@ -1071,8 +1071,8 @@ bool Editor::load_file(ccstr new_filepath) {
                 if (it.mark_start->valid) our_panic("this shouldn't be happening");
                 if (it.mark_end->valid) our_panic("this shouldn't be happening");
 
-                buf.mark_tree.insert_mark(MARK_SEARCH_RESULT, it.match_start, it.mark_start);
-                buf.mark_tree.insert_mark(MARK_SEARCH_RESULT, it.match_end, it.mark_end);
+                buf->mark_tree.insert_mark(MARK_SEARCH_RESULT, it.match_start, it.mark_start);
+                buf->mark_tree.insert_mark(MARK_SEARCH_RESULT, it.match_end, it.mark_end);
             }
         }
     }
@@ -1100,22 +1100,22 @@ bool Editor::save_file() {
         return error("unable to open %s for writing", filepath), false;
     defer { f.cleanup(); };
 
-    buf.write(&f);
+    buf->write(&f);
     return true;
 }
 
 i32 Editor::cur_to_offset(cur2 c) {
-    return buf.cur_to_offset(c);
+    return buf->cur_to_offset(c);
 }
 
 i32 Editor::cur_to_offset() { return cur_to_offset(cur); }
 
 cur2 Editor::offset_to_cur(i32 offset) {
-    return buf.offset_to_cur(offset);
+    return buf->offset_to_cur(offset);
 }
 
 int Editor::get_indent_of_line(int y) {
-    auto& line = buf.lines[y];
+    auto& line = buf->lines[y];
 
     int indent = 0;
     for (; indent < line.len; indent++)
@@ -1125,7 +1125,7 @@ int Editor::get_indent_of_line(int y) {
 }
 
 Buffer_It Editor::iter() { return iter(cur); }
-Buffer_It Editor::iter(cur2 _cur) { return buf.iter(_cur); }
+Buffer_It Editor::iter(cur2 _cur) { return buf->iter(_cur); }
 
 void Pane::init() {
     ptr0(this);
@@ -1181,7 +1181,7 @@ bool Editor::trigger_escape(cur2 go_here_after) {
 
         {
             auto c = cur;
-            auto &line = buf.lines[c.y];
+            auto &line = buf->lines[c.y];
             while (c.x > 0 && isident(line[c.x-1])) c.x--;
             if (c.x < cur.x)
                 last_closed_autocomplete = c;
@@ -1251,7 +1251,7 @@ bool Editor::trigger_escape(cur2 go_here_after) {
                         writer.write_array(cur.y - start.y + 1);
                         {
                             for (u32 y = start.y; y <= cur.y; y++)
-                                nv.write_line(&buf.lines[y]);
+                                nv.write_line(&buf->lines[y]);
                         }
                     }
                 }
@@ -1265,7 +1265,7 @@ bool Editor::trigger_escape(cur2 go_here_after) {
                         writer.write_array(2);
                         {
                             nv.writer.write_int(cur.y + 1);
-                            nv.writer.write_int(buf.idx_cp_to_byte(cur.y, cur.x));
+                            nv.writer.write_int(buf->idx_cp_to_byte(cur.y, cur.x));
                         }
                     }
                 }
@@ -1339,7 +1339,7 @@ bool Editor::trigger_escape(cur2 go_here_after) {
                     for (u32 i = 0; i < delete_len; i++)
                         r.writestr("<BS>");
 
-                    auto it = buf.iter(nvim_insert.start);
+                    auto it = buf->iter(nvim_insert.start);
                     while (it.pos < cur) {
                         // wait, does this take utf-8?
                         auto ch = it.next();
@@ -1368,8 +1368,8 @@ bool Editor::trigger_escape(cur2 go_here_after) {
             {
                 auto c = cur;
                 if (c.x > 0) {
-                    int gr_idx = buf.idx_cp_to_gr(c.y, c.x);
-                    c.x = buf.idx_gr_to_cp(c.y, relu_sub(gr_idx, 1));
+                    int gr_idx = buf->idx_cp_to_gr(c.y, c.x);
+                    c.x = buf->idx_gr_to_cp(c.y, relu_sub(gr_idx, 1));
                 }
                 raw_move_cursor(c);
             }
@@ -1466,6 +1466,7 @@ void Editor::init() {
         SCOPED_MEM(&mem);
         postfix_stack.init();
         nvim_insert.other_changes.init();
+        buf = alloc_object(Buffer);
     }
 
     nvim_insert.mem.init("nvim_insert mem");
@@ -1492,14 +1493,14 @@ void Editor::cleanup() {
         nv.end_message();
     }
 
-    buf.cleanup();
+    buf->cleanup();
     mem.cleanup();
 
     world.history.remove_invalid_marks();
 }
 
 bool Editor::cur_is_inside_comment_or_string() {
-    auto root = new_ast_node(ts_tree_root_node(buf.tree), NULL);
+    auto root = new_ast_node(ts_tree_root_node(buf->tree), NULL);
     bool ret = false;
 
     find_nodes_containing_pos(root, cur, false, [&](auto it) {
@@ -1534,7 +1535,7 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
     defer {
         if (!ok) {
             auto c = cur;
-            auto &line = buf.lines[c.y];
+            auto &line = buf->lines[c.y];
             while (c.x > 0 && isident(line[c.x-1])) c.x--;
             if (c.x < cur.x)
                 last_closed_autocomplete = c;
@@ -1853,10 +1854,10 @@ void Editor::trigger_parameter_hint() {
 
 void Editor::type_char(char ch) {
     uchar uch = ch;
-    buf.insert(cur, &uch, 1);
+    buf->insert(cur, &uch, 1);
 
     auto old_cur = cur;
-    auto new_cur = buf.inc_cur(cur);
+    auto new_cur = buf->inc_cur(cur);
 
     raw_move_cursor(new_cur);
 }
@@ -1878,9 +1879,9 @@ void Editor::update_parameter_hint() {
         hint.gotype = NULL;
     } else {
         Parser_It it;
-        it.init(&buf);
+        it.init(buf);
 
-        auto tree = ts_tree_copy(buf.tree);
+        auto tree = ts_tree_copy(buf->tree);
         auto root_node = new_ast_node(ts_tree_root_node(tree), &it);
 
         Parsed_File pf;
@@ -1888,7 +1889,7 @@ void Editor::update_parameter_hint() {
         pf.tree = tree;
         pf.it = &it;
         pf.tree_belongs_to_editor = true;
-        pf.editor_parser = buf.parser;
+        pf.editor_parser = buf->parser;
 
         if (!world.indexer.truncate_parsed_file(&pf, cur, "_)}}}}}}}}}}}}}}}}")) return;
 
@@ -1943,7 +1944,7 @@ if (end < curr_change.start_byte) {
     curr_change.start_point = cur_to_tspoint(cur);
 } else if (curr_change.start_byte > 0) {
     auto start = tspoint_to_cur(curr_change.start_point);
-    start = buf.dec_cur(start);
+    start = buf->dec_cur(start);
     curr_change.start_point = cur_to_tspoint(start);
     curr_change.start_byte = cur_to_offset(start);
 }
@@ -1990,7 +1991,7 @@ void Editor::type_char_in_insert_mode(char ch) {
 
             if (cur.x == 0) break;
 
-            auto rbrace_pos = buf.dec_cur(cur);
+            auto rbrace_pos = buf->dec_cur(cur);
 
             Ts_Ast_Type brace_type = TS_ERROR, other_brace_type = TS_ERROR;
             switch (ch) {
@@ -2008,7 +2009,7 @@ void Editor::type_char_in_insert_mode(char ch) {
                 break;
             }
 
-            auto &line = buf.lines[rbrace_pos.y];
+            auto &line = buf->lines[rbrace_pos.y];
             bool starts_with_spaces = true;
             for (u32 x = 0; x < rbrace_pos.x; x++) {
                 if (line[x] != ' ' && line[x] != '\t') {
@@ -2020,9 +2021,9 @@ void Editor::type_char_in_insert_mode(char ch) {
             if (!starts_with_spaces) break;
 
             Parser_It it;
-            it.init(&buf);
+            it.init(buf);
 
-            auto root_node = new_ast_node(ts_tree_root_node(buf.tree), &it);
+            auto root_node = new_ast_node(ts_tree_root_node(buf->tree), &it);
 
             Ast_Node *rbrace_node = alloc_object(Ast_Node);
             bool rbrace_found = false;
@@ -2082,7 +2083,7 @@ void Editor::type_char_in_insert_mode(char ch) {
             if (lbrace_line == -1) break;
 
             auto indentation = alloc_list<uchar>();
-            For (buf.lines[lbrace_line]) {
+            For (buf->lines[lbrace_line]) {
                 if (it == '\t' || it == ' ')
                     indentation->append(it);
                 else
@@ -2094,12 +2095,12 @@ void Editor::type_char_in_insert_mode(char ch) {
 
             // insert indentation
             auto pos = cur;
-            buf.insert(pos, indentation->items, indentation->len);
+            buf->insert(pos, indentation->items, indentation->len);
             pos.x += indentation->len;
 
             // insert the brace
             uchar uch = ch;
-            buf.insert(pos, &uch, 1);
+            buf->insert(pos, &uch, 1);
             pos.x++;
 
             // move cursor after everything we typed
@@ -2113,7 +2114,7 @@ void Editor::type_char_in_insert_mode(char ch) {
         if (autocomplete.ac.results != NULL) break;
 
         auto c = cur;
-        auto &line = buf.lines[c.y];
+        auto &line = buf->lines[c.y];
 
         while (c.x > 0 && isident(line[c.x-1]))
             c.x--;
@@ -2151,22 +2152,22 @@ void Editor::backspace_in_insert_mode(int graphemes_to_erase, int codepoints_to_
         // we want to move it back by one gr index
         // and then convert that back to cp index
         // what the fuck lmao, is backspace going to be this expensive?
-        int gr_idx = buf.idx_cp_to_gr(start.y, start.x);
-        start.x = buf.idx_gr_to_cp(start.y, relu_sub(gr_idx, graphemes_to_erase));
+        int gr_idx = buf->idx_cp_to_gr(start.y, start.x);
+        start.x = buf->idx_gr_to_cp(start.y, relu_sub(gr_idx, graphemes_to_erase));
     } else if (codepoints_to_erase > 0) {
         start.x -= codepoints_to_erase;
     }
 
     if (start < nvim_insert.start) {
         // this assumes start and nvim_insert.start are on same line
-        int gr_end = buf.idx_cp_to_gr(nvim_insert.start.y, nvim_insert.start.x);
-        int gr_start = buf.idx_cp_to_gr(start.y, start.x);
+        int gr_end = buf->idx_cp_to_gr(nvim_insert.start.y, nvim_insert.start.x);
+        int gr_start = buf->idx_cp_to_gr(start.y, start.x);
         nvim_insert.deleted_graphemes += (gr_end - gr_start);
 
         nvim_insert.start = start;
     }
 
-    buf.remove(start, cur);
+    buf->remove(start, cur);
     raw_move_cursor(start);
 
     last_closed_autocomplete = new_cur2(-1, -1);
@@ -2188,8 +2189,8 @@ bool Editor::optimize_imports() {
     // add imports into the file
     do {
         auto iter = alloc_object(Parser_It);
-        iter->init(&buf);
-        auto root = new_ast_node(ts_tree_root_node(buf.tree), iter);
+        iter->init(buf);
+        auto root = new_ast_node(ts_tree_root_node(buf->tree), iter);
 
         Ast_Node *package_node = NULL;
         Ast_Node *imports_node = NULL;
@@ -2290,8 +2291,8 @@ bool Editor::optimize_imports() {
         }
 
         if (start != old_end)
-            buf.remove(start, old_end);
-        buf.insert(start, chars->items, chars->len);
+            buf->remove(start, old_end);
+        buf->insert(start, chars->items, chars->len);
     } while (0);
 
     return true;
@@ -2305,13 +2306,13 @@ void Editor::format_on_save(int fmt_type, bool write_to_nvim) {
 
     GHFmtStart();
 
-    for (int i = 0; i < buf.lines.len; i++) {
+    for (int i = 0; i < buf->lines.len; i++) {
         SCOPED_FRAME();
 
         List<char> line;
         line.init();
 
-        For (buf.lines[i]) {
+        For (buf->lines[i]) {
             char tmp[4];
             auto n = uchar_to_cstr(it, tmp);
             for (u32 j = 0; j < n; j++)
@@ -2338,9 +2339,9 @@ void Editor::format_on_save(int fmt_type, bool write_to_nvim) {
         return false;
     });
 
-    /// auto was_dirty = buf.dirty;
-    buf.copy_from(&swapbuf);
-    buf.dirty = true;
+    /// auto was_dirty = buf->dirty;
+    buf->copy_from(&swapbuf);
+    buf->dirty = true;
 
     if (write_to_nvim) {
         auto &nv = world.nvim;
@@ -2358,8 +2359,8 @@ void Editor::format_on_save(int fmt_type, bool write_to_nvim) {
         writer.write_int(-1);
         writer.write_bool(false);
 
-        writer.write_array(buf.lines.len);
-        For (buf.lines) nv.write_line(&it);
+        writer.write_array(buf->lines.len);
+        For (buf->lines) nv.write_line(&it);
         nv.end_message();
     }
 }
@@ -2387,7 +2388,7 @@ void Editor::handle_save(bool about_to_close) {
         is_go_file = str_ends_with(filepath, ".go");
 
         if (is_go_file)
-            buf.enable_tree();
+            buf->enable_tree();
     }
 
     format_on_save(GH_FMT_GOIMPORTS, !about_to_close);
@@ -2403,8 +2404,8 @@ void Editor::handle_save(bool about_to_close) {
         }
         defer { f.cleanup(); };
 
-        buf.write(&f);
-        buf.dirty = false;
+        buf->write(&f);
+        buf->dirty = false;
     }
 
     auto find_node = [&]() -> FT_Node * {

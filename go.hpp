@@ -630,7 +630,7 @@ struct Godecl {
 
     Godecl_Type type;
 
-    ccstr file; // only guaranteed to be set on toplevels
+    // ccstr file; // only guaranteed to be set on toplevels
     cur2 decl_start;
     cur2 decl_end;
     cur2 spec_start;

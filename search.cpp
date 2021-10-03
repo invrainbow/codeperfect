@@ -225,8 +225,8 @@ void Searcher::search_worker() {
 
                 if (editor != NULL) {
                     // what do we do here?
-                    editor->buf.mark_tree.insert_mark(MARK_SEARCH_RESULT, sr.match_start, sr.mark_start);
-                    editor->buf.mark_tree.insert_mark(MARK_SEARCH_RESULT, sr.match_end, sr.mark_end);
+                    editor->buf->mark_tree.insert_mark(MARK_SEARCH_RESULT, sr.match_start, sr.mark_start);
+                    editor->buf->mark_tree.insert_mark(MARK_SEARCH_RESULT, sr.match_end, sr.mark_end);
                 }
 
                 results->append(&sr);

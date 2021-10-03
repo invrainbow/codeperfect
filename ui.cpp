@@ -103,15 +103,15 @@ namespace ImGui {
 }
 
 int get_line_number_width(Editor *editor) {
-    auto &buf = editor->buf;
+    auto buf = editor->buf;
 
     u32 maxval = 0;
     if (world.replace_line_numbers_with_bytecounts) {
-        For (buf.bytecounts)
+        For (buf->bytecounts)
             if (it > maxval)
                 maxval = it;
     } else {
-        maxval = buf.lines.len;
+        maxval = buf->lines.len;
     }
 
     return max(4, (int)log10(maxval) + 1);
@@ -1995,13 +1995,13 @@ void UI::draw_everything() {
                 if (!editor->is_go_file) return false;
                 if (!str_ends_with(editor->filepath, "_test.go")) return false;
                 if (!path_contains_in_subtree(world.current_path, editor->filepath)) return false;
-                if (editor->buf.tree == NULL) return false;
+                if (editor->buf->tree == NULL) return false;
 
                 bool ret = false;
 
                 Parser_It it;
-                it.init(&editor->buf);
-                auto root_node = new_ast_node(ts_tree_root_node(editor->buf.tree), &it);
+                it.init(editor->buf);
+                auto root_node = new_ast_node(ts_tree_root_node(editor->buf->tree), &it);
 
                 find_nodes_containing_pos(root_node, editor->cur, true, [&](auto it) -> Walk_Action {
                     if (it->type() == TS_SOURCE_FILE)
@@ -3414,7 +3414,7 @@ void UI::draw_everything() {
         auto editor = world.get_current_editor();
         if (editor == NULL) break;
 
-        auto tree = editor->buf.tree;
+        auto tree = editor->buf->tree;
         if (tree == NULL) break;
 
         if (world.wnd_editor_tree.show) {
@@ -3431,8 +3431,8 @@ void UI::draw_everything() {
             if (ImGui::Button("go to cursor"))
                 open_cur = editor->cur;
 
-            ts_tree_cursor_reset(&editor->buf.cursor, ts_tree_root_node(tree));
-            render_ts_cursor(&editor->buf.cursor, open_cur);
+            ts_tree_cursor_reset(&editor->buf->cursor, ts_tree_root_node(tree));
+            render_ts_cursor(&editor->buf->cursor, open_cur);
 
             ImGui::End();
         }
@@ -3444,7 +3444,7 @@ void UI::draw_everything() {
             decls.init();
 
             Parser_It it; ptr0(&it);
-            it.init(&editor->buf);
+            it.init(editor->buf);
 
             Ast_Node node; ptr0(&node);
             node.init(ts_tree_root_node(tree), &it);
@@ -3565,7 +3565,7 @@ void UI::draw_everything() {
                 }
             }
 
-            if (editor.buf.dirty)
+            if (editor.buf->dirty)
                 label = our_sprintf("%s*", label);
 
             auto text_width = get_text_width(label);
@@ -3693,13 +3693,13 @@ void UI::draw_everything() {
             highlights.init();
 
             // generate editor highlights
-            if (editor->buf.tree != NULL) {
-                ts_tree_cursor_reset(&editor->buf.cursor, ts_tree_root_node(editor->buf.tree));
+            if (editor->buf->tree != NULL) {
+                ts_tree_cursor_reset(&editor->buf->cursor, ts_tree_root_node(editor->buf->tree));
 
                 auto start = new_cur2(0, editor->view.y);
                 auto end = new_cur2(0, editor->view.y + editor->view.h);
 
-                walk_ts_cursor(&editor->buf.cursor, false, [&](Ast_Node *node, Ts_Field_Type, int depth) -> Walk_Action {
+                walk_ts_cursor(&editor->buf->cursor, false, [&](Ast_Node *node, Ts_Field_Type, int depth) -> Walk_Action {
                     auto node_start = node->start();
                     auto node_end = node->end();
 
@@ -3761,7 +3761,7 @@ void UI::draw_everything() {
                     }
                 }
 
-                if (buf.lines.len == 0) draw_cursor(1);
+                if (buf->lines.len == 0) draw_cursor(1);
 
                 auto &hint = editor->parameter_hint;
 
@@ -3795,9 +3795,9 @@ void UI::draw_everything() {
 
                 auto relative_y = 0;
                 for (u32 y = view.y; y < view.y + view.h; y++, relative_y++) {
-                    if (y >= buf.lines.len) break;
+                    if (y >= buf->lines.len) break;
 
-                    auto line = &buf.lines[y];
+                    auto line = &buf->lines[y];
 
                     enum {
                         BREAKPOINT_NONE,
@@ -3859,7 +3859,7 @@ void UI::draw_everything() {
                         cur_pos.x += settings.line_number_margin_left;
                         ccstr line_number_str = NULL;
                         if (world.replace_line_numbers_with_bytecounts)
-                            line_number_str = our_sprintf("%*d", line_number_width, buf.bytecounts[y]);
+                            line_number_str = our_sprintf("%*d", line_number_width, buf->bytecounts[y]);
                         else
                             line_number_str = our_sprintf("%*d", line_number_width, y + 1);
                         auto len = strlen(line_number_str);

@@ -51,7 +51,7 @@ void Nvim::handle_editor_on_ready(Editor *editor) {
 
     // clear dirty indicator (it'll be set after we filled buf during
     // nvim_buf_lines_event)
-    editor->buf.dirty = false;
+    editor->buf->dirty = false;
 
     {
         // clear undo history
@@ -159,7 +159,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 break;
 
             case NVIM_REQ_FILEOPEN_CLEAR_UNDO:
-                editor->buf.dirty = false;
+                editor->buf->dirty = false;
                 break;
 
             case NVIM_REQ_POST_SAVE_SETLINES:
@@ -167,15 +167,15 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                     auto was_saving = editor->saving;
                     editor->saving = false;
                     if (was_saving)
-                        editor->buf.dirty = false;
+                        editor->buf->dirty = false;
                 }
 
                 {
                     /*
                     auto cur = req->post_save_setlines.cur;
-                    if (cur.y >= editor->buf.lines.len) {
-                        cur.y = editor->buf.lines.len-1;
-                        cur.x = relu_sub(editor->buf.lines[cur.y].len, 1);
+                    if (cur.y >= editor->buf->lines.len) {
+                        cur.y = editor->buf->lines.len-1;
+                        cur.x = relu_sub(editor->buf->lines[cur.y].len, 1);
                     }
                     editor->move_cursor(cur);
                     */
@@ -278,8 +278,8 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                             writer.write_int(-1);
                             writer.write_bool(false);
 
-                            writer.write_array(editor->buf.lines.len);
-                            For (editor->buf.lines) write_line(&it);
+                            writer.write_array(editor->buf->lines.len);
+                            For (editor->buf->lines) write_line(&it);
                         }
                     }
 
@@ -480,10 +480,10 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                     break;
                 }
 
-                if (y >= editor->buf.lines.len)
-                    y = editor->buf.lines.len-1;
+                if (y >= editor->buf->lines.len)
+                    y = editor->buf->lines.len-1;
 
-                auto &line = editor->buf.lines[y];
+                auto &line = editor->buf->lines[y];
                 u32 x = 0;
                 while (x < line.len && isspace((char)line[x]))
                     x++;
@@ -522,7 +522,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 }
 
                 if (event->notification.custom_reveal_line.reset_cursor) {
-                    auto &line = editor->buf.lines[y];
+                    auto &line = editor->buf->lines[y];
                     u32 x = 0;
                     while (x < line.len && isspace((char)line[x]))
                         x++;
@@ -647,7 +647,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                         auto &gohere = editor->go_here_after_escape;
                         if (gohere.x != -1 && gohere.y != -1) {
                             ccstr insert_cmd = "i";
-                            if (gohere.x == editor->buf.lines[gohere.y].len)
+                            if (gohere.x == editor->buf->lines[gohere.y].len)
                                 insert_cmd = "a";
 
                             // gohere.x--;
@@ -702,11 +702,11 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                     if (mode != VI_INSERT) return true;
 
                     auto &cur = editor->cur;
-                    // auto &buf = editor->buf;
+                    // auto buf = editor->buf;
 
                     // if this a necessary post-insert corrective cursor change
-                    if (cur.x > buf.lines[cur.y].len)
-                        if (args.curline == cur.y && args.curcol <= buf.lines[cur.y].len)
+                    if (cur.x > buf->lines[cur.y].len)
+                        if (args.curline == cur.y && args.curcol <= buf->lines[cur.y].len)
                             return true;
 
                     return false;
@@ -717,7 +717,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 */
 
                 auto y = (u32)args.curline;
-                auto x = editor->buf.idx_byte_to_cp(y, args.curcol, true);
+                auto x = editor->buf->idx_byte_to_cp(y, args.curcol, true);
                 auto new_cur = new_cur2(x, y);
 
                 if (!editor->nvim_data.got_initial_cur) {
@@ -729,9 +729,9 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                             pos = editor->offset_to_cur(pos.x);
 
                         auto is_pos_even_valid = [&]() -> bool {
-                            auto &buf = editor->buf;
-                            if (0 <= pos.y && pos.y < buf.lines.len)
-                                if (0 <= pos.x && pos.x < buf.lines[pos.y].len)
+                            auto buf = editor->buf;
+                            if (0 <= pos.y && pos.y < buf->lines.len)
+                                if (0 <= pos.x && pos.x < buf->lines[pos.y].len)
                                     return true;
                             return false;
                         };

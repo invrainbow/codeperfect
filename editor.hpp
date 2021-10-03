@@ -64,7 +64,7 @@ struct Editor {
     Pool mem;
     Pane* pane;
 
-    Buffer buf;
+    Buffer *buf;
 
     box view;
     cur2 cur;
