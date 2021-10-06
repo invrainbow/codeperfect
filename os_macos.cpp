@@ -372,22 +372,34 @@ bool delete_file(ccstr path) {
 
 ccstr get_canon_path(ccstr path) {
     auto new_path = alloc_list<ccstr>();
+    auto p = make_path(path);
 
-    For (*make_path(path)->parts) {
+    int extra_dotdots = 0;
+
+    For (*p->parts) {
         if (streq(it, "")) continue;
         if (streq(it, ".")) continue;
 
         if (streq(it, "..")) {
-            new_path->len--;
+            if (new_path->len > 0)
+                new_path->len--;
+            else
+                extra_dotdots++;
             continue;
         }
 
         new_path->append(it);
     }
 
-    Path p;
-    p.init(new_path);
-    return p.str(PATH_SEP);
+    auto ret = alloc_list<ccstr>();
+    for (int i = 0; i < extra_dotdots; i++)
+        ret->append("..");
+    For (*new_path)
+        ret->append(it);
+
+    Path pret;
+    pret.init(ret);
+    return pret.str(PATH_SEP);
 }
 
 ccstr rel_to_abs_path(ccstr path) {
