@@ -1244,10 +1244,10 @@ int main(int argc, char **argv) {
                 if (res != CPR_DIRECTORY)
                     filepath = our_dirname(filepath);
 
-                reload_file_subtree(filepath);
-
                 if (streq(filepath, "."))
                     filepath = "";
+
+                reload_file_subtree(filepath);
 
                 auto editor = world.find_editor_by_filepath(filepath);
                 if (editor != NULL)

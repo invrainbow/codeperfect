@@ -5262,46 +5262,40 @@ ccstr ts_ast_type_str(Ts_Ast_Type type) {
 }
 
 ccstr _path_join(ccstr a, ...) {
-    auto get_part_length = [&](ccstr s) {
-        auto len = strlen(s);
-        if (len > 0 && is_sep(s[len-1])) len--;
-        return len;
-    };
-
     va_list vl, vlcount;
-    s32 total_len = 0;
-    s32 num_parts = 0;
-
     va_start(vl, a);
     va_copy(vlcount, vl);
 
-    for (;; num_parts++) {
-        ccstr val = (num_parts == 0 ? a : va_arg(vlcount, ccstr));
+    auto ret = alloc_list<char>();
+
+    while (true) {
+        ccstr val = NULL;
+        if (a != NULL) {
+            val = a;
+            a = NULL;
+        } else {
+            val = va_arg(vlcount, ccstr);
+        }
         if (val == NULL) break;
-        total_len += get_part_length(val);
-    }
-    total_len += (num_parts-1); // path separators
+        if (val[0] == '\0') continue;
 
-    auto ret = alloc_array(char, total_len + 1);
-    u32 k = 0;
-
-    for (u32 i = 0; i < num_parts; i++) {
-        ccstr val = (i == 0 ? a : va_arg(vl, ccstr));
-        auto len = get_part_length(val);
+        auto len = strlen(val);
+        if (len > 0 && is_sep(val[len-1])) len--;
 
         // copy val into ret, normalizing path separators
         for (u32 j = 0; j < len; j++) {
             auto ch = val[j];
             if (is_sep(ch)) ch = PATH_SEP;
-            ret[k++] = ch;
+            ret->append(ch);
         }
 
-        if (i + 1 < num_parts)
-            ret[k++] = PATH_SEP;
+        ret->append(PATH_SEP);
     }
 
-    ret[k] = '\0';
-    return ret;
+    if (ret->len > 0) ret->len--; // remove last PATH_SEP
+
+    ret->append('\0');
+    return ret->items;
 }
 
 TSParser *new_ts_parser() {

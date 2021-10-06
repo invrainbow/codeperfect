@@ -20,6 +20,9 @@ int gargc = 0;
 char **gargv = NULL;
 
 bool is_ignored_by_git(ccstr path) {
+    // go-gitignore crashes when path == base path
+    if (are_filepaths_equal(path, world.current_path))
+        return false;
     return GHGitIgnoreCheckFile((char*)path);
 }
 
@@ -1109,10 +1112,12 @@ void goto_next_error(int direction) {
 }
 
 void reload_file_subtree(ccstr relpath) {
+    auto path = path_join(world.current_path, relpath);
+    if (is_ignored_by_git(path))
+        return;
+
     auto node = world.find_or_create_ft_node(relpath, true);
     if (node == NULL) return;
-
-    auto path = path_join(world.current_path, relpath);
 
     String_Set current_items;    current_items.init();
     String_Set new_files;        new_files.init();

@@ -67,7 +67,10 @@ ccstr _our_dirname(ccstr path) {
     _splitpath(s, NULL, ret + strlen(ret), NULL, NULL);
     return ret;
 #elif OS_MAC
-    return dirname((char*)our_strcpy(path));
+    // dirname might overwrite mem we pass it
+    // and also it might return pointer to statically allocated mem
+    // so just send it a copy and copy what it gives us
+    return our_strcpy(dirname((char*)our_strcpy(path)));
 #endif
 }
 

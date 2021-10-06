@@ -6,7 +6,7 @@
             "request": "launch",
             "name": "debug",
             "program": "${workspaceFolder}/build/bin/ide",
-            "args": ["/Users/brandon/necc"],
+            "args": ["/Users/brandon/archive"],
             "cwd": "${workspaceFolder}/build/bin",
             "expressions": "native"
         },

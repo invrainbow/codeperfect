@@ -273,7 +273,9 @@ func GHGitIgnoreInit(repo *C.char) bool {
 
 //export GHGitIgnoreCheckFile
 func GHGitIgnoreCheckFile(file *C.char) bool {
-	match := gitignoreChecker.ignore.Match(C.GoString(file))
+    str := C.GoString(file)
+    fmt.Printf("checking file: %s\n", str)
+	match := gitignoreChecker.ignore.Match(str)
 	return match != nil && match.Ignore()
 }
 
