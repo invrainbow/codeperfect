@@ -2182,7 +2182,7 @@ bool Editor::optimize_imports() {
     if (!world.indexer.lock.try_enter()) return false;
     defer { world.indexer.lock.leave(); };
 
-    auto imports = world.indexer.list_missing_imports(filepath);
+    auto imports = world.indexer.optimize_imports(filepath);
     if (imports == NULL) return false;
     if (imports->len == 0) return false;
 
@@ -2210,31 +2210,21 @@ bool Editor::optimize_imports() {
         rend.init();
         rend.write("import (\n");
 
-        if (imports_node != NULL) {
-            auto imports = alloc_list<Go_Import>();
-            world.indexer.import_decl_to_goimports(imports_node, NULL, imports);
-
-            For (*imports) {
-                switch (it.package_name_type) {
-                case GPN_IMPLICIT:
-                    rend.write("\"%s\"", it.import_path);
-                    break;
-                case GPN_EXPLICIT:
-                    rend.write("%s \"%s\"", it.package_name, it.import_path);
-                    break;
-                case GPN_BLANK:
-                    rend.write("_ \"%s\"", it.import_path);
-                    break;
-                case GPN_DOT:
-                    rend.write(". \"%s\"", it.import_path);
-                    break;
-                }
-                rend.write("\n");
-            }
-        }
-
         For (*imports) {
-            rend.write("\"%s\"", it);
+            switch (it.package_name_type) {
+            case GPN_IMPLICIT:
+                rend.write("\"%s\"", it.import_path);
+                break;
+            case GPN_EXPLICIT:
+                rend.write("%s \"%s\"", it.package_name, it.import_path);
+                break;
+            case GPN_BLANK:
+                rend.write("_ \"%s\"", it.import_path);
+                break;
+            case GPN_DOT:
+                rend.write(". \"%s\"", it.import_path);
+                break;
+            }
             rend.write("\n");
         }
 
