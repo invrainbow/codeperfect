@@ -76,9 +76,13 @@ uchar Buffer_It::next() {
         return 0;
 
     auto ret = peek();
-    if (++x > buf->lines[y].len) {
-        y++;
-        x = 0;
+    if (has_fake_end && pos >= fake_end) {
+        pos.x++;
+    } else {
+        if (++x > buf->lines[y].len) {
+            y++;
+            x = 0;
+        }
     }
     return ret;
 }

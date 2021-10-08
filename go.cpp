@@ -1091,7 +1091,7 @@ void Go_Indexer::background_thread() {
                 create_package_if_null();
                 init_builtins(pkg);
                 continue;
-            } 
+            }
 
             auto source_files = list_source_files(resolved_path, true);
             if (source_files == NULL) continue;
@@ -2632,6 +2632,21 @@ bool Go_Indexer::truncate_parsed_file(Parsed_File *pf, cur2 end_pos, ccstr chars
         it.chars_to_append_to_end = chars_to_append;
     }
 
+    {
+        SCOPED_FRAME();
+
+        Buffer_It it2;
+        memcpy(&it2, &it, sizeof(Buffer_It));
+
+        auto ret = alloc_list<char>();
+
+        it2.pos = new_cur2(0, 0);
+        while (!it2.eof())
+            ret->append(it2.next());
+        ret->append('\0');
+        print("truncated file:\n===\n%s\n===", ret->items);
+    }
+
     TSInput input;
     input.payload = &it;
     input.encoding = TSInputEncodingUTF8;
@@ -3458,12 +3473,23 @@ Parameter_Hint *Go_Indexer::parameter_hint(ccstr filepath, cur2 pos) {
                 if (func->null || args->null) break;
 
                 func_expr = func;
-                call_args_start = args->start();
 
                 if (node->type() == TS_TYPE_CONVERSION_EXPRESSION) {
+                    bool found = false;
+                    FOR_ALL_NODE_CHILDREN (node) {
+                        if (it->type() == TS_LPAREN) {
+                            call_args_start = it->start();
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found) break;
+
                     if (cmp_pos_to_node(pos, args, true) == 0)
                         current_param = 0;
                 } else {
+                    call_args_start = args->start();
+
                     int i = 0;
                     FOR_NODE_CHILDREN(args) {
                         if (cmp_pos_to_node(pos, it, true) == 0) {
