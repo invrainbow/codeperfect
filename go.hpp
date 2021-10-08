@@ -1187,7 +1187,7 @@ struct Go_Indexer {
     Jump_To_Definition_Result* jump_to_definition(ccstr filepath, cur2 pos);
     bool autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period, Autocomplete *out);
     Parameter_Hint *parameter_hint(ccstr filepath, cur2 pos);
-    List<ccstr> *list_missing_imports(ccstr filepath);
+    List<Go_Import> *optimize_imports(ccstr filepath);
     ccstr find_best_import(ccstr package_name, List<ccstr> *identifiers);
 
     ccstr filepath_to_import_path(ccstr filepath);

@@ -2195,7 +2195,7 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_symbol(ccstr symbol) {
     return NULL;
 }
 
-List<ccstr> *Go_Indexer::list_missing_imports(ccstr filepath) {
+List<Go_Import> *Go_Indexer::optimize_imports(ccstr filepath) {
     Timer t; t.init("list_missing_imports");
 
     auto editor = world.find_editor_by_filepath(filepath);
@@ -2277,6 +2277,7 @@ List<ccstr> *Go_Indexer::list_missing_imports(ccstr filepath) {
     };
 
     auto pkgs = alloc_list<Ref_Package>();
+    String_Set referenced_package_names; referenced_package_names.init();
 
     For (refs) {
         auto &ref = it;
@@ -2287,13 +2288,17 @@ List<ccstr> *Go_Indexer::list_missing_imports(ccstr filepath) {
             pkg = pkgs->append();
             pkg->name = ref.package;
             pkg->sels.init();
+
+            referenced_package_names.add(ref.package);
         }
 
-        if (pkg->sels.find([&](auto it) { return streq(*it , ref.sel); }) == NULL)
+        if (pkg->sels.find([&](auto it) { return streq(*it, ref.sel); }) == NULL)
             pkg->sels.append(ref.sel);
     }
 
     t.log("sort into packages");
+
+    // grab the gofile
 
     auto gopkg = find_up_to_date_package(ctx.import_path);
     if (gopkg == NULL) return NULL;
@@ -2302,27 +2307,33 @@ List<ccstr> *Go_Indexer::list_missing_imports(ccstr filepath) {
     auto gofile = gopkg->files->find(check);
     if (gofile == NULL) return NULL;
 
-    String_Set existing_package_names; existing_package_names.init();
+    String_Set imported_package_names; imported_package_names.init();
+    auto ret = alloc_list<Go_Import>();
 
     if (gofile->imports != NULL) {
         For (*gofile->imports) {
             auto package_name = get_import_package_name(&it);
-            if (package_name != NULL)
-                existing_package_names.add(package_name);
+            if (package_name == NULL || !referenced_package_names.has(package_name))
+                continue;
+
+            ret->append(&it);
+            imported_package_names.add(package_name);
         }
     }
 
     t.log("get existing imports");
 
-    auto ret = alloc_list<ccstr>();
     For (*pkgs) {
-        if (existing_package_names.has(it.name)) continue;
+        if (imported_package_names.has(it.name)) continue;
 
         print("unaccounted package: %s", it.name);
 
         auto import_path = find_best_import(it.name, &it.sels);
-        if (import_path != NULL)
-            ret->append(import_path);
+        if (import_path == NULL) continue; // couldn't find anything
+
+        auto imp = ret->append();
+        imp->package_name_type = GPN_IMPLICIT;
+        imp->import_path = import_path;
     }
 
     t.log("list unaccounted-for imports");
