@@ -224,7 +224,8 @@ struct World {
     // cur2 navigating_to_pos;
     // int navigating_to_editor;
 
-    void activate_pane(u32 idx);
+    void activate_pane(Pane *pane);
+    void activate_pane_by_index(u32 idx);
     void init_workspace();
 
     bool replace_line_numbers_with_bytecounts;

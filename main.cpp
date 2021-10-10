@@ -370,8 +370,8 @@ int main(int argc, char **argv) {
     glfwGetFramebufferSize(world.window, (i32*)&world.display_size.x, (i32*)&world.display_size.y);
     glfwGetWindowContentScale(world.window, &world.display_scale.x, &world.display_scale.y);
 
-    // now that we have world.display_size, we can call wksp.activate_pane
-    world.activate_pane(0);
+    // now that we have world.display_size, we can call wksp.activate_pane_by_index
+    world.activate_pane_by_index(0);
 
     // initialize & bind textures
     glGenTextures(__TEXTURE_COUNT__, world.ui.textures);
@@ -585,7 +585,7 @@ int main(int argc, char **argv) {
             case GLFW_KEY_2:
             case GLFW_KEY_3:
             case GLFW_KEY_4:
-                world.activate_pane(key - GLFW_KEY_1);
+                world.activate_pane_by_index(key - GLFW_KEY_1);
                 ImGui::SetWindowFocus(NULL);
                 break;
             case GLFW_KEY_T:
@@ -998,7 +998,7 @@ int main(int argc, char **argv) {
                         pane->cleanup();
                         world.panes.remove(world.current_pane);
                         if (world.current_pane >= world.panes.len)
-                            world.activate_pane(world.panes.len - 1);
+                            world.activate_pane_by_index(world.panes.len - 1);
                     } else {
                         if (editor->buf->dirty) {
                             auto title = "Your changes will be lost if you don't.";

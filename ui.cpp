@@ -3530,7 +3530,7 @@ void UI::draw_everything() {
             draw_rect(tabs_area, rgba(is_pane_selected ? COLOR_MEDIUM_GREY : COLOR_DARK_GREY));
         draw_rect(editor_area, rgba(COLOR_JBLOW_BG));
 
-        vec2 tab_padding = { 15, 5 };
+        vec2 tab_padding = { 9, 4 };
 
         boxf tab;
         tab.pos = tabs_area.pos + new_vec2(5, tabs_area.h - tab_padding.y * 2 - font->height);
@@ -3645,8 +3645,10 @@ void UI::draw_everything() {
             draw_string(tab.pos + tab_padding, label, rgba(is_selected ? COLOR_WHITE : COLOR_LIGHT_GREY));
 
             auto mouse_flags = get_mouse_flags(tab);
-            if (mouse_flags & MOUSE_CLICKED)
+            if (mouse_flags & MOUSE_CLICKED) {
+                world.activate_pane(&pane);
                 pane.focus_editor_by_index(tab_id);
+            }
             if (mouse_flags & MOUSE_MCLICKED)
                 tab_to_remove = tab_id;
 
@@ -3660,7 +3662,7 @@ void UI::draw_everything() {
         if (pane.tabs_offset > 0) {
             auto margin = (pane.current_editor == pane.editors.len - 1) ? 5 : settings.tabs_offset;
             auto space_avail = fmin(
-                relu_sub(tabs_area.x + tabs_area.w, (current_tab.x + current_tab.w + margin)),
+                relu_subf(tabs_area.x + tabs_area.w, (current_tab.x + current_tab.w + margin)),
                 pane.tabs_offset
             );
             /*
@@ -4689,7 +4691,7 @@ void UI::get_tabs_and_editor_area(boxf* pane_area, boxf* ptabs_area, boxf* pedit
     if (has_tabs) {
         tabs_area.pos = pane_area->pos;
         tabs_area.w = pane_area->w;
-        tabs_area.h = 30; // ???
+        tabs_area.h = 26; // ???
     }
 
     editor_area.pos = pane_area->pos;
