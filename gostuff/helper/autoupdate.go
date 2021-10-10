@@ -199,7 +199,7 @@ The program will continue to run for a grace period of 24 hours.
 `
 
 func pushPanic(msg string) {
-    PushMessage(msg, "Authentication Error", true)
+	PushMessage(msg, "Authentication Error", true)
 }
 
 func pushWarning(msg string) {
