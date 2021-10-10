@@ -1089,7 +1089,14 @@ void Go_Indexer::background_thread() {
 
             if (streq(import_path, "@builtins")) {
                 create_package_if_null();
+
+                pkg->status = GPS_UPDATING; // i don't think we actually need this anymore...
+
                 init_builtins(pkg);
+
+                fill_package_hash(pkg);
+                pkg->status = GPS_READY;
+                pkg->checked_for_outdated_hash = true;
                 continue;
             }
 
@@ -1631,13 +1638,6 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
                     op.pos = scope_ops_decls->items[i].decl_start;
                     if (!cb(&op)) return WALK_ABORT;
                 }
-            }
-            break;
-
-            {
-
-
-
             }
             break;
         }
@@ -5902,6 +5902,7 @@ char* (*GHGetGopath)();
 char* (*GHGetGomodcache)();
 GoBool (*GHGetMessage)(void* p);
 void (*GHFreeMessage)(void* p);
+GoBool (*GHInitConfig)();
 
 #if OS_WIN
 #   define dll_load_library(x) LoadLibraryW(L"gohelper.dll")
@@ -5949,6 +5950,7 @@ void load_gohelper() {
     load(GHGetGomodcache);
     load(GHGetMessage);
     load(GHFreeMessage);
+    load(GHInitConfig);
 #undef load
 
     gh_version = GHGetVersion();

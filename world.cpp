@@ -460,6 +460,9 @@ void World::init(GLFWwindow *_wnd) {
 
     load_gohelper();
 
+    if (!GHInitConfig())
+        our_panic("Unable to load ~/.cpconfig. Please make sure the file exists and is formatted properly (see Getting Started in our docs).");
+
     {
         auto go_binary_path = GHGetGoBinaryPath();
         if (go_binary_path == NULL)

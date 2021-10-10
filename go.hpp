@@ -1363,6 +1363,7 @@ extern char* (*GHGetGopath)();
 extern char* (*GHGetGomodcache)();
 extern GoBool (*GHGetMessage)(void* p);
 extern void (*GHFreeMessage)(void* p);
+extern GoBool (*GHInitConfig)();
 
 void load_gohelper();
 

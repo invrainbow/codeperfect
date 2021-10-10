@@ -1719,6 +1719,13 @@ void UI::draw_everything() {
             ImGui::PopStyleVar(3);
         }
 
+        /*
+        // if the dockspace is focused, means we just closed last docked window
+        // but keyboard capture still going to imgui, so we need to SetWindowFocus(NULL)
+        if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootWindow))
+            ImGui::SetWindowFocus(NULL);
+        */
+
         ImGuiID dockspace_id = ImGui::GetID("main_dockspace");
 
         // set up dock layout
@@ -1795,8 +1802,15 @@ void UI::draw_everything() {
             }
 
             ImGui::Separator();
-            if (ImGui::MenuItem("Exit", format_key(KEYMOD_ALT, "F4"))) {
-                glfwSetWindowShouldClose(world.window, true);
+            {
+#if OS_WIN
+                auto key = format_key(KEYMOD_ALT, "F4");
+#elif OS_MAC
+                auto key = format_key(KEYMOD_CMD, "Q");
+#endif
+                if (ImGui::MenuItem("Exit", key)) {
+                    glfwSetWindowShouldClose(world.window, true);
+                }
             }
             ImGui::EndMenu();
         }
@@ -3864,7 +3878,7 @@ void UI::draw_everything() {
                             line_number_str = our_sprintf("%*d", line_number_width, y + 1);
                         auto len = strlen(line_number_str);
                         for (u32 i = 0; i < len; i++)
-                            draw_char(&cur_pos, line_number_str[i], rgba(COLOR_MEDIUM_DARK_GREY));
+                            draw_char(&cur_pos, line_number_str[i], rgba(COLOR_WHITE, 0.3));
                         cur_pos.x += settings.line_number_margin_right;
                     }
 
@@ -3918,9 +3932,11 @@ void UI::draw_everything() {
                                 if (++next_hl >= highlights.len)
                                     next_hl = -1;
 
-                            auto& hl = highlights[next_hl];
-                            if (hl.start <= curr && curr < hl.end)
-                                text_color = hl.color;
+                            if (next_hl != -1) {
+                                auto& hl = highlights[next_hl];
+                                if (hl.start <= curr && curr < hl.end)
+                                    text_color = hl.color;
+                            }
                         }
 
                         if (editor->cur == new_cur2((u32)curr_cp_idx, (u32)y)) {

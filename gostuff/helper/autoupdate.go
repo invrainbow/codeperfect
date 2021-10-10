@@ -199,11 +199,11 @@ The program will continue to run for a grace period of 24 hours.
 `
 
 func pushPanic(msg string) {
-	globalMQ.Push(msg, "Authentication error", true)
+    PushMessage(msg, "Authentication Error", true)
 }
 
 func pushWarning(msg string) {
-	globalMQ.Push(msg, "Authentication", false)
+	PushMessage(msg, "Authentication", false)
 }
 
 func pushUnknownError(desc string, err error) {

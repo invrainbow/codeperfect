@@ -10,21 +10,31 @@ import (
 type Config struct {
 	GoBinaryPath string `json:"go_binary_path"`
 	DelvePath    string `json:"delve_path"`
-    Goroot string `json:"goroot"`
-    Gopath string `json:"gopath"`
-    Gomodcache string `json:"gomodcache"`
+	Goroot       string `json:"goroot"`
+	Gopath       string `json:"gopath"`
+	Gomodcache   string `json:"gomodcache"`
 }
 
 var config *Config
 
-func init() {
-	conf, err := readConfig()
+func InitConfig() error {
+	homedir, err := os.UserHomeDir()
 	if err != nil {
-		panic(err)
+		return err
 	}
-	config = conf
+	configfile := path.Join(homedir, ".cpconfig")
 
-	// update path with gobinarypath
+	buf, err := os.ReadFile(configfile)
+	if err != nil {
+		return err
+	}
+
+	conf := &Config{}
+	if err := json.Unmarshal(buf, conf); err != nil {
+		return err
+	}
+
+	config = conf
 	if config.GoBinaryPath != "" {
 		path := os.Getenv("PATH")
 		if path == "" {
@@ -34,23 +44,6 @@ func init() {
 		}
 		os.Setenv("PATH", path)
 	}
-}
 
-func readConfig() (*Config, error) {
-	homedir, err := os.UserHomeDir()
-	if err != nil {
-		return nil, err
-	}
-	configfile := path.Join(homedir, ".cpconfig")
-
-	buf, err := os.ReadFile(configfile)
-	if err != nil {
-		return nil, err
-	}
-
-	config = &Config{}
-	if err := json.Unmarshal(buf, config); err != nil {
-		return nil, err
-	}
-	return config, nil
+	return nil
 }
