@@ -303,7 +303,7 @@ function Download() {
                 Mac &ndash; Intel
               </DownloadButton>
               <DownloadButton
-                onClick={() => onDownload("darwin-arm")}
+                onClick={() => onDownload("darwin_arm")}
                 icon={FaApple}
               >
                 Mac &ndash; M1

@@ -9,7 +9,7 @@ ifeq (${RELEASE}, 1)
 	GOFLAGS += -ldflags "-s -w"
 	CFLAGS += -DRELEASE_MODE -O3
 else
-	CFLAGS += -DDEBUG_MODE -g
+	CFLAGS += -DDEBUG_MODE -g -O0
 endif
 
 $(info $$CFLAGS is [${CFLAGS}])
