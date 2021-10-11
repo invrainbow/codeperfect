@@ -460,6 +460,9 @@ void World::init(GLFWwindow *_wnd) {
 
     load_gohelper();
 
+    if (!GHInitConfig())
+        our_panic("Unable to load ~/.cpconfig. Please make sure the file exists and is formatted properly (see Getting Started in our docs).");
+
     {
         auto go_binary_path = GHGetGoBinaryPath();
         if (go_binary_path == NULL)
@@ -560,7 +563,7 @@ Editor *World::focus_editor(ccstr path, cur2 pos) {
         for (u32 i = 0; i < pane.editors.len; i++) {
             auto &it = pane.editors[i];
             if (are_filepaths_same_file(path, it.filepath)) {
-                activate_pane((&pane) - panes.items);
+                activate_pane(&pane);
                 pane.focus_editor_by_index(i, pos);
                 return &it;
             }
@@ -569,7 +572,11 @@ Editor *World::focus_editor(ccstr path, cur2 pos) {
     return get_current_pane()->focus_editor(path, pos);
 }
 
-void World::activate_pane(u32 idx) {
+void World::activate_pane(Pane *pane) {
+    activate_pane_by_index(pane - panes.items);
+}
+
+void World::activate_pane_by_index(u32 idx) {
     if (idx > panes.len) return;
 
     if (idx == panes.len) {
@@ -601,6 +608,9 @@ void World::activate_pane(u32 idx) {
             world.nvim.set_current_window(editor);
         */
     }
+
+    // we might have to add a "are we inside imgui" check
+    ImGui::SetWindowFocus(NULL);
 }
 
 void init_goto_file() {
@@ -837,7 +847,7 @@ Editor* World::focus_editor_by_id(int editor_id, cur2 pos) {
         for (int j = 0; j < it.editors.len; j++) {
             auto &editor = it.editors[j];
             if (editor.id == editor_id) {
-                activate_pane((&it) - panes.items);
+                activate_pane(&it);
                 it.focus_editor_by_index(j, pos);
                 return &editor;
             }
@@ -953,7 +963,8 @@ FT_Node *World::find_or_create_ft_node(ccstr relpath, bool is_directory) {
         ret->open = parent->open;
 
         ret->next = parent->children;
-        parent->children->prev = ret;
+        if (parent->children != NULL)
+            parent->children->prev = ret;
         parent->children = ret;
         parent->children = world.sort_ft_nodes(parent->children);
 

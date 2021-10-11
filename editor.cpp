@@ -515,8 +515,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
                         ccstr builtins_with_space[] = {
                             "package", "import", "const", "var", "func",
                             "type", "struct", "interface", "map", "chan",
-                            "fallthrough", "break", "continue", "goto",
-                            "go", "defer", "if", "else",
+                            "goto", "go", "defer", "if", "else",
                             "for", "select", "switch",
                         };
 

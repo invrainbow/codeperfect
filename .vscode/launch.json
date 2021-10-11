@@ -6,7 +6,9 @@
             "request": "launch",
             "name": "debug",
             "program": "${workspaceFolder}/build/bin/ide",
-            "args": ["/Users/brandon/archive"],
+            "args": [
+                "/Users/brandon/archive"
+            ],
             "cwd": "${workspaceFolder}/build/bin",
             "expressions": "native"
         },
@@ -15,7 +17,9 @@
             "request": "launch",
             "name": "test",
             "program": "build/bin/test",
-            "args": ["${input:testName}"],
+            "args": [
+                "${input:testName}"
+            ],
             "cwd": "${workspaceFolder}/build/bin",
             "expressions": "native"
         },

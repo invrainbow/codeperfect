@@ -963,9 +963,9 @@ bool Debugger::start(Debug_Profile *debug_profile) {
 
             ccstr cmd = NULL;
             if (debug_profile->type == DEBUG_RUN_PACKAGE)
-                cmd = our_sprintf("go build -o %s --gcflags=\"all=-N -l\" %s", binary_name, package_path);
+                cmd = our_sprintf("%s build -o %s --gcflags=\"all=-N -l\" %s", world.go_binary_path, binary_name, package_path);
             else
-                cmd = our_sprintf("go test -c %s -o %s --gcflags=\"all=-N -l\"", binary_name, package_path);
+                cmd = our_sprintf("%s test -c %s -o %s --gcflags=\"all=-N -l\"", world.go_binary_path, package_path, binary_name);
 
             Build_Profile build_profile; ptr0(&build_profile);
             strcpy_safe(build_profile.label, _countof(build_profile.label), "temp");

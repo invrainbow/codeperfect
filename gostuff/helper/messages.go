@@ -1,45 +1,24 @@
 package helper
 
-import (
-	"fmt"
-	"sync"
-)
-
 type Message struct {
 	Text    string
 	Title   string
 	IsPanic bool
 }
 
-type MessageQueue struct {
-	mu    sync.Mutex
-	queue []Message
-}
+var MessageChan chan Message
 
-func (m *MessageQueue) Push(text, title string, ispanic bool) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	fmt.Printf("(%d) %s: %s\n", BoolToInt(ispanic), title, text)
-
-	m.queue = append(m.queue, Message{
+func PushMessage(text string, title string, ispanic bool) bool {
+	m := Message{
 		Text:    text,
 		Title:   title,
 		IsPanic: ispanic,
-	})
-}
-
-func (m *MessageQueue) Pop() *Message {
-	if len(m.queue) == 0 {
-		return nil
 	}
 
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	var ret Message
-	ret, m.queue = m.queue[0], m.queue[1:]
-	return &ret
+	select {
+	case MessageChan <- m:
+		return true
+	default:
+		return false
+	}
 }
-
-var globalMQ MessageQueue

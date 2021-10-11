@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"go/format"
+	"log"
 	"os"
 	"os/exec"
 	"unsafe"
@@ -309,20 +310,29 @@ func GHGetGomodcache() *C.char { return C.CString(config.Gomodcache) }
 
 //export GHGetMessage
 func GHGetMessage(p unsafe.Pointer) bool {
-	msg := globalMQ.Pop()
-	if msg == nil {
+	select {
+	case msg := <-MessageChan:
+		out := (*C.GH_Message)(p)
+		out.text = C.CString(msg.Text)
+		out.title = C.CString(msg.Title)
+		out.is_panic = C.int32_t(BoolToInt(msg.IsPanic))
+		return true
+	default:
 		return false
 	}
-
-	out := (*C.GH_Message)(p)
-	out.text = C.CString(msg.Text)
-	out.title = C.CString(msg.Title)
-	out.is_panic = C.int32_t(BoolToInt(msg.IsPanic))
-	return true
 }
 
 //export GHFreeMessage
 func GHFreeMessage(p unsafe.Pointer) {
 	out := (*C.GH_Message)(p)
 	C.free(unsafe.Pointer(out.text))
+}
+
+//export GHInitConfig
+func GHInitConfig() bool {
+	if err := InitConfig(); err != nil {
+		log.Printf("error: %s\n", err)
+		return false
+	}
+	return true
 }
