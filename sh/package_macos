@@ -9,6 +9,11 @@ rm -rf build/bin obj
 # build again
 RELEASE=1 sh/build_macos
 
+OS_PREFIX=darwin
+if [ "$cpu_name" = "Apple M1" ]; then
+    OS_PREFIX=darwin_arm
+fi
+
 package_app() {
     APPNAME="CodePerfect.app"
     rm -rf "${APPNAME}"
@@ -17,13 +22,13 @@ package_app() {
     cp ../build/launcher "${APPNAME}/Contents/MacOS/CodePerfect"
     zip -r app.zip CodePerfect.app/
     sha256sum app.zip
-    # aws s3 cp app.zip "s3://codeperfect95/app/darwin_v${VERSION}.zip"
+    aws s3 cp app.zip "s3://codeperfect95/app/${OS_PREFIX}_v${VERSION}.zip"
 }
 
 package_update() {
     zip -j -r update.zip ../build/bin/ 
     sha256sum update.zip
-    # aws s3 cp update.zip "s3://codeperfect95/update/darwin_v${VERSION}.zip"
+    aws s3 cp update.zip "s3://codeperfect95/update/${OS_PREFIX}_v${VERSION}.zip"
 }
 
 rm -rf scratch/
