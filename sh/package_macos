@@ -10,7 +10,7 @@ rm -rf build/bin obj
 RELEASE=1 FIX_DYLIB=1 sh/build_macos
 
 OS_PREFIX=darwin
-if [ "$cpu_name" = "Apple M1" ]; then
+if [[ "$(sysctl -n machdep.cpu.brand_string)" = "Apple M1" ]]; then
     OS_PREFIX=darwin_arm
 fi
 

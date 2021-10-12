@@ -2,20 +2,35 @@
 
 set -e
 
+git submodule update --init --recursive
+
 brew install glew pcre go coreutils cmake pkg-config xxhash
 
 # install glfw using our custom formula which links statically
 brew reinstall --build-from-source ./sh/glfw.rb
 
+# install cwalk
 TMPDIR="/tmp/cwalk-for-cp"
 rm -rf "$TMPDIR"
 git clone https://github.com/likle/cwalk "$TMPDIR"
 mkdir -p "$TMPDIR/build"
-cd "$TMPDIR/build"
-cmake ..
-make
-sudo make install
-cd /tmp
+pushd "$TMPDIR/build"
+{
+    cmake ..
+    make
+    sudo make install
+}
+popd
 rm -rf "$TMPDIR"
 
-git submodule update --init --recursive
+# install macdylibbundler
+TMPDIR="/tmp/macdylibbundler-for-cp"
+rm -rf "$TMPDIR"
+git clone https://github.com/auriamg/macdylibbundler "$TMPDIR"
+pushd "$TMPDIR"
+{
+    make
+    sudo make install
+}
+popd
+rm -rf "$TMPDIR"
