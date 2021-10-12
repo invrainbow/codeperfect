@@ -12,8 +12,6 @@ else
 	CFLAGS += -DDEBUG_MODE -g -O0
 endif
 
-$(info $$CFLAGS is [${CFLAGS}])
-
 LDFLAGS = -ldl -lcwalk -lpcre -framework OpenGL -framework Cocoa -L/opt/homebrew/lib
 LDFLAGS += `pkg-config --libs glfw3 glew`
 
@@ -21,9 +19,12 @@ SRC_FILES := $(filter-out tests.cpp, $(wildcard *.cpp))
 OBJ_FILES = $(patsubst %.cpp,obj/%.o,$(SRC_FILES))
 DEP_FILES = $(patsubst %.cpp,obj/%.d,$(SRC_FILES))
 
-.PHONY: all
+.PHONY: all clean
 
 all: build/bin/ide build/bin/gohelper.dylib build/launcher build/bin/dynamic_helper.go build/bin/int.vim
+
+clean:
+	rm -rf obj/ build/bin/
 
 build/bin/test: $(filter-out obj/main.o, $(OBJ_FILES)) obj/objclibs.o obj/clibs.o obj/tests.o
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^

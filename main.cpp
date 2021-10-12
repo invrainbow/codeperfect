@@ -31,16 +31,6 @@
 #include "imgui.h"
 #include "fonts.hpp"
 
-#if OS_WIN
-#define GLFW_EXPOSE_NATIVE_WIN32
-#elif OS_MAC
-#define GLFW_EXPOSE_NATIVE_COCOA
-#endif
-
-#include <GL/glew.h>
-#include <GLFW/glfw3.h>
-#include <GLFW/glfw3native.h>
-
 #define MAX_PATH 260
 #define CODE_FONT_SIZE 14
 #define UI_FONT_SIZE 16

@@ -3,4 +3,20 @@ set -e
 
 mkdir -p obj build/bin
 sh/make
-[ -f "build/bin/nvim" ] || cp "$(grealpath $(which nvim))" build/bin/nvim
+
+sudo cp "$(grealpath $(which nvim))" build/bin/nvim
+sudo chown $(whoami) build/bin/nvim
+
+if [[ $FIX_DYLIB == "1" ]]; then
+    pushd build/bin
+
+    # fix nvim
+    rm -rf ./nvimlibs
+    dylibbundler -od -b -x ./nvim -p @executable_path/nvimlibs -d ./nvimlibs
+
+    # fix ide
+    rm -rf ./libs
+    dylibbundler -od -b -x ./ide -p @executable_path/libs -d ./libs
+
+    popd
+fi

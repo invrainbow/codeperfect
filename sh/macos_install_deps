@@ -2,7 +2,10 @@
 
 set -e
 
-brew install glfw3 glew pcre go coreutils cmake pkg-config xxhash
+brew install glew pcre go coreutils cmake pkg-config xxhash
+
+# install glfw using our custom formula which links statically
+brew reinstall --build-from-source ./sh/glfw.rb
 
 TMPDIR="/tmp/cwalk-for-cp"
 rm -rf "$TMPDIR"
@@ -14,3 +17,5 @@ make
 sudo make install
 cd /tmp
 rm -rf "$TMPDIR"
+
+git submodule update --init --recursive
