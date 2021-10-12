@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
+	"regexp"
+	"strings"
 
 	"github.com/btcsuite/btcutil/base58"
 	"github.com/invrainbow/codeperfect/gostuff/db"
@@ -22,37 +25,50 @@ func generateKey(nbytes int) string {
 	return base58.Encode(b)
 }
 
+func filterAlnum(s string) string {
+	reg, err := regexp.Compile("[^a-zA-Z0-9]+")
+	if err != nil {
+		log.Fatal(err)
+	}
+	return reg.ReplaceAllString(s, "")
+}
+
 func main() {
 	if len(os.Args) <= 1 {
 		panic("expected email")
 	}
 
-	email := os.Args[1]
-	licenseKey := generateKey(32)
-	downloadCode := generateKey(16)
+	for _, email := range os.Args[1:] {
+		licenseKey := generateKey(32)
+		downloadCode := generateKey(16)
 
-	license := &helper.License{
-		Email:      email,
-		LicenseKey: licenseKey,
-	}
-	data, err := json.MarshalIndent(license, "", "  ")
-	if err != nil {
-		panic(err)
-	}
-	if err := ioutil.WriteFile(".cplicense", data, 0644); err != nil {
-		panic(err)
-	}
+		license := &helper.License{
+			Email:      email,
+			LicenseKey: licenseKey,
+		}
+		data, err := json.MarshalIndent(license, "", "  ")
+		if err != nil {
+			panic(err)
+		}
 
-	user := &models.User{
-		Email:        email,
-		LicenseKey:   licenseKey,
-		DownloadCode: downloadCode,
-		IsActive:     true,
-	}
-	db.Db.Create(&user)
+		filename := fmt.Sprintf("license_%s.json", filterAlnum(strings.Split(email, "@")[0]))
+		if err := ioutil.WriteFile(filename, data, 0644); err != nil {
+			panic(err)
+		}
 
-	fmt.Printf("ID = %d\n", user.ID)
-	fmt.Printf("License key: %s\n", user.LicenseKey)
-	fmt.Printf("Download code: %s\n", user.DownloadCode)
-	fmt.Printf("Download link: https://codeperfect95.com/download?code=%s\n", user.DownloadCode)
+		user := &models.User{
+			Email:        email,
+			LicenseKey:   licenseKey,
+			DownloadCode: downloadCode,
+			IsActive:     true,
+		}
+		db.Db.Create(&user)
+
+		fmt.Printf("%s\n", email)
+		fmt.Printf("ID = %d\n", user.ID)
+		fmt.Printf("License key: %s\n", user.LicenseKey)
+		fmt.Printf("Download code: %s\n", user.DownloadCode)
+		fmt.Printf("Download link: https://codeperfect95.com/download?code=%s\n", user.DownloadCode)
+		fmt.Printf("\n")
+	}
 }

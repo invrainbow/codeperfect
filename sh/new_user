@@ -1,4 +1,4 @@
 #!/bin/bash
 
 cd gostuff
-go run github.com/invrainbow/codeperfect/gostuff/cmd/licensekey "$1"
+go run ./cmd/licensekey "$@"

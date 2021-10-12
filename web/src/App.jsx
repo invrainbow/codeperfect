@@ -412,8 +412,8 @@ function Pricing() {
           </PricingBox>
           <PricingBox
             title="Premium"
-            monthly={20}
-            yearly={180}
+            monthly="20+"
+            yearly="180+"
             unit={"user"}
             isYearly={yearly}
             cta="Contact sales"
