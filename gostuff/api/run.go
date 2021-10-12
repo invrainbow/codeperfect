@@ -122,6 +122,13 @@ func Run() {
 			return
 		}
 
+		LogEvent(&AmplitudeEvent{
+			UserID:          fmt.Sprint(user.ID),
+			EventType:       "user_auth",
+			EventProperties: req,
+			UserProperties:  user,
+		})
+
 		if req.CurrentVersion > versions.CurrentVersion {
 			sendError(c, models.ErrorInvalidVersion)
 			return
@@ -139,7 +146,7 @@ func Run() {
 			}
 
 			resp.DownloadURL = presignedUrl
-			resp.DownloadHash = versions.VersionHashes[versions.CurrentVersion]
+			resp.DownloadHash = versions.VersionUpdateHashes[req.OS][versions.CurrentVersion]
 		}
 
 		c.JSON(http.StatusOK, resp)
