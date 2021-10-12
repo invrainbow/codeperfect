@@ -80,11 +80,13 @@ func replaceBinFolder(basedir string) error {
 func Run() error {
 	exepath, err := os.Executable()
 	if err != nil {
+        fmt.Printf("error: %v\n", err)
 		return err
 	}
 
 	exedir := path.Dir(exepath)
 	if err := replaceBinFolder(exedir); err != nil {
+        fmt.Printf("error: %v\n", err)
 		return err
 	}
 
@@ -92,6 +94,7 @@ func Run() error {
 	cmd.Env = os.Environ()
 	cmd.Dir = path.Join(exedir, "bin")
 	if err := cmd.Start(); err != nil {
+        fmt.Printf("error: %v\n", err)
 		return err
 	}
 

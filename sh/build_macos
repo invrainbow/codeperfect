@@ -7,16 +7,23 @@ sh/make
 sudo cp "$(grealpath $(which nvim))" build/bin/nvim
 sudo chown $(whoami) build/bin/nvim
 
-if [[ $FIX_DYLIB == "1" ]]; then
+if [[ $FIX_BINARIES == "1" ]]; then
     pushd build/bin
+    {
+        # fix nvim
+        rm -rf ./nvimlibs
+        dylibbundler -od -b -x ./nvim -p @executable_path/nvimlibs -d ./nvimlibs
 
-    # fix nvim
-    rm -rf ./nvimlibs
-    dylibbundler -od -b -x ./nvim -p @executable_path/nvimlibs -d ./nvimlibs
+        # fix ide
+        rm -rf ./libs
+        dylibbundler -od -b -x ./ide -p @executable_path/libs -d ./libs
 
-    # fix ide
-    rm -rf ./libs
-    dylibbundler -od -b -x ./ide -p @executable_path/libs -d ./libs
-
+        # codesigning bullshit, i don't know what this even does
+        # who the fuck cares tho, programming is stupid
+        codesign -s - -f -vvvvvv ./libs/*
+        codesign -s - -f -vvvvvv ./ide
+    }
     popd
+
+    codesign -s - -f -vvvvvv ./build/launcher
 fi
