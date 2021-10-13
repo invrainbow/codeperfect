@@ -265,9 +265,7 @@ int main(int argc, char **argv) {
     GHEnableDebugMode();
 #endif
 
-#ifndef DEBUG_MOE
     GHAuthAndUpdate(); // kicks off auth/autoupdate shit in the background
-#endif
 
     world.window = window;
     glfwSetWindowTitle(world.window, our_sprintf("%s - %s", WINDOW_TITLE, world.current_path));
@@ -1180,6 +1178,7 @@ int main(int argc, char **argv) {
         {
             GH_Message msg; ptr0(&msg);
             if (GHGetMessage(&msg)) {
+                print("GHGetMessage returned: %s", msg.text);
                 tell_user(msg.text, msg.title);
                 if (msg.is_panic)
                     return EXIT_FAILURE;
