@@ -122,8 +122,7 @@ func Run() {
 			return
 		}
 
-		LogEvent(&AmplitudeEvent{
-			UserID:          fmt.Sprint(user.ID),
+		LogEvent(int(user.ID), &AmplitudeEvent{
 			EventType:       "user_auth",
 			EventProperties: req,
 			UserProperties:  user,

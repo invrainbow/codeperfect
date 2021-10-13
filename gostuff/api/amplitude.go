@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -28,8 +29,9 @@ type AmplitudeRequest struct {
 	Events []interface{} `json:"events"`
 }
 
-func LogEvent(event *AmplitudeEvent) error {
+func LogEvent(userID int, event *AmplitudeEvent) error {
 	event.Time = time.Now().UnixMilli()
+	event.UserID = fmt.Sprintf("%05d", userID)
 	err := ActuallyLogEvent(event)
 	if err != nil {
 		log.Println(err)
@@ -54,11 +56,12 @@ func ActuallyLogEvent(event *AmplitudeEvent) error {
 	}
 	defer resp.Body.Close()
 
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+
 	if resp.StatusCode != http.StatusOK {
-		body, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return err
-		}
 		return errors.New(string(body))
 	}
 
