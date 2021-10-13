@@ -23,14 +23,7 @@ pushd "$TMPDIR/build"
 popd
 rm -rf "$TMPDIR"
 
-# install macdylibbundler
-TMPDIR="/tmp/macdylibbundler-for-cp"
-rm -rf "$TMPDIR"
-git clone https://github.com/auriamg/macdylibbundler "$TMPDIR"
-pushd "$TMPDIR"
-{
-    make
-    sudo make install
-}
-popd
-rm -rf "$TMPDIR"
+wget https://github.com/neovim/neovim/releases/download/v0.5.1/nvim-macos.tar.gz
+tar xvzf nvim-macos.tar.gz
+mv nvim-osx64 nvim-archive
+rm nvim-macos.tar.gz

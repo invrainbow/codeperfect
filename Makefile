@@ -12,8 +12,10 @@ else
 	CFLAGS += -DDEBUG_MODE -g -O0
 endif
 
-LDFLAGS = -ldl -lcwalk -lpcre -framework OpenGL -framework Cocoa -L/opt/homebrew/lib
-LDFLAGS += `pkg-config --libs glfw3 glew`
+LDFLAGS = -ldl -lcwalk -framework OpenGL -framework Cocoa -framework IOKit -L/opt/homebrew/lib
+LDFLAGS += $(shell pkg-config --variable=libdir glfw3)/libglfw3.a
+LDFLAGS += $(shell pkg-config --variable=libdir libpcre)/libpcre.a
+LDFLAGS += $(shell pkg-config --variable=libdir glew)/libGLEW.a
 
 SRC_FILES := $(filter-out tests.cpp, $(wildcard *.cpp))
 OBJ_FILES = $(patsubst %.cpp,obj/%.o,$(SRC_FILES))

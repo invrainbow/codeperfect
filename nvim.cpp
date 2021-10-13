@@ -1375,7 +1375,7 @@ void Nvim::start_running() {
 #if OS_WIN
     nvim_proc.run("nvim.exe -u init.vim -i NONE -N --embed --headless");
 #elif OS_MAC
-    nvim_proc.run("./nvim -u init.vim -i NONE -N --embed --headless");
+    nvim_proc.run("./nvim/bin/nvim -u init.vim -i NONE -N --embed --headless");
 #else
 #error "only windows and mac supported right now"
 #endif

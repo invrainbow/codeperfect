@@ -7,7 +7,7 @@ VERSION="$(grep CurrentVersion gostuff/versions/versions.go | rev | cut -d' ' -f
 rm -rf build/bin obj
 
 # build again
-RELEASE=1 FIX_BINARIES=1 sh/build_macos
+RELEASE=1 sh/build_macos
 
 OS_PREFIX=darwin
 if [[ "$(sysctl -n machdep.cpu.brand_string)" = "Apple M1" ]]; then
@@ -21,15 +21,13 @@ package_app() {
     cp -R ../build/bin/ "${APPNAME}/Contents/MacOS/bin/"
     cp ../build/launcher "${APPNAME}/Contents/MacOS/CodePerfect"
     zip -r app.zip CodePerfect.app/
-    sha256sum app.zip
     if [[ -z "$SKIP_UPLOAD" ]]; then
         aws s3 cp app.zip "s3://codeperfect95/app/${OS_PREFIX}_v${VERSION}.zip"
     fi
 }
 
 package_update() {
-    zip -j -r update.zip ../build/bin/ 
-    sha256sum update.zip
+    zip -r update.zip ../build/bin/ 
     if [[ -z "$SKIP_UPLOAD" ]]; then
         aws s3 cp update.zip "s3://codeperfect95/update/${OS_PREFIX}_v${VERSION}.zip"
     fi
@@ -42,3 +40,5 @@ cd scratch
 package_app
 package_update
 
+sha256sum app.zip
+sha256sum update.zip
