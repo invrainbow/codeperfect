@@ -16,11 +16,11 @@ var AmplitudeAPIKey = os.Getenv("AMPLITUDE_API_KEY")
 // add more as i need them i guess
 // https://developers.amplitude.com/docs/http-api-v2#keys-for-the-event-argument
 type AmplitudeEvent struct {
-	UserID          string
-	EventType       string
-	Time            int64
-	EventProperties interface{}
-	UserProperties  interface{}
+	UserID          string      `json:"user_id,omitempty"`
+	EventType       string      `json:"event_type,omitempty"`
+	Time            int64       `json:"time,omitempty"`
+	EventProperties interface{} `json:"event_properties,omitempty"`
+	UserProperties  interface{} `json:"event_properties,omitempty"`
 }
 
 type AmplitudeRequest struct {
