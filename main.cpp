@@ -265,7 +265,9 @@ int main(int argc, char **argv) {
     GHEnableDebugMode();
 #endif
 
-    // GHAuthAndUpdate(); // kicks off auth/autoupdate shit in the background
+#ifndef DEBUG_MOE
+    GHAuthAndUpdate(); // kicks off auth/autoupdate shit in the background
+#endif
 
     world.window = window;
     glfwSetWindowTitle(world.window, our_sprintf("%s - %s", WINDOW_TITLE, world.current_path));
