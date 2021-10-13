@@ -26,7 +26,6 @@ class Glfw < Formula
     args = std_cmake_args + %w[
       -DGLFW_USE_CHDIR=TRUE
       -DGLFW_USE_MENUBAR=TRUE
-      -DBUILD_SHARED_LIBS=TRUE
     ]
 
     system "cmake", *args, "."
