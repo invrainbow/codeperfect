@@ -6,4 +6,5 @@ sh/make
 
 if [[ ! -d ./build/bin/nvim/ ]]; then
     cp -R nvim-archive/ ./build/bin/nvim/
+    rm -rf ./build/bin/nvim/share
 fi
