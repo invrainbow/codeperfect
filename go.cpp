@@ -1321,6 +1321,7 @@ Parsed_File *Go_Indexer::parse_file(ccstr filepath, bool use_latest) {
     if (use_latest) {
         auto editor = world.find_editor_by_filepath(filepath);
         if (editor == NULL) return NULL;
+        if (editor->buf->tree == NULL) return NULL;
 
         auto it = alloc_object(Parser_It);
         it->init(editor->buf);

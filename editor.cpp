@@ -1527,6 +1527,7 @@ bool Editor::cur_is_inside_comment_or_string() {
 // basically the rule is, if autocomplete comes up empty ON FIRST OPEN, then keep it closed
 
 void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typing_ident, char typed_ident_char) {
+    if (!is_go_file) return;
 
     if (cur_is_inside_comment_or_string()) {
         return;
@@ -1825,6 +1826,8 @@ void Type_Renderer::write_type(Gotype *t, bool parameter_hint_root) {
 }
 
 void Editor::trigger_parameter_hint() {
+    if (!is_go_file) return;
+
     ptr0(&parameter_hint);
 
     {

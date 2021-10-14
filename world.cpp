@@ -880,6 +880,7 @@ void goto_jump_to_definition_result(Jump_To_Definition_Result *result) {
 void handle_goto_definition() {
     auto editor = world.get_current_editor();
     if (editor == NULL) return;
+    if (!editor->is_go_file) return;
 
     SCOPED_MEM(&world.indexer.ui_mem);
     defer { world.indexer.ui_mem.reset(); };
