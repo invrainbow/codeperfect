@@ -100,6 +100,12 @@ func Run() {
 			return
 		}
 
+		LogEvent(int(user.ID), &AmplitudeEvent{
+			EventType:       "user_download",
+			EventProperties: req,
+			UserProperties:  user,
+		})
+
 		presignedUrl := MustGetDownloadLink(c, req.OS)
 		if presignedUrl == "" {
 			return
