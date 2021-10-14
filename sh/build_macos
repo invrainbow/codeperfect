@@ -6,5 +6,9 @@ sh/make
 
 if [[ ! -d ./build/bin/nvim/ ]]; then
     cp -R nvim-archive/ ./build/bin/nvim/
+
+    # wipe out the share folder but keep clipboard handler
     rm -rf ./build/bin/nvim/share
+    mkdir -p ./build/bin/nvim/share/nvim/runtime/autoload/provider
+    cp nvim-archive/share/nvim/runtime/autoload/provider/clipboard.vim ./build/bin/nvim/share/nvim/runtime/autoload/provider
 fi

@@ -1321,6 +1321,7 @@ Parsed_File *Go_Indexer::parse_file(ccstr filepath, bool use_latest) {
     if (use_latest) {
         auto editor = world.find_editor_by_filepath(filepath);
         if (editor == NULL) return NULL;
+        if (editor->buf->tree == NULL) return NULL;
 
         auto it = alloc_object(Parser_It);
         it->init(editor->buf);
@@ -2097,7 +2098,11 @@ List<Goresult> *Go_Indexer::get_dot_completions(Ast_Node *operand_node, bool *wa
         list_fields_and_methods(res, rres, tmp);
 
         auto results = alloc_list<Goresult>();
-        For (*tmp) {
+
+        // Look backwards, so that overridden methods are found first.
+        // @Robustness: Eventually list_fields_and_methods() should do this correctly.
+        for (int i = tmp->len - 1; i >= 0; i--) {
+            auto &it = tmp->at(i);
             if (it.decl->name == NULL) continue;
 
             if (!streq(it.ctx->import_path, ctx->import_path))
@@ -2390,8 +2395,9 @@ ccstr Go_Indexer::find_best_import(ccstr package_name, List<ccstr> *identifiers)
             score.in_workspace = true;
 
         auto package_path = get_package_path(it->import_path);
-        if (path_contains_in_subtree(package_path, goroot))
-            score.in_goroot = true;
+        if (package_path != NULL)
+            if (path_contains_in_subtree(package_path, goroot))
+                score.in_goroot = true;
     };
 
     auto compare_scores = [&](Score *a, Score *b) {
@@ -3106,11 +3112,134 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                 return res;
             };
 
+            String_Set existing_imports; existing_imports.init();
+
+            auto gofile = find_gofile_from_ctx(&ctx);
+            if (gofile != NULL) {
+                SCOPED_FRAME_WITH_MEM(&scoped_table_mem);
+                Scoped_Table<Godecl*> table;
+                {
+                    SCOPED_MEM(&scoped_table_mem);
+                    table.init();
+                }
+                defer { table.cleanup(); };
+
+                For (*gofile->scope_ops) {
+                    if (it.pos > pos) break;
+
+                    switch (it.type) {
+                    case GSOP_OPEN_SCOPE:
+                        table.push_scope();
+                        break;
+                    case GSOP_CLOSE_SCOPE:
+                        table.pop_scope();
+                        break;
+                    case GSOP_DECL:
+                        table.set(it.decl->name, it.decl->copy());
+                        break;
+                    }
+                }
+
+                t.log("iterate over scope ops");
+
+                auto entries = table.entries();
+                For (*entries) {
+                    auto r = add_declaration_result(it->name);
+                    if (r != NULL) {
+                        r->declaration_godecl = it->value;
+                        r->declaration_import_path = ctx.import_path;
+                        r->declaration_filename = ctx.filename;
+
+                        auto res = evaluate_type(it->value->gotype, &ctx);
+                        if (res != NULL)
+                            r->declaration_evaluated_gotype = res->gotype;
+                    }
+                }
+
+                t.log("iterate over table entries");
+
+                For (*gofile->imports) {
+                    auto package_name = get_import_package_name(&it);
+                    if (package_name == NULL) continue;
+
+                    auto res = ac_results->append();
+                    res->name = package_name;
+                    res->type = ACR_IMPORT;
+                    res->import_path = it.import_path;
+
+                    existing_imports.add(it.import_path);
+                }
+
+                t.log("add imports");
+
+                Parser_It it = *pf->it;
+                it.set_pos(keyword_start);
+
+                bool has_three_letters = true;
+                char first_three_letters[3];
+
+                for (int i = 0; i < 3; i++) {
+                    if (it.get_pos() == pos) {
+                        has_three_letters = false;
+                        break;
+                    }
+                    first_three_letters[i] = it.next();
+                }
+
+                if (has_three_letters) {
+                    For (*gofile->imports) {
+                        auto pkgname = get_import_package_name(&it);
+                        if (pkgname == NULL) continue;
+
+                        auto import_path = it.import_path;
+                        if (import_path == NULL) continue;
+
+                        auto fuzzy_matches_first_three_letters = [&]() -> bool {
+                            int i = 0;
+                            for (int j = 0, len = strlen(import_path); j < len; j++)
+                                if (import_path[j] == first_three_letters[i])
+                                    if (++i == 3)
+                                        return true;
+                            return false;
+                        };
+
+                        if (!fuzzy_matches_first_three_letters()) continue;
+
+                        auto results = list_package_decls(it.import_path, LISTDECLS_EXCLUDE_METHODS);
+                        if (results != NULL) {
+                            int count = 0;
+                            For (*results) {
+                                if (it.decl->name == NULL) continue;
+                                if (is_name_private(it.decl->name)) continue;
+
+                                if (count++ > 500) break;
+
+                                auto result = add_declaration_result(our_sprintf("%s.%s", pkgname, it.decl->name));
+                                if (result != NULL) {
+                                    result->declaration_godecl = it.decl;
+                                    result->declaration_import_path = it.ctx->import_path;
+                                    result->declaration_filename = it.ctx->filename;
+
+                                    // wait, is this guaranteed to just always be declaration_import_path
+                                    result->declaration_package = import_path;
+
+                                    auto res = evaluate_type(it.decl->gotype, it.ctx);
+                                    if (res != NULL)
+                                        result->declaration_evaluated_gotype = res->gotype;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             // workspace or are immediate deps?
             For (*index.packages) {
                 if (it.import_path == NULL) continue;
+                if (existing_imports.has(it.import_path)) continue;
                 if (it.status != GPS_READY) continue;
                 if (it.package_name == NULL) continue;
+                if (streq(it.import_path, ctx.import_path)) continue;
 
                 if (!path_contains_in_subtree(index.current_import_path, it.import_path)) {
                     auto parts = make_path(it.import_path)->parts;
@@ -3134,121 +3263,6 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
 
             t.log("iterate over packages");
 
-            SCOPED_FRAME_WITH_MEM(&scoped_table_mem);
-            Scoped_Table<Godecl*> table;
-            {
-                SCOPED_MEM(&scoped_table_mem);
-                table.init();
-            }
-            defer { table.cleanup(); };
-
-            iterate_over_scope_ops(pf->root, [&](Go_Scope_Op *it) -> bool {
-                if (it->pos > pos) return false;
-
-                switch (it->type) {
-                case GSOP_OPEN_SCOPE:
-                    table.push_scope();
-                    break;
-                case GSOP_CLOSE_SCOPE:
-                    table.pop_scope();
-                    break;
-                case GSOP_DECL:
-                    table.set(it->decl->name, it->decl->copy());
-                    break;
-                }
-                return true;
-            }, ctx.filename);
-
-            t.log("iterate over scope ops");
-
-            auto entries = table.entries();
-            For (*entries) {
-                auto r = add_declaration_result(it->name);
-                if (r != NULL) {
-                    r->declaration_godecl = it->value;
-                    r->declaration_import_path = ctx.import_path;
-                    r->declaration_filename = ctx.filename;
-
-                    auto res = evaluate_type(it->value->gotype, &ctx);
-                    if (res != NULL)
-                        r->declaration_evaluated_gotype = res->gotype;
-                }
-            }
-
-            t.log("iterate over table entries");
-
-            // probably should write like a "get current gofile" function
-            Go_File *gofile = NULL;
-
-            do {
-                auto pkg = find_up_to_date_package(ctx.import_path);
-                if (pkg == NULL) break;
-
-                auto check = [&](auto it) { return streq(it->filename, ctx.filename); };
-                gofile = pkg->files->find(check);
-                if (gofile == NULL) break;
-
-                Parser_It it = *pf->it;
-                it.set_pos(keyword_start);
-
-                bool has_three_letters = true;
-                char first_three_letters[3];
-
-                for (int i = 0; i < 3; i++) {
-                    if (it.get_pos() == pos) {
-                        has_three_letters = false;
-                        break;
-                    }
-                    first_three_letters[i] = it.next();
-                }
-
-                if (!has_three_letters) break;
-
-                For (*gofile->imports) {
-                    auto pkgname = get_import_package_name(&it);
-                    if (pkgname == NULL) continue;
-
-                    auto import_path = it.import_path;
-
-                    if (import_path == NULL) continue;
-
-                    auto fuzzy_matches_first_three_letters = [&]() -> bool {
-                        int i = 0;
-                        for (int j = 0, len = strlen(import_path); j < len; j++)
-                            if (import_path[j] == first_three_letters[i])
-                                if (++i == 3)
-                                    return true;
-                        return false;
-                    };
-
-                    if (!fuzzy_matches_first_three_letters()) continue;
-
-                    auto results = list_package_decls(it.import_path, LISTDECLS_EXCLUDE_METHODS);
-                    if (results != NULL) {
-                        int count = 0;
-                        For (*results) {
-                            if (it.decl->name == NULL) continue;
-                            if (is_name_private(it.decl->name)) continue;
-
-                            if (count++ > 500) break;
-
-                            auto result = add_declaration_result(our_sprintf("%s.%s", pkgname, it.decl->name));
-                            if (result != NULL) {
-                                result->declaration_godecl = it.decl;
-                                result->declaration_import_path = it.ctx->import_path;
-                                result->declaration_filename = it.ctx->filename;
-
-                                // wait, is this guaranteed to just always be declaration_import_path
-                                result->declaration_package = import_path;
-
-                                auto res = evaluate_type(it.decl->gotype, it.ctx);
-                                if (res != NULL)
-                                    result->declaration_evaluated_gotype = res->gotype;
-                            }
-                        }
-                    }
-                }
-            } while (0);
 
             t.log("crazy shit");
 
@@ -3689,6 +3703,14 @@ ccstr Go_Indexer::get_filepath_from_ctx(Go_Ctx *ctx) {
     auto dir = get_package_path(ctx->import_path);
     if (dir == NULL) return NULL;
     return path_join(dir, ctx->filename);
+}
+
+Go_File *Go_Indexer::find_gofile_from_ctx(Go_Ctx *ctx) {
+    auto pkg = find_up_to_date_package(ctx->import_path);
+    if (pkg == NULL) return NULL;
+
+    auto check = [&](auto it) { return streq(it->filename, ctx->filename); };
+    return pkg->files->find(check);
 }
 
 ccstr Go_Indexer::filepath_to_import_path(ccstr path_str) {

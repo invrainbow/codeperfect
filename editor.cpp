@@ -1363,6 +1363,7 @@ bool Editor::trigger_escape(cur2 go_here_after) {
 
             nv.end_message();
 
+            /*
             // move cursor
             {
                 auto c = cur;
@@ -1372,6 +1373,7 @@ bool Editor::trigger_escape(cur2 go_here_after) {
                 }
                 raw_move_cursor(c);
             }
+            */
 
             // reset other_changes and mem
             nvim_insert.other_changes.len = 0;
@@ -1525,6 +1527,7 @@ bool Editor::cur_is_inside_comment_or_string() {
 // basically the rule is, if autocomplete comes up empty ON FIRST OPEN, then keep it closed
 
 void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typing_ident, char typed_ident_char) {
+    if (!is_go_file) return;
 
     if (cur_is_inside_comment_or_string()) {
         return;
@@ -1823,6 +1826,8 @@ void Type_Renderer::write_type(Gotype *t, bool parameter_hint_root) {
 }
 
 void Editor::trigger_parameter_hint() {
+    if (!is_go_file) return;
+
     ptr0(&parameter_hint);
 
     {
@@ -2438,4 +2443,19 @@ void Editor::handle_save(bool about_to_close) {
             });
         }
     }
+}
+
+bool Editor::ask_user_about_unsaved_changes() {
+    if (!buf->dirty) return true;
+
+    auto title = "Your changes will be lost if you don't.";
+    auto filename  = is_untitled ? "(untitled)" : our_basename(filepath);
+    auto msg = our_sprintf("Do you want to save your changes to %s?", filename);
+
+    auto result = ask_user_yes_no_cancel(title, msg, "Save", "Don't Save");
+    if (result == ASKUSER_CANCEL) return false;
+
+    if (result == ASKUSER_YES)
+        handle_save(true);
+    return true;
 }
