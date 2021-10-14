@@ -312,8 +312,8 @@ func GHGetGomodcache() *C.char { return C.CString(config.Gomodcache) }
 func GHGetMessage(p unsafe.Pointer) bool {
 	select {
 	case msg := <-MessageChan:
-        log.Println("msg received")
-        log.Println(msg)
+		log.Println("msg received")
+		log.Println(msg)
 		out := (*C.GH_Message)(p)
 		out.text = C.CString(msg.Text)
 		out.title = C.CString(msg.Title)

@@ -3111,6 +3111,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                 if (it.import_path == NULL) continue;
                 if (it.status != GPS_READY) continue;
                 if (it.package_name == NULL) continue;
+                if (streq(it.import_path, ctx.import_path)) continue;
 
                 if (!path_contains_in_subtree(index.current_import_path, it.import_path)) {
                     auto parts = make_path(it.import_path)->parts;
