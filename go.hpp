@@ -1247,6 +1247,7 @@ struct Go_Indexer {
     void init_builtins(Go_Package *pkg);
     void import_decl_to_goimports(Ast_Node *decl_node, ccstr filename, List<Go_Import> *out);
     bool check_if_still_in_parameter_hint(ccstr filepath, cur2 cur, cur2 hint_start);
+    Go_File *find_gofile_from_ctx(Go_Ctx *ctx);
 };
 
 void walk_ast_node(Ast_Node *node, bool abstract_only, Walk_TS_Callback cb);
