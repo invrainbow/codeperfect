@@ -151,7 +151,7 @@ func Run() {
 			}
 
 			resp.DownloadURL = presignedUrl
-			resp.DownloadHash = versions.VersionUpdateHashes[req.OS][versions.CurrentVersion]
+			resp.DownloadHash = versions.VersionUpdateHashes[req.OS]
 		}
 
 		c.JSON(http.StatusOK, resp)
