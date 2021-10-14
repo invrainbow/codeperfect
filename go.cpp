@@ -2097,7 +2097,11 @@ List<Goresult> *Go_Indexer::get_dot_completions(Ast_Node *operand_node, bool *wa
         list_fields_and_methods(res, rres, tmp);
 
         auto results = alloc_list<Goresult>();
-        For (*tmp) {
+
+        // Look backwards, so that overridden methods are found first.
+        // @Robustness: Eventually list_fields_and_methods() should do this correctly.
+        for (int i = tmp->len - 1; i >= 0; i--) {
+            auto &it = tmp->at(i);
             if (it.decl->name == NULL) continue;
 
             if (!streq(it.ctx->import_path, ctx->import_path))
