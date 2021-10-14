@@ -3675,20 +3675,23 @@ void UI::draw_everything() {
         }
 
         if (tab_to_remove != -1) {
-            // duplicate of code in main.cpp under GLFW_KEY_W handler, refactor
-            // if we copy this a few more times
-            pane.editors[tab_to_remove].cleanup();
-            pane.editors.remove(tab_to_remove);
+            auto &editor = pane.editors[tab_to_remove];
+            if (editor.ask_user_about_unsaved_changes()) {
+                // duplicate of code in main.cpp under GLFW_KEY_W handler, refactor
+                // if we copy this a few more times
+                pane.editors[tab_to_remove].cleanup();
+                pane.editors.remove(tab_to_remove);
 
-            if (pane.editors.len == 0)
-                pane.set_current_editor(-1);
-            else if (pane.current_editor == tab_to_remove) {
-                auto new_idx = pane.current_editor;
-                if (new_idx >= pane.editors.len)
-                    new_idx = pane.editors.len - 1;
-                pane.focus_editor_by_index(new_idx);
-            } else if (pane.current_editor > tab_to_remove) {
-                pane.set_current_editor(pane.current_editor - 1);
+                if (pane.editors.len == 0)
+                    pane.set_current_editor(-1);
+                else if (pane.current_editor == tab_to_remove) {
+                    auto new_idx = pane.current_editor;
+                    if (new_idx >= pane.editors.len)
+                        new_idx = pane.editors.len - 1;
+                    pane.focus_editor_by_index(new_idx);
+                } else if (pane.current_editor > tab_to_remove) {
+                    pane.set_current_editor(pane.current_editor - 1);
+                }
             }
         }
 
@@ -3743,7 +3746,7 @@ void UI::draw_everything() {
                     if (current_pane != world.current_pane) return;
 
                     actual_cursor_positions[current_pane] = cur_pos;    // save position where cursor is drawn for later use
-                    bool is_insert_cursor = (world.nvim.mode == VI_INSERT && is_pane_selected && !world.nvim.exiting_insert_mode);
+                    bool is_insert_cursor = false; // (world.nvim.mode == VI_INSERT && is_pane_selected /* && !world.nvim.exiting_insert_mode */);
 
                     auto pos = cur_pos;
                     pos.y -= font->offset_y;
@@ -3943,8 +3946,8 @@ void UI::draw_everything() {
 
                         if (editor->cur == new_cur2((u32)curr_cp_idx, (u32)y)) {
                             draw_cursor(glyph_width);
-                            if ((world.nvim.mode != VI_INSERT || world.nvim.exiting_insert_mode) && current_pane == world.current_pane)
-                                text_color = rgba(COLOR_BLACK);
+                            // if ((world.nvim.mode != VI_INSERT/* || world.nvim.exiting_insert_mode */) && current_pane == world.current_pane)
+                            text_color = rgba(COLOR_BLACK);
                         } else if (world.nvim.mode != VI_INSERT) {
                             auto topline = editor->nvim_data.grid_topline;
                             if (topline <= y && y < topline + NVIM_DEFAULT_HEIGHT) {

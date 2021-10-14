@@ -990,17 +990,8 @@ int main(int argc, char **argv) {
                         if (world.current_pane >= world.panes.len)
                             world.activate_pane_by_index(world.panes.len - 1);
                     } else {
-                        if (editor->buf->dirty) {
-                            auto title = "Your changes will be lost if you don't.";
-                            auto filename  = editor->is_untitled ? "(untitled)" : our_basename(editor->filepath);
-                            auto msg = our_sprintf("Do you want to save your changes to %s?", filename);
-
-                            auto result = ask_user_yes_no_cancel(title, msg, "Save", "Don't Save");
-                            if (result == ASKUSER_CANCEL)
-                                break;
-                            if (result == ASKUSER_YES)
-                                editor->handle_save(true);
-                        }
+                        if (!editor->ask_user_about_unsaved_changes())
+                            break;
 
                         editor->cleanup();
 
