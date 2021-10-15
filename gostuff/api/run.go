@@ -100,6 +100,8 @@ func Run() {
 			return
 		}
 
+		SendSlackMessage("%s downloaded version `%s`.", user.Email, req.OS)
+
 		LogEvent(int(user.ID), &AmplitudeEvent{
 			EventType:       "user_download",
 			EventProperties: req,
@@ -127,6 +129,8 @@ func Run() {
 		if user == nil {
 			return
 		}
+
+		SendSlackMessage("%s authed.", user.Email)
 
 		LogEvent(int(user.ID), &AmplitudeEvent{
 			EventType:       "user_auth",

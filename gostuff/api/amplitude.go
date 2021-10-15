@@ -13,6 +13,7 @@ import (
 )
 
 var AmplitudeAPIKey = os.Getenv("AMPLITUDE_API_KEY")
+var SlackWebhookURL = os.Getenv("SLACK_WEBHOOK_URL")
 
 // add more as i need them i guess
 // https://developers.amplitude.com/docs/http-api-v2#keys-for-the-event-argument
@@ -66,5 +67,36 @@ func ActuallyLogEvent(event *AmplitudeEvent) error {
 	}
 
 	// all good!
+	return nil
+}
+
+func SendSlackMessage(format string, args ...interface{}) {
+	if err := ActuallySendSlackMessage(format, args...); err != nil {
+		log.Printf("error sending slack message: %s", err)
+	}
+}
+
+func ActuallySendSlackMessage(format string, args ...interface{}) error {
+	req := map[string]string{"text": fmt.Sprintf(format, args...)}
+	data, err := json.Marshal(req)
+	if err != nil {
+		return err
+	}
+
+	resp, err := http.Post(SlackWebhookURL, "application/json", bytes.NewReader(data))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return errors.New(string(body))
+	}
+
 	return nil
 }
