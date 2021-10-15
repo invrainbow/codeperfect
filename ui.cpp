@@ -3894,19 +3894,30 @@ void UI::draw_everything() {
                     gc.feed(line->at(cp_idx)); // feed first character for GB1
 
                     // jump {view.x} clusters
-                    for (int i = 0; i < view.x && cp_idx < line->len;) {
-                        if (line->at(cp_idx) == '\t') {
-                            cp_idx++;
-                            i += options.tabsize - (i % options.tabsize);
-                        } else {
-                            cp_idx++;
-                            while (cp_idx < line->len && !gc.feed(line->at(cp_idx)))
+                    int line_start = 0;
+                    {
+                        int i = 0;
+                        for (; i < view.x && cp_idx < line->len;) {
+                            if (line->at(cp_idx) == '\t') {
+                                i += options.tabsize - (i % options.tabsize);
                                 cp_idx++;
-                            i++;
+                            } else {
+                                auto width = our_wcwidth(line->at(cp_idx));
+                                if (width == -1) width = 1;
+                                i += width;
+
+                                cp_idx++;
+                                while (cp_idx < line->len && !gc.feed(line->at(cp_idx)))
+                                    cp_idx++;
+                            }
                         }
+                        line_start = i;
                     }
 
-                    for (u32 x = view.x, vx = view.x; vx < view.x + view.w; x++) {
+                    if (line_start > view.x)
+                        cur_pos.x += (line_start - view.x) * font->width;
+
+                    for (u32 x = line_start, vx = line_start; vx < view.x + view.w; x++) {
                         if (cp_idx >= line->len) break;
 
                         auto curr_cp_idx = cp_idx;
@@ -3931,7 +3942,7 @@ void UI::draw_everything() {
                         vec4f text_color = rgba(COLOR_JBLOW_FG);
 
                         if (next_hl != -1) {
-                            auto curr = new_cur2(x, y);
+                            auto curr = new_cur2((u32)curr_cp_idx, (u32)y);
 
                             while (next_hl != -1 && curr >= highlights[next_hl].end)
                                 if (++next_hl >= highlights.len)
@@ -3992,20 +4003,17 @@ void UI::draw_everything() {
 
                         uchar uch = curr_cp;
                         if (uch == '\t') {
-                            auto chars = options.tabsize - (vx % options.tabsize);
-                            cur_pos.x += font->width * chars;
-                            vx += chars;
+                            cur_pos.x += font->width * glyph_width;
                         } else if (grapheme_cpsize > 1 || uch > 0x7f) {
                             auto pos = cur_pos;
                             pos.x += (font->width * glyph_width) / 2 - (font->width / 2);
                             draw_char(&pos, 0xfffd, text_color);
 
                             cur_pos.x += font->width * glyph_width;
-                            vx += glyph_width;
                         } else {
                             draw_char(&cur_pos, uch, text_color);
-                            vx++;
                         }
+                        vx += glyph_width;
                     }
 
                     if (line->len == 0) {
