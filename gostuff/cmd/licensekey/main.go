@@ -42,6 +42,6 @@ func main() {
 			IsActive:     true,
 		}
 		db.Db.Create(&user)
-		fmt.Printf("%s: https://codeperfect95.com/download?code=%s\n", email, user.DownloadCode)
+		fmt.Printf("%s: https://codeperfect95.com/install?code=%s\n", email, user.DownloadCode)
 	}
 }

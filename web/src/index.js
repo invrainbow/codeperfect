@@ -286,7 +286,7 @@ function AutoInstall() {
 
         <Link
           className="font-semibold no-underline"
-          to={`/download/manual?code=${code}`}
+          to={`/install/manual?code=${code}`}
         >
           Manual install <Icon icon={HiArrowNarrowRight} />
         </Link>
@@ -462,7 +462,7 @@ function ManualInstall() {
 }
 
 function Download() {
-  return <Redirect to={`/download/automatic?code=${getCode()}`} />;
+  return <Redirect to={`/install?code=${getCode()}`} />;
 }
 
 function Pricing() {
@@ -672,10 +672,10 @@ ReactDOM.render(
             <Route path="/download" exact>
               <Download />
             </Route>
-            <Route path="/download/automatic">
+            <Route path="/install" exact>
               <AutoInstall />
             </Route>
-            <Route path="/download/manual">
+            <Route path="/install/manual" exact>
               <ManualInstall />
             </Route>
             <Route path="/pricing">
@@ -689,6 +689,9 @@ ReactDOM.render(
             </Route>
             <Route exact path="/">
               <Home />
+            </Route>
+            <Route>
+              <Redirect to="/" />
             </Route>
           </Switch>
         </div>
