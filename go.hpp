@@ -1147,7 +1147,7 @@ struct Go_Message {
 
 struct Go_Indexer {
     ccstr goroot;
-    ccstr gopath;
+    // ccstr gopath;
     ccstr gomodcache;
 
     Pool mem;        // mem that exists for lifetime of Go_Indexer
@@ -1360,7 +1360,7 @@ extern GoInt (*GHGetVersion)();
 extern char* (*GHGetGoBinaryPath)();
 extern char* (*GHGetDelvePath)();
 extern char* (*GHGetGoroot)();
-extern char* (*GHGetGopath)();
+// extern char* (*GHGetGopath)();
 extern char* (*GHGetGomodcache)();
 extern GoBool (*GHGetMessage)(void* p);
 extern void (*GHFreeMessage)(void* p);

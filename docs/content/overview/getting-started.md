@@ -60,17 +60,16 @@ Currently we just need to know where Go is installed. Create the file
 
 Set `go_binary_path` to the path to your `go` binary, e.g. `/usr/local/bin/go`.
 
-This might be all you need for now. Sometimes, CodePerfect is unable to detect GOPATH, GOROOT, and GOMODCACHE. If that happens you'll need to configure them manually. Add the following fields:
+This might be all you need for now. Sometimes, CodePerfect is unable to detect GOROOT and GOMODCACHE. If that happens you'll need to configure them manually. Add the following fields:
 
 ```
 {
-  "gopath": "...",
   "goroot": "...",
   "gomodcache": "..."
 }
 ```
 
-Replace these with the values of `go env GOPATH`, `go env GOROOT`, and `go env GOMODCACHE`.
+Replace these with the values of `go env GOROOT` and `go env GOMODCACHE`.
 
 ## Opening a project
 
@@ -82,8 +81,8 @@ project folder (with a `go.mod` at its root).
 
 ## Starting a Project
 
-CodePerfect doesn't provide any sort of project creation wizard. It just knows
-how to read Go modules. To start a new project, just initialize a module the
+CodePerfect doesn't provide any kind of project creation wizard. It just knows
+how to read Go modules. To start a new project, initialize a module the
 usual way:
 
 ```

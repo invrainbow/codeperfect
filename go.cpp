@@ -3777,11 +3777,11 @@ void Go_Indexer::init() {
     };
 
     {
-        gopath = copystr(GHGetGopath());
-        if (gopath == NULL || gopath[0] == '\0')
-            gopath = get_env("GOPATH");
-        if (gopath == NULL || gopath[0] == '\0')
-            our_panic("Unable to detect GOPATH. Please add it to ~/.cpconfig.");
+        // gopath = copystr(GHGetGopath());
+        // if (gopath == NULL || gopath[0] == '\0')
+            // gopath = get_env("GOPATH");
+        // if (gopath == NULL || gopath[0] == '\0')
+            // our_panic("Unable to detect GOPATH. Please add it to ~/.cpconfig.");
 
         goroot = copystr(GHGetGoroot());
         if (goroot == NULL || goroot[0] == '\0')
@@ -3789,8 +3789,21 @@ void Go_Indexer::init() {
         if (goroot == NULL || goroot[0] == '\0')
             our_panic("Unable to detect GOROOT. Please add it to ~/.cpconfig.");
 
-        gopath = path_join(gopath, "src");
+        auto goroot_without_src = goroot;
         goroot = path_join(goroot, "src");
+
+        if (check_path(goroot) != CPR_DIRECTORY) {
+            // This is called from main thread, so we can just call tell_user().
+            tell_user(
+                our_sprintf(
+                    "We found the following GOROOT:\n\n%s\n\nIt doesn't appear to be valid. The program will keep running, but code intelligence might not fully work. Please configure \"goroot\" with a valid path in your ~/.cpconfig file.",
+                    goroot_without_src
+                ),
+                "Warning"
+            );
+        }
+
+        // gopath = path_join(gopath, "src");
 
         gomodcache = copystr(GHGetGomodcache());
         if (gomodcache == NULL || gomodcache[0] == '\0')
@@ -5920,7 +5933,7 @@ GoInt (*GHGetVersion)();
 char* (*GHGetGoBinaryPath)();
 char* (*GHGetDelvePath)();
 char* (*GHGetGoroot)();
-char* (*GHGetGopath)();
+// char* (*GHGetGopath)();
 char* (*GHGetGomodcache)();
 GoBool (*GHGetMessage)(void* p);
 void (*GHFreeMessage)(void* p);
@@ -5967,7 +5980,7 @@ void load_gohelper() {
     load(GHGetVersion);
     load(GHGetGoBinaryPath);
     load(GHGetDelvePath);
-    load(GHGetGopath);
+    // load(GHGetGopath);
     load(GHGetGoroot);
     load(GHGetGomodcache);
     load(GHGetMessage);

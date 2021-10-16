@@ -54,8 +54,6 @@ enum Main_Thread_Message_Type {
 
     MTM_PANIC,
     MTM_TELL_USER,
-
-    MTM_ADD_DEBUGGER_STDOUT_LINE,
 };
 
 struct Main_Thread_Message {

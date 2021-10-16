@@ -1094,8 +1094,8 @@ bool Debugger::start(Debug_Profile *debug_profile) {
 void Debugger::send_tell_user(ccstr text, ccstr title) {
     world.message_queue.add([&](auto msg) {
         msg->type = MTM_TELL_USER;
-        msg->tell_user_text = text;
-        msg->tell_user_title = title;
+        msg->tell_user_text = our_strcpy(text);
+        msg->tell_user_title = our_strcpy(title);
     });
 }
 
