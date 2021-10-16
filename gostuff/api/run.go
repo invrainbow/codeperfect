@@ -114,7 +114,9 @@ func Run() {
 		}
 
 		c.JSON(http.StatusOK, &models.DownloadResponse{
-			URL: presignedUrl,
+			URL:        presignedUrl,
+			Email:      user.Email,
+			LicenseKey: user.LicenseKey,
 		})
 	})
 

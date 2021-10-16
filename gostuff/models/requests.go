@@ -45,5 +45,7 @@ type DownloadRequest struct {
 }
 
 type DownloadResponse struct {
-	URL string `json:"url"`
+	URL        string `json:"url"`
+	Email      string `json:"email"`
+	LicenseKey string `json:"license_key"`
 }

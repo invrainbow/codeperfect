@@ -65,9 +65,6 @@ func main() {
 		db.Db.Create(&user)
 
 		fmt.Printf("%s\n", email)
-		fmt.Printf("ID = %d\n", user.ID)
-		fmt.Printf("License key: %s\n", user.LicenseKey)
-		fmt.Printf("Download code: %s\n", user.DownloadCode)
 		fmt.Printf("Download link: https://codeperfect95.com/download?code=%s\n", user.DownloadCode)
 		fmt.Printf("\n")
 	}

@@ -3,7 +3,7 @@ import _ from "lodash";
 import React from "react";
 import { Helmet } from "react-helmet";
 import { AiOutlineCheck, AiOutlineClose } from "react-icons/ai";
-import { FaApple, FaLinux, FaWindows } from "react-icons/fa";
+import { FaApple, FaLinux, FaWindows, FaClipboard } from "react-icons/fa";
 import {
   BrowserRouter as Router,
   Link,
@@ -12,6 +12,8 @@ import {
   useHistory,
   useLocation,
 } from "react-router-dom";
+import { CopyToClipboard } from "react-copy-to-clipboard";
+
 import gif60fps from "./60fps.gif";
 // static assets
 import ideScreenshotImage from "./ide.png";
@@ -239,101 +241,138 @@ function PricingBox({
 
 function DownloadButton({ onClick, icon, children, disabled }) {
   return (
-    <button
-      className="main-button download-button"
-      disabled={disabled}
-      onClick={onClick}
-    >
-      <span className="mr-2">
-        <Icon icon={icon} />
-      </span>
-      {children}
-    </button>
+    <div className="mb-4">
+      <button
+        className="main-button download-button"
+        disabled={disabled}
+        onClick={onClick}
+      >
+        <span className="mr-2">
+          <Icon icon={icon} />
+        </span>
+        {children}
+      </button>
+    </div>
   );
 }
+
+const licenseKeyFile = `{
+  "email": "{{ email }}",
+  "key": "{{ key }}",
+}`;
 
 function Download() {
   const history = useHistory();
   const [done, setDone] = React.useState(false);
+  const [license, setLicense] = React.useState(null);
 
   const onDownload = React.useCallback(
     async (os) => {
-      const code = new URLSearchParams(window.location.search).get("code");
-      if (!code) {
-        history.push("/");
-        return;
-      }
-
-      try {
-        const resp = await fetch(`${API_BASE}/download`, {
-          method: "POST",
-          headers: {
-            Accept: "application/json",
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ os, code }),
-        });
-        const data = await resp.json();
-        if (data.url) {
-          window.location = data.url;
-          setDone(true);
-          return;
+      const run = async function () {
+        const code = new URLSearchParams(window.location.search).get("code");
+        if (!code) {
+          return false;
         }
-      } catch (err) {}
 
-      history.push("/");
+        try {
+          const resp = await fetch(`${API_BASE}/download`, {
+            method: "POST",
+            headers: {
+              Accept: "application/json",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ os, code }),
+          });
+
+          const data = await resp.json();
+          if (data.error) {
+            alert(data.error);
+            return false;
+          }
+
+          if (!data.url) {
+            return false;
+          }
+
+          // window.open(, "_blank");
+          window.location.href = data.url;
+          setDone(true);
+          setLicense(
+            licenseKeyFile
+              .replace("{{ email }}", data.email)
+              .replace("{{ key }}", data.license_key)
+          );
+          return true;
+        } catch (err) {}
+
+        return false;
+      };
+
+      if (!(await run())) {
+        history.push("/");
+      }
     },
-    [history, setDone]
+    [history, setDone, setLicense]
   );
 
   return (
-    <div className="download my-4 py-20 bg-gray-100 rounded-md">
+    <div className="download my-4 py-20">
       <h1 className="text-center text-black font-bold text-4xl mb-8">
         Download
       </h1>
-      <div className="text-center">
-        {!done ? (
-          <div>
-            <div className="text-lg">Please select your OS.</div>
-            <div className="mt-6">
-              <DownloadButton
-                onClick={() => onDownload("darwin")}
-                icon={FaApple}
-              >
-                Mac &ndash; Intel
-              </DownloadButton>
-              <DownloadButton
-                onClick={() => onDownload("darwin_arm")}
-                icon={FaApple}
-              >
-                Mac &ndash; M1
-              </DownloadButton>
-              <DownloadButton
-                disabled
-                onClick={() => onDownload("windows")}
-                icon={FaWindows}
-              >
-                Windows
-              </DownloadButton>
-              <DownloadButton
-                disabled
-                onClick={() => onDownload("linux")}
-                icon={FaLinux}
-              >
-                Linux
-              </DownloadButton>
-            </div>
+      {!done ? (
+        <div className="text-center">
+          <div className="text-lg">Please select your OS.</div>
+          <div className="mt-6">
+            <DownloadButton onClick={() => onDownload("darwin")} icon={FaApple}>
+              Mac &ndash; Intel
+            </DownloadButton>
+            <DownloadButton
+              onClick={() => onDownload("darwin_arm")}
+              icon={FaApple}
+            >
+              Mac &ndash; M1
+            </DownloadButton>
+            <DownloadButton
+              disabled
+              onClick={() => onDownload("windows")}
+              icon={FaWindows}
+            >
+              Windows
+            </DownloadButton>
+            <DownloadButton
+              disabled
+              onClick={() => onDownload("linux")}
+              icon={FaLinux}
+            >
+              Linux
+            </DownloadButton>
           </div>
-        ) : (
-          <div>
-            Thanks! Please see{" "}
+        </div>
+      ) : (
+        <div className="max-w-2xl mx-auto">
+          Your download should be starting now! Here's your license key:
+          <pre className="text-left rounded-md p-4 bg-gray-100 my-4 text-sm border-0 relative">
+            <CopyToClipboard
+              text={license}
+              className="absolute top-2 right-2 cursor-pointer p-2 shadow bg-white hover:text-black text-gray-600 leading-none rounded text-sm"
+            >
+              <span>
+                <Icon icon={FaClipboard} />
+              </span>
+            </CopyToClipboard>
+            {license}
+          </pre>
+          <p>
+            Please copy and paste this into <code>~/.cpconfig</code>. See also
+            our{" "}
             <a href="https://docs.codeperfect95.com/overview/getting-started/">
               Getting Started
             </a>{" "}
-            in our docs to install and start using CodePerfect.
-          </div>
-        )}
-      </div>
+            guide to install and start using CodePerfect.
+          </p>
+        </div>
+      )}
     </div>
   );
 }

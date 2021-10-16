@@ -61,7 +61,7 @@
   }
 
   code {
-    @apply rounded-md px-1 py-0.5 bg-gray-600 text-gray-200;
+    @apply rounded-md px-1.5 py-1 bg-gray-100 text-gray-600;
     font-size: 82.5%;
   }
 
@@ -86,7 +86,7 @@
     background: #666;
   }
   .download-button {
-    @apply bg-gray-50 border border-gray-300 font-medium text-gray-500 shadow-md whitespace-nowrap mx-2.5 py-2 px-4 text-lg w-40;
+    @apply bg-gray-50 border border-gray-300 font-medium text-gray-500 shadow whitespace-nowrap mx-2.5 py-2 px-4 w-40;
   }
   .download-button:hover {
     @apply bg-gray-50;

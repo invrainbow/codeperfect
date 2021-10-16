@@ -7,7 +7,7 @@
             "name": "debug",
             "program": "${workspaceFolder}/build/bin/ide",
             "args": [
-                "/Users/brandon/archive"
+                "/Users/brandon/ide/gostuff"
             ],
             "cwd": "${workspaceFolder}/build/bin",
             "expressions": "native"
