@@ -127,9 +127,9 @@ download_license() {
 
 create_config() {
     echo "{" > ~/.cpconfig
-    echo "  \\"go_binary_path\\": \\"$(which go)\\"," >> ~/.cpconfig
-    echo "  \\"goroot\\": \\"$(go env GOROOT)\\"," >> ~/.cpconfig
-    echo "  \\"gomodcache\\": \\"$(go env GOMODCACHE)\\"" >> ~/.cpconfig
+    echo "  \"go_binary_path\": \"$(which go)\"," >> ~/.cpconfig
+    echo "  \"goroot\": \"$(go env GOROOT)\"," >> ~/.cpconfig
+    echo "  \"gomodcache\": \"$(go env GOMODCACHE)\"" >> ~/.cpconfig
     echo "}" >> ~/.cpconfig
 }
 
