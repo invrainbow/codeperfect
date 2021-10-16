@@ -149,6 +149,19 @@ echo ""
 echo "CodePerfect.app is available to use in your Applications folder."
 `
 
+var SendAlertsForSelf = (os.Getenv("SEND_ALERTS_FOR_SELF") == "1")
+
+func isMyself(user *models.User) bool {
+	return user.Email == "bh@codeperfect95.com" || user.Email == "brhs.again@gmail.com"
+}
+
+func SendSlackMessageForUser(user *models.User, format string, args ...interface{}) {
+	if !SendAlertsForSelf && isMyself(user) {
+		return
+	}
+	SendSlackMessage(format, args...)
+}
+
 func Run() {
 	r := gin.Default()
 	r.Use(cors.Default())
@@ -159,8 +172,7 @@ func Run() {
 			return
 		}
 
-		SendSlackMessage("%s accessed install script.", user.Email)
-
+		SendSlackMessageForUser(user, "%s accessed install script.", user.Email)
 		tpl, err := template.New("install").Parse(installScript)
 		if err != nil {
 			sendServerError(c, "unable to load install script")
@@ -193,7 +205,7 @@ func Run() {
 			return
 		}
 
-		SendSlackMessage("%s downloaded their license.", user.Email)
+		SendSlackMessageForUser(user, "%s downloaded their license.", user.Email)
 		license := &helper.License{
 			Email:      user.Email,
 			LicenseKey: user.LicenseKey,
@@ -211,7 +223,7 @@ func Run() {
 			return
 		}
 
-		SendSlackMessage("%s downloaded version `%s`.", user.Email, c.Query("os"))
+		SendSlackMessageForUser(user, "%s downloaded version `%s`.", user.Email, c.Query("os"))
 
 		LogEvent(int(user.ID), &AmplitudeEvent{
 			EventType:      "user_download",
@@ -238,7 +250,7 @@ func Run() {
 			return
 		}
 
-		SendSlackMessage("%s opened the download page.", user.Email)
+		SendSlackMessageForUser(user, "%s opened the download page.", user.Email)
 
 		LogEvent(int(user.ID), &AmplitudeEvent{
 			EventType:       "user_web_auth",
@@ -264,7 +276,7 @@ func Run() {
 			return
 		}
 
-		SendSlackMessage("%s authed.", user.Email)
+		SendSlackMessageForUser(user, "%s authed.", user.Email)
 
 		LogEvent(int(user.ID), &AmplitudeEvent{
 			EventType:       "user_auth",
