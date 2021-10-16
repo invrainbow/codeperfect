@@ -2,17 +2,13 @@ package main
 
 import (
 	"crypto/rand"
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"regexp"
-	"strings"
 
 	"github.com/btcsuite/btcutil/base58"
 	"github.com/invrainbow/codeperfect/gostuff/db"
-	"github.com/invrainbow/codeperfect/gostuff/helper"
 	"github.com/invrainbow/codeperfect/gostuff/models"
 )
 
@@ -39,33 +35,13 @@ func main() {
 	}
 
 	for _, email := range os.Args[1:] {
-		licenseKey := generateKey(32)
-		downloadCode := generateKey(16)
-
-		license := &helper.License{
-			Email:      email,
-			LicenseKey: licenseKey,
-		}
-		data, err := json.MarshalIndent(license, "", "  ")
-		if err != nil {
-			panic(err)
-		}
-
-		filename := fmt.Sprintf("license_%s.json", filterAlnum(strings.Split(email, "@")[0]))
-		if err := ioutil.WriteFile(filename, data, 0644); err != nil {
-			panic(err)
-		}
-
 		user := &models.User{
 			Email:        email,
-			LicenseKey:   licenseKey,
-			DownloadCode: downloadCode,
+			LicenseKey:   generateKey(32),
+			DownloadCode: generateKey(16),
 			IsActive:     true,
 		}
 		db.Db.Create(&user)
-
-		fmt.Printf("%s\n", email)
-		fmt.Printf("Download link: https://codeperfect95.com/download?code=%s\n", user.DownloadCode)
-		fmt.Printf("\n")
+		fmt.Printf("%s: https://codeperfect95.com/download?code=%s\n", email, user.DownloadCode)
 	}
 }
