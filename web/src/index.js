@@ -46,7 +46,7 @@ function A({ children, ...props }) {
 
 function WallOfText({ title, children }) {
   return (
-    <div className="wall-of-text p-4 my-12 md:p-8 leading-normal md:max-w-3xl md:mx-auto">
+    <div className="wall-of-text my-12 md:p-8 leading-normal md:max-w-3xl md:mx-auto">
       {title && <Title>{title}</Title>}
       {children}
     </div>
@@ -695,7 +695,7 @@ ReactDOM.render(
             </Route>
           </Switch>
         </div>
-        <div className="lg:max-w-screen-xl lg:mx-auto flex flex-col sm:flex-row justify-between">
+        <div className="pt-12 lg:max-w-screen-xl lg:mx-auto flex flex-col sm:flex-row justify-between">
           <div className="text-gray-500">
             &copy; {CURRENT_YEAR} {NAME}
           </div>
