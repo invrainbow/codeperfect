@@ -7,133 +7,67 @@ weight: 10
 toc: true
 ---
 
-## Prerequisites
+## Install
 
-CodePerfect requires Go version 1.13 or higher to be installed. You can install
-Go a number of ways: from their [website](https://golang.org/dl/), using
-[Homebrew](https://formulae.brew.sh/formula/go) on Mac, or using
-[Chocolatey](https://community.chocolatey.org/packages/golang) on Windows.
-
-CodePerfect supports any installation method, so long as it gets installed and
-CodePerfect can find the `go` binary.
-
-## Installing and running
-
-Please refer to the instructions for your OS.
-
-### Windows
-
-1. Download the .zip file provided to you. Unzip it anywhere.
-
-2. Download the .cplicense file provided to you, and place it in your
-   home directory. You can open this directory by pressing <kbd>Win+R</kbd>
-   and typing in `%USERPROFILE%`.
-
-3. Run CodePerfect.exe, located in the root of the folder
-   you unzipped in Step 1.
-
-### macOS
-
-1. Download the .zip file provided to you. Unzip it and drag CodePerfect.app into your Applications folder.
-
-2. Download the .cplicense file provided to you, and move it to `~/.cplicense`.
-
-3. Run CodePerfect.app.
-
-### Install notes
-
-On all platforms, please do not change or move any of files or directories
-inside the unzipped application. The autoupdater depends explicitly on the
-existing directory structure.
-
-## Configuration
-
-In general, CodePerfect tries to require as little configuration as possible.
-Currently we just need to know where Go is installed. Create the file
-`~/.cpconfig` with the following JSON contents:
-
-```
-{
-  "go_binary_path": "..."
-}
-```
-
-Set `go_binary_path` to the path to your `go` binary, e.g. `/usr/local/bin/go`.
-
-This might be all you need for now. Sometimes, CodePerfect is unable to detect GOROOT and GOMODCACHE. If that happens you'll need to configure them manually. Add the following fields:
-
-```
-{
-  "goroot": "...",
-  "gomodcache": "..."
-}
-```
-
-Replace these with the values of `go env GOROOT` and `go env GOMODCACHE`.
+Please follow the instructions on your download page.
 
 ## Opening a project
 
-Right now CodePerfect can only open modules. Your project must be organized as
-a single module, with `go.mod` placed at the root of your project fodler.
+CodePerfect can only open modules (GOPATH is not supported). Your
+project must be organized as a single module, with `go.mod` at the root
+of your project folder.
 
 When you open CodePerfect, it prompts you for a directory to open. Select your
-project folder (with a `go.mod` at its root).
+project folder.
 
-## Starting a Project
+## Starting a project
 
-CodePerfect doesn't provide any kind of project creation wizard. It just knows
-how to read Go modules. To start a new project, initialize a module the
-usual way:
+CodePerfect doesn't have any sort of "create project" wizard; it just reads Go
+modules. Initialize a module the usual way:
 
 ```
 $ go mod init <module_path>
 ```
 
 CodePerfect relies on `go list -mod=mod -m all` to find your dependencies. If
-you have un-downloaded dependencies, it'll interfere with the output. So if
-you're opening an existing project, make sure all dependencies have been
+you have un-downloaded dependencies, the indexer won't return complete results.
+So with existing projects, make sure dependencies have been
 downloaded:
 
 ```
-$ go mod download
+$ go mod tidy
 ```
-
-(Use `go mod tidy` if you're on an older version of Go.)
 
 ## Indexing
 
-CodePerfect automatically scans your code to understand it. When it's busy
-doing that, the bottom right will display a red INDEXING indicator:
+CodePerfect automatically scans your code to understand it. While it's doing
+that, the bottom right will display a red <span
+class="indexing">INDEXING</span> indicator. During this time, CodePerfect
+cannot provide code intelligence, and features like autocomplete will be
+disabled. When it's done indexing, the indicator will turn into a green <span
+class="index-ready">INDEX READY</span>.
 
-![](/index-indexing.png)
-
-During this time, CodePerfect cannot provide code intelligence, and features
-like autocomplete will be disabled. When it's done indexing, the indicator will
-turn into a green INDEX READY:
-
-![](/index-ready.png)
+If you click the indicator, you can see what the indexer is doing.
 
 ## Adding dependencies
 
-For the most part, the indexer just runs automagically in the background.
-However, there is one case where it needs your assistance: when you add a
-dependency.
+For the most part, the indexer runs automagically in the background.
+In one case, however, it needs your assistance: when you add a dependency.
 
-After adding a dependency &mdash; adding it to your codebase as an
-import, and downloading it with `go get` &mdash; go to <cite>Tools</cite> &gt;
-<cite>Rescan Index</cite>. This scans for new packages and parses them. (It
-doesn't rebuild the whole index.)
+After adding a dependency to your codebase as an import and installing it
+either with `go get` or `go mod tidy`, go to <cite>Tools</cite> &gt;
+<cite>Rescan Index</cite>. This scans for any new packages and parses them.
 
 ## Troubleshooting the indexer
 
 If the index is ever broken or out of sync (e.g. it's giving you incorrect
 results), there are two fixes you can apply. (And please report the bug to us!)
 
-- Close and restart the IDE. On startup, it scans to see if any packages are
-  missing or have changed, and processes them. 90% of the time, this should fix
-  your problem.
+- Go to <cite>Tools</cite> &gt; <cite>Rescan Index</cite>.  This looks for
+  missing and changed packages, and processes them. 90% of the time, this
+  should fix your problem. (This also runs when you restart CodePerfect).
 
-- If that doesn't work, you can go to <cite>Tools</cite> > <cite>Obliterate and
+- More drastically, go to <cite>Tools</cite> &gt; <cite>Obliterate and
   Recreate Index</cite>. This will completely re-index everything (the process
   that took place when you opened the folder for the first time).
 

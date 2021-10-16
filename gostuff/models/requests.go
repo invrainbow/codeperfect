@@ -27,6 +27,8 @@ type ErrorResponse struct {
 	Error string `json:"error"`
 }
 
+// ---
+
 type AuthRequest struct {
 	OS             string `json:"os"`
 	CurrentVersion int    `json:"current_version"`
@@ -39,13 +41,13 @@ type AuthResponse struct {
 	DownloadHash   string `json:"string"`
 }
 
-type DownloadRequest struct {
+// ---
+
+type AuthWebRequest struct {
 	Code string `json:"code"`
-	OS   string `json:"os"`
 }
 
-type DownloadResponse struct {
-	URL        string `json:"url"`
+type AuthWebResponse struct {
 	Email      string `json:"email"`
 	LicenseKey string `json:"license_key"`
 }

@@ -88,10 +88,10 @@ h1 {
   font-size: 200%;
 }
 h2 {
-  font-size: 130%;
+  font-size: 150%;
 }
 h3 {
-  font-size: 115%;
+  font-size: 120%;
 }
 
 h1,
@@ -260,4 +260,20 @@ cite {
   display: inline-block;
   font: 600 14px/13px $font-sans-serif;
   padding: 3px 5px;
+}
+
+.indexing, .index-ready {
+  color: white;
+  padding: 1px 3px;
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  font-size: 85%;
+  border-radius: 2px;
+}
+
+.indexing {
+  background: #880000;
+}
+
+.index-ready {
+  background: #008800;
 }

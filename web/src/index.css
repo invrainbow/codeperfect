@@ -26,6 +26,9 @@
     @apply text-gray-600 underline;
     @apply inline-block break-words;
   }
+  a.btn {
+    @apply no-underline;
+  }
 
   p,
   ul,
@@ -61,7 +64,12 @@
   }
 
   code {
-    @apply rounded-md px-1.5 py-1 bg-gray-100 text-gray-600;
+    @apply rounded-md px-1.5 py-0.5 bg-gray-100 text-gray-600;
+    margin-bottom: 1px;
+    display: inline-block;
+  }
+  code,
+  pre {
     font-size: 82.5%;
   }
 
@@ -71,22 +79,25 @@
   svg {
     display: inline-block;
   }
+
+  * {
+    outline: 0 !important;
+  }
 }
 
 @layer components {
   .main-button {
-    background: #444;
-    border: solid 1px #333;
+    background: #333;
     color: white;
     @apply rounded font-medium shadow-sm;
     @apply py-2 px-5;
     @apply disabled:opacity-50 no-underline outline-none;
   }
   .main-button:hover {
-    background: #666;
+    background: #444;
   }
   .download-button {
-    @apply bg-gray-50 border border-gray-300 font-medium text-gray-500 shadow whitespace-nowrap mx-2.5 py-2 px-4 w-40;
+    @apply bg-gray-50 border border-gray-300 font-medium text-gray-500 whitespace-nowrap text-base mr-1.5 py-1.5 px-3;
   }
   .download-button:hover {
     @apply bg-gray-50;
@@ -117,6 +128,42 @@
   @media (min-width: 640px) {
     .nice-image {
       border-color: #242424;
+    }
+  }
+
+  .lds-ring {
+    display: inline-block;
+    position: relative;
+    width: 80px;
+    height: 80px;
+  }
+  .lds-ring div {
+    box-sizing: border-box;
+    display: block;
+    position: absolute;
+    width: 64px;
+    height: 64px;
+    margin: 8px;
+    border: 8px solid #ddd;
+    border-radius: 50%;
+    animation: lds-ring 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+    border-color: #ddd transparent transparent transparent;
+  }
+  .lds-ring div:nth-child(1) {
+    animation-delay: -0.45s;
+  }
+  .lds-ring div:nth-child(2) {
+    animation-delay: -0.3s;
+  }
+  .lds-ring div:nth-child(3) {
+    animation-delay: -0.15s;
+  }
+  @keyframes lds-ring {
+    0% {
+      transform: rotate(0deg);
+    }
+    100% {
+      transform: rotate(360deg);
     }
   }
 }
