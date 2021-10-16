@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/invrainbow/codeperfect/gostuff/db"
+	"github.com/invrainbow/codeperfect/gostuff/helper"
 	"github.com/invrainbow/codeperfect/gostuff/models"
 	"github.com/invrainbow/codeperfect/gostuff/versions"
 	"gorm.io/gorm"
@@ -183,6 +185,24 @@ func Run() {
 		}
 
 		c.Data(http.StatusOK, "text/plain", buf.Bytes())
+	})
+
+	r.GET("/license", func(c *gin.Context) {
+		user := authUserByCode(c, c.Query("code"))
+		if user == nil {
+			return
+		}
+
+		SendSlackMessage("%s downloaded their license.", user.Email)
+		license := &helper.License{
+			Email:      user.Email,
+			LicenseKey: user.LicenseKey,
+		}
+		data, err := json.MarshalIndent(license, "", "  ")
+		if err != nil {
+			sendServerError(c, "unable to return license")
+		}
+		c.Data(http.StatusOK, "application/json", data)
 	})
 
 	r.GET("/download", func(c *gin.Context) {
