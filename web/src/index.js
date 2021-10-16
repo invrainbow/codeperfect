@@ -322,7 +322,7 @@ function CopyButton({ text }) {
 
 function Snippet({ text }) {
   return (
-    <pre className="text-left rounded-md p-3 bg-gray-100 my-4 border-0 relative">
+    <pre className="text-left rounded-md p-3 bg-gray-100 my-4 border-0 relative overflow-auto">
       <CopyButton text={text} />
       {text}
     </pre>
