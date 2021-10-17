@@ -513,6 +513,8 @@ void World::init(GLFWwindow *_wnd) {
     }
 
     fswatch.init(current_path);
+
+    init_global_colors();
 }
 
 void World::start_background_threads() {

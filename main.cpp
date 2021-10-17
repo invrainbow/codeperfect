@@ -429,7 +429,7 @@ int main(int argc, char **argv) {
         glUniformMatrix4fv(glGetUniformLocation(world.ui.im_program, "projection"), 1, GL_FALSE, (float*)projection);
 
         // clear frame
-        auto bgcolor = COLOR_JBLOW_BG;
+        auto bgcolor = global_colors.background;
         glClearColor(bgcolor.r, bgcolor.g, bgcolor.b, 1.0);
         glClear(GL_COLOR_BUFFER_BIT);
         glfwSwapBuffers(world.window);
@@ -445,7 +445,7 @@ int main(int argc, char **argv) {
         glUniformMatrix4fv(glGetUniformLocation(world.ui.program, "projection"), 1, GL_FALSE, (float*)projection);
 
         // clear frame
-        auto bgcolor = COLOR_JBLOW_BG;
+        auto bgcolor = global_colors.background;
         glClearColor(bgcolor.r, bgcolor.g, bgcolor.b, 1.0);
         glClear(GL_COLOR_BUFFER_BIT);
         glfwSwapBuffers(world.window);
@@ -1242,7 +1242,7 @@ int main(int argc, char **argv) {
         }
 
         glDisable(GL_SCISSOR_TEST);
-        auto bgcolor = COLOR_JBLOW_BG;
+        auto bgcolor = global_colors.background;
         glClearColor(bgcolor.r, bgcolor.g, bgcolor.b, 1.0);
         glClear(GL_COLOR_BUFFER_BIT);
 

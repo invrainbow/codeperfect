@@ -188,10 +188,6 @@ struct UI {
     void imgui_with_disabled(bool disable, fn<void()> f);
     bool imgui_is_window_focusing(bool *b);
     u32 imgui_get_keymods();
-
-
-
-
 };
 
 extern UI ui;
@@ -200,30 +196,50 @@ vec3f rgb_hex(ccstr s);
 vec4f rgba(vec3f color, float alpha = 1.0);
 vec4f rgba(ccstr hex, float alpha = 1.0);
 
-extern const vec3f COLOR_JBLOW_BG;
-extern const vec3f COLOR_JBLOW_FG;
-extern const vec3f COLOR_JBLOW_GREEN;
-extern const vec3f COLOR_JBLOW_BLUE_STRING;
-extern const vec3f COLOR_JBLOW_BLUE_NUMBER;
-extern const vec3f COLOR_JBLOW_CYAN;
-extern const vec3f COLOR_JBLOW_WHITE;
-extern const vec3f COLOR_JBLOW_YELLOW;
-extern const vec3f COLOR_JBLOW_SEARCH;
-extern const vec3f COLOR_JBLOW_VISUAL;
-
-extern const vec3f COLOR_WHITE;
-extern const vec3f COLOR_DARK_RED;
-extern const vec3f COLOR_DARK_YELLOW;
-extern const vec3f COLOR_BLACK;
-extern const vec3f COLOR_LIGHT_GREY;
-extern const vec3f COLOR_DARK_GREY;
-extern const vec3f COLOR_MEDIUM_DARK_GREY;
-extern const vec3f COLOR_MEDIUM_GREY;
-extern const vec3f COLOR_LIME;
-
 enum {
     HOVERID_PANE_RESIZERS = 1000,
     HOVERID_TABS = 2000,
 };
 
 #define AUTOCOMPLETE_TRUNCATE_LENGTH 40
+
+struct Global_Colors {
+    vec3f autocomplete_background;
+    vec3f autocomplete_border;
+    vec3f autocomplete_selection;
+    vec3f background;
+    vec3f breakpoint_active;
+    vec3f breakpoint_current;
+    vec3f breakpoint_inactive;
+    vec3f breakpoint_other;
+    vec3f builtin;
+    vec3f comment;
+    vec3f cursor;
+    vec3f cursor_foreground;
+    vec3f foreground;
+    vec3f green;
+    vec3f keyword;
+    vec3f muted;
+    vec3f number_literal;
+    vec3f pane_active;
+    vec3f pane_inactive;
+    vec3f pane_resizer;
+    vec3f pane_resizer_hover;
+    vec3f punctuation;
+    vec3f search_background;
+    vec3f search_foreground;
+    vec3f string_literal;
+    vec3f tab;
+    vec3f tab_hovered;
+    vec3f tab_selected;
+    vec3f type;
+    vec3f visual_background;
+    vec3f visual_foreground;
+    vec3f visual_highlight;
+    vec3f white;
+    vec3f white_muted;
+};
+
+extern Global_Colors global_colors;
+
+void init_global_colors();

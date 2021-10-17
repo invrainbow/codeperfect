@@ -20,6 +20,20 @@
 void open_ft_node(FT_Node *it);
 
 UI ui;
+Global_Colors global_colors;
+
+void init_global_colors() {
+    if (check_path("/Users/brandon/.cpcolors") == CPR_FILE) {
+        File f;
+        f.init("/Users/brandon/.cpcolors", FILE_MODE_READ, FILE_OPEN_EXISTING);
+        f.read((char*)&global_colors, sizeof(global_colors));
+        f.cleanup();
+    } else {
+        for (int i = 0; i < sizeof(global_colors) / sizeof(float); i++) {
+            ((float*)&global_colors)[i] = (float)(rand() % 255) / (float)255;
+        }
+    }
+}
 
 ccstr format_key(int mods, ccstr key) {
     List<ccstr> parts; parts.init();
@@ -154,51 +168,6 @@ ImVec4 to_imcolor(vec4f color) {
     return (ImVec4)ImColor(color.r, color.g, color.b, color.a);
 }
 
-/*
-const vec3f COLOR_SOLARIZED_0 = rgb_hex("#073642"); // normal
-const vec3f COLOR_SOLARIZED_1 = rgb_hex("#dc322f");
-const vec3f COLOR_SOLARIZED_2 = rgb_hex("#859900");
-const vec3f COLOR_SOLARIZED_3 = rgb_hex("#b58900");
-const vec3f COLOR_SOLARIZED_4 = rgb_hex("#268bd2");
-const vec3f COLOR_SOLARIZED_5 = rgb_hex("#d33682");
-const vec3f COLOR_SOLARIZED_6 = rgb_hex("#2aa198");
-const vec3f COLOR_SOLARIZED_7 = rgb_hex("#eee8d5");
-
-const vec3f COLOR_SOLARIZED_B0 = rgb_hex("#002b36"); // bright
-const vec3f COLOR_SOLARIZED_B1 = rgb_hex("#cb4b16");
-const vec3f COLOR_SOLARIZED_B2 = rgb_hex("#586e75");
-const vec3f COLOR_SOLARIZED_B3 = rgb_hex("#657b83");
-const vec3f COLOR_SOLARIZED_B4 = rgb_hex("#839496");
-const vec3f COLOR_SOLARIZED_B5 = rgb_hex("#6c71c4");
-const vec3f COLOR_SOLARIZED_B6 = rgb_hex("#93a1a1");
-const vec3f COLOR_SOLARIZED_B7 = rgb_hex("#fdf6e3");
-*/
-
-const vec3f COLOR_JBLOW_BG = rgb_hex("#042327");
-const vec3f COLOR_JBLOW_FG = rgb_hex("#d6b48b");
-const vec3f COLOR_JBLOW_GREEN = rgb_hex("#31B72C");
-const vec3f COLOR_JBLOW_BLUE_STRING = rgb_hex("#2ca198");
-const vec3f COLOR_JBLOW_BLUE_NUMBER = rgb_hex("#70c5bf");
-const vec3f COLOR_JBLOW_CYAN = rgb_hex("#9DE3C0");
-const vec3f COLOR_JBLOW_WHITE = rgb_hex("#ffffff");
-const vec3f COLOR_JBLOW_YELLOW = rgb_hex("#dfdfaf");
-const vec3f COLOR_JBLOW_SEARCH = rgb_hex("#143337");
-const vec3f COLOR_JBLOW_VISUAL = rgb_hex("#888888");
-
-const vec3f COLOR_WHITE = rgb_hex("#ffffff");
-const vec3f COLOR_RED = rgb_hex("#ff5555");
-const vec3f COLOR_LIGHT_BLUE = rgb_hex("#6699dd");
-const vec3f COLOR_DARK_RED = rgb_hex("#880000");
-const vec3f COLOR_DARK_YELLOW = rgb_hex("#6b6d0a");
-const vec3f COLOR_DARKER_YELLOW = rgb_hex("#2b2d00");
-const vec3f COLOR_BLACK = rgb_hex("#000000");
-const vec3f COLOR_LIGHT_GREY = rgb_hex("#eeeeee");
-const vec3f COLOR_DARK_GREY = rgb_hex("#333333");
-const vec3f COLOR_MEDIUM_DARK_GREY = rgb_hex("#585858");
-const vec3f COLOR_MEDIUM_GREY = rgb_hex("#888888");
-const vec3f COLOR_LIME = rgb_hex("#22ff22");
-const vec3f COLOR_GREEN = rgb_hex("#88dd88");
-
 bool get_type_color(Ast_Node *node, Editor *editor, vec4f *out) {
     switch (node->type()) {
     case TS_PACKAGE:
@@ -224,14 +193,14 @@ bool get_type_color(Ast_Node *node, Editor *editor, vec4f *out) {
     case TS_SELECT:
     case TS_NEW:
     case TS_MAKE:
-        *out = rgba(COLOR_JBLOW_WHITE);
+        *out = rgba(global_colors.keyword);
         return true;
 
     case TS_STRUCT:
     case TS_INTERFACE:
     case TS_MAP:
     case TS_CHAN:
-        *out = rgba(COLOR_JBLOW_CYAN);
+        *out = rgba(global_colors.type);
         return true;
 
     case TS_PLUS:
@@ -282,7 +251,7 @@ bool get_type_color(Ast_Node *node, Editor *editor, vec4f *out) {
     case TS_GT_EQ:
     case TS_AMP_AMP:
     case TS_PIPE_PIPE:
-        *out = rgba(COLOR_JBLOW_FG, 0.75);
+        *out = rgba(global_colors.punctuation, 0.75);
         return true;
 
     case TS_INT_LITERAL:
@@ -292,16 +261,16 @@ bool get_type_color(Ast_Node *node, Editor *editor, vec4f *out) {
     case TS_NIL:
     case TS_TRUE:
     case TS_FALSE:
-        *out = rgba(COLOR_JBLOW_BLUE_NUMBER);
+        *out = rgba(global_colors.number_literal);
         return true;
 
     case TS_COMMENT:
-        *out = rgba(COLOR_JBLOW_GREEN);
+        *out = rgba(global_colors.comment);
         return true;
 
     case TS_INTERPRETED_STRING_LITERAL:
     case TS_RAW_STRING_LITERAL:
-        *out = rgba(COLOR_JBLOW_BLUE_STRING);
+        *out = rgba(global_colors.string_literal);
         return true;
 
     case TS_IDENTIFIER:
@@ -341,21 +310,21 @@ bool get_type_color(Ast_Node *node, Editor *editor, vec4f *out) {
 
             For (keywords) {
                 if (streq(it, token)) {
-                    *out = rgba(COLOR_JBLOW_WHITE);
+                    *out = rgba(global_colors.keyword);
                     return true;
                 }
             }
 
             For (builtin_types) {
                 if (streq(it, token)) {
-                    *out = rgba(COLOR_JBLOW_CYAN);
+                    *out = rgba(global_colors.type);
                     return true;
                 }
             }
 
             For (builtin_others) {
                 if (streq(it, token)) {
-                    *out = rgba(COLOR_JBLOW_WHITE);
+                    *out = rgba(global_colors.builtin);
                     return true;
                 }
             }
@@ -2125,49 +2094,47 @@ void UI::draw_everything() {
             // ImGui::MenuItem("Dark Mode", NULL, &world.darkmode);
 
 #ifndef RELEASE_MODE
-            if (io.KeyAlt) {
-                ImGui::Separator();
-                ImGui::MenuItem("ImGui demo", NULL, &world.windows_open.im_demo);
-                ImGui::MenuItem("ImGui metrics", NULL, &world.windows_open.im_metrics);
-                ImGui::MenuItem("AST viewer", NULL, &world.wnd_editor_tree.show);
-                ImGui::MenuItem("Toplevels viewer", NULL, &world.wnd_editor_toplevels.show);
-                ImGui::MenuItem("Show mouse position", NULL, &world.wnd_mouse_pos.show);
-                ImGui::MenuItem("Style editor", NULL, &world.wnd_style_editor.show);
-                ImGui::MenuItem("Replace line numbers with bytecounts", NULL, &world.replace_line_numbers_with_bytecounts);
-                ImGui::MenuItem("Randomly move cursor around", NULL, &world.randomly_move_cursor_around);
-                ImGui::MenuItem("Disable framerate cap", NULL, &world.turn_off_framerate_cap);
+            ImGui::Separator();
+            ImGui::MenuItem("ImGui demo", NULL, &world.windows_open.im_demo);
+            ImGui::MenuItem("ImGui metrics", NULL, &world.windows_open.im_metrics);
+            ImGui::MenuItem("AST viewer", NULL, &world.wnd_editor_tree.show);
+            ImGui::MenuItem("Toplevels viewer", NULL, &world.wnd_editor_toplevels.show);
+            ImGui::MenuItem("Show mouse position", NULL, &world.wnd_mouse_pos.show);
+            ImGui::MenuItem("Style editor", NULL, &world.wnd_style_editor.show);
+            ImGui::MenuItem("Replace line numbers with bytecounts", NULL, &world.replace_line_numbers_with_bytecounts);
+            ImGui::MenuItem("Randomly move cursor around", NULL, &world.randomly_move_cursor_around);
+            ImGui::MenuItem("Disable framerate cap", NULL, &world.turn_off_framerate_cap);
 
-                if (ImGui::MenuItem("Cleanup unused memory")) {
-                    world.indexer.message_queue.add([&](auto msg) {
-                        msg->type = GOMSG_CLEANUP_UNUSED_MEMORY;
-                    });
-                }
+            if (ImGui::MenuItem("Cleanup unused memory")) {
+                world.indexer.message_queue.add([&](auto msg) {
+                    msg->type = GOMSG_CLEANUP_UNUSED_MEMORY;
+                });
+            }
 
-                ImGui::Separator();
+            ImGui::Separator();
 
-                if (ImGui::MenuItem("Show message box (OK)")) {
-                    tell_user("Sorry, that keyfile was invalid. Please select another one.", "License key required");
-                }
+            if (ImGui::MenuItem("Show message box (OK)")) {
+                tell_user("Sorry, that keyfile was invalid. Please select another one.", "License key required");
+            }
 
-                if (ImGui::MenuItem("Show message box (Yes/No)")) {
-                    auto res = ask_user_yes_no(
-                        "Are you sure you want to delete all breakpoints?",
-                        NULL,
-                        "Delete",
-                        "Don't Delete"
-                    );
-                    print("%d", res);
-                }
+            if (ImGui::MenuItem("Show message box (Yes/No)")) {
+                auto res = ask_user_yes_no(
+                    "Are you sure you want to delete all breakpoints?",
+                    NULL,
+                    "Delete",
+                    "Don't Delete"
+                );
+                print("%d", res);
+            }
 
-                if (ImGui::MenuItem("Show message box (Yes/No/Cancel)")) {
-                    auto res = ask_user_yes_no_cancel(
-                        "Do you want to save your changes to main.go?",
-                        "Your changes will be lost if you don't.",
-                        "Save",
-                        "Don't Save"
-                    );
-                    print("%d", res);
-                }
+            if (ImGui::MenuItem("Show message box (Yes/No/Cancel)")) {
+                auto res = ask_user_yes_no_cancel(
+                    "Do you want to save your changes to main.go?",
+                    "Your changes will be lost if you don't.",
+                    "Save",
+                    "Don't Save"
+                );
+                print("%d", res);
             }
 #endif
 
@@ -2310,7 +2277,7 @@ void UI::draw_everything() {
 
         if (world.build.ready()) {
             if (world.build.errors.len == 0) {
-                ImGui::TextColored(to_imcolor(rgba(COLOR_GREEN)), "Build was successful!");
+                ImGui::TextColored(to_imcolor(rgba(global_colors.green)), "Build was successful!");
             } else {
                 ImGui::PushFont(world.ui.im_font_mono);
 
@@ -2318,7 +2285,7 @@ void UI::draw_everything() {
                     auto &it = world.build.errors[i];
 
                     if (!it.valid) {
-                        ImGui::TextColored(to_imcolor(rgba(COLOR_MEDIUM_GREY)), "%s", it.message);
+                        ImGui::TextColored(to_imcolor(rgba(global_colors.muted)), "%s", it.message);
                         continue;
                     }
 
@@ -3410,16 +3377,70 @@ void UI::draw_everything() {
     }
 
     if (world.wnd_style_editor.show) {
-        ImGui::Begin("Style Editor", &world.wnd_style_editor.show, ImGuiWindowFlags_AlwaysAutoResize);
+        ImGui::Begin("Style Editor", &world.wnd_style_editor.show, ImGuiWindowFlags_None);
 
-        ImGui::SliderFloat("status_padding_x", &settings.status_padding_x, 0.0, 20.0f, "%.0f");
-        ImGui::SliderFloat("status_padding_y", &settings.status_padding_y, 0.0, 20.0f, "%.0f");
-        ImGui::SliderFloat("line_number_margin_left", &settings.line_number_margin_left, 0.0, 20.0f, "%.0f");
-        ImGui::SliderFloat("line_number_margin_right", &settings.line_number_margin_right, 0.0, 20.0f, "%.0f");
-        ImGui::SliderFloat("autocomplete_menu_padding", &settings.autocomplete_menu_padding, 0.0, 20.0f, "%.0f");
-        ImGui::SliderFloat("autocomplete_item_padding_x", &settings.autocomplete_item_padding_x, 0.0, 20.0f, "%.0f");
-        ImGui::SliderFloat("autocomplete_item_padding_y", &settings.autocomplete_item_padding_y, 0.0, 20.0f, "%.0f");
-        ImGui::SliderFloat("tabs_offset", &settings.tabs_offset, 0.0, 20.0f, "%.0f");
+        if (ImGui::BeginTabBar("style_editor_tabbar", ImGuiTabBarFlags_None)) {
+            if (ImGui::BeginTabItem("Margins & Padding", NULL, 0)) {
+                ImGui::SliderFloat("status_padding_x", &settings.status_padding_x, 0.0, 20.0f, "%.0f");
+                ImGui::SliderFloat("status_padding_y", &settings.status_padding_y, 0.0, 20.0f, "%.0f");
+                ImGui::SliderFloat("line_number_margin_left", &settings.line_number_margin_left, 0.0, 20.0f, "%.0f");
+                ImGui::SliderFloat("line_number_margin_right", &settings.line_number_margin_right, 0.0, 20.0f, "%.0f");
+                ImGui::SliderFloat("autocomplete_menu_padding", &settings.autocomplete_menu_padding, 0.0, 20.0f, "%.0f");
+                ImGui::SliderFloat("autocomplete_item_padding_x", &settings.autocomplete_item_padding_x, 0.0, 20.0f, "%.0f");
+                ImGui::SliderFloat("autocomplete_item_padding_y", &settings.autocomplete_item_padding_y, 0.0, 20.0f, "%.0f");
+                ImGui::SliderFloat("tabs_offset", &settings.tabs_offset, 0.0, 20.0f, "%.0f");
+
+                ImGui::EndTabItem();
+            }
+
+            if (ImGui::BeginTabItem("Colors", NULL, 0)) {
+                ImGui::ColorEdit3("autocomplete_background", (float*)&global_colors.autocomplete_background);
+                ImGui::ColorEdit3("autocomplete_border", (float*)&global_colors.autocomplete_border);
+                ImGui::ColorEdit3("autocomplete_selection", (float*)&global_colors.autocomplete_selection);
+                ImGui::ColorEdit3("background", (float*)&global_colors.background);
+                ImGui::ColorEdit3("breakpoint_active", (float*)&global_colors.breakpoint_active);
+                ImGui::ColorEdit3("breakpoint_current", (float*)&global_colors.breakpoint_current);
+                ImGui::ColorEdit3("breakpoint_inactive", (float*)&global_colors.breakpoint_inactive);
+                ImGui::ColorEdit3("breakpoint_other", (float*)&global_colors.breakpoint_other);
+                ImGui::ColorEdit3("builtin", (float*)&global_colors.builtin);
+                ImGui::ColorEdit3("comment", (float*)&global_colors.comment);
+                ImGui::ColorEdit3("cursor", (float*)&global_colors.cursor);
+                ImGui::ColorEdit3("cursor_foreground", (float*)&global_colors.cursor_foreground);
+                ImGui::ColorEdit3("foreground", (float*)&global_colors.foreground);
+                ImGui::ColorEdit3("green", (float*)&global_colors.green);
+                ImGui::ColorEdit3("keyword", (float*)&global_colors.keyword);
+                ImGui::ColorEdit3("muted", (float*)&global_colors.muted);
+                ImGui::ColorEdit3("number_literal", (float*)&global_colors.number_literal);
+                ImGui::ColorEdit3("pane_active", (float*)&global_colors.pane_active);
+                ImGui::ColorEdit3("pane_inactive", (float*)&global_colors.pane_inactive);
+                ImGui::ColorEdit3("pane_resizer", (float*)&global_colors.pane_resizer);
+                ImGui::ColorEdit3("pane_resizer_hover", (float*)&global_colors.pane_resizer_hover);
+                ImGui::ColorEdit3("punctuation", (float*)&global_colors.punctuation);
+                ImGui::ColorEdit3("search_background", (float*)&global_colors.search_background);
+                ImGui::ColorEdit3("search_foreground", (float*)&global_colors.search_foreground);
+                ImGui::ColorEdit3("string_literal", (float*)&global_colors.string_literal);
+                ImGui::ColorEdit3("tab", (float*)&global_colors.tab);
+                ImGui::ColorEdit3("tab_hovered", (float*)&global_colors.tab_hovered);
+                ImGui::ColorEdit3("tab_selected", (float*)&global_colors.tab_selected);
+                ImGui::ColorEdit3("type", (float*)&global_colors.type);
+                ImGui::ColorEdit3("visual_background", (float*)&global_colors.visual_background);
+                ImGui::ColorEdit3("visual_foreground", (float*)&global_colors.visual_foreground);
+                ImGui::ColorEdit3("visual_highlight", (float*)&global_colors.visual_highlight);
+                ImGui::ColorEdit3("white", (float*)&global_colors.white);
+                ImGui::ColorEdit3("white_muted", (float*)&global_colors.white_muted);
+
+                if (ImGui::Button("Save to disk")) {
+                    File f;
+                    f.init("/Users/brandon/.cpcolors", FILE_MODE_WRITE, FILE_CREATE_NEW);
+                    f.write((char*)&global_colors, sizeof(global_colors));
+                    f.cleanup();
+                }
+
+                ImGui::EndTabItem();
+            }
+
+            ImGui::EndTabBar();
+        }
 
         ImGui::End();
     }
@@ -3515,7 +3536,7 @@ void UI::draw_everything() {
     }
 
     // Draw panes.
-    draw_rect(panes_area, rgba(COLOR_JBLOW_BG));
+    draw_rect(panes_area, rgba(global_colors.background));
     for (u32 current_pane = 0; current_pane < world.panes.len; current_pane++) {
         auto &pane = world.panes[current_pane];
         auto is_pane_selected = (current_pane == world.current_pane);
@@ -3527,8 +3548,8 @@ void UI::draw_everything() {
         get_tabs_and_editor_area(&pane_area, &tabs_area, &editor_area, pane.editors.len > 0);
 
         if (pane.editors.len > 0)
-            draw_rect(tabs_area, rgba(is_pane_selected ? COLOR_MEDIUM_GREY : COLOR_DARK_GREY));
-        draw_rect(editor_area, rgba(COLOR_JBLOW_BG));
+            draw_rect(tabs_area, rgba(is_pane_selected ? global_colors.pane_active : global_colors.pane_inactive));
+        draw_rect(editor_area, rgba(global_colors.background));
 
         vec2 tab_padding = { 9, 4 };
 
@@ -3629,11 +3650,11 @@ void UI::draw_everything() {
                 ImGui::End();
             }
 
-            vec3f tab_color = COLOR_MEDIUM_DARK_GREY;
+            vec3f tab_color = global_colors.tab;
             if (is_selected)
-                tab_color = COLOR_JBLOW_BG;
+                tab_color = global_colors.tab_selected;
             else if (is_hovered)
-                tab_color = COLOR_DARK_GREY;
+                tab_color = global_colors.tab_hovered;
 
             /*
             if (!is_selected) {
@@ -3642,7 +3663,7 @@ void UI::draw_everything() {
             */
 
             draw_rounded_rect(tab, rgba(tab_color), 4, ROUND_TL | ROUND_TR);
-            draw_string(tab.pos + tab_padding, label, rgba(is_selected ? COLOR_WHITE : COLOR_LIGHT_GREY));
+            draw_string(tab.pos + tab_padding, label, rgba(is_selected ? global_colors.white : global_colors.white_muted));
 
             auto mouse_flags = get_mouse_flags(tab);
             if (mouse_flags & MOUSE_CLICKED) {
@@ -3760,7 +3781,7 @@ void UI::draw_everything() {
                     b.y -= py;
                     b.h += py * 2;
 
-                    draw_rect(b, rgba(COLOR_LIME));
+                    draw_rect(b, rgba(global_colors.cursor));
                 };
 
                 List<Client_Breakpoint> breakpoints_for_this_editor;
@@ -3864,13 +3885,13 @@ void UI::draw_everything() {
 
                     auto bptype = find_breakpoint_stopped_at_this_line();
                     if (bptype == BREAKPOINT_CURRENT_GOROUTINE)
-                        draw_rect(line_box, rgba(COLOR_DARK_YELLOW));
+                        draw_rect(line_box, rgba(global_colors.breakpoint_current));
                     else if (bptype == BREAKPOINT_OTHER_GOROUTINE)
-                        draw_rect(line_box, rgba(COLOR_DARKER_YELLOW));
+                        draw_rect(line_box, rgba(global_colors.breakpoint_other));
                     else if (bptype == BREAKPOINT_ACTIVE)
-                        draw_rect(line_box, rgba(COLOR_RED, 0.5));
+                        draw_rect(line_box, rgba(global_colors.breakpoint_active, 0.5));
                     else if (bptype == BREAKPOINT_INACTIVE)
-                        draw_rect(line_box, rgba(COLOR_RED, 0.3));
+                        draw_rect(line_box, rgba(global_colors.breakpoint_inactive, 0.3));
 
                     auto line_number_width = get_line_number_width(editor);
 
@@ -3883,7 +3904,7 @@ void UI::draw_everything() {
                             line_number_str = our_sprintf("%*d", line_number_width, y + 1);
                         auto len = strlen(line_number_str);
                         for (u32 i = 0; i < len; i++)
-                            draw_char(&cur_pos, line_number_str[i], rgba(COLOR_WHITE, 0.3));
+                            draw_char(&cur_pos, line_number_str[i], rgba(global_colors.white, 0.3));
                         cur_pos.x += settings.line_number_margin_right;
                     }
 
@@ -3939,7 +3960,7 @@ void UI::draw_everything() {
 
                         if (glyph_width == -1) glyph_width = 1;
 
-                        vec4f text_color = rgba(COLOR_JBLOW_FG);
+                        vec4f text_color = rgba(global_colors.foreground);
 
                         if (next_hl != -1) {
                             auto curr = new_cur2((u32)curr_cp_idx, (u32)y);
@@ -3957,8 +3978,8 @@ void UI::draw_everything() {
 
                         if (editor->cur == new_cur2((u32)curr_cp_idx, (u32)y)) {
                             draw_cursor(glyph_width);
-                            // if ((world.nvim.mode != VI_INSERT/* || world.nvim.exiting_insert_mode */) && current_pane == world.current_pane)
-                            text_color = rgba(COLOR_BLACK);
+                            if (current_pane == world.current_pane)
+                                text_color = rgba(global_colors.cursor_foreground);
                         } else if (world.nvim.mode != VI_INSERT) {
                             auto topline = editor->nvim_data.grid_topline;
                             if (topline <= y && y < topline + NVIM_DEFAULT_HEIGHT) {
@@ -3981,16 +4002,16 @@ void UI::draw_everything() {
                                     auto hl = editor->highlights[y - topline][vx + i];
                                     switch (hl) {
                                     case HL_INCSEARCH:
-                                        draw_highlight(rgba(COLOR_JBLOW_FG));
-                                        text_color = rgba(COLOR_JBLOW_BG);
+                                        draw_highlight(rgba(global_colors.foreground));
+                                        text_color = rgba(global_colors.background);
                                         break;
                                     case HL_SEARCH:
-                                        draw_highlight(rgba(COLOR_JBLOW_SEARCH));
-                                        text_color = rgba(COLOR_JBLOW_YELLOW);
+                                        draw_highlight(rgba(global_colors.search_background));
+                                        text_color = rgba(global_colors.search_foreground);
                                         break;
                                     case HL_VISUAL:
-                                        draw_highlight(rgba(COLOR_JBLOW_VISUAL));
-                                        text_color = rgba(COLOR_JBLOW_YELLOW);
+                                        draw_highlight(rgba(global_colors.visual_background));
+                                        text_color = rgba(global_colors.visual_foreground);
                                         break;
                                     }
                                 }
@@ -4035,13 +4056,13 @@ void UI::draw_everything() {
 
                             switch (editor->highlights[y - topline][0]) {
                             case HL_INCSEARCH:
-                                draw_highlight(rgba(COLOR_JBLOW_FG));
+                                draw_highlight(rgba(global_colors.foreground));
                                 break;
                             case HL_SEARCH:
-                                draw_highlight(rgba(COLOR_JBLOW_SEARCH));
+                                draw_highlight(rgba(global_colors.search_background));
                                 break;
                             case HL_VISUAL:
-                                draw_highlight(rgba(COLOR_JBLOW_VISUAL));
+                                draw_highlight(rgba(global_colors.visual_highlight));
                                 break;
                             }
                         }
@@ -4078,14 +4099,14 @@ void UI::draw_everything() {
             hitbox.w += 8;
 
             if (test_hover(hitbox, HOVERID_PANE_RESIZERS + i, ImGuiMouseCursor_ResizeEW)) {
-                draw_rect(b, rgba(COLOR_WHITE));
+                draw_rect(b, rgba(global_colors.pane_resizer_hover));
                 if (world.ui.mouse_down[GLFW_MOUSE_BUTTON_LEFT])
                     if (world.resizing_pane == -1)
                         world.resizing_pane = i;
             } else if (world.resizing_pane == i) {
-                draw_rect(b, rgba(COLOR_WHITE));
+                draw_rect(b, rgba(global_colors.pane_resizer_hover));
             } else {
-                draw_rect(b, rgba(COLOR_DARK_GREY));
+                draw_rect(b, rgba(global_colors.pane_resizer));
             }
         }
 
@@ -4179,13 +4200,13 @@ void UI::draw_everything() {
 
         switch (world.dbg.state_flag) {
         case DLV_STATE_PAUSED:
-            draw_status_piece(LEFT, "PAUSED", rgba("#800000"), rgba(COLOR_WHITE));
+            draw_status_piece(LEFT, "PAUSED", rgba("#800000"), rgba(global_colors.white));
             break;
         case DLV_STATE_STARTING:
-            draw_status_piece(LEFT, "STARTING", rgba("#888822"), rgba(COLOR_WHITE));
+            draw_status_piece(LEFT, "STARTING", rgba("#888822"), rgba(global_colors.white));
             break;
         case DLV_STATE_RUNNING:
-            draw_status_piece(LEFT, "RUNNING", rgba("#008000"), rgba(COLOR_WHITE));
+            draw_status_piece(LEFT, "RUNNING", rgba("#008000"), rgba(global_colors.white));
             break;
         }
 
@@ -4207,7 +4228,7 @@ void UI::draw_everything() {
         auto curr_editor = world.get_current_editor();
         if (curr_editor != NULL) {
             auto cur = curr_editor->cur;
-            draw_status_piece(RIGHT, our_sprintf("%d,%d", cur.y+1, cur.x+1), rgba(COLOR_WHITE, 0.0), rgba("#aaaaaa"));
+            draw_status_piece(RIGHT, our_sprintf("%d,%d", cur.y+1, cur.x+1), rgba(global_colors.white, 0.0), rgba("#aaaaaa"));
         }
     }
 }
@@ -4345,40 +4366,25 @@ void UI::end_frame() {
                     menu.x = x1;
                 }
 
-                draw_bordered_rect_outer(menu, rgba(COLOR_BLACK), rgba(COLOR_DARK_GREY), 1, 4);
-
-                // --- draw the actual stuff inside the menu
-
-                // boxf preview_area = menu;
-                // preview_area.w = preview_width + (settings.autocomplete_menu_padding * 2);
-                // preview_area.x += (menu.w - preview_area.w);
+                draw_bordered_rect_outer(menu, rgba(global_colors.autocomplete_background), rgba(global_colors.autocomplete_border), 1, 4);
 
                 boxf items_area = menu;
-                items_area.w = menu.w; // - preview_area.w;
+                items_area.w = menu.w;
 
                 float menu_padding = settings.autocomplete_menu_padding;
                 auto items_pos = items_area.pos + new_vec2f(menu_padding, menu_padding);
 
-                {
-                    boxf sep;
-                    sep.w = 1;
-                    sep.h = items_area.h;
-                    sep.x = items_area.x + items_area.w - 1;
-                    sep.y = items_area.y;
-                    draw_rect(sep, rgba(COLOR_DARK_GREY));
-                }
-
                 for (int i = ac.view; i < ac.view + num_items; i++) {
                     auto idx = ac.filtered_results->at(i);
 
-                    vec3f color = COLOR_WHITE;
+                    vec3f color = global_colors.white;
 
                     if (i == ac.selection) {
                         boxf b;
                         b.pos = items_pos;
                         b.h = font->height + (settings.autocomplete_item_padding_y * 2);
                         b.w = items_area.w - (settings.autocomplete_menu_padding * 2);
-                        draw_rounded_rect(b, rgba(COLOR_DARK_GREY), 4, ROUND_ALL);
+                        draw_rounded_rect(b, rgba(global_colors.autocomplete_selection), 4, ROUND_ALL);
                     }
 
                     auto &result = ac.ac.results->at(idx);
@@ -4538,7 +4544,7 @@ void UI::end_frame() {
                     auto idx = ac.filtered_results->at(ac.selection);
                     auto &result = ac.ac.results->at(idx);
 
-                    auto color = rgba(COLOR_WHITE);
+                    auto color = rgba(global_colors.white);
 
                     preview_drawable_area = preview_area;
                     preview_drawable_area.x += preview_padding;
@@ -4657,7 +4663,7 @@ void UI::end_frame() {
             bg.x = fmin(actual_parameter_hint_start.x, world.window_size.x - bg.w);
             bg.y = fmin(actual_parameter_hint_start.y - font->offset_y - bg.h - settings.parameter_hint_margin_y, world.window_size.y - bg.h);
 
-            draw_bordered_rect_outer(bg, rgba(color_darken(COLOR_JBLOW_BG, 0.1), 1.0), rgba(COLOR_JBLOW_WHITE, 0.8), 1, 4);
+            draw_bordered_rect_outer(bg, rgba(color_darken(global_colors.background, 0.1), 1.0), rgba(global_colors.white, 0.8), 1, 4);
 
             auto text_pos = bg.pos;
             text_pos.x += settings.parameter_hint_padding_x;
@@ -4667,7 +4673,7 @@ void UI::end_frame() {
 
             {
                 u32 len = strlen(help_text);
-                vec4f color = rgba(COLOR_JBLOW_FG, 0.75);
+                vec4f color = rgba(global_colors.foreground, 0.75);
                 float opacity = 1.0;
 
                 int j = 0;
@@ -4677,9 +4683,9 @@ void UI::end_frame() {
                         switch (token_changes[j].token) {
                         case HINT_CURRENT_PARAM: opacity = 1.0; break;
                         case HINT_NOT_CURRENT_PARAM: opacity = 0.5; break;
-                        case HINT_NAME: color = rgba(COLOR_JBLOW_FG); break;
-                        case HINT_TYPE: color = rgba(COLOR_JBLOW_CYAN); break;
-                        case HINT_NORMAL: color = rgba(COLOR_JBLOW_FG, 0.75); break;
+                        case HINT_NAME: color = rgba(global_colors.foreground); break;
+                        case HINT_TYPE: color = rgba(global_colors.type); break;
+                        case HINT_NORMAL: color = rgba(global_colors.foreground, 0.75); break;
                         }
 
                         j++;
