@@ -5,6 +5,7 @@ import _ from "lodash";
 import { Helmet } from "react-helmet";
 import { AiOutlineCheck, AiOutlineClose, AiFillCode } from "react-icons/ai";
 import { FaApple, FaRegClipboard } from "react-icons/fa";
+import { BsLightningFill } from "react-icons/bs";
 import { FcCheckmark } from "react-icons/fc";
 import { HiArrowNarrowRight } from "react-icons/hi";
 import {
@@ -18,8 +19,11 @@ import {
 } from "react-router-dom";
 import { CopyToClipboard } from "react-copy-to-clipboard";
 import "./index.css";
-import gif60fps from "./60fps.gif";
 import ideScreenshotImage from "./ide.png";
+import gpuImage from "./gpu.svg";
+import vimSvg from "./vim.svg";
+import codeSvg from "./code.svg";
+import workflowSvg from "./workflow.svg";
 import pngIntellisense from "./intellisense.png";
 import logoImage from "./logo.png";
 import gifVim from "./vim.gif";
@@ -53,11 +57,11 @@ function WallOfText({ title, children }) {
   );
 }
 
-function Icon({ icon }) {
+function Icon({ icon, ...props }) {
   const C = icon;
   return (
     <span className="relative -top-0.5">
-      <C />
+      <C {...props} />
     </span>
   );
 }
@@ -82,7 +86,7 @@ function Section({ className, ...props }) {
   return (
     <div
       className={cx(
-        "mb-24 md:gap-14 flex flex-col md:flex-row md:mb-32 md:items-center",
+        "mb-24 md:gap-20 flex flex-col md:flex-row md:mb-32 md:items-center",
         className
       )}
       {...props}
@@ -90,25 +94,55 @@ function Section({ className, ...props }) {
   );
 }
 
-const IDE_FEATURES = _.shuffle([
-  "Auto Completion",
-  "Integrated Debugger",
-  "Integrated Build",
-  "Auto Format",
-  "Parameter Hints",
-  "Go To Definition",
-  "Vim Keybindings",
-  "Fuzzy File Search",
-  "GPU-Based Renderer",
-  "Highly Optimized Core",
-  "Instant Startup",
-  "Syntax Highlighting",
-]);
+function Feature({ title, icon, children, selected, ...props }) {
+  return (
+    <button
+      className={cx(
+        "pl-3 my-8 block w-full text-left border-l-4",
+        selected ? "border-gray-700" : "", // "hover:border-gray-200 border-gray-100",
+        selected && "text-black"
+      )}
+      {...props}
+    >
+      <div className="">
+        <img src={icon} className={cx("w-10 filter grayscale")} />
+      </div>
+      <div className="font-bold my-2">{title}</div>
+      <div>{children}</div>
+    </button>
+  );
+}
+
+function FeaturePresentation() {
+  return (
+    <div className="flex max-w-screen-xl mx-auto gap-8 px-8 items-center">
+      <div>
+        <img
+          alt=""
+          className="max-w-auto border border-gray-500 rounded-2xl"
+          src={ideScreenshotImage}
+        />
+      </div>
+      <div className="max-w-sm">
+        <Feature title="Code Intelligence" icon={codeSvg}>
+          An IDE that understands what you're trying to do.
+        </Feature>
+        <Feature title="Vim Keybindings" icon={vimSvg}>
+          Built into the core of the application. Designed to work seamlessly
+          with everything else.
+        </Feature>
+        <Feature title="Integrated Build &amp; Debug" icon={workflowSvg}>
+          Your entire workflow in one application.
+        </Feature>
+      </div>
+    </div>
+  );
+}
 
 function Home() {
   return (
-    <div className="w-full lg:max-w-screen-xl lg:mx-auto">
-      <div className="mt-8 mb-24 sm:my-24 md:my-32 md:mt-24">
+    <div className="w-full">
+      <div className="sm:mt-24 sm:mb-8 md:mt-24 md:mb-12 lg:max-w-screen-xl lg:mx-auto">
         <div className="leading-tight text-center mb-2 text-4xl md:text-5xl font-bold text-black">
           The Fastest IDE for Go
         </div>
@@ -121,100 +155,35 @@ function Home() {
             in private beta!
           </A>
         </div>
-        <img
-          alt=""
-          className="max-w-auto border border-gray-500 rounded-2xl"
-          src={ideScreenshotImage}
-        />
       </div>
 
-      <Section className="md:block lg:flex">
-        <div className="leading-relaxed mb-4 md:flex md:flex-row lg:block md:gap-8 md:mb-4 lg:w-1/3">
-          <h2 className="text-2xl mb-4 text-gray-700 md:w-4/12 lg:w-full font-medium">
+      <FeaturePresentation />
+
+      <div className="pt-32 pb-24 lg:flex lg:justify-center lg:items-center md:gap-16">
+        <div>
+          <img src={gpuImage} className="w-48" />
+        </div>
+        <div className="leading-relaxed md:flex md:flex-row lg:block md:gap-8 lg:w-1/3">
+          <h2 className="text-2xl mb-4 text-gray-800 md:w-4/12 lg:w-full font-medium">
             No Electron. No JavaScript. No garbage collection.
           </h2>
-          <p className="md:w-4/12 lg:w-full md:mt-0 lg:mt-4">
-            {NAME_SHORT} is written in C++ and designed to run at 144 FPS. Every
-            keystroke responds instantly.
-          </p>
-        </div>
-        <NiceImage src={gif60fps} className="lg:w-2/3" />
-      </Section>
-
-      <Section className="md:flex-row-reverse">
-        <div className="leading-relaxed md:w-5/12">
-          <h2 className="text-2xl mb-4 text-gray-700 font-medium">
-            A batteries-included IDE, as fast as Vim.
-          </h2>
-          <p>
-            Today, IDEs are powerful but slow, while Vim is fast but limited.{" "}
-            {NAME_SHORT} brings the best of both worlds: everything you need to
-            effectively develop in Go, at lightning speed.
-          </p>
-          <p>
-            No more waiting on GoLand. No more hacking Vim plugins together.
-          </p>
-        </div>
-        <div className="md:w-7/12 mt-8 md:mt-0 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-4 gap-3 md:gap-6 select-none">
-          {IDE_FEATURES.map((feature, i) => (
-            <div
-              key={i}
-              className="text-sm md:text-md leading-tight font-semibold h-16 md:h-20 lg:h-20 rounded-lg text-gray-500 hover:text-gray-600 text-center flex justify-center items-center p-4 transform hover:scale-110 transition-all shadow-sm"
-              style={{ background: "#eee" }}
-            >
-              <span>{feature}</span>
-            </div>
-          ))}
-        </div>
-      </Section>
-
-      <div className="block md:hidden">
-        <Section>
-          <div className="leading-relaxed md:flex md:flex-row md:gap-8 md:mb-12">
-            <div className="text-2xl mb-4 text-gray-700 md:w-1/3 font-medium">
-              Tools that understand Go as a first language.
-            </div>
-            <p className="md:w-1/3 md:mt-0">
-              {NAME_SHORT}'s intellisense is hand-written, extensively tested,
-              and designed for speed and reliability.
+          <div className="md:w-4/12 lg:w-full md:mt-0 lg:mt-4 text-lg text-gray-600">
+            <p>
+              {NAME_SHORT} is written in C++ and runs at 144 FPS. Every
+              keystroke responds instantly.
+            </p>
+            <p>
+              A full-featured IDE, faster than Sublime. Rip through your code
+              without being encumbered by your tools.
+            </p>
+            <p>
+              <A className="main-button mt-4" href={BETA_SIGNUP_LINK}>
+                Request Access
+              </A>
             </p>
           </div>
-        </Section>
-      </div>
-
-      <div className="hidden md:block relative rounded-md overflow-hidden border-gray-500 border mb-24 md:mb-32">
-        <div
-          className="leading-relaxed md:gap-8 w-5/12 z-20 relative p-8 drop-shadow rounded-md my-12 mx-auto"
-          style={{ background: "rgba(0, 0, 0, 0.75)" }}
-        >
-          <div className="text-2xl mb-4 text-white font-medium">
-            Tools that understand Go as a first language.
-          </div>
-          <p className="text-white">
-            {NAME_SHORT}'s intellisense is hand-written, extensively tested, and
-            designed for speed and reliability.
-          </p>
         </div>
-        <img
-          src={pngIntellisense}
-          alt=""
-          className="absolute top-0 left-0 z-10 w-full opacity-50"
-        />
       </div>
-
-      <Section className="md:flex-row-reverse">
-        <div className="leading-relaxed mb-4 md:mb-0 md:w-5/12">
-          <div className="text-2xl mb-4 text-gray-700 font-medium">
-            Complete Vim keybindings, out of the box.
-          </div>
-          <p>
-            Our Vim keybindings aren't a plugin added as an afterthought.
-            They're built into the core of the application and designed to work
-            seamlessly with everything else.
-          </p>
-        </div>
-        <NiceImage src={gifVim} className="md:w-7/12" />
-      </Section>
     </div>
   );
 }
@@ -502,7 +471,7 @@ function Pricing() {
             monthly={5}
             yearly={45}
             isYearly={yearly}
-            cta="Request access"
+            cta="Request Access"
             link={BETA_SIGNUP_LINK}
           >
             <div className="">
@@ -524,7 +493,7 @@ function Pricing() {
             yearly={90}
             unit={"user"}
             isYearly={yearly}
-            cta="Request access"
+            cta="Request Access"
             link={BETA_SIGNUP_LINK}
           >
             <div className="">
@@ -543,7 +512,7 @@ function Pricing() {
             yearly="180+"
             unit={"user"}
             isYearly={yearly}
-            cta="Contact sales"
+            cta="Contact Sales"
             link="mailto:sales@codeperfect95.com"
           >
             <div className="">
@@ -634,8 +603,8 @@ ReactDOM.render(
         <title>{NAME}</title>
       </Helmet>
 
-      <div className="p-6 md:p-12 text-gray-500">
-        <div className="pb-4 flex justify-between items-center w-full lg:max-w-screen-xl lg:mx-auto">
+      <div className="text-gray-500">
+        <div className="mt-8 pb-4 flex justify-between items-center w-full lg:max-w-screen-xl lg:mx-auto">
           <Link
             to="/"
             className="font-bold text-lg text-black no-underline whitespace-nowrap flex items-center"
@@ -695,7 +664,7 @@ ReactDOM.render(
             </Route>
           </Switch>
         </div>
-        <div className="pt-12 lg:max-w-screen-xl lg:mx-auto flex flex-col sm:flex-row justify-between">
+        <div className="pt-12 mb-12 lg:max-w-screen-xl lg:mx-auto flex flex-col sm:flex-row justify-between">
           <div className="text-gray-500">
             &copy; {CURRENT_YEAR} {NAME}
           </div>

@@ -238,6 +238,20 @@ struct Global_Colors {
     vec3f visual_highlight;
     vec3f white;
     vec3f white_muted;
+
+    // added in round 2
+    vec3f status_area_background;
+    vec3f command_background;
+    vec3f command_foreground;
+    vec3f status_mode_background;
+    vec3f status_mode_foreground;
+    vec3f status_debugger_paused_background;
+    vec3f status_debugger_starting_background;
+    vec3f status_debugger_running_background;
+    vec3f status_index_ready_background;
+    vec3f status_index_ready_foreground;
+    vec3f status_index_indexing_background;
+    vec3f status_index_indexing_foreground;
 };
 
 extern Global_Colors global_colors;

@@ -2478,9 +2478,9 @@ void UI::draw_everything() {
             return ret;
         };
 
-        ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.15, 0.15, 0.15, 1.0));
+        // ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.15, 0.15, 0.15, 1.0));
         {
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 4));
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6, 6));
 
             ImGuiStyle &style = ImGui::GetStyle();
             float child_height = ImGui::GetTextLineHeight() + (style.FramePadding.y * 2.0f) + (style.WindowPadding.y * 2.0f);
@@ -2507,7 +2507,7 @@ void UI::draw_everything() {
 
             ImGui::EndChild();
         }
-        ImGui::PopStyleColor();
+        // ImGui::PopStyleColor();
 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 4));
         ImGui::BeginChild("child3", ImVec2(0,0), true);
@@ -3429,6 +3429,19 @@ void UI::draw_everything() {
                 ImGui::ColorEdit3("white", (float*)&global_colors.white);
                 ImGui::ColorEdit3("white_muted", (float*)&global_colors.white_muted);
 
+                ImGui::ColorEdit3("status_area_background", (float*)&global_colors.status_area_background);
+                ImGui::ColorEdit3("command_background", (float*)&global_colors.command_background);
+                ImGui::ColorEdit3("command_foreground", (float*)&global_colors.command_foreground);
+                ImGui::ColorEdit3("status_mode_background", (float*)&global_colors.status_mode_background);
+                ImGui::ColorEdit3("status_mode_foreground", (float*)&global_colors.status_mode_foreground);
+                ImGui::ColorEdit3("status_debugger_paused_background", (float*)&global_colors.status_debugger_paused_background);
+                ImGui::ColorEdit3("status_debugger_starting_background", (float*)&global_colors.status_debugger_starting_background);
+                ImGui::ColorEdit3("status_debugger_running_background", (float*)&global_colors.status_debugger_running_background);
+                ImGui::ColorEdit3("status_index_ready_background", (float*)&global_colors.status_index_ready_background);
+                ImGui::ColorEdit3("status_index_ready_foreground", (float*)&global_colors.status_index_ready_foreground);
+                ImGui::ColorEdit3("status_index_indexing_background", (float*)&global_colors.status_index_indexing_background);
+                ImGui::ColorEdit3("status_index_indexing_foreground", (float*)&global_colors.status_index_indexing_foreground);
+
                 if (ImGui::Button("Save to disk")) {
                     File f;
                     f.init("/Users/brandon/.cpcolors", FILE_MODE_WRITE, FILE_CREATE_NEW);
@@ -3650,11 +3663,13 @@ void UI::draw_everything() {
                 ImGui::End();
             }
 
-            vec3f tab_color = global_colors.tab;
+            vec4f tab_color;
             if (is_selected)
-                tab_color = global_colors.tab_selected;
+                tab_color = rgba(global_colors.tab_selected);
             else if (is_hovered)
-                tab_color = global_colors.tab_hovered;
+                tab_color = rgba(global_colors.tab_hovered);
+            else
+                tab_color = rgba(global_colors.tab_selected, 0.7);
 
             /*
             if (!is_selected) {
@@ -3662,7 +3677,7 @@ void UI::draw_everything() {
             }
             */
 
-            draw_rounded_rect(tab, rgba(tab_color), 4, ROUND_TL | ROUND_TR);
+            draw_rounded_rect(tab, tab_color, 4, ROUND_TL | ROUND_TR);
             draw_string(tab.pos + tab_padding, label, rgba(is_selected ? global_colors.white : global_colors.white_muted));
 
             auto mouse_flags = get_mouse_flags(tab);
@@ -3781,6 +3796,9 @@ void UI::draw_everything() {
                     b.y -= py;
                     b.h += py * 2;
 
+                    b.y++;
+                    b.h -= 2;
+
                     draw_rect(b, rgba(global_colors.cursor));
                 };
 
@@ -3882,16 +3900,18 @@ void UI::draw_everything() {
                     auto py = font->height * (settings.line_height - 1.0) / 2;
                     line_box.y -= py;
                     line_box.h += py * 2;
+                    line_box.y++;
+                    line_box.h -= 2;
 
                     auto bptype = find_breakpoint_stopped_at_this_line();
                     if (bptype == BREAKPOINT_CURRENT_GOROUTINE)
-                        draw_rect(line_box, rgba(global_colors.breakpoint_current));
+                        draw_rect(line_box, rgba(global_colors.breakpoint_current, 0.25));
                     else if (bptype == BREAKPOINT_OTHER_GOROUTINE)
-                        draw_rect(line_box, rgba(global_colors.breakpoint_other));
+                        draw_rect(line_box, rgba(global_colors.breakpoint_current, 0.1));
                     else if (bptype == BREAKPOINT_ACTIVE)
-                        draw_rect(line_box, rgba(global_colors.breakpoint_active, 0.5));
+                        draw_rect(line_box, rgba(global_colors.breakpoint_active, 0.25));
                     else if (bptype == BREAKPOINT_INACTIVE)
-                        draw_rect(line_box, rgba(global_colors.breakpoint_inactive, 0.3));
+                        draw_rect(line_box, rgba(global_colors.breakpoint_active, 0.15));
 
                     auto line_number_width = get_line_number_width(editor);
 
@@ -3996,6 +4016,9 @@ void UI::draw_everything() {
                                         b.y -= py;
                                         b.h += py * 2;
 
+                                        b.y++;
+                                        b.h -= 2;
+
                                         draw_rect(b, color);
                                     };
 
@@ -4062,7 +4085,7 @@ void UI::draw_everything() {
                                 draw_highlight(rgba(global_colors.search_background));
                                 break;
                             case HL_VISUAL:
-                                draw_highlight(rgba(global_colors.visual_highlight));
+                                draw_highlight(rgba(global_colors.visual_background));
                                 break;
                             }
                         }
@@ -4115,7 +4138,7 @@ void UI::draw_everything() {
     }
 
     {
-        draw_rect(status_area, rgba("#252525"));
+        draw_rect(status_area, rgba(global_colors.status_area_background));
 
         float status_area_left = status_area.x;
         float status_area_right = status_area.x + status_area.w;
@@ -4182,7 +4205,7 @@ void UI::draw_everything() {
                 };
 
                 auto command = our_sprintf("%s%s", get_title(), cmd.content.items);
-                draw_status_piece(LEFT, command, rgba("#888833"), rgba("#cccc88"));
+                draw_status_piece(LEFT, command, rgba(global_colors.command_background), rgba(global_colors.command_foreground));
             } else if (world.get_current_editor() != NULL) {
                 ccstr mode_str = NULL;
                 switch (world.nvim.mode) {
@@ -4194,19 +4217,19 @@ void UI::draw_everything() {
                 case VI_CMDLINE: mode_str = "CMDLINE"; break;
                 default: mode_str = "UNKNOWN"; break;
                 }
-                draw_status_piece(LEFT, mode_str, rgba("#666666"), rgba("aaaaaa"));
+                draw_status_piece(LEFT, mode_str, rgba(global_colors.status_mode_background), rgba(global_colors.status_mode_foreground));
             }
         }
 
         switch (world.dbg.state_flag) {
         case DLV_STATE_PAUSED:
-            draw_status_piece(LEFT, "PAUSED", rgba("#800000"), rgba(global_colors.white));
+            draw_status_piece(LEFT, "PAUSED", rgba(global_colors.status_debugger_paused_background), rgba(global_colors.white));
             break;
         case DLV_STATE_STARTING:
-            draw_status_piece(LEFT, "STARTING", rgba("#888822"), rgba(global_colors.white));
+            draw_status_piece(LEFT, "STARTING", rgba(global_colors.status_debugger_starting_background), rgba(global_colors.white));
             break;
         case DLV_STATE_RUNNING:
-            draw_status_piece(LEFT, "RUNNING", rgba("#008000"), rgba(global_colors.white));
+            draw_status_piece(LEFT, "RUNNING", rgba(global_colors.status_debugger_running_background), rgba(global_colors.white));
             break;
         }
 
@@ -4214,11 +4237,11 @@ void UI::draw_everything() {
         if (world.indexer.ready) {
             auto mouse_flags = get_mouse_flags(get_status_piece_rect(RIGHT, "INDEX READY"));
             auto opacity = mouse_flags & MOUSE_HOVER ? 1.0 : 0.8;
-            index_mouse_flags = draw_status_piece(RIGHT, "INDEX READY", rgba("#008800", opacity), rgba("#cceecc", opacity));
+            index_mouse_flags = draw_status_piece(RIGHT, "INDEX READY", rgba(global_colors.status_index_ready_background, opacity), rgba(global_colors.status_index_ready_foreground, opacity));
         } else {
             auto mouse_flags = get_mouse_flags(get_status_piece_rect(RIGHT, "INDEXING..."));
             auto opacity = mouse_flags & MOUSE_HOVER ? 1.0 : 0.8;
-            index_mouse_flags = draw_status_piece(RIGHT, "INDEXING...", rgba("#880000", opacity), rgba("#eecccc", opacity));
+            index_mouse_flags = draw_status_piece(RIGHT, "INDEXING...", rgba(global_colors.status_index_indexing_background, opacity), rgba(global_colors.status_index_indexing_foreground, opacity));
         }
 
         if (index_mouse_flags & MOUSE_CLICKED) {
