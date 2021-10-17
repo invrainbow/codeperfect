@@ -97,7 +97,7 @@
     background: #444;
   }
   .download-button {
-    @apply bg-gray-50 border border-gray-300 font-medium text-gray-500 whitespace-nowrap text-base mr-1.5 py-1.5 px-3;
+    @apply bg-gray-50 border border-gray-300 font-medium text-gray-500 whitespace-nowrap mr-1.5 py-1.5 px-3;
   }
   .download-button:hover {
     @apply bg-gray-50;
