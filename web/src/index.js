@@ -1,11 +1,10 @@
 import React from "react";
 import ReactDOM from "react-dom";
 import cx from "classnames";
-import _ from "lodash";
+// import _ from "lodash";
 import { Helmet } from "react-helmet";
 import { AiOutlineCheck, AiOutlineClose, AiFillCode } from "react-icons/ai";
 import { FaApple, FaRegClipboard } from "react-icons/fa";
-import { BsLightningFill } from "react-icons/bs";
 import { FcCheckmark } from "react-icons/fc";
 import { HiArrowNarrowRight } from "react-icons/hi";
 import {
@@ -24,9 +23,7 @@ import gpuImage from "./gpu.svg";
 import vimSvg from "./vim.svg";
 import codeSvg from "./code.svg";
 import workflowSvg from "./workflow.svg";
-import pngIntellisense from "./intellisense.png";
 import logoImage from "./logo.png";
-import gifVim from "./vim.gif";
 
 // constants
 const NAME = "CodePerfect 95";
@@ -74,26 +71,6 @@ function Title({ children, ...props }) {
   );
 }
 
-function NiceImage({ className, ...props }) {
-  return (
-    <div className={cx("flex items-center justify-center", className)}>
-      <img alt="" className="overflow-hidden w-full" {...props} />
-    </div>
-  );
-}
-
-function Section({ className, ...props }) {
-  return (
-    <div
-      className={cx(
-        "mb-24 md:gap-20 flex flex-col md:flex-row md:mb-32 md:items-center",
-        className
-      )}
-      {...props}
-    />
-  );
-}
-
 function Feature({ title, icon, children, selected, ...props }) {
   return (
     <button
@@ -105,7 +82,7 @@ function Feature({ title, icon, children, selected, ...props }) {
       {...props}
     >
       <div className="">
-        <img src={icon} className={cx("w-10 filter grayscale")} />
+        <img alt="ide" src={icon} className={cx("w-10 filter grayscale")} />
       </div>
       <div className="font-bold my-2">{title}</div>
       <div>{children}</div>
@@ -161,7 +138,7 @@ function Home() {
 
       <div className="pt-32 pb-24 lg:flex lg:justify-center lg:items-center md:gap-16">
         <div>
-          <img src={gpuImage} className="w-48" />
+          <img alt="gpu" src={gpuImage} className="w-48" />
         </div>
         <div className="leading-relaxed md:flex md:flex-row lg:block md:gap-8 lg:w-1/3">
           <h2 className="text-2xl mb-4 text-gray-800 md:w-4/12 lg:w-full font-medium">
