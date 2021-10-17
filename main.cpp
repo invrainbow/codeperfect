@@ -298,10 +298,10 @@ int main(int argc, char **argv) {
     style.ScrollbarSize = 11;
     style.GrabMinSize = 8;
 
-    style.WindowRounding = 3;
+    style.WindowRounding = 6;
     style.ChildRounding = 0;
     style.FrameRounding = 2;
-    style.PopupRounding = 0;
+    style.PopupRounding = 6;
     style.ScrollbarRounding = 2;
     style.GrabRounding = 2;
     style.LogSliderDeadzone = 4;
@@ -589,6 +589,28 @@ int main(int argc, char **argv) {
         io.KeySuper = io.KeysDown[GLFW_KEY_LEFT_SUPER] || io.KeysDown[GLFW_KEY_RIGHT_SUPER];
 
         if (ev != GLFW_PRESS && ev != GLFW_REPEAT) return;
+
+        {
+            auto name = glfwGetKeyName(key, scan);
+            if (name == NULL) {
+                switch (key) {
+                case GLFW_KEY_LEFT_CONTROL: name = "ctrl"; break;
+                case GLFW_KEY_RIGHT_CONTROL: name = "ctrl"; break;
+                case GLFW_KEY_LEFT_SHIFT: name = "shift"; break;
+                case GLFW_KEY_RIGHT_SHIFT: name = "shift"; break;
+                case GLFW_KEY_LEFT_ALT: name = "alt"; break;
+                case GLFW_KEY_RIGHT_ALT: name = "alt"; break;
+                case GLFW_KEY_LEFT_SUPER: name = "super"; break;
+                case GLFW_KEY_RIGHT_SUPER: name = "super"; break;
+                case GLFW_KEY_SPACE: name = "space"; break;
+                case GLFW_KEY_TAB: name = "tab"; break;
+                case GLFW_KEY_ESCAPE: name = "escape"; break;
+                default: name = our_sprintf("<key: %d>", key, scan); break;
+                }
+            }
+            print("[key] %s", name);
+        }
+
 
         // handle global keys
 
@@ -1068,17 +1090,17 @@ int main(int argc, char **argv) {
     });
 
     glfwSetCharCallback(world.window, [](GLFWwindow* wnd, u32 ch) {
-        auto pressed = [&](int key1, int key2) {
-            return glfwGetKey(wnd, key1) || glfwGetKey(wnd, key2);
-        };
+        u32 mods = 0; // normalized mod
+        if (glfwGetKey(wnd, GLFW_KEY_LEFT_SUPER)) mods |= KEYMOD_CMD;
+        if (glfwGetKey(wnd, GLFW_KEY_RIGHT_SUPER)) mods |= KEYMOD_CMD;
+        if (glfwGetKey(wnd, GLFW_KEY_LEFT_CONTROL)) mods |= KEYMOD_CTRL;
+        if (glfwGetKey(wnd, GLFW_KEY_RIGHT_SUPER)) mods |= KEYMOD_CTRL;
+        if (glfwGetKey(wnd, GLFW_KEY_LEFT_SHIFT)) mods |= KEYMOD_SHIFT;
+        if (glfwGetKey(wnd, GLFW_KEY_RIGHT_SHIFT)) mods |= KEYMOD_SHIFT;
+        if (glfwGetKey(wnd, GLFW_KEY_LEFT_ALT)) mods |= KEYMOD_ALT;
+        if (glfwGetKey(wnd, GLFW_KEY_RIGHT_ALT)) mods |= KEYMOD_ALT;
 
-        u32 nmod = 0; // normalized mod
-        if (pressed(GLFW_KEY_LEFT_SUPER, GLFW_KEY_RIGHT_SUPER)) nmod |= KEYMOD_CMD;
-        if (pressed(GLFW_KEY_LEFT_CONTROL, GLFW_KEY_RIGHT_SUPER)) nmod |= KEYMOD_CTRL;
-        if (pressed(GLFW_KEY_LEFT_SHIFT, GLFW_KEY_RIGHT_SHIFT)) nmod |= KEYMOD_SHIFT;
-        if (pressed(GLFW_KEY_LEFT_ALT, GLFW_KEY_RIGHT_ALT)) nmod |= KEYMOD_ALT;
-
-        if (nmod == KEYMOD_CTRL) return;
+        if (mods == KEYMOD_CTRL) return;
 
         ImGuiIO& io = ImGui::GetIO();
         if (ch > 0 && ch < 0x10000)

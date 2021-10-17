@@ -176,6 +176,11 @@ struct World {
     vec2 display_size;
     vec2f display_scale;
 
+    struct {
+        bool recording;
+        File f;
+    } record_keys;
+
     Message_Queue<Main_Thread_Message> message_queue;
 
     Searcher searcher;

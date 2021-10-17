@@ -2136,6 +2136,22 @@ void UI::draw_everything() {
                 );
                 print("%d", res);
             }
+
+            ImGui::Separator();
+            {
+                auto &ref = world.record_keys;
+                if (ref.recording) {
+                    if (ImGui::MenuItem("Stop recording")) {
+                        ref.f.cleanup();
+                        ref.recording = false;
+                    }
+                } else {
+                    if (ImGui::MenuItem("Start recording")) {
+                        ref.f.init("/Users/brandon/keyrecordings.txt", FILE_MODE_WRITE, FILE_CREATE_NEW);
+                        ref.recording = true;
+                    }
+                }
+            }
 #endif
 
             /*
@@ -3419,8 +3435,8 @@ void UI::draw_everything() {
                 ImGui::ColorEdit3("search_background", (float*)&global_colors.search_background);
                 ImGui::ColorEdit3("search_foreground", (float*)&global_colors.search_foreground);
                 ImGui::ColorEdit3("string_literal", (float*)&global_colors.string_literal);
-                ImGui::ColorEdit3("tab", (float*)&global_colors.tab);
-                ImGui::ColorEdit3("tab_hovered", (float*)&global_colors.tab_hovered);
+                // ImGui::ColorEdit3("tab", (float*)&global_colors.tab);
+                // ImGui::ColorEdit3("tab_hovered", (float*)&global_colors.tab_hovered);
                 ImGui::ColorEdit3("tab_selected", (float*)&global_colors.tab_selected);
                 ImGui::ColorEdit3("type", (float*)&global_colors.type);
                 ImGui::ColorEdit3("visual_background", (float*)&global_colors.visual_background);
@@ -3667,9 +3683,9 @@ void UI::draw_everything() {
             if (is_selected)
                 tab_color = rgba(global_colors.tab_selected);
             else if (is_hovered)
-                tab_color = rgba(global_colors.tab_hovered);
+                tab_color = rgba(global_colors.tab_selected, 0.75);
             else
-                tab_color = rgba(global_colors.tab_selected, 0.7);
+                tab_color = rgba(global_colors.tab_selected, 0.5);
 
             /*
             if (!is_selected) {
