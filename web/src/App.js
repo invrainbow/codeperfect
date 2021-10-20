@@ -111,13 +111,13 @@ const BIG_TABLE_OF_FEATURES = {
   code: {
     image: animSpritesheet,
     frames: animFrames,
-    skip: 3250,
+    skip: 3000,
     speed: 1,
   },
   vim: {
     image: animVimSpritesheet,
     frames: animVimFrames,
-    skip: 1000,
+    skip: 2100,
     speed: 1,
   },
   workflow: {
@@ -178,6 +178,11 @@ class Anim {
       }
     });
     this.observer.observe(this.canvas);
+
+    // clear canvas
+    const ctx = this.canvas.getContext("2d");
+    ctx.fillStyle = "rgb(26, 26, 26)";
+    ctx.fillRect(0, 0, this.canvas.width * 2, this.canvas.height * 2);
   }
 
   cleanup() {
@@ -188,10 +193,7 @@ class Anim {
   draw = (time) => {
     if (!this.start) {
       this.start = time;
-
-      const ctx = this.canvas.getContext("2d");
-      ctx.fillStyle = "rgb(26, 26, 26)";
-      ctx.fillRect(0, 0, this.canvas.width * 2, this.canvas.height * 2);
+      // this.clearCanvas();
     }
 
     time -= this.start;
