@@ -92,7 +92,6 @@ List<Diff> *diff_compute(DString a, DString b) {
 }
 
 List<Diff> *diff_main(DString a, DString b) {
-    print("diff_main '%s' '%s'", a.str(), b.str());
     if (a.equals(b)) {
         auto ret = alloc_list<Diff>();
         if (a.len() > 0)

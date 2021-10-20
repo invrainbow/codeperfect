@@ -20,12 +20,20 @@ import { FcCheckmark } from "react-icons/fc";
 import { HiArrowNarrowLeft, HiArrowNarrowRight } from "react-icons/hi";
 
 import "./index.css";
-import ideScreenshotImage from "./ide.png";
 import gpuImage from "./gpu.svg";
 import vimSvg from "./vim.svg";
 import codeSvg from "./code.svg";
 import workflowSvg from "./workflow.svg";
 import logoImage from "./logo.png";
+
+import animFrames from "./anim/data.json";
+import animSpritesheet from "./anim/spritesheet.png";
+
+import animVimFrames from "./anim-vim/data.json";
+import animVimSpritesheet from "./anim-vim/spritesheet.png";
+
+import animWorkflowFrames from "./anim-workflow/data.json";
+import animWorkflowSpritesheet from "./anim-workflow/spritesheet.png";
 
 const NAME = "CodePerfect 95";
 const NAME_SHORT = "CodePerfect";
@@ -72,16 +80,18 @@ function Title({ children, ...props }) {
   );
 }
 
-function Feature({ title, icon, children, selected, ...props }) {
+function Feature({ title, icon, children, selected, onClick, ...props }) {
   return (
     <button
       className={cx(
         "block w-full text-center",
         "sm:text-left",
         "lg:pl-3 lg:text-left lg:border-l-4",
+        "hover:text-gray-700",
         selected ? "border-gray-700" : "", // "hover:border-gray-200 border-gray-100",
-        selected && "text-black"
+        selected && "text-black hover:text-black"
       )}
+      onClick={onClick}
       {...props}
     >
       <div className="flex justify-center sm:justify-start">
@@ -97,43 +107,206 @@ function Feature({ title, icon, children, selected, ...props }) {
   );
 }
 
+const BIG_TABLE_OF_FEATURES = {
+  code: {
+    image: animSpritesheet,
+    frames: animFrames,
+    skip: 3250,
+    speed: 1,
+  },
+  vim: {
+    image: animVimSpritesheet,
+    frames: animVimFrames,
+    skip: 1000,
+    speed: 1,
+  },
+  workflow: {
+    image: animWorkflowSpritesheet,
+    frames: animWorkflowFrames,
+    skip: 500,
+    speed: 1.25,
+  },
+};
+
+class Anim {
+  constructor(canvas, feature) {
+    this.canvas = canvas;
+    this.stop = false;
+    this.start = null;
+    this.frame = 0;
+
+    this.feature = feature;
+
+    const featureInfo = BIG_TABLE_OF_FEATURES[feature];
+    this.frames = featureInfo.frames;
+    this.skip = featureInfo.skip;
+    this.speed = featureInfo.speed;
+
+    this.image = new Image();
+    this.image.src = featureInfo.image;
+    this.image.onload = () => {
+      if (!this.stop) {
+        requestAnimationFrame(this.draw);
+      }
+    };
+
+    this.firstFrameTime = this.frames[0][0];
+
+    {
+      const [, , x1, y1, x2, y2] = this.frames[0][1][0];
+      const w = x2 - x1;
+      const h = y2 - y1;
+
+      this.canvas.width = w;
+      this.canvas.height = h;
+    }
+
+    const resizeCanvas = (width) => {
+      const height = width * (this.canvas.height / this.canvas.width);
+      this.canvas.style.height = `${height}px`;
+    };
+
+    resizeCanvas(this.canvas.getBoundingClientRect().width);
+
+    this.observer = new ResizeObserver((entries) => {
+      for (let entry of entries) {
+        if (entry.contentBoxSize) {
+          resizeCanvas(entry.contentBoxSize[0].inlineSize);
+        } else {
+          resizeCanvas(entry.contentRect.width);
+        }
+      }
+    });
+    this.observer.observe(this.canvas);
+  }
+
+  cleanup() {
+    this.stop = true;
+    this.observer.disconnect();
+  }
+
+  draw = (time) => {
+    if (!this.start) {
+      this.start = time;
+
+      const ctx = this.canvas.getContext("2d");
+      ctx.fillStyle = "rgb(26, 26, 26)";
+      ctx.fillRect(0, 0, this.canvas.width * 2, this.canvas.height * 2);
+    }
+
+    time -= this.start;
+    time += this.skip;
+
+    while (
+      this.frame < this.frames.length &&
+      time * this.speed > this.frames[this.frame][0] - this.firstFrameTime
+    ) {
+      this.frames[this.frame][1].forEach((change) => {
+        const [x, y, x1, y1, x2, y2] = change;
+        const ctx = this.canvas.getContext("2d");
+        const [sx, sy] = [x1 + 2, y1 + 2];
+        const [w, h] = [x2 - x1 - 4, y2 - y1 - 4];
+        const [dx, dy] = [x + 2, y + 2];
+        ctx.drawImage(this.image, sx, sy, w, h, dx, dy, w, h);
+      });
+      this.frame++;
+    }
+
+    if (this.frame === this.frames.length) {
+      // start over
+      this.start = null;
+      this.frame = 0;
+    }
+
+    if (!this.stop) requestAnimationFrame(this.draw);
+  };
+}
+
 function FeaturePresentation() {
+  const [feature, setFeature] = React.useState("code");
+
+  const canvasRef = React.useRef(null);
+  const animRef = React.useRef(null);
+
+  function cleanupAnim() {
+    if (animRef.current !== null) {
+      animRef.current.cleanup();
+      animRef.current = null;
+    }
+  }
+
+  const initAnim = React.useCallback(() => {
+    cleanupAnim();
+    animRef.current = new Anim(canvasRef.current, feature);
+  }, [feature]);
+
+  React.useEffect(() => {
+    initAnim();
+  }, [initAnim, feature]);
+
+  const canvasRefCallback = React.useCallback(
+    (canvas) => {
+      if (canvas) {
+        canvasRef.current = canvas;
+        if (animRef.current === null) {
+          initAnim();
+        }
+      }
+    },
+    [initAnim]
+  );
+
+  // cleanup
+  React.useEffect(() => {
+    return () => cleanupAnim();
+  }, []);
+
   return (
     <div
       className={cx(
         "flex flex-col",
         "lg:flex-row lg:px-8",
-        "max-w-screen-xl mx-auto gap-8 px-3 items-center"
+        "max-w-screen-xl mx-auto gap-8 px-3 items-center justify-center"
       )}
     >
-      <div>
-        <img
-          alt=""
-          className="max-w-auto border border-gray-500 rounded-md md:rounded-2xl"
-          src={ideScreenshotImage}
+      <div className="w-full">
+        <canvas
+          className="w-full border border-gray-300 shadow rounded-lg"
+          ref={canvasRefCallback}
         />
       </div>
       <div
         className={cx(
-          "max-w-sm flex items-start gap-2",
-          "sm:max-w-full sm:gap-8 sm:px-8",
-          "md:gap-16",
-          "lg:flex-col lg:gap-8 lg:px-0"
+          "w-full flex justify-between items-start gap-2",
+          "sm:max-w-full sm:px-8",
+          "md:gap-16 md:justify-start",
+          "lg:w-60 lg:flex-col lg:gap-8 lg:px-0"
         )}
       >
-        <Feature title="Code Intelligence" icon={codeSvg}>
+        <Feature
+          title="Code Intelligence"
+          icon={codeSvg}
+          selected={feature === "code"}
+          onClick={() => setFeature("code")}
+        >
           An IDE that understands what you're trying to do.
         </Feature>
-        <Feature title="Vim Keybindings" icon={vimSvg}>
+        <Feature
+          title="Vim Keybindings"
+          icon={vimSvg}
+          selected={feature === "vim"}
+          onClick={() => setFeature("vim")}
+        >
           Built into the core of the application. Designed to work seamlessly
           with everything else.
         </Feature>
         <Feature
+          selected={feature === "workflow"}
+          onClick={() => setFeature("workflow")}
           title={
             <>
-              Integrated
-              <br />
-              Build &amp; Debug
+              <span className="inline-block">Integrated</span>{" "}
+              <span className="inline-block">Build &amp; Debug</span>
             </>
           }
           icon={workflowSvg}

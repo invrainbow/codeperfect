@@ -590,7 +590,7 @@ int main(int argc, char **argv) {
 
         if (ev != GLFW_PRESS && ev != GLFW_REPEAT) return;
 
-        {
+        if (world.record_keys.recording) {
             auto name = glfwGetKeyName(key, scan);
             if (name == NULL) {
                 switch (key) {
@@ -605,12 +605,13 @@ int main(int argc, char **argv) {
                 case GLFW_KEY_SPACE: name = "space"; break;
                 case GLFW_KEY_TAB: name = "tab"; break;
                 case GLFW_KEY_ESCAPE: name = "escape"; break;
-                default: name = our_sprintf("<key: %d>", key, scan); break;
+                default: name = our_sprintf("%d", key, scan); break;
                 }
             }
-            print("[key] %s", name);
-        }
 
+            auto s = our_sprintf("%llu %s\n", current_time_in_nanoseconds() / 1000000, name);
+            world.record_keys.f.write((char*)s, strlen(s));
+        }
 
         // handle global keys
 
