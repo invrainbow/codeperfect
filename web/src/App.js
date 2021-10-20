@@ -224,10 +224,16 @@ class Anim {
   };
 }
 
-function preloadSpritesheets() {
-  new Image().src = animSpritesheet;
-  new Image().src = animVimSpritesheet;
-  new Image().src = animWorkflowSpritesheet;
+async function preloadSpritesheets() {
+  const sheets = [animSpritesheet, animVimSpritesheet, animWorkflowSpritesheet];
+  for (let src of sheets) {
+    await new Promise((resolve, reject) => {
+      const img = new Image();
+      img.src = src;
+      img.onload = resolve;
+      img.onerror = reject;
+    });
+  }
 }
 
 preloadSpritesheets();
