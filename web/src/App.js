@@ -224,6 +224,14 @@ class Anim {
   };
 }
 
+function preloadSpritesheets() {
+  new Image().src = animSpritesheet;
+  new Image().src = animVimSpritesheet;
+  new Image().src = animWorkflowSpritesheet;
+}
+
+preloadSpritesheets();
+
 function FeaturePresentation() {
   const [feature, setFeature] = React.useState("code");
 
