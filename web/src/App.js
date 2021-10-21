@@ -4,6 +4,7 @@ import cx from "classnames";
 
 import { Helmet } from "react-helmet";
 import { CopyToClipboard } from "react-copy-to-clipboard";
+import { NavHashLink } from "react-router-hash-link";
 import {
   BrowserRouter as Router,
   Link,
@@ -334,6 +335,30 @@ function FeaturePresentation() {
 }
 
 function Home() {
+  React.useEffect(() => {
+    const hash = window.location.hash.slice(1);
+    if (hash) {
+      const elem = document.getElementById(hash.slice(1));
+      if (elem) {
+        elem.scrollIntoView();
+      }
+    }
+  }, []);
+
+  /*
+  React.useEffect(() => {
+    const onchange = () => {
+      const hash = window.location.hash.slice(1)
+      const elem = document.getElementById(hash)
+      if (elem) {
+        elem.scrollIntoView();
+      }
+    }
+    window.addEventListener('hashchange', onchange);
+    return () => window.removeEventListener('hashchange', onchange);
+  })
+  */
+
   return (
     <div className="w-full">
       <div className="mt-8 px-4 sm:mt-24 sm:mb-8 md:mt-24 md:mb-12 lg:max-w-screen-xl lg:mx-auto">
@@ -388,6 +413,7 @@ function Home() {
           </div>
         </div>
       </div>
+      <Pricing />
     </div>
   );
 }
@@ -646,11 +672,30 @@ function Download() {
   return <Redirect to={`/install?code=${getCode()}`} />;
 }
 
+function Anchor({ name }) {
+  const ref = React.useCallback(
+    (elem) => {
+      console.log("ref found", elem);
+      console.log(name);
+      console.log(window.location.hash);
+      if (window.location.hash.slice(1) === name) {
+        console.log("scrolling");
+        setTimeout(() => {
+          elem.scrollIntoView();
+        }, 1);
+      }
+    },
+    [name]
+  );
+  return <a ref={ref} name={name}></a>;
+}
+
 function Pricing() {
   const [yearly, setYearly] = React.useState(false);
 
   return (
     <div className="pricing my-24">
+      <Anchor name="pricing" />
       <h1 className="text-center text-black font-bold text-4xl mb-8">
         Pricing
       </h1>
@@ -796,11 +841,13 @@ function Privacy() {
 }
 
 function ScrollToTop() {
-  const { pathname } = useLocation();
+  const { pathname, hash } = useLocation();
 
   React.useEffect(() => {
-    window.scrollTo(0, 0);
-  }, [pathname]);
+    if (hash) {
+      window.scrollTo(0, 0);
+    }
+  }, [pathname, hash]);
 
   return null;
 }
@@ -838,7 +885,7 @@ function App() {
 
             <Link
               className="no-underline font-semibold text-gray-600 hidden sm:inline-block"
-              to="/pricing"
+              to="/#pricing"
             >
               Pricing
             </Link>
@@ -860,7 +907,7 @@ function App() {
               <ManualInstall />
             </Route>
             <Route path="/pricing">
-              <Pricing />
+              <Redirect to="/#pricing" />
             </Route>
             <Route path="/terms">
               <Terms />
@@ -904,9 +951,12 @@ function App() {
                 </A>
               </div>
               <div>
-                <Link to="/pricing" className="text-gray-500 no-underline">
-                  Pricing
-                </Link>
+                <A
+                  className="text-gray-500 no-underline"
+                  href={`mailto:${SUPPORT_EMAIL}`}
+                >
+                  Support
+                </A>
               </div>
             </div>
             <div className="text-left">
@@ -919,14 +969,6 @@ function App() {
                 <Link className="text-gray-500 no-underline" to="/privacy">
                   Privacy Policy
                 </Link>
-              </div>
-              <div>
-                <A
-                  className="text-gray-500 no-underline"
-                  href={`mailto:${SUPPORT_EMAIL}`}
-                >
-                  Contact
-                </A>
               </div>
             </div>
           </div>
