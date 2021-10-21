@@ -26,14 +26,14 @@ import codeSvg from "./code.svg";
 import workflowSvg from "./workflow.svg";
 import logoImage from "./logo.png";
 
-import animFrames from "./anim/data.json";
-import animSpritesheet from "./anim/spritesheet.png";
+import animFrames from "./anim-code-intelligence/data.json";
+import animSpritesheet from "./anim-code-intelligence/spritesheet.png";
 
-import animVimFrames from "./anim-vim/data.json";
-import animVimSpritesheet from "./anim-vim/spritesheet.png";
+import animVimFrames from "./anim-vim2/data.json";
+import animVimSpritesheet from "./anim-vim2/spritesheet.png";
 
-import animWorkflowFrames from "./anim-workflow/data.json";
-import animWorkflowSpritesheet from "./anim-workflow/spritesheet.png";
+import animWorkflowFrames from "./anim-workflow2/data.json";
+import animWorkflowSpritesheet from "./anim-workflow2/spritesheet.png";
 
 const NAME = "CodePerfect 95";
 const NAME_SHORT = "CodePerfect";
@@ -111,7 +111,7 @@ const BIG_TABLE_OF_FEATURES = {
   code: {
     image: animSpritesheet,
     frames: animFrames,
-    skip: 3000,
+    skip: 1500,
     speed: 1,
   },
   vim: {
@@ -240,7 +240,6 @@ preloadSpritesheets();
 
 function FeaturePresentation() {
   const [feature, setFeature] = React.useState("code");
-
   const canvasRef = React.useRef(null);
   const animRef = React.useRef(null);
 
