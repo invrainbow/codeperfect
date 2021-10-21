@@ -4,7 +4,6 @@ import cx from "classnames";
 
 import { Helmet } from "react-helmet";
 import { CopyToClipboard } from "react-copy-to-clipboard";
-import { NavHashLink } from "react-router-hash-link";
 import {
   BrowserRouter as Router,
   Link,
@@ -55,12 +54,25 @@ function A({ children, ...props }) {
   );
 }
 
-function WallOfText({ title, children }) {
+function WallOfText({ children, className, ...props }) {
   return (
-    <div className="wall-of-text p-4 my-12 md:p-8 leading-normal md:max-w-3xl md:mx-auto">
-      {title && <Title>{title}</Title>}
+    <div
+      className={cx(
+        className,
+        "wall-of-text p-4 my-4 md:my-12 md:p-8 leading-normal md:max-w-3xl md:mx-auto"
+      )}
+      {...props}
+    >
       {children}
     </div>
+  );
+}
+
+function Title({ children, ...props }) {
+  return (
+    <h2 className="text-xl font-bold text-gray-700" {...props}>
+      {children}
+    </h2>
   );
 }
 
@@ -73,24 +85,16 @@ function Icon({ icon, ...props }) {
   );
 }
 
-function Title({ children, ...props }) {
-  return (
-    <h2 className="text-xl font-bold text-gray-700" {...props}>
-      {children}
-    </h2>
-  );
-}
-
 function Feature({ title, icon, children, selected, onClick, ...props }) {
   return (
     <button
       className={cx(
-        "block w-full text-center",
+        "block w-full text-center group",
         "sm:text-left",
         "lg:pl-3 lg:text-left lg:border-l-4",
-        "hover:text-gray-700",
-        selected ? "border-gray-700" : "", // "hover:border-gray-200 border-gray-100",
-        selected && "text-black hover:text-black"
+        selected
+          ? "lg:border-gray-700 text-black hover:text-black"
+          : "lg:border-gray-200 text-gray-500 hover:text-gray-600"
       )}
       onClick={onClick}
       {...props}
@@ -99,7 +103,11 @@ function Feature({ title, icon, children, selected, onClick, ...props }) {
         <img
           alt="ide"
           src={icon}
-          className={cx("text-center w-10 filter grayscale")}
+          className={cx(
+            "opacity-50 text-center w-10 filter grayscale",
+            "group-hover:opacity-60",
+            selected && "opacity-100 group-hover:opacity-100"
+          )}
         />
       </div>
       <div className="text-sm font-bold my-2">{title}</div>
@@ -335,30 +343,6 @@ function FeaturePresentation() {
 }
 
 function Home() {
-  React.useEffect(() => {
-    const hash = window.location.hash.slice(1);
-    if (hash) {
-      const elem = document.getElementById(hash.slice(1));
-      if (elem) {
-        elem.scrollIntoView();
-      }
-    }
-  }, []);
-
-  /*
-  React.useEffect(() => {
-    const onchange = () => {
-      const hash = window.location.hash.slice(1)
-      const elem = document.getElementById(hash)
-      if (elem) {
-        elem.scrollIntoView();
-      }
-    }
-    window.addEventListener('hashchange', onchange);
-    return () => window.removeEventListener('hashchange', onchange);
-  })
-  */
-
   return (
     <div className="w-full">
       <div className="mt-8 px-4 sm:mt-24 sm:mb-8 md:mt-24 md:mb-12 lg:max-w-screen-xl lg:mx-auto">
@@ -464,7 +448,8 @@ function AutoInstall() {
   const installLink = `${API_BASE}/install?code=${code}`;
 
   return (
-    <WallOfText title="Install">
+    <WallOfText>
+      <Title>Install</Title>
       <div className="p-6 border border-gray-300 rounded mt-4">
         <div>
           Make sure Go (version 1.13 or higher) is installed. Then paste this
@@ -615,7 +600,8 @@ function ManualInstall() {
   }
 
   return (
-    <WallOfText title="Manual Install">
+    <WallOfText>
+      <Title>Manual Install</Title>
       <p>Install Go (version 1.13+ or higher).</p>
       <p>Download the appropriate package for your machine:</p>
       <p className="flex space-x-2">
@@ -687,6 +673,8 @@ function Anchor({ name }) {
     },
     [name]
   );
+
+  // eslint-disable-next-line
   return <a ref={ref} name={name}></a>;
 }
 
@@ -803,40 +791,40 @@ function Pricing() {
 
 function Terms() {
   return (
-    <WallOfText title="Terms of Service">
-      <p>
-        This website provides you with information about the IDE and a means for
-        you to subscribe to our services, which allow you to use the IDE for as
-        long as your subscription is active.
-      </p>
-      <p>
-        The IDE is an application that lets you write Go applications. In
-        exchange for paying a monthly rate, we provide you with a license to use
-        it.
-      </p>
-    </WallOfText>
-  );
-}
+    <>
+      <WallOfText>
+        <Title>Terms of Service</Title>
+        <p>
+          This website provides you with information about the IDE and a means
+          for you to subscribe to our services, which allow you to use the IDE
+          for as long as your subscription is active.
+        </p>
+        <p>
+          The IDE is an application that lets you write Go applications. In
+          exchange for paying a monthly rate, we provide you with a license to
+          use it.
+        </p>
 
-function Privacy() {
-  return (
-    <WallOfText title="Privacy Policy">
-      <p>
-        When you fill out the Join Beta form, we collect your name and email. We
-        use this to send you updates about new product features.
-      </p>
-      <p>
-        When you sign up, we collect your name, email, and credit card
-        information. We use this information to bill you and send you emails
-        with updates about your payment status (for example, if your card
-        fails).
-      </p>
-      <p>
-        The IDE contacts the server to authenticate your license key and to
-        install automatic updates. This exposes your IP address to us. We won't
-        share it with anyone, unless ordered to by law.
-      </p>
-    </WallOfText>
+        <br />
+
+        <Title>Privacy Policy</Title>
+        <p>
+          When you fill out the Join Beta form, we collect your name and email.
+          We use this to send you updates about new product features.
+        </p>
+        <p>
+          When you sign up, we collect your name, email, and credit card
+          information. We use this information to bill you and send you emails
+          with updates about your payment status (for example, if your card
+          fails).
+        </p>
+        <p>
+          The IDE contacts the server to authenticate your license key and to
+          install automatic updates. This exposes your IP address to us. We
+          won't share it with anyone, unless ordered to by law.
+        </p>
+      </WallOfText>
+    </>
   );
 }
 
@@ -844,7 +832,7 @@ function ScrollToTop() {
   const { pathname, hash } = useLocation();
 
   React.useEffect(() => {
-    if (hash) {
+    if (!hash) {
       window.scrollTo(0, 0);
     }
   }, [pathname, hash]);
@@ -863,7 +851,7 @@ function App() {
       </Helmet>
 
       <div className="text-gray-500">
-        <div className="pt-8 px-4 pb-4 flex justify-between items-center w-full lg:max-w-screen-xl lg:mx-auto">
+        <div className="pt-4 lg:pt-8 px-4 pb-4 flex justify-between items-center w-full lg:max-w-screen-xl lg:mx-auto">
           <Link
             to="/"
             className="font-bold text-lg text-black no-underline whitespace-nowrap flex items-center"
@@ -885,7 +873,7 @@ function App() {
 
             <Link
               className="no-underline font-semibold text-gray-600 hidden sm:inline-block"
-              to="/#pricing"
+              to="/pricing"
             >
               Pricing
             </Link>
@@ -913,7 +901,7 @@ function App() {
               <Terms />
             </Route>
             <Route path="/privacy">
-              <Privacy />
+              <Redirect to="/terms" />
             </Route>
             <Route exact path="/">
               <Home />
@@ -925,7 +913,7 @@ function App() {
         </div>
         <div
           className={cx(
-            "px-4 pt-8 mb-20 flex flex-col justify-between",
+            "px-4 pt-4 mb-8 lg:pt-8 lg:mb-12 flex flex-col justify-between",
             "lg:max-w-screen-xl lg:mx-auto sm:flex-row"
           )}
         >
@@ -933,7 +921,7 @@ function App() {
             &copy; {CURRENT_YEAR} {NAME}
           </div>
           <div className="flex flex-col sm:flex-row space-x-0 sm:space-x-12 mt-2 sm:mt-0">
-            <div className="text-left">
+            <div className="sm:text-right sm:flex sm:flex-row sm:space-x-6">
               <div>
                 <A
                   className="text-gray-500 no-underline"
@@ -958,16 +946,9 @@ function App() {
                   Support
                 </A>
               </div>
-            </div>
-            <div className="text-left">
               <div>
                 <Link to="/terms" className="text-gray-500 no-underline">
-                  Terms of Service
-                </Link>
-              </div>
-              <div>
-                <Link className="text-gray-500 no-underline" to="/privacy">
-                  Privacy Policy
+                  Terms &amp; Privacy
                 </Link>
               </div>
             </div>
