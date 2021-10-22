@@ -126,7 +126,7 @@ const BIG_TABLE_OF_FEATURES = {
   vim: {
     image: animVimSpritesheet,
     frames: animVimFrames,
-    skip: 2100,
+    skip: 3100,
     speed: 1,
   },
   workflow: {
@@ -137,99 +137,91 @@ const BIG_TABLE_OF_FEATURES = {
   },
 };
 
-class Anim {
-  constructor(canvas, feature) {
-    this.canvas = canvas;
-    this.stop = false;
-    this.start = null;
-    this.frame = 0;
+function animate(canvas, feature) {
+  let stop = false;
+  let start = null;
+  let frame = 0;
 
-    this.feature = feature;
+  const featureInfo = BIG_TABLE_OF_FEATURES[feature];
+  const frames = featureInfo.frames;
 
-    const featureInfo = BIG_TABLE_OF_FEATURES[feature];
-    this.frames = featureInfo.frames;
-    this.skip = featureInfo.skip;
-    this.speed = featureInfo.speed;
+  let image = null;
 
-    this.image = new Image();
-    this.image.src = featureInfo.image;
-    this.image.onload = () => {
-      if (!this.stop) {
-        requestAnimationFrame(this.draw);
-      }
-    };
+  {
+    const [, , x1, y1, x2, y2] = frames[0][1][0];
+    const w = x2 - x1;
+    const h = y2 - y1;
 
-    this.firstFrameTime = this.frames[0][0];
+    canvas.width = w;
+    canvas.height = h;
+  }
 
-    {
-      const [, , x1, y1, x2, y2] = this.frames[0][1][0];
-      const w = x2 - x1;
-      const h = y2 - y1;
+  const resizeCanvas = (w) => {
+    const h = w * (canvas.height / canvas.width);
+    canvas.style.height = `${h}px`;
+  };
 
-      this.canvas.width = w;
-      this.canvas.height = h;
-    }
+  resizeCanvas(canvas.getBoundingClientRect().width);
 
-    const resizeCanvas = (width) => {
-      const height = width * (this.canvas.height / this.canvas.width);
-      this.canvas.style.height = `${height}px`;
-    };
-
-    resizeCanvas(this.canvas.getBoundingClientRect().width);
-
-    this.observer = new ResizeObserver((entries) => {
-      for (let entry of entries) {
-        if (entry.contentBoxSize) {
-          resizeCanvas(entry.contentBoxSize[0].inlineSize);
-        } else {
-          resizeCanvas(entry.contentRect.width);
-        }
+  const observer = new ResizeObserver((entries) => {
+    entries.forEach((entry) => {
+      if (entry.contentBoxSize) {
+        resizeCanvas(entry.contentBoxSize[0].inlineSize);
+      } else {
+        resizeCanvas(entry.contentRect.width);
       }
     });
-    this.observer.observe(this.canvas);
+  });
+  observer.observe(canvas);
 
-    // clear canvas
-    const ctx = this.canvas.getContext("2d");
-    ctx.fillStyle = "rgb(26, 26, 26)";
-    ctx.fillRect(0, 0, this.canvas.width * 2, this.canvas.height * 2);
-  }
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "rgb(26, 26, 26)";
+  ctx.fillRect(0, 0, canvas.width * 2, canvas.height * 2);
+  canvas.classList.remove("done");
 
-  cleanup() {
-    this.stop = true;
-    this.observer.disconnect();
-  }
+  const draw = (rawTime) => {
+    const ctx = canvas.getContext("2d");
 
-  draw = (time) => {
-    if (!this.start) {
-      this.start = time;
-      // this.clearCanvas();
+    if (stop) return;
+    if (!start) {
+      start = rawTime;
+
+      canvas.classList.add("done");
+      ctx.fillStyle = "rgba(255, 255, 255, 0)";
+      ctx.fillRect(0, 0, canvas.width * 2, canvas.height * 2);
     }
 
-    time -= this.start;
-    time += this.skip;
+    let time = rawTime;
+    time -= start;
+    time += featureInfo.skip;
+    time *= featureInfo.speed;
 
-    while (
-      this.frame < this.frames.length &&
-      time * this.speed > this.frames[this.frame][0] - this.firstFrameTime
-    ) {
-      this.frames[this.frame][1].forEach((change) => {
+    while (frame < frames.length && time > frames[frame][0] - frames[0][0]) {
+      frames[frame][1].forEach((change) => {
         const [x, y, x1, y1, x2, y2] = change;
-        const ctx = this.canvas.getContext("2d");
-        const [sx, sy] = [x1 + 2, y1 + 2];
-        const [w, h] = [x2 - x1 - 4, y2 - y1 - 4];
-        const [dx, dy] = [x + 2, y + 2];
-        ctx.drawImage(this.image, sx, sy, w, h, dx, dy, w, h);
+        const w = x2 - x1;
+        const h = y2 - y1;
+        ctx.drawImage(image, x1, y1, w, h, x, y, w, h);
       });
-      this.frame++;
+      frame++;
     }
 
-    if (this.frame === this.frames.length) {
+    if (frame === frames.length) {
       // start over
-      this.start = null;
-      this.frame = 0;
+      start = null;
+      frame = 0;
     }
 
-    if (!this.stop) requestAnimationFrame(this.draw);
+    requestAnimationFrame(draw);
+  };
+
+  image = new Image();
+  image.src = featureInfo.image;
+  image.onload = () => requestAnimationFrame(draw);
+
+  return () => {
+    stop = true;
+    observer.disconnect();
   };
 }
 
@@ -249,41 +241,32 @@ preloadSpritesheets();
 
 function FeaturePresentation() {
   const [feature, setFeature] = React.useState("code");
+  const [isCanvasReady, setIsCanvasReady] = React.useState(false);
   const canvasRef = React.useRef(null);
-  const animRef = React.useRef(null);
-
-  function cleanupAnim() {
-    if (animRef.current !== null) {
-      animRef.current.cleanup();
-      animRef.current = null;
-    }
-  }
-
-  const initAnim = React.useCallback(() => {
-    cleanupAnim();
-    animRef.current = new Anim(canvasRef.current, feature);
-  }, [feature]);
+  const stopAnimRef = React.useRef(null);
 
   React.useEffect(() => {
-    initAnim();
-  }, [initAnim, feature]);
+    if (isCanvasReady) {
+      stopAnimRef.current = animate(canvasRef.current, feature);
+    }
+
+    return () => {
+      if (stopAnimRef.current) {
+        stopAnimRef.current();
+        stopAnimRef.current = null;
+      }
+    };
+  }, [feature, isCanvasReady]);
 
   const canvasRefCallback = React.useCallback(
     (canvas) => {
       if (canvas) {
         canvasRef.current = canvas;
-        if (animRef.current === null) {
-          initAnim();
-        }
+        setIsCanvasReady(true);
       }
     },
-    [initAnim]
+    [setIsCanvasReady]
   );
-
-  // cleanup
-  React.useEffect(() => {
-    return () => cleanupAnim();
-  }, []);
 
   return (
     <div
@@ -293,11 +276,15 @@ function FeaturePresentation() {
         "max-w-screen-xl mx-auto gap-8 px-3 items-center justify-center"
       )}
     >
-      <div className="w-full">
+      <div className="w-full relative">
         <canvas
-          className="w-full border border-gray-300 shadow rounded-lg"
+          style={{ border: "solid 1px rgb(26, 26, 26)" }}
+          className="w-full rounded-xl feature-canvas"
           ref={canvasRefCallback}
         />
+        <div className="feature-loading absolute top-0 left-0 right-0 bottom-0 flex justify-center items-center opacity-30 transform scale-50">
+          <Loading />
+        </div>
       </div>
       <div
         className={cx(
@@ -433,6 +420,14 @@ function PricingBox({
       <A className="main-button" href={link}>
         {cta}
       </A>
+    </div>
+  );
+}
+
+function PricingPoint({ label, not }) {
+  return (
+    <div className={cx("leading-5 mb-1", not && "text-red-600")}>
+      <Icon icon={not ? AiOutlineClose : AiOutlineCheck} /> {label}
     </div>
   );
 }
@@ -661,14 +656,10 @@ function Download() {
 function Anchor({ name }) {
   const ref = React.useCallback(
     (elem) => {
-      console.log("ref found", elem);
-      console.log(name);
-      console.log(window.location.hash);
-      if (window.location.hash.slice(1) === name) {
-        console.log("scrolling");
-        setTimeout(() => {
-          elem.scrollIntoView();
-        }, 1);
+      if (elem) {
+        if (window.location.hash.slice(1) === name) {
+          setTimeout(() => elem.scrollIntoView(), 1);
+        }
       }
     },
     [name]
@@ -719,18 +710,11 @@ function Pricing() {
             cta="Request Access"
             link={BETA_SIGNUP_LINK}
           >
-            <div className="">
-              <Icon icon={AiOutlineCheck} /> Commercial use allowed
-            </div>
-            <div className="">
-              <Icon icon={AiOutlineCheck} /> All features unlocked
-            </div>
-            <div className="text-red-600">
-              <Icon icon={AiOutlineClose} /> Company cannot pay
-            </div>
-            <div className="text-red-600">
-              <Icon icon={AiOutlineClose} /> Purchase cannot be expensed
-            </div>
+            <PricingPoint label="7-day free trial" />
+            <PricingPoint label="Commercial use allowed" />
+            <PricingPoint label="All features unlocked" />
+            <PricingPoint not label=" Company cannot pay" />
+            <PricingPoint not label=" Purchase cannot be expensed" />
           </PricingBox>
           <PricingBox
             title="Team"
@@ -741,15 +725,9 @@ function Pricing() {
             cta="Request Access"
             link={BETA_SIGNUP_LINK}
           >
-            <div className="">
-              <Icon icon={AiOutlineCheck} /> All features in Personal
-            </div>
-            <div className="">
-              <Icon icon={AiOutlineCheck} /> Company can pay
-            </div>
-            <div className="">
-              <Icon icon={AiOutlineCheck} /> Purchase can be expensed
-            </div>
+            <PricingPoint label="All features in Personal" />
+            <PricingPoint label="Company can pay" />
+            <PricingPoint label="Purchase can be expensed" />
           </PricingBox>
           <PricingBox
             title="Premium"
@@ -760,15 +738,9 @@ function Pricing() {
             cta="Contact Sales"
             link="mailto:sales@codeperfect95.com"
           >
-            <div className="">
-              <Icon icon={AiOutlineCheck} /> All features in Team
-            </div>
-            <div className="">
-              <Icon icon={AiOutlineCheck} /> Priority support
-            </div>
-            <div className="">
-              <Icon icon={AiOutlineCheck} /> Custom requests &amp; integrations
-            </div>
+            <PricingPoint label="All features in Team" />
+            <PricingPoint label="Priority support" />
+            <PricingPoint label="Custom requests &amp; integrations" />
           </PricingBox>
         </div>
       </div>
@@ -883,7 +855,7 @@ function App() {
             </A>
           </div>
         </div>
-        <div className="">
+        <div>
           <Switch>
             <Route path="/download" exact>
               <Download />

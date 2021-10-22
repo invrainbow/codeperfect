@@ -169,4 +169,9 @@
       transform: rotate(360deg);
     }
   }
+
+  .feature-canvas.done + .feature-loading {
+    display: none;
+  }
+
 }
