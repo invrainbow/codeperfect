@@ -1770,6 +1770,10 @@ void UI::draw_everything() {
                     editor->handle_save();
             }
 
+            if (ImGui::MenuItem("Save All", format_key(KEYMOD_PRIMARY | KEYMOD_SHIFT, "S"))) {
+                save_all_unsaved_files();
+            }
+
             ImGui::Separator();
             {
 #if OS_WIN
@@ -1824,6 +1828,11 @@ void UI::draw_everything() {
             if (ImGui::MenuItem("Go to Definition", format_key(KEYMOD_PRIMARY, "G"))) {
                 handle_goto_definition();
             }
+
+            if (ImGui::MenuItem("Go to References", format_key(KEYMOD_PRIMARY | KEYMOD_ALT, "R"))) {
+                kick_off_find_references();
+            }
+
             ImGui::EndMenu();
         }
 

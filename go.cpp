@@ -23,7 +23,9 @@
 #endif
 
 const unsigned char GO_INDEX_MAGIC_BYTES[3] = {0x49, 0xfa, 0x98};
-const int GO_INDEX_VERSION = 15;
+
+// version 16: add Go_Reference
+const int GO_INDEX_VERSION = 16;
 
 void index_print(ccstr fmt, ...) {
     va_list args;
@@ -345,6 +347,7 @@ Go_File *get_ready_file_in_package(Go_Package *pkg, ccstr filename) {
         file->scope_ops = alloc_list<Go_Scope_Op>();
         file->decls = alloc_list<Godecl>();
         file->imports = alloc_list<Go_Import>();
+        file->references = alloc_list<Go_Reference>();
     }
 
     return file;
@@ -1715,6 +1718,67 @@ void Go_Indexer::process_tree_into_gofile(
 
     if (time) t.log("get scope ops");
 
+    // add references
+    // --------------
+
+    file->references->len = 0;
+    {
+        int scope_ops_idx = 0;
+
+        walk_ast_node(root, true, [&](auto it, auto, auto) {
+            Ast_Node *x = NULL, *sel = NULL;
+
+            switch (it->type()) {
+            case TS_IDENTIFIER:
+            case TS_FIELD_IDENTIFIER:
+            case TS_PACKAGE_IDENTIFIER:
+            case TS_TYPE_IDENTIFIER:
+                {
+                    auto ref = file->references->append();
+                    ref->is_sel = false;
+                    ref->start = it->start();
+                    ref->end = it->end();
+                    ref->name = it->string();
+                }
+                break;
+
+            case TS_QUALIFIED_TYPE:
+            case TS_SELECTOR_EXPRESSION:
+                {
+                    Ast_Node *x = NULL, *sel = NULL;
+
+                    if (it->type() == TS_QUALIFIED_TYPE) {
+                        x = it->field(TSF_PACKAGE);
+                        sel = it->field(TSF_NAME); // TODO: this is wrong, look at astviewer
+                    } else {
+                        x = it->field(TSF_OPERAND);
+                        switch (x->type()) {
+                        case TS_IDENTIFIER:
+                        case TS_FIELD_IDENTIFIER:
+                        case TS_PACKAGE_IDENTIFIER:
+                        case TS_TYPE_IDENTIFIER:
+                            break;
+                        default:
+                            return WALK_CONTINUE;
+                        }
+                        sel = it->field(TSF_FIELD);
+                    }
+
+                    auto ref = file->references->append();
+                    ref->is_sel = true;
+                    ref->x = x->string();
+                    ref->x_start = x->start();
+                    ref->x_end = x->end();
+                    ref->sel = sel->string();
+                    ref->sel_start = sel->start();
+                    ref->sel_end = sel->end();
+                }
+                return WALK_SKIP_CHILDREN;
+            }
+            return WALK_CONTINUE;
+        });
+    }
+
     // add import info
     // ---------------
 
@@ -2131,7 +2195,6 @@ List<Goresult> *Go_Indexer::get_dot_completions(Ast_Node *operand_node, bool *wa
     return NULL;
 }
 
-
 Jump_To_Definition_Result* Go_Indexer::jump_to_symbol(ccstr symbol) {
     reload_all_dirty_files();
 
@@ -2222,14 +2285,7 @@ List<Go_Import> *Go_Indexer::optimize_imports(ccstr filepath) {
     String_Set package_refs; package_refs.init();
     String_Set full_refs; full_refs.init();
 
-    struct Ref {
-        Ast_Node *node;
-        ccstr package;
-        ccstr sel;
-    };
-
-    List<Ref> refs; refs.init();
-
+    /*
     walk_ast_node(pf->root, true, [&](auto it, auto, auto) {
         Ast_Node *x = NULL, *sel = NULL;
 
@@ -2267,13 +2323,14 @@ List<Go_Import> *Go_Indexer::optimize_imports(ccstr filepath) {
         r->node = node;
         r->package = x->string();
         r->sel = sel->string();
+
+        return WALK_SKIP_CHILDREN;
     });
+    */
 
     t.log("list all references");
 
-    auto has_decl = [&](Ast_Node *expr) {
-        auto res = find_decl_of_id(expr->string(), expr->start(), &ctx);
-        return res != NULL && res->decl->type != GODECL_IMPORT;
+    auto has_decl = [&](Go_Reference *ref) {
     };
 
     struct Ref_Package {
@@ -2284,17 +2341,26 @@ List<Go_Import> *Go_Indexer::optimize_imports(ccstr filepath) {
     auto pkgs = alloc_list<Ref_Package>();
     String_Set referenced_package_names; referenced_package_names.init();
 
-    For (refs) {
-        auto &ref = it;
-        if (has_decl(ref.node)) continue;
+    // put this earlier maybe?
+    auto gofile = find_gofile_from_ctx(&ctx);
+    if (gofile == NULL) return NULL;
 
-        auto pkg = pkgs->find([&](auto it) { return streq(it->name, ref.package); });
+    For (*gofile->references) {
+        auto &ref = it;
+
+        if (!ref.is_sel) continue;
+
+        auto res = find_decl_of_id(ref.x, ref.x_start, &ctx);
+        if (res == NULL) continue;
+        if (res->decl->type == GODECL_IMPORT) continue;
+
+        auto pkg = pkgs->find([&](auto it) { return streq(it->name, ref.x); });
         if (pkg == NULL) {
             pkg = pkgs->append();
-            pkg->name = ref.package;
+            pkg->name = ref.x;
             pkg->sels.init();
 
-            referenced_package_names.add(ref.package);
+            referenced_package_names.add(ref.x);
         }
 
         if (pkg->sels.find([&](auto it) { return streq(*it, ref.sel); }) == NULL)
@@ -2302,15 +2368,6 @@ List<Go_Import> *Go_Indexer::optimize_imports(ccstr filepath) {
     }
 
     t.log("sort into packages");
-
-    // grab the gofile
-
-    auto gopkg = find_up_to_date_package(ctx.import_path);
-    if (gopkg == NULL) return NULL;
-
-    auto check = [&](Go_File *it) { return streq(it->filename, ctx.filename); };
-    auto gofile = gopkg->files->find(check);
-    if (gofile == NULL) return NULL;
 
     String_Set imported_package_names; imported_package_names.init();
     auto ret = alloc_list<Go_Import>();
@@ -2481,6 +2538,7 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 p
                         if (streq(decl->name, sel_name)) {
                             result.pos = decl->name_start;
                             result.file = get_filepath_from_ctx(it.ctx);
+                            result.decl = decl;
                             return WALK_ABORT;
                         }
                     }
@@ -2546,6 +2604,7 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 p
 
                 if (declres != NULL) {
                     result.file = get_filepath_from_ctx(declres->ctx);
+                    result.decl = declres->decl;
                     if (declres->decl->name != NULL)
                         result.pos = declres->decl->name_start;
                     else
@@ -5448,6 +5507,16 @@ Go_Struct_Spec *Go_Struct_Spec::copy() {
     return ret;
 }
 
+Go_Reference *Go_Reference::copy() {
+    auto ret = clone(this);
+    if (is_sel) {
+        ret->x = our_strcpy(x);
+        ret->sel = our_strcpy(sel);
+    } else {
+        ret->name = our_strcpy(name);
+    }
+}
+
 Gotype *Gotype::copy() {
     auto ret = clone(this);
     switch (type) {
@@ -5550,6 +5619,7 @@ Go_Package *Go_Package::copy() {
             gofile->scope_ops = copy_list(gofile->scope_ops);
             gofile->decls = copy_list(gofile->decls);
             gofile->imports = copy_list(gofile->imports);
+            gofile->references = copy_list(gofile->references);
         }
 
         gofile->cleanup();
@@ -5621,6 +5691,15 @@ void Go_Import::read(Index_Stream *s) {
     READ_STR(package_name);
     READ_STR(import_path);
     READ_OBJ(decl);
+}
+
+void Go_Reference::read(Index_Stream *s) {
+    if (is_sel) {
+        READ_STR(x);
+        READ_STR(sel);
+    } else {
+        READ_STR(name);
+    }
 }
 
 void Gotype::read(Index_Stream *s) {
@@ -5765,6 +5844,15 @@ void Go_Import::write(Index_Stream *s) {
     WRITE_STR(package_name);
     WRITE_STR(import_path);
     WRITE_OBJ(decl);
+}
+
+void Go_Reference::write(Index_Stream *s) {
+    if (is_sel) {
+        WRITE_STR(x);
+        WRITE_STR(sel);
+    } else {
+        WRITE_STR(name);
+    }
 }
 
 void Gotype::write(Index_Stream *s) {

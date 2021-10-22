@@ -908,6 +908,30 @@ struct Go_Scope_Op {
     void write(Index_Stream *s);
 };
 
+struct Go_Reference {
+    bool is_sel;
+    union {
+        struct {
+            ccstr x;
+            cur2 x_start;
+            cur2 x_end;
+
+            ccstr sel;
+            cur2 sel_start;
+            cur2 sel_end;
+        };
+        struct {
+            ccstr name;
+            cur2 start;
+            cur2 end;
+        };
+    };
+
+    Go_Reference *copy();
+    void read(Index_Stream *s);
+    void write(Index_Stream *s);
+};
+
 struct Go_File {
     Pool pool;
 
@@ -915,6 +939,7 @@ struct Go_File {
     List<Go_Scope_Op> *scope_ops;
     List<Godecl> *decls;
     List<Go_Import> *imports;
+    List<Go_Reference> *references;
 
     u64 hash;
 
@@ -977,6 +1002,7 @@ struct Parameter_Hint {
 struct Jump_To_Definition_Result {
     ccstr file;
     cur2 pos;
+    Godecl *decl; // can be null
 };
 
 typedef fn<Godecl*()> New_Godecl_Func;

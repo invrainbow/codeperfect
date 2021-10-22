@@ -160,6 +160,7 @@ struct World {
     Pool build_mem;
     Pool build_index_mem;
     Pool ui_mem;
+    Pool find_references_mem;
 
     Fridge<Mark> mark_fridge;
     Fridge<Mark_Node> mark_node_fridge;
@@ -239,6 +240,15 @@ struct World {
 
     bool auth_update_done;
     u64 auth_update_last_check;
+
+    // collapse into world.find_references?
+    struct : Wnd {
+    } wnd_find_references;
+
+    struct {
+        bool in_progress;
+        // ???
+    } find_references;
 
     struct : Wnd {
         // ring buffer
@@ -426,10 +436,13 @@ void start_search_job(ccstr query);
 void goto_error(int index);
 void goto_next_error(int direction);
 void reload_file_subtree(ccstr path);
+bool kick_off_find_references();
 
 extern u64 post_insert_dotrepeat_time;
 
 bool move_autocomplete_cursor(Editor *ed, int direction);
+Jump_To_Definition_Result *get_current_definition();
 
 extern int gargc;
 extern char **gargv;
+

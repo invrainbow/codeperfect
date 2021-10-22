@@ -675,6 +675,9 @@ int main(int argc, char **argv) {
 
         case KEYMOD_PRIMARY | KEYMOD_SHIFT:
             switch (key) {
+            case GLFW_KEY_S:
+                save_all_unsaved_files();
+                break;
             case GLFW_KEY_B:
                 world.error_list.show = true;
                 world.error_list.cmd_focus = true;

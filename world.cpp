@@ -424,6 +424,7 @@ void World::init(GLFWwindow *_wnd) {
     init_mem(scratch_mem);
     init_mem(build_index_mem);
     init_mem(ui_mem);
+    init_mem(find_references_mem);
 #undef init_mem
 
     // use frame_mem as the default mem
@@ -515,6 +516,8 @@ void World::init(GLFWwindow *_wnd) {
     fswatch.init(current_path);
 
     init_global_colors();
+
+    world.file_explorer.show = true;
 }
 
 void World::start_background_threads() {
@@ -879,36 +882,76 @@ void goto_jump_to_definition_result(Jump_To_Definition_Result *result) {
     goto_file_and_pos(result->file, result->pos, ECM_GOTO_DEF);
 }
 
-void handle_goto_definition() {
+Jump_To_Definition_Result *get_current_definition() {
     auto editor = world.get_current_editor();
-    if (editor == NULL) return;
-    if (!editor->is_go_file) return;
+    if (editor == NULL) return NULL;
+    if (!editor->is_go_file) return NULL;
 
     SCOPED_MEM(&world.indexer.ui_mem);
     defer { world.indexer.ui_mem.reset(); };
 
     Jump_To_Definition_Result *result = NULL;
 
-    {
-        if (!world.indexer.ready) return; // strictly we can just call try_enter(), but want consistency with UI, which is based on `ready`
-        if (!world.indexer.lock.try_enter()) return;
-        defer { world.indexer.lock.leave(); };
+    // strictly we can just call try_enter(), but want consistency with UI, which is based on `ready`
+    if (!world.indexer.ready) return NULL; 
+    if (!world.indexer.lock.try_enter()) return NULL;
+    defer { world.indexer.lock.leave(); };
 
-        result = world.indexer.jump_to_definition(editor->filepath, new_cur2(editor->cur_to_offset(editor->cur), -1));
-        if (result == NULL) {
-            error("unable to jump to definition");
-            return;
-        }
+    auto result = world.indexer.jump_to_definition(editor->filepath, new_cur2(editor->cur_to_offset(editor->cur), -1));
+    if (result == NULL) {
+        error("unable to jump to definition");
+        return NULL;
     }
 
-    goto_jump_to_definition_result(result);
+    return result;
+}
+
+void handle_goto_definition() {
+    auto result = get_current_definition();
+    if (result != NULL)
+        goto_jump_to_definition_result(result);
 }
 
 void save_all_unsaved_files() {
-    for (auto&& pane : world.panes)
-        For (pane.editors)
-            if (!it.is_untitled)
-                it.handle_save(false);
+    for (auto&& pane : world.panes) {
+        For (pane.editors) {
+            // TODO: handle untitled files
+            if (it.is_untitled) continue;
+            if (!path_contains_in_subtree(world.current_path, it.filepath)) continue;
+
+            it.handle_save(false);
+        }
+    }
+}
+
+bool kick_off_find_implementations() {
+}
+
+// TODO: tell user what went wrong if returning false
+bool kick_off_find_references() {
+    auto result = get_current_definition();
+    if (result == NULL) return false;
+
+    auto decl = result->decl;
+    if (decl == NULL) return false;
+
+    // TODO: find all references that refer to decl 
+
+    /*
+    switch (decl->type) {
+    case GODECL_IMPORT:
+    case GODECL_VAR:
+    case GODECL_CONST:
+    case GODECL_TYPE:
+    case GODECL_FUNC:
+    case GODECL_FIELD:
+    case GODECL_SHORTVAR:
+    case GODECL_TYPECASE:
+        name
+        break;
+        // ??
+    }
+    */
 }
 
 void World::delete_ft_node(FT_Node *it) {
