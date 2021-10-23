@@ -71,7 +71,7 @@ endfunction
 
 nnoremap gd <Cmd>call <SID>goToDefinition()<CR>
 
-" nnoremap : <nop>
+nnoremap : <nop>
 " nnoremap <F1> :
 
 set shortmess=filnxtToOFI

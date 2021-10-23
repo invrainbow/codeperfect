@@ -298,7 +298,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                     set_option("expandtab",  [&]() { writer.write_bool(false); });
                     set_option("tabstop",    [&]() { writer.write_int(4); });
                     set_option("shiftwidth", [&]() { writer.write_int(4); });
-                    set_option("modifiable", [&]() { writer.write_bool(true); });
+                    set_option("modifiable", [&]() { writer.write_bool(editor->is_modifiable()); });
                     set_option("buftype",    [&]() { writer.write_string("nofile"); });
                     set_option("buflisted",  [&]() { writer.write_bool(true); });
 
@@ -338,6 +338,15 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                         pos = editor->offset_to_cur(pos.x);
                     // editor->raw_move_cursor(pos);
                     editor->move_cursor(pos);
+                }
+
+                {
+                    start_request_message("nvim_win_set_option", 3);
+                    writer.write_int(editor->nvim_data.win_id);
+                    writer.write_string("scroll");
+                    print("new scroll: %d", editor->view.h / 2);
+                    writer.write_int(editor->view.h / 2);
+                    end_message();
                 }
 
                 handle_editor_on_ready(editor);

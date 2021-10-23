@@ -523,7 +523,19 @@ void Go_Indexer::init_builtins(Go_Package *pkg) {
     add_builtin(GODECL_TYPE, GO_BUILTIN_UINT8, "uint8");
     add_builtin(GODECL_TYPE, GO_BUILTIN_UINTPTR, "uintptr");
 
-    // TODO: add true, false, nil (i can't be fucked right now lol)
+    auto add_builtin_value = [&](Gotype_Builtin_Type type, ccstr name) {
+        SCOPED_MEM(&final_mem);
+
+        auto decl = f->decls->append();
+        decl->type = GODECL_VAR; // TODO: special godecl_type for builtin values?
+        decl->name = our_strcpy(name);
+        decl->gotype = new_gotype(GOTYPE_BUILTIN);
+        decl->gotype->builtin_type = type;
+    };
+
+    add_builtin_value(GO_BUILTIN_BOOL, "true");
+    add_builtin_value(GO_BUILTIN_BOOL, "false");
+    add_builtin_value(GO_BUILTIN_TYPE, "nil"); // nil type?
 
     {
         Gotype *func_type = NULL;

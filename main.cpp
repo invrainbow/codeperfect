@@ -886,6 +886,8 @@ int main(int argc, char **argv) {
                 case GLFW_KEY_R:
                 case GLFW_KEY_O:
                 case GLFW_KEY_I:
+                case GLFW_KEY_D:
+                case GLFW_KEY_U:
                     if (world.nvim.mode != VI_INSERT) {
                         SCOPED_FRAME();
                         send_nvim_keys(our_sprintf("<C-%c>", tolower((char)key)));

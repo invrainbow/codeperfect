@@ -4222,18 +4222,25 @@ void UI::draw_everything() {
 
                 auto command = our_sprintf("%s%s", get_title(), cmd.content.items);
                 draw_status_piece(LEFT, command, rgba(global_colors.command_background), rgba(global_colors.command_foreground));
-            } else if (world.get_current_editor() != NULL) {
-                ccstr mode_str = NULL;
-                switch (world.nvim.mode) {
-                case VI_NORMAL: mode_str = "NORMAL"; break;
-                case VI_VISUAL: mode_str = "VISUAL"; break;
-                case VI_INSERT: mode_str = "INSERT"; break;
-                case VI_REPLACE: mode_str = "REPLACE"; break;
-                case VI_OPERATOR: mode_str = "OPERATOR"; break;
-                case VI_CMDLINE: mode_str = "CMDLINE"; break;
-                default: mode_str = "UNKNOWN"; break;
+            } else {
+                auto editor = world.get_current_editor();
+                if (editor != NULL) {
+                    if (editor->is_modifiable()) {
+                        ccstr mode_str = NULL;
+                        switch (world.nvim.mode) {
+                        case VI_NORMAL: mode_str = "NORMAL"; break;
+                        case VI_VISUAL: mode_str = "VISUAL"; break;
+                        case VI_INSERT: mode_str = "INSERT"; break;
+                        case VI_REPLACE: mode_str = "REPLACE"; break;
+                        case VI_OPERATOR: mode_str = "OPERATOR"; break;
+                        case VI_CMDLINE: mode_str = "CMDLINE"; break;
+                        default: mode_str = "UNKNOWN"; break;
+                        }
+                        draw_status_piece(LEFT, mode_str, rgba(global_colors.status_mode_background), rgba(global_colors.status_mode_foreground));
+                    } else {
+                        draw_status_piece(LEFT, "READONLY", rgba(global_colors.status_mode_background), rgba(global_colors.status_mode_foreground));
+                    }
                 }
-                draw_status_piece(LEFT, mode_str, rgba(global_colors.status_mode_background), rgba(global_colors.status_mode_foreground));
             }
         }
 
@@ -4821,6 +4828,14 @@ void UI::recalculate_view_sizes(bool force) {
             // don't want to move it. Instead we should move the *view* so the
             // cursor is on the screen.
             editor.ensure_cursor_on_screen_by_moving_view();
+
+            auto& nv = world.nvim;
+            nv.start_request_message("nvim_win_set_option", 3);
+            nv.writer.write_int(editor.nvim_data.win_id);
+            nv.writer.write_string("scroll");
+            print("new scroll: %d", editor.view.h / 2);
+            nv.writer.write_int(editor.view.h / 2);
+            nv.end_message();
         }
     }
 }
