@@ -136,15 +136,6 @@ struct Build {
     void cleanup();
 };
 
-struct Wnd {
-    bool show;
-    bool focused;
-    bool first_open_focus_twice_done;
-
-    // "commands"
-    bool cmd_focus;
-};
-
 #define INDEX_LOG_CAP 64 // 512
 #define INDEX_LOG_MAXLEN 256
 
@@ -161,6 +152,7 @@ struct World {
     Pool build_index_mem;
     Pool ui_mem;
     Pool find_references_mem;
+    Pool rename_identifier_mem;
 
     Fridge<Mark> mark_fridge;
     Fridge<Mark_Node> mark_node_fridge;
@@ -240,6 +232,14 @@ struct World {
 
     bool auth_update_done;
     u64 auth_update_last_check;
+
+    struct : Wnd {
+        bool running;
+        char rename_to[256];
+        Godecl *decl;
+        ccstr filepath;
+        Thread_Handle thread;
+    } wnd_rename_identifier;
 
     // collapse into world.find_references?
     struct : Wnd {
@@ -437,12 +437,14 @@ void goto_error(int index);
 void goto_next_error(int direction);
 void reload_file_subtree(ccstr path);
 bool kick_off_find_references();
+void open_rename_identifier();
 
 extern u64 post_insert_dotrepeat_time;
 
 bool move_autocomplete_cursor(Editor *ed, int direction);
-Jump_To_Definition_Result *get_current_definition();
+Jump_To_Definition_Result *get_current_definition(ccstr *filepath = NULL);
 
 extern int gargc;
 extern char **gargv;
+
 

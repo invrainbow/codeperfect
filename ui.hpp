@@ -112,6 +112,20 @@ struct Draw_Debugger_Var_Args {
     int locals_index;
 };
 
+enum Focus_Keyboard_Cond {
+    FKC_APPEARING = 1 << 0,
+    FKC_FOCUSING = 1 << 1,
+};
+
+struct Wnd {
+    bool show;
+    bool focused;
+    bool first_open_focus_twice_done;
+
+    // "commands"
+    bool cmd_focus;
+};
+
 struct UI {
     Font* font;
     List<Vert> verts;
@@ -188,6 +202,7 @@ struct UI {
     void imgui_with_disabled(bool disable, fn<void()> f);
     bool imgui_is_window_focusing(bool *b);
     u32 imgui_get_keymods();
+    void focus_keyboard(Wnd *wnd, int cond = FKC_APPEARING | FKC_FOCUSING);
 };
 
 extern UI ui;

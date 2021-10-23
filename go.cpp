@@ -2263,6 +2263,87 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_symbol(ccstr symbol) {
     return NULL;
 }
 
+List<Find_References_File> *Go_Indexer::find_all_references(ccstr filepath, cur2 pos) {
+    auto result = world.indexer.jump_to_definition(filepath, pos);
+    if (result == NULL) return NULL;
+    if (result->decl == NULL) return NULL;
+
+    auto decl_name = result->decl->name;
+    if (decl_name == NULL) return NULL;
+
+    Go_Ctx ctx; ptr0(&ctx);
+    ctx.import_path = filepath_to_import_path(our_dirname(filepath));
+    ctx.filename = our_basename(filepath);
+
+    auto ret = alloc_list<Go_Reference>();
+
+    For (*index.packages) {
+        if (!path_contains_in_subtree(index.current_import_path, it.import_path))
+            continue;
+
+        if (streq(it.import_path, ctx.import_path)) {
+            auto &pkg = it;
+            For (*it.files) {
+                auto &file = it;
+                For (*it.references) {
+                    if (it.is_sel) continue;
+                    if (!streq(it.name, decl_name)) continue;
+
+                    Go_Ctx ctx2;
+                    ctx2.import_path = pkg.import_path;
+                    ctx2.filename = file.filename;
+
+                    auto res = find_decl_of_id(it.name, it.start, &ctx2);
+                    if (res->decl != result->decl) continue; // can we compare using pointer identity?
+
+                    ret->append(&it);
+                }
+            }
+        } else {
+            if (islower(decl_name[0])) continue;
+
+            auto &pkg = it;
+            For (*it.files) {
+                auto &file = it;
+                ccstr package_name = NULL;
+
+                For (*it.imports) {
+                    // TODO: handle dot
+                    if (it.package_name_type == GPN_DOT) continue;
+                    if (it.package_name_type == GPN_BLANK) continue;
+
+                    if (streq(it.import_path, ctx.import_path)) {
+                        package_name = get_import_package_name(&it);
+                        break;
+                    }
+                }
+
+                if (package_name == NULL) continue;
+
+                For (*it.references) {
+                    if (!it.is_sel) continue;
+                    if (!streq(it.x, package_name)) continue;
+                    if (!streq(it.sel, decl_name)) continue;
+
+                    Go_Ctx ctx2;
+                    ctx2.import_path = pkg.import_path;
+                    ctx2.filename = file.filename;
+                    
+                    Go_Import *imp = NULL;
+
+                    auto res = find_decl_of_id(it.x, it.x_start, &ctx2, &imp);
+                    if (imp == NULL) continue;
+                    if (!streq(imp->import_path, ctx.import_path)) continue; // when would this happen?
+
+                    ret->append(&it);
+                }
+            }
+        }
+    }
+
+    return ret;
+}
+
 List<Go_Import> *Go_Indexer::optimize_imports(ccstr filepath) {
     Timer t; t.init("list_missing_imports");
 
@@ -2329,9 +2410,6 @@ List<Go_Import> *Go_Indexer::optimize_imports(ccstr filepath) {
     */
 
     t.log("list all references");
-
-    auto has_decl = [&](Go_Reference *ref) {
-    };
 
     struct Ref_Package {
         ccstr name;

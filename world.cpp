@@ -425,6 +425,7 @@ void World::init(GLFWwindow *_wnd) {
     init_mem(build_index_mem);
     init_mem(ui_mem);
     init_mem(find_references_mem);
+    init_mem(rename_identifier_mem);
 #undef init_mem
 
     // use frame_mem as the default mem
@@ -882,15 +883,13 @@ void goto_jump_to_definition_result(Jump_To_Definition_Result *result) {
     goto_file_and_pos(result->file, result->pos, ECM_GOTO_DEF);
 }
 
-Jump_To_Definition_Result *get_current_definition() {
+Jump_To_Definition_Result *get_current_definition(ccstr *filepath) {
     auto editor = world.get_current_editor();
     if (editor == NULL) return NULL;
     if (!editor->is_go_file) return NULL;
 
     SCOPED_MEM(&world.indexer.ui_mem);
     defer { world.indexer.ui_mem.reset(); };
-
-    Jump_To_Definition_Result *result = NULL;
 
     // strictly we can just call try_enter(), but want consistency with UI, which is based on `ready`
     if (!world.indexer.ready) return NULL; 
@@ -903,6 +902,8 @@ Jump_To_Definition_Result *get_current_definition() {
         return NULL;
     }
 
+    if (filepath != NULL)
+        *filepath = editor->filepath;
     return result;
 }
 
@@ -924,7 +925,58 @@ void save_all_unsaved_files() {
     }
 }
 
+void open_rename_identifier() {
+    ccstr filepath = NULL;
+
+    // TODO: this should be a "blocking" modal, like it disables activity in rest of IDE
+    auto result = get_current_definition(&filepath);
+    if (result == NULL) return;
+    if (result->decl == NULL) return;
+    if (result->decl->type == GODECL_IMPORT) return;
+
+    world.rename_identifier_mem.reset();
+    SCOPED_MEM(&world.rename_identifier_mem);
+
+    auto &wnd = world.wnd_rename_identifier;
+    wnd.show = true;
+    wnd.running = false;
+    wnd.decl = result->decl->copy();
+    wnd.filepath = our_strcpy(filepath);
+}
+
+bool kick_off_find_implemented_interfaces() {
+    auto result = get_current_definition();
+    if (result == NULL) return false;
+
+    auto decl = result->decl;
+    if (decl == NULL) return false;
+
+    if (decl->type != GODECL_TYPE) {
+        tell_user("The selected object is not a type.", "Error");
+        return false;
+    }
+
+    // get method set
+    // iter over interfaces and see if they match
+    // this one is actually relatively easy i feel
+}
+
 bool kick_off_find_implementations() {
+    auto result = get_current_definition();
+    if (result == NULL) return false;
+
+    auto decl = result->decl;
+    if (decl == NULL) return false;
+
+    if (decl->type != GODECL_TYPE || decl->gotype->type != GOTYPE_INTERFACE) {
+        tell_user("The selected object is not an interface.", "Error");
+        return false;
+    }
+
+    auto specs = decl->gotype->interface_specs;
+
+    // iterate over types, see which ones implement interface?
+    // this is the hard one (compared to find_implemented_interfaces)
 }
 
 // TODO: tell user what went wrong if returning false
@@ -934,6 +986,11 @@ bool kick_off_find_references() {
 
     auto decl = result->decl;
     if (decl == NULL) return false;
+
+    // iterate thru all packages
+    // if in same package as decl, check all non-sel refs, 
+    // if in diff package, check if package is even imported,
+    //  if so, check all sel refs, making sure package is same
 
     // TODO: find all references that refer to decl 
 
@@ -1302,4 +1359,35 @@ void Build::cleanup() {
     errors.len = 0;
 
     mem.cleanup();
+}
+
+void kick_off_rename_identifier() {
+    auto &wnd = world.wnd_rename_identifier;
+
+    if (!world.indexer.ready) return NULL; 
+    if (!world.indexer.lock.try_enter()) return NULL;
+
+    // TODO: when do we release the lock?
+    // TODO: seems we need a new "running" indexer status
+
+    auto thread = [](void *param) {
+        defer { world.indexer.lock.leave(); };
+
+        auto files = find_all_references(wnd.filepath, wnd.decl->start);
+        if (files == NULL) return;
+        For (*files) {
+            auto filepath = it.filepath;
+
+            For (*it.references) {
+                if (it.is_sel) {
+                    // rename to hurrdurr.
+                }
+            }
+        }
+
+        For (*refs) {
+        }
+    };
+
+    wnd.thread = create_thread(thread, NULL);
 }

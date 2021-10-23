@@ -1650,6 +1650,25 @@ struct Coarse_Clipper {
     }
 };
 
+// TODO: This is kind of weird, because now we're relying on focus_keyboard()
+// to set wnd->focused. We should just have an "initialization" routine for Wnds.
+void UI::focus_keyboard(Wnd *wnd, int cond) {
+    auto is_focusing = imgui_is_window_focusing(&wnd->focused);
+
+    if (ImGui::IsWindowAppearing()) {
+        if (cond & FKC_APPEARING)
+            ImGui::SetKeyboardFocusHere();
+    } else if (!wnd->first_open_focus_twice_done) {
+        wnd->first_open_focus_twice_done = true;
+        if (cond & FKC_APPEARING) {
+            ImGui::SetKeyboardFocusHere();
+        }
+    } else if (is_focusing) {
+        if (cond & FKC_FOCUSING) 
+            ImGui::SetKeyboardFocusHere();
+    }
+}
+
 void UI::draw_everything() {
     verts.len = 0;
 
@@ -1860,7 +1879,6 @@ void UI::draw_everything() {
             ImGui::EndMenu();
         }
 
-        /*
         if (ImGui::BeginMenu("Refactor")) {
             auto can_rename_id_under_cursor = [&]() -> bool {
 #if 0
@@ -1900,18 +1918,15 @@ void UI::draw_everything() {
                     return WALK_ABORT;
                 });
 #endif
-
                 return true; // ???
             };
 
             if (ImGui::MenuItem("Rename...", NULL, false, can_rename_id_under_cursor())) {
-                // ???
+                open_rename_identifier();
             }
 
             ImGui::EndMenu();
         }
-        */
-
 
         if (ImGui::BeginMenu("Project")) {
             if (ImGui::MenuItem("Add New File...")) {
@@ -2190,6 +2205,63 @@ void UI::draw_everything() {
         ImGui::EndMainMenuBar();
     }
 
+    if (world.wnd_rename_identifier.show) {
+        auto &wnd = world.wnd_rename_identifier;
+
+        ImGui::SetNextWindowSize(ImVec2(400, -1));
+        ImGui::SetNextWindowPos(ImVec2(world.window_size.x/2, 150), ImGuiCond_Once, ImVec2(0.5f, 0));
+
+        ImGui::Begin("Rename", &wnd.show, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking);
+
+        auto get_type_str = [&]() -> ccstr {
+            switch (wnd.decl->type) {
+            // TODO: support import renaming
+            case GODECL_TYPE:
+                return "type";
+            case GODECL_FUNC:
+                return "function";
+            case GODECL_FIELD:
+                return "field";
+            case GODECL_VAR:
+            case GODECL_CONST:
+            case GODECL_SHORTVAR:
+            case GODECL_TYPECASE:
+                return "variable";
+            }
+            return "";
+        };
+
+        ImGui::Text("Renaming %s", get_type_str());
+
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(ImColor(140, 194, 248)));
+        ImGui::PushFont(world.ui.im_font_mono);
+        ImGui::Text("%s", wnd.decl->name);
+        ImGui::PopStyleColor();
+        ImGui::PopFont();
+
+        imgui_small_newline();
+
+        focus_keyboard(&wnd);
+        imgui_input_text_full_fixbuf("New name", wnd.rename_to);
+
+        imgui_small_newline();
+
+        if (wnd.running) {
+            if (ImGui::Button(our_sprintf("Rename", wnd.decl->name))) {
+                // TODO
+            }
+        } else {
+            ImGui::Text("Renaming...");
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel")) {
+                // ???
+                // TODO: cancel rename
+            }
+        }
+
+        ImGui::End();
+    }
+
     if (world.wnd_about.show) {
         auto &wnd = world.wnd_about;
         ImGui::Begin("About", &wnd.show, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking);
@@ -2387,15 +2459,7 @@ void UI::draw_everything() {
 
         imgui_small_newline();
 
-        auto is_focusing = imgui_is_window_focusing(&wnd.focused);
-        if (ImGui::IsWindowAppearing()) {
-            ImGui::SetKeyboardFocusHere();
-        } else if (!wnd.first_open_focus_twice_done) {
-            wnd.first_open_focus_twice_done = true;
-            ImGui::SetKeyboardFocusHere();
-        } else if (is_focusing) {
-            ImGui::SetKeyboardFocusHere();
-        }
+        focus_keyboard(&wnd);
 
         // close the window when we unfocus
         if (!wnd.focused) wnd.show = false;
@@ -2444,15 +2508,7 @@ void UI::draw_everything() {
 
         imgui_small_newline();
 
-        auto is_focusing = imgui_is_window_focusing(&wnd.focused);
-        if (ImGui::IsWindowAppearing()) {
-            ImGui::SetKeyboardFocusHere();
-        } else if (!wnd.first_open_focus_twice_done) {
-            wnd.first_open_focus_twice_done = true;
-            ImGui::SetKeyboardFocusHere();
-        } else if (is_focusing) {
-            ImGui::SetKeyboardFocusHere();
-        }
+        focus_keyboard(&wnd);
 
         // close the window when we unfocus
         if (!wnd.focused) wnd.show = false;
@@ -2994,16 +3050,7 @@ void UI::draw_everything() {
 
         ImGui::Begin("Go To File", &world.wnd_goto_file.show, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking);
 
-        auto is_focusing = imgui_is_window_focusing(&wnd.focused);
-
-        if (ImGui::IsWindowAppearing()) {
-            ImGui::SetKeyboardFocusHere();
-        } else if (!wnd.first_open_focus_twice_done) {
-            wnd.first_open_focus_twice_done = true;
-            ImGui::SetKeyboardFocusHere();
-        } else if (is_focusing) {
-            ImGui::SetKeyboardFocusHere();
-        }
+        focus_keyboard(&wnd);
 
         // close the window when we unfocus
         if (!wnd.focused) wnd.show = false;
@@ -3090,18 +3137,9 @@ void UI::draw_everything() {
             break;
         }
 
-        auto is_focusing = imgui_is_window_focusing(&wnd.focused);
-
         ImGui::Text("Search for symbol:");
 
-        if (ImGui::IsWindowAppearing()) {
-            ImGui::SetKeyboardFocusHere();
-        } else if (!wnd.first_open_focus_twice_done) {
-            wnd.first_open_focus_twice_done = true;
-            ImGui::SetKeyboardFocusHere();
-        } else if (is_focusing) {
-            ImGui::SetKeyboardFocusHere();
-        }
+        focus_keyboard(&wnd);
 
         if (ImGui::InputText("##search_for_symbol", wnd.query, _countof(wnd.query), ImGuiInputTextFlags_EnterReturnsTrue)) {
             wnd.show = false;

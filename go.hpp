@@ -1171,6 +1171,11 @@ struct Go_Message {
     };
 };
 
+struct Find_References_File {
+    ccstr filepath;
+    List<Go_Reference> *references;
+};
+
 struct Go_Indexer {
     ccstr goroot;
     // ccstr gopath;
@@ -1274,6 +1279,7 @@ struct Go_Indexer {
     void import_decl_to_goimports(Ast_Node *decl_node, ccstr filename, List<Go_Import> *out);
     bool check_if_still_in_parameter_hint(ccstr filepath, cur2 cur, cur2 hint_start);
     Go_File *find_gofile_from_ctx(Go_Ctx *ctx);
+    List<Find_References_File>* find_all_references(ccstr filepath, cur2 pos);
 };
 
 void walk_ast_node(Ast_Node *node, bool abstract_only, Walk_TS_Callback cb);
