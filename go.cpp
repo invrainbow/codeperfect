@@ -22,10 +22,10 @@
 #define go_print(fmt, ...)
 #endif
 
-const unsigned char GO_INDEX_MAGIC_BYTES[3] = {0x49, 0xfa, 0x98};
-
+const int GO_INDEX_MAGIC_NUMBER = 0x49fa98;
 // version 16: add Go_Reference
-const int GO_INDEX_VERSION = 16;
+// version 17: change GO_INDEX_MAGIC_NUMBER
+const int GO_INDEX_VERSION = 17;
 
 void index_print(ccstr fmt, ...) {
     va_list args;
@@ -153,14 +153,13 @@ ccstr Index_Stream::readstr() {
 }
 
 Go_Index *Index_Stream::read_index() {
-    char magic_bytes[sizeof(GO_INDEX_MAGIC_BYTES)];
-    readn(magic_bytes, _countof(magic_bytes));
+    auto magic_number = read4();
     if (!ok) {
         go_print("unable to read magic bytes");
         return NULL;
     }
 
-    if (memcmp(magic_bytes, GO_INDEX_MAGIC_BYTES, sizeof(GO_INDEX_MAGIC_BYTES)) != 0) {
+    if (magic_number != GO_INDEX_MAGIC_NUMBER) {
         go_print("magic bytes incorrect");
         ok = false;
         return NULL;
@@ -182,7 +181,7 @@ Go_Index *Index_Stream::read_index() {
 }
 
 void Index_Stream::write_index(Go_Index *index) {
-    writen((void*)GO_INDEX_MAGIC_BYTES, sizeof(GO_INDEX_MAGIC_BYTES));
+    write4(GO_INDEX_MAGIC_NUMBER);
     write4(GO_INDEX_VERSION);
     write_object<Go_Index>(index, this);
 
