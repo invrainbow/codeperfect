@@ -8,6 +8,10 @@
 #include "settings.hpp"
 #include "set.hpp"
 
+bool Editor::is_modifiable() {
+    return path_contains_in_subtree(world.current_path, filepath);
+}
+
 ccstr Editor::get_autoindent(int for_y) {
     auto y = relu_sub(for_y, 1);
 
@@ -1815,7 +1819,7 @@ void Type_Renderer::write_type(Gotype *t, bool parameter_hint_root) {
     case GOTYPE_CHAN:
         if (t->chan_direction == CHAN_RECV)
             write("<-");
-        write("chan");
+        write("chan ");
         write_type(t->chan_base);
         if (t->chan_direction == CHAN_SEND)
             write("<-");

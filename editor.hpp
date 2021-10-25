@@ -144,6 +144,7 @@ struct Editor {
 
     Client_Parameter_Hint parameter_hint;
 
+    bool is_modifiable();
     void update_tree();
     void raw_move_cursor(cur2 c, bool dont_add_to_history = false);
     void move_cursor(cur2 c);

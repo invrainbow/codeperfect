@@ -54,12 +54,25 @@ function A({ children, ...props }) {
   );
 }
 
-function WallOfText({ title, children }) {
+function WallOfText({ children, className, ...props }) {
   return (
-    <div className="wall-of-text p-4 my-12 md:p-8 leading-normal md:max-w-3xl md:mx-auto">
-      {title && <Title>{title}</Title>}
+    <div
+      className={cx(
+        className,
+        "wall-of-text p-4 my-4 md:my-12 md:p-8 leading-normal md:max-w-3xl md:mx-auto"
+      )}
+      {...props}
+    >
       {children}
     </div>
+  );
+}
+
+function Title({ children, ...props }) {
+  return (
+    <h2 className="text-xl font-bold text-gray-700" {...props}>
+      {children}
+    </h2>
   );
 }
 
@@ -72,24 +85,16 @@ function Icon({ icon, ...props }) {
   );
 }
 
-function Title({ children, ...props }) {
-  return (
-    <h2 className="text-xl font-bold text-gray-700" {...props}>
-      {children}
-    </h2>
-  );
-}
-
 function Feature({ title, icon, children, selected, onClick, ...props }) {
   return (
     <button
       className={cx(
-        "block w-full text-center",
+        "block w-full text-center group",
         "sm:text-left",
         "lg:pl-3 lg:text-left lg:border-l-4",
-        "hover:text-gray-700",
-        selected ? "border-gray-700" : "", // "hover:border-gray-200 border-gray-100",
-        selected && "text-black hover:text-black"
+        selected
+          ? "lg:border-gray-700 text-black hover:text-black"
+          : "lg:border-gray-200 text-gray-500 hover:text-gray-600"
       )}
       onClick={onClick}
       {...props}
@@ -98,7 +103,11 @@ function Feature({ title, icon, children, selected, onClick, ...props }) {
         <img
           alt="ide"
           src={icon}
-          className={cx("text-center w-10 filter grayscale")}
+          className={cx(
+            "opacity-50 text-center w-10 filter grayscale",
+            "group-hover:opacity-60",
+            selected && "opacity-100 group-hover:opacity-100"
+          )}
         />
       </div>
       <div className="text-sm font-bold my-2">{title}</div>
@@ -117,7 +126,7 @@ const BIG_TABLE_OF_FEATURES = {
   vim: {
     image: animVimSpritesheet,
     frames: animVimFrames,
-    skip: 2100,
+    skip: 3100,
     speed: 1,
   },
   workflow: {
@@ -128,99 +137,91 @@ const BIG_TABLE_OF_FEATURES = {
   },
 };
 
-class Anim {
-  constructor(canvas, feature) {
-    this.canvas = canvas;
-    this.stop = false;
-    this.start = null;
-    this.frame = 0;
+function animate(canvas, feature) {
+  let stop = false;
+  let start = null;
+  let frame = 0;
 
-    this.feature = feature;
+  const featureInfo = BIG_TABLE_OF_FEATURES[feature];
+  const frames = featureInfo.frames;
 
-    const featureInfo = BIG_TABLE_OF_FEATURES[feature];
-    this.frames = featureInfo.frames;
-    this.skip = featureInfo.skip;
-    this.speed = featureInfo.speed;
+  let image = null;
 
-    this.image = new Image();
-    this.image.src = featureInfo.image;
-    this.image.onload = () => {
-      if (!this.stop) {
-        requestAnimationFrame(this.draw);
-      }
-    };
+  {
+    const [, , x1, y1, x2, y2] = frames[0][1][0];
+    const w = x2 - x1;
+    const h = y2 - y1;
 
-    this.firstFrameTime = this.frames[0][0];
+    canvas.width = w;
+    canvas.height = h;
+  }
 
-    {
-      const [, , x1, y1, x2, y2] = this.frames[0][1][0];
-      const w = x2 - x1;
-      const h = y2 - y1;
+  const resizeCanvas = (w) => {
+    const h = w * (canvas.height / canvas.width);
+    canvas.style.height = `${h}px`;
+  };
 
-      this.canvas.width = w;
-      this.canvas.height = h;
-    }
+  resizeCanvas(canvas.getBoundingClientRect().width);
 
-    const resizeCanvas = (width) => {
-      const height = width * (this.canvas.height / this.canvas.width);
-      this.canvas.style.height = `${height}px`;
-    };
-
-    resizeCanvas(this.canvas.getBoundingClientRect().width);
-
-    this.observer = new ResizeObserver((entries) => {
-      for (let entry of entries) {
-        if (entry.contentBoxSize) {
-          resizeCanvas(entry.contentBoxSize[0].inlineSize);
-        } else {
-          resizeCanvas(entry.contentRect.width);
-        }
+  const observer = new ResizeObserver((entries) => {
+    entries.forEach((entry) => {
+      if (entry.contentBoxSize) {
+        resizeCanvas(entry.contentBoxSize[0].inlineSize);
+      } else {
+        resizeCanvas(entry.contentRect.width);
       }
     });
-    this.observer.observe(this.canvas);
+  });
+  observer.observe(canvas);
 
-    // clear canvas
-    const ctx = this.canvas.getContext("2d");
-    ctx.fillStyle = "rgb(26, 26, 26)";
-    ctx.fillRect(0, 0, this.canvas.width * 2, this.canvas.height * 2);
-  }
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "rgb(26, 26, 26)";
+  ctx.fillRect(0, 0, canvas.width * 2, canvas.height * 2);
+  canvas.classList.remove("done");
 
-  cleanup() {
-    this.stop = true;
-    this.observer.disconnect();
-  }
+  const draw = (rawTime) => {
+    const ctx = canvas.getContext("2d");
 
-  draw = (time) => {
-    if (!this.start) {
-      this.start = time;
-      // this.clearCanvas();
+    if (stop) return;
+    if (!start) {
+      start = rawTime;
+
+      canvas.classList.add("done");
+      ctx.fillStyle = "rgba(255, 255, 255, 0)";
+      ctx.fillRect(0, 0, canvas.width * 2, canvas.height * 2);
     }
 
-    time -= this.start;
-    time += this.skip;
+    let time = rawTime;
+    time -= start;
+    time += featureInfo.skip;
+    time *= featureInfo.speed;
 
-    while (
-      this.frame < this.frames.length &&
-      time * this.speed > this.frames[this.frame][0] - this.firstFrameTime
-    ) {
-      this.frames[this.frame][1].forEach((change) => {
+    while (frame < frames.length && time > frames[frame][0] - frames[0][0]) {
+      frames[frame][1].forEach((change) => {
         const [x, y, x1, y1, x2, y2] = change;
-        const ctx = this.canvas.getContext("2d");
-        const [sx, sy] = [x1 + 2, y1 + 2];
-        const [w, h] = [x2 - x1 - 4, y2 - y1 - 4];
-        const [dx, dy] = [x + 2, y + 2];
-        ctx.drawImage(this.image, sx, sy, w, h, dx, dy, w, h);
+        const w = x2 - x1;
+        const h = y2 - y1;
+        ctx.drawImage(image, x1, y1, w, h, x, y, w, h);
       });
-      this.frame++;
+      frame++;
     }
 
-    if (this.frame === this.frames.length) {
+    if (frame === frames.length) {
       // start over
-      this.start = null;
-      this.frame = 0;
+      start = null;
+      frame = 0;
     }
 
-    if (!this.stop) requestAnimationFrame(this.draw);
+    requestAnimationFrame(draw);
+  };
+
+  image = new Image();
+  image.src = featureInfo.image;
+  image.onload = () => requestAnimationFrame(draw);
+
+  return () => {
+    stop = true;
+    observer.disconnect();
   };
 }
 
@@ -240,41 +241,32 @@ preloadSpritesheets();
 
 function FeaturePresentation() {
   const [feature, setFeature] = React.useState("code");
+  const [isCanvasReady, setIsCanvasReady] = React.useState(false);
   const canvasRef = React.useRef(null);
-  const animRef = React.useRef(null);
-
-  function cleanupAnim() {
-    if (animRef.current !== null) {
-      animRef.current.cleanup();
-      animRef.current = null;
-    }
-  }
-
-  const initAnim = React.useCallback(() => {
-    cleanupAnim();
-    animRef.current = new Anim(canvasRef.current, feature);
-  }, [feature]);
+  const stopAnimRef = React.useRef(null);
 
   React.useEffect(() => {
-    initAnim();
-  }, [initAnim, feature]);
+    if (isCanvasReady) {
+      stopAnimRef.current = animate(canvasRef.current, feature);
+    }
+
+    return () => {
+      if (stopAnimRef.current) {
+        stopAnimRef.current();
+        stopAnimRef.current = null;
+      }
+    };
+  }, [feature, isCanvasReady]);
 
   const canvasRefCallback = React.useCallback(
     (canvas) => {
       if (canvas) {
         canvasRef.current = canvas;
-        if (animRef.current === null) {
-          initAnim();
-        }
+        setIsCanvasReady(true);
       }
     },
-    [initAnim]
+    [setIsCanvasReady]
   );
-
-  // cleanup
-  React.useEffect(() => {
-    return () => cleanupAnim();
-  }, []);
 
   return (
     <div
@@ -284,11 +276,15 @@ function FeaturePresentation() {
         "max-w-screen-xl mx-auto gap-8 px-3 items-center justify-center"
       )}
     >
-      <div className="w-full">
+      <div className="w-full relative">
         <canvas
-          className="w-full border border-gray-300 shadow rounded-lg"
+          style={{ border: "solid 1px rgb(26, 26, 26)" }}
+          className="w-full rounded-xl feature-canvas"
           ref={canvasRefCallback}
         />
+        <div className="feature-loading absolute top-0 left-0 right-0 bottom-0 flex justify-center items-center opacity-30 transform scale-50">
+          <Loading />
+        </div>
       </div>
       <div
         className={cx(
@@ -388,6 +384,7 @@ function Home() {
           </div>
         </div>
       </div>
+      <Pricing />
     </div>
   );
 }
@@ -427,6 +424,14 @@ function PricingBox({
   );
 }
 
+function PricingPoint({ label, not }) {
+  return (
+    <div className={cx("leading-5 mb-1", not && "text-red-600")}>
+      <Icon icon={not ? AiOutlineClose : AiOutlineCheck} /> {label}
+    </div>
+  );
+}
+
 function AutoInstall() {
   const code = getCode();
   const data = useAuthWeb(code);
@@ -438,7 +443,8 @@ function AutoInstall() {
   const installLink = `${API_BASE}/install?code=${code}`;
 
   return (
-    <WallOfText title="Install">
+    <WallOfText>
+      <Title>Install</Title>
       <div className="p-6 border border-gray-300 rounded mt-4">
         <div>
           Make sure Go (version 1.13 or higher) is installed. Then paste this
@@ -589,7 +595,8 @@ function ManualInstall() {
   }
 
   return (
-    <WallOfText title="Manual Install">
+    <WallOfText>
+      <Title>Manual Install</Title>
       <p>Install Go (version 1.13+ or higher).</p>
       <p>Download the appropriate package for your machine:</p>
       <p className="flex space-x-2">
@@ -646,11 +653,28 @@ function Download() {
   return <Redirect to={`/install?code=${getCode()}`} />;
 }
 
+function Anchor({ name }) {
+  const ref = React.useCallback(
+    (elem) => {
+      if (elem) {
+        if (window.location.hash.slice(1) === name) {
+          setTimeout(() => elem.scrollIntoView(), 1);
+        }
+      }
+    },
+    [name]
+  );
+
+  // eslint-disable-next-line
+  return <a ref={ref} name={name}></a>;
+}
+
 function Pricing() {
   const [yearly, setYearly] = React.useState(false);
 
   return (
     <div className="pricing my-24">
+      <Anchor name="pricing" />
       <h1 className="text-center text-black font-bold text-4xl mb-8">
         Pricing
       </h1>
@@ -686,18 +710,11 @@ function Pricing() {
             cta="Request Access"
             link={BETA_SIGNUP_LINK}
           >
-            <div className="">
-              <Icon icon={AiOutlineCheck} /> Commercial use allowed
-            </div>
-            <div className="">
-              <Icon icon={AiOutlineCheck} /> All features unlocked
-            </div>
-            <div className="text-red-600">
-              <Icon icon={AiOutlineClose} /> Company cannot pay
-            </div>
-            <div className="text-red-600">
-              <Icon icon={AiOutlineClose} /> Purchase cannot be expensed
-            </div>
+            <PricingPoint label="7-day free trial" />
+            <PricingPoint label="Commercial use allowed" />
+            <PricingPoint label="All features unlocked" />
+            <PricingPoint not label=" Company cannot pay" />
+            <PricingPoint not label=" Purchase cannot be expensed" />
           </PricingBox>
           <PricingBox
             title="Team"
@@ -708,15 +725,9 @@ function Pricing() {
             cta="Request Access"
             link={BETA_SIGNUP_LINK}
           >
-            <div className="">
-              <Icon icon={AiOutlineCheck} /> All features in Personal
-            </div>
-            <div className="">
-              <Icon icon={AiOutlineCheck} /> Company can pay
-            </div>
-            <div className="">
-              <Icon icon={AiOutlineCheck} /> Purchase can be expensed
-            </div>
+            <PricingPoint label="All features in Personal" />
+            <PricingPoint label="Company can pay" />
+            <PricingPoint label="Purchase can be expensed" />
           </PricingBox>
           <PricingBox
             title="Premium"
@@ -727,15 +738,9 @@ function Pricing() {
             cta="Contact Sales"
             link="mailto:sales@codeperfect95.com"
           >
-            <div className="">
-              <Icon icon={AiOutlineCheck} /> All features in Team
-            </div>
-            <div className="">
-              <Icon icon={AiOutlineCheck} /> Priority support
-            </div>
-            <div className="">
-              <Icon icon={AiOutlineCheck} /> Custom requests &amp; integrations
-            </div>
+            <PricingPoint label="All features in Team" />
+            <PricingPoint label="Priority support" />
+            <PricingPoint label="Custom requests &amp; integrations" />
           </PricingBox>
         </div>
       </div>
@@ -758,49 +763,51 @@ function Pricing() {
 
 function Terms() {
   return (
-    <WallOfText title="Terms of Service">
-      <p>
-        This website provides you with information about the IDE and a means for
-        you to subscribe to our services, which allow you to use the IDE for as
-        long as your subscription is active.
-      </p>
-      <p>
-        The IDE is an application that lets you write Go applications. In
-        exchange for paying a monthly rate, we provide you with a license to use
-        it.
-      </p>
-    </WallOfText>
-  );
-}
+    <>
+      <WallOfText>
+        <Title>Terms of Service</Title>
+        <p>
+          This website provides you with information about the IDE and a means
+          for you to subscribe to our services, which allow you to use the IDE
+          for as long as your subscription is active.
+        </p>
+        <p>
+          The IDE is an application that lets you write Go applications. In
+          exchange for paying a monthly rate, we provide you with a license to
+          use it.
+        </p>
 
-function Privacy() {
-  return (
-    <WallOfText title="Privacy Policy">
-      <p>
-        When you fill out the Join Beta form, we collect your name and email. We
-        use this to send you updates about new product features.
-      </p>
-      <p>
-        When you sign up, we collect your name, email, and credit card
-        information. We use this information to bill you and send you emails
-        with updates about your payment status (for example, if your card
-        fails).
-      </p>
-      <p>
-        The IDE contacts the server to authenticate your license key and to
-        install automatic updates. This exposes your IP address to us. We won't
-        share it with anyone, unless ordered to by law.
-      </p>
-    </WallOfText>
+        <br />
+
+        <Title>Privacy Policy</Title>
+        <p>
+          When you fill out the Join Beta form, we collect your name and email.
+          We use this to send you updates about new product features.
+        </p>
+        <p>
+          When you sign up, we collect your name, email, and credit card
+          information. We use this information to bill you and send you emails
+          with updates about your payment status (for example, if your card
+          fails).
+        </p>
+        <p>
+          The IDE contacts the server to authenticate your license key and to
+          install automatic updates. This exposes your IP address to us. We
+          won't share it with anyone, unless ordered to by law.
+        </p>
+      </WallOfText>
+    </>
   );
 }
 
 function ScrollToTop() {
-  const { pathname } = useLocation();
+  const { pathname, hash } = useLocation();
 
   React.useEffect(() => {
-    window.scrollTo(0, 0);
-  }, [pathname]);
+    if (!hash) {
+      window.scrollTo(0, 0);
+    }
+  }, [pathname, hash]);
 
   return null;
 }
@@ -816,7 +823,7 @@ function App() {
       </Helmet>
 
       <div className="text-gray-500">
-        <div className="pt-8 px-4 pb-4 flex justify-between items-center w-full lg:max-w-screen-xl lg:mx-auto">
+        <div className="pt-4 lg:pt-8 px-4 pb-4 flex justify-between items-center w-full lg:max-w-screen-xl lg:mx-auto">
           <Link
             to="/"
             className="font-bold text-lg text-black no-underline whitespace-nowrap flex items-center"
@@ -848,7 +855,7 @@ function App() {
             </A>
           </div>
         </div>
-        <div className="">
+        <div>
           <Switch>
             <Route path="/download" exact>
               <Download />
@@ -860,13 +867,13 @@ function App() {
               <ManualInstall />
             </Route>
             <Route path="/pricing">
-              <Pricing />
+              <Redirect to="/#pricing" />
             </Route>
             <Route path="/terms">
               <Terms />
             </Route>
             <Route path="/privacy">
-              <Privacy />
+              <Redirect to="/terms" />
             </Route>
             <Route exact path="/">
               <Home />
@@ -878,7 +885,7 @@ function App() {
         </div>
         <div
           className={cx(
-            "px-4 pt-8 mb-20 flex flex-col justify-between",
+            "px-4 pt-4 mb-8 lg:pt-8 lg:mb-12 flex flex-col justify-between",
             "lg:max-w-screen-xl lg:mx-auto sm:flex-row"
           )}
         >
@@ -886,7 +893,7 @@ function App() {
             &copy; {CURRENT_YEAR} {NAME}
           </div>
           <div className="flex flex-col sm:flex-row space-x-0 sm:space-x-12 mt-2 sm:mt-0">
-            <div className="text-left">
+            <div className="sm:text-right sm:flex sm:flex-row sm:space-x-6">
               <div>
                 <A
                   className="text-gray-500 no-underline"
@@ -904,29 +911,17 @@ function App() {
                 </A>
               </div>
               <div>
-                <Link to="/pricing" className="text-gray-500 no-underline">
-                  Pricing
-                </Link>
-              </div>
-            </div>
-            <div className="text-left">
-              <div>
-                <Link to="/terms" className="text-gray-500 no-underline">
-                  Terms of Service
-                </Link>
-              </div>
-              <div>
-                <Link className="text-gray-500 no-underline" to="/privacy">
-                  Privacy Policy
-                </Link>
-              </div>
-              <div>
                 <A
                   className="text-gray-500 no-underline"
                   href={`mailto:${SUPPORT_EMAIL}`}
                 >
-                  Contact
+                  Support
                 </A>
+              </div>
+              <div>
+                <Link to="/terms" className="text-gray-500 no-underline">
+                  Terms &amp; Privacy
+                </Link>
               </div>
             </div>
           </div>

@@ -89,7 +89,7 @@
   .main-button {
     background: #333;
     color: white;
-    @apply rounded font-medium shadow-sm;
+    @apply rounded-lg font-medium shadow-sm;
     @apply py-2 px-5;
     @apply disabled:opacity-50 no-underline outline-none;
   }
@@ -114,6 +114,9 @@
 @layer utilities {
   .thick-list li {
     @apply mb-3;
+  }
+  .wall-of-text h2:not(:first-child) {
+    @apply mt-5;
   }
   .wall-of-text h3 {
     @apply mt-5 text-gray-300 font-semibold;
@@ -166,4 +169,9 @@
       transform: rotate(360deg);
     }
   }
+
+  .feature-canvas.done + .feature-loading {
+    display: none;
+  }
+
 }
