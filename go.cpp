@@ -2252,6 +2252,7 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_symbol(ccstr symbol) {
                 auto filepath = get_filepath_from_ctx(&ctx);
 
                 auto ret = alloc_object(Jump_To_Definition_Result);
+                // TODO: fill out decl if we need it, i guess
                 ret->file = filepath;
                 ret->pos = it.name_start;
                 return ret;
@@ -2265,25 +2266,42 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_symbol(ccstr symbol) {
 List<Find_References_File> *Go_Indexer::find_all_references(ccstr filepath, cur2 pos) {
     auto result = world.indexer.jump_to_definition(filepath, pos);
     if (result == NULL) return NULL;
-    if (result->decl == NULL) return NULL;
+    return find_all_references(result->decl);
+}
 
-    auto decl_name = result->decl->name;
+List<Find_References_File> *Go_Indexer::find_all_references(Goresult *declres) {
+    auto filepath = get_filepath_from_ctx(declres->ctx);
+    auto decl = declres->decl;
+    if (decl == NULL) return NULL;
+
+    auto decl_name = decl->name;
     if (decl_name == NULL) return NULL;
 
     Go_Ctx ctx; ptr0(&ctx);
     ctx.import_path = filepath_to_import_path(our_dirname(filepath));
     ctx.filename = our_basename(filepath);
 
-    auto ret = alloc_list<Go_Reference>();
+    auto ret = alloc_list<Find_References_File>();
 
     For (*index.packages) {
         if (!path_contains_in_subtree(index.current_import_path, it.import_path))
             continue;
 
-        if (streq(it.import_path, ctx.import_path)) {
-            auto &pkg = it;
-            For (*it.files) {
-                auto &file = it;
+        bool same_package = streq(it.import_path, ctx.import_path);
+
+        auto &pkg = it;
+
+        if (!same_package)
+            if (islower(decl_name[0]))
+                continue;
+
+        For (*it.files) {
+            auto &file = it;
+            auto out = ret->append();
+            out->filepath = our_strcpy(path_join(get_package_path(pkg.import_path), it.filename));
+            out->references = alloc_list<Go_Reference>();
+
+            if (same_package) {
                 For (*it.references) {
                     if (it.is_sel) continue;
                     if (!streq(it.name, decl_name)) continue;
@@ -2293,17 +2311,21 @@ List<Find_References_File> *Go_Indexer::find_all_references(ccstr filepath, cur2
                     ctx2.filename = file.filename;
 
                     auto res = find_decl_of_id(it.name, it.start, &ctx2);
-                    if (res->decl != result->decl) continue; // can we compare using pointer identity?
 
-                    ret->append(&it);
+                    auto are_decls_equal = [&](Godecl *a, Godecl *b) {
+                        if (a == NULL || b == NULL) return false;
+                        if (a->name_start != b->name_start) return false;
+                        if (!streq(a->name, b->name)) return false;
+
+                        return true;
+                    };
+
+                    // TODO: should we not compare using pointer equality?
+                    if (!are_decls_equal(res->decl, decl)) continue;
+
+                    out->references->append(&it);
                 }
-            }
-        } else {
-            if (islower(decl_name[0])) continue;
-
-            auto &pkg = it;
-            For (*it.files) {
-                auto &file = it;
+            } else {
                 ccstr package_name = NULL;
 
                 For (*it.imports) {
@@ -2327,14 +2349,14 @@ List<Find_References_File> *Go_Indexer::find_all_references(ccstr filepath, cur2
                     Go_Ctx ctx2;
                     ctx2.import_path = pkg.import_path;
                     ctx2.filename = file.filename;
-                    
+
                     Go_Import *imp = NULL;
 
                     auto res = find_decl_of_id(it.x, it.x_start, &ctx2, &imp);
                     if (imp == NULL) continue;
                     if (!streq(imp->import_path, ctx.import_path)) continue; // when would this happen?
 
-                    ret->append(&it);
+                    out->references->append(&it);
                 }
             }
         }
@@ -2615,7 +2637,7 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 p
                         if (streq(decl->name, sel_name)) {
                             result.pos = decl->name_start;
                             result.file = get_filepath_from_ctx(it.ctx);
-                            result.decl = decl;
+                            result.decl = it.copy_decl();
                             return WALK_ABORT;
                         }
                     }
@@ -2681,7 +2703,7 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 p
 
                 if (declres != NULL) {
                     result.file = get_filepath_from_ctx(declres->ctx);
-                    result.decl = declres->decl;
+                    result.decl = declres->copy_decl();
                     if (declres->decl->name != NULL)
                         result.pos = declres->decl->name_start;
                     else
@@ -5515,13 +5537,6 @@ TSParser *new_ts_parser() {
 // -----
 // stupid c++ template shit
 
-template<typename T>
-T *clone(T *old) {
-    auto ret = alloc_object(T);
-    memcpy(ret, old, sizeof(T));
-    return ret;
-}
-
 template <typename T>
 T* copy_object(T *old) {
     return old == NULL ? NULL : old->copy();
@@ -5545,6 +5560,30 @@ List<T> *copy_list(List<T> *arr) {
 
 // -----
 // actual code that tells us how to copy objects
+
+Goresult *Goresult::copy_decl() {
+    auto ret = clone(this);
+
+    auto ctx = clone(ret->ctx);
+    ctx->import_path = our_strcpy(ret->ctx->import_path);
+    ctx->filename = our_strcpy(ret->ctx->filename);
+    ret->ctx = ctx;
+
+    ret->decl = copy_object(decl);
+    return ret;
+}
+
+Goresult *Goresult::copy_gotype() {
+    auto ret = clone(this);
+
+    auto newctx = clone(ctx);
+    newctx->import_path = our_strcpy(ctx->import_path);
+    newctx->filename = our_strcpy(ctx->filename);
+    ret->ctx = newctx;
+
+    ret->gotype = copy_object(gotype);
+    return ret;
+}
 
 AC_Result *AC_Result::copy() {
     auto ret = clone(this);

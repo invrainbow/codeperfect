@@ -485,66 +485,123 @@ void Searcher::replace_worker() {
         if (it.filepath == NULL) continue;
         if (it.results == NULL || it.results->len == 0) continue;
 
-#if 0
-        if (!streq(it.filepath, "/Users/brandon/dev/hugo/CONTRIBUTING.md")) continue;
-#endif
+        File_Replacer fr;
+        if (!fr.init(it.filepath, "search_and_replace")) continue;
 
-        File_Mapping_Opts optsr; ptr0(&optsr);
-        optsr.write = false;
+        For (*it.results) {
+            if (fr.done()) break;
 
-        auto fmr = map_file_into_memory(it.filepath, &optsr);
-        if (fmr == NULL) continue;
-        defer { if (fmr != NULL) fmr->cleanup(); };
-
-        File_Mapping_Opts optsw; ptr0(&optsw);
-        optsw.write = true;
-        optsw.initial_size = 1024;
-
-        auto fmw = map_file_into_memory(".search_and_replace.tmp", &optsw);
-        if (fmw == NULL) continue;
-        defer { if (fmw != NULL) fmw->cleanup(); };
-
-        int write_pointer = 0;
-
-        auto write = [&](char ch) -> bool {
-            if (write_pointer >= fmw->len)
-                if (!fmw->resize(fmw->len * 2))
-                    return false;
-
-            fmw->data[write_pointer++] = ch;
-            return true;
-        };
-
-        int index = 0;
-        int result_index = 0;
-        Search_Result *nextmatch = &it.results->at(result_index);
-
-        while (index < fmr->len) {
-            if (nextmatch != NULL && index == nextmatch->match_off) {
-                auto newtext = get_replacement_text(nextmatch, replace_with);
-                for (auto p = newtext; *p != '\0'; p++)
-                    write(*p);
-
-                result_index++;
-                index += nextmatch->match_len;
-                nextmatch = result_index < it.results->len ? &it.results->at(result_index) : NULL;
-            } else {
-                write(fmr->data[index]);
-                index++;
-            }
+            auto newtext = get_replacement_text(&it, replace_with);
+            fr.goto_next_replacement(new_cur2(it.match_off, -1));
+            fr.do_replacement(new_cur2(it.match_off + it.match_len, -1), newtext);
         }
 
-        fmw->finish_writing(write_pointer);
-        fmw->cleanup();
-        fmw = NULL;
-
-        fmr->cleanup();
-        fmr = NULL;
-
-        move_file_atomically(".search_and_replace.tmp", it.filepath);
+        fr.finish();
     }
 
     state = SEARCH_REPLACE_DONE;
     close_thread_handle(thread);
     thread = NULL;
 }
+
+// ========================
+
+bool File_Replacer::init(ccstr _filepath, ccstr unique_id) {
+    ptr0(this);
+    filepath = _filepath;
+    tmpfile = our_sprintf(".file_replacer_%s.tmp", unique_id);
+
+    bool success = false;
+    defer {
+        // if init fails, it needs to cleanup everything
+        if (!success) {
+            if (fmr != NULL) {
+                fmr->cleanup();
+                fmr = NULL;
+            }
+            if (fmw != NULL) {
+                fmw->cleanup();
+                fmw = NULL;
+            }
+        }
+    };
+
+    File_Mapping_Opts optsr; ptr0(&optsr);
+    optsr.write = false;
+
+    fmr = map_file_into_memory(filepath, &optsr);
+    if (fmr == NULL) return false;
+
+    File_Mapping_Opts optsw; ptr0(&optsw);
+    optsw.write = true;
+    optsw.initial_size = 1024;
+
+    fmw = map_file_into_memory(tmpfile, &optsw);
+    if (fmw == NULL) return false;
+
+    success = true;
+    return true;
+}
+
+bool File_Replacer::write(char ch) {
+    if (write_pointer >= fmw->len)
+        if (!fmw->resize(fmw->len * 2))
+            return false;
+
+    fmw->data[write_pointer++] = ch;
+    return true;
+}
+
+char File_Replacer::advance_read_pointer() {
+    auto ch = fmr->data[read_pointer++];
+    if (ch == '\n') {
+        read_cur.y++;
+        read_cur.x = 0;
+    } else {
+        read_cur.x++;
+    }
+}
+
+bool File_Replacer::goto_next_replacement(cur2 pos) {
+    while (read_pointer < fmr->len) {
+        if (pos.y == -1 ? (read_cur == pos) : (read_pointer == pos.x))
+            return true;
+        write(advance_read_pointer());
+    }
+    return false;
+}
+
+void File_Replacer::do_replacement(cur2 skipuntil, ccstr newtext) {
+    for (auto p = newtext; *p != '\0'; p++)
+        write(*p);
+
+    while (read_pointer < fmr->len) {
+        if (skipuntil.y == -1) {
+            if (read_cur == skipuntil)
+                break;
+        } else {
+            if (read_pointer == skipuntil.x)
+                break;
+        }
+        advance_read_pointer();
+    }
+}
+
+bool File_Replacer::done() { return read_pointer >= fmr->len; }
+
+void File_Replacer::finish() {
+    while (read_pointer < fmr->len) {
+        write(fmr->data[read_pointer]);
+        read_pointer++;
+    }
+
+    fmw->finish_writing(write_pointer);
+    fmw->cleanup();
+    fmw = NULL;
+
+    fmr->cleanup();
+    fmr = NULL;
+
+    move_file_atomically(tmpfile, filepath);
+}
+

@@ -112,3 +112,21 @@ struct Searcher {
 };
 
 bool is_binary(ccstr buf, s32 len);
+
+struct File_Replacer {
+    File_Mapping *fmr;
+    File_Mapping *fmw;
+    int write_pointer;
+    int read_pointer;
+    cur2 read_cur;
+    ccstr tmpfile;
+    ccstr filepath;
+
+    bool init(ccstr filepath, ccstr unique_id);
+    void finish();
+    char advance_read_pointer();
+    bool goto_next_replacement(cur2 pos);
+    void do_replacement(cur2 skipuntil, ccstr newtext);
+    bool write(char ch);
+    bool done();
+};

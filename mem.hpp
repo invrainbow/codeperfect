@@ -113,9 +113,9 @@ struct Pool {
 
     u64 recount_total_allocated() {
         u64 ret = 0;
-        for (u32 i = 0; i < obsolete_blocks.len; i++) ret += obsolete_blocks.items[i]->size;
-        for (u32 i = 0; i < used_blocks.len; i++) ret += used_blocks.items[i]->size;
-        for (u32 i = 0; i < unused_blocks.len; i++) ret += unused_blocks.items[i]->size;
+        For (obsolete_blocks) ret += it->size;
+        For (used_blocks) ret += it->size;
+        For (unused_blocks) ret += it->size;
         if (curr != NULL) ret += curr->size;
         return ret;
     }

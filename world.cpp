@@ -888,23 +888,37 @@ Jump_To_Definition_Result *get_current_definition(ccstr *filepath) {
     if (editor == NULL) return NULL;
     if (!editor->is_go_file) return NULL;
 
-    SCOPED_MEM(&world.indexer.ui_mem);
     defer { world.indexer.ui_mem.reset(); };
 
-    // strictly we can just call try_enter(), but want consistency with UI, which is based on `ready`
-    if (!world.indexer.ready) return NULL; 
-    if (!world.indexer.lock.try_enter()) return NULL;
-    defer { world.indexer.lock.leave(); };
+    Jump_To_Definition_Result *result = NULL;
 
-    auto result = world.indexer.jump_to_definition(editor->filepath, new_cur2(editor->cur_to_offset(editor->cur), -1));
+    {
+        SCOPED_MEM(&world.indexer.ui_mem);
+
+        // strictly we can just call try_enter(), but want consistency with UI, which is based on `ready`
+        if (!world.indexer.ready) return NULL;
+        if (!world.indexer.lock.try_enter()) return NULL;
+        defer { world.indexer.lock.leave(); };
+
+        result = world.indexer.jump_to_definition(editor->filepath, new_cur2(editor->cur_to_offset(editor->cur), -1));
+    }
+
     if (result == NULL) {
         error("unable to jump to definition");
         return NULL;
     }
 
+    if (result->decl == NULL) return NULL;
+    if (result->decl->decl == NULL) return NULL;
+
     if (filepath != NULL)
         *filepath = editor->filepath;
-    return result;
+
+    // copy using caller mem
+    auto ret = clone(result);
+    ret->file = our_strcpy(result->file);
+    ret->decl = result->decl->copy_decl();
+    return ret;
 }
 
 void handle_goto_definition() {
@@ -931,8 +945,7 @@ void open_rename_identifier() {
     // TODO: this should be a "blocking" modal, like it disables activity in rest of IDE
     auto result = get_current_definition(&filepath);
     if (result == NULL) return;
-    if (result->decl == NULL) return;
-    if (result->decl->type == GODECL_IMPORT) return;
+    if (result->decl->decl->type == GODECL_IMPORT) return;
 
     world.rename_identifier_mem.reset();
     SCOPED_MEM(&world.rename_identifier_mem);
@@ -940,7 +953,7 @@ void open_rename_identifier() {
     auto &wnd = world.wnd_rename_identifier;
     wnd.show = true;
     wnd.running = false;
-    wnd.decl = result->decl->copy();
+    wnd.declres = result->decl->copy_decl();
     wnd.filepath = our_strcpy(filepath);
 }
 
@@ -948,7 +961,7 @@ bool kick_off_find_implemented_interfaces() {
     auto result = get_current_definition();
     if (result == NULL) return false;
 
-    auto decl = result->decl;
+    auto decl = result->decl->decl;
     if (decl == NULL) return false;
 
     if (decl->type != GODECL_TYPE) {
@@ -965,7 +978,7 @@ bool kick_off_find_implementations() {
     auto result = get_current_definition();
     if (result == NULL) return false;
 
-    auto decl = result->decl;
+    auto decl = result->decl->decl;
     if (decl == NULL) return false;
 
     if (decl->type != GODECL_TYPE || decl->gotype->type != GOTYPE_INTERFACE) {
@@ -988,11 +1001,11 @@ bool kick_off_find_references() {
     if (decl == NULL) return false;
 
     // iterate thru all packages
-    // if in same package as decl, check all non-sel refs, 
+    // if in same package as decl, check all non-sel refs,
     // if in diff package, check if package is even imported,
     //  if so, check all sel refs, making sure package is same
 
-    // TODO: find all references that refer to decl 
+    // TODO: find all references that refer to decl
 
     /*
     switch (decl->type) {
@@ -1362,32 +1375,70 @@ void Build::cleanup() {
 }
 
 void kick_off_rename_identifier() {
-    auto &wnd = world.wnd_rename_identifier;
-
-    if (!world.indexer.ready) return NULL; 
-    if (!world.indexer.lock.try_enter()) return NULL;
+    auto &ind = world.indexer;
+    if (!ind.ready) return;
+    if (!ind.lock.try_enter()) return;
 
     // TODO: when do we release the lock?
     // TODO: seems we need a new "running" indexer status
 
     auto thread = [](void *param) {
-        defer { world.indexer.lock.leave(); };
+        auto &wnd = world.wnd_rename_identifier;
+        wnd.thread_mem.cleanup();
+        wnd.thread_mem.init();
+        SCOPED_MEM(&wnd.thread_mem);
 
-        auto files = find_all_references(wnd.filepath, wnd.decl->start);
+        auto &ind = world.indexer;
+
+        defer { ind.lock.leave(); };
+
+        auto files = ind.find_all_references(wnd.declres);
         if (files == NULL) return;
+
+        auto symbol = wnd.declres->decl->name;
+        auto symbol_len = strlen(symbol);
+
         For (*files) {
             auto filepath = it.filepath;
 
-            For (*it.references) {
-                if (it.is_sel) {
-                    // rename to hurrdurr.
-                }
-            }
-        }
+            File_Replacer fr;
+            if (!fr.init(filepath, "refactor_rename")) continue;
 
-        For (*refs) {
+            For (*it.references) {
+                if (fr.done()) break;
+
+                cur2 start, end;
+                if (it.is_sel) {
+                    start = it.sel_start;
+                    end = it.sel_end;
+                } else {
+                    start = it.start;
+                    end = it.end;
+                }
+
+                // i think this is a safe assumption?
+                if (start.y != end.y) continue;
+
+                if (end.x-start.x != symbol_len) continue;
+
+                fr.goto_next_replacement(start);
+
+                bool matches = true;
+                for (int i = 0; i < symbol_len; i++) {
+                    if (symbol[i] != fr.fmr->data[fr.read_pointer + i]) {
+                        matches = false;
+                        break;
+                    }
+                }
+                if (!matches) continue;
+
+                fr.do_replacement(end, wnd.rename_to);
+            }
+
+            fr.finish();
         }
     };
 
+    auto &wnd = world.wnd_rename_identifier;
     wnd.thread = create_thread(thread, NULL);
 }

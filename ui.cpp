@@ -2211,10 +2211,8 @@ void UI::draw_everything() {
         ImGui::SetNextWindowSize(ImVec2(400, -1));
         ImGui::SetNextWindowPos(ImVec2(world.window_size.x/2, 150), ImGuiCond_Once, ImVec2(0.5f, 0));
 
-        ImGui::Begin("Rename", &wnd.show, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking);
-
         auto get_type_str = [&]() -> ccstr {
-            switch (wnd.decl->type) {
+            switch (wnd.declres->decl->type) {
             // TODO: support import renaming
             case GODECL_TYPE:
                 return "type";
@@ -2231,8 +2229,9 @@ void UI::draw_everything() {
             return "";
         };
 
-        ImGui::Text("Renaming %s", get_type_str());
+        ImGui::Begin(our_sprintf("Rename %s###rename_identifier", get_type_str()), &wnd.show, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking);
 
+        /*
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(ImColor(140, 194, 248)));
         ImGui::PushFont(world.ui.im_font_mono);
         ImGui::Text("%s", wnd.decl->name);
@@ -2240,22 +2239,23 @@ void UI::draw_everything() {
         ImGui::PopFont();
 
         imgui_small_newline();
+        */
 
         focus_keyboard(&wnd);
-        imgui_input_text_full_fixbuf("New name", wnd.rename_to);
+        imgui_input_text_full_fixbuf(our_sprintf("Rename %s to", wnd.declres->decl->name), wnd.rename_to);
 
         imgui_small_newline();
 
         if (wnd.running) {
-            if (ImGui::Button(our_sprintf("Rename", wnd.decl->name))) {
-                // TODO
-            }
-        } else {
             ImGui::Text("Renaming...");
             ImGui::SameLine();
             if (ImGui::Button("Cancel")) {
                 // ???
                 // TODO: cancel rename
+            }
+        } else {
+            if (ImGui::Button(our_sprintf("Rename %s", wnd.declres->decl->name))) {
+                kick_off_rename_identifier();
             }
         }
 

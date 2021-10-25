@@ -686,6 +686,9 @@ struct Goresult {
         Godecl *decl;
         Gotype *gotype;
     };
+
+    Goresult *copy_decl();
+    Goresult *copy_gotype();
 };
 
 enum Chan_Direction { CHAN_RECV, CHAN_SEND, CHAN_BI };
@@ -1002,7 +1005,7 @@ struct Parameter_Hint {
 struct Jump_To_Definition_Result {
     ccstr file;
     cur2 pos;
-    Godecl *decl; // can be null
+    Goresult *decl; // can be null
 };
 
 typedef fn<Godecl*()> New_Godecl_Func;
@@ -1279,7 +1282,9 @@ struct Go_Indexer {
     void import_decl_to_goimports(Ast_Node *decl_node, ccstr filename, List<Go_Import> *out);
     bool check_if_still_in_parameter_hint(ccstr filepath, cur2 cur, cur2 hint_start);
     Go_File *find_gofile_from_ctx(Go_Ctx *ctx);
+
     List<Find_References_File>* find_all_references(ccstr filepath, cur2 pos);
+    List<Find_References_File>* find_all_references(Goresult *declres);
 };
 
 void walk_ast_node(Ast_Node *node, bool abstract_only, Walk_TS_Callback cb);
@@ -1401,3 +1406,10 @@ extern GoBool (*GHInitConfig)();
 void load_gohelper();
 
 extern int gh_version;
+
+template<typename T>
+T *clone(T *old) {
+    auto ret = alloc_object(T);
+    memcpy(ret, old, sizeof(T));
+    return ret;
+}

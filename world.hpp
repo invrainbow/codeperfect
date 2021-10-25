@@ -234,9 +234,10 @@ struct World {
     u64 auth_update_last_check;
 
     struct : Wnd {
+        Pool thread_mem;
         bool running;
         char rename_to[256];
-        Godecl *decl;
+        Goresult *declres;
         ccstr filepath;
         Thread_Handle thread;
     } wnd_rename_identifier;
@@ -438,6 +439,7 @@ void goto_next_error(int direction);
 void reload_file_subtree(ccstr path);
 bool kick_off_find_references();
 void open_rename_identifier();
+void kick_off_rename_identifier();
 
 extern u64 post_insert_dotrepeat_time;
 
@@ -446,5 +448,3 @@ Jump_To_Definition_Result *get_current_definition(ccstr *filepath = NULL);
 
 extern int gargc;
 extern char **gargv;
-
-
