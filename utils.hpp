@@ -121,7 +121,7 @@ struct Path {
 Path* make_path(ccstr s);
 List<ccstr> *split_string(ccstr str, fn<bool(char)> pred);
 List<ccstr> *split_string(ccstr str, char sep);
-bool path_contains_in_subtree(ccstr base_path, ccstr full_path);
+bool path_has_descendant(ccstr base_path, ccstr full_path);
 
 template <typename T>
 struct Scoped_Table {

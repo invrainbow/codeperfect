@@ -904,7 +904,7 @@ bool Debugger::start(Debug_Profile *debug_profile) {
                     if (!str_ends_with(editor->filepath, "_test.go"))
                         return;
 
-                if (!path_contains_in_subtree(world.current_path, editor->filepath)) return;
+                if (!path_has_descendant(world.current_path, editor->filepath)) return;
 
                 auto root_module_path = world.indexer.module_resolver.module_path;
                 auto subpath = get_path_relative_to(our_dirname(editor->filepath), world.current_path);

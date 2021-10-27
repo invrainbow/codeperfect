@@ -54,6 +54,8 @@ enum Main_Thread_Message_Type {
 
     MTM_PANIC,
     MTM_TELL_USER,
+
+    MTM_RELOAD_EDITOR,
 };
 
 struct Main_Thread_Message {
@@ -138,6 +140,13 @@ struct Build {
 
 #define INDEX_LOG_CAP 64 // 512
 #define INDEX_LOG_MAXLEN 256
+
+/*
+enum {
+    DISCARD_UNSAVED = 0,
+    SAVE_UNSAVED = 1,
+};
+*/
 
 struct World {
     Pool world_mem;
@@ -238,6 +247,7 @@ struct World {
         bool running;
         char rename_to[256];
         Goresult *declres;
+        // int how_to_handle_unsaved_files;
         ccstr filepath;
         Thread_Handle thread;
     } wnd_rename_identifier;
@@ -440,11 +450,12 @@ void reload_file_subtree(ccstr path);
 bool kick_off_find_references();
 void open_rename_identifier();
 void kick_off_rename_identifier();
+void cancel_rename_identifier();
 
 extern u64 post_insert_dotrepeat_time;
 
 bool move_autocomplete_cursor(Editor *ed, int direction);
-Jump_To_Definition_Result *get_current_definition(ccstr *filepath = NULL);
+Jump_To_Definition_Result *get_current_definition(ccstr *filepath = NULL, bool display_error = false);
 
 extern int gargc;
 extern char **gargv;

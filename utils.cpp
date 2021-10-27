@@ -205,7 +205,7 @@ ccstr Path::str(char sep) {
     return ret;
 }
 
-bool path_contains_in_subtree(ccstr base_path, ccstr full_path) {
+bool path_has_descendant(ccstr base_path, ccstr full_path) {
     SCOPED_FRAME();
     return make_path(base_path)->contains(make_path(full_path));
 }

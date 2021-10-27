@@ -163,9 +163,9 @@ struct Buffer {
     void copy_from(Buffer *other);
     void init(Pool *_mem, bool use_tree);
     void cleanup();
-    bool read(Buffer_Read_Func f);
-    bool read_data(char *data, int len);
-    bool read(File_Mapping* fm);
+    bool read(Buffer_Read_Func f, bool reread = false);
+    bool read_data(char *data, int len, bool reread = false);
+    bool read(File_Mapping* fm, bool reread = false);
     void write(File* f);
     void clear();
     uchar* alloc_temp_array(s32 size);

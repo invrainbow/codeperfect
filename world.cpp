@@ -883,10 +883,18 @@ void goto_jump_to_definition_result(Jump_To_Definition_Result *result) {
     goto_file_and_pos(result->file, result->pos, ECM_GOTO_DEF);
 }
 
-Jump_To_Definition_Result *get_current_definition(ccstr *filepath) {
+Jump_To_Definition_Result *get_current_definition(ccstr *filepath, bool display_error) {
+    auto show_error = [&](ccstr msg) -> Jump_To_Definition_Result* {
+        if (display_error)
+            tell_user(msg, NULL);
+        return NULL;
+    };
+
     auto editor = world.get_current_editor();
-    if (editor == NULL) return NULL;
-    if (!editor->is_go_file) return NULL;
+    if (editor == NULL)
+        return show_error("Couldn't find anything under your cursor to rename (you don't have an editor focused).");
+    if (!editor->is_go_file)
+        return show_error("Couldn't find anything under your cursor to rename (you're not in a Go file).");
 
     defer { world.indexer.ui_mem.reset(); };
 
@@ -896,20 +904,17 @@ Jump_To_Definition_Result *get_current_definition(ccstr *filepath) {
         SCOPED_MEM(&world.indexer.ui_mem);
 
         // strictly we can just call try_enter(), but want consistency with UI, which is based on `ready`
-        if (!world.indexer.ready) return NULL;
-        if (!world.indexer.lock.try_enter()) return NULL;
+        if (!world.indexer.ready)
+            return show_error("The indexer is currently busy; please wait for it to finish.");
+        if (!world.indexer.lock.try_enter())
+            return show_error("The indexer is currently busy; please wait for it to finish.");
         defer { world.indexer.lock.leave(); };
 
         result = world.indexer.jump_to_definition(editor->filepath, new_cur2(editor->cur_to_offset(editor->cur), -1));
     }
 
-    if (result == NULL) {
-        error("unable to jump to definition");
-        return NULL;
-    }
-
-    if (result->decl == NULL) return NULL;
-    if (result->decl->decl == NULL) return NULL;
+    if (result == NULL || result->decl == NULL || result->decl->decl == NULL)
+        return show_error("Couldn't find anything under your cursor to rename.");
 
     if (filepath != NULL)
         *filepath = editor->filepath;
@@ -930,9 +935,12 @@ void handle_goto_definition() {
 void save_all_unsaved_files() {
     for (auto&& pane : world.panes) {
         For (pane.editors) {
-            // TODO: handle untitled files
+            // TODO: handle untitled files; and when we do, put it behind a
+            // flag, because save_all_unsaved_files() is now depended on and we
+            // can't break existing functionality
             if (it.is_untitled) continue;
-            if (!path_contains_in_subtree(world.current_path, it.filepath)) continue;
+
+            if (!path_has_descendant(world.current_path, it.filepath)) continue;
 
             it.handle_save(false);
         }
@@ -943,14 +951,18 @@ void open_rename_identifier() {
     ccstr filepath = NULL;
 
     // TODO: this should be a "blocking" modal, like it disables activity in rest of IDE
-    auto result = get_current_definition(&filepath);
+    auto result = get_current_definition(&filepath, true);
     if (result == NULL) return;
-    if (result->decl->decl->type == GODECL_IMPORT) return;
+    if (result->decl->decl->type == GODECL_IMPORT) {
+        tell_user("Sorry, we're currently not yet able to rename imports.", NULL);
+        return;
+    }
 
     world.rename_identifier_mem.reset();
     SCOPED_MEM(&world.rename_identifier_mem);
 
     auto &wnd = world.wnd_rename_identifier;
+    wnd.rename_to[0] = '\0';
     wnd.show = true;
     wnd.running = false;
     wnd.declres = result->decl->copy_decl();
@@ -1015,6 +1027,7 @@ bool kick_off_find_references() {
     case GODECL_TYPE:
     case GODECL_FUNC:
     case GODECL_FIELD:
+    case GODECL_PARAM:
     case GODECL_SHORTVAR:
     case GODECL_TYPECASE:
         name
@@ -1379,10 +1392,25 @@ void kick_off_rename_identifier() {
     if (!ind.ready) return;
     if (!ind.lock.try_enter()) return;
 
+    auto has_unsaved_files = [&]() {
+        For (world.panes)
+            For (it.editors)
+                if (it.buf->dirty)
+                    return true;
+        return false;
+    };
+
+    if (has_unsaved_files()) {
+        tell_user("Please save all your unsaved files before running the Rename operation.", "Unsaved files");
+        return;
+    }
+
     // TODO: when do we release the lock?
     // TODO: seems we need a new "running" indexer status
 
-    auto thread = [](void *param) {
+    auto thread_proc = [](void *param) {
+        // TODO: put a sleep here so we can test out cancellationshit
+
         auto &wnd = world.wnd_rename_identifier;
         wnd.thread_mem.cleanup();
         wnd.thread_mem.init();
@@ -1419,7 +1447,7 @@ void kick_off_rename_identifier() {
                 // i think this is a safe assumption?
                 if (start.y != end.y) continue;
 
-                if (end.x-start.x != symbol_len) continue;
+                if (end.x - start.x != symbol_len) continue;
 
                 fr.goto_next_replacement(start);
 
@@ -1436,9 +1464,37 @@ void kick_off_rename_identifier() {
             }
 
             fr.finish();
+
+            auto editor = world.find_editor_by_filepath(filepath);
+            if (editor != NULL) {
+                world.message_queue.add([&](auto msg) {
+                    msg->type = MTM_RELOAD_EDITOR;
+                    msg->reload_editor_id = editor->id;
+                });
+            }
         }
+
+        // close the thread handle first so it doesn't try to kill the thread
+        if (wnd.thread != NULL) {
+            close_thread_handle(wnd.thread);
+            wnd.thread = NULL;
+        }
+
+        cancel_rename_identifier();
+        wnd.show = false;
     };
 
     auto &wnd = world.wnd_rename_identifier;
-    wnd.thread = create_thread(thread, NULL);
+    wnd.running = true;
+    wnd.thread = create_thread(thread_proc, NULL);
+}
+
+void cancel_rename_identifier() {
+    auto &wnd = world.wnd_rename_identifier;
+    if (wnd.thread != NULL) {
+        kill_thread(wnd.thread);
+        close_thread_handle(wnd.thread);
+        wnd.thread = NULL;
+    }
+    wnd.running = false;
 }

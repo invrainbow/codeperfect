@@ -358,6 +358,7 @@ void UI::render_godecl(Godecl *decl) {
         case GODECL_TYPE:
         case GODECL_FUNC:
         case GODECL_FIELD:
+        case GODECL_PARAM:
         case GODECL_SHORTVAR:
             render_gotype(decl->gotype);
             break;
@@ -1053,9 +1054,9 @@ void UI::draw_debugger_var(Draw_Debugger_Var_Args *args) {
             ImGui::Indent();
         ImGui::Indent(ImGui::GetTreeNodeToLabelSpacing());
 
-        ImGui::PushFont(world.ui.im_font_ui);
+        imgui_push_ui_font();
         bool clicked = ImGui::SmallButton("Load more...");
-        ImGui::PopFont();
+        imgui_pop_font();
 
         if (clicked) {
             world.dbg.push_call(DLVC_VAR_LOAD_MORE, [&](Dlv_Call *it) {
@@ -1250,7 +1251,7 @@ void UI::draw_debugger() {
     {
         ImGui::SetNextWindowDockID(dock_bottom_id, ImGuiCond_Once);
         ImGui::Begin("Call Stack");
-        ImGui::PushFont(world.ui.im_font_mono);
+        imgui_push_mono_font();
 
         if (world.dbg.state_flag == DLV_STATE_PAUSED && !world.dbg.exiting) {
             for (int i = 0; i < state.goroutines.len; i++) {
@@ -1308,7 +1309,7 @@ void UI::draw_debugger() {
             }
         }
 
-        ImGui::PopFont();
+        imgui_pop_font();
         ImGui::End();
     }
 
@@ -1321,7 +1322,7 @@ void UI::draw_debugger() {
             ImGui::PopStyleVar();
         }
 
-        ImGui::PushFont(world.ui.im_font_mono);
+        imgui_push_mono_font();
 
         if (world.dbg.state_flag == DLV_STATE_PAUSED) {
             auto flags = ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable;
@@ -1390,7 +1391,7 @@ void UI::draw_debugger() {
             }
         }
 
-        ImGui::PopFont();
+        imgui_pop_font();
         ImGui::End();
     }
 
@@ -1403,7 +1404,7 @@ void UI::draw_debugger() {
             ImGui::PopStyleVar();
         }
 
-        ImGui::PushFont(world.ui.im_font_mono);
+        imgui_push_mono_font();
 
         if (world.dbg.state_flag == DLV_STATE_PAUSED) {
             auto flags = ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable;
@@ -1469,7 +1470,7 @@ void UI::draw_debugger() {
             }
         }
 
-        ImGui::PopFont();
+        imgui_pop_font();
         ImGui::End();
     }
 
@@ -1477,9 +1478,9 @@ void UI::draw_debugger() {
     {
         ImGui::SetNextWindowDockID(dock_bottom_right_id, ImGuiCond_Once);
         ImGui::Begin("Global Variables");
-        ImGui::PushFont(world.ui.im_font_mono);
+        imgui_push_mono_font();
         ImGui::Text("@Incomplete: global vars go here");
-        ImGui::PopFont();
+        imgui_pop_font();
         ImGui::End();
     }
     */
@@ -1528,9 +1529,9 @@ void UI::imgui_small_newline() {
 bool UI::imgui_input_text_full(ccstr label, char *buf, int count, int flags) {
     ImGui::PushItemWidth(-1);
     {
-        ImGui::PushFont(world.ui.im_font_ui);
+        imgui_push_ui_font();
         ImGui::Text("%s", label);
-        ImGui::PopFont();
+        imgui_pop_font();
     }
     auto ret = ImGui::InputText(our_sprintf("###%s", label), buf, count, flags);
     ImGui::PopItemWidth();
@@ -1580,6 +1581,18 @@ u32 UI::imgui_get_keymods() {
     if (io.KeyShift) ret |= KEYMOD_SHIFT;
     if (io.KeyAlt) ret |= KEYMOD_ALT;
     return ret;
+}
+
+void UI::imgui_push_mono_font() {
+    ImGui::PushFont(world.ui.im_font_mono);
+}
+
+void UI::imgui_push_ui_font() {
+    ImGui::PushFont(world.ui.im_font_ui);
+}
+
+void UI::imgui_pop_font() {
+    ImGui::PopFont();
 }
 
 void open_ft_node(FT_Node *it) {
@@ -1664,7 +1677,7 @@ void UI::focus_keyboard(Wnd *wnd, int cond) {
             ImGui::SetKeyboardFocusHere();
         }
     } else if (is_focusing) {
-        if (cond & FKC_FOCUSING) 
+        if (cond & FKC_FOCUSING)
             ImGui::SetKeyboardFocusHere();
     }
 }
@@ -1921,7 +1934,7 @@ void UI::draw_everything() {
                 return true; // ???
             };
 
-            if (ImGui::MenuItem("Rename...", NULL, false, can_rename_id_under_cursor())) {
+            if (ImGui::MenuItem("Rename...", format_key(0, "F12"), false, can_rename_id_under_cursor())) {
                 open_rename_identifier();
             }
 
@@ -2001,7 +2014,7 @@ void UI::draw_everything() {
                 if (editor == NULL) return false;
                 if (!editor->is_go_file) return false;
                 if (!str_ends_with(editor->filepath, "_test.go")) return false;
-                if (!path_contains_in_subtree(world.current_path, editor->filepath)) return false;
+                if (!path_has_descendant(world.current_path, editor->filepath)) return false;
                 if (editor->buf->tree == NULL) return false;
 
                 bool ret = false;
@@ -2214,12 +2227,11 @@ void UI::draw_everything() {
         auto get_type_str = [&]() -> ccstr {
             switch (wnd.declres->decl->type) {
             // TODO: support import renaming
-            case GODECL_TYPE:
-                return "type";
-            case GODECL_FUNC:
-                return "function";
-            case GODECL_FIELD:
-                return "field";
+            case GODECL_TYPE: return "type";
+            case GODECL_FUNC: return "function";
+            case GODECL_FIELD: return "field";
+            case GODECL_PARAM: return "parameter";
+
             case GODECL_VAR:
             case GODECL_CONST:
             case GODECL_SHORTVAR:
@@ -2233,16 +2245,38 @@ void UI::draw_everything() {
 
         /*
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(ImColor(140, 194, 248)));
-        ImGui::PushFont(world.ui.im_font_mono);
+        imgui_push_mono_font();
         ImGui::Text("%s", wnd.decl->name);
         ImGui::PopStyleColor();
-        ImGui::PopFont();
+        imgui_pop_font();
 
         imgui_small_newline();
         */
 
+        bool submitted = false;
+
+        imgui_push_mono_font();
+
         focus_keyboard(&wnd);
-        imgui_input_text_full_fixbuf(our_sprintf("Rename %s to", wnd.declres->decl->name), wnd.rename_to);
+        if (imgui_input_text_full(our_sprintf("Rename %s to", wnd.declres->decl->name), wnd.rename_to, _countof(wnd.rename_to), ImGuiInputTextFlags_EnterReturnsTrue)) {
+            submitted = true;
+        }
+
+        imgui_pop_font();
+
+        imgui_small_newline();
+
+        /*
+        ImGui::RadioButton("Discard unsaved changes", &wnd.how_to_handle_unsaved_files, DISCARD_UNSAVED);
+        ImGui::SameLine();
+        ImGui::RadioButton("Save unsaved changes", &wnd.how_to_handle_unsaved_files, SAVE_UNSAVED);
+
+        imgui_small_newline();
+        */
+
+        // ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(ImColor(230, 180, 180)));
+        ImGui::TextWrapped("Please note that we currently have no undo feature. As soon as you click Rename or press Enter, we'll try to find all references and rename them. You'll need Git or something to undo the changes.");
+        // ImGui::PopStyleColor();
 
         imgui_small_newline();
 
@@ -2250,12 +2284,45 @@ void UI::draw_everything() {
             ImGui::Text("Renaming...");
             ImGui::SameLine();
             if (ImGui::Button("Cancel")) {
-                // ???
-                // TODO: cancel rename
+                cancel_rename_identifier();
             }
         } else {
-            if (ImGui::Button(our_sprintf("Rename %s", wnd.declres->decl->name))) {
+            if (ImGui::Button(our_sprintf("Rename", wnd.declres->decl->name)))
+                submitted = true;
+        }
+
+        /*
+        if (wnd.focused) {
+            auto mods = imgui_get_keymods();
+            switch (mods) {
+            case KEYMOD_NONE:
+                if (imgui_special_key_pressed(ImGuiKey_Escape))
+                    wnd.show = false;
+                break;
+            }
+        }
+        */
+
+        if (!wnd.focused) {
+            wnd.show = false;
+            ImGui::SetWindowFocus(NULL);
+        }
+
+        if (submitted) {
+            auto validate = [&]() {
+                for (int i = 0, n = strlen(wnd.rename_to); i<n; i++) {
+                    if (!isident(wnd.rename_to[i])) {
+                        tell_user("Sorry, that's not a valid identifier.", "Error");
+                        return false;
+                    }
+                }
+                return true;
+            };
+
+            if (validate()) {
                 kick_off_rename_identifier();
+                wnd.show = false;
+                ImGui::SetWindowFocus(NULL);
             }
         }
 
@@ -2275,7 +2342,7 @@ void UI::draw_everything() {
         ImGui::SetNextWindowDockID(dock_bottom_id, ImGuiCond_Once);
         ImGui::Begin("Index Log", &wnd.show);
 
-        ImGui::PushFont(world.ui.im_font_mono);
+        imgui_push_mono_font();
 
         ImGuiListClipper clipper;
         clipper.Begin(wnd.len);
@@ -2291,7 +2358,7 @@ void UI::draw_everything() {
                 ImGui::SetScrollHereY(1.0f);
         }
 
-        ImGui::PopFont();
+        imgui_pop_font();
 
         ImGui::End();
     }
@@ -2307,7 +2374,7 @@ void UI::draw_everything() {
             wnd.cmd_focus = false;
         }
 
-        ImGui::PushFont(world.ui.im_font_mono);
+        imgui_push_mono_font();
 
         auto &lines = world.dbg.stdout_lines;
 
@@ -2352,7 +2419,7 @@ void UI::draw_everything() {
                 ImGui::SetScrollHereY(1.0f);
         }
 
-        ImGui::PopFont();
+        imgui_pop_font();
 
         ImGui::End();
     }
@@ -2376,7 +2443,7 @@ void UI::draw_everything() {
             if (world.build.errors.len == 0) {
                 ImGui::TextColored(to_imcolor(rgba(global_colors.green)), "Build was successful!");
             } else {
-                ImGui::PushFont(world.ui.im_font_mono);
+                imgui_push_mono_font();
 
                 for (int i = 0; i < world.build.errors.len; i++) {
                     auto &it = world.build.errors[i];
@@ -2429,7 +2496,7 @@ void UI::draw_everything() {
                     }
                 }
 
-                ImGui::PopFont();
+                imgui_pop_font();
             }
         } else if (world.build.started) {
             ImGui::Text("Building...");
@@ -2452,10 +2519,10 @@ void UI::draw_everything() {
         ImGui::Text("Renaming");
 
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(ImColor(140, 194, 248)));
-        ImGui::PushFont(world.ui.im_font_mono);
+        imgui_push_mono_font();
         ImGui::Text("%s", wnd.location);
         ImGui::PopStyleColor();
-        ImGui::PopFont();
+        imgui_pop_font();
 
         imgui_small_newline();
 
@@ -2464,9 +2531,9 @@ void UI::draw_everything() {
         // close the window when we unfocus
         if (!wnd.focused) wnd.show = false;
 
-        ImGui::PushFont(world.ui.im_font_mono);
+        imgui_push_mono_font();
         bool entered = imgui_input_text_full("Name", wnd.name, _countof(wnd.name), ImGuiInputTextFlags_EnterReturnsTrue);
-        ImGui::PopFont();
+        imgui_pop_font();
 
         if (entered) {
             wnd.show = false;
@@ -2496,7 +2563,7 @@ void UI::draw_everything() {
         ImGui::Text("Destination");
 
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(ImColor(140, 194, 248)));
-        ImGui::PushFont(world.ui.im_font_mono);
+        imgui_push_mono_font();
 
         if (wnd.location_is_root)
             ImGui::Text("(workspace root)");
@@ -2504,7 +2571,7 @@ void UI::draw_everything() {
             ImGui::Text("%s", wnd.location);
 
         ImGui::PopStyleColor();
-        ImGui::PopFont();
+        imgui_pop_font();
 
         imgui_small_newline();
 
@@ -2513,9 +2580,9 @@ void UI::draw_everything() {
         // close the window when we unfocus
         if (!wnd.focused) wnd.show = false;
 
-        ImGui::PushFont(world.ui.im_font_mono);
+        imgui_push_mono_font();
         bool entered = imgui_input_text_full("Name", wnd.name, _countof(wnd.name), ImGuiInputTextFlags_EnterReturnsTrue);
-        ImGui::PopFont();
+        imgui_pop_font();
 
         if (entered) {
             wnd.show = false;
@@ -3053,7 +3120,10 @@ void UI::draw_everything() {
         focus_keyboard(&wnd);
 
         // close the window when we unfocus
-        if (!wnd.focused) wnd.show = false;
+        if (!wnd.focused) {
+            wnd.show = false;
+            ImGui::SetWindowFocus(NULL);
+        }
 
         if (imgui_input_text_full("Search for file:", wnd.query, _countof(wnd.query), ImGuiInputTextFlags_EnterReturnsTrue)) {
             if (wnd.filtered_results->len > 0) {
@@ -3061,7 +3131,7 @@ void UI::draw_everything() {
                 auto filepath = path_join(world.current_path, relpath);
                 world.focus_editor(filepath);
             }
-            world.wnd_goto_file.show = false;
+            wnd.show = false;
             ImGui::SetWindowFocus(NULL);
         }
 
@@ -3088,8 +3158,8 @@ void UI::draw_everything() {
         }
 
         {
-            ImGui::PushFont(world.ui.im_font_mono);
-            defer { ImGui::PopFont(); };
+            imgui_push_mono_font();
+            defer { imgui_pop_font(); };
 
             for (u32 i = 0; i < wnd.filtered_results->len && i < settings.goto_file_max_results; i++) {
                 if (i == 0) imgui_small_newline();
@@ -3168,8 +3238,8 @@ void UI::draw_everything() {
         }
 
         {
-            ImGui::PushFont(world.ui.im_font_mono);
-            defer { ImGui::PopFont(); };
+            imgui_push_mono_font();
+            defer { imgui_pop_font(); };
 
             for (u32 i = 0; i < wnd.filtered_results->len && i < settings.goto_file_max_results; i++) {
                 auto it = wnd.symbols->at(wnd.filtered_results->at(i));
@@ -3204,7 +3274,7 @@ void UI::draw_everything() {
 
         bool entered = false;
 
-        ImGui::PushFont(world.ui.im_font_mono);
+        imgui_push_mono_font();
         {
             auto should_focus_textbox = [&]() -> bool {
                 if (wnd.focus_textbox == 1) {
@@ -3230,7 +3300,7 @@ void UI::draw_everything() {
                 if (imgui_input_text_full("Replace with", wnd.replace_str, _countof(wnd.replace_str), ImGuiInputTextFlags_EnterReturnsTrue))
                     entered = true;
         }
-        ImGui::PopFont();
+        imgui_pop_font();
 
         imgui_small_newline();
 
@@ -3290,7 +3360,7 @@ void UI::draw_everything() {
                     ImGui::Text("%s", get_path_relative_to(it.filepath, world.current_path));
 
                     ImGui::Indent();
-                    ImGui::PushFont(world.ui.im_font_mono);
+                    imgui_push_mono_font();
 
                     auto filepath = it.filepath;
 
@@ -3394,7 +3464,7 @@ void UI::draw_everything() {
                         }
                     }
 
-                    ImGui::PopFont();
+                    imgui_pop_font();
                     ImGui::Unindent();
                 }
 
@@ -3665,10 +3735,10 @@ void UI::draw_everything() {
             ccstr label = "<untitled>";
             if (!editor.is_untitled) {
                 auto &ind = world.indexer;
-                if (ind.goroot != NULL && path_contains_in_subtree(ind.goroot, editor.filepath)) {
+                if (ind.goroot != NULL && path_has_descendant(ind.goroot, editor.filepath)) {
                     label = get_path_relative_to(editor.filepath, ind.goroot);
                     label = our_sprintf("$GOROOT/%s", label);
-                } else if (ind.gomodcache != NULL && path_contains_in_subtree(ind.gomodcache, editor.filepath)) {
+                } else if (ind.gomodcache != NULL && path_has_descendant(ind.gomodcache, editor.filepath)) {
                     label = get_path_relative_to(editor.filepath, ind.gomodcache);
                     label = our_sprintf("$GOMODCACHE/%s", label);
                 } else {
@@ -4543,6 +4613,7 @@ void UI::end_frame() {
                                     case GODECL_SHORTVAR:
                                     case GODECL_FUNC:
                                     case GODECL_FIELD:
+                                    case GODECL_PARAM:
                                         return render_type(result.declaration_evaluated_gotype);
                                     }
                                 }

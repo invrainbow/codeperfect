@@ -202,6 +202,11 @@ struct UI {
     void imgui_with_disabled(bool disable, fn<void()> f);
     bool imgui_is_window_focusing(bool *b);
     u32 imgui_get_keymods();
+
+    void imgui_push_mono_font();
+    void imgui_push_ui_font();
+    void imgui_pop_font();
+
     void focus_keyboard(Wnd *wnd, int cond = FKC_APPEARING | FKC_FOCUSING);
 };
 

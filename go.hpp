@@ -616,6 +616,7 @@ enum Godecl_Type {
     GODECL_TYPE,
     GODECL_FUNC, // should we have GODECL_METHOD too? can just check gotype->func_recv
     GODECL_FIELD,
+    GODECL_PARAM,
     GODECL_SHORTVAR,
     GODECL_TYPECASE,
     // GODECL_RANGE,
@@ -638,6 +639,7 @@ struct Godecl {
     cur2 name_end;
     ccstr name;
     bool is_embedded; // for GODECL_FIELD
+    bool is_toplevel;
 
     union {
         Gotype *gotype;
@@ -915,7 +917,7 @@ struct Go_Reference {
     bool is_sel;
     union {
         struct {
-            ccstr x;
+            Gotype *x;
             cur2 x_start;
             cur2 x_end;
 
@@ -1238,10 +1240,10 @@ struct Go_Indexer {
     Goresult *resolve_type(Gotype *type, Go_Ctx *ctx);
     Goresult *unpointer_type(Gotype *type, Go_Ctx *ctx);
     List<Godecl> *parameter_list_to_fields(Ast_Node *params);
-    Gotype *node_to_gotype(Ast_Node *node);
+    Gotype *node_to_gotype(Ast_Node *node, bool toplevel = false);
     Goresult *find_decl_of_id(ccstr id, cur2 id_pos, Go_Ctx *ctx, Go_Import **single_import = NULL);
     void list_struct_fields(Goresult *type, List<Goresult> *ret);
-    void list_fields_and_methods(Goresult *type_res, Goresult *resolved_type_res, List<Goresult> *ret);
+    void list_dotprops(Goresult *type_res, Goresult *resolved_type_res, List<Goresult> *ret);
     bool node_func_to_gotype_sig(Ast_Node *params, Ast_Node *result, Go_Func_Sig *sig);
     void node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr filename, Pool *target_pool = NULL);
     Gotype *new_gotype(Gotype_Type type);
@@ -1255,7 +1257,7 @@ struct Go_Indexer {
     Go_Package *find_up_to_date_package(ccstr import_path);
     void import_spec_to_decl(Ast_Node *spec_node, Godecl *decl);
     List<Postfix_Completion_Type> *get_postfix_completions(Ast_Node *operand_node, Go_Ctx *ctx);
-    List<Goresult> *get_dot_completions(Ast_Node *operand_node, bool *was_package, Go_Ctx *ctx);
+    List<Goresult> *get_node_dotprops(Ast_Node *operand_node, bool *was_package, Go_Ctx *ctx);
     bool assignment_to_decls(List<Ast_Node*> *lhs, List<Ast_Node*> *rhs, New_Godecl_Func new_godecl, bool range = false);
     Gotype *new_primitive_type(ccstr name);
     Goresult *evaluate_type(Gotype *gotype, Go_Ctx *ctx);
@@ -1281,10 +1283,11 @@ struct Go_Indexer {
     void init_builtins(Go_Package *pkg);
     void import_decl_to_goimports(Ast_Node *decl_node, ccstr filename, List<Go_Import> *out);
     bool check_if_still_in_parameter_hint(ccstr filepath, cur2 cur, cur2 hint_start);
-    Go_File *find_gofile_from_ctx(Go_Ctx *ctx);
+    Go_File *find_gofile_from_ctx(Go_Ctx *ctx, Go_Package **out = NULL);
 
     List<Find_References_File>* find_all_references(ccstr filepath, cur2 pos);
     List<Find_References_File>* find_all_references(Goresult *declres);
+    List<Goresult> *get_lazy_type_dotprops(Gotype *type, Go_Ctx *ctx);
 };
 
 void walk_ast_node(Ast_Node *node, bool abstract_only, Walk_TS_Callback cb);

@@ -9,7 +9,7 @@
 #include "set.hpp"
 
 bool Editor::is_modifiable() {
-    return path_contains_in_subtree(world.current_path, filepath);
+    return path_has_descendant(world.current_path, filepath);
 }
 
 ccstr Editor::get_autoindent(int for_y) {
@@ -967,21 +967,15 @@ void Editor::reload_file(bool because_of_file_watcher) {
     }
     defer { fm->cleanup(); };
 
-    if (is_binary((ccstr)fm->data, fm->len)) {
-        auto res = ask_user_yes_no(
-            "This file appears to be a binary file. Attempting to open it as text could have adverse results. Do you still want to try?",
-            "Binary file encountered",
-            "Open", "Don't Open"
-        );
-        if (res != ASKUSER_YES) return;
-    }
-
     if (!check_file(fm)) return;
 
+    /*
     if (buf->initialized)
         buf->cleanup();
     buf->init(&mem, is_go_file);
-    buf->read(fm);
+    */
+
+    buf->read(fm, true);
 
     if (world.use_nvim) {
         nvim_data.got_initial_lines = false;
@@ -1685,7 +1679,7 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
 
                     // for now it's just prioritizing imports in workspace
                     if (wksp_import_path != NULL)
-                        if (path_contains_in_subtree(wksp_import_path, result.import_path))
+                        if (path_has_descendant(wksp_import_path, result.import_path))
                             score.import_score = 2;
                 }
 
@@ -2377,7 +2371,7 @@ void Editor::handle_save(bool about_to_close) {
         opts.starting_folder = our_strcpy(world.current_path);
         if (!let_user_select_file(&opts)) return;
 
-        if (!path_contains_in_subtree(world.current_path, filepath)) {
+        if (!path_has_descendant(world.current_path, filepath)) {
             tell_user("Unable to save file outside workspace.", "Error");
             return;
         }

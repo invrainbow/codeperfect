@@ -236,12 +236,17 @@ void Buffer::copy_from(Buffer *other) {
     });
 }
 
-bool Buffer::read(Buffer_Read_Func f) {
+bool Buffer::read(Buffer_Read_Func f, bool reread) {
     // Expects buf to be empty.
 
     char ch;
     Cstr_To_Ustr conv;
     bool found;
+
+    if (reread) {
+        u32 y = lines.len-1;
+        internal_start_edit(new_cur2(0, 0), new_cur2(lines[y].len, y));
+    }
 
     clear();
 
@@ -288,9 +293,14 @@ bool Buffer::read(Buffer_Read_Func f) {
         }
         update_tree();
     }
+
+    if (reread) {
+        u32 y = lines.len-1;
+        internal_finish_edit(new_cur2(lines[y].len, y));
+    }
 }
 
-bool Buffer::read_data(char *data, int len) {
+bool Buffer::read_data(char *data, int len, bool reread) {
     if (len == -1) len = strlen(data);
 
     int i = 0;
@@ -300,11 +310,11 @@ bool Buffer::read_data(char *data, int len) {
             return true;
         }
         return false;
-    });
+    }, reread);
 }
 
-bool Buffer::read(File_Mapping *fm) {
-    return read_data((char*)fm->data, fm->len);
+bool Buffer::read(File_Mapping *fm, bool reread) {
+    return read_data((char*)fm->data, fm->len, reread);
 }
 
 void Buffer::write(File *f) {

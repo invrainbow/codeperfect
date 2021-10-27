@@ -13,7 +13,9 @@ void* get_native_window_handle();
 NSAlert *make_nsalert(ccstr text, ccstr title) {
     auto alert = [[NSAlert alloc] init];
 
-    if (title != NULL) [alert setMessageText:[NSString stringWithUTF8String:title]];
+    if (title == NULL) title = "Error";
+    [alert setMessageText:[NSString stringWithUTF8String:title]];
+
     if (text != NULL) [alert setInformativeText:[NSString stringWithUTF8String:text]];
 
     [alert setAlertStyle:NSAlertStyleWarning];
@@ -65,7 +67,6 @@ Ask_User_Result ask_user_yes_no(ccstr text, ccstr title, ccstr yeslabel, ccstr n
         }
 
         int sel = run_nsalert(alert);
-        print("sel: %d", sel);
         if (sel == 0) return ASKUSER_YES;
         if (sel == 1) return ASKUSER_NO;
         if (sel == 2 && cancel) return ASKUSER_CANCEL;

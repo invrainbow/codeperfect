@@ -560,11 +560,12 @@ char File_Replacer::advance_read_pointer() {
     } else {
         read_cur.x++;
     }
+    return ch;
 }
 
 bool File_Replacer::goto_next_replacement(cur2 pos) {
     while (read_pointer < fmr->len) {
-        if (pos.y == -1 ? (read_cur == pos) : (read_pointer == pos.x))
+        if (pos.y != -1 ? (read_cur == pos) : (read_pointer == pos.x))
             return true;
         write(advance_read_pointer());
     }
@@ -576,7 +577,7 @@ void File_Replacer::do_replacement(cur2 skipuntil, ccstr newtext) {
         write(*p);
 
     while (read_pointer < fmr->len) {
-        if (skipuntil.y == -1) {
+        if (skipuntil.y != -1) {
             if (read_cur == skipuntil)
                 break;
         } else {

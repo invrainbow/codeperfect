@@ -265,7 +265,9 @@ int main(int argc, char **argv) {
     GHEnableDebugMode();
 #endif
 
+#ifdef RELEASE_MODE
     GHAuthAndUpdate(); // kicks off auth/autoupdate shit in the background
+#endif
 
     world.window = window;
     glfwSetWindowTitle(world.window, our_sprintf("%s - %s", WINDOW_TITLE, world.current_path));
@@ -721,7 +723,7 @@ int main(int argc, char **argv) {
         case KEYMOD_NONE:
             switch (key) {
             case GLFW_KEY_F12:
-                world.windows_open.im_demo ^= 1;
+                open_rename_identifier();
                 break;
             case GLFW_KEY_F6:
                 if (world.dbg.state_flag == DLV_STATE_INACTIVE)
@@ -1037,6 +1039,12 @@ int main(int argc, char **argv) {
         switch (ui.imgui_get_keymods()) {
         case KEYMOD_PRIMARY:
             switch (key) {
+#ifndef RELEASE_MODE
+            case GLFW_KEY_F12:
+                world.windows_open.im_demo ^= 1;
+                break;
+#endif
+
             case GLFW_KEY_V:
                 if (world.nvim.mode == VI_INSERT) {
                     auto clipboard_contents = glfwGetClipboardString(world.window);
@@ -1277,6 +1285,14 @@ int main(int argc, char **argv) {
 
                 case MTM_TELL_USER:
                     tell_user(it.tell_user_text, it.tell_user_title);
+                    break;
+
+                case MTM_RELOAD_EDITOR:
+                    {
+                        auto editor = world.find_editor_by_id(it.reload_editor_id);
+                        if (editor != NULL)
+                            editor->reload_file(false);
+                    }
                     break;
 
                 case MTM_NVIM_MESSAGE:
