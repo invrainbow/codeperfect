@@ -42,3 +42,9 @@ Run:
 
     cd build/bin
     ./ide
+
+### Cutting a new release
+
+On each machine, increment `CurrentVersion` in versions.go, then run
+`sh/package_macos`. Then, update the app/update hashes and merge all into
+master. Then re-deploy the API.
