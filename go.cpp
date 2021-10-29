@@ -1774,6 +1774,7 @@ void Go_Indexer::process_tree_into_gofile(
                         sel = it->field(TSF_NAME); // TODO: this is wrong, look at astviewer
                     } else {
                         x = it->field(TSF_OPERAND);
+                        /*
                         switch (x->type()) {
                         case TS_IDENTIFIER:
                         case TS_FIELD_IDENTIFIER:
@@ -1783,6 +1784,7 @@ void Go_Indexer::process_tree_into_gofile(
                         default:
                             return WALK_CONTINUE;
                         }
+                        */
                         sel = it->field(TSF_FIELD);
                     }
 

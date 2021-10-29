@@ -451,6 +451,7 @@ bool kick_off_find_references();
 void open_rename_identifier();
 void kick_off_rename_identifier();
 void cancel_rename_identifier();
+bool exclude_from_file_tree(ccstr path);
 
 extern u64 post_insert_dotrepeat_time;
 

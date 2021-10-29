@@ -247,6 +247,19 @@ void History_Loc::cleanup() {
     mark = NULL;
 }
 
+bool exclude_from_file_tree(ccstr path) {
+    if (is_ignored_by_git(path)) return true;
+
+    auto filename = our_basename(path);
+    if (streq(filename, ".git")) return true;
+    if (streq(filename, ".cpproj")) return true;
+    if (streq(filename, ".cpdb")) return true;
+    if (streq(filename, ".cpdb.tmp")) return true;
+    if (str_ends_with(filename, ".exe")) return true;
+
+    return false;
+}
+
 void World::fill_file_tree() {
     SCOPED_MEM(&file_tree_mem);
     file_tree_mem.reset();
@@ -270,10 +283,7 @@ void World::fill_file_tree() {
         list_directory(path, [&](Dir_Entry *ent) {
             do {
                 auto fullpath = path_join(path, ent->name);
-                if (is_ignored_by_git(fullpath)) break;
-                if (streq(ent->name, ".git")) break;
-                if (streq(ent->name, ".cpproj")) break;
-                if (str_ends_with(ent->name, ".exe")) break;
+                if (exclude_from_file_tree(fullpath)) break;
 
                 auto file = alloc_object(FT_Node);
                 file->name = our_strcpy(ent->name);
@@ -1269,10 +1279,7 @@ void reload_file_subtree(ccstr relpath) {
     list_directory(path, [&](Dir_Entry *ent) {
         do {
             auto fullpath = path_join(path, ent->name);
-            if (is_ignored_by_git(fullpath)) break;
-            if (streq(ent->name, ".git")) break;
-            if (streq(ent->name, ".cpproj")) break;
-            if (str_ends_with(ent->name, ".exe")) break;
+            if (exclude_from_file_tree(fullpath)) break;
 
             auto name = our_strcpy(ent->name);
             if (ent->type & FILE_TYPE_DIRECTORY)

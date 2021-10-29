@@ -1316,7 +1316,8 @@ int main(int argc, char **argv) {
                 if (is_git_folder(event.filepath)) continue;
                 if (event.filepath[0] == '\0') continue;
 
-                auto filepath = (ccstr)event.filepath;
+                auto orig_filepath = (ccstr)event.filepath;
+                auto filepath = orig_filepath;
                 auto res = check_path(path_join(world.current_path, filepath));
                 if (res != CPR_DIRECTORY)
                     filepath = our_dirname(filepath);
@@ -1326,7 +1327,7 @@ int main(int argc, char **argv) {
 
                 reload_file_subtree(filepath);
 
-                auto editor = world.find_editor_by_filepath(filepath);
+                auto editor = world.find_editor_by_filepath(orig_filepath);
                 if (editor != NULL)
                     editor->reload_file(true);
 
