@@ -2284,16 +2284,20 @@ void UI::draw_everything() {
         */
 
         // ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(ImColor(230, 180, 180)));
-        ImGui::TextWrapped("Please note that we currently have no undo feature. As soon as you click Rename or press Enter, we'll try to find all references and rename them. You'll need Git or something to undo the changes.");
+        ImGui::TextWrapped("Please note: we don't currently support undo. (You can always just rename it back.)");
         // ImGui::PopStyleColor();
 
         imgui_small_newline();
 
         if (wnd.running) {
-            ImGui::Text("Renaming...");
-            ImGui::SameLine();
-            if (ImGui::Button("Cancel")) {
-                cancel_rename_identifier();
+            if (wnd.too_late_to_cancel) {
+                ImGui::Text("Applying changes...");
+            } else {
+                ImGui::Text("Renaming...");
+                ImGui::SameLine();
+                if (ImGui::Button("Cancel")) {
+                    cancel_rename_identifier();
+                }
             }
         } else {
             if (ImGui::Button(our_sprintf("Rename", wnd.declres->decl->name)))
@@ -3657,6 +3661,11 @@ void UI::draw_everything() {
 
     world.ui.mouse_captured_by_imgui = io.WantCaptureMouse;
     world.ui.keyboard_captured_by_imgui = io.WantCaptureKeyboard;
+
+    if (world.flag_defocus_imgui) {
+        ImGui::SetWindowFocus(NULL);
+        world.flag_defocus_imgui = false;
+    }
 
     {
         // prepare opengl for drawing shit

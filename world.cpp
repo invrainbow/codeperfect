@@ -1010,38 +1010,6 @@ bool kick_off_find_implementations() {
     // this is the hard one (compared to find_implemented_interfaces)
 }
 
-// TODO: tell user what went wrong if returning false
-bool kick_off_find_references() {
-    auto result = get_current_definition();
-    if (result == NULL) return false;
-
-    auto decl = result->decl;
-    if (decl == NULL) return false;
-
-    // iterate thru all packages
-    // if in same package as decl, check all non-sel refs,
-    // if in diff package, check if package is even imported,
-    // if so, check all sel refs, making sure package is same
-
-    // TODO: find all references that refer to decl
-
-    /*
-    switch (decl->type) {
-    case GODECL_IMPORT:
-    case GODECL_VAR:
-    case GODECL_CONST:
-    case GODECL_TYPE:
-    case GODECL_FUNC:
-    case GODECL_FIELD:
-    case GODECL_PARAM:
-    case GODECL_SHORTVAR:
-    case GODECL_TYPECASE:
-        break;
-        // ??
-    }
-    */
-}
-
 void World::delete_ft_node(FT_Node *it) {
     SCOPED_FRAME();
     auto rel_path = world.ft_node_to_path(it);
@@ -1389,6 +1357,40 @@ void Build::cleanup() {
     mem.cleanup();
 }
 
+// TODO: tell user what went wrong if returning false
+bool kick_off_find_references() {
+    auto result = get_current_definition();
+    if (result == NULL) return false;
+
+    auto decl = result->decl;
+    if (decl == NULL) return false;
+
+    auto &ind = world.indexer;
+    if (!ind.acquire_lock(IND_READING)) return;
+
+    auto thread_proc = [](void *param) {
+        auto &wnd = world.wnd_find_references;
+        wnd.thread_mem.cleanup();
+        wnd.thread_mem.init();
+        SCOPED_MEM(&wnd.thread_mem);
+
+        defer { cancel_find_references(); };
+
+        auto files = world.indexer.find_references(wnd.declres);
+        if (files == NULL) return;
+
+        // close the thread handle first so it doesn't try to kill the thread
+        if (wnd.thread != NULL) {
+            close_thread_handle(wnd.thread);
+            wnd.thread = NULL;
+        }
+    };
+
+    auto &wnd = world.wnd_find_references;
+    wnd.running = true;
+    wnd.thread = create_thread(thread_proc, NULL);
+}
+
 void kick_off_rename_identifier() {
     auto &ind = world.indexer;
     if (!ind.acquire_lock(IND_READING)) return;
@@ -1417,12 +1419,16 @@ void kick_off_rename_identifier() {
         wnd.thread_mem.init();
         SCOPED_MEM(&wnd.thread_mem);
 
-        defer { world.indexer.release_lock(IND_READING); };
-
-        sleep_milliseconds(1000 * 2000);
+        defer {
+            cancel_rename_identifier();
+            wnd.show = false;
+            world.flag_defocus_imgui = true;
+        };
 
         auto files = world.indexer.find_references(wnd.declres);
         if (files == NULL) return;
+
+        wnd.too_late_to_cancel = true;
 
         auto symbol = wnd.declres->decl->name;
         auto symbol_len = strlen(symbol);
@@ -1480,15 +1486,29 @@ void kick_off_rename_identifier() {
             close_thread_handle(wnd.thread);
             wnd.thread = NULL;
         }
-
-        cancel_rename_identifier();
-        wnd.show = false;
     };
 
     auto &wnd = world.wnd_rename_identifier;
     wnd.running = true;
     wnd.too_late_to_cancel = false;
     wnd.thread = create_thread(thread_proc, NULL);
+}
+
+void cancel_find_references() {
+    auto &wnd = world.wnd_find_references;
+    if (!wnd.running) return;
+
+    if (wnd.thread != NULL) {
+        kill_thread(wnd.thread);
+        close_thread_handle(wnd.thread);
+        wnd.thread = NULL;
+    }
+
+    // assume it was acquired by find_references
+    if (world.indexer.status == IND_READING)
+        world.indexer.release_lock(IND_READING);
+
+    wnd.running = false;
 }
 
 void cancel_rename_identifier() {

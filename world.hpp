@@ -217,6 +217,8 @@ struct World {
 
     Lock global_mark_tree_lock;
 
+    bool flag_defocus_imgui;
+
     struct Navigation_Dest {
         int editor_id;
         cur2 pos;
@@ -253,14 +255,16 @@ struct World {
         bool too_late_to_cancel = false;
     } wnd_rename_identifier;
 
-    // TODO: collapse into world.find_references?
     struct : Wnd {
+        Pool thread_mem;
+        bool running;
+        char rename_to[256];
+        Goresult *declres;
+        // int how_to_handle_unsaved_files;
+        ccstr filepath;
+        Thread_Handle thread;
+        bool too_late_to_cancel = false;
     } wnd_find_references;
-
-    struct {
-        bool in_progress;
-        // ???
-    } find_references;
 
     struct : Wnd {
         // ring buffer
@@ -452,6 +456,7 @@ bool kick_off_find_references();
 void open_rename_identifier();
 void kick_off_rename_identifier();
 void cancel_rename_identifier();
+void cancel_find_references();
 bool exclude_from_file_tree(ccstr path);
 
 extern u64 post_insert_dotrepeat_time;
