@@ -1223,7 +1223,7 @@ void Go_Indexer::background_thread() {
             }
 
             if (done) {
-                if (!ready)
+                if (status == IND_WRITING)
                     stop_writing();
                 if (force_write_after_checking_hashes) {
                     force_write_this_time = true;
@@ -2329,13 +2329,13 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_symbol(ccstr symbol) {
     return NULL;
 }
 
-List<Find_References_File> *Go_Indexer::find_all_references(ccstr filepath, cur2 pos) {
+List<Find_References_File> *Go_Indexer::find_references(ccstr filepath, cur2 pos) {
     auto result = world.indexer.jump_to_definition(filepath, pos);
     if (result == NULL) return NULL;
-    return find_all_references(result->decl);
+    return find_references(result->decl);
 }
 
-List<Find_References_File> *Go_Indexer::find_all_references(Goresult *declres) {
+List<Find_References_File> *Go_Indexer::find_references(Goresult *declres) {
     reload_all_dirty_files();
 
     auto filepath = get_filepath_from_ctx(declres->ctx);
@@ -4131,23 +4131,61 @@ void Go_Indexer::init() {
     start_writing();
 }
 
-void Go_Indexer::start_writing() {
-    if (ready) {
-        lock.enter();
-        ready = false;
+ccstr indexer_status_str(Indexer_Status status) {
+    switch (status) {
+    define_str_case(IND_READY);
+    define_str_case(IND_READING);
+    define_str_case(IND_WRITING);
+    }
+    return NULL;
+}
+
+bool Go_Indexer::acquire_lock(Indexer_Status new_status, bool just_try) {
+    print("[acquire] %s", indexer_status_str(new_status));
+
+    if (status == IND_READY) {
+        if (just_try) {
+            if (!lock.try_enter())
+                return false;
+        } else {
+            lock.enter();
+        }
+        status = new_status;
+        reacquires++;
+        return true;
+    } else if (status == new_status) {
+        // read lock can only be acquired once
+        if (status == IND_READING)
+            return false;
+
+        reacquires++;
+        return true;
+    } else {
+        return false;
+    }
+}
+
+bool Go_Indexer::release_lock(Indexer_Status expected_status) {
+    print("[release] %s", indexer_status_str(expected_status));
+
+    if (status != expected_status) {
+        auto msg = "Go_Indexer::release_lock() called with status mismatch (want %d, got %d)";
+        msg = our_sprintf(msg, expected_status, status);
+        our_panic(msg);
     }
 
-    open_starts++;
+    if (--reacquires == 0) {
+        status = IND_READY;
+        lock.leave();
+    }
+}
+
+void Go_Indexer::start_writing() {
+    acquire_lock(IND_WRITING);
 }
 
 void Go_Indexer::stop_writing() {
-    if (open_starts == 0)
-        our_panic("extra stop_writing called");
-
-    if (--open_starts == 0) {
-        lock.leave();
-        ready = true;
-    }
+    release_lock(IND_WRITING);
 }
 
 // i don't think this is actually called right now...

@@ -537,9 +537,8 @@ void Editor::perform_autocomplete(AC_Result *result) {
                         auto godecl = result->declaration_godecl;
                         if (godecl == NULL) break;
 
-                        if (!world.indexer.ready) break;
-                        if (!world.indexer.lock.try_enter()) break;
-                        defer { world.indexer.lock.leave(); };
+                        if (!world.indexer.acquire_lock(IND_READING)) break;
+                        defer { world.indexer.release_lock(IND_READING); };
 
                         Go_Ctx ctx;
                         ctx.import_path = result->declaration_import_path;
@@ -1555,9 +1554,8 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
         SCOPED_MEM(&world.indexer.ui_mem);
         defer { world.indexer.ui_mem.reset(); };
 
-        if (!world.indexer.ready) return; // strictly we can just call try_enter(), but want consistency with UI, which is based on `ready`
-        if (!world.indexer.lock.try_enter()) return;
-        defer { world.indexer.lock.leave(); };
+        if (!world.indexer.acquire_lock(IND_READING, true)) return;
+        defer { world.indexer.release_lock(IND_READING); };
 
         Autocomplete ac; ptr0(&ac);
 
@@ -1595,8 +1593,8 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
     }
 
     ccstr wksp_import_path = NULL;
-    if (world.indexer.ready & world.indexer.lock.try_enter()) {
-        defer { world.indexer.lock.leave(); };
+    if (world.indexer.try_acquire_lock(IND_READING)) {
+        defer { world.indexer.release_lock(IND_READING); };
 
         // only needs to live for duration of function
         wksp_import_path = our_strcpy(world.indexer.index.current_import_path);
@@ -1832,9 +1830,8 @@ void Editor::trigger_parameter_hint() {
         SCOPED_MEM(&world.indexer.ui_mem);
         defer { world.indexer.ui_mem.reset(); };
 
-        if (!world.indexer.ready) return; // strictly we can just call try_enter(), but want consistency with UI, which is based on `ready`
-        if (!world.indexer.lock.try_enter()) return;
-        defer { world.indexer.lock.leave(); };
+        if (!world.indexer.try_acquire_lock(IND_READING)) return;
+        defer { world.indexer.release_lock(IND_READING); };
 
         auto hint = world.indexer.parameter_hint(filepath, cur);
         if (hint == NULL) return;
@@ -1870,9 +1867,8 @@ void Editor::update_parameter_hint() {
     if (hint.gotype == NULL) return;
 
     auto should_close_hints = [&]() -> bool {
-        if (!world.indexer.ready) return true;
-        if (!world.indexer.lock.try_enter()) return true;
-        defer { world.indexer.lock.leave(); };
+        if (!world.indexer.try_acquire_lock(IND_READING)) return true;
+        defer { world.indexer.release_lock(IND_READING); };
 
         return !world.indexer.check_if_still_in_parameter_hint(filepath, cur, hint.start);
     };
@@ -2180,9 +2176,8 @@ bool Editor::optimize_imports() {
     SCOPED_MEM(&world.indexer.ui_mem);
     defer { world.indexer.ui_mem.reset(); };
 
-    if (!world.indexer.ready) return false;
-    if (!world.indexer.lock.try_enter()) return false;
-    defer { world.indexer.lock.leave(); };
+    if (!world.indexer.try_acquire_lock(IND_READING)) return false;
+    defer { world.indexer.release_lock(IND_READING); };
 
     auto imports = world.indexer.optimize_imports(filepath);
     if (imports == NULL) return false;

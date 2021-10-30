@@ -1181,6 +1181,12 @@ struct Find_References_File {
     List<Go_Reference> *references;
 };
 
+enum Indexer_Status {
+    IND_READY,
+    IND_WRITING,
+    IND_READING,
+};
+
 struct Go_Indexer {
     ccstr goroot;
     // ccstr gopath;
@@ -1208,8 +1214,8 @@ struct Go_Indexer {
     Message_Queue<Go_Message> message_queue;
 
     Lock lock;
-    bool ready;
-    int open_starts;
+    Indexer_Status status;
+    int reacquires;
 
     // ---
 
@@ -1285,9 +1291,16 @@ struct Go_Indexer {
     bool check_if_still_in_parameter_hint(ccstr filepath, cur2 cur, cur2 hint_start);
     Go_File *find_gofile_from_ctx(Go_Ctx *ctx, Go_Package **out = NULL);
 
-    List<Find_References_File>* find_all_references(ccstr filepath, cur2 pos);
-    List<Find_References_File>* find_all_references(Goresult *declres);
+    List<Find_References_File>* find_references(ccstr filepath, cur2 pos);
+    List<Find_References_File>* find_references(Goresult *declres);
     List<Goresult> *get_lazy_type_dotprops(Gotype *type, Go_Ctx *ctx);
+
+    bool acquire_lock(Indexer_Status new_status, bool just_try = false);
+    bool release_lock(Indexer_Status expected_status);
+
+    bool try_acquire_lock(Indexer_Status new_status) {
+        return acquire_lock(new_status, true);
+    }
 };
 
 void walk_ast_node(Ast_Node *node, bool abstract_only, Walk_TS_Callback cb);

@@ -250,9 +250,10 @@ struct World {
         // int how_to_handle_unsaved_files;
         ccstr filepath;
         Thread_Handle thread;
+        bool too_late_to_cancel = false;
     } wnd_rename_identifier;
 
-    // collapse into world.find_references?
+    // TODO: collapse into world.find_references?
     struct : Wnd {
     } wnd_find_references;
 

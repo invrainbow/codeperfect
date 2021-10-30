@@ -661,9 +661,8 @@ void init_goto_symbol() {
     SCOPED_MEM(&world.goto_symbol_mem);
     world.goto_symbol_mem.reset();
 
-    if (!world.indexer.ready) return;
-    if (!world.indexer.lock.try_enter()) return;
-    defer { world.indexer.lock.leave(); };
+    if (!world.indexer.acquire_lock(IND_READING, true)) return;
+    defer { world.indexer.release_lock(IND_READING); };
 
     world.indexer.fill_goto_symbol();
     world.wnd_goto_symbol.show = true;
@@ -913,12 +912,9 @@ Jump_To_Definition_Result *get_current_definition(ccstr *filepath, bool display_
     {
         SCOPED_MEM(&world.indexer.ui_mem);
 
-        // strictly we can just call try_enter(), but want consistency with UI, which is based on `ready`
-        if (!world.indexer.ready)
+        if (!world.indexer.acquire_lock(IND_READING, true))
             return show_error("The indexer is currently busy; please wait for it to finish.");
-        if (!world.indexer.lock.try_enter())
-            return show_error("The indexer is currently busy; please wait for it to finish.");
-        defer { world.indexer.lock.leave(); };
+        defer { world.indexer.release_lock(IND_READING); };
 
         result = world.indexer.jump_to_definition(editor->filepath, new_cur2(editor->cur_to_offset(editor->cur), -1));
     }
@@ -1025,7 +1021,7 @@ bool kick_off_find_references() {
     // iterate thru all packages
     // if in same package as decl, check all non-sel refs,
     // if in diff package, check if package is even imported,
-    //  if so, check all sel refs, making sure package is same
+    // if so, check all sel refs, making sure package is same
 
     // TODO: find all references that refer to decl
 
@@ -1040,7 +1036,6 @@ bool kick_off_find_references() {
     case GODECL_PARAM:
     case GODECL_SHORTVAR:
     case GODECL_TYPECASE:
-        name
         break;
         // ??
     }
@@ -1396,8 +1391,7 @@ void Build::cleanup() {
 
 void kick_off_rename_identifier() {
     auto &ind = world.indexer;
-    if (!ind.ready) return;
-    if (!ind.lock.try_enter()) return;
+    if (!ind.acquire_lock(IND_READING)) return;
 
     auto has_unsaved_files = [&]() {
         For (world.panes)
@@ -1416,18 +1410,18 @@ void kick_off_rename_identifier() {
     // TODO: seems we need a new "running" indexer status
 
     auto thread_proc = [](void *param) {
-        // TODO: put a sleep here so we can test out cancellationshit
+        // TODO: put a sleep here so we can test out cancellation shit
 
         auto &wnd = world.wnd_rename_identifier;
         wnd.thread_mem.cleanup();
         wnd.thread_mem.init();
         SCOPED_MEM(&wnd.thread_mem);
 
-        auto &ind = world.indexer;
+        defer { world.indexer.release_lock(IND_READING); };
 
-        defer { ind.lock.leave(); };
+        sleep_milliseconds(1000 * 2000);
 
-        auto files = ind.find_all_references(wnd.declres);
+        auto files = world.indexer.find_references(wnd.declres);
         if (files == NULL) return;
 
         auto symbol = wnd.declres->decl->name;
@@ -1493,15 +1487,23 @@ void kick_off_rename_identifier() {
 
     auto &wnd = world.wnd_rename_identifier;
     wnd.running = true;
+    wnd.too_late_to_cancel = false;
     wnd.thread = create_thread(thread_proc, NULL);
 }
 
 void cancel_rename_identifier() {
     auto &wnd = world.wnd_rename_identifier;
+    if (!wnd.running) return;
+
     if (wnd.thread != NULL) {
         kill_thread(wnd.thread);
         close_thread_handle(wnd.thread);
         wnd.thread = NULL;
     }
+
+    // assume it was acquired by rename_identifier
+    if (world.indexer.status == IND_READING)
+        world.indexer.release_lock(IND_READING);
+
     wnd.running = false;
 }

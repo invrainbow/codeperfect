@@ -2115,13 +2115,14 @@ void UI::draw_everything() {
         }
 
         if (ImGui::BeginMenu("Tools")) {
-            if (ImGui::MenuItem("Rescan Index", NULL, false, world.indexer.ready)) {
+            // should we allow this even when not ready, so it can be used as an escape hatch if the indexer gets stuck?
+            if (ImGui::MenuItem("Rescan Index", NULL, false, world.indexer.status == IND_READY)) {
                 world.indexer.message_queue.add([&](auto msg) {
                     msg->type = GOMSG_RESCAN_INDEX;
                 });
             }
 
-            if (ImGui::MenuItem("Obliterate and Recreate Index", NULL, false, world.indexer.ready)) {
+            if (ImGui::MenuItem("Obliterate and Recreate Index", NULL, false, world.indexer.status == IND_READY)) {
                 world.indexer.message_queue.add([&](auto msg) {
                     msg->type = GOMSG_OBLITERATE_AND_RECREATE_INDEX;
                 });
@@ -2241,7 +2242,15 @@ void UI::draw_everything() {
             return "";
         };
 
-        ImGui::Begin(our_sprintf("Rename %s###rename_identifier", get_type_str()), &wnd.show, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking);
+        auto p_open = &wnd.show;
+        if (wnd.running)
+            p_open = NULL;
+
+        ImGui::Begin(our_sprintf("Rename %s###rename_identifier", get_type_str()), p_open, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking);
+
+        // if it's running, make sure the window stays focused
+        if (wnd.running)
+            ImGui::SetWindowFocus();
 
         /*
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(ImColor(140, 194, 248)));
@@ -2303,12 +2312,14 @@ void UI::draw_everything() {
         }
         */
 
+        // We need to close this window when defocused, because otherwise the
+        // user might move the cursor and fuck this up
         if (!wnd.focused) {
             wnd.show = false;
             ImGui::SetWindowFocus(NULL);
         }
 
-        if (submitted) {
+        if (submitted && !wnd.running) {
             auto validate = [&]() {
                 for (int i = 0, n = strlen(wnd.rename_to); i<n; i++) {
                     if (!isident(wnd.rename_to[i])) {
@@ -2319,11 +2330,7 @@ void UI::draw_everything() {
                 return true;
             };
 
-            if (validate()) {
-                kick_off_rename_identifier();
-                wnd.show = false;
-                ImGui::SetWindowFocus(NULL);
-            }
+            if (validate()) kick_off_rename_identifier();
         }
 
         ImGui::End();
@@ -3217,10 +3224,9 @@ void UI::draw_everything() {
 
             do {
                 if (wnd.filtered_results->len == 0) break;
-                if (!world.indexer.ready) break;
 
-                if (!world.indexer.lock.try_enter()) break;
-                defer { world.indexer.lock.leave(); };
+                if (!world.indexer.try_acquire_lock(IND_READING)) break;
+                defer { world.indexer.release_lock(IND_READING); };
 
                 auto symbol = wnd.symbols->at(wnd.filtered_results->at(wnd.selection));
                 auto result = world.indexer.jump_to_symbol(symbol);
@@ -4374,14 +4380,28 @@ void UI::draw_everything() {
         }
 
         int index_mouse_flags = 0;
-        if (world.indexer.ready) {
-            auto mouse_flags = get_mouse_flags(get_status_piece_rect(RIGHT, "INDEX READY"));
-            auto opacity = mouse_flags & MOUSE_HOVER ? 1.0 : 0.8;
-            index_mouse_flags = draw_status_piece(RIGHT, "INDEX READY", rgba(global_colors.status_index_ready_background, opacity), rgba(global_colors.status_index_ready_foreground, opacity));
-        } else {
-            auto mouse_flags = get_mouse_flags(get_status_piece_rect(RIGHT, "INDEXING..."));
-            auto opacity = mouse_flags & MOUSE_HOVER ? 1.0 : 0.8;
-            index_mouse_flags = draw_status_piece(RIGHT, "INDEXING...", rgba(global_colors.status_index_indexing_background, opacity), rgba(global_colors.status_index_indexing_foreground, opacity));
+        switch (world.indexer.status) {
+        case IND_READY:
+            {
+                auto mouse_flags = get_mouse_flags(get_status_piece_rect(RIGHT, "INDEX READY"));
+                auto opacity = mouse_flags & MOUSE_HOVER ? 1.0 : 0.8;
+                index_mouse_flags = draw_status_piece(RIGHT, "INDEX READY", rgba(global_colors.status_index_ready_background, opacity), rgba(global_colors.status_index_ready_foreground, opacity));
+            }
+            break;
+        case IND_WRITING:
+            {
+                auto mouse_flags = get_mouse_flags(get_status_piece_rect(RIGHT, "INDEXING..."));
+                auto opacity = mouse_flags & MOUSE_HOVER ? 1.0 : 0.8;
+                index_mouse_flags = draw_status_piece(RIGHT, "INDEXING...", rgba(global_colors.status_index_indexing_background, opacity), rgba(global_colors.status_index_indexing_foreground, opacity));
+            }
+            break;
+        case IND_READING:
+            {
+                auto mouse_flags = get_mouse_flags(get_status_piece_rect(RIGHT, "RUNNING..."));
+                auto opacity = mouse_flags & MOUSE_HOVER ? 1.0 : 0.8;
+                index_mouse_flags = draw_status_piece(RIGHT, "RUNNING...", rgba(global_colors.status_index_indexing_background, opacity), rgba(global_colors.status_index_indexing_foreground, opacity));
+            }
+            break;
         }
 
         if (index_mouse_flags & MOUSE_CLICKED) {
