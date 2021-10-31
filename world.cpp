@@ -29,7 +29,7 @@ bool is_ignored_by_git(ccstr path) {
 void History::actually_push(int editor_id, cur2 pos) {
     assert_main_thread();
 
-    auto editor = world.find_editor_by_id(editor_id);
+    auto editor = find_editor_by_id(editor_id);
 
     check_marks();
 
@@ -75,7 +75,7 @@ void History::push(int editor_id, cur2 pos) {
         auto &prev = ring[dec(curr)];
         if (prev.editor_id == editor_id) break;
 
-        auto prev_editor = world.find_editor_by_id(prev.editor_id);
+        auto prev_editor = find_editor_by_id(prev.editor_id);
         if (prev_editor == NULL) break;
 
         if (prev_editor->cur == prev.pos) break;
@@ -93,7 +93,7 @@ void History::push(int editor_id, cur2 pos) {
 void History::actually_go(History_Loc *it) {
     assert_main_thread();
 
-    auto editor = world.find_editor_by_id(it->editor_id);
+    auto editor = find_editor_by_id(it->editor_id);
     if (editor == NULL) return;
     if (!editor->is_nvim_ready()) return;
 
@@ -104,7 +104,7 @@ void History::actually_go(History_Loc *it) {
     dest->editor_id = it->editor_id;
     dest->pos = pos;
 
-    world.focus_editor_by_id(it->editor_id, pos);
+    focus_editor_by_id(it->editor_id, pos);
 }
 
 bool History::go_forward() {
@@ -154,7 +154,7 @@ bool History::go_backward() {
     if (curr == start) return false;
 
     {
-        auto editor = world.get_current_editor();
+        auto editor = get_current_editor();
         auto &it = ring[dec(curr)];
 
         // handle the case of: open file a, open file b, move down 4 lines (something < threshold),
@@ -192,7 +192,7 @@ bool History::go_backward() {
 void History::save_latest() {
     assert_main_thread();
 
-    auto editor = world.get_current_editor();
+    auto editor = get_current_editor();
     if (editor == NULL) return;
 
     if (curr == start) return; // does this ever happen?
@@ -260,22 +260,22 @@ bool exclude_from_file_tree(ccstr path) {
     return false;
 }
 
-void World::fill_file_tree() {
-    SCOPED_MEM(&file_tree_mem);
-    file_tree_mem.reset();
+void fill_file_tree() {
+    SCOPED_MEM(&world.file_tree_mem);
+    world.file_tree_mem.reset();
 
     // invalidate pointers
-    file_explorer.selection = NULL;
-    file_explorer.last_file_copied = NULL;
-    file_explorer.last_file_cut = NULL;
+    world.file_explorer.selection = NULL;
+    world.file_explorer.last_file_copied = NULL;
+    world.file_explorer.last_file_cut = NULL;
 
-    file_tree = alloc_object(FT_Node);
-    file_tree->is_directory = true;
-    file_tree->depth = -1;
+    world.file_tree = alloc_object(FT_Node);
+    world.file_tree->is_directory = true;
+    world.file_tree->depth = -1;
 
     u32 depth = 0;
 
-    GHGitIgnoreInit(current_path);
+    GHGitIgnoreInit(world.current_path);
 
     fn<void(ccstr, FT_Node*)> recur = [&](ccstr path, FT_Node *parent) {
         FT_Node *last_child = parent->children;
@@ -318,7 +318,7 @@ void World::fill_file_tree() {
         parent->children = sort_ft_nodes(parent->children);
     };
 
-    recur(current_path, file_tree);
+    recur(world.current_path, world.file_tree);
 }
 
 bool copy_file(ccstr src, ccstr dest) {
@@ -526,7 +526,9 @@ void World::init(GLFWwindow *_wnd) {
 
     fswatch.init(current_path);
 
+    // init ui shit
     init_global_colors();
+    init_command_keys();
 
     world.file_explorer.show = true;
 }
@@ -537,45 +539,45 @@ void World::start_background_threads() {
     dbg.start_loop();
 }
 
-Pane* World::get_current_pane() {
-    if (panes.len == 0) return NULL;
+Pane* get_current_pane() {
+    if (world.panes.len == 0) return NULL;
 
-    return &panes[current_pane];
+    return &world.panes[world.current_pane];
 }
 
-Editor* World::get_current_editor() {
+Editor* get_current_editor() {
     auto pane = get_current_pane();
     if (pane == NULL) return NULL;
 
     return pane->get_current_editor();
 }
 
-Editor* World::find_editor(find_editor_func f) {
-    for (auto&& pane : panes)
+Editor* find_editor(find_editor_func f) {
+    for (auto&& pane : world.panes)
         For (pane.editors)
             if (f(&it))
                 return &it;
     return NULL;
 }
 
-Editor* World::find_editor_by_id(u32 id) {
+Editor* find_editor_by_id(u32 id) {
     auto is_match = [&](auto it) { return it->id == id; };
     return find_editor(is_match);
 }
 
-Editor* World::find_editor_by_filepath(ccstr filepath) {
+Editor* find_editor_by_filepath(ccstr filepath) {
     auto is_match = [&](auto it) {
         return are_filepaths_same_file(it->filepath, filepath);
     };
     return find_editor(is_match);
 }
 
-Editor *World::focus_editor(ccstr path) {
+Editor *focus_editor(ccstr path) {
     return focus_editor(path, new_cur2(-1, -1));
 }
 
-Editor *World::focus_editor(ccstr path, cur2 pos) {
-    for (auto&& pane : panes) {
+Editor *focus_editor(ccstr path, cur2 pos) {
+    for (auto&& pane : world.panes) {
         for (u32 i = 0; i < pane.editors.len; i++) {
             auto &it = pane.editors[i];
             if (are_filepaths_same_file(path, it.filepath)) {
@@ -588,31 +590,31 @@ Editor *World::focus_editor(ccstr path, cur2 pos) {
     return get_current_pane()->focus_editor(path, pos);
 }
 
-void World::activate_pane(Pane *pane) {
-    activate_pane_by_index(pane - panes.items);
+void activate_pane(Pane *pane) {
+    activate_pane_by_index(pane - world.panes.items);
 }
 
-void World::activate_pane_by_index(u32 idx) {
-    if (idx > panes.len) return;
+void activate_pane_by_index(u32 idx) {
+    if (idx > world.panes.len) return;
 
-    if (idx == panes.len) {
+    if (idx == world.panes.len) {
         auto panes_width = ::ui.panes_area.w;
 
         float new_width = panes_width;
-        if (panes.len > 0)
-            new_width /= panes.len;
+        if (world.panes.len > 0)
+            new_width /= world.panes.len;
 
-        auto pane = panes.append();
+        auto pane = world.panes.append();
         pane->init();
         pane->width = new_width;
     }
 
-    if (current_pane != idx) {
-        auto e = world.get_current_editor();
+    if (world.current_pane != idx) {
+        auto e = get_current_editor();
         if (e != NULL) e->trigger_escape();
     }
 
-    current_pane = idx;
+    world.current_pane = idx;
 
     if (world.use_nvim) {
         auto pane = get_current_pane();
@@ -857,8 +859,8 @@ void run_proc_the_normal_way(Process* proc, ccstr cmd) {
     proc->run(cmd);
 }
 
-Editor* World::focus_editor_by_id(int editor_id, cur2 pos) {
-    For (panes) {
+Editor* focus_editor_by_id(int editor_id, cur2 pos) {
+    For (world.panes) {
         for (int j = 0; j < it.editors.len; j++) {
             auto &editor = it.editors[j];
             if (editor.id == editor_id) {
@@ -879,7 +881,7 @@ bool is_build_debug_free() {
 }
 
 void goto_file_and_pos(ccstr file, cur2 pos, Ensure_Cursor_Mode mode) {
-    auto editor = world.focus_editor(file, pos);
+    auto editor = focus_editor(file, pos);
     if (editor == NULL) return; // TODO
 
     editor->ensure_cursor_on_screen_by_moving_view(mode);
@@ -899,7 +901,7 @@ Jump_To_Definition_Result *get_current_definition(ccstr *filepath, bool display_
         return NULL;
     };
 
-    auto editor = world.get_current_editor();
+    auto editor = get_current_editor();
     if (editor == NULL)
         return show_error("Couldn't find anything under your cursor to rename (you don't have an editor focused).");
     if (!editor->is_go_file)
@@ -1009,9 +1011,9 @@ bool kick_off_find_implementations() {
     // this is the hard one (compared to find_implemented_interfaces)
 }
 
-void World::delete_ft_node(FT_Node *it) {
+void delete_ft_node(FT_Node *it) {
     SCOPED_FRAME();
-    auto rel_path = world.ft_node_to_path(it);
+    auto rel_path = ft_node_to_path(it);
     auto full_path = path_join(world.current_path, rel_path);
     if (it->is_directory)
         delete_rm_rf(full_path);
@@ -1027,7 +1029,7 @@ void World::delete_ft_node(FT_Node *it) {
         it->next->prev = it->prev;
 }
 
-ccstr World::ft_node_to_path(FT_Node *node) {
+ccstr ft_node_to_path(FT_Node *node) {
     auto path = alloc_list<FT_Node*>();
     for (auto curr = node; curr != NULL; curr = curr->parent)
         path->append(curr);
@@ -1042,7 +1044,7 @@ ccstr World::ft_node_to_path(FT_Node *node) {
     return r.finish();
 }
 
-FT_Node *World::find_or_create_ft_node(ccstr relpath, bool is_directory) {
+FT_Node *find_or_create_ft_node(ccstr relpath, bool is_directory) {
     auto ret = find_ft_node(relpath);
     if (ret != NULL) return ret;
 
@@ -1067,13 +1069,13 @@ FT_Node *World::find_or_create_ft_node(ccstr relpath, bool is_directory) {
         if (parent->children != NULL)
             parent->children->prev = ret;
         parent->children = ret;
-        parent->children = world.sort_ft_nodes(parent->children);
+        parent->children = sort_ft_nodes(parent->children);
 
         return ret;
     }
 }
 
-FT_Node *World::find_ft_node(ccstr relpath) {
+FT_Node *find_ft_node(ccstr relpath) {
     auto path = make_path(relpath);
     auto node = world.file_tree;
     For (*path->parts) {
@@ -1090,7 +1092,7 @@ FT_Node *World::find_ft_node(ccstr relpath) {
     return node;
 }
 
-int World::compare_ft_nodes(FT_Node *a, FT_Node *b) {
+int compare_ft_nodes(FT_Node *a, FT_Node *b) {
     auto score_node = [](FT_Node *it) -> int {
         if (it->is_directory) return 0;
         if (str_ends_with(it->name, ".go")) return 1;
@@ -1104,11 +1106,11 @@ int World::compare_ft_nodes(FT_Node *a, FT_Node *b) {
     return strcmpi(a->name, b->name);
 }
 
-void World::add_ft_node(FT_Node *parent, fn<void(FT_Node* it)> cb) {
+void add_ft_node(FT_Node *parent, fn<void(FT_Node* it)> cb) {
     FT_Node *node = NULL;
 
     {
-        SCOPED_MEM(&file_tree_mem);
+        SCOPED_MEM(&world.file_tree_mem);
 
         node = alloc_object(FT_Node);
         node->num_children = 0;
@@ -1124,10 +1126,10 @@ void World::add_ft_node(FT_Node *parent, fn<void(FT_Node* it)> cb) {
         parent->children->prev = node;
     parent->children = node;
     parent->num_children++;
-    parent->children = world.sort_ft_nodes(parent->children);
+    parent->children = sort_ft_nodes(parent->children);
 }
 
-FT_Node *World::sort_ft_nodes(FT_Node *nodes) {
+FT_Node *sort_ft_nodes(FT_Node *nodes) {
     if (nodes == NULL || nodes->next == NULL) return nodes;
 
     int len = 0;
@@ -1181,7 +1183,7 @@ void goto_error(int index) {
     auto path = path_join(world.current_path, error.file);
     auto pos = new_cur2(error.col-1, error.row-1);
 
-    auto editor = world.find_editor([&](auto it) {
+    auto editor = find_editor([&](auto it) {
         return are_filepaths_equal(path, it->filepath);
     });
 
@@ -1193,7 +1195,7 @@ void goto_error(int index) {
         return;
     }
 
-    world.focus_editor_by_id(editor->id, error.mark->pos());
+    focus_editor_by_id(editor->id, error.mark->pos());
     ImGui::SetWindowFocus(NULL);
     b.scroll_to = index;
 }
@@ -1228,7 +1230,7 @@ void reload_file_subtree(ccstr relpath) {
     if (is_ignored_by_git(path))
         return;
 
-    auto node = world.find_or_create_ft_node(relpath, true);
+    auto node = find_or_create_ft_node(relpath, true);
     if (node == NULL) return;
 
     String_Set current_items;    current_items.init();
@@ -1317,7 +1319,7 @@ void reload_file_subtree(ccstr relpath) {
 
         if (curr != NULL) curr->next = NULL;
 
-        node->children = world.sort_ft_nodes(head);
+        node->children = sort_ft_nodes(head);
     }
 
     // now delete all items in `current_items`
@@ -1501,7 +1503,7 @@ void kick_off_rename_identifier() {
 
             fr.finish();
 
-            auto editor = world.find_editor_by_filepath(filepath);
+            auto editor = find_editor_by_filepath(filepath);
             if (editor != NULL) {
                 world.message_queue.add([&](auto msg) {
                     msg->type = MTM_RELOAD_EDITOR;

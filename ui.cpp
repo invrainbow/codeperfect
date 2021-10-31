@@ -35,50 +35,122 @@ void init_global_colors() {
 #endif
 
     memcpy(&global_colors, _cpcolors, min(sizeof(global_colors), _cpcolors_len));
- }
+}
 
- ccstr format_key(int mods, ccstr key) {
-     List<ccstr> parts; parts.init();
+struct Key {
+    int mods;
+    int key;
+};
 
-     if (mods & KEYMOD_CMD)   parts.append("Cmd");
-     if (mods & KEYMOD_SHIFT) parts.append("Shift");
-     if (mods & KEYMOD_ALT)   parts.append("Alt");
-     if (mods & KEYMOD_CTRL)  parts.append("Ctrl");
+Key command_keys[_CMD_COUNT_];
 
-     Text_Renderer rend; rend.init();
-     For (parts) {
-         rend.write("%s + ", it);
-     }
-     rend.write("%s", key);
-     return rend.finish();
- }
+void init_command_keys() {
+    auto k = [&](int mods, int key) {
+        Key ret;
+        ret.mods = mods;
+        ret.key = key;
+        return ret;
+    };
 
- bool Font::init(u8* font_data, u32 font_size, int texture_id) {
-     height = font_size;
-     tex_size = (i32)pow(2.0f, (i32)log2(sqrt((float)height * height * 8 * 8 * 128)) + 1);
+    command_keys[CMD_RENAME_IDENTIFIER] = k(0, GLFW_KEY_F12);
+    command_keys[CMD_GOTO_DEFINITION] = k(KEYMOD_PRIMARY, 0);
+    command_keys[CMD_NEW_FILE] = k(0, 0);
+    command_keys[CMD_SAVE_UNTITLED_FILE] = k(0, 0);
+    command_keys[CMD_SAVE_FILE] = k(0, 0);
+    command_keys[CMD_SAVE_ALL] = k(0, 0);
+    command_keys[CMD_EXIT] = k(0, 0);
+    command_keys[CMD_SEARCH] = k(0, 0);
+    command_keys[CMD_SEARCH_AND_REPLACE] = k(0, 0);
+    command_keys[CMD_FILE_EXPLORER] = k(0, 0);
+    command_keys[CMD_ERROR_LIST] = k(0, 0);
+    command_keys[CMD_GO_TO_FILE] = k(0, 0);
+    command_keys[CMD_GO_TO_SYMBOL] = k(0, 0);
+    command_keys[CMD_GO_TO_NEXT_ITEM] = k(0, 0);
+    command_keys[CMD_GO_TO_PREVIOUS_ITEM] = k(0, 0);
+    command_keys[CMD_GO_TO_DEFINITION] = k(0, 0);
+    command_keys[CMD_GO_TO_REFERENCES] = k(0, 0);
+    command_keys[CMD_FORMAT_FILE] = k(0, 0);
+    command_keys[CMD_FORMAT_FILE_AND_ORGANIZE_IMPORTS] = k(0, 0);
+    command_keys[CMD_FORMAT_SELECTION] = k(0, 0);
+    command_keys[CMD_RENAME] = k(0, 0);
+    command_keys[CMD_GENERATE_LOLDONGS] = k(0, 0);
+    command_keys[CMD_ADD_NEW_FILE] = k(0, 0);
+    command_keys[CMD_ADD_NEW_FOLDER] = k(0, 0);
+    command_keys[CMD_PROJECT_SETTINGS] = k(0, 0);
+    command_keys[CMD_BUILD] = k(0, 0);
+    command_keys[CMD_BUILD_RESULTS] = k(0, 0);
+    command_keys[CMD_BUILD_PROFILES] = k(0, 0);
+    command_keys[CMD_CONTINUE] = k(0, 0);
+    command_keys[CMD_START_DEBUGGING] = k(0, 0);
+    command_keys[CMD_DEBUG_TEST_UNDER_CURSOR] = k(0, 0);
+    command_keys[CMD_BREAK_ALL] = k(0, 0);
+    command_keys[CMD_STOP_DEBUGGING] = k(0, 0);
+    command_keys[CMD_STEP_OVER] = k(0, 0);
+    command_keys[CMD_STEP_INTO] = k(0, 0);
+    command_keys[CMD_STEP_OUT] = k(0, 0);
+    command_keys[CMD_RUN_TO_CURSOR] = k(0, 0);
+    command_keys[CMD_TOGGLE_BREAKPOINT] = k(0, 0);
+    command_keys[CMD_DELETE_ALL_BREAKPOINTS] = k(0, 0);
+    command_keys[CMD_DEBUG_OUTPUT] = k(0, 0);
+    command_keys[CMD_DEBUG_PROFILES] = k(0, 0);
+    command_keys[CMD_RESCAN_INDEX] = k(0, 0);
+    command_keys[CMD_OBLITERATE_AND_RECREATE_INDEX] = k(0, 0);
+    command_keys[CMD_OPTIONS] = k(0, 0);
+    command_keys[CMD_ABOUT] = k(0, 0);
+}
 
-     u8* atlas_data = (u8*)our_malloc(tex_size * tex_size);
-     if (atlas_data == NULL)
-         return false;
-     defer { our_free(atlas_data); };
+ccstr format_key(int mods, ccstr key) {
+    List<ccstr> parts; parts.init();
 
-     stbtt_pack_context context;
-     if (!stbtt_PackBegin(&context, atlas_data, tex_size, tex_size, 0, 1, NULL)) {
-         error("stbtt_PackBegin failed");
-         return false;
-     }
+    if (mods & KEYMOD_CMD)   parts.append("Cmd");
+    if (mods & KEYMOD_SHIFT) parts.append("Shift");
+    if (mods & KEYMOD_ALT)   parts.append("Alt");
+    if (mods & KEYMOD_CTRL)  parts.append("Ctrl");
 
-     // TODO: what does this do?
-     stbtt_PackSetOversampling(&context, 8, 8);
+    Text_Renderer rend; rend.init();
+    For (parts) {
+        rend.write("%s + ", it);
+    }
+    rend.write("%s", key);
+    return rend.finish();
+}
 
-     if (!stbtt_PackFontRange(&context, font_data, 0, (float)height, ' ', '~' - ' ' + 1, char_info)) {
-         error("stbtt_PackFontRange failed");
-         return false;
-     }
+ccstr format_key(int mods, int key) {
+    auto keystr = "TODO"; // TODO: convert key to string
+    return format_key(mods, keystr);
+};
 
-     if (!stbtt_PackFontRange(&context, font_data, 0, (float)height, 0xfffd, 1, &char_info[_countof(char_info) - 1])) {
-         error("stbtt_PackFontRange failed");
-         return false;
+ccstr format_key(Key key) {
+    return format_Key(key.mods, key.key);
+}
+
+
+bool Font::init(u8* font_data, u32 font_size, int texture_id) {
+    height = font_size;
+    tex_size = (i32)pow(2.0f, (i32)log2(sqrt((float)height * height * 8 * 8 * 128)) + 1);
+
+    u8* atlas_data = (u8*)our_malloc(tex_size * tex_size);
+    if (atlas_data == NULL)
+        return false;
+    defer { our_free(atlas_data); };
+
+    stbtt_pack_context context;
+    if (!stbtt_PackBegin(&context, atlas_data, tex_size, tex_size, 0, 1, NULL)) {
+        error("stbtt_PackBegin failed");
+        return false;
+    }
+
+    // TODO: what does this do?
+    stbtt_PackSetOversampling(&context, 8, 8);
+
+    if (!stbtt_PackFontRange(&context, font_data, 0, (float)height, ' ', '~' - ' ' + 1, char_info)) {
+        error("stbtt_PackFontRange failed");
+        return false;
+    }
+
+    if (!stbtt_PackFontRange(&context, font_data, 0, (float)height, 0xfffd, 1, &char_info[_countof(char_info) - 1])) {
+        error("stbtt_PackFontRange failed");
+        return false;
     }
 
     stbtt_PackEnd(&context);
@@ -546,7 +618,7 @@ void UI::render_ts_cursor(TSTreeCursor *curr, cur2 open_cur) {
             ImGui::PopStyleColor();
 
         if (ImGui::IsMouseDoubleClicked(0) && ImGui::IsItemHovered(ImGuiHoveredFlags_None)) {
-            auto editor = world.get_current_editor();
+            auto editor = get_current_editor();
             if (editor != NULL)
                 editor->move_cursor(node->start());
         }
@@ -1494,7 +1566,7 @@ void open_rename(FT_Node *target) {
     wnd.show = true;
     wnd.target = target;
 
-    strcpy_safe(wnd.location, _countof(wnd.location), world.ft_node_to_path(target));
+    strcpy_safe(wnd.location, _countof(wnd.location), ft_node_to_path(target));
     strcpy_safe(wnd.name, _countof(wnd.name), target->name);
 }
 
@@ -1516,7 +1588,7 @@ void open_add_file_or_folder(bool folder, FT_Node *dest = NULL) {
 
     wnd.location_is_root = is_root();
     if (!wnd.location_is_root)
-        strcpy_safe(wnd.location, _countof(wnd.location), world.ft_node_to_path(node));
+        strcpy_safe(wnd.location, _countof(wnd.location), ft_node_to_path(node));
 
     wnd.dest = node;
     wnd.folder = folder;
@@ -1599,9 +1671,9 @@ void UI::imgui_pop_font() {
 
 void open_ft_node(FT_Node *it) {
     SCOPED_FRAME();
-    auto rel_path = world.ft_node_to_path(it);
+    auto rel_path = ft_node_to_path(it);
     auto full_path = path_join(world.current_path, rel_path);
-    if (world.focus_editor(full_path) != NULL)
+    if (focus_editor(full_path) != NULL)
         ImGui::SetWindowFocus(NULL);
 }
 
@@ -1683,6 +1755,8 @@ void UI::focus_keyboard(Wnd *wnd, int cond) {
             ImGui::SetKeyboardFocusHere();
     }
 }
+
+void UI::menu_item_from_command()
 
 void UI::draw_everything() {
     verts.len = 0;
@@ -1784,11 +1858,11 @@ void UI::draw_everything() {
 
         if (ImGui::BeginMenu("File")) {
             if (ImGui::MenuItem("New File", format_key(KEYMOD_PRIMARY, "N"))) {
-                world.get_current_pane()->open_empty_editor();
+                get_current_pane()->open_empty_editor();
             }
 
             {
-                auto editor = world.get_current_editor();
+                auto editor = get_current_editor();
                 bool clicked = false;
 
                 if (editor != NULL) {
@@ -1871,7 +1945,7 @@ void UI::draw_everything() {
         }
 
         if (ImGui::BeginMenu("Format")) {
-            auto editor = world.get_current_editor();
+            auto editor = get_current_editor();
 
             if (ImGui::MenuItem("Format File", format_key(KEYMOD_ALT | KEYMOD_SHIFT, "F"), false, editor != NULL)) {
                 if (editor != NULL)
@@ -1897,7 +1971,7 @@ void UI::draw_everything() {
         if (ImGui::BeginMenu("Refactor")) {
             auto can_rename_id_under_cursor = [&]() -> bool {
 #if 0
-                auto editor = world.get_current_editor();
+                auto editor = get_current_editor();
                 if (editor == NULL) return false;
                 if (!editor->is_go_file) return false;
                 if (editor->tree == NULL) return false;
@@ -1937,6 +2011,10 @@ void UI::draw_everything() {
             };
 
             if (ImGui::MenuItem("Rename...", format_key(0, "F12"), false, can_rename_id_under_cursor())) {
+                open_rename_identifier();
+            }
+
+            if (ImGui::MenuItem("Generate ", format_key(0, "F12"), false, can_rename_id_under_cursor())) {
                 open_rename_identifier();
             }
 
@@ -2012,7 +2090,7 @@ void UI::draw_everything() {
             auto can_debug_test_under_cursor = [&]() -> bool {
                 if (world.dbg.state_flag != DLV_STATE_INACTIVE) return false;
 
-                auto editor = world.get_current_editor();
+                auto editor = get_current_editor();
                 if (editor == NULL) return false;
                 if (!editor->is_go_file) return false;
                 if (!str_ends_with(editor->filepath, "_test.go")) return false;
@@ -2074,7 +2152,7 @@ void UI::draw_everything() {
             ImGui::Separator();
 
             if (ImGui::MenuItem("Toggle Breakpoint", format_key(KEYMOD_NONE, "F9"))) {
-                auto editor = world.get_current_editor();
+                auto editor = get_current_editor();
                 if (editor != NULL) {
                     world.dbg.push_call(DLVC_TOGGLE_BREAKPOINT, [&](auto call) {
                         call->toggle_breakpoint.filename = our_strcpy(editor->filepath);
@@ -2644,7 +2722,7 @@ void UI::draw_everything() {
                 auto ok = wnd.folder ? create_directory(path) : touch_file(path);
                 if (ok) {
                     auto dest = wnd.location_is_root ? world.file_tree : wnd.dest;
-                    world.add_ft_node(dest, [&](auto child) {
+                    add_ft_node(dest, [&](auto child) {
                         child->is_directory = wnd.folder;
                         child->name = our_strcpy(wnd.name);
                     });
@@ -2700,7 +2778,7 @@ void UI::draw_everything() {
 
             if (imgui_icon_button(ICON_MD_REFRESH)) {
                 // TODO: probably make this async task
-                world.fill_file_tree();
+                fill_file_tree();
             }
 
             ImGui::EndChild();
@@ -2777,7 +2855,7 @@ void UI::draw_everything() {
                     }
 
                     if (ImGui::Selectable("Delete")) {
-                        world.delete_ft_node(it);
+                        delete_ft_node(it);
                     }
 
                     ImGui::Separator();
@@ -2843,13 +2921,13 @@ void UI::draw_everything() {
 
                     if (ImGui::Selectable("Copy relative path")) {
                         SCOPED_FRAME();
-                        auto rel_path = world.ft_node_to_path(it);
+                        auto rel_path = ft_node_to_path(it);
                         glfwSetClipboardString(world.window, rel_path);
                     }
 
                     if (ImGui::Selectable("Copy absolute path")) {
                         SCOPED_FRAME();
-                        auto rel_path = world.ft_node_to_path(it);
+                        auto rel_path = ft_node_to_path(it);
                         auto full_path = path_join(world.current_path, rel_path);
                         glfwSetClipboardString(world.window, full_path);
                     }
@@ -2951,7 +3029,7 @@ void UI::draw_everything() {
             case KEYMOD_PRIMARY:
                 if (imgui_special_key_pressed(ImGuiKey_Delete) || imgui_special_key_pressed(ImGuiKey_Backspace)) {
                     auto curr = wnd.selection;
-                    if (curr != NULL) world.delete_ft_node(curr);
+                    if (curr != NULL) delete_ft_node(curr);
                 }
                 if (imgui_special_key_pressed(ImGuiKey_Enter)) {
                     auto curr = wnd.selection;
@@ -3179,7 +3257,7 @@ void UI::draw_everything() {
             if (wnd.filtered_results->len > 0) {
                 auto relpath = wnd.filepaths->at(wnd.filtered_results->at(wnd.selection));
                 auto filepath = path_join(world.current_path, relpath);
-                world.focus_editor(filepath);
+                focus_editor(filepath);
             }
             wnd.show = false;
             ImGui::SetWindowFocus(NULL);
@@ -3641,7 +3719,7 @@ void UI::draw_everything() {
     }
 
     do {
-        auto editor = world.get_current_editor();
+        auto editor = get_current_editor();
         if (editor == NULL) break;
 
         auto tree = editor->buf->tree;
@@ -3869,7 +3947,7 @@ void UI::draw_everything() {
 
             auto mouse_flags = get_mouse_flags(tab);
             if (mouse_flags & MOUSE_CLICKED) {
-                world.activate_pane(&pane);
+                activate_pane(&pane);
                 pane.focus_editor_by_index(tab_id);
             }
             if (mouse_flags & MOUSE_MCLICKED)
@@ -4394,7 +4472,7 @@ void UI::draw_everything() {
                 auto command = our_sprintf("%s%s", get_title(), cmd.content.items);
                 draw_status_piece(LEFT, command, rgba(global_colors.command_background), rgba(global_colors.command_foreground));
             } else {
-                auto editor = world.get_current_editor();
+                auto editor = get_current_editor();
                 if (editor != NULL) {
                     if (editor->is_modifiable()) {
                         ccstr mode_str = NULL;
@@ -4456,7 +4534,7 @@ void UI::draw_everything() {
             world.wnd_index_log.show ^= 1;
         }
 
-        auto curr_editor = world.get_current_editor();
+        auto curr_editor = get_current_editor();
         if (curr_editor != NULL) {
             auto cur = curr_editor->cur;
             draw_status_piece(RIGHT, our_sprintf("%d,%d", cur.y+1, cur.x+1), rgba(global_colors.white, 0.0), rgba("#aaaaaa"));

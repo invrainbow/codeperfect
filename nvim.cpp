@@ -16,13 +16,13 @@
 #endif
 
 Editor* find_editor_by_window(u32 win_id) {
-    return world.find_editor([&](auto it) {
+    return find_editor([&](auto it) {
         return it->nvim_data.win_id == win_id;
     });
 }
 
 Editor* find_editor_by_buffer(u32 buf_id) {
-    return world.find_editor([&](auto it) {
+    return find_editor([&](auto it) {
         return it->nvim_data.buf_id == buf_id;
     });
 }
@@ -132,7 +132,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
             // grab associated editor, break if we can't find it
             Editor* editor = NULL;
             if (req->editor_id != 0) {
-                editor = world.find_editor_by_id(req->editor_id);
+                editor = find_editor_by_id(req->editor_id);
                 if (editor == NULL) break;
             }
 
@@ -190,7 +190,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                     print("postinsert dotrepeat took %llu ns", diff);
                     post_insert_dotrepeat_time = current_time_in_nanoseconds();
 
-                    auto curr_editor = world.get_current_editor();
+                    auto curr_editor = get_current_editor();
 
                     writer.write_array(curr_editor != editor ? 3 : 2);
 
@@ -471,7 +471,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
             break;
         case NVIM_NOTIF_CUSTOM_MOVE_CURSOR:
             {
-                auto editor = world.get_current_editor();
+                auto editor = get_current_editor();
                 if (editor == NULL) break;
 
                 auto &view = editor->view;
@@ -512,7 +512,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
             break;
         case NVIM_NOTIF_CUSTOM_REVEAL_LINE:
             {
-                auto editor = world.get_current_editor();
+                auto editor = get_current_editor();
                 if (editor == NULL) break;
 
                 u32 y = editor->cur.y;
@@ -630,7 +630,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 else
                     mode = VI_UNKNOWN;
 
-                auto editor = world.get_current_editor();
+                auto editor = get_current_editor();
                 if (editor != NULL) {
                     if (mode == VI_INSERT) {
                         editor->nvim_insert.start = editor->cur;
@@ -646,7 +646,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
 
                 if (mode != VI_INSERT && exiting_insert_mode) {
                     if (editor_that_triggered_escape != 0) {
-                        auto ed = world.find_editor_by_id(editor_that_triggered_escape);
+                        auto ed = find_editor_by_id(editor_that_triggered_escape);
                         if (ed != NULL)
                             editor = ed;
                         editor_that_triggered_escape = 0;
@@ -1222,7 +1222,7 @@ void Nvim::run_event_loop() {
                 Editor* editor = NULL;
                 if (req_editor_id != 0) {
                     auto is_match = [&](auto it) { return it->id == req_editor_id; };
-                    editor = world.find_editor(is_match);
+                    editor = find_editor(is_match);
                     if (editor == NULL) {
                         reader.skip_object();
                         delete_request_by_msgid(msgid);

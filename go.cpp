@@ -1336,7 +1336,7 @@ Parsed_File *Go_Indexer::parse_file(ccstr filepath, bool use_latest) {
     Parsed_File *ret = NULL;
 
     if (use_latest) {
-        auto editor = world.find_editor_by_filepath(filepath);
+        auto editor = find_editor_by_filepath(filepath);
         if (editor == NULL) return NULL;
         if (editor->buf->tree == NULL) return NULL;
 
@@ -2516,7 +2516,7 @@ List<Find_References_File> *Go_Indexer::find_references(Goresult *declres) {
 List<Go_Import> *Go_Indexer::optimize_imports(ccstr filepath) {
     Timer t; t.init("list_missing_imports");
 
-    auto editor = world.find_editor_by_filepath(filepath);
+    auto editor = find_editor_by_filepath(filepath);
     if (editor != NULL)
         reload_editor_if_dirty(editor);
 

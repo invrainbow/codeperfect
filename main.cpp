@@ -206,7 +206,7 @@ void send_nvim_keys(ccstr s) {
 }
 
 void goto_next_tab() {
-    auto pane = world.get_current_pane();
+    auto pane = get_current_pane();
     if (pane->editors.len == 0) return;
 
     auto idx = (pane->current_editor + 1) % pane->editors.len;
@@ -214,7 +214,7 @@ void goto_next_tab() {
 }
 
 void goto_previous_tab() {
-    auto pane = world.get_current_pane();
+    auto pane = get_current_pane();
     if (pane->editors.len == 0) return;
 
     u32 idx;
@@ -417,7 +417,7 @@ int main(int argc, char **argv) {
     glfwGetWindowContentScale(world.window, &world.display_scale.x, &world.display_scale.y);
 
     // now that we have world.display_size, we can call wksp.activate_pane_by_index
-    world.activate_pane_by_index(0);
+    activate_pane_by_index(0);
 
     // initialize & bind textures
     glGenTextures(__TEXTURE_COUNT__, world.ui.textures);
@@ -654,7 +654,7 @@ int main(int argc, char **argv) {
             case GLFW_KEY_2:
             case GLFW_KEY_3:
             case GLFW_KEY_4:
-                world.activate_pane_by_index(key - GLFW_KEY_1);
+                activate_pane_by_index(key - GLFW_KEY_1);
                 ImGui::SetWindowFocus(NULL);
                 break;
             case GLFW_KEY_T:
@@ -670,7 +670,7 @@ int main(int argc, char **argv) {
                     init_goto_file();
                 break;
             case GLFW_KEY_N:
-                world.get_current_pane()->open_empty_editor();
+                get_current_pane()->open_empty_editor();
                 break;
             }
             break;
@@ -750,7 +750,7 @@ int main(int argc, char **argv) {
                 break;
             case GLFW_KEY_F9:
                 {
-                    auto editor = world.get_current_editor();
+                    auto editor = get_current_editor();
                     if (editor == NULL) break;
                     world.dbg.push_call(DLVC_TOGGLE_BREAKPOINT, [&](auto call) {
                         call->toggle_breakpoint.filename = our_strcpy(editor->filepath);
@@ -779,7 +779,7 @@ int main(int argc, char **argv) {
 
         // handle non-global keys
 
-        auto editor = world.get_current_editor();
+        auto editor = get_current_editor();
 
         auto handle_enter = [&](ccstr nvim_string) {
             if (editor == NULL) return;
@@ -940,7 +940,7 @@ int main(int argc, char **argv) {
                     break;
                 case GLFW_KEY_SPACE:
                     {
-                        auto ed = world.get_current_editor();
+                        auto ed = get_current_editor();
                         if (ed == NULL) break;
                         ed->trigger_autocomplete(false, false);
                     }
@@ -985,7 +985,7 @@ int main(int argc, char **argv) {
 #endif
                 case GLFW_KEY_SPACE:
                     {
-                        auto ed = world.get_current_editor();
+                        auto ed = get_current_editor();
                         if (ed == NULL) break;
                         ed->trigger_parameter_hint();
                     }
@@ -1068,14 +1068,14 @@ int main(int argc, char **argv) {
             case GLFW_KEY_J:
             case GLFW_KEY_K:
                 {
-                    auto ed = world.get_current_editor();
+                    auto ed = get_current_editor();
                     if (ed == NULL) return;
                     move_autocomplete_cursor(ed, key == GLFW_KEY_J ? 1 : -1);
                     break;
                 }
             case GLFW_KEY_W:
                 {
-                    auto pane = world.get_current_pane();
+                    auto pane = get_current_pane();
                     if (pane == NULL) break;
 
                     auto editor = pane->get_current_editor();
@@ -1086,7 +1086,7 @@ int main(int argc, char **argv) {
                         pane->cleanup();
                         world.panes.remove(world.current_pane);
                         if (world.current_pane >= world.panes.len)
-                            world.activate_pane_by_index(world.panes.len - 1);
+                            activate_pane_by_index(world.panes.len - 1);
                     } else {
                         if (!editor->ask_user_about_unsaved_changes())
                             break;
@@ -1131,7 +1131,7 @@ int main(int argc, char **argv) {
         if (world.ui.keyboard_captured_by_imgui) return;
         if (ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow)) return;
 
-        auto ed = world.get_current_editor();
+        auto ed = get_current_editor();
         if (ed == NULL) return;
 
         if (ch > 127) return;
@@ -1249,15 +1249,15 @@ int main(int argc, char **argv) {
 
     auto last_frame_time = current_time_in_nanoseconds();
 
-    // world.focus_editor("main.go");
-    // world.focus_editor(path_join(world.indexer.goroot, "time/time.go"));
-    // world.focus_editor(path_join(world.indexer.goroot, "database/sql/sql.go"));
-    // world.focus_editor(path_join(world.indexer.gomodcache, "github.com/davecgh/go-spew@v1.1.1/spew/dump.go"));
+    // focus_editor("main.go");
+    // focus_editor(path_join(world.indexer.goroot, "time/time.go"));
+    // focus_editor(path_join(world.indexer.goroot, "database/sql/sql.go"));
+    // focus_editor(path_join(world.indexer.gomodcache, "github.com/davecgh/go-spew@v1.1.1/spew/dump.go"));
 
     u32 frame_index = 0;
     while (!glfwWindowShouldClose(world.window)) {
         if (world.randomly_move_cursor_around) {
-            if (world.get_current_editor() != NULL) {
+            if (get_current_editor() != NULL) {
                 if (frame_index++ % 3 == 0) {
                     send_nvim_keys(rand() % 2 == 0 ? "{" : "}");
                 }
@@ -1297,7 +1297,7 @@ int main(int argc, char **argv) {
 
                 case MTM_RELOAD_EDITOR:
                     {
-                        auto editor = world.find_editor_by_id(it.reload_editor_id);
+                        auto editor = find_editor_by_id(it.reload_editor_id);
                         if (editor != NULL)
                             editor->reload_file(false);
                     }
@@ -1335,7 +1335,7 @@ int main(int argc, char **argv) {
 
                 reload_file_subtree(filepath);
 
-                auto editor = world.find_editor_by_filepath(orig_filepath);
+                auto editor = find_editor_by_filepath(orig_filepath);
                 if (editor != NULL)
                     editor->reload_file(true);
 

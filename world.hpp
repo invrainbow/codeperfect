@@ -148,6 +148,63 @@ enum {
 };
 */
 
+enum Command_Action {
+    CMD_RENAME_IDENTIFIER,
+    CMD_GOTO_DEFINITION,
+    CMD_NEW_FILE,
+    CMD_SAVE_UNTITLED_FILE,
+    CMD_SAVE_FILE,
+    CMD_SAVE_ALL,
+    CMD_EXIT,
+    CMD_SEARCH,
+    CMD_SEARCH_AND_REPLACE,
+    CMD_FILE_EXPLORER,
+    CMD_ERROR_LIST,
+    CMD_GO_TO_FILE,
+    CMD_GO_TO_SYMBOL,
+    CMD_GO_TO_NEXT_ITEM,
+    CMD_GO_TO_PREVIOUS_ITEM,
+    CMD_GO_TO_DEFINITION,
+    CMD_GO_TO_REFERENCES,
+    CMD_FORMAT_FILE,
+    CMD_FORMAT_FILE_AND_ORGANIZE_IMPORTS,
+    CMD_FORMAT_SELECTION,
+    CMD_RENAME,
+    CMD_GENERATE_LOLDONGS,
+    CMD_ADD_NEW_FILE,
+    CMD_ADD_NEW_FOLDER,
+    CMD_PROJECT_SETTINGS,
+    CMD_BUILD,
+    CMD_BUILD_RESULTS,
+    CMD_BUILD_PROFILES,
+    CMD_CONTINUE,
+    CMD_START_DEBUGGING,
+    CMD_DEBUG_TEST_UNDER_CURSOR,
+    CMD_BREAK_ALL,
+    CMD_STOP_DEBUGGING,
+    CMD_STEP_OVER,
+    CMD_STEP_INTO,
+    CMD_STEP_OUT,
+    CMD_RUN_TO_CURSOR,
+    CMD_TOGGLE_BREAKPOINT,
+    CMD_DELETE_ALL_BREAKPOINTS,
+    CMD_DEBUG_OUTPUT,
+    CMD_DEBUG_PROFILES,
+    CMD_RESCAN_INDEX,
+    CMD_OBLITERATE_AND_RECREATE_INDEX,
+    CMD_OPTIONS,
+    CMD_ABOUT,
+
+    _CMD_COUNT_,
+};
+
+struct Command {
+    Command_Action action;
+    union {
+        // action-specific payloads
+    };
+};
+
 struct World {
     Pool world_mem;
     Pool frame_mem;
@@ -230,10 +287,6 @@ struct World {
     // bool navigating_to;
     // cur2 navigating_to_pos;
     // int navigating_to_editor;
-
-    void activate_pane(Pane *pane);
-    void activate_pane_by_index(u32 idx);
-    void init_workspace();
 
     bool replace_line_numbers_with_bytecounts;
     bool turn_off_framerate_cap;
@@ -403,29 +456,33 @@ struct World {
     } wnd_style_editor;
 
     void init(GLFWwindow *_wnd);
+    void init_workspace();
     void start_background_threads();
-
-    Pane* get_current_pane();
-    Editor* get_current_editor();
-    Editor* find_editor(find_editor_func f);
-    Editor* find_editor_by_id(u32 id);
-    Editor* find_editor_by_filepath(ccstr filepath);
-    void fill_file_tree();
-
-    Editor *focus_editor(ccstr path);
-    Editor *focus_editor(ccstr path, cur2 pos);
-    Editor* focus_editor_by_id(int editor_id, cur2 pos);
-
-    FT_Node *sort_ft_nodes(FT_Node *nodes);
-    void add_ft_node(FT_Node *parent, fn<void(FT_Node* it)> cb);
-    int compare_ft_nodes(FT_Node *a, FT_Node *b);
-    FT_Node *find_ft_node(ccstr relpath);
-    FT_Node *find_or_create_ft_node(ccstr relpath, bool is_directory);
-    void delete_ft_node(FT_Node *it);
-    ccstr ft_node_to_path(FT_Node *node);
 };
 
 extern World world;
+
+void activate_pane(Pane *pane);
+void activate_pane_by_index(u32 idx);
+
+Pane* get_current_pane();
+Editor* get_current_editor();
+Editor* find_editor(find_editor_func f);
+Editor* find_editor_by_id(u32 id);
+Editor* find_editor_by_filepath(ccstr filepath);
+void fill_file_tree();
+
+Editor *focus_editor(ccstr path);
+Editor *focus_editor(ccstr path, cur2 pos);
+Editor* focus_editor_by_id(int editor_id, cur2 pos);
+
+FT_Node *sort_ft_nodes(FT_Node *nodes);
+void add_ft_node(FT_Node *parent, fn<void(FT_Node* it)> cb);
+int compare_ft_nodes(FT_Node *a, FT_Node *b);
+FT_Node *find_ft_node(ccstr relpath);
+FT_Node *find_or_create_ft_node(ccstr relpath, bool is_directory);
+void delete_ft_node(FT_Node *it);
+ccstr ft_node_to_path(FT_Node *node);
 
 bool is_ignored_by_git(ccstr path, bool isdir);
 

@@ -754,7 +754,7 @@ void Editor::add_change_in_insert_mode(cur2 start, cur2 old_end, cur2 new_end) {
 }
 
 bool Editor::is_current_editor() {
-    auto current_editor = world.get_current_editor();
+    auto current_editor = get_current_editor();
     if (current_editor != NULL)
         if (current_editor->id == id)
             return true;
@@ -832,7 +832,7 @@ void Editor::raw_move_cursor(cur2 c, bool dont_add_to_history) {
 
     if (push_to_history)
         if (!dont_add_to_history)
-            if (world.get_current_editor() == this)
+            if (get_current_editor() == this)
                 world.history.push(id, c);
 }
 
@@ -1390,12 +1390,12 @@ bool Editor::trigger_escape(cur2 go_here_after) {
 void Pane::set_current_editor(u32 idx) {
     current_editor = idx;
 
-    auto ed = world.get_current_editor();
+    auto ed = get_current_editor();
     if (ed == NULL) return;
 
     auto focus_current_editor_in_file_explorer = [&]() {
         auto edpath = get_path_relative_to(ed->filepath, world.current_path);
-        auto node = world.find_ft_node(edpath);
+        auto node = find_ft_node(edpath);
         if (node == NULL) return;
 
         world.file_explorer.scroll_to = node;
@@ -1410,7 +1410,7 @@ void Pane::set_current_editor(u32 idx) {
 
 Editor *Pane::focus_editor_by_index(u32 idx, cur2 pos) {
     if (current_editor != idx) {
-        auto e = world.get_current_editor();
+        auto e = get_current_editor();
         if (e != NULL) e->trigger_escape();
     }
 
@@ -2430,7 +2430,7 @@ void Editor::handle_save(bool about_to_close) {
         }
 
         if (!child_exists) {
-            world.add_ft_node(node, [&](auto child) {
+            add_ft_node(node, [&](auto child) {
                 child->is_directory = false;
                 child->name = our_strcpy(filename);
             });

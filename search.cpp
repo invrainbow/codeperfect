@@ -160,7 +160,7 @@ void Searcher::search_worker() {
             final_filepath = our_strcpy(filepath);
         }
 
-        auto editor = world.find_editor_by_filepath(final_filepath);
+        auto editor = find_editor_by_filepath(final_filepath);
 
         Search_Result sr; ptr0(&sr);
         auto results = alloc_list<Search_Result>(matches->len);

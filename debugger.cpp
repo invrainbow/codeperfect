@@ -896,7 +896,7 @@ bool Debugger::start(Debug_Profile *debug_profile) {
             ccstr package_path = NULL;
 
             auto get_info_from_current_editor = [&]() {
-                auto editor = world.get_current_editor();
+                auto editor = get_current_editor();
                 if (editor == NULL) return;
                 if (!editor->is_go_file) return;
 
@@ -933,11 +933,6 @@ bool Debugger::start(Debug_Profile *debug_profile) {
                         });
                     }
                 }
-            };
-
-            auto get_current_test_function = [&]() -> ccstr {
-                auto editor = world.get_current_editor();
-                if (editor == NULL) return NULL;
             };
 
             if (use_current_package())
