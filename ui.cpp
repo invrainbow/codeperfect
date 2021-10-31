@@ -13,6 +13,7 @@
 #define _USE_MATH_DEFINES // what the fuck is this lol
 #include <math.h>
 #include "tree_sitter_crap.hpp"
+#include "colors.hpp"
 
 #include <GLFW/glfw3.h>
 #include <inttypes.h>
@@ -23,60 +24,61 @@ UI ui;
 Global_Colors global_colors;
 
 void init_global_colors() {
+#if 0 // def DEBUG_MODE
     if (check_path("/Users/brandon/.cpcolors") == CPR_FILE) {
         File f;
         f.init("/Users/brandon/.cpcolors", FILE_MODE_READ, FILE_OPEN_EXISTING);
         f.read((char*)&global_colors, sizeof(global_colors));
         f.cleanup();
-    } else {
-        for (int i = 0; i < sizeof(global_colors) / sizeof(float); i++) {
-            ((float*)&global_colors)[i] = (float)(rand() % 255) / (float)255;
-        }
+        return;
     }
-}
+#endif
 
-ccstr format_key(int mods, ccstr key) {
-    List<ccstr> parts; parts.init();
+    memcpy(&global_colors, _cpcolors, min(sizeof(global_colors), _cpcolors_len));
+ }
 
-    if (mods & KEYMOD_CMD)   parts.append("Cmd");
-    if (mods & KEYMOD_SHIFT) parts.append("Shift");
-    if (mods & KEYMOD_ALT)   parts.append("Alt");
-    if (mods & KEYMOD_CTRL)  parts.append("Ctrl");
+ ccstr format_key(int mods, ccstr key) {
+     List<ccstr> parts; parts.init();
 
-    Text_Renderer rend; rend.init();
-    For (parts) {
-        rend.write("%s + ", it);
-    }
-    rend.write("%s", key);
-    return rend.finish();
-}
+     if (mods & KEYMOD_CMD)   parts.append("Cmd");
+     if (mods & KEYMOD_SHIFT) parts.append("Shift");
+     if (mods & KEYMOD_ALT)   parts.append("Alt");
+     if (mods & KEYMOD_CTRL)  parts.append("Ctrl");
 
-bool Font::init(u8* font_data, u32 font_size, int texture_id) {
-    height = font_size;
-    tex_size = (i32)pow(2.0f, (i32)log2(sqrt((float)height * height * 8 * 8 * 128)) + 1);
+     Text_Renderer rend; rend.init();
+     For (parts) {
+         rend.write("%s + ", it);
+     }
+     rend.write("%s", key);
+     return rend.finish();
+ }
 
-    u8* atlas_data = (u8*)our_malloc(tex_size * tex_size);
-    if (atlas_data == NULL)
-        return false;
-    defer { our_free(atlas_data); };
+ bool Font::init(u8* font_data, u32 font_size, int texture_id) {
+     height = font_size;
+     tex_size = (i32)pow(2.0f, (i32)log2(sqrt((float)height * height * 8 * 8 * 128)) + 1);
 
-    stbtt_pack_context context;
-    if (!stbtt_PackBegin(&context, atlas_data, tex_size, tex_size, 0, 1, NULL)) {
-        error("stbtt_PackBegin failed");
-        return false;
-    }
+     u8* atlas_data = (u8*)our_malloc(tex_size * tex_size);
+     if (atlas_data == NULL)
+         return false;
+     defer { our_free(atlas_data); };
 
-    // TODO: what does this do?
-    stbtt_PackSetOversampling(&context, 8, 8);
+     stbtt_pack_context context;
+     if (!stbtt_PackBegin(&context, atlas_data, tex_size, tex_size, 0, 1, NULL)) {
+         error("stbtt_PackBegin failed");
+         return false;
+     }
 
-    if (!stbtt_PackFontRange(&context, font_data, 0, (float)height, ' ', '~' - ' ' + 1, char_info)) {
-        error("stbtt_PackFontRange failed");
-        return false;
-    }
+     // TODO: what does this do?
+     stbtt_PackSetOversampling(&context, 8, 8);
 
-    if (!stbtt_PackFontRange(&context, font_data, 0, (float)height, 0xfffd, 1, &char_info[_countof(char_info) - 1])) {
-        error("stbtt_PackFontRange failed");
-        return false;
+     if (!stbtt_PackFontRange(&context, font_data, 0, (float)height, ' ', '~' - ' ' + 1, char_info)) {
+         error("stbtt_PackFontRange failed");
+         return false;
+     }
+
+     if (!stbtt_PackFontRange(&context, font_data, 0, (float)height, 0xfffd, 1, &char_info[_countof(char_info) - 1])) {
+         error("stbtt_PackFontRange failed");
+         return false;
     }
 
     stbtt_PackEnd(&context);

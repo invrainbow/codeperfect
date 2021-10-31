@@ -31,7 +31,7 @@ clean:
 build/bin/test: $(filter-out obj/main.o, $(OBJ_FILES)) obj/objclibs.o obj/clibs.o obj/tests.o
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 
-build/bin/ide: $(OBJ_FILES) obj/objclibs.o obj/clibs.o
+build/bin/ide: $(OBJ_FILES) obj/objclibs.o obj/clibs.o cpcolors.c
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 
 -include $(DEP_FILES)
@@ -47,6 +47,9 @@ obj/objclibs.o: os_macos.mm
 
 obj/clibs.o: clibs.c
 	clang $(CFLAGS) -std=gnu99 -fPIC -c -o $@ $<
+
+cpcolors.c: .cpcolors
+	xxd -i .cpcolors cpcolors.c
 
 GOSTUFF_DIRS = $(shell find gostuff/ -type d)
 GOSTUFF_FILES = $(shell find gostuff/ -type f -name '*')
