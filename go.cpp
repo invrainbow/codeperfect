@@ -5766,6 +5766,13 @@ List<T> *copy_list(List<T> *arr) {
 // -----
 // actual code that tells us how to copy objects
 
+Find_References_File* Find_References_File::copy() {
+    auto ret = clone(this);
+    ret->filepath = our_strcpy(filepath);
+    ret->references = copy_list(references);
+    return ret;
+}
+
 Goresult *Goresult::copy_decl() {
     auto ret = clone(this);
 
@@ -5836,6 +5843,7 @@ Go_Reference *Go_Reference::copy() {
     } else {
         ret->name = our_strcpy(name);
     }
+    return ret;
 }
 
 Gotype *Gotype::copy() {

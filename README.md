@@ -32,11 +32,11 @@ Old instructions:
 
 Install brew, then install dependencies:
 
-    sh/macos_install_dependencies.sh
+    sh/macos_install_dependencies
 
 Build:
 
-    sh/build_macos.sh
+    sh/build_macos
 
 Run:
 

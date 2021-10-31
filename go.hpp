@@ -1179,6 +1179,8 @@ struct Go_Message {
 struct Find_References_File {
     ccstr filepath;
     List<Go_Reference> *references;
+
+    Find_References_File* copy();
 };
 
 enum Indexer_Status {

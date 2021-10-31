@@ -247,23 +247,18 @@ struct World {
     struct : Wnd {
         Pool thread_mem;
         bool running;
+        bool too_late_to_cancel = false;
         char rename_to[256];
         Goresult *declres;
-        // int how_to_handle_unsaved_files;
-        ccstr filepath;
         Thread_Handle thread;
-        bool too_late_to_cancel = false;
     } wnd_rename_identifier;
 
     struct : Wnd {
         Pool thread_mem;
-        bool running;
-        char rename_to[256];
+        bool done;
         Goresult *declres;
-        // int how_to_handle_unsaved_files;
-        ccstr filepath;
         Thread_Handle thread;
-        bool too_late_to_cancel = false;
+        List<Find_References_File> *results;
     } wnd_find_references;
 
     struct : Wnd {

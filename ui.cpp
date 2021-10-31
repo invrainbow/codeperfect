@@ -2219,6 +2219,43 @@ void UI::draw_everything() {
         ImGui::EndMainMenuBar();
     }
 
+    if (world.wnd_find_references.show) {
+        auto &wnd = world.wnd_find_references;
+
+        auto p_open = &wnd.show;
+        if (!wnd.done)
+            p_open = NULL;
+
+        ImGui::Begin("Find References", p_open, ImGuiWindowFlags_AlwaysAutoResize);
+
+        if (wnd.done) {
+            imgui_push_mono_font();
+
+            For (*wnd.results) {
+                auto filepath = it.filepath;
+
+                // TODO: previews
+                For (*it.references) {
+                    auto pos = it.is_sel ? it.x_start : it.start;
+                    if (ImGui::Selectable(our_sprintf("%s: %s", filepath, format_cur(pos)))) {
+                        goto_file_and_pos(filepath, pos);
+                    }
+                }
+            }
+        done:
+
+            imgui_pop_font();
+        } else {
+            ImGui::Text("Searching...");
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel")) {
+                cancel_find_references();
+            }
+        }
+
+        ImGui::End();
+    }
+
     if (world.wnd_rename_identifier.show) {
         auto &wnd = world.wnd_rename_identifier;
 

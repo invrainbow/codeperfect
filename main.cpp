@@ -675,6 +675,14 @@ int main(int argc, char **argv) {
             }
             break;
 
+        case KEYMOD_PRIMARY | KEYMOD_ALT:
+            switch (key) {
+            case GLFW_KEY_R:
+                kick_off_find_references();
+                break;
+            }
+            break;
+
         case KEYMOD_PRIMARY | KEYMOD_SHIFT:
             switch (key) {
             case GLFW_KEY_S:

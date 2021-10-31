@@ -913,7 +913,7 @@ Jump_To_Definition_Result *get_current_definition(ccstr *filepath, bool display_
         SCOPED_MEM(&world.indexer.ui_mem);
 
         if (!world.indexer.acquire_lock(IND_READING, true))
-            return show_error("The indexer is currently busy; please wait for it to finish.");
+            return show_error("The indexer is currently busy.");
         defer { world.indexer.release_lock(IND_READING); };
 
         result = world.indexer.jump_to_definition(editor->filepath, new_cur2(editor->cur_to_offset(editor->cur), -1));
@@ -972,7 +972,6 @@ void open_rename_identifier() {
     wnd.show = true;
     wnd.running = false;
     wnd.declres = result->decl->copy_decl();
-    wnd.filepath = our_strcpy(filepath);
 }
 
 bool kick_off_find_implemented_interfaces() {
@@ -1359,14 +1358,23 @@ void Build::cleanup() {
 
 // TODO: tell user what went wrong if returning false
 bool kick_off_find_references() {
-    auto result = get_current_definition();
-    if (result == NULL) return false;
+    auto &wnd = world.wnd_find_references;
 
-    auto decl = result->decl;
-    if (decl == NULL) return false;
+    auto result = get_current_definition(NULL, true);
+    if (result == NULL) return false;
+    if (result->decl == NULL) return false;
+
+    world.find_references_mem.reset();
+    {
+        SCOPED_MEM(&world.find_references_mem);
+        wnd.declres = result->decl->copy_decl();
+    }
 
     auto &ind = world.indexer;
-    if (!ind.acquire_lock(IND_READING)) return;
+    if (!ind.acquire_lock(IND_READING)) {
+        tell_user("The indexer is currently busy.", NULL);
+        return false;
+    }
 
     auto thread_proc = [](void *param) {
         auto &wnd = world.wnd_find_references;
@@ -1379,21 +1387,42 @@ bool kick_off_find_references() {
         auto files = world.indexer.find_references(wnd.declres);
         if (files == NULL) return;
 
+        {
+            SCOPED_MEM(&world.find_references_mem);
+
+            auto newfiles = alloc_list<Find_References_File>(files->len);
+            For (*files) newfiles->append(it.copy());
+
+            wnd.results = newfiles;
+        }
+
         // close the thread handle first so it doesn't try to kill the thread
         if (wnd.thread != NULL) {
             close_thread_handle(wnd.thread);
             wnd.thread = NULL;
         }
+
+        wnd.done = true;
     };
 
-    auto &wnd = world.wnd_find_references;
-    wnd.running = true;
+    wnd.show = true;
+    wnd.done = false;
+    wnd.results = NULL;
     wnd.thread = create_thread(thread_proc, NULL);
+    if (wnd.thread == NULL) {
+        tell_user("Unable to kick off Find References.", NULL);
+        return false;
+    }
+
+    return true;
 }
 
 void kick_off_rename_identifier() {
     auto &ind = world.indexer;
-    if (!ind.acquire_lock(IND_READING)) return;
+    if (!ind.acquire_lock(IND_READING)) {
+        tell_user("The indexer is currently busy.", NULL);
+        return;
+    }
 
     auto has_unsaved_files = [&]() {
         For (world.panes)
@@ -1492,11 +1521,15 @@ void kick_off_rename_identifier() {
     wnd.running = true;
     wnd.too_late_to_cancel = false;
     wnd.thread = create_thread(thread_proc, NULL);
+    if (wnd.thread == NULL) {
+        tell_user("Unable to kick off Rename Identifier.", NULL);
+        return;
+    }
 }
 
 void cancel_find_references() {
     auto &wnd = world.wnd_find_references;
-    if (!wnd.running) return;
+    if (wnd.done) return;
 
     if (wnd.thread != NULL) {
         kill_thread(wnd.thread);
@@ -1508,7 +1541,7 @@ void cancel_find_references() {
     if (world.indexer.status == IND_READING)
         world.indexer.release_lock(IND_READING);
 
-    wnd.running = false;
+    wnd.show = false;
 }
 
 void cancel_rename_identifier() {
