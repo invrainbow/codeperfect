@@ -148,11 +148,8 @@ enum {
 };
 */
 
-enum Command_Action {
-    CMD_RENAME_IDENTIFIER,
-    CMD_GOTO_DEFINITION,
+enum Command {
     CMD_NEW_FILE,
-    CMD_SAVE_UNTITLED_FILE,
     CMD_SAVE_FILE,
     CMD_SAVE_ALL,
     CMD_EXIT,
@@ -162,15 +159,14 @@ enum Command_Action {
     CMD_ERROR_LIST,
     CMD_GO_TO_FILE,
     CMD_GO_TO_SYMBOL,
-    CMD_GO_TO_NEXT_ITEM,
-    CMD_GO_TO_PREVIOUS_ITEM,
+    CMD_GO_TO_NEXT_ERROR,
+    CMD_GO_TO_PREVIOUS_ERROR,
     CMD_GO_TO_DEFINITION,
     CMD_GO_TO_REFERENCES,
     CMD_FORMAT_FILE,
     CMD_FORMAT_FILE_AND_ORGANIZE_IMPORTS,
     CMD_FORMAT_SELECTION,
     CMD_RENAME,
-    CMD_GENERATE_LOLDONGS,
     CMD_ADD_NEW_FILE,
     CMD_ADD_NEW_FOLDER,
     CMD_PROJECT_SETTINGS,
@@ -195,15 +191,20 @@ enum Command_Action {
     CMD_OPTIONS,
     CMD_ABOUT,
 
+    CMD_GENERATE_IMPLEMENTATION,
+    CMD_GO_TO_IMPLEMENTATIONS,
+    CMD_GO_TO_IMPLEMENTED_INTERFACES,
+
     _CMD_COUNT_,
 };
 
-struct Command {
-    Command_Action action;
-    union {
-        // action-specific payloads
-    };
+struct Command_Info {
+    int mods;
+    int key;
+    ccstr name;
 };
+
+extern Command_Info command_info_table[_CMD_COUNT_];
 
 struct World {
     Pool world_mem;
@@ -219,6 +220,8 @@ struct World {
     Pool ui_mem;
     Pool find_references_mem;
     Pool rename_identifier_mem;
+    Pool run_command_mem;
+    Pool generate_implementation_mem;
 
     Fridge<Mark> mark_fridge;
     Fridge<Mark_Node> mark_node_fridge;
@@ -297,7 +300,7 @@ struct World {
     bool auth_update_done;
     u64 auth_update_last_check;
 
-    struct : Wnd {
+    struct Wnd_Rename_Identifier : Wnd {
         Pool thread_mem;
         bool running;
         bool too_late_to_cancel = false;
@@ -305,6 +308,23 @@ struct World {
         Goresult *declres;
         Thread_Handle thread;
     } wnd_rename_identifier;
+
+    struct Wnd_Generate_Implementation : Wnd {
+        Pool thread_mem;
+        bool running;
+        Goresult *declres;
+        List<Go_Symbol> *symbols;
+        int selection;
+        List<int> *filtered_results;
+        char query[256];
+
+        // if true, the user selected the interface,
+        // and now needs to select the type to add methods on
+        //
+        // if false, the user selected the type,
+        // and now needs to select the interface whose methods to add
+        bool selected_interface;
+    } wnd_generate_implementation;
 
     struct : Wnd {
         Pool thread_mem;
@@ -431,6 +451,13 @@ struct World {
         List<int> *filtered_results;
     } wnd_goto_file;
 
+    struct Wnd_Command : Wnd {
+        char query[256];
+        u32 selection;
+        List<Command> *actions;
+        List<Command> *filtered_results;
+    } wnd_command;
+
     struct : Wnd {
         char query[MAX_PATH];
         u32 selection;
@@ -518,3 +545,9 @@ Jump_To_Definition_Result *get_current_definition(ccstr *filepath = NULL, bool d
 
 extern int gargc;
 extern char **gargv;
+
+ccstr get_command_name(Command action);
+bool is_command_enabled(Command action);
+void init_command_info_table();
+void handle_command(Command action, bool from_menu);
+void open_add_file_or_folder(bool folder, FT_Node *dest = NULL);

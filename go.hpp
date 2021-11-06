@@ -1189,6 +1189,12 @@ enum Indexer_Status {
     IND_READING,
 };
 
+// a name & godecl (goresult) pair
+struct Go_Symbol {
+    ccstr name;
+    Goresult *decl;
+};
+
 struct Go_Indexer {
     ccstr goroot;
     // ccstr gopath;
@@ -1303,6 +1309,8 @@ struct Go_Indexer {
     bool try_acquire_lock(Indexer_Status new_status) {
         return acquire_lock(new_status, true);
     }
+
+    void fill_generate_implementation(List<Go_Symbol> *out, bool selected_interface);
 };
 
 void walk_ast_node(Ast_Node *node, bool abstract_only, Walk_TS_Callback cb);
