@@ -2260,6 +2260,14 @@ List<Goresult> *Go_Indexer::get_node_dotprops(Ast_Node *operand_node, bool *was_
     return NULL;
 }
 
+/*
+void Go_Indexer::find_implementations(ccstr filepath, cur2 pos) {
+    reload_all_dirty_files();
+
+    auto ctx = 
+}
+*/
+
 Jump_To_Definition_Result* Go_Indexer::jump_to_symbol(ccstr symbol) {
     reload_all_dirty_files();
 
@@ -2315,7 +2323,7 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_symbol(ccstr symbol) {
                 Go_Ctx ctx; ptr0(&ctx);
                 ctx.filename = filename;
                 ctx.import_path = import_path;
-                auto filepath = get_filepath_from_ctx(&ctx);
+                auto filepath = ctx_to_filepath(&ctx);
 
                 auto ret = alloc_object(Jump_To_Definition_Result);
                 // TODO: fill out decl if we need it, i guess
@@ -2338,7 +2346,6 @@ List<Find_References_File> *Go_Indexer::find_references(ccstr filepath, cur2 pos
 List<Find_References_File> *Go_Indexer::find_references(Goresult *declres) {
     reload_all_dirty_files();
 
-    auto filepath = get_filepath_from_ctx(declres->ctx);
     auto decl = declres->decl;
     if (decl == NULL) return NULL;
     if (decl->type == GODECL_IMPORT) return NULL;
@@ -2346,9 +2353,8 @@ List<Find_References_File> *Go_Indexer::find_references(Goresult *declres) {
     auto decl_name = decl->name;
     if (decl_name == NULL) return NULL;
 
-    Go_Ctx ctx; ptr0(&ctx);
-    ctx.import_path = filepath_to_import_path(our_dirname(filepath));
-    ctx.filename = our_basename(filepath);
+    auto ctx = declres->ctx;
+    if (ctx == NULL) return NULL;
 
     bool is_private = islower(decl_name[0]);
 
@@ -2406,7 +2412,7 @@ List<Find_References_File> *Go_Indexer::find_references(Goresult *declres) {
         out->filepath = our_strcpy(path_join(get_package_path(pkg->import_path), file->filename));
         out->references = alloc_list<Go_Reference>();
 
-        bool same_package = streq(pkg->import_path, ctx.import_path);
+        bool same_package = streq(pkg->import_path, ctx->import_path);
 
         ccstr package_name_we_want;
         if (!same_package && case_type == CASE_NORMAL) {
@@ -2415,7 +2421,7 @@ List<Find_References_File> *Go_Indexer::find_references(Goresult *declres) {
                 if (it.package_name_type == GPN_DOT) continue;
                 if (it.package_name_type == GPN_BLANK) continue;
 
-                if (streq(it.import_path, ctx.import_path)) {
+                if (streq(it.import_path, ctx->import_path)) {
                     package_name_we_want = get_import_package_name(&it);
                     break;
                 }
@@ -2494,11 +2500,11 @@ List<Find_References_File> *Go_Indexer::find_references(Goresult *declres) {
 
     if (!decl->is_toplevel) {
         Go_Package *pkg = NULL;
-        auto gofile = find_gofile_from_ctx(&ctx, &pkg);
+        auto gofile = find_gofile_from_ctx(ctx, &pkg);
         if (gofile == NULL) return NULL;
         process(pkg, gofile);
     } else if (islower(decl_name[0])) {
-        auto pkg = find_package_in_index(ctx.import_path);
+        auto pkg = find_package_in_index(ctx->import_path);
         if (pkg == NULL) return NULL;
         For (*pkg->files) process(pkg, &it);
     } else {
@@ -2528,9 +2534,8 @@ List<Go_Import> *Go_Indexer::optimize_imports(ccstr filepath) {
 
     t.log("parse_file");
 
-    Go_Ctx ctx; ptr0(&ctx);
-    ctx.import_path = filepath_to_import_path(our_dirname(filepath));
-    ctx.filename = our_basename(filepath);
+    auto ctx = filepath_to_ctx(filepath);
+    if (ctx == NULL) return NULL;
 
     String_Set package_refs; package_refs.init();
     String_Set full_refs; full_refs.init();
@@ -2589,7 +2594,7 @@ List<Go_Import> *Go_Indexer::optimize_imports(ccstr filepath) {
     String_Set referenced_package_names; referenced_package_names.init();
 
     // put this earlier maybe?
-    auto gofile = find_gofile_from_ctx(&ctx);
+    auto gofile = find_gofile_from_ctx(ctx);
     if (gofile == NULL) return NULL;
 
     For (*gofile->references) {
@@ -2600,7 +2605,7 @@ List<Go_Import> *Go_Indexer::optimize_imports(ccstr filepath) {
 
         auto pkgname = ref.x->lazy_id_name;
 
-        auto res = find_decl_of_id(pkgname, ref.x_start, &ctx);
+        auto res = find_decl_of_id(pkgname, ref.x_start, ctx);
         if (res == NULL) continue;
         if (res->decl->type == GODECL_IMPORT) continue;
 
@@ -2741,9 +2746,8 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 p
 
     auto file = pf->root;
 
-    Go_Ctx ctx; ptr0(&ctx);
-    ctx.import_path = filepath_to_import_path(our_dirname(filepath));
-    ctx.filename = our_basename(filepath);
+    auto ctx = filepath_to_ctx(filepath);
+    if (ctx == NULL) return NULL;
 
     Jump_To_Definition_Result result; ptr0(&result);
 
@@ -2779,7 +2783,7 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 p
                 auto operand_node = node->field(node->type() == TS_QUALIFIED_TYPE ? TSF_PACKAGE : TSF_OPERAND);
 
                 bool dontcare;
-                auto results = get_node_dotprops(operand_node, &dontcare, &ctx);
+                auto results = get_node_dotprops(operand_node, &dontcare, ctx);
                 if (results != NULL) {
                     auto sel_name = sel_node->string();
                     For (*results) {
@@ -2787,7 +2791,7 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 p
 
                         if (streq(decl->name, sel_name)) {
                             result.pos = decl->name_start;
-                            result.file = get_filepath_from_ctx(it.ctx);
+                            result.file = ctx_to_filepath(it.ctx);
                             result.decl = it.copy_decl();
                             return WALK_ABORT;
                         }
@@ -2831,7 +2835,7 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 p
                         auto gotype = expr_to_gotype(p);
                         if (gotype == NULL) break;
 
-                        auto res = evaluate_type(gotype, &ctx);
+                        auto res = evaluate_type(gotype, ctx);
                         if (res == NULL) break;
 
                         auto rres = resolve_type(res->gotype, res->ctx);
@@ -2849,11 +2853,11 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 p
                         }
                     } while (0);
                 } else {
-                    declres = find_decl_of_id(node->string(), node->start(), &ctx);
+                    declres = find_decl_of_id(node->string(), node->start(), ctx);
                 }
 
                 if (declres != NULL) {
-                    result.file = get_filepath_from_ctx(declres->ctx);
+                    result.file = ctx_to_filepath(declres->ctx);
                     result.decl = declres->copy_decl();
                     if (declres->decl->name != NULL)
                         result.pos = declres->decl->name_start;
@@ -3156,12 +3160,8 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
         return it->get_pos();
     };
 
-    auto import_path = filepath_to_import_path(our_dirname(filepath));
-    if (import_path == NULL) return false;
-
-    Go_Ctx ctx; ptr0(&ctx);
-    ctx.import_path = import_path;
-    ctx.filename = our_basename(filepath);
+    auto ctx = filepath_to_ctx(filepath);
+    if (ctx == NULL) return false;
 
     List<Goresult> results;
     results.init();
@@ -3326,7 +3326,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
 
         // try normal dot completions
         do {
-            auto results = get_node_dotprops(expr_to_analyze, &was_package, &ctx);
+            auto results = get_node_dotprops(expr_to_analyze, &was_package, ctx);
             if (results == NULL || results->len == 0) break;
 
             init_results();
@@ -3346,7 +3346,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
 
         // try postfix completions
         do {
-            auto results = get_postfix_completions(expr_to_analyze, &ctx);
+            auto results = get_postfix_completions(expr_to_analyze, ctx);
             if (results == NULL || results->len == 0) break;
 
             init_results();
@@ -3367,7 +3367,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
             auto gotype = expr_to_gotype(expr_to_analyze);
             if (gotype == NULL) break;
 
-            auto res = evaluate_type(gotype, &ctx);
+            auto res = evaluate_type(gotype, ctx);
             if (res == NULL) break;
 
             auto rres = resolve_type(res->gotype, res->ctx);
@@ -3423,7 +3423,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
 
             String_Set existing_imports; existing_imports.init();
 
-            auto gofile = find_gofile_from_ctx(&ctx);
+            auto gofile = find_gofile_from_ctx(ctx);
             if (gofile != NULL) {
                 SCOPED_FRAME_WITH_MEM(&scoped_table_mem);
                 Scoped_Table<Godecl*> table;
@@ -3456,10 +3456,10 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                     auto r = add_declaration_result(it->name);
                     if (r != NULL) {
                         r->declaration_godecl = it->value;
-                        r->declaration_import_path = ctx.import_path;
-                        r->declaration_filename = ctx.filename;
+                        r->declaration_import_path = ctx->import_path;
+                        r->declaration_filename = ctx->filename;
 
-                        auto res = evaluate_type(it->value->gotype, &ctx);
+                        auto res = evaluate_type(it->value->gotype, ctx);
                         if (res != NULL)
                             r->declaration_evaluated_gotype = res->gotype;
                     }
@@ -3548,7 +3548,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                 if (existing_imports.has(it.import_path)) continue;
                 if (it.status != GPS_READY) continue;
                 if (it.package_name == NULL) continue;
-                if (streq(it.import_path, ctx.import_path)) continue;
+                if (streq(it.import_path, ctx->import_path)) continue;
 
                 if (!path_has_descendant(index.current_import_path, it.import_path)) {
                     auto parts = make_path(it.import_path)->parts;
@@ -3581,7 +3581,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                 auto gotype = node_to_gotype(lone_identifier_struct_literal);
                 if (gotype == NULL) break;
 
-                auto res = evaluate_type(gotype, &ctx);
+                auto res = evaluate_type(gotype, ctx);
                 if (res == NULL) break;
 
                 auto rres = resolve_type(res->gotype, res->ctx);
@@ -3591,7 +3591,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                 list_struct_fields(rres, tmp);
 
                 For (*tmp) {
-                    if (!streq(it.ctx->import_path, ctx.import_path))
+                    if (!streq(it.ctx->import_path, ctx->import_path))
                         if (!isupper(it.decl->name[0]))
                             continue;
 
@@ -3615,7 +3615,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
 
             t.log("more crazy shit part 2");
 
-            auto results = list_package_decls(ctx.import_path, LISTDECLS_EXCLUDE_METHODS);
+            auto results = list_package_decls(ctx->import_path, LISTDECLS_EXCLUDE_METHODS);
             if (results != NULL) {
                 For (*results) {
                     auto result = add_declaration_result(it.decl->name);
@@ -3868,14 +3868,13 @@ Parameter_Hint *Go_Indexer::parameter_hint(ccstr filepath, cur2 pos) {
 
     if (func_expr == NULL) return NULL;
 
-    Go_Ctx ctx; ptr0(&ctx);
-    ctx.import_path = filepath_to_import_path(our_dirname(filepath));
-    ctx.filename = our_basename(filepath);
+    auto ctx = filepath_to_ctx(filepath);
+    if (ctx == NULL) return NULL;
 
     auto gotype = expr_to_gotype(func_expr);
     if (gotype == NULL) return NULL;
 
-    auto res = evaluate_type(gotype, &ctx);
+    auto res = evaluate_type(gotype, ctx);
     if (res == NULL) return NULL;
 
     auto rres = resolve_type(res->gotype, res->ctx);
@@ -4008,7 +4007,17 @@ ccstr remove_ats_from_path(ccstr s) {
     return path->str();
 }
 
-ccstr Go_Indexer::get_filepath_from_ctx(Go_Ctx *ctx) {
+Go_Ctx *Go_Indexer::filepath_to_ctx(ccstr filepath) {
+    auto import_path = filepath_to_import_path(our_dirname(filepath));
+    if (import_path == NULL) return NULL;
+
+    auto ret = alloc_object(Go_Ctx);
+    ret->import_path = import_path;
+    ret->filename = our_basename(filepath);
+    return ret;
+}
+
+ccstr Go_Indexer::ctx_to_filepath(Go_Ctx *ctx) {
     auto dir = get_package_path(ctx->import_path);
     if (dir == NULL) return NULL;
     return path_join(dir, ctx->filename);

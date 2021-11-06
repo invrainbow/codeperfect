@@ -1244,7 +1244,8 @@ struct Go_Indexer {
     void free_parsed_file(Parsed_File *file);
     void handle_error(ccstr err);
     u64 hash_package(ccstr resolved_package_path);
-    ccstr get_filepath_from_ctx(Go_Ctx *ctx);
+    ccstr ctx_to_filepath(Go_Ctx *ctx);
+    Go_Ctx *filepath_to_ctx(ccstr filepath);
     Goresult *resolve_type(Gotype *type, Go_Ctx *ctx);
     Goresult *unpointer_type(Gotype *type, Go_Ctx *ctx);
     List<Godecl> *parameter_list_to_fields(Ast_Node *params);

@@ -121,9 +121,8 @@ ccstr format_key(int mods, int key) {
 };
 
 ccstr format_key(Key key) {
-    return format_Key(key.mods, key.key);
+    return format_key(key.mods, key.key);
 }
-
 
 bool Font::init(u8* font_data, u32 font_size, int texture_id) {
     height = font_size;
@@ -1756,7 +1755,7 @@ void UI::focus_keyboard(Wnd *wnd, int cond) {
     }
 }
 
-void UI::menu_item_from_command()
+// void UI::menu_item_from_command()
 
 void UI::draw_everything() {
     verts.len = 0;
