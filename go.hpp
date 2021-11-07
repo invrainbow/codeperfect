@@ -658,7 +658,6 @@ struct Go_Func_Sig {
 
 // used for or interfaces too
 struct Go_Struct_Spec {
-    // bool is_embedded; // use field->name == NULL instead
     ccstr tag;
     Godecl *field;
 
@@ -691,6 +690,8 @@ struct Goresult {
 
     Goresult *copy_decl();
     Goresult *copy_gotype();
+    Goresult *wrap(Godecl *new_decl);
+    Goresult *wrap(Gotype *new_gotype);
 };
 
 enum Chan_Direction { CHAN_RECV, CHAN_SEND, CHAN_BI };
@@ -814,7 +815,11 @@ struct Gotype {
         };
 
         Gotype *slice_base;
-        Gotype *array_base;
+
+        struct {
+            Gotype *array_base;
+            int array_size;
+        };
 
         struct {
             Gotype *chan_base;
@@ -863,6 +868,7 @@ struct Gotype {
     Gotype *copy();
     void read(Index_Stream *s);
     void write(Index_Stream *s);
+    bool equals_in_go_sense(Gotype *other);
 };
 
 enum Go_Package_Status {
@@ -1304,6 +1310,13 @@ struct Go_Indexer {
     bool try_acquire_lock(Indexer_Status new_status) {
         return acquire_lock(new_status, true);
     }
+
+    bool are_gotypes_equal(Goresult *ra, Goresult *rb);
+    List<Goresult> *find_implementations(ccstr filepath, cur2 pos);
+    List<Goresult> *list_interface_methods(Goresult *interface);
+    bool list_interface_methods(Goresult *interface, List<Goresult> *out);
+
+    void find_interfaces_implemented(ccstr filepath, cur2 pos);
 };
 
 void walk_ast_node(Ast_Node *node, bool abstract_only, Walk_TS_Callback cb);

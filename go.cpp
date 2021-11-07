@@ -331,6 +331,9 @@ const char* read_from_parser_input(void *p, uint32_t off, TSPoint pos, uint32_t 
 
 bool isident(int c) { return isalnum(c) || c == '_'; }
 
+Goresult *Goresult::wrap(Godecl *new_decl) { return make_goresult(new_decl, ctx); }
+Goresult *Goresult::wrap(Gotype *new_gotype) { return make_goresult(new_gotype, ctx); }
+
 // @Write
 Go_File *get_ready_file_in_package(Go_Package *pkg, ccstr filename) {
     auto file = pkg->files->find([&](auto it) { return streq(filename, it->filename); });
@@ -1623,6 +1626,7 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
         case TS_VAR_DECLARATION:
         case TS_RANGE_CLAUSE:
         case TS_RECEIVE_STATEMENT:
+        // TODO: handle TS_TYPE_ALIAS here
             {
                 if (node_type == TS_METHOD_DECLARATION || node_type == TS_FUNCTION_DECLARATION) {
                     open_scopes.append(depth);
@@ -1708,6 +1712,7 @@ void Go_Indexer::process_tree_into_gofile(
         case TS_FUNCTION_DECLARATION:
         case TS_METHOD_DECLARATION:
         case TS_TYPE_DECLARATION:
+        case TS_TYPE_ALIAS:
         case TS_SHORT_VAR_DECLARATION:
             node_to_decls(it, file->decls, filename, &file->pool);
             break;
@@ -2260,13 +2265,377 @@ List<Goresult> *Go_Indexer::get_node_dotprops(Ast_Node *operand_node, bool *was_
     return NULL;
 }
 
-/*
-void Go_Indexer::find_implementations(ccstr filepath, cur2 pos) {
+bool Go_Indexer::are_gotypes_equal(Goresult *ra, Goresult *rb) {
+    auto a = ra->gotype;
+    auto b = rb->gotype;
+
+    // a and b must be resolved; no lazy types
+    if (a->type > _GOTYPE_LAZY_MARKER_) return false;
+    if (b->type > _GOTYPE_LAZY_MARKER_) return false;
+
+    auto resolve_aliased_type = [&](Goresult *res) {
+        return res; // TODO
+    };
+
+    ra = resolve_aliased_type(ra);
+    rb = resolve_aliased_type(rb);
+
+    if (a->type != b->type) {
+        auto a_is_ref = (a->type == GOTYPE_ID || a->type == GOTYPE_SEL);
+        auto b_is_ref = (b->type == GOTYPE_ID || b->type == GOTYPE_SEL);
+
+        if (a_is_ref && b_is_ref) return false;
+
+        Goresult *ref = NULL, *other = NULL;
+        if (a_is_ref) {
+            ref = ra;
+            other = rb;
+        } else {
+            ref = rb;
+            other = ra;
+        }
+
+        auto rres = resolve_type(ref->gotype, ref->ctx);
+        if (rres == NULL) return false;
+
+        // after resolution, they need to be the same type for instance, if:
+        //
+        //     type A int; var x A; var y int;
+        //
+        // then x and y have the same type. but if
+        //
+        //     type A int; type B int; var x B; var y int
+        //
+        // then x and y have different types.
+        if (rres->gotype->type != other->gotype->type) return false;
+
+        return are_gotypes_equal(rres, other);
+    }
+
+    // a->type == b->type
+
+    switch (a->type) {
+    case GOTYPE_INTERFACE:
+        {
+            auto validate_methods = [&](List<Goresult> *meths) {
+                if (meths == NULL) return false;
+
+                SCOPED_FRAME();
+                String_Set seen; seen.init();
+                For (*meths) {
+                    auto name = it.decl->name;
+                    if (seen.has(name))
+                        return false;
+                    seen.add(name);
+                }
+                return true;
+            };
+
+            auto ameths = list_interface_methods(ra);
+            if (!validate_methods(ameths)) return false;
+
+            auto bmeths = list_interface_methods(rb);
+            if (!validate_methods(bmeths)) return false;
+
+            if (ameths->len != bmeths->len) return false;
+
+            for (auto &&bmeth : *bmeths) {
+                bool found = false;
+                for (auto &&ameth : *ameths) {
+                    auto adecl = ameth.decl;
+                    auto bdecl = ameth.decl;
+
+                    if (!streq(adecl->name, bdecl->name)) continue;
+
+                    auto atype = ameth.wrap(adecl->gotype);
+                    auto btype = bmeth.wrap(bdecl->gotype);
+                    if (!are_gotypes_equal(atype, btype)) continue;
+
+                    found = true;
+                    break;
+                }
+                if (!found) return false;
+            }
+            return true;
+        }
+        break;
+
+    case GOTYPE_ID:
+        {
+            auto adecl = find_decl_of_id(a->id_name, a->id_pos, ra->ctx);
+            if (adecl == NULL) return false;
+
+            auto bdecl = find_decl_of_id(b->id_name, b->id_pos, rb->ctx);
+            if (bdecl == NULL) return false;
+
+            auto afile = ctx_to_filepath(adecl->ctx);
+            auto bfile = ctx_to_filepath(bdecl->ctx);
+
+            if (!streq(afile, bfile)) return false;
+            if (adecl->decl->name_start != bdecl->decl->name_start) return false;
+        }
+        return true;
+
+    case GOTYPE_SEL:
+        {
+            auto aimp = find_import_path_referred_to_by_id(a->sel_name, ra->ctx);
+            auto bimp = find_import_path_referred_to_by_id(b->sel_name, rb->ctx);
+            if (!streq(aimp, bimp)) return false;
+            if (!streq(a->sel_sel, b->sel_sel)) return false;
+        }
+        return true;
+
+    case GOTYPE_ASSERTION:
+        {
+            auto abase = ra->wrap(a->assertion_base);
+            auto bbase = rb->wrap(b->assertion_base);
+            return are_gotypes_equal(abase, bbase);
+        }
+        break;
+
+    case GOTYPE_STRUCT:
+        {
+            auto sa = a->struct_specs;
+            auto sb = a->struct_specs;
+            if (sa->len != sb->len) return false;
+
+            for (int i = 0; i < sa->len; i++) {
+                auto &ita = sa->at(i);
+                auto &itb = sb->at(i);
+
+                if (ita.tag != NULL || itb.tag != NULL) {
+                    if (ita.tag == NULL || itb.tag == NULL) return false;
+                    if (!streq(ita.tag, itb.tag)) return false;
+                }
+
+                if (ita.field->is_embedded != itb.field->is_embedded) return false;
+                if (!streq(ita.field->name, itb.field->name)) return false;
+
+                if (!are_gotypes_equal(ra->wrap(ita.field->gotype), rb->wrap(itb.field->gotype)))
+                    return false;
+            }
+
+            return true;
+        }
+        break;
+
+    case GOTYPE_MAP:
+        {
+            auto akey = ra->wrap(a->map_key);
+            auto aval = ra->wrap(a->map_value);
+            auto bkey = rb->wrap(b->map_key);
+            auto bval = rb->wrap(b->map_value);
+            return are_gotypes_equal(akey, bkey) && are_gotypes_equal(aval, bval);
+        }
+        break;
+
+    case GOTYPE_POINTER:
+        {
+            auto abase = ra->wrap(a->pointer_base);
+            auto bbase = rb->wrap(b->pointer_base);
+            return are_gotypes_equal(abase, bbase);
+        }
+
+    case GOTYPE_FUNC:
+        {
+            auto &fa = a->func_sig;
+            auto &fb = b->func_sig;
+
+            if (fa.params->len != fb.params->len) return false;
+            if (fa.result->len != fb.result->len) return false;
+
+            for (int i = 0; i < fa.params->len; i++) {
+                auto ga = ra->wrap(fa.params->at(i).gotype);
+                auto gb = rb->wrap(fb.params->at(i).gotype);
+                if (!are_gotypes_equal(ga, gb)) return false;
+            }
+
+            for (int i = 0; i < fa.result->len; i++) {
+                auto ga = ra->wrap(fa.result->at(i).gotype);
+                auto gb = rb->wrap(fb.result->at(i).gotype);
+                if (!are_gotypes_equal(ga, gb)) return false;
+            }
+
+            return true;
+        }
+
+    case GOTYPE_SLICE:
+        {
+            auto abase = ra->wrap(a->slice_base);
+            auto bbase = rb->wrap(b->slice_base);
+            return are_gotypes_equal(abase, bbase);
+        }
+
+    case GOTYPE_ARRAY:
+        {
+            auto abase = ra->wrap(a->array_base);
+            auto bbase = rb->wrap(b->array_base);
+            return a->array_size == b->array_size && are_gotypes_equal(abase, bbase);
+        }
+
+    case GOTYPE_CHAN:
+        {
+            auto abase = ra->wrap(a->chan_base);
+            auto bbase = rb->wrap(b->chan_base);
+            return are_gotypes_equal(abase, bbase);
+        }
+
+    case GOTYPE_MULTI:
+        return false; // this isn't a real go type, it's for our purposes
+
+    case GOTYPE_VARIADIC:
+        {
+            auto abase = ra->wrap(a->variadic_base);
+            auto bbase = rb->wrap(b->variadic_base);
+            return are_gotypes_equal(abase, bbase);
+        }
+
+    case GOTYPE_RANGE:
+        {
+            auto abase = ra->wrap(a->range_base);
+            auto bbase = rb->wrap(b->range_base);
+            return are_gotypes_equal(abase, bbase);
+        }
+        break;
+
+    case GOTYPE_BUILTIN:
+        return a->builtin_type == b->builtin_type;
+    }
+    return false;
+}
+
+List<Goresult> *Go_Indexer::find_implementations(ccstr filepath, cur2 pos) {
     reload_all_dirty_files();
 
-    auto ctx = 
+    auto jdres = world.indexer.jump_to_definition(filepath, pos);
+    if (jdres == NULL) return NULL;
+
+    auto target = jdres->decl;
+    if (target == NULL) return NULL;
+    if (target->decl == NULL) return NULL;
+    if (target->decl->type != GODECL_TYPE) return NULL;
+    if (target->decl->gotype->type != GOTYPE_INTERFACE) return NULL;
+
+    auto ctx = filepath_to_ctx(filepath);
+    if (ctx == NULL) return NULL;
+
+    // ctx for these is target->ctx
+    auto methods = alloc_list<Godecl*>();
+    For (*target->decl->gotype->interface_specs)
+        methods->append(it.field);
+
+    struct Type_Info {
+        bool *methods_matched;
+        Goresult *decl;
+    };
+
+    Table<Type_Info*> huge_table;
+    huge_table.init();
+
+    auto get_type_info = [&](ccstr key) -> Type_Info * {
+        bool found = false;
+        auto ret = huge_table.get(key, &found);
+        if (!found) {
+            ret = alloc_object(Type_Info);
+            ret->methods_matched = alloc_array(bool, methods->len);
+            huge_table.set(key, ret);
+        }
+        return ret;
+    };
+
+    For (*index.packages) {
+        auto import_path = it.import_path;
+
+        if (!path_has_descendant(index.current_import_path, import_path))
+            continue;
+
+        For (*it.files) {
+            auto ctx = alloc_object(Go_Ctx);
+            ctx->import_path = import_path;
+            ctx->filename = it.filename;
+
+            For (*it.decls) {
+                if (it.type != GODECL_FUNC && it.type != GODECL_TYPE) continue;
+
+                if (it.type == GODECL_TYPE) {
+                    auto type_name = our_sprintf("%s:%s", import_path, it.name);
+                    auto type_info = get_type_info(type_name);
+                    type_info->decl = make_goresult(&it, ctx);
+                    continue;
+                }
+
+                auto gotype = it.gotype;
+                if (gotype->type != GOTYPE_FUNC) continue;
+                if (gotype->func_recv == NULL) continue;
+
+                auto recv = gotype->func_recv;
+                if (recv->type == GOTYPE_POINTER)
+                    recv = recv->pointer_base;
+
+                if (recv->type != GOTYPE_ID) continue;
+
+                auto type_name = our_sprintf("%s:%s", import_path, recv->id_name);
+
+                auto method_name = it.name;
+
+                for (int i = 0; i < methods->len; i++) {
+                    auto &it = methods->at(i);
+
+                    if (!streq(it->name, method_name)) continue;
+                    if (!are_gotypes_equal(make_goresult(it->gotype, target->ctx), make_goresult(gotype, ctx))) continue;
+
+                    auto type_info = get_type_info(type_name);
+                    type_info->methods_matched[i] = true;
+
+                    bool found = false;
+                    auto info = huge_table.get(type_name, &found);
+                    if (!found) {
+                        info = alloc_object(Type_Info);
+                        huge_table.set(type_name, info);
+                    }
+
+                    info->methods_matched[i] = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    auto ret = alloc_list<Goresult>();
+
+    auto entries = huge_table.entries();
+    int index = 0;
+    for (int i = 0; i < entries->len; i++) {
+        auto &it = entries->at(i);
+        auto info = it->value;
+
+        auto match = [&]() {
+            for (int i = 0; i < methods->len; i++)
+                if (!info->methods_matched[i])
+                    return false;
+            return true;
+        };
+
+        if (!match()) continue;
+
+        auto parts = split_string(it->name, ':');
+        if (parts->len != 2) continue;
+
+        auto import_path = parts->at(0);
+        auto type_name = parts->at(1);
+
+        ret->append(info->decl);
+    }
+
+    return ret;
 }
-*/
+
+void Go_Indexer::find_interfaces_implemented(ccstr filepath, cur2 pos) {
+    reload_all_dirty_files();
+
+    auto ctx = filepath_to_ctx(filepath);
+    if (ctx == NULL) return;
+}
 
 Jump_To_Definition_Result* Go_Indexer::jump_to_symbol(ccstr symbol) {
     reload_all_dirty_files();
@@ -3902,7 +4271,7 @@ void Go_Indexer::list_struct_fields(Goresult *type, List<Goresult> *ret) {
     auto t = type->gotype;
     switch (t->type) {
     case GOTYPE_POINTER:
-        list_struct_fields(make_goresult(t->pointer_base, type->ctx), ret);
+        list_struct_fields(type->wrap(t->pointer_base), ret);
         break;
     case GOTYPE_STRUCT:
         For (*t->struct_specs) {
@@ -3912,10 +4281,46 @@ void Go_Indexer::list_struct_fields(Goresult *type, List<Goresult> *ret) {
                 if (res != NULL)
                     list_struct_fields(res, ret);
             }
-            ret->append(make_goresult(it.field, type->ctx));
+            ret->append(type->wrap(it.field));
         }
         break;
     }
+}
+
+bool Go_Indexer::list_interface_methods(Goresult *interface, List<Goresult> *out) {
+    auto gotype = interface->gotype;
+    if (gotype->type != GOTYPE_INTERFACE) return false;
+
+    auto specs = gotype->interface_specs;
+    if (specs == NULL) return false;
+
+    For (*specs) {
+        if (it.field == NULL) return false; // this shouldn't happen
+
+        auto method = it.field;
+        if (method->is_embedded) {
+            auto rres = resolve_type(method->gotype, interface->ctx);
+            if (rres == NULL) return false;
+            if (!list_interface_methods(rres, out)) return false;
+        } else {
+            if (method->type != GOTYPE_FUNC) return false;
+            out->append(interface->wrap(method));
+        }
+    }
+
+    return true;
+}
+
+List<Goresult> *Go_Indexer::list_interface_methods(Goresult *interface) {
+    Frame frame;
+
+    auto ret = alloc_list<Goresult>();
+    if (!list_interface_methods(interface, ret)) {
+        frame.restore();
+        return NULL;
+    }
+
+    return ret;
 }
 
 void Go_Indexer::list_dotprops(Goresult *type_res, Goresult *resolved_type_res, List<Goresult> *ret) {
@@ -3927,7 +4332,7 @@ void Go_Indexer::list_dotprops(Goresult *type_res, Goresult *resolved_type_res, 
     switch (resolved_type->type) {
     case GOTYPE_POINTER:
         {
-            auto new_resolved_type_res = make_goresult(resolved_type->pointer_base, resolved_type_res->ctx);
+            auto new_resolved_type_res = resolved_type_res->wrap(resolved_type->pointer_base);
             list_dotprops(type_res, new_resolved_type_res, ret);
             return;
         }
@@ -3944,10 +4349,10 @@ void Go_Indexer::list_dotprops(Goresult *type_res, Goresult *resolved_type_res, 
                     auto embedded_type = it.field->gotype;
                     auto res = resolve_type(embedded_type, resolved_type_res->ctx);
                     if (res == NULL) continue;
-                    list_dotprops(make_goresult(embedded_type, resolved_type_res->ctx), res, ret);
+                    list_dotprops(resolved_type_res->wrap(embedded_type), res, ret);
                 }
 
-                ret->append(make_goresult(it.field, resolved_type_res->ctx));
+                ret->append(resolved_type_res->wrap(it.field));
             }
         }
         break;
@@ -3994,7 +4399,7 @@ void Go_Indexer::list_dotprops(Goresult *type_res, Goresult *resolved_type_res, 
         if (recv->type != GOTYPE_ID) continue;
         if (!streq(recv->id_name, type_name)) continue;
 
-        ret->append(make_goresult(decl, it.ctx));
+        ret->append(&it);
     }
 }
 
@@ -4346,10 +4751,13 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
     case TS_IMPLICIT_LENGTH_ARRAY_TYPE:
         ret = new_gotype(GOTYPE_ARRAY);
         ret->array_base = node_to_gotype(node->field(TSF_ELEMENT));
+        // TODO
+        break;
 
     case TS_ARRAY_TYPE:
         ret = new_gotype(GOTYPE_ARRAY);
         ret->array_base = node_to_gotype(node->field(TSF_ELEMENT));
+        // TODO
         break;
 
     case TS_SLICE_TYPE:
@@ -4690,6 +5098,7 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
         break;
 
     case TS_TYPE_DECLARATION:
+    // TODO: handle TS_TYPE_ALIAS here.
         for (auto spec = node->child(); !spec->null; spec = spec->next()) {
             auto name_node = spec->field(TSF_NAME);
             if (name_node->null) continue;
@@ -5137,16 +5546,16 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
             switch (res->gotype->type) {
             case GOTYPE_MAP:
                 if (gotype->lazy_range_is_index)
-                    return make_goresult(res->gotype->map_key, res->ctx);
-                return make_goresult(res->gotype->map_value, res->ctx);
+                    return res->wrap(res->gotype->map_key);
+                return res->wrap(res->gotype->map_value);
             case GOTYPE_SLICE:
                 if (gotype->lazy_range_is_index)
                     return make_goresult(new_primitive_type("int"), NULL);
-                return make_goresult(res->gotype->slice_base, res->ctx);
+                return res->wrap(res->gotype->slice_base);
             case GOTYPE_ARRAY:
                 if (gotype->lazy_range_is_index)
                     return make_goresult(new_primitive_type("int"), NULL);
-                return make_goresult(res->gotype->array_base, res->ctx);
+                return res->wrap(res->gotype->array_base);
             }
             return NULL;
         }
@@ -5176,7 +5585,7 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
                 {
                     auto ret = new_gotype(GOTYPE_ASSERTION);
                     ret->assertion_base = base_type->map_value;
-                    return make_goresult(ret, res->ctx);
+                    return res->wrap(ret);
                 }
             }
             return NULL;
@@ -5196,12 +5605,12 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
             if (result == NULL) return NULL;
 
             if (result->len == 1)
-                return make_goresult(result->at(0).gotype, res->ctx);
+                return res->wrap(result->at(0).gotype);
 
             auto ret = new_gotype(GOTYPE_MULTI);
             ret->multi_types = alloc_list<Gotype*>(result->len);
             For (*result) ret->multi_types->append(it.gotype);
-            return make_goresult(ret, res->ctx);
+            return res->wrap(ret);
         }
 
     case GOTYPE_LAZY_DEREFERENCE:
@@ -5223,7 +5632,7 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
 
             auto type = new_gotype(GOTYPE_POINTER);
             type->pointer_base = res->gotype;
-            return make_goresult(type, res->ctx);
+            return res->wrap(type);
         }
 
     case GOTYPE_LAZY_ARROW:
@@ -5309,7 +5718,7 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
                 if (index == 0)
                     return evaluate_type(res->gotype->assertion_base, res->ctx);
                 if (index == 1)
-                    return make_goresult(new_primitive_type("bool"), res->ctx);
+                    return res->wrap(new_primitive_type("bool"));
                 break;
 
             case GOTYPE_RANGE:
@@ -5324,7 +5733,7 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
                 case GOTYPE_ARRAY:
                 case GOTYPE_SLICE:
                     if (index == 0)
-                        return make_goresult(new_primitive_type("int"), res->ctx);
+                        return res->wrap(new_primitive_type("int"));
                     if (index == 1) {
                         auto base = res->gotype->type == GOTYPE_ARRAY ? res->gotype->array_base : res->gotype->slice_base;
                         return evaluate_type(base, res->ctx);
@@ -5334,9 +5743,9 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
                 case GOTYPE_ID:
                     if (!streq(res->gotype->id_name, "string")) break;
                     if (index == 0)
-                        return make_goresult(new_primitive_type("int"), res->ctx);
+                        return res->wrap(new_primitive_type("int"));
                     if (index == 1)
-                        return make_goresult(new_primitive_type("rune"), res->ctx);
+                        return res->wrap(new_primitive_type("rune"));
                     break;
                 }
                 break;
@@ -5365,44 +5774,47 @@ Goresult *make_goresult(Gotype *gotype, Go_Ctx *ctx) { return make_goresult_from
 Goresult *make_goresult(Godecl *decl, Go_Ctx *ctx) { return make_goresult_from_pointer(decl, ctx); }
 
 Goresult *Go_Indexer::resolve_type(Gotype *type, Go_Ctx *ctx) {
+    if (type == NULL) return NULL;
+
     switch (type->type) {
     case GOTYPE_BUILTIN: // pending decision: should we do this here?
         if (type->builtin_underlying_type == NULL)
-            break;
+            return NULL;
         return resolve_type(type->builtin_underlying_type, ctx);
 
     case GOTYPE_POINTER:
         {
             auto res = resolve_type(type->pointer_base, ctx);
-            if (res == NULL) break;
+            if (res == NULL) return NULL;
 
             auto ret = new_gotype(GOTYPE_POINTER);
             ret->pointer_base = res->gotype;
 
-            return make_goresult(ret, res->ctx);
+            return res->wrap(ret);
         }
         break;
 
     case GOTYPE_ID:
         {
             auto res = find_decl_of_id(type->id_name, type->id_pos, ctx);
-            if (res == NULL) break;
-            if (res->decl->type != GODECL_TYPE) break;
+            if (res == NULL) return NULL;
+            if (res->decl->type != GODECL_TYPE) return NULL;
             return resolve_type(res->decl->gotype, res->ctx);
         }
 
     case GOTYPE_SEL:
         {
             auto import_path = find_import_path_referred_to_by_id(type->sel_name, ctx);
-            if (import_path == NULL) break;
+            if (import_path == NULL) return NULL;
 
             auto res = find_decl_in_package(type->sel_sel, import_path);
-            if (res == NULL) break;
-            if (res->decl->type != GODECL_TYPE) break;
+            if (res == NULL) return NULL;
+            if (res->decl->type != GODECL_TYPE) return NULL;
 
             return resolve_type(res->decl->gotype, res->ctx);
         }
     }
+
     return make_goresult(type, ctx);
 }
 

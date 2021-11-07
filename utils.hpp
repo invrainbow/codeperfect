@@ -124,6 +124,83 @@ List<ccstr> *split_string(ccstr str, char sep);
 bool path_has_descendant(ccstr base_path, ccstr full_path);
 
 template <typename T>
+struct Table {
+    struct Table_Entry {
+        ccstr name;
+        T value;
+        UT_hash_handle hh;
+    };
+
+    Table_Entry *lookup = NULL;
+    Pool *mem;
+
+    void clear() {
+        List<ccstr> keys; keys.init();
+        auto ents = entries();
+        For (*ents) keys.append(it->name);
+        For (keys) remove(it);
+    }
+
+    List<Table_Entry*> *entries() {
+        auto ret = alloc_list<Table_Entry*>(HASH_COUNT(lookup));
+        Table_Entry *curr = NULL, *tmp = NULL;
+        HASH_ITER(hh, lookup, curr, tmp) ret->append(curr);
+        return ret;
+    }
+
+    void init() { mem = MEM; }
+
+    void cleanup() {
+        SCOPED_MEM(mem);
+        HASH_CLEAR(hh, lookup);
+    }
+
+    void set(ccstr name, T value) {
+        SCOPED_MEM(mem);
+        _set_value(name, value);
+    }
+
+    void remove(ccstr name) {
+        SCOPED_MEM(mem);
+
+        Table_Entry *item = NULL;
+        HASH_FIND_STR(lookup, name, item);
+        if (item == NULL) return;
+
+        HASH_DEL(lookup, item);
+    }
+
+    T get(ccstr name, bool *found = NULL) {
+        SCOPED_MEM(mem);
+
+        Table_Entry *item = NULL;
+        HASH_FIND_STR(lookup, name, item);
+
+        if (item == NULL) {
+            T zero = {0};
+            if (found != NULL) *found = false;
+            return zero;
+        }
+
+        if (found != NULL) *found = true;
+        return item->value;
+    }
+
+    void _set_value(ccstr name, T value) {
+        SCOPED_MEM(mem);
+
+        Table_Entry *item = NULL;
+        HASH_FIND_STR(lookup, name, item);
+        if (item == NULL) {
+            item = alloc_object(Table_Entry);
+            item->name = name;
+            HASH_ADD_KEYPTR(hh, lookup, name, strlen(name), item);
+        }
+        item->value = value;
+    }
+};
+
+template <typename T>
 struct Scoped_Table {
     struct Old_Value {
         ccstr name;
