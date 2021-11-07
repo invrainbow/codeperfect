@@ -436,6 +436,8 @@ void World::init(GLFWwindow *_wnd) {
     init_mem(ui_mem);
     init_mem(find_references_mem);
     init_mem(rename_identifier_mem);
+    init_mem(run_command_mem);
+    init_mem(generate_implementation_mem);
 #undef init_mem
 
     // use frame_mem as the default mem
@@ -528,7 +530,7 @@ void World::init(GLFWwindow *_wnd) {
 
     // init ui shit
     init_global_colors();
-    init_command_keys();
+    init_command_info_table();
 
     world.file_explorer.show = true;
 }
@@ -766,18 +768,6 @@ void* get_native_window_handle() {
 #endif
 }
 
-void prompt_delete_all_breakpoints() {
-    auto res = ask_user_yes_no(
-        "Are you sure you want to delete all breakpoints?",
-        NULL,
-        "Delete",
-        "Don't Delete"
-    );
-
-    if (res != ASKUSER_YES) return;
-    world.dbg.push_call(DLVC_DELETE_ALL_BREAKPOINTS);
-}
-
 void filter_files() {
     auto &wnd = world.wnd_goto_file;
 
@@ -833,19 +823,12 @@ void filter_symbols() {
     // t.log("matching");
 
     auto scores = alloc_array(double, wnd.symbols->len);
-    auto scores_saved = alloc_array(bool, wnd.symbols->len);
-
-    auto get_score = [&](int i) {
-        if (!scores_saved[i]) {
-            scores[i] = fzy_match(wnd.query, wnd.symbols->at(i));
-            scores_saved[i] = true;
-        }
-        return scores[i];
-    };
+    For (*wnd.filtered_results)
+        scores[i] = fzy_match(wnd.query, wnd.symbols->at(it));
 
     wnd.filtered_results->sort([&](int *pa, int *pb) {
-        auto a = get_score(*pa);
-        auto b = get_score(*pb);
+        auto a = scores[*pa];
+        auto b = scores[*pb];
         return a < b ? 1 : (a > b ? -1 : 0);  // reverse
     });
 
@@ -1561,4 +1544,470 @@ void cancel_rename_identifier() {
         world.indexer.release_lock(IND_READING);
 
     wnd.running = false;
+}
+
+Command_Info command_info_table[_CMD_COUNT_];
+
+bool is_command_enabled(Command cmd) {
+    switch (cmd) {
+    case CMD_SAVE_FILE:
+        return get_current_editor() != NULL;
+
+    case CMD_SAVE_ALL:
+        For (world.panes)
+            if (it.editors.len > 0)
+                return true;
+        return false;
+
+    case CMD_GO_TO_PREVIOUS_ERROR:
+    case CMD_GO_TO_NEXT_ERROR:
+        {
+            auto &b = world.build;
+            bool has_valid = false;
+            For (b.errors) {
+                if (it.valid) {
+                    has_valid = true;
+                    break;
+                }
+            }
+            return b.ready() && has_valid;
+        }
+
+    case CMD_START_DEBUGGING:
+        return world.dbg.state_flag == DLV_STATE_INACTIVE;
+
+    case CMD_FORMAT_FILE:
+    case CMD_FORMAT_FILE_AND_ORGANIZE_IMPORTS:
+    case CMD_FORMAT_SELECTION:
+        return get_current_editor() != NULL;
+
+    case CMD_DEBUG_TEST_UNDER_CURSOR:
+        {
+            if (world.dbg.state_flag != DLV_STATE_INACTIVE) return false;
+
+            auto editor = get_current_editor();
+            if (editor == NULL) return false;
+            if (!editor->is_go_file) return false;
+            if (!str_ends_with(editor->filepath, "_test.go")) return false;
+            if (!path_has_descendant(world.current_path, editor->filepath)) return false;
+            if (editor->buf->tree == NULL) return false;
+
+            bool ret = false;
+
+            Parser_It it;
+            it.init(editor->buf);
+            auto root_node = new_ast_node(ts_tree_root_node(editor->buf->tree), &it);
+
+            find_nodes_containing_pos(root_node, editor->cur, true, [&](auto it) -> Walk_Action {
+                if (it->type() == TS_SOURCE_FILE)
+                    return WALK_CONTINUE;
+
+                if (it->type() == TS_FUNCTION_DECLARATION) {
+                    auto name = it->field(TSF_NAME);
+                    if (!name->null)
+                        ret = str_starts_with(name->string(), "Test");
+                }
+
+                return WALK_ABORT;
+            });
+
+            return ret;
+        }
+
+    case CMD_BREAK_ALL:
+        return world.dbg.state_flag == DLV_STATE_RUNNING;
+
+    case CMD_STOP_DEBUGGING:
+        return world.dbg.state_flag != DLV_STATE_INACTIVE;
+
+    case CMD_STEP_OVER:
+    case CMD_STEP_INTO:
+    case CMD_STEP_OUT:
+        return world.dbg.state_flag == DLV_STATE_PAUSED;
+    }
+
+    return true;
+}
+
+ccstr get_command_name(Command cmd) {
+    auto info = command_info_table[cmd];
+
+    /*
+    if (editor != NULL) {
+        if (editor->is_untitled)
+            clicked = ImGui::MenuItem("Save untitled file...###save_file", format_key(KEYMOD_PRIMARY, "S"));
+        else
+            clicked = ImGui::MenuItem(our_sprintf("Save %s...###save_file", our_basename(editor->filepath)), format_key(KEYMOD_PRIMARY, "S"));
+    } else {
+        ImGui::MenuItem("Save file...###save_file", format_key(KEYMOD_PRIMARY, "S"), false, false);
+    }
+    */
+
+    switch (cmd) {
+        // ??
+    }
+
+    return info.name;
+}
+
+void init_command_info_table() {
+    auto k = [&](int mods, int key, ccstr name) {
+        Command_Info ret;
+        ret.mods = mods;
+        ret.key = key;
+        ret.name = name;
+        return ret;
+    };
+
+    mem0(command_info_table, sizeof(command_info_table));
+
+#if OS_WIN
+    command_info_table[CMD_EXIT] = k(KEYMOD_ALT, GLFW_KEY_F4, "Exit");
+#elif OS_MAC
+    command_info_table[CMD_EXIT] = k(KEYMOD_CMD, GLFW_KEY_Q, "Quit");
+#endif
+    command_info_table[CMD_NEW_FILE] = k(KEYMOD_PRIMARY, GLFW_KEY_N, "New File");
+    command_info_table[CMD_SAVE_FILE] = k(KEYMOD_PRIMARY, GLFW_KEY_S, "Save File");
+    command_info_table[CMD_SAVE_ALL] = k(KEYMOD_PRIMARY | KEYMOD_SHIFT, GLFW_KEY_S, "Save All");
+    command_info_table[CMD_SEARCH] = k(KEYMOD_PRIMARY | KEYMOD_SHIFT, GLFW_KEY_F, "Search");
+    command_info_table[CMD_SEARCH_AND_REPLACE] = k(KEYMOD_PRIMARY | KEYMOD_SHIFT, GLFW_KEY_H, "Search and Replace");
+    command_info_table[CMD_FILE_EXPLORER] = k(KEYMOD_PRIMARY | KEYMOD_SHIFT, GLFW_KEY_E, "File Explorer");
+    command_info_table[CMD_GO_TO_FILE] = k(KEYMOD_PRIMARY, GLFW_KEY_P, "Go To File");
+    command_info_table[CMD_GO_TO_SYMBOL] = k(KEYMOD_PRIMARY, GLFW_KEY_T, "Go To Symbol");
+    command_info_table[CMD_GO_TO_NEXT_ERROR] = k(KEYMOD_ALT, GLFW_KEY_RIGHT_BRACKET, "Go To Next Error");
+    command_info_table[CMD_GO_TO_PREVIOUS_ERROR] = k(KEYMOD_ALT, GLFW_KEY_RIGHT_BRACKET, "Go To Previous Error");
+    command_info_table[CMD_GO_TO_DEFINITION] = k(KEYMOD_PRIMARY, GLFW_KEY_G, "Go To Definition");
+    command_info_table[CMD_GO_TO_REFERENCES] = k(KEYMOD_PRIMARY | KEYMOD_ALT, GLFW_KEY_R, "Go To References");
+    command_info_table[CMD_FORMAT_FILE] = k(KEYMOD_ALT | KEYMOD_SHIFT, GLFW_KEY_F, "Format File");
+    command_info_table[CMD_FORMAT_FILE_AND_ORGANIZE_IMPORTS] = k(KEYMOD_ALT | KEYMOD_SHIFT, GLFW_KEY_O, "Format File and Organize Imports");
+    command_info_table[CMD_RENAME] = k(KEYMOD_NONE, GLFW_KEY_F12, "Rename");
+    command_info_table[CMD_BUILD] = k(KEYMOD_PRIMARY | KEYMOD_SHIFT, GLFW_KEY_B, "Build");
+    command_info_table[CMD_CONTINUE] = k(KEYMOD_NONE, GLFW_KEY_F5, "Continue");
+    command_info_table[CMD_START_DEBUGGING] = k(KEYMOD_NONE, GLFW_KEY_F5, "Start Debugging");
+    command_info_table[CMD_STOP_DEBUGGING] = k(KEYMOD_SHIFT, GLFW_KEY_F5, "Stop Debugging");
+    command_info_table[CMD_DEBUG_TEST_UNDER_CURSOR] = k(KEYMOD_NONE, GLFW_KEY_F6, "Debug Test Under Cursor");
+    command_info_table[CMD_STEP_OVER] = k(KEYMOD_NONE, GLFW_KEY_F10, "Step Over");
+    command_info_table[CMD_STEP_INTO] = k(KEYMOD_NONE, GLFW_KEY_F11, "Step Into");
+    command_info_table[CMD_STEP_OUT] = k(KEYMOD_SHIFT, GLFW_KEY_F11, "Step Out");
+    command_info_table[CMD_RUN_TO_CURSOR] = k(KEYMOD_SHIFT, GLFW_KEY_F10, "Run To Cursor");
+    command_info_table[CMD_TOGGLE_BREAKPOINT] = k(KEYMOD_NONE, GLFW_KEY_F9, "Toggle Breakpoint");
+    command_info_table[CMD_DELETE_ALL_BREAKPOINTS] = k(KEYMOD_SHIFT, GLFW_KEY_F9, "Delete All Breakpoints");
+    /**/
+    command_info_table[CMD_ERROR_LIST] = k(0, 0, "Error List");
+    command_info_table[CMD_FORMAT_SELECTION] = k(0, 0, "Format Selection");
+    command_info_table[CMD_ADD_NEW_FILE] = k(0, 0, "Add New File");
+    command_info_table[CMD_ADD_NEW_FOLDER] = k(0, 0, "Add New Folder");
+    command_info_table[CMD_PROJECT_SETTINGS] = k(0, 0, "Project Settings");
+    command_info_table[CMD_BUILD_RESULTS] = k(0, 0, "Build Results");
+    command_info_table[CMD_BUILD_PROFILES] = k(0, 0, "Build Profiles");
+    command_info_table[CMD_CONTINUE] = k(0, 0, "Continue");
+    command_info_table[CMD_BREAK_ALL] = k(0, 0, "Break All");
+    command_info_table[CMD_RUN_TO_CURSOR] = k(0, 0, "Run To Cursor");
+    command_info_table[CMD_DEBUG_OUTPUT] = k(0, 0, "Debug Output");
+    command_info_table[CMD_DEBUG_PROFILES] = k(0, 0, "Debug Profiles");
+    command_info_table[CMD_RESCAN_INDEX] = k(0, 0, "Rescan Index");
+    command_info_table[CMD_OBLITERATE_AND_RECREATE_INDEX] = k(0, 0, "Obliterate and Recreate Index");
+    command_info_table[CMD_OPTIONS] = k(0, 0, "Options");
+    command_info_table[CMD_ABOUT] = k(0, 0, "About");
+    command_info_table[CMD_GENERATE_IMPLEMENTATION] = k(0, 0, "Generate Implementation");
+}
+
+void handle_command(Command cmd, bool from_menu) {
+    // make this a precondition
+    if (!is_command_enabled(cmd)) return;
+
+    switch (cmd) {
+    case CMD_NEW_FILE:
+        get_current_pane()->open_empty_editor();
+        break;
+
+    case CMD_SAVE_FILE:
+        {
+            auto editor = get_current_editor();
+            if (editor != NULL) editor->handle_save();
+        }
+        break;
+
+    case CMD_SAVE_ALL:
+        save_all_unsaved_files();
+        break;
+
+    case CMD_EXIT:
+        glfwSetWindowShouldClose(world.window, true);
+        break;
+
+    case CMD_SEARCH:
+    case CMD_SEARCH_AND_REPLACE:
+        {
+            auto &wnd = world.wnd_search_and_replace;
+            if (wnd.show) {
+                ImGui::SetWindowFocus("###search_and_replace");
+                wnd.focus_textbox = 1;
+            }
+            wnd.show = true;
+            wnd.replace = (cmd == CMD_SEARCH_AND_REPLACE);
+        }
+        break;
+
+    case CMD_FILE_EXPLORER:
+        if (from_menu) {
+            world.file_explorer.show ^= 1;
+        } else {
+            auto &wnd = world.file_explorer;
+            if (wnd.show) {
+                if (!wnd.focused) {
+                    ImGui::SetWindowFocus("File Explorer");
+                } else {
+                    wnd.show = false;
+                }
+            } else {
+                wnd.show = true;
+            }
+        }
+        break;
+
+    case CMD_ERROR_LIST:
+        world.error_list.show ^= 1;
+        break;
+
+    case CMD_GO_TO_FILE:
+        if (world.wnd_goto_file.show) {
+            if (from_menu)
+                world.wnd_goto_file.show = false;
+        } else {
+            init_goto_file();
+        }
+        break;
+
+    case CMD_GO_TO_SYMBOL:
+        if (world.wnd_goto_symbol.show) {
+            if (from_menu)
+                world.wnd_goto_symbol.show = false;
+        } else {
+            init_goto_symbol();
+        }
+        break;
+
+    case CMD_GO_TO_NEXT_ERROR:
+        goto_next_error(1);
+        break;
+
+    case CMD_GO_TO_PREVIOUS_ERROR:
+        goto_next_error(-1);
+        break;
+
+    case CMD_GO_TO_DEFINITION:
+        handle_goto_definition();
+        break;
+
+    case CMD_GO_TO_REFERENCES:
+        kick_off_find_references();
+        break;
+
+    case CMD_FORMAT_FILE:
+        {
+            auto editor = get_current_editor();
+            if (editor != NULL)
+                editor->format_on_save(GH_FMT_GOIMPORTS);
+        }
+        break;
+
+    case CMD_FORMAT_FILE_AND_ORGANIZE_IMPORTS:
+        {
+            auto editor = get_current_editor();
+            if (editor != NULL) {
+                if (editor->optimize_imports())
+                    editor->format_on_save(GH_FMT_GOIMPORTS);
+                else
+                    editor->format_on_save(GH_FMT_GOIMPORTS_WITH_AUTOIMPORT);
+            }
+        }
+        break;
+
+    case CMD_FORMAT_SELECTION:
+        // TODO
+        // how do we even get the visual selection?
+        break;
+
+    case CMD_RENAME:
+        open_rename_identifier();
+        break;
+
+    case CMD_ADD_NEW_FILE:
+        open_add_file_or_folder(false);
+        break;
+
+    case CMD_ADD_NEW_FOLDER:
+        open_add_file_or_folder(true);
+        break;
+
+    case CMD_PROJECT_SETTINGS:
+        ui.open_project_settings();
+        break;
+
+    case CMD_BUILD:
+        world.error_list.show = true;
+        world.error_list.cmd_focus = true;
+        save_all_unsaved_files();
+        kick_off_build();
+        break;
+
+    case CMD_BUILD_RESULTS:
+        world.error_list.show ^= 1;
+        break;
+
+    case CMD_BUILD_PROFILES:
+        ui.open_project_settings();
+        world.wnd_project_settings.focus_build_profiles = true;
+        break;
+
+    case CMD_RESCAN_INDEX:
+        world.indexer.message_queue.add([&](auto msg) {
+            msg->type = GOMSG_RESCAN_INDEX;
+        });
+        break;
+
+    case CMD_OBLITERATE_AND_RECREATE_INDEX:
+        world.indexer.message_queue.add([&](auto msg) {
+            msg->type = GOMSG_OBLITERATE_AND_RECREATE_INDEX;
+        });
+        break;
+
+    case CMD_BREAK_ALL:
+        world.dbg.push_call(DLVC_BREAK_ALL);
+        break;
+
+    case CMD_STOP_DEBUGGING:
+        world.dbg.push_call(DLVC_STOP);
+        break;
+
+    case CMD_STEP_OVER:
+        world.dbg.push_call(DLVC_STEP_OVER);
+        break;
+
+    case CMD_STEP_INTO:
+        world.dbg.push_call(DLVC_STEP_INTO);
+        break;
+
+    case CMD_STEP_OUT:
+        world.dbg.push_call(DLVC_STEP_OUT);
+        break;
+
+    case CMD_TOGGLE_BREAKPOINT:
+        {
+            auto editor = get_current_editor();
+            if (editor != NULL) {
+                world.dbg.push_call(DLVC_TOGGLE_BREAKPOINT, [&](auto call) {
+                    call->toggle_breakpoint.filename = our_strcpy(editor->filepath);
+                    call->toggle_breakpoint.lineno = editor->cur.y + 1;
+                });
+            }
+        }
+        break;
+
+    case CMD_DELETE_ALL_BREAKPOINTS:
+        {
+            auto res = ask_user_yes_no(
+                "Are you sure you want to delete all breakpoints?",
+                NULL,
+                "Delete",
+                "Don't Delete"
+            );
+
+            if (res == ASKUSER_YES)
+                world.dbg.push_call(DLVC_DELETE_ALL_BREAKPOINTS);
+        }
+        break;
+
+    case CMD_DEBUG_TEST_UNDER_CURSOR:
+        world.dbg.push_call(DLVC_DEBUG_TEST_UNDER_CURSOR);
+        break;
+
+    case CMD_DEBUG_OUTPUT:
+        world.wnd_debug_output.show ^= 1;
+        break;
+
+    case CMD_CONTINUE:
+        world.dbg.push_call(DLVC_CONTINUE_RUNNING);
+        break;
+
+    case CMD_START_DEBUGGING:
+        save_all_unsaved_files();
+        world.dbg.push_call(DLVC_START);
+        break;
+
+    case CMD_DEBUG_PROFILES:
+        ui.open_project_settings();
+        world.wnd_project_settings.focus_debug_profiles = true;
+        break;
+
+    case CMD_ABOUT:
+        world.wnd_about.show = true;
+        break;
+
+    case CMD_GENERATE_IMPLEMENTATION:
+        {
+            auto &wnd = world.wnd_generate_implementation;
+            ptr0(&wnd);
+
+            auto result = get_current_definition();
+            if (result == NULL) break;
+            if (result->decl == NULL) break;
+            if (result->decl->gotype == NULL) break;
+
+            world.generate_implementation_mem.reset();
+            {
+                if (!world.indexer.acquire_lock(IND_READING, true)) return;
+                defer { world.indexer.release_lock(IND_READING); };
+
+                SCOPED_MEM(&world.generate_implementation_mem);
+                wnd.declres = result->decl->copy_decl();
+
+                auto gotype = wnd.declres->decl->gotype;
+                wnd.selected_interface = (gotype->type == GOTYPE_INTERFACE);
+
+                wnd.symbols = alloc_list<Go_Symbol>();
+                wnd.filtered_results = alloc_list<int>();
+
+                world.indexer.fill_generate_implementation(wnd.symbols, wnd.selected_interface);
+            }
+
+            wnd.show = true;
+        }
+        break;
+
+    case CMD_GO_TO_IMPLEMENTATIONS:
+        // TODO
+        break;
+
+    case CMD_GO_TO_IMPLEMENTED_INTERFACES:
+        // TODO
+        break;
+    }
+}
+
+void open_add_file_or_folder(bool folder, FT_Node *dest) {
+    if (dest == NULL) dest = world.file_explorer.selection;
+
+    FT_Node *node = NULL;
+    auto &wnd = world.wnd_add_file_or_folder;
+
+    auto is_root = [&]() {
+        node = dest;
+
+        if (node == NULL) return true;
+        if (node->is_directory) return false;
+
+        node = node->parent;
+        return (node->parent == NULL);
+    };
+
+    wnd.location_is_root = is_root();
+    if (!wnd.location_is_root)
+        strcpy_safe(wnd.location, _countof(wnd.location), ft_node_to_path(node));
+
+    wnd.dest = node;
+    wnd.folder = folder;
+    wnd.show = true;
+    wnd.name[0] = '\0';
 }

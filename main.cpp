@@ -617,37 +617,8 @@ int main(int argc, char **argv) {
 
         // handle global keys
 
-        switch (ui.imgui_get_keymods()) {
-        case KEYMOD_SHIFT:
-            if (world.use_nvim) {
-                switch (key) {
-                case GLFW_KEY_F5:
-                    if (world.dbg.state_flag == DLV_STATE_INACTIVE) break;
-                    world.dbg.push_call(DLVC_STOP);
-                    break;
-                case GLFW_KEY_F11:
-                    if (world.dbg.state_flag != DLV_STATE_PAUSED) break;
-                    world.dbg.push_call(DLVC_STEP_OUT);
-                    break;
-                case GLFW_KEY_F10:
-                    // TODO: run to cursor
-                    break;
-                case GLFW_KEY_F9:
-                    prompt_delete_all_breakpoints();
-                }
-                break;
-            }
-            break;
-
-        case KEYMOD_ALT:
-            switch (key) {
-            case GLFW_KEY_LEFT_BRACKET:
-            case GLFW_KEY_RIGHT_BRACKET:
-                goto_next_error(key == GLFW_KEY_LEFT_BRACKET ? -1 : 1);
-                break;
-            }
-            break;
-
+        auto mods = ui.imgui_get_keymods();
+        switch (mods) {
         case KEYMOD_PRIMARY:
             switch (key) {
             case GLFW_KEY_1:
@@ -657,72 +628,24 @@ int main(int argc, char **argv) {
                 activate_pane_by_index(key - GLFW_KEY_1);
                 ImGui::SetWindowFocus(NULL);
                 break;
-            case GLFW_KEY_T:
-                if (world.wnd_goto_symbol.show)
-                    world.wnd_goto_symbol.show = false;
-                else
-                    init_goto_symbol();
-                break;
-            case GLFW_KEY_P:
-                if (world.wnd_goto_file.show)
-                    world.wnd_goto_file.show = false;
-                else
-                    init_goto_file();
-                break;
-            case GLFW_KEY_N:
-                get_current_pane()->open_empty_editor();
-                break;
-            }
-            break;
 
-        case KEYMOD_PRIMARY | KEYMOD_ALT:
-            switch (key) {
-            case GLFW_KEY_R:
-                kick_off_find_references();
-                break;
-            }
-            break;
+            case GLFW_KEY_K:
+                {
+                    SCOPED_MEM(&world.run_command_mem);
+                    world.run_command_mem.reset();
 
-        case KEYMOD_PRIMARY | KEYMOD_SHIFT:
-            switch (key) {
-            case GLFW_KEY_S:
-                save_all_unsaved_files();
-                break;
-            case GLFW_KEY_B:
-                world.error_list.show = true;
-                world.error_list.cmd_focus = true;
-                save_all_unsaved_files();
-                kick_off_build();
-                break;
-            case GLFW_KEY_F:
-                {
-                    auto &wnd = world.wnd_search_and_replace;
-                    if (wnd.show) {
-                        ImGui::SetWindowFocus("###search_and_replace");
-                        wnd.focus_textbox = 1;
+                    auto &wnd = world.wnd_command;
+                    wnd.query[0] = '\0';
+                    wnd.actions = alloc_list<Command>();
+                    wnd.filtered_results = alloc_list<Command>();
+
+                    for (int i = 0; i < _CMD_COUNT_; i++) {
+                        auto fuck_cpp = (Command)i;
+                        if (is_command_enabled(fuck_cpp))
+                            wnd.actions->append(fuck_cpp);
                     }
-                    wnd.show = true;
-                    wnd.replace = false;
-                }
-                break;
-            case GLFW_KEY_H:
-                if (world.wnd_search_and_replace.show)
-                    ImGui::SetWindowFocus("###search_and_replace");
-                world.wnd_search_and_replace.show = true;
-                world.wnd_search_and_replace.replace = true;
-                break;
-            case GLFW_KEY_E:
-                {
-                    auto &wnd = world.file_explorer;
-                    if (wnd.show) {
-                        if (!wnd.focused) {
-                            ImGui::SetWindowFocus("File Explorer");
-                        } else {
-                            wnd.show = false;
-                        }
-                    } else {
-                        wnd.show = true;
-                    }
+
+                    world.wnd_command.show = true;
                 }
                 break;
             }
@@ -730,48 +653,24 @@ int main(int argc, char **argv) {
 
         case KEYMOD_NONE:
             switch (key) {
-            case GLFW_KEY_F12:
-                open_rename_identifier();
-                break;
-            case GLFW_KEY_F6:
-                if (world.dbg.state_flag == DLV_STATE_INACTIVE)
-                    world.dbg.push_call(DLVC_DEBUG_TEST_UNDER_CURSOR);
-                break;
-            case GLFW_KEY_F5:
-                switch (world.dbg.state_flag) {
-                case DLV_STATE_PAUSED:
-                    world.dbg.push_call(DLVC_CONTINUE_RUNNING);
-                    break;
-                case DLV_STATE_INACTIVE:
-                    save_all_unsaved_files();
-                    world.dbg.push_call(DLVC_START);
-                    break;
-                }
-                break;
-            case GLFW_KEY_F9:
-                {
-                    auto editor = get_current_editor();
-                    if (editor == NULL) break;
-                    world.dbg.push_call(DLVC_TOGGLE_BREAKPOINT, [&](auto call) {
-                        call->toggle_breakpoint.filename = our_strcpy(editor->filepath);
-                        call->toggle_breakpoint.lineno = editor->cur.y + 1;
-                    });
-                }
-                break;
-            case GLFW_KEY_F10:
-                if (world.dbg.state_flag != DLV_STATE_PAUSED) break;
-                world.dbg.push_call(DLVC_STEP_OVER);
-                break;
-            case GLFW_KEY_F11:
-                if (world.dbg.state_flag != DLV_STATE_PAUSED) break;
-                world.dbg.push_call(DLVC_STEP_INTO);
-                break;
             case GLFW_KEY_ESCAPE:
                 if (ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow))
                     ImGui::SetWindowFocus(NULL);
                 break;
             }
             break;
+        }
+
+        for (int i = 0; i < _CMD_COUNT_; i++) {
+            auto cmd = (Command)i;
+
+            auto info = command_info_table[cmd];
+            if (info.mods == mods && info.key == key) {
+                if (is_command_enabled(cmd)) {
+                    handle_command(cmd, false);
+                    break;
+                }
+            }
         }
 
         if (world.ui.keyboard_captured_by_imgui) return;
@@ -844,20 +743,6 @@ int main(int argc, char **argv) {
             }
             break;
 
-        case KEYMOD_ALT | KEYMOD_SHIFT:
-            switch (key) {
-            case GLFW_KEY_O:
-                if (editor->optimize_imports())
-                    editor->format_on_save(GH_FMT_GOIMPORTS);
-                else
-                    editor->format_on_save(GH_FMT_GOIMPORTS_WITH_AUTOIMPORT);
-                break;
-            case GLFW_KEY_F:
-                editor->format_on_save(GH_FMT_GOIMPORTS);
-                break;
-            }
-            break;
-
         case KEYMOD_CTRL:
             {
                 bool handled = false;
@@ -925,9 +810,6 @@ int main(int argc, char **argv) {
                 case GLFW_KEY_V:
                     if (world.nvim.mode != VI_INSERT)
                         send_nvim_keys("<C-v>");
-                    break;
-                case GLFW_KEY_G:
-                    handle_goto_definition();
                     break;
                 case GLFW_KEY_SLASH:
                     {
@@ -1061,10 +943,6 @@ int main(int argc, char **argv) {
                 }
                 break;
 
-            case GLFW_KEY_S:
-                if (editor != NULL)
-                    editor->handle_save();
-                break;
             case GLFW_KEY_J:
             case GLFW_KEY_K:
                 {

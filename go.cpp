@@ -3437,6 +3437,49 @@ Gotype *Go_Indexer::get_closest_function(ccstr filepath, cur2 pos) {
     return ret;
 }
 
+// this fills possible types
+void Go_Indexer::fill_generate_implementation(List<Go_Symbol> *out, bool selected_interface) {
+    reload_all_dirty_files();
+
+    auto base_path = make_path(index.current_import_path);
+
+    For (*index.packages) {
+        {
+            SCOPED_FRAME();
+            if (!base_path->contains(make_path(it.import_path)))
+                continue;
+        }
+
+        auto pkg = &it;
+
+        Go_Ctx ctx;
+        ctx.import_path = it.import_path;
+
+        auto pkgname = it.package_name;
+        For (*it.files) {
+            ctx.filename = it.filename;
+
+            For (*it.decls) {
+                if (it.type != GODECL_TYPE) continue;
+                if (it.gotype == NULL) continue; // ???
+
+                // if user selected interface, we're looking for any other
+                // non-interface type
+                if (selected_interface) {
+                    if (it.gotype->type == GOTYPE_INTERFACE) continue;
+                } else {
+                    if (it.gotype->type != GOTYPE_INTERFACE) continue;
+                }
+
+                Go_Symbol sym;
+                sym.name = our_sprintf("%s.%s", pkgname, it.name);
+                sym.decl = make_goresult(&it, &ctx)->copy_decl();
+                out->append(&sym);
+            }
+        }
+    }
+}
+
 void Go_Indexer::fill_goto_symbol() {
     reload_all_dirty_files();
 

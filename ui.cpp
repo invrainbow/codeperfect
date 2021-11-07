@@ -9,6 +9,7 @@
 #include "settings.hpp"
 #include "IconsFontAwesome5.h"
 #include "IconsMaterialDesign.h"
+#include "fzy_match.h"
 
 #define _USE_MATH_DEFINES // what the fuck is this lol
 #include <math.h>
@@ -37,74 +38,16 @@ void init_global_colors() {
     memcpy(&global_colors, _cpcolors, min(sizeof(global_colors), _cpcolors_len));
 }
 
-struct Key {
-    int mods;
-    int key;
-};
-
-Key command_keys[_CMD_COUNT_];
-
-void init_command_keys() {
-    auto k = [&](int mods, int key) {
-        Key ret;
-        ret.mods = mods;
-        ret.key = key;
-        return ret;
-    };
-
-    command_keys[CMD_RENAME_IDENTIFIER] = k(0, GLFW_KEY_F12);
-    command_keys[CMD_GOTO_DEFINITION] = k(KEYMOD_PRIMARY, 0);
-    command_keys[CMD_NEW_FILE] = k(0, 0);
-    command_keys[CMD_SAVE_UNTITLED_FILE] = k(0, 0);
-    command_keys[CMD_SAVE_FILE] = k(0, 0);
-    command_keys[CMD_SAVE_ALL] = k(0, 0);
-    command_keys[CMD_EXIT] = k(0, 0);
-    command_keys[CMD_SEARCH] = k(0, 0);
-    command_keys[CMD_SEARCH_AND_REPLACE] = k(0, 0);
-    command_keys[CMD_FILE_EXPLORER] = k(0, 0);
-    command_keys[CMD_ERROR_LIST] = k(0, 0);
-    command_keys[CMD_GO_TO_FILE] = k(0, 0);
-    command_keys[CMD_GO_TO_SYMBOL] = k(0, 0);
-    command_keys[CMD_GO_TO_NEXT_ITEM] = k(0, 0);
-    command_keys[CMD_GO_TO_PREVIOUS_ITEM] = k(0, 0);
-    command_keys[CMD_GO_TO_DEFINITION] = k(0, 0);
-    command_keys[CMD_GO_TO_REFERENCES] = k(0, 0);
-    command_keys[CMD_FORMAT_FILE] = k(0, 0);
-    command_keys[CMD_FORMAT_FILE_AND_ORGANIZE_IMPORTS] = k(0, 0);
-    command_keys[CMD_FORMAT_SELECTION] = k(0, 0);
-    command_keys[CMD_RENAME] = k(0, 0);
-    command_keys[CMD_GENERATE_LOLDONGS] = k(0, 0);
-    command_keys[CMD_ADD_NEW_FILE] = k(0, 0);
-    command_keys[CMD_ADD_NEW_FOLDER] = k(0, 0);
-    command_keys[CMD_PROJECT_SETTINGS] = k(0, 0);
-    command_keys[CMD_BUILD] = k(0, 0);
-    command_keys[CMD_BUILD_RESULTS] = k(0, 0);
-    command_keys[CMD_BUILD_PROFILES] = k(0, 0);
-    command_keys[CMD_CONTINUE] = k(0, 0);
-    command_keys[CMD_START_DEBUGGING] = k(0, 0);
-    command_keys[CMD_DEBUG_TEST_UNDER_CURSOR] = k(0, 0);
-    command_keys[CMD_BREAK_ALL] = k(0, 0);
-    command_keys[CMD_STOP_DEBUGGING] = k(0, 0);
-    command_keys[CMD_STEP_OVER] = k(0, 0);
-    command_keys[CMD_STEP_INTO] = k(0, 0);
-    command_keys[CMD_STEP_OUT] = k(0, 0);
-    command_keys[CMD_RUN_TO_CURSOR] = k(0, 0);
-    command_keys[CMD_TOGGLE_BREAKPOINT] = k(0, 0);
-    command_keys[CMD_DELETE_ALL_BREAKPOINTS] = k(0, 0);
-    command_keys[CMD_DEBUG_OUTPUT] = k(0, 0);
-    command_keys[CMD_DEBUG_PROFILES] = k(0, 0);
-    command_keys[CMD_RESCAN_INDEX] = k(0, 0);
-    command_keys[CMD_OBLITERATE_AND_RECREATE_INDEX] = k(0, 0);
-    command_keys[CMD_OPTIONS] = k(0, 0);
-    command_keys[CMD_ABOUT] = k(0, 0);
-}
-
 ccstr format_key(int mods, ccstr key) {
     List<ccstr> parts; parts.init();
 
     if (mods & KEYMOD_CMD)   parts.append("Cmd");
     if (mods & KEYMOD_SHIFT) parts.append("Shift");
+#if OS_MAC
+    if (mods & KEYMOD_ALT)   parts.append("Option");
+#else
     if (mods & KEYMOD_ALT)   parts.append("Alt");
+#endif
     if (mods & KEYMOD_CTRL)  parts.append("Ctrl");
 
     Text_Renderer rend; rend.init();
@@ -118,10 +61,6 @@ ccstr format_key(int mods, ccstr key) {
 ccstr format_key(int mods, int key) {
     auto keystr = "TODO"; // TODO: convert key to string
     return format_key(mods, keystr);
-};
-
-ccstr format_key(Key key) {
-    return format_key(key.mods, key.key);
 }
 
 bool Font::init(u8* font_data, u32 font_size, int texture_id) {
@@ -188,6 +127,53 @@ namespace ImGui {
         return BeginPopupEx(id, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoSavedSettings);
     }
 }
+
+ccstr get_key_name(int key) {
+    switch (key) {
+    case GLFW_KEY_F1: return "F1";
+    case GLFW_KEY_F2: return "F2";
+    case GLFW_KEY_F3: return "F3";
+    case GLFW_KEY_F4: return "F4";
+    case GLFW_KEY_F5: return "F5";
+    case GLFW_KEY_F6: return "F6";
+    case GLFW_KEY_F7: return "F7";
+    case GLFW_KEY_F8: return "F8";
+    case GLFW_KEY_F9: return "F9";
+    case GLFW_KEY_F10: return "F10";
+    case GLFW_KEY_F11: return "F11";
+    case GLFW_KEY_F12: return "F12";
+    case GLFW_KEY_TAB: return "Tab";
+    case GLFW_KEY_ENTER: return "Enter";
+    }
+    return glfwGetKeyName(key, 0);
+}
+
+bool menu_command(Command cmd, bool selected = false) {
+    auto info = command_info_table[cmd];
+
+    ccstr keystr = NULL;
+    if (info.key != 0) {
+        auto keyname = get_key_name(info.key);
+        if (keyname != NULL) {
+            auto s = alloc_list<char>();
+            for (int i = 0, len = strlen(keyname); i < len; i++)
+                s->append(toupper(keyname[i]));
+            s->append('\0');
+            keystr = format_key(info.mods, s->items);
+        }
+    }
+
+    bool clicked = ImGui::MenuItem(
+        get_command_name(cmd),
+        keystr,
+        selected,
+        is_command_enabled(cmd)
+    );
+
+    if (clicked) handle_command(cmd, true);
+    return clicked;
+}
+
 
 int get_line_number_width(Editor *editor) {
     auto buf = editor->buf;
@@ -1569,32 +1555,6 @@ void open_rename(FT_Node *target) {
     strcpy_safe(wnd.name, _countof(wnd.name), target->name);
 }
 
-void open_add_file_or_folder(bool folder, FT_Node *dest = NULL) {
-    if (dest == NULL) dest = world.file_explorer.selection;
-
-    FT_Node *node = NULL;
-    auto &wnd = world.wnd_add_file_or_folder;
-
-    auto is_root = [&]() {
-        node = dest;
-
-        if (node == NULL) return true;
-        if (node->is_directory) return false;
-
-        node = node->parent;
-        return (node->parent == NULL);
-    };
-
-    wnd.location_is_root = is_root();
-    if (!wnd.location_is_root)
-        strcpy_safe(wnd.location, _countof(wnd.location), ft_node_to_path(node));
-
-    wnd.dest = node;
-    wnd.folder = folder;
-    wnd.show = true;
-    wnd.name[0] = '\0';
-}
-
 void UI::imgui_small_newline() {
     ImGui::Dummy(ImVec2(0.0f, ImGui::GetFrameHeightWithSpacing() * 1/4));
 }
@@ -1755,8 +1715,6 @@ void UI::focus_keyboard(Wnd *wnd, int cond) {
     }
 }
 
-// void UI::menu_item_from_command()
-
 void UI::draw_everything() {
     verts.len = 0;
 
@@ -1856,205 +1814,70 @@ void UI::draw_everything() {
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(7, 5));
 
         if (ImGui::BeginMenu("File")) {
-            if (ImGui::MenuItem("New File", format_key(KEYMOD_PRIMARY, "N"))) {
-                get_current_pane()->open_empty_editor();
-            }
-
-            {
-                auto editor = get_current_editor();
-                bool clicked = false;
-
-                if (editor != NULL) {
-                    if (editor->is_untitled)
-                        clicked = ImGui::MenuItem("Save untitled file...###save_file", format_key(KEYMOD_PRIMARY, "S"));
-                    else
-                        clicked = ImGui::MenuItem(our_sprintf("Save %s...###save_file", our_basename(editor->filepath)), format_key(KEYMOD_PRIMARY, "S"));
-                } else {
-                    ImGui::MenuItem("Save file...###save_file", format_key(KEYMOD_PRIMARY, "S"), false, false);
-                }
-
-                if (clicked && editor != NULL)
-                    editor->handle_save();
-            }
-
-            if (ImGui::MenuItem("Save All", format_key(KEYMOD_PRIMARY | KEYMOD_SHIFT, "S"))) {
-                save_all_unsaved_files();
-            }
-
+            menu_command(CMD_NEW_FILE);
+            menu_command(CMD_SAVE_FILE);
+            menu_command(CMD_SAVE_ALL);
             ImGui::Separator();
-            {
-#if OS_WIN
-                auto key = format_key(KEYMOD_ALT, "F4");
-#elif OS_MAC
-                auto key = format_key(KEYMOD_CMD, "Q");
-#endif
-                if (ImGui::MenuItem("Exit", key)) {
-                    glfwSetWindowShouldClose(world.window, true);
-                }
-            }
+            menu_command(CMD_EXIT);
             ImGui::EndMenu();
         }
 
         if (ImGui::BeginMenu("Edit")) {
-            if (ImGui::MenuItem("Search...", format_key(KEYMOD_PRIMARY | KEYMOD_SHIFT, "F"))) {
-                world.wnd_search_and_replace.show = true;
-                world.wnd_search_and_replace.replace = false;
-            }
-            if (ImGui::MenuItem("Search and Replace...", format_key(KEYMOD_PRIMARY | KEYMOD_SHIFT, "H"))) {
-                world.wnd_search_and_replace.show = true;
-                world.wnd_search_and_replace.replace = true;
-            }
+            menu_command(CMD_SEARCH);
+            menu_command(CMD_SEARCH_AND_REPLACE);
             ImGui::EndMenu();
         }
 
         if (ImGui::BeginMenu("View")) {
-            ImGui::MenuItem("File Explorer", format_key(KEYMOD_PRIMARY | KEYMOD_SHIFT, "E"), &world.file_explorer.show);
-            ImGui::MenuItem("Error List", NULL, &world.error_list.show);
+            menu_command(CMD_FILE_EXPLORER, world.file_explorer.show);
+            menu_command(CMD_ERROR_LIST, world.error_list.show);
             ImGui::EndMenu();
         }
 
         if (ImGui::BeginMenu("Go")) {
-            if (ImGui::MenuItem("Go to File...", format_key(KEYMOD_PRIMARY, "P"))) {
-                if (!world.wnd_goto_file.show) {
-                    world.wnd_goto_file.show = true;
-                    init_goto_file();
-                }
-            }
-            if (ImGui::MenuItem("Go to Symbol...", format_key(KEYMOD_PRIMARY, "T"))) {
-                if (!world.wnd_goto_symbol.show) {
-                    world.wnd_goto_symbol.show = true;
-                    init_goto_symbol();
-                }
-            }
-            if (ImGui::MenuItem("Go to Next Item", format_key(KEYMOD_ALT, "]"))) {
-                goto_next_error(1);
-            }
-            if (ImGui::MenuItem("Go to Previous Item", format_key(KEYMOD_ALT, "["))) {
-                goto_next_error(-1);
-            }
-            if (ImGui::MenuItem("Go to Definition", format_key(KEYMOD_PRIMARY, "G"))) {
-                handle_goto_definition();
-            }
-
-            if (ImGui::MenuItem("Go to References", format_key(KEYMOD_PRIMARY | KEYMOD_ALT, "R"))) {
-                kick_off_find_references();
-            }
-
+            menu_command(CMD_GO_TO_FILE);
+            menu_command(CMD_GO_TO_SYMBOL);
+            menu_command(CMD_GO_TO_NEXT_ERROR);
+            menu_command(CMD_GO_TO_PREVIOUS_ERROR);
+            menu_command(CMD_GO_TO_DEFINITION);
+            menu_command(CMD_GO_TO_REFERENCES);
             ImGui::EndMenu();
         }
 
         if (ImGui::BeginMenu("Format")) {
-            auto editor = get_current_editor();
-
-            if (ImGui::MenuItem("Format File", format_key(KEYMOD_ALT | KEYMOD_SHIFT, "F"), false, editor != NULL)) {
-                if (editor != NULL)
-                    editor->format_on_save(GH_FMT_GOIMPORTS);
-            }
-
-            if (ImGui::MenuItem("Format File and Organize Imports", format_key(KEYMOD_ALT | KEYMOD_SHIFT, "O"), false, editor != NULL)) {
-                if (editor != NULL) {
-                    if (editor->optimize_imports())
-                        editor->format_on_save(GH_FMT_GOIMPORTS);
-                    else
-                        editor->format_on_save(GH_FMT_GOIMPORTS_WITH_AUTOIMPORT);
-                }
-            }
-
-            if (ImGui::MenuItem("Format Selection", NULL, false, editor != NULL)) {
-                // how do we even get the visual selection?
-            }
-
+            menu_command(CMD_FORMAT_FILE);
+            menu_command(CMD_FORMAT_FILE_AND_ORGANIZE_IMPORTS);
+            menu_command(CMD_FORMAT_SELECTION);
             ImGui::EndMenu();
         }
 
         if (ImGui::BeginMenu("Refactor")) {
-            auto can_rename_id_under_cursor = [&]() -> bool {
-#if 0
-                auto editor = get_current_editor();
-                if (editor == NULL) return false;
-                if (!editor->is_go_file) return false;
-                if (editor->tree == NULL) return false;
-
-                Parser_It it;
-                it.init(&editor->buf);
-                auto root_node = new_ast_node(ts_tree_root_node(editor->tree), &it);
-
-                find_nodes_containing_pos(root_node, editor->cur, true, [&](auto it) -> Walk_Action {
-                    switch (it->type()) {
-                    case TS_TYPE_DECLARATION:
-                        break;
-                    case TS_PARAMETER_LIST:
-                        break;
-                    case TS_SHORT_VAR_DECLARATION:
-                        break;
-                    case TS_CONST_DECLARATION:
-                        break;
-                    case TS_VAR_DECLARATION:
-                        break;
-                    case TS_RANGE_CLAUSE:
-                        break;
-                    default:
-                        return WALK_CONTINUE;
-                    }
-
-                    if (it->type() == TS_FUNCTION_DECLARATION) {
-                        auto name = it->field(TSF_NAME);
-                        if (!name->null)
-                            ret = str_starts_with(name->string(), "Test");
-                    }
-
-                    return WALK_ABORT;
-                });
-#endif
-                return true; // ???
-            };
-
-            if (ImGui::MenuItem("Rename...", format_key(0, "F12"), false, can_rename_id_under_cursor())) {
-                open_rename_identifier();
-            }
-
-            if (ImGui::MenuItem("Generate ", format_key(0, "F12"), false, can_rename_id_under_cursor())) {
-                open_rename_identifier();
-            }
-
+            menu_command(CMD_RENAME);
+            menu_command(CMD_GENERATE_IMPLEMENTATION);
             ImGui::EndMenu();
         }
 
         if (ImGui::BeginMenu("Project")) {
-            if (ImGui::MenuItem("Add New File...")) {
-                open_add_file_or_folder(false);
-            }
-
-            if (ImGui::MenuItem("Add New Folder...")) {
-                open_add_file_or_folder(true);
-            }
-
+            menu_command(CMD_ADD_NEW_FILE);
+            menu_command(CMD_ADD_NEW_FOLDER);
             ImGui::Separator();
-
-            if (ImGui::MenuItem("Project Settings...")) {
-                open_project_settings();
-            }
-
+            menu_command(CMD_PROJECT_SETTINGS);
             ImGui::EndMenu();
         }
 
         if (ImGui::BeginMenu("Build")) {
-            if (ImGui::MenuItem("Build", format_key(KEYMOD_PRIMARY | KEYMOD_SHIFT, "B"))) {
-                world.error_list.show = true;
-                world.error_list.cmd_focus = true;
-                save_all_unsaved_files();
-                kick_off_build();
-            }
+            menu_command(CMD_BUILD);
 
             ImGui::Separator();
 
             if (ImGui::BeginMenu("Windows...")) {
-                ImGui::MenuItem("Build Results", NULL, &world.error_list.show);
+                menu_command(CMD_BUILD_RESULTS, world.error_list.show);
                 ImGui::EndMenu();
             }
 
             ImGui::Separator();
 
+            // TODO: add these as commands
             if (ImGui::BeginMenu("Select Active Build Profile..."))  {
                 for (int i = 0; i < project_settings.build_profiles_len; i++) {
                     auto &it = project_settings.build_profiles[i];
@@ -2066,109 +1889,34 @@ void UI::draw_everything() {
                 ImGui::EndMenu();
             }
 
-            if (ImGui::MenuItem("Build Profiles...")) {
-                open_project_settings();
-                world.wnd_project_settings.focus_build_profiles = true;
-            }
+            menu_command(CMD_BUILD_PROFILES);
 
             ImGui::EndMenu();
         }
 
         if (ImGui::BeginMenu("Debug")) {
-            if (world.dbg.state_flag == DLV_STATE_PAUSED) {
-                if (ImGui::MenuItem("Continue", "F5", false)) {
-                    world.dbg.push_call(DLVC_CONTINUE_RUNNING);
-                }
-            } else {
-                if (ImGui::MenuItem("Start Debugging", "F5", false, world.dbg.state_flag == DLV_STATE_INACTIVE)) {
-                    save_all_unsaved_files();
-                    world.dbg.push_call(DLVC_START);
-                }
-            }
+            if (world.dbg.state_flag == DLV_STATE_PAUSED)
+                menu_command(CMD_CONTINUE);
+            else
+                menu_command(CMD_START_DEBUGGING);
 
-            auto can_debug_test_under_cursor = [&]() -> bool {
-                if (world.dbg.state_flag != DLV_STATE_INACTIVE) return false;
-
-                auto editor = get_current_editor();
-                if (editor == NULL) return false;
-                if (!editor->is_go_file) return false;
-                if (!str_ends_with(editor->filepath, "_test.go")) return false;
-                if (!path_has_descendant(world.current_path, editor->filepath)) return false;
-                if (editor->buf->tree == NULL) return false;
-
-                bool ret = false;
-
-                Parser_It it;
-                it.init(editor->buf);
-                auto root_node = new_ast_node(ts_tree_root_node(editor->buf->tree), &it);
-
-                find_nodes_containing_pos(root_node, editor->cur, true, [&](auto it) -> Walk_Action {
-                    if (it->type() == TS_SOURCE_FILE)
-                        return WALK_CONTINUE;
-
-                    if (it->type() == TS_FUNCTION_DECLARATION) {
-                        auto name = it->field(TSF_NAME);
-                        if (!name->null)
-                            ret = str_starts_with(name->string(), "Test");
-                    }
-
-                    return WALK_ABORT;
-                });
-
-                return ret;
-            };
-
-            if (ImGui::MenuItem("Debug Test Under Cursor", "F6", false, can_debug_test_under_cursor())) {
-                // TODO
-            }
-
-            if (ImGui::MenuItem("Break All", NULL, false, world.dbg.state_flag == DLV_STATE_RUNNING)) {
-                world.dbg.push_call(DLVC_BREAK_ALL);
-            }
-
-            if (ImGui::MenuItem("Stop Debugging", format_key(KEYMOD_SHIFT, "F5"), false, world.dbg.state_flag != DLV_STATE_INACTIVE)) {
-                world.dbg.push_call(DLVC_STOP);
-            }
-
-            if (ImGui::MenuItem("Step Over", format_key(KEYMOD_NONE, "F10"), false, world.dbg.state_flag == DLV_STATE_PAUSED)) {
-                world.dbg.push_call(DLVC_STEP_OVER);
-            }
-
-            if (ImGui::MenuItem("Step Into", format_key(KEYMOD_NONE, "F11"), false, world.dbg.state_flag == DLV_STATE_PAUSED)) {
-                world.dbg.push_call(DLVC_STEP_INTO);
-            }
-
-            if (ImGui::MenuItem("Step Out", format_key(KEYMOD_SHIFT, "F11"), false, world.dbg.state_flag == DLV_STATE_PAUSED)) {
-                world.dbg.push_call(DLVC_STEP_OUT);
-            }
-
-            /*
-            if (ImGui::MenuItem("Run to Cursor", format_key(KEYMOD_SHIFT, "F10"), false, world.dbg.state_flag == DLV_STATE_PAUSED)) {
-                // TODO
-            }
-            */
+            menu_command(CMD_DEBUG_TEST_UNDER_CURSOR);
+            menu_command(CMD_BREAK_ALL);
+            menu_command(CMD_STOP_DEBUGGING);
+            menu_command(CMD_STEP_OVER);
+            menu_command(CMD_STEP_INTO);
+            menu_command(CMD_STEP_OUT);
+            // menu_command(CMD_RUN_TO_CURSOR); world.dbg.state_flag == DLV_STATE_PAUSED
 
             ImGui::Separator();
 
-            if (ImGui::MenuItem("Toggle Breakpoint", format_key(KEYMOD_NONE, "F9"))) {
-                auto editor = get_current_editor();
-                if (editor != NULL) {
-                    world.dbg.push_call(DLVC_TOGGLE_BREAKPOINT, [&](auto call) {
-                        call->toggle_breakpoint.filename = our_strcpy(editor->filepath);
-                        call->toggle_breakpoint.lineno = editor->cur.y + 1;
-                    });
-                }
-            }
-
-            if (ImGui::MenuItem("Delete All Breakpoints", format_key(KEYMOD_SHIFT, "F9"))) {
-                prompt_delete_all_breakpoints();
-            }
+            menu_command(CMD_TOGGLE_BREAKPOINT);
+            menu_command(CMD_DELETE_ALL_BREAKPOINTS);
 
             ImGui::Separator();
 
             if (ImGui::BeginMenu("Windows..."))  {
-                ImGui::MenuItem("Debug Output", NULL, &world.wnd_debug_output.show);
-
+                menu_command(CMD_DEBUG_OUTPUT, world.wnd_debug_output.show);
                 ImGui::EndMenu();
             }
 
@@ -2185,30 +1933,16 @@ void UI::draw_everything() {
                 ImGui::EndMenu();
             }
 
-            if (ImGui::MenuItem("Debug Profiles...")) {
-                open_project_settings();
-                world.wnd_project_settings.focus_debug_profiles = true;
-            }
+            menu_command(CMD_DEBUG_PROFILES);
 
             ImGui::EndMenu();
         }
 
         if (ImGui::BeginMenu("Tools")) {
             // should we allow this even when not ready, so it can be used as an escape hatch if the indexer gets stuck?
-            if (ImGui::MenuItem("Rescan Index", NULL, false, world.indexer.status == IND_READY)) {
-                world.indexer.message_queue.add([&](auto msg) {
-                    msg->type = GOMSG_RESCAN_INDEX;
-                });
-            }
 
-            if (ImGui::MenuItem("Obliterate and Recreate Index", NULL, false, world.indexer.status == IND_READY)) {
-                world.indexer.message_queue.add([&](auto msg) {
-                    msg->type = GOMSG_OBLITERATE_AND_RECREATE_INDEX;
-                });
-            }
-
-            // ImGui::Separator();
-            // ImGui::MenuItem("Dark Mode", NULL, &world.darkmode);
+            menu_command(CMD_RESCAN_INDEX);
+            menu_command(CMD_OBLITERATE_AND_RECREATE_INDEX);
 
 #ifndef RELEASE_MODE
             ImGui::Separator();
@@ -2288,9 +2022,7 @@ void UI::draw_everything() {
         }
 
         if (ImGui::BeginMenu("Help")) {
-            if (ImGui::MenuItem("About")) {
-                world.wnd_about.show = true;
-            }
+            menu_command(CMD_ABOUT);
             ImGui::EndMenu();
         }
 
@@ -2329,6 +2061,106 @@ void UI::draw_everything() {
             ImGui::SameLine();
             if (ImGui::Button("Cancel")) {
                 cancel_find_references();
+            }
+        }
+
+        ImGui::End();
+    }
+
+    if (world.wnd_generate_implementation.show) {
+        auto &wnd = world.wnd_generate_implementation;
+
+        auto go_up = [&]() {
+            if (wnd.filtered_results->len == 0) return;
+            if (wnd.selection == 0)
+                wnd.selection = min(wnd.filtered_results->len, settings.generate_implementation_max_results) - 1;
+            else
+                wnd.selection--;
+        };
+
+        auto go_down = [&]() {
+            if (wnd.filtered_results->len == 0) return;
+            wnd.selection++;
+            wnd.selection %= min(wnd.filtered_results->len, settings.generate_implementation_max_results);
+        };
+
+        ImGui::Begin("Generate Implementation", &wnd.show, ImGuiWindowFlags_AlwaysAutoResize);
+
+        if (wnd.selected_interface)
+            ImGui::Text("You've selected an interface. Please select a type and we'll add this interface's methods to that type.");
+        else
+            ImGui::Text("You've selected a type. Please select an interface and we'll add that interface's methods to this type.");
+
+        auto mods = imgui_get_keymods();
+        switch (mods) {
+        case KEYMOD_NONE:
+            if (imgui_special_key_pressed(ImGuiKey_DownArrow)) go_down();
+            if (imgui_special_key_pressed(ImGuiKey_UpArrow)) go_up();
+            if (imgui_special_key_pressed(ImGuiKey_Escape)) wnd.show = false;
+            break;
+        }
+
+        focus_keyboard(&wnd);
+
+        if (ImGui::InputText("##search_for_symbol_generate_implementation", wnd.query, _countof(wnd.query), ImGuiInputTextFlags_EnterReturnsTrue)) {
+            wnd.show = false;
+            ImGui::SetWindowFocus(NULL);
+
+            do {
+                if (wnd.filtered_results->len == 0) break;
+
+                // if (!world.indexer.try_acquire_lock(IND_READING)) break;
+                // defer { world.indexer.release_lock(IND_READING); };
+
+                auto &symbol = wnd.symbols->at(wnd.filtered_results->at(wnd.selection));
+                print(
+                    "selected type %s is at %s/%s:%s",
+                    symbol.name,
+                    symbol.decl->ctx->import_path,
+                    symbol.decl->ctx->filename,
+                    format_cur(symbol.decl->decl->decl_start)
+                );
+            } while (0);
+        }
+
+        if (ImGui::IsItemEdited()) {
+            if (strlen(wnd.query) >= 2) {
+                wnd.filtered_results->len = 0;
+
+                u32 i = 0;
+                For (*wnd.symbols) {
+                    if (fzy_has_match(wnd.query, it.name))
+                        wnd.filtered_results->append(i);
+                    i++;
+                }
+
+                auto scores = alloc_array(double, wnd.symbols->len);
+                For (*wnd.filtered_results)
+                    scores[i] = fzy_match(wnd.query, wnd.symbols->at(it).name);
+
+                wnd.filtered_results->sort([&](int *pa, int *pb) {
+                    auto a = scores[*pa];
+                    auto b = scores[*pb];
+                    return a < b ? 1 : (a > b ? -1 : 0);  // reverse
+                });
+            } else {
+                wnd.filtered_results->len = 0;
+            }
+        }
+
+        {
+            imgui_push_mono_font();
+            defer { imgui_pop_font(); };
+
+            for (u32 i = 0; i < wnd.filtered_results->len && i < settings.goto_file_max_results; i++) {
+                auto it = wnd.symbols->at(wnd.filtered_results->at(i));
+                if (i == wnd.selection)
+                    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.5f, 1.0f), "%s", it.name);
+                else
+                    ImGui::Text("%s", it.name);
+
+                ImGui::SameLine();
+                ImGui::TextColored(ImVec4(1.0f, 1.0, 1.0f, 0.5f), "(%s)", it.decl->ctx->import_path);
             }
         }
 
@@ -3270,10 +3102,6 @@ void UI::draw_everything() {
                 if (imgui_special_key_pressed(ImGuiKey_UpArrow)) go_up();
                 if (imgui_special_key_pressed(ImGuiKey_Escape)) wnd.show = false;
                 break;
-            case KEYMOD_PRIMARY:
-                if (imgui_key_pressed('j')) go_down();
-                if (imgui_key_pressed('k')) go_up();
-                break;
             }
         }
 
@@ -3302,6 +3130,87 @@ void UI::draw_everything() {
         ImGui::End();
     }
 
+    if (world.wnd_command.show) {
+        auto& wnd = world.wnd_command;
+
+        ImGui::SetNextWindowSize(ImVec2(400, -1));
+        ImGui::SetNextWindowPos(ImVec2(world.window_size.x/2, 150), ImGuiCond_Always, ImVec2(0.5f, 0));
+
+        ImGui::Begin("Run Command", &wnd.show, ImGuiWindowFlags_AlwaysAutoResize);
+
+        focus_keyboard(&wnd);
+
+        auto go_up = [&]() {
+            if (wnd.filtered_results->len == 0) return;
+            if (wnd.selection == 0)
+                wnd.selection = min(wnd.filtered_results->len, settings.run_command_max_results) - 1;
+            else
+                wnd.selection--;
+        };
+
+        auto go_down = [&]() {
+            if (wnd.filtered_results->len == 0) return;
+            wnd.selection++;
+            wnd.selection %= min(wnd.filtered_results->len, settings.run_command_max_results);
+        };
+
+        auto mods = imgui_get_keymods();
+        switch (mods) {
+        case KEYMOD_NONE:
+            if (imgui_special_key_pressed(ImGuiKey_DownArrow)) go_down();
+            if (imgui_special_key_pressed(ImGuiKey_UpArrow)) go_up();
+            if (imgui_special_key_pressed(ImGuiKey_Escape)) wnd.show = false;
+            break;
+        }
+
+        ImGui::PushItemWidth(-1);
+        {
+            if (ImGui::InputText("###run_command", wnd.query, _countof(wnd.query), ImGuiInputTextFlags_EnterReturnsTrue)) {
+                wnd.show = false;
+                ImGui::SetWindowFocus(NULL);
+
+                if (wnd.filtered_results->len > 0)
+                    handle_command(wnd.filtered_results->at(wnd.selection), false);
+            }
+        }
+        ImGui::PopItemWidth();
+
+        if (ImGui::IsItemEdited()) {
+            wnd.filtered_results->len = 0;
+            if (strlen(wnd.query) >= 3) {
+                For (*wnd.actions)
+                    if (fzy_has_match(wnd.query, get_command_name(it)))
+                        wnd.filtered_results->append(it);
+
+                auto scores = alloc_array(double, _CMD_COUNT_);
+                For (*wnd.filtered_results)
+                    scores[it] = fzy_match(wnd.query, get_command_name(it));
+
+                wnd.filtered_results->sort([&](Command *pa, Command *pb) {
+                    auto a = scores[*pa];
+                    auto b = scores[*pb];
+                    return a < b ? 1 : (a > b ? -1 : 0); // reverse
+                });
+            }
+        }
+
+        {
+            // imgui_push_mono_font();
+            // defer { imgui_pop_font(); };
+
+            for (u32 i = 0; i < wnd.filtered_results->len && i < settings.run_command_max_results; i++) {
+                auto text = get_command_name(wnd.filtered_results->at(i));
+                if (i == wnd.selection)
+                    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.5f, 1.0f), "%s", text);
+                else
+                    ImGui::Text("%s", text);
+            }
+        }
+
+        ImGui::End();
+
+    }
+
     if (world.wnd_goto_symbol.show) {
         auto& wnd = world.wnd_goto_symbol;
 
@@ -3316,7 +3225,7 @@ void UI::draw_everything() {
         auto go_down = [&]() {
             if (wnd.filtered_results->len == 0) return;
             wnd.selection++;
-            wnd.selection %= min(wnd.filtered_results->len, settings.goto_file_max_results);
+            wnd.selection %= min(wnd.filtered_results->len, settings.goto_symbol_max_results);
         };
 
         ImGui::Begin("Go To Symbol", &world.wnd_goto_symbol.show, ImGuiWindowFlags_AlwaysAutoResize);
@@ -3327,10 +3236,6 @@ void UI::draw_everything() {
             if (imgui_special_key_pressed(ImGuiKey_DownArrow)) go_down();
             if (imgui_special_key_pressed(ImGuiKey_UpArrow)) go_up();
             if (imgui_special_key_pressed(ImGuiKey_Escape)) wnd.show = false;
-            break;
-        case KEYMOD_PRIMARY:
-            if (imgui_key_pressed('j')) go_down();
-            if (imgui_key_pressed('k')) go_up();
             break;
         }
 

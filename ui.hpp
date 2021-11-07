@@ -277,5 +277,4 @@ struct Global_Colors {
 extern Global_Colors global_colors;
 
 void init_global_colors();
-void init_command_keys();
 ccstr format_key(int mods, ccstr key);

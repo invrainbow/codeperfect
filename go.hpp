@@ -1195,6 +1195,12 @@ enum Indexer_Status {
     IND_READING,
 };
 
+// a name & godecl (goresult) pair
+struct Go_Symbol {
+    ccstr name;
+    Goresult *decl;
+};
+
 struct Go_Indexer {
     ccstr goroot;
     // ccstr gopath;
@@ -1317,6 +1323,7 @@ struct Go_Indexer {
     bool list_interface_methods(Goresult *interface, List<Goresult> *out);
 
     void find_interfaces_implemented(ccstr filepath, cur2 pos);
+    void fill_generate_implementation(List<Go_Symbol> *out, bool selected_interface);
 };
 
 void walk_ast_node(Ast_Node *node, bool abstract_only, Walk_TS_Callback cb);

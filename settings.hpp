@@ -26,6 +26,8 @@ struct Settings {
     float line_height = 1.2;
     int goto_file_max_results = 20;
     int goto_symbol_max_results = 20;
+    int generate_implementation_max_results = 20;
+    int run_command_max_results = 10;
 };
 
 struct Options {
