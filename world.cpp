@@ -438,6 +438,8 @@ void World::init(GLFWwindow *_wnd) {
     init_mem(rename_identifier_mem);
     init_mem(run_command_mem);
     init_mem(generate_implementation_mem);
+    init_mem(find_implementations_mem);
+    init_mem(find_interfaces_mem);
 #undef init_mem
 
     // use frame_mem as the default mem
@@ -938,62 +940,6 @@ void save_all_unsaved_files() {
     }
 }
 
-void open_rename_identifier() {
-    ccstr filepath = NULL;
-
-    // TODO: this should be a "blocking" modal, like it disables activity in rest of IDE
-    auto result = get_current_definition(&filepath, true);
-    if (result == NULL) return;
-    if (result->decl->decl->type == GODECL_IMPORT) {
-        tell_user("Sorry, we're currently not yet able to rename imports.", NULL);
-        return;
-    }
-
-    world.rename_identifier_mem.reset();
-    SCOPED_MEM(&world.rename_identifier_mem);
-
-    auto &wnd = world.wnd_rename_identifier;
-    wnd.rename_to[0] = '\0';
-    wnd.show = true;
-    wnd.running = false;
-    wnd.declres = result->decl->copy_decl();
-}
-
-bool kick_off_find_implemented_interfaces() {
-    auto result = get_current_definition();
-    if (result == NULL) return false;
-
-    auto decl = result->decl->decl;
-    if (decl == NULL) return false;
-
-    if (decl->type != GODECL_TYPE) {
-        tell_user("The selected object is not a type.", "Error");
-        return false;
-    }
-
-    // get method set
-    // iter over interfaces and see if they match
-    // this one is actually relatively easy i feel
-}
-
-bool kick_off_find_implementations() {
-    auto result = get_current_definition();
-    if (result == NULL) return false;
-
-    auto decl = result->decl->decl;
-    if (decl == NULL) return false;
-
-    if (decl->type != GODECL_TYPE || decl->gotype->type != GOTYPE_INTERFACE) {
-        tell_user("The selected object is not an interface.", "Error");
-        return false;
-    }
-
-    auto specs = decl->gotype->interface_specs;
-
-    // iterate over types, see which ones implement interface?
-    // this is the hard one (compared to find_implemented_interfaces)
-}
-
 void delete_ft_node(FT_Node *it) {
     SCOPED_FRAME();
     auto rel_path = ft_node_to_path(it);
@@ -1341,67 +1287,6 @@ void Build::cleanup() {
     mem.cleanup();
 }
 
-// TODO: tell user what went wrong if returning false
-bool kick_off_find_references() {
-    auto &wnd = world.wnd_find_references;
-
-    auto result = get_current_definition(NULL, true);
-    if (result == NULL) return false;
-    if (result->decl == NULL) return false;
-
-    world.find_references_mem.reset();
-    {
-        SCOPED_MEM(&world.find_references_mem);
-        wnd.declres = result->decl->copy_decl();
-    }
-
-    auto &ind = world.indexer;
-    if (!ind.acquire_lock(IND_READING)) {
-        tell_user("The indexer is currently busy.", NULL);
-        return false;
-    }
-
-    auto thread_proc = [](void *param) {
-        auto &wnd = world.wnd_find_references;
-        wnd.thread_mem.cleanup();
-        wnd.thread_mem.init();
-        SCOPED_MEM(&wnd.thread_mem);
-
-        defer { cancel_find_references(); };
-
-        auto files = world.indexer.find_references(wnd.declres);
-        if (files == NULL) return;
-
-        {
-            SCOPED_MEM(&world.find_references_mem);
-
-            auto newfiles = alloc_list<Find_References_File>(files->len);
-            For (*files) newfiles->append(it.copy());
-
-            wnd.results = newfiles;
-        }
-
-        // close the thread handle first so it doesn't try to kill the thread
-        if (wnd.thread != NULL) {
-            close_thread_handle(wnd.thread);
-            wnd.thread = NULL;
-        }
-
-        wnd.done = true;
-    };
-
-    wnd.show = true;
-    wnd.done = false;
-    wnd.results = NULL;
-    wnd.thread = create_thread(thread_proc, NULL);
-    if (wnd.thread == NULL) {
-        tell_user("Unable to kick off Find References.", NULL);
-        return false;
-    }
-
-    return true;
-}
-
 void kick_off_rename_identifier() {
     auto &ind = world.indexer;
     if (!ind.acquire_lock(IND_READING)) {
@@ -1512,9 +1397,22 @@ void kick_off_rename_identifier() {
     }
 }
 
+void cancel_find_interfaces() {
+    auto &wnd = world.wnd_find_interfaces;
+
+    if (wnd.thread != NULL) {
+        kill_thread(wnd.thread);
+        close_thread_handle(wnd.thread);
+        wnd.thread = NULL;
+    }
+
+    // assume it was acquired by find_interfaces
+    if (world.indexer.status == IND_READING)
+        world.indexer.release_lock(IND_READING);
+}
+
 void cancel_find_references() {
     auto &wnd = world.wnd_find_references;
-    if (wnd.done) return;
 
     if (wnd.thread != NULL) {
         kill_thread(wnd.thread);
@@ -1525,8 +1423,20 @@ void cancel_find_references() {
     // assume it was acquired by find_references
     if (world.indexer.status == IND_READING)
         world.indexer.release_lock(IND_READING);
+}
 
-    wnd.show = false;
+void cancel_find_implementations() {
+    auto &wnd = world.wnd_find_implementations;
+
+    if (wnd.thread != NULL) {
+        kill_thread(wnd.thread);
+        close_thread_handle(wnd.thread);
+        wnd.thread = NULL;
+    }
+
+    // assume it was acquired by find_implementations
+    if (world.indexer.status == IND_READING)
+        world.indexer.release_lock(IND_READING);
 }
 
 void cancel_rename_identifier() {
@@ -1632,19 +1542,16 @@ bool is_command_enabled(Command cmd) {
 ccstr get_command_name(Command cmd) {
     auto info = command_info_table[cmd];
 
-    /*
-    if (editor != NULL) {
-        if (editor->is_untitled)
-            clicked = ImGui::MenuItem("Save untitled file...###save_file", format_key(KEYMOD_PRIMARY, "S"));
-        else
-            clicked = ImGui::MenuItem(our_sprintf("Save %s...###save_file", our_basename(editor->filepath)), format_key(KEYMOD_PRIMARY, "S"));
-    } else {
-        ImGui::MenuItem("Save file...###save_file", format_key(KEYMOD_PRIMARY, "S"), false, false);
-    }
-    */
-
     switch (cmd) {
-        // ??
+    case CMD_SAVE_FILE: {
+        auto editor = get_current_editor();
+        if (editor != NULL) {
+            if (editor->is_untitled)
+                return "Save untitled file...";
+            return our_sprintf("Save %s...", our_basename(editor->filepath));
+        }
+        return "Save file...";
+    }
     }
 
     return info.name;
@@ -1677,7 +1584,7 @@ void init_command_info_table() {
     command_info_table[CMD_GO_TO_NEXT_ERROR] = k(KEYMOD_ALT, GLFW_KEY_RIGHT_BRACKET, "Go To Next Error");
     command_info_table[CMD_GO_TO_PREVIOUS_ERROR] = k(KEYMOD_ALT, GLFW_KEY_RIGHT_BRACKET, "Go To Previous Error");
     command_info_table[CMD_GO_TO_DEFINITION] = k(KEYMOD_PRIMARY, GLFW_KEY_G, "Go To Definition");
-    command_info_table[CMD_GO_TO_REFERENCES] = k(KEYMOD_PRIMARY | KEYMOD_ALT, GLFW_KEY_R, "Go To References");
+    command_info_table[CMD_FIND_REFERENCES] = k(KEYMOD_PRIMARY | KEYMOD_ALT, GLFW_KEY_R, "Find References");
     command_info_table[CMD_FORMAT_FILE] = k(KEYMOD_ALT | KEYMOD_SHIFT, GLFW_KEY_F, "Format File");
     command_info_table[CMD_FORMAT_FILE_AND_ORGANIZE_IMPORTS] = k(KEYMOD_ALT | KEYMOD_SHIFT, GLFW_KEY_O, "Format File and Organize Imports");
     command_info_table[CMD_RENAME] = k(KEYMOD_NONE, GLFW_KEY_F12, "Rename");
@@ -1710,6 +1617,9 @@ void init_command_info_table() {
     command_info_table[CMD_OPTIONS] = k(0, 0, "Options");
     command_info_table[CMD_ABOUT] = k(0, 0, "About");
     command_info_table[CMD_GENERATE_IMPLEMENTATION] = k(0, 0, "Generate Implementation");
+
+    command_info_table[CMD_FIND_IMPLEMENTATIONS] = k(0, 0, "Find Implementations");
+    command_info_table[CMD_FIND_INTERFACES] = k(0, 0, "Find Interfaces");
 }
 
 void handle_command(Command cmd, bool from_menu) {
@@ -1800,38 +1710,109 @@ void handle_command(Command cmd, bool from_menu) {
         handle_goto_definition();
         break;
 
-    case CMD_GO_TO_REFERENCES:
-        kick_off_find_references();
-        break;
+    case CMD_FIND_REFERENCES: {
+        auto &wnd = world.wnd_find_references;
 
-    case CMD_FORMAT_FILE:
+        auto result = get_current_definition(NULL, true);
+        if (result == NULL) break;
+        if (result->decl == NULL) break;
+
+        world.find_references_mem.reset();
         {
-            auto editor = get_current_editor();
-            if (editor != NULL)
-                editor->format_on_save(GH_FMT_GOIMPORTS);
+            SCOPED_MEM(&world.find_references_mem);
+            wnd.declres = result->decl->copy_decl();
         }
-        break;
 
-    case CMD_FORMAT_FILE_AND_ORGANIZE_IMPORTS:
-        {
-            auto editor = get_current_editor();
-            if (editor != NULL) {
-                if (editor->optimize_imports())
-                    editor->format_on_save(GH_FMT_GOIMPORTS);
-                else
-                    editor->format_on_save(GH_FMT_GOIMPORTS_WITH_AUTOIMPORT);
+        auto &ind = world.indexer;
+        if (!ind.acquire_lock(IND_READING)) {
+            tell_user("The indexer is currently busy.", NULL);
+            break;
+        }
+
+        auto thread_proc = [](void *param) {
+            auto &wnd = world.wnd_find_references;
+            wnd.thread_mem.cleanup();
+            wnd.thread_mem.init();
+            SCOPED_MEM(&wnd.thread_mem);
+
+            defer { cancel_find_references(); };
+
+            auto files = world.indexer.find_references(wnd.declres);
+            if (files == NULL) return;
+
+            {
+                SCOPED_MEM(&world.find_references_mem);
+
+                auto newfiles = alloc_list<Find_References_File>(files->len);
+                For (*files) newfiles->append(it.copy());
+
+                wnd.results = newfiles;
             }
+
+            // close the thread handle first so it doesn't try to kill the thread
+            if (wnd.thread != NULL) {
+                close_thread_handle(wnd.thread);
+                wnd.thread = NULL;
+            }
+
+            wnd.done = true;
+        };
+
+        wnd.show = true;
+        wnd.done = false;
+        wnd.results = NULL;
+        wnd.thread = create_thread(thread_proc, NULL);
+        if (wnd.thread == NULL) {
+            tell_user("Unable to kick off Find References.", NULL);
+            break;
         }
         break;
+    }
+
+    case CMD_FORMAT_FILE: {
+        auto editor = get_current_editor();
+        if (editor != NULL)
+            editor->format_on_save(GH_FMT_GOIMPORTS);
+        break;
+    }
+
+    case CMD_FORMAT_FILE_AND_ORGANIZE_IMPORTS: {
+        auto editor = get_current_editor();
+        if (editor != NULL) {
+            if (editor->optimize_imports())
+                editor->format_on_save(GH_FMT_GOIMPORTS);
+            else
+                editor->format_on_save(GH_FMT_GOIMPORTS_WITH_AUTOIMPORT);
+        }
+        break;
+    }
 
     case CMD_FORMAT_SELECTION:
         // TODO
         // how do we even get the visual selection?
         break;
 
-    case CMD_RENAME:
-        open_rename_identifier();
+    case CMD_RENAME: {
+        ccstr filepath = NULL;
+
+        // TODO: this should be a "blocking" modal, like it disables activity in rest of IDE
+        auto result = get_current_definition(&filepath, true);
+        if (result == NULL) return;
+        if (result->decl->decl->type == GODECL_IMPORT) {
+            tell_user("Sorry, we're currently not yet able to rename imports.", NULL);
+            return;
+        }
+
+        world.rename_identifier_mem.reset();
+        SCOPED_MEM(&world.rename_identifier_mem);
+
+        auto &wnd = world.wnd_rename_identifier;
+        wnd.rename_to[0] = '\0';
+        wnd.show = true;
+        wnd.running = false;
+        wnd.declres = result->decl->copy_decl();
         break;
+    }
 
     case CMD_ADD_NEW_FILE:
         open_add_file_or_folder(false);
@@ -1976,12 +1957,154 @@ void handle_command(Command cmd, bool from_menu) {
         }
         break;
 
-    case CMD_GO_TO_IMPLEMENTATIONS:
-        // TODO
+    case CMD_FIND_IMPLEMENTATIONS:
+        {
+            auto &wnd = world.wnd_find_implementations;
+
+            auto result = get_current_definition(NULL, true);
+            if (result == NULL) break;
+            if (result->decl == NULL) break;
+
+            auto decl = result->decl->decl;
+            if (decl == NULL) break;
+
+            if (decl->type != GODECL_TYPE || decl->gotype->type != GOTYPE_INTERFACE) {
+                tell_user("The selected object is not an interface.", "Error");
+                break;
+            }
+
+            auto specs = decl->gotype->interface_specs;
+            if (specs == NULL || specs->len == 0) {
+                auto msg = "The selected interface is empty. That means every type will match it. Do you still want to just list every type I can find?";
+                if (ask_user_yes_no(msg, "Warning", "Yes, continue", "No") != ASKUSER_YES)
+                    break;
+            }
+
+            world.find_implementations_mem.reset();
+            {
+                SCOPED_MEM(&world.find_implementations_mem);
+                wnd.declres = result->decl->copy_decl();
+            }
+
+            auto &ind = world.indexer;
+            if (!ind.acquire_lock(IND_READING)) {
+                tell_user("The indexer is currently busy.", NULL);
+                break;
+            }
+
+            auto thread_proc = [](void *param) {
+                auto &wnd = world.wnd_find_implementations;
+                wnd.thread_mem.cleanup();
+                wnd.thread_mem.init();
+                SCOPED_MEM(&wnd.thread_mem);
+
+                defer { cancel_find_implementations(); };
+
+                auto results = world.indexer.find_implementations(wnd.declres);
+                if (results == NULL) return;
+
+                {
+                    SCOPED_MEM(&world.find_implementations_mem);
+
+                    auto newresults = alloc_list<Find_Decl*>(results->len);
+                    For (*results) newresults->append(it.copy());
+
+                    wnd.results = newresults;
+                }
+
+                // close the thread handle first so it doesn't try to kill the thread
+                if (wnd.thread != NULL) {
+                    close_thread_handle(wnd.thread);
+                    wnd.thread = NULL;
+                }
+
+                wnd.done = true;
+            };
+
+            wnd.show = true;
+            wnd.done = false;
+            wnd.results = NULL;
+
+            wnd.thread = create_thread(thread_proc, NULL);
+            if (wnd.thread == NULL) {
+                tell_user("Unable to kick off Find Implementations.", NULL);
+                break;
+            }
+        }
         break;
 
-    case CMD_GO_TO_IMPLEMENTED_INTERFACES:
-        // TODO
+    case CMD_FIND_INTERFACES:
+        {
+            auto &wnd = world.wnd_find_interfaces;
+
+            auto result = get_current_definition(NULL, true);
+            if (result == NULL) break;
+            if (result->decl == NULL) break;
+
+            auto decl = result->decl->decl;
+            if (decl == NULL) break;
+
+            if (decl->type != GODECL_TYPE) {
+                tell_user("The selected object is not an interface.", "Error");
+                break;
+            }
+
+            if (decl->gotype->type == GOTYPE_INTERFACE) {
+                tell_user("The selected type is an interface. (Did you mean to use Find Implementations?)", "Error");
+                break;
+            }
+
+            world.find_interfaces_mem.reset();
+            {
+                SCOPED_MEM(&world.find_interfaces_mem);
+                wnd.declres = result->decl->copy_decl();
+            }
+
+            auto &ind = world.indexer;
+            if (!ind.acquire_lock(IND_READING)) {
+                tell_user("The indexer is currently busy.", NULL);
+                break;
+            }
+
+            auto thread_proc = [](void *param) {
+                auto &wnd = world.wnd_find_interfaces;
+                wnd.thread_mem.cleanup();
+                wnd.thread_mem.init();
+                SCOPED_MEM(&wnd.thread_mem);
+
+                defer { cancel_find_interfaces(); };
+
+                auto results = world.indexer.find_interfaces(wnd.declres);
+                if (results == NULL) return;
+
+                {
+                    SCOPED_MEM(&world.find_interfaces_mem);
+
+                    auto newresults = alloc_list<Find_Decl*>(results->len);
+                    For (*results) newresults->append(it.copy());
+
+                    wnd.results = newresults;
+                }
+
+                // close the thread handle first so it doesn't try to kill the thread
+                if (wnd.thread != NULL) {
+                    close_thread_handle(wnd.thread);
+                    wnd.thread = NULL;
+                }
+
+                wnd.done = true;
+            };
+
+            wnd.show = true;
+            wnd.done = false;
+            wnd.results = NULL;
+
+            wnd.thread = create_thread(thread_proc, NULL);
+            if (wnd.thread == NULL) {
+                tell_user("Unable to kick off Find Interfaces.", NULL);
+                break;
+            }
+        }
         break;
     }
 }

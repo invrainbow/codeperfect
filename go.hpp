@@ -1189,6 +1189,13 @@ struct Find_References_File {
     Find_References_File* copy();
 };
 
+struct Find_Decl {
+    ccstr filepath;
+    Goresult *decl;
+
+    Find_Decl* copy();
+};
+
 enum Indexer_Status {
     IND_READY,
     IND_WRITING,
@@ -1318,7 +1325,8 @@ struct Go_Indexer {
     }
 
     bool are_gotypes_equal(Goresult *ra, Goresult *rb);
-    List<Goresult> *find_implementations(ccstr filepath, cur2 pos);
+    List<Find_Decl> *find_implementations(Goresult *target);
+    List<Find_Decl> *find_interfaces(Goresult *target);
     List<Goresult> *list_interface_methods(Goresult *interface);
     bool list_interface_methods(Goresult *interface, List<Goresult> *out);
 

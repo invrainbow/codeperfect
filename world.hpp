@@ -162,7 +162,7 @@ enum Command {
     CMD_GO_TO_NEXT_ERROR,
     CMD_GO_TO_PREVIOUS_ERROR,
     CMD_GO_TO_DEFINITION,
-    CMD_GO_TO_REFERENCES,
+    CMD_FIND_REFERENCES,
     CMD_FORMAT_FILE,
     CMD_FORMAT_FILE_AND_ORGANIZE_IMPORTS,
     CMD_FORMAT_SELECTION,
@@ -192,8 +192,8 @@ enum Command {
     CMD_ABOUT,
 
     CMD_GENERATE_IMPLEMENTATION,
-    CMD_GO_TO_IMPLEMENTATIONS,
-    CMD_GO_TO_IMPLEMENTED_INTERFACES,
+    CMD_FIND_IMPLEMENTATIONS,
+    CMD_FIND_INTERFACES,
 
     _CMD_COUNT_,
 };
@@ -222,6 +222,8 @@ struct World {
     Pool rename_identifier_mem;
     Pool run_command_mem;
     Pool generate_implementation_mem;
+    Pool find_implementations_mem;
+    Pool find_interfaces_mem;
 
     Fridge<Mark> mark_fridge;
     Fridge<Mark_Node> mark_node_fridge;
@@ -326,7 +328,7 @@ struct World {
         bool selected_interface;
     } wnd_generate_implementation;
 
-    struct : Wnd {
+    struct Wnd_Find_References : Wnd {
         Pool thread_mem;
         bool done;
         Goresult *declres;
@@ -334,7 +336,23 @@ struct World {
         List<Find_References_File> *results;
     } wnd_find_references;
 
-    struct : Wnd {
+    struct Wnd_Find_Interfaces : Wnd {
+        Pool thread_mem;
+        bool done;
+        Goresult *declres;
+        Thread_Handle thread;
+        List<Find_Decl*> *results;
+    } wnd_find_interfaces;
+
+    struct Wnd_Find_Implementations : Wnd {
+        Pool thread_mem;
+        bool done;
+        Goresult *declres;
+        Thread_Handle thread;
+        List<Find_Decl*> *results;
+    } wnd_find_implementations;
+
+    struct Wnd_Index_Log : Wnd {
         // ring buffer
         char buf[INDEX_LOG_CAP][INDEX_LOG_MAXLEN];
         int start;
@@ -342,15 +360,15 @@ struct World {
         bool cmd_scroll_to_end;
     } wnd_index_log;
 
-    struct : Wnd {
+    struct Wnd_Mouse_Pos : Wnd {
     } wnd_mouse_pos;
 
-    struct : Wnd {
+    struct Wnd_Debug_Output : Wnd {
         int selection;
         bool cmd_scroll_to_end;
     } wnd_debug_output;
 
-    struct : Wnd {
+    struct Wnd_About : Wnd {
     } wnd_about;
 
     struct : Wnd {
@@ -531,11 +549,12 @@ void start_search_job(ccstr query);
 void goto_error(int index);
 void goto_next_error(int direction);
 void reload_file_subtree(ccstr path);
-bool kick_off_find_references();
 void open_rename_identifier();
 void kick_off_rename_identifier();
 void cancel_rename_identifier();
 void cancel_find_references();
+void cancel_find_interfaces();
+void cancel_find_implementations();
 bool exclude_from_file_tree(ccstr path);
 
 extern u64 post_insert_dotrepeat_time;

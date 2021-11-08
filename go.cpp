@@ -2266,19 +2266,19 @@ List<Goresult> *Go_Indexer::get_node_dotprops(Ast_Node *operand_node, bool *was_
 }
 
 bool Go_Indexer::are_gotypes_equal(Goresult *ra, Goresult *rb) {
-    auto a = ra->gotype;
-    auto b = rb->gotype;
-
-    // a and b must be resolved; no lazy types
-    if (a->type > _GOTYPE_LAZY_MARKER_) return false;
-    if (b->type > _GOTYPE_LAZY_MARKER_) return false;
-
     auto resolve_aliased_type = [&](Goresult *res) {
         return res; // TODO
     };
 
     ra = resolve_aliased_type(ra);
     rb = resolve_aliased_type(rb);
+
+    auto a = ra->gotype;
+    auto b = rb->gotype;
+
+    // a and b must be resolved; no lazy types
+    if (a->type > _GOTYPE_LAZY_MARKER_) return false;
+    if (b->type > _GOTYPE_LAZY_MARKER_) return false;
 
     if (a->type != b->type) {
         auto a_is_ref = (a->type == GOTYPE_ID || a->type == GOTYPE_SEL);
@@ -2442,7 +2442,6 @@ bool Go_Indexer::are_gotypes_equal(Goresult *ra, Goresult *rb) {
             auto &fb = b->func_sig;
 
             if (fa.params->len != fb.params->len) return false;
-            if (fa.result->len != fb.result->len) return false;
 
             for (int i = 0; i < fa.params->len; i++) {
                 auto ga = ra->wrap(fa.params->at(i).gotype);
@@ -2450,10 +2449,15 @@ bool Go_Indexer::are_gotypes_equal(Goresult *ra, Goresult *rb) {
                 if (!are_gotypes_equal(ga, gb)) return false;
             }
 
-            for (int i = 0; i < fa.result->len; i++) {
-                auto ga = ra->wrap(fa.result->at(i).gotype);
-                auto gb = rb->wrap(fb.result->at(i).gotype);
-                if (!are_gotypes_equal(ga, gb)) return false;
+            if (fa.result != NULL || fb.result != NULL) {
+                if (fa.result == NULL || fb.result == NULL) return false;
+                if (fa.result->len != fb.result->len) return false;
+
+                for (int i = 0; i < fa.result->len; i++) {
+                    auto ga = ra->wrap(fa.result->at(i).gotype);
+                    auto gb = rb->wrap(fb.result->at(i).gotype);
+                    if (!are_gotypes_equal(ga, gb)) return false;
+                }
             }
 
             return true;
@@ -2504,20 +2508,104 @@ bool Go_Indexer::are_gotypes_equal(Goresult *ra, Goresult *rb) {
     return false;
 }
 
-List<Goresult> *Go_Indexer::find_implementations(ccstr filepath, cur2 pos) {
+List<Find_Decl> *Go_Indexer::find_interfaces(Goresult *target) {
     reload_all_dirty_files();
 
-    auto jdres = world.indexer.jump_to_definition(filepath, pos);
-    if (jdres == NULL) return NULL;
+    if (target->decl == NULL) return NULL;
+    if (target->decl->type != GODECL_TYPE) return NULL;
 
-    auto target = jdres->decl;
-    if (target == NULL) return NULL;
+    auto pkg = find_up_to_date_package(target->ctx->import_path);
+    if (pkg == NULL) return NULL;
+
+    auto ctx = target->ctx;
+    // ctx for these is target->ctx
+    auto methods = alloc_list<Godecl*>();
+
+    For (*pkg->files) {
+        For (*it.decls) {
+            if (it.type != GODECL_FUNC) continue;
+            if (it.gotype->type != GOTYPE_FUNC) continue;
+
+            auto recv = it.gotype->func_recv;
+            if (recv != NULL && recv->type == GOTYPE_POINTER)
+                recv = recv->pointer_base;
+
+            if (recv == NULL) continue;
+            if (recv->type != GOTYPE_ID) continue;
+
+            if (!streq(recv->id_name, target->decl->name)) continue;
+
+            // do we need the context? no right?
+            methods->append(&it);
+        }
+    }
+
+    auto ret = alloc_list<Find_Decl>();
+
+    For (*index.packages) {
+        auto import_path = it.import_path;
+
+        if (!path_has_descendant(index.current_import_path, import_path))
+            continue;
+
+        For (*it.files) {
+            auto ctx = alloc_object(Go_Ctx);
+            ctx->import_path = import_path;
+            ctx->filename = it.filename;
+
+            auto filepath = ctx_to_filepath(ctx);
+
+            For (*it.decls) {
+                if (it.type != GODECL_TYPE) continue;
+
+                auto gotype = it.gotype;
+                if (gotype->type != GOTYPE_INTERFACE) continue;
+
+                // TODO: validate methods
+
+                auto match = [&]() {
+                    auto imethods = list_interface_methods(make_goresult(gotype, ctx));
+                    if (imethods == NULL) return false;
+
+                    // test that all(<methods contains i> for i in imethods)
+                    For (*imethods) {
+                        bool found = false;
+                        auto imeth = make_goresult(it.decl->gotype, ctx);
+
+                        For (*methods) {
+                            if (are_gotypes_equal(imeth, target->wrap(it->gotype))) {
+                                found = true;
+                                break;
+                            }
+                        }
+
+                        if (!found) return false;
+                    }
+
+                    return true;
+                };
+
+                if (!match()) continue;
+
+                Find_Decl result; ptr0(&result);
+                result.filepath = filepath;
+                result.decl = make_goresult(&it, ctx);
+                ret->append(&result);
+            }
+        }
+    }
+
+    return ret;
+}
+
+List<Find_Decl> *Go_Indexer::find_implementations(Goresult *target) {
+    reload_all_dirty_files();
+
     if (target->decl == NULL) return NULL;
     if (target->decl->type != GODECL_TYPE) return NULL;
     if (target->decl->gotype->type != GOTYPE_INTERFACE) return NULL;
 
-    auto ctx = filepath_to_ctx(filepath);
-    if (ctx == NULL) return NULL;
+    auto ctx = target->ctx;
 
     // ctx for these is target->ctx
     auto methods = alloc_list<Godecl*>();
@@ -2601,10 +2689,9 @@ List<Goresult> *Go_Indexer::find_implementations(ccstr filepath, cur2 pos) {
         }
     }
 
-    auto ret = alloc_list<Goresult>();
+    auto ret = alloc_list<Find_Decl>();
 
     auto entries = huge_table.entries();
-    int index = 0;
     for (int i = 0; i < entries->len; i++) {
         auto &it = entries->at(i);
         auto info = it->value;
@@ -2624,7 +2711,10 @@ List<Goresult> *Go_Indexer::find_implementations(ccstr filepath, cur2 pos) {
         auto import_path = parts->at(0);
         auto type_name = parts->at(1);
 
-        ret->append(info->decl);
+        Find_Decl result; ptr0(&result);
+        result.filepath = ctx_to_filepath(info->decl->ctx);
+        result.decl = info->decl;
+        ret->append(&result);
     }
 
     return ret;
@@ -4346,7 +4436,7 @@ bool Go_Indexer::list_interface_methods(Goresult *interface, List<Goresult> *out
             if (rres == NULL) return false;
             if (!list_interface_methods(rres, out)) return false;
         } else {
-            if (method->type != GOTYPE_FUNC) return false;
+            if (method->gotype->type != GOTYPE_FUNC) return false;
             out->append(interface->wrap(method));
         }
     }
@@ -6229,6 +6319,13 @@ List<T> *copy_list(List<T> *arr) {
 
 // -----
 // actual code that tells us how to copy objects
+
+Find_Decl* Find_Decl::copy() {
+    auto ret = clone(this);
+    ret->filepath = our_strcpy(filepath);
+    ret->decl = decl->copy_decl();
+    return ret;
+}
 
 Find_References_File* Find_References_File::copy() {
     auto ret = clone(this);

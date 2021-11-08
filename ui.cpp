@@ -1834,13 +1834,16 @@ void UI::draw_everything() {
             ImGui::EndMenu();
         }
 
-        if (ImGui::BeginMenu("Go")) {
+        if (ImGui::BeginMenu("Navigate")) {
             menu_command(CMD_GO_TO_FILE);
             menu_command(CMD_GO_TO_SYMBOL);
             menu_command(CMD_GO_TO_NEXT_ERROR);
             menu_command(CMD_GO_TO_PREVIOUS_ERROR);
             menu_command(CMD_GO_TO_DEFINITION);
-            menu_command(CMD_GO_TO_REFERENCES);
+            ImGui::Separator();
+            menu_command(CMD_FIND_REFERENCES);
+            menu_command(CMD_FIND_IMPLEMENTATIONS);
+            menu_command(CMD_FIND_INTERFACES);
             ImGui::EndMenu();
         }
 
@@ -2030,6 +2033,72 @@ void UI::draw_everything() {
         ImGui::EndMainMenuBar();
     }
 
+    if (world.wnd_find_interfaces.show) {
+        auto &wnd = world.wnd_find_interfaces;
+
+        auto p_open = &wnd.show;
+        if (!wnd.done)
+            p_open = NULL;
+
+        ImGui::SetNextWindowDockID(dock_sidebar_id, ImGuiCond_Once);
+
+        ImGui::Begin("Find Interfaces", p_open, ImGuiWindowFlags_AlwaysAutoResize);
+
+        if (wnd.done) {
+            imgui_push_mono_font();
+
+            For (*wnd.results) {
+                // TODO: previews
+                if (ImGui::Selectable(our_sprintf("%s (%s)", it->decl->decl->name, it->decl->ctx->import_path)))
+                    goto_file_and_pos(it->filepath, it->decl->decl->name_start);
+            }
+
+            imgui_pop_font();
+        } else {
+            ImGui::Text("Searching...");
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel")) {
+                cancel_find_interfaces();
+                wnd.show = false;
+            }
+        }
+
+        ImGui::End();
+    }
+
+    if (world.wnd_find_implementations.show) {
+        auto &wnd = world.wnd_find_implementations;
+
+        auto p_open = &wnd.show;
+        if (!wnd.done)
+            p_open = NULL;
+
+        ImGui::SetNextWindowDockID(dock_sidebar_id, ImGuiCond_Once);
+
+        ImGui::Begin("Find Implementations", p_open, ImGuiWindowFlags_AlwaysAutoResize);
+
+        if (wnd.done) {
+            imgui_push_mono_font();
+
+            For (*wnd.results) {
+                // TODO: previews
+                if (ImGui::Selectable(our_sprintf("%s (%s)", it->decl->decl->name, it->decl->ctx->import_path)))
+                    goto_file_and_pos(it->filepath, it->decl->decl->name_start);
+            }
+
+            imgui_pop_font();
+        } else {
+            ImGui::Text("Searching...");
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel")) {
+                cancel_find_implementations();
+                wnd.show = false;
+            }
+        }
+
+        ImGui::End();
+    }
+
     if (world.wnd_find_references.show) {
         auto &wnd = world.wnd_find_references;
 
@@ -2061,6 +2130,7 @@ void UI::draw_everything() {
             ImGui::SameLine();
             if (ImGui::Button("Cancel")) {
                 cancel_find_references();
+                wnd.show = false;
             }
         }
 
