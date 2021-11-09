@@ -1332,6 +1332,7 @@ struct Go_Indexer {
 
     void find_interfaces_implemented(ccstr filepath, cur2 pos);
     void fill_generate_implementation(List<Go_Symbol> *out, bool selected_interface);
+    bool list_type_methods(ccstr type_name, ccstr import_path, List<Goresult> *out);
 };
 
 void walk_ast_node(Ast_Node *node, bool abstract_only, Walk_TS_Callback cb);

@@ -2047,10 +2047,14 @@ void UI::draw_everything() {
         if (wnd.done) {
             imgui_push_mono_font();
 
-            For (*wnd.results) {
-                // TODO: previews
-                if (ImGui::Selectable(our_sprintf("%s (%s)", it->decl->decl->name, it->decl->ctx->import_path)))
-                    goto_file_and_pos(it->filepath, it->decl->decl->name_start);
+            if (wnd.results != NULL && wnd.results->len > 0) {
+                For (*wnd.results) {
+                    // TODO: previews
+                    if (ImGui::Selectable(our_sprintf("%s (%s)", it->decl->decl->name, it->decl->ctx->import_path)))
+                        goto_file_and_pos(it->filepath, it->decl->decl->name_start);
+                }
+            } else {
+                ImGui::Text("No interfaces found.");
             }
 
             imgui_pop_font();

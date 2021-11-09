@@ -1409,6 +1409,8 @@ void cancel_find_interfaces() {
     // assume it was acquired by find_interfaces
     if (world.indexer.status == IND_READING)
         world.indexer.release_lock(IND_READING);
+
+    wnd.done = true;
 }
 
 void cancel_find_references() {
@@ -1423,6 +1425,8 @@ void cancel_find_references() {
     // assume it was acquired by find_references
     if (world.indexer.status == IND_READING)
         world.indexer.release_lock(IND_READING);
+
+    wnd.done = true;
 }
 
 void cancel_find_implementations() {
@@ -1437,11 +1441,12 @@ void cancel_find_implementations() {
     // assume it was acquired by find_implementations
     if (world.indexer.status == IND_READING)
         world.indexer.release_lock(IND_READING);
+
+    wnd.done = true;
 }
 
 void cancel_rename_identifier() {
     auto &wnd = world.wnd_rename_identifier;
-    if (!wnd.running) return;
 
     if (wnd.thread != NULL) {
         kill_thread(wnd.thread);
@@ -1754,8 +1759,6 @@ void handle_command(Command cmd, bool from_menu) {
                 close_thread_handle(wnd.thread);
                 wnd.thread = NULL;
             }
-
-            wnd.done = true;
         };
 
         wnd.show = true;
@@ -2017,8 +2020,6 @@ void handle_command(Command cmd, bool from_menu) {
                     close_thread_handle(wnd.thread);
                     wnd.thread = NULL;
                 }
-
-                wnd.done = true;
             };
 
             wnd.show = true;
@@ -2074,6 +2075,8 @@ void handle_command(Command cmd, bool from_menu) {
 
                 defer { cancel_find_interfaces(); };
 
+                // TODO: how do we handle errors?
+                // right now it just freezes on "Searching..."
                 auto results = world.indexer.find_interfaces(wnd.declres);
                 if (results == NULL) return;
 
@@ -2091,8 +2094,6 @@ void handle_command(Command cmd, bool from_menu) {
                     close_thread_handle(wnd.thread);
                     wnd.thread = NULL;
                 }
-
-                wnd.done = true;
             };
 
             wnd.show = true;

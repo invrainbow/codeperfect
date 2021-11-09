@@ -2513,32 +2513,11 @@ List<Find_Decl> *Go_Indexer::find_interfaces(Goresult *target) {
 
     if (target->decl == NULL) return NULL;
     if (target->decl->type != GODECL_TYPE) return NULL;
+    if (target->decl->gotype->type == GOTYPE_INTERFACE) return NULL;
 
-    auto pkg = find_up_to_date_package(target->ctx->import_path);
-    if (pkg == NULL) return NULL;
-
-    auto ctx = target->ctx;
-    // ctx for these is target->ctx
-    auto methods = alloc_list<Godecl*>();
-
-    For (*pkg->files) {
-        For (*it.decls) {
-            if (it.type != GODECL_FUNC) continue;
-            if (it.gotype->type != GOTYPE_FUNC) continue;
-
-            auto recv = it.gotype->func_recv;
-            if (recv != NULL && recv->type == GOTYPE_POINTER)
-                recv = recv->pointer_base;
-
-            if (recv == NULL) continue;
-            if (recv->type != GOTYPE_ID) continue;
-
-            if (!streq(recv->id_name, target->decl->name)) continue;
-
-            // do we need the context? no right?
-            methods->append(&it);
-        }
-    }
+    auto methods = alloc_list<Goresult>();
+    if (!list_type_methods(target->decl->name, target->ctx->import_path, methods))
+        return NULL;
 
     auto ret = alloc_list<Find_Decl>();
 
@@ -2573,7 +2552,7 @@ List<Find_Decl> *Go_Indexer::find_interfaces(Goresult *target) {
                         auto imeth = make_goresult(it.decl->gotype, ctx);
 
                         For (*methods) {
-                            if (are_gotypes_equal(imeth, target->wrap(it->gotype))) {
+                            if (are_gotypes_equal(imeth, target->wrap(it.decl->gotype))) {
                                 found = true;
                                 break;
                             }
@@ -4456,12 +4435,31 @@ List<Goresult> *Go_Indexer::list_interface_methods(Goresult *interface) {
     return ret;
 }
 
+bool Go_Indexer::list_type_methods(ccstr type_name, ccstr import_path, List<Goresult> *out) {
+    auto results = list_package_decls(import_path);
+    if (results == NULL) return false;
+
+    For (*results) {
+        auto decl = it.decl;
+
+        if (decl->type != GODECL_FUNC) continue;
+
+        auto functype = decl->gotype;
+        if (functype->func_recv == NULL) continue;
+
+        auto recv = unpointer_type(functype->func_recv, NULL)->gotype;
+
+        if (recv->type != GOTYPE_ID) continue;
+        if (!streq(recv->id_name, type_name)) continue;
+
+        out->append(&it);
+    }
+
+    return true;
+}
+
 void Go_Indexer::list_dotprops(Goresult *type_res, Goresult *resolved_type_res, List<Goresult> *ret) {
-    // list fields of resolved type
-    // ----------------------------
-
     auto resolved_type = resolved_type_res->gotype;
-
     switch (resolved_type->type) {
     case GOTYPE_POINTER:
         {
@@ -4491,9 +4489,6 @@ void Go_Indexer::list_dotprops(Goresult *type_res, Goresult *resolved_type_res, 
         break;
     }
 
-    // list methods of unresolved type
-    // -------------------------------
-
     type_res = unpointer_type(type_res->gotype, type_res->ctx);
 
     auto type = type_res->gotype;
@@ -4511,29 +4506,10 @@ void Go_Indexer::list_dotprops(Goresult *type_res, Goresult *resolved_type_res, 
         target_import_path = find_import_path_referred_to_by_id(type->sel_name, type_res->ctx);
         break;
     default:
-        break;
+        return;
     }
 
-    if (type_name == NULL || target_import_path == NULL) return;
-
-    auto results = list_package_decls(target_import_path);
-    if (results == NULL) return;
-
-    For (*results) {
-        auto decl = it.decl;
-
-        if (decl->type != GODECL_FUNC) continue;
-
-        auto functype = decl->gotype;
-        if (functype->func_recv == NULL) continue;
-
-        auto recv = unpointer_type(functype->func_recv, NULL)->gotype;
-
-        if (recv->type != GOTYPE_ID) continue;
-        if (!streq(recv->id_name, type_name)) continue;
-
-        ret->append(&it);
-    }
+    list_type_methods(type_name, target_import_path, ret);
 }
 
 ccstr remove_ats_from_path(ccstr s) {
