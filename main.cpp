@@ -657,6 +657,19 @@ int main(int argc, char **argv) {
                 if (ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow))
                     ImGui::SetWindowFocus(NULL);
                 break;
+
+            case GLFW_KEY_UP:
+                if (world.use_nvim) break;
+                break;
+            case GLFW_KEY_DOWN:
+                if (world.use_nvim) break;
+                break;
+            case GLFW_KEY_LEFT:
+                if (world.use_nvim) break;
+                break;
+            case GLFW_KEY_RIGHT:
+                if (world.use_nvim) break;
+                break;
             }
             break;
         }

@@ -4164,7 +4164,7 @@ void UI::draw_everything() {
                     if (current_pane != world.current_pane) return;
 
                     actual_cursor_positions[current_pane] = cur_pos;    // save position where cursor is drawn for later use
-                    bool is_insert_cursor = false; // (world.nvim.mode == VI_INSERT && is_pane_selected /* && !world.nvim.exiting_insert_mode */);
+                    bool is_insert_cursor = !world.use_nvim; // (world.nvim.mode == VI_INSERT && is_pane_selected /* && !world.nvim.exiting_insert_mode */);
 
                     auto pos = cur_pos;
                     pos.y -= font->offset_y;
@@ -4563,6 +4563,8 @@ void UI::draw_everything() {
 
         if (world.use_nvim) {
             auto should_show_cmd = [&]() -> bool {
+                if (!world.use_nvim) return false;
+
                 auto &nv = world.nvim;
                 if (nv.mode != VI_CMDLINE) return false;
                 if (nv.cmdline.content.len > 0) return true;
@@ -4589,22 +4591,24 @@ void UI::draw_everything() {
                 auto command = our_sprintf("%s%s", get_title(), cmd.content.items);
                 draw_status_piece(LEFT, command, rgba(global_colors.command_background), rgba(global_colors.command_foreground));
             } else {
-                auto editor = get_current_editor();
-                if (editor != NULL) {
-                    if (editor->is_modifiable()) {
-                        ccstr mode_str = NULL;
-                        switch (world.nvim.mode) {
-                        case VI_NORMAL: mode_str = "NORMAL"; break;
-                        case VI_VISUAL: mode_str = "VISUAL"; break;
-                        case VI_INSERT: mode_str = "INSERT"; break;
-                        case VI_REPLACE: mode_str = "REPLACE"; break;
-                        case VI_OPERATOR: mode_str = "OPERATOR"; break;
-                        case VI_CMDLINE: mode_str = "CMDLINE"; break;
-                        default: mode_str = "UNKNOWN"; break;
+                if (world.use_nvim) {
+                    auto editor = get_current_editor();
+                    if (editor != NULL) {
+                        if (editor->is_modifiable()) {
+                            ccstr mode_str = NULL;
+                            switch (world.nvim.mode) {
+                            case VI_NORMAL: mode_str = "NORMAL"; break;
+                            case VI_VISUAL: mode_str = "VISUAL"; break;
+                            case VI_INSERT: mode_str = "INSERT"; break;
+                            case VI_REPLACE: mode_str = "REPLACE"; break;
+                            case VI_OPERATOR: mode_str = "OPERATOR"; break;
+                            case VI_CMDLINE: mode_str = "CMDLINE"; break;
+                            default: mode_str = "UNKNOWN"; break;
+                            }
+                            draw_status_piece(LEFT, mode_str, rgba(global_colors.status_mode_background), rgba(global_colors.status_mode_foreground));
+                        } else {
+                            draw_status_piece(LEFT, "READONLY", rgba(global_colors.status_mode_background), rgba(global_colors.status_mode_foreground));
                         }
-                        draw_status_piece(LEFT, mode_str, rgba(global_colors.status_mode_background), rgba(global_colors.status_mode_foreground));
-                    } else {
-                        draw_status_piece(LEFT, "READONLY", rgba(global_colors.status_mode_background), rgba(global_colors.status_mode_foreground));
                     }
                 }
             }
