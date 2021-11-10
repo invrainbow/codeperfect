@@ -413,3 +413,8 @@ struct Message_Queue {
         f(messages.append());
     }
 };
+
+template<typename T>
+bool isempty(List<T> *arr) {
+    return arr == NULL || arr->len == 0;
+}

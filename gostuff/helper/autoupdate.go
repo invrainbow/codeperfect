@@ -221,17 +221,12 @@ func pushUnknownError(desc string, err error) {
 
 // tolsa = "time of last successful auth"
 func getTolsaPath() (string, error) {
-	configdir, err := os.UserConfigDir()
+	configDir, err := PrepareConfigDir()
 	if err != nil {
 		return "", err
 	}
 
-	appdir := path.Join(configdir, "CodePerfect")
-	if err := os.MkdirAll(appdir, os.ModePerm); err != nil {
-		return "", err
-	}
-
-	return path.Join(appdir, ".tolsa"), nil
+	return path.Join(configDir, ".tolsa"), nil
 }
 
 // don't return error, we don't care

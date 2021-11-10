@@ -476,6 +476,21 @@ void World::init(GLFWwindow *_wnd) {
 
     load_gohelper();
 
+    // read options from disk
+    do {
+        auto filepath = GHGetOptionsFile();
+        if (filepath == NULL) break;
+
+        File f;
+        if (f.init(filepath, FILE_MODE_READ, FILE_OPEN_EXISTING) != FILE_RESULT_SUCCESS)
+            break;
+
+        defer { f.cleanup(); };
+        f.read((char*)&options, sizeof(options));
+    } while (0);
+
+    world.use_nvim = options.enable_vim_mode;
+
     if (!GHInitConfig())
         our_panic("Unable to load ~/.cpconfig. Please make sure the file exists and is formatted properly (see Getting Started in our docs).");
 
@@ -508,11 +523,9 @@ void World::init(GLFWwindow *_wnd) {
     // build helper
     // shell("go build helper.go", "w:/helper");
 
-    use_nvim = true;
-
     init_workspace();
     indexer.init();
-    nvim.init();
+    if (use_nvim) nvim.init();
     dbg.init();
     history.init();
 
@@ -539,7 +552,7 @@ void World::init(GLFWwindow *_wnd) {
 
 void World::start_background_threads() {
     indexer.start_background_thread();
-    nvim.start_running();
+    if (use_nvim) nvim.start_running();
     dbg.start_loop();
 }
 
@@ -1619,7 +1632,7 @@ void init_command_info_table() {
     command_info_table[CMD_DEBUG_PROFILES] = k(0, 0, "Debug Profiles");
     command_info_table[CMD_RESCAN_INDEX] = k(0, 0, "Rescan Index");
     command_info_table[CMD_OBLITERATE_AND_RECREATE_INDEX] = k(0, 0, "Obliterate and Recreate Index");
-    command_info_table[CMD_OPTIONS] = k(0, 0, "Options");
+    command_info_table[CMD_OPTIONS] = k(KEYMOD_PRIMARY, GLFW_KEY_COMMA, "Options");
     command_info_table[CMD_ABOUT] = k(0, 0, "About");
     command_info_table[CMD_GENERATE_IMPLEMENTATION] = k(0, 0, "Generate Implementation");
 
@@ -1939,21 +1952,34 @@ void handle_command(Command cmd, bool from_menu) {
             if (result->decl == NULL) break;
             if (result->decl->gotype == NULL) break;
 
-            world.generate_implementation_mem.reset();
-            {
-                if (!world.indexer.acquire_lock(IND_READING, true)) return;
-                defer { world.indexer.release_lock(IND_READING); };
+            if (!world.indexer.acquire_lock(IND_READING, true)) break;
+            defer { world.indexer.release_lock(IND_READING); };
 
+            world.generate_implementation_mem.reset();
+
+            {
                 SCOPED_MEM(&world.generate_implementation_mem);
                 wnd.declres = result->decl->copy_decl();
+                wnd.filtered_results = alloc_list<int>();
 
                 auto gotype = wnd.declres->decl->gotype;
                 wnd.selected_interface = (gotype->type == GOTYPE_INTERFACE);
+            }
 
-                wnd.symbols = alloc_list<Go_Symbol>();
-                wnd.filtered_results = alloc_list<int>();
+            auto symbols = alloc_list<Go_Symbol>();
+            world.indexer.fill_generate_implementation(symbols, wnd.selected_interface);
+            if (symbols->len == 0) break;
 
-                world.indexer.fill_generate_implementation(wnd.symbols, wnd.selected_interface);
+            {
+                SCOPED_MEM(&world.generate_implementation_mem);
+                wnd.symbols = alloc_list<Go_Symbol>(symbols->len);
+
+                For (*symbols) {
+                    Go_Symbol sym;
+                    sym.name = our_strcpy(it.name);
+                    sym.decl = it.decl->copy_decl();
+                    wnd.symbols->append(&sym);
+                }
             }
 
             wnd.show = true;
@@ -2105,6 +2131,17 @@ void handle_command(Command cmd, bool from_menu) {
                 tell_user("Unable to kick off Find Interfaces.", NULL);
                 break;
             }
+        }
+        break;
+
+    case CMD_OPTIONS:
+        if (world.wnd_options.show) {
+            ImGui::Begin("Options");
+            ImGui::SetWindowFocus();
+            ImGui::End();
+        } else {
+            world.wnd_options.show = true;
+            memcpy(&world.wnd_options.tmp, &options, sizeof(Options));
         }
         break;
     }

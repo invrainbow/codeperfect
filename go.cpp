@@ -189,6 +189,124 @@ void Index_Stream::write_index(Go_Index *index) {
     finish_writing();
 }
 
+void Type_Renderer::write_type(Gotype *t, bool parameter_hint_root) {
+    if (t == NULL) return;
+
+    switch (t->type) {
+    case GOTYPE_BUILTIN:
+        switch (t->builtin_type) {
+        case GO_BUILTIN_COMPLEXTYPE: write("ComplexType"); break;
+        case GO_BUILTIN_FLOATTYPE: write("FloatType"); break;
+        case GO_BUILTIN_INTEGERTYPE: write("IntegerType"); break;
+        case GO_BUILTIN_TYPE: write("Type"); break;
+        case GO_BUILTIN_TYPE1: write("Type1"); break;
+        case GO_BUILTIN_BOOL: write("bool"); break;
+        case GO_BUILTIN_BYTE: write("byte"); break;
+        case GO_BUILTIN_COMPLEX128: write("complex128"); break;
+        case GO_BUILTIN_COMPLEX64: write("complex64"); break;
+        case GO_BUILTIN_ERROR: write("error"); break;
+        case GO_BUILTIN_FLOAT32: write("float32"); break;
+        case GO_BUILTIN_FLOAT64: write("float64"); break;
+        case GO_BUILTIN_INT: write("int"); break;
+        case GO_BUILTIN_INT16: write("int16"); break;
+        case GO_BUILTIN_INT32: write("int32"); break;
+        case GO_BUILTIN_INT64: write("int64"); break;
+        case GO_BUILTIN_INT8: write("int8"); break;
+        case GO_BUILTIN_RUNE: write("rune"); break;
+        case GO_BUILTIN_STRING: write("string"); break;
+        case GO_BUILTIN_UINT: write("uint"); break;
+        case GO_BUILTIN_UINT16: write("uint16"); break;
+        case GO_BUILTIN_UINT32: write("uint32"); break;
+        case GO_BUILTIN_UINT64: write("uint64"); break;
+        case GO_BUILTIN_UINT8: write("uint8"); break;
+        case GO_BUILTIN_UINTPTR: write("uintptr"); break;
+        }
+        break;
+    case GOTYPE_ID:
+        write("%s", t->id_name);
+        break;
+    case GOTYPE_SEL:
+        write("%s.%s", t->sel_name, t->sel_sel);
+        break;
+    case GOTYPE_MAP:
+        write("map[");
+        write_type(t->map_key);
+        write("]");
+        write_type(t->map_value);
+        break;
+    case GOTYPE_STRUCT:
+        write("struct");
+        break;
+    case GOTYPE_INTERFACE:
+        write("interface");
+        break;
+    case GOTYPE_VARIADIC:
+        write("...");
+        write_type(t->variadic_base);
+        break;
+    case GOTYPE_POINTER:
+        write("*");
+        write_type(t->pointer_base);
+        break;
+    case GOTYPE_FUNC:
+        {
+            if (!parameter_hint_root)
+                write("func");
+
+            auto write_params = [&](List<Godecl> *params, bool is_result) {
+                write("(");
+
+                u32 i = 0;
+                For (*params) {
+                    if (is_goident_empty(it.name)) {
+                        if (!is_result)
+                            write("_ ");
+                    } else {
+                        write("%s ", it.name);
+                    }
+                    write_type(it.gotype);
+                    if (i < params->len - 1)
+                        write(", ");
+                    i++;
+                }
+
+                write(")");
+            };
+
+            auto &sig = t->func_sig;
+            write_params(sig.params, false);
+
+            auto result = sig.result;
+            if (result != NULL && result->len > 0) {
+                write(" ");
+                if (result->len == 1 && is_goident_empty(result->at(0).name))
+                    write_type(result->at(0).gotype);
+                else
+                    write_params(result, true);
+            }
+        }
+        break;
+    case GOTYPE_SLICE:
+        write("[]");
+        write_type(t->slice_base);
+        break;
+    case GOTYPE_ARRAY:
+        write("[]");
+        write_type(t->array_base);
+        break;
+    case GOTYPE_CHAN:
+        if (t->chan_direction == CHAN_RECV)
+            write("<-");
+        write("chan ");
+        write_type(t->chan_base);
+        if (t->chan_direction == CHAN_SEND)
+            write("<-");
+        break;
+    case GOTYPE_MULTI:
+        write("(multi type?)");
+    }
+}
+
 void Module_Resolver::init(ccstr current_module_filepath, ccstr _gomodcache) {
     ptr0(this);
 
@@ -3513,7 +3631,11 @@ void Go_Indexer::fill_generate_implementation(List<Go_Symbol> *out, bool selecte
     auto base_path = make_path(index.current_import_path);
 
     For (*index.packages) {
-        {
+        if (streq(it.import_path, "github.com/invrainbow/cpcast")) {
+            print("cpcast");
+        }
+
+        if (selected_interface) {
             SCOPED_FRAME();
             if (!base_path->contains(make_path(it.import_path)))
                 continue;
@@ -6893,6 +7015,7 @@ char* (*GHGetGomodcache)();
 GoBool (*GHGetMessage)(void* p);
 void (*GHFreeMessage)(void* p);
 GoBool (*GHInitConfig)();
+char* (*GHGetOptionsFile)();
 
 #if OS_WIN
 #   define dll_load_library(x) LoadLibraryW(L"gohelper.dll")
@@ -6941,6 +7064,7 @@ void load_gohelper() {
     load(GHGetMessage);
     load(GHFreeMessage);
     load(GHInitConfig);
+    load(GHGetOptionsFile);
 #undef load
 
     gh_version = GHGetVersion();

@@ -210,8 +210,4 @@ struct Pane {
 
 bool check_file_dimensions(ccstr path);
 
-struct Type_Renderer : public Text_Renderer {
-    void write_type(Gotype *t, bool parameter_hint_root = false);
-};
-
 bool is_goident_empty(ccstr name);

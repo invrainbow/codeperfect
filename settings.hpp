@@ -33,6 +33,7 @@ struct Settings {
 struct Options {
 	int scrolloff = 2;
     int tabsize = 4;
+    bool enable_vim_mode = false;
 };
 
 struct Build_Profile {

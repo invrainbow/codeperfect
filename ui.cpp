@@ -1946,6 +1946,8 @@ void UI::draw_everything() {
 
             menu_command(CMD_RESCAN_INDEX);
             menu_command(CMD_OBLITERATE_AND_RECREATE_INDEX);
+            ImGui::Separator();
+            menu_command(CMD_OPTIONS);
 
 #ifndef RELEASE_MODE
             ImGui::Separator();
@@ -2008,18 +2010,8 @@ void UI::draw_everything() {
             }
 #endif
 
-            /*
             ImGui::Separator();
-            if (ImGui::MenuItem("Options...")) {
-                if (world.wnd_options.show) {
-                    ImGui::Begin("Options");
-                    ImGui::SetWindowFocus();
-                    ImGui::End();
-                } else {
-                    world.wnd_options.show = true;
-                }
-            }
-            */
+            menu_command(CMD_OPTIONS);
 
             ImGui::EndMenu();
         }
@@ -2031,6 +2023,46 @@ void UI::draw_everything() {
 
         ImGui::PopStyleVar(2);
         ImGui::EndMainMenuBar();
+    }
+
+    if (world.wnd_options.show) {
+        auto &wnd = world.wnd_options;
+        auto &tmp = wnd.tmp;
+
+        ImGui::Begin("Options", &wnd.show, ImGuiWindowFlags_AlwaysAutoResize);
+
+        ImGui::Checkbox("Enable Vim keybindings", &tmp.enable_vim_mode);
+        ImGui::SliderInt("Scroll offset", &tmp.scrolloff, 0, 10);
+        ImGui::SliderInt("Tab size", &tmp.tabsize, 1, 8);
+
+        ImGui::Separator();
+
+        if (ImGui::Button("Save")) {
+            memcpy(&options, &tmp, sizeof(options));
+
+            // write out options
+            do {
+                auto filepath = GHGetOptionsFile();
+                if (filepath == NULL) break;
+
+                File f;
+                if (f.init(filepath, FILE_MODE_WRITE, FILE_CREATE_NEW) != FILE_RESULT_SUCCESS)
+                    break;
+
+                defer { f.cleanup(); };
+                f.write((char*)&options, sizeof(options));
+            } while (0);
+
+            wnd.show = false;
+        }
+
+        ImGui::SameLine();
+
+        if (ImGui::Button("Cancel")) {
+            wnd.show = false;
+        }
+
+        ImGui::End();
     }
 
     if (world.wnd_find_interfaces.show) {
@@ -2180,20 +2212,122 @@ void UI::draw_everything() {
             wnd.show = false;
             ImGui::SetWindowFocus(NULL);
 
+            // actually generate the implementation
+            // ------------------------------------
+
             do {
                 if (wnd.filtered_results->len == 0) break;
 
-                // if (!world.indexer.try_acquire_lock(IND_READING)) break;
-                // defer { world.indexer.release_lock(IND_READING); };
+                auto &ind = world.indexer;
+
+                if (!ind.try_acquire_lock(IND_READING)) break;
+                defer { ind.release_lock(IND_READING); };
 
                 auto &symbol = wnd.symbols->at(wnd.filtered_results->at(wnd.selection));
-                print(
-                    "selected type %s is at %s/%s:%s",
-                    symbol.name,
-                    symbol.decl->ctx->import_path,
-                    symbol.decl->ctx->filename,
-                    format_cur(symbol.decl->decl->decl_start)
-                );
+
+                Goresult *src = NULL, *dest = NULL;
+                if (wnd.selected_interface) {
+                    src = wnd.declres;
+                    dest = symbol.decl;
+                } else {
+                    src = symbol.decl;
+                    dest = wnd.declres;
+                }
+
+                auto src_gotype = src->decl->gotype;
+                auto dest_gotype = dest->decl->gotype;
+
+                if (src_gotype == NULL) break;
+                if (src_gotype->type != GOTYPE_INTERFACE) break;
+
+                if (dest_gotype == NULL) break;
+                if (dest_gotype->type == GOTYPE_INTERFACE) break;
+
+                auto src_methods = ind.list_interface_methods(src->wrap(src_gotype));
+                if (src_methods == NULL) break;
+
+                auto dest_methods = alloc_list<Goresult>();
+                if (!ind.list_type_methods(dest->decl->name, dest->ctx->import_path, dest_methods))
+                    break;
+
+                auto methods_to_add = alloc_list<Goresult>();
+                For (*src_methods) {
+                    auto &srcmeth = it;
+                    For (*dest_methods)
+                        if (streq(srcmeth.decl->name, it.decl->name))
+                            if (ind.are_gotypes_equal(src->wrap(srcmeth.decl->gotype), dest->wrap(it.decl->gotype)))
+                                goto skip;
+                    methods_to_add->append(&it);
+                skip:;
+                }
+
+                auto type_name = dest->decl->name;
+
+                auto generate_type_var = [&]() {
+                    auto s = alloc_list<char>();
+                    for (int i = 0, len = strlen(type_name); i < len && s->len < 3; i++) 
+                        if (isupper(type_name[i]))
+                            s->append(tolower(type_name[i]));
+                    s->append('\0');
+                    return s->items;
+                };
+
+                auto type_var = generate_type_var();
+
+                Text_Renderer rend; rend.init();
+
+                auto render_type = [&](Gotype *gotype) {
+                    // TODO: handle sel/imports
+                    Type_Renderer tr; tr.init();
+                    tr.write_type(gotype);
+                    return tr.finish();
+                };
+
+                For (*methods_to_add) {
+                    auto gotype = it.decl->gotype;
+                    if (gotype == NULL) continue;
+                    if (gotype->type != GOTYPE_FUNC) continue;
+
+                    auto &sig = gotype->func_sig;
+
+                    rend.write("func (%s *%s) %s(", type_var, type_name, it.decl->name);
+
+                    bool first = true;
+                    For (*sig.params) {
+                        if (first)
+                            first = false;
+                        else
+                            rend.write(", ");
+                        rend.write("%s %s", it.name, render_type(it.gotype));
+                    }
+
+                    rend.write(") ");
+
+                    if (!isempty(sig.result)) {
+                        if (sig.result->len > 1) rend.write("(");
+
+                        bool first = true;
+                        For (*sig.result) {
+                            if (first)
+                                first = false;
+                            else
+                                rend.write(", ");
+                            rend.write("%s", render_type(it.gotype));
+                        }
+
+                        if (sig.result->len > 1) rend.write(")");
+                    }
+
+                    rend.write(" {\n\tpanic(\"not implemented\")\n}\n\n");
+                }
+
+                auto s = rend.finish();
+                print("%s", s);
+                // TODO: actually add s
+
+                // print("selected type %s is at %s/%s:%s",
+                //       symbol.name, symbol.decl->ctx->import_path, symbol.decl->ctx->filename,
+                //       format_cur(symbol.decl->decl->decl_start)
             } while (0);
         }
 
@@ -2208,9 +2342,14 @@ void UI::draw_everything() {
                     i++;
                 }
 
+                print("=== SCORING ===");
+
                 auto scores = alloc_array(double, wnd.symbols->len);
-                For (*wnd.filtered_results)
-                    scores[i] = fzy_match(wnd.query, wnd.symbols->at(it).name);
+
+                For (*wnd.filtered_results) {
+                    scores[it] = fzy_match(wnd.query, wnd.symbols->at(it).name);
+                    print("%s: %f", wnd.symbols->at(it).name, scores[it]);
+                }
 
                 wnd.filtered_results->sort([&](int *pa, int *pb) {
                     auto a = scores[*pa];
@@ -2234,7 +2373,7 @@ void UI::draw_everything() {
                     ImGui::Text("%s", it.name);
 
                 ImGui::SameLine();
-                ImGui::TextColored(ImVec4(1.0f, 1.0, 1.0f, 0.5f), "(%s)", it.decl->ctx->import_path);
+                ImGui::TextColored(ImVec4(1.0f, 1.0, 1.0f, 0.4f), "\"%s\"", it.decl->ctx->import_path);
             }
         }
 

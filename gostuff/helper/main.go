@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path"
 	"unsafe"
 
 	"github.com/denormal/go-gitignore"
@@ -337,4 +338,13 @@ func GHInitConfig() bool {
 		return false
 	}
 	return true
+}
+
+//export GHGetOptionsFile
+func GHGetOptionsFile() *C.char {
+	configDir, err := PrepareConfigDir()
+	if err != nil {
+		return nil
+	}
+	return C.CString(path.Join(configDir, ".options"))
 }

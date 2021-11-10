@@ -40,3 +40,17 @@ var DebugModeFlag = false
 func IsDebugMode() bool {
 	return DebugModeFlag || os.Getenv("DEBUG") == "1"
 }
+
+func PrepareConfigDir() (string, error) {
+	configdir, err := os.UserConfigDir()
+	if err != nil {
+		return "", err
+	}
+
+	appdir := path.Join(configdir, "CodePerfect")
+	if err := os.MkdirAll(appdir, os.ModePerm); err != nil {
+		return "", err
+	}
+
+	return appdir, nil
+}

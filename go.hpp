@@ -1450,6 +1450,7 @@ extern char* (*GHGetGomodcache)();
 extern GoBool (*GHGetMessage)(void* p);
 extern void (*GHFreeMessage)(void* p);
 extern GoBool (*GHInitConfig)();
+extern char* (*GHGetOptionsFile)();
 
 void load_gohelper();
 
@@ -1461,3 +1462,7 @@ T *clone(T *old) {
     memcpy(ret, old, sizeof(T));
     return ret;
 }
+
+struct Type_Renderer : public Text_Renderer {
+    void write_type(Gotype *t, bool parameter_hint_root = false);
+};

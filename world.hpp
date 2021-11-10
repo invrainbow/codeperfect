@@ -239,6 +239,7 @@ struct World {
     vec2 window_size;
     vec2 display_size;
     vec2f display_scale;
+    bool use_nvim_this_time;
 
     struct {
         bool recording;
@@ -435,14 +436,15 @@ struct World {
         int selection;
     } wnd_search_and_replace;
 
-    struct : Wnd {
+    struct Wnd_Editor_Tree : Wnd {
         bool show_anon_nodes;
         bool show_comments;
         // bool move;
         // cur2 move_to_cur;
     } wnd_editor_tree;
 
-    struct : Wnd {
+    struct Wnd_Options : Wnd {
+        Options tmp;
     } wnd_options;
 
     struct : Wnd {
