@@ -68,9 +68,14 @@ struct Editor {
 
     box view;
     cur2 cur;
+    int savedvx;
 
     char filepath[MAX_PATH];
     bool is_untitled;
+
+    // only used when !world.use_nvim
+    bool selecting;
+    cur2 select_start;
 
     // TSInputEdit curr_change;
 

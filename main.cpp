@@ -25,6 +25,7 @@
 #include "ui.hpp"
 #include "fzy_match.h"
 #include "settings.hpp"
+#include "unicode.hpp"
 #include "IconsFontAwesome5.h"
 #include "IconsMaterialDesign.h"
 
@@ -617,8 +618,9 @@ int main(int argc, char **argv) {
 
         // handle global keys
 
-        auto mods = ui.imgui_get_keymods();
-        switch (mods) {
+        auto keymods = ui.imgui_get_keymods();
+
+        switch (keymods) {
         case KEYMOD_PRIMARY:
             switch (key) {
             case GLFW_KEY_1:
@@ -658,18 +660,6 @@ int main(int argc, char **argv) {
                     ImGui::SetWindowFocus(NULL);
                 break;
 
-            case GLFW_KEY_UP:
-                if (world.use_nvim) break;
-                break;
-            case GLFW_KEY_DOWN:
-                if (world.use_nvim) break;
-                break;
-            case GLFW_KEY_LEFT:
-                if (world.use_nvim) break;
-                break;
-            case GLFW_KEY_RIGHT:
-                if (world.use_nvim) break;
-                break;
             }
             break;
         }
@@ -678,10 +668,10 @@ int main(int argc, char **argv) {
             auto cmd = (Command)i;
 
             auto info = command_info_table[cmd];
-            if (info.mods == mods && info.key == key) {
+            if (info.mods == keymods && info.key == key) {
                 if (is_command_enabled(cmd)) {
                     handle_command(cmd, false);
-                    break;
+                    return; // break;
                 }
             }
         }
@@ -693,11 +683,28 @@ int main(int argc, char **argv) {
 
         auto editor = get_current_editor();
 
-        auto handle_enter = [&](ccstr nvim_string) {
+        auto make_nvim_string = [&](ccstr s) {
+            List<ccstr> parts; parts.init();
+
+            if (keymods & KEYMOD_CMD)   parts.append("D");
+            if (keymods & KEYMOD_SHIFT) parts.append("S");
+            if (keymods & KEYMOD_ALT)   parts.append("A");
+            if (keymods & KEYMOD_CTRL)  parts.append("C");
+
+            Text_Renderer rend; rend.init();
+            For (parts) rend.write("%s-", it);
+            rend.write("%s", s);
+            return rend.finish();
+        };
+
+        auto handle_enter = [&]() {
             if (editor == NULL) return;
-            if (world.nvim.mode != VI_INSERT) {
-                send_nvim_keys(nvim_string);
-                return;
+
+            if (world.use_nvim) {
+                if (world.nvim.mode != VI_INSERT) {
+                    send_nvim_keys(make_nvim_string("Enter"));
+                    return;
+                }
             }
 
             editor->type_char_in_insert_mode('\n');
@@ -706,52 +713,270 @@ int main(int argc, char **argv) {
             editor->insert_text_in_insert_mode(indent_chars);
         };
 
-        auto handle_tab = [&](ccstr nvim_string) {
+        auto handle_tab = [&]() {
             if (editor == NULL) return;
-            if (world.nvim.mode != VI_INSERT) {
-                send_nvim_keys(nvim_string);
-                return;
+
+            if (keymods == KEYMOD_NONE) {
+                auto& ac = editor->autocomplete;
+                if (ac.ac.results != NULL && ac.filtered_results->len != 0) {
+                    auto idx = ac.filtered_results->at(ac.selection);
+                    auto& result = ac.ac.results->at(idx);
+                    editor->perform_autocomplete(&result);
+                    return;
+                }
             }
+
+            if (world.use_nvim) {
+                if (world.nvim.mode != VI_INSERT) {
+                    send_nvim_keys(make_nvim_string("Tab"));
+                    return;
+                }
+            }
+
             editor->type_char_in_insert_mode('\t');
         };
 
-        auto handle_backspace = [&](ccstr nvim_string) {
-            if (editor == NULL) return;
-            if (world.nvim.mode != VI_INSERT) {
-                send_nvim_keys(nvim_string);
-                return;
+        auto alt_move = [&](bool back) -> cur2 {
+            auto it = editor->iter();
+
+            if (back) {
+                if (it.bof()) return it.pos;
+                it.prev();
             }
 
-            if (world.nvim.exiting_insert_mode) {
-                world.nvim.chars_after_exiting_insert_mode.append('\b');
+            auto done = [&]() { return back ? it.bof() : it.eof(); };
+            auto advance = [&]() { back ? it.prev() : it.next(); };
+
+            for (; !done(); advance())
+                if (!isspace(it.peek()))
+                    break;
+
+            bool isid = isident(it.peek());
+            for (; !done(); advance()) {
+                if (isident(it.peek()) != isid || isspace(it.peek())) {
+                    if (back) it.next();
+                    break;
+                }
+            }
+
+            return it.pos;
+        };
+
+        auto handle_backspace = [&]() {
+            if (editor == NULL) return;
+
+            if (world.use_nvim) {
+                if (world.nvim.mode != VI_INSERT) {
+                    send_nvim_keys(make_nvim_string("Backspace"));
+                    return;
+                }
+
+                if (world.nvim.exiting_insert_mode) {
+                    world.nvim.chars_after_exiting_insert_mode.append('\b');
+                    return;
+                }
+            } else {
+                if (editor->selecting) {
+                    auto a = editor->select_start;
+                    auto b = editor->cur;
+                    if (a > b) {
+                        auto tmp = a;
+                        a = b;
+                        b = tmp;
+                    }
+
+                    editor->buf->remove(a, b);
+                    editor->selecting = false;
+                    editor->move_cursor(a);
+                    return;
+                }
+            }
+
+            if (keymods & KEYMOD_TEXT) {
+                auto new_cur = alt_move(true);
+                while (editor->cur > new_cur)
+                    editor->backspace_in_insert_mode(1, 0);
             } else {
                 // if we're at beginning of line
                 if (editor->cur.x == 0) {
                     auto back1 = editor->buf->dec_cur(editor->cur);
                     editor->buf->remove(back1, editor->cur);
-                    if (back1 < editor->nvim_insert.start) {
-                        editor->nvim_insert.start = back1;
-                        editor->nvim_insert.deleted_graphemes++;
+                    if (world.use_nvim) {
+                        if (back1 < editor->nvim_insert.start) {
+                            editor->nvim_insert.start = back1;
+                            editor->nvim_insert.deleted_graphemes++;
+                        }
                     }
                     editor->raw_move_cursor(back1);
                 } else {
                     editor->backspace_in_insert_mode(1, 0); // erase one grapheme
                 }
-
-                editor->update_autocomplete(false);
-                editor->update_parameter_hint();
             }
+
+            editor->update_autocomplete(false);
+            editor->update_parameter_hint();
         };
 
-        switch (ui.imgui_get_keymods()) {
-        case KEYMOD_SHIFT:
-            if (world.use_nvim) {
+        // handle movement
+        do {
+            if (world.use_nvim) break;
+            if (editor == NULL) break;
+
+            bool handled = false;
+
+            auto buf = editor->buf;
+            auto cur = editor->cur;
+
+            switch (keymods) {
+            case KEYMOD_SHIFT:
+            case KEYMOD_NONE:
                 switch (key) {
-                case GLFW_KEY_ENTER: handle_enter("<S-Enter>"); break;
-                case GLFW_KEY_TAB: handle_tab("<S-Tab>"); break;
-                case GLFW_KEY_BACKSPACE: handle_backspace("<S-Backspace>"); break;
-                case GLFW_KEY_ESCAPE: if (!editor->trigger_escape()) send_nvim_keys("<S-Esc>"); break;
+                case GLFW_KEY_LEFT:
+                    if (cur.x > 0) {
+                        cur.x--;
+                    } else if (cur.y > 0) {
+                        cur.y--;
+                        cur.x = buf->lines[cur.y].len;
+                    }
+                    handled = true;
+                    break;
+
+                case GLFW_KEY_RIGHT:
+                    if (cur.x < buf->lines[cur.y].len) {
+                        cur.x++;
+                    } else if (cur.y < buf->lines.len-1) {
+                        cur.y++;
+                        cur.x = 0;
+                    }
+                    handled = true;
+                    break;
                 }
+                break;
+
+            case KEYMOD_TEXT | KEYMOD_SHIFT:
+            case KEYMOD_TEXT:
+                switch (key) {
+                case GLFW_KEY_LEFT:
+                case GLFW_KEY_RIGHT:
+                    cur = alt_move(key == GLFW_KEY_LEFT);
+                    handled = true;
+                    break;
+                }
+                break;
+            }
+
+            switch (keymods) {
+            case KEYMOD_NONE:
+            case KEYMOD_SHIFT:
+            case KEYMOD_TEXT | KEYMOD_SHIFT:
+            case KEYMOD_TEXT:
+                switch (key) {
+                case GLFW_KEY_DOWN:
+                case GLFW_KEY_UP: {
+                    if (keymods == KEYMOD_NONE)
+                        if (move_autocomplete_cursor(editor, key == GLFW_KEY_DOWN ? 1 : -1))
+                            break;
+
+                    auto old_savedvx = editor->savedvx;
+
+                    auto calc_x = [&]() -> int {
+                        int x = 0;
+                        int vx = 0;
+                        auto &line = buf->lines[cur.y];
+
+                        Grapheme_Clusterer gc;
+                        gc.init();
+                        gc.feed(line[x]);
+
+                        while (x < line.len && vx < editor->savedvx) {
+                            if (line[x] == '\t') {
+                                vx += options.tabsize - (vx % options.tabsize);
+                                x++;
+                            } else {
+                                auto width = our_wcwidth(line[x]);
+                                if (width == -1) width = 1;
+                                vx += width;
+
+                                x++;
+                                while (x < line.len && !gc.feed(line[x]))
+                                    x++;
+                            }
+                        }
+
+                        return x;
+                    };
+
+                    if (key == GLFW_KEY_DOWN) {
+                        if (cur.y < buf->lines.len-1) {
+                            cur.y++;
+                            cur.x = calc_x();
+                        }
+                    } else {
+                        if (cur.y > 0) {
+                            cur.y--;
+                            cur.x = calc_x();
+                        }
+                    }
+                    handled = true;
+                    break;
+                }
+                }
+                break;
+            }
+
+            if (!handled) break;
+
+            if (keymods & KEYMOD_SHIFT) {
+                if (!editor->selecting) {
+                    editor->select_start = editor->cur;
+                    editor->selecting = true;
+                }
+            } else {
+                editor->selecting = false;
+            }
+
+            auto old_savedvx = editor->savedvx;
+            editor->move_cursor(cur);
+            if (key == GLFW_KEY_UP || key == GLFW_KEY_DOWN)
+                editor->savedvx = old_savedvx;
+
+            editor->update_autocomplete(false);
+            editor->update_parameter_hint();
+            return;
+        } while (0);
+
+        // handle enter, backspace, tab
+        switch (keymods) {
+        case KEYMOD_NONE:
+        case KEYMOD_SHIFT:
+        case KEYMOD_CTRL:
+        case KEYMOD_ALT:
+        case KEYMOD_CTRL | KEYMOD_ALT:
+        case KEYMOD_CTRL | KEYMOD_SHIFT:
+        case KEYMOD_ALT | KEYMOD_SHIFT:
+        case KEYMOD_CTRL | KEYMOD_ALT | KEYMOD_SHIFT:
+            switch (key) {
+            case GLFW_KEY_ENTER:
+                handle_enter();
+                return;
+            case GLFW_KEY_BACKSPACE:
+                handle_backspace();
+                return;
+            case GLFW_KEY_TAB:
+#if OS_WIN
+                break;
+#endif
+                handle_tab();
+                return;
+            }
+        }
+
+        switch (keymods) {
+        case KEYMOD_SHIFT:
+            switch (key) {
+            case GLFW_KEY_ESCAPE:
+                if (!editor->trigger_escape())
+                    send_nvim_keys("<S-Esc>");
                 break;
             }
             break;
@@ -760,35 +985,29 @@ int main(int argc, char **argv) {
             {
                 bool handled = false;
 
-                if (world.use_nvim) {
-                    handled = true;
-                    switch (key) {
-                    case GLFW_KEY_ENTER:
-                        /*
-                        if (world.nvim.mode == VI_INSERT && editor->postfix_stack.len > 0) {
-                            auto pf = editor->postfix_stack.last();
-                            our_assert(pf->current_insert_position < pf->insert_positions.len, "went past last error position");
-
-                            auto pos = pf->insert_positions[pf->current_insert_position++];
-                            editor->trigger_escape(pos);
-
-                            if (pf->current_insert_position == pf->insert_positions.len)
-                                editor->postfix_stack.len--;
-                        } else {
-                            handle_enter("<C-Enter>");
-                        }
-                        */
-                        handle_enter("<C-Enter>");
-                        break;
-                    case GLFW_KEY_BACKSPACE: handle_backspace("<C-Backspace>"); break;
-                    case GLFW_KEY_ESCAPE: if (!editor->trigger_escape()) send_nvim_keys("<C-Esc>"); break;
-                    default: handled = false; break;
-                    }
-                }
-
-                if (handled) break;
-
                 switch (key) {
+                case GLFW_KEY_ENTER:
+                    /*
+                    if (world.nvim.mode == VI_INSERT && editor->postfix_stack.len > 0) {
+                        auto pf = editor->postfix_stack.last();
+                        our_assert(pf->current_insert_position < pf->insert_positions.len, "went past last error position");
+
+                        auto pos = pf->insert_positions[pf->current_insert_position++];
+                        editor->trigger_escape(pos);
+
+                        if (pf->current_insert_position == pf->insert_positions.len)
+                            editor->postfix_stack.len--;
+                    } else {
+                        handle_enter("<C-Enter>");
+                    }
+                    */
+                    break;
+
+                case GLFW_KEY_ESCAPE:
+                    if (!editor->trigger_escape())
+                        send_nvim_keys("<C-Esc>");
+                    break;
+
 #if OS_WIN
                 case GLFW_KEY_TAB:
                     goto_next_tab();
@@ -799,9 +1018,11 @@ int main(int argc, char **argv) {
                 case GLFW_KEY_I:
                 case GLFW_KEY_D:
                 case GLFW_KEY_U:
-                    if (world.nvim.mode != VI_INSERT) {
-                        SCOPED_FRAME();
-                        send_nvim_keys(our_sprintf("<C-%c>", tolower((char)key)));
+                    if (world.use_nvim) {
+                        if (world.nvim.mode != VI_INSERT) {
+                            SCOPED_FRAME();
+                            send_nvim_keys(our_sprintf("<C-%c>", tolower((char)key)));
+                        }
                     }
                     break;
                 case GLFW_KEY_Y:
@@ -821,8 +1042,9 @@ int main(int argc, char **argv) {
                     }
                     break;
                 case GLFW_KEY_V:
-                    if (world.nvim.mode != VI_INSERT)
-                        send_nvim_keys("<C-v>");
+                    if (world.use_nvim)
+                        if (world.nvim.mode != VI_INSERT)
+                            send_nvim_keys("<C-v>");
                     break;
                 case GLFW_KEY_SLASH:
                     {
@@ -858,79 +1080,51 @@ int main(int argc, char **argv) {
             break;
 
         case KEYMOD_CTRL | KEYMOD_SHIFT:
-            {
-                bool handled = false;
-                if (world.use_nvim) {
-                    handled = true;
-                    switch (key) {
-                    case GLFW_KEY_ENTER: handle_enter("<C-S-Enter>"); break;
-                    case GLFW_KEY_ESCAPE: if (!editor->trigger_escape()) send_nvim_keys("<C-S-Esc>"); break;
-                    case GLFW_KEY_BACKSPACE: handle_backspace("<C-S-Backspace>"); break;
-                    default: handled = false; break;
-                    }
-                }
-
-                if (handled) break;
-
-                switch (key) {
+            switch (key) {
+            case GLFW_KEY_ESCAPE:
+                if (!editor->trigger_escape())
+                    send_nvim_keys("<C-S-Esc>");
+                break;
 #if OS_WIN
-                case GLFW_KEY_TAB:
-                    goto_previous_tab();
-                    break;
+            case GLFW_KEY_TAB:
+                goto_previous_tab();
+                break;
 #endif
-                case GLFW_KEY_SPACE:
-                    {
-                        auto ed = get_current_editor();
-                        if (ed == NULL) break;
-                        ed->trigger_parameter_hint();
-                    }
-                    break;
+            case GLFW_KEY_SPACE:
+                {
+                    auto ed = get_current_editor();
+                    if (ed == NULL) break;
+                    ed->trigger_parameter_hint();
                 }
                 break;
             }
+            break;
+
         case KEYMOD_NONE:
             {
                 if (editor == NULL) break;
 
-                auto &buf = editor->buf;
-                auto cur = editor->cur;
-
                 switch (key) {
-                case GLFW_KEY_LEFT: send_nvim_keys("<Left>"); break;
-                case GLFW_KEY_RIGHT: send_nvim_keys("<Right>"); break;
+                case GLFW_KEY_LEFT:
+                case GLFW_KEY_RIGHT:
+                    if (world.use_nvim && world.nvim.mode != VI_INSERT)
+                        send_nvim_keys(key == GLFW_KEY_LEFT ? "<Left>" : "<Right>");
+                    break;
 
                 case GLFW_KEY_DOWN:
                 case GLFW_KEY_UP:
-                    if (!move_autocomplete_cursor(editor, key == GLFW_KEY_DOWN ? 1 : -1)) {
-                        if (key == GLFW_KEY_DOWN)
-                            send_nvim_keys("<Down>");
+                    if (world.use_nvim) {
+                        if (world.nvim.mode == VI_INSERT)
+                            move_autocomplete_cursor(editor, key == GLFW_KEY_DOWN ? 1 : -1);
                         else
-                            send_nvim_keys("<Up>");
-                    }
-                    break;
-
-                case GLFW_KEY_BACKSPACE: handle_backspace("<Backspace>"); break;
-
-                case GLFW_KEY_ENTER:
-                    handle_enter("<Enter>");
-                    break;
-
-                case GLFW_KEY_TAB:
-                    {
-                        auto& ac = editor->autocomplete;
-                        if (ac.ac.results == NULL || ac.filtered_results->len == 0) {
-                            handle_tab("<Tab>");
-                            break;
-                        }
-
-                        auto idx = ac.filtered_results->at(ac.selection);
-                        auto& result = ac.ac.results->at(idx);
-                        editor->perform_autocomplete(&result);
+                            send_nvim_keys(key == GLFW_KEY_DOWN ? "<Down>" : "<Up>");
                     }
                     break;
 
                 case GLFW_KEY_ESCAPE:
-                    if (!editor->trigger_escape()) send_nvim_keys("<Esc>");
+                    if (editor->trigger_escape()) break;
+                    if (world.use_nvim)
+                        send_nvim_keys("<Esc>");
                     break;
                 }
                 break;
@@ -939,7 +1133,7 @@ int main(int argc, char **argv) {
 
         // separate switch for KEYMOD_PRIMARY
 
-        switch (ui.imgui_get_keymods()) {
+        switch (keymods) {
         case KEYMOD_PRIMARY:
             switch (key) {
 #ifndef RELEASE_MODE
@@ -994,7 +1188,8 @@ int main(int argc, char **argv) {
                             pane->focus_editor_by_index(new_idx);
                         }
 
-                        send_nvim_keys("<Esc>");
+                        if (world.use_nvim)
+                            send_nvim_keys("<Esc>");
                     }
                 }
                 break;
@@ -1026,15 +1221,16 @@ int main(int argc, char **argv) {
         if (ed == NULL) return;
 
         if (ch > 127) return;
+        if (!isprint(ch)) return;
 
-        if (isprint(ch)) {
+        if (world.use_nvim) {
             if (world.nvim.mode == VI_INSERT) {
                 if (world.nvim.exiting_insert_mode) {
                     world.nvim.chars_after_exiting_insert_mode.append(ch);
                 } else {
                     ed->type_char_in_insert_mode(ch);
                 }
-            } else { // if (world.nvim.mode == VI_REPLACE || ch != ':') {
+            } else {
                 if (ch == '<') {
                     send_nvim_keys("<LT>");
                 } else {
@@ -1042,6 +1238,8 @@ int main(int argc, char **argv) {
                     send_nvim_keys(keys);
                 }
             }
+        } else {
+            ed->type_char_in_insert_mode(ch);
         }
     });
 

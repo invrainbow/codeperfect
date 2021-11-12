@@ -801,19 +801,12 @@ void filter_files() {
     // t.log("matching");
 
     auto scores = alloc_array(double, wnd.filepaths->len);
-    auto scores_saved = alloc_array(bool, wnd.filepaths->len);
-
-    auto get_score = [&](int i) {
-        if (!scores_saved[i]) {
-            scores[i] = fzy_match(wnd.query, wnd.filepaths->at(i));
-            scores_saved[i] = true;
-        }
-        return scores[i];
-    };
+    For (*wnd.filtered_results)
+        scores[it] = fzy_match(wnd.query, wnd.filepaths->at(it));
 
     wnd.filtered_results->sort([&](int *pa, int *pb) {
-        auto a = get_score(*pa);
-        auto b = get_score(*pb);
+        auto a = scores[*pa];
+        auto b = scores[*pa];
         return a < b ? 1 : (a > b ? -1 : 0);  // reverse
     });
 
@@ -839,7 +832,7 @@ void filter_symbols() {
 
     auto scores = alloc_array(double, wnd.symbols->len);
     For (*wnd.filtered_results)
-        scores[i] = fzy_match(wnd.query, wnd.symbols->at(it));
+        scores[it] = fzy_match(wnd.query, wnd.symbols->at(it));
 
     wnd.filtered_results->sort([&](int *pa, int *pb) {
         auto a = scores[*pa];

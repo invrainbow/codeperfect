@@ -7,6 +7,7 @@
 #include "tree_sitter_crap.hpp"
 #include "settings.hpp"
 #include "set.hpp"
+#include "unicode.hpp"
 
 bool Editor::is_modifiable() {
     return path_has_descendant(world.current_path, filepath);
@@ -783,13 +784,28 @@ void Editor::raw_move_cursor(cur2 c, bool dont_add_to_history) {
     auto& line = buf->lines[c.y];
 
     u32 vx = 0;
-    for (u32 i = 0; i < c.x; i++) {
-        // TODO: determine vx correctly with graphemes and shit
-        if (line[i] == '\t')
+    u32 i = 0;
+
+    Grapheme_Clusterer gc;
+    gc.init();
+    gc.feed(line[0]);
+
+    while (i < c.x) {
+        if (line[i] == '\t') {
             vx += options.tabsize - (vx % options.tabsize);
-        else
-            vx++;
+            i++;
+        } else {
+            auto width = our_wcwidth(line[i]);
+            if (width == -1) width = 1;
+            vx += width;
+
+            i++;
+            while (i < c.x && !gc.feed(line[i]))
+                i++;
+        }
     }
+
+    savedvx = vx;
 
     if (vx < view.x)
         view.x = vx;
@@ -799,12 +815,6 @@ void Editor::raw_move_cursor(cur2 c, bool dont_add_to_history) {
         view.y = relu_sub(cur.y, options.scrolloff);
     if (cur.y + options.scrolloff >= view.y + view.h)
         view.y = cur.y + options.scrolloff - view.h + 1;
-
-    auto is_navigating_here = [&]() -> bool {
-        return nvim_data.is_navigating
-            && nvim_data.navigating_to_pos == c
-            && nvim_data.navigating_to_editor == id;
-    };
 
     bool push_to_history = true;
 
@@ -895,7 +905,7 @@ void Editor::update_lines(int firstline, int lastline, List<uchar*> *new_lines, 
 }
 
 void Editor::move_cursor(cur2 c) {
-    if (world.nvim.mode == VI_INSERT) {
+    if (world.use_nvim && world.nvim.mode == VI_INSERT) {
         nvim_data.waiting_for_move_cursor = true;
         nvim_data.move_cursor_to = c;
 
@@ -1446,6 +1456,9 @@ Editor* Pane::get_current_editor() {
 }
 
 bool Editor::is_nvim_ready() {
+    // will this fix things?
+    if (!world.use_nvim) return true;
+
     return world.nvim.is_ui_attached
         && nvim_data.is_buf_attached
         && (nvim_data.buf_id != 0)
@@ -2026,26 +2039,59 @@ void Editor::update_autocomplete(bool triggered_by_ident) {
 
 void Editor::backspace_in_insert_mode(int graphemes_to_erase, int codepoints_to_erase) {
     auto start = cur;
+    auto zero = new_cur2(0, 0);
 
-    if (graphemes_to_erase > 0) {
-        // we have the current cursor as cp index
-        // we want to move it back by one gr index
-        // and then convert that back to cp index
-        // what the fuck lmao, is backspace going to be this expensive?
-        int gr_idx = buf->idx_cp_to_gr(start.y, start.x);
-        start.x = buf->idx_gr_to_cp(start.y, relu_sub(gr_idx, graphemes_to_erase));
-    } else if (codepoints_to_erase > 0) {
-        start.x -= codepoints_to_erase;
+    if (graphemes_to_erase > 0 && codepoints_to_erase > 0)
+        our_panic("backspace_in_insert_mode called with both graphemes and codepoints");
+
+    while ((graphemes_to_erase > 0 || codepoints_to_erase > 0) && start > zero) {
+        if (start.x == 0) {
+            start = buf->dec_cur(start);
+
+            if (graphemes_to_erase > 0) graphemes_to_erase--;
+            if (codepoints_to_erase > 0) codepoints_to_erase--;
+
+            if (start < nvim_insert.start)
+                nvim_insert.deleted_graphemes++;
+            continue;
+        }
+
+        auto old_start = start;
+
+        if (graphemes_to_erase > 0) {
+            // we have current cursor as cp index
+            // move it back by 1 gr index, then convert that back to cp index
+            int gr_idx = buf->idx_cp_to_gr(start.y, start.x);
+            if (gr_idx > graphemes_to_erase) {
+                start.x = buf->idx_gr_to_cp(start.y, gr_idx - graphemes_to_erase);
+                graphemes_to_erase = 0;
+            } else {
+                start.x = 0;
+                graphemes_to_erase -= gr_idx;
+            }
+        } else { // codepoints_to_erase > 0
+            auto gr_idx = buf->idx_cp_to_gr(start.y, start.x);
+            if (codepoints_to_erase > start.x) {
+                start.x = 0;
+                codepoints_to_erase -= start.x;
+            } else {
+                start.x -= codepoints_to_erase;
+                codepoints_to_erase = 0;
+            }
+        }
+
+        if (start < nvim_insert.start) {
+            if (old_start.y != nvim_insert.start.y)
+                our_panic("this shouldn't happen");
+
+            int lo = buf->idx_cp_to_gr(start.y, start.x);
+            int hi = buf->idx_cp_to_gr(start.y, min(old_start.x, nvim_insert.start.x));
+            nvim_insert.deleted_graphemes += (hi - lo);
+        }
     }
 
-    if (start < nvim_insert.start) {
-        // this assumes start and nvim_insert.start are on same line
-        int gr_end = buf->idx_cp_to_gr(nvim_insert.start.y, nvim_insert.start.x);
-        int gr_start = buf->idx_cp_to_gr(start.y, start.x);
-        nvim_insert.deleted_graphemes += (gr_end - gr_start);
-
+    if (start < nvim_insert.start)
         nvim_insert.start = start;
-    }
 
     buf->remove(start, cur);
     raw_move_cursor(start);
@@ -2212,7 +2258,12 @@ void Editor::format_on_save(int fmt_type, bool write_to_nvim) {
     buf->copy_from(&swapbuf);
     buf->dirty = true;
 
-    if (write_to_nvim) {
+    // we need to adjust cursor manually
+    if (!world.use_nvim) {
+        // TODO
+    }
+
+    if (world.use_nvim && write_to_nvim) {
         auto &nv = world.nvim;
         auto &writer = nv.writer;
 

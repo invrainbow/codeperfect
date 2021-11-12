@@ -400,6 +400,17 @@ bool UI::imgui_is_window_focusing(bool *b) {
     return !old_focus && *b;
 }
 
+void UI::help_marker(ccstr text) {
+    ImGui::TextDisabled(ICON_MD_HELP_OUTLINE);
+    if (ImGui::IsItemHovered()) {
+        ImGui::BeginTooltip();
+        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
+        ImGui::TextUnformatted(text);
+        ImGui::PopTextWrapPos();
+        ImGui::EndTooltip();
+    }
+}
+
 void UI::render_godecl(Godecl *decl) {
     auto flags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth;
     if (ImGui::TreeNodeEx(decl, flags, "%s", godecl_type_str(decl->type))) {
@@ -528,7 +539,6 @@ void UI::render_gotype(Gotype *gotype, ccstr field) {
         ImGui::TreePop();
     }
 }
-
 
 void UI::render_ts_cursor(TSTreeCursor *curr, cur2 open_cur) {
     int last_depth = 0;
@@ -1950,68 +1960,45 @@ void UI::draw_everything() {
             menu_command(CMD_OPTIONS);
 
 #ifndef RELEASE_MODE
-            ImGui::Separator();
-            ImGui::MenuItem("ImGui demo", NULL, &world.windows_open.im_demo);
-            ImGui::MenuItem("ImGui metrics", NULL, &world.windows_open.im_metrics);
-            ImGui::MenuItem("AST viewer", NULL, &world.wnd_editor_tree.show);
-            ImGui::MenuItem("Toplevels viewer", NULL, &world.wnd_editor_toplevels.show);
-            ImGui::MenuItem("Show mouse position", NULL, &world.wnd_mouse_pos.show);
-            ImGui::MenuItem("Style editor", NULL, &world.wnd_style_editor.show);
-            ImGui::MenuItem("Replace line numbers with bytecounts", NULL, &world.replace_line_numbers_with_bytecounts);
-            ImGui::MenuItem("Randomly move cursor around", NULL, &world.randomly_move_cursor_around);
-            ImGui::MenuItem("Disable framerate cap", NULL, &world.turn_off_framerate_cap);
-
-            if (ImGui::MenuItem("Cleanup unused memory")) {
-                world.indexer.message_queue.add([&](auto msg) {
-                    msg->type = GOMSG_CLEANUP_UNUSED_MEMORY;
-                });
-            }
 
             ImGui::Separator();
 
-            if (ImGui::MenuItem("Show message box (OK)")) {
-                tell_user("Sorry, that keyfile was invalid. Please select another one.", "License key required");
-            }
+            if (ImGui::BeginMenu("Debug Tools")) {
+                ImGui::MenuItem("ImGui demo", NULL, &world.windows_open.im_demo);
+                ImGui::MenuItem("ImGui metrics", NULL, &world.windows_open.im_metrics);
+                ImGui::MenuItem("AST viewer", NULL, &world.wnd_editor_tree.show);
+                ImGui::MenuItem("Toplevels viewer", NULL, &world.wnd_editor_toplevels.show);
+                ImGui::MenuItem("Show mouse position", NULL, &world.wnd_mouse_pos.show);
+                ImGui::MenuItem("Style editor", NULL, &world.wnd_style_editor.show);
+                ImGui::MenuItem("Replace line numbers with bytecounts", NULL, &world.replace_line_numbers_with_bytecounts);
+                ImGui::MenuItem("Randomly move cursor around", NULL, &world.randomly_move_cursor_around);
+                ImGui::MenuItem("Disable framerate cap", NULL, &world.turn_off_framerate_cap);
 
-            if (ImGui::MenuItem("Show message box (Yes/No)")) {
-                auto res = ask_user_yes_no(
-                    "Are you sure you want to delete all breakpoints?",
-                    NULL,
-                    "Delete",
-                    "Don't Delete"
-                );
-                print("%d", res);
-            }
+                if (ImGui::MenuItem("Cleanup unused memory")) {
+                    world.indexer.message_queue.add([&](auto msg) {
+                        msg->type = GOMSG_CLEANUP_UNUSED_MEMORY;
+                    });
+                }
 
-            if (ImGui::MenuItem("Show message box (Yes/No/Cancel)")) {
-                auto res = ask_user_yes_no_cancel(
-                    "Do you want to save your changes to main.go?",
-                    "Your changes will be lost if you don't.",
-                    "Save",
-                    "Don't Save"
-                );
-                print("%d", res);
-            }
-
-            ImGui::Separator();
-            {
-                auto &ref = world.record_keys;
-                if (ref.recording) {
-                    if (ImGui::MenuItem("Stop recording")) {
-                        ref.f.cleanup();
-                        ref.recording = false;
-                    }
-                } else {
-                    if (ImGui::MenuItem("Start recording")) {
-                        ref.f.init("/Users/brandon/keyrecordings.txt", FILE_MODE_WRITE, FILE_CREATE_NEW);
-                        ref.recording = true;
+                ImGui::Separator();
+                {
+                    auto &ref = world.record_keys;
+                    if (ref.recording) {
+                        if (ImGui::MenuItem("Stop recording")) {
+                            ref.f.cleanup();
+                            ref.recording = false;
+                        }
+                    } else {
+                        if (ImGui::MenuItem("Start recording")) {
+                            ref.f.init("/Users/brandon/keyrecordings.txt", FILE_MODE_WRITE, FILE_CREATE_NEW);
+                            ref.recording = true;
+                        }
                     }
                 }
-            }
 #endif
 
-            ImGui::Separator();
-            menu_command(CMD_OPTIONS);
+                ImGui::EndMenu();
+            }
 
             ImGui::EndMenu();
         }
@@ -2032,8 +2019,20 @@ void UI::draw_everything() {
         ImGui::Begin("Options", &wnd.show, ImGuiWindowFlags_AlwaysAutoResize);
 
         ImGui::Checkbox("Enable Vim keybindings", &tmp.enable_vim_mode);
+        ImGui::SameLine();
+        help_marker("This requires a restart.");
+
+        imgui_small_newline();
+
         ImGui::SliderInt("Scroll offset", &tmp.scrolloff, 0, 10);
+        ImGui::SameLine();
+        help_marker("The number of lines the editor will keep between your cursor and the top/bottom of the screen.");
+
+        imgui_small_newline();
+
         ImGui::SliderInt("Tab size", &tmp.tabsize, 1, 8);
+
+        imgui_small_newline();
 
         ImGui::Separator();
 
@@ -2265,7 +2264,7 @@ void UI::draw_everything() {
 
                 auto generate_type_var = [&]() {
                     auto s = alloc_list<char>();
-                    for (int i = 0, len = strlen(type_name); i < len && s->len < 3; i++) 
+                    for (int i = 0, len = strlen(type_name); i < len && s->len < 3; i++)
                         if (isupper(type_name[i]))
                             s->append(tolower(type_name[i]));
                     s->append('\0');
@@ -2342,13 +2341,10 @@ void UI::draw_everything() {
                     i++;
                 }
 
-                print("=== SCORING ===");
-
                 auto scores = alloc_array(double, wnd.symbols->len);
 
                 For (*wnd.filtered_results) {
                     scores[it] = fzy_match(wnd.query, wnd.symbols->at(it).name);
-                    print("%s: %f", wnd.symbols->at(it).name, scores[it]);
                 }
 
                 wnd.filtered_results->sort([&](int *pa, int *pb) {
@@ -3578,7 +3574,7 @@ void UI::draw_everything() {
             ImGui::Text("Searching...");
             ImGui::SameLine();
             if (ImGui::Button("Cancel")) {
-                // TODO
+                world.searcher.cleanup();
             }
             break;
         case SEARCH_SEARCH_DONE:
@@ -4233,6 +4229,39 @@ void UI::draw_everything() {
                     }
                 }
 
+                cur2 select_start, select_end;
+                if (editor->selecting) {
+                    auto a = editor->select_start;
+                    auto b = editor->cur;
+                    if (a > b) {
+                        auto tmp = a;
+                        a = b;
+                        b = tmp;
+                    }
+
+                    select_start = a;
+                    select_end = b;
+                }
+
+                auto draw_highlight = [&](vec4f color, int width, bool fullsize = false) {
+                    boxf b;
+                    b.pos = cur_pos;
+                    b.y -= font->offset_y;
+                    b.w = font->width * width;
+                    b.h = font->height;
+
+                    auto py = font->height * (settings.line_height - 1.0) / 2;
+                    b.y -= py;
+                    b.h += py * 2;
+
+                    if (!fullsize) {
+                        b.y++;
+                        b.h -= 2;
+                    }
+
+                    draw_rect(b, color);
+                };
+
                 auto relative_y = 0;
                 for (u32 y = view.y; y < view.y + view.h; y++, relative_y++) {
                     if (y >= buf->lines.len) break;
@@ -4320,7 +4349,7 @@ void UI::draw_everything() {
                     int line_start = 0;
                     {
                         int i = 0;
-                        for (; i < view.x && cp_idx < line->len;) {
+                        while (i < view.x && cp_idx < line->len) {
                             if (line->at(cp_idx) == '\t') {
                                 i += options.tabsize - (i % options.tabsize);
                                 cp_idx++;
@@ -4340,18 +4369,24 @@ void UI::draw_everything() {
                     if (line_start > view.x)
                         cur_pos.x += (line_start - view.x) * font->width;
 
-                    for (u32 x = line_start, vx = line_start; vx < view.x + view.w; x++) {
+                    u32 x = buf->idx_cp_to_byte(y, cp_idx), vx = line_start;
+                    while (vx < view.x + view.w) {
                         if (cp_idx >= line->len) break;
 
                         auto curr_cp_idx = cp_idx;
+                        int curr_cp = line->at(cp_idx);
+                        int grapheme_cpsize = 0;
 
-                        int curr_cp = line->at(cp_idx++);
-                        int grapheme_cpsize = 1;
+                        {
+                            auto uch = curr_cp;
+                            while (true) {
+                                cp_idx++;
+                                x += uchar_size(uch);
+                                grapheme_cpsize++;
 
-                        // grab another cluster
-                        while (cp_idx < line->len && !gc.feed(line->at(cp_idx))) {
-                            cp_idx++;
-                            grapheme_cpsize++;
+                                if (cp_idx >= line->len) break;
+                                if (gc.feed(uch = line->at(cp_idx))) break;
+                            }
                         }
 
                         int glyph_width = 0;
@@ -4380,46 +4415,36 @@ void UI::draw_everything() {
 
                         if (editor->cur == new_cur2((u32)curr_cp_idx, (u32)y)) {
                             draw_cursor(glyph_width);
-                            if (current_pane == world.current_pane)
+                            if (current_pane == world.current_pane && world.use_nvim)
                                 text_color = rgba(global_colors.cursor_foreground);
-                        } else if (world.nvim.mode != VI_INSERT) {
+                        } else if (world.use_nvim && world.nvim.mode != VI_INSERT) {
                             auto topline = editor->nvim_data.grid_topline;
                             if (topline <= y && y < topline + NVIM_DEFAULT_HEIGHT) {
-                                for (int i = 0; i < glyph_width && vx+i < _countof(editor->highlights[y - topline]); i++) {
-                                    auto draw_highlight = [&](vec4f color) {
-                                        boxf b;
-                                        b.pos = cur_pos;
-                                        b.x += font->width * i;
-                                        b.y -= font->offset_y;
-                                        b.w = font->width;
-                                        b.h = font->height;
+                                int i = 0;
+                                while (i < glyph_width && vx+i < _countof(editor->highlights[y - topline]))
+                                    i++;
 
-                                        auto py = font->height * (settings.line_height - 1.0) / 2;
-                                        b.y -= py;
-                                        b.h += py * 2;
-
-                                        b.y++;
-                                        b.h -= 2;
-
-                                        draw_rect(b, color);
-                                    };
-
-                                    auto hl = editor->highlights[y - topline][vx + i];
-                                    switch (hl) {
-                                    case HL_INCSEARCH:
-                                        draw_highlight(rgba(global_colors.foreground));
-                                        text_color = rgba(global_colors.background);
-                                        break;
-                                    case HL_SEARCH:
-                                        draw_highlight(rgba(global_colors.search_background));
-                                        text_color = rgba(global_colors.search_foreground);
-                                        break;
-                                    case HL_VISUAL:
-                                        draw_highlight(rgba(global_colors.visual_background));
-                                        text_color = rgba(global_colors.visual_foreground);
-                                        break;
-                                    }
+                                auto hl = editor->highlights[y - topline][vx];
+                                switch (hl) {
+                                case HL_INCSEARCH:
+                                    draw_highlight(rgba(global_colors.foreground), i);
+                                    text_color = rgba(global_colors.background);
+                                    break;
+                                case HL_SEARCH:
+                                    draw_highlight(rgba(global_colors.search_background), i);
+                                    text_color = rgba(global_colors.search_foreground);
+                                    break;
+                                case HL_VISUAL:
+                                    draw_highlight(rgba(global_colors.visual_background), i);
+                                    text_color = rgba(global_colors.visual_foreground);
+                                    break;
                                 }
+                            }
+                        } else if (!world.use_nvim && editor->selecting) {
+                            auto pos = new_cur2((u32)curr_cp_idx, (u32)y);
+                            if (select_start <= pos && pos < select_end) {
+                                draw_highlight(rgba(global_colors.visual_background), glyph_width, true);
+                                text_color = rgba(global_colors.visual_foreground);
                             }
                         }
 
@@ -4439,37 +4464,30 @@ void UI::draw_everything() {
                         } else {
                             draw_char(&cur_pos, uch, text_color);
                         }
+
                         vx += glyph_width;
                     }
 
                     if (line->len == 0) {
-                        auto topline = editor->nvim_data.grid_topline;
-                        if (topline <= y && y < topline + NVIM_DEFAULT_HEIGHT) {
-                            auto draw_highlight = [&](vec4f color) {
-                                boxf b;
-                                b.pos = cur_pos;
-                                b.y -= font->offset_y;
-                                b.w = font->width;
-                                b.h = font->height;
-
-                                auto py = font->height * (settings.line_height - 1.0) / 2;
-                                b.y -= py;
-                                b.h += py * 2;
-
-                                draw_rect(b, color);
-                            };
-
-                            switch (editor->highlights[y - topline][0]) {
-                            case HL_INCSEARCH:
-                                draw_highlight(rgba(global_colors.foreground));
-                                break;
-                            case HL_SEARCH:
-                                draw_highlight(rgba(global_colors.search_background));
-                                break;
-                            case HL_VISUAL:
-                                draw_highlight(rgba(global_colors.visual_background));
-                                break;
+                        if (world.use_nvim) {
+                            auto topline = editor->nvim_data.grid_topline;
+                            if (topline <= y && y < topline + NVIM_DEFAULT_HEIGHT) {
+                                switch (editor->highlights[y - topline][0]) {
+                                case HL_INCSEARCH:
+                                    draw_highlight(rgba(global_colors.foreground), 1);
+                                    break;
+                                case HL_SEARCH:
+                                    draw_highlight(rgba(global_colors.search_background), 1);
+                                    break;
+                                case HL_VISUAL:
+                                    draw_highlight(rgba(global_colors.visual_background), 1);
+                                    break;
+                                }
                             }
+                        } else {
+                            auto pos = new_cur2((u32)0, (u32)y);
+                            if (select_start <= pos && pos < select_end)
+                                draw_highlight(rgba(global_colors.visual_background), 1, true);
                         }
                     }
 
@@ -5214,13 +5232,15 @@ void UI::recalculate_view_sizes(bool force) {
             // cursor is on the screen.
             editor.ensure_cursor_on_screen_by_moving_view();
 
-            auto& nv = world.nvim;
-            nv.start_request_message("nvim_win_set_option", 3);
-            nv.writer.write_int(editor.nvim_data.win_id);
-            nv.writer.write_string("scroll");
-            print("new scroll: %d", editor.view.h / 2);
-            nv.writer.write_int(editor.view.h / 2);
-            nv.end_message();
+            if (world.use_nvim) {
+                auto& nv = world.nvim;
+                nv.start_request_message("nvim_win_set_option", 3);
+                nv.writer.write_int(editor.nvim_data.win_id);
+                nv.writer.write_string("scroll");
+                print("new scroll: %d", editor.view.h / 2);
+                nv.writer.write_int(editor.view.h / 2);
+                nv.end_message();
+            }
         }
     }
 }

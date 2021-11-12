@@ -86,9 +86,11 @@ enum {
 };
 
 #if OS_MAC
-#define KEYMOD_PRIMARY KEYMOD_CMD
+#   define KEYMOD_PRIMARY KEYMOD_CMD
+#   define KEYMOD_TEXT KEYMOD_ALT
 #else
-#define KEYMOD_PRIMARY KEYMOD_CTRL
+#   define KEYMOD_PRIMARY KEYMOD_CTRL
+#   define KEYMOD_TEXT KEYMOD_CTRL
 #endif
 
 enum Dbg_Index_Type {
@@ -208,6 +210,8 @@ struct UI {
     void imgui_pop_font();
 
     void focus_keyboard(Wnd *wnd, int cond = FKC_APPEARING | FKC_FOCUSING);
+
+    void help_marker(ccstr text);
 };
 
 extern UI ui;
