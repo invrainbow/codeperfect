@@ -400,15 +400,21 @@ bool UI::imgui_is_window_focusing(bool *b) {
     return !old_focus && *b;
 }
 
-void UI::help_marker(ccstr text) {
+void UI::help_marker(fn<void()> cb) {
     ImGui::TextDisabled(ICON_MD_HELP_OUTLINE);
     if (ImGui::IsItemHovered()) {
         ImGui::BeginTooltip();
         ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
-        ImGui::TextUnformatted(text);
+        cb();
         ImGui::PopTextWrapPos();
         ImGui::EndTooltip();
     }
+}
+
+void UI::help_marker(ccstr text) {
+    help_marker([&]() {
+        ImGui::TextUnformatted(text);
+    });
 }
 
 void UI::render_godecl(Godecl *decl) {
@@ -2076,19 +2082,34 @@ void UI::draw_everything() {
         ImGui::Begin("Find Interfaces", p_open, ImGuiWindowFlags_AlwaysAutoResize);
 
         if (wnd.done) {
-            imgui_push_mono_font();
+            ImGui::Checkbox("Show empty interfaces", &wnd.include_empty);
+            ImGui::SameLine();
+            help_marker("An empty interface{} is always implemented by every type. This checkbox lets you hide these from the results.");
+
+            imgui_small_newline();
 
             if (wnd.results != NULL && wnd.results->len > 0) {
+                imgui_push_mono_font();
                 For (*wnd.results) {
+                    auto is_empty = [&]() {
+                        auto gotype = it->decl->decl->gotype;
+                        if (gotype == NULL) return false;
+                        if (gotype->type != GOTYPE_INTERFACE) return false;
+                        return isempty(gotype->interface_specs);
+                    };
+
+                    if (!wnd.include_empty && is_empty())
+                        continue;
+
                     // TODO: previews
-                    if (ImGui::Selectable(our_sprintf("%s (%s)", it->decl->decl->name, it->decl->ctx->import_path)))
+                    if (ImGui::Selectable(our_sprintf("%s.%s (%s)", it->package_name, it->decl->decl->name, it->decl->ctx->import_path)))
                         goto_file_and_pos(it->filepath, it->decl->decl->name_start);
                 }
+                imgui_pop_font();
             } else {
                 ImGui::Text("No interfaces found.");
             }
 
-            imgui_pop_font();
         } else {
             ImGui::Text("Searching...");
             ImGui::SameLine();
@@ -2117,7 +2138,7 @@ void UI::draw_everything() {
 
             For (*wnd.results) {
                 // TODO: previews
-                if (ImGui::Selectable(our_sprintf("%s (%s)", it->decl->decl->name, it->decl->ctx->import_path)))
+                if (ImGui::Selectable(our_sprintf("%s.%s (%s)", it->package_name, it->decl->decl->name, it->decl->ctx->import_path)))
                     goto_file_and_pos(it->filepath, it->decl->decl->name_start);
             }
 
@@ -2208,126 +2229,9 @@ void UI::draw_everything() {
         focus_keyboard(&wnd);
 
         if (ImGui::InputText("##search_for_symbol_generate_implementation", wnd.query, _countof(wnd.query), ImGuiInputTextFlags_EnterReturnsTrue)) {
+            do_generate_implementation();
             wnd.show = false;
             ImGui::SetWindowFocus(NULL);
-
-            // actually generate the implementation
-            // ------------------------------------
-
-            do {
-                if (wnd.filtered_results->len == 0) break;
-
-                auto &ind = world.indexer;
-
-                if (!ind.try_acquire_lock(IND_READING)) break;
-                defer { ind.release_lock(IND_READING); };
-
-                auto &symbol = wnd.symbols->at(wnd.filtered_results->at(wnd.selection));
-
-                Goresult *src = NULL, *dest = NULL;
-                if (wnd.selected_interface) {
-                    src = wnd.declres;
-                    dest = symbol.decl;
-                } else {
-                    src = symbol.decl;
-                    dest = wnd.declres;
-                }
-
-                auto src_gotype = src->decl->gotype;
-                auto dest_gotype = dest->decl->gotype;
-
-                if (src_gotype == NULL) break;
-                if (src_gotype->type != GOTYPE_INTERFACE) break;
-
-                if (dest_gotype == NULL) break;
-                if (dest_gotype->type == GOTYPE_INTERFACE) break;
-
-                auto src_methods = ind.list_interface_methods(src->wrap(src_gotype));
-                if (src_methods == NULL) break;
-
-                auto dest_methods = alloc_list<Goresult>();
-                if (!ind.list_type_methods(dest->decl->name, dest->ctx->import_path, dest_methods))
-                    break;
-
-                auto methods_to_add = alloc_list<Goresult>();
-                For (*src_methods) {
-                    auto &srcmeth = it;
-                    For (*dest_methods)
-                        if (streq(srcmeth.decl->name, it.decl->name))
-                            if (ind.are_gotypes_equal(src->wrap(srcmeth.decl->gotype), dest->wrap(it.decl->gotype)))
-                                goto skip;
-                    methods_to_add->append(&it);
-                skip:;
-                }
-
-                auto type_name = dest->decl->name;
-
-                auto generate_type_var = [&]() {
-                    auto s = alloc_list<char>();
-                    for (int i = 0, len = strlen(type_name); i < len && s->len < 3; i++)
-                        if (isupper(type_name[i]))
-                            s->append(tolower(type_name[i]));
-                    s->append('\0');
-                    return s->items;
-                };
-
-                auto type_var = generate_type_var();
-
-                Text_Renderer rend; rend.init();
-
-                auto render_type = [&](Gotype *gotype) {
-                    // TODO: handle sel/imports
-                    Type_Renderer tr; tr.init();
-                    tr.write_type(gotype);
-                    return tr.finish();
-                };
-
-                For (*methods_to_add) {
-                    auto gotype = it.decl->gotype;
-                    if (gotype == NULL) continue;
-                    if (gotype->type != GOTYPE_FUNC) continue;
-
-                    auto &sig = gotype->func_sig;
-
-                    rend.write("func (%s *%s) %s(", type_var, type_name, it.decl->name);
-
-                    bool first = true;
-                    For (*sig.params) {
-                        if (first)
-                            first = false;
-                        else
-                            rend.write(", ");
-                        rend.write("%s %s", it.name, render_type(it.gotype));
-                    }
-
-                    rend.write(") ");
-
-                    if (!isempty(sig.result)) {
-                        if (sig.result->len > 1) rend.write("(");
-
-                        bool first = true;
-                        For (*sig.result) {
-                            if (first)
-                                first = false;
-                            else
-                                rend.write(", ");
-                            rend.write("%s", render_type(it.gotype));
-                        }
-
-                        if (sig.result->len > 1) rend.write(")");
-                    }
-
-                    rend.write(" {\n\tpanic(\"not implemented\")\n}\n\n");
-                }
-
-                auto s = rend.finish();
-                print("%s", s);
-                // TODO: actually add s
-
-                // print("selected type %s is at %s/%s:%s",
-                //       symbol.name, symbol.decl->ctx->import_path, symbol.decl->ctx->filename,
-                //       format_cur(symbol.decl->decl->decl_start)
-            } while (0);
         }
 
         if (ImGui::IsItemEdited()) {
@@ -4870,97 +4774,94 @@ void UI::end_frame() {
                         text_end = pos.x + strlen(str) * font->width;
                     }
 
+                    auto render_description = [&]() -> ccstr {
+                        switch (result.type) {
+                        case ACR_DECLARATION: {
+                            auto decl = result.declaration_godecl;
+                            switch (decl->type) {
+                            case GODECL_IMPORT:
+                                // is this even possible here?
+                                // handle either way
+                                return our_sprintf("\"%s\"", decl->import_path);
+                            case GODECL_TYPE:
+                            case GODECL_VAR:
+                            case GODECL_CONST:
+                            case GODECL_SHORTVAR:
+                            case GODECL_FUNC:
+                            case GODECL_FIELD:
+                            case GODECL_PARAM: {
+                                auto gotype = result.declaration_evaluated_gotype;
+                                if (gotype == NULL) return "";
+
+                                Type_Renderer rend;
+                                rend.init();
+                                rend.write_type(gotype, false);
+                                return rend.finish();
+                            }
+                            }
+                            break;
+                        }
+                        case ACR_KEYWORD:
+                            if (streq(result.name, "package")) return "Declare package";
+                            if (streq(result.name, "import")) return "Declare import";
+                            if (streq(result.name, "const")) return "Declare constant";
+                            if (streq(result.name, "var")) return "Declare variable";
+                            if (streq(result.name, "func")) return "Declare function";
+                            if (streq(result.name, "type")) return "Declare type";
+                            if (streq(result.name, "struct")) return "Declare struct type";
+                            if (streq(result.name, "interface")) return "Declare interface type";
+                            if (streq(result.name, "map")) return "Declare map type";
+                            if (streq(result.name, "chan")) return "Declare channel type";
+                            if (streq(result.name, "fallthrough")) return "Fall through to next case";
+                            if (streq(result.name, "break")) return "Break out";
+                            if (streq(result.name, "continue")) return "Continue to next iteration";
+                            if (streq(result.name, "goto")) return "Go to label";
+                            if (streq(result.name, "return")) return "Return from function";
+                            if (streq(result.name, "go")) return "Spawn goroutine";
+                            if (streq(result.name, "defer")) return "Defer statement to end of function";
+                            if (streq(result.name, "if")) return "Begin branching conditional";
+                            if (streq(result.name, "else")) return "Specify else clause";
+                            if (streq(result.name, "for")) return "Declare loop";
+                            if (streq(result.name, "range")) return "Iterate over collection";
+                            if (streq(result.name, "switch")) return "Match expression against values";
+                            if (streq(result.name, "case")) return "Declare case";
+                            if (streq(result.name, "default")) return "Declare the default case";
+                            if (streq(result.name, "select")) return "Wait for a number of channels";
+                            if (streq(result.name, "new")) return "Allocate new instance of type";
+                            if (streq(result.name, "make")) return "Make new instance of type";
+                            if (streq(result.name, "iota")) return "Counter in variable declaration";
+                        case ACR_POSTFIX:
+                            switch (result.postfix_operation) {
+                            case PFC_ASSIGNAPPEND: return "append and assign";
+                            case PFC_APPEND: return "append";
+                            case PFC_LEN: return "len";
+                            case PFC_CAP: return "cap";
+                            case PFC_FOR: return "iterate over collection";
+                            case PFC_FORKEY: return "iterate over keys";
+                            case PFC_FORVALUE: return "iterate over values";
+                            case PFC_NIL: return "nil";
+                            case PFC_NOTNIL: return "not nil";
+                            case PFC_NOT: return "not";
+                            case PFC_EMPTY: return "empty";
+                            case PFC_IFEMPTY: return "check if empty";
+                            case PFC_IF: return "check if true";
+                            case PFC_IFNOT: return "check if false";
+                            case PFC_IFNIL: return "check if nil";
+                            case PFC_IFNOTNIL: return "check if not nil";
+                            case PFC_CHECK: return "check returned error";
+                            case PFC_DEFSTRUCT: return "define a struct";
+                            case PFC_DEFINTERFACE: return "define an interface";
+                            case PFC_SWITCH: return "switch on expression";
+                            }
+                            break;
+                        case ACR_IMPORT:
+                            return our_sprintf("\"%s\"", result.import_path);
+                        }
+                        return "";
+                    };
+
                     {
                         SCOPED_FRAME();
-
-                        auto render_type = [&](Gotype *gotype) -> ccstr {
-                            if (gotype == NULL) return "";
-
-                            Type_Renderer rend;
-                            rend.init();
-                            rend.write_type(gotype, false);
-                            return rend.finish();
-                        };
-
-                        auto render_description = [&]() -> ccstr {
-                            switch (result.type) {
-                            case ACR_DECLARATION:
-                                {
-                                    auto decl = result.declaration_godecl;
-                                    switch (decl->type) {
-                                    case GODECL_IMPORT:
-                                        // is this even possible here?
-                                        // handle either way
-                                        return our_sprintf("\"%s\"", decl->import_path);
-                                    case GODECL_TYPE:
-                                    case GODECL_VAR:
-                                    case GODECL_CONST:
-                                    case GODECL_SHORTVAR:
-                                    case GODECL_FUNC:
-                                    case GODECL_FIELD:
-                                    case GODECL_PARAM:
-                                        return render_type(result.declaration_evaluated_gotype);
-                                    }
-                                }
-                                break;
-                            case ACR_KEYWORD:
-                                if (streq(result.name, "package")) return "Declare package";
-                                if (streq(result.name, "import")) return "Declare import";
-                                if (streq(result.name, "const")) return "Declare constant";
-                                if (streq(result.name, "var")) return "Declare variable";
-                                if (streq(result.name, "func")) return "Declare function";
-                                if (streq(result.name, "type")) return "Declare type";
-                                if (streq(result.name, "struct")) return "Declare struct type";
-                                if (streq(result.name, "interface")) return "Declare interface type";
-                                if (streq(result.name, "map")) return "Declare map type";
-                                if (streq(result.name, "chan")) return "Declare channel type";
-                                if (streq(result.name, "fallthrough")) return "Fall through to next case";
-                                if (streq(result.name, "break")) return "Break out";
-                                if (streq(result.name, "continue")) return "Continue to next iteration";
-                                if (streq(result.name, "goto")) return "Go to label";
-                                if (streq(result.name, "return")) return "Return from function";
-                                if (streq(result.name, "go")) return "Spawn goroutine";
-                                if (streq(result.name, "defer")) return "Defer statement to end of function";
-                                if (streq(result.name, "if")) return "Begin branching conditional";
-                                if (streq(result.name, "else")) return "Specify else clause";
-                                if (streq(result.name, "for")) return "Declare loop";
-                                if (streq(result.name, "range")) return "Iterate over collection";
-                                if (streq(result.name, "switch")) return "Match expression against values";
-                                if (streq(result.name, "case")) return "Declare case";
-                                if (streq(result.name, "default")) return "Declare the default case";
-                                if (streq(result.name, "select")) return "Wait for a number of channels";
-                                if (streq(result.name, "new")) return "Allocate new instance of type";
-                                if (streq(result.name, "make")) return "Make new instance of type";
-                                if (streq(result.name, "iota")) return "Counter in variable declaration";
-                            case ACR_POSTFIX:
-                                switch (result.postfix_operation) {
-                                case PFC_ASSIGNAPPEND: return "append and assign";
-                                case PFC_APPEND: return "append";
-                                case PFC_LEN: return "len";
-                                case PFC_CAP: return "cap";
-                                case PFC_FOR: return "iterate over collection";
-                                case PFC_FORKEY: return "iterate over keys";
-                                case PFC_FORVALUE: return "iterate over values";
-                                case PFC_NIL: return "nil";
-                                case PFC_NOTNIL: return "not nil";
-                                case PFC_NOT: return "not";
-                                case PFC_EMPTY: return "empty";
-                                case PFC_IFEMPTY: return "check if empty";
-                                case PFC_IF: return "check if true";
-                                case PFC_IFNOT: return "check if false";
-                                case PFC_IFNIL: return "check if nil";
-                                case PFC_IFNOTNIL: return "check if not nil";
-                                case PFC_CHECK: return "check returned error";
-                                case PFC_DEFSTRUCT: return "define a struct";
-                                case PFC_DEFINTERFACE: return "define an interface";
-                                case PFC_SWITCH: return "switch on expression";
-                                }
-                                break;
-                            case ACR_IMPORT:
-                                return our_sprintf("\"%s\"", result.import_path);
-                            }
-                            return "";
-                        };
 
                         auto desc = render_description();
                         auto desclen = strlen(desc);

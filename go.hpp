@@ -1192,6 +1192,7 @@ struct Find_References_File {
 struct Find_Decl {
     ccstr filepath;
     Goresult *decl;
+    ccstr package_name;
 
     Find_Decl* copy();
 };
@@ -1330,7 +1331,6 @@ struct Go_Indexer {
     List<Goresult> *list_interface_methods(Goresult *interface);
     bool list_interface_methods(Goresult *interface, List<Goresult> *out);
 
-    void find_interfaces_implemented(ccstr filepath, cur2 pos);
     void fill_generate_implementation(List<Go_Symbol> *out, bool selected_interface);
     bool list_type_methods(ccstr type_name, ccstr import_path, List<Goresult> *out);
 };

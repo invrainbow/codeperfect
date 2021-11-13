@@ -212,6 +212,7 @@ struct UI {
     void focus_keyboard(Wnd *wnd, int cond = FKC_APPEARING | FKC_FOCUSING);
 
     void help_marker(ccstr text);
+    void help_marker(fn<void()> cb);
 };
 
 extern UI ui;

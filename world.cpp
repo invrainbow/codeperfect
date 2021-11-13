@@ -335,89 +335,6 @@ bool copy_file(ccstr src, ccstr dest) {
     return f.write((char*)fm->data, fm->len);
 }
 
-void shell(ccstr s, ccstr dir) {
-    Process p;
-    p.init();
-    p.dir = dir;
-    p.run(s);
-    while (p.status() == PROCESS_WAITING) continue;
-
-    if (p.exit_code != 0) {
-        print("`%s` code %d, output below:", p.exit_code);
-        char ch;
-        while (p.read1(&ch)) {
-            printf("%c", ch);
-        }
-        our_panic("askldjfhalkfh");
-    }
-}
-
-void prepare_workspace() {
-    auto p = [&](ccstr f) {
-        return path_join(world.current_path, f);
-    };
-
-    if (!copy_file(p("main.go.bak"), p("main.go")))
-        our_panic("failed to copy main.go.bak");
-
-    delete_rm_rf(p("db.tmp"));
-    delete_rm_rf(p("go.mod"));
-    delete_rm_rf(p("go.sum"));
-
-    shell("go mod init github.com/invrainbow/life", world.current_path);
-    shell("go mod tidy", world.current_path);
-}
-
-void World::init_workspace() {
-    resizing_pane = -1;
-
-    panes.init(LIST_FIXED, _countof(_panes), _panes);
-
-#if 1
-    // if testing
-    if (world.window == NULL) {
-        strcpy_safe(current_path, _countof(current_path), "/Users/bh/ide/api");
-    } else if (gargc >= 2) {
-        strcpy_safe(current_path, _countof(current_path), gargv[1]);
-    } else {
-        Select_File_Opts opts; ptr0(&opts);
-        opts.buf = current_path;
-        opts.bufsize = _countof(current_path);
-        opts.folder = true;
-        opts.save = false;
-        if (!let_user_select_file(&opts)) exit(0);
-    }
-#else
-    {
-        SCOPED_FRAME();
-
-        File f;
-        f.init(".cpdefaultfolder", FILE_MODE_READ, FILE_OPEN_EXISTING);
-        defer { f.cleanup(); };
-
-        List<char> chars;
-        chars.init();
-
-        char ch;
-        while (f.read(&ch, 1) && ch != '\0' && ch != '\r' && ch != '\n')
-            chars.append(ch);
-
-        chars.append('\0');
-        strcpy_safe(current_path, _countof(current_path), normalize_path_sep(chars.items));
-    }
-#endif
-
-    GHGitIgnoreInit(current_path);
-    xplat_chdir(current_path);
-
-    project_settings.read(path_join(current_path, ".cpproj"));
-
-    /*
-    if (project_settings.build_command[0] == '\0')
-        strcpy_safe(project_settings.build_command, _countof(project_settings.build_command), "go build --gcflags=\"all=-N -l\" ");
-    */
-}
-
 void World::init(GLFWwindow *_wnd) {
     ptr0(this);
 
@@ -442,24 +359,7 @@ void World::init(GLFWwindow *_wnd) {
     init_mem(find_interfaces_mem);
 #undef init_mem
 
-    // use frame_mem as the default mem
     MEM = &frame_mem;
-
-    /*
-    auto get_path = [&]() -> ccstr {
-        Process proc;
-        defer { proc.cleanup(); };
-        proc.run("echo $PATH");
-
-        Text_Renderer r;
-        r.init();
-        char ch;
-        while (proc.read1(&ch)) r.writechar(ch);
-        return r.finish();
-    };
-
-    tell_user(our_sprintf("PATH = %s", get_path()), NULL);
-    */
 
     global_mark_tree_lock.init();
 
@@ -519,11 +419,31 @@ void World::init(GLFWwindow *_wnd) {
 
     fzy_init();
 
-    // prepare_workspace();
-    // build helper
-    // shell("go build helper.go", "w:/helper");
+    // init workspace
+    {
+        resizing_pane = -1;
+        panes.init(LIST_FIXED, _countof(_panes), _panes);
 
-    init_workspace();
+        // if testing
+        if (world.window == NULL) {
+            strcpy_safe(current_path, _countof(current_path), "/Users/bh/ide/api");
+        } else if (gargc >= 2) {
+            strcpy_safe(current_path, _countof(current_path), gargv[1]);
+        } else {
+            Select_File_Opts opts; ptr0(&opts);
+            opts.buf = current_path;
+            opts.bufsize = _countof(current_path);
+            opts.folder = true;
+            opts.save = false;
+            if (!let_user_select_file(&opts)) exit(0);
+        }
+
+        GHGitIgnoreInit(current_path);
+        xplat_chdir(current_path);
+
+        project_settings.read(path_join(current_path, ".cpproj"));
+    }
+
     indexer.init();
     if (use_nvim) nvim.init();
     dbg.init();
@@ -2164,4 +2084,171 @@ void open_add_file_or_folder(bool folder, FT_Node *dest) {
     wnd.folder = folder;
     wnd.show = true;
     wnd.name[0] = '\0';
+}
+
+void do_generate_implementation() {
+    auto &wnd = world.wnd_generate_implementation;
+    if (wnd.filtered_results->len == 0) return;
+
+    auto &ind = world.indexer;
+    if (!ind.try_acquire_lock(IND_READING)) return;
+    defer { ind.release_lock(IND_READING); };
+
+    auto &symbol = wnd.symbols->at(wnd.filtered_results->at(wnd.selection));
+
+    Goresult *src = NULL, *dest = NULL;
+    if (wnd.selected_interface) {
+        src = wnd.declres;
+        dest = symbol.decl;
+    } else {
+        src = symbol.decl;
+        dest = wnd.declres;
+    }
+
+    auto src_gotype = src->decl->gotype;
+    auto dest_gotype = dest->decl->gotype;
+
+    if (src_gotype == NULL) return;
+    if (src_gotype->type != GOTYPE_INTERFACE) return;
+
+    if (dest_gotype == NULL) return;
+    if (dest_gotype->type == GOTYPE_INTERFACE) return;
+
+    auto src_methods = ind.list_interface_methods(src->wrap(src_gotype));
+    if (src_methods == NULL) return;
+
+    auto dest_methods = alloc_list<Goresult>();
+    if (!ind.list_type_methods(dest->decl->name, dest->ctx->import_path, dest_methods))
+        break;
+
+    auto methods_to_add = alloc_list<Goresult>();
+    For (*src_methods) {
+        auto &srcmeth = it;
+        For (*dest_methods)
+            if (streq(srcmeth.decl->name, it.decl->name))
+                if (ind.are_gotypes_equal(src->wrap(srcmeth.decl->gotype), dest->wrap(it.decl->gotype)))
+                    goto skip;
+        methods_to_add->append(&it);
+    skip:;
+    }
+
+    auto type_name = dest->decl->name;
+
+    auto generate_type_var = [&]() {
+        auto s = alloc_list<char>();
+        for (int i = 0, len = strlen(type_name); i < len && s->len < 3; i++)
+            if (isupper(type_name[i]))
+                s->append(tolower(type_name[i]));
+        s->append('\0');
+        return s->items;
+    };
+
+    auto type_var = generate_type_var();
+
+    Text_Renderer rend; rend.init();
+
+    struct Import_To_Add {
+        ccstr import_path;
+        ccstr package_name;
+        bool declare_explicitly;
+    };
+
+    auto imports_to_add = alloc_list<Import_To_Add>();
+    auto errors = alloc_list<ccstr>();
+
+    auto add_error = [&](ccstr fmt, ...) {
+        va_list vl;
+        va_start(vl, fmt);
+        auto ret = our_vsprintf(fmt, vl);
+        va_end();
+
+        errors->append(ret);
+    };
+
+    auto render_type = [&](Goresult *res, ccstr method_name) {
+        auto gotype = res->gotype;
+        switch (gotype->type) {
+        case GOTYPE_ID:
+        case GOTYPE_SEL: {
+            ccstr *import_path, *name;
+
+            if (gotype == GOTYPE_ID) {
+                import_path = res->ctx->import_path;
+                name = gotype->id_name;
+            } else  {
+                import_path = ind.find_import_path_referred_to_by_id(gotype->sel_name, res->ctx);
+                name = gotype->sel_sel;
+            }
+
+            auto res = find_decl_in_package(name, import_path);
+            if (res == NULL || if (res->decl->type != GODECL_TYPE) {
+                ccstr typestr = NULL;
+                if (gotype->type == GOTYPE_ID)
+                    typestr = gotype->id_name;
+                else
+                    typestr = our_sprintf("%s.%s", gotype->sel_name, gotype->sel_sel);
+
+                add_error(
+                    "Unable to add method %s because we couldn't resolve type %s.",
+                    method_name,
+                    typestr
+                );
+                break;
+            }
+
+            imports_to_add->append(import_path);
+            break;
+        }
+        }
+
+        Type_Renderer tr; tr.init();
+        tr.write_type(gotype);
+        return tr.finish();
+    };
+
+    For (*methods_to_add) {
+        auto gotype = it.decl->gotype;
+        if (gotype == NULL) continue;
+        if (gotype->type != GOTYPE_FUNC) continue;
+
+        auto &sig = gotype->func_sig;
+
+        rend.write("func (%s *%s) %s(", type_var, type_name, it.decl->name);
+
+        bool first = true;
+        For (*sig.params) {
+            if (first)
+                first = false;
+            else
+                rend.write(", ");
+            rend.write("%s %s", it.name, render_type(it.gotype, it.name));
+        }
+
+        rend.write(") ");
+
+        if (!isempty(sig.result)) {
+            if (sig.result->len > 1) rend.write("(");
+
+            bool first = true;
+            For (*sig.result) {
+                if (first)
+                    first = false;
+                else
+                    rend.write(", ");
+                rend.write("%s", render_type(it.gotype, it.name));
+            }
+
+            if (sig.result->len > 1) rend.write(")");
+        }
+
+        rend.write(" {\n\tpanic(\"not implemented\")\n}\n\n");
+    }
+
+    auto s = rend.finish();
+    print("%s", s);
+    // TODO: actually add s
+
+    // print("selected type %s is at %s/%s:%s",
+    //       symbol.name, symbol.decl->ctx->import_path, symbol.decl->ctx->filename,
+    //       format_cur(symbol.decl->decl->decl_start)
 }

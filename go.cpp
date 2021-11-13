@@ -2641,6 +2641,7 @@ List<Find_Decl> *Go_Indexer::find_interfaces(Goresult *target) {
 
     For (*index.packages) {
         auto import_path = it.import_path;
+        auto package_name = it.package_name;
 
         if (!path_has_descendant(index.current_import_path, import_path))
             continue;
@@ -2687,6 +2688,7 @@ List<Find_Decl> *Go_Indexer::find_interfaces(Goresult *target) {
                 Find_Decl result; ptr0(&result);
                 result.filepath = filepath;
                 result.decl = make_goresult(&it, ctx);
+                result.package_name = package_name;
                 ret->append(&result);
             }
         }
@@ -2712,6 +2714,7 @@ List<Find_Decl> *Go_Indexer::find_implementations(Goresult *target) {
     struct Type_Info {
         bool *methods_matched;
         Goresult *decl;
+        ccstr package_name;
     };
 
     Table<Type_Info*> huge_table;
@@ -2730,6 +2733,7 @@ List<Find_Decl> *Go_Indexer::find_implementations(Goresult *target) {
 
     For (*index.packages) {
         auto import_path = it.import_path;
+        auto package_name = it.package_name;
 
         if (!path_has_descendant(index.current_import_path, import_path))
             continue;
@@ -2746,6 +2750,7 @@ List<Find_Decl> *Go_Indexer::find_implementations(Goresult *target) {
                     auto type_name = our_sprintf("%s:%s", import_path, it.name);
                     auto type_info = get_type_info(type_name);
                     type_info->decl = make_goresult(&it, ctx);
+                    type_info->package_name = package_name;
                     continue;
                 }
 
@@ -2811,17 +2816,11 @@ List<Find_Decl> *Go_Indexer::find_implementations(Goresult *target) {
         Find_Decl result; ptr0(&result);
         result.filepath = ctx_to_filepath(info->decl->ctx);
         result.decl = info->decl;
+        result.package_name = info->package_name;
         ret->append(&result);
     }
 
     return ret;
-}
-
-void Go_Indexer::find_interfaces_implemented(ccstr filepath, cur2 pos) {
-    reload_all_dirty_files();
-
-    auto ctx = filepath_to_ctx(filepath);
-    if (ctx == NULL) return;
 }
 
 Jump_To_Definition_Result* Go_Indexer::jump_to_symbol(ccstr symbol) {
@@ -6382,6 +6381,8 @@ ccstr _path_join(ccstr a, ...) {
     if (ret->len > 0) ret->len--; // remove last PATH_SEP
 
     ret->append('\0');
+
+    va_end();
     return ret->items;
 }
 
@@ -6422,6 +6423,7 @@ Find_Decl* Find_Decl::copy() {
     auto ret = clone(this);
     ret->filepath = our_strcpy(filepath);
     ret->decl = decl->copy_decl();
+    ret->package_name = our_strcpy(package_name);
     return ret;
 }
 

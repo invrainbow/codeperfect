@@ -320,6 +320,7 @@ struct World {
         int selection;
         List<int> *filtered_results;
         char query[256];
+        List<ccstr> errors;
 
         // if true, the user selected the interface,
         // and now needs to select the type to add methods on
@@ -342,6 +343,7 @@ struct World {
         bool done;
         Goresult *declres;
         Thread_Handle thread;
+        bool include_empty;
         List<Find_Decl*> *results;
     } wnd_find_interfaces;
 
@@ -372,7 +374,7 @@ struct World {
     struct Wnd_About : Wnd {
     } wnd_about;
 
-    struct : Wnd {
+    struct Wnd_Project_Settings : Wnd {
         Project_Settings tmp;
         int current_debug_profile;
         int current_build_profile;
@@ -382,13 +384,13 @@ struct World {
         bool focus_build_profiles;
     } wnd_project_settings;
 
-    struct : Wnd {
+    struct Error_List : Wnd {
         float height;
     } error_list;
 
     Build build;
 
-    struct : Wnd {
+    struct File_Explorer : Wnd {
         FT_Node *selection;
         // char buf[256];
         // bool adding_something;
@@ -426,7 +428,7 @@ struct World {
         bool im_metrics;
     } windows_open;
 
-    struct : Wnd {
+    struct Wnd_Search_And_Replace : Wnd {
         bool replace;
         char find_str[256];
         char replace_str[256];
@@ -447,10 +449,10 @@ struct World {
         Options tmp;
     } wnd_options;
 
-    struct : Wnd {
+    struct Wnd_Editor_Toplevels : Wnd {
     } wnd_editor_toplevels;
 
-    struct : Wnd {
+    struct Wnd_Add_File_Or_Folder : Wnd {
         char name[MAX_PATH];
         char location[MAX_PATH];
         bool location_is_root;
@@ -458,13 +460,13 @@ struct World {
         FT_Node *dest;
     } wnd_add_file_or_folder;
 
-    struct : Wnd {
+    struct Wnd_Rename_File_or_Folder : Wnd {
         char name[MAX_PATH];
         char location[MAX_PATH];
         FT_Node *target;
     } wnd_rename_file_or_folder;
 
-    struct : Wnd {
+    struct Wnd_Goto_File : Wnd {
         char query[MAX_PATH];
         u32 selection;
         List<ccstr> *filepaths;
@@ -478,7 +480,7 @@ struct World {
         List<Command> *filtered_results;
     } wnd_command;
 
-    struct : Wnd {
+    struct Wnd_Goto_Symbol : Wnd {
         char query[MAX_PATH];
         u32 selection;
         List<ccstr> *symbols;
@@ -499,11 +501,10 @@ struct World {
         Dlv_Var *locals_selection;
     } wnd_debugger;
 
-    struct : Wnd {
+    struct Wnd_Style_Editor : Wnd {
     } wnd_style_editor;
 
     void init(GLFWwindow *_wnd);
-    void init_workspace();
     void start_background_threads();
 };
 
