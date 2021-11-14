@@ -21,8 +21,7 @@ char **gargv = NULL;
 
 bool is_ignored_by_git(ccstr path) {
     // go-gitignore crashes when path == base path
-    if (are_filepaths_equal(path, world.current_path))
-        return false;
+    if (are_filepaths_equal(path, world.current_path)) return false;
     return GHGitIgnoreCheckFile((char*)path);
 }
 
@@ -122,6 +121,7 @@ bool History::go_forward() {
 }
 
 void History::check_marks(int upper) {
+#ifdef DEBUG_MODE
     if (upper == -1) upper = top;
 
     for (auto i = start; i != upper; i = inc(i)) {
@@ -145,6 +145,7 @@ void History::check_marks(int upper) {
         if (it->tree->root != node)
             our_panic("mark node is detached from root!");
     }
+#endif
 }
 
 bool History::go_backward() {
@@ -1213,28 +1214,29 @@ void Build::cleanup() {
     mem.cleanup();
 }
 
+bool has_unsaved_files() {
+    For (world.panes)
+        For (it.editors)
+            if (it.buf->dirty)
+                return true;
+    return false;
+}
+
 void kick_off_rename_identifier() {
+    bool ok = false;
+
     auto &ind = world.indexer;
     if (!ind.acquire_lock(IND_READING)) {
         tell_user("The indexer is currently busy.", NULL);
         return;
     }
 
-    auto has_unsaved_files = [&]() {
-        For (world.panes)
-            For (it.editors)
-                if (it.buf->dirty)
-                    return true;
-        return false;
-    };
+    defer { if (!ok) ind.release_lock(IND_READING); };
 
     if (has_unsaved_files()) {
-        tell_user("Please save all your unsaved files before running the Rename operation.", "Unsaved files");
+        tell_user("Please save all your unsaved files before running Rename.", "Unsaved files");
         return;
     }
-
-    // TODO: when do we release the lock?
-    // TODO: seems we need a new "running" indexer status
 
     auto thread_proc = [](void *param) {
         // TODO: put a sleep here so we can test out cancellation shit
@@ -1321,6 +1323,8 @@ void kick_off_rename_identifier() {
         tell_user("Unable to kick off Rename Identifier.", NULL);
         return;
     }
+
+    ok = true;
 }
 
 void cancel_find_interfaces() {
@@ -1860,18 +1864,32 @@ void handle_command(Command cmd, bool from_menu) {
             auto &wnd = world.wnd_generate_implementation;
             ptr0(&wnd);
 
+            if (has_unsaved_files()) {
+                tell_user("Please save all your unsaved files before running Generate Implementation.", "Unsaved files");
+                break;
+            }
+
+            auto &ind = world.indexer;
+
             auto result = get_current_definition();
             if (result == NULL) break;
             if (result->decl == NULL) break;
-            if (result->decl->gotype == NULL) break;
 
-            if (!world.indexer.acquire_lock(IND_READING, true)) break;
-            defer { world.indexer.release_lock(IND_READING); };
+            auto decl = result->decl->decl;
+            if (decl->gotype == NULL) break;
+
+            if (!ind.acquire_lock(IND_READING, true)) break;
+            defer { ind.release_lock(IND_READING); };
 
             world.generate_implementation_mem.reset();
 
+            auto gofile = ind.find_gofile_from_ctx(result->decl->ctx);
+            if (gofile == NULL) break;
+
             {
                 SCOPED_MEM(&world.generate_implementation_mem);
+
+                wnd.file_hash_on_open = gofile->hash;
                 wnd.declres = result->decl->copy_decl();
                 wnd.filtered_results = alloc_list<int>();
 
@@ -1880,7 +1898,7 @@ void handle_command(Command cmd, bool from_menu) {
             }
 
             auto symbols = alloc_list<Go_Symbol>();
-            world.indexer.fill_generate_implementation(symbols, wnd.selected_interface);
+            ind.fill_generate_implementation(symbols, wnd.selected_interface);
             if (symbols->len == 0) break;
 
             {
@@ -1891,6 +1909,7 @@ void handle_command(Command cmd, bool from_menu) {
                     Go_Symbol sym;
                     sym.name = our_strcpy(it.name);
                     sym.decl = it.decl->copy_decl();
+                    sym.filehash = it.filehash;
                     wnd.symbols->append(&sym);
                 }
             }
@@ -1942,7 +1961,7 @@ void handle_command(Command cmd, bool from_menu) {
 
                 defer { cancel_find_implementations(); };
 
-                auto results = world.indexer.find_implementations(wnd.declres);
+                auto results = ind.find_implementations(wnd.declres);
                 if (results == NULL) return;
 
                 {
@@ -2016,7 +2035,7 @@ void handle_command(Command cmd, bool from_menu) {
 
                 // TODO: how do we handle errors?
                 // right now it just freezes on "Searching..."
-                auto results = world.indexer.find_interfaces(wnd.declres);
+                auto results = ind.find_interfaces(wnd.declres);
                 if (results == NULL) return;
 
                 {
@@ -2094,7 +2113,30 @@ void do_generate_implementation() {
     if (!ind.try_acquire_lock(IND_READING)) return;
     defer { ind.release_lock(IND_READING); };
 
+    if (has_unsaved_files()) {
+        tell_user("Please save all your unsaved files before running Generate Implementation.", "Unsaved files");
+        return;
+    }
+
     auto &symbol = wnd.symbols->at(wnd.filtered_results->at(wnd.selection));
+
+    // check that wnd.declres and symbol.decl haven't changed
+
+    auto check_filehash_hasnt_changed = [&](Go_Ctx *ctx, u64 want) -> bool {
+        auto gofile = ind.find_gofile_from_ctx(ctx);
+        return gofile != NULL && gofile->hash == want;
+    };
+
+    {
+        bool ok = (
+            check_filehash_hasnt_changed(wnd.declres->ctx, wnd.file_hash_on_open) &&
+            check_filehash_hasnt_changed(symbol.decl->ctx, symbol.filehash)
+        );
+        if (!ok) {
+            tell_user("It looks like one or more files involved has changed since you opened Generate Implementation.\n\nPlease save all files and try again", "File mismatch");
+            return;
+        }
+    }
 
     Goresult *src = NULL, *dest = NULL;
     if (wnd.selected_interface) {
@@ -2103,6 +2145,17 @@ void do_generate_implementation() {
     } else {
         src = symbol.decl;
         dest = wnd.declres;
+    }
+
+    Table<ccstr> import_table; import_table.init();
+    Table<ccstr> import_table_r; import_table_r.init();
+
+    auto dest_gofile = ind.find_gofile_from_ctx(dest->ctx);
+    For (*dest_gofile->imports) {
+        auto package_name = ind.get_import_package_name(&it);
+
+        import_table.set(it.import_path, package_name);
+        import_table_r.set(package_name, it.import_path);
     }
 
     auto src_gotype = src->decl->gotype;
@@ -2119,7 +2172,7 @@ void do_generate_implementation() {
 
     auto dest_methods = alloc_list<Goresult>();
     if (!ind.list_type_methods(dest->decl->name, dest->ctx->import_path, dest_methods))
-        break;
+        return;
 
     auto methods_to_add = alloc_list<Goresult>();
     For (*src_methods) {
@@ -2160,49 +2213,102 @@ void do_generate_implementation() {
         va_list vl;
         va_start(vl, fmt);
         auto ret = our_vsprintf(fmt, vl);
-        va_end();
+        va_end(vl);
 
         errors->append(ret);
     };
 
-    auto render_type = [&](Goresult *res, ccstr method_name) {
-        auto gotype = res->gotype;
-        switch (gotype->type) {
-        case GOTYPE_ID:
-        case GOTYPE_SEL: {
-            ccstr *import_path, *name;
+    auto render_type = [&](Goresult *res, ccstr method_name) -> ccstr {
+        bool ok = true;
 
-            if (gotype == GOTYPE_ID) {
-                import_path = res->ctx->import_path;
-                name = gotype->id_name;
-            } else  {
-                import_path = ind.find_import_path_referred_to_by_id(gotype->sel_name, res->ctx);
-                name = gotype->sel_sel;
-            }
-
-            auto res = find_decl_in_package(name, import_path);
-            if (res == NULL || if (res->decl->type != GODECL_TYPE) {
-                ccstr typestr = NULL;
-                if (gotype->type == GOTYPE_ID)
-                    typestr = gotype->id_name;
-                else
-                    typestr = our_sprintf("%s.%s", gotype->sel_name, gotype->sel_sel);
-
-                add_error(
-                    "Unable to add method %s because we couldn't resolve type %s.",
-                    method_name,
-                    typestr
-                );
+        auto handler = [&](Type_Renderer *tr, Gotype *t) -> bool {
+            switch (t->type) {
+            case GOTYPE_ID:
+            case GOTYPE_SEL:
                 break;
+            default:
+                return false;
             }
 
-            imports_to_add->append(import_path);
-            break;
-        }
-        }
+            Goresult *declres = NULL;
+            if (t->type == GOTYPE_ID) {
+                declres = ind.find_decl_of_id(t->id_name, t->id_pos, res->ctx);
+            } else {
+                auto import_path = ind.find_import_path_referred_to_by_id(t->sel_name, res->ctx);
+                declres = ind.find_decl_in_package(t->sel_sel, import_path);
+            }
+
+            if (declres == NULL || declres->decl->type != GODECL_TYPE) {
+                ok = false;
+                return false;
+            }
+
+            auto decl = declres->decl;
+            if (decl->gotype->type == GOTYPE_BUILTIN) {
+                // handle normally with default handler
+                return false;
+            }
+
+            // see what the import is
+            auto import_path = declres->ctx->import_path;
+
+            bool found = false;
+            auto package_name = import_table.get(import_path, &found);
+            if (!found) {
+                auto pkg = ind.find_up_to_date_package(import_path);
+                if (pkg != NULL) {
+                    auto actual_name = pkg->package_name;
+                    bool alias_package = false;
+
+                    for (int i = 0;; i++) {
+                        auto new_name = actual_name;
+                        if (i > 0)
+                            new_name = our_sprintf("%s%d", new_name, i);
+
+                        import_table_r.get(new_name, &found);
+                        if (!found) {
+                            package_name = new_name;
+                            alias_package = i > 0;
+                            break;
+                        }
+                    }
+
+                    import_table.set(import_path, package_name);
+                    import_table_r.set(package_name, import_path);
+
+                    Import_To_Add imp; ptr0(&imp);
+                    imp.import_path = import_path;
+                    imp.package_name = package_name;
+                    imp.declare_explicitly = alias_package;
+                    imports_to_add->append(&imp);
+                }
+            }
+
+            if (package_name == NULL) {
+                ok = false;
+                return false;
+            }
+
+            tr->write("%s.%s", package_name, t->type == GOTYPE_ID ? t->id_name : t->sel_sel);
+            return true;
+        };
+
+        auto t = res->gotype;
 
         Type_Renderer tr; tr.init();
-        tr.write_type(gotype);
+        tr.write_type(t, handler);
+
+        if (!ok) {
+            auto get_typestr = [&]() -> ccstr {
+                if (t->type == GOTYPE_ID)
+                    return t->id_name;
+                return our_sprintf("%s.%s", t->sel_name, t->sel_sel);
+            };
+
+            add_error("Unable to add method %s because we couldn't resolve type %s.", method_name, get_typestr());
+            return NULL;
+        }
+
         return tr.finish();
     };
 
@@ -2213,7 +2319,7 @@ void do_generate_implementation() {
 
         auto &sig = gotype->func_sig;
 
-        rend.write("func (%s *%s) %s(", type_var, type_name, it.decl->name);
+        rend.write("\n\nfunc (%s *%s) %s(", type_var, type_name, it.decl->name);
 
         bool first = true;
         For (*sig.params) {
@@ -2221,7 +2327,7 @@ void do_generate_implementation() {
                 first = false;
             else
                 rend.write(", ");
-            rend.write("%s %s", it.name, render_type(it.gotype, it.name));
+            rend.write("%s %s", it.name, render_type(src->wrap(it.gotype), it.name));
         }
 
         rend.write(") ");
@@ -2235,20 +2341,143 @@ void do_generate_implementation() {
                     first = false;
                 else
                     rend.write(", ");
-                rend.write("%s", render_type(it.gotype, it.name));
+                rend.write("%s", render_type(src->wrap(it.gotype), it.name));
             }
 
             if (sig.result->len > 1) rend.write(")");
         }
 
-        rend.write(" {\n\tpanic(\"not implemented\")\n}\n\n");
+        rend.write(" {\n\tpanic(\"not implemented\")\n}");
     }
 
     auto s = rend.finish();
-    print("%s", s);
-    // TODO: actually add s
 
-    // print("selected type %s is at %s/%s:%s",
-    //       symbol.name, symbol.decl->ctx->import_path, symbol.decl->ctx->filename,
-    //       format_cur(symbol.decl->decl->decl_start)
+    // we now know that src and dest accurately reflect what's on disk
+
+    Buffer buf; buf.init(MEM, true);
+    defer { buf.cleanup(); };
+
+    auto filepath = ind.ctx_to_filepath(dest->ctx);
+    if (filepath == NULL) return;
+
+    auto fm = map_file_into_memory(filepath);
+    if (fm == NULL) return;
+    defer { fm->cleanup(); };
+
+    buf.read(fm);
+
+    auto uchars = alloc_list<uchar>();
+    {
+        Cstr_To_Ustr conv; conv.init();
+        for (auto p = s; *p != '\0'; p++) {
+            bool found = false;
+            auto uch = conv.feed(*p, &found);
+            if (found)
+                uchars->append(uch);
+        }
+    }
+
+    // add the generated methods
+    buf.insert(dest->decl->decl_end, uchars->items, uchars->len);
+
+    // add the imports
+    {
+        auto iter = alloc_object(Parser_It);
+        iter->init(&buf);
+        auto root = new_ast_node(ts_tree_root_node(buf.tree), iter);
+
+        Ast_Node *package_node = NULL;
+        Ast_Node *imports_node = NULL;
+
+        FOR_NODE_CHILDREN (root) {
+            if (it->type() == TS_PACKAGE_CLAUSE) {
+                package_node = it;
+            } else if (it->type() == TS_IMPORT_DECLARATION) {
+                imports_node = it;
+                break;
+            }
+        }
+
+        if (imports_node == NULL && package_node == NULL) return;
+
+        Text_Renderer rend;
+        rend.init();
+        rend.write("import (\n");
+
+        // write all existing imports
+        if (imports_node != NULL) {
+            auto speclist = imports_node->child();
+            if (speclist->type() != TS_IMPORT_SPEC_LIST)
+                return;
+            FOR_NODE_CHILDREN (speclist) {
+                rend.write("\t%s\n", it->string());
+            }
+        }
+
+        For (*imports_to_add) {
+            if (it.declare_explicitly) {
+                rend.write("\t%s \"%s\"\n", it.package_name, it.import_path);
+            } else {
+                rend.write("\t\"%s\"\n", it.import_path);
+            }
+        }
+
+        rend.write(")\n");
+
+        GHFmtStart();
+        GHFmtAddLine(rend.finish());
+        GHFmtAddLine("");
+
+        auto new_contents = GHFmtFinish(GH_FMT_GOIMPORTS);
+        if (new_contents == NULL) return;
+        defer { GHFree(new_contents); };
+
+        auto new_contents_len = strlen(new_contents);
+        if (new_contents_len == 0) return;
+
+        while (new_contents[new_contents_len-1] == '\n') {
+            new_contents[new_contents_len-1] = '\0';
+            new_contents_len--;
+        }
+
+        cur2 start, old_end;
+        if (imports_node != NULL) {
+            start = imports_node->start();
+            old_end = imports_node->end();
+        } else {
+            start = package_node->end();
+            old_end = package_node->end();
+        }
+
+        auto chars = alloc_list<uchar>();
+        if (imports_node == NULL) {
+            // add two newlines, it's going after the package decl
+            chars->append('\n');
+            chars->append('\n');
+        }
+
+        Cstr_To_Ustr conv; conv.init();
+        for (auto p = new_contents; *p != '\0'; p++) {
+            bool found = false;
+            auto uch = conv.feed(*p, &found);
+            if (found) chars->append(uch);
+        }
+
+        if (start != old_end)
+            buf.remove(start, old_end);
+        buf.insert(start, chars->items, chars->len);
+    }
+
+    // write to disk
+    {
+        File f;
+        if (f.init(filepath, FILE_MODE_WRITE, FILE_CREATE_NEW) != FILE_RESULT_SUCCESS)
+            return;
+        defer { f.cleanup(); };
+        buf.write(&f);
+    }
+
+    buf.cleanup();
+
+    // TODO: refresh existing editors if `filepath` is open
 }

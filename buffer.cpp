@@ -699,6 +699,41 @@ u32 Buffer::idx_byte_to_cp(int y, int off, bool nocrash) {
     return lines[y].len;
 }
 
+u32 Buffer::internal_convert_x_vx(int y, int off, bool to_vx) {
+    int x = 0;
+    int vx = 0;
+    auto &line = lines[y];
+
+    Grapheme_Clusterer gc;
+    gc.init();
+    gc.feed(line[x]);
+
+    while (true) {
+        if (x >= line.len) break;
+
+        if (to_vx) {
+            if (x >= off) break;
+        } else {
+            if (vx >= off) break;
+        }
+
+        if (line[x] == '\t') {
+            vx += options.tabsize - (vx % options.tabsize);
+            x++;
+        } else {
+            auto width = our_wcwidth(line[x]);
+            if (width == -1) width = 1;
+            vx += width;
+
+            x++;
+            while (x < (to_vx ? off : line.len) && !gc.feed(line[x]))
+                x++;
+        }
+    }
+
+    return to_vx ? vx : x;
+}
+
 cur2 Buffer::offset_to_cur(i32 off) {
     cur2 ret;
     ret.x = -1;

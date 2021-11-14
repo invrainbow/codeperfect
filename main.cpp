@@ -543,8 +543,17 @@ int main(int argc, char **argv) {
         // world.ui.mouse_just_pressed and some additional logic below, while
         // we're setting io.MouseDown for ImGui.
 
-        if (action == GLFW_PRESS && button >= 0 && button < IM_ARRAYSIZE(world.ui.mouse_just_pressed))
+        if (button < 0 || button >= IM_ARRAYSIZE(world.ui.mouse_just_pressed))
+            return;
+
+        switch (action) {
+        case GLFW_PRESS:
             world.ui.mouse_just_pressed[button] = true;
+            break;
+        case GLFW_RELEASE:
+            world.ui.mouse_just_released[button] = true;
+            break;
+        }
     });
 
     glfwSetScrollCallback(world.window, [](GLFWwindow*, double dx, double dy) {
@@ -880,30 +889,7 @@ int main(int argc, char **argv) {
                     auto old_savedvx = editor->savedvx;
 
                     auto calc_x = [&]() -> int {
-                        int x = 0;
-                        int vx = 0;
-                        auto &line = buf->lines[cur.y];
-
-                        Grapheme_Clusterer gc;
-                        gc.init();
-                        gc.feed(line[x]);
-
-                        while (x < line.len && vx < editor->savedvx) {
-                            if (line[x] == '\t') {
-                                vx += options.tabsize - (vx % options.tabsize);
-                                x++;
-                            } else {
-                                auto width = our_wcwidth(line[x]);
-                                if (width == -1) width = 1;
-                                vx += width;
-
-                                x++;
-                                while (x < line.len && !gc.feed(line[x]))
-                                    x++;
-                            }
-                        }
-
-                        return x;
+                        return buf->idx_vcp_to_cp(cur.y, editor->savedvx);
                     };
 
                     if (key == GLFW_KEY_DOWN) {
@@ -1142,8 +1128,34 @@ int main(int argc, char **argv) {
                 break;
 #endif
 
+            case GLFW_KEY_C:
+            case GLFW_KEY_X: {
+                auto editor = get_current_editor();
+                if (editor == NULL) break;
+                if (!editor->selecting) break;
+
+                auto a = editor->select_start;
+                auto b = editor->cur;
+                if (a > b) {
+                    auto tmp = a;
+                    a = b;
+                    b = tmp;
+                }
+
+                auto s = editor->buf->get_text(a, b);
+                glfwSetClipboardString(world.window, s);
+
+                if (key == GLFW_KEY_X) {
+                    editor->buf->remove(a, b);
+                    editor->selecting = false;
+                    editor->move_cursor(a);
+                }
+
+                break;
+            }
+
             case GLFW_KEY_V:
-                if (world.nvim.mode == VI_INSERT) {
+                if (!world.use_nvim || world.nvim.mode == VI_INSERT) {
                     auto clipboard_contents = glfwGetClipboardString(world.window);
                     if (clipboard_contents == NULL) break;
                     editor->insert_text_in_insert_mode(clipboard_contents);
@@ -1467,6 +1479,7 @@ int main(int argc, char **argv) {
                 io.MouseDown[i] = down;
                 world.ui.mouse_down[i] = down && !world.ui.mouse_captured_by_imgui;
                 world.ui.mouse_just_pressed[i] = false;
+                world.ui.mouse_just_released[i] = false;
             }
 
             bool cur_changed = ((io.ConfigFlags & ImGuiConfigFlags_NoMouseCursorChange) == 0);

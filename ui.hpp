@@ -213,6 +213,8 @@ struct UI {
 
     void help_marker(ccstr text);
     void help_marker(fn<void()> cb);
+
+    void begin_centered_window(ccstr title, bool *show, int flags = 0, int width = -1);
 };
 
 extern UI ui;
@@ -224,6 +226,7 @@ vec4f rgba(ccstr hex, float alpha = 1.0);
 enum {
     HOVERID_PANE_RESIZERS = 1000,
     HOVERID_TABS = 2000,
+    HOVERID_EDITORS = 2000,
 };
 
 #define AUTOCOMPLETE_TRUNCATE_LENGTH 40

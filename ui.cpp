@@ -400,6 +400,18 @@ bool UI::imgui_is_window_focusing(bool *b) {
     return !old_focus && *b;
 }
 
+void UI::begin_centered_window(ccstr title, bool *show, int flags, int width) {
+    if (width != -1) {
+        ImGui::SetNextWindowSize(ImVec2(width, -1));
+    } else {
+        flags |= ImGuiWindowFlags_AlwaysAutoResize;
+    }
+    flags |= ImGuiWindowFlags_NoDocking;
+
+    ImGui::SetNextWindowPos(ImVec2(world.window_size.x/2, 150), ImGuiCond_Always, ImVec2(0.5f, 0));
+    ImGui::Begin(title, show, flags);
+}
+
 void UI::help_marker(fn<void()> cb) {
     ImGui::TextDisabled(ICON_MD_HELP_OUTLINE);
     if (ImGui::IsItemHovered()) {
@@ -901,7 +913,6 @@ int UI::get_mouse_flags(boxf area) {
     int ret = 0;
     if (contains_mouse()) {
         ret |= MOUSE_HOVER;
-
         if (ImGui::IsMouseClicked(0))
             ret |= MOUSE_CLICKED;
         if (ImGui::IsMouseClicked(1))
@@ -2169,16 +2180,12 @@ void UI::draw_everything() {
 
             For (*wnd.results) {
                 auto filepath = it.filepath;
-
-                // TODO: previews
                 For (*it.references) {
                     auto pos = it.is_sel ? it.x_start : it.start;
-                    if (ImGui::Selectable(our_sprintf("%s: %s", filepath, format_cur(pos)))) {
+                    if (ImGui::Selectable(our_sprintf("%s: %s", filepath, format_cur(pos))))
                         goto_file_and_pos(filepath, pos);
-                    }
                 }
             }
-        done:
 
             imgui_pop_font();
         } else {
@@ -2210,12 +2217,12 @@ void UI::draw_everything() {
             wnd.selection %= min(wnd.filtered_results->len, settings.generate_implementation_max_results);
         };
 
-        ImGui::Begin("Generate Implementation", &wnd.show, ImGuiWindowFlags_AlwaysAutoResize);
+        begin_centered_window("Generate Implementation", &wnd.show, 0, 400);
 
         if (wnd.selected_interface)
-            ImGui::Text("You've selected an interface. Please select a type and we'll add this interface's methods to that type.");
+            ImGui::TextWrapped("You've selected an interface. Please select a type and we'll add this interface's methods to that type.");
         else
-            ImGui::Text("You've selected a type. Please select an interface and we'll add that interface's methods to this type.");
+            ImGui::TextWrapped("You've selected a type. Please select an interface and we'll add that interface's methods to this type.");
 
         auto mods = imgui_get_keymods();
         switch (mods) {
@@ -2283,9 +2290,6 @@ void UI::draw_everything() {
     if (world.wnd_rename_identifier.show) {
         auto &wnd = world.wnd_rename_identifier;
 
-        ImGui::SetNextWindowSize(ImVec2(400, -1));
-        ImGui::SetNextWindowPos(ImVec2(world.window_size.x/2, 150), ImGuiCond_Once, ImVec2(0.5f, 0));
-
         auto get_type_str = [&]() -> ccstr {
             switch (wnd.declres->decl->type) {
             // TODO: support import renaming
@@ -2307,7 +2311,7 @@ void UI::draw_everything() {
         if (wnd.running)
             p_open = NULL;
 
-        ImGui::Begin(our_sprintf("Rename %s###rename_identifier", get_type_str()), p_open, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking);
+        begin_centered_window(our_sprintf("Rename %s###rename_identifier", get_type_str()), p_open, 0, 400);
 
         // if it's running, make sure the window stays focused
         if (wnd.running)
@@ -2582,11 +2586,8 @@ void UI::draw_everything() {
     if (world.wnd_rename_file_or_folder.show) {
         auto &wnd = world.wnd_rename_file_or_folder;
 
-        ImGui::SetNextWindowSize(ImVec2(300, -1));
-        ImGui::SetNextWindowPos(ImVec2(world.window_size.x/2, world.window_size.y/2), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-
         auto label = our_sprintf("Rename %s", wnd.target->is_directory ? "folder" : "file");
-        ImGui::Begin(our_sprintf("%s###add_file_or_folder", label), &wnd.show, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking);
+        begin_centered_window(our_sprintf("%s###add_file_or_folder", label), &wnd.show, 0, 300);
 
         ImGui::Text("Renaming");
 
@@ -2626,11 +2627,8 @@ void UI::draw_everything() {
     if (world.wnd_add_file_or_folder.show) {
         auto &wnd = world.wnd_add_file_or_folder;
 
-        ImGui::SetNextWindowSize(ImVec2(300, -1));
-        ImGui::SetNextWindowPos(ImVec2(world.window_size.x/2, world.window_size.y/2), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-
         auto label = our_sprintf("Add %s", wnd.folder ? "Folder" : "File");
-        ImGui::Begin(our_sprintf("%s###add_file_or_folder", label), &wnd.show, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking);
+        begin_centered_window(our_sprintf("%s###add_file_or_folder", label), &wnd.show, 0, 300);
 
         ImGui::Text("Destination");
 
@@ -3184,10 +3182,7 @@ void UI::draw_everything() {
             wnd.selection %= min(wnd.filtered_results->len, settings.goto_file_max_results);
         };
 
-        ImGui::SetNextWindowSize(ImVec2(500, -1));
-        ImGui::SetNextWindowPos(ImVec2(world.window_size.x/2, 150), ImGuiCond_Always, ImVec2(0.5f, 0));
-
-        ImGui::Begin("Go To File", &world.wnd_goto_file.show, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking);
+        begin_centered_window("Go To File", &world.wnd_goto_file.show, 0, 500);
 
         focus_keyboard(&wnd);
 
@@ -3246,10 +3241,7 @@ void UI::draw_everything() {
     if (world.wnd_command.show) {
         auto& wnd = world.wnd_command;
 
-        ImGui::SetNextWindowSize(ImVec2(400, -1));
-        ImGui::SetNextWindowPos(ImVec2(world.window_size.x/2, 150), ImGuiCond_Always, ImVec2(0.5f, 0));
-
-        ImGui::Begin("Run Command", &wnd.show, ImGuiWindowFlags_AlwaysAutoResize);
+        begin_centered_window("Run Command", &wnd.show, 0, 400);
 
         focus_keyboard(&wnd);
 
@@ -3842,14 +3834,58 @@ void UI::draw_everything() {
         boxf tabs_area, editor_area;
         get_tabs_and_editor_area(&pane_area, &tabs_area, &editor_area, pane.editors.len > 0);
 
-        if (pane.editors.len > 0)
+        if (pane.editors.len > 0) {
             draw_rect(tabs_area, rgba(is_pane_selected ? global_colors.pane_active : global_colors.pane_inactive));
+            auto editor = pane.get_current_editor();
+
+            auto calculate_pos_from_mouse = [&]() -> cur2 {
+                auto buf = editor->buf;
+                auto &view = editor->view;
+
+                auto area = editor_area;
+                area.x += settings.editor_margin_x;
+                area.y += settings.editor_margin_y;
+                area.w -= settings.editor_margin_x * 2;
+                area.h -= settings.editor_margin_y * 2;
+
+                area.x += settings.line_number_margin_left;
+                area.x += settings.line_number_margin_right;
+                area.x += world.font.width * get_line_number_width(editor);
+
+                auto im_pos = ImGui::GetIO().MousePos;
+                auto pos = new_vec2f(im_pos.x, im_pos.y);
+                pos.x -= area.x;
+                pos.y -= area.y;
+
+                auto vx = (int)(pos.x / world.font.width);
+                auto y = view.y + pos.y / (world.font.height * settings.line_height);
+
+                u32 x = buf->idx_vcp_to_cp(y, vx);
+                return new_cur2((i32)x, (i32)y);
+            };
+
+            auto is_hovered = test_hover(editor_area, HOVERID_EDITORS + current_pane, ImGuiMouseCursor_TextInput);
+            if (is_hovered) {
+                if (world.ui.mouse_just_pressed[ImGuiMouseButton_Left]) {
+                    auto pos = calculate_pos_from_mouse();
+                    // set start of selection to pos
+                    editor->select_start = pos;
+                    editor->selecting = true;
+                    editor->move_cursor(pos);
+                }
+
+                if (world.ui.mouse_down[ImGuiMouseButton_Left]) {
+                    editor->move_cursor(calculate_pos_from_mouse());
+                }
+            }
+        }
+
         draw_rect(editor_area, rgba(global_colors.background));
 
-        vec2 tab_padding = { 9, 4 };
+        vec2 tab_padding = { 8, 3 };
 
         boxf tab;
-        tab.pos = tabs_area.pos + new_vec2(5, tabs_area.h - tab_padding.y * 2 - font->height);
+        tab.pos = tabs_area.pos + new_vec2(2, tabs_area.h - tab_padding.y * 2 - font->height);
         tab.x -= pane.tabs_offset;
 
         i32 tab_to_remove = -1;
@@ -4250,31 +4286,36 @@ void UI::draw_everything() {
                     gc.feed(line->at(cp_idx)); // feed first character for GB1
 
                     // jump {view.x} clusters
-                    int line_start = 0;
+                    int vx_start = 0;
                     {
-                        int i = 0;
-                        while (i < view.x && cp_idx < line->len) {
+                        int vx = 0;
+                        while (vx < view.x && cp_idx < line->len) {
                             if (line->at(cp_idx) == '\t') {
-                                i += options.tabsize - (i % options.tabsize);
+                                vx += options.tabsize - (vx % options.tabsize);
                                 cp_idx++;
                             } else {
                                 auto width = our_wcwidth(line->at(cp_idx));
                                 if (width == -1) width = 1;
-                                i += width;
+                                vx += width;
 
                                 cp_idx++;
                                 while (cp_idx < line->len && !gc.feed(line->at(cp_idx)))
                                     cp_idx++;
                             }
                         }
-                        line_start = i;
+                        vx_start = vx;
                     }
 
-                    if (line_start > view.x)
-                        cur_pos.x += (line_start - view.x) * font->width;
+                    if (vx_start > view.x)
+                        cur_pos.x += (vx_start - view.x) * font->width;
 
-                    u32 x = buf->idx_cp_to_byte(y, cp_idx), vx = line_start;
-                    while (vx < view.x + view.w) {
+                    u32 x = buf->idx_cp_to_byte(y, cp_idx);
+                    u32 vx = vx_start;
+                    u32 newx = 0;
+
+                    for (; vx < view.x + view.w; x = newx) {
+                        newx = x;
+
                         if (cp_idx >= line->len) break;
 
                         auto curr_cp_idx = cp_idx;
@@ -4285,7 +4326,7 @@ void UI::draw_everything() {
                             auto uch = curr_cp;
                             while (true) {
                                 cp_idx++;
-                                x += uchar_size(uch);
+                                newx += uchar_size(uch);
                                 grapheme_cpsize++;
 
                                 if (cp_idx >= line->len) break;
@@ -4344,7 +4385,9 @@ void UI::draw_everything() {
                                     break;
                                 }
                             }
-                        } else if (!world.use_nvim && editor->selecting) {
+                        }
+
+                        if (!world.use_nvim && editor->selecting) {
                             auto pos = new_cur2((u32)curr_cp_idx, (u32)y);
                             if (select_start <= pos && pos < select_end) {
                                 draw_highlight(rgba(global_colors.visual_background), glyph_width, true);
@@ -5049,7 +5092,6 @@ void UI::end_frame() {
     flush_verts();
 
     recalculate_view_sizes();
-
 }
 
 void UI::get_tabs_and_editor_area(boxf* pane_area, boxf* ptabs_area, boxf* peditor_area, bool has_tabs) {
@@ -5058,7 +5100,7 @@ void UI::get_tabs_and_editor_area(boxf* pane_area, boxf* ptabs_area, boxf* pedit
     if (has_tabs) {
         tabs_area.pos = pane_area->pos;
         tabs_area.w = pane_area->w;
-        tabs_area.h = 26; // ???
+        tabs_area.h = 24; // ???
     }
 
     editor_area.pos = pane_area->pos;

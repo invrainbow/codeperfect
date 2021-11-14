@@ -1207,6 +1207,7 @@ enum Indexer_Status {
 struct Go_Symbol {
     ccstr name;
     Goresult *decl;
+    u64 filehash;
 };
 
 struct Go_Indexer {
@@ -1301,6 +1302,7 @@ struct Go_Indexer {
     void iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> cb, ccstr filename);
     void reload_all_dirty_files();
     void reload_editor_if_dirty(void *editor);
+    void reload_single_file(ccstr path);
     Go_Package_Status get_package_status(ccstr import_path);
     void replace_package_name(Go_Package *pkg, ccstr package_name);
     u64 hash_file(ccstr filepath);
@@ -1463,6 +1465,14 @@ T *clone(T *old) {
     return ret;
 }
 
+struct Type_Renderer;
+
+typedef fn<bool(Type_Renderer*, Gotype*)> Type_Renderer_Handler;
+
 struct Type_Renderer : public Text_Renderer {
-    void write_type(Gotype *t, bool parameter_hint_root = false);
+    void write_type(Gotype *t, Type_Renderer_Handler custom_handler, bool parameter_hint_root = false);
+
+    void write_type(Gotype *t, bool parameter_hint_root = false) {
+        write_type(t, [&](auto, auto) -> bool { return false; }, parameter_hint_root);
+    }
 };

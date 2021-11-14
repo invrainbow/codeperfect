@@ -197,6 +197,11 @@ struct Buffer {
     u32 idx_cp_to_gr(int y, int off) { return idx_byte_to_gr(y, idx_cp_to_byte(y, off)); }
     u32 idx_byte_to_cp(int y, int off, bool nocrash = false);
 
+    // ???
+    u32 internal_convert_x_vx(int y, int off, bool to_vx);
+    u32 idx_vcp_to_cp(int y, int off) { return internal_convert_x_vx(y, off, false); }
+    u32 idx_cp_to_vcp(int y, int off) { return internal_convert_x_vx(y, off, true); }
+
     ccstr get_text(cur2 start, cur2 end);
 };
 

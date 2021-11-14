@@ -663,6 +663,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
 
                     auto new_contents = GHFmtFinish(GH_FMT_GOIMPORTS);
                     if (new_contents == NULL) break;
+                    defer { GHFree(new_contents); };
 
                     auto new_contents_len = strlen(new_contents);
                     if (new_contents_len == 0) break;
@@ -773,7 +774,7 @@ void Editor::raw_move_cursor(cur2 c, bool dont_add_to_history) {
 
     auto line_len = buf->lines[c.y].len;
     if (c.x > line_len) {
-        if (world.nvim.mode == VI_INSERT)
+        if (!world.use_nvim || world.nvim.mode == VI_INSERT)
             c.x = line_len;
         else
             c.x = relu_sub(line_len, 1);
@@ -2099,7 +2100,6 @@ void Editor::backspace_in_insert_mode(int graphemes_to_erase, int codepoints_to_
     last_closed_autocomplete = new_cur2(-1, -1);
 }
 
-// TODO: change to bool
 bool Editor::optimize_imports() {
     SCOPED_MEM(&world.indexer.ui_mem);
     defer { world.indexer.ui_mem.reset(); };
@@ -2161,6 +2161,7 @@ bool Editor::optimize_imports() {
 
         auto new_contents = GHFmtFinish(GH_FMT_GOIMPORTS);
         if (new_contents == NULL) break;
+        defer { GHFree(new_contents); };
 
         auto new_contents_len = strlen(new_contents);
         if (new_contents_len == 0) break;
@@ -2170,7 +2171,7 @@ bool Editor::optimize_imports() {
             new_contents_len--;
         }
 
-        cur2 start, old_end, new_end;
+        cur2 start, old_end;
         if (imports_node != NULL) {
             start = imports_node->start();
             old_end = imports_node->end();
@@ -2178,31 +2179,19 @@ bool Editor::optimize_imports() {
             start = package_node->end();
             old_end = package_node->end();
         }
-        new_end = start;
 
         auto chars = alloc_list<uchar>();
         if (imports_node == NULL) {
             // add two newlines, it's going after the package decl
             chars->append('\n');
             chars->append('\n');
-            new_end.x = 0;
-            new_end.y += 2;
         }
 
         Cstr_To_Ustr conv; conv.init();
         for (auto p = new_contents; *p != '\0'; p++) {
             bool found = false;
             auto uch = conv.feed(*p, &found);
-            if (found) {
-                chars->append(uch);
-
-                if (uch == '\n') {
-                    new_end.x = 0;
-                    new_end.y++;
-                } else {
-                    new_end.x++;
-                }
-            }
+            if (found) chars->append(uch);
         }
 
         if (start != old_end)
@@ -2243,6 +2232,7 @@ void Editor::format_on_save(int fmt_type, bool write_to_nvim) {
         saving = false;
         return;
     }
+    defer { GHFree(new_contents); };
 
     int curr = 0;
     swapbuf.init(MEM, false);

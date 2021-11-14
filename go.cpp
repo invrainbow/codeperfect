@@ -189,8 +189,13 @@ void Index_Stream::write_index(Go_Index *index) {
     finish_writing();
 }
 
-void Type_Renderer::write_type(Gotype *t, bool parameter_hint_root) {
+void Type_Renderer::write_type(Gotype *t, Type_Renderer_Handler custom_handler, bool parameter_hint_root) {
     if (t == NULL) return;
+
+    // custom handle
+    if (custom_handler(this, t)) return;
+
+    auto recur = [&](Gotype *t) { write_type(t, custom_handler); };
 
     switch (t->type) {
     case GOTYPE_BUILTIN:
@@ -230,9 +235,9 @@ void Type_Renderer::write_type(Gotype *t, bool parameter_hint_root) {
         break;
     case GOTYPE_MAP:
         write("map[");
-        write_type(t->map_key);
+        recur(t->map_key);
         write("]");
-        write_type(t->map_value);
+        recur(t->map_value);
         break;
     case GOTYPE_STRUCT:
         write("struct");
@@ -242,11 +247,11 @@ void Type_Renderer::write_type(Gotype *t, bool parameter_hint_root) {
         break;
     case GOTYPE_VARIADIC:
         write("...");
-        write_type(t->variadic_base);
+        recur(t->variadic_base);
         break;
     case GOTYPE_POINTER:
         write("*");
-        write_type(t->pointer_base);
+        recur(t->pointer_base);
         break;
     case GOTYPE_FUNC:
         {
@@ -264,7 +269,7 @@ void Type_Renderer::write_type(Gotype *t, bool parameter_hint_root) {
                     } else {
                         write("%s ", it.name);
                     }
-                    write_type(it.gotype);
+                    recur(it.gotype);
                     if (i < params->len - 1)
                         write(", ");
                     i++;
@@ -280,7 +285,7 @@ void Type_Renderer::write_type(Gotype *t, bool parameter_hint_root) {
             if (result != NULL && result->len > 0) {
                 write(" ");
                 if (result->len == 1 && is_goident_empty(result->at(0).name))
-                    write_type(result->at(0).gotype);
+                    recur(result->at(0).gotype);
                 else
                     write_params(result, true);
             }
@@ -288,17 +293,17 @@ void Type_Renderer::write_type(Gotype *t, bool parameter_hint_root) {
         break;
     case GOTYPE_SLICE:
         write("[]");
-        write_type(t->slice_base);
+        recur(t->slice_base);
         break;
     case GOTYPE_ARRAY:
         write("[]");
-        write_type(t->array_base);
+        recur(t->array_base);
         break;
     case GOTYPE_CHAN:
         if (t->chan_direction == CHAN_RECV)
             write("<-");
         write("chan ");
-        write_type(t->chan_base);
+        recur(t->chan_base);
         if (t->chan_direction == CHAN_SEND)
             write("<-");
         break;
@@ -524,6 +529,22 @@ either:
         - honestly, wouldn't this slow things down?
 */
 
+void Go_Indexer::reload_single_file(ccstr filepath) {
+    auto import_path = filepath_to_import_path(our_dirname(filepath));
+    auto pkg = find_package_in_index(import_path);
+    if (pkg == NULL) return;
+
+    auto file = get_ready_file_in_package(pkg, our_basename(filepath));
+    if (file == NULL) return;
+
+    auto pf = parse_file(filepath, false);
+    if (pf == NULL) return;
+    defer { free_parsed_file(pf); };
+
+    ccstr package_name = NULL;
+    process_tree_into_gofile(file, pf->root, filepath, &package_name);
+    replace_package_name(pkg, package_name);
+}
 
 void Go_Indexer::reload_editor_if_dirty(void *editor) {
     auto it = (Editor*)editor;
@@ -1602,21 +1623,11 @@ Go_Package *Go_Indexer::find_package_in_index(ccstr import_path) {
     bool found = false;
     auto ret = package_lookup.get(import_path, &found);
     return found ? ret : NULL;
-
-    /*
-    if (index.packages == NULL) return NULL;
-    return index.packages->find([&](auto it) {
-        return streq(it->import_path, import_path);
-    });
-    */
 }
 
 Go_Package *Go_Indexer::find_up_to_date_package(ccstr import_path) {
     auto pkg = find_package_in_index(import_path);
-    if (pkg != NULL)
-        if (pkg->status != GPS_OUTDATED)
-            return pkg;
-    return NULL;
+    return (pkg != NULL && pkg->status != GPS_OUTDATED) ? pkg : NULL;
 }
 
 ccstr Go_Indexer::get_import_package_name(Go_Import *it) {
@@ -3648,6 +3659,7 @@ void Go_Indexer::fill_generate_implementation(List<Go_Symbol> *out, bool selecte
         auto pkgname = it.package_name;
         For (*it.files) {
             ctx.filename = it.filename;
+            auto filehash = it.hash;
 
             For (*it.decls) {
                 if (it.type != GODECL_TYPE) continue;
@@ -3664,6 +3676,7 @@ void Go_Indexer::fill_generate_implementation(List<Go_Symbol> *out, bool selecte
                 Go_Symbol sym;
                 sym.name = our_sprintf("%s.%s", pkgname, it.name);
                 sym.decl = make_goresult(&it, &ctx)->copy_decl();
+                sym.filehash = filehash;
                 out->append(&sym);
             }
         }
@@ -6382,7 +6395,8 @@ ccstr _path_join(ccstr a, ...) {
 
     ret->append('\0');
 
-    va_end();
+    va_end(vl);
+    va_end(vlcount);
     return ret->items;
 }
 

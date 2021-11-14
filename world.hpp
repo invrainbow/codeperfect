@@ -315,8 +315,11 @@ struct World {
     struct Wnd_Generate_Implementation : Wnd {
         Pool thread_mem;
         bool running;
+
+        u64 file_hash_on_open;
         Goresult *declres;
         List<Go_Symbol> *symbols;
+
         int selection;
         List<int> *filtered_results;
         char query[256];
@@ -417,6 +420,7 @@ struct World {
         double scroll_buffer;
         bool mouse_down[ImGuiMouseButton_COUNT];
         bool mouse_just_pressed[ImGuiMouseButton_COUNT];
+        bool mouse_just_released[ImGuiMouseButton_COUNT];
         GLFWcursor* cursors[ImGuiMouseCursor_COUNT];
         GLuint textures[__TEXTURE_COUNT__];
         bool mouse_captured_by_imgui;
@@ -573,3 +577,5 @@ bool is_command_enabled(Command action);
 void init_command_info_table();
 void handle_command(Command action, bool from_menu);
 void open_add_file_or_folder(bool folder, FT_Node *dest = NULL);
+void do_generate_implementation();
+bool has_unsaved_files();
