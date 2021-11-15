@@ -74,7 +74,9 @@ enum {
     MOUSE_CLICKED = 1 << 1,
     MOUSE_MCLICKED = 1 << 2,
     MOUSE_RCLICKED = 1 << 3,
-    // support double click somehow?
+    MOUSE_DBLCLICKED = 1 << 4,
+    MOUSE_MDBLCLICKED = 1 << 5,
+    MOUSE_RDBLCLICKED = 1 << 6,
 };
 
 enum {

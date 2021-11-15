@@ -77,6 +77,8 @@ struct Editor {
     bool selecting;
     cur2 select_start;
 
+    bool double_clicked_selection;
+
     // TSInputEdit curr_change;
 
     // is this file "dirty" from the perspective of the index?

@@ -630,7 +630,7 @@ void UI::render_ts_cursor(TSTreeCursor *curr, cur2 open_cur) {
         if (node->type() == TS_COMMENT)
             ImGui::PopStyleColor();
 
-        if (ImGui::IsMouseDoubleClicked(0) && ImGui::IsItemHovered(ImGuiHoveredFlags_None)) {
+        if (ImGui::IsMouseDoubleClicked(0) && ImGui::IsItemHovered(0)) {
             auto editor = get_current_editor();
             if (editor != NULL)
                 editor->move_cursor(node->start());
@@ -913,12 +913,13 @@ int UI::get_mouse_flags(boxf area) {
     int ret = 0;
     if (contains_mouse()) {
         ret |= MOUSE_HOVER;
-        if (ImGui::IsMouseClicked(0))
-            ret |= MOUSE_CLICKED;
-        if (ImGui::IsMouseClicked(1))
-            ret |= MOUSE_RCLICKED;
-        if (ImGui::IsMouseClicked(2))
-            ret |= MOUSE_MCLICKED;
+        if (ImGui::IsMouseClicked(0)) ret |= MOUSE_CLICKED;
+        if (ImGui::IsMouseClicked(1)) ret |= MOUSE_RCLICKED;
+        if (ImGui::IsMouseClicked(2)) ret |= MOUSE_MCLICKED;
+
+        if (ImGui::IsMouseDoubleClicked(0)) ret |= MOUSE_DBLCLICKED;
+        if (ImGui::IsMouseDoubleClicked(1)) ret |= MOUSE_RDBLCLICKED;
+        if (ImGui::IsMouseDoubleClicked(2)) ret |= MOUSE_MDBLCLICKED;
     }
     return ret;
 }
@@ -1120,7 +1121,7 @@ void UI::draw_debugger_var(Draw_Debugger_Var_Args *args) {
 
         if (watch != NULL) {
             if (!args->is_child) {
-                if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && ImGui::IsItemHovered(ImGuiHoveredFlags_None)) {
+                if (ImGui::IsMouseDoubleClicked(0) && ImGui::IsItemHovered(0)) {
                     watch->editing = true;
                     watch->open_before_editing = open;
                     watch->edit_first_frame = true;
@@ -2884,7 +2885,7 @@ void UI::draw_everything() {
                     wnd.selection = it;
                 }
 
-                if (ImGui::IsMouseDoubleClicked(0) && ImGui::IsItemHovered(ImGuiHoveredFlags_None)) {
+                if (ImGui::IsMouseDoubleClicked(0) && ImGui::IsItemHovered(0)) {
                     if (it->is_directory)
                         it->open ^= 1;
                     else
@@ -2994,8 +2995,8 @@ void UI::draw_everything() {
 
         auto &tmp = wnd.tmp;
 
-        if (ImGui::BeginTabBar("MyTabBar", ImGuiTabBarFlags_None)) {
-            int flags = ImGuiTabItemFlags_None;
+        if (ImGui::BeginTabBar("MyTabBar", 0)) {
+            int flags = 0;
             if (wnd.focus_debug_profiles) {
                 flags |= ImGuiTabItemFlags_SetSelected;
                 wnd.focus_debug_profiles = false;
@@ -3094,7 +3095,7 @@ void UI::draw_everything() {
                 ImGui::EndTabItem();
             }
 
-            flags = ImGuiTabItemFlags_None;
+            flags = 0;
             if (wnd.focus_build_profiles) {
                 flags |= ImGuiTabItemFlags_SetSelected;
                 wnd.focus_build_profiles = false;
@@ -3646,9 +3647,9 @@ void UI::draw_everything() {
     }
 
     if (world.wnd_style_editor.show) {
-        ImGui::Begin("Style Editor", &world.wnd_style_editor.show, ImGuiWindowFlags_None);
+        ImGui::Begin("Style Editor", &world.wnd_style_editor.show, 0);
 
-        if (ImGui::BeginTabBar("style_editor_tabbar", ImGuiTabBarFlags_None)) {
+        if (ImGui::BeginTabBar("style_editor_tabbar", 0)) {
             if (ImGui::BeginTabItem("Margins & Padding", NULL, 0)) {
                 ImGui::SliderFloat("status_padding_x", &settings.status_padding_x, 0.0, 20.0f, "%.0f");
                 ImGui::SliderFloat("status_padding_y", &settings.status_padding_y, 0.0, 20.0f, "%.0f");
@@ -3838,7 +3839,9 @@ void UI::draw_everything() {
             draw_rect(tabs_area, rgba(is_pane_selected ? global_colors.pane_active : global_colors.pane_inactive));
             auto editor = pane.get_current_editor();
 
-            auto calculate_pos_from_mouse = [&]() -> cur2 {
+            cur2 saved_pos = new_cur2(-1, -1);
+
+            auto actually_calculate_pos_from_mouse = [&]() -> cur2 {
                 auto buf = editor->buf;
                 auto &view = editor->view;
 
@@ -3857,25 +3860,92 @@ void UI::draw_everything() {
                 pos.x -= area.x;
                 pos.y -= area.y;
 
-                auto vx = (int)(pos.x / world.font.width);
                 auto y = view.y + pos.y / (world.font.height * settings.line_height);
+                if (y >= buf->lines.len) {
+                    y = buf->lines.len-1;
+                    return new_cur2((i32)buf->lines[y].len, (i32)y);
+                }
 
-                u32 x = buf->idx_vcp_to_cp(y, vx);
+                auto vx = (int)(pos.x / world.font.width);
+                auto x = buf->idx_vcp_to_cp(y, vx);
+
                 return new_cur2((i32)x, (i32)y);
+            };
+
+            auto calculate_pos_from_mouse = [&]() -> cur2 {
+                if (saved_pos.x != -1) return saved_pos;
+
+                auto pos = actually_calculate_pos_from_mouse();
+                saved_pos = pos;
+                return pos;
             };
 
             auto is_hovered = test_hover(editor_area, HOVERID_EDITORS + current_pane, ImGuiMouseCursor_TextInput);
             if (is_hovered) {
-                if (world.ui.mouse_just_pressed[ImGuiMouseButton_Left]) {
+                if (world.ui.mouse_just_pressed[0]) {
                     auto pos = calculate_pos_from_mouse();
-                    // set start of selection to pos
                     editor->select_start = pos;
                     editor->selecting = true;
                     editor->move_cursor(pos);
                 }
 
-                if (world.ui.mouse_down[ImGuiMouseButton_Left]) {
-                    editor->move_cursor(calculate_pos_from_mouse());
+                if (world.ui.mouse_down[0])
+                    if (!editor->double_clicked_selection)
+                        editor->move_cursor(calculate_pos_from_mouse());
+
+                if (world.ui.mouse_just_released[0])
+                    editor->double_clicked_selection = false;
+
+                auto flags = get_mouse_flags(editor_area);
+                if (flags & MOUSE_DBLCLICKED) {
+                    auto pos = calculate_pos_from_mouse();
+
+                    auto classify_char = [&](uchar ch) {
+                        if (isspace(ch)) return 0;
+                        if (isident(ch)) return 1;
+                        return 2;
+                    };
+
+                    cur2 start, end;
+                    auto type = classify_char(editor->iter(pos).peek());
+
+                    // figure out start
+                    {
+                        auto it = editor->iter(pos);
+                        while (true) {
+                            it.prev();
+                            if (classify_char(it.peek()) != type || it.y != pos.y) {
+                                it.next();
+                                break;
+                            }
+                            if (it.bof())
+                                break;
+                        }
+                        start = it.pos;
+                    }
+
+                    // figure out end
+                    {
+                        auto it = editor->iter(pos);
+                        while (true) {
+                            it.next();
+                            if (classify_char(it.peek()) != type || it.y != pos.y) {
+                                if (it.y != pos.y)
+                                    it.prev();
+                                break;
+                            }
+                            if (it.eof())
+                                break;
+                        }
+                        end = it.pos;
+                    }
+
+                    if (start < end) {
+                        editor->selecting = true;
+                        editor->select_start = start;
+                        editor->double_clicked_selection = true;
+                        editor->move_cursor(end);
+                    }
                 }
             }
         }
