@@ -344,7 +344,6 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                     start_request_message("nvim_win_set_option", 3);
                     writer.write_int(editor->nvim_data.win_id);
                     writer.write_string("scroll");
-                    print("new scroll: %d", editor->view.h / 2);
                     writer.write_int(editor->view.h / 2);
                     end_message();
                 }

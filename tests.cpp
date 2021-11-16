@@ -55,8 +55,6 @@ void test_mark_tree() {
 	m2->cleanup();
 	m3->cleanup();
     */
-
-	print("break here");
 }
 
 enum Mtf_Action_Type {

@@ -2174,16 +2174,18 @@ void UI::draw_everything() {
         if (!wnd.done)
             p_open = NULL;
 
+        ImGui::SetNextWindowDockID(dock_sidebar_id, ImGuiCond_Once);
+
         ImGui::Begin("Find References", p_open, ImGuiWindowFlags_AlwaysAutoResize);
 
         if (wnd.done) {
             imgui_push_mono_font();
 
             For (*wnd.results) {
-                auto filepath = it.filepath;
+                auto filepath = get_path_relative_to(it.filepath, world.current_path);
                 For (*it.references) {
                     auto pos = it.is_sel ? it.x_start : it.start;
-                    if (ImGui::Selectable(our_sprintf("%s: %s", filepath, format_cur(pos))))
+                    if (ImGui::Selectable(our_sprintf("%s:%s", filepath, format_cur(pos))))
                         goto_file_and_pos(filepath, pos);
                 }
             }
@@ -3883,21 +3885,45 @@ void UI::draw_everything() {
             auto is_hovered = test_hover(editor_area, HOVERID_EDITORS + current_pane, ImGuiMouseCursor_TextInput);
             if (is_hovered) {
                 if (world.ui.mouse_just_pressed[0]) {
+                    print("[mouse] just_pressed");
+                    focus_editor_by_id(editor->id, new_cur2(-1, -1));
+
                     auto pos = calculate_pos_from_mouse();
-                    editor->select_start = pos;
-                    editor->selecting = true;
-                    editor->move_cursor(pos);
+
+                    auto &io = ImGui::GetIO();
+                    if (OS_MAC ? io.KeySuper : io.KeyCtrl) {
+                        handle_goto_definition(pos);
+                    } else {
+                        editor->select_start = pos;
+                        editor->selecting = true;
+                        editor->mouse_select.on = true;
+                        editor->mouse_select.editor_id = editor->id;
+                        editor->move_cursor(pos);
+                    }
+                } else if (world.ui.mouse_down[0]) {
+                    print("[mouse] down");
+                    if (editor->mouse_select.on)
+                        if (editor->mouse_select.editor_id == editor->id)
+                            if (!editor->double_clicked_selection)
+                                editor->move_cursor(calculate_pos_from_mouse());
+                } else if (editor->mouse_select.on) {
+                    editor->mouse_select.on = false;
                 }
 
-                if (world.ui.mouse_down[0])
-                    if (!editor->double_clicked_selection)
-                        editor->move_cursor(calculate_pos_from_mouse());
+                if (world.ui.mouse_just_released[0]) {
+                    print("[mouse] released");
 
-                if (world.ui.mouse_just_released[0])
+                    if (editor->selecting)
+                        if (editor->select_start == editor->cur)
+                            editor->selecting = false;
                     editor->double_clicked_selection = false;
+                    editor->mouse_select.on = false;
+                }
 
                 auto flags = get_mouse_flags(editor_area);
                 if (flags & MOUSE_DBLCLICKED) {
+                    print("[mouse] double clicked");
+
                     auto pos = calculate_pos_from_mouse();
 
                     auto classify_char = [&](uchar ch) {
@@ -3945,6 +3971,33 @@ void UI::draw_everything() {
                         editor->select_start = start;
                         editor->double_clicked_selection = true;
                         editor->move_cursor(end);
+                    }
+                }
+
+                // handle scrolling
+                auto dy = ImGui::GetIO().MouseWheel;
+                if (dy != 0) {
+                    bool flip = true;
+                    if (dy < 0) {
+                        flip = false;
+                        dy = -dy;
+                    }
+
+                    auto lines = (int)dy;
+                    if (lines == 0) lines = 1;
+
+                    for (int i = 0; i < lines; i++) {
+                        if (flip) {
+                            if (editor->view.y > 0) {
+                                editor->view.y--;
+                                editor->ensure_cursor_on_screen();
+                            }
+                        } else {
+                            if (editor->view.y + 1 < editor->buf->lines.len) {
+                                editor->view.y++;
+                                editor->ensure_cursor_on_screen();
+                            }
+                        }
                     }
                 }
             }
@@ -5250,7 +5303,6 @@ void UI::recalculate_view_sizes(bool force) {
                 nv.start_request_message("nvim_win_set_option", 3);
                 nv.writer.write_int(editor.nvim_data.win_id);
                 nv.writer.write_string("scroll");
-                print("new scroll: %d", editor.view.h / 2);
                 nv.writer.write_int(editor.view.h / 2);
                 nv.end_message();
             }

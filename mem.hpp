@@ -295,9 +295,6 @@ struct Frame {
     void init(Pool *mem) {
         pool = mem;
         block = pool->curr;
-        if (block == NULL) {
-            print("breakpoint");
-        }
         pos = pool->sp;
     }
 

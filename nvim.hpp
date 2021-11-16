@@ -121,9 +121,6 @@ struct Mp_Reader {
     u8 _read1() {
         u8 ret = 0;
         ok = proc->read1((char*)&ret);
-        if (!ok) {
-            print("break here");
-        }
         return ret;
     }
 
@@ -183,9 +180,6 @@ struct Mp_Reader {
     u8 peek() {
         u8 ch = 0;
         ok = proc->peek((char*)&ch);
-        if (!ok) {
-            print("break here");
-        }
         return ch;
     }
 
@@ -305,9 +299,6 @@ struct Mp_Reader {
     void read_nil() {
         auto b = read1();
         ok = ok && (b == 0xc0);
-        if (!ok) {
-            print("break");
-        }
     }
 };
 

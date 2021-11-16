@@ -76,6 +76,10 @@ struct Editor {
     // only used when !world.use_nvim
     bool selecting;
     cur2 select_start;
+    struct {
+        bool on;
+        int editor_id;
+    } mouse_select;
 
     bool double_clicked_selection;
 

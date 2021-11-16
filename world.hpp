@@ -550,7 +550,7 @@ void* get_native_window_handle();
 bool is_build_debug_free();
 void goto_file_and_pos(ccstr file, cur2 pos, Ensure_Cursor_Mode mode = ECM_NONE);
 void goto_jump_to_definition_result(Jump_To_Definition_Result *result);
-void handle_goto_definition();
+void handle_goto_definition(cur2 pos = {-1, -1});
 void save_all_unsaved_files();
 void start_search_job(ccstr query);
 void goto_error(int index);
@@ -567,7 +567,7 @@ bool exclude_from_file_tree(ccstr path);
 extern u64 post_insert_dotrepeat_time;
 
 bool move_autocomplete_cursor(Editor *ed, int direction);
-Jump_To_Definition_Result *get_current_definition(ccstr *filepath = NULL, bool display_error = false);
+Jump_To_Definition_Result *get_current_definition(ccstr *filepath = NULL, bool display_error = false, cur2 pos = {-1, -1});
 
 extern int gargc;
 extern char **gargv;

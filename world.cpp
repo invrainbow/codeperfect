@@ -806,7 +806,7 @@ void goto_jump_to_definition_result(Jump_To_Definition_Result *result) {
     goto_file_and_pos(result->file, result->pos, ECM_GOTO_DEF);
 }
 
-Jump_To_Definition_Result *get_current_definition(ccstr *filepath, bool display_error) {
+Jump_To_Definition_Result *get_current_definition(ccstr *filepath, bool display_error, cur2 pos) {
     auto show_error = [&](ccstr msg) -> Jump_To_Definition_Result* {
         if (display_error)
             tell_user(msg, NULL);
@@ -830,7 +830,10 @@ Jump_To_Definition_Result *get_current_definition(ccstr *filepath, bool display_
             return show_error("The indexer is currently busy.");
         defer { world.indexer.release_lock(IND_READING); };
 
-        result = world.indexer.jump_to_definition(editor->filepath, new_cur2(editor->cur_to_offset(editor->cur), -1));
+        if (pos.x == -1)
+            pos = editor->cur;
+        auto off = editor->cur_to_offset(pos);
+        result = world.indexer.jump_to_definition(editor->filepath, new_cur2(off, -1));
     }
 
     if (result == NULL || result->decl == NULL || result->decl->decl == NULL)
@@ -846,8 +849,8 @@ Jump_To_Definition_Result *get_current_definition(ccstr *filepath, bool display_
     return ret;
 }
 
-void handle_goto_definition() {
-    auto result = get_current_definition();
+void handle_goto_definition(cur2 pos) {
+    auto result = get_current_definition(NULL, false, pos);
     if (result != NULL)
         goto_jump_to_definition_result(result);
 }
@@ -2319,7 +2322,12 @@ void do_generate_implementation() {
 
         auto &sig = gotype->func_sig;
 
-        rend.write("\n\nfunc (%s *%s) %s(", type_var, type_name, it.decl->name);
+        rend.write("\n\n");
+
+        if (isupper(it.decl->name[0]))
+            rend.write("// %s is a function that still needs to be documented.\n", it.decl->name);
+
+        rend.write("func (%s *%s) %s(", type_var, type_name, it.decl->name);
 
         bool first = true;
         For (*sig.params) {

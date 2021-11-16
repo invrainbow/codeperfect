@@ -1231,8 +1231,7 @@ struct Go_Indexer {
 
     Module_Resolver module_resolver;
 
-    // why am i even using a scoped_table here?
-    Scoped_Table<Go_Package*> package_lookup;
+    Table<int> package_lookup;
 
     Message_Queue<Go_Message> message_queue;
 
@@ -1318,7 +1317,7 @@ struct Go_Indexer {
 
     List<Find_References_File>* find_references(ccstr filepath, cur2 pos);
     List<Find_References_File>* find_references(Goresult *declres);
-    List<Goresult> *get_lazy_type_dotprops(Gotype *type, Go_Ctx *ctx);
+    List<Goresult> *list_lazy_type_dotprops(Gotype *type, Go_Ctx *ctx);
 
     bool acquire_lock(Indexer_Status new_status, bool just_try = false);
     bool release_lock(Indexer_Status expected_status);

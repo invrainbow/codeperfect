@@ -26,7 +26,9 @@ const int GO_INDEX_MAGIC_NUMBER = 0x49fa98;
 // version 16: add Go_Reference
 // version 17: change GO_INDEX_MAGIC_NUMBER
 // version 18: change Go_Reference
-const int GO_INDEX_VERSION = 18;
+// version 19: fix Go_File::read()/write() not saving Go_Reference
+// version 20: fix Go_Reference not using correct pool
+const int GO_INDEX_VERSION = 20;
 
 void index_print(ccstr fmt, ...) {
     va_list args;
@@ -347,7 +349,6 @@ void Module_Resolver::init(ccstr current_module_filepath, ccstr _gomodcache) {
         ccstr resolved_path = NULL;
 
         auto parts = split_string(line.items, ' ');
-
         if (parts->len == 1) {
             module_path = our_strcpy(parts->at(0));
             import_path = module_path;
@@ -913,13 +914,6 @@ void Go_Indexer::background_thread() {
         enqueue_package(import_path);
     };
 
-    auto pop_package_from_queue = [&]() -> ccstr {
-        auto import_path = *package_queue.last();
-        package_queue.len--;
-        already_enqueued_packages.remove(import_path);
-        return import_path;
-    };
-
     auto enqueue_imports_from_file = [&](Go_File *file) {
         if (file->imports == NULL) return;
         For (*file->imports) {
@@ -963,10 +957,13 @@ void Go_Indexer::background_thread() {
 
         if (index.packages == NULL) return;
 
-        For (*index.packages) {
-            if (package_lookup.get(it.import_path) != NULL)
+        for (int i = 0; i < index.packages->len; i++) {
+            auto &it = index.packages->at(i);
+            bool found = false;
+            package_lookup.get(it.import_path, &found);
+            if (found)
                 print("duplicate entry detected");
-            package_lookup.set(it.import_path, &it);
+            package_lookup.set(it.import_path, i);
         }
     };
 
@@ -1042,7 +1039,11 @@ void Go_Indexer::background_thread() {
             memcpy(&index, obj, sizeof(Go_Index));
         }
 
+#if DEBUG_MODE
         index_print("Successfully read database from disk, final_mem.size = %d", final_mem.mem_allocated);
+#else
+        index_print("Successfully read database from disk.");
+#endif
     } while (0);
 
     // initialize index
@@ -1134,13 +1135,15 @@ void Go_Indexer::background_thread() {
             SCOPED_FRAME();
 
             For (*index.packages) {
-                if (it.status != GPS_READY) {
-                    enqueue_package(it.import_path);
+                auto &pkg = it;
+
+                if (pkg.status != GPS_READY) {
+                    enqueue_package(pkg.import_path);
                     continue;
                 }
 
-                if (it.files != NULL)
-                    For (*it.files)
+                if (pkg.files != NULL)
+                    For (*pkg.files)
                         enqueue_imports_from_file(&it);
             }
         }
@@ -1157,13 +1160,15 @@ void Go_Indexer::background_thread() {
 
     int last_final_mem_allocated = final_mem.mem_allocated;
     u64 last_write_time = 0;
+    int packages_processed_since_last_write = 0;
+    ccstr last_package_processed = NULL;
     u64 last_hash_check = MAX_U64;
 
     index_print("Entering main loop...");
 
-    bool force_write_after_checking_hashes = false;
+    bool try_write_after_checking_hashes = false;
     for (;; sleep_milliseconds(100)) {
-        bool force_write_this_time = false;
+        bool try_write_this_time = false;
         bool cleanup_unused_memory_this_time = false;
 
         // process messages from main thread
@@ -1216,7 +1221,13 @@ void Go_Indexer::background_thread() {
             defer { scratch_mem.cleanup(); };
             SCOPED_MEM(&scratch_mem);
 
-            auto import_path = pop_package_from_queue();
+            // pop package from end of queue
+            ccstr import_path = NULL;
+            {
+                import_path = *package_queue.last();
+                package_queue.len--;
+                already_enqueued_packages.remove(import_path);
+            }
 
             auto resolved_path = get_package_path(import_path);
             if (resolved_path == NULL) {
@@ -1236,11 +1247,12 @@ void Go_Indexer::background_thread() {
                 if (pkg != NULL) return;
 
                 SCOPED_MEM(&final_mem);
+                auto idx = index.packages->len;
                 pkg = index.packages->append();
                 pkg->status = GPS_OUTDATED;
                 pkg->files = alloc_list<Go_File>();
                 pkg->import_path = our_strcpy(import_path);
-                package_lookup.set(pkg->import_path, pkg);
+                package_lookup.set(pkg->import_path, idx);
             };
 
             Timer t;
@@ -1310,6 +1322,11 @@ void Go_Indexer::background_thread() {
             pkg->status = GPS_READY;
             pkg->checked_for_outdated_hash = true;
 
+            if (last_package_processed == NULL || !streq(import_path, last_package_processed)) {
+                last_package_processed = our_strcpy(import_path);
+                packages_processed_since_last_write++;
+            }
+
             index_print("Processed %s in %dms.", import_path, t.read_time() / 1000000);
         }
 
@@ -1319,7 +1336,7 @@ void Go_Indexer::background_thread() {
 
             if (queue_had_stuff) {
                 index_print("Scanning packages for changes...");
-                force_write_after_checking_hashes = true;
+                try_write_after_checking_hashes = true;
             }
 
             auto to_remove = alloc_list<int>();
@@ -1334,11 +1351,20 @@ void Go_Indexer::background_thread() {
                 it.checked_for_outdated_hash = true;
 
                 // if this is a duplicate, remove
-                auto true_copy = package_lookup.get(it.import_path);
-                if (true_copy != NULL && true_copy != &it) {
-                    // are we ever gonna have to handle true_copy == NULL?
-                    to_remove->append(i);
-                    continue;
+                bool found = false;
+                auto true_copy = package_lookup.get(it.import_path, &found);
+                if (!found) {
+#if DEBUG_MODE
+                    our_panic("we have a package that wasn't found in package_lookup");
+#endif
+                } else {
+                    if (true_copy != i) {
+#if DEBUG_MODE
+                        our_panic("why do we have a copy?");
+#endif
+                        to_remove->append(i);
+                        continue;
+                    }
                 }
 
                 auto package_path = get_package_path(it.import_path);
@@ -1355,7 +1381,6 @@ void Go_Indexer::background_thread() {
                 // hash changed, mark outdated & queue for re-processing
                 mark_package_for_reprocessing(it.import_path);
             }
-
             bool done = (i == index.packages->len && package_queue.len == 0);
 
             int offset = 0;
@@ -1367,9 +1392,9 @@ void Go_Indexer::background_thread() {
             if (done) {
                 if (status == IND_WRITING)
                     stop_writing();
-                if (force_write_after_checking_hashes) {
-                    force_write_this_time = true;
-                    force_write_after_checking_hashes = false;
+                if (try_write_after_checking_hashes) {
+                    try_write_this_time = true;
+                    try_write_after_checking_hashes = false;
                 }
             }
         }
@@ -1416,11 +1441,15 @@ void Go_Indexer::background_thread() {
         auto time = current_time_in_nanoseconds();
 
         auto should_write = [&]() -> bool {
-            if (force_write_this_time) return true;
-
             // if there's still stuff in queue, don't write yet, we'll trigger
             // a write when we clear out the queue
             if (package_queue.len > 0) return false;
+            if (!try_write_this_time) return false;
+
+            // either every 10 minutes, or every 5 package updates
+
+            if (packages_processed_since_last_write > 5)
+                return true;
 
             if (last_write_time != 0) {
                 auto ten_minutes_in_ns = (u64)10 * 60 * 1000 * 1000 * 1000;
@@ -1439,6 +1468,8 @@ void Go_Indexer::background_thread() {
             // Set last_write_time, even if the write operation itself later fails.
             // This way we're not stuck trying over and over to write.
             last_write_time = time;
+            packages_processed_since_last_write = 0;
+            last_package_processed = NULL;
 
             Timer t;
             t.init();
@@ -1622,7 +1653,14 @@ Go_Package *Go_Indexer::find_package_in_index(ccstr import_path) {
 
     bool found = false;
     auto ret = package_lookup.get(import_path, &found);
-    return found ? ret : NULL;
+    if (!found) return NULL;
+
+    if (ret < 0 || ret >= index.packages->len) {
+        index_print("package_lookup points to an invalid package for %s", import_path);
+        return NULL;
+    }
+
+    return index.packages->items + ret;
 }
 
 Go_Package *Go_Indexer::find_up_to_date_package(ccstr import_path) {
@@ -1890,11 +1928,16 @@ void Go_Indexer::process_tree_into_gofile(
                             return WALK_SKIP_CHILDREN;
                     }
 
-                    auto ref = file->references->append();
-                    ref->is_sel = false;
-                    ref->start = it->start();
-                    ref->end = it->end();
-                    ref->name = it->string();
+                    Go_Reference ref;
+                    ref.is_sel = false;
+                    ref.start = it->start();
+                    ref.end = it->end();
+                    ref.name = it->string();
+
+                    {
+                        SCOPED_MEM(&file->pool);
+                        file->references->append(ref.copy());
+                    }
                 }
                 break;
 
@@ -1925,14 +1968,19 @@ void Go_Indexer::process_tree_into_gofile(
                     auto xtype = expr_to_gotype(x);
                     if (xtype == NULL) break;
 
-                    auto ref = file->references->append();
-                    ref->is_sel = true;
-                    ref->x = expr_to_gotype(x);
-                    ref->x_start = x->start();
-                    ref->x_end = x->end();
-                    ref->sel = sel->string();
-                    ref->sel_start = sel->start();
-                    ref->sel_end = sel->end();
+                    Go_Reference ref;
+                    ref.is_sel = true;
+                    ref.x = expr_to_gotype(x);
+                    ref.x_start = x->start();
+                    ref.x_end = x->end();
+                    ref.sel = sel->string();
+                    ref.sel_start = sel->start();
+                    ref.sel_end = sel->end();
+
+                    {
+                        SCOPED_MEM(&file->pool);
+                        file->references->append(ref.copy());
+                    }
 
                     switch (x->type()) {
                     case TS_IDENTIFIER:
@@ -2168,11 +2216,6 @@ Goresult *Go_Indexer::find_decl_of_id(ccstr id_to_find, cur2 id_pos, Go_Ctx *ctx
 
             auto decl = table.get(id_to_find);
             if (decl != NULL) return make_goresult(decl, ctx);
-
-            // try to find field struct
-
-
-
         }
 
         For (*pkg->files) {
@@ -2338,7 +2381,7 @@ List<Postfix_Completion_Type> *Go_Indexer::get_postfix_completions(Ast_Node *ope
     return ret;
 }
 
-List<Goresult> *Go_Indexer::get_lazy_type_dotprops(Gotype *type, Go_Ctx *ctx) {
+List<Goresult> *Go_Indexer::list_lazy_type_dotprops(Gotype *type, Go_Ctx *ctx) {
     auto res = evaluate_type(type, ctx);
     if (res == NULL) return NULL;
 
@@ -2371,7 +2414,7 @@ List<Goresult> *Go_Indexer::get_node_dotprops(Ast_Node *operand_node, bool *was_
         auto gotype = expr_to_gotype(operand_node);
         if (gotype == NULL) break;
 
-        auto ret = get_lazy_type_dotprops(gotype, ctx);
+        auto ret = list_lazy_type_dotprops(gotype, ctx);
         if (ret == NULL) break;
 
         *was_package = false;
@@ -2493,12 +2536,17 @@ bool Go_Indexer::are_gotypes_equal(Goresult *ra, Goresult *rb) {
         {
             auto adecl = find_decl_of_id(a->id_name, a->id_pos, ra->ctx);
             if (adecl == NULL) return false;
+            if (adecl->ctx == NULL) return false;
 
             auto bdecl = find_decl_of_id(b->id_name, b->id_pos, rb->ctx);
             if (bdecl == NULL) return false;
+            if (bdecl->ctx == NULL) return false;
 
             auto afile = ctx_to_filepath(adecl->ctx);
+            if (afile == NULL) return false;
+
             auto bfile = ctx_to_filepath(bdecl->ctx);
+            if (bfile == NULL) return false;
 
             if (!streq(afile, bfile)) return false;
             if (adecl->decl->name_start != bdecl->decl->name_start) return false;
@@ -2509,6 +2557,7 @@ bool Go_Indexer::are_gotypes_equal(Goresult *ra, Goresult *rb) {
         {
             auto aimp = find_import_path_referred_to_by_id(a->sel_name, ra->ctx);
             auto bimp = find_import_path_referred_to_by_id(b->sel_name, rb->ctx);
+            if (aimp == NULL || bimp == NULL) return false;
             if (!streq(aimp, bimp)) return false;
             if (!streq(a->sel_sel, b->sel_sel)) return false;
         }
@@ -2648,6 +2697,13 @@ List<Find_Decl> *Go_Indexer::find_interfaces(Goresult *target) {
     if (!list_type_methods(target->decl->name, target->ctx->import_path, methods))
         return NULL;
 
+    For (*methods) {
+        auto filepath = ctx_to_filepath(it.ctx);
+        auto decl = it.decl;
+
+        print("%s %s %s", filepath, format_cur(decl->decl_start), decl->name);
+    }
+
     auto ret = alloc_list<Find_Decl>();
 
     For (*index.packages) {
@@ -2678,14 +2734,21 @@ List<Find_Decl> *Go_Indexer::find_interfaces(Goresult *target) {
 
                     // test that all(<methods contains i> for i in imethods)
                     For (*imethods) {
-                        bool found = false;
+                        auto imeth_name = it.decl->name;
+                        if (imeth_name == NULL) return false;
+
                         auto imeth = make_goresult(it.decl->gotype, ctx);
+                        bool found = false;
 
                         For (*methods) {
-                            if (are_gotypes_equal(imeth, target->wrap(it.decl->gotype))) {
-                                found = true;
-                                break;
-                            }
+                            if (it.decl->name == NULL) continue;
+                            if (!streq(imeth_name, it.decl->name)) continue;
+
+                            auto gotype_res = target->wrap(it.decl->gotype);
+                            if (!are_gotypes_equal(imeth, gotype_res)) continue;
+
+                            found = true;
+                            break;
                         }
 
                         if (!found) return false;
@@ -2970,6 +3033,10 @@ List<Find_References_File> *Go_Indexer::find_references(Goresult *declres) {
     };
 
     auto process = [&](Go_Package *pkg, Go_File *file) {
+        if (streq(pkg->package_name, "legacyscheme")) {
+            print("break here");
+        }
+
         Go_Ctx ctx2;
         ctx2.import_path = pkg->import_path;
         ctx2.filename = file->filename;
@@ -2994,8 +3061,8 @@ List<Find_References_File> *Go_Indexer::find_references(Goresult *declres) {
             }
         }
 
-        auto process_ref = [&](Go_Reference &it) {
-            if (!streq(it.is_sel ? it.sel : it.name, decl_name))
+        auto process_ref = [&](Go_Reference *it) {
+            if (!streq(it->is_sel ? it->sel : it->name, decl_name))
                 return;
 
             /*
@@ -3026,21 +3093,26 @@ List<Find_References_File> *Go_Indexer::find_references(Goresult *declres) {
             switch (case_type) {
             case CASE_NORMAL:
                 if (!same_package) {
-                    if (!it.is_sel) return;
-                    if (it.x->type != GOTYPE_LAZY_ID) return;
-                    if (!streq(it.x->lazy_id_name, package_name_we_want)) return;
+                    if (!it->is_sel) return;
+                    if (it->x->type != GOTYPE_LAZY_ID) return;
+                    if (!streq(it->x->lazy_id_name, package_name_we_want)) return;
                 } else {
-                    if (it.is_sel) return;
+                    if (it->is_sel) return;
                 }
                 break;
             case CASE_METHOD:
-                if (!it.is_sel) return;
+                if (!it->is_sel) return;
                 break;
             }
 
             // basically, check "does this reference refer to our decl?"
-            if (it.is_sel) {
-                auto results = get_lazy_type_dotprops(it.x, &ctx2);
+            if (it->is_sel) {
+                auto results = list_lazy_type_dotprops(it->x, &ctx2);
+                if (results == NULL) {
+                    auto import_path = find_import_path_referred_to_by_id(it->x->lazy_id_name, &ctx2);
+                    if (import_path == NULL) return;
+                    results = list_package_decls(import_path, LISTDECLS_PUBLIC_ONLY | LISTDECLS_EXCLUDE_METHODS);
+                }
                 if (results == NULL) return;
 
                 bool match = false;
@@ -3053,15 +3125,15 @@ List<Find_References_File> *Go_Indexer::find_references(Goresult *declres) {
 
                 if (!match) return;
             } else {
-                auto res = find_decl_of_id(it.name, it.start, &ctx2);
+                auto res = find_decl_of_id(it->name, it->start, &ctx2);
                 if (res == NULL) return;
                 if (!is_match(res)) return;
             }
 
-            out->references->append(&it);
+            out->references->append(it);
         };
 
-        For (*file->references) process_ref(it);
+        For (*file->references) process_ref(&it);
     };
 
     if (!decl->is_toplevel) {
@@ -3171,9 +3243,14 @@ List<Go_Import> *Go_Indexer::optimize_imports(ccstr filepath) {
 
         auto pkgname = ref.x->lazy_id_name;
 
-        auto res = find_decl_of_id(pkgname, ref.x_start, ctx);
-        if (res == NULL) continue;
-        if (res->decl->type == GODECL_IMPORT) continue;
+        auto has_nonimport_decl = [&]() -> bool {
+            auto res = find_decl_of_id(pkgname, ref.x_start, ctx);
+            if (res == NULL) return false;
+            if (res->decl->type == GODECL_IMPORT) return false;
+            return true;
+        };
+
+        if (has_nonimport_decl()) continue;
 
         auto pkg = pkgs->find([&](auto it) { return streq(it->name, pkgname); });
         if (pkg == NULL) {
@@ -4666,8 +4743,11 @@ Go_Ctx *Go_Indexer::filepath_to_ctx(ccstr filepath) {
 }
 
 ccstr Go_Indexer::ctx_to_filepath(Go_Ctx *ctx) {
+    if (ctx == NULL) return NULL;
+
     auto dir = get_package_path(ctx->import_path);
     if (dir == NULL) return NULL;
+
     return path_join(dir, ctx->filename);
 }
 
@@ -5624,13 +5704,9 @@ List<Goresult> *Go_Indexer::list_package_decls(ccstr import_path, int flags) {
         For (*it.decls) {
             if (it.name == NULL) continue;
 
-            if (flags & LISTDECLS_PUBLIC_ONLY) {
-                if (streq(it.name, "ShaderSource"))
-                    print("break here");
+            if (flags & LISTDECLS_PUBLIC_ONLY)
                 if (is_name_private(it.name))
                     continue;
-            }
-
 
             if (flags & LISTDECLS_EXCLUDE_METHODS)
                 if (it.type == GODECL_FUNC && it.gotype->func_recv != NULL)
@@ -6810,6 +6886,7 @@ void Go_File::read(Index_Stream *s) {
     READ_LIST(scope_ops);
     READ_LIST(decls);
     READ_LIST(imports);
+    READ_LIST(references);
 }
 
 void Go_Package::read(Index_Stream *s) {
@@ -6952,6 +7029,7 @@ void Go_File::write(Index_Stream *s) {
     WRITE_LIST(scope_ops);
     WRITE_LIST(decls);
     WRITE_LIST(imports);
+    WRITE_LIST(references);
 }
 
 void Go_Package::write(Index_Stream *s) {

@@ -557,33 +557,9 @@ int main(int argc, char **argv) {
     });
 
     glfwSetScrollCallback(world.window, [](GLFWwindow*, double dx, double dy) {
-        ImGuiIO& io = ImGui::GetIO();
+        auto &io = ImGui::GetIO();
         io.MouseWheelH += (float)dx;
         io.MouseWheel += (float)dy;
-
-        dy *= (world.font.height * 3);
-
-        auto add_dy = [&](i32* offset) {
-            *offset = (dy > 0 ? (*offset + dy) : relu_sub(*offset, -dy));
-        };
-
-        /*
-        {
-            // TODO: scroll in current editor
-            auto &ed = world.editor;
-            auto FACTOR = 0.5;
-            world.ui.scroll_buffer += (-dy);
-            if (world.ui.scroll_buffer <= -FACTOR || world.ui.scroll_buffer >= FACTOR) {
-                auto y = ed.cur.y;
-                if (world.ui.scroll_buffer > 0)
-                    y = min(ed.buf->lines.len - 1, y + world.ui.scroll_buffer / FACTOR);
-                else
-                    y = relu_sub(y, -world.ui.scroll_buffer / FACTOR);
-                ed.move_cursor({(i32)min(ed.cur.x, ed.buf->lines[y].len), y});
-                world.ui.scroll_buffer = fmod(world.ui.scroll_buffer, FACTOR);
-            }
-        }
-        */
     });
 
     glfwSetWindowContentScaleCallback(world.window, [](GLFWwindow*, float xscale, float yscale) {
@@ -702,7 +678,7 @@ int main(int argc, char **argv) {
 
             Text_Renderer rend; rend.init();
             For (parts) rend.write("%s-", it);
-            rend.write("%s", s);
+            rend.write("<%s>", s);
             return rend.finish();
         };
 

@@ -219,6 +219,10 @@ struct Scoped_Table {
     Table_Entry *lookup = NULL;
     Pool *mem;
 
+    int count() {
+        return HASH_COUNT(lookup);
+    }
+
     void clear() {
         List<ccstr> keys; keys.init();
         auto ents = entries();
@@ -239,6 +243,8 @@ struct Scoped_Table {
 
         old_values.init();
         frames.init();
+
+        print("%d", count());
     }
 
     void cleanup() {
