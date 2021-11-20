@@ -5855,6 +5855,8 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
             if (res == NULL) return NULL;
 
             res = resolve_type(res->gotype, res->ctx);
+            if (res == NULL) return NULL;
+
             res = unpointer_type(res->gotype, res->ctx);
 
             auto base_type = res->gotype;
@@ -5885,6 +5887,8 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
             if (res == NULL) return NULL;
 
             res = resolve_type(res->gotype, res->ctx);
+            if (res == NULL) return NULL;
+
             res = unpointer_type(res->gotype, res->ctx);
 
             auto base_type = res->gotype;
@@ -5916,7 +5920,10 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
             if (res == NULL) break;
 
             res = resolve_type(res->gotype, res->ctx);
+            if (res == NULL) break;
+
             res = unpointer_type(res->gotype, res->ctx);
+            if (res == NULL) break;
 
             if (res->gotype->type != GOTYPE_FUNC) return NULL;
 
@@ -6004,6 +6011,8 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
             if (res == NULL) return NULL;
 
             auto rres = resolve_type(res->gotype, res->ctx);
+            if (rres == NULL) return NULL;
+
             rres = unpointer_type(rres->gotype, rres->ctx);
 
             List<Goresult> results;
