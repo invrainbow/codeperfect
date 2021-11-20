@@ -7,3 +7,6 @@ packages.config
 tree-sitter-go
 tree-sitter
 stb_*
+*.png
+*.svg
+docs
