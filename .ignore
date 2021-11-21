@@ -10,3 +10,4 @@ stb_*
 *.png
 *.svg
 docs
+meow_hash_x64_aesni.h
