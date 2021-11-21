@@ -366,6 +366,7 @@ void World::init(GLFWwindow *_wnd) {
 
     mark_fridge.init(512);
     mark_node_fridge.init(512);
+    change_fridge.init(512);
 
     chunk0_fridge.init(512);
     chunk1_fridge.init(256);
@@ -469,6 +470,9 @@ void World::init(GLFWwindow *_wnd) {
     init_command_info_table();
 
     world.file_explorer.show = true;
+
+    // DEBUG
+    world.wnd_history.show = true;
 }
 
 void World::start_background_threads() {
@@ -2362,7 +2366,7 @@ void do_generate_implementation() {
 
     // we now know that src and dest accurately reflect what's on disk
 
-    Buffer buf; buf.init(MEM, true);
+    Buffer buf; buf.init(MEM, true, false);
     defer { buf.cleanup(); };
 
     auto filepath = ind.ctx_to_filepath(dest->ctx);
@@ -2488,4 +2492,6 @@ void do_generate_implementation() {
     buf.cleanup();
 
     // TODO: refresh existing editors if `filepath` is open
+    // tho i think writing to disk just automatically does that?
+    // or should we not write to disk for editors that are open
 }

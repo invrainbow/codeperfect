@@ -89,6 +89,7 @@ void Editor::insert_text_in_insert_mode(ccstr s) {
     auto c = cur;
     for (u32 i = 0; i < ulen; i++)
         c = buf->inc_cur(c);
+
     raw_move_cursor(c);
 }
 
@@ -554,46 +555,14 @@ void Editor::perform_autocomplete(AC_Result *result) {
                         auto gotype = rres->gotype;
                         if (gotype->type != GOTYPE_FUNC) break;
 
-                        // it's a func, add a '('
                         is_function = true;
-                        return our_sprintf("%s(", s);
+                        return our_sprintf("%s(", s); // it's a func, add a '('
                     }
                     break;
                 }
 
                 return s;
             };
-
-            // this whole section is basically, like, "how do we replace text
-            // and make sure nvim/ts are in sync"
-            //
-            // refactor this out somehow, we're already starting to copy paste
-
-            auto fullstring = modify_string(result->name);
-
-            // grab len & save name
-            auto len = strlen(fullstring);
-            auto name = alloc_array(uchar, len);
-            for (u32 i = 0; i < len; i++)
-                name[i] = (uchar)fullstring[i];
-
-            auto ac_start = cur;
-            ac_start.x -= strlen(ac.prefix);
-
-            // perform the edit
-            buf->remove(ac_start, cur);
-            buf->insert(ac_start, name, len);
-
-            // move cursor forward
-            raw_move_cursor(new_cur2(ac_start.x + len, ac_start.y));
-
-            // clear out last_closed_autocomplete
-            last_closed_autocomplete = new_cur2(-1, -1);
-
-            // clear autocomplete
-            ptr0(&ac);
-
-            if (is_function) trigger_parameter_hint();
 
             auto see_if_we_need_autoimport = [&]() -> ccstr {
                 if (result->type == ACR_IMPORT)
@@ -602,6 +571,9 @@ void Editor::perform_autocomplete(AC_Result *result) {
                     return result->declaration_package;
                 return NULL;
             };
+
+            buf->hist_batch_mode = true;
+            defer { buf->hist_batch_mode = false; };
 
             auto import_to_add = see_if_we_need_autoimport();
             if (import_to_add != NULL) {
@@ -677,7 +649,8 @@ void Editor::perform_autocomplete(AC_Result *result) {
                     if (imports_node != NULL) {
                         start = imports_node->start();
                         old_end = imports_node->end();
-                        if (old_end.y >= nvim_insert.start.y) break;
+                        if (world.use_nvim)
+                            if (old_end.y >= nvim_insert.start.y) break;
                     } else {
                         start = package_node->end();
                         old_end = package_node->end();
@@ -710,49 +683,88 @@ void Editor::perform_autocomplete(AC_Result *result) {
                     }
 
                     // perform the edit
-                    if (start != old_end)
-                        buf->remove(start, old_end);
-                    buf->insert(start, chars->items, chars->len);
+                    {
+                        if (start != old_end)
+                            buf->remove(start, old_end);
+                        buf->insert(start, chars->items, chars->len);
+                    }
 
                     add_change_in_insert_mode(start, old_end, new_end);
 
                     // do something with new_contents
                 } while (0);
+            }
 
+            // this whole section is basically, like, "how do we replace text
+            // and make sure nvim/ts are in sync"
+            //
+            // refactor this out somehow, we're already starting to copy paste
+
+            auto fullstring = modify_string(result->name);
+
+            // grab len & save name
+            auto len = strlen(fullstring);
+            auto name = alloc_array(uchar, len);
+            for (u32 i = 0; i < len; i++)
+                name[i] = (uchar)fullstring[i];
+
+            auto ac_start = cur;
+            ac_start.x -= strlen(ac.prefix);
+
+            // perform the edit
+            // i don't think we need to create a batch here? as long as it follows the flow of normal text editing
+            buf->remove(ac_start, cur);
+            buf->insert(ac_start, name, len);
+
+            // move cursor forward
+            raw_move_cursor(new_cur2(ac_start.x + len, ac_start.y));
+
+            // clear out last_closed_autocomplete
+            last_closed_autocomplete = new_cur2(-1, -1);
+
+            // clear autocomplete
+            ptr0(&ac);
+
+            if (is_function) trigger_parameter_hint();
+
+            if (import_to_add != NULL)
                 if (result->type == ACR_IMPORT)
                     trigger_autocomplete(true, false);
-            }
         }
         break;
     }
 }
 
 void Editor::add_change_in_insert_mode(cur2 start, cur2 old_end, cur2 new_end) {
-    auto &nvi = nvim_insert;
+    if (world.use_nvim) {
+        auto change = nvim_insert.other_changes.append();
+        change->start = start;
+        change->end = old_end;
 
-    auto change = nvi.other_changes.append();
-    change->start = start;
-    change->end = old_end;
+        {
+            SCOPED_MEM(&nvim_insert.mem);
 
-    {
-        SCOPED_MEM(&nvi.mem);
-
-        change->lines.init(LIST_POOL, new_end.y - start.y + 1);
-        for (int i = start.y; i <= new_end.y; i++) {
-            auto line = change->lines.append();
-            line->init(LIST_POOL, buf->lines[i].len);
-            line->len = buf->lines[i].len;
-            memcpy(line->items, buf->lines[i].items, sizeof(uchar) * line->len);
+            change->lines.init(LIST_POOL, new_end.y - start.y + 1);
+            for (int i = start.y; i <= new_end.y; i++) {
+                auto line = change->lines.append();
+                line->init(LIST_POOL, buf->lines[i].len);
+                line->len = buf->lines[i].len;
+                memcpy(line->items, buf->lines[i].items, sizeof(uchar) * line->len);
+            }
         }
+
+        if (old_end.y >= nvim_insert.start.y)
+            our_panic("can only add changes in insert mode before current change");
     }
 
-    if (old_end.y >= nvim_insert.start.y)
-        our_panic("can only add changes in insert mode before current change");
-
     auto dy = new_end.y - old_end.y;
-    nvim_insert.start.y += dy;
-    nvim_insert.old_end.y += dy;
-    raw_move_cursor(new_cur2(cur.x, cur.y + dy), true);
+
+    if (world.use_nvim) {
+        nvim_insert.start.y += dy;
+        nvim_insert.old_end.y += dy;
+    }
+
+    raw_move_cursor(new_cur2(cur.x, cur.y + dy));
 }
 
 bool Editor::is_current_editor() {
@@ -763,10 +775,20 @@ bool Editor::is_current_editor() {
     return false;
 }
 
-void Editor::raw_move_cursor(cur2 c, bool dont_add_to_history) {
-    if (!is_main_thread) {
-        our_panic("can't call this from outside main thread");
-    }
+Move_Cursor_Opts *default_move_cursor_opts() {
+    auto ret = alloc_object(Move_Cursor_Opts);
+
+    // set defaults
+    ret->dont_add_to_history = false;
+    ret->is_user_movement = false;
+
+    return ret;
+}
+
+void Editor::raw_move_cursor(cur2 c, Move_Cursor_Opts *opts) {
+    if (!is_main_thread) our_panic("can't call this from outside main thread");
+
+    if (opts == NULL) opts = default_move_cursor_opts();
 
     if (c.y == -1) c = buf->offset_to_cur(c.x);
     if (c.y < 0 || c.y >= buf->lines.len) return;
@@ -817,6 +839,16 @@ void Editor::raw_move_cursor(cur2 c, bool dont_add_to_history) {
     if (cur.y + options.scrolloff >= view.y + view.h)
         view.y = cur.y + options.scrolloff - view.h + 1;
 
+    // If we're not using nvim, then we're using this function to trigger
+    // certain "on cursor move" actions
+    if (!world.use_nvim && opts->is_user_movement) {
+        // clear out autocomplete
+        ptr0(&autocomplete.ac);
+
+        // force next change to be a new history entry
+        buf->hist_force_push_next_change = true;
+    }
+
     bool push_to_history = true;
 
     // what the fuck is this stupid pyramid of shit
@@ -841,8 +873,8 @@ void Editor::raw_move_cursor(cur2 c, bool dont_add_to_history) {
         }
     }
 
-    if (push_to_history)
-        if (!dont_add_to_history)
+    if (!opts->dont_add_to_history)
+        if (push_to_history)
             if (get_current_editor() == this)
                 world.history.push(id, c);
 }
@@ -905,7 +937,7 @@ void Editor::update_lines(int firstline, int lastline, List<uchar*> *new_lines, 
     buf->internal_finish_edit(new_end_cur);
 }
 
-void Editor::move_cursor(cur2 c) {
+void Editor::move_cursor(cur2 c, Move_Cursor_Opts *opts) {
     if (world.use_nvim && world.nvim.mode == VI_INSERT) {
         nvim_data.waiting_for_move_cursor = true;
         nvim_data.move_cursor_to = c;
@@ -917,7 +949,7 @@ void Editor::move_cursor(cur2 c) {
         return;
     }
 
-    raw_move_cursor(c);
+    raw_move_cursor(c, opts);
 
     if (world.use_nvim) {
         auto& nv = world.nvim;
@@ -1009,7 +1041,7 @@ bool Editor::load_file(ccstr new_filepath) {
         buf->cleanup();
 
     is_go_file = (new_filepath != NULL && str_ends_with(new_filepath, ".go"));
-    buf->init(&mem, is_go_file);
+    buf->init(&mem, is_go_file, !world.use_nvim);
 
     FILE* f = NULL;
     if (new_filepath != NULL) {
@@ -2194,6 +2226,7 @@ bool Editor::optimize_imports() {
             if (found) chars->append(uch);
         }
 
+        buf->hist_force_push_next_change = true;
         if (start != old_end)
             buf->remove(start, old_end);
         buf->insert(start, chars->items, chars->len);
@@ -2235,7 +2268,7 @@ void Editor::format_on_save(int fmt_type, bool write_to_nvim) {
     defer { GHFree(new_contents); };
 
     int curr = 0;
-    swapbuf.init(MEM, false);
+    swapbuf.init(MEM, false, false);
     swapbuf.read([&](char *out) -> bool {
         if (new_contents[curr] != '\0') {
             *out = new_contents[curr++];
@@ -2250,7 +2283,13 @@ void Editor::format_on_save(int fmt_type, bool write_to_nvim) {
 
     // we need to adjust cursor manually
     if (!world.use_nvim) {
-        // TODO
+        if (cur.y >= buf->lines.len) {
+            cur.y = buf->lines.len-1;
+            cur.x = buf->lines[cur.y].len;
+        }
+
+        if (cur.x > buf->lines[cur.y].len)
+            cur.x = buf->lines[cur.y].len;
     }
 
     if (world.use_nvim && write_to_nvim) {

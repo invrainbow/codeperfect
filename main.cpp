@@ -898,11 +898,15 @@ int main(int argc, char **argv) {
             }
 
             auto old_savedvx = editor->savedvx;
-            editor->move_cursor(cur);
+
+            auto opts = default_move_cursor_opts();
+            opts->is_user_movement = true;
+            editor->move_cursor(cur, opts);
+
             if (key == GLFW_KEY_UP || key == GLFW_KEY_DOWN)
                 editor->savedvx = old_savedvx;
 
-            editor->update_autocomplete(false);
+            editor->update_autocomplete(false); // TODO: why call this here?
             editor->update_parameter_hint();
             return;
         } while (0);

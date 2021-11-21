@@ -59,6 +59,13 @@ enum Ensure_Cursor_Mode {
     ECM_GOTO_DEF,
 };
 
+struct Move_Cursor_Opts {
+    bool dont_add_to_history;
+    bool is_user_movement;
+};
+
+Move_Cursor_Opts *default_move_cursor_opts();
+
 struct Editor {
     u32 id;
     Pool mem;
@@ -157,8 +164,8 @@ struct Editor {
 
     bool is_modifiable();
     void update_tree();
-    void raw_move_cursor(cur2 c, bool dont_add_to_history = false);
-    void move_cursor(cur2 c);
+    void raw_move_cursor(cur2 c, Move_Cursor_Opts *opts = NULL);
+    void move_cursor(cur2 c, Move_Cursor_Opts *opts = NULL);
     void reset_state();
     bool load_file(ccstr new_filepath);
     bool save_file();

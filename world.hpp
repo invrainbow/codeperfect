@@ -227,6 +227,7 @@ struct World {
 
     Fridge<Mark> mark_fridge;
     Fridge<Mark_Node> mark_node_fridge;
+    Fridge<Change> change_fridge;
     Fridge<Chunk0> chunk0_fridge;
     Fridge<Chunk1> chunk1_fridge;
     Fridge<Chunk2> chunk2_fridge;
@@ -311,6 +312,10 @@ struct World {
         Goresult *declres;
         Thread_Handle thread;
     } wnd_rename_identifier;
+
+    struct Wnd_History : Wnd {
+        // ???
+    } wnd_history;
 
     struct Wnd_Generate_Implementation : Wnd {
         Pool thread_mem;

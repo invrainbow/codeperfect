@@ -140,6 +140,17 @@ struct Mark_Tree {
     void check_duplicate_marks_helper(Mark_Node *root, List<Mark*> *seen);
 };
 
+struct Change {
+    cur2 start;
+    cur2 old_end;
+    cur2 new_end;
+    uchar _old_text[64];
+    uchar _new_text[64];
+    List<uchar> old_text;
+    List<uchar> new_text;
+    Change *next;
+};
+
 struct Buffer {
     Pool *mem;
 
@@ -160,8 +171,25 @@ struct Buffer {
     List<uchar> edit_buffer_old;
     List<uchar> edit_buffer_new;
 
+    // TODO: if we have any more ring buffers, consider refactor
+    bool use_history;
+    Change* history[256];
+    int hist_start;
+    int hist_top;
+    int hist_curr;
+
+    bool hist_batch_mode;
+    bool hist_force_push_next_change;
+
+    int hist_inc(int i) { return i == _countof(history) - 1 ? 0 : i + 1; }
+    int hist_dec(int i) { return i == 0 ? _countof(history) - 1 : i - 1; }
+    Change* hist_alloc();
+    void hist_free(int i);
+    Change* hist_push();
+    Change* hist_get_latest_change_for_append();
+
     void copy_from(Buffer *other);
-    void init(Pool *_mem, bool use_tree);
+    void init(Pool *_mem, bool use_tree, bool use_history);
     void cleanup();
     bool read(Buffer_Read_Func f, bool reread = false);
     bool read_data(char *data, int len, bool reread = false);
@@ -179,6 +207,7 @@ struct Buffer {
     void internal_start_edit(cur2 start, cur2 end);
     void internal_finish_edit(cur2 new_end);
     void internal_update_mark_tree();
+    int internal_distance_between(cur2 a, cur2 b);
 
     void insert(cur2 start, uchar* text, s32 len);
     void remove(cur2 start, cur2 end);

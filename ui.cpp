@@ -1985,6 +1985,7 @@ void UI::draw_everything() {
                 ImGui::MenuItem("ImGui demo", NULL, &world.windows_open.im_demo);
                 ImGui::MenuItem("ImGui metrics", NULL, &world.windows_open.im_metrics);
                 ImGui::MenuItem("AST viewer", NULL, &world.wnd_editor_tree.show);
+                ImGui::MenuItem("History viewer", NULL, &world.wnd_history.show);
                 ImGui::MenuItem("Toplevels viewer", NULL, &world.wnd_editor_toplevels.show);
                 ImGui::MenuItem("Show mouse position", NULL, &world.wnd_mouse_pos.show);
                 ImGui::MenuItem("Style editor", NULL, &world.wnd_style_editor.show);
@@ -3726,6 +3727,46 @@ void UI::draw_everything() {
 
             ImGui::EndTabBar();
         }
+
+        ImGui::End();
+    }
+
+    if (world.wnd_history.show) {
+        ImGui::SetNextWindowDockID(dock_sidebar_id, ImGuiCond_Once);
+
+        ImGui::Begin("History", &world.wnd_history.show, ImGuiWindowFlags_AlwaysAutoResize);
+
+        bool handled = false;
+        do {
+            auto editor = get_current_editor();
+            if (editor == NULL) break;
+            if (!editor->buf->use_history) break;
+
+            handled = true;
+
+            auto buf = editor->buf;
+            for (auto i = buf->hist_start; i != buf->hist_top; i = buf->hist_inc(i)) {
+                // if (i != buf->hist_start)
+                //     ImGui::Separator();
+
+                auto change = buf->history[i];
+                ImGui::Text("### %d", i);
+
+                for (auto it = change; it != NULL; it = it->next) {
+                    ImGui::BulletText(
+                        "start = %s, oldend = %s, newend = %s, oldlen = %d, newlen = %d",
+                        format_cur(it->start),
+                        format_cur(it->old_end),
+                        format_cur(it->new_end),
+                        it->old_text.len,
+                        it->new_text.len
+                    );
+                }
+            }
+        } while (0);
+
+        if (!handled)
+            ImGui::Text("no history to show");
 
         ImGui::End();
     }
