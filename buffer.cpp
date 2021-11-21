@@ -161,6 +161,61 @@ uchar Cstr_To_Ustr::feed(u8 ch, bool* found) {
     return 0;
 }
 
+void Buffer::hist_apply_change(Change *change, bool undo) {
+    auto start = change->start;
+    cur2 old_end;
+    List<uchar> *new_text;
+
+    if (undo) {
+        old_end = change->new_end;
+        new_text = &change->old_text;
+    } else {
+        old_end = change->old_end;
+        new_text = &change->new_text;
+    }
+
+    if (start != old_end)
+        remove(start, old_end, true);
+    insert(start, new_text->items, new_text->len, true);
+}
+
+cur2 Buffer::hist_undo() {
+    if (hist_curr == hist_start) return new_cur2(-1, -1);
+
+    hist_curr = hist_dec(hist_curr);
+
+    auto arr = alloc_list<Change*>();
+    for (auto it = history[hist_curr]; it != NULL; it = it->next)
+        arr->append(it);
+
+    auto ret = new_cur2(-1, -1);
+
+    for (int i = 0; i < arr->len; i++) {
+        auto it = arr->at(arr->len - i - 1);
+        hist_apply_change(it, true);
+
+        if (i == arr->len-1)
+            ret = it->start;
+    }
+
+    return ret;
+}
+
+cur2 Buffer::hist_redo() {
+    if (hist_curr == hist_top) return new_cur2(-1, -1);
+
+    auto ret = new_cur2(-1, -1);
+
+    for (auto it = history[hist_curr]; it != NULL; it = it->next){
+        hist_apply_change(it, false);
+        if (it->next == NULL)
+            ret = it->new_end;
+    }
+
+    hist_curr = hist_inc(hist_curr);
+    return ret;
+}
+
 ccstr Buffer::get_text(cur2 start, cur2 end) {
     auto ret = alloc_list<char>();
     char tmp[4];
@@ -394,7 +449,7 @@ void Buffer::internal_append_line(uchar* text, s32 len) {
     dirty = true;
 }
 
-void Buffer::insert(cur2 start, uchar* text, s32 len) {
+void Buffer::insert(cur2 start, uchar* text, s32 len, bool applying_change) {
     i32 x = start.x, y = start.y;
 
     internal_start_edit(start, start);
@@ -402,7 +457,7 @@ void Buffer::insert(cur2 start, uchar* text, s32 len) {
     Change *change = NULL;
     bool need_new_change = false;
 
-    if (use_history) {
+    if (use_history && !applying_change) {
         auto c = hist_get_latest_change_for_append();
         if (c != NULL) {
             if (start == c->new_end || hist_batch_mode) {
@@ -468,7 +523,7 @@ void Buffer::insert(cur2 start, uchar* text, s32 len) {
         }
     }
 
-    if (use_history) {
+    if (use_history && !applying_change) {
         auto start_of_chars_to_copy = start;
         while (start_of_chars_to_copy < end) {
             if (change == NULL || change->new_text.len == change->new_text.cap || need_new_change) {
@@ -682,7 +737,7 @@ int Buffer::internal_distance_between(cur2 a, cur2 b) {
     return total + (lines[a.y].len - a.x + 1) + b.x;
 }
 
-void Buffer::remove(cur2 start, cur2 end) {
+void Buffer::remove(cur2 start, cur2 end, bool applying_change) {
     i32 x1 = start.x, y1 = start.y;
     i32 x2 = end.x, y2 = end.y;
 
@@ -690,6 +745,7 @@ void Buffer::remove(cur2 start, cur2 end) {
 
     do {
         if (!use_history) break;
+        if (applying_change) break;
 
         Change *change = NULL;
         bool need_new_change = false;
@@ -703,16 +759,23 @@ void Buffer::remove(cur2 start, cur2 end) {
             }
         }
 
-        if (change != NULL && !need_new_change && change->start <= start) {
-            change->new_end = start;
-            change->new_text.len -= internal_distance_between(start, end);
-            break;
+        if (change != NULL && !need_new_change) {
+            if (change->start <= start) {
+                change->new_end = start;
+                change->new_text.len -= internal_distance_between(start, end);
+                break;
+            }
+
+            // we have an existing change and we're deleting past the start,
+            // this means we're completing wiping out any text we've written
+            change->new_text.len = 0;
         }
 
-        if (change != NULL)
-            change->new_text.len = 0;
+        auto end_of_chars_to_copy = end;
 
-        auto end_of_chars_to_copy = change == NULL ? end : change->start;
+        // if we are going to be appending to this change
+        if (change != NULL && !need_new_change)
+            end_of_chars_to_copy = change->start;
 
         while (start < end_of_chars_to_copy) {
             if (change == NULL || change->old_text.len == change->old_text.cap || need_new_change) {

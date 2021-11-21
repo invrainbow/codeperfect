@@ -1108,31 +1108,46 @@ int main(int argc, char **argv) {
                 break;
 #endif
 
-            case GLFW_KEY_C:
-            case GLFW_KEY_X: {
-                auto editor = get_current_editor();
-                if (editor == NULL) break;
-                if (!editor->selecting) break;
+            case GLFW_KEY_A:
+                if (!world.use_nvim) {
+                    auto editor = get_current_editor();
+                    if (editor == NULL) break;
 
-                auto a = editor->select_start;
-                auto b = editor->cur;
-                if (a > b) {
-                    auto tmp = a;
-                    a = b;
-                    b = tmp;
+                    editor->selecting = true;
+                    editor->select_start = new_cur2(0, 0);
+
+                    auto buf = editor->buf;
+                    int y = buf->lines.len-1;
+                    int x = buf->lines[y].len;
+                    editor->raw_move_cursor(new_cur2(x, y));
                 }
-
-                auto s = editor->buf->get_text(a, b);
-                glfwSetClipboardString(world.window, s);
-
-                if (key == GLFW_KEY_X) {
-                    editor->buf->remove(a, b);
-                    editor->selecting = false;
-                    editor->move_cursor(a);
-                }
-
                 break;
-            }
+
+            case GLFW_KEY_C:
+            case GLFW_KEY_X:
+                if (!world.use_nvim) {
+                    auto editor = get_current_editor();
+                    if (editor == NULL) break;
+                    if (!editor->selecting) break;
+
+                    auto a = editor->select_start;
+                    auto b = editor->cur;
+                    if (a > b) {
+                        auto tmp = a;
+                        a = b;
+                        b = tmp;
+                    }
+
+                    auto s = editor->buf->get_text(a, b);
+                    glfwSetClipboardString(world.window, s);
+
+                    if (key == GLFW_KEY_X) {
+                        editor->buf->remove(a, b);
+                        editor->selecting = false;
+                        editor->move_cursor(a);
+                    }
+                }
+                break;
 
             case GLFW_KEY_V:
                 if (!world.use_nvim || world.nvim.mode == VI_INSERT) {

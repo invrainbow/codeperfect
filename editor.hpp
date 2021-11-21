@@ -61,6 +61,10 @@ enum Ensure_Cursor_Mode {
 
 struct Move_Cursor_Opts {
     bool dont_add_to_history;
+
+    // NOTE: Honestly, this is not a great name. The point isn't whether it's a
+    // user movement, but whether we should reset location-pegged things like
+    // autocomplete and appending keystrokes to the most recent change in history.
     bool is_user_movement;
 };
 

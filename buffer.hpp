@@ -140,6 +140,8 @@ struct Mark_Tree {
     void check_duplicate_marks_helper(Mark_Node *root, List<Mark*> *seen);
 };
 
+// to apply, remove start to old_end & insert what's in new_text
+// to undo, remove start to new_end & insert what's in old_text
 struct Change {
     cur2 start;
     cur2 old_end;
@@ -172,6 +174,9 @@ struct Buffer {
     List<uchar> edit_buffer_new;
 
     // TODO: if we have any more ring buffers, consider refactor
+
+    // honestly, should we just pull this out into a Buffer_History class
+    // so we don't need to keep writing `hist_` everywhere...
     bool use_history;
     Change* history[256];
     int hist_start;
@@ -187,6 +192,9 @@ struct Buffer {
     void hist_free(int i);
     Change* hist_push();
     Change* hist_get_latest_change_for_append();
+    cur2 hist_undo();
+    cur2 hist_redo();
+    void hist_apply_change(Change *change, bool undo);
 
     void copy_from(Buffer *other);
     void init(Pool *_mem, bool use_tree, bool use_history);
@@ -209,8 +217,8 @@ struct Buffer {
     void internal_update_mark_tree();
     int internal_distance_between(cur2 a, cur2 b);
 
-    void insert(cur2 start, uchar* text, s32 len);
-    void remove(cur2 start, cur2 end);
+    void insert(cur2 start, uchar* text, s32 len, bool applying_change = false);
+    void remove(cur2 start, cur2 end, bool applying_change = false);
 
     Buffer_It iter(cur2 c);
     cur2 inc_cur(cur2 c);

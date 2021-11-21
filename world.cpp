@@ -1476,6 +1476,11 @@ bool is_command_enabled(Command cmd) {
     case CMD_STEP_INTO:
     case CMD_STEP_OUT:
         return world.dbg.state_flag == DLV_STATE_PAUSED;
+
+    case CMD_UNDO:
+    case CMD_REDO:
+        // TODO: also check if we *can* undo/redo (to be done after we actually implement it)
+        return get_current_editor() != NULL;
     }
 
     return true;
@@ -1562,6 +1567,8 @@ void init_command_info_table() {
 
     command_info_table[CMD_FIND_IMPLEMENTATIONS] = k(0, 0, "Find Implementations");
     command_info_table[CMD_FIND_INTERFACES] = k(0, 0, "Find Interfaces");
+    command_info_table[CMD_UNDO] = k(KEYMOD_PRIMARY, GLFW_KEY_Z, "Undo");
+    command_info_table[CMD_REDO] = k(KEYMOD_PRIMARY | KEYMOD_SHIFT, GLFW_KEY_Z, "Redo");
 }
 
 void handle_command(Command cmd, bool from_menu) {
@@ -1569,6 +1576,26 @@ void handle_command(Command cmd, bool from_menu) {
     if (!is_command_enabled(cmd)) return;
 
     switch (cmd) {
+    case CMD_UNDO:
+    case CMD_REDO: {
+        // TODO: handle this for vim too; do we just use `u` and `C-r`?
+        if (world.use_nvim) break;
+
+        auto editor = get_current_editor();
+        if (editor == NULL) break;
+
+        auto buf = editor->buf;
+        auto pos = (cmd == CMD_UNDO ?  buf->hist_undo() : buf->hist_redo());
+
+        if (pos.x != -1) {
+            auto opts = default_move_cursor_opts();
+            opts->is_user_movement = true;
+            editor->raw_move_cursor(pos, opts);
+        }
+
+        break;
+    }
+
     case CMD_NEW_FILE:
         get_current_pane()->open_empty_editor();
         break;

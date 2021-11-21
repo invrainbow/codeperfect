@@ -1851,6 +1851,9 @@ void UI::draw_everything() {
         }
 
         if (ImGui::BeginMenu("Edit")) {
+            menu_command(CMD_UNDO);
+            menu_command(CMD_REDO);
+            ImGui::Separator();
             menu_command(CMD_SEARCH);
             menu_command(CMD_SEARCH_AND_REPLACE);
             ImGui::EndMenu();
@@ -3746,11 +3749,8 @@ void UI::draw_everything() {
 
             auto buf = editor->buf;
             for (auto i = buf->hist_start; i != buf->hist_top; i = buf->hist_inc(i)) {
-                // if (i != buf->hist_start)
-                //     ImGui::Separator();
-
                 auto change = buf->history[i];
-                ImGui::Text("### %d", i);
+                ImGui::Text("### %d%s", i, i == buf->hist_curr ? " (*)" : "");
 
                 for (auto it = change; it != NULL; it = it->next) {
                     ImGui::BulletText(
