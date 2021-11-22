@@ -471,8 +471,9 @@ void World::init(GLFWwindow *_wnd) {
 
     world.file_explorer.show = true;
 
-    // DEBUG
+#ifdef DEBUG_MODE
     world.wnd_history.show = true;
+#endif
 }
 
 void World::start_background_threads() {
@@ -615,6 +616,11 @@ void init_goto_symbol() {
 void kick_off_build(Build_Profile *build_profile) {
     if (build_profile == NULL)
         build_profile = project_settings.get_active_build_profile();
+
+    if (build_profile == NULL) {
+        tell_user("You have no build profile selected.", "No profile selected");
+        return;
+    }
 
     world.build.cleanup();
     world.build.init();

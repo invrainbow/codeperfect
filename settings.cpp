@@ -72,11 +72,3 @@ void Project_Settings::write(ccstr file) {
 
     f.write((char*)this, sizeof(*this));
 }
-
-Build_Profile *Project_Settings::get_active_build_profile() {
-    return &build_profiles[active_build_profile];
-}
-
-Debug_Profile *Project_Settings::get_active_debug_profile() {
-    return &debug_profiles[active_debug_profile];
-}

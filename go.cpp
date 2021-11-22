@@ -1040,7 +1040,7 @@ void Go_Indexer::background_thread() {
             memcpy(&index, obj, sizeof(Go_Index));
         }
 
-#if DEBUG_MODE
+#ifdef DEBUG_MODE
         index_print("Successfully read database from disk, final_mem.size = %d", final_mem.mem_allocated);
 #else
         index_print("Successfully read database from disk.");
@@ -1355,12 +1355,12 @@ void Go_Indexer::background_thread() {
                 bool found = false;
                 auto true_copy = package_lookup.get(it.import_path, &found);
                 if (!found) {
-#if DEBUG_MODE
+#ifdef DEBUG_MODE
                     our_panic("we have a package that wasn't found in package_lookup");
 #endif
                 } else {
                     if (true_copy != i) {
-#if DEBUG_MODE
+#ifdef DEBUG_MODE
                         our_panic("why do we have a copy?");
 #endif
                         to_remove->append(i);

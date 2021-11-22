@@ -315,9 +315,9 @@ struct World {
         Thread_Handle thread;
     } wnd_rename_identifier;
 
-    struct Wnd_History : Wnd {
-        // ???
-    } wnd_history;
+#ifdef DEBUG_MODE
+    struct Wnd_History : Wnd {} wnd_history;
+#endif
 
     struct Wnd_Generate_Implementation : Wnd {
         Pool thread_mem;
@@ -390,6 +390,7 @@ struct World {
         int current_build_profile;
         int tmp_debug_profile_type;
 
+        bool focus_general_settings;
         bool focus_debug_profiles;
         bool focus_build_profiles;
     } wnd_project_settings;

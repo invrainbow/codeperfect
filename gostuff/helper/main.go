@@ -178,7 +178,7 @@ func GHGetBuildStatus(pstatus *int, plines *int) *C.GH_Build_Error {
 
 //export GHGetGoEnv
 func GHGetGoEnv(name *C.char) *C.char {
-	cmd := fmt.Sprintf("go env %s", C.GoString(name))
+	cmd := fmt.Sprintf("%s env %s", config.GoBinaryPath, C.GoString(name))
 	return C.CString(GetShellOutput(cmd))
 }
 
