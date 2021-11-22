@@ -2107,6 +2107,7 @@ void handle_command(Command cmd, bool from_menu) {
             ImGui::End();
         } else {
             world.wnd_options.show = true;
+            world.wnd_options.something_that_needs_restart_was_changed = false;
             memcpy(&world.wnd_options.tmp, &options, sizeof(Options));
         }
         break;

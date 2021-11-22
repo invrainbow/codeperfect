@@ -1157,6 +1157,10 @@ int main(int argc, char **argv) {
                 }
                 break;
 
+            /*
+            // We need to rethink this, because cmd+k is now used for the
+            // command palette.
+
             case GLFW_KEY_J:
             case GLFW_KEY_K:
                 {
@@ -1165,6 +1169,8 @@ int main(int argc, char **argv) {
                     move_autocomplete_cursor(ed, key == GLFW_KEY_J ? 1 : -1);
                     break;
                 }
+            */
+
             case GLFW_KEY_W:
                 {
                     auto pane = get_current_pane();

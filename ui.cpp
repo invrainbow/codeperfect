@@ -416,7 +416,7 @@ void UI::help_marker(fn<void()> cb) {
     ImGui::TextDisabled(ICON_MD_HELP_OUTLINE);
     if (ImGui::IsItemHovered()) {
         ImGui::BeginTooltip();
-        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
+        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 20.0f);
         cb();
         ImGui::PopTextWrapPos();
         ImGui::EndTooltip();
@@ -425,7 +425,7 @@ void UI::help_marker(fn<void()> cb) {
 
 void UI::help_marker(ccstr text) {
     help_marker([&]() {
-        ImGui::TextUnformatted(text);
+        ImGui::TextWrapped(text);
     });
 }
 
@@ -2040,9 +2040,13 @@ void UI::draw_everything() {
 
         ImGui::Begin("Options", &wnd.show, ImGuiWindowFlags_AlwaysAutoResize);
 
-        ImGui::Checkbox("Enable Vim keybindings", &tmp.enable_vim_mode);
+        ImGui::Checkbox("Use Vim mode", &tmp.enable_vim_mode);
+
+        if (ImGui::IsItemEdited())
+            wnd.something_that_needs_restart_was_changed = true;
+
         ImGui::SameLine();
-        help_marker("This requires a restart.");
+        help_marker("Enables Vim keybindings in the editor.\n\nThis requires a restart.");
 
         imgui_small_newline();
 
@@ -2073,6 +2077,10 @@ void UI::draw_everything() {
                 defer { f.cleanup(); };
                 f.write((char*)&options, sizeof(options));
             } while (0);
+
+            if (wnd.something_that_needs_restart_was_changed) {
+                tell_user("One of the settings changed requires you to restart CodePerfect.", "Restarted needed");
+            }
 
             wnd.show = false;
         }
@@ -4283,7 +4291,7 @@ void UI::draw_everything() {
                 auto &view = editor->view;
 
                 auto draw_cursor = [&](int chars) {
-                    if (current_pane != world.current_pane) return;
+                    auto muted = (current_pane != world.current_pane);
 
                     actual_cursor_positions[current_pane] = cur_pos;    // save position where cursor is drawn for later use
                     bool is_insert_cursor = !world.use_nvim; // (world.nvim.mode == VI_INSERT && is_pane_selected /* && !world.nvim.exiting_insert_mode */);
@@ -4303,7 +4311,7 @@ void UI::draw_everything() {
                     b.y++;
                     b.h -= 2;
 
-                    draw_rounded_rect(b, rgba(global_colors.cursor), 2, ROUND_ALL);
+                    draw_rect(b, rgba(global_colors.cursor, muted ? 0.5 : 1.0));
                 };
 
                 List<Client_Breakpoint> breakpoints_for_this_editor;

@@ -458,6 +458,7 @@ struct World {
 
     struct Wnd_Options : Wnd {
         Options tmp;
+        bool something_that_needs_restart_was_changed;
     } wnd_options;
 
     struct Wnd_Editor_Toplevels : Wnd {
