@@ -480,6 +480,7 @@ struct Autocomplete {
     cur2 operand_start;
     cur2 operand_end;
     Gotype *operand_gotype;
+    bool operand_is_error_type; // fix this once we're checking too many individual cases
 };
 
 enum Walk_Action {
@@ -815,11 +816,7 @@ struct Gotype {
         };
 
         Gotype *slice_base;
-
-        struct {
-            Gotype *array_base;
-            int array_size;
-        };
+        Gotype *array_base;
 
         struct {
             Gotype *chan_base;
@@ -1273,6 +1270,7 @@ struct Go_Indexer {
     Goresult *find_decl_of_id(ccstr id, cur2 id_pos, Go_Ctx *ctx, Go_Import **single_import = NULL);
     void list_struct_fields(Goresult *type, List<Goresult> *ret);
     void list_dotprops(Goresult *type_res, Goresult *resolved_type_res, List<Goresult> *ret);
+    void actually_list_dotprops(Goresult *type_res, Goresult *resolved_type_res, List<Goresult> *ret);
     bool node_func_to_gotype_sig(Ast_Node *params, Ast_Node *result, Go_Func_Sig *sig);
     void node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr filename, Pool *target_pool = NULL);
     Gotype *new_gotype(Gotype_Type type);
@@ -1334,6 +1332,7 @@ struct Go_Indexer {
 
     void fill_generate_implementation(List<Go_Symbol> *out, bool selected_interface);
     bool list_type_methods(ccstr type_name, ccstr import_path, List<Goresult> *out);
+    bool is_gotype_error(Goresult *res);
 };
 
 void walk_ast_node(Ast_Node *node, bool abstract_only, Walk_TS_Callback cb);

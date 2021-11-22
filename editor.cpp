@@ -147,6 +147,9 @@ void Editor::perform_autocomplete(AC_Result *result) {
             auto insert_autoindent = [&](int add = 0) {
                 SCOPED_FRAME();
 
+                if (autoindent_chars == NULL)
+                    our_panic("autoindent_chars is null (you probably forgot to call save_autoindent");
+
                 insert_text("%s", autoindent_chars);
 
                 if (add > 0) {
@@ -367,48 +370,58 @@ void Editor::perform_autocomplete(AC_Result *result) {
 
             case PFC_CHECK:
                 {
-                    if (ac.operand_gotype->type != GOTYPE_MULTI) break;
+                    auto is_multi = ac.operand_gotype->type == GOTYPE_MULTI;
+                    if (!(is_multi || ac.operand_is_error_type)) break;
 
                     int error_found_at = -1;
                     auto multi_types = ac.operand_gotype->multi_types;
 
-                    for (int i = 0; i < multi_types->len; i++) {
-                        auto it = multi_types->at(i);
-                        if (it->type == GOTYPE_ID && streq(it->id_name, "error")) {
-                            error_found_at = i;
-                            break;
+                    if (is_multi) {
+                        for (int i = 0; i < multi_types->len; i++) {
+                            auto it = multi_types->at(i);
+                            if (it->type == GOTYPE_ID && streq(it->id_name, "error")) {
+                                error_found_at = i;
+                                break;
+                            }
                         }
-                    }
 
-                    if (error_found_at == -1) break;
+                        if (error_found_at == -1) break;
+                    }
 
                     initialize_everything();
 
-                    int varcount = 0;
-                    for (int i = 0; i < multi_types->len; i++) {
-                        auto it = multi_types->at(i);
-                        if (i == error_found_at) {
-                            insert_text("err");
-                        } else {
-                            if (varcount == 0)
-                                insert_text("val");
-                            else
-                                insert_text("val%d", varcount);
-                            varcount++;
+                    if (is_multi) {
+                        int varcount = 0;
+
+                        for (int i = 0; i < multi_types->len; i++) {
+                            auto it = multi_types->at(i);
+                            if (i == error_found_at) {
+                                insert_text("err");
+                            } else {
+                                if (varcount == 0)
+                                    insert_text("val");
+                                else
+                                    insert_text("val%d", varcount);
+                                varcount++;
+                            }
+
+                            if (i + 1 < multi_types->len)
+                                insert_text(",");
+                            insert_text(" ");
                         }
 
-                        if (i + 1 < multi_types->len)
-                            insert_text(",");
-                        insert_text(" ");
+                        // TODO: make this smarter, like if we're already using err, either
+                        // make it a = instead of :=, or use a different name.
+                        insert_text(":= %s", operand_text);
+                        save_autoindent();
+                        insert_newline();
+                        insert_text("if err != nil {");
+                        insert_newline(1);
+                    } else {
+                        insert_text("if err := %s; err != nil {", operand_text);
+                        save_autoindent();
+                        insert_newline(1);
                     }
-
-                    // TODO: make this smarter, like if we're already using err, either
-                    // make it a = instead of :=, or use a different name.
-                    insert_text(":= %s", operand_text);
-                    save_autoindent();
-                    insert_newline();
-                    insert_text("if err != nil {");
-                    insert_newline(1);
 
                     {
                         bool ok = false;
@@ -419,8 +432,11 @@ void Editor::perform_autocomplete(AC_Result *result) {
                             if (functype == NULL) break;
 
                             auto result = functype->func_sig.result;
-                            if (result == NULL) break;
-                            if (result->len == 0) break;
+                            if (result == NULL  || result->len == 0) {
+                                insert_text("return");
+                                ok = true;
+                                break;
+                            }
 
                             bool error_found = false;
                             auto &ind = world.indexer;

@@ -2615,18 +2615,40 @@ void UI::draw_everything() {
         bool entered = imgui_input_text_full("Name", wnd.name, _countof(wnd.name), ImGuiInputTextFlags_EnterReturnsTrue);
         imgui_pop_font();
 
-        if (entered) {
-            wnd.show = false;
+        do {
+            if (!entered) break;
 
-            if (strlen(wnd.name) > 0) {
-                auto oldpath = path_join(world.current_path, wnd.location);
-                auto newpath = path_join(our_dirname(oldpath), wnd.name);
+            auto error_out = [&](ccstr msg) {
+                tell_user(msg, "Error");
+                wnd.name[0] = '\0';
+            };
 
-                // TODO: handle wnd.name having a slash in it
-                GHRenameFileOrDirectory((char*)oldpath, (char*)newpath);
-                reload_file_subtree(our_dirname(wnd.location));
+            if (strlen(wnd.name) == 0) {
+                error_out("Please enter a file name.");
+                break;
             }
-        }
+
+            bool slash_found = false;
+            for (int i = 0, len = strlen(wnd.name); i < len; i++) {
+                if (is_sep(wnd.name[i])) {
+                    slash_found = true;
+                    break;
+                }
+            }
+
+            if (slash_found) {
+                error_out("New file name can't contain slashes.");
+                break;
+            }
+
+            auto oldpath = path_join(world.current_path, wnd.location);
+            auto newpath = path_join(our_dirname(oldpath), wnd.name);
+
+            GHRenameFileOrDirectory((char*)oldpath, (char*)newpath);
+            reload_file_subtree(our_dirname(wnd.location));
+
+            wnd.show = false;
+        } while (0);
 
         ImGui::End();
     }
@@ -4281,7 +4303,7 @@ void UI::draw_everything() {
                     b.y++;
                     b.h -= 2;
 
-                    draw_rect(b, rgba(global_colors.cursor));
+                    draw_rounded_rect(b, rgba(global_colors.cursor), 2, ROUND_ALL);
                 };
 
                 List<Client_Breakpoint> breakpoints_for_this_editor;
@@ -4787,7 +4809,25 @@ void UI::draw_everything() {
         auto curr_editor = get_current_editor();
         if (curr_editor != NULL) {
             auto cur = curr_editor->cur;
-            draw_status_piece(RIGHT, our_sprintf("%d,%d", cur.y+1, cur.x+1), rgba(global_colors.white, 0.0), rgba("#aaaaaa"));
+
+            auto s = our_sprintf("%d,%d", cur.y+1, cur.x+1);
+
+            if (world.use_nvim) {
+                auto view = curr_editor->view;
+
+                auto curr = view.y;
+                auto total = curr_editor->buf->lines.len - view.h;
+
+                auto blah = [&]() {
+                    if (curr == 0) return "Top";
+                    if (curr >= total) return "Bot";
+                    return our_sprintf("%d%%", (int)((float)curr/(float)total * 100));
+                };
+
+                s = our_sprintf("%s  %s", s, blah());
+            }
+
+            draw_status_piece(RIGHT, s, rgba(global_colors.white, 0.0), rgba("#aaaaaa"));
         }
     }
 }

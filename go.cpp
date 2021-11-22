@@ -28,7 +28,8 @@ const int GO_INDEX_MAGIC_NUMBER = 0x49fa98;
 // version 18: change Go_Reference
 // version 19: fix Go_File::read()/write() not saving Go_Reference
 // version 20: fix Go_Reference not using correct pool
-const int GO_INDEX_VERSION = 20;
+// version 21: remove array_size from Gotype
+const int GO_INDEX_VERSION = 21;
 
 void index_print(ccstr fmt, ...) {
     va_list args;
@@ -2255,6 +2256,21 @@ ccstr Go_Indexer::get_package_referred_to_by_ast(Ast_Node *node, Go_Ctx *ctx) {
     return NULL;
 }
 
+bool Go_Indexer::is_gotype_error(Goresult *res) {
+    auto gotype = res->gotype;
+    if (gotype->type != GOTYPE_ID) return false;
+    if (!streq(gotype->id_name, "error")) return false;
+
+    auto declres = find_decl_of_id(gotype->id_name, gotype->id_pos, res->ctx);
+    if (declres == NULL) return false;
+
+    auto decl = declres->decl;
+    if (decl->type != GODECL_TYPE) return false;
+    if (decl->gotype->type != GOTYPE_BUILTIN) return false;
+
+    return true;
+}
+
 List<Postfix_Completion_Type> *Go_Indexer::get_postfix_completions(Ast_Node *operand_node, Go_Ctx *ctx) {
     auto import_path = get_package_referred_to_by_ast(operand_node, ctx);
     if (import_path != NULL) {
@@ -2270,6 +2286,11 @@ List<Postfix_Completion_Type> *Go_Indexer::get_postfix_completions(Ast_Node *ope
 
         auto res = evaluate_type(gotype, ctx);
         if (res == NULL) return false;
+
+        // If res->gotype is an ID called "error" and resolves to the error in
+        // @builtins, then we want to add PFC_CHECK.
+        if (is_gotype_error(res))
+            ret->append(PFC_CHECK);
 
         auto rres = resolve_type(res->gotype, res->ctx);
         if (rres == NULL) return false;
@@ -2289,6 +2310,8 @@ List<Postfix_Completion_Type> *Go_Indexer::get_postfix_completions(Ast_Node *ope
             case TS_TYPE_IDENTIFIER:
             case TS_IDENTIFIER:
             case TS_FIELD_IDENTIFIER:
+            case TS_QUALIFIED_TYPE:
+            case TS_SELECTOR_EXPRESSION:
                 ret->append(PFC_ASSIGNAPPEND);
                 break;
             }
@@ -2392,19 +2415,12 @@ List<Goresult> *Go_Indexer::list_lazy_type_dotprops(Gotype *type, Go_Ctx *ctx) {
     list_dotprops(res, rres, tmp);
 
     auto results = alloc_list<Goresult>();
-
-    // Look backwards, so that overridden methods are found first.
-    // @Robustness: Eventually list_dotprops() should do this correctly.
-    for (int i = tmp->len - 1; i >= 0; i--) {
-        auto &it = tmp->at(i);
-        if (it.decl->name == NULL) continue;
-
+    For (*tmp) {
         if (!streq(it.ctx->import_path, ctx->import_path))
             if (!isupper(it.decl->name[0]))
                 continue;
         results->append(&it);
     }
-
     return results;
 }
 
@@ -2652,7 +2668,15 @@ bool Go_Indexer::are_gotypes_equal(Goresult *ra, Goresult *rb) {
         {
             auto abase = ra->wrap(a->array_base);
             auto bbase = rb->wrap(b->array_base);
-            return a->array_size == b->array_size && are_gotypes_equal(abase, bbase);
+
+            // Strictly speaking, we should check the array size too. But that
+            // would require us to evaluate the actual *value* of expressions,
+            // something we can't do yet (right now we only deal with types).
+            //
+            // If it becomes important enough, we can do it.
+
+            // return a->array_size == b->array_size && are_gotypes_equal(abase, bbase);
+            return are_gotypes_equal(abase, bbase);
         }
 
     case GOTYPE_CHAN:
@@ -4007,6 +4031,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
 
     List<AC_Result> *ac_results = NULL;
     Gotype *expr_to_analyze_gotype = NULL;
+    bool expr_to_analyze_gotype_is_error = false;
 
     auto try_dot_complete = [&](Ast_Node *expr_to_analyze) -> bool {
         bool was_package = false;
@@ -4062,10 +4087,13 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
             auto res = evaluate_type(gotype, ctx);
             if (res == NULL) break;
 
+            bool iserror = is_gotype_error(res);
+
             auto rres = resolve_type(res->gotype, res->ctx);
             if (rres == NULL) break;
 
             expr_to_analyze_gotype = rres->gotype;
+            expr_to_analyze_gotype_is_error = iserror;
         } while (0);
 
         out->type = AUTOCOMPLETE_DOT_COMPLETE;
@@ -4373,6 +4401,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
         out->operand_start = expr_to_analyze->start();
         out->operand_end = expr_to_analyze->end();
         out->operand_gotype = expr_to_analyze_gotype;
+        out->operand_is_error_type = expr_to_analyze_gotype_is_error;
     }
 
     out->keyword_start = keyword_start;
@@ -4670,12 +4699,30 @@ bool Go_Indexer::list_type_methods(ccstr type_name, ccstr import_path, List<Gore
 }
 
 void Go_Indexer::list_dotprops(Goresult *type_res, Goresult *resolved_type_res, List<Goresult> *ret) {
+    auto tmp = alloc_list<Goresult>();
+    actually_list_dotprops(type_res, resolved_type_res, tmp);
+
+    String_Set seen; seen.init();
+    auto ctx = type_res->ctx;
+
+    for (int i = 0; i < tmp->len; i++) {
+        auto &it = tmp->at(tmp->len - i - 1);
+
+        if (it.decl->name == NULL) continue;
+        if (seen.has(it.decl->name)) continue;
+
+        seen.add(it.decl->name);
+        ret->append(&it);
+    }
+}
+
+void Go_Indexer::actually_list_dotprops(Goresult *type_res, Goresult *resolved_type_res, List<Goresult> *ret) {
     auto resolved_type = resolved_type_res->gotype;
     switch (resolved_type->type) {
     case GOTYPE_POINTER:
         {
             auto new_resolved_type_res = resolved_type_res->wrap(resolved_type->pointer_base);
-            list_dotprops(type_res, new_resolved_type_res, ret);
+            actually_list_dotprops(type_res, new_resolved_type_res, ret);
             return;
         }
         break;
@@ -4691,7 +4738,7 @@ void Go_Indexer::list_dotprops(Goresult *type_res, Goresult *resolved_type_res, 
                     auto embedded_type = it.field->gotype;
                     auto res = resolve_type(embedded_type, resolved_type_res->ctx);
                     if (res == NULL) continue;
-                    list_dotprops(resolved_type_res->wrap(embedded_type), res, ret);
+                    actually_list_dotprops(resolved_type_res->wrap(embedded_type), res, ret);
                 }
 
                 ret->append(resolved_type_res->wrap(it.field));
@@ -5074,13 +5121,11 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
     case TS_IMPLICIT_LENGTH_ARRAY_TYPE:
         ret = new_gotype(GOTYPE_ARRAY);
         ret->array_base = node_to_gotype(node->field(TSF_ELEMENT));
-        // TODO
         break;
 
     case TS_ARRAY_TYPE:
         ret = new_gotype(GOTYPE_ARRAY);
         ret->array_base = node_to_gotype(node->field(TSF_ELEMENT));
-        // TODO
         break;
 
     case TS_SLICE_TYPE:
@@ -6019,13 +6064,9 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
             results.init();
             list_dotprops(res, rres, &results);
 
-            // look backwards, so that overridden methods are found first
-            for (int i = results.len - 1; i >= 0; i--) {
-                auto &it = results[i];
-                if (it.decl->name != NULL)
-                    if (streq(it.decl->name, gotype->lazy_sel_sel))
-                        return evaluate_type(it.decl->gotype, it.ctx);
-            }
+            For (results)
+                if (streq(it.decl->name, gotype->lazy_sel_sel))
+                    return evaluate_type(it.decl->gotype, it.ctx);
         }
         break;
 
