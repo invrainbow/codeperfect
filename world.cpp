@@ -1436,8 +1436,10 @@ bool is_command_enabled(Command cmd) {
 
     case CMD_FORMAT_FILE:
     case CMD_FORMAT_FILE_AND_ORGANIZE_IMPORTS:
-    case CMD_FORMAT_SELECTION:
         return get_current_editor() != NULL;
+
+    case CMD_FORMAT_SELECTION:
+        return false;
 
     case CMD_DEBUG_TEST_UNDER_CURSOR:
         {
@@ -1486,6 +1488,12 @@ bool is_command_enabled(Command cmd) {
     case CMD_UNDO:
     case CMD_REDO:
         // TODO: also check if we *can* undo/redo (to be done after we actually implement it)
+        return get_current_editor() != NULL;
+
+    case CMD_GENERATE_IMPLEMENTATION:
+    case CMD_FIND_REFERENCES:
+    case CMD_FIND_IMPLEMENTATIONS:
+    case CMD_FIND_INTERFACES:
         return get_current_editor() != NULL;
     }
 
@@ -1911,12 +1919,25 @@ void handle_command(Command cmd, bool from_menu) {
 
             auto &ind = world.indexer;
 
+            bool found_something = false;
+            defer {
+                if (!found_something)
+                    tell_user("Couldn't find anything under cursor for Generate Implementation.", "Error");
+            };
+
             auto result = get_current_definition();
             if (result == NULL) break;
             if (result->decl == NULL) break;
 
             auto decl = result->decl->decl;
             if (decl->gotype == NULL) break;
+
+            found_something = true;
+
+            if (decl->type != GODECL_TYPE) {
+                tell_user("The selected object is not a type.", "Error");
+                break;
+            }
 
             if (!ind.acquire_lock(IND_READING, true)) break;
             defer { ind.release_lock(IND_READING); };

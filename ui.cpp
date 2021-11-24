@@ -1884,7 +1884,7 @@ void UI::draw_everything() {
         if (ImGui::BeginMenu("Format")) {
             menu_command(CMD_FORMAT_FILE);
             menu_command(CMD_FORMAT_FILE_AND_ORGANIZE_IMPORTS);
-            menu_command(CMD_FORMAT_SELECTION);
+            // menu_command(CMD_FORMAT_SELECTION);
             ImGui::EndMenu();
         }
 
@@ -2029,10 +2029,10 @@ void UI::draw_everything() {
                         }
                     }
                 }
-#endif
 
                 ImGui::EndMenu();
             }
+#endif
 
             ImGui::EndMenu();
         }
@@ -2052,55 +2052,89 @@ void UI::draw_everything() {
 
         ImGui::Begin("Options", &wnd.show, ImGuiWindowFlags_AlwaysAutoResize);
 
-        ImGui::Checkbox("Use Vim mode", &tmp.enable_vim_mode);
+        auto &outer_style = ImGui::GetStyle();
+        int outer_window_padding = outer_style.WindowPadding.y;
 
-        if (ImGui::IsItemEdited())
-            wnd.something_that_needs_restart_was_changed = true;
+        if (ImGui::BeginTabBar("wnd_options_tab_bar", 0)) {
+            if (ImGui::BeginTabItem("Editor Settings", NULL)) {
+                auto begin_container_child = [&]() {
+                    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 8));
+                    defer { ImGui::PopStyleVar(); };
 
-        ImGui::SameLine();
-        help_marker("Enables Vim keybindings in the editor.\n\nThis requires a restart.");
+                    ImGui::BeginChild("container", ImVec2(200, 200), false, ImGuiWindowFlags_AlwaysUseWindowPadding);
+                };
 
-        imgui_small_newline();
+                begin_container_child(); {
+                    ImGui::PushItemWidth(-1);
+                    imgui_push_ui_font();
+                    {
+                        ImGui::Text("Vim keybindings");
+                        ImGui::SameLine();
+                        help_marker("Enables Vim keybindings in the editor.\n\nThis requires a restart.");
+                        ImGui::Checkbox("Enable", &tmp.enable_vim_mode);
+                        if (ImGui::IsItemEdited())
+                            wnd.something_that_needs_restart_was_changed = true;
 
-        ImGui::SliderInt("Scroll offset", &tmp.scrolloff, 0, 10);
-        ImGui::SameLine();
-        help_marker("The number of lines the editor will keep between your cursor and the top/bottom of the screen.");
+                        imgui_small_newline();
 
-        imgui_small_newline();
+                        ImGui::Text("Scroll offset");
+                        ImGui::SameLine();
+                        help_marker("The number of lines the editor will keep between your cursor and the top/bottom of the screen.");
+                        ImGui::SliderInt("###scroll_offset", &tmp.scrolloff, 0, 10);
 
-        ImGui::SliderInt("Tab size", &tmp.tabsize, 1, 8);
+                        imgui_small_newline();
 
-        imgui_small_newline();
+                        ImGui::Text("Tab size");
+                        ImGui::SliderInt("###tab_size", &tmp.tabsize, 1, 8);
+                    }
+                    imgui_pop_font();
+                    ImGui::PopItemWidth();
+
+                } ImGui::EndChild();
+
+                ImGui::EndTabItem();
+            }
+            ImGui::EndTabBar();
+        }
 
         ImGui::Separator();
 
-        if (ImGui::Button("Save")) {
-            memcpy(&options, &tmp, sizeof(options));
+        {
+            ImGuiStyle &style = ImGui::GetStyle();
 
-            // write out options
-            do {
-                auto filepath = GHGetOptionsFile();
-                if (filepath == NULL) break;
+            float button1_w = ImGui::CalcTextSize("Save").x + style.FramePadding.x * 2.f;
+            float button2_w = ImGui::CalcTextSize("Cancel").x + style.FramePadding.x * 2.f;
+            float width_needed = button1_w + style.ItemSpacing.x + button2_w;
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - width_needed);
 
-                File f;
-                if (f.init(filepath, FILE_MODE_WRITE, FILE_CREATE_NEW) != FILE_RESULT_SUCCESS)
-                    break;
+            if (ImGui::Button("Save")) {
+                memcpy(&options, &tmp, sizeof(options));
 
-                defer { f.cleanup(); };
-                f.write((char*)&options, sizeof(options));
-            } while (0);
+                // write out options
+                do {
+                    auto filepath = GHGetOptionsFile();
+                    if (filepath == NULL) break;
 
-            if (wnd.something_that_needs_restart_was_changed) {
-                tell_user("One of the settings changed requires you to restart CodePerfect.", "Restarted needed");
+                    File f;
+                    if (f.init(filepath, FILE_MODE_WRITE, FILE_CREATE_NEW) != FILE_RESULT_SUCCESS)
+                        break;
+
+                    defer { f.cleanup(); };
+                    f.write((char*)&options, sizeof(options));
+                } while (0);
+
+                if (wnd.something_that_needs_restart_was_changed) {
+                    tell_user("One of the settings changed requires you to restart CodePerfect.", "Restart needed");
+                }
+
+                wnd.show = false;
             }
 
-            wnd.show = false;
-        }
+            ImGui::SameLine();
 
-        ImGui::SameLine();
-
-        if (ImGui::Button("Cancel")) {
-            wnd.show = false;
+            if (ImGui::Button("Cancel")) {
+                wnd.show = false;
+            }
         }
 
         ImGui::End();
@@ -2262,7 +2296,7 @@ void UI::draw_everything() {
 
         focus_keyboard(&wnd);
 
-        if (ImGui::InputText("##search_for_symbol_generate_implementation", wnd.query, _countof(wnd.query), ImGuiInputTextFlags_EnterReturnsTrue)) {
+        if (imgui_input_text_full("", wnd.query, _countof(wnd.query), ImGuiInputTextFlags_EnterReturnsTrue)) {
             do_generate_implementation();
             wnd.show = false;
             ImGui::SetWindowFocus(NULL);
@@ -2738,36 +2772,35 @@ void UI::draw_everything() {
 
         auto is_focusing = imgui_is_window_focusing(&wnd.focused);
 
-        // ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.15, 0.15, 0.15, 1.0));
-        {
+        auto begin_buttons_child = [&]() {
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6, 6));
+            defer { ImGui::PopStyleVar(); };
 
             auto &style = ImGui::GetStyle();
-            float child_height = ImGui::GetTextLineHeight() + (style.FramePadding.y * 2.0f) + (style.WindowPadding.y * 2.0f);
+
+            auto text_height = ImGui::CalcTextSize(ICON_MD_NOTE_ADD, NULL, true).y;
+            float child_height = text_height + (icon_button_padding.y * 2.0f) + (style.WindowPadding.y * 2.0f);
             ImGui::BeginChild("child2", ImVec2(0, child_height), false, ImGuiWindowFlags_AlwaysUseWindowPadding);
+        };
 
-            ImGui::PopStyleVar();
-
+        begin_buttons_child(); {
             if (imgui_icon_button(ICON_MD_NOTE_ADD)) {
                 open_add_file_or_folder(false);
             }
 
-            ImGui::SameLine(0.0, 4.0f);
+            ImGui::SameLine(0.0, 6.0f);
 
             if (imgui_icon_button(ICON_MD_CREATE_NEW_FOLDER)) {
                 open_add_file_or_folder(true);
             }
 
-            ImGui::SameLine(0.0, 4.0f);
+            ImGui::SameLine(0.0, 6.0f);
 
             if (imgui_icon_button(ICON_MD_REFRESH)) {
-                // TODO: probably make this async task
-                fill_file_tree();
+                fill_file_tree(); // TODO: async?
             }
 
-            ImGui::EndChild();
-        }
-        // ImGui::PopStyleColor();
+        } ImGui::EndChild();
 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 4));
         ImGui::BeginChild("child3", ImVec2(0,0), true);
@@ -3034,7 +3067,7 @@ void UI::draw_everything() {
 
         ImGui::Begin("Project Settings", &wnd.show, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking);
 
-        auto &tmp = wnd.tmp;
+        auto &ps = wnd.tmp;
 
         if (ImGui::BeginTabBar("MyTabBar", 0)) {
             auto get_focus_flags = [&](bool *pfocus, int flags = 0) -> int {
@@ -3045,6 +3078,7 @@ void UI::draw_everything() {
                 return flags;
             };
 
+#if 0
             if (ImGui::BeginTabItem("General Settings", NULL, get_focus_flags(&wnd.focus_general_settings))) {
                 auto begin_container_child = [&]() {
                     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 8));
@@ -3055,12 +3089,13 @@ void UI::draw_everything() {
 
                 begin_container_child(); {
                     imgui_with_disabled(true, [&]() {
-                        ImGui::Checkbox("Search vendor before GOMODCACHE", &tmp.search_vendor_before_modcache);
+                        ImGui::Checkbox("Search vendor before GOMODCACHE", &ps.search_vendor_before_modcache);
                     });
                 } ImGui::EndChild();
 
                 ImGui::EndTabItem();
             }
+#endif
 
             auto begin_left_pane_child = [&]() {
                 ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
@@ -3082,7 +3117,7 @@ void UI::draw_everything() {
                 auto &style = ImGui::GetStyle();
 
                 auto text_height = ImGui::CalcTextSize(ICON_MD_NOTE_ADD, NULL, true).y;
-                return text_height + (1 /*style.FramePadding.y*/ * 2.0f) + (style.WindowPadding.y * 2.0f);
+                return text_height + (icon_button_padding.y *style.FramePadding.y * 2.0f) + (style.WindowPadding.y * 2.0f);
             };
 
             auto begin_profiles_buttons_child = [&]() {
@@ -3111,6 +3146,7 @@ void UI::draw_everything() {
             };
 
             if (ImGui::BeginTabItem("Debug Profiles", NULL, get_focus_flags(&wnd.focus_debug_profiles))) {
+
                 begin_left_pane_child(); {
                     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
                     defer { ImGui::PopStyleVar(); };
@@ -3119,8 +3155,8 @@ void UI::draw_everything() {
                         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 4));
                         defer { ImGui::PopStyleVar(); };
 
-                        for (int i = 0; i < tmp.debug_profiles_len; i++) {
-                            auto &it = tmp.debug_profiles[i];
+                        for (int i = 0; i < ps.debug_profiles_len; i++) {
+                            auto &it = ps.debug_profiles[i];
                             if (ImGui::Selectable(it.label, wnd.current_debug_profile == i))
                                 wnd.current_debug_profile = i;
                         }
@@ -3128,7 +3164,6 @@ void UI::draw_everything() {
 
                     begin_profiles_buttons_child(); {
                         if (imgui_icon_button(ICON_MD_ADD)) {
-                            auto &ps = tmp;
                             if (ps.debug_profiles_len < _countof(ps.debug_profiles)) {
                                 Debug_Profile prof; ptr0(&prof);
                                 prof.type = DEBUG_TEST_PACKAGE;
@@ -3145,8 +3180,20 @@ void UI::draw_everything() {
 
                         ImGui::SameLine(0.0, 4.0f);
 
-                        if (imgui_icon_button(ICON_MD_REMOVE)) {
-                            auto &ps = tmp;
+                        auto can_remove = [&]() {
+                            if (wnd.current_debug_profile < 0) return false;
+                            if (wnd.current_debug_profile >= ps.debug_profiles_len) return false;
+                            if (ps.debug_profiles[wnd.current_debug_profile].is_builtin) return false;
+
+                            return true;
+                        };
+
+                        bool remove_clicked = false;
+                        imgui_with_disabled(!can_remove(), [&]() {
+                            remove_clicked = imgui_icon_button(ICON_MD_REMOVE);
+                        });
+
+                        if (remove_clicked) {
                             do {
                                 if (wnd.current_debug_profile >= ps.debug_profiles_len) break;
 
@@ -3172,82 +3219,93 @@ void UI::draw_everything() {
                 ImGui::SameLine();
 
                 begin_right_pane_child(); {
-                    auto &dp = tmp.debug_profiles[wnd.current_debug_profile];
+                    auto index = wnd.current_debug_profile;
+                    if (0 <= index && index < ps.debug_profiles_len) {
+                        auto &dp = ps.debug_profiles[wnd.current_debug_profile];
 
-                    if (dp.is_builtin) {
-                        if (dp.type == DEBUG_TEST_CURRENT_FUNCTION) {
-                            ImGuiStyle &style = ImGui::GetStyle();
-                            ImGui::PushStyleColor(ImGuiCol_Text, style.Colors[ImGuiCol_TextDisabled]);
-                            ImGui::TextWrapped("This is a built-in debug profile, used for the Debug Test Under Cursor command. It can't be changed, except to add command-line arguments.");
-                            ImGui::PopStyleColor();
+                        if (dp.is_builtin) {
+                            if (dp.type == DEBUG_TEST_CURRENT_FUNCTION) {
+                                ImGuiStyle &style = ImGui::GetStyle();
+                                ImGui::PushStyleColor(ImGuiCol_Text, style.Colors[ImGuiCol_TextDisabled]);
+                                ImGui::TextWrapped("This is a built-in debug profile, used for the Debug Test Under Cursor command. It can't be changed, except to add command-line arguments.");
+                                ImGui::PopStyleColor();
+                                imgui_small_newline();
+                            }
+                        }
+
+                        imgui_with_disabled(dp.is_builtin, [&]() {
+                            imgui_input_text_full_fixbuf("Name", dp.label);
+                        });
+
+                        imgui_small_newline();
+
+                        const char* labels[] = {
+                            "Test Package",
+                            "Test Function Under Cursor",
+                            "Run Package",
+                            "Run Binary",
+                        };
+
+                        imgui_with_disabled(dp.is_builtin, [&]() {
+                            ImGui::Text("Type");
+                            ImGui::PushItemWidth(-1);
+                            ImGui::Combo("##dp_type", (int*)&dp.type, labels, _countof(labels));
+                            ImGui::PopItemWidth();
+                        });
+
+                        imgui_small_newline();
+
+                        switch (dp.type) {
+                        case DEBUG_TEST_PACKAGE:
+                            ImGui::Checkbox("Use package of current file", &dp.test_package.use_current_package);
+
                             imgui_small_newline();
+
+                            imgui_with_disabled(dp.test_package.use_current_package, [&]() {
+                                imgui_push_mono_font();
+                                imgui_input_text_full_fixbuf("Package path", dp.test_package.package_path);
+                                imgui_pop_font();
+                            });
+
+                            imgui_small_newline();
+                            break;
+
+                        case DEBUG_TEST_CURRENT_FUNCTION:
+                            break;
+
+                        case DEBUG_RUN_PACKAGE:
+                            ImGui::Checkbox("Use package of current file", &dp.run_package.use_current_package);
+                            imgui_small_newline();
+
+                            imgui_with_disabled(dp.run_package.use_current_package, [&]() {
+                                imgui_push_mono_font();
+                                imgui_input_text_full_fixbuf("Package path", dp.run_package.package_path);
+                                imgui_pop_font();
+                            });
+
+                            imgui_small_newline();
+                            break;
+
+                        case DEBUG_RUN_BINARY:
+                            imgui_push_mono_font();
+                            imgui_input_text_full_fixbuf("Binary path", dp.run_binary.binary_path);
+                            imgui_pop_font();
+                            imgui_small_newline();
+                            break;
+                        }
+
+                        imgui_push_mono_font();
+                        imgui_input_text_full_fixbuf("Additional arguments", dp.args);
+                        imgui_pop_font();
+                    } else {
+                        if (ps.debug_profiles_len == 0) {
+                            ImGui::Text("Create a profile on the left and it'll show up here.");
+                        } else {
+                            ImGui::Text("Select a profile on the left and it'll show up here.");
                         }
                     }
 
-                    imgui_with_disabled(dp.is_builtin, [&]() {
-                        imgui_input_text_full_fixbuf("Name", dp.label);
-                    });
 
-                    imgui_small_newline();
-
-                    const char* labels[] = {
-                        "Test Package",
-                        "Test Function Under Cursor",
-                        "Run Package",
-                        "Run Binary",
-                    };
-
-                    imgui_with_disabled(dp.is_builtin, [&]() {
-                        ImGui::Text("Type");
-                        ImGui::PushItemWidth(-1);
-                        ImGui::Combo("##dp_type", (int*)&dp.type, labels, _countof(labels));
-                        ImGui::PopItemWidth();
-                    });
-
-                    imgui_small_newline();
-
-                    switch (dp.type) {
-                    case DEBUG_TEST_PACKAGE:
-                        ImGui::Checkbox("Use package of current file", &dp.test_package.use_current_package);
-
-                        imgui_small_newline();
-
-                        imgui_with_disabled(dp.test_package.use_current_package, [&]() {
-                            imgui_push_mono_font();
-                            imgui_input_text_full_fixbuf("Package path", dp.test_package.package_path);
-                            imgui_pop_font();
-                        });
-
-                        imgui_small_newline();
-                        break;
-
-                    case DEBUG_TEST_CURRENT_FUNCTION:
-                        break;
-
-                    case DEBUG_RUN_PACKAGE:
-                        ImGui::Checkbox("Use package of current file", &dp.run_package.use_current_package);
-                        imgui_small_newline();
-
-                        imgui_with_disabled(dp.run_package.use_current_package, [&]() {
-                            imgui_push_mono_font();
-                            imgui_input_text_full_fixbuf("Package path", dp.run_package.package_path);
-                            imgui_pop_font();
-                        });
-
-                        imgui_small_newline();
-                        break;
-
-                    case DEBUG_RUN_BINARY:
-                        imgui_push_mono_font();
-                        imgui_input_text_full_fixbuf("Binary path", dp.run_binary.binary_path);
-                        imgui_pop_font();
-                        imgui_small_newline();
-                        break;
-                    }
-
-                    imgui_push_mono_font();
-                    imgui_input_text_full_fixbuf("Additional arguments", dp.args);
-                    imgui_pop_font();
                 } ImGui::EndChild();
 
                 ImGui::EndTabItem();
@@ -3262,8 +3320,8 @@ void UI::draw_everything() {
                         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 4));
                         defer { ImGui::PopStyleVar(); };
 
-                        for (int i = 0; i < tmp.build_profiles_len; i++) {
-                            auto &it = tmp.build_profiles[i];
+                        for (int i = 0; i < ps.build_profiles_len; i++) {
+                            auto &it = ps.build_profiles[i];
                             if (ImGui::Selectable(it.label, wnd.current_build_profile == i))
                                 wnd.current_build_profile = i;
                         }
@@ -3271,7 +3329,6 @@ void UI::draw_everything() {
 
                     begin_profiles_buttons_child(); {
                         if (imgui_icon_button(ICON_MD_ADD)) {
-                            auto &ps = tmp;
                             if (ps.build_profiles_len < _countof(ps.build_profiles)) {
                                 // TODO
                                 Build_Profile prof; ptr0(&prof);
@@ -3286,8 +3343,19 @@ void UI::draw_everything() {
 
                         ImGui::SameLine(0.0, 4.0f);
 
-                        if (imgui_icon_button(ICON_MD_REMOVE)) {
-                            auto &ps = tmp;
+                        auto can_remove = [&]() {
+                            if (wnd.current_build_profile < 0) return false;
+                            if (wnd.current_build_profile >= ps.build_profiles_len) return false;
+
+                            return true;
+                        };
+
+                        bool remove_clicked = false;
+                        imgui_with_disabled(!can_remove(), [&]() {
+                            remove_clicked = imgui_icon_button(ICON_MD_REMOVE);
+                        });
+
+                        if (remove_clicked) {
                             do {
                                 if (wnd.current_build_profile >= ps.build_profiles_len) break;
 
@@ -3308,14 +3376,23 @@ void UI::draw_everything() {
                 ImGui::SameLine();
 
                 begin_right_pane_child(); {
-                    auto &bp = tmp.build_profiles[wnd.current_build_profile];
+                    auto index = wnd.current_build_profile;
+                    if (0 <= index && index < ps.build_profiles_len) {
+                        auto &bp = ps.build_profiles[index];
 
-                    imgui_input_text_full_fixbuf("Name", bp.label);
-                    imgui_small_newline();
+                        imgui_input_text_full_fixbuf("Name", bp.label);
+                        imgui_small_newline();
 
-                    imgui_push_mono_font();
-                    imgui_input_text_full_fixbuf("Build command", bp.cmd);
-                    imgui_pop_font();
+                        imgui_push_mono_font();
+                        imgui_input_text_full_fixbuf("Build command", bp.cmd);
+                        imgui_pop_font();
+                    } else {
+                        if (ps.build_profiles_len == 0) {
+                            ImGui::Text("Create a profile on the left and it'll show up here.");
+                        } else {
+                            ImGui::Text("Select a profile on the left and it'll show up here.");
+                        }
+                    }
                 } ImGui::EndChild();
 
                 ImGui::EndTabItem();
@@ -3436,6 +3513,13 @@ void UI::draw_everything() {
 
         focus_keyboard(&wnd);
 
+        // We need to close this window when defocused, because otherwise the
+        // user might move the cursor and fuck this up
+        if (!wnd.focused) {
+            wnd.show = false;
+            ImGui::SetWindowFocus(NULL);
+        }
+
         auto go_up = [&]() {
             if (wnd.filtered_results->len == 0) return;
             if (wnd.selection == 0)
@@ -3473,7 +3557,7 @@ void UI::draw_everything() {
 
         if (ImGui::IsItemEdited()) {
             wnd.filtered_results->len = 0;
-            if (strlen(wnd.query) >= 3) {
+            if (strlen(wnd.query) > 0) {
                 For (*wnd.actions)
                     if (fzy_has_match(wnd.query, get_command_name(it)))
                         wnd.filtered_results->append(it);
@@ -3524,7 +3608,7 @@ void UI::draw_everything() {
             wnd.selection %= min(wnd.filtered_results->len, settings.goto_symbol_max_results);
         };
 
-        ImGui::Begin("Go To Symbol", &world.wnd_goto_symbol.show, ImGuiWindowFlags_AlwaysAutoResize);
+        begin_centered_window("Go To Symbol", &world.wnd_goto_symbol.show, 0, 400);
 
         auto mods = imgui_get_keymods();
         switch (mods) {
@@ -3535,11 +3619,14 @@ void UI::draw_everything() {
             break;
         }
 
-        ImGui::Text("Search for symbol:");
-
         focus_keyboard(&wnd);
 
-        if (ImGui::InputText("##search_for_symbol", wnd.query, _countof(wnd.query), ImGuiInputTextFlags_EnterReturnsTrue)) {
+        if (!wnd.focused) {
+            wnd.show = false;
+            ImGui::SetWindowFocus(NULL);
+        }
+
+        if (imgui_input_text_full("Search for symbol:", wnd.query, _countof(wnd.query), ImGuiInputTextFlags_EnterReturnsTrue)) {
             wnd.show = false;
             ImGui::SetWindowFocus(NULL);
 
@@ -4996,8 +5083,10 @@ void UI::draw_everything() {
     }
 }
 
+ImVec2 icon_button_padding = ImVec2(4, 2);
+
 bool UI::imgui_icon_button(ccstr icon) {
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(3, 1));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, icon_button_padding);
     auto ret = ImGui::Button(icon);
     ImGui::PopStyleVar();
     return ret;

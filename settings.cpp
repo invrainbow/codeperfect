@@ -15,14 +15,14 @@ void Project_Settings::load_defaults() {
     ptr0(this);
 
     // This is designed so that debug/build profiles is never empty, and
-    // active_debug_profile/active_build_profile always points to a valid file.
+    // active_debug_profile/active_build_profile always points to a valid profile.
 
     active_debug_profile = 1; // can't select "test function under cursor" as default profile
 
     {
         auto bp = &build_profiles[build_profiles_len++];
         strcpy_safe(bp->label, _countof(bp->label), "Build Project");
-        strcpy_safe(bp->cmd, _countof(bp->cmd), "go build <write your package here>");
+        strcpy_safe(bp->cmd, _countof(bp->cmd), "go build");
     }
 
     {

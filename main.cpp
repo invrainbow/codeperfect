@@ -1153,6 +1153,21 @@ int main(int argc, char **argv) {
                 if (!world.use_nvim || world.nvim.mode == VI_INSERT) {
                     auto clipboard_contents = glfwGetClipboardString(world.window);
                     if (clipboard_contents == NULL) break;
+
+                    if (editor->selecting) {
+                        auto a = editor->select_start;
+                        auto b = editor->cur;
+                        if (a > b) {
+                            auto tmp = a;
+                            a = b;
+                            b = tmp;
+                        }
+
+                        editor->buf->remove(a, b);
+                        editor->raw_move_cursor(a);
+                        editor->selecting = false;
+                    }
+
                     editor->insert_text_in_insert_mode(clipboard_contents);
                 }
                 break;

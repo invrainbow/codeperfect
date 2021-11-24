@@ -315,9 +315,9 @@ struct World {
         Thread_Handle thread;
     } wnd_rename_identifier;
 
-#ifdef DEBUG_MODE
+// #ifdef DEBUG_MODE
     struct Wnd_History : Wnd {} wnd_history;
-#endif
+// #endif
 
     struct Wnd_Generate_Implementation : Wnd {
         Pool thread_mem;

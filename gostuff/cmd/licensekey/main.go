@@ -21,14 +21,6 @@ func generateKey(nbytes int) string {
 	return base58.Encode(b)
 }
 
-func filterAlnum(s string) string {
-	reg, err := regexp.Compile("[^a-zA-Z0-9]+")
-	if err != nil {
-		log.Fatal(err)
-	}
-	return reg.ReplaceAllString(s, "")
-}
-
 func main() {
 	if len(os.Args) <= 1 {
 		panic("expected email")
