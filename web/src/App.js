@@ -145,7 +145,8 @@ function animate(canvas, feature) {
   const featureInfo = BIG_TABLE_OF_FEATURES[feature];
   const frames = featureInfo.frames;
 
-  let image = null;
+  const image = new Image();
+  image.src = featureInfo.image;
 
   {
     const [, , x1, y1, x2, y2] = frames[0][1][0];
@@ -215,8 +216,6 @@ function animate(canvas, feature) {
     requestAnimationFrame(draw);
   };
 
-  image = new Image();
-  image.src = featureInfo.image;
   image.onload = () => requestAnimationFrame(draw);
 
   return () => {
