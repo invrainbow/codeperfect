@@ -40,6 +40,8 @@ const NAME_SHORT = "CodePerfect";
 const SUPPORT_EMAIL = "support@codeperfect95.com";
 const CURRENT_YEAR = new Date().getFullYear();
 const BETA_SIGNUP_LINK = "https://airtable.com/shraN38Z2jqQJVqbk";
+const CHANGELOG_LINK =
+  "https://github.com/codeperfect95/changelog/blob/master/README.md";
 
 let API_BASE = "https://api.codeperfect95.com";
 if (process.env.NODE_ENV === "development") {
@@ -893,6 +895,11 @@ function App() {
           </div>
           <div className="flex flex-col sm:flex-row space-x-0 sm:space-x-12 mt-2 sm:mt-0">
             <div className="sm:text-right sm:flex sm:flex-row sm:space-x-6">
+              <div>
+                <A className="text-gray-500 no-underline" href={CHANGELOG_LINK}>
+                  Changelog
+                </A>
+              </div>
               <div>
                 <A
                   className="text-gray-500 no-underline"

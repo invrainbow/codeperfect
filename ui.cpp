@@ -4212,7 +4212,10 @@ void UI::draw_everything() {
                         editor->selecting = true;
                         editor->mouse_select.on = true;
                         editor->mouse_select.editor_id = editor->id;
-                        editor->move_cursor(pos);
+
+                        auto opts = default_move_cursor_opts();
+                        opts->is_user_movement = true;
+                        editor->move_cursor(pos, opts);
                     }
                 } else if (world.ui.mouse_down[0]) {
                     print("[mouse] down");

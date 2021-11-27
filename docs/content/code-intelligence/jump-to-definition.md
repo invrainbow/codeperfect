@@ -8,7 +8,7 @@ toc: true
 ---
 
 CodePerfect can jump to the definition of almost any (valid) identifier. Just
-put your cursor over it, and go to <cite>Go</cite> &gt; <cite>Go to Definition</cite>.
+put your cursor over it, and run <cite>Navigate</cite> &gt; <cite>Go to Definition</cite>.
 
 ## Keyboard Shortcuts
 

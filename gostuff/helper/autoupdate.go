@@ -297,6 +297,7 @@ func AuthAndUpdate() {
 	if err := CallServer("auth", license, req, &resp); err != nil {
 		switch e := err.(type) {
 		case net.Error, *net.OpError, syscall.Errno:
+			fmt.Println(e)
 			handleGracePeriod(MessageInternetOffline, 7)
 			return
 		case *ServerError:

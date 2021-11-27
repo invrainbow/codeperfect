@@ -15,7 +15,6 @@ import (
 var AmplitudeAPIKey = os.Getenv("AMPLITUDE_API_KEY")
 var SlackWebhookURL = os.Getenv("SLACK_WEBHOOK_URL")
 
-// add more as i need them i guess
 // https://developers.amplitude.com/docs/http-api-v2#keys-for-the-event-argument
 type AmplitudeEvent struct {
 	UserID          string      `json:"user_id,omitempty"`
@@ -23,6 +22,11 @@ type AmplitudeEvent struct {
 	Time            int64       `json:"time,omitempty"`
 	EventProperties interface{} `json:"event_properties,omitempty"`
 	UserProperties  interface{} `json:"event_properties,omitempty"`
+}
+
+// Read is a function that still needs to be documented.
+func (ae *AmplitudeEvent) Read(p []byte) (int, error) {
+	panic("not implemented")
 }
 
 type AmplitudeRequest struct {
