@@ -3,9 +3,7 @@ package main
 import (
 	"crypto/rand"
 	"fmt"
-	"log"
 	"os"
-	"regexp"
 
 	"github.com/btcsuite/btcutil/base58"
 	"github.com/invrainbow/codeperfect/gostuff/db"
