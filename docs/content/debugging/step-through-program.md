@@ -33,8 +33,8 @@ current function on the line after the function call.
 
 ## Keyboard Shortcuts
 
-| Command   | macOS                      | Windows                        |
-| --------- | -------------------------- | ------------------------------ |
-| Step Over | <kbd>F10</kbd>             | <kbd>F10</kbd>                 |
-| Step Into | <kbd>F11</kbd>             | <kbd>F11</kbd>                 |
-| Step Out  | <kbd>⇧</kbd><kbd>F11</kbd> | <kbd>Shift</kbd><kbd>F11</kbd> |
+| Command   | Shortcut                   |
+| --------- | -------------------------- |
+| Step Over | <kbd>F10</kbd>             |
+| Step Into | <kbd>F11</kbd>             |
+| Step Out  | <kbd>⇧</kbd><kbd>F11</kbd> |

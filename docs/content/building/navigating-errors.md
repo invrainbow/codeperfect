@@ -15,7 +15,7 @@ You can navigate between errors using <cite>Go</cite> &gt; <cite>Go to Previous 
 
 ## Keyboard Shortcuts
 
-| Command              | macOS                    | Windows                    |
-| -------------------- | ------------------------ | -------------------------- |
-| Go to Previous Error | <kbd>⌥</kbd><kbd>[</kbd> | <kbd>Alt</kbd><kbd>[</kbd> |
-| Go to Next Error     | <kbd>⌥</kbd><kbd>]</kbd> | <kbd>Alt</kbd><kbd>]</kbd> |
+| Command              | Shortcut                 |
+| -------------------- | ------------------------ |
+| Go to Previous Error | <kbd>⌥</kbd><kbd>[</kbd> |
+| Go to Next Error     | <kbd>⌥</kbd><kbd>]</kbd> |

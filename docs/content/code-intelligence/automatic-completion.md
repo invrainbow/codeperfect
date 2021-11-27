@@ -31,16 +31,16 @@ instance, a space after the `type` keyword, or a `(` after you select a
 function.
 
 All completions support fuzzy search, so you don't need to type the whole word
-or even a strict substring. For instance, you could just type `of` to match
+or even a strict substring. For instance, you could type `of` to match
 <code><b>O</b>pen<b>F</b>ile</code>.
 
 ## Keyboard Shortcuts
 
-| Command                  | macOS                                          | Windows                                        |
-| ------------------------ | ---------------------------------------------- | ---------------------------------------------- |
-| Open autocomplete menu\* | <kbd>Ctrl</kbd><kbd>Space</kbd>                | <kbd>Ctrl</kbd><kbd>Space</kbd>                |
-| Move cursor down         | <kbd>Ctrl</kbd><kbd>J</kbd> or <kbd>Down</kbd> | <kbd>Ctrl</kbd><kbd>J</kbd> or <kbd>Down</kbd> |
-| Move cursor up           | <kbd>Ctrl</kbd><kbd>K</kbd> or <kbd>Up</kbd>   | <kbd>Ctrl</kbd><kbd>K</kbd> or <kbd>Up</kbd>   |
-| Select item              | <kbd>Tab</kbd>                                 | <kbd>Tab</kbd>                                 |
+| Command                  | Shortcut                                       |
+| ------------------------ | ---------------------------------------------- |
+| Open autocomplete menu\* | <kbd>Ctrl</kbd><kbd>Space</kbd>                |
+| Move cursor down         | <kbd>Ctrl</kbd><kbd>J</kbd> or <kbd>Down</kbd> |
+| Move cursor up           | <kbd>Ctrl</kbd><kbd>K</kbd> or <kbd>Up</kbd>   |
+| Select item              | <kbd>Tab</kbd>                                 |
 
 \* The menu opens automatically as you type, but you can also manually trigger it after you've closed it.
