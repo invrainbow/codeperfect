@@ -1202,9 +1202,13 @@ enum Indexer_Status {
 
 // a name & godecl (goresult) pair
 struct Go_Symbol {
+    ccstr pkgname;
     ccstr name;
     Goresult *decl;
     u64 filehash;
+
+    ccstr full_name() { return our_sprintf("%s.%s", pkgname, name); }
+    Go_Symbol* copy();
 };
 
 struct Go_Indexer {
@@ -1307,14 +1311,14 @@ struct Go_Indexer {
     void stop_writing();
     bool truncate_parsed_file(Parsed_File *pf, cur2 end_pos, ccstr chars_to_append);
     Gotype *get_closest_function(ccstr filepath, cur2 pos);
-    void fill_goto_symbol();
+    void fill_goto_symbol(List<Go_Symbol> *out);
     void init_builtins(Go_Package *pkg);
     void import_decl_to_goimports(Ast_Node *decl_node, ccstr filename, List<Go_Import> *out);
     bool check_if_still_in_parameter_hint(ccstr filepath, cur2 cur, cur2 hint_start);
     Go_File *find_gofile_from_ctx(Go_Ctx *ctx, Go_Package **out = NULL);
 
-    List<Find_References_File>* find_references(ccstr filepath, cur2 pos);
-    List<Find_References_File>* find_references(Goresult *declres);
+    List<Find_References_File>* find_references(ccstr filepath, cur2 pos, bool include_self);
+    List<Find_References_File>* find_references(Goresult *declres, bool include_self);
     List<Goresult> *list_lazy_type_dotprops(Gotype *type, Go_Ctx *ctx);
 
     bool acquire_lock(Indexer_Status new_status, bool just_try = false);

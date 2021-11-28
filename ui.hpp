@@ -132,6 +132,17 @@ struct Wnd {
     bool cmd_focus;
 };
 
+#define PM_DEFAULT_COLOR IM_COL32(0x49, 0xfa, 0x98, 0x69)
+
+struct Pretty_Menu {
+    ImDrawList *drawlist;
+    ImVec2 pos;
+    ImVec2 padding;
+    ImVec2 tl, br;
+    ImVec2 text_tl, text_br;
+    ImU32 text_color;
+};
+
 struct UI {
     Font* font;
     List<Vert> verts;
@@ -220,6 +231,10 @@ struct UI {
     void help_marker(fn<void()> cb);
 
     void begin_centered_window(ccstr title, bool *show, int flags = 0, int width = -1);
+
+    Pretty_Menu *start_pretty_menu(ImVec2 padding = ImVec2(4, 2));
+    void pretty_menu_item(Pretty_Menu *menu, bool selected);
+    void pretty_menu_text(Pretty_Menu *pm, ccstr text, ImU32 color = PM_DEFAULT_COLOR);
 };
 
 extern UI ui;

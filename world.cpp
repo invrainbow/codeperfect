@@ -602,17 +602,6 @@ void init_goto_file() {
     wnd.show = true;
 }
 
-void init_goto_symbol() {
-    SCOPED_MEM(&world.goto_symbol_mem);
-    world.goto_symbol_mem.reset();
-
-    if (!world.indexer.acquire_lock(IND_READING, true)) return;
-    defer { world.indexer.release_lock(IND_READING); };
-
-    world.indexer.fill_goto_symbol();
-    world.wnd_goto_symbol.show = true;
-}
-
 void kick_off_build(Build_Profile *build_profile) {
     if (build_profile == NULL)
         build_profile = project_settings.get_active_build_profile();
@@ -754,7 +743,7 @@ void filter_symbols() {
 
     u32 i = 0;
     For (*wnd.symbols) {
-        if (fzy_has_match(wnd.query, it))
+        if (fzy_has_match(wnd.query, it.full_name()))
             wnd.filtered_results->append(i);
         i++;
     }
@@ -763,7 +752,7 @@ void filter_symbols() {
 
     auto scores = alloc_array(double, wnd.symbols->len);
     For (*wnd.filtered_results)
-        scores[it] = fzy_match(wnd.query, wnd.symbols->at(it));
+        scores[it] = fzy_match(wnd.query, wnd.symbols->at(it).full_name());
 
     wnd.filtered_results->sort([&](int *pa, int *pb) {
         auto a = scores[*pa];
@@ -1265,7 +1254,7 @@ void kick_off_rename_identifier() {
             world.flag_defocus_imgui = true;
         };
 
-        auto files = world.indexer.find_references(wnd.declres);
+        auto files = world.indexer.find_references(wnd.declres, true);
         if (files == NULL) return;
 
         wnd.too_late_to_cancel = true;
@@ -1677,7 +1666,26 @@ void handle_command(Command cmd, bool from_menu) {
             if (from_menu)
                 world.wnd_goto_symbol.show = false;
         } else {
-            init_goto_symbol();
+            if (!world.indexer.acquire_lock(IND_READING, true)) break;
+            defer { world.indexer.release_lock(IND_READING); };
+
+            auto &wnd = world.wnd_goto_symbol;
+            ptr0(&wnd);
+
+            auto symbols = alloc_list<Go_Symbol>();
+            world.indexer.fill_goto_symbol(symbols);
+            if (symbols->len == 0) break;
+
+            {
+                SCOPED_MEM(&world.goto_symbol_mem);
+                wnd.symbols = alloc_list<Go_Symbol>(symbols->len);
+                For (*symbols) wnd.symbols->append(it.copy());
+
+                wnd.filtered_results = alloc_list<int>();
+                wnd.current_import_path = our_strcpy(world.indexer.index.current_import_path);
+            }
+
+            wnd.show = true;
         }
         break;
 
@@ -1720,7 +1728,7 @@ void handle_command(Command cmd, bool from_menu) {
 
             defer { cancel_find_references(); };
 
-            auto files = world.indexer.find_references(wnd.declres);
+            auto files = world.indexer.find_references(wnd.declres, false);
             if (files == NULL) return;
 
             {
@@ -1965,14 +1973,7 @@ void handle_command(Command cmd, bool from_menu) {
             {
                 SCOPED_MEM(&world.generate_implementation_mem);
                 wnd.symbols = alloc_list<Go_Symbol>(symbols->len);
-
-                For (*symbols) {
-                    Go_Symbol sym;
-                    sym.name = our_strcpy(it.name);
-                    sym.decl = it.decl->copy_decl();
-                    sym.filehash = it.filehash;
-                    wnd.symbols->append(&sym);
-                }
+                For (*symbols) wnd.symbols->append(it.copy());
             }
 
             wnd.show = true;

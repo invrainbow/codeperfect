@@ -495,8 +495,9 @@ struct World {
 
     struct Wnd_Goto_Symbol : Wnd {
         char query[MAX_PATH];
+        ccstr current_import_path;
         u32 selection;
-        List<ccstr> *symbols;
+        List<Go_Symbol> *symbols;
         List<int> *filtered_results;
     } wnd_goto_symbol;
 
@@ -548,7 +549,6 @@ ccstr ft_node_to_path(FT_Node *node);
 bool is_ignored_by_git(ccstr path, bool isdir);
 
 void init_goto_file();
-void init_goto_symbol();
 void filter_files();
 void filter_symbols();
 
