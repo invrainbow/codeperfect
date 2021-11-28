@@ -232,7 +232,7 @@ struct UI {
 
     void begin_centered_window(ccstr title, bool *show, int flags = 0, int width = -1);
 
-    Pretty_Menu *start_pretty_menu(ImVec2 padding = ImVec2(4, 2));
+    Pretty_Menu *pretty_menu_start(ImVec2 padding = ImVec2(4, 2));
     void pretty_menu_item(Pretty_Menu *menu, bool selected);
     void pretty_menu_text(Pretty_Menu *pm, ccstr text, ImU32 color = PM_DEFAULT_COLOR);
 };

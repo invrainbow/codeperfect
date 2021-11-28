@@ -24,6 +24,9 @@ void open_ft_node(FT_Node *it);
 UI ui;
 Global_Colors global_colors;
 
+ccstr get_menu_command_key(Command cmd);
+bool menu_command(Command cmd, bool selected = false);
+
 void init_global_colors() {
 #if 0 // def DEBUG_MODE
     if (check_path("/Users/brandon/.cpcolors") == CPR_FILE) {
@@ -148,24 +151,24 @@ ccstr get_key_name(int key) {
     return glfwGetKeyName(key, 0);
 }
 
-bool menu_command(Command cmd, bool selected = false) {
+ccstr get_menu_command_key(Command cmd) {
     auto info = command_info_table[cmd];
+    if (info.key == 0) return NULL;
 
-    ccstr keystr = NULL;
-    if (info.key != 0) {
-        auto keyname = get_key_name(info.key);
-        if (keyname != NULL) {
-            auto s = alloc_list<char>();
-            for (int i = 0, len = strlen(keyname); i < len; i++)
-                s->append(toupper(keyname[i]));
-            s->append('\0');
-            keystr = format_key(info.mods, s->items);
-        }
-    }
+    auto keyname = get_key_name(info.key);
+    if (keyname == NULL) return NULL;
 
+    auto s = alloc_list<char>();
+    for (int i = 0, len = strlen(keyname); i < len; i++)
+        s->append(toupper(keyname[i]));
+    s->append('\0');
+    return format_key(info.mods, s->items);
+}
+
+bool menu_command(Command cmd, bool selected) {
     bool clicked = ImGui::MenuItem(
         get_command_name(cmd),
-        keystr,
+        get_menu_command_key(cmd),
         selected,
         is_command_enabled(cmd)
     );
@@ -173,7 +176,6 @@ bool menu_command(Command cmd, bool selected = false) {
     if (clicked) handle_command(cmd, true);
     return clicked;
 }
-
 
 int get_line_number_width(Editor *editor) {
     auto buf = editor->buf;
@@ -394,7 +396,7 @@ bool get_type_color(Ast_Node *node, Editor *editor, vec4f *out) {
     return false;
 }
 
-Pretty_Menu *UI::start_pretty_menu(ImVec2 padding) {
+Pretty_Menu *UI::pretty_menu_start(ImVec2 padding) {
     auto ret = alloc_object(Pretty_Menu);
     ret->drawlist = ImGui::GetWindowDrawList();
     ret->padding = padding;
@@ -2363,6 +2365,8 @@ void UI::draw_everything() {
             } else {
                 wnd.filtered_results->len = 0;
             }
+
+            wnd.selection = 0;
         }
 
         {
@@ -3522,6 +3526,7 @@ void UI::draw_everything() {
                 filter_files();
             else
                 wnd.filtered_results->len = 0; // maybe use logic from filter_files
+            wnd.selection = 0;
         }
 
         if (wnd.filtered_results->len > 0) {
@@ -3530,7 +3535,7 @@ void UI::draw_everything() {
             imgui_push_mono_font();
             defer { imgui_pop_font(); };
 
-            auto pm = start_pretty_menu();
+            auto pm = pretty_menu_start();
 
             for (u32 i = 0; i < wnd.filtered_results->len && i < settings.goto_file_max_results; i++) {
                 pretty_menu_item(pm, i == wnd.selection);
@@ -3599,6 +3604,8 @@ void UI::draw_everything() {
 
         if (ImGui::IsItemEdited()) {
             wnd.filtered_results->len = 0;
+            wnd.selection = 0;
+
             if (strlen(wnd.query) > 0) {
                 For (*wnd.actions)
                     if (fzy_has_match(wnd.query, get_command_name(it)))
@@ -3622,11 +3629,28 @@ void UI::draw_everything() {
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
             defer { ImGui::PopStyleVar(); };
 
-            auto pm = start_pretty_menu();
+            auto pm = pretty_menu_start();
 
             for (u32 i = 0; i < wnd.filtered_results->len && i < settings.run_command_max_results; i++) {
                 pretty_menu_item(pm, i == wnd.selection);
-                pretty_menu_text(pm, get_command_name(wnd.filtered_results->at(i)));
+
+                auto it = wnd.filtered_results->at(i);
+                pretty_menu_text(pm, get_command_name(it));
+
+                auto keystr = get_menu_command_key(it);
+                if (keystr != NULL) {
+                    imgui_push_mono_font();
+                    defer { imgui_pop_font(); };
+
+                    pm->pos.x = pm->text_br.x - ImGui::CalcTextSize(keystr).x;
+
+                    // TODO: refactor
+                    auto color = i == wnd.selection
+                        ? IM_COL32(150, 150, 150, 255)
+                        : IM_COL32(110, 110, 110, 255);
+
+                    pretty_menu_text(pm, keystr, color);
+                }
             }
         }
 
@@ -3693,6 +3717,7 @@ void UI::draw_everything() {
                 filter_symbols();
             else
                 wnd.filtered_results->len = 0;
+            wnd.selection = 0;
         }
 
         if (wnd.filtered_results->len > 0) {
@@ -3701,7 +3726,7 @@ void UI::draw_everything() {
             imgui_push_mono_font();
             defer { imgui_pop_font(); };
 
-            auto pm = start_pretty_menu();
+            auto pm = pretty_menu_start();
 
             for (u32 i = 0; i < wnd.filtered_results->len && i < settings.goto_file_max_results; i++) {
                 pretty_menu_item(pm, i == wnd.selection);
