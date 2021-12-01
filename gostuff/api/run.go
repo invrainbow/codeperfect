@@ -277,7 +277,7 @@ func Run() {
 			return
 		}
 
-		SendSlackMessageForUser(user, "%s authed.", user.Email)
+		SendSlackMessageForUser(user, "%s authed on version %s/%d.", user.Email, req.OS, req.CurrentVersion)
 
 		LogEvent(int(user.ID), &AmplitudeEvent{
 			EventType:       "user_auth",
