@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"text/template"
+	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -34,6 +35,29 @@ func sendServerError(c *gin.Context, format string, args ...interface{}) {
 	fmt.Printf("%s\n", fmt.Sprintf(format, args...))
 }
 
+const TrialPeriod = time.Hour * 24 * 7
+
+func authUserByStatus(user *models.User) (bool, int) {
+	switch user.Status {
+	case models.UserStatusTrialWaiting:
+		// start the user's trial
+		user.Status = models.UserStatusTrial
+		user.TrialStartedAt = time.Now()
+		db.Db.Save(&user)
+
+	case models.UserStatusTrial:
+		if time.Since(user.TrialStartedAt) > TrialPeriod {
+			return false, models.ErrorTrialExpired
+		}
+
+	case models.UserStatusInactive:
+		return false, models.ErrorUserNoLongerActive
+	}
+
+	return true, 0
+}
+
+// can maybe refactor this
 func authUser(c *gin.Context, email, licenseKey string) *models.User {
 	var user models.User
 	if res := db.Db.First(&user, "email = ?", email); res.Error != nil {
@@ -45,13 +69,14 @@ func authUser(c *gin.Context, email, licenseKey string) *models.User {
 		return nil
 	}
 
-	if !user.IsActive {
-		sendError(c, models.ErrorUserNoLongerActive)
+	if user.LicenseKey != licenseKey {
+		sendError(c, models.ErrorInvalidLicenseKey)
 		return nil
 	}
 
-	if user.LicenseKey != licenseKey {
-		sendError(c, models.ErrorInvalidLicenseKey)
+	ok, errCode := authUserByStatus(&user)
+	if !ok {
+		sendError(c, errCode)
 		return nil
 	}
 
@@ -65,8 +90,9 @@ func authUserByCode(c *gin.Context, code string) *models.User {
 		return nil
 	}
 
-	if !user.IsActive {
-		sendError(c, models.ErrorUserNoLongerActive)
+	ok, errCode := authUserByStatus(&user)
+	if !ok {
+		sendError(c, errCode)
 		return nil
 	}
 

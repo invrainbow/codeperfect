@@ -29,7 +29,7 @@ func main() {
 			Email:        email,
 			LicenseKey:   generateKey(32),
 			DownloadCode: generateKey(16),
-			IsActive:     true,
+			Status:       models.UserStatusTrialWaiting,
 		}
 		db.Db.Create(&user)
 		fmt.Printf("%s: https://codeperfect95.com/install?code=%s\n", email, user.DownloadCode)

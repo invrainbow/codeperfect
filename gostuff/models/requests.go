@@ -9,6 +9,7 @@ const (
 	ErrorInvalidOS
 	ErrorInvalidVersion
 	ErrorInvalidDownloadCode
+	ErrorTrialExpired
 )
 
 var ErrorMessages = map[int]string{
@@ -20,6 +21,7 @@ var ErrorMessages = map[int]string{
 	ErrorInvalidOS:           "Invalid OS.",
 	ErrorInvalidVersion:      "Invalid version.",
 	ErrorInvalidDownloadCode: "Invalid download code.",
+	ErrorTrialExpired:        "Trial has expired.",
 }
 
 type ErrorResponse struct {
