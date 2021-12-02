@@ -24,6 +24,9 @@ void open_ft_node(FT_Node *it);
 UI ui;
 Global_Colors global_colors;
 
+ccstr get_menu_command_key(Command cmd);
+bool menu_command(Command cmd, bool selected = false);
+
 void init_global_colors() {
 #if 0 // def DEBUG_MODE
     if (check_path("/Users/brandon/.cpcolors") == CPR_FILE) {
@@ -148,24 +151,24 @@ ccstr get_key_name(int key) {
     return glfwGetKeyName(key, 0);
 }
 
-bool menu_command(Command cmd, bool selected = false) {
+ccstr get_menu_command_key(Command cmd) {
     auto info = command_info_table[cmd];
+    if (info.key == 0) return NULL;
 
-    ccstr keystr = NULL;
-    if (info.key != 0) {
-        auto keyname = get_key_name(info.key);
-        if (keyname != NULL) {
-            auto s = alloc_list<char>();
-            for (int i = 0, len = strlen(keyname); i < len; i++)
-                s->append(toupper(keyname[i]));
-            s->append('\0');
-            keystr = format_key(info.mods, s->items);
-        }
-    }
+    auto keyname = get_key_name(info.key);
+    if (keyname == NULL) return NULL;
 
+    auto s = alloc_list<char>();
+    for (int i = 0, len = strlen(keyname); i < len; i++)
+        s->append(toupper(keyname[i]));
+    s->append('\0');
+    return format_key(info.mods, s->items);
+}
+
+bool menu_command(Command cmd, bool selected) {
     bool clicked = ImGui::MenuItem(
         get_command_name(cmd),
-        keystr,
+        get_menu_command_key(cmd),
         selected,
         is_command_enabled(cmd)
     );
@@ -173,7 +176,6 @@ bool menu_command(Command cmd, bool selected = false) {
     if (clicked) handle_command(cmd, true);
     return clicked;
 }
-
 
 int get_line_number_width(Editor *editor) {
     auto buf = editor->buf;
@@ -392,6 +394,46 @@ bool get_type_color(Ast_Node *node, Editor *editor, vec4f *out) {
     }
 
     return false;
+}
+
+Pretty_Menu *UI::pretty_menu_start(ImVec2 padding) {
+    auto ret = alloc_object(Pretty_Menu);
+    ret->drawlist = ImGui::GetWindowDrawList();
+    ret->padding = padding;
+    return ret;
+}
+
+void UI::pretty_menu_text(Pretty_Menu *pm, ccstr text, ImU32 color) {
+    if (color == PM_DEFAULT_COLOR)
+        color = pm->text_color;
+
+    pm->drawlist->AddText(pm->pos, color, text);
+    pm->pos.x += ImGui::CalcTextSize(text).x;
+}
+
+void UI::pretty_menu_item(Pretty_Menu *pm, bool selected) {
+    auto h = ImGui::CalcTextSize("Some Text").y;
+    auto w = ImGui::GetContentRegionAvail().x;
+
+    auto pad = pm->padding;
+    auto tl = ImGui::GetCursorScreenPos();
+    auto br = tl + ImVec2(w, h);
+    br.y += (pad.y * 2);
+
+    pm->tl = tl;
+    pm->br = br;
+    pm->text_tl = tl + pad;
+    pm->text_br = br - pad;
+
+    ImGui::Dummy(ImVec2(0.0, pm->br.y - pm->tl.y));
+    if (selected) {
+        pm->text_color = IM_COL32(0, 0, 0, 255);
+        pm->drawlist->AddRectFilled(pm->tl, pm->br, IM_COL32(255, 255, 255, 255), 4);
+    } else {
+        pm->text_color = ImGui::GetColorU32(ImGuiCol_Text);
+    }
+
+    pm->pos = pm->text_tl;
 }
 
 bool UI::imgui_is_window_focusing(bool *b) {
@@ -1043,7 +1085,6 @@ void UI::draw_debugger_var(Draw_Debugger_Var_Args *args) {
 
             for (int i = 0; i < args->indent; i++)
                 ImGui::Unindent();
-
         }
 
         if (final_var_name != NULL) {
@@ -1108,7 +1149,6 @@ void UI::draw_debugger_var(Draw_Debugger_Var_Args *args) {
                                 next -= frame->locals->len;
                                 *selection = &frame->args->at(next);
                             }
-
                         } while (0);
                     }
                 }
@@ -2089,7 +2129,6 @@ void UI::draw_everything() {
                     }
                     imgui_pop_font();
                     ImGui::PopItemWidth();
-
                 } ImGui::EndChild();
 
                 ImGui::EndTabItem();
@@ -2179,7 +2218,6 @@ void UI::draw_everything() {
             } else {
                 ImGui::Text("No interfaces found.");
             }
-
         } else {
             ImGui::Text("Searching...");
             ImGui::SameLine();
@@ -2327,6 +2365,8 @@ void UI::draw_everything() {
             } else {
                 wnd.filtered_results->len = 0;
             }
+
+            wnd.selection = 0;
         }
 
         {
@@ -2335,10 +2375,13 @@ void UI::draw_everything() {
 
             for (u32 i = 0; i < wnd.filtered_results->len && i < settings.goto_file_max_results; i++) {
                 auto it = wnd.symbols->at(wnd.filtered_results->at(i));
+
+                auto text = our_sprintf("%s.%s", it.pkgname, it.name);
+
                 if (i == wnd.selection)
-                    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.5f, 1.0f), "%s", it.name);
+                    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.5f, 1.0f), "%s", text);
                 else
-                    ImGui::Text("%s", it.name);
+                    ImGui::Text("%s", text);
 
                 ImGui::SameLine();
                 ImGui::TextColored(ImVec4(1.0f, 1.0, 1.0f, 0.4f), "\"%s\"", it.decl->ctx->import_path);
@@ -2799,7 +2842,6 @@ void UI::draw_everything() {
             if (imgui_icon_button(ICON_MD_REFRESH)) {
                 fill_file_tree(); // TODO: async?
             }
-
         } ImGui::EndChild();
 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 4));
@@ -3304,8 +3346,6 @@ void UI::draw_everything() {
                             ImGui::Text("Select a profile on the left and it'll show up here.");
                         }
                     }
-
-
                 } ImGui::EndChild();
 
                 ImGui::EndTabItem();
@@ -3486,20 +3526,20 @@ void UI::draw_everything() {
                 filter_files();
             else
                 wnd.filtered_results->len = 0; // maybe use logic from filter_files
+            wnd.selection = 0;
         }
 
-        {
+        if (wnd.filtered_results->len > 0) {
+            imgui_small_newline();
+
             imgui_push_mono_font();
             defer { imgui_pop_font(); };
 
-            for (u32 i = 0; i < wnd.filtered_results->len && i < settings.goto_file_max_results; i++) {
-                if (i == 0) imgui_small_newline();
+            auto pm = pretty_menu_start();
 
-                auto it = wnd.filepaths->at(wnd.filtered_results->at(i));
-                if (i == wnd.selection)
-                    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.5f, 1.0f), "%s", it);
-                else
-                    ImGui::Text("%s", it);
+            for (u32 i = 0; i < wnd.filtered_results->len && i < settings.goto_file_max_results; i++) {
+                pretty_menu_item(pm, i == wnd.selection);
+                pretty_menu_text(pm, wnd.filepaths->at(wnd.filtered_results->at(i)));
             }
         }
 
@@ -3509,7 +3549,14 @@ void UI::draw_everything() {
     if (world.wnd_command.show) {
         auto& wnd = world.wnd_command;
 
-        begin_centered_window("Run Command", &wnd.show, 0, 400);
+        auto begin_window = [&]() {
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 8));
+            defer { ImGui::PopStyleVar(); };
+
+            begin_centered_window("Run Command", &wnd.show, 0, 400);
+        };
+
+        begin_window();
 
         focus_keyboard(&wnd);
 
@@ -3557,6 +3604,8 @@ void UI::draw_everything() {
 
         if (ImGui::IsItemEdited()) {
             wnd.filtered_results->len = 0;
+            wnd.selection = 0;
+
             if (strlen(wnd.query) > 0) {
                 For (*wnd.actions)
                     if (fzy_has_match(wnd.query, get_command_name(it)))
@@ -3574,21 +3623,38 @@ void UI::draw_everything() {
             }
         }
 
-        {
-            // imgui_push_mono_font();
-            // defer { imgui_pop_font(); };
+        if (wnd.filtered_results->len > 0) {
+            imgui_small_newline();
+
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
+            defer { ImGui::PopStyleVar(); };
+
+            auto pm = pretty_menu_start();
 
             for (u32 i = 0; i < wnd.filtered_results->len && i < settings.run_command_max_results; i++) {
-                auto text = get_command_name(wnd.filtered_results->at(i));
-                if (i == wnd.selection)
-                    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.5f, 1.0f), "%s", text);
-                else
-                    ImGui::Text("%s", text);
+                pretty_menu_item(pm, i == wnd.selection);
+
+                auto it = wnd.filtered_results->at(i);
+                pretty_menu_text(pm, get_command_name(it));
+
+                auto keystr = get_menu_command_key(it);
+                if (keystr != NULL) {
+                    imgui_push_mono_font();
+                    defer { imgui_pop_font(); };
+
+                    pm->pos.x = pm->text_br.x - ImGui::CalcTextSize(keystr).x;
+
+                    // TODO: refactor
+                    auto color = i == wnd.selection
+                        ? IM_COL32(150, 150, 150, 255)
+                        : IM_COL32(110, 110, 110, 255);
+
+                    pretty_menu_text(pm, keystr, color);
+                }
             }
         }
 
         ImGui::End();
-
     }
 
     if (world.wnd_goto_symbol.show) {
@@ -3608,7 +3674,7 @@ void UI::draw_everything() {
             wnd.selection %= min(wnd.filtered_results->len, settings.goto_symbol_max_results);
         };
 
-        begin_centered_window("Go To Symbol", &world.wnd_goto_symbol.show, 0, 400);
+        begin_centered_window("Go To Symbol", &world.wnd_goto_symbol.show, 0, 600);
 
         auto mods = imgui_get_keymods();
         switch (mods) {
@@ -3636,11 +3702,13 @@ void UI::draw_everything() {
                 if (!world.indexer.try_acquire_lock(IND_READING)) break;
                 defer { world.indexer.release_lock(IND_READING); };
 
-                auto symbol = wnd.symbols->at(wnd.filtered_results->at(wnd.selection));
-                auto result = world.indexer.jump_to_symbol(symbol);
-                if (result == NULL) break;
+                auto it = wnd.symbols->at(wnd.filtered_results->at(wnd.selection));
 
-                goto_jump_to_definition_result(result);
+                Jump_To_Definition_Result res;
+                res.file = world.indexer.ctx_to_filepath(it.decl->ctx);
+                res.pos = it.decl->decl->name_start;
+                res.decl = it.decl;
+                goto_jump_to_definition_result(&res);
             } while (0);
         }
 
@@ -3649,18 +3717,40 @@ void UI::draw_everything() {
                 filter_symbols();
             else
                 wnd.filtered_results->len = 0;
+            wnd.selection = 0;
         }
 
-        {
+        if (wnd.filtered_results->len > 0) {
+            imgui_small_newline();
+
             imgui_push_mono_font();
             defer { imgui_pop_font(); };
 
+            auto pm = pretty_menu_start();
+
             for (u32 i = 0; i < wnd.filtered_results->len && i < settings.goto_file_max_results; i++) {
+                pretty_menu_item(pm, i == wnd.selection);
+
                 auto it = wnd.symbols->at(wnd.filtered_results->at(i));
-                if (i == wnd.selection)
-                    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.5f, 1.0f), "%s", it);
-                else
-                    ImGui::Text("%s", it);
+
+                pretty_menu_text(pm, it.full_name());
+                pm->pos.x += 12;
+
+                auto import_path = it.decl->ctx->import_path;
+                if (path_has_descendant(wnd.current_import_path, import_path))
+                    import_path = get_path_relative_to(import_path, wnd.current_import_path);
+
+                int rem_chars = (pm->text_br.x - pm->pos.x) / font->width;
+
+                auto s = import_path;
+                if (strlen(s) > rem_chars)
+                    s = our_sprintf("%.*s...", rem_chars - 3, s);
+
+                auto color = i == wnd.selection
+                    ? IM_COL32(150, 150, 150, 255)
+                    : IM_COL32(110, 110, 110, 255);
+
+                pretty_menu_text(pm, s, color);
             }
         }
 

@@ -23,9 +23,9 @@ be disabled.
 
 ## Keyboard Shortcuts
 
-| Command                    | macOS                                       | Windows                                        |
-| -------------------------- | ------------------------------------------- | ---------------------------------------------- |
-| Toggle Go To Symbol window | <kbd>⌘</kbd><kbd>T</kbd>                    | <kbd>Ctrl</kbd><kbd>T</kbd>                    |
-| Move cursor down           | <kbd>⌘</kbd><kbd>J</kbd> or <kbd>Down</kbd> | <kbd>Ctrl</kbd><kbd>J</kbd> or <kbd>Down</kbd> |
-| Move cursor up             | <kbd>⌘</kbd><kbd>K</kbd> or <kbd>Up</kbd>   | <kbd>Ctrl</kbd><kbd>K</kbd> or <kbd>Up</kbd>   |
-| Select file                | <kbd>Enter</kbd>                            | <kbd>Enter</kbd>                               |
+| Command                    | Shortcut                                    |
+| -------------------------- | ------------------------------------------- |
+| Toggle Go To Symbol window | <kbd>⌘</kbd><kbd>T</kbd>                    |
+| Move cursor down           | <kbd>⌘</kbd><kbd>J</kbd> or <kbd>Down</kbd> |
+| Move cursor up             | <kbd>⌘</kbd><kbd>K</kbd> or <kbd>Up</kbd>   |
+| Select file                | <kbd>Enter</kbd>                            |

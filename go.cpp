@@ -2990,13 +2990,13 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_symbol(ccstr symbol) {
     return NULL;
 }
 
-List<Find_References_File> *Go_Indexer::find_references(ccstr filepath, cur2 pos) {
+List<Find_References_File> *Go_Indexer::find_references(ccstr filepath, cur2 pos, bool include_self) {
     auto result = world.indexer.jump_to_definition(filepath, pos);
     if (result == NULL) return NULL;
-    return find_references(result->decl);
+    return find_references(result->decl, include_self);
 }
 
-List<Find_References_File> *Go_Indexer::find_references(Goresult *declres) {
+List<Find_References_File> *Go_Indexer::find_references(Goresult *declres, bool include_self) {
     reload_all_dirty_files();
 
     auto decl = declres->decl;
@@ -3065,9 +3065,11 @@ List<Find_References_File> *Go_Indexer::find_references(Goresult *declres) {
         ctx2.import_path = pkg->import_path;
         ctx2.filename = file->filename;
 
-        auto out = ret->append();
-        out->filepath = our_strcpy(path_join(get_package_path(pkg->import_path), file->filename));
-        out->references = alloc_list<Go_Reference>();
+        bool same_file_as_decl = false;
+        if (streq(ctx2.import_path, ctx->import_path) && streq(ctx2.filename, ctx->filename))
+            same_file_as_decl = true;
+
+        auto references = alloc_list<Go_Reference>();
 
         bool same_package = streq(pkg->import_path, ctx->import_path);
 
@@ -3087,6 +3089,18 @@ List<Find_References_File> *Go_Indexer::find_references(Goresult *declres) {
 
         auto process_ref = [&](Go_Reference *it) {
             if (!streq(it->is_sel ? it->sel : it->name, decl_name))
+                return;
+
+            auto is_self = [&]() {
+                if (!same_file_as_decl) return false;
+                if (it->is_sel) return false;
+                if (it->start != decl->name_start) return false;
+                if (it->end != decl->name_end) return false;
+
+                return true;
+            };
+
+            if (!include_self && is_self())
                 return;
 
             /*
@@ -3154,10 +3168,17 @@ List<Find_References_File> *Go_Indexer::find_references(Goresult *declres) {
                 if (!is_match(res)) return;
             }
 
-            out->references->append(it);
+            references->append(it);
         };
 
         For (*file->references) process_ref(&it);
+
+        if (references->len > 0) {
+            Find_References_File out;
+            out.filepath = our_strcpy(path_join(get_package_path(pkg->import_path), file->filename));
+            out.references = references;
+            ret->append(&out);
+        }
     };
 
     if (!decl->is_toplevel) {
@@ -3775,7 +3796,8 @@ void Go_Indexer::fill_generate_implementation(List<Go_Symbol> *out, bool selecte
                 }
 
                 Go_Symbol sym;
-                sym.name = our_sprintf("%s.%s", pkgname, it.name);
+                sym.pkgname = pkgname;
+                sym.name = it.name;
                 sym.decl = make_goresult(&it, &ctx)->copy_decl();
                 sym.filehash = filehash;
                 out->append(&sym);
@@ -3784,15 +3806,8 @@ void Go_Indexer::fill_generate_implementation(List<Go_Symbol> *out, bool selecte
     }
 }
 
-void Go_Indexer::fill_goto_symbol() {
+void Go_Indexer::fill_goto_symbol(List<Go_Symbol> *out) {
     reload_all_dirty_files();
-
-    auto &wnd = world.wnd_goto_symbol;
-    ptr0(&wnd);
-
-    wnd.show = true;
-    wnd.symbols = alloc_list<ccstr>();
-    wnd.filtered_results = alloc_list<int>();
 
     auto base_path = make_path(index.current_import_path);
 
@@ -3806,7 +3821,13 @@ void Go_Indexer::fill_goto_symbol() {
         auto pkg = &it;
 
         auto pkgname = it.package_name;
+        auto import_path = it.import_path;
+
         For (*it.files) {
+            auto ctx = alloc_object(Go_Ctx);
+            ctx->filename = it.filename;
+            ctx->import_path = import_path;
+
             For (*it.decls) {
                 auto getrecv = [&]() -> ccstr {
                     if (it.type != GODECL_FUNC) return NULL;
@@ -3823,18 +3844,18 @@ void Go_Indexer::fill_goto_symbol() {
                 };
 
                 ccstr name = NULL;
-
                 auto recvname = getrecv();
                 if (recvname != NULL)
-                    name = our_sprintf("%s.%s.%s", pkgname, recvname, it.name);
+                    name = our_sprintf("%s.%s", recvname, it.name);
                 else
-                    name = our_sprintf("%s.%s", pkgname, it.name);
+                    name = our_sprintf("%s", it.name);
 
-                if (!isident(name[0])) {
-                    break;
-                }
-
-                wnd.symbols->append(name);
+                Go_Symbol sym;
+                sym.pkgname = pkgname;
+                sym.name = name;
+                sym.decl = make_goresult(&it, ctx);
+                sym.filehash = 0; // ???
+                out->append(&sym);
             }
         }
     }
@@ -6564,6 +6585,14 @@ Find_Decl* Find_Decl::copy() {
     ret->filepath = our_strcpy(filepath);
     ret->decl = decl->copy_decl();
     ret->package_name = our_strcpy(package_name);
+    return ret;
+}
+
+Go_Symbol* Go_Symbol::copy() {
+    auto ret = clone(this);
+    ret->pkgname = our_strcpy(pkgname);
+    ret->name = our_strcpy(name);
+    ret->decl = decl->copy_decl();
     return ret;
 }
 

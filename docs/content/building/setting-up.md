@@ -14,17 +14,11 @@ errors, and allow you to easily navigate between them. To get started, go to
 
 ![](/build-profiles.png)
 
-On the left, it says <cite>Build Project</cite> in a list. Eventually this list
-will allow you to add and remove different profiles. Right now only the one
-hardcoded profile is available.
+Use the list on the left to add, remove, and select remove different profiles.
 
-On the right, enter the build command. CodePerfect can parse the output of any
-command that uses the same error format as `go build`.
+On the right, you can configure a given profile. Currently all you can do is
+edit the name and build command. For the build command, CodePerfect can parse
+the output of any command that prints errors in the same format as `go build`.
 
-In the most basic case, you will simply want to enter
-
-```
-go build <module_path>/<path_to_main_package>
-```
-
-replacing `<module_path>` and `<path_to_main_package>` with their respective values.
+In the most basic case, you can simply enter `go build` to build the current
+module.

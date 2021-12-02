@@ -33,7 +33,7 @@ Set this debug profile as the default by doing to
 
 ## Keyboard Shortcuts
 
-| Command                 | macOS         | Windows       |
-| ----------------------- | ------------- | ------------- |
-| Start Debugging         | <kbd>F5</kbd> | <kbd>F5</kbd> |
-| Debug Test Under Cursor | <kbd>F6</kbd> | <kbd>F6</kbd> |
+| Command                 | Shortcut      |
+| ----------------------- | ------------- |
+| Start Debugging         | <kbd>F5</kbd> |
+| Debug Test Under Cursor | <kbd>F6</kbd> |

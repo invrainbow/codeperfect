@@ -17,28 +17,28 @@
   url = "/editor"
 
 [[docs]]
-  name = "Building"
+  name = "Code Intelligence"
   weight = 40
+  identifier = "code-intelligence"
+  url = "/code-intelligence"
+
+[[docs]]
+  name = "Refactoring"
+  weight = 50
+  identifier = "refactoring"
+  url = "/refactoring"
+
+[[docs]]
+  name = "Building"
+  weight = 60
   identifier = "building"
   url = "/building"
 
 [[docs]]
   name = "Debugging"
-  weight = 50
+  weight = 70
   identifier = "debugging"
   url = "/debugging"
-
-[[docs]]
-  name = "Code Intelligence"
-  weight = 60
-  identifier = "code-intelligence"
-  url = "/code-intelligence"
-
-# [[docs]]
-#   name = "Refactoring"
-#   weight = 70
-#   identifier = "refactoring"
-#   url = "/refactoring"
 
 # [[docs]]
 #   name = "Commands"

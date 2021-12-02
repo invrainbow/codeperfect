@@ -16,9 +16,9 @@ When you type a `,` inside a function call, it will re-open the hint.
 
 ## Keyboard Shortcuts
 
-| Command               | macOS                                       | Windows                                         |
-| --------------------- | ------------------------------------------- | ----------------------------------------------- |
-| Open parameter hint\* | <kbd>Ctrl</kbd><kbd>⇧</kbd><kbd>Space</kbd> | <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>Space</kbd> |
+| Command               | Shortcut                                    |
+| --------------------- | ------------------------------------------- |
+| Open parameter hint\* | <kbd>Ctrl</kbd><kbd>⇧</kbd><kbd>Space</kbd> |
 
 \* The hint opens automatically as you type, but you can also manually trigger
 it with your cursor inside a function call after you've closed it.
