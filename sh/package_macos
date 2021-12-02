@@ -15,12 +15,22 @@ if [[ "$(sysctl -n machdep.cpu.brand_string)" = "Apple M1" ]]; then
 fi
 
 package_app() {
-    APPNAME="CodePerfect.app"
-    rm -rf "${APPNAME}"
-    mkdir -p "${APPNAME}/Contents/MacOS"
-    cp -R ../build/bin/ "${APPNAME}/Contents/MacOS/bin/"
-    cp ../build/launcher "${APPNAME}/Contents/MacOS/CodePerfect"
+    rm -rf CodePerfect.app
+
+    appify -name CodePerfect \
+        -icon ../logo.png \
+        -version "0.${VERSION}.0" \
+        -author "CodePerfect" \
+        -id com.codeperfect95 \
+        ../build/launcher
+
+    rm -f CodePerfect.app/Contents/README
+    rm -f CodePerfect.app/Contents/MacOS/bin/ide.d
+
+    cp -R ../build/bin/ "CodePerfect.app/Contents/MacOS/bin/"
+
     zip -r app.zip CodePerfect.app/
+
     if [[ -z "$SKIP_UPLOAD" ]]; then
         aws s3 cp app.zip "s3://codeperfect95/app/${OS_PREFIX}_v${VERSION}.zip"
     fi
@@ -28,6 +38,7 @@ package_app() {
 
 package_update() {
     zip -r update.zip ../build/bin/
+
     if [[ -z "$SKIP_UPLOAD" ]]; then
         aws s3 cp update.zip "s3://codeperfect95/update/${OS_PREFIX}_v${VERSION}.zip"
     fi
