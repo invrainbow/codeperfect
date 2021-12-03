@@ -27,3 +27,5 @@ wget https://github.com/neovim/neovim/releases/download/v0.5.1/nvim-macos.tar.gz
 tar xvzf nvim-macos.tar.gz
 mv nvim-osx64 nvim-archive
 rm nvim-macos.tar.gz
+
+go get github.com/machinebox/appify
