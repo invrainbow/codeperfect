@@ -1268,6 +1268,7 @@ struct Go_Indexer {
     ccstr ctx_to_filepath(Go_Ctx *ctx);
     Go_Ctx *filepath_to_ctx(ccstr filepath);
     Goresult *resolve_type(Gotype *type, Go_Ctx *ctx);
+    Goresult *resolve_type_to_decl(Gotype *type, Go_Ctx *ctx);
     Goresult *unpointer_type(Gotype *type, Go_Ctx *ctx);
     List<Godecl> *parameter_list_to_fields(Ast_Node *params);
     Gotype *node_to_gotype(Ast_Node *node, bool toplevel = false);
@@ -1329,6 +1330,8 @@ struct Go_Indexer {
     }
 
     bool are_gotypes_equal(Goresult *ra, Goresult *rb);
+    bool are_decls_equal(Goresult *adecl, Goresult *bdecl);
+
     List<Find_Decl> *find_implementations(Goresult *target);
     List<Find_Decl> *find_interfaces(Goresult *target);
     List<Goresult> *list_interface_methods(Goresult *interface);

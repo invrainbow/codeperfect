@@ -302,7 +302,7 @@ int main(int argc, char **argv) {
     style.GrabMinSize = 8;
 
     style.WindowRounding = 6;
-    style.ChildRounding = 0;
+    style.ChildRounding = 6;
     style.FrameRounding = 2;
     style.PopupRounding = 6;
     style.ScrollbarRounding = 2;

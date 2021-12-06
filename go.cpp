@@ -2453,6 +2453,24 @@ List<Goresult> *Go_Indexer::get_node_dotprops(Ast_Node *operand_node, bool *was_
     return NULL;
 }
 
+bool Go_Indexer::are_decls_equal(Goresult *adecl, Goresult *bdecl) {
+    if (adecl == NULL) return false;
+    if (adecl->ctx == NULL) return false;
+    if (bdecl == NULL) return false;
+    if (bdecl->ctx == NULL) return false;
+
+    auto afile = ctx_to_filepath(adecl->ctx);
+    if (afile == NULL) return false;
+
+    auto bfile = ctx_to_filepath(bdecl->ctx);
+    if (bfile == NULL) return false;
+
+    if (!streq(afile, bfile)) return false;
+    if (adecl->decl->name_start != bdecl->decl->name_start) return false;
+
+    return true;
+}
+
 bool Go_Indexer::are_gotypes_equal(Goresult *ra, Goresult *rb) {
     auto resolve_aliased_type = [&](Goresult *res) {
         return res; // TODO
@@ -2472,7 +2490,11 @@ bool Go_Indexer::are_gotypes_equal(Goresult *ra, Goresult *rb) {
         auto a_is_ref = (a->type == GOTYPE_ID || a->type == GOTYPE_SEL);
         auto b_is_ref = (b->type == GOTYPE_ID || b->type == GOTYPE_SEL);
 
-        if (a_is_ref && b_is_ref) return false;
+        if (a_is_ref && b_is_ref) {
+            auto resa = resolve_type_to_decl(a, ra->ctx);
+            auto resb = resolve_type_to_decl(b, rb->ctx);
+            return are_decls_equal(resa, resb);
+        }
 
         Goresult *ref = NULL, *other = NULL;
         if (a_is_ref) {
@@ -2551,21 +2573,8 @@ bool Go_Indexer::are_gotypes_equal(Goresult *ra, Goresult *rb) {
     case GOTYPE_ID:
         {
             auto adecl = find_decl_of_id(a->id_name, a->id_pos, ra->ctx);
-            if (adecl == NULL) return false;
-            if (adecl->ctx == NULL) return false;
-
             auto bdecl = find_decl_of_id(b->id_name, b->id_pos, rb->ctx);
-            if (bdecl == NULL) return false;
-            if (bdecl->ctx == NULL) return false;
-
-            auto afile = ctx_to_filepath(adecl->ctx);
-            if (afile == NULL) return false;
-
-            auto bfile = ctx_to_filepath(bdecl->ctx);
-            if (bfile == NULL) return false;
-
-            if (!streq(afile, bfile)) return false;
-            if (adecl->decl->name_start != bdecl->decl->name_start) return false;
+            return are_decls_equal(adecl, bdecl);
         }
         return true;
 
@@ -2635,18 +2644,28 @@ bool Go_Indexer::are_gotypes_equal(Goresult *ra, Goresult *rb) {
             auto &fa = a->func_sig;
             auto &fb = b->func_sig;
 
-            if (fa.params->len != fb.params->len) return false;
+            auto mismatch = [&](List<Godecl> *aarr, List<Godecl> *barr) -> bool {
+                if (isempty(fa.params) != isempty(fb.params))
+                    return true;
+                if (fa.params != NULL)
+                    if (fa.params->len != fb.params->len)
+                        return true;
+                return false;
+            };
 
-            for (int i = 0; i < fa.params->len; i++) {
-                auto ga = ra->wrap(fa.params->at(i).gotype);
-                auto gb = rb->wrap(fb.params->at(i).gotype);
-                if (!are_gotypes_equal(ga, gb)) return false;
+            if (mismatch(fa.params, fb.params)) return false;
+
+            if (!isempty(fa.params)) {
+                for (int i = 0; i < fa.params->len; i++) {
+                    auto ga = ra->wrap(fa.params->at(i).gotype);
+                    auto gb = rb->wrap(fb.params->at(i).gotype);
+                    if (!are_gotypes_equal(ga, gb)) return false;
+                }
             }
 
-            if (fa.result != NULL || fb.result != NULL) {
-                if (fa.result == NULL || fb.result == NULL) return false;
-                if (fa.result->len != fb.result->len) return false;
+            if (mismatch(fa.result, fb.result)) return false;
 
+            if (!isempty(fa.result)) {
                 for (int i = 0; i < fa.result->len; i++) {
                     auto ga = ra->wrap(fa.result->at(i).gotype);
                     auto gb = rb->wrap(fb.result->at(i).gotype);
@@ -2805,9 +2824,10 @@ List<Find_Decl> *Go_Indexer::find_implementations(Goresult *target) {
     auto ctx = target->ctx;
 
     // ctx for these is target->ctx
-    auto methods = alloc_list<Godecl*>();
-    For (*target->decl->gotype->interface_specs)
-        methods->append(it.field);
+    auto methods = alloc_list<Goresult>();
+    if (!list_interface_methods(target->wrap(target->decl->gotype), methods))
+        return NULL;
+    // For (*target->decl->gotype->interface_specs) methods->append(it.field);
 
     struct Type_Info {
         bool *methods_matched;
@@ -2863,14 +2883,17 @@ List<Find_Decl> *Go_Indexer::find_implementations(Goresult *target) {
                 if (recv->type != GOTYPE_ID) continue;
 
                 auto type_name = our_sprintf("%s:%s", import_path, recv->id_name);
+                if (streq(recv->id_name, "Cocks"))
+                    print("break here");
 
                 auto method_name = it.name;
 
                 for (int i = 0; i < methods->len; i++) {
                     auto &it = methods->at(i);
 
-                    if (!streq(it->name, method_name)) continue;
-                    if (!are_gotypes_equal(make_goresult(it->gotype, target->ctx), make_goresult(gotype, ctx))) continue;
+                    if (!streq(it.decl->name, method_name)) continue;
+                    if (!are_gotypes_equal(it.wrap(it.decl->gotype), make_goresult(gotype, ctx)))
+                        continue; // break here
 
                     auto type_info = get_type_info(type_name);
                     type_info->methods_matched[i] = true;
@@ -2892,6 +2915,9 @@ List<Find_Decl> *Go_Indexer::find_implementations(Goresult *target) {
     auto ret = alloc_list<Find_Decl>();
 
     auto entries = huge_table.entries();
+
+    auto ent = huge_table.get("github.com/gin-gonic/gin:Cocks");
+
     for (int i = 0; i < entries->len; i++) {
         auto &it = entries->at(i);
         auto info = it->value;
@@ -4759,6 +4785,8 @@ void Go_Indexer::actually_list_dotprops(Goresult *type_res, Goresult *resolved_t
                     auto embedded_type = it.field->gotype;
                     auto res = resolve_type(embedded_type, resolved_type_res->ctx);
                     if (res == NULL) continue;
+                    if (res->gotype->type != resolved_type->type) continue; // this is technically an error, should we surface it here?
+
                     actually_list_dotprops(resolved_type_res->wrap(embedded_type), res, ret);
                 }
 
@@ -6163,6 +6191,31 @@ Goresult *make_goresult_from_pointer(void *ptr, Go_Ctx *ctx) {
 Goresult *make_goresult(Gotype *gotype, Go_Ctx *ctx) { return make_goresult_from_pointer(gotype, ctx); }
 Goresult *make_goresult(Godecl *decl, Go_Ctx *ctx) { return make_goresult_from_pointer(decl, ctx); }
 
+// resolves a GOTYPE_ID or GOTYPE_SEL to the decl it points to.
+Goresult *Go_Indexer::resolve_type_to_decl(Gotype *type, Go_Ctx *ctx) {
+    Goresult *res = NULL;
+
+    switch (type->type) {
+    case GOTYPE_ID:
+        res = find_decl_of_id(type->id_name, type->id_pos, ctx);
+        break;
+
+    case GOTYPE_SEL:
+        {
+            auto import_path = find_import_path_referred_to_by_id(type->sel_name, ctx);
+            if (import_path == NULL) return NULL;
+
+            res = find_decl_in_package(type->sel_sel, import_path);
+            break;
+        }
+    }
+
+    if (res == NULL) return NULL;
+    if (res->decl->type != GODECL_TYPE) return NULL;
+
+    return res;
+}
+
 Goresult *Go_Indexer::resolve_type(Gotype *type, Go_Ctx *ctx) {
     if (type == NULL) return NULL;
 
@@ -6185,22 +6238,10 @@ Goresult *Go_Indexer::resolve_type(Gotype *type, Go_Ctx *ctx) {
         break;
 
     case GOTYPE_ID:
-        {
-            auto res = find_decl_of_id(type->id_name, type->id_pos, ctx);
-            if (res == NULL) return NULL;
-            if (res->decl->type != GODECL_TYPE) return NULL;
-            return resolve_type(res->decl->gotype, res->ctx);
-        }
-
     case GOTYPE_SEL:
         {
-            auto import_path = find_import_path_referred_to_by_id(type->sel_name, ctx);
-            if (import_path == NULL) return NULL;
-
-            auto res = find_decl_in_package(type->sel_sel, import_path);
+            auto res = resolve_type_to_decl(type, ctx);
             if (res == NULL) return NULL;
-            if (res->decl->type != GODECL_TYPE) return NULL;
-
             return resolve_type(res->decl->gotype, res->ctx);
         }
     }

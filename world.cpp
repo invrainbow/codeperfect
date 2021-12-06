@@ -2375,7 +2375,11 @@ void do_generate_implementation() {
         return tr.finish();
     };
 
+    bool error = false;
+
     For (*methods_to_add) {
+        auto method_ctx = it.ctx;
+
         auto gotype = it.decl->gotype;
         if (gotype == NULL) continue;
         if (gotype->type != GOTYPE_FUNC) continue;
@@ -2395,7 +2399,14 @@ void do_generate_implementation() {
                 first = false;
             else
                 rend.write(", ");
-            rend.write("%s %s", it.name, render_type(src->wrap(it.gotype), it.name));
+
+            auto typestr = render_type(make_goresult(it.gotype, method_ctx), it.name);
+            if (typestr == NULL) {
+                error = true;
+                goto done_writing;
+            }
+
+            rend.write("%s %s", it.name, typestr);
         }
 
         rend.write(") ");
@@ -2409,13 +2420,27 @@ void do_generate_implementation() {
                     first = false;
                 else
                     rend.write(", ");
-                rend.write("%s", render_type(src->wrap(it.gotype), it.name));
+
+                auto typestr = render_type(make_goresult(it.gotype, method_ctx), it.name);
+                if (typestr == NULL) {
+                    error = true;
+                    goto done_writing;
+                }
+
+                rend.write("%s", typestr);
             }
 
             if (sig.result->len > 1) rend.write(")");
         }
 
         rend.write(" {\n\tpanic(\"not implemented\")\n}");
+    }
+
+done_writing:
+
+    if (error) {
+        // TODO: notify user of errors?
+        return;
     }
 
     auto s = rend.finish();

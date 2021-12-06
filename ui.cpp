@@ -129,6 +129,18 @@ namespace ImGui {
             OpenPopupEx(id, popup_flags);
         return BeginPopupEx(id, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoSavedSettings);
     }
+
+    bool OurBeginPopupContextWindow(const char* str_id, ImGuiPopupFlags popup_flags = 1) {
+        ImGuiWindow* window = GImGui->CurrentWindow;
+        if (!str_id)
+            str_id = "window_context";
+        ImGuiID id = window->GetID(str_id);
+        int mouse_button = (popup_flags & ImGuiPopupFlags_MouseButtonMask_);
+        if (IsMouseReleased(mouse_button) && IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup))
+            if (!(popup_flags & ImGuiPopupFlags_NoOpenOverItems) || !IsAnyItemHovered())
+                OpenPopupEx(id, popup_flags);
+        return BeginPopupEx(id, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoSavedSettings);
+    }
 }
 
 ccstr get_key_name(int key) {
@@ -2844,10 +2856,17 @@ void UI::draw_everything() {
             }
         } ImGui::EndChild();
 
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 4));
-        ImGui::BeginChild("child3", ImVec2(0,0), true);
-        ImGui::PopStyleVar();
-        {
+        auto begin_directory_child = [&]() {
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 4));
+            ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0);
+            defer { ImGui::PopStyleVar(2); };
+
+            ImGui::BeginChild("child3", ImVec2(0,0), true);
+        };
+
+        bool menu_handled = false;
+
+        begin_directory_child(); {
             SCOPED_FRAME();
 
             fn<void(FT_Node*)> draw = [&](auto it) {
@@ -2899,6 +2918,8 @@ void UI::draw_everything() {
                 }
 
                 if (ImGui::OurBeginPopupContextItem(NULL)) {
+                    menu_handled = true;
+
                     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, old_item_spacing);
 
                     // wnd.selection = it;
@@ -3020,9 +3041,24 @@ void UI::draw_everything() {
 
             for (auto child = world.file_tree->children; child != NULL; child = child->next)
                 draw(child);
-        }
-        ImGui::EndChild();
-        // ImGui::PopStyleVar();
+
+            if (ImGui::OurBeginPopupContextWindow("file_explorer_context_menu")) {
+                {
+                    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, old_item_spacing);
+                    defer { ImGui::PopStyleVar(); };
+
+                    if (ImGui::Selectable("Add new file...")) {
+                        open_add_file_or_folder(false);
+                    }
+
+                    if (ImGui::Selectable("Add new folder...")) {
+                        open_add_file_or_folder(true);
+                    }
+                }
+                ImGui::EndPopup();
+            }
+
+        } ImGui::EndChild();
 
         if (wnd.focused) {
             auto mods = imgui_get_keymods();
@@ -3141,7 +3177,8 @@ void UI::draw_everything() {
 
             auto begin_left_pane_child = [&]() {
                 ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-                defer { ImGui::PopStyleVar(); };
+                ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0);
+                defer { ImGui::PopStyleVar(2); };
 
                 ImGui::BeginChild("left_pane_child", ImVec2(200, 300), true, ImGuiWindowFlags_AlwaysUseWindowPadding);
             };
@@ -3180,7 +3217,8 @@ void UI::draw_everything() {
                 }
 
                 ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 4));
-                defer { ImGui::PopStyleVar(); };
+                ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0);
+                defer { ImGui::PopStyleVar(2); };
 
                 auto h = ImGui::GetContentRegionAvail().y - height;
 
