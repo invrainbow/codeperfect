@@ -64,7 +64,9 @@
   }
 
   code {
-    @apply rounded-md px-1.5 py-0.5 bg-gray-100 text-gray-600;
+    background: #eef2ee;
+    color: #383;
+    @apply rounded-md px-1.5 py-0.5;
     margin-bottom: 1px;
     display: inline-block;
   }

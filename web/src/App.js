@@ -433,6 +433,33 @@ function PricingPoint({ label, not }) {
   );
 }
 
+function Card({ children, ...props }) {
+  return (
+    <div className="border border-gray-300 rounded mt-4" {...props}>
+      {children}
+    </div>
+  );
+}
+
+function CardSection({ children, step, ...props }) {
+  return (
+    <div
+      className="p-6 border-b border-gray-300 last:border-0 flex space-x-6"
+      {...props}
+    >
+      <div
+        className={cx(
+          "w-6 h-6 rounded-full text-gray-500 flex items-center justify-center",
+          "bg-gray-200 text-sm"
+        )}
+      >
+        <span>{step}</span>
+      </div>
+      <div className="flex-1">{children}</div>
+    </div>
+  );
+}
+
 function AutoInstall() {
   const code = getCode();
   const data = useAuthWeb(code);
@@ -446,23 +473,27 @@ function AutoInstall() {
   return (
     <WallOfText>
       <Title>Install</Title>
-      <div className="p-6 border border-gray-300 rounded mt-4">
-        <div>
-          Make sure Go (version 1.13 or higher) is installed. Then paste this
-          into a terminal:
-        </div>
-        <div className="mt-4">
-          <Snippet text={`curl -s ${installLink} | bash`} />
-        </div>
-        <p>
+      <Card>
+        <CardSection step={1}>
+          Install Go (version 1.13+). If you don't have it, we recommend
+          installing <A href="https://brew.sh/">Homebrew</A>, then running{" "}
+          <code>brew install go</code>.
+        </CardSection>
+        <CardSection step={2}>
+          <div>Paste this into a terminal:</div>
+          <div className="mt-4">
+            <Snippet text={`curl -s "${installLink}" | bash`} />
+          </div>
+        </CardSection>
+        <CardSection step={3}>
           That's it! See{" "}
           <A href="https://docs.codeperfect95.com/overview/getting-started/">
             Getting Started
           </A>{" "}
           to start using CodePerfect.
-        </p>
-      </div>
-      <div className="flex justify-between mt-3">
+        </CardSection>
+      </Card>
+      <div className="flex justify-between mt-4">
         <A className="font-semibold no-underline" href={installLink}>
           <Icon icon={AiFillCode} /> View install script
         </A>
@@ -505,7 +536,15 @@ function CopyButton({ text }) {
 
 function Snippet({ text }) {
   return (
-    <pre className="text-left rounded-md p-3 bg-gray-100 my-4 border-0 relative overflow-auto">
+    <pre
+      className="text-left rounded-md p-3 bg-gray-100 border-0 relative overflow-auto"
+      style={{
+        "border-radius": "8px",
+        background: "#eef2ee",
+        color: "#383",
+        padding: "0.75rem",
+      }}
+    >
       <CopyButton text={text} />
       {text}
     </pre>
@@ -598,49 +637,62 @@ function ManualInstall() {
   return (
     <WallOfText>
       <Title>Manual Install</Title>
-      <p>Install Go (version 1.13+ or higher).</p>
-      <p>Download the appropriate package for your machine:</p>
-      <p className="flex space-x-2">
-        <button
-          className="main-button download-button"
-          onClick={() => onDownload("darwin")}
-        >
-          <Icon icon={FaApple} /> Mac &ndash; Intel
-        </button>
-        <button
-          className="main-button download-button"
-          onClick={() => onDownload("darwin_arm")}
-        >
-          <Icon icon={FaApple} /> Mac &ndash; M1
-        </button>
-      </p>
-      <p>Unzip CodePerfect.app into your Applications folder.</p>
-
-      <p>
-        Here's your license key; copy it into <code>~/.cplicense</code>:
-      </p>
-      <div className="mt-4">
-        <Snippet
-          text={`{\n  "email": "${data.email}",\n  "key": "${data.license_key}"\n}`}
-        />
-      </div>
-      <p>
-        CodePerfect needs to know where to find various things. Create a
-        <code>~/.cpconfig</code> file:
-      </p>
-      <div className="mt-4">
-        <Snippet
-          text={`{
+      <Card>
+        <CardSection step={1}>
+          Install Go (version 1.13+). If you don't have it, we recommend
+          installing <A href="https://brew.sh/">Homebrew</A>, then running{" "}
+          <code>brew install go</code>.
+        </CardSection>
+        <CardSection step={2}>
+          Download the appropriate package for your machine:
+          <p className="flex space-x-2">
+            <button
+              className="main-button download-button"
+              onClick={() => onDownload("darwin")}
+            >
+              <Icon icon={FaApple} /> Mac &ndash; Intel
+            </button>
+            <button
+              className="main-button download-button"
+              onClick={() => onDownload("darwin_arm")}
+            >
+              <Icon icon={FaApple} /> Mac &ndash; M1
+            </button>
+          </p>
+        </CardSection>
+        <CardSection step={3}>
+          Copy your license key into <code>~/.cplicense</code>:
+          <div className="mt-4">
+            <Snippet
+              text={`{\n  "email": "${data.email}",\n  "key": "${data.license_key}"\n}`}
+            />
+          </div>
+        </CardSection>
+        <CardSection step={4}>
+          CodePerfect needs to know where to find various things. Create a
+          <code>~/.cpconfig</code> file:
+          <div className="mt-4">
+            <Snippet
+              text={`{
   "go_binary_path": "...",
   "goroot": "...",
   "gomodcache": "..."
 }`}
-        />
-      </div>
-      <p>
-        Fill these in with the values of <code>which go</code>,{" "}
-        <code>go env GOROOT</code>, and <code>go env GOMODCACHE</code>.
-      </p>
+            />
+          </div>
+          <p>
+            Fill these in with the values of <code>which go</code>,{" "}
+            <code>go env GOROOT</code>, and <code>go env GOMODCACHE</code>.
+          </p>
+        </CardSection>
+        <CardSection step={5}>
+          That's it! See{" "}
+          <A href="https://docs.codeperfect95.com/overview/getting-started/">
+            Getting Started
+          </A>{" "}
+          to start using CodePerfect.
+        </CardSection>
+      </Card>
       <p>
         <Link to={`/install?code=${code}`} className="font-bold no-underline">
           <Icon icon={HiArrowNarrowLeft} /> Use install script

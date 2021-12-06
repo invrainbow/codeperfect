@@ -124,7 +124,7 @@ if [[ -z "$(which go)" ]]; then
 fi
 
 OS_NAME=darwin
-if [ "$(sysctl -n machdep.cpu.brand_string)" = "Apple M1" ]; then
+if [[ "$(sysctl -n machdep.cpu.brand_string)" == "Apple M1"* ]]; then
     OS_NAME=darwin_arm
 fi
 
