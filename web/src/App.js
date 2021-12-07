@@ -444,18 +444,18 @@ function Card({ children, ...props }) {
 function CardSection({ children, step, ...props }) {
   return (
     <div
-      className="p-6 border-b border-gray-300 last:border-0 flex space-x-6"
+      className="p-6 border-b border-gray-300 last:border-0 relative"
       {...props}
     >
       <div
         className={cx(
           "w-6 h-6 rounded-full text-gray-500 flex items-center justify-center",
-          "bg-gray-200 text-sm"
+          "bg-gray-200 text-sm absolute left-5 top-6"
         )}
       >
         <span>{step}</span>
       </div>
-      <div className="flex-1">{children}</div>
+      <div className="ml-10">{children}</div>
     </div>
   );
 }
@@ -537,7 +537,7 @@ function CopyButton({ text }) {
 function Snippet({ text }) {
   return (
     <pre
-      className="text-left rounded-md p-3 bg-gray-100 border-0 relative overflow-auto"
+      className="text-left border-0 relative overflow-auto"
       style={{
         "border-radius": "8px",
         background: "#eef2ee",
