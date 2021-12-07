@@ -536,18 +536,22 @@ function CopyButton({ text }) {
 
 function Snippet({ text }) {
   return (
-    <pre
-      className="text-left border-0 relative overflow-auto"
-      style={{
-        "border-radius": "8px",
-        background: "#eef2ee",
-        color: "#383",
-        padding: "0.75rem",
-      }}
-    >
-      <CopyButton text={text} />
-      {text}
-    </pre>
+    <div className="relative">
+      <pre
+        className="relative text-left border-0 overflow-auto"
+        style={{
+          "border-radius": "8px",
+          background: "#eef2ee",
+          color: "#383",
+          padding: "0.75rem",
+        }}
+      >
+        {text}
+      </pre>
+      <div className="absolute right-0 top-0">
+        <CopyButton text={text} />
+      </div>
+    </div>
   );
 }
 
