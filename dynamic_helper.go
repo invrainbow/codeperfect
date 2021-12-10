@@ -37,7 +37,7 @@ func CheckGoVersion(tag string) bool {
 }
 
 func main() {
-	versionOk := CheckGoVersion("go1.16")
+	versionOk := CheckGoVersion("go1.13")
 	Write(versionOk)
 	if !versionOk {
 		return

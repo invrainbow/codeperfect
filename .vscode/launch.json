@@ -9,9 +9,9 @@
             "args": [
                 // "/Users/brandon/kubernetes"
                 // "/Users/brandon/cpcast"
-                // "/Users/brandon/ide/gostuff"
+                "/Users/brandon/ide/gostuff"
                 // "/Users/brandon/sr"
-                "/Users/brandon/gin"
+                // "/Users/brandon/gin"
             ],
             "cwd": "${workspaceFolder}/build/bin",
             "expressions": "native"

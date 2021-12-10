@@ -720,15 +720,12 @@ void filter_files() {
 
     // t.log("matching");
 
-    auto scores = alloc_array(double, wnd.filepaths->len);
-    For (*wnd.filtered_results)
-        scores[it] = fzy_match(wnd.query, wnd.filepaths->at(it));
-
-    wnd.filtered_results->sort([&](int *pa, int *pb) {
-        auto a = scores[*pa];
-        auto b = scores[*pa];
-        return a < b ? 1 : (a > b ? -1 : 0);  // reverse
-    });
+    fuzzy_sort_filtered_results(
+        wnd.query,
+        wnd.filtered_results,
+        wnd.filepaths->len,
+        [&](auto i) { return wnd.filepaths->at(i); }
+    );
 
     // t.log("scoring");
 }
@@ -750,15 +747,12 @@ void filter_symbols() {
 
     // t.log("matching");
 
-    auto scores = alloc_array(double, wnd.symbols->len);
-    For (*wnd.filtered_results)
-        scores[it] = fzy_match(wnd.query, wnd.symbols->at(it).full_name());
-
-    wnd.filtered_results->sort([&](int *pa, int *pb) {
-        auto a = scores[*pa];
-        auto b = scores[*pb];
-        return a < b ? 1 : (a > b ? -1 : 0);  // reverse
-    });
+    fuzzy_sort_filtered_results(
+        wnd.query,
+        wnd.filtered_results,
+        wnd.symbols->len,
+        [&](auto i) { return wnd.symbols->at(i).full_name(); }
+    );
 
     // t.log("scoring");
 }
@@ -869,14 +863,16 @@ void save_all_unsaved_files() {
     }
 }
 
-void delete_ft_node(FT_Node *it) {
-    SCOPED_FRAME();
-    auto rel_path = ft_node_to_path(it);
-    auto full_path = path_join(world.current_path, rel_path);
-    if (it->is_directory)
-        delete_rm_rf(full_path);
-    else
-        delete_file(full_path);
+void delete_ft_node(FT_Node *it, bool delete_on_disk) {
+    if (delete_on_disk) {
+        SCOPED_FRAME();
+        auto rel_path = ft_node_to_path(it);
+        auto full_path = path_join(world.current_path, rel_path);
+        if (it->is_directory)
+            delete_rm_rf(full_path);
+        else
+            delete_file(full_path);
+    }
 
     // delete `it` from file tree
     if (it->parent != NULL && it->parent->children == it)
@@ -1087,6 +1083,19 @@ void reload_file_subtree(ccstr relpath) {
     auto path = path_join(world.current_path, relpath);
     if (is_ignored_by_git(path))
         return;
+
+    switch (check_path(path)) {
+    case CPR_DIRECTORY:
+        break;
+    case CPR_NONEXISTENT: {
+        auto node = find_ft_node(relpath);
+        if (node != NULL)
+            delete_ft_node(node, false);
+        return;
+    }
+    case CPR_FILE:
+        return;
+    }
 
     auto node = find_or_create_ft_node(relpath, true);
     if (node == NULL) return;
@@ -2162,7 +2171,6 @@ void open_add_file_or_folder(bool folder, FT_Node *dest) {
     if (!wnd.location_is_root)
         strcpy_safe(wnd.location, _countof(wnd.location), ft_node_to_path(node));
 
-    wnd.dest = node;
     wnd.folder = folder;
     wnd.show = true;
     wnd.name[0] = '\0';

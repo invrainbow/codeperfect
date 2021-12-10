@@ -3583,7 +3583,7 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 p
         }
 
         return WALK_CONTINUE;
-    });
+    }, true);
 
     t.log("find declaration");
 
@@ -4910,7 +4910,7 @@ void Go_Indexer::init() {
     gohelper_dynamic.init(our_sprintf("%s run dynamic_helper.go", world.go_binary_path), current_exe_path);
     auto resp = gohelper_dynamic.readline();
     if (!streq(resp, "true")) {
-        our_panic(our_sprintf("Please make sure Go version 1.16+ is installed and accessible through your PATH, resp = %s", resp));
+        our_panic(our_sprintf("Please make sure Go version 1.13+ is installed and accessible through your PATH, resp = %s", resp));
     }
 
     auto copystr = [&](ccstr s) {

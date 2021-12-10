@@ -87,7 +87,7 @@ ccstr our_basename(ccstr path) {
     return (ccstr)ret;
 #elif OS_MAC
     auto ret = our_strcpy(path);
-    return basename((char*)our_strcpy(ret));
+    return our_strcpy(basename((char*)ret));
 #endif
 }
 

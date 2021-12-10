@@ -17,6 +17,7 @@
 #include "mem.hpp"
 #include "settings.hpp"
 #include "search.hpp"
+#include "fzy_match.h"
 
 #define RELEASE_BUILD 0
 
@@ -470,7 +471,7 @@ struct World {
         char location[MAX_PATH];
         bool location_is_root;
         bool folder;
-        FT_Node *dest;
+        // FT_Node *dest;
     } wnd_add_file_or_folder;
 
     struct Wnd_Rename_File_or_Folder : Wnd {
@@ -543,7 +544,7 @@ void add_ft_node(FT_Node *parent, fn<void(FT_Node* it)> cb);
 int compare_ft_nodes(FT_Node *a, FT_Node *b);
 FT_Node *find_ft_node(ccstr relpath);
 FT_Node *find_or_create_ft_node(ccstr relpath, bool is_directory);
-void delete_ft_node(FT_Node *it);
+void delete_ft_node(FT_Node *it, bool delete_on_disk = true);
 ccstr ft_node_to_path(FT_Node *node);
 
 bool is_ignored_by_git(ccstr path, bool isdir);
@@ -588,3 +589,24 @@ void handle_command(Command action, bool from_menu);
 void open_add_file_or_folder(bool folder, FT_Node *dest = NULL);
 void do_generate_implementation();
 bool has_unsaved_files();
+
+template<typename T>
+void fuzzy_sort_filtered_results(ccstr query, T *list, int total_results, fn<ccstr(int)> get_name) {
+    auto scores = alloc_array(double, total_results);
+    For (*list)
+        scores[it] = fzy_match(query, get_name(it));
+
+    list->sort([&](auto pa, auto pb) {
+        auto a = scores[*pa];
+        auto b = scores[*pb];
+
+        if (a == b) {
+            auto alen = strlen(get_name(*pa));
+            auto blen = strlen(get_name(*pb));
+            return alen < blen ? -1 : (alen > blen ? 1 : 0);
+        }
+
+        return a < b ? 1 : -1;
+    });
+}
+

@@ -8,10 +8,10 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"strings"
 	"unsafe"
 
 	"github.com/denormal/go-gitignore"
-	"github.com/google/shlex"
 	"github.com/invrainbow/codeperfect/gostuff/versions"
 	"github.com/reviewdog/errorformat"
 	"golang.org/x/tools/imports"
@@ -72,22 +72,15 @@ var LastError error
 func GHStartBuild(cmdstr *C.char) bool {
 	stopBuild()
 
-	parts, err := shlex.Split(C.GoString(cmdstr))
-	if err != nil {
-		LastError = err
-		return false
-	}
-
-	if len(parts) == 0 {
+	s := strings.TrimSpace(C.GoString(cmdstr))
+	if len(s) == 0 {
 		LastError = fmt.Errorf("Build command was empty.")
 		return false
 	}
 
-	cmd := exec.Command(parts[0], parts[1:]...)
-
 	currentBuild = &GoBuild{}
 	currentBuild.done = false
-	currentBuild.cmd = cmd
+	currentBuild.cmd = exec.Command("/bin/bash", "-i", "-c", s)
 
 	go func(b *GoBuild) {
 		out, err := b.cmd.CombinedOutput()

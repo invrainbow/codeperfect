@@ -2353,9 +2353,10 @@ void UI::draw_everything() {
         }
 
         if (ImGui::IsItemEdited()) {
-            if (strlen(wnd.query) >= 2) {
-                wnd.filtered_results->len = 0;
+            wnd.filtered_results->len = 0;
+            wnd.selection = 0;
 
+            if (strlen(wnd.query) >= 2) {
                 u32 i = 0;
                 For (*wnd.symbols) {
                     if (fzy_has_match(wnd.query, it.name))
@@ -2363,22 +2364,13 @@ void UI::draw_everything() {
                     i++;
                 }
 
-                auto scores = alloc_array(double, wnd.symbols->len);
-
-                For (*wnd.filtered_results) {
-                    scores[it] = fzy_match(wnd.query, wnd.symbols->at(it).name);
-                }
-
-                wnd.filtered_results->sort([&](int *pa, int *pb) {
-                    auto a = scores[*pa];
-                    auto b = scores[*pb];
-                    return a < b ? 1 : (a > b ? -1 : 0);  // reverse
-                });
-            } else {
-                wnd.filtered_results->len = 0;
+                fuzzy_sort_filtered_results(
+                    wnd.query,
+                    wnd.filtered_results,
+                    wnd.symbols->len,
+                    [&](auto i) { return wnd.symbols->at(i).name; }
+                );
             }
-
-            wnd.selection = 0;
         }
 
         {
@@ -2795,19 +2787,26 @@ void UI::draw_everything() {
         if (entered) {
             wnd.show = false;
 
-            if (strlen(wnd.name) > 0) {
+            do {
+                if (strlen(wnd.name) == 0) break;
+
                 auto dest = wnd.location_is_root ? world.current_path : path_join(world.current_path, wnd.location);
                 auto path = path_join(dest, wnd.name);
 
                 auto ok = wnd.folder ? create_directory(path) : touch_file(path);
-                if (ok) {
-                    auto dest = wnd.location_is_root ? world.file_tree : wnd.dest;
-                    add_ft_node(dest, [&](auto child) {
-                        child->is_directory = wnd.folder;
-                        child->name = our_strcpy(wnd.name);
-                    });
+                if (!ok) break;
+
+                auto destnode = wnd.location_is_root ? world.file_tree : find_ft_node(wnd.location);
+                add_ft_node(destnode, [&](auto child) {
+                    child->is_directory = wnd.folder;
+                    child->name = our_strcpy(wnd.name);
+                });
+
+                if (!wnd.folder) {
+                    focus_editor(path);
+                    ImGui::SetWindowFocus(NULL);
                 }
-            }
+            } while (0);
         }
 
         ImGui::End();
@@ -3042,7 +3041,7 @@ void UI::draw_everything() {
             for (auto child = world.file_tree->children; child != NULL; child = child->next)
                 draw(child);
 
-            if (ImGui::OurBeginPopupContextWindow("file_explorer_context_menu")) {
+            if (!menu_handled && ImGui::OurBeginPopupContextWindow("file_explorer_context_menu")) {
                 {
                     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, old_item_spacing);
                     defer { ImGui::PopStyleVar(); };
@@ -3649,15 +3648,12 @@ void UI::draw_everything() {
                     if (fzy_has_match(wnd.query, get_command_name(it)))
                         wnd.filtered_results->append(it);
 
-                auto scores = alloc_array(double, _CMD_COUNT_);
-                For (*wnd.filtered_results)
-                    scores[it] = fzy_match(wnd.query, get_command_name(it));
-
-                wnd.filtered_results->sort([&](Command *pa, Command *pb) {
-                    auto a = scores[*pa];
-                    auto b = scores[*pb];
-                    return a < b ? 1 : (a > b ? -1 : 0); // reverse
-                });
+                fuzzy_sort_filtered_results(
+                    wnd.query,
+                    wnd.filtered_results,
+                    _CMD_COUNT_,
+                    [&](int i) { return get_command_name((Command)i); }
+                );
             }
         }
 
