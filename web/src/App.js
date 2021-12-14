@@ -475,17 +475,17 @@ function AutoInstall() {
       <Title>Install</Title>
       <Card>
         <CardSection step={1}>
-          Install Go (version 1.13+). If you don't have it, we recommend
-          installing <A href="https://brew.sh/">Homebrew</A>, then running{" "}
-          <code>brew install go</code>.
-        </CardSection>
-        <CardSection step={2}>
           <div>Paste this into a terminal:</div>
-          <div className="mt-4">
+          <div className="my-4">
             <Snippet text={`curl -s "${installLink}" | bash`} />
           </div>
+          <div className="text-xs text-gray-400">
+            If Go isn't intalled, it will offer to install it with Homebrew. If
+            you don't have Homebrew, it will offer to install that. You can also
+            decline and install Go (1.13+) yourself if you prefer.
+          </div>
         </CardSection>
-        <CardSection step={3}>
+        <CardSection step={2}>
           That's it! See{" "}
           <A href="https://docs.codeperfect95.com/overview/getting-started/">
             Getting Started
@@ -536,7 +536,7 @@ function CopyButton({ text }) {
 
 function Snippet({ text }) {
   return (
-    <div className="relative">
+    <div className="relative group">
       <pre
         className="relative text-left border-0 overflow-auto"
         style={{
@@ -548,7 +548,7 @@ function Snippet({ text }) {
       >
         {text}
       </pre>
-      <div className="absolute right-0 top-0">
+      <div className="absolute right-0 top-0 opacity-0 group-hover:opacity-100 transition-opacity">
         <CopyButton text={text} />
       </div>
     </div>
