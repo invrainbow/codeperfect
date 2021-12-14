@@ -1261,7 +1261,7 @@ bool Editor::trigger_escape(cur2 go_here_after) {
 
         {
             // skip next update from nvim
-            nvim_insert.skip_changedticks_until = nvim_data.changedtick + nvim_insert.other_changes.len + 1;
+            skip_next_nvim_update(nvim_insert.other_changes.len + 1);
 
             auto start = nvim_insert.start;
             auto old_end = nvim_insert.old_end;
@@ -1666,6 +1666,8 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
         auto prefix = autocomplete.ac.prefix;
         auto results = autocomplete.ac.results;
 
+        bool prefix_is_empty = strlen(prefix) == 0;
+
         autocomplete.filtered_results->len = 0;
 
         Timer t;
@@ -1689,6 +1691,7 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
             AC_Result_Type result_type;
             bool is_struct_literal;
             double import_score;
+            int str_length;
         };
 
         auto compare_scores = [&](Score *a, Score *b) -> int {
@@ -1705,13 +1708,17 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
             if (a->is_struct_literal != b->is_struct_literal)
                 return a->is_struct_literal ? 1 : -1;
 
-            if (a->fzy_score != b->fzy_score)
+            if (a->fzy_score != b->fzy_score && !prefix_is_empty)
                 return a->fzy_score > b->fzy_score ? 1 : -1;
 
             if (a->result_type == ACR_IMPORT && b->result_type == ACR_IMPORT)
                 if (a->import_score != b->import_score)
                     return a > b ? 1 : -1;
 
+            if (a->str_length < b->str_length)
+                return 1;
+            if (a->str_length > b->str_length)
+                return -1;
             return 0;
         };
 
@@ -1727,6 +1734,7 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
 
                 score.fzy_score = fzy_match(prefix, result.name);
                 score.result_type = result.type;
+                score.str_length = strlen(result.name);
 
                 if (result.type == ACR_DECLARATION)
                     if (result.declaration_is_struct_literal_field)
@@ -1895,7 +1903,27 @@ curr_change.new_end_point = cur_to_tspoint(cur);
 */
 
 void Editor::type_char_in_insert_mode(char ch) {
-    type_char(ch);
+    bool already_typed = false;
+
+    // handle typing a dot when an import is selected
+    do {
+        if (ch != '.') break;
+
+        if (autocomplete.ac.results == NULL) break;
+        if (autocomplete.selection >= autocomplete.filtered_results->len) break;
+
+        auto idx = autocomplete.filtered_results->at(autocomplete.selection);
+        auto &result = autocomplete.ac.results->at(idx);
+        if (result.type != ACR_IMPORT) break;
+
+        // need a full match
+        if (!streq(autocomplete.ac.prefix, result.name)) break;
+
+        perform_autocomplete(&result);
+        already_typed = true;
+    } while (0);
+
+    if (!already_typed) type_char(ch);
 
     if (!is_go_file) return;
 
@@ -2067,8 +2095,8 @@ void Editor::type_char_in_insert_mode(char ch) {
 
         if (last_closed_autocomplete == c) break;
 
-        // don't open autocomplete before 3 chars
-        if (cur.x - c.x < 3) break;
+        // don't open autocomplete before 2 chars
+        if (cur.x - c.x < 2) break;
 
         did_autocomplete = true;
         trigger_autocomplete(false, false);
@@ -2246,6 +2274,32 @@ bool Editor::optimize_imports() {
         if (start != old_end)
             buf->remove(start, old_end);
         buf->insert(start, chars->items, chars->len);
+
+        {
+            auto c = cur;
+            if (c.y >= buf->lines.len) {
+                c.y = buf->lines.len-1;
+                c.x = buf->lines[c.y].len;
+            }
+            if (c.x > buf->lines[c.y].len)
+                c.x = buf->lines[cur.y].len;
+
+            move_cursor(c); // use raw_move_cursor()?
+        }
+
+        if (world.use_nvim) {
+            skip_next_nvim_update();
+
+            auto& nv = world.nvim;
+            nv.start_request_message("nvim_buf_set_lines", 5);
+            nv.writer.write_int(nvim_data.buf_id);
+            nv.writer.write_int(0);
+            nv.writer.write_int(-1);
+            nv.writer.write_bool(false);
+            nv.writer.write_array(buf->lines.len);
+            For (buf->lines) nv.write_line(&it);
+            nv.end_message();
+        }
     } while (0);
 
     return true;
@@ -2312,8 +2366,7 @@ void Editor::format_on_save(int fmt_type, bool write_to_nvim) {
         auto &nv = world.nvim;
         auto &writer = nv.writer;
 
-        // skip next update from nvim
-        nvim_insert.skip_changedticks_until = nvim_data.changedtick + 1;
+        skip_next_nvim_update();
 
         auto msgid = nv.start_request_message("nvim_buf_set_lines", 5);
         auto req = nv.save_request(NVIM_REQ_POST_SAVE_SETLINES, msgid, id);
@@ -2327,6 +2380,14 @@ void Editor::format_on_save(int fmt_type, bool write_to_nvim) {
         writer.write_array(buf->lines.len);
         For (buf->lines) nv.write_line(&it);
         nv.end_message();
+    }
+}
+
+void Editor::skip_next_nvim_update(int n) {
+    if (nvim_insert.skip_changedticks_until > nvim_data.changedtick) {
+        nvim_insert.skip_changedticks_until += n;
+    } else {
+        nvim_insert.skip_changedticks_until = nvim_data.changedtick + n;
     }
 }
 
@@ -2417,7 +2478,7 @@ void Editor::handle_save(bool about_to_close) {
 }
 
 bool Editor::ask_user_about_unsaved_changes() {
-    if (!buf->dirty) return true;
+    if (!is_unsaved()) return true;
 
     auto title = "Your changes will be lost if you don't.";
     auto filename  = is_untitled ? "(untitled)" : our_basename(filepath);

@@ -11,3 +11,4 @@ stb_*
 *.svg
 docs
 meow_hash_x64_aesni.h
+Icons*.h

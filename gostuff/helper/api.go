@@ -62,7 +62,6 @@ func CallServer(endpoint string, license *License, params interface{}, out inter
 	fmt.Printf("body: %s\n", body)
 
 	if resp.StatusCode != http.StatusOK {
-
 		var errResp models.ErrorResponse
 		if err := json.Unmarshal(body, &errResp); err != nil {
 			return err

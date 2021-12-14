@@ -314,6 +314,19 @@ func AuthAndUpdate() {
 		return
 	}
 
+	runHeartbeat := func(license *License, sessionID uint) {
+		for {
+			req := &models.HeartbeatRequest{
+				SessionID: sessionID,
+			}
+			var resp models.HeartbeatResponse
+			CallServer("heartbeat", license, req, &resp)
+			time.Sleep(time.Minute)
+		}
+	}
+
+	go runHeartbeat(license, resp.SessionID)
+
 	// after a successful auth call, update tolsa
 	timepath, err := getTolsaPath()
 	if err != nil {

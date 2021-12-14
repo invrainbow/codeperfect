@@ -29,7 +29,8 @@ const int GO_INDEX_MAGIC_NUMBER = 0x49fa98;
 // version 19: fix Go_File::read()/write() not saving Go_Reference
 // version 20: fix Go_Reference not using correct pool
 // version 21: remove array_size from Gotype
-const int GO_INDEX_VERSION = 21;
+// version 22: sort references
+const int GO_INDEX_VERSION = 22;
 
 void index_print(ccstr fmt, ...) {
     va_list args;
@@ -985,12 +986,14 @@ void Go_Indexer::background_thread() {
 
         switch (res) {
         case CPR_DIRECTORY:
-            start_writing();
+            if (status != IND_WRITING)
+                start_writing();
             if (is_go_package(filepath))
                 mark_package_for_reprocessing(import_path);
             break;
         case CPR_FILE:
-            start_writing();
+            if (status != IND_WRITING)
+                start_writing();
             if (is_go_package(our_dirname(filepath)))
                 mark_package_for_reprocessing(our_dirname(import_path));
             break;
@@ -1004,7 +1007,8 @@ void Go_Indexer::background_thread() {
 
                 pkg = find_package_in_index(our_dirname(import_path));
                 if (pkg != NULL) {
-                    start_writing();
+                    if (status != IND_WRITING)
+                        start_writing();
                     mark_package_for_reprocessing(pkg->import_path);
                 }
             }
@@ -1921,6 +1925,7 @@ void Go_Indexer::process_tree_into_gofile(
             case TS_PACKAGE_IDENTIFIER:
             case TS_TYPE_IDENTIFIER:
                 {
+                    /*
                     auto parent = it->parent();
                     if (!parent->null) {
                         if (parent->type() == TS_QUALIFIED_TYPE)
@@ -1928,6 +1933,7 @@ void Go_Indexer::process_tree_into_gofile(
                         if (parent->type() == TS_SELECTOR_EXPRESSION)
                             return WALK_SKIP_CHILDREN;
                     }
+                    */
 
                     Go_Reference ref;
                     ref.is_sel = false;
@@ -1983,6 +1989,7 @@ void Go_Indexer::process_tree_into_gofile(
                         file->references->append(ref.copy());
                     }
 
+                    /*
                     switch (x->type()) {
                     case TS_IDENTIFIER:
                     case TS_FIELD_IDENTIFIER:
@@ -1990,10 +1997,20 @@ void Go_Indexer::process_tree_into_gofile(
                     case TS_TYPE_IDENTIFIER:
                         return WALK_SKIP_CHILDREN;
                     }
+                    */
                     return WALK_CONTINUE;
                 }
             }
             return WALK_CONTINUE;
+        });
+
+        file->references->sort([&](auto pa, auto pb) {
+            auto a = pa->is_sel ? pa->sel_start : pa->start;
+            auto b = pb->is_sel ? pb->sel_start : pb->start;
+
+            if (a == b) return 0; // should this ever happen? no right?
+
+            return a < b ? -1 : 1;
         });
     }
 
@@ -3344,11 +3361,16 @@ List<Go_Import> *Go_Indexer::optimize_imports(ccstr filepath) {
     if (gofile->imports != NULL) {
         For (*gofile->imports) {
             auto package_name = get_import_package_name(&it);
-            if (package_name == NULL || !referenced_package_names.has(package_name))
-                continue;
+
+            // leave _ imports alone
+            if (it.package_name_type != GPN_BLANK)
+                if (package_name == NULL || !referenced_package_names.has(package_name))
+                    continue;
 
             ret->append(&it);
-            imported_package_names.add(package_name);
+
+            if (package_name != NULL)
+                imported_package_names.add(package_name);
         }
     }
 
@@ -3379,10 +3401,15 @@ ccstr Go_Indexer::find_best_import(ccstr package_name, List<ccstr> *identifiers)
     List<int> indexes; indexes.init();
 
     For (*index.packages) {
-        if (it.package_name != NULL && streq(it.package_name, package_name)) {
-            candidates.append(&it);
-            indexes.append(indexes.len);
-        }
+        if (it.package_name == NULL) continue;
+        if (!streq(it.package_name, package_name)) continue;
+
+        if (!path_has_descendant(index.current_import_path, it.import_path))
+            if (is_import_path_internal(it.import_path))
+                continue;
+
+        candidates.append(&it);
+        indexes.append(indexes.len);
     }
 
     if (candidates.len == 0) return NULL;
@@ -4317,19 +4344,9 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                 if (it.package_name == NULL) continue;
                 if (streq(it.import_path, ctx->import_path)) continue;
 
-                if (!path_has_descendant(index.current_import_path, it.import_path)) {
-                    auto parts = make_path(it.import_path)->parts;
-                    bool internal = false;
-
-                    For (*parts) {
-                        if (streq(it, "internal")) {
-                            internal = true;
-                            break;
-                        }
-                    }
-
-                    if (internal) continue;
-                }
+                if (!path_has_descendant(index.current_import_path, it.import_path))
+                    if (is_import_path_internal(it.import_path))
+                        continue;
 
                 auto res = ac_results->append();
                 res->name = it.package_name;
@@ -4458,6 +4475,14 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
     out->prefix = prefix;
 
     return true;
+}
+
+bool Go_Indexer::is_import_path_internal(ccstr import_path) {
+    auto parts = make_path(import_path)->parts;
+    For (*parts)
+        if (streq(it, "internal"))
+            return true;
+    return false;
 }
 
 bool Go_Indexer::check_if_still_in_parameter_hint(ccstr filepath, cur2 cur, cur2 hint_start) {

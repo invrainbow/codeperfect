@@ -1,6 +1,6 @@
 package versions
 
-const CurrentVersion = 3
+const CurrentVersion = 4
 
 type Version struct {
 	URL  string

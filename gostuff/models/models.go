@@ -22,4 +22,12 @@ type User struct {
 	TrialStartedAt time.Time
 }
 
+type Session struct {
+	gorm.Model
+	UserID          uint
+	StartedAt       time.Time
+	LastHeartbeatAt time.Time
+	Heartbeats      int
+}
+
 // users email license_key stripe_cus_id stripe_cus_status

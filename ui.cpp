@@ -7,8 +7,7 @@
 #include "go.hpp"
 #include "unicode.hpp"
 #include "settings.hpp"
-#include "IconsFontAwesome5.h"
-#include "IconsMaterialDesign.h"
+#include "icons.h"
 #include "fzy_match.h"
 
 #define _USE_MATH_DEFINES // what the fuck is this lol
@@ -41,21 +40,28 @@ void init_global_colors() {
     memcpy(&global_colors, _cpcolors, min(sizeof(global_colors), _cpcolors_len));
 }
 
-ccstr format_key(int mods, ccstr key) {
+ccstr format_key(int mods, ccstr key, bool icon) {
     List<ccstr> parts; parts.init();
 
-    if (mods & KEYMOD_CMD)   parts.append("Cmd");
-    if (mods & KEYMOD_SHIFT) parts.append("Shift");
+#ifndef OS_MAC
+    icon = false;
+#endif
+
+    if (mods & KEYMOD_CMD)   parts.append(icon ? ICON_MD_KEYBOARD_COMMAND_KEY : "Cmd");
+    if (mods & KEYMOD_SHIFT) parts.append(icon ? ICON_MD_ARROW_UPWARD : "Shift");
 #if OS_MAC
-    if (mods & KEYMOD_ALT)   parts.append("Option");
+    if (mods & KEYMOD_ALT)   parts.append(icon ? ICON_MD_KEYBOARD_OPTION_KEY : "Option");
 #else
     if (mods & KEYMOD_ALT)   parts.append("Alt");
 #endif
-    if (mods & KEYMOD_CTRL)  parts.append("Ctrl");
+    if (mods & KEYMOD_CTRL)  parts.append(icon ? ICON_MD_KEYBOARD_CONTROL_KEY : "Ctrl");
 
     Text_Renderer rend; rend.init();
     For (parts) {
-        rend.write("%s + ", it);
+        if (icon)
+            rend.write("%s", it);
+        else
+            rend.write("%s + ", it);
     }
     rend.write("%s", key);
     return rend.finish();
@@ -171,10 +177,13 @@ ccstr get_menu_command_key(Command cmd) {
     if (keyname == NULL) return NULL;
 
     auto s = alloc_list<char>();
-    for (int i = 0, len = strlen(keyname); i < len; i++)
-        s->append(toupper(keyname[i]));
+    for (int i = 0, len = strlen(keyname); i < len; i++) {
+        auto it = keyname[i];
+        if (i == 0) it = toupper(it);
+        s->append(it);
+    }
     s->append('\0');
-    return format_key(info.mods, s->items);
+    return format_key(info.mods, s->items, true);
 }
 
 bool menu_command(Command cmd, bool selected) {
@@ -454,7 +463,22 @@ bool UI::imgui_is_window_focusing(bool *b) {
     return !old_focus && *b;
 }
 
-void UI::begin_centered_window(ccstr title, bool *show, int flags, int width) {
+void UI::begin_window(ccstr title, Wnd *wnd, int flags, bool noclose) {
+    ImGui::Begin(title, noclose ? NULL : &wnd->show, flags);
+    init_window(wnd);
+}
+
+void UI::init_window(Wnd *wnd) {
+    wnd->is_focusing = imgui_is_window_focusing(&wnd->focused);
+    wnd->appearing = ImGui::IsWindowAppearing();
+
+    if (wnd->cmd_focus) {
+        ImGui::SetWindowFocus();
+        wnd->cmd_focus = false;
+    }
+}
+
+void UI::begin_centered_window(ccstr title, Wnd *wnd, int flags, int width, bool noclose) {
     if (width != -1) {
         ImGui::SetNextWindowSize(ImVec2(width, -1));
     } else {
@@ -463,7 +487,7 @@ void UI::begin_centered_window(ccstr title, bool *show, int flags, int width) {
     flags |= ImGuiWindowFlags_NoDocking;
 
     ImGui::SetNextWindowPos(ImVec2(world.window_size.x/2, 150), ImGuiCond_Always, ImVec2(0.5f, 0));
-    ImGui::Begin(title, show, flags);
+    begin_window(title, wnd, flags, noclose);
 }
 
 void UI::help_marker(fn<void()> cb) {
@@ -1779,12 +1803,8 @@ struct Coarse_Clipper {
     }
 };
 
-// TODO: This is kind of weird, because now we're relying on focus_keyboard()
-// to set wnd->focused. We should just have an "initialization" routine for Wnds.
 void UI::focus_keyboard(Wnd *wnd, int cond) {
-    auto is_focusing = imgui_is_window_focusing(&wnd->focused);
-
-    if (ImGui::IsWindowAppearing()) {
+    if (wnd->appearing) {
         if (cond & FKC_APPEARING)
             ImGui::SetKeyboardFocusHere();
     } else if (!wnd->first_open_focus_twice_done) {
@@ -1792,7 +1812,7 @@ void UI::focus_keyboard(Wnd *wnd, int cond) {
         if (cond & FKC_APPEARING) {
             ImGui::SetKeyboardFocusHere();
         }
-    } else if (is_focusing) {
+    } else if (wnd->is_focusing) {
         if (cond & FKC_FOCUSING)
             ImGui::SetKeyboardFocusHere();
     }
@@ -2059,6 +2079,7 @@ void UI::draw_everything() {
                 ImGui::MenuItem("Replace line numbers with bytecounts", NULL, &world.replace_line_numbers_with_bytecounts);
                 ImGui::MenuItem("Randomly move cursor around", NULL, &world.randomly_move_cursor_around);
                 ImGui::MenuItem("Disable framerate cap", NULL, &world.turn_off_framerate_cap);
+                ImGui::MenuItem("Hover Info", NULL, &world.wnd_hover_info.show);
 
                 if (ImGui::MenuItem("Cleanup unused memory")) {
                     world.indexer.message_queue.add([&](auto msg) {
@@ -2102,7 +2123,16 @@ void UI::draw_everything() {
         auto &wnd = world.wnd_options;
         auto &tmp = wnd.tmp;
 
-        ImGui::Begin("Options", &wnd.show, ImGuiWindowFlags_AlwaysAutoResize);
+        begin_window("Options", &wnd, ImGuiWindowFlags_AlwaysAutoResize);
+
+        if (wnd.focused) {
+            auto mods = imgui_get_keymods();
+            switch (mods) {
+            case KEYMOD_NONE:
+                if (imgui_special_key_pressed(ImGuiKey_Escape)) wnd.show = false;
+                break;
+            }
+        }
 
         auto &outer_style = ImGui::GetStyle();
         int outer_window_padding = outer_style.WindowPadding.y;
@@ -2194,13 +2224,9 @@ void UI::draw_everything() {
     if (world.wnd_find_interfaces.show) {
         auto &wnd = world.wnd_find_interfaces;
 
-        auto p_open = &wnd.show;
-        if (!wnd.done)
-            p_open = NULL;
-
         ImGui::SetNextWindowDockID(dock_sidebar_id, ImGuiCond_Once);
 
-        ImGui::Begin("Find Interfaces", p_open, ImGuiWindowFlags_AlwaysAutoResize);
+        begin_window("Find Interfaces", &wnd, ImGuiWindowFlags_AlwaysAutoResize, !wnd.done);
 
         if (wnd.done) {
             ImGui::Checkbox("Show empty interfaces", &wnd.include_empty);
@@ -2245,13 +2271,9 @@ void UI::draw_everything() {
     if (world.wnd_find_implementations.show) {
         auto &wnd = world.wnd_find_implementations;
 
-        auto p_open = &wnd.show;
-        if (!wnd.done)
-            p_open = NULL;
-
         ImGui::SetNextWindowDockID(dock_sidebar_id, ImGuiCond_Once);
 
-        ImGui::Begin("Find Implementations", p_open, ImGuiWindowFlags_AlwaysAutoResize);
+        begin_window("Find Implementations", &wnd, ImGuiWindowFlags_AlwaysAutoResize, !wnd.done);
 
         if (wnd.done) {
             imgui_push_mono_font();
@@ -2278,13 +2300,9 @@ void UI::draw_everything() {
     if (world.wnd_find_references.show) {
         auto &wnd = world.wnd_find_references;
 
-        auto p_open = &wnd.show;
-        if (!wnd.done)
-            p_open = NULL;
-
         ImGui::SetNextWindowDockID(dock_sidebar_id, ImGuiCond_Once);
 
-        ImGui::Begin("Find References", p_open, ImGuiWindowFlags_AlwaysAutoResize);
+        begin_window("Find References", &wnd, ImGuiWindowFlags_AlwaysAutoResize, !wnd.done);
 
         if (wnd.done) {
             imgui_push_mono_font();
@@ -2328,7 +2346,7 @@ void UI::draw_everything() {
             wnd.selection %= min(wnd.filtered_results->len, settings.generate_implementation_max_results);
         };
 
-        begin_centered_window("Generate Implementation", &wnd.show, 0, 400);
+        begin_centered_window("Generate Implementation", &wnd, 0, 400);
 
         if (wnd.selected_interface)
             ImGui::TextWrapped("You've selected an interface. Please select a type and we'll add this interface's methods to that type.");
@@ -2415,11 +2433,7 @@ void UI::draw_everything() {
             return "";
         };
 
-        auto p_open = &wnd.show;
-        if (wnd.running)
-            p_open = NULL;
-
-        begin_centered_window(our_sprintf("Rename %s###rename_identifier", get_type_str()), p_open, 0, 400);
+        begin_centered_window(our_sprintf("Rename %s###rename_identifier", get_type_str()), &wnd, 0, 400, wnd.running);
 
         // if it's running, make sure the window stays focused
         if (wnd.running)
@@ -2515,7 +2529,8 @@ void UI::draw_everything() {
 
     if (world.wnd_about.show) {
         auto &wnd = world.wnd_about;
-        ImGui::Begin("About", &wnd.show, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking);
+
+        begin_window("About", &wnd, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking);
         ImGui::Text("CodePerfect 95    Build %d", gh_version);
         ImGui::End();
     }
@@ -2524,7 +2539,7 @@ void UI::draw_everything() {
         auto &wnd = world.wnd_index_log;
 
         ImGui::SetNextWindowDockID(dock_bottom_id, ImGuiCond_Once);
-        ImGui::Begin("Index Log", &wnd.show);
+        begin_window("Index Log", &wnd);
 
         imgui_push_mono_font();
 
@@ -2551,12 +2566,7 @@ void UI::draw_everything() {
         auto &wnd = world.wnd_debug_output;
 
         ImGui::SetNextWindowDockID(dock_bottom_id, ImGuiCond_Once);
-        ImGui::Begin("Debug Output", &wnd.show);
-
-        if (wnd.cmd_focus) {
-            ImGui::SetWindowFocus();
-            wnd.cmd_focus = false;
-        }
+        begin_window("Debug Output", &wnd);
 
         imgui_push_mono_font();
 
@@ -2610,17 +2620,12 @@ void UI::draw_everything() {
 
     if (world.error_list.show) {
         ImGui::SetNextWindowDockID(dock_bottom_id, ImGuiCond_Once);
-        ImGui::Begin("Build Results", &world.error_list.show);
+        begin_window("Build Results", &world.error_list);
 
         static Build_Error *menu_current_error = NULL;
 
         if (ImGui::IsWindowAppearing()) {
             ImGui::SetWindowFocus(NULL);
-        }
-
-        if (world.error_list.cmd_focus) {
-            ImGui::SetWindowFocus();
-            world.error_list.cmd_focus = false;
         }
 
         if (world.build.ready()) {
@@ -2695,7 +2700,7 @@ void UI::draw_everything() {
         auto &wnd = world.wnd_rename_file_or_folder;
 
         auto label = our_sprintf("Rename %s", wnd.target->is_directory ? "folder" : "file");
-        begin_centered_window(our_sprintf("%s###add_file_or_folder", label), &wnd.show, 0, 300);
+        begin_centered_window(our_sprintf("%s###add_file_or_folder", label), &wnd, 0, 300);
 
         ImGui::Text("Renaming");
 
@@ -2758,7 +2763,7 @@ void UI::draw_everything() {
         auto &wnd = world.wnd_add_file_or_folder;
 
         auto label = our_sprintf("Add %s", wnd.folder ? "Folder" : "File");
-        begin_centered_window(our_sprintf("%s###add_file_or_folder", label), &wnd.show, 0, 300);
+        begin_centered_window(our_sprintf("%s###add_file_or_folder", label), &wnd, 0, 300);
 
         ImGui::Text("Destination");
 
@@ -2821,10 +2826,8 @@ void UI::draw_everything() {
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-        ImGui::Begin("File Explorer", &wnd.show);
+        begin_window("File Explorer", &wnd);
         ImGui::PopStyleVar();
-
-        auto is_focusing = imgui_is_window_focusing(&wnd.focused);
 
         auto begin_buttons_child = [&]() {
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6, 6));
@@ -3142,7 +3145,11 @@ void UI::draw_everything() {
     if (world.wnd_project_settings.show) {
         auto &wnd = world.wnd_project_settings;
 
-        ImGui::Begin("Project Settings", &wnd.show, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking);
+        begin_window("Project Settings", &wnd, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking);
+
+        if (imgui_get_keymods() == KEYMOD_NONE)
+            if (imgui_special_key_pressed(ImGuiKey_Escape))
+                wnd.show = false;
 
         auto &ps = wnd.tmp;
 
@@ -3491,13 +3498,13 @@ void UI::draw_everything() {
             if (ImGui::Button("Save")) {
                 project_settings.copy(&wnd.tmp);
                 project_settings.write(path_join(world.current_path, ".cpproj"));
-                world.wnd_project_settings.show = false;
+                wnd.show = false;
             }
 
             ImGui::SameLine();
 
             if (ImGui::Button("Cancel")) {
-                world.wnd_project_settings.show = false;
+                wnd.show = false;
             }
         }
 
@@ -3527,15 +3534,15 @@ void UI::draw_everything() {
             wnd.selection %= min(wnd.filtered_results->len, settings.goto_file_max_results);
         };
 
-        begin_centered_window("Go To File", &world.wnd_goto_file.show, 0, 500);
-
-        focus_keyboard(&wnd);
+        begin_centered_window("Go To File", &wnd, 0, 500);
 
         // close the window when we unfocus
         if (!wnd.focused) {
             wnd.show = false;
             ImGui::SetWindowFocus(NULL);
         }
+
+        focus_keyboard(&wnd);
 
         if (imgui_input_text_full("Search for file:", wnd.query, _countof(wnd.query), ImGuiInputTextFlags_EnterReturnsTrue)) {
             if (wnd.filtered_results->len > 0) {
@@ -3590,7 +3597,7 @@ void UI::draw_everything() {
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 8));
             defer { ImGui::PopStyleVar(); };
 
-            begin_centered_window("Run Command", &wnd.show, 0, 400);
+            begin_centered_window("Run Command", &wnd, 0, 400);
         };
 
         begin_window();
@@ -3673,8 +3680,8 @@ void UI::draw_everything() {
 
                 auto keystr = get_menu_command_key(it);
                 if (keystr != NULL) {
-                    imgui_push_mono_font();
-                    defer { imgui_pop_font(); };
+                    // imgui_push_mono_font();
+                    // defer { imgui_pop_font(); };
 
                     pm->pos.x = pm->text_br.x - ImGui::CalcTextSize(keystr).x;
 
@@ -3708,7 +3715,7 @@ void UI::draw_everything() {
             wnd.selection %= min(wnd.filtered_results->len, settings.goto_symbol_max_results);
         };
 
-        begin_centered_window("Go To Symbol", &world.wnd_goto_symbol.show, 0, 600);
+        begin_centered_window("Go To Symbol", &world.wnd_goto_symbol, 0, 600);
 
         auto mods = imgui_get_keymods();
         switch (mods) {
@@ -3803,12 +3810,8 @@ void UI::draw_everything() {
 
         ImGui::SetNextWindowDockID(dock_sidebar_id, ImGuiCond_Once);
 
-        ImGui::Begin(
-            our_sprintf("%s###search_and_replace", wnd.replace ? "Search and Replace" : "Search"),
-            &wnd.show, ImGuiWindowFlags_AlwaysAutoResize
-        );
-
-        bool is_focusing = imgui_is_window_focusing(&wnd.focused);
+        auto title = our_sprintf("%s###search_and_replace", wnd.replace ? "Search and Replace" : "Search");
+        begin_window(title, &wnd, ImGuiWindowFlags_AlwaysAutoResize);
 
         bool entered = false;
 
@@ -4048,7 +4051,7 @@ void UI::draw_everything() {
     }
 
     if (world.wnd_style_editor.show) {
-        ImGui::Begin("Style Editor", &world.wnd_style_editor.show, 0);
+        begin_window("Style Editor", &world.wnd_style_editor);
 
         if (ImGui::BeginTabBar("style_editor_tabbar", 0)) {
             if (ImGui::BeginTabItem("Margins & Padding", NULL, 0)) {
@@ -4133,7 +4136,7 @@ void UI::draw_everything() {
     if (world.wnd_history.show) {
         ImGui::SetNextWindowDockID(dock_sidebar_id, ImGuiCond_Once);
 
-        ImGui::Begin("History", &world.wnd_history.show, ImGuiWindowFlags_AlwaysAutoResize);
+        begin_window("History", &world.wnd_history, ImGuiWindowFlags_AlwaysAutoResize);
 
         bool handled = false;
         do {
@@ -4178,7 +4181,7 @@ void UI::draw_everything() {
         if (world.wnd_editor_tree.show) {
             auto &wnd = world.wnd_editor_tree;
 
-            ImGui::Begin("AST", &wnd.show, 0);
+            begin_window("AST", &wnd);
 
             ImGui::Checkbox("show anon?", &wnd.show_anon_nodes);
             ImGui::SameLine();
@@ -4196,7 +4199,7 @@ void UI::draw_everything() {
         }
 
         if (world.wnd_editor_toplevels.show) {
-            ImGui::Begin("Toplevels", &world.wnd_editor_toplevels.show, 0);
+            begin_window("Toplevels", &world.wnd_editor_toplevels);
 
             List<Godecl> decls;
             decls.init();
@@ -4259,7 +4262,7 @@ void UI::draw_everything() {
 
     if (world.wnd_mouse_pos.show) {
         // always show this
-        ImGui::Begin("Mouse Pos", &world.wnd_mouse_pos.show);
+        begin_window("Mouse Pos", &world.wnd_mouse_pos);
         ImGui::End();
     }
 
@@ -4296,6 +4299,9 @@ void UI::draw_everything() {
                 area.x += world.font.width * get_line_number_width(editor);
 
                 auto im_pos = ImGui::GetIO().MousePos;
+                if (im_pos.x < 0 || im_pos.y < 0)
+                    return new_cur2(-1, -1);
+
                 auto pos = new_vec2f(im_pos.x, im_pos.y);
                 pos.x -= area.x;
                 pos.y -= area.y;
@@ -4320,26 +4326,31 @@ void UI::draw_everything() {
                 return pos;
             };
 
-            auto is_hovered = test_hover(editor_area, HOVERID_EDITORS + current_pane, ImGuiMouseCursor_TextInput);
+            boxf editor_area_considering_pane_resizers = editor_area;
+            editor_area_considering_pane_resizers.x += PANE_RESIZER_WIDTH / 2;
+            editor_area_considering_pane_resizers.w -= PANE_RESIZER_WIDTH;
+
+            auto is_hovered = test_hover(editor_area_considering_pane_resizers, HOVERID_EDITORS + current_pane, ImGuiMouseCursor_TextInput);
             if (is_hovered) {
                 if (world.ui.mouse_just_pressed[0]) {
                     print("[mouse] just_pressed");
                     focus_editor_by_id(editor->id, new_cur2(-1, -1));
 
                     auto pos = calculate_pos_from_mouse();
+                    if (pos.x > 0 && pos.y > 0) {
+                        auto &io = ImGui::GetIO();
+                        if (OS_MAC ? io.KeySuper : io.KeyCtrl) {
+                            handle_goto_definition(pos);
+                        } else {
+                            editor->select_start = pos;
+                            editor->selecting = true;
+                            editor->mouse_select.on = true;
+                            editor->mouse_select.editor_id = editor->id;
 
-                    auto &io = ImGui::GetIO();
-                    if (OS_MAC ? io.KeySuper : io.KeyCtrl) {
-                        handle_goto_definition(pos);
-                    } else {
-                        editor->select_start = pos;
-                        editor->selecting = true;
-                        editor->mouse_select.on = true;
-                        editor->mouse_select.editor_id = editor->id;
-
-                        auto opts = default_move_cursor_opts();
-                        opts->is_user_movement = true;
-                        editor->move_cursor(pos, opts);
+                            auto opts = default_move_cursor_opts();
+                            opts->is_user_movement = true;
+                            editor->move_cursor(pos, opts);
+                        }
                     }
                 } else if (world.ui.mouse_down[0]) {
                     print("[mouse] down");
@@ -4459,7 +4470,7 @@ void UI::draw_everything() {
 
         if (current_pane == 0) {
             if (world.wnd_mouse_pos.show) {
-                ImGui::Begin("Mouse Pos", &world.wnd_mouse_pos.show);
+                begin_window("Mouse Pos", &world.wnd_mouse_pos);
                 ImGui::Text("mouse_pos = (%.4f, %.4f)", world.ui.mouse_pos.x, world.ui.mouse_pos.y);
                 ImGui::Text(
                     "tabs_area: pos = (%.4f, %.4f), size = (%.4f, %.4f)",
@@ -4484,18 +4495,26 @@ void UI::draw_everything() {
             ccstr label = "<untitled>";
             if (!editor.is_untitled) {
                 auto &ind = world.indexer;
+                bool external = false;
+
                 if (ind.goroot != NULL && path_has_descendant(ind.goroot, editor.filepath)) {
                     label = get_path_relative_to(editor.filepath, ind.goroot);
-                    label = our_sprintf("$GOROOT/%s", label);
+                    external = true;
+                    // label = our_sprintf("$GOROOT/%s", label);
                 } else if (ind.gomodcache != NULL && path_has_descendant(ind.gomodcache, editor.filepath)) {
                     label = get_path_relative_to(editor.filepath, ind.gomodcache);
-                    label = our_sprintf("$GOMODCACHE/%s", label);
+                    external = true;
+                    // label = our_sprintf("$GOMODCACHE/%s", label);
                 } else {
                     label = get_path_relative_to(editor.filepath, world.current_path);
                 }
+
+                if (external) {
+                    label = our_sprintf("[ext] %s", label);
+                }
             }
 
-            if (editor.buf->dirty)
+            if (editor.is_unsaved())
                 label = our_sprintf("%s*", label);
 
             auto text_width = get_text_width(label);
@@ -4522,7 +4541,7 @@ void UI::draw_everything() {
 
             auto is_hovered = test_hover(tab, HOVERID_TABS + editor_index);
             if (world.wnd_mouse_pos.show) {
-                ImGui::Begin("Mouse Pos", &world.wnd_mouse_pos.show);
+                begin_window("Mouse Pos", &world.wnd_mouse_pos);
 
                 ImGui::Separator();
                 ImGui::Text("Tab %d: pos = (%.4f,%.4f), size = (%.4f,%.4f)",
@@ -5028,9 +5047,11 @@ void UI::draw_everything() {
             b.x = panes_area.x + offset - 1;
             b.y = panes_area.y;
 
-            boxf hitbox = b;
-            hitbox.x -= 4;
-            hitbox.w += 8;
+            boxf hitbox;
+            hitbox.w = PANE_RESIZER_WIDTH;
+            hitbox.h = panes_area.h;
+            hitbox.y = panes_area.y;
+            hitbox.x = panes_area.x + offset - PANE_RESIZER_WIDTH / 2;
 
             if (test_hover(hitbox, HOVERID_PANE_RESIZERS + i, ImGuiMouseCursor_ResizeEW)) {
                 draw_rect(b, rgba(global_colors.pane_resizer_hover));
@@ -5207,6 +5228,20 @@ void UI::draw_everything() {
 
             draw_status_piece(RIGHT, s, rgba(global_colors.white, 0.0), rgba("#aaaaaa"));
         }
+    }
+
+    if (world.wnd_hover_info.show) {
+        auto &wnd = world.wnd_hover_info;
+
+        begin_window("Hover Info", &wnd);
+
+        ImGui::Text("id: %d", hover.id);
+        ImGui::Text("id last frame: %d", hover.id_last_frame);
+        ImGui::Text("cursor: %d", hover.id);
+        ImGui::Text("start_time: %llums ago", (current_time_in_nanoseconds() - hover.start_time) / 1000000);
+        ImGui::Text("ready: %d", hover.ready);
+
+        ImGui::End();
     }
 }
 
@@ -5790,6 +5825,12 @@ bool UI::test_hover(boxf area, int id, ImGuiMouseCursor cursor) {
     auto now = current_time_in_nanoseconds();
 
     if (id != hover.id_last_frame) {
+        if (world.wnd_hover_info.show) {
+            ImGui::Begin("Hover Info");
+            ImGui::Text("id = %d, last = %d", id, hover.id_last_frame);
+            ImGui::End();
+        }
+
         hover.start_time = now;
         hover.ready = false;
     }

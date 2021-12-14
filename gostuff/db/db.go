@@ -9,13 +9,14 @@ import (
 	"gorm.io/gorm"
 )
 
-var Db *gorm.DB
+var DB *gorm.DB
 
 func init() {
 	res, err := gorm.Open(postgres.Open(os.Getenv("POSTGRES_URL")), &gorm.Config{})
 	if err != nil {
 		log.Fatal(err)
 	}
-	Db = res
-	Db.AutoMigrate(&models.User{})
+	DB = res
+	DB.AutoMigrate(&models.User{})
+	DB.AutoMigrate(&models.Session{})
 }

@@ -26,14 +26,14 @@ func main() {
 
 	for _, email := range os.Args[1:] {
 		user := &models.User{}
-		if res := db.Db.First(&user, "email = ?", email); res.Error != nil {
+		if res := db.DB.First(&user, "email = ?", email); res.Error != nil {
 			user = &models.User{
 				Email:        email,
 				LicenseKey:   generateKey(32),
 				DownloadCode: generateKey(16),
 				Status:       models.UserStatusTrialWaiting,
 			}
-			db.Db.Create(&user)
+			db.DB.Create(&user)
 		}
 
 		fmt.Printf("%s: https://codeperfect95.com/install?code=%s\n", email, user.DownloadCode)

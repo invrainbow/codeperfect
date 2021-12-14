@@ -307,6 +307,10 @@ struct World {
     bool auth_update_done;
     u64 auth_update_last_check;
 
+    struct Wnd_Hover_Info : Wnd {
+
+    } wnd_hover_info;
+
     struct Wnd_Rename_Identifier : Wnd {
         Pool thread_mem;
         bool running;

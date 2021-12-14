@@ -480,6 +480,23 @@ void World::start_background_threads() {
     indexer.start_background_thread();
     if (use_nvim) nvim.start_running();
     dbg.start_loop();
+
+#if DEBUG_MODE
+    // VSCode debugger frequently fails to break when I press break.  But, it
+    // works if I set a breakpoint which is hit. So the asinine solution I've
+    // devised is to create a background thread that runs in a loop, so I can
+    // set a breakpoint in it at any time.
+    auto microsoft_programmers_are_fucking_monkeys = [](void*) {
+        while (true) sleep_milliseconds(1000);
+    };
+
+    {
+        auto t = create_thread(microsoft_programmers_are_fucking_monkeys, NULL);
+        if (t == NULL)
+            our_panic("couldn't create thread");
+        close_thread_handle(t);
+    }
+#endif
 }
 
 Pane* get_current_pane() {
@@ -1228,7 +1245,7 @@ void Build::cleanup() {
 bool has_unsaved_files() {
     For (world.panes)
         For (it.editors)
-            if (it.buf->dirty)
+            if (it.is_unsaved())
                 return true;
     return false;
 }
@@ -1434,7 +1451,10 @@ bool is_command_enabled(Command cmd) {
 
     case CMD_FORMAT_FILE:
     case CMD_FORMAT_FILE_AND_ORGANIZE_IMPORTS:
-        return get_current_editor() != NULL;
+        {
+            auto editor = get_current_editor();
+            return editor != NULL && editor->is_modifiable();
+        }
 
     case CMD_FORMAT_SELECTION:
         return false;
@@ -1541,7 +1561,7 @@ void init_command_info_table() {
     command_info_table[CMD_GO_TO_FILE] = k(KEYMOD_PRIMARY, GLFW_KEY_P, "Go To File");
     command_info_table[CMD_GO_TO_SYMBOL] = k(KEYMOD_PRIMARY, GLFW_KEY_T, "Go To Symbol");
     command_info_table[CMD_GO_TO_NEXT_ERROR] = k(KEYMOD_ALT, GLFW_KEY_RIGHT_BRACKET, "Go To Next Error");
-    command_info_table[CMD_GO_TO_PREVIOUS_ERROR] = k(KEYMOD_ALT, GLFW_KEY_RIGHT_BRACKET, "Go To Previous Error");
+    command_info_table[CMD_GO_TO_PREVIOUS_ERROR] = k(KEYMOD_ALT, GLFW_KEY_LEFT_BRACKET, "Go To Previous Error");
     command_info_table[CMD_GO_TO_DEFINITION] = k(KEYMOD_PRIMARY, GLFW_KEY_G, "Go To Definition");
     command_info_table[CMD_FIND_REFERENCES] = k(KEYMOD_PRIMARY | KEYMOD_ALT, GLFW_KEY_R, "Find References");
     command_info_table[CMD_FORMAT_FILE] = k(KEYMOD_ALT | KEYMOD_SHIFT, GLFW_KEY_F, "Format File");
@@ -1769,19 +1789,22 @@ void handle_command(Command cmd, bool from_menu) {
 
     case CMD_FORMAT_FILE: {
         auto editor = get_current_editor();
-        if (editor != NULL)
-            editor->format_on_save(GH_FMT_GOIMPORTS);
+        if (editor == NULL) break;
+        if (!editor->is_modifiable()) break;
+
+        editor->format_on_save(GH_FMT_GOIMPORTS);
         break;
     }
 
     case CMD_FORMAT_FILE_AND_ORGANIZE_IMPORTS: {
         auto editor = get_current_editor();
-        if (editor != NULL) {
-            if (editor->optimize_imports())
-                editor->format_on_save(GH_FMT_GOIMPORTS);
-            else
-                editor->format_on_save(GH_FMT_GOIMPORTS_WITH_AUTOIMPORT);
-        }
+        if (editor == NULL) break;
+        if (!editor->is_modifiable()) break;
+
+        if (editor->optimize_imports())
+            editor->format_on_save(GH_FMT_GOIMPORTS);
+        else
+            editor->format_on_save(GH_FMT_GOIMPORTS_WITH_AUTOIMPORT);
         break;
     }
 
@@ -2139,9 +2162,7 @@ void handle_command(Command cmd, bool from_menu) {
 
     case CMD_OPTIONS:
         if (world.wnd_options.show) {
-            ImGui::Begin("Options");
-            ImGui::SetWindowFocus();
-            ImGui::End();
+            world.wnd_options.cmd_focus = true;
         } else {
             world.wnd_options.show = true;
             world.wnd_options.something_that_needs_restart_was_changed = false;

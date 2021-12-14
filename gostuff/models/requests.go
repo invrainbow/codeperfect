@@ -10,6 +10,7 @@ const (
 	ErrorInvalidVersion
 	ErrorInvalidDownloadCode
 	ErrorTrialExpired
+	ErrorInvalidSession
 )
 
 var ErrorMessages = map[int]string{
@@ -22,14 +23,13 @@ var ErrorMessages = map[int]string{
 	ErrorInvalidVersion:      "Invalid version.",
 	ErrorInvalidDownloadCode: "Invalid download code.",
 	ErrorTrialExpired:        "Trial has expired.",
+	ErrorInvalidSession:      "Invalid session ID.",
 }
 
 type ErrorResponse struct {
 	Code  int    `json:"code"`
 	Error string `json:"error"`
 }
-
-// ---
 
 type AuthRequest struct {
 	OS             string `json:"os"`
@@ -41,15 +41,13 @@ type AuthResponse struct {
 	Version        int    `json:"version"`
 	DownloadURL    string `json:"download_url"`
 	DownloadHash   string `json:"string"`
+	SessionID      uint   `json:"session_id"`
 }
 
-// ---
-
-type AuthWebRequest struct {
-	Code string `json:"code"`
+type HeartbeatRequest struct {
+	SessionID uint `json:"session_id"`
 }
 
-type AuthWebResponse struct {
-	Email      string `json:"email"`
-	LicenseKey string `json:"license_key"`
+type HeartbeatResponse struct {
+	Ok bool `json:"ok"`
 }

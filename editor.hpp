@@ -155,6 +155,8 @@ struct Editor {
     void init();
     void cleanup();
 
+    bool is_unsaved() { return is_modifiable() && buf->dirty; }
+
     bool is_nvim_ready();
 
     struct {
@@ -209,6 +211,7 @@ struct Editor {
     void add_change_in_insert_mode(cur2 start, cur2 old_end, cur2 new_end);
     bool cur_is_inside_comment_or_string();
     bool ask_user_about_unsaved_changes();
+    void skip_next_nvim_update(int n = 1);
 };
 
 struct Pane {

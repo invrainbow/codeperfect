@@ -26,11 +26,10 @@
 #include "fzy_match.h"
 #include "settings.hpp"
 #include "unicode.hpp"
-#include "IconsFontAwesome5.h"
-#include "IconsMaterialDesign.h"
 
 #include "imgui.h"
 #include "fonts.hpp"
+#include "icons.h"
 
 #define MAX_PATH 260
 #define CODE_FONT_SIZE 14
@@ -452,6 +451,9 @@ int main(int argc, char **argv) {
 
             ImWchar icon_ranges[] = { ICON_MIN_MD, ICON_MAX_MD, 0 };
             io.Fonts->AddFontFromMemoryTTF(material_icons_regular_ttf, material_icons_regular_ttf_len, ICON_FONT_SIZE, &config, icon_ranges);
+
+            ImWchar icon_ranges2[] = { 0x21E7, 0x21E7+1, 0 };
+            io.Fonts->AddFontFromMemoryTTF(open_sans_ttf, open_sans_ttf_len, UI_FONT_SIZE, &config, icon_ranges2);
         }
 
         world.ui.im_font_mono = io.Fonts->AddFontFromMemoryTTF(vera_mono_ttf, vera_mono_ttf_len, CODE_FONT_SIZE);

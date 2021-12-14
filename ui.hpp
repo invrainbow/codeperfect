@@ -127,6 +127,8 @@ struct Wnd {
     bool show;
     bool focused;
     bool first_open_focus_twice_done;
+    bool appearing;
+    bool is_focusing;
 
     // "commands"
     bool cmd_focus;
@@ -230,7 +232,9 @@ struct UI {
     void help_marker(ccstr text);
     void help_marker(fn<void()> cb);
 
-    void begin_centered_window(ccstr title, bool *show, int flags = 0, int width = -1);
+    void init_window(Wnd *wnd);
+    void begin_window(ccstr title, Wnd *wnd, int flags = 0, bool noclose = false);
+    void begin_centered_window(ccstr title, Wnd *wnd, int flags = 0, int width = -1, bool noclose = false);
 
     Pretty_Menu *pretty_menu_start(ImVec2 padding = ImVec2(4, 2));
     void pretty_menu_item(Pretty_Menu *menu, bool selected);
@@ -243,10 +247,12 @@ vec3f rgb_hex(ccstr s);
 vec4f rgba(vec3f color, float alpha = 1.0);
 vec4f rgba(ccstr hex, float alpha = 1.0);
 
+#define PANE_RESIZER_WIDTH 8
+
 enum {
     HOVERID_PANE_RESIZERS = 1000,
     HOVERID_TABS = 2000,
-    HOVERID_EDITORS = 2000,
+    HOVERID_EDITORS = 3000,
 };
 
 #define AUTOCOMPLETE_TRUNCATE_LENGTH 40
@@ -305,4 +311,4 @@ struct Global_Colors {
 extern Global_Colors global_colors;
 
 void init_global_colors();
-ccstr format_key(int mods, ccstr key);
+ccstr format_key(int mods, ccstr key, bool icon = false);
