@@ -19,5 +19,5 @@ var AppHashes = map[string]string{
 
 var VersionUpdateHashes = map[string]string{
 	"darwin":     "f7d4b208f7a2808484aab3791bad8f2dc94d440cc08395d6eb0c13ee97507994",
-	"darwin_arm": "7966bd81057c5e8b66345b8801e2e9b1e1d82c681d55911e3a9d4296db778c30",
+	"darwin_arm": "e3a137959e6b9077b95c1620cd5451d5847f7f62251ef31d2737e40b3b0be140",
 }
