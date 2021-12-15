@@ -41,7 +41,7 @@ const SUPPORT_EMAIL = "support@codeperfect95.com";
 const CURRENT_YEAR = new Date().getFullYear();
 const BETA_SIGNUP_LINK = "https://airtable.com/shraN38Z2jqQJVqbk";
 const CHANGELOG_LINK =
-  "https://github.com/codeperfect95/changelog/blob/master/README.md";
+  "https://codeperfect95.notion.site/codeperfect95/CodePerfect-95-Changelog-dcedf41014ef4de79690a5b5b54ebb33";
 
 let API_BASE = "https://api.codeperfect95.com";
 if (process.env.NODE_ENV === "development") {
