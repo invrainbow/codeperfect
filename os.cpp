@@ -66,3 +66,19 @@ Ask_User_Result ask_user_yes_no_cancel(ccstr text, ccstr title, ccstr yeslabel, 
     return ask_user_yes_no(text, title, yeslabel, nolabel, true);
 }
 
+#if OS_WIN
+#   define OPEN_COMMAND "start"
+#elif OS_MAC
+#   define OPEN_COMMAND "open"
+#elif OS_LINUX
+#   define OPEN_COMMAND "xdg-open"
+#endif
+
+void open_webbrowser(ccstr url) {
+    Process p;
+    p.init();
+    p.run(our_sprintf("%s %s", OPEN_COMMAND, url));
+    p.cleanup();
+}
+
+#undef OPEN_COMMAND

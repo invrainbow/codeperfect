@@ -2112,6 +2112,7 @@ void UI::draw_everything() {
 
         if (ImGui::BeginMenu("Help")) {
             menu_command(CMD_ABOUT);
+            menu_command(CMD_DOCUMENTATION);
             ImGui::EndMenu();
         }
 

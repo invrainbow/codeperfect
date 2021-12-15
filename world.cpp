@@ -1601,6 +1601,7 @@ void init_command_info_table() {
     command_info_table[CMD_FIND_INTERFACES] = k(0, 0, "Find Interfaces");
     command_info_table[CMD_UNDO] = k(KEYMOD_PRIMARY, GLFW_KEY_Z, "Undo");
     command_info_table[CMD_REDO] = k(KEYMOD_PRIMARY | KEYMOD_SHIFT, GLFW_KEY_Z, "Redo");
+    command_info_table[CMD_DOCUMENTATION] = k(0, 0, "Documentation");
 }
 
 void handle_command(Command cmd, bool from_menu) {
@@ -1608,6 +1609,10 @@ void handle_command(Command cmd, bool from_menu) {
     if (!is_command_enabled(cmd)) return;
 
     switch (cmd) {
+    case CMD_DOCUMENTATION:
+        open_webbrowser("https://docs.codeperfect95.com/");
+        break;
+
     case CMD_UNDO:
     case CMD_REDO: {
         // TODO: handle this for vim too; do we just use `u` and `C-r`?
