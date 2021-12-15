@@ -18,6 +18,6 @@ var AppHashes = map[string]string{
 }
 
 var VersionUpdateHashes = map[string]string{
-	"darwin":     "f7d4b208f7a2808484aab3791bad8f2dc94d440cc08395d6eb0c13ee97507994",
+	"darwin":     "4f82a1918f772aede98c5c46ccccb208f0d9d5c893d664e7db199d1c32170433",
 	"darwin_arm": "e3a137959e6b9077b95c1620cd5451d5847f7f62251ef31d2737e40b3b0be140",
 }
