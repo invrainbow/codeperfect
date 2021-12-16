@@ -1,5 +1,6 @@
 #!/bin/bash
-
-cd /root/codeperfect/gostuff
+cd /root/codeperfect
+git pull
+cd gostuff
 /usr/local/go/bin/go build -o bin/api github.com/invrainbow/codeperfect/gostuff/cmd/api
 sudo service api restart
