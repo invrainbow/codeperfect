@@ -288,8 +288,15 @@ func AuthAndUpdate() {
 		return
 	}
 
+    osSlug := runtime.GOOS
+    if osSlug == "darwin" {
+        if runtime.GOARCH == "arm64" {
+            osSlug = "darwin_arm"
+        }
+    }
+
 	req := &models.AuthRequest{
-		OS:             runtime.GOOS,
+		OS:             osSlug,
 		CurrentVersion: versions.CurrentVersion,
 	}
 

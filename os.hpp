@@ -5,16 +5,16 @@
 #define OS_LINUX 0
 
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
-#undef OS_WIN
-#define OS_WIN 1
+#   undef OS_WIN
+#   define OS_WIN 1
 #elif defined(__APPLE__)
-#undef OS_MAC
-#define OS_MAC 1
+#   undef OS_MAC
+#   define OS_MAC 1
 #elif defined(__linux__)
-#undef OS_LINUX
-#define OS_LINUX 1
+#   undef OS_LINUX
+#   define OS_LINUX 1
 #else
-#error "what the fuck OS is this?"
+#   error "what the fuck OS is this?"
 #endif
 
 #if OS_WIN

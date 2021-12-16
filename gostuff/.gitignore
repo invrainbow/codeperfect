@@ -2,3 +2,5 @@
 .cpdb.tmp
 .cpproj
 bin/
+test.db
+.DS_Store
