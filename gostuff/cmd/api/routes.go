@@ -108,7 +108,7 @@ func MustGetDownloadLink(c *gin.Context, os string) string {
 		return ""
 	}
 
-	filename := fmt.Sprintf("app/%v_v%v.zip", os, versions.CurrentVersion)
+	filename := fmt.Sprintf("update/%v_v%v.zip", os, versions.CurrentVersion)
 	presignedUrl, err := GetPresignedURL("codeperfect95", filename)
 	if err != nil {
 		sendServerError(c, "error while creating presigned url: %v", err)
