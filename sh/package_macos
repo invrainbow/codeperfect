@@ -37,7 +37,9 @@ package_app() {
 }
 
 package_update() {
-    zip -r update.zip ../build/bin/
+    pushd ../build/bin
+    zip -r ../../scratch/update.zip *
+    popd
 
     if [[ -z "$SKIP_UPLOAD" ]]; then
         aws s3 cp update.zip "s3://codeperfect95/update/${OS_PREFIX}_v${VERSION}.zip"
