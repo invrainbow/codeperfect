@@ -1,3 +1,3 @@
 package versions
 
-const CurrentVersion = 6
+const CurrentVersion = 5
