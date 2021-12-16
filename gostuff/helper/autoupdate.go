@@ -374,7 +374,7 @@ func AuthAndUpdate() {
 		// unzip to newbintmp instead
 		// move newbintmp to newbin
 
-		if err := Unzip(tmpfile.Name(), path.Join(path.Dir(path.Dir(exepath)), "newbin")); err != nil {
+		if err := Unzip(tmpfile.Name(), path.Join(path.Dir(exepath), "newbin")); err != nil {
 			pushUnknownError("unzip", err)
 			return
 		}

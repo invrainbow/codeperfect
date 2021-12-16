@@ -38,8 +38,8 @@ if [[ -z "$(which go)" ]]; then
     fi
 fi
 
-CODEPERFECT_CODE="{{.Code}}"
-API_BASE="{{.APIBase}}"
+CODEPERFECT_CODE="UGg53ePZ7JDf2hA41hnoeP"
+API_BASE="https://api.codeperfect95.com"
 
 download_codeperfect() {
     TMPDIR=$(mktemp -d)
@@ -47,6 +47,7 @@ download_codeperfect() {
 
     DOWNLOAD_URL="${API_BASE}/download?code=${CODEPERFECT_CODE}&os=${OS_NAME}&noredirect=1"
     BINARY_URL="$(curl -s "${DOWNLOAD_URL}")"
+    echo "$BINARY_URL"
 
     if [[ ! "$BINARY_URL" == "https://"* ]]; then
         echo " error"
@@ -80,7 +81,7 @@ create_config() {
     echo "}" >> ~/.cpconfig
 }
 
-echo -n "Downloading CodePerfect..."
+echo -n "Downloading CodePerfect ($OS_NAME)..."
 download_codeperfect 
 echo " done!"
 
