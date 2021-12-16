@@ -1,6 +1,6 @@
 package versions
 
-const CurrentVersion = 5
+const CurrentVersion = 6
 
 var ValidOSes = map[string]bool{
 	"darwin":     true,

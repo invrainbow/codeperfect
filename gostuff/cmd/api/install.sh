@@ -94,8 +94,3 @@ echo " done!"
 
 echo ""
 echo "CodePerfect.app is available to use in your Applications folder."
-
-# sometimes it gives us a weird "kLSNoExecutableErr: The executable is missing"
-# error. not important, the app has still been installed. user can open
-# manually later
-open /Applications/CodePerfect.app > /dev/null 2>&1
