@@ -19,4 +19,5 @@ func init() {
 	DB = res
 	DB.AutoMigrate(&models.User{})
 	DB.AutoMigrate(&models.Session{})
+	DB.AutoMigrate(&models.Version{})
 }

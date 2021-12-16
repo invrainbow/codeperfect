@@ -30,4 +30,12 @@ type Session struct {
 	Heartbeats      int
 }
 
+type Version struct {
+	gorm.Model
+	Version    int
+	OS         string
+	AppHash    string
+	UpdateHash string
+}
+
 // users email license_key stripe_cus_id stripe_cus_status

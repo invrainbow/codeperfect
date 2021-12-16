@@ -9,9 +9,9 @@ sh/make clean
 # build again
 RELEASE=1 sh/build_macos
 
-OS_PREFIX=darwin
+OS_SLUG=darwin
 if [[ "$(sysctl -n machdep.cpu.brand_string)" = "Apple M1" ]]; then
-    OS_PREFIX=darwin_arm
+    OS_SLUG=darwin_arm
 fi
 
 package_app() {
@@ -32,7 +32,7 @@ package_app() {
     zip -r app.zip CodePerfect.app/
 
     if [[ -z "$SKIP_UPLOAD" ]]; then
-        aws s3 cp app.zip "s3://codeperfect95/app/${OS_PREFIX}_v${VERSION}.zip"
+        aws s3 cp app.zip "s3://codeperfect95/app/${OS_SLUG}_v${VERSION}.zip"
     fi
 }
 
@@ -42,7 +42,7 @@ package_update() {
     popd
 
     if [[ -z "$SKIP_UPLOAD" ]]; then
-        aws s3 cp update.zip "s3://codeperfect95/update/${OS_PREFIX}_v${VERSION}.zip"
+        aws s3 cp update.zip "s3://codeperfect95/update/${OS_SLUG}_v${VERSION}.zip"
     fi
 }
 
@@ -53,5 +53,10 @@ cd scratch
 package_app
 package_update
 
-sha256sum app.zip
-sha256sum update.zip
+APP_HASH="$(sha256sum app.zip)"
+UPDATE_HASH="$(sha256sum update.zip)"
+
+pushd ../gostuff
+POSTGRES_URL=$POSTGRES_URL_PROD
+go run ./cmd/addversion "$VERSION" "$OS_SLUG" "$APP_HASH" "$UPDATE_HASH"
+popd

@@ -284,8 +284,15 @@ func PostAuth(c *gin.Context) {
 			return
 		}
 
+		var versionObj models.Version
+		res := db.DB.Where("version = ? AND os = ?", versions.CurrentVersion, req.OS).First(&versionObj)
+		if res.Error != nil {
+			sendServerError(c, "find version: %v", res.Error)
+			return
+		}
+
 		resp.DownloadURL = presignedUrl
-		resp.DownloadHash = versions.VersionUpdateHashes[req.OS]
+		resp.DownloadHash = versionObj.UpdateHash
 	}
 
 	c.JSON(http.StatusOK, resp)
