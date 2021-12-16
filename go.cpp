@@ -2900,9 +2900,6 @@ List<Find_Decl> *Go_Indexer::find_implementations(Goresult *target) {
                 if (recv->type != GOTYPE_ID) continue;
 
                 auto type_name = our_sprintf("%s:%s", import_path, recv->id_name);
-                if (streq(recv->id_name, "Cocks"))
-                    print("break here");
-
                 auto method_name = it.name;
 
                 for (int i = 0; i < methods->len; i++) {
@@ -3100,10 +3097,6 @@ List<Find_References_File> *Go_Indexer::find_references(Goresult *declres, bool 
     };
 
     auto process = [&](Go_Package *pkg, Go_File *file) {
-        if (streq(pkg->package_name, "legacyscheme")) {
-            print("break here");
-        }
-
         Go_Ctx ctx2;
         ctx2.import_path = pkg->import_path;
         ctx2.filename = file->filename;
