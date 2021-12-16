@@ -102,13 +102,13 @@ func authUserByCode(c *gin.Context, code string) *models.User {
 	return &user
 }
 
-func MustGetDownloadLink(c *gin.Context, os string) string {
+func MustGetDownloadLink(c *gin.Context, os, folder string) string {
 	if !versions.ValidOSes[os] {
 		sendError(c, models.ErrorInvalidOS)
 		return ""
 	}
 
-	filename := fmt.Sprintf("update/%v_v%v.zip", os, versions.CurrentVersion)
+	filename := fmt.Sprintf("%s/%v_v%v.zip", folder, os, versions.CurrentVersion)
 	presignedUrl, err := GetPresignedURL("codeperfect95", filename)
 	if err != nil {
 		sendServerError(c, "error while creating presigned url: %v", err)
@@ -198,7 +198,7 @@ func GetDownload(c *gin.Context) {
 		UserProperties: user,
 	})
 
-	presignedUrl := MustGetDownloadLink(c, c.Query("os"))
+	presignedUrl := MustGetDownloadLink(c, c.Query("os"), "app")
 	if presignedUrl == "" {
 		return
 	}
@@ -279,7 +279,7 @@ func PostAuth(c *gin.Context) {
 	}
 
 	if resp.NeedAutoupdate {
-		presignedUrl := MustGetDownloadLink(c, req.OS)
+		presignedUrl := MustGetDownloadLink(c, req.OS, "update")
 		if presignedUrl == "" {
 			return
 		}
