@@ -102,13 +102,13 @@ func authUserByCode(c *gin.Context, code string) *models.User {
 	return &user
 }
 
-const validOSes = map[string]bool{
+var validOSes = map[string]bool{
 	"darwin":     true,
 	"darwin_arm": true,
 }
 
 func MustGetDownloadLink(c *gin.Context, os, folder string) string {
-	if !validOSses[os] {
+	if !validOSes[os] {
 		sendError(c, models.ErrorInvalidOS)
 		return ""
 	}
