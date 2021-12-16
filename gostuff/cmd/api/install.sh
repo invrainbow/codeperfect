@@ -80,7 +80,7 @@ create_config() {
     echo "}" >> ~/.cpconfig
 }
 
-echo -n "Downloading CodePerfect..."
+echo -n "Downloading CodePerfect ($OS_NAME)..."
 download_codeperfect 
 echo " done!"
 
