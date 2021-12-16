@@ -53,8 +53,8 @@ cd scratch
 package_app
 package_update
 
-APP_HASH="$(sha256sum app.zip)"
-UPDATE_HASH="$(sha256sum update.zip)"
+APP_HASH="$(sha256sum app.zip | cut -d' ' -f1)"
+UPDATE_HASH="$(sha256sum update.zip | cut -d' ' -f1)"
 
 pushd ../gostuff
 POSTGRES_URL=$POSTGRES_URL_PROD
