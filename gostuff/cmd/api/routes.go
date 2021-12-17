@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"text/template"
 	"time"
@@ -21,6 +23,21 @@ import (
 
 var AdminPassword = os.Getenv("ADMIN_PASSWORD")
 var IsDevelMode = os.Getenv("DEVELOPMENT_MODE") == "1"
+var AirtableAPIKey = os.Getenv("AIRTABLE_API_KEY")
+
+func GetAPIBase() string {
+	if IsDevelMode {
+		return "http://localhost:8080"
+	}
+	return "https://api.codeperfect95.com"
+}
+
+func GetFrontendBase() string {
+	if IsDevelMode {
+		return "http://localhost:3000"
+	}
+	return "https://codeperfect95.com"
+}
 
 func sendError(c *gin.Context, code int) {
 	err := &models.ErrorResponse{
@@ -158,10 +175,7 @@ func GetInstall(c *gin.Context) {
 	}
 
 	data.Code = user.DownloadCode
-	data.APIBase = "https://api.codeperfect95.com"
-	if IsDevelMode {
-		data.APIBase = "http://localhost:8080"
-	}
+	data.APIBase = GetAPIBase()
 
 	var buf bytes.Buffer
 	if err := tpl.Execute(&buf, data); err != nil {
@@ -326,4 +340,76 @@ func PostHeartbeat(c *gin.Context) {
 	db.DB.Save(&sess)
 
 	c.JSON(200, &models.HeartbeatResponse{Ok: true})
+}
+
+func PostAirtableCallback(c *gin.Context) {
+	var req struct {
+		AirtableID string `json:"airtable_id"`
+	}
+	if err := c.BindJSON(&req); err != nil {
+		return
+	}
+
+	type AirtableResponse struct {
+		Fields struct {
+			Email string   `json:"Email"`
+			Name  string   `json:"Name"`
+			OSes  []string `json:"Operating System"`
+		} `json:"fields"`
+	}
+
+	do := func() *AirtableResponse {
+		url := fmt.Sprintf("https://api.airtable.com/v0/appjrtpjRjl0HV5EY/Signups/%s", req.AirtableID)
+		req, err := http.NewRequest("GET", url, nil)
+		if err != nil {
+			return nil
+		}
+		req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", AirtableAPIKey))
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return nil
+		}
+		defer resp.Body.Close()
+
+		dat, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil
+		}
+
+		var aresp AirtableResponse
+		if err := json.Unmarshal(dat, &aresp); err != nil {
+			return nil
+		}
+
+		isMacOS := func() bool {
+			for _, os := range aresp.Fields.OSes {
+				if os == "macOS" {
+					return true
+				}
+			}
+			return false
+		}
+
+		if !isMacOS() {
+			return nil
+		}
+
+		return &aresp
+	}
+
+	if resp := do(); resp != nil {
+		q := url.Values{}
+		q.Add("name", resp.Fields.Name)
+		q.Add("email", resp.Fields.Email)
+		url := fmt.Sprintf("https://calendly.com/bh-codeperfect/beta-onboarding?%s", q.Encode())
+
+		c.JSON(200, &gin.H{
+			"action":    "schedule_call",
+			"call_link": url,
+		})
+	} else {
+		c.JSON(200, &gin.H{
+			"action": "nothing",
+		})
+	}
 }

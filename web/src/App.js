@@ -12,6 +12,7 @@ import {
   useLocation,
   Redirect,
   useHistory,
+  useParams,
 } from "react-router-dom";
 
 import { AiOutlineCheck, AiOutlineClose, AiFillCode } from "react-icons/ai";
@@ -61,7 +62,7 @@ function WallOfText({ children, className, ...props }) {
     <div
       className={cx(
         className,
-        "wall-of-text p-4 my-4 md:my-12 md:p-8 leading-normal md:max-w-3xl md:mx-auto"
+        "wall-of-text p-4 my-4 md:my-16 md:p-12 leading-normal md:max-w-3xl md:mx-auto"
       )}
       {...props}
     >
@@ -869,6 +870,60 @@ function ScrollToTop() {
   return null;
 }
 
+function FinishSignup(props) {
+  const params = useParams();
+  const [data, setData] = React.useState(null);
+
+  React.useEffect(() => {
+    async function run() {
+      const resp = await fetch(`${API_BASE}/airtable`, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ airtable_id: params.id }),
+      });
+      const data = await resp.json();
+      setData(data);
+    }
+    run();
+  }, [params.id]);
+
+  if (data === null) return <Loading />;
+
+  return (
+    <div>
+      {data.action === "schedule_call" && (
+        <WallOfText>
+          <Title>Thanks for signing up for CodePerfect!</Title>
+          <p>
+            We're working closely with a small number of people for our private
+            macOS beta release. The next step is to schedule a 15 minute
+            onboarding call.
+          </p>
+          <p>
+            The goal is for us to learn about what projects you're working on
+            and what your day-to-day looks like. After that we'll take you
+            through CodePerfect installation and do a feature walkthrough.
+          </p>
+          <p>
+            <A className="main-button mt-6" href={data.call_link}>
+              Schedule Call
+            </A>
+          </p>
+        </WallOfText>
+      )}
+      {data.action === "nothing" && (
+        <div>
+          Thanks for signing up! At the moment we're still rolling out support
+          for your OS, but we'll reach out once we do!
+        </div>
+      )}
+    </div>
+  );
+}
+
 function App() {
   return (
     <Router>
@@ -931,6 +986,9 @@ function App() {
             </Route>
             <Route path="/privacy">
               <Redirect to="/terms" />
+            </Route>
+            <Route exact path="/s/:id">
+              <FinishSignup />
             </Route>
             <Route exact path="/">
               <Home />

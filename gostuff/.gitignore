@@ -4,3 +4,4 @@
 bin/
 test.db
 .DS_Store
+.env
