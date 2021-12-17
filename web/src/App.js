@@ -899,8 +899,7 @@ function FinishSignup(props) {
           <Title>Thanks for signing up for CodePerfect!</Title>
           <p>
             We're working closely with a small number of people for our private
-            macOS beta release. The next step is to schedule a 15 minute
-            onboarding call.
+            macOS beta release. The next step is to schedule an onboarding call.
           </p>
           <p>
             The goal is for us to learn about what projects you're working on
