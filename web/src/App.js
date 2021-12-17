@@ -915,10 +915,10 @@ function FinishSignup(props) {
         </WallOfText>
       )}
       {data.action === "nothing" && (
-        <div>
+        <WallOfText>
           Thanks for signing up! At the moment we're still rolling out support
           for your OS, but we'll reach out once we do!
-        </div>
+        </WallOfText>
       )}
     </div>
   );
