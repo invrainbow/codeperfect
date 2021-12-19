@@ -51,10 +51,10 @@ func ReadLicense() *License {
 		return nil
 	}
 
-	fmt.Printf("homedir: %s\n", homedir)
+	log.Printf("homedir: %s\n", homedir)
 
 	licensefile := path.Join(homedir, ".cplicense")
-	fmt.Printf("licensefile: %s\n", licensefile)
+	log.Printf("licensefile: %s\n", licensefile)
 	buf, err := os.ReadFile(licensefile)
 	if err != nil {
 		return nil
@@ -208,7 +208,7 @@ func pushWarning(msg string) {
 
 func pushUnknownError(desc string, err error) {
 	if DebugModeFlag {
-		fmt.Printf("%v\n", err)
+		log.Printf("%v\n", err)
 	}
 	pushWarning(
 		fmt.Sprintf(
@@ -304,7 +304,7 @@ func AuthAndUpdate() {
 	if err := CallServer("auth", license, req, &resp); err != nil {
 		switch e := err.(type) {
 		case net.Error, *net.OpError, syscall.Errno:
-			fmt.Println(e)
+			log.Println(e)
 			handleGracePeriod(MessageInternetOffline, 7)
 			return
 		case *ServerError:

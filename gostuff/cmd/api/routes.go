@@ -7,9 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
-	"net/url"
 	"os"
+	"strings"
 	"text/template"
 	"time"
 
@@ -24,6 +25,8 @@ import (
 var AdminPassword = os.Getenv("ADMIN_PASSWORD")
 var IsDevelMode = os.Getenv("DEVELOPMENT_MODE") == "1"
 var AirtableAPIKey = os.Getenv("AIRTABLE_API_KEY")
+var BetaPaymentLink = "https://buy.stripe.com/28ofZb9Dl0RO9a05kr"
+var ConvertKitAPIKey = os.Getenv("CONVERTKIT_API_KEY")
 
 func GetAPIBase() string {
 	if IsDevelMode {
@@ -49,7 +52,7 @@ func sendError(c *gin.Context, code int) {
 
 func sendServerError(c *gin.Context, format string, args ...interface{}) {
 	sendError(c, models.ErrorInternal)
-	fmt.Printf("%s\n", fmt.Sprintf(format, args...))
+	log.Printf("%s\n", fmt.Sprintf(format, args...))
 }
 
 const TrialPeriod = time.Hour * 24 * 7
@@ -153,6 +156,20 @@ func SendSlackMessageForUser(user *models.User, format string, args ...interface
 	SendSlackMessage(format, args...)
 }
 
+func executeTemplate(text string, params interface{}) ([]byte, error) {
+	tpl, err := template.New("install").Parse(text)
+	if err != nil {
+		return nil, err
+	}
+
+	var buf bytes.Buffer
+	if err := tpl.Execute(&buf, params); err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
+}
+
 //go:embed install.sh
 var installScript string
 
@@ -163,27 +180,22 @@ func GetInstall(c *gin.Context) {
 	}
 
 	SendSlackMessageForUser(user, "%s accessed install script.", user.Email)
-	tpl, err := template.New("install").Parse(installScript)
+
+	type Data struct {
+		APIBase string
+		Code    string
+	}
+
+	tpl, err := executeTemplate(installScript, &Data{
+		Code:    user.DownloadCode,
+		APIBase: GetAPIBase(),
+	})
 	if err != nil {
 		sendServerError(c, "unable to load install script")
 		return
 	}
 
-	var data struct {
-		APIBase string
-		Code    string
-	}
-
-	data.Code = user.DownloadCode
-	data.APIBase = GetAPIBase()
-
-	var buf bytes.Buffer
-	if err := tpl.Execute(&buf, data); err != nil {
-		sendServerError(c, "unable to generate install script")
-		return
-	}
-
-	c.Data(http.StatusOK, "text/plain", buf.Bytes())
+	c.Data(http.StatusOK, "text/plain", tpl)
 }
 
 func GetLicense(c *gin.Context) {
@@ -342,74 +354,236 @@ func PostHeartbeat(c *gin.Context) {
 	c.JSON(200, &models.HeartbeatResponse{Ok: true})
 }
 
-func PostAirtableCallback(c *gin.Context) {
-	var req struct {
-		AirtableID string `json:"airtable_id"`
+type BetaSignupRequest struct {
+	Name   string   `json:"name"`
+	Email  string   `json:"email"`
+	OS     []string `json:"os"`
+	Editor []string `json:"editor"`
+}
+
+func NewPostJSONRequest(url string, body interface{}) (*http.Request, error) {
+	dat, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
 	}
+	req, err := http.NewRequest("POST", url, bytes.NewReader(dat))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Content-Type", "application/json")
+	return req, nil
+}
+
+func AddSignupToConvertKit(input *BetaSignupRequest) error {
+	data := &gin.H{
+		"api_key":    ConvertKitAPIKey,
+		"email":      input.Email,
+		"first_name": getFirstNameFromName(input.Name),
+	}
+
+	url := "https://api.convertkit.com/v3/tags/2785111/subscribe"
+	req, err := NewPostJSONRequest(url, data)
+	if err != nil {
+		return err
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		buf, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf("bad response from convertkit: %s", string(buf))
+	}
+	return nil
+}
+
+func AddSignupToAirtable(input *BetaSignupRequest) error {
+	osLookup := map[string]string{
+		"windows": "Windows",
+		"mac":     "macOS",
+		"linux":   "Linux",
+	}
+
+	editorLookup := map[string]string{
+		"vscode":      "VSCode",
+		"goland":      "GoLand",
+		"other":       "Other",
+		"text_editor": "A text editor (Vim, Sublime, etc.)",
+	}
+
+	newOS := []string{}
+	for _, os := range input.OS {
+		val, ok := osLookup[os]
+		if !ok {
+			return fmt.Errorf("invalid os")
+		}
+		newOS = append(newOS, val)
+	}
+
+	newEditor := []string{}
+	for _, editor := range input.Editor {
+		val, ok := editorLookup[editor]
+		if !ok {
+			return fmt.Errorf("invalid editor")
+		}
+		newEditor = append(newEditor, val)
+	}
+
+	data := gin.H{
+		"records": []gin.H{
+			gin.H{
+				"fields": gin.H{
+					"Name":             input.Name,
+					"Email":            input.Email,
+					"Operating System": newOS,
+					"Currently Using":  newEditor,
+				},
+			},
+		},
+	}
+
+	req, err := NewPostJSONRequest("https://api.airtable.com/v0/appjrtpjRjl0HV5EY/Signups", data)
+	if err != nil {
+		return err
+	}
+
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", AirtableAPIKey))
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	buf, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Printf("couldn't read response from airtable: %v", err)
+		return err
+	}
+	log.Printf("%s", string(buf))
+	return nil
+}
+
+//go:embed signup_email.txt
+var SignupEmailText string
+
+//go:embed signup_email.html
+var SignupEmailHTML string
+
+func getFirstNameFromName(name string) string {
+	parts := strings.Fields(name)
+	if len(parts) == 0 {
+		return ""
+	}
+	return parts[0]
+}
+
+func getGreetingFromName(name string) string {
+	firstName := getFirstNameFromName(name)
+	if firstName == "" {
+		return "Hi"
+	}
+	return fmt.Sprintf("Hi %s", firstName)
+}
+
+func SendBetaSignupEmail(name, email string) error {
+	type Data struct {
+		Greeting    string
+		PaymentLink string
+	}
+
+	data := &Data{
+		Greeting:    getGreetingFromName(name),
+		PaymentLink: BetaPaymentLink,
+	}
+
+	emailText, err := executeTemplate(SignupEmailText, data)
+	if err != nil {
+		return err
+	}
+
+	emailHTML, err := executeTemplate(SignupEmailHTML, data)
+	if err != nil {
+		return err
+	}
+
+	return SendEmail(
+		email,
+		"CodePerfect Beta - Onboarding",
+		string(emailText),
+		string(emailHTML),
+	)
+}
+
+func SendSignupToSlack(req *BetaSignupRequest) {
+	osList := []string{}
+	editorList := []string{}
+
+	for _, it := range req.OS {
+		osList = append(osList, fmt.Sprintf("`%s`", it))
+	}
+	for _, it := range req.Editor {
+		editorList = append(editorList, fmt.Sprintf("`%s`", it))
+	}
+
+	os := "none"
+	if len(osList) > 0 {
+		os = strings.Join(osList, ", ")
+	}
+
+	editor := "none"
+	if len(editorList) > 0 {
+		editor = strings.Join(editorList, ", ")
+	}
+
+	SendSlackMessage(
+		"New signup:\n> *%s*\n> Email: %s\n> OS: %s\n> Editor: %s",
+		req.Name,
+		req.Email,
+		os,
+		editor,
+	)
+}
+
+func PostBetaSignup(c *gin.Context) {
+	var req BetaSignupRequest
 	if err := c.BindJSON(&req); err != nil {
 		return
 	}
 
-	type AirtableResponse struct {
-		Fields struct {
-			Email string   `json:"Email"`
-			Name  string   `json:"Name"`
-			OSes  []string `json:"Operating System"`
-		} `json:"fields"`
+	SendSignupToSlack(&req)
+
+	if err := AddSignupToAirtable(&req); err != nil {
+		SendSlackMessage("couldn't add to airtable:\n```%v```", err)
+		log.Println(err)
 	}
 
-	do := func() *AirtableResponse {
-		url := fmt.Sprintf("https://api.airtable.com/v0/appjrtpjRjl0HV5EY/Signups/%s", req.AirtableID)
-		req, err := http.NewRequest("GET", url, nil)
-		if err != nil {
-			return nil
-		}
-		req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", AirtableAPIKey))
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			return nil
-		}
-		defer resp.Body.Close()
+	if err := AddSignupToConvertKit(&req); err != nil {
+		SendSlackMessage("couldn't add to convertkit:\n```%v```", err)
+		log.Println(err)
+	}
 
-		dat, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return nil
-		}
-
-		var aresp AirtableResponse
-		if err := json.Unmarshal(dat, &aresp); err != nil {
-			return nil
-		}
-
-		isMacOS := func() bool {
-			for _, os := range aresp.Fields.OSes {
-				if os == "macOS" {
-					return true
-				}
+	isMacOS := func() bool {
+		for _, os := range req.OS {
+			if os == "mac" {
+				return true
 			}
-			return false
 		}
-
-		if !isMacOS() {
-			return nil
-		}
-
-		return &aresp
+		return false
 	}
 
-	if resp := do(); resp != nil {
-		q := url.Values{}
-		q.Add("name", resp.Fields.Name)
-		q.Add("email", resp.Fields.Email)
-		url := fmt.Sprintf("https://calendly.com/bh-codeperfect/beta-onboarding?%s", q.Encode())
-
-		c.JSON(200, &gin.H{
-			"action":    "schedule_call",
-			"call_link": url,
-		})
-	} else {
-		c.JSON(200, &gin.H{
-			"action": "nothing",
-		})
+	nextStage := "not_supported"
+	if isMacOS() {
+		nextStage = "supported"
+		if err := SendBetaSignupEmail(req.Name, req.Email); err != nil {
+			log.Print(err)
+		}
 	}
+
+	c.JSON(200, &gin.H{"next_stage": nextStage})
 }

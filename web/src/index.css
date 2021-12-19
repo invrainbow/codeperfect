@@ -88,28 +88,31 @@
 }
 
 @layer components {
-  .main-button {
-    background: #333;
-    color: white;
+  .button {
     @apply rounded-lg font-medium shadow-sm;
     @apply py-2 px-5;
     @apply disabled:opacity-50 no-underline outline-none;
+    @apply whitespace-nowrap;
+  }
+  .button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .main-button {
+    background: #333;
+    color: white;
   }
   .main-button:hover {
     background: #444;
   }
   .download-button {
-    @apply bg-gray-50 border border-gray-300 font-medium text-gray-500 whitespace-nowrap mr-1.5 py-1.5 px-3;
+    @apply bg-gray-50 border border-gray-300 text-gray-500;
   }
   .download-button:hover {
     @apply bg-gray-50;
   }
   .download-button:hover:not(:disabled) {
     background: white;
-  }
-  .download-button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
   }
 }
 
@@ -175,5 +178,4 @@
   .feature-canvas.done + .feature-loading {
     display: none;
   }
-
 }

@@ -6,6 +6,7 @@ require (
 	github.com/aws/aws-sdk-go v1.40.28
 	github.com/btcsuite/btcutil v1.0.2
 	github.com/danwakefield/fnmatch v0.0.0-20160403171240-cbb64ac3d964 // indirect
+	github.com/davecgh/go-spew v1.1.1
 	github.com/denormal/go-gitignore v0.0.0-20180930084346-ae8ad1d07817
 	github.com/gin-contrib/cors v1.3.1
 	github.com/gin-gonic/gin v1.7.2

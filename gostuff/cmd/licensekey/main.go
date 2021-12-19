@@ -36,6 +36,6 @@ func main() {
 			db.DB.Create(&user)
 		}
 
-		fmt.Printf("%s: https://codeperfect95.com/install?code=%s\n", email, user.DownloadCode)
+		log.Printf("%s: https://codeperfect95.com/install?code=%s\n", email, user.DownloadCode)
 	}
 }

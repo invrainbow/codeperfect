@@ -14,6 +14,6 @@ func main() {
 	r.POST("/auth-web", PostAuthWeb)
 	r.POST("/auth", PostAuth)
 	r.POST("/heartbeat", PostHeartbeat)
-	r.POST("/airtable", PostAirtableCallback)
+	r.POST("/beta-signup", PostBetaSignup)
 	r.Run()
 }

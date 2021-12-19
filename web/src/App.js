@@ -1,3 +1,4 @@
+import produce from "immer";
 import React from "react";
 import cx from "classnames";
 // import _ from "lodash";
@@ -16,6 +17,7 @@ import {
 } from "react-router-dom";
 
 import { AiOutlineCheck, AiOutlineClose, AiFillCode } from "react-icons/ai";
+import { BsArrowRight } from "react-icons/bs";
 import { FaApple, FaRegClipboard } from "react-icons/fa";
 import { FcCheckmark } from "react-icons/fc";
 import { HiArrowNarrowLeft, HiArrowNarrowRight } from "react-icons/hi";
@@ -36,13 +38,7 @@ import animVimSpritesheet from "./anim-vim2/spritesheet.png";
 import animWorkflowFrames from "./anim-workflow2/data.json";
 import animWorkflowSpritesheet from "./anim-workflow2/spritesheet.png";
 
-const NAME = "CodePerfect 95";
-const NAME_SHORT = "CodePerfect";
 const SUPPORT_EMAIL = "support@codeperfect95.com";
-const CURRENT_YEAR = new Date().getFullYear();
-const BETA_SIGNUP_LINK = "https://airtable.com/shraN38Z2jqQJVqbk";
-const CHANGELOG_LINK =
-  "https://codeperfect95.notion.site/codeperfect95/CodePerfect-95-Changelog-dcedf41014ef4de79690a5b5b54ebb33";
 
 let API_BASE = "https://api.codeperfect95.com";
 if (process.env.NODE_ENV === "development") {
@@ -57,12 +53,13 @@ function A({ children, ...props }) {
   );
 }
 
-function WallOfText({ children, className, ...props }) {
+function WallOfText({ width, children, className, ...props }) {
   return (
     <div
       className={cx(
-        className,
-        "wall-of-text p-4 my-4 md:my-16 md:p-12 leading-normal md:max-w-3xl md:mx-auto"
+        "wall-of-text p-4 my-4 md:my-16 md:p-12 leading-normal md:mx-auto",
+        `md:max-w-${width || "3xl"}`,
+        className
       )}
       {...props}
     >
@@ -73,7 +70,7 @@ function WallOfText({ children, className, ...props }) {
 
 function Title({ children, ...props }) {
   return (
-    <h2 className="text-xl font-bold text-gray-700" {...props}>
+    <h2 className="text-2xl font-bold text-gray-700" {...props}>
       {children}
     </h2>
   );
@@ -340,13 +337,13 @@ function Home() {
           <span className="inline-block">IDE for Go</span>
         </div>
         <div className="mt-4 mb-6 md:mb-20 text-lg text-gray-400 text-center">
-          <A
-            href={BETA_SIGNUP_LINK}
+          <Link
+            to="/beta"
             className="rounded-full bg-gray-100 hover:bg-gray-200 color-gray-400 inline-block text-sm py-1 px-4 no-underline"
           >
             <b className="text-black">NEW:</b> <Icon icon={FaApple} /> macOS now
             in private beta!
-          </A>
+          </Link>
         </div>
       </div>
 
@@ -370,7 +367,7 @@ function Home() {
             </h2>
             <div className="lg:w-full md:mt-0 lg:mt-4 text-lg text-gray-600">
               <p>
-                {NAME_SHORT} is written in C++ and runs at 144 FPS. Every
+                CodePerfect is written in C++ and runs at 144 FPS. Every
                 keystroke responds instantly.
               </p>
               <p>
@@ -378,9 +375,9 @@ function Home() {
                 without being encumbered by your tools.
               </p>
               <p className="text-center lg:text-left">
-                <A className="main-button mt-4" href={BETA_SIGNUP_LINK}>
+                <Link className="button main-button mt-4" to="/beta">
                   Request Access
-                </A>
+                </Link>
               </p>
             </div>
           </div>
@@ -391,16 +388,7 @@ function Home() {
   );
 }
 
-function PricingBox({
-  title,
-  monthly,
-  yearly,
-  isYearly,
-  children,
-  unit,
-  cta,
-  link,
-}) {
+function PricingBox({ title, monthly, yearly, isYearly, children, unit, cta }) {
   return (
     <div
       className={cx(
@@ -419,9 +407,7 @@ function PricingBox({
         </div>
       </div>
       <div className="text-gray-500 text-left my-6">{children}</div>
-      <A className="main-button" href={link}>
-        {cta}
-      </A>
+      {cta}
     </div>
   );
 }
@@ -481,9 +467,9 @@ function AutoInstall() {
             <Snippet text={`curl -s "${installLink}" | bash`} />
           </div>
           <div className="text-xs text-gray-400">
-            If Go isn't intalled, it will offer to install it with Homebrew. If
-            you don't have Homebrew, it will offer to install that. You can also
-            decline and install Go (1.13+) yourself if you prefer.
+            CodePerfect requires Go 1.13+. If Go isn't intalled, the script will
+            offer to install it with Homebrew. You can also decline and install
+            Go yourself if you prefer.
           </div>
         </CardSection>
         <CardSection step={2}>
@@ -652,13 +638,13 @@ function ManualInstall() {
           Download the appropriate package for your machine:
           <p className="flex space-x-2">
             <button
-              className="main-button download-button"
+              className="button download-button mr-1.5"
               onClick={() => onDownload("darwin")}
             >
               <Icon icon={FaApple} /> Mac &ndash; Intel
             </button>
             <button
-              className="main-button download-button"
+              className="button download-button"
               onClick={() => onDownload("darwin_arm")}
             >
               <Icon icon={FaApple} /> Mac &ndash; M1
@@ -709,6 +695,196 @@ function ManualInstall() {
 
 function Download() {
   return <Redirect to={`/install?code=${getCode()}`} />;
+}
+
+function Textbox({ area, onChange, className, ...props }) {
+  const realProps = {
+    className: cx(className, "py-1.5 px-3 rounded border-2 border-gray-200"),
+    onChange: onChange && ((e) => onChange(e.target.value)),
+    ...props,
+  };
+  if (area) {
+    realProps.className = cx(realProps.className, "resize-none h-24");
+    return <textarea {...realProps} />;
+  }
+  return <input {...realProps} />;
+}
+
+function BetaField({ className, label, children }) {
+  return (
+    <div className={cx("my-6", className)}>
+      {label && <div className="mb-1.5 font-medium">{label}</div>}
+      <div>{children}</div>
+    </div>
+  );
+}
+
+/*
+function BetaStep({ step, children }) {
+  const selected = step === 1;
+  return (
+    <div
+      className={cx(
+        "p-4 rounded mb-3 flex items-center text-lg text-black",
+        selected ? "border-r-4 border-blue-400" : "opacity-30"
+      )}
+    >
+      <div className="w-10 h-10 mr-3 flex rounded-full items-center justify-center bg-gray-600 text-gray-200">
+        <span>{step}</span>
+      </div>
+      <div>{children}</div>
+    </div>
+  );
+}
+*/
+
+function Beta() {
+  const [sending, setSending] = React.useState(false);
+  const [form, rawSetForm] = React.useState({
+    name: "",
+    email: "",
+    os: [],
+    editor: [],
+  });
+  const [stage, setStage] = React.useState("signup");
+  const setForm = (cb) => rawSetForm(produce(form, cb));
+
+  const osOptions = [
+    ["windows", "Windows"],
+    ["mac", "macOS"],
+    ["linux", "Linux"],
+  ];
+
+  const editorOptions = [
+    ["goland", "Goland"],
+    ["vscode", "VSCode"],
+    ["text_editor", "A text editor (Vim, Sublime)"],
+    ["other", "Other"],
+  ];
+
+  const onSubmit = React.useCallback(
+    async (e) => {
+      e.preventDefault();
+      setSending(true);
+      const resp = await fetch(`${API_BASE}/beta-signup`, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(form),
+      });
+      const data = await resp.json();
+      setStage(data.next_stage);
+      setSending(false);
+    },
+    [form, setSending, setStage]
+  );
+
+  return (
+    <WallOfText width="xl" className="border shadow">
+      <Title>CodePerfect Beta</Title>
+      {stage === "signup" && (
+        <form onSubmit={onSubmit}>
+          <BetaField label="What's your name?">
+            <Textbox
+              value={form.name}
+              onChange={(name) =>
+                setForm((draft) => {
+                  draft.name = name;
+                })
+              }
+              className="w-full"
+            />
+          </BetaField>
+          <BetaField label="What's your email?">
+            <Textbox
+              value={form.email}
+              onChange={(email) =>
+                setForm((draft) => {
+                  draft.email = email;
+                })
+              }
+              className="w-full"
+            />
+          </BetaField>
+          <BetaField label="What platforms do you use?">
+            {osOptions.map(([key, label]) => (
+              <div className="mb-1">
+                <label className="mr-4 cursor-pointer">
+                  <input
+                    checked={form.os.includes(key)}
+                    onChange={(e) => {
+                      setForm((draft) => {
+                        const set = new Set(draft.os);
+                        if (e.target.checked) {
+                          set.add(key);
+                        } else {
+                          set.delete(key);
+                        }
+                        draft.os = Array.from(set);
+                      });
+                    }}
+                    type="checkbox"
+                    className="mr-1 cursor-pointer"
+                  />
+                  {label}
+                </label>
+              </div>
+            ))}
+          </BetaField>
+          <BetaField label="What do you currently use to write Go?">
+            {editorOptions.map(([key, label]) => (
+              <div className="mb-1">
+                <label className="mr-4 cursor-pointer">
+                  <input
+                    checked={form.editor.includes(key)}
+                    onChange={(e) => {
+                      setForm((draft) => {
+                        const set = new Set(draft.editor);
+                        if (e.target.checked) {
+                          set.add(key);
+                        } else {
+                          set.delete(key);
+                        }
+                        draft.editor = Array.from(set);
+                      });
+                    }}
+                    type="checkbox"
+                    className="mr-1 cursor-pointer"
+                  />
+                  {label}
+                </label>
+              </div>
+            ))}
+          </BetaField>
+          <div>
+            <button
+              disabled={sending}
+              type="submit"
+              className="button main-button"
+            >
+              {sending ? "Submitting..." : "Join Beta"}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {stage === "not_supported" && (
+        <p>
+          Thanks for signing up! At the moment we only support macOS, but we'll
+          be sure to update you when we roll out support for other platforms.
+        </p>
+      )}
+
+      {stage === "supported" && (
+        <p>
+          Thanks for signing up! We just sent you an email to schedule your
+          onboarding call. (If you don't see it, please check your spam folder.)
+        </p>
+      )}
+    </WallOfText>
+  );
 }
 
 function Anchor({ name }) {
@@ -765,8 +941,11 @@ function Pricing() {
             monthly={5}
             yearly={45}
             isYearly={yearly}
-            cta="Request Access"
-            link={BETA_SIGNUP_LINK}
+            cta={
+              <Link className="button main-button" to="/beta">
+                Request Access
+              </Link>
+            }
           >
             <PricingPoint label="7-day free trial" />
             <PricingPoint label="Commercial use allowed" />
@@ -780,8 +959,11 @@ function Pricing() {
             yearly={90}
             unit={"user"}
             isYearly={yearly}
-            cta="Request Access"
-            link={BETA_SIGNUP_LINK}
+            cta={
+              <Link className="button main-button" to="/beta">
+                Request Access
+              </Link>
+            }
           >
             <PricingPoint label="All features in Personal" />
             <PricingPoint label="Company can pay" />
@@ -793,8 +975,14 @@ function Pricing() {
             yearly="180+"
             unit={"user"}
             isYearly={yearly}
-            cta="Contact Sales"
-            link="mailto:sales@codeperfect95.com"
+            cta={
+              <a
+                className="button main-button"
+                href="mailto:sales@codeperfect95.com"
+              >
+                Contact Sales
+              </a>
+            }
           >
             <PricingPoint label="All features in Team" />
             <PricingPoint label="Priority support" />
@@ -807,7 +995,7 @@ function Pricing() {
         <p className="text-xl mb-0">Ready to get started?</p>
         <p>
           <A
-            className="main-button font-bold text-xl px-6 py-3 whitespace-nowrap"
+            className="button main-button font-bold text-xl px-6 py-3 whitespace-nowrap"
             href={BETA_SIGNUP_LINK}
           >
             Request Access
@@ -893,10 +1081,10 @@ function FinishSignup(props) {
   if (data === null) return <Loading />;
 
   return (
-    <div>
+    <WallOfText width="2xl">
+      <Title>Thanks for signing up for CodePerfect!</Title>
       {data.action === "schedule_call" && (
-        <WallOfText>
-          <Title>Thanks for signing up for CodePerfect!</Title>
+        <>
           <p>
             We're working closely with a small number of people for our private
             macOS beta release. The next step is to schedule an onboarding call.
@@ -906,20 +1094,27 @@ function FinishSignup(props) {
             and what your day-to-day looks like. After that we'll take you
             through CodePerfect installation and do a feature walkthrough.
           </p>
-          <p>
-            <A className="main-button mt-6" href={data.call_link}>
+          <div className="mt-6">
+            <A className="button main-button mr-2" href={data.call_link}>
               Schedule Call
+              <Icon className="ml-2" icon={BsArrowRight} />
             </A>
-          </p>
-        </WallOfText>
+            <a
+              className="button main-button download-button"
+              href={`mailto:${SUPPORT_EMAIL}`}
+            >
+              Contact Us
+            </a>
+          </div>
+        </>
       )}
       {data.action === "nothing" && (
-        <WallOfText>
-          Thanks for signing up! At the moment we're still rolling out support
-          for your OS, but we'll reach out once we do!
-        </WallOfText>
+        <p>
+          At the moment we're still rolling out support for your OS, but we'll
+          reach out once we do.
+        </p>
       )}
-    </div>
+    </WallOfText>
   );
 }
 
@@ -930,7 +1125,7 @@ function App() {
 
       <Helmet>
         <meta charSet="utf-8" />
-        <title>{NAME}</title>
+        <title>CodePerfect 95</title>
       </Helmet>
 
       <div className="text-gray-500">
@@ -944,7 +1139,7 @@ function App() {
               className="w-auto h-16 inline-block mr-4"
               src={logoImage}
             />
-            <span className="hidden md:inline-block">{NAME}</span>
+            <span className="hidden md:inline-block">CodePerfect 95</span>
           </Link>
           <div className="flex items-baseline space-x-6">
             <A
@@ -961,13 +1156,16 @@ function App() {
               Pricing
             </Link>
 
-            <A className="main-button" role="button" href={BETA_SIGNUP_LINK}>
+            <Link className="button main-button" role="button" to="/beta">
               Join Beta
-            </A>
+            </Link>
           </div>
         </div>
         <div>
           <Switch>
+            <Route path="/beta" exact>
+              <Beta />
+            </Route>
             <Route path="/download" exact>
               <Download />
             </Route>
@@ -1004,22 +1202,22 @@ function App() {
           )}
         >
           <div className="text-gray-500">
-            &copy; {CURRENT_YEAR} {NAME}
+            &copy; {new Date().getFullYear()} CodePerfect 95
           </div>
           <div className="flex flex-col sm:flex-row space-x-0 sm:space-x-12 mt-2 sm:mt-0">
-            <div className="sm:text-right sm:flex sm:flex-row sm:space-x-6">
+            <div className="sm:text-right sm:flex sm:flex-row sm:space-x-8">
               <div>
-                <A className="text-gray-500 no-underline" href={CHANGELOG_LINK}>
+                <A
+                  className="text-gray-500 no-underline"
+                  href="https://codeperfect95.notion.site/codeperfect95/CodePerfect-95-Changelog-dcedf41014ef4de79690a5b5b54ebb33"
+                >
                   Changelog
                 </A>
               </div>
               <div>
-                <A
-                  className="text-gray-500 no-underline"
-                  href={BETA_SIGNUP_LINK}
-                >
+                <Link className="text-gray-500 no-underline" to="/beta">
                   Join Beta
-                </A>
+                </Link>
               </div>
               <div>
                 <A

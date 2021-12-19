@@ -39,7 +39,7 @@ func CallServer(endpoint string, license *License, params interface{}, out inter
 		return err
 	}
 
-	fmt.Printf("email = %s, key = %s\n", license.Email, license.LicenseKey)
+	log.Printf("email = %s, key = %s\n", license.Email, license.LicenseKey)
 
 	url := fmt.Sprintf("%s/%s", GetServerBase(), endpoint)
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(buf))
@@ -59,7 +59,7 @@ func CallServer(endpoint string, license *License, params interface{}, out inter
 		return err
 	}
 
-	fmt.Printf("body: %s\n", body)
+	log.Printf("body: %s\n", body)
 
 	if resp.StatusCode != http.StatusOK {
 		var errResp models.ErrorResponse
