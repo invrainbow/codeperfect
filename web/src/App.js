@@ -55,10 +55,10 @@ function A({ children, ...props }) {
 
 function WallOfText({ width, children, className, ...props }) {
   // for tailwindcss shake:
-  // max-w-0 max-w-none max-w-xs max-w-sm max-w-md max-w-lg max-w-xl max-w-2xl
-  // max-w-3xl max-w-4xl max-w-5xl max-w-6xl max-w-7xl max-w-full max-w-min max-w-max
-  // max-w-fit max-w-prose max-w-screen-sm max-w-screen-md max-w-screen-lg
-  // max-w-screen-xl max-w-screen-2xl
+  // md:max-w-0 md:max-w-none md:max-w-xs md:max-w-sm md:max-w-md md:max-w-lg
+  // md:max-w-xl md:max-w-2xl md:max-w-3xl md:max-w-4xl md:max-w-5xl md:max-w-6xl
+  // md:max-w-7xl md:max-w-full md:max-w-min md:max-w-max md:max-w-fit md:max-w-prose
+  // md:max-w-screen-sm md:max-w-screen-md md:max-w-screen-lg md:max-w-screen-xl md:max-w-screen-2xl
 
   return (
     <div
