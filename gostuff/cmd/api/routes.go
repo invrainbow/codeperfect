@@ -581,6 +581,7 @@ func PostBetaSignup(c *gin.Context) {
 	if isMacOS() {
 		nextStage = "supported"
 		if err := SendBetaSignupEmail(req.Name, req.Email); err != nil {
+            SendSlackMessage("couldn't send email to %s:\n```%v```", req.Email, err)
 			log.Print(err)
 		}
 	}
