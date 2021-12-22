@@ -2222,6 +2222,54 @@ void UI::draw_everything() {
         ImGui::End();
     }
 
+    if (world.wnd_call_hierarchy.show) {
+        auto &wnd = world.wnd_call_hierarchy;
+
+        ImGui::SetNextWindowDockID(dock_sidebar_id, ImGuiCond_Once);
+
+        begin_window(
+            our_sprintf("Call Hierarchy for %s###call_hierarchy", wnd.declres->decl->name),
+            &wnd,
+            ImGuiWindowFlags_AlwaysAutoResize,
+            !wnd.done
+        );
+
+        if (wnd.done) {
+            fn<void(Call_Hier_Node*)> render_call_hier = [&](auto it) {
+                auto fd = it->decl;
+                auto res = fd->decl;
+                auto ctx = res->ctx;
+                auto decl = res->decl;
+
+                auto flags = ImGuiTreeNodeFlags_OpenOnArrow;
+                bool open = ImGui::TreeNodeEx((void*)it, flags, "%s.%s", fd->package_name, decl->name);
+
+                if (ImGui::IsItemClicked()) {
+                    auto ref = it->ref;
+                    auto start = ref->is_sel ? ref->x_start : ref->start;
+                    goto_file_and_pos(fd->filepath, start);
+                }
+
+                if (open) {
+                    For (*it->children)
+                        render_call_hier(&it);
+                    ImGui::TreePop();
+                }
+            };
+
+            For (*wnd.results) render_call_hier(&it);
+        } else {
+            ImGui::Text("Generating call hierarchy...");
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel")) {
+                cancel_call_hierarchy();
+                wnd.show = false;
+            }
+        }
+
+        ImGui::End();
+    }
+
     if (world.wnd_find_interfaces.show) {
         auto &wnd = world.wnd_find_interfaces;
 

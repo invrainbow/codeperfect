@@ -1211,6 +1211,15 @@ struct Go_Symbol {
     Go_Symbol* copy();
 };
 
+struct Call_Hier_Node {
+    Find_Decl *decl;
+    Go_Reference *ref;
+    // TODO: what else
+    List<Call_Hier_Node> *children;
+
+    Call_Hier_Node *copy();
+};
+
 struct Go_Indexer {
     ccstr goroot;
     // ccstr gopath;
@@ -1320,6 +1329,7 @@ struct Go_Indexer {
 
     List<Find_References_File>* find_references(ccstr filepath, cur2 pos, bool include_self);
     List<Find_References_File>* find_references(Goresult *declres, bool include_self);
+    List<Find_References_File>* actually_find_references(Goresult *declres, bool include_self);
     List<Goresult> *list_lazy_type_dotprops(Gotype *type, Go_Ctx *ctx);
 
     bool acquire_lock(Indexer_Status new_status, bool just_try = false);
@@ -1341,6 +1351,8 @@ struct Go_Indexer {
     bool list_type_methods(ccstr type_name, ccstr import_path, List<Goresult> *out);
     bool is_gotype_error(Goresult *res);
     bool is_import_path_internal(ccstr import_path);
+    List<Call_Hier_Node>* generate_call_hierarchy(Goresult *declres);
+    void actually_generate_call_hierarchy(Goresult *declres, List<Call_Hier_Node> *out);
 };
 
 void walk_ast_node(Ast_Node *node, bool abstract_only, Walk_TS_Callback cb);
