@@ -2930,8 +2930,6 @@ List<Find_Decl> *Go_Indexer::find_implementations(Goresult *target) {
 
     auto entries = huge_table.entries();
 
-    auto ent = huge_table.get("github.com/gin-gonic/gin:Cocks");
-
     for (int i = 0; i < entries->len; i++) {
         auto &it = entries->at(i);
         auto info = it->value;
