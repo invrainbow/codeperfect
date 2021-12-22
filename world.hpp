@@ -197,6 +197,7 @@ enum Command {
     CMD_FIND_IMPLEMENTATIONS,
     CMD_FIND_INTERFACES,
     CMD_DOCUMENTATION,
+    CMD_VIEW_CALL_HIERARCHY,
 
     _CMD_COUNT_,
 };
@@ -224,9 +225,11 @@ struct World {
     Pool find_references_mem;
     Pool rename_identifier_mem;
     Pool run_command_mem;
+    // TODO: should i start scoping these to their respective Wnd_*?
     Pool generate_implementation_mem;
     Pool find_implementations_mem;
     Pool find_interfaces_mem;
+    Pool call_hierarchy_mem;
 
     Fridge<Mark> mark_fridge;
     Fridge<Mark_Node> mark_node_fridge;
@@ -369,6 +372,17 @@ struct World {
         Thread_Handle thread;
         List<Find_Decl*> *results;
     } wnd_find_implementations;
+
+    struct Wnd_Call_Hierarchy : Wnd {
+        Pool thread_mem;
+        bool done;
+        Goresult *declres;
+        // TODO: when is it time to abstract out all this create new thread,
+        // kill, etc logic?  like we're now repeating it for find references,
+        // find interfaces, find implementations, call hierarchy, etc...
+        Thread_Handle thread;
+        List<Call_Hier_Node> *results;
+    } wnd_call_hierarchy;
 
     struct Wnd_Index_Log : Wnd {
         // ring buffer
@@ -573,6 +587,7 @@ void reload_file_subtree(ccstr path);
 void open_rename_identifier();
 void kick_off_rename_identifier();
 void cancel_rename_identifier();
+void cancel_call_hierarchy();
 void cancel_find_references();
 void cancel_find_interfaces();
 void cancel_find_implementations();

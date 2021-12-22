@@ -358,6 +358,7 @@ void World::init(GLFWwindow *_wnd) {
     init_mem(generate_implementation_mem);
     init_mem(find_implementations_mem);
     init_mem(find_interfaces_mem);
+    init_mem(call_hierarchy_mem);
 #undef init_mem
 
     MEM = &frame_mem;
@@ -1387,6 +1388,22 @@ void cancel_find_references() {
     wnd.done = true;
 }
 
+void cancel_call_hierarchy() {
+    auto &wnd = world.wnd_call_hierarchy;
+
+    if (wnd.thread != NULL) {
+        kill_thread(wnd.thread);
+        close_thread_handle(wnd.thread);
+        wnd.thread = NULL;
+    }
+
+    // assume it was acquired by find_implementations
+    if (world.indexer.status == IND_READING)
+        world.indexer.release_lock(IND_READING);
+
+    wnd.done = true;
+}
+
 void cancel_find_implementations() {
     auto &wnd = world.wnd_find_implementations;
 
@@ -1602,10 +1619,11 @@ void init_command_info_table() {
     command_info_table[CMD_UNDO] = k(KEYMOD_PRIMARY, GLFW_KEY_Z, "Undo");
     command_info_table[CMD_REDO] = k(KEYMOD_PRIMARY | KEYMOD_SHIFT, GLFW_KEY_Z, "Redo");
     command_info_table[CMD_DOCUMENTATION] = k(0, 0, "Documentation");
+    command_info_table[CMD_VIEW_CALL_HIERARCHY] = k(KEYMOD_PRIMARY, GLFW_KEY_I, "View Call Hierarchy");
 }
 
 void handle_command(Command cmd, bool from_menu) {
-    // make this a precondition
+    // make this a precondition (actually, I think it might already be)
     if (!is_command_enabled(cmd)) return;
 
     switch (cmd) {
@@ -2017,153 +2035,217 @@ void handle_command(Command cmd, bool from_menu) {
         }
         break;
 
-    case CMD_FIND_IMPLEMENTATIONS:
+    case CMD_VIEW_CALL_HIERARCHY: {
+        auto &wnd = world.wnd_call_hierarchy;
+
+        auto result = get_current_definition(NULL, true);
+        if (result == NULL) break;
+        if (result->decl == NULL) break;
+
+        auto decl = result->decl->decl;
+        if (decl == NULL) break;
+
+        if (decl->gotype == NULL || decl->gotype->type != GOTYPE_FUNC) {
+            tell_user("The selected object is not a function.", "Error");
+            break;
+        }
+
+        world.call_hierarchy_mem.reset();
         {
-            auto &wnd = world.wnd_find_implementations;
+            SCOPED_MEM(&world.call_hierarchy_mem);
+            wnd.declres = result->decl->copy_decl();
+        }
 
-            auto result = get_current_definition(NULL, true);
-            if (result == NULL) break;
-            if (result->decl == NULL) break;
+        auto &ind = world.indexer;
+        if (!ind.acquire_lock(IND_READING)) {
+            tell_user("The indexer is currently busy.", NULL);
+            break;
+        }
 
-            auto decl = result->decl->decl;
-            if (decl == NULL) break;
+        auto thread_proc = [](void *param) {
+            auto &wnd = world.wnd_call_hierarchy;
+            wnd.thread_mem.cleanup();
+            wnd.thread_mem.init();
+            SCOPED_MEM(&wnd.thread_mem);
 
-            if (decl->type != GODECL_TYPE || decl->gotype->type != GOTYPE_INTERFACE) {
-                tell_user("The selected object is not an interface.", "Error");
+            defer { cancel_call_hierarchy(); };
+
+            auto results = ind.generate_call_hierarchy(wnd.declres);
+            if (results == NULL) return;
+
+            {
+                SCOPED_MEM(&world.call_hierarchy_mem);
+
+                auto newresults = alloc_list<Call_Hier_Node>(results->len);
+                For (*results) newresults->append(it.copy());
+
+                wnd.results = newresults;
+            }
+
+            // close the thread handle first so it doesn't try to kill the thread
+            if (wnd.thread != NULL) {
+                close_thread_handle(wnd.thread);
+                wnd.thread = NULL;
+            }
+        };
+
+        wnd.show = true;
+        wnd.done = false;
+        wnd.results = NULL;
+
+        wnd.thread = create_thread(thread_proc, NULL);
+        if (wnd.thread == NULL) {
+            tell_user("Unable to kick off View Call Hierarchy.", NULL);
+            break;
+        }
+        break;
+    }
+
+    case CMD_FIND_IMPLEMENTATIONS: {
+        auto &wnd = world.wnd_find_implementations;
+
+        auto result = get_current_definition(NULL, true);
+        if (result == NULL) break;
+        if (result->decl == NULL) break;
+
+        auto decl = result->decl->decl;
+        if (decl == NULL) break;
+
+        if (decl->type != GODECL_TYPE || decl->gotype->type != GOTYPE_INTERFACE) {
+            tell_user("The selected object is not an interface.", "Error");
+            break;
+        }
+
+        auto specs = decl->gotype->interface_specs;
+        if (specs == NULL || specs->len == 0) {
+            auto msg = "The selected interface is empty. That means every type will match it. Do you still want to just list every type I can find?";
+            if (ask_user_yes_no(msg, "Warning", "Yes, continue", "No") != ASKUSER_YES)
                 break;
-            }
+        }
 
-            auto specs = decl->gotype->interface_specs;
-            if (specs == NULL || specs->len == 0) {
-                auto msg = "The selected interface is empty. That means every type will match it. Do you still want to just list every type I can find?";
-                if (ask_user_yes_no(msg, "Warning", "Yes, continue", "No") != ASKUSER_YES)
-                    break;
-            }
+        world.find_implementations_mem.reset();
+        {
+            SCOPED_MEM(&world.find_implementations_mem);
+            wnd.declres = result->decl->copy_decl();
+        }
 
-            world.find_implementations_mem.reset();
+        auto &ind = world.indexer;
+        if (!ind.acquire_lock(IND_READING)) {
+            tell_user("The indexer is currently busy.", NULL);
+            break;
+        }
+
+        auto thread_proc = [](void *param) {
+            auto &wnd = world.wnd_find_implementations;
+            wnd.thread_mem.cleanup();
+            wnd.thread_mem.init();
+            SCOPED_MEM(&wnd.thread_mem);
+
+            defer { cancel_find_implementations(); };
+
+            auto results = ind.find_implementations(wnd.declres);
+            if (results == NULL) return;
+
             {
                 SCOPED_MEM(&world.find_implementations_mem);
-                wnd.declres = result->decl->copy_decl();
+
+                auto newresults = alloc_list<Find_Decl*>(results->len);
+                For (*results) newresults->append(it.copy());
+
+                wnd.results = newresults;
             }
 
-            auto &ind = world.indexer;
-            if (!ind.acquire_lock(IND_READING)) {
-                tell_user("The indexer is currently busy.", NULL);
-                break;
+            // close the thread handle first so it doesn't try to kill the thread
+            if (wnd.thread != NULL) {
+                close_thread_handle(wnd.thread);
+                wnd.thread = NULL;
             }
+        };
 
-            auto thread_proc = [](void *param) {
-                auto &wnd = world.wnd_find_implementations;
-                wnd.thread_mem.cleanup();
-                wnd.thread_mem.init();
-                SCOPED_MEM(&wnd.thread_mem);
+        wnd.show = true;
+        wnd.done = false;
+        wnd.results = NULL;
 
-                defer { cancel_find_implementations(); };
-
-                auto results = ind.find_implementations(wnd.declres);
-                if (results == NULL) return;
-
-                {
-                    SCOPED_MEM(&world.find_implementations_mem);
-
-                    auto newresults = alloc_list<Find_Decl*>(results->len);
-                    For (*results) newresults->append(it.copy());
-
-                    wnd.results = newresults;
-                }
-
-                // close the thread handle first so it doesn't try to kill the thread
-                if (wnd.thread != NULL) {
-                    close_thread_handle(wnd.thread);
-                    wnd.thread = NULL;
-                }
-            };
-
-            wnd.show = true;
-            wnd.done = false;
-            wnd.results = NULL;
-
-            wnd.thread = create_thread(thread_proc, NULL);
-            if (wnd.thread == NULL) {
-                tell_user("Unable to kick off Find Implementations.", NULL);
-                break;
-            }
+        wnd.thread = create_thread(thread_proc, NULL);
+        if (wnd.thread == NULL) {
+            tell_user("Unable to kick off Find Implementations.", NULL);
+            break;
         }
         break;
+    }
 
-    case CMD_FIND_INTERFACES:
+    case CMD_FIND_INTERFACES: {
+        auto &wnd = world.wnd_find_interfaces;
+
+        auto result = get_current_definition(NULL, true);
+        if (result == NULL) break;
+        if (result->decl == NULL) break;
+
+        auto decl = result->decl->decl;
+        if (decl == NULL) break;
+
+        if (decl->type != GODECL_TYPE) {
+            tell_user("The selected object is not an interface.", "Error");
+            break;
+        }
+
+        if (decl->gotype->type == GOTYPE_INTERFACE) {
+            tell_user("The selected type is an interface. (Did you mean to use Find Implementations?)", "Error");
+            break;
+        }
+
+        world.find_interfaces_mem.reset();
         {
+            SCOPED_MEM(&world.find_interfaces_mem);
+            wnd.declres = result->decl->copy_decl();
+        }
+
+        auto &ind = world.indexer;
+        if (!ind.acquire_lock(IND_READING)) {
+            tell_user("The indexer is currently busy.", NULL);
+            break;
+        }
+
+        auto thread_proc = [](void *param) {
             auto &wnd = world.wnd_find_interfaces;
+            wnd.thread_mem.cleanup();
+            wnd.thread_mem.init();
+            SCOPED_MEM(&wnd.thread_mem);
 
-            auto result = get_current_definition(NULL, true);
-            if (result == NULL) break;
-            if (result->decl == NULL) break;
+            defer { cancel_find_interfaces(); };
 
-            auto decl = result->decl->decl;
-            if (decl == NULL) break;
+            // TODO: how do we handle errors?
+            // right now it just freezes on "Searching..."
+            auto results = ind.find_interfaces(wnd.declres);
+            if (results == NULL) return;
 
-            if (decl->type != GODECL_TYPE) {
-                tell_user("The selected object is not an interface.", "Error");
-                break;
-            }
-
-            if (decl->gotype->type == GOTYPE_INTERFACE) {
-                tell_user("The selected type is an interface. (Did you mean to use Find Implementations?)", "Error");
-                break;
-            }
-
-            world.find_interfaces_mem.reset();
             {
                 SCOPED_MEM(&world.find_interfaces_mem);
-                wnd.declres = result->decl->copy_decl();
+
+                auto newresults = alloc_list<Find_Decl*>(results->len);
+                For (*results) newresults->append(it.copy());
+
+                wnd.results = newresults;
             }
 
-            auto &ind = world.indexer;
-            if (!ind.acquire_lock(IND_READING)) {
-                tell_user("The indexer is currently busy.", NULL);
-                break;
+            // close the thread handle first so it doesn't try to kill the thread
+            if (wnd.thread != NULL) {
+                close_thread_handle(wnd.thread);
+                wnd.thread = NULL;
             }
+        };
 
-            auto thread_proc = [](void *param) {
-                auto &wnd = world.wnd_find_interfaces;
-                wnd.thread_mem.cleanup();
-                wnd.thread_mem.init();
-                SCOPED_MEM(&wnd.thread_mem);
+        wnd.show = true;
+        wnd.done = false;
+        wnd.results = NULL;
 
-                defer { cancel_find_interfaces(); };
-
-                // TODO: how do we handle errors?
-                // right now it just freezes on "Searching..."
-                auto results = ind.find_interfaces(wnd.declres);
-                if (results == NULL) return;
-
-                {
-                    SCOPED_MEM(&world.find_interfaces_mem);
-
-                    auto newresults = alloc_list<Find_Decl*>(results->len);
-                    For (*results) newresults->append(it.copy());
-
-                    wnd.results = newresults;
-                }
-
-                // close the thread handle first so it doesn't try to kill the thread
-                if (wnd.thread != NULL) {
-                    close_thread_handle(wnd.thread);
-                    wnd.thread = NULL;
-                }
-            };
-
-            wnd.show = true;
-            wnd.done = false;
-            wnd.results = NULL;
-
-            wnd.thread = create_thread(thread_proc, NULL);
-            if (wnd.thread == NULL) {
-                tell_user("Unable to kick off Find Interfaces.", NULL);
-                break;
-            }
+        wnd.thread = create_thread(thread_proc, NULL);
+        if (wnd.thread == NULL) {
+            tell_user("Unable to kick off Find Interfaces.", NULL);
+            break;
         }
         break;
+    }
 
     case CMD_OPTIONS:
         if (world.wnd_options.show) {

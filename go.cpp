@@ -3034,9 +3034,86 @@ List<Find_References_File> *Go_Indexer::find_references(ccstr filepath, cur2 pos
     return find_references(result->decl, include_self);
 }
 
-List<Find_References_File> *Go_Indexer::find_references(Goresult *declres, bool include_self) {
+// TODO: maybe we should have the caller call reload_all_dirty_files(), wrapped
+// in a function like init_indexer_session() or something
+List<Call_Hier_Node>* Go_Indexer::generate_call_hierarchy(Goresult *declres) {
     reload_all_dirty_files();
 
+    auto ret = alloc_list<Call_Hier_Node>();
+    actually_generate_call_hierarchy(declres, ret);
+    return ret;
+}
+
+void Go_Indexer::actually_generate_call_hierarchy(Goresult *declres, List<Call_Hier_Node> *out) {
+    auto ref_files = actually_find_references(declres, false);
+    if (ref_files == NULL) return;
+    // if (ref_files->len == 0) return;
+
+    For (*ref_files) {
+        auto filepath = it.filepath;
+        auto ctx = filepath_to_ctx(filepath);
+        Go_Package *pkg = NULL;
+        auto file = find_gofile_from_ctx(ctx, &pkg);
+
+        if (file == NULL || pkg == NULL) continue;
+
+        For (*it.references) {
+            // get the bounds of the reference
+            cur2 start, end;
+            if (it.is_sel) {
+                start = it.x_start;
+                end = it.sel_end;
+            } else {
+                start = it.start;
+                end = it.end;
+            }
+
+            auto find_enclosing_decl = [&]() -> Godecl* {
+                int lo = 0, hi = file->decls->len;
+                while (lo <= hi) {
+                    auto mid = (lo+hi)/2;
+                    auto it = file->decls->items + mid;
+
+                    if (start < it->decl_start)
+                        hi = mid-1;
+                    else if (end > it->decl_end)
+                        lo = mid+1;
+                    else
+                        return it;
+                }
+                return NULL;
+            };
+
+            auto enclosing_decl = find_enclosing_decl();
+            if (enclosing_decl == NULL)
+                continue;
+
+            auto declres = make_goresult(enclosing_decl, ctx);
+
+            auto fd = alloc_object(Find_Decl);
+            fd->filepath = filepath;
+            fd->decl = declres;
+            fd->package_name = pkg->package_name;
+
+            Call_Hier_Node node;
+            node.decl = fd;
+            node.children = alloc_list<Call_Hier_Node>();
+            node.ref = &it;
+            out->append(&node);
+
+            if (enclosing_decl->gotype != NULL)
+                if (enclosing_decl->gotype->type == GOTYPE_FUNC)
+                    actually_generate_call_hierarchy(declres, node.children);
+        }
+    }
+}
+
+List<Find_References_File> *Go_Indexer::find_references(Goresult *declres, bool include_self) {
+    reload_all_dirty_files();
+    return actually_find_references(declres, include_self);
+}
+
+List<Find_References_File> *Go_Indexer::actually_find_references(Goresult *declres, bool include_self) {
     auto decl = declres->decl;
     if (decl == NULL) return NULL;
     if (decl->type == GODECL_IMPORT) return NULL;
@@ -6634,13 +6711,28 @@ List<T> *copy_list(List<T> *arr) {
     return copy_list<T>(arr, copy_func);
 }
 
+template <typename T>
+List<T> *copy_list(List<T*> *arr) {
+    auto copy_func = [&](T **it) -> T* { return copy_object(*it); };
+    return copy_list<T>(arr, copy_func);
+}
+
+
 // -----
 // actual code that tells us how to copy objects
+
+Call_Hier_Node* Call_Hier_Node::copy() {
+    auto ret = clone(this);
+    ret->decl = copy_object(decl);
+    ret->ref = copy_object(ref);
+    ret->children = copy_list(children);
+    return ret;
+}
 
 Find_Decl* Find_Decl::copy() {
     auto ret = clone(this);
     ret->filepath = our_strcpy(filepath);
-    ret->decl = decl->copy_decl();
+    ret->decl = decl == NULL ? NULL : decl->copy_decl();
     ret->package_name = our_strcpy(package_name);
     return ret;
 }
@@ -6649,7 +6741,7 @@ Go_Symbol* Go_Symbol::copy() {
     auto ret = clone(this);
     ret->pkgname = our_strcpy(pkgname);
     ret->name = our_strcpy(name);
-    ret->decl = decl->copy_decl();
+    ret->decl = decl == NULL ? NULL : decl->copy_decl();
     return ret;
 }
 
