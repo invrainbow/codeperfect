@@ -39,6 +39,8 @@ import animWorkflowFrames from "./anim-workflow2/data.json";
 import animWorkflowSpritesheet from "./anim-workflow2/spritesheet.png";
 
 const SUPPORT_EMAIL = "support@codeperfect95.com";
+const BETA_LINK =
+  "https://codeperfect95.notion.site/codeperfect95/CodePerfect-macOS-Beta-b899fc159c6341abae382f2b5b744bc5";
 
 let API_BASE = "https://api.codeperfect95.com";
 if (process.env.NODE_ENV === "development") {
@@ -344,13 +346,13 @@ function Home() {
           <span className="inline-block">IDE for Go</span>
         </div>
         <div className="mt-4 mb-6 md:mb-20 text-lg text-gray-400 text-center">
-          <Link
-            to="/beta"
+          <A
+            href={BETA_LINK}
             className="rounded-full bg-gray-100 hover:bg-gray-200 color-gray-400 inline-block text-sm py-1 px-4 no-underline"
           >
             <b className="text-black">NEW:</b> <Icon icon={FaApple} /> macOS now
             in private beta!
-          </Link>
+          </A>
         </div>
       </div>
 
@@ -381,16 +383,18 @@ function Home() {
                 A full-featured IDE, faster than Sublime. Tear through your code
                 without being encumbered by your tools.
               </p>
-              <p className="text-center lg:text-left">
-                <Link className="button main-button mt-4" to="/beta">
-                  Request Access
-                </Link>
+              <p className="text-gray-400 pt-6 mt-6 border-t">
+                Using macOS? Join our{" "}
+                <A className="text-inherit" href={BETA_LINK}>
+                  private beta
+                </A>
+                .
               </p>
             </div>
           </div>
         </div>
       </div>
-      <Pricing />
+      {/* <Pricing /> */}
     </div>
   );
 }
@@ -949,9 +953,9 @@ function Pricing() {
             yearly={45}
             isYearly={yearly}
             cta={
-              <Link className="button main-button" to="/beta">
+              <A className="button main-button" href={BETA_LINK}>
                 Request Access
-              </Link>
+              </A>
             }
           >
             <PricingPoint label="7-day free trial" />
@@ -967,9 +971,9 @@ function Pricing() {
             unit={"user"}
             isYearly={yearly}
             cta={
-              <Link className="button main-button" to="/beta">
+              <A className="button main-button" href={BETA_LINK}>
                 Request Access
-              </Link>
+              </A>
             }
           >
             <PricingPoint label="All features in Personal" />
@@ -1149,23 +1153,9 @@ function App() {
             <span className="hidden md:inline-block">CodePerfect 95</span>
           </Link>
           <div className="flex items-baseline space-x-6">
-            <A
-              className="no-underline font-semibold text-gray-600 hidden sm:inline-block"
-              href="https://docs.codeperfect95.com"
-            >
-              Docs
+            <A className="button main-button" role="button" href={BETA_LINK}>
+              Join macOS Beta
             </A>
-
-            <Link
-              className="no-underline font-semibold text-gray-600 hidden sm:inline-block"
-              to="/pricing"
-            >
-              Pricing
-            </Link>
-
-            <Link className="button main-button" role="button" to="/beta">
-              Join Beta
-            </Link>
           </div>
         </div>
         <div>
@@ -1183,7 +1173,7 @@ function App() {
               <ManualInstall />
             </Route>
             <Route path="/pricing">
-              <Redirect to="/#pricing" />
+              <Pricing />
             </Route>
             <Route path="/terms">
               <Terms />
@@ -1214,17 +1204,9 @@ function App() {
           <div className="flex flex-col sm:flex-row space-x-0 sm:space-x-12 mt-2 sm:mt-0">
             <div className="sm:text-right sm:flex sm:flex-row sm:space-x-8">
               <div>
-                <A
-                  className="text-gray-500 no-underline"
-                  href="https://codeperfect95.notion.site/codeperfect95/CodePerfect-95-Changelog-dcedf41014ef4de79690a5b5b54ebb33"
-                >
-                  Changelog
+                <A className="text-gray-500 no-underline" href={BETA_LINK}>
+                  Join macOS Beta
                 </A>
-              </div>
-              <div>
-                <Link className="text-gray-500 no-underline" to="/beta">
-                  Join Beta
-                </Link>
               </div>
               <div>
                 <A
@@ -1232,6 +1214,14 @@ function App() {
                   href="https://docs.codeperfect95.com"
                 >
                   Docs
+                </A>
+              </div>
+              <div>
+                <A
+                  className="text-gray-500 no-underline"
+                  href="https://codeperfect95.notion.site/codeperfect95/CodePerfect-95-Changelog-dcedf41014ef4de79690a5b5b54ebb33"
+                >
+                  Changelog
                 </A>
               </div>
               <div>
