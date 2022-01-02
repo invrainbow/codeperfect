@@ -358,7 +358,8 @@ void World::init(GLFWwindow *_wnd) {
     init_mem(generate_implementation_mem);
     init_mem(find_implementations_mem);
     init_mem(find_interfaces_mem);
-    init_mem(call_hierarchy_mem);
+    init_mem(caller_hierarchy_mem);
+    init_mem(callee_hierarchy_mem);
 #undef init_mem
 
     MEM = &frame_mem;
@@ -473,7 +474,7 @@ void World::init(GLFWwindow *_wnd) {
     world.file_explorer.show = true;
 
 #ifdef DEBUG_MODE
-    world.wnd_history.show = true;
+    if (!use_nvim) world.wnd_history.show = true;
 #endif
 }
 
@@ -826,9 +827,9 @@ Jump_To_Definition_Result *get_current_definition(ccstr *filepath, bool display_
 
     auto editor = get_current_editor();
     if (editor == NULL)
-        return show_error("Couldn't find anything under your cursor to rename (you don't have an editor focused).");
+        return show_error("Couldn't find anything under your cursor (you don't have an editor focused).");
     if (!editor->is_go_file)
-        return show_error("Couldn't find anything under your cursor to rename (you're not in a Go file).");
+        return show_error("Couldn't find anything under your cursor (you're not in a Go file).");
 
     defer { world.indexer.ui_mem.reset(); };
 
@@ -848,7 +849,7 @@ Jump_To_Definition_Result *get_current_definition(ccstr *filepath, bool display_
     }
 
     if (result == NULL || result->decl == NULL || result->decl->decl == NULL)
-        return show_error("Couldn't find anything under your cursor to rename.");
+        return show_error("Couldn't find anything under your cursor.");
 
     if (filepath != NULL)
         *filepath = editor->filepath;
@@ -1388,8 +1389,24 @@ void cancel_find_references() {
     wnd.done = true;
 }
 
-void cancel_call_hierarchy() {
-    auto &wnd = world.wnd_call_hierarchy;
+void cancel_caller_hierarchy() {
+    auto &wnd = world.wnd_caller_hierarchy;
+
+    if (wnd.thread != NULL) {
+        kill_thread(wnd.thread);
+        close_thread_handle(wnd.thread);
+        wnd.thread = NULL;
+    }
+
+    // assume it was acquired by find_implementations
+    if (world.indexer.status == IND_READING)
+        world.indexer.release_lock(IND_READING);
+
+    wnd.done = true;
+}
+
+void cancel_callee_hierarchy() {
+    auto &wnd = world.wnd_callee_hierarchy;
 
     if (wnd.thread != NULL) {
         kill_thread(wnd.thread);
@@ -1619,7 +1636,8 @@ void init_command_info_table() {
     command_info_table[CMD_UNDO] = k(KEYMOD_PRIMARY, GLFW_KEY_Z, "Undo");
     command_info_table[CMD_REDO] = k(KEYMOD_PRIMARY | KEYMOD_SHIFT, GLFW_KEY_Z, "Redo");
     command_info_table[CMD_DOCUMENTATION] = k(0, 0, "Documentation");
-    command_info_table[CMD_VIEW_CALL_HIERARCHY] = k(KEYMOD_PRIMARY, GLFW_KEY_I, "View Call Hierarchy");
+    command_info_table[CMD_VIEW_CALLER_HIERARCHY] = k(KEYMOD_PRIMARY, GLFW_KEY_I, "View Caller Hierarchy");
+    command_info_table[CMD_VIEW_CALLEE_HIERARCHY] = k(KEYMOD_PRIMARY | KEYMOD_SHIFT, GLFW_KEY_I, "View Callee Hierarchy");
 }
 
 void handle_command(Command cmd, bool from_menu) {
@@ -1790,6 +1808,7 @@ void handle_command(Command cmd, bool from_menu) {
                 For (*files) newfiles->append(it.copy());
 
                 wnd.results = newfiles;
+                wnd.current_import_path = our_strcpy(world.indexer.index.current_import_path);
             }
 
             // close the thread handle first so it doesn't try to kill the thread
@@ -2035,26 +2054,8 @@ void handle_command(Command cmd, bool from_menu) {
         }
         break;
 
-    case CMD_VIEW_CALL_HIERARCHY: {
-        auto &wnd = world.wnd_call_hierarchy;
-
-        auto result = get_current_definition(NULL, true);
-        if (result == NULL) break;
-        if (result->decl == NULL) break;
-
-        auto decl = result->decl->decl;
-        if (decl == NULL) break;
-
-        if (decl->gotype == NULL || decl->gotype->type != GOTYPE_FUNC) {
-            tell_user("The selected object is not a function.", "Error");
-            break;
-        }
-
-        world.call_hierarchy_mem.reset();
-        {
-            SCOPED_MEM(&world.call_hierarchy_mem);
-            wnd.declres = result->decl->copy_decl();
-        }
+    case CMD_VIEW_CALLEE_HIERARCHY: {
+        auto &wnd = world.wnd_callee_hierarchy;
 
         auto &ind = world.indexer;
         if (!ind.acquire_lock(IND_READING)) {
@@ -2062,24 +2063,55 @@ void handle_command(Command cmd, bool from_menu) {
             break;
         }
 
+        bool ok = false;
+        defer { if (!ok && ind.status == IND_READING) ind.release_lock(IND_READING); };
+
+        auto editor = get_current_editor();
+        if (editor == NULL) break;
+        if (!editor->is_go_file) break;
+
+        Goresult *result = NULL;
+        {
+            SCOPED_MEM(&world.indexer.ui_mem);
+            result = ind.find_enclosing_toplevel(editor->filepath, editor->cur);
+        }
+
+        if (result == NULL) break;
+        if (result->decl == NULL) break;
+
+        auto decl = result->decl;
+        if (decl == NULL) break;
+
+        if (decl->gotype == NULL || decl->gotype->type != GOTYPE_FUNC) {
+            tell_user("The declaration under your cursor is not a function.", "Error");
+            break;
+        }
+
+        world.callee_hierarchy_mem.reset();
+        {
+            SCOPED_MEM(&world.callee_hierarchy_mem);
+            wnd.declres = result->copy_decl();
+        }
+
         auto thread_proc = [](void *param) {
-            auto &wnd = world.wnd_call_hierarchy;
+            auto &wnd = world.wnd_callee_hierarchy;
             wnd.thread_mem.cleanup();
             wnd.thread_mem.init();
             SCOPED_MEM(&wnd.thread_mem);
 
-            defer { cancel_call_hierarchy(); };
+            defer { cancel_callee_hierarchy(); };
 
-            auto results = ind.generate_call_hierarchy(wnd.declres);
+            auto results = ind.generate_callee_hierarchy(wnd.declres);
             if (results == NULL) return;
 
             {
-                SCOPED_MEM(&world.call_hierarchy_mem);
+                SCOPED_MEM(&world.callee_hierarchy_mem);
 
                 auto newresults = alloc_list<Call_Hier_Node>(results->len);
                 For (*results) newresults->append(it.copy());
 
                 wnd.results = newresults;
+                wnd.current_import_path = our_strcpy(world.indexer.index.current_import_path);
             }
 
             // close the thread handle first so it doesn't try to kill the thread
@@ -2098,6 +2130,87 @@ void handle_command(Command cmd, bool from_menu) {
             tell_user("Unable to kick off View Call Hierarchy.", NULL);
             break;
         }
+        break;
+    }
+
+    case CMD_VIEW_CALLER_HIERARCHY: {
+        auto &wnd = world.wnd_caller_hierarchy;
+
+        auto &ind = world.indexer;
+        if (!ind.acquire_lock(IND_READING)) {
+            tell_user("The indexer is currently busy.", NULL);
+            break;
+        }
+
+        bool ok = false;
+        defer { if (!ok && ind.status == IND_READING) ind.release_lock(IND_READING); };
+
+        auto editor = get_current_editor();
+        if (editor == NULL) break;
+        if (!editor->is_go_file) break;
+
+        Goresult *result = NULL;
+        {
+            SCOPED_MEM(&world.indexer.ui_mem);
+            result = ind.find_enclosing_toplevel(editor->filepath, editor->cur);
+        }
+
+        if (result == NULL) break;
+        if (result->decl == NULL) break;
+
+        auto decl = result->decl;
+        if (decl == NULL) break;
+
+        if (decl->gotype == NULL || decl->gotype->type != GOTYPE_FUNC) {
+            tell_user("The declaration under your cursor is not a function.", "Error");
+            break;
+        }
+
+        world.caller_hierarchy_mem.reset();
+        {
+            SCOPED_MEM(&world.caller_hierarchy_mem);
+            wnd.declres = result->copy_decl();
+        }
+
+        auto thread_proc = [](void *param) {
+            auto &wnd = world.wnd_caller_hierarchy;
+            wnd.thread_mem.cleanup();
+            wnd.thread_mem.init();
+            SCOPED_MEM(&wnd.thread_mem);
+
+            defer { cancel_caller_hierarchy(); };
+
+            auto results = ind.generate_caller_hierarchy(wnd.declres);
+            if (results == NULL) return;
+
+            {
+                SCOPED_MEM(&world.caller_hierarchy_mem);
+
+                auto newresults = alloc_list<Call_Hier_Node>(results->len);
+                For (*results) newresults->append(it.copy());
+
+                wnd.results = newresults;
+                wnd.current_import_path = our_strcpy(world.indexer.index.current_import_path);
+            }
+
+            // close the thread handle first so it doesn't try to kill the thread
+            if (wnd.thread != NULL) {
+                close_thread_handle(wnd.thread);
+                wnd.thread = NULL;
+            }
+        };
+
+        wnd.show = true;
+        wnd.done = false;
+        wnd.results = NULL;
+
+        wnd.thread = create_thread(thread_proc, NULL);
+        if (wnd.thread == NULL) {
+            tell_user("Unable to kick off View Call Hierarchy.", NULL);
+            break;
+        }
+
+        ok = true;
         break;
     }
 
@@ -2153,6 +2266,7 @@ void handle_command(Command cmd, bool from_menu) {
                 For (*results) newresults->append(it.copy());
 
                 wnd.results = newresults;
+                wnd.current_import_path = our_strcpy(world.indexer.index.current_import_path);
             }
 
             // close the thread handle first so it doesn't try to kill the thread
@@ -2226,6 +2340,7 @@ void handle_command(Command cmd, bool from_menu) {
                 For (*results) newresults->append(it.copy());
 
                 wnd.results = newresults;
+                wnd.current_import_path = our_strcpy(world.indexer.index.current_import_path);
             }
 
             // close the thread handle first so it doesn't try to kill the thread
@@ -2691,4 +2806,26 @@ done_writing:
     // TODO: refresh existing editors if `filepath` is open
     // tho i think writing to disk just automatically does that?
     // or should we not write to disk for editors that are open
+}
+
+void fuzzy_sort_filtered_results(ccstr query, List<int> *list, int total_results, fn<ccstr(int)> get_name) {
+    auto names = alloc_array(ccstr, total_results);
+    auto scores = alloc_array(double, total_results);
+
+    For (*list) {
+        names[it] = get_name(it);
+        scores[it] = fzy_match(query, names[it]);
+    }
+
+    list->sort([&](int* pa, int* pb) {
+        auto a = scores[*pa]; 
+        auto b = scores[*pb];
+
+        if (a < b) return 1;
+        if (a > b) return -1;
+
+        auto alen = strlen(names[*pa]);
+        auto blen = strlen(names[*pb]);
+        return alen < blen ? -1 : (alen > blen ? 1 : 0);
+    });
 }

@@ -938,6 +938,8 @@ struct Go_Reference {
     Go_Reference *copy();
     void read(Index_Stream *s);
     void write(Index_Stream *s);
+
+    cur2 true_start() { return is_sel ? x_start : start; }
 };
 
 struct Go_File {
@@ -1220,6 +1222,11 @@ struct Call_Hier_Node {
     Call_Hier_Node *copy();
 };
 
+struct Seen_Callee_Entry {
+    Goresult *declres;
+    Call_Hier_Node node;
+};
+
 struct Go_Indexer {
     ccstr goroot;
     // ccstr gopath;
@@ -1351,8 +1358,16 @@ struct Go_Indexer {
     bool list_type_methods(ccstr type_name, ccstr import_path, List<Goresult> *out);
     bool is_gotype_error(Goresult *res);
     bool is_import_path_internal(ccstr import_path);
-    List<Call_Hier_Node>* generate_call_hierarchy(Goresult *declres);
-    void actually_generate_call_hierarchy(Goresult *declres, List<Call_Hier_Node> *out);
+
+    List<Call_Hier_Node>* generate_caller_hierarchy(Goresult *declres);
+    void actually_generate_caller_hierarchy(Goresult *declres, List<Call_Hier_Node> *out);
+
+    List<Call_Hier_Node>* generate_callee_hierarchy(Goresult *declres);
+    void actually_generate_callee_hierarchy(Goresult *declres, List<Call_Hier_Node> *out, List<Seen_Callee_Entry> *seen = NULL);
+    ccstr get_godecl_recvname(Godecl *it);
+    Goresult *get_reference_decl(Go_Reference *it, Go_Ctx *ctx);
+    Godecl *find_toplevel_containing(Go_File *file, cur2 start, cur2 end);
+    Goresult *find_enclosing_toplevel(ccstr filepath, cur2 pos);
 };
 
 void walk_ast_node(Ast_Node *node, bool abstract_only, Walk_TS_Callback cb);
@@ -1494,3 +1509,5 @@ struct Type_Renderer : public Text_Renderer {
         write_type(t, [&](auto, auto) -> bool { return false; }, parameter_hint_root);
     }
 };
+
+bool is_name_special_function(ccstr name);

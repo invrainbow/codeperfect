@@ -626,7 +626,7 @@ int main(int argc, char **argv) {
                     auto &wnd = world.wnd_command;
                     wnd.query[0] = '\0';
                     wnd.actions = alloc_list<Command>();
-                    wnd.filtered_results = alloc_list<Command>();
+                    wnd.filtered_results = alloc_list<int>();
 
                     for (int i = 0; i < _CMD_COUNT_; i++) {
                         auto fuck_cpp = (Command)i;

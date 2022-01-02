@@ -243,8 +243,6 @@ struct Scoped_Table {
 
         old_values.init();
         frames.init();
-
-        print("%d", count());
     }
 
     void cleanup() {

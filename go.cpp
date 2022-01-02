@@ -390,10 +390,7 @@ void Module_Resolver::cleanup() {
 
 // -----
 
-bool is_name_private(ccstr name) {
-    if (!isupper(name[0]))
-        return true;
-
+bool is_name_special_function(ccstr name) {
     if (strlen(name) >= 5)
         if (str_starts_with(name, "Test"))
             if (isupper(name[4]))
@@ -409,6 +406,14 @@ bool is_name_private(ccstr name) {
             if (isupper(name[9]))
                 return true;
 
+    return false;
+}
+
+bool is_name_private(ccstr name) {
+    if (!isupper(name[0]))
+        return true;
+    if (is_name_special_function(name))
+        return true;
     return false;
 }
 
@@ -2005,8 +2010,8 @@ void Go_Indexer::process_tree_into_gofile(
         });
 
         file->references->sort([&](auto pa, auto pb) {
-            auto a = pa->is_sel ? pa->sel_start : pa->start;
-            auto b = pb->is_sel ? pb->sel_start : pb->start;
+            auto a = pa->true_start();
+            auto b = pb->true_start();
 
             if (a == b) return 0; // should this ever happen? no right?
 
@@ -2959,6 +2964,20 @@ List<Find_Decl> *Go_Indexer::find_implementations(Goresult *target) {
     return ret;
 }
 
+ccstr Go_Indexer::get_godecl_recvname(Godecl *it) {
+    if (it->type != GODECL_FUNC) return NULL;
+    if (it->gotype == NULL) return NULL;
+    if (it->gotype->type != GOTYPE_FUNC) return NULL;
+
+    auto recv = it->gotype->func_recv;
+    if (recv == NULL) return NULL;
+
+    recv = unpointer_type(recv, NULL)->gotype;
+    if (recv->type != GOTYPE_ID) return NULL;
+
+    return recv->id_name;
+}
+
 Jump_To_Definition_Result* Go_Indexer::jump_to_symbol(ccstr symbol) {
     reload_all_dirty_files();
 
@@ -2974,20 +2993,6 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_symbol(ccstr symbol) {
         strncpy(pkgname, symbol, len);
         pkgname[len] = '\0';
     }
-
-    auto get_godecl_recvname = [&](Godecl *it) -> ccstr {
-        if (it->type != GODECL_FUNC) return NULL;
-        if (it->gotype == NULL) return NULL;
-        if (it->gotype->type != GOTYPE_FUNC) return NULL;
-
-        auto recv = it->gotype->func_recv;
-        if (recv == NULL) return NULL;
-
-        recv = unpointer_type(recv, NULL)->gotype;
-        if (recv->type != GOTYPE_ID) return NULL;
-
-        return recv->id_name;
-    };
 
     auto base_path = make_path(index.current_import_path);
 
@@ -3036,15 +3041,31 @@ List<Find_References_File> *Go_Indexer::find_references(ccstr filepath, cur2 pos
 
 // TODO: maybe we should have the caller call reload_all_dirty_files(), wrapped
 // in a function like init_indexer_session() or something
-List<Call_Hier_Node>* Go_Indexer::generate_call_hierarchy(Goresult *declres) {
+List<Call_Hier_Node>* Go_Indexer::generate_caller_hierarchy(Goresult *declres) {
     reload_all_dirty_files();
 
     auto ret = alloc_list<Call_Hier_Node>();
-    actually_generate_call_hierarchy(declres, ret);
+    actually_generate_caller_hierarchy(declres, ret);
     return ret;
 }
 
-void Go_Indexer::actually_generate_call_hierarchy(Goresult *declres, List<Call_Hier_Node> *out) {
+Godecl *Go_Indexer::find_toplevel_containing(Go_File *file, cur2 start, cur2 end) {
+    int lo = 0, hi = file->decls->len;
+    while (lo <= hi) {
+        auto mid = (lo+hi)/2;
+        auto it = file->decls->items + mid;
+
+        if (start < it->decl_start)
+            hi = mid-1;
+        else if (end > it->decl_end)
+            lo = mid+1;
+        else
+            return it;
+    }
+    return NULL;
+}
+
+void Go_Indexer::actually_generate_caller_hierarchy(Goresult *declres, List<Call_Hier_Node> *out) {
     auto ref_files = actually_find_references(declres, false);
     if (ref_files == NULL) return;
     // if (ref_files->len == 0) return;
@@ -3068,23 +3089,7 @@ void Go_Indexer::actually_generate_call_hierarchy(Goresult *declres, List<Call_H
                 end = it.end;
             }
 
-            auto find_enclosing_decl = [&]() -> Godecl* {
-                int lo = 0, hi = file->decls->len;
-                while (lo <= hi) {
-                    auto mid = (lo+hi)/2;
-                    auto it = file->decls->items + mid;
-
-                    if (start < it->decl_start)
-                        hi = mid-1;
-                    else if (end > it->decl_end)
-                        lo = mid+1;
-                    else
-                        return it;
-                }
-                return NULL;
-            };
-
-            auto enclosing_decl = find_enclosing_decl();
+            auto enclosing_decl = find_toplevel_containing(file, start, end);
             if (enclosing_decl == NULL)
                 continue;
 
@@ -3103,14 +3108,127 @@ void Go_Indexer::actually_generate_call_hierarchy(Goresult *declres, List<Call_H
 
             if (enclosing_decl->gotype != NULL)
                 if (enclosing_decl->gotype->type == GOTYPE_FUNC)
-                    actually_generate_call_hierarchy(declres, node.children);
+                    actually_generate_caller_hierarchy(declres, node.children);
         }
+    }
+}
+
+List<Call_Hier_Node>* Go_Indexer::generate_callee_hierarchy(Goresult *declres) {
+    reload_all_dirty_files();
+
+    auto ret = alloc_list<Call_Hier_Node>();
+    actually_generate_callee_hierarchy(declres, ret);
+    return ret;
+}
+
+void Go_Indexer::actually_generate_callee_hierarchy(Goresult *declres, List<Call_Hier_Node> *out, List<Seen_Callee_Entry> *seen) {
+    Go_Package *pkg = NULL;
+    auto file = find_gofile_from_ctx(declres->ctx, &pkg);
+    if (file == NULL) return;
+
+    // auto ctx = declres->ctx;
+    auto decl = declres->decl;
+
+    int start_index = -1;
+    {
+        auto refs = file->references;
+        int lo = 0, hi = refs->len-1;
+        while (lo < hi) {
+            auto mid = (lo+hi)/2;
+            auto &it = file->references->at(mid);
+            if (it.true_start() < decl->decl_start)
+                lo = mid+1;
+            else
+                hi = mid-1;
+        }
+        start_index = lo;
+    }
+
+    if (seen == NULL)
+        seen = alloc_list<Seen_Callee_Entry>();
+
+    auto find_seen = [&](Goresult *res) -> Call_Hier_Node* {
+        For (*seen) {
+            auto a = it.declres;
+            auto b = res;
+
+            if (!streq(a->ctx->import_path, b->ctx->import_path)) continue;
+            if (!streq(a->ctx->filename, b->ctx->filename)) continue;
+            if (a->decl->name_start != b->decl->name_start) continue;
+            if (!streq(a->decl->name, b->decl->name)) continue;
+
+            return &it.node;
+        }
+        return NULL;
+    };
+
+    for (int i = start_index; i < file->references->len; i++) {
+        auto &it = file->references->at(i);
+        if (it.true_start() >= decl->decl_end)
+            break;
+
+        if (!it.is_sel && it.start == decl->name_start) continue;
+
+        auto res = get_reference_decl(&it, declres->ctx);
+        if (res == NULL) continue;
+        if (!path_has_descendant(index.current_import_path, res->ctx->import_path)) continue;
+
+        auto decl = res->decl;
+        auto gotype = decl->gotype;
+        if (gotype == NULL) continue;
+        if (gotype->type != GOTYPE_FUNC) continue;
+
+        auto existing = find_seen(res);
+        if (existing != NULL) {
+            out->append(existing);
+            continue;
+        }
+
+        auto pkg = find_up_to_date_package(res->ctx->import_path);
+        if (pkg == NULL) continue;
+
+        auto fd = alloc_object(Find_Decl);
+        fd->filepath = ctx_to_filepath(res->ctx);
+        fd->decl = res;
+        fd->package_name = pkg->package_name;
+
+        Call_Hier_Node node; ptr0(&node);
+        node.decl = fd;
+        node.children = alloc_list<Call_Hier_Node>();
+        node.ref = &it;
+        out->append(&node);
+
+        Seen_Callee_Entry se;
+        se.declres = res;
+        memcpy(&se.node, &node, sizeof(Call_Hier_Node));
+        seen->append(&se);
+
+        actually_generate_callee_hierarchy(res, node.children, seen);
     }
 }
 
 List<Find_References_File> *Go_Indexer::find_references(Goresult *declres, bool include_self) {
     reload_all_dirty_files();
     return actually_find_references(declres, include_self);
+}
+
+Goresult *Go_Indexer::get_reference_decl(Go_Reference *ref, Go_Ctx *ctx) {
+    if (!ref->is_sel)
+        return find_decl_of_id(ref->name, ref->start, ctx);
+
+    auto results = list_lazy_type_dotprops(ref->x, ctx);
+    if (results == NULL) {
+        auto import_path = find_import_path_referred_to_by_id(ref->x->lazy_id_name, ctx);
+        if (import_path == NULL) return NULL;
+
+        results = list_package_decls(import_path, LISTDECLS_PUBLIC_ONLY | LISTDECLS_EXCLUDE_METHODS);
+        if (results == NULL) return NULL;
+    }
+
+    For (*results)
+        if (streq(it.decl->name, ref->sel))
+            return &it;
+    return NULL;
 }
 
 List<Find_References_File> *Go_Indexer::actually_find_references(Goresult *declres, bool include_self) {
@@ -3254,32 +3372,9 @@ List<Find_References_File> *Go_Indexer::actually_find_references(Goresult *declr
                 break;
             }
 
-            // basically, check "does this reference refer to our decl?"
-            if (it->is_sel) {
-                auto results = list_lazy_type_dotprops(it->x, &ctx2);
-                if (results == NULL) {
-                    auto import_path = find_import_path_referred_to_by_id(it->x->lazy_id_name, &ctx2);
-                    if (import_path == NULL) return;
-                    results = list_package_decls(import_path, LISTDECLS_PUBLIC_ONLY | LISTDECLS_EXCLUDE_METHODS);
-                }
-                if (results == NULL) return;
-
-                bool match = false;
-                For (*results) {
-                    if (is_match(&it)) {
-                        match = true;
-                        break;
-                    }
-                }
-
-                if (!match) return;
-            } else {
-                auto res = find_decl_of_id(it->name, it->start, &ctx2);
-                if (res == NULL) return;
-                if (!is_match(res)) return;
-            }
-
-            references->append(it);
+            auto decl = get_reference_decl(it, &ctx2);
+            if (decl != NULL && is_match(decl))
+                references->append(it);
         };
 
         For (*file->references) process_ref(&it);
@@ -3539,6 +3634,17 @@ ccstr Go_Indexer::find_best_import(ccstr package_name, List<ccstr> *identifiers)
     });
 
     return candidates[indexes[0]]->import_path;
+}
+
+Goresult *Go_Indexer::find_enclosing_toplevel(ccstr filepath, cur2 pos) {
+    auto ctx = filepath_to_ctx(filepath);
+    auto gofile = find_gofile_from_ctx(ctx);
+    if (gofile == NULL) return NULL;
+
+    auto decl = find_toplevel_containing(gofile, pos, pos);
+    if (decl == NULL) return NULL;
+
+    return make_goresult(decl, ctx);
 }
 
 Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 pos) {

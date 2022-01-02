@@ -197,7 +197,8 @@ enum Command {
     CMD_FIND_IMPLEMENTATIONS,
     CMD_FIND_INTERFACES,
     CMD_DOCUMENTATION,
-    CMD_VIEW_CALL_HIERARCHY,
+    CMD_VIEW_CALLER_HIERARCHY,
+    CMD_VIEW_CALLEE_HIERARCHY,
 
     _CMD_COUNT_,
 };
@@ -229,7 +230,8 @@ struct World {
     Pool generate_implementation_mem;
     Pool find_implementations_mem;
     Pool find_interfaces_mem;
-    Pool call_hierarchy_mem;
+    Pool caller_hierarchy_mem;
+    Pool callee_hierarchy_mem;
 
     Fridge<Mark> mark_fridge;
     Fridge<Mark_Node> mark_node_fridge;
@@ -354,6 +356,7 @@ struct World {
         Goresult *declres;
         Thread_Handle thread;
         List<Find_References_File> *results;
+        ccstr current_import_path;
     } wnd_find_references;
 
     struct Wnd_Find_Interfaces : Wnd {
@@ -363,6 +366,7 @@ struct World {
         Thread_Handle thread;
         bool include_empty;
         List<Find_Decl*> *results;
+        ccstr current_import_path;
     } wnd_find_interfaces;
 
     struct Wnd_Find_Implementations : Wnd {
@@ -371,18 +375,30 @@ struct World {
         Goresult *declres;
         Thread_Handle thread;
         List<Find_Decl*> *results;
+        ccstr current_import_path;
     } wnd_find_implementations;
 
-    struct Wnd_Call_Hierarchy : Wnd {
+    struct Wnd_Caller_Hierarchy : Wnd {
         Pool thread_mem;
         bool done;
         Goresult *declres;
         // TODO: when is it time to abstract out all this create new thread,
-        // kill, etc logic?  like we're now repeating it for find references,
+        // kill, etc logic? like we're now repeating it for find references,
         // find interfaces, find implementations, call hierarchy, etc...
         Thread_Handle thread;
         List<Call_Hier_Node> *results;
-    } wnd_call_hierarchy;
+        ccstr current_import_path;
+        bool show_tests_and_benchmarks;
+    } wnd_caller_hierarchy;
+
+    struct Wnd_Callee_Hierarchy : Wnd {
+        Pool thread_mem;
+        bool done;
+        Goresult *declres;
+        Thread_Handle thread;
+        List<Call_Hier_Node> *results;
+        ccstr current_import_path;
+    } wnd_callee_hierarchy;
 
     struct Wnd_Index_Log : Wnd {
         // ring buffer
@@ -509,7 +525,7 @@ struct World {
         char query[256];
         u32 selection;
         List<Command> *actions;
-        List<Command> *filtered_results;
+        List<int> *filtered_results; // directly holds casted commands
     } wnd_command;
 
     struct Wnd_Goto_Symbol : Wnd {
@@ -587,7 +603,8 @@ void reload_file_subtree(ccstr path);
 void open_rename_identifier();
 void kick_off_rename_identifier();
 void cancel_rename_identifier();
-void cancel_call_hierarchy();
+void cancel_caller_hierarchy();
+void cancel_callee_hierarchy();
 void cancel_find_references();
 void cancel_find_interfaces();
 void cancel_find_implementations();
@@ -609,23 +626,4 @@ void open_add_file_or_folder(bool folder, FT_Node *dest = NULL);
 void do_generate_implementation();
 bool has_unsaved_files();
 
-template<typename T>
-void fuzzy_sort_filtered_results(ccstr query, T *list, int total_results, fn<ccstr(int)> get_name) {
-    auto scores = alloc_array(double, total_results);
-    For (*list)
-        scores[it] = fzy_match(query, get_name(it));
-
-    list->sort([&](auto pa, auto pb) {
-        auto a = scores[*pa];
-        auto b = scores[*pb];
-
-        if (a == b) {
-            auto alen = strlen(get_name(*pa));
-            auto blen = strlen(get_name(*pb));
-            return alen < blen ? -1 : (alen > blen ? 1 : 0);
-        }
-
-        return a < b ? 1 : -1;
-    });
-}
-
+void fuzzy_sort_filtered_results(ccstr query, List<int> *list, int total_results, fn<ccstr(int)> get_name);

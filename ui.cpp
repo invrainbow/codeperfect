@@ -250,6 +250,10 @@ ImVec4 to_imcolor(vec4f color) {
     return (ImVec4)ImColor(color.r, color.g, color.b, color.a);
 }
 
+ImVec4 to_imcolor(vec3f color) {
+    return (ImVec4)ImColor(color.r, color.g, color.b, 1.0);
+}
+
 bool get_type_color(Ast_Node *node, Editor *editor, vec4f *out) {
     switch (node->type()) {
     case TS_PACKAGE:
@@ -2222,47 +2226,109 @@ void UI::draw_everything() {
         ImGui::End();
     }
 
-    if (world.wnd_call_hierarchy.show) {
-        auto &wnd = world.wnd_call_hierarchy;
+    fn<void(Call_Hier_Node*, ccstr, bool)> render_call_hier;
+    render_call_hier = [&](auto it, auto current_import_path, auto show_tests_and_benchmarks) {
+        auto should_hide = [&](Call_Hier_Node *it) {
+            auto decl = it->decl->decl->decl;
+            if (world.indexer.get_godecl_recvname(decl) == NULL)
+                if (!show_tests_and_benchmarks)
+                    if (is_name_special_function(decl->name))
+                        return true;
+            return false;
+        };
+
+        auto fd = it->decl;
+        auto res = fd->decl;
+        auto ctx = res->ctx;
+        auto decl = res->decl;
+
+        if (should_hide(it)) return;
+
+        auto name = decl->name;
+        auto recvname = world.indexer.get_godecl_recvname(decl);
+        if (recvname != NULL)
+            name = our_sprintf("%s.%s", recvname, name);
+
+        auto has_children = [&]() {
+            For (*it->children)
+                if (!should_hide(&it))
+                    return true;
+            return false;
+        };
+
+        auto flags = 0;
+        if (has_children())
+            flags = ImGuiTreeNodeFlags_OpenOnArrow;
+        else
+            flags = ImGuiTreeNodeFlags_Bullet;
+
+        bool open = ImGui::TreeNodeEx(
+            (void*)it,
+            flags,
+            "%s.%s (%s)",
+            fd->package_name,
+            name,
+            get_path_relative_to(ctx->import_path, current_import_path)
+        );
+
+        if (ImGui::IsItemClicked()) {
+            auto ref = it->ref;
+            auto start = ref->is_sel ? ref->x_start : ref->start;
+            goto_file_and_pos(fd->filepath, start);
+        }
+
+        if (open) {
+            For (*it->children)
+                render_call_hier(&it, current_import_path, show_tests_and_benchmarks);
+            ImGui::TreePop();
+        }
+    };
+
+    if (world.wnd_callee_hierarchy.show) {
+        auto &wnd = world.wnd_callee_hierarchy;
 
         ImGui::SetNextWindowDockID(dock_sidebar_id, ImGuiCond_Once);
-
         begin_window(
-            our_sprintf("Call Hierarchy for %s###call_hierarchy", wnd.declres->decl->name),
+            our_sprintf("Callee Hierarchy for %s###callee_hierarchy", wnd.declres->decl->name),
             &wnd,
-            ImGuiWindowFlags_AlwaysAutoResize,
+            0,
             !wnd.done
         );
 
         if (wnd.done) {
-            fn<void(Call_Hier_Node*)> render_call_hier = [&](auto it) {
-                auto fd = it->decl;
-                auto res = fd->decl;
-                auto ctx = res->ctx;
-                auto decl = res->decl;
-
-                auto flags = ImGuiTreeNodeFlags_OpenOnArrow;
-                bool open = ImGui::TreeNodeEx((void*)it, flags, "%s.%s", fd->package_name, decl->name);
-
-                if (ImGui::IsItemClicked()) {
-                    auto ref = it->ref;
-                    auto start = ref->is_sel ? ref->x_start : ref->start;
-                    goto_file_and_pos(fd->filepath, start);
-                }
-
-                if (open) {
-                    For (*it->children)
-                        render_call_hier(&it);
-                    ImGui::TreePop();
-                }
-            };
-
-            For (*wnd.results) render_call_hier(&it);
+            ImGui::Text("Done!");
+            For (*wnd.results) render_call_hier(&it, wnd.current_import_path, true);
         } else {
-            ImGui::Text("Generating call hierarchy...");
+            ImGui::Text("Generating callee hierarchy...");
             ImGui::SameLine();
             if (ImGui::Button("Cancel")) {
-                cancel_call_hierarchy();
+                cancel_callee_hierarchy();
+                wnd.show = false;
+            }
+        }
+
+        ImGui::End();
+    }
+
+    if (world.wnd_caller_hierarchy.show) {
+        auto &wnd = world.wnd_caller_hierarchy;
+        
+        ImGui::SetNextWindowDockID(dock_sidebar_id, ImGuiCond_Once);
+        begin_window(
+            our_sprintf("Caller Hierarchy for %s###caller_hierarchy", wnd.declres->decl->name),
+            &wnd,
+            0,
+            !wnd.done
+        );
+
+        if (wnd.done) {
+            ImGui::Checkbox("Show tests, examples, and benchmarks", &wnd.show_tests_and_benchmarks);
+            For (*wnd.results) render_call_hier(&it, wnd.current_import_path, wnd.show_tests_and_benchmarks);
+        } else {
+            ImGui::Text("Generating caller hierarchy...");
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel")) {
+                cancel_caller_hierarchy();
                 wnd.show = false;
             }
         }
@@ -2286,6 +2352,8 @@ void UI::draw_everything() {
 
             if (wnd.results != NULL && wnd.results->len > 0) {
                 imgui_push_mono_font();
+
+                int index = 0;
                 For (*wnd.results) {
                     auto is_empty = [&]() {
                         auto gotype = it->decl->decl->gotype;
@@ -2297,9 +2365,32 @@ void UI::draw_everything() {
                     if (!wnd.include_empty && is_empty())
                         continue;
 
-                    // TODO: previews
-                    if (ImGui::Selectable(our_sprintf("%s.%s (%s)", it->package_name, it->decl->decl->name, it->decl->ctx->import_path)))
-                        goto_file_and_pos(it->filepath, it->decl->decl->name_start);
+                    // TODO: refactor out custom draw
+                    auto availwidth = ImGui::GetContentRegionAvail().x;
+                    auto text_size = ImVec2(availwidth, ImGui::CalcTextSize("blah").y);
+                    auto drawpos = ImGui::GetCursorScreenPos();
+                    auto drawlist = ImGui::GetWindowDrawList();
+
+                    auto draw_selectable = [&]() {
+                        auto label = our_sprintf("##find_implementations_result__%d", index++);
+                        return ImGui::Selectable(label, false, 0, text_size);
+                    };
+
+                    auto clicked = draw_selectable();
+
+                    auto draw_text = [&](ccstr text) {
+                        drawlist->AddText(drawpos, ImGui::GetColorU32(ImGuiCol_Text), text);
+                        drawpos.x += ImGui::CalcTextSize(text).x;
+                    };
+
+                    draw_text(our_sprintf("%s.%s", it->package_name, it->decl->decl->name));
+
+                    ImGui::PushStyleColor(ImGuiCol_Text, to_imcolor(global_colors.muted));
+                    draw_text(our_sprintf(" (%s)", get_path_relative_to(it->decl->ctx->import_path, wnd.current_import_path)));
+                    ImGui::PopStyleColor();
+
+                    // TODO: previews?
+                    if (clicked) goto_file_and_pos(it->filepath, it->decl->decl->name_start);
                 }
                 imgui_pop_font();
             } else {
@@ -2327,10 +2418,34 @@ void UI::draw_everything() {
         if (wnd.done) {
             imgui_push_mono_font();
 
+            int index = 0;
             For (*wnd.results) {
-                // TODO: previews
-                if (ImGui::Selectable(our_sprintf("%s.%s (%s)", it->package_name, it->decl->decl->name, it->decl->ctx->import_path)))
-                    goto_file_and_pos(it->filepath, it->decl->decl->name_start);
+                // TODO: refactor out custom draw
+                auto availwidth = ImGui::GetContentRegionAvail().x;
+                auto text_size = ImVec2(availwidth, ImGui::CalcTextSize("blah").y);
+                auto drawpos = ImGui::GetCursorScreenPos();
+                auto drawlist = ImGui::GetWindowDrawList();
+
+                auto draw_selectable = [&]() {
+                    auto label = our_sprintf("##find_implementations_result__%d", index++);
+                    return ImGui::Selectable(label, false, 0, text_size);
+                };
+
+                auto clicked = draw_selectable();
+
+                auto draw_text = [&](ccstr text) {
+                    drawlist->AddText(drawpos, ImGui::GetColorU32(ImGuiCol_Text), text);
+                    drawpos.x += ImGui::CalcTextSize(text).x;
+                };
+
+                draw_text(our_sprintf("%s.%s", it->package_name, it->decl->decl->name));
+
+                ImGui::PushStyleColor(ImGuiCol_Text, to_imcolor(global_colors.muted));
+                draw_text(our_sprintf(" (%s)", get_path_relative_to(it->decl->ctx->import_path, wnd.current_import_path)));
+                ImGui::PopStyleColor();
+
+                // TODO: previews?
+                if (clicked) goto_file_and_pos(it->filepath, it->decl->decl->name_start);
             }
 
             imgui_pop_font();
@@ -2679,7 +2794,7 @@ void UI::draw_everything() {
 
         if (world.build.ready()) {
             if (world.build.errors.len == 0) {
-                ImGui::TextColored(to_imcolor(rgba(global_colors.green)), "Build was successful!");
+                ImGui::TextColored(to_imcolor(global_colors.green), "Build was successful!");
             } else {
                 imgui_push_mono_font();
 
@@ -2687,7 +2802,7 @@ void UI::draw_everything() {
                     auto &it = world.build.errors[i];
 
                     if (!it.valid) {
-                        ImGui::TextColored(to_imcolor(rgba(global_colors.muted)), "%s", it.message);
+                        ImGui::TextColored(to_imcolor(global_colors.muted), "%s", it.message);
                         continue;
                     }
 
@@ -3690,7 +3805,7 @@ void UI::draw_everything() {
                 ImGui::SetWindowFocus(NULL);
 
                 if (wnd.filtered_results->len > 0)
-                    handle_command(wnd.filtered_results->at(wnd.selection), false);
+                    handle_command((Command)wnd.filtered_results->at(wnd.selection), false);
             }
         }
         ImGui::PopItemWidth();
@@ -3724,7 +3839,9 @@ void UI::draw_everything() {
             for (u32 i = 0; i < wnd.filtered_results->len && i < settings.run_command_max_results; i++) {
                 pretty_menu_item(pm, i == wnd.selection);
 
-                auto it = wnd.filtered_results->at(i);
+                auto it = (Command)wnd.filtered_results->at(i);
+
+                auto name = get_command_name(it);
                 pretty_menu_text(pm, get_command_name(it));
 
                 auto keystr = get_menu_command_key(it);
@@ -3823,12 +3940,34 @@ void UI::draw_everything() {
 
                 auto it = wnd.symbols->at(wnd.filtered_results->at(i));
 
+                auto get_decl_type = [&]() {
+                    auto decl_type = it.decl->decl->type;
+                    switch (decl_type) {
+                    case GODECL_IMPORT:
+                        return "import";
+                    case GODECL_VAR:
+                    case GODECL_SHORTVAR:
+                        return "var";
+                    case GODECL_CONST:
+                        return "const";
+                    case GODECL_TYPE:
+                        return "type";
+                    case GODECL_FUNC:
+                        return "func";
+                    }
+                    return "unknown";
+                };
+
+                pretty_menu_text(pm, our_sprintf("(%s) ", get_decl_type()), IM_COL32(80, 80, 80, 255));
+
                 pretty_menu_text(pm, it.full_name());
-                pm->pos.x += 12;
+                pm->pos.x += 8;
 
                 auto import_path = it.decl->ctx->import_path;
                 if (path_has_descendant(wnd.current_import_path, import_path))
                     import_path = get_path_relative_to(import_path, wnd.current_import_path);
+                if (streq(import_path, ""))
+                    import_path = "(root)";
 
                 int rem_chars = (pm->text_br.x - pm->pos.x) / font->width;
 
@@ -5478,17 +5617,54 @@ void UI::end_frame() {
                         // show a bit more helpful info (like inline signature for funcs)
                         // show extended info on a panel to the right
 
+                        auto get_decl_type = [&]() {
+                            switch (result.type) {
+                            case ACR_DECLARATION:
+                                switch (result.declaration_godecl->type) {
+                                case GODECL_IMPORT:
+                                    return "import";
+                                case GODECL_CONST:
+                                    return "const";
+                                case GODECL_TYPE:
+                                    return "type";
+                                case GODECL_FUNC:
+                                    return "func";
+                                case GODECL_VAR:
+                                case GODECL_SHORTVAR:
+                                case GODECL_TYPECASE:
+                                    return "var";
+                                case GODECL_FIELD:
+                                    return "field";
+                                case GODECL_PARAM:
+                                    return "param";
+                                }
+                                return "unknown";
+                            case ACR_KEYWORD:
+                                return "keyword";
+                            case ACR_POSTFIX:
+                                return "postfix";
+                            case ACR_IMPORT:
+                                return "import";
+                            }
+                            return "unknown";
+                        };
+
+                        auto pos = items_pos + new_vec2f(settings.autocomplete_item_padding_x, settings.autocomplete_item_padding_y);
+
+                        auto type_str = our_sprintf("(%s) ", get_decl_type());
+                        draw_string(pos, type_str, rgba(color, 0.5));
+                        pos.x += font->width * strlen(type_str);
+
                         auto str = (cstr)our_strcpy(result.name);
                         if (strlen(str) > AUTOCOMPLETE_TRUNCATE_LENGTH)
                             str = (cstr)our_sprintf("%.*s...", AUTOCOMPLETE_TRUNCATE_LENGTH, str);
-
-                        auto pos = items_pos + new_vec2f(settings.autocomplete_item_padding_x, settings.autocomplete_item_padding_y);
 
                         auto avail_width = items_area.w - settings.autocomplete_item_padding_x * 2;
                         if (strlen(str) * font->width > avail_width)
                             str[(int)(avail_width / font->width)] = '\0';
 
                         draw_string(pos, str, rgba(actual_color));
+
                         text_end = pos.x + strlen(str) * font->width;
                     }
 
@@ -5548,6 +5724,7 @@ void UI::end_frame() {
                             if (streq(result.name, "new")) return "Allocate new instance of type";
                             if (streq(result.name, "make")) return "Make new instance of type";
                             if (streq(result.name, "iota")) return "Counter in variable declaration";
+                            break;
                         case ACR_POSTFIX:
                             switch (result.postfix_operation) {
                             case PFC_ASSIGNAPPEND: return "append and assign";
