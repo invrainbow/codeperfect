@@ -749,33 +749,6 @@ void filter_files() {
     // t.log("scoring");
 }
 
-void filter_symbols() {
-    auto &wnd = world.wnd_goto_symbol;
-
-    wnd.filtered_results->len = 0;
-
-    Timer t;
-    // t.init("filter_symbols");
-
-    u32 i = 0;
-    For (*wnd.symbols) {
-        if (fzy_has_match(wnd.query, it.full_name()))
-            wnd.filtered_results->append(i);
-        i++;
-    }
-
-    // t.log("matching");
-
-    fuzzy_sort_filtered_results(
-        wnd.query,
-        wnd.filtered_results,
-        wnd.symbols->len,
-        [&](auto i) { return wnd.symbols->at(i).full_name(); }
-    );
-
-    // t.log("scoring");
-}
-
 void run_proc_the_normal_way(Process* proc, ccstr cmd) {
     proc->cleanup();
     proc->init();
@@ -1640,6 +1613,129 @@ void init_command_info_table() {
     command_info_table[CMD_VIEW_CALLEE_HIERARCHY] = k(KEYMOD_PRIMARY | KEYMOD_SHIFT, GLFW_KEY_I, "View Callee Hierarchy");
 }
 
+void do_find_interfaces() {
+    auto &wnd = world.wnd_find_interfaces;
+
+    if (wnd.show && !wnd.done) return; // already in progress
+
+    auto &ind = world.indexer;
+    if (!ind.acquire_lock(IND_READING)) {
+        tell_user("The indexer is currently busy.", NULL);
+        return;
+    }
+
+    auto thread_proc = [](void *param) {
+        auto &wnd = world.wnd_find_interfaces;
+        wnd.thread_mem.cleanup();
+        wnd.thread_mem.init();
+        SCOPED_MEM(&wnd.thread_mem);
+
+        defer { cancel_find_interfaces(); };
+
+        // TODO: how do we handle errors?
+        // right now it just freezes on "Searching..."
+        auto results = ind.find_interfaces(wnd.declres, wnd.search_everywhere);
+        if (results == NULL) return;
+
+        {
+            SCOPED_MEM(&world.find_interfaces_mem);
+
+            auto newresults = alloc_list<Find_Decl*>(results->len);
+            For (*results) newresults->append(it.copy());
+
+            wnd.results = newresults;
+            wnd.current_import_path = our_strcpy(world.indexer.index.current_import_path);
+        }
+
+        // close the thread handle first so it doesn't try to kill the thread
+        if (wnd.thread != NULL) {
+            close_thread_handle(wnd.thread);
+            wnd.thread = NULL;
+        }
+    };
+
+    wnd.show = true;
+    wnd.done = false;
+    wnd.results = NULL;
+
+    wnd.thread = create_thread(thread_proc, NULL);
+    if (wnd.thread == NULL) {
+        tell_user("Unable to kick off Find Interfaces.", NULL);
+        return;
+    }
+}
+
+void init_goto_symbol() {
+    if (!world.indexer.acquire_lock(IND_READING, true)) return;
+    defer { world.indexer.release_lock(IND_READING); };
+
+    auto &wnd = world.wnd_goto_symbol;
+    ptr0(&wnd);
+
+    auto symbols = alloc_list<Go_Symbol>();
+    world.indexer.fill_goto_symbol(symbols);
+    if (symbols->len == 0) return;
+
+    {
+        SCOPED_MEM(&world.goto_symbol_mem);
+        wnd.symbols = alloc_list<Go_Symbol>(symbols->len);
+        For (*symbols) wnd.symbols->append(it.copy());
+
+        wnd.filtered_results = alloc_list<int>();
+        wnd.current_import_path = our_strcpy(world.indexer.index.current_import_path);
+    }
+
+    wnd.show = true;
+}
+
+void do_find_implementations() {
+    auto &wnd = world.wnd_find_implementations;
+
+    auto &ind = world.indexer;
+    if (!ind.acquire_lock(IND_READING)) {
+        tell_user("The indexer is currently busy.", NULL);
+        return;
+    }
+
+    auto thread_proc = [](void *param) {
+        auto &wnd = world.wnd_find_implementations;
+        wnd.thread_mem.cleanup();
+        wnd.thread_mem.init();
+        SCOPED_MEM(&wnd.thread_mem);
+
+        defer { cancel_find_implementations(); };
+
+        auto results = ind.find_implementations(wnd.declres, wnd.search_everywhere);
+        if (results == NULL) return;
+
+        {
+            SCOPED_MEM(&world.find_implementations_mem);
+
+            auto newresults = alloc_list<Find_Decl*>(results->len);
+            For (*results) newresults->append(it.copy());
+
+            wnd.results = newresults;
+            wnd.current_import_path = our_strcpy(world.indexer.index.current_import_path);
+        }
+
+        // close the thread handle first so it doesn't try to kill the thread
+        if (wnd.thread != NULL) {
+            close_thread_handle(wnd.thread);
+            wnd.thread = NULL;
+        }
+    };
+
+    wnd.show = true;
+    wnd.done = false;
+    wnd.results = NULL;
+
+    wnd.thread = create_thread(thread_proc, NULL);
+    if (wnd.thread == NULL) {
+        tell_user("Unable to kick off Find Implementations.", NULL);
+        return;
+    }
+}
+
 void handle_command(Command cmd, bool from_menu) {
     // make this a precondition (actually, I think it might already be)
     if (!is_command_enabled(cmd)) return;
@@ -1736,26 +1832,7 @@ void handle_command(Command cmd, bool from_menu) {
             if (from_menu)
                 world.wnd_goto_symbol.show = false;
         } else {
-            if (!world.indexer.acquire_lock(IND_READING, true)) break;
-            defer { world.indexer.release_lock(IND_READING); };
-
-            auto &wnd = world.wnd_goto_symbol;
-            ptr0(&wnd);
-
-            auto symbols = alloc_list<Go_Symbol>();
-            world.indexer.fill_goto_symbol(symbols);
-            if (symbols->len == 0) break;
-
-            {
-                SCOPED_MEM(&world.goto_symbol_mem);
-                wnd.symbols = alloc_list<Go_Symbol>(symbols->len);
-                For (*symbols) wnd.symbols->append(it.copy());
-
-                wnd.filtered_results = alloc_list<int>();
-                wnd.current_import_path = our_strcpy(world.indexer.index.current_import_path);
-            }
-
-            wnd.show = true;
+            init_goto_symbol();
         }
         break;
 
@@ -2242,49 +2319,8 @@ void handle_command(Command cmd, bool from_menu) {
             wnd.declres = result->decl->copy_decl();
         }
 
-        auto &ind = world.indexer;
-        if (!ind.acquire_lock(IND_READING)) {
-            tell_user("The indexer is currently busy.", NULL);
-            break;
-        }
-
-        auto thread_proc = [](void *param) {
-            auto &wnd = world.wnd_find_implementations;
-            wnd.thread_mem.cleanup();
-            wnd.thread_mem.init();
-            SCOPED_MEM(&wnd.thread_mem);
-
-            defer { cancel_find_implementations(); };
-
-            auto results = ind.find_implementations(wnd.declres);
-            if (results == NULL) return;
-
-            {
-                SCOPED_MEM(&world.find_implementations_mem);
-
-                auto newresults = alloc_list<Find_Decl*>(results->len);
-                For (*results) newresults->append(it.copy());
-
-                wnd.results = newresults;
-                wnd.current_import_path = our_strcpy(world.indexer.index.current_import_path);
-            }
-
-            // close the thread handle first so it doesn't try to kill the thread
-            if (wnd.thread != NULL) {
-                close_thread_handle(wnd.thread);
-                wnd.thread = NULL;
-            }
-        };
-
-        wnd.show = true;
-        wnd.done = false;
-        wnd.results = NULL;
-
-        wnd.thread = create_thread(thread_proc, NULL);
-        if (wnd.thread == NULL) {
-            tell_user("Unable to kick off Find Implementations.", NULL);
-            break;
-        }
+        wnd.search_everywhere = false;
+        do_find_implementations();
         break;
     }
 
@@ -2314,51 +2350,8 @@ void handle_command(Command cmd, bool from_menu) {
             wnd.declres = result->decl->copy_decl();
         }
 
-        auto &ind = world.indexer;
-        if (!ind.acquire_lock(IND_READING)) {
-            tell_user("The indexer is currently busy.", NULL);
-            break;
-        }
-
-        auto thread_proc = [](void *param) {
-            auto &wnd = world.wnd_find_interfaces;
-            wnd.thread_mem.cleanup();
-            wnd.thread_mem.init();
-            SCOPED_MEM(&wnd.thread_mem);
-
-            defer { cancel_find_interfaces(); };
-
-            // TODO: how do we handle errors?
-            // right now it just freezes on "Searching..."
-            auto results = ind.find_interfaces(wnd.declres);
-            if (results == NULL) return;
-
-            {
-                SCOPED_MEM(&world.find_interfaces_mem);
-
-                auto newresults = alloc_list<Find_Decl*>(results->len);
-                For (*results) newresults->append(it.copy());
-
-                wnd.results = newresults;
-                wnd.current_import_path = our_strcpy(world.indexer.index.current_import_path);
-            }
-
-            // close the thread handle first so it doesn't try to kill the thread
-            if (wnd.thread != NULL) {
-                close_thread_handle(wnd.thread);
-                wnd.thread = NULL;
-            }
-        };
-
-        wnd.show = true;
-        wnd.done = false;
-        wnd.results = NULL;
-
-        wnd.thread = create_thread(thread_proc, NULL);
-        if (wnd.thread == NULL) {
-            tell_user("Unable to kick off Find Interfaces.", NULL);
-            break;
-        }
+        wnd.search_everywhere = false;
+        do_find_interfaces();
         break;
     }
 

@@ -24,8 +24,8 @@ Open ~/.cpconfig and add the `delve_path` field:
 }
 ```
 
-Replace `delve_path` with the full path of your Delve binary. Get this value
-using `which delve` on Mac, and `where delve` on Windows.
+Replace `delve_path` with the full path of your Delve binary, which you can get
+by running `which dlv`.
 
 ## Configuring the Debugger
 

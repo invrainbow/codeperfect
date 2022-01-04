@@ -2751,7 +2751,7 @@ bool Go_Indexer::are_gotypes_equal(Goresult *ra, Goresult *rb) {
     return false;
 }
 
-List<Find_Decl> *Go_Indexer::find_interfaces(Goresult *target) {
+List<Find_Decl> *Go_Indexer::find_interfaces(Goresult *target, bool search_everywhere) {
     reload_all_dirty_files();
 
     if (target->decl == NULL) return NULL;
@@ -2775,8 +2775,9 @@ List<Find_Decl> *Go_Indexer::find_interfaces(Goresult *target) {
         auto import_path = it.import_path;
         auto package_name = it.package_name;
 
-        if (!path_has_descendant(index.current_import_path, import_path))
-            continue;
+        if (!search_everywhere)
+            if (!path_has_descendant(index.current_import_path, import_path))
+                continue;
 
         For (*it.files) {
             auto ctx = alloc_object(Go_Ctx);
@@ -2836,7 +2837,7 @@ List<Find_Decl> *Go_Indexer::find_interfaces(Goresult *target) {
     return ret;
 }
 
-List<Find_Decl> *Go_Indexer::find_implementations(Goresult *target) {
+List<Find_Decl> *Go_Indexer::find_implementations(Goresult *target, bool search_everywhere) {
     reload_all_dirty_files();
 
     if (target->decl == NULL) return NULL;
@@ -2875,8 +2876,9 @@ List<Find_Decl> *Go_Indexer::find_implementations(Goresult *target) {
         auto import_path = it.import_path;
         auto package_name = it.package_name;
 
-        if (!path_has_descendant(index.current_import_path, import_path))
-            continue;
+        if (!search_everywhere)
+            if (!path_has_descendant(index.current_import_path, import_path))
+                continue;
 
         For (*it.files) {
             auto ctx = alloc_object(Go_Ctx);
@@ -4009,6 +4011,7 @@ void Go_Indexer::fill_generate_implementation(List<Go_Symbol> *out, bool selecte
         For (*it.files) {
             ctx.filename = it.filename;
             auto filehash = it.hash;
+            auto filepath = ctx_to_filepath(&ctx);
 
             For (*it.decls) {
                 if (it.type != GODECL_TYPE) continue;
@@ -4024,6 +4027,7 @@ void Go_Indexer::fill_generate_implementation(List<Go_Symbol> *out, bool selecte
 
                 Go_Symbol sym;
                 sym.pkgname = pkgname;
+                sym.filepath = filepath;
                 sym.name = it.name;
                 sym.decl = make_goresult(&it, &ctx)->copy_decl();
                 sym.filehash = filehash;
@@ -4055,6 +4059,8 @@ void Go_Indexer::fill_goto_symbol(List<Go_Symbol> *out) {
             ctx->filename = it.filename;
             ctx->import_path = import_path;
 
+            auto filepath = ctx_to_filepath(ctx);
+
             For (*it.decls) {
                 auto getrecv = [&]() -> ccstr {
                     if (it.type != GODECL_FUNC) return NULL;
@@ -4079,6 +4085,7 @@ void Go_Indexer::fill_goto_symbol(List<Go_Symbol> *out) {
 
                 Go_Symbol sym;
                 sym.pkgname = pkgname;
+                sym.filepath = filepath;
                 sym.name = name;
                 sym.decl = make_goresult(&it, ctx);
                 sym.filehash = 0; // ???
@@ -6846,6 +6853,7 @@ Find_Decl* Find_Decl::copy() {
 Go_Symbol* Go_Symbol::copy() {
     auto ret = clone(this);
     ret->pkgname = our_strcpy(pkgname);
+    ret->filepath = our_strcpy(filepath);
     ret->name = our_strcpy(name);
     ret->decl = decl == NULL ? NULL : decl->copy_decl();
     return ret;

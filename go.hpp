@@ -1205,6 +1205,7 @@ enum Indexer_Status {
 // a name & godecl (goresult) pair
 struct Go_Symbol {
     ccstr pkgname;
+    ccstr filepath;
     ccstr name;
     Goresult *decl;
     u64 filehash;
@@ -1349,8 +1350,8 @@ struct Go_Indexer {
     bool are_gotypes_equal(Goresult *ra, Goresult *rb);
     bool are_decls_equal(Goresult *adecl, Goresult *bdecl);
 
-    List<Find_Decl> *find_implementations(Goresult *target);
-    List<Find_Decl> *find_interfaces(Goresult *target);
+    List<Find_Decl> *find_implementations(Goresult *target, bool search_everywhere);
+    List<Find_Decl> *find_interfaces(Goresult *target, bool search_everywhere);
     List<Goresult> *list_interface_methods(Goresult *interface);
     bool list_interface_methods(Goresult *interface, List<Goresult> *out);
 

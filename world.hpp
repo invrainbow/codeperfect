@@ -361,6 +361,7 @@ struct World {
 
     struct Wnd_Find_Interfaces : Wnd {
         Pool thread_mem;
+        bool search_everywhere;
         bool done;
         Goresult *declres;
         Thread_Handle thread;
@@ -371,6 +372,7 @@ struct World {
 
     struct Wnd_Find_Implementations : Wnd {
         Pool thread_mem;
+        bool search_everywhere;
         bool done;
         Goresult *declres;
         Thread_Handle thread;
@@ -531,6 +533,7 @@ struct World {
     struct Wnd_Goto_Symbol : Wnd {
         char query[MAX_PATH];
         ccstr current_import_path;
+        bool current_file_only;
         u32 selection;
         List<Go_Symbol> *symbols;
         List<int> *filtered_results;
@@ -627,3 +630,5 @@ void do_generate_implementation();
 bool has_unsaved_files();
 
 void fuzzy_sort_filtered_results(ccstr query, List<int> *list, int total_results, fn<ccstr(int)> get_name);
+void do_find_interfaces();
+void do_find_implementations();

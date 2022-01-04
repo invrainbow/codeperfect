@@ -2312,7 +2312,7 @@ void UI::draw_everything() {
 
     if (world.wnd_caller_hierarchy.show) {
         auto &wnd = world.wnd_caller_hierarchy;
-        
+
         ImGui::SetNextWindowDockID(dock_sidebar_id, ImGuiCond_Once);
         begin_window(
             our_sprintf("Caller Hierarchy for %s###caller_hierarchy", wnd.declres->decl->name),
@@ -2347,6 +2347,19 @@ void UI::draw_everything() {
             ImGui::Checkbox("Show empty interfaces", &wnd.include_empty);
             ImGui::SameLine();
             help_marker("An empty interface{} is always implemented by every type. This checkbox lets you hide these from the results.");
+
+            ImGui::Checkbox("Search everywhere", &wnd.search_everywhere);
+            bool search_everywhere_changed = ImGui::IsItemEdited();
+            ImGui::SameLine();
+            help_marker("By default, Find Interfaces only looks at interfaces inside your workspace. This setting will search everywhere in your dependency tree.");
+
+            defer {
+                if (search_everywhere_changed) {
+                    if (wnd.search_everywhere)
+                        wnd.include_empty = false;
+                    do_find_interfaces();
+                }
+            };
 
             imgui_small_newline();
 
@@ -2383,10 +2396,33 @@ void UI::draw_everything() {
                         drawpos.x += ImGui::CalcTextSize(text).x;
                     };
 
+                    auto import_path = it->decl->ctx->import_path;
+
+                    if (!path_has_descendant(wnd.current_import_path, import_path)) {
+                        ImGui::PushStyleColor(ImGuiCol_Text, to_imcolor(global_colors.muted));
+                        defer { ImGui::PopStyleColor(); };
+
+                        draw_text("(ext) ");
+                    }
+
                     draw_text(our_sprintf("%s.%s", it->package_name, it->decl->decl->name));
 
                     ImGui::PushStyleColor(ImGuiCol_Text, to_imcolor(global_colors.muted));
-                    draw_text(our_sprintf(" (%s)", get_path_relative_to(it->decl->ctx->import_path, wnd.current_import_path)));
+                    {
+                        ccstr path = NULL;
+
+                        ccstr parents[] = {wnd.current_import_path, world.indexer.goroot};
+                        For (parents) {
+                            if (path_has_descendant(it, import_path)) {
+                                path = get_path_relative_to(import_path, it);
+                                break;
+                            }
+                        }
+
+                        if (path == NULL) path = import_path;
+
+                        draw_text(our_sprintf(" (%s)", path));
+                    }
                     ImGui::PopStyleColor();
 
                     // TODO: previews?
@@ -2416,39 +2452,54 @@ void UI::draw_everything() {
         begin_window("Find Implementations", &wnd, ImGuiWindowFlags_AlwaysAutoResize, !wnd.done);
 
         if (wnd.done) {
-            imgui_push_mono_font();
+            ImGui::Checkbox("Search everywhere", &wnd.search_everywhere);
+            bool search_everywhere_changed = ImGui::IsItemEdited();
+            ImGui::SameLine();
+            help_marker("By default, Find Implementations only looks at types inside your workspace. This setting will search everywhere in your dependency tree.");
 
-            int index = 0;
-            For (*wnd.results) {
-                // TODO: refactor out custom draw
-                auto availwidth = ImGui::GetContentRegionAvail().x;
-                auto text_size = ImVec2(availwidth, ImGui::CalcTextSize("blah").y);
-                auto drawpos = ImGui::GetCursorScreenPos();
-                auto drawlist = ImGui::GetWindowDrawList();
+            defer {
+                if (search_everywhere_changed) {
+                    do_find_implementations();
+                }
+            };
 
-                auto draw_selectable = [&]() {
-                    auto label = our_sprintf("##find_implementations_result__%d", index++);
-                    return ImGui::Selectable(label, false, 0, text_size);
-                };
+            imgui_small_newline();
 
-                auto clicked = draw_selectable();
+            if (wnd.results != NULL && wnd.results->len > 0) {
+                imgui_push_mono_font();
 
-                auto draw_text = [&](ccstr text) {
-                    drawlist->AddText(drawpos, ImGui::GetColorU32(ImGuiCol_Text), text);
-                    drawpos.x += ImGui::CalcTextSize(text).x;
-                };
+                int index = 0;
+                For (*wnd.results) {
+                    // TODO: refactor out custom draw
+                    auto availwidth = ImGui::GetContentRegionAvail().x;
+                    auto text_size = ImVec2(availwidth, ImGui::CalcTextSize("blah").y);
+                    auto drawpos = ImGui::GetCursorScreenPos();
+                    auto drawlist = ImGui::GetWindowDrawList();
 
-                draw_text(our_sprintf("%s.%s", it->package_name, it->decl->decl->name));
+                    auto draw_selectable = [&]() {
+                        auto label = our_sprintf("##find_implementations_result__%d", index++);
+                        return ImGui::Selectable(label, false, 0, text_size);
+                    };
 
-                ImGui::PushStyleColor(ImGuiCol_Text, to_imcolor(global_colors.muted));
-                draw_text(our_sprintf(" (%s)", get_path_relative_to(it->decl->ctx->import_path, wnd.current_import_path)));
-                ImGui::PopStyleColor();
+                    auto clicked = draw_selectable();
 
-                // TODO: previews?
-                if (clicked) goto_file_and_pos(it->filepath, it->decl->decl->name_start);
+                    auto draw_text = [&](ccstr text) {
+                        drawlist->AddText(drawpos, ImGui::GetColorU32(ImGuiCol_Text), text);
+                        drawpos.x += ImGui::CalcTextSize(text).x;
+                    };
+
+                    draw_text(our_sprintf("%s.%s", it->package_name, it->decl->decl->name));
+
+                    ImGui::PushStyleColor(ImGuiCol_Text, to_imcolor(global_colors.muted));
+                    draw_text(our_sprintf(" (%s)", get_path_relative_to(it->decl->ctx->import_path, wnd.current_import_path)));
+                    ImGui::PopStyleColor();
+
+                    // TODO: previews?
+                    if (clicked) goto_file_and_pos(it->filepath, it->decl->decl->name_start);
+                }
+
+                imgui_pop_font();
             }
-
-            imgui_pop_font();
         } else {
             ImGui::Text("Searching...");
             ImGui::SameLine();
@@ -2534,6 +2585,10 @@ void UI::draw_everything() {
             ImGui::SetWindowFocus(NULL);
         }
 
+        auto symbol_to_name = [&](auto &it) {
+            return our_sprintf("%s.%s", it.pkgname, it.name);
+        };
+
         if (ImGui::IsItemEdited()) {
             wnd.filtered_results->len = 0;
             wnd.selection = 0;
@@ -2541,7 +2596,7 @@ void UI::draw_everything() {
             if (strlen(wnd.query) >= 2) {
                 u32 i = 0;
                 For (*wnd.symbols) {
-                    if (fzy_has_match(wnd.query, it.name))
+                    if (fzy_has_match(wnd.query, symbol_to_name(it)))
                         wnd.filtered_results->append(i);
                     i++;
                 }
@@ -2550,7 +2605,7 @@ void UI::draw_everything() {
                     wnd.query,
                     wnd.filtered_results,
                     wnd.symbols->len,
-                    [&](auto i) { return wnd.symbols->at(i).name; }
+                    [&](auto i) { return symbol_to_name(wnd.symbols->at(i)); }
                 );
             }
         }
@@ -2561,8 +2616,7 @@ void UI::draw_everything() {
 
             for (u32 i = 0; i < wnd.filtered_results->len && i < settings.goto_file_max_results; i++) {
                 auto it = wnd.symbols->at(wnd.filtered_results->at(i));
-
-                auto text = our_sprintf("%s.%s", it.pkgname, it.name);
+                auto text = symbol_to_name(it);
 
                 if (i == wnd.selection)
                     ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.5f, 1.0f), "%s", text);
@@ -3881,7 +3935,15 @@ void UI::draw_everything() {
             wnd.selection %= min(wnd.filtered_results->len, settings.goto_symbol_max_results);
         };
 
-        begin_centered_window("Go To Symbol", &world.wnd_goto_symbol, 0, 600);
+        begin_centered_window("Go To Symbol", &wnd, 0, 600);
+
+        bool refilter = false;
+
+        ImGui::Checkbox("Include symbols in current file only", &wnd.current_file_only);
+        if (ImGui::IsItemEdited())
+            refilter = true;
+
+        imgui_small_newline();
 
         auto mods = imgui_get_keymods();
         switch (mods) {
@@ -3919,13 +3981,49 @@ void UI::draw_everything() {
             } while (0);
         }
 
-        if (ImGui::IsItemEdited()) {
-            if (strlen(wnd.query) >= 2)
-                filter_symbols();
-            else
-                wnd.filtered_results->len = 0;
+        if (ImGui::IsItemEdited())
+            refilter = true;
+
+        do {
+            if (!refilter) continue;
+
             wnd.selection = 0;
-        }
+            wnd.filtered_results->len = 0;
+
+            if (strlen(wnd.query) < 2) break;
+
+            Editor *editor = NULL;
+            if (wnd.current_file_only) {
+                editor = get_current_editor();
+                if (editor == NULL)
+                    break;
+            }
+
+            Timer t;
+            // t.init("filter_symbols");
+
+            for (u32 i = 0; i < wnd.symbols->len; i++) {
+                auto &it = wnd.symbols->at(i);
+
+                if (wnd.current_file_only)
+                    if (!are_filepaths_equal(it.filepath, editor->filepath))
+                        continue;
+
+                if (!fzy_has_match(wnd.query, it.full_name()))
+                    continue;
+
+                wnd.filtered_results->append(i);
+            }
+
+            // t.log("matching");
+
+            fuzzy_sort_filtered_results(
+                wnd.query,
+                wnd.filtered_results,
+                wnd.symbols->len,
+                [&](auto i) { return wnd.symbols->at(i).full_name(); }
+            );
+        } while (0);
 
         if (wnd.filtered_results->len > 0) {
             imgui_small_newline();
@@ -5403,9 +5501,10 @@ void UI::draw_everything() {
                 auto view = curr_editor->view;
 
                 auto curr = view.y;
-                auto total = curr_editor->buf->lines.len - view.h;
+                auto total = relu_sub(curr_editor->buf->lines.len, view.h);
 
                 auto blah = [&]() {
+                    if (total == 0) return curr > 0 ? "Bot" : "All";
                     if (curr == 0) return "Top";
                     if (curr >= total) return "Bot";
                     return our_sprintf("%d%%", (int)((float)curr/(float)total * 100));
