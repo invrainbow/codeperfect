@@ -13,7 +13,7 @@
 #define _USE_MATH_DEFINES // what the fuck is this lol
 #include <math.h>
 #include "tree_sitter_crap.hpp"
-#include "colors.hpp"
+#include "cpcolors.hpp"
 
 #include <GLFW/glfw3.h>
 #include <inttypes.h>
