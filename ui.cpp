@@ -4619,7 +4619,6 @@ void UI::draw_everything() {
             auto is_hovered = test_hover(editor_area_considering_pane_resizers, HOVERID_EDITORS + current_pane, ImGuiMouseCursor_TextInput);
             if (is_hovered) {
                 if (world.ui.mouse_just_pressed[0]) {
-                    print("[mouse] just_pressed");
                     focus_editor_by_id(editor->id, new_cur2(-1, -1));
 
                     auto pos = calculate_pos_from_mouse();
@@ -4639,7 +4638,6 @@ void UI::draw_everything() {
                         }
                     }
                 } else if (world.ui.mouse_down[0]) {
-                    print("[mouse] down");
                     if (editor->mouse_select.on)
                         if (editor->mouse_select.editor_id == editor->id)
                             if (!editor->double_clicked_selection)
@@ -4649,8 +4647,6 @@ void UI::draw_everything() {
                 }
 
                 if (world.ui.mouse_just_released[0]) {
-                    print("[mouse] released");
-
                     if (editor->selecting)
                         if (editor->select_start == editor->cur)
                             editor->selecting = false;
@@ -4660,8 +4656,6 @@ void UI::draw_everything() {
 
                 auto flags = get_mouse_flags(editor_area);
                 if (flags & MOUSE_DBLCLICKED) {
-                    print("[mouse] double clicked");
-
                     auto pos = calculate_pos_from_mouse();
 
                     auto classify_char = [&](uchar ch) {

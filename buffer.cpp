@@ -345,7 +345,7 @@ bool Buffer::read(Buffer_Read_Func f, bool reread) {
     (*bytecounts.last())++;
     dirty = false;
 
-    if (use_tree) {
+    if (use_tree && !reread) {
         if (tree != NULL) {
             ts_tree_delete(tree);
             tree = NULL;

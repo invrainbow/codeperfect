@@ -1325,7 +1325,7 @@ struct Go_Indexer {
     Go_Package_Status get_package_status(ccstr import_path);
     void replace_package_name(Go_Package *pkg, ccstr package_name);
     u64 hash_file(ccstr filepath);
-    void start_writing();
+    void start_writing(bool skip_if_already_started = false);
     void stop_writing();
     bool truncate_parsed_file(Parsed_File *pf, cur2 end_pos, ccstr chars_to_append);
     Gotype *get_closest_function(ccstr filepath, cur2 pos);

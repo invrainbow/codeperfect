@@ -1225,6 +1225,17 @@ bool has_unsaved_files() {
     return false;
 }
 
+bool handle_unsaved_files() {
+    if (!has_unsaved_files()) return true;
+
+    auto msg = "This operation requires all unsaved files first be saved. Do you want to do that?";
+    auto result = ask_user_yes_no(msg, "Unsaved files", "Yes", "No");
+    if (result != ASKUSER_YES) return false;
+
+    save_all_unsaved_files();
+    return true;
+}
+
 void kick_off_rename_identifier() {
     bool ok = false;
 
@@ -1236,10 +1247,7 @@ void kick_off_rename_identifier() {
 
     defer { if (!ok) ind.release_lock(IND_READING); };
 
-    if (has_unsaved_files()) {
-        tell_user("Please save all your unsaved files before running Rename.", "Unsaved files");
-        return;
-    }
+    if (!handle_unsaved_files()) return;
 
     auto thread_proc = [](void *param) {
         // TODO: put a sleep here so we can test out cancellation shit
@@ -1309,6 +1317,8 @@ void kick_off_rename_identifier() {
                     msg->reload_editor_id = editor->id;
                 });
             }
+
+            editor->disable_file_watcher_until = current_time_in_nanoseconds() + (2 * 1000000000);
         }
 
         // close the thread handle first so it doesn't try to kill the thread
@@ -1453,8 +1463,14 @@ bool is_command_enabled(Command cmd) {
             return b.ready() && has_valid;
         }
 
+    case CMD_RESCAN_INDEX:
+        return world.indexer.status == IND_READY;
+
     case CMD_START_DEBUGGING:
         return world.dbg.state_flag == DLV_STATE_INACTIVE;
+
+    case CMD_CONTINUE:
+        return world.dbg.state_flag == DLV_STATE_PAUSED;
 
     case CMD_FORMAT_FILE:
     case CMD_FORMAT_FILE_AND_ORGANIZE_IMPORTS:
@@ -1520,6 +1536,7 @@ bool is_command_enabled(Command cmd) {
     case CMD_FIND_IMPLEMENTATIONS:
     case CMD_FIND_INTERFACES:
         return get_current_editor() != NULL;
+
     }
 
     return true;
@@ -1593,7 +1610,6 @@ void init_command_info_table() {
     command_info_table[CMD_PROJECT_SETTINGS] = k(0, 0, "Project Settings");
     command_info_table[CMD_BUILD_RESULTS] = k(0, 0, "Build Results");
     command_info_table[CMD_BUILD_PROFILES] = k(0, 0, "Build Profiles");
-    command_info_table[CMD_CONTINUE] = k(0, 0, "Continue");
     command_info_table[CMD_BREAK_ALL] = k(0, 0, "Break All");
     command_info_table[CMD_RUN_TO_CURSOR] = k(0, 0, "Run To Cursor");
     command_info_table[CMD_DEBUG_OUTPUT] = k(0, 0, "Debug Output");
@@ -2071,10 +2087,7 @@ void handle_command(Command cmd, bool from_menu) {
             auto &wnd = world.wnd_generate_implementation;
             ptr0(&wnd);
 
-            if (has_unsaved_files()) {
-                tell_user("Please save all your unsaved files before running Generate Implementation.", "Unsaved files");
-                break;
-            }
+            if (!handle_unsaved_files()) break;
 
             auto &ind = world.indexer;
 
@@ -2400,10 +2413,7 @@ void do_generate_implementation() {
     if (!ind.try_acquire_lock(IND_READING)) return;
     defer { ind.release_lock(IND_READING); };
 
-    if (has_unsaved_files()) {
-        tell_user("Please save all your unsaved files before running Generate Implementation.", "Unsaved files");
-        return;
-    }
+    if (!handle_unsaved_files()) return;
 
     auto &symbol = wnd.symbols->at(wnd.filtered_results->at(wnd.selection));
 

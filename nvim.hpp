@@ -326,8 +326,6 @@ enum Nvim_Request_Type {
     NVIM_REQ_POST_INSERT_DOTREPEAT_REPLAY,
     NVIM_REQ_POST_SAVE_SETLINES,
     // NVIM_REQ_AUTOIMPORT_SETLINES,
-
-    NVIM_REQ_COCKS,
 };
 
 struct Nvim_Request {

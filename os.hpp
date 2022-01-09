@@ -361,3 +361,5 @@ bool touch_file(ccstr path);
 
 void init_platform_specific_crap();
 void open_webbrowser(ccstr url);
+
+ccstr our_getcwd();

@@ -1444,25 +1444,33 @@ int main(int argc, char **argv) {
                 if (is_git_folder(event.filepath)) continue;
                 if (event.filepath[0] == '\0') continue;
 
-                auto orig_filepath = (ccstr)event.filepath;
-                auto filepath = orig_filepath;
-                auto res = check_path(path_join(world.current_path, filepath));
+                auto filepath = path_join(world.current_path, event.filepath);
+
+                auto filedir = filepath;
+                auto res = check_path(filedir);
                 if (res != CPR_DIRECTORY)
-                    filepath = our_dirname(filepath);
+                    filedir = our_dirname(filedir);
+                if (streq(filedir, "."))
+                    filedir = "";
 
-                if (streq(filepath, "."))
-                    filepath = "";
+                reload_file_subtree(filedir);
 
-                reload_file_subtree(filepath);
-
-                auto editor = find_editor_by_filepath(orig_filepath);
+                auto editor = find_editor_by_filepath(filepath);
                 if (editor != NULL)
                     editor->reload_file(true);
 
-                if (res == CPR_DIRECTORY || str_ends_with(event.filepath, ".go")) {
+                auto should_handle_fsevent = [&]() {
+                    if (res == CPR_DIRECTORY) return true;
+                    if (str_ends_with(filepath, ".go")) return true;
+                    if (streq(our_basename(filepath), "go.mod")) return true;
+
+                    return false;
+                };
+
+                if (should_handle_fsevent()) {
                     world.indexer.message_queue.add([&](auto msg) {
                         msg->type = GOMSG_FSEVENT;
-                        msg->fsevent_filepath = our_strcpy(filepath);
+                        msg->fsevent_filepath = our_strcpy(event.filepath);
                     });
                 }
             }

@@ -983,44 +983,6 @@ void Go_Indexer::background_thread() {
         rebuild_package_lookup();
     };
 
-    auto handle_fsevent = [&](ccstr filepath) {
-        filepath = path_join(index.current_path, filepath);
-
-        auto import_path = filepath_to_import_path(filepath);
-        auto res = check_path(filepath);
-
-        switch (res) {
-        case CPR_DIRECTORY:
-            if (status != IND_WRITING)
-                start_writing();
-            if (is_go_package(filepath))
-                mark_package_for_reprocessing(import_path);
-            break;
-        case CPR_FILE:
-            if (status != IND_WRITING)
-                start_writing();
-            if (is_go_package(our_dirname(filepath)))
-                mark_package_for_reprocessing(our_dirname(import_path));
-            break;
-        case CPR_NONEXISTENT:
-            {
-                auto pkg = find_package_in_index(import_path);
-                if (pkg != NULL) {
-                    remove_package(pkg);
-                    break;
-                }
-
-                pkg = find_package_in_index(our_dirname(import_path));
-                if (pkg != NULL) {
-                    if (status != IND_WRITING)
-                        start_writing();
-                    mark_package_for_reprocessing(pkg->import_path);
-                }
-            }
-            break;
-        }
-    };
-
     // random shit
 
     // try to read in index from disk
@@ -1082,6 +1044,13 @@ void Go_Indexer::background_thread() {
 
     init_index(false);
     rebuild_package_lookup();
+
+    auto rescan_gomod = [&](bool force_reset_index) {
+        module_resolver.cleanup();
+        module_resolver.init(world.current_path, gomodcache);
+
+        init_index(force_reset_index);
+    };
 
     auto rescan_everything = [&]() {
         // make sure workspace is in index or queue
@@ -1165,6 +1134,50 @@ void Go_Indexer::background_thread() {
 
     rescan_everything(); // kick off rescan
 
+    auto handle_fsevent = [&](ccstr filepath) {
+        filepath = path_join(index.current_path, filepath);
+
+        auto import_path = filepath_to_import_path(filepath);
+        auto res = check_path(filepath);
+
+        switch (res) {
+        case CPR_DIRECTORY:
+            if (is_go_package(filepath)) {
+                start_writing(true);
+                mark_package_for_reprocessing(import_path);
+            }
+            break;
+        case CPR_FILE:
+            if (is_go_package(our_dirname(filepath)) && str_ends_with(filepath, ".go")) {
+                start_writing(true);
+                mark_package_for_reprocessing(our_dirname(import_path));
+            }
+            if (are_filepaths_equal(path_join(index.current_path, "go.mod"), filepath)) {
+                if (status == IND_READY) {
+                    start_writing();
+                    rescan_gomod(false);
+                    rescan_everything();
+                }
+            }
+            break;
+        case CPR_NONEXISTENT:
+            {
+                auto pkg = find_package_in_index(import_path);
+                if (pkg != NULL) {
+                    remove_package(pkg);
+                    break;
+                }
+
+                pkg = find_package_in_index(our_dirname(import_path));
+                if (pkg != NULL) {
+                    start_writing(true);
+                    mark_package_for_reprocessing(pkg->import_path);
+                }
+            }
+            break;
+        }
+    };
+
     // main loop
     // ===
 
@@ -1187,20 +1200,29 @@ void Go_Indexer::background_thread() {
         auto process_message = [&](auto msg) {
             switch (msg->type) {
             case GOMSG_RESCAN_INDEX:
+                if (status != IND_READY) break;
                 start_writing();
-
-                module_resolver.cleanup();
-                module_resolver.init(world.current_path, gomodcache);
-
+                rescan_gomod(false);
                 rescan_everything();
                 break;
 
             case GOMSG_OBLITERATE_AND_RECREATE_INDEX:
+                if (status != IND_READY) {
+                    if (status == IND_WRITING) {
+                        while (reacquires > 0)
+                            stop_writing();
+                    } else {
+                        break;
+                    }
+                }
+
+                our_assert(status == IND_READY, "status not ready");
+
                 start_writing();
                 delete_file(path_join(world.current_path, ".cpdb"));
                 final_mem.reset();
-                init_index(true);
                 package_lookup.clear();
+                rescan_gomod(true);
                 rescan_everything();
                 break;
 
@@ -5182,26 +5204,25 @@ ccstr indexer_status_str(Indexer_Status status) {
 bool Go_Indexer::acquire_lock(Indexer_Status new_status, bool just_try) {
     print("[acquire] %s", indexer_status_str(new_status));
 
-    if (status == IND_READY) {
-        if (just_try) {
-            if (!lock.try_enter())
-                return false;
-        } else {
-            lock.enter();
-        }
-        status = new_status;
-        reacquires++;
-        return true;
-    } else if (status == new_status) {
+    if (status == new_status) {
         // read lock can only be acquired once
         if (status == IND_READING)
             return false;
 
         reacquires++;
         return true;
-    } else {
-        return false;
     }
+
+    if (just_try) {
+        if (!lock.try_enter())
+            return false;
+    } else {
+        lock.enter();
+    }
+
+    status = new_status;
+    reacquires++;
+    return true;
 }
 
 bool Go_Indexer::release_lock(Indexer_Status expected_status) {
@@ -5219,7 +5240,11 @@ bool Go_Indexer::release_lock(Indexer_Status expected_status) {
     }
 }
 
-void Go_Indexer::start_writing() {
+void Go_Indexer::start_writing(bool skip_if_already_started) {
+    if (skip_if_already_started)
+        if (status == IND_WRITING)
+            return;
+
     acquire_lock(IND_WRITING);
 }
 

@@ -1,6 +1,7 @@
 #include "os.hpp"
 #include "world.hpp"
 #include <filesystem>
+#include <unistd.h>
 
 ccstr normalize_path_sep(ccstr path, char sep) {
     if (sep == 0) sep = PATH_SEP;
@@ -82,3 +83,9 @@ void open_webbrowser(ccstr url) {
 }
 
 #undef OPEN_COMMAND
+
+ccstr our_getcwd() {
+    auto ret = alloc_array(char, 256);
+    return getcwd(ret, 256);
+}
+

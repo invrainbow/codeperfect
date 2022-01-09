@@ -24,6 +24,10 @@ when a frame is opened
 #include "utils.hpp"
 #include "go.hpp"
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+
 #if OS_WIN
 #include "win32.hpp"
 #elif OS_MAC
@@ -432,7 +436,10 @@ Packet* Debugger::send_packet(ccstr packet_name, lambda f, bool read) {
     if (!read) return NULL;
 
     Packet p;
-    if (!read_packet(&p)) return NULL;
+    if (!read_packet(&p)) {
+        error("couldn't read packet");
+        return NULL;
+    }
 
     auto packet = alloc_object(Packet);
     memcpy(packet, &p, sizeof(p));
@@ -467,27 +474,24 @@ bool Debugger::read_packet(Packet* p) {
 
     auto run = [&]() -> bool {
         auto s = read();
-        if (s == NULL)
+        if (s == NULL) {
+            dbg_print("recv.run: s == NULL");
             return false;
-
-        auto is_jsmn_error = [&](int result) -> bool {
-            switch (result) {
-                case JSMN_ERROR_INVAL:
-                case JSMN_ERROR_NOMEM:
-                case JSMN_ERROR_PART:
-                    return true;
-            }
-            return false;
-        };
+        }
 
         Json_Navigator js;
-        if (!js.parse(s))
+        if (!js.parse(s)) {
+            dbg_print("recv.run: js.parse returned false");
+            dbg_print("%s", s);
             return false;
+        }
 
         p->string = js.string;
         p->tokens = js.tokens;
         return true;
     };
+
+    dbg_print("running");
 
     if (run()) {
         SCOPED_FRAME();
@@ -971,7 +975,10 @@ bool Debugger::start(Debug_Profile *debug_profile) {
             kick_off_build(&build_profile);
             while (!world.build.done) continue;
 
+            dbg_print("build completed");
+
             if (world.build.errors.len > 0 || world.build.build_itself_had_error) {
+                dbg_print("returning false, errors.len = %d, build_itself_had_error = %d", world.build.errors.len, world.build.build_itself_had_error);
                 return false;
             }
 
@@ -1000,6 +1007,7 @@ bool Debugger::start(Debug_Profile *debug_profile) {
     // dlv_proc.create_new_console = true;
 
     if (world.delve_path[0] == '\0') {
+        dbg_print("delve path is empty");
         send_tell_user("Please set your Delve binary path in ~/.cpconfig, and restart CodePerfect.", NULL);
         return false;
     }
@@ -1008,7 +1016,18 @@ bool Debugger::start(Debug_Profile *debug_profile) {
     if (debug_profile->type == DEBUG_TEST_CURRENT_FUNCTION)
         dlv_cmd = our_sprintf("%s -- -test.v -test.run %s", dlv_cmd, test_function_name);
 
-    if (!dlv_proc.run(dlv_cmd)) return false;
+#ifdef CPU_ARM64
+        dlv_cmd = our_sprintf("arch -arm64 %s", dlv_cmd);
+#endif
+
+    dbg_print("delve command: %s", dlv_cmd);
+    dbg_print("getcwd = %s", our_getcwd());
+    dbg_print("dlv_proc.dir = %s", dlv_proc.dir);
+
+    if (!dlv_proc.run(dlv_cmd)) {
+        dbg_print("failed to run");
+        return false;
+    }
 
     {
         stdout_mem.cleanup();
@@ -1032,9 +1051,7 @@ bool Debugger::start(Debug_Profile *debug_profile) {
     char ch = 0;
     do {
         if (!dlv_proc.read1(&ch)) return false;
-        printf("%c", ch);
     } while (ch != '\n');
-    printf("\n");
 
     auto server = "127.0.0.1";
     auto port = "1234";
@@ -1058,7 +1075,7 @@ bool Debugger::start(Debug_Profile *debug_profile) {
                 if (ioctl_stub(fd, FIONBIO, &io_mode) == 0)
                     return fd;
 
-            print("unable to connect: %s", get_socket_error());
+            dbg_print("unable to connect: %s", get_socket_error());
             close_stub(fd);
         }
         return -1;
@@ -1082,6 +1099,7 @@ bool Debugger::start(Debug_Profile *debug_profile) {
     world.wnd_debug_output.selection = -1;
     world.wnd_debug_output.show = true;
     world.wnd_debug_output.cmd_focus = true;
+    dbg_print("got to the end");
 
     return true;
 }
@@ -1506,7 +1524,7 @@ void Debugger::do_everything() {
     u64 start = 0;
     if (step_over_time != 0) {
         auto time_elapsed = current_time_in_nanoseconds() - step_over_time;
-        print("response after step over took %d ms", time_elapsed / 1000000);
+        dbg_print("response after step over took %d ms", time_elapsed / 1000000);
         start = current_time_in_nanoseconds();
     }
 
@@ -1514,7 +1532,7 @@ void Debugger::do_everything() {
 
     if (step_over_time != 0) {
         auto time_elapsed = current_time_in_nanoseconds() - start;
-        print("handle new state took %d ms", time_elapsed / 1000000);
+        dbg_print("handle new state took %d ms", time_elapsed / 1000000);
         step_over_time = 0;
     }
 }
@@ -1584,7 +1602,7 @@ void Debugger::handle_new_state(Packet *p) {
             }
         }
 
-        print("found %d threads with breakpoints", goroutines_with_breakpoint.len);
+        dbg_print("found %d threads with breakpoints", goroutines_with_breakpoint.len);
     }
 
     t.log("checking threads");

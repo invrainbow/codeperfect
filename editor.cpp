@@ -1033,6 +1033,7 @@ void Editor::reload_file(bool because_of_file_watcher) {
     buf->init(&mem, is_go_file);
     */
 
+    print("=== reloading %s", filepath);
     buf->read(fm, true);
 
     if (world.use_nvim) {

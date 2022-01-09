@@ -48,22 +48,14 @@ class="index-ready">INDEX READY</span>.
 
 If you click the indicator, you can see what the indexer is doing.
 
-## Adding dependencies
-
-For the most part, the indexer runs automagically in the background.
-In one case, however, it needs your assistance: when you add a dependency.
-
-After adding a dependency to your codebase as an import and installing it
-either with `go get` or `go mod tidy`, run <cite>Tools</cite> &gt;
-<cite>Rescan Index</cite>. This scans for any new packages and parses them.
-
 ## Troubleshooting the indexer
 
-If the index is ever broken giving you incorrect results, there are two fixes
-you can apply. (And please report the bug to us!)
+In theory the indexer runs automagically in the background and keeps up to date
+by itself. If it's ever broken or giving you incorrect results, however, there
+are two fixes you can try. (And please report the bug to us!)
 
 - Run <cite>Tools</cite> &gt; <cite>Rescan Index</cite>. This looks for
-  missing and changed packages, and processes them. 90% of the time, this
+  missing and changed packages, and processes them. Most of the time, this
   should fix your problem. (This runs when you restart CodePerfect).
 
 - More drastically, run <cite>Tools</cite> &gt; <cite>Obliterate and
