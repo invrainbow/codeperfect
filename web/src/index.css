@@ -93,6 +93,7 @@
     @apply py-2 px-5;
     @apply disabled:opacity-50 no-underline outline-none;
     @apply whitespace-nowrap;
+    @apply transform md:hover:scale-105 ease-in duration-75;
   }
   .button:disabled {
     opacity: 0.5;
