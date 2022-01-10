@@ -1,16 +1,15 @@
 import cx from "classnames";
-import produce from "immer";
 import React from "react";
 import { CopyToClipboard } from "react-copy-to-clipboard";
 import { Helmet } from "react-helmet";
-import { AiFillCode, AiOutlineCheck, AiOutlineClose } from "react-icons/ai";
+import { AiFillCode } from "react-icons/ai";
 import { BsArrowRight, BsCodeSquare, BsCpu } from "react-icons/bs";
 import {
-  FaPalette,
   FaApple,
+  FaLayerGroup,
+  FaPalette,
   FaRegClipboard,
   FaRobot,
-  FaLayerGroup,
 } from "react-icons/fa";
 import { FcCheckmark } from "react-icons/fc";
 import { GoPackage } from "react-icons/go";
@@ -29,11 +28,7 @@ import {
   useLocation,
   useParams,
 } from "react-router-dom";
-import betaImage from "./beta.png";
-import demoImage from "./demo.png";
 import "./index.css";
-import logoImage from "./logo.png";
-import playImage from "./play.png";
 
 const SUPPORT_EMAIL = "support@codeperfect95.com";
 const BETA_LINK =
@@ -156,9 +151,9 @@ function Home() {
               onClick={() => setStartDemo(true)}
             >
               <div className="absolute w-full h-full flex items-center justify-center z-10">
-                <img alt="play" style={{ width: "72px" }} src={playImage} />
+                <img alt="play" style={{ width: "72px" }} src="/play.png" />
               </div>
-              <img className="block relative z-0" src={demoImage} alt="demo" />
+              <img className="block relative z-0" src="/demo.png" alt="demo" />
             </div>
           )}
         </div>
@@ -242,42 +237,10 @@ function Home() {
             style={{ transform: "translate(0, -47.5%)" }}
             className="absolute top-1/2 -left-16"
           >
-            <img className="w-full h-auto" src={betaImage} alt="beta" />
+            <img className="w-full h-auto" src="/beta.png" alt="beta" />
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-function PricingBox({ title, monthly, yearly, isYearly, children, unit, cta }) {
-  return (
-    <div
-      className={cx(
-        "w-auto md:w-1/3 rounded-lg overflow-hidden p-8",
-        "border border-gray-200 shadow-sm"
-      )}
-    >
-      <h1 className="font-bold text-gray-700 text-lg mb-2">{title}</h1>
-      <div className="flex items-end">
-        <div className="font-medium text-black text-5xl">
-          ${isYearly ? yearly : monthly}
-        </div>
-        <div className="leading-tight text-xs pb-1 ml-2">
-          {unit && <div>per {unit}</div>}
-          <div>per {isYearly ? "year" : "month"}</div>
-        </div>
-      </div>
-      <div className="text-gray-500 text-left my-6">{children}</div>
-      {cta}
-    </div>
-  );
-}
-
-function PricingPoint({ label, not }) {
-  return (
-    <div className={cx("leading-5 mb-1", not && "text-red-600")}>
-      <Icon icon={not ? AiOutlineClose : AiOutlineCheck} /> {label}
     </div>
   );
 }
@@ -559,316 +522,6 @@ function Download() {
   return <Redirect to={`/install?code=${getCode()}`} />;
 }
 
-function Textbox({ area, onChange, className, ...props }) {
-  const realProps = {
-    className: cx(className, "py-1.5 px-3 rounded border-2 border-gray-200"),
-    onChange: onChange && ((e) => onChange(e.target.value)),
-    ...props,
-  };
-  if (area) {
-    realProps.className = cx(realProps.className, "resize-none h-24");
-    return <textarea {...realProps} />;
-  }
-  return <input {...realProps} />;
-}
-
-function BetaField({ className, label, children }) {
-  return (
-    <div className={cx("my-6", className)}>
-      {label && <div className="mb-1.5 font-medium">{label}</div>}
-      <div>{children}</div>
-    </div>
-  );
-}
-
-/*
-function BetaStep({ step, children }) {
-  const selected = step === 1;
-  return (
-    <div
-      className={cx(
-        "p-4 rounded mb-3 flex items-center text-lg text-black",
-        selected ? "border-r-4 border-blue-400" : "opacity-30"
-      )}
-    >
-      <div className="w-10 h-10 mr-3 flex rounded-full items-center justify-center bg-gray-600 text-gray-200">
-        <span>{step}</span>
-      </div>
-      <div>{children}</div>
-    </div>
-  );
-}
-*/
-
-function Beta() {
-  const [sending, setSending] = React.useState(false);
-  const [form, rawSetForm] = React.useState({
-    name: "",
-    email: "",
-    os: [],
-    editor: [],
-  });
-  const [stage, setStage] = React.useState("signup");
-  const setForm = (cb) => rawSetForm(produce(form, cb));
-
-  const osOptions = [
-    ["windows", "Windows"],
-    ["mac", "macOS"],
-    ["linux", "Linux"],
-  ];
-
-  const editorOptions = [
-    ["goland", "Goland"],
-    ["vscode", "VSCode"],
-    ["text_editor", "A text editor (Vim, Sublime)"],
-    ["other", "Other"],
-  ];
-
-  const onSubmit = React.useCallback(
-    async (e) => {
-      e.preventDefault();
-      setSending(true);
-      const resp = await fetch(`${API_BASE}/beta-signup`, {
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(form),
-      });
-      const data = await resp.json();
-      setStage(data.next_stage);
-      setSending(false);
-    },
-    [form, setSending, setStage]
-  );
-
-  return (
-    <WallOfText width="xl" className="border shadow">
-      <Title>CodePerfect Beta</Title>
-      {stage === "signup" && (
-        <form onSubmit={onSubmit}>
-          <BetaField label="What's your name?">
-            <Textbox
-              value={form.name}
-              onChange={(name) =>
-                setForm((draft) => {
-                  draft.name = name;
-                })
-              }
-              className="w-full"
-            />
-          </BetaField>
-          <BetaField label="What's your email?">
-            <Textbox
-              value={form.email}
-              onChange={(email) =>
-                setForm((draft) => {
-                  draft.email = email;
-                })
-              }
-              className="w-full"
-            />
-          </BetaField>
-          <BetaField label="What platforms do you use?">
-            {osOptions.map(([key, label]) => (
-              <div className="mb-1">
-                <label className="mr-4 cursor-pointer">
-                  <input
-                    checked={form.os.includes(key)}
-                    onChange={(e) => {
-                      setForm((draft) => {
-                        const set = new Set(draft.os);
-                        if (e.target.checked) {
-                          set.add(key);
-                        } else {
-                          set.delete(key);
-                        }
-                        draft.os = Array.from(set);
-                      });
-                    }}
-                    type="checkbox"
-                    className="mr-1 cursor-pointer"
-                  />
-                  {label}
-                </label>
-              </div>
-            ))}
-          </BetaField>
-          <BetaField label="What do you currently use to write Go?">
-            {editorOptions.map(([key, label]) => (
-              <div className="mb-1">
-                <label className="mr-4 cursor-pointer">
-                  <input
-                    checked={form.editor.includes(key)}
-                    onChange={(e) => {
-                      setForm((draft) => {
-                        const set = new Set(draft.editor);
-                        if (e.target.checked) {
-                          set.add(key);
-                        } else {
-                          set.delete(key);
-                        }
-                        draft.editor = Array.from(set);
-                      });
-                    }}
-                    type="checkbox"
-                    className="mr-1 cursor-pointer"
-                  />
-                  {label}
-                </label>
-              </div>
-            ))}
-          </BetaField>
-          <div>
-            <button
-              disabled={sending}
-              type="submit"
-              className="button main-button"
-            >
-              {sending ? "Submitting..." : "Join Beta"}
-            </button>
-          </div>
-        </form>
-      )}
-
-      {stage === "not_supported" && (
-        <p>
-          Thanks for signing up! At the moment we only support macOS, but we'll
-          be sure to update you when we roll out support for other platforms.
-        </p>
-      )}
-
-      {stage === "supported" && (
-        <p>
-          Thanks for signing up! We just sent you an email to schedule your
-          onboarding call. (If you don't see it, please check your spam folder.)
-        </p>
-      )}
-    </WallOfText>
-  );
-}
-
-function Anchor({ name }) {
-  const ref = React.useCallback(
-    (elem) => {
-      if (elem) {
-        if (window.location.hash.slice(1) === name) {
-          setTimeout(() => elem.scrollIntoView(), 1);
-        }
-      }
-    },
-    [name]
-  );
-
-  // eslint-disable-next-line
-  return <a ref={ref} name={name}></a>;
-}
-
-function Pricing() {
-  const [yearly, setYearly] = React.useState(false);
-
-  return (
-    <div className="pricing my-24">
-      <Anchor name="pricing" />
-      <h1 className="text-center text-black font-bold text-4xl mb-8">
-        Pricing
-      </h1>
-      <div className="text-center">
-        <span className="relative inline-block text-sm">
-          <button
-            onClick={() => setYearly(false)}
-            className={cx(
-              "left-0 inline-block rounded-full py-1 px-3 font-medium cursor-pointer outline-none",
-              !yearly ? "bg-gray-200 text-black" : "text-gray-400"
-            )}
-          >
-            Monthly
-          </button>
-          <button
-            onClick={() => setYearly(true)}
-            className={cx(
-              "left-0 inline-block rounded-full py-1 px-4 font-medium cursor-pointer outline-none",
-              yearly ? "bg-gray-200 text-black" : "text-gray-400"
-            )}
-          >
-            Annual
-          </button>
-        </span>
-      </div>
-      <div className="mt-8">
-        <div className="px-4 md:px-4 max-w-5xl flex flex-col md:flex-row space-between space-y-4 space-x-0 md:space-y-0 md:space-x-4 lg:space-x-12 mx-auto">
-          <PricingBox
-            title="Personal"
-            monthly={5}
-            yearly={45}
-            isYearly={yearly}
-            cta={
-              <A className="button main-button" href={BETA_LINK}>
-                Request Access
-              </A>
-            }
-          >
-            <PricingPoint label="7-day free trial" />
-            <PricingPoint label="Commercial use allowed" />
-            <PricingPoint label="All features unlocked" />
-            <PricingPoint not label=" Company cannot pay" />
-            <PricingPoint not label=" Purchase cannot be expensed" />
-          </PricingBox>
-          <PricingBox
-            title="Team"
-            monthly={10}
-            yearly={90}
-            unit={"user"}
-            isYearly={yearly}
-            cta={
-              <A className="button main-button" href={BETA_LINK}>
-                Request Access
-              </A>
-            }
-          >
-            <PricingPoint label="All features in Personal" />
-            <PricingPoint label="Company can pay" />
-            <PricingPoint label="Purchase can be expensed" />
-          </PricingBox>
-          <PricingBox
-            title="Premium"
-            monthly="20+"
-            yearly="180+"
-            unit={"user"}
-            isYearly={yearly}
-            cta={
-              <a
-                className="button main-button"
-                href="mailto:sales@codeperfect95.com"
-              >
-                Contact Sales
-              </a>
-            }
-          >
-            <PricingPoint label="All features in Team" />
-            <PricingPoint label="Priority support" />
-            <PricingPoint label="Custom requests &amp; integrations" />
-          </PricingBox>
-        </div>
-      </div>
-      {/*
-      <div className="pt-16 mt-16 border-t border-gray-200 text-center">
-        <p className="text-xl mb-0">Ready to get started?</p>
-        <p>
-          <A
-            className="button main-button font-bold text-xl px-6 py-3 whitespace-nowrap"
-            href={BETA_SIGNUP_LINK}
-          >
-            Request Access
-          </a>
-        </p>
-      </div>
-      */}
-    </div>
-  );
-}
-
 function Terms() {
   return (
     <>
@@ -999,7 +652,7 @@ function App() {
             <img
               alt="logo"
               className="w-auto h-16 inline-block mr-4"
-              src={logoImage}
+              src="/logo.png"
             />
             <span className="hidden md:inline-block">CodePerfect 95</span>
           </Link>
@@ -1011,9 +664,6 @@ function App() {
         </div>
         <div>
           <Switch>
-            <Route path="/beta" exact>
-              <Beta />
-            </Route>
             <Route path="/download" exact>
               <Download />
             </Route>
@@ -1022,9 +672,6 @@ function App() {
             </Route>
             <Route path="/install/manual" exact>
               <ManualInstall />
-            </Route>
-            <Route path="/pricing">
-              <Pricing />
             </Route>
             <Route path="/terms">
               <Terms />
