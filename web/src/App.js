@@ -163,7 +163,7 @@ function Home() {
         <div className="text-center font-bold text-3xl mb-8 text-black">
           A full-featured IDE, as fast as Sublime Text.
         </div>
-        <div className="mx-auto max-w-screen-lg grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-5 ">
+        <div className="mx-auto max-w-screen-lg grid grid-cols-2 sm:grid-cols-3 gap-3 md:grid-cols-4 lg:grid-cols-5 md:gap-5">
           <Feature name="Code intelligence" icon={BsCodeSquare}>
             Autocomplete, go to definition, parameter hints, find usages, and
             more.
@@ -182,12 +182,12 @@ function Home() {
             Vim keybindings work natively out of the box, the full feature set.
           </Feature>
 
-          <Feature name="Instant fuzzy search for everything" icon={IoMdSearch}>
-            Select and jump to files, symbols, types, commands, and completions.
+          <Feature name="Instant fuzzy search" icon={IoMdSearch}>
+            Works on files, symbols, commands, and completions.
           </Feature>
 
           <Feature name="Automatic refactoring" icon={ImMagicWand}>
-            Rename, move, and generate code automatically with a click.
+            Rename, move, and generate code automatically.
           </Feature>
 
           <Feature name="Automatic import" icon={GoPackage}>
@@ -198,11 +198,7 @@ function Home() {
             Generate code with macros that work intelligently on your Go
             expressions.
           </Feature>
-          <Feature
-            name="Native support for interfaces"
-            icon={FaLayerGroup}
-            className="col-start-2"
-          >
+          <Feature name="Native support for interfaces" icon={FaLayerGroup}>
             Navigate and generate interfaces in a few keystrokes.
           </Feature>
           <Feature name="Command Palette" icon={FaPalette}>
@@ -211,8 +207,8 @@ function Home() {
         </div>
       </div>
 
-      <div className="my-16 md:mt-52 md:mb-48 md:rounded-md bg-black max-w-screen-xl mx-auto flex">
-        <div className="md:w-2/5 p-8 md:p-16">
+      <div className="my-16 md:my-36 lg:mt-52 lg:mb-48 lg:rounded-md bg-black max-w-screen-xl mx-auto flex">
+        <div className="lg:w-2/5 p-8 md:p-16">
           <div className="font-bold text-3xl text-white leading-snug">
             <div>Ready to try it out?</div>
             <div>Help test our macOS beta.</div>
@@ -232,7 +228,7 @@ function Home() {
             </A>
           </div>
         </div>
-        <div className="flex-1 pl-12 relative hidden md:block">
+        <div className="flex-1 pl-12 relative hidden lg:block">
           <div
             style={{ transform: "translate(0, -47.5%)" }}
             className="absolute top-1/2 -left-16"
