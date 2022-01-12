@@ -4083,7 +4083,7 @@ void Go_Indexer::fill_goto_symbol(List<Go_Symbol> *out) {
 
         {
             SCOPED_FRAME();
-            if (base_path->contains(make_path(it.import_path)))
+            if (!base_path->contains(make_path(it.import_path)))
                 continue;
         }
 
@@ -4094,15 +4094,15 @@ void Go_Indexer::fill_goto_symbol(List<Go_Symbol> *out) {
         auto threadctx = (Thread_Context*)param;
         auto ind = threadctx->_this;
 
-        // Pool pool;
-        // pool.init();
-        // defer { pool.cleanup(); };
-        // SCOPED_MEM(&pool);
+        Pool pool;
+        pool.init();
+        defer { pool.cleanup(); };
+        SCOPED_MEM(&pool);
 
         while (true) {
             Go_Package *pkg;
             {
-                // SCOPED_LOCK(threadctx->queuelock);
+                SCOPED_LOCK(threadctx->queuelock);
                 auto queue = threadctx->queue;
                 if (queue->len == 0) break;
                 pkg = queue->at(--queue->len);
@@ -4114,11 +4114,23 @@ void Go_Indexer::fill_goto_symbol(List<Go_Symbol> *out) {
             auto import_path = pkg->import_path;
 
             For (*pkg->files) {
-                auto ctx = alloc_object(Go_Ctx);
-                ctx->filename = it.filename;
-                ctx->import_path = import_path;
+                Go_Ctx *ctx = NULL;
+                {
+                    SCOPED_LOCK(threadctx->outlock);
+                    SCOPED_MEM(threadctx->pool);
 
-                auto filepath = ind->ctx_to_filepath(ctx);
+                    ctx = alloc_object(Go_Ctx);
+                    ctx->filename = our_strcpy(it.filename);
+                    ctx->import_path = import_path;
+                }
+
+                ccstr filepath = NULL;
+
+                {
+                    SCOPED_LOCK(threadctx->outlock);
+                    SCOPED_MEM(threadctx->pool);
+                    filepath = ind->ctx_to_filepath(ctx);
+                }
 
                 For (*it.decls) {
                     if (streq(it.name, "_")) continue;
@@ -4137,31 +4149,30 @@ void Go_Indexer::fill_goto_symbol(List<Go_Symbol> *out) {
                         return recv->id_name;
                     };
 
-                    ccstr name = NULL;
                     auto recvname = getrecv();
-                    if (recvname != NULL)
-                        name = our_sprintf("%s.%s", recvname, it.name);
-                    else
-                        name = our_strcpy(it.name);
 
                     Go_Symbol sym;
-                    sym.pkgname = pkgname;
+                    sym.pkgname = pkg->package_name;
                     sym.filepath = filepath;
-                    sym.name = name;
-                    sym.decl = make_goresult(&it, ctx);
                     sym.filehash = 0; // ???
 
                     {
-                        // SCOPED_LOCK(threadctx->outlock);
+                        SCOPED_LOCK(threadctx->outlock);
                         SCOPED_MEM(threadctx->pool);
-                        threadctx->out->append(sym.copy());
+
+                        sym.decl = make_goresult(&it, ctx);
+                        if (recvname != NULL)
+                            sym.name = our_sprintf("%s.%s", recvname, it.name);
+                        else
+                            sym.name = our_strcpy(it.name);
+                        threadctx->out->append(&sym);
                     }
                 }
             }
         }
 
         {
-            // SCOPED_LOCK(threadctx->outlock);
+            SCOPED_LOCK(threadctx->outlock);
             threadctx->done++;
         }
     };
@@ -4169,11 +4180,8 @@ void Go_Indexer::fill_goto_symbol(List<Go_Symbol> *out) {
     Timer t;
     t.init("fill_goto_symbol");
 
-    worker(&ctx);
-
-    /*
     auto threads = alloc_list<Thread_Handle>();
-    int n = 1; // cpu_count();
+    int n = cpu_count();
     threads->ensure_cap(n);
     for (int i = 0; i < n; i++) {
         auto t = create_thread(worker, &ctx);
@@ -4185,7 +4193,6 @@ void Go_Indexer::fill_goto_symbol(List<Go_Symbol> *out) {
         sleep_milliseconds(1);
 
     For (*threads) close_thread_handle(it);
-    */
 
     t.total();
 }
