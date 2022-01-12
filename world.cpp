@@ -2811,7 +2811,7 @@ void fuzzy_sort_filtered_results(ccstr query, List<int> *list, int total_results
     }
 
     list->sort([&](int* pa, int* pb) {
-        auto a = scores[*pa]; 
+        auto a = scores[*pa];
         auto b = scores[*pb];
 
         if (a < b) return 1;

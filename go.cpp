@@ -2772,6 +2772,8 @@ List<Find_Decl> *Go_Indexer::find_interfaces(Goresult *target, bool search_every
     auto ret = alloc_list<Find_Decl>();
 
     For (*index.packages) {
+        if (it.status != GPS_READY) continue;
+
         auto import_path = it.import_path;
         auto package_name = it.package_name;
 
@@ -2873,6 +2875,8 @@ List<Find_Decl> *Go_Indexer::find_implementations(Goresult *target, bool search_
     };
 
     For (*index.packages) {
+        if (it.status != GPS_READY) continue;
+
         auto import_path = it.import_path;
         auto package_name = it.package_name;
 
@@ -2999,6 +3003,8 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_symbol(ccstr symbol) {
     auto base_path = make_path(index.current_import_path);
 
     For (*index.packages) {
+        if (it.status != GPS_READY) continue;
+
         {
             SCOPED_FRAME();
             if (!base_path->contains(make_path(it.import_path)))
@@ -3400,6 +3406,7 @@ List<Find_References_File> *Go_Indexer::actually_find_references(Goresult *declr
         For (*pkg->files) process(pkg, &it);
     } else {
         For (*index.packages) {
+            if (it.status != GPS_READY) continue;
             if (!path_has_descendant(index.current_import_path, it.import_path))
                 continue;
             auto &pkg = it;
@@ -3566,6 +3573,7 @@ ccstr Go_Indexer::find_best_import(ccstr package_name, List<ccstr> *identifiers)
     List<int> indexes; indexes.init();
 
     For (*index.packages) {
+        if (it.status != GPS_READY) continue;
         if (it.package_name == NULL) continue;
         if (!streq(it.package_name, package_name)) continue;
 
@@ -3992,6 +4000,8 @@ void Go_Indexer::fill_generate_implementation(List<Go_Symbol> *out, bool selecte
     auto base_path = make_path(index.current_import_path);
 
     For (*index.packages) {
+        if (it.status != GPS_READY) continue;
+
         if (streq(it.import_path, "github.com/invrainbow/cpcast")) {
             print("cpcast");
         }
@@ -4040,59 +4050,144 @@ void Go_Indexer::fill_generate_implementation(List<Go_Symbol> *out, bool selecte
 void Go_Indexer::fill_goto_symbol(List<Go_Symbol> *out) {
     reload_all_dirty_files();
 
-    auto base_path = make_path(index.current_import_path);
+    struct Thread_Context {
+        Lock *queuelock;
+        Lock *outlock;
+        List<Go_Symbol> *out;
+        List<Go_Package*> *queue;
+        Pool *pool;
+        Go_Indexer *_this;
+        int done;
+    };
 
+    Lock queuelock, outlock;
+    queuelock.init();
+    outlock.init();
+    defer {
+        queuelock.cleanup();
+        outlock.cleanup();
+    };
+
+    Thread_Context ctx; ptr0(&ctx);
+    ctx.queuelock = &queuelock;
+    ctx.outlock = &outlock;
+    ctx.out = out;
+    ctx.queue = alloc_list<Go_Package*>();
+    ctx.pool = MEM;
+    ctx._this = this;
+    ctx.done = 0;
+
+    auto base_path = make_path(index.current_import_path);
     For (*index.packages) {
+        if (it.status != GPS_READY) continue;
+
         {
             SCOPED_FRAME();
-            if (!base_path->contains(make_path(it.import_path)))
+            if (base_path->contains(make_path(it.import_path)))
                 continue;
         }
 
-        auto pkg = &it;
+        ctx.queue->append(&it);
+    }
 
-        auto pkgname = it.package_name;
-        auto import_path = it.import_path;
+    auto worker = [](void *param) {
+        auto threadctx = (Thread_Context*)param;
+        auto ind = threadctx->_this;
 
-        For (*it.files) {
-            auto ctx = alloc_object(Go_Ctx);
-            ctx->filename = it.filename;
-            ctx->import_path = import_path;
+        // Pool pool;
+        // pool.init();
+        // defer { pool.cleanup(); };
+        // SCOPED_MEM(&pool);
 
-            auto filepath = ctx_to_filepath(ctx);
+        while (true) {
+            Go_Package *pkg;
+            {
+                // SCOPED_LOCK(threadctx->queuelock);
+                auto queue = threadctx->queue;
+                if (queue->len == 0) break;
+                pkg = queue->at(--queue->len);
+            }
 
-            For (*it.decls) {
-                auto getrecv = [&]() -> ccstr {
-                    if (it.type != GODECL_FUNC) return NULL;
-                    if (it.gotype == NULL) return NULL;
-                    if (it.gotype->type != GOTYPE_FUNC) return NULL;
+            if (pkg == NULL) break;
 
-                    auto recv = it.gotype->func_recv;
-                    if (recv == NULL) return NULL;
+            auto pkgname = pkg->package_name;
+            auto import_path = pkg->import_path;
 
-                    recv = unpointer_type(recv, NULL)->gotype;
-                    if (recv->type != GOTYPE_ID) return NULL;
+            For (*pkg->files) {
+                auto ctx = alloc_object(Go_Ctx);
+                ctx->filename = it.filename;
+                ctx->import_path = import_path;
 
-                    return recv->id_name;
-                };
+                auto filepath = ind->ctx_to_filepath(ctx);
 
-                ccstr name = NULL;
-                auto recvname = getrecv();
-                if (recvname != NULL)
-                    name = our_sprintf("%s.%s", recvname, it.name);
-                else
-                    name = our_sprintf("%s", it.name);
+                For (*it.decls) {
+                    if (streq(it.name, "_")) continue;
 
-                Go_Symbol sym;
-                sym.pkgname = pkgname;
-                sym.filepath = filepath;
-                sym.name = name;
-                sym.decl = make_goresult(&it, ctx);
-                sym.filehash = 0; // ???
-                out->append(&sym);
+                    auto getrecv = [&]() -> ccstr {
+                        if (it.type != GODECL_FUNC) return NULL;
+                        if (it.gotype == NULL) return NULL;
+                        if (it.gotype->type != GOTYPE_FUNC) return NULL;
+
+                        auto recv = it.gotype->func_recv;
+                        if (recv == NULL) return NULL;
+
+                        recv = ind->unpointer_type(recv, NULL)->gotype;
+                        if (recv->type != GOTYPE_ID) return NULL;
+
+                        return recv->id_name;
+                    };
+
+                    ccstr name = NULL;
+                    auto recvname = getrecv();
+                    if (recvname != NULL)
+                        name = our_sprintf("%s.%s", recvname, it.name);
+                    else
+                        name = our_strcpy(it.name);
+
+                    Go_Symbol sym;
+                    sym.pkgname = pkgname;
+                    sym.filepath = filepath;
+                    sym.name = name;
+                    sym.decl = make_goresult(&it, ctx);
+                    sym.filehash = 0; // ???
+
+                    {
+                        // SCOPED_LOCK(threadctx->outlock);
+                        SCOPED_MEM(threadctx->pool);
+                        threadctx->out->append(sym.copy());
+                    }
+                }
             }
         }
+
+        {
+            // SCOPED_LOCK(threadctx->outlock);
+            threadctx->done++;
+        }
+    };
+
+    Timer t;
+    t.init("fill_goto_symbol");
+
+    worker(&ctx);
+
+    /*
+    auto threads = alloc_list<Thread_Handle>();
+    int n = 1; // cpu_count();
+    threads->ensure_cap(n);
+    for (int i = 0; i < n; i++) {
+        auto t = create_thread(worker, &ctx);
+        threads->append(t);
     }
+
+    // TODO: timeout
+    while (ctx.done < n)
+        sleep_milliseconds(1);
+
+    For (*threads) close_thread_handle(it);
+    */
+
+    t.total();
 }
 
 bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period, Autocomplete *out) {
