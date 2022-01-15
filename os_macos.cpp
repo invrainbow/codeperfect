@@ -14,6 +14,8 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/param.h>
+#include <sys/sysctl.h>
 #include <unistd.h>
 #include <ftw.h>
 #include <CoreServices/CoreServices.h>
@@ -660,5 +662,21 @@ bool Fs_Watcher::next_event(Fs_Event *event) {
     return true;
 }
 
-#endif
+int cpu_count() {
+    int mib[4];
+    int ret = 1;
+    size_t len = sizeof(ret);
 
+    mib[0] = CTL_HW;
+    mib[1] = HW_AVAILCPU;
+    sysctl(mib, 2, &ret, &len, NULL, 0);
+    if (ret >= 1) return ret;
+
+    mib[1] = HW_NCPU;
+    sysctl(mib, 2, &ret, &len, NULL, 0);
+    if (ret >= 1) return ret;
+
+    return 1;
+}
+
+#endif

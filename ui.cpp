@@ -2598,7 +2598,8 @@ void UI::draw_everything() {
                 For (*wnd.symbols) {
                     if (fzy_has_match(wnd.query, symbol_to_name(it)))
                         wnd.filtered_results->append(i);
-                    i++;
+                    if (i++ > 1000)
+                        break;
                 }
 
                 fuzzy_sort_filtered_results(
@@ -3869,9 +3870,13 @@ void UI::draw_everything() {
             wnd.selection = 0;
 
             if (strlen(wnd.query) > 0) {
-                For (*wnd.actions)
+                int i = 0;
+                For (*wnd.actions) {
                     if (fzy_has_match(wnd.query, get_command_name(it)))
                         wnd.filtered_results->append(it);
+                    if (i++ > 1000)
+                        break;
+                }
 
                 fuzzy_sort_filtered_results(
                     wnd.query,
@@ -3918,7 +3923,15 @@ void UI::draw_everything() {
         ImGui::End();
     }
 
-    if (world.wnd_goto_symbol.show) {
+    if (world.wnd_goto_symbol.show && world.wnd_goto_symbol.filling) {
+        auto &wnd = world.wnd_goto_symbol;
+
+        begin_centered_window("Go To Symbol...###goto_symbol_filling", &wnd, 0, 600);
+        ImGui::Text("Loading symbols...");
+        ImGui::End();
+    }
+
+    if (world.wnd_goto_symbol.show && !world.wnd_goto_symbol.filling) {
         auto& wnd = world.wnd_goto_symbol;
 
         auto go_up = [&]() {
@@ -3935,7 +3948,7 @@ void UI::draw_everything() {
             wnd.selection %= min(wnd.filtered_results->len, settings.goto_symbol_max_results);
         };
 
-        begin_centered_window("Go To Symbol", &wnd, 0, 600);
+        begin_centered_window("Go To Symbol###goto_symbol_ready", &wnd, 0, 600);
 
         bool refilter = false;
 
@@ -3978,6 +3991,9 @@ void UI::draw_everything() {
                 res.pos = it.decl->decl->name_start;
                 res.decl = it.decl;
                 goto_jump_to_definition_result(&res);
+
+                wnd.filtered_results->len = 0;
+                wnd.selection = 0;
             } while (0);
         }
 
@@ -4000,9 +4016,9 @@ void UI::draw_everything() {
             }
 
             Timer t;
-            // t.init("filter_symbols");
+            t.init("filter_symbols");
 
-            for (u32 i = 0; i < wnd.symbols->len; i++) {
+            for (u32 i = 0; i < wnd.symbols->len && i < 1000; i++) {
                 auto &it = wnd.symbols->at(i);
 
                 if (wnd.current_file_only)
@@ -4015,7 +4031,7 @@ void UI::draw_everything() {
                 wnd.filtered_results->append(i);
             }
 
-            // t.log("matching");
+            t.log("matching");
 
             fuzzy_sort_filtered_results(
                 wnd.query,
@@ -4023,6 +4039,8 @@ void UI::draw_everything() {
                 wnd.symbols->len,
                 [&](auto i) { return wnd.symbols->at(i).full_name(); }
             );
+
+            t.log("sort");
         } while (0);
 
         if (wnd.filtered_results->len > 0) {
@@ -5705,6 +5723,8 @@ void UI::end_frame() {
                             actual_color = new_vec3f(0.8, 1.0, 0.8);
                         else if (result.type == ACR_DECLARATION && result.declaration_is_struct_literal_field)
                             actual_color = new_vec3f(1.0, 1.0, 0.8);
+                        else if (result.type == ACR_IMPORT && result.import_is_existing)
+                            actual_color = new_vec3f(1.0, 0.8, 1.0);
 
                         // add icon based on type
                         // show a bit more helpful info (like inline signature for funcs)

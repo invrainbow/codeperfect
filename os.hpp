@@ -363,3 +363,4 @@ void init_platform_specific_crap();
 void open_webbrowser(ccstr url);
 
 ccstr our_getcwd();
+int cpu_count();
