@@ -457,7 +457,10 @@ struct AC_Result {
             bool declaration_is_struct_literal_field;
         };
 
-        ccstr import_path;
+        struct {
+            ccstr import_path;
+            bool import_is_existing;
+        };
     };
 
     AC_Result* copy();
@@ -1329,6 +1332,7 @@ struct Go_Indexer {
     void stop_writing();
     bool truncate_parsed_file(Parsed_File *pf, cur2 end_pos, ccstr chars_to_append);
     Gotype *get_closest_function(ccstr filepath, cur2 pos);
+
     void fill_goto_symbol(List<Go_Symbol> *out);
     void init_builtins(Go_Package *pkg);
     void import_decl_to_goimports(Ast_Node *decl_node, ccstr filename, List<Go_Import> *out);

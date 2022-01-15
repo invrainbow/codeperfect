@@ -1603,6 +1603,8 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
         }
     };
 
+    auto &ind = world.indexer;
+
     if (autocomplete.ac.results != NULL && triggered_by_typing_ident) {
         SCOPED_MEM(&world.autocomplete_mem);
         autocomplete.ac.prefix = our_sprintf("%s%c", autocomplete.ac.prefix, typed_ident_char);
@@ -1613,18 +1615,18 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
 
         ptr0(&autocomplete);
 
-        SCOPED_MEM(&world.indexer.ui_mem);
-        defer { world.indexer.ui_mem.reset(); };
+        SCOPED_MEM(&ind.ui_mem);
+        defer { ind.ui_mem.reset(); };
 
-        if (!world.indexer.acquire_lock(IND_READING, true)) return;
-        defer { world.indexer.release_lock(IND_READING); };
+        if (!ind.acquire_lock(IND_READING, true)) return;
+        defer { ind.release_lock(IND_READING); };
 
         Autocomplete ac; ptr0(&ac);
 
         Timer t;
         t.init();
 
-        if (!world.indexer.autocomplete(filepath, cur, triggered_by_dot, &ac)) return;
+        if (!ind.autocomplete(filepath, cur, triggered_by_dot, &ac)) return;
 
         t.log("world.indexer.autocomplete");
 
@@ -1655,11 +1657,12 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
     }
 
     ccstr wksp_import_path = NULL;
-    if (world.indexer.try_acquire_lock(IND_READING)) {
-        defer { world.indexer.release_lock(IND_READING); };
+
+    if (ind.try_acquire_lock(IND_READING)) {
+        defer { ind.release_lock(IND_READING); };
 
         // only needs to live for duration of function
-        wksp_import_path = our_strcpy(world.indexer.index.current_import_path);
+        wksp_import_path = our_strcpy(ind.index.current_import_path);
     }
 
     {
@@ -1690,8 +1693,10 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
             double fzy_score;
             AC_Result_Type result_type;
             bool is_struct_literal;
-            double import_score;
             int str_length;
+
+            bool import_in_workspace;
+            bool import_in_file;
         };
 
         auto compare_scores = [&](Score *a, Score *b) -> int {
@@ -1711,55 +1716,52 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
             if (a->fzy_score != b->fzy_score && !prefix_is_empty)
                 return a->fzy_score > b->fzy_score ? 1 : -1;
 
-            if (a->result_type == ACR_IMPORT && b->result_type == ACR_IMPORT)
-                if (a->import_score != b->import_score)
-                    return a > b ? 1 : -1;
+            if (a->result_type == ACR_IMPORT && b->result_type == ACR_IMPORT) {
+                if (a->import_in_file != b->import_in_file)
+                    return a->import_in_file ? 1 : -1;
+                if (a->import_in_workspace != b->import_in_workspace)
+                    return a->import_in_workspace ? 1 : -1;
+            }
 
             if (a->str_length < b->str_length)
                 return 1;
             if (a->str_length > b->str_length)
                 return -1;
+
             return 0;
         };
 
         auto scores = alloc_array(Score, results->len);
-        auto scores_saved = alloc_array(bool, results->len);
 
-        auto get_score = [&](int i) -> Score* {
-            if (!scores_saved[i]) {
-                auto &result = autocomplete.ac.results->at(i);
+        for (int i = 0; i < results->len; i++) {
+            auto &it = autocomplete.ac.results->at(i);
 
-                auto &score = scores[i];
-                ptr0(&score);
+            auto &score = scores[i];
+            ptr0(&score);
 
-                score.fzy_score = fzy_match(prefix, result.name);
-                score.result_type = result.type;
-                score.str_length = strlen(result.name);
+            score.fzy_score = fzy_match(prefix, it.name);
+            score.result_type = it.type;
+            score.str_length = strlen(it.name);
 
-                if (result.type == ACR_DECLARATION)
-                    if (result.declaration_is_struct_literal_field)
-                        score.is_struct_literal = true;
+            if (it.type == ACR_DECLARATION)
+                if (it.declaration_is_struct_literal_field)
+                    score.is_struct_literal = true;
 
-                if (result.type == ACR_IMPORT) {
-                    // figure out score
-
-                    score.import_score = 1;
-
-                    // for now it's just prioritizing imports in workspace
-                    if (wksp_import_path != NULL)
-                        if (path_has_descendant(wksp_import_path, result.import_path))
-                            score.import_score = 2;
+            if (it.type == ACR_IMPORT) {
+                if (it.import_is_existing) {
+                    print("import in file: %s", it.name);
+                    score.import_in_file = true;
                 }
 
-                scores_saved[i] = true;
+                if (wksp_import_path != NULL)
+                    if (path_has_descendant(wksp_import_path, it.import_path))
+                        score.import_in_workspace = true;
             }
-
-            return &scores[i];
-        };
+        }
 
         autocomplete.filtered_results->sort([&](int *ia, int *ib) -> int {
             // reverse
-            return -compare_scores(get_score(*ia), get_score(*ib));
+            return -compare_scores(&scores[*ia], &scores[*ib]);
         });
 
         t.log("scoring");

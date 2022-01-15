@@ -1400,11 +1400,12 @@ void Go_Indexer::background_thread() {
             }
 
             if (done) {
-                if (status == IND_WRITING)
-                    stop_writing();
                 if (try_write_after_checking_hashes) {
+                    index_print("Finished scanning packages.");
                     try_write_this_time = true;
                     try_write_after_checking_hashes = false;
+                } else if (status == IND_WRITING) { // is this even necessary?
+                    stop_writing();
                 }
             }
         }
@@ -1450,27 +1451,28 @@ void Go_Indexer::background_thread() {
 
         auto time = current_time_in_nanoseconds();
 
-        auto should_write = [&]() -> bool {
-            // if there's still stuff in queue, don't write yet, we'll trigger
-            // a write when we clear out the queue
-            if (package_queue.len > 0) return false;
-            if (!try_write_this_time) return false;
-
-            // either every 10 minutes, or every 5 package updates
-
-            if (packages_processed_since_last_write > 5)
-                return true;
-
-            if (last_write_time != 0) {
-                auto ten_minutes_in_ns = (u64)10 * 60 * 1000 * 1000 * 1000;
-                if (time - last_write_time >= ten_minutes_in_ns)
-                    return true;
-            }
-
-            return false;
-        };
-
         do {
+            if (package_queue.len > 0) break;
+            if (!try_write_this_time) break;
+
+            defer {
+                if (status == IND_WRITING)
+                    stop_writing();
+            };
+
+            auto should_write = [&]() {
+                if (packages_processed_since_last_write > 5)
+                    return true;
+                if (packages_processed_since_last_write > 0 && last_write_time == 0)
+                    return true;
+                if (last_write_time != 0) {
+                    auto ten_minutes_in_ns = (u64)10 * 60 * 1000 * 1000 * 1000;
+                    if (time - last_write_time >= ten_minutes_in_ns)
+                        return true;
+                }
+                return false;
+            };
+
             if (!should_write()) break;
 
             index_print("Writing index to disk...");
@@ -4051,6 +4053,7 @@ void Go_Indexer::fill_goto_symbol(List<Go_Symbol> *out) {
     reload_all_dirty_files();
 
     auto base_path = make_path(index.current_import_path);
+    auto packages = alloc_list<Go_Package*>();
 
     For (*index.packages) {
         {
@@ -4058,13 +4061,16 @@ void Go_Indexer::fill_goto_symbol(List<Go_Symbol> *out) {
             if (!base_path->contains(make_path(it.import_path)))
                 continue;
         }
+        packages->append(&it);
+    }
 
-        auto pkg = &it;
+    For (*packages) {
+        auto pkg = it;
 
-        auto pkgname = it.package_name;
-        auto import_path = it.import_path;
+        auto pkgname = pkg->package_name;
+        auto import_path = pkg->import_path;
 
-        For (*it.files) {
+        For (*pkg->files) {
             auto ctx = alloc_object(Go_Ctx);
             ctx->filename = it.filename;
             ctx->import_path = import_path;
@@ -4072,6 +4078,8 @@ void Go_Indexer::fill_goto_symbol(List<Go_Symbol> *out) {
             auto filepath = ctx_to_filepath(ctx);
 
             For (*it.decls) {
+                if (streq(it.name, "_")) continue;
+
                 auto getrecv = [&]() -> ccstr {
                     if (it.type != GODECL_FUNC) return NULL;
                     if (it.gotype == NULL) return NULL;
@@ -4460,6 +4468,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                     res->name = package_name;
                     res->type = ACR_IMPORT;
                     res->import_path = it.import_path;
+                    res->import_is_existing = true;
 
                     existing_imports.add(it.import_path);
                 }
@@ -4534,6 +4543,9 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                 if (it.status != GPS_READY) continue;
                 if (it.package_name == NULL) continue;
                 if (streq(it.import_path, ctx->import_path)) continue;
+
+                // gofile->imports
+                // TODO: check if import already exists in file
 
                 if (!path_has_descendant(index.current_import_path, it.import_path))
                     if (is_import_path_internal(it.import_path))

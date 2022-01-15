@@ -531,6 +531,9 @@ struct World {
     } wnd_command;
 
     struct Wnd_Goto_Symbol : Wnd {
+        bool filling;
+        Thread_Handle fill_thread;
+
         char query[MAX_PATH];
         ccstr current_import_path;
         bool current_file_only;

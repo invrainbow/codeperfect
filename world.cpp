@@ -734,7 +734,8 @@ void filter_files() {
     For (*wnd.filepaths) {
         if (fzy_has_match(wnd.query, it))
             wnd.filtered_results->append(i);
-        i++;
+        if (i++ > 1000)
+            break;
     }
 
     // t.log("matching");
@@ -1670,21 +1671,43 @@ void init_goto_symbol() {
     defer { world.indexer.release_lock(IND_READING); };
 
     auto &wnd = world.wnd_goto_symbol;
+
+    if (wnd.fill_thread == NULL)
+        kill_thread(wnd.fill_thread);
+
     ptr0(&wnd);
 
-    auto symbols = alloc_list<Go_Symbol>();
-    world.indexer.fill_goto_symbol(symbols);
-    if (symbols->len == 0) return;
+    auto worker = [](void*) {
+        Pool pool;
+        pool.init();
+        defer { pool.cleanup(); };
 
-    {
-        SCOPED_MEM(&world.goto_symbol_mem);
-        wnd.symbols = alloc_list<Go_Symbol>(symbols->len);
-        For (*symbols) wnd.symbols->append(it.copy());
+        SCOPED_MEM(&pool);
 
-        wnd.filtered_results = alloc_list<int>();
-        wnd.current_import_path = our_strcpy(world.indexer.index.current_import_path);
-    }
+        auto &wnd = world.wnd_goto_symbol;
 
+        auto symbols = alloc_list<Go_Symbol>();
+        world.indexer.fill_goto_symbol(symbols);
+        if (symbols->len == 0) return;
+
+        {
+            SCOPED_MEM(&world.goto_symbol_mem);
+            wnd.symbols = alloc_list<Go_Symbol>(symbols->len);
+            For (*symbols) wnd.symbols->append(it.copy());
+
+            wnd.filtered_results = alloc_list<int>();
+            wnd.current_import_path = our_strcpy(world.indexer.index.current_import_path);
+        }
+
+        wnd.filling = false;
+
+        auto t = wnd.fill_thread;
+        wnd.fill_thread = NULL;
+        close_thread_handle(t);
+    };
+
+    wnd.filling = true;
+    wnd.fill_thread = create_thread(worker, NULL);
     wnd.show = true;
 }
 
@@ -2805,10 +2828,15 @@ void fuzzy_sort_filtered_results(ccstr query, List<int> *list, int total_results
     auto names = alloc_array(ccstr, total_results);
     auto scores = alloc_array(double, total_results);
 
+    Timer t;
+    t.init("sort");
+
     For (*list) {
         names[it] = get_name(it);
         scores[it] = fzy_match(query, names[it]);
     }
+
+    t.log("get names and scores");
 
     list->sort([&](int* pa, int* pb) {
         auto a = scores[*pa];
@@ -2821,4 +2849,6 @@ void fuzzy_sort_filtered_results(ccstr query, List<int> *list, int total_results
         auto blen = strlen(names[*pb]);
         return alen < blen ? -1 : (alen > blen ? 1 : 0);
     });
+
+    t.log("actually sort");
 }
