@@ -3534,6 +3534,9 @@ void UI::draw_everything() {
                                     break;
                                 }
 
+                                if (ps.active_debug_profile > wnd.current_debug_profile)
+                                    ps.active_debug_profile--;
+
                                 auto len = ps.debug_profiles_len--;
                                 memmove(
                                     &ps.debug_profiles[wnd.current_debug_profile],
@@ -3543,6 +3546,9 @@ void UI::draw_everything() {
 
                                 if (wnd.current_debug_profile >= ps.debug_profiles_len)
                                     wnd.current_debug_profile = ps.debug_profiles_len - 1;
+
+                                if (ps.active_debug_profile >= ps.debug_profiles_len)
+                                    ps.active_debug_profile = ps.debug_profiles_len - 1;
                             } while (0);
                         }
                     } ImGui::EndChild();
@@ -3689,6 +3695,9 @@ void UI::draw_everything() {
                             do {
                                 if (wnd.current_build_profile >= ps.build_profiles_len) break;
 
+                                if (ps.active_build_profile > wnd.current_build_profile)
+                                    ps.active_build_profile--;
+
                                 auto len = ps.build_profiles_len--;
                                 memmove(
                                     &ps.build_profiles[wnd.current_build_profile],
@@ -3698,6 +3707,9 @@ void UI::draw_everything() {
 
                                 if (wnd.current_build_profile >= ps.build_profiles_len)
                                     wnd.current_build_profile = ps.build_profiles_len - 1;
+
+                                if (ps.active_build_profile >= ps.build_profiles_len)
+                                    ps.active_build_profile = ps.build_profiles_len - 1;
                             } while (0);
                         }
                     } ImGui::EndChild();
