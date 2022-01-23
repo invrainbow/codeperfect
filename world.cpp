@@ -644,6 +644,7 @@ void kick_off_build(Build_Profile *build_profile) {
         SCOPED_MEM(&build->mem);
 
         build->id = world.next_build_id++;
+        build->build_profile_name = our_strcpy(build_profile->label);
         build->started = true;
 
         if (!GHStartBuild((char*)build_profile->cmd)) {

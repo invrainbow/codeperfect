@@ -110,6 +110,7 @@ struct History {
 struct Build {
     Pool mem;
 
+    ccstr build_profile_name;
     u64 id;
     bool done;
     bool started;

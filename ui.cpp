@@ -2858,14 +2858,18 @@ void UI::draw_everything() {
             ImGui::SetWindowFocus(NULL);
         }
 
-        if (world.build.ready()) {
-            if (world.build.errors.len == 0) {
-                ImGui::TextColored(to_imcolor(global_colors.green), "Build was successful!");
+        auto &b = world.build;
+
+        if (b.ready()) {
+            if (b.errors.len == 0) {
+                ImGui::TextColored(to_imcolor(global_colors.green), "Build \"%s\" was successful!", b.build_profile_name);
             } else {
+                ImGui::Text("Building \"%s\"...", b.build_profile_name);
+
                 imgui_push_mono_font();
 
-                for (int i = 0; i < world.build.errors.len; i++) {
-                    auto &it = world.build.errors[i];
+                for (int i = 0; i < b.errors.len; i++) {
+                    auto &it = b.errors[i];
 
                     if (!it.valid) {
                         ImGui::TextColored(to_imcolor(global_colors.muted), "%s", it.message);
@@ -2874,7 +2878,7 @@ void UI::draw_everything() {
 
                     /*
                     auto flags = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen | ImGuiTreeNodeFlags_SpanFullWidth;
-                    if (i == world.build.current_error)
+                    if (i == b.current_error)
                         flags |= ImGuiTreeNodeFlags_Selected;
 
                     ImGui::Unindent(ImGui::GetTreeNodeToLabelSpacing());
@@ -2882,9 +2886,9 @@ void UI::draw_everything() {
                     ImGui::Indent(ImGui::GetTreeNodeToLabelSpacing());
                     */
 
-                    if (i == world.build.scroll_to) {
+                    if (i == b.scroll_to) {
                         ImGui::SetScrollHereY();
-                        world.build.scroll_to = -1;
+                        b.scroll_to = -1;
                     }
 
                     auto label = our_sprintf("%s:%d:%d: %s", it.file, it.row, it.col, it.message);
@@ -2892,7 +2896,7 @@ void UI::draw_everything() {
                     auto text_size = ImVec2(wrap_width, ImGui::CalcTextSize(label, NULL, false, wrap_width).y);
                     auto pos = ImGui::GetCursorScreenPos();
 
-                    bool clicked = ImGui::Selectable(our_sprintf("##hidden_%d", i), i == world.build.current_error, 0, text_size);
+                    bool clicked = ImGui::Selectable(our_sprintf("##hidden_%d", i), i == b.current_error, 0, text_size);
                     ImGui::GetWindowDrawList()->AddText(NULL, 0.0f, pos, ImGui::GetColorU32(ImGuiCol_Text), label, NULL, wrap_width);
 
                     if (ImGui::OurBeginPopupContextItem()) {
@@ -2910,15 +2914,15 @@ void UI::draw_everything() {
                     */
 
                     if (clicked) {
-                        world.build.current_error = i;
+                        b.current_error = i;
                         goto_error(i);
                     }
                 }
 
                 imgui_pop_font();
             }
-        } else if (world.build.started) {
-            ImGui::Text("Building...");
+        } else if (b.started) {
+            ImGui::Text("Building \"%s\"...", b.build_profile_name);
         } else {
             ImGui::Text("No build in progress.");
         }
