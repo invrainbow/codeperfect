@@ -1457,8 +1457,12 @@ Command_Info command_info_table[_CMD_COUNT_];
 
 bool is_command_enabled(Command cmd) {
     switch (cmd) {
-    case CMD_SAVE_FILE:
-        return get_current_editor() != NULL;
+    case CMD_SAVE_FILE: {
+        auto editor = get_current_editor();
+        if (editor == NULL) return false;
+        if (!editor->is_modifiable()) return false;
+        return true;
+    }
 
     case CMD_SAVE_ALL:
         For (world.panes)
