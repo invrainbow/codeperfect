@@ -126,12 +126,15 @@ enum Focus_Keyboard_Cond {
 struct Wnd {
     bool show;
     bool focused;
+    // https://github.com/ocornut/imgui/issues/4293#issuecomment-914322632
+    bool focused_prev; 
     bool first_open_focus_twice_done;
     bool appearing;
-    bool is_focusing;
+    bool focusing;
 
     // "commands"
     bool cmd_focus;
+    bool cmd_make_visible_but_dont_focus;
 };
 
 #define PM_DEFAULT_COLOR IM_COL32(0x49, 0xfa, 0x98, 0x69)
@@ -219,7 +222,6 @@ struct UI {
     bool imgui_special_key_pressed(int key);
     bool imgui_key_pressed(int key);
     void imgui_with_disabled(bool disable, fn<void()> f);
-    bool imgui_is_window_focusing(bool *b);
     u32 imgui_get_keymods();
     bool imgui_icon_button(ccstr icon);
 

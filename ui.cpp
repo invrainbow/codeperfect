@@ -461,24 +461,33 @@ void UI::pretty_menu_item(Pretty_Menu *pm, bool selected) {
     pm->pos = pm->text_tl;
 }
 
-bool UI::imgui_is_window_focusing(bool *b) {
-    auto old_focus = *b;
-    *b = ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows);
-    return !old_focus && *b;
-}
-
 void UI::begin_window(ccstr title, Wnd *wnd, int flags, bool noclose) {
     ImGui::Begin(title, noclose ? NULL : &wnd->show, flags);
     init_window(wnd);
 }
 
 void UI::init_window(Wnd *wnd) {
-    wnd->is_focusing = imgui_is_window_focusing(&wnd->focused);
+    // https://github.com/ocornut/imgui/issues/4293#issuecomment-914322632
+    bool might_be_focusing = (!wnd->focused_prev && wnd->focused);
+    wnd->focused_prev = wnd->focused;
+    wnd->focused = ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows);
+    wnd->focusing = might_be_focusing && wnd->focused;
+
     wnd->appearing = ImGui::IsWindowAppearing();
 
-    if (wnd->cmd_focus) {
+    auto checkflag = [](bool *b) {
+        auto ret = *b;
+        *b = false;
+        return ret;
+    };
+
+    if (checkflag(&wnd->cmd_focus)) {
         ImGui::SetWindowFocus();
-        wnd->cmd_focus = false;
+    }
+
+    if (checkflag(&wnd->cmd_make_visible_but_dont_focus)) {
+        ImGui::SetWindowFocus();
+        ImGui::SetWindowFocus(NULL);
     }
 }
 
@@ -1816,7 +1825,7 @@ void UI::focus_keyboard(Wnd *wnd, int cond) {
         if (cond & FKC_APPEARING) {
             ImGui::SetKeyboardFocusHere();
         }
-    } else if (wnd->is_focusing) {
+    } else if (wnd->focusing) {
         if (cond & FKC_FOCUSING)
             ImGui::SetKeyboardFocusHere();
     }

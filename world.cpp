@@ -1671,7 +1671,10 @@ void do_find_interfaces() {
         }
     };
 
-    wnd.show = true;
+    if (wnd.show)
+        wnd.cmd_focus = true;
+    else
+        wnd.show = true;
     wnd.done = false;
     wnd.results = NULL;
 
@@ -1764,7 +1767,10 @@ void do_find_implementations() {
         }
     };
 
-    wnd.show = true;
+    if (wnd.show)
+        wnd.cmd_focus = true;
+    else
+        wnd.show = true;
     wnd.done = false;
     wnd.results = NULL;
 
@@ -1828,7 +1834,8 @@ void handle_command(Command cmd, bool from_menu) {
         {
             auto &wnd = world.wnd_search_and_replace;
             if (wnd.show) {
-                ImGui::SetWindowFocus("###search_and_replace");
+                wnd.cmd_focus = true;
+                // ImGui::SetWindowFocus("###search_and_replace");
                 wnd.focus_textbox = 1;
             }
             wnd.show = true;
@@ -1843,7 +1850,8 @@ void handle_command(Command cmd, bool from_menu) {
             auto &wnd = world.file_explorer;
             if (wnd.show) {
                 if (!wnd.focused) {
-                    ImGui::SetWindowFocus("File Explorer");
+                    wnd.cmd_focus = true;
+                    // ImGui::SetWindowFocus("File Explorer");
                 } else {
                     wnd.show = false;
                 }
@@ -1934,7 +1942,10 @@ void handle_command(Command cmd, bool from_menu) {
             }
         };
 
-        wnd.show = true;
+        if (wnd.show)
+            wnd.cmd_focus = true;
+        else
+            wnd.show = true;
         wnd.done = false;
         wnd.results = NULL;
         wnd.thread = create_thread(thread_proc, NULL);
@@ -1988,6 +1999,7 @@ void handle_command(Command cmd, bool from_menu) {
         auto &wnd = world.wnd_rename_identifier;
         wnd.rename_to[0] = '\0';
         wnd.show = true;
+        wnd.cmd_focus = true;
         wnd.running = false;
         wnd.declres = result->decl->copy_decl();
         break;
@@ -2007,7 +2019,7 @@ void handle_command(Command cmd, bool from_menu) {
 
     case CMD_BUILD:
         world.error_list.show = true;
-        world.error_list.cmd_focus = true;
+        world.error_list.cmd_make_visible_but_dont_focus = true;
         save_all_unsaved_files();
         kick_off_build();
         break;
@@ -2234,7 +2246,10 @@ void handle_command(Command cmd, bool from_menu) {
             }
         };
 
-        wnd.show = true;
+        if (wnd.show)
+            wnd.cmd_focus = true;
+        else
+            wnd.show = true;
         wnd.done = false;
         wnd.results = NULL;
 
@@ -2313,7 +2328,10 @@ void handle_command(Command cmd, bool from_menu) {
             }
         };
 
-        wnd.show = true;
+        if (wnd.show)
+            wnd.cmd_focus = true;
+        else
+            wnd.show = true;
         wnd.done = false;
         wnd.results = NULL;
 
