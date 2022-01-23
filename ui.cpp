@@ -4733,8 +4733,11 @@ void UI::draw_everything() {
                         dy = -dy;
                     }
 
-                    auto lines = (int)dy;
-                    if (lines == 0) lines = 1;
+                    dy *= 4;
+                    dy += editor->scroll_leftover;
+
+                    editor->scroll_leftover = fmod(dy, font->height);
+                    auto lines = (int)(dy / font->height);
 
                     for (int i = 0; i < lines; i++) {
                         if (flip) {
@@ -4749,6 +4752,8 @@ void UI::draw_everything() {
                             }
                         }
                     }
+
+                    if (lines > 0) editor->scroll_leftover = 0;
                 }
             }
         }
