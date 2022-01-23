@@ -2684,7 +2684,7 @@ void do_generate_implementation() {
         rend.write("\n\n");
 
         if (isupper(it.decl->name[0]))
-            rend.write("// %s is a function that still needs to be documented.\n", it.decl->name);
+            rend.write("// %s still needs a comment.\n", it.decl->name);
 
         rend.write("func (%s *%s) %s(", type_var, type_name, it.decl->name);
 
@@ -2894,15 +2894,12 @@ void fuzzy_sort_filtered_results(ccstr query, List<int> *list, int total_results
     auto names = alloc_array(ccstr, total_results);
     auto scores = alloc_array(double, total_results);
 
-    Timer t;
-    t.init("sort");
+    // Timer t;
 
     For (*list) {
         names[it] = get_name(it);
         scores[it] = fzy_match(query, names[it]);
     }
-
-    t.log("get names and scores");
 
     list->sort([&](int* pa, int* pb) {
         auto a = scores[*pa];
@@ -2915,6 +2912,4 @@ void fuzzy_sort_filtered_results(ccstr query, List<int> *list, int total_results
         auto blen = strlen(names[*pb]);
         return alen < blen ? -1 : (alen > blen ? 1 : 0);
     });
-
-    t.log("actually sort");
 }
