@@ -89,3 +89,6 @@ ccstr our_getcwd() {
     return getcwd(ret, 256);
 }
 
+u64 current_time_milli() {
+    return (u64)(current_time_nano() / 1000000);
+}

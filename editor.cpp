@@ -1014,7 +1014,7 @@ bool check_file(File_Mapping *fm) {
 
 // I'm just going to make this a separate function from load_file(), since it is doing mostly a different thing.
 void Editor::reload_file(bool because_of_file_watcher) {
-    if (because_of_file_watcher && disable_file_watcher_until > current_time_in_nanoseconds())
+    if (because_of_file_watcher && disable_file_watcher_until > current_time_nano())
         return;
 
     auto fm = map_file_into_memory(filepath);
@@ -1269,7 +1269,7 @@ bool Editor::trigger_escape(cur2 go_here_after) {
 
             u32 delete_len = nvim_insert.deleted_graphemes;
 
-            post_insert_dotrepeat_time = current_time_in_nanoseconds();
+            post_insert_dotrepeat_time = current_time_nano();
 
             // set new lines
             auto msgid = nv.start_request_message("nvim_call_atomic", 1);
@@ -2424,7 +2424,7 @@ void Editor::handle_save(bool about_to_close) {
 
     // save to disk
     {
-        disable_file_watcher_until = current_time_in_nanoseconds() + (2 * 1000000000);
+        disable_file_watcher_until = current_time_nano() + (2 * 1000000000);
 
         File f;
         if (f.init(filepath, FILE_MODE_WRITE, FILE_CREATE_NEW) != FILE_RESULT_SUCCESS) {

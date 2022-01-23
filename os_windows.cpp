@@ -114,7 +114,7 @@ bool are_filepaths_same_file(ccstr path1, ccstr path2) {
     return true;
 }
 
-u64 current_time_in_nanoseconds() {
+u64 current_time_nano() {
     static LARGE_INTEGER freq = { 0 };
 
     if (freq.QuadPart == 0)

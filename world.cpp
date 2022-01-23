@@ -1319,7 +1319,7 @@ void kick_off_rename_identifier() {
                 });
             }
 
-            editor->disable_file_watcher_until = current_time_in_nanoseconds() + (2 * 1000000000);
+            editor->disable_file_watcher_until = current_time_nano() + (2 * 1000000000);
         }
 
         // close the thread handle first so it doesn't try to kill the thread

@@ -356,7 +356,7 @@ struct Timer {
 
         name = _name;
         enabled = _enabled;
-        time = current_time_in_nanoseconds();
+        time = current_time_nano();
         start = time;
     }
 
@@ -373,7 +373,7 @@ struct Timer {
     }
 
     i64 read_time() {
-        auto curr = current_time_in_nanoseconds();
+        auto curr = current_time_nano();
         auto ret = curr - time;
         time = curr;
         return ret;
@@ -382,7 +382,7 @@ struct Timer {
     void total() {
         if (!enabled) return;
 
-        auto curr = current_time_in_nanoseconds();
+        auto curr = current_time_nano();
         print("%s: %dus", make_label("TOTAL"), (curr - start) / 1000);
         time = curr;
     }

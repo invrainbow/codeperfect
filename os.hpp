@@ -105,7 +105,8 @@ enum File_Type {
     FILE_TYPE_DIRECTORY,
 };
 
-u64 current_time_in_nanoseconds();
+u64 current_time_nano();
+u64 current_time_milli();
 
 bool are_filepaths_same_file(ccstr path1, ccstr path2);
 bool are_filepaths_equal(ccstr a, ccstr b);

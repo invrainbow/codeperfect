@@ -186,9 +186,9 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 {
                     start_request_message("nvim_call_atomic", 1);
 
-                    u64 diff = current_time_in_nanoseconds() - post_insert_dotrepeat_time;
+                    u64 diff = current_time_nano() - post_insert_dotrepeat_time;
                     print("postinsert dotrepeat took %llu ns", diff);
-                    post_insert_dotrepeat_time = current_time_in_nanoseconds();
+                    post_insert_dotrepeat_time = current_time_nano();
 
                     auto curr_editor = get_current_editor();
 
@@ -612,7 +612,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                     mode = VI_NORMAL;
 
                     if (post_insert_dotrepeat_time != 0) {
-                        print("postinsert mode change took %llu ns", current_time_in_nanoseconds() - post_insert_dotrepeat_time);
+                        print("postinsert mode change took %llu ns", current_time_nano() - post_insert_dotrepeat_time);
                         post_insert_dotrepeat_time = 0;
                     }
                 }

@@ -45,7 +45,7 @@ bool are_filepaths_same_file(ccstr path1, ccstr path2) {
     return a.st_dev == b.st_dev && a.st_ino == b.st_ino;
 }
 
-u64 current_time_in_nanoseconds() {
+u64 current_time_nano() {
     // i cbf to figure out the linux way to do it, just use std::chrono
     // jblow can throw a floppy disk at my head, i'm frankly tired of this project
 

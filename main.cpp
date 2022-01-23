@@ -600,7 +600,7 @@ int main(int argc, char **argv) {
                 }
             }
 
-            auto s = our_sprintf("%llu %s\n", current_time_in_nanoseconds() / 1000000, name);
+            auto s = our_sprintf("%llu %s\n", current_time_nano() / 1000000, name);
             world.record_keys.f.write((char*)s, strlen(s));
         }
 
@@ -1367,12 +1367,7 @@ int main(int argc, char **argv) {
 
     t.log("initialize everything");
 
-    auto last_frame_time = current_time_in_nanoseconds();
-
-    // focus_editor("main.go");
-    // focus_editor(path_join(world.indexer.goroot, "time/time.go"));
-    // focus_editor(path_join(world.indexer.goroot, "database/sql/sql.go"));
-    // focus_editor(path_join(world.indexer.gomodcache, "github.com/davecgh/go-spew@v1.1.1/spew/dump.go"));
+    auto last_frame_time = current_time_nano();
 
     u32 frame_index = 0;
     while (!glfwWindowShouldClose(world.window)) {
@@ -1394,7 +1389,7 @@ int main(int argc, char **argv) {
             }
         }
 
-        auto frame_start_time = current_time_in_nanoseconds();
+        auto frame_start_time = current_time_nano();
 
         world.frame_mem.reset();
 
@@ -1486,7 +1481,7 @@ int main(int argc, char **argv) {
             io.DisplaySize = ImVec2((float)world.window_size.x, (float)world.window_size.y);
             io.DisplayFramebufferScale = ImVec2(world.display_scale.x, world.display_scale.y);
 
-            auto now = current_time_in_nanoseconds();
+            auto now = current_time_nano();
             io.DeltaTime = (double)(now - last_frame_time) / (double)1000000000;
             last_frame_time = now;
 
@@ -1545,7 +1540,7 @@ int main(int argc, char **argv) {
         if (!world.turn_off_framerate_cap) {
             // wait until next frame
             auto budget = (1000.f / FRAME_RATE_CAP);
-            auto spent = (current_time_in_nanoseconds() - frame_start_time) / 1000000.f;
+            auto spent = (current_time_nano() - frame_start_time) / 1000000.f;
             if (budget > spent) sleep_milliseconds((u32)(budget - spent));
         }
     }

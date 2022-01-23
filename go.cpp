@@ -1471,7 +1471,7 @@ void Go_Indexer::background_thread() {
         // write index to disk
         // ---
 
-        auto time = current_time_in_nanoseconds();
+        auto time = current_time_nano();
 
         do {
             if (package_queue.len > 0) break;

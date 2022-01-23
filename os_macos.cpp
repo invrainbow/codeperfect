@@ -51,7 +51,7 @@ bool are_filepaths_same_file(ccstr path1, ccstr path2) {
     return a.st_dev == b.st_dev && a.st_ino == b.st_ino;
 }
 
-u64 current_time_in_nanoseconds() {
+u64 current_time_nano() {
     static uint64_t start_mach;
     static double frequency;
     static bool initialized = false;

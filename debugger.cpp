@@ -1491,7 +1491,7 @@ void Debugger::do_everything() {
                 if (state_flag == DLV_STATE_PAUSED) {
                     state_flag = DLV_STATE_RUNNING;
                     exec_step_over(false);
-                    step_over_time = current_time_in_nanoseconds();
+                    step_over_time = current_time_nano();
                 }
                 break;
             case DLVC_STEP_OUT:
@@ -1523,15 +1523,15 @@ void Debugger::do_everything() {
 
     u64 start = 0;
     if (step_over_time != 0) {
-        auto time_elapsed = current_time_in_nanoseconds() - step_over_time;
+        auto time_elapsed = current_time_nano() - step_over_time;
         dbg_print("response after step over took %d ms", time_elapsed / 1000000);
-        start = current_time_in_nanoseconds();
+        start = current_time_nano();
     }
 
     handle_new_state(&p);
 
     if (step_over_time != 0) {
-        auto time_elapsed = current_time_in_nanoseconds() - start;
+        auto time_elapsed = current_time_nano() - start;
         dbg_print("handle new state took %d ms", time_elapsed / 1000000);
         step_over_time = 0;
     }

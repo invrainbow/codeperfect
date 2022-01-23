@@ -5537,7 +5537,7 @@ void UI::draw_everything() {
         ImGui::Text("id: %d", hover.id);
         ImGui::Text("id last frame: %d", hover.id_last_frame);
         ImGui::Text("cursor: %d", hover.id);
-        ImGui::Text("start_time: %llums ago", (current_time_in_nanoseconds() - hover.start_time) / 1000000);
+        ImGui::Text("start_time: %llums ago", (current_time_nano() - hover.start_time) / 1000000);
         ImGui::Text("ready: %d", hover.ready);
 
         ImGui::End();
@@ -6161,7 +6161,7 @@ bool UI::test_hover(boxf area, int id, ImGuiMouseCursor cursor) {
     hover.id = id;
     hover.cursor = cursor;
 
-    auto now = current_time_in_nanoseconds();
+    auto now = current_time_nano();
 
     if (id != hover.id_last_frame) {
         if (world.wnd_hover_info.show) {
