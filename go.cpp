@@ -30,7 +30,8 @@ const int GO_INDEX_MAGIC_NUMBER = 0x49fa98;
 // version 20: fix Go_Reference not using correct pool
 // version 21: remove array_size from Gotype
 // version 22: sort references
-const int GO_INDEX_VERSION = 22;
+// version 23: rename @builtins to @builtin
+const int GO_INDEX_VERSION = 23;
 
 void index_print(ccstr fmt, ...) {
     va_list args;
@@ -660,7 +661,7 @@ void Go_Indexer::replace_package_name(Go_Package *pkg, ccstr package_name) {
 }
 
 void Go_Indexer::init_builtins(Go_Package *pkg) {
-    pkg->package_name = "@builtins";
+    pkg->package_name = "@builtin";
 
     ccstr fake_filename = "this is a fake file";
 
@@ -1136,8 +1137,8 @@ void Go_Indexer::background_thread() {
         // queue up builtins
         // ===
 
-        if (find_up_to_date_package("@builtins") == NULL)
-            enqueue_package("@builtins");
+        if (find_up_to_date_package("@builtin") == NULL)
+            enqueue_package("@builtin");
 
         // if we have any ready packages, see if they have any imports that were missed
         // ===
@@ -1322,7 +1323,7 @@ void Go_Indexer::background_thread() {
             Timer t;
             t.init();
 
-            if (streq(import_path, "@builtins")) {
+            if (streq(import_path, "@builtin")) {
                 create_package_if_null();
 
                 pkg->status = GPS_UPDATING; // i don't think we actually need this anymore...
@@ -2173,7 +2174,7 @@ u64 Go_Indexer::hash_file(ccstr filepath) {
 u64 Go_Indexer::hash_package(ccstr resolved_package_path) {
     if (resolved_package_path == NULL) return 0;
 
-    if (streq(resolved_package_path, "@builtins"))
+    if (streq(resolved_package_path, "@builtin"))
         return CUSTOM_HASH_BUILTINS;
 
     u64 ret = 0;
@@ -2315,7 +2316,7 @@ Goresult *Go_Indexer::find_decl_of_id(ccstr id_to_find, cur2 id_pos, Go_Ctx *ctx
     auto ret = find_decl_in_package(id_to_find, ctx->import_path);
     if (ret != NULL) return ret;
 
-    ret = find_decl_in_package(id_to_find, "@builtins");
+    ret = find_decl_in_package(id_to_find, "@builtin");
     if (ret != NULL) return ret;
 
     return NULL;
@@ -2366,7 +2367,7 @@ List<Postfix_Completion_Type> *Go_Indexer::get_postfix_completions(Ast_Node *ope
         if (res == NULL) return false;
 
         // If res->gotype is an ID called "error" and resolves to the error in
-        // @builtins, then we want to add PFC_CHECK.
+        // @builtin, then we want to add PFC_CHECK.
         if (is_gotype_error(res))
             ret->append(PFC_CHECK);
 
@@ -4691,7 +4692,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
 
             // add builtins
             {
-                auto results = list_package_decls("@builtins", LISTDECLS_EXCLUDE_METHODS);
+                auto results = list_package_decls("@builtin", LISTDECLS_EXCLUDE_METHODS);
                 if (results != NULL) {
                     For (*results) {
                         auto res = add_declaration_result(it.decl->name); // i think this is enough?
