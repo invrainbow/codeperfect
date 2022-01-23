@@ -309,7 +309,7 @@ func AuthAndUpdate() {
 			return
 		case *ServerError:
 			switch e.Code {
-			case models.ErrorUserNoLongerActive:
+			case models.ErrorUserNoLongerActive, models.ErrorTrialExpired:
 				handleGracePeriod(MessageTrialEnded, 3)
 				return
 			case models.ErrorEmailNotFound, models.ErrorInvalidLicenseKey:
