@@ -2549,6 +2549,9 @@ void do_generate_implementation() {
     auto src_gotype = src->decl->gotype;
     auto dest_gotype = dest->decl->gotype;
 
+    if (src_gotype->type == GOTYPE_BUILTIN)
+        src_gotype = src_gotype->builtin_underlying_type;
+
     if (src_gotype == NULL) return;
     if (src_gotype->type != GOTYPE_INTERFACE) return;
 

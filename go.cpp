@@ -4084,12 +4084,18 @@ void Go_Indexer::fill_generate_implementation(List<Go_Symbol> *out, bool selecte
                 if (it.type != GODECL_TYPE) continue;
                 if (it.gotype == NULL) continue; // ???
 
+                auto gotype_type = it.gotype->type;
+                if (gotype_type == GOTYPE_BUILTIN) {
+                    if (it.gotype->builtin_underlying_type == NULL) continue;
+                    gotype_type = it.gotype->builtin_underlying_type->type;
+                }
+
                 // if user selected interface, we're looking for any other
                 // non-interface type
                 if (selected_interface) {
-                    if (it.gotype->type == GOTYPE_INTERFACE) continue;
+                    if (gotype_type == GOTYPE_INTERFACE) continue;
                 } else {
-                    if (it.gotype->type != GOTYPE_INTERFACE) continue;
+                    if (gotype_type != GOTYPE_INTERFACE) continue;
                 }
 
                 Go_Symbol sym;
