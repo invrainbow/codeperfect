@@ -193,7 +193,7 @@ void Index_Stream::write_index(Go_Index *index) {
     finish_writing();
 }
 
-void Type_Renderer::write_type(Gotype *t, Type_Renderer_Handler custom_handler, bool parameter_hint_root) {
+void Type_Renderer::write_type(Gotype *t, Type_Renderer_Handler custom_handler, bool omit_func_keyword) {
     if (t == NULL) return;
 
     // custom handle
@@ -244,10 +244,42 @@ void Type_Renderer::write_type(Gotype *t, Type_Renderer_Handler custom_handler, 
         recur(t->map_value);
         break;
     case GOTYPE_STRUCT:
-        write("struct");
+        if (!full) {
+            write("struct");
+            break;
+        }
+
+        if (isempty(t->struct_specs)) {
+            write("struct {}");
+            break;
+        }
+
+        write("struct {\n");
+        For (*t->struct_specs) {
+            write("%s ", it.field->name);
+            recur(it.field->gotype);
+            write("\n");
+        }
+        write("}");
         break;
     case GOTYPE_INTERFACE:
-        write("interface");
+        if (!full) {
+            write("interface");
+            break;
+        }
+
+        if (isempty(t->interface_specs)) {
+            write("interface {}");
+            break;
+        }
+
+        write("interface {\n");
+        For (*t->interface_specs) {
+            write("%s ", it.field->name);
+            write_type(it.field->gotype, custom_handler, true);
+            write("\n");
+        }
+        write("}");
         break;
     case GOTYPE_VARIADIC:
         write("...");
@@ -259,7 +291,7 @@ void Type_Renderer::write_type(Gotype *t, Type_Renderer_Handler custom_handler, 
         break;
     case GOTYPE_FUNC:
         {
-            if (!parameter_hint_root)
+            if (!omit_func_keyword)
                 write("func");
 
             auto write_params = [&](List<Godecl> *params, bool is_result) {

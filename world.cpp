@@ -2654,6 +2654,7 @@ void do_generate_implementation() {
         auto t = res->gotype;
 
         Type_Renderer tr; tr.init();
+        tr.full = true;
         tr.write_type(t, handler);
 
         if (!ok) {

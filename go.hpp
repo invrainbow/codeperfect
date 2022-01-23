@@ -1508,10 +1508,12 @@ struct Type_Renderer;
 typedef fn<bool(Type_Renderer*, Gotype*)> Type_Renderer_Handler;
 
 struct Type_Renderer : public Text_Renderer {
-    void write_type(Gotype *t, Type_Renderer_Handler custom_handler, bool parameter_hint_root = false);
+    bool full;
 
-    void write_type(Gotype *t, bool parameter_hint_root = false) {
-        write_type(t, [&](auto, auto) -> bool { return false; }, parameter_hint_root);
+    void write_type(Gotype *t, Type_Renderer_Handler custom_handler, bool omit_func_keyword = false);
+
+    void write_type(Gotype *t, bool omit_func_keyword = false) {
+        write_type(t, [&](auto, auto) -> bool { return false; }, omit_func_keyword);
     }
 };
 
