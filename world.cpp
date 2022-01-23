@@ -2768,6 +2768,8 @@ done_writing:
     // add the generated methods
     buf.insert(dest->decl->decl_end, uchars->items, uchars->len);
 
+    int cursor_offset = 0;
+
     // add the imports
     {
         auto iter = alloc_object(Parser_It);
@@ -2844,16 +2846,23 @@ done_writing:
             chars->append('\n');
         }
 
+        int lines_in_new = 0;
+
         Cstr_To_Ustr conv; conv.init();
         for (auto p = new_contents; *p != '\0'; p++) {
             bool found = false;
             auto uch = conv.feed(*p, &found);
-            if (found) chars->append(uch);
+            if (found) {
+                chars->append(uch);
+                if (uch == '\n')
+                    lines_in_new++;
+            }
         }
 
         if (start != old_end)
             buf.remove(start, old_end);
         buf.insert(start, chars->items, chars->len);
+        cursor_offset = lines_in_new - (old_end.y - start.y);
     }
 
     // write to disk
@@ -2866,6 +2875,15 @@ done_writing:
     }
 
     buf.cleanup();
+
+    auto editor = find_editor_by_filepath(filepath);
+    if (editor != NULL) {
+        editor->reload_file();
+
+        auto c = editor->cur;
+        auto newc = new_cur2(c.x, c.y + cursor_offset);
+        editor->move_cursor(newc);
+    }
 
     // TODO: refresh existing editors if `filepath` is open
     // tho i think writing to disk just automatically does that?
