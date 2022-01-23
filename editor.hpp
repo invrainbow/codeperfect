@@ -91,6 +91,7 @@ struct Editor {
         bool on;
         int editor_id;
     } mouse_select;
+    double scroll_leftover;
 
     bool double_clicked_selection;
 
