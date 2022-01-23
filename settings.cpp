@@ -21,7 +21,7 @@ void Project_Settings::load_defaults() {
 
     {
         auto bp = &build_profiles[build_profiles_len++];
-        strcpy_safe(bp->label, _countof(bp->label), "Build Project");
+        strcpy_safe(bp->label, _countof(bp->label), "Project");
         strcpy_safe(bp->cmd, _countof(bp->cmd), "go build");
     }
 
