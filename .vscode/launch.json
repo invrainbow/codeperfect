@@ -7,11 +7,12 @@
             "name": "debug",
             "program": "${workspaceFolder}/build/bin/ide",
             "args": [
-                "/Users/brandon/kubernetes"
+                // "/Users/brandon/kubernetes"
                 // "/Users/brandon/cpcast"
-                // "/Users/brandon/ide/gostuff"
+                "/Users/brandon/ide/gostuff"
                 // "/Users/brandon/sr"
                 // "/Users/brandon/gin"
+                // "/Users/brandon/gorm-slack"
             ],
             "cwd": "${workspaceFolder}/build/bin",
             "expressions": "native"
