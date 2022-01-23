@@ -634,6 +634,7 @@ int main(int argc, char **argv) {
                     wnd.query[0] = '\0';
                     wnd.actions = alloc_list<Command>();
                     wnd.filtered_results = alloc_list<int>();
+                    wnd.selection = 0;
 
                     for (int i = 0; i < _CMD_COUNT_; i++) {
                         auto fuck_cpp = (Command)i;
