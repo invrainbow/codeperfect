@@ -7498,7 +7498,7 @@ char* (*GHGetGomodcache)();
 GoBool (*GHGetMessage)(void* p);
 void (*GHFreeMessage)(void* p);
 GoBool (*GHInitConfig)();
-char* (*GHGetOptionsFile)();
+char* (*GHGetConfigDir)();
 
 #if OS_WIN
 #   define dll_load_library(x) LoadLibraryW(L"gohelper.dll")
@@ -7547,7 +7547,7 @@ void load_gohelper() {
     load(GHGetMessage);
     load(GHFreeMessage);
     load(GHInitConfig);
-    load(GHGetOptionsFile);
+    load(GHGetConfigDir);
 #undef load
 
     gh_version = GHGetVersion();

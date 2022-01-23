@@ -284,10 +284,16 @@ int main(int argc, char **argv) {
 
     glfwSwapInterval(0);
 
+    auto configdir = GHGetConfigDir();
+    if (configdir == NULL)
+        return error("unable to get config dir"), EXIT_FAILURE;
+
     ImGui::CreateContext();
 
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    io.IniFilename = path_join(configdir, "imgui.ini");
+
     // ImGui::StyleColorsLight();
 
     auto &style = ImGui::GetStyle();
