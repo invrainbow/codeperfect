@@ -1714,16 +1714,14 @@ void init_goto_symbol() {
     if (wnd.fill_thread == NULL)
         kill_thread(wnd.fill_thread);
 
-    ptr0(&wnd);
+    wnd.query[0] = '\0';
+    wnd.symbols = NULL;
+    wnd.filtered_results = NULL;
 
     auto worker = [](void*) {
-        Pool pool;
-        pool.init();
-        defer { pool.cleanup(); };
-
-        SCOPED_MEM(&pool);
-
         auto &wnd = world.wnd_goto_symbol;
+
+        SCOPED_MEM(&wnd.fill_thread_pool);
 
         auto symbols = alloc_list<Go_Symbol>();
         world.indexer.fill_goto_symbol(symbols);
@@ -1738,14 +1736,20 @@ void init_goto_symbol() {
             wnd.current_import_path = our_strcpy(world.indexer.index.current_import_path);
         }
 
-        wnd.filling = false;
+        wnd.fill_running = false;
 
-        auto t = wnd.fill_thread;
-        wnd.fill_thread = NULL;
-        close_thread_handle(t);
+        if (wnd.fill_thread != NULL) {
+            auto t = wnd.fill_thread;
+            wnd.fill_thread = NULL;
+            close_thread_handle(t);
+        }
     };
 
-    wnd.filling = true;
+    wnd.fill_thread_pool.cleanup();
+    wnd.fill_thread_pool.init();
+
+    wnd.fill_time_started_ms = current_time_milli();
+    wnd.fill_running = true;
     wnd.fill_thread = create_thread(worker, NULL);
     wnd.show = true;
 }
@@ -1940,6 +1944,7 @@ void handle_command(Command cmd, bool from_menu) {
             wnd.thread_mem.init();
             SCOPED_MEM(&wnd.thread_mem);
 
+            // kinda confusing that cancel_find_references is responsible for wnd.done = true
             defer { cancel_find_references(); };
 
             auto files = world.indexer.find_references(wnd.declres, false);
@@ -2140,7 +2145,13 @@ void handle_command(Command cmd, bool from_menu) {
     case CMD_GENERATE_IMPLEMENTATION:
         {
             auto &wnd = world.wnd_generate_implementation;
-            ptr0(&wnd);
+
+            if (wnd.fill_thread == NULL)
+                kill_thread(wnd.fill_thread);
+
+            wnd.query[0] = '\0';
+            wnd.symbols = NULL;
+            wnd.filtered_results = NULL;
 
             if (!handle_unsaved_files()) break;
 
@@ -2185,16 +2196,35 @@ void handle_command(Command cmd, bool from_menu) {
                 wnd.selected_interface = (gotype->type == GOTYPE_INTERFACE);
             }
 
-            auto symbols = alloc_list<Go_Symbol>();
-            ind.fill_generate_implementation(symbols, wnd.selected_interface);
-            if (symbols->len == 0) break;
+            auto worker = [](void*) {
+                auto &wnd = world.wnd_generate_implementation;
 
-            {
-                SCOPED_MEM(&world.generate_implementation_mem);
-                wnd.symbols = alloc_list<Go_Symbol>(symbols->len);
-                For (*symbols) wnd.symbols->append(it.copy());
-            }
+                SCOPED_MEM(&wnd.fill_thread_pool);
 
+                auto symbols = alloc_list<Go_Symbol>();
+                ind.fill_generate_implementation(symbols, wnd.selected_interface);
+                if (symbols->len == 0) return;
+
+                {
+                    SCOPED_MEM(&world.generate_implementation_mem);
+                    wnd.symbols = alloc_list<Go_Symbol>(symbols->len);
+                    For (*symbols) wnd.symbols->append(it.copy());
+                }
+
+                wnd.fill_running = false;
+                if (wnd.fill_thread != NULL) {
+                    auto t = wnd.fill_thread;
+                    wnd.fill_thread = NULL;
+                    close_thread_handle(t);
+                }
+            };
+
+            wnd.fill_thread_pool.cleanup();
+            wnd.fill_thread_pool.init();
+
+            wnd.fill_time_started_ms = current_time_milli();
+            wnd.fill_running = true;
+            wnd.fill_thread = create_thread(worker, NULL);
             wnd.show = true;
         }
         break;

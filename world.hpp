@@ -331,8 +331,10 @@ struct World {
 // #endif
 
     struct Wnd_Generate_Implementation : Wnd {
-        Pool thread_mem;
-        bool running;
+        bool fill_running;
+        Thread_Handle fill_thread;
+        Pool fill_thread_pool;
+        u64 fill_time_started_ms;
 
         u64 file_hash_on_open;
         Goresult *declres;
@@ -532,8 +534,10 @@ struct World {
     } wnd_command;
 
     struct Wnd_Goto_Symbol : Wnd {
-        bool filling;
+        bool fill_running;
         Thread_Handle fill_thread;
+        Pool fill_thread_pool;
+        u64 fill_time_started_ms;
 
         char query[MAX_PATH];
         ccstr current_import_path;

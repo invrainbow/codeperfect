@@ -2555,92 +2555,104 @@ void UI::draw_everything() {
         ImGui::End();
     }
 
-    if (world.wnd_generate_implementation.show) {
+    {
         auto &wnd = world.wnd_generate_implementation;
 
-        auto go_up = [&]() {
-            if (wnd.filtered_results->len == 0) return;
-            if (wnd.selection == 0)
-                wnd.selection = min(wnd.filtered_results->len, settings.generate_implementation_max_results) - 1;
-            else
-                wnd.selection--;
-        };
-
-        auto go_down = [&]() {
-            if (wnd.filtered_results->len == 0) return;
-            wnd.selection++;
-            wnd.selection %= min(wnd.filtered_results->len, settings.generate_implementation_max_results);
-        };
-
-        begin_centered_window("Generate Implementation", &wnd, 0, 400);
-
-        if (wnd.selected_interface)
-            ImGui::TextWrapped("You've selected an interface. Please select a type and we'll add this interface's methods to that type.");
-        else
-            ImGui::TextWrapped("You've selected a type. Please select an interface and we'll add that interface's methods to this type.");
-
-        auto mods = imgui_get_keymods();
-        switch (mods) {
-        case KEYMOD_NONE:
-            if (imgui_special_key_pressed(ImGuiKey_DownArrow)) go_down();
-            if (imgui_special_key_pressed(ImGuiKey_UpArrow)) go_up();
-            if (imgui_special_key_pressed(ImGuiKey_Escape)) wnd.show = false;
-            break;
+        if (wnd.show && wnd.fill_running && current_time_milli() - wnd.fill_time_started_ms > 100) {
+            begin_centered_window("Generate Implementation...###generate_impelmentation_filling", &wnd, 0, 400);
+            ImGui::Text("Loading...");
+            ImGui::End();
         }
 
-        focus_keyboard(&wnd);
-
-        if (imgui_input_text_full("", wnd.query, _countof(wnd.query), ImGuiInputTextFlags_EnterReturnsTrue)) {
-            do_generate_implementation();
-            wnd.show = false;
-            ImGui::SetWindowFocus(NULL);
-        }
-
-        auto symbol_to_name = [&](auto &it) {
-            return our_sprintf("%s.%s", it.pkgname, it.name);
-        };
-
-        if (ImGui::IsItemEdited()) {
-            wnd.filtered_results->len = 0;
-            wnd.selection = 0;
-
-            if (strlen(wnd.query) >= 2) {
-                u32 i = 0;
-                For (*wnd.symbols) {
-                    if (fzy_has_match(wnd.query, symbol_to_name(it)))
-                        wnd.filtered_results->append(i);
-                    if (i++ > 1000)
-                        break;
-                }
-
-                fuzzy_sort_filtered_results(
-                    wnd.query,
-                    wnd.filtered_results,
-                    wnd.symbols->len,
-                    [&](auto i) { return symbol_to_name(wnd.symbols->at(i)); }
-                );
-            }
-        }
-
-        {
-            imgui_push_mono_font();
-            defer { imgui_pop_font(); };
-
-            for (u32 i = 0; i < wnd.filtered_results->len && i < settings.goto_file_max_results; i++) {
-                auto it = wnd.symbols->at(wnd.filtered_results->at(i));
-                auto text = symbol_to_name(it);
-
-                if (i == wnd.selection)
-                    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.5f, 1.0f), "%s", text);
+        if (wnd.show && !wnd.fill_running) {
+            auto go_up = [&]() {
+                if (wnd.filtered_results->len == 0) return;
+                if (wnd.selection == 0)
+                    wnd.selection = min(wnd.filtered_results->len, settings.generate_implementation_max_results) - 1;
                 else
-                    ImGui::Text("%s", text);
+                    wnd.selection--;
+            };
 
-                ImGui::SameLine();
-                ImGui::TextColored(ImVec4(1.0f, 1.0, 1.0f, 0.4f), "\"%s\"", it.decl->ctx->import_path);
+            auto go_down = [&]() {
+                if (wnd.filtered_results->len == 0) return;
+                wnd.selection++;
+                wnd.selection %= min(wnd.filtered_results->len, settings.generate_implementation_max_results);
+            };
+
+            begin_centered_window("Generate Implementation###generate_impelmentation_ready", &wnd, 0, 400);
+
+            if (wnd.selected_interface)
+                ImGui::TextWrapped("You've selected an interface. Please select a type and we'll add this interface's methods to that type.");
+            else
+                ImGui::TextWrapped("You've selected a type. Please select an interface and we'll add that interface's methods to this type.");
+
+            auto mods = imgui_get_keymods();
+            switch (mods) {
+            case KEYMOD_NONE:
+                if (imgui_special_key_pressed(ImGuiKey_DownArrow)) go_down();
+                if (imgui_special_key_pressed(ImGuiKey_UpArrow)) go_up();
+                if (imgui_special_key_pressed(ImGuiKey_Escape)) {
+                    wnd.show = false;
+                    wnd.filtered_results->len = 0;
+                    wnd.selection = 0;
+                }
+                break;
             }
-        }
 
-        ImGui::End();
+            focus_keyboard(&wnd);
+
+            if (imgui_input_text_full("", wnd.query, _countof(wnd.query), ImGuiInputTextFlags_EnterReturnsTrue)) {
+                do_generate_implementation();
+                wnd.show = false;
+                ImGui::SetWindowFocus(NULL);
+            }
+
+            auto symbol_to_name = [&](auto &it) {
+                return our_sprintf("%s.%s", it.pkgname, it.name);
+            };
+
+            if (ImGui::IsItemEdited()) {
+                wnd.filtered_results->len = 0;
+                wnd.selection = 0;
+
+                if (strlen(wnd.query) >= 2) {
+                    u32 i = 0;
+                    For (*wnd.symbols) {
+                        if (fzy_has_match(wnd.query, symbol_to_name(it)))
+                            wnd.filtered_results->append(i);
+                        if (i++ > 1000)
+                            break;
+                    }
+
+                    fuzzy_sort_filtered_results(
+                        wnd.query,
+                        wnd.filtered_results,
+                        wnd.symbols->len,
+                        [&](auto i) { return symbol_to_name(wnd.symbols->at(i)); }
+                    );
+                }
+            }
+
+            {
+                imgui_push_mono_font();
+                defer { imgui_pop_font(); };
+
+                for (u32 i = 0; i < wnd.filtered_results->len && i < settings.goto_file_max_results; i++) {
+                    auto it = wnd.symbols->at(wnd.filtered_results->at(i));
+                    auto text = symbol_to_name(it);
+
+                    if (i == wnd.selection)
+                        ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.5f, 1.0f), "%s", text);
+                    else
+                        ImGui::Text("%s", text);
+
+                    ImGui::SameLine();
+                    ImGui::TextColored(ImVec4(1.0f, 1.0, 1.0f, 0.4f), "\"%s\"", it.decl->ctx->import_path);
+                }
+            }
+
+            ImGui::End();
+        }
     }
 
     if (world.wnd_rename_identifier.show) {
@@ -3938,183 +3950,187 @@ void UI::draw_everything() {
         ImGui::End();
     }
 
-    if (world.wnd_goto_symbol.show && world.wnd_goto_symbol.filling) {
+    {
         auto &wnd = world.wnd_goto_symbol;
 
-        begin_centered_window("Go To Symbol...###goto_symbol_filling", &wnd, 0, 600);
-        ImGui::Text("Loading symbols...");
-        ImGui::End();
-    }
-
-    if (world.wnd_goto_symbol.show && !world.wnd_goto_symbol.filling) {
-        auto& wnd = world.wnd_goto_symbol;
-
-        auto go_up = [&]() {
-            if (wnd.filtered_results->len == 0) return;
-            if (wnd.selection == 0)
-                wnd.selection = min(wnd.filtered_results->len, settings.goto_symbol_max_results) - 1;
-            else
-                wnd.selection--;
-        };
-
-        auto go_down = [&]() {
-            if (wnd.filtered_results->len == 0) return;
-            wnd.selection++;
-            wnd.selection %= min(wnd.filtered_results->len, settings.goto_symbol_max_results);
-        };
-
-        begin_centered_window("Go To Symbol###goto_symbol_ready", &wnd, 0, 600);
-
-        bool refilter = false;
-
-        ImGui::Checkbox("Include symbols in current file only", &wnd.current_file_only);
-        if (ImGui::IsItemEdited())
-            refilter = true;
-
-        imgui_small_newline();
-
-        auto mods = imgui_get_keymods();
-        switch (mods) {
-        case KEYMOD_NONE:
-            if (imgui_special_key_pressed(ImGuiKey_DownArrow)) go_down();
-            if (imgui_special_key_pressed(ImGuiKey_UpArrow)) go_up();
-            if (imgui_special_key_pressed(ImGuiKey_Escape)) wnd.show = false;
-            break;
+        if (wnd.show && wnd.fill_running && current_time_milli() - wnd.fill_time_started_ms > 100) {
+            begin_centered_window("Go To Symbol...###goto_symbol_filling", &wnd, 0, 600);
+            ImGui::Text("Loading symbols...");
+            ImGui::End();
         }
 
-        focus_keyboard(&wnd);
+        if (wnd.show && !wnd.fill_running) {
+            auto go_up = [&]() {
+                if (wnd.filtered_results->len == 0) return;
+                if (wnd.selection == 0)
+                    wnd.selection = min(wnd.filtered_results->len, settings.goto_symbol_max_results) - 1;
+                else
+                    wnd.selection--;
+            };
 
-        if (!wnd.focused) {
-            wnd.show = false;
-            ImGui::SetWindowFocus(NULL);
-        }
+            auto go_down = [&]() {
+                if (wnd.filtered_results->len == 0) return;
+                wnd.selection++;
+                wnd.selection %= min(wnd.filtered_results->len, settings.goto_symbol_max_results);
+            };
 
-        if (imgui_input_text_full("Search for symbol:", wnd.query, _countof(wnd.query), ImGuiInputTextFlags_EnterReturnsTrue)) {
-            wnd.show = false;
-            ImGui::SetWindowFocus(NULL);
+            begin_centered_window("Go To Symbol###goto_symbol_ready", &wnd, 0, 600);
 
-            do {
-                if (wnd.filtered_results->len == 0) break;
+            bool refilter = false;
 
-                if (!world.indexer.try_acquire_lock(IND_READING)) break;
-                defer { world.indexer.release_lock(IND_READING); };
+            ImGui::Checkbox("Include symbols in current file only", &wnd.current_file_only);
+            if (ImGui::IsItemEdited())
+                refilter = true;
 
-                auto it = wnd.symbols->at(wnd.filtered_results->at(wnd.selection));
-
-                Jump_To_Definition_Result res;
-                res.file = world.indexer.ctx_to_filepath(it.decl->ctx);
-                res.pos = it.decl->decl->name_start;
-                res.decl = it.decl;
-                goto_jump_to_definition_result(&res);
-
-                wnd.filtered_results->len = 0;
-                wnd.selection = 0;
-            } while (0);
-        }
-
-        if (ImGui::IsItemEdited())
-            refilter = true;
-
-        do {
-            if (!refilter) continue;
-
-            wnd.selection = 0;
-            wnd.filtered_results->len = 0;
-
-            if (strlen(wnd.query) < 2) break;
-
-            Editor *editor = NULL;
-            if (wnd.current_file_only) {
-                editor = get_current_editor();
-                if (editor == NULL)
-                    break;
-            }
-
-            Timer t;
-            t.init("filter_symbols");
-
-            for (u32 i = 0; i < wnd.symbols->len && i < 1000; i++) {
-                auto &it = wnd.symbols->at(i);
-
-                if (wnd.current_file_only)
-                    if (!are_filepaths_equal(it.filepath, editor->filepath))
-                        continue;
-
-                if (!fzy_has_match(wnd.query, it.full_name()))
-                    continue;
-
-                wnd.filtered_results->append(i);
-            }
-
-            t.log("matching");
-
-            fuzzy_sort_filtered_results(
-                wnd.query,
-                wnd.filtered_results,
-                wnd.symbols->len,
-                [&](auto i) { return wnd.symbols->at(i).full_name(); }
-            );
-
-            t.log("sort");
-        } while (0);
-
-        if (wnd.filtered_results->len > 0) {
             imgui_small_newline();
 
-            imgui_push_mono_font();
-            defer { imgui_pop_font(); };
-
-            auto pm = pretty_menu_start();
-
-            for (u32 i = 0; i < wnd.filtered_results->len && i < settings.goto_file_max_results; i++) {
-                pretty_menu_item(pm, i == wnd.selection);
-
-                auto it = wnd.symbols->at(wnd.filtered_results->at(i));
-
-                auto get_decl_type = [&]() {
-                    auto decl_type = it.decl->decl->type;
-                    switch (decl_type) {
-                    case GODECL_IMPORT:
-                        return "import";
-                    case GODECL_VAR:
-                    case GODECL_SHORTVAR:
-                        return "var";
-                    case GODECL_CONST:
-                        return "const";
-                    case GODECL_TYPE:
-                        return "type";
-                    case GODECL_FUNC:
-                        return "func";
-                    }
-                    return "unknown";
-                };
-
-                pretty_menu_text(pm, our_sprintf("(%s) ", get_decl_type()), IM_COL32(80, 80, 80, 255));
-
-                pretty_menu_text(pm, it.full_name());
-                pm->pos.x += 8;
-
-                auto import_path = it.decl->ctx->import_path;
-                if (path_has_descendant(wnd.current_import_path, import_path))
-                    import_path = get_path_relative_to(import_path, wnd.current_import_path);
-                if (streq(import_path, ""))
-                    import_path = "(root)";
-
-                int rem_chars = (pm->text_br.x - pm->pos.x) / font->width;
-
-                auto s = import_path;
-                if (strlen(s) > rem_chars)
-                    s = our_sprintf("%.*s...", rem_chars - 3, s);
-
-                auto color = i == wnd.selection
-                    ? IM_COL32(150, 150, 150, 255)
-                    : IM_COL32(110, 110, 110, 255);
-
-                pretty_menu_text(pm, s, color);
+            auto mods = imgui_get_keymods();
+            switch (mods) {
+            case KEYMOD_NONE:
+                if (imgui_special_key_pressed(ImGuiKey_DownArrow)) go_down();
+                if (imgui_special_key_pressed(ImGuiKey_UpArrow)) go_up();
+                if (imgui_special_key_pressed(ImGuiKey_Escape)) {
+                    wnd.show = false;
+                    wnd.filtered_results->len = 0;
+                    wnd.selection = 0;
+                }
+                break;
             }
-        }
 
-        ImGui::End();
+            focus_keyboard(&wnd);
+
+            if (!wnd.focused) {
+                wnd.show = false;
+                ImGui::SetWindowFocus(NULL);
+            }
+
+            if (imgui_input_text_full("Search for symbol:", wnd.query, _countof(wnd.query), ImGuiInputTextFlags_EnterReturnsTrue)) {
+                wnd.show = false;
+                ImGui::SetWindowFocus(NULL);
+
+                do {
+                    if (wnd.filtered_results->len == 0) break;
+
+                    if (!world.indexer.try_acquire_lock(IND_READING)) break;
+                    defer { world.indexer.release_lock(IND_READING); };
+
+                    auto it = wnd.symbols->at(wnd.filtered_results->at(wnd.selection));
+
+                    Jump_To_Definition_Result res;
+                    res.file = world.indexer.ctx_to_filepath(it.decl->ctx);
+                    res.pos = it.decl->decl->name_start;
+                    res.decl = it.decl;
+                    goto_jump_to_definition_result(&res);
+
+                    wnd.filtered_results->len = 0;
+                    wnd.selection = 0;
+                } while (0);
+            }
+
+            if (ImGui::IsItemEdited())
+                refilter = true;
+
+            do {
+                if (!refilter) continue;
+
+                wnd.selection = 0;
+                wnd.filtered_results->len = 0;
+
+                if (strlen(wnd.query) < 2) break;
+
+                Editor *editor = NULL;
+                if (wnd.current_file_only) {
+                    editor = get_current_editor();
+                    if (editor == NULL)
+                        break;
+                }
+
+                Timer t;
+                t.init("filter_symbols");
+
+                for (u32 i = 0; i < wnd.symbols->len && i < 1000; i++) {
+                    auto &it = wnd.symbols->at(i);
+
+                    if (wnd.current_file_only)
+                        if (!are_filepaths_equal(it.filepath, editor->filepath))
+                            continue;
+
+                    if (!fzy_has_match(wnd.query, it.full_name()))
+                        continue;
+
+                    wnd.filtered_results->append(i);
+                }
+
+                t.log("matching");
+
+                fuzzy_sort_filtered_results(
+                    wnd.query,
+                    wnd.filtered_results,
+                    wnd.symbols->len,
+                    [&](auto i) { return wnd.symbols->at(i).full_name(); }
+                );
+
+                t.log("sort");
+            } while (0);
+
+            if (wnd.filtered_results->len > 0) {
+                imgui_small_newline();
+
+                imgui_push_mono_font();
+                defer { imgui_pop_font(); };
+
+                auto pm = pretty_menu_start();
+
+                for (u32 i = 0; i < wnd.filtered_results->len && i < settings.goto_file_max_results; i++) {
+                    pretty_menu_item(pm, i == wnd.selection);
+
+                    auto it = wnd.symbols->at(wnd.filtered_results->at(i));
+
+                    auto get_decl_type = [&]() {
+                        auto decl_type = it.decl->decl->type;
+                        switch (decl_type) {
+                        case GODECL_IMPORT:
+                            return "import";
+                        case GODECL_VAR:
+                        case GODECL_SHORTVAR:
+                            return "var";
+                        case GODECL_CONST:
+                            return "const";
+                        case GODECL_TYPE:
+                            return "type";
+                        case GODECL_FUNC:
+                            return "func";
+                        }
+                        return "unknown";
+                    };
+
+                    pretty_menu_text(pm, our_sprintf("(%s) ", get_decl_type()), IM_COL32(80, 80, 80, 255));
+
+                    pretty_menu_text(pm, it.full_name());
+                    pm->pos.x += 8;
+
+                    auto import_path = it.decl->ctx->import_path;
+                    if (path_has_descendant(wnd.current_import_path, import_path))
+                        import_path = get_path_relative_to(import_path, wnd.current_import_path);
+                    if (streq(import_path, ""))
+                        import_path = "(root)";
+
+                    int rem_chars = (pm->text_br.x - pm->pos.x) / font->width;
+
+                    auto s = import_path;
+                    if (strlen(s) > rem_chars)
+                        s = our_sprintf("%.*s...", rem_chars - 3, s);
+
+                    auto color = i == wnd.selection
+                        ? IM_COL32(150, 150, 150, 255)
+                        : IM_COL32(110, 110, 110, 255);
+
+                    pretty_menu_text(pm, s, color);
+                }
+            }
+
+            ImGui::End();
+        }
     }
 
     // Don't show the debugger UI if we're still starting up, because we're
