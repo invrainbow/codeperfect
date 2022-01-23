@@ -859,6 +859,15 @@ void save_all_unsaved_files() {
     }
 }
 
+bool ft_tree_contains_node(FT_Node *tree, FT_Node *node) {
+    if (tree == node) return true;
+
+    for (auto child = tree->children; child != NULL; child = child->next)
+        if (ft_tree_contains_node(child, node))
+            return true;
+    return false;
+}
+
 void delete_ft_node(FT_Node *it, bool delete_on_disk) {
     if (delete_on_disk) {
         SCOPED_FRAME();
@@ -869,6 +878,10 @@ void delete_ft_node(FT_Node *it, bool delete_on_disk) {
         else
             delete_file(full_path);
     }
+
+    auto &fe = world.file_explorer;
+    if (fe.selection != NULL && ft_tree_contains_node(it, fe.selection))
+        fe.selection = NULL;
 
     // delete `it` from file tree
     if (it->parent != NULL && it->parent->children == it)
