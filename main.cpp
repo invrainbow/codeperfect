@@ -1454,7 +1454,7 @@ int main(int argc, char **argv) {
                 if (streq(filedir, "."))
                     filedir = "";
 
-                reload_file_subtree(filedir);
+                reload_file_subtree(get_path_relative_to(filedir, world.current_path));
 
                 auto editor = find_editor_by_filepath(filepath);
                 if (editor != NULL)
