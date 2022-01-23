@@ -7,7 +7,6 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"path"
 	"strings"
 	"unsafe"
 
@@ -333,11 +332,11 @@ func GHInitConfig() bool {
 	return true
 }
 
-//export GHGetOptionsFile
-func GHGetOptionsFile() *C.char {
+//export GHGetConfigDir
+func GHGetConfigDir() *C.char {
 	configDir, err := PrepareConfigDir()
 	if err != nil {
 		return nil
 	}
-	return C.CString(path.Join(configDir, ".options"))
+	return C.CString(configDir)
 }

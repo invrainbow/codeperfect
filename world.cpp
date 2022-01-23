@@ -382,8 +382,10 @@ void World::init(GLFWwindow *_wnd) {
 
     // read options from disk
     do {
-        auto filepath = GHGetOptionsFile();
-        if (filepath == NULL) break;
+        auto configpath = GHGetConfigDir();
+        if (configpath == NULL) break;
+
+        auto filepath = path_join(configpath, ".options");
 
         File f;
         if (f.init(filepath, FILE_MODE_READ, FILE_OPEN_EXISTING) != FILE_RESULT_SUCCESS)
