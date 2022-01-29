@@ -292,7 +292,10 @@ int main(int argc, char **argv) {
 
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-    io.IniFilename = path_join(configdir, "imgui.ini");
+    {
+        SCOPED_MEM(&world.world_mem);
+        io.IniFilename = path_join(configdir, "imgui.ini");
+    }
 
     // ImGui::StyleColorsLight();
 
