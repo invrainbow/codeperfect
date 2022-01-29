@@ -153,7 +153,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
                 insert_text("%s", autoindent_chars);
 
                 if (add > 0) {
-                    ccstr tabs = "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t";
+                    ccstr tabs = "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t";
                     if (add >= strlen(tabs)) our_panic("not enough tabs");
                     insert_text("%.*s", add, tabs);
                 }
