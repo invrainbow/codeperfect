@@ -660,7 +660,7 @@ function Pricing() {
         </span>
       </div>
       <div className="mt-8">
-        <div className="px-4 md:px-4 max-w-5xl flex flex-col md:flex-row space-between space-y-4 space-x-0 md:space-y-0 md:space-x-4 lg:space-x-12 mx-auto">
+        <div className="px-4 md:px-4 max-w-5xl flex flex-col md:flex-row space-between space-y-4 space-x-0 md:space-y-0 md:space-x-4 lg:space-x-8 mx-auto">
           <PricingBox
             title="Personal"
             monthly={5}
