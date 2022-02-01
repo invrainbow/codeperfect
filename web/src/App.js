@@ -548,7 +548,6 @@ function PricingBox({
   children,
   cta,
   className,
-  width,
   premium,
 }) {
   return (
@@ -556,8 +555,7 @@ function PricingBox({
       className={cx(
         className,
         "w-auto rounded-lg overflow-hidden p-6 md:p-8",
-        "border border-gray-200 shadow-sm",
-        `md:${width || "w-1/3"}`
+        "border border-gray-200 shadow-sm md:w-1/3"
       )}
     >
       <h1 className="font-bold text-gray-500 text-sm uppercase mb-1">
@@ -660,7 +658,7 @@ function Pricing() {
         </span>
       </div>
       <div className="mt-8">
-        <div className="px-4 md:px-4 max-w-5xl flex flex-col md:flex-row space-between space-y-4 space-x-0 md:space-y-0 md:space-x-4 lg:space-x-8 mx-auto">
+        <div className="px-4 md:px-12 max-w-5xl flex flex-col md:flex-row justify-between space-y-4 space-x-0 md:space-y-0 md:space-x-4 lg:space-x-8 mx-auto">
           <PricingBox
             title="Personal"
             monthly={5}
