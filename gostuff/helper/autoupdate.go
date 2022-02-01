@@ -281,18 +281,14 @@ func handleGracePeriod(message string, days int) {
 	}
 }
 
-func AuthAndUpdate() {
-	license := ReadLicense()
-	if license == nil {
-		pushPanic("Unable to read license. Please place your license file at ~/.cplicense.")
-		return
-	}
+func AuthAndUpdate(email, licenseKey string) {
+	license := &License{}
+	license.Email = email
+	license.LicenseKey = licenseKey
 
 	osSlug := runtime.GOOS
-	if osSlug == "darwin" {
-		if runtime.GOARCH == "arm64" {
-			osSlug = "darwin_arm"
-		}
+	if osSlug == "darwin" && runtime.GOARCH == "arm64" {
+		osSlug = "darwin_arm"
 	}
 
 	req := &models.AuthRequest{

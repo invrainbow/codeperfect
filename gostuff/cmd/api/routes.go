@@ -57,26 +57,6 @@ func sendServerError(c *gin.Context, format string, args ...interface{}) {
 
 const TrialPeriod = time.Hour * 24 * 7
 
-func authUserByStatus(user *models.User) (bool, int) {
-	switch user.Status {
-	case models.UserStatusTrialWaiting:
-		// start the user's trial
-		user.Status = models.UserStatusTrial
-		user.TrialStartedAt = time.Now()
-		db.DB.Save(&user)
-
-	case models.UserStatusTrial:
-		if time.Since(user.TrialStartedAt) > TrialPeriod {
-			return false, models.ErrorTrialExpired
-		}
-
-	case models.UserStatusInactive:
-		return false, models.ErrorUserNoLongerActive
-	}
-
-	return true, 0
-}
-
 // can maybe refactor this
 func authUser(c *gin.Context) *models.User {
 	email := c.GetHeader("X-Email")
@@ -97,25 +77,8 @@ func authUser(c *gin.Context) *models.User {
 		return nil
 	}
 
-	ok, errCode := authUserByStatus(&user)
-	if !ok {
-		sendError(c, errCode)
-		return nil
-	}
-
-	return &user
-}
-
-func authUserByCode(c *gin.Context, code string) *models.User {
-	var user models.User
-	if res := db.DB.First(&user, "download_code = ?", code); res.Error != nil {
-		sendError(c, models.ErrorInvalidDownloadCode)
-		return nil
-	}
-
-	ok, errCode := authUserByStatus(&user)
-	if !ok {
-		sendError(c, errCode)
+	if !user.Active {
+		sendError(c, models.ErrorUserNoLongerActive)
 		return nil
 	}
 
@@ -134,13 +97,17 @@ func MustGetDownloadLink(c *gin.Context, os, folder string) string {
 	}
 
 	filename := fmt.Sprintf("%s/%v_v%v.zip", folder, os, versions.CurrentVersion)
-	presignedUrl, err := GetPresignedURL("codeperfect95", filename)
-	if err != nil {
-		sendServerError(c, "error while creating presigned url: %v", err)
-		return ""
-	}
 
-	return presignedUrl
+	/*
+		presignedUrl, err := GetPresignedURL("codeperfect95", filename)
+		if err != nil {
+			sendServerError(c, "error while creating presigned url: %v", err)
+			return ""
+		}
+		return presignedUrl
+	*/
+	baseUrl := "https://codeperfect95.s3.us-east-2.amazonaws.com"
+	return fmt.Sprintf("%s/%s", baseUrl, filename)
 }
 
 var SendAlertsForSelf = (os.Getenv("SEND_ALERTS_FOR_SELF") == "1")
@@ -170,105 +137,35 @@ func executeTemplate(text string, params interface{}) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-//go:embed install.sh
-var installScript string
-
-func GetInstall(c *gin.Context) {
-	user := authUserByCode(c, c.Query("code"))
-	if user == nil {
-		return
-	}
-
-	SendSlackMessageForUser(user, "%s accessed install script.", user.Email)
-
-	type Data struct {
-		APIBase string
-		Code    string
-	}
-
-	tpl, err := executeTemplate(installScript, &Data{
-		Code:    user.DownloadCode,
-		APIBase: GetAPIBase(),
-	})
-	if err != nil {
-		sendServerError(c, "unable to load install script")
-		return
-	}
-
-	c.Data(http.StatusOK, "text/plain", tpl)
-}
-
-func GetLicense(c *gin.Context) {
-	user := authUserByCode(c, c.Query("code"))
-	if user == nil {
-		return
-	}
-
-	SendSlackMessageForUser(user, "%s downloaded their license.", user.Email)
-	license := &helper.License{
-		Email:      user.Email,
-		LicenseKey: user.LicenseKey,
-	}
-	data, err := json.MarshalIndent(license, "", "  ")
-	if err != nil {
-		sendServerError(c, "unable to return license")
-	}
-	c.Data(http.StatusOK, "application/json", data)
-}
-
-func GetDownload(c *gin.Context) {
-	user := authUserByCode(c, c.Query("code"))
-	if user == nil {
-		return
-	}
-
-	SendSlackMessageForUser(user, "%s downloaded version `%s`.", user.Email, c.Query("os"))
-
-	LogEvent(int(user.ID), &AmplitudeEvent{
-		EventType:      "user_download",
-		UserProperties: user,
-	})
-
-	presignedUrl := MustGetDownloadLink(c, c.Query("os"), "app")
-	if presignedUrl == "" {
-		return
-	}
-
-	c.Data(http.StatusOK, "text/plain", []byte(presignedUrl))
-}
-
-func PostAuthWeb(c *gin.Context) {
-	var req struct {
-		Code string `json:"code"`
-	}
-
+func PostUpdate(c *gin.Context) {
+	var req models.UpdateRequest
 	if c.ShouldBindJSON(&req) != nil {
 		sendError(c, models.ErrorInvalidData)
 		return
 	}
 
-	user := authUserByCode(c, req.Code)
-	if user == nil {
-		return
+	resp := &models.UpdateResponse{
+		Version:        versions.CurrentVersion,
+		NeedAutoupdate: req.CurrentVersion < versions.CurrentVersion,
 	}
 
-	SendSlackMessageForUser(user, "%s opened the download page.", user.Email)
+	if resp.NeedAutoupdate {
+		url := MustGetDownloadLink(c, req.OS, "update")
+		if url == "" {
+			return
+		}
 
-	LogEvent(int(user.ID), &AmplitudeEvent{
-		EventType:       "user_web_auth",
-		EventProperties: req,
-		UserProperties:  user,
-	})
+		var versionObj models.Version
+		res := db.DB.Where("version = ? AND os = ?", versions.CurrentVersion, req.OS).First(&versionObj)
+		if res.Error != nil {
+			sendServerError(c, "find version: %v", res.Error)
+			return
+		}
 
-	type AuthWebResponse struct {
-		Email      string `json:"email"`
-		LicenseKey string `json:"license_key"`
+		resp.DownloadURL = url
+		resp.DownloadHash = versionObj.UpdateHash
 	}
 
-	c.JSON(http.StatusOK, &AuthWebResponse{
-		Email:      user.Email,
-		LicenseKey: user.LicenseKey,
-	})
 }
 
 func PostAuth(c *gin.Context) {
@@ -291,11 +188,6 @@ func PostAuth(c *gin.Context) {
 		UserProperties:  user,
 	})
 
-	if req.CurrentVersion > versions.CurrentVersion {
-		sendError(c, models.ErrorInvalidVersion)
-		return
-	}
-
 	sess := models.Session{}
 	sess.UserID = user.ID
 	sess.StartedAt = time.Now()
@@ -303,30 +195,12 @@ func PostAuth(c *gin.Context) {
 	sess.Heartbeats = 1
 	db.DB.Create(&sess)
 
-	resp := &models.AuthResponse{
-		Version:        versions.CurrentVersion,
-		NeedAutoupdate: req.CurrentVersion < versions.CurrentVersion,
-		SessionID:      sess.ID,
+	if req.CurrentVersion > versions.CurrentVersion {
+		sendError(c, models.ErrorInvalidVersion)
+		return
 	}
 
-	if resp.NeedAutoupdate {
-		presignedUrl := MustGetDownloadLink(c, req.OS, "update")
-		if presignedUrl == "" {
-			return
-		}
-
-		var versionObj models.Version
-		res := db.DB.Where("version = ? AND os = ?", versions.CurrentVersion, req.OS).First(&versionObj)
-		if res.Error != nil {
-			sendServerError(c, "find version: %v", res.Error)
-			return
-		}
-
-		resp.DownloadURL = presignedUrl
-		resp.DownloadHash = versionObj.UpdateHash
-	}
-
-	c.JSON(http.StatusOK, resp)
+	c.JSON(http.StatusOK, &gin.H{"ok": true})
 }
 
 func PostHeartbeat(c *gin.Context) {
@@ -352,13 +226,6 @@ func PostHeartbeat(c *gin.Context) {
 	db.DB.Save(&sess)
 
 	c.JSON(200, &models.HeartbeatResponse{Ok: true})
-}
-
-type BetaSignupRequest struct {
-	Name   string   `json:"name"`
-	Email  string   `json:"email"`
-	OS     []string `json:"os"`
-	Editor []string `json:"editor"`
 }
 
 func NewPostJSONRequest(url string, body interface{}) (*http.Request, error) {
@@ -399,73 +266,6 @@ func AddSignupToConvertKit(input *BetaSignupRequest) error {
 		}
 		return fmt.Errorf("bad response from convertkit: %s", string(buf))
 	}
-	return nil
-}
-
-func AddSignupToAirtable(input *BetaSignupRequest) error {
-	osLookup := map[string]string{
-		"windows": "Windows",
-		"mac":     "macOS",
-		"linux":   "Linux",
-	}
-
-	editorLookup := map[string]string{
-		"vscode":      "VSCode",
-		"goland":      "GoLand",
-		"other":       "Other",
-		"text_editor": "A text editor (Vim, Sublime, etc.)",
-	}
-
-	newOS := []string{}
-	for _, os := range input.OS {
-		val, ok := osLookup[os]
-		if !ok {
-			return fmt.Errorf("invalid os")
-		}
-		newOS = append(newOS, val)
-	}
-
-	newEditor := []string{}
-	for _, editor := range input.Editor {
-		val, ok := editorLookup[editor]
-		if !ok {
-			return fmt.Errorf("invalid editor")
-		}
-		newEditor = append(newEditor, val)
-	}
-
-	data := gin.H{
-		"records": []gin.H{
-			gin.H{
-				"fields": gin.H{
-					"Name":             input.Name,
-					"Email":            input.Email,
-					"Operating System": newOS,
-					"Currently Using":  newEditor,
-				},
-			},
-		},
-	}
-
-	req, err := NewPostJSONRequest("https://api.airtable.com/v0/appjrtpjRjl0HV5EY/Signups", data)
-	if err != nil {
-		return err
-	}
-
-	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", AirtableAPIKey))
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	buf, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Printf("couldn't read response from airtable: %v", err)
-		return err
-	}
-	log.Printf("%s", string(buf))
 	return nil
 }
 
@@ -518,73 +318,4 @@ func SendBetaSignupEmail(name, email string) error {
 		string(emailText),
 		string(emailHTML),
 	)
-}
-
-func SendSignupToSlack(req *BetaSignupRequest) {
-	osList := []string{}
-	editorList := []string{}
-
-	for _, it := range req.OS {
-		osList = append(osList, fmt.Sprintf("`%s`", it))
-	}
-	for _, it := range req.Editor {
-		editorList = append(editorList, fmt.Sprintf("`%s`", it))
-	}
-
-	os := "none"
-	if len(osList) > 0 {
-		os = strings.Join(osList, ", ")
-	}
-
-	editor := "none"
-	if len(editorList) > 0 {
-		editor = strings.Join(editorList, ", ")
-	}
-
-	SendSlackMessage(
-		"New signup:\n> *%s*\n> Email: %s\n> OS: %s\n> Editor: %s",
-		req.Name,
-		req.Email,
-		os,
-		editor,
-	)
-}
-
-func PostBetaSignup(c *gin.Context) {
-	var req BetaSignupRequest
-	if err := c.BindJSON(&req); err != nil {
-		return
-	}
-
-	SendSignupToSlack(&req)
-
-	if err := AddSignupToAirtable(&req); err != nil {
-		SendSlackMessage("couldn't add to airtable:\n```%v```", err)
-		log.Println(err)
-	}
-
-	if err := AddSignupToConvertKit(&req); err != nil {
-		SendSlackMessage("couldn't add to convertkit:\n```%v```", err)
-		log.Println(err)
-	}
-
-	isMacOS := func() bool {
-		for _, os := range req.OS {
-			if os == "mac" {
-				return true
-			}
-		}
-		return false
-	}
-
-	nextStage := "not_supported"
-	if isMacOS() {
-		nextStage = "supported"
-		if err := SendBetaSignupEmail(req.Name, req.Email); err != nil {
-            SendSlackMessage("couldn't send email to %s:\n```%v```", req.Email, err)
-			log.Print(err)
-		}
-	}
-
-	c.JSON(200, &gin.H{"next_stage": nextStage})
 }

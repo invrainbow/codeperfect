@@ -10,6 +10,7 @@ module.exports = {
       borderWidth: ["last"],
       display: ["group-hover"],
       transform: ["hover"],
+      margin: ["last"],
     },
   },
   plugins: [],

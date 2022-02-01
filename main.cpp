@@ -254,11 +254,13 @@ int main(int argc, char **argv) {
     // glfwWindowHint(GLFW_COCOA_FRAME_AUTOSAVE, GLFW_TRUE);
     // glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
 
+    // ...
+
     auto window = glfwCreateWindow(1280, 720, WINDOW_TITLE, NULL, NULL);
     if (window == NULL)
         return error("could not create window"), EXIT_FAILURE;
 
-    // on macos, this requires glfw crap to be done
+    // on macos, this requires glfw crap to be done (why?)
     world.init(window);
     SCOPED_MEM(&world.frame_mem);
 
@@ -266,9 +268,48 @@ int main(int argc, char **argv) {
     GHEnableDebugMode();
 #endif
 
-// #ifdef RELEASE_MODE
-    GHAuthAndUpdate(); // kicks off auth/autoupdate shit in the background
-// #endif
+    // TODO: read in world.auth (should go in World::init()?)
+
+    switch (world.auth.state) {
+    case AUTH_NOTHING: {
+        world.auth.trial_start = current_time_milli();
+        tell_user("You started a trial!", "Trial started"); // TODO
+
+        auto configpath = GHGetConfigDir();
+        if (configpath == NULL) panic("Unable to write file.");
+
+        auto filepath = path_join(configpath, ".auth");
+
+        File f;
+        if (f.init(filepath, FILE_MODE_WRITE, FILE_CREATE_NEW) != FILE_RESULT_SUCCESS)
+            panic("Unable to write file.");
+
+        defer { f.cleanup(); };
+        f.write((char*)(&world.auth), sizeof(world.auth));
+        break;
+    }
+
+    case AUTH_TRIAL:
+        if (current_time_milli() - world.auth.trial_start > 1000 * 60 * 60 * 24 * 7) {
+            tell_user("Your trial has ended. Please go to Help > License to buy a license.", "Trial ended");
+            world.auth_error = true;
+        }
+        break;
+
+    case AUTH_REGISTERED: {
+        auto &auth = world.auth;
+        assert(auth.reg_email_len <= _countof(auth.reg_email));
+        assert(auth.reg_license_len <= _countof(auth.reg_license));
+
+        auto email = our_sprintf("%.*s", auth.reg_email_len, auth.reg_email);
+        auto license = our_sprintf("%.*s", auth.reg_license_len, auth.reg_license);
+
+        GHCheckAuth(email, license); // kicks off auth/autoupdate shit in the background
+        break;
+    }
+    }
+
+    GHRunAutoupdate();
 
     world.window = window;
     glfwSetWindowTitle(world.window, our_sprintf("%s - %s", WINDOW_TITLE, world.current_path));

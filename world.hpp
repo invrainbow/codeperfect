@@ -212,6 +212,32 @@ struct Command_Info {
 
 extern Command_Info command_info_table[_CMD_COUNT_];
 
+enum Auth_State {
+    AUTH_NOTHING,
+    AUTH_TRIAL,
+    AUTH_REGISTERED,
+};
+
+struct Auth_To_Disk {
+    Auth_State state;
+
+    union {
+        struct {
+            u64 trial_start;
+        };
+
+        struct {
+            char reg_email[64];
+            int reg_email_len;
+            char reg_license[64];
+            int reg_license_len;
+        };
+    };
+};
+
+struct Auth_Extras {
+};
+
 struct World {
     Pool world_mem;
     Pool frame_mem;
@@ -250,6 +276,10 @@ struct World {
     vec2 display_size;
     vec2f display_scale;
     bool use_nvim_this_time;
+
+    Auth_To_Disk auth;
+    Auth_Extras auth_extras;
+    bool auth_error;
 
     struct {
         bool recording;

@@ -1,19 +1,11 @@
 import cx from "classnames";
 import React from "react";
-import { CopyToClipboard } from "react-copy-to-clipboard";
 import { Helmet } from "react-helmet";
-import { AiFillCode } from "react-icons/ai";
+import { AiOutlineCheck, AiOutlineClose } from "react-icons/ai";
 import { BsArrowRight, BsCodeSquare, BsCpu } from "react-icons/bs";
-import {
-  FaApple,
-  FaLayerGroup,
-  FaPalette,
-  FaRegClipboard,
-  FaRobot,
-} from "react-icons/fa";
-import { FcCheckmark } from "react-icons/fc";
+import { FaApple, FaLayerGroup, FaPalette, FaRobot } from "react-icons/fa";
 import { GoPackage } from "react-icons/go";
-import { HiArrowNarrowLeft, HiArrowNarrowRight } from "react-icons/hi";
+import { HiOutlineDownload } from "react-icons/hi";
 import { ImMagicWand } from "react-icons/im";
 import { IoMdSearch } from "react-icons/io";
 import { SiVim } from "react-icons/si";
@@ -24,15 +16,27 @@ import {
   Redirect,
   Route,
   Switch,
-  useHistory,
   useLocation,
   useParams,
 } from "react-router-dom";
-import "./index.css";
+import "./index.scss";
 
 const SUPPORT_EMAIL = "support@codeperfect95.com";
-const BETA_LINK =
-  "https://codeperfect95.notion.site/codeperfect95/CodePerfect-macOS-Beta-b899fc159c6341abae382f2b5b744bc5";
+
+const LINKS = {
+  docs: "https://docs.codeperfect95.com",
+  gettingStarted: "https://docs.codeperfect95.com/overview/getting-started/",
+  changelog:
+    "https://codeperfect95.notion.site/codeperfect95/CodePerfect-95-Changelog-dcedf41014ef4de79690a5b5b54ebb33",
+  buyPersonalMonthly: "https://buy.stripe.com/aEU5kx2aTaso4TK008",
+  buyPersonalYearly: "https://buy.stripe.com/fZefZb2aTdEAbi8aEN",
+  buyProfessionalMonthly: "https://buy.stripe.com/6oE28ldTB5843PG9AK",
+  buyProfessionalYearly: "https://buy.stripe.com/28o8wJ3eXfMI4TK5kv",
+  downloadIntel:
+    "https://codeperfect95.s3.us-east-2.amazonaws.com/app/darwin_latest.zip",
+  downloadM1:
+    "https://codeperfect95.s3.us-east-2.amazonaws.com/app/darwin_arm_latest.zip",
+};
 
 let API_BASE = "https://api.codeperfect95.com";
 if (process.env.NODE_ENV === "development") {
@@ -69,17 +73,34 @@ function WallOfText({ width, children, className, ...props }) {
   );
 }
 
-function Title({ children, ...props }) {
+function H1({ className, children, ...props }) {
   return (
-    <h2 className="text-2xl font-bold text-gray-700" {...props}>
+    <h2
+      className={cx(
+        "text-center mb-6 text-3xl font-bold text-gray-700",
+        className
+      )}
+      {...props}
+    >
       {children}
     </h2>
   );
 }
 
-function Icon({ icon: IconComponent, ...props }) {
+function H2({ className, children, ...props }) {
   return (
-    <span className="relative -top-0.5">
+    <h2
+      className={cx("text-xl leading-tight font-bold text-gray-700", className)}
+      {...props}
+    >
+      {children}
+    </h2>
+  );
+}
+
+function Icon({ noshift, icon: IconComponent, ...props }) {
+  return (
+    <span className="inline-block">
       <IconComponent {...props} />
     </span>
   );
@@ -116,14 +137,11 @@ function Home() {
           <span className="inline-block">The Fastest</span>{" "}
           <span className="inline-block">IDE for Go</span>
         </div>
-        <div className="mt-4 mb-6 md:mb-20 text-lg text-gray-400 text-center">
-          <A
-            href={BETA_LINK}
-            className="rounded-full bg-gray-100 hover:bg-gray-200 color-gray-400 inline-block text-sm py-1 px-4 no-underline"
-          >
-            <b className="text-black">NEW:</b> <Icon icon={FaApple} /> macOS now
-            in private beta!
-          </A>
+        <div className="mt-6 mb-6 md:mb-20 text-lg text-gray-400 text-center">
+          <Link to="/download" className="button main-button py-4 px-8">
+            <Icon className="mr-2" icon={HiOutlineDownload} />
+            Download for Mac
+          </Link>
         </div>
       </div>
 
@@ -207,201 +225,39 @@ function Home() {
         </div>
       </div>
 
-      <div className="my-16 md:my-36 lg:mt-52 lg:mb-48 lg:rounded-md bg-black max-w-screen-xl mx-auto flex">
-        <div className="lg:w-2/5 p-8 md:p-16">
-          <div className="font-bold text-3xl text-white leading-snug">
-            <div>Ready to try it out?</div>
-            <div>Help test our macOS beta.</div>
+      <div className="my-16 md:my-36 lg:mt-56 lg:mb-48 md:mx-4">
+        <div className="md:rounded-md bg-black max-w-screen-xl mx-auto flex">
+          <div className="lg:w-2/5 p-8 md:p-16">
+            <div className="font-bold text-3xl text-white leading-snug">
+              <div>Ready to get started?</div>
+            </div>
+            <div className="text-lg text-white opacity-80 mt-4 mb-6">
+              <p>
+                Try CodePerfect for free for 7 days with all features available.
+              </p>
+            </div>
+            <div>
+              <Link
+                className="button main-button text-lg bg-white text-black hover:bg-white hover:text-black py-3 px-6"
+                to="/download"
+              >
+                <Icon className="mr-3" icon={HiOutlineDownload} />
+                Download for Mac
+              </Link>
+            </div>
           </div>
-          <div className="text-lg text-white opacity-80 mt-4 mb-6">
-            <p>
-              Our macOS release is in private beta. We're looking for testers to
-              help us improve the product.
-            </p>
-          </div>
-          <div>
-            <A
-              className="button main-button text-lg bg-white text-black hover:bg-white hover:text-black"
-              href={BETA_LINK}
+          <div className="flex-1 pl-12 relative hidden lg:block">
+            <div
+              style={{ transform: "translate(0, -47.5%)" }}
+              className="absolute top-1/2 -left-16"
             >
-              Request Access
-            </A>
-          </div>
-        </div>
-        <div className="flex-1 pl-12 relative hidden lg:block">
-          <div
-            style={{ transform: "translate(0, -47.5%)" }}
-            className="absolute top-1/2 -left-16"
-          >
-            <img className="w-full h-auto" src="/beta.png" alt="beta" />
+              <img className="w-full h-auto" src="/beta.png" alt="beta" />
+            </div>
           </div>
         </div>
       </div>
     </div>
   );
-}
-
-function Card({ children, ...props }) {
-  return (
-    <div className="border border-gray-300 rounded mt-4" {...props}>
-      {children}
-    </div>
-  );
-}
-
-function CardSection({ children, step, ...props }) {
-  return (
-    <div
-      className="p-6 border-b border-gray-300 last:border-0 relative"
-      {...props}
-    >
-      <div
-        className={cx(
-          "w-6 h-6 rounded-full text-gray-500 flex items-center justify-center",
-          "bg-gray-200 text-sm absolute left-5 top-6"
-        )}
-      >
-        <span>{step}</span>
-      </div>
-      <div className="ml-10">{children}</div>
-    </div>
-  );
-}
-
-function AutoInstall() {
-  const code = getCode();
-  const data = useAuthWeb(code);
-
-  if (!data) {
-    return <Loading />;
-  }
-
-  const installLink = `${API_BASE}/install?code=${code}`;
-
-  return (
-    <WallOfText>
-      <Title>Install</Title>
-      <Card>
-        <CardSection step={1}>
-          <div>Paste this into a terminal:</div>
-          <div className="my-4">
-            <Snippet text={`curl -s "${installLink}" | bash`} />
-          </div>
-          <div className="text-xs text-gray-400">
-            CodePerfect requires Go 1.13+. If Go isn't intalled, the script will
-            offer to install it with Homebrew. You can also decline and install
-            Go yourself if you prefer.
-          </div>
-        </CardSection>
-        <CardSection step={2}>
-          That's it! See{" "}
-          <A href="https://docs.codeperfect95.com/overview/getting-started/">
-            Getting Started
-          </A>{" "}
-          to start using CodePerfect.
-        </CardSection>
-      </Card>
-      <div className="flex justify-between mt-4">
-        <A className="font-semibold no-underline" href={installLink}>
-          <Icon icon={AiFillCode} /> View install script
-        </A>
-
-        <Link
-          className="font-semibold no-underline"
-          to={`/install/manual?code=${code}`}
-        >
-          Manual install <Icon icon={HiArrowNarrowRight} />
-        </Link>
-      </div>
-    </WallOfText>
-  );
-}
-
-function CopyButton({ text }) {
-  const [check, setCheck] = React.useState(false);
-  const timeout = React.useRef(null);
-
-  const onCopy = React.useCallback(() => {
-    setCheck(true);
-    if (timeout.current) {
-      clearTimeout(timeout.current);
-    }
-    timeout.current = setTimeout(() => setCheck(false), 750);
-  }, []);
-
-  return (
-    <CopyToClipboard
-      onCopy={onCopy}
-      text={text}
-      className="absolute top-2 right-2 cursor-pointer p-1.5 pb-1 shadow bg-white hover:text-black text-gray-600 leading-none rounded text-sm"
-    >
-      <span>
-        <Icon icon={check ? FcCheckmark : FaRegClipboard} />
-      </span>
-    </CopyToClipboard>
-  );
-}
-
-function Snippet({ text }) {
-  return (
-    <div className="relative group">
-      <pre
-        className="relative text-left border-0 overflow-auto"
-        style={{
-          "border-radius": "8px",
-          background: "#eef2ee",
-          color: "#383",
-          padding: "0.75rem",
-        }}
-      >
-        {text}
-      </pre>
-      <div className="absolute right-0 top-0 opacity-0 group-hover:opacity-100 transition-opacity">
-        <CopyButton text={text} />
-      </div>
-    </div>
-  );
-}
-
-function getCode() {
-  return new URLSearchParams(window.location.search).get("code");
-}
-
-function useAuthWeb(code) {
-  const [data, setData] = React.useState(null);
-  const [error, setError] = React.useState(null);
-  const history = useHistory();
-
-  React.useEffect(() => {
-    async function run() {
-      const resp = await fetch(`${API_BASE}/auth-web`, {
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ code: getCode() }),
-      });
-
-      const data = await resp.json();
-      if (data.error) {
-        setError(data.error);
-        return;
-      }
-
-      setData(data);
-    }
-    run();
-  }, [code, setData, setError]);
-
-  React.useEffect(() => {
-    if (error) {
-      alert(error);
-      history.push("/");
-    }
-  }, [error, history]);
-
-  return data;
 }
 
 function Loading() {
@@ -417,130 +273,158 @@ function Loading() {
   );
 }
 
-function ManualInstall() {
-  const code = getCode();
-  const data = useAuthWeb(code);
-
-  const onDownload = React.useCallback(
-    async (os) => {
-      const resp = await fetch(`${API_BASE}/download?code=${code}&os=${os}`);
-      const text = await resp.text();
-
-      if (resp.status !== 200) {
-        let error;
-        try {
-          error = JSON.parse(text).error;
-        } catch {
-          error = "Unable to download.";
-        }
-        alert(error);
-        return;
-      }
-
-      window.location.href = text;
-    },
-    [code]
-  );
-
-  if (!data) {
-    return <Loading />;
-  }
-
+function Download() {
   return (
     <WallOfText>
-      <Title>Manual Install</Title>
-      <Card>
-        <CardSection step={1}>
-          Install Go (version 1.13+). If you don't have it, we recommend
-          installing <A href="https://brew.sh/">Homebrew</A>, then running{" "}
-          <code>brew install go</code>.
-        </CardSection>
-        <CardSection step={2}>
-          Download the appropriate package for your machine:
-          <p className="flex space-x-2">
-            <button
-              className="button download-button mr-1.5"
-              onClick={() => onDownload("darwin")}
+      <H1>Download CodePerfect for Mac</H1>
+
+      <div className="shadow-md rounded-md border">
+        <div className="p-6">
+          <div>Please download the right package for your architecture:</div>
+          <p className="-mb-1">
+            <A
+              href={LINKS.downloadIntel}
+              className="button download-button mb-1 mr-2 py-3"
             >
-              <Icon icon={FaApple} /> Mac &ndash; Intel
-            </button>
-            <button
-              className="button download-button"
-              onClick={() => onDownload("darwin_arm")}
+              <Icon className="mr-2" icon={FaApple} />
+              <span>macOS Intel</span>
+            </A>
+            <A
+              href={LINKS.downloadM1}
+              className="button download-button py-3 mb-1"
             >
-              <Icon icon={FaApple} /> Mac &ndash; M1
-            </button>
+              <Icon className="mr-2" icon={FaApple} />
+              <span>macOS M1</span>
+            </A>
           </p>
-        </CardSection>
-        <CardSection step={3}>
-          Copy your license key into <code>~/.cplicense</code>:
-          <div className="mt-4">
-            <Snippet
-              text={`{\n  "email": "${data.email}",\n  "key": "${data.license_key}"\n}`}
-            />
-          </div>
-        </CardSection>
-        <CardSection step={4}>
-          CodePerfect needs to know where to find various things. Create a
-          <code>~/.cpconfig</code> file:
-          <div className="mt-4">
-            <Snippet
-              text={`{
-  "go_binary_path": "...",
-  "goroot": "...",
-  "gomodcache": "..."
-}`}
-            />
-          </div>
+
           <p>
-            Fill these in with the values of <code>which go</code>,{" "}
-            <code>go env GOROOT</code>, and <code>go env GOMODCACHE</code>.
+            When you first open CodePerfect, you'll get a free 7-day trial.
+            Afterward you'll need to enter a license key to keep using
+            CodePerfect. You can buy one below.
           </p>
-        </CardSection>
-        <CardSection step={5}>
-          That's it! See{" "}
-          <A href="https://docs.codeperfect95.com/overview/getting-started/">
-            Getting Started
-          </A>{" "}
-          to start using CodePerfect.
-        </CardSection>
-      </Card>
-      <p>
-        <Link to={`/install?code=${code}`} className="font-bold no-underline">
-          <Icon icon={HiArrowNarrowLeft} /> Use install script
-        </Link>
-      </p>
+        </div>
+      </div>
+
+      <div className="mt-8 shadow-md rounded-md border">
+        <div className="py-4 px-6 border-b bg-gray-100">
+          <H2>Buy a License</H2>
+        </div>
+        <div className="flex flex-col md:flex-row border-b">
+          <div className="w-auto overflow-hidden border-r md:w-1/2 p-5">
+            <h1 className="font-bold text-gray-700 text-sm uppercase mb-2">
+              Personal
+            </h1>
+            <PricingPoint label="Commercial use allowed" />
+            <PricingPoint label="All features unlocked" />
+            <PricingPoint not label="Company can't pay" />
+            <PricingPoint not label="Purchase can't be expensed" />
+            <div className="flex mt-6">
+              <div className="w-1/2 box-content pr-4">
+                <div className="flex items-center mb-2">
+                  <div className="leading-none text-xl font-bold text-gray-700">
+                    $5
+                  </div>
+                  <div className="leading-none text-xs ml-1">per month</div>
+                </div>
+                <A
+                  className="button download-button"
+                  href={LINKS.buyPersonalMonthly}
+                >
+                  Buy Monthly
+                </A>
+              </div>
+              <div className="w-1/2 box-content pr-4">
+                <div className="flex items-center mb-2">
+                  <div className="leading-none text-xl font-bold text-gray-700">
+                    $50
+                  </div>
+                  <div className="leading-none text-xs ml-1">per year</div>
+                </div>
+                <A
+                  className="button download-button"
+                  href={LINKS.buyPersonalYearly}
+                >
+                  Buy Yearly
+                </A>
+              </div>
+            </div>
+          </div>
+
+          <div className="w-auto overflow-hidden md:w-1/2 p-5">
+            <h1 className="font-bold text-gray-700 text-sm uppercase mb-2">
+              Professional
+            </h1>
+            <PricingPoint label="Commercial use allowed" />
+            <PricingPoint label="All features unlocked" />
+            <PricingPoint label="Company can pay" />
+            <PricingPoint label="Purchase can be expensed" />
+
+            <div className="flex mt-6">
+              <div className="w-1/2 box-content pr-4">
+                <div className="flex items-center mb-2">
+                  <div className="leading-none text-xl font-bold text-gray-700">
+                    $10
+                  </div>
+                  <div className="leading-none text-xs ml-1">per month</div>
+                </div>
+                <A
+                  className="button download-button"
+                  href={LINKS.buyProfessionalMonthly}
+                >
+                  Buy Monthly
+                </A>
+              </div>
+              <div className="w-1/2 box-content pr-4">
+                <div className="flex items-center mb-2">
+                  <div className="leading-none text-xl font-bold text-gray-700">
+                    $100
+                  </div>
+                  <div className="leading-none text-xs ml-1">per year</div>
+                </div>
+                <A
+                  className="button download-button"
+                  href={LINKS.buyProfessionalYearly}
+                >
+                  Buy Yearly
+                </A>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="p-6">
+          <p>
+            Please enter your real email. Your license key will be sent there
+            after payment.
+          </p>
+          <p>
+            If you want multiple licenses, priority support, or any other custom
+            requests fulfilled, please{" "}
+            <A href={`mailto:${SUPPORT_EMAIL}`}>contact support</A>.
+          </p>
+        </div>
+      </div>
     </WallOfText>
   );
 }
 
-function Download() {
-  return <Redirect to={`/install?code=${getCode()}`} />;
-}
-
 function Terms() {
   return (
-    <>
-      <WallOfText>
-        <Title>Terms of Service</Title>
-        <p>
-          This website provides you with information about the IDE and a means
-          for you to subscribe to our services, which allow you to use the IDE
-          for as long as your subscription is active.
-        </p>
-        <p>
-          The IDE is an application that lets you write Go applications. In
-          exchange for paying a monthly rate, we provide you with a license to
-          use it.
-        </p>
+    <WallOfText>
+      <H1>Terms of Service</H1>
+      <p>
+        This website provides you with information about the IDE and a means for
+        you to subscribe to our services, which allow you to use the IDE for as
+        long as your subscription is active.
+      </p>
+      <p>
+        The IDE is an application that lets you write Go applications. In
+        exchange for paying a monthly rate, we provide you with a license to use
+        it.
+      </p>
 
-        <br />
-
-        <Title>Privacy Policy</Title>
-        <p>
-          When you fill out the Join Beta form, we collect your name and email.
-          We use this to send you updates about new product features.
-        </p>
+      <div className="mt-16">
+        <H1>Privacy Policy</H1>
         <p>
           When you sign up, we collect your name, email, and credit card
           information. We use this information to bill you and send you emails
@@ -552,8 +436,8 @@ function Terms() {
           install automatic updates. This exposes your IP address to us. We
           won't share it with anyone, unless ordered to by law.
         </p>
-      </WallOfText>
-    </>
+      </div>
+    </WallOfText>
   );
 }
 
@@ -593,7 +477,7 @@ function FinishSignup(props) {
 
   return (
     <WallOfText width="2xl">
-      <Title>Thanks for signing up for CodePerfect!</Title>
+      <H1>Thanks for signing up for CodePerfect!</H1>
       {data.action === "schedule_call" && (
         <>
           <p>
@@ -629,6 +513,206 @@ function FinishSignup(props) {
   );
 }
 
+function PricingBox({
+  title,
+  monthly,
+  yearly,
+  isYearly,
+  buyLicense,
+  children,
+  cta,
+  className,
+  width,
+  premium,
+}) {
+  return (
+    <div
+      className={cx(
+        className,
+        "w-auto rounded-lg overflow-hidden p-6 md:p-8",
+        "border border-gray-200 shadow-sm",
+        `md:${width || "w-1/3"}`
+      )}
+    >
+      <h1 className="font-bold text-gray-500 text-sm uppercase mb-1">
+        {title}
+      </h1>
+      <div className="leading-none">
+        {premium ? (
+          <div className="font-bold text-black text-2xl">Contact us</div>
+        ) : buyLicense ? (
+          <div className="flex space-x-4">
+            <div className="flex items-end">
+              <div className="font-bold text-black text-3xl">${monthly}</div>
+              <div className="leading-tight text-xs pb-1.5 ml-1">
+                {" "}
+                per month
+              </div>
+            </div>
+            <div className="flex items-end">
+              <div className="font-bold text-black text-3xl">${yearly}</div>
+              <div className="leading-tight text-xs pb-1.5 ml-1"> per year</div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-end">
+            <div className="font-bold text-black text-3xl">
+              ${isYearly ? yearly : monthly}
+            </div>
+            <div className="leading-tight text-xs pb-1.5 ml-1">
+              <div>per {isYearly ? "year" : "month"}</div>
+            </div>
+          </div>
+        )}
+      </div>
+      <div className="text-gray-500 text-left mt-6 mb-5">{children}</div>
+      {cta}
+    </div>
+  );
+}
+
+function PricingPoint({ label, not }) {
+  return (
+    <div
+      className={cx(
+        "flex items-start space-x-1 leading-5 mb-1 last:mb-0",
+        not && "text-red-600"
+      )}
+    >
+      <Icon
+        className="relative top-1"
+        icon={not ? AiOutlineClose : AiOutlineCheck}
+      />
+      <span>{label}</span>
+    </div>
+  );
+}
+
+function Anchor({ name }) {
+  const ref = React.useCallback(
+    (elem) => {
+      if (elem) {
+        if (window.location.hash.slice(1) === name) {
+          setTimeout(() => elem.scrollIntoView(), 1);
+        }
+      }
+    },
+    [name]
+  );
+
+  // eslint-disable-next-line
+  return <a ref={ref} name={name}></a>;
+}
+
+function Pricing() {
+  const [yearly, setYearly] = React.useState(false);
+
+  return (
+    <div className="pricing my-20">
+      <Anchor name="pricing" />
+      <H1 className="text-4xl">Pricing</H1>
+      <div className="text-center">
+        <span className="relative inline-block text-sm">
+          <button
+            onClick={() => setYearly(false)}
+            className={cx(
+              "left-0 inline-block rounded-full py-1 px-3 font-medium cursor-pointer outline-none",
+              !yearly ? "bg-gray-200 text-black" : "text-gray-400"
+            )}
+          >
+            Monthly
+          </button>
+          <button
+            onClick={() => setYearly(true)}
+            className={cx(
+              "left-0 inline-block rounded-full py-1 px-4 font-medium cursor-pointer outline-none",
+              yearly ? "bg-gray-200 text-black" : "text-gray-400"
+            )}
+          >
+            Annual
+          </button>
+        </span>
+      </div>
+      <div className="mt-8">
+        <div className="px-4 md:px-4 max-w-5xl flex flex-col md:flex-row space-between space-y-4 space-x-0 md:space-y-0 md:space-x-4 lg:space-x-12 mx-auto">
+          <PricingBox
+            title="Personal"
+            monthly={5}
+            yearly={50}
+            isYearly={yearly}
+            cta={
+              <Link className="button main-button" to="/download">
+                Get Started
+              </Link>
+            }
+          >
+            <PricingPoint label="7-day free trial" />
+            <PricingPoint label="All features unlocked" />
+            <PricingPoint not label="Company can't pay" />
+            <PricingPoint not label="Purchase can't be expensed" />
+          </PricingBox>
+          <PricingBox
+            title="Professional"
+            monthly={10}
+            yearly={100}
+            isYearly={yearly}
+            cta={
+              <Link className="button main-button" to="/download">
+                Get Started
+              </Link>
+            }
+          >
+            <PricingPoint label="All features in Personal" />
+            <PricingPoint label="Company can pay" />
+            <PricingPoint label="Purchase can be expensed" />
+          </PricingBox>
+          <PricingBox
+            title="Custom"
+            premium
+            cta={
+              <a
+                className="button main-button"
+                href="mailto:support@codeperfect95.com"
+              >
+                Contact Support
+              </a>
+            }
+          >
+            <PricingPoint label="All features in Professional" />
+            <PricingPoint label="Priority support" />
+            <PricingPoint label="Custom requests" />
+            <PricingPoint label="Multiple licenses for team" />
+          </PricingBox>
+        </div>
+      </div>
+
+      <div className="mt-16 md:mt-24 sm:mx-4">
+        <div className="sm:rounded-md bg-black max-w-screen-lg mx-auto flex">
+          <div className="lg:w-1/2 p-8 md:p-16 mx-auto text-center">
+            <div className="font-bold text-3xl text-white leading-snug">
+              <div>Ready to get started?</div>
+            </div>
+            <div className="text-xl text-white opacity-80 mt-4 mb-6">
+              <p>
+                Try CodePerfect for free for 7 days with all features available.
+              </p>
+            </div>
+            <div>
+              <Link
+                className="button main-button text-lg bg-white text-black hover:bg-white hover:text-black py-3 px-6"
+                to="/download"
+              >
+                <Icon className="mr-3" icon={HiOutlineDownload} />
+                Download for Mac
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   return (
     <Router>
@@ -653,9 +737,28 @@ function App() {
             <span className="hidden md:inline-block">CodePerfect 95</span>
           </Link>
           <div className="flex items-baseline space-x-6">
-            <A className="button main-button" role="button" href={BETA_LINK}>
-              Join Beta
+            <A
+              href={LINKS.docs}
+              className="text-black no-underline whitespace-nowrap hidden md:inline-block"
+            >
+              Docs
             </A>
+            <A
+              href={LINKS.changelog}
+              className="text-black no-underline whitespace-nowrap hidden md:inline-block"
+            >
+              Changelog
+            </A>
+            <Link
+              to="/pricing"
+              className="text-black no-underline whitespace-nowrap hidden md:inline-block"
+            >
+              Pricing
+            </Link>
+            <Link to="/download" className="button main-button">
+              <Icon className="mr-2" icon={HiOutlineDownload} />
+              Download
+            </Link>
           </div>
         </div>
         <div>
@@ -663,11 +766,8 @@ function App() {
             <Route path="/download" exact>
               <Download />
             </Route>
-            <Route path="/install" exact>
-              <AutoInstall />
-            </Route>
-            <Route path="/install/manual" exact>
-              <ManualInstall />
+            <Route path="/pricing" exact>
+              <Pricing />
             </Route>
             <Route path="/terms">
               <Terms />
@@ -689,7 +789,7 @@ function App() {
         <div
           className={cx(
             "px-4 pt-4 mb-8 lg:pt-8 lg:mb-12 flex flex-col justify-between",
-            "lg:max-w-screen-xl lg:mx-auto sm:flex-row"
+            "lg:max-w-screen-xl lg:mx-auto sm:flex-row border-t sm:border-none"
           )}
         >
           <div className="text-gray-500">
@@ -698,22 +798,19 @@ function App() {
           <div className="flex flex-col sm:flex-row space-x-0 sm:space-x-12 mt-2 sm:mt-0">
             <div className="sm:text-right sm:flex sm:flex-row sm:space-x-8">
               <div>
-                <A className="text-gray-500 no-underline" href={BETA_LINK}>
-                  Join Beta
-                </A>
-              </div>
-              <div>
-                <A
-                  className="text-gray-500 no-underline"
-                  href="https://docs.codeperfect95.com"
-                >
+                <A className="text-gray-500 no-underline" href={LINKS.docs}>
                   Docs
                 </A>
               </div>
               <div>
+                <Link className="text-gray-500 no-underline" to="/pricing">
+                  Pricing
+                </Link>
+              </div>
+              <div>
                 <A
                   className="text-gray-500 no-underline"
-                  href="https://codeperfect95.notion.site/codeperfect95/CodePerfect-95-Changelog-dcedf41014ef4de79690a5b5b54ebb33"
+                  href={LINKS.changelog}
                 >
                   Changelog
                 </A>

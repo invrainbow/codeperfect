@@ -8,12 +8,8 @@ import (
 func main() {
 	r := gin.Default()
 	r.Use(cors.Default())
-	r.GET("/install", GetInstall)
-	r.GET("/license", GetLicense)
-	r.GET("/download", GetDownload)
-	r.POST("/auth-web", PostAuthWeb)
 	r.POST("/auth", PostAuth)
+	r.POST("/update", PostUpdate)
 	r.POST("/heartbeat", PostHeartbeat)
-	r.POST("/beta-signup", PostBetaSignup)
 	r.Run()
 }

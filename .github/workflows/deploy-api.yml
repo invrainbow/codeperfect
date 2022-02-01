@@ -1,0 +1,29 @@
+name: Deploy API
+
+on:
+  push:
+    branches:
+    - master
+    paths:
+    - '.github/workflows/**'
+    - 'gostuff/**'
+
+jobs:
+  deploy:
+    name: Deploy API
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v1
+
+    - name: Install SSH Key
+      uses: shimataro/ssh-key-action@v2
+      with:
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        known_hosts: ${{ secrets.SSH_KNOWN_HOSTS }}
+
+    - name: Test SSH
+      run: ssh root@api.codeperfect95.com exit
+
+    - name: Deploy
+      run: sh/deploy_api

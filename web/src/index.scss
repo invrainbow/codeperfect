@@ -24,7 +24,7 @@
 
   a {
     @apply text-gray-600 underline;
-    @apply inline-block break-words;
+    @apply break-words;
   }
   a.btn {
     @apply no-underline;
@@ -36,14 +36,9 @@
   blockquote,
   center,
   form {
-    @apply mt-4;
-  }
-
-  p:first-child,
-  ul:first-child,
-  ol:first-child,
-  form:first-child {
-    @apply mt-0;
+    &:not(:first-child) {
+      @apply mt-4;
+    }
   }
 
   ul,
@@ -79,7 +74,7 @@
     outline: none !important;
   }
   svg {
-    display: inline-block;
+    display: block;
   }
 
   * {
@@ -89,14 +84,15 @@
 
 @layer components {
   .button {
-    @apply rounded-lg font-medium shadow-sm;
-    @apply py-2 px-5;
+    @apply rounded-lg font-medium shadow-sm leading-none;
+    @apply py-4 px-5;
     @apply disabled:opacity-50 no-underline outline-none;
     @apply whitespace-nowrap;
-  }
-  .button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+    @apply inline-flex items-center;
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
   }
   .main-button {
     background: #333;
@@ -114,17 +110,21 @@
   .thick-list li {
     @apply mb-3;
   }
-  .wall-of-text h2:not(:first-child) {
-    @apply mt-5;
-  }
-  .wall-of-text h3 {
-    @apply mt-5 text-gray-300 font-semibold;
-  }
-  .wall-of-text p,
-  ol,
-  ul,
-  blockquote {
-    @apply mt-5;
+  .wall-of-text {
+    h2:not(:first-child) {
+      @apply mt-4;
+    }
+    h3 {
+      @apply mt-4 text-gray-300 font-semibold;
+    }
+    p,
+    ol,
+    ul,
+    blockquote {
+      &:not(:first-child) {
+        @apply mt-4;
+      }
+    }
   }
 
   @media (min-width: 640px) {

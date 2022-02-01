@@ -240,8 +240,11 @@ func GHFmtFinish(fmtType int) *C.char {
 }
 
 //export GHAuthAndUpdate
-func GHAuthAndUpdate() {
-	go AuthAndUpdate()
+func GHAuthAndUpdate(rawEmail *C.char, rawLicenseKey *C.char) {
+	email := C.GoString(rawEmail)
+	licenseKey := C.GoString(rawLicenseKey)
+
+	go AuthAndUpdate(email, licenseKey)
 }
 
 type GitignoreChecker struct {

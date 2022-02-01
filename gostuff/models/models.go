@@ -6,19 +6,11 @@ import (
 	"gorm.io/gorm"
 )
 
-const (
-	UserStatusTrialWaiting = "trial_waiting"
-	UserStatusTrial        = "trial"
-	UserStatusPaid         = "paid"
-	UserStatusInactive     = "inactive"
-)
-
 type User struct {
 	gorm.Model
 	Email          string
 	LicenseKey     string
-	DownloadCode   string
-	Status         string
+	Active         bool
 	TrialStartedAt time.Time
 }
 
