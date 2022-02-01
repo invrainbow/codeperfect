@@ -41,10 +41,8 @@ const LINKS = {
   buyPersonalYearly: "https://buy.stripe.com/fZefZb2aTdEAbi8aEN",
   buyProfessionalMonthly: "https://buy.stripe.com/6oE28ldTB5843PG9AK",
   buyProfessionalYearly: "https://buy.stripe.com/28o8wJ3eXfMI4TK5kv",
-  downloadIntel:
-    "https://codeperfect95.s3.us-east-2.amazonaws.com/app/darwin_latest.zip",
-  downloadM1:
-    "https://codeperfect95.s3.us-east-2.amazonaws.com/app/darwin_arm_latest.zip",
+  downloadIntel: "https://d2hzcm0ooi1duz.cloudfront.net/app/darwin_latest.zip",
+  downloadM1: "https://d2hzcm0ooi1duz.cloudfront.net/app/darwin_arm_latest.zip",
 };
 
 let API_BASE = "https://api.codeperfect95.com";
