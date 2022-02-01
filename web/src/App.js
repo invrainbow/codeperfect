@@ -52,6 +52,13 @@ if (process.env.NODE_ENV === "development") {
   API_BASE = "http://localhost:8080";
 }
 
+const CDN_PATH = "https://d2mje1xp79ofdv.cloudfront.net";
+
+function static(path) {
+  const dev = process.env.NODE_ENV === "development";
+  return dev ? `${path}` : `${CDN_PATH}${path}`;
+}
+
 function A({ children, ...props }) {
   return (
     <a target="_blank" rel="noreferrer" {...props}>
@@ -178,9 +185,17 @@ function Home() {
               onClick={() => setStartDemo(true)}
             >
               <div className="absolute w-full h-full flex items-center justify-center z-10">
-                <img alt="play" style={{ width: "72px" }} src="/play.png" />
+                <img
+                  alt="play"
+                  style={{ width: "72px" }}
+                  src={static("/play.png")}
+                />
               </div>
-              <img className="block relative z-0" src="/demo.png" alt="demo" />
+              <img
+                className="block relative z-0"
+                src={static("/demo.png")}
+                alt="demo"
+              />
             </div>
           )}
         </div>
@@ -260,7 +275,11 @@ function Home() {
               style={{ transform: "translate(0, -47.5%)" }}
               className="absolute top-1/2 -left-16"
             >
-              <img className="w-full h-auto" src="/beta.png" alt="beta" />
+              <img
+                className="w-full h-auto"
+                src={static("/beta.png")}
+                alt="beta"
+              />
             </div>
           </div>
         </div>
@@ -741,7 +760,7 @@ function App() {
             <img
               alt="logo"
               className="w-auto h-16 inline-block mr-4"
-              src="/logo.png"
+              src={static("/logo.png")}
             />
             <span className="hidden md:inline-block">CodePerfect 95</span>
           </Link>
