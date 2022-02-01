@@ -52,7 +52,7 @@ if (process.env.NODE_ENV === "development") {
 
 const CDN_PATH = "https://d2mje1xp79ofdv.cloudfront.net";
 
-function static(path) {
+function asset(path) {
   const dev = process.env.NODE_ENV === "development";
   return dev ? `${path}` : `${CDN_PATH}${path}`;
 }
@@ -186,12 +186,12 @@ function Home() {
                 <img
                   alt="play"
                   style={{ width: "72px" }}
-                  src={static("/play.png")}
+                  src={asset("/play.png")}
                 />
               </div>
               <img
                 className="block relative z-0"
-                src={static("/demo.png")}
+                src={asset("/demo.png")}
                 alt="demo"
               />
             </div>
@@ -275,7 +275,7 @@ function Home() {
             >
               <img
                 className="w-full h-auto"
-                src={static("/beta.png")}
+                src={asset("/beta.png")}
                 alt="beta"
               />
             </div>
@@ -758,7 +758,7 @@ function App() {
             <img
               alt="logo"
               className="w-auto h-16 inline-block mr-4"
-              src={static("/logo.png")}
+              src={asset("/logo.png")}
             />
             <span className="hidden md:inline-block">CodePerfect 95</span>
           </Link>
