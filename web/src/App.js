@@ -1,15 +1,24 @@
 import cx from "classnames";
 import React from "react";
+
 import { Helmet } from "react-helmet";
-import { AiOutlineCheck, AiOutlineClose } from "react-icons/ai";
-import { BsArrowRight, BsCodeSquare, BsCpu } from "react-icons/bs";
-import { FaApple, FaLayerGroup, FaPalette, FaRobot } from "react-icons/fa";
-import { GoPackage } from "react-icons/go";
-import { HiOutlineDownload } from "react-icons/hi";
-import { ImMagicWand } from "react-icons/im";
-import { IoMdSearch } from "react-icons/io";
-import { SiVim } from "react-icons/si";
-import { VscTools } from "react-icons/vsc";
+
+import { AiOutlineCheck } from "@react-icons/all-files/ai/AiOutlineCheck";
+import { AiOutlineClose } from "@react-icons/all-files/ai/AiOutlineClose";
+import { BsArrowRight } from "@react-icons/all-files/bs/BsArrowRight";
+import { BsCodeSlash } from "@react-icons/all-files/bs/BsCodeSlash";
+import { FaApple } from "@react-icons/all-files/fa/FaApple";
+import { FaLayerGroup } from "@react-icons/all-files/fa/FaLayerGroup";
+import { FaPalette } from "@react-icons/all-files/fa/FaPalette";
+import { FaRobot } from "@react-icons/all-files/fa/FaRobot";
+import { GoPackage } from "@react-icons/all-files/go/GoPackage";
+import { HiOutlineDownload } from "@react-icons/all-files/hi/HiOutlineDownload";
+import { ImMagicWand } from "@react-icons/all-files/im/ImMagicWand";
+import { IoMdSearch } from "@react-icons/all-files/io/IoMdSearch";
+import { IoHardwareChipOutline } from "@react-icons/all-files/io5/IoHardwareChipOutline";
+import { SiVim } from "@react-icons/all-files/si/SiVim";
+import { VscTools } from "@react-icons/all-files/vsc/VscTools";
+
 import {
   BrowserRouter as Router,
   Link,
@@ -182,12 +191,12 @@ function Home() {
           A full-featured IDE, as fast as Sublime Text.
         </div>
         <div className="mx-auto max-w-screen-lg grid grid-cols-2 sm:grid-cols-3 gap-3 md:grid-cols-4 lg:grid-cols-5 md:gap-5">
-          <Feature name="Code intelligence" icon={BsCodeSquare}>
+          <Feature name="Code intelligence" icon={BsCodeSlash}>
             Autocomplete, go to definition, parameter hints, find usages, and
             more.
           </Feature>
 
-          <Feature name="Built for speed" icon={BsCpu}>
+          <Feature name="Built for speed" icon={IoHardwareChipOutline}>
             Written in C++, no Electron. Runs at 144 FPS. Keystrokes are
             instant.
           </Feature>
