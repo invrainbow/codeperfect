@@ -6,7 +6,6 @@ require (
 	github.com/aws/aws-sdk-go v1.40.28
 	github.com/btcsuite/btcutil v1.0.2
 	github.com/danwakefield/fnmatch v0.0.0-20160403171240-cbb64ac3d964 // indirect
-	github.com/davecgh/go-spew v1.1.1
 	github.com/denormal/go-gitignore v0.0.0-20180930084346-ae8ad1d07817
 	github.com/gin-contrib/cors v1.3.1
 	github.com/gin-gonic/gin v1.7.2
@@ -19,6 +18,7 @@ require (
 	github.com/mattn/go-isatty v0.0.13 // indirect
 	github.com/reviewdog/errorformat v0.0.0-20210809090836-cda72036d1df
 	github.com/stretchr/testify v1.7.0 // indirect
+	github.com/stripe/stripe-go/v72 v72.86.0
 	github.com/ugorji/go v1.2.6 // indirect
 	golang.org/x/crypto v0.0.0-20210817164053-32db794688a5 // indirect
 	golang.org/x/sys v0.0.0-20210630005230-0f9fa26af87c // indirect

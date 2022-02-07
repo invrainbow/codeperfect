@@ -591,8 +591,7 @@ void activate_pane_by_index(u32 idx) {
         */
     }
 
-    // we might have to add a "are we inside imgui" check
-    ImGui::SetWindowFocus(NULL);
+    world.cmd_unfocus_all_windows = true;
 }
 
 void init_goto_file() {
@@ -787,7 +786,7 @@ void goto_file_and_pos(ccstr file, cur2 pos, Ensure_Cursor_Mode mode) {
 
     editor->ensure_cursor_on_screen_by_moving_view(mode);
 
-    ImGui::SetWindowFocus(NULL);
+    world.cmd_unfocus_all_windows = true;
 }
 
 void goto_jump_to_definition_result(Jump_To_Definition_Result *result) {
@@ -1059,7 +1058,7 @@ void goto_error(int index) {
     }
 
     focus_editor_by_id(editor->id, error.mark->pos());
-    ImGui::SetWindowFocus(NULL);
+    world.cmd_unfocus_all_windows = true;
     b.scroll_to = index;
 }
 
@@ -1576,6 +1575,10 @@ ccstr get_command_name(Command cmd) {
         }
         return "Save file...";
     }
+    case CMD_ENTER_LICENSE:
+        if (world.auth.state == AUTH_REGISTERED)
+            return "Re-enter License...";
+        return "Enter License...";
     }
 
     return info.name;
@@ -1648,6 +1651,8 @@ void init_command_info_table() {
     command_info_table[CMD_DOCUMENTATION] = k(0, 0, "Documentation");
     command_info_table[CMD_VIEW_CALLER_HIERARCHY] = k(KEYMOD_PRIMARY, GLFW_KEY_I, "View Caller Hierarchy");
     command_info_table[CMD_VIEW_CALLEE_HIERARCHY] = k(KEYMOD_PRIMARY | KEYMOD_SHIFT, GLFW_KEY_I, "View Callee Hierarchy");
+    command_info_table[CMD_BUY_LICENSE] = k(0, 0, "Buy a License");
+    command_info_table[CMD_ENTER_LICENSE] = k(0, 0, "Enter License...");
 }
 
 void do_find_interfaces() {
@@ -1810,6 +1815,22 @@ void handle_command(Command cmd, bool from_menu) {
     if (!is_command_enabled(cmd)) return;
 
     switch (cmd) {
+    case CMD_BUY_LICENSE:
+        open_webbrowser("https://codeperfect95.com/buy-license");
+        break;
+
+    case CMD_ENTER_LICENSE: {
+        auto &wnd = world.wnd_enter_license;
+        if (wnd.show) {
+            wnd.cmd_focus = true;
+        } else {
+            wnd.email[0] = '\0';
+            wnd.license[0] = '\0';
+            wnd.show = true;
+        }
+        break;
+    }
+
     case CMD_DOCUMENTATION:
         open_webbrowser("https://docs.codeperfect95.com/");
         break;
@@ -1859,7 +1880,6 @@ void handle_command(Command cmd, bool from_menu) {
             auto &wnd = world.wnd_search_and_replace;
             if (wnd.show) {
                 wnd.cmd_focus = true;
-                // ImGui::SetWindowFocus("###search_and_replace");
                 wnd.focus_textbox = 1;
             }
             wnd.show = true;
@@ -1875,7 +1895,6 @@ void handle_command(Command cmd, bool from_menu) {
             if (wnd.show) {
                 if (!wnd.focused) {
                     wnd.cmd_focus = true;
-                    // ImGui::SetWindowFocus("File Explorer");
                 } else {
                     wnd.show = false;
                 }
@@ -2947,3 +2966,28 @@ void fuzzy_sort_filtered_results(ccstr query, List<int> *list, int total_results
         return alen < blen ? -1 : (alen > blen ? 1 : 0);
     });
 }
+
+ccstr get_auth_filepath() {
+    auto configpath = GHGetConfigDir();
+    if (configpath == NULL) our_panic("Unable to open config directory.");
+    return path_join(configpath, ".auth");
+}
+
+void read_auth() {
+    File f;
+    if (f.init(get_auth_filepath(), FILE_MODE_READ, FILE_OPEN_EXISTING) != FILE_RESULT_SUCCESS) {
+        ptr0(&world.auth);
+        return;
+    }
+    defer { f.cleanup(); };
+    f.read((char*)&world.auth, sizeof(world.auth));
+}
+
+void write_auth() {
+    File f;
+    if (f.init(get_auth_filepath(), FILE_MODE_WRITE, FILE_CREATE_NEW) != FILE_RESULT_SUCCESS)
+        return;
+    defer { f.cleanup(); };
+    f.write((char*)&world.auth, sizeof(world.auth));
+}
+

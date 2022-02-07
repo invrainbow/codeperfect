@@ -200,6 +200,8 @@ enum Command {
     CMD_DOCUMENTATION,
     CMD_VIEW_CALLER_HIERARCHY,
     CMD_VIEW_CALLEE_HIERARCHY,
+    CMD_BUY_LICENSE,
+    CMD_ENTER_LICENSE,
 
     _CMD_COUNT_,
 };
@@ -218,8 +220,17 @@ enum Auth_State {
     AUTH_REGISTERED,
 };
 
+enum GH_Auth_Status {
+    GH_AUTH_WAITING,
+    GH_AUTH_OK,
+    GH_AUTH_INTERNETERROR,
+    GH_AUTH_UNKNOWNERROR,
+    GH_AUTH_BADCREDS,
+};
+
 struct Auth_To_Disk {
     Auth_State state;
+    u64 grace_period_start;
 
     union {
         struct {
@@ -227,15 +238,16 @@ struct Auth_To_Disk {
         };
 
         struct {
-            char reg_email[64];
+            char reg_email[256];
             int reg_email_len;
-            char reg_license[64];
+            char reg_license[256];
             int reg_license_len;
         };
     };
 };
 
 struct Auth_Extras {
+    // ???
 };
 
 struct World {
@@ -280,6 +292,10 @@ struct World {
     Auth_To_Disk auth;
     Auth_Extras auth_extras;
     bool auth_error;
+    GH_Auth_Status auth_status;
+    char authed_email[256];
+
+    bool cmd_unfocus_all_windows;
 
     struct {
         bool recording;
@@ -343,8 +359,13 @@ struct World {
     bool auth_update_done;
     u64 auth_update_last_check;
 
-    struct Wnd_Hover_Info : Wnd {
+    struct Wnd_Enter_License : Wnd {
+        char email[256];
+        char license[256];
+    } wnd_enter_license;
 
+    struct Wnd_Hover_Info : Wnd {
+        // ...
     } wnd_hover_info;
 
     struct Wnd_Rename_Identifier : Wnd {
@@ -670,3 +691,6 @@ bool has_unsaved_files();
 void fuzzy_sort_filtered_results(ccstr query, List<int> *list, int total_results, fn<ccstr(int)> get_name);
 void do_find_interfaces();
 void do_find_implementations();
+
+void read_auth();
+void write_auth();

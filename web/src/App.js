@@ -1,13 +1,7 @@
-import cx from "classnames";
-import React from "react";
-
-import { Helmet } from "react-helmet";
-
 import { AiOutlineCheck } from "@react-icons/all-files/ai/AiOutlineCheck";
 import { AiOutlineClose } from "@react-icons/all-files/ai/AiOutlineClose";
 import { BsArrowRight } from "@react-icons/all-files/bs/BsArrowRight";
 import { BsCodeSlash } from "@react-icons/all-files/bs/BsCodeSlash";
-import { FaApple } from "@react-icons/all-files/fa/FaApple";
 import { FaLayerGroup } from "@react-icons/all-files/fa/FaLayerGroup";
 import { FaPalette } from "@react-icons/all-files/fa/FaPalette";
 import { FaRobot } from "@react-icons/all-files/fa/FaRobot";
@@ -18,7 +12,9 @@ import { IoMdSearch } from "@react-icons/all-files/io/IoMdSearch";
 import { IoHardwareChipOutline } from "@react-icons/all-files/io5/IoHardwareChipOutline";
 import { SiVim } from "@react-icons/all-files/si/SiVim";
 import { VscTools } from "@react-icons/all-files/vsc/VscTools";
-
+import cx from "classnames";
+import React from "react";
+import { Helmet } from "react-helmet";
 import {
   BrowserRouter as Router,
   Link,
@@ -101,6 +97,7 @@ function H1({ className, children, ...props }) {
   );
 }
 
+/*
 function H2({ className, children, ...props }) {
   return (
     <h2
@@ -111,6 +108,7 @@ function H2({ className, children, ...props }) {
     </h2>
   );
 }
+*/
 
 function Icon({ noshift, icon: IconComponent, ...props }) {
   return (
@@ -299,6 +297,7 @@ function Loading() {
   );
 }
 
+<<<<<<< Updated upstream
 function Download() {
   return (
     <WallOfText>
@@ -352,72 +351,107 @@ function Download() {
                     $5
                   </div>
                   <div className="leading-none text-xs ml-1">per month</div>
+=======
+function PaymentDone() {
+  return (
+    <WallOfText>
+      <Title>Thanks for the purchase!</Title>
+      <p>
+        Please check your email &mdash; we just sent your license key to you. If
+        you don't see it, see if it's in your spam folder. If you still don't
+        see it, please <a href={`mailto:${SUPPORT_EMAIL}`}>contact support</a>.
+      </p>
+    </WallOfText>
+  );
+}
+
+function BuyLicense() {
+  return (
+    <WallOfText>
+      <Title>Buy License</Title>
+      <div className="mt-8 flex flex-col md:flex-row border">
+        <div className="w-auto overflow-hidden border-r md:w-1/2 p-5">
+          <h1 className="font-bold text-gray-700 text-sm uppercase mb-2">
+            Personal
+          </h1>
+          <PricingPoint label="Commercial use allowed" />
+          <PricingPoint label="All features unlocked" />
+          <PricingPoint not label="Company can't pay" />
+          <PricingPoint not label="Purchase can't be expensed" />
+          <div className="flex mt-6">
+            <div className="w-1/2 box-content pr-4">
+              <div className="flex items-center mb-2">
+                <div className="leading-none text-xl font-bold text-gray-700">
+                  $5
+>>>>>>> Stashed changes
                 </div>
-                <A
-                  className="button download-button"
-                  href={LINKS.buyPersonalMonthly}
-                >
-                  Buy Monthly
-                </A>
+                <div className="leading-none text-xs ml-1">per month</div>
               </div>
-              <div className="w-1/2 box-content pr-4">
-                <div className="flex items-center mb-2">
-                  <div className="leading-none text-xl font-bold text-gray-700">
-                    $50
-                  </div>
-                  <div className="leading-none text-xs ml-1">per year</div>
-                </div>
-                <A
-                  className="button download-button"
-                  href={LINKS.buyPersonalYearly}
-                >
-                  Buy Yearly
-                </A>
-              </div>
+              <A
+                className="button download-button"
+                href={LINKS.buyPersonalMonthly}
+              >
+                Buy Monthly
+              </A>
             </div>
-          </div>
-
-          <div className="w-auto overflow-hidden md:w-1/2 p-5">
-            <h1 className="font-bold text-gray-700 text-sm uppercase mb-2">
-              Professional
-            </h1>
-            <PricingPoint label="Commercial use allowed" />
-            <PricingPoint label="All features unlocked" />
-            <PricingPoint label="Company can pay" />
-            <PricingPoint label="Purchase can be expensed" />
-
-            <div className="flex mt-6">
-              <div className="w-1/2 box-content pr-4">
-                <div className="flex items-center mb-2">
-                  <div className="leading-none text-xl font-bold text-gray-700">
-                    $10
-                  </div>
-                  <div className="leading-none text-xs ml-1">per month</div>
+            <div className="w-1/2 box-content pr-4">
+              <div className="flex items-center mb-2">
+                <div className="leading-none text-xl font-bold text-gray-700">
+                  $50
                 </div>
-                <A
-                  className="button download-button"
-                  href={LINKS.buyProfessionalMonthly}
-                >
-                  Buy Monthly
-                </A>
+                <div className="leading-none text-xs ml-1">per year</div>
               </div>
-              <div className="w-1/2 box-content pr-4">
-                <div className="flex items-center mb-2">
-                  <div className="leading-none text-xl font-bold text-gray-700">
-                    $100
-                  </div>
-                  <div className="leading-none text-xs ml-1">per year</div>
-                </div>
-                <A
-                  className="button download-button"
-                  href={LINKS.buyProfessionalYearly}
-                >
-                  Buy Yearly
-                </A>
-              </div>
+              <A
+                className="button download-button"
+                href={LINKS.buyPersonalYearly}
+              >
+                Buy Yearly
+              </A>
             </div>
           </div>
         </div>
+
+        <div className="w-auto overflow-hidden md:w-1/2 p-5">
+          <h1 className="font-bold text-gray-700 text-sm uppercase mb-2">
+            Professional
+          </h1>
+          <PricingPoint label="Commercial use allowed" />
+          <PricingPoint label="All features unlocked" />
+          <PricingPoint label="Company can pay" />
+          <PricingPoint label="Purchase can be expensed" />
+
+          <div className="flex mt-6">
+            <div className="w-1/2 box-content pr-4">
+              <div className="flex items-center mb-2">
+                <div className="leading-none text-xl font-bold text-gray-700">
+                  $10
+                </div>
+                <div className="leading-none text-xs ml-1">per month</div>
+              </div>
+              <A
+                className="button download-button"
+                href={LINKS.buyProfessionalMonthly}
+              >
+                Buy Monthly
+              </A>
+            </div>
+            <div className="w-1/2 box-content pr-4">
+              <div className="flex items-center mb-2">
+                <div className="leading-none text-xl font-bold text-gray-700">
+                  $100
+                </div>
+                <div className="leading-none text-xs ml-1">per year</div>
+              </div>
+              <A
+                className="button download-button"
+                href={LINKS.buyProfessionalYearly}
+              >
+                Buy Yearly
+              </A>
+            </div>
+          </div>
+        </div>
+<<<<<<< Updated upstream
         <div className="p-6">
           <p>
             Please enter your real email. Your license key will be sent there
@@ -429,6 +463,46 @@ function Download() {
             <A href={`mailto:${SUPPORT_EMAIL}`}>contact support</A>.
           </p>
         </div>
+=======
+      </div>
+      <p>
+        Please use your real email; your license key will be sent there after
+        payment. If you want multiple licenses, priority support, or any other
+        custom requests fulfilled, please{" "}
+        <a href={`mailto:${SUPPORT_EMAIL}`}>contact support</a>.
+      </p>
+    </WallOfText>
+  );
+}
+
+function Download() {
+  return (
+    <WallOfText>
+      <Title>Download</Title>
+      <div className="rounded-md shadow border p-8">
+        <p>Please download the right package for your architecture.</p>
+        <p>
+          <A
+            href={LINKS.downloadIntel}
+            className="button download-button inline-flex items-center justify-center mr-2"
+          >
+            <Icon className="mr-1" icon={HiOutlineDownload} />
+            <span>macOS on Intel</span>
+          </A>
+          <A
+            href={LINKS.downloadM1}
+            className="button download-button inline-flex items-center justify-center"
+          >
+            <Icon className="mr-1" icon={HiOutlineDownload} />
+            <span>macOS on Apple M1</span>
+          </A>
+        </p>
+        <p>
+          When you first open CodePerfect, you'll get a free 7-day trial.
+          Afterward you'll need a <Link to="/buy-license">license</Link> to keep
+          using CodePerfect.
+        </p>
+>>>>>>> Stashed changes
       </div>
     </WallOfText>
   );
@@ -779,6 +853,12 @@ function App() {
             >
               Pricing
             </Link>
+            <Link
+              to="/buy-license"
+              className="text-black no-underline whitespace-nowrap hidden md:inline-block"
+            >
+              Buy License
+            </Link>
             <Link to="/download" className="button main-button">
               <Icon className="mr-2" icon={HiOutlineDownload} />
               Download
@@ -790,6 +870,15 @@ function App() {
             <Route path="/download" exact>
               <Download />
             </Route>
+<<<<<<< Updated upstream
+=======
+            <Route path="/buy-license" exact>
+              <BuyLicense />
+            </Route>
+            <Route path="/payment-done" exact>
+              <PaymentDone />
+            </Route>
+>>>>>>> Stashed changes
             <Route path="/pricing" exact>
               <Pricing />
             </Route>

@@ -268,31 +268,24 @@ int main(int argc, char **argv) {
     GHEnableDebugMode();
 #endif
 
-    // TODO: read in world.auth (should go in World::init()?)
+    read_auth();
 
     switch (world.auth.state) {
     case AUTH_NOTHING: {
-        world.auth.trial_start = current_time_milli();
-        tell_user("You started a trial!", "Trial started"); // TODO
-
-        auto configpath = GHGetConfigDir();
-        if (configpath == NULL) panic("Unable to write file.");
-
-        auto filepath = path_join(configpath, ".auth");
-
-        File f;
-        if (f.init(filepath, FILE_MODE_WRITE, FILE_CREATE_NEW) != FILE_RESULT_SUCCESS)
-            panic("Unable to write file.");
-
-        defer { f.cleanup(); };
-        f.write((char*)(&world.auth), sizeof(world.auth));
+        world.auth.state = AUTH_TRIAL;
+        world.auth.trial_start = get_unix_time();
+        write_auth();
+        tell_user("CodePerfect is free to evaluate for a 7-day trial, with access to full functionality. After that, you'll need a license for continued use.\n\nYou can buy a license at any time by selecting Help > Buy License.", "Trial");
         break;
     }
 
     case AUTH_TRIAL:
-        if (current_time_milli() - world.auth.trial_start > 1000 * 60 * 60 * 24 * 7) {
-            tell_user("Your trial has ended. Please go to Help > License to buy a license.", "Trial ended");
+        if (get_unix_time() - world.auth.trial_start > 1000 * 60 * 60 * 24 * 7) {
             world.auth_error = true;
+            auto res = ask_user_yes_no(NULL, "Your trial has ended. A license is required for continued use.\n\nWould you like to purchase one now?", "Purchase License", "No");
+            if (res == ASKUSER_YES) {
+                open_webbrowser("https://codeperfect95.com/buy-license");
+            }
         }
         break;
 
@@ -303,17 +296,37 @@ int main(int argc, char **argv) {
 
         auto email = our_sprintf("%.*s", auth.reg_email_len, auth.reg_email);
         auto license = our_sprintf("%.*s", auth.reg_license_len, auth.reg_license);
+        strcpy_safe(world.authed_email, _countof(world.authed_email), auth.reg_email);
 
-        GHCheckAuth(email, license); // kicks off auth/autoupdate shit in the background
+        GHAuth((char*)email, (char*)license);
         break;
     }
     }
 
-    GHRunAutoupdate();
+    GHUpdate();
+
+    auto set_window_title = [&](ccstr note) {
+        ccstr s = NULL;
+        if (note == NULL)
+            s = our_sprintf("%s - %s", WINDOW_TITLE, world.current_path);
+        else
+            s = our_sprintf("%s (%s) - %s", WINDOW_TITLE, note, world.current_path);
+        glfwSetWindowTitle(world.window, s);
+    };
+
+    auto get_window_note = [&]() -> ccstr {
+        if (world.auth.state == AUTH_TRIAL) {
+            auto time_elapsed = (get_unix_time() - world.auth.trial_start);
+            auto days_left = 7 - floor((double)time_elapsed / (double)(1000 * 60 * 60 * 24));
+            if (world.auth_error)
+                return "trial expired";
+            return our_sprintf("%d days left in trial", (int)days_left);
+        }
+        return NULL;
+    };
 
     world.window = window;
-    glfwSetWindowTitle(world.window, our_sprintf("%s - %s", WINDOW_TITLE, world.current_path));
-
+    set_window_title(get_window_note());
     glfwMakeContextCurrent(world.window);
 
     {
@@ -631,29 +644,6 @@ int main(int argc, char **argv) {
 
         if (ev != GLFW_PRESS && ev != GLFW_REPEAT) return;
 
-        if (world.record_keys.recording) {
-            auto name = glfwGetKeyName(key, scan);
-            if (name == NULL) {
-                switch (key) {
-                case GLFW_KEY_LEFT_CONTROL: name = "ctrl"; break;
-                case GLFW_KEY_RIGHT_CONTROL: name = "ctrl"; break;
-                case GLFW_KEY_LEFT_SHIFT: name = "shift"; break;
-                case GLFW_KEY_RIGHT_SHIFT: name = "shift"; break;
-                case GLFW_KEY_LEFT_ALT: name = "alt"; break;
-                case GLFW_KEY_RIGHT_ALT: name = "alt"; break;
-                case GLFW_KEY_LEFT_SUPER: name = "super"; break;
-                case GLFW_KEY_RIGHT_SUPER: name = "super"; break;
-                case GLFW_KEY_SPACE: name = "space"; break;
-                case GLFW_KEY_TAB: name = "tab"; break;
-                case GLFW_KEY_ESCAPE: name = "escape"; break;
-                default: name = our_sprintf("%d", key, scan); break;
-                }
-            }
-
-            auto s = our_sprintf("%llu %s\n", current_time_nano() / 1000000, name);
-            world.record_keys.f.write((char*)s, strlen(s));
-        }
-
         // handle global keys
 
         auto keymods = ui.imgui_get_keymods();
@@ -666,7 +656,7 @@ int main(int argc, char **argv) {
             case GLFW_KEY_3:
             case GLFW_KEY_4:
                 activate_pane_by_index(key - GLFW_KEY_1);
-                ImGui::SetWindowFocus(NULL);
+                world.cmd_unfocus_all_windows = true;
                 break;
 
             case GLFW_KEY_K:
@@ -696,7 +686,7 @@ int main(int argc, char **argv) {
             switch (key) {
             case GLFW_KEY_ESCAPE:
                 if (ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow))
-                    ImGui::SetWindowFocus(NULL);
+                    world.cmd_unfocus_all_windows = true; // see if this causes any sync problems
                 break;
 
             }
@@ -1422,6 +1412,49 @@ int main(int argc, char **argv) {
 
     u32 frame_index = 0;
     while (!glfwWindowShouldClose(world.window)) {
+        if (world.auth_status == GH_AUTH_WAITING) {
+            auto &auth = world.auth;
+
+            auto in_grace_period = [&](int days) {
+                if (auth.grace_period_start == 0) {
+                    auth.grace_period_start = get_unix_time();
+                    write_auth();
+                }
+                return (get_unix_time() - auth.grace_period_start) < (1000 * 60 * 60 * 24 * days);
+            };
+
+            // TODO: timeout?
+            world.auth_status = (GH_Auth_Status)GHGetAuthStatus();
+            switch (world.auth_status) {
+            case GH_AUTH_OK:
+                auth.grace_period_start = get_unix_time();
+                write_auth();
+                // set_window_title(world.authed_email);
+                break;
+            case GH_AUTH_UNKNOWNERROR:
+                // for now just do nothing, don't punish user for our fuckup
+                break;
+            case GH_AUTH_BADCREDS:
+                set_window_title("unregistered");
+                if (in_grace_period(3)) {
+                    tell_user("We were unable to validate your license key. CodePerfect will continue to work for a short grace period. Please go to Help > License to enter a new license, or contact support@codeperfect95.com for help. Thanks!", "Invalid credentials");
+                } else {
+                    tell_user("We were unable to validate your license key. Unfortunately, the grace period has ended, so many features are now disabled. Please go to Help > License to enter a new license, or contact support@codeperfect95.com for help. Thanks!", "Invalid credentials");
+                    world.auth_error = true;
+                }
+                break;
+            case GH_AUTH_INTERNETERROR:
+                set_window_title("unregistered");
+                if (in_grace_period(7)) {
+                    tell_user("We were unable to connect to the internet to validate your license key. CodePerfect will continue to work for a week; please connect to the internet at some point. Thanks!", "Unable to connect to internet");
+                } else {
+                    tell_user("We were unable to connect to the internet to validate your license key. Unfortunately, the grace period has ended, so many features are now disabled. Please connect to the internet, then restart CodePerfect.", "Unable to connect to internet");
+                    world.auth_error = true;
+                }
+                break;
+            }
+        }
+
         if (world.randomly_move_cursor_around) {
             if (get_current_editor() != NULL) {
                 if (frame_index++ % 3 == 0) {

@@ -2101,19 +2101,21 @@ void UI::draw_everything() {
                 }
 
                 ImGui::Separator();
-                {
-                    auto &ref = world.record_keys;
-                    if (ref.recording) {
-                        if (ImGui::MenuItem("Stop recording")) {
-                            ref.f.cleanup();
-                            ref.recording = false;
-                        }
+
+                if (ImGui::MenuItem("Expire trial")) {
+                    if (world.auth.state != AUTH_TRIAL) {
+                        tell_user("User is not currently in a trial state.", NULL);
                     } else {
-                        if (ImGui::MenuItem("Start recording")) {
-                            ref.f.init("/Users/brandon/keyrecordings.txt", FILE_MODE_WRITE, FILE_CREATE_NEW);
-                            ref.recording = true;
-                        }
+                        world.auth.trial_start = get_unix_time() - 1000 * 60 * 60 * 24 * 14;
+                        write_auth();
                     }
+                }
+
+                if (ImGui::MenuItem("Start new trial")) {
+                    world.auth.state = AUTH_TRIAL;
+                    world.auth.trial_start = get_unix_time();
+                    write_auth();
+                    tell_user(NULL, "Ok, done.");
                 }
 
                 ImGui::EndMenu();
@@ -2126,6 +2128,12 @@ void UI::draw_everything() {
         if (ImGui::BeginMenu("Help")) {
             menu_command(CMD_ABOUT);
             menu_command(CMD_DOCUMENTATION);
+
+            ImGui::Separator();
+
+            menu_command(CMD_BUY_LICENSE);
+            menu_command(CMD_ENTER_LICENSE);
+
             ImGui::EndMenu();
         }
 
@@ -2773,7 +2781,15 @@ void UI::draw_everything() {
         auto &wnd = world.wnd_about;
 
         begin_window("About", &wnd, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking);
-        ImGui::Text("CodePerfect 95    Build %d", gh_version);
+
+        ImGui::Text("CodePerfect 95");
+
+        ImGui::Text("Build %d", gh_version);
+
+        if (world.auth.state == AUTH_REGISTERED)
+            if (world.auth_status == GH_AUTH_OK)
+                ImGui::Text("Registered to %s", world.authed_email);
+
         ImGui::End();
     }
 
@@ -2800,6 +2816,60 @@ void UI::draw_everything() {
         }
 
         imgui_pop_font();
+
+        ImGui::End();
+    }
+
+    if (world.wnd_enter_license.show) {
+        auto &wnd = world.wnd_enter_license;
+        bool entered = false;
+
+        begin_centered_window("Enter License Key", &wnd, 0, 500);
+
+        if (imgui_input_text_full("Email", wnd.email, _countof(wnd.email), ImGuiInputTextFlags_EnterReturnsTrue))
+            entered = true;
+
+        imgui_small_newline();
+
+        if (imgui_input_text_full("License Key", wnd.license, _countof(wnd.license), ImGuiInputTextFlags_EnterReturnsTrue))
+            entered = true;
+
+        imgui_small_newline();
+
+        if (ImGui::Button("Enter"))
+            entered = true;
+
+        do {
+            if (!entered) break;
+
+            wnd.show = false;
+
+            auto &auth = world.auth;
+            auto old_state = auth.state;
+
+            auth.state = AUTH_REGISTERED;
+
+            auto email_len = strlen(wnd.email);
+            auto license_len = strlen(wnd.license);
+
+            if (email_len + 1 > _countof(auth.reg_email)) {
+                tell_user(NULL, "Sorry, that email is too long.");
+                break;
+            }
+
+            if (license_len + 1 > _countof(auth.reg_license)) {
+                tell_user(NULL, "Sorry, that license key is too long.");
+                break;
+            }
+
+            strcpy_safe(auth.reg_email, _countof(auth.reg_email), wnd.email);
+            strcpy_safe(auth.reg_license, _countof(auth.reg_license), wnd.license);
+            auth.reg_email_len = email_len;
+            auth.reg_license_len = license_len;
+            write_auth();
+
+            tell_user(NULL, "Your license key was saved. Please restart CodePerfect for it to take effect. Thanks!");
+        } while (0);
 
         ImGui::End();
     }
@@ -5589,6 +5659,12 @@ void UI::draw_everything() {
         ImGui::Text("ready: %d", hover.ready);
 
         ImGui::End();
+    }
+
+
+    if (world.cmd_unfocus_all_windows) {
+        world.cmd_unfocus_all_windows = false;
+        ImGui::SetWindowFocus(NULL);
     }
 }
 

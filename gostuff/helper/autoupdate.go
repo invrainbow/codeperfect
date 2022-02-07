@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net"
 	"net/http"
 	"os"
 	"path"
@@ -16,7 +15,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/invrainbow/codeperfect/gostuff/models"
@@ -186,12 +184,6 @@ It appears your internet is offline, or for some reason we're not able to connec
 The program will continue to run for a grace period of a week -- please just rerun CodePerfect at some point with an internet connection. Thanks!
 `
 
-const MessageTrialEnded = `
-Your trial has ended. Please contact support@codeperfect95.com to activate your subscription.
-
-The program will continue to run for a grace period of 3 days.
-`
-
 const MessageInvalidCreds = `
 We were unable to authenticate your credentials. Please contact support@codeperfect95.com if you believe this was in error.
 
@@ -219,171 +211,76 @@ func pushUnknownError(desc string, err error) {
 	)
 }
 
-// tolsa = "time of last successful auth"
-func getTolsaPath() (string, error) {
-	configDir, err := PrepareConfigDir()
-	if err != nil {
-		return "", err
-	}
-
-	return path.Join(configDir, ".tolsa"), nil
-}
-
 // don't return error, we don't care
 func writeTime(filepath string, t time.Time) {
 	timestr := strconv.FormatInt(t.Unix(), 10)
 	os.WriteFile(filepath, []byte(timestr), os.ModePerm)
 }
 
-func handleGracePeriod(message string, days int) {
-	pushWarning(message)
-
-	getLastSuccessfulAuthTime := func() (time.Time, error) {
-		zero := time.Time{}
-
-		timepath, err := getTolsaPath()
-		if err != nil {
-			return zero, err
-		}
-
-		content, err := os.ReadFile(timepath)
-		if err != nil {
-			if os.IsNotExist(err) {
-				now := time.Now()
-				writeTime(timepath, now)
-				return now, nil
-			}
-			return zero, err
-		}
-
-		n, err := strconv.ParseInt(string(content), 10, 64)
-		if err != nil {
-			return zero, err
-		}
-
-		return time.Unix(n, 0), nil
-	}
-
-	isGracePeriodStillGood := func() bool {
-		lastTime, err := getLastSuccessfulAuthTime()
-		if err != nil {
-			// surface err?
-			return false
-		}
-		if time.Since(lastTime) > time.Hour*time.Duration(24*days) {
-			return false
-		}
-		return true
-	}
-
-	if !isGracePeriodStillGood() {
-		pushPanic("The grace period has ended. Please contact support@codeperfect95.com to renew your subscription.")
-	}
-}
-
-func AuthAndUpdate(email, licenseKey string) {
-	license := &License{}
-	license.Email = email
-	license.LicenseKey = licenseKey
-
+func Update() {
 	osSlug := runtime.GOOS
-	if osSlug == "darwin" && runtime.GOARCH == "arm64" {
-		osSlug = "darwin_arm"
+	if runtime.GOARCH == "arm64" {
+		osSlug += "_arm"
 	}
 
-	req := &models.AuthRequest{
+	req := &models.UpdateRequest{
 		OS:             osSlug,
 		CurrentVersion: versions.CurrentVersion,
 	}
 
-	var resp models.AuthResponse
-	if err := CallServer("auth", license, req, &resp); err != nil {
-		switch e := err.(type) {
-		case net.Error, *net.OpError, syscall.Errno:
-			log.Println(e)
-			handleGracePeriod(MessageInternetOffline, 7)
-			return
-		case *ServerError:
-			switch e.Code {
-			case models.ErrorUserNoLongerActive, models.ErrorTrialExpired:
-				handleGracePeriod(MessageTrialEnded, 3)
-				return
-			case models.ErrorEmailNotFound, models.ErrorInvalidLicenseKey:
-				handleGracePeriod(MessageInvalidCreds, 1)
-				return
-			}
-		}
-		pushUnknownError("auth", err)
+	var resp models.UpdateResponse
+	if err := CallServer("update", nil, req, &resp); err != nil {
+		log.Printf("%s", err)
 		return
 	}
 
-	runHeartbeat := func(license *License, sessionID uint) {
-		for {
-			req := &models.HeartbeatRequest{
-				SessionID: sessionID,
-			}
-			var resp models.HeartbeatResponse
-			CallServer("heartbeat", license, req, &resp)
-			time.Sleep(time.Minute)
-		}
+	if !resp.NeedAutoupdate {
+		return
 	}
 
-	go runHeartbeat(license, resp.SessionID)
-
-	// after a successful auth call, update tolsa
-	timepath, err := getTolsaPath()
+	tmpfile, err := os.CreateTemp("", "update.zip")
 	if err != nil {
-		pushUnknownError("time", err)
+		pushUnknownError("CreateTemp", err)
+		return
 	}
-	writeTime(timepath, time.Now())
+	defer os.Remove(tmpfile.Name())
 
-	if resp.NeedAutoupdate {
-		tmpfile, err := os.CreateTemp("", "update.zip")
-		if err != nil {
-			pushUnknownError("CreateTemp", err)
-			return
-		}
-		defer os.Remove(tmpfile.Name())
-
-		if err := DownloadFile(resp.DownloadURL, tmpfile); err != nil {
-			pushUnknownError("DownloadFile", err)
-			return
-		}
-
-		hash, err := GetFileSHAHash(tmpfile.Name())
-		if err != nil {
-			pushUnknownError("SHA", err)
-			return
-		}
-		if hash != resp.DownloadHash {
-			pushUnknownError("hash mismatch", fmt.Errorf("got %s, expected %s", hash, resp.DownloadHash))
-			return
-		}
-
-		var exepath string
-		if IsTestMode() {
-			exepath = "/Users/bh/ide/gostuff/helper/autoupdate.go"
-		} else {
-			path, err := os.Executable()
-			if err != nil {
-				pushUnknownError("executable", err)
-				return
-			}
-			exepath = path
-		}
-
-		// TODO:
-		// destroy newbintmp if it exists
-		// unzip to newbintmp instead
-		// move newbintmp to newbin
-
-		if err := Unzip(tmpfile.Name(), path.Join(path.Dir(path.Dir(exepath)), "newbin")); err != nil {
-			pushUnknownError("unzip", err)
-			return
-		}
+	if err := DownloadFile(resp.DownloadURL, tmpfile); err != nil {
+		pushUnknownError("DownloadFile", err)
+		return
 	}
 
-	return
+	hash, err := GetFileSHAHash(tmpfile.Name())
+	if err != nil {
+		pushUnknownError("SHA", err)
+		return
+	}
+	if hash != resp.DownloadHash {
+		pushUnknownError("hash mismatch", fmt.Errorf("got %s, expected %s", hash, resp.DownloadHash))
+		return
+	}
+
+	var exepath string
+	if IsTestMode() {
+		exepath = "/Users/bh/ide/gostuff/helper/autoupdate.go"
+	} else {
+		path, err := os.Executable()
+		if err != nil {
+			pushUnknownError("executable", err)
+			return
+		}
+		exepath = path
+	}
+
+	// TODO:
+	// destroy newbintmp if it exists
+	// unzip to newbintmp instead
+	// move newbintmp to newbin
+
+	if err := Unzip(tmpfile.Name(), path.Join(path.Dir(path.Dir(exepath)), "newbin")); err != nil {
+		pushUnknownError("unzip", err)
+		return
+	}
 }
 
 /*

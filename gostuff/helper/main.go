@@ -5,12 +5,17 @@ import (
 	"fmt"
 	"go/format"
 	"log"
+	"net"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
+	"syscall"
+	"time"
 	"unsafe"
 
 	"github.com/denormal/go-gitignore"
+	"github.com/invrainbow/codeperfect/gostuff/models"
 	"github.com/invrainbow/codeperfect/gostuff/versions"
 	"github.com/reviewdog/errorformat"
 	"golang.org/x/tools/imports"
@@ -239,12 +244,74 @@ func GHFmtFinish(fmtType int) *C.char {
 	return C.CString(string(newSource))
 }
 
-//export GHAuthAndUpdate
-func GHAuthAndUpdate(rawEmail *C.char, rawLicenseKey *C.char) {
-	email := C.GoString(rawEmail)
-	licenseKey := C.GoString(rawLicenseKey)
+const (
+	AuthWaiting = iota
+	AuthOk
+	AuthInternetError
+	AuthUnknownError
+	AuthBadCreds
+)
 
-	go AuthAndUpdate(email, licenseKey)
+var authStatus int = AuthWaiting
+
+//export GHGetAuthStatus
+func GHGetAuthStatus() int {
+	return authStatus
+}
+
+//export GHAuth
+func GHAuth(rawEmail *C.char, rawLicenseKey *C.char) {
+	license := &License{}
+	license.Email = C.GoString(rawEmail)
+	license.LicenseKey = C.GoString(rawLicenseKey)
+
+	osSlug := runtime.GOOS
+	if osSlug == "darwin" && runtime.GOARCH == "arm64" {
+		osSlug = "darwin_arm"
+	}
+
+	req := &models.AuthRequest{
+		OS:             osSlug,
+		CurrentVersion: versions.CurrentVersion,
+	}
+
+	var resp models.AuthResponse
+
+	doAuth := func() int {
+		if err := CallServer("auth", license, req, &resp); err != nil {
+			log.Println(err)
+			switch err.(type) {
+			case net.Error, *net.OpError, syscall.Errno:
+				return AuthInternetError
+			}
+			return AuthUnknownError
+		}
+		if !resp.Success {
+			return AuthBadCreds
+		}
+		return AuthOk
+	}
+
+	run := func() {
+		authStatus = doAuth()
+		if authStatus == AuthOk {
+			// heartbeat
+			for {
+				req := &models.HeartbeatRequest{SessionID: resp.SessionID}
+				var resp models.HeartbeatResponse
+				CallServer("heartbeat", license, req, &resp)
+
+				time.Sleep(time.Minute)
+			}
+		}
+	}
+
+	go run()
+}
+
+//export GHUpdate
+func GHUpdate() {
+	go Update()
 }
 
 type GitignoreChecker struct {

@@ -90,5 +90,12 @@ ccstr our_getcwd() {
 }
 
 u64 current_time_milli() {
-    return (u64)(current_time_nano() / 1000000);
+    auto nano = current_time_nano();
+    return (u64)(nano / 1000000);
 }
+
+// TODO: native?
+int get_unix_time() {
+    return (int)time(NULL);
+}
+

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	_ "embed"
 	"encoding/json"
 	"errors"
@@ -11,22 +10,28 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"text/template"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/invrainbow/codeperfect/gostuff/cmd/lib"
 	"github.com/invrainbow/codeperfect/gostuff/db"
-	"github.com/invrainbow/codeperfect/gostuff/helper"
 	"github.com/invrainbow/codeperfect/gostuff/models"
 	"github.com/invrainbow/codeperfect/gostuff/versions"
+	"github.com/stripe/stripe-go/v72"
+	"github.com/stripe/stripe-go/v72/customer"
+	"github.com/stripe/stripe-go/v72/webhook"
 	"gorm.io/gorm"
 )
 
 var AdminPassword = os.Getenv("ADMIN_PASSWORD")
 var IsDevelMode = os.Getenv("DEVELOPMENT_MODE") == "1"
 var AirtableAPIKey = os.Getenv("AIRTABLE_API_KEY")
-var BetaPaymentLink = "https://buy.stripe.com/28ofZb9Dl0RO9a05kr"
 var ConvertKitAPIKey = os.Getenv("CONVERTKIT_API_KEY")
+var StripeAPIKey = os.Getenv("STRIPE_API_KEY")
+
+func init() {
+	stripe.Key = StripeAPIKey
+}
 
 func GetAPIBase() string {
 	if IsDevelMode {
@@ -42,72 +47,43 @@ func GetFrontendBase() string {
 	return "https://codeperfect95.com"
 }
 
-func sendError(c *gin.Context, code int) {
-	err := &models.ErrorResponse{
-		Code:  code,
-		Error: models.ErrorMessages[code],
-	}
-	c.JSON(http.StatusBadRequest, err)
+func sendError(c *gin.Context, errmsg string) {
+	// i'm not using http semantics
+	// 500 just means error, any error
+	// 200 means ok
+	c.JSON(500, &models.ErrorResponse{Error: errmsg})
 }
 
 func sendServerError(c *gin.Context, format string, args ...interface{}) {
-	sendError(c, models.ErrorInternal)
-	log.Printf("%s\n", fmt.Sprintf(format, args...))
+	log.Printf("server error: %s", fmt.Sprintf(format, args...))
+	sendError(c, "An unknown server error occurred.")
 }
 
-const TrialPeriod = time.Hour * 24 * 7
-
 // can maybe refactor this
-func authUser(c *gin.Context) *models.User {
+func authUser(c *gin.Context) (*models.User, error) {
 	email := c.GetHeader("X-Email")
 	licenseKey := c.GetHeader("X-License-Key")
 
 	var user models.User
 	if res := db.DB.First(&user, "email = ?", email); res.Error != nil {
 		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
-			sendError(c, models.ErrorEmailNotFound)
-		} else {
-			sendServerError(c, "error while grabbing user: %v", res.Error)
+			return nil, nil
 		}
-		return nil
+		return nil, res.Error
 	}
 
 	if user.LicenseKey != licenseKey {
-		sendError(c, models.ErrorInvalidLicenseKey)
-		return nil
+		return nil, nil
 	}
-
 	if !user.Active {
-		sendError(c, models.ErrorUserNoLongerActive)
-		return nil
+		return nil, nil
 	}
-
-	return &user
+	return &user, nil
 }
 
 var validOSes = map[string]bool{
 	"darwin":     true,
 	"darwin_arm": true,
-}
-
-func MustGetDownloadLink(c *gin.Context, os, folder string) string {
-	if !validOSes[os] {
-		sendError(c, models.ErrorInvalidOS)
-		return ""
-	}
-
-	filename := fmt.Sprintf("%s/%v_v%v.zip", folder, os, versions.CurrentVersion)
-
-	/*
-		presignedUrl, err := GetPresignedURL("codeperfect95", filename)
-		if err != nil {
-			sendServerError(c, "error while creating presigned url: %v", err)
-			return ""
-		}
-		return presignedUrl
-	*/
-	baseUrl := "https://codeperfect95.s3.us-east-2.amazonaws.com"
-	return fmt.Sprintf("%s/%s", baseUrl, filename)
 }
 
 var SendAlertsForSelf = (os.Getenv("SEND_ALERTS_FOR_SELF") == "1")
@@ -123,24 +99,20 @@ func SendSlackMessageForUser(user *models.User, format string, args ...interface
 	SendSlackMessage(format, args...)
 }
 
-func executeTemplate(text string, params interface{}) ([]byte, error) {
-	tpl, err := template.New("install").Parse(text)
-	if err != nil {
-		return nil, err
-	}
-
-	var buf bytes.Buffer
-	if err := tpl.Execute(&buf, params); err != nil {
-		return nil, err
-	}
-
-	return buf.Bytes(), nil
-}
-
 func PostUpdate(c *gin.Context) {
 	var req models.UpdateRequest
 	if c.ShouldBindJSON(&req) != nil {
-		sendError(c, models.ErrorInvalidData)
+		sendError(c, "Invalid data.")
+		return
+	}
+
+	if req.CurrentVersion > versions.CurrentVersion {
+		sendError(c, "Invalid version.")
+		return
+	}
+
+	if !validOSes[req.OS] {
+		sendError(c, "Invalid OS.")
 		return
 	}
 
@@ -150,11 +122,6 @@ func PostUpdate(c *gin.Context) {
 	}
 
 	if resp.NeedAutoupdate {
-		url := MustGetDownloadLink(c, req.OS, "update")
-		if url == "" {
-			return
-		}
-
 		var versionObj models.Version
 		res := db.DB.Where("version = ? AND os = ?", versions.CurrentVersion, req.OS).First(&versionObj)
 		if res.Error != nil {
@@ -162,21 +129,28 @@ func PostUpdate(c *gin.Context) {
 			return
 		}
 
-		resp.DownloadURL = url
+		url := "https://d2hzcm0ooi1duz.cloudfront.net/update/%v_latest.zip"
+		resp.DownloadURL = fmt.Sprintf(url, req.OS)
 		resp.DownloadHash = versionObj.UpdateHash
 	}
 
+	c.JSON(200, resp)
 }
 
 func PostAuth(c *gin.Context) {
-	var req models.AuthRequest
-	if c.ShouldBindJSON(&req) != nil {
-		sendError(c, models.ErrorInvalidData)
+	user, err := authUser(c)
+	if err != nil {
+		sendServerError(c, err.Error())
+	}
+
+	if user == nil {
+		c.JSON(http.StatusOK, &models.AuthResponse{Success: false})
 		return
 	}
 
-	user := authUser(c)
-	if user == nil {
+	var req models.AuthRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		sendError(c, "Invalid data.")
 		return
 	}
 
@@ -195,12 +169,10 @@ func PostAuth(c *gin.Context) {
 	sess.Heartbeats = 1
 	db.DB.Create(&sess)
 
-	if req.CurrentVersion > versions.CurrentVersion {
-		sendError(c, models.ErrorInvalidVersion)
-		return
-	}
-
-	c.JSON(http.StatusOK, &gin.H{"ok": true})
+	c.JSON(http.StatusOK, &models.AuthResponse{
+		Success:   true,
+		SessionID: sess.ID,
+	})
 }
 
 func PostHeartbeat(c *gin.Context) {
@@ -209,15 +181,26 @@ func PostHeartbeat(c *gin.Context) {
 		return
 	}
 
-	user := authUser(c)
+	user, err := authUser(c)
+	if err != nil {
+		sendServerError(c, err.Error())
+		return
+	}
+
 	if user == nil {
+		sendError(c, "Invalid credentials.")
 		return
 	}
 
 	var sess models.Session
 	res := db.DB.First(&sess, req.SessionID)
 	if res.Error != nil {
-		sendError(c, models.ErrorInvalidSession)
+		sendError(c, "Invalid session ID.")
+		return
+	}
+
+	if sess.UserID != user.ID {
+		sendError(c, "Invalid session ID.")
 		return
 	}
 
@@ -225,97 +208,136 @@ func PostHeartbeat(c *gin.Context) {
 	sess.Heartbeats++ // not safe, i don't care
 	db.DB.Save(&sess)
 
-	c.JSON(200, &models.HeartbeatResponse{Ok: true})
+	c.JSON(200, &gin.H{"ok": true})
 }
 
-func NewPostJSONRequest(url string, body interface{}) (*http.Request, error) {
-	dat, err := json.Marshal(body)
+func PostStripeWebhook(c *gin.Context) {
+	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
-		return nil, err
-	}
-	req, err := http.NewRequest("POST", url, bytes.NewReader(dat))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Add("Content-Type", "application/json")
-	return req, nil
-}
-
-func AddSignupToConvertKit(input *BetaSignupRequest) error {
-	data := &gin.H{
-		"api_key":    ConvertKitAPIKey,
-		"email":      input.Email,
-		"first_name": getFirstNameFromName(input.Name),
+		c.JSON(http.StatusBadRequest, gin.H{})
+		log.Printf("ioutil.Readall: %v", err)
+		return
 	}
 
-	url := "https://api.convertkit.com/v3/tags/2785111/subscribe"
-	req, err := NewPostJSONRequest(url, data)
+	event, err := webhook.ConstructEvent(body, c.Request.Header.Get("Stripe-Signature"), os.Getenv("STRIPE_WEBHOOK_SECRET"))
 	if err != nil {
-		return err
+		c.JSON(http.StatusBadRequest, gin.H{})
+		log.Printf("webhook.ConstructEvent: %v", err)
+		return
 	}
 
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return err
+	switch event.Type {
+	case "customer.subscription.created":
+	case "customer.subscription.updated":
+	default:
+		return
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		buf, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return err
+
+	var sub stripe.Subscription
+	if err := json.Unmarshal(event.Data.Raw, &sub); err != nil {
+		log.Printf("json.Unmarshal: %v", err)
+		return
+	}
+
+	log.Printf("=== subscription change: %v, %s ===", sub.ID, sub.Status)
+
+	cus, err := customer.Get(sub.Customer.ID, nil)
+	if err != nil {
+		log.Printf("customer.Get: %v", err)
+		return
+	}
+
+	// spew.Dump(cus)
+
+	newUser := false
+	active := (sub.Status == stripe.SubscriptionStatusActive)
+
+	var user models.User
+	res := db.DB.First(&user, "stripe_subscription_id = ?", sub.ID)
+	if res.Error != nil {
+		if !errors.Is(res.Error, gorm.ErrRecordNotFound) {
+			log.Printf("error looking up user: %v", res.Error)
+			return
 		}
-		return fmt.Errorf("bad response from convertkit: %s", string(buf))
-	}
-	return nil
-}
 
-//go:embed signup_email.txt
-var SignupEmailText string
+		// new user. if not active, don't bother creating user yet.
+		if !active {
+			log.Printf("user doesn't exist for %s, status = %s, skipping...", cus.Email, sub.Status)
+			return
+		}
 
-//go:embed signup_email.html
-var SignupEmailHTML string
-
-func getFirstNameFromName(name string) string {
-	parts := strings.Fields(name)
-	if len(parts) == 0 {
-		return ""
-	}
-	return parts[0]
-}
-
-func getGreetingFromName(name string) string {
-	firstName := getFirstNameFromName(name)
-	if firstName == "" {
-		return "Hi"
-	}
-	return fmt.Sprintf("Hi %s", firstName)
-}
-
-func SendBetaSignupEmail(name, email string) error {
-	type Data struct {
-		Greeting    string
-		PaymentLink string
+		newUser = true
+		user.Email = cus.Email
+		user.LicenseKey = lib.GenerateLicenseKey()
+		user.StripeSubscriptionID = sub.ID
 	}
 
-	data := &Data{
-		Greeting:    getGreetingFromName(name),
-		PaymentLink: BetaPaymentLink,
+	// if email changed, notify us via slack & let ops handle manually
+	if user.Email != cus.Email {
+		msg := fmt.Sprintf(
+			"[slack webhook] customer email changed, old = %s, new = %s",
+			user.Email,
+			cus.Email,
+		)
+		log.Printf("%s", msg)
+		SendSlackMessage("%s", msg)
+		return
 	}
 
-	emailText, err := executeTemplate(SignupEmailText, data)
-	if err != nil {
-		return err
+	old := user.Active
+	user.Active = active
+	user.Name = cus.Name
+	db.DB.Save(&user)
+
+	if old == user.Active {
+		return
 	}
 
-	emailHTML, err := executeTemplate(SignupEmailHTML, data)
-	if err != nil {
-		return err
+	type EmailParams struct {
+		Email      string
+		LicenseKey string
+		Greeting   string
 	}
 
-	return SendEmail(
-		email,
-		"CodePerfect Beta - Onboarding",
-		string(emailText),
-		string(emailHTML),
-	)
+	makeGreeting := func() string {
+		if user.Name != "" {
+			fields := strings.Fields(user.Name)
+			if len(fields) > 0 {
+				return fmt.Sprintf("Hi %s,", fields[0])
+			}
+		}
+		return "Hi,"
+	}
+
+	params := &EmailParams{
+		Email:      user.Email,
+		LicenseKey: user.LicenseKey,
+		Greeting:   makeGreeting(),
+	}
+
+	doSendEmail := func(subject, txtTmpl, htmlTmpl string) {
+		txt, err := lib.ExecuteTemplate(txtTmpl, params)
+		if err != nil {
+			return
+		}
+
+		html, err := lib.ExecuteTemplate(htmlTmpl, params)
+		if err != nil {
+			return
+		}
+
+		if err := lib.SendEmail(user.Email, subject, string(txt), string(html)); err != nil {
+			log.Printf("failed to send email to %s: %v", user.Email, err)
+		}
+	}
+
+	if user.Active {
+		if newUser {
+			doSendEmail("CodePerfect 95: New License", emailUserCreatedTxt, emailUserCreatedHtml)
+		} else {
+			doSendEmail("CodePerfect 95: License Reactivated", emailUserEnabledTxt, emailUserEnabledHtml)
+		}
+	} else {
+		doSendEmail("CodePerfect 95: License Deactivated", emailUserEnabledTxt, emailUserEnabledHtml)
+	}
 }

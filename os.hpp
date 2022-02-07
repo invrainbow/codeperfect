@@ -365,3 +365,5 @@ void open_webbrowser(ccstr url);
 
 ccstr our_getcwd();
 int cpu_count();
+
+int get_unix_time();

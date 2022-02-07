@@ -1,7 +1,7 @@
 package helper
 
 import (
-    "log"
+	"log"
 )
 
 type Message struct {
@@ -13,7 +13,7 @@ type Message struct {
 var MessageChan chan Message
 
 func init() {
-    MessageChan = make(chan Message, 128)
+	MessageChan = make(chan Message, 128)
 }
 
 func PushMessage(text string, title string, ispanic bool) {
@@ -22,6 +22,6 @@ func PushMessage(text string, title string, ispanic bool) {
 		Title:   title,
 		IsPanic: ispanic,
 	}
-    log.Println(m)
+	log.Println(m)
 	MessageChan <- m
 }

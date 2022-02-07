@@ -8,10 +8,11 @@ import (
 
 type User struct {
 	gorm.Model
-	Email          string
-	LicenseKey     string
-	Active         bool
-	TrialStartedAt time.Time
+	Email                string
+	Name                 string
+	LicenseKey           string
+	Active               bool
+	StripeSubscriptionID string
 }
 
 type Session struct {

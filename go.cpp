@@ -378,7 +378,7 @@ void Module_Resolver::init(ccstr current_module_filepath, ccstr _gomodcache) {
             line.append(ch);
         line.append('\0');
 
-        print("%s", line.items);
+        // print("%s", line.items);
 
         ccstr import_path = NULL;
         ccstr resolved_path = NULL;
@@ -4059,10 +4059,6 @@ void Go_Indexer::fill_generate_implementation(List<Go_Symbol> *out, bool selecte
     For (*index.packages) {
         if (it.status != GPS_READY) continue;
 
-        if (streq(it.import_path, "github.com/invrainbow/cpcast")) {
-            print("cpcast");
-        }
-
         if (selected_interface) {
             SCOPED_FRAME();
             if (!base_path->contains(make_path(it.import_path)))
@@ -7525,7 +7521,9 @@ char* (*GHFmtFinish)(GoBool sortImports);
 void (*GHFree)(void* p);
 GoBool (*GHGitIgnoreInit)(char* repo);
 GoBool (*GHGitIgnoreCheckFile)(char* file);
-void (*GHAuthAndUpdate)();
+void (*GHAuth)(char* rawEmail, char *rawLicenseKey);
+GoInt (*GHGetAuthStatus)();
+void (*GHUpdate)();
 GoBool (*GHRenameFileOrDirectory)(char* oldpath, char* newpath);
 void (*GHEnableDebugMode)();
 GoInt (*GHGetVersion)();
@@ -7574,7 +7572,9 @@ void load_gohelper() {
     load(GHFree);
     load(GHGitIgnoreInit);
     load(GHGitIgnoreCheckFile);
-    load(GHAuthAndUpdate);
+    load(GHAuth);
+    load(GHGetAuthStatus);
+    load(GHUpdate);
     load(GHRenameFileOrDirectory);
     load(GHEnableDebugMode);
     load(GHGetVersion);

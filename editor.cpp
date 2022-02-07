@@ -1136,7 +1136,31 @@ bool Editor::load_file(ccstr new_filepath) {
     return true;
 }
 
+bool handle_auth_error() {
+    if (!world.auth_error) return false;
+
+    switch (world.auth.state) {
+    case AUTH_TRIAL:
+        tell_user("Your trial has expired. As a result, opening files is currently disabled.\n\nPlease buy a license key using Help > Buy a License, and enter it using Help > Enter License.", "Trial expired");
+        break;
+    case AUTH_REGISTERED:
+        switch (world.auth_status) {
+        case GH_AUTH_BADCREDS:
+            tell_user("We were unable to validate your license key, and the grace period has passed. As a result, opening files is currently disabled.\n\nPlease buy a license key using Help > Buy a License, and enter it using Help > Enter License.", "Invalid license key");
+            break;
+        case GH_AUTH_INTERNETERROR:
+            tell_user("We were unable to connect to the internet to validate your license key, and the grace period has passed. As a result, opening files is currently disabled.\n\nPlease buy a license key using Help > Buy a License, and enter it using Help > Enter License.", "No internet connection");
+            break;
+        }
+        break;
+    }
+    return true;
+}
+
 Editor* Pane::open_empty_editor() {
+    if (handle_auth_error())
+        return NULL;
+
     auto ed = editors.append();
     ed->init();
 
@@ -1208,6 +1232,9 @@ Editor* Pane::focus_editor(ccstr path, cur2 pos) {
             return focus_editor_by_index(i, pos);
         i++;
     }
+
+    if (handle_auth_error())
+        return NULL;
 
     auto ed = editors.append();
     ed->init();
