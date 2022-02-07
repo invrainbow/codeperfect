@@ -1,1 +1,12 @@
-../api/emails/user_enabled.txt
+{{.Greeting}}
+
+Your license key has been reactivated! To remind you, it's:
+
+{{.LicenseKey}}
+
+If you previously entered this into CodePerfect, please restart CodePerfect and
+it should work again. Otherwise, enter your license by going to Help > Enter
+License or Help > Re-enter License.
+
+Thanks,
+The CodePerfect Team

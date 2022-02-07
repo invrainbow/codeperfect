@@ -1,1 +1,16 @@
-../api/emails/user_created.txt
+{{.Greeting}}
+
+Thanks for your purchase! To activate your license, open CodePerfect and go to
+Help > Enter License, then enter the following license key.
+
+{{.LicenseKey}}
+
+You can manage your subscription and billing info using this link:
+
+{{.PortalLink}}
+
+If you have any questions or need help, you can always reach us at
+support@codeperfect95.com.
+
+Thanks,
+The CodePerfect Team
