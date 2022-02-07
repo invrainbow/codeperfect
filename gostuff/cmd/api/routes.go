@@ -18,6 +18,7 @@ import (
 	"github.com/invrainbow/codeperfect/gostuff/models"
 	"github.com/invrainbow/codeperfect/gostuff/versions"
 	"github.com/stripe/stripe-go/v72"
+	"github.com/stripe/stripe-go/v72/billingportal/session"
 	"github.com/stripe/stripe-go/v72/customer"
 	"github.com/stripe/stripe-go/v72/webhook"
 	"gorm.io/gorm"
@@ -297,6 +298,7 @@ func PostStripeWebhook(c *gin.Context) {
 		Email      string
 		LicenseKey string
 		Greeting   string
+		PortalLink string
 	}
 
 	makeGreeting := func() string {
@@ -309,10 +311,29 @@ func PostStripeWebhook(c *gin.Context) {
 		return "Hi,"
 	}
 
+	makePortalLink := func() (string, error) {
+		params := &stripe.BillingPortalSessionParams{
+			Customer:  stripe.String(cus.ID),
+			ReturnURL: stripe.String("https://codeperfect95.com/portal-done"),
+		}
+		s, err := session.New(params)
+		if err != nil {
+			return "", err
+		}
+		return s.URL, nil
+	}
+
+	portalLink, err := makePortalLink()
+	if err != nil {
+		log.Printf("unable to create portal link: %v", err)
+		return
+	}
+
 	params := &EmailParams{
 		Email:      user.Email,
 		LicenseKey: user.LicenseKey,
 		Greeting:   makeGreeting(),
+		PortalLink: portalLink,
 	}
 
 	doSendEmail := func(subject, txtTmpl, htmlTmpl string) {

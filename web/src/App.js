@@ -97,6 +97,10 @@ function H1({ className, children, ...props }) {
   );
 }
 
+function Title({ className, ...props }) {
+  return <H1 className={cx("text-4xl", className)} {...props} />;
+}
+
 /*
 function H2({ className, children, ...props }) {
   return (
@@ -297,61 +301,6 @@ function Loading() {
   );
 }
 
-<<<<<<< Updated upstream
-function Download() {
-  return (
-    <WallOfText>
-      <H1>Download CodePerfect for Mac</H1>
-
-      <div className="shadow-md rounded-md border">
-        <div className="p-6">
-          <div>Please download the right package for your architecture:</div>
-          <p className="-mb-1">
-            <A
-              href={LINKS.downloadIntel}
-              className="button download-button mb-1 mr-2 py-3"
-            >
-              <Icon className="mr-2" icon={FaApple} />
-              <span>macOS Intel</span>
-            </A>
-            <A
-              href={LINKS.downloadM1}
-              className="button download-button py-3 mb-1"
-            >
-              <Icon className="mr-2" icon={FaApple} />
-              <span>macOS M1</span>
-            </A>
-          </p>
-
-          <p>
-            When you first open CodePerfect, you'll get a free 7-day trial.
-            Afterward you'll need to enter a license key to keep using
-            CodePerfect. You can buy one below.
-          </p>
-        </div>
-      </div>
-
-      <div className="mt-8 shadow-md rounded-md border">
-        <div className="py-4 px-6 border-b bg-gray-100">
-          <H2>Buy a License</H2>
-        </div>
-        <div className="flex flex-col md:flex-row border-b">
-          <div className="w-auto overflow-hidden border-r md:w-1/2 p-5">
-            <h1 className="font-bold text-gray-700 text-sm uppercase mb-2">
-              Personal
-            </h1>
-            <PricingPoint label="Commercial use allowed" />
-            <PricingPoint label="All features unlocked" />
-            <PricingPoint not label="Company can't pay" />
-            <PricingPoint not label="Purchase can't be expensed" />
-            <div className="flex mt-6">
-              <div className="w-1/2 box-content pr-4">
-                <div className="flex items-center mb-2">
-                  <div className="leading-none text-xl font-bold text-gray-700">
-                    $5
-                  </div>
-                  <div className="leading-none text-xs ml-1">per month</div>
-=======
 function PaymentDone() {
   return (
     <WallOfText>
@@ -360,6 +309,16 @@ function PaymentDone() {
         Please check your email &mdash; we just sent your license key to you. If
         you don't see it, see if it's in your spam folder. If you still don't
         see it, please <a href={`mailto:${SUPPORT_EMAIL}`}>contact support</a>.
+      </p>
+    </WallOfText>
+  );
+}
+
+function PortalDone() {
+  return (
+    <WallOfText>
+      <p className="text-center">
+        You just left the billing portal. You can now close this window.
       </p>
     </WallOfText>
   );
@@ -383,7 +342,6 @@ function BuyLicense() {
               <div className="flex items-center mb-2">
                 <div className="leading-none text-xl font-bold text-gray-700">
                   $5
->>>>>>> Stashed changes
                 </div>
                 <div className="leading-none text-xs ml-1">per month</div>
               </div>
@@ -451,19 +409,6 @@ function BuyLicense() {
             </div>
           </div>
         </div>
-<<<<<<< Updated upstream
-        <div className="p-6">
-          <p>
-            Please enter your real email. Your license key will be sent there
-            after payment.
-          </p>
-          <p>
-            If you want multiple licenses, priority support, or any other custom
-            requests fulfilled, please{" "}
-            <A href={`mailto:${SUPPORT_EMAIL}`}>contact support</A>.
-          </p>
-        </div>
-=======
       </div>
       <p>
         Please use your real email; your license key will be sent there after
@@ -502,7 +447,6 @@ function Download() {
           Afterward you'll need a <Link to="/buy-license">license</Link> to keep
           using CodePerfect.
         </p>
->>>>>>> Stashed changes
       </div>
     </WallOfText>
   );
@@ -870,15 +814,15 @@ function App() {
             <Route path="/download" exact>
               <Download />
             </Route>
-<<<<<<< Updated upstream
-=======
             <Route path="/buy-license" exact>
               <BuyLicense />
             </Route>
             <Route path="/payment-done" exact>
               <PaymentDone />
             </Route>
->>>>>>> Stashed changes
+            <Route path="/portal-done" exact>
+              <PortalDone />
+            </Route>
             <Route path="/pricing" exact>
               <Pricing />
             </Route>
@@ -918,6 +862,11 @@ function App() {
               <div>
                 <Link className="text-gray-500 no-underline" to="/pricing">
                   Pricing
+                </Link>
+              </div>
+              <div>
+                <Link className="text-gray-500 no-underline" to="/buy-license">
+                  Buy License
                 </Link>
               </div>
               <div>
