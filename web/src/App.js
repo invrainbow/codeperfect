@@ -73,7 +73,7 @@ function WallOfText({ width, children, className, ...props }) {
     <div
       className={cx(
         "wall-of-text p-4 my-4 md:my-16 md:p-12 leading-normal md:mx-auto",
-        `md:max-w-${width || "3xl"}`,
+        `md:max-w-${width || "2xl"}`,
         className
       )}
       {...props}
@@ -324,12 +324,33 @@ function PortalDone() {
   );
 }
 
+function BuyLicenseButton({ className, ...props }) {
+  return (
+    <A
+      className={cx(className, "button download-button p-3 block text-center")}
+      {...props}
+    />
+  );
+}
+
+function BuyLicenseBox({ className, ...props }) {
+  return (
+    <div
+      className={cx(
+        className,
+        "w-auto overflow-hidden border border-r p-5 rounded-md"
+      )}
+      {...props}
+    />
+  );
+}
+
 function BuyLicense() {
   return (
     <WallOfText>
       <Title>Buy License</Title>
-      <div className="mt-8 flex flex-col md:flex-row border">
-        <div className="w-auto overflow-hidden border-r md:w-1/2 p-5">
+      <div className="mt-8 grid grid-cols-2 gap-4">
+        <BuyLicenseBox>
           <h1 className="font-bold text-gray-700 text-sm uppercase mb-2">
             Personal
           </h1>
@@ -337,39 +358,33 @@ function BuyLicense() {
           <PricingPoint label="All features unlocked" />
           <PricingPoint not label="Company can't pay" />
           <PricingPoint not label="Purchase can't be expensed" />
-          <div className="flex mt-6">
-            <div className="w-1/2 box-content pr-4">
+
+          <div className="grid grid-cols-2 gap-2 mt-4 pt-4 border-t">
+            <div>
               <div className="flex items-center mb-2">
                 <div className="leading-none text-xl font-bold text-gray-700">
                   $5
                 </div>
                 <div className="leading-none text-xs ml-1">per month</div>
               </div>
-              <A
-                className="button download-button"
-                href={LINKS.buyPersonalMonthly}
-              >
+              <BuyLicenseButton href={LINKS.buyPersonalMonthly}>
                 Buy Monthly
-              </A>
+              </BuyLicenseButton>
             </div>
-            <div className="w-1/2 box-content pr-4">
+            <div>
               <div className="flex items-center mb-2">
                 <div className="leading-none text-xl font-bold text-gray-700">
                   $50
                 </div>
                 <div className="leading-none text-xs ml-1">per year</div>
               </div>
-              <A
-                className="button download-button"
-                href={LINKS.buyPersonalYearly}
-              >
+              <BuyLicenseButton href={LINKS.buyPersonalYearly}>
                 Buy Yearly
-              </A>
+              </BuyLicenseButton>
             </div>
           </div>
-        </div>
-
-        <div className="w-auto overflow-hidden md:w-1/2 p-5">
+        </BuyLicenseBox>
+        <BuyLicenseBox>
           <h1 className="font-bold text-gray-700 text-sm uppercase mb-2">
             Professional
           </h1>
@@ -378,37 +393,31 @@ function BuyLicense() {
           <PricingPoint label="Company can pay" />
           <PricingPoint label="Purchase can be expensed" />
 
-          <div className="flex mt-6">
-            <div className="w-1/2 box-content pr-4">
+          <div className="grid grid-cols-2 gap-2 mt-4 pt-4 border-t">
+            <div>
               <div className="flex items-center mb-2">
                 <div className="leading-none text-xl font-bold text-gray-700">
                   $10
                 </div>
                 <div className="leading-none text-xs ml-1">per month</div>
               </div>
-              <A
-                className="button download-button"
-                href={LINKS.buyProfessionalMonthly}
-              >
+              <BuyLicenseButton href={LINKS.buyProfessionalMonthly}>
                 Buy Monthly
-              </A>
+              </BuyLicenseButton>
             </div>
-            <div className="w-1/2 box-content pr-4">
+            <div>
               <div className="flex items-center mb-2">
                 <div className="leading-none text-xl font-bold text-gray-700">
                   $100
                 </div>
                 <div className="leading-none text-xs ml-1">per year</div>
               </div>
-              <A
-                className="button download-button"
-                href={LINKS.buyProfessionalYearly}
-              >
+              <BuyLicenseButton href={LINKS.buyProfessionalYearly}>
                 Buy Yearly
-              </A>
+              </BuyLicenseButton>
             </div>
           </div>
-        </div>
+        </BuyLicenseBox>
       </div>
       <p>
         Please use your real email; your license key will be sent there after
@@ -424,30 +433,28 @@ function Download() {
   return (
     <WallOfText>
       <Title>Download</Title>
-      <div className="rounded-md shadow border p-8">
-        <p>Please download the right package for your architecture.</p>
-        <p>
-          <A
-            href={LINKS.downloadIntel}
-            className="button download-button inline-flex items-center justify-center mr-2"
-          >
-            <Icon className="mr-1" icon={HiOutlineDownload} />
-            <span>macOS on Intel</span>
-          </A>
-          <A
-            href={LINKS.downloadM1}
-            className="button download-button inline-flex items-center justify-center"
-          >
-            <Icon className="mr-1" icon={HiOutlineDownload} />
-            <span>macOS on Apple M1</span>
-          </A>
-        </p>
-        <p>
-          When you first open CodePerfect, you'll get a free 7-day trial.
-          Afterward you'll need a <Link to="/buy-license">license</Link> to keep
-          using CodePerfect.
-        </p>
-      </div>
+      <p>Please download the right package for your architecture.</p>
+      <p className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <A
+          href={LINKS.downloadIntel}
+          className="button download-button flex items-center justify-center"
+        >
+          <Icon className="mr-1" icon={HiOutlineDownload} />
+          <span>macOS on Intel</span>
+        </A>
+        <A
+          href={LINKS.downloadM1}
+          className="button download-button flex items-center justify-center"
+        >
+          <Icon className="mr-1" icon={HiOutlineDownload} />
+          <span>macOS on Apple M1</span>
+        </A>
+      </p>
+      <p>
+        When you first open CodePerfect, you'll get a free 7-day trial.
+        Afterward you'll need a <Link to="/buy-license">license</Link> to keep
+        using CodePerfect.
+      </p>
     </WallOfText>
   );
 }
@@ -572,11 +579,11 @@ function PricingBox({
     <div
       className={cx(
         className,
-        "w-auto rounded-lg overflow-hidden p-6 md:p-8",
-        "border border-gray-200 shadow-sm md:w-1/3"
+        "w-auto rounded-lg overflow-hidden p-6",
+        "border border-gray-200 shadow-sm"
       )}
     >
-      <h1 className="font-bold text-gray-500 text-sm uppercase mb-1">
+      <h1 className="font-bold text-gray-600 text-sm uppercase mb-0.5">
         {title}
       </h1>
       <div className="leading-none">
@@ -607,7 +614,7 @@ function PricingBox({
           </div>
         )}
       </div>
-      <div className="text-gray-500 text-left mt-6 mb-5">{children}</div>
+      <div className="text-gray-500 text-left mt-4 mb-6">{children}</div>
       {cta}
     </div>
   );
@@ -676,7 +683,13 @@ function Pricing() {
         </span>
       </div>
       <div className="mt-8">
-        <div className="px-4 md:px-12 max-w-5xl flex flex-col md:flex-row justify-between space-y-4 space-x-0 md:space-y-0 md:space-x-4 lg:space-x-8 mx-auto">
+        <div
+          className={cx(
+            "max-w-5xl mx-auto",
+            "px-4 md:px-12",
+            "grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-8"
+          )}
+        >
           <PricingBox
             title="Personal"
             monthly={5}
@@ -852,43 +865,57 @@ function App() {
           <div className="text-gray-500">
             &copy; {new Date().getFullYear()} CodePerfect 95
           </div>
-          <div className="flex flex-col sm:flex-row space-x-0 sm:space-x-12 mt-2 sm:mt-0">
-            <div className="sm:text-right sm:flex sm:flex-row sm:space-x-8">
+          <div className="flex flex-col sm:flex-row space-x-0 mt-2 sm:mt-0">
+            <div className="sm:flex sm:flex-row sm:space-x-12 md:space-x-16">
               <div>
-                <A className="text-gray-500 no-underline" href={LINKS.docs}>
-                  Docs
-                </A>
+                <div>
+                  <Link className="text-gray-500 no-underline" to="/download">
+                    Download
+                  </Link>
+                </div>
+                <div>
+                  <Link className="text-gray-500 no-underline" to="/pricing">
+                    Pricing
+                  </Link>
+                </div>
+                <div>
+                  <Link
+                    className="text-gray-500 no-underline"
+                    to="/buy-license"
+                  >
+                    Buy License
+                  </Link>
+                </div>
               </div>
               <div>
-                <Link className="text-gray-500 no-underline" to="/pricing">
-                  Pricing
-                </Link>
+                <div>
+                  <A className="text-gray-500 no-underline" href={LINKS.docs}>
+                    Docs
+                  </A>
+                </div>
+                <div>
+                  <A
+                    className="text-gray-500 no-underline"
+                    href={LINKS.changelog}
+                  >
+                    Changelog
+                  </A>
+                </div>
               </div>
               <div>
-                <Link className="text-gray-500 no-underline" to="/buy-license">
-                  Buy License
-                </Link>
-              </div>
-              <div>
-                <A
-                  className="text-gray-500 no-underline"
-                  href={LINKS.changelog}
-                >
-                  Changelog
-                </A>
-              </div>
-              <div>
-                <A
-                  className="text-gray-500 no-underline"
-                  href={`mailto:${SUPPORT_EMAIL}`}
-                >
-                  Support
-                </A>
-              </div>
-              <div>
-                <Link to="/terms" className="text-gray-500 no-underline">
-                  Terms &amp; Privacy
-                </Link>
+                <div>
+                  <A
+                    className="text-gray-500 no-underline"
+                    href={`mailto:${SUPPORT_EMAIL}`}
+                  >
+                    Support
+                  </A>
+                </div>
+                <div>
+                  <Link to="/terms" className="text-gray-500 no-underline">
+                    Terms &amp; Privacy
+                  </Link>
+                </div>
               </div>
             </div>
           </div>
