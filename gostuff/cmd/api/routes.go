@@ -130,7 +130,7 @@ func PostUpdate(c *gin.Context) {
 			return
 		}
 
-		url := "https://d2hzcm0ooi1duz.cloudfront.net/update/%v_latest.zip"
+		url := "https://d2hzcm0ooi1duz.cloudfront.net/update/%v.zip"
 		resp.DownloadURL = fmt.Sprintf(url, req.OS)
 		resp.DownloadHash = versionObj.UpdateHash
 	}

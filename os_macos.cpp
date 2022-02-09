@@ -3,7 +3,6 @@
 #if OS_MAC // whole file is mac only
 
 #include <stdio.h>
-#include <cwalk.h>
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -19,6 +18,7 @@
 #include <unistd.h>
 #include <ftw.h>
 #include <CoreServices/CoreServices.h>
+#include "cwalk.h"
 
 // for places where i can't be fucked to learn the linux
 // way of doing things, just use c++ stdlib (requires c++17)

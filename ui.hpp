@@ -10,7 +10,7 @@
 #include "editor.hpp"
 #include "list.hpp"
 #include "debugger.hpp"
-#include <GL/glew.h>
+#include "glew.h"
 
 extern ImVec2 icon_button_padding;
 

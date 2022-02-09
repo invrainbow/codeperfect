@@ -33,6 +33,7 @@ package_app() {
 
     if [[ -z "$SKIP_UPLOAD" ]]; then
         aws s3 cp app.zip "s3://codeperfect95/app/${OS_SLUG}_v${VERSION}.zip"
+        aws s3 cp app.zip "s3://codeperfect95/app/${OS_SLUG}.zip"
     fi
 }
 
@@ -43,6 +44,7 @@ package_update() {
 
     if [[ -z "$SKIP_UPLOAD" ]]; then
         aws s3 cp update.zip "s3://codeperfect95/update/${OS_SLUG}_v${VERSION}.zip"
+        aws s3 cp update.zip "s3://codeperfect95/update/${OS_SLUG}.zip"
     fi
 }
 

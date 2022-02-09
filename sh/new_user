@@ -1,5 +1,0 @@
-#!/bin/bash
-
-cd gostuff
-export POSTGRES_URL=$POSTGRES_URL_PROD
-go run ./cmd/licensekey "$@"

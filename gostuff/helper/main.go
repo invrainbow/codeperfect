@@ -1,4 +1,6 @@
-package helper
+package main
+
+import "C"
 
 import (
 	"bytes"
@@ -266,8 +268,8 @@ func GHAuth(rawEmail *C.char, rawLicenseKey *C.char) {
 	license.LicenseKey = C.GoString(rawLicenseKey)
 
 	osSlug := runtime.GOOS
-	if osSlug == "darwin" && runtime.GOARCH == "arm64" {
-		osSlug = "darwin_arm"
+	if runtime.GOARCH == "arm64" {
+		osSlug += "_arm"
 	}
 
 	req := &models.AuthRequest{
@@ -410,3 +412,5 @@ func GHGetConfigDir() *C.char {
 	}
 	return C.CString(configDir)
 }
+
+func main() {}

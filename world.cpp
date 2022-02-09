@@ -9,7 +9,7 @@
 #define GLFW_EXPOSE_NATIVE_COCOA
 #endif
 
-#include <GL/glew.h>
+#include "glew.h"
 #include <GLFW/glfw3.h>
 #include <GLFW/glfw3native.h>
 
@@ -377,8 +377,6 @@ void World::init(GLFWwindow *_wnd) {
     chunk4_fridge.init(32);
     chunk5_fridge.init(16);
     chunk6_fridge.init(8);
-
-    load_gohelper();
 
     // read options from disk
     do {

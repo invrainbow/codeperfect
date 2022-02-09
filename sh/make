@@ -1,13 +1,10 @@
 #!/bin/bash
 set -e
 
-nprocs=$(sysctl hw.ncpu | grep -o '[0-9]\+')
-cpu_name="$(sysctl -n machdep.cpu.brand_string)"
-
 cmd="make"
-if [ "$cpu_name" = "Apple M1" ]; then
+if [ "$(sysctl -n machdep.cpu.brand_string)" = "Apple M1" ]; then
     cmd="arch -arm64 $cmd"
 fi
-echo "$cmd"
 
+nprocs=$(sysctl hw.ncpu | grep -o '[0-9]\+')
 $cmd -j $nprocs $@

@@ -6,6 +6,7 @@
 #include "mem.hpp"
 #include "os.hpp"
 #include "tree_sitter_crap.hpp"
+#include "gohelper_shim.h"
 
 extern "C" TSLanguage *tree_sitter_go();
 
@@ -1436,65 +1437,6 @@ void write_list(L arr, Index_Stream *s) {
 }
 
 ccstr format_cur(cur2 c);
-
-typedef struct _GH_Build_Error {
-    char* text;
-    int32_t is_valid;
-    char *filename;
-    int32_t line;
-    int32_t col;
-    int32_t is_vcol;
-} GH_Build_Error;
-
-typedef struct _GH_Message {
-	char* text;
-	char* title;
-	int32_t is_panic;
-} GH_Message;
-
-typedef signed char GoInt8;
-typedef unsigned char GoUint8;
-typedef short GoInt16;
-typedef unsigned short GoUint16;
-typedef int GoInt32;
-typedef unsigned int GoUint32;
-typedef long long GoInt64;
-typedef unsigned long long GoUint64;
-typedef GoInt64 GoInt;
-typedef GoUint64 GoUint;
-typedef size_t GoUintptr;
-typedef float GoFloat32;
-typedef double GoFloat64;
-typedef GoUint8 GoBool;
-
-extern GoBool (*GHStartBuild)(char* cmdstr);
-extern void (*GHStopBuild)();
-extern void (*GHFreeBuildStatus)(void* p, GoInt lines);
-extern GH_Build_Error* (*GHGetBuildStatus)(GoInt* pstatus, GoInt* plines);
-extern char* (*GHGetGoEnv)(char* name);
-extern void (*GHFmtStart)();
-extern void (*GHFmtAddLine)(char* line);
-extern char* (*GHFmtFinish)(GoBool sortImports);
-extern void (*GHFree)(void* p);
-extern GoBool (*GHGitIgnoreInit)(char* repo);
-extern GoBool (*GHGitIgnoreCheckFile)(char* file);
-extern void (*GHAuth)(char* rawEmail, char *rawLicenseKey);
-extern GoInt (*GHGetAuthStatus)();
-extern void (*GHUpdate)();
-extern GoBool (*GHRenameFileOrDirectory)(char* oldpath, char* newpath);
-extern void (*GHEnableDebugMode)();
-extern GoInt (*GHGetVersion)();
-extern char* (*GHGetGoBinaryPath)();
-extern char* (*GHGetDelvePath)();
-extern char* (*GHGetGoroot)();
-// extern char* (*GHGetGopath)();
-extern char* (*GHGetGomodcache)();
-extern GoBool (*GHGetMessage)(void* p);
-extern void (*GHFreeMessage)(void* p);
-extern GoBool (*GHInitConfig)();
-extern char* (*GHGetConfigDir)();
-
-void load_gohelper();
 
 extern int gh_version;
 

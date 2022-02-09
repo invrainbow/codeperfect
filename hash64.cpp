@@ -3,7 +3,7 @@
 
 #if OS_MAC && defined(CPU_ARM64)
 #   define XXH_INLINE_ALL
-#   include <xxhash.h>
+#   include "xxhash.h"
 #else
 #   include "meow_hash_x64_aesni.h"
 #endif
