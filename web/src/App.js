@@ -338,7 +338,7 @@ function BuyLicenseBox({ className, ...props }) {
     <div
       className={cx(
         className,
-        "w-auto overflow-hidden border border-r p-5 rounded-md"
+        "w-auto overflow-hidden border border-r p-6 rounded-md"
       )}
       {...props}
     />
@@ -349,7 +349,7 @@ function BuyLicense() {
   return (
     <WallOfText>
       <Title>Buy License</Title>
-      <div className="mt-8 grid grid-cols-2 gap-4">
+      <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
         <BuyLicenseBox>
           <h1 className="font-bold text-gray-700 text-sm uppercase mb-2">
             Personal
@@ -420,9 +420,9 @@ function BuyLicense() {
         </BuyLicenseBox>
       </div>
       <p>
-        Please use your real email; your license key will be sent there after
-        payment. If you want multiple licenses, priority support, or any other
-        custom requests fulfilled, please{" "}
+        We'll send your license key to the email you provide during checkout. If
+        you want multiple licenses, priority support, or any other custom
+        requests fulfilled, please{" "}
         <a href={`mailto:${SUPPORT_EMAIL}`}>contact support</a>.
       </p>
     </WallOfText>
@@ -433,27 +433,23 @@ function Download() {
   return (
     <WallOfText>
       <Title>Download</Title>
-      <p>Please download the right package for your architecture.</p>
-      <p className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+      <p>
+        CodePerfect is currently only supported on Mac. Here you can download a
+        universal binary that works on both Intel and Apple Silicon.
+      </p>
+      <p>
         <A
           href={LINKS.downloadIntel}
-          className="button download-button flex items-center justify-center"
+          className="button download-button inline-flex items-center justify-center"
         >
           <Icon className="mr-1" icon={HiOutlineDownload} />
-          <span>macOS on Intel</span>
-        </A>
-        <A
-          href={LINKS.downloadM1}
-          className="button download-button flex items-center justify-center"
-        >
-          <Icon className="mr-1" icon={HiOutlineDownload} />
-          <span>macOS on Apple M1</span>
+          <span>macOS &mdash; Universal</span>
         </A>
       </p>
       <p>
-        When you first open CodePerfect, you'll get a free 7-day trial.
-        Afterward you'll need a <Link to="/buy-license">license</Link> to keep
-        using CodePerfect.
+        When you first run CodePerfect, you'll get a free 7-day trial. You'll
+        need a <Link to="/buy-license">license</Link> to keep using CodePerfect
+        afterward.
       </p>
     </WallOfText>
   );
