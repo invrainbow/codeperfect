@@ -5205,16 +5205,10 @@ void Go_Indexer::init() {
     };
 
     auto get_env = [&](ccstr var) -> ccstr {
-        return copystr(GHGetGoEnv((char*)var));
+        return copystr(GHGetGoEnvVar((char*)var));
     };
 
     {
-        // gopath = copystr(GHGetGopath());
-        // if (gopath == NULL || gopath[0] == '\0')
-            // gopath = get_env("GOPATH");
-        // if (gopath == NULL || gopath[0] == '\0')
-            // our_panic("Unable to detect GOPATH. Please add it to ~/.cpconfig.");
-
         goroot = copystr(GHGetGoroot());
         if (goroot == NULL || goroot[0] == '\0')
             goroot = get_env("GOROOT");

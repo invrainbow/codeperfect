@@ -83,8 +83,8 @@ build/launcher: gostuff/ $(GOSTUFF_DIRS) $(GOSTUFF_FILES)
 		lipo -create -output ../build/launcher launcher.x64 launcher.arm64; \
 		rm launcher.x64 launcher.arm64
 
-build/bin/dynamic_helper.go: dynamic_helper.go
-	cp dynamic_helper.go build/bin/dynamic_helper.go
+build/bin/buildcontext.go: gostuff/buildcontext/main.go
+	cp gostuff/buildcontext/main.go build/bin/buildcontext.go
 
 build/bin/int.vim: init.vim
 	cp init.vim build/bin/init.vim

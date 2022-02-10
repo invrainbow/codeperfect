@@ -1,15 +1,17 @@
 package main
 
-import "C"
-
 import (
 	"bytes"
+	"encoding/gob"
 	"fmt"
+	"go/build"
 	"go/format"
 	"log"
 	"net"
 	"os"
 	"os/exec"
+	"path"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"syscall"
@@ -41,6 +43,12 @@ typedef struct _GH_Message {
 	char* title;
 	int32_t is_panic;
 } GH_Message;
+
+typedef struct _GH_Goenv_Init {
+	char *error;
+	int32_t init_done;
+	int32_t init_error;
+} GH_Goenv_Init;
 */
 import "C"
 
@@ -175,8 +183,8 @@ func GHGetBuildStatus(pstatus *int, plines *int) *C.GH_Build_Error {
 	return (*C.GH_Build_Error)(errorsptr)
 }
 
-//export GHGetGoEnv
-func GHGetGoEnv(name *C.char) *C.char {
+//export GHGetGoEnvVar
+func GHGetGoEnvVar(name *C.char) *C.char {
 	cmd := fmt.Sprintf("%s env %s", config.GoBinaryPath, C.GoString(name))
 	return C.CString(GetShellOutput(cmd))
 }
@@ -411,6 +419,78 @@ func GHGetConfigDir() *C.char {
 		return nil
 	}
 	return C.CString(configDir)
+}
+
+var buildctx struct {
+	Context  build.Context
+	InitDone bool
+	InitErr  bool
+	Err      error
+}
+
+//export GHGoenvInit
+func GHGoenvInit() {
+	setBuildError := func(err error) {
+		log.Print(err)
+		buildstuff.Err = err
+		buildstuff.InitDone = true
+		buildstuff.InitErr = true
+	}
+
+	initBuildStuff := func() {
+		dirpath, err := os.Executable()
+		if err != nil {
+			setBuildError(err)
+			return
+		}
+
+		filepath := path.Join(path.Dir(filepath), "buildcontext.go")
+		log.Printf("using buildcontext.go at %s", filepath)
+
+		out, err := exec.Command("go", "run", filepath).Output()
+		if err != nil {
+			setBuildError(err)
+			return
+		}
+
+		dec := gob.NewDecoder(bytes.NewBuffer(out))
+		if err := dec.Decode(&buildstuff.Context); err != nil {
+			setBuildError(err)
+			return
+		}
+
+		buildstuff.InitDone = true
+	}
+	go initBuildStuff()
+}
+
+//export GHGoenvGetStatus
+func GHGoenvGetStatus() *C.GH_Gobool {
+	return buildstuff.IsReady
+}
+
+//export GHGoenvCheckFileIncluded
+func GHGoenvCheckFileIncluded(cpath *C.char) bool {
+	if !(buildstuff.InitDone && !buildstuff.InitErr) {
+		return false
+	}
+	path := C.GoString(cpath)
+	match, err := buildstuff.Context.MatchFile(filepath.Dir(path), filepath.Base(path))
+	if err != nil {
+		log.Printf("%v", err)
+		return false
+	}
+	return match
+}
+
+//export GHGoenvCheckMinGoVersion
+func GHGoenvCheckMinGoVersion() bool {
+	for _, it := range build.Default.ReleaseTags {
+		if it == "go1.13" {
+			return true
+		}
+	}
+	return false
 }
 
 func main() {}

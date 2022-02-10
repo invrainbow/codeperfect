@@ -276,7 +276,7 @@ void fill_file_tree() {
 
     u32 depth = 0;
 
-    GHGitIgnoreInit(world.current_path);
+    GHGitIgnoreInit(world.current_path); // why do we need this here?
 
     fn<void(ccstr, FT_Node*)> recur = [&](ccstr path, FT_Node *parent) {
         FT_Node *last_child = parent->children;
