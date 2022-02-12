@@ -37,8 +37,7 @@ const LINKS = {
   buyPersonalYearly: "https://buy.stripe.com/fZefZb2aTdEAbi8aEN",
   buyProfessionalMonthly: "https://buy.stripe.com/6oE28ldTB5843PG9AK",
   buyProfessionalYearly: "https://buy.stripe.com/28o8wJ3eXfMI4TK5kv",
-  downloadIntel: "https://d2hzcm0ooi1duz.cloudfront.net/app/darwin_latest.zip",
-  downloadM1: "https://d2hzcm0ooi1duz.cloudfront.net/app/darwin_arm_latest.zip",
+  downloadMac: "https://d2hzcm0ooi1duz.cloudfront.net/app/darwin_latest.zip",
 };
 
 let API_BASE = "https://api.codeperfect95.com";
@@ -276,7 +275,7 @@ function Home() {
               className="absolute top-1/2 -left-16"
             >
               <img
-                className="w-full h-auto"
+                className="w-full h-auto border border-black rounded-lg shadow-md"
                 src={asset("/beta.png")}
                 alt="beta"
               />
@@ -347,7 +346,7 @@ function BuyLicenseBox({ className, ...props }) {
 
 function BuyLicense() {
   return (
-    <WallOfText>
+    <WallOfText width="3xl">
       <Title>Buy License</Title>
       <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
         <BuyLicenseBox>
@@ -359,7 +358,7 @@ function BuyLicense() {
           <PricingPoint not label="Company can't pay" />
           <PricingPoint not label="Purchase can't be expensed" />
 
-          <div className="grid grid-cols-2 gap-2 mt-4 pt-4 border-t">
+          <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t">
             <div>
               <div className="flex items-center mb-2">
                 <div className="leading-none text-xl font-bold text-gray-700">
@@ -393,7 +392,7 @@ function BuyLicense() {
           <PricingPoint label="Company can pay" />
           <PricingPoint label="Purchase can be expensed" />
 
-          <div className="grid grid-cols-2 gap-2 mt-4 pt-4 border-t">
+          <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t">
             <div>
               <div className="flex items-center mb-2">
                 <div className="leading-none text-xl font-bold text-gray-700">
@@ -431,27 +430,50 @@ function BuyLicense() {
 
 function Download() {
   return (
-    <WallOfText>
-      <Title>Download</Title>
-      <p>
-        CodePerfect is currently only supported on Mac. Here you can download a
-        universal binary that works on both Intel and Apple Silicon.
-      </p>
-      <p>
-        <A
-          href={LINKS.downloadIntel}
-          className="button download-button inline-flex items-center justify-center"
-        >
-          <Icon className="mr-1" icon={HiOutlineDownload} />
-          <span>macOS &mdash; Universal</span>
-        </A>
-      </p>
-      <p>
-        When you first run CodePerfect, you'll get a free 7-day trial. You'll
-        need a <Link to="/buy-license">license</Link> to keep using CodePerfect
-        afterward.
-      </p>
-    </WallOfText>
+    <div className="flex items-center flex-col md:flex-row max-w-screen-xl px-4 mx-auto my-8 md:my-16 md:gap-8">
+      <div className="max-w-sm md:pb-12">
+        <div className="text-3xl font-bold text-black">CodePerfect for Mac</div>
+        <p>Try CodePerfect for free for 7 days with all features available.</p>
+        <div className="my-6">
+          <p className="mb-2">
+            <A
+              href={LINKS.downloadMac}
+              className="button main-button inline-flex items-center justify-center"
+            >
+              <Icon className="mr-1" icon={HiOutlineDownload} />
+              <span>CodePerfect for Mac</span>
+            </A>
+          </p>
+          <p className="text-xs text-gray-400" style={{ marginTop: 0 }}>
+            Universal binary supports both Intel and Apple Silicon.
+          </p>
+        </div>
+        <p>
+          <A
+            className="inline-block border-b-2 border-gray-600 no-underline leading-none font-semibold"
+            href="https://docs.codeperfect95.com/overview/getting-started/"
+            style={{ paddingBottom: "2px" }}
+          >
+            Getting Started
+          </A>{" "}
+          /{" "}
+          <Link
+            className="inline-block border-b-2 border-gray-600 no-underline leading-none font-semibold"
+            to="/buy-license"
+            style={{ paddingBottom: "2px" }}
+          >
+            Buy License
+          </Link>
+        </p>
+      </div>
+      <div className="flex-1">
+        <img
+          className="w-full h-auto border border-gray-700 rounded-lg shadow-md"
+          src={asset("/beta.png")}
+          alt="beta"
+        />
+      </div>
+    </div>
   );
 }
 
@@ -821,6 +843,9 @@ function App() {
         <div>
           <Switch>
             <Route path="/download" exact>
+              <Redirect to="/download/mac" />
+            </Route>
+            <Route path="/download/mac" exact>
               <Download />
             </Route>
             <Route path="/buy-license" exact>
