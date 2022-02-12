@@ -1365,8 +1365,7 @@ int main(int argc, char **argv) {
         glUniformMatrix4fv(loc, 1, GL_FALSE, (float*)ortho_projection);
 
         for (u32 i = 0; i < __TEXTURE_COUNT__; i++) {
-            char key[] = {'t', 'e', 'x', (char)('0' + i), '\0'};
-            loc = glGetUniformLocation(world.ui.program, key);
+            loc = glGetUniformLocation(world.ui.program, our_sprintf("tex%d", i));
             glUniform1i(loc, i);
         }
     }
