@@ -4,7 +4,6 @@ import (
 	"archive/zip"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -13,9 +12,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/invrainbow/codeperfect/gostuff/models"
 	"github.com/invrainbow/codeperfect/gostuff/versions"
@@ -41,29 +38,6 @@ func DownloadFile(url string, f *os.File) error {
 		return fmt.Errorf("failed to copy anything")
 	}
 	return nil
-}
-
-func ReadLicense() *License {
-	homedir, err := os.UserHomeDir()
-	if err != nil {
-		return nil
-	}
-
-	log.Printf("homedir: %s\n", homedir)
-
-	licensefile := path.Join(homedir, ".cplicense")
-	log.Printf("licensefile: %s\n", licensefile)
-	buf, err := os.ReadFile(licensefile)
-	if err != nil {
-		return nil
-	}
-
-	var license License
-	if err := json.Unmarshal(buf, &license); err != nil {
-		return nil
-	}
-
-	return &license
 }
 
 /*
@@ -166,63 +140,21 @@ func Unzip(src string, dest string) error {
 	return nil
 }
 
-type AuthUpdateError struct {
-	RequiresExit bool
-	Message      string
-}
-
-func NewAuthUpdateError(exit bool, format string, args ...interface{}) *AuthUpdateError {
-	return &AuthUpdateError{
-		RequiresExit: exit,
-		Message:      fmt.Sprintf(format, args...),
-	}
-}
-
-const MessageInternetOffline = `
-It appears your internet is offline, or for some reason we're not able to connect to the server to authenticate your license key.
-
-The program will continue to run for a grace period of a week -- please just rerun CodePerfect at some point with an internet connection. Thanks!
-`
-
-const MessageInvalidCreds = `
-We were unable to authenticate your credentials. Please contact support@codeperfect95.com if you believe this was in error.
-
-The program will continue to run for a grace period of 24 hours.
-`
-
-func pushPanic(msg string) {
-	PushMessage(msg, "Authentication Error", true)
-}
-
-func pushWarning(msg string) {
-	PushMessage(msg, "Authentication", false)
-}
-
 func pushUnknownError(desc string, err error) {
 	if DebugModeFlag {
-		log.Printf("%v\n", err)
+		log.Printf("%s: %v\n", desc, err)
 	}
-	pushWarning(
-		fmt.Sprintf(
-			"%s: An unexpected error has occurred:\n\n%v\n\nThe program will continue to run, but please report this error to us if possible. Thanks!",
-			desc,
-			err,
-		),
-	)
-}
 
-// don't return error, we don't care
-func writeTime(filepath string, t time.Time) {
-	timestr := strconv.FormatInt(t.Unix(), 10)
-	os.WriteFile(filepath, []byte(timestr), os.ModePerm)
+	msg := fmt.Sprintf(
+		"An unexpected error has occurred:\n\n%s: %v\n\nThe program will continue to run, but please report this error to us if possible. Thanks!",
+		desc,
+		err,
+	)
+	PushMessage(msg, "Authentication", false)
 }
 
 func Update() {
 	osSlug := runtime.GOOS
-	if runtime.GOARCH == "arm64" {
-		osSlug += "_arm"
-	}
-
 	req := &models.UpdateRequest{
 		OS:             osSlug,
 		CurrentVersion: versions.CurrentVersion,
@@ -291,7 +223,6 @@ folder structure:
 	bin/
 		ide*
 		nvim*
-		gohelper.dylib       # includes autoupdate code
 		dynamic_gohelper.go
 		...
 	newbin/

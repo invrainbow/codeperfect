@@ -3,16 +3,14 @@ set -e
 
 VERSION="$(grep CurrentVersion gostuff/versions/versions.go | rev | cut -d' ' -f 1 | rev)"
 
-# clear out everything for a fresh build
-sh/make clean
+if [[ -z "$NO_REBUILD" ]]; then
+    sh/make clean
+    RELEASE=1 sh/build_macos
+fi
 
-# build again
-RELEASE=1 sh/build_macos
+rm -rf build/bin/ide.d
 
 OS_SLUG=darwin
-if [[ "$(sysctl -n machdep.cpu.brand_string)" = "Apple M1" ]]; then
-    OS_SLUG=darwin_arm
-fi
 
 package_app() {
     rm -rf CodePerfect.app
@@ -24,16 +22,16 @@ package_app() {
         -id com.codeperfect95 \
         ../build/launcher
 
-    rm -f CodePerfect.app/Contents/README
-    rm -f CodePerfect.app/Contents/MacOS/bin/ide.d
-
     cp -R ../build/bin/ "CodePerfect.app/Contents/MacOS/bin/"
+
+    rm -rf CodePerfect.app/Contents/README
+    rm -rf CodePerfect.app/Contents/MacOS/bin/ide.d
 
     zip -r app.zip CodePerfect.app/
 
     if [[ -z "$SKIP_UPLOAD" ]]; then
         aws s3 cp app.zip "s3://codeperfect95/app/${OS_SLUG}_v${VERSION}.zip"
-        aws s3 cp app.zip "s3://codeperfect95/app/${OS_SLUG}.zip"
+        aws s3 cp app.zip "s3://codeperfect95/app/${OS_SLUG}_latest.zip"
     fi
 }
 
@@ -44,7 +42,7 @@ package_update() {
 
     if [[ -z "$SKIP_UPLOAD" ]]; then
         aws s3 cp update.zip "s3://codeperfect95/update/${OS_SLUG}_v${VERSION}.zip"
-        aws s3 cp update.zip "s3://codeperfect95/update/${OS_SLUG}.zip"
+        aws s3 cp update.zip "s3://codeperfect95/update/${OS_SLUG}_latest.zip"
     fi
 }
 
@@ -55,10 +53,7 @@ cd scratch
 package_app
 package_update
 
-APP_HASH="$(sha256sum app.zip | cut -d' ' -f1)"
-UPDATE_HASH="$(sha256sum update.zip | cut -d' ' -f1)"
-
 pushd ../gostuff
 POSTGRES_URL=$POSTGRES_URL_PROD
-go run ./cmd/addversion "$VERSION" "$OS_SLUG" "$APP_HASH" "$UPDATE_HASH"
+go run ./cmd/addversion "$OS_SLUG" ../scratch/app.zip ../scratch/update.zip
 popd

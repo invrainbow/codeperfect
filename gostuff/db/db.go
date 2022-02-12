@@ -20,4 +20,5 @@ func init() {
 	DB.AutoMigrate(&models.User{})
 	DB.AutoMigrate(&models.Session{})
 	DB.AutoMigrate(&models.Version{})
+	DB.AutoMigrate(&models.CurrentVersion{})
 }

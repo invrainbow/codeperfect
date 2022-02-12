@@ -268,10 +268,6 @@ func GHAuth(rawEmail *C.char, rawLicenseKey *C.char) {
 	license.LicenseKey = C.GoString(rawLicenseKey)
 
 	osSlug := runtime.GOOS
-	if runtime.GOARCH == "arm64" {
-		osSlug += "_arm"
-	}
-
 	req := &models.AuthRequest{
 		OS:             osSlug,
 		CurrentVersion: versions.CurrentVersion,
