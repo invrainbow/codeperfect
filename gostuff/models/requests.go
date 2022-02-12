@@ -13,7 +13,7 @@ type UpdateResponse struct {
 	NeedAutoupdate bool   `json:"need_autoupdate"`
 	Version        int    `json:"version"`
 	DownloadURL    string `json:"download_url"`
-	DownloadHash   string `json:"string"`
+	DownloadHash   string `json:"download_hash"`
 }
 
 type AuthRequest struct {

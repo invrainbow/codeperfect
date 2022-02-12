@@ -12,11 +12,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/gin-gonic/gin"
 	"github.com/invrainbow/codeperfect/gostuff/cmd/lib"
 	"github.com/invrainbow/codeperfect/gostuff/db"
 	"github.com/invrainbow/codeperfect/gostuff/models"
-	"github.com/invrainbow/codeperfect/gostuff/versions"
 	"github.com/stripe/stripe-go/v72"
 	"github.com/stripe/stripe-go/v72/billingportal/session"
 	"github.com/stripe/stripe-go/v72/customer"
@@ -82,9 +82,9 @@ func authUser(c *gin.Context) (*models.User, error) {
 	return &user, nil
 }
 
-var validOSes = map[string]bool{
-	"darwin":     true,
-	"darwin_arm": true,
+func isOSValid(os string) bool {
+	// for now only darwin is valid
+	return os == "darwin"
 }
 
 var SendAlertsForSelf = (os.Getenv("SEND_ALERTS_FOR_SELF") == "1")
@@ -107,30 +107,37 @@ func PostUpdate(c *gin.Context) {
 		return
 	}
 
-	if req.CurrentVersion > versions.CurrentVersion {
-		sendError(c, "Invalid version.")
-		return
-	}
-
-	if !validOSes[req.OS] {
+	if !isOSValid(req.OS) {
 		sendError(c, "Invalid OS.")
 		return
 	}
 
+	var currentVersion models.CurrentVersion
+	if res := db.DB.First(&currentVersion, "os = ?", req.OS); res.Error != nil {
+		sendServerError(c, "unable to grab current version: %v", res.Error)
+		return
+	}
+
+	if req.CurrentVersion > currentVersion.Version {
+		sendError(c, "Invalid version.")
+		return
+	}
+
 	resp := &models.UpdateResponse{
-		Version:        versions.CurrentVersion,
-		NeedAutoupdate: req.CurrentVersion < versions.CurrentVersion,
+		Version:        currentVersion.Version,
+		NeedAutoupdate: req.CurrentVersion < currentVersion.Version,
 	}
 
 	if resp.NeedAutoupdate {
 		var versionObj models.Version
-		res := db.DB.Where("version = ? AND os = ?", versions.CurrentVersion, req.OS).First(&versionObj)
+		res := db.DB.First(&versionObj, "version = ? AND os = ?", currentVersion.Version, req.OS)
 		if res.Error != nil {
 			sendServerError(c, "find version: %v", res.Error)
 			return
 		}
 
-		url := "https://d2hzcm0ooi1duz.cloudfront.net/update/%v.zip"
+		url := "https://d2hzcm0ooi1duz.cloudfront.net/update/%v_latest.zip"
+		spew.Dump(versionObj)
 		resp.DownloadURL = fmt.Sprintf(url, req.OS)
 		resp.DownloadHash = versionObj.UpdateHash
 	}

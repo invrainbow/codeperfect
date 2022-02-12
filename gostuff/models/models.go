@@ -31,4 +31,10 @@ type Version struct {
 	UpdateHash string
 }
 
+type CurrentVersion struct {
+	gorm.Model
+	OS      string
+	Version int
+}
+
 // users email license_key stripe_cus_id stripe_cus_status
