@@ -1,24 +1,18 @@
 #pragma once
 
-#if (__cplusplus >= 201100) || (defined(_MSVC_LANG) && _MSVC_LANG >= 201100)
-#   define OFFSETOF(_TYPE,_MEMBER)  offsetof(_TYPE, _MEMBER)
-#else
-#   define OFFSETOF(_TYPE,_MEMBER)  ((size_t)&(((_TYPE*)0)->_MEMBER))
-#endif
-
-// meant to be used inside sdfields
-#define SERDE_OFFSET(x) OFFSETOF(decltype(this), x)
+#include "common.hpp"
+#include "os.hpp"
 
 enum Serde_Type {
     SERDE_INT,
-    SERDE_DOUBLE,
+    SERDE_FLOAT,
     SERDE_BOOL,
     SERDE_STRING,
     SERDE_ARRAY,
+    SERDE_FIXSTR,
     _SERDE_BUILTINS_COUNT,
-
     _SERDE_CUSTOM_START = 1024,
-    SERDE_SETTINGS,
+    SERDE_SETTINGS, // deprecated
     SERDE_OPTIONS,
     SERDE_BUILD_PROFILE,
     SERDE_DEBUG_PROFILE,
@@ -27,34 +21,17 @@ enum Serde_Type {
 
 typedef i32    serde_int;
 typedef bool   serde_bool;
-typedef double serde_double;
+typedef float  serde_float;
 typedef ccstr  serde_string;
+typedef char   serde_char;
 
-struct Serde_Field {
-    int id;
-    int struct_offset;
-    Serde_Type type;
-};
-
-struct Serde_Type_Info {
-    Serde_Type type;
-    List<Serde_Field> *fields;
-
-    add_field(int id, Serde_Type 
-};
-
-extern List<Serde_Type_Info> *serde_types;
-
-void init_serde();
-Serde_Type_Info* get_type_info();
-
-enum Serde_Read_Type {
-    SRT_FILE_MAPPING,
-    SRT_FILE,
+enum Serde_Io_Type {
+    SERDE_IO_FILEMAPPING,
+    SERDE_IO_FILE,
 };
 
 struct Serde {
-    Serde_Read_Type read_type;
+    Serde_Io_Type iotype;
     bool ok;
 
     union {
@@ -65,113 +42,82 @@ struct Serde {
         };
     };
 
-    void init() {
-        ptr0(this);
-        // TODO
-    }
+    bool init(ccstr filename, bool write);
 
-    /*
-    def read_type():
-        serde_type = read4()
-        if serde_type == SERDE_ARRAY:
-            len = read4()
-            return [read() for _ in range(len)]
-        elif serde_type in [SERDE_INT, SERDE_DOUBLE, SERDE_BOOL]:
-            return readn()
+    void init(File *_file);
+    void init(File_Mapping *fm, int starting_offset = 0);
 
-    4 bytes: serde_type
-    if it's an array
-        4 bytes: array length
-    n bytes: value
-    */
+    void readn(char *buf, int n);
+    serde_int read_int();
+    serde_bool read_bool();
+    serde_float read_float();
+    serde_string read_string();
+    void read_type_field(void* out, int type, int field_id);
+    void read_type(void* out, int type);
+    void read_fixstr(char *out, int maxlen);
 
-    void readn(char *buf, int n) {
-        switch (read_type) {
-        case SRT_FILE:
-            // TODO
-            break;
-        case SRT_FILE_MAPPING:
-            // TODO
-            break;
-        }
-    }
+    void writen(char* buf, int n);
+    void write_int(serde_int val);
+    void write_bool(serde_bool val);
+    void write_float(serde_float val);
+    void write_string(serde_string val);
+    void write_field(int field_id, void* val, int type);
+    void write_type(void* val, int type);
+    void write_fixstr_field(int field_id, serde_char *s, int len);
+
+    // =======
+    // Templates. I think I read somewhere that templates have to be in the
+    // header? I don't know, C++ is dumb.
+    // =======
 
     template<typename T>
     T read_primitive() {
-        T ret;
+        T ret; ptr0(&ret);
         readn((char*)(&ret), sizeof(T));
         return ret;
     }
 
-    serde_int read_int() { return read_primitive<serde_int>(); }
-    serde_bool read_bool() { return read_primitive<serde_bool>(); }
-    serde_double read_double() { return read_primitive<serde_double>(); }
+    template<typename T>
+    void write_primitive(T val) {
+        writen((char*)(&val), sizeof(T));
+    }
 
-    serde_string read_string() {
-        auto len = read_int();
-        auto ret = alloc_array(char, len+1);
-        readn(ret, len);
-        ret[len] = '\0';
-        return ret;
+    template<typename T>
+    void write_array_field(int field_id, List<T> *val, int type) {
+        write_int(field_id);
+        if (!ok) return;
+
+        write_int(SERDE_ARRAY);
+        if (!ok) return;
+
+        write_int(val->len);
+        if (!ok) return;
+
+        For (*val) {
+            write_type(&it, type);
+            if (!ok) break;
+        }
     }
 
     template<typename T>
     List<T> *read_array(int type) {
-        auto len = read4();
-        auto ret = alloc_list<T>();
+        auto t = read_int();
+        if (t != SERDE_ARRAY) {
+            ok = false;
+            return NULL;
+        }
 
+        auto len = read_int();
+        if (!ok) return NULL;
+
+        auto ret = alloc_list<T>();
         for (u32 i = 0; i < len; i++) {
             T obj;
             read_type(&obj, type);
+            if (!ok) return NULL;
+
             ret->append(&obj);
         }
         return ret;
-    }
-
-    template<typename T>
-    void read_type(T *out, int type) {
-        auto stored_type = read_int();
-        if (!ok) return;
-
-        if (stored_type != type) {
-            ok = false;
-            return;
-        }
-
-        auto type_info = get_type_info(type);
-
-        while (true) {
-            auto field_id = read_int();
-            if (field_id == 0) break;;
-
-            auto find_field = [&]() -> Serde_Field* {
-                For (*type_info->fields)
-                    if (it.id == field_id) 
-                        return &it;
-                return NULL;
-            };
-
-            auto field = find_field();
-            if (field == NULL) {
-                out->sdread(this, field_id);
-            } else {
-                switch (it.type) {
-                case SERDE_INT:
-                    *(serde_int*)((char*)out + it.struct_offset) = read_int();
-                    break;
-                case SERDE_DOUBLE:
-                    *(serde_double*)((char*)out + it.struct_offset) = read_double();
-                    break;
-                case SERDE_BOOL:
-                    *(serde_bool*)((char*)out + it.struct_offset) = read_bool();
-                    break;
-                case SERDE_STRING:
-                    *(serde_string*)((char*)out + it.struct_offset) = read_string();
-                    break;
-                default:
-                    our_panic("fields returned by sdfields must be primitives");
-                }
-            }
-        }
     }
 };

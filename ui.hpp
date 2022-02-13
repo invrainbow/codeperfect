@@ -127,7 +127,7 @@ struct Wnd {
     bool show;
     bool focused;
     // https://github.com/ocornut/imgui/issues/4293#issuecomment-914322632
-    bool focused_prev; 
+    bool focused_prev;
     bool first_open_focus_twice_done;
     bool appearing;
     bool focusing;

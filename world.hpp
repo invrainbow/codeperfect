@@ -271,6 +271,7 @@ struct World {
     Pool find_interfaces_mem;
     Pool caller_hierarchy_mem;
     Pool callee_hierarchy_mem;
+    Pool project_settings_mem;
 
     Fridge<Mark> mark_fridge;
     Fridge<Mark_Node> mark_node_fridge;
@@ -321,7 +322,6 @@ struct World {
     u64 next_build_id;
 
     char go_binary_path[MAX_PATH];
-    char delve_path[MAX_PATH];
     char current_path[MAX_PATH];
 
     Pane _panes[MAX_PANES];
@@ -476,7 +476,9 @@ struct World {
     } wnd_about;
 
     struct Wnd_Project_Settings : Wnd {
-        Project_Settings tmp;
+        Pool pool;
+
+        Project_Settings *tmp;
         int current_debug_profile;
         int current_build_profile;
         int tmp_debug_profile_type;
@@ -694,3 +696,5 @@ void do_find_implementations();
 
 void read_auth();
 void write_auth();
+
+bool write_project_settings();

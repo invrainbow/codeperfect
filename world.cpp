@@ -329,7 +329,7 @@ bool copy_file(ccstr src, ccstr dest) {
 
     // TODO: map this into memory too?
     File f;
-    if (f.init(dest, FILE_MODE_WRITE, FILE_CREATE_NEW) != FILE_RESULT_SUCCESS)
+    if (f.init_write(dest) != FILE_RESULT_OK)
         return false;
     defer { f.cleanup(); };
 
@@ -360,6 +360,7 @@ void World::init(GLFWwindow *_wnd) {
     init_mem(find_interfaces_mem);
     init_mem(caller_hierarchy_mem);
     init_mem(callee_hierarchy_mem);
+    init_mem(project_settings_mem);
 #undef init_mem
 
     MEM = &frame_mem;
@@ -386,32 +387,23 @@ void World::init(GLFWwindow *_wnd) {
         auto filepath = path_join(configpath, ".options");
 
         File f;
-        if (f.init(filepath, FILE_MODE_READ, FILE_OPEN_EXISTING) != FILE_RESULT_SUCCESS)
+        if (f.init_read(filepath) != FILE_RESULT_OK)
             break;
-
         defer { f.cleanup(); };
-        f.read((char*)&options, sizeof(options));
+
+        Serde serde;
+        serde.init(&f);
+        serde.read_type(&options, SERDE_OPTIONS);
     } while (0);
 
     world.use_nvim = options.enable_vim_mode;
 
-    if (!GHInitConfig())
-        our_panic("Unable to load ~/.cpconfig. Please make sure the file exists and is formatted properly (see Getting Started in our docs).");
-
     {
         auto go_binary_path = GHGetGoBinaryPath();
         if (go_binary_path == NULL)
-            our_panic("Please set your Go binary path in ~/.cpconfig.");
+            our_panic("Unable to find Go. Please make sure it's installed, and accessible from a Bash shell (with .bashrc).");
         defer { GHFree(go_binary_path); };
-        strcpy_safe(world.go_binary_path, _countof(world.go_binary_path), go_binary_path);
-    }
-
-    {
-        auto delve_path = GHGetDelvePath();
-        if (delve_path != NULL) {
-            defer { GHFree(delve_path); };
-            strcpy_safe(world.delve_path, _countof(world.delve_path), delve_path);
-        }
+        strcpy_safe_fixed(world.go_binary_path, go_binary_path);
     }
 
     {
@@ -430,9 +422,9 @@ void World::init(GLFWwindow *_wnd) {
 
         // if testing
         if (world.window == NULL) {
-            strcpy_safe(current_path, _countof(current_path), "/Users/bh/ide/api");
+            strcpy_safe_fixed(current_path, "/Users/bh/ide/api");
         } else if (gargc >= 2) {
-            strcpy_safe(current_path, _countof(current_path), gargv[1]);
+            strcpy_safe_fixed(current_path, gargv[1]);
         } else {
             Select_File_Opts opts; ptr0(&opts);
             opts.buf = current_path;
@@ -444,8 +436,31 @@ void World::init(GLFWwindow *_wnd) {
 
         GHGitIgnoreInit(current_path);
         xplat_chdir(current_path);
+    }
 
-        project_settings.read(path_join(current_path, ".cpproj"));
+    // read project settings
+    // TODO: handle errors
+    {
+        auto read_project_settings = [&]() {
+            auto filepath = path_join(current_path, ".cpproj");
+            File f;
+            if (f.init_read(filepath) != FILE_RESULT_OK)
+                return false;
+            defer { f.cleanup(); };
+
+            Serde serde;
+            serde.init(&f);
+            {
+                SCOPED_MEM(&world.project_settings_mem);
+                serde.read_type(&project_settings, SERDE_PROJECT_SETTINGS);
+            }
+            return serde.ok;
+        };
+
+        if (!read_project_settings()) {
+            SCOPED_MEM(&world.project_settings_mem);
+            project_settings.load_defaults();
+        }
     }
 
     indexer.init();
@@ -829,10 +844,7 @@ Jump_To_Definition_Result *get_current_definition(ccstr *filepath, bool display_
         *filepath = editor->filepath;
 
     // copy using caller mem
-    auto ret = clone(result);
-    ret->file = our_strcpy(result->file);
-    ret->decl = result->decl->copy_decl();
-    return ret;
+    return result->copy();
 }
 
 void handle_goto_definition(cur2 pos) {
@@ -2506,7 +2518,7 @@ void open_add_file_or_folder(bool folder, FT_Node *dest) {
 
     wnd.location_is_root = is_root();
     if (!wnd.location_is_root)
-        strcpy_safe(wnd.location, _countof(wnd.location), ft_node_to_path(node));
+        strcpy_safe_fixed(wnd.location, ft_node_to_path(node));
 
     wnd.folder = folder;
     wnd.show = true;
@@ -2919,7 +2931,7 @@ done_writing:
     // write to disk
     {
         File f;
-        if (f.init(filepath, FILE_MODE_WRITE, FILE_CREATE_NEW) != FILE_RESULT_SUCCESS)
+        if (f.init_write(filepath) != FILE_RESULT_OK)
             return;
         defer { f.cleanup(); };
         buf.write(&f);
@@ -2973,7 +2985,7 @@ ccstr get_auth_filepath() {
 
 void read_auth() {
     File f;
-    if (f.init(get_auth_filepath(), FILE_MODE_READ, FILE_OPEN_EXISTING) != FILE_RESULT_SUCCESS) {
+    if (f.init_read(get_auth_filepath()) != FILE_RESULT_OK) {
         ptr0(&world.auth);
         return;
     }
@@ -2983,9 +2995,22 @@ void read_auth() {
 
 void write_auth() {
     File f;
-    if (f.init(get_auth_filepath(), FILE_MODE_WRITE, FILE_CREATE_NEW) != FILE_RESULT_SUCCESS)
+    if (f.init_write(get_auth_filepath()) != FILE_RESULT_OK)
         return;
     defer { f.cleanup(); };
     f.write((char*)&world.auth, sizeof(world.auth));
 }
 
+bool write_project_settings() {
+    auto filepath = path_join(world.current_path, ".cpproj");
+
+    File f;
+    if (f.init_write(filepath) != FILE_RESULT_OK)
+        return false;
+    defer { f.cleanup(); };
+
+    Serde serde;
+    serde.init(&f);
+    serde.write_type(&project_settings, SERDE_PROJECT_SETTINGS);
+    return serde.ok;
+}

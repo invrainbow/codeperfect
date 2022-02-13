@@ -296,7 +296,7 @@ int main(int argc, char **argv) {
 
         auto email = our_sprintf("%.*s", auth.reg_email_len, auth.reg_email);
         auto license = our_sprintf("%.*s", auth.reg_license_len, auth.reg_license);
-        strcpy_safe(world.authed_email, _countof(world.authed_email), auth.reg_email);
+        strcpy_safe_fixed(world.authed_email, auth.reg_email);
 
         GHAuth((char*)email, (char*)license);
         break;

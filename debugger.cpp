@@ -967,8 +967,8 @@ bool Debugger::start(Debug_Profile *debug_profile) {
                 cmd = our_sprintf("%s test -c %s -o %s --gcflags=\"all=-N -l\"", world.go_binary_path, package_path, binary_name);
 
             Build_Profile build_profile; ptr0(&build_profile);
-            strcpy_safe(build_profile.label, _countof(build_profile.label), "temp");
-            strcpy_safe(build_profile.cmd, _countof(build_profile.cmd), cmd);
+            strcpy_safe_fixed(build_profile.label, "temp");
+            strcpy_safe_fixed(build_profile.cmd, cmd);
 
             world.error_list.show = true;
             world.error_list.cmd_focus = true;
@@ -1006,13 +1006,22 @@ bool Debugger::start(Debug_Profile *debug_profile) {
     dlv_proc.dir = world.current_path;
     // dlv_proc.create_new_console = true;
 
-    if (world.delve_path[0] == '\0') {
+    ccstr delve_path = NULL;
+    {
+        auto path = GHGetDelvePath();
+        if (path != NULL) {
+            delve_path = our_strcpy(path);
+            defer { GHFree(path); };
+        }
+    }
+
+    if (delve_path == NULL || delve_path[0] == '\0') {
         dbg_print("delve path is empty");
-        send_tell_user("Please set your Delve binary path in ~/.cpconfig, and restart CodePerfect.", NULL);
+        send_tell_user("Couldn't find Delve. Please make sure it's installed and accessible from a Bash shell.", NULL);
         return false;
     }
 
-    ccstr dlv_cmd = our_sprintf("%s exec --headless --listen=127.0.0.1:1234 %s", world.delve_path, binary_path);
+    ccstr dlv_cmd = our_sprintf("%s exec --headless --listen=127.0.0.1:1234 %s", delve_path, binary_path);
     if (debug_profile->type == DEBUG_TEST_CURRENT_FUNCTION)
         dlv_cmd = our_sprintf("%s -- -test.v -test.run %s", dlv_cmd, test_function_name);
 
@@ -1224,8 +1233,8 @@ void Debugger::do_everything() {
 
                     {
                         SCOPED_MEM(&watches_mem);
-                        strcpy_safe(watch->expr, _countof(watch->expr), args.expression);
-                        strcpy_safe(watch->expr_tmp, _countof(watch->expr_tmp), args.expression);
+                        strcpy_safe_fixed(watch->expr, args.expression);
+                        strcpy_safe_fixed(watch->expr_tmp, args.expression);
                     }
 
                     if (state_flag == DLV_STATE_PAUSED)
@@ -1244,8 +1253,8 @@ void Debugger::do_everything() {
 
                     {
                         SCOPED_MEM(&watches_mem);
-                        strcpy_safe(watch->expr, _countof(watch->expr), args.expression);
-                        strcpy_safe(watch->expr_tmp, _countof(watch->expr_tmp), args.expression);
+                        strcpy_safe_fixed(watch->expr, args.expression);
+                        strcpy_safe_fixed(watch->expr_tmp, args.expression);
                     }
 
                     if (state_flag == DLV_STATE_PAUSED)
@@ -1391,8 +1400,8 @@ void Debugger::do_everything() {
 
                     Debug_Profile *debug_profile = NULL;
                     if (it.type == DLVC_DEBUG_TEST_UNDER_CURSOR) {
-                        for (int i = 0; i < project_settings.debug_profiles_len; i++) {
-                            auto &it = project_settings.debug_profiles[i];
+                        for (int i = 0; i < project_settings.debug_profiles->len; i++) {
+                            auto &it = project_settings.debug_profiles->at(i);
                             if (it.is_builtin && it.type == DEBUG_TEST_CURRENT_FUNCTION) {
                                 debug_profile = &it;
                                 break;

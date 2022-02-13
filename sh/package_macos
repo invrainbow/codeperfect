@@ -6,6 +6,7 @@ VERSION="$(grep CurrentVersion gostuff/versions/versions.go | rev | cut -d' ' -f
 if [[ -z "$NO_REBUILD" ]]; then
     sh/make clean
     RELEASE=1 sh/build_macos
+    sh/make build/launcher
 fi
 
 rm -rf build/bin/ide.d

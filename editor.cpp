@@ -1066,7 +1066,7 @@ bool Editor::load_file(ccstr new_filepath) {
         if (path == NULL)
             return error("unable to normalize filepath"), false;
 
-        strcpy_safe(filepath, _countof(filepath), path);
+        strcpy_safe_fixed(filepath, path);
 
         auto fm = map_file_into_memory(filepath);
         if (fm == NULL) {
@@ -1176,7 +1176,7 @@ Editor* Pane::open_empty_editor() {
 
 bool Editor::save_file() {
     File f;
-    if (f.init(filepath, FILE_MODE_WRITE, FILE_CREATE_NEW) != FILE_RESULT_SUCCESS)
+    if (f.init_write(filepath) != FILE_RESULT_OK)
         return error("unable to open %s for writing", filepath), false;
     defer { f.cleanup(); };
 
@@ -2454,7 +2454,7 @@ void Editor::handle_save(bool about_to_close) {
         disable_file_watcher_until = current_time_nano() + (2 * 1000000000);
 
         File f;
-        if (f.init(filepath, FILE_MODE_WRITE, FILE_CREATE_NEW) != FILE_RESULT_SUCCESS) {
+        if (f.init_write(filepath) != FILE_RESULT_OK) {
             tell_user("Unable to save file.", "Error");
             return;
         }

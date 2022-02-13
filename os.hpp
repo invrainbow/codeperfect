@@ -195,7 +195,7 @@ enum File_Open_Mode {
 };
 
 enum File_Result {
-    FILE_RESULT_SUCCESS,
+    FILE_RESULT_OK,
     FILE_RESULT_FAILURE,
     FILE_RESULT_ALREADY_EXISTS,
 };
@@ -211,6 +211,15 @@ struct File {
 #endif
 
     File_Result init(ccstr path, int access, File_Open_Mode open_mode);
+
+    File_Result init_read(ccstr path) {
+        return init(path, FILE_MODE_READ, FILE_OPEN_EXISTING);
+    }
+
+    File_Result init_write(ccstr path) {
+        return init(path, FILE_MODE_WRITE, FILE_CREATE_NEW);
+    }
+
     void cleanup();
     bool read(char *buf, s32 size);
     bool write(char *buf, s32 size);

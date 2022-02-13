@@ -7,12 +7,10 @@ Project_Settings project_settings;
 
 // --- main code
 
-void Project_Settings::copy(Project_Settings *other) {
-    memcpy(this, other, sizeof(*this));
-}
-
 void Project_Settings::load_defaults() {
     ptr0(this);
+    build_profiles = alloc_list<Build_Profile>();
+    debug_profiles = alloc_list<Debug_Profile>();
 
     // This is designed so that debug/build profiles is never empty, and
     // active_debug_profile/active_build_profile always points to a valid profile.
@@ -20,55 +18,35 @@ void Project_Settings::load_defaults() {
     active_debug_profile = 1; // can't select "test function under cursor" as default profile
 
     {
-        auto bp = &build_profiles[build_profiles_len++];
-        strcpy_safe(bp->label, _countof(bp->label), "Project");
-        strcpy_safe(bp->cmd, _countof(bp->cmd), "go build");
+        auto bp = build_profiles->append();
+        strcpy_safe_fixed(bp->label, "Project");
+        strcpy_safe_fixed(bp->cmd, "go build");
     }
 
     {
-        auto dp = &debug_profiles[debug_profiles_len++];
+        auto dp = debug_profiles->append();
         dp->type = DEBUG_TEST_CURRENT_FUNCTION;
         dp->is_builtin = true;
-        strcpy_safe(dp->label, _countof(dp->label), "Test Function Under Cursor");
+        strcpy_safe_fixed(dp->label, "Test Function Under Cursor");
     }
 
     {
-        auto dp = &debug_profiles[debug_profiles_len++];
+        auto dp = debug_profiles->append();
         dp->type = DEBUG_RUN_PACKAGE;
-        strcpy_safe(dp->label, _countof(dp->label), "Run Package");
+        strcpy_safe_fixed(dp->label, "Run Package");
         dp->run_package.use_current_package = true;
     }
 
     {
-        auto dp = &debug_profiles[debug_profiles_len++];
+        auto dp = debug_profiles->append();
         dp->type = DEBUG_RUN_BINARY;
-        strcpy_safe(dp->label, _countof(dp->label), "Run Binary");
+        strcpy_safe_fixed(dp->label, "Run Binary");
     }
 
     {
-        auto dp = &debug_profiles[debug_profiles_len++];
+        auto dp = debug_profiles->append();
         dp->type = DEBUG_TEST_PACKAGE;
-        strcpy_safe(dp->label, _countof(dp->label), "Test Package");
+        strcpy_safe_fixed(dp->label, "Test Package");
         dp->test_package.use_current_package = true;
     }
-}
-
-void Project_Settings::read(ccstr file) {
-    File f;
-    if (f.init(file, FILE_MODE_READ, FILE_OPEN_EXISTING) != FILE_RESULT_SUCCESS) {
-        load_defaults();
-        return;
-    }
-    defer { f.cleanup(); };
-
-    f.read((char*)this, sizeof(*this));
-}
-
-void Project_Settings::write(ccstr file) {
-    File f;
-    if (f.init(file, FILE_MODE_WRITE, FILE_CREATE_NEW) != FILE_RESULT_SUCCESS)
-        return;
-    defer { f.cleanup(); };
-
-    f.write((char*)this, sizeof(*this));
 }

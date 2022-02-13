@@ -186,7 +186,7 @@ bool list_directory(ccstr folder, list_directory_cb cb) {
 
         Dir_Entry info;
         info.type = (ent->d_type == DT_DIR ? DIRENT_DIR : DIRENT_FILE);
-        strcpy_safe(info.name, _countof(info.name), ent->d_name);
+        strcpy_safe_fixed(info.name, ent->d_name);
         cb(&info);
     }
 
@@ -258,7 +258,7 @@ File_Result File::init(ccstr path, u32 mode, File_Open_Mode open_mode) {
 
     // TODO: handle the FILE_RESULT_ALREADY_EXISTS case.
 
-    return FILE_RESULT_SUCCESS;
+    return FILE_RESULT_OK;
 }
 
 void File::cleanup() {

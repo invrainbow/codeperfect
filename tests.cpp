@@ -199,7 +199,7 @@ struct Mark_Tree_Fuzzer {
 
     bool run() {
         File f;
-        if (f.init("mark_tree_fuzzer_output", FILE_MODE_WRITE, FILE_CREATE_NEW) != FILE_RESULT_SUCCESS)
+        if (f.init_write("mark_tree_fuzzer_output") != FILE_RESULT_OK)
             return false;
         defer { f.cleanup(); };
 
@@ -262,7 +262,7 @@ struct Mark_Tree_Fuzzer {
         // read actions
         {
             File f;
-            if (f.init("mark_tree_fuzzer_output", FILE_MODE_READ, FILE_OPEN_EXISTING) != FILE_RESULT_SUCCESS)
+            if (f.init_read("mark_tree_fuzzer_output") != FILE_RESULT_OK)
                 return false;
             defer { f.cleanup(); };
 

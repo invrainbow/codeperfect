@@ -30,7 +30,7 @@ void init_global_colors() {
 #if 0 // def DEBUG_MODE
     if (check_path("/Users/brandon/.cpcolors") == CPR_FILE) {
         File f;
-        f.init("/Users/brandon/.cpcolors", FILE_MODE_READ, FILE_OPEN_EXISTING);
+        f.init_read("/Users/brandon/.cpcolors");
         f.read((char*)&global_colors, sizeof(global_colors));
         f.cleanup();
         return;
@@ -1668,8 +1668,8 @@ void open_rename(FT_Node *target) {
     wnd.show = true;
     wnd.target = target;
 
-    strcpy_safe(wnd.location, _countof(wnd.location), ft_node_to_path(target));
-    strcpy_safe(wnd.name, _countof(wnd.name), target->name);
+    strcpy_safe_fixed(wnd.location, ft_node_to_path(target));
+    strcpy_safe_fixed(wnd.name, target->name);
 }
 
 void UI::imgui_small_newline() {
@@ -1693,13 +1693,17 @@ bool UI::imgui_input_text_full(ccstr label, char *buf, int count, int flags) {
 
 void UI::open_project_settings() {
     auto &wnd = world.wnd_project_settings;
-
     if (wnd.show) return;
 
     wnd.focus_general_settings = true;
 
-    ptr0(&wnd.tmp);
-    wnd.tmp.copy(&project_settings);
+    {
+        wnd.pool.cleanup();
+        wnd.pool.init();
+        SCOPED_MEM(&wnd.pool);
+        wnd.tmp = project_settings.copy();
+    }
+
     wnd.show = true;
 }
 
@@ -2001,12 +2005,12 @@ void UI::draw_everything() {
 
             // TODO: add these as commands
             if (ImGui::BeginMenu("Select Active Build Profile..."))  {
-                if (project_settings.build_profiles_len > 0) {
-                    for (int i = 0; i < project_settings.build_profiles_len; i++) {
-                        auto &it = project_settings.build_profiles[i];
+                if (project_settings.build_profiles->len > 0) {
+                    for (int i = 0; i < project_settings.build_profiles->len; i++) {
+                        auto &it = project_settings.build_profiles->at(i);
                         if (ImGui::MenuItem(it.label, NULL, project_settings.active_build_profile == i, true)) {
                             project_settings.active_build_profile = i;
-                            project_settings.write(path_join(world.current_path, ".cpproj"));
+                            write_project_settings();
                         }
                     }
                 } else {
@@ -2050,12 +2054,12 @@ void UI::draw_everything() {
 
             if (ImGui::BeginMenu("Select Active Debug Profile..."))  {
                 // TODO(robust): we should handle the builtins more explicitly, instead of using hardcoded value of 1
-                if (project_settings.debug_profiles_len > 1) {
-                    for (int i = 1; i < project_settings.debug_profiles_len; i++) {
-                        auto &it = project_settings.debug_profiles[i];
+                if (project_settings.debug_profiles->len > 1) {
+                    for (int i = 1; i < project_settings.debug_profiles->len; i++) {
+                        auto &it = project_settings.debug_profiles->at(i);
                         if (ImGui::MenuItem(it.label, NULL, project_settings.active_debug_profile == i, true)) {
                             project_settings.active_debug_profile = i;
-                            project_settings.write(path_join(world.current_path, ".cpproj"));
+                            write_project_settings();
                         }
                     }
                 } else {
@@ -2221,11 +2225,13 @@ void UI::draw_everything() {
                     auto filepath = path_join(configdir, ".options");
 
                     File f;
-                    if (f.init(filepath, FILE_MODE_WRITE, FILE_CREATE_NEW) != FILE_RESULT_SUCCESS)
+                    if (f.init_write(filepath) != FILE_RESULT_OK)
                         break;
-
                     defer { f.cleanup(); };
-                    f.write((char*)&options, sizeof(options));
+
+                    Serde serde;
+                    serde.init(&f);
+                    serde.write_type(&options, SERDE_OPTIONS);
                 } while (0);
 
                 if (wnd.something_that_needs_restart_was_changed) {
@@ -2862,8 +2868,8 @@ void UI::draw_everything() {
                 break;
             }
 
-            strcpy_safe(auth.reg_email, _countof(auth.reg_email), wnd.email);
-            strcpy_safe(auth.reg_license, _countof(auth.reg_license), wnd.license);
+            strcpy_safe_fixed(auth.reg_email, wnd.email);
+            strcpy_safe_fixed(auth.reg_license, wnd.license);
             auth.reg_email_len = email_len;
             auth.reg_license_len = license_len;
             write_auth();
@@ -3489,7 +3495,7 @@ void UI::draw_everything() {
 
                 begin_container_child(); {
                     imgui_with_disabled(true, [&]() {
-                        ImGui::Checkbox("Search vendor before GOMODCACHE", &ps.search_vendor_before_modcache);
+                        ImGui::Checkbox("Search vendor before GOMODCACHE", &ps->search_vendor_before_modcache);
                     });
                 } ImGui::EndChild();
 
@@ -3557,35 +3563,36 @@ void UI::draw_everything() {
                         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 4));
                         defer { ImGui::PopStyleVar(); };
 
-                        for (int i = 0; i < ps.debug_profiles_len; i++) {
-                            auto &it = ps.debug_profiles[i];
-                            if (ImGui::Selectable(it.label, wnd.current_debug_profile == i))
+                        for (int i = 0; i < ps->debug_profiles->len; i++) {
+                            auto &it = ps->debug_profiles->at(i);
+                            auto label = our_sprintf("%s##debug_profile_%d", it.label, i);
+                            if (ImGui::Selectable(label, wnd.current_debug_profile == i))
                                 wnd.current_debug_profile = i;
                         }
                     } ImGui::EndChild();
 
                     begin_profiles_buttons_child(); {
                         if (imgui_icon_button(ICON_MD_ADD)) {
-                            if (ps.debug_profiles_len < _countof(ps.debug_profiles)) {
-                                Debug_Profile prof; ptr0(&prof);
-                                prof.type = DEBUG_TEST_PACKAGE;
-                                prof.is_builtin = false;
-                                strcpy_safe(prof.label, _countof(prof.label), "New Profile");
-                                prof.test_package.package_path[0] = '\0';
-                                prof.test_package.use_current_package = true;
+                            Debug_Profile prof; ptr0(&prof);
+                            prof.type = DEBUG_TEST_PACKAGE;
+                            prof.is_builtin = false;
+                            strcpy_safe_fixed(prof.label, "New Profile");
+                            prof.test_package.package_path[0] = '\0';
+                            prof.test_package.use_current_package = true;
 
-                                memcpy(&ps.debug_profiles[ps.debug_profiles_len], &prof, sizeof(prof));
-                                ps.debug_profiles_len++;
-                                wnd.current_debug_profile = ps.debug_profiles_len - 1;
+                            {
+                                SCOPED_MEM(&wnd.pool);
+                                ps->debug_profiles->append(&prof);
                             }
+                            wnd.current_debug_profile = ps->debug_profiles->len - 1;
                         }
 
                         ImGui::SameLine(0.0, 4.0f);
 
                         auto can_remove = [&]() {
                             if (wnd.current_debug_profile < 0) return false;
-                            if (wnd.current_debug_profile >= ps.debug_profiles_len) return false;
-                            if (ps.debug_profiles[wnd.current_debug_profile].is_builtin) return false;
+                            if (wnd.current_debug_profile >= ps->debug_profiles->len) return false;
+                            if (ps->debug_profiles->at(wnd.current_debug_profile).is_builtin) return false;
 
                             return true;
                         };
@@ -3597,28 +3604,23 @@ void UI::draw_everything() {
 
                         if (remove_clicked) {
                             do {
-                                if (wnd.current_debug_profile >= ps.debug_profiles_len) break;
+                                if (wnd.current_debug_profile >= ps->debug_profiles->len) break;
 
-                                if (ps.debug_profiles[wnd.current_debug_profile].is_builtin) {
+                                if (ps->debug_profiles->at(wnd.current_debug_profile).is_builtin) {
                                     tell_user("Sorry, you can't remove a builtin profile.", "Can't remove profile");
                                     break;
                                 }
 
-                                if (ps.active_debug_profile > wnd.current_debug_profile)
-                                    ps.active_debug_profile--;
+                                if (ps->active_debug_profile > wnd.current_debug_profile)
+                                    ps->active_debug_profile--;
 
-                                auto len = ps.debug_profiles_len--;
-                                memmove(
-                                    &ps.debug_profiles[wnd.current_debug_profile],
-                                    &ps.debug_profiles[wnd.current_debug_profile + 1],
-                                    sizeof(ps.debug_profiles[0]) * (len - wnd.current_debug_profile - 1)
-                                );
+                                ps->debug_profiles->remove(wnd.current_debug_profile);
 
-                                if (wnd.current_debug_profile >= ps.debug_profiles_len)
-                                    wnd.current_debug_profile = ps.debug_profiles_len - 1;
+                                if (wnd.current_debug_profile >= ps->debug_profiles->len)
+                                    wnd.current_debug_profile = ps->debug_profiles->len - 1;
 
-                                if (ps.active_debug_profile >= ps.debug_profiles_len)
-                                    ps.active_debug_profile = ps.debug_profiles_len - 1;
+                                if (ps->active_debug_profile >= ps->debug_profiles->len)
+                                    ps->active_debug_profile = ps->debug_profiles->len - 1;
                             } while (0);
                         }
                     } ImGui::EndChild();
@@ -3628,8 +3630,8 @@ void UI::draw_everything() {
 
                 begin_right_pane_child(); {
                     auto index = wnd.current_debug_profile;
-                    if (0 <= index && index < ps.debug_profiles_len) {
-                        auto &dp = ps.debug_profiles[wnd.current_debug_profile];
+                    if (0 <= index && index < ps->debug_profiles->len) {
+                        auto &dp = ps->debug_profiles->at(wnd.current_debug_profile);
 
                         if (dp.is_builtin) {
                             if (dp.type == DEBUG_TEST_CURRENT_FUNCTION) {
@@ -3706,7 +3708,7 @@ void UI::draw_everything() {
                         imgui_input_text_full_fixbuf("Additional arguments", dp.args);
                         imgui_pop_font();
                     } else {
-                        if (ps.debug_profiles_len == 0) {
+                        if (ps->debug_profiles->len == 0) {
                             ImGui::Text("Create a profile on the left and it'll show up here.");
                         } else {
                             ImGui::Text("Select a profile on the left and it'll show up here.");
@@ -3726,32 +3728,32 @@ void UI::draw_everything() {
                         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 4));
                         defer { ImGui::PopStyleVar(); };
 
-                        for (int i = 0; i < ps.build_profiles_len; i++) {
-                            auto &it = ps.build_profiles[i];
-                            if (ImGui::Selectable(it.label, wnd.current_build_profile == i))
+                        for (int i = 0; i < ps->build_profiles->len; i++) {
+                            auto &it = ps->build_profiles->at(i);
+                            auto label = our_sprintf("%s##build_profile_%d", it.label, i);
+                            if (ImGui::Selectable(label, wnd.current_build_profile == i))
                                 wnd.current_build_profile = i;
                         }
                     } ImGui::EndChild();
 
                     begin_profiles_buttons_child(); {
                         if (imgui_icon_button(ICON_MD_ADD)) {
-                            if (ps.build_profiles_len < _countof(ps.build_profiles)) {
-                                // TODO
-                                Build_Profile prof; ptr0(&prof);
-                                strcpy_safe(prof.label, _countof(prof.label), "New Profile");
-                                strcpy_safe(prof.cmd, _countof(prof.label), "go build");
+                            Build_Profile prof; ptr0(&prof);
+                            strcpy_safe_fixed(prof.label, "New Profile");
+                            strcpy_safe_fixed(prof.cmd, "go build");
 
-                                memcpy(&ps.build_profiles[ps.build_profiles_len], &prof, sizeof(prof));
-                                ps.build_profiles_len++;
-                                wnd.current_build_profile = ps.build_profiles_len - 1;
+                            {
+                                SCOPED_MEM(&wnd.pool);
+                                ps->build_profiles->append(&prof);
                             }
+                            wnd.current_build_profile = ps->build_profiles->len - 1;
                         }
 
                         ImGui::SameLine(0.0, 4.0f);
 
                         auto can_remove = [&]() {
                             if (wnd.current_build_profile < 0) return false;
-                            if (wnd.current_build_profile >= ps.build_profiles_len) return false;
+                            if (wnd.current_build_profile >= ps->build_profiles->len) return false;
 
                             return true;
                         };
@@ -3763,23 +3765,18 @@ void UI::draw_everything() {
 
                         if (remove_clicked) {
                             do {
-                                if (wnd.current_build_profile >= ps.build_profiles_len) break;
+                                if (wnd.current_build_profile >= ps->build_profiles->len) break;
 
-                                if (ps.active_build_profile > wnd.current_build_profile)
-                                    ps.active_build_profile--;
+                                if (ps->active_build_profile > wnd.current_build_profile)
+                                    ps->active_build_profile--;
 
-                                auto len = ps.build_profiles_len--;
-                                memmove(
-                                    &ps.build_profiles[wnd.current_build_profile],
-                                    &ps.build_profiles[wnd.current_build_profile + 1],
-                                    sizeof(ps.build_profiles[0]) * (len - wnd.current_build_profile - 1)
-                                );
+                                ps->build_profiles->remove(wnd.current_build_profile);
 
-                                if (wnd.current_build_profile >= ps.build_profiles_len)
-                                    wnd.current_build_profile = ps.build_profiles_len - 1;
+                                if (wnd.current_build_profile >= ps->build_profiles->len)
+                                    wnd.current_build_profile = ps->build_profiles->len - 1;
 
-                                if (ps.active_build_profile >= ps.build_profiles_len)
-                                    ps.active_build_profile = ps.build_profiles_len - 1;
+                                if (ps->active_build_profile >= ps->build_profiles->len)
+                                    ps->active_build_profile = ps->build_profiles->len - 1;
                             } while (0);
                         }
                     } ImGui::EndChild();
@@ -3789,8 +3786,8 @@ void UI::draw_everything() {
 
                 begin_right_pane_child(); {
                     auto index = wnd.current_build_profile;
-                    if (0 <= index && index < ps.build_profiles_len) {
-                        auto &bp = ps.build_profiles[index];
+                    if (0 <= index && index < ps->build_profiles->len) {
+                        auto &bp = ps->build_profiles->at(index);
 
                         imgui_input_text_full_fixbuf("Name", bp.label);
                         imgui_small_newline();
@@ -3799,7 +3796,7 @@ void UI::draw_everything() {
                         imgui_input_text_full_fixbuf("Build command", bp.cmd);
                         imgui_pop_font();
                     } else {
-                        if (ps.build_profiles_len == 0) {
+                        if (ps->build_profiles->len == 0) {
                             ImGui::Text("Create a profile on the left and it'll show up here.");
                         } else {
                             ImGui::Text("Select a profile on the left and it'll show up here.");
@@ -3824,8 +3821,12 @@ void UI::draw_everything() {
             ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - width_needed);
 
             if (ImGui::Button("Save")) {
-                project_settings.copy(&wnd.tmp);
-                project_settings.write(path_join(world.current_path, ".cpproj"));
+                {
+                    world.project_settings_mem.reset();
+                    SCOPED_MEM(&world.project_settings_mem);
+                    memcpy(&project_settings, wnd.tmp->copy(), sizeof(Project_Settings));
+                }
+                write_project_settings();
                 wnd.show = false;
             }
 
@@ -4472,15 +4473,24 @@ void UI::draw_everything() {
 
         if (ImGui::BeginTabBar("style_editor_tabbar", 0)) {
             if (ImGui::BeginTabItem("Margins & Padding", NULL, 0)) {
-                ImGui::SliderFloat("status_padding_x", &settings.status_padding_x, 0.0, 20.0f, "%.0f");
-                ImGui::SliderFloat("status_padding_y", &settings.status_padding_y, 0.0, 20.0f, "%.0f");
-                ImGui::SliderFloat("line_number_margin_left", &settings.line_number_margin_left, 0.0, 20.0f, "%.0f");
-                ImGui::SliderFloat("line_number_margin_right", &settings.line_number_margin_right, 0.0, 20.0f, "%.0f");
-                ImGui::SliderFloat("autocomplete_menu_padding", &settings.autocomplete_menu_padding, 0.0, 20.0f, "%.0f");
-                ImGui::SliderFloat("autocomplete_item_padding_x", &settings.autocomplete_item_padding_x, 0.0, 20.0f, "%.0f");
-                ImGui::SliderFloat("autocomplete_item_padding_y", &settings.autocomplete_item_padding_y, 0.0, 20.0f, "%.0f");
-                ImGui::SliderFloat("tabs_offset", &settings.tabs_offset, 0.0, 20.0f, "%.0f");
-
+                ImGui::SliderInt("status_padding_x", &settings.status_padding_x, 0.0, 20.0f, "%d");
+                ImGui::SliderInt("status_padding_y", &settings.status_padding_y, 0.0, 20.0f, "%d");
+                ImGui::SliderInt("line_number_margin_left", &settings.line_number_margin_left, 0.0, 20.0f, "%d");
+                ImGui::SliderInt("line_number_margin_right", &settings.line_number_margin_right, 0.0, 20.0f, "%d");
+                ImGui::SliderInt("autocomplete_menu_padding", &settings.autocomplete_menu_padding, 0.0, 20.0f, "%d");
+                ImGui::SliderInt("autocomplete_item_padding_x", &settings.autocomplete_item_padding_x, 0.0, 20.0f, "%d");
+                ImGui::SliderInt("autocomplete_item_padding_y", &settings.autocomplete_item_padding_y, 0.0, 20.0f, "%d");
+                ImGui::SliderInt("tabs_offset", &settings.tabs_offset, 0.0, 20.0f, "%d");
+                ImGui::SliderInt("parameter_hint_margin_y", &settings.parameter_hint_margin_y, 0, 0, "%d");
+                ImGui::SliderInt("parameter_hint_padding_x", &settings.parameter_hint_padding_x, 0, 0, "%d");
+                ImGui::SliderInt("parameter_hint_padding_y", &settings.parameter_hint_padding_y, 0, 0, "%d");
+                ImGui::SliderInt("editor_margin_x", &settings.editor_margin_x, 0, 0, "%d");
+                ImGui::SliderInt("editor_margin_y", &settings.editor_margin_y, 0, 0, "%d");
+                ImGui::SliderFloat("line_height", &settings.line_height, 0, 0, "%f");
+                ImGui::SliderInt("goto_file_max_results", &settings.goto_file_max_results, 0, 0, "%d");
+                ImGui::SliderInt("goto_symbol_max_results", &settings.goto_symbol_max_results, 0, 0, "%d");
+                ImGui::SliderInt("generate_implementation_max_results", &settings.generate_implementation_max_results, 0, 0, "%d");
+                ImGui::SliderInt("run_command_max_results", &settings.run_command_max_results, 0, 0, "%d");
                 ImGui::EndTabItem();
             }
 
@@ -4535,7 +4545,7 @@ void UI::draw_everything() {
 
                 if (ImGui::Button("Save to disk")) {
                     File f;
-                    f.init("/Users/brandon/.cpcolors", FILE_MODE_WRITE, FILE_CREATE_NEW);
+                    f.init_write("/Users/brandon/.cpcolors");
                     f.write((char*)&global_colors, sizeof(global_colors));
                     f.cleanup();
                 }

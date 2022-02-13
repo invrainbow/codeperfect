@@ -17,6 +17,8 @@ ccstr our_strcat(ccstr a, ccstr b);
 bool strcpy_safe(cstr buf, s32 count, ccstr src);
 ccstr str_replace(ccstr s, ccstr find, ccstr replace);
 
+#define strcpy_safe_fixed(x, y) strcpy_safe(x, _countof(x), y)
+
 struct Text_Renderer {
     List<char> chars;
 

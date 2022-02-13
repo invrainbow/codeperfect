@@ -43,12 +43,6 @@ typedef struct _GH_Message {
 	char* title;
 	int32_t is_panic;
 } GH_Message;
-
-typedef struct _GH_Goenv_Init {
-	char *error;
-	int32_t init_done;
-	int32_t init_error;
-} GH_Goenv_Init;
 */
 import "C"
 
@@ -181,12 +175,6 @@ func GHGetBuildStatus(pstatus *int, plines *int) *C.GH_Build_Error {
 	}
 
 	return (*C.GH_Build_Error)(errorsptr)
-}
-
-//export GHGetGoEnvVar
-func GHGetGoEnvVar(name *C.char) *C.char {
-	cmd := fmt.Sprintf("%s env %s", config.GoBinaryPath, C.GoString(name))
-	return C.CString(GetShellOutput(cmd))
 }
 
 //export GHFree
@@ -362,20 +350,60 @@ func GHGetVersion() int {
 	return versions.CurrentVersion
 }
 
+func GetBinaryPath(bin string) (string, error) {
+	out, err := exec.Command("/bin/bash", "-ic", fmt.Sprintf("which %s", bin)).Output()
+	if err != nil {
+		return "", nil
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
 //export GHGetGoBinaryPath
-func GHGetGoBinaryPath() *C.char { return C.CString(config.GoBinaryPath) }
+func GHGetGoBinaryPath() *C.char {
+	ret, err := GetBinaryPath("go")
+	if err != nil {
+		return nil
+	}
+	return C.CString(ret)
+}
 
 //export GHGetDelvePath
-func GHGetDelvePath() *C.char { return C.CString(config.DelvePath) }
+func GHGetDelvePath() *C.char {
+	ret, err := GetBinaryPath("dlv")
+	if err != nil {
+		return nil
+	}
+	return C.CString(ret)
+}
+
+func GetGoEnv(envvar string) (string, error) {
+	binpath, err := GetBinaryPath("go")
+	if err != nil {
+		return "", nil
+	}
+	out, err := exec.Command(binpath, "env", envvar).Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+func GetGoEnvAsCString(envvar string) *C.char {
+	ret, err := GetGoEnv(envvar)
+	if err != nil {
+		return nil
+	}
+	return C.CString(ret)
+}
 
 //export GHGetGopath
-func GHGetGopath() *C.char { return C.CString(config.Gopath) }
+func GHGetGopath() *C.char { return GetGoEnvAsCString("GOPATH") }
 
 //export GHGetGoroot
-func GHGetGoroot() *C.char { return C.CString(config.Goroot) }
+func GHGetGoroot() *C.char { return GetGoEnvAsCString("GOROOT") }
 
 //export GHGetGomodcache
-func GHGetGomodcache() *C.char { return C.CString(config.Gomodcache) }
+func GHGetGomodcache() *C.char { return GetGoEnvAsCString("GOMODCACHE") }
 
 //export GHGetMessage
 func GHGetMessage(p unsafe.Pointer) bool {
@@ -399,15 +427,6 @@ func GHFreeMessage(p unsafe.Pointer) {
 	C.free(unsafe.Pointer(out.text))
 }
 
-//export GHInitConfig
-func GHInitConfig() bool {
-	if err := InitConfig(); err != nil {
-		log.Printf("error: %s\n", err)
-		return false
-	}
-	return true
-}
-
 //export GHGetConfigDir
 func GHGetConfigDir() *C.char {
 	configDir, err := PrepareConfigDir()
@@ -417,61 +436,62 @@ func GHGetConfigDir() *C.char {
 	return C.CString(configDir)
 }
 
-var buildctx struct {
-	Context  build.Context
-	InitDone bool
-	InitErr  bool
-	Err      error
+type BuildEnvStatus int
+
+const (
+	BuildEnvWaiting = iota
+	BuildEnvDone
+	BuildEnvError
+)
+
+var buildenv struct {
+	Context build.Context
+	Ok      bool
 }
 
-//export GHGoenvInit
-func GHGoenvInit() {
-	setBuildError := func(err error) {
+//export GHBuildEnvInit
+func GHBuildEnvInit() bool {
+	exepath, err := os.Executable()
+	if err != nil {
 		log.Print(err)
-		buildstuff.Err = err
-		buildstuff.InitDone = true
-		buildstuff.InitErr = true
+		return false
 	}
 
-	initBuildStuff := func() {
-		dirpath, err := os.Executable()
-		if err != nil {
-			setBuildError(err)
-			return
-		}
+	dirpath := path.Dir(exepath)
+	filepath := path.Join(dirpath, "buildcontext.go")
+	log.Printf("using buildcontext.go at %s", filepath)
 
-		filepath := path.Join(path.Dir(filepath), "buildcontext.go")
-		log.Printf("using buildcontext.go at %s", filepath)
-
-		out, err := exec.Command("go", "run", filepath).Output()
-		if err != nil {
-			setBuildError(err)
-			return
-		}
-
-		dec := gob.NewDecoder(bytes.NewBuffer(out))
-		if err := dec.Decode(&buildstuff.Context); err != nil {
-			setBuildError(err)
-			return
-		}
-
-		buildstuff.InitDone = true
+	binpath, err := GetBinaryPath("go")
+	if err != nil {
+		log.Print(err)
+		return false
 	}
-	go initBuildStuff()
+
+	log.Printf("binpath: %s", binpath)
+
+	out, err := exec.Command(binpath, "run", filepath).Output()
+	if err != nil {
+		log.Print(err)
+		return false
+	}
+
+	dec := gob.NewDecoder(bytes.NewBuffer(out))
+	if err := dec.Decode(&buildenv.Context); err != nil {
+		log.Print(err)
+		return false
+	}
+
+	buildenv.Ok = true
+	return true
 }
 
-//export GHGoenvGetStatus
-func GHGoenvGetStatus() *C.GH_Gobool {
-	return buildstuff.IsReady
-}
-
-//export GHGoenvCheckFileIncluded
-func GHGoenvCheckFileIncluded(cpath *C.char) bool {
-	if !(buildstuff.InitDone && !buildstuff.InitErr) {
+//export GHBuildEnvIsFileIncluded
+func GHBuildEnvIsFileIncluded(cpath *C.char) bool {
+	if !buildenv.Ok {
 		return false
 	}
 	path := C.GoString(cpath)
-	match, err := buildstuff.Context.MatchFile(filepath.Dir(path), filepath.Base(path))
+	match, err := buildenv.Context.MatchFile(filepath.Dir(path), filepath.Base(path))
 	if err != nil {
 		log.Printf("%v", err)
 		return false
@@ -479,9 +499,12 @@ func GHGoenvCheckFileIncluded(cpath *C.char) bool {
 	return match
 }
 
-//export GHGoenvCheckMinGoVersion
-func GHGoenvCheckMinGoVersion() bool {
-	for _, it := range build.Default.ReleaseTags {
+//export GHBuildEnvGoVersionSupported
+func GHBuildEnvGoVersionSupported() bool {
+	if !buildenv.Ok {
+		return false
+	}
+	for _, it := range buildenv.Context.ReleaseTags {
 		if it == "go1.13" {
 			return true
 		}

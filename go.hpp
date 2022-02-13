@@ -1017,6 +1017,8 @@ struct Jump_To_Definition_Result {
     ccstr file;
     cur2 pos;
     Goresult *decl; // can be null
+
+    Jump_To_Definition_Result *copy();
 };
 
 typedef fn<Godecl*()> New_Godecl_Func;
@@ -1440,15 +1442,7 @@ ccstr format_cur(cur2 c);
 
 extern int gh_version;
 
-template<typename T>
-T *clone(T *old) {
-    auto ret = alloc_object(T);
-    memcpy(ret, old, sizeof(T));
-    return ret;
-}
-
 struct Type_Renderer;
-
 typedef fn<bool(Type_Renderer*, Gotype*)> Type_Renderer_Handler;
 
 struct Type_Renderer : public Text_Renderer {

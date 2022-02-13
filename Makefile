@@ -4,14 +4,14 @@ BREW_ARM = /opt/homebrew/bin/brew
 BREW = $(if $(filter $(shell uname -m), arm64), $(BREW_ARM), $(BREW_X64))
 
 # CFLAGS = -std=c++17 -mavx -maes -w -MMD -MP
-CFLAGS = -std=c++17 -w -MMD -MP
+CFLAGS = -std=c++17 -w -MMD -MP -ferror-limit=100
 CFLAGS += -I$(shell $(BREW) --prefix glfw)/include
 CFLAGS += -Itree-sitter/src -Itree-sitter/include
 CFLAGS += $(if $(filter $(shell uname -m), arm64), -DCPU_ARM64,)
-CFLAGS += -arch x86_64 -arch arm64
 
 ifeq (${RELEASE}, 1)
 	GOFLAGS += -ldflags "-s -w"
+	CFLAGS += -arch x86_64 -arch arm64
 	CFLAGS += -DRELEASE_MODE -O3
 else
 	CFLAGS += -DDEBUG_MODE -g -O0
@@ -29,9 +29,9 @@ SRC_FILES := $(filter-out tests.cpp, $(wildcard *.cpp))
 OBJ_FILES = $(patsubst %.cpp,obj/%.o,$(SRC_FILES))
 DEP_FILES = $(patsubst %.cpp,obj/%.d,$(SRC_FILES))
 
-.PHONY: all clean
+.PHONY: all clean build/launcher
 
-all: build/bin/ide build/launcher build/bin/dynamic_helper.go build/bin/int.vim
+all: build/bin/ide build/bin/init.vim build/bin/buildcontext.go
 
 clean:
 	rm -rf obj/ build/bin/
@@ -56,9 +56,6 @@ obj/objclibs.o: os_macos.mm
 obj/clibs.o: clibs.c
 	clang $(CFLAGS) -std=gnu99 -fPIC -c -o $@ $<
 
-# obj/glew.o: glew.c
-# 	clang $(CFLAGS) -std=gnu99 -fPIC -c -o $@ $<
-
 cpcolors.c: .cpcolors
 	xxd -i .cpcolors cpcolors.c
 
@@ -66,6 +63,7 @@ GOSTUFF_DIRS = $(shell find gostuff/ -type d)
 GOSTUFF_FILES = $(shell find gostuff/ -type f -name '*')
 
 obj/gohelper.a: gostuff/ $(GOSTUFF_DIRS) $(GOSTUFF_FILES)
+ifeq (${RELEASE}, 1)
 	cd gostuff; \
 		CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 go build $(GOFLAGS) -o gohelper.x64.a -buildmode=c-archive ./helper; \
 		CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build $(GOFLAGS) -o gohelper.arm64.a -buildmode=c-archive ./helper; \
@@ -73,6 +71,11 @@ obj/gohelper.a: gostuff/ $(GOSTUFF_DIRS) $(GOSTUFF_FILES)
 		lipo -create -output ../obj/gohelper.a gohelper.x64.a gohelper.arm64.a; \
 		cp gohelper.x64.h ../gohelper.h; \
 		rm gohelper.*.a gohelper.*.h
+else
+	cd gostuff; \
+		CGO_ENABLED=1 go build $(GOFLAGS) -o ../obj/gohelper.a -buildmode=c-archive ./helper; \
+		mv ../obj/gohelper.h ../gohelper.h
+endif
 
 gohelper.h: obj/gohelper.a
 
@@ -86,5 +89,5 @@ build/launcher: gostuff/ $(GOSTUFF_DIRS) $(GOSTUFF_FILES)
 build/bin/buildcontext.go: gostuff/buildcontext/main.go
 	cp gostuff/buildcontext/main.go build/bin/buildcontext.go
 
-build/bin/int.vim: init.vim
+build/bin/init.vim: init.vim
 	cp init.vim build/bin/init.vim

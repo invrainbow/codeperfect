@@ -287,7 +287,7 @@ bool list_directory(ccstr folder, list_directory_cb cb) {
 
         Dir_Entry info;
         info.type = (find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ? DIRENT_DIR : DIRENT_FILE);
-        strcpy_safe(info.name, _countof(info.name), filename);
+        strcpy_safe_fixed(info.name, filename);
 
         if (!cb(&info)) break;
     } while (FindNextFileW(find, &find_data));
@@ -370,7 +370,7 @@ HANDLE create_win32_file_handle(ccstr path, int access, File_Open_Mode open_mode
 
 File_Result File::init(ccstr path, int access, File_Open_Mode open_mode) {
     h = create_win32_file_handle(path, access, open_mode);
-    if (h != INVALID_HANDLE_VALUE) return FILE_RESULT_SUCCESS;
+    if (h != INVALID_HANDLE_VALUE) return FILE_RESULT_OK;
     if (GetLastError() == ERROR_FILE_EXISTS) return FILE_RESULT_ALREADY_EXISTS;
 
     print("File::init: error opening %s: %s", path, get_last_error());

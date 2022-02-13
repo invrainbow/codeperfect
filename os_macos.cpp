@@ -210,7 +210,7 @@ bool list_directory(ccstr folder, list_directory_cb cb) {
 
         Dir_Entry info;
         info.type = (ent->d_type == DT_DIR ? DIRENT_DIR : DIRENT_FILE);
-        strcpy_safe(info.name, _countof(info.name), ent->d_name);
+        strcpy_safe_fixed(info.name, ent->d_name);
         if (!cb(&info)) break;
     }
 
@@ -289,7 +289,7 @@ File_Result File::init(ccstr path, int access, File_Open_Mode open_mode) {
     if (fd == -1) return FILE_RESULT_FAILURE;
 
     // TODO: handle the FILE_RESULT_ALREADY_EXISTS case.
-    return FILE_RESULT_SUCCESS;
+    return FILE_RESULT_OK;
 }
 
 void File::cleanup() {
@@ -591,7 +591,7 @@ void Fs_Watcher::handle_event(size_t count, ccstr *paths) {
         if (streq(relpath, ".")) relpath = "";
 
         auto ev = events.append();
-        strcpy_safe(ev->filepath, _countof(ev->filepath), relpath);
+        strcpy_safe_fixed(ev->filepath, relpath);
     }
 }
 
