@@ -1,6 +1,5 @@
 import { AiOutlineCheck } from "@react-icons/all-files/ai/AiOutlineCheck";
 import { AiOutlineClose } from "@react-icons/all-files/ai/AiOutlineClose";
-import { BsArrowRight } from "@react-icons/all-files/bs/BsArrowRight";
 import { BsCodeSlash } from "@react-icons/all-files/bs/BsCodeSlash";
 import { FaLayerGroup } from "@react-icons/all-files/fa/FaLayerGroup";
 import { FaPalette } from "@react-icons/all-files/fa/FaPalette";
@@ -21,9 +20,8 @@ import {
   Redirect,
   Route,
   Switch,
-  useLocation,
   useHistory,
-  useParams,
+  useLocation,
 } from "react-router-dom";
 import "./index.scss";
 
