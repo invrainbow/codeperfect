@@ -6,6 +6,7 @@ import { FaPalette } from "@react-icons/all-files/fa/FaPalette";
 import { FaRobot } from "@react-icons/all-files/fa/FaRobot";
 import { GoPackage } from "@react-icons/all-files/go/GoPackage";
 import { HiOutlineDownload } from "@react-icons/all-files/hi/HiOutlineDownload";
+import { HiOutlineMail } from "@react-icons/all-files/hi/HiOutlineMail";
 import { ImMagicWand } from "@react-icons/all-files/im/ImMagicWand";
 import { IoMdSearch } from "@react-icons/all-files/io/IoMdSearch";
 import { IoHardwareChipOutline } from "@react-icons/all-files/io5/IoHardwareChipOutline";
@@ -364,9 +365,9 @@ function BuyLicense() {
           <PricingPoint not label="Company can't pay" />
           <PricingPoint not label="Purchase can't be expensed" />
 
-          <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t">
+          <div className="grid grid-cols-2 gap-3 mt-5 pt-5 border-t">
             <div>
-              <div className="flex items-center mb-2">
+              <div className="flex items-center mb-2.5">
                 <div className="leading-none text-xl font-bold text-gray-700">
                   $5
                 </div>
@@ -377,7 +378,7 @@ function BuyLicense() {
               </BuyLicenseButton>
             </div>
             <div>
-              <div className="flex items-center mb-2">
+              <div className="flex items-center mb-2.5">
                 <div className="leading-none text-xl font-bold text-gray-700">
                   $50
                 </div>
@@ -398,9 +399,9 @@ function BuyLicense() {
           <PricingPoint label="Company can pay" />
           <PricingPoint label="Purchase can be expensed" />
 
-          <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t">
+          <div className="grid grid-cols-2 gap-3 mt-5 pt-5 border-t">
             <div>
-              <div className="flex items-center mb-2">
+              <div className="flex items-center mb-2.5">
                 <div className="leading-none text-xl font-bold text-gray-700">
                   $10
                 </div>
@@ -411,7 +412,7 @@ function BuyLicense() {
               </BuyLicenseButton>
             </div>
             <div>
-              <div className="flex items-center mb-2">
+              <div className="flex items-center mb-2.5">
                 <div className="leading-none text-xl font-bold text-gray-700">
                   $100
                 </div>
@@ -582,43 +583,48 @@ function PricingBox({
     <div
       className={cx(
         className,
-        "w-auto rounded-lg overflow-hidden p-6",
-        "border border-gray-200 shadow-sm"
+        "w-auto rounded-lg overflow-hidden",
+        "border border-gray-200 shadow-sm flex flex-col justify-between"
       )}
     >
-      <h1 className="font-bold text-gray-600 text-sm uppercase mb-0.5">
-        {title}
-      </h1>
-      <div className="leading-none">
-        {premium ? (
-          <div className="font-bold text-black text-2xl">Contact us</div>
-        ) : buyLicense ? (
-          <div className="flex space-x-4">
-            <div className="flex items-end">
-              <div className="font-bold text-black text-3xl">${monthly}</div>
-              <div className="leading-tight text-xs pb-1.5 ml-1">
-                {" "}
-                per month
+      <div className="p-6">
+        <h1 className="font-bold text-gray-600 text-sm uppercase mb-0.5">
+          {title}
+        </h1>
+        <div className="leading-none">
+          {premium ? (
+            <div className="font-bold text-black text-2xl">Contact us</div>
+          ) : buyLicense ? (
+            <div className="flex space-x-4">
+              <div className="flex items-end">
+                <div className="font-bold text-black text-3xl">${monthly}</div>
+                <div className="leading-tight text-xs pb-1.5 ml-1">
+                  {" "}
+                  per month
+                </div>
+              </div>
+              <div className="flex items-end">
+                <div className="font-bold text-black text-3xl">${yearly}</div>
+                <div className="leading-tight text-xs pb-1.5 ml-1">
+                  {" "}
+                  per year
+                </div>
               </div>
             </div>
+          ) : (
             <div className="flex items-end">
-              <div className="font-bold text-black text-3xl">${yearly}</div>
-              <div className="leading-tight text-xs pb-1.5 ml-1"> per year</div>
+              <div className="font-bold text-black text-3xl">
+                ${isYearly ? yearly : monthly}
+              </div>
+              <div className="leading-tight text-xs pb-1.5 ml-1">
+                <div>per {isYearly ? "year" : "month"}</div>
+              </div>
             </div>
-          </div>
-        ) : (
-          <div className="flex items-end">
-            <div className="font-bold text-black text-3xl">
-              ${isYearly ? yearly : monthly}
-            </div>
-            <div className="leading-tight text-xs pb-1.5 ml-1">
-              <div>per {isYearly ? "year" : "month"}</div>
-            </div>
-          </div>
-        )}
+          )}
+        </div>
+        <div className="text-gray-500 text-left mt-4">{children}</div>
       </div>
-      <div className="text-gray-500 text-left mt-4 mb-6">{children}</div>
-      {cta}
+      <div className="p-6 border-t border-gray-200">{cta}</div>
     </div>
   );
 }
@@ -699,9 +705,20 @@ function Pricing() {
             yearly={50}
             isYearly={yearly}
             cta={
-              <Link className="button main-button" to="/download">
-                Get Started
-              </Link>
+              <div className="grid grid-cols-1 gap-2">
+                <Link
+                  className="button main-button flex gap-1.5 items-center justify-center"
+                  to="/download"
+                >
+                  Get Started
+                </Link>
+                <Link
+                  className="button download-button block text-center"
+                  to="/buy-license"
+                >
+                  Buy License
+                </Link>
+              </div>
             }
           >
             <PricingPoint label="7-day free trial" />
@@ -715,9 +732,20 @@ function Pricing() {
             yearly={100}
             isYearly={yearly}
             cta={
-              <Link className="button main-button" to="/download">
-                Get Started
-              </Link>
+              <div className="grid grid-cols-1 gap-2">
+                <Link
+                  className="button main-button flex gap-1.5 items-center justify-center"
+                  to="/download"
+                >
+                  Get Started
+                </Link>
+                <Link
+                  className="button download-button block text-center"
+                  to="/buy-license"
+                >
+                  Buy License
+                </Link>
+              </div>
             }
           >
             <PricingPoint label="All features in Personal" />
@@ -728,12 +756,18 @@ function Pricing() {
             title="Custom"
             premium
             cta={
-              <a
-                className="button main-button"
-                href="mailto:support@codeperfect95.com"
-              >
-                Contact Support
-              </a>
+              <div className="grid grid-cols-1 gap-2">
+                <a
+                  className="button main-button flex gap-1.5 items-center justify-center"
+                  href="mailto:support@codeperfect95.com"
+                >
+                  <Icon icon={HiOutlineMail} />
+                  Contact Support
+                </a>
+                <div className="button download-button block text-center opacity-0 select-none">
+                  spacer
+                </div>
+              </div>
             }
           >
             <PricingPoint label="All features in Professional" />
