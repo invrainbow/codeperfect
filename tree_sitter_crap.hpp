@@ -1,5 +1,5 @@
 #pragma once
 
-#include <tree_sitter/api.h>
+#include "tree-sitter/tree_sitter/api.h"
 
 extern "C" TSLanguage *tree_sitter_go();
