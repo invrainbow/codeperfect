@@ -11,8 +11,8 @@ on:
     - 'web/**'
 
 jobs:
-  deploy-api:
-    name: Deploy API
+  api:
+    name: API
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
@@ -30,8 +30,8 @@ jobs:
     - name: Deploy
       run: sh/deploy_api
 
-  deploy-website:
-    name: Deploy Website
+  website:
+    name: Website
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -67,14 +67,14 @@ jobs:
     - name: Build
       run: yarn build
 
-    - name: Deploy
+    - name: Deploy website
       run: rsync -avz --delete ./build/ root@api.codeperfect95.com:/var/www/codeperfect95.com/
 
     - name: Deploy static assets
       run: aws s3 sync ./public/ s3://codeperfect-static --delete
 
-  deploy-docs:
-    name: Deploy Docs
+  docs:
+    name: Docs
     runs-on: ubuntu-latest
     defaults:
       run:
