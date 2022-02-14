@@ -461,7 +461,22 @@ function Download() {
   return (
     <div className="flex items-center flex-col md:flex-row max-w-screen-xl px-4 mx-auto my-16 md:my-16 md:gap-4 lg:gap-8">
       <div className="max-w-sm lg:pb-12">
-        <div className="text-3xl font-bold text-black">CodePerfect for Mac</div>
+        <div>
+          <span className="relative inline-block">
+            <span className="text-3xl font-bold text-black">
+              CodePerfect for Mac
+            </span>
+            <span
+              className={cx(
+                "absolute left-0 bottom-full text-xs uppercase bg-yellow-100 text-yellow-500",
+                "px-2 py-0.5 rounded-full font-bold",
+                "mb-0.5"
+              )}
+            >
+              Public beta
+            </span>
+          </span>
+        </div>
         <p>Try CodePerfect for free for 7 days with all features available.</p>
         <div className="lg:h-32">
           <div className="my-6">
