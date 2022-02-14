@@ -1,0 +1,2 @@
+#!/bin/bash
+ssh root@api.codeperfect95.com 'bash -s' < $1

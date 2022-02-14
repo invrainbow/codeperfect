@@ -1,0 +1,8 @@
+#!/bin/bash
+set -e
+
+cd /root/codeperfect
+
+# basically "git pull --force", if that existed
+git fetch --all
+git reset --hard origin/master

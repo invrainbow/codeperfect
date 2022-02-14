@@ -11,8 +11,8 @@ on:
     - 'web/**'
 
 jobs:
-  api:
-    name: API
+  checkout:
+    name: Checkout
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
@@ -23,62 +23,14 @@ jobs:
       with:
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         known_hosts: ${{ secrets.SSH_KNOWN_HOSTS }}
-
-    - name: Test SSH
-      run: ssh root@api.codeperfect95.com exit
 
     - name: Deploy
-      run: sh/deploy_api
+      run: sh/deploy/run_helper sh/deploy/checkout
 
-  website:
-    name: Website
+  deploy-api:
+    name: Deploy API
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./web
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v1
-
-    - name: Configure AWS Credentials
-      uses: aws-actions/configure-aws-credentials@v1
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: us-west-1
-
-    - name: Install SSH Key
-      uses: shimataro/ssh-key-action@v2
-      with:
-        key: ${{ secrets.SSH_PRIVATE_KEY }}
-        known_hosts: ${{ secrets.SSH_KNOWN_HOSTS }}
-
-    - name: Test SSH
-      run: ssh root@api.codeperfect95.com exit
-
-    - name: Install Node.js
-      uses: actions/setup-node@v2
-      with:
-        node-version: '16'
-
-    - name: Install dependencies
-      run: yarn
-
-    - name: Build
-      run: yarn build
-
-    - name: Deploy website
-      run: rsync -avz --delete ./build/ root@api.codeperfect95.com:/var/www/codeperfect95.com/
-
-    - name: Deploy static assets
-      run: aws s3 sync ./public/ s3://codeperfect-static --delete
-
-  docs:
-    name: Docs
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./docs
+    needs: checkout
     steps:
     - name: Checkout
       uses: actions/checkout@v1
@@ -88,20 +40,40 @@ jobs:
       with:
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         known_hosts: ${{ secrets.SSH_KNOWN_HOSTS }}
-
-    - name: Test SSH
-      run: ssh root@api.codeperfect95.com exit
-
-    - name: Install Node.js
-      uses: actions/setup-node@v2
-      with:
-        node-version: '16'
-
-    - name: Install dependencies
-      run: yarn
-
-    - name: Build
-      run: yarn build
 
     - name: Deploy
-      run: rsync -avz --delete ./public/ root@api.codeperfect95.com:/var/www/docs.codeperfect95.com/
+      run: sh/deploy/run_helper sh/deploy/api
+
+  deploy-web:
+    name: Deploy Web
+    runs-on: ubuntu-latest
+    needs: checkout
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v1
+
+    - name: Install SSH Key
+      uses: shimataro/ssh-key-action@v2
+      with:
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        known_hosts: ${{ secrets.SSH_KNOWN_HOSTS }}
+
+    - name: Deploy
+      run: sh/deploy/run_helper sh/deploy/web
+
+  deploy-docs:
+    name: Deploy Docs
+    runs-on: ubuntu-latest
+    needs: checkout
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v1
+
+    - name: Install SSH Key
+      uses: shimataro/ssh-key-action@v2
+      with:
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        known_hosts: ${{ secrets.SSH_KNOWN_HOSTS }}
+
+    - name: Deploy
+      run: sh/deploy/run_helper sh/deploy/docs
