@@ -456,7 +456,7 @@ function Download() {
       setUrl(dlurl);
     }
     run();
-  }, []);
+  }, [history]);
 
   return (
     <div className="flex items-center flex-col md:flex-row max-w-screen-xl px-4 mx-auto my-8 md:my-16 md:gap-8">
