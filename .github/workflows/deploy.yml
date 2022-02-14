@@ -43,7 +43,7 @@ jobs:
 
     - name: Deploy
       run: |
-        CHANGED_FILES=$(git diff --name-only HEAD^ HEAD | grep ^docs/) || true
+        CHANGED_FILES=$(git diff --name-only HEAD^ HEAD | grep ^gostuff/) || true
         if [[ -n "$CHANGED_FILES" ]]; then
           sh/deploy/run_helper sh/deploy/api
         else
