@@ -136,7 +136,7 @@ func PostUpdate(c *gin.Context) {
 		}
 
 		// spew.Dump(versionObj)
-		url := "https://d2hzcm0ooi1duz.cloudfront.net/update/%v_%d.zip"
+		url := "https://d2hzcm0ooi1duz.cloudfront.net/update/%v_v%d.zip"
 		resp.DownloadURL = fmt.Sprintf(url, req.OS, currentVersion.Version)
 		resp.DownloadHash = versionObj.UpdateHash
 	}
