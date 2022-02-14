@@ -368,3 +368,18 @@ func PostStripeWebhook(c *gin.Context) {
 		doSendEmail("CodePerfect 95: License Deactivated", emailUserEnabledTxt, emailUserEnabledHtml)
 	}
 }
+
+func GetDownload(c *gin.Context) {
+	var currentVersion models.CurrentVersion
+	if res := db.DB.First(&currentVersion, "os = ?", "darwin"); res.Error != nil {
+		c.JSON(400, &gin.H{"error": "Unable to get current version."})
+		return
+	}
+
+	url := fmt.Sprintf(
+		"https://d2hzcm0ooi1duz.cloudfront.net/app/%v_v%d.zip",
+		"darwin",
+		currentVersion.Version,
+	)
+	c.JSON(200, &gin.H{"url": url})
+}

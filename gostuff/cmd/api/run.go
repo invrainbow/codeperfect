@@ -12,5 +12,6 @@ func main() {
 	r.POST("/update", PostUpdate)
 	r.POST("/heartbeat", PostHeartbeat)
 	r.POST("/stripe-webhook", PostStripeWebhook)
+	r.GET("/download", GetDownload)
 	r.Run()
 }

@@ -22,6 +22,7 @@ import {
   Route,
   Switch,
   useLocation,
+  useHistory,
   useParams,
 } from "react-router-dom";
 import "./index.scss";
@@ -37,7 +38,7 @@ const LINKS = {
   buyPersonalYearly: "https://buy.stripe.com/fZefZb2aTdEAbi8aEN",
   buyProfessionalMonthly: "https://buy.stripe.com/6oE28ldTB5843PG9AK",
   buyProfessionalYearly: "https://buy.stripe.com/28o8wJ3eXfMI4TK5kv",
-  downloadMac: "https://d2hzcm0ooi1duz.cloudfront.net/app/darwin_latest.zip",
+  // downloadMac: "https://d2hzcm0ooi1duz.cloudfront.net/app/darwin_latest.zip",
 };
 
 let API_BASE = "https://api.codeperfect95.com";
@@ -287,14 +288,21 @@ function Home() {
   );
 }
 
-function Loading() {
+function Loading({ size = 80, className, ...props }) {
   return (
-    <div className="text-center my-24">
-      <div className="lds-ring">
-        <div></div>
-        <div></div>
-        <div></div>
-        <div></div>
+    <div className={cx(className)} {...props}>
+      <div className="lds-ring" style={{ width: size, height: size }}>
+        {[0, 1, 2, 3].map((key) => (
+          <div
+            key={key}
+            style={{
+              width: (size * 4) / 5,
+              height: (size * 4) / 5,
+              margin: size / 10,
+              borderWidth: size / 10,
+            }}
+          />
+        ))}
       </div>
     </div>
   );
@@ -429,24 +437,55 @@ function BuyLicense() {
 }
 
 function Download() {
+  const [url, setUrl] = React.useState(null);
+  const history = useHistory();
+
+  React.useEffect(() => {
+    async function run() {
+      let dlurl = null;
+      try {
+        const resp = await fetch(`${API_BASE}/download`);
+        const data = await resp.json();
+        dlurl = data.url;
+      } catch (err) {}
+
+      if (!dlurl) {
+        alert("Unable to get download link.");
+        history.push("/");
+        return;
+      }
+
+      setUrl(dlurl);
+    }
+    run();
+  }, []);
+
   return (
     <div className="flex items-center flex-col md:flex-row max-w-screen-xl px-4 mx-auto my-8 md:my-16 md:gap-8">
       <div className="max-w-sm md:pb-12">
         <div className="text-3xl font-bold text-black">CodePerfect for Mac</div>
         <p>Try CodePerfect for free for 7 days with all features available.</p>
         <div className="my-6">
-          <p className="mb-2">
-            <A
-              href={LINKS.downloadMac}
-              className="button main-button inline-flex items-center justify-center"
-            >
-              <Icon className="mr-1" icon={HiOutlineDownload} />
-              <span>CodePerfect for Mac</span>
-            </A>
-          </p>
-          <p className="text-xs text-gray-400" style={{ marginTop: 0 }}>
-            Universal binary supports both Intel and Apple Silicon.
-          </p>
+          {url ? (
+            <>
+              <p className="mb-2">
+                <A
+                  href={url || "#"}
+                  className="button main-button inline-flex items-center justify-center"
+                >
+                  <Icon className="mr-1" icon={HiOutlineDownload} />
+                  <span>CodePerfect for Mac</span>
+                </A>
+              </p>
+              <p className="text-xs text-gray-400" style={{ marginTop: 0 }}>
+                Universal binary supports both Intel and Apple Silicon.
+              </p>
+            </>
+          ) : (
+            <div className="my-4">
+              <Loading size={30} />
+            </div>
+          )}
         </div>
         <p>
           <A
@@ -520,66 +559,6 @@ function ScrollToTop() {
   }, [pathname, hash]);
 
   return null;
-}
-
-function FinishSignup(props) {
-  const params = useParams();
-  const [data, setData] = React.useState(null);
-
-  React.useEffect(() => {
-    async function run() {
-      const resp = await fetch(`${API_BASE}/airtable`, {
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ airtable_id: params.id }),
-      });
-      const data = await resp.json();
-      setData(data);
-    }
-    run();
-  }, [params.id]);
-
-  if (data === null) return <Loading />;
-
-  return (
-    <WallOfText width="2xl">
-      <H1>Thanks for signing up for CodePerfect!</H1>
-      {data.action === "schedule_call" && (
-        <>
-          <p>
-            We're working closely with a small number of people for our private
-            macOS beta release. The next step is to schedule an onboarding call.
-          </p>
-          <p>
-            The goal is for us to learn about what projects you're working on
-            and what your day-to-day looks like. After that we'll take you
-            through CodePerfect installation and do a feature walkthrough.
-          </p>
-          <div className="mt-6">
-            <A className="button main-button mr-2" href={data.call_link}>
-              Schedule Call
-              <Icon className="ml-2" icon={BsArrowRight} />
-            </A>
-            <a
-              className="button main-button download-button"
-              href={`mailto:${SUPPORT_EMAIL}`}
-            >
-              Contact Us
-            </a>
-          </div>
-        </>
-      )}
-      {data.action === "nothing" && (
-        <p>
-          At the moment we're still rolling out support for your OS, but we'll
-          reach out once we do.
-        </p>
-      )}
-    </WallOfText>
-  );
 }
 
 function PricingBox({
@@ -865,9 +844,6 @@ function App() {
             </Route>
             <Route path="/privacy">
               <Redirect to="/terms" />
-            </Route>
-            <Route exact path="/s/:id">
-              <FinishSignup />
             </Route>
             <Route exact path="/">
               <Home />

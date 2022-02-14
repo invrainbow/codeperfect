@@ -150,7 +150,7 @@ func pushUnknownError(desc string, err error) {
 		desc,
 		err,
 	)
-	PushMessage(msg, "Authentication", false)
+	PushMessage(msg, "Automatic Update", false)
 }
 
 func Update() {
