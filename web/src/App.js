@@ -286,7 +286,7 @@ function Home() {
   );
 }
 
-function Loading({ size = 80, className, ...props }) {
+function Loading({ size = "80px", className, ...props }) {
   return (
     <div className={cx(className)} {...props}>
       <div className="lds-ring" style={{ width: size, height: size }}>
@@ -294,10 +294,10 @@ function Loading({ size = 80, className, ...props }) {
           <div
             key={key}
             style={{
-              width: (size * 4) / 5,
-              height: (size * 4) / 5,
-              margin: size / 10,
-              borderWidth: size / 10,
+              width: `calc((${size} * 4) / 5)`,
+              height: `calc((${size} * 4) / 5)`,
+              margin: `calc(${size} / 10)`,
+              borderWidth: `calc(${size} / 10)`,
             }}
           />
         ))}
@@ -436,6 +436,7 @@ function BuyLicense() {
 
 function Download() {
   const [url, setUrl] = React.useState(null);
+  const [err, setErr] = React.useState(false);
   const history = useHistory();
 
   React.useEffect(() => {
@@ -448,12 +449,10 @@ function Download() {
       } catch (err) {}
 
       if (!dlurl) {
-        alert("Unable to get download link.");
-        history.push("/");
-        return;
+        setErr(true);
+      } else {
+        setUrl(dlurl);
       }
-
-      setUrl(dlurl);
     }
     run();
   }, [history]);
@@ -479,10 +478,12 @@ function Download() {
                 Universal binary supports both Intel and Apple Silicon.
               </p>
             </>
-          ) : (
-            <div className="my-4">
-              <Loading size={30} />
+          ) : err ? (
+            <div className="p-4 bg-yellow-100 leading-none rounded text-yellow-700 opacity-70">
+              Unable to fetch download link.
             </div>
+          ) : (
+            <Loading size="2em" />
           )}
         </div>
         <p>
