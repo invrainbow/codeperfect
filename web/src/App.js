@@ -458,58 +458,65 @@ function Download() {
   }, [history]);
 
   return (
-    <div className="flex items-center flex-col md:flex-row max-w-screen-xl px-4 mx-auto my-8 md:my-16 md:gap-8">
-      <div className="max-w-sm md:pb-12">
+    <div className="flex items-center flex-col md:flex-row max-w-screen-xl px-4 mx-auto my-16 md:my-16 md:gap-4 lg:gap-8">
+      <div className="max-w-sm lg:pb-12">
         <div className="text-3xl font-bold text-black">CodePerfect for Mac</div>
         <p>Try CodePerfect for free for 7 days with all features available.</p>
-        <div className="my-6">
-          {url ? (
-            <>
-              <p className="mb-2">
-                <A
-                  href={url || "#"}
-                  className="button main-button inline-flex items-center justify-center"
-                >
-                  <Icon className="mr-1" icon={HiOutlineDownload} />
-                  <span>CodePerfect for Mac</span>
-                </A>
-              </p>
-              <p className="text-xs text-gray-400" style={{ marginTop: 0 }}>
-                Universal binary supports both Intel and Apple Silicon.
-              </p>
-            </>
-          ) : err ? (
-            <div className="p-4 bg-yellow-100 leading-none rounded text-yellow-700 opacity-70">
-              Unable to fetch download link.
-            </div>
-          ) : (
-            <Loading size="2em" />
-          )}
+        <div className="lg:h-32">
+          <div className="my-6">
+            {url ? (
+              <>
+                <p className="mb-2">
+                  <A
+                    href={url || "#"}
+                    className="button main-button inline-flex items-center justify-center"
+                  >
+                    <Icon className="mr-1" icon={HiOutlineDownload} />
+                    <span>CodePerfect for Mac</span>
+                  </A>
+                </p>
+                <p className="text-xs text-gray-400" style={{ marginTop: 0 }}>
+                  Universal binary supports both Intel and Apple Silicon.
+                </p>
+              </>
+            ) : err ? (
+              <div className="p-4 bg-yellow-100 leading-none rounded text-yellow-700 opacity-70">
+                Unable to fetch download link.
+              </div>
+            ) : (
+              <Loading size="2em" />
+            )}
+          </div>
+          <p>
+            <A
+              className="inline-block border-b-2 border-gray-600 no-underline leading-none font-semibold"
+              href="https://docs.codeperfect95.com/overview/getting-started/"
+              style={{ paddingBottom: "2px" }}
+            >
+              Getting Started
+            </A>{" "}
+            /{" "}
+            <Link
+              className="inline-block border-b-2 border-gray-600 no-underline leading-none font-semibold"
+              to="/buy-license"
+              style={{ paddingBottom: "2px" }}
+            >
+              Buy License
+            </Link>
+          </p>
         </div>
-        <p>
-          <A
-            className="inline-block border-b-2 border-gray-600 no-underline leading-none font-semibold"
-            href="https://docs.codeperfect95.com/overview/getting-started/"
-            style={{ paddingBottom: "2px" }}
-          >
-            Getting Started
-          </A>{" "}
-          /{" "}
-          <Link
-            className="inline-block border-b-2 border-gray-600 no-underline leading-none font-semibold"
-            to="/buy-license"
-            style={{ paddingBottom: "2px" }}
-          >
-            Buy License
-          </Link>
-        </p>
       </div>
-      <div className="flex-1">
-        <img
-          className="w-full h-auto border border-gray-700 rounded-lg shadow-md"
-          src={asset("/beta.png")}
-          alt="beta"
-        />
+      <div className="flex-1 hidden md:block">
+        <div
+          className="relative bg-black overflow-hidden rounded-lg shadow-md border-gray-700 border"
+          style={{ paddingTop: "60.8173%" }}
+        >
+          <img
+            className="absolute left-0 top-0 h-full"
+            src={asset("/beta.png")}
+            alt="beta"
+          />
+        </div>
       </div>
     </div>
   );
