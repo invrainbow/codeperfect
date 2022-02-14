@@ -42,7 +42,13 @@ jobs:
         known_hosts: ${{ secrets.SSH_KNOWN_HOSTS }}
 
     - name: Deploy
-      run: sh/deploy/run_helper sh/deploy/api
+      run: |
+        CHANGED_FILES=$(git diff --name-only HEAD^ HEAD | grep ^docs/)
+        if [[ -n "$CHANGED_FILES" ]]; then
+          sh/deploy/run_helper sh/deploy/api
+        else
+          echo API not changed, skipping.
+        fi
 
   deploy-web:
     name: Deploy Web
@@ -59,7 +65,13 @@ jobs:
         known_hosts: ${{ secrets.SSH_KNOWN_HOSTS }}
 
     - name: Deploy
-      run: sh/deploy/run_helper sh/deploy/web
+      run: |
+        CHANGED_FILES=$(git diff --name-only HEAD^ HEAD | grep ^web/)
+        if [[ -n "$CHANGED_FILES" ]]; then
+          sh/deploy/run_helper sh/deploy/web
+        else
+          echo Web not changed, skipping.
+        fi
 
   deploy-docs:
     name: Deploy Docs
@@ -76,4 +88,10 @@ jobs:
         known_hosts: ${{ secrets.SSH_KNOWN_HOSTS }}
 
     - name: Deploy
-      run: sh/deploy/run_helper sh/deploy/docs
+      run: |
+        CHANGED_FILES=$(git diff --name-only HEAD^ HEAD | grep ^docs/)
+        if [[ -n "$CHANGED_FILES" ]]; then
+          sh/deploy/run_helper sh/deploy/docs
+        else
+          echo Docs not changed, skipping.
+        fi
