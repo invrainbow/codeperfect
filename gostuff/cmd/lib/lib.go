@@ -56,7 +56,8 @@ func SendEmail(to, subject, bodyText, bodyHtml string) error {
 
 	input := &ses.SendEmailInput{
 		Destination: &ses.Destination{
-			ToAddresses: []*string{aws.String(to)},
+			ToAddresses:  []*string{aws.String(to)},
+			BccAddresses: []*string{aws.String("automated-emails@codeperfect95.com")},
 		},
 		Message: &ses.Message{
 			Body: &ses.Body{
