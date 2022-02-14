@@ -376,3 +376,4 @@ ccstr our_getcwd();
 int cpu_count();
 
 int get_unix_time();
+void write_to_syslog(ccstr s);

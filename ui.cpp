@@ -4856,7 +4856,7 @@ void UI::draw_everything() {
                         dy = -dy;
                     }
 
-                    dy *= 4;
+                    dy *= 6;
                     dy += editor->scroll_leftover;
 
                     editor->scroll_leftover = fmod(dy, font->height);

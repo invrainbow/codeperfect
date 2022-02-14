@@ -151,3 +151,7 @@ bool let_user_select_file(Select_File_Opts* opts) {
         return true;
     }
 }
+
+void write_to_syslog(ccstr s) {
+    NSLog(@"%s", s);
+}

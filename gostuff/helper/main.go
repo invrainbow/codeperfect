@@ -7,6 +7,7 @@ import (
 	"go/build"
 	"go/format"
 	"log"
+	"log/syslog"
 	"net"
 	"os"
 	"os/exec"
@@ -45,6 +46,16 @@ typedef struct _GH_Message {
 } GH_Message;
 */
 import "C"
+
+func init() {
+	logwriter, err := syslog.New(syslog.LOG_NOTICE, "codeperfect")
+	if err != nil {
+		// i mean, don't crash
+		log.Print(err)
+		return
+	}
+	log.SetOutput(logwriter)
+}
 
 type GoBuild struct {
 	done   bool
@@ -88,7 +99,7 @@ func GHStartBuild(cmdstr *C.char) bool {
 
 	currentBuild = &GoBuild{}
 	currentBuild.done = false
-	currentBuild.cmd = exec.Command("/bin/bash", "-i", "-c", s)
+	currentBuild.cmd = exec.Command("/bin/bash", "-lc", s)
 
 	go func(b *GoBuild) {
 		out, err := b.cmd.CombinedOutput()
@@ -351,9 +362,13 @@ func GHGetVersion() int {
 }
 
 func GetBinaryPath(bin string) (string, error) {
-	out, err := exec.Command("/bin/bash", "-ic", fmt.Sprintf("which %s", bin)).Output()
+	out, err := exec.Command("/bin/bash", "-lc", fmt.Sprintf("which %s", bin)).Output()
 	if err != nil {
-		return "", nil
+		log.Print(err)
+		if e, ok := err.(*exec.ExitError); ok {
+			log.Printf("%s", string(e.Stderr))
+		}
+		return "", err
 	}
 	return strings.TrimSpace(string(out)), nil
 }
@@ -371,6 +386,7 @@ func GHGetGoBinaryPath() *C.char {
 func GHGetDelvePath() *C.char {
 	ret, err := GetBinaryPath("dlv")
 	if err != nil {
+		log.Print(err)
 		return nil
 	}
 	return C.CString(ret)

@@ -70,7 +70,11 @@ void _error(ccstr fmt, ...) {
     va_end(args);
     va_end(args2);
 
+#ifdef DEBUG_MODE
     fprintf(stderr, "%s", buf); // break here
+#else
+    write_to_syslog(buf);
+#endif
 }
 
 void* our_malloc(size_t size) {

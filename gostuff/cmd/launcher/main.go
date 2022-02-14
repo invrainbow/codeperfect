@@ -92,6 +92,8 @@ func Run() error {
 	}
 
 	cmd := exec.Command(path.Join(exedir, "bin/ide"), os.Args[1:]...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 	cmd.Env = os.Environ()
 	cmd.Dir = path.Join(exedir, "bin")
 	if err := cmd.Start(); err != nil {

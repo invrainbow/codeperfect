@@ -327,13 +327,13 @@ struct Panic_Exception : std::runtime_error {
     Panic_Exception(ccstr error) : std::runtime_error(error) {}
 };
 
-void _error(ccstr fmt, ...);
-
 #if OS_WIN
 #define strcmpi stricmp
 #else
 #define strcmpi strcasecmp
 #endif
+
+void _error(ccstr fmt, ...);
 
 // convenience macros
 #define streq(a, b) (strcmp(a, b) == 0)

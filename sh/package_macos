@@ -1,60 +1,46 @@
 #!/bin/bash
 set -e
 
+# grab version from versions.go
 VERSION="$(grep CurrentVersion gostuff/versions/versions.go | rev | cut -d' ' -f 1 | rev)"
 
+# build the actual app
 if [[ -z "$NO_REBUILD" ]]; then
-    sh/make clean
     RELEASE=1 sh/build_macos
-    sh/make build/launcher
 fi
 
-rm -rf build/bin/ide.d
-
-OS_SLUG=darwin
-
-package_app() {
-    rm -rf CodePerfect.app
-
-    appify -name CodePerfect \
-        -icon ../logo.png \
-        -version "0.${VERSION}.0" \
-        -author "CodePerfect" \
-        -id com.codeperfect95 \
-        ../build/launcher
-
-    cp -R ../build/bin/ "CodePerfect.app/Contents/MacOS/bin/"
-
-    rm -rf CodePerfect.app/Contents/README
-    rm -rf CodePerfect.app/Contents/MacOS/bin/ide.d
-
-    zip -r app.zip CodePerfect.app/
-
-    if [[ -z "$SKIP_UPLOAD" ]]; then
-        aws s3 cp app.zip "s3://codeperfect95/app/${OS_SLUG}_v${VERSION}.zip"
-        aws s3 cp app.zip "s3://codeperfect95/app/${OS_SLUG}_latest.zip"
-    fi
-}
-
-package_update() {
-    pushd ../build/bin
-    zip -r ../../scratch/update.zip *
-    popd
-
-    if [[ -z "$SKIP_UPLOAD" ]]; then
-        aws s3 cp update.zip "s3://codeperfect95/update/${OS_SLUG}_v${VERSION}.zip"
-        aws s3 cp update.zip "s3://codeperfect95/update/${OS_SLUG}_latest.zip"
-    fi
-}
-
+# create scratch directory
 rm -rf scratch/
 mkdir scratch/
 cd scratch
 
-package_app
-package_update
+# create .app from launcher
+rm -rf CodePerfect.app
+appify -name CodePerfect \
+    -icon ../logo.png \
+    -version "0.${VERSION}.0" \
+    -author "CodePerfect" \
+    -id com.codeperfect95 \
+    ../build/launcher
 
-pushd ../gostuff
-POSTGRES_URL=$POSTGRES_URL_PROD
-go run ./cmd/addversion "$OS_SLUG" ../scratch/app.zip ../scratch/update.zip
+# create bin folder inside .app
+cp -R ../build/bin/ "CodePerfect.app/Contents/MacOS/bin/"
+rm -rf CodePerfect.app/Contents/README
+rm -rf CodePerfect.app/Contents/MacOS/bin/ide.d
+
+# zip up app
+zip -r app.zip CodePerfect.app/
+
+# zip up update
+pushd CodePerfect.app/Contents/MacOS/bin
+zip -r ../../../../update.zip *
 popd
+
+# push to s3 & database
+if [[ -z "$SKIP_UPLOAD" ]]; then
+    aws s3 cp app.zip "s3://codeperfect95/app/darwin_v${VERSION}.zip"
+    aws s3 cp update.zip "s3://codeperfect95/update/darwin_v${VERSION}.zip"
+
+    cd ../gostuff
+    POSTGRES_URL=$POSTGRES_URL_PROD go run ./cmd/addversion "darwin" ../scratch/app.zip ../scratch/update.zip
+fi

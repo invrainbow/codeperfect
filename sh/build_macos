@@ -1,8 +1,16 @@
 #!/bin/bash
 set -e
 
+if [[ "$RELEASE" == "1" ]]; then
+    sh/make clean
+fi
+
 mkdir -p obj build/bin
 sh/make
+
+if [[ "$RELEASE" == "1" ]]; then
+    sh/make build/launcher
+fi
 
 if [[ ! -d ./build/bin/nvim/ ]]; then
     cp -R nvim-archive/ ./build/bin/nvim/
