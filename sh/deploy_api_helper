@@ -2,7 +2,11 @@
 set -e
 
 cd /root/codeperfect
-git pull
+
+# basically "git pull --force", if that existed
+git fetch --all
+git reset --hard origin/master
+
 cd gostuff
 /usr/local/go/bin/go build -o bin/api github.com/invrainbow/codeperfect/gostuff/cmd/api
 sudo service api restart
