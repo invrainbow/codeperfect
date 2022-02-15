@@ -823,16 +823,18 @@ function Pricing() {
 function Countdown() {
   const daysPassed = Math.ceil((new Date() - new Date(2022, 1, 2)) / 86400000);
   return (
-    <div className="my-48 px-4 max-w-screen-md mx-auto">
-      <div className="mt-12 h-5 rounded border-green-700 border-2 bg-green-100">
-        <div
-          className="bg-green-700 h-full"
-          style={{ width: `${(daysPassed / 730) * 100}%` }}
-        />
-      </div>
-      <div className="text-center text-black font-bold text-lg mt-4 flex justify-between">
-        <div>{daysPassed} days out of 730</div>
-        <div>{((daysPassed / 730) * 100).toFixed(2)}%</div>
+    <div className="fixed top-0 left-0 right-0 bottom-0 z-50 bg-white">
+      <div className="px-4 my-48 max-w-screen-md mx-auto">
+        <div className="mt-12 h-5 rounded border-green-700 border-2 bg-green-100">
+          <div
+            className="bg-green-700 h-full"
+            style={{ width: `${(daysPassed / 730) * 100}%` }}
+          />
+        </div>
+        <div className="text-center text-black font-bold text-lg mt-4 flex justify-between">
+          <div>{daysPassed} days out of 730</div>
+          <div>{((daysPassed / 730) * 100).toFixed(2)}%</div>
+        </div>
       </div>
     </div>
   );
