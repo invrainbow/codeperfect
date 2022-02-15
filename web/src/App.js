@@ -86,7 +86,7 @@ function H1({ className, children, ...props }) {
   return (
     <h2
       className={cx(
-        "text-center mb-6 text-3xl font-bold text-gray-700",
+        "text-center mb-6 text-3xl font-bold text-gray-800",
         className
       )}
       {...props}
@@ -820,6 +820,24 @@ function Pricing() {
   );
 }
 
+function Countdown() {
+  const daysPassed = Math.ceil((new Date() - new Date(2022, 1, 2)) / 86400000);
+  return (
+    <div className="my-48 px-4 max-w-screen-md mx-auto">
+      <div className="mt-12 h-5 rounded border-green-700 border-2 bg-green-100">
+        <div
+          className="bg-green-700 h-full"
+          style={{ width: `${(daysPassed / 730) * 100}%` }}
+        />
+      </div>
+      <div className="text-center text-black font-bold text-lg mt-4 flex justify-between">
+        <div>{daysPassed} days out of 730</div>
+        <div>{((daysPassed / 730) * 100).toFixed(2)}%</div>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   return (
     <Router>
@@ -876,6 +894,9 @@ function App() {
         </div>
         <div>
           <Switch>
+            <Route path="/countdown" exact>
+              <Countdown />
+            </Route>
             <Route path="/download" exact>
               <Redirect to="/download/mac" />
             </Route>
