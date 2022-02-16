@@ -822,7 +822,7 @@ function Pricing() {
 
 function Countdown() {
   const [showLeft, setShowLeft] = React.useState(false);
-  const daysPassed = Math.ceil((new Date() - new Date(2022, 1, 2)) / 86400000);
+  const weeksPassed = (new Date() - new Date(2022, 1, 2)) / 86400000 / 7;
 
   return (
     <div className="fixed top-0 left-0 right-0 bottom-0 z-50 bg-white">
@@ -842,7 +842,7 @@ function Countdown() {
             )}
             style={{
               width: `${
-                ((showLeft ? 730 - daysPassed : daysPassed) / 730) * 100
+                ((showLeft ? 104 - weeksPassed : weeksPassed) / 104) * 100
               }%`,
             }}
           />
@@ -852,18 +852,21 @@ function Countdown() {
             <button
               className="text-black font-bold"
               onClick={() => setShowLeft(!showLeft)}
+              style={{ fontVariantNumeric: "tabular-nums" }}
             >
               {!showLeft ? (
-                <span className="text-green-700">{daysPassed}/730 done</span>
+                <span className="text-green-700">
+                  {Math.floor(weeksPassed)}/104 weeks done
+                </span>
               ) : (
                 <span className="text-red-700">
-                  {730 - daysPassed}/730 left
+                  {104 - Math.floor(weeksPassed)}/104 weeks left
                 </span>
               )}
             </button>
           </div>
           <div className="text-black font-bold">
-            {((daysPassed / 730) * 100).toFixed(2)}%
+            {((weeksPassed / 104) * 100).toFixed(2)}%
           </div>
         </div>
       </div>
