@@ -69,7 +69,9 @@ html[data-theme="dark"] .docusaurus-highlight-code-line {
   padding: 0 !important;
 }
 
-main.docMainContainer_node_modules-\@docusaurus-theme-classic-lib-next-theme-DocPage-styles-module {
+.main-wrapper main > .container {
+  padding: 2rem !important;
+
   .hash-link {
     font-size: 16px !important;
   }
@@ -130,7 +132,7 @@ main.docMainContainer_node_modules-\@docusaurus-theme-classic-lib-next-theme-Doc
 
 .navbar {
   height: auto !important;
-  padding: 1em !important;
+  padding: 1em 1.5em !important;
   .navbar__title {
     font-size: 18px;
     span {
@@ -139,7 +141,7 @@ main.docMainContainer_node_modules-\@docusaurus-theme-classic-lib-next-theme-Doc
   }
 }
 
-.iconExternalLink_node_modules-\@docusaurus-theme-classic-lib-next-theme-IconExternalLink-styles-module {
+a.navbar__link > span > svg {
   display: none;
 }
 
