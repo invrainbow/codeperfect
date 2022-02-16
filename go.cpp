@@ -5219,7 +5219,7 @@ void Go_Indexer::init() {
             // This is called from main thread, so we can just call tell_user().
             tell_user(
                 our_sprintf(
-                    "We found the following GOROOT:\n\n%s\n\nIt doesn't appear to be valid. The program will keep running, but code intelligence might not fully work. Please configure \"goroot\" with a valid path in your ~/.cpconfig file.",
+                    "We found the following GOROOT:\n\n%s\n\nIt doesn't appear to be valid. The program will keep running, but code intelligence might not fully work.",
                     goroot_without_src
                 ),
                 "Warning"

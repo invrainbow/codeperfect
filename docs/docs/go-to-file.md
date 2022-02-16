@@ -1,0 +1,21 @@
+---
+title: "Go to File"
+menu:
+  docs:
+    parent: "navigation"
+weight: 10
+toc: true
+---
+
+CodePerfect lets you fuzzy-search for a file and open it. To do this, press <kbd>⌘P</kbd>.
+
+![](/go-to-file.png)
+
+## Keyboard Shortcuts
+
+| Command                  | Shortcut                         |
+| ------------------------ | -------------------------------- |
+| Toggle Go To File window | <kbd>⌘P</kbd>                    |
+| Move cursor down         | <kbd>⌘J</kbd> or <kbd>Down</kbd> |
+| Move cursor up           | <kbd>⌘K</kbd> or <kbd>Up</kbd>   |
+| Select file              | <kbd>Enter</kbd>                 |

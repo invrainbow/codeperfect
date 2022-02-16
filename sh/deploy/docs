@@ -4,4 +4,4 @@ set -e
 cd /root/codeperfect/docs
 yarn
 yarn build
-rsync -avz --delete ./public/ /var/www/docs.codeperfect95.com/
+rsync -avz --delete ./build/ /var/www/docs.codeperfect95.com/

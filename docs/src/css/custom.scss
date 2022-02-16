@@ -1,0 +1,215 @@
+/**
+ * Any CSS included here will be global. The classic template
+ * bundles Infima by default. Infima is a CSS framework designed to
+ * work well for content-centric websites.
+ */
+
+/* You can override the default Infima variables here. */
+:root {
+  --ifm-color-primary: black;
+  --ifm-code-font-size: 90%;
+  --ifm-font-size-base: 15px;
+  --ifm-line-height-base: 1.5;
+  --ifm-font-family-base: "Inter UI", "SF Pro Display", -apple-system,
+    BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell,
+    "Open Sans", "Helvetica Neue", sans-serif;
+  --ifm-code-padding-horizontal: 0.2rem;
+}
+
+kbd {
+  background: #f6f8fa;
+  border: 1px solid rgba(175, 184, 193, 0.2);
+  border-radius: 6px;
+  box-shadow: inset 0 -1px 0 rgb(175 184 193 / 20%);
+  color: #383d43;
+  display: inline-block;
+  font: 500 12px/11px -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
+    "Helvetica Neue", "Ubuntu", sans-serif;
+  padding: 3px 5px;
+}
+
+/* For readability concerns, you should choose a lighter palette in dark mode. */
+html[data-theme="dark"] {
+  --ifm-color-primary: #25c2a0;
+  --ifm-color-primary-dark: #21af90;
+  --ifm-color-primary-darker: #1fa588;
+  --ifm-color-primary-darkest: #1a8870;
+  --ifm-color-primary-light: #29d5b0;
+  --ifm-color-primary-lighter: #32d8b4;
+  --ifm-color-primary-lightest: #4fddbf;
+}
+
+.docusaurus-highlight-code-line {
+  background-color: rgba(0, 0, 0, 0.1);
+  display: block;
+  margin: 0 calc(-1 * var(--ifm-pre-padding));
+  padding: 0 var(--ifm-pre-padding);
+}
+
+html[data-theme="dark"] .docusaurus-highlight-code-line {
+  background-color: rgba(0, 0, 0, 0.3);
+}
+
+.table-of-contents {
+  padding: 0.5rem;
+  border: solid 1px #eee;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  li {
+    margin-top: 0.2rem;
+    margin-bottom: 0.2rem;
+  }
+  .table-of-contents__link--active {
+    color: black;
+    font-weight: bold;
+  }
+}
+
+.menu {
+  padding: 0 !important;
+}
+
+main.docMainContainer_node_modules-\@docusaurus-theme-classic-lib-next-theme-DocPage-styles-module {
+  .hash-link {
+    font-size: 16px !important;
+  }
+  *:hover > .hash-link {
+    opacity: 0.4 !important;
+  }
+
+  // used for commands
+  cite {
+    background: #eee;
+    border-radius: 6px;
+    display: inline-block;
+    font-weight: 600;
+    font-size: 14px;
+    line-height: 14px;
+    font-style: normal;
+    padding: 3px 5px;
+  }
+
+  h2.anchor,
+  h3.anchor,
+  h4.anchor {
+    display: flex;
+    align-items: center;
+  }
+
+  .container {
+    padding: 2rem !important;
+  }
+  article {
+    h2 {
+      vertical-align: center !important;
+    }
+
+    a {
+      text-decoration: underline !important;
+      font-weight: 700 !important;
+      &.hash-link {
+        text-decoration: none !important;
+        &::before {
+          text-decoration: none !important;
+          content: "\1f517" !important;
+        }
+      }
+    }
+  }
+
+  table {
+    thead tr th {
+      text-align: left !important;
+    }
+    th,
+    td {
+      padding: 0.4rem 0.7rem;
+    }
+  }
+}
+
+.navbar {
+  height: auto !important;
+  padding: 1em !important;
+  .navbar__title {
+    font-size: 18px;
+    span {
+      margin-left: 0.35rem;
+    }
+  }
+}
+
+.iconExternalLink_node_modules-\@docusaurus-theme-classic-lib-next-theme-IconExternalLink-styles-module {
+  display: none;
+}
+
+.theme-doc-sidebar-menu {
+  margin-top: 0 !important;
+  padding: 1.5em !important;
+
+  .menu__list {
+    padding-left: 0 !important;
+  }
+
+  .theme-doc-sidebar-item-link {
+    margin: 10px 0 !important;
+    .menu__link {
+      padding: 0;
+    }
+  }
+
+  .menu__link {
+    padding: 0 !important;
+    color: #555 !important;
+    &:hover {
+      background: none;
+    }
+  }
+  .menu__link--active {
+    background: none !important;
+    color: black !important;
+    font-weight: bold;
+  }
+
+  .theme-doc-sidebar-item-category {
+    &:not(:first-child) {
+      margin-top: 1.5em;
+    }
+  }
+
+  .menu__list-item-collapsible {
+    text-transform: uppercase;
+    font-weight: 700;
+    font-size: 0.75em;
+    &:hover {
+      background: none;
+    }
+    .menu__link,
+    .menu__link--active {
+      padding-top: 0;
+      padding-bottom: 0;
+      color: rgb(156, 163, 175) !important;
+    }
+  }
+}
+
+.codeBlockLines_node_modules-\@docusaurus-theme-classic-lib-next-theme-CodeBlock-styles-module {
+  padding: 0.75em;
+}
+
+.footer {
+  background: none;
+  border-top: solid 1px #eee;
+  .container {
+    margin: 0 auto !important;
+    padding: 0 !important;
+  }
+  .footer__logo {
+    margin: 0;
+    display: block;
+  }
+  .footer__copyright {
+    color: #aaa;
+    font-size: 90%;
+  }
+}
