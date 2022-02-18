@@ -166,10 +166,11 @@ a.navbar__link > span > svg {
 
   .menu__list {
     padding-left: 0 !important;
+    margin-top: 0.5rem !important;
   }
 
   .theme-doc-sidebar-item-link {
-    margin: 10px 0 !important;
+    margin: 6px 0 !important;
     .menu__link {
       padding: 0;
     }
@@ -190,7 +191,7 @@ a.navbar__link > span > svg {
 
   .theme-doc-sidebar-item-category {
     &:not(:first-child) {
-      margin-top: 1.5em;
+      margin-top: 1.75em;
     }
   }
 
