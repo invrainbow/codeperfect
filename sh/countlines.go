@@ -13,6 +13,19 @@ func die(s string) {
 	os.Exit(1)
 }
 
+func isFileOk(name string) bool {
+	if !strings.HasSuffix(name, ".cpp") && !strings.HasSuffix(name, ".hpp") {
+		return false
+	}
+	if strings.Contains(name, "imgui") {
+		return false
+	}
+	if name == "fonts.cpp" || name == "fonts.hpp" {
+		return false
+	}
+	return true
+}
+
 func main() {
 	files, err := os.ReadDir(".")
 	if err != nil {
@@ -20,55 +33,31 @@ func main() {
 	}
 
 	names := []string{}
-
 	for _, file := range files {
-		if file.IsDir() {
-			continue
+		if !file.IsDir() {
+			name := file.Name()
+			if isFileOk(name) {
+				names = append(names, name)
+			}
 		}
-
-		name := file.Name()
-
-		if !strings.HasSuffix(name, ".cpp") && !strings.HasSuffix(name, ".hpp") {
-			continue
-		}
-
-		if strings.Contains(name, "imgui") {
-			continue
-		}
-
-		if name == "fonts.cpp" || name == "fonts.hpp" {
-			continue
-		}
-
-		names = append(names, name)
 	}
 
 	fmt.Printf("%s\n", strings.Join(names, " "))
 
-	cmd := exec.Command("cloc", append([]string{"--json"}, names...)...)
-	out, err := cmd.CombinedOutput()
+	out, err := exec.Command("cloc", append([]string{"--json"}, names...)...).CombinedOutput()
 	if err != nil {
 		die("couldn't run cloc")
 	}
 
 	type Row struct {
-		Files   int `json:"nFiles"`
 		Blank   int `json:"blank"`
 		Comment int `json:"comment"`
-		Code    int `json:"code"`
+		Code	int `json:"code"`
 	}
 
 	var data map[string]Row
-
 	if err := json.Unmarshal(out, &data); err != nil {
 		die("couldn't read cloc output")
-	}
-
-	for key, row := range data {
-		if key == "header" || key == "SUM" {
-			continue
-		}
-		fmt.Printf("%s: %d blank, %d comment, %d code\n", key, row.Blank, row.Comment, row.Code)
 	}
 
 	row := data["SUM"]
