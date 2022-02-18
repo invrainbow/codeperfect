@@ -49,7 +49,7 @@ const config = {
             href: "https://codeperfect95.com",
           },
           {
-            label: "Download for Mac",
+            label: "Download",
             position: "right",
             href: "https://codeperfect95.com/download",
           },

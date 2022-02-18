@@ -1,47 +1,43 @@
 ---
 title: "Setting Up the Debugger"
-menu:
-  docs:
-    parent: "debugging"
-    identifier: "setting-up-debugging"
-weight: 10
-toc: true
 ---
 
-CodePerfect comes with an integrated debugger, allowing you to debug your programs directly from inside CodePerfect.
+CodePerfect integrates with the Delve debugger, allowing you to debug your
+programs directly from inside CodePerfect.
 
 ## Prerequisites
 
-CodePerfect integrates the Delve debugger, so you'll need to
-[install](https://github.com/go-delve/delve/blob/master/Documentation/installation/README.md)
-the latest version.
+You'll need [the Delve debugger](https://github.com/go-delve/delve). You can
+install the latest version from their
+[docs](https://github.com/go-delve/delve/blob/master/Documentation/installation/README.md).
+Then, make sure Delve is installed correctly: open a Bash shell and run
+`which dlv`.
 
-Open ~/.cpconfig and add the `delve_path` field:
+:::info
 
-```
-{
-  "delve_path": "..."
-}
-```
+CodePerfect locates the `dlv` binary the same way, by running `which dlv` inside
+a Bash shell. You don't need to configure anything; just run `which dlv` in a
+shell and make sure the right path pops up.
 
-Replace `delve_path` with the full path of your Delve binary, which you can get by running `which dlv`.
+:::
 
-## Configuring the Debugger
+## Configuring the debugger
 
 To get started, run `Debug` &gt; `Debug Profiles`.
 
 ![](/debug-profiles.png)
 
-The list on the left lets you add, remove, and select profiles. Each profile is a piece of configuration that tells CodePerfect how to debug your program.
+The list on the left lets you add, remove, and select profiles. Each profile is
+a piece of configuration that tells CodePerfect how to debug your program.
 
 There are currently four supported profile types:
 
 ### Test Function Under Cursor
 
-> This is used for the [Test Function Under Cursor](/docs/debug-a-test)
-> feature, which lets you debug an individual test. CodePerfect comes with a
-> built-in profile of this type, which can't be removed, except to add
-> command-line arguments. You can add additional profiles of this type.
+> This is used for the [Test Function Under Cursor](/docs/debug-a-test) feature,
+> which lets you debug an individual test. CodePerfect comes with a built-in
+> profile of this type, which can't be removed, except to add command-line
+> arguments. You can add additional profiles of this type.
 >
 > The settings allow you to add command-line arguments.
 
@@ -50,8 +46,8 @@ There are currently four supported profile types:
 > This profile lets you run and debug a `main` package.
 >
 > The settings allow you to either configure the package path, or to use
-> whatever package the current file is located in. You can also add
-> command-line arguments.
+> whatever package the current file is located in. You can also add command-line
+> arguments.
 
 ### Run Binary
 

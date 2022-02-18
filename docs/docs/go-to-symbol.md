@@ -1,14 +1,9 @@
 ---
 title: "Go to Symbol"
-menu:
-  docs:
-    parent: "navigation"
-weight: 20
-toc: true
 ---
 
 CodePerfect indexes every toplevel declaration in your code. To jump to one,
-press <kbd>⌘T</kbd>.
+press `Cmd+T`.
 
 ![](/go-to-symbol.png)
 
@@ -18,14 +13,14 @@ as `package.identifier`. Method declarations are keyed as
 search for just the `identifier`, the entire `package.identifier`, the initials
 of each word, or any fuzzy substring.
 
-Go To Symbol depends on the indexer. If the indexer is busy, this feature will
-be disabled.
+Unlike Go To File, Go To Symbol depends on the indexer. If the indexer is busy,
+this feature will be disabled.
 
 ## Keyboard Shortcuts
 
-| Command                    | Shortcut                         |
-| -------------------------- | -------------------------------- |
-| Toggle Go To Symbol window | <kbd>⌘T</kbd>                    |
-| Move cursor down           | <kbd>⌘J</kbd> or <kbd>Down</kbd> |
-| Move cursor up             | <kbd>⌘K</kbd> or <kbd>Up</kbd>   |
-| Select file                | <kbd>Enter</kbd>                 |
+| Command                    | Shortcut          |
+| -------------------------- | ----------------- |
+| Toggle Go To Symbol window | `Cmd+T`           |
+| Move cursor down           | `Cmd+J` or `Down` |
+| Move cursor up             | `Cmd+K` or `Up`   |
+| Select file                | `Enter`           |

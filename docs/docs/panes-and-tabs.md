@@ -1,24 +1,19 @@
 ---
 title: "Panes and Tabs"
-menu:
-  docs:
-    parent: "editor"
-weight: 10
-toc: true
 ---
 
-CodePerfect supports panes and tabs. Panes are vertical splits that let you
-edit two files side by side. Each pane can contain several tabs.
+CodePerfect supports panes and tabs. Panes are vertical splits that let you edit
+two files side by side. Each pane can contain several tabs.
 
 ## Keyboard Shortcuts
 
-| Command            | Shortcut                              |
-| ------------------ | ------------------------------------- |
-| Go to Pane 1       | <kbd>⌘1</kbd>                         |
-| Go to Pane 2       | <kbd>⌘2</kbd>                         |
-| Go to Pane 3       | <kbd>⌘3</kbd>                         |
-| Go to Pane 4       | <kbd>⌘4</kbd>                         |
-| Go to next tab     | <kbd>CtrlTab</kbd> or <kbd>⌘⇧[</kbd>  |
-| Go to previous tab | <kbd>Ctrl⇧Tab</kbd> or <kbd>⌘⇧]</kbd> |
+| Command            | Shortcut                          |
+| ------------------ | --------------------------------- |
+| Go to Pane 1       | `Cmd+1`                           |
+| Go to Pane 2       | `Cmd+2`                           |
+| Go to Pane 3       | `Cmd+3`                           |
+| Go to Pane 4       | `Cmd+4`                           |
+| Go to next tab     | `Ctrl+Tab` or `Cmd+Shift+[`       |
+| Go to previous tab | `Ctrl+Shift+Tab` or `Cmd+Shift+]` |
 
 When you have N panes open, switch to pane N+1 to open a new pane.

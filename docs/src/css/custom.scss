@@ -7,7 +7,7 @@
 /* You can override the default Infima variables here. */
 :root {
   --ifm-color-primary: black;
-  --ifm-code-font-size: 90%;
+  --ifm-code-font-size: 85%;
   --ifm-font-size-base: 15px;
   --ifm-line-height-base: 1.5;
   --ifm-font-family-base: "Inter UI", "SF Pro Display", -apple-system,
@@ -26,6 +26,10 @@ kbd {
   font: 500 12px/11px -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
     "Helvetica Neue", "Ubuntu", sans-serif;
   padding: 3px 5px;
+}
+
+.alert--secondary {
+  --ifm-alert-background-color: #f7f7f7;
 }
 
 /* For readability concerns, you should choose a lighter palette in dark mode. */
@@ -107,10 +111,21 @@ html[data-theme="dark"] .docusaurus-highlight-code-line {
     }
 
     a {
-      text-decoration: underline !important;
-      font-weight: 700 !important;
+      text-decoration: none !important;
+      color: maroon;
+      font-weight: 500 !important;
+      display: inline-block !important;
+
+      padding-bottom: 2px;
+      line-height: 1;
+      border-bottom: solid 3px rgba(maroon, 0.1);
+      &:hover {
+        border-bottom-color: rgba(maroon, 0.2);
+      }
       &.hash-link {
         text-decoration: none !important;
+        padding-bottom: 0;
+        border: 0;
         &::before {
           text-decoration: none !important;
           content: "\1f517" !important;
@@ -214,4 +229,20 @@ a.navbar__link > span > svg {
     color: #aaa;
     font-size: 90%;
   }
+}
+
+.indexing,
+.index-ready {
+  color: white;
+  padding: 1px 3px;
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  font-size: 85%;
+  border-radius: 2px;
+}
+
+.indexing {
+  background: #880000;
+}
+.index-ready {
+  background: #008800;
 }

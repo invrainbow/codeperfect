@@ -11,8 +11,7 @@ performs a few types of completions:
     includes fields and methods. For packages this lists all public
     declarations.
 
-  - [Postfix completions](/docs/postfix-completion), covered in
-    the linked page.
+  - [Postfix completions](/docs/postfix-completion), covered in the linked page.
 
 - When you type lone identifiers, it looks for:
 
@@ -32,11 +31,12 @@ or even a strict substring. For instance, you could type `of` to match
 
 ## Keyboard Shortcuts
 
-| Command                  | Shortcut                             |
-| ------------------------ | ------------------------------------ |
-| Open autocomplete menu\* | <kbd>Ctrl Space</kbd>                |
-| Move cursor down         | <kbd>Ctrl J</kbd> or <kbd>Down</kbd> |
-| Move cursor up           | <kbd>Ctrl K</kbd> or <kbd>Up</kbd>   |
-| Select item              | <kbd>Tab</kbd>                       |
+| Command                  | Shortcut           |
+| ------------------------ | ------------------ |
+| Open autocomplete menu\* | `Ctrl+Space`       |
+| Move cursor down         | `Ctrl+J` or `Down` |
+| Move cursor up           | `Ctrl+K` or `Up`   |
+| Select item              | `Tab`              |
 
-\* The menu opens automatically as you type, but you can also manually trigger it after you've closed it.
+\* The menu opens automatically as you type, but you can also manually trigger
+it after you've closed it.

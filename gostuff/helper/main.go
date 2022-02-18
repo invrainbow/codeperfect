@@ -362,7 +362,7 @@ func GHGetVersion() int {
 }
 
 func GetBinaryPath(bin string) (string, error) {
-	out, err := exec.Command("/bin/bash", "-lc", fmt.Sprintf("which %s", bin)).Output()
+	out, err := exec.Command("/bin/bash", "-ilc", fmt.Sprintf("which %s", bin)).Output()
 	if err != nil {
 		log.Print(err)
 		if e, ok := err.(*exec.ExitError); ok {

@@ -1,10 +1,5 @@
 ---
 title: "Parameter Hints"
-menu:
-  docs:
-    parent: "code-intelligence"
-weight: 30
-toc: true
 ---
 
 When you open a function call by typing `(`, if the thing preceding it is a
@@ -16,9 +11,9 @@ When you type a `,` inside a function call, it will re-open the hint.
 
 ## Keyboard Shortcuts
 
-| Command               | Shortcut              |
-| --------------------- | --------------------- |
-| Open parameter hint\* | <kbd>Ctrl⇧Space</kbd> |
+| Command               | Shortcut           |
+| --------------------- | ------------------ |
+| Open parameter hint\* | `Ctrl+Shift+Space` |
 
 \* The hint opens automatically as you type, but you can also manually trigger
 it with your cursor inside a function call after you've closed it.
