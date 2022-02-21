@@ -16,7 +16,7 @@ you're typing:
 For instance, if you type `foo.`, it will show you postfix completions such as
 `ifnotnil!`. If you select that, it replaces `foo.` with
 
-```
+```go
 if foo != nil {
   █
 }

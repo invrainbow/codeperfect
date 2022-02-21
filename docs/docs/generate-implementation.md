@@ -6,7 +6,7 @@ CodePerfect can generate boilerplate methods for a type so that it implements an
 interface. For instance, given a type `Foo` that you want to implement the
 interface [`io.Reader`](https://pkg.go.dev/io#Reader), CodePerfect can generate:
 
-```
+```go
 func (f *Foo) Read(p []byte) (n int, err error) {
   panic("not implemented")
 }

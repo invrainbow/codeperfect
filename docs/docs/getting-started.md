@@ -63,7 +63,7 @@ Currently, nested modules are not supported.
 
 :::
 
-When you open a folder, CodePerfect creates some internally used files inside:
+When you open a folder, CodePerfect creates some files inside for internal use:
 
 - `.cpproj`
 - `.cpdb`
@@ -85,7 +85,7 @@ If you're opening a pre-existing project, CodePerfect relies on
 un-downloaded dependencies, the indexer may not fully work. Make sure all
 dependencies have been downloaded:
 
-```
+```bash
 $ go mod tidy
 ```
 
