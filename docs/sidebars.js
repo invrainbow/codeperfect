@@ -30,12 +30,12 @@ const sidebars = {
     {
       type: "category",
       label: "Overview",
-      items: ["getting-started", "command-palette"],
+      items: ["getting-started", "getting-license"],
     },
     {
       type: "category",
       label: "Navigation",
-      items: ["go-to-file", "go-to-symbol"],
+      items: ["command-palette", "go-to-file", "go-to-symbol"],
     },
     {
       type: "category",

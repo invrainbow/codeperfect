@@ -21,7 +21,7 @@ performs a few types of completions:
   - Language keywords.
 
 When you select an item, CodePerfect automatically adds all necessary imports
-and fills in the completion. It also inserts supporting characters -- for
+and fills in the completion. It also inserts supporting characters &mdash; for
 instance, a space after the `type` keyword, or a `(` after you select a
 function.
 
