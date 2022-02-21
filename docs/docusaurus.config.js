@@ -23,6 +23,7 @@ const config = {
       /** @type {import('@docusaurus/preset-classic').Options} */
       ({
         docs: {
+          routeBasePath: "/",
           sidebarPath: require.resolve("./sidebars.js"),
           sidebarCollapsible: false,
         },
@@ -44,6 +45,11 @@ const config = {
         },
         items: [
           {
+            label: "Changelog",
+            position: "right",
+            href: "/changelog",
+          },
+          {
             label: "Website",
             position: "right",
             href: "https://codeperfect95.com",
@@ -56,7 +62,7 @@ const config = {
         ],
       },
       footer: {
-        style: "light",
+        style: "dark",
         logo: {
           alt: "CodePerfect 95",
           src: "logo.png",

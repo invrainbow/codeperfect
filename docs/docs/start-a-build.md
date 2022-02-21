@@ -7,7 +7,7 @@ Ensure the correct build profile is selected. Run `Build` &gt;
 The Build Results window will pop up at the bottom of the screen. When the build
 is finished, if successful, the window will simply disappear. If the build
 failed, errors will be displayed here. See
-[Navigating Errors](/docs/navigating-errors) for more information.
+[Navigating Errors](navigating-errors) for more information.
 
 ## Keyboard Shortcuts
 

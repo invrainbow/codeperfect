@@ -29,15 +29,16 @@ import "./index.scss";
 const SUPPORT_EMAIL = "support@codeperfect95.com";
 
 const LINKS = {
+  // random links to docs
   docs: "https://docs.codeperfect95.com",
-  gettingStarted: "https://docs.codeperfect95.com/overview/getting-started/",
-  changelog:
-    "https://codeperfect95.notion.site/codeperfect95/CodePerfect-95-Changelog-dcedf41014ef4de79690a5b5b54ebb33",
+  gettingStarted: "https://docs.codeperfect95.com/getting-started",
+  changelog: "https://docs.codeperfect95.com/changelog",
+
+  // stripe links
   buyPersonalMonthly: "https://buy.stripe.com/aEU5kx2aTaso4TK008",
   buyPersonalYearly: "https://buy.stripe.com/fZefZb2aTdEAbi8aEN",
   buyProfessionalMonthly: "https://buy.stripe.com/6oE28ldTB5843PG9AK",
   buyProfessionalYearly: "https://buy.stripe.com/28o8wJ3eXfMI4TK5kv",
-  // downloadMac: "https://d2hzcm0ooi1duz.cloudfront.net/app/darwin_latest.zip",
 };
 
 let API_BASE = "https://api.codeperfect95.com";
@@ -506,7 +507,7 @@ function Download() {
           <p>
             <A
               className="inline-block border-b-2 border-gray-600 no-underline leading-none font-semibold"
-              href="https://docs.codeperfect95.com/overview/getting-started/"
+              href="https://docs.codeperfect95.com/docs/getting-started/"
               style={{ paddingBottom: "2px" }}
             >
               Getting Started

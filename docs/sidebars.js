@@ -13,6 +13,19 @@
 
 /** @type {import('@docusaurus/plugin-content-docs').SidebarsConfig} */
 const sidebars = {
+  changelogSidebar: [
+    {
+      type: "category",
+      label: "Changelog",
+      items: [
+        { type: "doc", id: "changelog/0.6", label: "Version 0.6" },
+        { type: "doc", id: "changelog/0.5", label: "Version 0.5" },
+        { type: "doc", id: "changelog/0.4", label: "Version 0.4" },
+        { type: "doc", id: "changelog/0.3", label: "Version 0.3" },
+      ],
+    },
+  ],
+
   tutorialSidebar: [
     {
       type: "category",

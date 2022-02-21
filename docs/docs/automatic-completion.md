@@ -11,7 +11,7 @@ performs a few types of completions:
     includes fields and methods. For packages this lists all public
     declarations.
 
-  - [Postfix completions](/docs/postfix-completion), covered in the linked page.
+  - [Postfix completions](postfix-completion), covered in the linked page.
 
 - When you type lone identifiers, it looks for:
 

@@ -1,9 +1,0 @@
-{{ with .Parent -}}
-  {{ partial "main/breadcrumb.html" . -}}
-  <span class="inline">
-    <a href="{{ .RelPermalink }}">
-      {{ if .IsHome }}Home{{ else }}{{ .Title }}{{ end }}
-    </a>
-    <span class="text-gray-300">&rarr;</span>
-  </span>
-{{ end -}}

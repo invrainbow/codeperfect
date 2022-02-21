@@ -34,10 +34,10 @@ There are currently four supported profile types:
 
 ### Test Function Under Cursor
 
-> This is used for the [Test Function Under Cursor](/docs/debug-a-test) feature,
-> which lets you debug an individual test. CodePerfect comes with a built-in
-> profile of this type, which can't be removed, except to add command-line
-> arguments. You can add additional profiles of this type.
+> This is used for the [Test Function Under Cursor](debug-a-test) feature, which
+> lets you debug an individual test. CodePerfect comes with a built-in profile
+> of this type, which can't be removed, except to add command-line arguments.
+> You can add additional profiles of this type.
 >
 > The settings allow you to add command-line arguments.
 
