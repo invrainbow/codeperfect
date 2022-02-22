@@ -10,7 +10,7 @@ supported through a
 Get it from the [download page](https://codeperfect95.com/download), unzip it,
 and drag CodePerfect.app into your Applications folder.
 
-:::caution
+:::info
 
 The first time you run CodePerfect, you may get an "Unidentified developer"
 warning. If this happens, right click CodePerfect.app and click Open. Then press
