@@ -250,3 +250,21 @@ a.navbar__link > span > svg {
 .index-ready {
   background: #008800;
 }
+
+table.postfixes {
+  max-width: 500px;
+  td,
+  th {
+    text-align: left;
+    width: auto;
+  }
+  td {
+    .theme-code-block {
+      margin: 0 !important;
+    }
+    pre {
+      padding: 0.4rem;
+      line-height: 1.4;
+    }
+  }
+}
