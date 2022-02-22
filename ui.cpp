@@ -3821,6 +3821,12 @@ void UI::draw_everything() {
             ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - width_needed);
 
             if (ImGui::Button("Save")) {
+                if (wnd.tmp->active_build_profile >= wnd.tmp->build_profiles->len)
+                    wnd.tmp->active_build_profile = wnd.tmp->build_profiles->len - 1;
+
+                if (wnd.tmp->active_debug_profile >= wnd.tmp->debug_profiles->len)
+                    wnd.tmp->active_debug_profile = wnd.tmp->debug_profiles->len - 1;
+
                 {
                     world.project_settings_mem.reset();
                     SCOPED_MEM(&world.project_settings_mem);
