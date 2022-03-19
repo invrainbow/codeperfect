@@ -1440,8 +1440,6 @@ void write_list(L arr, Index_Stream *s) {
 
 ccstr format_cur(cur2 c);
 
-extern int gh_version;
-
 struct Type_Renderer;
 typedef fn<bool(Type_Renderer*, Gotype*)> Type_Renderer_Handler;
 

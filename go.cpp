@@ -7208,5 +7208,3 @@ ccstr godecl_type_str(Godecl_Type type) {
     }
     return NULL;
 }
-
-int gh_version = GHGetVersion();

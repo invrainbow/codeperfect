@@ -7,6 +7,10 @@ git submodule update --init --recursive
 brew install pcre go coreutils
 brew reinstall --build-from-source ./sh/glfw.rb
 
+brewi="arch --x86_64 /usr/local/Homebrew/bin/brew"
+$brewi install pcre
+$brewi reinstall --build-from-source ./sh/glfw.rb
+
 wget https://github.com/neovim/neovim/releases/download/v0.5.1/nvim-macos.tar.gz
 tar xvzf nvim-macos.tar.gz
 mv nvim-osx64 nvim-archive

@@ -340,6 +340,7 @@ void World::init(GLFWwindow *_wnd) {
     ptr0(this);
 
     window = _wnd;
+    gh_version = GHGetVersion();
 
 #define init_mem(x) x.init(#x)
     init_mem(world_mem);

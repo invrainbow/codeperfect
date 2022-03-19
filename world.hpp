@@ -284,6 +284,8 @@ struct World {
     Fridge<Chunk5> chunk5_fridge;
     Fridge<Chunk6> chunk6_fridge;
 
+    int gh_version;
+
     GLFWwindow* window;
     vec2 window_size;
     vec2 display_size;

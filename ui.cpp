@@ -2790,7 +2790,7 @@ void UI::draw_everything() {
 
         ImGui::Text("CodePerfect 95");
 
-        ImGui::Text("Build %d", gh_version);
+        ImGui::Text("Build %d", world.gh_version);
 
         if (world.auth.state == AUTH_REGISTERED)
             if (world.auth_status == GH_AUTH_OK)

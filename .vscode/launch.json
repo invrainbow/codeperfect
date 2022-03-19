@@ -7,15 +7,15 @@
             "name": "debug",
             "program": "${workspaceFolder}/build/bin/ide",
             "args": [
-                // "/Users/brandon/kubernetes"
-                // "/Users/brandon/cpcast"
-                "/Users/brandon/ide/gostuff"
-                // "/Users/brandon/sr"
-                // "/Users/brandon/gin"
-                // "/Users/brandon/gorm-slack"
+                // "/Users/bh/kubernetes"
+                // "/Users/bh/cpcast"
+                "/Users/bh/ide/gostuff"
+                // "/Users/bh/sr"
+                // "/Users/bh/gin"
+                // "/Users/bh/gorm-slack"
             ],
             "cwd": "${workspaceFolder}/build/bin",
-            "expressions": "native"
+            "expressions": "native",
         },
         {
             "type": "lldb",

@@ -1,13 +1,11 @@
 CC = clang++
 BREW_X64 = arch --x86_64 /usr/local/Homebrew/bin/brew
 BREW_ARM = /opt/homebrew/bin/brew
-BREW = $(if $(filter $(shell uname -m), arm64), $(BREW_ARM), $(BREW_X64))
 
 # CFLAGS = -std=c++17 -mavx -maes -w -MMD -MP
 CFLAGS = -std=c++17 -w -MMD -MP
-CFLAGS += -I$(shell $(BREW) --prefix glfw)/include
+CFLAGS += -I$(shell $(BREW_ARM) --prefix glfw)/include
 CFLAGS += -Itree-sitter
-CFLAGS += $(if $(filter $(shell uname -m), arm64), -DCPU_ARM64,)
 
 LDFLAGS = -ldl -framework OpenGL -framework Cocoa -framework IOKit
 LDFLAGS += -framework CoreFoundation -framework Security  # for go
