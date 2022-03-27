@@ -541,6 +541,8 @@ int main(int argc, char **argv) {
     }
 
     glfwSetWindowSizeCallback(world.window, [](GLFWwindow*, i32 w, i32 h) {
+        Timer t; t.init("windowsize callback", &world.trace_next_frame); defer { t.log("done"); };
+
         world.window_size.x = w;
         world.window_size.y = h;
 
@@ -559,6 +561,8 @@ int main(int argc, char **argv) {
     });
 
     glfwSetFramebufferSizeCallback(world.window, [](GLFWwindow*, i32 w, i32 h) {
+        Timer t; t.init("framebuffersize callback", &world.trace_next_frame); defer { t.log("done"); };
+
         world.display_size.x = w;
         world.display_size.y = h;
 
@@ -575,6 +579,8 @@ int main(int argc, char **argv) {
     });
 
     glfwSetCursorPosCallback(world.window, [](GLFWwindow*, double x, double y) {
+        Timer t; t.init("cursorpos callback", &world.trace_next_frame); defer { t.log("done"); };
+
         // world.ui.mouse_delta.x = x - world.ui.mouse_pos.x;
         // world.ui.mouse_delta.y = y - world.ui.mouse_pos.y;
         world.ui.mouse_pos.x = x;
@@ -605,6 +611,8 @@ int main(int argc, char **argv) {
     });
 
     glfwSetMouseButtonCallback(world.window, [](GLFWwindow*, int button, int action, int mods) {
+        Timer t; t.init("mousebutton callback", &world.trace_next_frame); defer { t.log("done"); };
+
         // Don't set world.ui.mouse_down here. We set it based on
         // world.ui.mouse_just_pressed and some additional logic below, while
         // we're setting io.MouseDown for ImGui.
@@ -623,16 +631,22 @@ int main(int argc, char **argv) {
     });
 
     glfwSetScrollCallback(world.window, [](GLFWwindow*, double dx, double dy) {
+        Timer t; t.init("scroll callback", &world.trace_next_frame); defer { t.log("done"); };
+
         auto &io = ImGui::GetIO();
         io.MouseWheelH += (float)dx;
         io.MouseWheel += (float)dy;
     });
 
     glfwSetWindowContentScaleCallback(world.window, [](GLFWwindow*, float xscale, float yscale) {
+        Timer t; t.init("windowcontentscale callback", &world.trace_next_frame); defer { t.log("done"); };
+
         world.display_scale = { xscale, yscale };
     });
 
     glfwSetKeyCallback(world.window, [](GLFWwindow*, i32 key, i32 scan, i32 ev, i32 mod) {
+        Timer t; t.init("key callback", &world.trace_next_frame); defer { t.log("done"); };
+
         ImGuiIO& io = ImGui::GetIO();
         if (ev == GLFW_PRESS) io.KeysDown[key] = true;
         if (ev == GLFW_RELEASE) io.KeysDown[key] = false;
@@ -700,7 +714,10 @@ int main(int argc, char **argv) {
             if (info.mods == keymods && info.key == key) {
                 if (is_command_enabled(cmd)) {
                     handle_command(cmd, false);
-                    return; // break;
+                    if (cmd == CMD_GO_TO_FILE)
+                        world.trace_next_frame = true;
+
+                    return;
                 }
             }
         }
@@ -1270,6 +1287,8 @@ int main(int argc, char **argv) {
     });
 
     glfwSetCharCallback(world.window, [](GLFWwindow* wnd, u32 ch) {
+        Timer t; t.init("char callback", &world.trace_next_frame); defer { t.log("done"); };
+
         u32 mods = 0; // normalized mod
         if (glfwGetKey(wnd, GLFW_KEY_LEFT_SUPER)) mods |= KEYMOD_CMD;
         if (glfwGetKey(wnd, GLFW_KEY_RIGHT_SUPER)) mods |= KEYMOD_CMD;
@@ -1409,8 +1428,13 @@ int main(int argc, char **argv) {
 
     auto last_frame_time = current_time_nano();
 
-    u32 frame_index = 0;
-    while (!glfwWindowShouldClose(world.window)) {
+    for (; !glfwWindowShouldClose(world.window); world.frame_index++) {
+        bool was_trace_on = world.trace_next_frame;
+        defer { if (was_trace_on) world.trace_next_frame = false; };
+
+        Timer t;
+        t.init("frame tracer", &world.trace_next_frame);
+
         if (world.auth_status == GH_AUTH_WAITING) {
             auto &auth = world.auth;
 
@@ -1454,9 +1478,11 @@ int main(int argc, char **argv) {
             }
         }
 
+        t.log("auth");
+
         if (world.randomly_move_cursor_around) {
             if (get_current_editor() != NULL) {
-                if (frame_index++ % 3 == 0) {
+                if (world.frame_index % 3 == 0) {
                     send_nvim_keys(rand() % 2 == 0 ? "{" : "}");
                 }
             }
@@ -1514,6 +1540,8 @@ int main(int argc, char **argv) {
             }
         }
 
+        t.log("message queue");
+
         // Process filesystem changes.
 
         {
@@ -1553,6 +1581,8 @@ int main(int argc, char **argv) {
                 }
             }
         }
+
+        t.log("filesystem changes");
 
         glDisable(GL_SCISSOR_TEST);
         {
@@ -1615,12 +1645,23 @@ int main(int argc, char **argv) {
             }
         }
 
+        t.log("set up imgui");
+
         glfwPollEvents();
 
+        t.log("poll events");
+
         ui.draw_everything();
+
+        t.log("draw");
+
         ui.end_frame(); // end frame after polling events, so our event callbacks have access to imgui
 
+        t.log("end_frame");
+
         glfwSwapBuffers(world.window);
+
+        t.log("swap buffers");
 
         if (!world.turn_off_framerate_cap) {
             // wait until next frame

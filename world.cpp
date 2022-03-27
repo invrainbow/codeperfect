@@ -491,6 +491,8 @@ void World::init(GLFWwindow *_wnd) {
 
 #ifdef DEBUG_MODE
     if (!use_nvim) world.wnd_history.show = true;
+
+    show_frame_index = true;
 #endif
 }
 
@@ -1924,7 +1926,10 @@ void handle_command(Command cmd, bool from_menu) {
             if (from_menu)
                 world.wnd_goto_file.show = false;
         } else {
+            Timer t;
+            t.init();
             init_goto_file();
+            t.log("init_goto_file");
         }
         break;
 

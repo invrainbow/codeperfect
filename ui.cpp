@@ -2097,6 +2097,7 @@ void UI::draw_everything() {
                 ImGui::MenuItem("Randomly move cursor around", NULL, &world.randomly_move_cursor_around);
                 ImGui::MenuItem("Disable framerate cap", NULL, &world.turn_off_framerate_cap);
                 ImGui::MenuItem("Hover Info", NULL, &world.wnd_hover_info.show);
+                ImGui::MenuItem("Show frame index", NULL, &world.show_frame_index);
 
                 if (ImGui::MenuItem("Cleanup unused memory")) {
                     world.indexer.message_queue.add([&](auto msg) {
@@ -5595,6 +5596,14 @@ void UI::draw_everything() {
                     }
                 }
             }
+        }
+
+        if (world.show_frame_index) {
+            auto s = our_sprintf("%d", world.frame_index);
+            auto bg = rgba("#000000");
+            auto fg = rgba("#ffffff");
+
+            draw_status_piece(RIGHT, s, bg, fg);
         }
 
         switch (world.dbg.state_flag) {

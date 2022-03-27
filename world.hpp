@@ -285,6 +285,7 @@ struct World {
     Fridge<Chunk6> chunk6_fridge;
 
     int gh_version;
+    int frame_index;
 
     GLFWwindow* window;
     vec2 window_size;
@@ -355,6 +356,8 @@ struct World {
     bool replace_line_numbers_with_bytecounts;
     bool turn_off_framerate_cap;
     bool randomly_move_cursor_around;
+    bool show_frame_index;
+    bool trace_next_frame;
 
     Fs_Watcher fswatch;
 
