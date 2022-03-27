@@ -352,8 +352,18 @@ struct Timer {
     u64 start;
     ccstr name;
     bool enabled;
+    bool *penabled;
 
-    void init(ccstr _name = NULL, bool _enabled = true) {
+    void init(ccstr _name, bool *_penabled) {
+        ptr0(this);
+
+        name = _name;
+        penabled = _penabled;
+        time = current_time_nano();
+        start = time;
+    }
+
+    void init(ccstr _name, bool _enabled) {
         ptr0(this);
 
         name = _name;
@@ -362,16 +372,29 @@ struct Timer {
         start = time;
     }
 
+    void init() { init(NULL, true); }
+    void init(ccstr _name) { init(_name, true); }
+
     ccstr make_label(ccstr s) {
         if (name == NULL)
             return s;
         return our_sprintf("[%s] %s", name, s);
     }
 
-    void log(ccstr s) {
-        if (!enabled) return;
+    bool is_enabled() {
+#ifdef DEBUG_MODE
+        if (penabled != NULL) return *penabled;
+#else
+        return false;
+#endif
+    }
 
-        print("%s: %dus", make_label(s), read_time() / 1000);
+    void output(ccstr s) {
+        if (is_enabled()) print("%s", s);
+    }
+
+    void log(ccstr s) {
+        output(our_sprintf("%s: %dus", make_label(s), read_time() / 1000));
     }
 
     i64 read_time() {
@@ -382,10 +405,8 @@ struct Timer {
     }
 
     void total() {
-        if (!enabled) return;
-
         auto curr = current_time_nano();
-        print("%s: %dus", make_label("TOTAL"), (curr - start) / 1000);
+        output(our_sprintf("%s: %dus", make_label("TOTAL"), (curr - start) / 1000));
         time = curr;
     }
 };
