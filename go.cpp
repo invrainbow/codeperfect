@@ -1294,17 +1294,13 @@ void Go_Indexer::background_thread() {
                 already_enqueued_packages.remove(import_path);
             }
 
-            auto resolved_path = get_package_path(import_path);
-            if (resolved_path == NULL) {
-                // This means this package is one of our dependencies, but it
-                // has not been added to go.mod yet, so we can't resolve it.
-                continue;
+            if (streq(import_path, "@builtin")) {
+                BREAK_HERE;
             }
 
             auto pkg = find_package_in_index(import_path);
-            if (pkg != NULL)
-                if (pkg->status == GPS_READY) // already been processed
-                    continue;
+            if (pkg != NULL && pkg->status == GPS_READY) // already been processed
+                continue;
 
             // we defer this, because in case we don't find any files,
             // we don't actually want to create the package
@@ -1320,21 +1316,27 @@ void Go_Indexer::background_thread() {
                 package_lookup.set(pkg->import_path, idx);
             };
 
-            Timer t;
-            t.init();
-
             if (streq(import_path, "@builtin")) {
                 create_package_if_null();
-
                 pkg->status = GPS_UPDATING; // i don't think we actually need this anymore...
 
                 init_builtins(pkg);
-
                 fill_package_hash(pkg);
+
                 pkg->status = GPS_READY;
                 pkg->checked_for_outdated_hash = true;
                 continue;
             }
+
+            auto resolved_path = get_package_path(import_path);
+            if (resolved_path == NULL) {
+                // This means this package is one of our dependencies, but it
+                // has not been added to go.mod yet, so we can't resolve it.
+                continue;
+            }
+
+            Timer t;
+            t.init();
 
             auto source_files = list_source_files(resolved_path, true);
             if (source_files == NULL) continue;
