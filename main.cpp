@@ -1555,8 +1555,10 @@ int main(int argc, char **argv) {
         }
 
         glDisable(GL_SCISSOR_TEST);
-        auto bgcolor = global_colors.background;
-        glClearColor(bgcolor.r, bgcolor.g, bgcolor.b, 1.0);
+        {
+            auto bg = global_colors.background;
+            glClearColor(bg.r, bg.g, bg.b, 1.0);
+        }
         glClear(GL_COLOR_BUFFER_BIT);
 
         {
