@@ -507,7 +507,7 @@ function Download() {
           <p>
             <A
               className="inline-block border-b-2 border-gray-600 no-underline leading-none font-semibold"
-              href="https://docs.codeperfect95.com/docs/getting-started/"
+              href="https://docs.codeperfect95.com/getting-started/"
               style={{ paddingBottom: "2px" }}
             >
               Getting Started
