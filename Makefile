@@ -37,10 +37,16 @@ all: build/bin/ide build/bin/init.vim build/bin/buildcontext.go
 clean:
 	rm -rf obj/ build/bin/
 
-build/bin/test: $(filter-out obj/main.o, $(OBJ_FILES)) obj/gohelper.arm64.a obj/objclibs.o obj/clibs.o obj/tests.o
+OBJ_DEPS = $(OBJ_FILES) obj/objclibs.o obj/clibs.o
+ifeq (${RELEASE}, 1)
+	OBJ_DEPS += obj/gohelper.arm64.a
+	OBJ_DEPS += obj/gohelper.x64.a
+endif
+
+build/bin/test: $(filter-out obj/main.o, $(OBJ_DEPS)) obj/tests.o
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 
-build/bin/ide: $(OBJ_FILES) obj/gohelper.arm64.a obj/gohelper.x64.a obj/objclibs.o obj/clibs.o cpcolors.c
+build/bin/ide: $(OBJ_DEPS) cpcolors.c
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 
 -include $(DEP_FILES)
