@@ -4769,7 +4769,7 @@ void UI::draw_everything() {
                     focus_editor_by_id(editor->id, new_cur2(-1, -1));
 
                     auto pos = calculate_pos_from_mouse();
-                    if (pos.x > 0 && pos.y > 0) {
+                    if (pos.x != -1 && pos.y != -1) {
                         auto &io = ImGui::GetIO();
                         if (OS_MAC ? io.KeySuper : io.KeyCtrl) {
                             handle_goto_definition(pos);
@@ -5065,11 +5065,11 @@ void UI::draw_everything() {
         }
 
         // draw editor
-        if (pane.editors.len > 0) {
-            vec2f cur_pos = editor_area.pos + new_vec2f(settings.editor_margin_x, settings.editor_margin_y);
-            cur_pos.y += font->offset_y;
+        do {
+            if (pane.editors.len == 0) break;
 
             auto editor = pane.get_current_editor();
+            if (!editor->is_nvim_ready()) break;
 
             struct Highlight {
                 cur2 start;
@@ -5107,360 +5107,361 @@ void UI::draw_everything() {
                 });
             }
 
-            if (editor->is_nvim_ready()) {
-                auto &buf = editor->buf;
-                auto &view = editor->view;
+            auto &buf = editor->buf;
+            auto &view = editor->view;
 
-                auto draw_cursor = [&](int chars) {
-                    auto muted = (current_pane != world.current_pane);
+            vec2f cur_pos = editor_area.pos + new_vec2f(settings.editor_margin_x, settings.editor_margin_y);
+            cur_pos.y += font->offset_y;
 
-                    actual_cursor_positions[current_pane] = cur_pos;    // save position where cursor is drawn for later use
-                    bool is_insert_cursor = !world.use_nvim; // (world.nvim.mode == VI_INSERT && is_pane_selected /* && !world.nvim.exiting_insert_mode */);
+            auto draw_cursor = [&](int chars) {
+                auto muted = (current_pane != world.current_pane);
 
-                    auto pos = cur_pos;
-                    pos.y -= font->offset_y;
+                actual_cursor_positions[current_pane] = cur_pos;    // save position where cursor is drawn for later use
+                bool is_insert_cursor = !world.use_nvim; // (world.nvim.mode == VI_INSERT && is_pane_selected /* && !world.nvim.exiting_insert_mode */);
 
-                    boxf b;
-                    b.pos = pos;
-                    b.h = (float)font->height;
-                    b.w = is_insert_cursor ? 2 : ((float)font->width * chars);
+                auto pos = cur_pos;
+                pos.y -= font->offset_y;
 
-                    auto py = font->height * (settings.line_height - 1.0) / 2;
-                    b.y -= py;
-                    b.h += py * 2;
+                boxf b;
+                b.pos = pos;
+                b.h = (float)font->height;
+                b.w = is_insert_cursor ? 2 : ((float)font->width * chars);
 
-                    b.y++;
-                    b.h -= 2;
+                auto py = font->height * (settings.line_height - 1.0) / 2;
+                b.y -= py;
+                b.h += py * 2;
 
-                    draw_rect(b, rgba(global_colors.cursor, muted ? 0.5 : 1.0));
-                };
+                b.y++;
+                b.h -= 2;
 
-                List<Client_Breakpoint> breakpoints_for_this_editor;
+                draw_rect(b, rgba(global_colors.cursor, muted ? 0.5 : 1.0));
+            };
 
-                {
-                    u32 len = 0;
-                    For (world.dbg.breakpoints)
-                        if (streq(it.file, editor->filepath))
-                            len++;
+            List<Client_Breakpoint> breakpoints_for_this_editor;
 
-                    alloc_list(&breakpoints_for_this_editor, len);
-                    For (world.dbg.breakpoints) {
-                        if (are_filepaths_equal(it.file, editor->filepath)) {
-                            auto p = breakpoints_for_this_editor.append();
-                            memcpy(p, &it, sizeof(it));
-                        }
+            {
+                u32 len = 0;
+                For (world.dbg.breakpoints)
+                    if (streq(it.file, editor->filepath))
+                        len++;
+
+                alloc_list(&breakpoints_for_this_editor, len);
+                For (world.dbg.breakpoints) {
+                    if (are_filepaths_equal(it.file, editor->filepath)) {
+                        auto p = breakpoints_for_this_editor.append();
+                        memcpy(p, &it, sizeof(it));
                     }
-                }
-
-                if (buf->lines.len == 0) draw_cursor(1);
-
-                auto &hint = editor->parameter_hint;
-
-                int next_hl = (highlights.len > 0 ? 0 : -1);
-
-                auto goroutines_hit = alloc_list<Dlv_Goroutine*>();
-                u32 current_goroutine_id = 0;
-                Dlv_Goroutine *current_goroutine = NULL;
-                Dlv_Frame *current_frame = NULL;
-                bool is_current_goroutine_on_current_file = false;
-
-                if (world.dbg.state_flag == DLV_STATE_PAUSED) {
-                    current_goroutine_id = world.dbg.state.current_goroutine_id;
-                    For (world.dbg.state.goroutines) {
-                        if (it.id == current_goroutine_id) {
-                            current_goroutine = &it;
-                            if (current_goroutine->fresh) {
-                                current_frame = &current_goroutine->frames->at(world.dbg.state.current_frame);
-                                if (are_filepaths_equal(editor->filepath, current_frame->filepath))
-                                    is_current_goroutine_on_current_file = true;
-                            } else {
-                                if (are_filepaths_equal(editor->filepath, current_goroutine->curr_file))
-                                    is_current_goroutine_on_current_file = true;
-                            }
-                        } else if (it.breakpoint_hit) {
-                            if (are_filepaths_equal(editor->filepath, editor->filepath))
-                                goroutines_hit->append(&it);
-                        }
-                    }
-                }
-
-                cur2 select_start, select_end;
-                if (editor->selecting) {
-                    auto a = editor->select_start;
-                    auto b = editor->cur;
-                    if (a > b) {
-                        auto tmp = a;
-                        a = b;
-                        b = tmp;
-                    }
-
-                    select_start = a;
-                    select_end = b;
-                }
-
-                auto draw_highlight = [&](vec4f color, int width, bool fullsize = false) {
-                    boxf b;
-                    b.pos = cur_pos;
-                    b.y -= font->offset_y;
-                    b.w = font->width * width;
-                    b.h = font->height;
-
-                    auto py = font->height * (settings.line_height - 1.0) / 2;
-                    b.y -= py;
-                    b.h += py * 2;
-
-                    if (!fullsize) {
-                        b.y++;
-                        b.h -= 2;
-                    }
-
-                    draw_rect(b, color);
-                };
-
-                auto relative_y = 0;
-                for (u32 y = view.y; y < view.y + view.h; y++, relative_y++) {
-                    if (y >= buf->lines.len) break;
-
-                    auto line = &buf->lines[y];
-
-                    enum {
-                        BREAKPOINT_NONE,
-                        BREAKPOINT_CURRENT_GOROUTINE,
-                        BREAKPOINT_OTHER_GOROUTINE,
-                        BREAKPOINT_ACTIVE,
-                        BREAKPOINT_INACTIVE,
-                    };
-
-                    auto find_breakpoint_stopped_at_this_line = [&]() -> int {
-                        if (world.dbg.state_flag == DLV_STATE_PAUSED) {
-                            if (is_current_goroutine_on_current_file) {
-                                if (current_frame != NULL) {
-                                    if (current_frame->lineno == y + 1)
-                                        return BREAKPOINT_CURRENT_GOROUTINE;
-                                } else if (current_goroutine->curr_line == y + 1)
-                                    return BREAKPOINT_CURRENT_GOROUTINE;
-                            }
-
-                            For (*goroutines_hit)
-                                if (it->curr_line == y + 1)
-                                    return BREAKPOINT_OTHER_GOROUTINE;
-                        }
-
-                        For (breakpoints_for_this_editor) {
-                            if (it.line == y + 1) {
-                                bool inactive = (it.pending || world.dbg.state_flag == DLV_STATE_INACTIVE);
-                                return inactive ? BREAKPOINT_INACTIVE : BREAKPOINT_ACTIVE;
-                            }
-                        }
-
-                        return BREAKPOINT_NONE;
-                    };
-
-                    boxf line_box = {
-                        cur_pos.x,
-                        cur_pos.y - font->offset_y,
-                        (float)editor_area.w,
-                        (float)font->height,
-                    };
-
-                    auto py = font->height * (settings.line_height - 1.0) / 2;
-                    line_box.y -= py;
-                    line_box.h += py * 2;
-                    line_box.y++;
-                    line_box.h -= 2;
-
-                    auto bptype = find_breakpoint_stopped_at_this_line();
-                    if (bptype == BREAKPOINT_CURRENT_GOROUTINE)
-                        draw_rect(line_box, rgba(global_colors.breakpoint_current, 0.25));
-                    else if (bptype == BREAKPOINT_OTHER_GOROUTINE)
-                        draw_rect(line_box, rgba(global_colors.breakpoint_current, 0.1));
-                    else if (bptype == BREAKPOINT_ACTIVE)
-                        draw_rect(line_box, rgba(global_colors.breakpoint_active, 0.25));
-                    else if (bptype == BREAKPOINT_INACTIVE)
-                        draw_rect(line_box, rgba(global_colors.breakpoint_active, 0.15));
-
-                    auto line_number_width = get_line_number_width(editor);
-
-                    {
-                        cur_pos.x += settings.line_number_margin_left;
-                        ccstr line_number_str = NULL;
-                        if (world.replace_line_numbers_with_bytecounts)
-                            line_number_str = our_sprintf("%*d", line_number_width, buf->bytecounts[y]);
-                        else
-                            line_number_str = our_sprintf("%*d", line_number_width, y + 1);
-                        auto len = strlen(line_number_str);
-                        for (u32 i = 0; i < len; i++)
-                            draw_char(&cur_pos, line_number_str[i], rgba(global_colors.white, 0.3));
-                        cur_pos.x += settings.line_number_margin_right;
-                    }
-
-                    Grapheme_Clusterer gc;
-                    gc.init();
-
-                    int cp_idx = 0;
-                    gc.feed(line->at(cp_idx)); // feed first character for GB1
-
-                    // jump {view.x} clusters
-                    int vx_start = 0;
-                    {
-                        int vx = 0;
-                        while (vx < view.x && cp_idx < line->len) {
-                            if (line->at(cp_idx) == '\t') {
-                                vx += options.tabsize - (vx % options.tabsize);
-                                cp_idx++;
-                            } else {
-                                auto width = our_wcwidth(line->at(cp_idx));
-                                if (width == -1) width = 1;
-                                vx += width;
-
-                                cp_idx++;
-                                while (cp_idx < line->len && !gc.feed(line->at(cp_idx)))
-                                    cp_idx++;
-                            }
-                        }
-                        vx_start = vx;
-                    }
-
-                    if (vx_start > view.x)
-                        cur_pos.x += (vx_start - view.x) * font->width;
-
-                    u32 x = buf->idx_cp_to_byte(y, cp_idx);
-                    u32 vx = vx_start;
-                    u32 newx = 0;
-
-                    for (; vx < view.x + view.w; x = newx) {
-                        newx = x;
-
-                        if (cp_idx >= line->len) break;
-
-                        auto curr_cp_idx = cp_idx;
-                        int curr_cp = line->at(cp_idx);
-                        int grapheme_cpsize = 0;
-
-                        {
-                            auto uch = curr_cp;
-                            while (true) {
-                                cp_idx++;
-                                newx += uchar_size(uch);
-                                grapheme_cpsize++;
-
-                                if (cp_idx >= line->len) break;
-                                if (gc.feed(uch = line->at(cp_idx))) break;
-                            }
-                        }
-
-                        int glyph_width = 0;
-                        if (grapheme_cpsize == 1 && curr_cp == '\t')
-                            glyph_width = options.tabsize - (vx % options.tabsize);
-                        else
-                            glyph_width = our_wcwidth(curr_cp);
-
-                        if (glyph_width == -1) glyph_width = 1;
-
-                        vec4f text_color = rgba(global_colors.foreground);
-
-                        if (next_hl != -1) {
-                            auto curr = new_cur2((u32)curr_cp_idx, (u32)y);
-
-                            while (next_hl != -1 && curr >= highlights[next_hl].end)
-                                if (++next_hl >= highlights.len)
-                                    next_hl = -1;
-
-                            if (next_hl != -1) {
-                                auto& hl = highlights[next_hl];
-                                if (hl.start <= curr && curr < hl.end)
-                                    text_color = hl.color;
-                            }
-                        }
-
-                        if (editor->cur == new_cur2((u32)curr_cp_idx, (u32)y)) {
-                            draw_cursor(glyph_width);
-                            if (current_pane == world.current_pane && world.use_nvim)
-                                text_color = rgba(global_colors.cursor_foreground);
-                        } else if (world.use_nvim && world.nvim.mode != VI_INSERT) {
-                            auto topline = editor->nvim_data.grid_topline;
-                            if (topline <= y && y < topline + NVIM_DEFAULT_HEIGHT) {
-                                int i = 0;
-                                while (i < glyph_width && vx+i < _countof(editor->highlights[y - topline]))
-                                    i++;
-
-                                auto hl = editor->highlights[y - topline][vx];
-                                switch (hl) {
-                                case HL_INCSEARCH:
-                                    draw_highlight(rgba(global_colors.foreground), i);
-                                    text_color = rgba(global_colors.background);
-                                    break;
-                                case HL_SEARCH:
-                                    draw_highlight(rgba(global_colors.search_background), i);
-                                    text_color = rgba(global_colors.search_foreground);
-                                    break;
-                                case HL_VISUAL:
-                                    draw_highlight(rgba(global_colors.visual_background), i);
-                                    text_color = rgba(global_colors.visual_foreground);
-                                    break;
-                                }
-                            }
-                        }
-
-                        if (!world.use_nvim && editor->selecting) {
-                            auto pos = new_cur2((u32)curr_cp_idx, (u32)y);
-                            if (select_start <= pos && pos < select_end) {
-                                draw_highlight(rgba(global_colors.visual_background), glyph_width, true);
-                                text_color = rgba(global_colors.visual_foreground);
-                            }
-                        }
-
-                        if (hint.gotype != NULL)
-                            if (new_cur2(x, y) == hint.start)
-                                actual_parameter_hint_start = cur_pos;
-
-                        uchar uch = curr_cp;
-                        if (uch == '\t') {
-                            cur_pos.x += font->width * glyph_width;
-                        } else if (grapheme_cpsize > 1 || uch > 0x7f) {
-                            auto pos = cur_pos;
-                            pos.x += (font->width * glyph_width) / 2 - (font->width / 2);
-                            draw_char(&pos, 0xfffd, text_color);
-
-                            cur_pos.x += font->width * glyph_width;
-                        } else {
-                            draw_char(&cur_pos, uch, text_color);
-                        }
-
-                        vx += glyph_width;
-                    }
-
-                    if (line->len == 0) {
-                        if (world.use_nvim) {
-                            auto topline = editor->nvim_data.grid_topline;
-                            if (topline <= y && y < topline + NVIM_DEFAULT_HEIGHT) {
-                                switch (editor->highlights[y - topline][0]) {
-                                case HL_INCSEARCH:
-                                    draw_highlight(rgba(global_colors.foreground), 1);
-                                    break;
-                                case HL_SEARCH:
-                                    draw_highlight(rgba(global_colors.search_background), 1);
-                                    break;
-                                case HL_VISUAL:
-                                    draw_highlight(rgba(global_colors.visual_background), 1);
-                                    break;
-                                }
-                            }
-                        } else {
-                            auto pos = new_cur2((u32)0, (u32)y);
-                            if (select_start <= pos && pos < select_end)
-                                draw_highlight(rgba(global_colors.visual_background), 1, true);
-                        }
-                    }
-
-                    if (editor->cur == new_cur2(line->len, y))
-                        draw_cursor(1);
-
-                    cur_pos.x = editor_area.x + settings.editor_margin_x;
-                    cur_pos.y += font->height * settings.line_height;
                 }
             }
-        }
+
+            if (buf->lines.len == 0) draw_cursor(1);
+
+            auto &hint = editor->parameter_hint;
+
+            int next_hl = (highlights.len > 0 ? 0 : -1);
+
+            auto goroutines_hit = alloc_list<Dlv_Goroutine*>();
+            u32 current_goroutine_id = 0;
+            Dlv_Goroutine *current_goroutine = NULL;
+            Dlv_Frame *current_frame = NULL;
+            bool is_current_goroutine_on_current_file = false;
+
+            if (world.dbg.state_flag == DLV_STATE_PAUSED) {
+                current_goroutine_id = world.dbg.state.current_goroutine_id;
+                For (world.dbg.state.goroutines) {
+                    if (it.id == current_goroutine_id) {
+                        current_goroutine = &it;
+                        if (current_goroutine->fresh) {
+                            current_frame = &current_goroutine->frames->at(world.dbg.state.current_frame);
+                            if (are_filepaths_equal(editor->filepath, current_frame->filepath))
+                                is_current_goroutine_on_current_file = true;
+                        } else {
+                            if (are_filepaths_equal(editor->filepath, current_goroutine->curr_file))
+                                is_current_goroutine_on_current_file = true;
+                        }
+                    } else if (it.breakpoint_hit) {
+                        if (are_filepaths_equal(editor->filepath, editor->filepath))
+                            goroutines_hit->append(&it);
+                    }
+                }
+            }
+
+            cur2 select_start, select_end;
+            if (editor->selecting) {
+                auto a = editor->select_start;
+                auto b = editor->cur;
+                if (a > b) {
+                    auto tmp = a;
+                    a = b;
+                    b = tmp;
+                }
+
+                select_start = a;
+                select_end = b;
+            }
+
+            auto draw_highlight = [&](vec4f color, int width, bool fullsize = false) {
+                boxf b;
+                b.pos = cur_pos;
+                b.y -= font->offset_y;
+                b.w = font->width * width;
+                b.h = font->height;
+
+                auto py = font->height * (settings.line_height - 1.0) / 2;
+                b.y -= py;
+                b.h += py * 2;
+
+                if (!fullsize) {
+                    b.y++;
+                    b.h -= 2;
+                }
+
+                draw_rect(b, color);
+            };
+
+            auto relative_y = 0;
+            for (u32 y = view.y; y < view.y + view.h; y++, relative_y++) {
+                if (y >= buf->lines.len) break;
+
+                auto line = &buf->lines[y];
+
+                enum {
+                    BREAKPOINT_NONE,
+                    BREAKPOINT_CURRENT_GOROUTINE,
+                    BREAKPOINT_OTHER_GOROUTINE,
+                    BREAKPOINT_ACTIVE,
+                    BREAKPOINT_INACTIVE,
+                };
+
+                auto find_breakpoint_stopped_at_this_line = [&]() -> int {
+                    if (world.dbg.state_flag == DLV_STATE_PAUSED) {
+                        if (is_current_goroutine_on_current_file) {
+                            if (current_frame != NULL) {
+                                if (current_frame->lineno == y + 1)
+                                    return BREAKPOINT_CURRENT_GOROUTINE;
+                            } else if (current_goroutine->curr_line == y + 1)
+                                return BREAKPOINT_CURRENT_GOROUTINE;
+                        }
+
+                        For (*goroutines_hit)
+                            if (it->curr_line == y + 1)
+                                return BREAKPOINT_OTHER_GOROUTINE;
+                    }
+
+                    For (breakpoints_for_this_editor) {
+                        if (it.line == y + 1) {
+                            bool inactive = (it.pending || world.dbg.state_flag == DLV_STATE_INACTIVE);
+                            return inactive ? BREAKPOINT_INACTIVE : BREAKPOINT_ACTIVE;
+                        }
+                    }
+
+                    return BREAKPOINT_NONE;
+                };
+
+                boxf line_box = {
+                    cur_pos.x,
+                    cur_pos.y - font->offset_y,
+                    (float)editor_area.w,
+                    (float)font->height,
+                };
+
+                auto py = font->height * (settings.line_height - 1.0) / 2;
+                line_box.y -= py;
+                line_box.h += py * 2;
+                line_box.y++;
+                line_box.h -= 2;
+
+                auto bptype = find_breakpoint_stopped_at_this_line();
+                if (bptype == BREAKPOINT_CURRENT_GOROUTINE)
+                    draw_rect(line_box, rgba(global_colors.breakpoint_current, 0.25));
+                else if (bptype == BREAKPOINT_OTHER_GOROUTINE)
+                    draw_rect(line_box, rgba(global_colors.breakpoint_current, 0.1));
+                else if (bptype == BREAKPOINT_ACTIVE)
+                    draw_rect(line_box, rgba(global_colors.breakpoint_active, 0.25));
+                else if (bptype == BREAKPOINT_INACTIVE)
+                    draw_rect(line_box, rgba(global_colors.breakpoint_active, 0.15));
+
+                auto line_number_width = get_line_number_width(editor);
+
+                {
+                    cur_pos.x += settings.line_number_margin_left;
+                    ccstr line_number_str = NULL;
+                    if (world.replace_line_numbers_with_bytecounts)
+                        line_number_str = our_sprintf("%*d", line_number_width, buf->bytecounts[y]);
+                    else
+                        line_number_str = our_sprintf("%*d", line_number_width, y + 1);
+                    auto len = strlen(line_number_str);
+                    for (u32 i = 0; i < len; i++)
+                        draw_char(&cur_pos, line_number_str[i], rgba(global_colors.white, 0.3));
+                    cur_pos.x += settings.line_number_margin_right;
+                }
+
+                Grapheme_Clusterer gc;
+                gc.init();
+
+                int cp_idx = 0;
+                gc.feed(line->at(cp_idx)); // feed first character for GB1
+
+                // jump {view.x} clusters
+                int vx_start = 0;
+                {
+                    int vx = 0;
+                    while (vx < view.x && cp_idx < line->len) {
+                        if (line->at(cp_idx) == '\t') {
+                            vx += options.tabsize - (vx % options.tabsize);
+                            cp_idx++;
+                        } else {
+                            auto width = our_wcwidth(line->at(cp_idx));
+                            if (width == -1) width = 1;
+                            vx += width;
+
+                            cp_idx++;
+                            while (cp_idx < line->len && !gc.feed(line->at(cp_idx)))
+                                cp_idx++;
+                        }
+                    }
+                    vx_start = vx;
+                }
+
+                if (vx_start > view.x)
+                    cur_pos.x += (vx_start - view.x) * font->width;
+
+                u32 x = buf->idx_cp_to_byte(y, cp_idx);
+                u32 vx = vx_start;
+                u32 newx = 0;
+
+                for (; vx < view.x + view.w; x = newx) {
+                    newx = x;
+
+                    if (cp_idx >= line->len) break;
+
+                    auto curr_cp_idx = cp_idx;
+                    int curr_cp = line->at(cp_idx);
+                    int grapheme_cpsize = 0;
+
+                    {
+                        auto uch = curr_cp;
+                        while (true) {
+                            cp_idx++;
+                            newx += uchar_size(uch);
+                            grapheme_cpsize++;
+
+                            if (cp_idx >= line->len) break;
+                            if (gc.feed(uch = line->at(cp_idx))) break;
+                        }
+                    }
+
+                    int glyph_width = 0;
+                    if (grapheme_cpsize == 1 && curr_cp == '\t')
+                        glyph_width = options.tabsize - (vx % options.tabsize);
+                    else
+                        glyph_width = our_wcwidth(curr_cp);
+
+                    if (glyph_width == -1) glyph_width = 1;
+
+                    vec4f text_color = rgba(global_colors.foreground);
+
+                    if (next_hl != -1) {
+                        auto curr = new_cur2((u32)curr_cp_idx, (u32)y);
+
+                        while (next_hl != -1 && curr >= highlights[next_hl].end)
+                            if (++next_hl >= highlights.len)
+                                next_hl = -1;
+
+                        if (next_hl != -1) {
+                            auto& hl = highlights[next_hl];
+                            if (hl.start <= curr && curr < hl.end)
+                                text_color = hl.color;
+                        }
+                    }
+
+                    if (editor->cur == new_cur2((u32)curr_cp_idx, (u32)y)) {
+                        draw_cursor(glyph_width);
+                        if (current_pane == world.current_pane && world.use_nvim)
+                            text_color = rgba(global_colors.cursor_foreground);
+                    } else if (world.use_nvim && world.nvim.mode != VI_INSERT) {
+                        auto topline = editor->nvim_data.grid_topline;
+                        if (topline <= y && y < topline + NVIM_DEFAULT_HEIGHT) {
+                            int i = 0;
+                            while (i < glyph_width && vx+i < _countof(editor->highlights[y - topline]))
+                                i++;
+
+                            auto hl = editor->highlights[y - topline][vx];
+                            switch (hl) {
+                            case HL_INCSEARCH:
+                                draw_highlight(rgba(global_colors.foreground), i);
+                                text_color = rgba(global_colors.background);
+                                break;
+                            case HL_SEARCH:
+                                draw_highlight(rgba(global_colors.search_background), i);
+                                text_color = rgba(global_colors.search_foreground);
+                                break;
+                            case HL_VISUAL:
+                                draw_highlight(rgba(global_colors.visual_background), i);
+                                text_color = rgba(global_colors.visual_foreground);
+                                break;
+                            }
+                        }
+                    }
+
+                    if (!world.use_nvim && editor->selecting) {
+                        auto pos = new_cur2((u32)curr_cp_idx, (u32)y);
+                        if (select_start <= pos && pos < select_end) {
+                            draw_highlight(rgba(global_colors.visual_background), glyph_width, true);
+                            text_color = rgba(global_colors.visual_foreground);
+                        }
+                    }
+
+                    if (hint.gotype != NULL)
+                        if (new_cur2(x, y) == hint.start)
+                            actual_parameter_hint_start = cur_pos;
+
+                    uchar uch = curr_cp;
+                    if (uch == '\t') {
+                        cur_pos.x += font->width * glyph_width;
+                    } else if (grapheme_cpsize > 1 || uch > 0x7f) {
+                        auto pos = cur_pos;
+                        pos.x += (font->width * glyph_width) / 2 - (font->width / 2);
+                        draw_char(&pos, 0xfffd, text_color);
+
+                        cur_pos.x += font->width * glyph_width;
+                    } else {
+                        draw_char(&cur_pos, uch, text_color);
+                    }
+
+                    vx += glyph_width;
+                }
+
+                if (line->len == 0) {
+                    if (world.use_nvim) {
+                        auto topline = editor->nvim_data.grid_topline;
+                        if (topline <= y && y < topline + NVIM_DEFAULT_HEIGHT) {
+                            switch (editor->highlights[y - topline][0]) {
+                            case HL_INCSEARCH:
+                                draw_highlight(rgba(global_colors.foreground), 1);
+                                break;
+                            case HL_SEARCH:
+                                draw_highlight(rgba(global_colors.search_background), 1);
+                                break;
+                            case HL_VISUAL:
+                                draw_highlight(rgba(global_colors.visual_background), 1);
+                                break;
+                            }
+                        }
+                    } else {
+                        auto pos = new_cur2((u32)0, (u32)y);
+                        if (select_start <= pos && pos < select_end)
+                            draw_highlight(rgba(global_colors.visual_background), 1, true);
+                    }
+                }
+
+                if (editor->cur == new_cur2(line->len, y))
+                    draw_cursor(1);
+
+                cur_pos.x = editor_area.x + settings.editor_margin_x;
+                cur_pos.y += font->height * settings.line_height;
+            }
+        } while (0);
 
         pane_area.x += pane_area.w;
     }
