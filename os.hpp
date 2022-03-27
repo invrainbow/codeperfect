@@ -20,8 +20,8 @@
 #if OS_WIN
 #   include "win32.hpp"
 #elif OS_MAC
-#   include "pthread.h"
-#   include "errno.h"
+#   include <pthread.h>
+#   include <errno.h>
 #endif
 
 #if OS_WIN
@@ -34,6 +34,13 @@
 #define FILEPATHS_CASE_SENSITIVE 1
 #else
 #define FILEPATHS_CASE_SENSITIVE 0
+#endif
+
+#if OS_WIN
+#define BREAK_HERE DebugBreak()
+#elif OS_MAC
+#include <signal.h>
+#define BREAK_HERE raise(SIGTRAP)
 #endif
 
 #include "common.hpp"
