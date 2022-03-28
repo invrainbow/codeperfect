@@ -521,8 +521,14 @@ void UI::help_marker(ccstr text) {
 }
 
 void UI::render_godecl(Godecl *decl) {
-    auto flags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth;
-    if (ImGui::TreeNodeEx(decl, flags, "%s", godecl_type_str(decl->type))) {
+    auto flags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_SpanAvailWidth;
+
+    bool open = ImGui::TreeNodeEx(decl, flags, "%s", godecl_type_str(decl->type));
+
+    if (ImGui::IsItemClicked())
+        goto_file_and_pos(current_render_godecl_filepath, decl->name_start);
+
+    if (open) {
         ImGui::Text("decl_start: %s", format_cur(decl->decl_start));
         ImGui::Text("spec_start: %s", format_cur(decl->spec_start));
         ImGui::Text("name_start: %s", format_cur(decl->name_start));
@@ -544,12 +550,13 @@ void UI::render_godecl(Godecl *decl) {
         }
         ImGui::TreePop();
     }
+
 }
 
 void UI::render_gotype(Gotype *gotype, ccstr field) {
     if (gotype == NULL) return;
 
-    auto flags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth;
+    auto flags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_SpanAvailWidth;
     bool is_open = false;
 
     if (field == NULL)
@@ -4643,6 +4650,8 @@ void UI::draw_everything() {
 
             Ast_Node node; ptr0(&node);
             node.init(ts_tree_root_node(tree), &it);
+
+            current_render_godecl_filepath = our_strcpy(editor->filepath);
 
             FOR_NODE_CHILDREN (&node) {
                 switch (it->type()) {
