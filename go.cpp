@@ -5823,6 +5823,16 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
                 auto type_node = spec->field(TSF_TYPE);
                 auto value_node = spec->field(TSF_VALUE);
 
+                bool is_error = false;
+                FOR_NODE_CHILDREN (spec) {
+                    if (it->type() == TS_ERROR) {
+                        is_error = true;
+                        break;
+                    }
+                }
+
+                if (is_error) continue;
+
                 // !type && !value      try to used saved iota expression
                 // !type && value       infer types from values, try to save iota
                 // type && value        save type from type, try to save iota
