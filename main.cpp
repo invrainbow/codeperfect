@@ -1286,18 +1286,18 @@ int main(int argc, char **argv) {
         }
     });
 
-    glfwSetCharCallback(world.window, [](GLFWwindow* wnd, u32 ch) {
+    glfwSetCharCallback(world.window, [](GLFWwindow*, u32 ch) {
         Timer t; t.init("char callback", &world.trace_next_frame); defer { t.log("done"); };
 
         u32 mods = 0; // normalized mod
-        if (glfwGetKey(wnd, GLFW_KEY_LEFT_SUPER)) mods |= KEYMOD_CMD;
-        if (glfwGetKey(wnd, GLFW_KEY_RIGHT_SUPER)) mods |= KEYMOD_CMD;
-        if (glfwGetKey(wnd, GLFW_KEY_LEFT_CONTROL)) mods |= KEYMOD_CTRL;
-        if (glfwGetKey(wnd, GLFW_KEY_RIGHT_SUPER)) mods |= KEYMOD_CTRL;
-        if (glfwGetKey(wnd, GLFW_KEY_LEFT_SHIFT)) mods |= KEYMOD_SHIFT;
-        if (glfwGetKey(wnd, GLFW_KEY_RIGHT_SHIFT)) mods |= KEYMOD_SHIFT;
-        if (glfwGetKey(wnd, GLFW_KEY_LEFT_ALT)) mods |= KEYMOD_ALT;
-        if (glfwGetKey(wnd, GLFW_KEY_RIGHT_ALT)) mods |= KEYMOD_ALT;
+        if (glfwGetKey(world.window, GLFW_KEY_LEFT_SUPER)) mods |= KEYMOD_CMD;
+        if (glfwGetKey(world.window, GLFW_KEY_RIGHT_SUPER)) mods |= KEYMOD_CMD;
+        if (glfwGetKey(world.window, GLFW_KEY_LEFT_CONTROL)) mods |= KEYMOD_CTRL;
+        if (glfwGetKey(world.window, GLFW_KEY_RIGHT_SUPER)) mods |= KEYMOD_CTRL;
+        if (glfwGetKey(world.window, GLFW_KEY_LEFT_SHIFT)) mods |= KEYMOD_SHIFT;
+        if (glfwGetKey(world.window, GLFW_KEY_RIGHT_SHIFT)) mods |= KEYMOD_SHIFT;
+        if (glfwGetKey(world.window, GLFW_KEY_LEFT_ALT)) mods |= KEYMOD_ALT;
+        if (glfwGetKey(world.window, GLFW_KEY_RIGHT_ALT)) mods |= KEYMOD_ALT;
 
         if (mods == KEYMOD_CTRL) return;
 
