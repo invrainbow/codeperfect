@@ -76,6 +76,7 @@ Ask_User_Result ask_user_yes_no_cancel(ccstr text, ccstr title, ccstr yeslabel, 
 #endif
 
 void open_webbrowser(ccstr url) {
+    // for highlevel stuff like this, shell out to go?
     Process p;
     p.init();
     p.run(our_sprintf("%s %s", OPEN_COMMAND, url));

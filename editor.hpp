@@ -102,7 +102,6 @@ struct Editor {
     u64 disable_file_watcher_until;
 
     bool saving;
-    Process goimports_proc;
     char highlights[NVIM_DEFAULT_HEIGHT][NVIM_DEFAULT_WIDTH];
 
     cur2 go_here_after_escape;

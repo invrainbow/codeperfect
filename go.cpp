@@ -520,48 +520,6 @@ Go_File *get_ready_file_in_package(Go_Package *pkg, ccstr filename) {
     return file;
 }
 
-ccstr Gohelper::readline() {
-    auto ret = alloc_list<char>();
-    char ch;
-    while (true) {
-        our_assert(proc.read1(&ch), "gohelper crashed, we can't do anything anymore");
-        if (ch == '\n') break;
-        ret->append(ch);
-    }
-    ret->append('\0');
-    return ret->items;
-}
-
-int Gohelper::readint() {
-    return atoi(readline());
-}
-
-ccstr Gohelper::run(ccstr op, ...) {
-    va_list vl;
-    va_start(vl, op);
-
-    proc.writestr(op);
-    proc.write1('\n');
-
-    ccstr param = NULL;
-    while ((param = va_arg(vl, ccstr)) != NULL) {
-        proc.writestr(param);
-        proc.write1('\n');
-    }
-
-    auto ret = readline();
-    if (streq(ret, "error")) {
-        returned_error = true;
-        auto errmsg = readline();
-        error("gohelper returned error for op %s: %s", op, errmsg);
-        return errmsg;
-    }
-
-    returned_error = false;
-    return ret;
-}
-
-
 /*
 granularize our background thread loop
 either:
@@ -5161,18 +5119,6 @@ ccstr Go_Indexer::filepath_to_import_path(ccstr path_str) {
     Path p;
     p.init(parts);
     return p.str('/');
-}
-
-void Gohelper::init(ccstr cmd, ccstr dir) {
-    proc.init();
-    proc.dir = dir;
-    proc.use_stdin = true;
-    proc.skip_shell = true;
-    proc.run(cmd);
-}
-
-void Gohelper::cleanup() {
-    proc.cleanup();
 }
 
 void Go_Indexer::init() {

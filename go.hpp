@@ -1154,17 +1154,6 @@ struct Token {
 
 bool isident(int c);
 
-struct Gohelper {
-    Process proc;
-    bool returned_error;
-
-    void init(ccstr cmd, ccstr path);
-    void cleanup();
-    ccstr readline();
-    int readint();
-    ccstr run(ccstr op, ...);
-};
-
 enum {
     LISTDECLS_PUBLIC_ONLY = 1 << 0,
     LISTDECLS_EXCLUDE_METHODS = 1 << 1,
@@ -1242,8 +1231,6 @@ struct Go_Indexer {
     Pool mem;        // mem that exists for lifetime of Go_Indexer
     Pool final_mem;  // memory that holds the final value of `this->index`
     Pool ui_mem;     // memory used by UI when it calls jump to definition, etc.
-
-    Gohelper gohelper_dynamic;
 
     Pool scoped_table_mem;
 

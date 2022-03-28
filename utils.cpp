@@ -16,6 +16,7 @@ bool strcpy_safe(cstr buf, s32 count, ccstr src) {
     return true;
 }
 
+// TODO: can probably do this in gohelper
 ccstr our_format_json(ccstr s) {
     Process proc;
 
