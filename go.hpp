@@ -1049,7 +1049,7 @@ struct Module_Resolver {
         if (create_if_not_found) {
             auto ret = alloc_object(Node);
             ret->next = node->children;
-            ret->name = our_strcpy(name);
+            ret->name = cp_strcpy(name);
             node->children = ret;
             return ret;
         }
@@ -1067,7 +1067,7 @@ struct Module_Resolver {
     }
 
     void add_path(ccstr import_path, ccstr resolved_path) {
-        resolved_path = normalize_path_sep(our_strcpy(resolved_path));
+        resolved_path = normalize_path_sep(cp_strcpy(resolved_path));
         add_to_root(root_import_to_resolved, import_path, resolved_path);
         add_to_root(root_resolved_to_import, resolved_path, import_path);
     }
@@ -1205,7 +1205,7 @@ struct Go_Symbol {
     Goresult *decl;
     u64 filehash;
 
-    ccstr full_name() { return our_sprintf("%s.%s", pkgname, name); }
+    ccstr full_name() { return cp_sprintf("%s.%s", pkgname, name); }
     Go_Symbol* copy();
 };
 
@@ -1385,7 +1385,7 @@ T *read_object(Index_Stream *s) {
 
     // TODO: i mean, don't literally crash the program, show an error and
     // rebuild the index or something
-    our_assert(size == sizeof(T), "size mismatch while reading object from index");
+    cp_assert(size == sizeof(T), "size mismatch while reading object from index");
 
     auto obj = alloc_object(T);
     s->readn(obj, size);

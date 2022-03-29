@@ -40,7 +40,7 @@ ccstr get_normalized_path(ccstr path) {
     if (!ret) return NULL;
     defer { free(ret); };
 
-    return our_strcpy(ret);
+    return cp_strcpy(ret);
 }
 
 bool are_filepaths_same_file(ccstr path1, ccstr path2) {
@@ -226,12 +226,12 @@ struct Thread_Ctx {
 void* _run_thread(void* p) {
     auto ctx = (Thread_Ctx*)p;
     ctx->callback(ctx->param);
-    our_free(ctx);
+    cp_free(ctx);
     return 0;
 }
 
 Thread_Handle create_thread(Thread_Callback callback, void* param) {
-    auto ctx = (Thread_Ctx*)our_malloc(sizeof(Thread_Ctx));
+    auto ctx = (Thread_Ctx*)cp_malloc(sizeof(Thread_Ctx));
     ctx->callback = callback;
     ctx->param = param;
 

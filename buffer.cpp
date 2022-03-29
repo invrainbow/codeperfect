@@ -859,13 +859,13 @@ cur2 Buffer::dec_cur(cur2 c) {
 
 uchar* Buffer::alloc_temp_array(s32 size) {
     if (size > 1024)
-        return (uchar*)our_malloc(sizeof(uchar) * size);
+        return (uchar*)cp_malloc(sizeof(uchar) * size);
     return alloc_array(uchar, size);
 }
 
 void Buffer::free_temp_array(uchar* buf, s32 size) {
     if (size > 1024)
-        our_free(buf);
+        cp_free(buf);
 }
 
 i32 Buffer::cur_to_offset(cur2 c) {
@@ -964,7 +964,7 @@ u32 Buffer::internal_convert_x_vx(int y, int off, bool to_vx) {
             vx += options.tabsize - (vx % options.tabsize);
             x++;
         } else {
-            auto width = our_wcwidth(line[x]);
+            auto width = cp_wcwidth(line[x]);
             if (width == -1) width = 1;
             vx += width;
 
@@ -1016,7 +1016,7 @@ void cleanup_mark_node(Mark_Node *node) {
 
     for (auto it = node->marks; it; it = it->next) {
         if (it == it->next)
-            our_panic("infinite loop");
+            cp_panic("infinite loop");
         it->valid = false;
     }
 
@@ -1087,7 +1087,7 @@ void Mark_Tree::insert_mark(Mark_Type type, cur2 pos, Mark *mark) {
     auto node = insert_node(pos);
     mark->node = node;
     mark->next = node->marks;
-    if (mark->next == mark) our_panic("infinite loop");
+    if (mark->next == mark) cp_panic("infinite loop");
     node->marks = mark;
 
     check_tree_integrity();
@@ -1146,7 +1146,7 @@ Mark_Node *Mark_Tree::internal_insert_node(Mark_Node *root, cur2 pos, Mark_Node 
         return node;
     }
 
-    if (root->pos == pos) our_panic("trying to insert duplicate pos");
+    if (root->pos == pos) cp_panic("trying to insert duplicate pos");
 
     if (pos < root->pos) {
         auto old = root->left;
@@ -1198,7 +1198,7 @@ void Mark_Tree::delete_mark(Mark *mark) {
                node->marks = mark->next;
             else {
                last->next = mark->next;
-               if (last->next == last) our_panic("infinite loop");
+               if (last->next == last) cp_panic("infinite loop");
             }
             break;
         }
@@ -1208,7 +1208,7 @@ void Mark_Tree::delete_mark(Mark *mark) {
     check_tree_integrity();
 
     if (!found)
-        our_panic("trying to delete mark not found in its node");
+        cp_panic("trying to delete mark not found in its node");
 
     if (!node->marks)
         delete_node(node->pos);
@@ -1233,7 +1233,7 @@ Mark_Node *Mark_Tree::internal_delete_node(Mark_Node *root, cur2 pos) {
         root->right = internal_delete_node(root->right, pos);
     else {
         if (root->marks)
-            our_panic("trying to delete a node that still has marks");
+            cp_panic("trying to delete a node that still has marks");
 
         if (!root->left || !root->right) {
             Mark_Node *ret = NULL;
@@ -1318,23 +1318,23 @@ void Mark_Tree::apply_edit(cur2 start, cur2 old_end, cur2 new_end) {
         } else {
             for (auto mark = it->marks; mark; mark = mark->next)
                 if (mark == mark->next)
-                    our_panic("infinite loop");
+                    cp_panic("infinite loop");
 
             Mark *next = NULL;
 
             if (it->marks == orphan_marks)
-                our_panic("why is this happening?");
+                cp_panic("why is this happening?");
 
             int i = 0;
             for (auto mark = it->marks; mark; mark = next) {
                 if (orphan_marks == mark)
-                    our_panic("why is this happening?");
+                    cp_panic("why is this happening?");
 
                 mark->node = NULL;
                 next = mark->next;
 
                 mark->next = orphan_marks;
-                if (mark->next == mark) our_panic("infinite loop");
+                if (mark->next == mark) cp_panic("infinite loop");
 
                 orphan_marks = mark;
                 i++;
@@ -1371,7 +1371,7 @@ void Mark_Tree::apply_edit(cur2 start, cur2 old_end, cur2 new_end) {
             next = mark->next;
             mark->node = nend;
             mark->next = nend->marks;
-            if (mark->next == mark) our_panic("infinite loop");
+            if (mark->next == mark) cp_panic("infinite loop");
             nend->marks = mark;
         }
     }
@@ -1384,7 +1384,7 @@ void Mark_Tree::check_mark_cycle(Mark_Node *root) {
 
     for (auto mark = root->marks; mark; mark = mark->next)
         if (mark == mark->next)
-            our_panic("mark cycle detected");
+            cp_panic("mark cycle detected");
 
     check_mark_cycle(root->left);
     check_mark_cycle(root->right);
@@ -1398,7 +1398,7 @@ void Mark_Tree::check_duplicate_marks_helper(Mark_Node *root, List<Mark*> *seen)
 
     for (auto m = root->marks; m; m = m->next) {
         if (seen->find([&](auto it) { return *it == m; }))
-            our_panic("duplicate mark");
+            cp_panic("duplicate mark");
         seen->append(m);
     }
 }
@@ -1430,7 +1430,7 @@ void Mark_Tree::check_ordering() {
     for (auto it = min; it; it = succ(it)) {
         if (last.x != -1) {
             if (last >= it->pos) {
-                our_panic("out of order (or duplicate)");
+                cp_panic("out of order (or duplicate)");
             }
         }
         last = it->pos;

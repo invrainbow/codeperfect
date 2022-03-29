@@ -125,7 +125,7 @@ Process_Status Process::status() {
 
 bool Process::peek(char *ch) {
     if (peek_buffer_full)
-        our_panic("can only peek 1 character at a time");
+        cp_panic("can only peek 1 character at a time");
 
     if (!read1(&peek_buffer)) return false;
 
@@ -202,12 +202,12 @@ struct Thread_Ctx {
 void* _run_thread(void* p) {
     auto ctx = (Thread_Ctx*)p;
     ctx->callback(ctx->param);
-    our_free(ctx);
+    cp_free(ctx);
     return 0;
 }
 
 Thread_Handle create_thread(Thread_Callback callback, void* param) {
-    auto ctx = (Thread_Ctx*)our_malloc(sizeof(Thread_Ctx));
+    auto ctx = (Thread_Ctx*)cp_malloc(sizeof(Thread_Ctx));
     ctx->callback = callback;
     ctx->param = param;
 

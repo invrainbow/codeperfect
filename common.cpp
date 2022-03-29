@@ -63,8 +63,8 @@ void _error(ccstr fmt, ...) {
     va_copy(args2, args);
 
     auto len = vsnprintf(NULL, 0, fmt, args);
-    auto buf = (char*)our_malloc(sizeof(char) * (len + 1));
-    defer { our_free(buf); };
+    auto buf = (char*)cp_malloc(sizeof(char) * (len + 1));
+    defer { cp_free(buf); };
 
     vsnprintf(buf, len + 1, fmt, args2);
 
@@ -78,11 +78,11 @@ void _error(ccstr fmt, ...) {
 #endif
 }
 
-void* our_malloc(size_t size) {
+void* cp_malloc(size_t size) {
     return malloc(size);
 }
 
-void our_free(void* p) {
+void cp_free(void* p) {
     free(p);
 }
 
@@ -107,7 +107,7 @@ bool boxf::contains(vec2f point) {
 
 s32 global_mem_allocated = 0;
 
-void our_panic(ccstr s) {
+void cp_panic(ccstr s) {
 #ifdef DEBUG_MODE
     // throw exception so we can debug it
 	throw Panic_Exception(s);
@@ -118,7 +118,7 @@ void our_panic(ccstr s) {
     } else {
         world.message_queue.add([&](auto msg) {
             msg->type = MTM_PANIC;
-            msg->panic_message = our_strcpy(s);
+            msg->panic_message = cp_strcpy(s);
         });
         exit_thread(1);
     }

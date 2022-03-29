@@ -79,13 +79,13 @@ void open_webbrowser(ccstr url) {
     // for highlevel stuff like this, shell out to go?
     Process p;
     p.init();
-    p.run(our_sprintf("%s %s", OPEN_COMMAND, url));
+    p.run(cp_sprintf("%s %s", OPEN_COMMAND, url));
     p.cleanup();
 }
 
 #undef OPEN_COMMAND
 
-ccstr our_getcwd() {
+ccstr cp_getcwd() {
     auto ret = alloc_array(char, 256);
     return getcwd(ret, 256);
 }

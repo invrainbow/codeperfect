@@ -235,7 +235,7 @@ void Debugger::save_single_var(Json_Navigator js, i32 idx, Dlv_Var* out, Save_Va
     }
 
     if (save_mode == SAVE_VAR_VALUE_APPEND) {
-        out->value = our_sprintf("%s%s", out->value, js.str(js.get(idx, ".value")));
+        out->value = cp_sprintf("%s%s", out->value, js.str(js.get(idx, ".value")));
     } else {
         if (save_mode == SAVE_VAR_NORMAL || save_mode == SAVE_VAR_CHILDREN_OVERWRITE)
             out->children = alloc_list<Dlv_Var>();
@@ -381,7 +381,7 @@ void Debugger::init() {
 #if OS_WIN
     WSADATA wsa;
     if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
-        our_panic("WSAStartup failed");
+        cp_panic("WSAStartup failed");
 #endif
 }
 
@@ -496,7 +496,7 @@ bool Debugger::read_packet(Packet* p) {
 
     if (run()) {
         SCOPED_FRAME();
-		dbg_print("[\"recv\"]\n%s", p->string); // our_format_json(p->string));
+		dbg_print("[\"recv\"]\n%s", p->string); // cp_format_json(p->string));
         return true;
     }
 
@@ -736,7 +736,7 @@ i32 Json_Navigator::array_length(i32 i) {
 
 i32 Json_Navigator::get(i32 i, i32 idx) {
     SCOPED_FRAME();
-    return get(i, our_sprintf("[%d]", idx));
+    return get(i, cp_sprintf("[%d]", idx));
 }
 
 i32 Json_Navigator::get(i32 i, ccstr keys) {
@@ -912,7 +912,7 @@ bool Debugger::start(Debug_Profile *debug_profile) {
                 if (!path_has_descendant(world.current_path, editor->filepath)) return;
 
                 auto root_module_path = world.indexer.module_resolver.module_path;
-                auto subpath = get_path_relative_to(our_dirname(editor->filepath), world.current_path);
+                auto subpath = get_path_relative_to(cp_dirname(editor->filepath), world.current_path);
                 package_path = normalize_path_sep(path_join(root_module_path, subpath), '/');
 
                 if (debug_profile->type == DEBUG_TEST_CURRENT_FUNCTION) {
@@ -963,9 +963,9 @@ bool Debugger::start(Debug_Profile *debug_profile) {
 
             ccstr cmd = NULL;
             if (debug_profile->type == DEBUG_RUN_PACKAGE)
-                cmd = our_sprintf("%s build -o %s --gcflags=\"all=-N -l\" %s", world.go_binary_path, binary_name, package_path);
+                cmd = cp_sprintf("%s build -o %s --gcflags=\"all=-N -l\" %s", world.go_binary_path, binary_name, package_path);
             else
-                cmd = our_sprintf("%s test -c %s -o %s --gcflags=\"all=-N -l\"", world.go_binary_path, package_path, binary_name);
+                cmd = cp_sprintf("%s test -c %s -o %s --gcflags=\"all=-N -l\"", world.go_binary_path, package_path, binary_name);
 
             Build_Profile build_profile; ptr0(&build_profile);
             strcpy_safe_fixed(build_profile.label, "temp");
@@ -1011,7 +1011,7 @@ bool Debugger::start(Debug_Profile *debug_profile) {
     {
         auto path = GHGetDelvePath();
         if (path) {
-            delve_path = our_strcpy(path);
+            delve_path = cp_strcpy(path);
             defer { GHFree(path); };
         }
     }
@@ -1022,16 +1022,16 @@ bool Debugger::start(Debug_Profile *debug_profile) {
         return false;
     }
 
-    ccstr dlv_cmd = our_sprintf("%s exec --headless --listen=127.0.0.1:1234 %s", delve_path, binary_path);
+    ccstr dlv_cmd = cp_sprintf("%s exec --headless --listen=127.0.0.1:1234 %s", delve_path, binary_path);
     if (debug_profile->type == DEBUG_TEST_CURRENT_FUNCTION)
-        dlv_cmd = our_sprintf("%s -- -test.v -test.run %s", dlv_cmd, test_function_name);
+        dlv_cmd = cp_sprintf("%s -- -test.v -test.run %s", dlv_cmd, test_function_name);
 
 #ifdef CPU_ARM64
-        dlv_cmd = our_sprintf("arch -arm64 %s", dlv_cmd);
+        dlv_cmd = cp_sprintf("arch -arm64 %s", dlv_cmd);
 #endif
 
     dbg_print("delve command: %s", dlv_cmd);
-    dbg_print("getcwd = %s", our_getcwd());
+    dbg_print("getcwd = %s", cp_getcwd());
     dbg_print("dlv_proc.dir = %s", dlv_proc.dir);
 
     if (!dlv_proc.run(dlv_cmd)) {
@@ -1117,8 +1117,8 @@ bool Debugger::start(Debug_Profile *debug_profile) {
 void Debugger::send_tell_user(ccstr text, ccstr title) {
     world.message_queue.add([&](auto msg) {
         msg->type = MTM_TELL_USER;
-        msg->tell_user_text = our_strcpy(text);
-        msg->tell_user_title = our_strcpy(title);
+        msg->tell_user_text = cp_strcpy(text);
+        msg->tell_user_title = cp_strcpy(title);
     });
 }
 
@@ -1141,7 +1141,7 @@ void Debugger::pipe_stdout_into_our_buffer() {
             stdout_line_buffer.append('\0');
             {
                 SCOPED_MEM(&stdout_mem);
-                stdout_lines.append(our_strcpy(stdout_line_buffer.items));
+                stdout_lines.append(cp_strcpy(stdout_line_buffer.items));
                 world.wnd_debug_output.cmd_scroll_to_end = true;
             }
             stdout_line_buffer.len = 0;
@@ -1205,7 +1205,7 @@ void Debugger::select_frame(u32 goroutine_id, u32 frame) {
     if (!exiting) {
         world.message_queue.add([&](auto msg) {
             msg->type = MTM_GOTO_FILEPOS;
-            msg->goto_file = our_strcpy(dlvframe->filepath);
+            msg->goto_file = cp_strcpy(dlvframe->filepath);
             msg->goto_pos = new_cur2((i32)0, (i32)dlvframe->lineno - 1);
         });
     }
@@ -1285,7 +1285,7 @@ void Debugger::do_everything() {
                     case GO_KIND_STRUCT:
                     case GO_KIND_INTERFACE:
                         eval_expression(
-                            our_sprintf("*(*\"%s\")(0x%" PRIx64 ")", var->type, var->address),
+                            cp_sprintf("*(*\"%s\")(0x%" PRIx64 ")", var->type, var->address),
                             state.current_goroutine_id,
                             state.current_frame,
                             var,
@@ -1299,7 +1299,7 @@ void Debugger::do_everything() {
                         {
                             auto offset = var->kind == GO_KIND_STRING ? strlen(var->value) : var->children->len;
                             eval_expression(
-                                our_sprintf("(*(*\"%s\")(0x%" PRIx64 "))[%d:]", var->type, var->address, offset),
+                                cp_sprintf("(*(*\"%s\")(0x%" PRIx64 "))[%d:]", var->type, var->address, offset),
                                 state.current_goroutine_id,
                                 state.current_frame,
                                 var,
@@ -1310,7 +1310,7 @@ void Debugger::do_everything() {
 
                     case GO_KIND_MAP:
                         eval_expression(
-                            our_sprintf("(*(*\"%s\")(0x%" PRIx64 "))[%d:]", var->type, var->address, var->children->len / 2),
+                            cp_sprintf("(*(*\"%s\")(0x%" PRIx64 "))[%d:]", var->type, var->address, var->children->len / 2),
                             state.current_goroutine_id,
                             state.current_frame,
                             var,
@@ -1460,7 +1460,7 @@ void Debugger::do_everything() {
                         Client_Breakpoint b;
                         {
                             SCOPED_MEM(&breakpoints_mem);
-                            b.file = our_strcpy(args.filename);
+                            b.file = cp_strcpy(args.filename);
                         }
                         b.line = args.lineno;
                         b.pending = true;

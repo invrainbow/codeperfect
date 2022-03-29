@@ -207,7 +207,7 @@ struct Mark_Tree_Fuzzer {
         int offset = 0;
         int count = 0;
 
-        our_assert(f.write((char*)&count, sizeof(count)), "f.write");
+        cp_assert(f.write((char*)&count, sizeof(count)), "f.write");
         offset += sizeof(count);
 
         for (int i = 0; i < 10000; i++) {
@@ -221,12 +221,12 @@ struct Mark_Tree_Fuzzer {
             count++;
 
             // write the action
-            our_assert(f.write((char*)a, sizeof(*a)), "f.write");
+            cp_assert(f.write((char*)a, sizeof(*a)), "f.write");
             offset += sizeof(*a);
 
             // write the count at the beginning
             f.seek(0);
-            our_assert(f.write((char*)&count, sizeof(count)), "f.write");
+            cp_assert(f.write((char*)&count, sizeof(count)), "f.write");
             f.seek(offset);
 
             // run
@@ -243,14 +243,14 @@ struct Mark_Tree_Fuzzer {
                         break;
                     }
                 }
-                if (!found) our_panic("mark got detached from its node somehow");
+                if (!found) cp_panic("mark got detached from its node somehow");
 
                 // check that mark node is still in root
                 auto node = it->node;
                 while (node->parent)
                     node = node->parent;
                 if (tree.root != node)
-                    our_panic("mark node is detached from root!");
+                    cp_panic("mark node is detached from root!");
             }
             */
 
@@ -268,10 +268,10 @@ struct Mark_Tree_Fuzzer {
             defer { f.cleanup(); };
 
             int len = 0;
-            our_assert(f.read((char*)&len, sizeof(len)), "f.read");
+            cp_assert(f.read((char*)&len, sizeof(len)), "f.read");
 
             actions.ensure_cap(len);
-            our_assert(f.read((char*)actions.items, sizeof(Mtf_Action) * len), "f.read");
+            cp_assert(f.read((char*)actions.items, sizeof(Mtf_Action) * len), "f.read");
             actions.len = len;
         }
 
@@ -301,7 +301,7 @@ void test_mark_tree_fuzz() {
         defer { mtf.cleanup(); };
 
         mtf.print_flag = false;
-        our_assert(mtf.run(), "mtf.run");
+        cp_assert(mtf.run(), "mtf.run");
     }
 }
 
@@ -316,7 +316,7 @@ void test_mark_tree_fuzz_replay() {
     defer { mtf.cleanup(); };
 
     mtf.print_flag = false;
-    our_assert(mtf.replay(), "mtf.replay");
+    cp_assert(mtf.replay(), "mtf.replay");
 }
 
 int main(int argc, char *argv[]) {

@@ -160,7 +160,7 @@ ccstr get_win32_error(DWORD error = -1);
 
 #elif OS_MAC
 
-#define get_last_error() our_sprintf("(%d) %s", errno, strerror(errno))
+#define get_last_error() cp_sprintf("(%d) %s", errno, strerror(errno))
 #define get_socket_error() strerror(errno)
 
 #endif
@@ -379,7 +379,7 @@ bool touch_file(ccstr path);
 void init_platform_specific_crap();
 void open_webbrowser(ccstr url);
 
-ccstr our_getcwd();
+ccstr cp_getcwd();
 int cpu_count();
 
 int get_unix_time();

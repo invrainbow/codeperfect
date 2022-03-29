@@ -5,14 +5,14 @@
 #include "mem.hpp"
 #include "hash.hpp"
 
-ccstr our_format_json(ccstr s);
-ccstr our_strcpy(ccstr s);
-ccstr our_strncpy(ccstr s, int n);
-ccstr our_dirname(ccstr path);
-ccstr our_basename(ccstr path);
-ccstr our_vsprintf(ccstr fmt, va_list args);
-ccstr our_sprintf(ccstr fmt, ...);
-ccstr our_strcat(ccstr a, ccstr b);
+ccstr cp_format_json(ccstr s);
+ccstr cp_strcpy(ccstr s);
+ccstr cp_strncpy(ccstr s, int n);
+ccstr cp_dirname(ccstr path);
+ccstr cp_basename(ccstr path);
+ccstr cp_vsprintf(ccstr fmt, va_list args);
+ccstr cp_sprintf(ccstr fmt, ...);
+ccstr cp_strcat(ccstr a, ccstr b);
 
 bool strcpy_safe(cstr buf, s32 count, ccstr src);
 ccstr str_replace(ccstr s, ccstr find, ccstr replace);
@@ -378,7 +378,7 @@ struct Timer {
     ccstr make_label(ccstr s) {
         if (!name)
             return s;
-        return our_sprintf("[%s] %s", name, s);
+        return cp_sprintf("[%s] %s", name, s);
     }
 
     bool is_enabled() {
@@ -394,7 +394,7 @@ struct Timer {
     }
 
     void log(ccstr s) {
-        output(our_sprintf("%s: %dus", make_label(s), read_time() / 1000));
+        output(cp_sprintf("%s: %dus", make_label(s), read_time() / 1000));
     }
 
     i64 read_time() {
@@ -406,7 +406,7 @@ struct Timer {
 
     void total() {
         auto curr = current_time_nano();
-        output(our_sprintf("%s: %dus", make_label("TOTAL"), (curr - start) / 1000));
+        output(cp_sprintf("%s: %dus", make_label("TOTAL"), (curr - start) / 1000));
         time = curr;
     }
 };

@@ -158,7 +158,7 @@ void Searcher::search_worker() {
         ccstr final_filepath = NULL;
         {
             SCOPED_MEM(&final_mem);
-            final_filepath = our_strcpy(filepath);
+            final_filepath = cp_strcpy(filepath);
         }
 
         auto editor = find_editor_by_filepath(final_filepath);
@@ -185,7 +185,7 @@ void Searcher::search_worker() {
                         auto start = nextmatch.group_starts->at(i);
                         auto end = nextmatch.group_ends->at(i);
 
-                        auto group = our_strncpy(&buf[start], end-start);
+                        auto group = cp_strncpy(&buf[start], end-start);
                         sr.groups->append(group);
                     }
                 }
@@ -196,7 +196,7 @@ void Searcher::search_worker() {
 
                 sr.match_len = i - sr.match_off;
                 sr.match_end = pos;
-                sr.match = our_strncpy(&buf[sr.match_off], sr.match_len);
+                sr.match = cp_strncpy(&buf[sr.match_off], sr.match_len);
 
                 sr.preview_start = sr.match_start;
                 sr.preview_end = sr.match_end;
@@ -219,7 +219,7 @@ void Searcher::search_worker() {
 
                 sr.preview_len += to_right;
                 sr.preview_end.x += to_right;
-                sr.preview = our_strncpy(&buf[prevoff], sr.preview_len);
+                sr.preview = cp_strncpy(&buf[prevoff], sr.preview_len);
 
                 sr.mark_start = world.mark_fridge.alloc();
                 sr.mark_end = world.mark_fridge.alloc();
@@ -303,7 +303,7 @@ bool Searcher::start_search(ccstr _query, Search_Opts *_opts) {
     state = SEARCH_SEARCH_IN_PROGRESS;
     opts = *_opts;
 
-    query = our_strcpy(_query);
+    query = cp_strcpy(_query);
     qlen = strlen(query);
 
     file_queue.init();
@@ -413,7 +413,7 @@ bool Searcher::start_search(ccstr _query, Search_Opts *_opts) {
 
 bool Searcher::start_replace(ccstr _replace_with) {
     SCOPED_MEM(&mem);
-    replace_with = our_strcpy(_replace_with);
+    replace_with = cp_strcpy(_replace_with);
 
     auto fun = [](void *param) {
         auto s = (Searcher*)param;
@@ -510,7 +510,7 @@ void Searcher::replace_worker() {
 bool File_Replacer::init(ccstr _filepath, ccstr unique_id) {
     ptr0(this);
     filepath = _filepath;
-    tmpfile = our_sprintf(".file_replacer_%s.tmp", unique_id);
+    tmpfile = cp_sprintf(".file_replacer_%s.tmp", unique_id);
 
     bool success = false;
     defer {

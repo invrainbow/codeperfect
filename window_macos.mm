@@ -767,13 +767,13 @@ bool Window::create_nsgl_context() {
 
     nsgl_pixel_format = [[NSOpenGLPixelFormat alloc] initWithAttributes:attribs];
     if (nsgl_pixel_format == nil) {
-        our_panic("Unable to initialize window (couldn't find pixel format)");
+        cp_panic("Unable to initialize window (couldn't find pixel format)");
         return false;
     }
 
     nsgl_object = [[NSOpenGLContext alloc] initWithFormat:nsgl_pixel_format shareContext:nil];
     if (nsgl_object == nil) {
-        our_panic("Unable to initialize window (couldn't create context)");
+        cp_panic("Unable to initialize window (couldn't create context)");
         return false;
     }
 

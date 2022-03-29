@@ -129,14 +129,14 @@ void History::check_marks(int upper) {
                 break;
             }
         }
-        if (!found) our_panic("mark got detached from its node somehow");
+        if (!found) cp_panic("mark got detached from its node somehow");
 
         // check that mark node is still in root
         auto node = it->node;
         while (node->parent)
             node = node->parent;
         if (it->tree->root != node)
-            our_panic("mark node is detached from root!");
+            cp_panic("mark node is detached from root!");
     }
 #endif
 }
@@ -244,7 +244,7 @@ void History_Loc::cleanup() {
 bool exclude_from_file_tree(ccstr path) {
     if (is_ignored_by_git(path)) return true;
 
-    auto filename = our_basename(path);
+    auto filename = cp_basename(path);
     if (streq(filename, ".git")) return true;
     if (streq(filename, ".cpproj")) return true;
     if (streq(filename, ".cpdb")) return true;
@@ -280,7 +280,7 @@ void fill_file_tree() {
                 if (exclude_from_file_tree(fullpath)) break;
 
                 auto file = alloc_object(FT_Node);
-                file->name = our_strcpy(ent->name);
+                file->name = cp_strcpy(ent->name);
                 file->is_directory = (ent->type & FILE_TYPE_DIRECTORY);
                 file->num_children = 0;
                 file->parent = parent;
@@ -395,7 +395,7 @@ void World::init(Window *_wnd) {
     {
         auto go_binary_path = GHGetGoBinaryPath();
         if (!go_binary_path)
-            our_panic("Unable to find Go. Please make sure it's installed, and accessible from a Bash shell (with .bashrc).");
+            cp_panic("Unable to find Go. Please make sure it's installed, and accessible from a Bash shell (with .bashrc).");
         defer { GHFree(go_binary_path); };
         strcpy_safe_fixed(world.go_binary_path, go_binary_path);
     }
@@ -506,7 +506,7 @@ void World::start_background_threads() {
     {
         auto t = create_thread(microsoft_programmers_are_fucking_monkeys, NULL);
         if (!t)
-            our_panic("couldn't create thread");
+            cp_panic("couldn't create thread");
         close_thread_handle(t);
     }
 #endif
@@ -619,7 +619,7 @@ void init_goto_file() {
 
             // if (isdir && !node->parent && streq(it->name, ".cp")) return;
 
-            auto relpath = path[0] == '\0' ? our_strcpy(it->name) : path_join(path, it->name);
+            auto relpath = path[0] == '\0' ? cp_strcpy(it->name) : path_join(path, it->name);
             if (isdir)
                 fill_files(it, relpath);
             else
@@ -652,7 +652,7 @@ void kick_off_build(Build_Profile *build_profile) {
         SCOPED_MEM(&build->mem);
 
         build->id = world.next_build_id++;
-        build->build_profile_name = our_strcpy(build_profile->label);
+        build->build_profile_name = cp_strcpy(build_profile->label);
         build->started = true;
 
         if (!GHStartBuild((char*)build_profile->cmd)) {
@@ -678,11 +678,11 @@ void kick_off_build(Build_Profile *build_profile) {
             for (u32 i = 0; i < num_errors; i++) {
                 Build_Error err;
 
-                err.message = our_strcpy(errors[i].text);
+                err.message = cp_strcpy(errors[i].text);
                 err.valid = errors[i].is_valid;
 
                 if (err.valid) {
-                    err.file = our_strcpy(errors[i].filename);
+                    err.file = cp_strcpy(errors[i].filename);
                     err.row = errors[i].line;
                     err.col = errors[i].col;
                     // errors[i].is_vcol;
@@ -910,7 +910,7 @@ FT_Node *find_or_create_ft_node(ccstr relpath, bool is_directory) {
     auto ret = find_ft_node(relpath);
     if (ret) return ret;
 
-    auto parent = find_ft_node(our_dirname(relpath));
+    auto parent = find_ft_node(cp_dirname(relpath));
     if (!parent) return NULL;
 
 
@@ -919,7 +919,7 @@ FT_Node *find_or_create_ft_node(ccstr relpath, bool is_directory) {
 
         auto ret = alloc_object(FT_Node);
         ret->is_directory = true;
-        ret->name = our_basename(relpath);
+        ret->name = cp_basename(relpath);
         ret->depth = parent->depth + 1;
         ret->num_children = 0;
         ret->parent = parent;
@@ -1120,7 +1120,7 @@ void reload_file_subtree(ccstr relpath) {
             auto fullpath = path_join(path, ent->name);
             if (exclude_from_file_tree(fullpath)) break;
 
-            auto name = our_strcpy(ent->name);
+            auto name = cp_strcpy(ent->name);
             if (ent->type & FILE_TYPE_DIRECTORY)
                 new_directories.add(name);
             else
@@ -1166,7 +1166,7 @@ void reload_file_subtree(ccstr relpath) {
             SCOPED_MEM(&world.file_tree_mem);
 
             auto child = alloc_object(FT_Node);
-            child->name = our_strcpy(it);
+            child->name = cp_strcpy(it);
             child->is_directory = false;
             child->num_children = 0;
             child->parent = node;
@@ -1182,7 +1182,7 @@ void reload_file_subtree(ccstr relpath) {
             // TODO: recurse into directory
 
             auto child = alloc_object(FT_Node);
-            child->name = our_strcpy(it);
+            child->name = cp_strcpy(it);
             child->is_directory = true;
             child->num_children = 0;
             child->parent = node;
@@ -1571,7 +1571,7 @@ ccstr get_command_name(Command cmd) {
         if (editor) {
             if (editor->is_untitled)
                 return "Save untitled file...";
-            return our_sprintf("Save %s...", our_basename(editor->filepath));
+            return cp_sprintf("Save %s...", cp_basename(editor->filepath));
         }
         return "Save file...";
     }
@@ -1686,7 +1686,7 @@ void do_find_interfaces() {
             For (*results) newresults->append(it.copy());
 
             wnd.results = newresults;
-            wnd.current_import_path = our_strcpy(world.indexer.index.current_import_path);
+            wnd.current_import_path = cp_strcpy(world.indexer.index.current_import_path);
         }
 
         // close the thread handle first so it doesn't try to kill the thread
@@ -1738,7 +1738,7 @@ void init_goto_symbol() {
             For (*symbols) wnd.symbols->append(it.copy());
 
             wnd.filtered_results = alloc_list<int>();
-            wnd.current_import_path = our_strcpy(world.indexer.index.current_import_path);
+            wnd.current_import_path = cp_strcpy(world.indexer.index.current_import_path);
         }
 
         wnd.fill_running = false;
@@ -1786,7 +1786,7 @@ void do_find_implementations() {
             For (*results) newresults->append(it.copy());
 
             wnd.results = newresults;
-            wnd.current_import_path = our_strcpy(world.indexer.index.current_import_path);
+            wnd.current_import_path = cp_strcpy(world.indexer.index.current_import_path);
         }
 
         // close the thread handle first so it doesn't try to kill the thread
@@ -1979,7 +1979,7 @@ void handle_command(Command cmd, bool from_menu) {
                 For (*files) newfiles->append(it.copy());
 
                 wnd.results = newfiles;
-                wnd.current_import_path = our_strcpy(world.indexer.index.current_import_path);
+                wnd.current_import_path = cp_strcpy(world.indexer.index.current_import_path);
             }
 
             // close the thread handle first so it doesn't try to kill the thread
@@ -2117,7 +2117,7 @@ void handle_command(Command cmd, bool from_menu) {
             auto editor = get_current_editor();
             if (editor) {
                 world.dbg.push_call(DLVC_TOGGLE_BREAKPOINT, [&](auto call) {
-                    call->toggle_breakpoint.filename = our_strcpy(editor->filepath);
+                    call->toggle_breakpoint.filename = cp_strcpy(editor->filepath);
                     call->toggle_breakpoint.lineno = editor->cur.y + 1;
                 });
             }
@@ -2308,7 +2308,7 @@ void handle_command(Command cmd, bool from_menu) {
                 For (*results) newresults->append(it.copy());
 
                 wnd.results = newresults;
-                wnd.current_import_path = our_strcpy(world.indexer.index.current_import_path);
+                wnd.current_import_path = cp_strcpy(world.indexer.index.current_import_path);
             }
 
             // close the thread handle first so it doesn't try to kill the thread
@@ -2390,7 +2390,7 @@ void handle_command(Command cmd, bool from_menu) {
                 For (*results) newresults->append(it.copy());
 
                 wnd.results = newresults;
-                wnd.current_import_path = our_strcpy(world.indexer.index.current_import_path);
+                wnd.current_import_path = cp_strcpy(world.indexer.index.current_import_path);
             }
 
             // close the thread handle first so it doesn't try to kill the thread
@@ -2625,7 +2625,7 @@ void do_generate_implementation() {
     auto add_error = [&](ccstr fmt, ...) {
         va_list vl;
         va_start(vl, fmt);
-        auto ret = our_vsprintf(fmt, vl);
+        auto ret = cp_vsprintf(fmt, vl);
         va_end(vl);
 
         errors->append(ret);
@@ -2676,7 +2676,7 @@ void do_generate_implementation() {
                     for (int i = 0;; i++) {
                         auto new_name = actual_name;
                         if (i)
-                            new_name = our_sprintf("%s%d", new_name, i);
+                            new_name = cp_sprintf("%s%d", new_name, i);
 
                         import_table_r.get(new_name, &found);
                         if (!found) {
@@ -2716,7 +2716,7 @@ void do_generate_implementation() {
             auto get_typestr = [&]() -> ccstr {
                 if (t->type == GOTYPE_ID)
                     return t->id_name;
-                return our_sprintf("%s.%s", t->sel_name, t->sel_sel);
+                return cp_sprintf("%s.%s", t->sel_name, t->sel_sel);
             };
 
             add_error("Unable to add method %s because we couldn't resolve type %s.", method_name, get_typestr());
@@ -2972,7 +2972,7 @@ void fuzzy_sort_filtered_results(ccstr query, List<int> *list, int total_results
 
 ccstr get_auth_filepath() {
     auto configpath = GHGetConfigDir();
-    if (!configpath) our_panic("Unable to open config directory.");
+    if (!configpath) cp_panic("Unable to open config directory.");
     return path_join(configpath, ".auth");
 }
 

@@ -118,7 +118,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
 
                 va_list vl;
                 va_start(vl, fmt);
-                insert_text_in_insert_mode(our_vsprintf(fmt, vl));
+                insert_text_in_insert_mode(cp_vsprintf(fmt, vl));
                 va_end(vl);
             };
 
@@ -149,13 +149,13 @@ void Editor::perform_autocomplete(AC_Result *result) {
                 SCOPED_FRAME();
 
                 if (!autoindent_chars)
-                    our_panic("autoindent_chars is null (you probably forgot to call save_autoindent");
+                    cp_panic("autoindent_chars is null (you probably forgot to call save_autoindent");
 
                 insert_text("%s", autoindent_chars);
 
                 if (add) {
                     ccstr tabs = "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t";
-                    if (add >= strlen(tabs)) our_panic("not enough tabs");
+                    if (add >= strlen(tabs)) cp_panic("not enough tabs");
                     insert_text("%.*s", add, tabs);
                 }
             };
@@ -446,8 +446,8 @@ void Editor::perform_autocomplete(AC_Result *result) {
                                 if (!gotype) return NULL;
 
                                 Go_Ctx ctx; ptr0(&ctx);
-                                ctx.import_path = ind.filepath_to_import_path(our_dirname(filepath));
-                                ctx.filename = our_basename(filepath);
+                                ctx.import_path = ind.filepath_to_import_path(cp_dirname(filepath));
+                                ctx.filename = cp_basename(filepath);
 
                                 auto res = ind.evaluate_type(gotype, &ctx);
                                 if (!res) return NULL;
@@ -531,7 +531,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
             auto modify_string = [&](ccstr s) -> ccstr {
                 switch (result->type) {
                 case ACR_IMPORT:
-                    return our_sprintf("%s.", s);
+                    return cp_sprintf("%s.", s);
 
                 case ACR_KEYWORD:
                     {
@@ -544,14 +544,14 @@ void Editor::perform_autocomplete(AC_Result *result) {
 
                         For (builtins_with_space)
                             if (streq(s, it))
-                                return our_sprintf("%s ", s);
+                                return cp_sprintf("%s ", s);
                     }
                     break;
 
                 case ACR_DECLARATION:
                     {
                         if (result->declaration_is_struct_literal_field)
-                            return our_sprintf("%s: ", s);
+                            return cp_sprintf("%s: ", s);
 
                         auto godecl = result->declaration_godecl;
                         if (!godecl) break;
@@ -573,7 +573,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
                         if (gotype->type != GOTYPE_FUNC) break;
 
                         is_function = true;
-                        return our_sprintf("%s(", s); // it's a func, add a '('
+                        return cp_sprintf("%s(", s); // it's a func, add a '('
                     }
                     break;
                 }
@@ -771,7 +771,7 @@ void Editor::add_change_in_insert_mode(cur2 start, cur2 old_end, cur2 new_end) {
         }
 
         if (old_end.y >= nvim_insert.start.y)
-            our_panic("can only add changes in insert mode before current change");
+            cp_panic("can only add changes in insert mode before current change");
     }
 
     auto dy = new_end.y - old_end.y;
@@ -803,7 +803,7 @@ Move_Cursor_Opts *default_move_cursor_opts() {
 }
 
 void Editor::raw_move_cursor(cur2 c, Move_Cursor_Opts *opts) {
-    if (!is_main_thread) our_panic("can't call this from outside main thread");
+    if (!is_main_thread) cp_panic("can't call this from outside main thread");
 
     if (!opts) opts = default_move_cursor_opts();
 
@@ -835,7 +835,7 @@ void Editor::raw_move_cursor(cur2 c, Move_Cursor_Opts *opts) {
             vx += options.tabsize - (vx % options.tabsize);
             i++;
         } else {
-            auto width = our_wcwidth(line[i]);
+            auto width = cp_wcwidth(line[i]);
             if (width == -1) width = 1;
             vx += width;
 
@@ -1002,7 +1002,7 @@ bool check_file(File_Mapping *fm) {
             pos.x++;
             if (pos.x > CHUNKMAX) {
                 tell_user(
-                    our_sprintf("Sorry, we're not yet able to open files containing lines with more than %d characters.", CHUNKMAX),
+                    cp_sprintf("Sorry, we're not yet able to open files containing lines with more than %d characters.", CHUNKMAX),
                     "Unable to open file."
                 );
                 return false;
@@ -1021,7 +1021,7 @@ void Editor::reload_file(bool because_of_file_watcher) {
     auto fm = map_file_into_memory(filepath);
     if (!fm) {
         // don't error here
-        // tell_user(our_sprintf("Unable to open %s for reading: %s", filepath, get_last_error()), "Error opening file");
+        // tell_user(cp_sprintf("Unable to open %s for reading: %s", filepath, get_last_error()), "Error opening file");
         return;
     }
     defer { fm->cleanup(); };
@@ -1071,7 +1071,7 @@ bool Editor::load_file(ccstr new_filepath) {
 
         auto fm = map_file_into_memory(filepath);
         if (!fm) {
-            tell_user(our_sprintf("Unable to open %s for reading: %s", filepath, get_last_error()), "Error opening file");
+            tell_user(cp_sprintf("Unable to open %s for reading: %s", filepath, get_last_error()), "Error opening file");
             return false;
         }
         defer { fm->cleanup(); };
@@ -1122,11 +1122,11 @@ bool Editor::load_file(ccstr new_filepath) {
             if (!are_filepaths_equal(it.filepath, filepath)) continue;
 
             For (*it.results) {
-                if (!it.mark_start) our_panic("mark_start was null");
-                if (!it.mark_end) our_panic("mark_end was null");
+                if (!it.mark_start) cp_panic("mark_start was null");
+                if (!it.mark_end) cp_panic("mark_end was null");
 
-                if (it.mark_start->valid) our_panic("this shouldn't be happening");
-                if (it.mark_end->valid) our_panic("this shouldn't be happening");
+                if (it.mark_start->valid) cp_panic("this shouldn't be happening");
+                if (it.mark_end->valid) cp_panic("this shouldn't be happening");
 
                 buf->mark_tree.insert_mark(MARK_SEARCH_RESULT, it.match_start, it.mark_start);
                 buf->mark_tree.insert_mark(MARK_SEARCH_RESULT, it.match_end, it.mark_end);
@@ -1636,7 +1636,7 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
 
     if (autocomplete.ac.results && triggered_by_typing_ident) {
         SCOPED_MEM(&world.autocomplete_mem);
-        autocomplete.ac.prefix = our_sprintf("%s%c", autocomplete.ac.prefix, typed_ident_char);
+        autocomplete.ac.prefix = cp_sprintf("%s%c", autocomplete.ac.prefix, typed_ident_char);
         autocomplete.ac.keyword_end.x++;
     } else {
         auto old_type = autocomplete.ac.type;
@@ -1680,7 +1680,7 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
             // copy ac over to autocomplete.ac
             memcpy(&autocomplete.ac, &ac, sizeof(Autocomplete));
             autocomplete.filtered_results = alloc_list<int>();
-            autocomplete.ac.prefix = our_strcpy(ac.prefix);
+            autocomplete.ac.prefix = cp_strcpy(ac.prefix);
             autocomplete.ac.results = new_results;
         }
     }
@@ -1691,7 +1691,7 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
         defer { ind.release_lock(IND_READING); };
 
         // only needs to live for duration of function
-        wksp_import_path = our_strcpy(ind.index.current_import_path);
+        wksp_import_path = cp_strcpy(ind.index.current_import_path);
     }
 
     {
@@ -2150,7 +2150,7 @@ void Editor::backspace_in_insert_mode(int graphemes_to_erase, int codepoints_to_
     auto zero = new_cur2(0, 0);
 
     if (graphemes_to_erase > 0 && codepoints_to_erase > 0)
-        our_panic("backspace_in_insert_mode called with both graphemes and codepoints");
+        cp_panic("backspace_in_insert_mode called with both graphemes and codepoints");
 
     while ((graphemes_to_erase > 0 || codepoints_to_erase > 0) && start > zero) {
         if (!start.x) {
@@ -2190,7 +2190,7 @@ void Editor::backspace_in_insert_mode(int graphemes_to_erase, int codepoints_to_
 
         if (start < nvim_insert.start) {
             if (old_start.y != nvim_insert.start.y)
-                our_panic("this shouldn't happen");
+                cp_panic("this shouldn't happen");
 
             int lo = buf->idx_cp_to_gr(start.y, start.x);
             int hi = buf->idx_cp_to_gr(start.y, min(old_start.x, nvim_insert.start.x));
@@ -2433,7 +2433,7 @@ void Editor::handle_save(bool about_to_close) {
         opts.bufsize = _countof(filepath);
         opts.folder = false;
         opts.save = true;
-        opts.starting_folder = our_strcpy(world.current_path);
+        opts.starting_folder = cp_strcpy(world.current_path);
         if (!let_user_select_file(&opts)) return;
 
         if (!path_has_descendant(world.current_path, filepath)) {
@@ -2490,7 +2490,7 @@ void Editor::handle_save(bool about_to_close) {
     auto node = find_node();
     if (node) {
         bool child_exists = false;
-        auto filename = our_basename(filepath);
+        auto filename = cp_basename(filepath);
 
         for (auto child = node->children; child; child = child->next) {
             if (streq(child->name, filename)) {
@@ -2502,7 +2502,7 @@ void Editor::handle_save(bool about_to_close) {
         if (!child_exists) {
             add_ft_node(node, [&](auto child) {
                 child->is_directory = false;
-                child->name = our_strcpy(filename);
+                child->name = cp_strcpy(filename);
             });
         }
     }
@@ -2512,8 +2512,8 @@ bool Editor::ask_user_about_unsaved_changes() {
     if (!is_unsaved()) return true;
 
     auto title = "Your changes will be lost if you don't.";
-    auto filename  = is_untitled ? "(untitled)" : our_basename(filepath);
-    auto msg = our_sprintf("Do you want to save your changes to %s?", filename);
+    auto filename  = is_untitled ? "(untitled)" : cp_basename(filepath);
+    auto msg = cp_sprintf("Do you want to save your changes to %s?", filename);
 
     auto result = ask_user_yes_no_cancel(title, msg, "Save", "Don't Save");
     if (result == ASKUSER_CANCEL) return false;

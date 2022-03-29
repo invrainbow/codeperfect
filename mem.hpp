@@ -33,13 +33,13 @@ struct Fridge {
         while (block) {
             auto next = block->next;
             global_mem_allocated -= block->size;
-            our_free(block);
+            cp_free(block);
             block = next;
         }
     }
 
     void add_new_block() {
-        auto next_block = (Fridge_Block*)our_malloc(sizeof(Fridge_Block) + sizeof(T) * blocksize);
+        auto next_block = (Fridge_Block*)cp_malloc(sizeof(Fridge_Block) + sizeof(T) * blocksize);
         next_block->size = sizeof(T) * blocksize;
         global_mem_allocated += next_block->size;
 
@@ -133,7 +133,7 @@ struct Pool {
     }
 
     Pool_Block *alloc_block(s32 blocksize) {
-        auto ret = (Pool_Block*)our_malloc(sizeof(Pool_Block) + blocksize);
+        auto ret = (Pool_Block*)cp_malloc(sizeof(Pool_Block) + blocksize);
         mem_allocated += blocksize;
         global_mem_allocated += blocksize;
         return ret;
@@ -142,7 +142,7 @@ struct Pool {
     void free_block(Pool_Block *block) {
         mem_allocated -= block->size;
         global_mem_allocated -= block->size;
-        our_free(block);
+        cp_free(block);
     }
 
     void cleanup() {

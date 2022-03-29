@@ -78,7 +78,7 @@ uniform sampler2D tex3;
 uniform sampler2D tex4;
 uniform sampler2D tex5;
 
-vec4 our_texture(vec2 uv) {
+vec4 cp_texture(vec2 uv) {
     if (_texture_id == 0) return texture(tex0, uv);
     if (_texture_id == 1) return texture(tex1, uv);
     if (_texture_id == 2) return texture(tex2, uv);
@@ -94,14 +94,14 @@ void main(void) {
         outcolor = _color;
         break;
     case 1: // DRAW_FONT_MASK
-        outcolor = vec4(_color.rgb, our_texture(_uv).r * _color.a);
+        outcolor = vec4(_color.rgb, cp_texture(_uv).r * _color.a);
         break;
     case 2: // DRAW_IMAGE
-        outcolor = our_texture(_uv);
+        outcolor = cp_texture(_uv);
         break;
     case 3: // DRAW_IMAGE_MASK
-        // outcolor = vec4(_color.rgb, (0.5 + dot(vec3(0.33, 0.33, 0.33), our_texture(_uv).rgb) * 0.5) * our_texture(_uv).a);
-        outcolor = vec4(_color.rgb, our_texture(_uv).a);
+        // outcolor = vec4(_color.rgb, (0.5 + dot(vec3(0.33, 0.33, 0.33), cp_texture(_uv).rgb) * 0.5) * cp_texture(_uv).a);
+        outcolor = vec4(_color.rgb, cp_texture(_uv).a);
         break;
     }
 }
@@ -149,7 +149,7 @@ GLint compile_program(cstr vert_code, cstr frag_code) {
 
         char log[512];
         glGetShaderInfoLog(shader, 512, NULL, log);
-        our_panic(our_sprintf("failed to build shader, error: %s", log));
+        cp_panic(cp_sprintf("failed to build shader, error: %s", log));
     };
 
     auto vert = compile_shader(vert_code, GL_VERTEX_SHADER);
@@ -741,7 +741,7 @@ void handle_window_event(Window_Event *it) {
                     /*
                     if (world.nvim.mode == VI_INSERT && editor->postfix_stack.len > 0) {
                         auto pf = editor->postfix_stack.last();
-                        our_assert(pf->current_insert_position < pf->insert_positions.len, "went past last error position");
+                        cp_assert(pf->current_insert_position < pf->insert_positions.len, "went past last error position");
 
                         auto pos = pf->insert_positions[pf->current_insert_position++];
                         editor->trigger_escape(pos);
@@ -772,7 +772,7 @@ void handle_window_event(Window_Event *it) {
                     if (world.use_nvim) {
                         if (world.nvim.mode != VI_INSERT) {
                             SCOPED_FRAME();
-                            send_nvim_keys(our_sprintf("<C-%c>", tolower((char)key)));
+                            send_nvim_keys(cp_sprintf("<C-%c>", tolower((char)key)));
                         }
                     }
                     break;
@@ -1118,8 +1118,8 @@ int main(int argc, char **argv) {
         assert(auth.reg_email_len <= _countof(auth.reg_email));
         assert(auth.reg_license_len <= _countof(auth.reg_license));
 
-        auto email = our_sprintf("%.*s", auth.reg_email_len, auth.reg_email);
-        auto license = our_sprintf("%.*s", auth.reg_license_len, auth.reg_license);
+        auto email = cp_sprintf("%.*s", auth.reg_email_len, auth.reg_email);
+        auto license = cp_sprintf("%.*s", auth.reg_license_len, auth.reg_license);
         strcpy_safe_fixed(world.authed_email, auth.reg_email);
 
         GHAuth((char*)email, (char*)license);
@@ -1132,9 +1132,9 @@ int main(int argc, char **argv) {
     auto set_window_title = [&](ccstr note) {
         ccstr s = NULL;
         if (!note)
-            s = our_sprintf("%s - %s", WINDOW_TITLE, world.current_path);
+            s = cp_sprintf("%s - %s", WINDOW_TITLE, world.current_path);
         else
-            s = our_sprintf("%s (%s) - %s", WINDOW_TITLE, note, world.current_path);
+            s = cp_sprintf("%s (%s) - %s", WINDOW_TITLE, note, world.current_path);
 
         world.window->set_title(s);
     };
@@ -1145,7 +1145,7 @@ int main(int argc, char **argv) {
             auto days_left = 7 - floor((double)time_elapsed / (double)(1000 * 60 * 60 * 24));
             if (world.auth_error)
                 return "trial expired";
-            return our_sprintf("%d days left in trial", (int)days_left);
+            return cp_sprintf("%d days left in trial", (int)days_left);
         }
         return NULL;
     };
@@ -1334,7 +1334,7 @@ int main(int argc, char **argv) {
         s32 len = 0;
 
         world.ui.im_font_ui = io.Fonts->AddFontFromMemoryTTF(open_sans_ttf, open_sans_ttf_len, UI_FONT_SIZE);
-        our_assert(world.ui.im_font_ui, "unable to load UI font");
+        cp_assert(world.ui.im_font_ui, "unable to load UI font");
 
         {
             // merge font awesome into main font
@@ -1357,10 +1357,10 @@ int main(int argc, char **argv) {
         }
 
         world.ui.im_font_mono = io.Fonts->AddFontFromMemoryTTF(vera_mono_ttf, vera_mono_ttf_len, CODE_FONT_SIZE);
-        our_assert(world.ui.im_font_mono, "unable to load code font");
+        cp_assert(world.ui.im_font_mono, "unable to load code font");
 
         if (!world.font.init((u8*)vera_mono_ttf, CODE_FONT_SIZE, TEXTURE_FONT))
-            our_panic("unable to load code font");
+            cp_panic("unable to load code font");
 
         io.Fonts->Build();
 
@@ -1426,7 +1426,7 @@ int main(int argc, char **argv) {
         glUniformMatrix4fv(loc, 1, GL_FALSE, (float*)ortho_projection);
 
         for (u32 i = 0; i < __TEXTURE_COUNT__; i++) {
-            loc = glGetUniformLocation(world.ui.program, our_sprintf("tex%d", i));
+            loc = glGetUniformLocation(world.ui.program, cp_sprintf("tex%d", i));
             glUniform1i(loc, i);
         }
     }
@@ -1550,7 +1550,7 @@ int main(int argc, char **argv) {
             For (*messages) {
                 switch (it.type) {
                 case MTM_PANIC:
-                    our_panic(it.panic_message);
+                    cp_panic(it.panic_message);
                     break;
 
                 case MTM_TELL_USER:
@@ -1593,7 +1593,7 @@ int main(int argc, char **argv) {
                 auto filedir = filepath;
                 auto res = check_path(filedir);
                 if (res != CPR_DIRECTORY)
-                    filedir = our_dirname(filedir);
+                    filedir = cp_dirname(filedir);
                 if (streq(filedir, "."))
                     filedir = "";
 
@@ -1606,7 +1606,7 @@ int main(int argc, char **argv) {
                 auto should_handle_fsevent = [&]() {
                     if (res == CPR_DIRECTORY) return true;
                     if (str_ends_with(filepath, ".go")) return true;
-                    if (streq(our_basename(filepath), "go.mod")) return true;
+                    if (streq(cp_basename(filepath), "go.mod")) return true;
 
                     return false;
                 };
@@ -1614,7 +1614,7 @@ int main(int argc, char **argv) {
                 if (should_handle_fsevent()) {
                     world.indexer.message_queue.add([&](auto msg) {
                         msg->type = GOMSG_FSEVENT;
-                        msg->fsevent_filepath = our_strcpy(event.filepath);
+                        msg->fsevent_filepath = cp_strcpy(event.filepath);
                     });
                 }
             }

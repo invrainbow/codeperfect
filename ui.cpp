@@ -76,10 +76,10 @@ bool Font::init(u8* font_data, u32 font_size, int texture_id) {
     height = font_size;
     tex_size = (i32)pow(2.0f, (i32)log2(sqrt((float)height * height * 8 * 8 * 128)) + 1);
 
-    u8* atlas_data = (u8*)our_malloc(tex_size * tex_size);
+    u8* atlas_data = (u8*)cp_malloc(tex_size * tex_size);
     if (!atlas_data)
         return false;
-    defer { our_free(atlas_data); };
+    defer { cp_free(atlas_data); };
 
     stbtt_pack_context context;
     if (!stbtt_PackBegin(&context, atlas_data, tex_size, tex_size, 0, 1, NULL)) {
@@ -1109,7 +1109,7 @@ void UI::draw_debugger_var(Draw_Debugger_Var_Args *args) {
                     ImGui::SetKeyboardFocusHere();
                 }
                 bool changed = ImGui::InputText(
-                    our_sprintf("##newwatch%x", (iptr)(void*)watch),
+                    cp_sprintf("##newwatch%x", (iptr)(void*)watch),
                     watch->expr_tmp,
                     _countof(watch->expr_tmp),
                     ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll
@@ -1119,7 +1119,7 @@ void UI::draw_debugger_var(Draw_Debugger_Var_Args *args) {
                 if (changed || ImGui::IsItemDeactivated()) {
                     if (watch->expr_tmp[0] != '\0') {
                         world.dbg.push_call(DLVC_EDIT_WATCH, [&](auto it) {
-                            it->edit_watch.expression = our_strcpy(watch->expr_tmp);
+                            it->edit_watch.expression = cp_strcpy(watch->expr_tmp);
                             it->edit_watch.watch_idx = args->watch_index;
                         });
                     } else {
@@ -1148,13 +1148,13 @@ void UI::draw_debugger_var(Draw_Debugger_Var_Args *args) {
             case INDEX_NONE:
                 var_name = var->name;
                 if (var->is_shadowed)
-                    var_name = our_sprintf("(%s)", var_name);
+                    var_name = cp_sprintf("(%s)", var_name);
                 break;
             case INDEX_ARRAY:
-                var_name = our_sprintf("[%d]", args->index);
+                var_name = cp_sprintf("[%d]", args->index);
                 break;
             case INDEX_MAP:
-                var_name = our_sprintf("[%s]", var_value_as_string(args->key));
+                var_name = cp_sprintf("[%s]", var_value_as_string(args->key));
                 break;
             }
             final_var_name = var_name;
@@ -1173,7 +1173,7 @@ void UI::draw_debugger_var(Draw_Debugger_Var_Args *args) {
         }
 
         if (final_var_name) {
-            if (ImGui::OurBeginPopupContextItem(our_sprintf("dbg_copyvalue_%lld", (uptr)var))) {
+            if (ImGui::OurBeginPopupContextItem(cp_sprintf("dbg_copyvalue_%lld", (uptr)var))) {
                 if (ImGui::Selectable("Copy Name")) {
                     set_clipboard_string(final_var_name);
                 }
@@ -1318,7 +1318,7 @@ void UI::draw_debugger_var(Draw_Debugger_Var_Args *args) {
                 if (imgui_key_pressed('c'))
                     copy = true;
 
-        if (ImGui::OurBeginPopupContextItem(our_sprintf("dbg_copyvalue_%lld", (uptr)var))) {
+        if (ImGui::OurBeginPopupContextItem(cp_sprintf("dbg_copyvalue_%lld", (uptr)var))) {
             if (ImGui::Selectable("Copy Value"))
                 copy = true;
             ImGui::EndPopup();
@@ -1365,7 +1365,7 @@ void UI::draw_debugger_var(Draw_Debugger_Var_Args *args) {
 
             if (type_name) {
                 ImGui::TextWrapped("%s", type_name);
-                if (ImGui::OurBeginPopupContextItem(our_sprintf("dbg_copyvalue_%lld", (uptr)var))) {
+                if (ImGui::OurBeginPopupContextItem(cp_sprintf("dbg_copyvalue_%lld", (uptr)var))) {
                     if (ImGui::Selectable("Copy Type")) {
                         set_clipboard_string(type_name);
                     }
@@ -1422,7 +1422,7 @@ void UI::draw_debugger_var(Draw_Debugger_Var_Args *args) {
 
 ccstr UI::var_value_as_string(Dlv_Var *var) {
     if (var->unreadable_description)
-        return our_sprintf("<unreadable: %s>", var->unreadable_description);
+        return cp_sprintf("<unreadable: %s>", var->unreadable_description);
 
     switch (var->kind) {
     case GO_KIND_INVALID: // i don't think this should even happen
@@ -1430,23 +1430,23 @@ ccstr UI::var_value_as_string(Dlv_Var *var) {
 
     case GO_KIND_ARRAY:
     case GO_KIND_SLICE:
-        return our_sprintf("0x%" PRIx64 " (Len = %d, Cap = %d)", var->address, var->len, var->cap);
+        return cp_sprintf("0x%" PRIx64 " (Len = %d, Cap = %d)", var->address, var->len, var->cap);
 
     case GO_KIND_STRUCT:
     case GO_KIND_INTERFACE:
-        return our_sprintf("0x%" PRIx64, var->address);
+        return cp_sprintf("0x%" PRIx64, var->address);
 
     case GO_KIND_MAP:
-        return our_sprintf("0x%" PRIx64 " (Len = %d)", var->address, var->len);
+        return cp_sprintf("0x%" PRIx64 " (Len = %d)", var->address, var->len);
 
     case GO_KIND_STRING:
-        return our_sprintf("\"%s%s\"", var->value, var->incomplete() ? "..." : "");
+        return cp_sprintf("\"%s%s\"", var->value, var->incomplete() ? "..." : "");
 
     case GO_KIND_UNSAFEPOINTER:
     case GO_KIND_CHAN:
     case GO_KIND_FUNC:
     case GO_KIND_PTR:
-        return our_sprintf("0x%" PRIx64, var->address);
+        return cp_sprintf("0x%" PRIx64, var->address);
 
     default:
         return var->value;
@@ -1504,7 +1504,7 @@ void UI::draw_debugger() {
                             if (state.current_goroutine_id == goroutine.id && state.current_frame == j)
                                 tree_flags |= ImGuiTreeNodeFlags_Selected;
 
-                            ImGui::TreeNodeEx(&frame, tree_flags, "%s (%s:%d)", frame.func_name, our_basename(frame.filepath), frame.lineno);
+                            ImGui::TreeNodeEx(&frame, tree_flags, "%s (%s:%d)", frame.func_name, cp_basename(frame.filepath), frame.lineno);
                             if (ImGui::IsItemClicked()) {
                                 world.dbg.push_call(DLVC_SET_CURRENT_FRAME, [&](auto call) {
                                     call->set_current_frame.goroutine_id = goroutine.id;
@@ -1667,7 +1667,7 @@ void UI::draw_debugger() {
                     if (changed || ImGui::IsItemDeactivated())
                         if (world.wnd_debugger.new_watch_buf[0] != '\0') {
                             dbg.push_call(DLVC_CREATE_WATCH, [&](auto it) {
-                                it->create_watch.expression = our_strcpy(world.wnd_debugger.new_watch_buf);
+                                it->create_watch.expression = cp_strcpy(world.wnd_debugger.new_watch_buf);
                             });
                             world.wnd_debugger.new_watch_buf[0] = '\0';
                         }
@@ -1719,7 +1719,7 @@ bool UI::imgui_input_text_full(ccstr label, char *buf, int count, int flags) {
         ImGui::Text("%s", label);
         imgui_pop_font();
     }
-    auto ret = ImGui::InputText(our_sprintf("###%s", label), buf, count, flags);
+    auto ret = ImGui::InputText(cp_sprintf("###%s", label), buf, count, flags);
     ImGui::PopItemWidth();
 
     return ret;
@@ -2309,7 +2309,7 @@ void UI::draw_everything() {
         auto name = decl->name;
         auto recvname = world.indexer.get_godecl_recvname(decl);
         if (recvname)
-            name = our_sprintf("%s.%s", recvname, name);
+            name = cp_sprintf("%s.%s", recvname, name);
 
         auto has_children = [&]() {
             For (*it->children)
@@ -2351,7 +2351,7 @@ void UI::draw_everything() {
 
         ImGui::SetNextWindowDockID(dock_sidebar_id, ImGuiCond_Once);
         begin_window(
-            our_sprintf("Callee Hierarchy for %s###callee_hierarchy", wnd.declres->decl->name),
+            cp_sprintf("Callee Hierarchy for %s###callee_hierarchy", wnd.declres->decl->name),
             &wnd,
             0,
             !wnd.done
@@ -2377,7 +2377,7 @@ void UI::draw_everything() {
 
         ImGui::SetNextWindowDockID(dock_sidebar_id, ImGuiCond_Once);
         begin_window(
-            our_sprintf("Caller Hierarchy for %s###caller_hierarchy", wnd.declres->decl->name),
+            cp_sprintf("Caller Hierarchy for %s###caller_hierarchy", wnd.declres->decl->name),
             &wnd,
             0,
             !wnd.done
@@ -2447,7 +2447,7 @@ void UI::draw_everything() {
                     auto drawlist = ImGui::GetWindowDrawList();
 
                     auto draw_selectable = [&]() {
-                        auto label = our_sprintf("##find_implementations_result__%d", index++);
+                        auto label = cp_sprintf("##find_implementations_result__%d", index++);
                         return ImGui::Selectable(label, false, 0, text_size);
                     };
 
@@ -2467,7 +2467,7 @@ void UI::draw_everything() {
                         draw_text("(ext) ");
                     }
 
-                    draw_text(our_sprintf("%s.%s", it->package_name, it->decl->decl->name));
+                    draw_text(cp_sprintf("%s.%s", it->package_name, it->decl->decl->name));
 
                     ImGui::PushStyleColor(ImGuiCol_Text, to_imcolor(global_colors.muted));
                     {
@@ -2483,7 +2483,7 @@ void UI::draw_everything() {
 
                         if (!path) path = import_path;
 
-                        draw_text(our_sprintf(" (%s)", path));
+                        draw_text(cp_sprintf(" (%s)", path));
                     }
                     ImGui::PopStyleColor();
 
@@ -2539,7 +2539,7 @@ void UI::draw_everything() {
                     auto drawlist = ImGui::GetWindowDrawList();
 
                     auto draw_selectable = [&]() {
-                        auto label = our_sprintf("##find_implementations_result__%d", index++);
+                        auto label = cp_sprintf("##find_implementations_result__%d", index++);
                         return ImGui::Selectable(label, false, 0, text_size);
                     };
 
@@ -2550,10 +2550,10 @@ void UI::draw_everything() {
                         drawpos.x += ImGui::CalcTextSize(text).x;
                     };
 
-                    draw_text(our_sprintf("%s.%s", it->package_name, it->decl->decl->name));
+                    draw_text(cp_sprintf("%s.%s", it->package_name, it->decl->decl->name));
 
                     ImGui::PushStyleColor(ImGuiCol_Text, to_imcolor(global_colors.muted));
-                    draw_text(our_sprintf(" (%s)", get_path_relative_to(it->decl->ctx->import_path, wnd.current_import_path)));
+                    draw_text(cp_sprintf(" (%s)", get_path_relative_to(it->decl->ctx->import_path, wnd.current_import_path)));
                     ImGui::PopStyleColor();
 
                     // TODO: previews?
@@ -2588,7 +2588,7 @@ void UI::draw_everything() {
                 auto filepath = get_path_relative_to(it.filepath, world.current_path);
                 For (*it.references) {
                     auto pos = it.is_sel ? it.x_start : it.start;
-                    if (ImGui::Selectable(our_sprintf("%s:%s", filepath, format_cur(pos))))
+                    if (ImGui::Selectable(cp_sprintf("%s:%s", filepath, format_cur(pos))))
                         goto_file_and_pos(filepath, pos);
                 }
             }
@@ -2659,7 +2659,7 @@ void UI::draw_everything() {
             }
 
             auto symbol_to_name = [&](auto &it) {
-                return our_sprintf("%s.%s", it.pkgname, it.name);
+                return cp_sprintf("%s.%s", it.pkgname, it.name);
             };
 
             if (ImGui::IsItemEdited()) {
@@ -2726,7 +2726,7 @@ void UI::draw_everything() {
             return "";
         };
 
-        begin_centered_window(our_sprintf("Rename %s###rename_identifier", get_type_str()), &wnd, 0, 400, wnd.running);
+        begin_centered_window(cp_sprintf("Rename %s###rename_identifier", get_type_str()), &wnd, 0, 400, wnd.running);
 
         // if it's running, make sure the window stays focused
         if (wnd.running)
@@ -2747,7 +2747,7 @@ void UI::draw_everything() {
         imgui_push_mono_font();
 
         focus_keyboard(&wnd);
-        if (imgui_input_text_full(our_sprintf("Rename %s to", wnd.declres->decl->name), wnd.rename_to, _countof(wnd.rename_to), ImGuiInputTextFlags_EnterReturnsTrue)) {
+        if (imgui_input_text_full(cp_sprintf("Rename %s to", wnd.declres->decl->name), wnd.rename_to, _countof(wnd.rename_to), ImGuiInputTextFlags_EnterReturnsTrue)) {
             submitted = true;
         }
 
@@ -2780,7 +2780,7 @@ void UI::draw_everything() {
                 }
             }
         } else {
-            if (ImGui::Button(our_sprintf("Rename", wnd.declres->decl->name)))
+            if (ImGui::Button(cp_sprintf("Rename", wnd.declres->decl->name)))
                 submitted = true;
         }
 
@@ -2934,7 +2934,7 @@ void UI::draw_everything() {
                 auto &it = lines[i];
 
                 ImGui::Text("%s", it);
-                if (ImGui::OurBeginPopupContextItem(our_sprintf("##debug_output_hidden_%d", i))) {
+                if (ImGui::OurBeginPopupContextItem(cp_sprintf("##debug_output_hidden_%d", i))) {
                     defer { ImGui::EndPopup(); };
 
                     if (ImGui::Selectable("Copy")) {
@@ -3016,12 +3016,12 @@ void UI::draw_everything() {
                         b.scroll_to = -1;
                     }
 
-                    auto label = our_sprintf("%s:%d:%d: %s", it.file, it.row, it.col, it.message);
+                    auto label = cp_sprintf("%s:%d:%d: %s", it.file, it.row, it.col, it.message);
                     auto wrap_width = ImGui::GetContentRegionAvail().x;
                     auto text_size = ImVec2(wrap_width, ImGui::CalcTextSize(label, NULL, false, wrap_width).y);
                     auto pos = ImGui::GetCursorScreenPos();
 
-                    bool clicked = ImGui::Selectable(our_sprintf("##hidden_%d", i), i == b.current_error, 0, text_size);
+                    bool clicked = ImGui::Selectable(cp_sprintf("##hidden_%d", i), i == b.current_error, 0, text_size);
                     ImGui::GetWindowDrawList()->AddText(NULL, 0.0f, pos, ImGui::GetColorU32(ImGuiCol_Text), label, NULL, wrap_width);
 
                     if (ImGui::OurBeginPopupContextItem()) {
@@ -3058,8 +3058,8 @@ void UI::draw_everything() {
     if (world.wnd_rename_file_or_folder.show) {
         auto &wnd = world.wnd_rename_file_or_folder;
 
-        auto label = our_sprintf("Rename %s", wnd.target->is_directory ? "folder" : "file");
-        begin_centered_window(our_sprintf("%s###add_file_or_folder", label), &wnd, 0, 300);
+        auto label = cp_sprintf("Rename %s", wnd.target->is_directory ? "folder" : "file");
+        begin_centered_window(cp_sprintf("%s###add_file_or_folder", label), &wnd, 0, 300);
 
         ImGui::Text("Renaming");
 
@@ -3107,10 +3107,10 @@ void UI::draw_everything() {
             }
 
             auto oldpath = path_join(world.current_path, wnd.location);
-            auto newpath = path_join(our_dirname(oldpath), wnd.name);
+            auto newpath = path_join(cp_dirname(oldpath), wnd.name);
 
             GHRenameFileOrDirectory((char*)oldpath, (char*)newpath);
-            reload_file_subtree(our_dirname(wnd.location));
+            reload_file_subtree(cp_dirname(wnd.location));
 
             wnd.show = false;
         } while (0);
@@ -3121,8 +3121,8 @@ void UI::draw_everything() {
     if (world.wnd_add_file_or_folder.show) {
         auto &wnd = world.wnd_add_file_or_folder;
 
-        auto label = our_sprintf("Add %s", wnd.folder ? "Folder" : "File");
-        begin_centered_window(our_sprintf("%s###add_file_or_folder", label), &wnd, 0, 300);
+        auto label = cp_sprintf("Add %s", wnd.folder ? "Folder" : "File");
+        begin_centered_window(cp_sprintf("%s###add_file_or_folder", label), &wnd, 0, 300);
 
         ImGui::Text("Destination");
 
@@ -3163,7 +3163,7 @@ void UI::draw_everything() {
                 auto destnode = wnd.location_is_root ? world.file_tree : find_ft_node(wnd.location);
                 add_ft_node(destnode, [&](auto child) {
                     child->is_directory = wnd.folder;
-                    child->name = our_strcpy(wnd.name);
+                    child->name = cp_strcpy(wnd.name);
                 });
 
                 if (!wnd.folder) {
@@ -3257,9 +3257,9 @@ void UI::draw_everything() {
 
                     ccstr label = NULL;
                     if (it->is_directory)
-                        label = our_sprintf("%s %s %s", icon, it->name, it->open ? ICON_MD_EXPAND_MORE : ICON_MD_CHEVRON_RIGHT);
+                        label = cp_sprintf("%s %s %s", icon, it->name, it->open ? ICON_MD_EXPAND_MORE : ICON_MD_CHEVRON_RIGHT);
                     else
-                        label = our_sprintf("%s %s", icon, it->name);
+                        label = cp_sprintf("%s %s", icon, it->name);
 
                     if (it == wnd.scroll_to) {
                         ImGui::SetScrollHereY();
@@ -3337,7 +3337,7 @@ void UI::draw_everything() {
 
                             // if we're copying to the same place
                             if (src->parent == dest)
-                                destpath = path_join(ft_node_to_path(dest), our_sprintf("copy of %s", src->name));
+                                destpath = path_join(ft_node_to_path(dest), cp_sprintf("copy of %s", src->name));
                             else
                                 destpath = path_join(ft_node_to_path(dest), src->name);
 
@@ -3602,7 +3602,7 @@ void UI::draw_everything() {
 
                         for (int i = 0; i < ps->debug_profiles->len; i++) {
                             auto &it = ps->debug_profiles->at(i);
-                            auto label = our_sprintf("%s##debug_profile_%d", it.label, i);
+                            auto label = cp_sprintf("%s##debug_profile_%d", it.label, i);
                             if (ImGui::Selectable(label, wnd.current_debug_profile == i))
                                 wnd.current_debug_profile = i;
                         }
@@ -3767,7 +3767,7 @@ void UI::draw_everything() {
 
                         for (int i = 0; i < ps->build_profiles->len; i++) {
                             auto &it = ps->build_profiles->at(i);
-                            auto label = our_sprintf("%s##build_profile_%d", it.label, i);
+                            auto label = cp_sprintf("%s##build_profile_%d", it.label, i);
                             if (ImGui::Selectable(label, wnd.current_build_profile == i))
                                 wnd.current_build_profile = i;
                         }
@@ -4230,7 +4230,7 @@ void UI::draw_everything() {
                         return "unknown";
                     };
 
-                    pretty_menu_text(pm, our_sprintf("(%s) ", get_decl_type()), IM_COL32(80, 80, 80, 255));
+                    pretty_menu_text(pm, cp_sprintf("(%s) ", get_decl_type()), IM_COL32(80, 80, 80, 255));
 
                     pretty_menu_text(pm, it.full_name());
                     pm->pos.x += 8;
@@ -4245,7 +4245,7 @@ void UI::draw_everything() {
 
                     auto s = import_path;
                     if (strlen(s) > rem_chars)
-                        s = our_sprintf("%.*s...", rem_chars - 3, s);
+                        s = cp_sprintf("%.*s...", rem_chars - 3, s);
 
                     auto color = i == wnd.selection
                         ? IM_COL32(150, 150, 150, 255)
@@ -4271,7 +4271,7 @@ void UI::draw_everything() {
 
         ImGui::SetNextWindowDockID(dock_sidebar_id, ImGuiCond_Once);
 
-        auto title = our_sprintf("%s###search_and_replace", wnd.replace ? "Search and Replace" : "Search");
+        auto title = cp_sprintf("%s###search_and_replace", wnd.replace ? "Search and Replace" : "Search");
         begin_window(title, &wnd, ImGuiWindowFlags_AlwaysAutoResize);
 
         bool entered = false;
@@ -4382,7 +4382,7 @@ void UI::draw_everything() {
                         ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(ImColor(60, 60, 60)));
 
                         bool clicked = ImGui::Selectable(
-                            our_sprintf("##search_result_%d", index),
+                            cp_sprintf("##search_result_%d", index),
                             index == wnd.selection,
                             ImGuiSelectableFlags_AllowDoubleClick,
                             text_size
@@ -4396,7 +4396,7 @@ void UI::draw_everything() {
                         ImGui::PopStyleColor();
 
                         auto draw_text = [&](ccstr s, int len, bool strikethrough = false) {
-                            auto text = our_sprintf("%.*s", len, s);
+                            auto text = cp_sprintf("%.*s", len, s);
                             auto size = ImGui::CalcTextSize(text);
 
                             auto drawlist = ImGui::GetWindowDrawList();
@@ -4420,7 +4420,7 @@ void UI::draw_everything() {
                             if (is_mark_valid(it.mark_start))
                                 pos = it.mark_start->pos();
 
-                            auto s = our_sprintf("%d:%d ", pos.y+1, pos.x+1);
+                            auto s = cp_sprintf("%d:%d ", pos.y+1, pos.x+1);
                             draw_text(s, strlen(s));
                         }
                         ImGui::PopStyleColor();
@@ -4680,7 +4680,7 @@ void UI::draw_everything() {
             Ast_Node node; ptr0(&node);
             node.init(ts_tree_root_node(tree), &it);
 
-            current_render_godecl_filepath = our_strcpy(editor->filepath);
+            current_render_godecl_filepath = cp_strcpy(editor->filepath);
 
             FOR_NODE_CHILDREN (&node) {
                 switch (it->type()) {
@@ -4971,22 +4971,22 @@ void UI::draw_everything() {
                 if (ind.goroot && path_has_descendant(ind.goroot, editor.filepath)) {
                     label = get_path_relative_to(editor.filepath, ind.goroot);
                     external = true;
-                    // label = our_sprintf("$GOROOT/%s", label);
+                    // label = cp_sprintf("$GOROOT/%s", label);
                 } else if (ind.gomodcache && path_has_descendant(ind.gomodcache, editor.filepath)) {
                     label = get_path_relative_to(editor.filepath, ind.gomodcache);
                     external = true;
-                    // label = our_sprintf("$GOMODCACHE/%s", label);
+                    // label = cp_sprintf("$GOMODCACHE/%s", label);
                 } else {
                     label = get_path_relative_to(editor.filepath, world.current_path);
                 }
 
                 if (external) {
-                    label = our_sprintf("[ext] %s", label);
+                    label = cp_sprintf("[ext] %s", label);
                 }
             }
 
             if (editor.is_unsaved())
-                label = our_sprintf("%s*", label);
+                label = cp_sprintf("%s*", label);
 
             auto text_width = get_text_width(label);
 
@@ -5326,9 +5326,9 @@ void UI::draw_everything() {
                     cur_pos.x += settings.line_number_margin_left;
                     ccstr line_number_str = NULL;
                     if (world.replace_line_numbers_with_bytecounts)
-                        line_number_str = our_sprintf("%*d", line_number_width, buf->bytecounts[y]);
+                        line_number_str = cp_sprintf("%*d", line_number_width, buf->bytecounts[y]);
                     else
-                        line_number_str = our_sprintf("%*d", line_number_width, y + 1);
+                        line_number_str = cp_sprintf("%*d", line_number_width, y + 1);
                     auto len = strlen(line_number_str);
                     for (u32 i = 0; i < len; i++)
                         draw_char(&cur_pos, line_number_str[i], rgba(global_colors.white, 0.3));
@@ -5350,7 +5350,7 @@ void UI::draw_everything() {
                             vx += options.tabsize - (vx % options.tabsize);
                             cp_idx++;
                         } else {
-                            auto width = our_wcwidth(line->at(cp_idx));
+                            auto width = cp_wcwidth(line->at(cp_idx));
                             if (width == -1) width = 1;
                             vx += width;
 
@@ -5394,7 +5394,7 @@ void UI::draw_everything() {
                     if (grapheme_cpsize == 1 && curr_cp == '\t')
                         glyph_width = options.tabsize - (vx % options.tabsize);
                     else
-                        glyph_width = our_wcwidth(curr_cp);
+                        glyph_width = cp_wcwidth(curr_cp);
 
                     if (glyph_width == -1) glyph_width = 1;
 
@@ -5610,7 +5610,7 @@ void UI::draw_everything() {
                     return cmd.firstc.items;
                 };
 
-                auto command = our_sprintf("%s%s", get_title(), cmd.content.items);
+                auto command = cp_sprintf("%s%s", get_title(), cmd.content.items);
                 draw_status_piece(LEFT, command, rgba(global_colors.command_background), rgba(global_colors.command_foreground));
             } else {
                 if (world.use_nvim) {
@@ -5637,7 +5637,7 @@ void UI::draw_everything() {
         }
 
         if (world.show_frame_index) {
-            auto s = our_sprintf("%d", world.frame_index);
+            auto s = cp_sprintf("%d", world.frame_index);
             auto bg = rgba("#000000");
             auto fg = rgba("#ffffff");
 
@@ -5689,7 +5689,7 @@ void UI::draw_everything() {
         if (curr_editor) {
             auto cur = curr_editor->cur;
 
-            auto s = our_sprintf("%d,%d", cur.y+1, cur.x+1);
+            auto s = cp_sprintf("%d,%d", cur.y+1, cur.x+1);
 
             if (world.use_nvim) {
                 auto view = curr_editor->view;
@@ -5701,10 +5701,10 @@ void UI::draw_everything() {
                     if (!total) return curr > 0 ? "Bot" : "All";
                     if (!curr) return "Top";
                     if (curr >= total) return "Bot";
-                    return our_sprintf("%d%%", (int)((float)curr/(float)total * 100));
+                    return cp_sprintf("%d%%", (int)((float)curr/(float)total * 100));
                 };
 
-                s = our_sprintf("%s  %s", s, blah());
+                s = cp_sprintf("%s  %s", s, blah());
             }
 
             draw_status_piece(RIGHT, s, rgba(global_colors.white, 0.0), rgba("#aaaaaa"));
@@ -5952,13 +5952,13 @@ void UI::end_frame() {
 
                         auto pos = items_pos + new_vec2f(settings.autocomplete_item_padding_x, settings.autocomplete_item_padding_y);
 
-                        auto type_str = our_sprintf("(%s) ", get_decl_type());
+                        auto type_str = cp_sprintf("(%s) ", get_decl_type());
                         draw_string(pos, type_str, rgba(color, 0.5));
                         pos.x += font->width * strlen(type_str);
 
-                        auto str = (cstr)our_strcpy(result.name);
+                        auto str = (cstr)cp_strcpy(result.name);
                         if (strlen(str) > AUTOCOMPLETE_TRUNCATE_LENGTH)
-                            str = (cstr)our_sprintf("%.*s...", AUTOCOMPLETE_TRUNCATE_LENGTH, str);
+                            str = (cstr)cp_sprintf("%.*s...", AUTOCOMPLETE_TRUNCATE_LENGTH, str);
 
                         auto avail_width = items_area.w - settings.autocomplete_item_padding_x * 2;
                         if (strlen(str) * font->width > avail_width)
@@ -5977,7 +5977,7 @@ void UI::end_frame() {
                             case GODECL_IMPORT:
                                 // is this even possible here?
                                 // handle either way
-                                return our_sprintf("\"%s\"", decl->import_path);
+                                return cp_sprintf("\"%s\"", decl->import_path);
                             case GODECL_TYPE:
                             case GODECL_VAR:
                             case GODECL_CONST:
@@ -6051,7 +6051,7 @@ void UI::end_frame() {
                             }
                             break;
                         case ACR_IMPORT:
-                            return our_sprintf("\"%s\"", result.import_path);
+                            return cp_sprintf("\"%s\"", result.import_path);
                         }
                         return "";
                     };
@@ -6073,7 +6073,7 @@ void UI::end_frame() {
                         }
 
                         if (desclen > desclimit)
-                            desc = our_sprintf("%.*s...", desclimit-3, desc);
+                            desc = cp_sprintf("%.*s...", desclimit-3, desc);
 
                         draw_string(pos, desc, rgba(new_vec3f(0.5, 0.5, 0.5)));
                     }

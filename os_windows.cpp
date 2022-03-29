@@ -192,8 +192,8 @@ bool Process::run(ccstr _cmd) {
         if (skip_shell) {
             wargs = to_wide(cmd);
         } else {
-            // auto args = our_sprintf("cmd /S /K \"start cmd /S /K \"%s\"\"", cmd);
-            auto args = our_sprintf("cmd /S /C %s\"%s\"", keep_open_after_exit ? "/K " : "", cmd);
+            // auto args = cp_sprintf("cmd /S /K \"start cmd /S /K \"%s\"\"", cmd);
+            auto args = cp_sprintf("cmd /S /C %s\"%s\"", keep_open_after_exit ? "/K " : "", cmd);
             print("Process::run: %s", args);
             wargs = to_wide(args);
         }
@@ -302,14 +302,14 @@ struct Thread_Ctx {
 };
 
 Thread_Handle create_thread(Thread_Callback callback, void* param) {
-    auto ctx = (Thread_Ctx*)our_malloc(sizeof(Thread_Ctx));
+    auto ctx = (Thread_Ctx*)cp_malloc(sizeof(Thread_Ctx));
     ctx->callback = callback;
     ctx->param = param;
 
     auto run = [](void *p) -> DWORD WINAPI {
         auto ctx = (Thread_Ctx*)p;
         ctx->callback(ctx->param);
-        our_free(ctx);
+        cp_free(ctx);
         return 0;
     };
 
@@ -630,7 +630,7 @@ bool File_Mapping::create_actual_file_mapping(LARGE_INTEGER size) {
         // TODO: handle this. Everywhere else in the code is set up to handle
         // 64-bit sizes, but because MapViewOfFile only lets you map a 32-bit
         // sized portion at a time, we need to write the unmap/remap logic.
-        our_panic("File to be mapped is too big.");
+        cp_panic("File to be mapped is too big.");
     }
 
     if (!size.LowPart) {

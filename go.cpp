@@ -38,7 +38,7 @@ void index_print(ccstr fmt, ...) {
     va_list args;
     va_start(args, fmt);
 
-    auto msg = our_vsprintf(fmt, args);
+    auto msg = cp_vsprintf(fmt, args);
 
     {
         auto &wnd = world.wnd_index_log;
@@ -53,7 +53,7 @@ void index_print(ccstr fmt, ...) {
 
         char *dest = wnd.buf[index];
         if (strlen(msg) > INDEX_LOG_MAXLEN - 1)
-            msg = our_sprintf("%.*s...", INDEX_LOG_MAXLEN - 1 - 3, msg);
+            msg = cp_sprintf("%.*s...", INDEX_LOG_MAXLEN - 1 - 3, msg);
         strcpy_safe(dest, INDEX_LOG_MAXLEN, msg);
 
         wnd.cmd_scroll_to_end = true;
@@ -357,7 +357,7 @@ void Module_Resolver::init(ccstr current_module_filepath, ccstr _gomodcache) {
 
     SCOPED_MEM(&mem);
 
-    gomodcache = our_strcpy(_gomodcache);
+    gomodcache = cp_strcpy(_gomodcache);
 
     root_import_to_resolved = alloc_object(Node);
     root_resolved_to_import = alloc_object(Node);
@@ -366,7 +366,7 @@ void Module_Resolver::init(ccstr current_module_filepath, ccstr _gomodcache) {
     proc.init();
     proc.dir = current_module_filepath;
     proc.skip_shell = true;
-    if (!proc.run(our_sprintf("%s list -mod=mod -m all", world.go_binary_path))) return;
+    if (!proc.run(cp_sprintf("%s list -mod=mod -m all", world.go_binary_path))) return;
     defer { proc.cleanup(); };
 
     List<char> line;
@@ -386,13 +386,13 @@ void Module_Resolver::init(ccstr current_module_filepath, ccstr _gomodcache) {
 
         auto parts = split_string(line.items, ' ');
         if (parts->len == 1) {
-            module_path = our_strcpy(parts->at(0));
+            module_path = cp_strcpy(parts->at(0));
             import_path = module_path;
             resolved_path = current_module_filepath;
         } else if (parts->len == 2) {
             import_path = parts->at(0);
             auto version = parts->at(1);
-            auto subpath = normalize_path_in_module_cache(our_sprintf("%s@%s", import_path, version));
+            auto subpath = normalize_path_in_module_cache(cp_sprintf("%s@%s", import_path, version));
             resolved_path = path_join(gomodcache, subpath);
         } else if (parts->len == 4) {
             import_path = parts->at(0);
@@ -402,7 +402,7 @@ void Module_Resolver::init(ccstr current_module_filepath, ccstr _gomodcache) {
             import_path = parts->at(0);
             auto new_import_path = parts->at(3);
             auto version = parts->at(4);
-            auto subpath = normalize_path_in_module_cache(our_sprintf("%s@%s", new_import_path, version));
+            auto subpath = normalize_path_in_module_cache(cp_sprintf("%s@%s", new_import_path, version));
             resolved_path = path_join(gomodcache, subpath);
         } else {
             continue;
@@ -414,7 +414,7 @@ void Module_Resolver::init(ccstr current_module_filepath, ccstr _gomodcache) {
 
     if (!module_path) {
         // TODO
-        our_panic("Sorry, currently only modules are supported.");
+        cp_panic("Sorry, currently only modules are supported.");
     }
 }
 
@@ -453,8 +453,8 @@ bool is_name_private(ccstr name) {
 
 ccstr format_cur(cur2 c) {
     if (c.y == -1)
-        return our_sprintf("%d", c.x);
-    return our_sprintf("%d:%d", c.y, c.x);
+        return cp_sprintf("%d", c.x);
+    return cp_sprintf("%d:%d", c.y, c.x);
 }
 
 struct Parser_Input {
@@ -511,7 +511,7 @@ Go_File *get_ready_file_in_package(Go_Package *pkg, ccstr filename) {
 
     {
         SCOPED_MEM(&file->pool);
-        file->filename = our_strcpy(filename);
+        file->filename = cp_strcpy(filename);
         file->scope_ops = alloc_list<Go_Scope_Op>();
         file->decls = alloc_list<Godecl>();
         file->imports = alloc_list<Go_Import>();
@@ -530,11 +530,11 @@ either:
 */
 
 void Go_Indexer::reload_single_file(ccstr filepath) {
-    auto import_path = filepath_to_import_path(our_dirname(filepath));
+    auto import_path = filepath_to_import_path(cp_dirname(filepath));
     auto pkg = find_package_in_index(import_path);
     if (!pkg) return;
 
-    auto file = get_ready_file_in_package(pkg, our_basename(filepath));
+    auto file = get_ready_file_in_package(pkg, cp_basename(filepath));
     if (!file) return;
 
     auto pf = parse_file(filepath, false);
@@ -550,16 +550,16 @@ void Go_Indexer::reload_editor_if_dirty(void *editor) {
     auto it = (Editor*)editor;
 
     Timer t;
-    t.init(our_sprintf("reload %s", our_basename(it->filepath)));
+    t.init(cp_sprintf("reload %s", cp_basename(it->filepath)));
 
     if (!it->buf->tree_dirty) return;
     it->buf->tree_dirty = false;
 
     SCOPED_FRAME();
 
-    auto filename = our_basename(it->filepath);
+    auto filename = cp_basename(it->filepath);
 
-    auto import_path = filepath_to_import_path(our_dirname(it->filepath));
+    auto import_path = filepath_to_import_path(cp_dirname(it->filepath));
     auto pkg = find_package_in_index(import_path);
     if (!pkg) return;
 
@@ -615,7 +615,7 @@ void Go_Indexer::replace_package_name(Go_Package *pkg, ccstr package_name) {
 
     {
         SCOPED_MEM(&final_mem);
-        pkg->package_name = our_strcpy(package_name);
+        pkg->package_name = cp_strcpy(package_name);
     }
 }
 
@@ -636,7 +636,7 @@ void Go_Indexer::init_builtins(Go_Package *pkg) {
         auto decl = f->decls->append();
         decl->is_toplevel = true;
         decl->type = decl_type;
-        decl->name = our_strcpy(name);
+        decl->name = cp_strcpy(name);
         decl->gotype = gotype;
 
         return gotype;
@@ -675,7 +675,7 @@ void Go_Indexer::init_builtins(Go_Package *pkg) {
         auto decl = f->decls->append();
         decl->type = GODECL_VAR; // TODO: special godecl_type for builtin values?
         decl->is_toplevel = true;
-        decl->name = our_strcpy(name);
+        decl->name = cp_strcpy(name);
         decl->gotype = new_gotype(GOTYPE_BUILTIN);
         decl->gotype->builtin_type = type;
     };
@@ -902,7 +902,7 @@ void Go_Indexer::background_thread() {
         if (already_enqueued_packages.has(import_path))
             return;
 
-        package_queue.append(our_strcpy(import_path));
+        package_queue.append(cp_strcpy(import_path));
         already_enqueued_packages.add(import_path);
     };
 
@@ -1027,8 +1027,8 @@ void Go_Indexer::background_thread() {
         if (index.current_import_path && !streq(index.current_import_path, workspace_import_path))
             reset_index = true;
 
-        index.current_path = our_strcpy(world.current_path);
-        index.current_import_path = our_strcpy(workspace_import_path);
+        index.current_path = cp_strcpy(world.current_path);
+        index.current_import_path = cp_strcpy(workspace_import_path);
 
         if (!index.packages || reset_index)
             index.packages = alloc_list<Go_Package>();
@@ -1140,9 +1140,9 @@ void Go_Indexer::background_thread() {
             }
             break;
         case CPR_FILE:
-            if (is_go_package(our_dirname(filepath)) && str_ends_with(filepath, ".go")) {
+            if (is_go_package(cp_dirname(filepath)) && str_ends_with(filepath, ".go")) {
                 start_writing(true);
-                mark_package_for_reprocessing(our_dirname(import_path));
+                mark_package_for_reprocessing(cp_dirname(import_path));
             }
             if (are_filepaths_equal(path_join(index.current_path, "go.mod"), filepath)) {
                 if (status == IND_READY) {
@@ -1160,7 +1160,7 @@ void Go_Indexer::background_thread() {
                     break;
                 }
 
-                pkg = find_package_in_index(our_dirname(import_path));
+                pkg = find_package_in_index(cp_dirname(import_path));
                 if (pkg) {
                     start_writing(true);
                     mark_package_for_reprocessing(pkg->import_path);
@@ -1208,7 +1208,7 @@ void Go_Indexer::background_thread() {
                     }
                 }
 
-                our_assert(status == IND_READY, "status not ready");
+                cp_assert(status == IND_READY, "status not ready");
 
                 start_writing();
                 delete_file(path_join(world.current_path, ".cpdb"));
@@ -1271,7 +1271,7 @@ void Go_Indexer::background_thread() {
                 pkg = index.packages->append();
                 pkg->status = GPS_OUTDATED;
                 pkg->files = alloc_list<Go_File>();
-                pkg->import_path = our_strcpy(import_path);
+                pkg->import_path = cp_strcpy(import_path);
                 package_lookup.set(pkg->import_path, idx);
             };
 
@@ -1331,10 +1331,10 @@ void Go_Indexer::background_thread() {
                     SCOPED_MEM(&final_mem);
                     if (str_ends_with(filename, "_test.go")) {
                         if (!test_package_name)
-                            test_package_name = our_strcpy(pkgname);
+                            test_package_name = cp_strcpy(pkgname);
                     } else {
                         if (!package_name)
-                            package_name = our_strcpy(pkgname);
+                            package_name = cp_strcpy(pkgname);
                     }
                 }
 
@@ -1349,7 +1349,7 @@ void Go_Indexer::background_thread() {
             pkg->checked_for_outdated_hash = true;
 
             if (!last_package_processed || !streq(import_path, last_package_processed)) {
-                last_package_processed = our_strcpy(import_path);
+                last_package_processed = cp_strcpy(import_path);
                 packages_processed_since_last_write++;
             }
 
@@ -1381,12 +1381,12 @@ void Go_Indexer::background_thread() {
                 auto true_copy = package_lookup.get(it.import_path, &found);
                 if (!found) {
 #ifdef DEBUG_MODE
-                    our_panic("we have a package that wasn't found in package_lookup");
+                    cp_panic("we have a package that wasn't found in package_lookup");
 #endif
                 } else {
                     if (true_copy != i) {
 #ifdef DEBUG_MODE
-                        our_panic("why do we have a copy?");
+                        cp_panic("why do we have a copy?");
 #endif
                         to_remove->append(i);
                         continue;
@@ -1731,7 +1731,7 @@ ccstr parse_go_string(ccstr s) {
 
     auto len = strlen(s);
     if ((s[0] == '"' && s[len-1] == '"') || (s[0] == '`' && s[len-1] == '`')) {
-        auto ret = (cstr)our_strcpy(s);
+        auto ret = (cstr)cp_strcpy(s);
         ret[len-1] = '\0';
         return &ret[1];
     }
@@ -1784,7 +1784,7 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
                     if (it->type() != TS_IDENTIFIER) break;
 
                     auto decl = alloc_object(Godecl);
-                    decl->name = our_strcpy(it->string());
+                    decl->name = cp_strcpy(it->string());
                     decl->type = GODECL_TYPECASE;
                     decl->decl_start = node->start();
                     decl->decl_end = node->start();
@@ -1886,7 +1886,7 @@ void Go_Indexer::process_tree_into_gofile(
     Timer t;
     t.init("process_tree_into_gofile");
 
-    auto filename = our_basename(filepath);
+    auto filename = cp_basename(filepath);
 
     if (time) t.log("get filename");
 
@@ -2126,7 +2126,7 @@ u64 Go_Indexer::hash_file(ccstr filepath) {
     defer { fm->cleanup(); };
 
     u64 ret = 0;
-    auto name = our_basename(filepath);
+    auto name = cp_basename(filepath);
     ret ^= hash64(fm->data, fm->len);
     ret ^= hash64((void*)name, strlen(name));
     return ret;
@@ -2171,7 +2171,7 @@ List<ccstr>* Go_Indexer::list_source_files(ccstr dirpath, bool include_tests) {
                 if (!is_file_included_in_build(path_join(dirpath, ent->name))) break;
             }
 
-            ret->append(our_strcpy(ent->name));
+            ret->append(cp_strcpy(ent->name));
         } while (0);
 
         return true;
@@ -2910,7 +2910,7 @@ List<Find_Decl> *Go_Indexer::find_implementations(Goresult *target, bool search_
                 if (it.type != GODECL_FUNC && it.type != GODECL_TYPE) continue;
 
                 if (it.type == GODECL_TYPE) {
-                    auto type_name = our_sprintf("%s:%s", import_path, it.name);
+                    auto type_name = cp_sprintf("%s:%s", import_path, it.name);
                     auto type_info = get_type_info(type_name);
                     type_info->decl = make_goresult(&it, ctx);
                     type_info->package_name = package_name;
@@ -2927,7 +2927,7 @@ List<Find_Decl> *Go_Indexer::find_implementations(Goresult *target, bool search_
 
                 if (recv->type != GOTYPE_ID) continue;
 
-                auto type_name = our_sprintf("%s:%s", import_path, recv->id_name);
+                auto type_name = cp_sprintf("%s:%s", import_path, recv->id_name);
                 auto method_name = it.name;
 
                 for (int i = 0; i < methods->len; i++) {
@@ -3037,7 +3037,7 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_symbol(ccstr symbol) {
                 auto key = it.name;
                 auto recvname = get_godecl_recvname(&it);
                 if (recvname)
-                    key = our_sprintf("%s.%s", recvname, it.name);
+                    key = cp_sprintf("%s.%s", recvname, it.name);
 
                 if (!streq(key, rest)) continue;
 
@@ -3406,7 +3406,7 @@ List<Find_References_File> *Go_Indexer::actually_find_references(Goresult *declr
 
         if (references->len > 0) {
             Find_References_File out;
-            out.filepath = our_strcpy(path_join(get_package_path(pkg->import_path), file->filename));
+            out.filepath = cp_strcpy(path_join(get_package_path(pkg->import_path), file->filename));
             out.references = references;
             ret->append(&out);
         }
@@ -4005,7 +4005,7 @@ Gotype *Go_Indexer::get_closest_function(ccstr filepath, cur2 pos) {
         return true;
     };
 
-    iterate_over_scope_ops(pf->root, cb, our_basename(filepath));
+    iterate_over_scope_ops(pf->root, cb, cp_basename(filepath));
     return ret;
 }
 
@@ -4113,9 +4113,9 @@ void Go_Indexer::fill_goto_symbol(List<Go_Symbol> *out) {
                 ccstr name = NULL;
                 auto recvname = getrecv();
                 if (recvname)
-                    name = our_sprintf("%s.%s", recvname, it.name);
+                    name = cp_sprintf("%s.%s", recvname, it.name);
                 else
-                    name = our_sprintf("%s", it.name);
+                    name = cp_sprintf("%s", it.name);
 
                 Go_Symbol sym;
                 sym.pkgname = pkgname;
@@ -4228,7 +4228,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                     break;
                 case 0: // pos is inside sel
                     keyword_start = sel_node->start();
-                    prefix = our_strcpy(sel_node->string());
+                    prefix = cp_strcpy(sel_node->string());
                     ((cstr)prefix)[pos.x - sel_node->start().x] = '\0';
                     break;
                 case 1: // pos is after sel
@@ -4254,7 +4254,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
             expr_to_analyze = copy_node(node);
             situation = FOUND_LONE_IDENTIFIER;
             keyword_start = node->start();
-            prefix = our_strcpy(node->string());
+            prefix = cp_strcpy(node->string());
             ((cstr)prefix)[pos.x - node->start().x] = '\0';
             {
                 auto get_struct_literal_type = [&]() -> Ast_Node* {
@@ -4533,7 +4533,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
 
                                 if (count++ > 500) break;
 
-                                auto result = add_declaration_result(our_sprintf("%s.%s", pkgname, it.decl->name));
+                                auto result = add_declaration_result(cp_sprintf("%s.%s", pkgname, it.decl->name));
                                 if (result) {
                                     result->declaration_godecl = it.decl;
                                     result->declaration_import_path = it.ctx->import_path;
@@ -4748,8 +4748,8 @@ bool Go_Indexer::check_if_still_in_parameter_hint(ccstr filepath, cur2 cur, cur2
 
     ccstr suffix = "";
     if (string_close_char != 0)
-        suffix = our_sprintf("%c", string_close_char);
-    suffix = our_sprintf("%s)}}}}}}}}}}}}}}}}", suffix);
+        suffix = cp_sprintf("%c", string_close_char);
+    suffix = cp_sprintf("%s)}}}}}}}}}}}}}}}}", suffix);
 
     if (!truncate_parsed_file(pf, cur, suffix)) return NULL;
     defer { ts_tree_delete(pf->tree); };
@@ -5073,12 +5073,12 @@ ccstr remove_ats_from_path(ccstr s) {
 }
 
 Go_Ctx *Go_Indexer::filepath_to_ctx(ccstr filepath) {
-    auto import_path = filepath_to_import_path(our_dirname(filepath));
+    auto import_path = filepath_to_import_path(cp_dirname(filepath));
     if (!import_path) return NULL;
 
     auto ret = alloc_object(Go_Ctx);
     ret->import_path = import_path;
-    ret->filename = our_basename(filepath);
+    ret->filename = cp_basename(filepath);
     return ret;
 }
 
@@ -5136,7 +5136,7 @@ void Go_Indexer::init() {
 
     {
         SCOPED_FRAME();
-        strcpy_safe_fixed(current_exe_path, our_dirname(get_executable_path()));
+        strcpy_safe_fixed(current_exe_path, cp_dirname(get_executable_path()));
     }
 
     auto init_buildenv = [&]() {
@@ -5148,10 +5148,10 @@ void Go_Indexer::init() {
     };
 
     if (!init_buildenv())
-        our_panic("Please make sure Go version 1.13+ is installed and accessible through your PATH.");
+        cp_panic("Please make sure Go version 1.13+ is installed and accessible through your PATH.");
 
     auto copystr = [&](ccstr s) {
-        auto ret = our_strcpy(s);
+        auto ret = cp_strcpy(s);
         GHFree((void*)s);
         return ret[0] == '\0' ? NULL : ret;
     };
@@ -5159,7 +5159,7 @@ void Go_Indexer::init() {
     {
         goroot = copystr(GHGetGoroot());
         if (!goroot)
-            our_panic("Unable to detect GOROOT. Please make sure Go is installed and accessible through your PATH.");
+            cp_panic("Unable to detect GOROOT. Please make sure Go is installed and accessible through your PATH.");
 
         auto goroot_without_src = goroot;
         goroot = path_join(goroot, "src");
@@ -5167,7 +5167,7 @@ void Go_Indexer::init() {
         if (check_path(goroot) != CPR_DIRECTORY) {
             // This is called from main thread, so we can just call tell_user().
             tell_user(
-                our_sprintf(
+                cp_sprintf(
                     "We found the following GOROOT:\n\n%s\n\nIt doesn't appear to be valid. The program will keep running, but code intelligence might not fully work.",
                     goroot_without_src
                 ),
@@ -5177,7 +5177,7 @@ void Go_Indexer::init() {
 
         gomodcache = copystr(GHGetGomodcache());
         if (!gomodcache)
-            our_panic("Unable to detect GOMODCACHE. Please make sure Go is installed and accessible through your PATH.");
+            cp_panic("Unable to detect GOMODCACHE. Please make sure Go is installed and accessible through your PATH.");
     }
 
     lock.init();
@@ -5223,8 +5223,8 @@ bool Go_Indexer::release_lock(Indexer_Status expected_status) {
 
     if (status != expected_status) {
         auto msg = "Go_Indexer::release_lock() called with status mismatch (want %d, got %d)";
-        msg = our_sprintf(msg, expected_status, status);
-        our_panic(msg);
+        msg = cp_sprintf(msg, expected_status, status);
+        cp_panic(msg);
     }
 
     if (--reacquires == 0) {
@@ -5875,7 +5875,7 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
                             saved_iota_types->append(type_node_gotype);
                     }
                 } else {
-                    our_assert(value_node->type() == TS_EXPRESSION_LIST, "rhs must be a TS_EXPRESSION_LIST");
+                    cp_assert(value_node->type() == TS_EXPRESSION_LIST, "rhs must be a TS_EXPRESSION_LIST");
 
                     u32 lhs_count = 0;
                     FOR_NODE_CHILDREN (spec) {
@@ -6412,7 +6412,7 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
 }
 
 Goresult *make_goresult_from_pointer(void *ptr, Go_Ctx *ctx) {
-    our_assert(ptr, "make_goresult should never contain a NULL value, just return NULL instead!");
+    cp_assert(ptr, "make_goresult should never contain a NULL value, just return NULL instead!");
 
     auto ret = alloc_object(Goresult);
     ret->ptr = ptr;

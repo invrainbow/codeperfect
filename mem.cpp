@@ -75,7 +75,7 @@ uchar* alloc_chunk(s32 needed, s32* new_size) {
     auto size = (int)sizes[_countof(sizes) - 1]; // last largest size
     while (size < needed) size *= 2;
     *new_size = size;
-    return (uchar*)our_malloc(sizeof(uchar) * size);
+    return (uchar*)cp_malloc(sizeof(uchar) * size);
     */
 }
 
@@ -88,6 +88,6 @@ void free_chunk(uchar* buf, s32 cap) {
         case CHUNK4: world.chunk4_fridge.free((Chunk4*)buf); break;
         case CHUNK5: world.chunk5_fridge.free((Chunk5*)buf); break;
         case CHUNK6: world.chunk6_fridge.free((Chunk6*)buf); break;
-        default: our_free(buf); break;
+        default: cp_free(buf); break;
     }
 }

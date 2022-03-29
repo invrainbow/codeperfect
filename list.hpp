@@ -49,16 +49,16 @@ struct List {
             break;
         case LIST_MALLOC:
             cap = _cap;
-            items = (T*)our_malloc(sizeof(T) * cap);
+            items = (T*)cp_malloc(sizeof(T) * cap);
             if (!items)
-                our_panic("unable to our_malloc for array");
+                cp_panic("unable to cp_malloc for array");
             global_mem_allocated += sizeof(T) * cap;
             mem0(items, sizeof(T) * cap);
             break;
         case LIST_CHUNK:
             items = (T*)alloc_chunk_stub(_cap, &cap);
             if (!items)
-                our_panic("unable to alloc chunk for array");
+                cp_panic("unable to alloc chunk for array");
             break;
         }
     }
@@ -67,7 +67,7 @@ struct List {
         switch (mode) {
         case LIST_MALLOC:
             global_mem_allocated -= sizeof(T) * cap;
-            our_free(items);
+            cp_free(items);
             break;
         case LIST_CHUNK:
             free_chunk_stub((uchar*)items, cap);

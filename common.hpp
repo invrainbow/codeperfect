@@ -344,17 +344,17 @@ void _error(ccstr fmt, ...);
 #define ptr0(ptr) memset(ptr, 0, sizeof(*ptr))
 #define For(arr) for (auto &&it : arr)
 #define define_str_case(x) case x: return #x
-#define our_assert(x, s) if (!(x)) our_panic(s)
+#define cp_assert(x, s) if (!(x)) cp_panic(s)
 
-void* our_malloc(size_t size);
-void our_free(void* p);
+void* cp_malloc(size_t size);
+void cp_free(void* p);
 bool str_ends_with(ccstr a, ccstr suf);
 bool str_starts_with(ccstr a, ccstr pre);
 
 extern s32 global_mem_allocated;
 extern const u64 MAX_U64;
 
-void our_panic(ccstr s);
+void cp_panic(ccstr s);
 
 extern thread_local bool is_main_thread;
 void assert_main_thread();
