@@ -8,6 +8,7 @@
 #include "os.hpp"
 #include "world.hpp"
 #include "diff.hpp"
+#include "defer.hpp"
 
 void test_diff() {
     auto run = [&](ccstr a, ccstr b) {

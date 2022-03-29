@@ -9,13 +9,13 @@
 #include "settings.hpp"
 #include "icons.h"
 #include "fzy_match.h"
+#include "defer.hpp"
 
 #define _USE_MATH_DEFINES // what the fuck is this lol
 #include <math.h>
 #include "tree_sitter_crap.hpp"
 #include "cpcolors.hpp"
 
-#include <GLFW/glfw3.h>
 #include <inttypes.h>
 
 void open_ft_node(FT_Node *it);
@@ -47,14 +47,14 @@ ccstr format_key(int mods, ccstr key, bool icon) {
     icon = false;
 #endif
 
-    if (mods & KEYMOD_CMD)   parts.append(icon ? ICON_MD_KEYBOARD_COMMAND_KEY : "Cmd");
-    if (mods & KEYMOD_SHIFT) parts.append(icon ? ICON_MD_ARROW_UPWARD : "Shift");
+    if (mods & CP_MOD_CMD)   parts.append(icon ? ICON_MD_KEYBOARD_COMMAND_KEY : "Cmd");
+    if (mods & CP_MOD_SHIFT) parts.append(icon ? ICON_MD_ARROW_UPWARD : "Shift");
 #if OS_MAC
-    if (mods & KEYMOD_ALT)   parts.append(icon ? ICON_MD_KEYBOARD_OPTION_KEY : "Option");
+    if (mods & CP_MOD_ALT)   parts.append(icon ? ICON_MD_KEYBOARD_OPTION_KEY : "Option");
 #else
-    if (mods & KEYMOD_ALT)   parts.append("Alt");
+    if (mods & CP_MOD_ALT)   parts.append("Alt");
 #endif
-    if (mods & KEYMOD_CTRL)  parts.append(icon ? ICON_MD_KEYBOARD_CONTROL_KEY : "Ctrl");
+    if (mods & CP_MOD_CTRL)  parts.append(icon ? ICON_MD_KEYBOARD_CONTROL_KEY : "Ctrl");
 
     Text_Renderer rend; rend.init();
     For (parts) {
@@ -151,22 +151,51 @@ namespace ImGui {
 
 ccstr get_key_name(int key) {
     switch (key) {
-    case GLFW_KEY_F1: return "F1";
-    case GLFW_KEY_F2: return "F2";
-    case GLFW_KEY_F3: return "F3";
-    case GLFW_KEY_F4: return "F4";
-    case GLFW_KEY_F5: return "F5";
-    case GLFW_KEY_F6: return "F6";
-    case GLFW_KEY_F7: return "F7";
-    case GLFW_KEY_F8: return "F8";
-    case GLFW_KEY_F9: return "F9";
-    case GLFW_KEY_F10: return "F10";
-    case GLFW_KEY_F11: return "F11";
-    case GLFW_KEY_F12: return "F12";
-    case GLFW_KEY_TAB: return "Tab";
-    case GLFW_KEY_ENTER: return "Enter";
+    case CP_KEY_F1: return "F1";
+    case CP_KEY_F2: return "F2";
+    case CP_KEY_F3: return "F3";
+    case CP_KEY_F4: return "F4";
+    case CP_KEY_F5: return "F5";
+    case CP_KEY_F6: return "F6";
+    case CP_KEY_F7: return "F7";
+    case CP_KEY_F8: return "F8";
+    case CP_KEY_F9: return "F9";
+    case CP_KEY_F10: return "F10";
+    case CP_KEY_F11: return "F11";
+    case CP_KEY_F12: return "F12";
+    case CP_KEY_TAB: return "Tab";
+    case CP_KEY_ENTER: return "Enter";
+    case CP_KEY_A: return "A";
+    case CP_KEY_B: return "B";
+    case CP_KEY_C: return "C";
+    case CP_KEY_D: return "D";
+    case CP_KEY_E: return "E";
+    case CP_KEY_F: return "F";
+    case CP_KEY_G: return "G";
+    case CP_KEY_H: return "H";
+    case CP_KEY_I: return "I";
+    case CP_KEY_J: return "J";
+    case CP_KEY_K: return "K";
+    case CP_KEY_L: return "L";
+    case CP_KEY_M: return "M";
+    case CP_KEY_N: return "N";
+    case CP_KEY_O: return "O";
+    case CP_KEY_P: return "P";
+    case CP_KEY_Q: return "Q";
+    case CP_KEY_R: return "R";
+    case CP_KEY_S: return "S";
+    case CP_KEY_T: return "T";
+    case CP_KEY_U: return "U";
+    case CP_KEY_V: return "V";
+    case CP_KEY_W: return "W";
+    case CP_KEY_X: return "X";
+    case CP_KEY_Y: return "Y";
+    case CP_KEY_Z: return "Z";
+    case CP_KEY_LEFT_BRACKET: return "[";
+    case CP_KEY_RIGHT_BRACKET: return "]";
+    case CP_KEY_COMMA: return ",";
     }
-    return glfwGetKeyName(key, 0);
+    return NULL;
 }
 
 ccstr get_menu_command_key(Command cmd) {
@@ -1146,7 +1175,7 @@ void UI::draw_debugger_var(Draw_Debugger_Var_Args *args) {
         if (final_var_name != NULL) {
             if (ImGui::OurBeginPopupContextItem(our_sprintf("dbg_copyvalue_%lld", (uptr)var))) {
                 if (ImGui::Selectable("Copy Name")) {
-                    glfwSetClipboardString(world.window, final_var_name);
+                    set_clipboard_string(final_var_name);
                 }
                 ImGui::EndPopup();
             }
@@ -1160,7 +1189,7 @@ void UI::draw_debugger_var(Draw_Debugger_Var_Args *args) {
                     if (args->some_watch_being_edited) return false;
                     if (dbg_editing_new_watch) return false;
 
-                    if (imgui_get_keymods() == KEYMOD_NONE) {
+                    if (imgui_get_keymods() == CP_MOD_NONE) {
                         if (imgui_special_key_pressed(ImGuiKey_Backspace))
                             return true;
                         if (imgui_special_key_pressed(ImGuiKey_Delete))
@@ -1210,7 +1239,7 @@ void UI::draw_debugger_var(Draw_Debugger_Var_Args *args) {
                 }
             }
 
-            if (imgui_get_keymods() == KEYMOD_PRIMARY && imgui_key_pressed('c')) {
+            if (imgui_get_keymods() == CP_MOD_PRIMARY && imgui_key_pressed('c')) {
                 // ???
             }
         }
@@ -1285,7 +1314,7 @@ void UI::draw_debugger_var(Draw_Debugger_Var_Args *args) {
         bool copy = false;
 
         if (*selection == var)
-            if (imgui_get_keymods() == KEYMOD_PRIMARY)
+            if (imgui_get_keymods() == CP_MOD_PRIMARY)
                 if (imgui_key_pressed('c'))
                     copy = true;
 
@@ -1295,7 +1324,7 @@ void UI::draw_debugger_var(Draw_Debugger_Var_Args *args) {
             ImGui::EndPopup();
         }
 
-        if (copy) glfwSetClipboardString(world.window, underlying_value);
+        if (copy) set_clipboard_string(underlying_value);
 
         ImGui::TableNextColumn();
         if (watch == NULL || watch->state != DBGWATCH_ERROR) {
@@ -1338,7 +1367,7 @@ void UI::draw_debugger_var(Draw_Debugger_Var_Args *args) {
                 ImGui::TextWrapped("%s", type_name);
                 if (ImGui::OurBeginPopupContextItem(our_sprintf("dbg_copyvalue_%lld", (uptr)var))) {
                     if (ImGui::Selectable("Copy Type")) {
-                        glfwSetClipboardString(world.window, type_name);
+                        set_clipboard_string(type_name);
                     }
                     ImGui::EndPopup();
                 }
@@ -1740,10 +1769,10 @@ u32 UI::imgui_get_keymods() {
     auto &io = ImGui::GetIO();
 
     u32 ret = 0;
-    if (io.KeySuper) ret |= KEYMOD_CMD;
-    if (io.KeyCtrl) ret |= KEYMOD_CTRL;
-    if (io.KeyShift) ret |= KEYMOD_SHIFT;
-    if (io.KeyAlt) ret |= KEYMOD_ALT;
+    if (io.KeySuper) ret |= CP_MOD_CMD;
+    if (io.KeyCtrl) ret |= CP_MOD_CTRL;
+    if (io.KeyShift) ret |= CP_MOD_SHIFT;
+    if (io.KeyAlt) ret |= CP_MOD_ALT;
     return ret;
 }
 
@@ -2162,7 +2191,7 @@ void UI::draw_everything() {
         if (wnd.focused) {
             auto mods = imgui_get_keymods();
             switch (mods) {
-            case KEYMOD_NONE:
+            case CP_MOD_NONE:
                 if (imgui_special_key_pressed(ImGuiKey_Escape)) wnd.show = false;
                 break;
             }
@@ -2610,7 +2639,7 @@ void UI::draw_everything() {
 
             auto mods = imgui_get_keymods();
             switch (mods) {
-            case KEYMOD_NONE:
+            case CP_MOD_NONE:
                 if (imgui_special_key_pressed(ImGuiKey_DownArrow)) go_down();
                 if (imgui_special_key_pressed(ImGuiKey_UpArrow)) go_up();
                 if (imgui_special_key_pressed(ImGuiKey_Escape)) {
@@ -2759,7 +2788,7 @@ void UI::draw_everything() {
         if (wnd.focused) {
             auto mods = imgui_get_keymods();
             switch (mods) {
-            case KEYMOD_NONE:
+            case CP_MOD_NONE:
                 if (imgui_special_key_pressed(ImGuiKey_Escape))
                     wnd.show = false;
                 break;
@@ -2909,7 +2938,7 @@ void UI::draw_everything() {
                     defer { ImGui::EndPopup(); };
 
                     if (ImGui::Selectable("Copy")) {
-                        glfwSetClipboardString(world.window, it);
+                        set_clipboard_string(it);
                     }
 
                     if (ImGui::Selectable("Copy All")) {
@@ -2922,7 +2951,7 @@ void UI::draw_everything() {
                         }
                         output->len--; // remove last '\n'
                         output->append('\0');
-                        glfwSetClipboardString(world.window, output->items);
+                        set_clipboard_string(output->items);
                     }
 
                     if (ImGui::Selectable("Clear")) {
@@ -2997,7 +3026,7 @@ void UI::draw_everything() {
 
                     if (ImGui::OurBeginPopupContextItem()) {
                         if (ImGui::Selectable("Copy")) {
-                            glfwSetClipboardString(world.window, label);
+                            set_clipboard_string(label);
                         }
                         ImGui::EndPopup();
                     }
@@ -3334,14 +3363,14 @@ void UI::draw_everything() {
                     if (ImGui::Selectable("Copy relative path")) {
                         SCOPED_FRAME();
                         auto rel_path = ft_node_to_path(it);
-                        glfwSetClipboardString(world.window, rel_path);
+                        set_clipboard_string(rel_path);
                     }
 
                     if (ImGui::Selectable("Copy absolute path")) {
                         SCOPED_FRAME();
                         auto rel_path = ft_node_to_path(it);
                         auto full_path = path_join(world.current_path, rel_path);
-                        glfwSetClipboardString(world.window, full_path);
+                        set_clipboard_string(full_path);
                     }
 
                     ImGui::PopStyleVar();
@@ -3395,7 +3424,7 @@ void UI::draw_everything() {
         if (wnd.focused) {
             auto mods = imgui_get_keymods();
             switch (mods) {
-            case KEYMOD_NONE:
+            case CP_MOD_NONE:
                 if (imgui_special_key_pressed(ImGuiKey_DownArrow) || imgui_key_pressed('j')) {
                     auto getnext = [&]() -> FT_Node * {
                         auto curr = wnd.selection;
@@ -3453,7 +3482,7 @@ void UI::draw_everything() {
                         wnd.selection = curr;
                 }
                 break;
-            case KEYMOD_PRIMARY:
+            case CP_MOD_PRIMARY:
                 if (imgui_special_key_pressed(ImGuiKey_Delete) || imgui_special_key_pressed(ImGuiKey_Backspace)) {
                     auto curr = wnd.selection;
                     if (curr != NULL) delete_ft_node(curr);
@@ -3477,7 +3506,7 @@ void UI::draw_everything() {
 
         begin_window("Project Settings", &wnd, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking);
 
-        if (imgui_get_keymods() == KEYMOD_NONE)
+        if (imgui_get_keymods() == CP_MOD_NONE)
             if (imgui_special_key_pressed(ImGuiKey_Escape))
                 wnd.show = false;
 
@@ -3900,7 +3929,7 @@ void UI::draw_everything() {
         if (wnd.focused) {
             auto mods = imgui_get_keymods();
             switch (mods) {
-            case KEYMOD_NONE:
+            case CP_MOD_NONE:
                 if (imgui_special_key_pressed(ImGuiKey_DownArrow)) go_down();
                 if (imgui_special_key_pressed(ImGuiKey_UpArrow)) go_up();
                 if (imgui_special_key_pressed(ImGuiKey_Escape)) wnd.show = false;
@@ -3970,7 +3999,7 @@ void UI::draw_everything() {
 
         auto mods = imgui_get_keymods();
         switch (mods) {
-        case KEYMOD_NONE:
+        case CP_MOD_NONE:
             if (imgui_special_key_pressed(ImGuiKey_DownArrow)) go_down();
             if (imgui_special_key_pressed(ImGuiKey_UpArrow)) go_up();
             if (imgui_special_key_pressed(ImGuiKey_Escape)) wnd.show = false;
@@ -4083,7 +4112,7 @@ void UI::draw_everything() {
 
             auto mods = imgui_get_keymods();
             switch (mods) {
-            case KEYMOD_NONE:
+            case CP_MOD_NONE:
                 if (imgui_special_key_pressed(ImGuiKey_DownArrow)) go_down();
                 if (imgui_special_key_pressed(ImGuiKey_UpArrow)) go_up();
                 if (imgui_special_key_pressed(ImGuiKey_Escape)) {
@@ -4444,7 +4473,7 @@ void UI::draw_everything() {
                 if (wnd.focused && !world.ui.keyboard_captured_by_imgui) {
                     auto mods = imgui_get_keymods();
                     switch (mods) {
-                    case KEYMOD_NONE:
+                    case CP_MOD_NONE:
                         if (imgui_special_key_pressed(ImGuiKey_DownArrow) || imgui_key_pressed('j')) {
                             if (wnd.selection < index-1)
                                 wnd.selection++;
@@ -5056,7 +5085,7 @@ void UI::draw_everything() {
         if (tab_to_remove != -1) {
             auto &editor = pane.editors[tab_to_remove];
             if (editor.ask_user_about_unsaved_changes()) {
-                // duplicate of code in main.cpp under GLFW_KEY_W handler, refactor
+                // duplicate of code in main.cpp under CP_KEY_W handler, refactor
                 // if we copy this a few more times
                 pane.editors[tab_to_remove].cleanup();
                 pane.editors.remove(tab_to_remove);
@@ -5498,7 +5527,7 @@ void UI::draw_everything() {
 
             if (test_hover(hitbox, HOVERID_PANE_RESIZERS + i, ImGuiMouseCursor_ResizeEW)) {
                 draw_rect(b, rgba(global_colors.pane_resizer_hover));
-                if (world.ui.mouse_down[GLFW_MOUSE_BUTTON_LEFT])
+                if (world.ui.mouse_down[CP_MOUSE_LEFT])
                     if (world.resizing_pane == -1)
                         world.resizing_pane = i;
             } else if (world.resizing_pane == i) {
@@ -5508,7 +5537,7 @@ void UI::draw_everything() {
             }
         }
 
-        if (!world.ui.mouse_down[GLFW_MOUSE_BUTTON_LEFT])
+        if (!world.ui.mouse_down[CP_MOUSE_LEFT])
             world.resizing_pane = -1;
     }
 

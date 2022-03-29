@@ -1,19 +1,25 @@
 #!/bin/bash
 
+# prerequisite: intel/arm versions of brew installed side by side, per
+# https://stackoverflow.com/a/64951025
+
 set -e
 
+# donwload submodules
 git submodule update --init --recursive
 
+# stuff we need from brew
 brew install pcre go coreutils
-brew reinstall --build-from-source ./sh/glfw.rb
 
+# intel version of brew
 brewi="arch --x86_64 /usr/local/Homebrew/bin/brew"
 $brewi install pcre
-$brewi reinstall --build-from-source ./sh/glfw.rb
 
+# nvim
 wget https://github.com/neovim/neovim/releases/download/v0.5.1/nvim-macos.tar.gz
 tar xvzf nvim-macos.tar.gz
 mv nvim-osx64 nvim-archive
 rm nvim-macos.tar.gz
 
+# appify
 go get github.com/machinebox/appify

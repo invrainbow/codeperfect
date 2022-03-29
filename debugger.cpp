@@ -17,6 +17,7 @@ when a frame is opened
 20. the debugger should run fast even in presence of very deep stacks, a large number of goroutines or very large variables
 */
 
+#include "defer.hpp"
 #include "debugger.hpp"
 
 #include "world.hpp"

@@ -3,7 +3,6 @@
 #include <math.h>
 
 #include "glew.h"
-#include <GLFW/glfw3.h>
 
 #include "common.hpp"
 #include "editor.hpp"
@@ -18,6 +17,7 @@
 #include "settings.hpp"
 #include "search.hpp"
 #include "fzy_match.h"
+#include "window.hpp"
 
 #define RELEASE_BUILD 0
 
@@ -287,7 +287,8 @@ struct World {
     int gh_version;
     int frame_index;
 
-    GLFWwindow* window;
+    Window* window;
+
     vec2 window_size;
     vec2 display_size;
     vec2f display_scale;
@@ -317,7 +318,7 @@ struct World {
     Nvim nvim;
     bool use_nvim;
 
-    Debugger dbg;
+    struct Debugger dbg;
 
     u32 next_editor_id;
 
@@ -527,7 +528,8 @@ struct World {
         bool mouse_down[ImGuiMouseButton_COUNT];
         bool mouse_just_pressed[ImGuiMouseButton_COUNT];
         bool mouse_just_released[ImGuiMouseButton_COUNT];
-        GLFWcursor* cursors[ImGuiMouseCursor_COUNT];
+        Cursor cursors[ImGuiMouseCursor_COUNT];
+        bool cursors_ready[ImGuiMouseCursor_COUNT];
         GLuint textures[__TEXTURE_COUNT__];
         bool mouse_captured_by_imgui;
         bool keyboard_captured_by_imgui;
@@ -622,7 +624,7 @@ struct World {
     struct Wnd_Style_Editor : Wnd {
     } wnd_style_editor;
 
-    void init(GLFWwindow *_wnd);
+    void init(Window *_wnd);
     void start_background_threads();
 };
 

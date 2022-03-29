@@ -4,6 +4,7 @@
 
 #include "win32.hpp"
 #include "world.hpp"
+#include "defer.hpp"
 
 #include <shlwapi.h>
 #include <shlobj.h>

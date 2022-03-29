@@ -2,16 +2,9 @@
 #include "ui.hpp"
 #include "fzy_match.h"
 #include "set.hpp"
-
-#if OS_WIN
-#define GLFW_EXPOSE_NATIVE_WIN32
-#elif OS_MAC
-#define GLFW_EXPOSE_NATIVE_COCOA
-#endif
+#include "defer.hpp"
 
 #include "glew.h"
-#include <GLFW/glfw3.h>
-#include <GLFW/glfw3native.h>
 
 World world;
 
@@ -336,7 +329,7 @@ bool copy_file(ccstr src, ccstr dest) {
     return f.write((char*)fm->data, fm->len);
 }
 
-void World::init(GLFWwindow *_wnd) {
+void World::init(Window *_wnd) {
     ptr0(this);
 
     window = _wnd;
@@ -731,13 +724,7 @@ void kick_off_build(Build_Profile *build_profile) {
 void* get_native_window_handle() {
     if (world.window == NULL) return NULL;
 
-#if OS_WIN
-    return (void*)glfwGetWin32Window(world.window);
-#elif OS_MAC
-    return (void*)glfwGetCocoaWindow(world.window);
-#else
-    return NULL;
-#endif
+    return world.window->ns_window;
 }
 
 void filter_files() {
@@ -1609,36 +1596,36 @@ void init_command_info_table() {
     mem0(command_info_table, sizeof(command_info_table));
 
 #if OS_WIN
-    command_info_table[CMD_EXIT] = k(KEYMOD_ALT, GLFW_KEY_F4, "Exit");
+    command_info_table[CMD_EXIT] = k(CP_MOD_ALT, CP_KEY_F4, "Exit");
 #elif OS_MAC
-    command_info_table[CMD_EXIT] = k(KEYMOD_CMD, GLFW_KEY_Q, "Quit");
+    command_info_table[CMD_EXIT] = k(CP_MOD_CMD, CP_KEY_Q, "Quit");
 #endif
-    command_info_table[CMD_NEW_FILE] = k(KEYMOD_PRIMARY, GLFW_KEY_N, "New File");
-    command_info_table[CMD_SAVE_FILE] = k(KEYMOD_PRIMARY, GLFW_KEY_S, "Save File");
-    command_info_table[CMD_SAVE_ALL] = k(KEYMOD_PRIMARY | KEYMOD_SHIFT, GLFW_KEY_S, "Save All");
-    command_info_table[CMD_SEARCH] = k(KEYMOD_PRIMARY | KEYMOD_SHIFT, GLFW_KEY_F, "Search");
-    command_info_table[CMD_SEARCH_AND_REPLACE] = k(KEYMOD_PRIMARY | KEYMOD_SHIFT, GLFW_KEY_H, "Search and Replace");
-    command_info_table[CMD_FILE_EXPLORER] = k(KEYMOD_PRIMARY | KEYMOD_SHIFT, GLFW_KEY_E, "File Explorer");
-    command_info_table[CMD_GO_TO_FILE] = k(KEYMOD_PRIMARY, GLFW_KEY_P, "Go To File");
-    command_info_table[CMD_GO_TO_SYMBOL] = k(KEYMOD_PRIMARY, GLFW_KEY_T, "Go To Symbol");
-    command_info_table[CMD_GO_TO_NEXT_ERROR] = k(KEYMOD_ALT, GLFW_KEY_RIGHT_BRACKET, "Go To Next Error");
-    command_info_table[CMD_GO_TO_PREVIOUS_ERROR] = k(KEYMOD_ALT, GLFW_KEY_LEFT_BRACKET, "Go To Previous Error");
-    command_info_table[CMD_GO_TO_DEFINITION] = k(KEYMOD_PRIMARY, GLFW_KEY_G, "Go To Definition");
-    command_info_table[CMD_FIND_REFERENCES] = k(KEYMOD_PRIMARY | KEYMOD_ALT, GLFW_KEY_R, "Find References");
-    command_info_table[CMD_FORMAT_FILE] = k(KEYMOD_ALT | KEYMOD_SHIFT, GLFW_KEY_F, "Format File");
-    command_info_table[CMD_FORMAT_FILE_AND_ORGANIZE_IMPORTS] = k(KEYMOD_ALT | KEYMOD_SHIFT, GLFW_KEY_O, "Format File and Organize Imports");
-    command_info_table[CMD_RENAME] = k(KEYMOD_NONE, GLFW_KEY_F12, "Rename");
-    command_info_table[CMD_BUILD] = k(KEYMOD_PRIMARY | KEYMOD_SHIFT, GLFW_KEY_B, "Build");
-    command_info_table[CMD_CONTINUE] = k(KEYMOD_NONE, GLFW_KEY_F5, "Continue");
-    command_info_table[CMD_START_DEBUGGING] = k(KEYMOD_NONE, GLFW_KEY_F5, "Start Debugging");
-    command_info_table[CMD_STOP_DEBUGGING] = k(KEYMOD_SHIFT, GLFW_KEY_F5, "Stop Debugging");
-    command_info_table[CMD_DEBUG_TEST_UNDER_CURSOR] = k(KEYMOD_NONE, GLFW_KEY_F6, "Debug Test Under Cursor");
-    command_info_table[CMD_STEP_OVER] = k(KEYMOD_NONE, GLFW_KEY_F10, "Step Over");
-    command_info_table[CMD_STEP_INTO] = k(KEYMOD_NONE, GLFW_KEY_F11, "Step Into");
-    command_info_table[CMD_STEP_OUT] = k(KEYMOD_SHIFT, GLFW_KEY_F11, "Step Out");
-    command_info_table[CMD_RUN_TO_CURSOR] = k(KEYMOD_SHIFT, GLFW_KEY_F10, "Run To Cursor");
-    command_info_table[CMD_TOGGLE_BREAKPOINT] = k(KEYMOD_NONE, GLFW_KEY_F9, "Toggle Breakpoint");
-    command_info_table[CMD_DELETE_ALL_BREAKPOINTS] = k(KEYMOD_SHIFT, GLFW_KEY_F9, "Delete All Breakpoints");
+    command_info_table[CMD_NEW_FILE] = k(CP_MOD_PRIMARY, CP_KEY_N, "New File");
+    command_info_table[CMD_SAVE_FILE] = k(CP_MOD_PRIMARY, CP_KEY_S, "Save File");
+    command_info_table[CMD_SAVE_ALL] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_S, "Save All");
+    command_info_table[CMD_SEARCH] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_F, "Search");
+    command_info_table[CMD_SEARCH_AND_REPLACE] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_H, "Search and Replace");
+    command_info_table[CMD_FILE_EXPLORER] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_E, "File Explorer");
+    command_info_table[CMD_GO_TO_FILE] = k(CP_MOD_PRIMARY, CP_KEY_P, "Go To File");
+    command_info_table[CMD_GO_TO_SYMBOL] = k(CP_MOD_PRIMARY, CP_KEY_T, "Go To Symbol");
+    command_info_table[CMD_GO_TO_NEXT_ERROR] = k(CP_MOD_ALT, CP_KEY_RIGHT_BRACKET, "Go To Next Error");
+    command_info_table[CMD_GO_TO_PREVIOUS_ERROR] = k(CP_MOD_ALT, CP_KEY_LEFT_BRACKET, "Go To Previous Error");
+    command_info_table[CMD_GO_TO_DEFINITION] = k(CP_MOD_PRIMARY, CP_KEY_G, "Go To Definition");
+    command_info_table[CMD_FIND_REFERENCES] = k(CP_MOD_PRIMARY | CP_MOD_ALT, CP_KEY_R, "Find References");
+    command_info_table[CMD_FORMAT_FILE] = k(CP_MOD_ALT | CP_MOD_SHIFT, CP_KEY_F, "Format File");
+    command_info_table[CMD_FORMAT_FILE_AND_ORGANIZE_IMPORTS] = k(CP_MOD_ALT | CP_MOD_SHIFT, CP_KEY_O, "Format File and Organize Imports");
+    command_info_table[CMD_RENAME] = k(CP_MOD_NONE, CP_KEY_F12, "Rename");
+    command_info_table[CMD_BUILD] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_B, "Build");
+    command_info_table[CMD_CONTINUE] = k(CP_MOD_NONE, CP_KEY_F5, "Continue");
+    command_info_table[CMD_START_DEBUGGING] = k(CP_MOD_NONE, CP_KEY_F5, "Start Debugging");
+    command_info_table[CMD_STOP_DEBUGGING] = k(CP_MOD_SHIFT, CP_KEY_F5, "Stop Debugging");
+    command_info_table[CMD_DEBUG_TEST_UNDER_CURSOR] = k(CP_MOD_NONE, CP_KEY_F6, "Debug Test Under Cursor");
+    command_info_table[CMD_STEP_OVER] = k(CP_MOD_NONE, CP_KEY_F10, "Step Over");
+    command_info_table[CMD_STEP_INTO] = k(CP_MOD_NONE, CP_KEY_F11, "Step Into");
+    command_info_table[CMD_STEP_OUT] = k(CP_MOD_SHIFT, CP_KEY_F11, "Step Out");
+    command_info_table[CMD_RUN_TO_CURSOR] = k(CP_MOD_SHIFT, CP_KEY_F10, "Run To Cursor");
+    command_info_table[CMD_TOGGLE_BREAKPOINT] = k(CP_MOD_NONE, CP_KEY_F9, "Toggle Breakpoint");
+    command_info_table[CMD_DELETE_ALL_BREAKPOINTS] = k(CP_MOD_SHIFT, CP_KEY_F9, "Delete All Breakpoints");
     /**/
     command_info_table[CMD_ERROR_LIST] = k(0, 0, "Error List");
     command_info_table[CMD_FORMAT_SELECTION] = k(0, 0, "Format Selection");
@@ -1653,17 +1640,17 @@ void init_command_info_table() {
     command_info_table[CMD_DEBUG_PROFILES] = k(0, 0, "Debug Profiles");
     command_info_table[CMD_RESCAN_INDEX] = k(0, 0, "Rescan Index");
     command_info_table[CMD_OBLITERATE_AND_RECREATE_INDEX] = k(0, 0, "Obliterate and Recreate Index");
-    command_info_table[CMD_OPTIONS] = k(KEYMOD_PRIMARY, GLFW_KEY_COMMA, "Options");
+    command_info_table[CMD_OPTIONS] = k(CP_MOD_PRIMARY, CP_KEY_COMMA, "Options");
     command_info_table[CMD_ABOUT] = k(0, 0, "About");
     command_info_table[CMD_GENERATE_IMPLEMENTATION] = k(0, 0, "Generate Implementation");
 
     command_info_table[CMD_FIND_IMPLEMENTATIONS] = k(0, 0, "Find Implementations");
     command_info_table[CMD_FIND_INTERFACES] = k(0, 0, "Find Interfaces");
-    command_info_table[CMD_UNDO] = k(KEYMOD_PRIMARY, GLFW_KEY_Z, "Undo");
-    command_info_table[CMD_REDO] = k(KEYMOD_PRIMARY | KEYMOD_SHIFT, GLFW_KEY_Z, "Redo");
+    command_info_table[CMD_UNDO] = k(CP_MOD_PRIMARY, CP_KEY_Z, "Undo");
+    command_info_table[CMD_REDO] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_Z, "Redo");
     command_info_table[CMD_DOCUMENTATION] = k(0, 0, "Documentation");
-    command_info_table[CMD_VIEW_CALLER_HIERARCHY] = k(KEYMOD_PRIMARY, GLFW_KEY_I, "View Caller Hierarchy");
-    command_info_table[CMD_VIEW_CALLEE_HIERARCHY] = k(KEYMOD_PRIMARY | KEYMOD_SHIFT, GLFW_KEY_I, "View Callee Hierarchy");
+    command_info_table[CMD_VIEW_CALLER_HIERARCHY] = k(CP_MOD_PRIMARY, CP_KEY_I, "View Caller Hierarchy");
+    command_info_table[CMD_VIEW_CALLEE_HIERARCHY] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_I, "View Callee Hierarchy");
     command_info_table[CMD_BUY_LICENSE] = k(0, 0, "Buy a License");
     command_info_table[CMD_ENTER_LICENSE] = k(0, 0, "Enter License...");
 }
@@ -1884,7 +1871,7 @@ void handle_command(Command cmd, bool from_menu) {
         break;
 
     case CMD_EXIT:
-        glfwSetWindowShouldClose(world.window, true);
+        world.window->should_close = true;
         break;
 
     case CMD_SEARCH:

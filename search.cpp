@@ -1,5 +1,6 @@
 #include "search.hpp"
 #include "world.hpp"
+#include "defer.hpp"
 
 #define PREVIEW_LEN 40
 

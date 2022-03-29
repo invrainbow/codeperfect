@@ -7,6 +7,7 @@
 #include "editor.hpp"
 #include "hash64.hpp"
 #include <stdlib.h>
+#include "defer.hpp"
 
 #if OS_WIN
 #include <windows.h>

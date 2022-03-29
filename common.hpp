@@ -13,8 +13,6 @@
 #include <inttypes.h>
 #endif
 
-#include "defer.hpp"
-
 // tools for macros
 #define TOKENPASTE0(a, b) a##b
 #define TOKENPASTE(a, b) TOKENPASTE0(a, b)

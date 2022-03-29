@@ -8,6 +8,7 @@
 #include "settings.hpp"
 #include "set.hpp"
 #include "unicode.hpp"
+#include "defer.hpp"
 
 bool Editor::is_modifiable() {
     return path_has_descendant(world.current_path, filepath);

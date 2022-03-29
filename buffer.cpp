@@ -3,6 +3,7 @@
 #include "world.hpp"
 #include "unicode.hpp"
 #include "diff.hpp"
+#include "defer.hpp"
 
 s32 uchar_to_cstr(uchar c, cstr out) {
     u32 k = 0;

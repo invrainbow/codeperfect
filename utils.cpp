@@ -2,6 +2,7 @@
 #include "os.hpp"
 #include "world.hpp"
 #include "stb_sprintf.h"
+#include "defer.hpp"
 
 #if OS_WIN
 #include <shlwapi.h>

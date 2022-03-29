@@ -25,6 +25,7 @@
 #include <filesystem>
 
 #include "utils.hpp"
+#include "defer.hpp"
 
 Check_Path_Result check_path(ccstr path) {
     struct stat st;

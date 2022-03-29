@@ -5,6 +5,7 @@
 #include "go.hpp"
 #include "settings.hpp"
 #include "unicode.hpp"
+#include "defer.hpp"
 // #include <strsafe.h>
 
 #define NVIM_DEBUG 0

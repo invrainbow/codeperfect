@@ -81,22 +81,6 @@ enum {
     MOUSE_RDBLCLICKED = 1 << 6,
 };
 
-enum {
-    KEYMOD_NONE = 0,
-    KEYMOD_CMD = 1 << 0,
-    KEYMOD_SHIFT = 1 << 1,
-    KEYMOD_ALT = 1 << 2,
-    KEYMOD_CTRL = 1 << 3,
-};
-
-#if OS_MAC
-#   define KEYMOD_PRIMARY KEYMOD_CMD
-#   define KEYMOD_TEXT KEYMOD_ALT
-#else
-#   define KEYMOD_PRIMARY KEYMOD_CTRL
-#   define KEYMOD_TEXT KEYMOD_CTRL
-#endif
-
 enum Dbg_Index_Type {
     INDEX_NONE,
     INDEX_ARRAY,
