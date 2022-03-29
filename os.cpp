@@ -4,7 +4,7 @@
 #include <unistd.h>
 
 ccstr normalize_path_sep(ccstr path, char sep) {
-    if (sep == 0) sep = PATH_SEP;
+    if (!sep) sep = PATH_SEP;
 
     auto len = strlen(path);
     auto ret = alloc_array(char, len+1);

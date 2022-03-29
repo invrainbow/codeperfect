@@ -70,7 +70,7 @@ struct Json_Renderer : public Text_Renderer {
     void prim(bool b) { write("%s", b ? "true" : "false"); }
 
     void prim(void* v) {
-        if (v != NULL)
+        if (v)
             print("warning: prim(void*) is only for sending 'NULL'");
         write("null");
     }
@@ -167,7 +167,7 @@ struct Table {
 
         Table_Entry *item = NULL;
         HASH_FIND_STR(lookup, name, item);
-        if (item == NULL) return;
+        if (!item) return;
 
         HASH_DEL(lookup, item);
     }
@@ -178,13 +178,13 @@ struct Table {
         Table_Entry *item = NULL;
         HASH_FIND_STR(lookup, name, item);
 
-        if (item == NULL) {
+        if (!item) {
             T zero = {0};
-            if (found != NULL) *found = false;
+            if (found) *found = false;
             return zero;
         }
 
-        if (found != NULL) *found = true;
+        if (found) *found = true;
         return item->value;
     }
 
@@ -193,7 +193,7 @@ struct Table {
 
         Table_Entry *item = NULL;
         HASH_FIND_STR(lookup, name, item);
-        if (item == NULL) {
+        if (!item) {
             item = alloc_object(Table_Entry);
             item->name = name;
             HASH_ADD_KEYPTR(hh, lookup, name, strlen(name), item);
@@ -262,7 +262,7 @@ struct Scoped_Table {
     void pop_scope() {
         SCOPED_MEM(mem);
 
-        if (frames.len == 0) return;
+        if (!frames.len) return;
         for (auto pos = *frames.last(); old_values.len > pos; old_values.len--) {
             auto old = old_values.last();
 
@@ -270,7 +270,7 @@ struct Scoped_Table {
             if (old->dne) {
                 Table_Entry *item = NULL;
                 HASH_FIND_STR(lookup, old->name, item);
-                if (item != NULL)
+                if (item)
                     HASH_DEL(lookup, item);
             } else {
                 _set_value(old->name, old->value);
@@ -299,7 +299,7 @@ struct Scoped_Table {
 
         Table_Entry *item = NULL;
         HASH_FIND_STR(lookup, name, item);
-        if (item == NULL) return;
+        if (!item) return;
 
         auto old = old_values.append();
         old->name = name;
@@ -314,13 +314,13 @@ struct Scoped_Table {
         Table_Entry *item = NULL;
         HASH_FIND_STR(lookup, name, item);
 
-        if (item == NULL) {
+        if (!item) {
             T zero = {0};
-            if (found != NULL) *found = false;
+            if (found) *found = false;
             return zero;
         }
 
-        if (found != NULL) *found = true;
+        if (found) *found = true;
         return item->value;
     }
 
@@ -329,7 +329,7 @@ struct Scoped_Table {
 
         Table_Entry *item = NULL;
         HASH_FIND_STR(lookup, name, item);
-        if (item == NULL) {
+        if (!item) {
             item = alloc_object(Table_Entry);
             item->name = name;
             HASH_ADD_KEYPTR(hh, lookup, name, strlen(name), item);
@@ -376,14 +376,14 @@ struct Timer {
     void init(ccstr _name) { init(_name, true); }
 
     ccstr make_label(ccstr s) {
-        if (name == NULL)
+        if (!name)
             return s;
         return our_sprintf("[%s] %s", name, s);
     }
 
     bool is_enabled() {
 #ifdef DEBUG_MODE
-        if (penabled != NULL) return *penabled;
+        if (penabled) return *penabled;
 #else
         return false;
 #endif
@@ -443,5 +443,5 @@ struct Message_Queue {
 
 template<typename T>
 bool isempty(List<T> *arr) {
-    return arr == NULL || arr->len == 0;
+    return !arr || arr->len == 0;
 }

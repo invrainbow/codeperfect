@@ -100,7 +100,7 @@ bool Index_Stream::write2(i16 x) { return writen(&x, 2); }
 bool Index_Stream::write4(i32 x) { return writen(&x, 4); }
 
 bool Index_Stream::writestr(ccstr s) {
-    if (s == NULL) return write2(0);
+    if (!s) return write2(0);
     auto len = strlen(s);
     if (!write2(len)) return false;
     if (!writen((void*)s, len)) return false;
@@ -145,7 +145,7 @@ ccstr Index_Stream::readstr() {
 
     auto size = (u32)read2();
     if (!ok) return NULL;
-    if (size == 0) return NULL;
+    if (!size) return NULL;
 
     auto s = alloc_array(char, size + 1);
     readn(s, size);
@@ -196,7 +196,7 @@ void Index_Stream::write_index(Go_Index *index) {
 }
 
 void Type_Renderer::write_type(Gotype *t, Type_Renderer_Handler custom_handler, bool omit_func_keyword) {
-    if (t == NULL) return;
+    if (!t) return;
 
     // custom handle
     if (custom_handler(this, t)) return;
@@ -320,7 +320,7 @@ void Type_Renderer::write_type(Gotype *t, Type_Renderer_Handler custom_handler, 
             write_params(sig.params, false);
 
             auto result = sig.result;
-            if (result != NULL && result->len > 0) {
+            if (result && result->len > 0) {
                 write(" ");
                 if (result->len == 1 && is_goident_empty(result->at(0).name))
                     recur(result->at(0).gotype);
@@ -412,7 +412,7 @@ void Module_Resolver::init(ccstr current_module_filepath, ccstr _gomodcache) {
         add_path(import_path, resolved_path);
     } while (ch != '\0');
 
-    if (module_path == NULL) {
+    if (!module_path) {
         // TODO
         our_panic("Sorry, currently only modules are supported.");
     }
@@ -477,7 +477,7 @@ const char* read_from_parser_input(void *p, uint32_t off, TSPoint pos, uint32_t 
 
     while (!it->eof()) {
         auto uch = it->next();
-        if (uch == 0) break;
+        if (!uch) break;
 
         if (it->type == IT_MMAP) {
             if (n + 2 > bufsize) break;
@@ -503,7 +503,7 @@ Goresult *Goresult::wrap(Gotype *new_gotype) { return make_goresult(new_gotype, 
 Go_File *get_ready_file_in_package(Go_Package *pkg, ccstr filename) {
     auto file = pkg->files->find([&](auto it) { return streq(filename, it->filename); });
 
-    if (file == NULL)
+    if (!file)
         file = pkg->files->append();
     else
         file->pool.cleanup();
@@ -532,13 +532,13 @@ either:
 void Go_Indexer::reload_single_file(ccstr filepath) {
     auto import_path = filepath_to_import_path(our_dirname(filepath));
     auto pkg = find_package_in_index(import_path);
-    if (pkg == NULL) return;
+    if (!pkg) return;
 
     auto file = get_ready_file_in_package(pkg, our_basename(filepath));
-    if (file == NULL) return;
+    if (!file) return;
 
     auto pf = parse_file(filepath, false);
-    if (pf == NULL) return;
+    if (!pf) return;
     defer { free_parsed_file(pf); };
 
     ccstr package_name = NULL;
@@ -561,7 +561,7 @@ void Go_Indexer::reload_editor_if_dirty(void *editor) {
 
     auto import_path = filepath_to_import_path(our_dirname(it->filepath));
     auto pkg = find_package_in_index(import_path);
-    if (pkg == NULL) return;
+    if (!pkg) return;
 
     t.log("get package");
 
@@ -607,9 +607,9 @@ The procedure is:
 
 // @Write
 void Go_Indexer::replace_package_name(Go_Package *pkg, ccstr package_name) {
-    if (package_name == NULL) return;
+    if (!package_name) return;
 
-    if (pkg->package_name != NULL)
+    if (pkg->package_name)
         if (streq(pkg->package_name, package_name))
             return;
 
@@ -717,7 +717,7 @@ void Go_Indexer::init_builtins(Go_Package *pkg) {
 
         auto builtin = [&](ccstr name) -> Gotype * {
             auto decl = f->decls->find([&](auto it) { return streq(it->name, name); });
-            if (decl == NULL) return NULL;
+            if (!decl) return NULL;
             return decl->gotype;
         };
 
@@ -908,19 +908,19 @@ void Go_Indexer::background_thread() {
 
     auto mark_package_for_reprocessing = [&](ccstr import_path) {
         auto pkg = find_package_in_index(import_path);
-        if (pkg != NULL)
+        if (pkg)
             pkg->status = GPS_OUTDATED;
         enqueue_package(import_path);
     };
 
     auto enqueue_imports_from_file = [&](Go_File *file) {
-        if (file->imports == NULL) return;
+        if (!file->imports) return;
         For (*file->imports) {
-            if (it.import_path == NULL) continue;
+            if (!it.import_path) continue;
             if (already_enqueued_packages.has(it.import_path)) continue;
 
             auto pkg = find_package_in_index(it.import_path);
-            if (pkg != NULL && pkg->status == GPS_READY) continue;
+            if (pkg && pkg->status == GPS_READY) continue;
 
             enqueue_package(it.import_path);
         }
@@ -928,10 +928,10 @@ void Go_Indexer::background_thread() {
 
     auto fill_package_hash = [&](Go_Package *pkg) -> bool {
         auto path = get_package_path(pkg->import_path);
-        if (path == NULL) return false;
+        if (!path) return false;
 
         auto hash = hash_package(path);
-        if (hash == 0) return false;
+        if (!hash) return false;
 
         pkg->hash = hash;
         return true;
@@ -954,7 +954,7 @@ void Go_Indexer::background_thread() {
     auto rebuild_package_lookup = [&]() {
         package_lookup.clear();
 
-        if (index.packages == NULL) return;
+        if (!index.packages) return;
 
         for (int i = 0; i < index.packages->len; i++) {
             auto &it = index.packages->at(i);
@@ -1020,17 +1020,17 @@ void Go_Indexer::background_thread() {
             reset_index = true;
 
         SCOPED_MEM(&final_mem);
-        if (index.current_path != NULL && !streq(index.current_path, world.current_path))
+        if (index.current_path && !streq(index.current_path, world.current_path))
             reset_index = true;
 
         auto workspace_import_path = module_resolver.module_path;
-        if (index.current_import_path != NULL && !streq(index.current_import_path, workspace_import_path))
+        if (index.current_import_path && !streq(index.current_import_path, workspace_import_path))
             reset_index = true;
 
         index.current_path = our_strcpy(world.current_path);
         index.current_import_path = our_strcpy(workspace_import_path);
 
-        if (index.packages == NULL || reset_index)
+        if (!index.packages || reset_index)
             index.packages = alloc_list<Go_Package>();
     };
 
@@ -1063,7 +1063,7 @@ void Go_Indexer::background_thread() {
                 import_paths_queue->len--;
                 resolved_paths_queue->len--;
 
-                bool already_in_index = (find_up_to_date_package(import_path) != NULL);
+                bool already_in_index = (find_up_to_date_package(import_path));
                 bool is_go_package = false;
 
                 list_directory(resolved_path, [&](Dir_Entry *ent) {
@@ -1096,7 +1096,7 @@ void Go_Indexer::background_thread() {
         // queue up builtins
         // ===
 
-        if (find_up_to_date_package("@builtin") == NULL)
+        if (!find_up_to_date_package("@builtin"))
             enqueue_package("@builtin");
 
         // if we have any ready packages, see if they have any imports that were missed
@@ -1113,7 +1113,7 @@ void Go_Indexer::background_thread() {
                     continue;
                 }
 
-                if (pkg.files != NULL)
+                if (pkg.files)
                     For (*pkg.files)
                         enqueue_imports_from_file(&it);
             }
@@ -1155,13 +1155,13 @@ void Go_Indexer::background_thread() {
         case CPR_NONEXISTENT:
             {
                 auto pkg = find_package_in_index(import_path);
-                if (pkg != NULL) {
+                if (pkg) {
                     remove_package(pkg);
                     break;
                 }
 
                 pkg = find_package_in_index(our_dirname(import_path));
-                if (pkg != NULL) {
+                if (pkg) {
                     start_writing(true);
                     mark_package_for_reprocessing(pkg->import_path);
                 }
@@ -1258,13 +1258,13 @@ void Go_Indexer::background_thread() {
             }
 
             auto pkg = find_package_in_index(import_path);
-            if (pkg != NULL && pkg->status == GPS_READY) // already been processed
+            if (pkg && pkg->status == GPS_READY) // already been processed
                 continue;
 
             // we defer this, because in case we don't find any files,
             // we don't actually want to create the package
             auto create_package_if_null = [&]() {
-                if (pkg != NULL) return;
+                if (pkg) return;
 
                 SCOPED_MEM(&final_mem);
                 auto idx = index.packages->len;
@@ -1288,7 +1288,7 @@ void Go_Indexer::background_thread() {
             }
 
             auto resolved_path = get_package_path(import_path);
-            if (resolved_path == NULL) {
+            if (!resolved_path) {
                 // This means this package is one of our dependencies, but it
                 // has not been added to go.mod yet, so we can't resolve it.
                 continue;
@@ -1298,7 +1298,7 @@ void Go_Indexer::background_thread() {
             t.init();
 
             auto source_files = list_source_files(resolved_path, true);
-            if (source_files == NULL) continue;
+            if (!source_files) continue;
             if (source_files->len == 0) continue;
 
             create_package_if_null();
@@ -1319,7 +1319,7 @@ void Go_Indexer::background_thread() {
                 auto filepath = path_join(resolved_path, filename);
 
                 auto pf = parse_file(filepath);
-                if (pf == NULL) continue;
+                if (!pf) continue;
                 defer { free_parsed_file(pf); };
 
                 auto file = get_ready_file_in_package(pkg, filename);
@@ -1327,13 +1327,13 @@ void Go_Indexer::background_thread() {
                 ccstr pkgname = NULL;
                 process_tree_into_gofile(file, pf->root, filepath, &pkgname);
 
-                if (pkgname != NULL) {
+                if (pkgname) {
                     SCOPED_MEM(&final_mem);
                     if (str_ends_with(filename, "_test.go")) {
-                        if (test_package_name == NULL)
+                        if (!test_package_name)
                             test_package_name = our_strcpy(pkgname);
                     } else {
-                        if (package_name == NULL)
+                        if (!package_name)
                             package_name = our_strcpy(pkgname);
                     }
                 }
@@ -1341,14 +1341,14 @@ void Go_Indexer::background_thread() {
                 enqueue_imports_from_file(file);
             }
 
-            if (package_name == NULL) package_name = test_package_name;
+            if (!package_name) package_name = test_package_name;
             replace_package_name(pkg, package_name);
 
             fill_package_hash(pkg);
             pkg->status = GPS_READY;
             pkg->checked_for_outdated_hash = true;
 
-            if (last_package_processed == NULL || !streq(import_path, last_package_processed)) {
+            if (!last_package_processed || !streq(import_path, last_package_processed)) {
                 last_package_processed = our_strcpy(import_path);
                 packages_processed_since_last_write++;
             }
@@ -1394,10 +1394,10 @@ void Go_Indexer::background_thread() {
                 }
 
                 auto package_path = get_package_path(it.import_path);
-                if (package_path == NULL) continue;
+                if (!package_path) continue;
 
                 auto hash = hash_package(package_path);
-                if (hash == 0) {
+                if (!hash) {
                     // path no longer exists, so remove it
                     to_remove->append(i);
                     continue;
@@ -1530,7 +1530,7 @@ bool Go_Indexer::start_background_thread() {
         auto indexer = (Go_Indexer*)param;
         indexer->background_thread();
     };
-    return (bgthread = create_thread(fn, this)) != NULL;
+    return (bgthread = create_thread(fn, this));
 }
 
 Parsed_File *Go_Indexer::parse_file(ccstr filepath, bool use_latest) {
@@ -1538,8 +1538,8 @@ Parsed_File *Go_Indexer::parse_file(ccstr filepath, bool use_latest) {
 
     if (use_latest) {
         auto editor = find_editor_by_filepath(filepath);
-        if (editor == NULL) return NULL;
-        if (editor->buf->tree == NULL) return NULL;
+        if (!editor) return NULL;
+        if (!editor->buf->tree) return NULL;
 
         auto it = alloc_object(Parser_It);
         it->init(editor->buf);
@@ -1551,7 +1551,7 @@ Parsed_File *Go_Indexer::parse_file(ccstr filepath, bool use_latest) {
         ret->tree = ts_tree_copy(editor->buf->tree);
     } else {
         auto fm = map_file_into_memory(filepath);
-        if (fm == NULL) return NULL;
+        if (!fm) return NULL;
 
         auto it = alloc_object(Parser_It);
         it->init(fm);
@@ -1566,7 +1566,7 @@ Parsed_File *Go_Indexer::parse_file(ccstr filepath, bool use_latest) {
         input.read = read_from_parser_input;
 
         auto tree = ts_parser_parse(new_ts_parser(), NULL, input);
-        if (tree == NULL) return NULL;
+        if (!tree) return NULL;
 
         ret = alloc_object(Parsed_File);
         ret->tree_belongs_to_editor = false;
@@ -1586,11 +1586,11 @@ Ast_Node *new_ast_node(TSNode node, Parser_It *it) {
 }
 
 void Go_Indexer::free_parsed_file(Parsed_File *file) {
-    if (file->it != NULL) file->it->cleanup();
+    if (file->it) file->it->cleanup();
 
     // do we even need to/can we even free tree, if we're using our custom pool memory?
     /*
-    if (file->tree != NULL)
+    if (file->tree)
         if (!file->tree_belongs_to_editor)
             ts_tree_delete(file->tree);
     */
@@ -1634,7 +1634,7 @@ void find_nodes_containing_pos(Ast_Node *root, cur2 pos, bool abstract_only, fn<
     walk_ast_node(root, abstract_only, [&](Ast_Node *node, Ts_Field_Type, int) -> Walk_Action {
         int res = cmp_pos_to_node(pos, node, end_inclusive);
         if (res < 0) return WALK_ABORT;
-        if (res > 0) return WALK_SKIP_CHILDREN;
+        if (res) return WALK_SKIP_CHILDREN;
 
         return callback(node);
     });
@@ -1677,7 +1677,7 @@ Gotype *Go_Indexer::new_primitive_type(ccstr name) {
 }
 
 Go_Package *Go_Indexer::find_package_in_index(ccstr import_path) {
-    if (import_path == NULL) return NULL;
+    if (!import_path) return NULL;
 
     bool found = false;
     auto ret = package_lookup.get(import_path, &found);
@@ -1693,16 +1693,16 @@ Go_Package *Go_Indexer::find_package_in_index(ccstr import_path) {
 
 Go_Package *Go_Indexer::find_up_to_date_package(ccstr import_path) {
     auto pkg = find_package_in_index(import_path);
-    return (pkg != NULL && pkg->status != GPS_OUTDATED) ? pkg : NULL;
+    return (pkg && pkg->status != GPS_OUTDATED) ? pkg : NULL;
 }
 
 ccstr Go_Indexer::get_import_package_name(Go_Import *it) {
     if (it->package_name_type == GPN_EXPLICIT)
-        if (it->package_name != NULL)
+        if (it->package_name)
             return it->package_name;
 
     auto pkg = find_up_to_date_package(it->import_path);
-    if (pkg != NULL)
+    if (pkg)
         return pkg->package_name;
 
     return NULL;
@@ -1710,13 +1710,13 @@ ccstr Go_Indexer::get_import_package_name(Go_Import *it) {
 
 ccstr Go_Indexer::find_import_path_referred_to_by_id(ccstr id, Go_Ctx *ctx) {
     auto pkg = find_up_to_date_package(ctx->import_path);
-    if (pkg == NULL) return NULL;
+    if (!pkg) return NULL;
 
     For (*pkg->files) {
         if (streq(it.filename, ctx->filename)) {
             For (*it.imports) {
                 auto package_name = get_import_package_name(&it);
-                if (package_name != NULL && streq(package_name, id))
+                if (package_name && streq(package_name, id))
                     return it.import_path;
             }
             break;
@@ -1898,8 +1898,8 @@ void Go_Indexer::process_tree_into_gofile(
     FOR_NODE_CHILDREN (root) {
         switch (it->type()) {
         case TS_PACKAGE_CLAUSE:
-            if (package_name != NULL)
-                if (*package_name == NULL)
+            if (package_name)
+                if (!*package_name)
                     *package_name = it->child()->string();
             break;
         case TS_VAR_DECLARATION:
@@ -1996,7 +1996,7 @@ void Go_Indexer::process_tree_into_gofile(
                     }
 
                     auto xtype = expr_to_gotype(x);
-                    if (xtype == NULL) break;
+                    if (!xtype) break;
 
                     Go_Reference ref;
                     ref.is_sel = true;
@@ -2089,7 +2089,7 @@ void Go_Indexer::import_decl_to_goimports(Ast_Node *decl_node, ccstr filename, L
         }
 
         auto new_import_path = parse_go_string(path_node->string());
-        if (new_import_path == NULL) continue;
+        if (!new_import_path) continue;
 
         // decl
         auto decl = alloc_object(Godecl);
@@ -2101,7 +2101,7 @@ void Go_Indexer::import_decl_to_goimports(Ast_Node *decl_node, ccstr filename, L
         auto imp = out->append();
         imp->decl = decl;
         imp->import_path = new_import_path;
-        if (name_node == NULL || name_node->null)
+        if (!name_node || name_node->null)
             imp->package_name_type = GPN_IMPLICIT;
         else if (name_node->type() == TS_DOT)
             imp->package_name_type = GPN_DOT;
@@ -2122,7 +2122,7 @@ void Go_Indexer::handle_error(ccstr err) {
 
 u64 Go_Indexer::hash_file(ccstr filepath) {
     auto fm = map_file_into_memory(filepath);
-    if (fm == NULL) return 0;
+    if (!fm) return 0;
     defer { fm->cleanup(); };
 
     u64 ret = 0;
@@ -2133,7 +2133,7 @@ u64 Go_Indexer::hash_file(ccstr filepath) {
 }
 
 u64 Go_Indexer::hash_package(ccstr resolved_package_path) {
-    if (resolved_package_path == NULL) return 0;
+    if (!resolved_package_path) return 0;
 
     if (streq(resolved_package_path, "@builtin"))
         return CUSTOM_HASH_BUILTINS;
@@ -2145,7 +2145,7 @@ u64 Go_Indexer::hash_package(ccstr resolved_package_path) {
         SCOPED_FRAME();
 
         auto files = list_source_files(resolved_package_path, true);
-        if (files == NULL) return 0;
+        if (!files) return 0;
         For (*files)
             ret ^= hash_file(path_join(resolved_package_path, it));
     }
@@ -2182,7 +2182,7 @@ List<ccstr>* Go_Indexer::list_source_files(ccstr dirpath, bool include_tests) {
 
 ccstr Go_Indexer::get_package_path(ccstr import_path) {
     auto ret = module_resolver.resolve_import(import_path);
-    if (ret != NULL) return ret;
+    if (ret) return ret;
 
     auto path = path_join(goroot, import_path);
     if (check_path(path) != CPR_DIRECTORY) return NULL;
@@ -2203,10 +2203,10 @@ ccstr Go_Indexer::get_package_path(ccstr import_path) {
 
 Goresult *Go_Indexer::find_decl_of_id(ccstr id_to_find, cur2 id_pos, Go_Ctx *ctx, Go_Import **single_import) {
     auto pkg = find_up_to_date_package(ctx->import_path);
-    if (pkg != NULL) {
+    if (pkg) {
         auto check = [&](Go_File *it) { return streq(it->filename, ctx->filename); };
         auto file = pkg->files->find(check);
-        if (file != NULL) {
+        if (file) {
             // see if we're on a struct field declaration
             For (*file->decls) {
                 if (it.type != GODECL_TYPE) continue;
@@ -2255,15 +2255,15 @@ Goresult *Go_Indexer::find_decl_of_id(ccstr id_to_find, cur2 id_pos, Go_Ctx *ctx
             }
 
             auto decl = table.get(id_to_find);
-            if (decl != NULL) return make_goresult(decl, ctx);
+            if (decl) return make_goresult(decl, ctx);
         }
 
         For (*pkg->files) {
             if (streq(it.filename, ctx->filename)) {
                 For (*it.imports) {
                     auto package_name = get_import_package_name(&it);
-                    if (package_name != NULL && streq(package_name, id_to_find)) {
-                        if (single_import != NULL)
+                    if (package_name && streq(package_name, id_to_find)) {
+                        if (single_import)
                             *single_import = &it;
                         return make_goresult(it.decl, ctx);
                     }
@@ -2274,10 +2274,10 @@ Goresult *Go_Indexer::find_decl_of_id(ccstr id_to_find, cur2 id_pos, Go_Ctx *ctx
     }
 
     auto ret = find_decl_in_package(id_to_find, ctx->import_path);
-    if (ret != NULL) return ret;
+    if (ret) return ret;
 
     ret = find_decl_in_package(id_to_find, "@builtin");
-    if (ret != NULL) return ret;
+    if (ret) return ret;
 
     return NULL;
 }
@@ -2289,7 +2289,7 @@ ccstr Go_Indexer::get_package_referred_to_by_ast(Ast_Node *node, Go_Ctx *ctx) {
     case TS_PACKAGE_IDENTIFIER:
     case TS_TYPE_IDENTIFIER:
         auto import_path = find_import_path_referred_to_by_id(node->string(), ctx);
-        if (import_path != NULL) return import_path;
+        if (import_path) return import_path;
         break;
     }
     return NULL;
@@ -2301,7 +2301,7 @@ bool Go_Indexer::is_gotype_error(Goresult *res) {
     if (!streq(gotype->id_name, "error")) return false;
 
     auto declres = find_decl_of_id(gotype->id_name, gotype->id_pos, res->ctx);
-    if (declres == NULL) return false;
+    if (!declres) return false;
 
     auto decl = declres->decl;
     if (decl->type != GODECL_TYPE) return false;
@@ -2312,7 +2312,7 @@ bool Go_Indexer::is_gotype_error(Goresult *res) {
 
 List<Postfix_Completion_Type> *Go_Indexer::get_postfix_completions(Ast_Node *operand_node, Go_Ctx *ctx) {
     auto import_path = get_package_referred_to_by_ast(operand_node, ctx);
-    if (import_path != NULL) {
+    if (import_path) {
         // TODO: do something special with packages
         return NULL;
     }
@@ -2321,10 +2321,10 @@ List<Postfix_Completion_Type> *Go_Indexer::get_postfix_completions(Ast_Node *ope
 
     auto try_based_on_gotype = [&]() -> bool {
         auto gotype = expr_to_gotype(operand_node);
-        if (gotype == NULL) return false;
+        if (!gotype) return false;
 
         auto res = evaluate_type(gotype, ctx);
-        if (res == NULL) return false;
+        if (!res) return false;
 
         // If res->gotype is an ID called "error" and resolves to the error in
         // @builtin, then we want to add PFC_CHECK.
@@ -2332,7 +2332,7 @@ List<Postfix_Completion_Type> *Go_Indexer::get_postfix_completions(Ast_Node *ope
             ret->append(PFC_CHECK);
 
         auto rres = resolve_type(res->gotype, res->ctx);
-        if (rres == NULL) return false;
+        if (!rres) return false;
 
         auto basetype = rres->gotype;
 
@@ -2445,10 +2445,10 @@ List<Postfix_Completion_Type> *Go_Indexer::get_postfix_completions(Ast_Node *ope
 
 List<Goresult> *Go_Indexer::list_lazy_type_dotprops(Gotype *type, Go_Ctx *ctx) {
     auto res = evaluate_type(type, ctx);
-    if (res == NULL) return NULL;
+    if (!res) return NULL;
 
     auto rres = resolve_type(res->gotype, res->ctx);
-    if (rres == NULL) return NULL;
+    if (!rres) return NULL;
 
     auto tmp = alloc_list<Goresult>();
     list_dotprops(res, rres, tmp);
@@ -2467,10 +2467,10 @@ List<Goresult> *Go_Indexer::get_node_dotprops(Ast_Node *operand_node, bool *was_
     // try as type
     do {
         auto gotype = expr_to_gotype(operand_node);
-        if (gotype == NULL) break;
+        if (!gotype) break;
 
         auto ret = list_lazy_type_dotprops(gotype, ctx);
-        if (ret == NULL) break;
+        if (!ret) break;
 
         *was_package = false;
         return ret;
@@ -2479,10 +2479,10 @@ List<Goresult> *Go_Indexer::get_node_dotprops(Ast_Node *operand_node, bool *was_
     // try as import
     do {
         auto import_path = get_package_referred_to_by_ast(operand_node, ctx);
-        if (import_path == NULL) break;
+        if (!import_path) break;
 
         auto ret = list_package_decls(import_path, LISTDECLS_PUBLIC_ONLY | LISTDECLS_EXCLUDE_METHODS);
-        if (ret == NULL) break;
+        if (!ret) break;
 
         *was_package = true;
         return ret;
@@ -2493,16 +2493,16 @@ List<Goresult> *Go_Indexer::get_node_dotprops(Ast_Node *operand_node, bool *was_
 }
 
 bool Go_Indexer::are_decls_equal(Goresult *adecl, Goresult *bdecl) {
-    if (adecl == NULL) return false;
-    if (adecl->ctx == NULL) return false;
-    if (bdecl == NULL) return false;
-    if (bdecl->ctx == NULL) return false;
+    if (!adecl) return false;
+    if (!adecl->ctx) return false;
+    if (!bdecl) return false;
+    if (!bdecl->ctx) return false;
 
     auto afile = ctx_to_filepath(adecl->ctx);
-    if (afile == NULL) return false;
+    if (!afile) return false;
 
     auto bfile = ctx_to_filepath(bdecl->ctx);
-    if (bfile == NULL) return false;
+    if (!bfile) return false;
 
     if (!streq(afile, bfile)) return false;
     if (adecl->decl->name_start != bdecl->decl->name_start) return false;
@@ -2545,7 +2545,7 @@ bool Go_Indexer::are_gotypes_equal(Goresult *ra, Goresult *rb) {
         }
 
         auto rres = resolve_type(ref->gotype, ref->ctx);
-        if (rres == NULL) return false;
+        if (!rres) return false;
 
         // after resolution, they need to be the same type for instance, if:
         //
@@ -2567,7 +2567,7 @@ bool Go_Indexer::are_gotypes_equal(Goresult *ra, Goresult *rb) {
     case GOTYPE_INTERFACE:
         {
             auto validate_methods = [&](List<Goresult> *meths) {
-                if (meths == NULL) return false;
+                if (!meths) return false;
 
                 SCOPED_FRAME();
                 String_Set seen; seen.init();
@@ -2621,7 +2621,7 @@ bool Go_Indexer::are_gotypes_equal(Goresult *ra, Goresult *rb) {
         {
             auto aimp = find_import_path_referred_to_by_id(a->sel_name, ra->ctx);
             auto bimp = find_import_path_referred_to_by_id(b->sel_name, rb->ctx);
-            if (aimp == NULL || bimp == NULL) return false;
+            if (!aimp || !bimp) return false;
             if (!streq(aimp, bimp)) return false;
             if (!streq(a->sel_sel, b->sel_sel)) return false;
         }
@@ -2645,8 +2645,8 @@ bool Go_Indexer::are_gotypes_equal(Goresult *ra, Goresult *rb) {
                 auto &ita = sa->at(i);
                 auto &itb = sb->at(i);
 
-                if (ita.tag != NULL || itb.tag != NULL) {
-                    if (ita.tag == NULL || itb.tag == NULL) return false;
+                if (ita.tag || itb.tag) {
+                    if (!ita.tag || !itb.tag) return false;
                     if (!streq(ita.tag, itb.tag)) return false;
                 }
 
@@ -2686,7 +2686,7 @@ bool Go_Indexer::are_gotypes_equal(Goresult *ra, Goresult *rb) {
             auto mismatch = [&](List<Godecl> *aarr, List<Godecl> *barr) -> bool {
                 if (isempty(fa.params) != isempty(fb.params))
                     return true;
-                if (fa.params != NULL)
+                if (fa.params)
                     if (fa.params->len != fb.params->len)
                         return true;
                 return false;
@@ -2771,7 +2771,7 @@ bool Go_Indexer::are_gotypes_equal(Goresult *ra, Goresult *rb) {
 List<Find_Decl> *Go_Indexer::find_interfaces(Goresult *target, bool search_everywhere) {
     reload_all_dirty_files();
 
-    if (target->decl == NULL) return NULL;
+    if (!target->decl) return NULL;
     if (target->decl->type != GODECL_TYPE) return NULL;
     if (target->decl->gotype->type == GOTYPE_INTERFACE) return NULL;
 
@@ -2815,18 +2815,18 @@ List<Find_Decl> *Go_Indexer::find_interfaces(Goresult *target, bool search_every
 
                 auto match = [&]() {
                     auto imethods = list_interface_methods(make_goresult(gotype, ctx));
-                    if (imethods == NULL) return false;
+                    if (!imethods) return false;
 
                     // test that all(<methods contains i> for i in imethods)
                     For (*imethods) {
                         auto imeth_name = it.decl->name;
-                        if (imeth_name == NULL) return false;
+                        if (!imeth_name) return false;
 
                         auto imeth = make_goresult(it.decl->gotype, ctx);
                         bool found = false;
 
                         For (*methods) {
-                            if (it.decl->name == NULL) continue;
+                            if (!it.decl->name) continue;
                             if (!streq(imeth_name, it.decl->name)) continue;
 
                             auto gotype_res = target->wrap(it.decl->gotype);
@@ -2859,7 +2859,7 @@ List<Find_Decl> *Go_Indexer::find_interfaces(Goresult *target, bool search_every
 List<Find_Decl> *Go_Indexer::find_implementations(Goresult *target, bool search_everywhere) {
     reload_all_dirty_files();
 
-    if (target->decl == NULL) return NULL;
+    if (!target->decl) return NULL;
     if (target->decl->type != GODECL_TYPE) return NULL;
     if (target->decl->gotype->type != GOTYPE_INTERFACE) return NULL;
 
@@ -2919,7 +2919,7 @@ List<Find_Decl> *Go_Indexer::find_implementations(Goresult *target, bool search_
 
                 auto gotype = it.gotype;
                 if (gotype->type != GOTYPE_FUNC) continue;
-                if (gotype->func_recv == NULL) continue;
+                if (!gotype->func_recv) continue;
 
                 auto recv = gotype->func_recv;
                 if (recv->type == GOTYPE_POINTER)
@@ -2989,11 +2989,11 @@ List<Find_Decl> *Go_Indexer::find_implementations(Goresult *target, bool search_
 
 ccstr Go_Indexer::get_godecl_recvname(Godecl *it) {
     if (it->type != GODECL_FUNC) return NULL;
-    if (it->gotype == NULL) return NULL;
+    if (!it->gotype) return NULL;
     if (it->gotype->type != GOTYPE_FUNC) return NULL;
 
     auto recv = it->gotype->func_recv;
-    if (recv == NULL) return NULL;
+    if (!recv) return NULL;
 
     recv = unpointer_type(recv, NULL)->gotype;
     if (recv->type != GOTYPE_ID) return NULL;
@@ -3036,7 +3036,7 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_symbol(ccstr symbol) {
             For (*it.decls) {
                 auto key = it.name;
                 auto recvname = get_godecl_recvname(&it);
-                if (recvname != NULL)
+                if (recvname)
                     key = our_sprintf("%s.%s", recvname, it.name);
 
                 if (!streq(key, rest)) continue;
@@ -3060,7 +3060,7 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_symbol(ccstr symbol) {
 
 List<Find_References_File> *Go_Indexer::find_references(ccstr filepath, cur2 pos, bool include_self) {
     auto result = world.indexer.jump_to_definition(filepath, pos);
-    if (result == NULL) return NULL;
+    if (!result) return NULL;
     return find_references(result->decl, include_self);
 }
 
@@ -3092,7 +3092,7 @@ Godecl *Go_Indexer::find_toplevel_containing(Go_File *file, cur2 start, cur2 end
 
 void Go_Indexer::actually_generate_caller_hierarchy(Goresult *declres, List<Call_Hier_Node> *out) {
     auto ref_files = actually_find_references(declres, false);
-    if (ref_files == NULL) return;
+    if (!ref_files) return;
     // if (ref_files->len == 0) return;
 
     For (*ref_files) {
@@ -3101,7 +3101,7 @@ void Go_Indexer::actually_generate_caller_hierarchy(Goresult *declres, List<Call
         Go_Package *pkg = NULL;
         auto file = find_gofile_from_ctx(ctx, &pkg);
 
-        if (file == NULL || pkg == NULL) continue;
+        if (!file || !pkg) continue;
 
         For (*it.references) {
             // get the bounds of the reference
@@ -3115,7 +3115,7 @@ void Go_Indexer::actually_generate_caller_hierarchy(Goresult *declres, List<Call
             }
 
             auto enclosing_decl = find_toplevel_containing(file, start, end);
-            if (enclosing_decl == NULL)
+            if (!enclosing_decl)
                 continue;
 
             auto declres = make_goresult(enclosing_decl, ctx);
@@ -3131,7 +3131,7 @@ void Go_Indexer::actually_generate_caller_hierarchy(Goresult *declres, List<Call
             node.ref = &it;
             out->append(&node);
 
-            if (enclosing_decl->gotype != NULL)
+            if (enclosing_decl->gotype)
                 if (enclosing_decl->gotype->type == GOTYPE_FUNC)
                     actually_generate_caller_hierarchy(declres, node.children);
         }
@@ -3149,7 +3149,7 @@ List<Call_Hier_Node>* Go_Indexer::generate_callee_hierarchy(Goresult *declres) {
 void Go_Indexer::actually_generate_callee_hierarchy(Goresult *declres, List<Call_Hier_Node> *out, List<Seen_Callee_Entry> *seen) {
     Go_Package *pkg = NULL;
     auto file = find_gofile_from_ctx(declres->ctx, &pkg);
-    if (file == NULL) return;
+    if (!file) return;
 
     // auto ctx = declres->ctx;
     auto decl = declres->decl;
@@ -3169,7 +3169,7 @@ void Go_Indexer::actually_generate_callee_hierarchy(Goresult *declres, List<Call
         start_index = lo;
     }
 
-    if (seen == NULL)
+    if (!seen)
         seen = alloc_list<Seen_Callee_Entry>();
 
     auto find_seen = [&](Goresult *res) -> Call_Hier_Node* {
@@ -3195,22 +3195,22 @@ void Go_Indexer::actually_generate_callee_hierarchy(Goresult *declres, List<Call
         if (!it.is_sel && it.start == decl->name_start) continue;
 
         auto res = get_reference_decl(&it, declres->ctx);
-        if (res == NULL) continue;
+        if (!res) continue;
         if (!path_has_descendant(index.current_import_path, res->ctx->import_path)) continue;
 
         auto decl = res->decl;
         auto gotype = decl->gotype;
-        if (gotype == NULL) continue;
+        if (!gotype) continue;
         if (gotype->type != GOTYPE_FUNC) continue;
 
         auto existing = find_seen(res);
-        if (existing != NULL) {
+        if (existing) {
             out->append(existing);
             continue;
         }
 
         auto pkg = find_up_to_date_package(res->ctx->import_path);
-        if (pkg == NULL) continue;
+        if (!pkg) continue;
 
         auto fd = alloc_object(Find_Decl);
         fd->filepath = ctx_to_filepath(res->ctx);
@@ -3242,12 +3242,12 @@ Goresult *Go_Indexer::get_reference_decl(Go_Reference *ref, Go_Ctx *ctx) {
         return find_decl_of_id(ref->name, ref->start, ctx);
 
     auto results = list_lazy_type_dotprops(ref->x, ctx);
-    if (results == NULL) {
+    if (!results) {
         auto import_path = find_import_path_referred_to_by_id(ref->x->lazy_id_name, ctx);
-        if (import_path == NULL) return NULL;
+        if (!import_path) return NULL;
 
         results = list_package_decls(import_path, LISTDECLS_PUBLIC_ONLY | LISTDECLS_EXCLUDE_METHODS);
-        if (results == NULL) return NULL;
+        if (!results) return NULL;
     }
 
     For (*results)
@@ -3258,14 +3258,14 @@ Goresult *Go_Indexer::get_reference_decl(Go_Reference *ref, Go_Ctx *ctx) {
 
 List<Find_References_File> *Go_Indexer::actually_find_references(Goresult *declres, bool include_self) {
     auto decl = declres->decl;
-    if (decl == NULL) return NULL;
+    if (!decl) return NULL;
     if (decl->type == GODECL_IMPORT) return NULL;
 
     auto decl_name = decl->name;
-    if (decl_name == NULL) return NULL;
+    if (!decl_name) return NULL;
 
     auto ctx = declres->ctx;
-    if (ctx == NULL) return NULL;
+    if (!ctx) return NULL;
 
     bool is_private = islower(decl_name[0]);
 
@@ -3287,7 +3287,7 @@ List<Find_References_File> *Go_Indexer::actually_find_references(Goresult *declr
         break;
 
     case GODECL_FUNC:
-        if (decl->gotype->func_recv == NULL)
+        if (!decl->gotype->func_recv)
             case_type = CASE_NORMAL;
         else
             case_type = CASE_METHOD;
@@ -3307,7 +3307,7 @@ List<Find_References_File> *Go_Indexer::actually_find_references(Goresult *declr
         auto a = r->decl;
         auto b = decl;
 
-        if (a == NULL || b == NULL) return false;
+        if (!a || !b) return false;
         if (a->name_start != b->name_start) return false;
         if (!streq(a->name, b->name)) return false;
 
@@ -3398,7 +3398,7 @@ List<Find_References_File> *Go_Indexer::actually_find_references(Goresult *declr
             }
 
             auto decl = get_reference_decl(it, &ctx2);
-            if (decl != NULL && is_match(decl))
+            if (decl && is_match(decl))
                 references->append(it);
         };
 
@@ -3415,11 +3415,11 @@ List<Find_References_File> *Go_Indexer::actually_find_references(Goresult *declr
     if (!decl->is_toplevel) {
         Go_Package *pkg = NULL;
         auto gofile = find_gofile_from_ctx(ctx, &pkg);
-        if (gofile == NULL) return NULL;
+        if (!gofile) return NULL;
         process(pkg, gofile);
     } else if (islower(decl_name[0])) {
         auto pkg = find_package_in_index(ctx->import_path);
-        if (pkg == NULL) return NULL;
+        if (!pkg) return NULL;
         For (*pkg->files) process(pkg, &it);
     } else {
         For (*index.packages) {
@@ -3438,19 +3438,19 @@ List<Go_Import> *Go_Indexer::optimize_imports(ccstr filepath) {
     Timer t; t.init("list_missing_imports");
 
     auto editor = find_editor_by_filepath(filepath);
-    if (editor != NULL)
+    if (editor)
         reload_editor_if_dirty(editor);
 
     t.log("reload");
 
     auto pf = parse_file(filepath, true);
-    if (pf == NULL) return NULL;
+    if (!pf) return NULL;
     defer { free_parsed_file(pf); };
 
     t.log("parse_file");
 
     auto ctx = filepath_to_ctx(filepath);
-    if (ctx == NULL) return NULL;
+    if (!ctx) return NULL;
 
     String_Set package_refs; package_refs.init();
     String_Set full_refs; full_refs.init();
@@ -3510,7 +3510,7 @@ List<Go_Import> *Go_Indexer::optimize_imports(ccstr filepath) {
 
     // put this earlier maybe?
     auto gofile = find_gofile_from_ctx(ctx);
-    if (gofile == NULL) return NULL;
+    if (!gofile) return NULL;
 
     For (*gofile->references) {
         auto &ref = it;
@@ -3522,7 +3522,7 @@ List<Go_Import> *Go_Indexer::optimize_imports(ccstr filepath) {
 
         auto has_nonimport_decl = [&]() -> bool {
             auto res = find_decl_of_id(pkgname, ref.x_start, ctx);
-            if (res == NULL) return false;
+            if (!res) return false;
             if (res->decl->type == GODECL_IMPORT) return false;
             return true;
         };
@@ -3530,7 +3530,7 @@ List<Go_Import> *Go_Indexer::optimize_imports(ccstr filepath) {
         if (has_nonimport_decl()) continue;
 
         auto pkg = pkgs->find([&](auto it) { return streq(it->name, pkgname); });
-        if (pkg == NULL) {
+        if (!pkg) {
             pkg = pkgs->append();
             pkg->name = pkgname;
             pkg->sels.init();
@@ -3538,7 +3538,7 @@ List<Go_Import> *Go_Indexer::optimize_imports(ccstr filepath) {
             referenced_package_names.add(pkgname);
         }
 
-        if (pkg->sels.find([&](auto it) { return streq(*it, ref.sel); }) == NULL)
+        if (!pkg->sels.find([&](auto it) { return streq(*it, ref.sel); }))
             pkg->sels.append(ref.sel);
     }
 
@@ -3547,18 +3547,18 @@ List<Go_Import> *Go_Indexer::optimize_imports(ccstr filepath) {
     String_Set imported_package_names; imported_package_names.init();
     auto ret = alloc_list<Go_Import>();
 
-    if (gofile->imports != NULL) {
+    if (gofile->imports) {
         For (*gofile->imports) {
             auto package_name = get_import_package_name(&it);
 
             // leave _ imports alone
             if (it.package_name_type != GPN_BLANK)
-                if (package_name == NULL || !referenced_package_names.has(package_name))
+                if (!package_name || !referenced_package_names.has(package_name))
                     continue;
 
             ret->append(&it);
 
-            if (package_name != NULL)
+            if (package_name)
                 imported_package_names.add(package_name);
         }
     }
@@ -3571,7 +3571,7 @@ List<Go_Import> *Go_Indexer::optimize_imports(ccstr filepath) {
         print("unaccounted package: %s", it.name);
 
         auto import_path = find_best_import(it.name, &it.sels);
-        if (import_path == NULL) continue; // couldn't find anything
+        if (!import_path) continue; // couldn't find anything
 
         auto imp = ret->append();
         imp->package_name_type = GPN_IMPLICIT;
@@ -3591,7 +3591,7 @@ ccstr Go_Indexer::find_best_import(ccstr package_name, List<ccstr> *identifiers)
 
     For (*index.packages) {
         if (it.status != GPS_READY) continue;
-        if (it.package_name == NULL) continue;
+        if (!it.package_name) continue;
         if (!streq(it.package_name, package_name)) continue;
 
         if (!path_has_descendant(index.current_import_path, it.import_path))
@@ -3602,7 +3602,7 @@ ccstr Go_Indexer::find_best_import(ccstr package_name, List<ccstr> *identifiers)
         indexes.append(indexes.len);
     }
 
-    if (candidates.len == 0) return NULL;
+    if (!candidates.len) return NULL;
 
     String_Set all_identifiers; all_identifiers.init();
     For (*identifiers) all_identifiers.add(it);
@@ -3621,12 +3621,12 @@ ccstr Go_Indexer::find_best_import(ccstr package_name, List<ccstr> *identifiers)
         auto &score = scores[i];
         ptr0(&score);
 
-        if (it->files != NULL) {
+        if (it->files) {
             For (*it->files) {
-                if (it.decls == NULL) continue;
+                if (!it.decls) continue;
                 For (*it.decls) {
                     if (it.type == GODECL_FUNC)
-                        if (it.gotype->func_recv == NULL)
+                        if (!it.gotype->func_recv)
                             continue;
                     if (all_identifiers.has(it.name))
                         score.matching_idents++;
@@ -3638,7 +3638,7 @@ ccstr Go_Indexer::find_best_import(ccstr package_name, List<ccstr> *identifiers)
             score.in_workspace = true;
 
         auto package_path = get_package_path(it->import_path);
-        if (package_path != NULL)
+        if (package_path)
             if (path_has_descendant(package_path, goroot))
                 score.in_goroot = true;
     };
@@ -3666,10 +3666,10 @@ ccstr Go_Indexer::find_best_import(ccstr package_name, List<ccstr> *identifiers)
 Goresult *Go_Indexer::find_enclosing_toplevel(ccstr filepath, cur2 pos) {
     auto ctx = filepath_to_ctx(filepath);
     auto gofile = find_gofile_from_ctx(ctx);
-    if (gofile == NULL) return NULL;
+    if (!gofile) return NULL;
 
     auto decl = find_toplevel_containing(gofile, pos, pos);
-    if (decl == NULL) return NULL;
+    if (!decl) return NULL;
 
     return make_goresult(decl, ctx);
 }
@@ -3683,13 +3683,13 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 p
     t.log("reload dirty files");
 
     auto pf = parse_file(filepath, true);
-    if (pf == NULL) return NULL;
+    if (!pf) return NULL;
     defer { free_parsed_file(pf); };
 
     auto file = pf->root;
 
     auto ctx = filepath_to_ctx(filepath);
-    if (ctx == NULL) return NULL;
+    if (!ctx) return NULL;
 
     Jump_To_Definition_Result result; ptr0(&result);
 
@@ -3726,7 +3726,7 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 p
 
                 bool dontcare;
                 auto results = get_node_dotprops(operand_node, &dontcare, ctx);
-                if (results != NULL) {
+                if (results) {
                     auto sel_name = sel_node->string();
                     For (*results) {
                         auto decl = it.decl;
@@ -3769,19 +3769,19 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 p
                 Goresult *declres = NULL;
 
                 auto comp_literal = is_struct_field_in_literal();
-                if (comp_literal != NULL) {
+                if (comp_literal) {
                     do {
                         auto p = comp_literal->field(TSF_TYPE);
                         if (p->null) break;
 
                         auto gotype = expr_to_gotype(p);
-                        if (gotype == NULL) break;
+                        if (!gotype) break;
 
                         auto res = evaluate_type(gotype, ctx);
-                        if (res == NULL) break;
+                        if (!res) break;
 
                         auto rres = resolve_type(res->gotype, res->ctx);
-                        if (rres == NULL) break;
+                        if (!rres) break;
 
                         auto tmp = alloc_list<Goresult>();
                         list_struct_fields(rres, tmp);
@@ -3798,10 +3798,10 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 p
                     declres = find_decl_of_id(node->string(), node->start(), ctx);
                 }
 
-                if (declres != NULL) {
+                if (declres) {
                     result.file = ctx_to_filepath(declres->ctx);
                     result.decl = declres->copy_decl();
-                    if (declres->decl->name != NULL)
+                    if (declres->decl->name)
                         result.pos = declres->decl->name_start;
                     else
                         result.pos = declres->decl->spec_start;
@@ -3815,11 +3815,11 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 p
 
     t.log("find declaration");
 
-    if (result.file == NULL) return NULL;
+    if (!result.file) return NULL;
 
     if (result.pos.y == -1) {
         auto fm = map_file_into_memory(result.file);
-        if (fm == NULL) return NULL;
+        if (!fm) return NULL;
         defer { fm->cleanup(); };
 
         cur2 newpos; ptr0(&newpos);
@@ -3936,7 +3936,7 @@ bool Go_Indexer::truncate_parsed_file(Parsed_File *pf, cur2 end_pos, ccstr chars
 
         while (!it->eof()) {
             auto uch = it->next();
-            if (uch == 0) break;
+            if (!uch) break;
 
             auto size = uchar_size(uch);
             if (n + size + 1 > _countof(go_tsinput_buffer)) break;
@@ -3985,7 +3985,7 @@ Gotype *Go_Indexer::get_closest_function(ccstr filepath, cur2 pos) {
     reload_all_dirty_files();
 
     auto pf = parse_file(filepath, true);
-    if (pf == NULL) return NULL;
+    if (!pf) return NULL;
     defer { free_parsed_file(pf); };
 
     if (!truncate_parsed_file(pf, pos, "_}}}}}}}}}}}}}}}}}")) return NULL;
@@ -3999,7 +3999,7 @@ Gotype *Go_Indexer::get_closest_function(ccstr filepath, cur2 pos) {
         if (it->type == GSOP_DECL)
             if (it->decl->decl_start <= pos && pos < it->decl->decl_end)
                 if (it->decl->type != GODECL_IMPORT)
-                    if (it->decl->gotype != NULL && it->decl->gotype->type == GOTYPE_FUNC)
+                    if (it->decl->gotype && it->decl->gotype->type == GOTYPE_FUNC)
                         ret = it->decl->gotype;
 
         return true;
@@ -4037,11 +4037,11 @@ void Go_Indexer::fill_generate_implementation(List<Go_Symbol> *out, bool selecte
 
             For (*it.decls) {
                 if (it.type != GODECL_TYPE) continue;
-                if (it.gotype == NULL) continue; // ???
+                if (!it.gotype) continue; // ???
 
                 auto gotype_type = it.gotype->type;
                 if (gotype_type == GOTYPE_BUILTIN) {
-                    if (it.gotype->builtin_underlying_type == NULL) continue;
+                    if (!it.gotype->builtin_underlying_type) continue;
                     gotype_type = it.gotype->builtin_underlying_type->type;
                 }
 
@@ -4098,11 +4098,11 @@ void Go_Indexer::fill_goto_symbol(List<Go_Symbol> *out) {
 
                 auto getrecv = [&]() -> ccstr {
                     if (it.type != GODECL_FUNC) return NULL;
-                    if (it.gotype == NULL) return NULL;
+                    if (!it.gotype) return NULL;
                     if (it.gotype->type != GOTYPE_FUNC) return NULL;
 
                     auto recv = it.gotype->func_recv;
-                    if (recv == NULL) return NULL;
+                    if (!recv) return NULL;
 
                     recv = unpointer_type(recv, NULL)->gotype;
                     if (recv->type != GOTYPE_ID) return NULL;
@@ -4112,7 +4112,7 @@ void Go_Indexer::fill_goto_symbol(List<Go_Symbol> *out) {
 
                 ccstr name = NULL;
                 auto recvname = getrecv();
-                if (recvname != NULL)
+                if (recvname)
                     name = our_sprintf("%s.%s", recvname, it.name);
                 else
                     name = our_sprintf("%s", it.name);
@@ -4138,7 +4138,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
     t.log("reload");
 
     auto pf = parse_file(filepath, true);
-    if (pf == NULL) return false;
+    if (!pf) return false;
     defer { free_parsed_file(pf); };
 
     if (!truncate_parsed_file(pf, pos, "_}}}}}}}}}}}}}}}}}")) return false;
@@ -4166,7 +4166,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
     };
 
     auto ctx = filepath_to_ctx(filepath);
-    if (ctx == NULL) return false;
+    if (!ctx) return false;
 
     List<Goresult> results;
     results.init();
@@ -4326,14 +4326,14 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
         bool was_package = false;
 
         auto init_results = [&]() {
-            if (ac_results == NULL)
+            if (!ac_results)
                 ac_results = alloc_list<AC_Result>();
         };
 
         // try normal dot completions
         do {
             auto results = get_node_dotprops(expr_to_analyze, &was_package, ctx);
-            if (results == NULL || results->len == 0) break;
+            if (!results || results->len == 0) break;
 
             init_results();
             For (*results) {
@@ -4345,7 +4345,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                 r->declaration_filename = it.ctx->filename;
 
                 auto res = evaluate_type(it.decl->gotype, it.ctx);
-                if (res != NULL)
+                if (res)
                     r->declaration_evaluated_gotype = res->gotype;
             }
         } while (0);
@@ -4353,12 +4353,12 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
         // try postfix completions
         do {
             auto results = get_postfix_completions(expr_to_analyze, ctx);
-            if (results == NULL || results->len == 0) break;
+            if (!results || results->len == 0) break;
 
             init_results();
             For (*results) {
                 auto name = get_postfix_completion_name(it);
-                if (name != NULL) {
+                if (name) {
                     auto r = ac_results->append();
                     r->name = name;
                     r->type = ACR_POSTFIX;
@@ -4367,19 +4367,19 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
             }
         } while (0);
 
-        if (ac_results == NULL) return false;
+        if (!ac_results) return false;
 
         do {
             auto gotype = expr_to_gotype(expr_to_analyze);
-            if (gotype == NULL) break;
+            if (!gotype) break;
 
             auto res = evaluate_type(gotype, ctx);
-            if (res == NULL) break;
+            if (!res) break;
 
             bool iserror = is_gotype_error(res);
 
             auto rres = resolve_type(res->gotype, res->ctx);
-            if (rres == NULL) break;
+            if (!rres) break;
 
             expr_to_analyze_gotype = rres->gotype;
             expr_to_analyze_gotype_is_error = iserror;
@@ -4418,7 +4418,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
             ac_results = alloc_list<AC_Result>();
 
             auto add_declaration_result = [&](ccstr name) -> AC_Result* {
-                if (name == NULL) return NULL;
+                if (!name) return NULL;
                 if (seen_strings.has(name)) return NULL;
 
                 auto res = ac_results->append();
@@ -4433,7 +4433,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
             String_Set existing_imports; existing_imports.init();
 
             auto gofile = find_gofile_from_ctx(ctx);
-            if (gofile != NULL) {
+            if (gofile) {
                 SCOPED_FRAME_WITH_MEM(&scoped_table_mem);
                 Scoped_Table<Godecl*> table;
                 {
@@ -4463,13 +4463,13 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                 auto entries = table.entries();
                 For (*entries) {
                     auto r = add_declaration_result(it->name);
-                    if (r != NULL) {
+                    if (r) {
                         r->declaration_godecl = it->value;
                         r->declaration_import_path = ctx->import_path;
                         r->declaration_filename = ctx->filename;
 
                         auto res = evaluate_type(it->value->gotype, ctx);
-                        if (res != NULL)
+                        if (res)
                             r->declaration_evaluated_gotype = res->gotype;
                     }
                 }
@@ -4478,7 +4478,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
 
                 For (*gofile->imports) {
                     auto package_name = get_import_package_name(&it);
-                    if (package_name == NULL) continue;
+                    if (!package_name) continue;
 
                     auto res = ac_results->append();
                     res->name = package_name;
@@ -4508,10 +4508,10 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                 if (has_three_letters) {
                     For (*gofile->imports) {
                         auto pkgname = get_import_package_name(&it);
-                        if (pkgname == NULL) continue;
+                        if (!pkgname) continue;
 
                         auto import_path = it.import_path;
-                        if (import_path == NULL) continue;
+                        if (!import_path) continue;
 
                         auto fuzzy_matches_first_three_letters = [&]() -> bool {
                             int i = 0;
@@ -4525,16 +4525,16 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                         if (!fuzzy_matches_first_three_letters()) continue;
 
                         auto results = list_package_decls(it.import_path, LISTDECLS_EXCLUDE_METHODS);
-                        if (results != NULL) {
+                        if (results) {
                             int count = 0;
                             For (*results) {
-                                if (it.decl->name == NULL) continue;
+                                if (!it.decl->name) continue;
                                 if (is_name_private(it.decl->name)) continue;
 
                                 if (count++ > 500) break;
 
                                 auto result = add_declaration_result(our_sprintf("%s.%s", pkgname, it.decl->name));
-                                if (result != NULL) {
+                                if (result) {
                                     result->declaration_godecl = it.decl;
                                     result->declaration_import_path = it.ctx->import_path;
                                     result->declaration_filename = it.ctx->filename;
@@ -4543,7 +4543,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                                     result->declaration_package = import_path;
 
                                     auto res = evaluate_type(it.decl->gotype, it.ctx);
-                                    if (res != NULL)
+                                    if (res)
                                         result->declaration_evaluated_gotype = res->gotype;
                                 }
                             }
@@ -4554,10 +4554,10 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
 
             // workspace or are immediate deps?
             For (*index.packages) {
-                if (it.import_path == NULL) continue;
+                if (!it.import_path) continue;
                 if (existing_imports.has(it.import_path)) continue;
                 if (it.status != GPS_READY) continue;
-                if (it.package_name == NULL) continue;
+                if (!it.package_name) continue;
                 if (streq(it.import_path, ctx->import_path)) continue;
 
                 // gofile->imports
@@ -4579,16 +4579,16 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
             t.log("crazy shit");
 
             do {
-                if (lone_identifier_struct_literal == NULL) break;
+                if (!lone_identifier_struct_literal) break;
 
                 auto gotype = node_to_gotype(lone_identifier_struct_literal);
-                if (gotype == NULL) break;
+                if (!gotype) break;
 
                 auto res = evaluate_type(gotype, ctx);
-                if (res == NULL) break;
+                if (!res) break;
 
                 auto rres = resolve_type(res->gotype, res->ctx);
-                if (rres == NULL) break;
+                if (!rres) break;
 
                 auto tmp = alloc_list<Goresult>();
                 list_struct_fields(rres, tmp);
@@ -4619,16 +4619,16 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
             t.log("more crazy shit part 2");
 
             auto results = list_package_decls(ctx->import_path, LISTDECLS_EXCLUDE_METHODS);
-            if (results != NULL) {
+            if (results) {
                 For (*results) {
                     auto result = add_declaration_result(it.decl->name);
-                    if (result != NULL) {
+                    if (result) {
                         result->declaration_godecl = it.decl;
                         result->declaration_import_path = it.ctx->import_path;
                         result->declaration_filename = it.ctx->filename;
 
                         auto res = evaluate_type(it.decl->gotype, it.ctx);
-                        if (res != NULL)
+                        if (res)
                             result->declaration_evaluated_gotype = res->gotype;
                     }
                 }
@@ -4654,16 +4654,16 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
             // add builtins
             {
                 auto results = list_package_decls("@builtin", LISTDECLS_EXCLUDE_METHODS);
-                if (results != NULL) {
+                if (results) {
                     For (*results) {
                         auto res = add_declaration_result(it.decl->name); // i think this is enough?
-                        if (res != NULL) {
+                        if (res) {
                             res->declaration_godecl = it.decl;
                             res->declaration_import_path = it.ctx->import_path;
                             res->declaration_filename = it.ctx->filename;
 
                             auto gores = evaluate_type(it.decl->gotype, it.ctx);
-                            if (gores != NULL)
+                            if (gores)
                                 res->declaration_evaluated_gotype = gores->gotype;
                         }
                     }
@@ -4680,7 +4680,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
 
     t.log("done generating results");
 
-    if (expr_to_analyze != NULL) {
+    if (expr_to_analyze) {
         out->operand_start = expr_to_analyze->start();
         out->operand_end = expr_to_analyze->end();
         out->operand_gotype = expr_to_analyze_gotype;
@@ -4710,7 +4710,7 @@ bool Go_Indexer::check_if_still_in_parameter_hint(ccstr filepath, cur2 cur, cur2
     reload_all_dirty_files();
 
     auto pf = parse_file(filepath, true);
-    if (pf == NULL) return NULL;
+    if (!pf) return NULL;
     defer { free_parsed_file(pf); };
 
     // try to close string if we're in one
@@ -4778,7 +4778,7 @@ Parameter_Hint *Go_Indexer::parameter_hint(ccstr filepath, cur2 pos) {
     t.log("reload files");
 
     auto pf = parse_file(filepath, true);
-    if (pf == NULL) return NULL;
+    if (!pf) return NULL;
     defer { free_parsed_file(pf); };
 
     if (!truncate_parsed_file(pf, pos, "_)}}}}}}}}}}}}}}}}")) return NULL;
@@ -4856,7 +4856,7 @@ Parameter_Hint *Go_Indexer::parameter_hint(ccstr filepath, cur2 pos) {
                     func_expr = prev;
                     if (func_expr->type() == TS_ERROR) {
                         func_expr = func_expr->child();
-                        for (Ast_Node *next; (next = func_expr->next()) != NULL;)
+                        for (Ast_Node *next; (next = func_expr->next());)
                             func_expr = next;
                     }
                     call_args_start = node->start();
@@ -4878,19 +4878,19 @@ Parameter_Hint *Go_Indexer::parameter_hint(ccstr filepath, cur2 pos) {
 
     t.log("find function node");
 
-    if (func_expr == NULL) return NULL;
+    if (!func_expr) return NULL;
 
     auto ctx = filepath_to_ctx(filepath);
-    if (ctx == NULL) return NULL;
+    if (!ctx) return NULL;
 
     auto gotype = expr_to_gotype(func_expr);
-    if (gotype == NULL) return NULL;
+    if (!gotype) return NULL;
 
     auto res = evaluate_type(gotype, ctx);
-    if (res == NULL) return NULL;
+    if (!res) return NULL;
 
     auto rres = resolve_type(res->gotype, res->ctx);
-    if (rres == NULL) return NULL;
+    if (!rres) return NULL;
 
     if (rres->gotype->type != GOTYPE_FUNC) return NULL;
 
@@ -4921,7 +4921,7 @@ void Go_Indexer::list_struct_fields(Goresult *type, List<Goresult> *ret) {
             // recursively list methods for embedded fields
             if (it.field->is_embedded) {
                 auto res = resolve_type(it.field->gotype, type->ctx);
-                if (res != NULL)
+                if (res)
                     list_struct_fields(res, ret);
             }
             ret->append(type->wrap(it.field));
@@ -4935,15 +4935,15 @@ bool Go_Indexer::list_interface_methods(Goresult *interface, List<Goresult> *out
     if (gotype->type != GOTYPE_INTERFACE) return false;
 
     auto specs = gotype->interface_specs;
-    if (specs == NULL) return false;
+    if (!specs) return false;
 
     For (*specs) {
-        if (it.field == NULL) return false; // this shouldn't happen
+        if (!it.field) return false; // this shouldn't happen
 
         auto method = it.field;
         if (method->is_embedded) {
             auto rres = resolve_type(method->gotype, interface->ctx);
-            if (rres == NULL) return false;
+            if (!rres) return false;
             if (!list_interface_methods(rres, out)) return false;
         } else {
             if (method->gotype->type != GOTYPE_FUNC) return false;
@@ -4968,7 +4968,7 @@ List<Goresult> *Go_Indexer::list_interface_methods(Goresult *interface) {
 
 bool Go_Indexer::list_type_methods(ccstr type_name, ccstr import_path, List<Goresult> *out) {
     auto results = list_package_decls(import_path);
-    if (results == NULL) return false;
+    if (!results) return false;
 
     For (*results) {
         auto decl = it.decl;
@@ -4976,7 +4976,7 @@ bool Go_Indexer::list_type_methods(ccstr type_name, ccstr import_path, List<Gore
         if (decl->type != GODECL_FUNC) continue;
 
         auto functype = decl->gotype;
-        if (functype->func_recv == NULL) continue;
+        if (!functype->func_recv) continue;
 
         auto recv = unpointer_type(functype->func_recv, NULL)->gotype;
 
@@ -4999,7 +4999,7 @@ void Go_Indexer::list_dotprops(Goresult *type_res, Goresult *resolved_type_res, 
     for (int i = 0; i < tmp->len; i++) {
         auto &it = tmp->at(tmp->len - i - 1);
 
-        if (it.decl->name == NULL) continue;
+        if (!it.decl->name) continue;
         if (seen.has(it.decl->name)) continue;
 
         seen.add(it.decl->name);
@@ -5028,7 +5028,7 @@ void Go_Indexer::actually_list_dotprops(Goresult *type_res, Goresult *resolved_t
                 if (it.field->is_embedded) {
                     auto embedded_type = it.field->gotype;
                     auto res = resolve_type(embedded_type, resolved_type_res->ctx);
-                    if (res == NULL) continue;
+                    if (!res) continue;
                     if (res->gotype->type != resolved_type->type) continue; // this is technically an error, should we surface it here?
 
                     actually_list_dotprops(resolved_type_res->wrap(embedded_type), res, ret);
@@ -5067,14 +5067,14 @@ ccstr remove_ats_from_path(ccstr s) {
     auto path = make_path(s);
     For (*path->parts) {
         auto atpos = strchr((char*)it, '@');
-        if (atpos != NULL) *atpos = '\0';
+        if (atpos) *atpos = '\0';
     }
     return path->str();
 }
 
 Go_Ctx *Go_Indexer::filepath_to_ctx(ccstr filepath) {
     auto import_path = filepath_to_import_path(our_dirname(filepath));
-    if (import_path == NULL) return NULL;
+    if (!import_path) return NULL;
 
     auto ret = alloc_object(Go_Ctx);
     ret->import_path = import_path;
@@ -5083,30 +5083,30 @@ Go_Ctx *Go_Indexer::filepath_to_ctx(ccstr filepath) {
 }
 
 ccstr Go_Indexer::ctx_to_filepath(Go_Ctx *ctx) {
-    if (ctx == NULL) return NULL;
+    if (!ctx) return NULL;
 
     auto dir = get_package_path(ctx->import_path);
-    if (dir == NULL) return NULL;
+    if (!dir) return NULL;
 
     return path_join(dir, ctx->filename);
 }
 
 Go_File *Go_Indexer::find_gofile_from_ctx(Go_Ctx *ctx, Go_Package **out) {
     auto pkg = find_up_to_date_package(ctx->import_path);
-    if (pkg == NULL) return NULL;
+    if (!pkg) return NULL;
 
     auto check = [&](auto it) { return streq(it->filename, ctx->filename); };
     auto ret = pkg->files->find(check);
-    if (ret == NULL) return NULL;
+    if (!ret) return NULL;
 
-    if (out != NULL)
+    if (out)
         *out = pkg;
     return ret;
 }
 
 ccstr Go_Indexer::filepath_to_import_path(ccstr path_str) {
     auto ret = module_resolver.resolved_path_to_import_path(path_str);
-    if (ret != NULL) return ret;
+    if (ret) return ret;
 
     auto path = make_path(path_str);
     auto goroot_path = make_path(goroot);
@@ -5158,7 +5158,7 @@ void Go_Indexer::init() {
 
     {
         goroot = copystr(GHGetGoroot());
-        if (goroot == NULL)
+        if (!goroot)
             our_panic("Unable to detect GOROOT. Please make sure Go is installed and accessible through your PATH.");
 
         auto goroot_without_src = goroot;
@@ -5176,7 +5176,7 @@ void Go_Indexer::init() {
         }
 
         gomodcache = copystr(GHGetGomodcache());
-        if (gomodcache == NULL)
+        if (!gomodcache)
             our_panic("Unable to detect GOMODCACHE. Please make sure Go is installed and accessible through your PATH.");
     }
 
@@ -5248,7 +5248,7 @@ void Go_Indexer::stop_writing() {
 // i don't think this is actually called right now...
 // we're just letting the OS reclaim all this shit when the program exits
 void Go_Indexer::cleanup() {
-    if (bgthread != NULL) {
+    if (bgthread) {
         kill_thread(bgthread);
         close_thread_handle(bgthread);
         bgthread = NULL;
@@ -5427,7 +5427,7 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
                     if (it->eq(type_node)) break;
                     total++;
                 }
-                if (total == 0) total++;
+                if (!total) total++;
 
                 num_children += total;
             }
@@ -5442,7 +5442,7 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
                 if (type_node->null) continue;
 
                 auto field_type = node_to_gotype(type_node);
-                if (field_type == NULL) continue;
+                if (!field_type) continue;
 
                 bool names_found = false;
                 FOR_NODE_CHILDREN (field_node) {
@@ -5483,7 +5483,7 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
                         break;
                     }
 
-                    if (field_name == NULL) continue;
+                    if (!field_name) continue;
 
                     auto field = alloc_object(Godecl);
                     field->type = GODECL_FIELD;
@@ -5591,7 +5591,7 @@ bool Go_Indexer::assignment_to_decls(List<Ast_Node*> *lhs, List<Ast_Node*> *rhs,
 
             for (int i = 0; i < 2 && i < lhs->len; i++) {
                 auto id = lhs->at(i);
-                if (id == NULL) continue;
+                if (!id) continue;
                 if (id->type() != TS_IDENTIFIER) continue;
 
                 auto gotype = new_gotype(GOTYPE_LAZY_RANGE);
@@ -5610,7 +5610,7 @@ bool Go_Indexer::assignment_to_decls(List<Ast_Node*> *lhs, List<Ast_Node*> *rhs,
         auto multi_type = expr_to_gotype(rhs->at(0));
 
         /*
-        if (multi_type == NULL || multi_type->type != GOTYPE_MULTI) {
+        if (!multi_type || multi_type->type != GOTYPE_MULTI) {
             if (lhs->len != 1) {
                 // TODO: are there legitimate cases where this will happen?
                 return false;
@@ -5657,7 +5657,7 @@ bool Go_Indexer::assignment_to_decls(List<Ast_Node*> *lhs, List<Ast_Node*> *rhs,
             if (name_node->type() != TS_IDENTIFIER) continue;
 
             auto gotype = expr_to_gotype(rhs->at(i));
-            if (gotype == NULL) continue;
+            if (!gotype) continue;
 
             if (gotype->type == GOTYPE_MULTI || gotype->type == GOTYPE_RANGE)
                 continue;
@@ -5696,7 +5696,7 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
     };
 
     auto save_decl = [&](Godecl *decl) {
-        if (target_pool == NULL) return;
+        if (!target_pool) return;
         SCOPED_MEM(target_pool);
         memcpy(decl, decl->copy(), sizeof(Godecl));
     };
@@ -5721,7 +5721,7 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
                 auto recv_type = recv_node->child()->field(TSF_TYPE);
                 if (!recv_type->null) {
                     gotype->func_recv = node_to_gotype(recv_type);
-                    if (gotype->func_recv == NULL) break;
+                    if (!gotype->func_recv) break;
                 }
             }
 
@@ -5746,7 +5746,7 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
             if (type_node->null) continue;
 
             auto gotype = node_to_gotype(type_node, is_toplevel);
-            if (gotype == NULL) continue;
+            if (!gotype) continue;
 
             auto decl = new_result();
             decl->type = GODECL_TYPE;
@@ -5787,7 +5787,7 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
 
                 if (type_node->null && value_node->null) {
                     do {
-                        if (saved_iota_types == NULL) break;
+                        if (!saved_iota_types) break;
 
                         auto ntype = node->type();
                         if (ntype != TS_CONST_DECLARATION && ntype != TS_VAR_DECLARATION)
@@ -5834,7 +5834,7 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
                 };
 
                 bool should_save_iota_types = (
-                    saved_iota_types == NULL
+                    !saved_iota_types
                     && !value_node->null
                     && has_iota(value_node)
                 );
@@ -5842,7 +5842,7 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
                 Gotype *type_node_gotype = NULL;
                 if (!type_node->null) {
                     type_node_gotype = node_to_gotype(type_node);
-                    if (type_node_gotype == NULL) continue;
+                    if (!type_node_gotype) continue;
 
                     if (node->type() == TS_PARAMETER_LIST && spec->type() == TS_VARIADIC_PARAMETER_DECLARATION) {
                         auto t = new_gotype(GOTYPE_VARIADIC);
@@ -6020,7 +6020,7 @@ Goresult *Go_Indexer::unpointer_type(Gotype *type, Go_Ctx *ctx) {
 
 List<Goresult> *Go_Indexer::list_package_decls(ccstr import_path, int flags) {
     auto pkg = find_up_to_date_package(import_path);
-    if (pkg == NULL) return NULL;
+    if (!pkg) return NULL;
 
     auto ret = alloc_list<Goresult>();
 
@@ -6028,14 +6028,14 @@ List<Goresult> *Go_Indexer::list_package_decls(ccstr import_path, int flags) {
         auto filename = it.filename;
 
         For (*it.decls) {
-            if (it.name == NULL) continue;
+            if (!it.name) continue;
 
             if (flags & LISTDECLS_PUBLIC_ONLY)
                 if (is_name_private(it.name))
                     continue;
 
             if (flags & LISTDECLS_EXCLUDE_METHODS)
-                if (it.type == GODECL_FUNC && it.gotype->func_recv != NULL)
+                if (it.type == GODECL_FUNC && it.gotype->func_recv)
                     continue;
 
             auto ctx = alloc_object(Go_Ctx);
@@ -6050,7 +6050,7 @@ List<Goresult> *Go_Indexer::list_package_decls(ccstr import_path, int flags) {
 
 Goresult *Go_Indexer::find_decl_in_package(ccstr id, ccstr import_path) {
     auto results = list_package_decls(import_path, LISTDECLS_EXCLUDE_METHODS);
-    if (results == NULL) return NULL;
+    if (!results) return NULL;
 
     // in the future we can sort this shit
     For (*results)
@@ -6172,22 +6172,22 @@ Gotype *Go_Indexer::expr_to_gotype(Ast_Node *expr) {
 }
 
 Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
-    if (gotype == NULL) return NULL;
+    if (!gotype) return NULL;
 
     switch (gotype->type) {
     case GOTYPE_LAZY_RANGE:
         {
             auto res = evaluate_type(gotype->lazy_range_base, ctx);
-            if (res == NULL) return NULL;
+            if (!res) return NULL;
 
             res = resolve_type(res->gotype, res->ctx);
-            if (res == NULL) return NULL;
+            if (!res) return NULL;
 
             res = unpointer_type(res->gotype, res->ctx);
 
             auto base_type = res->gotype;
             if (base_type->type == GOTYPE_MULTI)
-                if (base_type->multi_types != NULL && base_type->multi_types->len == 1)
+                if (base_type->multi_types && base_type->multi_types->len == 1)
                     base_type = base_type->multi_types->at(0);
 
             switch (res->gotype->type) {
@@ -6210,17 +6210,17 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
     case GOTYPE_LAZY_INDEX:
         {
             auto res = evaluate_type(gotype->lazy_index_base, ctx);
-            if (res == NULL) return NULL;
+            if (!res) return NULL;
 
             res = resolve_type(res->gotype, res->ctx);
-            if (res == NULL) return NULL;
+            if (!res) return NULL;
 
             res = unpointer_type(res->gotype, res->ctx);
 
             auto base_type = res->gotype;
 
             if (base_type->type == GOTYPE_MULTI)
-                if (base_type->multi_types != NULL && base_type->multi_types->len == 1)
+                if (base_type->multi_types && base_type->multi_types->len == 1)
                     base_type = base_type->multi_types->at(0);
 
             switch (base_type->type) {
@@ -6243,18 +6243,18 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
     case GOTYPE_LAZY_CALL:
         {
             auto res = evaluate_type(gotype->lazy_call_base, ctx);
-            if (res == NULL) break;
+            if (!res) break;
 
             res = resolve_type(res->gotype, res->ctx);
-            if (res == NULL) break;
+            if (!res) break;
 
             res = unpointer_type(res->gotype, res->ctx);
-            if (res == NULL) break;
+            if (!res) break;
 
             if (res->gotype->type != GOTYPE_FUNC) return NULL;
 
             auto result = res->gotype->func_sig.result;
-            if (result == NULL) return NULL;
+            if (!result) return NULL;
 
             if (result->len == 1)
                 return res->wrap(result->at(0).gotype);
@@ -6268,10 +6268,10 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
     case GOTYPE_LAZY_DEREFERENCE:
         {
             auto res = evaluate_type(gotype->lazy_dereference_base, ctx);
-            if (res == NULL) return NULL;
+            if (!res) return NULL;
 
             res = resolve_type(res->gotype, res->ctx);
-            if (res == NULL) return NULL;
+            if (!res) return NULL;
 
             if (res->gotype->type != GOTYPE_POINTER) return NULL;
             return evaluate_type(res->gotype->pointer_base, res->ctx);
@@ -6280,7 +6280,7 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
     case GOTYPE_LAZY_REFERENCE:
         {
             auto res = evaluate_type(gotype->lazy_reference_base, ctx);
-            if (res == NULL) return NULL;
+            if (!res) return NULL;
 
             auto type = new_gotype(GOTYPE_POINTER);
             type->pointer_base = res->gotype;
@@ -6290,7 +6290,7 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
     case GOTYPE_LAZY_ARROW:
         {
             auto res = evaluate_type(gotype->lazy_arrow_base, ctx);
-            if (res == NULL) return NULL;
+            if (!res) return NULL;
             if (res->gotype->type != GOTYPE_CHAN) return NULL;
 
             return evaluate_type(res->gotype->chan_base, res->ctx);
@@ -6299,27 +6299,27 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
     case GOTYPE_LAZY_ID:
         {
             auto res = find_decl_of_id(gotype->lazy_id_name, gotype->lazy_id_pos, ctx);
-            if (res == NULL) return NULL;
+            if (!res) return NULL;
             if (res->decl->type == GODECL_IMPORT) return NULL;
-            if (res->decl->gotype == NULL) return NULL;
+            if (!res->decl->gotype) return NULL;
             return evaluate_type(res->decl->gotype, res->ctx);
         }
 
     case GOTYPE_LAZY_SEL:
         {
             do {
-                if (gotype->lazy_sel_base == NULL) break;
+                if (!gotype->lazy_sel_base) break;
                 if (gotype->lazy_sel_base->type != GOTYPE_LAZY_ID) break;
 
                 auto base = gotype->lazy_sel_base;
                 Go_Import *gi = NULL;
 
                 auto decl_res = find_decl_of_id(base->lazy_id_name, base->lazy_id_pos, ctx, &gi);
-                if (decl_res == NULL) break;
-                if (gi == NULL) break;
+                if (!decl_res) break;
+                if (!gi) break;
 
                 auto res = find_decl_in_package(gotype->lazy_sel_sel, gi->import_path);
-                if (res == NULL) return NULL;
+                if (!res) return NULL;
 
                 auto ext_decl = res->decl;
                 switch (ext_decl->type) {
@@ -6334,10 +6334,10 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
             } while (0);
 
             auto res = evaluate_type(gotype->lazy_sel_base, ctx);
-            if (res == NULL) return NULL;
+            if (!res) return NULL;
 
             auto rres = resolve_type(res->gotype, res->ctx);
-            if (rres == NULL) return NULL;
+            if (!rres) return NULL;
 
             rres = unpointer_type(rres->gotype, rres->ctx);
 
@@ -6354,7 +6354,7 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
     case GOTYPE_LAZY_ONE_OF_MULTI:
         {
             auto res = evaluate_type(gotype->lazy_one_of_multi_base, ctx);
-            if (res == NULL) return NULL;
+            if (!res) return NULL;
 
             bool is_single = gotype->lazy_one_of_multi_is_single;
             int index = gotype->lazy_one_of_multi_index;
@@ -6365,7 +6365,7 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
                 return evaluate_type(res->gotype->multi_types->at(index), res->ctx);
 
             case GOTYPE_ASSERTION:
-                if (index == 0)
+                if (!index)
                     return evaluate_type(res->gotype->assertion_base, res->ctx);
                 if (index == 1)
                     return res->wrap(new_primitive_type("bool"));
@@ -6374,7 +6374,7 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
             case GOTYPE_RANGE:
                 switch (res->gotype->range_base->type) {
                 case GOTYPE_MAP:
-                    if (index == 0)
+                    if (!index)
                         return evaluate_type(res->gotype->range_base->map_key, res->ctx);
                     if (index == 1)
                         return evaluate_type(res->gotype->range_base->map_value, res->ctx);
@@ -6382,7 +6382,7 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
 
                 case GOTYPE_ARRAY:
                 case GOTYPE_SLICE:
-                    if (index == 0)
+                    if (!index)
                         return res->wrap(new_primitive_type("int"));
                     if (index == 1) {
                         auto base = res->gotype->type == GOTYPE_ARRAY ? res->gotype->array_base : res->gotype->slice_base;
@@ -6392,7 +6392,7 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
 
                 case GOTYPE_ID:
                     if (!streq(res->gotype->id_name, "string")) break;
-                    if (index == 0)
+                    if (!index)
                         return res->wrap(new_primitive_type("int"));
                     if (index == 1)
                         return res->wrap(new_primitive_type("rune"));
@@ -6412,7 +6412,7 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
 }
 
 Goresult *make_goresult_from_pointer(void *ptr, Go_Ctx *ctx) {
-    our_assert(ptr != NULL, "make_goresult should never contain a NULL value, just return NULL instead!");
+    our_assert(ptr, "make_goresult should never contain a NULL value, just return NULL instead!");
 
     auto ret = alloc_object(Goresult);
     ret->ptr = ptr;
@@ -6435,32 +6435,32 @@ Goresult *Go_Indexer::resolve_type_to_decl(Gotype *type, Go_Ctx *ctx) {
     case GOTYPE_SEL:
         {
             auto import_path = find_import_path_referred_to_by_id(type->sel_name, ctx);
-            if (import_path == NULL) return NULL;
+            if (!import_path) return NULL;
 
             res = find_decl_in_package(type->sel_sel, import_path);
             break;
         }
     }
 
-    if (res == NULL) return NULL;
+    if (!res) return NULL;
     if (res->decl->type != GODECL_TYPE) return NULL;
 
     return res;
 }
 
 Goresult *Go_Indexer::resolve_type(Gotype *type, Go_Ctx *ctx) {
-    if (type == NULL) return NULL;
+    if (!type) return NULL;
 
     switch (type->type) {
     case GOTYPE_BUILTIN: // pending decision: should we do this here?
-        if (type->builtin_underlying_type == NULL)
+        if (!type->builtin_underlying_type)
             return NULL;
         return resolve_type(type->builtin_underlying_type, ctx);
 
     case GOTYPE_POINTER:
         {
             auto res = resolve_type(type->pointer_base, ctx);
-            if (res == NULL) return NULL;
+            if (!res) return NULL;
 
             auto ret = new_gotype(GOTYPE_POINTER);
             ret->pointer_base = res->gotype;
@@ -6473,7 +6473,7 @@ Goresult *Go_Indexer::resolve_type(Gotype *type, Go_Ctx *ctx) {
     case GOTYPE_SEL:
         {
             auto res = resolve_type_to_decl(type, ctx);
-            if (res == NULL) return NULL;
+            if (!res) return NULL;
             return resolve_type(res->decl->gotype, res->ctx);
         }
     }
@@ -6789,13 +6789,13 @@ ccstr _path_join(ccstr a, ...) {
 
     while (true) {
         ccstr val = NULL;
-        if (a != NULL) {
+        if (a) {
             val = a;
             a = NULL;
         } else {
             val = va_arg(vlcount, ccstr);
         }
-        if (val == NULL) break;
+        if (!val) break;
         if (val[0] == '\0') continue;
 
         auto len = strlen(val);

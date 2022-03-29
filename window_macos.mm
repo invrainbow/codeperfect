@@ -28,13 +28,13 @@ void init_keyscan_pair(int scan, int key) {
 @implementation CPApplicationDelegate
 
 - (NSApplicationTerminateReply)applicationShouldTerminate:(NSApplication *)sender {
-    if (world.window != NULL)
+    if (world.window)
         world.window->should_close = true;
     return NSTerminateCancel;
 }
 
 - (void)applicationDidChangeScreenParameters:(NSNotification *) notification {
-    if (world.window != NULL)
+    if (world.window)
         [world.window->nsgl_object update];
 }
 
@@ -959,7 +959,7 @@ NSEvent *get_next_event() {
 void poll_window_events() {
     @autoreleasepool {
         NSEvent *event = NULL;
-        while ((event = get_next_event()) != NULL)
+        while ((event = get_next_event()))
             [NSApp sendEvent:event];
     }
 }
@@ -989,7 +989,7 @@ bool Cursor::init(Cursor_Type _type) {
         case CP_CUR_RESIZE_NESW: sel = NSSelectorFromString(@"_windowResizeNorthEastSouthWestCursor"); break;
         }
 
-        if (sel != NULL && [NSCursor respondsToSelector:sel]) {
+        if (sel && [NSCursor respondsToSelector:sel]) {
             id ret = [NSCursor performSelector:sel];
             if ([ret isKindOfClass:[NSCursor class]])
                 object = ret;
@@ -1046,7 +1046,7 @@ ccstr get_clipboard_string() {
         NSString* object = [pasteboard stringForType:NSPasteboardTypeString];
         if (!object) return NULL;
 
-        if (static_clipboard_string != NULL)
+        if (static_clipboard_string)
             free((void*)static_clipboard_string);
         static_clipboard_string = strdup([object UTF8String]);
         return static_clipboard_string;

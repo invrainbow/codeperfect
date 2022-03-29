@@ -170,7 +170,7 @@ struct Mark_Tree_Fuzzer {
             a->insert_mark_pos = random_pos(NOBOUND, NOBOUND);
         } else if (r < 66) {
             // delete
-            if (marks.len > 0) {
+            if (marks.len) {
                 a->type = MTF_DELETE_MARK;
                 a->delete_mark_index = rand() % marks.len;
             } else {
@@ -237,7 +237,7 @@ struct Mark_Tree_Fuzzer {
             For (marks) {
                 // check that mark node contains the mark
                 bool found = false;
-                for (auto m = it->node->marks; m != NULL; m = m->next) {
+                for (auto m = it->node->marks; m; m = m->next) {
                     if (m == it) {
                         found = true;
                         break;
@@ -247,7 +247,7 @@ struct Mark_Tree_Fuzzer {
 
                 // check that mark node is still in root
                 auto node = it->node;
-                while (node->parent != NULL)
+                while (node->parent)
                     node = node->parent;
                 if (tree.root != node)
                     our_panic("mark node is detached from root!");

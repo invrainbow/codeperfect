@@ -39,7 +39,7 @@ ccstr our_format_json(ccstr s) {
 }
 
 ccstr our_strcpy(ccstr s) {
-    if (s == NULL) return NULL;
+    if (!s) return NULL;
 
     auto len = strlen(s);
     auto ret = alloc_array(char, len + 1);
@@ -48,7 +48,7 @@ ccstr our_strcpy(ccstr s) {
 }
 
 ccstr our_strncpy(ccstr s, int n) {
-    if (s == NULL) return NULL;
+    if (!s) return NULL;
 
     auto ret = alloc_array(char, n + 1);
     memcpy(ret, s, sizeof(char) * n);
@@ -183,7 +183,7 @@ void Path::goto_child(ccstr child) {
 ccstr Path::str(char sep) {
     if (parts->len == 0) return "";
 
-    if (sep == 0) sep = PATH_SEP;
+    if (!sep) sep = PATH_SEP;
 
     auto len = 0;
     For (*parts) len += strlen(it);

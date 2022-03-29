@@ -104,7 +104,7 @@ s32 Cstr_To_Ustr::get_uchar_size(u8 first_char) {
 }
 
 void Cstr_To_Ustr::count(u8 ch) {
-    if (buflen > 0) {
+    if (buflen) {
         if (buflen + 1 == get_uchar_size(buf[0])) {
             len++;
             buflen = 0;
@@ -119,7 +119,7 @@ void Cstr_To_Ustr::count(u8 ch) {
 }
 
 uchar Cstr_To_Ustr::feed(u8 ch, bool* found) {
-    if (buflen > 0) {
+    if (buflen) {
         auto needed = get_uchar_size(buf[0]);
         if (buflen + 1 == needed) {
             buflen = 0;
@@ -186,7 +186,7 @@ cur2 Buffer::hist_undo() {
     hist_curr = hist_dec(hist_curr);
 
     auto arr = alloc_list<Change*>();
-    for (auto it = history[hist_curr]; it != NULL; it = it->next)
+    for (auto it = history[hist_curr]; it; it = it->next)
         arr->append(it);
 
     auto ret = new_cur2(-1, -1);
@@ -207,9 +207,9 @@ cur2 Buffer::hist_redo() {
 
     auto ret = new_cur2(-1, -1);
 
-    for (auto it = history[hist_curr]; it != NULL; it = it->next){
+    for (auto it = history[hist_curr]; it; it = it->next){
         hist_apply_change(it, false);
-        if (it->next == NULL)
+        if (!it->next)
             ret = it->new_end;
     }
 
@@ -264,9 +264,9 @@ void Buffer::cleanup() {
     if (!initialized) return;
 
     clear();
-    if (parser != NULL)
+    if (parser)
         ts_parser_delete(parser);
-    if (tree != NULL)
+    if (tree)
         ts_tree_delete(tree);
 
     mark_tree.cleanup();
@@ -318,7 +318,7 @@ bool Buffer::read(Buffer_Read_Func f, bool reread) {
         bc = bytecounts.append();
 
         // make this check more robust/at the right place?
-        if (line == NULL) return false;
+        if (!line) return false;
 
         line->init(LIST_CHUNK, CHUNK0);
         *bc = 0;
@@ -347,7 +347,7 @@ bool Buffer::read(Buffer_Read_Func f, bool reread) {
     dirty = false;
 
     if (use_tree && !reread) {
-        if (tree != NULL) {
+        if (tree) {
             ts_tree_delete(tree);
             tree = NULL;
         }
@@ -460,7 +460,7 @@ void Buffer::insert(cur2 start, uchar* text, s32 len, bool applying_change) {
 
     if (use_history && !applying_change) {
         auto c = hist_get_latest_change_for_append();
-        if (c != NULL) {
+        if (c) {
             if (start == c->new_end || hist_batch_mode) {
                 change = c;
                 if (start != c->new_end)
@@ -487,7 +487,7 @@ void Buffer::insert(cur2 start, uchar* text, s32 len, bool applying_change) {
         uchar* buf = alloc_temp_array(total_len);
         defer { free_temp_array(buf, total_len); };
 
-        if (x > 0)
+        if (x)
             memcpy(buf, line->items, sizeof(uchar) * x);
         memcpy(&buf[x], text, sizeof(uchar) * len);
         if (line->len > x)
@@ -527,10 +527,10 @@ void Buffer::insert(cur2 start, uchar* text, s32 len, bool applying_change) {
     if (use_history && !applying_change) {
         auto start_of_chars_to_copy = start;
         while (start_of_chars_to_copy < end) {
-            if (change == NULL || change->new_text.len == change->new_text.cap || need_new_change) {
+            if (!change || change->new_text.len == change->new_text.cap || need_new_change) {
                 need_new_change = false;
 
-                if (change == NULL) {
+                if (!change) {
                     change = hist_push();
                 } else {
                     change->next = hist_alloc();
@@ -565,7 +565,7 @@ void Buffer::update_tree() {
 
         while (!it.eof()) {
             auto uch = it.next();
-            if (uch == 0) break;
+            if (!uch) break;
 
             auto size = uchar_size(uch);
             if (n + size + 1 > _countof(buf->tsinput_buffer)) break;
@@ -612,7 +612,7 @@ void Buffer::internal_finish_edit(cur2 new_end) {
 }
 
 void Buffer::internal_update_mark_tree() {
-    if (mark_tree.root == NULL) return;
+    if (!mark_tree.root) return;
 
     {
         auto start = tspoint_to_cur(tsedit.start_point);
@@ -631,7 +631,7 @@ void Buffer::internal_update_mark_tree() {
     auto newend = tspoint_to_cur(tsedit.new_end_point);
 
     auto diffs = diff_main(a, b);
-    if (diffs == NULL) {
+    if (!diffs) {
         mark_tree.apply_edit(start, oldend, newend);
         return;
     }
@@ -678,7 +678,7 @@ Change* Buffer::hist_alloc() {
 
 void Buffer::hist_free(int i) {
     auto change = history[i];
-    while (change != NULL) {
+    while (change) {
         auto next = change->next;
         world.change_fridge.free(change);
         change = next;
@@ -710,9 +710,9 @@ Change* Buffer::hist_get_latest_change_for_append() {
     if (hist_force_push_next_change) return NULL;
 
     auto c = history[hist_dec(hist_curr)];
-    if (c == NULL) return NULL; // when would this happen?
+    if (!c) return NULL; // when would this happen?
 
-    while (c->next != NULL) c = c->next;
+    while (c->next) c = c->next;
 
     return c;
 }
@@ -752,7 +752,7 @@ void Buffer::remove(cur2 start, cur2 end, bool applying_change) {
         bool need_new_change = false;
 
         auto c = hist_get_latest_change_for_append();
-        if (c != NULL) {
+        if (c) {
             if (c->new_end == end || hist_batch_mode) {
                 change = c;
                 if (c->new_end != end)
@@ -760,7 +760,7 @@ void Buffer::remove(cur2 start, cur2 end, bool applying_change) {
             }
         }
 
-        if (change != NULL && !need_new_change) {
+        if (change && !need_new_change) {
             if (change->start <= start) {
                 change->new_end = start;
                 change->new_text.len -= internal_distance_between(start, end);
@@ -775,14 +775,14 @@ void Buffer::remove(cur2 start, cur2 end, bool applying_change) {
         auto end_of_chars_to_copy = end;
 
         // if we are going to be appending to this change
-        if (change != NULL && !need_new_change)
+        if (change && !need_new_change)
             end_of_chars_to_copy = change->start;
 
         while (start < end_of_chars_to_copy) {
-            if (change == NULL || change->old_text.len == change->old_text.cap || need_new_change) {
+            if (!change || change->old_text.len == change->old_text.cap || need_new_change) {
                 need_new_change = false;
                 Change *new_change = NULL;
-                if (change == NULL) {
+                if (!change) {
                     change = hist_push();
                 } else {
                     change->next = hist_alloc();
@@ -1009,12 +1009,12 @@ cur2 Buffer::offset_to_cur(i32 off) {
 Lock global_mark_tree_lock;
 
 void cleanup_mark_node(Mark_Node *node) {
-    if (node == NULL) return;
+    if (!node) return;
 
     cleanup_mark_node(node->left);
     cleanup_mark_node(node->right);
 
-    for (auto it = node->marks; it != NULL; it = it->next) {
+    for (auto it = node->marks; it; it = it->next) {
         if (it == it->next)
             our_panic("infinite loop");
         it->valid = false;
@@ -1029,40 +1029,40 @@ void Mark_Tree::cleanup() {
 }
 
 int Mark_Tree::get_height(Mark_Node *root) {
-    return root == NULL ? 0 : root->height;
+    return !root ? 0 : root->height;
 }
 
 int Mark_Tree::get_balance(Mark_Node *root) {
-    return root == NULL ? 0 : (get_height(root->left) - get_height(root->right));
+    return !root ? 0 : (get_height(root->left) - get_height(root->right));
 }
 
 Mark_Node *Mark_Tree::succ(Mark_Node *node) {
-    if (node->right != NULL) {
+    if (node->right) {
         auto ret = node->right;
-        while (ret->left != NULL)
+        while (ret->left)
             ret = ret->left;
         return ret;
     }
 
-    for (; node->parent != NULL; node = node->parent)
+    for (; node->parent; node = node->parent)
         if (node->isleft)
             return node->parent;
     return NULL;
 }
 
 Mark_Node *Mark_Tree::find_node(Mark_Node *root, cur2 pos) {
-    if (root == NULL) return NULL;
+    if (!root) return NULL;
     if (root->pos == pos) return root;
 
     auto child = pos < root->pos ? root->left : root->right;
-    if (child == NULL)
+    if (!child)
         return root;
     return find_node(child, pos);
 }
 
 Mark_Node *Mark_Tree::insert_node(cur2 pos) {
     auto node = find_node(root, pos);
-    if (node != NULL && node->pos == pos)
+    if (node && node->pos == pos)
         return node;
 
     node = world.mark_node_fridge.alloc();
@@ -1104,7 +1104,7 @@ Mark_Node* Mark_Tree::rotate_right(Mark_Node *root) {
     y->isleft = root->isleft;
 
     root->left = y->right;
-    if (root->left != NULL) {
+    if (root->left) {
         root->left->parent = root;
         root->left->isleft = true;
     }
@@ -1125,7 +1125,7 @@ Mark_Node* Mark_Tree::rotate_left(Mark_Node *root) {
     y->isleft = root->isleft;
 
     root->right = y->left;
-    if (root->right != NULL) {
+    if (root->right) {
         root->right->parent = root;
         root->right->isleft = false;
     }
@@ -1141,7 +1141,7 @@ Mark_Node* Mark_Tree::rotate_left(Mark_Node *root) {
 
 // precond: pos doesn't exist in root
 Mark_Node *Mark_Tree::internal_insert_node(Mark_Node *root, cur2 pos, Mark_Node *node) {
-    if (root == NULL) {
+    if (!root) {
         recalc_height(node);
         return node;
     }
@@ -1151,14 +1151,14 @@ Mark_Node *Mark_Tree::internal_insert_node(Mark_Node *root, cur2 pos, Mark_Node 
     if (pos < root->pos) {
         auto old = root->left;
         root->left = internal_insert_node(root->left, pos, node);
-        if (old == NULL) {
+        if (!old) {
             node->parent = root;
             node->isleft = true;
         }
     } else {
         auto old = root->right;
         root->right = internal_insert_node(root->right, pos, node);
-        if (old == NULL) {
+        if (!old) {
             node->parent = root;
             node->isleft = false;
         }
@@ -1191,10 +1191,10 @@ void Mark_Tree::delete_mark(Mark *mark) {
 
     // remove `mark` from `node->marks`
     Mark *last = NULL;
-    for (auto it = node->marks; it != NULL; it = it->next) {
+    for (auto it = node->marks; it; it = it->next) {
         if (it == mark) {
             found = true;
-            if (last == NULL)
+            if (!last)
                node->marks = mark->next;
             else {
                last->next = mark->next;
@@ -1210,7 +1210,7 @@ void Mark_Tree::delete_mark(Mark *mark) {
     if (!found)
         our_panic("trying to delete mark not found in its node");
 
-    if (node->marks == NULL)
+    if (!node->marks)
         delete_node(node->pos);
 
     mark->valid = false;
@@ -1225,24 +1225,24 @@ void Mark_Tree::delete_node(cur2 pos) {
 }
 
 Mark_Node *Mark_Tree::internal_delete_node(Mark_Node *root, cur2 pos) {
-    if (root == NULL) return root;
+    if (!root) return root;
 
     if (pos < root->pos)
         root->left = internal_delete_node(root->left, pos);
     else if (pos > root->pos)
         root->right = internal_delete_node(root->right, pos);
     else {
-        if (root->marks != NULL)
+        if (root->marks)
             our_panic("trying to delete a node that still has marks");
 
-        if (root->left == NULL || root->right == NULL) {
+        if (!root->left || !root->right) {
             Mark_Node *ret = NULL;
             bool isleft = false;
 
-            if (root->left == NULL) ret = root->right;
-            if (root->right == NULL) ret = root->left;
+            if (!root->left) ret = root->right;
+            if (!root->right) ret = root->left;
 
-            if (ret != NULL) {
+            if (ret) {
                 ret->parent = root->parent;
                 ret->isleft = root->isleft;
             }
@@ -1252,11 +1252,11 @@ Mark_Node *Mark_Tree::internal_delete_node(Mark_Node *root, cur2 pos) {
         }
 
         auto min = root->right;
-        while (min->left != NULL)
+        while (min->left)
             min = min->left;
 
         root->marks = min->marks;
-        for (auto it = root->marks; it != NULL; it = it->next)
+        for (auto it = root->marks; it; it = it->next)
             it->node = root;
         root->pos = min->pos;
         min->marks = NULL;
@@ -1303,7 +1303,7 @@ void Mark_Tree::apply_edit(cur2 start, cur2 old_end, cur2 new_end) {
      */
 
     auto nstart = find_node(root, start);
-    if (nstart == NULL) return;
+    if (!nstart) return;
 
     auto it = nstart;
     if (it->pos < start) it = succ(it);
@@ -1312,11 +1312,11 @@ void Mark_Tree::apply_edit(cur2 start, cur2 old_end, cur2 new_end) {
 
     check_tree_integrity();
 
-    while (it != NULL && it->pos < old_end) {
+    while (it && it->pos < old_end) {
         if (it->pos < new_end) {
             it = succ(it);
         } else {
-            for (auto mark = it->marks; mark != NULL; mark = mark->next)
+            for (auto mark = it->marks; mark; mark = mark->next)
                 if (mark == mark->next)
                     our_panic("infinite loop");
 
@@ -1326,7 +1326,7 @@ void Mark_Tree::apply_edit(cur2 start, cur2 old_end, cur2 new_end) {
                 our_panic("why is this happening?");
 
             int i = 0;
-            for (auto mark = it->marks; mark != NULL; mark = next) {
+            for (auto mark = it->marks; mark; mark = next) {
                 if (orphan_marks == mark)
                     our_panic("why is this happening?");
 
@@ -1346,14 +1346,14 @@ void Mark_Tree::apply_edit(cur2 start, cur2 old_end, cur2 new_end) {
 
             // after deleting the node, go to the next node
             it = find_node(root, curr);
-            if (it != NULL && it->pos < curr)
+            if (it && it->pos < curr)
                 it = succ(it);
         }
     }
 
     check_tree_integrity();
 
-    for (; it != NULL; it = succ(it)) {
+    for (; it; it = succ(it)) {
         if (it->pos.y == old_end.y) {
             it->pos.y = new_end.y;
             it->pos.x = it->pos.x + new_end.x - old_end.x;
@@ -1364,10 +1364,10 @@ void Mark_Tree::apply_edit(cur2 start, cur2 old_end, cur2 new_end) {
 
     check_tree_integrity();
 
-    if (orphan_marks != NULL) {
+    if (orphan_marks) {
         auto nend = insert_node(new_end);
         Mark *next = NULL;
-        for (auto mark = orphan_marks; mark != NULL; mark = next) {
+        for (auto mark = orphan_marks; mark; mark = next) {
             next = mark->next;
             mark->node = nend;
             mark->next = nend->marks;
@@ -1380,9 +1380,9 @@ void Mark_Tree::apply_edit(cur2 start, cur2 old_end, cur2 new_end) {
 }
 
 void Mark_Tree::check_mark_cycle(Mark_Node *root) {
-    if (root == NULL) return;
+    if (!root) return;
 
-    for (auto mark = root->marks; mark != NULL; mark = mark->next)
+    for (auto mark = root->marks; mark; mark = mark->next)
         if (mark == mark->next)
             our_panic("mark cycle detected");
 
@@ -1391,13 +1391,13 @@ void Mark_Tree::check_mark_cycle(Mark_Node *root) {
 }
 
 void Mark_Tree::check_duplicate_marks_helper(Mark_Node *root, List<Mark*> *seen) {
-    if (root == NULL) return;
+    if (!root) return;
 
     check_duplicate_marks_helper(root->left, seen);
     check_duplicate_marks_helper(root->right, seen);
 
-    for (auto m = root->marks; m != NULL; m = m->next) {
-        if (seen->find([&](auto it) { return *it == m; }) != NULL)
+    for (auto m = root->marks; m; m = m->next) {
+        if (seen->find([&](auto it) { return *it == m; }))
             our_panic("duplicate mark");
         seen->append(m);
     }
@@ -1420,14 +1420,14 @@ void Mark_Tree::check_tree_integrity() {
 
 void Mark_Tree::check_ordering() {
     auto min = root;
-    if (min == NULL) return;
+    if (!min) return;
 
-    while (min->left != NULL)
+    while (min->left)
         min = min->left;
 
     // o(n). we need this for now, don't have this in final ver.
     cur2 last = {-1, -1};
-    for (auto it = min; it != NULL; it = succ(it)) {
+    for (auto it = min; it; it = succ(it)) {
         if (last.x != -1) {
             if (last >= it->pos) {
                 our_panic("out of order (or duplicate)");
@@ -1441,7 +1441,7 @@ cur2 Mark::pos() { return node->pos; }
 void Mark::cleanup() { if (valid) tree->delete_mark(this); }
 
 bool is_mark_valid(Mark *mark) {
-    return mark != NULL && mark->valid;
+    return mark && mark->valid;
 }
 
 // ============

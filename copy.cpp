@@ -16,12 +16,12 @@ T *clone(T *old) {
 
 template <typename T>
 T* copy_object(T *old) {
-    return old == NULL ? NULL : old->copy();
+    return !old ? NULL : old->copy();
 }
 
 template <typename T>
 List<T> *copy_list(List<T> *arr, fn<T*(T* it)> copy_func) {
-    if (arr == NULL) return NULL;
+    if (!arr) return NULL;
 
     auto new_arr = alloc_object(List<T>);
     new_arr->init(LIST_POOL, max(arr->len, 1));
@@ -56,7 +56,7 @@ Call_Hier_Node* Call_Hier_Node::copy() {
 Find_Decl* Find_Decl::copy() {
     auto ret = clone(this);
     ret->filepath = our_strcpy(filepath);
-    ret->decl = decl == NULL ? NULL : decl->copy_decl();
+    ret->decl = !decl ? NULL : decl->copy_decl();
     ret->package_name = our_strcpy(package_name);
     return ret;
 }
@@ -66,7 +66,7 @@ Go_Symbol* Go_Symbol::copy() {
     ret->pkgname = our_strcpy(pkgname);
     ret->filepath = our_strcpy(filepath);
     ret->name = our_strcpy(name);
-    ret->decl = decl == NULL ? NULL : decl->copy_decl();
+    ret->decl = !decl ? NULL : decl->copy_decl();
     return ret;
 }
 
@@ -300,7 +300,7 @@ Go_Index *Go_Index::copy() {
 Jump_To_Definition_Result* Jump_To_Definition_Result::copy() {
     auto ret = clone(this);
     ret->file = our_strcpy(file);
-    ret->decl = decl == NULL ? NULL : decl->copy_decl();
+    ret->decl = !decl ? NULL : decl->copy_decl();
     return ret;
 }
 

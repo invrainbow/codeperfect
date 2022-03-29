@@ -976,7 +976,7 @@ struct Go_Package {
     bool checked_for_outdated_hash;
 
     void cleanup_files() {
-        if (files == NULL) return;
+        if (!files) return;
         For (*files) it.cleanup();
         files->len = 0;
     }
@@ -1042,7 +1042,7 @@ struct Module_Resolver {
     void cleanup();
 
     Node *goto_child(Node *node, ccstr name, bool create_if_not_found) {
-        for (auto it = node->children; it != NULL; it = it->next)
+        for (auto it = node->children; it; it = it->next)
             if (streqi(it->name, name))
                 return it;
 
@@ -1104,15 +1104,15 @@ struct Module_Resolver {
             auto part = parts->at(i);
 
             curr = goto_child(curr, part, false);
-            if (curr == NULL) break;
+            if (!curr) break;
 
-            if (curr->value != NULL) {
+            if (curr->value) {
                 last_value = curr->value;
                 last_index = i + 1;
             }
         }
 
-        if (last_value == NULL) return NULL;
+        if (!last_value) return NULL;
 
         auto ret = alloc_list<ccstr>(parts->len - last_index + 1);
         ret->append(last_value);
@@ -1381,7 +1381,7 @@ TSParser *new_ts_parser();
 template<typename T>
 T *read_object(Index_Stream *s) {
     auto size = s->read2();
-    if (size == 0) return NULL;
+    if (!size) return NULL;
 
     // TODO: i mean, don't literally crash the program, show an error and
     // rebuild the index or something
@@ -1405,7 +1405,7 @@ List<T> *read_list(Index_Stream *s) {
 
 template<typename T>
 void write_object(T *obj, Index_Stream *s) {
-    if (obj == NULL) {
+    if (!obj) {
         s->write2(0);
         return;
     }
@@ -1417,7 +1417,7 @@ void write_object(T *obj, Index_Stream *s) {
 
 template<typename L>
 void write_list(L arr, Index_Stream *s) {
-    if (arr == NULL) {
+    if (!arr) {
         s->write4(0);
         return;
     }

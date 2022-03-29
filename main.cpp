@@ -165,7 +165,7 @@ GLint compile_program(cstr vert_code, cstr frag_code) {
     i32 status = 0;
     glGetProgramiv(id, GL_LINK_STATUS, &status);
 
-    if (status == 0) {
+    if (!status) {
         char log[512];
         glGetProgramInfoLog(id, 512, NULL, log);
         fprintf(stderr, "error linking program: %s", log);
@@ -229,7 +229,7 @@ void goto_previous_tab() {
 bool is_git_folder(ccstr path) {
     SCOPED_FRAME();
     auto pathlist = make_path(path);
-    return pathlist->parts->find([&](auto it) { return streqi(*it, ".git"); }) != NULL;
+    return pathlist->parts->find([&](auto it) { return streqi(*it, ".git"); });
 }
 
 void handle_window_event(Window_Event *it) {
@@ -468,7 +468,7 @@ void handle_window_event(Window_Event *it) {
         };
 
         auto handle_enter = [&]() {
-            if (editor == NULL) return;
+            if (!editor) return;
 
             if (world.use_nvim) {
                 if (world.nvim.mode != VI_INSERT) {
@@ -484,11 +484,11 @@ void handle_window_event(Window_Event *it) {
         };
 
         auto handle_tab = [&]() {
-            if (editor == NULL) return;
+            if (!editor) return;
 
             if (keymods == CP_MOD_NONE) {
                 auto& ac = editor->autocomplete;
-                if (ac.ac.results != NULL && ac.filtered_results->len != 0) {
+                if (ac.ac.results && ac.filtered_results->len != 0) {
                     auto idx = ac.filtered_results->at(ac.selection);
                     auto& result = ac.ac.results->at(idx);
                     editor->perform_autocomplete(&result);
@@ -533,7 +533,7 @@ void handle_window_event(Window_Event *it) {
         };
 
         auto handle_backspace = [&]() {
-            if (editor == NULL) return;
+            if (!editor) return;
 
             if (world.use_nvim) {
                 if (world.nvim.mode != VI_INSERT) {
@@ -590,7 +590,7 @@ void handle_window_event(Window_Event *it) {
         // handle movement
         do {
             if (world.use_nvim) break;
-            if (editor == NULL) break;
+            if (!editor) break;
 
             bool handled = false;
 
@@ -602,9 +602,9 @@ void handle_window_event(Window_Event *it) {
             case CP_MOD_NONE:
                 switch (key) {
                 case CP_KEY_LEFT:
-                    if (cur.x > 0) {
+                    if (cur.x) {
                         cur.x--;
-                    } else if (cur.y > 0) {
+                    } else if (cur.y) {
                         cur.y--;
                         cur.x = buf->lines[cur.y].len;
                     }
@@ -659,7 +659,7 @@ void handle_window_event(Window_Event *it) {
                             cur.x = calc_x();
                         }
                     } else {
-                        if (cur.y > 0) {
+                        if (cur.y) {
                             cur.y--;
                             cur.x = calc_x();
                         }
@@ -777,7 +777,7 @@ void handle_window_event(Window_Event *it) {
                     }
                     break;
                 case CP_KEY_Y:
-                    if (editor == NULL) break;
+                    if (!editor) break;
                     if (world.nvim.mode == VI_INSERT) break;
                     if (editor->view.y > 0) {
                         editor->view.y--;
@@ -785,7 +785,7 @@ void handle_window_event(Window_Event *it) {
                     }
                     break;
                 case CP_KEY_E:
-                    if (editor == NULL) break;
+                    if (!editor) break;
                     if (world.nvim.mode == VI_INSERT) break;
                     if (editor->view.y + 1 < editor->buf->lines.len) {
                         editor->view.y++;
@@ -809,7 +809,7 @@ void handle_window_event(Window_Event *it) {
                 case CP_KEY_SPACE:
                     {
                         auto ed = get_current_editor();
-                        if (ed == NULL) break;
+                        if (!ed) break;
                         ed->trigger_autocomplete(false, false);
                     }
                     break;
@@ -844,7 +844,7 @@ void handle_window_event(Window_Event *it) {
             case CP_KEY_SPACE:
                 {
                     auto ed = get_current_editor();
-                    if (ed == NULL) break;
+                    if (!ed) break;
                     ed->trigger_parameter_hint();
                 }
                 break;
@@ -853,7 +853,7 @@ void handle_window_event(Window_Event *it) {
 
         case CP_MOD_NONE:
             {
-                if (editor == NULL) break;
+                if (!editor) break;
 
                 switch (key) {
                 case CP_KEY_LEFT:
@@ -896,7 +896,7 @@ void handle_window_event(Window_Event *it) {
             case CP_KEY_A:
                 if (!world.use_nvim) {
                     auto editor = get_current_editor();
-                    if (editor == NULL) break;
+                    if (!editor) break;
 
                     editor->selecting = true;
                     editor->select_start = new_cur2(0, 0);
@@ -912,7 +912,7 @@ void handle_window_event(Window_Event *it) {
             case CP_KEY_X:
                 if (!world.use_nvim) {
                     auto editor = get_current_editor();
-                    if (editor == NULL) break;
+                    if (!editor) break;
                     if (!editor->selecting) break;
 
                     auto a = editor->select_start;
@@ -937,7 +937,7 @@ void handle_window_event(Window_Event *it) {
             case CP_KEY_V:
                 if (!world.use_nvim || world.nvim.mode == VI_INSERT) {
                     auto clipboard_contents = get_clipboard_string();
-                    if (clipboard_contents == NULL) break;
+                    if (!clipboard_contents) break;
 
                     if (editor->selecting) {
                         auto a = editor->select_start;
@@ -965,7 +965,7 @@ void handle_window_event(Window_Event *it) {
             case CP_KEY_K:
                 {
                     auto ed = get_current_editor();
-                    if (ed == NULL) return;
+                    if (!ed) return;
                     move_autocomplete_cursor(ed, key == CP_KEY_J ? 1 : -1);
                     break;
                 }
@@ -974,10 +974,10 @@ void handle_window_event(Window_Event *it) {
             case CP_KEY_W:
                 {
                     auto pane = get_current_pane();
-                    if (pane == NULL) break;
+                    if (!pane) break;
 
                     auto editor = pane->get_current_editor();
-                    if (editor == NULL) {
+                    if (!editor) {
                         // can't close the last pane
                         if (world.panes.len <= 1) break;
 
@@ -1038,7 +1038,7 @@ void handle_window_event(Window_Event *it) {
         if (ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow)) return;
 
         auto ed = get_current_editor();
-        if (ed == NULL) return;
+        if (!ed) return;
 
         if (ch > 127) return;
         if (!isprint(ch)) return;
@@ -1131,7 +1131,7 @@ int main(int argc, char **argv) {
 
     auto set_window_title = [&](ccstr note) {
         ccstr s = NULL;
-        if (note == NULL)
+        if (!note)
             s = our_sprintf("%s - %s", WINDOW_TITLE, world.current_path);
         else
             s = our_sprintf("%s (%s) - %s", WINDOW_TITLE, note, world.current_path);
@@ -1163,7 +1163,7 @@ int main(int argc, char **argv) {
     world.window->swap_interval(0);
 
     auto configdir = GHGetConfigDir();
-    if (configdir == NULL)
+    if (!configdir)
         return error("unable to get config dir"), EXIT_FAILURE;
 
     ImGui::CreateContext();
@@ -1334,7 +1334,7 @@ int main(int argc, char **argv) {
         s32 len = 0;
 
         world.ui.im_font_ui = io.Fonts->AddFontFromMemoryTTF(open_sans_ttf, open_sans_ttf_len, UI_FONT_SIZE);
-        our_assert(world.ui.im_font_ui != NULL, "unable to load UI font");
+        our_assert(world.ui.im_font_ui, "unable to load UI font");
 
         {
             // merge font awesome into main font
@@ -1357,7 +1357,7 @@ int main(int argc, char **argv) {
         }
 
         world.ui.im_font_mono = io.Fonts->AddFontFromMemoryTTF(vera_mono_ttf, vera_mono_ttf_len, CODE_FONT_SIZE);
-        our_assert(world.ui.im_font_mono != NULL, "unable to load code font");
+        our_assert(world.ui.im_font_mono, "unable to load code font");
 
         if (!world.font.init((u8*)vera_mono_ttf, CODE_FONT_SIZE, TEXTURE_FONT))
             our_panic("unable to load code font");
@@ -1519,7 +1519,7 @@ int main(int argc, char **argv) {
         t.log("auth");
 
         if (world.randomly_move_cursor_around) {
-            if (get_current_editor() != NULL) {
+            if (get_current_editor()) {
                 if (world.frame_index % 3 == 0) {
                     send_nvim_keys(rand() % 2 == 0 ? "{" : "}");
                 }
@@ -1560,7 +1560,7 @@ int main(int argc, char **argv) {
                 case MTM_RELOAD_EDITOR:
                     {
                         auto editor = find_editor_by_id(it.reload_editor_id);
-                        if (editor != NULL)
+                        if (editor)
                             editor->reload_file(false);
                     }
                     break;
@@ -1600,7 +1600,7 @@ int main(int argc, char **argv) {
                 reload_file_subtree(get_path_relative_to(filedir, world.current_path));
 
                 auto editor = find_editor_by_filepath(filepath);
-                if (editor != NULL)
+                if (editor)
                     editor->reload_file(true);
 
                 auto should_handle_fsevent = [&]() {

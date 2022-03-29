@@ -51,7 +51,7 @@ when a frame is opened
 #endif
 
 bool Dlv_Var::incomplete() {
-    auto children_len = [&]() -> int { return children == NULL ? 0 : children->len; };
+    auto children_len = [&]() -> int { return !children ? 0 : children->len; };
 
     switch (kind) {
     case GO_KIND_STRING:
@@ -93,7 +93,7 @@ bool Debugger::find_breakpoint(ccstr filename, u32 line, Breakpoint* out) {
     SCOPED_FRAME();
 
     auto breakpoints = list_breakpoints();
-    if (breakpoints == NULL)
+    if (!breakpoints)
         return false;
 
     For (*breakpoints)
@@ -153,7 +153,7 @@ ccstr parse_json_string(ccstr s) {
                 auto parse_hex4 = [&](ccstr s, bool *ok) -> u32 {
                     u32 h = 0;
                     for (u32 i = 0; i < 4; i++) {
-                        if (i > 0) h = h << 4;
+                        if (i) h = h << 4;
 
                         if ((s[i] >= '0') && (s[i] <= '9'))
                             h += (u32)s[i] - '0';
@@ -230,7 +230,7 @@ void Debugger::save_single_var(Json_Navigator js, i32 idx, Dlv_Var* out, Save_Va
         out->only_addr = js.boolean(js.get(idx, ".onlyAddr"));
 
         auto unreadable = js.str(js.get(idx, ".unreadable"));
-        if (unreadable != NULL && unreadable[0] != '\0')
+        if (unreadable && unreadable[0] != '\0')
             out->unreadable_description = unreadable;
     }
 
@@ -346,10 +346,10 @@ bool Debugger::read_stdin_until(char want, ccstr* pret) {
     r.init();
     for (char c; headless_proc.read1(&c);) {
         if (c == want) {
-            if (pret != NULL) *pret = r.finish();
+            if (pret) *pret = r.finish();
             return true;
         }
-        if (pret != NULL) r.writechar(c);
+        if (pret) r.writechar(c);
     }
 
     frame.restore();
@@ -388,7 +388,7 @@ void Debugger::init() {
 void Debugger::cleanup() {
     lock.cleanup();
 
-    if (thread != NULL) {
+    if (thread) {
         kill_thread(thread);
         close_thread_handle(thread);
     }
@@ -475,8 +475,8 @@ bool Debugger::read_packet(Packet* p) {
 
     auto run = [&]() -> bool {
         auto s = read();
-        if (s == NULL) {
-            dbg_print("recv.run: s == NULL");
+        if (!s) {
+            dbg_print("recv.run: !s");
             return false;
         }
 
@@ -832,7 +832,7 @@ i32 Json_Navigator::num(i32 i) {
     SCOPED_FRAME();
     auto s = str(i);
     return atoi(s);
-    // return s == NULL ? 0 : atoi(s);
+    // return !s ? 0 : atoi(s);
 }
 
 bool Json_Navigator::boolean(i32 i) {
@@ -902,7 +902,7 @@ bool Debugger::start(Debug_Profile *debug_profile) {
 
             auto get_info_from_current_editor = [&]() {
                 auto editor = get_current_editor();
-                if (editor == NULL) return;
+                if (!editor) return;
                 if (!editor->is_go_file) return;
 
                 if (debug_profile->type == DEBUG_TEST_CURRENT_FUNCTION)
@@ -916,7 +916,7 @@ bool Debugger::start(Debug_Profile *debug_profile) {
                 package_path = normalize_path_sep(path_join(root_module_path, subpath), '/');
 
                 if (debug_profile->type == DEBUG_TEST_CURRENT_FUNCTION) {
-                    if (editor->buf->tree != NULL) {
+                    if (editor->buf->tree) {
                         Parser_It it;
                         it.init(editor->buf);
                         auto root_node = new_ast_node(ts_tree_root_node(editor->buf->tree), &it);
@@ -947,11 +947,11 @@ bool Debugger::start(Debug_Profile *debug_profile) {
             else if (debug_profile->type == DEBUG_RUN_PACKAGE)
                 package_path = debug_profile->run_package.package_path;
 
-            if (package_path == NULL || package_path[0] == '\0')
+            if (!package_path || package_path[0] == '\0')
                 return false;
 
             if (debug_profile->type == DEBUG_TEST_CURRENT_FUNCTION)
-                if (test_function_name == NULL || test_function_name[0] == '\0')
+                if (!test_function_name || test_function_name[0] == '\0')
                     return false;
 
             ccstr binary_name = NULL;
@@ -997,7 +997,7 @@ bool Debugger::start(Debug_Profile *debug_profile) {
         break;
     }
 
-    if (binary_path == NULL || binary_path[0] == '\0') {
+    if (!binary_path || binary_path[0] == '\0') {
         send_tell_user("Unable to find binary to debug.", NULL); // probably be more specific later
         return false;
     }
@@ -1010,13 +1010,13 @@ bool Debugger::start(Debug_Profile *debug_profile) {
     ccstr delve_path = NULL;
     {
         auto path = GHGetDelvePath();
-        if (path != NULL) {
+        if (path) {
             delve_path = our_strcpy(path);
             defer { GHFree(path); };
         }
     }
 
-    if (delve_path == NULL || delve_path[0] == '\0') {
+    if (!delve_path || delve_path[0] == '\0') {
         dbg_print("delve path is empty");
         send_tell_user("Couldn't find Delve. Please make sure it's installed and accessible from a Bash shell.", NULL);
         return false;
@@ -1054,7 +1054,7 @@ bool Debugger::start(Debug_Profile *debug_profile) {
         };
 
         pipe_stdout_thread = create_thread(callback, this);
-        if (pipe_stdout_thread == NULL) return false;
+        if (!pipe_stdout_thread) return false;
     }
 
     // read the first line
@@ -1076,7 +1076,7 @@ bool Debugger::start(Debug_Profile *debug_profile) {
         return error("unable to resolve server:port %s:%s", server, port), false;
 
     auto make_connection = [&]() -> int {
-        for (auto ptr = result; ptr != NULL; ptr = ptr->ai_next) {
+        for (auto ptr = result; ptr; ptr = ptr->ai_next) {
             auto fd = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
             if (fd == -1) return -1;
 
@@ -1103,7 +1103,7 @@ bool Debugger::start(Debug_Profile *debug_profile) {
         rend->field("APIVersion", 2);
     });
 
-    if (resp == NULL)
+    if (!resp)
         return error("unable to set API version"), false;
 
     world.wnd_debug_output.selection = -1;
@@ -1135,7 +1135,7 @@ void Debugger::pipe_stdout_into_our_buffer() {
 
         char ch = 0;
         if (!p.read1(&ch)) break;
-        if (ch == 0) break;
+        if (!ch) break;
 
         if (ch == '\n') {
             stdout_line_buffer.append('\0');
@@ -1155,7 +1155,7 @@ void Debugger::stop() {
     if (conn != 0 && conn != -1)
         close_stub(conn);
 
-    if (pipe_stdout_thread != NULL) {
+    if (pipe_stdout_thread) {
         kill_thread(pipe_stdout_thread);
         pipe_stdout_thread = NULL;
     }
@@ -1185,7 +1185,7 @@ void Debugger::select_frame(u32 goroutine_id, u32 frame) {
     t.log("set_current_goroutine");
 
     auto goroutine = state.goroutines.find([&](auto it) { return it->id == goroutine_id; });
-    if (goroutine == NULL) return;
+    if (!goroutine) return;
 
     if (!goroutine->fresh)
         fetch_stackframe(goroutine);
@@ -1266,7 +1266,7 @@ void Debugger::do_everything() {
                 {
                     auto &args = it.delete_watch;
                     watches.remove(args.watch_idx);
-                    if (watches.len == 0) {
+                    if (!watches.len) {
                         watches_mem.cleanup();
                         watches_mem.init();
                     }
@@ -1412,7 +1412,7 @@ void Debugger::do_everything() {
                         debug_profile = project_settings.get_active_debug_profile();
                     }
 
-                    if (debug_profile == NULL) {
+                    if (!debug_profile) {
                         // be more specific?
                         send_tell_user("Unable to find debug profile.", "Error");
                         break;
@@ -1456,7 +1456,7 @@ void Debugger::do_everything() {
                         return are_breakpoints_same(args.filename, args.lineno, it->file, it->line);
                     });
 
-                    if (bkpt == NULL) {
+                    if (!bkpt) {
                         Client_Breakpoint b;
                         {
                             SCOPED_MEM(&breakpoints_mem);
@@ -1476,7 +1476,7 @@ void Debugger::do_everything() {
                         if (state_flag != DLV_STATE_INACTIVE)
                             unset_breakpoint(bkpt->dlv_id);
                         breakpoints.remove(bkpt);
-                        if (breakpoints.len == 0)
+                        if (!breakpoints.len)
                             breakpoints_mem.reset();
                     }
                 }
@@ -1553,7 +1553,7 @@ void Debugger::handle_new_state(Packet *p) {
     // this might lock up main thread
     SCOPED_LOCK(&lock);
 
-    if (p == NULL) return;
+    if (!p) return;
 
     state_id++;
 
@@ -1630,7 +1630,7 @@ void Debugger::handle_new_state(Packet *p) {
 
     For (state.goroutines) {
         auto entry = goroutines_with_breakpoint.find([&](auto g) { return g->goroutine_id == it.id; });
-        if (entry != NULL) {
+        if (entry) {
             SCOPED_MEM(&state_mem);
             it.curr_file = entry->breakpoint_file;
             it.curr_line = entry->breakpoint_line;

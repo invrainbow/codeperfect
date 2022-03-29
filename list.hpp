@@ -50,14 +50,14 @@ struct List {
         case LIST_MALLOC:
             cap = _cap;
             items = (T*)our_malloc(sizeof(T) * cap);
-            if (items == NULL)
+            if (!items)
                 our_panic("unable to our_malloc for array");
             global_mem_allocated += sizeof(T) * cap;
             mem0(items, sizeof(T) * cap);
             break;
         case LIST_CHUNK:
             items = (T*)alloc_chunk_stub(_cap, &cap);
-            if (items == NULL)
+            if (!items)
                 our_panic("unable to alloc chunk for array");
             break;
         }
@@ -89,7 +89,7 @@ struct List {
         return ret;
     }
 
-    bool append(T t) { return append(&t) != NULL; }
+    bool append(T t) { return append(&t); }
 
     T* append() {
         if (!ensure_cap(len + 1))
@@ -100,7 +100,7 @@ struct List {
     }
 
     T* last() {
-        if (len == 0) return NULL;
+        if (!len) return NULL;
         return &items[len-1];
     }
 
@@ -127,7 +127,7 @@ struct List {
                 cap = 1 << (int)ceil(log2(new_cap));
 
                 items = (T*)realloc(items, sizeof(T) * cap);
-                if (items == NULL)
+                if (!items)
                     return false;
 
                 global_mem_allocated -= sizeof(T) * old_cap;
@@ -141,7 +141,7 @@ struct List {
             {
                 cap = 1 << (int)ceil(log2(new_cap));
                 auto new_items = (T*)alloc_from_pool_stub(pool, sizeof(T) * cap);
-                if (new_items == NULL)
+                if (!new_items)
                     return false;
                 mem0(new_items, sizeof(T) * cap);
                 memcpy(new_items, items, sizeof(T) * len);
@@ -156,7 +156,7 @@ struct List {
             {
                 s32 chunksize;
                 auto chunk = (T*)alloc_chunk_stub(new_cap, &chunksize);
-                if (chunk == NULL) return false;
+                if (!chunk) return false;
 
                 memcpy(chunk, items, sizeof(T) * len);
                 free_chunk_stub((uchar*)items, cap);
@@ -192,7 +192,7 @@ struct List {
 
     T* find_or_append(find_pred f) {
         auto ret = find(f);
-        if (ret == NULL)
+        if (!ret)
             ret = append();
         return ret;
     }
@@ -213,7 +213,7 @@ struct List {
 
     bool remove(find_pred f) {
         auto p = find(f);
-        if (p == NULL) return false;
+        if (!p) return false;
         remove(p);
         return true;
     }

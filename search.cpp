@@ -21,18 +21,18 @@ void Searcher::init() {
 //     - clear everything but final
 
 void Searcher::cleanup_search() {
-    if (thread != NULL) {
+    if (thread) {
         kill_thread(thread);
         close_thread_handle(thread);
         thread = NULL;
     }
 
-    if (re != NULL) {
+    if (re) {
         pcre_free(re);
         re = NULL;
     }
 
-    if (re_extra != NULL) {
+    if (re_extra) {
         pcre_free(re_extra);
         re_extra = NULL;
     }
@@ -40,7 +40,7 @@ void Searcher::cleanup_search() {
 
 void Searcher::cleanup() {
     For (search_results) {
-        if (it.results == NULL) continue;
+        if (!it.results) continue;
         For (*it.results) {
             it.mark_start->cleanup();
             it.mark_end->cleanup();
@@ -83,7 +83,7 @@ void Searcher::search_worker() {
         file_queue.len--;
 
         auto fm = map_file_into_memory(filepath);
-        if (fm == NULL) continue;
+        if (!fm) continue;
         defer { fm->cleanup(); };
 
         auto buf = (char*)fm->data;
@@ -177,7 +177,7 @@ void Searcher::search_worker() {
                 sr.match_start = pos;
                 sr.match_off = i;
 
-                if (nextmatch.group_starts != NULL) {
+                if (nextmatch.group_starts) {
                     SCOPED_MEM(&final_mem);
 
                     sr.groups = alloc_list<ccstr>(nextmatch.group_starts->len);
@@ -224,7 +224,7 @@ void Searcher::search_worker() {
                 sr.mark_start = world.mark_fridge.alloc();
                 sr.mark_end = world.mark_fridge.alloc();
 
-                if (editor != NULL) {
+                if (editor) {
                     // what do we do here?
                     editor->buf->mark_tree.insert_mark(MARK_SEARCH_RESULT, sr.match_start, sr.mark_start);
                     editor->buf->mark_tree.insert_mark(MARK_SEARCH_RESULT, sr.match_end, sr.mark_end);
@@ -262,7 +262,7 @@ bool is_binary(ccstr buf, s32 len) {
     s32 total_bytes = len > 512 ? 512 : len;
 
     // empty
-    if (len == 0) return false;
+    if (!len) return false;
 
     // utf8 bom
     if (len >= 3 && buf[0] == 0xEF && buf[1] == 0xBB && buf[2] == 0xBF) return false;
@@ -313,8 +313,8 @@ bool Searcher::start_search(ccstr _query, Search_Opts *_opts) {
         search_results.init();
     }
 
-    if (opts.include != NULL) include_parts = make_path(opts.include)->parts;
-    if (opts.exclude != NULL) exclude_parts = make_path(opts.exclude)->parts;
+    if (opts.include) include_parts = make_path(opts.include)->parts;
+    if (opts.exclude) exclude_parts = make_path(opts.exclude)->parts;
 
     // precompute shit
     if (opts.literal) {
@@ -361,7 +361,7 @@ bool Searcher::start_search(ccstr _query, Search_Opts *_opts) {
         int pcre_err_offset = 0;
 
         re = pcre_compile(query, pcre_opts, &pcre_err, &pcre_err_offset, NULL);
-        if (re == NULL) return false;
+        if (!re) return false;
         // TODO: die("Bad regex! pcre_compile() failed at position %i: %s", pcre_err_offset, pcre_err);
 
         // jit enabled?
@@ -389,13 +389,13 @@ bool Searcher::start_search(ccstr _query, Search_Opts *_opts) {
 
             auto fullpath = path_join(path, node->name);
             if (node->is_directory) {
-                for (auto child = node->children; child != NULL; child = child->next) {
+                for (auto child = node->children; child; child = child->next) {
                     stack.append(child);
                     stackpaths.append(fullpath);
                 }
             } else {
-                // if (include_parts == NULL || pattern_matches(include_parts, fullpath))
-                //     if (exclude_parts == NULL || !pattern_matches(exclude_parts, fullpath))
+                // if (!include_parts || pattern_matches(include_parts, fullpath))
+                //     if (!exclude_parts || !pattern_matches(exclude_parts, fullpath))
                 file_queue.append(fullpath);
             }
         }
@@ -408,7 +408,7 @@ bool Searcher::start_search(ccstr _query, Search_Opts *_opts) {
     };
 
     thread = create_thread(fun, this);
-    return (thread != NULL);
+    return thread != NULL;
 }
 
 bool Searcher::start_replace(ccstr _replace_with) {
@@ -422,7 +422,7 @@ bool Searcher::start_replace(ccstr _replace_with) {
     };
 
     thread = create_thread(fun, this);
-    return (thread != NULL);
+    return thread != NULL;
 }
 
 ccstr Searcher::get_replacement_text(Search_Result *sr, ccstr replace_text) {
@@ -436,7 +436,7 @@ ccstr Searcher::get_replacement_text(Search_Result *sr, ccstr replace_text) {
         bool is_dollar_replacement = false;
 
         do {
-            if (sr->groups == NULL) break;
+            if (!sr->groups) break;
             if (replace_text[k] != '$') break;
             if (k+1 >= rlen) break;
             if (!isdigit(replace_text[k+1])) break;
@@ -452,7 +452,7 @@ ccstr Searcher::get_replacement_text(Search_Result *sr, ccstr replace_text) {
             ccstr groupstr = NULL;
 
             int group = atoi(tmp->items);
-            if (group == 0) {
+            if (!group) {
                 groupstr = sr->match;
             } else if (group-1 < sr->groups->len) {
                 groupstr = sr->groups->at(group-1);
@@ -483,8 +483,8 @@ void Searcher::replace_worker() {
 
     For (search_results) {
         // would these ever happen
-        if (it.filepath == NULL) continue;
-        if (it.results == NULL || it.results->len == 0) continue;
+        if (!it.filepath) continue;
+        if (!it.results || it.results->len == 0) continue;
 
         File_Replacer fr;
         if (!fr.init(it.filepath, "search_and_replace")) continue;
@@ -516,11 +516,11 @@ bool File_Replacer::init(ccstr _filepath, ccstr unique_id) {
     defer {
         // if init fails, it needs to cleanup everything
         if (!success) {
-            if (fmr != NULL) {
+            if (fmr) {
                 fmr->cleanup();
                 fmr = NULL;
             }
-            if (fmw != NULL) {
+            if (fmw) {
                 fmw->cleanup();
                 fmw = NULL;
             }
@@ -531,14 +531,14 @@ bool File_Replacer::init(ccstr _filepath, ccstr unique_id) {
     optsr.write = false;
 
     fmr = map_file_into_memory(filepath, &optsr);
-    if (fmr == NULL) return false;
+    if (!fmr) return false;
 
     File_Mapping_Opts optsw; ptr0(&optsw);
     optsw.write = true;
     optsw.initial_size = 1024;
 
     fmw = map_file_into_memory(tmpfile, &optsw);
-    if (fmw == NULL) return false;
+    if (!fmw) return false;
 
     success = true;
     return true;

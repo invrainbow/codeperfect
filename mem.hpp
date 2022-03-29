@@ -30,7 +30,7 @@ struct Fridge {
 
     void cleanup() {
         auto block = blocks;
-        while (block != NULL) {
+        while (block) {
             auto next = block->next;
             global_mem_allocated -= block->size;
             our_free(block);
@@ -53,9 +53,9 @@ struct Fridge {
     }
 
     T* alloc() {
-        if (head == NULL) {
+        if (!head) {
             add_new_block();
-            assert(head != NULL);
+            assert(head);
         }
 
         T* ret = (T*)head;
@@ -91,7 +91,7 @@ struct Pool {
 
     bool owns_address(void *addr) {
         auto check_block = [&](Pool_Block *block) -> bool {
-            if (block == NULL) return false;
+            if (!block) return false;
 
             auto start = (u64)block->base;
             auto end = start + block->size;
@@ -116,7 +116,7 @@ struct Pool {
         For (obsolete_blocks) ret += it->size;
         For (used_blocks) ret += it->size;
         For (unused_blocks) ret += it->size;
-        if (curr != NULL) ret += curr->size;
+        if (curr) ret += curr->size;
         return ret;
     }
 
@@ -149,7 +149,7 @@ struct Pool {
         For (unused_blocks) free_block(it);
         For (used_blocks) free_block(it);
         For (obsolete_blocks) free_block(it);
-        if (curr != NULL) free_block(curr);
+        if (curr) free_block(curr);
 
         unused_blocks.len = 0;
         used_blocks.len = 0;
@@ -163,7 +163,7 @@ struct Pool {
     }
 
     void request_new_block() {
-        if (curr != NULL) {
+        if (curr) {
             used_blocks.append(&curr);
         }
 
@@ -185,14 +185,14 @@ struct Pool {
                 return *it == block;
             });
 
-            if (pblock == NULL) {
+            if (!pblock) {
                 pblock = obsolete_blocks.find([&](auto it) -> bool {
                     return *it == block;
                 });
-                assert(pblock != NULL);
+                assert(pblock);
                 // if the block was obsoleted, we're not going to use it,
                 // but we *can* just reset all the current used blocks
-                if (curr != NULL) {
+                if (curr) {
                     unused_blocks.append(curr);
                     curr = NULL;
                 }
@@ -201,7 +201,7 @@ struct Pool {
                 request_new_block();
             } else {
                 auto idx = pblock - used_blocks.items;
-                if (curr != NULL)
+                if (curr)
                     unused_blocks.append(curr);
                 for (u32 i = idx + 1; i < used_blocks.len; i++)
                     unused_blocks.append(used_blocks[i]);
@@ -219,7 +219,7 @@ struct Pool {
         while (n > bs) bs *= 2;
         if (bs > blocksize) {
             blocksize = bs;
-            if (curr != NULL) obsolete_blocks.append(curr);
+            if (curr) obsolete_blocks.append(curr);
             For (used_blocks) obsolete_blocks.append(it);
             used_blocks.len = 0;
             For (unused_blocks) obsolete_blocks.append(it);
@@ -230,7 +230,7 @@ struct Pool {
     }
 
     bool can_alloc(s32 n) {
-        return (curr != NULL) && (sp + n <= curr->size);
+        return (curr) && (sp + n <= curr->size);
     }
 
     void *alloc(s32 n) {
@@ -244,7 +244,7 @@ struct Pool {
     }
 
     void reset() {
-        if (curr != NULL) {
+        if (curr) {
             unused_blocks.append(curr);
             curr = NULL;
         }
