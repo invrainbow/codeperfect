@@ -428,6 +428,10 @@ void World::init(Window *_wnd) {
             if (!let_user_select_file(&opts)) exit(0);
         }
 
+        if (check_path(current_path) != CPR_DIRECTORY) {
+            cp_panic("Unable to open selected folder.");
+        }
+
         GHGitIgnoreInit(current_path);
         xplat_chdir(current_path);
     }
@@ -485,7 +489,7 @@ void World::init(Window *_wnd) {
 #ifdef DEBUG_MODE
     if (!use_nvim) world.wnd_history.show = true;
 
-    show_frame_index = true;
+    show_frame_index = false;
 #endif
 }
 
