@@ -32,7 +32,8 @@ const int GO_INDEX_MAGIC_NUMBER = 0x49fa98;
 // version 21: remove array_size from Gotype
 // version 22: sort references
 // version 23: rename @builtins to @builtin
-const int GO_INDEX_VERSION = 23;
+// version 24: upgrade tree-sitter-go
+const int GO_INDEX_VERSION = 24;
 
 void index_print(ccstr fmt, ...) {
     va_list args;
@@ -1253,9 +1254,11 @@ void Go_Indexer::background_thread() {
                 already_enqueued_packages.remove(import_path);
             }
 
+            /*
             if (streq(import_path, "@builtin")) {
-                BREAK_HERE;
+                // BREAK_HERE;
             }
+            */
 
             auto pkg = find_package_in_index(import_path);
             if (pkg && pkg->status == GPS_READY) // already been processed
@@ -4260,7 +4263,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                 auto get_struct_literal_type = [&]() -> Ast_Node* {
                     auto curr = node->parent();
                     if (curr->null) return NULL;
-                    if (curr->type() != TS_KEYED_ELEMENT && curr->type() != TS_ELEMENT) return NULL;
+                    if (curr->type() != TS_KEYED_ELEMENT) return NULL;
 
                     if (!node->prev()->null) return NULL; // must be key, not value
 
@@ -6595,15 +6598,17 @@ ccstr ts_ast_type_str(Ts_Ast_Type type) {
     define_str_case(TS_EQ);
     define_str_case(TS_VAR);
     define_str_case(TS_FUNC);
+    define_str_case(TS_LBRACK);
+    define_str_case(TS_RBRACK);
     define_str_case(TS_DOT_DOT_DOT);
     define_str_case(TS_TYPE);
     define_str_case(TS_STAR);
-    define_str_case(TS_LBRACK);
-    define_str_case(TS_RBRACK);
     define_str_case(TS_STRUCT);
     define_str_case(TS_LBRACE);
     define_str_case(TS_RBRACE);
     define_str_case(TS_INTERFACE);
+    define_str_case(TS_PIPE);
+    define_str_case(TS_TILDE);
     define_str_case(TS_MAP);
     define_str_case(TS_CHAN);
     define_str_case(TS_LT_DASH);
@@ -6649,7 +6654,6 @@ ccstr ts_ast_type_str(Ts_Ast_Type type) {
     define_str_case(TS_LT_LT);
     define_str_case(TS_GT_GT);
     define_str_case(TS_AMP_CARET);
-    define_str_case(TS_PIPE);
     define_str_case(TS_EQ_EQ);
     define_str_case(TS_BANG_EQ);
     define_str_case(TS_LT);
@@ -6665,6 +6669,7 @@ ccstr ts_ast_type_str(Ts_Ast_Type type) {
     define_str_case(TS_NIL);
     define_str_case(TS_TRUE);
     define_str_case(TS_FALSE);
+    define_str_case(TS_IOTA);
     define_str_case(TS_COMMENT);
     define_str_case(TS_RAW_STRING_LITERAL);
     define_str_case(TS_INTERPRETED_STRING_LITERAL);
@@ -6681,6 +6686,7 @@ ccstr ts_ast_type_str(Ts_Ast_Type type) {
     define_str_case(TS_VAR_SPEC);
     define_str_case(TS_FUNCTION_DECLARATION);
     define_str_case(TS_METHOD_DECLARATION);
+    define_str_case(TS_TYPE_PARAMETER_LIST);
     define_str_case(TS_PARAMETER_LIST);
     define_str_case(TS_PARAMETER_DECLARATION);
     define_str_case(TS_VARIADIC_PARAMETER_DECLARATION);
@@ -6690,6 +6696,8 @@ ccstr ts_ast_type_str(Ts_Ast_Type type) {
     define_str_case(TS_EXPRESSION_LIST);
     define_str_case(TS_PARENTHESIZED_TYPE);
     define_str_case(TS_SIMPLE_TYPE);
+    define_str_case(TS_GENERIC_TYPE);
+    define_str_case(TS_TYPE_ARGUMENTS);
     define_str_case(TS_POINTER_TYPE);
     define_str_case(TS_ARRAY_TYPE);
     define_str_case(TS_IMPLICIT_LENGTH_ARRAY_TYPE);
@@ -6698,7 +6706,10 @@ ccstr ts_ast_type_str(Ts_Ast_Type type) {
     define_str_case(TS_FIELD_DECLARATION_LIST);
     define_str_case(TS_FIELD_DECLARATION);
     define_str_case(TS_INTERFACE_TYPE);
-    define_str_case(TS_METHOD_SPEC_LIST);
+    define_str_case(TS_INTERFACE_BODY);
+    define_str_case(TS_INTERFACE_TYPE_NAME);
+    define_str_case(TS_CONSTRAINT_ELEM);
+    define_str_case(TS_CONSTRAINT_TERM);
     define_str_case(TS_METHOD_SPEC);
     define_str_case(TS_MAP_TYPE);
     define_str_case(TS_CHANNEL_TYPE);
@@ -6748,8 +6759,8 @@ ccstr ts_ast_type_str(Ts_Ast_Type type) {
     define_str_case(TS_TYPE_CONVERSION_EXPRESSION);
     define_str_case(TS_COMPOSITE_LITERAL);
     define_str_case(TS_LITERAL_VALUE);
+    define_str_case(TS_LITERAL_ELEMENT);
     define_str_case(TS_KEYED_ELEMENT);
-    define_str_case(TS_ELEMENT);
     define_str_case(TS_FUNC_LITERAL);
     define_str_case(TS_UNARY_EXPRESSION);
     define_str_case(TS_BINARY_EXPRESSION);
@@ -6759,16 +6770,19 @@ ccstr ts_ast_type_str(Ts_Ast_Type type) {
     define_str_case(TS_CONST_DECLARATION_REPEAT1);
     define_str_case(TS_CONST_SPEC_REPEAT1);
     define_str_case(TS_VAR_DECLARATION_REPEAT1);
+    define_str_case(TS_TYPE_PARAMETER_LIST_REPEAT1);
     define_str_case(TS_PARAMETER_LIST_REPEAT1);
+    define_str_case(TS_PARAMETER_DECLARATION_REPEAT1);
     define_str_case(TS_TYPE_DECLARATION_REPEAT1);
-    define_str_case(TS_FIELD_NAME_LIST_REPEAT1);
     define_str_case(TS_EXPRESSION_LIST_REPEAT1);
+    define_str_case(TS_TYPE_ARGUMENTS_REPEAT1);
     define_str_case(TS_FIELD_DECLARATION_LIST_REPEAT1);
-    define_str_case(TS_METHOD_SPEC_LIST_REPEAT1);
+    define_str_case(TS_FIELD_DECLARATION_REPEAT1);
+    define_str_case(TS_INTERFACE_TYPE_REPEAT1);
+    define_str_case(TS_CONSTRAINT_ELEM_REPEAT1);
     define_str_case(TS_STATEMENT_LIST_REPEAT1);
     define_str_case(TS_EXPRESSION_SWITCH_STATEMENT_REPEAT1);
     define_str_case(TS_TYPE_SWITCH_STATEMENT_REPEAT1);
-    define_str_case(TS_TYPE_CASE_REPEAT1);
     define_str_case(TS_SELECT_STATEMENT_REPEAT1);
     define_str_case(TS_ARGUMENT_LIST_REPEAT1);
     define_str_case(TS_LITERAL_VALUE_REPEAT1);
@@ -6777,6 +6791,7 @@ ccstr ts_ast_type_str(Ts_Ast_Type type) {
     define_str_case(TS_PACKAGE_IDENTIFIER);
     define_str_case(TS_TYPE_IDENTIFIER);
     }
+
     return NULL;
 }
 
