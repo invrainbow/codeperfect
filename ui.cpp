@@ -9,13 +9,13 @@
 #include "settings.hpp"
 #include "icons.h"
 #include "fzy_match.h"
+#include "defer.hpp"
 
 #define _USE_MATH_DEFINES // what the fuck is this lol
 #include <math.h>
 #include "tree_sitter_crap.hpp"
 #include "cpcolors.hpp"
 
-#include <GLFW/glfw3.h>
 #include <inttypes.h>
 
 void open_ft_node(FT_Node *it);
@@ -47,14 +47,14 @@ ccstr format_key(int mods, ccstr key, bool icon) {
     icon = false;
 #endif
 
-    if (mods & KEYMOD_CMD)   parts.append(icon ? ICON_MD_KEYBOARD_COMMAND_KEY : "Cmd");
-    if (mods & KEYMOD_SHIFT) parts.append(icon ? ICON_MD_ARROW_UPWARD : "Shift");
+    if (mods & CP_MOD_CMD)   parts.append(icon ? ICON_MD_KEYBOARD_COMMAND_KEY : "Cmd");
+    if (mods & CP_MOD_SHIFT) parts.append(icon ? ICON_MD_ARROW_UPWARD : "Shift");
 #if OS_MAC
-    if (mods & KEYMOD_ALT)   parts.append(icon ? ICON_MD_KEYBOARD_OPTION_KEY : "Option");
+    if (mods & CP_MOD_ALT)   parts.append(icon ? ICON_MD_KEYBOARD_OPTION_KEY : "Option");
 #else
-    if (mods & KEYMOD_ALT)   parts.append("Alt");
+    if (mods & CP_MOD_ALT)   parts.append("Alt");
 #endif
-    if (mods & KEYMOD_CTRL)  parts.append(icon ? ICON_MD_KEYBOARD_CONTROL_KEY : "Ctrl");
+    if (mods & CP_MOD_CTRL)  parts.append(icon ? ICON_MD_KEYBOARD_CONTROL_KEY : "Ctrl");
 
     Text_Renderer rend; rend.init();
     For (parts) {
@@ -76,10 +76,10 @@ bool Font::init(u8* font_data, u32 font_size, int texture_id) {
     height = font_size;
     tex_size = (i32)pow(2.0f, (i32)log2(sqrt((float)height * height * 8 * 8 * 128)) + 1);
 
-    u8* atlas_data = (u8*)our_malloc(tex_size * tex_size);
-    if (atlas_data == NULL)
+    u8* atlas_data = (u8*)cp_malloc(tex_size * tex_size);
+    if (!atlas_data)
         return false;
-    defer { our_free(atlas_data); };
+    defer { cp_free(atlas_data); };
 
     stbtt_pack_context context;
     if (!stbtt_PackBegin(&context, atlas_data, tex_size, tex_size, 0, 1, NULL)) {
@@ -151,35 +151,64 @@ namespace ImGui {
 
 ccstr get_key_name(int key) {
     switch (key) {
-    case GLFW_KEY_F1: return "F1";
-    case GLFW_KEY_F2: return "F2";
-    case GLFW_KEY_F3: return "F3";
-    case GLFW_KEY_F4: return "F4";
-    case GLFW_KEY_F5: return "F5";
-    case GLFW_KEY_F6: return "F6";
-    case GLFW_KEY_F7: return "F7";
-    case GLFW_KEY_F8: return "F8";
-    case GLFW_KEY_F9: return "F9";
-    case GLFW_KEY_F10: return "F10";
-    case GLFW_KEY_F11: return "F11";
-    case GLFW_KEY_F12: return "F12";
-    case GLFW_KEY_TAB: return "Tab";
-    case GLFW_KEY_ENTER: return "Enter";
+    case CP_KEY_F1: return "F1";
+    case CP_KEY_F2: return "F2";
+    case CP_KEY_F3: return "F3";
+    case CP_KEY_F4: return "F4";
+    case CP_KEY_F5: return "F5";
+    case CP_KEY_F6: return "F6";
+    case CP_KEY_F7: return "F7";
+    case CP_KEY_F8: return "F8";
+    case CP_KEY_F9: return "F9";
+    case CP_KEY_F10: return "F10";
+    case CP_KEY_F11: return "F11";
+    case CP_KEY_F12: return "F12";
+    case CP_KEY_TAB: return "Tab";
+    case CP_KEY_ENTER: return "Enter";
+    case CP_KEY_A: return "A";
+    case CP_KEY_B: return "B";
+    case CP_KEY_C: return "C";
+    case CP_KEY_D: return "D";
+    case CP_KEY_E: return "E";
+    case CP_KEY_F: return "F";
+    case CP_KEY_G: return "G";
+    case CP_KEY_H: return "H";
+    case CP_KEY_I: return "I";
+    case CP_KEY_J: return "J";
+    case CP_KEY_K: return "K";
+    case CP_KEY_L: return "L";
+    case CP_KEY_M: return "M";
+    case CP_KEY_N: return "N";
+    case CP_KEY_O: return "O";
+    case CP_KEY_P: return "P";
+    case CP_KEY_Q: return "Q";
+    case CP_KEY_R: return "R";
+    case CP_KEY_S: return "S";
+    case CP_KEY_T: return "T";
+    case CP_KEY_U: return "U";
+    case CP_KEY_V: return "V";
+    case CP_KEY_W: return "W";
+    case CP_KEY_X: return "X";
+    case CP_KEY_Y: return "Y";
+    case CP_KEY_Z: return "Z";
+    case CP_KEY_LEFT_BRACKET: return "[";
+    case CP_KEY_RIGHT_BRACKET: return "]";
+    case CP_KEY_COMMA: return ",";
     }
-    return glfwGetKeyName(key, 0);
+    return NULL;
 }
 
 ccstr get_menu_command_key(Command cmd) {
     auto info = command_info_table[cmd];
-    if (info.key == 0) return NULL;
+    if (!info.key) return NULL;
 
     auto keyname = get_key_name(info.key);
-    if (keyname == NULL) return NULL;
+    if (!keyname) return NULL;
 
     auto s = alloc_list<char>();
     for (int i = 0, len = strlen(keyname); i < len; i++) {
         auto it = keyname[i];
-        if (i == 0) it = toupper(it);
+        if (!i) it = toupper(it);
         s->append(it);
     }
     s->append('\0');
@@ -554,12 +583,12 @@ void UI::render_godecl(Godecl *decl) {
 }
 
 void UI::render_gotype(Gotype *gotype, ccstr field) {
-    if (gotype == NULL) return;
+    if (!gotype) return;
 
     auto flags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_SpanAvailWidth;
     bool is_open = false;
 
-    if (field == NULL)
+    if (!field)
         is_open = ImGui::TreeNodeEx(gotype, flags, "%s", gotype_type_str(gotype->type));
     else
         is_open = ImGui::TreeNodeEx(gotype, flags, "%s: %s", field, gotype_type_str(gotype->type));
@@ -609,7 +638,7 @@ void UI::render_gotype(Gotype *gotype, ccstr field) {
             break;
 
         case GOTYPE_FUNC:
-            if (gotype->func_sig.params == NULL) {
+            if (!gotype->func_sig.params) {
                 ImGui::Text("params: NULL");
             } else if (ImGui::TreeNodeEx(&gotype->func_sig.params, flags, "params:")) {
                 For (*gotype->func_sig.params)
@@ -617,7 +646,7 @@ void UI::render_gotype(Gotype *gotype, ccstr field) {
                 ImGui::TreePop();
             }
 
-            if (gotype->func_sig.result == NULL) {
+            if (!gotype->func_sig.result) {
                 ImGui::Text("result: NULL");
             } else if (ImGui::TreeNodeEx(&gotype->func_sig.result, flags, "result:")) {
                 For (*gotype->func_sig.result)
@@ -687,7 +716,7 @@ void UI::render_ts_cursor(TSTreeCursor *curr, cur2 open_cur) {
             flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_Bullet;
 
         auto type_str = ts_ast_type_str(node->type());
-        if (type_str == NULL)
+        if (!type_str)
             type_str = "(unknown)";
         else
             type_str += strlen("TS_");
@@ -703,7 +732,7 @@ void UI::render_ts_cursor(TSTreeCursor *curr, cur2 open_cur) {
         }
 
         auto field_type_str = ts_field_type_str(field_type);
-        if (field_type_str == NULL)
+        if (!field_type_str)
             last_open = ImGui::TreeNodeEx(
                 node->id(),
                 flags,
@@ -730,7 +759,7 @@ void UI::render_ts_cursor(TSTreeCursor *curr, cur2 open_cur) {
 
         if (ImGui::IsMouseDoubleClicked(0) && ImGui::IsItemHovered(0)) {
             auto editor = get_current_editor();
-            if (editor != NULL)
+            if (editor)
                 editor->move_cursor(node->start());
         }
 
@@ -752,7 +781,7 @@ void UI::init() {
 }
 
 void UI::flush_verts() {
-    if (verts.len == 0) return;
+    if (!verts.len) return;
 
     glBufferData(GL_ARRAY_BUFFER, sizeof(Vert) * verts.len, verts.items, GL_DYNAMIC_DRAW);
     glDrawArrays(GL_TRIANGLES, 0, verts.len);
@@ -911,7 +940,7 @@ void UI::draw_bordered_rect_outer(boxf b, vec4f color, vec4f border_color, int b
     b2.h += border_width * 2;
     b2.w += border_width * 2;
 
-    if (radius == 0) {
+    if (!radius) {
         draw_rect(b2, border_color);
         draw_rect(b, color);
     } else {
@@ -1033,7 +1062,7 @@ void UI::draw_debugger_var(Draw_Debugger_Var_Args *args) {
     auto watch = args->watch;
 
     Dlv_Var** selection = NULL;
-    if (watch != NULL)
+    if (watch)
         selection = &world.wnd_debugger.watch_selection;
     else
         selection = &world.wnd_debugger.locals_selection;
@@ -1046,7 +1075,7 @@ void UI::draw_debugger_var(Draw_Debugger_Var_Args *args) {
             tree_flags |= ImGuiTreeNodeFlags_Selected;
         bool leaf = true;
 
-        if (var != NULL) {
+        if (var) {
             switch (var->kind) {
             case GO_KIND_ARRAY:
             case GO_KIND_CHAN: // ???
@@ -1071,7 +1100,7 @@ void UI::draw_debugger_var(Draw_Debugger_Var_Args *args) {
 
         ccstr final_var_name = NULL;
 
-        if (watch != NULL && !args->is_child) {
+        if (watch && !args->is_child) {
             if (watch->editing) {
                 ImGui::PushStyleColor(ImGuiCol_FrameBg, 0);
                 ImGui::SetNextItemWidth(-FLT_MIN);
@@ -1080,7 +1109,7 @@ void UI::draw_debugger_var(Draw_Debugger_Var_Args *args) {
                     ImGui::SetKeyboardFocusHere();
                 }
                 bool changed = ImGui::InputText(
-                    our_sprintf("##newwatch%x", (iptr)(void*)watch),
+                    cp_sprintf("##newwatch%x", (iptr)(void*)watch),
                     watch->expr_tmp,
                     _countof(watch->expr_tmp),
                     ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll
@@ -1090,7 +1119,7 @@ void UI::draw_debugger_var(Draw_Debugger_Var_Args *args) {
                 if (changed || ImGui::IsItemDeactivated()) {
                     if (watch->expr_tmp[0] != '\0') {
                         world.dbg.push_call(DLVC_EDIT_WATCH, [&](auto it) {
-                            it->edit_watch.expression = our_strcpy(watch->expr_tmp);
+                            it->edit_watch.expression = cp_strcpy(watch->expr_tmp);
                             it->edit_watch.watch_idx = args->watch_index;
                         });
                     } else {
@@ -1119,13 +1148,13 @@ void UI::draw_debugger_var(Draw_Debugger_Var_Args *args) {
             case INDEX_NONE:
                 var_name = var->name;
                 if (var->is_shadowed)
-                    var_name = our_sprintf("(%s)", var_name);
+                    var_name = cp_sprintf("(%s)", var_name);
                 break;
             case INDEX_ARRAY:
-                var_name = our_sprintf("[%d]", args->index);
+                var_name = cp_sprintf("[%d]", args->index);
                 break;
             case INDEX_MAP:
-                var_name = our_sprintf("[%s]", var_value_as_string(args->key));
+                var_name = cp_sprintf("[%s]", var_value_as_string(args->key));
                 break;
             }
             final_var_name = var_name;
@@ -1143,10 +1172,10 @@ void UI::draw_debugger_var(Draw_Debugger_Var_Args *args) {
                 ImGui::Unindent();
         }
 
-        if (final_var_name != NULL) {
-            if (ImGui::OurBeginPopupContextItem(our_sprintf("dbg_copyvalue_%lld", (uptr)var))) {
+        if (final_var_name) {
+            if (ImGui::OurBeginPopupContextItem(cp_sprintf("dbg_copyvalue_%lld", (uptr)var))) {
                 if (ImGui::Selectable("Copy Name")) {
-                    glfwSetClipboardString(world.window, final_var_name);
+                    set_clipboard_string(final_var_name);
                 }
                 ImGui::EndPopup();
             }
@@ -1155,12 +1184,12 @@ void UI::draw_debugger_var(Draw_Debugger_Var_Args *args) {
         // Assumes the last thing drawn was the TreeNode.
 
         if (*selection == var) {
-            if (watch != NULL) {
+            if (watch) {
                 auto delete_that_fucker = [&]() -> bool {
                     if (args->some_watch_being_edited) return false;
                     if (dbg_editing_new_watch) return false;
 
-                    if (imgui_get_keymods() == KEYMOD_NONE) {
+                    if (imgui_get_keymods() == CP_MOD_NONE) {
                         if (imgui_special_key_pressed(ImGuiKey_Backspace))
                             return true;
                         if (imgui_special_key_pressed(ImGuiKey_Delete))
@@ -1177,7 +1206,7 @@ void UI::draw_debugger_var(Draw_Debugger_Var_Args *args) {
                         it->delete_watch.watch_idx = args->watch_index;
                     });
 
-                    if (watch != NULL) {
+                    if (watch) {
                         auto next = args->watch_index;
                         if (next >= old_len-1)
                             next--;
@@ -1187,7 +1216,7 @@ void UI::draw_debugger_var(Draw_Debugger_Var_Args *args) {
                         do {
                             auto &state = world.dbg.state;
                             auto goroutine = state.goroutines.find([&](auto it) { return it->id == state.current_goroutine_id; });
-                            if (goroutine == NULL)
+                            if (!goroutine)
                                 break;
                             if (state.current_frame >= goroutine->frames->len)
                                 break;
@@ -1210,12 +1239,12 @@ void UI::draw_debugger_var(Draw_Debugger_Var_Args *args) {
                 }
             }
 
-            if (imgui_get_keymods() == KEYMOD_PRIMARY && imgui_key_pressed('c')) {
+            if (imgui_get_keymods() == CP_MOD_PRIMARY && imgui_key_pressed('c')) {
                 // ???
             }
         }
 
-        if (watch != NULL) {
+        if (watch) {
             if (!args->is_child) {
                 if (ImGui::IsMouseDoubleClicked(0) && ImGui::IsItemHovered(0)) {
                     watch->editing = true;
@@ -1225,7 +1254,7 @@ void UI::draw_debugger_var(Draw_Debugger_Var_Args *args) {
             }
         }
 
-        if (watch == NULL || !watch->editing) {
+        if (!watch || !watch->editing) {
             if (ImGui::IsItemClicked()) {
                 *selection = var;
             }
@@ -1253,13 +1282,13 @@ void UI::draw_debugger_var(Draw_Debugger_Var_Args *args) {
         ImGui::Unindent(ImGui::GetTreeNodeToLabelSpacing());
     }
 
-    if (watch == NULL || watch->fresh) {
+    if (!watch || watch->fresh) {
         ImGui::TableNextColumn();
 
         ccstr value_label = NULL;
         ccstr underlying_value = NULL;
 
-        auto muted = (watch != NULL && watch->state == DBGWATCH_ERROR);
+        auto muted = (watch && watch->state == DBGWATCH_ERROR);
         if (muted) {
             value_label ="<unable to read>";
             underlying_value = value_label;
@@ -1285,22 +1314,22 @@ void UI::draw_debugger_var(Draw_Debugger_Var_Args *args) {
         bool copy = false;
 
         if (*selection == var)
-            if (imgui_get_keymods() == KEYMOD_PRIMARY)
+            if (imgui_get_keymods() == CP_MOD_PRIMARY)
                 if (imgui_key_pressed('c'))
                     copy = true;
 
-        if (ImGui::OurBeginPopupContextItem(our_sprintf("dbg_copyvalue_%lld", (uptr)var))) {
+        if (ImGui::OurBeginPopupContextItem(cp_sprintf("dbg_copyvalue_%lld", (uptr)var))) {
             if (ImGui::Selectable("Copy Value"))
                 copy = true;
             ImGui::EndPopup();
         }
 
-        if (copy) glfwSetClipboardString(world.window, underlying_value);
+        if (copy) set_clipboard_string(underlying_value);
 
         ImGui::TableNextColumn();
-        if (watch == NULL || watch->state != DBGWATCH_ERROR) {
+        if (!watch || watch->state != DBGWATCH_ERROR) {
             ccstr type_name = NULL;
-            if (var->type == NULL || var->type[0] == '\0') {
+            if (!var->type || var->type[0] == '\0') {
                 switch (var->kind) {
                 case GO_KIND_BOOL: type_name = "bool"; break;
                 case GO_KIND_INT: type_name = "int"; break;
@@ -1334,11 +1363,11 @@ void UI::draw_debugger_var(Draw_Debugger_Var_Args *args) {
                 type_name = var->type;
             }
 
-            if (type_name != NULL) {
+            if (type_name) {
                 ImGui::TextWrapped("%s", type_name);
-                if (ImGui::OurBeginPopupContextItem(our_sprintf("dbg_copyvalue_%lld", (uptr)var))) {
+                if (ImGui::OurBeginPopupContextItem(cp_sprintf("dbg_copyvalue_%lld", (uptr)var))) {
                     if (ImGui::Selectable("Copy Type")) {
-                        glfwSetClipboardString(world.window, type_name);
+                        set_clipboard_string(type_name);
                     }
                     ImGui::EndPopup();
                 }
@@ -1346,15 +1375,15 @@ void UI::draw_debugger_var(Draw_Debugger_Var_Args *args) {
         }
     } else {
         ImGui::TableNextColumn();
-        if (watch != NULL && !watch->fresh) {
+        if (watch && !watch->fresh) {
             // TODO: grey out
             ImGui::TextWrapped("Reading...");
         }
         ImGui::TableNextColumn();
     }
 
-    if (open && (watch == NULL || (watch->fresh && watch->state != DBGWATCH_ERROR))) {
-        if (var->children != NULL) {
+    if (open && (!watch || (watch->fresh && watch->state != DBGWATCH_ERROR))) {
+        if (var->children) {
             if (var->kind == GO_KIND_MAP) {
                 for (int k = 0; k < var->children->len; k += 2) {
                     Draw_Debugger_Var_Args a;
@@ -1392,8 +1421,8 @@ void UI::draw_debugger_var(Draw_Debugger_Var_Args *args) {
 }
 
 ccstr UI::var_value_as_string(Dlv_Var *var) {
-    if (var->unreadable_description != NULL)
-        return our_sprintf("<unreadable: %s>", var->unreadable_description);
+    if (var->unreadable_description)
+        return cp_sprintf("<unreadable: %s>", var->unreadable_description);
 
     switch (var->kind) {
     case GO_KIND_INVALID: // i don't think this should even happen
@@ -1401,23 +1430,23 @@ ccstr UI::var_value_as_string(Dlv_Var *var) {
 
     case GO_KIND_ARRAY:
     case GO_KIND_SLICE:
-        return our_sprintf("0x%" PRIx64 " (Len = %d, Cap = %d)", var->address, var->len, var->cap);
+        return cp_sprintf("0x%" PRIx64 " (Len = %d, Cap = %d)", var->address, var->len, var->cap);
 
     case GO_KIND_STRUCT:
     case GO_KIND_INTERFACE:
-        return our_sprintf("0x%" PRIx64, var->address);
+        return cp_sprintf("0x%" PRIx64, var->address);
 
     case GO_KIND_MAP:
-        return our_sprintf("0x%" PRIx64 " (Len = %d)", var->address, var->len);
+        return cp_sprintf("0x%" PRIx64 " (Len = %d)", var->address, var->len);
 
     case GO_KIND_STRING:
-        return our_sprintf("\"%s%s\"", var->value, var->incomplete() ? "..." : "");
+        return cp_sprintf("\"%s%s\"", var->value, var->incomplete() ? "..." : "");
 
     case GO_KIND_UNSAFEPOINTER:
     case GO_KIND_CHAN:
     case GO_KIND_FUNC:
     case GO_KIND_PTR:
-        return our_sprintf("0x%" PRIx64, var->address);
+        return cp_sprintf("0x%" PRIx64, var->address);
 
     default:
         return var->value;
@@ -1475,7 +1504,7 @@ void UI::draw_debugger() {
                             if (state.current_goroutine_id == goroutine.id && state.current_frame == j)
                                 tree_flags |= ImGuiTreeNodeFlags_Selected;
 
-                            ImGui::TreeNodeEx(&frame, tree_flags, "%s (%s:%d)", frame.func_name, our_basename(frame.filepath), frame.lineno);
+                            ImGui::TreeNodeEx(&frame, tree_flags, "%s (%s:%d)", frame.func_name, cp_basename(frame.filepath), frame.lineno);
                             if (ImGui::IsItemClicked()) {
                                 world.dbg.push_call(DLVC_SET_CURRENT_FRAME, [&](auto call) {
                                     call->set_current_frame.goroutine_id = goroutine.id;
@@ -1524,7 +1553,7 @@ void UI::draw_debugger() {
                     if (state.current_goroutine_id == -1 || state.current_frame == -1) break;
 
                     auto goroutine = state.goroutines.find([&](auto it) { return it->id == state.current_goroutine_id; });
-                    if (goroutine == NULL) break;
+                    if (!goroutine) break;
 
                     loading = true;
 
@@ -1539,7 +1568,7 @@ void UI::draw_debugger() {
 
                     int index = 0;
 
-                    if (frame->locals != NULL) {
+                    if (frame->locals) {
                         For (*frame->locals) {
                             Draw_Debugger_Var_Args a; ptr0(&a);
                             a.var = &it;
@@ -1551,7 +1580,7 @@ void UI::draw_debugger() {
                         }
                     }
 
-                    if (frame->args != NULL) {
+                    if (frame->args) {
                         For (*frame->args) {
                             Draw_Debugger_Var_Args a; ptr0(&a);
                             a.var = &it;
@@ -1566,10 +1595,10 @@ void UI::draw_debugger() {
 
                 ImGui::EndTable();
 
-                if (frame == NULL && loading)
+                if (!frame && loading)
                     ImGui::Text("Loading...");
-                if (frame != NULL)
-                    if ((frame->locals == NULL || frame->locals->len == 0) && (frame->args == NULL || frame->args->len == 0))
+                if (frame)
+                    if ((!frame->locals || frame->locals->len == 0) && (!frame->args || frame->args->len == 0))
                         ImGui::Text("No variables to show here.");
             }
         }
@@ -1638,7 +1667,7 @@ void UI::draw_debugger() {
                     if (changed || ImGui::IsItemDeactivated())
                         if (world.wnd_debugger.new_watch_buf[0] != '\0') {
                             dbg.push_call(DLVC_CREATE_WATCH, [&](auto it) {
-                                it->create_watch.expression = our_strcpy(world.wnd_debugger.new_watch_buf);
+                                it->create_watch.expression = cp_strcpy(world.wnd_debugger.new_watch_buf);
                             });
                             world.wnd_debugger.new_watch_buf[0] = '\0';
                         }
@@ -1690,7 +1719,7 @@ bool UI::imgui_input_text_full(ccstr label, char *buf, int count, int flags) {
         ImGui::Text("%s", label);
         imgui_pop_font();
     }
-    auto ret = ImGui::InputText(our_sprintf("###%s", label), buf, count, flags);
+    auto ret = ImGui::InputText(cp_sprintf("###%s", label), buf, count, flags);
     ImGui::PopItemWidth();
 
     return ret;
@@ -1740,10 +1769,10 @@ u32 UI::imgui_get_keymods() {
     auto &io = ImGui::GetIO();
 
     u32 ret = 0;
-    if (io.KeySuper) ret |= KEYMOD_CMD;
-    if (io.KeyCtrl) ret |= KEYMOD_CTRL;
-    if (io.KeyShift) ret |= KEYMOD_SHIFT;
-    if (io.KeyAlt) ret |= KEYMOD_ALT;
+    if (io.KeySuper) ret |= CP_MOD_CMD;
+    if (io.KeyCtrl) ret |= CP_MOD_CTRL;
+    if (io.KeyShift) ret |= CP_MOD_SHIFT;
+    if (io.KeyAlt) ret |= CP_MOD_ALT;
     return ret;
 }
 
@@ -1763,7 +1792,7 @@ void open_ft_node(FT_Node *it) {
     SCOPED_FRAME();
     auto rel_path = ft_node_to_path(it);
     auto full_path = path_join(world.current_path, rel_path);
-    if (focus_editor(full_path) != NULL)
+    if (focus_editor(full_path))
         ImGui::SetWindowFocus(NULL);
 }
 
@@ -1922,7 +1951,7 @@ void UI::draw_everything() {
         {
             // get panes_area
             auto node = ImGui::DockBuilderGetCentralNode(dockspace_id);
-            if (node != NULL) {
+            if (node) {
                 panes_area.x = node->Pos.x;
                 panes_area.y = node->Pos.y;
                 panes_area.w = node->Size.x;
@@ -2162,7 +2191,7 @@ void UI::draw_everything() {
         if (wnd.focused) {
             auto mods = imgui_get_keymods();
             switch (mods) {
-            case KEYMOD_NONE:
+            case CP_MOD_NONE:
                 if (imgui_special_key_pressed(ImGuiKey_Escape)) wnd.show = false;
                 break;
             }
@@ -2228,7 +2257,7 @@ void UI::draw_everything() {
                 // write out options
                 do {
                     auto configdir = GHGetConfigDir();
-                    if (configdir == NULL) break;
+                    if (!configdir) break;
 
                     auto filepath = path_join(configdir, ".options");
 
@@ -2263,7 +2292,7 @@ void UI::draw_everything() {
     render_call_hier = [&](auto it, auto current_import_path, auto show_tests_and_benchmarks) {
         auto should_hide = [&](Call_Hier_Node *it) {
             auto decl = it->decl->decl->decl;
-            if (world.indexer.get_godecl_recvname(decl) == NULL)
+            if (!world.indexer.get_godecl_recvname(decl))
                 if (!show_tests_and_benchmarks)
                     if (is_name_special_function(decl->name))
                         return true;
@@ -2279,8 +2308,8 @@ void UI::draw_everything() {
 
         auto name = decl->name;
         auto recvname = world.indexer.get_godecl_recvname(decl);
-        if (recvname != NULL)
-            name = our_sprintf("%s.%s", recvname, name);
+        if (recvname)
+            name = cp_sprintf("%s.%s", recvname, name);
 
         auto has_children = [&]() {
             For (*it->children)
@@ -2322,7 +2351,7 @@ void UI::draw_everything() {
 
         ImGui::SetNextWindowDockID(dock_sidebar_id, ImGuiCond_Once);
         begin_window(
-            our_sprintf("Callee Hierarchy for %s###callee_hierarchy", wnd.declres->decl->name),
+            cp_sprintf("Callee Hierarchy for %s###callee_hierarchy", wnd.declres->decl->name),
             &wnd,
             0,
             !wnd.done
@@ -2348,7 +2377,7 @@ void UI::draw_everything() {
 
         ImGui::SetNextWindowDockID(dock_sidebar_id, ImGuiCond_Once);
         begin_window(
-            our_sprintf("Caller Hierarchy for %s###caller_hierarchy", wnd.declres->decl->name),
+            cp_sprintf("Caller Hierarchy for %s###caller_hierarchy", wnd.declres->decl->name),
             &wnd,
             0,
             !wnd.done
@@ -2396,14 +2425,14 @@ void UI::draw_everything() {
 
             imgui_small_newline();
 
-            if (wnd.results != NULL && wnd.results->len > 0) {
+            if (wnd.results && wnd.results->len > 0) {
                 imgui_push_mono_font();
 
                 int index = 0;
                 For (*wnd.results) {
                     auto is_empty = [&]() {
                         auto gotype = it->decl->decl->gotype;
-                        if (gotype == NULL) return false;
+                        if (!gotype) return false;
                         if (gotype->type != GOTYPE_INTERFACE) return false;
                         return isempty(gotype->interface_specs);
                     };
@@ -2418,7 +2447,7 @@ void UI::draw_everything() {
                     auto drawlist = ImGui::GetWindowDrawList();
 
                     auto draw_selectable = [&]() {
-                        auto label = our_sprintf("##find_implementations_result__%d", index++);
+                        auto label = cp_sprintf("##find_implementations_result__%d", index++);
                         return ImGui::Selectable(label, false, 0, text_size);
                     };
 
@@ -2438,7 +2467,7 @@ void UI::draw_everything() {
                         draw_text("(ext) ");
                     }
 
-                    draw_text(our_sprintf("%s.%s", it->package_name, it->decl->decl->name));
+                    draw_text(cp_sprintf("%s.%s", it->package_name, it->decl->decl->name));
 
                     ImGui::PushStyleColor(ImGuiCol_Text, to_imcolor(global_colors.muted));
                     {
@@ -2452,9 +2481,9 @@ void UI::draw_everything() {
                             }
                         }
 
-                        if (path == NULL) path = import_path;
+                        if (!path) path = import_path;
 
-                        draw_text(our_sprintf(" (%s)", path));
+                        draw_text(cp_sprintf(" (%s)", path));
                     }
                     ImGui::PopStyleColor();
 
@@ -2498,7 +2527,7 @@ void UI::draw_everything() {
 
             imgui_small_newline();
 
-            if (wnd.results != NULL && wnd.results->len > 0) {
+            if (wnd.results && wnd.results->len > 0) {
                 imgui_push_mono_font();
 
                 int index = 0;
@@ -2510,7 +2539,7 @@ void UI::draw_everything() {
                     auto drawlist = ImGui::GetWindowDrawList();
 
                     auto draw_selectable = [&]() {
-                        auto label = our_sprintf("##find_implementations_result__%d", index++);
+                        auto label = cp_sprintf("##find_implementations_result__%d", index++);
                         return ImGui::Selectable(label, false, 0, text_size);
                     };
 
@@ -2521,10 +2550,10 @@ void UI::draw_everything() {
                         drawpos.x += ImGui::CalcTextSize(text).x;
                     };
 
-                    draw_text(our_sprintf("%s.%s", it->package_name, it->decl->decl->name));
+                    draw_text(cp_sprintf("%s.%s", it->package_name, it->decl->decl->name));
 
                     ImGui::PushStyleColor(ImGuiCol_Text, to_imcolor(global_colors.muted));
-                    draw_text(our_sprintf(" (%s)", get_path_relative_to(it->decl->ctx->import_path, wnd.current_import_path)));
+                    draw_text(cp_sprintf(" (%s)", get_path_relative_to(it->decl->ctx->import_path, wnd.current_import_path)));
                     ImGui::PopStyleColor();
 
                     // TODO: previews?
@@ -2559,7 +2588,7 @@ void UI::draw_everything() {
                 auto filepath = get_path_relative_to(it.filepath, world.current_path);
                 For (*it.references) {
                     auto pos = it.is_sel ? it.x_start : it.start;
-                    if (ImGui::Selectable(our_sprintf("%s:%s", filepath, format_cur(pos))))
+                    if (ImGui::Selectable(cp_sprintf("%s:%s", filepath, format_cur(pos))))
                         goto_file_and_pos(filepath, pos);
                 }
             }
@@ -2589,7 +2618,7 @@ void UI::draw_everything() {
         if (wnd.show && !wnd.fill_running) {
             auto go_up = [&]() {
                 if (wnd.filtered_results->len == 0) return;
-                if (wnd.selection == 0)
+                if (!wnd.selection)
                     wnd.selection = min(wnd.filtered_results->len, settings.generate_implementation_max_results) - 1;
                 else
                     wnd.selection--;
@@ -2610,7 +2639,7 @@ void UI::draw_everything() {
 
             auto mods = imgui_get_keymods();
             switch (mods) {
-            case KEYMOD_NONE:
+            case CP_MOD_NONE:
                 if (imgui_special_key_pressed(ImGuiKey_DownArrow)) go_down();
                 if (imgui_special_key_pressed(ImGuiKey_UpArrow)) go_up();
                 if (imgui_special_key_pressed(ImGuiKey_Escape)) {
@@ -2630,7 +2659,7 @@ void UI::draw_everything() {
             }
 
             auto symbol_to_name = [&](auto &it) {
-                return our_sprintf("%s.%s", it.pkgname, it.name);
+                return cp_sprintf("%s.%s", it.pkgname, it.name);
             };
 
             if (ImGui::IsItemEdited()) {
@@ -2697,7 +2726,7 @@ void UI::draw_everything() {
             return "";
         };
 
-        begin_centered_window(our_sprintf("Rename %s###rename_identifier", get_type_str()), &wnd, 0, 400, wnd.running);
+        begin_centered_window(cp_sprintf("Rename %s###rename_identifier", get_type_str()), &wnd, 0, 400, wnd.running);
 
         // if it's running, make sure the window stays focused
         if (wnd.running)
@@ -2718,7 +2747,7 @@ void UI::draw_everything() {
         imgui_push_mono_font();
 
         focus_keyboard(&wnd);
-        if (imgui_input_text_full(our_sprintf("Rename %s to", wnd.declres->decl->name), wnd.rename_to, _countof(wnd.rename_to), ImGuiInputTextFlags_EnterReturnsTrue)) {
+        if (imgui_input_text_full(cp_sprintf("Rename %s to", wnd.declres->decl->name), wnd.rename_to, _countof(wnd.rename_to), ImGuiInputTextFlags_EnterReturnsTrue)) {
             submitted = true;
         }
 
@@ -2751,7 +2780,7 @@ void UI::draw_everything() {
                 }
             }
         } else {
-            if (ImGui::Button(our_sprintf("Rename", wnd.declres->decl->name)))
+            if (ImGui::Button(cp_sprintf("Rename", wnd.declres->decl->name)))
                 submitted = true;
         }
 
@@ -2759,7 +2788,7 @@ void UI::draw_everything() {
         if (wnd.focused) {
             auto mods = imgui_get_keymods();
             switch (mods) {
-            case KEYMOD_NONE:
+            case CP_MOD_NONE:
                 if (imgui_special_key_pressed(ImGuiKey_Escape))
                     wnd.show = false;
                 break;
@@ -2905,11 +2934,11 @@ void UI::draw_everything() {
                 auto &it = lines[i];
 
                 ImGui::Text("%s", it);
-                if (ImGui::OurBeginPopupContextItem(our_sprintf("##debug_output_hidden_%d", i))) {
+                if (ImGui::OurBeginPopupContextItem(cp_sprintf("##debug_output_hidden_%d", i))) {
                     defer { ImGui::EndPopup(); };
 
                     if (ImGui::Selectable("Copy")) {
-                        glfwSetClipboardString(world.window, it);
+                        set_clipboard_string(it);
                     }
 
                     if (ImGui::Selectable("Copy All")) {
@@ -2922,7 +2951,7 @@ void UI::draw_everything() {
                         }
                         output->len--; // remove last '\n'
                         output->append('\0');
-                        glfwSetClipboardString(world.window, output->items);
+                        set_clipboard_string(output->items);
                     }
 
                     if (ImGui::Selectable("Clear")) {
@@ -2957,7 +2986,7 @@ void UI::draw_everything() {
         auto &b = world.build;
 
         if (b.ready()) {
-            if (b.errors.len == 0) {
+            if (!b.errors.len) {
                 ImGui::TextColored(to_imcolor(global_colors.green), "Build \"%s\" was successful!", b.build_profile_name);
             } else {
                 ImGui::Text("Building \"%s\"...", b.build_profile_name);
@@ -2987,17 +3016,17 @@ void UI::draw_everything() {
                         b.scroll_to = -1;
                     }
 
-                    auto label = our_sprintf("%s:%d:%d: %s", it.file, it.row, it.col, it.message);
+                    auto label = cp_sprintf("%s:%d:%d: %s", it.file, it.row, it.col, it.message);
                     auto wrap_width = ImGui::GetContentRegionAvail().x;
                     auto text_size = ImVec2(wrap_width, ImGui::CalcTextSize(label, NULL, false, wrap_width).y);
                     auto pos = ImGui::GetCursorScreenPos();
 
-                    bool clicked = ImGui::Selectable(our_sprintf("##hidden_%d", i), i == b.current_error, 0, text_size);
+                    bool clicked = ImGui::Selectable(cp_sprintf("##hidden_%d", i), i == b.current_error, 0, text_size);
                     ImGui::GetWindowDrawList()->AddText(NULL, 0.0f, pos, ImGui::GetColorU32(ImGuiCol_Text), label, NULL, wrap_width);
 
                     if (ImGui::OurBeginPopupContextItem()) {
                         if (ImGui::Selectable("Copy")) {
-                            glfwSetClipboardString(world.window, label);
+                            set_clipboard_string(label);
                         }
                         ImGui::EndPopup();
                     }
@@ -3029,8 +3058,8 @@ void UI::draw_everything() {
     if (world.wnd_rename_file_or_folder.show) {
         auto &wnd = world.wnd_rename_file_or_folder;
 
-        auto label = our_sprintf("Rename %s", wnd.target->is_directory ? "folder" : "file");
-        begin_centered_window(our_sprintf("%s###add_file_or_folder", label), &wnd, 0, 300);
+        auto label = cp_sprintf("Rename %s", wnd.target->is_directory ? "folder" : "file");
+        begin_centered_window(cp_sprintf("%s###add_file_or_folder", label), &wnd, 0, 300);
 
         ImGui::Text("Renaming");
 
@@ -3078,10 +3107,10 @@ void UI::draw_everything() {
             }
 
             auto oldpath = path_join(world.current_path, wnd.location);
-            auto newpath = path_join(our_dirname(oldpath), wnd.name);
+            auto newpath = path_join(cp_dirname(oldpath), wnd.name);
 
             GHRenameFileOrDirectory((char*)oldpath, (char*)newpath);
-            reload_file_subtree(our_dirname(wnd.location));
+            reload_file_subtree(cp_dirname(wnd.location));
 
             wnd.show = false;
         } while (0);
@@ -3092,8 +3121,8 @@ void UI::draw_everything() {
     if (world.wnd_add_file_or_folder.show) {
         auto &wnd = world.wnd_add_file_or_folder;
 
-        auto label = our_sprintf("Add %s", wnd.folder ? "Folder" : "File");
-        begin_centered_window(our_sprintf("%s###add_file_or_folder", label), &wnd, 0, 300);
+        auto label = cp_sprintf("Add %s", wnd.folder ? "Folder" : "File");
+        begin_centered_window(cp_sprintf("%s###add_file_or_folder", label), &wnd, 0, 300);
 
         ImGui::Text("Destination");
 
@@ -3134,7 +3163,7 @@ void UI::draw_everything() {
                 auto destnode = wnd.location_is_root ? world.file_tree : find_ft_node(wnd.location);
                 add_ft_node(destnode, [&](auto child) {
                     child->is_directory = wnd.folder;
-                    child->name = our_strcpy(wnd.name);
+                    child->name = cp_strcpy(wnd.name);
                 });
 
                 if (!wnd.folder) {
@@ -3228,9 +3257,9 @@ void UI::draw_everything() {
 
                     ccstr label = NULL;
                     if (it->is_directory)
-                        label = our_sprintf("%s %s %s", icon, it->name, it->open ? ICON_MD_EXPAND_MORE : ICON_MD_CHEVRON_RIGHT);
+                        label = cp_sprintf("%s %s %s", icon, it->name, it->open ? ICON_MD_EXPAND_MORE : ICON_MD_CHEVRON_RIGHT);
                     else
-                        label = our_sprintf("%s %s", icon, it->name);
+                        label = cp_sprintf("%s %s", icon, it->name);
 
                     if (it == wnd.scroll_to) {
                         ImGui::SetScrollHereY();
@@ -3294,12 +3323,12 @@ void UI::draw_everything() {
                     if (ImGui::Selectable("Paste")) {
                         FT_Node *src = wnd.last_file_copied;
                         bool cut = false;
-                        if (src == NULL) {
+                        if (!src) {
                             src = wnd.last_file_cut;
                             cut = true;
                         }
 
-                        if (src != NULL) {
+                        if (src) {
                             auto dest = it;
                             if (!dest->is_directory) dest = dest->parent;
 
@@ -3308,7 +3337,7 @@ void UI::draw_everything() {
 
                             // if we're copying to the same place
                             if (src->parent == dest)
-                                destpath = path_join(ft_node_to_path(dest), our_sprintf("copy of %s", src->name));
+                                destpath = path_join(ft_node_to_path(dest), cp_sprintf("copy of %s", src->name));
                             else
                                 destpath = path_join(ft_node_to_path(dest), src->name);
 
@@ -3334,14 +3363,14 @@ void UI::draw_everything() {
                     if (ImGui::Selectable("Copy relative path")) {
                         SCOPED_FRAME();
                         auto rel_path = ft_node_to_path(it);
-                        glfwSetClipboardString(world.window, rel_path);
+                        set_clipboard_string(rel_path);
                     }
 
                     if (ImGui::Selectable("Copy absolute path")) {
                         SCOPED_FRAME();
                         auto rel_path = ft_node_to_path(it);
                         auto full_path = path_join(world.current_path, rel_path);
-                        glfwSetClipboardString(world.window, full_path);
+                        set_clipboard_string(full_path);
                     }
 
                     ImGui::PopStyleVar();
@@ -3362,7 +3391,7 @@ void UI::draw_everything() {
                 }
 
                 if (it->is_directory && it->open)
-                    for (auto child = it->children; child != NULL; child = child->next)
+                    for (auto child = it->children; child; child = child->next)
                         draw(child);
             };
 
@@ -3371,7 +3400,7 @@ void UI::draw_everything() {
                 ImGui::EndPopup();
             }
 
-            for (auto child = world.file_tree->children; child != NULL; child = child->next)
+            for (auto child = world.file_tree->children; child; child = child->next)
                 draw(child);
 
             if (!menu_handled && ImGui::OurBeginPopupContextWindow("file_explorer_context_menu")) {
@@ -3395,20 +3424,20 @@ void UI::draw_everything() {
         if (wnd.focused) {
             auto mods = imgui_get_keymods();
             switch (mods) {
-            case KEYMOD_NONE:
+            case CP_MOD_NONE:
                 if (imgui_special_key_pressed(ImGuiKey_DownArrow) || imgui_key_pressed('j')) {
                     auto getnext = [&]() -> FT_Node * {
                         auto curr = wnd.selection;
-                        if (curr == NULL) return world.file_tree->children;
+                        if (!curr) return world.file_tree->children;
 
-                        if (curr->children != NULL && curr->open)
+                        if (curr->children && curr->open)
                             return curr->children;
-                        if (curr->next != NULL)
+                        if (curr->next)
                             return curr->next;
 
-                        while (curr->parent != NULL) {
+                        while (curr->parent) {
                             curr = curr->parent;
-                            if (curr->next != NULL)
+                            if (curr->next)
                                 return curr->next;
                         }
 
@@ -3416,51 +3445,51 @@ void UI::draw_everything() {
                     };
 
                     auto next = getnext();
-                    if (next != NULL)
+                    if (next)
                         wnd.selection = next;
                 }
                 if (imgui_special_key_pressed(ImGuiKey_LeftArrow) || imgui_key_pressed('h')) {
                     auto curr = wnd.selection;
-                    if (curr != NULL)
+                    if (curr)
                         if (curr->is_directory)
                             curr->open = false;
                 }
                 if (imgui_special_key_pressed(ImGuiKey_RightArrow) || imgui_key_pressed('l')) {
                     auto curr = wnd.selection;
-                    if (curr != NULL)
+                    if (curr)
                         if (curr->is_directory)
                             curr->open = true;
                 }
                 if (imgui_special_key_pressed(ImGuiKey_UpArrow) || imgui_key_pressed('k')) {
                     auto curr = wnd.selection;
-                    if (curr != NULL) {
-                        if (curr->prev != NULL) {
+                    if (curr) {
+                        if (curr->prev) {
                             curr = curr->prev;
                             // as long as curr has children, keep grabbing the last child
-                            while (curr->is_directory && curr->open && curr->children != NULL) {
+                            while (curr->is_directory && curr->open && curr->children) {
                                 curr = curr->children;
-                                while (curr->next != NULL)
+                                while (curr->next)
                                     curr = curr->next;
                             }
                         } else {
                             curr = curr->parent;
-                            if (curr->parent == NULL) // if we're at the root
+                            if (!curr->parent) // if we're at the root
                                 curr = NULL; // don't set selection to root
                         }
                     }
 
-                    if (curr != NULL)
+                    if (curr)
                         wnd.selection = curr;
                 }
                 break;
-            case KEYMOD_PRIMARY:
+            case CP_MOD_PRIMARY:
                 if (imgui_special_key_pressed(ImGuiKey_Delete) || imgui_special_key_pressed(ImGuiKey_Backspace)) {
                     auto curr = wnd.selection;
-                    if (curr != NULL) delete_ft_node(curr);
+                    if (curr) delete_ft_node(curr);
                 }
                 if (imgui_special_key_pressed(ImGuiKey_Enter)) {
                     auto curr = wnd.selection;
-                    if (curr != NULL) open_ft_node(curr);
+                    if (curr) open_ft_node(curr);
                 }
                 break;
             }
@@ -3477,7 +3506,7 @@ void UI::draw_everything() {
 
         begin_window("Project Settings", &wnd, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking);
 
-        if (imgui_get_keymods() == KEYMOD_NONE)
+        if (imgui_get_keymods() == CP_MOD_NONE)
             if (imgui_special_key_pressed(ImGuiKey_Escape))
                 wnd.show = false;
 
@@ -3573,7 +3602,7 @@ void UI::draw_everything() {
 
                         for (int i = 0; i < ps->debug_profiles->len; i++) {
                             auto &it = ps->debug_profiles->at(i);
-                            auto label = our_sprintf("%s##debug_profile_%d", it.label, i);
+                            auto label = cp_sprintf("%s##debug_profile_%d", it.label, i);
                             if (ImGui::Selectable(label, wnd.current_debug_profile == i))
                                 wnd.current_debug_profile = i;
                         }
@@ -3738,7 +3767,7 @@ void UI::draw_everything() {
 
                         for (int i = 0; i < ps->build_profiles->len; i++) {
                             auto &it = ps->build_profiles->at(i);
-                            auto label = our_sprintf("%s##build_profile_%d", it.label, i);
+                            auto label = cp_sprintf("%s##build_profile_%d", it.label, i);
                             if (ImGui::Selectable(label, wnd.current_build_profile == i))
                                 wnd.current_build_profile = i;
                         }
@@ -3865,7 +3894,7 @@ void UI::draw_everything() {
 
         auto go_up = [&]() {
             if (wnd.filtered_results->len == 0) return;
-            if (wnd.selection == 0)
+            if (!wnd.selection)
                 wnd.selection = min(wnd.filtered_results->len, settings.goto_file_max_results) - 1;
             else
                 wnd.selection--;
@@ -3900,7 +3929,7 @@ void UI::draw_everything() {
         if (wnd.focused) {
             auto mods = imgui_get_keymods();
             switch (mods) {
-            case KEYMOD_NONE:
+            case CP_MOD_NONE:
                 if (imgui_special_key_pressed(ImGuiKey_DownArrow)) go_down();
                 if (imgui_special_key_pressed(ImGuiKey_UpArrow)) go_up();
                 if (imgui_special_key_pressed(ImGuiKey_Escape)) wnd.show = false;
@@ -3956,7 +3985,7 @@ void UI::draw_everything() {
 
         auto go_up = [&]() {
             if (wnd.filtered_results->len == 0) return;
-            if (wnd.selection == 0)
+            if (!wnd.selection)
                 wnd.selection = min(wnd.filtered_results->len, settings.run_command_max_results) - 1;
             else
                 wnd.selection--;
@@ -3970,7 +3999,7 @@ void UI::draw_everything() {
 
         auto mods = imgui_get_keymods();
         switch (mods) {
-        case KEYMOD_NONE:
+        case CP_MOD_NONE:
             if (imgui_special_key_pressed(ImGuiKey_DownArrow)) go_down();
             if (imgui_special_key_pressed(ImGuiKey_UpArrow)) go_up();
             if (imgui_special_key_pressed(ImGuiKey_Escape)) wnd.show = false;
@@ -4028,7 +4057,7 @@ void UI::draw_everything() {
                 pretty_menu_text(pm, get_command_name(it));
 
                 auto keystr = get_menu_command_key(it);
-                if (keystr != NULL) {
+                if (keystr) {
                     // imgui_push_mono_font();
                     // defer { imgui_pop_font(); };
 
@@ -4059,7 +4088,7 @@ void UI::draw_everything() {
         if (wnd.show && !wnd.fill_running) {
             auto go_up = [&]() {
                 if (wnd.filtered_results->len == 0) return;
-                if (wnd.selection == 0)
+                if (!wnd.selection)
                     wnd.selection = min(wnd.filtered_results->len, settings.goto_symbol_max_results) - 1;
                 else
                     wnd.selection--;
@@ -4083,7 +4112,7 @@ void UI::draw_everything() {
 
             auto mods = imgui_get_keymods();
             switch (mods) {
-            case KEYMOD_NONE:
+            case CP_MOD_NONE:
                 if (imgui_special_key_pressed(ImGuiKey_DownArrow)) go_down();
                 if (imgui_special_key_pressed(ImGuiKey_UpArrow)) go_up();
                 if (imgui_special_key_pressed(ImGuiKey_Escape)) {
@@ -4138,7 +4167,7 @@ void UI::draw_everything() {
                 Editor *editor = NULL;
                 if (wnd.current_file_only) {
                     editor = get_current_editor();
-                    if (editor == NULL)
+                    if (!editor)
                         break;
                 }
 
@@ -4201,7 +4230,7 @@ void UI::draw_everything() {
                         return "unknown";
                     };
 
-                    pretty_menu_text(pm, our_sprintf("(%s) ", get_decl_type()), IM_COL32(80, 80, 80, 255));
+                    pretty_menu_text(pm, cp_sprintf("(%s) ", get_decl_type()), IM_COL32(80, 80, 80, 255));
 
                     pretty_menu_text(pm, it.full_name());
                     pm->pos.x += 8;
@@ -4216,7 +4245,7 @@ void UI::draw_everything() {
 
                     auto s = import_path;
                     if (strlen(s) > rem_chars)
-                        s = our_sprintf("%.*s...", rem_chars - 3, s);
+                        s = cp_sprintf("%.*s...", rem_chars - 3, s);
 
                     auto color = i == wnd.selection
                         ? IM_COL32(150, 150, 150, 255)
@@ -4242,7 +4271,7 @@ void UI::draw_everything() {
 
         ImGui::SetNextWindowDockID(dock_sidebar_id, ImGuiCond_Once);
 
-        auto title = our_sprintf("%s###search_and_replace", wnd.replace ? "Search and Replace" : "Search");
+        auto title = cp_sprintf("%s###search_and_replace", wnd.replace ? "Search and Replace" : "Search");
         begin_window(title, &wnd, ImGuiWindowFlags_AlwaysAutoResize);
 
         bool entered = false;
@@ -4353,7 +4382,7 @@ void UI::draw_everything() {
                         ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(ImColor(60, 60, 60)));
 
                         bool clicked = ImGui::Selectable(
-                            our_sprintf("##search_result_%d", index),
+                            cp_sprintf("##search_result_%d", index),
                             index == wnd.selection,
                             ImGuiSelectableFlags_AllowDoubleClick,
                             text_size
@@ -4367,7 +4396,7 @@ void UI::draw_everything() {
                         ImGui::PopStyleColor();
 
                         auto draw_text = [&](ccstr s, int len, bool strikethrough = false) {
-                            auto text = our_sprintf("%.*s", len, s);
+                            auto text = cp_sprintf("%.*s", len, s);
                             auto size = ImGui::CalcTextSize(text);
 
                             auto drawlist = ImGui::GetWindowDrawList();
@@ -4391,7 +4420,7 @@ void UI::draw_everything() {
                             if (is_mark_valid(it.mark_start))
                                 pos = it.mark_start->pos();
 
-                            auto s = our_sprintf("%d:%d ", pos.y+1, pos.x+1);
+                            auto s = cp_sprintf("%d:%d ", pos.y+1, pos.x+1);
                             draw_text(s, strlen(s));
                         }
                         ImGui::PopStyleColor();
@@ -4444,17 +4473,17 @@ void UI::draw_everything() {
                 if (wnd.focused && !world.ui.keyboard_captured_by_imgui) {
                     auto mods = imgui_get_keymods();
                     switch (mods) {
-                    case KEYMOD_NONE:
+                    case CP_MOD_NONE:
                         if (imgui_special_key_pressed(ImGuiKey_DownArrow) || imgui_key_pressed('j')) {
                             if (wnd.selection < index-1)
                                 wnd.selection++;
                         }
                         if (imgui_special_key_pressed(ImGuiKey_UpArrow) || imgui_key_pressed('k')) {
-                            if (wnd.selection > 0)
+                            if (wnd.selection)
                                 wnd.selection--;
                         }
                         if (imgui_special_key_pressed(ImGuiKey_Enter))
-                            if (current_result != NULL)
+                            if (current_result)
                                 goto_file_and_pos(current_filepath, current_result->match_start);
                         break;
                     }
@@ -4582,7 +4611,7 @@ void UI::draw_everything() {
         bool handled = false;
         do {
             auto editor = get_current_editor();
-            if (editor == NULL) break;
+            if (!editor) break;
             if (!editor->buf->use_history) break;
 
             handled = true;
@@ -4592,7 +4621,7 @@ void UI::draw_everything() {
                 auto change = buf->history[i];
                 ImGui::Text("### %d%s", i, i == buf->hist_curr ? " (*)" : "");
 
-                for (auto it = change; it != NULL; it = it->next) {
+                for (auto it = change; it; it = it->next) {
                     ImGui::BulletText(
                         "start = %s, oldend = %s, newend = %s, oldlen = %d, newlen = %d",
                         format_cur(it->start),
@@ -4614,10 +4643,10 @@ void UI::draw_everything() {
 
     do {
         auto editor = get_current_editor();
-        if (editor == NULL) break;
+        if (!editor) break;
 
         auto tree = editor->buf->tree;
-        if (tree == NULL) break;
+        if (!tree) break;
 
         if (world.wnd_editor_tree.show) {
             auto &wnd = world.wnd_editor_tree;
@@ -4651,7 +4680,7 @@ void UI::draw_everything() {
             Ast_Node node; ptr0(&node);
             node.init(ts_tree_root_node(tree), &it);
 
-            current_render_godecl_filepath = our_strcpy(editor->filepath);
+            current_render_godecl_filepath = cp_strcpy(editor->filepath);
 
             FOR_NODE_CHILDREN (&node) {
                 switch (it->type()) {
@@ -4721,7 +4750,7 @@ void UI::draw_everything() {
         boxf tabs_area, editor_area;
         get_tabs_and_editor_area(&pane_area, &tabs_area, &editor_area, pane.editors.len > 0);
 
-        if (pane.editors.len > 0) {
+        if (pane.editors.len) {
             draw_rect(tabs_area, rgba(is_pane_selected ? global_colors.pane_active : global_colors.pane_inactive));
             auto editor = pane.get_current_editor();
 
@@ -4865,7 +4894,7 @@ void UI::draw_everything() {
 
                 // handle scrolling
                 auto dy = ImGui::GetIO().MouseWheel;
-                if (dy != 0) {
+                if (dy) {
                     bool flip = true;
                     if (dy < 0) {
                         flip = false;
@@ -4892,7 +4921,7 @@ void UI::draw_everything() {
                         }
                     }
 
-                    if (lines > 0) editor->scroll_leftover = 0;
+                    if (lines) editor->scroll_leftover = 0;
                 }
             }
         }
@@ -4939,25 +4968,25 @@ void UI::draw_everything() {
                 auto &ind = world.indexer;
                 bool external = false;
 
-                if (ind.goroot != NULL && path_has_descendant(ind.goroot, editor.filepath)) {
+                if (ind.goroot && path_has_descendant(ind.goroot, editor.filepath)) {
                     label = get_path_relative_to(editor.filepath, ind.goroot);
                     external = true;
-                    // label = our_sprintf("$GOROOT/%s", label);
-                } else if (ind.gomodcache != NULL && path_has_descendant(ind.gomodcache, editor.filepath)) {
+                    // label = cp_sprintf("$GOROOT/%s", label);
+                } else if (ind.gomodcache && path_has_descendant(ind.gomodcache, editor.filepath)) {
                     label = get_path_relative_to(editor.filepath, ind.gomodcache);
                     external = true;
-                    // label = our_sprintf("$GOMODCACHE/%s", label);
+                    // label = cp_sprintf("$GOMODCACHE/%s", label);
                 } else {
                     label = get_path_relative_to(editor.filepath, world.current_path);
                 }
 
                 if (external) {
-                    label = our_sprintf("[ext] %s", label);
+                    label = cp_sprintf("[ext] %s", label);
                 }
             }
 
             if (editor.is_unsaved())
-                label = our_sprintf("%s*", label);
+                label = cp_sprintf("%s*", label);
 
             auto text_width = get_text_width(label);
 
@@ -5056,12 +5085,12 @@ void UI::draw_everything() {
         if (tab_to_remove != -1) {
             auto &editor = pane.editors[tab_to_remove];
             if (editor.ask_user_about_unsaved_changes()) {
-                // duplicate of code in main.cpp under GLFW_KEY_W handler, refactor
+                // duplicate of code in main.cpp under CP_KEY_W handler, refactor
                 // if we copy this a few more times
                 pane.editors[tab_to_remove].cleanup();
                 pane.editors.remove(tab_to_remove);
 
-                if (pane.editors.len == 0)
+                if (!pane.editors.len)
                     pane.set_current_editor(-1);
                 else if (pane.current_editor == tab_to_remove) {
                     auto new_idx = pane.current_editor;
@@ -5076,7 +5105,7 @@ void UI::draw_everything() {
 
         // draw editor
         do {
-            if (pane.editors.len == 0) break;
+            if (!pane.editors.len) break;
 
             auto editor = pane.get_current_editor();
             if (!editor->is_nvim_ready()) break;
@@ -5091,7 +5120,7 @@ void UI::draw_everything() {
             highlights.init();
 
             // generate editor highlights
-            if (editor->buf->tree != NULL) {
+            if (editor->buf->tree) {
                 ts_tree_cursor_reset(&editor->buf->cursor, ts_tree_root_node(editor->buf->tree));
 
                 auto start = new_cur2(0, editor->view.y);
@@ -5246,7 +5275,7 @@ void UI::draw_everything() {
                 auto find_breakpoint_stopped_at_this_line = [&]() -> int {
                     if (world.dbg.state_flag == DLV_STATE_PAUSED) {
                         if (is_current_goroutine_on_current_file) {
-                            if (current_frame != NULL) {
+                            if (current_frame) {
                                 if (current_frame->lineno == y + 1)
                                     return BREAKPOINT_CURRENT_GOROUTINE;
                             } else if (current_goroutine->curr_line == y + 1)
@@ -5297,9 +5326,9 @@ void UI::draw_everything() {
                     cur_pos.x += settings.line_number_margin_left;
                     ccstr line_number_str = NULL;
                     if (world.replace_line_numbers_with_bytecounts)
-                        line_number_str = our_sprintf("%*d", line_number_width, buf->bytecounts[y]);
+                        line_number_str = cp_sprintf("%*d", line_number_width, buf->bytecounts[y]);
                     else
-                        line_number_str = our_sprintf("%*d", line_number_width, y + 1);
+                        line_number_str = cp_sprintf("%*d", line_number_width, y + 1);
                     auto len = strlen(line_number_str);
                     for (u32 i = 0; i < len; i++)
                         draw_char(&cur_pos, line_number_str[i], rgba(global_colors.white, 0.3));
@@ -5321,7 +5350,7 @@ void UI::draw_everything() {
                             vx += options.tabsize - (vx % options.tabsize);
                             cp_idx++;
                         } else {
-                            auto width = our_wcwidth(line->at(cp_idx));
+                            auto width = cp_wcwidth(line->at(cp_idx));
                             if (width == -1) width = 1;
                             vx += width;
 
@@ -5365,7 +5394,7 @@ void UI::draw_everything() {
                     if (grapheme_cpsize == 1 && curr_cp == '\t')
                         glyph_width = options.tabsize - (vx % options.tabsize);
                     else
-                        glyph_width = our_wcwidth(curr_cp);
+                        glyph_width = cp_wcwidth(curr_cp);
 
                     if (glyph_width == -1) glyph_width = 1;
 
@@ -5422,7 +5451,7 @@ void UI::draw_everything() {
                         }
                     }
 
-                    if (hint.gotype != NULL)
+                    if (hint.gotype)
                         if (new_cur2(x, y) == hint.start)
                             actual_parameter_hint_start = cur_pos;
 
@@ -5498,7 +5527,7 @@ void UI::draw_everything() {
 
             if (test_hover(hitbox, HOVERID_PANE_RESIZERS + i, ImGuiMouseCursor_ResizeEW)) {
                 draw_rect(b, rgba(global_colors.pane_resizer_hover));
-                if (world.ui.mouse_down[GLFW_MOUSE_BUTTON_LEFT])
+                if (world.ui.mouse_down[CP_MOUSE_LEFT])
                     if (world.resizing_pane == -1)
                         world.resizing_pane = i;
             } else if (world.resizing_pane == i) {
@@ -5508,7 +5537,7 @@ void UI::draw_everything() {
             }
         }
 
-        if (!world.ui.mouse_down[GLFW_MOUSE_BUTTON_LEFT])
+        if (!world.ui.mouse_down[CP_MOUSE_LEFT])
             world.resizing_pane = -1;
     }
 
@@ -5560,9 +5589,9 @@ void UI::draw_everything() {
 
                 auto &nv = world.nvim;
                 if (nv.mode != VI_CMDLINE) return false;
-                if (nv.cmdline.content.len > 0) return true;
-                if (nv.cmdline.firstc.len > 0) return true;
-                if (nv.cmdline.prompt.len > 0) return true;
+                if (nv.cmdline.content.len) return true;
+                if (nv.cmdline.firstc.len) return true;
+                if (nv.cmdline.prompt.len) return true;
                 return false;
             };
 
@@ -5581,12 +5610,12 @@ void UI::draw_everything() {
                     return cmd.firstc.items;
                 };
 
-                auto command = our_sprintf("%s%s", get_title(), cmd.content.items);
+                auto command = cp_sprintf("%s%s", get_title(), cmd.content.items);
                 draw_status_piece(LEFT, command, rgba(global_colors.command_background), rgba(global_colors.command_foreground));
             } else {
                 if (world.use_nvim) {
                     auto editor = get_current_editor();
-                    if (editor != NULL) {
+                    if (editor) {
                         if (editor->is_modifiable()) {
                             ccstr mode_str = NULL;
                             switch (world.nvim.mode) {
@@ -5608,7 +5637,7 @@ void UI::draw_everything() {
         }
 
         if (world.show_frame_index) {
-            auto s = our_sprintf("%d", world.frame_index);
+            auto s = cp_sprintf("%d", world.frame_index);
             auto bg = rgba("#000000");
             auto fg = rgba("#ffffff");
 
@@ -5657,10 +5686,10 @@ void UI::draw_everything() {
         }
 
         auto curr_editor = get_current_editor();
-        if (curr_editor != NULL) {
+        if (curr_editor) {
             auto cur = curr_editor->cur;
 
-            auto s = our_sprintf("%d,%d", cur.y+1, cur.x+1);
+            auto s = cp_sprintf("%d,%d", cur.y+1, cur.x+1);
 
             if (world.use_nvim) {
                 auto view = curr_editor->view;
@@ -5669,13 +5698,13 @@ void UI::draw_everything() {
                 auto total = relu_sub(curr_editor->buf->lines.len, view.h);
 
                 auto blah = [&]() {
-                    if (total == 0) return curr > 0 ? "Bot" : "All";
-                    if (curr == 0) return "Top";
+                    if (!total) return curr > 0 ? "Bot" : "All";
+                    if (!curr) return "Top";
                     if (curr >= total) return "Bot";
-                    return our_sprintf("%d%%", (int)((float)curr/(float)total * 100));
+                    return cp_sprintf("%d%%", (int)((float)curr/(float)total * 100));
                 };
 
-                s = our_sprintf("%s  %s", s, blah());
+                s = cp_sprintf("%s  %s", s, blah());
             }
 
             draw_status_piece(RIGHT, s, rgba(global_colors.white, 0.0), rgba("#aaaaaa"));
@@ -5757,7 +5786,7 @@ void UI::end_frame() {
 
     for (u32 current_pane = 0; current_pane < world.panes.len; current_pane++) {
         auto &pane = world.panes[current_pane];
-        if (pane.editors.len == 0) continue;
+        if (!pane.editors.len) continue;
 
         auto editor = pane.get_current_editor();
         do {
@@ -5766,7 +5795,7 @@ void UI::end_frame() {
 
             auto &ac = editor->autocomplete;
 
-            if (ac.ac.results == NULL) break;
+            if (!ac.ac.results) break;
 
             s32 max_len = 0;
             s32 num_items = min(ac.filtered_results->len, AUTOCOMPLETE_WINDOW_ITEMS);
@@ -5923,13 +5952,13 @@ void UI::end_frame() {
 
                         auto pos = items_pos + new_vec2f(settings.autocomplete_item_padding_x, settings.autocomplete_item_padding_y);
 
-                        auto type_str = our_sprintf("(%s) ", get_decl_type());
+                        auto type_str = cp_sprintf("(%s) ", get_decl_type());
                         draw_string(pos, type_str, rgba(color, 0.5));
                         pos.x += font->width * strlen(type_str);
 
-                        auto str = (cstr)our_strcpy(result.name);
+                        auto str = (cstr)cp_strcpy(result.name);
                         if (strlen(str) > AUTOCOMPLETE_TRUNCATE_LENGTH)
-                            str = (cstr)our_sprintf("%.*s...", AUTOCOMPLETE_TRUNCATE_LENGTH, str);
+                            str = (cstr)cp_sprintf("%.*s...", AUTOCOMPLETE_TRUNCATE_LENGTH, str);
 
                         auto avail_width = items_area.w - settings.autocomplete_item_padding_x * 2;
                         if (strlen(str) * font->width > avail_width)
@@ -5948,7 +5977,7 @@ void UI::end_frame() {
                             case GODECL_IMPORT:
                                 // is this even possible here?
                                 // handle either way
-                                return our_sprintf("\"%s\"", decl->import_path);
+                                return cp_sprintf("\"%s\"", decl->import_path);
                             case GODECL_TYPE:
                             case GODECL_VAR:
                             case GODECL_CONST:
@@ -5957,7 +5986,7 @@ void UI::end_frame() {
                             case GODECL_FIELD:
                             case GODECL_PARAM: {
                                 auto gotype = result.declaration_evaluated_gotype;
-                                if (gotype == NULL) return "";
+                                if (!gotype) return "";
 
                                 Type_Renderer rend;
                                 rend.init();
@@ -6022,7 +6051,7 @@ void UI::end_frame() {
                             }
                             break;
                         case ACR_IMPORT:
-                            return our_sprintf("\"%s\"", result.import_path);
+                            return cp_sprintf("\"%s\"", result.import_path);
                         }
                         return "";
                     };
@@ -6044,7 +6073,7 @@ void UI::end_frame() {
                         }
 
                         if (desclen > desclimit)
-                            desc = our_sprintf("%.*s...", desclimit-3, desc);
+                            desc = cp_sprintf("%.*s...", desclimit-3, desc);
 
                         draw_string(pos, desc, rgba(new_vec3f(0.5, 0.5, 0.5)));
                     }
@@ -6095,7 +6124,7 @@ void UI::end_frame() {
             if (actual_parameter_hint_start.x == -1) break;
 
             auto &hint = editor->parameter_hint;
-            if (hint.gotype == NULL) break;
+            if (!hint.gotype) break;
 
             struct Token_Change {
                 int token;
@@ -6148,7 +6177,7 @@ void UI::end_frame() {
                     rend.write(")");
 
                     // write result
-                    if (result != NULL && result->len > 0) {
+                    if (result && result->len > 0) {
                         rend.write(" ");
                         if (result->len == 1 && is_goident_empty(result->at(0).name)) {
                             add_token_change(HINT_TYPE);
@@ -6236,9 +6265,9 @@ void UI::get_tabs_and_editor_area(boxf* pane_area, boxf* ptabs_area, boxf* pedit
         editor_area.h -= tabs_area.h;
 
     if (has_tabs)
-        if (ptabs_area != NULL)
+        if (ptabs_area)
             memcpy(ptabs_area, &tabs_area, sizeof(boxf));
-    if (peditor_area != NULL)
+    if (peditor_area)
         memcpy(peditor_area, &editor_area, sizeof(boxf));
 }
 
@@ -6258,7 +6287,7 @@ void UI::recalculate_view_sizes(bool force) {
 
         int line_number_width = 0;
         auto editor = it.get_current_editor();
-        if (editor != NULL)
+        if (editor)
             line_number_width = get_line_number_width(editor);
 
         boxf editor_area;

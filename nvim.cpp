@@ -5,6 +5,7 @@
 #include "go.hpp"
 #include "settings.hpp"
 #include "unicode.hpp"
+#include "defer.hpp"
 // #include <strsafe.h>
 
 #define NVIM_DEBUG 0
@@ -31,7 +32,7 @@ void Nvim::assoc_grid_with_window(u32 grid, u32 win) {
     auto& table = grid_to_window;
 
     auto pair = table.find_or_append([&](auto it) { return it->grid == grid; });
-    assert(pair != NULL);
+    assert(pair);
 
     pair->grid = grid;
     pair->win = win;
@@ -41,7 +42,7 @@ Editor* Nvim::find_editor_by_grid(u32 grid) {
     auto& table = grid_to_window;
 
     auto pair = table.find([&](auto it) { return it->grid == grid; });
-    if (pair == NULL) return NULL;
+    if (!pair) return NULL;
 
     return find_editor_by_window(pair->win);
 }
@@ -120,7 +121,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
     case MPRPC_RESPONSE:
         {
             auto req = find_request_by_msgid(event->response.msgid);
-            if (req == NULL) {
+            if (!req) {
                 nvim_print("handle_message_from_main_thread: couldn't find request for msgid %d", event->response.msgid);
                 break;
             }
@@ -133,7 +134,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
             Editor* editor = NULL;
             if (req->editor_id != 0) {
                 editor = find_editor_by_id(req->editor_id);
-                if (editor == NULL) break;
+                if (!editor) break;
             }
 
             switch (req->type) {
@@ -367,7 +368,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
             {
                 auto &args = event->notification.grid_line;
                 auto editor = find_editor_by_grid(args.grid);
-                if (editor == NULL) break;
+                if (!editor) break;
                 mem0(editor->highlights, sizeof(editor->highlights));
             }
             break;
@@ -390,7 +391,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 }
 
                 auto editor = find_editor_by_grid(args.grid);
-                if (editor == NULL) break;
+                if (!editor) break;
 
                 i32 last_hl = -1;
                 Hl_Type last_hltype = HL_NONE;
@@ -402,7 +403,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                     if (it.hl != -1 && it.hl != last_hl) {
                         last_hl = it.hl;
                         auto def = hl_defs.find([&](auto it) { return it->id == last_hl; });
-                        last_hltype = def == NULL ? HL_NONE : def->type;
+                        last_hltype = !def ? HL_NONE : def->type;
                     }
 
                     int reps = (!streq(it.text, "\t") && it.reps != 0) ? it.reps : 1;
@@ -418,7 +419,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 auto &args = event->notification.grid_scroll;
 
                 auto editor = find_editor_by_grid(args.grid);
-                if (editor == NULL) break;
+                if (!editor) break;
 
                 auto move_row = [&](u32 dest, u32 src) {
                     for (u32 i = 0; i < NVIM_DEFAULT_WIDTH; i++) {
@@ -471,7 +472,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
         case NVIM_NOTIF_CUSTOM_MOVE_CURSOR:
             {
                 auto editor = get_current_editor();
-                if (editor == NULL) break;
+                if (!editor) break;
 
                 auto &view = editor->view;
                 u32 y = 0;
@@ -512,7 +513,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
         case NVIM_NOTIF_CUSTOM_REVEAL_LINE:
             {
                 auto editor = get_current_editor();
-                if (editor == NULL) break;
+                if (!editor) break;
 
                 u32 y = editor->cur.y;
                 auto &view = editor->view;
@@ -545,7 +546,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 auto &args = event->notification.buf_changedtick;
 
                 auto editor = find_editor_by_buffer(args.buf.object_id);
-                if (editor == NULL) break;
+                if (!editor) break;
 
                 if (args.changedtick > editor->nvim_data.changedtick)
                     editor->nvim_data.changedtick = args.changedtick;
@@ -556,7 +557,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 auto &args = event->notification.buf_lines;
 
                 auto editor = find_editor_by_buffer(args.buf.object_id);
-                if (editor == NULL) break;
+                if (!editor) break;
 
                 if (args.changedtick > editor->nvim_data.changedtick)
                     editor->nvim_data.changedtick = args.changedtick;
@@ -630,7 +631,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                     mode = VI_UNKNOWN;
 
                 auto editor = get_current_editor();
-                if (editor != NULL) {
+                if (editor) {
                     if (mode == VI_INSERT) {
                         editor->nvim_insert.start = editor->cur;
                         editor->nvim_insert.old_end = editor->cur;
@@ -646,12 +647,12 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 if (mode != VI_INSERT && exiting_insert_mode) {
                     if (editor_that_triggered_escape != 0) {
                         auto ed = find_editor_by_id(editor_that_triggered_escape);
-                        if (ed != NULL)
+                        if (ed)
                             editor = ed;
                         editor_that_triggered_escape = 0;
                     }
 
-                    if (editor != NULL) {
+                    if (editor) {
                         auto &gohere = editor->go_here_after_escape;
                         if (gohere.x != -1 && gohere.y != -1) {
                             ccstr insert_cmd = "i";
@@ -700,7 +701,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 assoc_grid_with_window(args.grid, args.window.object_id);
 
                 auto editor = find_editor_by_window(args.window.object_id);
-                if (editor == NULL)
+                if (!editor)
                     break; // TODO: handle us still receiving notifications for nonexistent window
 
                 editor->nvim_data.grid_topline = args.topline;
@@ -775,7 +776,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
 }
 
 void Nvim::run_event_loop() {
-#define ASSERT(x) if (!(x)) { our_panic("nvim crashed"); }
+#define ASSERT(x) if (!(x)) { cp_panic("nvim crashed"); }
 #define CHECKOK() ASSERT(reader.ok)
 
     {
@@ -981,9 +982,9 @@ void Nvim::run_event_loop() {
 
                                 add_event([&](auto m) {
                                     m->notification.type = NVIM_NOTIF_CMDLINE_SHOW;
-                                    m->notification.cmdline_show.content = our_strcpy(content);
-                                    m->notification.cmdline_show.firstc = our_strcpy(firstc);
-                                    m->notification.cmdline_show.prompt = our_strcpy(prompt);
+                                    m->notification.cmdline_show.content = cp_strcpy(content);
+                                    m->notification.cmdline_show.firstc = cp_strcpy(firstc);
+                                    m->notification.cmdline_show.prompt = cp_strcpy(prompt);
                                 });
                             } else if (streq(op, "mode_change")) {
                                 SCOPED_FRAME();
@@ -994,7 +995,7 @@ void Nvim::run_event_loop() {
 
                                 add_event([&](auto m) {
                                     m->notification.type = NVIM_NOTIF_MODE_CHANGE;
-                                    m->notification.mode_change.mode_name = our_strcpy(mode_name);
+                                    m->notification.mode_change.mode_name = cp_strcpy(mode_name);
                                     m->notification.mode_change.mode_index = mode_index;
                                 });
                             } else if (streq(op, "win_viewport")) {
@@ -1122,7 +1123,7 @@ void Nvim::run_event_loop() {
                                     auto info_keys = reader.read_map(); CHECKOK();
                                     for (u32 i = 0; i < info_keys; i++) {
                                         auto key = reader.read_string(); CHECKOK();
-                                        if (hi_name != NULL) {
+                                        if (hi_name) {
                                             reader.skip_object(); CHECKOK();
                                             continue;
                                         }
@@ -1135,11 +1136,11 @@ void Nvim::run_event_loop() {
                                     }
                                 }
 
-                                if (hi_name != NULL) {
+                                if (hi_name) {
                                     add_event([&](auto m) {
                                         m->notification.type = NVIM_NOTIF_HL_ATTR_DEFINE;
                                         m->notification.hl_attr_define.id = id;
-                                        m->notification.hl_attr_define.hi_name = our_strcpy(hi_name);
+                                        m->notification.hl_attr_define.hi_name = cp_strcpy(hi_name);
                                     });
                                 }
                             } else {
@@ -1188,7 +1189,7 @@ void Nvim::run_event_loop() {
                 {
                     SCOPED_LOCK(&requests_lock);
                     auto req = find_request_by_msgid(msgid);
-                    if (req == NULL) {
+                    if (!req) {
                         nvim_print("couldn't find request for msgid %d", msgid);
                         reader.skip_object(); CHECKOK(); // error
                         reader.skip_object(); CHECKOK(); // result
@@ -1222,7 +1223,7 @@ void Nvim::run_event_loop() {
                 if (req_editor_id != 0) {
                     auto is_match = [&](auto it) { return it->id == req_editor_id; };
                     editor = find_editor(is_match);
-                    if (editor == NULL) {
+                    if (!editor) {
                         reader.skip_object();
                         delete_request_by_msgid(msgid);
                         break;
@@ -1377,7 +1378,7 @@ void Nvim::start_running() {
 
     nvim_proc.init();
     nvim_proc.use_stdin = true;
-    nvim_proc.dir = our_dirname(get_executable_path());
+    nvim_proc.dir = cp_dirname(get_executable_path());
     nvim_proc.skip_shell = true;
 
 #if OS_WIN
@@ -1399,13 +1400,13 @@ void Nvim::start_running() {
     };
 
     event_loop_thread = create_thread(func, this);
-    if (event_loop_thread == NULL) return;
+    if (!event_loop_thread) return;
 }
 
 void Nvim::cleanup() {
     requests_lock.cleanup();
 
-    if (event_loop_thread != NULL) {
+    if (event_loop_thread) {
         kill_thread(event_loop_thread);
         close_thread_handle(event_loop_thread);
     }

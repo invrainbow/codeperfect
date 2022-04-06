@@ -34,7 +34,7 @@ struct DString {
         if (i < 0)
             i = len()+i;
         if (start+i >= end) {
-            our_panic("out of bounds");
+            cp_panic("out of bounds");
         }
         return text->at(start + i);
     }

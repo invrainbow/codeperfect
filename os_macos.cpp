@@ -25,6 +25,7 @@
 #include <filesystem>
 
 #include "utils.hpp"
+#include "defer.hpp"
 
 Check_Path_Result check_path(ccstr path) {
     struct stat st;
@@ -36,10 +37,10 @@ Check_Path_Result check_path(ccstr path) {
 
 ccstr get_normalized_path(ccstr path) {
     auto ret = realpath(path, NULL);
-    if (ret == NULL) return NULL;
+    if (!ret) return NULL;
     defer { free(ret); };
 
-    return our_strcpy(ret);
+    return cp_strcpy(ret);
 }
 
 bool are_filepaths_same_file(ccstr path1, ccstr path2) {
@@ -102,7 +103,7 @@ bool Process::run(ccstr _cmd) {
     pid = fork();
     if (pid == -1) return err("forking");
 
-    if (pid == 0) {
+    if (!pid) {
         // used by parent only
         close_pipe_handle(&stdin_pipe_write);
         close_pipe_handle(&stdout_pipe_read);
@@ -115,7 +116,7 @@ bool Process::run(ccstr _cmd) {
         close_pipe_handle(&stdin_pipe_read);
         close_pipe_handle(&stdout_pipe_write);
 
-        if (dir != NULL) chdir(dir);
+        if (dir) chdir(dir);
 
         exit(execlp("/bin/bash", "bash", "-c", cmd, NULL));
     }
@@ -186,7 +187,7 @@ bool Process::write1(char ch) {
 }
 
 bool Process::writestr(ccstr s, s32 len) {
-    if (len == 0) len = strlen(s);
+    if (!len) len = strlen(s);
     return (write(stdin_pipe_write, s, len) == len);
 }
 
@@ -200,11 +201,11 @@ void Process::done_writing() {
 
 bool list_directory(ccstr folder, list_directory_cb cb) {
     auto dir = opendir(folder);
-    if (dir == NULL) return false;
+    if (!dir) return false;
     defer { closedir(dir); };
 
     struct dirent *ent;
-    while ((ent = readdir(dir)) != NULL) {
+    while ((ent = readdir(dir))) {
         if (streq(ent->d_name, ".")) continue;
         if (streq(ent->d_name, "..")) continue;
 
@@ -225,12 +226,12 @@ struct Thread_Ctx {
 void* _run_thread(void* p) {
     auto ctx = (Thread_Ctx*)p;
     ctx->callback(ctx->param);
-    our_free(ctx);
+    cp_free(ctx);
     return 0;
 }
 
 Thread_Handle create_thread(Thread_Callback callback, void* param) {
-    auto ctx = (Thread_Ctx*)our_malloc(sizeof(Thread_Ctx));
+    auto ctx = (Thread_Ctx*)cp_malloc(sizeof(Thread_Ctx));
     ctx->callback = callback;
     ctx->param = param;
 
@@ -336,7 +337,7 @@ bool copy_file(ccstr src, ccstr dest, bool overwrite) {
 ccstr get_executable_path() {
     uint32_t size = 0;
     _NSGetExecutablePath(NULL, &size);
-    if (size == 0) return NULL;
+    if (!size) return NULL;
 
     auto ret = alloc_array(char, size+1);
     if (_NSGetExecutablePath(ret, &size) != 0) return NULL;
@@ -411,14 +412,14 @@ ccstr rel_to_abs_path(ccstr path) {
     while (true) {
         Frame frame;
         cwd = alloc_array(char, size);
-        if (getcwd(cwd, size) != NULL) break;
+        if (getcwd(cwd, size)) break;
 
         frame.restore();
         size *= 5;
     }
 
     int len = cwk_path_get_absolute(cwd, path, NULL, 0);
-    if (len == 0) return NULL;
+    if (!len) return NULL;
 
     Frame frame;
     auto ret = alloc_array(char, len+1);
@@ -447,7 +448,7 @@ void *xplat_binary_search(const void *key, void *list, s32 num, s32 size, compar
         auto curr = (void*)((char*)list + mid*size);
         auto result = cmp(key, curr);
 
-        if (result > 0)
+        if (result)
             lo = mid + 1;
         else if (result < 0)
             hi = mid - 1;
@@ -458,7 +459,7 @@ void *xplat_binary_search(const void *key, void *list, s32 num, s32 size, compar
 }
 
 bool create_directory(ccstr path) {
-    return mkdir(path, 0777) == NULL;
+    return !mkdir(path, 0777);
 }
 
 void sleep_milliseconds(u32 ms) {
@@ -538,7 +539,7 @@ bool File_Mapping::init(ccstr path, File_Mapping_Opts *_opts) {
         len = statbuf.st_size;
     }
 
-    if (len > 0)
+    if (len)
         if (!create_actual_file_mapping(len))
             return false;
 
@@ -560,7 +561,7 @@ bool File_Mapping::finish_writing(i64 final_size) {
 }
 
 bool File_Mapping::resize(i64 newlen) {
-    if (newlen == 0) return false;
+    if (!newlen) return false;
 
     if (opts.write) {
         if (!flush(len)) return false;
@@ -574,7 +575,7 @@ bool File_Mapping::resize(i64 newlen) {
 }
 
 void File_Mapping::cleanup() {
-    if (data != NULL) {
+    if (data) {
         munmap(data, len);
         data = NULL;
     }
@@ -635,7 +636,7 @@ bool Fs_Watcher::platform_specific_init() {
 }
 
 void Fs_Watcher::cleanup() {
-    if (stream != NULL) {
+    if (stream) {
         FSEventStreamStop((FSEventStreamRef)stream);
         FSEventStreamUnscheduleFromRunLoop((FSEventStreamRef)stream, CFRunLoopGetCurrent(), kCFRunLoopDefaultMode);
         FSEventStreamRelease((FSEventStreamRef)stream);
@@ -654,7 +655,7 @@ bool Fs_Watcher::next_event(Fs_Event *event) {
         }
 
         CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0, true);
-        if (events.len == 0)
+        if (!events.len)
             return false;
     }
 

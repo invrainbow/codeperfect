@@ -43,7 +43,7 @@ struct String_Set {
     void remove(ccstr s) {
         Item *item = NULL;
         HASH_FIND_STR(table, s, item);
-        if (item != NULL) {
+        if (item) {
             HASH_DEL(table, item);
             len--;
         }
@@ -52,7 +52,7 @@ struct String_Set {
     bool has(ccstr s) {
         Item *item = NULL;
         HASH_FIND_STR(table, s, item);
-        return (item != NULL);
+        return item;
     }
 };
 

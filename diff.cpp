@@ -69,7 +69,7 @@ List<Diff> *diff_compute(DString a, DString b) {
 
     // TODO:
     auto hm = diff_half_match(a, b);
-    if (hm != NULL) {
+    if (hm) {
         // A half-match was found, sort out the return data.
         auto text1_a = hm->big_prefix;
         auto text1_b = hm->big_suffix;
@@ -284,11 +284,11 @@ Half_Match *diff_half_match(DString a, DString b) {
     auto hm1 = diff_half_match_i(big, small, div_ceil(big.len(), 4));
     auto hm2 = diff_half_match_i(big, small, div_ceil(big.len(), 2));
 
-    if (hm1 == NULL && hm2 == NULL)
+    if (!hm1 && !hm2)
         return NULL;
 
-    auto len1 = hm1 == NULL ? 0 : hm1->middle.len();
-    auto len2 = hm2 == NULL ? 0 : hm2->middle.len();
+    auto len1 = !hm1 ? 0 : hm1->middle.len();
+    auto len2 = !hm2 ? 0 : hm2->middle.len();
     auto hm = len1 > len2 ? hm1 : hm2;
 
     if (a.len() < b.len()) {

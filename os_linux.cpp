@@ -17,6 +17,7 @@
 #include <chrono>
 
 #include "utils.hpp"
+#include "defer.hpp"
 
 Check_Path_Result check_path(ccstr path) {
     struct stat st;
@@ -30,7 +31,7 @@ u32 get_normalized_path(ccstr path, char *buf, u32 len) {
     auto ret = std::filesystem::absolute(path).c_str();
     auto retlen = strlen(ret);
 
-    if (len == 0) return retlen + 1;
+    if (!len) return retlen + 1;
     if (!strcpy_safe(buf, len, ret)) return 0;
 
     return retlen;
@@ -85,7 +86,7 @@ bool Process::run(ccstr _cmd) {
     pid = fork();
     if (pid == -1) return err("forking");
 
-    if (pid == 0) {
+    if (!pid) {
         // used by parent only
         close_pipe_handle(&stdin_pipe[PIPE_WRITE]);
         close_pipe_handle(&stdout_pipe[PIPE_READ]);
@@ -124,7 +125,7 @@ Process_Status Process::status() {
 
 bool Process::peek(char *ch) {
     if (peek_buffer_full)
-        our_panic("can only peek 1 character at a time");
+        cp_panic("can only peek 1 character at a time");
 
     if (!read1(&peek_buffer)) return false;
 
@@ -176,11 +177,11 @@ void Process::done_writing() {
 
 bool list_directory(ccstr folder, list_directory_cb cb) {
     auto dir = opendir(folder);
-    if (dir == NULL) return false;
+    if (!dir) return false;
     defer { closedir(dir); };
 
     struct dirent *ent;
-    while ((ent = readdir(dir)) != NULL) {
+    while ((ent = readdir(dir))) {
         if (streq(ent->d_name, ".")) continue;
         if (streq(ent->d_name, "..")) continue;
 
@@ -201,12 +202,12 @@ struct Thread_Ctx {
 void* _run_thread(void* p) {
     auto ctx = (Thread_Ctx*)p;
     ctx->callback(ctx->param);
-    our_free(ctx);
+    cp_free(ctx);
     return 0;
 }
 
 Thread_Handle create_thread(Thread_Callback callback, void* param) {
-    auto ctx = (Thread_Ctx*)our_malloc(sizeof(Thread_Ctx));
+    auto ctx = (Thread_Ctx*)cp_malloc(sizeof(Thread_Ctx));
     ctx->callback = callback;
     ctx->param = param;
 
@@ -254,7 +255,7 @@ File_Result File::init(ccstr path, u32 mode, File_Open_Mode open_mode) {
     }
 
     f = fopen(path, open_mode_str);
-    if (f == NULL) return FILE_RESULT_FAILURE;
+    if (!f) return FILE_RESULT_FAILURE;
 
     // TODO: handle the FILE_RESULT_ALREADY_EXISTS case.
 
@@ -272,15 +273,15 @@ bool File::seek(u32 pos) {
 
 bool File::read(char *buf, s32 size, s32 *bytes_read) {
     auto n = fread(buf, 1, size, f);
-    if (n == 0) return false;
-    if (bytes_read != NULL) *bytes_read = n;
+    if (!n) return false;
+    if (bytes_read) *bytes_read = n;
     return (n == size);
 }
 
 bool File::write(char *buf, s32 size, s32 *bytes_written) {
     auto n = fwrite(buf, 1, size, f);
-    if (n == 0) return false;
-    if (bytes_written != NULL) *bytes_written = n;
+    if (!n) return false;
+    if (bytes_written) *bytes_written = n;
     return (n == size);
 }
 
@@ -306,7 +307,7 @@ bool let_user_select_file(Select_File_Opts* opts) {
     if (res != GTK_RESPONSE_ACCEPT) return false;
 
     auto filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
-    if (filename == NULL) return false;
+    if (!filename) return false;
     defer { g_free(filename); };
 
     strcpy_safe(opts->buf, opts->bufsize, filename);

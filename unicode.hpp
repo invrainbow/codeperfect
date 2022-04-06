@@ -1,6 +1,6 @@
 #pragma once
 
-int our_wcwidth(int c);
+int cp_wcwidth(int c);
 
 enum Gr_State {
     GR_ANY,

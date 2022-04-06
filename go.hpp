@@ -976,7 +976,7 @@ struct Go_Package {
     bool checked_for_outdated_hash;
 
     void cleanup_files() {
-        if (files == NULL) return;
+        if (!files) return;
         For (*files) it.cleanup();
         files->len = 0;
     }
@@ -1042,14 +1042,14 @@ struct Module_Resolver {
     void cleanup();
 
     Node *goto_child(Node *node, ccstr name, bool create_if_not_found) {
-        for (auto it = node->children; it != NULL; it = it->next)
+        for (auto it = node->children; it; it = it->next)
             if (streqi(it->name, name))
                 return it;
 
         if (create_if_not_found) {
             auto ret = alloc_object(Node);
             ret->next = node->children;
-            ret->name = our_strcpy(name);
+            ret->name = cp_strcpy(name);
             node->children = ret;
             return ret;
         }
@@ -1067,7 +1067,7 @@ struct Module_Resolver {
     }
 
     void add_path(ccstr import_path, ccstr resolved_path) {
-        resolved_path = normalize_path_sep(our_strcpy(resolved_path));
+        resolved_path = normalize_path_sep(cp_strcpy(resolved_path));
         add_to_root(root_import_to_resolved, import_path, resolved_path);
         add_to_root(root_resolved_to_import, resolved_path, import_path);
     }
@@ -1104,15 +1104,15 @@ struct Module_Resolver {
             auto part = parts->at(i);
 
             curr = goto_child(curr, part, false);
-            if (curr == NULL) break;
+            if (!curr) break;
 
-            if (curr->value != NULL) {
+            if (curr->value) {
                 last_value = curr->value;
                 last_index = i + 1;
             }
         }
 
-        if (last_value == NULL) return NULL;
+        if (!last_value) return NULL;
 
         auto ret = alloc_list<ccstr>(parts->len - last_index + 1);
         ret->append(last_value);
@@ -1153,17 +1153,6 @@ struct Token {
 };
 
 bool isident(int c);
-
-struct Gohelper {
-    Process proc;
-    bool returned_error;
-
-    void init(ccstr cmd, ccstr path);
-    void cleanup();
-    ccstr readline();
-    int readint();
-    ccstr run(ccstr op, ...);
-};
 
 enum {
     LISTDECLS_PUBLIC_ONLY = 1 << 0,
@@ -1216,7 +1205,7 @@ struct Go_Symbol {
     Goresult *decl;
     u64 filehash;
 
-    ccstr full_name() { return our_sprintf("%s.%s", pkgname, name); }
+    ccstr full_name() { return cp_sprintf("%s.%s", pkgname, name); }
     Go_Symbol* copy();
 };
 
@@ -1242,8 +1231,6 @@ struct Go_Indexer {
     Pool mem;        // mem that exists for lifetime of Go_Indexer
     Pool final_mem;  // memory that holds the final value of `this->index`
     Pool ui_mem;     // memory used by UI when it calls jump to definition, etc.
-
-    Gohelper gohelper_dynamic;
 
     Pool scoped_table_mem;
 
@@ -1394,11 +1381,11 @@ TSParser *new_ts_parser();
 template<typename T>
 T *read_object(Index_Stream *s) {
     auto size = s->read2();
-    if (size == 0) return NULL;
+    if (!size) return NULL;
 
     // TODO: i mean, don't literally crash the program, show an error and
     // rebuild the index or something
-    our_assert(size == sizeof(T), "size mismatch while reading object from index");
+    cp_assert(size == sizeof(T), "size mismatch while reading object from index");
 
     auto obj = alloc_object(T);
     s->readn(obj, size);
@@ -1418,7 +1405,7 @@ List<T> *read_list(Index_Stream *s) {
 
 template<typename T>
 void write_object(T *obj, Index_Stream *s) {
-    if (obj == NULL) {
+    if (!obj) {
         s->write2(0);
         return;
     }
@@ -1430,7 +1417,7 @@ void write_object(T *obj, Index_Stream *s) {
 
 template<typename L>
 void write_list(L arr, Index_Stream *s) {
-    if (arr == NULL) {
+    if (!arr) {
         s->write4(0);
         return;
     }

@@ -589,9 +589,9 @@ struct Nvim {
         SCOPED_MEM(&requests_mem);
 
         auto req = find_request_by_msgid(msgid);
-        if (req != NULL) requests.remove(req);
+        if (req) requests.remove(req);
 
-        if (requests.len == 0)
+        if (!requests.len)
             requests_mem.reset();
     }
 

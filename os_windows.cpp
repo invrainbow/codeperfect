@@ -4,6 +4,7 @@
 
 #include "win32.hpp"
 #include "world.hpp"
+#include "defer.hpp"
 
 #include <shlwapi.h>
 #include <shlobj.h>
@@ -21,7 +22,7 @@ void init_platform_specific_crap() {
 
 wchar_t* to_wide(ccstr s, int slen = -1) {
     auto len = MultiByteToWideChar(CP_UTF8, 0, s, slen, NULL, 0);
-    if (len == 0) return NULL;
+    if (!len) return NULL;
 
     auto ret = alloc_array(wchar_t, len + 1);
     if (MultiByteToWideChar(CP_UTF8, 0, s, slen, ret, len) != len) return NULL;
@@ -32,7 +33,7 @@ wchar_t* to_wide(ccstr s, int slen = -1) {
 
 ccstr to_utf8(const wchar_t *s, int slen = -1) {
     auto len = WideCharToMultiByte(CP_UTF8, 0, s, slen, NULL, 0, NULL, NULL);
-    if (len == 0) return NULL;
+    if (!len) return NULL;
 
     auto ret = alloc_array(char, len+1);
     if (WideCharToMultiByte(CP_UTF8, 0, s, slen, ret, len, NULL, NULL) != len) return NULL;
@@ -76,7 +77,7 @@ ccstr get_normalized_path(ccstr path) {
     defer { CloseHandle(f); };
 
     auto len = GetFinalPathNameByHandleW(f, NULL, 0, FILE_NAME_NORMALIZED);
-    if (len == 0) return NULL;
+    if (!len) return NULL;
 
     Frame frame;
 
@@ -117,7 +118,7 @@ bool are_filepaths_same_file(ccstr path1, ccstr path2) {
 u64 current_time_nano() {
     static LARGE_INTEGER freq = { 0 };
 
-    if (freq.QuadPart == 0)
+    if (!freq.QuadPart)
         QueryPerformanceFrequency(&freq);
 
     LARGE_INTEGER now;
@@ -128,7 +129,7 @@ u64 current_time_nano() {
 }
 
 void close_and_null_handle(HANDLE* ph) {
-    if (*ph != NULL)
+    if (*ph)
         CloseHandle(*ph);
     *ph = NULL;
 }
@@ -191,8 +192,8 @@ bool Process::run(ccstr _cmd) {
         if (skip_shell) {
             wargs = to_wide(cmd);
         } else {
-            // auto args = our_sprintf("cmd /S /K \"start cmd /S /K \"%s\"\"", cmd);
-            auto args = our_sprintf("cmd /S /C %s\"%s\"", keep_open_after_exit ? "/K " : "", cmd);
+            // auto args = cp_sprintf("cmd /S /K \"start cmd /S /K \"%s\"\"", cmd);
+            auto args = cp_sprintf("cmd /S /C %s\"%s\"", keep_open_after_exit ? "/K " : "", cmd);
             print("Process::run: %s", args);
             wargs = to_wide(args);
         }
@@ -254,7 +255,7 @@ bool Process::read1(char* ch) {
 }
 
 bool Process::writestr(ccstr s, s32 len) {
-    if (len == 0) len = strlen(s);
+    if (!len) len = strlen(s);
     DWORD n = 0;
     return WriteFile(stdin_w, s, len, &n, NULL) && (n == len);
 }
@@ -301,14 +302,14 @@ struct Thread_Ctx {
 };
 
 Thread_Handle create_thread(Thread_Callback callback, void* param) {
-    auto ctx = (Thread_Ctx*)our_malloc(sizeof(Thread_Ctx));
+    auto ctx = (Thread_Ctx*)cp_malloc(sizeof(Thread_Ctx));
     ctx->callback = callback;
     ctx->param = param;
 
     auto run = [](void *p) -> DWORD WINAPI {
         auto ctx = (Thread_Ctx*)p;
         ctx->callback(ctx->param);
-        our_free(ctx);
+        cp_free(ctx);
         return 0;
     };
 
@@ -424,9 +425,9 @@ bool let_user_select_file(Select_File_Opts* opts) {
             return false;
 
     IShellItem *default_folder = NULL;
-    defer { if (default_folder != NULL) default_folder->Release(); };
+    defer { if (default_folder) default_folder->Release(); };
 
-    if (opts->starting_folder != NULL) {
+    if (opts->starting_folder) {
         if (FAILED(SHCreateItemFromParsingName(to_wide(opts->starting_folder), NULL, IID_IShellItem, (void**)&default_folder)))
             return false;
         if (FAILED(dialog->SetDefaultFolder(default_folder)))
@@ -537,13 +538,13 @@ ccstr rel_to_abs_path(ccstr path) {
     auto wpath = to_wide(path);
 
     auto len = GetFullPathNameW(wpath, 0, NULL, NULL);
-    if (len == 0) return NULL;
+    if (!len) return NULL;
 
     Frame frame;
     auto ret = alloc_array(wchar_t, len);
 
     auto copied = GetFullPathNameW(wpath, len, ret, NULL);
-    if (copied == 0) {
+    if (!copied) {
         error("GetFullPathNameW: %s", get_last_error());
         frame.restore();
         return NULL;
@@ -573,7 +574,7 @@ bool Fs_Watcher::platform_specific_init() {
 }
 
 void Fs_Watcher::cleanup() {
-    if (dir_handle != NULL) CloseHandle(dir_handle);
+    if (dir_handle) CloseHandle(dir_handle);
 }
 
 bool Fs_Watcher::initiate_wait() {
@@ -625,14 +626,14 @@ bool Fs_Watcher::next_event(Fs_Event *event) {
 }
 
 bool File_Mapping::create_actual_file_mapping(LARGE_INTEGER size) {
-    if (size.HighPart > 0) {
+    if (size.HighPart) {
         // TODO: handle this. Everywhere else in the code is set up to handle
         // 64-bit sizes, but because MapViewOfFile only lets you map a 32-bit
         // sized portion at a time, we need to write the unmap/remap logic.
-        our_panic("File to be mapped is too big.");
+        cp_panic("File to be mapped is too big.");
     }
 
-    if (size.LowPart == 0) {
+    if (!size.LowPart) {
         data = NULL;
         len = 0;
         return true;
@@ -641,7 +642,7 @@ bool File_Mapping::create_actual_file_mapping(LARGE_INTEGER size) {
     bool ok = false;
 
     mapping = CreateFileMapping(file, 0, opts.write ? PAGE_READWRITE : PAGE_READONLY, size.HighPart, size.LowPart, NULL);
-    if (mapping == NULL) {
+    if (!mapping) {
         error("CreateFileMapping: %s", get_last_error());
         return false;
     }
@@ -654,7 +655,7 @@ bool File_Mapping::create_actual_file_mapping(LARGE_INTEGER size) {
     };
 
     data = (u8*)MapViewOfFile(mapping, opts.write ? FILE_MAP_WRITE : FILE_MAP_READ, 0, 0, size.LowPart);
-    if (data == NULL) return false;
+    if (!data) return false;
 
     len = size.LowPart;
 
@@ -699,7 +700,7 @@ bool File_Mapping::init(ccstr path, File_Mapping_Opts *_opts) {
 }
 
 bool File_Mapping::resize(i64 newlen) {
-    if (newlen == 0) return false;
+    if (!newlen) return false;
 
     if (opts.write) {
         if (!flush(len)) return false;
@@ -740,11 +741,11 @@ bool File_Mapping::finish_writing(i64 final_size) {
 }
 
 void File_Mapping::cleanup() {
-    if (data != NULL)
+    if (data)
         UnmapViewOfFile(data);
-    if (mapping != NULL)
+    if (mapping)
         CloseHandle(mapping);
-    if (file != NULL)
+    if (file)
         CloseHandle(file);
 }
 
@@ -810,16 +811,16 @@ void *read_font_data_from_name(s32 *len, ccstr name, Charset_Type charset) {
         charset_to_win32_enum(charset), OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH,
         to_wide(name)
     );
-    if (hfont == NULL) return NULL;
+    if (!hfont) return NULL;
     defer { DeleteObject(hfont); };
 
     auto hdc = CreateCompatibleDC(NULL);
-    if (hdc == NULL) return NULL;
+    if (!hdc) return NULL;
     defer { DeleteDC(hdc); };
 
     SelectObject(hdc, hfont);
     auto size = GetFontData(hdc, 0, 0, NULL, 0);
-    if (size == 0) return NULL;
+    if (!size) return NULL;
 
     Frame frame;
 
@@ -841,16 +842,16 @@ void *read_font_data_from_first_found(s32 *plen, Charset_Type charset, ...) {
     s32 len = 0;
 
     ccstr curr = NULL;
-    while ((curr = va_arg(vl, ccstr)) != NULL) {
+    while ((curr = va_arg(vl, ccstr))) {
         Frame frame;
         font_data = read_font_data_from_name(&len, curr, charset);
-        if (font_data != NULL) break;
+        if (font_data) break;
         frame.restore();
     }
 
     va_end(vl);
 
-    if (font_data != NULL)
+    if (font_data)
         *plen = len;
     return font_data;
 }
@@ -885,7 +886,7 @@ ccstr get_executable_path() {
 
         auto ret = alloc_array(wchar_t, len+1);
         auto result = GetModuleFileNameW(NULL, ret, len+1);
-        if (result == 0) {
+        if (!result) {
             frame.restore();
             return NULL;
         }

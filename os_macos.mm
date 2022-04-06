@@ -13,10 +13,10 @@ void* get_native_window_handle();
 NSAlert *make_nsalert(ccstr text, ccstr title) {
     auto alert = [[NSAlert alloc] init];
 
-    if (title == NULL) title = "Error";
+    if (!title) title = "Error";
     [alert setMessageText:[NSString stringWithUTF8String:title]];
 
-    if (text != NULL) [alert setInformativeText:[NSString stringWithUTF8String:text]];
+    if (text) [alert setInformativeText:[NSString stringWithUTF8String:text]];
 
     [alert setAlertStyle:NSAlertStyleWarning];
     return alert;
@@ -26,7 +26,7 @@ int run_nsalert(NSAlert *alert) {
     [[alert window] setLevel:NSModalPanelWindowLevel];
 
     auto wnd = (__bridge NSWindow*)get_native_window_handle();
-    if (wnd == NULL) return [alert runModal];
+    if (!wnd) return [alert runModal];
 
     __block int ret = -1;
     [alert beginSheetModalForWindow:wnd
@@ -67,7 +67,7 @@ Ask_User_Result ask_user_yes_no(ccstr text, ccstr title, ccstr yeslabel, ccstr n
         }
 
         int sel = run_nsalert(alert);
-        if (sel == 0) return ASKUSER_YES;
+        if (!sel) return ASKUSER_YES;
         if (sel == 1) return ASKUSER_NO;
         if (sel == 2 && cancel) return ASKUSER_CANCEL;
         return ASKUSER_ERROR;
@@ -113,7 +113,7 @@ bool let_user_select_file(Select_File_Opts* opts) {
 
         {
             auto path = opts->starting_folder;
-            if (path != NULL && path[0] != '\0') {
+            if (path && path[0] != '\0') {
                 auto str = [NSString stringWithUTF8String:path];
                 auto url = [NSURL fileURLWithPath:str isDirectory:YES];
                 [panel setDirectoryURL:url];

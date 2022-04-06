@@ -8,6 +8,7 @@
 #include "settings.hpp"
 #include "set.hpp"
 #include "unicode.hpp"
+#include "defer.hpp"
 
 bool Editor::is_modifiable() {
     return path_has_descendant(world.current_path, filepath);
@@ -21,7 +22,7 @@ ccstr Editor::get_autoindent(int for_y) {
         for (u32 x = 0; x < line.len; x++)
             if (!isspace(line[x]))
                 goto done;
-        if (y == 0) break;
+        if (!y) break;
         y--;
     }
 done:
@@ -64,7 +65,7 @@ done:
 
 void Editor::insert_text_in_insert_mode(ccstr s) {
     auto len = strlen(s);
-    if (len == 0) return;
+    if (!len) return;
 
     Cstr_To_Ustr conv;
     conv.init();
@@ -117,7 +118,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
 
                 va_list vl;
                 va_start(vl, fmt);
-                insert_text_in_insert_mode(our_vsprintf(fmt, vl));
+                insert_text_in_insert_mode(cp_vsprintf(fmt, vl));
                 va_end(vl);
             };
 
@@ -147,14 +148,14 @@ void Editor::perform_autocomplete(AC_Result *result) {
             auto insert_autoindent = [&](int add = 0) {
                 SCOPED_FRAME();
 
-                if (autoindent_chars == NULL)
-                    our_panic("autoindent_chars is null (you probably forgot to call save_autoindent");
+                if (!autoindent_chars)
+                    cp_panic("autoindent_chars is null (you probably forgot to call save_autoindent");
 
                 insert_text("%s", autoindent_chars);
 
-                if (add > 0) {
+                if (add) {
                     ccstr tabs = "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t";
-                    if (add >= strlen(tabs)) our_panic("not enough tabs");
+                    if (add >= strlen(tabs)) cp_panic("not enough tabs");
                     insert_text("%.*s", add, tabs);
                 }
             };
@@ -227,7 +228,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
                 {
                     auto is_string = [&]() -> bool {
                         auto gotype = ac.operand_gotype;
-                        if (gotype != NULL)
+                        if (gotype)
                             if (gotype->type == GOTYPE_BUILTIN)
                                 if (gotype->builtin_type == GO_BUILTIN_STRING)
                                     return true;
@@ -348,7 +349,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
                     ccstr valuename = "val";
 
                     auto gotype = ac.operand_gotype;
-                    if (gotype != NULL)
+                    if (gotype)
                         if (gotype->type == GOTYPE_SLICE || gotype->type == GOTYPE_ARRAY) {
                             keyname = "i";
                             valuename = "val";
@@ -398,7 +399,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
                             if (i == error_found_at) {
                                 insert_text("err");
                             } else {
-                                if (varcount == 0)
+                                if (!varcount)
                                     insert_text("val");
                                 else
                                     insert_text("val%d", varcount);
@@ -429,10 +430,10 @@ void Editor::perform_autocomplete(AC_Result *result) {
                         do {
                             // get gotype of current function
                             auto functype = world.indexer.get_closest_function(filepath, cur);
-                            if (functype == NULL) break;
+                            if (!functype) break;
 
                             auto result = functype->func_sig.result;
-                            if (result == NULL  || result->len == 0) {
+                            if (!result  || result->len == 0) {
                                 insert_text("return");
                                 ok = true;
                                 break;
@@ -442,17 +443,17 @@ void Editor::perform_autocomplete(AC_Result *result) {
                             auto &ind = world.indexer;
 
                             auto get_zero_value_of_gotype = [&](Gotype *gotype) -> ccstr {
-                                if (gotype == NULL) return NULL;
+                                if (!gotype) return NULL;
 
                                 Go_Ctx ctx; ptr0(&ctx);
-                                ctx.import_path = ind.filepath_to_import_path(our_dirname(filepath));
-                                ctx.filename = our_basename(filepath);
+                                ctx.import_path = ind.filepath_to_import_path(cp_dirname(filepath));
+                                ctx.filename = cp_basename(filepath);
 
                                 auto res = ind.evaluate_type(gotype, &ctx);
-                                if (res == NULL) return NULL;
+                                if (!res) return NULL;
 
                                 auto rres = ind.resolve_type(res->gotype, res->ctx);
-                                if (rres == NULL) return NULL;
+                                if (!rres) return NULL;
 
                                 gotype = rres->gotype;
 
@@ -483,9 +484,9 @@ void Editor::perform_autocomplete(AC_Result *result) {
                                 auto &it = result->at(i);
                                 auto val = get_zero_value_of_gotype(it.gotype);
 
-                                if (i > 0)
+                                if (i)
                                     insert_text(", ");
-                                insert_text(val == NULL ? "nil" : val);
+                                insert_text(!val ? "nil" : val);
                             }
 
                             ok = true;
@@ -507,7 +508,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
 
             if (notfound) break;
 
-            if (curr_postfix != NULL) {
+            if (curr_postfix) {
                 if (curr_postfix->insert_positions.len > 1) {
                     trigger_escape(curr_postfix->insert_positions[0]);
                     curr_postfix->current_insert_position++;
@@ -530,7 +531,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
             auto modify_string = [&](ccstr s) -> ccstr {
                 switch (result->type) {
                 case ACR_IMPORT:
-                    return our_sprintf("%s.", s);
+                    return cp_sprintf("%s.", s);
 
                 case ACR_KEYWORD:
                     {
@@ -543,17 +544,17 @@ void Editor::perform_autocomplete(AC_Result *result) {
 
                         For (builtins_with_space)
                             if (streq(s, it))
-                                return our_sprintf("%s ", s);
+                                return cp_sprintf("%s ", s);
                     }
                     break;
 
                 case ACR_DECLARATION:
                     {
                         if (result->declaration_is_struct_literal_field)
-                            return our_sprintf("%s: ", s);
+                            return cp_sprintf("%s: ", s);
 
                         auto godecl = result->declaration_godecl;
-                        if (godecl == NULL) break;
+                        if (!godecl) break;
 
                         if (!world.indexer.acquire_lock(IND_READING)) break;
                         defer { world.indexer.release_lock(IND_READING); };
@@ -563,16 +564,16 @@ void Editor::perform_autocomplete(AC_Result *result) {
                         ctx.filename = result->declaration_filename;
 
                         auto res = world.indexer.evaluate_type(godecl->gotype, &ctx);
-                        if (res == NULL) break;
+                        if (!res) break;
 
                         auto rres = world.indexer.resolve_type(res->gotype, res->ctx);
-                        if (rres == NULL) break;
+                        if (!rres) break;
 
                         auto gotype = rres->gotype;
                         if (gotype->type != GOTYPE_FUNC) break;
 
                         is_function = true;
-                        return our_sprintf("%s(", s); // it's a func, add a '('
+                        return cp_sprintf("%s(", s); // it's a func, add a '('
                     }
                     break;
                 }
@@ -592,7 +593,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
             defer { buf->hist_batch_mode = false; };
 
             auto import_to_add = see_if_we_need_autoimport();
-            if (import_to_add != NULL) {
+            if (import_to_add) {
                 auto iter = alloc_object(Parser_It);
                 iter->init(buf);
                 auto root = new_ast_node(ts_tree_root_node(buf->tree), iter);
@@ -610,19 +611,19 @@ void Editor::perform_autocomplete(AC_Result *result) {
                 }
 
                 do {
-                    if (imports_node == NULL && package_node == NULL) break;
+                    if (!imports_node && !package_node) break;
 
                     Text_Renderer rend;
                     rend.init();
                     rend.write("import (\n");
                     rend.write("\"%s\"\n", import_to_add);
 
-                    if (imports_node != NULL && cur > imports_node->end()) {
+                    if (imports_node && cur > imports_node->end()) {
                         auto imports = alloc_list<Go_Import>();
                         world.indexer.import_decl_to_goimports(imports_node, NULL, imports);
 
                         auto imp = imports->find([&](auto it) { return streq(it->import_path, import_to_add); });
-                        if (imp != NULL) break;
+                        if (imp) break;
 
                         For (*imports) {
                             switch (it.package_name_type) {
@@ -650,7 +651,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
                     GHFmtAddLine("");
 
                     auto new_contents = GHFmtFinish(GH_FMT_GOIMPORTS);
-                    if (new_contents == NULL) break;
+                    if (!new_contents) break;
                     defer { GHFree(new_contents); };
 
                     auto new_contents_len = strlen(new_contents);
@@ -662,7 +663,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
                     }
 
                     cur2 start, old_end, new_end;
-                    if (imports_node != NULL) {
+                    if (imports_node) {
                         start = imports_node->start();
                         old_end = imports_node->end();
                         if (world.use_nvim)
@@ -674,7 +675,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
                     new_end = start;
 
                     auto chars = alloc_list<uchar>();
-                    if (imports_node == NULL) {
+                    if (!imports_node) {
                         // add two newlines, it's going after the package decl
                         chars->append('\n');
                         chars->append('\n');
@@ -743,7 +744,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
 
             if (is_function) trigger_parameter_hint();
 
-            if (import_to_add != NULL)
+            if (import_to_add)
                 if (result->type == ACR_IMPORT)
                     trigger_autocomplete(true, false);
         }
@@ -770,7 +771,7 @@ void Editor::add_change_in_insert_mode(cur2 start, cur2 old_end, cur2 new_end) {
         }
 
         if (old_end.y >= nvim_insert.start.y)
-            our_panic("can only add changes in insert mode before current change");
+            cp_panic("can only add changes in insert mode before current change");
     }
 
     auto dy = new_end.y - old_end.y;
@@ -785,7 +786,7 @@ void Editor::add_change_in_insert_mode(cur2 start, cur2 old_end, cur2 new_end) {
 
 bool Editor::is_current_editor() {
     auto current_editor = get_current_editor();
-    if (current_editor != NULL)
+    if (current_editor)
         if (current_editor->id == id)
             return true;
     return false;
@@ -802,9 +803,9 @@ Move_Cursor_Opts *default_move_cursor_opts() {
 }
 
 void Editor::raw_move_cursor(cur2 c, Move_Cursor_Opts *opts) {
-    if (!is_main_thread) our_panic("can't call this from outside main thread");
+    if (!is_main_thread) cp_panic("can't call this from outside main thread");
 
-    if (opts == NULL) opts = default_move_cursor_opts();
+    if (!opts) opts = default_move_cursor_opts();
 
     if (c.y == -1) c = buf->offset_to_cur(c.x);
     if (c.y < 0 || c.y >= buf->lines.len) return;
@@ -834,7 +835,7 @@ void Editor::raw_move_cursor(cur2 c, Move_Cursor_Opts *opts) {
             vx += options.tabsize - (vx % options.tabsize);
             i++;
         } else {
-            auto width = our_wcwidth(line[i]);
+            auto width = cp_wcwidth(line[i]);
             if (width == -1) width = 1;
             vx += width;
 
@@ -869,14 +870,14 @@ void Editor::raw_move_cursor(cur2 c, Move_Cursor_Opts *opts) {
 
     // what the fuck is this stupid pyramid of shit
     auto &nq = world.navigation_queue;
-    if (nq.len > 0) {
+    if (nq.len) {
         auto &top = nq[0];
         if (top.editor_id == id) {
             if (top.pos == c) {
                 push_to_history = false;
             } else {
                 nq.remove(&nq[0]);
-                if (nq.len > 0) {
+                if (nq.len) {
                     auto top = nq[0];
                     if (top.editor_id == id) {
                         if (top.pos == c)
@@ -1001,7 +1002,7 @@ bool check_file(File_Mapping *fm) {
             pos.x++;
             if (pos.x > CHUNKMAX) {
                 tell_user(
-                    our_sprintf("Sorry, we're not yet able to open files containing lines with more than %d characters.", CHUNKMAX),
+                    cp_sprintf("Sorry, we're not yet able to open files containing lines with more than %d characters.", CHUNKMAX),
                     "Unable to open file."
                 );
                 return false;
@@ -1018,9 +1019,9 @@ void Editor::reload_file(bool because_of_file_watcher) {
         return;
 
     auto fm = map_file_into_memory(filepath);
-    if (fm == NULL) {
+    if (!fm) {
         // don't error here
-        // tell_user(our_sprintf("Unable to open %s for reading: %s", filepath, get_last_error()), "Error opening file");
+        // tell_user(cp_sprintf("Unable to open %s for reading: %s", filepath, get_last_error()), "Error opening file");
         return;
     }
     defer { fm->cleanup(); };
@@ -1057,20 +1058,20 @@ bool Editor::load_file(ccstr new_filepath) {
     if (buf->initialized)
         buf->cleanup();
 
-    is_go_file = (new_filepath != NULL && str_ends_with(new_filepath, ".go"));
+    is_go_file = (new_filepath && str_ends_with(new_filepath, ".go"));
     buf->init(&mem, is_go_file, !world.use_nvim);
 
     FILE* f = NULL;
-    if (new_filepath != NULL) {
+    if (new_filepath) {
         auto path = get_normalized_path(new_filepath);
-        if (path == NULL)
+        if (!path)
             return error("unable to normalize filepath"), false;
 
         strcpy_safe_fixed(filepath, path);
 
         auto fm = map_file_into_memory(filepath);
-        if (fm == NULL) {
-            tell_user(our_sprintf("Unable to open %s for reading: %s", filepath, get_last_error()), "Error opening file");
+        if (!fm) {
+            tell_user(cp_sprintf("Unable to open %s for reading: %s", filepath, get_last_error()), "Error opening file");
             return false;
         }
         defer { fm->cleanup(); };
@@ -1121,11 +1122,11 @@ bool Editor::load_file(ccstr new_filepath) {
             if (!are_filepaths_equal(it.filepath, filepath)) continue;
 
             For (*it.results) {
-                if (it.mark_start == NULL) our_panic("mark_start was null");
-                if (it.mark_end == NULL) our_panic("mark_end was null");
+                if (!it.mark_start) cp_panic("mark_start was null");
+                if (!it.mark_end) cp_panic("mark_end was null");
 
-                if (it.mark_start->valid) our_panic("this shouldn't be happening");
-                if (it.mark_end->valid) our_panic("this shouldn't be happening");
+                if (it.mark_start->valid) cp_panic("this shouldn't be happening");
+                if (it.mark_end->valid) cp_panic("this shouldn't be happening");
 
                 buf->mark_tree.insert_mark(MARK_SEARCH_RESULT, it.match_start, it.mark_start);
                 buf->mark_tree.insert_mark(MARK_SEARCH_RESULT, it.match_end, it.mark_end);
@@ -1258,7 +1259,7 @@ bool Editor::trigger_escape(cur2 go_here_after) {
 
     bool handled = false;
 
-    if (autocomplete.ac.results != NULL) {
+    if (autocomplete.ac.results) {
         handled = true;
         ptr0(&autocomplete.ac);
 
@@ -1271,7 +1272,7 @@ bool Editor::trigger_escape(cur2 go_here_after) {
         }
     }
 
-    if (parameter_hint.gotype != NULL) {
+    if (parameter_hint.gotype) {
         handled = true;
         parameter_hint.gotype = NULL;
     }
@@ -1451,7 +1452,7 @@ bool Editor::trigger_escape(cur2 go_here_after) {
             // move cursor
             {
                 auto c = cur;
-                if (c.x > 0) {
+                if (c.x) {
                     int gr_idx = buf->idx_cp_to_gr(c.y, c.x);
                     c.x = buf->idx_gr_to_cp(c.y, relu_sub(gr_idx, 1));
                 }
@@ -1478,17 +1479,17 @@ void Pane::set_current_editor(u32 idx) {
     current_editor = idx;
 
     auto ed = get_current_editor();
-    if (ed == NULL) return;
+    if (!ed) return;
 
     auto focus_current_editor_in_file_explorer = [&]() {
         auto edpath = get_path_relative_to(ed->filepath, world.current_path);
         auto node = find_ft_node(edpath);
-        if (node == NULL) return;
+        if (!node) return;
 
         world.file_explorer.scroll_to = node;
         world.file_explorer.selection = node;
 
-        for (auto it = node->parent; it != NULL && it->parent != NULL; it = it->parent)
+        for (auto it = node->parent; it && it->parent; it = it->parent)
             it->open = true;
     };
 
@@ -1498,7 +1499,7 @@ void Pane::set_current_editor(u32 idx) {
 Editor *Pane::focus_editor_by_index(u32 idx, cur2 pos) {
     if (current_editor != idx) {
         auto e = get_current_editor();
-        if (e != NULL) e->trigger_escape();
+        if (e) e->trigger_escape();
     }
 
     set_current_editor(idx);
@@ -1526,7 +1527,7 @@ Editor *Pane::focus_editor_by_index(u32 idx, cur2 pos) {
 }
 
 Editor* Pane::get_current_editor() {
-    if (editors.len == 0) return NULL;
+    if (!editors.len) return NULL;
     if (current_editor == -1) return NULL;
 
     return &editors[current_editor];
@@ -1633,9 +1634,9 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
 
     auto &ind = world.indexer;
 
-    if (autocomplete.ac.results != NULL && triggered_by_typing_ident) {
+    if (autocomplete.ac.results && triggered_by_typing_ident) {
         SCOPED_MEM(&world.autocomplete_mem);
-        autocomplete.ac.prefix = our_sprintf("%s%c", autocomplete.ac.prefix, typed_ident_char);
+        autocomplete.ac.prefix = cp_sprintf("%s%c", autocomplete.ac.prefix, typed_ident_char);
         autocomplete.ac.keyword_end.x++;
     } else {
         auto old_type = autocomplete.ac.type;
@@ -1679,7 +1680,7 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
             // copy ac over to autocomplete.ac
             memcpy(&autocomplete.ac, &ac, sizeof(Autocomplete));
             autocomplete.filtered_results = alloc_list<int>();
-            autocomplete.ac.prefix = our_strcpy(ac.prefix);
+            autocomplete.ac.prefix = cp_strcpy(ac.prefix);
             autocomplete.ac.results = new_results;
         }
     }
@@ -1690,7 +1691,7 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
         defer { ind.release_lock(IND_READING); };
 
         // only needs to live for duration of function
-        wksp_import_path = our_strcpy(ind.index.current_import_path);
+        wksp_import_path = cp_strcpy(ind.index.current_import_path);
     }
 
     {
@@ -1781,7 +1782,7 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
                     score.import_in_file = true;
                 }
 
-                if (wksp_import_path != NULL)
+                if (wksp_import_path)
                     if (path_has_descendant(wksp_import_path, it.import_path))
                         score.import_in_workspace = true;
             }
@@ -1800,7 +1801,7 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
 }
 
 bool is_goident_empty(ccstr name) {
-    return (name == NULL || name[0] == '\0' || streq(name, "_"));
+    return (!name || name[0] == '\0' || streq(name, "_"));
 }
 
 void Editor::trigger_parameter_hint() {
@@ -1816,7 +1817,7 @@ void Editor::trigger_parameter_hint() {
         defer { world.indexer.release_lock(IND_READING); };
 
         auto hint = world.indexer.parameter_hint(filepath, cur);
-        if (hint == NULL) return;
+        if (!hint) return;
         if (hint->gotype->type != GOTYPE_FUNC) {
             hint->gotype = NULL;
             return;
@@ -1846,7 +1847,7 @@ void Editor::type_char(char ch) {
 void Editor::update_parameter_hint() {
     // reset parameter hint when cursor goes before hint start
     auto& hint = parameter_hint;
-    if (hint.gotype == NULL) return;
+    if (!hint.gotype) return;
 
     auto should_close_hints = [&]() -> bool {
         if (!world.indexer.try_acquire_lock(IND_READING)) return true;
@@ -1877,14 +1878,14 @@ void Editor::update_parameter_hint() {
 
         find_nodes_containing_pos(pf.root, cur, false, [&](auto it) {
             if (it->type() == TS_ARGUMENT_LIST) {
-                if (arglist == NULL)
+                if (!arglist)
                     arglist = alloc_object(Ast_Node);
                 memcpy(arglist, it, sizeof(Ast_Node));
             }
             return WALK_CONTINUE;
         });
 
-        if (arglist == NULL) return;
+        if (!arglist) return;
 
         auto commas = alloc_list<cur2>();
 
@@ -1939,7 +1940,7 @@ void Editor::type_char_in_insert_mode(char ch) {
     do {
         if (ch != '.') break;
 
-        if (autocomplete.ac.results == NULL) break;
+        if (!autocomplete.ac.results) break;
         if (autocomplete.selection >= autocomplete.filtered_results->len) break;
 
         auto idx = autocomplete.filtered_results->at(autocomplete.selection);
@@ -1962,7 +1963,7 @@ void Editor::type_char_in_insert_mode(char ch) {
     bool did_autocomplete = false;
     bool did_parameter_hint = false;
 
-    if (!isident(ch) && autocomplete.ac.results != NULL)
+    if (!isident(ch) && autocomplete.ac.results)
         ptr0(&autocomplete);
 
     switch (ch) {
@@ -1977,7 +1978,7 @@ void Editor::type_char_in_insert_mode(char ch) {
         break;
 
     case ',':
-        if (parameter_hint.gotype == NULL) {
+        if (!parameter_hint.gotype) {
             trigger_parameter_hint();
             did_parameter_hint = true;
         }
@@ -1989,7 +1990,7 @@ void Editor::type_char_in_insert_mode(char ch) {
         {
             if (!is_go_file) break;
 
-            if (cur.x == 0) break;
+            if (!cur.x) break;
 
             auto rbrace_pos = buf->dec_cur(cur);
 
@@ -2070,7 +2071,7 @@ void Editor::type_char_in_insert_mode(char ch) {
                     depth++;
                 if (node->type() == other_brace_type) {
                     depth--;
-                    if (depth == 0) {
+                    if (!depth) {
                         lbrace_line = node->start().y;
                         return;
                     }
@@ -2111,7 +2112,7 @@ void Editor::type_char_in_insert_mode(char ch) {
 
     do {
         if (!isident(ch)) break;
-        if (autocomplete.ac.results != NULL) break;
+        if (autocomplete.ac.results) break;
 
         auto c = cur;
         auto &line = buf->lines[c.y];
@@ -2133,14 +2134,14 @@ void Editor::type_char_in_insert_mode(char ch) {
     } while (0);
 
     if (!did_autocomplete)
-        if (autocomplete.ac.results != NULL)
+        if (autocomplete.ac.results)
             trigger_autocomplete(false, isident, ch);
 
     if (!did_parameter_hint) update_parameter_hint();
 }
 
 void Editor::update_autocomplete(bool triggered_by_ident) {
-    if (autocomplete.ac.results != NULL)
+    if (autocomplete.ac.results)
         trigger_autocomplete(false, triggered_by_ident);
 }
 
@@ -2149,10 +2150,10 @@ void Editor::backspace_in_insert_mode(int graphemes_to_erase, int codepoints_to_
     auto zero = new_cur2(0, 0);
 
     if (graphemes_to_erase > 0 && codepoints_to_erase > 0)
-        our_panic("backspace_in_insert_mode called with both graphemes and codepoints");
+        cp_panic("backspace_in_insert_mode called with both graphemes and codepoints");
 
     while ((graphemes_to_erase > 0 || codepoints_to_erase > 0) && start > zero) {
-        if (start.x == 0) {
+        if (!start.x) {
             start = buf->dec_cur(start);
 
             if (graphemes_to_erase > 0) graphemes_to_erase--;
@@ -2189,7 +2190,7 @@ void Editor::backspace_in_insert_mode(int graphemes_to_erase, int codepoints_to_
 
         if (start < nvim_insert.start) {
             if (old_start.y != nvim_insert.start.y)
-                our_panic("this shouldn't happen");
+                cp_panic("this shouldn't happen");
 
             int lo = buf->idx_cp_to_gr(start.y, start.x);
             int hi = buf->idx_cp_to_gr(start.y, min(old_start.x, nvim_insert.start.x));
@@ -2214,7 +2215,7 @@ bool Editor::optimize_imports() {
     defer { world.indexer.release_lock(IND_READING); };
 
     auto imports = world.indexer.optimize_imports(filepath);
-    if (imports == NULL) return false;
+    if (!imports) return false;
     if (imports->len == 0) return false;
 
     // add imports into the file
@@ -2235,7 +2236,7 @@ bool Editor::optimize_imports() {
             }
         }
 
-        if (imports_node == NULL && package_node == NULL) break;
+        if (!imports_node && !package_node) break;
 
         Text_Renderer rend;
         rend.init();
@@ -2266,7 +2267,7 @@ bool Editor::optimize_imports() {
         GHFmtAddLine("");
 
         auto new_contents = GHFmtFinish(GH_FMT_GOIMPORTS);
-        if (new_contents == NULL) break;
+        if (!new_contents) break;
         defer { GHFree(new_contents); };
 
         auto new_contents_len = strlen(new_contents);
@@ -2278,7 +2279,7 @@ bool Editor::optimize_imports() {
         }
 
         cur2 start, old_end;
-        if (imports_node != NULL) {
+        if (imports_node) {
             start = imports_node->start();
             old_end = imports_node->end();
         } else {
@@ -2287,7 +2288,7 @@ bool Editor::optimize_imports() {
         }
 
         auto chars = alloc_list<uchar>();
-        if (imports_node == NULL) {
+        if (!imports_node) {
             // add two newlines, it's going after the package decl
             chars->append('\n');
             chars->append('\n');
@@ -2361,7 +2362,7 @@ void Editor::format_on_save(int fmt_type, bool write_to_nvim) {
     }
 
     auto new_contents = GHFmtFinish(fmt_type);
-    if (new_contents == NULL) {
+    if (!new_contents) {
         saving = false;
         return;
     }
@@ -2432,7 +2433,7 @@ void Editor::handle_save(bool about_to_close) {
         opts.bufsize = _countof(filepath);
         opts.folder = false;
         opts.save = true;
-        opts.starting_folder = our_strcpy(world.current_path);
+        opts.starting_folder = cp_strcpy(world.current_path);
         if (!let_user_select_file(&opts)) return;
 
         if (!path_has_descendant(world.current_path, filepath)) {
@@ -2474,7 +2475,7 @@ void Editor::handle_save(bool about_to_close) {
 
         For (*parts) {
             bool found = false;
-            for (auto child = curr->children; child != NULL; child = child->next) {
+            for (auto child = curr->children; child; child = child->next) {
                 if (streq(child->name, it)) {
                     curr = child;
                     found = true;
@@ -2487,11 +2488,11 @@ void Editor::handle_save(bool about_to_close) {
     };
 
     auto node = find_node();
-    if (node != NULL) {
+    if (node) {
         bool child_exists = false;
-        auto filename = our_basename(filepath);
+        auto filename = cp_basename(filepath);
 
-        for (auto child = node->children; child != NULL; child = child->next) {
+        for (auto child = node->children; child; child = child->next) {
             if (streq(child->name, filename)) {
                 child_exists = true;
                 break;
@@ -2501,7 +2502,7 @@ void Editor::handle_save(bool about_to_close) {
         if (!child_exists) {
             add_ft_node(node, [&](auto child) {
                 child->is_directory = false;
-                child->name = our_strcpy(filename);
+                child->name = cp_strcpy(filename);
             });
         }
     }
@@ -2511,8 +2512,8 @@ bool Editor::ask_user_about_unsaved_changes() {
     if (!is_unsaved()) return true;
 
     auto title = "Your changes will be lost if you don't.";
-    auto filename  = is_untitled ? "(untitled)" : our_basename(filepath);
-    auto msg = our_sprintf("Do you want to save your changes to %s?", filename);
+    auto filename  = is_untitled ? "(untitled)" : cp_basename(filepath);
+    auto msg = cp_sprintf("Do you want to save your changes to %s?", filename);
 
     auto result = ask_user_yes_no_cancel(title, msg, "Save", "Don't Save");
     if (result == ASKUSER_CANCEL) return false;

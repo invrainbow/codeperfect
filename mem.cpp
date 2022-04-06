@@ -34,7 +34,7 @@ void* ts_interop_realloc(void *old_mem, size_t new_size) {
     if (new_size == 0) return NULL;
 
     auto new_mem = _ts_alloc_memory(new_size, 0);
-    if (old_mem != NULL) {
+    if (old_mem) {
         auto old_size = *((int*)old_mem - 1);
         memcpy(new_mem, old_mem, min(old_size, new_size));
     }
@@ -75,7 +75,7 @@ uchar* alloc_chunk(s32 needed, s32* new_size) {
     auto size = (int)sizes[_countof(sizes) - 1]; // last largest size
     while (size < needed) size *= 2;
     *new_size = size;
-    return (uchar*)our_malloc(sizeof(uchar) * size);
+    return (uchar*)cp_malloc(sizeof(uchar) * size);
     */
 }
 
@@ -88,6 +88,6 @@ void free_chunk(uchar* buf, s32 cap) {
         case CHUNK4: world.chunk4_fridge.free((Chunk4*)buf); break;
         case CHUNK5: world.chunk5_fridge.free((Chunk5*)buf); break;
         case CHUNK6: world.chunk6_fridge.free((Chunk6*)buf); break;
-        default: our_free(buf); break;
+        default: cp_free(buf); break;
     }
 }

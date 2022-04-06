@@ -4,14 +4,10 @@ BREW_ARM = /opt/homebrew/bin/brew
 
 # CFLAGS = -std=c++17 -mavx -maes -w -MMD -MP
 CFLAGS = -std=c++17 -w -MMD -MP
-CFLAGS += -I$(shell $(BREW_ARM) --prefix glfw)/include
 CFLAGS += -Itree-sitter
 
 LDFLAGS = -ldl -framework OpenGL -framework Cocoa -framework IOKit
 LDFLAGS += -framework CoreFoundation -framework Security  # for go
-LDFLAGS += $(shell $(BREW_X64) --prefix glfw)/lib/libglfw3.a
-LDFLAGS += $(shell $(BREW_X64) --prefix pcre)/lib/libpcre.a
-LDFLAGS += $(shell $(BREW_ARM) --prefix glfw)/lib/libglfw3.a
 LDFLAGS += $(shell $(BREW_ARM) --prefix pcre)/lib/libpcre.a
 LDFLAGS += obj/gohelper.arm64.a
 
@@ -21,6 +17,7 @@ ifeq (${RELEASE}, 1)
 	CFLAGS += -arch x86_64 -arch arm64
 	CFLAGS += -DRELEASE_MODE -O3
 	GOFLAGS += -ldflags "-s -w"
+	LDFLAGS += $(shell $(BREW_X64) --prefix pcre)/lib/libpcre.a
 	LDFLAGS += obj/gohelper.x64.a
 else
 	CFLAGS += -DDEBUG_MODE -g -O0
@@ -29,6 +26,7 @@ endif
 SRC_FILES := $(filter-out tests.cpp, $(wildcard *.cpp))
 OBJ_FILES = $(patsubst %.cpp,obj/%.o,$(SRC_FILES))
 DEP_FILES = $(patsubst %.cpp,obj/%.d,$(SRC_FILES))
+DEP_FILES += obj/objclibs.d obj/clibs.d
 
 .PHONY: all clean build/launcher
 
@@ -57,7 +55,7 @@ $(OBJ_FILES): obj/%.o: %.cpp Makefile gohelper.h
 obj/tests.o: tests.cpp Makefile
 	$(CC) $(CFLAGS) -MMD -MP -c -o $@ $<
 
-obj/objclibs.o: os_macos.mm
+obj/objclibs.o: objclibs.mm
 	$(CC) $(CFLAGS) -fobjc-arc -c -o $@ $<
 
 obj/clibs.o: clibs.c

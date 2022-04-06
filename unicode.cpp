@@ -116,7 +116,7 @@ bool _find(int c, Range *ranges, int ranges_len) {
     return false;
 }
 
-int our_wcwidth(int c) {
+int cp_wcwidth(int c) {
     switch (c) {
     case 0:
     case 0x034F:

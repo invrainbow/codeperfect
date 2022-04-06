@@ -2,16 +2,9 @@
 #include "ui.hpp"
 #include "fzy_match.h"
 #include "set.hpp"
-
-#if OS_WIN
-#define GLFW_EXPOSE_NATIVE_WIN32
-#elif OS_MAC
-#define GLFW_EXPOSE_NATIVE_COCOA
-#endif
+#include "defer.hpp"
 
 #include "glew.h"
-#include <GLFW/glfw3.h>
-#include <GLFW/glfw3native.h>
 
 World world;
 
@@ -75,7 +68,7 @@ void History::push(int editor_id, cur2 pos) {
         if (prev.editor_id == editor_id) break;
 
         auto prev_editor = find_editor_by_id(prev.editor_id);
-        if (prev_editor == NULL) break;
+        if (!prev_editor) break;
 
         if (prev_editor->cur == prev.pos) break;
 
@@ -93,7 +86,7 @@ void History::actually_go(History_Loc *it) {
     assert_main_thread();
 
     auto editor = find_editor_by_id(it->editor_id);
-    if (editor == NULL) return;
+    if (!editor) return;
     if (!editor->is_nvim_ready()) return;
 
     auto pos = it->mark->pos(); // it->pos
@@ -130,20 +123,20 @@ void History::check_marks(int upper) {
 
         // check that mark node contains the mark
         bool found = false;
-        for (auto m = it->node->marks; m != NULL; m = m->next) {
+        for (auto m = it->node->marks; m; m = m->next) {
             if (m == it) {
                 found = true;
                 break;
             }
         }
-        if (!found) our_panic("mark got detached from its node somehow");
+        if (!found) cp_panic("mark got detached from its node somehow");
 
         // check that mark node is still in root
         auto node = it->node;
-        while (node->parent != NULL)
+        while (node->parent)
             node = node->parent;
         if (it->tree->root != node)
-            our_panic("mark node is detached from root!");
+            cp_panic("mark node is detached from root!");
     }
 #endif
 }
@@ -160,8 +153,8 @@ bool History::go_backward() {
 
         // handle the case of: open file a, open file b, move down 4 lines (something < threshold),
         // go back, go forward, cursor will now be on line 0 instead of line 4
-        if (editor == NULL || it.editor_id != editor->id || it.pos != editor->cur) {
-            if (editor != NULL) {
+        if (!editor || it.editor_id != editor->id || it.pos != editor->cur) {
+            if (editor) {
                 actually_push(editor->id, editor->cur);
                 curr = dec(curr);
             }
@@ -194,7 +187,7 @@ void History::save_latest() {
     assert_main_thread();
 
     auto editor = get_current_editor();
-    if (editor == NULL) return;
+    if (!editor) return;
 
     if (curr == start) return; // does this ever happen?
 
@@ -239,7 +232,7 @@ void History::remove_invalid_marks() {
 }
 
 void History_Loc::cleanup() {
-    if (mark == NULL) {
+    if (!mark) {
         return;
     }
 
@@ -251,7 +244,7 @@ void History_Loc::cleanup() {
 bool exclude_from_file_tree(ccstr path) {
     if (is_ignored_by_git(path)) return true;
 
-    auto filename = our_basename(path);
+    auto filename = cp_basename(path);
     if (streq(filename, ".git")) return true;
     if (streq(filename, ".cpproj")) return true;
     if (streq(filename, ".cpdb")) return true;
@@ -287,7 +280,7 @@ void fill_file_tree() {
                 if (exclude_from_file_tree(fullpath)) break;
 
                 auto file = alloc_object(FT_Node);
-                file->name = our_strcpy(ent->name);
+                file->name = cp_strcpy(ent->name);
                 file->is_directory = (ent->type & FILE_TYPE_DIRECTORY);
                 file->num_children = 0;
                 file->parent = parent;
@@ -296,7 +289,7 @@ void fill_file_tree() {
                 file->open = false;
                 file->next = NULL;
 
-                if (last_child == NULL) {
+                if (!last_child) {
                     parent->children = last_child = file;
                 } else {
                     last_child->next = file;
@@ -324,7 +317,7 @@ void fill_file_tree() {
 
 bool copy_file(ccstr src, ccstr dest) {
     auto fm = map_file_into_memory(src);
-    if (fm == NULL) return false;
+    if (!fm) return false;
     defer { fm->cleanup(); };
 
     // TODO: map this into memory too?
@@ -336,7 +329,7 @@ bool copy_file(ccstr src, ccstr dest) {
     return f.write((char*)fm->data, fm->len);
 }
 
-void World::init(GLFWwindow *_wnd) {
+void World::init(Window *_wnd) {
     ptr0(this);
 
     window = _wnd;
@@ -383,7 +376,7 @@ void World::init(GLFWwindow *_wnd) {
     // read options from disk
     do {
         auto configpath = GHGetConfigDir();
-        if (configpath == NULL) break;
+        if (!configpath) break;
 
         auto filepath = path_join(configpath, ".options");
 
@@ -401,8 +394,8 @@ void World::init(GLFWwindow *_wnd) {
 
     {
         auto go_binary_path = GHGetGoBinaryPath();
-        if (go_binary_path == NULL)
-            our_panic("Unable to find Go. Please make sure it's installed, and accessible from a Bash shell (with .bashrc).");
+        if (!go_binary_path)
+            cp_panic("Unable to find Go. Please make sure it's installed, and accessible from a Bash shell (with .bashrc).");
         defer { GHFree(go_binary_path); };
         strcpy_safe_fixed(world.go_binary_path, go_binary_path);
     }
@@ -422,7 +415,7 @@ void World::init(GLFWwindow *_wnd) {
         panes.init(LIST_FIXED, _countof(_panes), _panes);
 
         // if testing
-        if (world.window == NULL) {
+        if (!world.window) {
             strcpy_safe_fixed(current_path, "/Users/bh/ide/api");
         } else if (gargc >= 2) {
             strcpy_safe_fixed(current_path, gargv[1]);
@@ -433,6 +426,10 @@ void World::init(GLFWwindow *_wnd) {
             opts.folder = true;
             opts.save = false;
             if (!let_user_select_file(&opts)) exit(0);
+        }
+
+        if (check_path(current_path) != CPR_DIRECTORY) {
+            cp_panic("Unable to open selected folder.");
         }
 
         GHGitIgnoreInit(current_path);
@@ -492,7 +489,7 @@ void World::init(GLFWwindow *_wnd) {
 #ifdef DEBUG_MODE
     if (!use_nvim) world.wnd_history.show = true;
 
-    show_frame_index = true;
+    show_frame_index = false;
 #endif
 }
 
@@ -507,27 +504,28 @@ void World::start_background_threads() {
     // devised is to create a background thread that runs in a loop, so I can
     // set a breakpoint in it at any time.
     auto microsoft_programmers_are_fucking_monkeys = [](void*) {
-        while (true) sleep_milliseconds(1000);
+        while (true)
+            sleep_milliseconds(1000);
     };
 
     {
         auto t = create_thread(microsoft_programmers_are_fucking_monkeys, NULL);
-        if (t == NULL)
-            our_panic("couldn't create thread");
+        if (!t)
+            cp_panic("couldn't create thread");
         close_thread_handle(t);
     }
 #endif
 }
 
 Pane* get_current_pane() {
-    if (world.panes.len == 0) return NULL;
+    if (!world.panes.len) return NULL;
 
     return &world.panes[world.current_pane];
 }
 
 Editor* get_current_editor() {
     auto pane = get_current_pane();
-    if (pane == NULL) return NULL;
+    if (!pane) return NULL;
 
     return pane->get_current_editor();
 }
@@ -581,7 +579,7 @@ void activate_pane_by_index(u32 idx) {
         auto panes_width = ::ui.panes_area.w;
 
         float new_width = panes_width;
-        if (world.panes.len > 0)
+        if (world.panes.len)
             new_width /= world.panes.len;
 
         auto pane = world.panes.append();
@@ -591,7 +589,7 @@ void activate_pane_by_index(u32 idx) {
 
     if (world.current_pane != idx) {
         auto e = get_current_editor();
-        if (e != NULL) e->trigger_escape();
+        if (e) e->trigger_escape();
     }
 
     world.current_pane = idx;
@@ -602,7 +600,7 @@ void activate_pane_by_index(u32 idx) {
             pane->focus_editor_by_index(pane->current_editor);
         /*
         auto editor = pane->get_current_editor();
-        if (editor != NULL)
+        if (editor)
             world.nvim.set_current_window(editor);
         */
     }
@@ -621,12 +619,12 @@ void init_goto_file() {
     wnd.filtered_results = alloc_list<int>();
 
     fn<void(FT_Node*, ccstr)> fill_files = [&](auto node, auto path) {
-        for (auto it = node->children; it != NULL; it = it->next) {
+        for (auto it = node->children; it; it = it->next) {
             auto isdir = it->is_directory;
 
-            // if (isdir && node->parent == NULL && streq(it->name, ".cp")) return;
+            // if (isdir && !node->parent && streq(it->name, ".cp")) return;
 
-            auto relpath = path[0] == '\0' ? our_strcpy(it->name) : path_join(path, it->name);
+            auto relpath = path[0] == '\0' ? cp_strcpy(it->name) : path_join(path, it->name);
             if (isdir)
                 fill_files(it, relpath);
             else
@@ -639,10 +637,10 @@ void init_goto_file() {
 }
 
 void kick_off_build(Build_Profile *build_profile) {
-    if (build_profile == NULL)
+    if (!build_profile)
         build_profile = project_settings.get_active_build_profile();
 
-    if (build_profile == NULL) {
+    if (!build_profile) {
         tell_user("You have no build profile selected.", "No profile selected");
         return;
     }
@@ -659,7 +657,7 @@ void kick_off_build(Build_Profile *build_profile) {
         SCOPED_MEM(&build->mem);
 
         build->id = world.next_build_id++;
-        build->build_profile_name = our_strcpy(build_profile->label);
+        build->build_profile_name = cp_strcpy(build_profile->label);
         build->started = true;
 
         if (!GHStartBuild((char*)build_profile->cmd)) {
@@ -678,18 +676,18 @@ void kick_off_build(Build_Profile *build_profile) {
             GoInt num_errors = 0;
             GoInt status = 0;
             auto errors = GHGetBuildStatus(&status, &num_errors);
-            defer { if (errors != NULL) GHFreeBuildStatus(errors, num_errors); };
+            defer { if (errors) GHFreeBuildStatus(errors, num_errors); };
 
             if (status != GH_BUILD_DONE) continue;
 
             for (u32 i = 0; i < num_errors; i++) {
                 Build_Error err;
 
-                err.message = our_strcpy(errors[i].text);
+                err.message = cp_strcpy(errors[i].text);
                 err.valid = errors[i].is_valid;
 
                 if (err.valid) {
-                    err.file = our_strcpy(errors[i].filename);
+                    err.file = cp_strcpy(errors[i].filename);
                     err.row = errors[i].line;
                     err.col = errors[i].col;
                     // errors[i].is_vcol;
@@ -729,15 +727,9 @@ void kick_off_build(Build_Profile *build_profile) {
 }
 
 void* get_native_window_handle() {
-    if (world.window == NULL) return NULL;
+    if (!world.window) return NULL;
 
-#if OS_WIN
-    return (void*)glfwGetWin32Window(world.window);
-#elif OS_MAC
-    return (void*)glfwGetCocoaWindow(world.window);
-#else
-    return NULL;
-#endif
+    return world.window->ns_window;
 }
 
 void filter_files() {
@@ -798,7 +790,7 @@ bool is_build_debug_free() {
 
 void goto_file_and_pos(ccstr file, cur2 pos, Ensure_Cursor_Mode mode) {
     auto editor = focus_editor(file, pos);
-    if (editor == NULL) return; // TODO
+    if (!editor) return; // TODO
 
     editor->ensure_cursor_on_screen_by_moving_view(mode);
 
@@ -818,7 +810,7 @@ Jump_To_Definition_Result *get_current_definition(ccstr *filepath, bool display_
     };
 
     auto editor = get_current_editor();
-    if (editor == NULL)
+    if (!editor)
         return show_error("Couldn't find anything under your cursor (you don't have an editor focused).");
     if (!editor->is_go_file)
         return show_error("Couldn't find anything under your cursor (you're not in a Go file).");
@@ -840,10 +832,10 @@ Jump_To_Definition_Result *get_current_definition(ccstr *filepath, bool display_
         result = world.indexer.jump_to_definition(editor->filepath, new_cur2(off, -1));
     }
 
-    if (result == NULL || result->decl == NULL || result->decl->decl == NULL)
+    if (!result || !result->decl || !result->decl->decl)
         return show_error("Couldn't find anything under your cursor.");
 
-    if (filepath != NULL)
+    if (filepath)
         *filepath = editor->filepath;
 
     // copy using caller mem
@@ -852,7 +844,7 @@ Jump_To_Definition_Result *get_current_definition(ccstr *filepath, bool display_
 
 void handle_goto_definition(cur2 pos) {
     auto result = get_current_definition(NULL, false, pos);
-    if (result != NULL)
+    if (result)
         goto_jump_to_definition_result(result);
 }
 
@@ -874,7 +866,7 @@ void save_all_unsaved_files() {
 bool ft_tree_contains_node(FT_Node *tree, FT_Node *node) {
     if (tree == node) return true;
 
-    for (auto child = tree->children; child != NULL; child = child->next)
+    for (auto child = tree->children; child; child = child->next)
         if (ft_tree_contains_node(child, node))
             return true;
     return false;
@@ -892,21 +884,21 @@ void delete_ft_node(FT_Node *it, bool delete_on_disk) {
     }
 
     auto &fe = world.file_explorer;
-    if (fe.selection != NULL && ft_tree_contains_node(it, fe.selection))
+    if (fe.selection && ft_tree_contains_node(it, fe.selection))
         fe.selection = NULL;
 
     // delete `it` from file tree
-    if (it->parent != NULL && it->parent->children == it)
+    if (it->parent && it->parent->children == it)
         it->parent->children = it->next;
-    if (it->prev != NULL)
+    if (it->prev)
         it->prev->next = it->next;
-    if (it->next != NULL)
+    if (it->next)
         it->next->prev = it->prev;
 }
 
 ccstr ft_node_to_path(FT_Node *node) {
     auto path = alloc_list<FT_Node*>();
-    for (auto curr = node; curr != NULL; curr = curr->parent)
+    for (auto curr = node; curr; curr = curr->parent)
         path->append(curr);
     path->len--; // remove root
 
@@ -914,17 +906,17 @@ ccstr ft_node_to_path(FT_Node *node) {
     r.init();
     for (i32 j = path->len - 1; j >= 0; j--) {
         r.write("%s", path->at(j)->name);
-        if (j != 0) r.write("/");
+        if (j) r.write("/");
     }
     return r.finish();
 }
 
 FT_Node *find_or_create_ft_node(ccstr relpath, bool is_directory) {
     auto ret = find_ft_node(relpath);
-    if (ret != NULL) return ret;
+    if (ret) return ret;
 
-    auto parent = find_ft_node(our_dirname(relpath));
-    if (parent == NULL) return NULL;
+    auto parent = find_ft_node(cp_dirname(relpath));
+    if (!parent) return NULL;
 
 
     {
@@ -932,7 +924,7 @@ FT_Node *find_or_create_ft_node(ccstr relpath, bool is_directory) {
 
         auto ret = alloc_object(FT_Node);
         ret->is_directory = true;
-        ret->name = our_basename(relpath);
+        ret->name = cp_basename(relpath);
         ret->depth = parent->depth + 1;
         ret->num_children = 0;
         ret->parent = parent;
@@ -941,7 +933,7 @@ FT_Node *find_or_create_ft_node(ccstr relpath, bool is_directory) {
         ret->open = parent->open;
 
         ret->next = parent->children;
-        if (parent->children != NULL)
+        if (parent->children)
             parent->children->prev = ret;
         parent->children = ret;
         parent->children = sort_ft_nodes(parent->children);
@@ -955,13 +947,13 @@ FT_Node *find_ft_node(ccstr relpath) {
     auto node = world.file_tree;
     For (*path->parts) {
         FT_Node *next = NULL;
-        for (auto child = node->children; child != NULL; child = child->next) {
+        for (auto child = node->children; child; child = child->next) {
             if (streqi(child->name, it)) {
                 next = child;
                 break;
             }
         }
-        if (next == NULL) return NULL;
+        if (!next) return NULL;
         node = next;
     }
     return node;
@@ -997,7 +989,7 @@ void add_ft_node(FT_Node *parent, fn<void(FT_Node* it)> cb) {
     }
 
     node->next = parent->children;
-    if (parent->children != NULL)
+    if (parent->children)
         parent->children->prev = node;
     parent->children = node;
     parent->num_children++;
@@ -1005,10 +997,10 @@ void add_ft_node(FT_Node *parent, fn<void(FT_Node* it)> cb) {
 }
 
 FT_Node *sort_ft_nodes(FT_Node *nodes) {
-    if (nodes == NULL || nodes->next == NULL) return nodes;
+    if (!nodes || !nodes->next) return nodes;
 
     int len = 0;
-    for (auto it = nodes; it != NULL; it = it->next)
+    for (auto it = nodes; it; it = it->next)
         len++;
 
     FT_Node *a = nodes, *b = nodes;
@@ -1022,9 +1014,9 @@ FT_Node *sort_ft_nodes(FT_Node *nodes) {
 
     FT_Node *ret = NULL, *curr = NULL;
 
-    while (a != NULL && b != NULL) {
+    while (a && b) {
         FT_Node **ptr = (compare_ft_nodes(a, b) <= 0 ? &a : &b);
-        if (ret == NULL) {
+        if (!ret) {
             ret = *ptr;
         } else {
             curr->next = *ptr;
@@ -1034,12 +1026,12 @@ FT_Node *sort_ft_nodes(FT_Node *nodes) {
         *ptr = (*ptr)->next;
     }
 
-    if (a != NULL) {
+    if (a) {
         curr->next = a;
         a->prev = curr;
     }
 
-    if (b != NULL) {
+    if (b) {
         curr->next = b;
         b->prev = curr;
     }
@@ -1065,7 +1057,7 @@ void goto_error(int index) {
     // when build finishes, set marks on existing editors
     // when editor opens, get all existing errors and set marks
 
-    if (editor == NULL || !is_mark_valid(error.mark)) {
+    if (!editor || !is_mark_valid(error.mark)) {
         goto_file_and_pos(path, pos);
         return;
     }
@@ -1110,7 +1102,7 @@ void reload_file_subtree(ccstr relpath) {
         break;
     case CPR_NONEXISTENT: {
         auto node = find_ft_node(relpath);
-        if (node != NULL)
+        if (node)
             delete_ft_node(node, false);
         return;
     }
@@ -1119,13 +1111,13 @@ void reload_file_subtree(ccstr relpath) {
     }
 
     auto node = find_or_create_ft_node(relpath, true);
-    if (node == NULL) return;
+    if (!node) return;
 
     String_Set current_items;    current_items.init();
     String_Set new_files;        new_files.init();
     String_Set new_directories;  new_directories.init();
 
-    for (auto it = node->children; it != NULL; it = it->next)
+    for (auto it = node->children; it; it = it->next)
         current_items.add(it->name);
 
     list_directory(path, [&](Dir_Entry *ent) {
@@ -1133,7 +1125,7 @@ void reload_file_subtree(ccstr relpath) {
             auto fullpath = path_join(path, ent->name);
             if (exclude_from_file_tree(fullpath)) break;
 
-            auto name = our_strcpy(ent->name);
+            auto name = cp_strcpy(ent->name);
             if (ent->type & FILE_TYPE_DIRECTORY)
                 new_directories.add(name);
             else
@@ -1162,7 +1154,7 @@ void reload_file_subtree(ccstr relpath) {
         FT_Node *head = NULL, *curr = NULL;
 
         auto add_child = [&](FT_Node *it) {
-            if (head == NULL)
+            if (!head)
                 head = it;
             else
                 curr->next = it;
@@ -1171,7 +1163,7 @@ void reload_file_subtree(ccstr relpath) {
             curr = it;
         };
 
-        for (auto it = node->children; it != NULL; it = it->next)
+        for (auto it = node->children; it; it = it->next)
             if (!current_items.has(it->name))
                 add_child(it);
 
@@ -1179,7 +1171,7 @@ void reload_file_subtree(ccstr relpath) {
             SCOPED_MEM(&world.file_tree_mem);
 
             auto child = alloc_object(FT_Node);
-            child->name = our_strcpy(it);
+            child->name = cp_strcpy(it);
             child->is_directory = false;
             child->num_children = 0;
             child->parent = node;
@@ -1195,7 +1187,7 @@ void reload_file_subtree(ccstr relpath) {
             // TODO: recurse into directory
 
             auto child = alloc_object(FT_Node);
-            child->name = our_strcpy(it);
+            child->name = cp_strcpy(it);
             child->is_directory = true;
             child->num_children = 0;
             child->parent = node;
@@ -1205,7 +1197,7 @@ void reload_file_subtree(ccstr relpath) {
             add_child(child);
         }
 
-        if (curr != NULL) curr->next = NULL;
+        if (curr) curr->next = NULL;
 
         node->children = sort_ft_nodes(head);
     }
@@ -1217,7 +1209,7 @@ void reload_file_subtree(ccstr relpath) {
 
 bool move_autocomplete_cursor(Editor *ed, int direction) {
     auto &ac = ed->autocomplete;
-    if (ac.ac.results == NULL) return false;
+    if (!ac.ac.results) return false;
 
     if (ac.selection == 0 && direction == -1)
         ac.selection = ac.filtered_results->len - 1;
@@ -1232,7 +1224,7 @@ bool move_autocomplete_cursor(Editor *ed, int direction) {
 }
 
 void Build::cleanup() {
-    if (thread != NULL) {
+    if (thread) {
         kill_thread(thread);
         close_thread_handle(thread);
     }
@@ -1293,7 +1285,7 @@ void kick_off_rename_identifier() {
         };
 
         auto files = world.indexer.find_references(wnd.declres, true);
-        if (files == NULL) return;
+        if (!files) return;
 
         wnd.too_late_to_cancel = true;
 
@@ -1340,7 +1332,7 @@ void kick_off_rename_identifier() {
             fr.finish();
 
             auto editor = find_editor_by_filepath(filepath);
-            if (editor != NULL) {
+            if (editor) {
                 world.message_queue.add([&](auto msg) {
                     msg->type = MTM_RELOAD_EDITOR;
                     msg->reload_editor_id = editor->id;
@@ -1351,7 +1343,7 @@ void kick_off_rename_identifier() {
         }
 
         // close the thread handle first so it doesn't try to kill the thread
-        if (wnd.thread != NULL) {
+        if (wnd.thread) {
             close_thread_handle(wnd.thread);
             wnd.thread = NULL;
         }
@@ -1361,7 +1353,7 @@ void kick_off_rename_identifier() {
     wnd.running = true;
     wnd.too_late_to_cancel = false;
     wnd.thread = create_thread(thread_proc, NULL);
-    if (wnd.thread == NULL) {
+    if (!wnd.thread) {
         tell_user("Unable to kick off Rename Identifier.", NULL);
         return;
     }
@@ -1372,7 +1364,7 @@ void kick_off_rename_identifier() {
 void cancel_find_interfaces() {
     auto &wnd = world.wnd_find_interfaces;
 
-    if (wnd.thread != NULL) {
+    if (wnd.thread) {
         kill_thread(wnd.thread);
         close_thread_handle(wnd.thread);
         wnd.thread = NULL;
@@ -1388,7 +1380,7 @@ void cancel_find_interfaces() {
 void cancel_find_references() {
     auto &wnd = world.wnd_find_references;
 
-    if (wnd.thread != NULL) {
+    if (wnd.thread) {
         kill_thread(wnd.thread);
         close_thread_handle(wnd.thread);
         wnd.thread = NULL;
@@ -1404,7 +1396,7 @@ void cancel_find_references() {
 void cancel_caller_hierarchy() {
     auto &wnd = world.wnd_caller_hierarchy;
 
-    if (wnd.thread != NULL) {
+    if (wnd.thread) {
         kill_thread(wnd.thread);
         close_thread_handle(wnd.thread);
         wnd.thread = NULL;
@@ -1420,7 +1412,7 @@ void cancel_caller_hierarchy() {
 void cancel_callee_hierarchy() {
     auto &wnd = world.wnd_callee_hierarchy;
 
-    if (wnd.thread != NULL) {
+    if (wnd.thread) {
         kill_thread(wnd.thread);
         close_thread_handle(wnd.thread);
         wnd.thread = NULL;
@@ -1436,7 +1428,7 @@ void cancel_callee_hierarchy() {
 void cancel_find_implementations() {
     auto &wnd = world.wnd_find_implementations;
 
-    if (wnd.thread != NULL) {
+    if (wnd.thread) {
         kill_thread(wnd.thread);
         close_thread_handle(wnd.thread);
         wnd.thread = NULL;
@@ -1452,7 +1444,7 @@ void cancel_find_implementations() {
 void cancel_rename_identifier() {
     auto &wnd = world.wnd_rename_identifier;
 
-    if (wnd.thread != NULL) {
+    if (wnd.thread) {
         kill_thread(wnd.thread);
         close_thread_handle(wnd.thread);
         wnd.thread = NULL;
@@ -1471,14 +1463,14 @@ bool is_command_enabled(Command cmd) {
     switch (cmd) {
     case CMD_SAVE_FILE: {
         auto editor = get_current_editor();
-        if (editor == NULL) return false;
+        if (!editor) return false;
         if (!editor->is_modifiable()) return false;
         return true;
     }
 
     case CMD_SAVE_ALL:
         For (world.panes)
-            if (it.editors.len > 0)
+            if (it.editors.len)
                 return true;
         return false;
 
@@ -1509,7 +1501,7 @@ bool is_command_enabled(Command cmd) {
     case CMD_FORMAT_FILE_AND_ORGANIZE_IMPORTS:
         {
             auto editor = get_current_editor();
-            return editor != NULL && editor->is_modifiable();
+            return editor && editor->is_modifiable();
         }
 
     case CMD_FORMAT_SELECTION:
@@ -1520,11 +1512,11 @@ bool is_command_enabled(Command cmd) {
             if (world.dbg.state_flag != DLV_STATE_INACTIVE) return false;
 
             auto editor = get_current_editor();
-            if (editor == NULL) return false;
+            if (!editor) return false;
             if (!editor->is_go_file) return false;
             if (!str_ends_with(editor->filepath, "_test.go")) return false;
             if (!path_has_descendant(world.current_path, editor->filepath)) return false;
-            if (editor->buf->tree == NULL) return false;
+            if (!editor->buf->tree) return false;
 
             bool ret = false;
 
@@ -1562,13 +1554,13 @@ bool is_command_enabled(Command cmd) {
     case CMD_UNDO:
     case CMD_REDO:
         // TODO: also check if we *can* undo/redo (to be done after we actually implement it)
-        return get_current_editor() != NULL;
+        return get_current_editor();
 
     case CMD_GENERATE_IMPLEMENTATION:
     case CMD_FIND_REFERENCES:
     case CMD_FIND_IMPLEMENTATIONS:
     case CMD_FIND_INTERFACES:
-        return get_current_editor() != NULL;
+        return get_current_editor();
 
     }
 
@@ -1581,10 +1573,10 @@ ccstr get_command_name(Command cmd) {
     switch (cmd) {
     case CMD_SAVE_FILE: {
         auto editor = get_current_editor();
-        if (editor != NULL) {
+        if (editor) {
             if (editor->is_untitled)
                 return "Save untitled file...";
-            return our_sprintf("Save %s...", our_basename(editor->filepath));
+            return cp_sprintf("Save %s...", cp_basename(editor->filepath));
         }
         return "Save file...";
     }
@@ -1609,36 +1601,36 @@ void init_command_info_table() {
     mem0(command_info_table, sizeof(command_info_table));
 
 #if OS_WIN
-    command_info_table[CMD_EXIT] = k(KEYMOD_ALT, GLFW_KEY_F4, "Exit");
+    command_info_table[CMD_EXIT] = k(CP_MOD_ALT, CP_KEY_F4, "Exit");
 #elif OS_MAC
-    command_info_table[CMD_EXIT] = k(KEYMOD_CMD, GLFW_KEY_Q, "Quit");
+    command_info_table[CMD_EXIT] = k(CP_MOD_CMD, CP_KEY_Q, "Quit");
 #endif
-    command_info_table[CMD_NEW_FILE] = k(KEYMOD_PRIMARY, GLFW_KEY_N, "New File");
-    command_info_table[CMD_SAVE_FILE] = k(KEYMOD_PRIMARY, GLFW_KEY_S, "Save File");
-    command_info_table[CMD_SAVE_ALL] = k(KEYMOD_PRIMARY | KEYMOD_SHIFT, GLFW_KEY_S, "Save All");
-    command_info_table[CMD_SEARCH] = k(KEYMOD_PRIMARY | KEYMOD_SHIFT, GLFW_KEY_F, "Search");
-    command_info_table[CMD_SEARCH_AND_REPLACE] = k(KEYMOD_PRIMARY | KEYMOD_SHIFT, GLFW_KEY_H, "Search and Replace");
-    command_info_table[CMD_FILE_EXPLORER] = k(KEYMOD_PRIMARY | KEYMOD_SHIFT, GLFW_KEY_E, "File Explorer");
-    command_info_table[CMD_GO_TO_FILE] = k(KEYMOD_PRIMARY, GLFW_KEY_P, "Go To File");
-    command_info_table[CMD_GO_TO_SYMBOL] = k(KEYMOD_PRIMARY, GLFW_KEY_T, "Go To Symbol");
-    command_info_table[CMD_GO_TO_NEXT_ERROR] = k(KEYMOD_ALT, GLFW_KEY_RIGHT_BRACKET, "Go To Next Error");
-    command_info_table[CMD_GO_TO_PREVIOUS_ERROR] = k(KEYMOD_ALT, GLFW_KEY_LEFT_BRACKET, "Go To Previous Error");
-    command_info_table[CMD_GO_TO_DEFINITION] = k(KEYMOD_PRIMARY, GLFW_KEY_G, "Go To Definition");
-    command_info_table[CMD_FIND_REFERENCES] = k(KEYMOD_PRIMARY | KEYMOD_ALT, GLFW_KEY_R, "Find References");
-    command_info_table[CMD_FORMAT_FILE] = k(KEYMOD_ALT | KEYMOD_SHIFT, GLFW_KEY_F, "Format File");
-    command_info_table[CMD_FORMAT_FILE_AND_ORGANIZE_IMPORTS] = k(KEYMOD_ALT | KEYMOD_SHIFT, GLFW_KEY_O, "Format File and Organize Imports");
-    command_info_table[CMD_RENAME] = k(KEYMOD_NONE, GLFW_KEY_F12, "Rename");
-    command_info_table[CMD_BUILD] = k(KEYMOD_PRIMARY | KEYMOD_SHIFT, GLFW_KEY_B, "Build");
-    command_info_table[CMD_CONTINUE] = k(KEYMOD_NONE, GLFW_KEY_F5, "Continue");
-    command_info_table[CMD_START_DEBUGGING] = k(KEYMOD_NONE, GLFW_KEY_F5, "Start Debugging");
-    command_info_table[CMD_STOP_DEBUGGING] = k(KEYMOD_SHIFT, GLFW_KEY_F5, "Stop Debugging");
-    command_info_table[CMD_DEBUG_TEST_UNDER_CURSOR] = k(KEYMOD_NONE, GLFW_KEY_F6, "Debug Test Under Cursor");
-    command_info_table[CMD_STEP_OVER] = k(KEYMOD_NONE, GLFW_KEY_F10, "Step Over");
-    command_info_table[CMD_STEP_INTO] = k(KEYMOD_NONE, GLFW_KEY_F11, "Step Into");
-    command_info_table[CMD_STEP_OUT] = k(KEYMOD_SHIFT, GLFW_KEY_F11, "Step Out");
-    command_info_table[CMD_RUN_TO_CURSOR] = k(KEYMOD_SHIFT, GLFW_KEY_F10, "Run To Cursor");
-    command_info_table[CMD_TOGGLE_BREAKPOINT] = k(KEYMOD_NONE, GLFW_KEY_F9, "Toggle Breakpoint");
-    command_info_table[CMD_DELETE_ALL_BREAKPOINTS] = k(KEYMOD_SHIFT, GLFW_KEY_F9, "Delete All Breakpoints");
+    command_info_table[CMD_NEW_FILE] = k(CP_MOD_PRIMARY, CP_KEY_N, "New File");
+    command_info_table[CMD_SAVE_FILE] = k(CP_MOD_PRIMARY, CP_KEY_S, "Save File");
+    command_info_table[CMD_SAVE_ALL] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_S, "Save All");
+    command_info_table[CMD_SEARCH] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_F, "Search");
+    command_info_table[CMD_SEARCH_AND_REPLACE] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_H, "Search and Replace");
+    command_info_table[CMD_FILE_EXPLORER] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_E, "File Explorer");
+    command_info_table[CMD_GO_TO_FILE] = k(CP_MOD_PRIMARY, CP_KEY_P, "Go To File");
+    command_info_table[CMD_GO_TO_SYMBOL] = k(CP_MOD_PRIMARY, CP_KEY_T, "Go To Symbol");
+    command_info_table[CMD_GO_TO_NEXT_ERROR] = k(CP_MOD_ALT, CP_KEY_RIGHT_BRACKET, "Go To Next Error");
+    command_info_table[CMD_GO_TO_PREVIOUS_ERROR] = k(CP_MOD_ALT, CP_KEY_LEFT_BRACKET, "Go To Previous Error");
+    command_info_table[CMD_GO_TO_DEFINITION] = k(CP_MOD_PRIMARY, CP_KEY_G, "Go To Definition");
+    command_info_table[CMD_FIND_REFERENCES] = k(CP_MOD_PRIMARY | CP_MOD_ALT, CP_KEY_R, "Find References");
+    command_info_table[CMD_FORMAT_FILE] = k(CP_MOD_ALT | CP_MOD_SHIFT, CP_KEY_F, "Format File");
+    command_info_table[CMD_FORMAT_FILE_AND_ORGANIZE_IMPORTS] = k(CP_MOD_ALT | CP_MOD_SHIFT, CP_KEY_O, "Format File and Organize Imports");
+    command_info_table[CMD_RENAME] = k(CP_MOD_NONE, CP_KEY_F12, "Rename");
+    command_info_table[CMD_BUILD] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_B, "Build");
+    command_info_table[CMD_CONTINUE] = k(CP_MOD_NONE, CP_KEY_F5, "Continue");
+    command_info_table[CMD_START_DEBUGGING] = k(CP_MOD_NONE, CP_KEY_F5, "Start Debugging");
+    command_info_table[CMD_STOP_DEBUGGING] = k(CP_MOD_SHIFT, CP_KEY_F5, "Stop Debugging");
+    command_info_table[CMD_DEBUG_TEST_UNDER_CURSOR] = k(CP_MOD_NONE, CP_KEY_F6, "Debug Test Under Cursor");
+    command_info_table[CMD_STEP_OVER] = k(CP_MOD_NONE, CP_KEY_F10, "Step Over");
+    command_info_table[CMD_STEP_INTO] = k(CP_MOD_NONE, CP_KEY_F11, "Step Into");
+    command_info_table[CMD_STEP_OUT] = k(CP_MOD_SHIFT, CP_KEY_F11, "Step Out");
+    command_info_table[CMD_RUN_TO_CURSOR] = k(CP_MOD_SHIFT, CP_KEY_F10, "Run To Cursor");
+    command_info_table[CMD_TOGGLE_BREAKPOINT] = k(CP_MOD_NONE, CP_KEY_F9, "Toggle Breakpoint");
+    command_info_table[CMD_DELETE_ALL_BREAKPOINTS] = k(CP_MOD_SHIFT, CP_KEY_F9, "Delete All Breakpoints");
     /**/
     command_info_table[CMD_ERROR_LIST] = k(0, 0, "Error List");
     command_info_table[CMD_FORMAT_SELECTION] = k(0, 0, "Format Selection");
@@ -1653,17 +1645,17 @@ void init_command_info_table() {
     command_info_table[CMD_DEBUG_PROFILES] = k(0, 0, "Debug Profiles");
     command_info_table[CMD_RESCAN_INDEX] = k(0, 0, "Rescan Index");
     command_info_table[CMD_OBLITERATE_AND_RECREATE_INDEX] = k(0, 0, "Obliterate and Recreate Index");
-    command_info_table[CMD_OPTIONS] = k(KEYMOD_PRIMARY, GLFW_KEY_COMMA, "Options");
+    command_info_table[CMD_OPTIONS] = k(CP_MOD_PRIMARY, CP_KEY_COMMA, "Options");
     command_info_table[CMD_ABOUT] = k(0, 0, "About");
     command_info_table[CMD_GENERATE_IMPLEMENTATION] = k(0, 0, "Generate Implementation");
 
     command_info_table[CMD_FIND_IMPLEMENTATIONS] = k(0, 0, "Find Implementations");
     command_info_table[CMD_FIND_INTERFACES] = k(0, 0, "Find Interfaces");
-    command_info_table[CMD_UNDO] = k(KEYMOD_PRIMARY, GLFW_KEY_Z, "Undo");
-    command_info_table[CMD_REDO] = k(KEYMOD_PRIMARY | KEYMOD_SHIFT, GLFW_KEY_Z, "Redo");
+    command_info_table[CMD_UNDO] = k(CP_MOD_PRIMARY, CP_KEY_Z, "Undo");
+    command_info_table[CMD_REDO] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_Z, "Redo");
     command_info_table[CMD_DOCUMENTATION] = k(0, 0, "Documentation");
-    command_info_table[CMD_VIEW_CALLER_HIERARCHY] = k(KEYMOD_PRIMARY, GLFW_KEY_I, "View Caller Hierarchy");
-    command_info_table[CMD_VIEW_CALLEE_HIERARCHY] = k(KEYMOD_PRIMARY | KEYMOD_SHIFT, GLFW_KEY_I, "View Callee Hierarchy");
+    command_info_table[CMD_VIEW_CALLER_HIERARCHY] = k(CP_MOD_PRIMARY, CP_KEY_I, "View Caller Hierarchy");
+    command_info_table[CMD_VIEW_CALLEE_HIERARCHY] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_I, "View Callee Hierarchy");
     command_info_table[CMD_BUY_LICENSE] = k(0, 0, "Buy a License");
     command_info_table[CMD_ENTER_LICENSE] = k(0, 0, "Enter License...");
 }
@@ -1690,7 +1682,7 @@ void do_find_interfaces() {
         // TODO: how do we handle errors?
         // right now it just freezes on "Searching..."
         auto results = ind.find_interfaces(wnd.declres, wnd.search_everywhere);
-        if (results == NULL) return;
+        if (!results) return;
 
         {
             SCOPED_MEM(&world.find_interfaces_mem);
@@ -1699,11 +1691,11 @@ void do_find_interfaces() {
             For (*results) newresults->append(it.copy());
 
             wnd.results = newresults;
-            wnd.current_import_path = our_strcpy(world.indexer.index.current_import_path);
+            wnd.current_import_path = cp_strcpy(world.indexer.index.current_import_path);
         }
 
         // close the thread handle first so it doesn't try to kill the thread
-        if (wnd.thread != NULL) {
+        if (wnd.thread) {
             close_thread_handle(wnd.thread);
             wnd.thread = NULL;
         }
@@ -1717,7 +1709,7 @@ void do_find_interfaces() {
     wnd.results = NULL;
 
     wnd.thread = create_thread(thread_proc, NULL);
-    if (wnd.thread == NULL) {
+    if (!wnd.thread) {
         tell_user("Unable to kick off Find Interfaces.", NULL);
         return;
     }
@@ -1729,7 +1721,7 @@ void init_goto_symbol() {
 
     auto &wnd = world.wnd_goto_symbol;
 
-    if (wnd.fill_thread == NULL)
+    if (!wnd.fill_thread)
         kill_thread(wnd.fill_thread);
 
     wnd.query[0] = '\0';
@@ -1751,12 +1743,12 @@ void init_goto_symbol() {
             For (*symbols) wnd.symbols->append(it.copy());
 
             wnd.filtered_results = alloc_list<int>();
-            wnd.current_import_path = our_strcpy(world.indexer.index.current_import_path);
+            wnd.current_import_path = cp_strcpy(world.indexer.index.current_import_path);
         }
 
         wnd.fill_running = false;
 
-        if (wnd.fill_thread != NULL) {
+        if (wnd.fill_thread) {
             auto t = wnd.fill_thread;
             wnd.fill_thread = NULL;
             close_thread_handle(t);
@@ -1790,7 +1782,7 @@ void do_find_implementations() {
         defer { cancel_find_implementations(); };
 
         auto results = ind.find_implementations(wnd.declres, wnd.search_everywhere);
-        if (results == NULL) return;
+        if (!results) return;
 
         {
             SCOPED_MEM(&world.find_implementations_mem);
@@ -1799,11 +1791,11 @@ void do_find_implementations() {
             For (*results) newresults->append(it.copy());
 
             wnd.results = newresults;
-            wnd.current_import_path = our_strcpy(world.indexer.index.current_import_path);
+            wnd.current_import_path = cp_strcpy(world.indexer.index.current_import_path);
         }
 
         // close the thread handle first so it doesn't try to kill the thread
-        if (wnd.thread != NULL) {
+        if (wnd.thread) {
             close_thread_handle(wnd.thread);
             wnd.thread = NULL;
         }
@@ -1817,7 +1809,7 @@ void do_find_implementations() {
     wnd.results = NULL;
 
     wnd.thread = create_thread(thread_proc, NULL);
-    if (wnd.thread == NULL) {
+    if (!wnd.thread) {
         tell_user("Unable to kick off Find Implementations.", NULL);
         return;
     }
@@ -1854,7 +1846,7 @@ void handle_command(Command cmd, bool from_menu) {
         if (world.use_nvim) break;
 
         auto editor = get_current_editor();
-        if (editor == NULL) break;
+        if (!editor) break;
 
         auto buf = editor->buf;
         auto pos = (cmd == CMD_UNDO ?  buf->hist_undo() : buf->hist_redo());
@@ -1875,7 +1867,7 @@ void handle_command(Command cmd, bool from_menu) {
     case CMD_SAVE_FILE:
         {
             auto editor = get_current_editor();
-            if (editor != NULL) editor->handle_save();
+            if (editor) editor->handle_save();
         }
         break;
 
@@ -1884,7 +1876,7 @@ void handle_command(Command cmd, bool from_menu) {
         break;
 
     case CMD_EXIT:
-        glfwSetWindowShouldClose(world.window, true);
+        world.window->should_close = true;
         break;
 
     case CMD_SEARCH:
@@ -1958,8 +1950,8 @@ void handle_command(Command cmd, bool from_menu) {
         auto &wnd = world.wnd_find_references;
 
         auto result = get_current_definition(NULL, true);
-        if (result == NULL) break;
-        if (result->decl == NULL) break;
+        if (!result) break;
+        if (!result->decl) break;
 
         world.find_references_mem.reset();
         {
@@ -1983,7 +1975,7 @@ void handle_command(Command cmd, bool from_menu) {
             defer { cancel_find_references(); };
 
             auto files = world.indexer.find_references(wnd.declres, false);
-            if (files == NULL) return;
+            if (!files) return;
 
             {
                 SCOPED_MEM(&world.find_references_mem);
@@ -1992,11 +1984,11 @@ void handle_command(Command cmd, bool from_menu) {
                 For (*files) newfiles->append(it.copy());
 
                 wnd.results = newfiles;
-                wnd.current_import_path = our_strcpy(world.indexer.index.current_import_path);
+                wnd.current_import_path = cp_strcpy(world.indexer.index.current_import_path);
             }
 
             // close the thread handle first so it doesn't try to kill the thread
-            if (wnd.thread != NULL) {
+            if (wnd.thread) {
                 close_thread_handle(wnd.thread);
                 wnd.thread = NULL;
             }
@@ -2009,7 +2001,7 @@ void handle_command(Command cmd, bool from_menu) {
         wnd.done = false;
         wnd.results = NULL;
         wnd.thread = create_thread(thread_proc, NULL);
-        if (wnd.thread == NULL) {
+        if (!wnd.thread) {
             tell_user("Unable to kick off Find References.", NULL);
             break;
         }
@@ -2018,7 +2010,7 @@ void handle_command(Command cmd, bool from_menu) {
 
     case CMD_FORMAT_FILE: {
         auto editor = get_current_editor();
-        if (editor == NULL) break;
+        if (!editor) break;
         if (!editor->is_modifiable()) break;
 
         editor->format_on_save(GH_FMT_GOIMPORTS);
@@ -2027,7 +2019,7 @@ void handle_command(Command cmd, bool from_menu) {
 
     case CMD_FORMAT_FILE_AND_ORGANIZE_IMPORTS: {
         auto editor = get_current_editor();
-        if (editor == NULL) break;
+        if (!editor) break;
         if (!editor->is_modifiable()) break;
 
         if (editor->optimize_imports())
@@ -2047,7 +2039,7 @@ void handle_command(Command cmd, bool from_menu) {
 
         // TODO: this should be a "blocking" modal, like it disables activity in rest of IDE
         auto result = get_current_definition(&filepath, true);
-        if (result == NULL) return;
+        if (!result) return;
         if (result->decl->decl->type == GODECL_IMPORT) {
             tell_user("Sorry, we're currently not yet able to rename imports.", NULL);
             return;
@@ -2128,9 +2120,9 @@ void handle_command(Command cmd, bool from_menu) {
     case CMD_TOGGLE_BREAKPOINT:
         {
             auto editor = get_current_editor();
-            if (editor != NULL) {
+            if (editor) {
                 world.dbg.push_call(DLVC_TOGGLE_BREAKPOINT, [&](auto call) {
-                    call->toggle_breakpoint.filename = our_strcpy(editor->filepath);
+                    call->toggle_breakpoint.filename = cp_strcpy(editor->filepath);
                     call->toggle_breakpoint.lineno = editor->cur.y + 1;
                 });
             }
@@ -2181,7 +2173,7 @@ void handle_command(Command cmd, bool from_menu) {
         {
             auto &wnd = world.wnd_generate_implementation;
 
-            if (wnd.fill_thread == NULL)
+            if (!wnd.fill_thread)
                 kill_thread(wnd.fill_thread);
 
             wnd.query[0] = '\0';
@@ -2199,11 +2191,11 @@ void handle_command(Command cmd, bool from_menu) {
             };
 
             auto result = get_current_definition();
-            if (result == NULL) break;
-            if (result->decl == NULL) break;
+            if (!result) break;
+            if (!result->decl) break;
 
             auto decl = result->decl->decl;
-            if (decl->gotype == NULL) break;
+            if (!decl->gotype) break;
 
             found_something = true;
 
@@ -2218,7 +2210,7 @@ void handle_command(Command cmd, bool from_menu) {
             world.generate_implementation_mem.reset();
 
             auto gofile = ind.find_gofile_from_ctx(result->decl->ctx);
-            if (gofile == NULL) break;
+            if (!gofile) break;
 
             {
                 SCOPED_MEM(&world.generate_implementation_mem);
@@ -2247,7 +2239,7 @@ void handle_command(Command cmd, bool from_menu) {
                 }
 
                 wnd.fill_running = false;
-                if (wnd.fill_thread != NULL) {
+                if (wnd.fill_thread) {
                     auto t = wnd.fill_thread;
                     wnd.fill_thread = NULL;
                     close_thread_handle(t);
@@ -2277,7 +2269,7 @@ void handle_command(Command cmd, bool from_menu) {
         defer { if (!ok && ind.status == IND_READING) ind.release_lock(IND_READING); };
 
         auto editor = get_current_editor();
-        if (editor == NULL) break;
+        if (!editor) break;
         if (!editor->is_go_file) break;
 
         Goresult *result = NULL;
@@ -2286,13 +2278,13 @@ void handle_command(Command cmd, bool from_menu) {
             result = ind.find_enclosing_toplevel(editor->filepath, editor->cur);
         }
 
-        if (result == NULL) break;
-        if (result->decl == NULL) break;
+        if (!result) break;
+        if (!result->decl) break;
 
         auto decl = result->decl;
-        if (decl == NULL) break;
+        if (!decl) break;
 
-        if (decl->gotype == NULL || decl->gotype->type != GOTYPE_FUNC) {
+        if (!decl->gotype || decl->gotype->type != GOTYPE_FUNC) {
             tell_user("The declaration under your cursor is not a function.", "Error");
             break;
         }
@@ -2312,7 +2304,7 @@ void handle_command(Command cmd, bool from_menu) {
             defer { cancel_callee_hierarchy(); };
 
             auto results = ind.generate_callee_hierarchy(wnd.declres);
-            if (results == NULL) return;
+            if (!results) return;
 
             {
                 SCOPED_MEM(&world.callee_hierarchy_mem);
@@ -2321,11 +2313,11 @@ void handle_command(Command cmd, bool from_menu) {
                 For (*results) newresults->append(it.copy());
 
                 wnd.results = newresults;
-                wnd.current_import_path = our_strcpy(world.indexer.index.current_import_path);
+                wnd.current_import_path = cp_strcpy(world.indexer.index.current_import_path);
             }
 
             // close the thread handle first so it doesn't try to kill the thread
-            if (wnd.thread != NULL) {
+            if (wnd.thread) {
                 close_thread_handle(wnd.thread);
                 wnd.thread = NULL;
             }
@@ -2339,7 +2331,7 @@ void handle_command(Command cmd, bool from_menu) {
         wnd.results = NULL;
 
         wnd.thread = create_thread(thread_proc, NULL);
-        if (wnd.thread == NULL) {
+        if (!wnd.thread) {
             tell_user("Unable to kick off View Call Hierarchy.", NULL);
             break;
         }
@@ -2359,7 +2351,7 @@ void handle_command(Command cmd, bool from_menu) {
         defer { if (!ok && ind.status == IND_READING) ind.release_lock(IND_READING); };
 
         auto editor = get_current_editor();
-        if (editor == NULL) break;
+        if (!editor) break;
         if (!editor->is_go_file) break;
 
         Goresult *result = NULL;
@@ -2368,13 +2360,13 @@ void handle_command(Command cmd, bool from_menu) {
             result = ind.find_enclosing_toplevel(editor->filepath, editor->cur);
         }
 
-        if (result == NULL) break;
-        if (result->decl == NULL) break;
+        if (!result) break;
+        if (!result->decl) break;
 
         auto decl = result->decl;
-        if (decl == NULL) break;
+        if (!decl) break;
 
-        if (decl->gotype == NULL || decl->gotype->type != GOTYPE_FUNC) {
+        if (!decl->gotype || decl->gotype->type != GOTYPE_FUNC) {
             tell_user("The declaration under your cursor is not a function.", "Error");
             break;
         }
@@ -2394,7 +2386,7 @@ void handle_command(Command cmd, bool from_menu) {
             defer { cancel_caller_hierarchy(); };
 
             auto results = ind.generate_caller_hierarchy(wnd.declres);
-            if (results == NULL) return;
+            if (!results) return;
 
             {
                 SCOPED_MEM(&world.caller_hierarchy_mem);
@@ -2403,11 +2395,11 @@ void handle_command(Command cmd, bool from_menu) {
                 For (*results) newresults->append(it.copy());
 
                 wnd.results = newresults;
-                wnd.current_import_path = our_strcpy(world.indexer.index.current_import_path);
+                wnd.current_import_path = cp_strcpy(world.indexer.index.current_import_path);
             }
 
             // close the thread handle first so it doesn't try to kill the thread
-            if (wnd.thread != NULL) {
+            if (wnd.thread) {
                 close_thread_handle(wnd.thread);
                 wnd.thread = NULL;
             }
@@ -2421,7 +2413,7 @@ void handle_command(Command cmd, bool from_menu) {
         wnd.results = NULL;
 
         wnd.thread = create_thread(thread_proc, NULL);
-        if (wnd.thread == NULL) {
+        if (!wnd.thread) {
             tell_user("Unable to kick off View Call Hierarchy.", NULL);
             break;
         }
@@ -2434,11 +2426,11 @@ void handle_command(Command cmd, bool from_menu) {
         auto &wnd = world.wnd_find_implementations;
 
         auto result = get_current_definition(NULL, true);
-        if (result == NULL) break;
-        if (result->decl == NULL) break;
+        if (!result) break;
+        if (!result->decl) break;
 
         auto decl = result->decl->decl;
-        if (decl == NULL) break;
+        if (!decl) break;
 
         if (decl->type != GODECL_TYPE || decl->gotype->type != GOTYPE_INTERFACE) {
             tell_user("The selected object is not an interface.", "Error");
@@ -2446,7 +2438,7 @@ void handle_command(Command cmd, bool from_menu) {
         }
 
         auto specs = decl->gotype->interface_specs;
-        if (specs == NULL || specs->len == 0) {
+        if (!specs || specs->len == 0) {
             auto msg = "The selected interface is empty. That means every type will match it. Do you still want to just list every type I can find?";
             if (ask_user_yes_no(msg, "Warning", "Yes, continue", "No") != ASKUSER_YES)
                 break;
@@ -2467,11 +2459,11 @@ void handle_command(Command cmd, bool from_menu) {
         auto &wnd = world.wnd_find_interfaces;
 
         auto result = get_current_definition(NULL, true);
-        if (result == NULL) break;
-        if (result->decl == NULL) break;
+        if (!result) break;
+        if (!result->decl) break;
 
         auto decl = result->decl->decl;
-        if (decl == NULL) break;
+        if (!decl) break;
 
         if (decl->type != GODECL_TYPE) {
             tell_user("The selected object is not an interface.", "Error");
@@ -2507,7 +2499,7 @@ void handle_command(Command cmd, bool from_menu) {
 }
 
 void open_add_file_or_folder(bool folder, FT_Node *dest) {
-    if (dest == NULL) dest = world.file_explorer.selection;
+    if (!dest) dest = world.file_explorer.selection;
 
     FT_Node *node = NULL;
     auto &wnd = world.wnd_add_file_or_folder;
@@ -2515,11 +2507,11 @@ void open_add_file_or_folder(bool folder, FT_Node *dest) {
     auto is_root = [&]() {
         node = dest;
 
-        if (node == NULL) return true;
+        if (!node) return true;
         if (node->is_directory) return false;
 
         node = node->parent;
-        return (node->parent == NULL);
+        return (!node->parent);
     };
 
     wnd.location_is_root = is_root();
@@ -2547,7 +2539,7 @@ void do_generate_implementation() {
 
     auto check_filehash_hasnt_changed = [&](Go_Ctx *ctx, u64 want) -> bool {
         auto gofile = ind.find_gofile_from_ctx(ctx);
-        return gofile != NULL && gofile->hash == want;
+        return gofile && gofile->hash == want;
     };
 
     {
@@ -2587,14 +2579,14 @@ void do_generate_implementation() {
     if (src_gotype->type == GOTYPE_BUILTIN)
         src_gotype = src_gotype->builtin_underlying_type;
 
-    if (src_gotype == NULL) return;
+    if (!src_gotype) return;
     if (src_gotype->type != GOTYPE_INTERFACE) return;
 
-    if (dest_gotype == NULL) return;
+    if (!dest_gotype) return;
     if (dest_gotype->type == GOTYPE_INTERFACE) return;
 
     auto src_methods = ind.list_interface_methods(src->wrap(src_gotype));
-    if (src_methods == NULL) return;
+    if (!src_methods) return;
 
     auto dest_methods = alloc_list<Goresult>();
     if (!ind.list_type_methods(dest->decl->name, dest->ctx->import_path, dest_methods))
@@ -2638,7 +2630,7 @@ void do_generate_implementation() {
     auto add_error = [&](ccstr fmt, ...) {
         va_list vl;
         va_start(vl, fmt);
-        auto ret = our_vsprintf(fmt, vl);
+        auto ret = cp_vsprintf(fmt, vl);
         va_end(vl);
 
         errors->append(ret);
@@ -2664,7 +2656,7 @@ void do_generate_implementation() {
                 declres = ind.find_decl_in_package(t->sel_sel, import_path);
             }
 
-            if (declres == NULL || declres->decl->type != GODECL_TYPE) {
+            if (!declres || declres->decl->type != GODECL_TYPE) {
                 ok = false;
                 return false;
             }
@@ -2682,14 +2674,14 @@ void do_generate_implementation() {
             auto package_name = import_table.get(import_path, &found);
             if (!found) {
                 auto pkg = ind.find_up_to_date_package(import_path);
-                if (pkg != NULL) {
+                if (pkg) {
                     auto actual_name = pkg->package_name;
                     bool alias_package = false;
 
                     for (int i = 0;; i++) {
                         auto new_name = actual_name;
-                        if (i > 0)
-                            new_name = our_sprintf("%s%d", new_name, i);
+                        if (i)
+                            new_name = cp_sprintf("%s%d", new_name, i);
 
                         import_table_r.get(new_name, &found);
                         if (!found) {
@@ -2710,7 +2702,7 @@ void do_generate_implementation() {
                 }
             }
 
-            if (package_name == NULL) {
+            if (!package_name) {
                 ok = false;
                 return false;
             }
@@ -2729,7 +2721,7 @@ void do_generate_implementation() {
             auto get_typestr = [&]() -> ccstr {
                 if (t->type == GOTYPE_ID)
                     return t->id_name;
-                return our_sprintf("%s.%s", t->sel_name, t->sel_sel);
+                return cp_sprintf("%s.%s", t->sel_name, t->sel_sel);
             };
 
             add_error("Unable to add method %s because we couldn't resolve type %s.", method_name, get_typestr());
@@ -2745,7 +2737,7 @@ void do_generate_implementation() {
         auto method_ctx = it.ctx;
 
         auto gotype = it.decl->gotype;
-        if (gotype == NULL) continue;
+        if (!gotype) continue;
         if (gotype->type != GOTYPE_FUNC) continue;
 
         auto &sig = gotype->func_sig;
@@ -2765,7 +2757,7 @@ void do_generate_implementation() {
                 rend.write(", ");
 
             auto typestr = render_type(make_goresult(it.gotype, method_ctx), it.name);
-            if (typestr == NULL) {
+            if (!typestr) {
                 error = true;
                 goto done_writing;
             }
@@ -2786,7 +2778,7 @@ void do_generate_implementation() {
                     rend.write(", ");
 
                 auto typestr = render_type(make_goresult(it.gotype, method_ctx), it.name);
-                if (typestr == NULL) {
+                if (!typestr) {
                     error = true;
                     goto done_writing;
                 }
@@ -2815,10 +2807,10 @@ done_writing:
     defer { buf.cleanup(); };
 
     auto filepath = ind.ctx_to_filepath(dest->ctx);
-    if (filepath == NULL) return;
+    if (!filepath) return;
 
     auto fm = map_file_into_memory(filepath);
-    if (fm == NULL) return;
+    if (!fm) return;
     defer { fm->cleanup(); };
 
     buf.read(fm);
@@ -2857,14 +2849,14 @@ done_writing:
             }
         }
 
-        if (imports_node == NULL && package_node == NULL) return;
+        if (!imports_node && !package_node) return;
 
         Text_Renderer rend;
         rend.init();
         rend.write("import (\n");
 
         // write all existing imports
-        if (imports_node != NULL) {
+        if (imports_node) {
             auto speclist = imports_node->child();
             if (speclist->type() != TS_IMPORT_SPEC_LIST)
                 return;
@@ -2888,7 +2880,7 @@ done_writing:
         GHFmtAddLine("");
 
         auto new_contents = GHFmtFinish(GH_FMT_GOIMPORTS);
-        if (new_contents == NULL) return;
+        if (!new_contents) return;
         defer { GHFree(new_contents); };
 
         auto new_contents_len = strlen(new_contents);
@@ -2900,7 +2892,7 @@ done_writing:
         }
 
         cur2 start, old_end;
-        if (imports_node != NULL) {
+        if (imports_node) {
             start = imports_node->start();
             old_end = imports_node->end();
         } else {
@@ -2909,7 +2901,7 @@ done_writing:
         }
 
         auto chars = alloc_list<uchar>();
-        if (imports_node == NULL) {
+        if (!imports_node) {
             // add two newlines, it's going after the package decl
             chars->append('\n');
             chars->append('\n');
@@ -2946,7 +2938,7 @@ done_writing:
     buf.cleanup();
 
     auto editor = find_editor_by_filepath(filepath);
-    if (editor != NULL) {
+    if (editor) {
         editor->reload_file();
 
         auto c = editor->cur;
@@ -2985,7 +2977,7 @@ void fuzzy_sort_filtered_results(ccstr query, List<int> *list, int total_results
 
 ccstr get_auth_filepath() {
     auto configpath = GHGetConfigDir();
-    if (configpath == NULL) our_panic("Unable to open config directory.");
+    if (!configpath) cp_panic("Unable to open config directory.");
     return path_join(configpath, ".auth");
 }
 

@@ -2,6 +2,7 @@
 #include "os.hpp"
 #include "world.hpp"
 #include "stb_sprintf.h"
+#include "defer.hpp"
 
 #if OS_WIN
 #include <shlwapi.h>
@@ -16,7 +17,8 @@ bool strcpy_safe(cstr buf, s32 count, ccstr src) {
     return true;
 }
 
-ccstr our_format_json(ccstr s) {
+// TODO: can probably do this in gohelper
+ccstr cp_format_json(ccstr s) {
     Process proc;
 
     proc.init();
@@ -36,8 +38,8 @@ ccstr our_format_json(ccstr s) {
     return r.finish();
 }
 
-ccstr our_strcpy(ccstr s) {
-    if (s == NULL) return NULL;
+ccstr cp_strcpy(ccstr s) {
+    if (!s) return NULL;
 
     auto len = strlen(s);
     auto ret = alloc_array(char, len + 1);
@@ -45,8 +47,8 @@ ccstr our_strcpy(ccstr s) {
     return (ccstr)ret;
 }
 
-ccstr our_strncpy(ccstr s, int n) {
-    if (s == NULL) return NULL;
+ccstr cp_strncpy(ccstr s, int n) {
+    if (!s) return NULL;
 
     auto ret = alloc_array(char, n + 1);
     memcpy(ret, s, sizeof(char) * n);
@@ -54,10 +56,10 @@ ccstr our_strncpy(ccstr s, int n) {
     return (ccstr)ret;
 }
 
-// why isn't this in os.hpp, btw? (along with our_basename)
+// why isn't this in os.hpp, btw? (along with cp_basename)
 ccstr _our_dirname(ccstr path) {
 #if OS_WIN
-    auto s = (char*)our_strcpy(path);
+    auto s = (char*)cp_strcpy(path);
     auto len = strlen(s);
     if (is_sep(s[len-1]))
         s[len-1] = '\0';
@@ -70,28 +72,28 @@ ccstr _our_dirname(ccstr path) {
     // dirname might overwrite mem we pass it
     // and also it might return pointer to statically allocated mem
     // so just send it a copy and copy what it gives us
-    return our_strcpy(dirname((char*)our_strcpy(path)));
+    return cp_strcpy(dirname((char*)cp_strcpy(path)));
 #endif
 }
 
-ccstr our_dirname(ccstr path) {
+ccstr cp_dirname(ccstr path) {
     auto ret = _our_dirname(path);
     if (streq(ret, ".")) ret = "";
     return ret;
 }
 
-ccstr our_basename(ccstr path) {
+ccstr cp_basename(ccstr path) {
 #if OS_WIN
-    auto ret = (cstr)our_strcpy(path);
+    auto ret = (cstr)cp_strcpy(path);
     PathStripPathA(ret);
     return (ccstr)ret;
 #elif OS_MAC
-    auto ret = our_strcpy(path);
-    return our_strcpy(basename((char*)ret));
+    auto ret = cp_strcpy(path);
+    return cp_strcpy(basename((char*)ret));
 #endif
 }
 
-ccstr our_vsprintf(ccstr fmt, va_list args) {
+ccstr cp_vsprintf(ccstr fmt, va_list args) {
     va_list args2;
     va_copy(args2, args);
 
@@ -101,19 +103,19 @@ ccstr our_vsprintf(ccstr fmt, va_list args) {
     return buf;
 }
 
-ccstr our_sprintf(ccstr fmt, ...) {
+ccstr cp_sprintf(ccstr fmt, ...) {
     va_list args;
     va_start(args, fmt);
 
-    auto buf = our_vsprintf(fmt, args);
+    auto buf = cp_vsprintf(fmt, args);
 
     va_end(args);
     return buf;
 }
 
-ccstr our_strcat(ccstr a, ccstr b) {
+ccstr cp_strcat(ccstr a, ccstr b) {
     // TODO: do this properly lol
-    return our_sprintf("%s%s", a, b);
+    return cp_sprintf("%s%s", a, b);
 }
 
 List<ccstr> *split_string(ccstr str, char sep) {
@@ -181,7 +183,7 @@ void Path::goto_child(ccstr child) {
 ccstr Path::str(char sep) {
     if (parts->len == 0) return "";
 
-    if (sep == 0) sep = PATH_SEP;
+    if (!sep) sep = PATH_SEP;
 
     auto len = 0;
     For (*parts) len += strlen(it);
