@@ -504,7 +504,8 @@ void World::start_background_threads() {
     // devised is to create a background thread that runs in a loop, so I can
     // set a breakpoint in it at any time.
     auto microsoft_programmers_are_fucking_monkeys = [](void*) {
-        while (true) sleep_milliseconds(1000);
+        while (true)
+            sleep_milliseconds(1000);
     };
 
     {

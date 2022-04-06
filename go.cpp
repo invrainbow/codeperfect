@@ -1253,10 +1253,6 @@ void Go_Indexer::background_thread() {
                 already_enqueued_packages.remove(import_path);
             }
 
-            if (streq(import_path, "@builtin")) {
-                BREAK_HERE;
-            }
-
             auto pkg = find_package_in_index(import_path);
             if (pkg && pkg->status == GPS_READY) // already been processed
                 continue;
