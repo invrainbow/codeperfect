@@ -32,7 +32,8 @@ const int GO_INDEX_MAGIC_NUMBER = 0x49fa98;
 // version 21: remove array_size from Gotype
 // version 22: sort references
 // version 23: rename @builtins to @builtin
-const int GO_INDEX_VERSION = 23;
+// version 24: don't include "_" decls
+const int GO_INDEX_VERSION = 24;
 
 void index_print(ccstr fmt, ...) {
     va_list args;
@@ -5700,43 +5701,53 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
     auto node_type = node->type();
     switch (node_type) {
     case TS_FUNCTION_DECLARATION:
-    case TS_METHOD_DECLARATION:
-        {
-            auto name = node->field(TSF_NAME);
-            if (name->null) break;
+    case TS_METHOD_DECLARATION: {
+        auto name_node = node->field(TSF_NAME);
+        if (name_node->null) break;
 
-            auto params_node = node->field(TSF_PARAMETERS);
-            auto result_node = node->field(TSF_RESULT);
+        auto name = name_node->string();
 
-            auto gotype = new_gotype(GOTYPE_FUNC);
+        if (node_type == TS_FUNCTION_DECLARATION)
+            if (is_toplevel)
+                if (streq(name, "init"))
+                    break;
 
-            if (!node_func_to_gotype_sig(params_node, result_node, &gotype->func_sig)) break;
+        auto params_node = node->field(TSF_PARAMETERS);
+        auto result_node = node->field(TSF_RESULT);
 
-            if (node->type() == TS_METHOD_DECLARATION) {
-                auto recv_node = node->field(TSF_RECEIVER);
-                auto recv_type = recv_node->child()->field(TSF_TYPE);
-                if (!recv_type->null) {
-                    gotype->func_recv = node_to_gotype(recv_type);
-                    if (!gotype->func_recv) break;
-                }
+        auto gotype = new_gotype(GOTYPE_FUNC);
+
+        if (!node_func_to_gotype_sig(params_node, result_node, &gotype->func_sig)) break;
+
+        if (node->type() == TS_METHOD_DECLARATION) {
+            auto recv_node = node->field(TSF_RECEIVER);
+            auto recv_type = recv_node->child()->field(TSF_TYPE);
+            if (!recv_type->null) {
+                gotype->func_recv = node_to_gotype(recv_type);
+                if (!gotype->func_recv) break;
             }
-
-            auto decl = new_result();
-            decl->type = GODECL_FUNC;
-            decl->spec_start = node->start();
-            decl->name = name->string();
-            decl->name_start = name->start();
-            decl->name_end = name->end();
-            decl->gotype = gotype;
-            save_decl(decl);
         }
+
+        auto decl = new_result();
+        decl->type = GODECL_FUNC;
+        decl->spec_start = node->start();
+        decl->name = name;
+        decl->name_start = name_node->start();
+        decl->name_end = name_node->end();
+        decl->gotype = gotype;
+        save_decl(decl);
+
         break;
+    }
 
     case TS_TYPE_DECLARATION:
-    // TODO: handle TS_TYPE_ALIAS here.
+        // TODO: handle TS_TYPE_ALIAS here.
         for (auto spec = node->child(); !spec->null; spec = spec->next()) {
             auto name_node = spec->field(TSF_NAME);
             if (name_node->null) continue;
+
+            auto name = name_node->string();
+            if (streq(name, "_")) continue;
 
             auto type_node = spec->field(TSF_TYPE);
             if (type_node->null) continue;
@@ -5747,7 +5758,7 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
             auto decl = new_result();
             decl->type = GODECL_TYPE;
             decl->spec_start = spec->start();
-            decl->name = name_node->string();
+            decl->name = name;
             decl->name_start = name_node->start();
             decl->name_end = name_node->end();
             decl->gotype = gotype;
@@ -5793,6 +5804,9 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
                         FOR_NODE_CHILDREN (spec) {
                             if (i >= saved_iota_types->len) break;
                             auto saved_gotype = saved_iota_types->at(i++);
+
+                            auto name = it->string();
+                            if (streq(name, "_")) continue;
 
                             auto decl = new_result();
                             decl->type = (ntype == TS_CONST_DECLARATION ?  GODECL_CONST : GODECL_VAR);
