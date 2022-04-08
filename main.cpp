@@ -1088,6 +1088,10 @@ int main(int argc, char **argv) {
     world.init(&window);
     SCOPED_MEM(&world.frame_mem);
 
+    // auto fonts = get_font_cascade();
+    // if (fonts == NULL) cp_panic("why???");
+    // For (*fonts) print("font: %s", it);
+
 #ifdef DEBUG_MODE
     GHEnableDebugMode();
 #endif

@@ -155,3 +155,41 @@ bool let_user_select_file(Select_File_Opts* opts) {
 void write_to_syslog(ccstr s) {
     NSLog(@"%s", s);
 }
+
+ccstr cfstring_to_ccstr(CFStringRef s) {
+    if (s == NULL) return NULL;
+
+    CFIndex len = CFStringGetLength(s);
+    CFIndex maxsize = CFStringGetMaximumSizeForEncoding(len, kCFStringEncodingUTF8) + 1;
+
+    Frame frame;
+
+    auto ret = alloc_array(char, maxsize);
+    if (!CFStringGetCString(s, ret, maxsize, kCFStringEncodingUTF8)) {
+        frame.restore();
+        return NULL;
+    }
+    return ret;
+}
+
+List<ccstr> *get_font_cascade() {
+    @autoreleasepool {
+        auto sysfont = CTFontCreateUIFontForLanguage(kCTFontSystemFontType, 12.0, CFSTR("en-US"));
+
+        CFStringRef langs[1] = { CFSTR("en") };
+        auto cf_langs = CFArrayCreate(kCFAllocatorDefault, (const void**)langs, 1, &kCFTypeArrayCallBacks);
+
+        auto fonts = CTFontCopyDefaultCascadeListForLanguages(sysfont, cf_langs);
+
+        auto len = CFArrayGetCount(fonts);
+        auto ret = alloc_list<ccstr>(len);
+
+        for (auto i = 0; i < len; i++) {
+            auto it = (CTFontDescriptorRef)CFArrayGetValueAtIndex(fonts, i);
+            auto name = (CFStringRef)CTFontDescriptorCopyAttribute(it, kCTFontNameAttribute);
+            ret->append(cfstring_to_ccstr(name));
+        }
+
+        return ret;
+    }
+}
