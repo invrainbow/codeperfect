@@ -1124,7 +1124,7 @@ int main(int argc, char **argv) {
 
         auto email = cp_sprintf("%.*s", auth.reg_email_len, auth.reg_email);
         auto license = cp_sprintf("%.*s", auth.reg_license_len, auth.reg_license);
-        strcpy_safe_fixed(world.authed_email, auth.reg_email);
+        cp_strcpy_fixed(world.authed_email, auth.reg_email);
 
         GHAuth((char*)email, (char*)license);
         break;
@@ -1618,7 +1618,7 @@ int main(int argc, char **argv) {
                 if (should_handle_fsevent()) {
                     world.indexer.message_queue.add([&](auto msg) {
                         msg->type = GOMSG_FSEVENT;
-                        msg->fsevent_filepath = cp_strcpy(event.filepath);
+                        msg->fsevent_filepath = cp_strdup(event.filepath);
                     });
                 }
             }

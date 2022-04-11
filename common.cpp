@@ -118,7 +118,7 @@ void cp_panic(ccstr s) {
     } else {
         world.message_queue.add([&](auto msg) {
             msg->type = MTM_PANIC;
-            msg->panic_message = cp_strcpy(s);
+            msg->panic_message = cp_strdup(s);
         });
         exit_thread(1);
     }
