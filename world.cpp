@@ -475,7 +475,9 @@ void World::init(Window *_wnd) {
 
     {
         SCOPED_MEM(&ui_mem);
-        ::ui.init();
+        if (!(::ui.init())) {
+            cp_panic("Unable to initialize UI.");
+        }
     }
 
     fswatch.init(current_path);

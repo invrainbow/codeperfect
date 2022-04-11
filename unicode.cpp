@@ -1,6 +1,30 @@
 #include "unicode.hpp"
 #include "common.hpp"
 
+enum Uni_Property {
+    PR_ANY,
+    PR_PREPREND,
+    PR_CR,
+    PR_LF,
+    PR_CONTROL,
+    PR_EXTEND,
+    PR_REGIONALINDICATOR,
+    PR_SPACINGMARK,
+    PR_L,
+    PR_V,
+    PR_T,
+    PR_LV,
+    PR_LVT,
+    PR_ZWJ,
+    PR_EXTENDEDPICTOGRAPHIC,
+};
+
+struct Property_Range {
+    int start;
+    int end;
+    Uni_Property prop;
+};
+
 struct Range { int start, end; };
 
 Range zero_width[] = {
@@ -116,7 +140,7 @@ bool _find(int c, Range *ranges, int ranges_len) {
     return false;
 }
 
-int cp_wcwidth(int c) {
+int cp_wcwidth(uchar c) {
     switch (c) {
     case 0:
     case 0x034F:
@@ -144,6 +168,16 @@ int cp_wcwidth(int c) {
     if (_find(c, zero_width, _countof(zero_width)))
         return 0;
     return 1 + (_find(c, east_asian, _countof(east_asian)) ? 1 : 0);
+}
+
+int cp_wcswidth(uchar *s, int len) {
+    int ret = 0;
+    for (int i = 0; i < len; i++) {
+        auto width = wcwidth(s[i]);
+        if (width < 0) return -1;
+        ret += width;
+    }
+    return ret;
 }
 
 Property_Range property_table[] = {

@@ -32,12 +32,6 @@
 #include "fonts.hpp"
 #include "icons.h"
 
-#define MAX_PATH 260
-#define CODE_FONT_SIZE 14
-#define UI_FONT_SIZE 17
-#define ICON_FONT_SIZE 16
-#define FRAME_RATE_CAP 60
-
 static const char WINDOW_TITLE[] = "CodePerfect 95";
 
 char vert_shader[] = R"(
@@ -242,8 +236,6 @@ void handle_window_event(Window_Event *it) {
 
         world.window_size.x = w;
         world.window_size.y = h;
-
-        auto& font = world.font;
 
         mat4f projection;
         new_ortho_matrix(projection, 0, w, h, 0);
@@ -1081,11 +1073,18 @@ int main(int argc, char **argv) {
     if (!window_init_everything())
         return error("window init failed"), EXIT_FAILURE;
 
+    {
+        // Pool pool;
+        // pool.init();
+        // SCOPED_MEM(&pool);
+        // random_macos_tests();
+    }
+
     Window window;
     if (!window.init(1280, 720, WINDOW_TITLE))
         return error("could not create window"), EXIT_FAILURE;
 
-    world.init(&window);
+    world.init(NULL); // &window);
     SCOPED_MEM(&world.frame_mem);
 
     // auto fonts = get_font_cascade();
@@ -1384,6 +1383,7 @@ int main(int argc, char **argv) {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glDisable(GL_CULL_FACE);
     glDisable(GL_DEPTH_TEST);
+    glDisable(GL_STENCIL_TEST);
 
     glGenVertexArrays(1, &world.ui.vao);
     glBindVertexArray(world.ui.vao);

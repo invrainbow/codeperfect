@@ -11,6 +11,13 @@
 #include "list.hpp"
 #include "debugger.hpp"
 #include "glew.h"
+#include "hash.hpp"
+#include <harfbuzz/hb.h>
+
+#define CODE_FONT_SIZE 14
+#define UI_FONT_SIZE 17
+#define ICON_FONT_SIZE 16
+#define FRAME_RATE_CAP 60
 
 extern ImVec2 icon_button_padding;
 
@@ -21,7 +28,7 @@ enum Texture_Id {
     __TEXTURE_COUNT__,
 };
 
-struct Font {
+struct Old_Font {
     stbtt_packedchar char_info['~' - ' ' + 1 + 1];
 
     i32 tex_size;
@@ -132,8 +139,78 @@ struct Pretty_Menu {
     ImU32 text_color;
 };
 
+struct Atlas {
+    int texture_id;
+    i32 texture_size;
+    Atlas *next;
+
+    /*
+    height = font_size;
+    tex_size = (i32)pow(2.0f, (i32)log2(sqrt((float)height * height * 8 * 8 * 256)) + 1);
+    glActiveTexture(GL_TEXTURE0 + texture_id);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, tex_size, tex_size, 0, GL_RED, GL_UNSIGNED_BYTE, atlas_data);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    */
+};
+
+struct Glyph {
+    uchar key;
+    int w;
+    int h;
+    int x;
+    int y;
+    Atlas *atlas; // use an index instead?
+};
+
+struct Glyph_Cache {
+    uchar key;
+    Glyph glyph;
+    UT_hash_handle hh;
+};
+
+struct Font_Options {
+    bool use_thin_strokes;
+    // what else?
+};
+
+struct Font {
+    Font_Options opts;
+    i32 height;
+
+    // i32 offset_y; // ??
+    // float width; // width of a standard char; some chars might take up 2 chars width
+
+    void* ctfont; // CTFontRef
+    hb_font_t *hbfont;
+
+    Font *next_fallback;
+    ccstr name;
+
+    bool init(ccstr font_name, u32 font_size, Font_Options *_opts = NULL) {
+        ptr0(this);
+        name = font_name;
+        height = font_size;
+
+        if (_opts != NULL) memcpy(&opts, _opts, sizeof(Font_Options));
+
+        if (!init_font()) {
+            cleanup();
+            return false;
+        }
+
+        return true;
+    }
+
+    void cleanup();
+
+    bool init_font();
+    void* get_glyphs(List<uchar> codepoints_comprising_a_grapheme, s32 *psize);
+};
+
 struct UI {
-    Font* font;
+    Old_Font *font;
     List<Vert> verts;
 
     vec2f _editor_sizes[MAX_PANES];
@@ -156,6 +233,11 @@ struct UI {
     vec2f actual_cursor_positions[16];
     vec2f actual_parameter_hint_start;
 
+    Atlas *atlases;
+    int current_char_texture;
+    Glyph_Cache *cache = NULL;
+    Font *font_list;
+
     ccstr current_render_godecl_filepath;
 
     struct {
@@ -172,7 +254,8 @@ struct UI {
     ccstr var_value_as_string(Dlv_Var *var);
     void draw_debugger_var(Draw_Debugger_Var_Args *args);
 
-    void init();
+    bool init();
+    bool init_fonts();
     void flush_verts();
     void draw_triangle(vec2f a, vec2f b, vec2f c, vec2f uva, vec2f uvb, vec2f uvc, vec4f color, Draw_Mode mode, Texture_Id texture = TEXTURE_FONT);
     void draw_quad(boxf b, boxf uv, vec4f color, Draw_Mode mode, Texture_Id texture = TEXTURE_FONT);
@@ -300,3 +383,4 @@ extern Global_Colors global_colors;
 
 void init_global_colors();
 ccstr format_key(int mods, ccstr key, bool icon = false);
+void random_macos_tests();

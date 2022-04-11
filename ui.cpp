@@ -72,7 +72,7 @@ ccstr format_key(int mods, int key) {
     return format_key(mods, keystr);
 }
 
-bool Font::init(u8* font_data, u32 font_size, int texture_id) {
+bool Old_Font::init(u8* font_data, u32 font_size, int texture_id) {
     height = font_size;
     tex_size = (i32)pow(2.0f, (i32)log2(sqrt((float)height * height * 8 * 8 * 128)) + 1);
 
@@ -769,15 +769,22 @@ void UI::render_ts_cursor(TSTreeCursor *curr, cur2 open_cur) {
     pop(0);
 }
 
-
-void UI::init() {
+bool UI::init() {
     ptr0(this);
     font = &world.font;
+
+    Frame frame;
+    if (!init_fonts()) {
+        frame.restore();
+        return false;
+    }
+
     editor_sizes.init(LIST_FIXED, _countof(_editor_sizes), _editor_sizes);
 
     // make sure panes_area is nonzero, so that panes can be initialized
     panes_area.w = 1;
     panes_area.h = 1;
+    return true;
 }
 
 void UI::flush_verts() {
@@ -5258,6 +5265,8 @@ void UI::draw_everything() {
                 draw_rect(b, color);
             };
 
+            auto grapheme_codepoints = alloc_list<uchar>();
+
             auto relative_y = 0;
             for (u32 y = view.y; y < view.y + view.h; y++, relative_y++) {
                 if (y >= buf->lines.len) break;
@@ -5350,13 +5359,16 @@ void UI::draw_everything() {
                             vx += options.tabsize - (vx % options.tabsize);
                             cp_idx++;
                         } else {
-                            auto width = cp_wcwidth(line->at(cp_idx));
+                            grapheme_codepoints->len = 0;
+                            do {
+                                auto codepoint = line->at(cp_idx);
+                                grapheme_codepoints->append(codepoint);
+                                cp_idx++;
+                            } while (cp_idx < line->len && !gc.feed(line->at(cp_idx)));
+
+                            auto width = cp_wcswidth(grapheme_codepoints->items, grapheme_codepoints->len);
                             if (width == -1) width = 1;
                             vx += width;
-
-                            cp_idx++;
-                            while (cp_idx < line->len && !gc.feed(line->at(cp_idx)))
-                                cp_idx++;
                         }
                     }
                     vx_start = vx;
@@ -5376,25 +5388,21 @@ void UI::draw_everything() {
 
                     auto curr_cp_idx = cp_idx;
                     int curr_cp = line->at(cp_idx);
-                    int grapheme_cpsize = 0;
 
-                    {
-                        auto uch = curr_cp;
-                        while (true) {
-                            cp_idx++;
-                            newx += uchar_size(uch);
-                            grapheme_cpsize++;
+                    grapheme_codepoints->len = 0;
 
-                            if (cp_idx >= line->len) break;
-                            if (gc.feed(uch = line->at(cp_idx))) break;
-                        }
-                    }
+                    do {
+                        auto codepoint = line->at(cp_idx);
+                        newx += uchar_size(codepoint);
+                        grapheme_codepoints->append(codepoint);
+                        cp_idx++;
+                    } while (cp_idx < line->len && !gc.feed(line->at(cp_idx)));
 
                     int glyph_width = 0;
-                    if (grapheme_cpsize == 1 && curr_cp == '\t')
+                    if (grapheme_codepoints->len == 1 && curr_cp == '\t')
                         glyph_width = options.tabsize - (vx % options.tabsize);
                     else
-                        glyph_width = cp_wcwidth(curr_cp);
+                        glyph_width = cp_wcswidth(grapheme_codepoints->items, grapheme_codepoints->len);
 
                     if (glyph_width == -1) glyph_width = 1;
 
@@ -5458,10 +5466,14 @@ void UI::draw_everything() {
                     uchar uch = curr_cp;
                     if (uch == '\t') {
                         cur_pos.x += font->width * glyph_width;
-                    } else if (grapheme_cpsize > 1 || uch > 0x7f) {
-                        auto pos = cur_pos;
-                        pos.x += (font->width * glyph_width) / 2 - (font->width / 2);
-                        draw_char(&pos, 0xfffd, text_color);
+                    } else if (grapheme_codepoints->len > 1 || uch > 0x7f) {
+                        // render codepoints.
+
+                        // TODO: handle multi-codepoint graphemes
+
+                        // auto pos = cur_pos;
+                        // pos.x += (font->width * glyph_width) / 2 - (font->width / 2);
+                        // draw_char(&pos, 0xfffd, text_color);
 
                         cur_pos.x += font->width * glyph_width;
                     } else {

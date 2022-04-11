@@ -313,7 +313,7 @@ struct World {
 
     Go_Indexer indexer;
 
-    Font font;
+    Old_Font font;
 
     Nvim nvim;
     bool use_nvim;

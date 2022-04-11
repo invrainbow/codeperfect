@@ -9,7 +9,15 @@ CFLAGS += -Itree-sitter
 LDFLAGS = -ldl -framework OpenGL -framework Cocoa -framework IOKit
 LDFLAGS += -framework CoreFoundation -framework Security  # for go
 LDFLAGS += $(shell $(BREW_ARM) --prefix pcre)/lib/libpcre.a
+# LDFLAGS += $(shell $(BREW_ARM) --prefix harfbuzz)/lib/libharfbuzz.a
+
+LDFLAGS += -L/opt/homebrew/Cellar/harfbuzz/4.2.0/lib -lharfbuzz
+
 LDFLAGS += obj/gohelper.arm64.a
+
+# LDFLAGS += $(shell $(BREW_ARM) --prefix fontconfig)/lib/libfontconfig.a
+# LDFLAGS += $(shell $(BREW_ARM) --prefix freetype2)/lib/libfreetype.a
+LDFLAGS += -L/opt/homebrew/Cellar/fontconfig/2.14.0/lib -L/opt/homebrew/opt/freetype/lib -lfontconfig -lfreetype
 
 GOFLAGS =
 
@@ -18,6 +26,8 @@ ifeq (${RELEASE}, 1)
 	CFLAGS += -DRELEASE_MODE -O3
 	GOFLAGS += -ldflags "-s -w"
 	LDFLAGS += $(shell $(BREW_X64) --prefix pcre)/lib/libpcre.a
+	LDFLAGS += $(shell $(BREW_X64) --prefix harfbuzz)/lib/libharfbuzz.a
+	LDFLAGS += $(shell $(BREW_X64) --prefix fontconfig)/lib/libfontconfig.a
 	LDFLAGS += obj/gohelper.x64.a
 else
 	CFLAGS += -DDEBUG_MODE -g -O0
