@@ -288,7 +288,7 @@ bool list_directory(ccstr folder, list_directory_cb cb) {
 
         Dir_Entry info;
         info.type = (find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ? DIRENT_DIR : DIRENT_FILE);
-        strcpy_safe_fixed(info.name, filename);
+        cp_strcpy_fixed(info.name, filename);
 
         if (!cb(&info)) break;
     } while (FindNextFileW(find, &find_data));
@@ -445,7 +445,7 @@ bool let_user_select_file(Select_File_Opts* opts) {
     if (FAILED(item->GetDisplayName(SIGDN_FILESYSPATH, &wpath))) return false;
     defer { CoTaskMemFree(wpath); };
 
-    strcpy_safe(opts->buf, opts->bufsize, to_utf8(wpath));
+    cp_strcpy(opts->buf, opts->bufsize, to_utf8(wpath));
     return true;
 }
 
@@ -611,7 +611,7 @@ bool Fs_Watcher::next_event(Fs_Event *event) {
     auto info = (FILE_NOTIFY_INFORMATION*)((u8*)buf + offset);
 
     ptr0(event);
-    strcpy_safe(
+    cp_strcpy(
         event->filepath,
         _countof(event->filepath),
         to_utf8(info->FileName, info->FileNameLength / sizeof(WCHAR)),

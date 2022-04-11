@@ -6,7 +6,7 @@
 #include "hash.hpp"
 
 ccstr cp_format_json(ccstr s);
-ccstr cp_strcpy(ccstr s);
+ccstr cp_strdup(ccstr s);
 ccstr cp_strncpy(ccstr s, int n);
 ccstr cp_dirname(ccstr path);
 ccstr cp_basename(ccstr path);
@@ -14,10 +14,10 @@ ccstr cp_vsprintf(ccstr fmt, va_list args);
 ccstr cp_sprintf(ccstr fmt, ...);
 ccstr cp_strcat(ccstr a, ccstr b);
 
-bool strcpy_safe(cstr buf, s32 count, ccstr src);
+bool cp_strcpy(cstr buf, s32 count, ccstr src);
 ccstr str_replace(ccstr s, ccstr find, ccstr replace);
 
-#define strcpy_safe_fixed(x, y) strcpy_safe(x, _countof(x), y)
+#define cp_strcpy_fixed(x, y) cp_strcpy(x, _countof(x), y)
 
 struct Text_Renderer {
     List<char> chars;

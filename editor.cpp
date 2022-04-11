@@ -1067,7 +1067,7 @@ bool Editor::load_file(ccstr new_filepath) {
         if (!path)
             return error("unable to normalize filepath"), false;
 
-        strcpy_safe_fixed(filepath, path);
+        cp_strcpy_fixed(filepath, path);
 
         auto fm = map_file_into_memory(filepath);
         if (!fm) {
@@ -1680,7 +1680,7 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
             // copy ac over to autocomplete.ac
             memcpy(&autocomplete.ac, &ac, sizeof(Autocomplete));
             autocomplete.filtered_results = alloc_list<int>();
-            autocomplete.ac.prefix = cp_strcpy(ac.prefix);
+            autocomplete.ac.prefix = cp_strdup(ac.prefix);
             autocomplete.ac.results = new_results;
         }
     }
@@ -1691,7 +1691,7 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
         defer { ind.release_lock(IND_READING); };
 
         // only needs to live for duration of function
-        wksp_import_path = cp_strcpy(ind.index.current_import_path);
+        wksp_import_path = cp_strdup(ind.index.current_import_path);
     }
 
     {
@@ -2433,7 +2433,7 @@ void Editor::handle_save(bool about_to_close) {
         opts.bufsize = _countof(filepath);
         opts.folder = false;
         opts.save = true;
-        opts.starting_folder = cp_strcpy(world.current_path);
+        opts.starting_folder = cp_strdup(world.current_path);
         if (!let_user_select_file(&opts)) return;
 
         if (!path_has_descendant(world.current_path, filepath)) {
@@ -2502,7 +2502,7 @@ void Editor::handle_save(bool about_to_close) {
         if (!child_exists) {
             add_ft_node(node, [&](auto child) {
                 child->is_directory = false;
-                child->name = cp_strcpy(filename);
+                child->name = cp_strdup(filename);
             });
         }
     }
