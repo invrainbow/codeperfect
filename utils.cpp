@@ -10,7 +10,7 @@
 #include <libgen.h>
 #endif
 
-bool strcpy_safe(cstr buf, s32 count, ccstr src) {
+bool cp_strcpy(cstr buf, s32 count, ccstr src) {
     auto len = strlen(src);
     if (count < len + 1) return false;
     strncpy(buf, src, len + 1);
@@ -38,7 +38,7 @@ ccstr cp_format_json(ccstr s) {
     return r.finish();
 }
 
-ccstr cp_strcpy(ccstr s) {
+ccstr cp_strdup(ccstr s) {
     if (!s) return NULL;
 
     auto len = strlen(s);
@@ -59,7 +59,7 @@ ccstr cp_strncpy(ccstr s, int n) {
 // why isn't this in os.hpp, btw? (along with cp_basename)
 ccstr _our_dirname(ccstr path) {
 #if OS_WIN
-    auto s = (char*)cp_strcpy(path);
+    auto s = (char*)cp_strdup(path);
     auto len = strlen(s);
     if (is_sep(s[len-1]))
         s[len-1] = '\0';
@@ -72,7 +72,7 @@ ccstr _our_dirname(ccstr path) {
     // dirname might overwrite mem we pass it
     // and also it might return pointer to statically allocated mem
     // so just send it a copy and copy what it gives us
-    return cp_strcpy(dirname((char*)cp_strcpy(path)));
+    return cp_strdup(dirname((char*)cp_strdup(path)));
 #endif
 }
 
@@ -84,12 +84,12 @@ ccstr cp_dirname(ccstr path) {
 
 ccstr cp_basename(ccstr path) {
 #if OS_WIN
-    auto ret = (cstr)cp_strcpy(path);
+    auto ret = (cstr)cp_strdup(path);
     PathStripPathA(ret);
     return (ccstr)ret;
 #elif OS_MAC
-    auto ret = cp_strcpy(path);
-    return cp_strcpy(basename((char*)ret));
+    auto ret = cp_strdup(path);
+    return cp_strdup(basename((char*)ret));
 #endif
 }
 

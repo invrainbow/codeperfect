@@ -158,7 +158,7 @@ void Searcher::search_worker() {
         ccstr final_filepath = NULL;
         {
             SCOPED_MEM(&final_mem);
-            final_filepath = cp_strcpy(filepath);
+            final_filepath = cp_strdup(filepath);
         }
 
         auto editor = find_editor_by_filepath(final_filepath);
@@ -303,7 +303,7 @@ bool Searcher::start_search(ccstr _query, Search_Opts *_opts) {
     state = SEARCH_SEARCH_IN_PROGRESS;
     opts = *_opts;
 
-    query = cp_strcpy(_query);
+    query = cp_strdup(_query);
     qlen = strlen(query);
 
     file_queue.init();
@@ -413,7 +413,7 @@ bool Searcher::start_search(ccstr _query, Search_Opts *_opts) {
 
 bool Searcher::start_replace(ccstr _replace_with) {
     SCOPED_MEM(&mem);
-    replace_with = cp_strcpy(_replace_with);
+    replace_with = cp_strdup(_replace_with);
 
     auto fun = [](void *param) {
         auto s = (Searcher*)param;

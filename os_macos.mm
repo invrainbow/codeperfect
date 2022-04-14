@@ -147,7 +147,7 @@ bool let_user_select_file(Select_File_Opts* opts) {
 
         if (pathlen + 1 > opts->bufsize) return false;
 
-        strcpy_safe(opts->buf, opts->bufsize, pathstr);
+        cp_strcpy(opts->buf, opts->bufsize, pathstr);
         return true;
     }
 }
