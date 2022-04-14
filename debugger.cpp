@@ -968,8 +968,8 @@ bool Debugger::start(Debug_Profile *debug_profile) {
                 cmd = cp_sprintf("%s test -c %s -o %s --gcflags=\"all=-N -l\"", world.go_binary_path, package_path, binary_name);
 
             Build_Profile build_profile; ptr0(&build_profile);
-            strcpy_safe_fixed(build_profile.label, "temp");
-            strcpy_safe_fixed(build_profile.cmd, cmd);
+            cp_strcpy_fixed(build_profile.label, "temp");
+            cp_strcpy_fixed(build_profile.cmd, cmd);
 
             world.error_list.show = true;
             world.error_list.cmd_focus = true;
@@ -1011,7 +1011,7 @@ bool Debugger::start(Debug_Profile *debug_profile) {
     {
         auto path = GHGetDelvePath();
         if (path) {
-            delve_path = cp_strcpy(path);
+            delve_path = cp_strdup(path);
             defer { GHFree(path); };
         }
     }
@@ -1117,8 +1117,8 @@ bool Debugger::start(Debug_Profile *debug_profile) {
 void Debugger::send_tell_user(ccstr text, ccstr title) {
     world.message_queue.add([&](auto msg) {
         msg->type = MTM_TELL_USER;
-        msg->tell_user_text = cp_strcpy(text);
-        msg->tell_user_title = cp_strcpy(title);
+        msg->tell_user_text = cp_strdup(text);
+        msg->tell_user_title = cp_strdup(title);
     });
 }
 
@@ -1141,7 +1141,7 @@ void Debugger::pipe_stdout_into_our_buffer() {
             stdout_line_buffer.append('\0');
             {
                 SCOPED_MEM(&stdout_mem);
-                stdout_lines.append(cp_strcpy(stdout_line_buffer.items));
+                stdout_lines.append(cp_strdup(stdout_line_buffer.items));
                 world.wnd_debug_output.cmd_scroll_to_end = true;
             }
             stdout_line_buffer.len = 0;
@@ -1205,7 +1205,7 @@ void Debugger::select_frame(u32 goroutine_id, u32 frame) {
     if (!exiting) {
         world.message_queue.add([&](auto msg) {
             msg->type = MTM_GOTO_FILEPOS;
-            msg->goto_file = cp_strcpy(dlvframe->filepath);
+            msg->goto_file = cp_strdup(dlvframe->filepath);
             msg->goto_pos = new_cur2((i32)0, (i32)dlvframe->lineno - 1);
         });
     }
@@ -1234,8 +1234,8 @@ void Debugger::do_everything() {
 
                     {
                         SCOPED_MEM(&watches_mem);
-                        strcpy_safe_fixed(watch->expr, args.expression);
-                        strcpy_safe_fixed(watch->expr_tmp, args.expression);
+                        cp_strcpy_fixed(watch->expr, args.expression);
+                        cp_strcpy_fixed(watch->expr_tmp, args.expression);
                     }
 
                     if (state_flag == DLV_STATE_PAUSED)
@@ -1254,8 +1254,8 @@ void Debugger::do_everything() {
 
                     {
                         SCOPED_MEM(&watches_mem);
-                        strcpy_safe_fixed(watch->expr, args.expression);
-                        strcpy_safe_fixed(watch->expr_tmp, args.expression);
+                        cp_strcpy_fixed(watch->expr, args.expression);
+                        cp_strcpy_fixed(watch->expr_tmp, args.expression);
                     }
 
                     if (state_flag == DLV_STATE_PAUSED)
@@ -1460,7 +1460,7 @@ void Debugger::do_everything() {
                         Client_Breakpoint b;
                         {
                             SCOPED_MEM(&breakpoints_mem);
-                            b.file = cp_strcpy(args.filename);
+                            b.file = cp_strdup(args.filename);
                         }
                         b.line = args.lineno;
                         b.pending = true;

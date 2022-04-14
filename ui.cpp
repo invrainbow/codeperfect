@@ -1119,7 +1119,7 @@ void UI::draw_debugger_var(Draw_Debugger_Var_Args *args) {
                 if (changed || ImGui::IsItemDeactivated()) {
                     if (watch->expr_tmp[0] != '\0') {
                         world.dbg.push_call(DLVC_EDIT_WATCH, [&](auto it) {
-                            it->edit_watch.expression = cp_strcpy(watch->expr_tmp);
+                            it->edit_watch.expression = cp_strdup(watch->expr_tmp);
                             it->edit_watch.watch_idx = args->watch_index;
                         });
                     } else {
@@ -1667,7 +1667,7 @@ void UI::draw_debugger() {
                     if (changed || ImGui::IsItemDeactivated())
                         if (world.wnd_debugger.new_watch_buf[0] != '\0') {
                             dbg.push_call(DLVC_CREATE_WATCH, [&](auto it) {
-                                it->create_watch.expression = cp_strcpy(world.wnd_debugger.new_watch_buf);
+                                it->create_watch.expression = cp_strdup(world.wnd_debugger.new_watch_buf);
                             });
                             world.wnd_debugger.new_watch_buf[0] = '\0';
                         }
@@ -1704,8 +1704,8 @@ void open_rename(FT_Node *target) {
     wnd.show = true;
     wnd.target = target;
 
-    strcpy_safe_fixed(wnd.location, ft_node_to_path(target));
-    strcpy_safe_fixed(wnd.name, target->name);
+    cp_strcpy_fixed(wnd.location, ft_node_to_path(target));
+    cp_strcpy_fixed(wnd.name, target->name);
 }
 
 void UI::imgui_small_newline() {
@@ -2905,8 +2905,8 @@ void UI::draw_everything() {
                 break;
             }
 
-            strcpy_safe_fixed(auth.reg_email, wnd.email);
-            strcpy_safe_fixed(auth.reg_license, wnd.license);
+            cp_strcpy_fixed(auth.reg_email, wnd.email);
+            cp_strcpy_fixed(auth.reg_license, wnd.license);
             auth.reg_email_len = email_len;
             auth.reg_license_len = license_len;
             write_auth();
@@ -3163,7 +3163,7 @@ void UI::draw_everything() {
                 auto destnode = wnd.location_is_root ? world.file_tree : find_ft_node(wnd.location);
                 add_ft_node(destnode, [&](auto child) {
                     child->is_directory = wnd.folder;
-                    child->name = cp_strcpy(wnd.name);
+                    child->name = cp_strdup(wnd.name);
                 });
 
                 if (!wnd.folder) {
@@ -3613,7 +3613,7 @@ void UI::draw_everything() {
                             Debug_Profile prof; ptr0(&prof);
                             prof.type = DEBUG_TEST_PACKAGE;
                             prof.is_builtin = false;
-                            strcpy_safe_fixed(prof.label, "New Profile");
+                            cp_strcpy_fixed(prof.label, "New Profile");
                             prof.test_package.package_path[0] = '\0';
                             prof.test_package.use_current_package = true;
 
@@ -3776,8 +3776,8 @@ void UI::draw_everything() {
                     begin_profiles_buttons_child(); {
                         if (imgui_icon_button(ICON_MD_ADD)) {
                             Build_Profile prof; ptr0(&prof);
-                            strcpy_safe_fixed(prof.label, "New Profile");
-                            strcpy_safe_fixed(prof.cmd, "go build");
+                            cp_strcpy_fixed(prof.label, "New Profile");
+                            cp_strcpy_fixed(prof.cmd, "go build");
 
                             {
                                 SCOPED_MEM(&wnd.pool);
@@ -4680,7 +4680,7 @@ void UI::draw_everything() {
             Ast_Node node; ptr0(&node);
             node.init(ts_tree_root_node(tree), &it);
 
-            current_render_godecl_filepath = cp_strcpy(editor->filepath);
+            current_render_godecl_filepath = cp_strdup(editor->filepath);
 
             FOR_NODE_CHILDREN (&node) {
                 switch (it->type()) {
@@ -5956,7 +5956,7 @@ void UI::end_frame() {
                         draw_string(pos, type_str, rgba(color, 0.5));
                         pos.x += font->width * strlen(type_str);
 
-                        auto str = (cstr)cp_strcpy(result.name);
+                        auto str = (cstr)cp_strdup(result.name);
                         if (strlen(str) > AUTOCOMPLETE_TRUNCATE_LENGTH)
                             str = (cstr)cp_sprintf("%.*s...", AUTOCOMPLETE_TRUNCATE_LENGTH, str);
 

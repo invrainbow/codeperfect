@@ -32,7 +32,7 @@ u32 get_normalized_path(ccstr path, char *buf, u32 len) {
     auto retlen = strlen(ret);
 
     if (!len) return retlen + 1;
-    if (!strcpy_safe(buf, len, ret)) return 0;
+    if (!cp_strcpy(buf, len, ret)) return 0;
 
     return retlen;
 }
@@ -187,7 +187,7 @@ bool list_directory(ccstr folder, list_directory_cb cb) {
 
         Dir_Entry info;
         info.type = (ent->d_type == DT_DIR ? DIRENT_DIR : DIRENT_FILE);
-        strcpy_safe_fixed(info.name, ent->d_name);
+        cp_strcpy_fixed(info.name, ent->d_name);
         cb(&info);
     }
 
@@ -310,7 +310,7 @@ bool let_user_select_file(Select_File_Opts* opts) {
     if (!filename) return false;
     defer { g_free(filename); };
 
-    strcpy_safe(opts->buf, opts->bufsize, filename);
+    cp_strcpy(opts->buf, opts->bufsize, filename);
     return true;
 }
 
