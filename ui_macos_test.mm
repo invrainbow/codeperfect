@@ -7,6 +7,23 @@
 #include "defer.hpp"
 #include <fontconfig/fontconfig.h>
 
+char* parse_hex(ccstr s) {
+    int len = strlen(s);
+    auto ret = alloc_array(char, len/2+1);
+    int i = 0, j = 0;
+
+    for (; i<len; i += 2) {
+        while (isspace(s[i]) && i<len) i++;
+        if (i>=len) break;
+
+        char tmp[3] = { s[i+0], s[i+1], 0 };
+        ret[j++] = (char)strtol(tmp, NULL, 16);
+    }
+
+    ret[j] = 0;
+    return ret;
+}
+
 ccstr big_string =
     u8"ㄅㄆㄇㄈㄉㄊㄋㄌㄍㄎㄏㄐㄑㄒㄓㄔㄕㄖㄗㄘㄙㄚㄛㄜㄝㄞㄟㄠㄡㄢㄣㄤ"
     u8"ㄥㄦㄧㄨㄩㄪㄫㄬㄭㄮㄯㆠㆡㆢㆣㆤㆥㆦㆧㆨㆩㆪㆫㆬㆭㆮㆯㆰㆱㆲㆳㆴ"

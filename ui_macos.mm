@@ -53,21 +53,32 @@ List<ccstr> *get_font_cascade(ccstr language) {
     }
 }
 
+Font* UI::acquire_font(ccstr name) {
+    bool found = false;
+    auto font = font_table.get(name, &found);
+    if (found) return font;
+
+    SCOPED_MEM(&ui_mem);
+    Frame frame;
+
+    font = alloc_object(Font);
+    if (!font->init(name, CODE_FONT_SIZE)) {
+        frame.restore();
+        error("unable to acquire font: %s", name);
+        return NULL;
+    }
+
+    font_table.set(name, font);
+    return font;
+}
+
 bool UI::init_fonts() {
-    auto font = alloc_object(Font);
-    if (!font->init("Menlo", CODE_FONT_SIZE)) return false;
+    // menlo has to succeed, or we literally don't have a font to use
+    base_code_font = acquire_font("Menlo");
+    if (!base_code_font) return false;
 
-    auto head = font;
-    auto curr = font;
-
-    auto add_font = [&](ccstr name) -> bool {
-        auto next = alloc_object(Font);
-        if (!next->init(name, CODE_FONT_SIZE)) return false;
-
-        curr->next_fallback = next;
-        curr = next;
-        return true;
-    };
+    // load some fallbacks
+    acquire_font("Apple Symbols");
 
     CFStringRef langs[1] = { CFSTR("en") };
     auto cf_langs = CFArrayCreate(NULL, (const void**)langs, 1, NULL);
@@ -79,13 +90,10 @@ bool UI::init_fonts() {
 
         auto cname = cfstring_to_ccstr(name);
         if (cname[0] == '.') continue;
-
-        if (!add_font(cname)) return false;
+        acquire_font(cname);
     }
+    acquire_font("Apple Symbols");
 
-    if (!add_font("Apple Symbols")) return false;
-
-    font_list = head;
     return true;
 }
 
@@ -111,7 +119,7 @@ void Font::cleanup() {
     }
 }
 
-void* Font::draw_grapheme(List<uchar> codepoints_comprising_a_grapheme, s32 *psize) {
+Rendered_Grapheme* Font::get_glyphs(List<uchar> codepoints_comprising_a_grapheme) {
     List<char> utf8_chars;
     char tmp[4];
 
@@ -180,11 +188,13 @@ void* Font::draw_grapheme(List<uchar> codepoints_comprising_a_grapheme, s32 *psi
         cur_y += glyph_pos[i].y_advance;
     }
 
-    auto device = CGColorSpaceCreateDeviceRGB();
+    auto device = CGColorSpaceCreateDeviceGray();
     if (!device) return NULL;
     defer { CGColorSpaceRelease(device); };
 
-    auto context = CGBitmapContextCreate(NULL, total_w, total_h, 8, total_w * 4, device, kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Host);
+    auto bitmap_buffer = alloc_array(char, total_w * total_h);
+
+    auto context = CGBitmapContextCreate(bitmap_buffer, total_w, total_h, 8, total_w, device, kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Host);
     if (!context) return NULL;
     defer { CGContextRelease(context); };
 
@@ -193,10 +203,7 @@ void* Font::draw_grapheme(List<uchar> codepoints_comprising_a_grapheme, s32 *psi
     auto rect = CGRectMake(0, 0, total_w, total_h);
     CGContextFillRect(context, rect);
 
-    if (opts.use_thin_strokes) {
-        // TODO: CGContextSetFontSmoothingStyle(context, 16);
-    }
-
+    // TODO: CGContextSetFontSmoothingStyle(context, 16);
     CGContextSetAllowsFontSmoothing(context, true);
     CGContextSetShouldSmoothFonts(context, true);
     CGContextSetAllowsFontSubpixelQuantization(context, true);
@@ -230,172 +237,10 @@ void* Font::draw_grapheme(List<uchar> codepoints_comprising_a_grapheme, s32 *psi
         cur_x += glyph_pos[i].x_advance;
     }
 
-    auto pixels = CGBitmapContextGetData(context);
-
-    let rasterized_pixels = cg_context.data().to_vec();
-
-    let buffer = if is_colored {
-        BitmapBuffer::Rgba(byte_order::extract_rgba(&rasterized_pixels))
-    } else {
-        BitmapBuffer::Rgb(byte_order::extract_rgb(&rasterized_pixels))
-    };
-
-    RasterizedGlyph {
-        character,
-        left: rasterized_left,
-        top: (bounds.size.height + bounds.origin.y).ceil() as i32,
-        width: rasterized_width as i32, height: rasterized_height as i32,
-        buffer,
-    }
-    */
-
-    /*
-    auto utf16_codepoints = alloc_list<unichar>();
-
-    For (codepoints_comprising_a_grapheme) {
-        // uchar -> utf-8
-        char buf[4+1];
-        auto nchars = uchar_to_cstr(it, buf);
-        buf[nchars] = '\0';
-
-        // utf-8 -> utf-16
-        auto nsstr = [NSString stringWithUTF8String:buf];
-        auto utf16chars = alloc_array(unichar, nsstr.length);
-        [nsstr getCharacters:utf16chars range:NSMakeRange(0, nsstr.length)];
-
-        // get glyph indexes
-        auto glyph_indexes = alloc_array(CGGlyph, nsstr.length);
-        if (!CTFontGetGlyphsForCharacters((CTFontRef)ctfont, utf16chars, glyph_indexes, nchars)) return NULL;
-
-        for (int i = 0; i < nsstr.length; i++) {
-
-        }
-
-        // ???
-    }
-    */
-
-    return NULL;
-
-    /*
-
-    auto bounds = CTFontGetBoundingRectsForGlyphs(
-        (CTFontRef)ctfont,
-        kCTFontDefaultOrientation,
-        glyphs,
-        NULL,
-        glyphs.len
-
-
-        self.as_concrete_TypeRef(),
-                                            orientation,
-                                            glyphs.as_ptr(),
-                                            ptr::null_mut(),
-                                            glyphs.len() as CFIndex)
-
-    let bounds = self
-        .ct_font
-        .get_bounding_rects_for_glyphs(CTFontOrientation::default(), &[glyph_index as CGGlyph]);
-
-    let rasterized_left = bounds.origin.x.floor() as i32;
-    let rasterized_width =
-        (bounds.origin.x - f64::from(rasterized_left) + bounds.size.width).ceil() as u32;
-    let rasterized_descent = (-bounds.origin.y).ceil() as i32;
-    let rasterized_ascent = (bounds.size.height + bounds.origin.y).ceil() as i32;
-    let rasterized_height = (rasterized_descent + rasterized_ascent) as u32;
-
-    if rasterized_width == 0 || rasterized_height == 0 {
-        return RasterizedGlyph {
-            character: ' ',
-            width: 0,
-            height: 0,
-            top: 0,
-            left: 0,
-            buffer: BitmapBuffer::Rgb(Vec::new()),
-        };
-    }
-
-    let mut cg_context = CGContext::create_bitmap_context(
-        None,
-        rasterized_width as usize, rasterized_height as usize,
-        8, // bits per component
-        rasterized_width as usize * 4,
-        &CGColorSpace::create_device_rgb(),
-        kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Host,
-    );
-
-    let is_colored = self.is_colored();
-
-    // Set background color for graphics context.
-    let bg_a = if is_colored { 0.0 } else { 1.0 };
-    cg_context.set_rgb_fill_color(0.0, 0.0, 0.0, bg_a);
-
-    let context_rect = CGRect::new(
-        &CGPoint::new(0.0, 0.0),
-        &CGSize::new(f64::from(rasterized_width), f64::from(rasterized_height)),
-    );
-
-    cg_context.fill_rect(context_rect);
-
-    if use_thin_strokes {
-        cg_context.set_font_smoothing_style(16);
-    }
-
-    cg_context.set_allows_font_smoothing(true);
-    cg_context.set_should_smooth_fonts(true);
-    cg_context.set_allows_font_subpixel_quantization(true);
-    cg_context.set_should_subpixel_quantize_fonts(true);
-    cg_context.set_allows_font_subpixel_positioning(true);
-    cg_context.set_should_subpixel_position_fonts(true);
-    cg_context.set_allows_antialiasing(true);
-    cg_context.set_should_antialias(true);
-
-    // Set fill color to white for drawing the glyph.
-    cg_context.set_rgb_fill_color(1.0, 1.0, 1.0, 1.0);
-    let rasterization_origin =
-        CGPoint { x: f64::from(-rasterized_left), y: f64::from(rasterized_descent) };
-
-    self.ct_font.draw_glyphs(
-        &[glyph_index as CGGlyph],
-        &[rasterization_origin],
-        cg_context.clone(),
-    );
-
-    let rasterized_pixels = cg_context.data().to_vec();
-
-    let buffer = if is_colored {
-        BitmapBuffer::Rgba(byte_order::extract_rgba(&rasterized_pixels))
-    } else {
-        BitmapBuffer::Rgb(byte_order::extract_rgb(&rasterized_pixels))
-    };
-
-    RasterizedGlyph {
-        character,
-        left: rasterized_left,
-        top: (bounds.size.height + bounds.origin.y).ceil() as i32,
-        width: rasterized_width as i32, height: rasterized_height as i32,
-        buffer,
-    }
-    */
-}
-
-char* parse_hex(ccstr s) {
-    int len = strlen(s);
-    auto ret = alloc_array(char, len/2+1);
-    int i = 0, j = 0;
-
-    while (i<len) {
-        while (isspace(s[i]) && i<len) i++;
-
-        char lol[3];
-        lol[0] = s[i+0];
-        lol[1] = s[i+1];
-        lol[2] = 0;
-        ret[j++] = (char)strtol(lol, NULL, 16);
-
-        i+=2;
-    }
-
-    ret[j] = 0;
+    auto ret = alloc_object(Rendered_Grapheme);
+    ret->data = bitmap_buffer;
+    ret->data_len = total_w * total_h;
+    ret->width = total_w;
+    ret->height = total_h;
     return ret;
 }

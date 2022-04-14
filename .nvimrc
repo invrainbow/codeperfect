@@ -19,3 +19,5 @@ function ConvertTSEnum()
     %s/__/_/g
     normal ggVGU
 endfunction
+
+autocmd BufRead,BufNewFile *.m,*.mm set cindent

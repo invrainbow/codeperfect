@@ -957,7 +957,26 @@ void UI::draw_bordered_rect_outer(boxf b, vec4f color, vec4f border_color, int b
 }
 
 // advances pos forward
-void UI::draw_char(vec2f* pos, uchar ch, vec4f color) {
+void UI::draw_char(vec2f* pos, List<uchar> *grapheme, vec4f color) {
+    // look up glyph
+    // if the glyph exists, ez, just draw it
+    // otherwise....
+
+    // find the right font for `grapheme`
+    // acquire the font
+    // use the font to get a rendered_grapheme
+    // create a new glyph:
+    //   - attempt to add rendered_grapheme to an atlas
+    //   - save that atlas
+    //   - fill in w/h/x-off/y-off using rendered_grapheme
+    //   - fill in u/v with result of saving to atlas
+    // save glyph in cache
+
+    // regardless of which path we took, we now have a glyph!
+    // draw that motherfucker
+
+    //
+    /*
     stbtt_aligned_quad q;
     stbtt_GetPackedQuad(
         font->char_info, font->tex_size, font->tex_size,
@@ -965,24 +984,32 @@ void UI::draw_char(vec2f* pos, uchar ch, vec4f color) {
         &pos->x, &pos->y, &q, 0
     );
 
+    box, uv, atlas
+
     if (q.x1 > q.x0) {
         boxf box = { q.x0, q.y0, q.x1 - q.x0, q.y1 - q.y0 };
         boxf uv = { q.s0, q.t0, q.s1 - q.s0, q.t1 - q.t0 };
         draw_quad(box, uv, color, DRAW_FONT_MASK);
     }
 
-    /*
-        boxf b;
-        b.pos = *pos;
-        b.w = font->width;
-        b.h = font->height;
-        b.y -= font->offset_y;
-        draw_rect(b, color);
-        pos->x += font->width;
+    boxf b;
+    b.pos = *pos;
+    b.w = font->width;
+    b.h = font->height;
+    b.y -= font->offset_y;
+    draw_rect(b, color);
+    pos->x += font->width;
     */
 }
 
+void UI::draw_char(vec2f* pos, uchar codepoint, vec4f color) {
+    auto grapheme = alloc_list<uchar>();
+    grapheme->append(codepoint);
+    draw_char(pos, grapheme, color);
+}
+
 vec2f UI::draw_string(vec2f pos, ccstr s, vec4f color) {
+    // TODO: handle graphemes
     pos.y += font->offset_y;
 
     Cstr_To_Ustr conv;
@@ -1004,6 +1031,7 @@ vec2f UI::draw_string(vec2f pos, ccstr s, vec4f color) {
 }
 
 float UI::get_text_width(ccstr s) {
+    // TODO: handle graphemes and use wcswidth
     float x = 0, y = 0;
     stbtt_aligned_quad q;
     Cstr_To_Ustr conv;
@@ -6378,4 +6406,19 @@ bool UI::test_hover(boxf area, int id, ImGuiMouseCursor cursor) {
         hover.ready = true;
 
     return hover.ready;
+}
+
+bool Font::init(ccstr font_name, u32 font_size, Font_Options *_opts = NULL) {
+    ptr0(this);
+    name = font_name;
+    height = font_size;
+
+    if (_opts != NULL) memcpy(&opts, _opts, sizeof(Font_Options));
+
+    if (!init_font()) {
+        cleanup();
+        return false;
+    }
+
+    return true;
 }

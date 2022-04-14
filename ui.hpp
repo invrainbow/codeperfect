@@ -155,28 +155,49 @@ struct Atlas {
     */
 };
 
+struct Atlas {
+    int total_width;
+    int total_height;
+
+    cur2 pos;
+    int tallest;
+    int gl_texture_id;
+
+    Atlas *next;
+};
+
 struct Glyph {
-    uchar key;
+    bool single;
+    union {
+        uchar codepoint;
+        List<uchar> *grapheme;
+    };
+
     int w;
     int h;
-    int x;
-    int y;
-    Atlas *atlas; // use an index instead?
+    int x_offset;
+    int y_offset;
+    int u;
+    int v;
+
+    Atlas *atlas; // DANGER: pointer must stay alive
 };
 
 struct Glyph_Cache {
-    uchar key;
+    List<uchar> key;
+
     Glyph glyph;
     UT_hash_handle hh;
 };
 
-struct Font_Options {
-    bool use_thin_strokes;
-    // what else?
+struct Rendered_Grapheme {
+    char *data;
+    u32 height;
+    u32 width;
+    u32 data_len;
 };
 
 struct Font {
-    Font_Options opts;
     i32 height;
 
     // i32 offset_y; // ??
@@ -188,25 +209,10 @@ struct Font {
     Font *next_fallback;
     ccstr name;
 
-    bool init(ccstr font_name, u32 font_size, Font_Options *_opts = NULL) {
-        ptr0(this);
-        name = font_name;
-        height = font_size;
-
-        if (_opts != NULL) memcpy(&opts, _opts, sizeof(Font_Options));
-
-        if (!init_font()) {
-            cleanup();
-            return false;
-        }
-
-        return true;
-    }
-
-    void cleanup();
-
+    bool init(ccstr font_name, u32 font_size);
     bool init_font();
-    void* get_glyphs(List<uchar> codepoints_comprising_a_grapheme, s32 *psize);
+    void cleanup();
+    Rendered_Grapheme* get_glyphs(List<uchar> codepoints_comprising_a_grapheme);
 };
 
 struct UI {
@@ -235,8 +241,9 @@ struct UI {
 
     Atlas *atlases;
     int current_char_texture;
-    Glyph_Cache *cache = NULL;
-    Font *font_list;
+    Font* base_code_font;
+    Table<Font*> font_cache;
+    Glyph_Cache *glyph_cache;
 
     ccstr current_render_godecl_filepath;
 
@@ -255,6 +262,7 @@ struct UI {
     void draw_debugger_var(Draw_Debugger_Var_Args *args);
 
     bool init();
+    Font* acquire_font(ccstr name);
     bool init_fonts();
     void flush_verts();
     void draw_triangle(vec2f a, vec2f b, vec2f c, vec2f uva, vec2f uvb, vec2f uvc, vec4f color, Draw_Mode mode, Texture_Id texture = TEXTURE_FONT);
