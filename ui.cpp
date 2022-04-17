@@ -958,22 +958,44 @@ void UI::draw_bordered_rect_outer(boxf b, vec4f color, vec4f border_color, int b
 
 // advances pos forward
 void UI::draw_char(vec2f* pos, List<uchar> *grapheme, vec4f color) {
+    if (!grapheme->len) return;
+
+    auto utf8_chars = alloc_list<char>();
+    ccstr utf8_str = utf8_chars->items;
+
+    For (*grapheme) {
+        char buf[4];
+        int len = uchar_to_cstr(it, buf);
+        for (int i = 0; i < len; i++)
+            utf8_chars->append(buf[i]);
+    }
+    utf8_chars->append('\0');
+
+    auto glyph = glyph_cache.get(utf8_str);
+    if (!glyph) {
+        SCOPED_MEM(&world.ui_mem);
+
+        glyph = alloc_object(Glyph);
+        // TODO: fill out glyph somehow...
+        glyph_cache.set(utf8_str, glyph);
+    }
+
+    // ???
+
+    // now, item->key & item->glyph can be used
+
     // look up glyph
-    // if the glyph exists, ez, just draw it
-    // otherwise....
-
-    // find the right font for `grapheme`
-    // acquire the font
-    // use the font to get a rendered_grapheme
-    // create a new glyph:
-    //   - attempt to add rendered_grapheme to an atlas
-    //   - save that atlas
-    //   - fill in w/h/x-off/y-off using rendered_grapheme
-    //   - fill in u/v with result of saving to atlas
-    // save glyph in cache
-
-    // regardless of which path we took, we now have a glyph!
-    // draw that motherfucker
+    // if the glyph doesn't exist,
+    //     find the right font for `grapheme`
+    //     acquire the font
+    //     use the font to get a rendered_grapheme
+    //     create a new glyph:
+    //         attempt to add rendered_grapheme to an atlas
+    //         save that atlas
+    //         fill in w/h/x-off/y-off using rendered_grapheme
+    //         fill in u/v with result of saving to atlas
+    //     save glyph in cache
+    // we now have a glyph! draw that motherfucker
 
     //
     /*
@@ -1008,6 +1030,16 @@ void UI::draw_char(vec2f* pos, uchar codepoint, vec4f color) {
     draw_char(pos, grapheme, color);
 }
 
+/*
+ * This is currently used in:
+ *
+ *  Tabs (i.e. filenames).
+ *  Status bar pieces. This is all ascii, mostly predefined.
+ *  Autocomplete.
+ *
+ * There's also parameter hints, which calls draw_char itself, but doesn't currently handle unicode (graphemes, etc.).
+ * We'll want this function to take a unicode string.
+ */
 vec2f UI::draw_string(vec2f pos, ccstr s, vec4f color) {
     // TODO: handle graphemes
     pos.y += font->offset_y;
@@ -6408,12 +6440,10 @@ bool UI::test_hover(boxf area, int id, ImGuiMouseCursor cursor) {
     return hover.ready;
 }
 
-bool Font::init(ccstr font_name, u32 font_size, Font_Options *_opts = NULL) {
+bool Font::init(ccstr font_name, u32 font_size) {
     ptr0(this);
     name = font_name;
     height = font_size;
-
-    if (_opts != NULL) memcpy(&opts, _opts, sizeof(Font_Options));
 
     if (!init_font()) {
         cleanup();

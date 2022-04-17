@@ -140,22 +140,6 @@ struct Pretty_Menu {
 };
 
 struct Atlas {
-    int texture_id;
-    i32 texture_size;
-    Atlas *next;
-
-    /*
-    height = font_size;
-    tex_size = (i32)pow(2.0f, (i32)log2(sqrt((float)height * height * 8 * 8 * 256)) + 1);
-    glActiveTexture(GL_TEXTURE0 + texture_id);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, tex_size, tex_size, 0, GL_RED, GL_UNSIGNED_BYTE, atlas_data);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    */
-};
-
-struct Atlas {
     int total_width;
     int total_height;
 
@@ -164,6 +148,18 @@ struct Atlas {
     int gl_texture_id;
 
     Atlas *next;
+
+    /*
+    i dunno what the fuck this shit is
+
+    height = font_size;
+    tex_size = (i32)pow(2.0f, (i32)log2(sqrt((float)height * height * 8 * 8 * 256)) + 1);
+    glActiveTexture(GL_TEXTURE0 + texture_id);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, tex_size, tex_size, 0, GL_RED, GL_UNSIGNED_BYTE, atlas_data);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    */
 };
 
 struct Glyph {
@@ -183,13 +179,6 @@ struct Glyph {
     Atlas *atlas; // DANGER: pointer must stay alive
 };
 
-struct Glyph_Cache {
-    List<uchar> key;
-
-    Glyph glyph;
-    UT_hash_handle hh;
-};
-
 struct Rendered_Grapheme {
     char *data;
     u32 height;
@@ -206,12 +195,13 @@ struct Font {
     void* ctfont; // CTFontRef
     hb_font_t *hbfont;
 
-    Font *next_fallback;
+    // Font *next_fallback;
     ccstr name;
 
     bool init(ccstr font_name, u32 font_size);
     bool init_font();
     void cleanup();
+    bool can_render_chars(List<uchar> *chars);
     Rendered_Grapheme* get_glyphs(List<uchar> codepoints_comprising_a_grapheme);
 };
 
@@ -242,8 +232,12 @@ struct UI {
     Atlas *atlases;
     int current_char_texture;
     Font* base_code_font;
+    List<ccstr> *all_font_names;
+
+    // we need a way of looking up fonts...
+
     Table<Font*> font_cache;
-    Glyph_Cache *glyph_cache;
+    Table<Glyph*> glyph_cache;
 
     ccstr current_render_godecl_filepath;
 
@@ -270,6 +264,7 @@ struct UI {
     void draw_rect(boxf b, vec4f color);
     void draw_rounded_rect(boxf b, vec4f color, float radius, int round_flags);
     void draw_bordered_rect_outer(boxf b, vec4f color, vec4f border_color, int border_width, float radius = 0);
+    void draw_char(vec2f* pos, List<uchar> *grapheme, vec4f color);
     void draw_char(vec2f* pos, uchar ch, vec4f color);
     vec2f draw_string(vec2f pos, ccstr s, vec4f color);
     float get_text_width(ccstr s);

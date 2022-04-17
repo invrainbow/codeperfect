@@ -885,7 +885,7 @@ void random_macos_tests() {
         auto font = fonts.get(name, &found);
         if (found) return font;
 
-        print("creating new font %s", name);
+        // print("creating new font %s", name);
 
         auto cfname = CFStringCreateWithCString(NULL, name, kCFStringEncodingUTF8);
         font = CTFontCreateWithName(cfname, CTFontGetSize(basefont), NULL);
@@ -919,7 +919,7 @@ void random_macos_tests() {
         auto uncasted_name = CTFontCopyPostScriptName(font);
         defer { CFRelease(uncasted_name); };
 
-        if (CFStringCompare(uncasted_name, CFSTR("LastResort"), 0) == kCFCompareEqualTo) continue;
+        if (!CFStringCompare(uncasted_name, CFSTR("LastResort"), 0)) continue;
 
         all_font_names->append(cfstring_to_ccstr(uncasted_name));
     }
@@ -958,31 +958,19 @@ void random_macos_tests() {
         if (streq(name, "LastResort")) {
             bool found = false;
 
-            For (*all_font_names)
-                if (test_font_char(load_font(it), uch))
+            For (*all_font_names) {
+                if (test_font_char(load_font(it), uch)) {
+                    print("fontcache couldn't find, but found through all_font_names: %s", it);
                     return true;
+                }
+            }
             return false;
         }
 
         return test_font_char(load_font(name), uch);
     };
 
-    auto fallback_fonts = get_font_cascade("en");
-    if (!fallback_fonts) cp_panic("couldn't get fonts");
-
-    auto find_font_for_char_old = [&](uchar uch) {
-        For (*fallback_fonts) {
-            auto font = load_font(it);
-            if (!font) continue;
-            if (test_font_char(font, uch)) return true;
-        }
-        return false;
-    };
-
-    int fails_with_old_method = 0;
-    int fails_with_new_method = 0;
-    int total = 0;
-
+    int fails = 0, total = 0;
     Cstr_To_Ustr conv; conv.init();
     for (int i = 0, len = strlen(big_string); i < len; i++) {
         bool found = false;
@@ -990,14 +978,10 @@ void random_macos_tests() {
         if (!found) continue;
         if (uch < 255) continue;
 
-        if (i % 100 == 0) print("%d/%d", i+1, len);
-
-        if (!find_font_for_char_old(uch)) fails_with_old_method++;
-        if (!find_font_for_char(uch)) fails_with_new_method++;
+        // if (total++ % 100 == 0)  print("%d/%d", i+1, len);
+        if (!find_font_for_char(uch)) fails++;
     }
-
-    print("%d fails with old, %d with new", fails_with_old_method, fails_with_new_method);
-    print("total %d", total);
+    print("failed %d/%d", fails, total);
     exit(0);
 }
 // 3591 fails with old, 1302 with new

@@ -384,5 +384,3 @@ int cpu_count();
 
 int get_unix_time();
 void write_to_syslog(ccstr s);
-
-List<ccstr> *get_font_cascade();

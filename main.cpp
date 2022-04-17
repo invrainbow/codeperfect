@@ -1074,10 +1074,10 @@ int main(int argc, char **argv) {
         return error("window init failed"), EXIT_FAILURE;
 
     {
-        // Pool pool;
-        // pool.init();
-        // SCOPED_MEM(&pool);
-        // random_macos_tests();
+        Pool pool;
+        pool.init();
+        SCOPED_MEM(&pool);
+        random_macos_tests();
     }
 
     Window window;
@@ -1086,10 +1086,6 @@ int main(int argc, char **argv) {
 
     world.init(NULL); // &window);
     SCOPED_MEM(&world.frame_mem);
-
-    // auto fonts = get_font_cascade();
-    // if (fonts == NULL) cp_panic("why???");
-    // For (*fonts) print("font: %s", it);
 
 #ifdef DEBUG_MODE
     GHEnableDebugMode();

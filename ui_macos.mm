@@ -28,37 +28,12 @@ static ccstr cfstring_to_ccstr(CFStringRef s) {
     return ret;
 }
 
-List<ccstr> *get_font_cascade(ccstr language) {
-    @autoreleasepool {
-        auto basefont = CTFontCreateWithName(CFSTR("Menlo"), 12, NULL);
-
-        CFStringRef langs[1] = { CFStringCreateWithCString(NULL, language, kCFStringEncodingUTF8) };
-        auto cf_langs = CFArrayCreate(NULL, (const void**)langs, 1, NULL);
-
-        auto fonts = CTFontCopyDefaultCascadeListForLanguages(basefont, cf_langs);
-
-        auto len = CFArrayGetCount(fonts);
-        auto ret = alloc_list<ccstr>(len);
-
-        for (auto i = 0; i < len; i++) {
-            auto it = (CTFontDescriptorRef)CFArrayGetValueAtIndex(fonts, i);
-            auto name = (CFStringRef)CTFontDescriptorCopyAttribute(it, kCTFontNameAttribute);
-            auto cname = cfstring_to_ccstr(name);
-            if (cname[0] != '.') ret->append(cname);
-        }
-
-        ret->append("Apple Symbols");
-        ret->append("DIN Condensed");
-        return ret;
-    }
-}
-
 Font* UI::acquire_font(ccstr name) {
     bool found = false;
-    auto font = font_table.get(name, &found);
+    auto font = font_cache.get(name, &found);
     if (found) return font;
 
-    SCOPED_MEM(&ui_mem);
+    SCOPED_MEM(&world.ui_mem);
     Frame frame;
 
     font = alloc_object(Font);
@@ -68,7 +43,7 @@ Font* UI::acquire_font(ccstr name) {
         return NULL;
     }
 
-    font_table.set(name, font);
+    font_cache.set(name, font);
     return font;
 }
 
@@ -80,19 +55,29 @@ bool UI::init_fonts() {
     // load some fallbacks
     acquire_font("Apple Symbols");
 
-    CFStringRef langs[1] = { CFSTR("en") };
-    auto cf_langs = CFArrayCreate(NULL, (const void**)langs, 1, NULL);
-    auto fallbacks = CTFontCopyDefaultCascadeListForLanguages((CTFontRef)font->ctfont, cf_langs);
+    // load list of fonts
+    {
+        auto collection = CTFontCollectionCreateFromAvailableFonts(NULL);
+        defer { CFRelease(collection); };
 
-    for (int i = 0, len = CFArrayGetCount(fallbacks); i < len; i++) {
-        auto it = (CTFontDescriptorRef)CFArrayGetValueAtIndex(fallbacks, i);
-        auto name = (CFStringRef)CTFontDescriptorCopyAttribute(it, kCTFontNameAttribute);
+        auto descriptors = CTFontCollectionCreateMatchingFontDescriptors(collection);
+        defer { CFRelease(descriptors); };
 
-        auto cname = cfstring_to_ccstr(name);
-        if (cname[0] == '.') continue;
-        acquire_font(cname);
+        all_font_names = alloc_list<ccstr>(CFArrayGetCount(descriptors));
+        for (int i = 0, count = CFArrayGetCount(descriptors); i < count; i++) {
+            auto it = (CTFontDescriptorRef)CFArrayGetValueAtIndex(descriptors, i);
+
+            auto name = CTFontDescriptorCopyAttribute(it, kCTFontNameAttribute);
+            defer { CFRelease(name); };
+
+            auto cname = cfstring_to_ccstr((CFStringRef)name);
+            if (streq(cname, "LastResort")) continue;
+            if (cname[0] == '.') continue;
+
+            all_font_names->append(cname);
+        }
     }
-    acquire_font("Apple Symbols");
+
 
     return true;
 }
@@ -105,6 +90,26 @@ bool Font::init_font() {
     if (!hbfont) return NULL;
 
     return ctfont != NULL;
+}
+
+bool Font::can_render_chars(List<uchar> *chars) {
+    SCOPED_FRAME();
+
+    // a "unichar" (apple's terminology, not mine) is a utf16 char, unlike our
+    // uchar (utf32)
+    auto unichars = alloc_list<unichar>();
+
+    For (*chars) {
+        unichar buf[2] = {0};
+        auto is_pair = CFStringGetSurrogatePairForLongCharacter(it, buf);
+
+        unichars->append(buf[0]);
+        if (is_pair)
+            unichars->append(buf[1]);
+    }
+
+    auto tmp = alloc_array(CGGlyph, unichars->len);
+    return CTFontGetGlyphsForCharacters((CTFontRef)ctfont, unichars->items, tmp, unichars->len);
 }
 
 void Font::cleanup() {
