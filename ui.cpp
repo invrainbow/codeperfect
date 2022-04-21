@@ -958,6 +958,21 @@ void UI::draw_bordered_rect_outer(boxf b, vec4f color, vec4f border_color, int b
 
 // advances pos forward
 void UI::draw_char(vec2f* pos, List<uchar> *grapheme, vec4f color) {
+    glActiveTexture(GL_TEXTURE0 + TEXTURE_FONT);
+
+    // look up glyph
+    // if the glyph doesn't exist,
+    //     find the right font for `grapheme`
+    //     acquire the font
+    //     use the font to get a rendered_grapheme
+    //     create a new glyph:
+    //         attempt to add rendered_grapheme to an atlas
+    //         save that atlas
+    //         fill in w/h/x-off/y-off using rendered_grapheme
+    //         fill in u/v with result of saving to atlas
+    //     save glyph in cache
+    // we now have a glyph! draw that motherfucker
+
     if (!grapheme->len) return;
 
     auto utf8_chars = alloc_list<char>();
@@ -975,53 +990,90 @@ void UI::draw_char(vec2f* pos, List<uchar> *grapheme, vec4f color) {
     if (!glyph) {
         SCOPED_MEM(&world.ui_mem);
 
+        auto font = find_font_for_grapheme(grapheme);
+        if (!font) return; // TODO: handle error
+
+        auto rend = font->get_glyphs(grapheme);
+        if (!rend) return; // TODO: handle error
+
+        auto box = rend->box;
+        // idk when these would ever happen, but check anyway
+        if (box.w > ATLAS_SIZE) return;
+        if (box.h > ATLAS_SIZE) return;
+
+        auto atlas = atlases_head;
+
+        // reached the end of the row? move back to start
+        if (atlas->pos.x + rend->box.w > ATLAS_SIZE) {
+            atlas->pos.x = 0;
+            atlas->pos.y += atlas->tallest;
+            atlas->tallest = 0;
+        }
+
+        auto xover = atlas->pos.x + rend->box.w > ATLAS_SIZE;
+        auto yover = atlas->pos.y + rend->box.h > ATLAS_SIZE;
+        if (xover || yover) {
+            glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+            GLuint texture_id;
+            glGenTextures(1, &texture_id);
+            glBindTexture(GL_TEXTURE_2D, texture_id);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, ATLAS_SIZE, ATLAS_SIZE, 0, GL_RED, GL_UNSIGNED_BYTE, NULL);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glBindTexture(GL_TEXTURE_2D, 0);
+
+            auto a = alloc_object(Atlas);
+            a->pos = new_cur2(0, 0);
+            a->tallest = 0;
+            a->gl_texture_id = texture_id;
+            a->next = atlases_head;
+            atlas = atlases_head = a;
+        }
+
+        // because of check above, glyph will never be uanble to fit in a fresh atlas
+
+        glBindTexture(GL_TEXTURE_2D, atlas->gl_texture_id);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, atlas->pos.x, atlas->pos.y, box.w, box.h, GL_RED, GL_UNSIGNED_BYTE, rend->data);
+
+        boxf uv;
+        uv.x = (float)atlases_head->pos.x / (float)ATLAS_SIZE;
+        uv.y = (float)atlases_head->pos.y / (float)ATLAS_SIZE;
+        uv.w = (float)box.w / (float)ATLAS_SIZE;
+        uv.h = (float)box.h / (float)ATLAS_SIZE;
+
+        if (box.h > atlas->tallest) atlas->tallest = box.h;
+        atlas->pos.x += box.w;
+
         glyph = alloc_object(Glyph);
-        // TODO: fill out glyph somehow...
+        glyph->single = grapheme->len == 1;
+        if (glyph->single) {
+            glyph->codepoint = grapheme->at(0);
+        } else {
+            auto copy = alloc_list<uchar>();
+            For (*grapheme) copy->append(it);
+            glyph->grapheme = copy;
+        }
+        glyph->box = box;
+        glyph->atlas = atlas;
+        glyph->uv = uv;
+
         glyph_cache.set(utf8_str, glyph);
     }
 
-    // ???
+    if (current_texture_id != glyph->atlas->gl_texture_id) {
+        flush_verts();
 
-    // now, item->key & item->glyph can be used
-
-    // look up glyph
-    // if the glyph doesn't exist,
-    //     find the right font for `grapheme`
-    //     acquire the font
-    //     use the font to get a rendered_grapheme
-    //     create a new glyph:
-    //         attempt to add rendered_grapheme to an atlas
-    //         save that atlas
-    //         fill in w/h/x-off/y-off using rendered_grapheme
-    //         fill in u/v with result of saving to atlas
-    //     save glyph in cache
-    // we now have a glyph! draw that motherfucker
-
-    //
-    /*
-    stbtt_aligned_quad q;
-    stbtt_GetPackedQuad(
-        font->char_info, font->tex_size, font->tex_size,
-        ch == 0xfffd ? _countof(font->char_info) - 1 : ch - ' ',
-        &pos->x, &pos->y, &q, 0
-    );
-
-    box, uv, atlas
-
-    if (q.x1 > q.x0) {
-        boxf box = { q.x0, q.y0, q.x1 - q.x0, q.y1 - q.y0 };
-        boxf uv = { q.s0, q.t0, q.s1 - q.s0, q.t1 - q.t0 };
-        draw_quad(box, uv, color, DRAW_FONT_MASK);
+        glBindTexture(GL_TEXTURE_2D, glyph->atlas->gl_texture_id);
+        current_texture_id = glyph->atlas->gl_texture_id;
     }
 
-    boxf b;
-    b.pos = *pos;
-    b.w = font->width;
-    b.h = font->height;
-    b.y -= font->offset_y;
-    draw_rect(b, color);
-    pos->x += font->width;
-    */
+    boxf box = glyph->box;
+    box.x += pos->x;
+    box.y += pos->y;
+
+    draw_quad(box, glyph->uv, color, DRAW_FONT_MASK);
+    pos->x += glyph->box.w;
 }
 
 void UI::draw_char(vec2f* pos, uchar codepoint, vec4f color) {

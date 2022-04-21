@@ -124,11 +124,61 @@ void Font::cleanup() {
     }
 }
 
-Rendered_Grapheme* Font::get_glyphs(List<uchar> codepoints_comprising_a_grapheme) {
+Font* UI::find_font_for_grapheme(List<uchar> *grapheme) {
+    if (base_code_font->can_render_chars(grapheme))
+        return base_code_font;
+
+    // print("base font failed for %x", uch);
+
+    auto pat = FcPatternCreate();
+    if (!pat) return error("FcPatternCreate failed"), (Font*)NULL;
+    defer { FcPatternDestroy(pat); };
+
+    auto charset = FcCharSetCreate();
+    if (!charset) return error("FcCharSetCreate failed"), (Font*)NULL;
+    defer { FcCharSetDestroy(charset); };
+
+    For (*grapheme)
+        if (!FcCharSetAddChar(charset, it))
+            return error("FcCharSetAddChar failed"), (Font*)NULL;
+
+    if (!FcPatternAddCharSet(pat, FC_CHARSET, charset))
+        return error("FcPatternAddCharSet failed"), (Font*)NULL;
+
+    FcConfigSubstitute(NULL, pat, FcMatchPattern);
+    FcDefaultSubstitute(pat);
+
+    FcResult result;
+    auto match = FcFontMatch(NULL, pat, &result);
+    if (!match) return error("FcFontMatch failed"), (Font*)NULL;
+    defer { FcPatternDestroy(match); };
+
+    FcChar8 *uncasted_name = NULL;
+    if (FcPatternGetString(match, FC_POSTSCRIPT_NAME, 0, &uncasted_name) != FcResultMatch) {
+        error("unable to get postscript name for font");
+        return NULL;
+    }
+
+    auto name = cp_strdup((ccstr)uncasted_name);
+    if (streq(name, "LastResort")) {
+        bool found = false;
+        For (*all_font_names) {
+            auto font = acquire_font(it);
+            if (font->can_render_chars(grapheme))
+                return font;
+        }
+        return NULL;
+    }
+
+    auto font = acquire_font(name);
+    return font->can_render_chars(grapheme) ? font : NULL;
+}
+
+Rendered_Grapheme* Font::get_glyphs(List<uchar> *codepoints_comprising_a_grapheme) {
     List<char> utf8_chars;
     char tmp[4];
 
-    For (codepoints_comprising_a_grapheme) {
+    For (*codepoints_comprising_a_grapheme) {
         int len = uchar_to_cstr(it, tmp);
         for (int i = 0; i < len; i++)
             utf8_chars.append(tmp[i]);
@@ -162,10 +212,13 @@ Rendered_Grapheme* Font::get_glyphs(List<uchar> codepoints_comprising_a_grapheme
     };
 
     auto glyphs = alloc_list<Glyph_Info>();
-    int total_w = 0;
-    int total_h = 0;
     int cur_x = 0;
     int cur_y = 0;
+
+    int top = -1;
+    int left = -1;
+    int bottom = -1;
+    int right = -1;
 
     for (u32 i = 0; i < glyph_count; i++) {
         Glyph_Info gi;
@@ -183,19 +236,32 @@ Rendered_Grapheme* Font::get_glyphs(List<uchar> codepoints_comprising_a_grapheme
 
         glyphs->append(&gi);
 
-        auto right = cur_x + glyph_pos[i].x_offset + gi.ras_w;
-        auto bottom = cur_y + glyph_pos[i].y_offset + gi.ras_h;
+        auto &pos = glyph_pos[i];
 
-        if (right > total_w) total_w = right;
-        if (bottom > total_h) total_h = bottom;
+        if (left == -1 || pos.x_offset < left) left = pos.x_offset;
+        if (top == -1 || pos.y_offset < top) top = pos.y_offset;
 
-        cur_x += glyph_pos[i].x_advance;
-        cur_y += glyph_pos[i].y_advance;
+        auto thisright = cur_x + pos.x_offset + gi.ras_w;
+        auto thisbottom = cur_y + pos.y_offset + gi.ras_h;
+
+        if (right == -1 || thisright > right) right = thisright;
+        if (bottom == -1 || thisbottom > bottom) bottom = thisbottom;
+
+        cur_x += pos.x_advance;
+        cur_y += pos.y_advance;
+    }
+
+    if (top == -1 || left == -1 || bottom == -1 || right == -1) {
+        error("top = %d, left = %d, bottom = %d, right = %d", top, left, bottom, right);
+        return NULL;
     }
 
     auto device = CGColorSpaceCreateDeviceGray();
     if (!device) return NULL;
     defer { CGColorSpaceRelease(device); };
+
+    auto total_w = right - left;
+    auto total_h = bottom - top;
 
     auto bitmap_buffer = alloc_array(char, total_w * total_h);
 
@@ -245,7 +311,9 @@ Rendered_Grapheme* Font::get_glyphs(List<uchar> codepoints_comprising_a_grapheme
     auto ret = alloc_object(Rendered_Grapheme);
     ret->data = bitmap_buffer;
     ret->data_len = total_w * total_h;
-    ret->width = total_w;
-    ret->height = total_h;
+    ret->box.x = left;
+    ret->box.y = top;
+    ret->box.w = right - left;
+    ret->box.h = bottom - top;
     return ret;
 }

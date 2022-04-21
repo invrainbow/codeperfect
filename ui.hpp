@@ -139,10 +139,9 @@ struct Pretty_Menu {
     ImU32 text_color;
 };
 
-struct Atlas {
-    int total_width;
-    int total_height;
+#define ATLAS_SIZE 1024
 
+struct Atlas {
     cur2 pos;
     int tallest;
     int gl_texture_id;
@@ -169,21 +168,16 @@ struct Glyph {
         List<uchar> *grapheme;
     };
 
-    int w;
-    int h;
-    int x_offset;
-    int y_offset;
-    int u;
-    int v;
+    boxf box;
+    boxf uv;
 
     Atlas *atlas; // DANGER: pointer must stay alive
 };
 
 struct Rendered_Grapheme {
     char *data;
-    u32 height;
-    u32 width;
     u32 data_len;
+    boxf box;
 };
 
 struct Font {
@@ -202,7 +196,7 @@ struct Font {
     bool init_font();
     void cleanup();
     bool can_render_chars(List<uchar> *chars);
-    Rendered_Grapheme* get_glyphs(List<uchar> codepoints_comprising_a_grapheme);
+    Rendered_Grapheme* get_glyphs(List<uchar> *codepoints_comprising_a_grapheme);
 };
 
 struct UI {
@@ -229,8 +223,8 @@ struct UI {
     vec2f actual_cursor_positions[16];
     vec2f actual_parameter_hint_start;
 
-    Atlas *atlases;
-    int current_char_texture;
+    Atlas *atlases_head;
+    int current_texture_id;
     Font* base_code_font;
     List<ccstr> *all_font_names;
 
@@ -255,9 +249,11 @@ struct UI {
     ccstr var_value_as_string(Dlv_Var *var);
     void draw_debugger_var(Draw_Debugger_Var_Args *args);
 
-    bool init();
     Font* acquire_font(ccstr name);
+    Font* find_font_for_grapheme(List<uchar> *grapheme);
     bool init_fonts();
+
+    bool init();
     void flush_verts();
     void draw_triangle(vec2f a, vec2f b, vec2f c, vec2f uva, vec2f uvb, vec2f uvc, vec4f color, Draw_Mode mode, Texture_Id texture = TEXTURE_FONT);
     void draw_quad(boxf b, boxf uv, vec4f color, Draw_Mode mode, Texture_Id texture = TEXTURE_FONT);
