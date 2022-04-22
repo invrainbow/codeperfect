@@ -86,19 +86,29 @@ bool UI::init_fonts() {
 }
 
 bool Font::init_font() {
+    auto screen = CGMainDisplayID();
+    auto screensize = CGDisplayScreenSize(screen);
+    auto bounds = CGDisplayBounds(screen);
+
+    BREAK_HERE;
+
     auto cf_font_name = CFStringCreateWithCString(NULL, name, kCFStringEncodingUTF8);
-    ctfont = (void*)CTFontCreateWithName(cf_font_name, (CGFloat)height, NULL);
+
+    CGFloat h = (CGFloat)height;
+    ctfont = (void*)CTFontCreateWithName(cf_font_name, h, NULL);
     if (!ctfont) return false;
 
     hbfont = hb_coretext_font_create((CTFontRef)ctfont);
     if (!hbfont) return false;
 
+    auto _ctfont = (CTFontRef)ctfont;
+
     // get font metrics for monospace fonts
     // fills in width and height of a single character for monospace fonts
     // tests on the char 'A'
     {
-        CGGlyph glyph = (CGGlyph)'A';
-        auto rect = CTFontGetBoundingRectsForGlyphs((CTFontRef)ctfont, kCTFontDefaultOrientation, &glyph, NULL, 1);
+        CGGlyph glyph = (CGGlyph)'a';
+        auto rect = CTFontGetBoundingRectsForGlyphs(_ctfont, kCTFontDefaultOrientation, &glyph, NULL, 1);
 
         auto ras_x = (i32)floor(rect.origin.x);
         auto ras_w = (u32)ceil(rect.origin.x - ras_x + rect.size.width);
@@ -106,10 +116,16 @@ bool Font::init_font() {
         auto ras_asc = (i32)ceil(rect.size.height + rect.origin.y);
         auto ras_h = (u32)(ras_desc + ras_asc); // wait, why don't we just set this to rect.size.height?
 
-        if (!ras_w && !ras_h) { /* TODO? error? */ }
+        CGSize advance;
+        CTFontGetAdvancesForGlyphs(_ctfont, kCTFontDefaultOrientation, &glyph, &advance, 1);
 
-        width = ras_w;
-        height = ras_h;
+        auto units_per_em = CTFontGetUnitsPerEm(_ctfont);
+        auto ascent = CTFontGetAscent(_ctfont);
+        auto descent = CTFontGetDescent(_ctfont);
+
+        auto bounding_box = CTFontGetBoundingBox(_ctfont);
+
+        width = advance.width;
         offset_y = ras_asc;
     }
 

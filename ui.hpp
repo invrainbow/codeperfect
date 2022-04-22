@@ -177,7 +177,7 @@ struct Font {
 
     // only filled in for monospace fonts
     // is offset_y the same for all characters? i assume not?
-    i32 width;
+    double width;
     i32 offset_y;
 
     // Font *next_fallback;
