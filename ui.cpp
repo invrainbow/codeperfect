@@ -72,57 +72,6 @@ ccstr format_key(int mods, int key) {
     return format_key(mods, keystr);
 }
 
-bool Old_Font::init(u8* font_data, u32 font_size, int texture_id) {
-    height = font_size;
-    tex_size = (i32)pow(2.0f, (i32)log2(sqrt((float)height * height * 8 * 8 * 128)) + 1);
-
-    u8* atlas_data = (u8*)cp_malloc(tex_size * tex_size);
-    if (!atlas_data)
-        return false;
-    defer { cp_free(atlas_data); };
-
-    stbtt_pack_context context;
-    if (!stbtt_PackBegin(&context, atlas_data, tex_size, tex_size, 0, 1, NULL)) {
-        error("stbtt_PackBegin failed");
-        return false;
-    }
-
-    // TODO: what does this do?
-    stbtt_PackSetOversampling(&context, 8, 8);
-
-    if (!stbtt_PackFontRange(&context, font_data, 0, (float)height, ' ', '~' - ' ' + 1, char_info)) {
-        error("stbtt_PackFontRange failed");
-        return false;
-    }
-
-    if (!stbtt_PackFontRange(&context, font_data, 0, (float)height, 0xfffd, 1, &char_info[_countof(char_info) - 1])) {
-        error("stbtt_PackFontRange failed");
-        return false;
-    }
-
-    stbtt_PackEnd(&context);
-
-    glActiveTexture(GL_TEXTURE0 + texture_id);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, tex_size, tex_size, 0, GL_RED, GL_UNSIGNED_BYTE, atlas_data);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-    stbtt_fontinfo font;
-    i32 unscaled_advance, junk;
-    float scale;
-
-    stbtt_InitFont(&font, font_data, 0);
-    stbtt_GetCodepointHMetrics(&font, 'A', &unscaled_advance, &junk);
-    stbtt_GetFontVMetrics(&font, &offset_y, NULL, NULL);
-
-    scale = stbtt_ScaleForPixelHeight(&font, (float)height);
-    width = unscaled_advance * scale;
-    offset_y = (int)((float)offset_y * scale);
-
-    return true;
-}
-
 namespace ImGui {
     bool OurBeginPopupContextItem(const char* str_id = NULL, ImGuiPopupFlags popup_flags = 1) {
         ImGuiWindow* window = GImGui->CurrentWindow;
@@ -771,7 +720,6 @@ void UI::render_ts_cursor(TSTreeCursor *curr, cur2 open_cur) {
 
 bool UI::init() {
     ptr0(this);
-    font = &world.font;
 
     Frame frame;
     if (!init_fonts()) {
@@ -1073,6 +1021,8 @@ void UI::draw_char(vec2f* pos, List<uchar> *grapheme, vec4f color) {
     box.y += pos->y;
 
     draw_quad(box, glyph->uv, color, DRAW_FONT_MASK);
+
+    // TODO: wait, shouldn't we add by a multiple of 1 or 2 of base char font? oh well, fix later
     pos->x += glyph->box.w;
 }
 
@@ -1094,49 +1044,49 @@ void UI::draw_char(vec2f* pos, uchar codepoint, vec4f color) {
  */
 vec2f UI::draw_string(vec2f pos, ccstr s, vec4f color) {
     // TODO: handle graphemes
-    pos.y += font->offset_y;
+    pos.y += base_font->offset_y;
 
     Cstr_To_Ustr conv;
     conv.init();
+
+    auto codepoints = alloc_list<uchar>();
 
     for (u32 i = 0, len = strlen(s); i < len; i++) {
         bool found;
         auto uch = conv.feed(s[i], &found);
-        if (found) {
-            if (uch < 0x7f)
-                draw_char(&pos, uch, color);
-            else
-                draw_char(&pos, '?', color);
-        }
+        if (found) codepoints->append(uch);
     }
 
-    pos.y -= font->offset_y;
+    if (!codepoints->len) return pos;
+
+    Grapheme_Clusterer gc; gc.init();
+    int i = 0;
+    auto grapheme = alloc_list<uchar>();
+
+    gc.feed(codepoints->at(0));
+    while (i < codepoints->len) {
+        grapheme->len = 0;
+        do {
+            grapheme->append(codepoints->at(i));
+            i++;
+        } while (i < codepoints->len && !gc.feed(codepoints->at(i)));
+        draw_char(&pos, grapheme, color);
+    }
+
+    pos.y -= base_font->offset_y;
     return pos;
 }
 
+// currently only called to render tabs
 float UI::get_text_width(ccstr s) {
-    // TODO: handle graphemes and use wcswidth
-    float x = 0, y = 0;
-    stbtt_aligned_quad q;
-    Cstr_To_Ustr conv;
-    bool found;
-
-    conv.init();
-    for (u32 i = 0, len = strlen(s); i < len; i++) {
-        auto uch = conv.feed(s[i], &found);
-        if (found) {
-            if (uch > 0x7f) uch = '?';
-            stbtt_GetPackedQuad(font->char_info, font->tex_size, font->tex_size, uch - ' ', &x, &y, &q, 0);
-        }
-    }
-
-    return x;
+    // TODO: handle unicode and graphemes
+    return strlen(s) * base_font->width;
 }
 
 boxf UI::get_status_area() {
     boxf b;
     b.w = world.window_size.x;
-    b.h = font->height + settings.status_padding_y * 2;
+    b.h = base_font->height + settings.status_padding_y * 2;
     b.x = 0;
     b.y = world.window_size.y - b.h;
     return b;
@@ -4360,7 +4310,7 @@ void UI::draw_everything() {
                     if (streq(import_path, ""))
                         import_path = "(root)";
 
-                    int rem_chars = (pm->text_br.x - pm->pos.x) / font->width;
+                    int rem_chars = (pm->text_br.x - pm->pos.x) / base_font->width;
 
                     auto s = import_path;
                     if (strlen(s) > rem_chars)
@@ -4887,7 +4837,7 @@ void UI::draw_everything() {
 
                 area.x += settings.line_number_margin_left;
                 area.x += settings.line_number_margin_right;
-                area.x += world.font.width * get_line_number_width(editor);
+                area.x += ui.base_font->width * get_line_number_width(editor);
 
                 auto im_pos = ImGui::GetIO().MousePos;
                 if (im_pos.x < 0 || im_pos.y < 0)
@@ -4897,13 +4847,13 @@ void UI::draw_everything() {
                 pos.x -= area.x;
                 pos.y -= area.y;
 
-                auto y = view.y + pos.y / (world.font.height * settings.line_height);
+                auto y = view.y + pos.y / (ui.base_font->height * settings.line_height);
                 if (y >= buf->lines.len) {
                     y = buf->lines.len-1;
                     return new_cur2((i32)buf->lines[y].len, (i32)y);
                 }
 
-                auto vx = (int)(pos.x / world.font.width);
+                auto vx = (int)(pos.x / ui.base_font->width);
                 auto x = buf->idx_vcp_to_cp(y, vx);
 
                 return new_cur2((i32)x, (i32)y);
@@ -5023,8 +4973,8 @@ void UI::draw_everything() {
                     dy *= 6;
                     dy += editor->scroll_leftover;
 
-                    editor->scroll_leftover = fmod(dy, font->height);
-                    auto lines = (int)(dy / font->height);
+                    editor->scroll_leftover = fmod(dy, base_font->height);
+                    auto lines = (int)(dy / base_font->height);
 
                     for (int i = 0; i < lines; i++) {
                         if (flip) {
@@ -5050,7 +5000,7 @@ void UI::draw_everything() {
         vec2 tab_padding = { 8, 3 };
 
         boxf tab;
-        tab.pos = tabs_area.pos + new_vec2(2, tabs_area.h - tab_padding.y * 2 - font->height);
+        tab.pos = tabs_area.pos + new_vec2(2, tabs_area.h - tab_padding.y * 2 - base_font->height);
         tab.x -= pane.tabs_offset;
 
         i32 tab_to_remove = -1;
@@ -5110,7 +5060,7 @@ void UI::draw_everything() {
             auto text_width = get_text_width(label);
 
             tab.w = text_width + tab_padding.x * 2;
-            tab.h = font->height + tab_padding.y * 2;
+            tab.h = base_font->height + tab_padding.y * 2;
 
             // Now `tab` is filled out, and I can do my logic to make sure it's visible on screen
             if (tab_id == pane.current_editor) {
@@ -5269,7 +5219,7 @@ void UI::draw_everything() {
             auto &view = editor->view;
 
             vec2f cur_pos = editor_area.pos + new_vec2f(settings.editor_margin_x, settings.editor_margin_y);
-            cur_pos.y += font->offset_y;
+            cur_pos.y += base_font->offset_y;
 
             auto draw_cursor = [&](int chars) {
                 auto muted = (current_pane != world.current_pane);
@@ -5278,14 +5228,14 @@ void UI::draw_everything() {
                 bool is_insert_cursor = !world.use_nvim; // (world.nvim.mode == VI_INSERT && is_pane_selected /* && !world.nvim.exiting_insert_mode */);
 
                 auto pos = cur_pos;
-                pos.y -= font->offset_y;
+                pos.y -= base_font->offset_y;
 
                 boxf b;
                 b.pos = pos;
-                b.h = (float)font->height;
-                b.w = is_insert_cursor ? 2 : ((float)font->width * chars);
+                b.h = (float)base_font->height;
+                b.w = is_insert_cursor ? 2 : ((float)base_font->width * chars);
 
-                auto py = font->height * (settings.line_height - 1.0) / 2;
+                auto py = base_font->height * (settings.line_height - 1.0) / 2;
                 b.y -= py;
                 b.h += py * 2;
 
@@ -5361,11 +5311,11 @@ void UI::draw_everything() {
             auto draw_highlight = [&](vec4f color, int width, bool fullsize = false) {
                 boxf b;
                 b.pos = cur_pos;
-                b.y -= font->offset_y;
-                b.w = font->width * width;
-                b.h = font->height;
+                b.y -= base_font->offset_y;
+                b.w = base_font->width * width;
+                b.h = base_font->height;
 
-                auto py = font->height * (settings.line_height - 1.0) / 2;
+                auto py = base_font->height * (settings.line_height - 1.0) / 2;
                 b.y -= py;
                 b.h += py * 2;
 
@@ -5420,12 +5370,12 @@ void UI::draw_everything() {
 
                 boxf line_box = {
                     cur_pos.x,
-                    cur_pos.y - font->offset_y,
+                    cur_pos.y - base_font->offset_y,
                     (float)editor_area.w,
-                    (float)font->height,
+                    (float)base_font->height,
                 };
 
-                auto py = font->height * (settings.line_height - 1.0) / 2;
+                auto py = base_font->height * (settings.line_height - 1.0) / 2;
                 line_box.y -= py;
                 line_box.h += py * 2;
                 line_box.y++;
@@ -5487,7 +5437,7 @@ void UI::draw_everything() {
                 }
 
                 if (vx_start > view.x)
-                    cur_pos.x += (vx_start - view.x) * font->width;
+                    cur_pos.x += (vx_start - view.x) * base_font->width;
 
                 u32 x = buf->idx_cp_to_byte(y, cp_idx);
                 u32 vx = vx_start;
@@ -5577,19 +5527,9 @@ void UI::draw_everything() {
 
                     uchar uch = curr_cp;
                     if (uch == '\t') {
-                        cur_pos.x += font->width * glyph_width;
-                    } else if (grapheme_codepoints->len > 1 || uch > 0x7f) {
-                        // render codepoints.
-
-                        // TODO: handle multi-codepoint graphemes
-
-                        // auto pos = cur_pos;
-                        // pos.x += (font->width * glyph_width) / 2 - (font->width / 2);
-                        // draw_char(&pos, 0xfffd, text_color);
-
-                        cur_pos.x += font->width * glyph_width;
+                        cur_pos.x += base_font->width * glyph_width;
                     } else {
-                        draw_char(&cur_pos, uch, text_color);
+                        draw_char(&cur_pos, grapheme_codepoints, text_color);
                     }
 
                     vx += glyph_width;
@@ -5622,7 +5562,7 @@ void UI::draw_everything() {
                     draw_cursor(1);
 
                 cur_pos.x = editor_area.x + settings.editor_margin_x;
-                cur_pos.y += font->height * settings.line_height;
+                cur_pos.y += base_font->height * settings.line_height;
             }
         } while (0);
 
@@ -5677,7 +5617,7 @@ void UI::draw_everything() {
             boxf ret; ptr0(&ret);
             ret.y = status_area.y;
             ret.h = status_area.h;
-            ret.w = font->width * strlen(s) + (settings.status_padding_x * 2);
+            ret.w = base_font->width * strlen(s) + (settings.status_padding_x * 2);
 
             if (dir == RIGHT)
                 ret.x = status_area_right - ret.w;
@@ -5946,11 +5886,11 @@ void UI::end_frame() {
 
             if (num_items > 0) {
                 boxf menu;
-                // float preview_width = settings.autocomplete_preview_width_in_chars * font->width;
+                // float preview_width = settings.autocomplete_preview_width_in_chars * base_font->width;
 
                 menu.w = (
                     // options
-                    (font->width * max_len)
+                    (base_font->width * max_len)
                     + (settings.autocomplete_item_padding_x * 2)
                     + (settings.autocomplete_menu_padding * 2)
 
@@ -5960,17 +5900,17 @@ void UI::end_frame() {
                 );
 
                 menu.h = (
-                    (font->height * num_items)
+                    (base_font->height * num_items)
                     + (settings.autocomplete_item_padding_y * 2 * num_items)
                     + (settings.autocomplete_menu_padding * 2)
                 );
 
-                // menu.x = fmin(actual_cursor_position.x - strlen(ac.ac.prefix) * font->width, world.window_size.x - menu.w);
-                // menu.y = fmin(actual_cursor_position.y - font->offset_y + font->height, world.window_size.y - menu.h);
+                // menu.x = fmin(actual_cursor_position.x - strlen(ac.ac.prefix) * base_font->width, world.window_size.x - menu.w);
+                // menu.y = fmin(actual_cursor_position.y - base_font->offset_y + base_font->height, world.window_size.y - menu.h);
 
                 {
-                    auto y1 = actual_cursor_position.y - font->offset_y - settings.autocomplete_menu_margin_y;
-                    auto y2 = actual_cursor_position.y - font->offset_y + (font->height * settings.line_height) + settings.autocomplete_menu_margin_y;
+                    auto y1 = actual_cursor_position.y - base_font->offset_y - settings.autocomplete_menu_margin_y;
+                    auto y2 = actual_cursor_position.y - base_font->offset_y + (base_font->height * settings.line_height) + settings.autocomplete_menu_margin_y;
 
                     if (y2 + menu.h < world.window_size.y) {
                         menu.y = y2;
@@ -5992,7 +5932,7 @@ void UI::end_frame() {
                     if (menu.w > world.window_size.x - 4) // small margin
                         menu.w = world.window_size.x - 4;
 
-                    auto x1 = actual_cursor_position.x - strlen(ac.ac.prefix) * font->width;
+                    auto x1 = actual_cursor_position.x - strlen(ac.ac.prefix) * base_font->width;
                     if (x1 + menu.w + 4 > world.window_size.x) // margin of 4
                         x1 = world.window_size.x - menu.w - 4;
                     menu.x = x1;
@@ -6014,7 +5954,7 @@ void UI::end_frame() {
                     if (i == ac.selection) {
                         boxf b;
                         b.pos = items_pos;
-                        b.h = font->height + (settings.autocomplete_item_padding_y * 2);
+                        b.h = base_font->height + (settings.autocomplete_item_padding_y * 2);
                         b.w = items_area.w - (settings.autocomplete_menu_padding * 2);
                         draw_rounded_rect(b, rgba(global_colors.autocomplete_selection), 4, ROUND_ALL);
                     }
@@ -6078,19 +6018,19 @@ void UI::end_frame() {
 
                         auto type_str = cp_sprintf("(%s) ", get_decl_type());
                         draw_string(pos, type_str, rgba(color, 0.5));
-                        pos.x += font->width * strlen(type_str);
+                        pos.x += base_font->width * strlen(type_str);
 
                         auto str = (cstr)cp_strdup(result.name);
                         if (strlen(str) > AUTOCOMPLETE_TRUNCATE_LENGTH)
                             str = (cstr)cp_sprintf("%.*s...", AUTOCOMPLETE_TRUNCATE_LENGTH, str);
 
                         auto avail_width = items_area.w - settings.autocomplete_item_padding_x * 2;
-                        if (strlen(str) * font->width > avail_width)
-                            str[(int)(avail_width / font->width)] = '\0';
+                        if (strlen(str) * base_font->width > avail_width)
+                            str[(int)(avail_width / base_font->width)] = '\0';
 
                         draw_string(pos, str, rgba(actual_color));
 
-                        text_end = pos.x + strlen(str) * font->width;
+                        text_end = pos.x + strlen(str) * base_font->width;
                     }
 
                     auto render_description = [&]() -> ccstr {
@@ -6188,11 +6128,11 @@ void UI::end_frame() {
 
                         auto pos = items_pos + new_vec2f(settings.autocomplete_item_padding_x, settings.autocomplete_item_padding_y);
                         pos.x += (items_area.w - (settings.autocomplete_item_padding_x*2) - (settings.autocomplete_menu_padding*2));
-                        pos.x -= font->width * desclen;
+                        pos.x -= base_font->width * desclen;
 
                         auto desclimit = desclen;
                         while (pos.x < text_end + 10) {
-                            pos.x += font->width;
+                            pos.x += base_font->width;
                             desclimit--;
                         }
 
@@ -6202,7 +6142,7 @@ void UI::end_frame() {
                         draw_string(pos, desc, rgba(new_vec3f(0.5, 0.5, 0.5)));
                     }
 
-                    items_pos.y += font->height + settings.autocomplete_item_padding_y * 2;
+                    items_pos.y += base_font->height + settings.autocomplete_item_padding_y * 2;
                 }
 
                 // auto preview_padding = settings.autocomplete_preview_padding;
@@ -6328,10 +6268,10 @@ void UI::end_frame() {
             }
 
             boxf bg;
-            bg.w = font->width * strlen(help_text) + settings.parameter_hint_padding_x * 2;
-            bg.h = font->height + settings.parameter_hint_padding_y * 2;
+            bg.w = base_font->width * strlen(help_text) + settings.parameter_hint_padding_x * 2;
+            bg.h = base_font->height + settings.parameter_hint_padding_y * 2;
             bg.x = fmin(actual_parameter_hint_start.x, world.window_size.x - bg.w);
-            bg.y = fmin(actual_parameter_hint_start.y - font->offset_y - bg.h - settings.parameter_hint_margin_y, world.window_size.y - bg.h);
+            bg.y = fmin(actual_parameter_hint_start.y - base_font->offset_y - bg.h - settings.parameter_hint_margin_y, world.window_size.y - bg.h);
 
             draw_bordered_rect_outer(bg, rgba(color_darken(global_colors.background, 0.1), 1.0), rgba(global_colors.white, 0.8), 1, 4);
 
@@ -6339,7 +6279,7 @@ void UI::end_frame() {
             text_pos.x += settings.parameter_hint_padding_x;
             text_pos.y += settings.parameter_hint_padding_y;
 
-            text_pos.y += font->offset_y;
+            text_pos.y += base_font->offset_y;
 
             {
                 u32 len = strlen(help_text);
@@ -6416,7 +6356,7 @@ void UI::recalculate_view_sizes(bool force) {
 
         boxf editor_area;
         get_tabs_and_editor_area(&pane_area, NULL, &editor_area, it.editors.len > 0);
-        editor_area.w -= ((line_number_width * font->width) + settings.line_number_margin_left + settings.line_number_margin_right);
+        editor_area.w -= ((line_number_width * base_font->width) + settings.line_number_margin_left + settings.line_number_margin_right);
         new_sizes->append(editor_area.size);
 
         pane_area.x += pane_area.w;
@@ -6442,8 +6382,8 @@ void UI::recalculate_view_sizes(bool force) {
 
     for (u32 i = 0; i < world.panes.len; i++) {
         for (auto&& editor : world.panes[i].editors) {
-            editor.view.w = (i32)((editor_sizes[i].x - settings.editor_margin_x) / world.font.width);
-            editor.view.h = (i32)((editor_sizes[i].y - settings.editor_margin_y) / world.font.height / settings.line_height);
+            editor.view.w = (i32)((editor_sizes[i].x - settings.editor_margin_x) / ui.base_font->width);
+            editor.view.h = (i32)((editor_sizes[i].y - settings.editor_margin_y) / ui.base_font->height / settings.line_height);
 
             // Previously we called editor.ensure_cursor_on_screen(), but that
             // moves the *cursor* onto the screen. But often when the user

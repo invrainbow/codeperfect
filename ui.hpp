@@ -28,17 +28,6 @@ enum Texture_Id {
     __TEXTURE_COUNT__,
 };
 
-struct Old_Font {
-    stbtt_packedchar char_info['~' - ' ' + 1 + 1];
-
-    i32 tex_size;
-    i32 offset_y;
-    i32 height;
-    float width;
-
-    bool init(u8* font_data, u32 font_size, int texture_id);
-};
-
 struct Vert {
     float x;
     float y;
@@ -181,13 +170,15 @@ struct Rendered_Grapheme {
 };
 
 struct Font {
-    i32 height;
-
-    // i32 offset_y; // ??
-    // float width; // width of a standard char; some chars might take up 2 chars width
-
     void* ctfont; // CTFontRef
     hb_font_t *hbfont;
+
+    i32 height;
+
+    // only filled in for monospace fonts
+    // is offset_y the same for all characters? i assume not?
+    i32 width;
+    i32 offset_y;
 
     // Font *next_fallback;
     ccstr name;
@@ -200,7 +191,6 @@ struct Font {
 };
 
 struct UI {
-    Old_Font *font;
     List<Vert> verts;
 
     vec2f _editor_sizes[MAX_PANES];
@@ -225,7 +215,7 @@ struct UI {
 
     Atlas *atlases_head;
     int current_texture_id;
-    Font* base_code_font;
+    Font* base_font;
     List<ccstr> *all_font_names;
 
     // we need a way of looking up fonts...

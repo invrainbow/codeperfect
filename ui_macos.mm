@@ -49,8 +49,8 @@ Font* UI::acquire_font(ccstr name) {
 
 bool UI::init_fonts() {
     // menlo has to succeed, or we literally don't have a font to use
-    base_code_font = acquire_font("Menlo");
-    if (!base_code_font) return false;
+    base_font = acquire_font("Menlo");
+    if (!base_font) return false;
 
     // load some fallbacks
     acquire_font("Apple Symbols");
@@ -85,11 +85,32 @@ bool UI::init_fonts() {
 bool Font::init_font() {
     auto cf_font_name = CFStringCreateWithCString(NULL, name, kCFStringEncodingUTF8);
     ctfont = (void*)CTFontCreateWithName(cf_font_name, (CGFloat)height, NULL);
+    if (!ctfont) return false;
 
     hbfont = hb_coretext_font_create((CTFontRef)ctfont);
-    if (!hbfont) return NULL;
+    if (!hbfont) return false;
 
-    return ctfont != NULL;
+    // get font metrics for monospace fonts
+    // fills in width and height of a single character for monospace fonts
+    // tests on the char 'A'
+    {
+        CGGlyph glyph = (CGGlyph)'A';
+        auto rect = CTFontGetBoundingRectsForGlyphs((CTFontRef)ctfont, kCTFontDefaultOrientation, &glyph, NULL, 1);
+
+        auto ras_x = (i32)floor(rect.origin.x);
+        auto ras_w = (u32)ceil(rect.origin.x - ras_x + rect.size.width);
+        auto ras_desc = (i32)ceil(-rect.origin.y);
+        auto ras_asc = (i32)ceil(rect.size.height + rect.origin.y);
+        auto ras_h = (u32)(ras_desc + ras_asc); // wait, why don't we just set this to rect.size.height?
+
+        if (!ras_w && !ras_h) { /* TODO? error? */ }
+
+        width = ras_w;
+        height = ras_h;
+        offset_y = ras_asc;
+    }
+
+    return true;
 }
 
 bool Font::can_render_chars(List<uchar> *chars) {
@@ -125,8 +146,8 @@ void Font::cleanup() {
 }
 
 Font* UI::find_font_for_grapheme(List<uchar> *grapheme) {
-    if (base_code_font->can_render_chars(grapheme))
-        return base_code_font;
+    if (base_font->can_render_chars(grapheme))
+        return base_font;
 
     // print("base font failed for %x", uch);
 
@@ -230,7 +251,7 @@ Rendered_Grapheme* Font::get_glyphs(List<uchar> *codepoints_comprising_a_graphem
         gi.ras_w = (u32)ceil(rect.origin.x - gi.ras_x + rect.size.width);
         gi.ras_desc = (i32)ceil(-rect.origin.y);
         gi.ras_asc = (i32)ceil(rect.size.height + rect.origin.y);
-        gi.ras_h = (u32)(gi.ras_desc + gi.ras_asc);
+        gi.ras_h = (u32)(gi.ras_desc + gi.ras_asc); // wait, why don't we just set this to rect.size.height?
 
         if (!gi.ras_w && !gi.ras_h) { /* TODO? just don't append? */ }
 

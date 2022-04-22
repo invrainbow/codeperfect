@@ -1358,8 +1358,10 @@ int main(int argc, char **argv) {
         world.ui.im_font_mono = io.Fonts->AddFontFromMemoryTTF(vera_mono_ttf, vera_mono_ttf_len, CODE_FONT_SIZE);
         cp_assert(world.ui.im_font_mono, "unable to load code font");
 
+        /*
         if (!world.font.init((u8*)vera_mono_ttf, CODE_FONT_SIZE, TEXTURE_FONT))
             cp_panic("unable to load code font");
+        */
 
         io.Fonts->Build();
 
