@@ -1073,18 +1073,20 @@ int main(int argc, char **argv) {
     if (!window_init_everything())
         return error("window init failed"), EXIT_FAILURE;
 
+#if 0
     {
         Pool pool;
         pool.init();
         SCOPED_MEM(&pool);
         random_macos_tests();
     }
+#endif
 
     Window window;
     if (!window.init(1280, 720, WINDOW_TITLE))
         return error("could not create window"), EXIT_FAILURE;
 
-    world.init(NULL); // &window);
+    world.init(&window);
     SCOPED_MEM(&world.frame_mem);
 
 #ifdef DEBUG_MODE

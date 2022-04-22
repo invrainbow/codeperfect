@@ -48,6 +48,9 @@ Font* UI::acquire_font(ccstr name) {
 }
 
 bool UI::init_fonts() {
+    font_cache.init();
+    glyph_cache.init();
+
     // menlo has to succeed, or we literally don't have a font to use
     base_font = acquire_font("Menlo");
     if (!base_font) return false;
@@ -196,22 +199,20 @@ Font* UI::find_font_for_grapheme(List<uchar> *grapheme) {
 }
 
 Rendered_Grapheme* Font::get_glyphs(List<uchar> *codepoints_comprising_a_grapheme) {
-    List<char> utf8_chars;
+    auto utf8_chars = alloc_list<char>();
     char tmp[4];
 
     For (*codepoints_comprising_a_grapheme) {
         int len = uchar_to_cstr(it, tmp);
         for (int i = 0; i < len; i++)
-            utf8_chars.append(tmp[i]);
+            utf8_chars->append(tmp[i]);
     }
-
-    utf8_chars.append('\0');
 
     auto buf = hb_buffer_create();
     if (!buf) return NULL;
     defer { hb_buffer_destroy(buf); };
 
-    hb_buffer_add_utf8(buf, utf8_chars.items, utf8_chars.len, 0, utf8_chars.len);
+    hb_buffer_add_utf8(buf, utf8_chars->items, utf8_chars->len, 0, utf8_chars->len);
     hb_buffer_set_direction(buf, HB_DIRECTION_LTR);
     hb_buffer_set_script(buf, HB_SCRIPT_LATIN);
     hb_buffer_set_language(buf, hb_language_from_string("en", -1));
