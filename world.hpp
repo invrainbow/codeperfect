@@ -294,6 +294,9 @@ struct World {
     vec2f display_scale;
     bool use_nvim_this_time;
 
+    int xdpi;
+    int ydpi;
+
     Auth_To_Disk auth;
     Auth_Extras auth_extras;
     bool auth_error;

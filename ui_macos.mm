@@ -90,12 +90,23 @@ bool Font::init_font() {
     auto screensize = CGDisplayScreenSize(screen);
     auto bounds = CGDisplayBounds(screen);
 
-    BREAK_HERE;
-
     auto cf_font_name = CFStringCreateWithCString(NULL, name, kCFStringEncodingUTF8);
 
-    CGFloat h = (CGFloat)height;
-    ctfont = (void*)CTFontCreateWithName(cf_font_name, h, NULL);
+    CGFloat size = height;
+
+#if 0
+    {
+        float xscale, yscale;
+        world.window->get_content_scale(&xscale, &yscale);
+
+        auto xdpi = xscale * 72.0;
+        auto ydpi = yscale * 72.0;
+
+        size = (xdpi + ydpi) / 144.0 * height;
+    }
+#endif
+
+    ctfont = (void*)CTFontCreateWithName(cf_font_name, size, NULL);
     if (!ctfont) return false;
 
     hbfont = hb_coretext_font_create((CTFontRef)ctfont);
@@ -126,7 +137,7 @@ bool Font::init_font() {
         auto bounding_box = CTFontGetBoundingBox(_ctfont);
 
         width = advance.width;
-        offset_y = ras_asc;
+        offset_y = 0; // ras_asc;
     }
 
     return true;
@@ -303,7 +314,7 @@ Rendered_Grapheme* Font::get_glyphs(List<uchar> *codepoints_comprising_a_graphem
 
     auto bitmap_buffer = alloc_array(char, total_w * total_h);
 
-    auto context = CGBitmapContextCreate(bitmap_buffer, total_w, total_h, 8, total_w, device, kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Host);
+    auto context = CGBitmapContextCreate(bitmap_buffer, total_w, total_h, 8, total_w, device, 0); // kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Host);
     if (!context) return NULL;
     defer { CGContextRelease(context); };
 

@@ -950,17 +950,21 @@ void UI::draw_char(vec2f* pos, List<uchar> *grapheme, vec4f color) {
         if (box.h > ATLAS_SIZE) return;
 
         auto atlas = atlases_head;
+        bool xover, yover;
 
-        // reached the end of the row? move back to start
-        if (atlas->pos.x + rend->box.w > ATLAS_SIZE) {
-            atlas->pos.x = 0;
-            atlas->pos.y += atlas->tallest;
-            atlas->tallest = 0;
+        if (atlas) {
+            // reached the end of the row? move back to start
+            if (atlas->pos.x + rend->box.w > ATLAS_SIZE) {
+                atlas->pos.x = 0;
+                atlas->pos.y += atlas->tallest;
+                atlas->tallest = 0;
+            }
+
+            xover = atlas->pos.x + rend->box.w > ATLAS_SIZE;
+            yover = atlas->pos.y + rend->box.h > ATLAS_SIZE;
         }
 
-        auto xover = atlas->pos.x + rend->box.w > ATLAS_SIZE;
-        auto yover = atlas->pos.y + rend->box.h > ATLAS_SIZE;
-        if (xover || yover) {
+        if (!atlas || xover || yover) {
             glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
             GLuint texture_id;
