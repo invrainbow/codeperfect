@@ -14,7 +14,7 @@
 #include "hash.hpp"
 #include <harfbuzz/hb.h>
 
-#define CODE_FONT_SIZE 14
+#define CODE_FONT_SIZE 16
 #define UI_FONT_SIZE 17
 #define ICON_FONT_SIZE 16
 #define FRAME_RATE_CAP 60
@@ -177,8 +177,10 @@ struct Font {
 
     // only filled in for monospace fonts
     // is offset_y the same for all characters? i assume not?
-    double width;
+    float width;
     i32 offset_y;
+    float ascent;
+
 
     // Font *next_fallback;
     ccstr name;

@@ -908,6 +908,12 @@ void UI::draw_bordered_rect_outer(boxf b, vec4f color, vec4f border_color, int b
 void UI::draw_char(vec2f* pos, List<uchar> *grapheme, vec4f color) {
     glActiveTexture(GL_TEXTURE0 + TEXTURE_FONT);
 
+    /*
+    if (grapheme->len == 1 && grapheme->at(0) == ' ') {
+        BREAK_HERE;
+    }
+    */
+
     // look up glyph
     // if the glyph doesn't exist,
     //     find the right font for `grapheme`
@@ -934,6 +940,10 @@ void UI::draw_char(vec2f* pos, List<uchar> *grapheme, vec4f color) {
     }
     utf8_chars->append('\0');
 
+    if (streq(utf8_str, "=")) {
+        BREAK_HERE;
+    }
+
     auto glyph = glyph_cache.get(utf8_str);
     if (!glyph) {
         SCOPED_MEM(&world.ui_mem);
@@ -954,7 +964,7 @@ void UI::draw_char(vec2f* pos, List<uchar> *grapheme, vec4f color) {
 
         if (atlas) {
             // reached the end of the row? move back to start
-            if (atlas->pos.x + rend->box.w > ATLAS_SIZE) {
+            if (atlas->pos.x + rend->box.w + 1 > ATLAS_SIZE) {
                 atlas->pos.x = 0;
                 atlas->pos.y += atlas->tallest;
                 atlas->tallest = 0;
@@ -989,13 +999,13 @@ void UI::draw_char(vec2f* pos, List<uchar> *grapheme, vec4f color) {
         glTexSubImage2D(GL_TEXTURE_2D, 0, atlas->pos.x, atlas->pos.y, box.w, box.h, GL_RED, GL_UNSIGNED_BYTE, rend->data);
 
         boxf uv;
-        uv.x = (float)atlases_head->pos.x / (float)ATLAS_SIZE;
-        uv.y = (float)atlases_head->pos.y / (float)ATLAS_SIZE;
+        uv.x = (float)atlas->pos.x / (float)ATLAS_SIZE;
+        uv.y = (float)atlas->pos.y / (float)ATLAS_SIZE;
         uv.w = (float)box.w / (float)ATLAS_SIZE;
         uv.h = (float)box.h / (float)ATLAS_SIZE;
 
         if (box.h > atlas->tallest) atlas->tallest = box.h;
-        atlas->pos.x += box.w;
+        atlas->pos.x += box.w + 1;
 
         glyph = alloc_object(Glyph);
         glyph->single = grapheme->len == 1;
@@ -1010,7 +1020,10 @@ void UI::draw_char(vec2f* pos, List<uchar> *grapheme, vec4f color) {
         glyph->atlas = atlas;
         glyph->uv = uv;
 
-        glyph_cache.set(utf8_str, glyph);
+        {
+            SCOPED_MEM(&world.ui_mem);
+            glyph_cache.set(cp_strdup(utf8_str), glyph);
+        }
     }
 
     if (current_texture_id != glyph->atlas->gl_texture_id) {
@@ -1021,13 +1034,22 @@ void UI::draw_char(vec2f* pos, List<uchar> *grapheme, vec4f color) {
     }
 
     boxf box = glyph->box;
+
+    float xscale = 1.0f, yscale = 1.0f;
+    world.window->get_content_scale(&xscale, &yscale);
+
+    box.x /= xscale;
+    box.w /= xscale;
+    box.y /= yscale;
+    box.h /= yscale;
+
     box.x += pos->x;
     box.y += pos->y;
 
     draw_quad(box, glyph->uv, color, DRAW_FONT_MASK);
-
-    // TODO: wait, shouldn't we add by a multiple of 1 or 2 of base char font? oh well, fix later
-    pos->x += glyph->box.w;
+    auto gw = cp_wcswidth(grapheme->items, grapheme->len);
+    if (gw == -1) gw = 2;
+    pos->x += base_font->width * gw;
 }
 
 void UI::draw_char(vec2f* pos, uchar codepoint, vec4f color) {

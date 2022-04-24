@@ -43,7 +43,7 @@ Font* UI::acquire_font(ccstr name) {
         return NULL;
     }
 
-    font_cache.set(name, font);
+    font_cache.set(cp_strdup(name), font);
     return font;
 }
 
@@ -92,51 +92,42 @@ bool Font::init_font() {
 
     auto cf_font_name = CFStringCreateWithCString(NULL, name, kCFStringEncodingUTF8);
 
-    CGFloat size = height;
+    float xscale = 1.0f, yscale = 1.0f;
+    world.window->get_content_scale(&xscale, &yscale);
 
-#if 0
-    {
-        float xscale, yscale;
-        world.window->get_content_scale(&xscale, &yscale);
-
-        auto xdpi = xscale * 72.0;
-        auto ydpi = yscale * 72.0;
-
-        size = (xdpi + ydpi) / 144.0 * height;
-    }
-#endif
-
-    ctfont = (void*)CTFontCreateWithName(cf_font_name, size, NULL);
+    ctfont = (void*)CTFontCreateWithName(cf_font_name, yscale * ceil(height * 72.0 / 96.0), NULL);
     if (!ctfont) return false;
 
     hbfont = hb_coretext_font_create((CTFontRef)ctfont);
     if (!hbfont) return false;
 
     auto _ctfont = (CTFontRef)ctfont;
+    ascent = CTFontGetAscent(_ctfont);
 
     // get font metrics for monospace fonts
     // fills in width and height of a single character for monospace fonts
     // tests on the char 'A'
     {
-        CGGlyph glyph = (CGGlyph)'a';
-        auto rect = CTFontGetBoundingRectsForGlyphs(_ctfont, kCTFontDefaultOrientation, &glyph, NULL, 1);
+        // CGGlyph glyph = (CGGlyph)'a';
+        // auto rect = CTFontGetBoundingRectsForGlyphs(_ctfont, kCTFontDefaultOrientation, &glyph, NULL, 1);
 
-        auto ras_x = (i32)floor(rect.origin.x);
-        auto ras_w = (u32)ceil(rect.origin.x - ras_x + rect.size.width);
-        auto ras_desc = (i32)ceil(-rect.origin.y);
-        auto ras_asc = (i32)ceil(rect.size.height + rect.origin.y);
-        auto ras_h = (u32)(ras_desc + ras_asc); // wait, why don't we just set this to rect.size.height?
+        // auto ras_x = (i32)floor(rect.origin.x);
+        // auto ras_w = (u32)ceil(rect.origin.x - ras_x + rect.size.width);
+        // auto ras_desc = (i32)ceil(-rect.origin.y);
+        // auto ras_asc = (i32)ceil(rect.size.height + rect.origin.y);
+        // auto ras_h = (u32)(ras_desc + ras_asc); // wait, why don't we just set this to rect.size.height?
 
-        CGSize advance;
-        CTFontGetAdvancesForGlyphs(_ctfont, kCTFontDefaultOrientation, &glyph, &advance, 1);
+        {
+            auto glyph = (CGGlyph)('A');
+            width = CTFontGetAdvancesForGlyphs(_ctfont, kCTFontDefaultOrientation, &glyph, NULL, 1);
+            width /= xscale;
+        }
 
-        auto units_per_em = CTFontGetUnitsPerEm(_ctfont);
-        auto ascent = CTFontGetAscent(_ctfont);
-        auto descent = CTFontGetDescent(_ctfont);
+        // auto units_per_em = CTFontGetUnitsPerEm(_ctfont);
+        ascent = CTFontGetAscent(_ctfont);
+        // auto descent = CTFontGetDescent(_ctfont);
+        // auto bounding_box = CTFontGetBoundingBox(_ctfont);
 
-        auto bounding_box = CTFontGetBoundingBox(_ctfont);
-
-        width = advance.width;
         offset_y = 0; // ras_asc;
     }
 
@@ -225,14 +216,18 @@ Font* UI::find_font_for_grapheme(List<uchar> *grapheme) {
     return font->can_render_chars(grapheme) ? font : NULL;
 }
 
-Rendered_Grapheme* Font::get_glyphs(List<uchar> *codepoints_comprising_a_grapheme) {
+Rendered_Grapheme* Font::get_glyphs(List<uchar> *grapheme) {
     auto utf8_chars = alloc_list<char>();
     char tmp[4];
 
-    For (*codepoints_comprising_a_grapheme) {
+    For (*grapheme) {
         int len = uchar_to_cstr(it, tmp);
         for (int i = 0; i < len; i++)
             utf8_chars->append(tmp[i]);
+    }
+
+    if (utf8_chars->len == 1 && utf8_chars->at(0) == '=') {
+        BREAK_HERE;
     }
 
     auto buf = hb_buffer_create();
@@ -264,10 +259,12 @@ Rendered_Grapheme* Font::get_glyphs(List<uchar> *codepoints_comprising_a_graphem
     int cur_x = 0;
     int cur_y = 0;
 
-    int top = -1;
-    int left = -1;
-    int bottom = -1;
-    int right = -1;
+    int b_top = -1;
+    int b_left = -1;
+    int b_bottom = -1;
+    int b_right = -1;
+
+    int highest_asc = 0;
 
     for (u32 i = 0; i < glyph_count; i++) {
         Glyph_Info gi;
@@ -281,36 +278,33 @@ Rendered_Grapheme* Font::get_glyphs(List<uchar> *codepoints_comprising_a_graphem
         gi.ras_asc = (i32)ceil(rect.size.height + rect.origin.y);
         gi.ras_h = (u32)(gi.ras_desc + gi.ras_asc); // wait, why don't we just set this to rect.size.height?
 
+        if (gi.ras_asc > highest_asc) highest_asc = gi.ras_asc;
         if (!gi.ras_w && !gi.ras_h) { /* TODO? just don't append? */ }
 
         glyphs->append(&gi);
 
         auto &pos = glyph_pos[i];
 
-        if (left == -1 || pos.x_offset < left) left = pos.x_offset;
-        if (top == -1 || pos.y_offset < top) top = pos.y_offset;
+        auto left = cur_x + pos.x_offset + gi.ras_x;
+        auto top = cur_x + pos.y_offset;
+        auto right = left + gi.ras_w;
+        auto bottom = top + gi.ras_h;
 
-        auto thisright = cur_x + pos.x_offset + gi.ras_w;
-        auto thisbottom = cur_y + pos.y_offset + gi.ras_h;
-
-        if (right == -1 || thisright > right) right = thisright;
-        if (bottom == -1 || thisbottom > bottom) bottom = thisbottom;
+        if (b_left == -1 || left < b_left) b_left = left;
+        if (b_top == -1 || top < b_top) b_top = top;
+        if (b_right == -1 || right < b_right) b_right = right;
+        if (b_bottom == -1 || bottom < b_bottom) b_bottom = bottom;
 
         cur_x += pos.x_advance;
         cur_y += pos.y_advance;
-    }
-
-    if (top == -1 || left == -1 || bottom == -1 || right == -1) {
-        error("top = %d, left = %d, bottom = %d, right = %d", top, left, bottom, right);
-        return NULL;
     }
 
     auto device = CGColorSpaceCreateDeviceGray();
     if (!device) return NULL;
     defer { CGColorSpaceRelease(device); };
 
-    auto total_w = right - left;
-    auto total_h = bottom - top;
+    auto total_w = max(1, b_right - b_left);
+    auto total_h = max(1, b_bottom - b_top);
 
     auto bitmap_buffer = alloc_array(char, total_w * total_h);
 
@@ -342,8 +336,8 @@ Rendered_Grapheme* Font::get_glyphs(List<uchar> *codepoints_comprising_a_graphem
         auto &gi = glyphs->at(i);
 
         auto origin = CGPointMake(
-            cur_x + glyph_pos[i].x_offset + gi.ras_x,
-            cur_y + glyph_pos[i].y_offset + gi.ras_desc
+            cur_x + glyph_pos[i].x_offset - gi.ras_x,
+            (float)total_h - (float)(cur_y + glyph_pos[i].y_offset + gi.ras_asc)
         );
 
         unichar glyphs[2] = {0};
@@ -355,14 +349,15 @@ Rendered_Grapheme* Font::get_glyphs(List<uchar> *codepoints_comprising_a_graphem
                 CTFontDrawGlyphs((CTFontRef)ctfont, &glyphs[i], &origin, 1, context);
 
         cur_x += glyph_pos[i].x_advance;
+        cur_y += glyph_pos[i].y_advance;
     }
 
     auto ret = alloc_object(Rendered_Grapheme);
     ret->data = bitmap_buffer;
     ret->data_len = total_w * total_h;
-    ret->box.x = left;
-    ret->box.y = top;
-    ret->box.w = right - left;
-    ret->box.h = bottom - top;
+    ret->box.x = b_left;
+    ret->box.y = b_top + (ascent - highest_asc);
+    ret->box.w = b_right - b_left;
+    ret->box.h = b_bottom - b_top;
     return ret;
 }
