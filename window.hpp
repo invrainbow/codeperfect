@@ -14,6 +14,8 @@ enum Window_Event_Type {
     WINEV_WINDOW_SCALE,
     WINEV_KEY,
     WINEV_CHAR,
+    WINEV_FOCUS,
+    WINEV_BLUR,
 };
 
 enum Mouse_Button {
@@ -73,6 +75,9 @@ struct Window_Event {
         struct {
             u32 ch;
         } character;
+
+        struct {} focus;
+        struct {} blur;
     };
 };
 

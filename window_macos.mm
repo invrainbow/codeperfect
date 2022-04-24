@@ -374,6 +374,11 @@ const NSRange kEmptyRange = { NSNotFound, 0 };
 
 - (void)windowDidBecomeKey:(NSNotification *)notification {
     window->update_cursor_mode();
+    window->dispatch_event(WINEV_FOCUS, [&](auto ev) {});
+}
+
+- (void)windowDidResignKey:(NSNotification *)notification {
+    window->dispatch_event(WINEV_BLUR, [&](auto ev) {});
 }
 
 @end

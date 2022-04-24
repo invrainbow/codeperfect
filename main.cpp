@@ -228,6 +228,21 @@ bool is_git_folder(ccstr path) {
 
 void handle_window_event(Window_Event *it) {
     switch (it->type) {
+    case WINEV_FOCUS:
+        break;
+
+    case WINEV_BLUR: {
+        auto &io = ImGui::GetIO();
+
+        ptr0(&io.KeysDown);
+        io.KeyCtrl = false;
+        io.KeyShift = false;
+        io.KeyAlt = false;
+        io.KeySuper = false;
+
+        break;
+    }
+
     case WINEV_WINDOW_SIZE: {
         auto w = it->window_size.w;
         auto h = it->window_size.h;
