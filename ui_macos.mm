@@ -231,10 +231,10 @@ Rendered_Grapheme* Font::get_glyphs(List<uchar> *grapheme) {
     defer { hb_buffer_destroy(buf); };
 
     hb_buffer_add_utf8(buf, utf8_chars->items, utf8_chars->len, 0, utf8_chars->len);
-    hb_buffer_set_direction(buf, HB_DIRECTION_LTR);
-    hb_buffer_set_script(buf, HB_SCRIPT_LATIN);
-    hb_buffer_set_language(buf, hb_language_from_string("en", -1));
-
+    // hb_buffer_set_direction(buf, HB_DIRECTION_LTR);
+    // hb_buffer_set_script(buf, HB_SCRIPT_LATIN);
+    // hb_buffer_set_language(buf, hb_language_from_string("en", -1));
+    hb_buffer_guess_segment_properties(buf);
     hb_shape(hbfont, buf, NULL, 0);
 
     unsigned int glyph_count;

@@ -1,5 +1,8 @@
 scriptencoding utf-8
 
+set encoding=utf-8
+set fileencoding=utf-8
+
 set ttimeout
 set ttimeoutlen=100
 set timeoutlen=3000

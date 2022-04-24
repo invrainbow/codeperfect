@@ -173,7 +173,7 @@ int cp_wcwidth(uchar c) {
 int cp_wcswidth(uchar *s, int len) {
     int ret = 0;
     for (int i = 0; i < len; i++) {
-        auto width = wcwidth(s[i]);
+        auto width = cp_wcwidth(s[i]);
         if (width < 0) return -1;
         ret += width;
     }
