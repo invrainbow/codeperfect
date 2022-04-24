@@ -908,12 +908,6 @@ void UI::draw_bordered_rect_outer(boxf b, vec4f color, vec4f border_color, int b
 void UI::draw_char(vec2f* pos, List<uchar> *grapheme, vec4f color) {
     glActiveTexture(GL_TEXTURE0 + TEXTURE_FONT);
 
-    /*
-    if (grapheme->len == 1 && grapheme->at(0) == ' ') {
-        BREAK_HERE;
-    }
-    */
-
     // look up glyph
     // if the glyph doesn't exist,
     //     find the right font for `grapheme`
@@ -939,10 +933,6 @@ void UI::draw_char(vec2f* pos, List<uchar> *grapheme, vec4f color) {
             utf8_chars->append(buf[i]);
     }
     utf8_chars->append('\0');
-
-    if (streq(utf8_str, "=")) {
-        BREAK_HERE;
-    }
 
     auto glyph = glyph_cache.get(utf8_str);
     if (!glyph) {

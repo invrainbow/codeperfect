@@ -226,10 +226,6 @@ Rendered_Grapheme* Font::get_glyphs(List<uchar> *grapheme) {
             utf8_chars->append(tmp[i]);
     }
 
-    if (utf8_chars->len == 1 && utf8_chars->at(0) == '=') {
-        BREAK_HERE;
-    }
-
     auto buf = hb_buffer_create();
     if (!buf) return NULL;
     defer { hb_buffer_destroy(buf); };
