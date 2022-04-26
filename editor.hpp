@@ -169,7 +169,6 @@ struct Editor {
     Client_Parameter_Hint parameter_hint;
 
     bool is_modifiable();
-    void update_tree();
     void raw_move_cursor(cur2 c, Move_Cursor_Opts *opts = NULL);
     void move_cursor(cur2 c, Move_Cursor_Opts *opts = NULL);
     void reset_state();
