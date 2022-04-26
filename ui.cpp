@@ -5426,6 +5426,15 @@ void UI::draw_everything() {
                 gc.init();
 
                 int cp_idx = 0;
+                int byte_idx = 0;
+
+                auto inc_cp_idx = [&]() {
+                    auto uch = line->at(cp_idx);
+
+                    cp_idx++;
+                    byte_idx += uchar_size(uch);
+                };
+
                 gc.feed(line->at(cp_idx)); // feed first character for GB1
 
                 // jump {view.x} clusters
@@ -5435,13 +5444,13 @@ void UI::draw_everything() {
                     while (vx < view.x && cp_idx < line->len) {
                         if (line->at(cp_idx) == '\t') {
                             vx += options.tabsize - (vx % options.tabsize);
-                            cp_idx++;
+                            inc_cp_idx();
                         } else {
                             grapheme_codepoints->len = 0;
                             do {
                                 auto codepoint = line->at(cp_idx);
                                 grapheme_codepoints->append(codepoint);
-                                cp_idx++;
+                                inc_cp_idx();
                             } while (cp_idx < line->len && !gc.feed(line->at(cp_idx)));
 
                             auto width = cp_wcswidth(grapheme_codepoints->items, grapheme_codepoints->len);
@@ -5465,6 +5474,7 @@ void UI::draw_everything() {
                     if (cp_idx >= line->len) break;
 
                     auto curr_cp_idx = cp_idx;
+                    auto curr_byte_idx = byte_idx;
                     int curr_cp = line->at(cp_idx);
 
                     grapheme_codepoints->len = 0;
@@ -5473,7 +5483,7 @@ void UI::draw_everything() {
                         auto codepoint = line->at(cp_idx);
                         newx += uchar_size(codepoint);
                         grapheme_codepoints->append(codepoint);
-                        cp_idx++;
+                        inc_cp_idx();
                     } while (cp_idx < line->len && !gc.feed(line->at(cp_idx)));
 
                     int glyph_width = 0;
@@ -5487,7 +5497,7 @@ void UI::draw_everything() {
                     vec4f text_color = rgba(global_colors.foreground);
 
                     if (next_hl != -1) {
-                        auto curr = new_cur2((u32)curr_cp_idx, (u32)y);
+                        auto curr = new_cur2((u32)curr_byte_idx, (u32)y);
 
                         while (next_hl != -1 && curr >= highlights[next_hl].end)
                             if (++next_hl >= highlights.len)
