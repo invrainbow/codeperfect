@@ -104,31 +104,16 @@ bool Font::init_font() {
     auto _ctfont = (CTFontRef)ctfont;
     ascent = CTFontGetAscent(_ctfont);
 
-    // get font metrics for monospace fonts
-    // fills in width and height of a single character for monospace fonts
-    // tests on the char 'A'
     {
-        // CGGlyph glyph = (CGGlyph)'a';
-        // auto rect = CTFontGetBoundingRectsForGlyphs(_ctfont, kCTFontDefaultOrientation, &glyph, NULL, 1);
+        auto glyph = (CGGlyph)('A');
+        width = CTFontGetAdvancesForGlyphs(_ctfont, kCTFontDefaultOrientation, &glyph, NULL, 1);
+        width /= xscale;
+    }
 
-        // auto ras_x = (i32)floor(rect.origin.x);
-        // auto ras_w = (u32)ceil(rect.origin.x - ras_x + rect.size.width);
-        // auto ras_desc = (i32)ceil(-rect.origin.y);
-        // auto ras_asc = (i32)ceil(rect.size.height + rect.origin.y);
-        // auto ras_h = (u32)(ras_desc + ras_asc); // wait, why don't we just set this to rect.size.height?
-
-        {
-            auto glyph = (CGGlyph)('A');
-            width = CTFontGetAdvancesForGlyphs(_ctfont, kCTFontDefaultOrientation, &glyph, NULL, 1);
-            width /= xscale;
-        }
-
-        // auto units_per_em = CTFontGetUnitsPerEm(_ctfont);
-        ascent = CTFontGetAscent(_ctfont);
-        // auto descent = CTFontGetDescent(_ctfont);
-        // auto bounding_box = CTFontGetBoundingBox(_ctfont);
-
-        offset_y = 0; // ras_asc;
+    {
+        auto descent = CTFontGetDescent(_ctfont);
+        auto bounding_box = CTFontGetBoundingBox(_ctfont);
+        offset_y = (CGRectGetHeight(bounding_box) - (ascent + descent)) / 2 / yscale;
     }
 
     return true;
