@@ -2,33 +2,35 @@ CC = clang++
 BREW_X64 = arch --x86_64 /usr/local/Homebrew/bin/brew
 BREW_ARM = /opt/homebrew/bin/brew
 
-# CFLAGS = -std=c++17 -mavx -maes -w -MMD -MP
 CFLAGS = -std=c++17 -w -MMD -MP
+# CFLAGS += -mavx -maes
 CFLAGS += -Itree-sitter
 
 LDFLAGS = -ldl -framework OpenGL -framework Cocoa -framework IOKit
 LDFLAGS += -framework CoreFoundation -framework Security  # for go
-LDFLAGS += $(shell $(BREW_ARM) --prefix pcre)/lib/libpcre.a
-# LDFLAGS += $(shell $(BREW_ARM) --prefix harfbuzz)/lib/libharfbuzz.a
+LDFLAGS += -lfreetype -lharfbuzz -lfontconfig
 
-LDFLAGS += -L/opt/homebrew/Cellar/harfbuzz/4.2.0/lib -lharfbuzz
-
-LDFLAGS += obj/gohelper.arm64.a
-
-# LDFLAGS += $(shell $(BREW_ARM) --prefix fontconfig)/lib/libfontconfig.a
-# LDFLAGS += $(shell $(BREW_ARM) --prefix freetype2)/lib/libfreetype.a
-LDFLAGS += -L/opt/homebrew/Cellar/fontconfig/2.14.0/lib -L/opt/homebrew/opt/freetype/lib -lfontconfig -lfreetype
+ifeq (${ARCH}, x64)
+	CFLAGS += -arch x86_64
+	LDFLAGS += obj/gohelper.x64.a
+	LDFLAGS += $(shell $(BREW_X64) --prefix pcre)/lib/libpcre.a
+	LDFLAGS += -L$(shell $(BREW_X64) --prefix fontconfig)/lib
+	LDFLAGS += -L$(shell $(BREW_X64) --prefix freetype)/lib
+	LDFLAGS += -L$(shell $(BREW_X64) --prefix harfbuzz)/lib
+else
+	CFLAGS += -arch arm64
+	LDFLAGS += obj/gohelper.arm64.a
+	LDFLAGS += $(shell $(BREW_ARM) --prefix pcre)/lib/libpcre.a
+	LDFLAGS += -L$(shell $(BREW_ARM) --prefix fontconfig)/lib
+	LDFLAGS += -L$(shell $(BREW_ARM) --prefix freetype)/lib
+	LDFLAGS += -L$(shell $(BREW_ARM) --prefix harfbuzz)/lib
+endif
 
 GOFLAGS =
 
 ifeq (${RELEASE}, 1)
-	CFLAGS += -arch x86_64 -arch arm64
 	CFLAGS += -DRELEASE_MODE -O3
 	GOFLAGS += -ldflags "-s -w"
-	LDFLAGS += $(shell $(BREW_X64) --prefix pcre)/lib/libpcre.a
-	LDFLAGS += $(shell $(BREW_X64) --prefix harfbuzz)/lib/libharfbuzz.a
-	LDFLAGS += $(shell $(BREW_X64) --prefix fontconfig)/lib/libfontconfig.a
-	LDFLAGS += obj/gohelper.x64.a
 else
 	CFLAGS += -DDEBUG_MODE -g -O0
 endif
@@ -42,8 +44,12 @@ DEP_FILES += obj/objclibs.d obj/clibs.d
 
 all: build/bin/ide build/bin/init.vim build/bin/buildcontext.go
 
+prep:
+	mkdir -p obj build/bin
+
 clean:
 	rm -rf obj/ build/bin/
+	make prep
 
 OBJ_DEPS = $(OBJ_FILES) obj/objclibs.o obj/clibs.o
 ifeq (${RELEASE}, 1)

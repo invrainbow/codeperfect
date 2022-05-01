@@ -1,0 +1,8 @@
+tap "homebrew/bundle"
+tap "homebrew/core"
+brew "go"
+brew "coreutils"
+brew "pcre"
+brew "harfbuzz"
+brew "fontconfig"
+brew "freetype"
