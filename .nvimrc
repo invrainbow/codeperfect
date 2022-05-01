@@ -11,6 +11,8 @@ nnoremap <leader>f 0f(bhhhbd2f:f{xs;<esc>>>
 
 " stupid macro for converting treesitter enum
 function ConvertTSEnum()
+    %!grep "\S"
+    %s/^ *//g
     %s/\<anon_sym_DOT\>/dontchangeme/g
     %s/^anon_//g
     %s/^aux_//g
