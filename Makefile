@@ -65,7 +65,7 @@ build/bin/ide: $(OBJ_DEPS) cpcolors.c
 
 -include $(DEP_FILES)
 
-$(OBJ_FILES): obj/%.o: %.cpp Makefile gohelper.h
+$(OBJ_FILES): obj/%.o: %.cpp Makefile gohelper.h tstypes.hpp
 	$(CC) $(CFLAGS) -MMD -MP -c -o $@ $<
 
 obj/tests.o: tests.cpp Makefile
@@ -94,6 +94,11 @@ obj/gohelper.arm64.a: gostuff/ $(GOSTUFF_DIRS) $(GOSTUFF_FILES)
 		mkdir -p ../obj; mv gohelper.arm64.a ../obj; mv gohelper.arm64.h ../gohelper.h
 
 gohelper.h: obj/gohelper.arm64.a
+
+tstypes.cpp: tree-sitter-go/src/parser.c sh/generate_tstypes.py
+	sh/generate_tstypes.py
+
+tstypes.hpp: tstypes.cpp
 
 build/launcher: gostuff/ $(GOSTUFF_DIRS) $(GOSTUFF_FILES)
 	cd gostuff; \
