@@ -67,28 +67,14 @@ void Editor::insert_text_in_insert_mode(ccstr s) {
     auto len = strlen(s);
     if (!len) return;
 
-    Cstr_To_Ustr conv;
-    conv.init();
-
-    for (int i = 0; i < len; i++)
-        conv.count(s[i]);
-
-    auto ulen = conv.len;
-
     SCOPED_FRAME();
 
-    auto text = alloc_array(uchar, ulen);
-    conv.init();
-    for (u32 i = 0, j = 0; i < len; i++) {
-        bool found = false;
-        auto uch = conv.feed(s[i], &found);
-        if (found)
-            text[j++] = uch;
-    }
+    auto text = cstr_to_ustr(s);
+    if (!text->len) return;
 
-    buf->insert(cur, text, ulen);
+    buf->insert(cur, text->items, text->len);
     auto c = cur;
-    for (u32 i = 0; i < ulen; i++)
+    for (u32 i = 0; i < text->len; i++)
         c = buf->inc_cur(c);
 
     raw_move_cursor(c);
@@ -683,14 +669,11 @@ void Editor::perform_autocomplete(AC_Result *result) {
                         new_end.y += 2;
                     }
 
-                    Cstr_To_Ustr conv; conv.init();
-                    for (auto p = new_contents; *p != '\0'; p++) {
-                        bool found = false;
-                        auto uch = conv.feed(*p, &found);
-                        if (found) {
-                            chars->append(uch);
-
-                            if (uch == '\n') {
+                    {
+                        auto ustr = cstr_to_ustr(new_contents);
+                        For (*ustr) {
+                            chars->append(it);
+                            if (it == '\n') {
                                 new_end.x = 0;
                                 new_end.y++;
                             } else {
@@ -2294,11 +2277,9 @@ bool Editor::optimize_imports() {
             chars->append('\n');
         }
 
-        Cstr_To_Ustr conv; conv.init();
-        for (auto p = new_contents; *p != '\0'; p++) {
-            bool found = false;
-            auto uch = conv.feed(*p, &found);
-            if (found) chars->append(uch);
+        {
+            auto ustr = cstr_to_ustr(new_contents);
+            For (*ustr) chars->append(it);
         }
 
         buf->hist_force_push_next_change = true;

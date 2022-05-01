@@ -973,9 +973,8 @@ void random_macos_tests() {
     int fails = 0, total = 0;
     Cstr_To_Ustr conv; conv.init();
     for (int i = 0, len = strlen(big_string); i < len; i++) {
-        bool found = false;
-        auto uch = conv.feed(big_string[i], &found);
-        if (!found) continue;
+        uchar uch = 0;
+        if (!conv.feed(big_string[i], &uch)) continue;
         if (uch < 255) continue;
 
         // if (total++ % 100 == 0)  print("%d/%d", i+1, len);

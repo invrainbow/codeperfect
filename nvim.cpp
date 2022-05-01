@@ -919,25 +919,10 @@ void Nvim::run_event_loop() {
 
                         for (u32 i = 0; i < num_lines; i++) {
                             auto line = reader.read_string(); CHECKOK();
-                            auto len = strlen(line);
                             {
-                                // SCOPED_MEM(&messages_mem);
-
-                                s32 ulen = 0;
-                                auto unicode_line = alloc_array(uchar, len);
-                                Cstr_To_Ustr conv;
-                                bool found = false;
-
-                                conv.init();
-
-                                for (u32 i = 0; i < len; i++) {
-                                    auto uch = conv.feed(line[i], &found);
-                                    if (found)
-                                        unicode_line[ulen++] = uch;
-                                }
-
-                                lines->append(unicode_line);
-                                line_lengths->append(ulen);
+                                auto uline = cstr_to_ustr(line);
+                                lines->append(uline->items);
+                                line_lengths->append(uline->len);
                             }
                         }
 

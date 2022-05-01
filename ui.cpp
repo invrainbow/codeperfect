@@ -1062,17 +1062,7 @@ vec2f UI::draw_string(vec2f pos, ccstr s, vec4f color) {
     // TODO: handle graphemes
     pos.y += base_font->offset_y;
 
-    Cstr_To_Ustr conv;
-    conv.init();
-
-    auto codepoints = alloc_list<uchar>();
-
-    for (u32 i = 0, len = strlen(s); i < len; i++) {
-        bool found;
-        auto uch = conv.feed(s[i], &found);
-        if (found) codepoints->append(uch);
-    }
-
+    auto codepoints = cstr_to_ustr(s);
     if (!codepoints->len) return pos;
 
     Grapheme_Clusterer gc; gc.init();

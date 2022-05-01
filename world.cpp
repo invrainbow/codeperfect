@@ -2817,16 +2817,7 @@ done_writing:
 
     buf.read(fm);
 
-    auto uchars = alloc_list<uchar>();
-    {
-        Cstr_To_Ustr conv; conv.init();
-        for (auto p = s; *p != '\0'; p++) {
-            bool found = false;
-            auto uch = conv.feed(*p, &found);
-            if (found)
-                uchars->append(uch);
-        }
-    }
+    auto uchars = cstr_to_ustr(s);
 
     // add the generated methods
     buf.insert(dest->decl->decl_end, uchars->items, uchars->len);
@@ -2910,15 +2901,11 @@ done_writing:
         }
 
         int lines_in_new = 0;
-
-        Cstr_To_Ustr conv; conv.init();
-        for (auto p = new_contents; *p != '\0'; p++) {
-            bool found = false;
-            auto uch = conv.feed(*p, &found);
-            if (found) {
-                chars->append(uch);
-                if (uch == '\n')
-                    lines_in_new++;
+        {
+            auto ustr = cstr_to_ustr(new_contents);
+            For (*ustr) {
+                chars->append(it);
+                if (it == '\n') lines_in_new++;
             }
         }
 
