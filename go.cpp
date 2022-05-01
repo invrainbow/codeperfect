@@ -6590,8 +6590,7 @@ ccstr ts_field_type_str(Ts_Field_Type type) {
 
 ccstr ts_ast_type_str(Ts_Ast_Type type) {
     switch (type) {
-    define_str_case(TS_ERROR);
-    define_str_case(TS_IDENTIFIER);
+    define_str_case(TS_AMP_EQ);
     define_str_case(TS_LF);
     define_str_case(TS_SEMI);
     define_str_case(TS_PACKAGE);
@@ -6625,7 +6624,6 @@ ccstr ts_ast_type_str(Ts_Ast_Type type) {
     define_str_case(TS_PERCENT_EQ);
     define_str_case(TS_LT_LT_EQ);
     define_str_case(TS_GT_GT_EQ);
-    define_str_case(TS_AMP_EQ);
     define_str_case(TS_AMP_CARET_EQ);
     define_str_case(TS_PLUS_EQ);
     define_str_case(TS_DASH_EQ);
@@ -6649,6 +6647,9 @@ ccstr ts_ast_type_str(Ts_Ast_Type type) {
     define_str_case(TS_SELECT);
     define_str_case(TS_NEW);
     define_str_case(TS_MAKE);
+    define_str_case(TS_NIL);
+    define_str_case(TS_TRUE);
+    define_str_case(TS_FALSE);
     define_str_case(TS_PLUS);
     define_str_case(TS_DASH);
     define_str_case(TS_BANG);
@@ -6672,12 +6673,10 @@ ccstr ts_ast_type_str(Ts_Ast_Type type) {
     define_str_case(TS_FLOAT_LITERAL);
     define_str_case(TS_IMAGINARY_LITERAL);
     define_str_case(TS_RUNE_LITERAL);
-    define_str_case(TS_NIL);
-    define_str_case(TS_TRUE);
-    define_str_case(TS_FALSE);
     define_str_case(TS_COMMENT);
     define_str_case(TS_RAW_STRING_LITERAL);
     define_str_case(TS_INTERPRETED_STRING_LITERAL);
+    define_str_case(TS_IDENTIFIER);
     define_str_case(TS_SOURCE_FILE);
     define_str_case(TS_PACKAGE_CLAUSE);
     define_str_case(TS_IMPORT_DECLARATION);

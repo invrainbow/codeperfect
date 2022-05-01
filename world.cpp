@@ -359,6 +359,8 @@ void World::init(Window *_wnd) {
 
     MEM = &frame_mem;
 
+    init_treesitter_go_trie();
+
     global_mark_tree_lock.init();
 
     mark_fridge.init(512);
