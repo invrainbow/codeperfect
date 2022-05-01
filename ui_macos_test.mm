@@ -973,12 +973,11 @@ void random_macos_tests() {
     int fails = 0, total = 0;
     Cstr_To_Ustr conv; conv.init();
     for (int i = 0, len = strlen(big_string); i < len; i++) {
-        uchar uch = 0;
-        if (!conv.feed(big_string[i], &uch)) continue;
-        if (uch < 255) continue;
+        if (!conv.feed(big_string[i])) continue;
+        if (conv.uch < 255) continue;
 
         // if (total++ % 100 == 0)  print("%d/%d", i+1, len);
-        if (!find_font_for_char(uch)) fails++;
+        if (!find_font_for_char(conv.uch)) fails++;
     }
     print("failed %d/%d", fails, total);
     exit(0);

@@ -118,7 +118,7 @@ void Cstr_To_Ustr::count(u8 ch) {
     }
 }
 
-bool Cstr_To_Ustr::feed(u8 ch, uchar *out) {
+bool Cstr_To_Ustr::feed(u8 ch) {
     if (buflen) {
         auto needed = get_uchar_size(buf[0]);
         if (buflen + 1 == needed) {
@@ -128,14 +128,14 @@ bool Cstr_To_Ustr::feed(u8 ch, uchar *out) {
             case 2: {
                 b1 &= 0b11111;
                 auto b2 = ch & 0b111111;
-                *out = (b1 << 6) | b2;
+                uch = (b1 << 6) | b2;
                 break;
             }
             case 3: {
                 b1 &= 0b1111;
                 auto b2 = buf[1] & 0b111111;
                 auto b3 = ch & 0b111111;
-                *out = (b1 << 12) | (b2 << 6) | b3;
+                uch = (b1 << 12) | (b2 << 6) | b3;
                 break;
             }
             case 4: {
@@ -143,7 +143,7 @@ bool Cstr_To_Ustr::feed(u8 ch, uchar *out) {
                 auto b2 = buf[1] & 0b111111;
                 auto b3 = buf[2] & 0b111111;
                 auto b4 = ch & 0b111111;
-                *out = (b1 << 18) | (b2 << 12) | (b3 << 6) | b4;
+                uch = (b1 << 18) | (b2 << 12) | (b3 << 6) | b4;
                 break;
             }
             }
@@ -152,7 +152,7 @@ bool Cstr_To_Ustr::feed(u8 ch, uchar *out) {
             buf[buflen++] = ch;
         }
     } else if (ch < 0b10000000) {
-        *out = ch;
+        uch = ch;
         return true;
     } else {
         buf[buflen++] = ch;
@@ -166,9 +166,8 @@ List<uchar>* cstr_to_ustr(ccstr s) {
 
     auto ret = alloc_list<uchar>();
     for (int i = 0, len = strlen(s); i < len; i++) {
-        uchar uch = 0;
-        if (conv.feed(s[i], &uch))
-            ret->append(uch);
+        if (conv.feed(s[i]))
+            ret->append(conv.uch);
     }
     return ret;
 }
@@ -341,13 +340,12 @@ bool Buffer::read(Buffer_Read_Func f, bool reread) {
     while (f(&ch)) {
         (*bc)++;
 
-        uchar uch;
-        if (conv.feed(ch, &uch)) {
-            if (uch == '\n') { // TODO: handle \r
+        if (conv.feed(ch)) {
+            if (conv.uch == '\n') { // TODO: handle \r
                 if (!insert_new_line())
                     return false;
             } else {
-                if (!line->append(uch))
+                if (!line->append(conv.uch))
                     return false;
             }
         }

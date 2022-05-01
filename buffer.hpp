@@ -39,11 +39,12 @@ struct Cstr_To_Ustr {
     u8 buf[3];
     s32 buflen;
     s32 len;
+    uchar uch;
 
     void init();
     s32 get_uchar_size(u8 first_char);
     void count(u8 ch);
-    bool feed(u8 ch, uchar *out);
+    bool feed(u8 ch);
 
     // TODO: should write this, but i'm lazy and we need to ship
     // void read(u8 *chars, int len, uchar *buf, int buflen);
