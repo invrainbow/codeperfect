@@ -19,34 +19,34 @@ void Project_Settings::load_defaults() {
 
     {
         auto bp = build_profiles->append();
-        strcpy_safe_fixed(bp->label, "Project");
-        strcpy_safe_fixed(bp->cmd, "go build");
+        cp_strcpy_fixed(bp->label, "Project");
+        cp_strcpy_fixed(bp->cmd, "go build");
     }
 
     {
         auto dp = debug_profiles->append();
         dp->type = DEBUG_TEST_CURRENT_FUNCTION;
         dp->is_builtin = true;
-        strcpy_safe_fixed(dp->label, "Test Function Under Cursor");
+        cp_strcpy_fixed(dp->label, "Test Function Under Cursor");
     }
 
     {
         auto dp = debug_profiles->append();
         dp->type = DEBUG_RUN_PACKAGE;
-        strcpy_safe_fixed(dp->label, "Run Package");
+        cp_strcpy_fixed(dp->label, "Run Package");
         dp->run_package.use_current_package = true;
     }
 
     {
         auto dp = debug_profiles->append();
         dp->type = DEBUG_RUN_BINARY;
-        strcpy_safe_fixed(dp->label, "Run Binary");
+        cp_strcpy_fixed(dp->label, "Run Binary");
     }
 
     {
         auto dp = debug_profiles->append();
         dp->type = DEBUG_TEST_PACKAGE;
-        strcpy_safe_fixed(dp->label, "Test Package");
+        cp_strcpy_fixed(dp->label, "Test Package");
         dp->test_package.use_current_package = true;
     }
 }

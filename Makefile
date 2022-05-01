@@ -8,7 +8,6 @@ CFLAGS += -Itree-sitter
 
 LDFLAGS = -ldl -framework OpenGL -framework Cocoa -framework IOKit
 LDFLAGS += -framework CoreFoundation -framework Security  # for go
-LDFLAGS += $(shell $(BREW_X64) --prefix pcre)/lib/libpcre.a
 LDFLAGS += $(shell $(BREW_ARM) --prefix pcre)/lib/libpcre.a
 LDFLAGS += obj/gohelper.arm64.a
 
@@ -18,6 +17,7 @@ ifeq (${RELEASE}, 1)
 	CFLAGS += -arch x86_64 -arch arm64
 	CFLAGS += -DRELEASE_MODE -O3
 	GOFLAGS += -ldflags "-s -w"
+	LDFLAGS += $(shell $(BREW_X64) --prefix pcre)/lib/libpcre.a
 	LDFLAGS += obj/gohelper.x64.a
 else
 	CFLAGS += -DDEBUG_MODE -g -O0

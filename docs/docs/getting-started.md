@@ -44,8 +44,8 @@ export PATH=$PATH:/path/to/folder/containing/go
 
 Below are some notes for some of the common ways that people install Go:
 
-- **Using the official installer.** The installer sets your system `$PATH`
-  &mdash; there's nothing else you need to do.
+- **Using the official installer.** The installer sets your system `$PATH` —
+  there's nothing else you need to do.
 
 * **Use Brew.** You'll just need to make sure Brew-installed binaries are
   accessible from a terminal. If `which go` resolves successfully in a Bash

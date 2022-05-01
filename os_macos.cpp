@@ -40,7 +40,7 @@ ccstr get_normalized_path(ccstr path) {
     if (!ret) return NULL;
     defer { free(ret); };
 
-    return cp_strcpy(ret);
+    return cp_strdup(ret);
 }
 
 bool are_filepaths_same_file(ccstr path1, ccstr path2) {
@@ -211,7 +211,7 @@ bool list_directory(ccstr folder, list_directory_cb cb) {
 
         Dir_Entry info;
         info.type = (ent->d_type == DT_DIR ? DIRENT_DIR : DIRENT_FILE);
-        strcpy_safe_fixed(info.name, ent->d_name);
+        cp_strcpy_fixed(info.name, ent->d_name);
         if (!cb(&info)) break;
     }
 
@@ -592,7 +592,7 @@ void Fs_Watcher::handle_event(size_t count, ccstr *paths) {
         if (streq(relpath, ".")) relpath = "";
 
         auto ev = events.append();
-        strcpy_safe_fixed(ev->filepath, relpath);
+        cp_strcpy_fixed(ev->filepath, relpath);
     }
 }
 

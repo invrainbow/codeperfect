@@ -1062,7 +1062,7 @@ struct Module_Resolver {
         if (create_if_not_found) {
             auto ret = alloc_object(Node);
             ret->next = node->children;
-            ret->name = cp_strcpy(name);
+            ret->name = cp_strdup(name);
             node->children = ret;
             return ret;
         }
@@ -1080,7 +1080,7 @@ struct Module_Resolver {
     }
 
     void add_path(ccstr import_path, ccstr resolved_path) {
-        resolved_path = normalize_path_sep(cp_strcpy(resolved_path));
+        resolved_path = normalize_path_sep(cp_strdup(resolved_path));
         add_to_root(root_import_to_resolved, import_path, resolved_path);
         add_to_root(root_resolved_to_import, resolved_path, import_path);
     }

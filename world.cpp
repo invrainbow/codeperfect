@@ -280,7 +280,7 @@ void fill_file_tree() {
                 if (exclude_from_file_tree(fullpath)) break;
 
                 auto file = alloc_object(FT_Node);
-                file->name = cp_strcpy(ent->name);
+                file->name = cp_strdup(ent->name);
                 file->is_directory = (ent->type & FILE_TYPE_DIRECTORY);
                 file->num_children = 0;
                 file->parent = parent;
@@ -397,7 +397,7 @@ void World::init(Window *_wnd) {
         if (!go_binary_path)
             cp_panic("Unable to find Go. Please make sure it's installed, and accessible from a Bash shell (with .bashrc).");
         defer { GHFree(go_binary_path); };
-        strcpy_safe_fixed(world.go_binary_path, go_binary_path);
+        cp_strcpy_fixed(world.go_binary_path, go_binary_path);
     }
 
     {
@@ -416,9 +416,9 @@ void World::init(Window *_wnd) {
 
         // if testing
         if (!world.window) {
-            strcpy_safe_fixed(current_path, "/Users/bh/ide/api");
+            cp_strcpy_fixed(current_path, "/Users/bh/dev/ide/gostuff");
         } else if (gargc >= 2) {
-            strcpy_safe_fixed(current_path, gargv[1]);
+            cp_strcpy_fixed(current_path, gargv[1]);
         } else {
             Select_File_Opts opts; ptr0(&opts);
             opts.buf = current_path;
@@ -426,6 +426,10 @@ void World::init(Window *_wnd) {
             opts.folder = true;
             opts.save = false;
             if (!let_user_select_file(&opts)) exit(0);
+        }
+
+        if (check_path(current_path) != CPR_DIRECTORY) {
+            cp_panic("Unable to open selected folder.");
         }
 
         GHGitIgnoreInit(current_path);
@@ -485,7 +489,7 @@ void World::init(Window *_wnd) {
 #ifdef DEBUG_MODE
     if (!use_nvim) world.wnd_history.show = true;
 
-    show_frame_index = true;
+    show_frame_index = false;
 #endif
 }
 
@@ -500,7 +504,8 @@ void World::start_background_threads() {
     // devised is to create a background thread that runs in a loop, so I can
     // set a breakpoint in it at any time.
     auto microsoft_programmers_are_fucking_monkeys = [](void*) {
-        while (true) sleep_milliseconds(1000);
+        while (true)
+            sleep_milliseconds(1000);
     };
 
     {
@@ -619,7 +624,7 @@ void init_goto_file() {
 
             // if (isdir && !node->parent && streq(it->name, ".cp")) return;
 
-            auto relpath = path[0] == '\0' ? cp_strcpy(it->name) : path_join(path, it->name);
+            auto relpath = path[0] == '\0' ? cp_strdup(it->name) : path_join(path, it->name);
             if (isdir)
                 fill_files(it, relpath);
             else
@@ -652,7 +657,7 @@ void kick_off_build(Build_Profile *build_profile) {
         SCOPED_MEM(&build->mem);
 
         build->id = world.next_build_id++;
-        build->build_profile_name = cp_strcpy(build_profile->label);
+        build->build_profile_name = cp_strdup(build_profile->label);
         build->started = true;
 
         if (!GHStartBuild((char*)build_profile->cmd)) {
@@ -678,11 +683,11 @@ void kick_off_build(Build_Profile *build_profile) {
             for (u32 i = 0; i < num_errors; i++) {
                 Build_Error err;
 
-                err.message = cp_strcpy(errors[i].text);
+                err.message = cp_strdup(errors[i].text);
                 err.valid = errors[i].is_valid;
 
                 if (err.valid) {
-                    err.file = cp_strcpy(errors[i].filename);
+                    err.file = cp_strdup(errors[i].filename);
                     err.row = errors[i].line;
                     err.col = errors[i].col;
                     // errors[i].is_vcol;
@@ -1120,7 +1125,7 @@ void reload_file_subtree(ccstr relpath) {
             auto fullpath = path_join(path, ent->name);
             if (exclude_from_file_tree(fullpath)) break;
 
-            auto name = cp_strcpy(ent->name);
+            auto name = cp_strdup(ent->name);
             if (ent->type & FILE_TYPE_DIRECTORY)
                 new_directories.add(name);
             else
@@ -1166,7 +1171,7 @@ void reload_file_subtree(ccstr relpath) {
             SCOPED_MEM(&world.file_tree_mem);
 
             auto child = alloc_object(FT_Node);
-            child->name = cp_strcpy(it);
+            child->name = cp_strdup(it);
             child->is_directory = false;
             child->num_children = 0;
             child->parent = node;
@@ -1182,7 +1187,7 @@ void reload_file_subtree(ccstr relpath) {
             // TODO: recurse into directory
 
             auto child = alloc_object(FT_Node);
-            child->name = cp_strcpy(it);
+            child->name = cp_strdup(it);
             child->is_directory = true;
             child->num_children = 0;
             child->parent = node;
@@ -1686,7 +1691,7 @@ void do_find_interfaces() {
             For (*results) newresults->append(it.copy());
 
             wnd.results = newresults;
-            wnd.current_import_path = cp_strcpy(world.indexer.index.current_import_path);
+            wnd.current_import_path = cp_strdup(world.indexer.index.current_import_path);
         }
 
         // close the thread handle first so it doesn't try to kill the thread
@@ -1738,7 +1743,7 @@ void init_goto_symbol() {
             For (*symbols) wnd.symbols->append(it.copy());
 
             wnd.filtered_results = alloc_list<int>();
-            wnd.current_import_path = cp_strcpy(world.indexer.index.current_import_path);
+            wnd.current_import_path = cp_strdup(world.indexer.index.current_import_path);
         }
 
         wnd.fill_running = false;
@@ -1786,7 +1791,7 @@ void do_find_implementations() {
             For (*results) newresults->append(it.copy());
 
             wnd.results = newresults;
-            wnd.current_import_path = cp_strcpy(world.indexer.index.current_import_path);
+            wnd.current_import_path = cp_strdup(world.indexer.index.current_import_path);
         }
 
         // close the thread handle first so it doesn't try to kill the thread
@@ -1979,7 +1984,7 @@ void handle_command(Command cmd, bool from_menu) {
                 For (*files) newfiles->append(it.copy());
 
                 wnd.results = newfiles;
-                wnd.current_import_path = cp_strcpy(world.indexer.index.current_import_path);
+                wnd.current_import_path = cp_strdup(world.indexer.index.current_import_path);
             }
 
             // close the thread handle first so it doesn't try to kill the thread
@@ -2117,7 +2122,7 @@ void handle_command(Command cmd, bool from_menu) {
             auto editor = get_current_editor();
             if (editor) {
                 world.dbg.push_call(DLVC_TOGGLE_BREAKPOINT, [&](auto call) {
-                    call->toggle_breakpoint.filename = cp_strcpy(editor->filepath);
+                    call->toggle_breakpoint.filename = cp_strdup(editor->filepath);
                     call->toggle_breakpoint.lineno = editor->cur.y + 1;
                 });
             }
@@ -2308,7 +2313,7 @@ void handle_command(Command cmd, bool from_menu) {
                 For (*results) newresults->append(it.copy());
 
                 wnd.results = newresults;
-                wnd.current_import_path = cp_strcpy(world.indexer.index.current_import_path);
+                wnd.current_import_path = cp_strdup(world.indexer.index.current_import_path);
             }
 
             // close the thread handle first so it doesn't try to kill the thread
@@ -2390,7 +2395,7 @@ void handle_command(Command cmd, bool from_menu) {
                 For (*results) newresults->append(it.copy());
 
                 wnd.results = newresults;
-                wnd.current_import_path = cp_strcpy(world.indexer.index.current_import_path);
+                wnd.current_import_path = cp_strdup(world.indexer.index.current_import_path);
             }
 
             // close the thread handle first so it doesn't try to kill the thread
@@ -2511,7 +2516,7 @@ void open_add_file_or_folder(bool folder, FT_Node *dest) {
 
     wnd.location_is_root = is_root();
     if (!wnd.location_is_root)
-        strcpy_safe_fixed(wnd.location, ft_node_to_path(node));
+        cp_strcpy_fixed(wnd.location, ft_node_to_path(node));
 
     wnd.folder = folder;
     wnd.show = true;

@@ -982,9 +982,9 @@ void Nvim::run_event_loop() {
 
                                 add_event([&](auto m) {
                                     m->notification.type = NVIM_NOTIF_CMDLINE_SHOW;
-                                    m->notification.cmdline_show.content = cp_strcpy(content);
-                                    m->notification.cmdline_show.firstc = cp_strcpy(firstc);
-                                    m->notification.cmdline_show.prompt = cp_strcpy(prompt);
+                                    m->notification.cmdline_show.content = cp_strdup(content);
+                                    m->notification.cmdline_show.firstc = cp_strdup(firstc);
+                                    m->notification.cmdline_show.prompt = cp_strdup(prompt);
                                 });
                             } else if (streq(op, "mode_change")) {
                                 SCOPED_FRAME();
@@ -995,7 +995,7 @@ void Nvim::run_event_loop() {
 
                                 add_event([&](auto m) {
                                     m->notification.type = NVIM_NOTIF_MODE_CHANGE;
-                                    m->notification.mode_change.mode_name = cp_strcpy(mode_name);
+                                    m->notification.mode_change.mode_name = cp_strdup(mode_name);
                                     m->notification.mode_change.mode_index = mode_index;
                                 });
                             } else if (streq(op, "win_viewport")) {
@@ -1140,7 +1140,7 @@ void Nvim::run_event_loop() {
                                     add_event([&](auto m) {
                                         m->notification.type = NVIM_NOTIF_HL_ATTR_DEFINE;
                                         m->notification.hl_attr_define.id = id;
-                                        m->notification.hl_attr_define.hi_name = cp_strcpy(hi_name);
+                                        m->notification.hl_attr_define.hi_name = cp_strdup(hi_name);
                                     });
                                 }
                             } else {
