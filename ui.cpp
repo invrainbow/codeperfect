@@ -924,8 +924,6 @@ void UI::draw_char(vec2f* pos, List<uchar> *grapheme, vec4f color) {
     if (!grapheme->len) return;
 
     auto utf8_chars = alloc_list<char>();
-    ccstr utf8_str = utf8_chars->items;
-
     For (*grapheme) {
         char buf[4];
         int len = uchar_to_cstr(it, buf);
@@ -933,6 +931,8 @@ void UI::draw_char(vec2f* pos, List<uchar> *grapheme, vec4f color) {
             utf8_chars->append(buf[i]);
     }
     utf8_chars->append('\0');
+
+    ccstr utf8_str = utf8_chars->items;
 
     auto glyph = glyph_cache.get(utf8_str);
     if (!glyph) {
@@ -1085,8 +1085,12 @@ vec2f UI::draw_string(vec2f pos, ccstr s, vec4f color) {
 
 // currently only called to render tabs
 float UI::get_text_width(ccstr s) {
-    // TODO: handle unicode and graphemes
-    return strlen(s) * base_font->width;
+    SCOPED_FRAME();
+
+    auto codepoints = cstr_to_ustr(s);
+    if (!codepoints->len) return 0;
+
+    return cp_wcswidth(codepoints->items, codepoints->len);
 }
 
 boxf UI::get_status_area() {
@@ -5063,7 +5067,7 @@ void UI::draw_everything() {
             if (editor.is_unsaved())
                 label = cp_sprintf("%s*", label);
 
-            auto text_width = get_text_width(label);
+            auto text_width = get_text_width(label) * base_font->width;
 
             tab.w = text_width + tab_padding.x * 2;
             tab.h = base_font->height + tab_padding.y * 2;
@@ -5881,7 +5885,7 @@ void UI::end_frame() {
             s32 num_items = min(ac.filtered_results->len, AUTOCOMPLETE_WINDOW_ITEMS);
 
             For (*ac.filtered_results) {
-                auto len = strlen(ac.ac.results->at(it).name);
+                auto len = get_text_width(ac.ac.results->at(it).name);
                 if (len > AUTOCOMPLETE_TRUNCATE_LENGTH)
                     len = AUTOCOMPLETE_TRUNCATE_LENGTH + 3;
 

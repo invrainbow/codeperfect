@@ -700,24 +700,18 @@ void Editor::perform_autocomplete(AC_Result *result) {
             //
             // refactor this out somehow, we're already starting to copy paste
 
-            auto fullstring = modify_string(result->name);
-
-            // grab len & save name
-            auto len = strlen(fullstring);
-            auto name = alloc_array(uchar, len);
-            for (u32 i = 0; i < len; i++)
-                name[i] = (uchar)fullstring[i];
+            auto name = cstr_to_ustr(modify_string(result->name));
 
             auto ac_start = cur;
-            ac_start.x -= strlen(ac.prefix);
+            ac_start.x -= strlen(ac.prefix); // what if the prefix contains unicode?
 
             // perform the edit
             // i don't think we need to create a batch here? as long as it follows the flow of normal text editing
             buf->remove(ac_start, cur);
-            buf->insert(ac_start, name, len);
+            buf->insert(ac_start, name->items, name->len);
 
             // move cursor forward
-            raw_move_cursor(new_cur2(ac_start.x + len, ac_start.y));
+            raw_move_cursor(new_cur2(ac_start.x + name->len, ac_start.y));
 
             // clear out last_closed_autocomplete
             last_closed_autocomplete = new_cur2(-1, -1);

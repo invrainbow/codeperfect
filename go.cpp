@@ -1644,20 +1644,35 @@ Ast_Node *Ast_Node::dup(TSNode new_node) {
 }
 
 ccstr Ast_Node::string() {
-    // auto start_byte = ts_node_start_byte(node);
-    // auto end_byte = ts_node_end_byte(node);
+    auto len = end_byte() - start_byte();
 
-    if (it->type == IT_MMAP)
+    if (it->type == IT_MMAP) {
         it->set_pos(new_cur2((i32)start_byte(), (i32)-1));
-    else if (it->type == IT_BUFFER)
+
+        auto ret = alloc_array(char, len + 1);
+        for (u32 i = 0; i < len; i++)
+            ret[i] = it->next();
+        ret[len] = '\0';
+        return ret;
+    }
+
+    if (it->type == IT_BUFFER) {
         it->set_pos(start());
 
-    auto len = end_byte() - start_byte();
-    auto ret = alloc_array(char, len + 1);
-    for (u32 i = 0; i < len; i++)
-        ret[i] = it->next();
-    ret[len] = '\0';
-    return ret;
+        auto ret = alloc_list<char>();
+        while (ret->len < len) {
+            char utf8[4];
+            int n = uchar_to_cstr(it->next(), utf8);
+            if (ret->len + n > len) break;
+
+            for (int i = 0; i < n; i++)
+                ret->append(utf8[i]);
+        }
+        ret->append('\0');
+        return ret->items;
+    }
+
+    return NULL;
 }
 
 Gotype *Go_Indexer::new_gotype(Gotype_Type type) {
@@ -4778,6 +4793,11 @@ Parameter_Hint *Go_Indexer::parameter_hint(ccstr filepath, cur2 pos) {
     if (!pf) return NULL;
     defer { free_parsed_file(pf); };
 
+    if (pf->it->type != IT_BUFFER) {
+        error("can only do parameter hint on buffer parser");
+        return NULL;
+    }
+
     if (!truncate_parsed_file(pf, pos, "_)}}}}}}}}}}}}}}}}")) return NULL;
     defer { ts_tree_delete(pf->tree); };
 
@@ -4789,13 +4809,19 @@ Parameter_Hint *Go_Indexer::parameter_hint(ccstr filepath, cur2 pos) {
         return it->get_pos();
     };
 
+    auto start_pos = go_back_until_non_space();
+
+    auto buf = pf->it->buffer_params.it.buf;
+    pos.x = buf->idx_cp_to_byte(pos.y, pos.x);
+    start_pos.x = buf->idx_cp_to_byte(start_pos.y, start_pos.x);
+
     Ast_Node *func_expr = NULL;
     cur2 call_args_start;
     int current_param = -1;
 
     t.log("prepare shit");
 
-    find_nodes_containing_pos(pf->root, go_back_until_non_space(), false, [&](auto node) -> Walk_Action {
+    find_nodes_containing_pos(pf->root, start_pos, false, [&](auto node) -> Walk_Action {
         switch (node->type()) {
         case TS_TYPE_CONVERSION_EXPRESSION:
         case TS_CALL_EXPRESSION:
