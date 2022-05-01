@@ -4272,7 +4272,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                 auto get_struct_literal_type = [&]() -> Ast_Node* {
                     auto curr = node->parent();
                     if (curr->null) return NULL;
-                    if (curr->type() != TS_KEYED_ELEMENT && curr->type() != TS_ELEMENT) return NULL;
+                    if (curr->type() != TS_KEYED_ELEMENT && curr->type() != TS_LITERAL_ELEMENT) return NULL;
 
                     if (!node->prev()->null) return NULL; // must be key, not value
 
