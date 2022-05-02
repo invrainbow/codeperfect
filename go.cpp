@@ -15,7 +15,7 @@
 #include <dlfcn.h>
 #endif
 
-#define GO_DEBUG 1
+#define GO_DEBUG 0
 
 #if GO_DEBUG
 #define go_print(fmt, ...) print("[go] " fmt, ##__VA_ARGS__)
