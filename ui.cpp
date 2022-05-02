@@ -6288,7 +6288,7 @@ void UI::end_frame() {
             }
 
             boxf bg;
-            bg.w = base_font->width * strlen(help_text) + settings.parameter_hint_padding_x * 2;
+            bg.w = base_font->width * get_text_width(help_text) + settings.parameter_hint_padding_x * 2;
             bg.h = base_font->height + settings.parameter_hint_padding_y * 2;
             bg.x = fmin(actual_parameter_hint_start.x, world.window_size.x - bg.w);
             bg.y = fmin(actual_parameter_hint_start.y - base_font->offset_y - bg.h - settings.parameter_hint_margin_y, world.window_size.y - bg.h);
@@ -6305,8 +6305,8 @@ void UI::end_frame() {
                 u32 len = strlen(help_text);
                 vec4f color = rgba(global_colors.foreground, 0.75);
                 float opacity = 1.0;
-
                 int j = 0;
+                Cstr_To_Ustr conv; conv.init();
 
                 for (u32 i = 0; i < len; i++) {
                     while (j < token_changes.len && i == token_changes[j].index) {
@@ -6320,7 +6320,8 @@ void UI::end_frame() {
 
                         j++;
                     }
-                    draw_char(&text_pos, help_text[i], rgba(color.rgb, color.a * opacity));
+                    if (conv.feed(help_text[i]))
+                        draw_char(&text_pos, conv.uch, rgba(color.rgb, color.a * opacity));
                 }
             }
         } while (0);

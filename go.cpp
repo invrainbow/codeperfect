@@ -1657,7 +1657,10 @@ ccstr Ast_Node::string() {
     }
 
     if (it->type == IT_BUFFER) {
-        it->set_pos(start());
+        auto pos = start();
+        auto buf = it->get_buf();
+        pos.x = buf->idx_byte_to_cp(pos.y, pos.x);
+        it->set_pos(pos);
 
         auto ret = alloc_list<char>();
         while (ret->len < len) {
@@ -4722,14 +4725,18 @@ bool Go_Indexer::check_if_still_in_parameter_hint(ccstr filepath, cur2 cur, cur2
     reload_all_dirty_files();
 
     auto pf = parse_file(filepath, true);
-    if (!pf) return NULL;
+    if (!pf) return false;
     defer { free_parsed_file(pf); };
 
-    // try to close string if we're in one
+    auto buf = pf->it->buffer_params.it.buf;
 
+    // try to close string if we're in one
     char string_close_char = 0;
 
-    find_nodes_containing_pos(pf->root, cur, true, [&](auto it) -> Walk_Action {
+    cur2 bytecur = cur;
+    bytecur.x = buf->idx_cp_to_byte(bytecur.y, bytecur.x);
+
+    find_nodes_containing_pos(pf->root, bytecur, true, [&](auto it) -> Walk_Action {
         switch (it->type()) {
         case TS_RAW_STRING_LITERAL:
         case TS_INTERPRETED_STRING_LITERAL:
@@ -4749,7 +4756,7 @@ bool Go_Indexer::check_if_still_in_parameter_hint(ccstr filepath, cur2 cur, cur2
                     auto last_pos = new_cur2((i32)relu_sub(end_pos.x, 1), (i32)end_pos.y);
 
                     auto last_ch = get_char_at_pos(last_pos);
-                    if (!(cur == end_pos && last_ch == start_ch && last_pos != start_pos))
+                    if (!(bytecur == end_pos && last_ch == start_ch && last_pos != start_pos))
                         string_close_char = start_ch;
                 }
             }
@@ -4768,10 +4775,12 @@ bool Go_Indexer::check_if_still_in_parameter_hint(ccstr filepath, cur2 cur, cur2
 
     bool ret = false;
 
+    // hint_start is already in byte index
+
     find_nodes_containing_pos(pf->root, hint_start, true, [&](auto it) -> Walk_Action {
         if (it->start() == hint_start)
             if (it->type() == TS_ARGUMENT_LIST)
-                if (cur < it->end()) {
+                if (bytecur < it->end()) {
                     ret = true;
                     return WALK_ABORT;
                 }

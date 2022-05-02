@@ -125,6 +125,11 @@ struct Parser_It {
         if (type == IT_MMAP) mmap_params.fm->cleanup();
     }
 
+    Buffer *get_buf() {
+        if (type != IT_BUFFER) return NULL;
+        return buffer_params.it.buf;
+    }
+
     uchar peek() {
         switch (type) {
         case IT_MMAP: return mmap_params.fm->data[mmap_params.pos.x];
