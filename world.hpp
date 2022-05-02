@@ -642,8 +642,8 @@ Editor* find_editor_by_filepath(ccstr filepath);
 void fill_file_tree();
 
 Editor *focus_editor(ccstr path);
-Editor *focus_editor(ccstr path, cur2 pos);
-Editor* focus_editor_by_id(int editor_id, cur2 pos);
+Editor *focus_editor(ccstr path, cur2 pos, bool pos_in_byte_format = false);
+Editor* focus_editor_by_id(int editor_id, cur2 pos, bool pos_in_byte_format = false);
 
 FT_Node *sort_ft_nodes(FT_Node *nodes);
 void add_ft_node(FT_Node *parent, fn<void(FT_Node* it)> cb);
@@ -664,7 +664,7 @@ void prompt_delete_all_breakpoints();
 void run_proc_the_normal_way(Process* proc, ccstr cmd);
 void* get_native_window_handle();
 bool is_build_debug_free();
-void goto_file_and_pos(ccstr file, cur2 pos, Ensure_Cursor_Mode mode = ECM_NONE);
+void goto_file_and_pos(ccstr file, cur2 pos, bool pos_in_byte_format = false, Ensure_Cursor_Mode mode = ECM_NONE);
 void goto_jump_to_definition_result(Jump_To_Definition_Result *result);
 void handle_goto_definition(cur2 pos = {-1, -1});
 void save_all_unsaved_files();

@@ -816,7 +816,7 @@ struct Parameter_Hint {
 
 struct Jump_To_Definition_Result {
     ccstr file;
-    cur2 pos;
+    cur2 pos; // in row-column byte format
     Goresult *decl; // can be null
 
     Jump_To_Definition_Result *copy();

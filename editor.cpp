@@ -1202,12 +1202,12 @@ Editor* Pane::focus_editor(ccstr path) {
     return focus_editor(path, new_cur2(-1, -1));
 }
 
-Editor* Pane::focus_editor(ccstr path, cur2 pos) {
+Editor* Pane::focus_editor(ccstr path, cur2 pos, bool pos_in_byte_format) {
     u32 i = 0;
     For (editors) {
         // TODO: use are_filepaths_equal instead, don't have to access filesystem
         if (are_filepaths_same_file(path, it.filepath))
-            return focus_editor_by_index(i, pos);
+            return focus_editor_by_index(i, pos, pos_in_byte_format);
         i++;
     }
 
@@ -1223,7 +1223,7 @@ Editor* Pane::focus_editor(ccstr path, cur2 pos) {
     }
 
     ui.recalculate_view_sizes(true);
-    return focus_editor_by_index(editors.len - 1, pos);
+    return focus_editor_by_index(editors.len - 1, pos, pos_in_byte_format);
 }
 
 Editor *Pane::focus_editor_by_index(u32 idx) {
@@ -1473,7 +1473,7 @@ void Pane::set_current_editor(u32 idx) {
     focus_current_editor_in_file_explorer();
 }
 
-Editor *Pane::focus_editor_by_index(u32 idx, cur2 pos) {
+Editor *Pane::focus_editor_by_index(u32 idx, cur2 pos, bool pos_in_byte_format) {
     if (current_editor != idx) {
         auto e = get_current_editor();
         if (e) e->trigger_escape();
@@ -1483,13 +1483,17 @@ Editor *Pane::focus_editor_by_index(u32 idx, cur2 pos) {
 
     auto &editor = editors[idx];
 
+    auto cppos = pos;
+    if (pos_in_byte_format)
+        cppos.x = editor.buf->idx_byte_to_cp(cppos.y, cppos.x);
+
     if (pos.x != -1) {
         if (editor.is_nvim_ready()) {
-            editor.move_cursor(pos);
+            editor.move_cursor(cppos);
         } else {
             editor.nvim_data.need_initial_pos_set = true;
-            editor.nvim_data.initial_pos = pos;
-            editor.raw_move_cursor(pos);
+            editor.nvim_data.initial_pos = cppos;
+            editor.raw_move_cursor(cppos);
         }
     }
 

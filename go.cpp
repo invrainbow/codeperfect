@@ -3071,7 +3071,7 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_symbol(ccstr symbol) {
 }
 
 List<Find_References_File> *Go_Indexer::find_references(ccstr filepath, cur2 pos, bool include_self) {
-    auto result = world.indexer.jump_to_definition(filepath, pos);
+    auto result = jump_to_definition(filepath, pos);
     if (!result) return NULL;
     return find_references(result->decl, include_self);
 }

@@ -558,18 +558,18 @@ Editor *focus_editor(ccstr path) {
     return focus_editor(path, new_cur2(-1, -1));
 }
 
-Editor *focus_editor(ccstr path, cur2 pos) {
+Editor *focus_editor(ccstr path, cur2 pos, bool pos_in_byte_format) {
     for (auto&& pane : world.panes) {
         for (u32 i = 0; i < pane.editors.len; i++) {
             auto &it = pane.editors[i];
             if (are_filepaths_same_file(path, it.filepath)) {
                 activate_pane(&pane);
-                pane.focus_editor_by_index(i, pos);
+                pane.focus_editor_by_index(i, pos, pos_in_byte_format);
                 return &it;
             }
         }
     }
-    return get_current_pane()->focus_editor(path, pos);
+    return get_current_pane()->focus_editor(path, pos, pos_in_byte_format);
 }
 
 void activate_pane(Pane *pane) {
@@ -771,7 +771,7 @@ void run_proc_the_normal_way(Process* proc, ccstr cmd) {
     proc->run(cmd);
 }
 
-Editor* focus_editor_by_id(int editor_id, cur2 pos) {
+Editor* focus_editor_by_id(int editor_id, cur2 pos, bool pos_in_byte_format) {
     For (world.panes) {
         for (int j = 0; j < it.editors.len; j++) {
             auto &editor = it.editors[j];
@@ -792,8 +792,8 @@ bool is_build_debug_free() {
     return true;
 }
 
-void goto_file_and_pos(ccstr file, cur2 pos, Ensure_Cursor_Mode mode) {
-    auto editor = focus_editor(file, pos);
+void goto_file_and_pos(ccstr file, cur2 pos, bool pos_in_byte_format, Ensure_Cursor_Mode mode) {
+    auto editor = focus_editor(file, pos, pos_in_byte_format);
     if (!editor) return; // TODO
 
     editor->ensure_cursor_on_screen_by_moving_view(mode);
@@ -803,7 +803,7 @@ void goto_file_and_pos(ccstr file, cur2 pos, Ensure_Cursor_Mode mode) {
 
 void goto_jump_to_definition_result(Jump_To_Definition_Result *result) {
     world.history.save_latest();
-    goto_file_and_pos(result->file, result->pos, ECM_GOTO_DEF);
+    goto_file_and_pos(result->file, result->pos, true, ECM_GOTO_DEF);
 }
 
 Jump_To_Definition_Result *get_current_definition(ccstr *filepath, bool display_error, cur2 pos) {
@@ -1062,7 +1062,7 @@ void goto_error(int index) {
     // when editor opens, get all existing errors and set marks
 
     if (!editor || !is_mark_valid(error.mark)) {
-        goto_file_and_pos(path, pos);
+        goto_file_and_pos(path, pos, false); // TODO: byte format?
         return;
     }
 

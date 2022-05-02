@@ -504,7 +504,7 @@ void UI::render_godecl(Godecl *decl) {
     bool open = ImGui::TreeNodeEx(decl, flags, "%s", godecl_type_str(decl->type));
 
     if (ImGui::IsItemClicked())
-        goto_file_and_pos(current_render_godecl_filepath, decl->name_start);
+        goto_file_and_pos(current_render_godecl_filepath, decl->name_start, true);
 
     if (open) {
         ImGui::Text("decl_start: %s", format_cur(decl->decl_start));
@@ -2415,7 +2415,7 @@ void UI::draw_everything() {
         if (ImGui::IsItemClicked()) {
             auto ref = it->ref;
             auto start = ref->is_sel ? ref->x_start : ref->start;
-            goto_file_and_pos(fd->filepath, start);
+            goto_file_and_pos(fd->filepath, start, true);
         }
 
         if (open) {
@@ -2567,7 +2567,7 @@ void UI::draw_everything() {
                     ImGui::PopStyleColor();
 
                     // TODO: previews?
-                    if (clicked) goto_file_and_pos(it->filepath, it->decl->decl->name_start);
+                    if (clicked) goto_file_and_pos(it->filepath, it->decl->decl->name_start, true);
                 }
                 imgui_pop_font();
             } else {
@@ -2636,7 +2636,7 @@ void UI::draw_everything() {
                     ImGui::PopStyleColor();
 
                     // TODO: previews?
-                    if (clicked) goto_file_and_pos(it->filepath, it->decl->decl->name_start);
+                    if (clicked) goto_file_and_pos(it->filepath, it->decl->decl->name_start, true);
                 }
 
                 imgui_pop_font();
@@ -2668,7 +2668,7 @@ void UI::draw_everything() {
                 For (*it.references) {
                     auto pos = it.is_sel ? it.x_start : it.start;
                     if (ImGui::Selectable(cp_sprintf("%s:%s", filepath, format_cur(pos))))
-                        goto_file_and_pos(filepath, pos);
+                        goto_file_and_pos(filepath, pos, true);
                 }
             }
 
@@ -4538,7 +4538,7 @@ void UI::draw_everything() {
                                 if (is_mark_valid(it.mark_start))
                                     pos = it.mark_start->pos();
 
-                                goto_file_and_pos(filepath, pos);
+                                goto_file_and_pos(filepath, pos, true);
                             } else {
                                 wnd.selection = index;
                             }
@@ -4563,7 +4563,7 @@ void UI::draw_everything() {
                         }
                         if (imgui_special_key_pressed(ImGuiKey_Enter))
                             if (current_result)
-                                goto_file_and_pos(current_filepath, current_result->match_start);
+                                goto_file_and_pos(current_filepath, current_result->match_start, true);
                         break;
                     }
                 }
