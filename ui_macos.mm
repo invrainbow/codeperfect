@@ -66,18 +66,43 @@ bool UI::init_fonts() {
         auto descriptors = CTFontCollectionCreateMatchingFontDescriptors(collection);
         defer { CFRelease(descriptors); };
 
-        all_font_names = alloc_list<ccstr>(CFArrayGetCount(descriptors));
-        for (int i = 0, count = CFArrayGetCount(descriptors); i < count; i++) {
+        int len = CFArrayGetCount(descriptors);
+
+        all_font_names = alloc_list<ccstr>(len);
+        all_font_urls = alloc_list<ccstr>(len);
+
+        for (int i = 0; i < len; i++) {
             auto it = (CTFontDescriptorRef)CFArrayGetValueAtIndex(descriptors, i);
 
             auto name = CTFontDescriptorCopyAttribute(it, kCTFontNameAttribute);
+            if (!name) continue;
             defer { CFRelease(name); };
+
+            auto url = (CFURLRef)CTFontDescriptorCopyAttribute(it, kCTFontURLAttribute);
+            if (!url) continue;
+            defer { CFRelease(url); };
 
             auto cname = cfstring_to_ccstr((CFStringRef)name);
             if (streq(cname, "LastResort")) continue;
             if (cname[0] == '.') continue;
 
+            auto filepath = CFURLCopyFileSystemPath(url, kCFURLPOSIXPathStyle);
+            if (!filepath) continue;
+            defer { CFRelease(filepath); };
+
+            auto fileext = CFURLCopyPathExtension(url);
+            if (!fileext) continue;
+            defer { CFRelease(fileext); };
+
+            auto cfileext = cfstring_to_ccstr(fileext);
+            if (!streq(cfileext, "ttf") && !streq(cfileext, "ttc")) continue;
+
+            auto curl = cfstring_to_ccstr(filepath);
+
             all_font_names->append(cname);
+            all_font_urls->append(curl);
+
+            print("(allfonts) %s %s", cname, curl);
         }
     }
 
@@ -97,6 +122,18 @@ bool Font::init_font() {
 
     ctfont = (void*)CTFontCreateWithName(cf_font_name, yscale * ceil(height * 72.0 / 96.0), NULL);
     if (!ctfont) return false;
+
+    auto url = (CFURLRef)CTFontCopyAttribute((CTFontRef)ctfont, kCTFontURLAttribute);
+    if (!url) return false;
+    defer { CFRelease(url); };
+
+    auto cffilepath = CFURLCopyFileSystemPath(url, kCFURLPOSIXPathStyle);
+    if (!cffilepath) return false;
+    defer { CFRelease(cffilepath); };
+
+    filepath = cfstring_to_ccstr(cffilepath);
+
+    print("initialized font %s - %s", name, filepath);
 
     hbfont = hb_coretext_font_create((CTFontRef)ctfont);
     if (!hbfont) return false;
@@ -171,6 +208,9 @@ Font* UI::find_font_for_grapheme(List<uchar> *grapheme) {
 
     if (!FcPatternAddCharSet(pat, FC_CHARSET, charset))
         return error("FcPatternAddCharSet failed"), (Font*)NULL;
+
+    if (!FcPatternAddString(pat, FC_FONTFORMAT, (const FcChar8*)"TrueType"))
+        return error("FcPatternAddString failed"), (Font*)NULL;
 
     FcConfigSubstitute(NULL, pat, FcMatchPattern);
     FcDefaultSubstitute(pat);

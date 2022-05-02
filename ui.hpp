@@ -181,9 +181,9 @@ struct Font {
     i32 offset_y;
     float ascent;
 
-
     // Font *next_fallback;
     ccstr name;
+    ccstr filepath;
 
     bool init(ccstr font_name, u32 font_size);
     bool init_font();
@@ -218,6 +218,7 @@ struct UI {
     Atlas *atlases_head;
     int current_texture_id;
     Font* base_font;
+    List<ccstr> *all_font_urls;
     List<ccstr> *all_font_names;
 
     // we need a way of looking up fonts...
