@@ -708,8 +708,11 @@ void UI::render_ts_cursor(TSTreeCursor *curr, cur2 open_cur) {
 
         if (ImGui::IsMouseDoubleClicked(0) && ImGui::IsItemHovered(0)) {
             auto editor = get_current_editor();
-            if (editor)
-                editor->move_cursor(node->start());
+            if (editor) {
+                auto pos = node->start();
+                pos.x = editor->buf->idx_byte_to_cp(pos.y, pos.x);
+                editor->move_cursor(pos);
+            }
         }
 
         return last_open ? WALK_CONTINUE : WALK_SKIP_CHILDREN;
