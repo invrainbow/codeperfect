@@ -7,8 +7,8 @@
             "name": "debug",
             "program": "${workspaceFolder}/build/bin/ide",
             "args": [
-                "/Users/bh/dev/go-unicode-test",
-                // "/Users/bh/snowball/backend/src",
+                // "/Users/bh/dev/go-unicode-test",
+                "/Users/bh/snowball",
                 // "/Users/bh/dev/ide/gostuff"
             ],
             "cwd": "${workspaceFolder}/build/bin",
