@@ -4256,7 +4256,7 @@ void UI::draw_everything() {
                 Timer t;
                 t.init("filter_symbols");
 
-                for (u32 i = 0; i < wnd.symbols->len && i < 1000; i++) {
+                for (u32 i = 0; i < wnd.symbols->len && i < 10000; i++) {
                     auto &it = wnd.symbols->at(i);
 
                     if (wnd.current_file_only)
