@@ -418,7 +418,7 @@ void World::init(Window *_wnd) {
 
         // if testing
         if (!world.window) {
-            cp_strcpy_fixed(current_path, "/Users/bh/dev/ide/gostuff");
+            cp_strcpy_fixed(current_path, "/Users/bh/ide/gostuff");
         } else if (gargc >= 2) {
             cp_strcpy_fixed(current_path, gargv[1]);
         } else {
