@@ -39,7 +39,7 @@
 #if OS_WIN
 #define BREAK_HERE DebugBreak()
 #elif OS_MAC
-#define BREAK_HERE
+#define BREAK_HERE Debugger()
 #endif
 
 #include "common.hpp"
