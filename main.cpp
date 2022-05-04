@@ -721,11 +721,15 @@ void handle_window_event(Window_Event *it) {
                 handle_backspace();
                 return;
             case CP_KEY_TAB:
+                if (keymods == CP_MOD_CTRL || keymods == (CP_MOD_CTRL | CP_MOD_SHIFT)) {
+                    break;
+                }
 #if OS_WIN
                 break;
-#endif
+#else
                 handle_tab();
                 return;
+#endif
             }
         }
 
@@ -766,11 +770,10 @@ void handle_window_event(Window_Event *it) {
                         send_nvim_keys("<C-Esc>");
                     break;
 
-#if OS_WIN
                 case CP_KEY_TAB:
                     goto_next_tab();
                     break;
-#endif
+
                 case CP_KEY_R:
                 case CP_KEY_O:
                 case CP_KEY_I:
@@ -843,11 +846,9 @@ void handle_window_event(Window_Event *it) {
                 if (!editor->trigger_escape())
                     send_nvim_keys("<C-S-Esc>");
                 break;
-#if OS_WIN
             case CP_KEY_TAB:
                 goto_previous_tab();
                 break;
-#endif
             case CP_KEY_SPACE:
                 {
                     auto ed = get_current_editor();
