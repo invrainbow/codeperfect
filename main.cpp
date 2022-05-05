@@ -1044,12 +1044,10 @@ void handle_window_event(Window_Event *it) {
 
         if (world.ui.keyboard_captured_by_imgui) return;
         if (ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow)) return;
+        if (!uni_isprint(ch)) return;
 
         auto ed = get_current_editor();
         if (!ed) return;
-
-        if (ch > 127) return;
-        if (!isprint(ch)) return;
 
         if (world.use_nvim) {
             if (world.nvim.mode == VI_INSERT) {
@@ -1059,12 +1057,7 @@ void handle_window_event(Window_Event *it) {
                     ed->type_char_in_insert_mode(ch);
                 }
             } else {
-                if (ch == '<') {
-                    send_nvim_keys("<LT>");
-                } else {
-                    char keys[2] = { (char)ch, '\0' };
-                    send_nvim_keys(keys);
-                }
+                send_nvim_keys(ch == '<' ? "<LT>" : uchar_to_cstr(ch));
             }
         } else {
             ed->type_char_in_insert_mode(ch);

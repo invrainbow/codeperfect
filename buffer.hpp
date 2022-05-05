@@ -53,6 +53,7 @@ struct Cstr_To_Ustr {
 List<uchar>* cstr_to_ustr(ccstr s);
 
 s32 uchar_to_cstr(uchar c, cstr out);
+char* uchar_to_cstr(uchar c);
 
 typedef fn<bool(char*)> Buffer_Read_Func;
 

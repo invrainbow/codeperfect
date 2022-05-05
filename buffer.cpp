@@ -25,6 +25,13 @@ s32 uchar_to_cstr(uchar c, cstr out) {
     return k;
 }
 
+char* uchar_to_cstr(uchar c) {
+    auto ret = alloc_array(char, 5);
+    auto len = uchar_to_cstr(c, ret);
+    ret[len] = '\0';
+    return ret;
+}
+
 s32 uchar_size(uchar c) {
     if (c <= 0x7f) return 1;
     if (c <= 0x7ff) return 2;

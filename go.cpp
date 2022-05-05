@@ -8,6 +8,7 @@
 #include "hash64.hpp"
 #include <stdlib.h>
 #include "defer.hpp"
+#include "unicode.hpp"
 
 #if OS_WIN
 #include <windows.h>
@@ -495,7 +496,9 @@ const char* read_from_parser_input(void *p, uint32_t off, TSPoint pos, uint32_t 
     return buf;
 }
 
-bool isident(int c) { return isalnum(c) || c == '_'; }
+bool isident(int c) {
+    return c == '_' || uni_isalpha(c) || uni_isdigit(c);
+}
 
 Goresult *Goresult::wrap(Godecl *new_decl) { return make_goresult(new_decl, ctx); }
 Goresult *Goresult::wrap(Gotype *new_gotype) { return make_goresult(new_gotype, ctx); }

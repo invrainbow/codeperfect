@@ -1595,7 +1595,7 @@ bool Editor::cur_is_inside_comment_or_string() {
 
 // basically the rule is, if autocomplete comes up empty ON FIRST OPEN, then keep it closed
 
-void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typing_ident, char typed_ident_char) {
+void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typing_ident, uchar typed_ident_char) {
     if (!is_go_file) return;
 
     if (cur_is_inside_comment_or_string()) {
@@ -1815,8 +1815,7 @@ void Editor::trigger_parameter_hint() {
     }
 }
 
-void Editor::type_char(char ch) {
-    uchar uch = ch;
+void Editor::type_char(uchar uch) {
     buf->insert(cur, &uch, 1);
 
     auto old_cur = cur;
@@ -1914,7 +1913,7 @@ curr_change.new_end_byte = end;
 curr_change.new_end_point = cur_to_tspoint(cur);
 */
 
-void Editor::type_char_in_insert_mode(char ch) {
+void Editor::type_char_in_insert_mode(uchar ch) {
     bool already_typed = false;
 
     // handle typing a dot when an import is selected
@@ -2081,8 +2080,7 @@ void Editor::type_char_in_insert_mode(char ch) {
             pos.x += indentation->len;
 
             // insert the brace
-            uchar uch = ch;
-            buf->insert(pos, &uch, 1);
+            buf->insert(pos, &ch, 1);
             pos.x++;
 
             // move cursor after everything we typed

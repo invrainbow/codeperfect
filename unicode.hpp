@@ -26,3 +26,7 @@ struct Grapheme_Clusterer {
     void init();
     bool feed(int codepoint);
 };
+
+extern "C" bool uni_isalpha(int c);
+extern "C" bool uni_isdigit(int c);
+extern "C" bool uni_isprint(int c);
