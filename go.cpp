@@ -34,7 +34,8 @@ const int GO_INDEX_MAGIC_NUMBER = 0x49fa98;
 // version 22: sort references
 // version 23: rename @builtins to @builtin
 // version 24: don't include "_" decls
-const int GO_INDEX_VERSION = 24;
+// version 25: fix selector references being counted a second time as single ident
+const int GO_INDEX_VERSION = 25;
 
 void index_print(ccstr fmt, ...) {
     va_list args;
@@ -2039,7 +2040,7 @@ void Go_Indexer::process_tree_into_gofile(
                         return WALK_SKIP_CHILDREN;
                     }
                     */
-                    return WALK_CONTINUE;
+                    return WALK_SKIP_CHILDREN;
                 }
             }
             return WALK_CONTINUE;
