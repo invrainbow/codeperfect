@@ -1738,6 +1738,11 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
             if (a->str_length > b->str_length)
                 return -1;
 
+            if (a->result_type == ACR_KEYWORD && b->result_type == ACR_DECLARATION)
+                return 1;
+            if (a->result_type == ACR_DECLARATION && b->result_type == ACR_KEYWORD)
+                return -1;
+
             return 0;
         };
 
