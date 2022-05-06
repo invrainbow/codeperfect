@@ -2671,7 +2671,12 @@ void UI::draw_everything() {
                 auto filepath = get_path_relative_to(it.filepath, world.current_path);
                 For (*it.references) {
                     auto pos = it.is_sel ? it.x_start : it.start;
-                    if (ImGui::Selectable(cp_sprintf("%s:%s", filepath, format_cur(pos))))
+
+                    auto rendered_pos = pos;
+                    rendered_pos.x++;
+                    rendered_pos.y++;
+
+                    if (ImGui::Selectable(cp_sprintf("%s:%s", filepath, format_cur(rendered_pos))))
                         goto_file_and_pos(filepath, pos, true);
                 }
             }
