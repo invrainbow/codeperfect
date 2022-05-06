@@ -633,7 +633,6 @@ void init_goto_file() {
     fn<void(FT_Node*, ccstr)> fill_files = [&](auto node, auto path) {
         for (auto it = node->children; it; it = it->next) {
             auto isdir = it->is_directory;
-
             // if (isdir && !node->parent && streq(it->name, ".cp")) return;
 
             auto relpath = path[0] == '\0' ? cp_strdup(it->name) : path_join(path, it->name);
@@ -752,12 +751,14 @@ void filter_files() {
     Timer t;
     // t.init("filter_files");
 
-    u32 i = 0;
+    u32 i = 0, j = 0;
     For (*wnd.filepaths) {
-        if (fzy_has_match(wnd.query, it))
+        if (fzy_has_match(wnd.query, it)) {
             wnd.filtered_results->append(i);
-        if (i++ > 1000)
-            break;
+            if (j++ > 10000)
+                break;
+        }
+        i++;
     }
 
     // t.log("matching");

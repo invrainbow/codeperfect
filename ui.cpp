@@ -2757,10 +2757,11 @@ void UI::draw_everything() {
                 if (strlen(wnd.query) >= 2) {
                     u32 i = 0;
                     For (*wnd.symbols) {
-                        if (fzy_has_match(wnd.query, symbol_to_name(it)))
+                        if (fzy_has_match(wnd.query, symbol_to_name(it))) {
                             wnd.filtered_results->append(i);
-                        if (i++ > 1000)
-                            break;
+                            if (i++ > 10000)
+                                break;
+                        }
                     }
 
                     fuzzy_sort_filtered_results(
@@ -4113,10 +4114,11 @@ void UI::draw_everything() {
             if (strlen(wnd.query) > 0) {
                 int i = 0;
                 For (*wnd.actions) {
-                    if (fzy_has_match(wnd.query, get_command_name(it)))
+                    if (fzy_has_match(wnd.query, get_command_name(it))) {
                         wnd.filtered_results->append(it);
-                    if (i++ > 1000)
-                        break;
+                        if (i++ > 10000)
+                            break;
+                    }
                 }
 
                 fuzzy_sort_filtered_results(
@@ -4262,7 +4264,7 @@ void UI::draw_everything() {
                 Timer t;
                 t.init("filter_symbols");
 
-                for (u32 i = 0; i < wnd.symbols->len && i < 10000; i++) {
+                for (u32 i = 0, k = 0; i < wnd.symbols->len && k < 10000; i++) {
                     auto &it = wnd.symbols->at(i);
 
                     if (wnd.current_file_only)
@@ -4273,6 +4275,7 @@ void UI::draw_everything() {
                         continue;
 
                     wnd.filtered_results->append(i);
+                    k++;
                 }
 
                 t.log("matching");
