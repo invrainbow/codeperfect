@@ -409,6 +409,14 @@ void World::init(Window *_wnd) {
         message_queue.init();
     }
 
+    {
+        SCOPED_MEM(&world_mem);
+        frameskips.init();
+#ifdef DEBUG_MODE
+        show_frameskips = true;
+#endif
+    }
+
     fzy_init();
 
     // init workspace

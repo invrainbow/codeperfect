@@ -2216,6 +2216,7 @@ void UI::draw_everything() {
                 ImGui::MenuItem("Disable framerate cap", NULL, &world.turn_off_framerate_cap);
                 ImGui::MenuItem("Hover Info", NULL, &world.wnd_hover_info.show);
                 ImGui::MenuItem("Show frame index", NULL, &world.show_frame_index);
+                ImGui::MenuItem("Show frameskips", NULL, &world.show_frameskips);
 
                 if (ImGui::MenuItem("Cleanup unused memory")) {
                     world.indexer.message_queue.add([&](auto msg) {
@@ -5812,6 +5813,26 @@ void UI::draw_everything() {
         ImGui::End();
     }
 
+    if (world.show_frameskips) {
+        auto now = current_time_milli();
+        auto pos = new_cur2(
+            (int)(world.window_size.x),
+            (int)(get_status_area().y - base_font->height)
+        );
+
+        For (world.frameskips) {
+            auto s = cp_sprintf("failed frame deadline by %llums", it.ms_over);
+
+            auto newpos = pos;
+            newpos.x -= get_text_width(s) * base_font->width;
+
+            auto opacity = 1.0 - (0.7 * (now - it.timestamp) / 2000.f);
+            auto color = rgba(rgb_hex("#ff0000"), opacity);
+            draw_string(newpos, s, color);
+
+            pos.y -= base_font->height;
+        }
+    }
 
     if (world.cmd_unfocus_all_windows) {
         world.cmd_unfocus_all_windows = false;

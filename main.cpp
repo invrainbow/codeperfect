@@ -1701,8 +1701,23 @@ int main(int argc, char **argv) {
             // wait until next frame
             auto budget = (1000.f / FRAME_RATE_CAP);
             auto spent = (current_time_nano() - frame_start_time) / 1000000.f;
-            if (budget > spent) sleep_milliseconds((u32)(budget - spent));
+            if (budget > spent) {
+                sleep_milliseconds((u32)(budget - spent));
+            } else {
+                auto fs = world.frameskips.append();
+                fs->timestamp = current_time_milli();
+                fs->ms_over = spent - budget;
+            }
         }
+
+        {
+            auto &fs = world.frameskips;
+            auto now = current_time_milli();
+
+            while (fs.len && fs[0].timestamp + 2000 < now)
+                fs.remove((u32)0);
+        }
+
     }
 
     return EXIT_SUCCESS;

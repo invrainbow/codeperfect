@@ -284,6 +284,13 @@ struct World {
     Fridge<Chunk5> chunk5_fridge;
     Fridge<Chunk6> chunk6_fridge;
 
+    struct Frameskip {
+        u64 timestamp;
+        u64 ms_over;
+    };
+
+    List<Frameskip> frameskips;
+
     int gh_version;
     int frame_index;
 
@@ -360,6 +367,7 @@ struct World {
     bool randomly_move_cursor_around;
     bool show_frame_index;
     bool trace_next_frame;
+    bool show_frameskips;
 
     Fs_Watcher fswatch;
 
