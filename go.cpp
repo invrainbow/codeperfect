@@ -6159,7 +6159,7 @@ Gotype *Go_Indexer::expr_to_gotype(Ast_Node *expr) {
         do {
             auto func = expr->field(TSF_FUNCTION);
             if (func->type() != TS_IDENTIFIER) break;
-            if (!streq(func->string(), "make")) break;
+            if (!streq(func->string(), "make") && !streq(func->string(), "new")) break;
 
             auto args = expr->field(TSF_ARGUMENTS);
             if (args->null) break;
@@ -6168,7 +6168,13 @@ Gotype *Go_Indexer::expr_to_gotype(Ast_Node *expr) {
             auto firstarg = args->child();
             if (firstarg->null) break;
 
-            return node_to_gotype(firstarg);
+            ret = node_to_gotype(firstarg);
+            if (streq(func->string(), "new")) {
+                auto newret = new_gotype(GOTYPE_POINTER);
+                newret->pointer_base = ret;
+                ret = newret;
+            }
+            return ret;
         } while (0);
 
         ret = new_gotype(GOTYPE_LAZY_CALL);
