@@ -2218,6 +2218,41 @@ void UI::draw_everything() {
                 ImGui::MenuItem("Show frame index", NULL, &world.show_frame_index);
                 ImGui::MenuItem("Show frameskips", NULL, &world.show_frameskips);
 
+                if (ImGui::MenuItem("Process file")) {
+                    do {
+                        auto editor = get_current_editor();
+                        if (!editor) break;
+
+                        Go_File file; ptr0(&file);
+
+                        file.pool.init("file pool");
+                        defer { file.pool.cleanup(); };
+
+                        {
+                            SCOPED_MEM(&file.pool);
+                            file.filename = cp_basename(editor->filepath);
+                            file.scope_ops = alloc_list<Go_Scope_Op>();
+                            file.decls = alloc_list<Godecl>();
+                            file.imports = alloc_list<Go_Import>();
+                            file.references = alloc_list<Go_Reference>();
+                        }
+
+                        if (!world.indexer.try_acquire_lock(IND_READING)) break;
+                        defer { world.indexer.release_lock(IND_READING); };
+
+                        Parser_It it; ptr0(&it);
+                        it.init(editor->buf);
+
+                        auto tree = editor->buf->tree;
+                        if (!tree) break;
+
+                        Ast_Node root; ptr0(&root);
+                        root.init(ts_tree_root_node(tree), &it);
+
+                        world.indexer.process_tree_into_gofile(&file, &root, file.filename, NULL);
+                    } while (0);
+                }
+
                 if (ImGui::MenuItem("Cleanup unused memory")) {
                     world.indexer.message_queue.add([&](auto msg) {
                         msg->type = GOMSG_CLEANUP_UNUSED_MEMORY;
