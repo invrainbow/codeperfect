@@ -101,8 +101,6 @@ bool UI::init_fonts() {
 
             all_font_names->append(cname);
             all_font_urls->append(curl);
-
-            print("(allfonts) %s %s", cname, curl);
         }
     }
 
@@ -132,8 +130,6 @@ bool Font::init_font() {
     defer { CFRelease(cffilepath); };
 
     filepath = cfstring_to_ccstr(cffilepath);
-
-    print("initialized font %s - %s", name, filepath);
 
     hbfont = hb_coretext_font_create((CTFontRef)ctfont);
     if (!hbfont) return false;
@@ -191,8 +187,6 @@ void Font::cleanup() {
 Font* UI::find_font_for_grapheme(List<uchar> *grapheme) {
     if (base_font->can_render_chars(grapheme))
         return base_font;
-
-    // print("base font failed for %x", uch);
 
     auto pat = FcPatternCreate();
     if (!pat) return error("FcPatternCreate failed"), (Font*)NULL;

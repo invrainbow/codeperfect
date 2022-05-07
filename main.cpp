@@ -391,8 +391,6 @@ void handle_window_event(Window_Event *it) {
 
         auto keymods = ui.imgui_get_keymods();
 
-        print("key %x, action = %d, mods = %d", key, action, keymods);
-
         switch (keymods) {
         case CP_MOD_PRIMARY:
             switch (key) {
@@ -1021,8 +1019,6 @@ void handle_window_event(Window_Event *it) {
 
     case WINEV_CHAR: {
         auto ch = it->character.ch;
-
-        print("char: %d", ch);
 
         Timer t; t.init("char callback", &world.trace_next_frame); defer { t.log("done"); };
 
