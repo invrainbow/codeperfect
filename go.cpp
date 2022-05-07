@@ -35,6 +35,7 @@ const int GO_INDEX_MAGIC_NUMBER = 0x49fa98;
 // version 23: rename @builtins to @builtin
 // version 24: don't include "_" decls
 // version 25: fix selector references being counted a second time as single ident
+// version 26: fix scope ops not handling TS_FUNC_LITERAL
 const int GO_INDEX_VERSION = 25;
 
 void index_print(ccstr fmt, ...) {
@@ -1777,6 +1778,7 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
         case TS_FOR_STATEMENT:
         case TS_EXPRESSION_SWITCH_STATEMENT:
         case TS_BLOCK:
+        case TS_FUNC_LITERAL:
         case TS_TYPE_SWITCH_STATEMENT:
             {
                 open_scopes.append(depth);
