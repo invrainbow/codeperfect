@@ -969,18 +969,16 @@ bool Window::is_focused() {
     }
 }
 
-NSEvent *get_next_event() {
-    return [NSApp nextEventMatchingMask:NSEventMaskAny
-                              untilDate:[NSDate distantPast]
-                                 inMode:NSDefaultRunLoopMode
-                                dequeue:YES];
-}
-
 void poll_window_events() {
     @autoreleasepool {
-        NSEvent *event = NULL;
-        while ((event = get_next_event()))
+        while (true) {
+            auto event = [NSApp nextEventMatchingMask:NSEventMaskAny
+                                            untilDate:[NSDate distantPast]
+                                               inMode:NSDefaultRunLoopMode
+                                              dequeue:YES];
+            if (!event) break;
             [NSApp sendEvent:event];
+        }
     }
 }
 
