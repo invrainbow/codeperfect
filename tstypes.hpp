@@ -6,7 +6,7 @@
 // use sh/generate_tstypes.py to generate
 enum Ts_Ast_Type {
     TS_ERROR = ((TSSymbol)-1),
-    TS_GT_GT_EQ = 1,
+    TS_AMP_EQ = 1,
     TS_LF = 2,
     TS_SEMI = 3,
     TS_PACKAGE = 4,
@@ -41,7 +41,7 @@ enum Ts_Ast_Type {
     TS_SLASH_EQ = 33,
     TS_PERCENT_EQ = 34,
     TS_LT_LT_EQ = 35,
-    TS_AMP_EQ = 36,
+    TS_GT_GT_EQ = 36,
     TS_AMP_CARET_EQ = 37,
     TS_PLUS_EQ = 38,
     TS_DASH_EQ = 39,

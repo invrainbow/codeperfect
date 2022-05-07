@@ -36,7 +36,8 @@ const int GO_INDEX_MAGIC_NUMBER = 0x49fa98;
 // version 24: don't include "_" decls
 // version 25: fix selector references being counted a second time as single ident
 // version 26: fix scope ops not handling TS_FUNC_LITERAL
-const int GO_INDEX_VERSION = 25;
+// version 27: fix parser handling newlines and idents wrong in interface specs
+const int GO_INDEX_VERSION = 27;
 
 void index_print(ccstr fmt, ...) {
     va_list args;
@@ -4875,7 +4876,7 @@ Parameter_Hint *Go_Indexer::parameter_hint(ccstr filepath, cur2 pos) {
                     call_args_start = args->start();
 
                     int i = 0;
-                    FOR_NODE_CHILDREN(args) {
+                    FOR_NODE_CHILDREN (args) {
                         if (cmp_pos_to_node(pos, it, true) == 0) {
                             current_param = i;
                             break;
@@ -5549,21 +5550,18 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
 
     case TS_INTERFACE_TYPE:
         {
-            auto speclist_node = node->child();
-            if (speclist_node->null) break;
-
             ret = alloc_object(Gotype);
             ret->type = GOTYPE_INTERFACE;
-            ret->interface_specs = alloc_list<Go_Struct_Spec>(speclist_node->child_count());
+            ret->interface_specs = alloc_list<Go_Struct_Spec>(node->child_count());
 
-            FOR_NODE_CHILDREN (speclist_node) {
-                auto spec = ret->interface_specs->append();
-                auto field = alloc_object(Godecl);
-                spec->field = field;
+            FOR_NODE_CHILDREN (node) {
+                Godecl *field = NULL;
 
-                if (it->type() == TS_METHOD_SPEC) {
+                switch (it->type()) {
+                case TS_METHOD_SPEC: {
                     auto name_node = it->field(TSF_NAME);
 
+                    field = alloc_object(Godecl);
                     field->type = GODECL_FIELD;
                     field->is_toplevel = toplevel;
                     field->name = name_node->string();
@@ -5579,15 +5577,28 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
                         it->field(TSF_RESULT),
                         &field->gotype->func_sig
                     );
-                } else {
+                    break;
+                }
+                case TS_INTERFACE_TYPE_NAME: {
+                    auto gotype = node_to_gotype(it->child());
+                    if (!gotype) break;
+
+                    field = alloc_object(Godecl);
                     field->type = GODECL_FIELD;
                     field->is_toplevel = toplevel;
                     field->name = NULL;
                     field->is_embedded = true;
-                    field->gotype = node_to_gotype(it);
+                    field->gotype = gotype;
                     field->spec_start = it->start();
                     field->decl_start = it->start();
                     field->decl_end = it->end();
+                    break;
+                }
+                }
+
+                if (field) {
+                    auto spec = ret->interface_specs->append();
+                    spec->field = field;
                 }
             }
         }
@@ -5813,7 +5824,7 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
         {
             List<Gotype*> *saved_iota_types = NULL;
 
-            FOR_NODE_CHILDREN(node) {
+            FOR_NODE_CHILDREN (node) {
                 auto spec = it;
                 auto type_node = spec->field(TSF_TYPE);
                 auto value_node = spec->field(TSF_VALUE);

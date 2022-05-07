@@ -3,7 +3,7 @@
 
 ccstr ts_ast_type_str(Ts_Ast_Type type) {
     switch (type) {
-    define_str_case(TS_GT_GT_EQ);
+    define_str_case(TS_AMP_EQ);
     define_str_case(TS_LF);
     define_str_case(TS_SEMI);
     define_str_case(TS_PACKAGE);
@@ -38,7 +38,7 @@ ccstr ts_ast_type_str(Ts_Ast_Type type) {
     define_str_case(TS_SLASH_EQ);
     define_str_case(TS_PERCENT_EQ);
     define_str_case(TS_LT_LT_EQ);
-    define_str_case(TS_AMP_EQ);
+    define_str_case(TS_GT_GT_EQ);
     define_str_case(TS_AMP_CARET_EQ);
     define_str_case(TS_PLUS_EQ);
     define_str_case(TS_DASH_EQ);
