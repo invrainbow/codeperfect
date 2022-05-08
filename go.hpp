@@ -19,48 +19,6 @@ enum {
     // other custom packages? can't imagine there will be anything else
 };
 
-// mirrors tree-sitter-go/src/parser.c
-enum Ts_Field_Type {
-    TSF_ALIAS = 1,
-    TSF_ALTERNATIVE = 2,
-    TSF_ARGUMENTS = 3,
-    TSF_BODY = 4,
-    TSF_CAPACITY = 5,
-    TSF_CHANNEL = 6,
-    TSF_COMMUNICATION = 7,
-    TSF_CONDITION = 8,
-    TSF_CONSEQUENCE = 9,
-    TSF_ELEMENT = 10,
-    TSF_END = 11,
-    TSF_FIELD = 12,
-    TSF_FUNCTION = 13,
-    TSF_INDEX = 14,
-    TSF_INITIALIZER = 15,
-    TSF_KEY = 16,
-    TSF_LABEL = 17,
-    TSF_LEFT = 18,
-    TSF_LENGTH = 19,
-    TSF_NAME = 20,
-    TSF_OPERAND = 21,
-    TSF_OPERATOR = 22,
-    TSF_PACKAGE = 23,
-    TSF_PARAMETERS = 24,
-    TSF_PATH = 25,
-    TSF_RECEIVER = 26,
-    TSF_RESULT = 27,
-    TSF_RIGHT = 28,
-    TSF_START = 29,
-    TSF_TAG = 30,
-    TSF_TYPE = 31,
-    TSF_TYPE_ARGUMENTS = 32,
-    TSF_TYPE_PARAMETERS = 33,
-    TSF_UPDATE = 34,
-    TSF_VALUE = 35,
-};
-
-ccstr ts_field_type_str(Ts_Field_Type type);
-ccstr ts_ast_type_str(Ts_Ast_Type type);
-
 struct Go_Index;
 
 struct Index_Stream {

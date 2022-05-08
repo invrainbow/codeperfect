@@ -35,7 +35,8 @@ else
 	CFLAGS += -DDEBUG_MODE -g -O0
 endif
 
-SRC_FILES := $(filter-out tests.cpp, $(wildcard *.cpp))
+SEPARATE_SRC_FILES = tests.cpp tstypes.cpp
+SRC_FILES := $(filter-out $(SEPARATE_SRC_FILES), $(wildcard *.cpp))
 OBJ_FILES = $(patsubst %.cpp,obj/%.o,$(SRC_FILES))
 DEP_FILES = $(patsubst %.cpp,obj/%.d,$(SRC_FILES))
 DEP_FILES += obj/objclibs.d obj/clibs.d
@@ -60,12 +61,15 @@ endif
 build/bin/test: $(filter-out obj/main.o, $(OBJ_DEPS)) obj/tests.o
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 
-build/bin/ide: $(OBJ_DEPS) cpcolors.c
+build/bin/ide: $(OBJ_DEPS) cpcolors.c tstypes.cpp
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 
 -include $(DEP_FILES)
 
 $(OBJ_FILES): obj/%.o: %.cpp Makefile gohelper.h tstypes.hpp
+	$(CC) $(CFLAGS) -MMD -MP -c -o $@ $<
+
+obj/tstypes.o: tstypes.cpp Makefile
 	$(CC) $(CFLAGS) -MMD -MP -c -o $@ $<
 
 obj/tests.o: tests.cpp Makefile
