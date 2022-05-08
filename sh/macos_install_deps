@@ -5,15 +5,15 @@
 
 set -e
 
-# donwload submodules
+# download submodules
 git submodule update --init --recursive
 
 # stuff we need from brew
-brew install pcre go coreutils
+brew bundle install --file sh/Brewfile
 
 # intel version of brew
 brewi="arch --x86_64 /usr/local/Homebrew/bin/brew"
-$brewi install pcre
+$brewi bundle install --file sh/Brewfile
 
 # nvim
 wget https://github.com/neovim/neovim/releases/download/v0.5.1/nvim-macos.tar.gz

@@ -17,6 +17,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unicode"
 	"unsafe"
 
 	"github.com/denormal/go-gitignore"
@@ -31,12 +32,12 @@ import (
 #include <stdlib.h>
 
 typedef struct _GH_Build_Error {
-    char* text;
-    int32_t is_valid;
-    char *filename;
-    int32_t line;
-    int32_t col;
-    int32_t is_vcol;
+	char* text;
+	int32_t is_valid;
+	char *filename;
+	int32_t line;
+	int32_t col;
+	int32_t is_vcol;
 } GH_Build_Error;
 
 typedef struct _GH_Message {
@@ -60,7 +61,7 @@ func init() {
 type GoBuild struct {
 	done   bool
 	errors []*errorformat.Entry
-	cmd    *exec.Cmd
+	cmd	*exec.Cmd
 }
 
 func BoolToInt(b bool) int {
@@ -207,8 +208,8 @@ func GHFmtAddLine(line *C.char) {
 }
 
 const (
-	FmtGoFmt                   = 0
-	FmtGoImports               = 1
+	FmtGoFmt				   = 0
+	FmtGoImports			   = 1
 	FmtGoImportsWithAutoImport = 2
 )
 
@@ -276,7 +277,7 @@ func GHAuth(rawEmail *C.char, rawLicenseKey *C.char) {
 
 	osSlug := runtime.GOOS
 	req := &models.AuthRequest{
-		OS:             osSlug,
+		OS:			 osSlug,
 		CurrentVersion: versions.CurrentVersion,
 	}
 
@@ -462,7 +463,7 @@ const (
 
 var buildenv struct {
 	Context build.Context
-	Ok      bool
+	Ok	  bool
 }
 
 //export GHBuildEnvInit
@@ -526,6 +527,18 @@ func GHBuildEnvGoVersionSupported() bool {
 		}
 	}
 	return false
+}
+
+//export GHIsUnicodeLetter
+func GHIsUnicodeLetter(code rune) bool {
+    log.Println(code)
+	return unicode.IsLetter(code)
+}
+
+//export GHIsUnicodeDigit
+func GHIsUnicodeDigit(code rune) bool {
+    log.Println(code)
+	return unicode.IsDigit(code)
 }
 
 func main() {}

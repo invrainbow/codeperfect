@@ -3,12 +3,7 @@
 #include "os.hpp"
 #include "common.hpp"
 #include <Carbon/Carbon.h>
-
-#if defined(__OBJC__)
-#import <Cocoa/Cocoa.h>
-#else
-typedef void* id;
-#endif
+#include "objc_id_shim.hpp"
 
 enum Window_Event_Type {
     WINEV_WINDOW_SIZE,
@@ -19,6 +14,8 @@ enum Window_Event_Type {
     WINEV_WINDOW_SCALE,
     WINEV_KEY,
     WINEV_CHAR,
+    WINEV_FOCUS,
+    WINEV_BLUR,
 };
 
 enum Mouse_Button {
@@ -78,6 +75,9 @@ struct Window_Event {
         struct {
             u32 ch;
         } character;
+
+        struct {} focus;
+        struct {} blur;
     };
 };
 

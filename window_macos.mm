@@ -374,6 +374,11 @@ const NSRange kEmptyRange = { NSNotFound, 0 };
 
 - (void)windowDidBecomeKey:(NSNotification *)notification {
     window->update_cursor_mode();
+    window->dispatch_event(WINEV_FOCUS, [&](auto ev) {});
+}
+
+- (void)windowDidResignKey:(NSNotification *)notification {
+    window->dispatch_event(WINEV_BLUR, [&](auto ev) {});
 }
 
 @end
@@ -408,6 +413,21 @@ const NSRange kEmptyRange = { NSNotFound, 0 };
     return self;
 }
 
+// basically, enable ctrl+tab and ctrl+shift+tab
+- (BOOL)performKeyEquivalent:(NSEvent *)event {
+    if ([[self window] firstResponder] != self) return NO;
+
+    auto mods = [event modifierFlags];
+    if (!(mods & NSEventModifierFlagControl)) return NO;
+
+    auto code = [event keyCode];
+    if (scan_to_key_table[code] != CP_KEY_TAB) return NO;
+
+    if (![[NSApp mainMenu] performKeyEquivalent:event])
+        [self keyDown:event];
+    return YES;
+}
+
 - (BOOL)canBecomeKeyView { return YES; }
 - (BOOL)acceptsFirstResponder { return YES; }
 - (BOOL)wantsUpdateLayer { return YES; }
@@ -422,7 +442,6 @@ const NSRange kEmptyRange = { NSNotFound, 0 };
 }
 
 - (void)mouseDown:(NSEvent *)event {
-;
     window->dispatch_mouse_event(CP_MOUSE_LEFT, CP_ACTION_PRESS, translate_keymod([event modifierFlags]));
 }
 
@@ -622,8 +641,7 @@ const NSRange kEmptyRange = { NSNotFound, 0 };
 - (NSRange)markedRange {
     if ([marked_text length] > 0)
         return NSMakeRange(0, [marked_text length] - 1);
-    else
-        return kEmptyRange;
+    return kEmptyRange;
 }
 
 - (NSRange)selectedRange {
@@ -949,18 +967,16 @@ bool Window::is_focused() {
     }
 }
 
-NSEvent *get_next_event() {
-    return [NSApp nextEventMatchingMask:NSEventMaskAny
-                              untilDate:[NSDate distantPast]
-                                 inMode:NSDefaultRunLoopMode
-                                dequeue:YES];
-}
-
 void poll_window_events() {
     @autoreleasepool {
-        NSEvent *event = NULL;
-        while ((event = get_next_event()))
+        while (true) {
+            auto event = [NSApp nextEventMatchingMask:NSEventMaskAny
+                                            untilDate:[NSDate distantPast]
+                                               inMode:NSDefaultRunLoopMode
+                                              dequeue:YES];
+            if (!event) break;
             [NSApp sendEvent:event];
+        }
     }
 }
 

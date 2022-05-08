@@ -8,6 +8,7 @@
 #include "hash64.hpp"
 #include <stdlib.h>
 #include "defer.hpp"
+#include "unicode.hpp"
 
 #if OS_WIN
 #include <windows.h>
@@ -15,7 +16,7 @@
 #include <dlfcn.h>
 #endif
 
-#define GO_DEBUG 1
+#define GO_DEBUG 0
 
 #if GO_DEBUG
 #define go_print(fmt, ...) print("[go] " fmt, ##__VA_ARGS__)
@@ -32,9 +33,12 @@ const int GO_INDEX_MAGIC_NUMBER = 0x49fa98;
 // version 21: remove array_size from Gotype
 // version 22: sort references
 // version 23: rename @builtins to @builtin
-// version 24: upgrade tree-sitter-go
-// version 25: don't include "_" decls
-const int GO_INDEX_VERSION = 25;
+// version 24: don't include "_" decls
+// version 25: fix selector references being counted a second time as single ident
+// version 26: fix scope ops not handling TS_FUNC_LITERAL
+// version 27: fix parser handling newlines and idents wrong in interface specs
+// version 28: upgrade tree-sitter-go
+const int GO_INDEX_VERSION = 27;
 
 void index_print(ccstr fmt, ...) {
     va_list args;
@@ -496,7 +500,9 @@ const char* read_from_parser_input(void *p, uint32_t off, TSPoint pos, uint32_t 
     return buf;
 }
 
-bool isident(int c) { return isalnum(c) || c == '_'; }
+bool isident(int c) {
+    return c == '_' || uni_isalpha(c) || uni_isdigit(c);
+}
 
 Goresult *Goresult::wrap(Godecl *new_decl) { return make_goresult(new_decl, ctx); }
 Goresult *Goresult::wrap(Gotype *new_gotype) { return make_goresult(new_gotype, ctx); }
@@ -1645,20 +1651,38 @@ Ast_Node *Ast_Node::dup(TSNode new_node) {
 }
 
 ccstr Ast_Node::string() {
-    // auto start_byte = ts_node_start_byte(node);
-    // auto end_byte = ts_node_end_byte(node);
-
-    if (it->type == IT_MMAP)
-        it->set_pos(new_cur2((i32)start_byte(), (i32)-1));
-    else if (it->type == IT_BUFFER)
-        it->set_pos(start());
-
     auto len = end_byte() - start_byte();
-    auto ret = alloc_array(char, len + 1);
-    for (u32 i = 0; i < len; i++)
-        ret[i] = it->next();
-    ret[len] = '\0';
-    return ret;
+
+    if (it->type == IT_MMAP) {
+        it->set_pos(new_cur2((i32)start_byte(), (i32)-1));
+
+        auto ret = alloc_array(char, len + 1);
+        for (u32 i = 0; i < len; i++)
+            ret[i] = it->next();
+        ret[len] = '\0';
+        return ret;
+    }
+
+    if (it->type == IT_BUFFER) {
+        auto pos = start();
+        auto buf = it->get_buf();
+        pos.x = buf->idx_byte_to_cp(pos.y, pos.x);
+        it->set_pos(pos);
+
+        auto ret = alloc_list<char>();
+        while (ret->len < len) {
+            char utf8[4];
+            int n = uchar_to_cstr(it->next(), utf8);
+            if (ret->len + n > len) break;
+
+            for (int i = 0; i < n; i++)
+                ret->append(utf8[i]);
+        }
+        ret->append('\0');
+        return ret->items;
+    }
+
+    return NULL;
 }
 
 Gotype *Go_Indexer::new_gotype(Gotype_Type type) {
@@ -1756,6 +1780,7 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
         case TS_FOR_STATEMENT:
         case TS_EXPRESSION_SWITCH_STATEMENT:
         case TS_BLOCK:
+        case TS_FUNC_LITERAL:
         case TS_TYPE_SWITCH_STATEMENT:
             {
                 open_scopes.append(depth);
@@ -2019,7 +2044,7 @@ void Go_Indexer::process_tree_into_gofile(
                         return WALK_SKIP_CHILDREN;
                     }
                     */
-                    return WALK_CONTINUE;
+                    return WALK_SKIP_CHILDREN;
                 }
             }
             return WALK_CONTINUE;
@@ -3057,7 +3082,7 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_symbol(ccstr symbol) {
 }
 
 List<Find_References_File> *Go_Indexer::find_references(ccstr filepath, cur2 pos, bool include_self) {
-    auto result = world.indexer.jump_to_definition(filepath, pos);
+    auto result = jump_to_definition(filepath, pos);
     if (!result) return NULL;
     return find_references(result->decl, include_self);
 }
@@ -4258,8 +4283,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                 auto get_struct_literal_type = [&]() -> Ast_Node* {
                     auto curr = node->parent();
                     if (curr->null) return NULL;
-                    if (curr->type() != TS_KEYED_ELEMENT) return NULL;
-
+                    if (curr->type() != TS_KEYED_ELEMENT && curr->type() != TS_LITERAL_ELEMENT) return NULL;
                     if (!node->prev()->null) return NULL; // must be key, not value
 
                     curr = curr->parent();
@@ -4708,14 +4732,18 @@ bool Go_Indexer::check_if_still_in_parameter_hint(ccstr filepath, cur2 cur, cur2
     reload_all_dirty_files();
 
     auto pf = parse_file(filepath, true);
-    if (!pf) return NULL;
+    if (!pf) return false;
     defer { free_parsed_file(pf); };
 
-    // try to close string if we're in one
+    auto buf = pf->it->buffer_params.it.buf;
 
+    // try to close string if we're in one
     char string_close_char = 0;
 
-    find_nodes_containing_pos(pf->root, cur, true, [&](auto it) -> Walk_Action {
+    cur2 bytecur = cur;
+    bytecur.x = buf->idx_cp_to_byte(bytecur.y, bytecur.x);
+
+    find_nodes_containing_pos(pf->root, bytecur, true, [&](auto it) -> Walk_Action {
         switch (it->type()) {
         case TS_RAW_STRING_LITERAL:
         case TS_INTERPRETED_STRING_LITERAL:
@@ -4735,7 +4763,7 @@ bool Go_Indexer::check_if_still_in_parameter_hint(ccstr filepath, cur2 cur, cur2
                     auto last_pos = new_cur2((i32)relu_sub(end_pos.x, 1), (i32)end_pos.y);
 
                     auto last_ch = get_char_at_pos(last_pos);
-                    if (!(cur == end_pos && last_ch == start_ch && last_pos != start_pos))
+                    if (!(bytecur == end_pos && last_ch == start_ch && last_pos != start_pos))
                         string_close_char = start_ch;
                 }
             }
@@ -4754,10 +4782,12 @@ bool Go_Indexer::check_if_still_in_parameter_hint(ccstr filepath, cur2 cur, cur2
 
     bool ret = false;
 
+    // hint_start is already in byte index
+
     find_nodes_containing_pos(pf->root, hint_start, true, [&](auto it) -> Walk_Action {
         if (it->start() == hint_start)
             if (it->type() == TS_ARGUMENT_LIST)
-                if (cur < it->end()) {
+                if (bytecur < it->end()) {
                     ret = true;
                     return WALK_ABORT;
                 }
@@ -4779,6 +4809,11 @@ Parameter_Hint *Go_Indexer::parameter_hint(ccstr filepath, cur2 pos) {
     if (!pf) return NULL;
     defer { free_parsed_file(pf); };
 
+    if (pf->it->type != IT_BUFFER) {
+        error("can only do parameter hint on buffer parser");
+        return NULL;
+    }
+
     if (!truncate_parsed_file(pf, pos, "_)}}}}}}}}}}}}}}}}")) return NULL;
     defer { ts_tree_delete(pf->tree); };
 
@@ -4790,13 +4825,19 @@ Parameter_Hint *Go_Indexer::parameter_hint(ccstr filepath, cur2 pos) {
         return it->get_pos();
     };
 
+    auto start_pos = go_back_until_non_space();
+
+    auto buf = pf->it->buffer_params.it.buf;
+    pos.x = buf->idx_cp_to_byte(pos.y, pos.x);
+    start_pos.x = buf->idx_cp_to_byte(start_pos.y, start_pos.x);
+
     Ast_Node *func_expr = NULL;
     cur2 call_args_start;
     int current_param = -1;
 
     t.log("prepare shit");
 
-    find_nodes_containing_pos(pf->root, go_back_until_non_space(), false, [&](auto node) -> Walk_Action {
+    find_nodes_containing_pos(pf->root, start_pos, false, [&](auto node) -> Walk_Action {
         switch (node->type()) {
         case TS_TYPE_CONVERSION_EXPRESSION:
         case TS_CALL_EXPRESSION:
@@ -4835,7 +4876,7 @@ Parameter_Hint *Go_Indexer::parameter_hint(ccstr filepath, cur2 pos) {
                     call_args_start = args->start();
 
                     int i = 0;
-                    FOR_NODE_CHILDREN(args) {
+                    FOR_NODE_CHILDREN (args) {
                         if (cmp_pos_to_node(pos, it, true) == 0) {
                             current_param = i;
                             break;
@@ -5509,21 +5550,18 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
 
     case TS_INTERFACE_TYPE:
         {
-            auto speclist_node = node->child();
-            if (speclist_node->null) break;
-
             ret = alloc_object(Gotype);
             ret->type = GOTYPE_INTERFACE;
-            ret->interface_specs = alloc_list<Go_Struct_Spec>(speclist_node->child_count());
+            ret->interface_specs = alloc_list<Go_Struct_Spec>(node->child_count());
 
-            FOR_NODE_CHILDREN (speclist_node) {
-                auto spec = ret->interface_specs->append();
-                auto field = alloc_object(Godecl);
-                spec->field = field;
+            FOR_NODE_CHILDREN (node) {
+                Godecl *field = NULL;
 
-                if (it->type() == TS_METHOD_SPEC) {
+                switch (it->type()) {
+                case TS_METHOD_SPEC: {
                     auto name_node = it->field(TSF_NAME);
 
+                    field = alloc_object(Godecl);
                     field->type = GODECL_FIELD;
                     field->is_toplevel = toplevel;
                     field->name = name_node->string();
@@ -5539,15 +5577,28 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
                         it->field(TSF_RESULT),
                         &field->gotype->func_sig
                     );
-                } else {
+                    break;
+                }
+                case TS_INTERFACE_TYPE_NAME: {
+                    auto gotype = node_to_gotype(it->child());
+                    if (!gotype) break;
+
+                    field = alloc_object(Godecl);
                     field->type = GODECL_FIELD;
                     field->is_toplevel = toplevel;
                     field->name = NULL;
                     field->is_embedded = true;
-                    field->gotype = node_to_gotype(it);
+                    field->gotype = gotype;
                     field->spec_start = it->start();
                     field->decl_start = it->start();
                     field->decl_end = it->end();
+                    break;
+                }
+                }
+
+                if (field) {
+                    auto spec = ret->interface_specs->append();
+                    spec->field = field;
                 }
             }
         }
@@ -5773,7 +5824,7 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
         {
             List<Gotype*> *saved_iota_types = NULL;
 
-            FOR_NODE_CHILDREN(node) {
+            FOR_NODE_CHILDREN (node) {
                 auto spec = it;
                 auto type_node = spec->field(TSF_TYPE);
                 auto value_node = spec->field(TSF_VALUE);
@@ -6121,7 +6172,7 @@ Gotype *Go_Indexer::expr_to_gotype(Ast_Node *expr) {
         do {
             auto func = expr->field(TSF_FUNCTION);
             if (func->type() != TS_IDENTIFIER) break;
-            if (!streq(func->string(), "make")) break;
+            if (!streq(func->string(), "make") && !streq(func->string(), "new")) break;
 
             auto args = expr->field(TSF_ARGUMENTS);
             if (args->null) break;
@@ -6130,7 +6181,13 @@ Gotype *Go_Indexer::expr_to_gotype(Ast_Node *expr) {
             auto firstarg = args->child();
             if (firstarg->null) break;
 
-            return node_to_gotype(firstarg);
+            ret = node_to_gotype(firstarg);
+            if (streq(func->string(), "new")) {
+                auto newret = new_gotype(GOTYPE_POINTER);
+                newret->pointer_base = ret;
+                ret = newret;
+            }
+            return ret;
         } while (0);
 
         ret = new_gotype(GOTYPE_LAZY_CALL);
@@ -6586,220 +6643,6 @@ ccstr ts_field_type_str(Ts_Field_Type type) {
     define_str_case(TSF_UPDATE);
     define_str_case(TSF_VALUE);
     }
-    return NULL;
-}
-
-ccstr ts_ast_type_str(Ts_Ast_Type type) {
-    switch (type) {
-    define_str_case(TS_ERROR);
-    define_str_case(TS_IDENTIFIER);
-    define_str_case(TS_LF);
-    define_str_case(TS_SEMI);
-    define_str_case(TS_PACKAGE);
-    define_str_case(TS_IMPORT);
-    define_str_case(TS_ANON_DOT);
-    define_str_case(TS_BLANK_IDENTIFIER);
-    define_str_case(TS_LPAREN);
-    define_str_case(TS_RPAREN);
-    define_str_case(TS_CONST);
-    define_str_case(TS_COMMA);
-    define_str_case(TS_EQ);
-    define_str_case(TS_VAR);
-    define_str_case(TS_FUNC);
-    define_str_case(TS_LBRACK);
-    define_str_case(TS_RBRACK);
-    define_str_case(TS_DOT_DOT_DOT);
-    define_str_case(TS_TYPE);
-    define_str_case(TS_STAR);
-    define_str_case(TS_STRUCT);
-    define_str_case(TS_LBRACE);
-    define_str_case(TS_RBRACE);
-    define_str_case(TS_INTERFACE);
-    define_str_case(TS_PIPE);
-    define_str_case(TS_TILDE);
-    define_str_case(TS_MAP);
-    define_str_case(TS_CHAN);
-    define_str_case(TS_LT_DASH);
-    define_str_case(TS_COLON_EQ);
-    define_str_case(TS_PLUS_PLUS);
-    define_str_case(TS_DASH_DASH);
-    define_str_case(TS_STAR_EQ);
-    define_str_case(TS_SLASH_EQ);
-    define_str_case(TS_PERCENT_EQ);
-    define_str_case(TS_LT_LT_EQ);
-    define_str_case(TS_GT_GT_EQ);
-    define_str_case(TS_AMP_EQ);
-    define_str_case(TS_AMP_CARET_EQ);
-    define_str_case(TS_PLUS_EQ);
-    define_str_case(TS_DASH_EQ);
-    define_str_case(TS_PIPE_EQ);
-    define_str_case(TS_CARET_EQ);
-    define_str_case(TS_COLON);
-    define_str_case(TS_FALLTHROUGH);
-    define_str_case(TS_BREAK);
-    define_str_case(TS_CONTINUE);
-    define_str_case(TS_GOTO);
-    define_str_case(TS_RETURN);
-    define_str_case(TS_GO);
-    define_str_case(TS_DEFER);
-    define_str_case(TS_IF);
-    define_str_case(TS_ELSE);
-    define_str_case(TS_FOR);
-    define_str_case(TS_RANGE);
-    define_str_case(TS_SWITCH);
-    define_str_case(TS_CASE);
-    define_str_case(TS_DEFAULT);
-    define_str_case(TS_SELECT);
-    define_str_case(TS_NEW);
-    define_str_case(TS_MAKE);
-    define_str_case(TS_PLUS);
-    define_str_case(TS_DASH);
-    define_str_case(TS_BANG);
-    define_str_case(TS_CARET);
-    define_str_case(TS_AMP);
-    define_str_case(TS_SLASH);
-    define_str_case(TS_PERCENT);
-    define_str_case(TS_LT_LT);
-    define_str_case(TS_GT_GT);
-    define_str_case(TS_AMP_CARET);
-    define_str_case(TS_EQ_EQ);
-    define_str_case(TS_BANG_EQ);
-    define_str_case(TS_LT);
-    define_str_case(TS_LT_EQ);
-    define_str_case(TS_GT);
-    define_str_case(TS_GT_EQ);
-    define_str_case(TS_AMP_AMP);
-    define_str_case(TS_PIPE_PIPE);
-    define_str_case(TS_INT_LITERAL);
-    define_str_case(TS_FLOAT_LITERAL);
-    define_str_case(TS_IMAGINARY_LITERAL);
-    define_str_case(TS_RUNE_LITERAL);
-    define_str_case(TS_NIL);
-    define_str_case(TS_TRUE);
-    define_str_case(TS_FALSE);
-    define_str_case(TS_IOTA);
-    define_str_case(TS_COMMENT);
-    define_str_case(TS_RAW_STRING_LITERAL);
-    define_str_case(TS_INTERPRETED_STRING_LITERAL);
-    define_str_case(TS_SOURCE_FILE);
-    define_str_case(TS_PACKAGE_CLAUSE);
-    define_str_case(TS_IMPORT_DECLARATION);
-    define_str_case(TS_IMPORT_SPEC);
-    define_str_case(TS_DOT);
-    define_str_case(TS_IMPORT_SPEC_LIST);
-    define_str_case(TS_DECLARATION);
-    define_str_case(TS_CONST_DECLARATION);
-    define_str_case(TS_CONST_SPEC);
-    define_str_case(TS_VAR_DECLARATION);
-    define_str_case(TS_VAR_SPEC);
-    define_str_case(TS_FUNCTION_DECLARATION);
-    define_str_case(TS_METHOD_DECLARATION);
-    define_str_case(TS_TYPE_PARAMETER_LIST);
-    define_str_case(TS_PARAMETER_LIST);
-    define_str_case(TS_PARAMETER_DECLARATION);
-    define_str_case(TS_VARIADIC_PARAMETER_DECLARATION);
-    define_str_case(TS_TYPE_ALIAS);
-    define_str_case(TS_TYPE_DECLARATION);
-    define_str_case(TS_TYPE_SPEC);
-    define_str_case(TS_EXPRESSION_LIST);
-    define_str_case(TS_PARENTHESIZED_TYPE);
-    define_str_case(TS_SIMPLE_TYPE);
-    define_str_case(TS_GENERIC_TYPE);
-    define_str_case(TS_TYPE_ARGUMENTS);
-    define_str_case(TS_POINTER_TYPE);
-    define_str_case(TS_ARRAY_TYPE);
-    define_str_case(TS_IMPLICIT_LENGTH_ARRAY_TYPE);
-    define_str_case(TS_SLICE_TYPE);
-    define_str_case(TS_STRUCT_TYPE);
-    define_str_case(TS_FIELD_DECLARATION_LIST);
-    define_str_case(TS_FIELD_DECLARATION);
-    define_str_case(TS_INTERFACE_TYPE);
-    define_str_case(TS_INTERFACE_BODY);
-    define_str_case(TS_INTERFACE_TYPE_NAME);
-    define_str_case(TS_CONSTRAINT_ELEM);
-    define_str_case(TS_CONSTRAINT_TERM);
-    define_str_case(TS_METHOD_SPEC);
-    define_str_case(TS_MAP_TYPE);
-    define_str_case(TS_CHANNEL_TYPE);
-    define_str_case(TS_FUNCTION_TYPE);
-    define_str_case(TS_BLOCK);
-    define_str_case(TS_STATEMENT_LIST);
-    define_str_case(TS_STATEMENT);
-    define_str_case(TS_EMPTY_STATEMENT);
-    define_str_case(TS_SIMPLE_STATEMENT);
-    define_str_case(TS_SEND_STATEMENT);
-    define_str_case(TS_RECEIVE_STATEMENT);
-    define_str_case(TS_INC_STATEMENT);
-    define_str_case(TS_DEC_STATEMENT);
-    define_str_case(TS_ASSIGNMENT_STATEMENT);
-    define_str_case(TS_SHORT_VAR_DECLARATION);
-    define_str_case(TS_LABELED_STATEMENT);
-    define_str_case(TS_EMPTY_LABELED_STATEMENT);
-    define_str_case(TS_FALLTHROUGH_STATEMENT);
-    define_str_case(TS_BREAK_STATEMENT);
-    define_str_case(TS_CONTINUE_STATEMENT);
-    define_str_case(TS_GOTO_STATEMENT);
-    define_str_case(TS_RETURN_STATEMENT);
-    define_str_case(TS_GO_STATEMENT);
-    define_str_case(TS_DEFER_STATEMENT);
-    define_str_case(TS_IF_STATEMENT);
-    define_str_case(TS_FOR_STATEMENT);
-    define_str_case(TS_FOR_CLAUSE);
-    define_str_case(TS_RANGE_CLAUSE);
-    define_str_case(TS_EXPRESSION_SWITCH_STATEMENT);
-    define_str_case(TS_EXPRESSION_CASE);
-    define_str_case(TS_DEFAULT_CASE);
-    define_str_case(TS_TYPE_SWITCH_STATEMENT);
-    define_str_case(TS_TYPE_SWITCH_HEADER);
-    define_str_case(TS_TYPE_CASE);
-    define_str_case(TS_SELECT_STATEMENT);
-    define_str_case(TS_COMMUNICATION_CASE);
-    define_str_case(TS_EXPRESSION);
-    define_str_case(TS_PARENTHESIZED_EXPRESSION);
-    define_str_case(TS_CALL_EXPRESSION);
-    define_str_case(TS_VARIADIC_ARGUMENT);
-    define_str_case(TS_SPECIAL_ARGUMENT_LIST);
-    define_str_case(TS_ARGUMENT_LIST);
-    define_str_case(TS_SELECTOR_EXPRESSION);
-    define_str_case(TS_INDEX_EXPRESSION);
-    define_str_case(TS_SLICE_EXPRESSION);
-    define_str_case(TS_TYPE_ASSERTION_EXPRESSION);
-    define_str_case(TS_TYPE_CONVERSION_EXPRESSION);
-    define_str_case(TS_COMPOSITE_LITERAL);
-    define_str_case(TS_LITERAL_VALUE);
-    define_str_case(TS_LITERAL_ELEMENT);
-    define_str_case(TS_KEYED_ELEMENT);
-    define_str_case(TS_FUNC_LITERAL);
-    define_str_case(TS_UNARY_EXPRESSION);
-    define_str_case(TS_BINARY_EXPRESSION);
-    define_str_case(TS_QUALIFIED_TYPE);
-    define_str_case(TS_SOURCE_FILE_REPEAT1);
-    define_str_case(TS_IMPORT_SPEC_LIST_REPEAT1);
-    define_str_case(TS_CONST_DECLARATION_REPEAT1);
-    define_str_case(TS_CONST_SPEC_REPEAT1);
-    define_str_case(TS_VAR_DECLARATION_REPEAT1);
-    define_str_case(TS_TYPE_PARAMETER_LIST_REPEAT1);
-    define_str_case(TS_PARAMETER_LIST_REPEAT1);
-    define_str_case(TS_PARAMETER_DECLARATION_REPEAT1);
-    define_str_case(TS_TYPE_DECLARATION_REPEAT1);
-    define_str_case(TS_EXPRESSION_LIST_REPEAT1);
-    define_str_case(TS_TYPE_ARGUMENTS_REPEAT1);
-    define_str_case(TS_FIELD_DECLARATION_LIST_REPEAT1);
-    define_str_case(TS_FIELD_DECLARATION_REPEAT1);
-    define_str_case(TS_INTERFACE_TYPE_REPEAT1);
-    define_str_case(TS_CONSTRAINT_ELEM_REPEAT1);
-    define_str_case(TS_STATEMENT_LIST_REPEAT1);
-    define_str_case(TS_EXPRESSION_SWITCH_STATEMENT_REPEAT1);
-    define_str_case(TS_TYPE_SWITCH_STATEMENT_REPEAT1);
-    define_str_case(TS_SELECT_STATEMENT_REPEAT1);
-    define_str_case(TS_ARGUMENT_LIST_REPEAT1);
-    define_str_case(TS_LITERAL_VALUE_REPEAT1);
-    define_str_case(TS_FIELD_IDENTIFIER);
-    define_str_case(TS_LABEL_NAME);
-    define_str_case(TS_PACKAGE_IDENTIFIER);
-    define_str_case(TS_TYPE_IDENTIFIER);
-    }
-
     return NULL;
 }
 

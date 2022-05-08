@@ -72,57 +72,6 @@ ccstr format_key(int mods, int key) {
     return format_key(mods, keystr);
 }
 
-bool Font::init(u8* font_data, u32 font_size, int texture_id) {
-    height = font_size;
-    tex_size = (i32)pow(2.0f, (i32)log2(sqrt((float)height * height * 8 * 8 * 128)) + 1);
-
-    u8* atlas_data = (u8*)cp_malloc(tex_size * tex_size);
-    if (!atlas_data)
-        return false;
-    defer { cp_free(atlas_data); };
-
-    stbtt_pack_context context;
-    if (!stbtt_PackBegin(&context, atlas_data, tex_size, tex_size, 0, 1, NULL)) {
-        error("stbtt_PackBegin failed");
-        return false;
-    }
-
-    // TODO: what does this do?
-    stbtt_PackSetOversampling(&context, 8, 8);
-
-    if (!stbtt_PackFontRange(&context, font_data, 0, (float)height, ' ', '~' - ' ' + 1, char_info)) {
-        error("stbtt_PackFontRange failed");
-        return false;
-    }
-
-    if (!stbtt_PackFontRange(&context, font_data, 0, (float)height, 0xfffd, 1, &char_info[_countof(char_info) - 1])) {
-        error("stbtt_PackFontRange failed");
-        return false;
-    }
-
-    stbtt_PackEnd(&context);
-
-    glActiveTexture(GL_TEXTURE0 + texture_id);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, tex_size, tex_size, 0, GL_RED, GL_UNSIGNED_BYTE, atlas_data);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-    stbtt_fontinfo font;
-    i32 unscaled_advance, junk;
-    float scale;
-
-    stbtt_InitFont(&font, font_data, 0);
-    stbtt_GetCodepointHMetrics(&font, 'A', &unscaled_advance, &junk);
-    stbtt_GetFontVMetrics(&font, &offset_y, NULL, NULL);
-
-    scale = stbtt_ScaleForPixelHeight(&font, (float)height);
-    width = unscaled_advance * scale;
-    offset_y = (int)((float)offset_y * scale);
-
-    return true;
-}
-
 namespace ImGui {
     bool OurBeginPopupContextItem(const char* str_id = NULL, ImGuiPopupFlags popup_flags = 1) {
         ImGuiWindow* window = GImGui->CurrentWindow;
@@ -555,7 +504,7 @@ void UI::render_godecl(Godecl *decl) {
     bool open = ImGui::TreeNodeEx(decl, flags, "%s", godecl_type_str(decl->type));
 
     if (ImGui::IsItemClicked())
-        goto_file_and_pos(current_render_godecl_filepath, decl->name_start);
+        goto_file_and_pos(current_render_godecl_filepath, decl->name_start, true);
 
     if (open) {
         ImGui::Text("decl_start: %s", format_cur(decl->decl_start));
@@ -759,8 +708,11 @@ void UI::render_ts_cursor(TSTreeCursor *curr, cur2 open_cur) {
 
         if (ImGui::IsMouseDoubleClicked(0) && ImGui::IsItemHovered(0)) {
             auto editor = get_current_editor();
-            if (editor)
-                editor->move_cursor(node->start());
+            if (editor) {
+                auto pos = node->start();
+                pos.x = editor->buf->idx_byte_to_cp(pos.y, pos.x);
+                editor->move_cursor(pos);
+            }
         }
 
         return last_open ? WALK_CONTINUE : WALK_SKIP_CHILDREN;
@@ -769,15 +721,21 @@ void UI::render_ts_cursor(TSTreeCursor *curr, cur2 open_cur) {
     pop(0);
 }
 
-
-void UI::init() {
+bool UI::init() {
     ptr0(this);
-    font = &world.font;
+
+    Frame frame;
+    if (!init_fonts()) {
+        frame.restore();
+        return false;
+    }
+
     editor_sizes.init(LIST_FIXED, _countof(_editor_sizes), _editor_sizes);
 
     // make sure panes_area is nonzero, so that panes can be initialized
     panes_area.w = 1;
     panes_area.h = 1;
+    return true;
 }
 
 void UI::flush_verts() {
@@ -950,74 +908,198 @@ void UI::draw_bordered_rect_outer(boxf b, vec4f color, vec4f border_color, int b
 }
 
 // advances pos forward
-void UI::draw_char(vec2f* pos, uchar ch, vec4f color) {
-    stbtt_aligned_quad q;
-    stbtt_GetPackedQuad(
-        font->char_info, font->tex_size, font->tex_size,
-        ch == 0xfffd ? _countof(font->char_info) - 1 : ch - ' ',
-        &pos->x, &pos->y, &q, 0
-    );
+void UI::draw_char(vec2f* pos, List<uchar> *grapheme, vec4f color) {
+    glActiveTexture(GL_TEXTURE0 + TEXTURE_FONT);
 
-    if (q.x1 > q.x0) {
-        boxf box = { q.x0, q.y0, q.x1 - q.x0, q.y1 - q.y0 };
-        boxf uv = { q.s0, q.t0, q.s1 - q.s0, q.t1 - q.t0 };
-        draw_quad(box, uv, color, DRAW_FONT_MASK);
+    // look up glyph
+    // if the glyph doesn't exist,
+    //     find the right font for `grapheme`
+    //     acquire the font
+    //     use the font to get a rendered_grapheme
+    //     create a new glyph:
+    //         attempt to add rendered_grapheme to an atlas
+    //         save that atlas
+    //         fill in w/h/x-off/y-off using rendered_grapheme
+    //         fill in u/v with result of saving to atlas
+    //     save glyph in cache
+    // we now have a glyph! draw that motherfucker
+
+    if (!grapheme->len) return;
+
+    auto utf8_chars = alloc_list<char>();
+    For (*grapheme) {
+        char buf[4];
+        int len = uchar_to_cstr(it, buf);
+        for (int i = 0; i < len; i++)
+            utf8_chars->append(buf[i]);
     }
+    utf8_chars->append('\0');
 
-    /*
-        boxf b;
-        b.pos = *pos;
-        b.w = font->width;
-        b.h = font->height;
-        b.y -= font->offset_y;
-        draw_rect(b, color);
-        pos->x += font->width;
-    */
-}
+    ccstr utf8_str = utf8_chars->items;
 
-vec2f UI::draw_string(vec2f pos, ccstr s, vec4f color) {
-    pos.y += font->offset_y;
+    auto glyph = glyph_cache.get(utf8_str);
+    if (!glyph) {
+        SCOPED_MEM(&world.ui_mem);
 
-    Cstr_To_Ustr conv;
-    conv.init();
+        auto font = find_font_for_grapheme(grapheme);
+        if (!font) return; // TODO: handle error
 
-    for (u32 i = 0, len = strlen(s); i < len; i++) {
-        bool found;
-        auto uch = conv.feed(s[i], &found);
-        if (found) {
-            if (uch < 0x7f)
-                draw_char(&pos, uch, color);
-            else
-                draw_char(&pos, '?', color);
+        auto rend = font->get_glyphs(grapheme);
+        if (!rend) return; // TODO: handle error
+
+        auto box = rend->box;
+        // idk when these would ever happen, but check anyway
+        if (box.w > ATLAS_SIZE) return;
+        if (box.h > ATLAS_SIZE) return;
+
+        auto atlas = atlases_head;
+        bool xover, yover;
+
+        if (atlas) {
+            // reached the end of the row? move back to start
+            if (atlas->pos.x + rend->box.w + 1 > ATLAS_SIZE) {
+                atlas->pos.x = 0;
+                atlas->pos.y += atlas->tallest;
+                atlas->tallest = 0;
+            }
+
+            xover = atlas->pos.x + rend->box.w > ATLAS_SIZE;
+            yover = atlas->pos.y + rend->box.h > ATLAS_SIZE;
+        }
+
+        if (!atlas || xover || yover) {
+            glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+            GLuint texture_id;
+            glGenTextures(1, &texture_id);
+            glBindTexture(GL_TEXTURE_2D, texture_id);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, ATLAS_SIZE, ATLAS_SIZE, 0, GL_RED, GL_UNSIGNED_BYTE, NULL);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glBindTexture(GL_TEXTURE_2D, 0);
+
+            auto a = alloc_object(Atlas);
+            a->pos = new_cur2(0, 0);
+            a->tallest = 0;
+            a->gl_texture_id = texture_id;
+            a->next = atlases_head;
+            atlas = atlases_head = a;
+        }
+
+        // because of check above, glyph will never be uanble to fit in a fresh atlas
+
+        glBindTexture(GL_TEXTURE_2D, atlas->gl_texture_id);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, atlas->pos.x, atlas->pos.y, box.w, box.h, GL_RED, GL_UNSIGNED_BYTE, rend->data);
+
+        boxf uv;
+        uv.x = (float)atlas->pos.x / (float)ATLAS_SIZE;
+        uv.y = (float)atlas->pos.y / (float)ATLAS_SIZE;
+        uv.w = (float)box.w / (float)ATLAS_SIZE;
+        uv.h = (float)box.h / (float)ATLAS_SIZE;
+
+        if (box.h > atlas->tallest) atlas->tallest = box.h;
+        atlas->pos.x += box.w + 1;
+
+        glyph = alloc_object(Glyph);
+        glyph->single = grapheme->len == 1;
+        if (glyph->single) {
+            glyph->codepoint = grapheme->at(0);
+        } else {
+            auto copy = alloc_list<uchar>();
+            For (*grapheme) copy->append(it);
+            glyph->grapheme = copy;
+        }
+        glyph->box = box;
+        glyph->atlas = atlas;
+        glyph->uv = uv;
+
+        {
+            SCOPED_MEM(&world.ui_mem);
+            glyph_cache.set(cp_strdup(utf8_str), glyph);
         }
     }
 
-    pos.y -= font->offset_y;
+    if (current_texture_id != glyph->atlas->gl_texture_id) {
+        flush_verts();
+
+        glBindTexture(GL_TEXTURE_2D, glyph->atlas->gl_texture_id);
+        current_texture_id = glyph->atlas->gl_texture_id;
+    }
+
+    boxf box = glyph->box;
+
+    float xscale = 1.0f, yscale = 1.0f;
+    world.window->get_content_scale(&xscale, &yscale);
+
+    box.x /= xscale;
+    box.w /= xscale;
+    box.y /= yscale;
+    box.h /= yscale;
+
+    box.x += pos->x;
+    box.y += pos->y;
+
+    draw_quad(box, glyph->uv, color, DRAW_FONT_MASK);
+    auto gw = cp_wcswidth(grapheme->items, grapheme->len);
+    if (gw == -1) gw = 2;
+    pos->x += base_font->width * gw;
+}
+
+void UI::draw_char(vec2f* pos, uchar codepoint, vec4f color) {
+    auto grapheme = alloc_list<uchar>();
+    grapheme->append(codepoint);
+    draw_char(pos, grapheme, color);
+}
+
+/*
+ * This is currently used in:
+ *
+ *  Tabs (i.e. filenames).
+ *  Status bar pieces. This is all ascii, mostly predefined.
+ *  Autocomplete.
+ *
+ * There's also parameter hints, which calls draw_char itself, but doesn't currently handle unicode (graphemes, etc.).
+ * We'll want this function to take a unicode string.
+ */
+vec2f UI::draw_string(vec2f pos, ccstr s, vec4f color) {
+    // TODO: handle graphemes
+    pos.y += base_font->offset_y;
+
+    auto codepoints = cstr_to_ustr(s);
+    if (!codepoints->len) return pos;
+
+    Grapheme_Clusterer gc; gc.init();
+    int i = 0;
+    auto grapheme = alloc_list<uchar>();
+
+    gc.feed(codepoints->at(0));
+    while (i < codepoints->len) {
+        grapheme->len = 0;
+        do {
+            grapheme->append(codepoints->at(i));
+            i++;
+        } while (i < codepoints->len && !gc.feed(codepoints->at(i)));
+        draw_char(&pos, grapheme, color);
+    }
+
+    pos.y -= base_font->offset_y;
     return pos;
 }
 
+// currently only called to render tabs
 float UI::get_text_width(ccstr s) {
-    float x = 0, y = 0;
-    stbtt_aligned_quad q;
-    Cstr_To_Ustr conv;
-    bool found;
+    SCOPED_FRAME();
 
-    conv.init();
-    for (u32 i = 0, len = strlen(s); i < len; i++) {
-        auto uch = conv.feed(s[i], &found);
-        if (found) {
-            if (uch > 0x7f) uch = '?';
-            stbtt_GetPackedQuad(font->char_info, font->tex_size, font->tex_size, uch - ' ', &x, &y, &q, 0);
-        }
-    }
+    auto codepoints = cstr_to_ustr(s);
+    if (!codepoints->len) return 0;
 
-    return x;
+    return cp_wcswidth(codepoints->items, codepoints->len);
 }
 
 boxf UI::get_status_area() {
     boxf b;
     b.w = world.window_size.x;
-    b.h = font->height + settings.status_padding_y * 2;
+    b.h = base_font->height + settings.status_padding_y * 2;
     b.x = 0;
     b.y = world.window_size.y - b.h;
     return b;
@@ -2134,6 +2216,42 @@ void UI::draw_everything() {
                 ImGui::MenuItem("Disable framerate cap", NULL, &world.turn_off_framerate_cap);
                 ImGui::MenuItem("Hover Info", NULL, &world.wnd_hover_info.show);
                 ImGui::MenuItem("Show frame index", NULL, &world.show_frame_index);
+                ImGui::MenuItem("Show frameskips", NULL, &world.show_frameskips);
+
+                if (ImGui::MenuItem("Process file")) {
+                    do {
+                        auto editor = get_current_editor();
+                        if (!editor) break;
+
+                        Go_File file; ptr0(&file);
+
+                        file.pool.init("file pool");
+                        defer { file.pool.cleanup(); };
+
+                        {
+                            SCOPED_MEM(&file.pool);
+                            file.filename = cp_basename(editor->filepath);
+                            file.scope_ops = alloc_list<Go_Scope_Op>();
+                            file.decls = alloc_list<Godecl>();
+                            file.imports = alloc_list<Go_Import>();
+                            file.references = alloc_list<Go_Reference>();
+                        }
+
+                        if (!world.indexer.try_acquire_lock(IND_READING)) break;
+                        defer { world.indexer.release_lock(IND_READING); };
+
+                        Parser_It it; ptr0(&it);
+                        it.init(editor->buf);
+
+                        auto tree = editor->buf->tree;
+                        if (!tree) break;
+
+                        Ast_Node root; ptr0(&root);
+                        root.init(ts_tree_root_node(tree), &it);
+
+                        world.indexer.process_tree_into_gofile(&file, &root, file.filename, NULL);
+                    } while (0);
+                }
 
                 if (ImGui::MenuItem("Cleanup unused memory")) {
                     world.indexer.message_queue.add([&](auto msg) {
@@ -2336,7 +2454,7 @@ void UI::draw_everything() {
         if (ImGui::IsItemClicked()) {
             auto ref = it->ref;
             auto start = ref->is_sel ? ref->x_start : ref->start;
-            goto_file_and_pos(fd->filepath, start);
+            goto_file_and_pos(fd->filepath, start, true);
         }
 
         if (open) {
@@ -2488,7 +2606,7 @@ void UI::draw_everything() {
                     ImGui::PopStyleColor();
 
                     // TODO: previews?
-                    if (clicked) goto_file_and_pos(it->filepath, it->decl->decl->name_start);
+                    if (clicked) goto_file_and_pos(it->filepath, it->decl->decl->name_start, true);
                 }
                 imgui_pop_font();
             } else {
@@ -2557,7 +2675,7 @@ void UI::draw_everything() {
                     ImGui::PopStyleColor();
 
                     // TODO: previews?
-                    if (clicked) goto_file_and_pos(it->filepath, it->decl->decl->name_start);
+                    if (clicked) goto_file_and_pos(it->filepath, it->decl->decl->name_start, true);
                 }
 
                 imgui_pop_font();
@@ -2588,8 +2706,13 @@ void UI::draw_everything() {
                 auto filepath = get_path_relative_to(it.filepath, world.current_path);
                 For (*it.references) {
                     auto pos = it.is_sel ? it.x_start : it.start;
-                    if (ImGui::Selectable(cp_sprintf("%s:%s", filepath, format_cur(pos))))
-                        goto_file_and_pos(filepath, pos);
+
+                    auto rendered_pos = pos;
+                    rendered_pos.x++;
+                    rendered_pos.y++;
+
+                    if (ImGui::Selectable(cp_sprintf("%s:%s", filepath, format_cur(rendered_pos))))
+                        goto_file_and_pos(filepath, pos, true);
                 }
             }
 
@@ -2669,10 +2792,11 @@ void UI::draw_everything() {
                 if (strlen(wnd.query) >= 2) {
                     u32 i = 0;
                     For (*wnd.symbols) {
-                        if (fzy_has_match(wnd.query, symbol_to_name(it)))
+                        if (fzy_has_match(wnd.query, symbol_to_name(it))) {
                             wnd.filtered_results->append(i);
-                        if (i++ > 1000)
-                            break;
+                            if (i++ > 10000)
+                                break;
+                        }
                     }
 
                     fuzzy_sort_filtered_results(
@@ -4025,10 +4149,11 @@ void UI::draw_everything() {
             if (strlen(wnd.query) > 0) {
                 int i = 0;
                 For (*wnd.actions) {
-                    if (fzy_has_match(wnd.query, get_command_name(it)))
+                    if (fzy_has_match(wnd.query, get_command_name(it))) {
                         wnd.filtered_results->append(it);
-                    if (i++ > 1000)
-                        break;
+                        if (i++ > 10000)
+                            break;
+                    }
                 }
 
                 fuzzy_sort_filtered_results(
@@ -4174,7 +4299,7 @@ void UI::draw_everything() {
                 Timer t;
                 t.init("filter_symbols");
 
-                for (u32 i = 0; i < wnd.symbols->len && i < 1000; i++) {
+                for (u32 i = 0, k = 0; i < wnd.symbols->len && k < 10000; i++) {
                     auto &it = wnd.symbols->at(i);
 
                     if (wnd.current_file_only)
@@ -4185,6 +4310,7 @@ void UI::draw_everything() {
                         continue;
 
                     wnd.filtered_results->append(i);
+                    k++;
                 }
 
                 t.log("matching");
@@ -4241,7 +4367,7 @@ void UI::draw_everything() {
                     if (streq(import_path, ""))
                         import_path = "(root)";
 
-                    int rem_chars = (pm->text_br.x - pm->pos.x) / font->width;
+                    int rem_chars = (pm->text_br.x - pm->pos.x) / base_font->width;
 
                     auto s = import_path;
                     if (strlen(s) > rem_chars)
@@ -4459,7 +4585,7 @@ void UI::draw_everything() {
                                 if (is_mark_valid(it.mark_start))
                                     pos = it.mark_start->pos();
 
-                                goto_file_and_pos(filepath, pos);
+                                goto_file_and_pos(filepath, pos, true);
                             } else {
                                 wnd.selection = index;
                             }
@@ -4484,7 +4610,7 @@ void UI::draw_everything() {
                         }
                         if (imgui_special_key_pressed(ImGuiKey_Enter))
                             if (current_result)
-                                goto_file_and_pos(current_filepath, current_result->match_start);
+                                goto_file_and_pos(current_filepath, current_result->match_start, true);
                         break;
                     }
                 }
@@ -4768,7 +4894,7 @@ void UI::draw_everything() {
 
                 area.x += settings.line_number_margin_left;
                 area.x += settings.line_number_margin_right;
-                area.x += world.font.width * get_line_number_width(editor);
+                area.x += ui.base_font->width * get_line_number_width(editor);
 
                 auto im_pos = ImGui::GetIO().MousePos;
                 if (im_pos.x < 0 || im_pos.y < 0)
@@ -4778,13 +4904,13 @@ void UI::draw_everything() {
                 pos.x -= area.x;
                 pos.y -= area.y;
 
-                auto y = view.y + pos.y / (world.font.height * settings.line_height);
+                auto y = view.y + pos.y / (ui.base_font->height * settings.line_height);
                 if (y >= buf->lines.len) {
                     y = buf->lines.len-1;
                     return new_cur2((i32)buf->lines[y].len, (i32)y);
                 }
 
-                auto vx = (int)(pos.x / world.font.width);
+                auto vx = (int)(pos.x / ui.base_font->width);
                 auto x = buf->idx_vcp_to_cp(y, vx);
 
                 return new_cur2((i32)x, (i32)y);
@@ -4904,8 +5030,8 @@ void UI::draw_everything() {
                     dy *= 6;
                     dy += editor->scroll_leftover;
 
-                    editor->scroll_leftover = fmod(dy, font->height);
-                    auto lines = (int)(dy / font->height);
+                    editor->scroll_leftover = fmod(dy, base_font->height);
+                    auto lines = (int)(dy / base_font->height);
 
                     for (int i = 0; i < lines; i++) {
                         if (flip) {
@@ -4931,7 +5057,7 @@ void UI::draw_everything() {
         vec2 tab_padding = { 8, 3 };
 
         boxf tab;
-        tab.pos = tabs_area.pos + new_vec2(2, tabs_area.h - tab_padding.y * 2 - font->height);
+        tab.pos = tabs_area.pos + new_vec2(2, tabs_area.h - tab_padding.y * 2 - base_font->height);
         tab.x -= pane.tabs_offset;
 
         i32 tab_to_remove = -1;
@@ -4988,10 +5114,10 @@ void UI::draw_everything() {
             if (editor.is_unsaved())
                 label = cp_sprintf("%s*", label);
 
-            auto text_width = get_text_width(label);
+            auto text_width = get_text_width(label) * base_font->width;
 
             tab.w = text_width + tab_padding.x * 2;
-            tab.h = font->height + tab_padding.y * 2;
+            tab.h = base_font->height + tab_padding.y * 2;
 
             // Now `tab` is filled out, and I can do my logic to make sure it's visible on screen
             if (tab_id == pane.current_editor) {
@@ -5150,7 +5276,7 @@ void UI::draw_everything() {
             auto &view = editor->view;
 
             vec2f cur_pos = editor_area.pos + new_vec2f(settings.editor_margin_x, settings.editor_margin_y);
-            cur_pos.y += font->offset_y;
+            cur_pos.y += base_font->offset_y;
 
             auto draw_cursor = [&](int chars) {
                 auto muted = (current_pane != world.current_pane);
@@ -5159,14 +5285,14 @@ void UI::draw_everything() {
                 bool is_insert_cursor = !world.use_nvim; // (world.nvim.mode == VI_INSERT && is_pane_selected /* && !world.nvim.exiting_insert_mode */);
 
                 auto pos = cur_pos;
-                pos.y -= font->offset_y;
+                pos.y -= base_font->offset_y;
 
                 boxf b;
                 b.pos = pos;
-                b.h = (float)font->height;
-                b.w = is_insert_cursor ? 2 : ((float)font->width * chars);
+                b.h = (float)base_font->height;
+                b.w = is_insert_cursor ? 2 : ((float)base_font->width * chars);
 
-                auto py = font->height * (settings.line_height - 1.0) / 2;
+                auto py = base_font->height * (settings.line_height - 1.0) / 2;
                 b.y -= py;
                 b.h += py * 2;
 
@@ -5242,11 +5368,11 @@ void UI::draw_everything() {
             auto draw_highlight = [&](vec4f color, int width, bool fullsize = false) {
                 boxf b;
                 b.pos = cur_pos;
-                b.y -= font->offset_y;
-                b.w = font->width * width;
-                b.h = font->height;
+                b.y -= base_font->offset_y;
+                b.w = base_font->width * width;
+                b.h = base_font->height;
 
-                auto py = font->height * (settings.line_height - 1.0) / 2;
+                auto py = base_font->height * (settings.line_height - 1.0) / 2;
                 b.y -= py;
                 b.h += py * 2;
 
@@ -5257,6 +5383,8 @@ void UI::draw_everything() {
 
                 draw_rect(b, color);
             };
+
+            auto grapheme_codepoints = alloc_list<uchar>();
 
             auto relative_y = 0;
             for (u32 y = view.y; y < view.y + view.h; y++, relative_y++) {
@@ -5299,12 +5427,12 @@ void UI::draw_everything() {
 
                 boxf line_box = {
                     cur_pos.x,
-                    cur_pos.y - font->offset_y,
+                    cur_pos.y - base_font->offset_y,
                     (float)editor_area.w,
-                    (float)font->height,
+                    (float)base_font->height,
                 };
 
-                auto py = font->height * (settings.line_height - 1.0) / 2;
+                auto py = base_font->height * (settings.line_height - 1.0) / 2;
                 line_box.y -= py;
                 line_box.h += py * 2;
                 line_box.y++;
@@ -5339,6 +5467,15 @@ void UI::draw_everything() {
                 gc.init();
 
                 int cp_idx = 0;
+                int byte_idx = 0;
+
+                auto inc_cp_idx = [&]() {
+                    auto uch = line->at(cp_idx);
+
+                    cp_idx++;
+                    byte_idx += uchar_size(uch);
+                };
+
                 gc.feed(line->at(cp_idx)); // feed first character for GB1
 
                 // jump {view.x} clusters
@@ -5348,22 +5485,25 @@ void UI::draw_everything() {
                     while (vx < view.x && cp_idx < line->len) {
                         if (line->at(cp_idx) == '\t') {
                             vx += options.tabsize - (vx % options.tabsize);
-                            cp_idx++;
+                            inc_cp_idx();
                         } else {
-                            auto width = cp_wcwidth(line->at(cp_idx));
+                            grapheme_codepoints->len = 0;
+                            do {
+                                auto codepoint = line->at(cp_idx);
+                                grapheme_codepoints->append(codepoint);
+                                inc_cp_idx();
+                            } while (cp_idx < line->len && !gc.feed(line->at(cp_idx)));
+
+                            auto width = cp_wcswidth(grapheme_codepoints->items, grapheme_codepoints->len);
                             if (width == -1) width = 1;
                             vx += width;
-
-                            cp_idx++;
-                            while (cp_idx < line->len && !gc.feed(line->at(cp_idx)))
-                                cp_idx++;
                         }
                     }
                     vx_start = vx;
                 }
 
                 if (vx_start > view.x)
-                    cur_pos.x += (vx_start - view.x) * font->width;
+                    cur_pos.x += (vx_start - view.x) * base_font->width;
 
                 u32 x = buf->idx_cp_to_byte(y, cp_idx);
                 u32 vx = vx_start;
@@ -5375,33 +5515,30 @@ void UI::draw_everything() {
                     if (cp_idx >= line->len) break;
 
                     auto curr_cp_idx = cp_idx;
+                    auto curr_byte_idx = byte_idx;
                     int curr_cp = line->at(cp_idx);
-                    int grapheme_cpsize = 0;
 
-                    {
-                        auto uch = curr_cp;
-                        while (true) {
-                            cp_idx++;
-                            newx += uchar_size(uch);
-                            grapheme_cpsize++;
+                    grapheme_codepoints->len = 0;
 
-                            if (cp_idx >= line->len) break;
-                            if (gc.feed(uch = line->at(cp_idx))) break;
-                        }
-                    }
+                    do {
+                        auto codepoint = line->at(cp_idx);
+                        newx += uchar_size(codepoint);
+                        grapheme_codepoints->append(codepoint);
+                        inc_cp_idx();
+                    } while (cp_idx < line->len && !gc.feed(line->at(cp_idx)));
 
                     int glyph_width = 0;
-                    if (grapheme_cpsize == 1 && curr_cp == '\t')
+                    if (grapheme_codepoints->len == 1 && curr_cp == '\t')
                         glyph_width = options.tabsize - (vx % options.tabsize);
                     else
-                        glyph_width = cp_wcwidth(curr_cp);
+                        glyph_width = cp_wcswidth(grapheme_codepoints->items, grapheme_codepoints->len);
 
                     if (glyph_width == -1) glyph_width = 1;
 
                     vec4f text_color = rgba(global_colors.foreground);
 
                     if (next_hl != -1) {
-                        auto curr = new_cur2((u32)curr_cp_idx, (u32)y);
+                        auto curr = new_cur2((u32)curr_byte_idx, (u32)y);
 
                         while (next_hl != -1 && curr >= highlights[next_hl].end)
                             if (++next_hl >= highlights.len)
@@ -5457,15 +5594,9 @@ void UI::draw_everything() {
 
                     uchar uch = curr_cp;
                     if (uch == '\t') {
-                        cur_pos.x += font->width * glyph_width;
-                    } else if (grapheme_cpsize > 1 || uch > 0x7f) {
-                        auto pos = cur_pos;
-                        pos.x += (font->width * glyph_width) / 2 - (font->width / 2);
-                        draw_char(&pos, 0xfffd, text_color);
-
-                        cur_pos.x += font->width * glyph_width;
+                        cur_pos.x += base_font->width * glyph_width;
                     } else {
-                        draw_char(&cur_pos, uch, text_color);
+                        draw_char(&cur_pos, grapheme_codepoints, text_color);
                     }
 
                     vx += glyph_width;
@@ -5498,7 +5629,7 @@ void UI::draw_everything() {
                     draw_cursor(1);
 
                 cur_pos.x = editor_area.x + settings.editor_margin_x;
-                cur_pos.y += font->height * settings.line_height;
+                cur_pos.y += base_font->height * settings.line_height;
             }
         } while (0);
 
@@ -5553,7 +5684,7 @@ void UI::draw_everything() {
             boxf ret; ptr0(&ret);
             ret.y = status_area.y;
             ret.h = status_area.h;
-            ret.w = font->width * strlen(s) + (settings.status_padding_x * 2);
+            ret.w = base_font->width * strlen(s) + (settings.status_padding_x * 2);
 
             if (dir == RIGHT)
                 ret.x = status_area_right - ret.w;
@@ -5725,6 +5856,26 @@ void UI::draw_everything() {
         ImGui::End();
     }
 
+    if (world.show_frameskips) {
+        auto now = current_time_milli();
+        auto pos = new_cur2(
+            (int)(world.window_size.x),
+            (int)(get_status_area().y - base_font->height)
+        );
+
+        For (world.frameskips) {
+            auto s = cp_sprintf("failed frame deadline by %llums", it.ms_over);
+
+            auto newpos = pos;
+            newpos.x -= get_text_width(s) * base_font->width;
+
+            auto opacity = 1.0 - (0.7 * (now - it.timestamp) / 2000.f);
+            auto color = rgba(rgb_hex("#ff0000"), opacity);
+            draw_string(newpos, s, color);
+
+            pos.y -= base_font->height;
+        }
+    }
 
     if (world.cmd_unfocus_all_windows) {
         world.cmd_unfocus_all_windows = false;
@@ -5801,7 +5952,7 @@ void UI::end_frame() {
             s32 num_items = min(ac.filtered_results->len, AUTOCOMPLETE_WINDOW_ITEMS);
 
             For (*ac.filtered_results) {
-                auto len = strlen(ac.ac.results->at(it).name);
+                auto len = get_text_width(ac.ac.results->at(it).name);
                 if (len > AUTOCOMPLETE_TRUNCATE_LENGTH)
                     len = AUTOCOMPLETE_TRUNCATE_LENGTH + 3;
 
@@ -5822,11 +5973,11 @@ void UI::end_frame() {
 
             if (num_items > 0) {
                 boxf menu;
-                // float preview_width = settings.autocomplete_preview_width_in_chars * font->width;
+                // float preview_width = settings.autocomplete_preview_width_in_chars * base_font->width;
 
                 menu.w = (
                     // options
-                    (font->width * max_len)
+                    (base_font->width * max_len)
                     + (settings.autocomplete_item_padding_x * 2)
                     + (settings.autocomplete_menu_padding * 2)
 
@@ -5836,17 +5987,17 @@ void UI::end_frame() {
                 );
 
                 menu.h = (
-                    (font->height * num_items)
+                    (base_font->height * num_items)
                     + (settings.autocomplete_item_padding_y * 2 * num_items)
                     + (settings.autocomplete_menu_padding * 2)
                 );
 
-                // menu.x = fmin(actual_cursor_position.x - strlen(ac.ac.prefix) * font->width, world.window_size.x - menu.w);
-                // menu.y = fmin(actual_cursor_position.y - font->offset_y + font->height, world.window_size.y - menu.h);
+                // menu.x = fmin(actual_cursor_position.x - strlen(ac.ac.prefix) * base_font->width, world.window_size.x - menu.w);
+                // menu.y = fmin(actual_cursor_position.y - base_font->offset_y + base_font->height, world.window_size.y - menu.h);
 
                 {
-                    auto y1 = actual_cursor_position.y - font->offset_y - settings.autocomplete_menu_margin_y;
-                    auto y2 = actual_cursor_position.y - font->offset_y + (font->height * settings.line_height) + settings.autocomplete_menu_margin_y;
+                    auto y1 = actual_cursor_position.y - base_font->offset_y - settings.autocomplete_menu_margin_y;
+                    auto y2 = actual_cursor_position.y - base_font->offset_y + (base_font->height * settings.line_height) + settings.autocomplete_menu_margin_y;
 
                     if (y2 + menu.h < world.window_size.y) {
                         menu.y = y2;
@@ -5868,7 +6019,7 @@ void UI::end_frame() {
                     if (menu.w > world.window_size.x - 4) // small margin
                         menu.w = world.window_size.x - 4;
 
-                    auto x1 = actual_cursor_position.x - strlen(ac.ac.prefix) * font->width;
+                    auto x1 = actual_cursor_position.x - strlen(ac.ac.prefix) * base_font->width;
                     if (x1 + menu.w + 4 > world.window_size.x) // margin of 4
                         x1 = world.window_size.x - menu.w - 4;
                     menu.x = x1;
@@ -5890,7 +6041,7 @@ void UI::end_frame() {
                     if (i == ac.selection) {
                         boxf b;
                         b.pos = items_pos;
-                        b.h = font->height + (settings.autocomplete_item_padding_y * 2);
+                        b.h = base_font->height + (settings.autocomplete_item_padding_y * 2);
                         b.w = items_area.w - (settings.autocomplete_menu_padding * 2);
                         draw_rounded_rect(b, rgba(global_colors.autocomplete_selection), 4, ROUND_ALL);
                     }
@@ -5954,19 +6105,19 @@ void UI::end_frame() {
 
                         auto type_str = cp_sprintf("(%s) ", get_decl_type());
                         draw_string(pos, type_str, rgba(color, 0.5));
-                        pos.x += font->width * strlen(type_str);
+                        pos.x += base_font->width * strlen(type_str);
 
                         auto str = (cstr)cp_strdup(result.name);
                         if (strlen(str) > AUTOCOMPLETE_TRUNCATE_LENGTH)
                             str = (cstr)cp_sprintf("%.*s...", AUTOCOMPLETE_TRUNCATE_LENGTH, str);
 
                         auto avail_width = items_area.w - settings.autocomplete_item_padding_x * 2;
-                        if (strlen(str) * font->width > avail_width)
-                            str[(int)(avail_width / font->width)] = '\0';
+                        if (strlen(str) * base_font->width > avail_width)
+                            str[(int)(avail_width / base_font->width)] = '\0';
 
                         draw_string(pos, str, rgba(actual_color));
 
-                        text_end = pos.x + strlen(str) * font->width;
+                        text_end = pos.x + strlen(str) * base_font->width;
                     }
 
                     auto render_description = [&]() -> ccstr {
@@ -6064,11 +6215,11 @@ void UI::end_frame() {
 
                         auto pos = items_pos + new_vec2f(settings.autocomplete_item_padding_x, settings.autocomplete_item_padding_y);
                         pos.x += (items_area.w - (settings.autocomplete_item_padding_x*2) - (settings.autocomplete_menu_padding*2));
-                        pos.x -= font->width * desclen;
+                        pos.x -= base_font->width * desclen;
 
                         auto desclimit = desclen;
                         while (pos.x < text_end + 10) {
-                            pos.x += font->width;
+                            pos.x += base_font->width;
                             desclimit--;
                         }
 
@@ -6078,7 +6229,7 @@ void UI::end_frame() {
                         draw_string(pos, desc, rgba(new_vec3f(0.5, 0.5, 0.5)));
                     }
 
-                    items_pos.y += font->height + settings.autocomplete_item_padding_y * 2;
+                    items_pos.y += base_font->height + settings.autocomplete_item_padding_y * 2;
                 }
 
                 // auto preview_padding = settings.autocomplete_preview_padding;
@@ -6204,10 +6355,10 @@ void UI::end_frame() {
             }
 
             boxf bg;
-            bg.w = font->width * strlen(help_text) + settings.parameter_hint_padding_x * 2;
-            bg.h = font->height + settings.parameter_hint_padding_y * 2;
+            bg.w = base_font->width * get_text_width(help_text) + settings.parameter_hint_padding_x * 2;
+            bg.h = base_font->height + settings.parameter_hint_padding_y * 2;
             bg.x = fmin(actual_parameter_hint_start.x, world.window_size.x - bg.w);
-            bg.y = fmin(actual_parameter_hint_start.y - font->offset_y - bg.h - settings.parameter_hint_margin_y, world.window_size.y - bg.h);
+            bg.y = fmin(actual_parameter_hint_start.y - base_font->offset_y - bg.h - settings.parameter_hint_margin_y, world.window_size.y - bg.h);
 
             draw_bordered_rect_outer(bg, rgba(color_darken(global_colors.background, 0.1), 1.0), rgba(global_colors.white, 0.8), 1, 4);
 
@@ -6215,14 +6366,14 @@ void UI::end_frame() {
             text_pos.x += settings.parameter_hint_padding_x;
             text_pos.y += settings.parameter_hint_padding_y;
 
-            text_pos.y += font->offset_y;
+            text_pos.y += base_font->offset_y;
 
             {
                 u32 len = strlen(help_text);
                 vec4f color = rgba(global_colors.foreground, 0.75);
                 float opacity = 1.0;
-
                 int j = 0;
+                Cstr_To_Ustr conv; conv.init();
 
                 for (u32 i = 0; i < len; i++) {
                     while (j < token_changes.len && i == token_changes[j].index) {
@@ -6236,7 +6387,8 @@ void UI::end_frame() {
 
                         j++;
                     }
-                    draw_char(&text_pos, help_text[i], rgba(color.rgb, color.a * opacity));
+                    if (conv.feed(help_text[i]))
+                        draw_char(&text_pos, conv.uch, rgba(color.rgb, color.a * opacity));
                 }
             }
         } while (0);
@@ -6292,7 +6444,7 @@ void UI::recalculate_view_sizes(bool force) {
 
         boxf editor_area;
         get_tabs_and_editor_area(&pane_area, NULL, &editor_area, it.editors.len > 0);
-        editor_area.w -= ((line_number_width * font->width) + settings.line_number_margin_left + settings.line_number_margin_right);
+        editor_area.w -= ((line_number_width * base_font->width) + settings.line_number_margin_left + settings.line_number_margin_right);
         new_sizes->append(editor_area.size);
 
         pane_area.x += pane_area.w;
@@ -6318,8 +6470,8 @@ void UI::recalculate_view_sizes(bool force) {
 
     for (u32 i = 0; i < world.panes.len; i++) {
         for (auto&& editor : world.panes[i].editors) {
-            editor.view.w = (i32)((editor_sizes[i].x - settings.editor_margin_x) / world.font.width);
-            editor.view.h = (i32)((editor_sizes[i].y - settings.editor_margin_y) / world.font.height / settings.line_height);
+            editor.view.w = (i32)((editor_sizes[i].x - settings.editor_margin_x) / ui.base_font->width);
+            editor.view.h = (i32)((editor_sizes[i].y - settings.editor_margin_y) / ui.base_font->height / settings.line_height);
 
             // Previously we called editor.ensure_cursor_on_screen(), but that
             // moves the *cursor* onto the screen. But often when the user
@@ -6366,4 +6518,17 @@ bool UI::test_hover(boxf area, int id, ImGuiMouseCursor cursor) {
         hover.ready = true;
 
     return hover.ready;
+}
+
+bool Font::init(ccstr font_name, u32 font_size) {
+    ptr0(this);
+    name = font_name;
+    height = font_size;
+
+    if (!init_font()) {
+        cleanup();
+        return false;
+    }
+
+    return true;
 }

@@ -32,12 +32,6 @@
 #include "fonts.hpp"
 #include "icons.h"
 
-#define MAX_PATH 260
-#define CODE_FONT_SIZE 14
-#define UI_FONT_SIZE 17
-#define ICON_FONT_SIZE 16
-#define FRAME_RATE_CAP 60
-
 static const char WINDOW_TITLE[] = "CodePerfect 95";
 
 char vert_shader[] = R"(
@@ -234,6 +228,21 @@ bool is_git_folder(ccstr path) {
 
 void handle_window_event(Window_Event *it) {
     switch (it->type) {
+    case WINEV_FOCUS:
+        break;
+
+    case WINEV_BLUR: {
+        auto &io = ImGui::GetIO();
+
+        ptr0(&io.KeysDown);
+        io.KeyCtrl = false;
+        io.KeyShift = false;
+        io.KeyAlt = false;
+        io.KeySuper = false;
+
+        break;
+    }
+
     case WINEV_WINDOW_SIZE: {
         auto w = it->window_size.w;
         auto h = it->window_size.h;
@@ -242,8 +251,6 @@ void handle_window_event(Window_Event *it) {
 
         world.window_size.x = w;
         world.window_size.y = h;
-
-        auto& font = world.font;
 
         mat4f projection;
         new_ortho_matrix(projection, 0, w, h, 0);
@@ -384,7 +391,7 @@ void handle_window_event(Window_Event *it) {
 
         auto keymods = ui.imgui_get_keymods();
 
-        print("key %x, action = %d, mods = %d", key, action, keymods);
+        // print("key = %d, mods = %d", key, keymods);
 
         switch (keymods) {
         case CP_MOD_PRIMARY:
@@ -714,11 +721,15 @@ void handle_window_event(Window_Event *it) {
                 handle_backspace();
                 return;
             case CP_KEY_TAB:
+                if (keymods == CP_MOD_CTRL || keymods == (CP_MOD_CTRL | CP_MOD_SHIFT)) {
+                    break;
+                }
 #if OS_WIN
                 break;
-#endif
+#else
                 handle_tab();
                 return;
+#endif
             }
         }
 
@@ -759,11 +770,10 @@ void handle_window_event(Window_Event *it) {
                         send_nvim_keys("<C-Esc>");
                     break;
 
-#if OS_WIN
                 case CP_KEY_TAB:
                     goto_next_tab();
                     break;
-#endif
+
                 case CP_KEY_R:
                 case CP_KEY_O:
                 case CP_KEY_I:
@@ -836,11 +846,9 @@ void handle_window_event(Window_Event *it) {
                 if (!editor->trigger_escape())
                     send_nvim_keys("<C-S-Esc>");
                 break;
-#if OS_WIN
             case CP_KEY_TAB:
                 goto_previous_tab();
                 break;
-#endif
             case CP_KEY_SPACE:
                 {
                     auto ed = get_current_editor();
@@ -1014,7 +1022,7 @@ void handle_window_event(Window_Event *it) {
     case WINEV_CHAR: {
         auto ch = it->character.ch;
 
-        print("char: %d", ch);
+        // print("char = %x", ch);
 
         Timer t; t.init("char callback", &world.trace_next_frame); defer { t.log("done"); };
 
@@ -1036,12 +1044,10 @@ void handle_window_event(Window_Event *it) {
 
         if (world.ui.keyboard_captured_by_imgui) return;
         if (ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow)) return;
+        if (!uni_isprint(ch)) return;
 
         auto ed = get_current_editor();
         if (!ed) return;
-
-        if (ch > 127) return;
-        if (!isprint(ch)) return;
 
         if (world.use_nvim) {
             if (world.nvim.mode == VI_INSERT) {
@@ -1051,12 +1057,7 @@ void handle_window_event(Window_Event *it) {
                     ed->type_char_in_insert_mode(ch);
                 }
             } else {
-                if (ch == '<') {
-                    send_nvim_keys("<LT>");
-                } else {
-                    char keys[2] = { (char)ch, '\0' };
-                    send_nvim_keys(keys);
-                }
+                send_nvim_keys(ch == '<' ? "<LT>" : uchar_to_cstr(ch));
             }
         } else {
             ed->type_char_in_insert_mode(ch);
@@ -1080,6 +1081,15 @@ int main(int argc, char **argv) {
 
     if (!window_init_everything())
         return error("window init failed"), EXIT_FAILURE;
+
+#if 0
+    {
+        Pool pool;
+        pool.init();
+        SCOPED_MEM(&pool);
+        random_macos_tests();
+    }
+#endif
 
     Window window;
     if (!window.init(1280, 720, WINDOW_TITLE))
@@ -1359,8 +1369,10 @@ int main(int argc, char **argv) {
         world.ui.im_font_mono = io.Fonts->AddFontFromMemoryTTF(vera_mono_ttf, vera_mono_ttf_len, CODE_FONT_SIZE);
         cp_assert(world.ui.im_font_mono, "unable to load code font");
 
+        /*
         if (!world.font.init((u8*)vera_mono_ttf, CODE_FONT_SIZE, TEXTURE_FONT))
             cp_panic("unable to load code font");
+        */
 
         io.Fonts->Build();
 
@@ -1380,6 +1392,7 @@ int main(int argc, char **argv) {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glDisable(GL_CULL_FACE);
     glDisable(GL_DEPTH_TEST);
+    glDisable(GL_STENCIL_TEST);
 
     glGenVertexArrays(1, &world.ui.vao);
     glBindVertexArray(world.ui.vao);
@@ -1688,8 +1701,23 @@ int main(int argc, char **argv) {
             // wait until next frame
             auto budget = (1000.f / FRAME_RATE_CAP);
             auto spent = (current_time_nano() - frame_start_time) / 1000000.f;
-            if (budget > spent) sleep_milliseconds((u32)(budget - spent));
+            if (budget > spent) {
+                sleep_milliseconds((u32)(budget - spent));
+            } else {
+                auto fs = world.frameskips.append();
+                fs->timestamp = current_time_milli();
+                fs->ms_over = spent - budget;
+            }
         }
+
+        {
+            auto &fs = world.frameskips;
+            auto now = current_time_milli();
+
+            while (fs.len && fs[0].timestamp + 2000 < now)
+                fs.remove((u32)0);
+        }
+
     }
 
     return EXIT_SUCCESS;

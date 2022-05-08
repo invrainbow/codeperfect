@@ -67,28 +67,14 @@ void Editor::insert_text_in_insert_mode(ccstr s) {
     auto len = strlen(s);
     if (!len) return;
 
-    Cstr_To_Ustr conv;
-    conv.init();
-
-    for (int i = 0; i < len; i++)
-        conv.count(s[i]);
-
-    auto ulen = conv.len;
-
     SCOPED_FRAME();
 
-    auto text = alloc_array(uchar, ulen);
-    conv.init();
-    for (u32 i = 0, j = 0; i < len; i++) {
-        bool found = false;
-        auto uch = conv.feed(s[i], &found);
-        if (found)
-            text[j++] = uch;
-    }
+    auto text = cstr_to_ustr(s);
+    if (!text->len) return;
 
-    buf->insert(cur, text, ulen);
+    buf->insert(cur, text->items, text->len);
     auto c = cur;
-    for (u32 i = 0; i < ulen; i++)
+    for (u32 i = 0; i < text->len; i++)
         c = buf->inc_cur(c);
 
     raw_move_cursor(c);
@@ -683,14 +669,11 @@ void Editor::perform_autocomplete(AC_Result *result) {
                         new_end.y += 2;
                     }
 
-                    Cstr_To_Ustr conv; conv.init();
-                    for (auto p = new_contents; *p != '\0'; p++) {
-                        bool found = false;
-                        auto uch = conv.feed(*p, &found);
-                        if (found) {
-                            chars->append(uch);
-
-                            if (uch == '\n') {
+                    {
+                        auto ustr = cstr_to_ustr(new_contents);
+                        For (*ustr) {
+                            chars->append(it);
+                            if (it == '\n') {
                                 new_end.x = 0;
                                 new_end.y++;
                             } else {
@@ -717,24 +700,18 @@ void Editor::perform_autocomplete(AC_Result *result) {
             //
             // refactor this out somehow, we're already starting to copy paste
 
-            auto fullstring = modify_string(result->name);
-
-            // grab len & save name
-            auto len = strlen(fullstring);
-            auto name = alloc_array(uchar, len);
-            for (u32 i = 0; i < len; i++)
-                name[i] = (uchar)fullstring[i];
+            auto name = cstr_to_ustr(modify_string(result->name));
 
             auto ac_start = cur;
-            ac_start.x -= strlen(ac.prefix);
+            ac_start.x -= strlen(ac.prefix); // what if the prefix contains unicode?
 
             // perform the edit
             // i don't think we need to create a batch here? as long as it follows the flow of normal text editing
             buf->remove(ac_start, cur);
-            buf->insert(ac_start, name, len);
+            buf->insert(ac_start, name->items, name->len);
 
             // move cursor forward
-            raw_move_cursor(new_cur2(ac_start.x + len, ac_start.y));
+            raw_move_cursor(new_cur2(ac_start.x + name->len, ac_start.y));
 
             // clear out last_closed_autocomplete
             last_closed_autocomplete = new_cur2(-1, -1);
@@ -1225,12 +1202,12 @@ Editor* Pane::focus_editor(ccstr path) {
     return focus_editor(path, new_cur2(-1, -1));
 }
 
-Editor* Pane::focus_editor(ccstr path, cur2 pos) {
+Editor* Pane::focus_editor(ccstr path, cur2 pos, bool pos_in_byte_format) {
     u32 i = 0;
     For (editors) {
         // TODO: use are_filepaths_equal instead, don't have to access filesystem
         if (are_filepaths_same_file(path, it.filepath))
-            return focus_editor_by_index(i, pos);
+            return focus_editor_by_index(i, pos, pos_in_byte_format);
         i++;
     }
 
@@ -1246,7 +1223,7 @@ Editor* Pane::focus_editor(ccstr path, cur2 pos) {
     }
 
     ui.recalculate_view_sizes(true);
-    return focus_editor_by_index(editors.len - 1, pos);
+    return focus_editor_by_index(editors.len - 1, pos, pos_in_byte_format);
 }
 
 Editor *Pane::focus_editor_by_index(u32 idx) {
@@ -1496,7 +1473,7 @@ void Pane::set_current_editor(u32 idx) {
     focus_current_editor_in_file_explorer();
 }
 
-Editor *Pane::focus_editor_by_index(u32 idx, cur2 pos) {
+Editor *Pane::focus_editor_by_index(u32 idx, cur2 pos, bool pos_in_byte_format) {
     if (current_editor != idx) {
         auto e = get_current_editor();
         if (e) e->trigger_escape();
@@ -1506,13 +1483,17 @@ Editor *Pane::focus_editor_by_index(u32 idx, cur2 pos) {
 
     auto &editor = editors[idx];
 
+    auto cppos = pos;
+    if (pos_in_byte_format)
+        cppos.x = editor.buf->idx_byte_to_cp(cppos.y, cppos.x);
+
     if (pos.x != -1) {
         if (editor.is_nvim_ready()) {
-            editor.move_cursor(pos);
+            editor.move_cursor(cppos);
         } else {
             editor.nvim_data.need_initial_pos_set = true;
-            editor.nvim_data.initial_pos = pos;
-            editor.raw_move_cursor(pos);
+            editor.nvim_data.initial_pos = cppos;
+            editor.raw_move_cursor(cppos);
         }
     }
 
@@ -1614,7 +1595,7 @@ bool Editor::cur_is_inside_comment_or_string() {
 
 // basically the rule is, if autocomplete comes up empty ON FIRST OPEN, then keep it closed
 
-void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typing_ident, char typed_ident_char) {
+void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typing_ident, uchar typed_ident_char) {
     if (!is_go_file) return;
 
     if (cur_is_inside_comment_or_string()) {
@@ -1757,6 +1738,11 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
             if (a->str_length > b->str_length)
                 return -1;
 
+            if (a->result_type == ACR_KEYWORD && b->result_type == ACR_DECLARATION)
+                return 1;
+            if (a->result_type == ACR_DECLARATION && b->result_type == ACR_KEYWORD)
+                return -1;
+
             return 0;
         };
 
@@ -1834,8 +1820,7 @@ void Editor::trigger_parameter_hint() {
     }
 }
 
-void Editor::type_char(char ch) {
-    uchar uch = ch;
+void Editor::type_char(uchar uch) {
     buf->insert(cur, &uch, 1);
 
     auto old_cur = cur;
@@ -1933,7 +1918,7 @@ curr_change.new_end_byte = end;
 curr_change.new_end_point = cur_to_tspoint(cur);
 */
 
-void Editor::type_char_in_insert_mode(char ch) {
+void Editor::type_char_in_insert_mode(uchar ch) {
     bool already_typed = false;
 
     // handle typing a dot when an import is selected
@@ -2100,8 +2085,7 @@ void Editor::type_char_in_insert_mode(char ch) {
             pos.x += indentation->len;
 
             // insert the brace
-            uchar uch = ch;
-            buf->insert(pos, &uch, 1);
+            buf->insert(pos, &ch, 1);
             pos.x++;
 
             // move cursor after everything we typed
@@ -2294,11 +2278,9 @@ bool Editor::optimize_imports() {
             chars->append('\n');
         }
 
-        Cstr_To_Ustr conv; conv.init();
-        for (auto p = new_contents; *p != '\0'; p++) {
-            bool found = false;
-            auto uch = conv.feed(*p, &found);
-            if (found) chars->append(uch);
+        {
+            auto ustr = cstr_to_ustr(new_contents);
+            For (*ustr) chars->append(it);
         }
 
         buf->hist_force_push_next_change = true;

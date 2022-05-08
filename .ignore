@@ -13,3 +13,5 @@ docs
 meow_hash_x64_aesni.h
 Icons*.h
 web
+glew.c
+glew.h

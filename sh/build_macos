@@ -3,13 +3,21 @@ set -e
 
 if [[ "$RELEASE" == "1" ]]; then
     sh/make clean
-fi
+    ARCH=arm sh/make
+    mv build/bin/ide build/ide-arm
 
-mkdir -p obj build/bin
-sh/make
+    sh/make clean
+    ARCH=x64 sh/make
+    mv build/bin/ide build/ide-x64
 
-if [[ "$RELEASE" == "1" ]]; then
+	lipo -create -output build/bin/ide build/ide-arm build/ide-x64
+    rm build/ide-arm
+    rm build/ide-x64
+
     sh/make build/launcher
+else
+    sh/make prep
+    sh/make
 fi
 
 if [[ ! -d ./build/bin/nvim/ ]]; then

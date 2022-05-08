@@ -2,23 +2,35 @@ CC = clang++
 BREW_X64 = arch --x86_64 /usr/local/Homebrew/bin/brew
 BREW_ARM = /opt/homebrew/bin/brew
 
-# CFLAGS = -std=c++17 -mavx -maes -w -MMD -MP
 CFLAGS = -std=c++17 -w -MMD -MP
+# CFLAGS += -mavx -maes
 CFLAGS += -Itree-sitter
 
 LDFLAGS = -ldl -framework OpenGL -framework Cocoa -framework IOKit
 LDFLAGS += -framework CoreFoundation -framework Security  # for go
-LDFLAGS += $(shell $(BREW_ARM) --prefix pcre)/lib/libpcre.a
-LDFLAGS += obj/gohelper.arm64.a
+LDFLAGS += -lfreetype -lharfbuzz -lfontconfig
+
+ifeq (${ARCH}, x64)
+	CFLAGS += -arch x86_64
+	LDFLAGS += obj/gohelper.x64.a
+	LDFLAGS += $(shell $(BREW_X64) --prefix pcre)/lib/libpcre.a
+	LDFLAGS += -L$(shell $(BREW_X64) --prefix fontconfig)/lib
+	LDFLAGS += -L$(shell $(BREW_X64) --prefix freetype)/lib
+	LDFLAGS += -L$(shell $(BREW_X64) --prefix harfbuzz)/lib
+else
+	CFLAGS += -arch arm64
+	LDFLAGS += obj/gohelper.arm64.a
+	LDFLAGS += $(shell $(BREW_ARM) --prefix pcre)/lib/libpcre.a
+	LDFLAGS += -L$(shell $(BREW_ARM) --prefix fontconfig)/lib
+	LDFLAGS += -L$(shell $(BREW_ARM) --prefix freetype)/lib
+	LDFLAGS += -L$(shell $(BREW_ARM) --prefix harfbuzz)/lib
+endif
 
 GOFLAGS =
 
 ifeq (${RELEASE}, 1)
-	CFLAGS += -arch x86_64 -arch arm64
 	CFLAGS += -DRELEASE_MODE -O3
 	GOFLAGS += -ldflags "-s -w"
-	LDFLAGS += $(shell $(BREW_X64) --prefix pcre)/lib/libpcre.a
-	LDFLAGS += obj/gohelper.x64.a
 else
 	CFLAGS += -DDEBUG_MODE -g -O0
 endif
@@ -32,8 +44,12 @@ DEP_FILES += obj/objclibs.d obj/clibs.d
 
 all: build/bin/ide build/bin/init.vim build/bin/buildcontext.go
 
+prep:
+	mkdir -p obj build/bin
+
 clean:
 	rm -rf obj/ build/bin/
+	make prep
 
 OBJ_DEPS = $(OBJ_FILES) obj/objclibs.o obj/clibs.o
 ifeq (${RELEASE}, 1)
@@ -49,7 +65,7 @@ build/bin/ide: $(OBJ_DEPS) cpcolors.c
 
 -include $(DEP_FILES)
 
-$(OBJ_FILES): obj/%.o: %.cpp Makefile gohelper.h
+$(OBJ_FILES): obj/%.o: %.cpp Makefile gohelper.h tstypes.hpp
 	$(CC) $(CFLAGS) -MMD -MP -c -o $@ $<
 
 obj/tests.o: tests.cpp Makefile
@@ -78,6 +94,11 @@ obj/gohelper.arm64.a: gostuff/ $(GOSTUFF_DIRS) $(GOSTUFF_FILES)
 		mkdir -p ../obj; mv gohelper.arm64.a ../obj; mv gohelper.arm64.h ../gohelper.h
 
 gohelper.h: obj/gohelper.arm64.a
+
+tstypes.cpp: tree-sitter-go/src/parser.c sh/generate_tstypes.py
+	sh/generate_tstypes.py
+
+tstypes.hpp: tstypes.cpp
 
 build/launcher: gostuff/ $(GOSTUFF_DIRS) $(GOSTUFF_FILES)
 	cd gostuff; \

@@ -39,8 +39,7 @@
 #if OS_WIN
 #define BREAK_HERE DebugBreak()
 #elif OS_MAC
-#include <signal.h>
-#define BREAK_HERE raise(SIGTRAP)
+#define BREAK_HERE Debugger()
 #endif
 
 #include "common.hpp"

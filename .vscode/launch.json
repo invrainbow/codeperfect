@@ -7,12 +7,9 @@
             "name": "debug",
             "program": "${workspaceFolder}/build/bin/ide",
             "args": [
-                // "/Users/bh/kubernetes"
-                // "/Users/bh/cpcast"
-                "/Users/bh/ide/gostuff"
-                // "/Users/bh/sr"
-                // "/Users/bh/gin"
-                // "/Users/bh/gorm-slack"
+                // "/Users/bh/go-unicode-test",
+                "/Users/bh/snowball",
+                // "/Users/bh/ide/gostuff"
             ],
             "cwd": "${workspaceFolder}/build/bin",
             "expressions": "native",

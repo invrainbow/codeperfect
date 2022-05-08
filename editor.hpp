@@ -169,7 +169,6 @@ struct Editor {
     Client_Parameter_Hint parameter_hint;
 
     bool is_modifiable();
-    void update_tree();
     void raw_move_cursor(cur2 c, Move_Cursor_Opts *opts = NULL);
     void move_cursor(cur2 c, Move_Cursor_Opts *opts = NULL);
     void reset_state();
@@ -183,12 +182,12 @@ struct Editor {
     Buffer_It iter(cur2 _cur);
     void perform_autocomplete(AC_Result *result);
 
-    void trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typing_ident, char typed_ident_char = 0);
+    void trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typing_ident, uchar typed_ident_char = 0);
     void filter_autocomplete_results(Autocomplete* ac);
     void trigger_parameter_hint();
 
-    void type_char(char ch);
-    void type_char_in_insert_mode(char ch);
+    void type_char(uchar ch);
+    void type_char_in_insert_mode(uchar ch);
     void update_autocomplete(bool triggered_by_ident);
     void update_parameter_hint();
 
@@ -224,8 +223,8 @@ struct Pane {
     void cleanup();
     Editor* focus_editor(ccstr path);
     Editor* focus_editor_by_index(u32 index);
-    Editor* focus_editor(ccstr path, cur2 pos);
-    Editor* focus_editor_by_index(u32 index, cur2 pos);
+    Editor* focus_editor(ccstr path, cur2 pos, bool pos_in_byte_format = false);
+    Editor* focus_editor_by_index(u32 index, cur2 pos, bool pos_in_byte_format = false);
     Editor* get_current_editor();
     Editor* open_empty_editor();
     void set_current_editor(u32 idx);

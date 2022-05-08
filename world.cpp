@@ -359,6 +359,8 @@ void World::init(Window *_wnd) {
 
     MEM = &frame_mem;
 
+    init_treesitter_go_trie();
+
     global_mark_tree_lock.init();
 
     mark_fridge.init(512);
@@ -407,6 +409,14 @@ void World::init(Window *_wnd) {
         message_queue.init();
     }
 
+    {
+        SCOPED_MEM(&world_mem);
+        frameskips.init();
+#ifdef DEBUG_MODE
+        show_frameskips = true;
+#endif
+    }
+
     fzy_init();
 
     // init workspace
@@ -416,7 +426,7 @@ void World::init(Window *_wnd) {
 
         // if testing
         if (!world.window) {
-            cp_strcpy_fixed(current_path, "/Users/bh/dev/ide/gostuff");
+            cp_strcpy_fixed(current_path, "/Users/bh/ide/gostuff");
         } else if (gargc >= 2) {
             cp_strcpy_fixed(current_path, gargv[1]);
         } else {
@@ -475,7 +485,9 @@ void World::init(Window *_wnd) {
 
     {
         SCOPED_MEM(&ui_mem);
-        ::ui.init();
+        if (!(::ui.init())) {
+            cp_panic("Unable to initialize UI.");
+        }
     }
 
     fswatch.init(current_path);
@@ -554,18 +566,18 @@ Editor *focus_editor(ccstr path) {
     return focus_editor(path, new_cur2(-1, -1));
 }
 
-Editor *focus_editor(ccstr path, cur2 pos) {
+Editor *focus_editor(ccstr path, cur2 pos, bool pos_in_byte_format) {
     for (auto&& pane : world.panes) {
         for (u32 i = 0; i < pane.editors.len; i++) {
             auto &it = pane.editors[i];
             if (are_filepaths_same_file(path, it.filepath)) {
                 activate_pane(&pane);
-                pane.focus_editor_by_index(i, pos);
+                pane.focus_editor_by_index(i, pos, pos_in_byte_format);
                 return &it;
             }
         }
     }
-    return get_current_pane()->focus_editor(path, pos);
+    return get_current_pane()->focus_editor(path, pos, pos_in_byte_format);
 }
 
 void activate_pane(Pane *pane) {
@@ -621,7 +633,6 @@ void init_goto_file() {
     fn<void(FT_Node*, ccstr)> fill_files = [&](auto node, auto path) {
         for (auto it = node->children; it; it = it->next) {
             auto isdir = it->is_directory;
-
             // if (isdir && !node->parent && streq(it->name, ".cp")) return;
 
             auto relpath = path[0] == '\0' ? cp_strdup(it->name) : path_join(path, it->name);
@@ -740,12 +751,14 @@ void filter_files() {
     Timer t;
     // t.init("filter_files");
 
-    u32 i = 0;
+    u32 i = 0, j = 0;
     For (*wnd.filepaths) {
-        if (fzy_has_match(wnd.query, it))
+        if (fzy_has_match(wnd.query, it)) {
             wnd.filtered_results->append(i);
-        if (i++ > 1000)
-            break;
+            if (j++ > 10000)
+                break;
+        }
+        i++;
     }
 
     // t.log("matching");
@@ -767,7 +780,7 @@ void run_proc_the_normal_way(Process* proc, ccstr cmd) {
     proc->run(cmd);
 }
 
-Editor* focus_editor_by_id(int editor_id, cur2 pos) {
+Editor* focus_editor_by_id(int editor_id, cur2 pos, bool pos_in_byte_format) {
     For (world.panes) {
         for (int j = 0; j < it.editors.len; j++) {
             auto &editor = it.editors[j];
@@ -788,8 +801,8 @@ bool is_build_debug_free() {
     return true;
 }
 
-void goto_file_and_pos(ccstr file, cur2 pos, Ensure_Cursor_Mode mode) {
-    auto editor = focus_editor(file, pos);
+void goto_file_and_pos(ccstr file, cur2 pos, bool pos_in_byte_format, Ensure_Cursor_Mode mode) {
+    auto editor = focus_editor(file, pos, pos_in_byte_format);
     if (!editor) return; // TODO
 
     editor->ensure_cursor_on_screen_by_moving_view(mode);
@@ -799,7 +812,7 @@ void goto_file_and_pos(ccstr file, cur2 pos, Ensure_Cursor_Mode mode) {
 
 void goto_jump_to_definition_result(Jump_To_Definition_Result *result) {
     world.history.save_latest();
-    goto_file_and_pos(result->file, result->pos, ECM_GOTO_DEF);
+    goto_file_and_pos(result->file, result->pos, true, ECM_GOTO_DEF);
 }
 
 Jump_To_Definition_Result *get_current_definition(ccstr *filepath, bool display_error, cur2 pos) {
@@ -1058,7 +1071,7 @@ void goto_error(int index) {
     // when editor opens, get all existing errors and set marks
 
     if (!editor || !is_mark_valid(error.mark)) {
-        goto_file_and_pos(path, pos);
+        goto_file_and_pos(path, pos, false); // TODO: byte format?
         return;
     }
 
@@ -2815,16 +2828,7 @@ done_writing:
 
     buf.read(fm);
 
-    auto uchars = alloc_list<uchar>();
-    {
-        Cstr_To_Ustr conv; conv.init();
-        for (auto p = s; *p != '\0'; p++) {
-            bool found = false;
-            auto uch = conv.feed(*p, &found);
-            if (found)
-                uchars->append(uch);
-        }
-    }
+    auto uchars = cstr_to_ustr(s);
 
     // add the generated methods
     buf.insert(dest->decl->decl_end, uchars->items, uchars->len);
@@ -2908,15 +2912,11 @@ done_writing:
         }
 
         int lines_in_new = 0;
-
-        Cstr_To_Ustr conv; conv.init();
-        for (auto p = new_contents; *p != '\0'; p++) {
-            bool found = false;
-            auto uch = conv.feed(*p, &found);
-            if (found) {
-                chars->append(uch);
-                if (uch == '\n')
-                    lines_in_new++;
+        {
+            auto ustr = cstr_to_ustr(new_contents);
+            For (*ustr) {
+                chars->append(it);
+                if (it == '\n') lines_in_new++;
             }
         }
 

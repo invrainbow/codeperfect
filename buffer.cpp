@@ -25,6 +25,13 @@ s32 uchar_to_cstr(uchar c, cstr out) {
     return k;
 }
 
+char* uchar_to_cstr(uchar c) {
+    auto ret = alloc_array(char, 5);
+    auto len = uchar_to_cstr(c, ret);
+    ret[len] = '\0';
+    return ret;
+}
+
 s32 uchar_size(uchar c) {
     if (c <= 0x7f) return 1;
     if (c <= 0x7ff) return 2;
@@ -118,48 +125,58 @@ void Cstr_To_Ustr::count(u8 ch) {
     }
 }
 
-uchar Cstr_To_Ustr::feed(u8 ch, bool* found) {
+bool Cstr_To_Ustr::feed(u8 ch) {
     if (buflen) {
         auto needed = get_uchar_size(buf[0]);
         if (buflen + 1 == needed) {
             buflen = 0;
             auto b1 = buf[0];
-            *found = true;
             switch (needed) {
-                case 2:
-                    {
-                        b1 &= 0b11111;
-                        auto b2 = ch & 0b111111;
-                        return (b1 << 6) | b2;
-                    }
-                case 3:
-                    {
-                        b1 &= 0b1111;
-                        auto b2 = buf[1] & 0b111111;
-                        auto b3 = ch & 0b111111;
-                        return (b1 << 12) | (b2 << 6) | b3;
-                    }
-                case 4:
-                    {
-                        b1 &= 0b111;
-                        auto b2 = buf[1] & 0b111111;
-                        auto b3 = buf[2] & 0b111111;
-                        auto b4 = ch & 0b111111;
-                        return (b1 << 18) | (b2 << 12) | (b3 << 6) | b4;
-                    }
+            case 2: {
+                b1 &= 0b11111;
+                auto b2 = ch & 0b111111;
+                uch = (b1 << 6) | b2;
+                break;
             }
+            case 3: {
+                b1 &= 0b1111;
+                auto b2 = buf[1] & 0b111111;
+                auto b3 = ch & 0b111111;
+                uch = (b1 << 12) | (b2 << 6) | b3;
+                break;
+            }
+            case 4: {
+                b1 &= 0b111;
+                auto b2 = buf[1] & 0b111111;
+                auto b3 = buf[2] & 0b111111;
+                auto b4 = ch & 0b111111;
+                uch = (b1 << 18) | (b2 << 12) | (b3 << 6) | b4;
+                break;
+            }
+            }
+            return true;
         } else {
             buf[buflen++] = ch;
         }
     } else if (ch < 0b10000000) {
-        *found = true;
-        return ch;
+        uch = ch;
+        return true;
     } else {
         buf[buflen++] = ch;
     }
 
-    *found = false;
-    return 0;
+    return false;
+}
+
+List<uchar>* cstr_to_ustr(ccstr s) {
+    Cstr_To_Ustr conv; conv.init();
+
+    auto ret = alloc_list<uchar>();
+    for (int i = 0, len = strlen(s); i < len; i++) {
+        if (conv.feed(s[i]))
+            ret->append(conv.uch);
+    }
+    return ret;
 }
 
 void Buffer::hist_apply_change(Change *change, bool undo) {
@@ -300,7 +317,6 @@ bool Buffer::read(Buffer_Read_Func f, bool reread) {
     // Expects buf to be empty.
 
     char ch;
-    Cstr_To_Ustr conv;
     bool found;
 
     if (reread) {
@@ -327,17 +343,16 @@ bool Buffer::read(Buffer_Read_Func f, bool reread) {
 
     if (!insert_new_line()) return false;
 
-    conv.init();
+    Cstr_To_Ustr conv; conv.init();
     while (f(&ch)) {
-        uchar uch = conv.feed(ch, &found);
         (*bc)++;
 
-        if (found) {
-            if (uch == '\n') { // TODO: handle \r
+        if (conv.feed(ch)) {
+            if (conv.uch == '\n') { // TODO: handle \r
                 if (!insert_new_line())
                     return false;
             } else {
-                if (!line->append(uch))
+                if (!line->append(conv.uch))
                     return false;
             }
         }
