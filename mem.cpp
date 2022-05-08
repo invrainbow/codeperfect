@@ -31,7 +31,7 @@ void* ts_interop_realloc(void *old_mem, size_t new_size) {
         return realloc(old_mem, new_size);
     }
 
-    if (new_size == 0) return NULL;
+    if (!new_size) return NULL;
 
     auto new_mem = _ts_alloc_memory(new_size, 0);
     if (old_mem) {

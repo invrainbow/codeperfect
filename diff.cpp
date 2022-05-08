@@ -33,13 +33,13 @@ int index_of(DString big, DString small, int start = 0) {
 }
 
 List<Diff> *diff_compute(DString a, DString b) {
-    if (a.len() == 0) {
+    if (!a.len()) {
         auto ret = alloc_list<Diff>();
         add_diff(ret, DIFF_INSERT, b);
         return ret;
     }
 
-    if (b.len() == 0) {
+    if (!b.len()) {
         auto ret = alloc_list<Diff>();
         add_diff(ret, DIFF_DELETE, a);
         return ret;
@@ -218,7 +218,7 @@ DString diff_common_prefix(DString a, DString b) {
   auto alen = a.len();
   auto blen = b.len();
 
-  if (alen == 0 || blen == 0 || a.get(0) != b.get(0))
+  if (!alen || !blen || a.get(0) != b.get(0))
       return a.slice(0, 0);
 
   for (int i = 0; i < alen && i < blen; i++)
@@ -231,7 +231,7 @@ DString diff_common_suffix(DString a, DString b) {
     auto alen = a.len();
     auto blen = b.len();
 
-    if (alen == 0 || blen == 0 || a.get(-1) != b.get(-1))
+    if (!alen || !blen || a.get(-1) != b.get(-1))
         return a.slice(0, 0);
 
     for (int i = 0; i < alen && i < blen; i++)

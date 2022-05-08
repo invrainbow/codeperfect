@@ -171,7 +171,7 @@ bool Path::contains(Path *other) {
 }
 
 bool Path::goto_parent() {
-    if (parts->len == 0) return false;
+    if (!parts->len) return false;
     parts->len--;
     return true;
 }
@@ -181,7 +181,7 @@ void Path::goto_child(ccstr child) {
 }
 
 ccstr Path::str(char sep) {
-    if (parts->len == 0) return "";
+    if (!parts->len) return "";
 
     if (!sep) sep = PATH_SEP;
 

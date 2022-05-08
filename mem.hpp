@@ -124,7 +124,7 @@ struct Pool {
         ptr0(this);
 
         name = _name;
-        blocksize = override_blocksize == 0 ? POOL_DEFAULT_BUCKET_SIZE : override_blocksize;
+        blocksize = !override_blocksize ? POOL_DEFAULT_BUCKET_SIZE : override_blocksize;
         obsolete_blocks.init(LIST_MALLOC, 32);
         used_blocks.init(LIST_MALLOC, 32);
         unused_blocks.init(LIST_MALLOC, 32);

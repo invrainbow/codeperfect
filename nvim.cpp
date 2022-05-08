@@ -132,7 +132,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
 
             // grab associated editor, break if we can't find it
             Editor* editor = NULL;
-            if (req->editor_id != 0) {
+            if (req->editor_id) {
                 editor = find_editor_by_id(req->editor_id);
                 if (!editor) break;
             }
@@ -406,7 +406,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                         last_hltype = !def ? HL_NONE : def->type;
                     }
 
-                    int reps = (!streq(it.text, "\t") && it.reps != 0) ? it.reps : 1;
+                    int reps = (!streq(it.text, "\t") && it.reps) ? it.reps : 1;
                     for (u32 i = 0; i < reps && col < NVIM_DEFAULT_WIDTH; i++) {
                         editor->highlights[args.row][col] = last_hltype;
                         col++;
@@ -562,7 +562,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 if (args.changedtick > editor->nvim_data.changedtick)
                     editor->nvim_data.changedtick = args.changedtick;
 
-                auto is_change_empty = (args.firstline == args.lastline && args.lines->len == 0);
+                auto is_change_empty = (args.firstline == args.lastline && !args.lines->len);
 
                 bool skip = (
                     !editor->nvim_data.got_initial_lines
@@ -612,7 +612,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 if (streq(args.mode_name, "normal")) {
                     mode = VI_NORMAL;
 
-                    if (post_insert_dotrepeat_time != 0) {
+                    if (post_insert_dotrepeat_time) {
                         print("postinsert mode change took %llu ns", current_time_nano() - post_insert_dotrepeat_time);
                         post_insert_dotrepeat_time = 0;
                     }
@@ -645,7 +645,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 }
 
                 if (mode != VI_INSERT && exiting_insert_mode) {
-                    if (editor_that_triggered_escape != 0) {
+                    if (editor_that_triggered_escape) {
                         auto ed = find_editor_by_id(editor_that_triggered_escape);
                         if (ed)
                             editor = ed;
@@ -868,7 +868,7 @@ void Nvim::run_event_loop() {
                         auto xe = reader.read_int(); CHECKOK();
                         print("%d:%d to %d:%d", ys, xs, ye, xe);
                     } else if (streq(cmd, "goto_definition")) {
-                        ASSERT(num_args == 0);
+                        ASSERT(!num_args);
                         add_event([&](auto msg) {
                             msg->notification.type = NVIM_NOTIF_CUSTOM_GOTO_DEFINITION;
                         });
@@ -1205,7 +1205,7 @@ void Nvim::run_event_loop() {
 
                 // grab associated editor, break if we can't find it
                 Editor* editor = NULL;
-                if (req_editor_id != 0) {
+                if (req_editor_id) {
                     auto is_match = [&](auto it) { return it->id == req_editor_id; };
                     editor = find_editor(is_match);
                     if (!editor) {

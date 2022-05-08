@@ -202,7 +202,7 @@ void send_nvim_keys(ccstr s) {
 
 void goto_next_tab() {
     auto pane = get_current_pane();
-    if (pane->editors.len == 0) return;
+    if (!pane->editors.len) return;
 
     auto idx = (pane->current_editor + 1) % pane->editors.len;
     pane->focus_editor_by_index(idx);
@@ -210,10 +210,10 @@ void goto_next_tab() {
 
 void goto_previous_tab() {
     auto pane = get_current_pane();
-    if (pane->editors.len == 0) return;
+    if (!pane->editors.len) return;
 
     u32 idx;
-    if (pane->current_editor == 0)
+    if (!pane->current_editor)
         idx = pane->editors.len - 1;
     else
         idx = pane->current_editor - 1;
@@ -495,7 +495,7 @@ void handle_window_event(Window_Event *it) {
 
             if (keymods == CP_MOD_NONE) {
                 auto& ac = editor->autocomplete;
-                if (ac.ac.results && ac.filtered_results->len != 0) {
+                if (ac.ac.results && ac.filtered_results->len) {
                     auto idx = ac.filtered_results->at(ac.selection);
                     auto& result = ac.ac.results->at(idx);
                     editor->perform_autocomplete(&result);
@@ -575,7 +575,7 @@ void handle_window_event(Window_Event *it) {
                     editor->backspace_in_insert_mode(1, 0);
             } else {
                 // if we're at beginning of line
-                if (editor->cur.x == 0) {
+                if (!editor->cur.x) {
                     auto back1 = editor->buf->dec_cur(editor->cur);
                     editor->buf->remove(back1, editor->cur);
                     if (world.use_nvim) {
@@ -1000,7 +1000,7 @@ void handle_window_event(Window_Event *it) {
                         editor->cleanup();
 
                         pane->editors.remove(pane->current_editor);
-                        if (pane->editors.len == 0)
+                        if (!pane->editors.len)
                             pane->current_editor = -1;
                         else {
                             auto new_idx = pane->current_editor;
@@ -1490,7 +1490,7 @@ int main(int argc, char **argv) {
             auto &auth = world.auth;
 
             auto in_grace_period = [&](int days) {
-                if (auth.grace_period_start == 0) {
+                if (!auth.grace_period_start) {
                     auth.grace_period_start = get_unix_time();
                     write_auth();
                 }

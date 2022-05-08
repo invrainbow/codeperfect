@@ -782,7 +782,7 @@ static void ShowDemoWindowWidgets()
             {
                 // Use SetNextItemOpen() so set the default state of a node to be open. We could
                 // also use TreeNodeEx() with the ImGuiTreeNodeFlags_DefaultOpen flag to achieve the same thing!
-                if (i == 0)
+                if (!i)
                     ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 
                 if (ImGui::TreeNode((void*)(intptr_t)i, "Child %d", i))

@@ -168,7 +168,7 @@ struct Parser_It {
 
     bool bof() {
         switch (type) {
-        case IT_MMAP: return (mmap_params.pos.x == 0);
+        case IT_MMAP: return (!mmap_params.pos.x);
         case IT_BUFFER: return buffer_params.it.bof();
         }
     }

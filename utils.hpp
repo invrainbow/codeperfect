@@ -342,7 +342,7 @@ template<typename T>
 bool iszero(T* p) {
     auto ptr = (char*)p;
     for (u32 i = 0; i < sizeof(T); i++)
-        if (ptr[i] != 0)
+        if (ptr[i])
             return false;
     return true;
 }
@@ -443,5 +443,5 @@ struct Message_Queue {
 
 template<typename T>
 bool isempty(List<T> *arr) {
-    return !arr || arr->len == 0;
+    return !arr || !arr->len;
 }

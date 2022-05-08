@@ -63,7 +63,7 @@ ccstr get_win32_error(DWORD errcode) {
     if (errcode == -1) errcode = GetLastError();
 
     wchar_t *str = NULL;
-    if (FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, errcode, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPWSTR)&str, 0, NULL) == 0)
+    if (!FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, errcode, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPWSTR)&str, 0, NULL))
         return NULL;
     defer { LocalFree(str); };
 
@@ -82,7 +82,7 @@ ccstr get_normalized_path(ccstr path) {
     Frame frame;
 
     auto buf = alloc_array(wchar_t, len);
-    if (GetFinalPathNameByHandleW(f, buf, len, FILE_NAME_NORMALIZED) == 0) {
+    if (!GetFinalPathNameByHandleW(f, buf, len, FILE_NAME_NORMALIZED)) {
         frame.restore();
         print("GetFinalPathNameByHandleW: %s", get_last_error());
         return NULL;
@@ -599,7 +599,7 @@ bool Fs_Watcher::next_event(Fs_Event *event) {
 
         initiate_wait();
 
-        if (bytes_read == 0) {
+        if (!bytes_read) {
             print("number of events overflowed our FILE_NOTIFY_INFORMATION buffer");
             return false;
         }
@@ -617,7 +617,7 @@ bool Fs_Watcher::next_event(Fs_Event *event) {
         to_utf8(info->FileName, info->FileNameLength / sizeof(WCHAR)),
     );
 
-    if (info->NextEntryOffset == 0)
+    if (!info->NextEntryOffset)
         has_more = false;
     else
         offset += info->NextEntryOffset;
@@ -727,7 +727,7 @@ bool File_Mapping::finish_writing(i64 final_size) {
     LARGE_INTEGER li;
     li.QuadPart = final_size;
 
-    PLONG hi = li.HighPart == 0 ? NULL : &li.HighPart;
+    PLONG hi = !li.HighPart ? NULL : &li.HighPart;
 
     if (SetFilePointer(file, li.LowPart, hi, FILE_BEGIN) == INVALID_SET_FILE_POINTER)
         return false;

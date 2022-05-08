@@ -54,7 +54,7 @@ bool Buffer_It::eof() {
         return pos >= new_end;
     }
 
-    if (buf->lines.len == 0) return true;
+    if (!buf->lines.len) return true;
     if (y == buf->lines.len - 1 && x == buf->lines[y].len) return true;
     if (y > buf->lines.len - 1) return true;
     return false;
@@ -941,7 +941,7 @@ u32 Buffer::idx_byte_to_gr(int y, int off) {
         off -= size;
     }
 
-    assert(off == 0);
+    assert(!off);
     return x;
 }
 
@@ -953,7 +953,7 @@ u32 Buffer::idx_byte_to_cp(int y, int off, bool nocrash) {
         off -= size;
     }
 
-    if (!nocrash) assert(off == 0);
+    if (!nocrash) assert(!off);
     return lines[y].len;
 }
 
@@ -1009,7 +1009,7 @@ cur2 Buffer::offset_to_cur(i32 off) {
 
     if (ret.x == -1 || ret.y == -1) {
         assert(ret.x == -1 && ret.y == -1);
-        assert(off == 0);
+        assert(!off);
         ret.y = lines.len-1;
         ret.x = lines[ret.y].len;
     }

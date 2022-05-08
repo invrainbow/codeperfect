@@ -1302,7 +1302,7 @@ void Go_Indexer::background_thread() {
 
             auto source_files = list_source_files(resolved_path, true);
             if (!source_files) continue;
-            if (source_files->len == 0) continue;
+            if (!source_files->len) continue;
 
             create_package_if_null();
 
@@ -1359,7 +1359,7 @@ void Go_Indexer::background_thread() {
             index_print("Processed %s in %dms.", import_path, t.read_time() / 1000000);
         }
 
-        if (package_queue.len == 0) {
+        if (!package_queue.len) {
             int i = 0;
             int num_checked = 0;
 
@@ -1410,7 +1410,7 @@ void Go_Indexer::background_thread() {
                 // hash changed, mark outdated & queue for re-processing
                 mark_package_for_reprocessing(it.import_path);
             }
-            bool done = (i == index.packages->len && package_queue.len == 0);
+            bool done = (i == index.packages->len && !package_queue.len);
 
             int offset = 0;
             For (*to_remove) {
@@ -1482,9 +1482,9 @@ void Go_Indexer::background_thread() {
             auto should_write = [&]() {
                 if (packages_processed_since_last_write > 5)
                     return true;
-                if (packages_processed_since_last_write > 0 && last_write_time == 0)
+                if (packages_processed_since_last_write > 0 && !last_write_time)
                     return true;
-                if (last_write_time != 0) {
+                if (last_write_time) {
                     auto ten_minutes_in_ns = (u64)10 * 60 * 1000 * 1000 * 1000;
                     if (time - last_write_time >= ten_minutes_in_ns)
                         return true;
@@ -3115,7 +3115,7 @@ Godecl *Go_Indexer::find_toplevel_containing(Go_File *file, cur2 start, cur2 end
 void Go_Indexer::actually_generate_caller_hierarchy(Goresult *declres, List<Call_Hier_Node> *out) {
     auto ref_files = actually_find_references(declres, false);
     if (!ref_files) return;
-    // if (ref_files->len == 0) return;
+    // if (!ref_files->len) return;
 
     For (*ref_files) {
         auto filepath = it.filepath;
@@ -3921,7 +3921,7 @@ bool Go_Indexer::truncate_parsed_file(Parsed_File *pf, cur2 end_pos, ccstr chars
     it.fake_end = end_pos;
     it.fake_end_offset = buf->cur_to_offset(it.fake_end);
 
-    if (chars_to_append != 0) {
+    if (chars_to_append) {
         it.append_chars_to_end = true;
         it.chars_to_append_to_end = chars_to_append;
     }
@@ -4355,7 +4355,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
         // try normal dot completions
         do {
             auto results = get_node_dotprops(expr_to_analyze, &was_package, ctx);
-            if (!results || results->len == 0) break;
+            if (!results || !results->len) break;
 
             init_results();
             For (*results) {
@@ -4375,7 +4375,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
         // try postfix completions
         do {
             auto results = get_postfix_completions(expr_to_analyze, ctx);
-            if (!results || results->len == 0) break;
+            if (!results || !results->len) break;
 
             init_results();
             For (*results) {
@@ -4694,7 +4694,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
 
             t.log("add keywords & builtins");
 
-            if (ac_results->len == 0) return false;
+            if (!ac_results->len) return false;
             out->type = AUTOCOMPLETE_IDENTIFIER;
         }
         break;
@@ -4773,7 +4773,7 @@ bool Go_Indexer::check_if_still_in_parameter_hint(ccstr filepath, cur2 cur, cur2
     }, true);
 
     ccstr suffix = "";
-    if (string_close_char != 0)
+    if (string_close_char)
         suffix = cp_sprintf("%c", string_close_char);
     suffix = cp_sprintf("%s)}}}}}}}}}}}}}}}}", suffix);
 
@@ -5313,7 +5313,7 @@ List<Godecl> *Go_Indexer::parameter_list_to_fields(Ast_Node *params) {
             id_count++;
         }
 
-        if (id_count == 0) id_count = 1;
+        if (!id_count) id_count = 1;
         count += id_count;
     }
 
@@ -5632,7 +5632,7 @@ void Go_Indexer::import_spec_to_decl(Ast_Node *spec_node, Godecl *decl) {
 }
 
 bool Go_Indexer::assignment_to_decls(List<Ast_Node*> *lhs, List<Ast_Node*> *rhs, New_Godecl_Func new_godecl, bool range) {
-    if (lhs->len == 0 || rhs->len == 0) return false;
+    if (!lhs->len || !rhs->len) return false;
 
     if (rhs->len == 1) {
         if (range) {
@@ -5645,7 +5645,7 @@ bool Go_Indexer::assignment_to_decls(List<Ast_Node*> *lhs, List<Ast_Node*> *rhs,
 
                 auto gotype = new_gotype(GOTYPE_LAZY_RANGE);
                 gotype->lazy_range_base = range_base;
-                gotype->lazy_range_is_index = (i == 0);
+                gotype->lazy_range_is_index = (!i);
 
                 auto decl = new_godecl();
                 decl->name = id->string();

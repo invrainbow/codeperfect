@@ -64,7 +64,7 @@ void Process::cleanup() {
 }
 
 void close_pipe_handle(int *fd) {
-    if (*fd != 0) {
+    if (*fd) {
         close(*fd);
         *fd = 0;
     }
@@ -268,7 +268,7 @@ void File::cleanup() {
 
 bool File::seek(u32 pos) {
     auto result = (pos == FILE_SEEK_END) ? fseek(f, 0, SEEK_END) : fseek(f, pos, SEEK_SET);
-    return (result == 0);
+    return (!result);
 }
 
 bool File::read(char *buf, s32 size, s32 *bytes_read) {
