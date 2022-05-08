@@ -641,8 +641,7 @@ const NSRange kEmptyRange = { NSNotFound, 0 };
 - (NSRange)markedRange {
     if ([marked_text length] > 0)
         return NSMakeRange(0, [marked_text length] - 1);
-    else
-        return kEmptyRange;
+    return kEmptyRange;
 }
 
 - (NSRange)selectedRange {
