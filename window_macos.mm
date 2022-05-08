@@ -442,7 +442,6 @@ const NSRange kEmptyRange = { NSNotFound, 0 };
 }
 
 - (void)mouseDown:(NSEvent *)event {
-;
     window->dispatch_mouse_event(CP_MOUSE_LEFT, CP_ACTION_PRESS, translate_keymod([event modifierFlags]));
 }
 
