@@ -1303,7 +1303,7 @@ bool search_ranges(int c, Unicode_Range *ranges, int count) {
         else if (c < it->start)
             hi = mid - 1;
         else
-            return (it->stride == 1 || (c - it->start) % it->stride == 0);
+            return (it->stride == 1 || (c - it->start) % !it->stride);
     }
     return false;
 }

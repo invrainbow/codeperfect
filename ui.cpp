@@ -661,7 +661,7 @@ void UI::render_ts_cursor(TSTreeCursor *curr, cur2 open_cur) {
 
         auto flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
 
-        if (node->child_count() == 0)
+        if (!node->child_count())
             flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_Bullet;
 
         auto type_str = ts_ast_type_str(node->type());
@@ -1680,7 +1680,7 @@ void UI::draw_debugger() {
                 if (!frame && loading)
                     ImGui::Text("Loading...");
                 if (frame)
-                    if ((!frame->locals || frame->locals->len == 0) && (!frame->args || frame->args->len == 0))
+                    if ((!frame->locals || !frame->locals->len) && (!frame->args || !frame->args->len))
                         ImGui::Text("No variables to show here.");
             }
         }
@@ -2740,7 +2740,7 @@ void UI::draw_everything() {
 
         if (wnd.show && !wnd.fill_running) {
             auto go_up = [&]() {
-                if (wnd.filtered_results->len == 0) return;
+                if (!wnd.filtered_results->len) return;
                 if (!wnd.selection)
                     wnd.selection = min(wnd.filtered_results->len, settings.generate_implementation_max_results) - 1;
                 else
@@ -2748,7 +2748,7 @@ void UI::draw_everything() {
             };
 
             auto go_down = [&]() {
-                if (wnd.filtered_results->len == 0) return;
+                if (!wnd.filtered_results->len) return;
                 wnd.selection++;
                 wnd.selection %= min(wnd.filtered_results->len, settings.generate_implementation_max_results);
             };
@@ -3212,7 +3212,7 @@ void UI::draw_everything() {
                 wnd.name[0] = '\0';
             };
 
-            if (strlen(wnd.name) == 0) {
+            if (!strlen(wnd.name)) {
                 error_out("Please enter a file name.");
                 break;
             }
@@ -3276,7 +3276,7 @@ void UI::draw_everything() {
             wnd.show = false;
 
             do {
-                if (strlen(wnd.name) == 0) break;
+                if (!strlen(wnd.name)) break;
 
                 auto dest = wnd.location_is_root ? world.current_path : path_join(world.current_path, wnd.location);
                 auto path = path_join(dest, wnd.name);
@@ -3869,7 +3869,7 @@ void UI::draw_everything() {
                         imgui_input_text_full_fixbuf("Additional arguments", dp.args);
                         imgui_pop_font();
                     } else {
-                        if (ps->debug_profiles->len == 0) {
+                        if (!ps->debug_profiles->len) {
                             ImGui::Text("Create a profile on the left and it'll show up here.");
                         } else {
                             ImGui::Text("Select a profile on the left and it'll show up here.");
@@ -3957,7 +3957,7 @@ void UI::draw_everything() {
                         imgui_input_text_full_fixbuf("Build command", bp.cmd);
                         imgui_pop_font();
                     } else {
-                        if (ps->build_profiles->len == 0) {
+                        if (!ps->build_profiles->len) {
                             ImGui::Text("Create a profile on the left and it'll show up here.");
                         } else {
                             ImGui::Text("Select a profile on the left and it'll show up here.");
@@ -4017,7 +4017,7 @@ void UI::draw_everything() {
         auto& wnd = world.wnd_goto_file;
 
         auto go_up = [&]() {
-            if (wnd.filtered_results->len == 0) return;
+            if (!wnd.filtered_results->len) return;
             if (!wnd.selection)
                 wnd.selection = min(wnd.filtered_results->len, settings.goto_file_max_results) - 1;
             else
@@ -4025,7 +4025,7 @@ void UI::draw_everything() {
         };
 
         auto go_down = [&]() {
-            if (wnd.filtered_results->len == 0) return;
+            if (!wnd.filtered_results->len) return;
             wnd.selection++;
             wnd.selection %= min(wnd.filtered_results->len, settings.goto_file_max_results);
         };
@@ -4108,7 +4108,7 @@ void UI::draw_everything() {
         }
 
         auto go_up = [&]() {
-            if (wnd.filtered_results->len == 0) return;
+            if (!wnd.filtered_results->len) return;
             if (!wnd.selection)
                 wnd.selection = min(wnd.filtered_results->len, settings.run_command_max_results) - 1;
             else
@@ -4116,7 +4116,7 @@ void UI::draw_everything() {
         };
 
         auto go_down = [&]() {
-            if (wnd.filtered_results->len == 0) return;
+            if (!wnd.filtered_results->len) return;
             wnd.selection++;
             wnd.selection %= min(wnd.filtered_results->len, settings.run_command_max_results);
         };
@@ -4212,7 +4212,7 @@ void UI::draw_everything() {
 
         if (wnd.show && !wnd.fill_running) {
             auto go_up = [&]() {
-                if (wnd.filtered_results->len == 0) return;
+                if (!wnd.filtered_results->len) return;
                 if (!wnd.selection)
                     wnd.selection = min(wnd.filtered_results->len, settings.goto_symbol_max_results) - 1;
                 else
@@ -4220,7 +4220,7 @@ void UI::draw_everything() {
             };
 
             auto go_down = [&]() {
-                if (wnd.filtered_results->len == 0) return;
+                if (!wnd.filtered_results->len) return;
                 wnd.selection++;
                 wnd.selection %= min(wnd.filtered_results->len, settings.goto_symbol_max_results);
             };
@@ -4260,7 +4260,7 @@ void UI::draw_everything() {
                 ImGui::SetWindowFocus(NULL);
 
                 do {
-                    if (wnd.filtered_results->len == 0) break;
+                    if (!wnd.filtered_results->len) break;
 
                     if (!world.indexer.try_acquire_lock(IND_READING)) break;
                     defer { world.indexer.release_lock(IND_READING); };
@@ -5065,7 +5065,7 @@ void UI::draw_everything() {
 
         start_clip(tabs_area); // will become problem once we have popups on tabs
 
-        if (current_pane == 0) {
+        if (!current_pane) {
             if (world.wnd_mouse_pos.show) {
                 begin_window("Mouse Pos", &world.wnd_mouse_pos);
                 ImGui::Text("mouse_pos = (%.4f, %.4f)", world.ui.mouse_pos.x, world.ui.mouse_pos.y);
@@ -5123,7 +5123,7 @@ void UI::draw_everything() {
             if (tab_id == pane.current_editor) {
                 current_tab = tab;
 
-                auto margin = tab_id == 0 ? 5 : settings.tabs_offset;
+                auto margin = !tab_id ? 5 : settings.tabs_offset;
                 if (tab.x < tabs_area.x + margin) {
                     pane.tabs_offset -= (tabs_area.x + margin - tab.x);
                 }
@@ -5258,7 +5258,7 @@ void UI::draw_everything() {
 
                     if (node_end < start) return WALK_SKIP_CHILDREN;
                     if (node_start > end) return WALK_ABORT;
-                    // if (node->child_count() != 0) return WALK_CONTINUE;
+                    // if (node->child_count()) return WALK_CONTINUE;
 
                     vec4f color; ptr0(&color);
                     if (get_type_color(node, editor, &color)) {
@@ -5319,7 +5319,7 @@ void UI::draw_everything() {
                 }
             }
 
-            if (buf->lines.len == 0) draw_cursor(1);
+            if (!buf->lines.len) draw_cursor(1);
 
             auto &hint = editor->parameter_hint;
 
@@ -5602,7 +5602,7 @@ void UI::draw_everything() {
                     vx += glyph_width;
                 }
 
-                if (line->len == 0) {
+                if (!line->len) {
                     if (world.use_nvim) {
                         auto topline = editor->nvim_data.grid_topline;
                         if (topline <= y && y < topline + NVIM_DEFAULT_HEIGHT) {

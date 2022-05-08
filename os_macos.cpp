@@ -79,7 +79,7 @@ void Process::cleanup() {
 }
 
 void close_pipe_handle(int *fd) {
-    if (*fd != 0) {
+    if (*fd) {
         close(*fd);
         *fd = 0;
     }
@@ -308,7 +308,7 @@ bool File::read(char *buf, s32 size) {
 
     while (off < size) {
         auto n = ::read(fd, buf + off, size - off);
-        if (n == -1 || n == 0) return false;
+        if (n == -1 || !n) return false;
         off += n;
     }
 
@@ -320,7 +320,7 @@ bool File::write(char *buf, s32 size) {
 
     while (off < size) {
         auto n = ::write(fd, buf + off, size - off);
-        if (n == -1 || n == 0) return false;
+        if (n == -1 || !n) return false;
         off += n;
     }
 
@@ -424,7 +424,7 @@ ccstr rel_to_abs_path(ccstr path) {
     Frame frame;
     auto ret = alloc_array(char, len+1);
 
-    if (cwk_path_get_absolute(cwd, path, ret, len+1) == 0) {
+    if (!cwk_path_get_absolute(cwd, path, ret, len+1)) {
         frame.restore();
         return NULL;
     }

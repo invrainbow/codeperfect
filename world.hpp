@@ -104,7 +104,7 @@ struct History {
     void check_marks(int upper = -1);
 
     int inc(int i) { return i == _countof(ring) - 1 ? 0 : i + 1; }
-    int dec(int i) { return i == 0 ? _countof(ring) - 1 : i - 1; }
+    int dec(int i) { return !i ? _countof(ring) - 1 : i - 1; }
 };
 
 struct Build {

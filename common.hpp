@@ -334,10 +334,10 @@ struct Panic_Exception : std::runtime_error {
 void _error(ccstr fmt, ...);
 
 // convenience macros
-#define streq(a, b) (strcmp(a, b) == 0)
-#define streqi(a, b) (strcmpi(a, b) == 0)
-#define strneq(a, b, n) (strncmp(a, b, n) == 0)
-#define strneqi(a, b, n) (strncmpi(a, b, n) == 0)
+#define streq(a, b) !strcmp(a, b)
+#define streqi(a, b) !strcmpi(a, b)
+#define strneq(a, b, n) !strncmp(a, b, n)
+#define strneqi(a, b, n) !strncmpi(a, b, n)
 #define print(fmt, ...) printf(fmt "\n", ##__VA_ARGS__)
 #define error(fmt, ...) _error("error: " fmt "\n", ##__VA_ARGS__)
 #define mem0(ptr, n) memset(ptr, 0, n)

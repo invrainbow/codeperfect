@@ -28,7 +28,7 @@ struct Buffer_It {
     uchar peek();
     uchar prev();
     uchar next();
-    bool bof() { return x == 0 && y == 0; }
+    bool bof() { return !x && !y; }
     bool eol() { return peek() == '\n'; }
     uchar get(cur2 _pos);
 };
@@ -191,7 +191,7 @@ struct Buffer {
     bool hist_force_push_next_change;
 
     int hist_inc(int i) { return i == _countof(history) - 1 ? 0 : i + 1; }
-    int hist_dec(int i) { return i == 0 ? _countof(history) - 1 : i - 1; }
+    int hist_dec(int i) { return !i ? _countof(history) - 1 : i - 1; }
     Change* hist_alloc();
     void hist_free(int i);
     Change* hist_push();

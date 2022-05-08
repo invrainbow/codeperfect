@@ -712,7 +712,7 @@ void kick_off_build(Build_Profile *build_profile) {
             build->done = true;
             build->started = false;
 
-            if (build->errors.len == 0) {
+            if (!build->errors.len) {
                 // world.error_list.show = false;
             }
 
@@ -1224,7 +1224,7 @@ bool move_autocomplete_cursor(Editor *ed, int direction) {
     auto &ac = ed->autocomplete;
     if (!ac.ac.results) return false;
 
-    if (ac.selection == 0 && direction == -1)
+    if (!ac.selection && direction == -1)
         ac.selection = ac.filtered_results->len - 1;
     else
         ac.selection = (ac.selection + direction) % ac.filtered_results->len;
@@ -1748,7 +1748,7 @@ void init_goto_symbol() {
 
         auto symbols = alloc_list<Go_Symbol>();
         world.indexer.fill_goto_symbol(symbols);
-        if (symbols->len == 0) return;
+        if (!symbols->len) return;
 
         {
             SCOPED_MEM(&world.goto_symbol_mem);
@@ -2243,7 +2243,7 @@ void handle_command(Command cmd, bool from_menu) {
 
                 auto symbols = alloc_list<Go_Symbol>();
                 ind.fill_generate_implementation(symbols, wnd.selected_interface);
-                if (symbols->len == 0) return;
+                if (!symbols->len) return;
 
                 {
                     SCOPED_MEM(&world.generate_implementation_mem);
@@ -2451,7 +2451,7 @@ void handle_command(Command cmd, bool from_menu) {
         }
 
         auto specs = decl->gotype->interface_specs;
-        if (!specs || specs->len == 0) {
+        if (!specs || !specs->len) {
             auto msg = "The selected interface is empty. That means every type will match it. Do you still want to just list every type I can find?";
             if (ask_user_yes_no(msg, "Warning", "Yes, continue", "No") != ASKUSER_YES)
                 break;
@@ -2538,7 +2538,7 @@ void open_add_file_or_folder(bool folder, FT_Node *dest) {
 
 void do_generate_implementation() {
     auto &wnd = world.wnd_generate_implementation;
-    if (wnd.filtered_results->len == 0) return;
+    if (!wnd.filtered_results->len) return;
 
     auto &ind = world.indexer;
     if (!ind.try_acquire_lock(IND_READING)) return;
@@ -2888,7 +2888,7 @@ done_writing:
         defer { GHFree(new_contents); };
 
         auto new_contents_len = strlen(new_contents);
-        if (new_contents_len == 0) return;
+        if (!new_contents_len) return;
 
         while (new_contents[new_contents_len-1] == '\n') {
             new_contents[new_contents_len-1] = '\0';

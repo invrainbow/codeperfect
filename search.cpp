@@ -150,7 +150,7 @@ void Searcher::search_worker() {
             }
         }
 
-        if (matches->len == 0) continue;
+        if (!matches->len) continue;
 
         int curr_match = 0;
         cur2 pos; ptr0(&pos);
@@ -268,7 +268,7 @@ bool is_binary(ccstr buf, s32 len) {
     if (len >= 3 && buf[0] == 0xEF && buf[1] == 0xBB && buf[2] == 0xBF) return false;
 
     // pdf
-    if (len >= 5 && strncmp(buf, "%PDF-", 5) == 0) return true;
+    if (len >= 5 && !strncmp(buf, "%PDF-", 5)) return true;
 
     for (u32 i = 0; i < total_bytes; i++) {
         if (buf[i] == '\0') return true;
@@ -484,7 +484,7 @@ void Searcher::replace_worker() {
     For (search_results) {
         // would these ever happen
         if (!it.filepath) continue;
-        if (!it.results || it.results->len == 0) continue;
+        if (!it.results || !it.results->len) continue;
 
         File_Replacer fr;
         if (!fr.init(it.filepath, "search_and_replace")) continue;

@@ -419,7 +419,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
                             if (!functype) break;
 
                             auto result = functype->func_sig.result;
-                            if (!result  || result->len == 0) {
+                            if (!result  || !result->len) {
                                 insert_text("return");
                                 ok = true;
                                 break;
@@ -641,7 +641,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
                     defer { GHFree(new_contents); };
 
                     auto new_contents_len = strlen(new_contents);
-                    if (new_contents_len == 0) break;
+                    if (!new_contents_len) break;
 
                     if (new_contents[new_contents_len-1] == '\n') {
                         new_contents[new_contents_len-1] = '\0';
@@ -917,12 +917,12 @@ void Editor::update_lines(int firstline, int lastline, List<uchar*> *new_lines, 
         buf->internal_insert_line(firstline + i, line, len);
     }
 
-    if (buf->lines.len == 0)
+    if (!buf->lines.len)
         buf->internal_append_line(NULL, 0);
 
     auto new_end_cur = new_cur2(0, firstline + new_lines->len);
     if (firstline + new_lines->len == buf->lines.len) {
-        if (buf->lines.len == 0)
+        if (!buf->lines.len)
             new_end_cur = new_cur2(0, 0);
         else
             new_end_cur = new_cur2((i32)buf->lines.last()->len, (i32)buf->lines.len - 1);
@@ -1498,7 +1498,7 @@ Editor *Pane::focus_editor_by_index(u32 idx, cur2 pos, bool pos_in_byte_format) 
     }
 
     if (world.nvim.current_win_id != editor.id) {
-        if (editor.nvim_data.win_id != 0)
+        if (editor.nvim_data.win_id)
             world.nvim.set_current_window(&editor);
         else
             world.nvim.waiting_focus_window = editor.id;
@@ -1520,8 +1520,8 @@ bool Editor::is_nvim_ready() {
 
     return world.nvim.is_ui_attached
         && nvim_data.is_buf_attached
-        && (nvim_data.buf_id != 0)
-        && (nvim_data.win_id != 0)
+        && nvim_data.buf_id
+        && nvim_data.win_id
         && nvim_data.got_initial_lines
         && nvim_data.got_initial_cur;
 }
@@ -1545,14 +1545,14 @@ void Editor::init() {
 void Editor::cleanup() {
     auto &nv = world.nvim;
 
-    if (nvim_data.win_id != 0) {
+    if (nvim_data.win_id) {
         nv.start_request_message("nvim_win_close", 2);
         nv.writer.write_int(nvim_data.win_id);
         nv.writer.write_bool(true);
         nv.end_message();
     }
 
-    if (nvim_data.buf_id != 0) {
+    if (nvim_data.buf_id) {
         nv.start_request_message("nvim_buf_delete", 2);
         nv.writer.write_int(nvim_data.buf_id);
         {
@@ -1693,7 +1693,7 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
         t.log("matching");
 
         /*
-        if (autocomplete.filtered_results->len == 0) {
+        if (!autocomplete.filtered_results->len) {
             ptr0(&autocomplete);
             return;
         }
@@ -2200,7 +2200,7 @@ bool Editor::optimize_imports() {
 
     auto imports = world.indexer.optimize_imports(filepath);
     if (!imports) return false;
-    if (imports->len == 0) return false;
+    if (!imports->len) return false;
 
     // add imports into the file
     do {
@@ -2255,7 +2255,7 @@ bool Editor::optimize_imports() {
         defer { GHFree(new_contents); };
 
         auto new_contents_len = strlen(new_contents);
-        if (new_contents_len == 0) break;
+        if (!new_contents_len) break;
 
         if (new_contents[new_contents_len-1] == '\n') {
             new_contents[new_contents_len-1] = '\0';
@@ -2452,7 +2452,7 @@ void Editor::handle_save(bool about_to_close) {
         auto subpath = get_path_relative_to(filepath, world.current_path);
         auto parts = make_path(subpath)->parts;
 
-        if (parts->len == 0) return NULL;
+        if (!parts->len) return NULL;
         parts->len--; // chop off last, we want dirname
 
         For (*parts) {

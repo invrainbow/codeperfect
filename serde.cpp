@@ -99,7 +99,7 @@ void Serde::read_type(void* out, int type) {
     while (true) {
         auto field_id = read_int();
         if (!ok) return;
-        if (field_id == 0) break;
+        if (!field_id) break;
 
         read_type_field(out, type, field_id);
         if (!ok) break;

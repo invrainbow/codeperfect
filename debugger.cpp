@@ -193,7 +193,7 @@ ccstr parse_json_string(ccstr s) {
 
                 char utf8_chars[4];
                 auto utf8_len = uchar_to_cstr(codepoint, utf8_chars);
-                if (utf8_len == 0) goto fail;
+                if (!utf8_len) goto fail;
                 for (u32 j = 0; j < utf8_len; j++)
                     chars.append(utf8_chars[j]);
             }
@@ -1152,7 +1152,7 @@ void Debugger::pipe_stdout_into_our_buffer() {
 }
 
 void Debugger::stop() {
-    if (conn != 0 && conn != -1)
+    if (conn && conn != -1)
         close_stub(conn);
 
     if (pipe_stdout_thread) {
@@ -1171,7 +1171,7 @@ void Debugger::set_current_goroutine(u32 goroutine_id) {
 }
 
 void Debugger::select_frame(u32 goroutine_id, u32 frame) {
-    Timer t; t.init("select_frame", step_over_time != 0);
+    Timer t; t.init("select_frame", step_over_time);
 
     auto old_goroutine_id = state.current_goroutine_id;
 
@@ -1532,7 +1532,7 @@ void Debugger::do_everything() {
     }
 
     u64 start = 0;
-    if (step_over_time != 0) {
+    if (step_over_time) {
         auto time_elapsed = current_time_nano() - step_over_time;
         dbg_print("response after step over took %d ms", time_elapsed / 1000000);
         start = current_time_nano();
@@ -1540,7 +1540,7 @@ void Debugger::do_everything() {
 
     handle_new_state(&p);
 
-    if (step_over_time != 0) {
+    if (step_over_time) {
         auto time_elapsed = current_time_nano() - start;
         dbg_print("handle new state took %d ms", time_elapsed / 1000000);
         step_over_time = 0;
@@ -1548,7 +1548,7 @@ void Debugger::do_everything() {
 }
 
 void Debugger::handle_new_state(Packet *p) {
-    Timer t; t.init("step_over", step_over_time != 0);
+    Timer t; t.init("step_over", step_over_time);
 
     // this might lock up main thread
     SCOPED_LOCK(&lock);
@@ -1652,7 +1652,7 @@ void Debugger::handle_new_state(Packet *p) {
 }
 
 void Debugger::fetch_variables(int goroutine_id, int frame, Dlv_Frame *dlvframe) {
-    Timer t; t.init("fetch_variables", step_over_time != 0);
+    Timer t; t.init("fetch_variables", step_over_time);
 
     Json_Navigator js;
 
@@ -1728,7 +1728,7 @@ bool Debugger::fetch_goroutines() {
     if (goroutines_idx == -1) return false;
 
     auto goroutines_len = js.array_length(goroutines_idx);
-    if (goroutines_len == 0) return false;
+    if (!goroutines_len) return false;
 
     {
         SCOPED_MEM(&state_mem);
