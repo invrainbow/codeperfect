@@ -61,7 +61,7 @@ endif
 build/bin/test: $(filter-out obj/main.o, $(OBJ_DEPS)) obj/tests.o
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 
-build/bin/ide: $(OBJ_DEPS) cpcolors.c tstypes.cpp
+build/bin/ide: $(OBJ_DEPS) binaries.c tstypes.cpp
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 
 -include $(DEP_FILES)
@@ -81,8 +81,9 @@ obj/objclibs.o: objclibs.mm
 obj/clibs.o: clibs.c
 	clang $(CFLAGS) -std=gnu99 -fPIC -c -o $@ $<
 
-cpcolors.c: .cpcolors
-	xxd -i .cpcolors cpcolors.c
+binaries.c: .cpcolors vert.glsl frag.glsl im.vert.glsl im.frag.glsl
+	truncate -s 0 binaries.c
+	for file in $^; do xxd -i $$file >> binaries.c; done
 
 GOSTUFF_DIRS = $(shell find gostuff/ -type d)
 GOSTUFF_FILES = $(shell find gostuff/ -type f -name '*')

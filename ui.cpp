@@ -14,7 +14,7 @@
 #define _USE_MATH_DEFINES // what the fuck is this lol
 #include <math.h>
 #include "tree_sitter_crap.hpp"
-#include "cpcolors.hpp"
+#include "binaries.h"
 
 #include <inttypes.h>
 

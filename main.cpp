@@ -31,110 +31,14 @@
 #include "imgui.h"
 #include "fonts.hpp"
 #include "icons.h"
+#include "binaries.h"
 
 static const char WINDOW_TITLE[] = "CodePerfect 95";
 
-char vert_shader[] = R"(
-#version 410
-
-in vec2 pos;
-in vec2 uv;
-in vec4 color;
-in int mode;
-in int texture_id;
-out vec2 _uv;
-out vec4 _color;
-flat out int _mode;
-flat out int _texture_id;
-uniform mat4 projection;
-
-void main(void) {
-    _uv = uv;
-    _color = color;
-    _mode = mode;
-    _texture_id = texture_id;
-    gl_Position = projection * vec4(pos, 0, 1);
-}
-)";
-
-char frag_shader[] = R"(
-#version 410
-
-in vec2 _uv;
-in vec4 _color;
-flat in int _mode;
-flat in int _texture_id;
-out vec4 outcolor;
-uniform sampler2D tex0;
-uniform sampler2D tex1;
-uniform sampler2D tex2;
-uniform sampler2D tex3;
-uniform sampler2D tex4;
-uniform sampler2D tex5;
-
-vec4 cp_texture(vec2 uv) {
-    if (_texture_id == 0) return texture(tex0, uv);
-    if (_texture_id == 1) return texture(tex1, uv);
-    if (_texture_id == 2) return texture(tex2, uv);
-    if (_texture_id == 3) return texture(tex3, uv);
-    if (_texture_id == 4) return texture(tex4, uv);
-    if (_texture_id == 5) return texture(tex5, uv);
-    return vec4(0);
-}
-
-void main(void) {
-    switch (_mode) {
-    case 0: // DRAW_SOLID
-        outcolor = _color;
-        break;
-    case 1: // DRAW_FONT_MASK
-        outcolor = vec4(_color.rgb, cp_texture(_uv).r * _color.a);
-        break;
-    case 2: // DRAW_IMAGE
-        outcolor = cp_texture(_uv);
-        break;
-    case 3: // DRAW_IMAGE_MASK
-        // outcolor = vec4(_color.rgb, (0.5 + dot(vec3(0.33, 0.33, 0.33), cp_texture(_uv).rgb) * 0.5) * cp_texture(_uv).a);
-        outcolor = vec4(_color.rgb, cp_texture(_uv).a);
-        break;
-    }
-}
-)";
-
-char im_vert_shader[] = R"(
-#version 410
-
-in vec2 pos;
-in vec2 uv;
-in vec4 color;
-out vec2 _uv;
-out vec4 _color;
-uniform mat4 projection;
-
-void main(void) {
-    _uv = uv;
-    _color = color;
-    gl_Position = projection * vec4(pos, 0, 1);
-}
-)";
-
-char im_frag_shader[] = R"(
-#version 410
-
-in vec2 _uv;
-in vec4 _color;
-out vec4 outcolor;
-uniform sampler2D tex;
-
-void main(void) {
-    outcolor = _color * texture(tex, _uv);
-}
-)";
-
-GLint compile_program(cstr vert_code, cstr frag_code) {
-    auto compile_shader = [](cstr code, u32 type) -> GLuint {
+GLint compile_program(cstr vert_code, u32 vert_len, cstr frag_code, u32 frag_len) {
+    auto compile_shader = [](GLchar *code, GLint len, u32 type) -> GLuint {
         GLuint shader = glCreateShader(type);
-        glShaderSource(shader, 1, (const GLchar**)&code, NULL);
+        glShaderSource(shader, 1, &code, &len);
         glCompileShader(shader);
 
         i32 status;
@@ -146,8 +50,8 @@ GLint compile_program(cstr vert_code, cstr frag_code) {
         cp_panic(cp_sprintf("failed to build shader, error: %s", log));
     };
 
-    auto vert = compile_shader(vert_code, GL_VERTEX_SHADER);
-    auto frag = compile_shader(frag_code, GL_FRAGMENT_SHADER);
+    auto vert = compile_shader(vert_code, vert_len, GL_VERTEX_SHADER);
+    auto frag = compile_shader(frag_code, frag_len, GL_FRAGMENT_SHADER);
 
     GLint id = glCreateProgram();
     glAttachShader(id, vert);
@@ -1313,13 +1217,13 @@ int main(int argc, char **argv) {
         }
     }
 
-    world.ui.program = compile_program(vert_shader, frag_shader);
+    world.ui.program = compile_program((char*)vert_glsl, vert_glsl_len, (char*)frag_glsl, frag_glsl_len);
     if (world.ui.program == -1)
         return error("could not compile shaders"), EXIT_FAILURE;
 
-    world.ui.im_program = compile_program(im_vert_shader, im_frag_shader);
+    world.ui.im_program = compile_program((char*)im_vert_glsl, im_vert_glsl_len, (char*)im_frag_glsl, im_frag_glsl_len);
     if (world.ui.im_program == -1)
-        return EXIT_FAILURE;
+        return error("could not compile imgui shaders"), EXIT_FAILURE;
 
     // grab window_size, display_size, and display_scale
     world.window->get_size((int*)&world.window_size.x, (int*)&world.window_size.y);
