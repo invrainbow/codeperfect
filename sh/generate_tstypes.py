@@ -58,7 +58,7 @@ if __name__ == "__main__":
         write("    return NULL;")
         write("}")
 
-        write("ccstr ts_field_type_str(Ts_Ast_Type type) {")
+        write("ccstr ts_field_type_str(Ts_Field_Type type) {")
         write("    switch (type) {")
         for line in field_types:
             write(f"    define_str_case({line.split()[0]});")

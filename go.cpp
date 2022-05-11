@@ -6607,45 +6607,6 @@ cur2 tspoint_to_cur(TSPoint p) {
     return c;
 }
 
-ccstr ts_field_type_str(Ts_Field_Type type) {
-    switch (type) {
-    define_str_case(TSF_ALIAS);
-    define_str_case(TSF_ALTERNATIVE);
-    define_str_case(TSF_ARGUMENTS);
-    define_str_case(TSF_BODY);
-    define_str_case(TSF_CAPACITY);
-    define_str_case(TSF_CHANNEL);
-    define_str_case(TSF_COMMUNICATION);
-    define_str_case(TSF_CONDITION);
-    define_str_case(TSF_CONSEQUENCE);
-    define_str_case(TSF_ELEMENT);
-    define_str_case(TSF_END);
-    define_str_case(TSF_FIELD);
-    define_str_case(TSF_FUNCTION);
-    define_str_case(TSF_INDEX);
-    define_str_case(TSF_INITIALIZER);
-    define_str_case(TSF_KEY);
-    define_str_case(TSF_LABEL);
-    define_str_case(TSF_LEFT);
-    define_str_case(TSF_LENGTH);
-    define_str_case(TSF_NAME);
-    define_str_case(TSF_OPERAND);
-    define_str_case(TSF_OPERATOR);
-    define_str_case(TSF_PACKAGE);
-    define_str_case(TSF_PARAMETERS);
-    define_str_case(TSF_PATH);
-    define_str_case(TSF_RECEIVER);
-    define_str_case(TSF_RESULT);
-    define_str_case(TSF_RIGHT);
-    define_str_case(TSF_START);
-    define_str_case(TSF_TAG);
-    define_str_case(TSF_TYPE);
-    define_str_case(TSF_UPDATE);
-    define_str_case(TSF_VALUE);
-    }
-    return NULL;
-}
-
 ccstr _path_join(ccstr a, ...) {
     va_list vl, vlcount;
     va_start(vl, a);
