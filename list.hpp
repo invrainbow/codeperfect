@@ -121,50 +121,47 @@ struct List {
             return true;
 
         switch (mode) {
-        case LIST_MALLOC:
-            {
-                auto old_cap = cap;
-                cap = 1 << (int)ceil(log2(new_cap));
+        case LIST_MALLOC: {
+            auto old_cap = cap;
+            cap = 1 << (int)ceil(log2(new_cap));
 
-                items = (T*)realloc(items, sizeof(T) * cap);
-                if (!items)
-                    return false;
+            items = (T*)realloc(items, sizeof(T) * cap);
+            if (!items)
+                return false;
 
-                global_mem_allocated -= sizeof(T) * old_cap;
-                global_mem_allocated += sizeof(T) * cap;
+            global_mem_allocated -= sizeof(T) * old_cap;
+            global_mem_allocated += sizeof(T) * cap;
 
-                mem0(items + len, sizeof(T) * (cap - len));
-            }
+            mem0(items + len, sizeof(T) * (cap - len));
             break;
+        }
 
-        case LIST_POOL:
-            {
-                cap = 1 << (int)ceil(log2(new_cap));
-                auto new_items = (T*)alloc_from_pool_stub(pool, sizeof(T) * cap);
-                if (!new_items)
-                    return false;
-                mem0(new_items, sizeof(T) * cap);
-                memcpy(new_items, items, sizeof(T) * len);
-                items = new_items;
-            }
+        case LIST_POOL: {
+            cap = 1 << (int)ceil(log2(new_cap));
+            auto new_items = (T*)alloc_from_pool_stub(pool, sizeof(T) * cap);
+            if (!new_items)
+                return false;
+            mem0(new_items, sizeof(T) * cap);
+            memcpy(new_items, items, sizeof(T) * len);
+            items = new_items;
             break;
+        }
 
         case LIST_FIXED:
             return false;
 
-        case LIST_CHUNK:
-            {
-                s32 chunksize;
-                auto chunk = (T*)alloc_chunk_stub(new_cap, &chunksize);
-                if (!chunk) return false;
+        case LIST_CHUNK: {
+            s32 chunksize;
+            auto chunk = (T*)alloc_chunk_stub(new_cap, &chunksize);
+            if (!chunk) return false;
 
-                memcpy(chunk, items, sizeof(T) * len);
-                free_chunk_stub((uchar*)items, cap);
+            memcpy(chunk, items, sizeof(T) * len);
+            free_chunk_stub((uchar*)items, cap);
 
-                items = chunk;
-                cap = chunksize;
-            }
+            items = chunk;
+            cap = chunksize;
             break;
+        }
         }
 
         return true;

@@ -1488,18 +1488,17 @@ bool is_command_enabled(Command cmd) {
         return false;
 
     case CMD_GO_TO_PREVIOUS_ERROR:
-    case CMD_GO_TO_NEXT_ERROR:
-        {
-            auto &b = world.build;
-            bool has_valid = false;
-            For (b.errors) {
-                if (it.valid) {
-                    has_valid = true;
-                    break;
-                }
+    case CMD_GO_TO_NEXT_ERROR: {
+        auto &b = world.build;
+        bool has_valid = false;
+        For (b.errors) {
+            if (it.valid) {
+                has_valid = true;
+                break;
             }
-            return b.ready() && has_valid;
         }
+        return b.ready() && has_valid;
+    }
 
     case CMD_RESCAN_INDEX:
         return world.indexer.status == IND_READY;
@@ -1511,47 +1510,45 @@ bool is_command_enabled(Command cmd) {
         return world.dbg.state_flag == DLV_STATE_PAUSED;
 
     case CMD_FORMAT_FILE:
-    case CMD_FORMAT_FILE_AND_ORGANIZE_IMPORTS:
-        {
-            auto editor = get_current_editor();
-            return editor && editor->is_modifiable();
-        }
+    case CMD_FORMAT_FILE_AND_ORGANIZE_IMPORTS: {
+        auto editor = get_current_editor();
+        return editor && editor->is_modifiable();
+    }
 
     case CMD_FORMAT_SELECTION:
         return false;
 
-    case CMD_DEBUG_TEST_UNDER_CURSOR:
-        {
-            if (world.dbg.state_flag != DLV_STATE_INACTIVE) return false;
+    case CMD_DEBUG_TEST_UNDER_CURSOR: {
+        if (world.dbg.state_flag != DLV_STATE_INACTIVE) return false;
 
-            auto editor = get_current_editor();
-            if (!editor) return false;
-            if (!editor->is_go_file) return false;
-            if (!str_ends_with(editor->filepath, "_test.go")) return false;
-            if (!path_has_descendant(world.current_path, editor->filepath)) return false;
-            if (!editor->buf->tree) return false;
+        auto editor = get_current_editor();
+        if (!editor) return false;
+        if (!editor->is_go_file) return false;
+        if (!str_ends_with(editor->filepath, "_test.go")) return false;
+        if (!path_has_descendant(world.current_path, editor->filepath)) return false;
+        if (!editor->buf->tree) return false;
 
-            bool ret = false;
+        bool ret = false;
 
-            Parser_It it;
-            it.init(editor->buf);
-            auto root_node = new_ast_node(ts_tree_root_node(editor->buf->tree), &it);
+        Parser_It it;
+        it.init(editor->buf);
+        auto root_node = new_ast_node(ts_tree_root_node(editor->buf->tree), &it);
 
-            find_nodes_containing_pos(root_node, editor->cur, true, [&](auto it) -> Walk_Action {
-                if (it->type() == TS_SOURCE_FILE)
-                    return WALK_CONTINUE;
+        find_nodes_containing_pos(root_node, editor->cur, true, [&](auto it) -> Walk_Action {
+            if (it->type() == TS_SOURCE_FILE)
+                return WALK_CONTINUE;
 
-                if (it->type() == TS_FUNCTION_DECLARATION) {
-                    auto name = it->field(TSF_NAME);
-                    if (!name->null)
-                        ret = str_starts_with(name->string(), "Test");
-                }
+            if (it->type() == TS_FUNCTION_DECLARATION) {
+                auto name = it->field(TSF_NAME);
+                if (!name->null)
+                    ret = str_starts_with(name->string(), "Test");
+            }
 
-                return WALK_ABORT;
-            });
+            return WALK_ABORT;
+        });
 
-            return ret;
-        }
+        return ret;
+    }
 
     case CMD_BREAK_ALL:
         return world.dbg.state_flag == DLV_STATE_RUNNING;
@@ -1877,12 +1874,11 @@ void handle_command(Command cmd, bool from_menu) {
         get_current_pane()->open_empty_editor();
         break;
 
-    case CMD_SAVE_FILE:
-        {
-            auto editor = get_current_editor();
-            if (editor) editor->handle_save();
-        }
+    case CMD_SAVE_FILE: {
+        auto editor = get_current_editor();
+        if (editor) editor->handle_save();
         break;
+    }
 
     case CMD_SAVE_ALL:
         save_all_unsaved_files();
@@ -1893,17 +1889,16 @@ void handle_command(Command cmd, bool from_menu) {
         break;
 
     case CMD_SEARCH:
-    case CMD_SEARCH_AND_REPLACE:
-        {
-            auto &wnd = world.wnd_search_and_replace;
-            if (wnd.show) {
-                wnd.cmd_focus = true;
-                wnd.focus_textbox = 1;
-            }
-            wnd.show = true;
-            wnd.replace = (cmd == CMD_SEARCH_AND_REPLACE);
+    case CMD_SEARCH_AND_REPLACE: {
+        auto &wnd = world.wnd_search_and_replace;
+        if (wnd.show) {
+            wnd.cmd_focus = true;
+            wnd.focus_textbox = 1;
         }
+        wnd.show = true;
+        wnd.replace = (cmd == CMD_SEARCH_AND_REPLACE);
         break;
+    }
 
     case CMD_FILE_EXPLORER:
         if (from_menu) {
@@ -2130,31 +2125,29 @@ void handle_command(Command cmd, bool from_menu) {
         world.dbg.push_call(DLVC_STEP_OUT);
         break;
 
-    case CMD_TOGGLE_BREAKPOINT:
-        {
-            auto editor = get_current_editor();
-            if (editor) {
-                world.dbg.push_call(DLVC_TOGGLE_BREAKPOINT, [&](auto call) {
-                    call->toggle_breakpoint.filename = cp_strdup(editor->filepath);
-                    call->toggle_breakpoint.lineno = editor->cur.y + 1;
-                });
-            }
+    case CMD_TOGGLE_BREAKPOINT: {
+        auto editor = get_current_editor();
+        if (editor) {
+            world.dbg.push_call(DLVC_TOGGLE_BREAKPOINT, [&](auto call) {
+                call->toggle_breakpoint.filename = cp_strdup(editor->filepath);
+                call->toggle_breakpoint.lineno = editor->cur.y + 1;
+            });
         }
         break;
+    }
 
-    case CMD_DELETE_ALL_BREAKPOINTS:
-        {
-            auto res = ask_user_yes_no(
-                "Are you sure you want to delete all breakpoints?",
-                NULL,
-                "Delete",
-                "Don't Delete"
-            );
+    case CMD_DELETE_ALL_BREAKPOINTS: {
+        auto res = ask_user_yes_no(
+            "Are you sure you want to delete all breakpoints?",
+            NULL,
+            "Delete",
+            "Don't Delete"
+        );
 
-            if (res == ASKUSER_YES)
-                world.dbg.push_call(DLVC_DELETE_ALL_BREAKPOINTS);
-        }
+        if (res == ASKUSER_YES)
+            world.dbg.push_call(DLVC_DELETE_ALL_BREAKPOINTS);
         break;
+    }
 
     case CMD_DEBUG_TEST_UNDER_CURSOR:
         world.dbg.push_call(DLVC_DEBUG_TEST_UNDER_CURSOR);
@@ -2182,92 +2175,91 @@ void handle_command(Command cmd, bool from_menu) {
         world.wnd_about.show = true;
         break;
 
-    case CMD_GENERATE_IMPLEMENTATION:
+    case CMD_GENERATE_IMPLEMENTATION: {
+        auto &wnd = world.wnd_generate_implementation;
+
+        if (!wnd.fill_thread)
+            kill_thread(wnd.fill_thread);
+
+        wnd.query[0] = '\0';
+        wnd.symbols = NULL;
+        wnd.filtered_results = NULL;
+
+        if (!handle_unsaved_files()) break;
+
+        auto &ind = world.indexer;
+
+        bool found_something = false;
+        defer {
+            if (!found_something)
+                tell_user("Couldn't find anything under cursor for Generate Implementation.", "Error");
+        };
+
+        auto result = get_current_definition();
+        if (!result) break;
+        if (!result->decl) break;
+
+        auto decl = result->decl->decl;
+        if (!decl->gotype) break;
+
+        found_something = true;
+
+        if (decl->type != GODECL_TYPE) {
+            tell_user("The selected object is not a type.", "Error");
+            break;
+        }
+
+        if (!ind.acquire_lock(IND_READING, true)) break;
+        defer { ind.release_lock(IND_READING); };
+
+        world.generate_implementation_mem.reset();
+
+        auto gofile = ind.find_gofile_from_ctx(result->decl->ctx);
+        if (!gofile) break;
+
         {
+            SCOPED_MEM(&world.generate_implementation_mem);
+
+            wnd.file_hash_on_open = gofile->hash;
+            wnd.declres = result->decl->copy_decl();
+            wnd.filtered_results = alloc_list<int>();
+
+            auto gotype = wnd.declres->decl->gotype;
+            wnd.selected_interface = (gotype->type == GOTYPE_INTERFACE);
+        }
+
+        auto worker = [](void*) {
             auto &wnd = world.wnd_generate_implementation;
 
-            if (!wnd.fill_thread)
-                kill_thread(wnd.fill_thread);
+            SCOPED_MEM(&wnd.fill_thread_pool);
 
-            wnd.query[0] = '\0';
-            wnd.symbols = NULL;
-            wnd.filtered_results = NULL;
-
-            if (!handle_unsaved_files()) break;
-
-            auto &ind = world.indexer;
-
-            bool found_something = false;
-            defer {
-                if (!found_something)
-                    tell_user("Couldn't find anything under cursor for Generate Implementation.", "Error");
-            };
-
-            auto result = get_current_definition();
-            if (!result) break;
-            if (!result->decl) break;
-
-            auto decl = result->decl->decl;
-            if (!decl->gotype) break;
-
-            found_something = true;
-
-            if (decl->type != GODECL_TYPE) {
-                tell_user("The selected object is not a type.", "Error");
-                break;
-            }
-
-            if (!ind.acquire_lock(IND_READING, true)) break;
-            defer { ind.release_lock(IND_READING); };
-
-            world.generate_implementation_mem.reset();
-
-            auto gofile = ind.find_gofile_from_ctx(result->decl->ctx);
-            if (!gofile) break;
+            auto symbols = alloc_list<Go_Symbol>();
+            ind.fill_generate_implementation(symbols, wnd.selected_interface);
+            if (!symbols->len) return;
 
             {
                 SCOPED_MEM(&world.generate_implementation_mem);
-
-                wnd.file_hash_on_open = gofile->hash;
-                wnd.declres = result->decl->copy_decl();
-                wnd.filtered_results = alloc_list<int>();
-
-                auto gotype = wnd.declres->decl->gotype;
-                wnd.selected_interface = (gotype->type == GOTYPE_INTERFACE);
+                wnd.symbols = alloc_list<Go_Symbol>(symbols->len);
+                For (*symbols) wnd.symbols->append(it.copy());
             }
 
-            auto worker = [](void*) {
-                auto &wnd = world.wnd_generate_implementation;
+            wnd.fill_running = false;
+            if (wnd.fill_thread) {
+                auto t = wnd.fill_thread;
+                wnd.fill_thread = NULL;
+                close_thread_handle(t);
+            }
+        };
 
-                SCOPED_MEM(&wnd.fill_thread_pool);
+        wnd.fill_thread_pool.cleanup();
+        wnd.fill_thread_pool.init();
 
-                auto symbols = alloc_list<Go_Symbol>();
-                ind.fill_generate_implementation(symbols, wnd.selected_interface);
-                if (!symbols->len) return;
-
-                {
-                    SCOPED_MEM(&world.generate_implementation_mem);
-                    wnd.symbols = alloc_list<Go_Symbol>(symbols->len);
-                    For (*symbols) wnd.symbols->append(it.copy());
-                }
-
-                wnd.fill_running = false;
-                if (wnd.fill_thread) {
-                    auto t = wnd.fill_thread;
-                    wnd.fill_thread = NULL;
-                    close_thread_handle(t);
-                }
-            };
-
-            wnd.fill_thread_pool.cleanup();
-            wnd.fill_thread_pool.init();
-
-            wnd.fill_time_started_ms = current_time_milli();
-            wnd.fill_running = true;
-            wnd.fill_thread = create_thread(worker, NULL);
-            wnd.show = true;
-        }
+        wnd.fill_time_started_ms = current_time_milli();
+        wnd.fill_running = true;
+        wnd.fill_thread = create_thread(worker, NULL);
+        wnd.show = true;
         break;
+    }
 
     case CMD_VIEW_CALLEE_HIERARCHY: {
         auto &wnd = world.wnd_callee_hierarchy;

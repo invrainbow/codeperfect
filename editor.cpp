@@ -84,648 +84,642 @@ void Editor::perform_autocomplete(AC_Result *result) {
     auto& ac = autocomplete.ac;
 
     switch (result->type) {
-    case ACR_POSTFIX:
-        {
-            // TODO: this currently only works for insert mode; support normal mode
-            // also what if we just forced you to be in insert mode for autocomplete lol
+    case ACR_POSTFIX: {
+        // TODO: this currently only works for insert mode; support normal mode
+        // also what if we just forced you to be in insert mode for autocomplete lol
 
-            // remove everything but the operator
-            raw_move_cursor(ac.operand_end);
-            buf->remove(ac.operand_end, ac.keyword_end);
+        // remove everything but the operator
+        raw_move_cursor(ac.operand_end);
+        buf->remove(ac.operand_end, ac.keyword_end);
 
-            // nice little dsl here lol
+        // nice little dsl here lol
 
-            ccstr autoindent_chars = NULL;
-            ccstr operand_text = NULL;
-            Postfix_Info *curr_postfix = NULL;
+        ccstr autoindent_chars = NULL;
+        ccstr operand_text = NULL;
+        Postfix_Info *curr_postfix = NULL;
 
-            auto insert_text = [&](ccstr fmt, ...) {
-                SCOPED_FRAME();
+        auto insert_text = [&](ccstr fmt, ...) {
+            SCOPED_FRAME();
 
-                va_list vl;
-                va_start(vl, fmt);
-                insert_text_in_insert_mode(cp_vsprintf(fmt, vl));
-                va_end(vl);
-            };
+            va_list vl;
+            va_start(vl, fmt);
+            insert_text_in_insert_mode(cp_vsprintf(fmt, vl));
+            va_end(vl);
+        };
 
-            auto save_autoindent = [&]() {
-                auto& line = buf->lines[cur.y];
-                u32 copy_spaces_until = 0;
-                {
-                    u32 x = 0;
-                    for (; x < line.len; x++)
-                        if (line[x] != ' ' && line[x] != '\t')
-                            break;
-                    if (x == line.len)  // all spaces
-                        x = 0;
-                    copy_spaces_until = x;
-                }
+        auto save_autoindent = [&]() {
+            auto& line = buf->lines[cur.y];
+            u32 copy_spaces_until = 0;
+            {
+                u32 x = 0;
+                for (; x < line.len; x++)
+                    if (line[x] != ' ' && line[x] != '\t')
+                        break;
+                if (x == line.len)  // all spaces
+                    x = 0;
+                copy_spaces_until = x;
+            }
 
-                auto ret = alloc_list<char>(copy_spaces_until + 1);
+            auto ret = alloc_list<char>(copy_spaces_until + 1);
 
-                // copy first `copy_spaces_until` chars of line y
-                for (u32 x = 0; x < copy_spaces_until; x++)
-                    ret->append((char)line[x]); // has to be ' ' or '\t'
+            // copy first `copy_spaces_until` chars of line y
+            for (u32 x = 0; x < copy_spaces_until; x++)
+                ret->append((char)line[x]); // has to be ' ' or '\t'
 
-                ret->append('\0');
-                autoindent_chars = ret->items;
-            };
+            ret->append('\0');
+            autoindent_chars = ret->items;
+        };
 
-            auto insert_autoindent = [&](int add = 0) {
-                SCOPED_FRAME();
+        auto insert_autoindent = [&](int add = 0) {
+            SCOPED_FRAME();
 
-                if (!autoindent_chars)
-                    cp_panic("autoindent_chars is null (you probably forgot to call save_autoindent");
+            if (!autoindent_chars)
+                cp_panic("autoindent_chars is null (you probably forgot to call save_autoindent");
 
-                insert_text("%s", autoindent_chars);
+            insert_text("%s", autoindent_chars);
 
-                if (add) {
-                    ccstr tabs = "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t";
-                    if (add >= strlen(tabs)) cp_panic("not enough tabs");
-                    insert_text("%.*s", add, tabs);
-                }
-            };
+            if (add) {
+                ccstr tabs = "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t";
+                if (add >= strlen(tabs)) cp_panic("not enough tabs");
+                insert_text("%.*s", add, tabs);
+            }
+        };
 
-            auto insert_newline = [&](int add_indent = 0) {
-                insert_text("\n");
-                insert_autoindent(add_indent);
-            };
+        auto insert_newline = [&](int add_indent = 0) {
+            insert_text("\n");
+            insert_autoindent(add_indent);
+        };
 
-            auto record_position = [&]() {
-                curr_postfix->insert_positions.append(cur);
-            };
+        auto record_position = [&]() {
+            curr_postfix->insert_positions.append(cur);
+        };
 
-            auto initialize_everything = [&]() {
-                operand_text = buf->get_text(ac.operand_start, ac.operand_end);
+        auto initialize_everything = [&]() {
+            operand_text = buf->get_text(ac.operand_start, ac.operand_end);
 
-                raw_move_cursor(ac.operand_start);
-                buf->remove(ac.operand_start, ac.operand_end);
+            raw_move_cursor(ac.operand_start);
+            buf->remove(ac.operand_start, ac.operand_end);
 
-                curr_postfix = postfix_stack.append();
-                curr_postfix->start();
-            };
+            curr_postfix = postfix_stack.append();
+            curr_postfix->start();
+        };
 
-            bool notfound = false;
+        bool notfound = false;
 
-            switch (result->postfix_operation) {
-            case PFC_ASSIGNAPPEND:
-                initialize_everything();
-                insert_text("%s = append(%s, ", operand_text, operand_text);
-                record_position();
-                insert_text(")");
-                record_position();
-                break;
+        switch (result->postfix_operation) {
+        case PFC_ASSIGNAPPEND:
+            initialize_everything();
+            insert_text("%s = append(%s, ", operand_text, operand_text);
+            record_position();
+            insert_text(")");
+            record_position();
+            break;
 
-            case PFC_APPEND:
-                initialize_everything();
-                insert_text("append(%s, ", operand_text);
-                record_position();
-                insert_text(")");
-                record_position();
-                break;
+        case PFC_APPEND:
+            initialize_everything();
+            insert_text("append(%s, ", operand_text);
+            record_position();
+            insert_text(")");
+            record_position();
+            break;
 
-            case PFC_LEN:
-                initialize_everything();
-                insert_text("len(%s)", operand_text);
-                break;
+        case PFC_LEN:
+            initialize_everything();
+            insert_text("len(%s)", operand_text);
+            break;
 
-            case PFC_CAP:
-                initialize_everything();
-                insert_text("cap(%s)", operand_text);
-                break;
+        case PFC_CAP:
+            initialize_everything();
+            insert_text("cap(%s)", operand_text);
+            break;
 
-            case PFC_NIL:
-                initialize_everything();
-                insert_text("%s == nil", operand_text);
-                break;
+        case PFC_NIL:
+            initialize_everything();
+            insert_text("%s == nil", operand_text);
+            break;
 
-            case PFC_NOTNIL:
-                initialize_everything();
-                insert_text("%s != nil", operand_text);
-                break;
+        case PFC_NOTNIL:
+            initialize_everything();
+            insert_text("%s != nil", operand_text);
+            break;
 
-            case PFC_NOT:
-                initialize_everything();
-                insert_text("!%s", operand_text);
-                break;
+        case PFC_NOT:
+            initialize_everything();
+            insert_text("!%s", operand_text);
+            break;
 
-            case PFC_EMPTY:
-                initialize_everything();
-                {
-                    auto is_string = [&]() -> bool {
-                        auto gotype = ac.operand_gotype;
-                        if (gotype)
-                            if (gotype->type == GOTYPE_BUILTIN)
-                                if (gotype->builtin_type == GO_BUILTIN_STRING)
-                                    return true;
-                        return false;
-                    };
-
-                    if (is_string())
-                        insert_text("%s == \"\"", operand_text);
-                    else
-                        insert_text("%s == nil || len(%s) == 0", operand_text, operand_text);
-                }
-                break;
-
-            case PFC_IF:
-                initialize_everything();
-                insert_text("if %s {", operand_text);
-                save_autoindent();
-                insert_newline(1);
-                record_position();
-                insert_newline(0);
-                insert_text("}");
-                record_position();
-                break;
-
-            case PFC_IFEMPTY:
-                initialize_everything();
-                insert_text("if %s == nil || %s.len == 0 {", operand_text, operand_text);
-                save_autoindent();
-                insert_newline(1);
-                record_position();
-                insert_newline(0);
-                insert_text("}");
-                record_position();
-                break;
-
-            case PFC_IFNOTEMPTY:
-                initialize_everything();
-                insert_text("if %s != nil && %s.len != 0 {", operand_text, operand_text);
-                save_autoindent();
-                insert_newline(1);
-                record_position();
-                insert_newline(0);
-                insert_text("}");
-                record_position();
-                break;
-
-            case PFC_IFNOT:
-                initialize_everything();
-                insert_text("if !%s {", operand_text);
-                save_autoindent();
-                insert_newline(1);
-                record_position();
-                insert_newline(0);
-                insert_text("}");
-                record_position();
-                break;
-
-            case PFC_IFNIL:
-                initialize_everything();
-                insert_text("if %s == nil {", operand_text);
-                save_autoindent();
-                insert_newline(1);
-                record_position();
-                insert_newline(0);
-                insert_text("}");
-                record_position();
-                break;
-
-            case PFC_IFNOTNIL:
-                initialize_everything();
-                insert_text("if %s != nil {", operand_text);
-                save_autoindent();
-                insert_newline(1);
-                record_position();
-                insert_newline(0);
-                insert_text("}");
-                record_position();
-                break;
-
-            case PFC_SWITCH:
-                initialize_everything();
-                insert_text("switch %s {", operand_text);
-                save_autoindent();
-                insert_newline(1);
-                record_position();
-                insert_newline(0);
-                insert_text("}");
-                record_position();
-                break;
-
-            case PFC_DEFSTRUCT:
-                initialize_everything();
-                insert_text("type %s struct {", operand_text);
-                save_autoindent();
-                insert_newline(1);
-                record_position();
-                insert_newline(0);
-                insert_text("}");
-                record_position();
-                break;
-
-            case PFC_DEFINTERFACE:
-                initialize_everything();
-                insert_text("type %s interface {", operand_text);
-                save_autoindent();
-                insert_newline(1);
-                record_position();
-                insert_newline(0);
-                insert_text("}");
-                record_position();
-                break;
-
-            case PFC_FOR:
-            case PFC_FORKEY:
-            case PFC_FORVALUE:
-                {
-                    ccstr keyname = "key";
-                    ccstr valuename = "val";
-
+        case PFC_EMPTY:
+            initialize_everything();
+            {
+                auto is_string = [&]() -> bool {
                     auto gotype = ac.operand_gotype;
                     if (gotype)
-                        if (gotype->type == GOTYPE_SLICE || gotype->type == GOTYPE_ARRAY) {
-                            keyname = "i";
-                            valuename = "val";
+                        if (gotype->type == GOTYPE_BUILTIN)
+                            if (gotype->builtin_type == GO_BUILTIN_STRING)
+                                return true;
+                    return false;
+                };
+
+                if (is_string())
+                    insert_text("%s == \"\"", operand_text);
+                else
+                    insert_text("%s == nil || len(%s) == 0", operand_text, operand_text);
+            }
+            break;
+
+        case PFC_IF:
+            initialize_everything();
+            insert_text("if %s {", operand_text);
+            save_autoindent();
+            insert_newline(1);
+            record_position();
+            insert_newline(0);
+            insert_text("}");
+            record_position();
+            break;
+
+        case PFC_IFEMPTY:
+            initialize_everything();
+            insert_text("if %s == nil || %s.len == 0 {", operand_text, operand_text);
+            save_autoindent();
+            insert_newline(1);
+            record_position();
+            insert_newline(0);
+            insert_text("}");
+            record_position();
+            break;
+
+        case PFC_IFNOTEMPTY:
+            initialize_everything();
+            insert_text("if %s != nil && %s.len != 0 {", operand_text, operand_text);
+            save_autoindent();
+            insert_newline(1);
+            record_position();
+            insert_newline(0);
+            insert_text("}");
+            record_position();
+            break;
+
+        case PFC_IFNOT:
+            initialize_everything();
+            insert_text("if !%s {", operand_text);
+            save_autoindent();
+            insert_newline(1);
+            record_position();
+            insert_newline(0);
+            insert_text("}");
+            record_position();
+            break;
+
+        case PFC_IFNIL:
+            initialize_everything();
+            insert_text("if %s == nil {", operand_text);
+            save_autoindent();
+            insert_newline(1);
+            record_position();
+            insert_newline(0);
+            insert_text("}");
+            record_position();
+            break;
+
+        case PFC_IFNOTNIL:
+            initialize_everything();
+            insert_text("if %s != nil {", operand_text);
+            save_autoindent();
+            insert_newline(1);
+            record_position();
+            insert_newline(0);
+            insert_text("}");
+            record_position();
+            break;
+
+        case PFC_SWITCH:
+            initialize_everything();
+            insert_text("switch %s {", operand_text);
+            save_autoindent();
+            insert_newline(1);
+            record_position();
+            insert_newline(0);
+            insert_text("}");
+            record_position();
+            break;
+
+        case PFC_DEFSTRUCT:
+            initialize_everything();
+            insert_text("type %s struct {", operand_text);
+            save_autoindent();
+            insert_newline(1);
+            record_position();
+            insert_newline(0);
+            insert_text("}");
+            record_position();
+            break;
+
+        case PFC_DEFINTERFACE:
+            initialize_everything();
+            insert_text("type %s interface {", operand_text);
+            save_autoindent();
+            insert_newline(1);
+            record_position();
+            insert_newline(0);
+            insert_text("}");
+            record_position();
+            break;
+
+        case PFC_FOR:
+        case PFC_FORKEY:
+        case PFC_FORVALUE: {
+            ccstr keyname = "key";
+            ccstr valuename = "val";
+
+            auto gotype = ac.operand_gotype;
+            if (gotype)
+                if (gotype->type == GOTYPE_SLICE || gotype->type == GOTYPE_ARRAY) {
+                    keyname = "i";
+                    valuename = "val";
+                }
+
+            if (result->postfix_operation == PFC_FORKEY) valuename = "_";
+            if (result->postfix_operation == PFC_FORVALUE) keyname = "_";
+
+            initialize_everything();
+            insert_text("for %s, %s := range %s {", keyname, valuename, operand_text);
+            save_autoindent();
+            insert_newline(1);
+            record_position();
+            insert_newline(0);
+            insert_text("}");
+            record_position();
+            break;
+        }
+
+        case PFC_CHECK: {
+                auto is_multi = ac.operand_gotype->type == GOTYPE_MULTI;
+                if (!(is_multi || ac.operand_is_error_type)) break;
+
+                int error_found_at = -1;
+                auto multi_types = ac.operand_gotype->multi_types;
+
+                if (is_multi) {
+                    for (int i = 0; i < multi_types->len; i++) {
+                        auto it = multi_types->at(i);
+                        if (it->type == GOTYPE_ID && streq(it->id_name, "error")) {
+                            error_found_at = i;
+                            break;
+                        }
+                    }
+
+                    if (error_found_at == -1) break;
+                }
+
+                initialize_everything();
+
+                if (is_multi) {
+                    int varcount = 0;
+
+                    for (int i = 0; i < multi_types->len; i++) {
+                        auto it = multi_types->at(i);
+                        if (i == error_found_at) {
+                            insert_text("err");
+                        } else {
+                            if (!varcount)
+                                insert_text("val");
+                            else
+                                insert_text("val%d", varcount);
+                            varcount++;
                         }
 
-                    if (result->postfix_operation == PFC_FORKEY) valuename = "_";
-                    if (result->postfix_operation == PFC_FORVALUE) keyname = "_";
+                        if (i + 1 < multi_types->len)
+                            insert_text(",");
+                        insert_text(" ");
+                    }
 
-                    initialize_everything();
-                    insert_text("for %s, %s := range %s {", keyname, valuename, operand_text);
+                    // TODO: make this smarter, like if we're already using err, either
+                    // make it a = instead of :=, or use a different name.
+                    insert_text(":= %s", operand_text);
+                    save_autoindent();
+                    insert_newline();
+                    insert_text("if err != nil {");
+                    insert_newline(1);
+                } else {
+                    insert_text("if err := %s; err != nil {", operand_text);
                     save_autoindent();
                     insert_newline(1);
-                    record_position();
-                    insert_newline(0);
-                    insert_text("}");
-                    record_position();
                 }
-                break;
 
-            case PFC_CHECK:
                 {
-                    auto is_multi = ac.operand_gotype->type == GOTYPE_MULTI;
-                    if (!(is_multi || ac.operand_is_error_type)) break;
+                    bool ok = false;
 
-                    int error_found_at = -1;
-                    auto multi_types = ac.operand_gotype->multi_types;
+                    do {
+                        // get gotype of current function
+                        auto functype = world.indexer.get_closest_function(filepath, cur);
+                        if (!functype) break;
 
-                    if (is_multi) {
-                        for (int i = 0; i < multi_types->len; i++) {
-                            auto it = multi_types->at(i);
-                            if (it->type == GOTYPE_ID && streq(it->id_name, "error")) {
-                                error_found_at = i;
-                                break;
-                            }
-                        }
-
-                        if (error_found_at == -1) break;
-                    }
-
-                    initialize_everything();
-
-                    if (is_multi) {
-                        int varcount = 0;
-
-                        for (int i = 0; i < multi_types->len; i++) {
-                            auto it = multi_types->at(i);
-                            if (i == error_found_at) {
-                                insert_text("err");
-                            } else {
-                                if (!varcount)
-                                    insert_text("val");
-                                else
-                                    insert_text("val%d", varcount);
-                                varcount++;
-                            }
-
-                            if (i + 1 < multi_types->len)
-                                insert_text(",");
-                            insert_text(" ");
-                        }
-
-                        // TODO: make this smarter, like if we're already using err, either
-                        // make it a = instead of :=, or use a different name.
-                        insert_text(":= %s", operand_text);
-                        save_autoindent();
-                        insert_newline();
-                        insert_text("if err != nil {");
-                        insert_newline(1);
-                    } else {
-                        insert_text("if err := %s; err != nil {", operand_text);
-                        save_autoindent();
-                        insert_newline(1);
-                    }
-
-                    {
-                        bool ok = false;
-
-                        do {
-                            // get gotype of current function
-                            auto functype = world.indexer.get_closest_function(filepath, cur);
-                            if (!functype) break;
-
-                            auto result = functype->func_sig.result;
-                            if (!result  || !result->len) {
-                                insert_text("return");
-                                ok = true;
-                                break;
-                            }
-
-                            bool error_found = false;
-                            auto &ind = world.indexer;
-
-                            auto get_zero_value_of_gotype = [&](Gotype *gotype) -> ccstr {
-                                if (!gotype) return NULL;
-
-                                Go_Ctx ctx; ptr0(&ctx);
-                                ctx.import_path = ind.filepath_to_import_path(cp_dirname(filepath));
-                                ctx.filename = cp_basename(filepath);
-
-                                auto res = ind.evaluate_type(gotype, &ctx);
-                                if (!res) return NULL;
-
-                                auto rres = ind.resolve_type(res->gotype, res->ctx);
-                                if (!rres) return NULL;
-
-                                gotype = rres->gotype;
-
-                                // TODO: check for aliases of error
-                                if (gotype->type == GOTYPE_ID) {
-                                    ccstr int_types[] = {
-                                        "byte", "complex128", "complex64", "float32", "float64",
-                                        "int", "int16", "int32", "int64", "int8",
-                                        "rune", "uint", "uint16", "uint32", "uint64",
-                                        "uint8", "uintptr",
-                                    };
-
-                                    For (int_types)
-                                        if (streq(gotype->id_name, it))
-                                            return "0";
-
-                                    if (streq(gotype->id_name, "bool")) return "false";
-                                    if (streq(gotype->id_name, "string")) return "\"\"";
-                                    if (!error_found && streq(gotype->id_name, "error")) return "err";
-                                }
-
-                                return NULL;
-                            };
-
-                            insert_text("return ");
-
-                            for (int i = 0; i < result->len; i++) {
-                                auto &it = result->at(i);
-                                auto val = get_zero_value_of_gotype(it.gotype);
-
-                                if (i)
-                                    insert_text(", ");
-                                insert_text(!val ? "nil" : val);
-                            }
-
+                        auto result = functype->func_sig.result;
+                        if (!result  || !result->len) {
+                            insert_text("return");
                             ok = true;
-                        } while (0);
+                            break;
+                        }
 
-                        if (!ok) insert_text("// sorry, couldn't deduce return type");
-                    }
+                        bool error_found = false;
+                        auto &ind = world.indexer;
 
-                    insert_newline(0);
-                    insert_text("}");
-                    insert_newline(0);
+                        auto get_zero_value_of_gotype = [&](Gotype *gotype) -> ccstr {
+                            if (!gotype) return NULL;
+
+                            Go_Ctx ctx; ptr0(&ctx);
+                            ctx.import_path = ind.filepath_to_import_path(cp_dirname(filepath));
+                            ctx.filename = cp_basename(filepath);
+
+                            auto res = ind.evaluate_type(gotype, &ctx);
+                            if (!res) return NULL;
+
+                            auto rres = ind.resolve_type(res->gotype, res->ctx);
+                            if (!rres) return NULL;
+
+                            gotype = rres->gotype;
+
+                            // TODO: check for aliases of error
+                            if (gotype->type == GOTYPE_ID) {
+                                ccstr int_types[] = {
+                                    "byte", "complex128", "complex64", "float32", "float64",
+                                    "int", "int16", "int32", "int64", "int8",
+                                    "rune", "uint", "uint16", "uint32", "uint64",
+                                    "uint8", "uintptr",
+                                };
+
+                                For (int_types)
+                                    if (streq(gotype->id_name, it))
+                                        return "0";
+
+                                if (streq(gotype->id_name, "bool")) return "false";
+                                if (streq(gotype->id_name, "string")) return "\"\"";
+                                if (!error_found && streq(gotype->id_name, "error")) return "err";
+                            }
+
+                            return NULL;
+                        };
+
+                        insert_text("return ");
+
+                        for (int i = 0; i < result->len; i++) {
+                            auto &it = result->at(i);
+                            auto val = get_zero_value_of_gotype(it.gotype);
+
+                            if (i)
+                                insert_text(", ");
+                            insert_text(!val ? "nil" : val);
+                        }
+
+                        ok = true;
+                    } while (0);
+
+                    if (!ok) insert_text("// sorry, couldn't deduce return type");
                 }
-                break;
 
-            default:
-                notfound = true;
-                break;
+                insert_newline(0);
+                insert_text("}");
+                insert_newline(0);
             }
+            break;
 
-            if (notfound) break;
-
-            if (curr_postfix) {
-                if (curr_postfix->insert_positions.len > 1) {
-                    trigger_escape(curr_postfix->insert_positions[0]);
-                    curr_postfix->current_insert_position++;
-                } else {
-                    postfix_stack.len--;
-                }
-            }
-
-            // clear autocomplete
-            ptr0(&ac);
+        default:
+            notfound = true;
+            break;
         }
+
+        if (notfound) break;
+
+        if (curr_postfix) {
+            if (curr_postfix->insert_positions.len > 1) {
+                trigger_escape(curr_postfix->insert_positions[0]);
+                curr_postfix->current_insert_position++;
+            } else {
+                postfix_stack.len--;
+            }
+        }
+
+        // clear autocomplete
+        ptr0(&ac);
         break;
+    }
 
     case ACR_KEYWORD:
     case ACR_DECLARATION:
-    case ACR_IMPORT:
-        {
-            bool is_function = false;
+    case ACR_IMPORT: {
+        bool is_function = false;
 
-            auto modify_string = [&](ccstr s) -> ccstr {
-                switch (result->type) {
-                case ACR_IMPORT:
-                    return cp_sprintf("%s.", s);
+        auto modify_string = [&](ccstr s) -> ccstr {
+            switch (result->type) {
+            case ACR_IMPORT:
+                return cp_sprintf("%s.", s);
 
-                case ACR_KEYWORD:
-                    {
-                        ccstr builtins_with_space[] = {
-                            "package", "import", "const", "var", "func",
-                            "type", "struct", "interface", "map", "chan",
-                            "goto", "go", "defer", "if", "else",
-                            "for", "select", "switch",
-                        };
+            case ACR_KEYWORD: {
+                ccstr builtins_with_space[] = {
+                    "package", "import", "const", "var", "func",
+                    "type", "struct", "interface", "map", "chan",
+                    "goto", "go", "defer", "if", "else",
+                    "for", "select", "switch",
+                };
 
-                        For (builtins_with_space)
-                            if (streq(s, it))
-                                return cp_sprintf("%s ", s);
-                    }
-                    break;
-
-                case ACR_DECLARATION:
-                    {
-                        if (result->declaration_is_struct_literal_field)
-                            return cp_sprintf("%s: ", s);
-
-                        auto godecl = result->declaration_godecl;
-                        if (!godecl) break;
-
-                        if (!world.indexer.acquire_lock(IND_READING)) break;
-                        defer { world.indexer.release_lock(IND_READING); };
-
-                        Go_Ctx ctx;
-                        ctx.import_path = result->declaration_import_path;
-                        ctx.filename = result->declaration_filename;
-
-                        auto res = world.indexer.evaluate_type(godecl->gotype, &ctx);
-                        if (!res) break;
-
-                        auto rres = world.indexer.resolve_type(res->gotype, res->ctx);
-                        if (!rres) break;
-
-                        auto gotype = rres->gotype;
-                        if (gotype->type != GOTYPE_FUNC) break;
-
-                        is_function = true;
-                        return cp_sprintf("%s(", s); // it's a func, add a '('
-                    }
-                    break;
-                }
-
-                return s;
-            };
-
-            auto see_if_we_need_autoimport = [&]() -> ccstr {
-                if (result->type == ACR_IMPORT)
-                    return result->import_path;
-                if (result->type == ACR_DECLARATION)
-                    return result->declaration_package;
-                return NULL;
-            };
-
-            buf->hist_batch_mode = true;
-            defer { buf->hist_batch_mode = false; };
-
-            auto import_to_add = see_if_we_need_autoimport();
-            if (import_to_add) {
-                auto iter = alloc_object(Parser_It);
-                iter->init(buf);
-                auto root = new_ast_node(ts_tree_root_node(buf->tree), iter);
-
-                Ast_Node *package_node = NULL;
-                Ast_Node *imports_node = NULL;
-
-                FOR_NODE_CHILDREN (root) {
-                    if (it->type() == TS_PACKAGE_CLAUSE) {
-                        package_node = it;
-                    } else if (it->type() == TS_IMPORT_DECLARATION) {
-                        imports_node = it;
-                        break;
-                    }
-                }
-
-                do {
-                    if (!imports_node && !package_node) break;
-
-                    Text_Renderer rend;
-                    rend.init();
-                    rend.write("import (\n");
-                    rend.write("\"%s\"\n", import_to_add);
-
-                    if (imports_node && cur > imports_node->end()) {
-                        auto imports = alloc_list<Go_Import>();
-                        world.indexer.import_decl_to_goimports(imports_node, NULL, imports);
-
-                        auto imp = imports->find([&](auto it) { return streq(it->import_path, import_to_add); });
-                        if (imp) break;
-
-                        For (*imports) {
-                            switch (it.package_name_type) {
-                            case GPN_IMPLICIT:
-                                rend.write("\"%s\"", it.import_path);
-                                break;
-                            case GPN_EXPLICIT:
-                                rend.write("%s \"%s\"", it.package_name, it.import_path);
-                                break;
-                            case GPN_BLANK:
-                                rend.write("_ \"%s\"", it.import_path);
-                                break;
-                            case GPN_DOT:
-                                rend.write(". \"%s\"", it.import_path);
-                                break;
-                            }
-                            rend.write("\n");
-                        }
-                    }
-
-                    rend.write(")");
-
-                    GHFmtStart();
-                    GHFmtAddLine(rend.finish());
-                    GHFmtAddLine("");
-
-                    auto new_contents = GHFmtFinish(GH_FMT_GOIMPORTS);
-                    if (!new_contents) break;
-                    defer { GHFree(new_contents); };
-
-                    auto new_contents_len = strlen(new_contents);
-                    if (!new_contents_len) break;
-
-                    if (new_contents[new_contents_len-1] == '\n') {
-                        new_contents[new_contents_len-1] = '\0';
-                        new_contents_len--;
-                    }
-
-                    cur2 start, old_end, new_end;
-                    if (imports_node) {
-                        start = imports_node->start();
-                        old_end = imports_node->end();
-                        if (world.use_nvim)
-                            if (old_end.y >= nvim_insert.start.y) break;
-                    } else {
-                        start = package_node->end();
-                        old_end = package_node->end();
-                    }
-                    new_end = start;
-
-                    auto chars = alloc_list<uchar>();
-                    if (!imports_node) {
-                        // add two newlines, it's going after the package decl
-                        chars->append('\n');
-                        chars->append('\n');
-                        new_end.x = 0;
-                        new_end.y += 2;
-                    }
-
-                    {
-                        auto ustr = cstr_to_ustr(new_contents);
-                        For (*ustr) {
-                            chars->append(it);
-                            if (it == '\n') {
-                                new_end.x = 0;
-                                new_end.y++;
-                            } else {
-                                new_end.x++;
-                            }
-                        }
-                    }
-
-                    // perform the edit
-                    {
-                        if (start != old_end)
-                            buf->remove(start, old_end);
-                        buf->insert(start, chars->items, chars->len);
-                    }
-
-                    add_change_in_insert_mode(start, old_end, new_end);
-
-                    // do something with new_contents
-                } while (0);
+                For (builtins_with_space)
+                    if (streq(s, it))
+                        return cp_sprintf("%s ", s);
+                break;
             }
 
-            // this whole section is basically, like, "how do we replace text
-            // and make sure nvim/ts are in sync"
-            //
-            // refactor this out somehow, we're already starting to copy paste
+            case ACR_DECLARATION: {
+                if (result->declaration_is_struct_literal_field)
+                    return cp_sprintf("%s: ", s);
 
-            auto name = cstr_to_ustr(modify_string(result->name));
+                auto godecl = result->declaration_godecl;
+                if (!godecl) break;
 
-            auto ac_start = cur;
-            ac_start.x -= strlen(ac.prefix); // what if the prefix contains unicode?
+                if (!world.indexer.acquire_lock(IND_READING)) break;
+                defer { world.indexer.release_lock(IND_READING); };
 
-            // perform the edit
-            // i don't think we need to create a batch here? as long as it follows the flow of normal text editing
-            buf->remove(ac_start, cur);
-            buf->insert(ac_start, name->items, name->len);
+                Go_Ctx ctx;
+                ctx.import_path = result->declaration_import_path;
+                ctx.filename = result->declaration_filename;
 
-            // move cursor forward
-            raw_move_cursor(new_cur2(ac_start.x + name->len, ac_start.y));
+                auto res = world.indexer.evaluate_type(godecl->gotype, &ctx);
+                if (!res) break;
 
-            // clear out last_closed_autocomplete
-            last_closed_autocomplete = new_cur2(-1, -1);
+                auto rres = world.indexer.resolve_type(res->gotype, res->ctx);
+                if (!rres) break;
 
-            // clear autocomplete
-            ptr0(&ac);
+                auto gotype = rres->gotype;
+                if (gotype->type != GOTYPE_FUNC) break;
 
-            if (is_function) trigger_parameter_hint();
+                is_function = true;
+                return cp_sprintf("%s(", s); // it's a func, add a '('
+                break;
+            }
+            }
 
-            if (import_to_add)
-                if (result->type == ACR_IMPORT)
-                    trigger_autocomplete(true, false);
+            return s;
+        };
+
+        auto see_if_we_need_autoimport = [&]() -> ccstr {
+            if (result->type == ACR_IMPORT)
+                return result->import_path;
+            if (result->type == ACR_DECLARATION)
+                return result->declaration_package;
+            return NULL;
+        };
+
+        buf->hist_batch_mode = true;
+        defer { buf->hist_batch_mode = false; };
+
+        auto import_to_add = see_if_we_need_autoimport();
+        if (import_to_add) {
+            auto iter = alloc_object(Parser_It);
+            iter->init(buf);
+            auto root = new_ast_node(ts_tree_root_node(buf->tree), iter);
+
+            Ast_Node *package_node = NULL;
+            Ast_Node *imports_node = NULL;
+
+            FOR_NODE_CHILDREN (root) {
+                if (it->type() == TS_PACKAGE_CLAUSE) {
+                    package_node = it;
+                } else if (it->type() == TS_IMPORT_DECLARATION) {
+                    imports_node = it;
+                    break;
+                }
+            }
+
+            do {
+                if (!imports_node && !package_node) break;
+
+                Text_Renderer rend;
+                rend.init();
+                rend.write("import (\n");
+                rend.write("\"%s\"\n", import_to_add);
+
+                if (imports_node && cur > imports_node->end()) {
+                    auto imports = alloc_list<Go_Import>();
+                    world.indexer.import_decl_to_goimports(imports_node, NULL, imports);
+
+                    auto imp = imports->find([&](auto it) { return streq(it->import_path, import_to_add); });
+                    if (imp) break;
+
+                    For (*imports) {
+                        switch (it.package_name_type) {
+                        case GPN_IMPLICIT:
+                            rend.write("\"%s\"", it.import_path);
+                            break;
+                        case GPN_EXPLICIT:
+                            rend.write("%s \"%s\"", it.package_name, it.import_path);
+                            break;
+                        case GPN_BLANK:
+                            rend.write("_ \"%s\"", it.import_path);
+                            break;
+                        case GPN_DOT:
+                            rend.write(". \"%s\"", it.import_path);
+                            break;
+                        }
+                        rend.write("\n");
+                    }
+                }
+
+                rend.write(")");
+
+                GHFmtStart();
+                GHFmtAddLine(rend.finish());
+                GHFmtAddLine("");
+
+                auto new_contents = GHFmtFinish(GH_FMT_GOIMPORTS);
+                if (!new_contents) break;
+                defer { GHFree(new_contents); };
+
+                auto new_contents_len = strlen(new_contents);
+                if (!new_contents_len) break;
+
+                if (new_contents[new_contents_len-1] == '\n') {
+                    new_contents[new_contents_len-1] = '\0';
+                    new_contents_len--;
+                }
+
+                cur2 start, old_end, new_end;
+                if (imports_node) {
+                    start = imports_node->start();
+                    old_end = imports_node->end();
+                    if (world.use_nvim)
+                        if (old_end.y >= nvim_insert.start.y) break;
+                } else {
+                    start = package_node->end();
+                    old_end = package_node->end();
+                }
+                new_end = start;
+
+                auto chars = alloc_list<uchar>();
+                if (!imports_node) {
+                    // add two newlines, it's going after the package decl
+                    chars->append('\n');
+                    chars->append('\n');
+                    new_end.x = 0;
+                    new_end.y += 2;
+                }
+
+                {
+                    auto ustr = cstr_to_ustr(new_contents);
+                    For (*ustr) {
+                        chars->append(it);
+                        if (it == '\n') {
+                            new_end.x = 0;
+                            new_end.y++;
+                        } else {
+                            new_end.x++;
+                        }
+                    }
+                }
+
+                // perform the edit
+                {
+                    if (start != old_end)
+                        buf->remove(start, old_end);
+                    buf->insert(start, chars->items, chars->len);
+                }
+
+                add_change_in_insert_mode(start, old_end, new_end);
+
+                // do something with new_contents
+            } while (0);
         }
+
+        // this whole section is basically, like, "how do we replace text
+        // and make sure nvim/ts are in sync"
+        //
+        // refactor this out somehow, we're already starting to copy paste
+
+        auto name = cstr_to_ustr(modify_string(result->name));
+
+        auto ac_start = cur;
+        ac_start.x -= strlen(ac.prefix); // what if the prefix contains unicode?
+
+        // perform the edit
+        // i don't think we need to create a batch here? as long as it follows the flow of normal text editing
+        buf->remove(ac_start, cur);
+        buf->insert(ac_start, name->items, name->len);
+
+        // move cursor forward
+        raw_move_cursor(new_cur2(ac_start.x + name->len, ac_start.y));
+
+        // clear out last_closed_autocomplete
+        last_closed_autocomplete = new_cur2(-1, -1);
+
+        // clear autocomplete
+        ptr0(&ac);
+
+        if (is_function) trigger_parameter_hint();
+
+        if (import_to_add)
+            if (result->type == ACR_IMPORT)
+                trigger_autocomplete(true, false);
         break;
+    }
     }
 }
 
@@ -1763,11 +1757,8 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
                     score.is_struct_literal = true;
 
             if (it.type == ACR_IMPORT) {
-                if (it.import_is_existing) {
-                    print("import in file: %s", it.name);
+                if (it.import_is_existing)
                     score.import_in_file = true;
-                }
-
                 if (wksp_import_path)
                     if (path_has_descendant(wksp_import_path, it.import_path))
                         score.import_in_workspace = true;
@@ -1971,127 +1962,126 @@ void Editor::type_char_in_insert_mode(uchar ch) {
 
     case '}':
     case ')':
-    case ']':
-        {
-            if (!is_go_file) break;
+    case ']': {
+        if (!is_go_file) break;
 
-            if (!cur.x) break;
+        if (!cur.x) break;
 
-            auto rbrace_pos = buf->dec_cur(cur);
+        auto rbrace_pos = buf->dec_cur(cur);
 
-            Ts_Ast_Type brace_type = TS_ERROR, other_brace_type = TS_ERROR;
-            switch (ch) {
-            case '}':
-                brace_type = TS_RBRACE;
-                other_brace_type = TS_LBRACE;
-                break;
-            case ')':
-                brace_type = TS_RPAREN;
-                other_brace_type = TS_LPAREN;
-                break;
-            case ']':
-                brace_type = TS_RBRACK;
-                other_brace_type = TS_LBRACK;
-                break;
-            }
-
-            auto &line = buf->lines[rbrace_pos.y];
-            bool starts_with_spaces = true;
-            for (u32 x = 0; x < rbrace_pos.x; x++) {
-                if (line[x] != ' ' && line[x] != '\t') {
-                    starts_with_spaces = false;
-                    break;
-                }
-            }
-
-            if (!starts_with_spaces) break;
-
-            Parser_It it;
-            it.init(buf);
-
-            auto root_node = new_ast_node(ts_tree_root_node(buf->tree), &it);
-
-            Ast_Node *rbrace_node = alloc_object(Ast_Node);
-            bool rbrace_found = false;
-
-            find_nodes_containing_pos(root_node, rbrace_pos, false, [&](auto it) {
-                if (it->type() == brace_type) {
-                    memcpy(rbrace_node, it, sizeof(Ast_Node));
-                    rbrace_found = true;
-                    return WALK_ABORT;
-                }
-                return WALK_CONTINUE;
-            });
-
-            if (!rbrace_found) break;
-
-            auto walk_upwards = [&](auto curr) -> Ast_Node * {
-                while (true) {
-                    // try to get prev
-                    auto prev = curr->prev_all();
-                    if (!prev->null) return prev;
-
-                    // unable to? get parent, try again
-                    curr = curr->parent();
-                    if (curr->null) return curr;
-                }
-            };
-
-            auto curr = walk_upwards(rbrace_node);
-            int depth = 1;
-
-            i32 lbrace_line = -1;
-
-            fn<void(Ast_Node*)> process_node = [&](Ast_Node* node) {
-                if (lbrace_line != -1) return;
-                if (node->is_missing()) return;
-
-                SCOPED_FRAME();
-                auto children = alloc_list<Ast_Node*>(node->all_child_count());
-                FOR_ALL_NODE_CHILDREN (node) children->append(it);
-                for (; children->len > 0; children->len--)
-                    process_node(*children->last());
-
-                if (node->type() == brace_type)
-                    depth++;
-                if (node->type() == other_brace_type) {
-                    depth--;
-                    if (!depth) {
-                        lbrace_line = node->start().y;
-                        return;
-                    }
-                }
-            };
-
-            for (; !curr->null && lbrace_line == -1; curr = walk_upwards(curr))
-                process_node(curr);
-
-            if (lbrace_line == -1) break;
-
-            auto indentation = alloc_list<uchar>();
-            For (buf->lines[lbrace_line]) {
-                if (it == '\t' || it == ' ')
-                    indentation->append(it);
-                else
-                    break;
-            }
-
-            // backspace to start of line
-            backspace_in_insert_mode(0, cur.x);
-
-            // insert indentation
-            auto pos = cur;
-            buf->insert(pos, indentation->items, indentation->len);
-            pos.x += indentation->len;
-
-            // insert the brace
-            buf->insert(pos, &ch, 1);
-            pos.x++;
-
-            // move cursor after everything we typed
-            raw_move_cursor(pos);
+        Ts_Ast_Type brace_type = TS_ERROR, other_brace_type = TS_ERROR;
+        switch (ch) {
+        case '}':
+            brace_type = TS_RBRACE;
+            other_brace_type = TS_LBRACE;
+            break;
+        case ')':
+            brace_type = TS_RPAREN;
+            other_brace_type = TS_LPAREN;
+            break;
+        case ']':
+            brace_type = TS_RBRACK;
+            other_brace_type = TS_LBRACK;
+            break;
         }
+
+        auto &line = buf->lines[rbrace_pos.y];
+        bool starts_with_spaces = true;
+        for (u32 x = 0; x < rbrace_pos.x; x++) {
+            if (line[x] != ' ' && line[x] != '\t') {
+                starts_with_spaces = false;
+                break;
+            }
+        }
+
+        if (!starts_with_spaces) break;
+
+        Parser_It it;
+        it.init(buf);
+
+        auto root_node = new_ast_node(ts_tree_root_node(buf->tree), &it);
+
+        Ast_Node *rbrace_node = alloc_object(Ast_Node);
+        bool rbrace_found = false;
+
+        find_nodes_containing_pos(root_node, rbrace_pos, false, [&](auto it) {
+            if (it->type() == brace_type) {
+                memcpy(rbrace_node, it, sizeof(Ast_Node));
+                rbrace_found = true;
+                return WALK_ABORT;
+            }
+            return WALK_CONTINUE;
+        });
+
+        if (!rbrace_found) break;
+
+        auto walk_upwards = [&](auto curr) -> Ast_Node * {
+            while (true) {
+                // try to get prev
+                auto prev = curr->prev_all();
+                if (!prev->null) return prev;
+
+                // unable to? get parent, try again
+                curr = curr->parent();
+                if (curr->null) return curr;
+            }
+        };
+
+        auto curr = walk_upwards(rbrace_node);
+        int depth = 1;
+
+        i32 lbrace_line = -1;
+
+        fn<void(Ast_Node*)> process_node = [&](Ast_Node* node) {
+            if (lbrace_line != -1) return;
+            if (node->is_missing()) return;
+
+            SCOPED_FRAME();
+            auto children = alloc_list<Ast_Node*>(node->all_child_count());
+            FOR_ALL_NODE_CHILDREN (node) children->append(it);
+            for (; children->len > 0; children->len--)
+                process_node(*children->last());
+
+            if (node->type() == brace_type)
+                depth++;
+            if (node->type() == other_brace_type) {
+                depth--;
+                if (!depth) {
+                    lbrace_line = node->start().y;
+                    return;
+                }
+            }
+        };
+
+        for (; !curr->null && lbrace_line == -1; curr = walk_upwards(curr))
+            process_node(curr);
+
+        if (lbrace_line == -1) break;
+
+        auto indentation = alloc_list<uchar>();
+        For (buf->lines[lbrace_line]) {
+            if (it == '\t' || it == ' ')
+                indentation->append(it);
+            else
+                break;
+        }
+
+        // backspace to start of line
+        backspace_in_insert_mode(0, cur.x);
+
+        // insert indentation
+        auto pos = cur;
+        buf->insert(pos, indentation->items, indentation->len);
+        pos.x += indentation->len;
+
+        // insert the brace
+        buf->insert(pos, &ch, 1);
+        pos.x++;
+
+        // move cursor after everything we typed
+        raw_move_cursor(pos);
         break;
+    }
     }
 
     do {

@@ -340,60 +340,59 @@ bool get_type_color(Ast_Node *node, Editor *editor, vec4f *out) {
     case TS_IDENTIFIER:
     case TS_FIELD_IDENTIFIER:
     case TS_PACKAGE_IDENTIFIER:
-    case TS_TYPE_IDENTIFIER:
-        {
-            auto len = node->end_byte() - node->start_byte();
-            if (len >= 16) break;
+    case TS_TYPE_IDENTIFIER: {
+        auto len = node->end_byte() - node->start_byte();
+        if (len >= 16) break;
 
-            ccstr keywords[] = {
-                "package", "import", "const", "var", "func",
-                "type", "struct", "interface",
-                "fallthrough", "break", "continue", "goto", "return",
-                "go", "defer", "if", "else",
-                "for", "range", "switch", "case",
-                "default", "select", "new", "make", "iota",
-            };
+        ccstr keywords[] = {
+            "package", "import", "const", "var", "func",
+            "type", "struct", "interface",
+            "fallthrough", "break", "continue", "goto", "return",
+            "go", "defer", "if", "else",
+            "for", "range", "switch", "case",
+            "default", "select", "new", "make", "iota",
+        };
 
-            ccstr builtin_types[] = {
-                // technically keywords, but look better here
-                "map", "chan", "bool", "byte", "complex128", "complex64",
-                "error", "float32", "float64", "int", "int16", "int32",
-                "int64", "int8", "rune", "string", "uint", "uint16", "uint32",
-                "uint64", "uint8", "uintptr",
-            };
+        ccstr builtin_types[] = {
+            // technically keywords, but look better here
+            "map", "chan", "bool", "byte", "complex128", "complex64",
+            "error", "float32", "float64", "int", "int16", "int32",
+            "int64", "int8", "rune", "string", "uint", "uint16", "uint32",
+            "uint64", "uint8", "uintptr",
+        };
 
-            ccstr builtin_others[] = {
-                "append", "cap", "close", "complex", "copy", "delete", "imag",
-                "len", "make", "new", "panic", "real", "recover",
-            };
+        ccstr builtin_others[] = {
+            "append", "cap", "close", "complex", "copy", "delete", "imag",
+            "len", "make", "new", "panic", "real", "recover",
+        };
 
-            char token[16] = {0};
-            auto it = editor->iter(node->start());
-            for (u32 i = 0; i < _countof(token) && it.pos != node->end(); i++)
-                token[i] = it.next();
+        char token[16] = {0};
+        auto it = editor->iter(node->start());
+        for (u32 i = 0; i < _countof(token) && it.pos != node->end(); i++)
+            token[i] = it.next();
 
-            For (keywords) {
-                if (streq(it, token)) {
-                    *out = rgba(global_colors.keyword);
-                    return true;
-                }
+        For (keywords) {
+            if (streq(it, token)) {
+                *out = rgba(global_colors.keyword);
+                return true;
             }
+        }
 
-            For (builtin_types) {
-                if (streq(it, token)) {
-                    *out = rgba(global_colors.type);
-                    return true;
-                }
+        For (builtin_types) {
+            if (streq(it, token)) {
+                *out = rgba(global_colors.type);
+                return true;
             }
+        }
 
-            For (builtin_others) {
-                if (streq(it, token)) {
-                    *out = rgba(global_colors.builtin);
-                    return true;
-                }
+        For (builtin_others) {
+            if (streq(it, token)) {
+                *out = rgba(global_colors.builtin);
+                return true;
             }
         }
         break;
+    }
     }
 
     return false;
@@ -557,19 +556,18 @@ void UI::render_gotype(Gotype *gotype, ccstr field) {
             render_gotype(gotype->map_value, "value");
             break;
         case GOTYPE_STRUCT:
-        case GOTYPE_INTERFACE:
-            {
-                auto specs = gotype->type == GOTYPE_STRUCT ? gotype->struct_specs : gotype->interface_specs;
-                for (u32 i = 0; i < specs->len; i++) {
-                    auto it = &specs->items[i];
-                    if (ImGui::TreeNodeEx(it, flags, "spec %d", i)) {
-                        ImGui::Text("tag: %s", it->tag);
-                        render_godecl(it->field);
-                        ImGui::TreePop();
-                    }
+        case GOTYPE_INTERFACE: {
+            auto specs = gotype->type == GOTYPE_STRUCT ? gotype->struct_specs : gotype->interface_specs;
+            for (u32 i = 0; i < specs->len; i++) {
+                auto it = &specs->items[i];
+                if (ImGui::TreeNodeEx(it, flags, "spec %d", i)) {
+                    ImGui::Text("tag: %s", it->tag);
+                    render_godecl(it->field);
+                    ImGui::TreePop();
                 }
             }
             break;
+        }
         case GOTYPE_POINTER: render_gotype(gotype->pointer_base, "base"); break;
         case GOTYPE_SLICE: render_gotype(gotype->slice_base, "base"); break;
         case GOTYPE_ARRAY: render_gotype(gotype->array_base, "base"); break;
@@ -4465,161 +4463,160 @@ void UI::draw_everything() {
                 world.searcher.cleanup();
             }
             break;
-        case SEARCH_SEARCH_DONE:
-            {
-                if (wnd.replace)
-                    if (ImGui::Button("Perform Replacement"))
-                        // TODO: if we have more results than we're showing, warn user about that
-                        world.searcher.start_replace(wnd.replace_str);
+        case SEARCH_SEARCH_DONE: {
+            if (wnd.replace)
+                if (ImGui::Button("Perform Replacement"))
+                    // TODO: if we have more results than we're showing, warn user about that
+                    world.searcher.start_replace(wnd.replace_str);
 
-                int index = 0;
-                int result_index = 0;
-                bool didnt_finish = false;
+            int index = 0;
+            int result_index = 0;
+            bool didnt_finish = false;
 
-                Search_Result *current_result = NULL;
-                ccstr current_filepath = NULL;
+            Search_Result *current_result = NULL;
+            ccstr current_filepath = NULL;
 
-                For (world.searcher.search_results) {
-                    if (index > 400) {
+            For (world.searcher.search_results) {
+                if (index > 400) {
+                    didnt_finish = true;
+                    break;
+                }
+
+                ImGui::Text("%s", get_path_relative_to(it.filepath, world.current_path));
+
+                ImGui::Indent();
+                imgui_push_mono_font();
+
+                auto filepath = it.filepath;
+
+                For (*it.results) {
+                    defer { index++; };
+
+                    // allow up to 100 to finish the results in current file
+                    if (index > 500) {
                         didnt_finish = true;
                         break;
                     }
 
-                    ImGui::Text("%s", get_path_relative_to(it.filepath, world.current_path));
+                    auto availwidth = ImGui::GetContentRegionAvail().x;
+                    auto text_size = ImVec2(availwidth, ImGui::CalcTextSize("blah").y);
+                    auto drawpos = ImGui::GetCursorScreenPos();
 
-                    ImGui::Indent();
-                    imgui_push_mono_font();
+                    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(ImColor(60, 60, 60)));
 
-                    auto filepath = it.filepath;
+                    bool clicked = ImGui::Selectable(
+                        cp_sprintf("##search_result_%d", index),
+                        index == wnd.selection,
+                        ImGuiSelectableFlags_AllowDoubleClick,
+                        text_size
+                    );
 
-                    For (*it.results) {
-                        defer { index++; };
+                    if (index == wnd.selection) {
+                        current_result = &it;
+                        current_filepath = filepath;
+                    }
 
-                        // allow up to 100 to finish the results in current file
-                        if (index > 500) {
-                            didnt_finish = true;
-                            break;
+                    ImGui::PopStyleColor();
+
+                    auto draw_text = [&](ccstr s, int len, bool strikethrough = false) {
+                        auto text = cp_sprintf("%.*s", len, s);
+                        auto size = ImGui::CalcTextSize(text);
+
+                        auto drawlist = ImGui::GetWindowDrawList();
+                        drawlist->AddText(drawpos, ImGui::GetColorU32(ImGuiCol_Text), text);
+
+                        if (strikethrough) {
+                            ImVec2 a = drawpos, b = drawpos;
+                            b.y += size.y/2;
+                            a.y += size.y/2;
+                            b.x += size.x;
+                            // ImGui::GetFontSize() / 2
+                            drawlist->AddLine(a, b, ImGui::GetColorU32(ImGuiCol_Text), 1.0f);
                         }
 
-                        auto availwidth = ImGui::GetContentRegionAvail().x;
-                        auto text_size = ImVec2(availwidth, ImGui::CalcTextSize("blah").y);
-                        auto drawpos = ImGui::GetCursorScreenPos();
+                        drawpos.x += ImGui::CalcTextSize(text).x;
+                    };
 
-                        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(ImColor(60, 60, 60)));
+                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(ImColor(200, 178, 178)));
+                    {
+                        auto pos = it.match_start;
+                        if (is_mark_valid(it.mark_start))
+                            pos = it.mark_start->pos();
 
-                        bool clicked = ImGui::Selectable(
-                            cp_sprintf("##search_result_%d", index),
-                            index == wnd.selection,
-                            ImGuiSelectableFlags_AllowDoubleClick,
-                            text_size
-                        );
+                        auto s = cp_sprintf("%d:%d ", pos.y+1, pos.x+1);
+                        draw_text(s, strlen(s));
+                    }
+                    ImGui::PopStyleColor();
 
-                        if (index == wnd.selection) {
-                            current_result = &it;
-                            current_filepath = filepath;
-                        }
+                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(ImColor(178, 178, 178)));
 
+                    draw_text(it.preview, it.match_offset_in_preview);
+
+                    if (wnd.replace) {
+                        // draw old
+                        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(ImColor(255, 180, 180)));
+                        draw_text(it.match, it.match_len, true);
                         ImGui::PopStyleColor();
 
-                        auto draw_text = [&](ccstr s, int len, bool strikethrough = false) {
-                            auto text = cp_sprintf("%.*s", len, s);
-                            auto size = ImGui::CalcTextSize(text);
+                        // draw new
+                        auto newtext = world.searcher.get_replacement_text(&it, wnd.replace_str);
+                        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(ImColor(180, 255, 180)));
+                        draw_text(newtext, strlen(newtext));
+                        ImGui::PopStyleColor();
+                    } else {
+                        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(ImColor(255, 255, 255)));
+                        draw_text(it.match, it.match_len);
+                        ImGui::PopStyleColor();
+                    }
 
-                            auto drawlist = ImGui::GetWindowDrawList();
-                            drawlist->AddText(drawpos, ImGui::GetColorU32(ImGuiCol_Text), text);
+                    draw_text(
+                        &it.preview[it.match_offset_in_preview + it.match_len],
+                        it.preview_len - it.match_offset_in_preview - it.match_len
+                    );
 
-                            if (strikethrough) {
-                                ImVec2 a = drawpos, b = drawpos;
-                                b.y += size.y/2;
-                                a.y += size.y/2;
-                                b.x += size.x;
-                                // ImGui::GetFontSize() / 2
-                                drawlist->AddLine(a, b, ImGui::GetColorU32(ImGuiCol_Text), 1.0f);
-                            }
+                    ImGui::PopStyleColor();
 
-                            drawpos.x += ImGui::CalcTextSize(text).x;
-                        };
-
-                        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(ImColor(200, 178, 178)));
-                        {
+                    if (clicked) {
+                        if (ImGui::IsMouseDoubleClicked(0)) {
                             auto pos = it.match_start;
                             if (is_mark_valid(it.mark_start))
                                 pos = it.mark_start->pos();
 
-                            auto s = cp_sprintf("%d:%d ", pos.y+1, pos.x+1);
-                            draw_text(s, strlen(s));
-                        }
-                        ImGui::PopStyleColor();
-
-                        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(ImColor(178, 178, 178)));
-
-                        draw_text(it.preview, it.match_offset_in_preview);
-
-                        if (wnd.replace) {
-                            // draw old
-                            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(ImColor(255, 180, 180)));
-                            draw_text(it.match, it.match_len, true);
-                            ImGui::PopStyleColor();
-
-                            // draw new
-                            auto newtext = world.searcher.get_replacement_text(&it, wnd.replace_str);
-                            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(ImColor(180, 255, 180)));
-                            draw_text(newtext, strlen(newtext));
-                            ImGui::PopStyleColor();
+                            goto_file_and_pos(filepath, pos, true);
                         } else {
-                            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(ImColor(255, 255, 255)));
-                            draw_text(it.match, it.match_len);
-                            ImGui::PopStyleColor();
+                            wnd.selection = index;
                         }
-
-                        draw_text(
-                            &it.preview[it.match_offset_in_preview + it.match_len],
-                            it.preview_len - it.match_offset_in_preview - it.match_len
-                        );
-
-                        ImGui::PopStyleColor();
-
-                        if (clicked) {
-                            if (ImGui::IsMouseDoubleClicked(0)) {
-                                auto pos = it.match_start;
-                                if (is_mark_valid(it.mark_start))
-                                    pos = it.mark_start->pos();
-
-                                goto_file_and_pos(filepath, pos, true);
-                            } else {
-                                wnd.selection = index;
-                            }
-                        }
-                    }
-
-                    imgui_pop_font();
-                    ImGui::Unindent();
-                }
-
-                if (wnd.focused && !world.ui.keyboard_captured_by_imgui) {
-                    auto mods = imgui_get_keymods();
-                    switch (mods) {
-                    case CP_MOD_NONE:
-                        if (imgui_special_key_pressed(ImGuiKey_DownArrow) || imgui_key_pressed('j')) {
-                            if (wnd.selection < index-1)
-                                wnd.selection++;
-                        }
-                        if (imgui_special_key_pressed(ImGuiKey_UpArrow) || imgui_key_pressed('k')) {
-                            if (wnd.selection)
-                                wnd.selection--;
-                        }
-                        if (imgui_special_key_pressed(ImGuiKey_Enter))
-                            if (current_result)
-                                goto_file_and_pos(current_filepath, current_result->match_start, true);
-                        break;
                     }
                 }
 
-                if (didnt_finish) {
-                    ImGui::Text("There were too many results; some are omitted.");
+                imgui_pop_font();
+                ImGui::Unindent();
+            }
+
+            if (wnd.focused && !world.ui.keyboard_captured_by_imgui) {
+                auto mods = imgui_get_keymods();
+                switch (mods) {
+                case CP_MOD_NONE:
+                    if (imgui_special_key_pressed(ImGuiKey_DownArrow) || imgui_key_pressed('j')) {
+                        if (wnd.selection < index-1)
+                            wnd.selection++;
+                    }
+                    if (imgui_special_key_pressed(ImGuiKey_UpArrow) || imgui_key_pressed('k')) {
+                        if (wnd.selection)
+                            wnd.selection--;
+                    }
+                    if (imgui_special_key_pressed(ImGuiKey_Enter))
+                        if (current_result)
+                            goto_file_and_pos(current_filepath, current_result->match_start, true);
+                    break;
                 }
             }
+
+            if (didnt_finish) {
+                ImGui::Text("There were too many results; some are omitted.");
+            }
             break;
+        }
         case SEARCH_REPLACE_IN_PROGRESS:
             ImGui::Text("Replacing...");
             ImGui::SameLine();
@@ -5789,27 +5786,24 @@ void UI::draw_everything() {
 
         int index_mouse_flags = 0;
         switch (world.indexer.status) {
-        case IND_READY:
-            {
-                auto mouse_flags = get_mouse_flags(get_status_piece_rect(RIGHT, "INDEX READY"));
-                auto opacity = mouse_flags & MOUSE_HOVER ? 1.0 : 0.8;
-                index_mouse_flags = draw_status_piece(RIGHT, "INDEX READY", rgba(global_colors.status_index_ready_background, opacity), rgba(global_colors.status_index_ready_foreground, opacity));
-            }
+        case IND_READY: {
+            auto mouse_flags = get_mouse_flags(get_status_piece_rect(RIGHT, "INDEX READY"));
+            auto opacity = mouse_flags & MOUSE_HOVER ? 1.0 : 0.8;
+            index_mouse_flags = draw_status_piece(RIGHT, "INDEX READY", rgba(global_colors.status_index_ready_background, opacity), rgba(global_colors.status_index_ready_foreground, opacity));
             break;
-        case IND_WRITING:
-            {
-                auto mouse_flags = get_mouse_flags(get_status_piece_rect(RIGHT, "INDEXING..."));
-                auto opacity = mouse_flags & MOUSE_HOVER ? 1.0 : 0.8;
-                index_mouse_flags = draw_status_piece(RIGHT, "INDEXING...", rgba(global_colors.status_index_indexing_background, opacity), rgba(global_colors.status_index_indexing_foreground, opacity));
-            }
+        }
+        case IND_WRITING: {
+            auto mouse_flags = get_mouse_flags(get_status_piece_rect(RIGHT, "INDEXING..."));
+            auto opacity = mouse_flags & MOUSE_HOVER ? 1.0 : 0.8;
+            index_mouse_flags = draw_status_piece(RIGHT, "INDEXING...", rgba(global_colors.status_index_indexing_background, opacity), rgba(global_colors.status_index_indexing_foreground, opacity));
             break;
-        case IND_READING:
-            {
-                auto mouse_flags = get_mouse_flags(get_status_piece_rect(RIGHT, "RUNNING..."));
-                auto opacity = mouse_flags & MOUSE_HOVER ? 1.0 : 0.8;
-                index_mouse_flags = draw_status_piece(RIGHT, "RUNNING...", rgba(global_colors.status_index_indexing_background, opacity), rgba(global_colors.status_index_indexing_foreground, opacity));
-            }
+        }
+        case IND_READING: {
+            auto mouse_flags = get_mouse_flags(get_status_piece_rect(RIGHT, "RUNNING..."));
+            auto opacity = mouse_flags & MOUSE_HOVER ? 1.0 : 0.8;
+            index_mouse_flags = draw_status_piece(RIGHT, "RUNNING...", rgba(global_colors.status_index_indexing_background, opacity), rgba(global_colors.status_index_indexing_foreground, opacity));
             break;
+        }
         }
 
         if (index_mouse_flags & MOUSE_CLICKED) {

@@ -297,44 +297,43 @@ void Type_Renderer::write_type(Gotype *t, Type_Renderer_Handler custom_handler, 
         write("*");
         recur(t->pointer_base);
         break;
-    case GOTYPE_FUNC:
-        {
-            if (!omit_func_keyword)
-                write("func");
+    case GOTYPE_FUNC: {
+        if (!omit_func_keyword)
+            write("func");
 
-            auto write_params = [&](List<Godecl> *params, bool is_result) {
-                write("(");
+        auto write_params = [&](List<Godecl> *params, bool is_result) {
+            write("(");
 
-                u32 i = 0;
-                For (*params) {
-                    if (is_goident_empty(it.name)) {
-                        if (!is_result)
-                            write("_ ");
-                    } else {
-                        write("%s ", it.name);
-                    }
-                    recur(it.gotype);
-                    if (i < params->len - 1)
-                        write(", ");
-                    i++;
+            u32 i = 0;
+            For (*params) {
+                if (is_goident_empty(it.name)) {
+                    if (!is_result)
+                        write("_ ");
+                } else {
+                    write("%s ", it.name);
                 }
-
-                write(")");
-            };
-
-            auto &sig = t->func_sig;
-            write_params(sig.params, false);
-
-            auto result = sig.result;
-            if (result && result->len > 0) {
-                write(" ");
-                if (result->len == 1 && is_goident_empty(result->at(0).name))
-                    recur(result->at(0).gotype);
-                else
-                    write_params(result, true);
+                recur(it.gotype);
+                if (i < params->len - 1)
+                    write(", ");
+                i++;
             }
+
+            write(")");
+        };
+
+        auto &sig = t->func_sig;
+        write_params(sig.params, false);
+
+        auto result = sig.result;
+        if (result && result->len > 0) {
+            write(" ");
+            if (result->len == 1 && is_goident_empty(result->at(0).name))
+                recur(result->at(0).gotype);
+            else
+                write_params(result, true);
         }
         break;
+    }
     case GOTYPE_SLICE:
         write("[]");
         recur(t->slice_base);
@@ -1160,21 +1159,20 @@ void Go_Indexer::background_thread() {
                 }
             }
             break;
-        case CPR_NONEXISTENT:
-            {
-                auto pkg = find_package_in_index(import_path);
-                if (pkg) {
-                    remove_package(pkg);
-                    break;
-                }
+        case CPR_NONEXISTENT: {
+            auto pkg = find_package_in_index(import_path);
+            if (pkg) {
+                remove_package(pkg);
+                break;
+            }
 
-                pkg = find_package_in_index(cp_dirname(import_path));
-                if (pkg) {
-                    start_writing(true);
-                    mark_package_for_reprocessing(pkg->import_path);
-                }
+            pkg = find_package_in_index(cp_dirname(import_path));
+            if (pkg) {
+                start_writing(true);
+                mark_package_for_reprocessing(pkg->import_path);
             }
             break;
+        }
         }
     };
 
@@ -1781,59 +1779,57 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
         case TS_EXPRESSION_SWITCH_STATEMENT:
         case TS_BLOCK:
         case TS_FUNC_LITERAL:
-        case TS_TYPE_SWITCH_STATEMENT:
-            {
-                open_scopes.append(depth);
+        case TS_TYPE_SWITCH_STATEMENT: {
+            open_scopes.append(depth);
+
+            Go_Scope_Op op;
+            op.type = GSOP_OPEN_SCOPE;
+            op.pos = node->start();
+            if (!cb(&op)) return WALK_ABORT;
+            break;
+        }
+
+        case TS_TYPE_CASE:
+        case TS_DEFAULT_CASE: {
+            auto parent = node->parent();
+            if (parent->null) break;
+            if (parent->type() != TS_TYPE_SWITCH_STATEMENT) break;
+
+            auto alias = parent->field(TSF_ALIAS);
+            if (alias->null) break;
+            if (alias->type() != TS_EXPRESSION_LIST) break;
+
+            FOR_NODE_CHILDREN (alias) {
+                if (it->type() != TS_IDENTIFIER) break;
+
+                auto decl = alloc_object(Godecl);
+                decl->name = cp_strdup(it->string());
+                decl->type = GODECL_TYPECASE;
+                decl->decl_start = node->start();
+                decl->decl_end = node->start();
+                decl->spec_start = node->start();
+                decl->name_start = it->start();
+                decl->name_end = it->end();
+
+                Gotype *gotype = NULL;
+                if (node_type == TS_TYPE_CASE && node->child_count() > 1) {
+                    gotype = node_to_gotype(node->child());
+                } else {
+                    gotype = new_gotype(GOTYPE_INTERFACE);
+                    gotype->interface_specs = alloc_list<Go_Struct_Spec>(0);
+                }
+
+                decl->gotype = gotype;
 
                 Go_Scope_Op op;
-                op.type = GSOP_OPEN_SCOPE;
-                op.pos = node->start();
+                op.type = GSOP_DECL;
+                op.decl = decl;
+                op.decl_scope_depth = open_scopes.len;
+                op.pos = decl->decl_start;
                 if (!cb(&op)) return WALK_ABORT;
             }
             break;
-
-        case TS_TYPE_CASE:
-        case TS_DEFAULT_CASE:
-            {
-                auto parent = node->parent();
-                if (parent->null) break;
-                if (parent->type() != TS_TYPE_SWITCH_STATEMENT) break;
-
-                auto alias = parent->field(TSF_ALIAS);
-                if (alias->null) break;
-                if (alias->type() != TS_EXPRESSION_LIST) break;
-
-                FOR_NODE_CHILDREN (alias) {
-                    if (it->type() != TS_IDENTIFIER) break;
-
-                    auto decl = alloc_object(Godecl);
-                    decl->name = cp_strdup(it->string());
-                    decl->type = GODECL_TYPECASE;
-                    decl->decl_start = node->start();
-                    decl->decl_end = node->start();
-                    decl->spec_start = node->start();
-                    decl->name_start = it->start();
-                    decl->name_end = it->end();
-
-                    Gotype *gotype = NULL;
-                    if (node_type == TS_TYPE_CASE && node->child_count() > 1) {
-                        gotype = node_to_gotype(node->child());
-                    } else {
-                        gotype = new_gotype(GOTYPE_INTERFACE);
-                        gotype->interface_specs = alloc_list<Go_Struct_Spec>(0);
-                    }
-
-                    decl->gotype = gotype;
-
-                    Go_Scope_Op op;
-                    op.type = GSOP_DECL;
-                    op.decl = decl;
-                    op.decl_scope_depth = open_scopes.len;
-                    op.pos = decl->decl_start;
-                    if (!cb(&op)) return WALK_ABORT;
-                }
-            }
-            break;
+        }
 
         case TS_METHOD_DECLARATION:
         case TS_FUNCTION_DECLARATION:
@@ -1969,83 +1965,81 @@ void Go_Indexer::process_tree_into_gofile(
             case TS_IDENTIFIER:
             case TS_FIELD_IDENTIFIER:
             case TS_PACKAGE_IDENTIFIER:
-            case TS_TYPE_IDENTIFIER:
+            case TS_TYPE_IDENTIFIER: {
+                /*
+                auto parent = it->parent();
+                if (!parent->null) {
+                    if (parent->type() == TS_QUALIFIED_TYPE)
+                        return WALK_SKIP_CHILDREN;
+                    if (parent->type() == TS_SELECTOR_EXPRESSION)
+                        return WALK_SKIP_CHILDREN;
+                }
+                */
+
+                Go_Reference ref;
+                ref.is_sel = false;
+                ref.start = it->start();
+                ref.end = it->end();
+                ref.name = it->string();
+
                 {
-                    /*
-                    auto parent = it->parent();
-                    if (!parent->null) {
-                        if (parent->type() == TS_QUALIFIED_TYPE)
-                            return WALK_SKIP_CHILDREN;
-                        if (parent->type() == TS_SELECTOR_EXPRESSION)
-                            return WALK_SKIP_CHILDREN;
-                    }
-                    */
-
-                    Go_Reference ref;
-                    ref.is_sel = false;
-                    ref.start = it->start();
-                    ref.end = it->end();
-                    ref.name = it->string();
-
-                    {
-                        SCOPED_MEM(&file->pool);
-                        file->references->append(ref.copy());
-                    }
+                    SCOPED_MEM(&file->pool);
+                    file->references->append(ref.copy());
                 }
                 break;
+            }
 
             case TS_QUALIFIED_TYPE:
-            case TS_SELECTOR_EXPRESSION:
-                {
-                    Ast_Node *x = NULL, *sel = NULL;
+            case TS_SELECTOR_EXPRESSION: {
+                Ast_Node *x = NULL, *sel = NULL;
 
-                    if (it->type() == TS_QUALIFIED_TYPE) {
-                        x = it->field(TSF_PACKAGE);
-                        sel = it->field(TSF_NAME); // TODO: this is wrong, look at astviewer
-                    } else {
-                        x = it->field(TSF_OPERAND);
-                        /*
-                        switch (x->type()) {
-                        case TS_IDENTIFIER:
-                        case TS_FIELD_IDENTIFIER:
-                        case TS_PACKAGE_IDENTIFIER:
-                        case TS_TYPE_IDENTIFIER:
-                            break;
-                        default:
-                            return WALK_CONTINUE;
-                        }
-                        */
-                        sel = it->field(TSF_FIELD);
-                    }
-
-                    auto xtype = expr_to_gotype(x);
-                    if (!xtype) break;
-
-                    Go_Reference ref;
-                    ref.is_sel = true;
-                    ref.x = expr_to_gotype(x);
-                    ref.x_start = x->start();
-                    ref.x_end = x->end();
-                    ref.sel = sel->string();
-                    ref.sel_start = sel->start();
-                    ref.sel_end = sel->end();
-
-                    {
-                        SCOPED_MEM(&file->pool);
-                        file->references->append(ref.copy());
-                    }
-
+                if (it->type() == TS_QUALIFIED_TYPE) {
+                    x = it->field(TSF_PACKAGE);
+                    sel = it->field(TSF_NAME); // TODO: this is wrong, look at astviewer
+                } else {
+                    x = it->field(TSF_OPERAND);
                     /*
                     switch (x->type()) {
                     case TS_IDENTIFIER:
                     case TS_FIELD_IDENTIFIER:
                     case TS_PACKAGE_IDENTIFIER:
                     case TS_TYPE_IDENTIFIER:
-                        return WALK_SKIP_CHILDREN;
+                        break;
+                    default:
+                        return WALK_CONTINUE;
                     }
                     */
+                    sel = it->field(TSF_FIELD);
+                }
+
+                auto xtype = expr_to_gotype(x);
+                if (!xtype) break;
+
+                Go_Reference ref;
+                ref.is_sel = true;
+                ref.x = expr_to_gotype(x);
+                ref.x_start = x->start();
+                ref.x_end = x->end();
+                ref.sel = sel->string();
+                ref.sel_start = sel->start();
+                ref.sel_end = sel->end();
+
+                {
+                    SCOPED_MEM(&file->pool);
+                    file->references->append(ref.copy());
+                }
+
+                /*
+                switch (x->type()) {
+                case TS_IDENTIFIER:
+                case TS_FIELD_IDENTIFIER:
+                case TS_PACKAGE_IDENTIFIER:
+                case TS_TYPE_IDENTIFIER:
                     return WALK_SKIP_CHILDREN;
                 }
+                */
+                return WALK_SKIP_CHILDREN;
+            }
             }
             return WALK_CONTINUE;
         });
@@ -2587,203 +2581,185 @@ bool Go_Indexer::are_gotypes_equal(Goresult *ra, Goresult *rb) {
     // a->type == b->type
 
     switch (a->type) {
-    case GOTYPE_INTERFACE:
-        {
-            auto validate_methods = [&](List<Goresult> *meths) {
-                if (!meths) return false;
+    case GOTYPE_INTERFACE: {
+        auto validate_methods = [&](List<Goresult> *meths) {
+            if (!meths) return false;
 
-                SCOPED_FRAME();
-                String_Set seen; seen.init();
-                For (*meths) {
-                    auto name = it.decl->name;
-                    if (seen.has(name))
-                        return false;
-                    seen.add(name);
-                }
-                return true;
-            };
-
-            auto ameths = list_interface_methods(ra);
-            if (!validate_methods(ameths)) return false;
-
-            auto bmeths = list_interface_methods(rb);
-            if (!validate_methods(bmeths)) return false;
-
-            if (ameths->len != bmeths->len) return false;
-
-            for (auto &&bmeth : *bmeths) {
-                bool found = false;
-                for (auto &&ameth : *ameths) {
-                    auto adecl = ameth.decl;
-                    auto bdecl = ameth.decl;
-
-                    if (!streq(adecl->name, bdecl->name)) continue;
-
-                    auto atype = ameth.wrap(adecl->gotype);
-                    auto btype = bmeth.wrap(bdecl->gotype);
-                    if (!are_gotypes_equal(atype, btype)) continue;
-
-                    found = true;
-                    break;
-                }
-                if (!found) return false;
-            }
-            return true;
-        }
-        break;
-
-    case GOTYPE_ID:
-        {
-            auto adecl = find_decl_of_id(a->id_name, a->id_pos, ra->ctx);
-            auto bdecl = find_decl_of_id(b->id_name, b->id_pos, rb->ctx);
-            return are_decls_equal(adecl, bdecl);
-        }
-        return true;
-
-    case GOTYPE_SEL:
-        {
-            auto aimp = find_import_path_referred_to_by_id(a->sel_name, ra->ctx);
-            auto bimp = find_import_path_referred_to_by_id(b->sel_name, rb->ctx);
-            if (!aimp || !bimp) return false;
-            if (!streq(aimp, bimp)) return false;
-            if (!streq(a->sel_sel, b->sel_sel)) return false;
-        }
-        return true;
-
-    case GOTYPE_ASSERTION:
-        {
-            auto abase = ra->wrap(a->assertion_base);
-            auto bbase = rb->wrap(b->assertion_base);
-            return are_gotypes_equal(abase, bbase);
-        }
-        break;
-
-    case GOTYPE_STRUCT:
-        {
-            auto sa = a->struct_specs;
-            auto sb = a->struct_specs;
-            if (sa->len != sb->len) return false;
-
-            for (int i = 0; i < sa->len; i++) {
-                auto &ita = sa->at(i);
-                auto &itb = sb->at(i);
-
-                if (ita.tag || itb.tag) {
-                    if (!ita.tag || !itb.tag) return false;
-                    if (!streq(ita.tag, itb.tag)) return false;
-                }
-
-                if (ita.field->is_embedded != itb.field->is_embedded) return false;
-                if (!streq(ita.field->name, itb.field->name)) return false;
-
-                if (!are_gotypes_equal(ra->wrap(ita.field->gotype), rb->wrap(itb.field->gotype)))
+            SCOPED_FRAME();
+            String_Set seen; seen.init();
+            For (*meths) {
+                auto name = it.decl->name;
+                if (seen.has(name))
                     return false;
+                seen.add(name);
+            }
+            return true;
+        };
+
+        auto ameths = list_interface_methods(ra);
+        if (!validate_methods(ameths)) return false;
+
+        auto bmeths = list_interface_methods(rb);
+        if (!validate_methods(bmeths)) return false;
+
+        if (ameths->len != bmeths->len) return false;
+
+        for (auto &&bmeth : *bmeths) {
+            bool found = false;
+            for (auto &&ameth : *ameths) {
+                auto adecl = ameth.decl;
+                auto bdecl = ameth.decl;
+
+                if (!streq(adecl->name, bdecl->name)) continue;
+
+                auto atype = ameth.wrap(adecl->gotype);
+                auto btype = bmeth.wrap(bdecl->gotype);
+                if (!are_gotypes_equal(atype, btype)) continue;
+
+                found = true;
+                break;
+            }
+            if (!found) return false;
+        }
+        return true;
+    }
+
+    case GOTYPE_ID: {
+        auto adecl = find_decl_of_id(a->id_name, a->id_pos, ra->ctx);
+        auto bdecl = find_decl_of_id(b->id_name, b->id_pos, rb->ctx);
+        return are_decls_equal(adecl, bdecl);
+    }
+
+    case GOTYPE_SEL: {
+        auto aimp = find_import_path_referred_to_by_id(a->sel_name, ra->ctx);
+        auto bimp = find_import_path_referred_to_by_id(b->sel_name, rb->ctx);
+        if (!aimp || !bimp) return false;
+        if (!streq(aimp, bimp)) return false;
+        if (!streq(a->sel_sel, b->sel_sel)) return false;
+        return true;
+    }
+
+    case GOTYPE_ASSERTION: {
+        auto abase = ra->wrap(a->assertion_base);
+        auto bbase = rb->wrap(b->assertion_base);
+        return are_gotypes_equal(abase, bbase);
+        break;
+    }
+
+    case GOTYPE_STRUCT: {
+        auto sa = a->struct_specs;
+        auto sb = a->struct_specs;
+        if (sa->len != sb->len) return false;
+
+        for (int i = 0; i < sa->len; i++) {
+            auto &ita = sa->at(i);
+            auto &itb = sb->at(i);
+
+            if (ita.tag || itb.tag) {
+                if (!ita.tag || !itb.tag) return false;
+                if (!streq(ita.tag, itb.tag)) return false;
             }
 
-            return true;
-        }
-        break;
+            if (ita.field->is_embedded != itb.field->is_embedded) return false;
+            if (!streq(ita.field->name, itb.field->name)) return false;
 
-    case GOTYPE_MAP:
-        {
-            auto akey = ra->wrap(a->map_key);
-            auto aval = ra->wrap(a->map_value);
-            auto bkey = rb->wrap(b->map_key);
-            auto bval = rb->wrap(b->map_value);
-            return are_gotypes_equal(akey, bkey) && are_gotypes_equal(aval, bval);
-        }
-        break;
-
-    case GOTYPE_POINTER:
-        {
-            auto abase = ra->wrap(a->pointer_base);
-            auto bbase = rb->wrap(b->pointer_base);
-            return are_gotypes_equal(abase, bbase);
-        }
-
-    case GOTYPE_FUNC:
-        {
-            auto &fa = a->func_sig;
-            auto &fb = b->func_sig;
-
-            auto mismatch = [&](List<Godecl> *aarr, List<Godecl> *barr) -> bool {
-                if (isempty(fa.params) != isempty(fb.params))
-                    return true;
-                if (fa.params)
-                    if (fa.params->len != fb.params->len)
-                        return true;
+            if (!are_gotypes_equal(ra->wrap(ita.field->gotype), rb->wrap(itb.field->gotype)))
                 return false;
-            };
+        }
 
-            if (mismatch(fa.params, fb.params)) return false;
+        return true;
+    }
 
-            if (!isempty(fa.params)) {
-                for (int i = 0; i < fa.params->len; i++) {
-                    auto ga = ra->wrap(fa.params->at(i).gotype);
-                    auto gb = rb->wrap(fb.params->at(i).gotype);
-                    if (!are_gotypes_equal(ga, gb)) return false;
-                }
+    case GOTYPE_MAP: {
+        auto akey = ra->wrap(a->map_key);
+        auto aval = ra->wrap(a->map_value);
+        auto bkey = rb->wrap(b->map_key);
+        auto bval = rb->wrap(b->map_value);
+        return are_gotypes_equal(akey, bkey) && are_gotypes_equal(aval, bval);
+    }
+
+    case GOTYPE_POINTER: {
+        auto abase = ra->wrap(a->pointer_base);
+        auto bbase = rb->wrap(b->pointer_base);
+        return are_gotypes_equal(abase, bbase);
+    }
+
+    case GOTYPE_FUNC: {
+        auto &fa = a->func_sig;
+        auto &fb = b->func_sig;
+
+        auto mismatch = [&](List<Godecl> *aarr, List<Godecl> *barr) -> bool {
+            if (isempty(fa.params) != isempty(fb.params))
+                return true;
+            if (fa.params)
+                if (fa.params->len != fb.params->len)
+                    return true;
+            return false;
+        };
+
+        if (mismatch(fa.params, fb.params)) return false;
+
+        if (!isempty(fa.params)) {
+            for (int i = 0; i < fa.params->len; i++) {
+                auto ga = ra->wrap(fa.params->at(i).gotype);
+                auto gb = rb->wrap(fb.params->at(i).gotype);
+                if (!are_gotypes_equal(ga, gb)) return false;
             }
+        }
 
-            if (mismatch(fa.result, fb.result)) return false;
+        if (mismatch(fa.result, fb.result)) return false;
 
-            if (!isempty(fa.result)) {
-                for (int i = 0; i < fa.result->len; i++) {
-                    auto ga = ra->wrap(fa.result->at(i).gotype);
-                    auto gb = rb->wrap(fb.result->at(i).gotype);
-                    if (!are_gotypes_equal(ga, gb)) return false;
-                }
+        if (!isempty(fa.result)) {
+            for (int i = 0; i < fa.result->len; i++) {
+                auto ga = ra->wrap(fa.result->at(i).gotype);
+                auto gb = rb->wrap(fb.result->at(i).gotype);
+                if (!are_gotypes_equal(ga, gb)) return false;
             }
-
-            return true;
         }
 
-    case GOTYPE_SLICE:
-        {
-            auto abase = ra->wrap(a->slice_base);
-            auto bbase = rb->wrap(b->slice_base);
-            return are_gotypes_equal(abase, bbase);
-        }
+        return true;
+    }
 
-    case GOTYPE_ARRAY:
-        {
-            auto abase = ra->wrap(a->array_base);
-            auto bbase = rb->wrap(b->array_base);
+    case GOTYPE_SLICE: {
+        auto abase = ra->wrap(a->slice_base);
+        auto bbase = rb->wrap(b->slice_base);
+        return are_gotypes_equal(abase, bbase);
+    }
 
-            // Strictly speaking, we should check the array size too. But that
-            // would require us to evaluate the actual *value* of expressions,
-            // something we can't do yet (right now we only deal with types).
-            //
-            // If it becomes important enough, we can do it.
+    case GOTYPE_ARRAY: {
+        auto abase = ra->wrap(a->array_base);
+        auto bbase = rb->wrap(b->array_base);
 
-            // return a->array_size == b->array_size && are_gotypes_equal(abase, bbase);
-            return are_gotypes_equal(abase, bbase);
-        }
+        // Strictly speaking, we should check the array size too. But that
+        // would require us to evaluate the actual *value* of expressions,
+        // something we can't do yet (right now we only deal with types).
+        //
+        // If it becomes important enough, we can do it.
 
-    case GOTYPE_CHAN:
-        {
-            auto abase = ra->wrap(a->chan_base);
-            auto bbase = rb->wrap(b->chan_base);
-            return are_gotypes_equal(abase, bbase);
-        }
+        // return a->array_size == b->array_size && are_gotypes_equal(abase, bbase);
+        return are_gotypes_equal(abase, bbase);
+    }
+
+    case GOTYPE_CHAN: {
+        auto abase = ra->wrap(a->chan_base);
+        auto bbase = rb->wrap(b->chan_base);
+        return are_gotypes_equal(abase, bbase);
+    }
 
     case GOTYPE_MULTI:
         return false; // this isn't a real go type, it's for our purposes
 
-    case GOTYPE_VARIADIC:
-        {
-            auto abase = ra->wrap(a->variadic_base);
-            auto bbase = rb->wrap(b->variadic_base);
-            return are_gotypes_equal(abase, bbase);
-        }
+    case GOTYPE_VARIADIC: {
+        auto abase = ra->wrap(a->variadic_base);
+        auto bbase = rb->wrap(b->variadic_base);
+        return are_gotypes_equal(abase, bbase);
+    }
 
-    case GOTYPE_RANGE:
-        {
-            auto abase = ra->wrap(a->range_base);
-            auto bbase = rb->wrap(b->range_base);
-            return are_gotypes_equal(abase, bbase);
-        }
-        break;
+    case GOTYPE_RANGE: {
+        auto abase = ra->wrap(a->range_base);
+        auto bbase = rb->wrap(b->range_base);
+        return are_gotypes_equal(abase, bbase);
+    }
 
     case GOTYPE_BUILTIN:
         return a->builtin_type == b->builtin_type;
@@ -3724,15 +3700,14 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 p
         };
 
         switch (node->type()) {
-        case TS_PACKAGE_CLAUSE:
-            {
-                auto name_node = node->child();
-                if (contains_pos(name_node)) {
-                    result.file = filepath;
-                    result.pos = name_node->start();
-                }
+        case TS_PACKAGE_CLAUSE: {
+            auto name_node = node->child();
+            if (contains_pos(name_node)) {
+                result.file = filepath;
+                result.pos = name_node->start();
             }
             return WALK_ABORT;
+        }
 
         case TS_IMPORT_SPEC:
             result.file = filepath;
@@ -3740,97 +3715,95 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 p
             return WALK_ABORT;
 
         case TS_QUALIFIED_TYPE:
-        case TS_SELECTOR_EXPRESSION:
-            {
-                auto sel_node = node->field(node->type() == TS_QUALIFIED_TYPE ? TSF_NAME : TSF_FIELD);
-                if (!contains_pos(sel_node)) return WALK_CONTINUE;
+        case TS_SELECTOR_EXPRESSION: {
+            auto sel_node = node->field(node->type() == TS_QUALIFIED_TYPE ? TSF_NAME : TSF_FIELD);
+            if (!contains_pos(sel_node)) return WALK_CONTINUE;
 
-                auto operand_node = node->field(node->type() == TS_QUALIFIED_TYPE ? TSF_PACKAGE : TSF_OPERAND);
+            auto operand_node = node->field(node->type() == TS_QUALIFIED_TYPE ? TSF_PACKAGE : TSF_OPERAND);
 
-                bool dontcare;
-                auto results = get_node_dotprops(operand_node, &dontcare, ctx);
-                if (results) {
-                    auto sel_name = sel_node->string();
-                    For (*results) {
-                        auto decl = it.decl;
+            bool dontcare;
+            auto results = get_node_dotprops(operand_node, &dontcare, ctx);
+            if (results) {
+                auto sel_name = sel_node->string();
+                For (*results) {
+                    auto decl = it.decl;
 
-                        if (streq(decl->name, sel_name)) {
-                            result.pos = decl->name_start;
-                            result.file = ctx_to_filepath(it.ctx);
-                            result.decl = it.copy_decl();
-                            return WALK_ABORT;
-                        }
+                    if (streq(decl->name, sel_name)) {
+                        result.pos = decl->name_start;
+                        result.file = ctx_to_filepath(it.ctx);
+                        result.decl = it.copy_decl();
+                        return WALK_ABORT;
                     }
                 }
             }
             return WALK_ABORT;
+        }
 
         case TS_PACKAGE_IDENTIFIER:
         case TS_TYPE_IDENTIFIER:
         case TS_IDENTIFIER:
-        case TS_FIELD_IDENTIFIER:
-            {
-                auto is_struct_field_in_literal = [&]() -> Ast_Node *{
-                    auto p = node->parent();
-                    if (p->null) return NULL;
-                    if (p->type() != TS_KEYED_ELEMENT) return NULL;
+        case TS_FIELD_IDENTIFIER: {
+            auto is_struct_field_in_literal = [&]() -> Ast_Node *{
+                auto p = node->parent();
+                if (p->null) return NULL;
+                if (p->type() != TS_KEYED_ELEMENT) return NULL;
 
-                    // field must be first child
-                    if (!node->prev()->null) return NULL;
+                // field must be first child
+                if (!node->prev()->null) return NULL;
 
-                    p = p->parent();
-                    if (p->null) return NULL;
-                    if (p->type() != TS_LITERAL_VALUE) return NULL;
+                p = p->parent();
+                if (p->null) return NULL;
+                if (p->type() != TS_LITERAL_VALUE) return NULL;
 
-                    p = p->parent();
-                    if (p->null) return NULL;
-                    if (p->type() != TS_COMPOSITE_LITERAL) return NULL;
+                p = p->parent();
+                if (p->null) return NULL;
+                if (p->type() != TS_COMPOSITE_LITERAL) return NULL;
 
-                    return p;
-                };
+                return p;
+            };
 
-                Goresult *declres = NULL;
+            Goresult *declres = NULL;
 
-                auto comp_literal = is_struct_field_in_literal();
-                if (comp_literal) {
-                    do {
-                        auto p = comp_literal->field(TSF_TYPE);
-                        if (p->null) break;
+            auto comp_literal = is_struct_field_in_literal();
+            if (comp_literal) {
+                do {
+                    auto p = comp_literal->field(TSF_TYPE);
+                    if (p->null) break;
 
-                        auto gotype = expr_to_gotype(p);
-                        if (!gotype) break;
+                    auto gotype = expr_to_gotype(p);
+                    if (!gotype) break;
 
-                        auto res = evaluate_type(gotype, ctx);
-                        if (!res) break;
+                    auto res = evaluate_type(gotype, ctx);
+                    if (!res) break;
 
-                        auto rres = resolve_type(res->gotype, res->ctx);
-                        if (!rres) break;
+                    auto rres = resolve_type(res->gotype, res->ctx);
+                    if (!rres) break;
 
-                        auto tmp = alloc_list<Goresult>();
-                        list_struct_fields(rres, tmp);
+                    auto tmp = alloc_list<Goresult>();
+                    list_struct_fields(rres, tmp);
 
-                        auto name = node->string();
-                        For (*tmp) {
-                            if (streq(it.decl->name, name)) {
-                                declres = &it;
-                                break;
-                            }
+                    auto name = node->string();
+                    For (*tmp) {
+                        if (streq(it.decl->name, name)) {
+                            declres = &it;
+                            break;
                         }
-                    } while (0);
-                } else {
-                    declres = find_decl_of_id(node->string(), node->start(), ctx);
-                }
+                    }
+                } while (0);
+            } else {
+                declres = find_decl_of_id(node->string(), node->start(), ctx);
+            }
 
-                if (declres) {
-                    result.file = ctx_to_filepath(declres->ctx);
-                    result.decl = declres->copy_decl();
-                    if (declres->decl->name)
-                        result.pos = declres->decl->name_start;
-                    else
-                        result.pos = declres->decl->spec_start;
-                }
+            if (declres) {
+                result.file = ctx_to_filepath(declres->ctx);
+                result.decl = declres->copy_decl();
+                if (declres->decl->name)
+                    result.pos = declres->decl->name_start;
+                else
+                    result.pos = declres->decl->spec_start;
             }
             return WALK_ABORT;
+        }
         }
 
         return WALK_CONTINUE;
@@ -4226,49 +4199,48 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
     find_nodes_containing_pos(pf->root, intelligently_move_cursor_backwards(), false, [&](auto node) -> Walk_Action {
         switch (node->type()) {
         case TS_QUALIFIED_TYPE:
-        case TS_SELECTOR_EXPRESSION:
-            {
-                auto operand_node = node->field(node->type() == TS_QUALIFIED_TYPE ? TSF_PACKAGE : TSF_OPERAND);
-                if (operand_node->null) return WALK_ABORT;
-                if (cmp_pos_to_node(pos, operand_node) == 0) return WALK_CONTINUE;
+        case TS_SELECTOR_EXPRESSION: {
+            auto operand_node = node->field(node->type() == TS_QUALIFIED_TYPE ? TSF_PACKAGE : TSF_OPERAND);
+            if (operand_node->null) return WALK_ABORT;
+            if (cmp_pos_to_node(pos, operand_node) == 0) return WALK_CONTINUE;
 
-                auto sel_node = node->field(node->type() == TS_QUALIFIED_TYPE ? TSF_NAME : TSF_FIELD);
+            auto sel_node = node->field(node->type() == TS_QUALIFIED_TYPE ? TSF_NAME : TSF_FIELD);
 
-                bool dot_found = false;
-                for (auto curr = node->child_all(); !curr->null; curr = curr->next_all()) {
-                    if (curr->type() == TS_ANON_DOT) {
-                        dot_found = true;
-                        break;
-                    }
-                }
-
-                if (!dot_found) return WALK_ABORT;
-
-                switch (cmp_pos_to_node(pos, sel_node)) {
-                case -1: // pos is before sel
-                    keyword_start = pos;
-                    prefix = "";
+            bool dot_found = false;
+            for (auto curr = node->child_all(); !curr->null; curr = curr->next_all()) {
+                if (curr->type() == TS_ANON_DOT) {
+                    dot_found = true;
                     break;
-                case 0: // pos is inside sel
-                    keyword_start = sel_node->start();
-                    prefix = cp_strdup(sel_node->string());
-                    ((cstr)prefix)[pos.x - sel_node->start().x] = '\0';
-                    break;
-                case 1: // pos is after sel
-                    // if it's directly to the right of sel, like foo.bar|,
-                    // then we treat cursor as being "in" sel
-                    if (pos == sel_node->end()) {
-                        keyword_start = sel_node->start();
-                        prefix = sel_node->string();
-                        break;
-                    }
-                    return WALK_ABORT;
                 }
-
-                expr_to_analyze = copy_node(operand_node);
-                situation = FOUND_DOT_COMPLETE;
             }
+
+            if (!dot_found) return WALK_ABORT;
+
+            switch (cmp_pos_to_node(pos, sel_node)) {
+            case -1: // pos is before sel
+                keyword_start = pos;
+                prefix = "";
+                break;
+            case 0: // pos is inside sel
+                keyword_start = sel_node->start();
+                prefix = cp_strdup(sel_node->string());
+                ((cstr)prefix)[pos.x - sel_node->start().x] = '\0';
+                break;
+            case 1: // pos is after sel
+                // if it's directly to the right of sel, like foo.bar|,
+                // then we treat cursor as being "in" sel
+                if (pos == sel_node->end()) {
+                    keyword_start = sel_node->start();
+                    prefix = sel_node->string();
+                    break;
+                }
+                return WALK_ABORT;
+            }
+
+            expr_to_analyze = copy_node(operand_node);
+            situation = FOUND_DOT_COMPLETE;
             return WALK_ABORT;
+        }
 
         case TS_PACKAGE_IDENTIFIER:
         case TS_TYPE_IDENTIFIER:
@@ -4303,28 +4275,27 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
             }
             return WALK_ABORT;
 
-        case TS_ANON_DOT:
-            {
-                auto prev = node->prev();
-                if (!prev->null) {
-                    expr_to_analyze = copy_node(prev);
-                    situation = FOUND_DOT_COMPLETE;
-                    keyword_start = pos;
-                    prefix = "";
-                } else {
-                    auto parent = node->parent();
-                    if (!parent->null && parent->type() == TS_ERROR) {
-                        auto expr = parent->prev();
-                        if (!expr->null) {
-                            expr_to_analyze = copy_node(expr);
-                            situation = FOUND_DOT_COMPLETE_NEED_CRAWL;
-                            keyword_start = pos;
-                            prefix = "";
-                        }
+        case TS_ANON_DOT: {
+            auto prev = node->prev();
+            if (!prev->null) {
+                expr_to_analyze = copy_node(prev);
+                situation = FOUND_DOT_COMPLETE;
+                keyword_start = pos;
+                prefix = "";
+            } else {
+                auto parent = node->parent();
+                if (!parent->null && parent->type() == TS_ERROR) {
+                    auto expr = parent->prev();
+                    if (!expr->null) {
+                        expr_to_analyze = copy_node(expr);
+                        situation = FOUND_DOT_COMPLETE_NEED_CRAWL;
+                        keyword_start = pos;
+                        prefix = "";
                     }
                 }
             }
             return WALK_ABORT;
+        }
 
         case TS_INT_LITERAL:
         case TS_FLOAT_LITERAL:
@@ -4433,271 +4404,270 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
         keyword_start = pos;
         prefix = "";
         // fallthrough
-    case FOUND_LONE_IDENTIFIER:
-        {
-            String_Set seen_strings;
-            seen_strings.init();
-            ac_results = alloc_list<AC_Result>();
+    case FOUND_LONE_IDENTIFIER: {
+        String_Set seen_strings;
+        seen_strings.init();
+        ac_results = alloc_list<AC_Result>();
 
-            auto add_declaration_result = [&](ccstr name) -> AC_Result* {
-                if (!name) return NULL;
-                if (seen_strings.has(name)) return NULL;
+        auto add_declaration_result = [&](ccstr name) -> AC_Result* {
+            if (!name) return NULL;
+            if (seen_strings.has(name)) return NULL;
+
+            auto res = ac_results->append();
+            res->name = name;
+            res->type = ACR_DECLARATION;
+
+            seen_strings.add(name);
+
+            return res;
+        };
+
+        String_Set existing_imports; existing_imports.init();
+
+        auto gofile = find_gofile_from_ctx(ctx);
+        if (gofile) {
+            SCOPED_FRAME_WITH_MEM(&scoped_table_mem);
+            Scoped_Table<Godecl*> table;
+            {
+                SCOPED_MEM(&scoped_table_mem);
+                table.init();
+            }
+            defer { table.cleanup(); };
+
+            For (*gofile->scope_ops) {
+                if (it.pos > pos) break;
+
+                switch (it.type) {
+                case GSOP_OPEN_SCOPE:
+                    table.push_scope();
+                    break;
+                case GSOP_CLOSE_SCOPE:
+                    table.pop_scope();
+                    break;
+                case GSOP_DECL:
+                    table.set(it.decl->name, it.decl->copy());
+                    break;
+                }
+            }
+
+            t.log("iterate over scope ops");
+
+            auto entries = table.entries();
+            For (*entries) {
+                auto r = add_declaration_result(it->name);
+                if (r) {
+                    r->declaration_godecl = it->value;
+                    r->declaration_import_path = ctx->import_path;
+                    r->declaration_filename = ctx->filename;
+
+                    auto res = evaluate_type(it->value->gotype, ctx);
+                    if (res)
+                        r->declaration_evaluated_gotype = res->gotype;
+                }
+            }
+
+            t.log("iterate over table entries");
+
+            For (*gofile->imports) {
+                auto package_name = get_import_package_name(&it);
+                if (!package_name) continue;
 
                 auto res = ac_results->append();
-                res->name = name;
-                res->type = ACR_DECLARATION;
+                res->name = package_name;
+                res->type = ACR_IMPORT;
+                res->import_path = it.import_path;
+                res->import_is_existing = true;
 
-                seen_strings.add(name);
+                existing_imports.add(it.import_path);
+            }
 
-                return res;
-            };
+            t.log("add imports");
 
-            String_Set existing_imports; existing_imports.init();
+            Parser_It it = *pf->it;
+            it.set_pos(keyword_start);
 
-            auto gofile = find_gofile_from_ctx(ctx);
-            if (gofile) {
-                SCOPED_FRAME_WITH_MEM(&scoped_table_mem);
-                Scoped_Table<Godecl*> table;
-                {
-                    SCOPED_MEM(&scoped_table_mem);
-                    table.init();
+            bool has_three_letters = true;
+            char first_three_letters[3];
+
+            for (int i = 0; i < 3; i++) {
+                if (it.get_pos() == pos) {
+                    has_three_letters = false;
+                    break;
                 }
-                defer { table.cleanup(); };
+                first_three_letters[i] = it.next();
+            }
 
-                For (*gofile->scope_ops) {
-                    if (it.pos > pos) break;
-
-                    switch (it.type) {
-                    case GSOP_OPEN_SCOPE:
-                        table.push_scope();
-                        break;
-                    case GSOP_CLOSE_SCOPE:
-                        table.pop_scope();
-                        break;
-                    case GSOP_DECL:
-                        table.set(it.decl->name, it.decl->copy());
-                        break;
-                    }
-                }
-
-                t.log("iterate over scope ops");
-
-                auto entries = table.entries();
-                For (*entries) {
-                    auto r = add_declaration_result(it->name);
-                    if (r) {
-                        r->declaration_godecl = it->value;
-                        r->declaration_import_path = ctx->import_path;
-                        r->declaration_filename = ctx->filename;
-
-                        auto res = evaluate_type(it->value->gotype, ctx);
-                        if (res)
-                            r->declaration_evaluated_gotype = res->gotype;
-                    }
-                }
-
-                t.log("iterate over table entries");
-
+            if (has_three_letters) {
                 For (*gofile->imports) {
-                    auto package_name = get_import_package_name(&it);
-                    if (!package_name) continue;
+                    auto pkgname = get_import_package_name(&it);
+                    if (!pkgname) continue;
 
-                    auto res = ac_results->append();
-                    res->name = package_name;
-                    res->type = ACR_IMPORT;
-                    res->import_path = it.import_path;
-                    res->import_is_existing = true;
+                    auto import_path = it.import_path;
+                    if (!import_path) continue;
 
-                    existing_imports.add(it.import_path);
-                }
+                    auto fuzzy_matches_first_three_letters = [&]() -> bool {
+                        int i = 0;
+                        for (int j = 0, len = strlen(import_path); j < len; j++)
+                            if (import_path[j] == first_three_letters[i])
+                                if (++i == 3)
+                                    return true;
+                        return false;
+                    };
 
-                t.log("add imports");
+                    if (!fuzzy_matches_first_three_letters()) continue;
 
-                Parser_It it = *pf->it;
-                it.set_pos(keyword_start);
+                    auto results = list_package_decls(it.import_path, LISTDECLS_EXCLUDE_METHODS);
+                    if (results) {
+                        int count = 0;
+                        For (*results) {
+                            if (!it.decl->name) continue;
+                            if (is_name_private(it.decl->name)) continue;
 
-                bool has_three_letters = true;
-                char first_three_letters[3];
+                            if (count++ > 500) break;
 
-                for (int i = 0; i < 3; i++) {
-                    if (it.get_pos() == pos) {
-                        has_three_letters = false;
-                        break;
-                    }
-                    first_three_letters[i] = it.next();
-                }
+                            auto result = add_declaration_result(cp_sprintf("%s.%s", pkgname, it.decl->name));
+                            if (result) {
+                                result->declaration_godecl = it.decl;
+                                result->declaration_import_path = it.ctx->import_path;
+                                result->declaration_filename = it.ctx->filename;
 
-                if (has_three_letters) {
-                    For (*gofile->imports) {
-                        auto pkgname = get_import_package_name(&it);
-                        if (!pkgname) continue;
+                                // wait, is this guaranteed to just always be declaration_import_path
+                                result->declaration_package = import_path;
 
-                        auto import_path = it.import_path;
-                        if (!import_path) continue;
-
-                        auto fuzzy_matches_first_three_letters = [&]() -> bool {
-                            int i = 0;
-                            for (int j = 0, len = strlen(import_path); j < len; j++)
-                                if (import_path[j] == first_three_letters[i])
-                                    if (++i == 3)
-                                        return true;
-                            return false;
-                        };
-
-                        if (!fuzzy_matches_first_three_letters()) continue;
-
-                        auto results = list_package_decls(it.import_path, LISTDECLS_EXCLUDE_METHODS);
-                        if (results) {
-                            int count = 0;
-                            For (*results) {
-                                if (!it.decl->name) continue;
-                                if (is_name_private(it.decl->name)) continue;
-
-                                if (count++ > 500) break;
-
-                                auto result = add_declaration_result(cp_sprintf("%s.%s", pkgname, it.decl->name));
-                                if (result) {
-                                    result->declaration_godecl = it.decl;
-                                    result->declaration_import_path = it.ctx->import_path;
-                                    result->declaration_filename = it.ctx->filename;
-
-                                    // wait, is this guaranteed to just always be declaration_import_path
-                                    result->declaration_package = import_path;
-
-                                    auto res = evaluate_type(it.decl->gotype, it.ctx);
-                                    if (res)
-                                        result->declaration_evaluated_gotype = res->gotype;
-                                }
+                                auto res = evaluate_type(it.decl->gotype, it.ctx);
+                                if (res)
+                                    result->declaration_evaluated_gotype = res->gotype;
                             }
                         }
                     }
                 }
             }
+        }
 
-            // workspace or are immediate deps?
-            For (*index.packages) {
-                if (!it.import_path) continue;
-                if (existing_imports.has(it.import_path)) continue;
-                if (it.status != GPS_READY) continue;
-                if (!it.package_name) continue;
-                if (streq(it.import_path, ctx->import_path)) continue;
+        // workspace or are immediate deps?
+        For (*index.packages) {
+            if (!it.import_path) continue;
+            if (existing_imports.has(it.import_path)) continue;
+            if (it.status != GPS_READY) continue;
+            if (!it.package_name) continue;
+            if (streq(it.import_path, ctx->import_path)) continue;
 
-                // gofile->imports
-                // TODO: check if import already exists in file
+            // gofile->imports
+            // TODO: check if import already exists in file
 
-                if (!path_has_descendant(index.current_import_path, it.import_path))
-                    if (is_import_path_internal(it.import_path))
+            if (!path_has_descendant(index.current_import_path, it.import_path))
+                if (is_import_path_internal(it.import_path))
+                    continue;
+
+            auto res = ac_results->append();
+            res->name = it.package_name;
+            res->type = ACR_IMPORT;
+            res->import_path = it.import_path;
+        }
+
+        t.log("iterate over packages");
+
+
+        t.log("crazy shit");
+
+        do {
+            if (!lone_identifier_struct_literal) break;
+
+            auto gotype = node_to_gotype(lone_identifier_struct_literal);
+            if (!gotype) break;
+
+            auto res = evaluate_type(gotype, ctx);
+            if (!res) break;
+
+            auto rres = resolve_type(res->gotype, res->ctx);
+            if (!rres) break;
+
+            auto tmp = alloc_list<Goresult>();
+            list_struct_fields(rres, tmp);
+
+            For (*tmp) {
+                if (!streq(it.ctx->import_path, ctx->import_path))
+                    if (!isupper(it.decl->name[0]))
                         continue;
 
+                if (it.decl->type != GODECL_FIELD) continue;
+                if (it.decl->is_embedded) continue;
+
                 auto res = ac_results->append();
-                res->name = it.package_name;
-                res->type = ACR_IMPORT;
-                res->import_path = it.import_path;
+                res->type = ACR_DECLARATION;
+                res->name = it.decl->name;
+
+                res->declaration_godecl = it.decl;
+                res->declaration_import_path = it.ctx->import_path;
+                res->declaration_filename = it.ctx->filename;
+                res->declaration_is_builtin = false;
+                res->declaration_is_struct_literal_field = true;
+
+                // struct field gotypes are already evaluated, i believe
+                res->declaration_evaluated_gotype = it.decl->gotype;
             }
+        } while (0);
 
-            t.log("iterate over packages");
+        t.log("more crazy shit part 2");
 
+        auto results = list_package_decls(ctx->import_path, LISTDECLS_EXCLUDE_METHODS);
+        if (results) {
+            For (*results) {
+                auto result = add_declaration_result(it.decl->name);
+                if (result) {
+                    result->declaration_godecl = it.decl;
+                    result->declaration_import_path = it.ctx->import_path;
+                    result->declaration_filename = it.ctx->filename;
 
-            t.log("crazy shit");
-
-            do {
-                if (!lone_identifier_struct_literal) break;
-
-                auto gotype = node_to_gotype(lone_identifier_struct_literal);
-                if (!gotype) break;
-
-                auto res = evaluate_type(gotype, ctx);
-                if (!res) break;
-
-                auto rres = resolve_type(res->gotype, res->ctx);
-                if (!rres) break;
-
-                auto tmp = alloc_list<Goresult>();
-                list_struct_fields(rres, tmp);
-
-                For (*tmp) {
-                    if (!streq(it.ctx->import_path, ctx->import_path))
-                        if (!isupper(it.decl->name[0]))
-                            continue;
-
-                    if (it.decl->type != GODECL_FIELD) continue;
-                    if (it.decl->is_embedded) continue;
-
-                    auto res = ac_results->append();
-                    res->type = ACR_DECLARATION;
-                    res->name = it.decl->name;
-
-                    res->declaration_godecl = it.decl;
-                    res->declaration_import_path = it.ctx->import_path;
-                    res->declaration_filename = it.ctx->filename;
-                    res->declaration_is_builtin = false;
-                    res->declaration_is_struct_literal_field = true;
-
-                    // struct field gotypes are already evaluated, i believe
-                    res->declaration_evaluated_gotype = it.decl->gotype;
+                    auto res = evaluate_type(it.decl->gotype, it.ctx);
+                    if (res)
+                        result->declaration_evaluated_gotype = res->gotype;
                 }
-            } while (0);
+            }
+        }
 
-            t.log("more crazy shit part 2");
+        t.log("list package decls");
 
-            auto results = list_package_decls(ctx->import_path, LISTDECLS_EXCLUDE_METHODS);
+        ccstr keywords[] = {
+            "package", "import", "const", "var", "func",
+            "type", "struct", "interface", "map", "chan",
+            "fallthrough", "break", "continue", "goto", "return",
+            "go", "defer", "if", "else",
+            "for", "range", "switch", "case",
+            "default", "select", "new", "make", "iota",
+        };
+
+        For (keywords) {
+            auto res = ac_results->append();
+            res->name = it;
+            res->type = ACR_KEYWORD;
+        }
+
+        // add builtins
+        {
+            auto results = list_package_decls("@builtin", LISTDECLS_EXCLUDE_METHODS);
             if (results) {
                 For (*results) {
-                    auto result = add_declaration_result(it.decl->name);
-                    if (result) {
-                        result->declaration_godecl = it.decl;
-                        result->declaration_import_path = it.ctx->import_path;
-                        result->declaration_filename = it.ctx->filename;
+                    auto res = add_declaration_result(it.decl->name); // i think this is enough?
+                    if (res) {
+                        res->declaration_godecl = it.decl;
+                        res->declaration_import_path = it.ctx->import_path;
+                        res->declaration_filename = it.ctx->filename;
 
-                        auto res = evaluate_type(it.decl->gotype, it.ctx);
-                        if (res)
-                            result->declaration_evaluated_gotype = res->gotype;
+                        auto gores = evaluate_type(it.decl->gotype, it.ctx);
+                        if (gores)
+                            res->declaration_evaluated_gotype = gores->gotype;
                     }
                 }
             }
-
-            t.log("list package decls");
-
-            ccstr keywords[] = {
-                "package", "import", "const", "var", "func",
-                "type", "struct", "interface", "map", "chan",
-                "fallthrough", "break", "continue", "goto", "return",
-                "go", "defer", "if", "else",
-                "for", "range", "switch", "case",
-                "default", "select", "new", "make", "iota",
-            };
-
-            For (keywords) {
-                auto res = ac_results->append();
-                res->name = it;
-                res->type = ACR_KEYWORD;
-            }
-
-            // add builtins
-            {
-                auto results = list_package_decls("@builtin", LISTDECLS_EXCLUDE_METHODS);
-                if (results) {
-                    For (*results) {
-                        auto res = add_declaration_result(it.decl->name); // i think this is enough?
-                        if (res) {
-                            res->declaration_godecl = it.decl;
-                            res->declaration_import_path = it.ctx->import_path;
-                            res->declaration_filename = it.ctx->filename;
-
-                            auto gores = evaluate_type(it.decl->gotype, it.ctx);
-                            if (gores)
-                                res->declaration_evaluated_gotype = gores->gotype;
-                        }
-                    }
-                }
-            }
-
-            t.log("add keywords & builtins");
-
-            if (!ac_results->len) return false;
-            out->type = AUTOCOMPLETE_IDENTIFIER;
         }
+
+        t.log("add keywords & builtins");
+
+        if (!ac_results->len) return false;
+        out->type = AUTOCOMPLETE_IDENTIFIER;
         break;
+    }
     }
 
     t.log("done generating results");
@@ -4746,28 +4716,27 @@ bool Go_Indexer::check_if_still_in_parameter_hint(ccstr filepath, cur2 cur, cur2
     find_nodes_containing_pos(pf->root, bytecur, true, [&](auto it) -> Walk_Action {
         switch (it->type()) {
         case TS_RAW_STRING_LITERAL:
-        case TS_INTERPRETED_STRING_LITERAL:
-            {
-                auto get_char_at_pos = [&](cur2 p) -> uchar {
-                    auto old = pf->it->get_pos();
-                    defer { pf->it->set_pos(old); };
+        case TS_INTERPRETED_STRING_LITERAL: {
+            auto get_char_at_pos = [&](cur2 p) -> uchar {
+                auto old = pf->it->get_pos();
+                defer { pf->it->set_pos(old); };
 
-                    pf->it->set_pos(p);
-                    return pf->it->peek();
-                };
+                pf->it->set_pos(p);
+                return pf->it->peek();
+            };
 
-                auto start_pos = it->start();
-                auto start_ch = get_char_at_pos(start_pos);
-                if (start_ch == '"' || start_ch == '`') {
-                    auto end_pos = it->end();
-                    auto last_pos = new_cur2((i32)relu_sub(end_pos.x, 1), (i32)end_pos.y);
+            auto start_pos = it->start();
+            auto start_ch = get_char_at_pos(start_pos);
+            if (start_ch == '"' || start_ch == '`') {
+                auto end_pos = it->end();
+                auto last_pos = new_cur2((i32)relu_sub(end_pos.x, 1), (i32)end_pos.y);
 
-                    auto last_ch = get_char_at_pos(last_pos);
-                    if (!(bytecur == end_pos && last_ch == start_ch && last_pos != start_pos))
-                        string_close_char = start_ch;
-                }
+                auto last_ch = get_char_at_pos(last_pos);
+                if (!(bytecur == end_pos && last_ch == start_ch && last_pos != start_pos))
+                    string_close_char = start_ch;
             }
             return WALK_ABORT;
+        }
         }
         return WALK_CONTINUE;
     }, true);
@@ -4840,77 +4809,75 @@ Parameter_Hint *Go_Indexer::parameter_hint(ccstr filepath, cur2 pos) {
     find_nodes_containing_pos(pf->root, start_pos, false, [&](auto node) -> Walk_Action {
         switch (node->type()) {
         case TS_TYPE_CONVERSION_EXPRESSION:
-        case TS_CALL_EXPRESSION:
-            {
-                if (cmp_pos_to_node(pos, node) != 0) return WALK_ABORT;
+        case TS_CALL_EXPRESSION: {
+            if (cmp_pos_to_node(pos, node) != 0) return WALK_ABORT;
 
-                Ast_Node *func = NULL, *args = NULL;
+            Ast_Node *func = NULL, *args = NULL;
 
-                if (node->type() == TS_TYPE_CONVERSION_EXPRESSION) {
-                    func = node->field(TSF_TYPE);
-                    args = node->field(TSF_OPERAND);
-                } else {
-                    func = node->field(TSF_FUNCTION);
-                    args = node->field(TSF_ARGUMENTS);
-                }
-
-                if (cmp_pos_to_node(pos, args) < 0) break;
-                if (func->null || args->null) break;
-
-                func_expr = func;
-
-                if (node->type() == TS_TYPE_CONVERSION_EXPRESSION) {
-                    bool found = false;
-                    FOR_ALL_NODE_CHILDREN (node) {
-                        if (it->type() == TS_LPAREN) {
-                            call_args_start = it->start();
-                            found = true;
-                            break;
-                        }
-                    }
-                    if (!found) break;
-
-                    if (cmp_pos_to_node(pos, args, true) == 0)
-                        current_param = 0;
-                } else {
-                    call_args_start = args->start();
-
-                    int i = 0;
-                    FOR_NODE_CHILDREN (args) {
-                        if (cmp_pos_to_node(pos, it, true) == 0) {
-                            current_param = i;
-                            break;
-                        }
-                        i++;
-                    }
-                }
-
-                // don't abort, if there's a deeper func_expr we want to use that one
+            if (node->type() == TS_TYPE_CONVERSION_EXPRESSION) {
+                func = node->field(TSF_TYPE);
+                args = node->field(TSF_OPERAND);
+            } else {
+                func = node->field(TSF_FUNCTION);
+                args = node->field(TSF_ARGUMENTS);
             }
-            break;
-        case TS_LPAREN:
-            {
-                auto prev = node->prev_all();
-                if (!prev->null) {
-                    func_expr = prev;
-                    if (func_expr->type() == TS_ERROR) {
-                        func_expr = func_expr->child();
-                        for (Ast_Node *next; (next = func_expr->next());)
-                            func_expr = next;
+
+            if (cmp_pos_to_node(pos, args) < 0) break;
+            if (func->null || args->null) break;
+
+            func_expr = func;
+
+            if (node->type() == TS_TYPE_CONVERSION_EXPRESSION) {
+                bool found = false;
+                FOR_ALL_NODE_CHILDREN (node) {
+                    if (it->type() == TS_LPAREN) {
+                        call_args_start = it->start();
+                        found = true;
+                        break;
                     }
-                    call_args_start = node->start();
-                } else {
-                    auto parent = node->parent();
-                    if (!parent->null && parent->type() == TS_ERROR) {
-                        auto parent_prev = parent->prev_all();
-                        if (!parent_prev->null) {
-                            func_expr = parent_prev;
-                            call_args_start = node->start();
-                        }
+                }
+                if (!found) break;
+
+                if (cmp_pos_to_node(pos, args, true) == 0)
+                    current_param = 0;
+            } else {
+                call_args_start = args->start();
+
+                int i = 0;
+                FOR_NODE_CHILDREN (args) {
+                    if (cmp_pos_to_node(pos, it, true) == 0) {
+                        current_param = i;
+                        break;
+                    }
+                    i++;
+                }
+            }
+
+            // don't abort, if there's a deeper func_expr we want to use that one
+            break;
+        }
+        case TS_LPAREN: {
+            auto prev = node->prev_all();
+            if (!prev->null) {
+                func_expr = prev;
+                if (func_expr->type() == TS_ERROR) {
+                    func_expr = func_expr->child();
+                    for (Ast_Node *next; (next = func_expr->next());)
+                        func_expr = next;
+                }
+                call_args_start = node->start();
+            } else {
+                auto parent = node->parent();
+                if (!parent->null && parent->type() == TS_ERROR) {
+                    auto parent_prev = parent->prev_all();
+                    if (!parent_prev->null) {
+                        func_expr = parent_prev;
+                        call_args_start = node->start();
                     }
                 }
             }
             return WALK_ABORT;
+        }
         }
         return WALK_CONTINUE;
     });
@@ -5049,34 +5016,31 @@ void Go_Indexer::list_dotprops(Goresult *type_res, Goresult *resolved_type_res, 
 void Go_Indexer::actually_list_dotprops(Goresult *type_res, Goresult *resolved_type_res, List<Goresult> *ret) {
     auto resolved_type = resolved_type_res->gotype;
     switch (resolved_type->type) {
-    case GOTYPE_POINTER:
-        {
-            auto new_resolved_type_res = resolved_type_res->wrap(resolved_type->pointer_base);
-            actually_list_dotprops(type_res, new_resolved_type_res, ret);
-            return;
-        }
-        break;
+    case GOTYPE_POINTER: {
+        auto new_resolved_type_res = resolved_type_res->wrap(resolved_type->pointer_base);
+        actually_list_dotprops(type_res, new_resolved_type_res, ret);
+        return;
+    }
 
     case GOTYPE_STRUCT:
-    case GOTYPE_INTERFACE:
-        {
-            // technically point the the same place in memeory, but want to be semantically correct
-            auto specs = resolved_type->type == GOTYPE_STRUCT ? resolved_type->struct_specs : resolved_type->interface_specs;
-            For (*specs) {
-                // recursively list methods for embedded fields
-                if (it.field->is_embedded) {
-                    auto embedded_type = it.field->gotype;
-                    auto res = resolve_type(embedded_type, resolved_type_res->ctx);
-                    if (!res) continue;
-                    if (res->gotype->type != resolved_type->type) continue; // this is technically an error, should we surface it here?
+    case GOTYPE_INTERFACE: {
+        // technically point the the same place in memeory, but want to be semantically correct
+        auto specs = resolved_type->type == GOTYPE_STRUCT ? resolved_type->struct_specs : resolved_type->interface_specs;
+        For (*specs) {
+            // recursively list methods for embedded fields
+            if (it.field->is_embedded) {
+                auto embedded_type = it.field->gotype;
+                auto res = resolve_type(embedded_type, resolved_type_res->ctx);
+                if (!res) continue;
+                if (res->gotype->type != resolved_type->type) continue; // this is technically an error, should we surface it here?
 
-                    actually_list_dotprops(resolved_type_res->wrap(embedded_type), res, ret);
-                }
-
-                ret->append(resolved_type_res->wrap(it.field));
+                actually_list_dotprops(resolved_type_res->wrap(embedded_type), res, ret);
             }
+
+            ret->append(resolved_type_res->wrap(it.field));
         }
         break;
+    }
     }
 
     type_res = unpointer_type(type_res->gotype, type_res->ctx);
@@ -5234,7 +5198,7 @@ ccstr indexer_status_str(Indexer_Status status) {
 }
 
 bool Go_Indexer::acquire_lock(Indexer_Status new_status, bool just_try) {
-    print("[acquire] %s", indexer_status_str(new_status));
+    go_print("[acquire] %s", indexer_status_str(new_status));
 
     if (status == new_status) {
         // read lock can only be acquired once
@@ -5258,7 +5222,7 @@ bool Go_Indexer::acquire_lock(Indexer_Status new_status, bool just_try) {
 }
 
 bool Go_Indexer::release_lock(Indexer_Status expected_status) {
-    print("[release] %s", indexer_status_str(expected_status));
+    go_print("[release] %s", indexer_status_str(expected_status));
 
     if (status != expected_status) {
         auto msg = "Go_Indexer::release_lock() called with status mismatch (want %d, got %d)";
@@ -5400,18 +5364,17 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
     switch (node->type()) {
     // case TS_SIMPLE_TYPE:
 
-    case TS_QUALIFIED_TYPE:
-        {
-            auto pkg_node = node->field(TSF_PACKAGE);
-            if (pkg_node->null) break;
-            auto name_node = node->field(TSF_NAME);
-            if (name_node->null) break;
+    case TS_QUALIFIED_TYPE: {
+        auto pkg_node = node->field(TSF_PACKAGE);
+        if (pkg_node->null) break;
+        auto name_node = node->field(TSF_NAME);
+        if (name_node->null) break;
 
-            ret = new_gotype(GOTYPE_SEL);
-            ret->sel_name = pkg_node->string();
-            ret->sel_sel = name_node->string();
-        }
+        ret = new_gotype(GOTYPE_SEL);
+        ret->sel_name = pkg_node->string();
+        ret->sel_sel = name_node->string();
         break;
+    }
 
     case TS_TYPE_IDENTIFIER:
         ret = new_gotype(GOTYPE_ID);
@@ -5449,160 +5412,158 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
         ret->map_value = node_to_gotype(node->field(TSF_VALUE));
         break;
 
-    case TS_STRUCT_TYPE:
-        {
-            auto fieldlist_node = node->child();
-            if (fieldlist_node->null) break;
-            ret = new_gotype(GOTYPE_STRUCT);
+    case TS_STRUCT_TYPE: {
+        auto fieldlist_node = node->child();
+        if (fieldlist_node->null) break;
+        ret = new_gotype(GOTYPE_STRUCT);
 
-            s32 num_children = 0;
+        s32 num_children = 0;
 
-            FOR_NODE_CHILDREN (fieldlist_node) {
-                auto field_node = it;
-                auto type_node = field_node->field(TSF_TYPE);
+        FOR_NODE_CHILDREN (fieldlist_node) {
+            auto field_node = it;
+            auto type_node = field_node->field(TSF_TYPE);
 
-                u32 total = 0;
-                FOR_NODE_CHILDREN (field_node) {
-                    if (it->eq(type_node)) break;
-                    total++;
-                }
-                if (!total) total++;
+            u32 total = 0;
+            FOR_NODE_CHILDREN (field_node) {
+                if (it->eq(type_node)) break;
+                total++;
+            }
+            if (!total) total++;
 
-                num_children += total;
+            num_children += total;
+        }
+
+        ret->struct_specs = alloc_list<Go_Struct_Spec>(num_children);
+
+        FOR_NODE_CHILDREN (fieldlist_node) {
+            auto field_node = it;
+
+            auto tag_node = field_node->field(TSF_TAG);
+            auto type_node = field_node->field(TSF_TYPE);
+            if (type_node->null) continue;
+
+            auto field_type = node_to_gotype(type_node);
+            if (!field_type) continue;
+
+            bool names_found = false;
+            FOR_NODE_CHILDREN (field_node) {
+                names_found = !it->eq(type_node);
+                break;
             }
 
-            ret->struct_specs = alloc_list<Go_Struct_Spec>(num_children);
-
-            FOR_NODE_CHILDREN (fieldlist_node) {
-                auto field_node = it;
-
-                auto tag_node = field_node->field(TSF_TAG);
-                auto type_node = field_node->field(TSF_TYPE);
-                if (type_node->null) continue;
-
-                auto field_type = node_to_gotype(type_node);
-                if (!field_type) continue;
-
-                bool names_found = false;
+            if (names_found) {
                 FOR_NODE_CHILDREN (field_node) {
-                    names_found = !it->eq(type_node);
-                    break;
-                }
-
-                if (names_found) {
-                    FOR_NODE_CHILDREN (field_node) {
-                        if (it->eq(type_node)) break;
-
-                        auto field = alloc_object(Godecl);
-                        field->type = GODECL_FIELD;
-                        field->is_toplevel = toplevel;
-                        field->gotype = field_type;
-                        field->name = it->string();
-                        field->name_start = it->start();
-                        field->name_end = it->end();
-                        field->spec_start = field_node->start();
-                        field->decl_start = field_node->start();
-                        field->decl_end = field_node->end();
-
-                        auto spec = ret->struct_specs->append();
-                        spec->field = field;
-                        if (!tag_node->null)
-                            spec->tag = tag_node->string();
-                    }
-                } else {
-                    auto unptr_type = unpointer_type(field_type, NULL)->gotype;
-                    ccstr field_name = NULL;
-
-                    switch (unptr_type->type) {
-                    case GOTYPE_SEL:
-                        field_name = unptr_type->sel_sel;
-                        break;
-                    case GOTYPE_ID:
-                        field_name = unptr_type->id_name;
-                        break;
-                    }
-
-                    if (!field_name) continue;
+                    if (it->eq(type_node)) break;
 
                     auto field = alloc_object(Godecl);
                     field->type = GODECL_FIELD;
                     field->is_toplevel = toplevel;
-                    field->is_embedded = true;
                     field->gotype = field_type;
-                    field->spec_start = type_node->start();
-                    field->decl_start = type_node->start();
-                    field->decl_end = type_node->end();
-                    field->name = field_name;
+                    field->name = it->string();
+                    field->name_start = it->start();
+                    field->name_end = it->end();
+                    field->spec_start = field_node->start();
+                    field->decl_start = field_node->start();
+                    field->decl_end = field_node->end();
 
                     auto spec = ret->struct_specs->append();
                     spec->field = field;
                     if (!tag_node->null)
                         spec->tag = tag_node->string();
                 }
+            } else {
+                auto unptr_type = unpointer_type(field_type, NULL)->gotype;
+                ccstr field_name = NULL;
+
+                switch (unptr_type->type) {
+                case GOTYPE_SEL:
+                    field_name = unptr_type->sel_sel;
+                    break;
+                case GOTYPE_ID:
+                    field_name = unptr_type->id_name;
+                    break;
+                }
+
+                if (!field_name) continue;
+
+                auto field = alloc_object(Godecl);
+                field->type = GODECL_FIELD;
+                field->is_toplevel = toplevel;
+                field->is_embedded = true;
+                field->gotype = field_type;
+                field->spec_start = type_node->start();
+                field->decl_start = type_node->start();
+                field->decl_end = type_node->end();
+                field->name = field_name;
+
+                auto spec = ret->struct_specs->append();
+                spec->field = field;
+                if (!tag_node->null)
+                    spec->tag = tag_node->string();
             }
         }
         break;
+    }
 
     case TS_CHANNEL_TYPE:
         ret = new_gotype(GOTYPE_CHAN);
         ret->chan_base = node_to_gotype(node->field(TSF_VALUE));
         break;
 
-    case TS_INTERFACE_TYPE:
-        {
-            ret = alloc_object(Gotype);
-            ret->type = GOTYPE_INTERFACE;
-            ret->interface_specs = alloc_list<Go_Struct_Spec>(node->child_count());
+    case TS_INTERFACE_TYPE: {
+        ret = alloc_object(Gotype);
+        ret->type = GOTYPE_INTERFACE;
+        ret->interface_specs = alloc_list<Go_Struct_Spec>(node->child_count());
 
-            FOR_NODE_CHILDREN (node) {
-                Godecl *field = NULL;
+        FOR_NODE_CHILDREN (node) {
+            Godecl *field = NULL;
 
-                switch (it->type()) {
-                case TS_METHOD_SPEC: {
-                    auto name_node = it->field(TSF_NAME);
+            switch (it->type()) {
+            case TS_METHOD_SPEC: {
+                auto name_node = it->field(TSF_NAME);
 
-                    field = alloc_object(Godecl);
-                    field->type = GODECL_FIELD;
-                    field->is_toplevel = toplevel;
-                    field->name = name_node->string();
-                    field->gotype = new_gotype(GOTYPE_FUNC);
-                    field->decl_start = it->start();
-                    field->decl_end =  it->end();
-                    field->spec_start = it->start();
-                    field->name_start = name_node->start();
-                    field->name_end = name_node->end();
+                field = alloc_object(Godecl);
+                field->type = GODECL_FIELD;
+                field->is_toplevel = toplevel;
+                field->name = name_node->string();
+                field->gotype = new_gotype(GOTYPE_FUNC);
+                field->decl_start = it->start();
+                field->decl_end =  it->end();
+                field->spec_start = it->start();
+                field->name_start = name_node->start();
+                field->name_end = name_node->end();
 
-                    node_func_to_gotype_sig(
-                        it->field(TSF_PARAMETERS),
-                        it->field(TSF_RESULT),
-                        &field->gotype->func_sig
-                    );
-                    break;
-                }
-                case TS_INTERFACE_TYPE_NAME: {
-                    auto gotype = node_to_gotype(it->child());
-                    if (!gotype) break;
+                node_func_to_gotype_sig(
+                    it->field(TSF_PARAMETERS),
+                    it->field(TSF_RESULT),
+                    &field->gotype->func_sig
+                );
+                break;
+            }
+            case TS_INTERFACE_TYPE_NAME: {
+                auto gotype = node_to_gotype(it->child());
+                if (!gotype) break;
 
-                    field = alloc_object(Godecl);
-                    field->type = GODECL_FIELD;
-                    field->is_toplevel = toplevel;
-                    field->name = NULL;
-                    field->is_embedded = true;
-                    field->gotype = gotype;
-                    field->spec_start = it->start();
-                    field->decl_start = it->start();
-                    field->decl_end = it->end();
-                    break;
-                }
-                }
+                field = alloc_object(Godecl);
+                field->type = GODECL_FIELD;
+                field->is_toplevel = toplevel;
+                field->name = NULL;
+                field->is_embedded = true;
+                field->gotype = gotype;
+                field->spec_start = it->start();
+                field->decl_start = it->start();
+                field->decl_end = it->end();
+                break;
+            }
+            }
 
-                if (field) {
-                    auto spec = ret->interface_specs->append();
-                    spec->field = field;
-                }
+            if (field) {
+                auto spec = ret->interface_specs->append();
+                spec->field = field;
             }
         }
         break;
+    }
 
     case TS_FUNCTION_TYPE:
     case TS_FUNC_LITERAL:
@@ -5820,257 +5781,254 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
 
     case TS_PARAMETER_LIST:
     case TS_CONST_DECLARATION:
-    case TS_VAR_DECLARATION:
-        {
-            List<Gotype*> *saved_iota_types = NULL;
+    case TS_VAR_DECLARATION: {
+        List<Gotype*> *saved_iota_types = NULL;
 
-            FOR_NODE_CHILDREN (node) {
-                auto spec = it;
-                auto type_node = spec->field(TSF_TYPE);
-                auto value_node = spec->field(TSF_VALUE);
+        FOR_NODE_CHILDREN (node) {
+            auto spec = it;
+            auto type_node = spec->field(TSF_TYPE);
+            auto value_node = spec->field(TSF_VALUE);
 
-                bool is_error = false;
-                FOR_NODE_CHILDREN (spec) {
-                    if (it->type() == TS_ERROR) {
-                        is_error = true;
+            bool is_error = false;
+            FOR_NODE_CHILDREN (spec) {
+                if (it->type() == TS_ERROR) {
+                    is_error = true;
+                    break;
+                }
+            }
+
+            if (is_error) continue;
+
+            // !type && !value      try to used saved iota expression
+            // !type && value       infer types from values, try to save iota
+            // type && value        save type from type, try to save iota
+            // type && !value       save type from type
+
+            if (type_node->null && value_node->null) {
+                do {
+                    if (!saved_iota_types) break;
+
+                    auto ntype = node->type();
+                    if (ntype != TS_CONST_DECLARATION && ntype != TS_VAR_DECLARATION)
                         break;
-                    }
-                }
 
-                if (is_error) continue;
-
-                // !type && !value      try to used saved iota expression
-                // !type && value       infer types from values, try to save iota
-                // type && value        save type from type, try to save iota
-                // type && !value       save type from type
-
-                if (type_node->null && value_node->null) {
-                    do {
-                        if (!saved_iota_types) break;
-
-                        auto ntype = node->type();
-                        if (ntype != TS_CONST_DECLARATION && ntype != TS_VAR_DECLARATION)
-                            break;
-
-                        int i = 0;
-                        FOR_NODE_CHILDREN (spec) {
-                            if (i >= saved_iota_types->len) break;
-                            auto saved_gotype = saved_iota_types->at(i++);
-
-                            auto name = it->string();
-                            if (streq(name, "_")) continue;
-
-                            auto decl = new_result();
-                            decl->type = (ntype == TS_CONST_DECLARATION ?  GODECL_CONST : GODECL_VAR);
-                            decl->spec_start = spec->start();
-                            decl->name = it->string();
-                            decl->name_start = it->start();
-                            decl->name_end = it->end();
-                            decl->gotype = saved_gotype;
-                            save_decl(decl);
-                        }
-                    } while (0);
-
-                    continue;
-                }
-
-                // at this point, !type_node->null || !value_node->null
-
-                auto has_iota = [&](Ast_Node *node) -> bool {
-                    bool ret = false;
-                    walk_ast_node(node, true, [&](Ast_Node *it, Ts_Field_Type, int) -> Walk_Action {
-                        switch (it->type()) {
-                        case TS_IDENTIFIER:
-                        case TS_FIELD_IDENTIFIER:
-                        case TS_PACKAGE_IDENTIFIER:
-                        case TS_TYPE_IDENTIFIER:
-                            if (streq(it->string(), "iota")) {
-                                ret = true;
-                                return WALK_ABORT;
-                            }
-                            break;
-                        }
-                        return WALK_CONTINUE;
-                    });
-                    return ret;
-                };
-
-                bool should_save_iota_types = (
-                    !saved_iota_types
-                    && !value_node->null
-                    && has_iota(value_node)
-                );
-
-                Gotype *type_node_gotype = NULL;
-                if (!type_node->null) {
-                    type_node_gotype = node_to_gotype(type_node);
-                    if (!type_node_gotype) continue;
-
-                    if (node->type() == TS_PARAMETER_LIST && spec->type() == TS_VARIADIC_PARAMETER_DECLARATION) {
-                        auto t = new_gotype(GOTYPE_VARIADIC);
-                        t->variadic_base = type_node_gotype;
-                        type_node_gotype = t;
-                    }
-
-                    if (should_save_iota_types)
-                        saved_iota_types = alloc_list<Gotype*>();
-
+                    int i = 0;
                     FOR_NODE_CHILDREN (spec) {
-                        if (it->eq(type_node) || it->eq(value_node)) break;
+                        if (i >= saved_iota_types->len) break;
+                        auto saved_gotype = saved_iota_types->at(i++);
+
+                        auto name = it->string();
+                        if (streq(name, "_")) continue;
 
                         auto decl = new_result();
-
-                        switch (node->type()) {
-                        case TS_PARAMETER_LIST: decl->type = GODECL_PARAM; break;
-                        case TS_CONST_DECLARATION: decl->type = GODECL_CONST; break;
-                        case TS_VAR_DECLARATION: decl->type = GODECL_VAR; break;
-                        }
-
+                        decl->type = (ntype == TS_CONST_DECLARATION ?  GODECL_CONST : GODECL_VAR);
                         decl->spec_start = spec->start();
                         decl->name = it->string();
                         decl->name_start = it->start();
                         decl->name_end = it->end();
-                        decl->gotype = type_node_gotype;
+                        decl->gotype = saved_gotype;
                         save_decl(decl);
-
-                        if (should_save_iota_types)
-                            saved_iota_types->append(type_node_gotype);
                     }
-                } else {
-                    cp_assert(value_node->type() == TS_EXPRESSION_LIST, "rhs must be a TS_EXPRESSION_LIST");
+                } while (0);
 
-                    u32 lhs_count = 0;
-                    FOR_NODE_CHILDREN (spec) {
-                        if (it->eq(type_node) || it->eq(value_node)) break;
-                        lhs_count++;
-                    }
-
-                    auto lhs = alloc_list<Ast_Node*>(lhs_count);
-                    auto rhs = alloc_list<Ast_Node*>(value_node->child_count());
-
-                    FOR_NODE_CHILDREN (spec) {
-                        if (it->eq(type_node) || it->eq(value_node)) break;
-                        lhs->append(it);
-                    }
-
-                    FOR_NODE_CHILDREN (value_node) rhs->append(it);
-
-                    auto new_godecl = [&]() -> Godecl * {
-                        auto decl = new_result();
-                        decl->spec_start = spec->start();
-
-                        switch (node->type()) {
-                        case TS_PARAMETER_LIST: decl->type = GODECL_PARAM; break;
-                        case TS_CONST_DECLARATION: decl->type = GODECL_CONST; break;
-                        case TS_VAR_DECLARATION: decl->type = GODECL_VAR; break;
-                        }
-
-                        return decl;
-                    };
-
-                    if (should_save_iota_types)
-                        saved_iota_types = alloc_list<Gotype*>();
-
-                    auto old_len = results->len;
-                    assignment_to_decls(lhs, rhs, new_godecl);
-                    for (u32 i = old_len; i < results->len; i++) {
-                        auto it = results->items + i;
-                        save_decl(it);
-                        if (should_save_iota_types)
-                            saved_iota_types->append(it->gotype);
-                    }
-                }
+                continue;
             }
-        }
-        break;
 
-    case TS_RANGE_CLAUSE:
-        {
-            auto left = node->field(TSF_LEFT);
-            auto right = node->field(TSF_RIGHT);
-            if (left->type() != TS_EXPRESSION_LIST) break;
+            // at this point, !type_node->null || !value_node->null
 
-            auto lhs = alloc_list<Ast_Node*>(left->child_count());
-            auto rhs = alloc_list<Ast_Node*>(1);
-
-            FOR_NODE_CHILDREN (left) lhs->append(it);
-            rhs->append(right);
-
-            auto new_godecl = [&]() -> Godecl * {
-                auto decl = new_result();
-                decl->spec_start = node->start();
-                decl->type = GODECL_VAR; // do we need GODECL_RANGE?
-                return decl;
-            };
-
-            auto old_len = results->len;
-            assignment_to_decls(lhs, rhs, new_godecl, true);
-            for (u32 i = old_len; i < results->len; i++)
-                save_decl(results->items + i);
-        }
-        break;
-
-    case TS_RECEIVE_STATEMENT:
-    case TS_SHORT_VAR_DECLARATION:
-        {
-            List<Ast_Node*> *lhs = NULL;
-            List<Ast_Node*> *rhs = NULL;
-
-            if (node_type == TS_RECEIVE_STATEMENT) {
-                bool isdecl = false;
-                FOR_ALL_NODE_CHILDREN (node) {
-                    if (it->type() == TS_COLON_EQ) {
-                        isdecl = true;
+            auto has_iota = [&](Ast_Node *node) -> bool {
+                bool ret = false;
+                walk_ast_node(node, true, [&](Ast_Node *it, Ts_Field_Type, int) -> Walk_Action {
+                    switch (it->type()) {
+                    case TS_IDENTIFIER:
+                    case TS_FIELD_IDENTIFIER:
+                    case TS_PACKAGE_IDENTIFIER:
+                    case TS_TYPE_IDENTIFIER:
+                        if (streq(it->string(), "iota")) {
+                            ret = true;
+                            return WALK_ABORT;
+                        }
                         break;
                     }
-                }
-
-                if (!isdecl) break;
-
-                auto left = node->field(TSF_LEFT);
-                if (left->null) break;
-                if (left->type() != TS_EXPRESSION_LIST) break;
-
-                auto right = node->field(TSF_RIGHT);
-                if (right->null) break;
-                if (!is_expression_node(right)) break;
-
-                lhs = alloc_list<Ast_Node*>(left->child_count());
-                FOR_NODE_CHILDREN (left) lhs->append(it);
-
-                rhs = alloc_list<Ast_Node*>(1);
-                rhs->append(right);
-            } else {
-                auto left = node->field(TSF_LEFT);
-                auto right = node->field(TSF_RIGHT);
-
-                if (left->null) break;
-                if (right->null) break;
-
-                if (left->type() != TS_EXPRESSION_LIST) break;
-                if (right->type() != TS_EXPRESSION_LIST) break;
-
-                lhs = alloc_list<Ast_Node*>(left->child_count());
-                rhs = alloc_list<Ast_Node*>(right->child_count());
-
-                FOR_NODE_CHILDREN (left) lhs->append(it);
-                FOR_NODE_CHILDREN (right) rhs->append(it);
-            }
-
-            auto new_godecl = [&]() -> Godecl * {
-                auto decl = new_result();
-                decl->spec_start = node->start();
-                decl->type = GODECL_SHORTVAR;
-                return decl;
+                    return WALK_CONTINUE;
+                });
+                return ret;
             };
 
-            auto old_len = results->len;
-            assignment_to_decls(lhs, rhs, new_godecl);
-            for (u32 i = old_len; i < results->len; i++)
-                save_decl(results->items + i);
+            bool should_save_iota_types = (
+                !saved_iota_types
+                && !value_node->null
+                && has_iota(value_node)
+            );
 
+            Gotype *type_node_gotype = NULL;
+            if (!type_node->null) {
+                type_node_gotype = node_to_gotype(type_node);
+                if (!type_node_gotype) continue;
+
+                if (node->type() == TS_PARAMETER_LIST && spec->type() == TS_VARIADIC_PARAMETER_DECLARATION) {
+                    auto t = new_gotype(GOTYPE_VARIADIC);
+                    t->variadic_base = type_node_gotype;
+                    type_node_gotype = t;
+                }
+
+                if (should_save_iota_types)
+                    saved_iota_types = alloc_list<Gotype*>();
+
+                FOR_NODE_CHILDREN (spec) {
+                    if (it->eq(type_node) || it->eq(value_node)) break;
+
+                    auto decl = new_result();
+
+                    switch (node->type()) {
+                    case TS_PARAMETER_LIST: decl->type = GODECL_PARAM; break;
+                    case TS_CONST_DECLARATION: decl->type = GODECL_CONST; break;
+                    case TS_VAR_DECLARATION: decl->type = GODECL_VAR; break;
+                    }
+
+                    decl->spec_start = spec->start();
+                    decl->name = it->string();
+                    decl->name_start = it->start();
+                    decl->name_end = it->end();
+                    decl->gotype = type_node_gotype;
+                    save_decl(decl);
+
+                    if (should_save_iota_types)
+                        saved_iota_types->append(type_node_gotype);
+                }
+            } else {
+                cp_assert(value_node->type() == TS_EXPRESSION_LIST, "rhs must be a TS_EXPRESSION_LIST");
+
+                u32 lhs_count = 0;
+                FOR_NODE_CHILDREN (spec) {
+                    if (it->eq(type_node) || it->eq(value_node)) break;
+                    lhs_count++;
+                }
+
+                auto lhs = alloc_list<Ast_Node*>(lhs_count);
+                auto rhs = alloc_list<Ast_Node*>(value_node->child_count());
+
+                FOR_NODE_CHILDREN (spec) {
+                    if (it->eq(type_node) || it->eq(value_node)) break;
+                    lhs->append(it);
+                }
+
+                FOR_NODE_CHILDREN (value_node) rhs->append(it);
+
+                auto new_godecl = [&]() -> Godecl * {
+                    auto decl = new_result();
+                    decl->spec_start = spec->start();
+
+                    switch (node->type()) {
+                    case TS_PARAMETER_LIST: decl->type = GODECL_PARAM; break;
+                    case TS_CONST_DECLARATION: decl->type = GODECL_CONST; break;
+                    case TS_VAR_DECLARATION: decl->type = GODECL_VAR; break;
+                    }
+
+                    return decl;
+                };
+
+                if (should_save_iota_types)
+                    saved_iota_types = alloc_list<Gotype*>();
+
+                auto old_len = results->len;
+                assignment_to_decls(lhs, rhs, new_godecl);
+                for (u32 i = old_len; i < results->len; i++) {
+                    auto it = results->items + i;
+                    save_decl(it);
+                    if (should_save_iota_types)
+                        saved_iota_types->append(it->gotype);
+                }
+            }
         }
         break;
+    }
+
+    case TS_RANGE_CLAUSE: {
+        auto left = node->field(TSF_LEFT);
+        auto right = node->field(TSF_RIGHT);
+        if (left->type() != TS_EXPRESSION_LIST) break;
+
+        auto lhs = alloc_list<Ast_Node*>(left->child_count());
+        auto rhs = alloc_list<Ast_Node*>(1);
+
+        FOR_NODE_CHILDREN (left) lhs->append(it);
+        rhs->append(right);
+
+        auto new_godecl = [&]() -> Godecl * {
+            auto decl = new_result();
+            decl->spec_start = node->start();
+            decl->type = GODECL_VAR; // do we need GODECL_RANGE?
+            return decl;
+        };
+
+        auto old_len = results->len;
+        assignment_to_decls(lhs, rhs, new_godecl, true);
+        for (u32 i = old_len; i < results->len; i++)
+            save_decl(results->items + i);
+        break;
+    }
+
+    case TS_RECEIVE_STATEMENT:
+    case TS_SHORT_VAR_DECLARATION: {
+        List<Ast_Node*> *lhs = NULL;
+        List<Ast_Node*> *rhs = NULL;
+
+        if (node_type == TS_RECEIVE_STATEMENT) {
+            bool isdecl = false;
+            FOR_ALL_NODE_CHILDREN (node) {
+                if (it->type() == TS_COLON_EQ) {
+                    isdecl = true;
+                    break;
+                }
+            }
+
+            if (!isdecl) break;
+
+            auto left = node->field(TSF_LEFT);
+            if (left->null) break;
+            if (left->type() != TS_EXPRESSION_LIST) break;
+
+            auto right = node->field(TSF_RIGHT);
+            if (right->null) break;
+            if (!is_expression_node(right)) break;
+
+            lhs = alloc_list<Ast_Node*>(left->child_count());
+            FOR_NODE_CHILDREN (left) lhs->append(it);
+
+            rhs = alloc_list<Ast_Node*>(1);
+            rhs->append(right);
+        } else {
+            auto left = node->field(TSF_LEFT);
+            auto right = node->field(TSF_RIGHT);
+
+            if (left->null) break;
+            if (right->null) break;
+
+            if (left->type() != TS_EXPRESSION_LIST) break;
+            if (right->type() != TS_EXPRESSION_LIST) break;
+
+            lhs = alloc_list<Ast_Node*>(left->child_count());
+            rhs = alloc_list<Ast_Node*>(right->child_count());
+
+            FOR_NODE_CHILDREN (left) lhs->append(it);
+            FOR_NODE_CHILDREN (right) rhs->append(it);
+        }
+
+        auto new_godecl = [&]() -> Godecl * {
+            auto decl = new_result();
+            decl->spec_start = node->start();
+            decl->type = GODECL_SHORTVAR;
+            return decl;
+        };
+
+        auto old_len = results->len;
+        assignment_to_decls(lhs, rhs, new_godecl);
+        for (u32 i = old_len; i < results->len; i++)
+            save_decl(results->items + i);
+
+        break;
+    }
     }
 }
 
@@ -6200,16 +6158,15 @@ Gotype *Go_Indexer::expr_to_gotype(Ast_Node *expr) {
         return ret;
 
     case TS_QUALIFIED_TYPE:
-    case TS_SELECTOR_EXPRESSION:
-        {
-            auto operand_node = expr->field(expr->type() == TS_QUALIFIED_TYPE ? TSF_PACKAGE : TSF_OPERAND);
-            auto field_node = expr->field(expr->type() == TS_QUALIFIED_TYPE ? TSF_NAME : TSF_FIELD);
+    case TS_SELECTOR_EXPRESSION: {
+        auto operand_node = expr->field(expr->type() == TS_QUALIFIED_TYPE ? TSF_PACKAGE : TSF_OPERAND);
+        auto field_node = expr->field(expr->type() == TS_QUALIFIED_TYPE ? TSF_NAME : TSF_FIELD);
 
-            ret = new_gotype(GOTYPE_LAZY_SEL);
-            ret->lazy_sel_sel = field_node->string();
-            ret->lazy_sel_base = expr_to_gotype(operand_node);
-            return ret;
-        }
+        ret = new_gotype(GOTYPE_LAZY_SEL);
+        ret->lazy_sel_sel = field_node->string();
+        ret->lazy_sel_base = expr_to_gotype(operand_node);
+        return ret;
+    }
 
     case TS_SLICE_EXPRESSION:
         return expr_to_gotype(expr->field(TSF_OPERAND));
@@ -6243,235 +6200,225 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
     if (!gotype) return NULL;
 
     switch (gotype->type) {
-    case GOTYPE_LAZY_RANGE:
-        {
-            auto res = evaluate_type(gotype->lazy_range_base, ctx);
-            if (!res) return NULL;
+    case GOTYPE_LAZY_RANGE: {
+        auto res = evaluate_type(gotype->lazy_range_base, ctx);
+        if (!res) return NULL;
 
-            res = resolve_type(res->gotype, res->ctx);
-            if (!res) return NULL;
+        res = resolve_type(res->gotype, res->ctx);
+        if (!res) return NULL;
 
-            res = unpointer_type(res->gotype, res->ctx);
+        res = unpointer_type(res->gotype, res->ctx);
 
-            auto base_type = res->gotype;
-            if (base_type->type == GOTYPE_MULTI)
-                if (base_type->multi_types && base_type->multi_types->len == 1)
-                    base_type = base_type->multi_types->at(0);
+        auto base_type = res->gotype;
+        if (base_type->type == GOTYPE_MULTI)
+            if (base_type->multi_types && base_type->multi_types->len == 1)
+                base_type = base_type->multi_types->at(0);
 
-            switch (res->gotype->type) {
-            case GOTYPE_MAP:
-                if (gotype->lazy_range_is_index)
-                    return res->wrap(res->gotype->map_key);
-                return res->wrap(res->gotype->map_value);
-            case GOTYPE_SLICE:
-                if (gotype->lazy_range_is_index)
-                    return make_goresult(new_primitive_type("int"), NULL);
-                return res->wrap(res->gotype->slice_base);
-            case GOTYPE_ARRAY:
-                if (gotype->lazy_range_is_index)
-                    return make_goresult(new_primitive_type("int"), NULL);
-                return res->wrap(res->gotype->array_base);
-            }
-            return NULL;
+        switch (res->gotype->type) {
+        case GOTYPE_MAP:
+            if (gotype->lazy_range_is_index)
+                return res->wrap(res->gotype->map_key);
+            return res->wrap(res->gotype->map_value);
+        case GOTYPE_SLICE:
+            if (gotype->lazy_range_is_index)
+                return make_goresult(new_primitive_type("int"), NULL);
+            return res->wrap(res->gotype->slice_base);
+        case GOTYPE_ARRAY:
+            if (gotype->lazy_range_is_index)
+                return make_goresult(new_primitive_type("int"), NULL);
+            return res->wrap(res->gotype->array_base);
         }
+        return NULL;
+    }
 
-    case GOTYPE_LAZY_INDEX:
-        {
-            auto res = evaluate_type(gotype->lazy_index_base, ctx);
-            if (!res) return NULL;
+    case GOTYPE_LAZY_INDEX: {
+        auto res = evaluate_type(gotype->lazy_index_base, ctx);
+        if (!res) return NULL;
 
-            res = resolve_type(res->gotype, res->ctx);
-            if (!res) return NULL;
+        res = resolve_type(res->gotype, res->ctx);
+        if (!res) return NULL;
 
-            res = unpointer_type(res->gotype, res->ctx);
+        res = unpointer_type(res->gotype, res->ctx);
 
-            auto base_type = res->gotype;
+        auto base_type = res->gotype;
 
-            if (base_type->type == GOTYPE_MULTI)
-                if (base_type->multi_types && base_type->multi_types->len == 1)
-                    base_type = base_type->multi_types->at(0);
+        if (base_type->type == GOTYPE_MULTI)
+            if (base_type->multi_types && base_type->multi_types->len == 1)
+                base_type = base_type->multi_types->at(0);
 
-            switch (base_type->type) {
-            case GOTYPE_ARRAY: return evaluate_type(base_type->array_base, res->ctx);
-            case GOTYPE_SLICE: return evaluate_type(base_type->slice_base, res->ctx);
-            case GOTYPE_ID:
-                if (streq(base_type->id_name, "string"))
-                    return make_goresult(new_primitive_type("rune"), NULL);
-                break;
-            case GOTYPE_MAP:
-                {
-                    auto ret = new_gotype(GOTYPE_ASSERTION);
-                    ret->assertion_base = base_type->map_value;
-                    return res->wrap(ret);
-                }
-            }
-            return NULL;
-        }
-
-    case GOTYPE_LAZY_CALL:
-        {
-            auto res = evaluate_type(gotype->lazy_call_base, ctx);
-            if (!res) break;
-
-            res = resolve_type(res->gotype, res->ctx);
-            if (!res) break;
-
-            res = unpointer_type(res->gotype, res->ctx);
-            if (!res) break;
-
-            if (res->gotype->type != GOTYPE_FUNC) return NULL;
-
-            auto result = res->gotype->func_sig.result;
-            if (!result) return NULL;
-
-            if (result->len == 1)
-                return res->wrap(result->at(0).gotype);
-
-            auto ret = new_gotype(GOTYPE_MULTI);
-            ret->multi_types = alloc_list<Gotype*>(result->len);
-            For (*result) ret->multi_types->append(it.gotype);
+        switch (base_type->type) {
+        case GOTYPE_ARRAY: return evaluate_type(base_type->array_base, res->ctx);
+        case GOTYPE_SLICE: return evaluate_type(base_type->slice_base, res->ctx);
+        case GOTYPE_ID:
+            if (streq(base_type->id_name, "string"))
+                return make_goresult(new_primitive_type("rune"), NULL);
+            break;
+        case GOTYPE_MAP: {
+            auto ret = new_gotype(GOTYPE_ASSERTION);
+            ret->assertion_base = base_type->map_value;
             return res->wrap(ret);
         }
-
-    case GOTYPE_LAZY_DEREFERENCE:
-        {
-            auto res = evaluate_type(gotype->lazy_dereference_base, ctx);
-            if (!res) return NULL;
-
-            res = resolve_type(res->gotype, res->ctx);
-            if (!res) return NULL;
-
-            if (res->gotype->type != GOTYPE_POINTER) return NULL;
-            return evaluate_type(res->gotype->pointer_base, res->ctx);
         }
+        return NULL;
+    }
 
-    case GOTYPE_LAZY_REFERENCE:
-        {
-            auto res = evaluate_type(gotype->lazy_reference_base, ctx);
+    case GOTYPE_LAZY_CALL: {
+        auto res = evaluate_type(gotype->lazy_call_base, ctx);
+        if (!res) break;
+
+        res = resolve_type(res->gotype, res->ctx);
+        if (!res) break;
+
+        res = unpointer_type(res->gotype, res->ctx);
+        if (!res) break;
+
+        if (res->gotype->type != GOTYPE_FUNC) return NULL;
+
+        auto result = res->gotype->func_sig.result;
+        if (!result) return NULL;
+
+        if (result->len == 1)
+            return res->wrap(result->at(0).gotype);
+
+        auto ret = new_gotype(GOTYPE_MULTI);
+        ret->multi_types = alloc_list<Gotype*>(result->len);
+        For (*result) ret->multi_types->append(it.gotype);
+        return res->wrap(ret);
+    }
+
+    case GOTYPE_LAZY_DEREFERENCE: {
+        auto res = evaluate_type(gotype->lazy_dereference_base, ctx);
+        if (!res) return NULL;
+
+        res = resolve_type(res->gotype, res->ctx);
+        if (!res) return NULL;
+
+        if (res->gotype->type != GOTYPE_POINTER) return NULL;
+        return evaluate_type(res->gotype->pointer_base, res->ctx);
+    }
+
+    case GOTYPE_LAZY_REFERENCE: {
+        auto res = evaluate_type(gotype->lazy_reference_base, ctx);
+        if (!res) return NULL;
+
+        auto type = new_gotype(GOTYPE_POINTER);
+        type->pointer_base = res->gotype;
+        return res->wrap(type);
+    }
+
+    case GOTYPE_LAZY_ARROW: {
+        auto res = evaluate_type(gotype->lazy_arrow_base, ctx);
+        if (!res) return NULL;
+        if (res->gotype->type != GOTYPE_CHAN) return NULL;
+
+        return evaluate_type(res->gotype->chan_base, res->ctx);
+    }
+
+    case GOTYPE_LAZY_ID: {
+        auto res = find_decl_of_id(gotype->lazy_id_name, gotype->lazy_id_pos, ctx);
+        if (!res) return NULL;
+        if (res->decl->type == GODECL_IMPORT) return NULL;
+        if (!res->decl->gotype) return NULL;
+        return evaluate_type(res->decl->gotype, res->ctx);
+    }
+
+    case GOTYPE_LAZY_SEL: {
+        do {
+            if (!gotype->lazy_sel_base) break;
+            if (gotype->lazy_sel_base->type != GOTYPE_LAZY_ID) break;
+
+            auto base = gotype->lazy_sel_base;
+            Go_Import *gi = NULL;
+
+            auto decl_res = find_decl_of_id(base->lazy_id_name, base->lazy_id_pos, ctx, &gi);
+            if (!decl_res) break;
+            if (!gi) break;
+
+            auto res = find_decl_in_package(gotype->lazy_sel_sel, gi->import_path);
             if (!res) return NULL;
 
-            auto type = new_gotype(GOTYPE_POINTER);
-            type->pointer_base = res->gotype;
-            return res->wrap(type);
-        }
+            auto ext_decl = res->decl;
+            switch (ext_decl->type) {
+            case GODECL_VAR:
+            case GODECL_CONST:
+            case GODECL_FUNC:
+            case GODECL_TYPE: // this wasn't added before, why?
+                return evaluate_type(ext_decl->gotype, res->ctx);
+            default:
+                return NULL;
+            }
+        } while (0);
 
-    case GOTYPE_LAZY_ARROW:
-        {
-            auto res = evaluate_type(gotype->lazy_arrow_base, ctx);
-            if (!res) return NULL;
-            if (res->gotype->type != GOTYPE_CHAN) return NULL;
+        auto res = evaluate_type(gotype->lazy_sel_base, ctx);
+        if (!res) return NULL;
 
-            return evaluate_type(res->gotype->chan_base, res->ctx);
-        }
+        auto rres = resolve_type(res->gotype, res->ctx);
+        if (!rres) return NULL;
 
-    case GOTYPE_LAZY_ID:
-        {
-            auto res = find_decl_of_id(gotype->lazy_id_name, gotype->lazy_id_pos, ctx);
-            if (!res) return NULL;
-            if (res->decl->type == GODECL_IMPORT) return NULL;
-            if (!res->decl->gotype) return NULL;
-            return evaluate_type(res->decl->gotype, res->ctx);
-        }
+        rres = unpointer_type(rres->gotype, rres->ctx);
 
-    case GOTYPE_LAZY_SEL:
-        {
-            do {
-                if (!gotype->lazy_sel_base) break;
-                if (gotype->lazy_sel_base->type != GOTYPE_LAZY_ID) break;
+        List<Goresult> results;
+        results.init();
+        list_dotprops(res, rres, &results);
 
-                auto base = gotype->lazy_sel_base;
-                Go_Import *gi = NULL;
-
-                auto decl_res = find_decl_of_id(base->lazy_id_name, base->lazy_id_pos, ctx, &gi);
-                if (!decl_res) break;
-                if (!gi) break;
-
-                auto res = find_decl_in_package(gotype->lazy_sel_sel, gi->import_path);
-                if (!res) return NULL;
-
-                auto ext_decl = res->decl;
-                switch (ext_decl->type) {
-                case GODECL_VAR:
-                case GODECL_CONST:
-                case GODECL_FUNC:
-                case GODECL_TYPE: // this wasn't added before, why?
-                    return evaluate_type(ext_decl->gotype, res->ctx);
-                default:
-                    return NULL;
-                }
-            } while (0);
-
-            auto res = evaluate_type(gotype->lazy_sel_base, ctx);
-            if (!res) return NULL;
-
-            auto rres = resolve_type(res->gotype, res->ctx);
-            if (!rres) return NULL;
-
-            rres = unpointer_type(rres->gotype, rres->ctx);
-
-            List<Goresult> results;
-            results.init();
-            list_dotprops(res, rres, &results);
-
-            For (results)
-                if (streq(it.decl->name, gotype->lazy_sel_sel))
-                    return evaluate_type(it.decl->gotype, it.ctx);
-        }
+        For (results)
+            if (streq(it.decl->name, gotype->lazy_sel_sel))
+                return evaluate_type(it.decl->gotype, it.ctx);
         break;
+    }
 
-    case GOTYPE_LAZY_ONE_OF_MULTI:
-        {
-            auto res = evaluate_type(gotype->lazy_one_of_multi_base, ctx);
-            if (!res) return NULL;
+    case GOTYPE_LAZY_ONE_OF_MULTI: {
+        auto res = evaluate_type(gotype->lazy_one_of_multi_base, ctx);
+        if (!res) return NULL;
 
-            bool is_single = gotype->lazy_one_of_multi_is_single;
-            int index = gotype->lazy_one_of_multi_index;
-            Gotype *base = gotype->lazy_one_of_multi_base;
+        bool is_single = gotype->lazy_one_of_multi_is_single;
+        int index = gotype->lazy_one_of_multi_index;
+        Gotype *base = gotype->lazy_one_of_multi_base;
 
-            switch (res->gotype->type) {
-            case GOTYPE_MULTI:
-                return evaluate_type(res->gotype->multi_types->at(index), res->ctx);
+        switch (res->gotype->type) {
+        case GOTYPE_MULTI:
+            return evaluate_type(res->gotype->multi_types->at(index), res->ctx);
 
-            case GOTYPE_ASSERTION:
+        case GOTYPE_ASSERTION:
+            if (!index)
+                return evaluate_type(res->gotype->assertion_base, res->ctx);
+            if (index == 1)
+                return res->wrap(new_primitive_type("bool"));
+            break;
+
+        case GOTYPE_RANGE:
+            switch (res->gotype->range_base->type) {
+            case GOTYPE_MAP:
                 if (!index)
-                    return evaluate_type(res->gotype->assertion_base, res->ctx);
+                    return evaluate_type(res->gotype->range_base->map_key, res->ctx);
                 if (index == 1)
-                    return res->wrap(new_primitive_type("bool"));
+                    return evaluate_type(res->gotype->range_base->map_value, res->ctx);
                 break;
 
-            case GOTYPE_RANGE:
-                switch (res->gotype->range_base->type) {
-                case GOTYPE_MAP:
-                    if (!index)
-                        return evaluate_type(res->gotype->range_base->map_key, res->ctx);
-                    if (index == 1)
-                        return evaluate_type(res->gotype->range_base->map_value, res->ctx);
-                    break;
-
-                case GOTYPE_ARRAY:
-                case GOTYPE_SLICE:
-                    if (!index)
-                        return res->wrap(new_primitive_type("int"));
-                    if (index == 1) {
-                        auto base = res->gotype->type == GOTYPE_ARRAY ? res->gotype->array_base : res->gotype->slice_base;
-                        return evaluate_type(base, res->ctx);
-                    }
-                    break;
-
-                case GOTYPE_ID:
-                    if (!streq(res->gotype->id_name, "string")) break;
-                    if (!index)
-                        return res->wrap(new_primitive_type("int"));
-                    if (index == 1)
-                        return res->wrap(new_primitive_type("rune"));
-                    break;
+            case GOTYPE_ARRAY:
+            case GOTYPE_SLICE:
+                if (!index)
+                    return res->wrap(new_primitive_type("int"));
+                if (index == 1) {
+                    auto base = res->gotype->type == GOTYPE_ARRAY ? res->gotype->array_base : res->gotype->slice_base;
+                    return evaluate_type(base, res->ctx);
                 }
+                break;
+
+            case GOTYPE_ID:
+                if (!streq(res->gotype->id_name, "string")) break;
+                if (!index)
+                    return res->wrap(new_primitive_type("int"));
+                if (index == 1)
+                    return res->wrap(new_primitive_type("rune"));
                 break;
             }
-
-            if (gotype->lazy_one_of_multi_is_single) return res;
+            break;
         }
+
+        if (gotype->lazy_one_of_multi_is_single) return res;
         break;
+    }
 
     default: return make_goresult(gotype, ctx);
     }
@@ -6500,14 +6447,13 @@ Goresult *Go_Indexer::resolve_type_to_decl(Gotype *type, Go_Ctx *ctx) {
         res = find_decl_of_id(type->id_name, type->id_pos, ctx);
         break;
 
-    case GOTYPE_SEL:
-        {
-            auto import_path = find_import_path_referred_to_by_id(type->sel_name, ctx);
-            if (!import_path) return NULL;
+    case GOTYPE_SEL: {
+        auto import_path = find_import_path_referred_to_by_id(type->sel_name, ctx);
+        if (!import_path) return NULL;
 
-            res = find_decl_in_package(type->sel_sel, import_path);
-            break;
-        }
+        res = find_decl_in_package(type->sel_sel, import_path);
+        break;
+    }
     }
 
     if (!res) return NULL;
@@ -6525,25 +6471,22 @@ Goresult *Go_Indexer::resolve_type(Gotype *type, Go_Ctx *ctx) {
             return NULL;
         return resolve_type(type->builtin_underlying_type, ctx);
 
-    case GOTYPE_POINTER:
-        {
-            auto res = resolve_type(type->pointer_base, ctx);
-            if (!res) return NULL;
+    case GOTYPE_POINTER: {
+        auto res = resolve_type(type->pointer_base, ctx);
+        if (!res) return NULL;
 
-            auto ret = new_gotype(GOTYPE_POINTER);
-            ret->pointer_base = res->gotype;
+        auto ret = new_gotype(GOTYPE_POINTER);
+        ret->pointer_base = res->gotype;
 
-            return res->wrap(ret);
-        }
-        break;
+        return res->wrap(ret);
+    }
 
     case GOTYPE_ID:
-    case GOTYPE_SEL:
-        {
-            auto res = resolve_type_to_decl(type, ctx);
-            if (!res) return NULL;
-            return resolve_type(res->decl->gotype, res->ctx);
-        }
+    case GOTYPE_SEL: {
+        auto res = resolve_type_to_decl(type, ctx);
+        if (!res) return NULL;
+        return resolve_type(res->decl->gotype, res->ctx);
+    }
     }
 
     return make_goresult(type, ctx);
@@ -6727,18 +6670,17 @@ void Gotype::read(Index_Stream *s) {
     case GOTYPE_CHAN:
         READ_OBJ(chan_base);
         break;
-    case GOTYPE_MULTI:
-        {
-            // can't use READ_LIST here because multi_types contains pointers
-            // (instead of the objects themselves)
-            auto len = s->read4();
-            multi_types = alloc_list<Gotype*>(len);
-            for (u32 i = 0; i < len; i++) {
-                auto gotype = read_object<Gotype>(s);
-                multi_types->append(gotype);
-            }
+    case GOTYPE_MULTI: {
+        // can't use READ_LIST here because multi_types contains pointers
+        // (instead of the objects themselves)
+        auto len = s->read4();
+        multi_types = alloc_list<Gotype*>(len);
+        for (u32 i = 0; i < len; i++) {
+            auto gotype = read_object<Gotype>(s);
+            multi_types->append(gotype);
         }
         break;
+    }
     case GOTYPE_VARIADIC:
         READ_OBJ(variadic_base);
         break;

@@ -146,58 +146,57 @@ ccstr parse_json_string(ccstr s) {
         case '\"': chars.append('\"'); break;
         case '\\': chars.append('\\'); break;
         case '/': chars.append('/'); break;
-        case 'u':
-            {
-                if (i+6 > len) goto fail;
+        case 'u': {
+            if (i+6 > len) goto fail;
 
-                auto parse_hex4 = [&](ccstr s, bool *ok) -> u32 {
-                    u32 h = 0;
-                    for (u32 i = 0; i < 4; i++) {
-                        if (i) h = h << 4;
+            auto parse_hex4 = [&](ccstr s, bool *ok) -> u32 {
+                u32 h = 0;
+                for (u32 i = 0; i < 4; i++) {
+                    if (i) h = h << 4;
 
-                        if ((s[i] >= '0') && (s[i] <= '9'))
-                            h += (u32)s[i] - '0';
-                        else if ((s[i] >= 'A') && (s[i] <= 'F'))
-                            h += (u32)10 + s[i] - 'A';
-                        else if ((s[i] >= 'a') && (s[i] <= 'f'))
-                            h += (u32)10 + s[i] - 'a';
-                        else {
-                            *ok = false;
-                            return 0;
-                        }
+                    if ((s[i] >= '0') && (s[i] <= '9'))
+                        h += (u32)s[i] - '0';
+                    else if ((s[i] >= 'A') && (s[i] <= 'F'))
+                        h += (u32)10 + s[i] - 'A';
+                    else if ((s[i] >= 'a') && (s[i] <= 'f'))
+                        h += (u32)10 + s[i] - 'a';
+                    else {
+                        *ok = false;
+                        return 0;
                     }
-
-                    *ok = true;
-                    return h;
-                };
-
-                bool ok = false;
-
-                auto codepoint = parse_hex4(&s[i+2], &ok);
-                if (!ok) goto fail;
-                if (codepoint >= 0xDC00 && codepoint <= 0xDFFF) goto fail;
-
-                seqlen = 6;
-                if (codepoint >= 0xD800 && codepoint <= 0xDBFF) {
-                    auto j = i+6;
-                    if (j+6 > len) goto fail;
-                    if (s[j] != '\\' || s[j+1] != 'u') goto fail;
-
-                    auto second = parse_hex4(&s[j+2], &ok);
-                    if (!ok) goto fail;
-                    if (second < 0xDC00 || second > 0xDFFF) goto fail;
-
-                    codepoint = 0x10000 + (((codepoint & 0x3FF) << 10) | (second & 0x3FF));
-                    seqlen = 12;
                 }
 
-                char utf8_chars[4];
-                auto utf8_len = uchar_to_cstr(codepoint, utf8_chars);
-                if (!utf8_len) goto fail;
-                for (u32 j = 0; j < utf8_len; j++)
-                    chars.append(utf8_chars[j]);
+                *ok = true;
+                return h;
+            };
+
+            bool ok = false;
+
+            auto codepoint = parse_hex4(&s[i+2], &ok);
+            if (!ok) goto fail;
+            if (codepoint >= 0xDC00 && codepoint <= 0xDFFF) goto fail;
+
+            seqlen = 6;
+            if (codepoint >= 0xD800 && codepoint <= 0xDBFF) {
+                auto j = i+6;
+                if (j+6 > len) goto fail;
+                if (s[j] != '\\' || s[j+1] != 'u') goto fail;
+
+                auto second = parse_hex4(&s[j+2], &ok);
+                if (!ok) goto fail;
+                if (second < 0xDC00 || second > 0xDFFF) goto fail;
+
+                codepoint = 0x10000 + (((codepoint & 0x3FF) << 10) | (second & 0x3FF));
+                seqlen = 12;
             }
+
+            char utf8_chars[4];
+            auto utf8_len = uchar_to_cstr(codepoint, utf8_chars);
+            if (!utf8_len) goto fail;
+            for (u32 j = 0; j < utf8_len; j++)
+                chars.append(utf8_chars[j]);
             break;
+        }
         default:
             goto fail;
         }
@@ -884,108 +883,107 @@ bool Debugger::start(Debug_Profile *debug_profile) {
     switch (debug_profile->type) {
     case DEBUG_TEST_PACKAGE:
     case DEBUG_TEST_CURRENT_FUNCTION:
-    case DEBUG_RUN_PACKAGE:
-        {
-            auto use_current_package = [&]() -> bool {
-                switch (debug_profile->type) {
-                case DEBUG_TEST_CURRENT_FUNCTION:
-                    return true;
-                case DEBUG_TEST_PACKAGE:
-                    return debug_profile->test_package.use_current_package;
-                case DEBUG_RUN_PACKAGE:
-                    return debug_profile->run_package.use_current_package;
-                }
-                return false;
-            };
+    case DEBUG_RUN_PACKAGE: {
+        auto use_current_package = [&]() -> bool {
+            switch (debug_profile->type) {
+            case DEBUG_TEST_CURRENT_FUNCTION:
+                return true;
+            case DEBUG_TEST_PACKAGE:
+                return debug_profile->test_package.use_current_package;
+            case DEBUG_RUN_PACKAGE:
+                return debug_profile->run_package.use_current_package;
+            }
+            return false;
+        };
 
-            ccstr package_path = NULL;
+        ccstr package_path = NULL;
 
-            auto get_info_from_current_editor = [&]() {
-                auto editor = get_current_editor();
-                if (!editor) return;
-                if (!editor->is_go_file) return;
-
-                if (debug_profile->type == DEBUG_TEST_CURRENT_FUNCTION)
-                    if (!str_ends_with(editor->filepath, "_test.go"))
-                        return;
-
-                if (!path_has_descendant(world.current_path, editor->filepath)) return;
-
-                auto root_module_path = world.indexer.module_resolver.module_path;
-                auto subpath = get_path_relative_to(cp_dirname(editor->filepath), world.current_path);
-                package_path = normalize_path_sep(path_join(root_module_path, subpath), '/');
-
-                if (debug_profile->type == DEBUG_TEST_CURRENT_FUNCTION) {
-                    if (editor->buf->tree) {
-                        Parser_It it;
-                        it.init(editor->buf);
-                        auto root_node = new_ast_node(ts_tree_root_node(editor->buf->tree), &it);
-
-                        find_nodes_containing_pos(root_node, editor->cur, true, [&](auto it) -> Walk_Action {
-                            if (it->type() == TS_SOURCE_FILE)
-                                return WALK_CONTINUE;
-
-                            if (it->type() == TS_FUNCTION_DECLARATION) {
-                                auto name = it->field(TSF_NAME);
-                                if (!name->null) {
-                                    auto func_name = name->string();
-                                    if (str_starts_with(func_name, "Test"))
-                                        test_function_name = func_name;
-                                }
-                            }
-
-                            return WALK_ABORT;
-                        });
-                    }
-                }
-            };
-
-            if (use_current_package())
-                get_info_from_current_editor();
-            else if (debug_profile->type == DEBUG_TEST_PACKAGE)
-                package_path = debug_profile->test_package.package_path;
-            else if (debug_profile->type == DEBUG_RUN_PACKAGE)
-                package_path = debug_profile->run_package.package_path;
-
-            if (!package_path || package_path[0] == '\0')
-                return false;
+        auto get_info_from_current_editor = [&]() {
+            auto editor = get_current_editor();
+            if (!editor) return;
+            if (!editor->is_go_file) return;
 
             if (debug_profile->type == DEBUG_TEST_CURRENT_FUNCTION)
-                if (!test_function_name || test_function_name[0] == '\0')
-                    return false;
+                if (!str_ends_with(editor->filepath, "_test.go"))
+                    return;
 
-            ccstr binary_name = NULL;
+            if (!path_has_descendant(world.current_path, editor->filepath)) return;
+
+            auto root_module_path = world.indexer.module_resolver.module_path;
+            auto subpath = get_path_relative_to(cp_dirname(editor->filepath), world.current_path);
+            package_path = normalize_path_sep(path_join(root_module_path, subpath), '/');
+
+            if (debug_profile->type == DEBUG_TEST_CURRENT_FUNCTION) {
+                if (editor->buf->tree) {
+                    Parser_It it;
+                    it.init(editor->buf);
+                    auto root_node = new_ast_node(ts_tree_root_node(editor->buf->tree), &it);
+
+                    find_nodes_containing_pos(root_node, editor->cur, true, [&](auto it) -> Walk_Action {
+                        if (it->type() == TS_SOURCE_FILE)
+                            return WALK_CONTINUE;
+
+                        if (it->type() == TS_FUNCTION_DECLARATION) {
+                            auto name = it->field(TSF_NAME);
+                            if (!name->null) {
+                                auto func_name = name->string();
+                                if (str_starts_with(func_name, "Test"))
+                                    test_function_name = func_name;
+                            }
+                        }
+
+                        return WALK_ABORT;
+                    });
+                }
+            }
+        };
+
+        if (use_current_package())
+            get_info_from_current_editor();
+        else if (debug_profile->type == DEBUG_TEST_PACKAGE)
+            package_path = debug_profile->test_package.package_path;
+        else if (debug_profile->type == DEBUG_RUN_PACKAGE)
+            package_path = debug_profile->run_package.package_path;
+
+        if (!package_path || package_path[0] == '\0')
+            return false;
+
+        if (debug_profile->type == DEBUG_TEST_CURRENT_FUNCTION)
+            if (!test_function_name || test_function_name[0] == '\0')
+                return false;
+
+        ccstr binary_name = NULL;
 #if OS_WIN
-            binary_name = "__debug_bin.exe";
+        binary_name = "__debug_bin.exe";
 #else
-            binary_name = "__debug_bin";
+        binary_name = "__debug_bin";
 #endif
 
-            ccstr cmd = NULL;
-            if (debug_profile->type == DEBUG_RUN_PACKAGE)
-                cmd = cp_sprintf("%s build -o %s --gcflags=\"all=-N -l\" %s", world.go_binary_path, binary_name, package_path);
-            else
-                cmd = cp_sprintf("%s test -c %s -o %s --gcflags=\"all=-N -l\"", world.go_binary_path, package_path, binary_name);
+        ccstr cmd = NULL;
+        if (debug_profile->type == DEBUG_RUN_PACKAGE)
+            cmd = cp_sprintf("%s build -o %s --gcflags=\"all=-N -l\" %s", world.go_binary_path, binary_name, package_path);
+        else
+            cmd = cp_sprintf("%s test -c %s -o %s --gcflags=\"all=-N -l\"", world.go_binary_path, package_path, binary_name);
 
-            Build_Profile build_profile; ptr0(&build_profile);
-            cp_strcpy_fixed(build_profile.label, "temp");
-            cp_strcpy_fixed(build_profile.cmd, cmd);
+        Build_Profile build_profile; ptr0(&build_profile);
+        cp_strcpy_fixed(build_profile.label, "temp");
+        cp_strcpy_fixed(build_profile.cmd, cmd);
 
-            world.error_list.show = true;
-            world.error_list.cmd_focus = true;
-            kick_off_build(&build_profile);
-            while (!world.build.done) continue;
+        world.error_list.show = true;
+        world.error_list.cmd_focus = true;
+        kick_off_build(&build_profile);
+        while (!world.build.done) continue;
 
-            dbg_print("build completed");
+        dbg_print("build completed");
 
-            if (world.build.errors.len > 0 || world.build.build_itself_had_error) {
-                dbg_print("returning false, errors.len = %d, build_itself_had_error = %d", world.build.errors.len, world.build.build_itself_had_error);
-                return false;
-            }
-
-            binary_path = binary_name;
+        if (world.build.errors.len > 0 || world.build.build_itself_had_error) {
+            dbg_print("returning false, errors.len = %d, build_itself_had_error = %d", world.build.errors.len, world.build.build_itself_had_error);
+            return false;
         }
+
+        binary_path = binary_name;
         break;
+    }
 
     case DEBUG_RUN_BINARY:
         if (debug_profile->run_binary.binary_path[0] == '\0') {
@@ -1224,102 +1222,97 @@ void Debugger::do_everything() {
         SCOPED_LOCK(&calls_lock);
         For (calls) {
             switch (it.type) {
-            case DLVC_CREATE_WATCH:
+            case DLVC_CREATE_WATCH: {
+                auto &args = it.create_watch;
+
+                auto watch = watches.append();
+                watch->fresh = false;
+                watch->state = DBGWATCH_PENDING;
+
                 {
-                    auto &args = it.create_watch;
+                    SCOPED_MEM(&watches_mem);
+                    cp_strcpy_fixed(watch->expr, args.expression);
+                    cp_strcpy_fixed(watch->expr_tmp, args.expression);
+                }
 
-                    auto watch = watches.append();
-                    watch->fresh = false;
-                    watch->state = DBGWATCH_PENDING;
+                if (state_flag == DLV_STATE_PAUSED)
+                    eval_watch(watch, state.current_goroutine_id, state.current_frame);
+                break;
+            }
+            case DLVC_EDIT_WATCH: {
+                auto &args = it.edit_watch;
 
-                    {
-                        SCOPED_MEM(&watches_mem);
-                        cp_strcpy_fixed(watch->expr, args.expression);
-                        cp_strcpy_fixed(watch->expr_tmp, args.expression);
-                    }
+                auto watch = &watches[args.watch_idx];
 
-                    if (state_flag == DLV_STATE_PAUSED)
-                        eval_watch(watch, state.current_goroutine_id, state.current_frame);
+                watch->fresh = false;
+                watch->state = DBGWATCH_PENDING;
+                watch->editing = false;
+
+                {
+                    SCOPED_MEM(&watches_mem);
+                    cp_strcpy_fixed(watch->expr, args.expression);
+                    cp_strcpy_fixed(watch->expr_tmp, args.expression);
+                }
+
+                if (state_flag == DLV_STATE_PAUSED)
+                    eval_watch(watch, state.current_goroutine_id, state.current_frame);
+                break;
+            }
+            case DLVC_DELETE_WATCH: {
+                auto &args = it.delete_watch;
+                watches.remove(args.watch_idx);
+                if (!watches.len) {
+                    watches_mem.cleanup();
+                    watches_mem.init();
                 }
                 break;
-            case DLVC_EDIT_WATCH:
-                {
-                    auto &args = it.edit_watch;
+            }
 
-                    auto watch = &watches[args.watch_idx];
+            case DLVC_VAR_LOAD_MORE: {
+                auto &args = it.var_load_more;
+                if (args.state_id != state_id) break;
 
-                    watch->fresh = false;
-                    watch->state = DBGWATCH_PENDING;
-                    watch->editing = false;
+                auto var = args.var;
+                if (!var->incomplete()) break;
 
-                    {
-                        SCOPED_MEM(&watches_mem);
-                        cp_strcpy_fixed(watch->expr, args.expression);
-                        cp_strcpy_fixed(watch->expr_tmp, args.expression);
-                    }
+                switch (var->kind) {
+                case GO_KIND_STRUCT:
+                case GO_KIND_INTERFACE:
+                    eval_expression(
+                        cp_sprintf("*(*\"%s\")(0x%" PRIx64 ")", var->type, var->address),
+                        state.current_goroutine_id,
+                        state.current_frame,
+                        var,
+                        var->kind == GO_KIND_STRUCT ? SAVE_VAR_CHILDREN_APPEND : SAVE_VAR_CHILDREN_OVERWRITE
+                    );
+                    break;
 
-                    if (state_flag == DLV_STATE_PAUSED)
-                        eval_watch(watch, state.current_goroutine_id, state.current_frame);
+                case GO_KIND_ARRAY:
+                case GO_KIND_SLICE:
+                case GO_KIND_STRING: {
+                    auto offset = var->kind == GO_KIND_STRING ? strlen(var->value) : var->children->len;
+                    eval_expression(
+                        cp_sprintf("(*(*\"%s\")(0x%" PRIx64 "))[%d:]", var->type, var->address, offset),
+                        state.current_goroutine_id,
+                        state.current_frame,
+                        var,
+                        var->kind == GO_KIND_STRING ? SAVE_VAR_VALUE_APPEND : SAVE_VAR_CHILDREN_APPEND
+                    );
+                    break;
+                }
+
+                case GO_KIND_MAP:
+                    eval_expression(
+                        cp_sprintf("(*(*\"%s\")(0x%" PRIx64 "))[%d:]", var->type, var->address, var->children->len / 2),
+                        state.current_goroutine_id,
+                        state.current_frame,
+                        var,
+                        SAVE_VAR_CHILDREN_APPEND
+                    );
+                    break;
                 }
                 break;
-            case DLVC_DELETE_WATCH:
-                {
-                    auto &args = it.delete_watch;
-                    watches.remove(args.watch_idx);
-                    if (!watches.len) {
-                        watches_mem.cleanup();
-                        watches_mem.init();
-                    }
-                }
-                break;
-
-            case DLVC_VAR_LOAD_MORE:
-                {
-                    auto &args = it.var_load_more;
-                    if (args.state_id != state_id) break;
-
-                    auto var = args.var;
-                    if (!var->incomplete()) break;
-
-                    switch (var->kind) {
-                    case GO_KIND_STRUCT:
-                    case GO_KIND_INTERFACE:
-                        eval_expression(
-                            cp_sprintf("*(*\"%s\")(0x%" PRIx64 ")", var->type, var->address),
-                            state.current_goroutine_id,
-                            state.current_frame,
-                            var,
-                            var->kind == GO_KIND_STRUCT ? SAVE_VAR_CHILDREN_APPEND : SAVE_VAR_CHILDREN_OVERWRITE
-                        );
-                        break;
-
-                    case GO_KIND_ARRAY:
-                    case GO_KIND_SLICE:
-                    case GO_KIND_STRING:
-                        {
-                            auto offset = var->kind == GO_KIND_STRING ? strlen(var->value) : var->children->len;
-                            eval_expression(
-                                cp_sprintf("(*(*\"%s\")(0x%" PRIx64 "))[%d:]", var->type, var->address, offset),
-                                state.current_goroutine_id,
-                                state.current_frame,
-                                var,
-                                var->kind == GO_KIND_STRING ? SAVE_VAR_VALUE_APPEND : SAVE_VAR_CHILDREN_APPEND
-                            );
-                        }
-                        break;
-
-                    case GO_KIND_MAP:
-                        eval_expression(
-                            cp_sprintf("(*(*\"%s\")(0x%" PRIx64 "))[%d:]", var->type, var->address, var->children->len / 2),
-                            state.current_goroutine_id,
-                            state.current_frame,
-                            var,
-                            SAVE_VAR_CHILDREN_APPEND
-                        );
-                        break;
-                    }
-                }
-                break;
+            }
             case DLVC_DELETE_ALL_BREAKPOINTS:
                 pause_and_resume([&]() {
                     if (state_flag != DLV_STATE_INACTIVE) {
@@ -1333,40 +1326,38 @@ void Debugger::do_everything() {
                 });
                 break;
 
-            case DLVC_SET_CURRENT_FRAME:
-                {
-                    auto &args = it.set_current_frame;
-                    select_frame(args.goroutine_id, args.frame);
-                    /*
-                    function select_frame:
-                        load vars and watches
+            case DLVC_SET_CURRENT_FRAME: {
+                auto &args = it.set_current_frame;
+                select_frame(args.goroutine_id, args.frame);
+                /*
+                function select_frame:
+                    load vars and watches
 
-                    function select_goroutine:
-                        set current goroutine
-                        if goroutine is not fresh
-                            get stacktrace
+                function select_goroutine:
+                    set current goroutine
+                    if goroutine is not fresh
+                        get stacktrace
 
-                    DLVC_SET_CURRENT_GOROUTINE:
-                        if goroutine is already selected
-                            i guess do nothing?
-                        else
-                            select_goroutine goroutine
-                            select_frame: goroutine, first frame
+                DLVC_SET_CURRENT_GOROUTINE:
+                    if goroutine is already selected
+                        i guess do nothing?
+                    else
+                        select_goroutine goroutine
+                        select_frame: goroutine, first frame
 
-                    DLVC_SET_CURRENT_FRAME:
-                        if goroutine is not already selected
-                            select_goroutine goroutine
-                        select_frame goroutine, frame
-                     */
+                DLVC_SET_CURRENT_FRAME:
+                    if goroutine is not already selected
+                        select_goroutine goroutine
+                    select_frame goroutine, frame
+                 */
 
-                }
                 break;
-            case DLVC_SET_CURRENT_GOROUTINE:
-                {
-                    auto &args = it.set_current_goroutine;
-                    select_frame(args.goroutine_id, 0);
-                }
+            }
+            case DLVC_SET_CURRENT_GOROUTINE: {
+                auto &args = it.set_current_goroutine;
+                select_frame(args.goroutine_id, 0);
                 break;
+            }
             case DLVC_STOP:
                 exiting = true;
                 if (state_flag == DLV_STATE_RUNNING)
@@ -1385,102 +1376,100 @@ void Debugger::do_everything() {
                 break;
 
             case DLVC_START:
-            case DLVC_DEBUG_TEST_UNDER_CURSOR:
+            case DLVC_DEBUG_TEST_UNDER_CURSOR: {
                 {
-                    {
-                        SCOPED_LOCK(&lock);
-                        ptr0(&state);
+                    SCOPED_LOCK(&lock);
+                    ptr0(&state);
 
-                        state.current_goroutine_id = -1;
-                        state.current_frame = -1;
+                    state.current_goroutine_id = -1;
+                    state.current_frame = -1;
 
-                        state_flag = DLV_STATE_STARTING;
-                        packetid = 0;
-                        exiting = false;
-                    }
+                    state_flag = DLV_STATE_STARTING;
+                    packetid = 0;
+                    exiting = false;
+                }
 
-                    Debug_Profile *debug_profile = NULL;
-                    if (it.type == DLVC_DEBUG_TEST_UNDER_CURSOR) {
-                        for (int i = 0; i < project_settings.debug_profiles->len; i++) {
-                            auto &it = project_settings.debug_profiles->at(i);
-                            if (it.is_builtin && it.type == DEBUG_TEST_CURRENT_FUNCTION) {
-                                debug_profile = &it;
-                                break;
-                            }
+                Debug_Profile *debug_profile = NULL;
+                if (it.type == DLVC_DEBUG_TEST_UNDER_CURSOR) {
+                    for (int i = 0; i < project_settings.debug_profiles->len; i++) {
+                        auto &it = project_settings.debug_profiles->at(i);
+                        if (it.is_builtin && it.type == DEBUG_TEST_CURRENT_FUNCTION) {
+                            debug_profile = &it;
+                            break;
                         }
-                    } else {
-                        debug_profile = project_settings.get_active_debug_profile();
                     }
+                } else {
+                    debug_profile = project_settings.get_active_debug_profile();
+                }
 
-                    if (!debug_profile) {
-                        // be more specific?
-                        send_tell_user("Unable to find debug profile.", "Error");
-                        break;
+                if (!debug_profile) {
+                    // be more specific?
+                    send_tell_user("Unable to find debug profile.", "Error");
+                    break;
+                }
+
+                if (!start(debug_profile)) {
+                    SCOPED_LOCK(&lock);
+                    state_flag = DLV_STATE_INACTIVE;
+                    loop_mem.reset();
+                    break;
+                }
+
+                auto new_ids = alloc_list<int>();
+
+                For (breakpoints) {
+                    auto js = set_breakpoint(it.file, it.line)->js();
+                    auto idx = js.get(0, ".result.Breakpoint.id");
+                    new_ids->append(idx == -1 ? -1 : js.num(idx));
+                }
+
+                exec_continue(false);
+
+                {
+                    SCOPED_LOCK(&lock);
+                    for (int i = 0; i < breakpoints.len; i++) {
+                        auto id = new_ids->at(i);
+                        if (id != -1)
+                            breakpoints[i].dlv_id = id;
+                        breakpoints[i].pending = false;
                     }
-
-                    if (!start(debug_profile)) {
-                        SCOPED_LOCK(&lock);
-                        state_flag = DLV_STATE_INACTIVE;
-                        loop_mem.reset();
-                        break;
-                    }
-
-                    auto new_ids = alloc_list<int>();
-
-                    For (breakpoints) {
-                        auto js = set_breakpoint(it.file, it.line)->js();
-                        auto idx = js.get(0, ".result.Breakpoint.id");
-                        new_ids->append(idx == -1 ? -1 : js.num(idx));
-                    }
-
-                    exec_continue(false);
-
-                    {
-                        SCOPED_LOCK(&lock);
-                        for (int i = 0; i < breakpoints.len; i++) {
-                            auto id = new_ids->at(i);
-                            if (id != -1)
-                                breakpoints[i].dlv_id = id;
-                            breakpoints[i].pending = false;
-                        }
-                        state_flag = DLV_STATE_RUNNING;
-                    }
+                    state_flag = DLV_STATE_RUNNING;
                 }
                 break;
+            }
 
-            case DLVC_TOGGLE_BREAKPOINT:
-                {
-                    auto &args = it.toggle_breakpoint;
+            case DLVC_TOGGLE_BREAKPOINT: {
+                auto &args = it.toggle_breakpoint;
 
-                    auto bkpt = breakpoints.find([&](auto it) {
-                        return are_breakpoints_same(args.filename, args.lineno, it->file, it->line);
-                    });
+                auto bkpt = breakpoints.find([&](auto it) {
+                    return are_breakpoints_same(args.filename, args.lineno, it->file, it->line);
+                });
 
-                    if (!bkpt) {
-                        Client_Breakpoint b;
-                        {
-                            SCOPED_MEM(&breakpoints_mem);
-                            b.file = cp_strdup(args.filename);
-                        }
-                        b.line = args.lineno;
-                        b.pending = true;
-                        bkpt = breakpoints.append(&b);
-
-                        if (state_flag != DLV_STATE_INACTIVE) {
-                            auto js = set_breakpoint(bkpt->file, bkpt->line)->js();
-                            bkpt->dlv_id = js.num(js.get(0, ".result.Breakpoint.id"));
-                        }
-
-                        bkpt->pending = false;
-                    } else {
-                        if (state_flag != DLV_STATE_INACTIVE)
-                            unset_breakpoint(bkpt->dlv_id);
-                        breakpoints.remove(bkpt);
-                        if (!breakpoints.len)
-                            breakpoints_mem.reset();
+                if (!bkpt) {
+                    Client_Breakpoint b;
+                    {
+                        SCOPED_MEM(&breakpoints_mem);
+                        b.file = cp_strdup(args.filename);
                     }
+                    b.line = args.lineno;
+                    b.pending = true;
+                    bkpt = breakpoints.append(&b);
+
+                    if (state_flag != DLV_STATE_INACTIVE) {
+                        auto js = set_breakpoint(bkpt->file, bkpt->line)->js();
+                        bkpt->dlv_id = js.num(js.get(0, ".result.Breakpoint.id"));
+                    }
+
+                    bkpt->pending = false;
+                } else {
+                    if (state_flag != DLV_STATE_INACTIVE)
+                        unset_breakpoint(bkpt->dlv_id);
+                    breakpoints.remove(bkpt);
+                    if (!breakpoints.len)
+                        breakpoints_mem.reset();
                 }
                 break;
+            }
             case DLVC_BREAK_ALL:
                 if (state_flag == DLV_STATE_RUNNING)
                     halt_when_already_running();

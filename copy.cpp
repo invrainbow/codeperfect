@@ -179,16 +179,15 @@ Gotype *Gotype::copy() {
         ret->func_sig.result = copy_list(func_sig.result);
         ret->func_recv = copy_object(ret->func_recv);
         break;
-    case GOTYPE_MULTI:
-        {
-            Gotype *tmp = NULL;
-            auto copy_func = [&](Gotype** it) {
-                tmp = copy_object(*it);
-                return &tmp;
-            };
-            ret->multi_types = copy_list<Gotype*>(multi_types, copy_func);
-        }
+    case GOTYPE_MULTI: {
+        Gotype *tmp = NULL;
+        auto copy_func = [&](Gotype** it) {
+            tmp = copy_object(*it);
+            return &tmp;
+        };
+        ret->multi_types = copy_list<Gotype*>(multi_types, copy_func);
         break;
+    }
     case GOTYPE_VARIADIC:
         ret->variadic_base = copy_object(variadic_base);
         break;

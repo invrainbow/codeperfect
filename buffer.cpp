@@ -670,13 +670,12 @@ void Buffer::internal_update_mark_tree() {
         case DIFF_DELETE:
             mark_tree.apply_edit(cur, advance_cur(cur, it.s), cur);
             break;
-        case DIFF_INSERT:
-            {
-                auto end = advance_cur(cur, it.s);
-                mark_tree.apply_edit(cur, cur, end);
-                cur = end;
-            }
+        case DIFF_INSERT: {
+            auto end = advance_cur(cur, it.s);
+            mark_tree.apply_edit(cur, cur, end);
+            cur = end;
             break;
+        }
         case DIFF_SAME:
             cur = advance_cur(cur, it.s);
             break;

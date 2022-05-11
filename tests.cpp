@@ -144,13 +144,12 @@ struct Mark_Tree_Fuzzer {
         if (print_flag) print_action(a);
 
         switch (a->type) {
-        case MTF_INSERT_MARK:
-            {
-                auto mark = world.mark_fridge.alloc();
-                tree.insert_mark(MARK_TEST, a->insert_mark_pos, mark);
-                marks.append(mark);
-            }
+        case MTF_INSERT_MARK: {
+            auto mark = world.mark_fridge.alloc();
+            tree.insert_mark(MARK_TEST, a->insert_mark_pos, mark);
+            marks.append(mark);
             break;
+        }
         case MTF_DELETE_MARK:
             marks[a->delete_mark_index]->cleanup();
             world.mark_fridge.free(marks[a->delete_mark_index]);

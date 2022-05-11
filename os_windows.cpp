@@ -217,20 +217,18 @@ bool Process::run(ccstr _cmd) {
 
 Process_Status Process::status() {
     switch (WaitForSingleObject(proc, 0)) {
-        case WAIT_TIMEOUT:
-            return PROCESS_WAITING;
-        case WAIT_OBJECT_0:
-            {
-                DWORD code;
-                GetExitCodeProcess(proc, &code);
-                exit_code = (u32)code;
-                return PROCESS_DONE;
-            }
-        case WAIT_FAILED:
-            {
-                error("process error: %s", get_last_error());
-            }
-            return PROCESS_ERROR;
+    case WAIT_TIMEOUT:
+        return PROCESS_WAITING;
+    case WAIT_OBJECT_0: {
+        DWORD code;
+        GetExitCodeProcess(proc, &code);
+        exit_code = (u32)code;
+        return PROCESS_DONE;
+    }
+    case WAIT_FAILED: {
+        error("process error: %s", get_last_error());
+        return PROCESS_ERROR;
+    }
     }
     return PROCESS_ERROR;
 }

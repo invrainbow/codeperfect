@@ -100,12 +100,11 @@ struct Parser_It {
 
     uchar next() {
         switch (type) {
-        case IT_MMAP:
-            {
-                auto ret = peek();
-                mmap_params.pos.x++;
-                return ret;
-            }
+        case IT_MMAP: {
+            auto ret = peek();
+            mmap_params.pos.x++;
+            return ret;
+        }
         case IT_BUFFER:
             return buffer_params.it.next();
         }
@@ -114,12 +113,11 @@ struct Parser_It {
 
     uchar prev() {
         switch (type) {
-        case IT_MMAP:
-            {
-                auto ret = peek();
-                mmap_params.pos.x--;
-                return ret;
-            }
+        case IT_MMAP: {
+            auto ret = peek();
+            mmap_params.pos.x--;
+            return ret;
+        }
         case IT_BUFFER:
             return buffer_params.it.prev();
         }
