@@ -765,10 +765,10 @@ i32 Json_Navigator::get(i32 i, ccstr keys) {
         if (ch == '.') {
             auto is_delim = [&](char ch) -> bool {
                 switch (ch) {
-                    case '.':
-                    case '[':
-                    case '\0':
-                        return true;
+                case '.':
+                case '[':
+                case '\0':
+                    return true;
                 }
                 return false;
             };

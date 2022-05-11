@@ -54,12 +54,12 @@ struct Json_Renderer : public Text_Renderer {
         writechar('"');
         for (ccstr p = s; *p != '\0'; p++) {
             switch (*p) {
-                case '\n': write("\\n"); break;
-                case '\r': write("\\r"); break;
-                case '\t': write("\\t"); break;
-                case '"': write("\\\""); break;
-                case '\\': write("\\\\"); break;
-                default: writechar(*p); break;
+            case '\n': write("\\n"); break;
+            case '\r': write("\\r"); break;
+            case '\t': write("\\t"); break;
+            case '"': write("\\\""); break;
+            case '\\': write("\\\\"); break;
+            default: writechar(*p); break;
             }
         }
         writechar('"');

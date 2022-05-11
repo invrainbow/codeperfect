@@ -1418,35 +1418,35 @@ Ext_Info* Mp_Reader::read_ext() {
     s32 len = 0;
 
     switch (b) {
-        case 0xd4:
-        case 0xd5:
-        case 0xd6:
-        case 0xd7:
-        case 0xd8:
-            type = (Nvim_Ext_Type)read1(); if (!ok) return NULL;
-            switch (b) {
-                case 0xd4: len = 1; break;
-                case 0xd5: len = 2; break;
-                case 0xd6: len = 4; break;
-                case 0xd7: len = 8; break;
-                case 0xd8: len = 16; break;
-            }
-            break;
-        case 0xc7:
-            len = (s32)(u8)read1(); if (!ok) return NULL;
-            type = (Nvim_Ext_Type)read1(); if (!ok) return NULL;
-            break;
-        case 0xc8:
-            len = (s32)(u16)read2(); if (!ok) return NULL;
-            type = (Nvim_Ext_Type)read1(); if (!ok) return NULL;
-            break;
-        case 0xc9:
-            len = (s32)(u32)read4(); if (!ok) return NULL;
-            type = (Nvim_Ext_Type)read1(); if (!ok) return NULL;
-            break;
-        default:
-            ok = false;
-            return NULL;
+    case 0xd4:
+    case 0xd5:
+    case 0xd6:
+    case 0xd7:
+    case 0xd8:
+        type = (Nvim_Ext_Type)read1(); if (!ok) return NULL;
+        switch (b) {
+        case 0xd4: len = 1; break;
+        case 0xd5: len = 2; break;
+        case 0xd6: len = 4; break;
+        case 0xd7: len = 8; break;
+        case 0xd8: len = 16; break;
+        }
+        break;
+    case 0xc7:
+        len = (s32)(u8)read1(); if (!ok) return NULL;
+        type = (Nvim_Ext_Type)read1(); if (!ok) return NULL;
+        break;
+    case 0xc8:
+        len = (s32)(u16)read2(); if (!ok) return NULL;
+        type = (Nvim_Ext_Type)read1(); if (!ok) return NULL;
+        break;
+    case 0xc9:
+        len = (s32)(u32)read4(); if (!ok) return NULL;
+        type = (Nvim_Ext_Type)read1(); if (!ok) return NULL;
+        break;
+    default:
+        ok = false;
+        return NULL;
     }
 
     auto start_offset = offset;
