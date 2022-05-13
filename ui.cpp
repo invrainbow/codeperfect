@@ -506,9 +506,9 @@ void UI::render_godecl(Godecl *decl) {
         goto_file_and_pos(current_render_godecl_filepath, decl->name_start, true);
 
     if (open) {
-        ImGui::Text("decl_start: %s", format_cur(decl->decl_start));
-        ImGui::Text("spec_start: %s", format_cur(decl->spec_start));
-        ImGui::Text("name_start: %s", format_cur(decl->name_start));
+        ImGui::Text("decl_start: %s", decl->decl_start.str());
+        ImGui::Text("spec_start: %s", decl->spec_start.str());
+        ImGui::Text("name_start: %s", decl->name_start.str());
         ImGui::Text("name: %s", decl->name);
 
         switch (decl->type) {
@@ -545,7 +545,7 @@ void UI::render_gotype(Gotype *gotype, ccstr field) {
         switch (gotype->type) {
         case GOTYPE_ID:
             ImGui::Text("name: %s", gotype->id_name);
-            ImGui::Text("pos: %s", format_cur(gotype->id_pos));
+            ImGui::Text("pos: %s", gotype->id_pos.str());
             break;
         case GOTYPE_SEL:
             ImGui::Text("package: %s", gotype->sel_name);
@@ -615,7 +615,7 @@ void UI::render_gotype(Gotype *gotype, ccstr field) {
 
         case GOTYPE_LAZY_ID:
             ImGui::Text("name: %s", gotype->lazy_id_name);
-            ImGui::Text("pos: %s", format_cur(gotype->lazy_id_pos));
+            ImGui::Text("pos: %s", gotype->lazy_id_pos.str());
             break;
 
         case GOTYPE_LAZY_SEL:
@@ -685,8 +685,8 @@ void UI::render_ts_cursor(TSTreeCursor *curr, cur2 open_cur) {
                 flags,
                 "%s, start = %s, end = %s",
                 type_str,
-                format_cur(node->start()),
-                format_cur(node->end())
+                node->start().str(),
+                node->end().str()
             );
         else
             last_open = ImGui::TreeNodeEx(
@@ -695,8 +695,8 @@ void UI::render_ts_cursor(TSTreeCursor *curr, cur2 open_cur) {
                 "(%s) %s, start = %s, end = %s",
                 field_type_str + strlen("TSF_"),
                 type_str,
-                format_cur(node->start()),
-                format_cur(node->end())
+                node->start().str(),
+                node->end().str()
             );
 
         if (node->anon())
@@ -2709,7 +2709,7 @@ void UI::draw_everything() {
                     rendered_pos.x++;
                     rendered_pos.y++;
 
-                    if (ImGui::Selectable(cp_sprintf("%s:%s", filepath, format_cur(rendered_pos))))
+                    if (ImGui::Selectable(cp_sprintf("%s:%s", filepath, rendered_pos.str())))
                         goto_file_and_pos(filepath, pos, true);
                 }
             }
@@ -4747,9 +4747,9 @@ void UI::draw_everything() {
                 for (auto it = change; it; it = it->next) {
                     ImGui::BulletText(
                         "start = %s, oldend = %s, newend = %s, oldlen = %d, newlen = %d",
-                        format_cur(it->start),
-                        format_cur(it->old_end),
-                        format_cur(it->new_end),
+                        it->start.str(),
+                        it->old_end.str(),
+                        it->new_end.str(),
                         it->old_text.len,
                         it->new_text.len
                     );

@@ -57,6 +57,12 @@ vec2::operator vec2f() {
     return v;
 }
 
+ccstr cur2::str() {
+    if (y == -1)
+        return cp_sprintf("%d", x);
+    return cp_sprintf("%d:%d", y, x);
+}
+
 void _error(ccstr fmt, ...) {
     va_list args, args2;
     va_start(args, fmt);

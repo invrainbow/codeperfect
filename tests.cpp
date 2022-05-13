@@ -120,21 +120,21 @@ struct Mark_Tree_Fuzzer {
     void print_action(Mtf_Action *a) {
         switch (a->type) {
         case MTF_INSERT_MARK:
-            print("insert mark: %s", format_cur(a->insert_mark_pos));
+            print("insert mark: %s", a->insert_mark_pos.str());
             break;
         case MTF_DELETE_MARK:
             print(
                 "delete mark: index %d, pos = %s",
                 a->delete_mark_index,
-                format_cur(marks[a->delete_mark_index]->pos())
+                marks[a->delete_mark_index]->pos().str()
             );
             break;
         case MTF_APPLY_EDIT:
             print(
                 "edit: start = %s, oldend = %s, newend = %s",
-                format_cur(a->edit_start),
-                format_cur(a->edit_old_end),
-                format_cur(a->edit_new_end)
+                a->edit_start.str(),
+                a->edit_old_end.str(),
+                a->edit_new_end.str()
             );
             break;
         }

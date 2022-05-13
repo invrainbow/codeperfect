@@ -1189,8 +1189,6 @@ void write_list(L arr, Index_Stream *s) {
     For (*arr) write_object(&it, s);
 }
 
-ccstr format_cur(cur2 c);
-
 struct Type_Renderer;
 typedef fn<bool(Type_Renderer*, Gotype*)> Type_Renderer_Handler;
 

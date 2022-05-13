@@ -456,12 +456,6 @@ bool is_name_private(ccstr name) {
     return false;
 }
 
-ccstr format_cur(cur2 c) {
-    if (c.y == -1)
-        return cp_sprintf("%d", c.x);
-    return cp_sprintf("%d:%d", c.y, c.x);
-}
-
 struct Parser_Input {
     Go_Indexer *indexer;
     Parser_It *it;
@@ -2782,7 +2776,7 @@ List<Find_Decl> *Go_Indexer::find_interfaces(Goresult *target, bool search_every
         auto filepath = ctx_to_filepath(it.ctx);
         auto decl = it.decl;
 
-        print("%s %s %s", filepath, format_cur(decl->decl_start), decl->name);
+        print("%s %s %s", filepath, decl->decl_start.str(), decl->name);
     }
 
     auto ret = alloc_list<Find_Decl>();

@@ -118,6 +118,7 @@ struct cur2 : vec2 {
     bool operator>=(cur2 b) { return cmp(b) >= 0; }
     bool operator==(cur2 b) { return cmp(b) == 0; }
     bool operator!=(cur2 b) { return cmp(b) != 0; }
+    ccstr str();
 };
 
 struct vec3 {
