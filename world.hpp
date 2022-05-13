@@ -49,13 +49,13 @@ struct FT_Node {
 enum Main_Thread_Message_Type {
     MTM_NVIM_MESSAGE,
     MTM_GOTO_FILEPOS,
-
+    /**/
     MTM_FILETREE_DELETE,
     MTM_FILETREE_CREATE,
-
+    /**/
     MTM_PANIC,
     MTM_TELL_USER,
-
+    /**/
     MTM_RELOAD_EDITOR,
 };
 
@@ -202,7 +202,7 @@ enum Command {
     CMD_VIEW_CALLEE_HIERARCHY,
     CMD_BUY_LICENSE,
     CMD_ENTER_LICENSE,
-
+    /**/
     _CMD_COUNT_,
 };
 

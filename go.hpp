@@ -175,28 +175,28 @@ enum Postfix_Completion_Type {
     PFC_APPEND,
     PFC_LEN,
     PFC_CAP,
-
+    /**/
     PFC_ASSIGNAPPEND,
-
+    /**/
     PFC_FOR,
     PFC_FORKEY,
     PFC_FORVALUE,
-
+    /**/
     PFC_NIL,
     PFC_NOTNIL,
     PFC_NOT,
-
+    /**/
     PFC_EMPTY,
     PFC_IFEMPTY,
     PFC_IFNOTEMPTY,
-
+    /**/
     PFC_IF,
     PFC_IFNOT,
     PFC_IFNIL,
     PFC_IFNOTNIL,
-
+    /**/
     PFC_CHECK,
-
+    /**/
     PFC_DEFSTRUCT,
     PFC_DEFINTERFACE,
     PFC_SWITCH,
@@ -489,7 +489,6 @@ enum Gotype_Builtin_Type {
     GO_BUILTIN_PRINTLN, // func println(args ...Type)
     GO_BUILTIN_REAL,    // func real(c ComplexType) FloatType
     GO_BUILTIN_RECOVER, // func recover() interface{}
-
     // types
     GO_BUILTIN_COMPLEXTYPE,
     GO_BUILTIN_FLOATTYPE,
@@ -533,11 +532,9 @@ enum Gotype_Type {
     GOTYPE_VARIADIC,
     GOTYPE_ASSERTION,
     GOTYPE_RANGE,
-
+    /**/
     GOTYPE_BUILTIN,
-
     _GOTYPE_LAZY_MARKER_, // #define IS_LAZY_TYPE(x) (x > _GOTYPE_LAZY_MARKER_)
-
     // "lazy" types
     GOTYPE_LAZY_INDEX,
     GOTYPE_LAZY_CALL,

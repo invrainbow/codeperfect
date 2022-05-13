@@ -23,7 +23,6 @@ enum {
     HINT_NAME,
     HINT_TYPE,
     HINT_NORMAL,
-
     HINT_CURRENT_PARAM,
     HINT_NOT_CURRENT_PARAM,
 };
