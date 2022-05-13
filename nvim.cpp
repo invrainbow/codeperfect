@@ -66,31 +66,6 @@ void Nvim::handle_editor_on_ready(Editor *editor) {
     }
 }
 
-ccstr nvim_request_type_str(Nvim_Request_Type type) {
-    switch (type) {
-    define_str_case(NVIM_REQ_GET_API_INFO);
-    define_str_case(NVIM_REQ_CREATE_BUF);
-    define_str_case(NVIM_REQ_CREATE_WIN);
-    define_str_case(NVIM_REQ_BUF_ATTACH);
-    define_str_case(NVIM_REQ_UI_ATTACH);
-    define_str_case(NVIM_REQ_SET_CURRENT_WIN);
-    define_str_case(NVIM_REQ_AUTOCOMPLETE_SETBUF);
-    define_str_case(NVIM_REQ_FILEOPEN_CLEAR_UNDO);
-    define_str_case(NVIM_REQ_POST_SAVE_SETLINES);
-    }
-    return NULL;
-}
-
-ccstr nvim_notification_type_str(Nvim_Notification_Type type) {
-    switch (type) {
-        define_str_case(NVIM_NOTIF_BUF_LINES);
-        define_str_case(NVIM_NOTIF_MODE_CHANGE);
-        define_str_case(NVIM_NOTIF_WIN_VIEWPORT);
-        define_str_case(NVIM_NOTIF_WIN_POS);
-    }
-    return NULL;
-}
-
 void Nvim::write_line(Line *line) {
     writer.write1(MP_OP_STRING);
 
@@ -1490,19 +1465,4 @@ void Mp_Reader::skip_object() {
         }
         return;
     }
-}
-
-ccstr mptype_str(Mp_Type type) {
-    switch (type) {
-    define_str_case(MP_UNKNOWN);
-    define_str_case(MP_BOOL);
-    define_str_case(MP_INT);
-    define_str_case(MP_DOUBLE);
-    define_str_case(MP_STRING);
-    define_str_case(MP_NIL);
-    define_str_case(MP_ARRAY);
-    define_str_case(MP_MAP);
-    define_str_case(MP_EXT);
-    }
-    return NULL;
 }

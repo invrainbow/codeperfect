@@ -5188,15 +5188,6 @@ void Go_Indexer::init() {
     start_writing();
 }
 
-ccstr indexer_status_str(Indexer_Status status) {
-    switch (status) {
-    define_str_case(IND_READY);
-    define_str_case(IND_READING);
-    define_str_case(IND_WRITING);
-    }
-    return NULL;
-}
-
 bool Go_Indexer::acquire_lock(Indexer_Status new_status, bool just_try) {
     go_print("[acquire] %s", indexer_status_str(new_status));
 
@@ -6893,46 +6884,4 @@ void Go_Index::write(Index_Stream *s) {
     WRITE_STR(current_path);
     WRITE_STR(current_import_path);
     WRITE_LIST(packages);
-}
-
-ccstr gotype_type_str(Gotype_Type type) {
-    switch (type) {
-    define_str_case(GOTYPE_ID);
-    define_str_case(GOTYPE_SEL);
-    define_str_case(GOTYPE_MAP);
-    define_str_case(GOTYPE_STRUCT);
-    define_str_case(GOTYPE_INTERFACE);
-    define_str_case(GOTYPE_POINTER);
-    define_str_case(GOTYPE_FUNC);
-    define_str_case(GOTYPE_SLICE);
-    define_str_case(GOTYPE_ARRAY);
-    define_str_case(GOTYPE_CHAN);
-    define_str_case(GOTYPE_MULTI);
-    define_str_case(GOTYPE_VARIADIC);
-    define_str_case(GOTYPE_ASSERTION);
-    define_str_case(GOTYPE_RANGE);
-    define_str_case(GOTYPE_LAZY_INDEX);
-    define_str_case(GOTYPE_LAZY_CALL);
-    define_str_case(GOTYPE_LAZY_DEREFERENCE);
-    define_str_case(GOTYPE_LAZY_REFERENCE);
-    define_str_case(GOTYPE_LAZY_ARROW);
-    define_str_case(GOTYPE_LAZY_ID);
-    define_str_case(GOTYPE_LAZY_SEL);
-    define_str_case(GOTYPE_LAZY_ONE_OF_MULTI);
-    }
-    return NULL;
-}
-
-ccstr godecl_type_str(Godecl_Type type) {
-    switch (type) {
-    define_str_case(GODECL_IMPORT);
-    define_str_case(GODECL_VAR);
-    define_str_case(GODECL_CONST);
-    define_str_case(GODECL_TYPE);
-    define_str_case(GODECL_FUNC); // should we have GODECL_METHOD too? can just check gotype->func_recv
-    define_str_case(GODECL_FIELD);
-    define_str_case(GODECL_PARAM);
-    define_str_case(GODECL_SHORTVAR);
-    }
-    return NULL;
 }

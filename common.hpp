@@ -66,8 +66,9 @@ enum Chunk_Size {
     CHUNK4 = 5000,
     CHUNK5 = 10000,
     CHUNK6 = 20000,
-    CHUNKMAX = CHUNK6,
 };
+
+#define CHUNKMAX CHUNK6
 
 typedef uchar Chunk0[CHUNK0];
 typedef uchar Chunk1[CHUNK1];

@@ -35,7 +35,7 @@ else
 	CFLAGS += -DDEBUG_MODE -g -O0
 endif
 
-SEPARATE_SRC_FILES = tests.cpp tstypes.cpp
+SEPARATE_SRC_FILES = tests.cpp enums.cpp
 SRC_FILES := $(filter-out $(SEPARATE_SRC_FILES), $(wildcard *.cpp))
 OBJ_FILES = $(patsubst %.cpp,obj/%.o,$(SRC_FILES))
 DEP_FILES = $(patsubst %.cpp,obj/%.d,$(SRC_FILES))
@@ -61,15 +61,15 @@ endif
 build/bin/test: $(filter-out obj/main.o, $(OBJ_DEPS)) obj/tests.o
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 
-build/bin/ide: $(OBJ_DEPS) binaries.c tstypes.cpp
+build/bin/ide: $(OBJ_DEPS) binaries.c enums.cpp
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 
 -include $(DEP_FILES)
 
-$(OBJ_FILES): obj/%.o: %.cpp Makefile gohelper.h tstypes.hpp
+$(OBJ_FILES): obj/%.o: %.cpp Makefile gohelper.h tstypes.hpp enums.hpp
 	$(CC) $(CFLAGS) -MMD -MP -c -o $@ $<
 
-obj/tstypes.o: tstypes.cpp Makefile
+obj/enums.o: enums.cpp Makefile
 	$(CC) $(CFLAGS) -MMD -MP -c -o $@ $<
 
 obj/tests.o: tests.cpp Makefile
@@ -100,10 +100,11 @@ obj/gohelper.arm64.a: gostuff/ $(GOSTUFF_DIRS) $(GOSTUFF_FILES)
 
 gohelper.h: obj/gohelper.arm64.a
 
-tstypes.cpp: tree-sitter-go/src/parser.c sh/generate_tstypes.py
+tstypes.hpp: tree-sitter-go/src/parser.c sh/generate_tstypes.py
 	sh/generate_tstypes.py
 
-tstypes.hpp: tstypes.cpp
+enums.hpp: $(filter-out enums.hpp, $(wildcard *.hpp)) tstypes.hpp sh/generate_enums.py
+	sh/generate_enums.py
 
 build/launcher: gostuff/ $(GOSTUFF_DIRS) $(GOSTUFF_FILES)
 	cd gostuff; \

@@ -391,8 +391,6 @@ enum Godecl_Type {
     // GODECL_RANGE,
 };
 
-ccstr godecl_type_str(Godecl_Type type);
-
 struct Godecl {
     // A decl (TS_XXX_DECLARATION) contains multiple specs (TS_XXX_SPEC), each of which
     // might contain multiple IDs (TS_IDENTIFIER). Each Godecl corresponds to one of those
@@ -463,7 +461,11 @@ struct Goresult {
     Goresult *wrap(Gotype *new_gotype);
 };
 
-enum Chan_Direction { CHAN_RECV, CHAN_SEND, CHAN_BI };
+enum Chan_Direction {
+    CHAN_RECV,
+    CHAN_SEND,
+    CHAN_BI
+};
 
 enum Range_Type {
     RANGE_LIST,
@@ -547,8 +549,6 @@ enum Gotype_Type {
     GOTYPE_LAZY_ONE_OF_MULTI,
     GOTYPE_LAZY_RANGE,
 };
-
-ccstr gotype_type_str(Gotype_Type type);
 
 struct Gotype {
     Gotype_Type type;
