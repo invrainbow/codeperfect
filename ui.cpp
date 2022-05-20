@@ -10,6 +10,7 @@
 #include "icons.h"
 #include "fzy_match.h"
 #include "defer.hpp"
+#include "enums.hpp"
 
 #define _USE_MATH_DEFINES // what the fuck is this lol
 #include <math.h>
@@ -498,12 +499,13 @@ void UI::help_marker(ccstr text) {
 }
 
 void UI::render_godecl(Godecl *decl) {
-    auto flags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_SpanAvailWidth;
-
+    auto flags = ImGuiTreeNodeFlags_SpanAvailWidth;
     bool open = ImGui::TreeNodeEx(decl, flags, "%s", godecl_type_str(decl->type));
 
+    /*
     if (ImGui::IsItemClicked())
         goto_file_and_pos(current_render_godecl_filepath, decl->name_start, true);
+    */
 
     if (open) {
         ImGui::Text("decl_start: %s", decl->decl_start.str());
@@ -533,7 +535,7 @@ void UI::render_godecl(Godecl *decl) {
 void UI::render_gotype(Gotype *gotype, ccstr field) {
     if (!gotype) return;
 
-    auto flags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_SpanAvailWidth;
+    auto flags = ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_SpanAvailWidth;
     bool is_open = false;
 
     if (!field)
@@ -560,9 +562,13 @@ void UI::render_gotype(Gotype *gotype, ccstr field) {
             auto specs = gotype->type == GOTYPE_STRUCT ? gotype->struct_specs : gotype->interface_specs;
             for (u32 i = 0; i < specs->len; i++) {
                 auto it = &specs->items[i];
-                if (ImGui::TreeNodeEx(it, flags, "spec %d", i)) {
-                    ImGui::Text("tag: %s", it->tag);
-                    render_godecl(it->field);
+                if (ImGuifi::TreeNodeEx(it, flags, "spec %d", i)) {
+                    if (it->tag)
+                        ImGui::Text("tag: %s", it->tag);
+                    if (it->is_interface_elem)
+                        render_gotype(it->elem);
+                    else
+                        render_godecl(it->field);
                     ImGui::TreePop();
                 }
             }
@@ -2197,90 +2203,95 @@ void UI::draw_everything() {
             ImGui::Separator();
             menu_command(CMD_OPTIONS);
 
+            ImGui::EndMenu();
+        }
+
 #ifdef DEBUG_MODE
+
+        if (ImGui::BeginMenu("Internal")) {
+            ImGui::MenuItem("ImGui demo", NULL, &world.windows_open.im_demo);
+            ImGui::MenuItem("ImGui metrics", NULL, &world.windows_open.im_metrics);
 
             ImGui::Separator();
 
-            if (ImGui::BeginMenu("Debug Tools")) {
-                ImGui::MenuItem("ImGui demo", NULL, &world.windows_open.im_demo);
-                ImGui::MenuItem("ImGui metrics", NULL, &world.windows_open.im_metrics);
-                ImGui::MenuItem("AST viewer", NULL, &world.wnd_editor_tree.show);
-                ImGui::MenuItem("History viewer", NULL, &world.wnd_history.show);
-                ImGui::MenuItem("Toplevels viewer", NULL, &world.wnd_editor_toplevels.show);
-                ImGui::MenuItem("Show mouse position", NULL, &world.wnd_mouse_pos.show);
-                ImGui::MenuItem("Style editor", NULL, &world.wnd_style_editor.show);
-                ImGui::MenuItem("Replace line numbers with bytecounts", NULL, &world.replace_line_numbers_with_bytecounts);
-                ImGui::MenuItem("Randomly move cursor around", NULL, &world.randomly_move_cursor_around);
-                ImGui::MenuItem("Disable framerate cap", NULL, &world.turn_off_framerate_cap);
-                ImGui::MenuItem("Hover Info", NULL, &world.wnd_hover_info.show);
-                ImGui::MenuItem("Show frame index", NULL, &world.show_frame_index);
-                ImGui::MenuItem("Show frameskips", NULL, &world.show_frameskips);
+            ImGui::MenuItem("AST viewer", NULL, &world.wnd_editor_tree.show);
+            ImGui::MenuItem("Gofile viewer", NULL, &world.wnd_gofile_viewer.show);
 
-                if (ImGui::MenuItem("Process file")) {
-                    do {
-                        auto editor = get_current_editor();
-                        if (!editor) break;
+            ImGui::Separator();
 
-                        Go_File file; ptr0(&file);
+            ImGui::MenuItem("History viewer", NULL, &world.wnd_history.show);
+            ImGui::MenuItem("Show mouse position", NULL, &world.wnd_mouse_pos.show);
+            ImGui::MenuItem("Style editor", NULL, &world.wnd_style_editor.show);
+            ImGui::MenuItem("Replace line numbers with bytecounts", NULL, &world.replace_line_numbers_with_bytecounts);
+            ImGui::MenuItem("Randomly move cursor around", NULL, &world.randomly_move_cursor_around);
+            ImGui::MenuItem("Disable framerate cap", NULL, &world.turn_off_framerate_cap);
+            ImGui::MenuItem("Hover Info", NULL, &world.wnd_hover_info.show);
+            ImGui::MenuItem("Show frame index", NULL, &world.show_frame_index);
+            ImGui::MenuItem("Show frameskips", NULL, &world.show_frameskips);
 
-                        file.pool.init("file pool");
-                        defer { file.pool.cleanup(); };
+            if (ImGui::MenuItem("Process file")) {
+                do {
+                    auto editor = get_current_editor();
+                    if (!editor) break;
 
-                        {
-                            SCOPED_MEM(&file.pool);
-                            file.filename = cp_basename(editor->filepath);
-                            file.scope_ops = alloc_list<Go_Scope_Op>();
-                            file.decls = alloc_list<Godecl>();
-                            file.imports = alloc_list<Go_Import>();
-                            file.references = alloc_list<Go_Reference>();
-                        }
+                    Go_File file; ptr0(&file);
 
-                        if (!world.indexer.try_acquire_lock(IND_READING)) break;
-                        defer { world.indexer.release_lock(IND_READING); };
+                    file.pool.init("file pool");
+                    defer { file.pool.cleanup(); };
 
-                        Parser_It it; ptr0(&it);
-                        it.init(editor->buf);
-
-                        auto tree = editor->buf->tree;
-                        if (!tree) break;
-
-                        Ast_Node root; ptr0(&root);
-                        root.init(ts_tree_root_node(tree), &it);
-
-                        world.indexer.process_tree_into_gofile(&file, &root, file.filename, NULL);
-                    } while (0);
-                }
-
-                if (ImGui::MenuItem("Cleanup unused memory")) {
-                    world.indexer.message_queue.add([&](auto msg) {
-                        msg->type = GOMSG_CLEANUP_UNUSED_MEMORY;
-                    });
-                }
-
-                ImGui::Separator();
-
-                if (ImGui::MenuItem("Expire trial")) {
-                    if (world.auth.state != AUTH_TRIAL) {
-                        tell_user("User is not currently in a trial state.", NULL);
-                    } else {
-                        world.auth.trial_start = get_unix_time() - 1000 * 60 * 60 * 24 * 14;
-                        write_auth();
+                    {
+                        SCOPED_MEM(&file.pool);
+                        file.filename = cp_basename(editor->filepath);
+                        file.scope_ops = alloc_list<Go_Scope_Op>();
+                        file.decls = alloc_list<Godecl>();
+                        file.imports = alloc_list<Go_Import>();
+                        file.references = alloc_list<Go_Reference>();
                     }
-                }
 
-                if (ImGui::MenuItem("Start new trial")) {
-                    world.auth.state = AUTH_TRIAL;
-                    world.auth.trial_start = get_unix_time();
-                    write_auth();
-                    tell_user(NULL, "Ok, done.");
-                }
+                    if (!world.indexer.try_acquire_lock(IND_READING)) break;
+                    defer { world.indexer.release_lock(IND_READING); };
 
-                ImGui::EndMenu();
+                    Parser_It it; ptr0(&it);
+                    it.init(editor->buf);
+
+                    auto tree = editor->buf->tree;
+                    if (!tree) break;
+
+                    Ast_Node root; ptr0(&root);
+                    root.init(ts_tree_root_node(tree), &it);
+
+                    world.indexer.process_tree_into_gofile(&file, &root, file.filename, NULL);
+                } while (0);
             }
-#endif
+
+            if (ImGui::MenuItem("Cleanup unused memory")) {
+                world.indexer.message_queue.add([&](auto msg) {
+                    msg->type = GOMSG_CLEANUP_UNUSED_MEMORY;
+                });
+            }
+
+            ImGui::Separator();
+
+            if (ImGui::MenuItem("Expire trial")) {
+                if (world.auth.state != AUTH_TRIAL) {
+                    tell_user("User is not currently in a trial state.", NULL);
+                } else {
+                    world.auth.trial_start = get_unix_time() - 1000 * 60 * 60 * 24 * 14;
+                    write_auth();
+                }
+            }
+
+            if (ImGui::MenuItem("Start new trial")) {
+                world.auth.state = AUTH_TRIAL;
+                world.auth.trial_start = get_unix_time();
+                write_auth();
+                tell_user(NULL, "Ok, done.");
+            }
 
             ImGui::EndMenu();
         }
+#endif
+
 
         if (ImGui::BeginMenu("Help")) {
             menu_command(CMD_ABOUT);
@@ -4791,32 +4802,101 @@ void UI::draw_everything() {
             ImGui::End();
         }
 
-        if (world.wnd_editor_toplevels.show) {
-            begin_window("Toplevels", &world.wnd_editor_toplevels);
+        if (world.wnd_gofile_viewer.show) {
+            auto &wnd = world.wnd_gofile_viewer;
 
-            List<Godecl> decls;
-            decls.init();
+            begin_window("Gofile Viewer", &wnd);
 
-            Parser_It it; ptr0(&it);
-            it.init(editor->buf);
+            if (ImGui::Button("Get current file")) {
+                do {
+                    auto editor = get_current_editor();
+                    if (!editor) break;
 
-            Ast_Node node; ptr0(&node);
-            node.init(ts_tree_root_node(tree), &it);
+                    auto &ind = world.indexer;
+                    if (!ind.try_acquire_lock(IND_READING)) break;
+                    defer { ind.release_lock(IND_READING); };
 
-            current_render_godecl_filepath = cp_strdup(editor->filepath);
+                    if (wnd.gofile) {
+                        wnd.gofile->cleanup();
+                        wnd.gofile = NULL;
+                    }
 
-            FOR_NODE_CHILDREN (&node) {
-                switch (it->type()) {
-                case TS_VAR_DECLARATION:
-                case TS_CONST_DECLARATION:
-                case TS_FUNCTION_DECLARATION:
-                case TS_METHOD_DECLARATION:
-                case TS_TYPE_DECLARATION:
-                case TS_SHORT_VAR_DECLARATION:
-                    decls.len = 0;
-                    world.indexer.node_to_decls(it, &decls, NULL);
-                    For (decls) render_godecl(&it);
-                    break;
+                    ind.reload_all_editors(true);
+
+                    auto ctx = ind.filepath_to_ctx(editor->filepath);
+                    auto gofile = ind.find_gofile_from_ctx(ctx);
+                    if (!gofile) break;
+
+                    wnd.pool.cleanup();
+                    wnd.pool.init();
+
+                    {
+                        SCOPED_MEM(&wnd.pool);
+                        wnd.gofile = gofile->copy();
+                        wnd.filepath = cp_strdup(editor->filepath);
+                    }
+                } while (0);
+            }
+
+            auto gofile = wnd.gofile;
+            if (gofile) {
+                if (ImGui::BeginTabBar("wnd_gofile_viewer_tab_bar", 0)) {
+                    if (ImGui::BeginTabItem("Scope Ops", NULL)) {
+
+
+                        ImGui::Text("todo"); // TODO
+                        ImGui::EndTabItem();
+                    }
+
+                    if (ImGui::BeginTabItem("Decls", NULL)) {
+                        For (*gofile->decls) render_godecl(&it);
+                        ImGui::EndTabItem();
+                    }
+
+                    if (ImGui::BeginTabItem("Imports", NULL)) {
+                        For (*gofile->imports) {
+                            ImGui::Text(
+                                "%s %s %s %s",
+                                it.package_name,
+                                go_package_name_type_str(it.package_name_type),
+                                it.import_path,
+                                it.decl->decl_start.str()
+                            );
+                        }
+                        ImGui::EndTabItem();
+                    }
+
+                    if (ImGui::BeginTabItem("References", NULL)) {
+                        For (*gofile->references) {
+                            if (it.is_sel) {
+                                auto flags = ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth;
+                                bool is_open = ImGui::TreeNodeEx(&it, flags, "<selector> at %s", it.x_start.str());
+
+                                if (ImGui::IsItemClicked())
+                                    goto_file_and_pos(wnd.filepath, it.x_start, true);
+
+                                if (is_open) {
+                                    render_gotype(it.x);
+
+                                    auto flags = ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+                                    ImGui::TreeNodeEx(it.sel, flags);
+                                    if (ImGui::IsItemClicked())
+                                        goto_file_and_pos(wnd.filepath, it.sel_start, true);
+
+                                    ImGui::TreePop();
+                                }
+                            } else {
+                                auto flags = ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+                                ImGui::TreeNodeEx(it.name, flags, "%s at %s", it.name, it.start.str());
+                                if (ImGui::IsItemClicked())
+                                    goto_file_and_pos(wnd.filepath, it.start, true);
+                            }
+                        }
+
+                        ImGui::EndTabItem();
+                    }
+
+                    ImGui::EndTabBar();
                 }
             }
 

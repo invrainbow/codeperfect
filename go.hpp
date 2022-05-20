@@ -388,6 +388,7 @@ enum Godecl_Type {
     GODECL_PARAM,
     GODECL_SHORTVAR,
     GODECL_TYPECASE,
+    GODECL_TYPE_PARAM,
     // GODECL_RANGE,
 };
 
@@ -423,10 +424,14 @@ struct Go_Func_Sig {
     List<Godecl> *result;
 };
 
-// used for or interfaces too
+// used for interfaces too
 struct Go_Struct_Spec {
     ccstr tag;
-    Godecl *field;
+    bool is_interface_elem; // kind of a hack lol
+    union {
+        Godecl *field;
+        Gotype *elem;
+    };
 
     Go_Struct_Spec *copy();
     void read(Index_Stream *s);
@@ -464,7 +469,7 @@ struct Goresult {
 enum Chan_Direction {
     CHAN_RECV,
     CHAN_SEND,
-    CHAN_BI
+    CHAN_BI,
 };
 
 enum Range_Type {
@@ -534,6 +539,9 @@ enum Gotype_Type {
     GOTYPE_RANGE,
     /**/
     GOTYPE_BUILTIN,
+    GOTYPE_CONSTRAINT,
+    GOTYPE_CONSTRAINT_UNDERLYING,
+    /**/
     _GOTYPE_LAZY_MARKER_, // #define IS_LAZY_TYPE(x) (x > _GOTYPE_LAZY_MARKER_)
     // "lazy" types
     GOTYPE_LAZY_INDEX,
@@ -551,6 +559,9 @@ struct Gotype {
     Gotype_Type type;
 
     union {
+        Gotype *constraint_underlying_base;
+        List<Gotype*> *constraint_terms;
+
         struct {
             Gotype_Builtin_Type builtin_type;
             Gotype *builtin_underlying_type;
@@ -661,19 +672,14 @@ enum Go_Scope_Op_Type {
     GSOP_OPEN_SCOPE,
     GSOP_CLOSE_SCOPE,
     GSOP_DECL,
-    GSOP_OPEN_SWITCH_TYPE_SCOPE,
 };
 
 struct Go_Scope_Op {
     Go_Scope_Op_Type type;
     cur2 pos;
-    union {
-        struct {
-            Godecl *decl;
-            int decl_scope_depth;
-        };
-
-        Gotype *gotype;
+    struct {
+        Godecl *decl;
+        int decl_scope_depth;
     };
 
     Go_Scope_Op *copy();
@@ -718,11 +724,8 @@ struct Go_File {
 
     u64 hash;
 
-    void cleanup() {
-        pool.cleanup();
-    }
-
-    // Go_File *copy();
+    void cleanup() { pool.cleanup(); }
+    Go_File *copy();
     void read(Index_Stream *s);
     void write(Index_Stream *s);
 };
@@ -1073,8 +1076,8 @@ struct Go_Indexer {
         bool time = false
     );
     void iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> cb, ccstr filename);
-    void reload_all_dirty_files();
-    void reload_editor_if_dirty(void *editor);
+    void reload_all_editors(bool force = false);
+    void reload_editor(void *editor);
     void reload_single_file(ccstr path);
     Go_Package_Status get_package_status(ccstr import_path);
     void replace_package_name(Go_Package *pkg, ccstr package_name);

@@ -135,7 +135,10 @@ Godecl *Godecl::copy() {
 Go_Struct_Spec *Go_Struct_Spec::copy() {
     auto ret = clone(this);
     ret->tag = cp_strdup(tag);
-    ret->field = copy_object(field);
+    if (is_interface_elem)
+        ret->elem = copy_object(elem);
+    else
+        ret->field = copy_object(field);
     return ret;
 }
 
@@ -153,6 +156,18 @@ Go_Reference *Go_Reference::copy() {
 Gotype *Gotype::copy() {
     auto ret = clone(this);
     switch (type) {
+    case GOTYPE_CONSTRAINT: {
+        Gotype *tmp = NULL;
+        auto copy_func = [&](Gotype** it) {
+            tmp = copy_object(*it);
+            return &tmp;
+        };
+        ret->constraint_terms = copy_list<Gotype*>(constraint_terms, copy_func);
+        break;
+    }
+    case GOTYPE_CONSTRAINT_UNDERLYING:
+        ret->constraint_underlying_base = copy_object(constraint_underlying_base);
+        break;
     case GOTYPE_ID:
         ret->id_name = cp_strdup(id_name);
         break;
@@ -277,16 +292,20 @@ Go_Scope_Op *Go_Scope_Op::copy() {
     return ret;
 }
 
-/*
 Go_File *Go_File::copy() {
     auto ret = clone(this);
+
+    ptr0(&ret->pool);
+    ret->pool.init();
+
+    SCOPED_MEM(&ret->pool);
+
     ret->filename = cp_strdup(filename);
     ret->scope_ops = copy_list(scope_ops);
     ret->decls = copy_list(decls);
     ret->imports = copy_list(imports);
     return ret;
 }
-*/
 
 Go_Index *Go_Index::copy() {
     auto ret = clone(this);

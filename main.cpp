@@ -1468,8 +1468,7 @@ int main(int argc, char **argv) {
 
                 case MTM_RELOAD_EDITOR: {
                     auto editor = find_editor_by_id(it.reload_editor_id);
-                    if (editor)
-                        editor->reload_file(false);
+                    if (editor) editor->reload_file(false);
                     break;
                 }
 

@@ -571,8 +571,11 @@ struct World {
         bool something_that_needs_restart_was_changed;
     } wnd_options;
 
-    struct Wnd_Editor_Toplevels : Wnd {
-    } wnd_editor_toplevels;
+    struct Wnd_Gofile_Viewer : Wnd {
+        Pool pool;
+        Go_File *gofile;
+        ccstr filepath;
+    } wnd_gofile_viewer;
 
     struct Wnd_Add_File_Or_Folder : Wnd {
         char name[MAX_PATH];

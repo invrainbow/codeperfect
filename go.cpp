@@ -38,7 +38,9 @@ const int GO_INDEX_MAGIC_NUMBER = 0x49fa98;
 // version 26: fix scope ops not handling TS_FUNC_LITERAL
 // version 27: fix parser handling newlines and idents wrong in interface specs
 // version 28: upgrade tree-sitter-go
-const int GO_INDEX_VERSION = 27;
+// version 29: generics
+// version 30: redo go_struct_spec
+const int GO_INDEX_VERSION = 30;
 
 void index_print(ccstr fmt, ...) {
     va_list args;
@@ -547,16 +549,13 @@ void Go_Indexer::reload_single_file(ccstr filepath) {
     replace_package_name(pkg, package_name);
 }
 
-void Go_Indexer::reload_editor_if_dirty(void *editor) {
+void Go_Indexer::reload_editor(void *editor) {
     auto it = (Editor*)editor;
+
+    SCOPED_FRAME();
 
     Timer t;
     t.init(cp_sprintf("reload %s", cp_basename(it->filepath)));
-
-    if (!it->buf->tree_dirty) return;
-    it->buf->tree_dirty = false;
-
-    SCOPED_FRAME();
 
     auto filename = cp_basename(it->filepath);
 
@@ -579,15 +578,17 @@ void Go_Indexer::reload_editor_if_dirty(void *editor) {
     replace_package_name(pkg, package_name);
 
     t.log("process tree");
-}
 
+    it->buf->tree_dirty = false;
+}
 
 // @Write
 // Should only be called from main thread.
-void Go_Indexer::reload_all_dirty_files() {
+void Go_Indexer::reload_all_editors(bool force) {
     For (world.panes) {
         For (it.editors) {
-            reload_editor_if_dirty(&it);
+            if (!it.buf->tree_dirty && !force) continue;
+            reload_editor(&it);
         }
     }
 }
@@ -1834,6 +1835,7 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
         case TS_VAR_DECLARATION:
         case TS_RANGE_CLAUSE:
         case TS_RECEIVE_STATEMENT:
+        case TS_PARAMETER_DECLARATION:
         // TODO: handle TS_TYPE_ALIAS here
             {
                 if (node_type == TS_METHOD_DECLARATION || node_type == TS_FUNCTION_DECLARATION) {
@@ -2229,6 +2231,8 @@ Goresult *Go_Indexer::find_decl_of_id(ccstr id_to_find, cur2 id_pos, Go_Ctx *ctx
 
                 auto specs = (gotype->type == GOTYPE_STRUCT ? gotype->struct_specs : gotype->struct_specs);
                 For (*specs) {
+                    if (it.is_interface_elem) continue;
+
                     auto field = it.field;
                     if (field->name_start <= id_pos && id_pos < field->name_end)
                         return make_goresult(field, ctx);
@@ -2762,7 +2766,7 @@ bool Go_Indexer::are_gotypes_equal(Goresult *ra, Goresult *rb) {
 }
 
 List<Find_Decl> *Go_Indexer::find_interfaces(Goresult *target, bool search_everywhere) {
-    reload_all_dirty_files();
+    reload_all_editors();
 
     if (!target->decl) return NULL;
     if (target->decl->type != GODECL_TYPE) return NULL;
@@ -2850,7 +2854,7 @@ List<Find_Decl> *Go_Indexer::find_interfaces(Goresult *target, bool search_every
 }
 
 List<Find_Decl> *Go_Indexer::find_implementations(Goresult *target, bool search_everywhere) {
-    reload_all_dirty_files();
+    reload_all_editors();
 
     if (!target->decl) return NULL;
     if (target->decl->type != GODECL_TYPE) return NULL;
@@ -2995,7 +2999,7 @@ ccstr Go_Indexer::get_godecl_recvname(Godecl *it) {
 }
 
 Jump_To_Definition_Result* Go_Indexer::jump_to_symbol(ccstr symbol) {
-    reload_all_dirty_files();
+    reload_all_editors();
 
     char* pkgname = NULL;
     ccstr rest = NULL;
@@ -3057,10 +3061,10 @@ List<Find_References_File> *Go_Indexer::find_references(ccstr filepath, cur2 pos
     return find_references(result->decl, include_self);
 }
 
-// TODO: maybe we should have the caller call reload_all_dirty_files(), wrapped
+// TODO: maybe we should have the caller call reload_all_editors(), wrapped
 // in a function like init_indexer_session() or something
 List<Call_Hier_Node>* Go_Indexer::generate_caller_hierarchy(Goresult *declres) {
-    reload_all_dirty_files();
+    reload_all_editors();
 
     auto ret = alloc_list<Call_Hier_Node>();
     actually_generate_caller_hierarchy(declres, ret);
@@ -3132,7 +3136,7 @@ void Go_Indexer::actually_generate_caller_hierarchy(Goresult *declres, List<Call
 }
 
 List<Call_Hier_Node>* Go_Indexer::generate_callee_hierarchy(Goresult *declres) {
-    reload_all_dirty_files();
+    reload_all_editors();
 
     auto ret = alloc_list<Call_Hier_Node>();
     actually_generate_callee_hierarchy(declres, ret);
@@ -3226,7 +3230,7 @@ void Go_Indexer::actually_generate_callee_hierarchy(Goresult *declres, List<Call
 }
 
 List<Find_References_File> *Go_Indexer::find_references(Goresult *declres, bool include_self) {
-    reload_all_dirty_files();
+    reload_all_editors();
     return actually_find_references(declres, include_self);
 }
 
@@ -3431,8 +3435,8 @@ List<Go_Import> *Go_Indexer::optimize_imports(ccstr filepath) {
     Timer t; t.init("list_missing_imports");
 
     auto editor = find_editor_by_filepath(filepath);
-    if (editor)
-        reload_editor_if_dirty(editor);
+    if (editor->buf->tree_dirty)
+        reload_editor(editor);
 
     t.log("reload");
 
@@ -3671,7 +3675,7 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 p
     Timer t;
     t.init("jump_to_definition");
 
-    reload_all_dirty_files();
+    reload_all_editors();
 
     t.log("reload dirty files");
 
@@ -3972,7 +3976,7 @@ ccstr get_postfix_completion_name(Postfix_Completion_Type type) {
 }
 
 Gotype *Go_Indexer::get_closest_function(ccstr filepath, cur2 pos) {
-    reload_all_dirty_files();
+    reload_all_editors();
 
     auto pf = parse_file(filepath, true);
     if (!pf) return NULL;
@@ -4001,7 +4005,7 @@ Gotype *Go_Indexer::get_closest_function(ccstr filepath, cur2 pos) {
 
 // this fills possible types
 void Go_Indexer::fill_generate_implementation(List<Go_Symbol> *out, bool selected_interface) {
-    reload_all_dirty_files();
+    reload_all_editors();
 
     auto base_path = make_path(index.current_import_path);
 
@@ -4056,7 +4060,7 @@ void Go_Indexer::fill_generate_implementation(List<Go_Symbol> *out, bool selecte
 }
 
 void Go_Indexer::fill_goto_symbol(List<Go_Symbol> *out) {
-    reload_all_dirty_files();
+    reload_all_editors();
 
     auto base_path = make_path(index.current_import_path);
     auto packages = alloc_list<Go_Package*>();
@@ -4123,7 +4127,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
     Timer t;
     t.init("autocomplete");
 
-    reload_all_dirty_files();
+    reload_all_editors();
 
     t.log("reload");
 
@@ -4693,7 +4697,7 @@ bool Go_Indexer::is_import_path_internal(ccstr import_path) {
 bool Go_Indexer::check_if_still_in_parameter_hint(ccstr filepath, cur2 cur, cur2 hint_start) {
     if (cur < hint_start) return false;
 
-    reload_all_dirty_files();
+    reload_all_editors();
 
     auto pf = parse_file(filepath, true);
     if (!pf) return false;
@@ -4764,7 +4768,7 @@ Parameter_Hint *Go_Indexer::parameter_hint(ccstr filepath, cur2 pos) {
     Timer t;
     t.init("parameter_hint");
 
-    reload_all_dirty_files();
+    reload_all_editors();
 
     t.log("reload files");
 
@@ -5096,8 +5100,7 @@ Go_File *Go_Indexer::find_gofile_from_ctx(Go_Ctx *ctx, Go_Package **out) {
     auto ret = pkg->files->find(check);
     if (!ret) return NULL;
 
-    if (out)
-        *out = pkg;
+    if (out) *out = pkg;
     return ret;
 }
 
@@ -5348,6 +5351,30 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
 
     switch (node->type()) {
     // case TS_SIMPLE_TYPE:
+    case TS_CONSTRAINT_ELEM: {
+        ret = new_gotype(GOTYPE_CONSTRAINT);
+        ret->constraint_terms = alloc_list<Gotype*>();
+
+        FOR_NODE_CHILDREN (node) {
+            if (it->type() != TS_CONSTRAINT_TERM) continue; // ???
+
+            auto child_node = it->child();
+            if (!child_node || child_node->null) continue; // ???
+
+            auto term = node_to_gotype(child_node);
+            if (!term) continue; // just break out of the whole thing?
+
+            auto prev = child_node->prev_all();
+            if (prev && !prev->null && prev->type() == TS_TILDE) {
+                auto tmp = new_gotype(GOTYPE_CONSTRAINT_UNDERLYING);
+                tmp->constraint_underlying_base = term;
+                term = tmp;
+            }
+
+            ret->constraint_terms->append(term);
+        }
+        break;
+    }
 
     case TS_QUALIFIED_TYPE: {
         auto pkg_node = node->field(TSF_PACKAGE);
@@ -5452,6 +5479,7 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
                     field->decl_end = field_node->end();
 
                     auto spec = ret->struct_specs->append();
+                    spec->is_interface_elem = false;
                     spec->field = field;
                     if (!tag_node->null)
                         spec->tag = tag_node->string();
@@ -5482,6 +5510,7 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
                 field->name = field_name;
 
                 auto spec = ret->struct_specs->append();
+                spec->is_interface_elem = false;
                 spec->field = field;
                 if (!tag_node->null)
                     spec->tag = tag_node->string();
@@ -5502,8 +5531,12 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
 
         FOR_NODE_CHILDREN (node) {
             Godecl *field = NULL;
+            Gotype *elem = NULL;
 
             switch (it->type()) {
+            case TS_CONSTRAINT_ELEM:
+                elem = node_to_gotype(it);
+                break;
             case TS_METHOD_SPEC: {
                 auto name_node = it->field(TSF_NAME);
 
@@ -5544,7 +5577,12 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
 
             if (field) {
                 auto spec = ret->interface_specs->append();
+                spec->is_interface_elem = false;
                 spec->field = field;
+            } else if (elem) {
+                auto spec = ret->interface_specs->append();
+                spec->is_interface_elem = true;
+                spec->elem = elem;
             }
         }
         break;
@@ -5763,6 +5801,29 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
             save_decl(decl);
         }
         break;
+
+    case TS_PARAMETER_DECLARATION: {
+        auto type_node = node->field(TSF_TYPE);
+        if (type_node->null) break;
+
+        auto type_node_gotype = node_to_gotype(type_node);
+        if (!type_node_gotype) break;
+
+        FOR_NODE_CHILDREN (node) {
+            if (it->eq(type_node)) break;
+            if (!it->type() == TS_IDENTIFIER) continue;
+
+            auto decl = new_result();
+            decl->type = GODECL_TYPE_PARAM;
+            decl->spec_start = node->start();
+            decl->name = it->string();
+            decl->name_start = it->start();
+            decl->name_end = it->end();
+            decl->gotype = type_node_gotype;
+            save_decl(decl);
+        }
+        break;
+    }
 
     case TS_PARAMETER_LIST:
     case TS_CONST_DECLARATION:
@@ -6601,7 +6662,10 @@ void Godecl::read(Index_Stream *s) {
 
 void Go_Struct_Spec::read(Index_Stream *s) {
     READ_STR(tag);
-    READ_OBJ(field);
+    if (is_interface_elem)
+        READ_OBJ(elem);
+    else
+        READ_OBJ(field);
 }
 
 void Go_Import::read(Index_Stream *s) {
@@ -6621,6 +6685,21 @@ void Go_Reference::read(Index_Stream *s) {
 
 void Gotype::read(Index_Stream *s) {
     switch (type) {
+    case GOTYPE_CONSTRAINT: {
+        // can't use READ_LIST here because constraint_terms contains pointers
+        // (instead of the objects themselves)
+        // do we need to refactor this? copy pasted from multi_types
+        auto len = s->read4();
+        constraint_terms = alloc_list<Gotype*>(len);
+        for (u32 i = 0; i < len; i++) {
+            auto gotype = read_object<Gotype>(s);
+            constraint_terms->append(gotype);
+        }
+        break;
+    }
+    case GOTYPE_CONSTRAINT_UNDERLYING:
+        READ_OBJ(constraint_underlying_base);
+        break;
     case GOTYPE_ID:
         READ_STR(id_name);
         break;
@@ -6754,7 +6833,10 @@ void Godecl::write(Index_Stream *s) {
 
 void Go_Struct_Spec::write(Index_Stream *s) {
     WRITE_STR(tag);
-    WRITE_OBJ(field);
+    if (is_interface_elem)
+        WRITE_OBJ(elem);
+    else
+        WRITE_OBJ(field);
 }
 
 void Go_Import::write(Index_Stream *s) {
@@ -6774,6 +6856,14 @@ void Go_Reference::write(Index_Stream *s) {
 
 void Gotype::write(Index_Stream *s) {
     switch (type) {
+    case GOTYPE_CONSTRAINT:
+        // refactor into WRITE_LIST_OF_POINTERS or some shit?
+        s->write4(constraint_terms->len);
+        For (*constraint_terms) write_object<Gotype>(it, s);
+        break;
+    case GOTYPE_CONSTRAINT_UNDERLYING:
+        WRITE_OBJ(constraint_underlying_base);
+        break;
     case GOTYPE_ID:
         WRITE_STR(id_name);
         break;
