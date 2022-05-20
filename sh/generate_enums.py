@@ -1,5 +1,7 @@
 #!/usr/bin/env python3.9
 
+# Enums must not contain any blank lines between the "enum X {" and "}"
+
 import os
 
 
