@@ -559,18 +559,23 @@ void UI::render_gotype(Gotype *gotype, ccstr field) {
             break;
         case GOTYPE_STRUCT:
         case GOTYPE_INTERFACE: {
-            auto specs = gotype->type == GOTYPE_STRUCT ? gotype->struct_specs : gotype->interface_specs;
-            for (u32 i = 0; i < specs->len; i++) {
-                auto it = &specs->items[i];
-                if (ImGuifi::TreeNodeEx(it, flags, "spec %d", i)) {
-                    if (it->tag)
-                        ImGui::Text("tag: %s", it->tag);
-                    if (it->is_interface_elem)
-                        render_gotype(it->elem);
-                    else
-                        render_godecl(it->field);
+            auto render_shit = [&](void* ptr, Godecl *field, ccstr tag, int i) {
+                if (ImGui::TreeNodeEx(ptr, flags, "spec %d", i)) {
+                    if (tag)
+                        ImGui::Text("tag: %s", tag);
+                    render_godecl(field);
                     ImGui::TreePop();
                 }
+            };
+
+            if (gotype->type == GOTYPE_STRUCT) {
+                int i = 0;
+                For (*gotype->struct_specs)
+                    render_shit(&it, it.field, it.tag, i++);
+            } else {
+                int i = 0;
+                For (*gotype->interface_specs)
+                    render_shit(&it, it.field, NULL, i++);
             }
             break;
         }

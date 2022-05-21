@@ -285,6 +285,9 @@ void Type_Renderer::write_type(Gotype *t, Type_Renderer_Handler custom_handler, 
 
         write("interface {\n");
         For (*t->interface_specs) {
+            // TODO: branch on it.field->is_embedded
+            if (it.field->is_embedded) continue;
+
             write("%s ", it.field->name);
             write_type(it.field->gotype, custom_handler, true);
             write("\n");
@@ -768,8 +771,7 @@ void Go_Indexer::init_builtins(Go_Package *pkg) {
             field->gotype = func_type->copy();
 
             auto error_interface = new_gotype(GOTYPE_INTERFACE);
-            error_interface->interface_specs = alloc_list<Go_Struct_Spec>(1);
-            error_interface->interface_specs = alloc_list<Go_Struct_Spec>(1);
+            error_interface->interface_specs = alloc_list<Go_Interface_Spec>(1);
 
             auto spec = error_interface->interface_specs->append();
             spec->field = field;
@@ -1811,7 +1813,7 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
                     gotype = node_to_gotype(node->child());
                 } else {
                     gotype = new_gotype(GOTYPE_INTERFACE);
-                    gotype->interface_specs = alloc_list<Go_Struct_Spec>(0);
+                    gotype->interface_specs = alloc_list<Go_Interface_Spec>(0);
                 }
 
                 decl->gotype = gotype;
@@ -2227,15 +2229,25 @@ Goresult *Go_Indexer::find_decl_of_id(ccstr id_to_find, cur2 id_pos, Go_Ctx *ctx
                 if (it.decl_start > id_pos) break;
 
                 auto gotype = it.gotype;
-                if (gotype->type != GOTYPE_STRUCT && gotype->type != GOTYPE_INTERFACE) continue;
 
-                auto specs = (gotype->type == GOTYPE_STRUCT ? gotype->struct_specs : gotype->struct_specs);
-                For (*specs) {
-                    if (it.is_interface_elem) continue;
+                auto check = [&](auto field) -> Goresult* {
+                    if (!field->is_embedded)
+                        if (field->name_start <= id_pos && id_pos < field->name_end)
+                            return make_goresult(field, ctx);
+                    return NULL;
+                };
 
-                    auto field = it.field;
-                    if (field->name_start <= id_pos && id_pos < field->name_end)
-                        return make_goresult(field, ctx);
+                if (gotype->type == GOTYPE_STRUCT) {
+                    For (*gotype->struct_specs) {
+                        auto ret = check(it.field);
+                        if (ret) return ret;
+                    }
+                } else if (gotype->type == GOTYPE_INTERFACE) {
+                    For (*gotype->interface_specs) {
+                        if (it.type != GO_INTERFACE_SPEC_METHOD) continue;
+                        auto ret = check(it.field);
+                        if (ret) return ret;
+                    }
                 }
             }
 
@@ -2562,18 +2574,8 @@ bool Go_Indexer::are_gotypes_equal(Goresult *ra, Goresult *rb) {
         auto rres = resolve_type(ref->gotype, ref->ctx);
         if (!rres) return false;
 
-        // after resolution, they need to be the same type for instance, if:
-        //
-        //     type A int; var x A; var y int;
-        //
-        // then x and y have the same type. but if
-        //
-        //     type A int; type B int; var x B; var y int
-        //
-        // then x and y have different types.
-        if (rres->gotype->type != other->gotype->type) return false;
-
-        return are_gotypes_equal(rres, other);
+        return rres->gotype->type == other->gotype->type
+            && are_gotypes_equal(rres, other);
     }
 
     // a->type == b->type
@@ -5020,11 +5022,8 @@ void Go_Indexer::actually_list_dotprops(Goresult *type_res, Goresult *resolved_t
         return;
     }
 
-    case GOTYPE_STRUCT:
-    case GOTYPE_INTERFACE: {
-        // technically point the the same place in memeory, but want to be semantically correct
-        auto specs = resolved_type->type == GOTYPE_STRUCT ? resolved_type->struct_specs : resolved_type->interface_specs;
-        For (*specs) {
+    case GOTYPE_STRUCT: {
+        For (*resolved_type->struct_specs) {
             // recursively list methods for embedded fields
             if (it.field->is_embedded) {
                 auto embedded_type = it.field->gotype;
@@ -5034,12 +5033,39 @@ void Go_Indexer::actually_list_dotprops(Goresult *type_res, Goresult *resolved_t
 
                 actually_list_dotprops(resolved_type_res->wrap(embedded_type), res, ret);
             }
+            ret->append(resolved_type_res->wrap(it.field));
+        }
+        break;
+    }
 
+    case GOTYPE_INTERFACE: {
+        // if we have an GO_INTERFACE_SPEC_ELEM, i.e. a union with more than one term, then:
+        //
+        //  - unions can't have terms that specify methods
+        //  - interfaces are the intersection of their elems
+        //  - means the interface itself has no elements
+        //  - so we have nothing to add, break out
+        For (*resolved_type->interface_specs)
+            if (it.type == GO_INTERFACE_SPEC_ELEM)
+                goto getout;
+
+        // no elems found
+        For (*resolved_type->interface_specs) {
+            // recursively list methods for embedded fields
+            if (it.field->is_embedded) {
+                auto embedded_type = it.field->gotype;
+                auto res = resolve_type(embedded_type, resolved_type_res->ctx);
+                if (!res) continue;
+                if (res->gotype->type != resolved_type->type) continue; // this is technically an error, should we surface it here?
+
+                actually_list_dotprops(resolved_type_res->wrap(embedded_type), res, ret);
+            }
             ret->append(resolved_type_res->wrap(it.field));
         }
         break;
     }
     }
+getout:
 
     type_res = unpointer_type(type_res->gotype, type_res->ctx);
 
@@ -5479,7 +5505,6 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
                     field->decl_end = field_node->end();
 
                     auto spec = ret->struct_specs->append();
-                    spec->is_interface_elem = false;
                     spec->field = field;
                     if (!tag_node->null)
                         spec->tag = tag_node->string();
@@ -5510,7 +5535,6 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
                 field->name = field_name;
 
                 auto spec = ret->struct_specs->append();
-                spec->is_interface_elem = false;
                 spec->field = field;
                 if (!tag_node->null)
                     spec->tag = tag_node->string();
@@ -5527,22 +5551,17 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
     case TS_INTERFACE_TYPE: {
         ret = alloc_object(Gotype);
         ret->type = GOTYPE_INTERFACE;
-        ret->interface_specs = alloc_list<Go_Struct_Spec>(node->child_count());
+        ret->interface_specs = alloc_list<Go_Interface_Spec>(node->child_count());
 
         FOR_NODE_CHILDREN (node) {
             Godecl *field = NULL;
-            Gotype *elem = NULL;
 
             switch (it->type()) {
-            case TS_CONSTRAINT_ELEM:
-                elem = node_to_gotype(it);
-                break;
             case TS_METHOD_SPEC: {
                 auto name_node = it->field(TSF_NAME);
 
                 field = alloc_object(Godecl);
                 field->type = GODECL_FIELD;
-                field->is_toplevel = toplevel;
                 field->name = name_node->string();
                 field->gotype = new_gotype(GOTYPE_FUNC);
                 field->decl_start = it->start();
@@ -5556,33 +5575,40 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
                     it->field(TSF_RESULT),
                     &field->gotype->func_sig
                 );
+
+                auto spec = ret->interface_specs->append();
+                spec->type = GO_INTERFACE_SPEC_METHOD;
+                spec->field = field;
                 break;
             }
+            case TS_CONSTRAINT_ELEM:
             case TS_INTERFACE_TYPE_NAME: {
-                auto gotype = node_to_gotype(it->child());
+                auto node = it;
+                if (node->type() == TS_INTERFACE_TYPE_NAME)
+                    node = node->child();
+
+                if (node->null) continue;
+
+                auto gotype = node_to_gotype(node);
                 if (!gotype) break;
 
                 field = alloc_object(Godecl);
                 field->type = GODECL_FIELD;
-                field->is_toplevel = toplevel;
                 field->name = NULL;
                 field->is_embedded = true;
                 field->gotype = gotype;
-                field->spec_start = it->start();
-                field->decl_start = it->start();
-                field->decl_end = it->end();
+                field->spec_start = node->start();
+                field->decl_start = node->start();
+                field->decl_end = node->end();
+
+                auto spec = ret->interface_specs->append();
+                if (node->type() == TS_CONSTRAINT_ELEM)
+                    spec->type = GO_INTERFACE_SPEC_ELEM;
+                else
+                    spec->type = GO_INTERFACE_SPEC_EMBEDDED;
+                spec->field = field;
                 break;
             }
-            }
-
-            if (field) {
-                auto spec = ret->interface_specs->append();
-                spec->is_interface_elem = false;
-                spec->field = field;
-            } else if (elem) {
-                auto spec = ret->interface_specs->append();
-                spec->is_interface_elem = true;
-                spec->elem = elem;
             }
         }
         break;
@@ -6662,10 +6688,11 @@ void Godecl::read(Index_Stream *s) {
 
 void Go_Struct_Spec::read(Index_Stream *s) {
     READ_STR(tag);
-    if (is_interface_elem)
-        READ_OBJ(elem);
-    else
-        READ_OBJ(field);
+    READ_OBJ(field);
+}
+
+void Go_Interface_Spec::read(Index_Stream *s) {
+    READ_OBJ(field);
 }
 
 void Go_Import::read(Index_Stream *s) {
@@ -6833,10 +6860,11 @@ void Godecl::write(Index_Stream *s) {
 
 void Go_Struct_Spec::write(Index_Stream *s) {
     WRITE_STR(tag);
-    if (is_interface_elem)
-        WRITE_OBJ(elem);
-    else
-        WRITE_OBJ(field);
+    WRITE_OBJ(field);
+}
+
+void Go_Interface_Spec::write(Index_Stream *s) {
+    WRITE_OBJ(field);
 }
 
 void Go_Import::write(Index_Stream *s) {

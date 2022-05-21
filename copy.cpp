@@ -135,10 +135,13 @@ Godecl *Godecl::copy() {
 Go_Struct_Spec *Go_Struct_Spec::copy() {
     auto ret = clone(this);
     ret->tag = cp_strdup(tag);
-    if (is_interface_elem)
-        ret->elem = copy_object(elem);
-    else
-        ret->field = copy_object(field);
+    ret->field = copy_object(field);
+    return ret;
+}
+
+Go_Interface_Spec *Go_Interface_Spec::copy() {
+    auto ret = clone(this);
+    ret->field = copy_object(field);
     return ret;
 }
 

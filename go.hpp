@@ -427,13 +427,32 @@ struct Go_Func_Sig {
 // used for interfaces too
 struct Go_Struct_Spec {
     ccstr tag;
-    bool is_interface_elem; // kind of a hack lol
-    union {
-        Godecl *field;
-        Gotype *elem;
-    };
+    Godecl *field;
 
     Go_Struct_Spec *copy();
+    void read(Index_Stream *s);
+    void write(Index_Stream *s);
+};
+
+enum Go_Interface_Spec_Type {
+    GO_INTERFACE_SPEC_METHOD,
+    GO_INTERFACE_SPEC_EMBEDDED,
+    GO_INTERFACE_SPEC_ELEM,
+};
+
+struct Go_Interface_Spec {
+    Go_Interface_Spec_Type type; // i mean, is this necessary
+    Godecl *field;
+
+    /*
+    union {
+        Godecl *method;
+        Gotype *embedded_type;
+        Gotype *elem;
+    };
+    */
+
+    Go_Interface_Spec *copy();
     void read(Index_Stream *s);
     void write(Index_Stream *s);
 };
@@ -583,7 +602,7 @@ struct Gotype {
         };
 
         List<Go_Struct_Spec> *struct_specs;
-        List<Go_Struct_Spec> *interface_specs;
+        List<Go_Interface_Spec> *interface_specs;
         Gotype *pointer_base;
 
         struct {
