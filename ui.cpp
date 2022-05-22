@@ -4847,9 +4847,47 @@ void UI::draw_everything() {
             if (gofile) {
                 if (ImGui::BeginTabBar("wnd_gofile_viewer_tab_bar", 0)) {
                     if (ImGui::BeginTabItem("Scope Ops", NULL)) {
+                        int i = 0;
+                        while (i < gofile->scope_ops->len) {
+                            auto &it = gofile->scope_ops->at(i++);
+                            auto pos = new_cur2(-1, -1);
 
+                            switch (it.type) {
+                            case GSOP_OPEN_SCOPE: {
+                                auto flags = ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_DefaultOpen;
+                                bool open = ImGui::TreeNodeEx(&it, flags, "scope open at %s", it.pos.str());
 
-                        ImGui::Text("todo"); // TODO
+                                if (ImGui::IsItemClicked())
+                                    pos = it.pos;
+
+                                if (open) break;
+
+                                int depth = 1;
+                                while (i < gofile->scope_ops->len) {
+                                    auto &it2 = gofile->scope_ops->at(i++);
+                                    if (it2.type == GSOP_OPEN_SCOPE) {
+                                        depth++;
+                                    } else if (it2.type == GSOP_CLOSE_SCOPE) {
+                                        depth--;
+                                        if (!depth)
+                                            break;
+                                    }
+                                }
+                                break;
+                            }
+                            case GSOP_DECL: {
+                                render_godecl(it.decl);
+                                break;
+                            }
+                            case GSOP_CLOSE_SCOPE:
+                                ImGui::TreePop();
+                                break;
+                            }
+
+                            if (pos.x != -1 && pos.y != -1)
+                                goto_file_and_pos(wnd.filepath, pos, true);
+                        }
+
                         ImGui::EndTabItem();
                     }
 

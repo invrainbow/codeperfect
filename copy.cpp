@@ -30,6 +30,16 @@ List<T> *copy_list(List<T> *arr, fn<T*(T* it)> copy_func) {
 }
 
 template <typename T>
+List<T> *copy_listp(List<T> *arr) {
+    if (!arr) return NULL;
+
+    auto new_arr = alloc_object(List<T>);
+    new_arr->init(LIST_POOL, max(arr->len, 1));
+    For (*arr) new_arr->append(copy_object(it));
+    return new_arr;
+}
+
+template <typename T>
 List<T> *copy_list(List<T> *arr) {
     auto copy_func = [&](T *it) -> T* { return copy_object(it); };
     return copy_list<T>(arr, copy_func);
@@ -121,14 +131,23 @@ AC_Result *AC_Result::copy() {
     return ret;
 }
 
+Go_Type_Parameter *Go_Type_Parameter::copy() {
+    auto ret = clone(this);
+    ret->name = cp_strdup(name);
+    ret->constraint = copy_object(constraint);
+    return ret;
+}
+
 Godecl *Godecl::copy() {
     auto ret = clone(this);
 
     ret->name = cp_strdup(name);
-    if (type == GODECL_IMPORT)
+    if (type == GODECL_IMPORT) {
         ret->import_path = cp_strdup(import_path);
-    else
+    } else {
         ret->gotype = copy_object(gotype);
+        ret->type_params = copy_list(type_params);
+    }
     return ret;
 }
 
@@ -159,15 +178,13 @@ Go_Reference *Go_Reference::copy() {
 Gotype *Gotype::copy() {
     auto ret = clone(this);
     switch (type) {
-    case GOTYPE_CONSTRAINT: {
-        Gotype *tmp = NULL;
-        auto copy_func = [&](Gotype** it) {
-            tmp = copy_object(*it);
-            return &tmp;
-        };
-        ret->constraint_terms = copy_list<Gotype*>(constraint_terms, copy_func);
+    case GOTYPE_GENERIC:
+        ret->generic_base = copy_object(generic_base);
+        ret->generic_args = copy_listp(generic_args);
         break;
-    }
+    case GOTYPE_CONSTRAINT:
+        ret->constraint_terms = copy_listp(constraint_terms);
+        break;
     case GOTYPE_CONSTRAINT_UNDERLYING:
         ret->constraint_underlying_base = copy_object(constraint_underlying_base);
         break;
@@ -197,15 +214,9 @@ Gotype *Gotype::copy() {
         ret->func_sig.result = copy_list(func_sig.result);
         ret->func_recv = copy_object(ret->func_recv);
         break;
-    case GOTYPE_MULTI: {
-        Gotype *tmp = NULL;
-        auto copy_func = [&](Gotype** it) {
-            tmp = copy_object(*it);
-            return &tmp;
-        };
-        ret->multi_types = copy_list<Gotype*>(multi_types, copy_func);
+    case GOTYPE_MULTI:
+        ret->multi_types = copy_listp(multi_types);
         break;
-    }
     case GOTYPE_VARIADIC:
         ret->variadic_base = copy_object(variadic_base);
         break;
@@ -307,6 +318,7 @@ Go_File *Go_File::copy() {
     ret->scope_ops = copy_list(scope_ops);
     ret->decls = copy_list(decls);
     ret->imports = copy_list(imports);
+    ret->references = copy_list(references);
     return ret;
 }
 

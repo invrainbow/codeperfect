@@ -40,7 +40,10 @@ const int GO_INDEX_MAGIC_NUMBER = 0x49fa98;
 // version 28: upgrade tree-sitter-go
 // version 29: generics
 // version 30: redo go_struct_spec
-const int GO_INDEX_VERSION = 30;
+// version 31: add go_interface_spec
+// version 32: redo scope ops and add gotype_generic
+// version 33: read/write/copy gotype_generic
+const int GO_INDEX_VERSION = 33;
 
 void index_print(ccstr fmt, ...) {
     va_list args;
@@ -1828,6 +1831,7 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
             break;
         }
 
+        // TODO: handle TS_TYPE_ALIAS here
         case TS_METHOD_DECLARATION:
         case TS_FUNCTION_DECLARATION:
         case TS_TYPE_DECLARATION:
@@ -1838,46 +1842,52 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
         case TS_RANGE_CLAUSE:
         case TS_RECEIVE_STATEMENT:
         case TS_PARAMETER_DECLARATION:
-        // TODO: handle TS_TYPE_ALIAS here
-            {
-                if (node_type == TS_METHOD_DECLARATION || node_type == TS_FUNCTION_DECLARATION) {
-                    open_scopes.append(depth);
+        case TS_TYPE_PARAMETER_DECLARATION: {
+            if (node_type == TS_METHOD_DECLARATION || node_type == TS_FUNCTION_DECLARATION) {
+                open_scopes.append(depth);
 
-                    Go_Scope_Op op;
-                    op.type = GSOP_OPEN_SCOPE;
-                    op.pos = node->start();
-                    if (!cb(&op)) return WALK_ABORT;
-                }
+                Go_Scope_Op op;
+                op.type = GSOP_OPEN_SCOPE;
+                op.pos = node->start();
+                if (!cb(&op)) return WALK_ABORT;
+            }
 
-                if (node_type == TS_RECEIVE_STATEMENT) {
-                    bool ok = false;
-                    do {
-                        auto parent = node->parent();
-                        if (parent->null) continue;
-                        if (parent->type() != TS_COMMUNICATION_CASE) continue;
-                        ok = true;
-                    } while (0);
+            if (node_type == TS_RECEIVE_STATEMENT) {
+                bool ok = false;
+                do {
+                    auto parent = node->parent();
+                    if (parent->null) continue;
+                    if (parent->type() != TS_COMMUNICATION_CASE) continue;
+                    ok = true;
+                } while (0);
 
-                    if (!ok) return WALK_ABORT;
-                }
+                if (!ok) return WALK_ABORT;
+            }
 
-                scope_ops_decls->len = 0;
-                node_to_decls(node, scope_ops_decls, filename);
+            scope_ops_decls->len = 0;
+            node_to_decls(node, scope_ops_decls, filename);
 
-                for (u32 i = 0; i < scope_ops_decls->len; i++) {
-                    Go_Scope_Op op;
-                    op.type = GSOP_DECL;
-                    op.decl = &scope_ops_decls->items[i];
-                    op.decl_scope_depth = open_scopes.len;
-                    op.pos = scope_ops_decls->items[i].decl_start;
-                    if (!cb(&op)) return WALK_ABORT;
-                }
+            for (u32 i = 0; i < scope_ops_decls->len; i++) {
+                Go_Scope_Op op;
+                op.type = GSOP_DECL;
+                op.decl = &scope_ops_decls->items[i];
+                op.decl_scope_depth = open_scopes.len;
+                op.pos = scope_ops_decls->items[i].decl_start;
+                if (!cb(&op)) return WALK_ABORT;
             }
             break;
+        }
         }
 
         return WALK_CONTINUE;
     });
+
+    For (open_scopes) {
+        Go_Scope_Op op;
+        op.type = GSOP_CLOSE_SCOPE;
+        op.pos = root->end();
+        cb(&op);
+    }
 }
 
 /*
@@ -2358,7 +2368,7 @@ List<Postfix_Completion_Type> *Go_Indexer::get_postfix_completions(Ast_Node *ope
         if (is_gotype_error(res))
             ret->append(PFC_CHECK);
 
-        auto rres = resolve_type(res->gotype, res->ctx);
+        auto rres = resolve_type(res);
         if (!rres) return false;
 
         auto basetype = rres->gotype;
@@ -2474,7 +2484,7 @@ List<Goresult> *Go_Indexer::list_lazy_type_dotprops(Gotype *type, Go_Ctx *ctx) {
     auto res = evaluate_type(type, ctx);
     if (!res) return NULL;
 
-    auto rres = resolve_type(res->gotype, res->ctx);
+    auto rres = resolve_type(res);
     if (!rres) return NULL;
 
     auto tmp = alloc_list<Goresult>();
@@ -2571,7 +2581,7 @@ bool Go_Indexer::are_gotypes_equal(Goresult *ra, Goresult *rb) {
             other = ra;
         }
 
-        auto rres = resolve_type(ref->gotype, ref->ctx);
+        auto rres = resolve_type(ref);
         if (!rres) return false;
 
         return rres->gotype->type == other->gotype->type
@@ -3776,7 +3786,7 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 p
                     auto res = evaluate_type(gotype, ctx);
                     if (!res) break;
 
-                    auto rres = resolve_type(res->gotype, res->ctx);
+                    auto rres = resolve_type(res);
                     if (!rres) break;
 
                     auto tmp = alloc_list<Goresult>();
@@ -4371,7 +4381,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
 
             bool iserror = is_gotype_error(res);
 
-            auto rres = resolve_type(res->gotype, res->ctx);
+            auto rres = resolve_type(res);
             if (!rres) break;
 
             expr_to_analyze_gotype = rres->gotype;
@@ -4579,7 +4589,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
             auto res = evaluate_type(gotype, ctx);
             if (!res) break;
 
-            auto rres = resolve_type(res->gotype, res->ctx);
+            auto rres = resolve_type(res);
             if (!rres) break;
 
             auto tmp = alloc_list<Goresult>();
@@ -4895,7 +4905,7 @@ Parameter_Hint *Go_Indexer::parameter_hint(ccstr filepath, cur2 pos) {
     auto res = evaluate_type(gotype, ctx);
     if (!res) return NULL;
 
-    auto rres = resolve_type(res->gotype, res->ctx);
+    auto rres = resolve_type(res);
     if (!rres) return NULL;
 
     if (rres->gotype->type != GOTYPE_FUNC) return NULL;
@@ -5067,7 +5077,7 @@ void Go_Indexer::actually_list_dotprops(Goresult *type_res, Goresult *resolved_t
     }
 getout:
 
-    type_res = unpointer_type(type_res->gotype, type_res->ctx);
+    type_res = unpointer_type(type_res);
 
     auto type = type_res->gotype;
     ccstr type_name = NULL;
@@ -5425,6 +5435,31 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
         ret->pointer_base = node_to_gotype(node->child());
         break;
 
+    case TS_GENERIC_TYPE: {
+        ret = new_gotype(GOTYPE_GENERIC);
+        ret->generic_base = node_to_gotype(node->field(TSF_TYPE));
+
+        auto args_node = node->field(TSF_TYPE_ARGUMENTS);
+        if (!args_node->null) {
+            bool ok = true;
+            auto args = alloc_list<Gotype*>();
+
+            FOR_NODE_CHILDREN (args_node) {
+                auto arg_gotype = node_to_gotype(it);
+                if (!arg_gotype) {
+                    ok = false;
+                    break;
+                }
+                args->append(arg_gotype);
+            }
+
+            if (!ok) return NULL;
+
+            ret->generic_args = args;
+        }
+        break;
+    }
+
     case TS_PARENTHESIZED_TYPE:
         ret = node_to_gotype(node->child());
         break;
@@ -5760,6 +5795,23 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
         memcpy(decl, decl->copy(), sizeof(Godecl));
     };
 
+    auto parse_type_params = [&](Ast_Node *node) -> List<Go_Type_Parameter> * {
+        if (node->null) return NULL;
+
+        auto ret = alloc_list<Go_Type_Parameter>();
+        FOR_NODE_CHILDREN (node) {
+            auto name_node = it->field(TSF_NAME);
+            if (name_node->null) return NULL;
+            auto type_node = it->field(TSF_TYPE);
+            if (type_node->null) return NULL;
+
+            auto obj = ret->append();
+            obj->name = name_node->string();
+            obj->constraint = node_to_gotype(type_node, is_toplevel);
+        }
+        return ret;
+    };
+
     auto node_type = node->type();
     switch (node_type) {
     case TS_FUNCTION_DECLARATION:
@@ -5770,9 +5822,10 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
         auto name = name_node->string();
 
         if (node_type == TS_FUNCTION_DECLARATION)
-            if (is_toplevel)
-                if (streq(name, "init"))
-                    break;
+            if (is_toplevel && streq(name, "init"))
+                break;
+
+        auto type_params = parse_type_params(node->field(TSF_TYPE_PARAMETERS));
 
         auto params_node = node->field(TSF_PARAMETERS);
         auto result_node = node->field(TSF_RESULT);
@@ -5797,6 +5850,7 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
         decl->name_start = name_node->start();
         decl->name_end = name_node->end();
         decl->gotype = gotype;
+        decl->type_params = type_params;
         save_decl(decl);
 
         break;
@@ -5807,6 +5861,8 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
         for (auto spec = node->child(); !spec->null; spec = spec->next()) {
             auto name_node = spec->field(TSF_NAME);
             if (name_node->null) continue;
+
+            auto type_params = parse_type_params(spec->field(TSF_TYPE_PARAMETERS));
 
             auto name = name_node->string();
             if (streq(name, "_")) continue;
@@ -5824,11 +5880,12 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
             decl->name_start = name_node->start();
             decl->name_end = name_node->end();
             decl->gotype = gotype;
+            decl->type_params = type_params;
             save_decl(decl);
         }
         break;
 
-    case TS_PARAMETER_DECLARATION: {
+    case TS_TYPE_PARAMETER_DECLARATION: {
         auto type_node = node->field(TSF_TYPE);
         if (type_node->null) break;
 
@@ -6104,6 +6161,53 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
     }
 }
 
+// precondition: type->type != GOTYPE_GENERIC
+Goresult *Go_Indexer::subst_generic_type_once(Gotype *type, Go_Ctx *ctx) {
+    auto base = type->generic_base;
+    switch (base->type) {
+    case GOTYPE_ID: {
+        auto res = find_decl_of_id(base->id_name, base->id_pos, ctx);
+        if (!res) break;
+
+        auto decl = res->godecl;
+        if (decl->type != GODECL_TYPE) break;
+
+        if (decl->type_params != NULL) break;
+
+        auto gotype = decl->gotype;
+        if (
+
+        // needs to be a type
+        if (res->type_params) {
+        }
+
+        // ...
+
+        break;
+    }
+    case GOTYPE_SEL: {
+        // ...
+        break;
+    }
+
+    }
+    return NULL;
+}
+
+Goresult *Go_Indexer::subst_generic_type(Goresult *res) {
+    while (res->gotype->type == GOTYPE_GENERIC)
+        res = subst_generic_type_once(res->gotype, res->ctx);
+    return res;
+}
+
+Goresult *Go_Indexer::subst_generic_type(Gotype *type, Go_Ctx *ctx) {
+    return subst_generic_type(make_goresult(type, ctx));
+}
+
+Goresult *Go_Indexer::unpointer_type(Goresult *res) {
+    return unpointer_type(res->gotype, res->ctx);
+}
+
 Goresult *Go_Indexer::unpointer_type(Gotype *type, Go_Ctx *ctx) {
     while (type->type == GOTYPE_POINTER)
         type = type->pointer_base;
@@ -6276,10 +6380,10 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
         auto res = evaluate_type(gotype->lazy_range_base, ctx);
         if (!res) return NULL;
 
-        res = resolve_type(res->gotype, res->ctx);
+        res = resolve_type(res);
         if (!res) return NULL;
 
-        res = unpointer_type(res->gotype, res->ctx);
+        res = unpointer_type(res);
 
         auto base_type = res->gotype;
         if (base_type->type == GOTYPE_MULTI)
@@ -6307,10 +6411,10 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
         auto res = evaluate_type(gotype->lazy_index_base, ctx);
         if (!res) return NULL;
 
-        res = resolve_type(res->gotype, res->ctx);
+        res = resolve_type(res);
         if (!res) return NULL;
 
-        res = unpointer_type(res->gotype, res->ctx);
+        res = unpointer_type(res);
 
         auto base_type = res->gotype;
 
@@ -6338,10 +6442,10 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
         auto res = evaluate_type(gotype->lazy_call_base, ctx);
         if (!res) break;
 
-        res = resolve_type(res->gotype, res->ctx);
+        res = resolve_type(res);
         if (!res) break;
 
-        res = unpointer_type(res->gotype, res->ctx);
+        res = unpointer_type(res);
         if (!res) break;
 
         if (res->gotype->type != GOTYPE_FUNC) return NULL;
@@ -6362,7 +6466,7 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
         auto res = evaluate_type(gotype->lazy_dereference_base, ctx);
         if (!res) return NULL;
 
-        res = resolve_type(res->gotype, res->ctx);
+        res = resolve_type(res);
         if (!res) return NULL;
 
         if (res->gotype->type != GOTYPE_POINTER) return NULL;
@@ -6424,10 +6528,10 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
         auto res = evaluate_type(gotype->lazy_sel_base, ctx);
         if (!res) return NULL;
 
-        auto rres = resolve_type(res->gotype, res->ctx);
+        auto rres = resolve_type(res);
         if (!rres) return NULL;
 
-        rres = unpointer_type(rres->gotype, rres->ctx);
+        rres = unpointer_type(rres);
 
         List<Goresult> results;
         results.init();
@@ -6532,6 +6636,10 @@ Goresult *Go_Indexer::resolve_type_to_decl(Gotype *type, Go_Ctx *ctx) {
     if (res->decl->type != GODECL_TYPE) return NULL;
 
     return res;
+}
+
+Goresult *Go_Indexer::resolve_type(Goresult *res) {
+    return resolve_type(res->gotype, res->ctx);
 }
 
 Goresult *Go_Indexer::resolve_type(Gotype *type, Go_Ctx *ctx) {
@@ -6671,19 +6779,28 @@ TSParser *new_ts_parser() {
 // -----
 // read functions
 
+#define depointer(x) std::remove_pointer<x>::type
 #define READ_STR(x) x = s->readstr()
-#define READ_OBJ(x) x = read_object<std::remove_pointer<decltype(x)>::type>(s)
-#define READ_LIST(x) x = read_list<std::remove_pointer<decltype(x)>::type::type>(s)
+#define READ_OBJ(x) x = read_object<depointer(decltype(x))>(s)
+#define READ_LIST(x) x = read_list<depointer(decltype(x))::type>(s)
+#define READ_LISTP(x) x = read_listp<depointer(depointer(decltype(x))::type)>(s)
 
 // ---
+
+void Go_Type_Parameter::read(Index_Stream *s) {
+    READ_STR(name);
+    READ_OBJ(constraint);
+}
 
 void Godecl::read(Index_Stream *s) {
     READ_STR(name);
 
-    if (type == GODECL_IMPORT)
+    if (type == GODECL_IMPORT) {
         READ_STR(import_path);
-    else
+    } else {
         READ_OBJ(gotype);
+        READ_LIST(type_params);
+    }
 }
 
 void Go_Struct_Spec::read(Index_Stream *s) {
@@ -6712,18 +6829,13 @@ void Go_Reference::read(Index_Stream *s) {
 
 void Gotype::read(Index_Stream *s) {
     switch (type) {
-    case GOTYPE_CONSTRAINT: {
-        // can't use READ_LIST here because constraint_terms contains pointers
-        // (instead of the objects themselves)
-        // do we need to refactor this? copy pasted from multi_types
-        auto len = s->read4();
-        constraint_terms = alloc_list<Gotype*>(len);
-        for (u32 i = 0; i < len; i++) {
-            auto gotype = read_object<Gotype>(s);
-            constraint_terms->append(gotype);
-        }
+    case GOTYPE_GENERIC:
+        READ_OBJ(generic_base);
+        READ_LISTP(generic_args);
         break;
-    }
+    case GOTYPE_CONSTRAINT:
+        READ_LISTP(constraint_terms);
+        break;
     case GOTYPE_CONSTRAINT_UNDERLYING:
         READ_OBJ(constraint_underlying_base);
         break;
@@ -6848,14 +6960,22 @@ void Go_Index::read(Index_Stream *s) {
 #define WRITE_STR(x) s->writestr(x)
 #define WRITE_OBJ(x) write_object<std::remove_pointer<decltype(x)>::type>(x, s)
 #define WRITE_LIST(x) write_list<decltype(x)>(x, s)
+#define WRITE_LISTP(x) write_listp<decltype(x)>(x, s)
+
+void Go_Type_Parameter::write(Index_Stream *s) {
+    WRITE_STR(name);
+    WRITE_OBJ(constraint);
+}
 
 void Godecl::write(Index_Stream *s) {
     WRITE_STR(name);
 
-    if (type == GODECL_IMPORT)
+    if (type == GODECL_IMPORT) {
         WRITE_STR(import_path);
-    else
+    } else {
         WRITE_OBJ(gotype);
+        WRITE_LIST(type_params);
+    }
 }
 
 void Go_Struct_Spec::write(Index_Stream *s) {
@@ -6884,10 +7004,12 @@ void Go_Reference::write(Index_Stream *s) {
 
 void Gotype::write(Index_Stream *s) {
     switch (type) {
+    case GOTYPE_GENERIC:
+        WRITE_OBJ(generic_base);
+        WRITE_LISTP(generic_args);
+        break;
     case GOTYPE_CONSTRAINT:
-        // refactor into WRITE_LIST_OF_POINTERS or some shit?
-        s->write4(constraint_terms->len);
-        For (*constraint_terms) write_object<Gotype>(it, s);
+        WRITE_LISTP(constraint_terms);
         break;
     case GOTYPE_CONSTRAINT_UNDERLYING:
         WRITE_OBJ(constraint_underlying_base);
@@ -6927,8 +7049,7 @@ void Gotype::write(Index_Stream *s) {
         WRITE_OBJ(chan_base);
         break;
     case GOTYPE_MULTI:
-        s->write4(multi_types->len);
-        For (*multi_types) write_object<Gotype>(it, s);
+        WRITE_LISTP(multi_types);
         break;
     case GOTYPE_VARIADIC:
         WRITE_OBJ(variadic_base);

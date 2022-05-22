@@ -392,6 +392,15 @@ enum Godecl_Type {
     // GODECL_RANGE,
 };
 
+struct Go_Type_Parameter {
+    ccstr name;
+    Gotype *constraint;
+
+    Go_Type_Parameter *copy();
+    void read(Index_Stream *s);
+    void write(Index_Stream *s);
+};
+
 struct Godecl {
     // A decl (TS_XXX_DECLARATION) contains multiple specs (TS_XXX_SPEC), each of which
     // might contain multiple IDs (TS_IDENTIFIER). Each Godecl corresponds to one of those
@@ -410,7 +419,10 @@ struct Godecl {
     bool is_toplevel;
 
     union {
-        Gotype *gotype;
+        struct {
+            Gotype *gotype;
+            List<Go_Type_Parameter> *type_params;
+        };
         ccstr import_path; // for GODECL_IMPORT
     };
 
@@ -556,10 +568,10 @@ enum Gotype_Type {
     GOTYPE_VARIADIC,
     GOTYPE_ASSERTION,
     GOTYPE_RANGE,
-    /**/
     GOTYPE_BUILTIN,
     GOTYPE_CONSTRAINT,
     GOTYPE_CONSTRAINT_UNDERLYING,
+    GOTYPE_GENERIC,
     /**/
     _GOTYPE_LAZY_MARKER_, // #define IS_LAZY_TYPE(x) (x > _GOTYPE_LAZY_MARKER_)
     // "lazy" types
@@ -574,12 +586,18 @@ enum Gotype_Type {
     GOTYPE_LAZY_RANGE,
 };
 
+// TODO: capture parameterization?
 struct Gotype {
     Gotype_Type type;
 
     union {
         Gotype *constraint_underlying_base;
         List<Gotype*> *constraint_terms;
+
+        struct {
+            Gotype *generic_base;
+            List<Gotype*> *generic_args;
+        };
 
         struct {
             Gotype_Builtin_Type builtin_type;
@@ -1060,9 +1078,14 @@ struct Go_Indexer {
     u64 hash_package(ccstr resolved_package_path);
     ccstr ctx_to_filepath(Go_Ctx *ctx);
     Go_Ctx *filepath_to_ctx(ccstr filepath);
+    Goresult *resolve_type(Goresult *res);
     Goresult *resolve_type(Gotype *type, Go_Ctx *ctx);
     Goresult *resolve_type_to_decl(Gotype *type, Go_Ctx *ctx);
+    Goresult *unpointer_type(Goresult *res);
     Goresult *unpointer_type(Gotype *type, Go_Ctx *ctx);
+    Goresult *subst_generic_type_once(Gotype *type, Go_Ctx *ctx);
+    Goresult *subst_generic_type(Goresult *res);
+    Goresult *subst_generic_type(Gotype *type, Go_Ctx *ctx);
     List<Godecl> *parameter_list_to_fields(Ast_Node *params);
     Gotype *node_to_gotype(Ast_Node *node, bool toplevel = false);
     Goresult *find_decl_of_id(ccstr id, cur2 id_pos, Go_Ctx *ctx, Go_Import **single_import = NULL);
@@ -1187,6 +1210,16 @@ List<T> *read_list(Index_Stream *s) {
 }
 
 template<typename T>
+List<T*> *read_listp(Index_Stream *s) {
+    auto len = s->read4();
+    auto ret = alloc_object(List<T*>);
+    ret->init(LIST_POOL, len);
+    for (u32 i = 0; i < len; i++)
+        ret->append(read_object<T>(s));
+    return ret;
+}
+
+template<typename T>
 void write_object(T *obj, Index_Stream *s) {
     if (!obj) {
         s->write2(0);
@@ -1206,6 +1239,16 @@ void write_list(L arr, Index_Stream *s) {
     }
     s->write4(arr->len);
     For (*arr) write_object(&it, s);
+}
+
+template<typename L>
+void write_listp(L arr, Index_Stream *s) {
+    if (!arr) {
+        s->write4(0);
+        return;
+    }
+    s->write4(arr->len);
+    For (*arr) write_object(it, s);
 }
 
 struct Type_Renderer;
