@@ -227,7 +227,7 @@ Gotype *Gotype::copy() {
         ret->range_base = copy_object(range_base);
         break;
     case GOTYPE_BUILTIN:
-        ret->builtin_underlying_type = copy_object(builtin_underlying_type);
+        ret->builtin_underlying_base = copy_object(builtin_underlying_base);
         break;
     case GOTYPE_LAZY_INDEX:
         ret->lazy_index_base = copy_object(lazy_index_base);

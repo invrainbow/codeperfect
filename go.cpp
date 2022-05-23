@@ -39,11 +39,8 @@ const int GO_INDEX_MAGIC_NUMBER = 0x49fa98;
 // version 27: fix parser handling newlines and idents wrong in interface specs
 // version 28: upgrade tree-sitter-go
 // version 29: generics
-// version 30: redo go_struct_spec
-// version 31: add go_interface_spec
-// version 32: redo scope ops and add gotype_generic
-// version 33: read/write/copy gotype_generic
-const int GO_INDEX_VERSION = 33;
+// version 30: generics cont
+const int GO_INDEX_VERSION = 30;
 
 void index_print(ccstr fmt, ...) {
     va_list args;
@@ -720,7 +717,7 @@ void Go_Indexer::init_builtins(Go_Package *pkg) {
             auto gotype = add_builtin(GODECL_FUNC, type, name);
 
             SCOPED_MEM(&final_mem);
-            gotype->builtin_underlying_type = func_type->copy();
+            gotype->builtin_underlying_base = func_type->copy();
         };
 
         auto builtin = [&](ccstr name) -> Gotype * {
@@ -780,7 +777,7 @@ void Go_Indexer::init_builtins(Go_Package *pkg) {
             spec->field = field;
 
             auto error_type = builtin("error");
-            error_type->builtin_underlying_type = error_interface;
+            error_type->builtin_underlying_base = error_interface;
         }
 
         // func append(slice []Type, elems ...Type) []Type
@@ -4047,8 +4044,8 @@ void Go_Indexer::fill_generate_implementation(List<Go_Symbol> *out, bool selecte
 
                 auto gotype_type = it.gotype->type;
                 if (gotype_type == GOTYPE_BUILTIN) {
-                    if (!it.gotype->builtin_underlying_type) continue;
-                    gotype_type = it.gotype->builtin_underlying_type->type;
+                    if (!it.gotype->builtin_underlying_base) continue;
+                    gotype_type = it.gotype->builtin_underlying_base->type;
                 }
 
                 // if user selected interface, we're looking for any other
@@ -6161,41 +6158,134 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
     }
 }
 
+Gotype* walk_gotype_and_replace(Gotype *gotype, fn<Gotype*(Gotype*)> cb) {
+    return _walk_gotype_and_replace(gotype->copy(), cb);
+}
+
+Gotype* _walk_gotype_and_replace(Gotype *gotype, fn<Gotype*(Gotype*)> cb) {
+    if (!gotype) return NULL;
+
+    auto repl = cb(gotype);
+    if (repl) return repl;
+
+#define recur_raw(x) _walk_gotype_and_replace(x, cb)
+#define recur(x) gotype->x = recur_raw(gotype->x)
+
+    auto recur_arr = [&](auto arr) {
+        for (int i = 0; i < arr->len; i++)
+            arr->items[i] = recur_raw(arr->items[i]);
+    };
+
+    auto recur_decl = [&](auto decl) {
+        if (decl->gotype)
+            decl->gotype = recur_raw(decl->gotype);
+    };
+
+    switch (gotype->type) {
+    case GOTYPE_VARIADIC:
+    case GOTYPE_POINTER:
+    case GOTYPE_SLICE:
+    case GOTYPE_ARRAY:
+    case GOTYPE_CHAN:
+    case GOTYPE_ASSERTION:
+    case GOTYPE_RANGE:
+    case GOTYPE_CONSTRAINT_UNDERLYING:
+    case GOTYPE_BUILTIN:
+        recur(general_base);
+        break;
+    case GOTYPE_MAP:
+        recur(map_key);
+        recur(map_value);
+        break;
+    case GOTYPE_STRUCT:
+        For (*gotype->struct_specs)
+            recur_decl(it.field);
+        break;
+    case GOTYPE_INTERFACE:
+        For (*gotype->interface_specs)
+            recur_decl(it.field);
+        break;
+    case GOTYPE_FUNC:
+        For (*gotype->func_sig.params) recur_decl(&it);
+        For (*gotype->func_sig.result) recur_decl(&it);
+        break;
+    case GOTYPE_MULTI:
+        recur_arr(gotype->multi_types);
+        break;
+    case GOTYPE_CONSTRAINT:
+        recur_arr(gotype->constraint_terms);
+        break;
+    case GOTYPE_GENERIC:
+        recur(generic_base);
+        recur_arr(gotype->generic_args);
+        break;
+    // i don't think we need to handle lazy types yet?
+    // this is for going through a GOTYPE_GENERIC and replacing type parameters with arguments
+    // case GOTYPE_LAZY_INDEX:
+    // case GOTYPE_LAZY_CALL:
+    // case GOTYPE_LAZY_DEREFERENCE:
+    // case GOTYPE_LAZY_REFERENCE:
+    // case GOTYPE_LAZY_ARROW:
+    // case GOTYPE_LAZY_ID:
+    // case GOTYPE_LAZY_SEL:
+    // case GOTYPE_LAZY_ONE_OF_MULTI:
+    // case GOTYPE_LAZY_RANGE:
+    }
+#undef recur
+#undef recur_raw
+
+    return gotype;
+}
+
 // precondition: type->type != GOTYPE_GENERIC
 Goresult *Go_Indexer::subst_generic_type_once(Gotype *type, Go_Ctx *ctx) {
     auto base = type->generic_base;
     switch (base->type) {
-    case GOTYPE_ID: {
-        auto res = find_decl_of_id(base->id_name, base->id_pos, ctx);
-        if (!res) break;
-
-        auto decl = res->godecl;
-        if (decl->type != GODECL_TYPE) break;
-
-        if (decl->type_params != NULL) break;
-
-        auto gotype = decl->gotype;
-        if (
-
-        // needs to be a type
-        if (res->type_params) {
+    case GOTYPE_ID:
+    case GOTYPE_SEL: {
+        Goresult *res = NULL;
+        if (base->type == GOTYPE_ID) {
+            res = find_decl_of_id(base->id_name, base->id_pos, ctx);
+        } else {
+            auto import_path = find_import_path_referred_to_by_id(base->sel_name, ctx);
+            if (!import_path) break;
+            res = find_decl_in_package(base->sel_sel, import_path);
         }
 
-        // ...
+        if (!res) break;
 
-        break;
-    }
-    case GOTYPE_SEL: {
-        // ...
-        break;
-    }
+        auto decl = res->decl;
 
+        // check requirements
+        if (decl->type != GODECL_TYPE) break;
+        if (decl->type_params == NULL) break;
+        if (decl->type_params->len != type->generic_args->len) break;
+
+        auto gotype = decl->gotype;
+
+        // table of name to gotype
+        Table<Gotype*> arguments; arguments.init();
+        for (int i = 0; i < decl->type_params->len; i++) {
+            auto &param = decl->type_params->at(i);
+            auto arg = type->generic_args->at(i);
+            arguments.set(param.name, arg);
+        }
+
+        auto ret = walk_gotype_and_replace(decl->gotype, [&](auto it) -> Gotype* {
+            if (it->type == GOTYPE_ID)
+                return arguments.get(it->id_name);
+            return NULL;
+        });
+
+        // should we keep ctxc or use decl->ctx? how is this result used?
+        return make_goresult(ret, ctx);
+    }
     }
     return NULL;
 }
 
 Goresult *Go_Indexer::subst_generic_type(Goresult *res) {
-    while (res->gotype->type == GOTYPE_GENERIC)
+    while (res && res->gotype->type == GOTYPE_GENERIC)
         res = subst_generic_type_once(res->gotype, res->ctx);
     return res;
 }
@@ -6372,18 +6462,51 @@ Gotype *Go_Indexer::expr_to_gotype(Ast_Node *expr) {
     return NULL;
 }
 
+Goresult *Go_Indexer::evaluate_type(Goresult *res) {
+    return evaluate_type(res->gotype, res->ctx);
+}
+
 Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
     if (!gotype) return NULL;
 
+    enum {
+        U_EVAL = 1 << 0,
+        U_RESOLVE = 1 << 1,
+        U_SUBST = 1 << 2,
+        U_UNPOINTER = 1 << 3,
+        U_ALL = U_EVAL | U_RESOLVE | U_SUBST | U_UNPOINTER,
+    };
+
+    auto unwrap_type = [&](Gotype *base, int flags = U_ALL) -> Goresult* {
+        auto res = make_goresult(base, ctx);
+
+        if (flags & U_EVAL) {
+            res = evaluate_type(res);
+            if (!res) return NULL;
+        }
+
+        if (flags & U_RESOLVE) {
+            res = resolve_type(res);
+            if (!res) return NULL;
+        }
+
+        if (flags & U_SUBST) {
+            res = subst_generic_type(res);
+            if (!res) return NULL;
+        }
+
+        if (flags & U_UNPOINTER) {
+            res = unpointer_type(res);
+            if (!res) return NULL;
+        }
+
+        return res;
+    };
+
     switch (gotype->type) {
     case GOTYPE_LAZY_RANGE: {
-        auto res = evaluate_type(gotype->lazy_range_base, ctx);
+        auto res = unwrap_type(gotype->lazy_range_base);
         if (!res) return NULL;
-
-        res = resolve_type(res);
-        if (!res) return NULL;
-
-        res = unpointer_type(res);
 
         auto base_type = res->gotype;
         if (base_type->type == GOTYPE_MULTI)
@@ -6407,14 +6530,16 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
         return NULL;
     }
 
+    /*
+    The fundamental problem is that given a generic type, we need to
+    access the instantiated type in order to do anything with it. E.g. if
+    we have a GOTYPE_LAZY_INDEX, we need the instantiated type to know how
+    to index into it.
+    */
+
     case GOTYPE_LAZY_INDEX: {
-        auto res = evaluate_type(gotype->lazy_index_base, ctx);
+        auto res = unwrap_type(gotype->lazy_index_base);
         if (!res) return NULL;
-
-        res = resolve_type(res);
-        if (!res) return NULL;
-
-        res = unpointer_type(res);
 
         auto base_type = res->gotype;
 
@@ -6439,13 +6564,7 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
     }
 
     case GOTYPE_LAZY_CALL: {
-        auto res = evaluate_type(gotype->lazy_call_base, ctx);
-        if (!res) break;
-
-        res = resolve_type(res);
-        if (!res) break;
-
-        res = unpointer_type(res);
+        auto res = unwrap_type(gotype->lazy_call_base);
         if (!res) break;
 
         if (res->gotype->type != GOTYPE_FUNC) return NULL;
@@ -6463,10 +6582,7 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
     }
 
     case GOTYPE_LAZY_DEREFERENCE: {
-        auto res = evaluate_type(gotype->lazy_dereference_base, ctx);
-        if (!res) return NULL;
-
-        res = resolve_type(res);
+        auto res = unwrap_type(gotype->lazy_dereference_base, U_ALL & ~U_UNPOINTER);
         if (!res) return NULL;
 
         if (res->gotype->type != GOTYPE_POINTER) return NULL;
@@ -6474,7 +6590,7 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
     }
 
     case GOTYPE_LAZY_REFERENCE: {
-        auto res = evaluate_type(gotype->lazy_reference_base, ctx);
+        auto res = unwrap_type(gotype->lazy_reference_base, U_EVAL | U_SUBST);
         if (!res) return NULL;
 
         auto type = new_gotype(GOTYPE_POINTER);
@@ -6483,7 +6599,7 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
     }
 
     case GOTYPE_LAZY_ARROW: {
-        auto res = evaluate_type(gotype->lazy_arrow_base, ctx);
+        auto res = unwrap_type(gotype->lazy_arrow_base);
         if (!res) return NULL;
         if (res->gotype->type != GOTYPE_CHAN) return NULL;
 
@@ -6544,7 +6660,7 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
     }
 
     case GOTYPE_LAZY_ONE_OF_MULTI: {
-        auto res = evaluate_type(gotype->lazy_one_of_multi_base, ctx);
+        auto res = unwrap_type(gotype->lazy_one_of_multi_base);
         if (!res) return NULL;
 
         bool is_single = gotype->lazy_one_of_multi_is_single;
@@ -6647,9 +6763,9 @@ Goresult *Go_Indexer::resolve_type(Gotype *type, Go_Ctx *ctx) {
 
     switch (type->type) {
     case GOTYPE_BUILTIN: // pending decision: should we do this here?
-        if (!type->builtin_underlying_type)
+        if (!type->builtin_underlying_base)
             return NULL;
-        return resolve_type(type->builtin_underlying_type, ctx);
+        return resolve_type(type->builtin_underlying_base, ctx);
 
     case GOTYPE_POINTER: {
         auto res = resolve_type(type->pointer_base, ctx);
@@ -6894,7 +7010,7 @@ void Gotype::read(Index_Stream *s) {
         READ_OBJ(range_base);
         break;
     case GOTYPE_BUILTIN:
-        READ_OBJ(builtin_underlying_type);
+        READ_OBJ(builtin_underlying_base);
         break;
     case GOTYPE_LAZY_INDEX:
         READ_OBJ(lazy_index_base);
@@ -7061,7 +7177,7 @@ void Gotype::write(Index_Stream *s) {
         WRITE_OBJ(range_base);
         break;
     case GOTYPE_BUILTIN:
-        WRITE_OBJ(builtin_underlying_type);
+        WRITE_OBJ(builtin_underlying_base);
         break;
     case GOTYPE_LAZY_INDEX:
         WRITE_OBJ(lazy_index_base);

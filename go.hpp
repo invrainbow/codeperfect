@@ -600,8 +600,8 @@ struct Gotype {
         };
 
         struct {
+            Gotype *builtin_underlying_base;
             Gotype_Builtin_Type builtin_type;
-            Gotype *builtin_underlying_type;
         };
 
         struct {
@@ -627,6 +627,8 @@ struct Gotype {
             Go_Func_Sig func_sig;
             Gotype *func_recv;
         };
+
+        Gotype *general_base; // to be used for any type that has a "base"
 
         Gotype *slice_base;
         Gotype *array_base;
@@ -1109,6 +1111,7 @@ struct Go_Indexer {
     bool assignment_to_decls(List<Ast_Node*> *lhs, List<Ast_Node*> *rhs, New_Godecl_Func new_godecl, bool range = false);
     Gotype *new_primitive_type(ccstr name);
     Goresult *evaluate_type(Gotype *gotype, Go_Ctx *ctx);
+    Goresult *evaluate_type(Goresult *res);
     Gotype *expr_to_gotype(Ast_Node *expr);
     void process_tree_into_gofile(
         Go_File *file,
@@ -1265,3 +1268,8 @@ struct Type_Renderer : public Text_Renderer {
 };
 
 bool is_name_special_function(ccstr name);
+
+typedef fn<Gotype*(Gotype*)> walk_gotype_cb;
+
+Gotype* walk_gotype_and_replace(Gotype *gotype, walk_gotype_cb cb);
+Gotype* _walk_gotype_and_replace(Gotype *gotype, walk_gotype_cb cb);
