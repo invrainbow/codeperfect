@@ -7,8 +7,10 @@
             "name": "debug",
             "program": "${workspaceFolder}/build/bin/ide",
             "args": [
+                "/Users/bh/runway",
+                // "/Users/bh/generics-test",
                 // "/Users/bh/go-unicode-test",
-                "/Users/bh/snowball",
+                // "/Users/bh/snowball",
                 // "/Users/bh/ide/gostuff"
             ],
             "cwd": "${workspaceFolder}/build/bin",
