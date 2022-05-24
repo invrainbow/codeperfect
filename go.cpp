@@ -5699,9 +5699,10 @@ bool Go_Indexer::assignment_to_decls(List<Ast_Node*> *lhs, List<Ast_Node*> *rhs,
         }
 
         auto multi_type = expr_to_gotype(rhs->at(0));
+        if (!multi_type) return false;
 
         /*
-        if (!multi_type || multi_type->type != GOTYPE_MULTI) {
+        if (multi_type->type != GOTYPE_MULTI) {
             if (lhs->len != 1) {
                 // TODO: are there legitimate cases where this will happen?
                 return false;
