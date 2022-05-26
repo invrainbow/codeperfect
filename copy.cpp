@@ -234,6 +234,8 @@ Gotype *Gotype::copy() {
         break;
     case GOTYPE_LAZY_CALL:
         ret->lazy_call_base = copy_object(lazy_call_base);
+        ret->lazy_call_type_args = copy_listp(lazy_call_type_args);
+        ret->lazy_call_args = copy_listp(lazy_call_args);
         break;
     case GOTYPE_LAZY_DEREFERENCE:
         ret->lazy_dereference_base = copy_object(lazy_dereference_base);

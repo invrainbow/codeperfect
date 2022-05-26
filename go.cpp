@@ -6238,8 +6238,9 @@ Gotype* _walk_gotype_and_replace(Gotype *gotype, fn<Gotype*(Gotype*)> cb) {
     return gotype;
 }
 
-// precondition: type->type != GOTYPE_GENERIC
-Goresult *Go_Indexer::subst_generic_type_once(Gotype *type, Go_Ctx *ctx) {
+Goresult *Go_Indexer::_subst_generic_type(Gotype *type, Go_Ctx *ctx) {
+    cp_assert(type->type == GOTYPE_GENERIC);
+
     auto base = type->generic_base;
     switch (base->type) {
     case GOTYPE_ID:
@@ -6287,7 +6288,7 @@ Goresult *Go_Indexer::subst_generic_type_once(Gotype *type, Go_Ctx *ctx) {
 
 Goresult *Go_Indexer::subst_generic_type(Goresult *res) {
     while (res && res->gotype->type == GOTYPE_GENERIC)
-        res = subst_generic_type_once(res->gotype, res->ctx);
+        res = _subst_generic_type(res->gotype, res->ctx);
     return res;
 }
 
@@ -6392,7 +6393,7 @@ Gotype *Go_Indexer::expr_to_gotype(Ast_Node *expr) {
         // TODO: these operators should return bool: || && == != < <= > >=
         return new_primitive_type("int");
 
-    case TS_CALL_EXPRESSION:
+    case TS_CALL_EXPRESSION: {
         // detect make(...) calls
         do {
             auto func = expr->field(TSF_FUNCTION);
@@ -6415,9 +6416,46 @@ Gotype *Go_Indexer::expr_to_gotype(Ast_Node *expr) {
             return ret;
         } while (0);
 
+        Frame frame;
+        List<Gotype*> *args = alloc_list<Gotype*>();
+        List<Gotype*> *type_args = NULL;
+
+        auto type_args_node = expr->field(TSF_TYPE_ARGUMENTS);
+        if (!type_args_node->null) {
+            type_args = alloc_list<Gotype*>();
+            FOR_NODE_CHILDREN (type_args_node) {
+                auto gotype = node_to_gotype(it);
+                if (!gotype) {
+                    frame.restore();
+                    return NULL;
+                }
+                type_args->append(gotype);
+            }
+        }
+
+        auto args_node = expr->field(TSF_ARGUMENTS);
+        FOR_NODE_CHILDREN (args_node) {
+            auto gotype = expr_to_gotype(it);
+            if (!gotype) {
+                frame.restore();
+                return NULL;
+            }
+            args->append(gotype);
+        }
+
+        auto base = expr_to_gotype(expr->field(TSF_FUNCTION));
+        if (type_args) {
+            auto newbase = new_gotype(GOTYPE_GENERIC);
+            newbase->generic_base = base;
+            newbase->generic_args = type_args;
+            base = newbase;
+        }
+
         ret = new_gotype(GOTYPE_LAZY_CALL);
-        ret->lazy_call_base = expr_to_gotype(expr->field(TSF_FUNCTION));
+        ret->lazy_call_base = base;
+        ret->lazy_call_args = args;
         return ret;
+    }
 
     case TS_INDEX_EXPRESSION:
         ret = new_gotype(GOTYPE_LAZY_INDEX);
@@ -6463,11 +6501,11 @@ Gotype *Go_Indexer::expr_to_gotype(Ast_Node *expr) {
     return NULL;
 }
 
-Goresult *Go_Indexer::evaluate_type(Goresult *res) {
-    return evaluate_type(res->gotype, res->ctx);
+Goresult *Go_Indexer::evaluate_type(Goresult *res, Godecl** outdecl) {
+    return evaluate_type(res->gotype, res->ctx, outdecl);
 }
 
-Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
+Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdecl) {
     if (!gotype) return NULL;
 
     enum {
@@ -6482,7 +6520,7 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
         auto res = make_goresult(base, ctx);
 
         if (flags & U_EVAL) {
-            res = evaluate_type(res);
+            res = evaluate_type(res, outdecl);
             if (!res) return NULL;
         }
 
@@ -6549,8 +6587,8 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
                 base_type = base_type->multi_types->at(0);
 
         switch (base_type->type) {
-        case GOTYPE_ARRAY: return evaluate_type(base_type->array_base, res->ctx);
-        case GOTYPE_SLICE: return evaluate_type(base_type->slice_base, res->ctx);
+        case GOTYPE_ARRAY: return evaluate_type(base_type->array_base, res->ctx, outdecl);
+        case GOTYPE_SLICE: return evaluate_type(base_type->slice_base, res->ctx, outdecl);
         case GOTYPE_ID:
             if (streq(base_type->id_name, "string"))
                 return make_goresult(new_primitive_type("rune"), NULL);
@@ -6565,8 +6603,22 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
     }
 
     case GOTYPE_LAZY_CALL: {
-        auto res = unwrap_type(gotype->lazy_call_base);
-        if (!res) break;
+        Godecl *decl = NULL;
+
+        auto res = evaluate_type(gotype->lazy_call_base, ctx, &decl);
+        if (!res) return NULL;
+
+        res = resolve_type(res);
+        if (!res) return NULL;
+
+        // TODO: type inference
+        {
+            // res = subst_generic_type(res);
+            // if (!res) return NULL;
+        }
+
+        res = unpointer_type(res);
+        if (!res) return NULL;
 
         if (res->gotype->type != GOTYPE_FUNC) return NULL;
 
@@ -6587,7 +6639,7 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
         if (!res) return NULL;
 
         if (res->gotype->type != GOTYPE_POINTER) return NULL;
-        return evaluate_type(res->gotype->pointer_base, res->ctx);
+        return evaluate_type(res->gotype->pointer_base, res->ctx, outdecl);
     }
 
     case GOTYPE_LAZY_REFERENCE: {
@@ -6604,7 +6656,7 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
         if (!res) return NULL;
         if (res->gotype->type != GOTYPE_CHAN) return NULL;
 
-        return evaluate_type(res->gotype->chan_base, res->ctx);
+        return evaluate_type(res->gotype->chan_base, res->ctx, outdecl);
     }
 
     case GOTYPE_LAZY_ID: {
@@ -6612,7 +6664,9 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
         if (!res) return NULL;
         if (res->decl->type == GODECL_IMPORT) return NULL;
         if (!res->decl->gotype) return NULL;
-        return evaluate_type(res->decl->gotype, res->ctx);
+
+        if (outdecl) *outdecl = res->decl;
+        return evaluate_type(res->decl->gotype, res->ctx, outdecl);
     }
 
     case GOTYPE_LAZY_SEL: {
@@ -6636,7 +6690,8 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
             case GODECL_CONST:
             case GODECL_FUNC:
             case GODECL_TYPE: // this wasn't added before, why?
-                return evaluate_type(ext_decl->gotype, res->ctx);
+                if (outdecl) *outdecl = ext_decl;
+                return evaluate_type(ext_decl->gotype, res->ctx, outdecl);
             default:
                 return NULL;
             }
@@ -7018,6 +7073,8 @@ void Gotype::read(Index_Stream *s) {
         break;
     case GOTYPE_LAZY_CALL:
         READ_OBJ(lazy_call_base);
+        READ_LISTP(lazy_call_type_args);
+        READ_LISTP(lazy_call_args);
         break;
     case GOTYPE_LAZY_DEREFERENCE:
         READ_OBJ(lazy_dereference_base);
@@ -7185,6 +7242,8 @@ void Gotype::write(Index_Stream *s) {
         break;
     case GOTYPE_LAZY_CALL:
         WRITE_OBJ(lazy_call_base);
+        WRITE_LISTP(lazy_call_type_args);
+        WRITE_LISTP(lazy_call_args);
         break;
     case GOTYPE_LAZY_DEREFERENCE:
         WRITE_OBJ(lazy_dereference_base);

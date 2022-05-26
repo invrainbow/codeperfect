@@ -660,7 +660,10 @@ struct Gotype {
         };
 
         Gotype *lazy_index_base;
-        Gotype *lazy_call_base;
+        struct {
+            Gotype *lazy_call_base;
+            List<Gotype*> *lazy_call_args;
+        };
         Gotype *lazy_dereference_base;
         Gotype *lazy_reference_base;
         Gotype *lazy_arrow_base;
@@ -1110,8 +1113,8 @@ struct Go_Indexer {
     List<Goresult> *get_node_dotprops(Ast_Node *operand_node, bool *was_package, Go_Ctx *ctx);
     bool assignment_to_decls(List<Ast_Node*> *lhs, List<Ast_Node*> *rhs, New_Godecl_Func new_godecl, bool range = false);
     Gotype *new_primitive_type(ccstr name);
-    Goresult *evaluate_type(Gotype *gotype, Go_Ctx *ctx);
-    Goresult *evaluate_type(Goresult *res);
+    Goresult *evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdecl = NULL);
+    Goresult *evaluate_type(Goresult *res, Godecl** outdecl = NULL);
     Gotype *expr_to_gotype(Ast_Node *expr);
     void process_tree_into_gofile(
         Go_File *file,
