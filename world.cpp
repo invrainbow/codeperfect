@@ -428,7 +428,14 @@ void World::init(Window *_wnd) {
         if (!world.window) {
             cp_strcpy_fixed(current_path, "/Users/bh/ide/gostuff");
         } else if (gargc >= 2) {
-            cp_strcpy_fixed(current_path, gargv[1]);
+            if (streq(gargv[1], "__debug__")) {
+                auto path = GHReadCpfolderFile();
+                if (!path) cp_panic("unable to read cpfolder file");
+                defer { GHFree(path); };
+                cp_strcpy_fixed(current_path, path);
+            } else {
+                cp_strcpy_fixed(current_path, gargv[1]);
+            }
         } else {
             Select_File_Opts opts; ptr0(&opts);
             opts.buf = current_path;

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"go/build"
 	"go/format"
+	"io"
 	"log"
 	"log/syslog"
 	"net"
@@ -61,7 +62,7 @@ func init() {
 type GoBuild struct {
 	done   bool
 	errors []*errorformat.Entry
-	cmd	*exec.Cmd
+	cmd    *exec.Cmd
 }
 
 func BoolToInt(b bool) int {
@@ -208,8 +209,8 @@ func GHFmtAddLine(line *C.char) {
 }
 
 const (
-	FmtGoFmt				   = 0
-	FmtGoImports			   = 1
+	FmtGoFmt                   = 0
+	FmtGoImports               = 1
 	FmtGoImportsWithAutoImport = 2
 )
 
@@ -277,7 +278,7 @@ func GHAuth(rawEmail *C.char, rawLicenseKey *C.char) {
 
 	osSlug := runtime.GOOS
 	req := &models.AuthRequest{
-		OS:			 osSlug,
+		OS:             osSlug,
 		CurrentVersion: versions.CurrentVersion,
 	}
 
@@ -463,7 +464,7 @@ const (
 
 var buildenv struct {
 	Context build.Context
-	Ok	  bool
+	Ok      bool
 }
 
 //export GHBuildEnvInit
@@ -531,14 +532,45 @@ func GHBuildEnvGoVersionSupported() bool {
 
 //export GHIsUnicodeLetter
 func GHIsUnicodeLetter(code rune) bool {
-    log.Println(code)
+	log.Println(code)
 	return unicode.IsLetter(code)
 }
 
 //export GHIsUnicodeDigit
 func GHIsUnicodeDigit(code rune) bool {
-    log.Println(code)
+	log.Println(code)
 	return unicode.IsDigit(code)
+}
+
+//export GHReadCpfolderFile
+func GHReadCpfolderFile() *C.char {
+    homedir, err := os.UserHomeDir()
+    if err != nil {
+        fmt.Println(err)
+        return nil
+    }
+
+	f, err := os.Open(path.Join(homedir, ".cpfolder"))
+	if err != nil {
+		fmt.Println(err)
+		return nil
+	}
+
+	buf, err := io.ReadAll(f)
+	if err != nil {
+		fmt.Println(err)
+		return nil
+	}
+
+    s := string(buf)
+	lines := strings.Split(strings.ReplaceAll(s, "\r\n", "\n"), "\n")
+	for _, line := range lines {
+		if strings.HasPrefix(line, "#") {
+			continue
+		}
+		return C.CString(line)
+	}
+	return nil
 }
 
 func main() {}
