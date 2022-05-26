@@ -346,7 +346,7 @@ void _error(ccstr fmt, ...);
 #define ptr0(ptr) memset(ptr, 0, sizeof(*ptr))
 #define For(arr) for (auto &&it : arr)
 #define define_str_case(x) case x: return #x
-#define cp_assert(x, s) if (!(x)) cp_panic(s)
+#define cp_assert(x) if (!(x)) cp_panic("assertion failed")
 
 void* cp_malloc(size_t size);
 void cp_free(void* p);

@@ -1211,7 +1211,7 @@ void Go_Indexer::background_thread() {
                     }
                 }
 
-                cp_assert(status == IND_READY, "status not ready");
+                cp_assert(status == IND_READY);
 
                 start_writing();
                 delete_file(path_join(world.current_path, ".cpdb"));
@@ -6024,7 +6024,7 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
                         saved_iota_types->append(type_node_gotype);
                 }
             } else {
-                cp_assert(value_node->type() == TS_EXPRESSION_LIST, "rhs must be a TS_EXPRESSION_LIST");
+                cp_assert(value_node->type() == TS_EXPRESSION_LIST);
 
                 u32 lhs_count = 0;
                 FOR_NODE_CHILDREN (spec) {
@@ -6720,7 +6720,7 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx) {
 }
 
 Goresult *make_goresult_from_pointer(void *ptr, Go_Ctx *ctx) {
-    cp_assert(ptr, "make_goresult should never contain a NULL value, just return NULL instead!");
+    cp_assert(ptr);
 
     auto ret = alloc_object(Goresult);
     ret->ptr = ptr;

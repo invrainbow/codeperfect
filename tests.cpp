@@ -206,7 +206,7 @@ struct Mark_Tree_Fuzzer {
         int offset = 0;
         int count = 0;
 
-        cp_assert(f.write((char*)&count, sizeof(count)), "f.write");
+        cp_assert(f.write((char*)&count, sizeof(count)));
         offset += sizeof(count);
 
         for (int i = 0; i < 10000; i++) {
@@ -220,12 +220,12 @@ struct Mark_Tree_Fuzzer {
             count++;
 
             // write the action
-            cp_assert(f.write((char*)a, sizeof(*a)), "f.write");
+            cp_assert(f.write((char*)a, sizeof(*a)));
             offset += sizeof(*a);
 
             // write the count at the beginning
             f.seek(0);
-            cp_assert(f.write((char*)&count, sizeof(count)), "f.write");
+            cp_assert(f.write((char*)&count, sizeof(count)));
             f.seek(offset);
 
             // run
@@ -267,10 +267,10 @@ struct Mark_Tree_Fuzzer {
             defer { f.cleanup(); };
 
             int len = 0;
-            cp_assert(f.read((char*)&len, sizeof(len)), "f.read");
+            cp_assert(f.read((char*)&len, sizeof(len)));
 
             actions.ensure_cap(len);
-            cp_assert(f.read((char*)actions.items, sizeof(Mtf_Action) * len), "f.read");
+            cp_assert(f.read((char*)actions.items, sizeof(Mtf_Action) * len));
             actions.len = len;
         }
 
@@ -300,7 +300,7 @@ void test_mark_tree_fuzz() {
         defer { mtf.cleanup(); };
 
         mtf.print_flag = false;
-        cp_assert(mtf.run(), "mtf.run");
+        cp_assert(mtf.run());
     }
 }
 
@@ -315,7 +315,7 @@ void test_mark_tree_fuzz_replay() {
     defer { mtf.cleanup(); };
 
     mtf.print_flag = false;
-    cp_assert(mtf.replay(), "mtf.replay");
+    cp_assert(mtf.replay());
 }
 
 int main(int argc, char *argv[]) {

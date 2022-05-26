@@ -654,7 +654,7 @@ void handle_window_event(Window_Event *it) {
                 /*
                 if (world.nvim.mode == VI_INSERT && editor->postfix_stack.len > 0) {
                     auto pf = editor->postfix_stack.last();
-                    cp_assert(pf->current_insert_position < pf->insert_positions.len, "went past last error position");
+                    cp_assert(pf->current_insert_position < pf->insert_positions.len);
 
                     auto pos = pf->insert_positions[pf->current_insert_position++];
                     editor->trigger_escape(pos);
@@ -1240,7 +1240,7 @@ int main(int argc, char **argv) {
         s32 len = 0;
 
         world.ui.im_font_ui = io.Fonts->AddFontFromMemoryTTF(open_sans_ttf, open_sans_ttf_len, UI_FONT_SIZE);
-        cp_assert(world.ui.im_font_ui, "unable to load UI font");
+        cp_assert(world.ui.im_font_ui);
 
         {
             // merge font awesome into main font
@@ -1263,7 +1263,7 @@ int main(int argc, char **argv) {
         }
 
         world.ui.im_font_mono = io.Fonts->AddFontFromMemoryTTF(vera_mono_ttf, vera_mono_ttf_len, CODE_FONT_SIZE);
-        cp_assert(world.ui.im_font_mono, "unable to load code font");
+        cp_assert(world.ui.im_font_mono);
 
         /*
         if (!world.font.init((u8*)vera_mono_ttf, CODE_FONT_SIZE, TEXTURE_FONT))

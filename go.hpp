@@ -1194,7 +1194,7 @@ T *read_object(Index_Stream *s) {
 
     // TODO: i mean, don't literally crash the program, show an error and
     // rebuild the index or something
-    cp_assert(size == sizeof(T), "size mismatch while reading object from index");
+    cp_assert(size == sizeof(T));
 
     auto obj = alloc_object(T);
     s->readn(obj, size);
