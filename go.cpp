@@ -39,8 +39,7 @@ const int GO_INDEX_MAGIC_NUMBER = 0x49fa98;
 // version 27: fix parser handling newlines and idents wrong in interface specs
 // version 28: upgrade tree-sitter-go
 // version 29: generics
-// version 30: generics cont
-const int GO_INDEX_VERSION = 30;
+const int GO_INDEX_VERSION = 31;
 
 void index_print(ccstr fmt, ...) {
     va_list args;
@@ -6462,6 +6461,24 @@ Gotype *Go_Indexer::expr_to_gotype(Ast_Node *expr) {
         ret->lazy_index_base = expr_to_gotype(expr->field(TSF_OPERAND));
         return ret;
 
+    case TS_INSTANCE_EXPRESSION: {
+        auto args_node = expr->field(TSF_TYPE_ARGUMENTS);
+        if (args_node->null) return NULL; // ?
+
+        auto args = alloc_list<Gotype*>();
+        FOR_NODE_CHILDREN (args_node) {
+            auto arg = node_to_gotype(it);
+            if (!arg) return NULL; // ?
+
+            args->append(arg);
+        }
+
+        ret = new_gotype(GOTYPE_LAZY_INSTANCE);
+        ret->lazy_instance_base = expr_to_gotype(expr->field(TSF_OPERAND));
+        ret->lazy_instance_args = args;
+        return ret;
+    }
+
     case TS_QUALIFIED_TYPE:
     case TS_SELECTOR_EXPRESSION: {
         auto operand_node = expr->field(expr->type() == TS_QUALIFIED_TYPE ? TSF_PACKAGE : TSF_OPERAND);
@@ -6576,6 +6593,10 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
     to index into it.
     */
 
+    // =========================================
+    // START OF WHERE TYPE INSTANTIATION HAPPENS
+    // =========================================
+
     case GOTYPE_LAZY_INDEX: {
         auto res = unwrap_type(gotype->lazy_index_base);
         if (!res) return NULL;
@@ -6600,6 +6621,10 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
         }
         }
         return NULL;
+    }
+
+    case GOTYPE_LAZY_INSTANCE: {
+        // auto res = 
     }
 
     case GOTYPE_LAZY_CALL: {
@@ -6633,6 +6658,10 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
         For (*result) ret->multi_types->append(it.gotype);
         return res->wrap(ret);
     }
+
+    // =========================
+    // END OF TYPE INSTANTIATION
+    // =========================
 
     case GOTYPE_LAZY_DEREFERENCE: {
         auto res = unwrap_type(gotype->lazy_dereference_base, U_ALL & ~U_UNPOINTER);
@@ -7005,6 +7034,10 @@ void Gotype::read(Index_Stream *s) {
         READ_OBJ(generic_base);
         READ_LISTP(generic_args);
         break;
+    case GOTYPE_LAZY_INSTANCE:
+        READ_OBJ(lazy_instance_base);
+        READ_LISTP(lazy_instance_args);
+        break;
     case GOTYPE_CONSTRAINT:
         READ_LISTP(constraint_terms);
         break;
@@ -7073,7 +7106,6 @@ void Gotype::read(Index_Stream *s) {
         break;
     case GOTYPE_LAZY_CALL:
         READ_OBJ(lazy_call_base);
-        READ_LISTP(lazy_call_type_args);
         READ_LISTP(lazy_call_args);
         break;
     case GOTYPE_LAZY_DEREFERENCE:
@@ -7182,6 +7214,10 @@ void Gotype::write(Index_Stream *s) {
         WRITE_OBJ(generic_base);
         WRITE_LISTP(generic_args);
         break;
+    case GOTYPE_LAZY_INSTANCE:
+        WRITE_OBJ(lazy_instance_base);
+        WRITE_LISTP(lazy_instance_args);
+        break;
     case GOTYPE_CONSTRAINT:
         WRITE_LISTP(constraint_terms);
         break;
@@ -7242,7 +7278,6 @@ void Gotype::write(Index_Stream *s) {
         break;
     case GOTYPE_LAZY_CALL:
         WRITE_OBJ(lazy_call_base);
-        WRITE_LISTP(lazy_call_type_args);
         WRITE_LISTP(lazy_call_args);
         break;
     case GOTYPE_LAZY_DEREFERENCE:

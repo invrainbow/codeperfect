@@ -182,6 +182,10 @@ Gotype *Gotype::copy() {
         ret->generic_base = copy_object(generic_base);
         ret->generic_args = copy_listp(generic_args);
         break;
+    case GOTYPE_LAZY_INSTANCE:
+        ret->lazy_instance_base = copy_object(lazy_instance_base);
+        ret->lazy_instance_args = copy_listp(lazy_instance_args);
+        break;
     case GOTYPE_CONSTRAINT:
         ret->constraint_terms = copy_listp(constraint_terms);
         break;
@@ -234,7 +238,6 @@ Gotype *Gotype::copy() {
         break;
     case GOTYPE_LAZY_CALL:
         ret->lazy_call_base = copy_object(lazy_call_base);
-        ret->lazy_call_type_args = copy_listp(lazy_call_type_args);
         ret->lazy_call_args = copy_listp(lazy_call_args);
         break;
     case GOTYPE_LAZY_DEREFERENCE:

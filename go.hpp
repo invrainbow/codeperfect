@@ -584,6 +584,7 @@ enum Gotype_Type {
     GOTYPE_LAZY_SEL,
     GOTYPE_LAZY_ONE_OF_MULTI,
     GOTYPE_LAZY_RANGE,
+    GOTYPE_LAZY_INSTANCE,
 };
 
 // TODO: capture parameterization?
@@ -593,6 +594,11 @@ struct Gotype {
     union {
         Gotype *constraint_underlying_base;
         List<Gotype*> *constraint_terms;
+
+        struct {
+            Gotype *lazy_instance_base;
+            List<Gotype*> *lazy_instance_args;
+        };
 
         struct {
             Gotype *generic_base;
@@ -1088,7 +1094,7 @@ struct Go_Indexer {
     Goresult *resolve_type_to_decl(Gotype *type, Go_Ctx *ctx);
     Goresult *unpointer_type(Goresult *res);
     Goresult *unpointer_type(Gotype *type, Go_Ctx *ctx);
-    Goresult *subst_generic_type_once(Gotype *type, Go_Ctx *ctx);
+    Goresult *_subst_generic_type(Gotype *type, Go_Ctx *ctx);
     Goresult *subst_generic_type(Goresult *res);
     Goresult *subst_generic_type(Gotype *type, Go_Ctx *ctx);
     List<Godecl> *parameter_list_to_fields(Ast_Node *params);
