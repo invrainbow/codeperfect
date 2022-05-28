@@ -591,6 +591,8 @@ enum Gotype_Type {
 struct Gotype {
     Gotype_Type type;
 
+    // if a gotype has a Gotype* base, it should be first field
+    // this way we can always access it using gotype->base
     union {
         Gotype *constraint_underlying_base;
         List<Gotype*> *constraint_terms;
@@ -634,7 +636,7 @@ struct Gotype {
             Gotype *func_recv;
         };
 
-        Gotype *general_base; // to be used for any type that has a "base"
+        Gotype *base; // to be used for any type that has a "base"
 
         Gotype *slice_base;
         Gotype *array_base;
@@ -665,7 +667,11 @@ struct Gotype {
             ccstr lazy_sel_sel;
         };
 
-        Gotype *lazy_index_base;
+        struct {
+            Gotype *lazy_index_base;
+            Gotype *lazy_index_key;
+        };
+
         struct {
             Gotype *lazy_call_base;
             List<Gotype*> *lazy_call_args;
@@ -1181,6 +1187,7 @@ struct Go_Indexer {
     Goresult *get_reference_decl(Go_Reference *it, Go_Ctx *ctx);
     Godecl *find_toplevel_containing(Go_File *file, cur2 start, cur2 end);
     Goresult *find_enclosing_toplevel(ccstr filepath, cur2 pos);
+    Gotype* do_subst_rename_this_later(Gotype *base, List<Go_Type_Parameter> *params, List<Gotype*> *args);
 };
 
 void walk_ast_node(Ast_Node *node, bool abstract_only, Walk_TS_Callback cb);

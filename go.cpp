@@ -39,7 +39,7 @@ const int GO_INDEX_MAGIC_NUMBER = 0x49fa98;
 // version 27: fix parser handling newlines and idents wrong in interface specs
 // version 28: upgrade tree-sitter-go
 // version 29: generics
-const int GO_INDEX_VERSION = 31;
+const int GO_INDEX_VERSION = 32;
 
 void index_print(ccstr fmt, ...) {
     va_list args;
@@ -6191,7 +6191,7 @@ Gotype* _walk_gotype_and_replace(Gotype *gotype, fn<Gotype*(Gotype*)> cb) {
     case GOTYPE_RANGE:
     case GOTYPE_CONSTRAINT_UNDERLYING:
     case GOTYPE_BUILTIN:
-        recur(general_base);
+        recur(base);
         break;
     case GOTYPE_MAP:
         recur(map_key);
@@ -6237,6 +6237,25 @@ Gotype* _walk_gotype_and_replace(Gotype *gotype, fn<Gotype*(Gotype*)> cb) {
     return gotype;
 }
 
+Gotype* Go_Indexer::do_subst_rename_this_later(Gotype *base, List<Go_Type_Parameter> *params, List<Gotype*> *args) {
+    if (!params) return NULL;
+    if (!args) return NULL;
+    if (params->len != args->len) return NULL;
+
+    Table<Gotype*> lookup; lookup.init();
+    int i = 0;
+
+    For (*params) {
+        lookup.set(it.name, args->at(i++));
+    }
+
+    return walk_gotype_and_replace(base, [&](auto it) -> Gotype* {
+        if (it->type == GOTYPE_ID)
+            return lookup.get(it->id_name);
+        return NULL;
+    });
+}
+
 Goresult *Go_Indexer::_subst_generic_type(Gotype *type, Go_Ctx *ctx) {
     cp_assert(type->type == GOTYPE_GENERIC);
 
@@ -6259,26 +6278,10 @@ Goresult *Go_Indexer::_subst_generic_type(Gotype *type, Go_Ctx *ctx) {
 
         // check requirements
         if (decl->type != GODECL_TYPE) break;
-        if (decl->type_params == NULL) break;
-        if (decl->type_params->len != type->generic_args->len) break;
 
-        auto gotype = decl->gotype;
+        auto ret = do_subst_rename_this_later(decl->gotype, decl->type_params, type->generic_args);
+        if (!ret) break;
 
-        // table of name to gotype
-        Table<Gotype*> arguments; arguments.init();
-        for (int i = 0; i < decl->type_params->len; i++) {
-            auto &param = decl->type_params->at(i);
-            auto arg = type->generic_args->at(i);
-            arguments.set(param.name, arg);
-        }
-
-        auto ret = walk_gotype_and_replace(decl->gotype, [&](auto it) -> Gotype* {
-            if (it->type == GOTYPE_ID)
-                return arguments.get(it->id_name);
-            return NULL;
-        });
-
-        // should we keep ctxc or use decl->ctx? how is this result used?
         return make_goresult(ret, ctx);
     }
     }
@@ -6444,9 +6447,9 @@ Gotype *Go_Indexer::expr_to_gotype(Ast_Node *expr) {
 
         auto base = expr_to_gotype(expr->field(TSF_FUNCTION));
         if (type_args) {
-            auto newbase = new_gotype(GOTYPE_GENERIC);
-            newbase->generic_base = base;
-            newbase->generic_args = type_args;
+            auto newbase = new_gotype(GOTYPE_LAZY_INSTANCE);
+            newbase->lazy_instance_base = base;
+            newbase->lazy_instance_args = type_args;
             base = newbase;
         }
 
@@ -6559,6 +6562,66 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
         return res;
     };
 
+    // A GOTYPE_LAZY_INDEX or GOTYPE_LAZY_INSTANCE Gotype possibly refers to a
+    // generic function. This procedure takes such a Gotype and returns the
+    // target Gotype (the GOTYPE_FUNC), the params, and the args for the caller
+    // to do type substitution.
+    //
+    // Why don't we just do the type substitution here? Because sometimes we do
+    // it using just the type args provided, and sometimes we need the func
+    // args to do type inference.
+
+    struct Prepare_Lazy_Subst_Result {
+        Goresult *res;
+        Gotype *target;
+        List<Go_Type_Parameter> *params;
+        List<Gotype*> *args;
+    };
+
+    auto prepare_lazy_subst = [&](Gotype *lazy) -> Prepare_Lazy_Subst_Result* {
+        Godecl *decl = NULL;
+        auto res = evaluate_type(lazy->base, ctx, &decl);
+        if (!res) return NULL;
+        if (decl->type != GODECL_FUNC) return NULL;
+        if (!decl->type_params) return NULL;
+
+        auto ret = alloc_object(Prepare_Lazy_Subst_Result);
+        ret->target = res->gotype;
+        ret->params = decl->type_params;
+        ret->res = res;
+
+        List<Gotype*> *args = NULL;
+        if (lazy->type == GOTYPE_LAZY_INDEX) {
+            auto key = lazy->lazy_index_key;
+            Gotype *newtype = NULL;
+
+            switch (key->type) {
+            case GOTYPE_LAZY_ID:
+                newtype = new_gotype(GOTYPE_ID);
+                newtype->id_name = key->lazy_id_name;
+                newtype->id_pos = key->lazy_id_pos;
+                break;
+            case GOTYPE_LAZY_SEL:
+                if (key->lazy_sel_base->type != GOTYPE_ID)
+                    return NULL;
+                newtype = new_gotype(GOTYPE_SEL);
+                newtype->sel_name = key->lazy_sel_base->id_name;
+                newtype->sel_sel = key->lazy_sel_sel;
+                break;
+            default:
+                return NULL;
+            }
+
+            args = alloc_list<Gotype*>();
+            args->append(newtype);
+        } else {
+            args = lazy->lazy_instance_args;
+        }
+
+        ret->args = args;
+        return ret;
+    };
+
     switch (gotype->type) {
     case GOTYPE_LAZY_RANGE: {
         auto res = unwrap_type(gotype->lazy_range_base);
@@ -6586,18 +6649,21 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
         return NULL;
     }
 
-    /*
-    The fundamental problem is that given a generic type, we need to
-    access the instantiated type in order to do anything with it. E.g. if
-    we have a GOTYPE_LAZY_INDEX, we need the instantiated type to know how
-    to index into it.
-    */
-
     // =========================================
     // START OF WHERE TYPE INSTANTIATION HAPPENS
     // =========================================
 
     case GOTYPE_LAZY_INDEX: {
+        do {
+            auto subst = prepare_lazy_subst(gotype->lazy_instance_base);
+            if (!subst) break;
+
+            auto ret = do_subst_rename_this_later(subst->target, subst->params, subst->args);
+            if (!ret) break;
+
+            return subst->res->wrap(ret);
+        } while (0);
+
         auto res = unwrap_type(gotype->lazy_index_base);
         if (!res) return NULL;
 
@@ -6624,27 +6690,38 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
     }
 
     case GOTYPE_LAZY_INSTANCE: {
-        // auto res = 
+        auto subst = prepare_lazy_subst(gotype->lazy_instance_base);
+        if (!subst) return NULL;
+
+        auto ret = do_subst_rename_this_later(subst->target, subst->params, subst->args);
+        if (!ret) return NULL;
+
+        return subst->res->wrap(ret);
     }
 
     case GOTYPE_LAZY_CALL: {
-        Godecl *decl = NULL;
+        auto try_with_type_args = [&]() -> Goresult* {
+            auto base = gotype->lazy_call_base;
+            if (base->type != GOTYPE_LAZY_INDEX && base->type != GOTYPE_LAZY_INSTANCE)
+                return NULL;
 
-        auto res = evaluate_type(gotype->lazy_call_base, ctx, &decl);
-        if (!res) return NULL;
+            auto result = prepare_lazy_subst(base);
+            if (!result) return NULL;
 
-        res = resolve_type(res);
-        if (!res) return NULL;
+            // TODO
+            // ok, now we're ready to perform type inference on `result`
+            // this is the stupidly annoyingly complicated part
+        };
 
-        // TODO: type inference
         {
-            // res = subst_generic_type(res);
-            // if (!res) return NULL;
+            auto ret = try_with_type_args();
+            if (ret) return ret;
         }
 
-        res = unpointer_type(res);
-        if (!res) return NULL;
+        // didn't work with type args, treat as normal function call.
 
+        auto res = unwrap_type(gotype->lazy_call_base);
+        if (!res) return NULL;
         if (res->gotype->type != GOTYPE_FUNC) return NULL;
 
         auto result = res->gotype->func_sig.result;
