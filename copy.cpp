@@ -235,6 +235,7 @@ Gotype *Gotype::copy() {
         break;
     case GOTYPE_LAZY_INDEX:
         ret->lazy_index_base = copy_object(lazy_index_base);
+        ret->lazy_index_key = copy_object(lazy_index_key);
         break;
     case GOTYPE_LAZY_CALL:
         ret->lazy_call_base = copy_object(lazy_call_base);

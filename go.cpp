@@ -39,7 +39,7 @@ const int GO_INDEX_MAGIC_NUMBER = 0x49fa98;
 // version 27: fix parser handling newlines and idents wrong in interface specs
 // version 28: upgrade tree-sitter-go
 // version 29: generics
-const int GO_INDEX_VERSION = 32;
+const int GO_INDEX_VERSION = 33;
 
 void index_print(ccstr fmt, ...) {
     va_list args;
@@ -5022,8 +5022,9 @@ void Go_Indexer::list_dotprops(Goresult *type_res, Goresult *resolved_type_res, 
 void Go_Indexer::actually_list_dotprops(Goresult *type_res, Goresult *resolved_type_res, List<Goresult> *ret) {
     auto resolved_type = resolved_type_res->gotype;
     switch (resolved_type->type) {
-    case GOTYPE_POINTER: {
-        auto new_resolved_type_res = resolved_type_res->wrap(resolved_type->pointer_base);
+    case GOTYPE_POINTER:
+    case GOTYPE_ASSERTION: {
+        auto new_resolved_type_res = resolved_type_res->wrap(resolved_type->base);
         actually_list_dotprops(type_res, new_resolved_type_res, ret);
         return;
     }
@@ -6462,6 +6463,7 @@ Gotype *Go_Indexer::expr_to_gotype(Ast_Node *expr) {
     case TS_INDEX_EXPRESSION:
         ret = new_gotype(GOTYPE_LAZY_INDEX);
         ret->lazy_index_base = expr_to_gotype(expr->field(TSF_OPERAND));
+        ret->lazy_index_key = expr_to_gotype(expr->field(TSF_INDEX));
         return ret;
 
     case TS_INSTANCE_EXPRESSION: {
@@ -6579,16 +6581,17 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
     };
 
     auto prepare_lazy_subst = [&](Gotype *lazy) -> Prepare_Lazy_Subst_Result* {
+        auto base = lazy->base;
+        if (base->type != GOTYPE_LAZY_ID && base->type != GOTYPE_LAZY_SEL)
+            return NULL;
+
         Godecl *decl = NULL;
-        auto res = evaluate_type(lazy->base, ctx, &decl);
+        auto res = evaluate_type(base, ctx, &decl);
+
         if (!res) return NULL;
+        if (!decl) return NULL;
         if (decl->type != GODECL_FUNC) return NULL;
         if (!decl->type_params) return NULL;
-
-        auto ret = alloc_object(Prepare_Lazy_Subst_Result);
-        ret->target = res->gotype;
-        ret->params = decl->type_params;
-        ret->res = res;
 
         List<Gotype*> *args = NULL;
         if (lazy->type == GOTYPE_LAZY_INDEX) {
@@ -6618,8 +6621,51 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
             args = lazy->lazy_instance_args;
         }
 
+        auto ret = alloc_object(Prepare_Lazy_Subst_Result);
+        ret->target = res->gotype;
+        ret->params = decl->type_params;
+        ret->res = res;
         ret->args = args;
         return ret;
+    };
+
+    auto try_evaluating_index = [&](Gotype *base) -> Goresult* {
+        auto res = unwrap_type(base);
+        if (!res) return NULL;
+
+        auto base_type = res->gotype;
+        if (base_type->type == GOTYPE_MULTI)
+            if (base_type->multi_types && base_type->multi_types->len == 1)
+                base_type = base_type->multi_types->at(0);
+
+        switch (base_type->type) {
+        case GOTYPE_ARRAY: return evaluate_type(base_type->array_base, res->ctx, outdecl);
+        case GOTYPE_SLICE: return evaluate_type(base_type->slice_base, res->ctx, outdecl);
+        case GOTYPE_ID:
+            if (streq(base_type->id_name, "string"))
+                return make_goresult(new_primitive_type("rune"), NULL);
+            break;
+        case GOTYPE_MAP: {
+            auto res2 = evaluate_type(base_type->map_value, res->ctx, outdecl);
+            if (!res2) return NULL;
+
+            auto ret = new_gotype(GOTYPE_ASSERTION);
+            ret->assertion_base = res2->gotype;
+            return res2->wrap(ret);
+        }
+        }
+
+        return NULL;
+    };
+
+    auto try_evaluating_instance = [&](Gotype *lazy) -> Goresult* {
+        auto subst = prepare_lazy_subst(lazy);
+        if (!subst) return NULL;
+
+        auto ret = do_subst_rename_this_later(subst->target, subst->params, subst->args);
+        if (!ret) return NULL;
+
+        return subst->res->wrap(ret);
     };
 
     switch (gotype->type) {
@@ -6649,54 +6695,29 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
         return NULL;
     }
 
-    // =========================================
-    // START OF WHERE TYPE INSTANTIATION HAPPENS
-    // =========================================
+    // ======================================
+    // START OF CASES WITH TYPE INSTANTIATION
+    // ======================================
 
     case GOTYPE_LAZY_INDEX: {
-        do {
-            auto subst = prepare_lazy_subst(gotype->lazy_instance_base);
-            if (!subst) break;
+        // try as index
+        auto ret = try_evaluating_index(gotype->lazy_index_base);
+        if (ret) return ret;
 
-            auto ret = do_subst_rename_this_later(subst->target, subst->params, subst->args);
-            if (!ret) break;
-
-            return subst->res->wrap(ret);
-        } while (0);
-
-        auto res = unwrap_type(gotype->lazy_index_base);
-        if (!res) return NULL;
-
-        auto base_type = res->gotype;
-
-        if (base_type->type == GOTYPE_MULTI)
-            if (base_type->multi_types && base_type->multi_types->len == 1)
-                base_type = base_type->multi_types->at(0);
-
-        switch (base_type->type) {
-        case GOTYPE_ARRAY: return evaluate_type(base_type->array_base, res->ctx, outdecl);
-        case GOTYPE_SLICE: return evaluate_type(base_type->slice_base, res->ctx, outdecl);
-        case GOTYPE_ID:
-            if (streq(base_type->id_name, "string"))
-                return make_goresult(new_primitive_type("rune"), NULL);
-            break;
-        case GOTYPE_MAP: {
-            auto ret = new_gotype(GOTYPE_ASSERTION);
-            ret->assertion_base = base_type->map_value;
-            return res->wrap(ret);
-        }
-        }
-        return NULL;
+        // then as instance
+        return try_evaluating_instance(gotype);
     }
 
     case GOTYPE_LAZY_INSTANCE: {
-        auto subst = prepare_lazy_subst(gotype->lazy_instance_base);
-        if (!subst) return NULL;
+        // try as instance
+        auto ret = try_evaluating_instance(gotype);
+        if (ret) return ret;
 
-        auto ret = do_subst_rename_this_later(subst->target, subst->params, subst->args);
-        if (!ret) return NULL;
-
-        return subst->res->wrap(ret);
+        // then as index
+        if (gotype->lazy_instance_args->len != 1) return NULL;
+        auto arg = gotype->lazy_instance_args->at(0);
+        if (arg->type != GOTYPE_ID && arg->type != GOTYPE_SEL) return NULL;
+        return try_evaluating_index(gotype->lazy_instance_base);
     }
 
     case GOTYPE_LAZY_CALL: {
@@ -6708,9 +6729,45 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
             auto result = prepare_lazy_subst(base);
             if (!result) return NULL;
 
-            // TODO
-            // ok, now we're ready to perform type inference on `result`
-            // this is the stupidly annoyingly complicated part
+            auto func_args = gotype->lazy_call_args;
+            auto func_params = result->target->func_sig.params;
+            if (func_args->len != func_params->len) return NULL;
+
+            /*
+            struct Prepare_Lazy_Subst_Result {
+                Goresult *res;
+                Gotype *target;
+                List<Go_Type_Parameter> *params;
+                List<Gotype*> *args;
+            };
+            */
+
+            Table<Gotype*> lookup; lookup.init();
+
+            for (int i = 0; i < result->params->len && i < result->args->len; i++) {
+                auto &param = result->params->at(i);
+                auto &arg = result->args->at(i);
+                lookup.set(param.name, arg);
+            }
+
+            // === type inference ===
+
+            for (int i = 0; i < func_params->len; i++) {
+                auto &arg = func_args->at(i);
+                auto &param = func_params->at(i);
+
+                // .....
+            }
+
+            // done
+
+            auto new_gotype = walk_gotype_and_replace(result->target, [&](auto it) -> Gotype* {
+                if (it->type == GOTYPE_ID)
+                    return lookup.get(it->id_name);
+                return NULL;
+            });
+
+            return result->res->wrap(new_gotype);
         };
 
         {
@@ -6929,13 +6986,13 @@ Goresult *Go_Indexer::resolve_type(Gotype *type, Go_Ctx *ctx) {
             return NULL;
         return resolve_type(type->builtin_underlying_base, ctx);
 
+    case GOTYPE_ASSERTION:
     case GOTYPE_POINTER: {
-        auto res = resolve_type(type->pointer_base, ctx);
+        auto res = resolve_type(type->base, ctx);
         if (!res) return NULL;
 
-        auto ret = new_gotype(GOTYPE_POINTER);
-        ret->pointer_base = res->gotype;
-
+        auto ret = type->copy();
+        ret->base = res->gotype;
         return res->wrap(ret);
     }
 
@@ -7180,6 +7237,7 @@ void Gotype::read(Index_Stream *s) {
         break;
     case GOTYPE_LAZY_INDEX:
         READ_OBJ(lazy_index_base);
+        READ_OBJ(lazy_index_key);
         break;
     case GOTYPE_LAZY_CALL:
         READ_OBJ(lazy_call_base);
@@ -7352,6 +7410,7 @@ void Gotype::write(Index_Stream *s) {
         break;
     case GOTYPE_LAZY_INDEX:
         WRITE_OBJ(lazy_index_base);
+        WRITE_OBJ(lazy_index_key);
         break;
     case GOTYPE_LAZY_CALL:
         WRITE_OBJ(lazy_call_base);
