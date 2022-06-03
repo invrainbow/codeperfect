@@ -2525,22 +2525,20 @@ List<Goresult> *Go_Indexer::get_node_dotprops(Ast_Node *operand_node, bool *was_
     return NULL;
 }
 
-bool Go_Indexer::are_decls_equal(Goresult *adecl, Goresult *bdecl) {
-    if (!adecl) return false;
-    if (!adecl->ctx) return false;
-    if (!bdecl) return false;
-    if (!bdecl->ctx) return false;
-
-    auto afile = ctx_to_filepath(adecl->ctx);
-    if (!afile) return false;
-
-    auto bfile = ctx_to_filepath(bdecl->ctx);
-    if (!bfile) return false;
-
-    if (!streq(afile, bfile)) return false;
-    if (adecl->decl->name_start != bdecl->decl->name_start) return false;
+bool Go_Indexer::are_ctxs_equal(Go_Ctx *a, Go_Ctx *b) {
+    if (!a || !b) return false;
+    if (!streq(a->import_path, b->import_path)) return false;
+    if (!streq(a->filename, b->filename)) return false;
 
     return true;
+}
+
+bool Go_Indexer::are_decls_equal(Goresult *adecl, Goresult *bdecl) {
+    if (!adecl) return false;
+    if (!bdecl) return false;
+    if (!are_ctxs_equal(adecl->ctx, bdecl->ctx)) return false;
+
+    return adecl->decl->name_start == bdecl->decl->name_start;
 }
 
 bool Go_Indexer::are_gotypes_equal(Goresult *ra, Goresult *rb) {
@@ -6159,11 +6157,18 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
     }
 }
 
-Gotype* walk_gotype_and_replace(Gotype *gotype, fn<Gotype*(Gotype*)> cb) {
+void walk_gotype(Gotype *gotype, walk_gotype_cb cb) {
+    walk_gotype_and_replace(gotype, [&](auto it) -> Gotype* {
+        cb(it);
+        return NULL;
+    });
+}
+
+Gotype* walk_gotype_and_replace(Gotype *gotype, walk_gotype_and_replace_cb cb) {
     return _walk_gotype_and_replace(gotype->copy(), cb);
 }
 
-Gotype* _walk_gotype_and_replace(Gotype *gotype, fn<Gotype*(Gotype*)> cb) {
+Gotype* _walk_gotype_and_replace(Gotype *gotype, walk_gotype_and_replace_cb cb) {
     if (!gotype) return NULL;
 
     auto repl = cb(gotype);
@@ -6220,18 +6225,8 @@ Gotype* _walk_gotype_and_replace(Gotype *gotype, fn<Gotype*(Gotype*)> cb) {
         recur(generic_base);
         recur_arr(gotype->generic_args);
         break;
-    // i don't think we need to handle lazy types yet?
-    // this is for going through a GOTYPE_GENERIC and replacing type parameters with arguments
-    // case GOTYPE_LAZY_INDEX:
-    // case GOTYPE_LAZY_CALL:
-    // case GOTYPE_LAZY_DEREFERENCE:
-    // case GOTYPE_LAZY_REFERENCE:
-    // case GOTYPE_LAZY_ARROW:
-    // case GOTYPE_LAZY_ID:
-    // case GOTYPE_LAZY_SEL:
-    // case GOTYPE_LAZY_ONE_OF_MULTI:
-    // case GOTYPE_LAZY_RANGE:
     }
+
 #undef recur
 #undef recur_raw
 
@@ -6359,6 +6354,8 @@ Gotype *Go_Indexer::expr_to_gotype(Ast_Node *expr) {
     case TS_PARENTHESIZED_EXPRESSION:
         return expr_to_gotype(expr->child());
 
+    case TS_TRUE: return new_primitive_type("bool");
+    case TS_FALSE: return new_primitive_type("bool");
     case TS_INT_LITERAL: return new_primitive_type("int");
     case TS_FLOAT_LITERAL: return new_primitive_type("float64");
     case TS_IMAGINARY_LITERAL: return new_primitive_type("complex128");
@@ -6575,6 +6572,7 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
 
     struct Prepare_Lazy_Subst_Result {
         Goresult *res;
+        Godecl *decl;
         Gotype *target;
         List<Go_Type_Parameter> *params;
         List<Gotype*> *args;
@@ -6625,6 +6623,7 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
         ret->target = res->gotype;
         ret->params = decl->type_params;
         ret->res = res;
+        ret->decl = decl;
         ret->args = args;
         return ret;
     };
@@ -6728,38 +6727,325 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
 
             auto result = prepare_lazy_subst(base);
             if (!result) return NULL;
+            if (result->args->len > result->params->len) return NULL;
 
             auto func_args = gotype->lazy_call_args;
             auto func_params = result->target->func_sig.params;
             if (func_args->len != func_params->len) return NULL;
 
-            /*
-            struct Prepare_Lazy_Subst_Result {
-                Goresult *res;
-                Gotype *target;
-                List<Go_Type_Parameter> *params;
-                List<Gotype*> *args;
-            };
-            */
-
             Table<Gotype*> lookup; lookup.init();
+            int types_found = 0;
 
-            for (int i = 0; i < result->params->len && i < result->args->len; i++) {
+            for (int i = 0; i < result->params->len; i++) {
                 auto &param = result->params->at(i);
-                auto &arg = result->args->at(i);
-                lookup.set(param.name, arg);
+                if (i < result->args->len) {
+                    auto &arg = result->args->at(i);
+                    lookup.set(param.name, arg);
+                } else {
+                    lookup.set(param.name, NULL);
+                }
             }
 
-            // === type inference ===
+            fn<bool(Goresult*, Goresult*)> unify_types = [&](auto ares, auto bres) {
+                cp_assert(ares);
+                cp_assert(bres);
 
-            for (int i = 0; i < func_params->len; i++) {
-                auto &arg = func_args->at(i);
-                auto &param = func_params->at(i);
+                auto a = ares->gotype;
+                auto b = bres->gotype;
 
-                // .....
-            }
+                if (!a && !b) return true;
+                if (!a || !b) return false;
 
-            // done
+                auto pos_is_in_func_sig = [&](cur2 pos, Go_Func_Sig *sig) {
+                    For (*sig->params)
+                        if (it.decl_start <= pos && pos < it.decl_end)
+                            return true;
+                    For (*sig->result)
+                        if (it.decl_start <= pos && pos < it.decl_end)
+                            return true;
+                    return false;
+                };
+
+                auto get_type_param = [&](Goresult *res, bool *pfound) -> Gotype* {
+                    if (!are_ctxs_equal(res->ctx, result->res->ctx)) return NULL;
+
+                    auto gotype = res->gotype;
+                    if (gotype->type != GOTYPE_ID) return NULL;
+                    if (!pos_is_in_func_sig(gotype->id_pos, &result->target->func_sig)) return NULL;
+
+                    return lookup.get(gotype->id_name, pfound);
+                };
+
+                {
+                    bool afound = false;
+                    bool bfound = false;
+                    auto atype = get_type_param(ares, &afound);
+                    auto btype = get_type_param(bres, &bfound);
+
+                    if ((afound && !bfound) || (!afound && bfound)) {
+                        Gotype *existing = NULL, *newtype = NULL;
+                        if (afound) {
+                            existing = atype;
+                            newtype = btype;
+                        } else {
+                            existing = btype;
+                            newtype = atype;
+                        }
+
+                        if (existing) {
+                            // should we do this? or just return true?
+                            return unify_types(ares->wrap(existing), newtype ? bres->wrap(newtype) : NULL);
+                        }
+
+                        ccstr name = (afound ? ares : bres)->gotype->id_name;
+                        lookup.set(name, newtype);
+                        types_found++;
+                        return true;
+                    }
+
+                    if (afound && bfound) // can't use another type param as constraint
+                        return false;
+                }
+
+                if (a->type != b->type) return false;
+
+                auto _recur_arr = [&](auto aarr, auto actx, auto barr, auto bctx) {
+                    if (!aarr && !barr) return true;
+                    if (!aarr || !barr) return false;
+                    if (aarr->len != barr->len) return false;
+
+                    for (int i = 0; i < barr->len; i++) {
+                        auto &a2 = aarr->at(i);
+                        auto &b2 = barr->at(i);
+                        if (!unify_types(make_goresult(a2, actx), make_goresult(b2, bctx))) return false;
+                    }
+                    return true;
+                };
+
+#define recur(field) if (!unify_types(ares->wrap(a->field), bres->wrap(b->field))) return false
+#define recur_arr(field) if (!_recur_arr(a->field, ares->ctx, b->field, bres->ctx)) return false
+
+                switch (a->type) {
+                case GOTYPE_ID: {
+                    // type params have already been handled
+                    auto adeclres = find_decl_of_id(a->id_name, a->id_pos, ares->ctx);
+                    auto bdeclres = find_decl_of_id(b->id_name, b->id_pos, bres->ctx);
+                    // when would this not be sufficient?
+                    return are_ctxs_equal(adeclres->ctx, bdeclres->ctx);
+                }
+
+                case GOTYPE_SEL: {
+                    auto aimp = find_import_path_referred_to_by_id(a->sel_name, ares->ctx);
+                    auto bimp = find_import_path_referred_to_by_id(b->sel_name, bres->ctx);
+                    if (!aimp || !bimp) return false;
+                    if (!streq(aimp, bimp)) return false;
+                    if (!streq(a->sel_sel, b->sel_sel)) return false;
+                    break;
+                }
+
+                case GOTYPE_VARIADIC:
+                case GOTYPE_POINTER:
+                case GOTYPE_SLICE:
+                case GOTYPE_ARRAY:
+                case GOTYPE_CHAN:
+                case GOTYPE_ASSERTION:
+                case GOTYPE_RANGE:
+                case GOTYPE_CONSTRAINT_UNDERLYING:
+                case GOTYPE_BUILTIN:
+                    recur(base);
+                    break;
+                case GOTYPE_MAP:
+                    recur(map_key);
+                    recur(map_value);
+                    break;
+                case GOTYPE_STRUCT: {
+                    auto &aspecs = a->struct_specs;
+                    auto &bspecs = b->struct_specs;
+
+                    if (aspecs->len != bspecs->len) return false;
+
+                    for (int i = 0; i < aspecs->len; i++) {
+                        auto &a2 = aspecs->at(i).field->gotype;
+                        auto &b2 = bspecs->at(i).field->gotype;
+                        if (!unify_types(ares->wrap(a2), bres->wrap(b2))) return false;
+                    }
+                    break;
+                }
+                case GOTYPE_INTERFACE: {
+                    auto &aspecs = a->interface_specs;
+                    auto &bspecs = b->interface_specs;
+
+                    if (aspecs->len != bspecs->len) return false;
+
+                    for (int i = 0; i < aspecs->len; i++) {
+                        auto &a2 = aspecs->at(i).field->gotype;
+                        auto &b2 = bspecs->at(i).field->gotype;
+                        if (!unify_types(ares->wrap(a2), bres->wrap(b2))) return false;
+                    }
+                    break;
+                }
+                case GOTYPE_FUNC: {
+                    auto aparams = a->func_sig.params;
+                    auto bparams = b->func_sig.params;
+
+                    auto aresult = a->func_sig.result;
+                    auto bresult = b->func_sig.result;
+
+                    if (aparams->len != bparams->len) return false;
+                    if (aresult->len != bresult->len) return false;
+
+                    for (int i = 0; i < aparams->len; i++) {
+                        auto &a2 = aparams->at(i);
+                        auto &b2 = bparams->at(i);
+                        if (!unify_types(ares->wrap(&a2), bres->wrap(&b2))) return false;
+                    }
+
+                    for (int i = 0; i < aresult->len; i++) {
+                        auto &a2 = aresult->at(i);
+                        auto &b2 = bresult->at(i);
+                        if (!unify_types(ares->wrap(&a2), bres->wrap(&b2))) return false;
+                    }
+                    break;
+                }
+                case GOTYPE_MULTI:
+                    recur_arr(multi_types);
+                    break;
+                case GOTYPE_CONSTRAINT:
+                    recur_arr(constraint_terms);
+                    break;
+                case GOTYPE_GENERIC:
+                    recur(generic_base);
+                    recur_arr(generic_args);
+                    break;
+                }
+
+#undef recur_arr
+#undef recur
+                return true;
+            };
+
+            bool ran_constraint_type_inference = false;
+
+            auto has_core_type = [&](Gotype *gotype, Go_Ctx *ctx) -> bool {
+                return true;
+                // TODO
+            };
+
+            auto constraint_type_inference = [&]() {
+                ran_constraint_type_inference = true;
+
+                For (*result->params) {
+                    auto res = result->res;
+
+                    if (!has_core_type(it.constraint, res->ctx))
+                        continue;
+
+                    auto idtype = new_gotype(GOTYPE_ID);
+                    idtype->id_name = it.name;
+                    // don't need id_pos
+
+                    if (!unify_types(res->wrap(idtype), res->wrap(it.constraint))) return false;
+                }
+
+                auto do_substitution = [&]() {
+                    bool found_something = false;
+                    For (*result->params) {
+                        bool found = false;
+                        auto result = lookup.get(it.name, &found);
+                        if (!found || !result) continue;
+
+                        result = walk_gotype_and_replace(result, [&](auto it) -> Gotype* {
+                            if (it->type == GOTYPE_ID) {
+                                auto gotype = lookup.get(it->id_name);
+                                if (gotype) {
+                                    found_something = true;
+                                    return gotype;
+                                }
+                            }
+                            return NULL;
+                        });
+                        lookup.set(it.name, result);
+                    }
+                    return found_something;
+                };
+
+                while (do_substitution()) continue;
+
+                return true;
+            };
+
+            bool added_new_types = false;
+
+            auto is_func_arg_untyped = [&](Gotype *gotype) {
+                if (gotype->type != GOTYPE_ID) return false;
+
+                if (streq(gotype->id_name, "int")) return true;
+                if (streq(gotype->id_name, "bool")) return true;
+                if (streq(gotype->id_name, "float64")) return true;
+                if (streq(gotype->id_name, "complex128")) return true;
+                if (streq(gotype->id_name, "string")) return true;
+
+                return false;
+            };
+
+            auto func_arg_type_inference = [&](bool untyped) {
+                added_new_types = false;
+                auto old = types_found;
+
+                for (int i = 0; i < func_params->len; i++) {
+                    auto &arg = func_args->at(i);
+                    if (is_func_arg_untyped(arg) == untyped) {
+                        auto &param = func_params->at(i).gotype;
+                        if (!unify_types(make_goresult(arg, ctx), result->res->wrap(param)))
+                            return false;
+                    }
+                }
+
+                if (types_found > old) added_new_types = true;
+
+                return true;
+            };
+
+            auto is_done = [&]() {
+                For (*result->params) {
+                    auto gotype = lookup.get(it.name);
+                    if (!gotype) return false;
+
+                    bool references_other_type_param = false;
+
+                    walk_gotype(gotype, [&](Gotype* it) {
+                        if (it->type != GOTYPE_ID) return;
+
+                        bool found = false;
+                        lookup.get(it->id_name, &found);
+                        if (found) references_other_type_param = true;
+                    });
+
+                    if (references_other_type_param) return false;
+                }
+                return true;
+            };
+
+
+            // apply function argument type inference to typed ordinary function arguments
+            if (!is_done() && !func_arg_type_inference(false))
+                return NULL;
+
+            // apply constraint type inference
+            if (!is_done() && added_new_types)
+                if (!constraint_type_inference())
+                    return NULL;
+
+            // apply function argument type inference to untyped ordinary function arguments
+            if (!is_done() && !func_arg_type_inference(true))
+                return NULL;
+
+            // apply constraint type inference
+            if (!is_done() && (added_new_types || !ran_constraint_type_inference))
+              if (!constraint_type_inference())
+                  return NULL;
+
+            if (!is_done()) return NULL;
 
             auto new_gotype = walk_gotype_and_replace(result->target, [&](auto it) -> Gotype* {
                 if (it->type == GOTYPE_ID)
@@ -6784,8 +7070,7 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
         auto result = res->gotype->func_sig.result;
         if (!result) return NULL;
 
-        if (result->len == 1)
-            return res->wrap(result->at(0).gotype);
+        if (result->len == 1) return res->wrap(result->at(0).gotype);
 
         auto ret = new_gotype(GOTYPE_MULTI);
         ret->multi_types = alloc_list<Gotype*>(result->len);

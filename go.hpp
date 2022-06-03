@@ -476,7 +476,6 @@ enum Goresult_Type {
 
 struct Go_Ctx {
     ccstr import_path;
-    // ccstr resolved_path;
     ccstr filename;
 };
 
@@ -598,11 +597,6 @@ struct Gotype {
         List<Gotype*> *constraint_terms;
 
         struct {
-            Gotype *lazy_instance_base;
-            List<Gotype*> *lazy_instance_args;
-        };
-
-        struct {
             Gotype *generic_base;
             List<Gotype*> *generic_args;
         };
@@ -619,6 +613,7 @@ struct Gotype {
 
         struct {
             ccstr sel_name; // now that we have pkg, do we need this?
+            // do we need sel_pos, so we can actually look up the decl?
             ccstr sel_sel;
         };
 
@@ -655,6 +650,13 @@ struct Gotype {
             // So if x is an []int and we have range x, range_base is []int, not int.
             Gotype *range_base;
             Range_Type range_type;
+        };
+
+        // lazy
+
+        struct {
+            Gotype *lazy_instance_base;
+            List<Gotype*> *lazy_instance_args;
         };
 
         struct {
@@ -1167,6 +1169,7 @@ struct Go_Indexer {
 
     bool are_gotypes_equal(Goresult *ra, Goresult *rb);
     bool are_decls_equal(Goresult *adecl, Goresult *bdecl);
+    bool are_ctxs_equal(Go_Ctx *a, Go_Ctx *b);
 
     List<Find_Decl> *find_implementations(Goresult *target, bool search_everywhere);
     List<Find_Decl> *find_interfaces(Goresult *target, bool search_everywhere);
@@ -1285,7 +1288,9 @@ struct Type_Renderer : public Text_Renderer {
 
 bool is_name_special_function(ccstr name);
 
-typedef fn<Gotype*(Gotype*)> walk_gotype_cb;
+typedef fn<Gotype*(Gotype*)> walk_gotype_and_replace_cb;
+Gotype* walk_gotype_and_replace(Gotype *gotype, walk_gotype_and_replace_cb cb);
+Gotype* _walk_gotype_and_replace(Gotype *gotype, walk_gotype_and_replace_cb cb);
 
-Gotype* walk_gotype_and_replace(Gotype *gotype, walk_gotype_cb cb);
-Gotype* _walk_gotype_and_replace(Gotype *gotype, walk_gotype_cb cb);
+typedef fn<void(Gotype*)> walk_gotype_cb;
+void walk_gotype(Gotype *gotype, walk_gotype_cb cb);
