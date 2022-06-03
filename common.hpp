@@ -8,12 +8,11 @@
 
 #include <stdexcept>
 #include <functional>
+#include <utility>
 
 #if OS_MAC
 #include <inttypes.h>
 #endif
-
-#include "enumerate.hpp"
 
 // tools for macros
 #define TOKENPASTE0(a, b) a##b
@@ -347,6 +346,38 @@ void _error(ccstr fmt, ...);
 #define mem0(ptr, n) memset(ptr, 0, n)
 #define ptr0(ptr) memset(ptr, 0, sizeof(*ptr))
 #define For(arr) for (auto &&it : arr)
+
+// https://github.com/therocode/enumerate/blob/master/enumerate.hpp
+template <typename L>
+struct enumerate {
+    using itertype = typename L::iter;
+    using reftype = typename L::type&;
+
+    struct iter {
+        size_t index;
+        itertype value;
+
+        constexpr bool operator!=(const itertype& other) const {
+            return value != other;
+        }
+
+        constexpr iter& operator++() {
+            ++index;
+            ++value;
+            return *this;
+        }
+
+        constexpr std::pair<size_t, reftype> operator*() {
+            return std::pair<size_t, reftype>{index, *value};
+        }
+    };
+
+    L& container;
+    constexpr enumerate(L& c): container(c) {}
+    constexpr iter begin() { return {0, std::begin(container)}; }
+    constexpr itertype end() { return std::end(container); }
+};
+
 #define Fori(arr) for (auto &&[i, it] : enumerate(arr))
 
 #define define_str_case(x) case x: return #x
