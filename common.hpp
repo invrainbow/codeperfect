@@ -13,6 +13,8 @@
 #include <inttypes.h>
 #endif
 
+#include "enumerate.hpp"
+
 // tools for macros
 #define TOKENPASTE0(a, b) a##b
 #define TOKENPASTE(a, b) TOKENPASTE0(a, b)
@@ -345,6 +347,8 @@ void _error(ccstr fmt, ...);
 #define mem0(ptr, n) memset(ptr, 0, n)
 #define ptr0(ptr) memset(ptr, 0, sizeof(*ptr))
 #define For(arr) for (auto &&it : arr)
+#define Fori(arr) for (auto &&[i, it] : enumerate(arr))
+
 #define define_str_case(x) case x: return #x
 #define cp_assert(x) if (!(x)) cp_panic("assertion failed")
 

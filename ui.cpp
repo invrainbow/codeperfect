@@ -2133,8 +2133,7 @@ void UI::draw_everything() {
             // TODO: add these as commands
             if (ImGui::BeginMenu("Select Active Build Profile..."))  {
                 if (project_settings.build_profiles->len > 0) {
-                    for (int i = 0; i < project_settings.build_profiles->len; i++) {
-                        auto &it = project_settings.build_profiles->at(i);
+                    Fori (*project_settings.build_profiles) {
                         if (ImGui::MenuItem(it.label, NULL, project_settings.active_build_profile == i, true)) {
                             project_settings.active_build_profile = i;
                             write_project_settings();
@@ -3738,8 +3737,7 @@ void UI::draw_everything() {
                         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 4));
                         defer { ImGui::PopStyleVar(); };
 
-                        for (int i = 0; i < ps->debug_profiles->len; i++) {
-                            auto &it = ps->debug_profiles->at(i);
+                        Fori (*ps->debug_profiles) {
                             auto label = cp_sprintf("%s##debug_profile_%d", it.label, i);
                             if (ImGui::Selectable(label, wnd.current_debug_profile == i))
                                 wnd.current_debug_profile = i;
@@ -3903,8 +3901,7 @@ void UI::draw_everything() {
                         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 4));
                         defer { ImGui::PopStyleVar(); };
 
-                        for (int i = 0; i < ps->build_profiles->len; i++) {
-                            auto &it = ps->build_profiles->at(i);
+                        Fori (*ps->build_profiles) {
                             auto label = cp_sprintf("%s##build_profile_%d", it.label, i);
                             if (ImGui::Selectable(label, wnd.current_build_profile == i))
                                 wnd.current_build_profile = i;

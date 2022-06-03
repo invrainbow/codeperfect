@@ -70,14 +70,14 @@ void Nvim::write_line(Line *line) {
     writer.write1(MP_OP_STRING);
 
     int len = 0;
-    for (int i = 0; i < line->len; i++)
-        len += uchar_size(line->at(i));
+    For (*line)
+        len += uchar_size(it);
 
     writer.write4(len);
 
-    for (int i = 0; i < line->len; i++) {
+    For (*line) {
         char buf[4];
-        auto size = uchar_to_cstr(line->at(i), buf);
+        auto size = uchar_to_cstr(it, buf);
         for (int j = 0; j < size; j++)
             writer.write1(buf[j]);
     }
@@ -85,8 +85,8 @@ void Nvim::write_line(Line *line) {
     /*
     writer.write1(MP_OP_STRING);
     writer.write4(line->len);
-    for (int i = 0; i < line->len; i++)
-        writer.write1(line->at(i));
+    For (*line)
+        writer.write1(it);
     */
 }
 
@@ -348,8 +348,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
 
                 Text_Renderer r;
                 r.init();
-                for (int i = 0; i < args.cells->len; i++) {
-                    auto &it = args.cells->at(i);
+                Fori (*args.cells) {
                     r.write("(%d x %d)", it.hl, it.reps);
                     if (i+1 < args.cells->len)
                         r.writestr(", ");

@@ -361,8 +361,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
                 auto multi_types = ac.operand_gotype->multi_types;
 
                 if (is_multi) {
-                    for (int i = 0; i < multi_types->len; i++) {
-                        auto it = multi_types->at(i);
+                    Fori (*multi_types) {
                         if (it->type == GOTYPE_ID && streq(it->id_name, "error")) {
                             error_found_at = i;
                             break;
@@ -377,8 +376,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
                 if (is_multi) {
                     int varcount = 0;
 
-                    for (int i = 0; i < multi_types->len; i++) {
-                        auto it = multi_types->at(i);
+                    Fori (*multi_types) {
                         if (i == error_found_at) {
                             insert_text("err");
                         } else {
@@ -463,10 +461,8 @@ void Editor::perform_autocomplete(AC_Result *result) {
 
                         insert_text("return ");
 
-                        for (int i = 0; i < result->len; i++) {
-                            auto &it = result->at(i);
+                        Fori (*result) {
                             auto val = get_zero_value_of_gotype(it.gotype);
-
                             if (i)
                                 insert_text(", ");
                             insert_text(!val ? "nil" : val);
@@ -1680,8 +1676,8 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
         Timer t;
         t.init("autocomplete");
 
-        for (int i = 0; i < results->len; i++)
-            if (fzy_has_match(prefix, results->at(i).name))
+        Fori (*results)
+            if (fzy_has_match(prefix, it.name))
                 autocomplete.filtered_results->append(i);
 
         t.log("matching");
@@ -1742,9 +1738,7 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
 
         auto scores = alloc_array(Score, results->len);
 
-        for (int i = 0; i < results->len; i++) {
-            auto &it = autocomplete.ac.results->at(i);
-
+        Fori (*results) {
             auto &score = scores[i];
             ptr0(&score);
 
@@ -1873,11 +1867,10 @@ void Editor::update_parameter_hint() {
         // not even gonna bother binary searching lol
 
         int current_param = -1;
-        for (int i = 0; i < commas->len; i++) {
-            auto pos = commas->at(i);
-            if (cur <= pos)
+        Fori (*commas)
+            if (cur <= it)
                 current_param = i;
-        }
+
         if (current_param == -1)
             current_param = commas->len;
 

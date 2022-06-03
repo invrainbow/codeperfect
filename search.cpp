@@ -181,8 +181,8 @@ void Searcher::search_worker() {
                     SCOPED_MEM(&final_mem);
 
                     sr.groups = alloc_list<ccstr>(nextmatch.group_starts->len);
-                    for (int i = 0; i < nextmatch.group_starts->len; i++) {
-                        auto start = nextmatch.group_starts->at(i);
+                    Fori (*nextmatch.group_starts) {
+                        auto start = it;
                         auto end = nextmatch.group_ends->at(i);
 
                         auto group = cp_strncpy(&buf[start], end-start);

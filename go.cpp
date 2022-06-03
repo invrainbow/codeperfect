@@ -959,8 +959,7 @@ void Go_Indexer::background_thread() {
 
         if (!index.packages) return;
 
-        for (int i = 0; i < index.packages->len; i++) {
-            auto &it = index.packages->at(i);
+        Fori (*index.packages) {
             bool found = false;
             package_lookup.get(it.import_path, &found);
             if (found)
@@ -2081,10 +2080,7 @@ void Go_Indexer::process_tree_into_gofile(
 
         {
             SCOPED_MEM(&file->pool);
-            for (int i = 0; i < file->imports->len; i++) {
-                auto imp = &file->imports->items[i];
-                memcpy(imp, imp->copy(), sizeof(Go_Import));
-            }
+            Fori (*file->imports) memcpy(&it, it.copy(), sizeof(Go_Import));
         }
     }
 
@@ -2655,8 +2651,8 @@ bool Go_Indexer::are_gotypes_equal(Goresult *ra, Goresult *rb) {
         auto sb = a->struct_specs;
         if (sa->len != sb->len) return false;
 
-        for (int i = 0; i < sa->len; i++) {
-            auto &ita = sa->at(i);
+        Fori (*sa) {
+            auto &ita = it;
             auto &itb = sb->at(i);
 
             if (ita.tag || itb.tag) {
@@ -2704,8 +2700,8 @@ bool Go_Indexer::are_gotypes_equal(Goresult *ra, Goresult *rb) {
         if (mismatch(fa.params, fb.params)) return false;
 
         if (!isempty(fa.params)) {
-            for (int i = 0; i < fa.params->len; i++) {
-                auto ga = ra->wrap(fa.params->at(i).gotype);
+            Fori (*fa.params) {
+                auto ga = ra->wrap(it.gotype);
                 auto gb = rb->wrap(fb.params->at(i).gotype);
                 if (!are_gotypes_equal(ga, gb)) return false;
             }
@@ -2714,8 +2710,8 @@ bool Go_Indexer::are_gotypes_equal(Goresult *ra, Goresult *rb) {
         if (mismatch(fa.result, fb.result)) return false;
 
         if (!isempty(fa.result)) {
-            for (int i = 0; i < fa.result->len; i++) {
-                auto ga = ra->wrap(fa.result->at(i).gotype);
+            Fori (*fa.result) {
+                auto ga = ra->wrap(it.gotype);
                 auto gb = rb->wrap(fb.result->at(i).gotype);
                 if (!are_gotypes_equal(ga, gb)) return false;
             }
@@ -2933,9 +2929,7 @@ List<Find_Decl> *Go_Indexer::find_implementations(Goresult *target, bool search_
                 auto type_name = cp_sprintf("%s:%s", import_path, recv->id_name);
                 auto method_name = it.name;
 
-                for (int i = 0; i < methods->len; i++) {
-                    auto &it = methods->at(i);
-
+                Fori (*methods) {
                     if (!streq(it.decl->name, method_name)) continue;
                     if (!are_gotypes_equal(it.wrap(it.decl->gotype), make_goresult(gotype, ctx)))
                         continue; // break here
@@ -2961,8 +2955,7 @@ List<Find_Decl> *Go_Indexer::find_implementations(Goresult *target, bool search_
 
     auto entries = huge_table.entries();
 
-    for (int i = 0; i < entries->len; i++) {
-        auto &it = entries->at(i);
+    Fori (*entries) {
         auto info = it->value;
 
         auto match = [&]() {
@@ -5678,19 +5671,20 @@ bool Go_Indexer::assignment_to_decls(List<Ast_Node*> *lhs, List<Ast_Node*> *rhs,
         if (range) {
             auto range_base = expr_to_gotype(rhs->at(0));
 
-            for (int i = 0; i < 2 && i < lhs->len; i++) {
-                auto id = lhs->at(i);
-                if (!id) continue;
-                if (id->type() != TS_IDENTIFIER) continue;
+            Fori (*lhs) {
+                if (i >= 2) break;
+
+                if (!it) continue;
+                if (it->type() != TS_IDENTIFIER) continue;
 
                 auto gotype = new_gotype(GOTYPE_LAZY_RANGE);
                 gotype->lazy_range_base = range_base;
                 gotype->lazy_range_is_index = (!i);
 
                 auto decl = new_godecl();
-                decl->name = id->string();
-                decl->name_start = id->start();
-                decl->name_end = id->end();
+                decl->name = it->string();
+                decl->name_start = it->start();
+                decl->name_end = it->end();
                 decl->gotype = gotype;
             }
             return true;
@@ -6736,13 +6730,12 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
             Table<Gotype*> lookup; lookup.init();
             int types_found = 0;
 
-            for (int i = 0; i < result->params->len; i++) {
-                auto &param = result->params->at(i);
+            Fori (*result->params) {
                 if (i < result->args->len) {
                     auto &arg = result->args->at(i);
-                    lookup.set(param.name, arg);
+                    lookup.set(it.name, arg);
                 } else {
-                    lookup.set(param.name, NULL);
+                    lookup.set(it.name, NULL);
                 }
             }
 
@@ -6814,8 +6807,8 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
                     if (!aarr || !barr) return false;
                     if (aarr->len != barr->len) return false;
 
-                    for (int i = 0; i < barr->len; i++) {
-                        auto &a2 = aarr->at(i);
+                    Fori (*aarr) {
+                        auto &a2 = it;
                         auto &b2 = barr->at(i);
                         if (!unify_types(make_goresult(a2, actx), make_goresult(b2, bctx))) return false;
                     }
@@ -6864,8 +6857,8 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
 
                     if (aspecs->len != bspecs->len) return false;
 
-                    for (int i = 0; i < aspecs->len; i++) {
-                        auto &a2 = aspecs->at(i).field->gotype;
+                    Fori (*aspecs) {
+                        auto &a2 = it.field->gotype;
                         auto &b2 = bspecs->at(i).field->gotype;
                         if (!unify_types(ares->wrap(a2), bres->wrap(b2))) return false;
                     }
@@ -6877,8 +6870,8 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
 
                     if (aspecs->len != bspecs->len) return false;
 
-                    for (int i = 0; i < aspecs->len; i++) {
-                        auto &a2 = aspecs->at(i).field->gotype;
+                    Fori (*aspecs) {
+                        auto &a2 = it.field->gotype;
                         auto &b2 = bspecs->at(i).field->gotype;
                         if (!unify_types(ares->wrap(a2), bres->wrap(b2))) return false;
                     }
@@ -6894,14 +6887,14 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
                     if (aparams->len != bparams->len) return false;
                     if (aresult->len != bresult->len) return false;
 
-                    for (int i = 0; i < aparams->len; i++) {
-                        auto &a2 = aparams->at(i);
+                    Fori (*aparams) {
+                        auto &a2 = it;
                         auto &b2 = bparams->at(i);
                         if (!unify_types(ares->wrap(&a2), bres->wrap(&b2))) return false;
                     }
 
-                    for (int i = 0; i < aresult->len; i++) {
-                        auto &a2 = aresult->at(i);
+                    Fori (*aresult) {
+                        auto &a2 = it;
                         auto &b2 = bresult->at(i);
                         if (!unify_types(ares->wrap(&a2), bres->wrap(&b2))) return false;
                     }
@@ -6992,11 +6985,10 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
                 added_new_types = false;
                 auto old = types_found;
 
-                for (int i = 0; i < func_params->len; i++) {
+                Fori (*func_params) {
                     auto &arg = func_args->at(i);
                     if (is_func_arg_untyped(arg) == untyped) {
-                        auto &param = func_params->at(i).gotype;
-                        if (!unify_types(make_goresult(arg, ctx), result->res->wrap(param)))
+                        if (!unify_types(make_goresult(arg, ctx), result->res->wrap(it.gotype)))
                             return false;
                     }
                 }

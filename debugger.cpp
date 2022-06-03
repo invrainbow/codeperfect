@@ -1391,8 +1391,7 @@ void Debugger::do_everything() {
 
                 Debug_Profile *debug_profile = NULL;
                 if (it.type == DLVC_DEBUG_TEST_UNDER_CURSOR) {
-                    for (int i = 0; i < project_settings.debug_profiles->len; i++) {
-                        auto &it = project_settings.debug_profiles->at(i);
+                    For (*project_settings.debug_profiles) {
                         if (it.is_builtin && it.type == DEBUG_TEST_CURRENT_FUNCTION) {
                             debug_profile = &it;
                             break;

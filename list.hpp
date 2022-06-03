@@ -234,8 +234,8 @@ struct List {
 
         T& operator*() { return *ptr_; }
         T* operator->() { return ptr_; }
-        bool operator==(const iter& rhs) { return ptr_ == rhs.ptr_; }
-        bool operator!=(const iter& rhs) { return ptr_ != rhs.ptr_; }
+        bool operator==(const iter& rhs) const { return ptr_ == rhs.ptr_; }
+        bool operator!=(const iter& rhs) const { return ptr_ != rhs.ptr_; }
 
         T* ptr_;
     };
