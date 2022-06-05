@@ -6573,20 +6573,28 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
     };
 
     auto prepare_lazy_subst = [&](Gotype *lazy) -> Prepare_Lazy_Subst_Result* {
-        auto base = lazy->base;
-        if (base->type != GOTYPE_LAZY_ID && base->type != GOTYPE_LAZY_SEL)
-            return NULL;
-
         Godecl *decl = NULL;
-        auto res = evaluate_type(base, ctx, &decl);
+        Goresult *res = NULL;
+
+        if (lazy->type == GOTYPE_LAZY_INDEX || lazy->type == GOTYPE_LAZY_INSTANCE) {
+            auto base = lazy->base;
+            if (base->type != GOTYPE_LAZY_ID && base->type != GOTYPE_LAZY_SEL)
+                return NULL;
+            res = evaluate_type(base, ctx, &decl);
+        } else {
+            res = evaluate_type(lazy, ctx, &decl);
+        }
 
         if (!res) return NULL;
         if (!decl) return NULL;
         if (decl->type != GODECL_FUNC) return NULL;
+        if (res->gotype->type != GOTYPE_FUNC) return NULL;
         if (!decl->type_params) return NULL;
 
         List<Gotype*> *args = NULL;
-        if (lazy->type == GOTYPE_LAZY_INDEX) {
+
+        switch (lazy->type) {
+        case GOTYPE_LAZY_INDEX: {
             auto key = lazy->lazy_index_key;
             Gotype *newtype = NULL;
 
@@ -6609,8 +6617,14 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
 
             args = alloc_list<Gotype*>();
             args->append(newtype);
-        } else {
+            break;
+        }
+        case GOTYPE_LAZY_INSTANCE:
             args = lazy->lazy_instance_args;
+            break;
+        case GOTYPE_LAZY_ID:
+            args = alloc_list<Gotype*>();
+            break;
         }
 
         auto ret = alloc_object(Prepare_Lazy_Subst_Result);
@@ -6716,8 +6730,12 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
     case GOTYPE_LAZY_CALL: {
         auto try_with_type_args = [&]() -> Goresult* {
             auto base = gotype->lazy_call_base;
-            if (base->type != GOTYPE_LAZY_INDEX && base->type != GOTYPE_LAZY_INSTANCE)
-                return NULL;
+
+            {
+                auto t = base->type;
+                if (t != GOTYPE_LAZY_INDEX && t != GOTYPE_LAZY_INSTANCE && t != GOTYPE_LAZY_ID)
+                    return NULL;
+            }
 
             auto result = prepare_lazy_subst(base);
             if (!result) return NULL;
@@ -6726,6 +6744,9 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
             auto func_args = gotype->lazy_call_args;
             auto func_params = result->target->func_sig.params;
             if (func_args->len != func_params->len) return NULL;
+
+            auto func_result = result->target->func_sig.result;
+            if (!func_result) return NULL;
 
             Table<Gotype*> lookup; lookup.init();
             int types_found = 0;
@@ -6791,7 +6812,7 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
                         }
 
                         ccstr name = (afound ? ares : bres)->gotype->id_name;
-                        lookup.set(name, newtype);
+                        lookup.set(name, (afound ? bres : ares)->gotype);
                         types_found++;
                         return true;
                     }
@@ -6988,7 +7009,17 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
                 Fori (*func_params) {
                     auto &arg = func_args->at(i);
                     if (is_func_arg_untyped(arg) == untyped) {
-                        if (!unify_types(make_goresult(arg, ctx), result->res->wrap(it.gotype)))
+                        auto res = make_goresult(arg, ctx);
+
+                        if (!untyped) {
+                            res = evaluate_type(arg, ctx);
+                            if (!res) return false;
+
+                            res = resolve_type(res);
+                            if (!res) return false;
+                        }
+
+                        if (!unify_types(res, result->res->wrap(it.gotype)))
                             return false;
                     }
                 }
@@ -7039,7 +7070,17 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
 
             if (!is_done()) return NULL;
 
-            auto new_gotype = walk_gotype_and_replace(result->target, [&](auto it) -> Gotype* {
+
+            Gotype *ret = NULL;
+            if (func_result->len == 1) {
+                ret = func_result->at(0).gotype;
+            } else {
+                ret = new_gotype(GOTYPE_MULTI);
+                ret->multi_types = alloc_list<Gotype*>(func_result->len);
+                For (*func_result) ret->multi_types->append(it.gotype);
+            }
+
+            auto new_gotype = walk_gotype_and_replace(ret, [&](auto it) -> Gotype* {
                 if (it->type == GOTYPE_ID)
                     return lookup.get(it->id_name);
                 return NULL;
