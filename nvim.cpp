@@ -32,7 +32,7 @@ void Nvim::assoc_grid_with_window(u32 grid, u32 win) {
     auto& table = grid_to_window;
 
     auto pair = table.find_or_append([&](auto it) { return it->grid == grid; });
-    assert(pair);
+    cp_assert(pair);
 
     pair->grid = grid;
     pair->win = win;

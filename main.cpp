@@ -1021,8 +1021,8 @@ int main(int argc, char **argv) {
 
     case AUTH_REGISTERED: {
         auto &auth = world.auth;
-        assert(auth.reg_email_len <= _countof(auth.reg_email));
-        assert(auth.reg_license_len <= _countof(auth.reg_license));
+        cp_assert(auth.reg_email_len <= _countof(auth.reg_email));
+        cp_assert(auth.reg_license_len <= _countof(auth.reg_license));
 
         auto email = cp_sprintf("%.*s", auth.reg_email_len, auth.reg_email);
         auto license = cp_sprintf("%.*s", auth.reg_license_len, auth.reg_license);
@@ -1563,7 +1563,7 @@ int main(int argc, char **argv) {
                 auto imgui_to_cp_cursor = [&](ImGuiMouseCursor cur) {
                     if (!world.ui.cursors_ready[cur])
                         cur = ImGuiMouseCursor_Arrow;
-                    assert(world.ui.cursors_ready[cur]);
+                    cp_assert(world.ui.cursors_ready[cur]);
                     return &world.ui.cursors[cur];
                 };
 

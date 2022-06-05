@@ -132,5 +132,5 @@ void cp_panic(ccstr s) {
 }
 
 void assert_main_thread() {
-    assert(is_main_thread);
+    cp_assert(is_main_thread);
 }

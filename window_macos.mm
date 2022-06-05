@@ -759,7 +759,7 @@ bool Window::create_nsgl_context() {
     int attrib_index = 0;
 
     auto add_attrib = [&](auto a) {
-        assert((size_t) attrib_index < _countof(attribs));
+        cp_assert((size_t) attrib_index < _countof(attribs));
         attribs[attrib_index++] = a;
     };
 

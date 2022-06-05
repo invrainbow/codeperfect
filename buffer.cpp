@@ -940,7 +940,7 @@ u32 Buffer::idx_byte_to_gr(int y, int off) {
         off -= size;
     }
 
-    assert(!off);
+    cp_assert(!off);
     return x;
 }
 
@@ -952,7 +952,7 @@ u32 Buffer::idx_byte_to_cp(int y, int off, bool nocrash) {
         off -= size;
     }
 
-    if (!nocrash) assert(!off);
+    if (!nocrash) cp_assert(!off);
     return lines[y].len;
 }
 
@@ -1007,8 +1007,8 @@ cur2 Buffer::offset_to_cur(i32 off) {
     }
 
     if (ret.x == -1 || ret.y == -1) {
-        assert(ret.x == -1 && ret.y == -1);
-        assert(!off);
+        cp_assert(ret.x == -1 && ret.y == -1);
+        cp_assert(!off);
         ret.y = lines.len-1;
         ret.x = lines[ret.y].len;
     }

@@ -55,7 +55,7 @@ struct Fridge {
     T* alloc() {
         if (!head) {
             add_new_block();
-            assert(head);
+            cp_assert(head);
         }
 
         T* ret = (T*)head;
@@ -189,7 +189,7 @@ struct Pool {
                 pblock = obsolete_blocks.find([&](auto it) -> bool {
                     return *it == block;
                 });
-                assert(pblock);
+                cp_assert(pblock);
                 // if the block was obsoleted, we're not going to use it,
                 // but we *can* just reset all the current used blocks
                 if (curr) {
