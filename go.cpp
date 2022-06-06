@@ -5798,6 +5798,8 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
             auto obj = ret->append();
             obj->name = name_node->string();
             obj->constraint = node_to_gotype(type_node, is_toplevel);
+            obj->start = it->start();
+            obj->end = it->end();
         }
         return ret;
     };
@@ -6770,22 +6772,32 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
                 if (!a && !b) return true;
                 if (!a || !b) return false;
 
-                auto pos_is_in_func_sig = [&](cur2 pos, Go_Func_Sig *sig) {
-                    For (*sig->params)
-                        if (it.decl_start <= pos && pos < it.decl_end)
-                            return true;
-                    For (*sig->result)
-                        if (it.decl_start <= pos && pos < it.decl_end)
-                            return true;
-                    return false;
-                };
-
                 auto get_type_param = [&](Goresult *res, bool *pfound) -> Gotype* {
                     if (!are_ctxs_equal(res->ctx, result->res->ctx)) return NULL;
 
                     auto gotype = res->gotype;
                     if (gotype->type != GOTYPE_ID) return NULL;
-                    if (!pos_is_in_func_sig(gotype->id_pos, &result->target->func_sig)) return NULL;
+
+                    // check if id pos is in func params, func result, or func type params
+                    auto check_id_pos = [&]() {
+                        auto pos = gotype->id_pos;
+
+                        For (*result->target->func_sig.params)
+                            if (it.decl_start <= pos && pos < it.decl_end)
+                                return true;
+
+                        For (*result->target->func_sig.result)
+                            if (it.decl_start <= pos && pos < it.decl_end)
+                                return true;
+
+                        For (*result->decl->type_params)
+                            if (it.start <= pos && pos < it.end)
+                                return true;
+
+                        return false;
+                    };
+
+                    if (!check_id_pos()) return NULL;
 
                     return lookup.get(gotype->id_name, pfound);
                 };
@@ -6797,21 +6809,19 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
                     auto btype = get_type_param(bres, &bfound);
 
                     if ((afound && !bfound) || (!afound && bfound)) {
-                        Gotype *existing = NULL, *newtype = NULL;
-                        if (afound) {
-                            existing = atype;
-                            newtype = btype;
-                        } else {
-                            existing = btype;
-                            newtype = atype;
+                        Gotype *existing_type = (afound ? atype : btype);
+                        Goresult *res = (afound ? ares : bres);
+
+                        if (existing_type) {
+                            // should we reunify? say afound && !bfound, atype
+                            // is like GOTYPE_SLICE, btype is GOTYPE_CONSTRAINT
+                            // -- do we check that atype *implements* btype?
+                            // https://go.dev/ref/spec#Type_unification is not
+                            // really clear here.
+                            return true; // return unify_types(res->wrap(existing_type), bres);
                         }
 
-                        if (existing) {
-                            // should we do this? or just return true?
-                            return unify_types(ares->wrap(existing), newtype ? bres->wrap(newtype) : NULL);
-                        }
-
-                        ccstr name = (afound ? ares : bres)->gotype->id_name;
+                        ccstr name = res->gotype->id_name;
                         lookup.set(name, (afound ? bres : ares)->gotype);
                         types_found++;
                         return true;
@@ -6940,9 +6950,251 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
 
             bool ran_constraint_type_inference = false;
 
-            auto has_core_type = [&](Gotype *gotype, Go_Ctx *ctx) -> bool {
-                return true;
+            enum Type_Node_Type {
+                TYPE_NODE_UNION,
+                TYPE_NODE_INTERSECT,
+                TYPE_NODE_TERM,
+            };
+
+            struct Type_Node {
+                Type_Node_Type *type;
+                union {
+                    List<Type_Node*> *children;
+                    struct {
+                        Goresult *term; // gotype
+                        bool is_underlying;
+                    };
+                };
+            };
+
+            auto new_type_node = [&](Type_Node_Type type) {
+                auto ret = alloc_object(Type_Node);
+                ret->type = type;
+                return ret;
+            };
+
+            auto gotype_to_type_node = [&](Gotype *gotype, Go_Ctx *ctx) -> Type_Node* {
+                Type_Node *ret = NULL;
+
+                switch (gotype->type) {
+                case GOTYPE_INTERFACE:
+                    ret = new_type_node(TYPE_NODE_INTERSECT);
+                    ret->children = alloc_list<Type_Node*>();
+                    For (*gotype->interface_specs) {
+                        if (it.type != GO_INTERFACE_SPEC_EMBEDDED && it.type != GO_INTERFACE_SPEC_ELEM)
+                            continue;
+                        auto child = gotype_to_type_node(it.field->gotype, ctx);
+                        if (!child) return NULL;
+                        children->append(child);
+                    }
+                    if (ret->children->len == 1)
+                        return ret->children->at(0);
+                    return ret;
+
+                case GOTYPE_CONSTRAINT:
+                    ret = new_type_node(TYPE_NODE_UNION);
+                    ret->children = alloc_list<Type_Node*>();
+                    For (*gotype->constraint_terms) {
+                        auto child = gotype_to_type_node(it, ctx);
+                        if (!child) return NULL;
+                        ret->children->append(child);
+                    }
+                    return ret;
+
+                case GOTYPE_CONSTRAINT_UNDERYLING:
+                    ret = gotype_to_type_node(gotype->constraint_underlying_base, ctx);
+                    if (ret) ret->is_underlying = true;
+                    return ret;
+
+                case GOTYPE_ID:
+                case GOTYPE_SEL: {
+                    auto res = resolve_type_to_decl(gotype, ctx);
+                    if (!res) return NULL;
+
+                    auto other_gotype = res->decl->gotype;
+                    if (other_gotype->type == GOTYPE_INTERFACE)
+                        return gotype_to_type_node(other_gotype, res->ctx);
+
+                    ret = new_type_node(TYPE_NODE_TERM);
+                    ret->term = make_goresult(gotype, ctx);
+                    return ret;
+                }
+
+                case GOTYPE_BUILTIN:
+                case GOTYPE_MAP:
+                case GOTYPE_STRUCT:
+                case GOTYPE_POINTER:
+                case GOTYPE_FUNC:
+                case GOTYPE_SLICE:
+                case GOTYPE_ARRAY:
+                case GOTYPE_CHAN:
+                case GOTYPE_GENERIC:
+                    ret = new_type_node(TYPE_NODE_TERM);
+                    ret->term = make_goresult(gotype, ctx);
+                    return ret;
+                }
+            };
+
+            // mutates node
+            auto flatten_type_node(Type_Node* node) {
+                if (node->type != TYPE_NODE_INTERSECT && node->type != TYPE_NODE_UNION)
+                    return;
+
+                auto children = alloc_list<Type_Node*>();
+                For (*node->children) {
+                    auto child = it;
+                    flatten_type_node(child);
+                    if (child->type == node->type) {
+                        For (*child->children) {
+                            children->append(it);
+                        }
+                    } else {
+                        children->append(child);
+                    }
+                }
+                node->children = children;
+            }
+
+            auto empty_intersection = [&]() {
+                return new_type_node(TYPE_NODE_INTERSECT);
+            };
+
+            auto get_intersection_of_two_terms = [&](Type_Node *a, Type_Node *b) -> Type_Node* {
+                cp_assert(a->type == TYPE_NODE_TERM);
+                cp_assert(b->type == TYPE_NODE_TERM);
+
+                // if both underlying or both not underlying
+                if (a->is_underlying == b->is_underlying)
+                    return are_gotypes_equal(a->term, b->term) ? a : empty_intersection();
+
+                // at this point, a->is_underlying != b->is_underlying
+
+                if (b->is_underlying) {
+                    auto tmp = a; a = b; b = tmp;
+                }
+
+                // at this point, a is underlying, b is not
+
+                auto underlying_type = a->term->gotype;
+                Goresult *resolved_gotype = NULL;
+
+                // TODO: resolve aliases
+                if (underlying_type->type == GOTYPE_ID) {
+                    auto res = find_decl_of_id(underlying_type->id_name, underlying_type->id_pos, a->term->ctx);
+                    if (!res) return NULL;
+                    if (res->gotype->type != GOTYPE_BUILTIN) return NULL;
+                    resolved_gotype = res;
+                } else {
+                    resolved_gotype = a->term;
+                }
+
+                auto res = resolve_type(b->term);
+                if (!res) return NULL;
+
+                return are_gotypes_equal(resolved_gotype, res) ? b : empty_intersection();
+            };
+
+            auto simplify_type_node = [&](Type_Node *node) -> Type_Node* {
+                switch (node->type) {
+                case TYPE_NODE_INTERSECT: {
+                    if (!node->children->len) return empty_intersection();
+
+                    auto current_union = alloc_list<Type_Node*>();
+                    auto temp_union = alloc_list<Type_Node*>();
+
+                    For (*node->children) {
+                        Type_Node* child = it; // without reference
+                        child = simplify_type_node(child);
+
+                        List<Type_Node*> *new_union = NULL;
+                        if (child->type == TYPE_NODE_UNION) {
+                            new_union = child->children;
+                        } else {
+                            new_union = alloc_list<Type_Node*>();
+                            new_union->append(child);
+                        }
+
+                        cp_assert(new_union->len);
+
+                        if (!current_union->len) {
+                            For (*new_union) current_union->append(it);
+                            continue;
+                        }
+
+                        temp_union->len = 0;
+
+                        For (*current_union) {
+                            auto curr = it;
+                            For (*new_union) {
+                                auto term = get_intersection_of_two_terms(curr, it);
+                                if (!term) return NULL;
+
+                                if (term->type == TYPE_NODE_INTERSECT && !term->children->len)
+                                    continue;
+
+                                cp_assert(term->type == TYPE_NODE_TERM);
+                                temp_union->append(term);
+                            }
+                        }
+
+                        if (!temp_union->len) return empty_intersection();
+
+                        current_union->len = 0;
+                        For (*temp_union) current_union->append(it);
+                    }
+
+                    auto ret = new_type_node(TYPE_NODE_UNION);
+                    ret->children = current_union;
+                    return ret;
+                }
+                case TYPE_NODE_UNION: {
+                    auto new_union = alloc_list<Type_Node*>();
+
+                    For (*node->children) {
+                        Type_Node *child = it; // without reference
+                        child = simplify_type_node(child);
+
+                        if (child->type == TYPE_NODE_UNION) {
+                            For (*child->children) new_union->append(it);
+                        } else {
+                            new_union->append(child);
+                        }
+                    }
+
+                    auto ret = new_type_node(TYPE_NODE_UNION);
+                    ret->children = new_union;
+                    return ret;
+                }
+                }
+                return node;
+            };
+
+            auto simplify_union = [&](Type_Node *tn) -> Type_Node* {
                 // TODO
+            };
+
+            // (intersection (union Celsius Kelvin) Celsius)
+
+            auto get_core_type = [&](Gotype *gotype, Go_Ctx *ctx) -> Goresult* {
+                auto tn = gotype_to_type_node(gotype, ctx);
+                if (!tn) return NULL;
+                flatten_type_node(tn);
+
+                // after flatten_type_node(), intersections and unions no
+                // longer have intersections and unions respectively as
+                // children
+
+                tn = simplify_type_node(tn);
+
+                // after simplify_type_node(), all intersections are
+                // eliminated, tn is now either a union of terms, or a single
+                // term
+
+                if (tn->type == TYPE_NODE_UNION)
+                    tn = simplify_union(tn);
+
+                // TODO: go through tn (which is either a simplified union or a single term) and determine if it has a core type
+                // worth creating tests for the core type examples?
             };
 
             auto constraint_type_inference = [&]() {
@@ -6951,14 +7203,14 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
                 For (*result->params) {
                     auto res = result->res;
 
-                    if (!has_core_type(it.constraint, res->ctx))
-                        continue;
+                    auto core_type = get_core_type(it.constraint, res->ctx);
+                    if (!core_type) continue;
 
                     auto idtype = new_gotype(GOTYPE_ID);
                     idtype->id_name = it.name;
-                    // don't need id_pos
+                    idtype->id_pos = it.start;
 
-                    if (!unify_types(res->wrap(idtype), res->wrap(it.constraint))) return false;
+                    if (!unify_types(res->wrap(idtype), core_type)) return false;
                 }
 
                 auto do_substitution = [&]() {
@@ -7301,7 +7553,7 @@ Goresult *Go_Indexer::resolve_type(Gotype *type, Go_Ctx *ctx) {
     switch (type->type) {
     case GOTYPE_BUILTIN: // pending decision: should we do this here?
         if (!type->builtin_underlying_base)
-            return NULL;
+            return type;
         return resolve_type(type->builtin_underlying_base, ctx);
 
     case GOTYPE_ASSERTION:

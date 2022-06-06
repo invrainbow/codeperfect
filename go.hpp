@@ -395,6 +395,8 @@ enum Godecl_Type {
 struct Go_Type_Parameter {
     ccstr name;
     Gotype *constraint;
+    cur2 start;
+    cur2 end;
 
     Go_Type_Parameter *copy();
     void read(Index_Stream *s);
@@ -590,8 +592,8 @@ enum Gotype_Type {
 struct Gotype {
     Gotype_Type type;
 
-    // if a gotype has a Gotype* base, it should be first field
-    // this way we can always access it using gotype->base
+    // if gotype has a Gotype* base, must be first field so it lines up with
+    // gotype->base
     union {
         Gotype *constraint_underlying_base;
         List<Gotype*> *constraint_terms;
