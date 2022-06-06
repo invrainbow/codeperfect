@@ -6957,7 +6957,7 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
             };
 
             struct Type_Node {
-                Type_Node_Type *type;
+                Type_Node_Type type;
                 union {
                     List<Type_Node*> *children;
                     struct {
@@ -6973,7 +6973,7 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
                 return ret;
             };
 
-            auto gotype_to_type_node = [&](Gotype *gotype, Go_Ctx *ctx) -> Type_Node* {
+            fn<Type_Node*(Gotype*, Go_Ctx*)> gotype_to_type_node = [&](auto gotype, auto ctx) -> Type_Node* {
                 Type_Node *ret = NULL;
 
                 switch (gotype->type) {
@@ -6985,7 +6985,7 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
                             continue;
                         auto child = gotype_to_type_node(it.field->gotype, ctx);
                         if (!child) return NULL;
-                        children->append(child);
+                        ret->children->append(child);
                     }
                     if (ret->children->len == 1)
                         return ret->children->at(0);
@@ -7001,7 +7001,7 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
                     }
                     return ret;
 
-                case GOTYPE_CONSTRAINT_UNDERYLING:
+                case GOTYPE_CONSTRAINT_UNDERLYING:
                     ret = gotype_to_type_node(gotype->constraint_underlying_base, ctx);
                     if (ret) ret->is_underlying = true;
                     return ret;
@@ -7036,7 +7036,7 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
             };
 
             // mutates node
-            auto flatten_type_node(Type_Node* node) {
+            fn<void(Type_Node*)> flatten_type_node = [&](auto node) {
                 if (node->type != TYPE_NODE_INTERSECT && node->type != TYPE_NODE_UNION)
                     return;
 
@@ -7053,7 +7053,7 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
                     }
                 }
                 node->children = children;
-            }
+            };
 
             auto empty_intersection = [&]() {
                 return new_type_node(TYPE_NODE_INTERSECT);
@@ -7094,7 +7094,7 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
                 return are_gotypes_equal(resolved_gotype, res) ? b : empty_intersection();
             };
 
-            auto simplify_type_node = [&](Type_Node *node) -> Type_Node* {
+            fn<Type_Node*(Type_Node*)> simplify_type_node = [&](auto node) -> Type_Node* {
                 switch (node->type) {
                 case TYPE_NODE_INTERSECT: {
                     if (!node->children->len) return empty_intersection();
@@ -7170,10 +7170,20 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
             };
 
             auto simplify_union = [&](Type_Node *tn) -> Type_Node* {
-                // TODO
-            };
+                cp_assert(tn->type != TYPE_NODE_INTERSECT);
 
-            // (intersection (union Celsius Kelvin) Celsius)
+                if (tn->type == TYPE_NODE_TERM) return tn;
+
+                auto children = alloc_list<Type_Node*>();
+
+                For (*tn->children) {
+                    children->append(it); // TODO
+                }
+
+                auto ret = new_type_node(TYPE_NODE_UNION);
+                ret->children = children;
+                return ret;
+            };
 
             auto get_core_type = [&](Gotype *gotype, Go_Ctx *ctx) -> Goresult* {
                 auto tn = gotype_to_type_node(gotype, ctx);
@@ -7193,8 +7203,10 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
                 if (tn->type == TYPE_NODE_UNION)
                     tn = simplify_union(tn);
 
-                // TODO: go through tn (which is either a simplified union or a single term) and determine if it has a core type
-                // worth creating tests for the core type examples?
+                // TODO: go through tn (which is either a union of terms or
+                // single term) and determine if it has a core type
+                //
+                // is it worth creating tests for the core type examples?
             };
 
             auto constraint_type_inference = [&]() {
@@ -7553,7 +7565,7 @@ Goresult *Go_Indexer::resolve_type(Gotype *type, Go_Ctx *ctx) {
     switch (type->type) {
     case GOTYPE_BUILTIN: // pending decision: should we do this here?
         if (!type->builtin_underlying_base)
-            return type;
+            break;
         return resolve_type(type->builtin_underlying_base, ctx);
 
     case GOTYPE_ASSERTION:
