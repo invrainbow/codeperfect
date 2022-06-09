@@ -1759,7 +1759,7 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
 
     auto scope_ops_decls = alloc_list<Godecl>();
 
-    walk_ast_node(root, true, [&](Ast_Node* node, Ts_Field_Type, int depth) -> Walk_Action {
+    walk_ast_node(root, true, [&](Ast_Node* node, Ts_Field_Type field, int depth) -> Walk_Action {
         for (; open_scopes.len > 0 && depth <= *open_scopes.last(); open_scopes.len--) {
             Go_Scope_Op op;
             op.type = GSOP_CLOSE_SCOPE;
@@ -1836,7 +1836,6 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
         case TS_VAR_DECLARATION:
         case TS_RANGE_CLAUSE:
         case TS_RECEIVE_STATEMENT:
-        case TS_PARAMETER_DECLARATION:
         case TS_TYPE_PARAMETER_DECLARATION: {
             if (node_type == TS_METHOD_DECLARATION || node_type == TS_FUNCTION_DECLARATION) {
                 open_scopes.append(depth);
@@ -1851,8 +1850,8 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
                 bool ok = false;
                 do {
                     auto parent = node->parent();
-                    if (parent->null) continue;
-                    if (parent->type() != TS_COMMUNICATION_CASE) continue;
+                    if (parent->null) break;
+                    if (parent->type() != TS_COMMUNICATION_CASE) break;
                     ok = true;
                 } while (0);
 
@@ -1872,6 +1871,7 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
             }
             break;
         }
+
         }
 
         return WALK_CONTINUE;
@@ -2278,6 +2278,8 @@ Goresult *Go_Indexer::find_decl_of_id(ccstr id_to_find, cur2 id_pos, Go_Ctx *ctx
                         if (it.decl_scope_depth == table.frames.len)
                             if (!(it.decl->name_start <= id_pos && id_pos < it.decl->name_end))
                                 break;
+                    if (!streq(it.decl->name, id_to_find))
+                        break;
                     table.set(it.decl->name, it.decl);
                     break;
                 }
@@ -5999,6 +6001,57 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
                 FOR_NODE_CHILDREN (spec) {
                     if (it->eq(type_node) || it->eq(value_node)) break;
 
+                    auto decl_gotype = type_node_gotype;
+
+                    do {
+                        if (node->type() != TS_PARAMETER_LIST) break;
+
+                        cp_assert(spec->type() == TS_PARAMETER_DECLARATION);
+
+                        auto method_decl = node->parent();
+                        if (method_decl->null) break;
+                        if (method_decl->type() != TS_METHOD_DECLARATION) break;
+
+                        auto gotype = decl_gotype;
+                        while (gotype->type == GOTYPE_POINTER)
+                            gotype = gotype->base;
+
+                        if (gotype->type != GOTYPE_GENERIC) break;
+
+                        decl_gotype = gotype->base;
+
+                        // ---
+                        // try to grab the type arguments and create decls from them
+
+                        auto generic_type_node = type_node;
+                        while (!generic_type_node->null && generic_type_node->type() == TS_POINTER_TYPE)
+                            generic_type_node = generic_type_node->child();
+
+                        // should this be an assert? gotype->type == GOTYPE_GENERIC at this point
+                        if (generic_type_node->type() != TS_GENERIC_TYPE) break;
+
+                        auto args_node = generic_type_node->field(TSF_TYPE_ARGUMENTS);
+                        if (args_node->null) break;
+
+                        FOR_NODE_CHILDREN (args_node) {
+                            if (it->type() != TS_TYPE_IDENTIFIER) continue;
+
+                            auto child_gotype = node_to_gotype(it);
+                            if (!child_gotype) continue;
+
+                            auto decl = results->append(); // don't call new_result(), we need to set everything manually
+                            decl->decl_start = it->start();
+                            decl->decl_end = it->end();
+                            decl->type = GODECL_TYPE_PARAM;
+                            decl->spec_start = it->start();
+                            decl->name = it->string();
+                            decl->name_start = it->start();
+                            decl->name_end = it->end();
+                            decl->gotype = child_gotype;
+                            save_decl(decl);
+                        }
+                    } while (0);
+
                     auto decl = new_result();
 
                     switch (node->type()) {
@@ -6011,7 +6064,7 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
                     decl->name = it->string();
                     decl->name_start = it->start();
                     decl->name_end = it->end();
-                    decl->gotype = type_node_gotype;
+                    decl->gotype = decl_gotype;
                     save_decl(decl);
 
                     if (should_save_iota_types)
@@ -7003,7 +7056,9 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
 
                 case GOTYPE_CONSTRAINT_UNDERLYING:
                     ret = gotype_to_type_node(gotype->constraint_underlying_base, ctx);
-                    if (ret) ret->is_underlying = true;
+                    if (!ret) return NULL;
+                    if (ret->term->gotype->type != GOTYPE_BUILTIN) return NULL;
+                    ret->is_underlying = true;
                     return ret;
 
                 case GOTYPE_ID:
@@ -7177,8 +7232,57 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
                 auto children = alloc_list<Type_Node*>();
 
                 For (*tn->children) {
-                    children->append(it); // TODO
+                    auto curr = it;
+                    cp_assert(curr->type == TYPE_NODE_TERM);
+
+                    if (curr->is_underlying) {
+                        // skip if any underlying from children equal to this
+                        // remove any non-underlying from children that belong to this
+                        auto underlying = curr->term;
+
+                        bool already_in_set = false;
+                        For (*children) {
+                            if (!it->is_underlying) continue;
+
+                            if (are_gotypes_equal(it->term, underlying)) {
+                                already_in_set = true;
+                                break;
+                            }
+                        }
+
+                        if (already_in_set) continue;
+
+                        for (int i = 0; i < children->len; i++) {
+                            auto &it = children->at(i);
+                            if (it->is_underlying) continue;
+
+                            auto res = resolve_type(it->term);
+                            if (!res) return NULL;
+
+                            if (are_gotypes_equal(res, underlying))
+                                children->remove(i--);
+                        }
+
+                        children->append(curr);
+                    } else {
+                        // skip if any non-underlying equal to this
+                        // skip if any underlying is superset of us
+                        auto underlying = resolve_type(curr->term);
+                        if (!underlying) return NULL;
+
+                        bool already_in_set = false;
+                        For (*children) {
+                            if (are_gotypes_equal(it->term, it->is_underlying ? underlying : curr->term)) {
+                                already_in_set = true;
+                                break;
+                            }
+                        }
+
+                        if (!already_in_set) children->append(it);
+                    }
                 }
+
+                if (children->len == 1) return children->at(0);
 
                 auto ret = new_type_node(TYPE_NODE_UNION);
                 ret->children = children;
@@ -7188,6 +7292,7 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
             auto get_core_type = [&](Gotype *gotype, Go_Ctx *ctx) -> Goresult* {
                 auto tn = gotype_to_type_node(gotype, ctx);
                 if (!tn) return NULL;
+
                 flatten_type_node(tn);
 
                 // after flatten_type_node(), intersections and unions no
@@ -7199,14 +7304,42 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
                 // after simplify_type_node(), all intersections are
                 // eliminated, tn is now either a union of terms, or a single
                 // term
+                cp_assert(tn->type != TYPE_NODE_INTERSECT);
 
                 if (tn->type == TYPE_NODE_UNION)
                     tn = simplify_union(tn);
 
-                // TODO: go through tn (which is either a union of terms or
-                // single term) and determine if it has a core type
-                //
-                // is it worth creating tests for the core type examples?
+                // tn is now either a union of terms, or a single term
+                // union will always contain multiple terms, otherwise it'll be a term
+                cp_assert(!(tn->type == TYPE_NODE_UNION && tn->children->len == 1));
+
+                List<Type_Node*> *children = NULL;
+                if (tn->type == TYPE_NODE_TERM) {
+                    children = alloc_list<Type_Node*>();
+                    children->append(tn);
+                } else {
+                    children = tn->children;
+                }
+
+                Goresult *first = NULL;
+                For (*tn->children) {
+                    Goresult *underlying = NULL;
+                    if (it->is_underlying) {
+                        underlying = it->term;
+                    } else {
+                        underlying = resolve_type(it->term);
+                        if (!underlying) return NULL;
+                    }
+
+                    if (!first) {
+                        first = underlying;
+                        continue;
+                    }
+
+                    if (!are_gotypes_equal(underlying, first)) return NULL;
+                }
+
+                return first;
             };
 
             auto constraint_type_inference = [&]() {
