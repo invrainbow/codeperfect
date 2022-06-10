@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include "defer.hpp"
 #include "unicode.hpp"
+#include "enums.hpp"
 
 #if OS_WIN
 #include <windows.h>
@@ -16,7 +17,7 @@
 #include <dlfcn.h>
 #endif
 
-#define GO_DEBUG 0
+#define GO_DEBUG 1
 
 #if GO_DEBUG
 #define go_print(fmt, ...) print("[go] " fmt, ##__VA_ARGS__)
@@ -39,7 +40,7 @@ const int GO_INDEX_MAGIC_NUMBER = 0x49fa98;
 // version 27: fix parser handling newlines and idents wrong in interface specs
 // version 28: upgrade tree-sitter-go
 // version 29: generics
-const int GO_INDEX_VERSION = 33;
+const int GO_INDEX_VERSION = 35;
 
 void index_print(ccstr fmt, ...) {
     va_list args;
@@ -2286,7 +2287,21 @@ Goresult *Go_Indexer::find_decl_of_id(ccstr id_to_find, cur2 id_pos, Go_Ctx *ctx
             }
 
             auto decl = table.get(id_to_find);
-            if (decl) return make_goresult(decl, ctx);
+            if (decl) {
+                if (decl->type != GODECL_METHOD_RECEIVER_TYPE_PARAM)
+                    return make_goresult(decl, ctx);
+
+                auto res = resolve_type_to_decl(decl->base, ctx);
+                if (!res) return NULL;
+
+                if (res->decl->type != GODECL_TYPE) return NULL;
+
+                auto type_params = res->decl->type_params;
+                if (!type_params) return NULL;
+                if (decl->type_param_index >= type_params->len) return NULL;
+
+                return res->wrap(type_params->at(decl->type_param_index).copy());
+            }
         }
 
         For (*pkg->files) {
@@ -5787,21 +5802,27 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
         memcpy(decl, decl->copy(), sizeof(Godecl));
     };
 
-    auto parse_type_params = [&](Ast_Node *node) -> List<Go_Type_Parameter> * {
+    auto parse_type_params = [&](Ast_Node *node) -> List<Godecl> * {
         if (node->null) return NULL;
 
-        auto ret = alloc_list<Go_Type_Parameter>();
+        auto ret = alloc_list<Godecl>();
         FOR_NODE_CHILDREN (node) {
             auto name_node = it->field(TSF_NAME);
             if (name_node->null) return NULL;
+
             auto type_node = it->field(TSF_TYPE);
             if (type_node->null) return NULL;
 
             auto obj = ret->append();
+            obj->type = GODECL_TYPE_PARAM;
             obj->name = name_node->string();
-            obj->constraint = node_to_gotype(type_node, is_toplevel);
-            obj->start = it->start();
-            obj->end = it->end();
+            obj->name_start = name_node->start();
+            obj->name_end = name_node->end();
+            obj->decl_start = node->start();
+            obj->decl_end = node->end();
+            obj->spec_start = node->start();
+            obj->is_toplevel = false;
+            obj->gotype = node_to_gotype(type_node, is_toplevel);
         }
         return ret;
     };
@@ -6005,8 +6026,7 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
 
                     do {
                         if (node->type() != TS_PARAMETER_LIST) break;
-
-                        cp_assert(spec->type() == TS_PARAMETER_DECLARATION);
+                        if (spec->type() != TS_PARAMETER_DECLARATION) break;
 
                         auto method_decl = node->parent();
                         if (method_decl->null) break;
@@ -6030,6 +6050,13 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
                         // should this be an assert? gotype->type == GOTYPE_GENERIC at this point
                         if (generic_type_node->type() != TS_GENERIC_TYPE) break;
 
+                        auto base_type_node = generic_type_node->field(TSF_TYPE);
+                        if (base_type_node->null) break;
+                        if (base_type_node->type() != TS_TYPE_IDENTIFIER) break;
+
+                        auto base_type = node_to_gotype(base_type_node);
+                        if (!base_type) break;
+
                         auto args_node = generic_type_node->field(TSF_TYPE_ARGUMENTS);
                         if (args_node->null) break;
 
@@ -6042,12 +6069,13 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
                             auto decl = results->append(); // don't call new_result(), we need to set everything manually
                             decl->decl_start = it->start();
                             decl->decl_end = it->end();
-                            decl->type = GODECL_TYPE_PARAM;
+                            decl->type = GODECL_METHOD_RECEIVER_TYPE_PARAM;
                             decl->spec_start = it->start();
                             decl->name = it->string();
                             decl->name_start = it->start();
                             decl->name_end = it->end();
                             decl->gotype = child_gotype;
+                            decl->base = base_type;
                             save_decl(decl);
                         }
                     } while (0);
@@ -6282,7 +6310,7 @@ Gotype* _walk_gotype_and_replace(Gotype *gotype, walk_gotype_and_replace_cb cb) 
     return gotype;
 }
 
-Gotype* Go_Indexer::do_subst_rename_this_later(Gotype *base, List<Go_Type_Parameter> *params, List<Gotype*> *args) {
+Gotype* Go_Indexer::do_subst_rename_this_later(Gotype *base, List<Godecl> *params, List<Gotype*> *args) {
     if (!params) return NULL;
     if (!args) return NULL;
     if (params->len != args->len) return NULL;
@@ -6623,7 +6651,7 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
         Goresult *res;
         Godecl *decl;
         Gotype *target;
-        List<Go_Type_Parameter> *params;
+        List<Godecl> *params;
         List<Gotype*> *args;
     };
 
@@ -6834,19 +6862,16 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
                     // check if id pos is in func params, func result, or func type params
                     auto check_id_pos = [&]() {
                         auto pos = gotype->id_pos;
+                        auto check_range = [&](auto decls) {
+                            For (*decls)
+                                if (it.decl_start <= pos && pos < it.decl_end)
+                                    return true;
+                            return false;
+                        };
 
-                        For (*result->target->func_sig.params)
-                            if (it.decl_start <= pos && pos < it.decl_end)
-                                return true;
-
-                        For (*result->target->func_sig.result)
-                            if (it.decl_start <= pos && pos < it.decl_end)
-                                return true;
-
-                        For (*result->decl->type_params)
-                            if (it.start <= pos && pos < it.end)
-                                return true;
-
+                        if (check_range(result->target->func_sig.params)) return true;
+                        if (check_range(result->target->func_sig.result)) return true;
+                        if (check_range(result->decl->type_params)) return true;
                         return false;
                     };
 
@@ -6865,14 +6890,8 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
                         Gotype *existing_type = (afound ? atype : btype);
                         Goresult *res = (afound ? ares : bres);
 
-                        if (existing_type) {
-                            // should we reunify? say afound && !bfound, atype
-                            // is like GOTYPE_SLICE, btype is GOTYPE_CONSTRAINT
-                            // -- do we check that atype *implements* btype?
-                            // https://go.dev/ref/spec#Type_unification is not
-                            // really clear here.
-                            return true; // return unify_types(res->wrap(existing_type), bres);
-                        }
+                        if (existing_type)
+                            return unify_types(res->wrap(existing_type), bres);
 
                         ccstr name = res->gotype->id_name;
                         lookup.set(name, (afound ? bres : ares)->gotype);
@@ -7057,7 +7076,7 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
                 case GOTYPE_CONSTRAINT_UNDERLYING:
                     ret = gotype_to_type_node(gotype->constraint_underlying_base, ctx);
                     if (!ret) return NULL;
-                    if (ret->term->gotype->type != GOTYPE_BUILTIN) return NULL;
+                    // if (ret->term->gotype->type != GOTYPE_BUILTIN) return NULL;
                     ret->is_underlying = true;
                     return ret;
 
@@ -7322,7 +7341,7 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
                 }
 
                 Goresult *first = NULL;
-                For (*tn->children) {
+                For (*children) {
                     Goresult *underlying = NULL;
                     if (it->is_underlying) {
                         underlying = it->term;
@@ -7348,12 +7367,12 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
                 For (*result->params) {
                     auto res = result->res;
 
-                    auto core_type = get_core_type(it.constraint, res->ctx);
+                    auto core_type = get_core_type(it.gotype, res->ctx);
                     if (!core_type) continue;
 
                     auto idtype = new_gotype(GOTYPE_ID);
                     idtype->id_name = it.name;
-                    idtype->id_pos = it.start;
+                    idtype->id_pos = it.name_start;
 
                     if (!unify_types(res->wrap(idtype), core_type)) return false;
                 }
@@ -7466,7 +7485,6 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
                   return NULL;
 
             if (!is_done()) return NULL;
-
 
             Gotype *ret = NULL;
             if (func_result->len == 1) {
@@ -7683,8 +7701,8 @@ Goresult *Go_Indexer::resolve_type_to_decl(Gotype *type, Go_Ctx *ctx) {
     }
 
     if (!res) return NULL;
-    if (res->decl->type != GODECL_TYPE) return NULL;
-
+    if (res->decl->type != GODECL_TYPE && res->decl->type != GODECL_TYPE_PARAM)
+        return NULL;
     return res;
 }
 
@@ -7837,11 +7855,6 @@ TSParser *new_ts_parser() {
 
 // ---
 
-void Go_Type_Parameter::read(Index_Stream *s) {
-    READ_STR(name);
-    READ_OBJ(constraint);
-}
-
 void Godecl::read(Index_Stream *s) {
     READ_STR(name);
 
@@ -7849,7 +7862,15 @@ void Godecl::read(Index_Stream *s) {
         READ_STR(import_path);
     } else {
         READ_OBJ(gotype);
-        READ_LIST(type_params);
+        switch (type) {
+        case GODECL_FUNC:
+        case GODECL_TYPE:
+            READ_LIST(type_params);
+            break;
+        case GODECL_METHOD_RECEIVER_TYPE_PARAM:
+            READ_OBJ(base);
+            break;
+        }
     }
 }
 
@@ -8018,11 +8039,6 @@ void Go_Index::read(Index_Stream *s) {
 #define WRITE_LIST(x) write_list<decltype(x)>(x, s)
 #define WRITE_LISTP(x) write_listp<decltype(x)>(x, s)
 
-void Go_Type_Parameter::write(Index_Stream *s) {
-    WRITE_STR(name);
-    WRITE_OBJ(constraint);
-}
-
 void Godecl::write(Index_Stream *s) {
     WRITE_STR(name);
 
@@ -8030,7 +8046,15 @@ void Godecl::write(Index_Stream *s) {
         WRITE_STR(import_path);
     } else {
         WRITE_OBJ(gotype);
-        WRITE_LIST(type_params);
+        switch (type) {
+        case GODECL_FUNC:
+        case GODECL_TYPE:
+            WRITE_LIST(type_params);
+            break;
+        case GODECL_METHOD_RECEIVER_TYPE_PARAM:
+            WRITE_OBJ(base);
+            break;
+        }
     }
 }
 

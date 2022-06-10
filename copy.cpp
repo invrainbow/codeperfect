@@ -131,13 +131,6 @@ AC_Result *AC_Result::copy() {
     return ret;
 }
 
-Go_Type_Parameter *Go_Type_Parameter::copy() {
-    auto ret = clone(this);
-    ret->name = cp_strdup(name);
-    ret->constraint = copy_object(constraint);
-    return ret;
-}
-
 Godecl *Godecl::copy() {
     auto ret = clone(this);
 
@@ -146,8 +139,17 @@ Godecl *Godecl::copy() {
         ret->import_path = cp_strdup(import_path);
     } else {
         ret->gotype = copy_object(gotype);
-        ret->type_params = copy_list(type_params);
+        switch (type) {
+        case GODECL_FUNC:
+        case GODECL_TYPE:
+            ret->type_params = copy_list(type_params);
+            break;
+        case GODECL_METHOD_RECEIVER_TYPE_PARAM:
+            ret->base = copy_object(base);
+            break;
+        }
     }
+
     return ret;
 }
 

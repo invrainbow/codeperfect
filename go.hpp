@@ -383,24 +383,13 @@ enum Godecl_Type {
     GODECL_VAR,
     GODECL_CONST,
     GODECL_TYPE,
-    GODECL_FUNC, // should we have GODECL_METHOD too? can just check gotype->func_recv
+    GODECL_FUNC,
     GODECL_FIELD,
     GODECL_PARAM,
     GODECL_SHORTVAR,
     GODECL_TYPECASE,
     GODECL_TYPE_PARAM,
-    // GODECL_RANGE,
-};
-
-struct Go_Type_Parameter {
-    ccstr name;
-    Gotype *constraint;
-    cur2 start;
-    cur2 end;
-
-    Go_Type_Parameter *copy();
-    void read(Index_Stream *s);
-    void write(Index_Stream *s);
+    GODECL_METHOD_RECEIVER_TYPE_PARAM,
 };
 
 struct Godecl {
@@ -417,15 +406,24 @@ struct Godecl {
     cur2 name_start;
     cur2 name_end;
     ccstr name;
-    bool is_embedded; // for GODECL_FIELD
     bool is_toplevel;
 
     union {
+        // for non-GODECL_IMPORT
         struct {
             Gotype *gotype;
-            List<Go_Type_Parameter> *type_params;
+            union {
+                bool is_embedded; // for GODECL_FIELD
+                List<Godecl> *type_params; // for GODECL_FUNC, GODECL_TYPE
+                struct { // for GODECL_METHOD_RECEIVER_TYPE_PARAM
+                    Gotype *base;
+                    int type_param_index;
+                };
+            };
         };
-        ccstr import_path; // for GODECL_IMPORT
+
+        // for GODECL_IMPORT
+        ccstr import_path;
     };
 
     Godecl *copy();
@@ -1192,7 +1190,7 @@ struct Go_Indexer {
     Goresult *get_reference_decl(Go_Reference *it, Go_Ctx *ctx);
     Godecl *find_toplevel_containing(Go_File *file, cur2 start, cur2 end);
     Goresult *find_enclosing_toplevel(ccstr filepath, cur2 pos);
-    Gotype* do_subst_rename_this_later(Gotype *base, List<Go_Type_Parameter> *params, List<Gotype*> *args);
+    Gotype* do_subst_rename_this_later(Gotype *base, List<Godecl> *params, List<Gotype*> *args);
 };
 
 void walk_ast_node(Ast_Node *node, bool abstract_only, Walk_TS_Callback cb);
