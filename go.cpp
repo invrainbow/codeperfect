@@ -6362,6 +6362,15 @@ Goresult *Go_Indexer::_subst_generic_type(Gotype *type, Go_Ctx *ctx) {
 }
 
 Goresult *Go_Indexer::subst_generic_type(Goresult *res) {
+    if (res->gotype->type == GOTYPE_POINTER) {
+        auto base = subst_generic_type(res->wrap(res->gotype->base));
+        if (!base) return NULL;
+
+        auto ret = res->gotype->copy();
+        ret->base = base->gotype;
+        return res->wrap(ret);
+    }
+
     while (res && res->gotype->type == GOTYPE_GENERIC)
         res = _subst_generic_type(res->gotype, res->ctx);
     return res;
@@ -6613,6 +6622,8 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
     };
 
     auto unwrap_type = [&](Gotype *base, int flags = U_ALL) -> Goresult* {
+        if (!base) return NULL;
+
         auto res = make_goresult(base, ctx);
 
         if (flags & U_EVAL) {
@@ -6903,6 +6914,12 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
                         return false;
                 }
 
+                if ((a->type == GOTYPE_ID || a->type == GOTYPE_SEL) && (b->type == GOTYPE_ID || b->type == GOTYPE_SEL)) {
+                    auto resa = resolve_type_to_decl(a, ares->ctx);
+                    auto resb = resolve_type_to_decl(b, bres->ctx);
+                    return are_decls_equal(resa, resb);
+                }
+
                 if (a->type != b->type) return false;
 
                 auto _recur_arr = [&](auto aarr, auto actx, auto barr, auto bctx) {
@@ -7133,6 +7150,10 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
                 return new_type_node(TYPE_NODE_INTERSECT);
             };
 
+            auto is_empty_intersection = [&](Type_Node *it) {
+                return it->type == TYPE_NODE_INTERSECT && isempty(it->children);
+            };
+
             auto get_intersection_of_two_terms = [&](Type_Node *a, Type_Node *b) -> Type_Node* {
                 cp_assert(a->type == TYPE_NODE_TERM);
                 cp_assert(b->type == TYPE_NODE_TERM);
@@ -7202,9 +7223,7 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
                             For (*new_union) {
                                 auto term = get_intersection_of_two_terms(curr, it);
                                 if (!term) return NULL;
-
-                                if (term->type == TYPE_NODE_INTERSECT && !term->children->len)
-                                    continue;
+                                if (is_empty_intersection(term)) continue;
 
                                 cp_assert(term->type == TYPE_NODE_TERM);
                                 temp_union->append(term);
@@ -7228,9 +7247,12 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
                         Type_Node *child = it; // without reference
                         child = simplify_type_node(child);
 
+                        if (is_empty_intersection(child)) continue;
+
                         if (child->type == TYPE_NODE_UNION) {
                             For (*child->children) new_union->append(it);
                         } else {
+                            cp_assert(child->type == TYPE_NODE_TERM);
                             new_union->append(child);
                         }
                     }
@@ -7424,20 +7446,19 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
 
                 Fori (*func_params) {
                     auto &arg = func_args->at(i);
-                    if (is_func_arg_untyped(arg) == untyped) {
-                        auto res = make_goresult(arg, ctx);
+                    if (is_func_arg_untyped(arg) != untyped) continue;
 
-                        if (!untyped) {
-                            res = evaluate_type(arg, ctx);
-                            if (!res) return false;
+                    auto res = make_goresult(arg, ctx);
 
-                            res = resolve_type(res);
-                            if (!res) return false;
-                        }
-
-                        if (!unify_types(res, result->res->wrap(it.gotype)))
-                            return false;
+                    if (!untyped) {
+                        res = evaluate_type(arg, ctx);
+                        if (!res) return false;
+                        // res = resolve_type(res);
+                        // if (!res) return false;
                     }
+
+                    if (!unify_types(res, result->res->wrap(it.gotype)))
+                        return false;
                 }
 
                 if (types_found > old) added_new_types = true;
@@ -7464,7 +7485,6 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
                 }
                 return true;
             };
-
 
             // apply function argument type inference to typed ordinary function arguments
             if (!is_done() && !func_arg_type_inference(false))
