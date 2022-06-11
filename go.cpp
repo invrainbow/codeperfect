@@ -1755,16 +1755,24 @@ ccstr parse_go_string(ccstr s) {
 }
 
 void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> cb, ccstr filename) {
-    List<int> open_scopes;
+    struct Open_Scope {
+        int depth;
+        cur2 close_pos;
+    };
+
+    List<Open_Scope> open_scopes;
     open_scopes.init();
 
     auto scope_ops_decls = alloc_list<Godecl>();
 
     walk_ast_node(root, true, [&](Ast_Node* node, Ts_Field_Type field, int depth) -> Walk_Action {
-        for (; open_scopes.len > 0 && depth <= *open_scopes.last(); open_scopes.len--) {
+        for (; open_scopes.len > 0; open_scopes.len--) {
+            auto it = open_scopes.last();
+            if (depth > it->depth) break;
+
             Go_Scope_Op op;
             op.type = GSOP_CLOSE_SCOPE;
-            op.pos = node->start();
+            op.pos = it->close_pos; // node->start();
             if (!cb(&op)) return WALK_ABORT;
         }
 
@@ -1776,7 +1784,10 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
         case TS_BLOCK:
         case TS_FUNC_LITERAL:
         case TS_TYPE_SWITCH_STATEMENT: {
-            open_scopes.append(depth);
+            Open_Scope os;
+            os.depth = depth;
+            os.close_pos = node->end();
+            open_scopes.append(&os);
 
             Go_Scope_Op op;
             op.type = GSOP_OPEN_SCOPE;
@@ -1839,7 +1850,10 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
         case TS_RECEIVE_STATEMENT:
         case TS_TYPE_PARAMETER_DECLARATION: {
             if (node_type == TS_METHOD_DECLARATION || node_type == TS_FUNCTION_DECLARATION) {
-                open_scopes.append(depth);
+                Open_Scope os;
+                os.depth = depth;
+                os.close_pos = node->end();
+                open_scopes.append(&os);
 
                 Go_Scope_Op op;
                 op.type = GSOP_OPEN_SCOPE;
