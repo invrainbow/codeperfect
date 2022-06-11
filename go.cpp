@@ -2496,6 +2496,9 @@ List<Goresult> *Go_Indexer::list_lazy_type_dotprops(Gotype *type, Go_Ctx *ctx) {
     auto rres = resolve_type(res);
     if (!rres) return NULL;
 
+    rres = subst_generic_type(rres);
+    if (!rres) return NULL;
+
     auto tmp = alloc_list<Goresult>();
     list_dotprops(res, rres, tmp);
 
@@ -5000,6 +5003,8 @@ bool Go_Indexer::list_type_methods(ccstr type_name, ccstr import_path, List<Gore
 
         auto recv = unpointer_type(functype->func_recv, NULL)->gotype;
 
+        if (recv->type == GOTYPE_GENERIC) recv = recv->base;
+
         if (recv->type != GOTYPE_ID) continue;
         if (!streq(recv->id_name, type_name)) continue;
 
@@ -5087,6 +5092,8 @@ getout:
     auto type = type_res->gotype;
     ccstr type_name = NULL;
     ccstr target_import_path = NULL;
+
+    if (type->type == GOTYPE_GENERIC) type = type->base;
 
     switch (type->type) {
     case GOTYPE_ID:
@@ -7632,7 +7639,7 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
     }
 
     case GOTYPE_LAZY_ONE_OF_MULTI: {
-        auto res = unwrap_type(gotype->lazy_one_of_multi_base);
+        auto res = unwrap_type(gotype->lazy_one_of_multi_base, U_EVAL);
         if (!res) return NULL;
 
         bool is_single = gotype->lazy_one_of_multi_is_single;
