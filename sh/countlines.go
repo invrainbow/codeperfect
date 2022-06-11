@@ -9,7 +9,7 @@ import (
 )
 
 func die(s string) {
-	fmt.Fprintln(os.Stderr, "couldn't read dir")
+	fmt.Fprintln(os.Stderr, s)
 	os.Exit(1)
 }
 
