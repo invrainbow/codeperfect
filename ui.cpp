@@ -4876,9 +4876,16 @@ void UI::draw_everything() {
                                 render_godecl(it.decl);
                                 break;
                             }
-                            case GSOP_CLOSE_SCOPE:
+                            case GSOP_CLOSE_SCOPE: {
+                                auto flags = ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+                                ImGui::TreeNodeEx(&it, flags, "scope close at %s", it.pos.str());
+
+                                if (ImGui::IsItemClicked())
+                                    pos = it.pos;
+
                                 ImGui::TreePop();
                                 break;
+                            }
                             }
 
                             if (pos.x != -1 && pos.y != -1)
