@@ -469,20 +469,12 @@ struct Go_Interface_Spec {
     void write(Index_Stream *s);
 };
 
-enum Goresult_Type {
-    GORESULT_DECL,
-    GORESULT_GOTYPE,
-};
-
 struct Go_Ctx {
     ccstr import_path;
     ccstr filename;
 };
 
 struct Goresult {
-    // we should just know this from context (the context this shows up in, not
-    // the Go_Ctx).
-    // Goresult_Type type;
     Go_Ctx *ctx;
     union {
         void *ptr;
