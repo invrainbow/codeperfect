@@ -6920,13 +6920,14 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
 
                     if ((afound && !bfound) || (!afound && bfound)) {
                         Gotype *existing_type = (afound ? atype : btype);
-                        Goresult *res = (afound ? ares : bres);
+                        auto res = (afound ? ares : bres);
+                        auto other_res = (afound ? bres : ares);
 
                         if (existing_type)
-                            return unify_types(res->wrap(existing_type), bres);
+                            return unify_types(res->wrap(existing_type), other_res);
 
                         ccstr name = res->gotype->id_name;
-                        lookup.set(name, (afound ? bres : ares)->gotype);
+                        lookup.set(name, other_res->gotype);
                         types_found++;
                         return true;
                     }
@@ -7031,13 +7032,13 @@ Goresult *Go_Indexer::evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdec
                     Fori (*aparams) {
                         auto &a2 = it;
                         auto &b2 = bparams->at(i);
-                        if (!unify_types(ares->wrap(&a2), bres->wrap(&b2))) return false;
+                        if (!unify_types(ares->wrap(a2.gotype), bres->wrap(b2.gotype))) return false;
                     }
 
                     Fori (*aresult) {
                         auto &a2 = it;
                         auto &b2 = bresult->at(i);
-                        if (!unify_types(ares->wrap(&a2), bres->wrap(&b2))) return false;
+                        if (!unify_types(ares->wrap(a2.gotype), bres->wrap(b2.gotype))) return false;
                     }
                     break;
                 }
