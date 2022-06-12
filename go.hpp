@@ -472,6 +472,8 @@ struct Go_Interface_Spec {
 struct Go_Ctx {
     ccstr import_path;
     ccstr filename;
+
+    Go_Ctx *copy();
 };
 
 struct Goresult {
@@ -563,6 +565,7 @@ enum Gotype_Type {
     GOTYPE_CONSTRAINT,
     GOTYPE_CONSTRAINT_UNDERLYING,
     GOTYPE_GENERIC,
+    GOTYPE_OVERRIDE_CTX, // used internally, not an actual gotype
     /**/
     _GOTYPE_LAZY_MARKER_, // #define IS_LAZY_TYPE(x) (x > _GOTYPE_LAZY_MARKER_)
     // "lazy" types
@@ -587,6 +590,11 @@ struct Gotype {
     union {
         Gotype *constraint_underlying_base;
         List<Gotype*> *constraint_terms;
+
+        struct {
+            Gotype *override_ctx_base;
+            Go_Ctx *override_ctx_ctx;
+        };
 
         struct {
             Gotype *generic_base;
@@ -1105,7 +1113,6 @@ struct Go_Indexer {
     void actually_list_dotprops(Goresult *type_res, Goresult *resolved_type_res, List<Goresult> *ret);
     bool node_func_to_gotype_sig(Ast_Node *params, Ast_Node *result, Go_Func_Sig *sig);
     void node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr filename, Pool *target_pool = NULL);
-    Gotype *new_gotype(Gotype_Type type);
     Goresult *find_decl_in_package(ccstr id, ccstr import_path);
     List<Goresult> *list_package_decls(ccstr import_path, int flags = 0);
     Go_Package *find_package_in_index(ccstr import_path);
@@ -1118,9 +1125,10 @@ struct Go_Indexer {
     List<Postfix_Completion_Type> *get_postfix_completions(Ast_Node *operand_node, Go_Ctx *ctx);
     List<Goresult> *get_node_dotprops(Ast_Node *operand_node, bool *was_package, Go_Ctx *ctx);
     bool assignment_to_decls(List<Ast_Node*> *lhs, List<Ast_Node*> *rhs, New_Godecl_Func new_godecl, bool range = false);
-    Gotype *new_primitive_type(ccstr name);
     Goresult *evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdecl = NULL);
     Goresult *evaluate_type(Goresult *res, Godecl** outdecl = NULL);
+    Goresult *_evaluate_type(Goresult *res, Godecl** outdecl = NULL);
+    Goresult *_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outdecl = NULL);
     Gotype *expr_to_gotype(Ast_Node *expr);
     void process_tree_into_gofile(
         Go_File *file,
@@ -1182,8 +1190,10 @@ struct Go_Indexer {
     Goresult *get_reference_decl(Go_Reference *it, Go_Ctx *ctx);
     Godecl *find_toplevel_containing(Go_File *file, cur2 start, cur2 end);
     Goresult *find_enclosing_toplevel(ccstr filepath, cur2 pos);
-    Gotype* do_subst_rename_this_later(Gotype *base, List<Godecl> *params, List<Gotype*> *args);
+    Gotype* do_subst_rename_this_later(Gotype *base, List<Godecl> *params, List<Goresult*> *args);
+    Goresult *remove_override_ctx(Gotype *gotype, Go_Ctx *ctx);
 };
+
 
 void walk_ast_node(Ast_Node *node, bool abstract_only, Walk_TS_Callback cb);
 void find_nodes_containing_pos(Ast_Node *root, cur2 pos, bool abstract_only, fn<Walk_Action(Ast_Node *it)> callback, bool end_inclusive = false);
@@ -1286,3 +1296,6 @@ Gotype* _walk_gotype_and_replace(Gotype *gotype, walk_gotype_and_replace_cb cb);
 
 typedef fn<void(Gotype*)> walk_gotype_cb;
 void walk_gotype(Gotype *gotype, walk_gotype_cb cb);
+
+Gotype *new_gotype(Gotype_Type type);
+Gotype *new_primitive_type(ccstr name);

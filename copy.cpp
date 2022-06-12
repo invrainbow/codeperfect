@@ -177,9 +177,20 @@ Go_Reference *Go_Reference::copy() {
     return ret;
 }
 
+Go_Ctx *Go_Ctx::copy() {
+    auto ret = clone(this);
+
+    ret->import_path = cp_strdup(import_path);
+    ret->filename = cp_strdup(filename);
+}
+
 Gotype *Gotype::copy() {
     auto ret = clone(this);
     switch (type) {
+    case GOTYPE_OVERRIDE_CTX:
+        ret->override_ctx_base = copy_object(override_ctx_base);
+        ret->override_ctx_ctx = copy_object(override_ctx_ctx);
+        break;
     case GOTYPE_GENERIC:
         ret->generic_base = copy_object(generic_base);
         ret->generic_args = copy_listp(generic_args);
