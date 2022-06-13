@@ -7044,9 +7044,15 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
                 case GOTYPE_ASSERTION:
                 case GOTYPE_RANGE:
                 case GOTYPE_CONSTRAINT_UNDERLYING:
-                case GOTYPE_BUILTIN:
                     recur(base);
                     break;
+                case GOTYPE_BUILTIN: {
+                    bool abase = a->base;
+                    bool bbase = b->base;
+                    if (abase != bbase) return false;
+                    if (a->base) recur(base);
+                    break;
+                }
                 case GOTYPE_MAP:
                     recur(map_key);
                     recur(map_value);
@@ -7599,12 +7605,47 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
 
         // didn't work with type args, treat as normal function call.
 
-        auto res = unwrap_type(gotype->lazy_call_base);
+        Godecl *decl = NULL;
+        auto res = _evaluate_type(make_goresult(gotype->lazy_call_base, ctx), &decl);
+        if (outdecl) *outdecl = decl;
         if (!res) return NULL;
+        if (!decl) return NULL;
+
+        if (decl->type == GODECL_TYPE) {
+            auto t = gotype->lazy_call_base->type;
+            if (t == GOTYPE_LAZY_ID || t == GOTYPE_LAZY_SEL)
+                return res;
+        }
+
+        res = resolve_type(res);       if (!res) return NULL;
+        res = subst_generic_type(res); if (!res) return NULL;
+        res = unpointer_type(res);     if (!res) return NULL;
+
         if (res->gotype->type != GOTYPE_FUNC) return NULL;
 
         auto result = res->gotype->func_sig.result;
         if (!result) return NULL;
+
+        // if the result contains type parameters, get out
+        if (decl->type_params) {
+            For (*result) {
+                bool bad = false;
+                walk_gotype_and_replace(it.gotype, [&](Gotype *it) -> Gotype* {
+                    if (bad) return NULL;
+                    if (it->type != GOTYPE_ID) return NULL;
+
+                    auto name = it->id_name;
+                    For (*decl->type_params) {
+                        if (streq(it.name, name)) {
+                            bad = true;
+                            break;
+                        }
+                    }
+                    return NULL;
+                });
+                if (bad) return NULL;
+            }
+        }
 
         if (result->len == 1) return res->wrap(result->at(0).gotype);
 
@@ -7647,6 +7688,12 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
         auto res = find_decl_of_id(gotype->lazy_id_name, gotype->lazy_id_pos, ctx);
         if (!res) return NULL;
         if (res->decl->type == GODECL_IMPORT) return NULL;
+        // strictly speaking, GOTYPE_LAZY_ID refers to an expression, so the
+        // decl type must not be a type, otherwise we're directly naming the
+        // type (and it's a GOTYPE_ID). should we explicitly disallow here?
+        //
+        // a couple places call _evaluate_type on an id that possibly refers to
+        // a type, and it's useful to get the GODECL_TYPE back.
         if (!res->decl->gotype) return NULL;
 
         if (outdecl) *outdecl = res->decl;
