@@ -205,13 +205,33 @@ void Index_Stream::write_index(Go_Index *index) {
 
 void Type_Renderer::write_type(Gotype *t, Type_Renderer_Handler custom_handler, bool omit_func_keyword) {
     if (!t) return;
-
-    // custom handle
     if (custom_handler(this, t)) return;
 
-    auto recur = [&](Gotype *t) { write_type(t, custom_handler); };
+#define recur(t) write_type(t, custom_handler)
 
     switch (t->type) {
+    case GOTYPE_CONSTRAINT:
+        Fori (*t->constraint_terms) {
+            if (i) write(" | ");
+            recur(it);
+        }
+        break;
+
+    case GOTYPE_CONSTRAINT_UNDERLYING:
+        write("~");
+        recur(t->base);
+        break;
+
+    case GOTYPE_GENERIC:
+        recur(t->base);
+        write("[");
+        Fori (*t->generic_args) {
+            if (i) write(", ");
+            recur(it);
+        }
+        write("]");
+        break;
+
     case GOTYPE_BUILTIN:
         switch (t->builtin_type) {
         case GO_BUILTIN_COMPLEXTYPE: write("ComplexType"); break;
@@ -356,8 +376,11 @@ void Type_Renderer::write_type(Gotype *t, Type_Renderer_Handler custom_handler, 
             write("<-");
         break;
     case GOTYPE_MULTI:
-        write("(multi type?)");
+        write("<multi type>"); // would this ever happen
+        break;
     }
+
+#undef recur
 }
 
 void Module_Resolver::init(ccstr current_module_filepath, ccstr _gomodcache) {
