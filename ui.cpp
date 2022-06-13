@@ -4352,17 +4352,12 @@ void UI::draw_everything() {
                     auto get_decl_type = [&]() {
                         auto decl_type = it.decl->decl->type;
                         switch (decl_type) {
-                        case GODECL_IMPORT:
-                            return "import";
-                        case GODECL_VAR:
-                        case GODECL_SHORTVAR:
-                            return "var";
-                        case GODECL_CONST:
-                            return "const";
-                        case GODECL_TYPE:
-                            return "type";
-                        case GODECL_FUNC:
-                            return "func";
+                        case GODECL_IMPORT: return "import";
+                        case GODECL_VAR: return "var";
+                        case GODECL_SHORTVAR: return "var";
+                        case GODECL_CONST: return "const";
+                        case GODECL_TYPE: return "type";
+                        case GODECL_FUNC: return "func";
                         }
                         return "unknown";
                     };
