@@ -7687,6 +7687,9 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
         auto rres = resolve_type(res);
         if (!rres) return NULL;
 
+        rres = subst_generic_type(rres);
+        if (!rres) return NULL;
+
         rres = unpointer_type(rres);
 
         List<Goresult> results;
