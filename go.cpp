@@ -4157,6 +4157,7 @@ void Go_Indexer::fill_goto_symbol(List<Go_Symbol> *out) {
                     if (!recv) return NULL;
 
                     recv = unpointer_type(recv, NULL)->gotype;
+                    if (recv->type == GOTYPE_GENERIC) recv = recv->base;
                     if (recv->type != GOTYPE_ID) return NULL;
 
                     return recv->id_name;
