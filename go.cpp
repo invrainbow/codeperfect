@@ -7727,10 +7727,13 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
             default:
                 return NULL;
             }
+
         } while (0);
 
-        auto res = _evaluate_type(gotype->lazy_sel_base, ctx);
+        Godecl *resdecl = NULL;
+        auto res = _evaluate_type(gotype->lazy_sel_base, ctx, &resdecl);
         if (!res) return NULL;
+        if (!resdecl) return NULL;
 
         auto rres = resolve_type(res);
         if (!rres) return NULL;
@@ -7744,10 +7747,51 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
         results.init();
         list_dotprops(res, rres, &results);
 
-        For (results)
-            if (streq(it.decl->name, gotype->lazy_sel_sel))
-                return _evaluate_type(it.decl->gotype, it.ctx);
-        break;
+        // ---
+        // find the method & correct its type
+        // ---
+
+        auto object_res = res;
+        auto object_type = res->gotype;
+        auto object_decl = resdecl;
+        Gotype *method_type = NULL;
+        Godecl *method_decl = NULL;
+        Go_Ctx *method_ctx = NULL;
+
+        For (results) {
+            if (streq(it.decl->name, gotype->lazy_sel_sel)) {
+                method_type = it.decl->gotype;
+                method_decl = it.decl;
+                method_ctx = it.ctx;
+                break;
+            }
+        }
+
+        if (!method_type) break;
+
+        auto handle_generics = [&]() {
+            if (method_type->type != GOTYPE_FUNC) return;
+
+            if (object_type->type == GOTYPE_POINTER)
+                object_type = object_type->base;
+            if (object_type->type != GOTYPE_GENERIC) return;
+
+            auto recv = method_type->func_recv;
+            if (!recv) return;
+            recv = unpointer_type(recv, NULL)->gotype;
+            if (recv->type != GOTYPE_GENERIC) return;
+
+            Table<Goresult*> lookup; lookup.init();
+            Fori (*recv->generic_args) {
+                if (it->type != GOTYPE_ID)
+                    return;
+                lookup.set(it->id_name, object_res->wrap(object_type->generic_args->at(i)));
+            }
+            method_type = walk_gotype_and_replace_ids(method_type, &lookup);
+        };
+
+        handle_generics();
+        return _evaluate_type(method_type, method_ctx);
     }
 
     case GOTYPE_LAZY_ONE_OF_MULTI: {
