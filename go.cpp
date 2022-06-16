@@ -331,12 +331,8 @@ void Type_Renderer::write_type(Gotype *t, Type_Renderer_Handler custom_handler, 
 
             u32 i = 0;
             For (*params) {
-                if (is_goident_empty(it.name)) {
-                    if (!is_result)
-                        write("_ ");
-                } else {
+                if (!is_goident_empty(it.name))
                     write("%s ", it.name);
-                }
                 recur(it.gotype);
                 if (i < params->len - 1)
                     write(", ");
