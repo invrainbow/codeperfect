@@ -7791,6 +7791,8 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
         };
 
         handle_generics();
+
+        if (outdecl) *outdecl = method_decl;
         return _evaluate_type(method_type, method_ctx);
     }
 
