@@ -6919,7 +6919,21 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
             if (result->args->len > result->params->len) return NULL;
 
             auto func_args = gotype->lazy_call_args;
+            auto func_ctx = ctx;
             auto func_params = result->target->func_sig.params;
+
+            // handle gotype_multi (e.g. `foo(bar())`, `foo` takes 2 args, `bar()` returns 2 vals)
+            do {
+                if (func_args->len != 1) break;
+
+                auto res = _evaluate_type(func_args->at(0), ctx);
+                if (!res) break;
+                if (res->gotype->type != GOTYPE_MULTI) break;
+
+                func_ctx = res->ctx;
+                func_args = res->gotype->multi_types;
+            } while (0);
+
             if (func_args->len != func_params->len) return NULL;
 
             auto func_result = result->target->func_sig.result;
@@ -7531,7 +7545,7 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
                     auto res = make_goresult(arg, ctx);
 
                     if (!untyped) {
-                        res = _evaluate_type(arg, ctx);
+                        res = _evaluate_type(arg, func_ctx);
                         if (!res) return false;
                         // res = resolve_type(res);
                         // if (!res) return false;
