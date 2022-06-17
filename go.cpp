@@ -7923,17 +7923,32 @@ Goresult *Go_Indexer::resolve_type(Goresult *res) {
 }
 
 Goresult *Go_Indexer::resolve_type(Gotype *type, Go_Ctx *ctx) {
+    Table<bool> seen; seen.init();
+    resolve_type(type, ctx, &seen);
+}
+
+Goresult *Go_Indexer::resolve_type(Gotype *type, Go_Ctx *ctx, Table<bool>* seen) {
     if (!type) return NULL;
 
     switch (type->type) {
     case GOTYPE_BUILTIN: // pending decision: should we do this here?
         if (!type->builtin_underlying_base)
             break;
-        return resolve_type(type->builtin_underlying_base, ctx);
+        return resolve_type(type->builtin_underlying_base, ctx, seen);
 
     case GOTYPE_ASSERTION:
     case GOTYPE_POINTER: {
-        auto res = resolve_type(type->base, ctx);
+        auto b = type->base;
+        if (b->type == GOTYPE_ID || b->type == GOTYPE_SEL) {
+            auto name = b->type == GOTYPE_ID
+                ? b->id_name
+                : cp_sprintf("%s.%s", b->sel_name, b->sel_sel);
+
+            // pointer base is an id we've already seen, break out to return type as is
+            if (seen->get(name)) break;
+        }
+
+        auto res = resolve_type(b, ctx, seen);
         if (!res) return NULL;
 
         auto ret = type->copy();
@@ -7943,9 +7958,16 @@ Goresult *Go_Indexer::resolve_type(Gotype *type, Go_Ctx *ctx) {
 
     case GOTYPE_ID:
     case GOTYPE_SEL: {
+        auto name = type->type == GOTYPE_ID
+            ? type->id_name
+            : cp_sprintf("%s.%s", type->sel_name, type->sel_sel);
+
+        if (seen->get(name)) return NULL;
+        seen->set(name, true);
+
         auto res = resolve_type_to_decl(type, ctx);
         if (!res) return NULL;
-        return resolve_type(res->decl->gotype, res->ctx);
+        return resolve_type(res->decl->gotype, res->ctx, seen);
     }
     }
 

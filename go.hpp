@@ -1098,6 +1098,7 @@ struct Go_Indexer {
     Go_Ctx *filepath_to_ctx(ccstr filepath);
     Goresult *resolve_type(Goresult *res);
     Goresult *resolve_type(Gotype *type, Go_Ctx *ctx);
+    Goresult *resolve_type(Gotype *type, Go_Ctx *ctx, Table<bool> *seen);
     Goresult *resolve_type_to_decl(Gotype *type, Go_Ctx *ctx);
     Goresult *unpointer_type(Goresult *res);
     Goresult *unpointer_type(Gotype *type, Go_Ctx *ctx);
