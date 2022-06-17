@@ -22,24 +22,29 @@
 #elif OS_MAC
 #   include <pthread.h>
 #   include <errno.h>
+#   include <signal.h>
 #endif
 
 #if OS_WIN
-#define PATH_SEP '\\'
+#   define PATH_SEP '\\'
 #else
-#define PATH_SEP '/'
+#   define PATH_SEP '/'
 #endif
 
 #if OS_LINUX
-#define FILEPATHS_CASE_SENSITIVE 1
+#   define FILEPATHS_CASE_SENSITIVE 1
 #else
-#define FILEPATHS_CASE_SENSITIVE 0
+#   define FILEPATHS_CASE_SENSITIVE 0
 #endif
 
-#if OS_WIN
-#define BREAK_HERE DebugBreak()
-#elif OS_MAC
-#define BREAK_HERE Debugger()
+#ifdef DEBUG_MODE
+#   if OS_WIN
+#       define BREAK_HERE DebugBreak()
+#   elif OS_MAC
+#       define BREAK_HERE raise(SIGSTOP)
+#   endif
+#else
+#   define BREAK_HERE
 #endif
 
 #include "common.hpp"
