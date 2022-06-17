@@ -2300,6 +2300,8 @@ Goresult *Go_Indexer::find_decl_of_id(ccstr id_to_find, cur2 id_pos, Go_Ctx *ctx
 
             For (*scope_ops) {
                 if (it.pos > id_pos) break;
+
+                bool get_out = false;
                 switch (it.type) {
                 case GSOP_OPEN_SCOPE:
                     table.push_scope();
@@ -2308,15 +2310,23 @@ Goresult *Go_Indexer::find_decl_of_id(ccstr id_to_find, cur2 id_pos, Go_Ctx *ctx
                     table.pop_scope();
                     break;
                 case GSOP_DECL:
+                    if (!streq(it.decl->name, id_to_find)) break;
                     if (it.decl->decl_start <= id_pos && id_pos < it.decl->decl_end)
                         if (it.decl_scope_depth == table.frames.len)
                             if (!(it.decl->name_start <= id_pos && id_pos < it.decl->name_end))
                                 break;
-                    if (!streq(it.decl->name, id_to_find))
-                        break;
                     table.set(it.decl->name, it.decl);
+
+                    // ENG-133: handle the specific case where pos is on the name of a func decl
+                    // because if we don't it might conflict with the generic type params
+                    if (it.decl->type == GODECL_FUNC)
+                        if (it.decl->name_start <= id_pos && id_pos < it.decl->name_end)
+                            get_out = true;
+
                     break;
                 }
+
+                if (get_out) break;
             }
 
             auto decl = table.get(id_to_find);
