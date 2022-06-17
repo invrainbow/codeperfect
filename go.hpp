@@ -859,7 +859,6 @@ struct Module_Resolver {
     ccstr module_path;
 
     void init(ccstr current_module_filepath, ccstr _gomodcache);
-    void cleanup();
 
     Node *goto_child(Node *node, ccstr name, bool create_if_not_found) {
         for (auto it = node->children; it; it = it->next)

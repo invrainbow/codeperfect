@@ -447,10 +447,6 @@ void Module_Resolver::init(ccstr current_module_filepath, ccstr _gomodcache) {
     }
 }
 
-void Module_Resolver::cleanup() {
-    // ???
-}
-
 // -----
 
 bool is_name_special_function(ccstr name) {
@@ -1060,7 +1056,8 @@ void Go_Indexer::background_thread() {
     rebuild_package_lookup();
 
     auto rescan_gomod = [&](bool force_reset_index) {
-        module_resolver.cleanup();
+        // nothing to clean up right now
+        // module_resolver.cleanup();
         module_resolver.init(world.current_path, gomodcache);
 
         init_index(force_reset_index);
