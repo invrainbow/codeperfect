@@ -442,8 +442,7 @@ void Module_Resolver::init(ccstr current_module_filepath, ccstr _gomodcache) {
     } while (ch != '\0');
 
     if (!module_path) {
-        // TODO
-        cp_panic("Sorry, currently only modules are supported.");
+        cp_panic("CodePerfect was unable to read your project folder as a Go module. Specifically, `go list -mod=mod -m all` didn't product valid output.\n\nIf this is unexpected, you can debug this by running `go list -mod=mod -m all` in a terminal in the folder of your project, and inspecting the output.");
     }
 }
 
