@@ -1694,6 +1694,8 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
             AC_Result_Type result_type;
             bool is_struct_literal;
             int str_length;
+            int field_order;
+            int field_depth;
 
             bool import_in_workspace;
             bool import_in_file;
@@ -1714,7 +1716,7 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
                 return a->is_struct_literal ? 1 : -1;
 
             if (a->fzy_score != b->fzy_score && !prefix_is_empty)
-                return a->fzy_score > b->fzy_score ? 1 : -1;
+                return a->fzy_score - b->fzy_score;
 
             if (a->result_type == ACR_IMPORT && b->result_type == ACR_IMPORT) {
                 if (a->import_in_file != b->import_in_file)
@@ -1723,15 +1725,19 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
                     return a->import_in_workspace ? 1 : -1;
             }
 
-            if (a->str_length < b->str_length)
-                return 1;
-            if (a->str_length > b->str_length)
-                return -1;
+            if (a->str_length != b->str_length)
+                return b->str_length - a->str_length;
 
             if (a->result_type == ACR_KEYWORD && b->result_type == ACR_DECLARATION)
                 return 1;
             if (a->result_type == ACR_DECLARATION && b->result_type == ACR_KEYWORD)
                 return -1;
+
+            if (a->field_depth != -1 && b->field_depth != -1) {
+                if (a->field_depth != b->field_depth)
+                    return b->field_depth - a->field_depth;
+                return b->field_order - a->field_order;
+            }
 
             return 0;
         };
@@ -1746,9 +1752,16 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
             score.result_type = it.type;
             score.str_length = strlen(it.name);
 
-            if (it.type == ACR_DECLARATION)
+            if (it.type == ACR_DECLARATION) {
                 if (it.declaration_is_struct_literal_field)
                     score.is_struct_literal = true;
+                if (it.declaration_godecl->type == GODECL_FIELD) {
+                    score.field_depth = it.declaration_godecl->field_depth;
+                    score.field_order = it.declaration_godecl->field_order;
+                } else {
+                    score.field_depth = -1;
+                }
+            }
 
             if (it.type == ACR_IMPORT) {
                 if (it.import_is_existing)

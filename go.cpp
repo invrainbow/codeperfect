@@ -40,7 +40,7 @@ const int GO_INDEX_MAGIC_NUMBER = 0x49fa98;
 // version 27: fix parser handling newlines and idents wrong in interface specs
 // version 28: upgrade tree-sitter-go
 // version 29: generics
-const int GO_INDEX_VERSION = 36;
+const int GO_INDEX_VERSION = 37;
 
 void index_print(ccstr fmt, ...) {
     va_list args;
@@ -305,8 +305,8 @@ void Type_Renderer::write_type(Gotype *t, Type_Renderer_Handler custom_handler, 
 
         write("interface {\n");
         For (*t->interface_specs) {
-            // TODO: branch on it.field->is_embedded
-            if (it.field->is_embedded) continue;
+            // TODO: branch on it.field->field_is_embedded
+            if (it.field->field_is_embedded) continue;
 
             write("%s ", it.field->name);
             write_type(it.field->gotype, custom_handler, true);
@@ -2263,7 +2263,7 @@ Goresult *Go_Indexer::find_decl_of_id(ccstr id_to_find, cur2 id_pos, Go_Ctx *ctx
                 auto gotype = it.gotype;
 
                 auto check = [&](auto field) -> Goresult* {
-                    if (!field->is_embedded)
+                    if (!field->field_is_embedded)
                         if (field->name_start <= id_pos && id_pos < field->name_end)
                             return make_goresult(field, ctx);
                     return NULL;
@@ -2721,7 +2721,7 @@ bool Go_Indexer::are_gotypes_equal(Goresult *ra, Goresult *rb) {
                 if (!streq(ita.tag, itb.tag)) return false;
             }
 
-            if (ita.field->is_embedded != itb.field->is_embedded) return false;
+            if (ita.field->field_is_embedded != itb.field->field_is_embedded) return false;
             if (!streq(ita.field->name, itb.field->name)) return false;
 
             if (!are_gotypes_equal(ra->wrap(ita.field->gotype), rb->wrap(itb.field->gotype)))
@@ -4650,7 +4650,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                         continue;
 
                 if (it.decl->type != GODECL_FIELD) continue;
-                if (it.decl->is_embedded) continue;
+                if (it.decl->field_is_embedded) continue;
 
                 auto res = ac_results->append();
                 res->type = ACR_DECLARATION;
@@ -4984,7 +4984,7 @@ void Go_Indexer::list_struct_fields(Goresult *type, List<Goresult> *ret) {
     case GOTYPE_STRUCT:
         For (*t->struct_specs) {
             // recursively list methods for embedded fields
-            if (it.field->is_embedded) {
+            if (it.field->field_is_embedded) {
                 auto res = resolve_type(it.field->gotype, type->ctx);
                 if (res)
                     list_struct_fields(res, ret);
@@ -5006,7 +5006,7 @@ bool Go_Indexer::list_interface_methods(Goresult *interface, List<Goresult> *out
         if (!it.field) return false; // this shouldn't happen
 
         auto method = it.field;
-        if (method->is_embedded) {
+        if (method->field_is_embedded) {
             auto rres = resolve_type(method->gotype, interface->ctx);
             if (!rres) return false;
             if (!list_interface_methods(rres, out)) return false;
@@ -5058,7 +5058,7 @@ bool Go_Indexer::list_type_methods(ccstr type_name, ccstr import_path, List<Gore
 
 void Go_Indexer::list_dotprops(Goresult *type_res, Goresult *resolved_type_res, List<Goresult> *ret) {
     auto tmp = alloc_list<Goresult>();
-    actually_list_dotprops(type_res, resolved_type_res, tmp);
+    actually_list_dotprops(type_res, resolved_type_res, tmp, 0);
 
     String_Set seen; seen.init();
     auto ctx = type_res->ctx;
@@ -5074,28 +5074,31 @@ void Go_Indexer::list_dotprops(Goresult *type_res, Goresult *resolved_type_res, 
     }
 }
 
-void Go_Indexer::actually_list_dotprops(Goresult *type_res, Goresult *resolved_type_res, List<Goresult> *ret) {
+void Go_Indexer::actually_list_dotprops(Goresult *type_res, Goresult *resolved_type_res, List<Goresult> *ret, int depth) {
     auto resolved_type = resolved_type_res->gotype;
     switch (resolved_type->type) {
     case GOTYPE_POINTER:
     case GOTYPE_ASSERTION: {
         auto new_resolved_type_res = resolved_type_res->wrap(resolved_type->base);
-        actually_list_dotprops(type_res, new_resolved_type_res, ret);
+        actually_list_dotprops(type_res, new_resolved_type_res, ret, depth + 1);
         return;
     }
 
     case GOTYPE_STRUCT: {
         For (*resolved_type->struct_specs) {
             // recursively list methods for embedded fields
-            if (it.field->is_embedded) {
+            if (it.field->field_is_embedded) {
                 auto embedded_type = it.field->gotype;
                 auto res = resolve_type(embedded_type, resolved_type_res->ctx);
                 if (!res) continue;
                 if (res->gotype->type != resolved_type->type) continue; // this is technically an error, should we surface it here?
 
-                actually_list_dotprops(resolved_type_res->wrap(embedded_type), res, ret);
+                actually_list_dotprops(resolved_type_res->wrap(embedded_type), res, ret, depth + 1);
             }
-            ret->append(resolved_type_res->wrap(it.field));
+
+            auto field = it.field->copy(); // is this gonna substantially slow things down?
+            field->field_depth = depth;
+            ret->append(resolved_type_res->wrap(field));
         }
         break;
     }
@@ -5114,15 +5117,18 @@ void Go_Indexer::actually_list_dotprops(Goresult *type_res, Goresult *resolved_t
         // no elems found
         For (*resolved_type->interface_specs) {
             // recursively list methods for embedded fields
-            if (it.field->is_embedded) {
+            if (it.field->field_is_embedded) {
                 auto embedded_type = it.field->gotype;
                 auto res = resolve_type(embedded_type, resolved_type_res->ctx);
                 if (!res) continue;
                 if (res->gotype->type != resolved_type->type) continue; // this is technically an error, should we surface it here?
 
-                actually_list_dotprops(resolved_type_res->wrap(embedded_type), res, ret);
+                actually_list_dotprops(resolved_type_res->wrap(embedded_type), res, ret, depth + 1);
             }
-            ret->append(resolved_type_res->wrap(it.field));
+
+            auto field = it.field->copy();
+            field->field_depth = depth;
+            ret->append(resolved_type_res->wrap(field));
         }
         break;
     }
@@ -5593,6 +5599,7 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
                     field->spec_start = field_node->start();
                     field->decl_start = field_node->start();
                     field->decl_end = field_node->end();
+                    field->field_order = ret->struct_specs->len;
 
                     auto spec = ret->struct_specs->append();
                     spec->field = field;
@@ -5617,12 +5624,13 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
                 auto field = alloc_object(Godecl);
                 field->type = GODECL_FIELD;
                 field->is_toplevel = toplevel;
-                field->is_embedded = true;
+                field->field_is_embedded = true;
                 field->gotype = field_type;
                 field->spec_start = type_node->start();
                 field->decl_start = type_node->start();
                 field->decl_end = type_node->end();
                 field->name = field_name;
+                field->field_order = ret->struct_specs->len;
 
                 auto spec = ret->struct_specs->append();
                 spec->field = field;
@@ -5643,7 +5651,10 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
         ret->type = GOTYPE_INTERFACE;
         ret->interface_specs = alloc_list<Go_Interface_Spec>(node->child_count());
 
+        int i = 0;
         FOR_NODE_CHILDREN (node) {
+            defer { i++; };
+
             Godecl *field = NULL;
 
             switch (it->type()) {
@@ -5659,6 +5670,7 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
                 field->spec_start = it->start();
                 field->name_start = name_node->start();
                 field->name_end = name_node->end();
+                field->field_order = i;
 
                 node_func_to_gotype_sig(
                     it->field(TSF_PARAMETERS),
@@ -5685,11 +5697,12 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
                 field = alloc_object(Godecl);
                 field->type = GODECL_FIELD;
                 field->name = NULL;
-                field->is_embedded = true;
+                field->field_is_embedded = true;
                 field->gotype = gotype;
                 field->spec_start = node->start();
                 field->decl_start = node->start();
                 field->decl_end = node->end();
+                field->field_order = i;
 
                 auto spec = ret->interface_specs->append();
                 if (node->type() == TS_CONSTRAINT_ELEM)
@@ -7924,7 +7937,7 @@ Goresult *Go_Indexer::resolve_type(Goresult *res) {
 
 Goresult *Go_Indexer::resolve_type(Gotype *type, Go_Ctx *ctx) {
     Table<bool> seen; seen.init();
-    resolve_type(type, ctx, &seen);
+    return resolve_type(type, ctx, &seen);
 }
 
 Goresult *Go_Indexer::resolve_type(Gotype *type, Go_Ctx *ctx, Table<bool>* seen) {

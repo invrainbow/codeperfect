@@ -413,7 +413,11 @@ struct Godecl {
         struct {
             Gotype *gotype;
             union {
-                bool is_embedded; // for GODECL_FIELD
+                struct {
+                    bool field_is_embedded; // for GODECL_FIELD
+                    int field_depth;
+                    int field_order;
+                };
                 List<Godecl> *type_params; // for GODECL_FUNC, GODECL_TYPE
                 struct { // for GODECL_METHOD_RECEIVER_TYPE_PARAM
                     Gotype *base;
@@ -1110,7 +1114,7 @@ struct Go_Indexer {
     Goresult *find_decl_of_id(ccstr id, cur2 id_pos, Go_Ctx *ctx, Go_Import **single_import = NULL);
     void list_struct_fields(Goresult *type, List<Goresult> *ret);
     void list_dotprops(Goresult *type_res, Goresult *resolved_type_res, List<Goresult> *ret);
-    void actually_list_dotprops(Goresult *type_res, Goresult *resolved_type_res, List<Goresult> *ret);
+    void actually_list_dotprops(Goresult *type_res, Goresult *resolved_type_res, List<Goresult> *ret, int depth);
     bool node_func_to_gotype_sig(Ast_Node *params, Ast_Node *result, Go_Func_Sig *sig);
     void node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr filename, Pool *target_pool = NULL);
     Goresult *find_decl_in_package(ccstr id, ccstr import_path);
