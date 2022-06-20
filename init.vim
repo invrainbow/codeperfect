@@ -7,7 +7,7 @@ set ttimeout
 set ttimeoutlen=100
 set timeoutlen=3000
 
-set clipboard=unnamed
+" set clipboard=unnamed
 set ignorecase
 set autoindent
 set noexpandtab
@@ -16,12 +16,24 @@ set scrolloff=100
 set nowrap
 
 " called from ide when opening/creating new file to reset undo tree
-function! IDE__ClearUndo(bufId)
+function! CPClearUndo(bufId)
     let oldlevels = &undolevels
     call nvim_buf_set_option(a:bufId, 'undolevels', -1)
     call nvim_buf_set_lines(a:bufId, 0, 0, 0, [])
     call nvim_buf_set_option(a:bufId, 'undolevels', oldlevels)
     unlet oldlevels
+endfunction
+
+function! CPCopyVisual()
+    let m = mode()
+    if m ==# "v" || m ==# "V"
+        let [row_s, col_s] = getpos("v")[1:2]
+        let [row_e, col_e] = getpos(".")[1:2]
+    else
+        let [row_s, col_s] = getpos("'<")[1:2]
+        let [row_e, col_e] = getpos("'>")[1:2]
+    end
+    call NotifyIDE('copy_visual', row_s, col_s, row_e, col_e, bufnr("%"))
 endfunction
 
 function! NotifyIDE(cmd, ...) abort
@@ -141,15 +153,6 @@ function! GoIndent(lnum)
         let l:ind -= shiftwidth()
     endif
     return l:ind
-endfunction
-
-function s:sendVisualSelection()
-    let m = mode()
-    if m ==# "v" || m ==# "V" || m ==# "^V"
-        let [row_s, col_s] = getpos("'<")[1:2]
-        let [row_e, col_e] = getpos("'>")[1:2]
-        call NotifyIDE('visual_update', row_s, col_s, row_e, col_e)
-    endif
 endfunction
 
 function s:forceLocalOptions()

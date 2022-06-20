@@ -131,6 +131,9 @@ struct Editor {
         int navigating_to_editor;
 
         int changedtick;
+
+        cur2 visual_start;
+        cur2 visual_end;
     } nvim_data;
 
     struct Insert_Change {

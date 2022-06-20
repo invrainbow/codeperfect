@@ -59,7 +59,7 @@ void Nvim::handle_editor_on_ready(Editor *editor) {
         auto msgid = start_request_message("nvim_call_function", 2);
         save_request(NVIM_REQ_FILEOPEN_CLEAR_UNDO, msgid, editor->id);
 
-        writer.write_string("IDE__ClearUndo");
+        writer.write_string("CPClearUndo");
         writer.write_array(1);
         writer.write_int(editor->nvim_data.buf_id);
         end_message();
@@ -433,6 +433,15 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
         case NVIM_NOTIF_CUSTOM_GOTO_DEFINITION:
             handle_goto_definition();
             break;
+        case NVIM_NOTIF_CUSTOM_COPY_VISUAL: {
+            auto &args = event->notification.custom_copy_visual;
+            auto editor = find_editor_by_buffer(args.bufid);
+            if (!editor) break;
+
+            auto s = editor->buf->get_text(args.start, editor->buf->inc_cur(args.end));
+            set_clipboard_string(s);
+            break;
+        }
         case NVIM_NOTIF_CUSTOM_MOVE_CURSOR: {
             auto editor = get_current_editor();
             if (!editor) break;
@@ -815,13 +824,19 @@ void Nvim::run_event_loop() {
                         msg->notification.custom_reveal_line.screen_pos = screen_pos;
                         msg->notification.custom_reveal_line.reset_cursor = reset_cursor;
                     });
-                } else if (streq(cmd, "visual_update")) {
-                    ASSERT(num_args == 4);
+                } else if (streq(cmd, "copy_visual")) {
+                    ASSERT(num_args == 5);
                     auto ys = reader.read_int(); CHECKOK();
                     auto xs = reader.read_int(); CHECKOK();
                     auto ye = reader.read_int(); CHECKOK();
                     auto xe = reader.read_int(); CHECKOK();
-                    print("%d:%d to %d:%d", ys, xs, ye, xe);
+                    auto bufid = reader.read_int(); CHECKOK();
+                    add_event([&](auto msg) {
+                        msg->notification.type = NVIM_NOTIF_CUSTOM_COPY_VISUAL;
+                        msg->notification.custom_copy_visual.start = new_cur2((i32)xs-1, (i32)ys-1);
+                        msg->notification.custom_copy_visual.end = new_cur2((i32)xe-1, (i32)ye-1);
+                        msg->notification.custom_copy_visual.bufid = bufid;
+                    });
                 } else if (streq(cmd, "goto_definition")) {
                     ASSERT(!num_args);
                     add_event([&](auto msg) {

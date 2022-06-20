@@ -238,7 +238,11 @@ ccstr Buffer::get_text(cur2 start, cur2 end) {
     auto ret = alloc_list<char>();
     char tmp[4];
 
-    for (auto it = iter(start); it.pos < end; it.next())
+    // make sure start is valid
+    if (start.x > lines[start.y].len)
+        start.x = lines[start.y].len;
+
+    for (auto it = iter(start); it.pos < end && !it.eof(); it.next())
         for (int i = 0, n = uchar_to_cstr(it.peek(), tmp); i < n; i++)
             ret->append(tmp[i]);
 

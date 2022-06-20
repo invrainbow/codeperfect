@@ -816,7 +816,14 @@ void handle_window_event(Window_Event *it) {
 
             case CP_KEY_C:
             case CP_KEY_X:
-                if (!world.use_nvim) {
+                if (world.use_nvim) {
+                    auto& nv = world.nvim;
+                    // clear undo history
+                    nv.start_request_message("nvim_call_function", 2);
+                    nv.writer.write_string("CPCopyVisual");
+                    nv.writer.write_array(0);
+                    nv.end_message();
+                } else {
                     auto editor = get_current_editor();
                     if (!editor) break;
                     if (!editor->selecting) break;
