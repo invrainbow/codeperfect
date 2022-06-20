@@ -2205,18 +2205,31 @@ bool Editor::optimize_imports() {
         auto root = new_ast_node(ts_tree_root_node(buf->tree), iter);
 
         Ast_Node *package_node = NULL;
-        Ast_Node *imports_node = NULL;
+        Ast_Node *first_imports_node = NULL;
+        Ast_Node *last_imports_node = NULL;
 
         FOR_NODE_CHILDREN (root) {
-            if (it->type() == TS_PACKAGE_CLAUSE) {
+            switch (it->type()) {
+            case TS_PACKAGE_CLAUSE:
                 package_node = it;
-            } else if (it->type() == TS_IMPORT_DECLARATION) {
-                imports_node = it;
                 break;
+            case TS_IMPORT_DECLARATION:
+                if (!first_imports_node)
+                    first_imports_node = it;
+                else
+                    last_imports_node = it;
+                break;
+            default:
+                if (first_imports_node)
+                    goto done;
             }
         }
+    done:
 
-        if (!imports_node && !package_node) break;
+        if (!first_imports_node && !package_node) break;
+
+        if (first_imports_node && !last_imports_node)
+            last_imports_node = first_imports_node;
 
         Text_Renderer rend;
         rend.init();
@@ -2259,16 +2272,16 @@ bool Editor::optimize_imports() {
         }
 
         cur2 start, old_end;
-        if (imports_node) {
-            start = imports_node->start();
-            old_end = imports_node->end();
+        if (first_imports_node) {
+            start = first_imports_node->start();
+            old_end = last_imports_node->end();
         } else {
             start = package_node->end();
             old_end = package_node->end();
         }
 
         auto chars = alloc_list<uchar>();
-        if (!imports_node) {
+        if (!first_imports_node) {
             // add two newlines, it's going after the package decl
             chars->append('\n');
             chars->append('\n');
