@@ -7936,11 +7936,11 @@ Goresult *Go_Indexer::resolve_type(Goresult *res) {
 }
 
 Goresult *Go_Indexer::resolve_type(Gotype *type, Go_Ctx *ctx) {
-    Table<bool> seen; seen.init();
+    String_Set seen; seen.init();
     return resolve_type(type, ctx, &seen);
 }
 
-Goresult *Go_Indexer::resolve_type(Gotype *type, Go_Ctx *ctx, Table<bool>* seen) {
+Goresult *Go_Indexer::resolve_type(Gotype *type, Go_Ctx *ctx, String_Set *seen) {
     if (!type) return NULL;
 
     switch (type->type) {
@@ -7952,13 +7952,20 @@ Goresult *Go_Indexer::resolve_type(Gotype *type, Go_Ctx *ctx, Table<bool>* seen)
     case GOTYPE_ASSERTION:
     case GOTYPE_POINTER: {
         auto b = type->base;
+
+        // if it's an id or sel, manually resolve it in order to check if it's already in table
+        // (we need to resolve because the table key needs to know the go_ctx too)
+        // if so, break out, otherwise, proceed as usual
+        // this does mean we'll be resolving twice, but who cares
         if (b->type == GOTYPE_ID || b->type == GOTYPE_SEL) {
-            auto name = b->type == GOTYPE_ID
-                ? b->id_name
-                : cp_sprintf("%s.%s", b->sel_name, b->sel_sel);
+            auto res = resolve_type_to_decl(type, ctx);
+            if (!res) return NULL;
+
+            auto name = b->type == GOTYPE_ID ? b->id_name : b->sel_sel;
+            auto key = cp_sprintf("%s:%s", ctx_to_filepath(res->ctx), name);
 
             // pointer base is an id we've already seen, break out to return type as is
-            if (seen->get(name)) break;
+            if (seen->has(key)) break;
         }
 
         auto res = resolve_type(b, ctx, seen);
@@ -7971,15 +7978,14 @@ Goresult *Go_Indexer::resolve_type(Gotype *type, Go_Ctx *ctx, Table<bool>* seen)
 
     case GOTYPE_ID:
     case GOTYPE_SEL: {
-        auto name = type->type == GOTYPE_ID
-            ? type->id_name
-            : cp_sprintf("%s.%s", type->sel_name, type->sel_sel);
-
-        if (seen->get(name)) return NULL;
-        seen->set(name, true);
-
         auto res = resolve_type_to_decl(type, ctx);
         if (!res) return NULL;
+
+        auto name = type->type == GOTYPE_ID ? type->id_name : type->sel_sel;
+        auto key = cp_sprintf("%s:%s", ctx_to_filepath(res->ctx), name);
+        if (seen->has(key)) return NULL;
+        seen->add(key);
+
         return resolve_type(res->decl->gotype, res->ctx, seen);
     }
     }
