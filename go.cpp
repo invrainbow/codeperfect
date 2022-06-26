@@ -5058,7 +5058,13 @@ bool Go_Indexer::list_type_methods(ccstr type_name, ccstr import_path, List<Gore
 
 void Go_Indexer::list_dotprops(Goresult *type_res, Goresult *resolved_type_res, List<Goresult> *ret) {
     auto tmp = alloc_list<Goresult>();
-    actually_list_dotprops(type_res, resolved_type_res, tmp, 0);
+
+    Actually_List_Dotprops_Opts opts; ptr0(&opts);
+    opts.out = tmp;
+    opts.depth = 0;
+    opts.seen_embeds.init();
+
+    actually_list_dotprops(type_res, resolved_type_res, &opts);
 
     String_Set seen; seen.init();
     auto ctx = type_res->ctx;
@@ -5074,13 +5080,33 @@ void Go_Indexer::list_dotprops(Goresult *type_res, Goresult *resolved_type_res, 
     }
 }
 
-void Go_Indexer::actually_list_dotprops(Goresult *type_res, Goresult *resolved_type_res, List<Goresult> *ret, int depth) {
+void Go_Indexer::actually_list_dotprops(Goresult *type_res, Goresult *resolved_type_res, Actually_List_Dotprops_Opts *opts) {
+    auto resolve_embedded_type_to_decl = [&](Gotype *gotype, Go_Ctx *ctx) -> Goresult* {
+        while (gotype->type == GOTYPE_POINTER)
+            gotype = gotype->base;
+
+        auto t = gotype->type;
+        if (t != GOTYPE_ID && t != GOTYPE_SEL) return NULL;
+
+        auto res = resolve_type_to_decl(gotype, ctx);
+        if (!res) return NULL;
+
+        auto key = cp_sprintf("%s:%s", ctx_to_filepath(res->ctx), res->decl->name);
+        if (opts->seen_embeds.has(key)) return NULL;
+        opts->seen_embeds.add(key);
+
+        return res->wrap(res->decl->gotype);
+    };
+
     auto resolved_type = resolved_type_res->gotype;
     switch (resolved_type->type) {
     case GOTYPE_POINTER:
     case GOTYPE_ASSERTION: {
         auto new_resolved_type_res = resolved_type_res->wrap(resolved_type->base);
-        actually_list_dotprops(type_res, new_resolved_type_res, ret, depth + 1);
+
+        opts->depth++;
+        actually_list_dotprops(type_res, new_resolved_type_res, opts);
+        opts->depth--;
         return;
     }
 
@@ -5089,16 +5115,18 @@ void Go_Indexer::actually_list_dotprops(Goresult *type_res, Goresult *resolved_t
             // recursively list methods for embedded fields
             if (it.field->field_is_embedded) {
                 auto embedded_type = it.field->gotype;
-                auto res = resolve_type(embedded_type, resolved_type_res->ctx);
+                auto res = resolve_embedded_type_to_decl(embedded_type, resolved_type_res->ctx);
                 if (!res) continue;
-                if (res->gotype->type != resolved_type->type) continue; // this is technically an error, should we surface it here?
+                if (res->gotype->type != resolved_type->type) continue; // this is an error, should we surface it here?
 
-                actually_list_dotprops(resolved_type_res->wrap(embedded_type), res, ret, depth + 1);
+                opts->depth++;
+                actually_list_dotprops(resolved_type_res->wrap(embedded_type), res, opts);
+                opts->depth--;
             }
 
             auto field = it.field->copy(); // is this gonna substantially slow things down?
-            field->field_depth = depth;
-            ret->append(resolved_type_res->wrap(field));
+            field->field_depth = opts->depth;
+            opts->out->append(resolved_type_res->wrap(field));
         }
         break;
     }
@@ -5119,16 +5147,18 @@ void Go_Indexer::actually_list_dotprops(Goresult *type_res, Goresult *resolved_t
             // recursively list methods for embedded fields
             if (it.field->field_is_embedded) {
                 auto embedded_type = it.field->gotype;
-                auto res = resolve_type(embedded_type, resolved_type_res->ctx);
+                auto res = resolve_embedded_type_to_decl(embedded_type, resolved_type_res->ctx);
                 if (!res) continue;
-                if (res->gotype->type != resolved_type->type) continue; // this is technically an error, should we surface it here?
+                if (res->gotype->type != resolved_type->type) continue; // this is an error, should we surface it here?
 
-                actually_list_dotprops(resolved_type_res->wrap(embedded_type), res, ret, depth + 1);
+                opts->depth++;
+                actually_list_dotprops(resolved_type_res->wrap(embedded_type), res, opts);
+                opts->depth--;
             }
 
             auto field = it.field->copy();
-            field->field_depth = depth;
-            ret->append(resolved_type_res->wrap(field));
+            field->field_depth = opts->depth;
+            opts->out->append(resolved_type_res->wrap(field));
         }
         break;
     }
@@ -5158,7 +5188,7 @@ getout:
         return;
     }
 
-    list_type_methods(type_name, target_import_path, ret);
+    list_type_methods(type_name, target_import_path, opts->out);
 }
 
 ccstr remove_ats_from_path(ccstr s) {

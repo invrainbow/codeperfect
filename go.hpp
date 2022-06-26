@@ -1047,6 +1047,12 @@ struct Seen_Callee_Entry {
     Call_Hier_Node node;
 };
 
+struct Actually_List_Dotprops_Opts {
+    List<Goresult> *out;
+    int depth;
+    String_Set seen_embeds;
+};
+
 struct Go_Indexer {
     ccstr goroot;
     // ccstr gopath;
@@ -1115,7 +1121,7 @@ struct Go_Indexer {
     Goresult *find_decl_of_id(ccstr id, cur2 id_pos, Go_Ctx *ctx, Go_Import **single_import = NULL);
     void list_struct_fields(Goresult *type, List<Goresult> *ret);
     void list_dotprops(Goresult *type_res, Goresult *resolved_type_res, List<Goresult> *ret);
-    void actually_list_dotprops(Goresult *type_res, Goresult *resolved_type_res, List<Goresult> *ret, int depth);
+    void actually_list_dotprops(Goresult *type_res, Goresult *resolved_type_res, Actually_List_Dotprops_Opts *opts);
     bool node_func_to_gotype_sig(Ast_Node *params, Ast_Node *result, Go_Func_Sig *sig);
     void node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr filename, Pool *target_pool = NULL);
     Goresult *find_decl_in_package(ccstr id, ccstr import_path);
