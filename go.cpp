@@ -2080,10 +2080,7 @@ void Go_Indexer::process_tree_into_gofile(
         file->references->sort([&](auto pa, auto pb) {
             auto a = pa->true_start();
             auto b = pb->true_start();
-
-            if (a == b) return 0; // should this ever happen? no right?
-
-            return a < b ? -1 : 1;
+            return a.cmp(b);
         });
     }
 

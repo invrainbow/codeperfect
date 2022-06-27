@@ -2964,13 +2964,9 @@ void fuzzy_sort_filtered_results(ccstr query, List<int> *list, int total_results
     list->sort([&](int* pa, int* pb) {
         auto a = scores[*pa];
         auto b = scores[*pb];
+        if (a != b) return b > a ? 1 : -1;
 
-        if (a < b) return 1;
-        if (a > b) return -1;
-
-        auto alen = strlen(names[*pa]);
-        auto blen = strlen(names[*pb]);
-        return alen < blen ? -1 : (alen > blen ? 1 : 0);
+        return (int)(strlen(names[*pa]) - strlen(names[*pb]));
     });
 }
 
