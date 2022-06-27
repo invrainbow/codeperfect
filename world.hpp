@@ -717,3 +717,4 @@ void read_auth();
 void write_auth();
 
 bool write_project_settings();
+void send_nvim_keys(ccstr s);

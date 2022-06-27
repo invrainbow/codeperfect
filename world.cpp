@@ -3011,3 +3011,10 @@ bool write_project_settings() {
     serde.write_type(&project_settings, SERDE_PROJECT_SETTINGS);
     return serde.ok;
 }
+
+void send_nvim_keys(ccstr s) {
+    auto& nv = world.nvim;
+    nv.start_request_message("nvim_input", 1);
+    nv.writer.write_string(s);
+    nv.end_message();
+}

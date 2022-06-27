@@ -97,13 +97,6 @@ void new_ortho_matrix(float* mat, float l, float r, float b, float t) {
 
 #define MAX_RETRIES 5
 
-void send_nvim_keys(ccstr s) {
-    auto& nv = world.nvim;
-    nv.start_request_message("nvim_input", 1);
-    nv.writer.write_string(s);
-    nv.end_message();
-}
-
 void goto_next_tab() {
     auto pane = get_current_pane();
     if (!pane->editors.len) return;

@@ -1437,6 +1437,9 @@ bool Editor::trigger_escape(cur2 go_here_after) {
         go_here_after_escape = go_here_after;
         nv.exiting_insert_mode = true;
         nv.editor_that_triggered_escape = id;
+    } else if (world.nvim.mode != VI_NORMAL) {
+        send_nvim_keys("<Esc>");
+        handled = true;
     }
 
     return handled;
