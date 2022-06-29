@@ -21,7 +21,7 @@ import {
   Redirect,
   Route,
   Switch,
-  useHistory,
+  // useHistory,
   useLocation,
 } from "react-router-dom";
 import "./index.scss";
@@ -41,10 +41,12 @@ const LINKS = {
   buyProfessionalYearly: "https://buy.stripe.com/28o8wJ3eXfMI4TK5kv",
 };
 
+/*
 let API_BASE = "https://api.codeperfect95.com";
 if (process.env.NODE_ENV === "development") {
   API_BASE = "http://localhost:8080";
 }
+*/
 
 const CDN_PATH = "https://d2mje1xp79ofdv.cloudfront.net";
 
@@ -163,7 +165,7 @@ function Home() {
 
       <div
         className={cx(
-          "max-w-screen-lg mx-auto gap-8 px-3 items-center justify-center"
+          "max-w-screen-xl mx-auto gap-8 px-3 items-center justify-center"
         )}
       >
         <div
@@ -185,11 +187,11 @@ function Home() {
               onClick={() => setStartDemo(true)}
             >
               <div className="absolute w-full h-full flex items-center justify-center z-10">
-                <img
+                {/*<img
                   alt="play"
                   style={{ width: "72px" }}
                   src={asset("/play.png")}
-                />
+                />*/}
               </div>
               <img
                 className="block relative z-0"
@@ -288,6 +290,7 @@ function Home() {
   );
 }
 
+/*
 function Loading({ size = "80px", className, ...props }) {
   return (
     <div className={cx(className)} {...props}>
@@ -307,6 +310,7 @@ function Loading({ size = "80px", className, ...props }) {
     </div>
   );
 }
+*/
 
 function PaymentDone() {
   return (
@@ -352,6 +356,15 @@ function BuyLicenseBox({ className, ...props }) {
   );
 }
 
+const disableButtonProps = {
+  onClick: (e) => {
+    e.preventDefault();
+    alert(
+      "CodePerfect is currently in maintenance mode and is not available for download. Please check back later."
+    );
+  },
+};
+
 function BuyLicense() {
   return (
     <WallOfText width="3xl">
@@ -374,7 +387,10 @@ function BuyLicense() {
                 </div>
                 <div className="leading-none text-xs ml-1">per month</div>
               </div>
-              <BuyLicenseButton href={LINKS.buyPersonalMonthly}>
+              <BuyLicenseButton
+                {...disableButtonProps}
+                href={LINKS.buyPersonalMonthly}
+              >
                 Buy Monthly
               </BuyLicenseButton>
             </div>
@@ -385,7 +401,10 @@ function BuyLicense() {
                 </div>
                 <div className="leading-none text-xs ml-1">per year</div>
               </div>
-              <BuyLicenseButton href={LINKS.buyPersonalYearly}>
+              <BuyLicenseButton
+                {...disableButtonProps}
+                href={LINKS.buyPersonalYearly}
+              >
                 Buy Yearly
               </BuyLicenseButton>
             </div>
@@ -408,7 +427,10 @@ function BuyLicense() {
                 </div>
                 <div className="leading-none text-xs ml-1">per month</div>
               </div>
-              <BuyLicenseButton href={LINKS.buyProfessionalMonthly}>
+              <BuyLicenseButton
+                {...disableButtonProps}
+                href={LINKS.buyProfessionalMonthly}
+              >
                 Buy Monthly
               </BuyLicenseButton>
             </div>
@@ -419,7 +441,10 @@ function BuyLicense() {
                 </div>
                 <div className="leading-none text-xs ml-1">per year</div>
               </div>
-              <BuyLicenseButton href={LINKS.buyProfessionalYearly}>
+              <BuyLicenseButton
+                {...disableButtonProps}
+                href={LINKS.buyProfessionalYearly}
+              >
                 Buy Yearly
               </BuyLicenseButton>
             </div>
@@ -437,6 +462,7 @@ function BuyLicense() {
 }
 
 function Download() {
+  /*
   const [url, setUrl] = React.useState(null);
   const [err, setErr] = React.useState(false);
   const history = useHistory();
@@ -458,6 +484,7 @@ function Download() {
     }
     run();
   }, [history]);
+  */
 
   return (
     <div className="flex items-center flex-col md:flex-row max-w-screen-xl px-4 mx-auto my-16 md:my-16 md:gap-4 lg:gap-8">
@@ -481,7 +508,11 @@ function Download() {
         <p>Try CodePerfect for free for 7 days with all features available.</p>
         <div className="lg:h-32">
           <div className="my-6">
-            {url ? (
+            <div className="p-4 bg-red-100 leading-snug rounded text-red-700 opacity-70">
+              <b>CodePerfect is in maintenance mode</b> and is currently not
+              available for download. Please check back later.
+            </div>
+            {/*url ? (
               <>
                 <p className="mb-2">
                   <A
@@ -502,7 +533,7 @@ function Download() {
               </div>
             ) : (
               <Loading size="2em" />
-            )}
+            )*/}
           </div>
           <p>
             <A
