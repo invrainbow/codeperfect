@@ -5737,7 +5737,7 @@ void UI::draw_everything() {
                                 break;
                             }
                         }
-                    } else {
+                    } else if (editor->selecting) {
                         auto pos = new_cur2((u32)0, (u32)y);
                         if (select_start <= pos && pos < select_end)
                             draw_highlight(rgba(global_colors.visual_background), 1, true);
