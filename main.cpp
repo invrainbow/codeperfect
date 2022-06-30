@@ -797,13 +797,15 @@ void handle_window_event(Window_Event *it) {
                     auto editor = get_current_editor();
                     if (!editor) break;
 
-                    editor->selecting = true;
                     editor->select_start = new_cur2(0, 0);
 
                     auto buf = editor->buf;
                     int y = buf->lines.len-1;
                     int x = buf->lines[y].len;
                     editor->raw_move_cursor(new_cur2(x, y));
+
+                    if (editor->select_start != editor->cur)
+                        editor->selecting = true;
                 }
                 break;
 
@@ -956,6 +958,20 @@ void handle_window_event(Window_Event *it) {
                 send_nvim_keys(ch == '<' ? "<LT>" : uchar_to_cstr(ch));
             }
         } else {
+            if (ed->selecting) {
+                // REFACTOR: duplicated in handle_backspace()
+                auto a = ed->select_start;
+                auto b = ed->cur;
+                if (a > b) {
+                    auto tmp = a;
+                    a = b;
+                    b = tmp;
+                }
+
+                ed->buf->remove(a, b);
+                ed->selecting = false;
+                ed->move_cursor(a);
+            }
             ed->type_char_in_insert_mode(ch);
         }
         break;
