@@ -772,6 +772,12 @@ void Go_Indexer::init_builtins(Go_Package *pkg) {
             return ret;
         };
 
+        auto empty_interface = [&]() -> Gotype * {
+            auto ret = new_gotype(GOTYPE_INTERFACE);
+            ret->interface_specs = alloc_list<Go_Interface_Spec>(0);
+            return ret;
+        };
+
         // error interface
         {
             SCOPED_MEM(&final_mem);
@@ -859,7 +865,7 @@ void Go_Indexer::init_builtins(Go_Package *pkg) {
 
         // func panic(v interface{})
         start();
-        add_param("v", new_gotype(GOTYPE_INTERFACE));
+        add_param("v", empty_interface());
         save(GO_BUILTIN_PANIC, "panic");
 
         // func print(args ...Type)
@@ -880,7 +886,7 @@ void Go_Indexer::init_builtins(Go_Package *pkg) {
 
         // func recover() interface{}
         start();
-        add_result(new_gotype(GOTYPE_INTERFACE));
+        add_result(empty_interface());
         save(GO_BUILTIN_RECOVER, "recover");
     }
 }
