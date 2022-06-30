@@ -489,7 +489,10 @@ void Editor::perform_autocomplete(AC_Result *result) {
 
         if (curr_postfix) {
             if (curr_postfix->insert_positions.len > 1) {
-                trigger_escape(curr_postfix->insert_positions[0]);
+                if (world.use_nvim)
+                    trigger_escape(curr_postfix->insert_positions[0]);
+                else
+                    move_cursor(curr_postfix->insert_positions[0]);
                 curr_postfix->current_insert_position++;
             } else {
                 postfix_stack.len--;
@@ -2515,4 +2518,21 @@ bool Editor::ask_user_about_unsaved_changes() {
     if (result == ASKUSER_YES)
         handle_save(true);
     return true;
+}
+
+void Editor::delete_selection() {
+    if (!selecting) return;
+
+    // REFACTOR: duplicated in handle_backspace()
+    auto a = select_start;
+    auto b = cur;
+    if (a > b) {
+        auto tmp = a;
+        a = b;
+        b = tmp;
+    }
+
+    buf->remove(a, b);
+    selecting = false;
+    move_cursor(a);
 }

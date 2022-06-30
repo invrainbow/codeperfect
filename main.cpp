@@ -380,6 +380,7 @@ void handle_window_event(Window_Event *it) {
                 }
             }
 
+            editor->delete_selection();
             editor->type_char_in_insert_mode('\n');
 
             auto indent_chars = editor->get_autoindent(editor->cur.y);
@@ -448,24 +449,11 @@ void handle_window_event(Window_Event *it) {
                     world.nvim.chars_after_exiting_insert_mode.append('\b');
                     return;
                 }
-            } else {
-                if (editor->selecting) {
-                    auto a = editor->select_start;
-                    auto b = editor->cur;
-                    if (a > b) {
-                        auto tmp = a;
-                        a = b;
-                        b = tmp;
-                    }
-
-                    editor->buf->remove(a, b);
-                    editor->selecting = false;
-                    editor->move_cursor(a);
-                    return;
-                }
             }
 
-            if (keymods & CP_MOD_TEXT) {
+            if (!world.use_nvim && editor->selecting) {
+                editor->delete_selection();
+            } else if (keymods & CP_MOD_TEXT) {
                 auto new_cur = alt_move(true);
                 while (editor->cur > new_cur)
                     editor->backspace_in_insert_mode(1, 0);
@@ -958,20 +946,7 @@ void handle_window_event(Window_Event *it) {
                 send_nvim_keys(ch == '<' ? "<LT>" : uchar_to_cstr(ch));
             }
         } else {
-            if (ed->selecting) {
-                // REFACTOR: duplicated in handle_backspace()
-                auto a = ed->select_start;
-                auto b = ed->cur;
-                if (a > b) {
-                    auto tmp = a;
-                    a = b;
-                    b = tmp;
-                }
-
-                ed->buf->remove(a, b);
-                ed->selecting = false;
-                ed->move_cursor(a);
-            }
+            ed->delete_selection();
             ed->type_char_in_insert_mode(ch);
         }
         break;

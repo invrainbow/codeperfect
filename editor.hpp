@@ -213,6 +213,7 @@ struct Editor {
     bool cur_is_inside_comment_or_string();
     bool ask_user_about_unsaved_changes();
     void skip_next_nvim_update(int n = 1);
+    void delete_selection();
 };
 
 struct Pane {
