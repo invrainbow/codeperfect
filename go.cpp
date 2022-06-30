@@ -7991,7 +7991,7 @@ Goresult *Go_Indexer::resolve_type(Gotype *type, Go_Ctx *ctx, String_Set *seen) 
         // if so, break out, otherwise, proceed as usual
         // this does mean we'll be resolving twice, but who cares
         if (b->type == GOTYPE_ID || b->type == GOTYPE_SEL) {
-            auto res = resolve_type_to_decl(type, ctx);
+            auto res = resolve_type_to_decl(b, ctx);
             if (!res) return NULL;
 
             auto name = b->type == GOTYPE_ID ? b->id_name : b->sel_sel;
