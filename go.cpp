@@ -2000,31 +2000,24 @@ void Go_Indexer::process_tree_into_gofile(
         walk_ast_node(root, true, [&](auto it, auto, auto) {
             Ast_Node *x = NULL, *sel = NULL;
 
-            switch (it->type()) {
-            case TS_IDENTIFIER:
-            case TS_FIELD_IDENTIFIER:
-            case TS_PACKAGE_IDENTIFIER:
-            case TS_TYPE_IDENTIFIER: {
-                /*
-                auto parent = it->parent();
-                if (!parent->null) {
-                    if (parent->type() == TS_QUALIFIED_TYPE)
-                        return WALK_SKIP_CHILDREN;
-                    if (parent->type() == TS_SELECTOR_EXPRESSION)
-                        return WALK_SKIP_CHILDREN;
-                }
-                */
-
+            auto add_ident_ref = [&](Ast_Node *it) {
                 Go_Reference ref;
                 ref.is_sel = false;
                 ref.start = it->start();
                 ref.end = it->end();
                 ref.name = it->string();
-
                 {
                     SCOPED_MEM(&file->pool);
                     file->references->append(ref.copy());
                 }
+            };
+
+            switch (it->type()) {
+            case TS_IDENTIFIER:
+            case TS_FIELD_IDENTIFIER:
+            case TS_PACKAGE_IDENTIFIER:
+            case TS_TYPE_IDENTIFIER: {
+                add_ident_ref(it);
                 break;
             }
 
@@ -2037,18 +2030,16 @@ void Go_Indexer::process_tree_into_gofile(
                     sel = it->field(TSF_NAME); // TODO: this is wrong, look at astviewer
                 } else {
                     x = it->field(TSF_OPERAND);
-                    /*
-                    switch (x->type()) {
-                    case TS_IDENTIFIER:
-                    case TS_FIELD_IDENTIFIER:
-                    case TS_PACKAGE_IDENTIFIER:
-                    case TS_TYPE_IDENTIFIER:
-                        break;
-                    default:
-                        return WALK_CONTINUE;
-                    }
-                    */
                     sel = it->field(TSF_FIELD);
+                }
+
+                switch (x->type()) {
+                case TS_IDENTIFIER:
+                case TS_FIELD_IDENTIFIER:
+                case TS_PACKAGE_IDENTIFIER:
+                case TS_TYPE_IDENTIFIER:
+                    add_ident_ref(x);
+                    break;
                 }
 
                 auto xtype = expr_to_gotype(x);
@@ -2068,15 +2059,6 @@ void Go_Indexer::process_tree_into_gofile(
                     file->references->append(ref.copy());
                 }
 
-                /*
-                switch (x->type()) {
-                case TS_IDENTIFIER:
-                case TS_FIELD_IDENTIFIER:
-                case TS_PACKAGE_IDENTIFIER:
-                case TS_TYPE_IDENTIFIER:
-                    return WALK_SKIP_CHILDREN;
-                }
-                */
                 return WALK_SKIP_CHILDREN;
             }
             }
