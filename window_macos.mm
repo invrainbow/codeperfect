@@ -559,7 +559,19 @@ const NSRange kEmptyRange = { NSNotFound, 0 };
         ev->key.mods = mods;
     });
 
-    [self interpretKeyEvents:@[event]];
+    auto prevent_default = [&]() -> bool {
+        // custom key shortcuts that should not trigger insertText
+        // will be harder when we allow user defined shortcuts, but cross that bridge when we get there
+        if (mods == CP_MOD_ALT && key == CP_KEY_RIGHT_BRACKET) return true;
+        if (mods == CP_MOD_ALT && key == CP_KEY_LEFT_BRACKET) return true;
+        if (mods == CP_MOD_PRIMARY | CP_MOD_ALT && key == CP_KEY_R) return true;
+        if (mods == CP_MOD_ALT | CP_MOD_SHIFT && key == CP_KEY_F) return true;
+        if (mods == CP_MOD_ALT | CP_MOD_SHIFT && key == CP_KEY_O) return true;
+
+        return false;
+    };
+
+    if (!prevent_default()) [self interpretKeyEvents:@[event]];
 }
 
 - (void)flagsChanged:(NSEvent *)event {
