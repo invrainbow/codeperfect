@@ -493,7 +493,11 @@ void handle_window_event(Window_Event *it) {
             case CP_MOD_NONE:
                 switch (key) {
                 case CP_KEY_LEFT:
-                    if (cur.x) {
+                    if (!(keymods & CP_MOD_SHIFT) && editor->selecting) {
+                        auto a = editor->select_start;
+                        auto b = cur;
+                        cur = a < b ? a : b;
+                    } else if (cur.x) {
                         cur.x--;
                     } else if (cur.y) {
                         cur.y--;
@@ -503,7 +507,11 @@ void handle_window_event(Window_Event *it) {
                     break;
 
                 case CP_KEY_RIGHT:
-                    if (cur.x < buf->lines[cur.y].len) {
+                    if (!(keymods & CP_MOD_SHIFT) && editor->selecting) {
+                        auto a = editor->select_start;
+                        auto b = cur;
+                        cur = a > b ? a : b;
+                    } else if (cur.x < buf->lines[cur.y].len) {
                         cur.x++;
                     } else if (cur.y < buf->lines.len-1) {
                         cur.y++;
@@ -519,7 +527,16 @@ void handle_window_event(Window_Event *it) {
                 switch (key) {
                 case CP_KEY_LEFT:
                 case CP_KEY_RIGHT:
-                    cur = alt_move(key == CP_KEY_LEFT);
+                    if (!(keymods & CP_MOD_SHIFT) && editor->selecting) {
+                        auto a = editor->select_start;
+                        auto b = cur;
+                        if (key == CP_KEY_LEFT)
+                            cur = a < b ? a : b;
+                        else
+                            cur = a > b ? a : b;
+                    } else {
+                        cur = alt_move(key == CP_KEY_LEFT);
+                    }
                     handled = true;
                     break;
                 }
