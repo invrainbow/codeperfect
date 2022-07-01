@@ -506,7 +506,7 @@ void World::init(Window *_wnd) {
     world.file_explorer.show = true;
 
 #ifdef DEBUG_MODE
-    if (!use_nvim) world.wnd_history.show = true;
+    // if (!use_nvim) world.wnd_history.show = true;
 
     show_frame_index = false;
 #endif
