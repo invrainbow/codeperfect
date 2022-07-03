@@ -1,6 +1,4 @@
 CC = clang++
-BREW_X64 = arch --x86_64 /usr/local/Homebrew/bin/brew
-BREW_ARM = /opt/homebrew/bin/brew
 
 CFLAGS = -std=c++17 -w -MMD -MP
 # CFLAGS += -mavx -maes
@@ -10,21 +8,20 @@ LDFLAGS = -ldl -framework OpenGL -framework Cocoa -framework IOKit
 LDFLAGS += -framework CoreFoundation -framework Security  # for go
 LDFLAGS += -lfreetype -lharfbuzz -lfontconfig
 
-ifeq (${ARCH}, x64)
-	CFLAGS += -arch x86_64
-	LDFLAGS += obj/gohelper.x64.a
-	LDFLAGS += $(shell $(BREW_X64) --prefix pcre)/lib/libpcre.a
-	LDFLAGS += -L$(shell $(BREW_X64) --prefix fontconfig)/lib
-	LDFLAGS += -L$(shell $(BREW_X64) --prefix freetype)/lib
-	LDFLAGS += -L$(shell $(BREW_X64) --prefix harfbuzz)/lib
-else
+M1 = $(shell sh/detect_m1)
+ifeq ($(M1), 1)
 	CFLAGS += -arch arm64
-	LDFLAGS += obj/gohelper.arm64.a
-	LDFLAGS += $(shell $(BREW_ARM) --prefix pcre)/lib/libpcre.a
-	LDFLAGS += -L$(shell $(BREW_ARM) --prefix fontconfig)/lib
-	LDFLAGS += -L$(shell $(BREW_ARM) --prefix freetype)/lib
-	LDFLAGS += -L$(shell $(BREW_ARM) --prefix harfbuzz)/lib
+	GOARCH = arm64
+else
+	CFLAGS += -arch x86_64
+	GOARCH = amd64
 endif
+
+LDFLAGS += obj/gohelper.a
+LDFLAGS += $(shell brew --prefix pcre)/lib/libpcre.a
+LDFLAGS += -L$(shell brew --prefix fontconfig)/lib
+LDFLAGS += -L$(shell brew --prefix freetype)/lib
+LDFLAGS += -L$(shell brew --prefix harfbuzz)/lib
 
 GOFLAGS =
 
@@ -52,11 +49,7 @@ clean:
 	rm -rf obj/ build/bin/
 	make prep
 
-OBJ_DEPS = $(OBJ_FILES) obj/objclibs.o obj/clibs.o
-ifeq (${RELEASE}, 1)
-	OBJ_DEPS += obj/gohelper.arm64.a
-	OBJ_DEPS += obj/gohelper.x64.a
-endif
+OBJ_DEPS = $(OBJ_FILES) obj/objclibs.o obj/clibs.o obj/gohelper.a
 
 build/bin/test: $(filter-out obj/main.o, $(OBJ_DEPS)) obj/tests.o
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
@@ -88,17 +81,12 @@ binaries.c: .cpcolors vert.glsl frag.glsl im.vert.glsl im.frag.glsl
 GOSTUFF_DIRS = $(shell find gostuff/ -type d)
 GOSTUFF_FILES = $(shell find gostuff/ -type f -name '*')
 
-obj/gohelper.x64.a: gostuff/ $(GOSTUFF_DIRS) $(GOSTUFF_FILES)
+obj/gohelper.a: gostuff/ $(GOSTUFF_DIRS) $(GOSTUFF_FILES)
 	cd gostuff; \
-		CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 go build $(GOFLAGS) -o gohelper.x64.a -buildmode=c-archive ./helper; \
-		mkdir -p ../obj; mv gohelper.x64.a ../obj; rm gohelper.x64.h
+		CGO_ENABLED=1 GOOS=darwin GOARCH=$(GOARCH) go build $(GOFLAGS) -o gohelper.a -buildmode=c-archive ./helper; \
+		mkdir -p ../obj; mv gohelper.a ../obj; rm gohelper.h
 
-obj/gohelper.arm64.a: gostuff/ $(GOSTUFF_DIRS) $(GOSTUFF_FILES)
-	cd gostuff; \
-		CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build $(GOFLAGS) -o gohelper.arm64.a -buildmode=c-archive ./helper; \
-		mkdir -p ../obj; mv gohelper.arm64.a ../obj; mv gohelper.arm64.h ../gohelper.h
-
-gohelper.h: obj/gohelper.arm64.a
+gohelper.h: obj/gohelper.a
 
 tstypes.hpp: tree-sitter-go/src/parser.c sh/generate_tstypes.py
 	sh/generate_tstypes.py

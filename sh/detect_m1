@@ -1,0 +1,6 @@
+#!/bin/bash
+if [[ -n $(sysctl -n machdep.cpu.brand_string | grep "Apple M1") ]]; then
+    echo 1
+else
+    echo 0
+fi

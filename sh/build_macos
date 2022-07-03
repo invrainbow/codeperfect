@@ -3,17 +3,8 @@ set -e
 
 if [[ "$RELEASE" == "1" ]]; then
     sh/make clean
-    ARCH=arm sh/make
-    mv build/bin/ide build/ide-arm
-
-    sh/make clean
-    ARCH=x64 sh/make
-    mv build/bin/ide build/ide-x64
-
-	lipo -create -output build/bin/ide build/ide-arm build/ide-x64
-    rm build/ide-arm
-    rm build/ide-x64
-
+    sh/make prep
+    sh/make
     sh/make build/launcher
 else
     sh/make prep

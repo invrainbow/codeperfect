@@ -1,8 +1,5 @@
 #!/bin/bash
 
-# prerequisite: intel/arm versions of brew installed side by side, per
-# https://stackoverflow.com/a/64951025
-
 set -e
 
 # download submodules
@@ -11,10 +8,6 @@ git submodule update --init --recursive
 # stuff we need from brew
 brew bundle install --file sh/Brewfile
 
-# intel version of brew
-brewi="arch --x86_64 /usr/local/Homebrew/bin/brew"
-$brewi bundle install --file sh/Brewfile
-
 # nvim
 wget https://github.com/neovim/neovim/releases/download/v0.5.1/nvim-macos.tar.gz
 tar xvzf nvim-macos.tar.gz
@@ -22,4 +15,4 @@ mv nvim-osx64 nvim-archive
 rm nvim-macos.tar.gz
 
 # appify
-go get github.com/machinebox/appify
+go install github.com/machinebox/appify@latest

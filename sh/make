@@ -2,7 +2,7 @@
 set -e
 
 cmd="make"
-if [ "$(sysctl -n machdep.cpu.brand_string)" = "Apple M1" ]; then
+if [ "$(sh/detect_m1)" = "1" ]; then
     cmd="arch -arm64 $cmd"
 fi
 
