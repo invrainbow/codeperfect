@@ -14,5 +14,11 @@ tar xvzf nvim-macos.tar.gz
 mv nvim-osx64 nvim-archive
 rm nvim-macos.tar.gz
 
+# wipe out the share folder but keep clipboard handler
+mv nvim-archive/share/nvim/runtime-autoload/provider/clipboard.vim clipboard.vim
+rm -rf nvim-archive/share
+mkdir -p nvim-archive/share/nvim/runtime/autoload/provider
+mv clipboard.vim nvim-archive/share/nvim/runtime/autoload/provider
+
 # appify
 go install github.com/machinebox/appify@latest

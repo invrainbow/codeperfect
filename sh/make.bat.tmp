@@ -1,0 +1,2 @@
+set OSTYPE=windows
+make -j %NUMBER_OF_PROCESSORS% %*

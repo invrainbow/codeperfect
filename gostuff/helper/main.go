@@ -8,7 +8,6 @@ import (
 	"go/format"
 	"io"
 	"log"
-	"log/syslog"
 	"net"
 	"os"
 	"os/exec"
@@ -48,16 +47,6 @@ typedef struct _GH_Message {
 } GH_Message;
 */
 import "C"
-
-func init() {
-	logwriter, err := syslog.New(syslog.LOG_NOTICE, "codeperfect")
-	if err != nil {
-		// i mean, don't crash
-		log.Print(err)
-		return
-	}
-	log.SetOutput(logwriter)
-}
 
 type GoBuild struct {
 	done   bool
