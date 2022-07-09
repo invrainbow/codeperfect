@@ -564,9 +564,9 @@ const NSRange kEmptyRange = { NSNotFound, 0 };
         // will be harder when we allow user defined shortcuts, but cross that bridge when we get there
         if (mods == CP_MOD_ALT && key == CP_KEY_RIGHT_BRACKET) return true;
         if (mods == CP_MOD_ALT && key == CP_KEY_LEFT_BRACKET) return true;
-        if (mods == CP_MOD_PRIMARY | CP_MOD_ALT && key == CP_KEY_R) return true;
-        if (mods == CP_MOD_ALT | CP_MOD_SHIFT && key == CP_KEY_F) return true;
-        if (mods == CP_MOD_ALT | CP_MOD_SHIFT && key == CP_KEY_O) return true;
+        if (mods == (CP_MOD_PRIMARY | CP_MOD_ALT) && key == CP_KEY_R) return true;
+        if (mods == (CP_MOD_ALT | CP_MOD_SHIFT) && key == CP_KEY_F) return true;
+        if (mods == (CP_MOD_ALT | CP_MOD_SHIFT) && key == CP_KEY_O) return true;
 
         return false;
     };
