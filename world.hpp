@@ -1,8 +1,7 @@
 #pragma once
 
 #include <math.h>
-
-#include "glew.h"
+#include <GL/glew.h>
 
 #include "common.hpp"
 #include "editor.hpp"
@@ -534,6 +533,9 @@ struct World {
         ImFont *im_font_mono;
         ImFont *im_font_ui;
         double scroll_buffer;
+        // seems like so far when writing imgui code i've been assuming one global window in whole app
+        // but when writing window/opengl context code i've been assuming possibility of multiple windows
+        // unify this at some point
         bool mouse_down[ImGuiMouseButton_COUNT];
         bool mouse_just_pressed[ImGuiMouseButton_COUNT];
         bool mouse_just_released[ImGuiMouseButton_COUNT];

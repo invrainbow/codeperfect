@@ -14,6 +14,8 @@
 #include <inttypes.h>
 #endif
 
+#include "ostype.hpp"
+
 // tools for macros
 #define TOKENPASTE0(a, b) a##b
 #define TOKENPASTE(a, b) TOKENPASTE0(a, b)
@@ -328,7 +330,7 @@ struct Panic_Exception : std::runtime_error {
     Panic_Exception(ccstr error) : std::runtime_error(error) {}
 };
 
-#if OS_WIN
+#if OS_WINDOWS
 #define strcmpi stricmp
 #else
 #define strcmpi strcasecmp

@@ -1,12 +1,13 @@
 CC = clang++
 
-CFLAGS = -std=c++17 -w -MMD -MP
+CFLAGS = -std=c++17 -w -MMD -MP -I. -ferror-limit=100
 # CFLAGS += -mavx -maes
 CFLAGS += -Itree-sitter
 
 LDFLAGS += obj/gohelper.a
 
 ifeq ($(OSTYPE), mac)
+	CFLAGS += -DOSTYPE_MAC
 	LDFLAGS = -ldl -framework OpenGL -framework Cocoa -framework IOKit
 	LDFLAGS += -framework CoreFoundation -framework Security # for go
 	LDFLAGS += -lfreetype -lharfbuzz -lfontconfig
@@ -25,7 +26,16 @@ ifeq ($(OSTYPE), mac)
 		GOARCH = amd64
 	endif
 else ifeq ($(OSTYPE), windows)
+	CFLAGS += -DOSTYPE_WINDOWS
+	CFLAGS += -I$(VCPKG_ROOT)/installed/x64-windows/include
+	LDFLAGS += -L$(VCPKG_ROOT)/installed/x64-windows/lib
+	LDFLAGS += -lfreetype -lharfbuzz -lpcre -lfontconfig
+	LDFLAGS += -lopengl32 -ladvapi32 -lshlwapi -lole32
+	LDFLAGS += -lpathcch -lshell32 -lwinmm -lws2_32 -lgdi32 -lshcore
+	LDFLAGS += --for-linker "/IGNORE:4217"
 	GOARCH = amd64
+else ifeq ($(OSTYPE), linux)
+	CFLAGS += -DOSTYPE_LINUX
 endif
 
 GOFLAGS =
@@ -37,17 +47,10 @@ else
 	CFLAGS += -DDEBUG_MODE -g -O0
 endif
 
-GOSTUFF_DEPS = $(shell find gostuff/ -type d)
-GOSTUFF_DEPS += $(shell find gostuff/ -type f -name '*')
-
 ifeq ($(OSTYPE), windows)
-	SHELL_SUFFIX := .bat
 	PYTHON = python
-	EXEC = call
 else
-	SHELL_SUFFIX = _$(OSTYPE)
 	PYTHON = python3
-	EXEC = bash
 endif
 
 SEPARATE_SRC_FILES = tests.cpp enums.cpp
@@ -56,6 +59,10 @@ OBJ_FILES = $(patsubst %.cpp,obj/%.o,$(SRC_FILES))
 DEP_FILES = $(patsubst %.cpp,obj/%.d,$(SRC_FILES))
 DEP_FILES += obj/clibs.d
 OBJ_DEPS = $(OBJ_FILES) obj/clibs.o obj/gohelper.a
+
+# GOSTUFF_DEPS = $(shell find gostuff/ -type d)
+GOSTUFF_DEPS = $(shell find gostuff/ -type f -name '*.go')
+# GOSTUFF_DEPS += gostuff/
 
 ifeq ($(OSTYPE), mac)
 	DEP_FILES += obj/objclibs.d 
@@ -66,37 +73,28 @@ endif
 
 all: build/bin/ide build/bin/init.vim build/bin/buildcontext.go
 
-ifeq ($(OSTYPE), windows)
-prep:
-	md obj
-	md build\bin
-clean:
-	del /s /q obj
-	del /s /q build\bin
-	make prep
-else
 prep:
 	mkdir -p obj build/bin
+
 clean:
 	rm -rf obj/ build/bin/
 	make prep
-endif
 
 build/bin/test: $(filter-out obj/main.o, $(OBJ_DEPS)) obj/tests.o
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 
-build/bin/ide: $(OBJ_DEPS) binaries.c enums.cpp
+build/bin/ide: $(OBJ_DEPS) binaries.c obj/enums.o
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 
 -include $(DEP_FILES)
 
-$(OBJ_FILES): obj/%.o: %.cpp Makefile gohelper.h tstypes.hpp enums.hpp
+$(OBJ_FILES): obj/%.o: %.cpp gohelper.h tstypes.hpp enums.hpp # Makefile
 	$(CC) $(CFLAGS) -MMD -MP -c -o $@ $<
 
-obj/enums.o: enums.cpp Makefile
+obj/enums.o: enums.cpp # Makefile
 	$(CC) $(CFLAGS) -MMD -MP -c -o $@ $<
 
-obj/tests.o: tests.cpp Makefile
+obj/tests.o: tests.cpp # Makefile
 	$(CC) $(CFLAGS) -MMD -MP -c -o $@ $<
 
 obj/objclibs.o: objclibs.mm
@@ -114,16 +112,16 @@ obj/clibs.o: clibs.c
 binaries.c: .cpcolors vert.glsl frag.glsl im.vert.glsl im.frag.glsl
 	$(PYTHON) sh/create_binaries_c.py $^
 
-obj/gohelper.a: gostuff/ $(GOSTUFF_DEPS)
+obj/gohelper.a: $(GOSTUFF_DEPS)
 	cd gostuff; \
-		CGO_ENABLED=1 go build "$@" -o gohelper.a -buildmode=c-archive helper; \
+		CC=clang CGO_ENABLED=1 go build $(GOFLAGS) -o gohelper.a -buildmode=c-archive ./helper; \
 		mkdir -p ../obj; \
 		mv gohelper.a ../obj; \
-		rm gohelper.h
+		mv gohelper.h ..
 
-build/launcher: gostuff/ $(GOSTUFF_DEPS)
+build/launcher: $(GOSTUFF_DEPS)
 	cd gostuff; \
-		go build "$@"  -o ../build/launcher cmd/launcher; \
+		go build $(GOFLAGS) -o ../build/launcher ./cmd/launcher
 
 gohelper.h: obj/gohelper.a
 
@@ -138,3 +136,4 @@ build/bin/buildcontext.go: gostuff/buildcontext/main.go
 
 build/bin/init.vim: init.vim
 	cp init.vim build/bin/init.vim
+

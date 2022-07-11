@@ -1,3 +1,6 @@
 [submodule "tree-sitter-go"]
 	path = tree-sitter-go
 	url = git@github.com:invrainbow/tree-sitter-go.git
+[submodule "stb"]
+	path = stb
+	url = https://github.com/nothings/stb

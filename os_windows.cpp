@@ -1,6 +1,6 @@
 #include "os.hpp"
 
-#if OS_WIN // whole file is windows only
+#if OS_WINDOWS // whole file is windows only
 
 #include "win32.hpp"
 #include "world.hpp"
@@ -20,7 +20,7 @@ void init_platform_specific_crap() {
 // stupid character conversion functions
 // =====================================
 
-wchar_t* to_wide(ccstr s, int slen = -1) {
+wchar_t* to_wide(ccstr s, int slen) {
     auto len = MultiByteToWideChar(CP_UTF8, 0, s, slen, NULL, 0);
     if (!len) return NULL;
 
@@ -31,7 +31,7 @@ wchar_t* to_wide(ccstr s, int slen = -1) {
     return ret;
 }
 
-ccstr to_utf8(const wchar_t *s, int slen = -1) {
+ccstr to_utf8(const wchar_t *s, int slen) {
     auto len = WideCharToMultiByte(CP_UTF8, 0, s, slen, NULL, 0, NULL, NULL);
     if (!len) return NULL;
 
@@ -589,6 +589,11 @@ bool Fs_Watcher::initiate_wait() {
     return true;
 }
 
+bool delete_file(ccstr path) {
+    SCOPED_FRAME();
+    return DeleteFileW(to_wide(path));
+}
+
 bool Fs_Watcher::next_event(Fs_Event *event) {
     if (!has_more) {
         DWORD bytes_read = 0;
@@ -612,7 +617,7 @@ bool Fs_Watcher::next_event(Fs_Event *event) {
     cp_strcpy(
         event->filepath,
         _countof(event->filepath),
-        to_utf8(info->FileName, info->FileNameLength / sizeof(WCHAR)),
+        to_utf8(info->FileName, info->FileNameLength / sizeof(WCHAR))
     );
 
     if (!info->NextEntryOffset)
@@ -791,6 +796,7 @@ bool move_file_atomically(ccstr src, ccstr dest) {
     return ReplaceFileW(wdest, wsrc, NULL, REPLACEFILE_IGNORE_MERGE_ERRORS, NULL, NULL);
 }
 
+/*
 int charset_to_win32_enum(Charset_Type t) {
     switch (t) {
     case CS_ENGLISH: return ANSI_CHARSET;
@@ -853,6 +859,7 @@ void *read_font_data_from_first_found(s32 *plen, Charset_Type charset, ...) {
         *plen = len;
     return font_data;
 }
+*/
 
 Ask_User_Result message_box(ccstr text, ccstr title, int flags) {
     SCOPED_FRAME();
@@ -929,4 +936,58 @@ bool touch_file(ccstr path) {
     return true;
 }
 
-#endif
+int CALLBACK enum_fonts_callback(const LOGFONTW *lf, const TEXTMETRICW*, DWORD type, LPARAM param) {
+    if (type & TRUETYPE_FONTTYPE) {
+        auto out = (List<ccstr>*)param;
+        out->append(to_utf8(lf->lfFaceName));
+    }
+    return 1;
+}
+
+bool list_all_fonts(List<ccstr> *out) {
+    LOGFONTW lf; ptr0(&lf);
+    lf.lfCharSet = DEFAULT_CHARSET;
+    lf.lfFaceName[0] = L'\0';
+    lf.lfPitchAndFamily = 0;
+
+    auto hdc = GetDC(NULL);
+    if (!hdc) return false;
+    defer { ReleaseDC(NULL, hdc); };
+
+    // i still don't really get how the return value of this works
+    // like what if it finds nothing?
+    EnumFontFamiliesExW(hdc, &lf, enum_fonts_callback, (LPARAM)out, 0);
+    return true;
+}
+
+// allocates font data with malloc, needs to be freed.
+bool load_font_data_by_name(ccstr name, char** data, u32 *len) {
+    auto hdc = CreateDCW(L"DISPLAY", NULL, NULL, NULL);
+    if (!hdc) return false;
+    defer { ReleaseDC(NULL, hdc); };
+
+    LOGFONTW lf; ptr0(&lf);
+    if (wcscpy_s(lf.lfFaceName, _countof(lf.lfFaceName), to_wide(name)) != 0)
+        return false;
+
+    auto hfont = CreateFontIndirectW(&lf);
+    if (!hfont) return false;
+    defer { DeleteObject(hfont); };
+
+    if (!SelectObject(hdc, hfont)) return false;
+
+    auto datalen = GetFontData(hdc, 0, 0, NULL, 0);
+    if (datalen == GDI_ERROR) return false;
+
+    auto fontdata = (char*)malloc(datalen); 
+    if (GetFontData(hdc, 0, 0, fontdata, datalen) == GDI_ERROR) {
+        free(fontdata);
+        return false;
+    }
+
+    *data = fontdata;
+    *len = datalen;
+    return true;
+}
+
+#endif // OS_WINDOWS

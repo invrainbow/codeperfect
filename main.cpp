@@ -32,6 +32,7 @@
 #include "fonts.hpp"
 #include "icons.h"
 #include "binaries.h"
+#include <GL/wglew.h>
 
 static const char WINDOW_TITLE[] = "CodePerfect 95";
 
@@ -625,7 +626,7 @@ void handle_window_event(Window_Event *it) {
                 if (keymods == CP_MOD_CTRL || keymods == (CP_MOD_CTRL | CP_MOD_SHIFT)) {
                     break;
                 }
-#if OS_WIN
+#if OS_WINDOWS
                 break;
 #else
                 handle_tab();
@@ -1073,6 +1074,9 @@ int main(int argc, char **argv) {
         if (err != GLEW_OK)
             return error("unable to init GLEW: %s", glewGetErrorString(err)), EXIT_FAILURE;
     }
+
+    wglSwapIntervalEXT(0);
+    wglGetCurrentDC(); // test that this works
 
     world.window->swap_interval(0);
 

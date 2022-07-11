@@ -7,8 +7,8 @@
 
 #include "window.hpp"
 
-int scan_to_key_table[256];
-int key_to_scan_table[CP_KEY_LAST+1];
+static int scan_to_key_table[256];
+static int key_to_scan_table[CP_KEY_LAST+1];
 
 struct Winctx {
     id helper;
@@ -16,11 +16,6 @@ struct Winctx {
     id keyup_monitor;
     CGEventSourceRef event_source;
 } winctx;
-
-void init_keyscan_pair(int scan, int key) {
-    scan_to_key_table[scan] = key;
-    key_to_scan_table[key] = scan;
-}
 
 @interface CPApplicationDelegate : NSObject <NSApplicationDelegate>
 @end
@@ -97,123 +92,126 @@ void create_menu_bar() {
 bool window_init_everything() {
     ptr0(&winctx);
 
-    for (int i = 0; i < _countof(scan_to_key_table); i++)
-        scan_to_key_table[i] = CP_KEY_UNKNOWN;
+    memset(scan_to_key_table, -1, sizeof(scan_to_key_table));
+    memset(key_to_scan_table, -1, sizeof(key_to_scan_table));
 
-    for (int i = 0; i < _countof(key_to_scan_table); i++)
-        key_to_scan_table[i] = CP_KEY_UNKNOWN;
+    scan_to_key_table[0x1D] = CP_KEY_0;
+    scan_to_key_table[0x12] = CP_KEY_1;
+    scan_to_key_table[0x13] = CP_KEY_2;
+    scan_to_key_table[0x14] = CP_KEY_3;
+    scan_to_key_table[0x15] = CP_KEY_4;
+    scan_to_key_table[0x17] = CP_KEY_5;
+    scan_to_key_table[0x16] = CP_KEY_6;
+    scan_to_key_table[0x1A] = CP_KEY_7;
+    scan_to_key_table[0x1C] = CP_KEY_8;
+    scan_to_key_table[0x19] = CP_KEY_9;
+    scan_to_key_table[0x00] = CP_KEY_A;
+    scan_to_key_table[0x0B] = CP_KEY_B;
+    scan_to_key_table[0x08] = CP_KEY_C;
+    scan_to_key_table[0x02] = CP_KEY_D;
+    scan_to_key_table[0x0E] = CP_KEY_E;
+    scan_to_key_table[0x03] = CP_KEY_F;
+    scan_to_key_table[0x05] = CP_KEY_G;
+    scan_to_key_table[0x04] = CP_KEY_H;
+    scan_to_key_table[0x22] = CP_KEY_I;
+    scan_to_key_table[0x26] = CP_KEY_J;
+    scan_to_key_table[0x28] = CP_KEY_K;
+    scan_to_key_table[0x25] = CP_KEY_L;
+    scan_to_key_table[0x2E] = CP_KEY_M;
+    scan_to_key_table[0x2D] = CP_KEY_N;
+    scan_to_key_table[0x1F] = CP_KEY_O;
+    scan_to_key_table[0x23] = CP_KEY_P;
+    scan_to_key_table[0x0C] = CP_KEY_Q;
+    scan_to_key_table[0x0F] = CP_KEY_R;
+    scan_to_key_table[0x01] = CP_KEY_S;
+    scan_to_key_table[0x11] = CP_KEY_T;
+    scan_to_key_table[0x20] = CP_KEY_U;
+    scan_to_key_table[0x09] = CP_KEY_V;
+    scan_to_key_table[0x0D] = CP_KEY_W;
+    scan_to_key_table[0x07] = CP_KEY_X;
+    scan_to_key_table[0x10] = CP_KEY_Y;
+    scan_to_key_table[0x06] = CP_KEY_Z;
+    scan_to_key_table[0x27] = CP_KEY_APOSTROPHE;
+    scan_to_key_table[0x2A] = CP_KEY_BACKSLASH;
+    scan_to_key_table[0x2B] = CP_KEY_COMMA;
+    scan_to_key_table[0x18] = CP_KEY_EQUAL;
+    scan_to_key_table[0x32] = CP_KEY_GRAVE_ACCENT;
+    scan_to_key_table[0x21] = CP_KEY_LEFT_BRACKET;
+    scan_to_key_table[0x1B] = CP_KEY_MINUS;
+    scan_to_key_table[0x2F] = CP_KEY_PERIOD;
+    scan_to_key_table[0x1E] = CP_KEY_RIGHT_BRACKET;
+    scan_to_key_table[0x29] = CP_KEY_SEMICOLON;
+    scan_to_key_table[0x2C] = CP_KEY_SLASH;
+    scan_to_key_table[0x0A] = CP_KEY_WORLD_1;
+    scan_to_key_table[0x33] = CP_KEY_BACKSPACE;
+    scan_to_key_table[0x39] = CP_KEY_CAPS_LOCK;
+    scan_to_key_table[0x75] = CP_KEY_DELETE;
+    scan_to_key_table[0x7D] = CP_KEY_DOWN;
+    scan_to_key_table[0x77] = CP_KEY_END;
+    scan_to_key_table[0x24] = CP_KEY_ENTER;
+    scan_to_key_table[0x35] = CP_KEY_ESCAPE;
+    scan_to_key_table[0x7A] = CP_KEY_F1;
+    scan_to_key_table[0x78] = CP_KEY_F2;
+    scan_to_key_table[0x63] = CP_KEY_F3;
+    scan_to_key_table[0x76] = CP_KEY_F4;
+    scan_to_key_table[0x60] = CP_KEY_F5;
+    scan_to_key_table[0x61] = CP_KEY_F6;
+    scan_to_key_table[0x62] = CP_KEY_F7;
+    scan_to_key_table[0x64] = CP_KEY_F8;
+    scan_to_key_table[0x65] = CP_KEY_F9;
+    scan_to_key_table[0x6D] = CP_KEY_F10;
+    scan_to_key_table[0x67] = CP_KEY_F11;
+    scan_to_key_table[0x6F] = CP_KEY_F12;
+    scan_to_key_table[0x69] = CP_KEY_PRINT_SCREEN;
+    scan_to_key_table[0x6B] = CP_KEY_F14;
+    scan_to_key_table[0x71] = CP_KEY_F15;
+    scan_to_key_table[0x6A] = CP_KEY_F16;
+    scan_to_key_table[0x40] = CP_KEY_F17;
+    scan_to_key_table[0x4F] = CP_KEY_F18;
+    scan_to_key_table[0x50] = CP_KEY_F19;
+    scan_to_key_table[0x5A] = CP_KEY_F20;
+    scan_to_key_table[0x73] = CP_KEY_HOME;
+    scan_to_key_table[0x72] = CP_KEY_INSERT;
+    scan_to_key_table[0x7B] = CP_KEY_LEFT;
+    scan_to_key_table[0x3A] = CP_KEY_LEFT_ALT;
+    scan_to_key_table[0x3B] = CP_KEY_LEFT_CONTROL;
+    scan_to_key_table[0x38] = CP_KEY_LEFT_SHIFT;
+    scan_to_key_table[0x37] = CP_KEY_LEFT_SUPER;
+    scan_to_key_table[0x6E] = CP_KEY_MENU;
+    scan_to_key_table[0x47] = CP_KEY_NUM_LOCK;
+    scan_to_key_table[0x79] = CP_KEY_PAGE_DOWN;
+    scan_to_key_table[0x74] = CP_KEY_PAGE_UP;
+    scan_to_key_table[0x7C] = CP_KEY_RIGHT;
+    scan_to_key_table[0x3D] = CP_KEY_RIGHT_ALT;
+    scan_to_key_table[0x3E] = CP_KEY_RIGHT_CONTROL;
+    scan_to_key_table[0x3C] = CP_KEY_RIGHT_SHIFT;
+    scan_to_key_table[0x36] = CP_KEY_RIGHT_SUPER;
+    scan_to_key_table[0x31] = CP_KEY_SPACE;
+    scan_to_key_table[0x30] = CP_KEY_TAB;
+    scan_to_key_table[0x7E] = CP_KEY_UP;
+    scan_to_key_table[0x52] = CP_KEY_KP_0;
+    scan_to_key_table[0x53] = CP_KEY_KP_1;
+    scan_to_key_table[0x54] = CP_KEY_KP_2;
+    scan_to_key_table[0x55] = CP_KEY_KP_3;
+    scan_to_key_table[0x56] = CP_KEY_KP_4;
+    scan_to_key_table[0x57] = CP_KEY_KP_5;
+    scan_to_key_table[0x58] = CP_KEY_KP_6;
+    scan_to_key_table[0x59] = CP_KEY_KP_7;
+    scan_to_key_table[0x5B] = CP_KEY_KP_8;
+    scan_to_key_table[0x5C] = CP_KEY_KP_9;
+    scan_to_key_table[0x45] = CP_KEY_KP_ADD;
+    scan_to_key_table[0x41] = CP_KEY_KP_DECIMAL;
+    scan_to_key_table[0x4B] = CP_KEY_KP_DIVIDE;
+    scan_to_key_table[0x4C] = CP_KEY_KP_ENTER;
+    scan_to_key_table[0x51] = CP_KEY_KP_EQUAL;
+    scan_to_key_table[0x43] = CP_KEY_KP_MULTIPLY;
+    scan_to_key_table[0x4E] = CP_KEY_KP_SUBTRACT;
 
-    init_keyscan_pair(0x1D, CP_KEY_0);
-    init_keyscan_pair(0x12, CP_KEY_1);
-    init_keyscan_pair(0x13, CP_KEY_2);
-    init_keyscan_pair(0x14, CP_KEY_3);
-    init_keyscan_pair(0x15, CP_KEY_4);
-    init_keyscan_pair(0x17, CP_KEY_5);
-    init_keyscan_pair(0x16, CP_KEY_6);
-    init_keyscan_pair(0x1A, CP_KEY_7);
-    init_keyscan_pair(0x1C, CP_KEY_8);
-    init_keyscan_pair(0x19, CP_KEY_9);
-    init_keyscan_pair(0x00, CP_KEY_A);
-    init_keyscan_pair(0x0B, CP_KEY_B);
-    init_keyscan_pair(0x08, CP_KEY_C);
-    init_keyscan_pair(0x02, CP_KEY_D);
-    init_keyscan_pair(0x0E, CP_KEY_E);
-    init_keyscan_pair(0x03, CP_KEY_F);
-    init_keyscan_pair(0x05, CP_KEY_G);
-    init_keyscan_pair(0x04, CP_KEY_H);
-    init_keyscan_pair(0x22, CP_KEY_I);
-    init_keyscan_pair(0x26, CP_KEY_J);
-    init_keyscan_pair(0x28, CP_KEY_K);
-    init_keyscan_pair(0x25, CP_KEY_L);
-    init_keyscan_pair(0x2E, CP_KEY_M);
-    init_keyscan_pair(0x2D, CP_KEY_N);
-    init_keyscan_pair(0x1F, CP_KEY_O);
-    init_keyscan_pair(0x23, CP_KEY_P);
-    init_keyscan_pair(0x0C, CP_KEY_Q);
-    init_keyscan_pair(0x0F, CP_KEY_R);
-    init_keyscan_pair(0x01, CP_KEY_S);
-    init_keyscan_pair(0x11, CP_KEY_T);
-    init_keyscan_pair(0x20, CP_KEY_U);
-    init_keyscan_pair(0x09, CP_KEY_V);
-    init_keyscan_pair(0x0D, CP_KEY_W);
-    init_keyscan_pair(0x07, CP_KEY_X);
-    init_keyscan_pair(0x10, CP_KEY_Y);
-    init_keyscan_pair(0x06, CP_KEY_Z);
-    init_keyscan_pair(0x27, CP_KEY_APOSTROPHE);
-    init_keyscan_pair(0x2A, CP_KEY_BACKSLASH);
-    init_keyscan_pair(0x2B, CP_KEY_COMMA);
-    init_keyscan_pair(0x18, CP_KEY_EQUAL);
-    init_keyscan_pair(0x32, CP_KEY_GRAVE_ACCENT);
-    init_keyscan_pair(0x21, CP_KEY_LEFT_BRACKET);
-    init_keyscan_pair(0x1B, CP_KEY_MINUS);
-    init_keyscan_pair(0x2F, CP_KEY_PERIOD);
-    init_keyscan_pair(0x1E, CP_KEY_RIGHT_BRACKET);
-    init_keyscan_pair(0x29, CP_KEY_SEMICOLON);
-    init_keyscan_pair(0x2C, CP_KEY_SLASH);
-    init_keyscan_pair(0x0A, CP_KEY_WORLD_1);
-    init_keyscan_pair(0x33, CP_KEY_BACKSPACE);
-    init_keyscan_pair(0x39, CP_KEY_CAPS_LOCK);
-    init_keyscan_pair(0x75, CP_KEY_DELETE);
-    init_keyscan_pair(0x7D, CP_KEY_DOWN);
-    init_keyscan_pair(0x77, CP_KEY_END);
-    init_keyscan_pair(0x24, CP_KEY_ENTER);
-    init_keyscan_pair(0x35, CP_KEY_ESCAPE);
-    init_keyscan_pair(0x7A, CP_KEY_F1);
-    init_keyscan_pair(0x78, CP_KEY_F2);
-    init_keyscan_pair(0x63, CP_KEY_F3);
-    init_keyscan_pair(0x76, CP_KEY_F4);
-    init_keyscan_pair(0x60, CP_KEY_F5);
-    init_keyscan_pair(0x61, CP_KEY_F6);
-    init_keyscan_pair(0x62, CP_KEY_F7);
-    init_keyscan_pair(0x64, CP_KEY_F8);
-    init_keyscan_pair(0x65, CP_KEY_F9);
-    init_keyscan_pair(0x6D, CP_KEY_F10);
-    init_keyscan_pair(0x67, CP_KEY_F11);
-    init_keyscan_pair(0x6F, CP_KEY_F12);
-    init_keyscan_pair(0x69, CP_KEY_PRINT_SCREEN);
-    init_keyscan_pair(0x6B, CP_KEY_F14);
-    init_keyscan_pair(0x71, CP_KEY_F15);
-    init_keyscan_pair(0x6A, CP_KEY_F16);
-    init_keyscan_pair(0x40, CP_KEY_F17);
-    init_keyscan_pair(0x4F, CP_KEY_F18);
-    init_keyscan_pair(0x50, CP_KEY_F19);
-    init_keyscan_pair(0x5A, CP_KEY_F20);
-    init_keyscan_pair(0x73, CP_KEY_HOME);
-    init_keyscan_pair(0x72, CP_KEY_INSERT);
-    init_keyscan_pair(0x7B, CP_KEY_LEFT);
-    init_keyscan_pair(0x3A, CP_KEY_LEFT_ALT);
-    init_keyscan_pair(0x3B, CP_KEY_LEFT_CONTROL);
-    init_keyscan_pair(0x38, CP_KEY_LEFT_SHIFT);
-    init_keyscan_pair(0x37, CP_KEY_LEFT_SUPER);
-    init_keyscan_pair(0x6E, CP_KEY_MENU);
-    init_keyscan_pair(0x47, CP_KEY_NUM_LOCK);
-    init_keyscan_pair(0x79, CP_KEY_PAGE_DOWN);
-    init_keyscan_pair(0x74, CP_KEY_PAGE_UP);
-    init_keyscan_pair(0x7C, CP_KEY_RIGHT);
-    init_keyscan_pair(0x3D, CP_KEY_RIGHT_ALT);
-    init_keyscan_pair(0x3E, CP_KEY_RIGHT_CONTROL);
-    init_keyscan_pair(0x3C, CP_KEY_RIGHT_SHIFT);
-    init_keyscan_pair(0x36, CP_KEY_RIGHT_SUPER);
-    init_keyscan_pair(0x31, CP_KEY_SPACE);
-    init_keyscan_pair(0x30, CP_KEY_TAB);
-    init_keyscan_pair(0x7E, CP_KEY_UP);
-    init_keyscan_pair(0x52, CP_KEY_KP_0);
-    init_keyscan_pair(0x53, CP_KEY_KP_1);
-    init_keyscan_pair(0x54, CP_KEY_KP_2);
-    init_keyscan_pair(0x55, CP_KEY_KP_3);
-    init_keyscan_pair(0x56, CP_KEY_KP_4);
-    init_keyscan_pair(0x57, CP_KEY_KP_5);
-    init_keyscan_pair(0x58, CP_KEY_KP_6);
-    init_keyscan_pair(0x59, CP_KEY_KP_7);
-    init_keyscan_pair(0x5B, CP_KEY_KP_8);
-    init_keyscan_pair(0x5C, CP_KEY_KP_9);
-    init_keyscan_pair(0x45, CP_KEY_KP_ADD);
-    init_keyscan_pair(0x41, CP_KEY_KP_DECIMAL);
-    init_keyscan_pair(0x4B, CP_KEY_KP_DIVIDE);
-    init_keyscan_pair(0x4C, CP_KEY_KP_ENTER);
-    init_keyscan_pair(0x51, CP_KEY_KP_EQUAL);
-    init_keyscan_pair(0x43, CP_KEY_KP_MULTIPLY);
-    init_keyscan_pair(0x4E, CP_KEY_KP_SUBTRACT);
+    for (int i = 0; i < _countof(scan_to_key_table); i++) {
+        auto it = scan_to_key_table[i];
+        if (it != CP_KEY_UNKNOWN)
+            key_to_scan_table[it] = i;
+    }
 
     @autoreleasepool {
         winctx.helper = [[CPHelper alloc] init];
@@ -255,7 +253,6 @@ bool window_init_everything() {
             [NSApp run];
 
         [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
-
         return true;
     }
 }
@@ -352,7 +349,7 @@ const NSRange kEmptyRange = { NSNotFound, 0 };
     auto frame_r = [window->ns_view convertRectToBacking:win_r];
 
     if (frame_r.size.width != window->frame_w || frame_r.size.height != window->frame_h) {
-        window->frame_w  = frame_r.size.width;
+        window->frame_w = frame_r.size.width;
         window->frame_h = frame_r.size.height;
 
         window->dispatch_event(WINEV_FRAME_SIZE, [&](auto ev) {
@@ -362,7 +359,7 @@ const NSRange kEmptyRange = { NSNotFound, 0 };
     }
 
     if (win_r.size.width != window->window_w || win_r.size.height != window->window_h) {
-        window->window_w  = win_r.size.width;
+        window->window_w = win_r.size.width;
         window->window_h = win_r.size.height;
 
         window->dispatch_event(WINEV_WINDOW_SIZE, [&](auto ev) {
@@ -462,9 +459,6 @@ const NSRange kEmptyRange = { NSNotFound, 0 };
         ev->mouse_move.x = pos.x;
         ev->mouse_move.y = rect.size.height - pos.y;
     });
-
-    window->ns_cursor_warp_dx = 0;
-    window->ns_cursor_warp_dy = 0;
 }
 
 - (void)rightMouseDown:(NSEvent *)event {
@@ -503,9 +497,9 @@ const NSRange kEmptyRange = { NSNotFound, 0 };
     auto xscale = framerect.size.width / rect.size.width;
     auto yscale = framerect.size.height / rect.size.height;
 
-    if (xscale != window->ns_xscale || yscale != window->ns_yscale) {
-        window->ns_xscale = xscale;
-        window->ns_yscale = yscale;
+    if (xscale != window->xscale || yscale != window->yscale) {
+        window->xscale = xscale;
+        window->yscale = yscale;
 
         window->dispatch_event(WINEV_WINDOW_SCALE, [&](auto ev) {
             ev->window_scale.xscale = xscale;
@@ -514,7 +508,7 @@ const NSRange kEmptyRange = { NSNotFound, 0 };
     }
 
     if (framerect.size.width != window->frame_w || framerect.size.height != window->frame_h) {
-        window->frame_w  = framerect.size.width;
+        window->frame_w = framerect.size.width;
         window->frame_h = framerect.size.height;
 
         window->dispatch_event(WINEV_FRAME_SIZE, [&](auto ev) {
@@ -633,11 +627,7 @@ const NSRange kEmptyRange = { NSNotFound, 0 };
 }
 
 /*
-// TODO(bh): implement this if we need drag and drop, i guess
-
 - (NSDragOperation)draggingEntered:(id <NSDraggingInfo>)sender {
-    // HACK: We don't know what to say here because we don't know what the
-    //       application wants to do with the paths
     return NSDragOperationGeneric;
 }
 
@@ -747,6 +737,10 @@ float cocoa_transform_y(float y) {
     return CGDisplayBounds(CGMainDisplayID()).size.height - y - 1;
 }
 
+void Window::dispatch_mouse_event_cocoa(Mouse_Button button, Press_Action action, NSEvent *event) {
+    dispatch_mouse_event(button, action, translate_keymod([event modifierFlags]));
+}
+
 void Window::make_context_current() {
     @autoreleasepool {
         [nsgl_object makeCurrentContext];
@@ -813,24 +807,10 @@ bool Window::create_nsgl_context() {
     return true;
 }
 
-bool Window::init(int width, int height, ccstr title) {
-    ptr0(this);
-    mem.init();
-    {
-        SCOPED_MEM(&mem);
-        events.init();
-    }
-
+bool Window::init_os_specific(int width, int height, ccstr title) {
     @autoreleasepool {
-        if (!create_actual_window(width, height, title))
-            return false;
-
-        // init nsgl
-        // create nsgl context
-
-        if (!create_nsgl_context())
-            return false;
-
+        if (!create_actual_window(width, height, title)) return false;
+        if (!create_nsgl_context()) return false;
         make_context_current();
 
         [ns_window orderFront:nil];
@@ -854,7 +834,7 @@ void Window::cleanup() {
         [ns_window close];
         ns_window = nil;
 
-        // HACK: Allow Cocoa to catch up before returning
+        // allow cocoa to catch up before returning
         poll_window_events();
     }
 
@@ -865,8 +845,6 @@ void Window::set_title(ccstr title) {
     @autoreleasepool {
         NSString* string = @(title);
         [ns_window setTitle:string];
-        // HACK: Set the miniwindow title explicitly as setTitle: doesn't update it
-        //       if the window lacks NSWindowStyleMaskTitled
         [ns_window setMiniwindowTitle:string];
     }
 }
@@ -928,6 +906,7 @@ void Window::get_content_scale(float* xscale, float* yscale) {
     }
 }
 
+/*
 void Window::restore() {
     @autoreleasepool {
         if ([ns_window isMiniaturized])
@@ -965,13 +944,11 @@ void Window::request_attention() {
 void Window::focus() {
     @autoreleasepool {
         // Make us the active application
-        // HACK: This is here to prevent applications using only hidden windows from
-        //       being activated, but should probably not be done every time any
-        //       window is shown
         [NSApp activateIgnoringOtherApps:YES];
         [ns_window makeKeyAndOrderFront:nil];
     }
 }
+*/
 
 bool Window::is_focused() {
     @autoreleasepool {
@@ -1124,7 +1101,7 @@ bool Window::create_actual_window(int width, int height, ccstr title) {
         [ns_window setTabbingMode:NSWindowTabbingModeDisallowed];
 #endif
 
-    get_size(&ns_width, &ns_height);
-    get_framebuffer_size(&ns_framewidth, &ns_frameheight);
+    get_size(&window_w, &window_h);
+    get_framebuffer_size(&frame_w, &frame_h);
     return true;
 }

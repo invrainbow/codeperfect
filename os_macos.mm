@@ -155,3 +155,68 @@ bool let_user_select_file(Select_File_Opts* opts) {
 void write_to_syslog(ccstr s) {
     NSLog(@"%s", s);
 }
+
+bool list_all_fonts(List<ccstr> *out) {
+    auto collection = CTFontCollectionCreateFromAvailableFonts(NULL);
+    defer { CFRelease(collection); };
+
+    auto descriptors = CTFontCollectionCreateMatchingFontDescriptors(collection);
+    defer { CFRelease(descriptors); };
+
+    int len = CFArrayGetCount(descriptors);
+    for (int i = 0; i < len; i++) {
+        auto it = (CTFontDescriptorRef)CFArrayGetValueAtIndex(descriptors, i);
+
+        auto name = CTFontDescriptorCopyAttribute(it, kCTFontNameAttribute);
+        if (!name) continue;
+        defer { CFRelease(name); };
+
+        auto url = (CFURLRef)CTFontDescriptorCopyAttribute(it, kCTFontURLAttribute);
+        if (!url) continue;
+        defer { CFRelease(url); };
+
+        auto cname = cfstring_to_ccstr((CFStringRef)name);
+        if (streq(cname, "LastResort")) continue;
+        if (cname[0] == '.') continue;
+
+        auto filepath = CFURLCopyFileSystemPath(url, kCFURLPOSIXPathStyle);
+        if (!filepath) continue;
+        defer { CFRelease(filepath); };
+
+        auto fileext = CFURLCopyPathExtension(url);
+        if (!fileext) continue;
+        defer { CFRelease(fileext); };
+
+        auto cfileext = cfstring_to_ccstr(fileext);
+        if (!streq(cfileext, "ttf") && !streq(cfileext, "ttc")) continue;
+
+        out->append(cname);
+    }
+
+    return true;
+}
+
+bool load_font_data_by_name(ccstr name, char** data, u32 *len) {
+    auto cf_font_name = CFStringCreateWithCString(NULL, name, kCFStringEncodingUTF8);
+
+    auto ctfont = (void*)CTFontCreateWithName(cf_font_name, 12, NULL);
+    if (!ctfont) return false;
+
+    auto url = (CFURLRef)CTFontCopyAttribute((CTFontRef)ctfont, kCTFontURLAttribute);
+    if (!url) return false;
+    defer { CFRelease(url); };
+
+    auto cffilepath = CFURLCopyFileSystemPath(url, kCFURLPOSIXPathStyle);
+    if (!cffilepath) return false;
+    defer { CFRelease(cffilepath); };
+
+    filepath = cfstring_to_ccstr(cffilepath);
+
+    auto fm = map_file_into_memory(filepath);
+    if (!fm) return false;
+    defer { fm->cleanup(); };
+    
+    auto ret = malloc(fm->len);
+    memcpy(ret, fm->data, fm->len);
+    return ret;
+}

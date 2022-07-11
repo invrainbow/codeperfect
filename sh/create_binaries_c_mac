@@ -1,5 +1,0 @@
-#!/bin/bash
-truncate -s 0 binaries.c
-for file in "$@"; do
-    xxd -i $file >> binaries.c
-done

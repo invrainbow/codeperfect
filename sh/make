@@ -3,19 +3,18 @@
 set -e
 
 os=$(sh/detect_os)
-
 cmd="make"
 nprocs=4
 
-if [[ $os = windows ]]; then
+if [ $os = "windows" ]; then
     nprocs=$NUMBER_OF_PROCESSORS
-elif [[ $os = mac ]]; then
+elif [ $os = "mac" ]; then
     nprocs=$(sysctl hw.ncpu | grep -o '[0-9]\+')
     if [ "$(sh/detect_m1)" = "1" ]; then
         cmd="arch -arm64 $cmd"
     fi
-elif [[ $os = linux ]]; then
-    # TODO
+elif [ $os = "linux" ]; then
+    echo todo
 fi
 
-OSTYPE=mac $cmd -j $nprocs $@
+OSTYPE=$os $cmd -j $nprocs $@

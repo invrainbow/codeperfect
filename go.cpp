@@ -11,7 +11,7 @@
 #include "unicode.hpp"
 #include "enums.hpp"
 
-#if OS_WIN
+#if OS_WINDOWS
 #include <windows.h>
 #elif OS_MAC
 #include <dlfcn.h>
@@ -4980,8 +4980,8 @@ void Go_Indexer::list_struct_fields(Goresult *type, List<Goresult> *ret) {
     }
 }
 
-bool Go_Indexer::list_interface_methods(Goresult *interface, List<Goresult> *out) {
-    auto gotype = interface->gotype;
+bool Go_Indexer::list_interface_methods(Goresult *interface_type, List<Goresult> *out) {
+    auto gotype = interface_type->gotype;
     if (gotype->type != GOTYPE_INTERFACE) return false;
 
     auto specs = gotype->interface_specs;
@@ -4992,23 +4992,23 @@ bool Go_Indexer::list_interface_methods(Goresult *interface, List<Goresult> *out
 
         auto method = it.field;
         if (method->field_is_embedded) {
-            auto rres = resolve_type(method->gotype, interface->ctx);
+            auto rres = resolve_type(method->gotype, interface_type->ctx);
             if (!rres) return false;
             if (!list_interface_methods(rres, out)) return false;
         } else {
             if (method->gotype->type != GOTYPE_FUNC) return false;
-            out->append(interface->wrap(method));
+            out->append(interface_type->wrap(method));
         }
     }
 
     return true;
 }
 
-List<Goresult> *Go_Indexer::list_interface_methods(Goresult *interface) {
+List<Goresult> *Go_Indexer::list_interface_methods(Goresult *interface_type) {
     Frame frame;
 
     auto ret = alloc_list<Goresult>();
-    if (!list_interface_methods(interface, ret)) {
+    if (!list_interface_methods(interface_type, ret)) {
         frame.restore();
         return NULL;
     }

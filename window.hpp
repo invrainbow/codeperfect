@@ -2,8 +2,12 @@
 
 #include "os.hpp"
 #include "common.hpp"
-#include <Carbon/Carbon.h>
 #include "objc_id_shim.hpp"
+
+#if OS_WINDOWS
+#elif OS_MAC
+#   include <Carbon/Carbon.h>
+#endif
 
 enum Window_Event_Type {
     WINEV_WINDOW_SIZE,
@@ -22,6 +26,9 @@ enum Mouse_Button {
     CP_MOUSE_LEFT = 0,
     CP_MOUSE_RIGHT = 1,
     CP_MOUSE_MIDDLE = 2,
+    CP_MOUSE_BUTTON_4 = 3,
+    CP_MOUSE_BUTTON_5 = 4,
+    __CP_MOUSE_COUNT,
 };
 
 enum Press_Action {
@@ -212,7 +219,7 @@ enum Key {
     CP_KEY_RIGHT_ALT,
     CP_KEY_RIGHT_SUPER,
     CP_KEY_MENU,
-    CP_KEY_LAST,
+    __CP_KEY_COUNT,
 };
 
 #if OS_MAC
@@ -237,7 +244,11 @@ enum Cursor_Type {
 };
 
 struct Cursor {
+#if OS_WINDOWS
+    HCURSOR handle;
+#elif OS_MAC
     id object;
+#endif
     Cursor_Type type;
 
     bool init(Cursor_Type _type);
@@ -253,28 +264,40 @@ struct Window {
     int window_h;
     int frame_w;
     int frame_h;
+    float xscale;
+    float yscale;
 
     Pool mem;
     List<Window_Event> events;
+    
+    bool mouse_states[__CP_MOUSE_COUNT + 1];
+    bool key_states[__CP_KEY_COUNT + 1];
 
+    bool init(int width, int height, ccstr title) {
+        ptr0(this);
+        mem.init();
+        {
+            SCOPED_MEM(&mem);
+            events.init();
+        }
+        return init_os_specific(width, height, title);
+    }
+
+#if OS_WINDOWS
+    HWND win32_window;
+    ATOM win32_window_class;
+    HGLRC wgl_context; // what type?
+    HDC wgl_dc;
+    WCHAR win32_high_surrogate;
+#elif OS_MAC
     id ns_window;
     id ns_view;
     id ns_delegate;
     id ns_layer;
-    int ns_width;
-    int ns_height;
-    int ns_framewidth;
-    int ns_frameheight;
-    double ns_cursor_warp_dx;
-    double ns_cursor_warp_dy;
-    double ns_xscale;
-    double ns_yscale;
-
-    bool mouse_states[42];
-    bool key_states[CP_KEY_LAST + 1];
 
     id nsgl_object;
     id nsgl_pixel_format;
+#endif
 
     void dispatch_event(Window_Event_Type type, fn<void(Window_Event*)> cb) {
         Window_Event ev; ptr0(&ev);
@@ -292,14 +315,10 @@ struct Window {
         });
     }
 
-    void update_cursor_image();
-    void update_cursor_mode();
-    bool is_cursor_in_content_area();
+    bool init_os_specific(int width, int height, ccstr title);
     void make_context_current();
     void swap_buffers();
     void swap_interval(int interval);
-    bool create_nsgl_context();
-    bool init(int width, int height, ccstr title);
     void cleanup();
     void set_title(ccstr title);
     void get_pos(int* xpos, int* ypos);
@@ -308,16 +327,24 @@ struct Window {
     void set_size(int width, int height);
     void get_framebuffer_size(int* width, int* height);
     void get_content_scale(float* xscale, float* yscale);
-    void restore();
-    void maximize();
-    void show();
-    void hide();
-    void request_attention();
-    void focus();
     bool is_focused();
     void get_cursor_pos(double* xpos, double* ypos);
     void set_cursor(Cursor *_cursor);
+
+#if OS_WINDOWS
+    LRESULT callback(HWND hwnd, UINT msg, WPARAM w, LPARAM l);
+    void adjust_rect_using_windows_gayness(RECT *rect);
     bool create_actual_window(int width, int height, ccstr title);
+    bool create_wgl_context();
+    void dispatch_mouse_event_win32(Mouse_Button button, Press_Action action);
+#elif OS_MAC
+    void dispatch_mouse_event_cocoa(Mouse_Button button, Press_Action action, NSEvent *event);
+    bool is_cursor_in_content_area();
+    void update_cursor_mode();
+    void update_cursor_image();
+    bool create_actual_window(int width, int height, ccstr title);
+    bool create_nsgl_context();
+#endif
 };
 
 bool window_init_everything();

@@ -3,5 +3,4 @@
 #include "tree-sitter-go/src/scanner.c"
 #include "cwalk.c"
 
-#define GLEW_INCLUDE "glew.h"
 #include "glew.c"

@@ -1,8 +1,4 @@
-if has('win32')
-    let &makeprg = 'sh\build_windows.bat'
-elseif has('macunix')
-    let &makeprg = 'sh/build_macos'
-end
+let &makeprg = 'sh/build'
 
 nnoremap <Leader>b :Make<CR>
 

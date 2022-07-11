@@ -1,31 +1,19 @@
 #pragma once
 
-#define OS_WIN 0
-#define OS_MAC 0
-#define OS_LINUX 0
+#include "ostype.hpp"
 
-#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
-#   undef OS_WIN
-#   define OS_WIN 1
-#elif defined(__APPLE__)
-#   undef OS_MAC
-#   define OS_MAC 1
-#elif defined(__linux__)
-#   undef OS_LINUX
-#   define OS_LINUX 1
-#else
-#   error "what the fuck OS is this?"
-#endif
-
-#if OS_WIN
+#if OS_WINDOWS
 #   include "win32.hpp"
+#   include <direct.h>
+#   define getcwd _getcwd
 #elif OS_MAC
 #   include <pthread.h>
 #   include <errno.h>
 #   include <signal.h>
+#   include <unistd.h>
 #endif
 
-#if OS_WIN
+#if OS_WINDOWS
 #   define PATH_SEP '\\'
 #else
 #   define PATH_SEP '/'
@@ -38,7 +26,7 @@
 #endif
 
 #ifdef DEBUG_MODE
-#   if OS_WIN
+#   if OS_WINDOWS
 #       define BREAK_HERE DebugBreak()
 #   elif OS_MAC
 #       define BREAK_HERE raise(SIGSTOP)
@@ -67,7 +55,7 @@ struct Process {
     bool keep_open_after_exit;
     bool skip_shell; // don't run command through a shell
 
-#if OS_WIN
+#if OS_WINDOWS
     HANDLE stdin_w;
     HANDLE stdin_r;
     HANDLE stdout_w;
@@ -123,7 +111,7 @@ bool are_filepaths_same_file(ccstr path1, ccstr path2);
 bool are_filepaths_equal(ccstr a, ccstr b);
 
 struct Lock {
-#if OS_WIN
+#if OS_WINDOWS
     CRITICAL_SECTION lock;
 #elif OS_MAC
     pthread_mutex_t lock;
@@ -154,7 +142,7 @@ enum Check_Path_Result {
 
 Check_Path_Result check_path(ccstr path);
 
-#if OS_WIN
+#if OS_WINDOWS
 
 #define get_last_error() get_win32_error()
 #define get_specific_error(x) get_win32_error(x)
@@ -215,7 +203,7 @@ enum File_Result {
 #define FILE_SEEK_ERROR (u32)(-1)
 
 struct File {
-#if OS_WIN
+#if OS_WINDOWS
     HANDLE h;
 #elif OS_MAC
     int fd;
@@ -275,7 +263,7 @@ struct File_Mapping {
     i64 len;
     File_Mapping_Opts opts;
 
-#if OS_WIN
+#if OS_WINDOWS
     HANDLE file;
     HANDLE mapping;
     bool create_actual_file_mapping(LARGE_INTEGER size);
@@ -309,7 +297,7 @@ struct Fs_Event {
 struct Fs_Watcher {
     ccstr path;
 
-#if OS_WIN
+#if OS_WINDOWS
     FILE_NOTIFY_INFORMATION *buf;
     bool has_more;
     s32 offset;
@@ -388,3 +376,6 @@ int cpu_count();
 
 int get_unix_time();
 void write_to_syslog(ccstr s);
+
+bool list_all_fonts(List<ccstr> *out);
+bool load_font_data_by_name(ccstr name, char** data, u32 *len);

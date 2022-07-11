@@ -1,10 +1,6 @@
 #!/bin/bash
 
-query_vcvarsall() {
-  local envars=$*
+dir="/cygdrive/c/Program Files/Microsoft Visual Studio/2022/Community/VC/Auxiliary/Build"
+print_path_cmd="VcVarsAll.bat x64 && bash -c 'printenv PATH'"
 
-  (cd '/cygdrive/c/Program Files/Microsoft Visual Studio/2022/Community/VC/Auxiliary/Build' &&
-   VcVarsAll.bat x64 && bash -c 'printenv $envars'")
-}
-
-export PATH="$(query_vcvarsall PATH)"
+export PATH="$(cd "$dir" && cmd /c "$print_path_cmd" | tail -n 1)"

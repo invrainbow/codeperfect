@@ -1,3 +1,9 @@
+#define _USE_MATH_DEFINES
+#include <math.h>
+#include <inttypes.h>
+
+#include <fontconfig/fontconfig.h>
+
 #include "imgui.h"
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include "imgui_internal.h"
@@ -11,13 +17,8 @@
 #include "fzy_match.h"
 #include "defer.hpp"
 #include "enums.hpp"
-
-#define _USE_MATH_DEFINES // what the fuck is this lol
-#include <math.h>
 #include "tree_sitter_crap.hpp"
 #include "binaries.h"
-
-#include <inttypes.h>
 
 void open_ft_node(FT_Node *it);
 
@@ -733,10 +734,24 @@ void UI::render_ts_cursor(TSTreeCursor *curr, cur2 open_cur) {
 bool UI::init() {
     ptr0(this);
 
-    Frame frame;
-    if (!init_fonts()) {
-        frame.restore();
-        return false;
+    // init fonts
+    {
+        font_cache.init();
+        glyph_cache.init();
+
+        ccstr base_font_candidates[] = { "SF Mono", "Menlo", "Monaco", "Consolas", "Liberation Mono" };
+        For (base_font_candidates) {
+            base_font = acquire_font(it);
+            if (base_font) break;
+        }
+
+        if (!base_font) return false;
+
+        // init freetype
+        if (FT_Init_FreeType(&ft_library) != 0) return false;
+
+        // list available font names
+        if (!list_all_fonts(all_font_names)) return false;
     }
 
     editor_sizes.init(LIST_FIXED, _countof(_editor_sizes), _editor_sizes);
@@ -935,16 +950,16 @@ void UI::draw_char(vec2f* pos, List<uchar> *grapheme, vec4f color) {
 
     if (!grapheme->len) return;
 
-    auto utf8_chars = alloc_list<char>();
+    auto utf8chars = alloc_list<char>();
     For (*grapheme) {
         char buf[4];
         int len = uchar_to_cstr(it, buf);
         for (int i = 0; i < len; i++)
-            utf8_chars->append(buf[i]);
+            utf8chars->append(buf[i]);
     }
-    utf8_chars->append('\0');
+    utf8chars->append('\0');
 
-    ccstr utf8_str = utf8_chars->items;
+    ccstr utf8_str = utf8chars->items;
 
     auto glyph = glyph_cache.get(utf8_str);
     if (!glyph) {
@@ -953,27 +968,97 @@ void UI::draw_char(vec2f* pos, List<uchar> *grapheme, vec4f color) {
         auto font = find_font_for_grapheme(grapheme);
         if (!font) return; // TODO: handle error
 
-        auto rend = font->get_glyphs(grapheme);
-        if (!rend) return; // TODO: handle error
+        auto buf = hb_buffer_create();
+        if (!buf) return;
+        defer { hb_buffer_destroy(buf); };
 
-        auto box = rend->box;
+        hb_buffer_add_utf8(buf, utf8chars->items, utf8chars->len, 0, utf8chars->len);
+        hb_buffer_guess_segment_properties(buf);
+        hb_shape(font->hbfont, buf, NULL, 0);
+
+        unsigned int glyph_count;
+        auto glyph_info = hb_buffer_get_glyph_infos(buf, &glyph_count);
+        auto glyph_pos = hb_buffer_get_glyph_positions(buf, &glyph_count);
+
+        // we have glyph_info and glyph_pos, use stbtt to render them into a bitmap
+
+        struct Glyph_Info {
+            uchar glyph_index;
+            i32 ras_x;
+            u32 ras_w;
+            i32 ras_desc;
+            i32 ras_asc;
+            u32 ras_h;
+        };
+
+        auto glyphs = alloc_list<Glyph_Info>();
+        int cur_x = 0;
+        int cur_y = 0;
+
+        int by0 = -1;
+        int bx0 = -1;
+        int by1 = -1;
+        int bx1 = -1;
+
+        int highest_asc = 0;
+
+        for (u32 i = 0; i < glyph_count; i++) {
+            Glyph_Info gi;
+            gi.glyph_index = glyph_info[i].codepoint;
+
+            int x0, y0, x1, y1;
+            // this should theoretically never happen
+            if (!stbtt_GetGlyphBox(&font->stbfont, gi.glyph_index, &x0, &y0, &x1, &y1))
+                continue;
+
+            gi.ras_x = (i32)floor(x0);
+            gi.ras_w = (u32)ceil(x0 - gi.ras_x + (x1-x0));
+            gi.ras_desc = (i32)ceil(-y0);
+            gi.ras_asc = (i32)ceil((y1-y0) + y0);
+            gi.ras_h = (u32)(gi.ras_desc + gi.ras_asc);
+
+            if (gi.ras_asc > highest_asc) highest_asc = gi.ras_asc;
+            if (!gi.ras_w && !gi.ras_h) continue; // ???
+
+            glyphs->append(&gi);
+
+            auto &pos = glyph_pos[i];
+            auto left = cur_x + pos.x_offset + gi.ras_x;
+            auto top = cur_x + pos.y_offset;
+            auto right = left + gi.ras_w;
+            auto bottom = top + gi.ras_h;
+
+            if (x0 == -1 || left < x0)   x0 = left;
+            if (y0 == -1 || top < y0)    y0 = top;
+            if (x1 == -1 || right < x1)  x1 = right;
+            if (y1 == -1 || bottom < y1) y1 = bottom;
+
+            cur_x += pos.x_advance;
+            cur_y += pos.y_advance;
+        }
+
+        boxf box;
+        box.x = bx0;
+        box.y = by0;
+        box.w = bx1-bx0;
+        box.h = by1-by0;
+
         // idk when these would ever happen, but check anyway
-        if (box.w > ATLAS_SIZE) return;
-        if (box.h > ATLAS_SIZE) return;
+        if (box.w > ATLAS_SIZE || box.h > ATLAS_SIZE) return;
 
         auto atlas = atlases_head;
         bool xover, yover;
 
         if (atlas) {
             // reached the end of the row? move back to start
-            if (atlas->pos.x + rend->box.w + 1 > ATLAS_SIZE) {
+            if (atlas->pos.x + box.h + 1 > ATLAS_SIZE) {
                 atlas->pos.x = 0;
                 atlas->pos.y += atlas->tallest;
                 atlas->tallest = 0;
             }
 
-            xover = atlas->pos.x + rend->box.w > ATLAS_SIZE;
-            yover = atlas->pos.y + rend->box.h > ATLAS_SIZE;
+            xover = atlas->pos.x + box.w > ATLAS_SIZE;
+            yover = atlas->pos.y + box.h > ATLAS_SIZE;
         }
 
         if (!atlas || xover || yover) {
@@ -995,10 +1080,37 @@ void UI::draw_char(vec2f* pos, List<uchar> *grapheme, vec4f color) {
             atlas = atlases_head = a;
         }
 
-        // because of check above, glyph will never be uanble to fit in a fresh atlas
+        // because of check above, glyph will always fit in the new atlas here
 
         glBindTexture(GL_TEXTURE_2D, atlas->gl_texture_id);
-        glTexSubImage2D(GL_TEXTURE_2D, 0, atlas->pos.x, atlas->pos.y, box.w, box.h, GL_RED, GL_UNSIGNED_BYTE, rend->data);
+
+        // TODO: draw straight into the opengl texture
+        cur_x = atlas->pos.x;
+        cur_y = atlas->pos.y;
+
+        for (int i = 0; i < glyph_count; i++) {
+            auto &gi = glyphs->at(i);
+            auto &pos = glyph_pos[i];
+
+            auto x = cur_x + pos.x_offset - gi.ras_x;
+            auto y = cur_y + pos.y_offset + gi.ras_asc;
+
+            int width = 0, height = 0; //, xoff = 0, yoff = 0;
+
+            auto data = stbtt_GetGlyphBitmap(
+                &font->stbfont, 0,
+                stbtt_ScaleForPixelHeight(&font->stbfont, height),
+                gi.glyph_index, &width, &height, NULL, NULL // &xoff, &yoff
+            );
+            if (!data) continue; // or just exit?
+            defer { stbtt_FreeBitmap(data, NULL); };
+            // TODO: draw gi.glyph_index at (x, y) with size (gi.ras_w, gi.ras_h)
+
+            glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, width, height, GL_RED, GL_UNSIGNED_BYTE, data);
+
+            cur_x += pos.x_advance;
+            cur_y += pos.y_advance;
+        }
 
         boxf uv;
         uv.x = (float)atlas->pos.x / (float)ATLAS_SIZE;
@@ -6636,15 +6748,120 @@ bool UI::test_hover(boxf area, int id, ImGuiMouseCursor cursor) {
     return hover.ready;
 }
 
+Font* UI::acquire_font(ccstr name) {
+    bool found = false;
+    auto font = font_cache.get(name, &found);
+    if (found) return font;
+
+    SCOPED_MEM(&world.ui_mem);
+    Frame frame;
+
+    font = alloc_object(Font);
+    if (!font->init(name, CODE_FONT_SIZE)) {
+        frame.restore();
+        error("unable to acquire font: %s", name);
+        return NULL;
+    }
+
+    font_cache.set(cp_strdup(name), font);
+    return font;
+}
+
+Font* UI::find_font_for_grapheme(List<uchar> *grapheme) {
+    if (base_font->can_render_chars(grapheme))
+        return base_font;
+
+    auto pat = FcPatternCreate();
+    if (!pat) return error("FcPatternCreate failed"), (Font*)NULL;
+    defer { FcPatternDestroy(pat); };
+
+    auto charset = FcCharSetCreate();
+    if (!charset) return error("FcCharSetCreate failed"), (Font*)NULL;
+    defer { FcCharSetDestroy(charset); };
+
+    For (*grapheme)
+        if (!FcCharSetAddChar(charset, it))
+            return error("FcCharSetAddChar failed"), (Font*)NULL;
+
+    if (!FcPatternAddCharSet(pat, FC_CHARSET, charset))
+        return error("FcPatternAddCharSet failed"), (Font*)NULL;
+
+    if (!FcPatternAddString(pat, FC_FONTFORMAT, (const FcChar8*)"TrueType"))
+        return error("FcPatternAddString failed"), (Font*)NULL;
+
+    FcConfigSubstitute(NULL, pat, FcMatchPattern);
+    FcDefaultSubstitute(pat);
+
+    FcResult result;
+    auto match = FcFontMatch(NULL, pat, &result);
+    if (!match) return error("FcFontMatch failed"), (Font*)NULL;
+    defer { FcPatternDestroy(match); };
+
+    FcChar8 *uncasted_name = NULL;
+    if (FcPatternGetString(match, FC_POSTSCRIPT_NAME, 0, &uncasted_name) != FcResultMatch) {
+        error("unable to get postscript name for font");
+        return NULL;
+    }
+
+    auto name = cp_strdup((ccstr)uncasted_name);
+    if (streq(name, "LastResort")) {
+        bool found = false;
+        For (*all_font_names) {
+            auto font = acquire_font(it);
+            if (font->can_render_chars(grapheme))
+                return font;
+        }
+        return NULL;
+    }
+
+    auto font = acquire_font(name);
+    return font->can_render_chars(grapheme) ? font : NULL;
+}
+
 bool Font::init(ccstr font_name, u32 font_size) {
     ptr0(this);
     name = font_name;
     height = font_size;
 
-    if (!init_font()) {
-        cleanup();
+    if (!load_font_data_by_name(name, &font_data, &font_data_len))
         return false;
-    }
 
+    bool ok = false;
+    defer { if (!ok) cleanup(); };
+
+    // create harfbuzz crap
+    hbblob = hb_blob_create(font_data, font_data_len, HB_MEMORY_MODE_READONLY, NULL, NULL);
+    if (!hbblob) return false;
+    hbface = hb_face_create(hbblob, 0);
+    if (!hbface) return false;
+    hbfont = hb_font_create(hbface);
+    if (!hbfont) return false;
+
+    // create stbtt font
+    if (!stbtt_InitFont(&stbfont, (unsigned char*)font_data, 0)) return false;
+
+    int unscaled_width = 0, unscaled_offset_y = 0;
+    stbtt_GetCodepointHMetrics(&stbfont, 'A', &unscaled_width, NULL);
+    stbtt_GetFontVMetrics(&stbfont, &unscaled_offset_y, NULL, NULL);
+
+    auto scale = stbtt_ScaleForPixelHeight(&stbfont, (float)height);
+    width = scale * unscaled_width;
+    offset_y = scale * unscaled_offset_y;
+
+    ok = true;
+    return true;
+}
+
+void Font::cleanup() {
+    if (hbfont) { hb_font_destroy(hbfont); hbfont = NULL; }
+    if (hbface) { hb_face_destroy(hbface); hbface = NULL; }
+    if (hbblob) { hb_blob_destroy(hbblob); hbblob = NULL; }
+    if (font_data) { free(font_data); font_data = NULL; }
+}
+
+bool Font::can_render_chars(List<uchar> *chars) {
+    For (*chars)
+        if (stbtt_FindGlyphIndex(&stbfont, it) == 0)
+            return false;
     return true;
 }

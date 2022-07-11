@@ -1,3 +1,4 @@
+#include <ctype.h>
 #include "unicode.hpp"
 #include "common.hpp"
 

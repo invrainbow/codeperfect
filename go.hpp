@@ -1184,8 +1184,8 @@ struct Go_Indexer {
 
     List<Find_Decl> *find_implementations(Goresult *target, bool search_everywhere);
     List<Find_Decl> *find_interfaces(Goresult *target, bool search_everywhere);
-    List<Goresult> *list_interface_methods(Goresult *interface);
-    bool list_interface_methods(Goresult *interface, List<Goresult> *out);
+    List<Goresult> *list_interface_methods(Goresult *interface_type);
+    bool list_interface_methods(Goresult *interface_type, List<Goresult> *out);
 
     void fill_generate_implementation(List<Go_Symbol> *out, bool selected_interface);
     bool list_type_methods(ccstr type_name, ccstr import_path, List<Goresult> *out);

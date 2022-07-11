@@ -1,18 +1,22 @@
 #pragma once
 
 #include <math.h>
-#include "stb_truetype.h"
-#include "stb_image.h"
-#include "stb_rect_pack.h"
+
+#include <stb/stb_truetype.h>
+#include <stb/stb_image.h>
+#include <stb/stb_rect_pack.h>
+#include <harfbuzz/hb.h>
+#include <GL/glew.h>
+#include <ft2build.h>
+#include FT_FREETYPE_H
+
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "common.hpp"
 #include "editor.hpp"
 #include "list.hpp"
 #include "debugger.hpp"
-#include "glew.h"
 #include "hash.hpp"
-#include <harfbuzz/hb.h>
 
 #define CODE_FONT_SIZE 16
 #define UI_FONT_SIZE 17
@@ -134,20 +138,7 @@ struct Atlas {
     cur2 pos;
     int tallest;
     int gl_texture_id;
-
     Atlas *next;
-
-    /*
-    i dunno what the fuck this shit is
-
-    height = font_size;
-    tex_size = (i32)pow(2.0f, (i32)log2(sqrt((float)height * height * 8 * 8 * 256)) + 1);
-    glActiveTexture(GL_TEXTURE0 + texture_id);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, tex_size, tex_size, 0, GL_RED, GL_UNSIGNED_BYTE, atlas_data);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    */
 };
 
 struct Glyph {
@@ -156,40 +147,28 @@ struct Glyph {
         uchar codepoint;
         List<uchar> *grapheme;
     };
-
     boxf box;
     boxf uv;
-
     Atlas *atlas; // DANGER: pointer must stay alive
 };
 
-struct Rendered_Grapheme {
-    char *data;
-    u32 data_len;
-    boxf box;
-};
-
 struct Font {
-    void* ctfont; // CTFontRef
+    char *font_data;
+    u32 font_data_len;
+    stbtt_fontinfo stbfont;
+    hb_blob_t *hbblob;
+    hb_face_t *hbface;
     hb_font_t *hbfont;
 
     i32 height;
-
-    // only filled in for monospace fonts
-    // is offset_y the same for all characters? i assume not?
     float width;
     i32 offset_y;
-    float ascent;
-
-    // Font *next_fallback;
     ccstr name;
     ccstr filepath;
 
     bool init(ccstr font_name, u32 font_size);
-    bool init_font();
     void cleanup();
     bool can_render_chars(List<uchar> *chars);
-    Rendered_Grapheme* get_glyphs(List<uchar> *codepoints_comprising_a_grapheme);
 };
 
 struct UI {
@@ -218,13 +197,16 @@ struct UI {
     Atlas *atlases_head;
     int current_texture_id;
     Font* base_font;
-    List<ccstr> *all_font_urls;
     List<ccstr> *all_font_names;
 
     // we need a way of looking up fonts...
 
     Table<Font*> font_cache;
     Table<Glyph*> glyph_cache;
+
+#if OS_WINDOWS
+    FT_Library ft_library;
+#endif
 
     ccstr current_render_godecl_filepath;
 
@@ -244,9 +226,9 @@ struct UI {
 
     Font* acquire_font(ccstr name);
     Font* find_font_for_grapheme(List<uchar> *grapheme);
-    bool init_fonts();
 
     bool init();
+    bool init_fonts();
     void flush_verts();
     void draw_triangle(vec2f a, vec2f b, vec2f c, vec2f uva, vec2f uvb, vec2f uvc, vec4f color, Draw_Mode mode, Texture_Id texture = TEXTURE_FONT);
     void draw_quad(boxf b, boxf uv, vec4f color, Draw_Mode mode, Texture_Id texture = TEXTURE_FONT);

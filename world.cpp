@@ -4,7 +4,7 @@
 #include "set.hpp"
 #include "defer.hpp"
 
-#include "glew.h"
+#include <GL/glew.h>
 
 World world;
 
@@ -747,7 +747,13 @@ void kick_off_build(Build_Profile *build_profile) {
 void* get_native_window_handle() {
     if (!world.window) return NULL;
 
+#if OS_WINDOWS
+    return world.window->win32_window;
+#elif OS_MAC
     return world.window->ns_window;
+#else
+#error shit done fucked up
+#endif
 }
 
 void filter_files() {
@@ -1617,7 +1623,7 @@ void init_command_info_table() {
 
     mem0(command_info_table, sizeof(command_info_table));
 
-#if OS_WIN
+#if OS_WINDOWS
     command_info_table[CMD_EXIT] = k(CP_MOD_ALT, CP_KEY_F4, "Exit");
 #elif OS_MAC
     command_info_table[CMD_EXIT] = k(CP_MOD_CMD, CP_KEY_Q, "Quit");
