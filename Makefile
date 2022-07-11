@@ -65,10 +65,10 @@ GOSTUFF_DEPS = $(shell find gostuff/ -type f -name '*.go')
 # GOSTUFF_DEPS += gostuff/
 
 ifeq ($(OSTYPE), mac)
-	DEP_FILES += obj/objclibs.d 
-	OBJ_DEPS += obj/objclibs.o 
+	DEP_FILES += obj/objclibs.d
+	OBJ_DEPS += obj/objclibs.o
 endif
- 
+
 .PHONY: all clean build/launcher
 
 all: build/bin/ide build/bin/init.vim build/bin/buildcontext.go

@@ -269,7 +269,7 @@ struct Window {
 
     Pool mem;
     List<Window_Event> events;
-    
+
     bool mouse_states[__CP_MOUSE_COUNT + 1];
     bool key_states[__CP_KEY_COUNT + 1];
 

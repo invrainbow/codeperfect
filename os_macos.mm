@@ -215,7 +215,7 @@ bool load_font_data_by_name(ccstr name, char** data, u32 *len) {
     auto fm = map_file_into_memory(filepath);
     if (!fm) return false;
     defer { fm->cleanup(); };
-    
+
     auto ret = malloc(fm->len);
     memcpy(ret, fm->data, fm->len);
     return ret;
