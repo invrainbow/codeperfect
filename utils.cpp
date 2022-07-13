@@ -1,10 +1,14 @@
+
+#define XSTR(x) STR(x)
+#define STR(x) #x
+
 #include "utils.hpp"
 #include "os.hpp"
 #include "world.hpp"
 #include <stb/stb_sprintf.h>
 #include "defer.hpp"
 
-#if OS_WINDOWS
+#if OS_WINBLOWS
 #include <shlwapi.h>
 #elif OS_MAC
 #include <libgen.h>
@@ -58,7 +62,7 @@ ccstr cp_strncpy(ccstr s, int n) {
 
 // why isn't this in os.hpp, btw? (along with cp_basename)
 ccstr _our_dirname(ccstr path) {
-#if OS_WINDOWS
+#if OS_WINBLOWS
     auto s = (char*)cp_strdup(path);
     auto len = strlen(s);
     if (is_sep(s[len-1]))
@@ -83,7 +87,7 @@ ccstr cp_dirname(ccstr path) {
 }
 
 ccstr cp_basename(ccstr path) {
-#if OS_WINDOWS
+#if OS_WINBLOWS
     auto ret = (cstr)cp_strdup(path);
     PathStripPathA(ret);
     return (ccstr)ret;

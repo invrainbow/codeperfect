@@ -9,10 +9,8 @@ git submodule update --init --recursive
 apt-cyg install binutils make  # there's more but i forgot to record
 
 # vcpkg must be installed
-export VCPKG_DEFAULT_TRIPLET=x64-windows
-vcpkg install pcre
-vcpkg install harfbuzz
-vcpkg install fontconfig
+export VCPKG_DEFAULT_TRIPLET=x64-windows-static
+vcpkg install pcre harfbuzz fontconfig
 vcpkg integrate install
 
 # nvim

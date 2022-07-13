@@ -29,7 +29,7 @@ ccstr get_menu_command_key(Command cmd);
 bool menu_command(Command cmd, bool selected = false);
 
 void init_global_colors() {
-#if 0 // def DEBUG_MODE
+#if 0 // def DEBUG_BUILD
     if (check_path("/Users/brandon/.cpcolors") == CPR_FILE) {
         File f;
         f.init_read("/Users/brandon/.cpcolors");
@@ -747,10 +747,8 @@ bool UI::init() {
 
         if (!base_font) return false;
 
-        // init freetype
-        if (FT_Init_FreeType(&ft_library) != 0) return false;
-
         // list available font names
+        all_font_names = alloc_list<ccstr>();
         if (!list_all_fonts(all_font_names)) return false;
     }
 
@@ -931,25 +929,7 @@ void UI::draw_bordered_rect_outer(boxf b, vec4f color, vec4f border_color, int b
     }
 }
 
-// advances pos forward
-void UI::draw_char(vec2f* pos, List<uchar> *grapheme, vec4f color) {
-    glActiveTexture(GL_TEXTURE0 + TEXTURE_FONT);
-
-    // look up glyph
-    // if the glyph doesn't exist,
-    //     find the right font for `grapheme`
-    //     acquire the font
-    //     use the font to get a rendered_grapheme
-    //     create a new glyph:
-    //         attempt to add rendered_grapheme to an atlas
-    //         save that atlas
-    //         fill in w/h/x-off/y-off using rendered_grapheme
-    //         fill in u/v with result of saving to atlas
-    //     save glyph in cache
-    // we now have a glyph! draw that motherfucker
-
-    if (!grapheme->len) return;
-
+Glyph *UI::lookup_glyph_for_grapheme(List<uchar> *grapheme) {
     auto utf8chars = alloc_list<char>();
     For (*grapheme) {
         char buf[4];
@@ -958,187 +938,194 @@ void UI::draw_char(vec2f* pos, List<uchar> *grapheme, vec4f color) {
             utf8chars->append(buf[i]);
     }
     utf8chars->append('\0');
+    auto utf8str = utf8chars->items;
 
-    ccstr utf8_str = utf8chars->items;
+    auto glyph = glyph_cache.get(utf8str);
+    if (glyph) return glyph;
 
-    auto glyph = glyph_cache.get(utf8_str);
-    if (!glyph) {
-        SCOPED_MEM(&world.ui_mem);
+    SCOPED_MEM(&world.ui_mem);
 
-        auto font = find_font_for_grapheme(grapheme);
-        if (!font) return; // TODO: handle error
+    auto font = find_font_for_grapheme(grapheme);
+    if (!font) return NULL; // TODO: handle error
 
-        auto buf = hb_buffer_create();
-        if (!buf) return;
-        defer { hb_buffer_destroy(buf); };
+    auto buf = hb_buffer_create();
+    if (!buf) return NULL;
+    defer { hb_buffer_destroy(buf); };
 
-        hb_buffer_add_utf8(buf, utf8chars->items, utf8chars->len, 0, utf8chars->len);
-        hb_buffer_guess_segment_properties(buf);
-        hb_shape(font->hbfont, buf, NULL, 0);
+    hb_buffer_add_utf8(buf, utf8chars->items, utf8chars->len-1, 0, utf8chars->len-1);
+    hb_buffer_guess_segment_properties(buf);
+    hb_shape(font->hbfont, buf, NULL, 0);
 
-        unsigned int glyph_count;
-        auto glyph_info = hb_buffer_get_glyph_infos(buf, &glyph_count);
-        auto glyph_pos = hb_buffer_get_glyph_positions(buf, &glyph_count);
+    unsigned int glyph_count;
+    auto hb_glyph_info = hb_buffer_get_glyph_infos(buf, &glyph_count);
+    auto hb_glyph_pos = hb_buffer_get_glyph_positions(buf, &glyph_count);
 
-        // we have glyph_info and glyph_pos, use stbtt to render them into a bitmap
+    int cur_x = 0;
+    int cur_y = 0;
+    int bx0 = -1, by0 = -1, bx1 = -1, by1 = -1;
 
-        struct Glyph_Info {
-            uchar glyph_index;
-            i32 ras_x;
-            u32 ras_w;
-            i32 ras_desc;
-            i32 ras_asc;
-            u32 ras_h;
-        };
+    auto glyph_bitmaps = alloc_list<u8*>();
+    auto glyph_positions = alloc_list<box>();
 
-        auto glyphs = alloc_list<Glyph_Info>();
-        int cur_x = 0;
-        int cur_y = 0;
+    float oversample_x = 3.0f;
+    float oversample_y = 3.0f;
 
-        int by0 = -1;
-        int bx0 = -1;
-        int by1 = -1;
-        int bx1 = -1;
+    for (u32 i = 0; i < glyph_count; i++) {
+        auto glyph_index = hb_glyph_info[i].codepoint;
 
-        int highest_asc = 0;
+        auto scale_x = stbtt_ScaleForPixelHeight(&font->stbfont, (float)font->height) * oversample_x;
+        auto scale_y = stbtt_ScaleForPixelHeight(&font->stbfont, (float)font->height) * oversample_y;
 
-        for (u32 i = 0; i < glyph_count; i++) {
-            Glyph_Info gi;
-            gi.glyph_index = glyph_info[i].codepoint;
+        int x0 = 0, y0 = 0, x1 = 0 , y1 = 0;
+        stbtt_GetGlyphBitmapBoxSubpixel(&font->stbfont, glyph_index, scale_x, scale_y, 0.0f, 0.0f, &x0, &y0, &x1, &y1);
 
-            int x0, y0, x1, y1;
-            // this should theoretically never happen
-            if (!stbtt_GetGlyphBox(&font->stbfont, gi.glyph_index, &x0, &y0, &x1, &y1))
-                continue;
+        auto &pos = hb_glyph_pos[i];
+        x0 += (cur_x + pos.x_offset) * oversample_x;
+        x1 += (cur_x + pos.x_offset) * oversample_x;
+        y0 += (cur_x + pos.y_offset) * oversample_y;
+        y1 += (cur_x + pos.y_offset) * oversample_y;
 
-            gi.ras_x = (i32)floor(x0);
-            gi.ras_w = (u32)ceil(x0 - gi.ras_x + (x1-x0));
-            gi.ras_desc = (i32)ceil(-y0);
-            gi.ras_asc = (i32)ceil((y1-y0) + y0);
-            gi.ras_h = (u32)(gi.ras_desc + gi.ras_asc);
+        if (bx0 == -1 || x0 < bx0) bx0 = x0;
+        if (by0 == -1 || y0 < by0) by0 = y0;
+        if (bx1 == -1 || x1 < bx1) bx1 = x1;
+        if (by1 == -1 || y1 < by1) by1 = y1;
 
-            if (gi.ras_asc > highest_asc) highest_asc = gi.ras_asc;
-            if (!gi.ras_w && !gi.ras_h) continue; // ???
+        int w = 0, h = 0;
+        auto data = stbtt_GetGlyphBitmapSubpixel(&font->stbfont, scale_x, scale_y, 0.0f, 0.0f, hb_glyph_info[i].codepoint, &w, &h, NULL, NULL);
+        if (!data) continue;
+        if (!w || !h) continue;
 
-            glyphs->append(&gi);
+        box b; ptr0(&b);
+        b.x = x0;
+        b.y = y0;
+        b.w = x1-x0;
+        b.h = y1-y0;
 
-            auto &pos = glyph_pos[i];
-            auto left = cur_x + pos.x_offset + gi.ras_x;
-            auto top = cur_x + pos.y_offset;
-            auto right = left + gi.ras_w;
-            auto bottom = top + gi.ras_h;
+        glyph_bitmaps->append(data);
+        glyph_positions->append(&b);
 
-            if (x0 == -1 || left < x0)   x0 = left;
-            if (y0 == -1 || top < y0)    y0 = top;
-            if (x1 == -1 || right < x1)  x1 = right;
-            if (y1 == -1 || bottom < y1) y1 = bottom;
-
-            cur_x += pos.x_advance;
-            cur_y += pos.y_advance;
-        }
-
-        boxf box;
-        box.x = bx0;
-        box.y = by0;
-        box.w = bx1-bx0;
-        box.h = by1-by0;
-
-        // idk when these would ever happen, but check anyway
-        if (box.w > ATLAS_SIZE || box.h > ATLAS_SIZE) return;
-
-        auto atlas = atlases_head;
-        bool xover, yover;
-
-        if (atlas) {
-            // reached the end of the row? move back to start
-            if (atlas->pos.x + box.h + 1 > ATLAS_SIZE) {
-                atlas->pos.x = 0;
-                atlas->pos.y += atlas->tallest;
-                atlas->tallest = 0;
-            }
-
-            xover = atlas->pos.x + box.w > ATLAS_SIZE;
-            yover = atlas->pos.y + box.h > ATLAS_SIZE;
-        }
-
-        if (!atlas || xover || yover) {
-            glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-
-            GLuint texture_id;
-            glGenTextures(1, &texture_id);
-            glBindTexture(GL_TEXTURE_2D, texture_id);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, ATLAS_SIZE, ATLAS_SIZE, 0, GL_RED, GL_UNSIGNED_BYTE, NULL);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            glBindTexture(GL_TEXTURE_2D, 0);
-
-            auto a = alloc_object(Atlas);
-            a->pos = new_cur2(0, 0);
-            a->tallest = 0;
-            a->gl_texture_id = texture_id;
-            a->next = atlases_head;
-            atlas = atlases_head = a;
-        }
-
-        // because of check above, glyph will always fit in the new atlas here
-
-        glBindTexture(GL_TEXTURE_2D, atlas->gl_texture_id);
-
-        // TODO: draw straight into the opengl texture
-        cur_x = atlas->pos.x;
-        cur_y = atlas->pos.y;
-
-        for (int i = 0; i < glyph_count; i++) {
-            auto &gi = glyphs->at(i);
-            auto &pos = glyph_pos[i];
-
-            auto x = cur_x + pos.x_offset - gi.ras_x;
-            auto y = cur_y + pos.y_offset + gi.ras_asc;
-
-            int width = 0, height = 0; //, xoff = 0, yoff = 0;
-
-            auto data = stbtt_GetGlyphBitmap(
-                &font->stbfont, 0,
-                stbtt_ScaleForPixelHeight(&font->stbfont, height),
-                gi.glyph_index, &width, &height, NULL, NULL // &xoff, &yoff
-            );
-            if (!data) continue; // or just exit?
-            defer { stbtt_FreeBitmap(data, NULL); };
-            // TODO: draw gi.glyph_index at (x, y) with size (gi.ras_w, gi.ras_h)
-
-            glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, width, height, GL_RED, GL_UNSIGNED_BYTE, data);
-
-            cur_x += pos.x_advance;
-            cur_y += pos.y_advance;
-        }
-
-        boxf uv;
-        uv.x = (float)atlas->pos.x / (float)ATLAS_SIZE;
-        uv.y = (float)atlas->pos.y / (float)ATLAS_SIZE;
-        uv.w = (float)box.w / (float)ATLAS_SIZE;
-        uv.h = (float)box.h / (float)ATLAS_SIZE;
-
-        if (box.h > atlas->tallest) atlas->tallest = box.h;
-        atlas->pos.x += box.w + 1;
-
-        glyph = alloc_object(Glyph);
-        glyph->single = grapheme->len == 1;
-        if (glyph->single) {
-            glyph->codepoint = grapheme->at(0);
-        } else {
-            auto copy = alloc_list<uchar>();
-            For (*grapheme) copy->append(it);
-            glyph->grapheme = copy;
-        }
-        glyph->box = box;
-        glyph->atlas = atlas;
-        glyph->uv = uv;
-
-        {
-            SCOPED_MEM(&world.ui_mem);
-            glyph_cache.set(cp_strdup(utf8_str), glyph);
-        }
+        cur_x += pos.x_advance;
+        cur_y += pos.y_advance;
     }
+
+    int leftmost = glyph_positions->at(0).x;
+    int topmost = glyph_positions->at(0).y;
+    For (*glyph_positions) {
+        if (it.y < topmost) topmost = it.y;
+        if (it.x < leftmost) leftmost = it.x;
+    }
+    For (*glyph_positions) it.y -= topmost;
+    For (*glyph_positions) it.x -= leftmost;
+
+    if (bx0 == -1 || by0 == -1 || bx1 == -1 || by1 == -1) return NULL;
+
+    boxf bbox; ptr0(&bbox);
+    bbox.x = (float)bx0;
+    bbox.y = (float)by0;
+    bbox.w = (float)(bx1-bx0);
+    bbox.h = (float)(by1-by0);
+
+    // idk when these would ever happen, but check anyway
+    if (bbox.w > ATLAS_SIZE || bbox.h > ATLAS_SIZE) return NULL;
+
+    auto atlas = atlases_head;
+    bool xover, yover;
+
+    if (atlas) {
+        // reached the end of the row? move back to start
+        if (atlas->pos.x + bbox.w + 3 > ATLAS_SIZE) {
+            atlas->pos.x = 0;
+            atlas->pos.y += atlas->tallest + 3;
+            atlas->tallest = 0;
+        }
+
+        xover = atlas->pos.x + bbox.w > ATLAS_SIZE;
+        yover = atlas->pos.y + bbox.h > ATLAS_SIZE;
+    }
+
+    if (!atlas || xover || yover) {
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+        GLuint texture_id;
+        glGenTextures(1, &texture_id);
+        glBindTexture(GL_TEXTURE_2D, texture_id);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, ATLAS_SIZE, ATLAS_SIZE, 0, GL_RED, GL_UNSIGNED_BYTE, NULL);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glBindTexture(GL_TEXTURE_2D, 0);
+
+        auto a = alloc_object(Atlas);
+        a->pos = new_cur2(0, 0);
+        a->tallest = 0;
+        a->gl_texture_id = texture_id;
+        a->next = atlases_head;
+        atlas = atlases_head = a;
+    }
+
+    // because of check above, glyph will always fit in the new atlas here
+
+    glBindTexture(GL_TEXTURE_2D, atlas->gl_texture_id);
+
+    for (int i = 0; i < glyph_count; i++) {
+        auto b = glyph_positions->at(i);
+        auto ax = atlas->pos.x;
+        auto ay = atlas->pos.y;
+        auto bitmap_data = glyph_bitmaps->at(i);
+
+        glTexSubImage2D(GL_TEXTURE_2D, 0, b.x+ax, b.y+ay, b.w, b.h, GL_RED, GL_UNSIGNED_BYTE, bitmap_data);
+        stbtt_FreeBitmap(bitmap_data, NULL);
+    }
+
+    boxf uv;
+    uv.x = (float)atlas->pos.x / (float)ATLAS_SIZE;
+    uv.y = (float)atlas->pos.y / (float)ATLAS_SIZE;
+    uv.w = (float)bbox.w / (float)ATLAS_SIZE;
+    uv.h = (float)bbox.h / (float)ATLAS_SIZE;
+
+    if (bbox.h > atlas->tallest) atlas->tallest = bbox.h;
+    atlas->pos.x += bbox.w + 3;
+
+    glyph = alloc_object(Glyph);
+    glyph->single = grapheme->len == 1;
+    if (glyph->single) {
+        glyph->codepoint = grapheme->at(0);
+    } else {
+        auto copy = alloc_list<uchar>();
+        For (*grapheme) copy->append(it);
+        glyph->grapheme = copy;
+    }
+
+    {
+        boxf b;
+        b.x = bbox.x / oversample_x;
+        b.w = bbox.w / oversample_x;
+        b.y = bbox.y / oversample_y;
+        b.h = bbox.h / oversample_y;
+        glyph->box = b;
+    }
+    glyph->atlas = atlas;
+    glyph->uv = uv;
+
+    {
+        SCOPED_MEM(&world.ui_mem);
+        glyph_cache.set(cp_strdup(utf8str), glyph);
+    }
+    return glyph;
+}
+
+// advances pos forward
+void UI::draw_char(vec2f* pos, List<uchar> *grapheme, vec4f color) {
+    if (!grapheme->len) return;
+
+    glActiveTexture(GL_TEXTURE0 + TEXTURE_FONT);
+
+    /*
+    if (grapheme->at(0) == ' ')
+        BREAK_HERE;
+    */
+
+    auto glyph = lookup_glyph_for_grapheme(grapheme);
+    if (!glyph) return;
 
     if (current_texture_id != glyph->atlas->gl_texture_id) {
         flush_verts();
@@ -1147,20 +1134,18 @@ void UI::draw_char(vec2f* pos, List<uchar> *grapheme, vec4f color) {
         current_texture_id = glyph->atlas->gl_texture_id;
     }
 
-    boxf box = glyph->box;
-
     float xscale = 1.0f, yscale = 1.0f;
     world.window->get_content_scale(&xscale, &yscale);
 
-    box.x /= xscale;
-    box.w /= xscale;
-    box.y /= yscale;
-    box.h /= yscale;
+    boxf b = glyph->box;
+    b.x /= xscale;
+    b.w /= xscale;
+    b.y /= yscale;
+    b.h /= yscale;
+    b.x += pos->x;
+    b.y += pos->y;
 
-    box.x += pos->x;
-    box.y += pos->y;
-
-    draw_quad(box, glyph->uv, color, DRAW_FONT_MASK);
+    draw_quad(b, glyph->uv, color, DRAW_FONT_MASK);
     auto gw = cp_wcswidth(grapheme->items, grapheme->len);
     if (gw == -1) gw = 2;
     pos->x += base_font->width * gw;
@@ -2322,7 +2307,7 @@ void UI::draw_everything() {
             ImGui::EndMenu();
         }
 
-#ifdef DEBUG_MODE
+#ifdef DEBUG_BUILD
 
         if (ImGui::BeginMenu("Internal")) {
             ImGui::MenuItem("ImGui demo", NULL, &world.windows_open.im_demo);
@@ -4845,7 +4830,7 @@ void UI::draw_everything() {
         ImGui::End();
     }
 
-#ifdef DEBUG_MODE
+#ifdef DEBUG_BUILD
     if (world.wnd_history.show) {
         ImGui::SetNextWindowDockID(dock_sidebar_id, ImGuiCond_Once);
 

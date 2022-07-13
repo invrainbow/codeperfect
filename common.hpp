@@ -330,7 +330,7 @@ struct Panic_Exception : std::runtime_error {
     Panic_Exception(ccstr error) : std::runtime_error(error) {}
 };
 
-#if OS_WINDOWS
+#if OS_WINBLOWS
 #define strcmpi stricmp
 #else
 #define strcmpi strcasecmp

@@ -18,8 +18,6 @@
 #include "fzy_match.h"
 #include "window.hpp"
 
-#define RELEASE_BUILD 0
-
 typedef fn<bool(Editor* e)> find_editor_func;
 
 // TODO: define init/cleanup routines for find and replace, and for build
@@ -391,7 +389,7 @@ struct World {
         Thread_Handle thread;
     } wnd_rename_identifier;
 
-// #ifdef DEBUG_MODE
+// #ifdef DEBUG_BUILD
     struct Wnd_History : Wnd {} wnd_history;
 // #endif
 
@@ -638,7 +636,7 @@ struct World {
     struct Wnd_Style_Editor : Wnd {
     } wnd_style_editor;
 
-    void init(Window *_wnd);
+    void init();
     void start_background_threads();
 };
 

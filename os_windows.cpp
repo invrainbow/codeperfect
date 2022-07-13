@@ -1,6 +1,6 @@
 #include "os.hpp"
 
-#if OS_WINDOWS // whole file is windows only
+#if OS_WINBLOWS // whole file is windows only
 
 #include "win32.hpp"
 #include "world.hpp"
@@ -718,7 +718,7 @@ bool File_Mapping::resize(i64 newlen) {
 }
 
 bool File_Mapping::flush(i64 bytes_to_flush) {
-    if (!FlushViewOfFile(data, bytes_to_flush)) return false;
+    return FlushViewOfFile(data, bytes_to_flush);
 }
 
 bool File_Mapping::finish_writing(i64 final_size) {
@@ -990,4 +990,4 @@ bool load_font_data_by_name(ccstr name, char** data, u32 *len) {
     return true;
 }
 
-#endif // OS_WINDOWS
+#endif // OS_WINBLOWS

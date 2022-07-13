@@ -11,7 +11,7 @@
 #include "unicode.hpp"
 #include "enums.hpp"
 
-#if OS_WINDOWS
+#if OS_WINBLOWS
 #include <windows.h>
 #elif OS_MAC
 #include <dlfcn.h>
@@ -1026,7 +1026,7 @@ void Go_Indexer::background_thread() {
             memcpy(&index, obj, sizeof(Go_Index));
         }
 
-#ifdef DEBUG_MODE
+#ifdef DEBUG_BUILD
         index_print("Successfully read database from disk, final_mem.size = %d", final_mem.mem_allocated);
 #else
         index_print("Successfully read database from disk.");
@@ -1399,12 +1399,12 @@ void Go_Indexer::background_thread() {
                 bool found = false;
                 auto true_copy = package_lookup.get(it.import_path, &found);
                 if (!found) {
-#ifdef DEBUG_MODE
+#ifdef DEBUG_BUILD
                     cp_panic("we have a package that wasn't found in package_lookup");
 #endif
                 } else {
                     if (true_copy != i) {
-#ifdef DEBUG_MODE
+#ifdef DEBUG_BUILD
                         cp_panic("why do we have a copy?");
 #endif
                         to_remove->append(i);
@@ -5321,7 +5321,7 @@ bool Go_Indexer::acquire_lock(Indexer_Status new_status, bool just_try) {
     return true;
 }
 
-bool Go_Indexer::release_lock(Indexer_Status expected_status) {
+void Go_Indexer::release_lock(Indexer_Status expected_status) {
     go_print("[release] %s", indexer_status_str(expected_status));
 
     if (status != expected_status) {

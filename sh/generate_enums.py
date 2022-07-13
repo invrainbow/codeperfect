@@ -1,8 +1,6 @@
-#!/usr/bin/env python3.9
-
 # Enums must not contain any blank lines between the "enum X {" and "}"
-
 import os
+import pathlib
 
 
 fhpp = None
@@ -71,6 +69,10 @@ def main():
 
 
 if __name__ == "__main__":
-    with open("enums.hpp", "w") as fhpp:
-        with open("enums.cpp", "w") as fcpp:
-            main()
+    try:
+        with open("enums.hpp", "w") as fhpp:
+            with open("enums.cpp", "w") as fcpp:
+                main()
+    except:
+        pathlib.Path('enums.hpp').unlink(missing_ok=True)
+        pathlib.Path('enums.cpp').unlink(missing_ok=True)

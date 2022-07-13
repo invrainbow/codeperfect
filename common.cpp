@@ -77,7 +77,7 @@ void _error(ccstr fmt, ...) {
     va_end(args);
     va_end(args2);
 
-#ifdef DEBUG_MODE
+#ifdef DEBUG_BUILD
     fprintf(stderr, "%s", buf); // break here
 #else
     write_to_syslog(buf);
@@ -114,7 +114,7 @@ bool boxf::contains(vec2f point) {
 s32 global_mem_allocated = 0;
 
 void cp_panic(ccstr s) {
-#ifdef DEBUG_MODE
+#ifdef DEBUG_BUILD
     // throw exception so we can debug it
 	throw Panic_Exception(s);
 #else

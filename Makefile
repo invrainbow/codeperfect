@@ -1,10 +1,12 @@
 CC = clang++
 
-CFLAGS = -std=c++17 -w -MMD -MP -I. -ferror-limit=100
+CFLAGS = -std=c++17 -MMD -MP -I. -ferror-limit=100
+CFLAGS += -w
 # CFLAGS += -mavx -maes
 CFLAGS += -Itree-sitter
 
 LDFLAGS += obj/gohelper.a
+BINARY_NAME = ide
 
 ifeq ($(OSTYPE), mac)
 	CFLAGS += -DOSTYPE_MAC
@@ -26,11 +28,13 @@ ifeq ($(OSTYPE), mac)
 		GOARCH = amd64
 	endif
 else ifeq ($(OSTYPE), windows)
+	BINARY_NAME = ide.exe
 	CFLAGS += -DOSTYPE_WINDOWS
-	CFLAGS += -I$(VCPKG_ROOT)/installed/x64-windows/include
-	LDFLAGS += -L$(VCPKG_ROOT)/installed/x64-windows/lib
+	CFLAGS += -I$(VCPKG_ROOT)/installed/x64-windows-static/include
+	LDFLAGS += -L$(VCPKG_ROOT)/installed/x64-windows-static/lib
 	LDFLAGS += -lfreetype -lharfbuzz -lpcre -lfontconfig
 	LDFLAGS += -lopengl32 -ladvapi32 -lshlwapi -lole32
+	LDFLAGS += -lbrotlicommon-static -lbz2 -lzlib -llibpng16 -lbrotlidec-static -llibexpatMD
 	LDFLAGS += -lpathcch -lshell32 -lwinmm -lws2_32 -lgdi32 -lshcore
 	LDFLAGS += --for-linker "/IGNORE:4217"
 	GOARCH = amd64
@@ -41,10 +45,10 @@ endif
 GOFLAGS =
 
 ifeq ($(RELEASE), 1)
-	CFLAGS += -DRELEASE_MODE -O3
+	CFLAGS += -O3
 	GOFLAGS += -ldflags "-s -w"
 else
-	CFLAGS += -DDEBUG_MODE -g -O0
+	CFLAGS += -DDEBUG_BUILD -g -O0
 endif
 
 ifeq ($(OSTYPE), windows)
@@ -71,19 +75,19 @@ endif
 
 .PHONY: all clean build/launcher
 
-all: build/bin/ide build/bin/init.vim build/bin/buildcontext.go
+all: build/bin/$(BINARY_NAME) build/bin/init.vim build/bin/buildcontext.go
 
 prep:
 	mkdir -p obj build/bin
 
 clean:
 	rm -rf obj/ build/bin/
-	make prep
+	mkdir -p obj build/bin
 
 build/bin/test: $(filter-out obj/main.o, $(OBJ_DEPS)) obj/tests.o
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 
-build/bin/ide: $(OBJ_DEPS) binaries.c obj/enums.o
+build/bin/$(BINARY_NAME): $(OBJ_DEPS) binaries.c obj/enums.o
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 
 -include $(DEP_FILES)
@@ -95,7 +99,7 @@ obj/enums.o: enums.cpp # Makefile
 	$(CC) $(CFLAGS) -MMD -MP -c -o $@ $<
 
 obj/tests.o: tests.cpp # Makefile
-	$(CC) $(CFLAGS) -MMD -MP -c -o $@ $<
+	$(CC) $(CFLAGS) -DTESTING_BUILD -MMD -MP -c -o $@ $<
 
 obj/objclibs.o: objclibs.mm
 	$(CC) $(CFLAGS) -fobjc-arc -c -o $@ $<
@@ -114,10 +118,8 @@ binaries.c: .cpcolors vert.glsl frag.glsl im.vert.glsl im.frag.glsl
 
 obj/gohelper.a: $(GOSTUFF_DEPS)
 	cd gostuff; \
-		CC=clang CGO_ENABLED=1 go build $(GOFLAGS) -o gohelper.a -buildmode=c-archive ./helper; \
-		mkdir -p ../obj; \
-		mv gohelper.a ../obj; \
-		mv gohelper.h ..
+		CC=clang CGO_ENABLED=1 go build $(GOFLAGS) -o gohelper.a -buildmode=c-archive ./helper && \
+		(mkdir -p ../obj; mv gohelper.a ../obj; mv gohelper.h ..)
 
 build/launcher: $(GOSTUFF_DEPS)
 	cd gostuff; \
@@ -127,6 +129,8 @@ gohelper.h: obj/gohelper.a
 
 tstypes.hpp: tree-sitter-go/src/parser.c sh/generate_tstypes.py
 	$(PYTHON) sh/generate_tstypes.py
+
+enums.cpp: enums.hpp
 
 enums.hpp: $(filter-out enums.hpp, $(wildcard *.hpp)) tstypes.hpp sh/generate_enums.py
 	$(PYTHON) sh/generate_enums.py

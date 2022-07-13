@@ -348,14 +348,25 @@ bool Buffer::read(Buffer_Read_Func f, bool reread) {
     if (!insert_new_line()) return false;
 
     Cstr_To_Ustr conv; conv.init();
+    bool last_was_cr = false;
+
     while (f(&ch)) {
         (*bc)++;
 
         if (conv.feed(ch)) {
-            if (conv.uch == '\n') { // TODO: handle \r
+            if (conv.uch == '\n') {
+                last_was_cr = false;
                 if (!insert_new_line())
                     return false;
             } else {
+                if (last_was_cr) {
+                    if (!line->append('\r'))
+                        return false;
+                    last_was_cr = false;
+                } else if (conv.uch == '\r') {
+                    last_was_cr = true;
+                    continue;
+                }
                 if (!line->append(conv.uch))
                     return false;
             }
@@ -377,6 +388,8 @@ bool Buffer::read(Buffer_Read_Func f, bool reread) {
         u32 y = lines.len-1;
         internal_finish_edit(new_cur2(lines[y].len, y));
     }
+
+    return true;
 }
 
 bool Buffer::read_data(char *data, int len, bool reread) {
@@ -897,7 +910,7 @@ i32 Buffer::cur_to_offset(cur2 c) {
     return ret;
 }
 
-#ifdef DEBUG_MODE
+#ifdef DEBUG_BUILD
 #   define idx_assert(x) if (!(x)) BREAK_HERE
 #else
 #   define idx_assert(x) cp_assert(x)

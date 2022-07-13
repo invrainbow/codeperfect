@@ -4,7 +4,7 @@
 #include "common.hpp"
 #include "objc_id_shim.hpp"
 
-#if OS_WINDOWS
+#if OS_WINBLOWS
 #elif OS_MAC
 #   include <Carbon/Carbon.h>
 #endif
@@ -244,7 +244,7 @@ enum Cursor_Type {
 };
 
 struct Cursor {
-#if OS_WINDOWS
+#if OS_WINBLOWS
     HCURSOR handle;
 #elif OS_MAC
     id object;
@@ -283,7 +283,7 @@ struct Window {
         return init_os_specific(width, height, title);
     }
 
-#if OS_WINDOWS
+#if OS_WINBLOWS
     HWND win32_window;
     ATOM win32_window_class;
     HGLRC wgl_context; // what type?
@@ -331,7 +331,7 @@ struct Window {
     void get_cursor_pos(double* xpos, double* ypos);
     void set_cursor(Cursor *_cursor);
 
-#if OS_WINDOWS
+#if OS_WINBLOWS
     LRESULT callback(HWND hwnd, UINT msg, WPARAM w, LPARAM l);
     void adjust_rect_using_windows_gayness(RECT *rect);
     bool create_actual_window(int width, int height, ccstr title);
@@ -351,3 +351,8 @@ bool window_init_everything();
 void set_clipboard_string(ccstr string);
 ccstr get_clipboard_string();
 void poll_window_events();
+
+// The purpose of this is function to get us to a point where the current
+// OpenGL context is a valid one, basically so we can initialize GLEW. Once GLEW is initialized the bootstrap context will be destroyed.
+bool make_bootstrap_context();
+void destroy_bootstrap_context();

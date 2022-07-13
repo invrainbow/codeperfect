@@ -1172,7 +1172,7 @@ struct Go_Indexer {
     List<Goresult> *list_lazy_type_dotprops(Gotype *type, Go_Ctx *ctx);
 
     bool acquire_lock(Indexer_Status new_status, bool just_try = false);
-    bool release_lock(Indexer_Status expected_status);
+    void release_lock(Indexer_Status expected_status);
 
     bool try_acquire_lock(Indexer_Status new_status) {
         return acquire_lock(new_status, true);

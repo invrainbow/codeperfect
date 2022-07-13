@@ -7,8 +7,6 @@
 #include <stb/stb_rect_pack.h>
 #include <harfbuzz/hb.h>
 #include <GL/glew.h>
-#include <ft2build.h>
-#include FT_FREETYPE_H
 
 #include "imgui.h"
 #include "imgui_internal.h"
@@ -18,7 +16,7 @@
 #include "debugger.hpp"
 #include "hash.hpp"
 
-#define CODE_FONT_SIZE 16
+#define CODE_FONT_SIZE 13
 #define UI_FONT_SIZE 17
 #define ICON_FONT_SIZE 16
 #define FRAME_RATE_CAP 60
@@ -204,10 +202,6 @@ struct UI {
     Table<Font*> font_cache;
     Table<Glyph*> glyph_cache;
 
-#if OS_WINDOWS
-    FT_Library ft_library;
-#endif
-
     ccstr current_render_godecl_filepath;
 
     struct {
@@ -284,6 +278,7 @@ struct UI {
     Pretty_Menu *pretty_menu_start(ImVec2 padding = ImVec2(4, 2));
     void pretty_menu_item(Pretty_Menu *menu, bool selected);
     void pretty_menu_text(Pretty_Menu *pm, ccstr text, ImU32 color = PM_DEFAULT_COLOR);
+    Glyph *lookup_glyph_for_grapheme(List<uchar> *grapheme);
 };
 
 extern UI ui;

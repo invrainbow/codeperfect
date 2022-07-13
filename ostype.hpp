@@ -1,12 +1,12 @@
 #pragma once
 
-#define OS_WINDOWS 0
+#define OS_WINBLOWS 0
 #define OS_MAC 0
 #define OS_LINUX 0
 
 #if defined(OSTYPE_WINDOWS)
-#   undef OS_WINDOWS
-#   define OS_WINDOWS 1
+#   undef OS_WINBLOWS
+#   define OS_WINBLOWS 1
 #elif defined(OSTYPE_MAC)
 #   undef OS_MAC
 #   define OS_MAC 1

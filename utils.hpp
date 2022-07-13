@@ -382,8 +382,8 @@ struct Timer {
     }
 
     bool is_enabled() {
-#ifdef DEBUG_MODE
-        if (penabled) return *penabled;
+#ifdef DEBUG_BUILD
+        return penabled ? *penabled : enabled;
 #else
         return false;
 #endif

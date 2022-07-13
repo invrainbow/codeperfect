@@ -28,7 +28,7 @@ when a frame is opened
 #include <stdio.h>
 #include <stdlib.h>
 
-#if OS_WINDOWS
+#if OS_WINBLOWS
 #include "win32.hpp"
 #elif OS_MAC
 #include <unistd.h>
@@ -376,7 +376,7 @@ void Debugger::init() {
     calls_lock.init();
     calls_mem.init();
 
-#if OS_WINDOWS
+#if OS_WINBLOWS
     WSADATA wsa;
     if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
         cp_panic("WSAStartup failed");
@@ -391,7 +391,7 @@ void Debugger::cleanup() {
         close_thread_handle(thread);
     }
 
-#if OS_WINDOWS
+#if OS_WINBLOWS
     WSACleanup();
 #endif
 
@@ -403,7 +403,7 @@ void Debugger::cleanup() {
     loop_mem.cleanup();
 }
 
-#if OS_WINDOWS
+#if OS_WINBLOWS
 #define ioctl_stub ioctlsocket
 #define close_stub closesocket
 #else
@@ -449,7 +449,7 @@ bool Debugger::read_packet(Packet* p) {
     u_long mode_blocking = 0;
     u_long mode_nonblocking = 1;
 
-#if OS_WINDOWS
+#if OS_WINBLOWS
     ioctlsocket(conn, FIONBIO, &mode_blocking);
     defer { ioctlsocket(conn, FIONBIO, &mode_nonblocking); };
 #else
@@ -952,7 +952,7 @@ bool Debugger::start(Debug_Profile *debug_profile) {
                 return false;
 
         ccstr binary_name = NULL;
-#if OS_WINDOWS
+#if OS_WINBLOWS
         binary_name = "__debug_bin.exe";
 #else
         binary_name = "__debug_bin";

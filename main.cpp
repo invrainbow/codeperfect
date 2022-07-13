@@ -32,7 +32,6 @@
 #include "fonts.hpp"
 #include "icons.h"
 #include "binaries.h"
-#include <GL/wglew.h>
 
 static const char WINDOW_TITLE[] = "CodePerfect 95";
 
@@ -626,7 +625,7 @@ void handle_window_event(Window_Event *it) {
                 if (keymods == CP_MOD_CTRL || keymods == (CP_MOD_CTRL | CP_MOD_SHIFT)) {
                     break;
                 }
-#if OS_WINDOWS
+#if OS_WINBLOWS
                 break;
 #else
                 handle_tab();
@@ -973,7 +972,20 @@ void handle_window_event(Window_Event *it) {
     }
 }
 
+// i can't believe this shit is necessary:
+// https://github.com/golang/go/issues/42190#issuecomment-1114628523
+//
+// and what happens if (after god intervenes and injects some iq points into
+// them) they decide to fix it, and call it themselves? will we be
+// double-calling? will that break things?
+
+extern "C" {
+extern __declspec(dllexport) void _rt0_amd64_windows_lib();
+}
+
 int main(int argc, char **argv) {
+    _rt0_amd64_windows_lib();
+
     gargc = argc;
     gargv = argv;
 
@@ -996,14 +1008,30 @@ int main(int argc, char **argv) {
     }
 #endif
 
-    Window window;
-    if (!window.init(1280, 720, WINDOW_TITLE))
-        return error("could not create window"), EXIT_FAILURE;
-
-    world.init(&window);
+    world.init();
     SCOPED_MEM(&world.frame_mem);
 
-#ifdef DEBUG_MODE
+    {
+        SCOPED_MEM(&world.world_mem);
+        world.window = alloc_object(Window);
+    }
+
+    {
+        // init glew using a dummy context
+        if (!make_bootstrap_context())
+            return error("couldn't create opengl context"), EXIT_FAILURE;
+        defer { destroy_bootstrap_context(); };
+
+        glewExperimental = GL_TRUE;
+        auto err = glewInit();
+        if (err != GLEW_OK)
+            return error("unable to init GLEW: %s", glewGetErrorString(err)), EXIT_FAILURE;
+    }
+
+    if (!world.window->init(1280, 720, WINDOW_TITLE))
+        return error("could not create window"), EXIT_FAILURE;
+
+#ifdef DEBUG_BUILD
     GHEnableDebugMode();
 #endif
 
@@ -1067,17 +1095,6 @@ int main(int argc, char **argv) {
 
     set_window_title(get_window_note());
     world.window->make_context_current();
-
-    {
-        glewExperimental = GL_TRUE;
-        auto err = glewInit();
-        if (err != GLEW_OK)
-            return error("unable to init GLEW: %s", glewGetErrorString(err)), EXIT_FAILURE;
-    }
-
-    wglSwapIntervalEXT(0);
-    wglGetCurrentDC(); // test that this works
-
     world.window->swap_interval(0);
 
     auto configdir = GHGetConfigDir();
@@ -1274,7 +1291,7 @@ int main(int argc, char **argv) {
             io.Fonts->AddFontFromMemoryTTF(open_sans_ttf, open_sans_ttf_len, UI_FONT_SIZE, &config, icon_ranges2);
         }
 
-        world.ui.im_font_mono = io.Fonts->AddFontFromMemoryTTF(vera_mono_ttf, vera_mono_ttf_len, CODE_FONT_SIZE);
+        world.ui.im_font_mono = io.Fonts->AddFontFromMemoryTTF(ui.base_font->font_data, ui.base_font->font_data_len, CODE_FONT_SIZE);
         cp_assert(world.ui.im_font_mono);
 
         /*
@@ -1500,7 +1517,7 @@ int main(int argc, char **argv) {
 
         // Process filesystem changes.
 
-        {
+        /* {
             Fs_Event event;
             for (u32 items_processed = 0; items_processed < 10 && world.fswatch.next_event(&event); items_processed++) {
                 if (is_git_folder(event.filepath)) continue;
@@ -1537,6 +1554,7 @@ int main(int argc, char **argv) {
                 }
             }
         }
+        */
 
         t.log("filesystem changes");
 

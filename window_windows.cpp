@@ -555,6 +555,7 @@ bool Window::init_os_specific(int width, int height, ccstr title) {
     BringWindowToTop(win32_window);
     SetForegroundWindow(win32_window);
     SetFocus(win32_window);
+    return true;
 }
 
 static LRESULT CALLBACK window_callback(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
@@ -869,6 +870,48 @@ bool Window::create_actual_window(int width, int height, ccstr title) {
     get_framebuffer_size(&frame_w, &frame_h);
     get_content_scale(&xscale, &yscale);
     return true;
+}
+
+static HDC bootstrap_hdc = NULL;
+static HGLRC bootstrap_ctx = NULL;
+
+bool make_bootstrap_context() {
+    bootstrap_hdc = GetDC(NULL);
+    if (!bootstrap_hdc) return false;
+
+    PIXELFORMATDESCRIPTOR pfd = {
+        sizeof(PIXELFORMATDESCRIPTOR), 1,
+        PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER,
+        PFD_TYPE_RGBA,
+        8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        8, 8, 0, PFD_MAIN_PLANE, 0, 0, 0, 0
+    };
+
+    bool ok = false;
+    defer { if (!ok) destroy_bootstrap_context(); };
+
+    int pixel_format = ChoosePixelFormat(bootstrap_hdc, &pfd);
+    if (!pixel_format) return false;
+    if (!SetPixelFormat(bootstrap_hdc, pixel_format, &pfd)) return false;
+
+    bootstrap_ctx = wglCreateContext(bootstrap_hdc);
+    if (!bootstrap_ctx) return false;
+    if (!wglMakeCurrent(bootstrap_hdc, bootstrap_ctx)) return false;
+
+    ok = true;
+    return true;
+}
+
+void destroy_bootstrap_context() {
+    if (bootstrap_ctx) {
+        wglMakeCurrent(NULL, NULL);
+        wglDeleteContext(bootstrap_ctx);
+    }
+
+    if (bootstrap_hdc != NULL) {
+        ReleaseDC(NULL, bootstrap_hdc);
+        bootstrap_hdc = NULL;
+    }
 }
 
 bool Window::create_wgl_context() {

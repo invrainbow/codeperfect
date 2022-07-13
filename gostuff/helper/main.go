@@ -11,7 +11,6 @@ import (
 	"net"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -90,7 +89,7 @@ func GHStartBuild(cmdstr *C.char) bool {
 
 	currentBuild = &GoBuild{}
 	currentBuild.done = false
-	currentBuild.cmd = exec.Command("/bin/bash", "-lc", s)
+	currentBuild.cmd = makeShellCommand(s)
 
 	go func(b *GoBuild) {
 		out, err := b.cmd.CombinedOutput()
@@ -353,7 +352,7 @@ func GHGetVersion() int {
 }
 
 func GetBinaryPath(bin string) (string, error) {
-	out, err := exec.Command("/bin/bash", "-ilc", fmt.Sprintf("which %s", bin)).Output()
+	out, err := makeFindBinaryPathCommand(bin).Output()
 	if err != nil {
 		log.Print(err)
 		if e, ok := err.(*exec.ExitError); ok {
@@ -464,8 +463,12 @@ func GHBuildEnvInit() bool {
 		return false
 	}
 
-	dirpath := path.Dir(exepath)
-	filepath := path.Join(dirpath, "buildcontext.go")
+	dirpath := filepath.Dir(exepath)
+	filepath := filepath.Join(dirpath, "buildcontext.go")
+
+	log.Printf("pathsep = %v", os.PathSeparator)
+	log.Printf("exepath = %s", exepath)
+	log.Printf("dirpath = %s", dirpath)
 	log.Printf("using buildcontext.go at %s", filepath)
 
 	binpath, err := GetBinaryPath("go")
@@ -476,9 +479,15 @@ func GHBuildEnvInit() bool {
 
 	log.Printf("binpath: %s", binpath)
 
-	out, err := exec.Command(binpath, "run", filepath).Output()
+	cmd := exec.Command(binpath, "run", filepath)
+	cmd.Dir = dirpath
+	out, err := cmd.Output()
 	if err != nil {
 		log.Print(err)
+		log.Print(out)
+		if err2, ok := err.(*exec.ExitError); ok {
+			log.Print(string(err2.Stderr))
+		}
 		return false
 	}
 
@@ -539,7 +548,7 @@ func GHReadCpfolderFile() *C.char {
         return nil
     }
 
-	f, err := os.Open(path.Join(homedir, ".cpfolder"))
+	f, err := os.Open(filepath.Join(homedir, ".cpfolder"))
 	if err != nil {
 		fmt.Println(err)
 		return nil

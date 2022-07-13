@@ -114,7 +114,7 @@ bool History::go_forward() {
 }
 
 void History::check_marks(int upper) {
-#ifdef DEBUG_MODE
+#ifdef DEBUG_BUILD
     if (upper == -1) upper = top;
 
     for (auto i = start; i != upper; i = inc(i)) {
@@ -329,10 +329,9 @@ bool copy_file(ccstr src, ccstr dest) {
     return f.write((char*)fm->data, fm->len);
 }
 
-void World::init(Window *_wnd) {
+void World::init() {
     ptr0(this);
 
-    window = _wnd;
     gh_version = GHGetVersion();
 
 #define init_mem(x) x.init(#x)
@@ -412,7 +411,7 @@ void World::init(Window *_wnd) {
     {
         SCOPED_MEM(&world_mem);
         frameskips.init();
-#ifdef DEBUG_MODE
+#ifdef DEBUG_BUILD
         show_frameskips = true;
 #endif
     }
@@ -424,10 +423,10 @@ void World::init(Window *_wnd) {
         resizing_pane = -1;
         panes.init(LIST_FIXED, _countof(_panes), _panes);
 
-        // if testing
-        if (!world.window) {
-            cp_strcpy_fixed(current_path, "/Users/bh/ide/gostuff");
-        } else if (gargc >= 2) {
+#ifdef TESTING_BUILD
+        cp_strcpy_fixed(current_path, "/Users/bh/ide/gostuff");
+#else
+        if (gargc >= 2) {
             if (streq(gargv[1], "__debug__")) {
                 auto path = GHReadCpfolderFile();
                 if (!path) cp_panic("unable to read cpfolder file");
@@ -444,6 +443,7 @@ void World::init(Window *_wnd) {
             opts.save = false;
             if (!let_user_select_file(&opts)) exit(0);
         }
+#endif
 
         if (check_path(current_path) != CPR_DIRECTORY) {
             cp_panic("Unable to open selected folder.");
@@ -505,7 +505,7 @@ void World::init(Window *_wnd) {
 
     world.file_explorer.show = true;
 
-#ifdef DEBUG_MODE
+#ifdef DEBUG_BUILD
     // if (!use_nvim) world.wnd_history.show = true;
 
     show_frame_index = false;
@@ -517,7 +517,7 @@ void World::start_background_threads() {
     if (use_nvim) nvim.start_running();
     dbg.start_loop();
 
-#if DEBUG_MODE
+#if DEBUG_BUILD
     // VSCode debugger frequently fails to break when I press break.  But, it
     // works if I set a breakpoint which is hit. So the asinine solution I've
     // devised is to create a background thread that runs in a loop, so I can
@@ -747,7 +747,7 @@ void kick_off_build(Build_Profile *build_profile) {
 void* get_native_window_handle() {
     if (!world.window) return NULL;
 
-#if OS_WINDOWS
+#if OS_WINBLOWS
     return world.window->win32_window;
 #elif OS_MAC
     return world.window->ns_window;
@@ -1623,7 +1623,7 @@ void init_command_info_table() {
 
     mem0(command_info_table, sizeof(command_info_table));
 
-#if OS_WINDOWS
+#if OS_WINBLOWS
     command_info_table[CMD_EXIT] = k(CP_MOD_ALT, CP_KEY_F4, "Exit");
 #elif OS_MAC
     command_info_table[CMD_EXIT] = k(CP_MOD_CMD, CP_KEY_Q, "Quit");
