@@ -542,11 +542,11 @@ func GHIsUnicodeDigit(code rune) bool {
 
 //export GHReadCpfolderFile
 func GHReadCpfolderFile() *C.char {
-    homedir, err := os.UserHomeDir()
-    if err != nil {
-        fmt.Println(err)
-        return nil
-    }
+	homedir, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Println(err)
+		return nil
+	}
 
 	f, err := os.Open(filepath.Join(homedir, ".cpfolder"))
 	if err != nil {
@@ -560,7 +560,7 @@ func GHReadCpfolderFile() *C.char {
 		return nil
 	}
 
-    s := string(buf)
+	s := string(buf)
 	lines := strings.Split(strings.ReplaceAll(s, "\r\n", "\n"), "\n")
 	for _, line := range lines {
 		if strings.HasPrefix(line, "#") {

@@ -4,6 +4,7 @@
 #include "window.hpp"
 #include "defer.hpp"
 #include "win32.hpp"
+#include "enums.hpp"
 
 #include <limits.h>
 #include <windowsx.h>
@@ -15,7 +16,7 @@
 #define WM_COPYGLOBALDATA 0x0049
 #endif
 
-static int scan_to_key_table[256];
+static int scan_to_key_table[0x200];
 static int key_to_scan_table[__CP_KEY_COUNT];
 
 static DWORD window_style = WS_CLIPSIBLINGS | WS_CLIPCHILDREN | WS_SYSMENU | WS_MINIMIZEBOX | WS_CAPTION | WS_MAXIMIZEBOX | WS_THICKFRAME;
@@ -629,7 +630,9 @@ LRESULT Window::callback(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
         if (scan == 0x54) scan = 0x137;
         if (scan == 0x146) scan = 0x45;
 
-        auto key = scan_to_key_table[scan];
+        auto key = (Key)scan_to_key_table[scan];
+        print("scan = 0x%x", scan);
+        print("keydown: %s", key_str(key));
 
         // The Ctrl keys require special handling
         if (w == VK_CONTROL) {

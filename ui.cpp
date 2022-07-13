@@ -967,8 +967,8 @@ Glyph *UI::lookup_glyph_for_grapheme(List<uchar> *grapheme) {
     auto glyph_bitmaps = alloc_list<u8*>();
     auto glyph_positions = alloc_list<box>();
 
-    float oversample_x = 3.0f;
-    float oversample_y = 3.0f;
+    float oversample_x = 2.0f;
+    float oversample_y = 2.0f;
 
     for (u32 i = 0; i < glyph_count; i++) {
         auto glyph_index = hb_glyph_info[i].codepoint;
@@ -1033,9 +1033,9 @@ Glyph *UI::lookup_glyph_for_grapheme(List<uchar> *grapheme) {
 
     if (atlas) {
         // reached the end of the row? move back to start
-        if (atlas->pos.x + bbox.w + 3 > ATLAS_SIZE) {
+        if (atlas->pos.x + bbox.w + 1 > ATLAS_SIZE) {
             atlas->pos.x = 0;
-            atlas->pos.y += atlas->tallest + 3;
+            atlas->pos.y += atlas->tallest + 1;
             atlas->tallest = 0;
         }
 
@@ -1083,7 +1083,7 @@ Glyph *UI::lookup_glyph_for_grapheme(List<uchar> *grapheme) {
     uv.h = (float)bbox.h / (float)ATLAS_SIZE;
 
     if (bbox.h > atlas->tallest) atlas->tallest = bbox.h;
-    atlas->pos.x += bbox.w + 3;
+    atlas->pos.x += bbox.w + 1;
 
     glyph = alloc_object(Glyph);
     glyph->single = grapheme->len == 1;
@@ -1120,7 +1120,7 @@ void UI::draw_char(vec2f* pos, List<uchar> *grapheme, vec4f color) {
     glActiveTexture(GL_TEXTURE0 + TEXTURE_FONT);
 
     /*
-    if (grapheme->at(0) == ' ')
+    if (grapheme->at(0) == '=')
         BREAK_HERE;
     */
 
