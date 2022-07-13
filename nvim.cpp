@@ -1329,11 +1329,12 @@ void Nvim::start_running() {
     nvim_proc.init();
     nvim_proc.use_stdin = true;
     nvim_proc.dir = cp_dirname(get_executable_path());
-    nvim_proc.skip_shell = true;
 
 #if OS_WINBLOWS
-    nvim_proc.run("nvim.exe -u init.vim -i NONE -N --embed --headless");
+    // for some reason skip_shell causes file not found on windows
+    nvim_proc.run(".\\nvim\\bin\\nvim.exe -u init.vim -i NONE -N --embed --headless");
 #elif OS_MAC
+    nvim_proc.skip_shell = true;
     nvim_proc.run("./nvim/bin/nvim -u init.vim -i NONE -N --embed --headless");
 #else
 #error "only windows and mac supported right now"
