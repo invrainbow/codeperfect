@@ -188,6 +188,7 @@ enum Postfix_Completion_Type {
     PFC_NOT,
     /**/
     PFC_EMPTY,
+    PFC_NOTEMPTY,
     PFC_IFEMPTY,
     PFC_IFNOTEMPTY,
     /**/

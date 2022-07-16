@@ -2431,8 +2431,11 @@ List<Postfix_Completion_Type> *Go_Indexer::get_postfix_completions(Ast_Node *ope
             ret->append(PFC_FORKEY);
             ret->append(PFC_FORVALUE);
             ret->append(PFC_EMPTY);
+            ret->append(PFC_NOTEMPTY);
             ret->append(PFC_IFNIL);
             ret->append(PFC_IFNOTNIL);
+            ret->append(PFC_IFEMPTY);
+            ret->append(PFC_IFNOTEMPTY);
             ret->append(PFC_NIL);
             ret->append(PFC_NOTNIL);
             return true;
@@ -2485,7 +2488,9 @@ List<Postfix_Completion_Type> *Go_Indexer::get_postfix_completions(Ast_Node *ope
         ret->append(PFC_NOTNIL);
         ret->append(PFC_NOT);
         ret->append(PFC_EMPTY);
+        ret->append(PFC_NOTEMPTY);
         ret->append(PFC_IFEMPTY);
+        ret->append(PFC_IFNOTEMPTY);
         ret->append(PFC_IF);
         ret->append(PFC_IFNOT);
         ret->append(PFC_IFNIL);
@@ -4006,7 +4011,9 @@ ccstr get_postfix_completion_name(Postfix_Completion_Type type) {
     case PFC_NOTNIL: return "notnil!";
     case PFC_NOT: return "not!";
     case PFC_EMPTY: return "empty!";
+    case PFC_NOTEMPTY: return "notempty!";
     case PFC_IFEMPTY: return "ifempty!";
+    case PFC_IFNOTEMPTY: return "ifnotempty!";
     case PFC_IF: return "if!";
     case PFC_IFNOT: return "ifnot!";
     case PFC_IFNIL: return "ifnil!";

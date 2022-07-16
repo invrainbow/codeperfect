@@ -133,14 +133,13 @@ void Editor::perform_autocomplete(AC_Result *result) {
         auto insert_autoindent = [&](int add = 0) {
             SCOPED_FRAME();
 
-            if (!autoindent_chars)
-                cp_panic("autoindent_chars is null (you probably forgot to call save_autoindent");
+            cp_assert(autoindent_chars);
 
             insert_text("%s", autoindent_chars);
 
             if (add) {
                 ccstr tabs = "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t";
-                if (add >= strlen(tabs)) cp_panic("not enough tabs");
+                cp_assert(add < strlen(tabs));
                 insert_text("%.*s", add, tabs);
             }
         };
@@ -165,6 +164,30 @@ void Editor::perform_autocomplete(AC_Result *result) {
         };
 
         bool notfound = false;
+
+        auto is_string = [&]() -> bool {
+            auto gotype = ac.operand_gotype;
+            if (gotype)
+                if (gotype->type == GOTYPE_BUILTIN)
+                    if (gotype->builtin_type == GO_BUILTIN_STRING)
+                        return true;
+            return false;
+        };
+
+        auto insert_is_empty = [&](bool invert) {
+            if (is_string()) {
+                insert_text("%s %s \"\"", operand_text, invert ? "!=" : "==");
+            } else {
+                insert_text(
+                    "%s %s nil %s len(%s) %s 0",
+                    operand_text,
+                    invert ? "!=" : "==",
+                    invert ? "&&" : "||" ,
+                    operand_text,
+                    invert ? "!=" : "=="
+                );
+            }
+        };
 
         switch (result->postfix_operation) {
         case PFC_ASSIGNAPPEND:
@@ -210,21 +233,12 @@ void Editor::perform_autocomplete(AC_Result *result) {
 
         case PFC_EMPTY:
             initialize_everything();
-            {
-                auto is_string = [&]() -> bool {
-                    auto gotype = ac.operand_gotype;
-                    if (gotype)
-                        if (gotype->type == GOTYPE_BUILTIN)
-                            if (gotype->builtin_type == GO_BUILTIN_STRING)
-                                return true;
-                    return false;
-                };
+            insert_is_empty(false);
+            break;
 
-                if (is_string())
-                    insert_text("%s == \"\"", operand_text);
-                else
-                    insert_text("%s == nil || len(%s) == 0", operand_text, operand_text);
-            }
+        case PFC_NOTEMPTY:
+            initialize_everything();
+            insert_is_empty(true);
             break;
 
         case PFC_IF:
@@ -240,7 +254,9 @@ void Editor::perform_autocomplete(AC_Result *result) {
 
         case PFC_IFEMPTY:
             initialize_everything();
-            insert_text("if %s == nil || %s.len == 0 {", operand_text, operand_text);
+            insert_text("if ");
+            insert_is_empty(false);
+            insert_text(" {");
             save_autoindent();
             insert_newline(1);
             record_position();
@@ -251,7 +267,9 @@ void Editor::perform_autocomplete(AC_Result *result) {
 
         case PFC_IFNOTEMPTY:
             initialize_everything();
-            insert_text("if %s != nil && %s.len != 0 {", operand_text, operand_text);
+            insert_text("if ");
+            insert_is_empty(true);
+            insert_text(" {");
             save_autoindent();
             insert_newline(1);
             record_position();
