@@ -9,6 +9,7 @@
 #include "imgui_internal.h"
 #include "ui.hpp"
 #include "common.hpp"
+#include "fonts.hpp"
 #include "world.hpp"
 #include "go.hpp"
 #include "unicode.hpp"
@@ -731,6 +732,13 @@ void UI::render_ts_cursor(TSTreeCursor *curr, cur2 open_cur) {
     pop(0);
 }
 
+Font *init_builtin_base_font() {
+    auto ret = alloc_object(Font);
+    if (ret->init("Bitstream Vera Sans Mono", CODE_FONT_SIZE, vera_mono_ttf, vera_mono_ttf_len))
+        return ret;
+    return NULL;
+}
+
 bool UI::init() {
     ptr0(this);
 
@@ -739,10 +747,13 @@ bool UI::init() {
         font_cache.init();
         glyph_cache.init();
 
-        ccstr base_font_candidates[] = { "SF Mono", "Menlo", "Monaco", "Consolas", "Liberation Mono" };
-        For (base_font_candidates) {
-            base_font = acquire_font(it);
-            if (base_font) break;
+        base_font = init_builtin_base_font();
+        if (!base_font) {
+            ccstr base_font_candidates[] = { "SF Mono", "Menlo", "Monaco", "Consolas", "Liberation Mono" };
+            For (base_font_candidates) {
+                base_font = acquire_font(it);
+                if (base_font) break;
+            }
         }
 
         if (!base_font) return false;
@@ -1119,29 +1130,16 @@ void UI::draw_char(vec2f* pos, List<uchar> *grapheme, vec4f color) {
 
     glActiveTexture(GL_TEXTURE0 + TEXTURE_FONT);
 
-    /*
-    if (grapheme->at(0) == '=')
-        BREAK_HERE;
-    */
-
     auto glyph = lookup_glyph_for_grapheme(grapheme);
     if (!glyph) return;
 
     if (current_texture_id != glyph->atlas->gl_texture_id) {
         flush_verts();
-
         glBindTexture(GL_TEXTURE_2D, glyph->atlas->gl_texture_id);
         current_texture_id = glyph->atlas->gl_texture_id;
     }
 
-    float xscale = 1.0f, yscale = 1.0f;
-    world.window->get_content_scale(&xscale, &yscale);
-
     boxf b = glyph->box;
-    b.x /= xscale;
-    b.w /= xscale;
-    b.y /= yscale;
-    b.h /= yscale;
     b.x += pos->x;
     b.y += pos->y;
 
@@ -6803,19 +6801,18 @@ Font* UI::find_font_for_grapheme(List<uchar> *grapheme) {
     return font->can_render_chars(grapheme) ? font : NULL;
 }
 
-bool Font::init(ccstr font_name, u32 font_size) {
+bool Font::init(ccstr font_name, u32 font_size, u8 *data, u32 data_len) {
     ptr0(this);
     name = font_name;
     height = font_size;
-
-    if (!load_font_data_by_name(name, &font_data, &font_data_len))
-        return false;
+    font_data = data;
+    font_data_len = data_len;
 
     bool ok = false;
     defer { if (!ok) cleanup(); };
 
     // create harfbuzz crap
-    hbblob = hb_blob_create(font_data, font_data_len, HB_MEMORY_MODE_READONLY, NULL, NULL);
+    hbblob = hb_blob_create((char*)font_data, font_data_len, HB_MEMORY_MODE_READONLY, NULL, NULL);
     if (!hbblob) return false;
     hbface = hb_face_create(hbblob, 0);
     if (!hbface) return false;
@@ -6835,6 +6832,14 @@ bool Font::init(ccstr font_name, u32 font_size) {
 
     ok = true;
     return true;
+}
+
+bool Font::init(ccstr font_name, u32 font_size) {
+    u8 *data = NULL;
+    u32 data_len = 0;
+    if (!load_font_data_by_name(name, &data, &data_len))
+        return false;
+    return init(name, font_size, data, data_len);
 }
 
 void Font::cleanup() {

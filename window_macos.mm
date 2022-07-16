@@ -8,7 +8,7 @@
 #include "window.hpp"
 
 static int scan_to_key_table[256];
-static int key_to_scan_table[CP_KEY_LAST+1];
+static int key_to_scan_table[__CP_KEY_COUNT];
 
 struct Winctx {
     id helper;
@@ -737,8 +737,8 @@ float cocoa_transform_y(float y) {
     return CGDisplayBounds(CGMainDisplayID()).size.height - y - 1;
 }
 
-void Window::dispatch_mouse_event_cocoa(Mouse_Button button, Press_Action action, NSEvent *event) {
-    dispatch_mouse_event(button, action, translate_keymod([event modifierFlags]));
+void Window::dispatch_mouse_event_cocoa(Mouse_Button button, Press_Action action, void *event) {
+    dispatch_mouse_event(button, action, translate_keymod([((__bridge NSEvent*)event) modifierFlags]));
 }
 
 void Window::make_context_current() {
@@ -760,22 +760,16 @@ void Window::swap_interval(int interval) {
     }
 }
 
-bool Window::create_nsgl_context() {
-    NSOpenGLPixelFormatAttribute attribs[40];
-    int attrib_index = 0;
-
-    auto add_attrib = [&](auto a) {
-        cp_assert((size_t) attrib_index < _countof(attribs));
-        attribs[attrib_index++] = a;
-    };
+void Window::create_nsgl_context() {
+    auto attribs = alloc_list<NSOpenGLPixelFormatAttribute>();
 
     auto set_attrib = [&](auto a, auto v) {
-        add_attrib(a);
-        add_attrib(v);
+        attribs->append(a);
+        attribs->append(v);
     };
 
-    add_attrib(NSOpenGLPFAAccelerated);
-    add_attrib(NSOpenGLPFAClosestPolicy);
+    attribs->append(NSOpenGLPFAAccelerated);
+    attribs->append(NSOpenGLPFAClosestPolicy);
 #if MAC_OS_X_VERSION_MAX_ALLOWED >= 101000
     set_attrib(NSOpenGLPFAOpenGLProfile, NSOpenGLProfileVersion4_1Core);
 #else
@@ -785,32 +779,26 @@ bool Window::create_nsgl_context() {
     set_attrib(NSOpenGLPFAAlphaSize, 8);
     set_attrib(NSOpenGLPFADepthSize, 24);
     set_attrib(NSOpenGLPFAStencilSize, 8);
-    add_attrib(NSOpenGLPFADoubleBuffer);
+    attribs->append(NSOpenGLPFADoubleBuffer);
     set_attrib(NSOpenGLPFASampleBuffers, 0);
-    add_attrib(0);
+    attribs->append((NSOpenGLPixelFormatAttribute)0);
 
-    nsgl_pixel_format = [[NSOpenGLPixelFormat alloc] initWithAttributes:attribs];
-    if (nsgl_pixel_format == nil) {
+    nsgl_pixel_format = [[NSOpenGLPixelFormat alloc] initWithAttributes:attribs->items];
+    if (nsgl_pixel_format == nil)
         cp_panic("Unable to initialize window (couldn't find pixel format)");
-        return false;
-    }
 
     nsgl_object = [[NSOpenGLContext alloc] initWithFormat:nsgl_pixel_format shareContext:nil];
-    if (nsgl_object == nil) {
+    if (nsgl_object == nil)
         cp_panic("Unable to initialize window (couldn't create context)");
-        return false;
-    }
 
     [ns_view setWantsBestResolutionOpenGLSurface:YES];
     [nsgl_object setView:ns_view];
-
-    return true;
 }
 
 bool Window::init_os_specific(int width, int height, ccstr title) {
     @autoreleasepool {
         if (!create_actual_window(width, height, title)) return false;
-        if (!create_nsgl_context()) return false;
+        create_nsgl_context();
         make_context_current();
 
         [ns_window orderFront:nil];
@@ -1104,4 +1092,54 @@ bool Window::create_actual_window(int width, int height, ccstr title) {
     get_size(&window_w, &window_h);
     get_framebuffer_size(&frame_w, &frame_h);
     return true;
+}
+
+static NSOpenGLPixelFormat *bootstrap_pixel_format = nil;
+static NSOpenGLContext *bootstrap_context = nil;
+
+// pretty much copy pasted from Window::create_nsgl_context()
+void _make_bootstrap_context() {
+    auto attribs = alloc_list<NSOpenGLPixelFormatAttribute>();
+    auto set_attrib = [&](auto a, auto v) {
+        attribs->append(a);
+        attribs->append(v);
+    };
+
+    attribs->append(NSOpenGLPFAAccelerated);
+    attribs->append(NSOpenGLPFAClosestPolicy);
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 101000
+    set_attrib(NSOpenGLPFAOpenGLProfile, NSOpenGLProfileVersion4_1Core);
+#else
+    set_attrib(NSOpenGLPFAOpenGLProfile, NSOpenGLProfileVersion3_2Core);
+#endif
+    set_attrib(NSOpenGLPFAColorSize, 24);
+    set_attrib(NSOpenGLPFAAlphaSize, 8);
+    set_attrib(NSOpenGLPFADepthSize, 24);
+    set_attrib(NSOpenGLPFAStencilSize, 8);
+    attribs->append(NSOpenGLPFADoubleBuffer);
+    set_attrib(NSOpenGLPFASampleBuffers, 0);
+    attribs->append((NSOpenGLPixelFormatAttribute)0);
+
+    bootstrap_pixel_format = [[NSOpenGLPixelFormat alloc] initWithAttributes:attribs->items];
+    if (bootstrap_pixel_format == nil)
+        cp_panic("Unable to initialize window (couldn't find pixel format)");
+
+    bootstrap_context = [[NSOpenGLContext alloc] initWithFormat:bootstrap_pixel_format shareContext:nil];
+    if (bootstrap_context == nil)
+        cp_panic("Unable to initialize window (couldn't create context)");
+
+    [bootstrap_context makeCurrentContext];
+}
+
+void make_bootstrap_context() {
+    @autoreleasepool {
+        _make_bootstrap_context();
+    }
+}
+
+void destroy_bootstrap_context() {
+    @autoreleasepool {
+        bootstrap_pixel_format = nil;
+        bootstrap_context = nil;
+    }
 }

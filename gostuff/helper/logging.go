@@ -1,5 +1,7 @@
 //go:build !windows
 
+package main
+
 import (
     "log"
 	"log/syslog"

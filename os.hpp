@@ -378,4 +378,4 @@ int get_unix_time();
 void write_to_syslog(ccstr s);
 
 bool list_all_fonts(List<ccstr> *out);
-bool load_font_data_by_name(ccstr name, char** data, u32 *len);
+bool load_font_data_by_name(ccstr name, u8** data, u32 *len);

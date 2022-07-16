@@ -16,7 +16,7 @@
 #include "debugger.hpp"
 #include "hash.hpp"
 
-#define CODE_FONT_SIZE 13
+#define CODE_FONT_SIZE 14
 #define UI_FONT_SIZE 17
 #define ICON_FONT_SIZE 16
 #define FRAME_RATE_CAP 60
@@ -151,7 +151,7 @@ struct Glyph {
 };
 
 struct Font {
-    char *font_data;
+    u8 *font_data;
     u32 font_data_len;
     stbtt_fontinfo stbfont;
     hb_blob_t *hbblob;
@@ -165,6 +165,7 @@ struct Font {
     ccstr filepath;
 
     bool init(ccstr font_name, u32 font_size);
+    bool init(ccstr font_name, u32 font_size, u8 *data, u32 data_len);
     void cleanup();
     bool can_render_chars(List<uchar> *chars);
 };

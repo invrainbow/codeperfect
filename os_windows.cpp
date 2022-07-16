@@ -979,7 +979,7 @@ bool load_font_data_by_name(ccstr name, char** data, u32 *len) {
     auto datalen = GetFontData(hdc, 0, 0, NULL, 0);
     if (datalen == GDI_ERROR) return false;
 
-    auto fontdata = (char*)malloc(datalen);
+    auto fontdata = (u8*)malloc(datalen);
     if (GetFontData(hdc, 0, 0, fontdata, datalen) == GDI_ERROR) {
         free(fontdata);
         return false;

@@ -338,12 +338,12 @@ struct Window {
     bool create_wgl_context();
     void dispatch_mouse_event_win32(Mouse_Button button, Press_Action action);
 #elif OS_MAC
-    void dispatch_mouse_event_cocoa(Mouse_Button button, Press_Action action, NSEvent *event);
+    void dispatch_mouse_event_cocoa(Mouse_Button button, Press_Action action, void* /* NSEvent* */ event);
     bool is_cursor_in_content_area();
     void update_cursor_mode();
     void update_cursor_image();
     bool create_actual_window(int width, int height, ccstr title);
-    bool create_nsgl_context();
+    void create_nsgl_context();
 #endif
 };
 
@@ -354,5 +354,6 @@ void poll_window_events();
 
 // The purpose of this is function to get us to a point where the current
 // OpenGL context is a valid one, basically so we can initialize GLEW. Once GLEW is initialized the bootstrap context will be destroyed.
-bool make_bootstrap_context();
+// Panics if it can't do it.
+void make_bootstrap_context();
 void destroy_bootstrap_context();

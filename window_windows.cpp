@@ -1,3 +1,5 @@
+#if OS_WINBLOWS
+
 #define OEMRESOURCE
 
 #include "world.hpp"
@@ -878,9 +880,10 @@ bool Window::create_actual_window(int width, int height, ccstr title) {
 static HDC bootstrap_hdc = NULL;
 static HGLRC bootstrap_ctx = NULL;
 
-bool make_bootstrap_context() {
+void make_bootstrap_context() {
     bootstrap_hdc = GetDC(NULL);
-    if (!bootstrap_hdc) return false;
+    if (!bootstrap_hdc)
+        cp_panic("Unable to get device context to bootstrap OpenGL context.");
 
     PIXELFORMATDESCRIPTOR pfd = {
         sizeof(PIXELFORMATDESCRIPTOR), 1,
@@ -890,19 +893,16 @@ bool make_bootstrap_context() {
         8, 8, 0, PFD_MAIN_PLANE, 0, 0, 0, 0
     };
 
-    bool ok = false;
-    defer { if (!ok) destroy_bootstrap_context(); };
-
     int pixel_format = ChoosePixelFormat(bootstrap_hdc, &pfd);
-    if (!pixel_format) return false;
+    if (!pixel_format)
+        cp_panic("Unable to get pixel format to bootstrap OpenGL context.");
     if (!SetPixelFormat(bootstrap_hdc, pixel_format, &pfd)) return false;
 
     bootstrap_ctx = wglCreateContext(bootstrap_hdc);
-    if (!bootstrap_ctx) return false;
-    if (!wglMakeCurrent(bootstrap_hdc, bootstrap_ctx)) return false;
-
-    ok = true;
-    return true;
+    if (!bootstrap_ctx)
+        cp_panic("Unable to create bootstrap OpenGL context.");
+    if (!wglMakeCurrent(bootstrap_hdc, bootstrap_ctx))
+        cp_panic("Unable to make bootstrap OpenGL context current.");
 }
 
 void destroy_bootstrap_context() {
@@ -1024,3 +1024,5 @@ void poll_window_events() {
         });
     }
 }
+
+#endif

@@ -3,12 +3,29 @@
 #include <Cocoa/Cocoa.h>
 #include "os.hpp"
 #include "utils.hpp"
+#include "defer.hpp"
 
 void init_platform_specific_crap() { }
 
 // idk why but including world.hpp gives us a bunch of dumb conflicts
 // i hate programming
 void* get_native_window_handle();
+
+static ccstr cfstring_to_ccstr(CFStringRef s) {
+    if (!s) return NULL;
+
+    CFIndex len = CFStringGetLength(s);
+    CFIndex maxsize = CFStringGetMaximumSizeForEncoding(len, kCFStringEncodingUTF8) + 1;
+
+    Frame frame;
+
+    auto ret = alloc_array(char, maxsize);
+    if (!CFStringGetCString(s, ret, maxsize, kCFStringEncodingUTF8)) {
+        frame.restore();
+        return NULL;
+    }
+    return ret;
+}
 
 NSAlert *make_nsalert(ccstr text, ccstr title) {
     auto alert = [[NSAlert alloc] init];
@@ -196,7 +213,7 @@ bool list_all_fonts(List<ccstr> *out) {
     return true;
 }
 
-bool load_font_data_by_name(ccstr name, char** data, u32 *len) {
+bool load_font_data_by_name(ccstr name, u8** data, u32 *len) {
     auto cf_font_name = CFStringCreateWithCString(NULL, name, kCFStringEncodingUTF8);
 
     auto ctfont = (void*)CTFontCreateWithName(cf_font_name, 12, NULL);
@@ -210,13 +227,14 @@ bool load_font_data_by_name(ccstr name, char** data, u32 *len) {
     if (!cffilepath) return false;
     defer { CFRelease(cffilepath); };
 
-    filepath = cfstring_to_ccstr(cffilepath);
-
-    auto fm = map_file_into_memory(filepath);
+    auto fm = map_file_into_memory(cfstring_to_ccstr(cffilepath));
     if (!fm) return false;
     defer { fm->cleanup(); };
 
-    auto ret = malloc(fm->len);
+    auto ret = (u8*)malloc(fm->len);
     memcpy(ret, fm->data, fm->len);
-    return ret;
+
+    *len = fm->len;
+    *data = ret;
+    return true;
 }

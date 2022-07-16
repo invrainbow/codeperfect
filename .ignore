@@ -15,3 +15,5 @@ Icons*.h
 web
 glew.c
 glew.h
+stb/*
+GL/*

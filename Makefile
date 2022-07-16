@@ -104,8 +104,8 @@ obj/tests.o: tests.cpp # Makefile
 obj/objclibs.o: objclibs.mm
 	$(CC) $(CFLAGS) -fobjc-arc -c -o $@ $<
 
+PIC_FLAGS =
 ifeq ($(OSTYPE), windows)
-	PIC_FLAGS =
 else
 	PIC_FLAGS = -fPIC
 endif
