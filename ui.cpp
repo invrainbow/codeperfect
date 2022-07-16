@@ -978,6 +978,8 @@ Glyph *UI::lookup_glyph_for_grapheme(List<uchar> *grapheme) {
     auto glyph_bitmaps = alloc_list<u8*>();
     auto glyph_positions = alloc_list<box>();
 
+    if (!glyph_count) return NULL; // but then won't it keep calling this every single frame?
+
     float oversample_x = 2.0f;
     float oversample_y = 2.0f;
 
@@ -996,10 +998,10 @@ Glyph *UI::lookup_glyph_for_grapheme(List<uchar> *grapheme) {
         y0 += (cur_x + pos.y_offset) * oversample_y;
         y1 += (cur_x + pos.y_offset) * oversample_y;
 
-        if (bx0 == -1 || x0 < bx0) bx0 = x0;
-        if (by0 == -1 || y0 < by0) by0 = y0;
-        if (bx1 == -1 || x1 < bx1) bx1 = x1;
-        if (by1 == -1 || y1 < by1) by1 = y1;
+        if (i == 0 || x0 < bx0) bx0 = x0;
+        if (i == 0 || y0 < by0) by0 = y0;
+        if (i == 0 || x1 < bx1) bx1 = x1;
+        if (i == 0 || y1 < by1) by1 = y1;
 
         int w = 0, h = 0;
         auto data = stbtt_GetGlyphBitmapSubpixel(&font->stbfont, scale_x, scale_y, 0.0f, 0.0f, hb_glyph_info[i].codepoint, &w, &h, NULL, NULL);
@@ -1027,8 +1029,6 @@ Glyph *UI::lookup_glyph_for_grapheme(List<uchar> *grapheme) {
     }
     For (*glyph_positions) it.y -= topmost;
     For (*glyph_positions) it.x -= leftmost;
-
-    if (bx0 == -1 || by0 == -1 || bx1 == -1 || by1 == -1) return NULL;
 
     boxf bbox; ptr0(&bbox);
     bbox.x = (float)bx0;
