@@ -4792,7 +4792,7 @@ bool Go_Indexer::check_if_still_in_parameter_hint(ccstr filepath, cur2 cur, cur2
         return WALK_CONTINUE;
     }, true);
 
-    ccstr suffix = "";
+    ccstr suffix = "_";
     if (string_close_char)
         suffix = cp_sprintf("%c", string_close_char);
     suffix = cp_sprintf("%s)}}}}}}}}}}}}}}}}", suffix);
