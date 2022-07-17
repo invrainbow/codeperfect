@@ -158,7 +158,7 @@ struct Editor {
     void init();
     void cleanup();
 
-    bool is_unsaved() { return is_modifiable() && buf->dirty; }
+    bool is_unsaved() { return is_modifiable() && (file_was_deleted || buf->dirty); }
 
     bool is_nvim_ready();
 
