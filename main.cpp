@@ -1520,7 +1520,7 @@ int main(int argc, char **argv) {
 
         // Process filesystem changes.
 
-        /* {
+        {
             Fs_Event event;
             for (u32 items_processed = 0; items_processed < 10 && world.fswatch.next_event(&event); items_processed++) {
                 if (is_git_folder(event.filepath)) continue;
@@ -1530,6 +1530,13 @@ int main(int argc, char **argv) {
 
                 auto filedir = filepath;
                 auto res = check_path(filedir);
+
+                if (res == CPR_NONEXISTENT)
+                    For (world.panes)
+                        For (it.editors)
+                            if (are_filepaths_equal(it.filepath, filepath))
+                                it.file_was_deleted = true;
+
                 if (res != CPR_DIRECTORY)
                     filedir = cp_dirname(filedir);
                 if (streq(filedir, "."))
@@ -1557,7 +1564,6 @@ int main(int argc, char **argv) {
                 }
             }
         }
-        */
 
         t.log("filesystem changes");
 

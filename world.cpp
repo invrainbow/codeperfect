@@ -1496,8 +1496,9 @@ bool is_command_enabled(Command cmd) {
 
     case CMD_SAVE_ALL:
         For (world.panes)
-            if (it.editors.len)
-                return true;
+            For (it.editors)
+                if (it.is_modifiable())
+                    return true;
         return false;
 
     case CMD_GO_TO_PREVIOUS_ERROR:

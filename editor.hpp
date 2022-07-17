@@ -82,6 +82,7 @@ struct Editor {
 
     char filepath[MAX_PATH];
     bool is_untitled;
+    bool file_was_deleted;
 
     // only used when !world.use_nvim
     bool selecting;
@@ -175,7 +176,6 @@ struct Editor {
     void move_cursor(cur2 c, Move_Cursor_Opts *opts = NULL);
     void reset_state();
     bool load_file(ccstr new_filepath);
-    bool save_file();
     i32 cur_to_offset(cur2 c);
     i32 cur_to_offset();
     cur2 offset_to_cur(i32 offset);

@@ -5328,6 +5328,10 @@ void UI::draw_everything() {
             if (editor.is_unsaved())
                 label = cp_sprintf("%s*", label);
 
+            // color change?
+            if (editor.file_was_deleted)
+                label = cp_sprintf("%s [deleted]", label);
+
             auto text_width = get_text_width(label) * base_font->width;
 
             tab.w = text_width + tab_padding.x * 2;

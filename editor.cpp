@@ -1163,16 +1163,6 @@ Editor* Pane::open_empty_editor() {
     return focus_editor_by_index(editors.len - 1);
 }
 
-bool Editor::save_file() {
-    File f;
-    if (f.init_write(filepath) != FILE_RESULT_OK)
-        return error("unable to open %s for writing", filepath), false;
-    defer { f.cleanup(); };
-
-    buf->write(&f);
-    return true;
-}
-
 i32 Editor::cur_to_offset(cur2 c) {
     return buf->cur_to_offset(c);
 }
@@ -2352,6 +2342,8 @@ bool Editor::optimize_imports() {
 }
 
 void Editor::format_on_save(int fmt_type, bool write_to_nvim) {
+    if (!is_go_file) return; // any more checks needed?
+
     auto old_cur = cur;
 
     Buffer swapbuf; ptr0(&swapbuf);
@@ -2479,6 +2471,8 @@ void Editor::handle_save(bool about_to_close) {
         buf->write(&f);
         buf->dirty = false;
     }
+
+    file_was_deleted = false;
 
     auto find_node = [&]() -> FT_Node * {
         auto curr = world.file_tree;

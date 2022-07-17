@@ -27,11 +27,7 @@ bool are_filepaths_equal(ccstr a, ccstr b) {
     auto a2 = normalize_path_sep(get_canon_path(a));
     auto b2 = normalize_path_sep(get_canon_path(b));
 
-#if FILEPATHS_CASE_SENSITIVE
-    return streq(a2, b2);
-#else
-    return streqi(a2, b2);
-#endif
+    return FILEPATHS_CASE_SENSITIVE ? streq(a2, b2) : streqi(a2, b2);
 }
 
 File_Mapping *map_file_into_memory(ccstr path) {

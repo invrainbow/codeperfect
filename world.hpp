@@ -333,6 +333,7 @@ struct World {
     char go_binary_path[MAX_PATH];
     char current_path[MAX_PATH];
 
+    // lol this was back before we had dynamic arrays and world_mem
     Pane _panes[MAX_PANES];
     List<Pane> panes;
     u32 current_pane;
