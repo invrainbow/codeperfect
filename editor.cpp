@@ -1730,7 +1730,7 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
                 return a->is_struct_literal ? 1 : -1;
 
             if (a->fzy_score != b->fzy_score && !prefix_is_empty)
-                return a->fzy_score - b->fzy_score;
+                return a->fzy_score > b->fzy_score ? 1 : -1;
 
             if (a->result_type == ACR_IMPORT && b->result_type == ACR_IMPORT) {
                 if (a->import_in_file != b->import_in_file)
@@ -1756,10 +1756,13 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
             return 0;
         };
 
+        auto filtered_results = autocomplete.filtered_results;
         auto scores = alloc_array(Score, results->len);
 
-        Fori (*results) {
-            auto &score = scores[i];
+        for (int i = 0; i < filtered_results->len; i++) {
+            auto idx = filtered_results->at(i);
+            auto &it = results->at(idx);
+            auto &score = scores[idx];
             ptr0(&score);
 
             score.fzy_score = fzy_match(prefix, it.name);
@@ -1786,8 +1789,7 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
             }
         }
 
-        autocomplete.filtered_results->sort([&](int *ia, int *ib) -> int {
-            // reverse
+        filtered_results->sort([&](int *ia, int *ib) -> int {
             return -compare_scores(&scores[*ia], &scores[*ib]);
         });
 
