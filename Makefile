@@ -1,6 +1,6 @@
 CC = clang++
 
-CFLAGS = -std=c++17 -MMD -MP -I. -ferror-limit=100
+CFLAGS = -std=c++17 -MMD -MP -I. -Iimgui/ -ferror-limit=100
 CFLAGS += -w
 # CFLAGS += -mavx -maes
 CFLAGS += -Itree-sitter

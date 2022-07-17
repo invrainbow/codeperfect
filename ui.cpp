@@ -80,7 +80,7 @@ namespace ImGui {
         ImGuiWindow* window = GImGui->CurrentWindow;
         if (window->SkipItems)
             return false;
-        ImGuiID id = str_id ? window->GetID(str_id) : window->DC.LastItemId; // If user hasn't passed an ID, we can use the LastItemID. Using LastItemID as a Popup ID won't conflict!
+        ImGuiID id = str_id ? window->GetID(str_id) : GImGui->LastItemData.ID; // If user hasn't passed an ID, we can use the LastItemID. Using LastItemID as a Popup ID won't conflict!
         IM_ASSERT(id != 0);                                                  // You cannot pass a NULL str_id if the last item has no identifier (e.g. a Text() item)
         int mouse_button = (popup_flags & ImGuiPopupFlags_MouseButtonMask_);
         if (IsMouseReleased(mouse_button) && IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup))
@@ -1995,13 +1995,13 @@ struct Coarse_Clipper {
     }
 
     ImRect get_window_clip_area() {
-        auto g = ImGui::GetCurrentContext();
+        auto g = GImGui;
         auto window = g->CurrentWindow;
         auto ret = window->ClipRect;
 
         // I don't know and don't care what this does. It's ripped from imgui.cpp
         // and makes my code "just work."
-        if (g->NavMoveRequest)
+        if (g->NavMoveSubmitted)
             ret.Add(g->NavScoringRect);
         if (g->NavJustMovedToId && window->NavLastIds[0] == g->NavJustMovedToId)
             ret.Add(ImRect(window->Pos + window->NavRectRel[0].Min, window->Pos + window->NavRectRel[0].Max));
