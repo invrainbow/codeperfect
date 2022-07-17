@@ -3021,3 +3021,16 @@ void send_nvim_keys(ccstr s) {
     nv.writer.write_string(s);
     nv.end_message();
 }
+
+void clear_key_states() {
+    auto &io = ImGui::GetIO();
+    ptr0(&io.KeysDown);
+    io.KeyCtrl = false;
+    io.KeyShift = false;
+    io.KeyAlt = false;
+    io.KeySuper = false;
+
+    mem0(world.ui.mouse_down, sizeof(world.ui.mouse_down));
+    mem0(world.ui.mouse_just_pressed, sizeof(world.ui.mouse_just_pressed));
+    mem0(world.ui.mouse_just_released, sizeof(world.ui.mouse_just_released));
+}

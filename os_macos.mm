@@ -154,6 +154,9 @@ bool let_user_select_file(Select_File_Opts* opts) {
             result = ret;
         }
 
+        // for some reason on macos after file dialog key states aren't reset by focus/blur handler
+        clear_key_states();
+
         [wnd makeKeyAndOrderFront:nil];
 
         if (result != NSModalResponseOK) return false;

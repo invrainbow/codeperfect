@@ -719,3 +719,4 @@ void write_auth();
 
 bool write_project_settings();
 void send_nvim_keys(ccstr s);
+void clear_key_states();
