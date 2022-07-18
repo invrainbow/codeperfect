@@ -1006,8 +1006,10 @@ void Go_Indexer::background_thread() {
     do {
         index_print("Reading existing database...");
 
+        auto index_file = path_join(world.current_path, ".cpdb");
+
         Index_Stream s;
-        if (!s.open(path_join(world.current_path, ".cpdb"))) {
+        if (!s.open(index_file)) {
             index_print("No database found (or couldn't open).");
             break;
         }
@@ -1020,6 +1022,7 @@ void Go_Indexer::background_thread() {
             auto obj = s.read_index();
             if (!s.ok) {
                 index_print("Unable to read database file.");
+                delete_file(index_file);
                 break;
             }
 
