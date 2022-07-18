@@ -1,40 +1,41 @@
 CC = clang++
 
-CFLAGS = -std=c++17 -MMD -MP -I. -Iimgui/ -ferror-limit=100
-CFLAGS += -w
+CFLAGS = -std=c++17 -MMD -MP -I. -Iimgui/ -ferror-limit=100 -w -Itree-sitter
 # CFLAGS += -mavx -maes
-CFLAGS += -Itree-sitter
 
+LDFLAGS =
 LDFLAGS += obj/gohelper.a
+LDFLAGS += -lfreetype -lharfbuzz -lpcre -lfontconfig
+LDFLAGS += -lbrotlicommon-static -lbz2 -lpng16 -lbrotlidec-static 
+
 BINARY_NAME = ide
 
 ifeq ($(OSTYPE), mac)
 	CFLAGS += -DOSTYPE_MAC
-	LDFLAGS = -ldl -framework OpenGL -framework Cocoa -framework IOKit
-	LDFLAGS += -framework CoreFoundation -framework Security # for go
-	LDFLAGS += -lfreetype -lharfbuzz -lfontconfig
+	LDFLAGS += -ldl -lz -lexpat
 
-	LDFLAGS += $(shell brew --prefix pcre)/lib/libpcre.a
-	LDFLAGS += -L$(shell brew --prefix fontconfig)/lib
-	LDFLAGS += -L$(shell brew --prefix freetype)/lib
-	LDFLAGS += -L$(shell brew --prefix harfbuzz)/lib
+	frameworks = OpenGL Cocoa IOKit CoreFoundation Security
+	LDFLAGS += $(foreach it, $(frameworks), -framework $(it))
 
-	M1 = $(shell sh/detect_m1)
-	ifeq ($(M1), 1)
+	ifeq ($(shell sh/detect_m1), 1)
 		CFLAGS += -arch arm64
+		CFLAGS += -I./vcpkg/installed/arm64-osx/include
+		LDFLAGS += -L./vcpkg/installed/arm64-osx/lib
 		GOARCH = arm64
 	else
 		CFLAGS += -arch x86_64
+		CFLAGS += -I./vcpkg/installed/x64-osx/include
+		LDFLAGS += -L./vcpkg/installed/x64-osx/lib
 		GOARCH = amd64
 	endif
 else ifeq ($(OSTYPE), windows)
 	BINARY_NAME = ide.exe
 	CFLAGS += -DOSTYPE_WINDOWS
-	CFLAGS += -I$(VCPKG_ROOT)/installed/x64-windows-static/include
-	LDFLAGS += -L$(VCPKG_ROOT)/installed/x64-windows-static/lib
-	LDFLAGS += -lfreetype -lharfbuzz -lpcre -lfontconfig
+	CFLAGS += -I./vcpkg/installed/x64-windows-static/include
+	LDFLAGS += -L./vcpkg/installed/x64-windows-static/lib
+
+	LDFLAGS += -lzlib -llibexpatMD
 	LDFLAGS += -lopengl32 -ladvapi32 -lshlwapi -lole32
-	LDFLAGS += -lbrotlicommon-static -lbz2 -lzlib -llibpng16 -lbrotlidec-static -llibexpatMD
 	LDFLAGS += -lpathcch -lshell32 -lwinmm -lws2_32 -lgdi32 -lshcore
 	LDFLAGS += --for-linker "/IGNORE:4217"
 	GOARCH = amd64
