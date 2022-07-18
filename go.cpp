@@ -40,7 +40,8 @@ const int GO_INDEX_MAGIC_NUMBER = 0x49fa98;
 // version 27: fix parser handling newlines and idents wrong in interface specs
 // version 28: upgrade tree-sitter-go
 // version 29: generics
-const int GO_INDEX_VERSION = 37;
+// version 30: support labels
+const int GO_INDEX_VERSION = 30;
 
 void index_print(ccstr fmt, ...) {
     va_list args;
@@ -1872,6 +1873,7 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
         case TS_VAR_DECLARATION:
         case TS_RANGE_CLAUSE:
         case TS_RECEIVE_STATEMENT:
+        case TS_LABELED_STATEMENT:
         case TS_TYPE_PARAMETER_DECLARATION: {
             if (node_type == TS_METHOD_DECLARATION || node_type == TS_FUNCTION_DECLARATION) {
                 Open_Scope os;
@@ -3793,6 +3795,7 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 p
         case TS_PACKAGE_IDENTIFIER:
         case TS_TYPE_IDENTIFIER:
         case TS_IDENTIFIER:
+        case TS_LABEL_NAME:
         case TS_FIELD_IDENTIFIER: {
             auto is_struct_field_in_literal = [&]() -> Ast_Node *{
                 auto p = node->parent();
@@ -5956,6 +5959,21 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
         decl->type_params = type_params;
         save_decl(decl);
 
+        break;
+    }
+
+    case TS_LABELED_STATEMENT: {
+        auto label = node->field(TSF_LABEL);
+        if (label->null) break;
+
+        auto decl = new_result();
+        decl->type = GODECL_LABEL;
+        decl->name = label->string();
+        decl->spec_start = node->start();
+        decl->name_start = label->start();
+        decl->name_end = label->end();
+        decl->gotype = NULL;
+        save_decl(decl);
         break;
     }
 

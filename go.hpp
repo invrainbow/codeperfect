@@ -392,6 +392,7 @@ enum Godecl_Type {
     GODECL_TYPECASE,
     GODECL_TYPE_PARAM,
     GODECL_METHOD_RECEIVER_TYPE_PARAM,
+    GODECL_LABEL,
 };
 
 struct Godecl {
