@@ -68,7 +68,7 @@ function WallOfText({ width, children, className, ...props }) {
   return (
     <div
       className={cx(
-        "wall-of-text p-4 md:py-16 leading-normal md:mx-auto",
+        "wall-of-text p-4 md:py-20 leading-normal md:mx-auto",
         `md:max-w-${width || "2xl"}`,
         className
       )}
@@ -96,19 +96,6 @@ function H1({ className, children, ...props }) {
 function Title({ className, ...props }) {
   return <H1 className={cx("text-4xl", className)} {...props} />;
 }
-
-/*
-function H2({ className, children, ...props }) {
-  return (
-    <h2
-      className={cx("text-xl leading-tight font-bold text-gray-700", className)}
-      {...props}
-    >
-      {children}
-    </h2>
-  );
-}
-*/
 
 function Icon({ block, noshift, icon: IconComponent, ...props }) {
   return (
@@ -167,7 +154,7 @@ function Feature({
 function Home() {
   const [selected, setSelected] = React.useState(null);
 
-  const featureProps = (name) => ({
+  const feature = (name) => ({
     name,
     selected: selected === name,
     onClick: () => setSelected(name),
@@ -175,14 +162,14 @@ function Home() {
 
   return (
     <div className="my-24 w-full">
-      <div className="max-w-lg mx-auto text-lg mb-24">
+      <div className="max-w-lg mx-auto text-xl leading-relaxed mb-24">
         <div className="text-center font-bold text-3xl mb-8 text-black">
           A High Performance IDE for Go
         </div>
         <p>
-          A full-featured IDE, as fast as Sublime Text. Written from scratch in
-          C++, indexes large codebases quickly, and responds to every user input
-          in 16ms.
+          A full-featured IDE, as fast as Sublime Text. Cross-platform and
+          written in C++, CodePerfect indexes large codebases quickly and
+          responds to every user input in 16ms.
         </p>
         <p>
           Built for Vim users who want more power, Jetbrains users who want more
@@ -195,55 +182,43 @@ function Home() {
             Download
           </Link>
         </div>
+        <div className="text-center text-3xl mt-4 font-medium text-gray-400">
+          <Icon icon={AiFillWindows} /> <Icon icon={AiFillApple} />{" "}
+          <Icon icon={FaLinux} />
+        </div>
       </div>
       <div
         className="grid max-w-screen-lg mx-auto gap-x-6"
-        style={{
-          "grid-template-columns": "250px auto",
-        }}
+        style={{ "grid-template-columns": "250px auto" }}
       >
         <div className="max-w-xs">
-          <Feature {...featureProps("Code intelligence")} icon={BsCodeSlash}>
+          <Feature {...feature("Code intelligence")} icon={BsCodeSlash}>
             Autocomplete, go to definition, parameter hints, find usages, and
             more.
           </Feature>
-
-          <Feature {...featureProps("Build and debug")} icon={VscTools}>
+          <Feature {...feature("Build and debug")} icon={VscTools}>
             Edit, build and debug in one workflow, one app, one place.
           </Feature>
-
-          <Feature {...featureProps("Vim keybindings")} icon={SiVim}>
+          <Feature {...feature("Vim keybindings")} icon={SiVim}>
             Vim keybindings work natively out of the box, the full feature set.
           </Feature>
-
-          <Feature {...featureProps("Instant fuzzy search")} icon={IoMdSearch}>
+          <Feature {...feature("Instant fuzzy search")} icon={IoMdSearch}>
             Works on files, symbols, commands, and completions.
           </Feature>
-
-          <Feature
-            {...featureProps("Automatic refactoring")}
-            icon={ImMagicWand}
-          >
+          <Feature {...feature("Automatic refactoring")} icon={ImMagicWand}>
             Rename, move, and generate code automatically.
           </Feature>
-
-          <Feature {...featureProps("Automatic import")} icon={GoPackage}>
+          <Feature {...feature("Automatic import")} icon={GoPackage}>
             Pull in libraries you need without moving your cursor.
           </Feature>
-
-          <Feature {...featureProps("Postfix macros")} icon={FaRobot}>
+          <Feature {...feature("Postfix macros")} icon={FaRobot}>
             Generate code with macros that work intelligently on your Go
             expressions.
           </Feature>
-
-          <Feature
-            {...featureProps("Native interface support")}
-            icon={FaLayerGroup}
-          >
+          <Feature {...feature("Native interface support")} icon={FaLayerGroup}>
             Navigate and generate interfaces in a few keystrokes.
           </Feature>
-
-          <Feature {...featureProps("Command Palette")} icon={FaPalette}>
+          <Feature {...feature("Command Palette")} icon={FaPalette}>
             Press ⌘K to run any command or action inside CodePerfect.
           </Feature>
         </div>
@@ -261,28 +236,6 @@ function Home() {
     </div>
   );
 }
-
-/*
-function Loading({ size = "80px", className, ...props }) {
-  return (
-    <div className={cx(className)} {...props}>
-      <div className="lds-ring" style={{ width: size, height: size }}>
-        {[0, 1, 2, 3].map((key) => (
-          <div
-            key={key}
-            style={{
-              width: `calc((${size} * 4) / 5)`,
-              height: `calc((${size} * 4) / 5)`,
-              margin: `calc(${size} / 10)`,
-              borderWidth: `calc(${size} / 10)`,
-            }}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-*/
 
 function PaymentDone() {
   return (
@@ -465,12 +418,13 @@ function Download() {
               Download CodePerfect
             </span>
           </div>
+          <p>Please select your operating system on the right.</p>
           <p>
-            CodePerfect for free to evaluate for 7 days, with all features
+            CodePerfect is free to evaluate for 7 days, with all features
             available. After the trial period you'll need a license for
             continued use.
           </p>
-          <p className="flex flex-row gap-3">
+          <p className="flex flex-row gap-4">
             <Link
               className="inline-block border-b-2 border-gray-600 no-underline leading-none font-semibold"
               to="/buy"
