@@ -7,10 +7,8 @@
     margin: 0;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
       "Helvetica Neue", "Ubuntu", sans-serif;
-    font-size: 15px;
+    font-size: 16px;
     line-height: 1.6;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
   }
 
   code {
@@ -84,7 +82,7 @@
 
 @layer components {
   .button {
-    @apply rounded-lg font-medium shadow-sm leading-none;
+    @apply rounded-md shadow-sm leading-none;
     @apply py-4 px-5;
     @apply disabled:opacity-50 no-underline outline-none;
     @apply whitespace-nowrap;
@@ -99,7 +97,7 @@
     color: white;
   }
   .download-button {
-    @apply bg-gray-50 border border-gray-300 text-gray-500;
+    @apply bg-white border border-gray-300 text-gray-500;
   }
   .download-button:hover:not(:disabled) {
     background: white;
