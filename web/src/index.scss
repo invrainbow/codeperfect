@@ -3,8 +3,13 @@
 @tailwind utilities;
 
 @layer base {
+  * {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
   html {
-    font-size: 18px;
+    font-size: 19px;
   }
 
   body {
