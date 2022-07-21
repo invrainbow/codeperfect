@@ -1064,11 +1064,9 @@ bool Editor::load_file(ccstr new_filepath) {
         }
         defer { fm->cleanup(); };
 
-        if (is_binary((ccstr)fm->data, fm->len)) {
-            if (ask_user_yes_no("This file appears to be a binary file. Attempting to open it as text could have adverse results. Do you still want to try?", "Binary file encountered", "Open", "Don't Open") != ASKUSER_YES) {
+        if (is_binary((ccstr)fm->data, fm->len))
+            if (ask_user_yes_no("This file appears to be a binary file. Attempting to open it as text could have adverse results. Do you still want to try?", "Binary file encountered", "Open", "Don't Open") != ASKUSER_YES)
                 return false;
-            }
-        }
 
         if (!check_file(fm)) return false;
 
