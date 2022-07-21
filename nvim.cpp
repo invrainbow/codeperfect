@@ -81,13 +81,6 @@ void Nvim::write_line(Line *line) {
         for (int j = 0; j < size; j++)
             writer.write1(buf[j]);
     }
-
-    /*
-    writer.write1(MP_OP_STRING);
-    writer.write4(line->len);
-    For (*line)
-        writer.write1(it);
-    */
 }
 
 // TODO: also need to remove request from queue once it's been processed
