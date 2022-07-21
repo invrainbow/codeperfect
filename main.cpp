@@ -956,7 +956,7 @@ void handle_window_event(Window_Event *it) {
             } else {
                 send_nvim_keys(ch == '<' ? "<LT>" : uchar_to_cstr(ch));
             }
-        } else {
+        } else if (ed->is_modifiable()) {
             ed->delete_selection();
             ed->type_char_in_insert_mode(ch);
         }
