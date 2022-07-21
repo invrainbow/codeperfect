@@ -13,25 +13,26 @@
 #include <string.h>
 #include <utility>
 
-#include "os.hpp"
 #include "common.hpp"
 #include "debugger.hpp"
+#include "defer.hpp"
 #include "editor.hpp"
-#include "list.hpp"
+#include "enums.hpp"
+#include "fonts.hpp"
 #include "go.hpp"
+#include "list.hpp"
+#include "nvim.hpp"
+#include "os.hpp"
+#include "settings.hpp"
+#include "ui.hpp"
+#include "unicode.hpp"
 #include "utils.hpp"
 #include "world.hpp"
-#include "nvim.hpp"
-#include "ui.hpp"
-#include "fzy_match.h"
-#include "settings.hpp"
-#include "unicode.hpp"
-#include "defer.hpp"
 
-#include "imgui.h"
-#include "fonts.hpp"
-#include "icons.h"
 #include "binaries.h"
+#include "fzy_match.h"
+#include "icons.h"
+#include "imgui.h"
 
 static const char WINDOW_TITLE[] = "CodePerfect 95";
 
