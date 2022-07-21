@@ -962,8 +962,8 @@ void Editor::move_cursor(cur2 c, Move_Cursor_Opts *opts) {
         nv.writer.write_int(nvim_data.win_id);
         {
             nv.writer.write_array(2);
-            nv.writer.write_int(c.y + 1);
-            nv.writer.write_int(buf->idx_cp_to_byte(c.y, c.x));
+            nv.writer.write_int(cur.y + 1);
+            nv.writer.write_int(buf->idx_cp_to_byte(cur.y, cur.x));
         }
         nv.end_message();
     }
