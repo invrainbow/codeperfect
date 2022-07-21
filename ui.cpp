@@ -5311,18 +5311,19 @@ void UI::draw_everything() {
                 if (ind.goroot && path_has_descendant(ind.goroot, editor.filepath)) {
                     label = get_path_relative_to(editor.filepath, ind.goroot);
                     external = true;
-                    // label = cp_sprintf("$GOROOT/%s", label);
                 } else if (ind.gomodcache && path_has_descendant(ind.gomodcache, editor.filepath)) {
-                    label = get_path_relative_to(editor.filepath, ind.gomodcache);
+                    auto path = get_path_relative_to(editor.filepath, ind.gomodcache);
+
+                    auto parts = split_string(cp_dirname(path), '@');
+                    parts->len--; // remove last part
+
+                    label = cp_sprintf("%s:%s", join_array(parts, '@'), cp_basename(path));
                     external = true;
-                    // label = cp_sprintf("$GOMODCACHE/%s", label);
                 } else {
                     label = get_path_relative_to(editor.filepath, world.current_path);
                 }
 
-                if (external) {
-                    label = cp_sprintf("[ext] %s", label);
-                }
+                if (external) label = cp_sprintf("[ext] %s", label);
             }
 
             if (editor.is_unsaved())
