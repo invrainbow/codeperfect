@@ -155,13 +155,6 @@ struct Editor {
         u32 skip_changedticks_until;
     } nvim_insert;
 
-    void init();
-    void cleanup();
-
-    bool is_unsaved() { return is_modifiable() && (file_was_deleted || buf->dirty); }
-
-    bool is_nvim_ready();
-
     struct {
         Autocomplete ac;
         List<int>* filtered_results;
@@ -171,7 +164,13 @@ struct Editor {
 
     Client_Parameter_Hint parameter_hint;
 
+    void init();
+    void cleanup();
+
+    bool is_unsaved() { return is_modifiable() && (file_was_deleted || buf->dirty); }
+    bool is_nvim_ready();
     bool is_modifiable();
+
     void raw_move_cursor(cur2 c, Move_Cursor_Opts *opts = NULL);
     void move_cursor(cur2 c, Move_Cursor_Opts *opts = NULL);
     void reset_state();

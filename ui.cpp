@@ -5452,7 +5452,7 @@ void UI::draw_everything() {
             if (!pane.editors.len) break;
 
             auto editor = pane.get_current_editor();
-            if (!editor->is_nvim_ready()) break;
+            // if (!editor->is_nvim_ready()) break;
 
             struct Highlight {
                 cur2 start;

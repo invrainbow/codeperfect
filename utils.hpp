@@ -428,6 +428,10 @@ struct Message_Queue {
         return &messages;
     }
 
+    void softend() {
+        lock.leave();
+    }
+
     void end() {
         mem.reset();
         messages.len = 0;

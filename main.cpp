@@ -1623,15 +1623,48 @@ int main(int argc, char **argv) {
         world.window->swap_buffers();
 
         if (!world.turn_off_framerate_cap) {
-            // wait until next frame
-            auto budget = (1000.f / FRAME_RATE_CAP);
-            auto spent = (current_time_nano() - frame_start_time) / 1000000.f;
-            if (budget > spent) {
-                sleep_milliseconds((u32)(budget - spent));
-            } else {
+            auto timeleft = [&]() -> i32 {
+                auto budget = (1000.f / FRAME_RATE_CAP);
+                auto spent = (current_time_nano() - frame_start_time) / 1000000.f;
+                return (i32)((i64)budget - (i64)spent);
+            };
+
+            while (true) {
+                auto rem = timeleft();
+                if (rem > 4 + 2) {
+                    auto messages = world.message_queue.start();
+                    defer {
+                        if (messages->len)
+                            world.message_queue.softend();
+                        else
+                            world.message_queue.end();
+                    };
+
+                    int i = 0;
+                    while (i < messages->len) {
+                        auto &it = messages->at(i);
+                        if (it.type == MTM_NVIM_MESSAGE) {
+                            auto &nv = world.nvim;
+                            nv.handle_message_from_main_thread(&it.nvim_message);
+                            messages->remove(i);
+                        } else i++;
+                    }
+
+                    // sleep what's rest of the 4 milliseconds
+                    auto rem2 = timeleft();
+                    if (rem - rem2 < 4) sleep_milliseconds(4 - (rem - timeleft()));
+                    continue;
+                }
+
+                if (rem > 0) {
+                    sleep_milliseconds((u32)rem);
+                    break;
+                }
+
                 auto fs = world.frameskips.append();
                 fs->timestamp = current_time_milli();
-                fs->ms_over = spent - budget;
+                fs->ms_over = -rem;
+                break;
             }
         }
 

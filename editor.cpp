@@ -11,7 +11,7 @@
 #include "defer.hpp"
 
 bool Editor::is_modifiable() {
-    return is_untitled || path_has_descendant(world.current_path, filepath);
+    return is_nvim_ready() && (is_untitled || path_has_descendant(world.current_path, filepath));
 }
 
 ccstr Editor::get_autoindent(int for_y) {
