@@ -17,3 +17,4 @@ glew.c
 glew.h
 stb/*
 GL/*
+vcpkg

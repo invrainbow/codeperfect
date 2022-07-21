@@ -6,7 +6,7 @@ CFLAGS = -std=c++17 -MMD -MP -I. -Iimgui/ -ferror-limit=100 -w -Itree-sitter
 LDFLAGS =
 LDFLAGS += obj/gohelper.a
 LDFLAGS += -lfreetype -lharfbuzz -lpcre -lfontconfig
-LDFLAGS += -lbrotlicommon-static -lbz2 -lpng16 -lbrotlidec-static 
+LDFLAGS += -lbrotlicommon-static -lbz2 -lpng16 -lbrotlidec-static
 
 BINARY_NAME = ide
 
