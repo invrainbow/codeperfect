@@ -8,12 +8,6 @@
 #include <stb/stb_sprintf.h>
 #include "defer.hpp"
 
-#if OS_WINBLOWS
-#include <shlwapi.h>
-#elif OS_MAC
-#include <libgen.h>
-#endif
-
 bool cp_strcpy(cstr buf, s32 count, ccstr src) {
     auto len = strlen(src);
     if (count < len + 1) return false;
@@ -58,43 +52,6 @@ ccstr cp_strncpy(ccstr s, int n) {
     memcpy(ret, s, sizeof(char) * n);
     ret[n] = '\0';
     return (ccstr)ret;
-}
-
-// why isn't this in os.hpp, btw? (along with cp_basename)
-ccstr _our_dirname(ccstr path) {
-#if OS_WINBLOWS
-    auto s = (char*)cp_strdup(path);
-    auto len = strlen(s);
-    if (is_sep(s[len-1]))
-        s[len-1] = '\0';
-
-    auto ret = alloc_array(char, strlen(s) + 1);
-    _splitpath(s, ret, NULL, NULL, NULL);
-    _splitpath(s, NULL, ret + strlen(ret), NULL, NULL);
-    return ret;
-#elif OS_MAC
-    // dirname might overwrite mem we pass it
-    // and also it might return pointer to statically allocated mem
-    // so just send it a copy and copy what it gives us
-    return cp_strdup(dirname((char*)cp_strdup(path)));
-#endif
-}
-
-ccstr cp_dirname(ccstr path) {
-    auto ret = _our_dirname(path);
-    if (streq(ret, ".")) ret = "";
-    return ret;
-}
-
-ccstr cp_basename(ccstr path) {
-#if OS_WINBLOWS
-    auto ret = (cstr)cp_strdup(path);
-    PathStripPathA(ret);
-    return (ccstr)ret;
-#elif OS_MAC
-    auto ret = cp_strdup(path);
-    return cp_strdup(basename((char*)ret));
-#endif
 }
 
 ccstr cp_vsprintf(ccstr fmt, va_list args) {
@@ -184,31 +141,32 @@ void Path::goto_child(ccstr child) {
     parts->append(child);
 }
 
-ccstr Path::str(char sep) {
-    if (!parts->len) return "";
+ccstr join_array(List<ccstr> *arr, char glue) {
+    char gluestr[] = {glue, '\0'};
+    return join_array(arr, gluestr);
+}
 
-    if (!sep) sep = PATH_SEP;
+ccstr join_array(List<ccstr> *arr, ccstr glue) {
+    if (!arr->len) return "";
 
-    auto len = 0;
-    For (*parts) len += strlen(it);
-    len += parts->len - 1;
+    auto ret = alloc_list<char>();
 
-    auto ret = alloc_array(char, len+1);
-    u32 k = 0;
+    auto append_str = [&](ccstr s) {
+        for (auto p = s; *p; p++)
+            ret->append(*p);
+    };
 
-    for (u32 i = 0; i < parts->len; i++) {
-        auto it = parts->at(i);
-
-        auto len = strlen(it);
-        memcpy(ret + k, it, len);
-        k += len;
-
-        if (i + 1 < parts->len)
-            ret[k++] = sep;
+    Fori (*arr) {
+        if (i) append_str(glue);
+        append_str(it);
     }
 
-    ret[k] = '\0';
-    return ret;
+    ret->append('\0');
+    return ret->items;
+}
+
+ccstr Path::str(char sep) {
+    return join_array(parts, sep ? sep : PATH_SEP);
 }
 
 bool path_has_descendant(ccstr base_path, ccstr full_path) {

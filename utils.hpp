@@ -4,12 +4,12 @@
 #include "os.hpp"
 #include "mem.hpp"
 #include "hash.hpp"
+#include <stb/stb_sprintf.h>
 
 ccstr cp_format_json(ccstr s);
 ccstr cp_strdup(ccstr s);
 ccstr cp_strncpy(ccstr s, int n);
-ccstr cp_dirname(ccstr path);
-ccstr cp_basename(ccstr path);
+
 ccstr cp_vsprintf(ccstr fmt, va_list args);
 ccstr cp_sprintf(ccstr fmt, ...);
 ccstr cp_strcat(ccstr a, ccstr b);
@@ -32,11 +32,11 @@ struct Text_Renderer {
         va_start(args, fmt);
         va_copy(args2, args);
 
-        auto n = vsnprintf(NULL, 0, fmt, args);
+        auto n = stbsp_vsnprintf(NULL, 0, fmt, args);
         chars.ensure_cap(chars.len + n + 1);
 
         auto buf = chars.items + chars.len;
-        vsnprintf((char*)buf, n + 1, fmt, args2);
+        stbsp_vsnprintf((char*)buf, n + 1, fmt, args2);
         chars.len += n;
 
         va_end(args);
@@ -123,6 +123,8 @@ struct Path {
 Path* make_path(ccstr s);
 List<ccstr> *split_string(ccstr str, fn<bool(char)> pred);
 List<ccstr> *split_string(ccstr str, char sep);
+ccstr join_array(List<ccstr> *arr, ccstr glue);
+ccstr join_array(List<ccstr> *arr, char glue);
 bool path_has_descendant(ccstr base_path, ccstr full_path);
 
 template <typename T>
@@ -353,6 +355,7 @@ struct Timer {
     ccstr name;
     bool enabled;
     bool *penabled;
+    List<char> *log_output;
 
     void init(ccstr _name, bool *_penabled) {
         ptr0(this);
@@ -390,7 +393,23 @@ struct Timer {
     }
 
     void output(ccstr s) {
-        if (is_enabled()) print("%s", s);
+        if (!is_enabled()) return;
+
+        if (!log_output) {
+            print("%s", s);
+            return;
+        }
+
+        for (char *p = (char*)s; *p; p++)
+            log_output->append(*p);
+        log_output->append('\n');
+    }
+
+    void logf(ccstr fmt, ...) {
+        va_list args;
+        va_start(args, fmt);
+        log(cp_vsprintf(fmt, args));
+        va_end(args);
     }
 
     void log(ccstr s) {

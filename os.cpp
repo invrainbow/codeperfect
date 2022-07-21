@@ -100,3 +100,8 @@ int get_unix_time() {
     return (int)time(NULL);
 }
 
+ccstr cp_dirname(ccstr path) {
+    auto ret = _cp_dirname(path);
+    if (streq(ret, ".")) ret = "";
+    return ret;
+}

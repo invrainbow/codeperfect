@@ -18,6 +18,7 @@
 #include <unistd.h>
 #include <ftw.h>
 #include <CoreServices/CoreServices.h>
+#include <libgen.h>
 #include "cwalk.h"
 
 // for places where i can't be fucked to learn the linux
@@ -678,6 +679,18 @@ int cpu_count() {
     if (ret >= 1) return ret;
 
     return 1;
+}
+
+ccstr _cp_dirname(ccstr path) {
+    // dirname might overwrite mem we pass it
+    // and might return pointer to statically allocated mem
+    // so send it a copy and copy what it gives us
+    return cp_strdup(dirname((char*)cp_strdup(path)));
+}
+
+ccstr cp_basename(ccstr path) {
+    auto ret = cp_strdup(path);
+    return cp_strdup(basename((char*)ret));
 }
 
 #endif

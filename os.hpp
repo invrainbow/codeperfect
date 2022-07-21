@@ -379,3 +379,7 @@ void write_to_syslog(ccstr s);
 
 bool list_all_fonts(List<ccstr> *out);
 bool load_font_data_by_name(ccstr name, u8** data, u32 *len);
+
+ccstr _cp_dirname(ccstr path);
+ccstr cp_dirname(ccstr path);
+ccstr cp_basename(ccstr path);

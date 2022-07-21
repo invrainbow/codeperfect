@@ -990,4 +990,22 @@ bool load_font_data_by_name(ccstr name, char** data, u32 *len) {
     return true;
 }
 
+ccstr _cp_dirname(ccstr path) {
+    auto s = (char*)cp_strdup(path);
+    auto len = strlen(s);
+    if (is_sep(s[len-1]))
+        s[len-1] = '\0';
+
+    auto ret = alloc_array(char, strlen(s) + 1);
+    _splitpath(s, ret, NULL, NULL, NULL);
+    _splitpath(s, NULL, ret + strlen(ret), NULL, NULL);
+    return ret;
+}
+
+ccstr cp_basename(ccstr path) {
+    auto ret = (cstr)cp_strdup(path);
+    PathStripPathA(ret);
+    return (ccstr)ret;
+}
+
 #endif // OS_WINBLOWS
