@@ -18,7 +18,7 @@
             "name": "test",
             "program": "build/bin/test",
             "args": [
-                "${input:testName}"
+                "parser_profile"
             ],
             "cwd": "${workspaceFolder}/build/bin",
             "expressions": "native"
@@ -30,7 +30,6 @@
             "initCommands": [
                 "target create -c ${input:coreFileName}"
             ],
-            "cwd": "${workspaceFolder}/build/bin",
             "expressions": "native"
         },
         {
@@ -38,18 +37,10 @@
             "request": "attach",
             "name": "attach",
             "program": "build/bin/ide",
-            "args": [],
-            "cwd": "${workspaceFolder}/build/bin",
             "expressions": "native"
         },
     ],
     "inputs": [
-        {
-            "id": "testName",
-            "type": "promptString",
-            "description": "Test name",
-            "default": "mtf_replay",
-        },
         {
             "id": "coreFileName",
             "type": "promptString",

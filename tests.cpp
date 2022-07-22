@@ -36,10 +36,10 @@ void test_diff() {
 
 void test_mark_tree() {
     Buffer buf;
-    buf.init(&world.frame_mem, false);
+    buf.init(&world.frame_mem, false, false);
     buf.read_data("loldongs", -1);
 
-    Mark_Tree mt;  mt.init(&buf);
+    Mark_Tree mt; mt.init(&buf);
 
     /*
     auto m1 = mt.insert_mark(MARK_BUILD_ERROR, new_cur2(2, 4));
@@ -318,9 +318,57 @@ void test_mark_tree_fuzz_replay() {
     cp_assert(mtf.replay());
 }
 
+void profile_parser() {
+    auto &gi = world.indexer;
+    auto resolved_path = "/opt/homebrew/Cellar/go/1.18.1/libexec/src/net/http";
+
+    Timer t; t.init();
+
+    auto source_files = gi.list_source_files(resolved_path, true);
+    if (!source_files) return;
+    if (!source_files->len) return;
+
+    t.log("list source files");
+
+    For (*source_files) {
+        auto filename = it;
+
+        SCOPED_FRAME();
+
+        auto filepath = path_join(resolved_path, it);
+
+        auto pf = gi.parse_file(filepath);
+        if (!pf) continue;
+        defer { gi.free_parsed_file(pf); };
+
+        t.logf("parse file: %s", it);
+
+        Go_File file;
+        file.pool.init("file pool", 512); // tweak this
+        defer { file.pool.cleanup(); };
+
+        {
+            SCOPED_MEM(&file.pool);
+            file.filename = cp_strdup(it);
+            file.scope_ops = alloc_list<Go_Scope_Op>();
+            file.decls = alloc_list<Godecl>();
+            file.imports = alloc_list<Go_Import>();
+            file.references = alloc_list<Go_Reference>();
+        }
+
+        ccstr pkgname = NULL;
+        gi.process_tree_into_gofile(&file, pf->root, filepath, &pkgname, true);
+
+        t.logf("process file: %s", it);
+        print("");
+    }
+
+    t.total();
+}
+
 int main(int argc, char *argv[]) {
     init_platform_specific_crap();
-    world.init(NULL);
+    world.init();
 
     auto match = [&](ccstr s) -> bool {
         if (argc <= 1) return true;
@@ -331,6 +379,7 @@ int main(int argc, char *argv[]) {
     if (match("mark_tree")) test_mark_tree();
     if (match("mtf")) test_mark_tree_fuzz();
     if (match("mtf_replay")) test_mark_tree_fuzz_replay();
+    if (match("parser_profile")) profile_parser();
 
     return 0;
 }

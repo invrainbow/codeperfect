@@ -1317,8 +1317,7 @@ void Go_Indexer::background_thread() {
                 continue;
             }
 
-            Timer t;
-            t.init();
+            Timer t; t.init();
 
             auto source_files = list_source_files(resolved_path, true);
             if (!source_files) continue;
@@ -1368,6 +1367,7 @@ void Go_Indexer::background_thread() {
             replace_package_name(pkg, package_name);
 
             fill_package_hash(pkg);
+
             pkg->status = GPS_READY;
             pkg->checked_for_outdated_hash = true;
 
@@ -1376,7 +1376,7 @@ void Go_Indexer::background_thread() {
                 packages_processed_since_last_write++;
             }
 
-            index_print("Processed %s in %dms.", import_path, t.read_time() / 1000000);
+            index_print("Processed %s in %dms.", import_path, t.read_total() / 1000000);
         }
 
         if (!package_queue.len) {

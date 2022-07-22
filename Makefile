@@ -3,6 +3,10 @@ CC = clang++
 CFLAGS = -std=c++17 -MMD -MP -I. -Iimgui/ -ferror-limit=100 -w -Itree-sitter
 # CFLAGS += -mavx -maes
 
+ifeq ($(TESTING_BUILD), 1)
+	CFLAGS += -DTESTING_BUILD
+endif
+
 LDFLAGS =
 LDFLAGS += obj/gohelper.a
 LDFLAGS += -lfreetype -lharfbuzz -lpcre -lfontconfig
@@ -78,6 +82,8 @@ endif
 
 all: build/bin/$(BINARY_NAME) build/bin/init.vim build/bin/buildcontext.go
 
+test: build/bin/test build/bin/init.vim build/bin/buildcontext.go
+
 prep:
 	mkdir -p obj build/bin
 
@@ -85,7 +91,7 @@ clean:
 	rm -rf obj/ build/bin/
 	mkdir -p obj build/bin
 
-build/bin/test: $(filter-out obj/main.o, $(OBJ_DEPS)) obj/tests.o
+build/bin/test: $(filter-out obj/main.o, $(OBJ_DEPS)) obj/tests.o obj/enums.o binaries.c
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 
 build/bin/$(BINARY_NAME): $(OBJ_DEPS) binaries.c obj/enums.o
@@ -100,7 +106,7 @@ obj/enums.o: enums.cpp # Makefile
 	$(CC) $(CFLAGS) -MMD -MP -c -o $@ $<
 
 obj/tests.o: tests.cpp # Makefile
-	$(CC) $(CFLAGS) -DTESTING_BUILD -MMD -MP -c -o $@ $<
+	$(CC) $(CFLAGS) -MMD -MP -c -o $@ $<
 
 obj/objclibs.o: objclibs.mm
 	$(CC) $(CFLAGS) -fobjc-arc -c -o $@ $<

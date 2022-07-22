@@ -1,0 +1,10 @@
+#!/bin/bash
+set -e
+
+if [[ "$(sh/detect_os)" = "windows" ]]; then
+    if [[ ! -z "$(tasklist /FI "IMAGENAME eq remedybg.exe" | grep remedybg)" ]]; then
+        remedybg stop-debugging
+    fi
+fi
+
+TESTING_BUILD=1 sh/make test

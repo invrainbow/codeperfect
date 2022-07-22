@@ -1098,7 +1098,7 @@ struct Go_Indexer {
     ccstr find_best_import(ccstr package_name, List<ccstr> *identifiers);
 
     ccstr filepath_to_import_path(ccstr filepath);
-    void process_package(ccstr import_path);
+    bool process_package(ccstr import_path, Go_Package *pkg);
     bool is_file_included_in_build(ccstr path);
     List<ccstr>* list_source_files(ccstr dirpath, bool include_tests);
     ccstr get_package_name(ccstr path);

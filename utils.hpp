@@ -385,11 +385,7 @@ struct Timer {
     }
 
     bool is_enabled() {
-#ifdef DEBUG_BUILD
         return penabled ? *penabled : enabled;
-#else
-        return false;
-#endif
     }
 
     void output(ccstr s) {
@@ -413,7 +409,7 @@ struct Timer {
     }
 
     void log(ccstr s) {
-        output(cp_sprintf("%s: %dus", make_label(s), read_time() / 1000));
+        output(cp_sprintf("%s: %.4fms", make_label(s), read_time() / 1000000.f));
     }
 
     i64 read_time() {
@@ -423,10 +419,15 @@ struct Timer {
         return ret;
     }
 
-    void total() {
+    i64 read_total() {
         auto curr = current_time_nano();
-        output(cp_sprintf("%s: %dus", make_label("TOTAL"), (curr - start) / 1000));
+        auto ret = curr - start;
         time = curr;
+        return ret;
+    }
+
+    void total() {
+        output(cp_sprintf("%s: %.4fms", make_label("TOTAL"), read_total() / 1000000.f));
     }
 };
 

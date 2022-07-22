@@ -6748,7 +6748,7 @@ Font* UI::acquire_font(ccstr name) {
     if (!font->init(name, CODE_FONT_SIZE)) {
         frame.restore();
         error("unable to acquire font: %s", name);
-        return NULL;
+        font = NULL;
     }
 
     font_cache.set(cp_strdup(name), font);
@@ -6803,7 +6803,10 @@ Font* UI::find_font_for_grapheme(List<uchar> *grapheme) {
     }
 
     auto font = acquire_font(name);
-    return font->can_render_chars(grapheme) ? font : NULL;
+    if (!font) return NULL;
+    if (!font->can_render_chars(grapheme)) return NULL;
+
+    return font;
 }
 
 bool Font::init(ccstr font_name, u32 font_size, u8 *data, u32 data_len) {
@@ -6825,7 +6828,9 @@ bool Font::init(ccstr font_name, u32 font_size, u8 *data, u32 data_len) {
     if (!hbfont) return false;
 
     // create stbtt font
-    if (!stbtt_InitFont(&stbfont, (unsigned char*)font_data, 0)) return false;
+    auto ucdata = (unsigned char*)font_data;
+    // if (!stbtt_InitFont(&stbfont, ucdata, stbtt_GetFontOffsetForIndex(ucdata, 0))) return false;
+    if (!stbtt_InitFont(&stbfont, ucdata, 0)) return false;
 
     int unscaled_width = 0, unscaled_offset_y = 0;
     stbtt_GetCodepointHMetrics(&stbfont, 'A', &unscaled_width, NULL);
@@ -6842,9 +6847,9 @@ bool Font::init(ccstr font_name, u32 font_size, u8 *data, u32 data_len) {
 bool Font::init(ccstr font_name, u32 font_size) {
     u8 *data = NULL;
     u32 data_len = 0;
-    if (!load_font_data_by_name(name, &data, &data_len))
+    if (!load_font_data_by_name(font_name, &data, &data_len))
         return false;
-    return init(name, font_size, data, data_len);
+    return init(font_name, font_size, data, data_len);
 }
 
 void Font::cleanup() {
