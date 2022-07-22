@@ -25,8 +25,10 @@ There are some additional things to note:
 
   - Custom .vimrc files are also unsupported at this time.
 
-- Clipboard integration works out of the box. `d`, `c`, and `y` all copy to the
-  clipboard. `p` pastes from the clipboard.
+- To copy to the clipboard, press Cmd+C (or Ctrl+C on Windows) while the text
+  you want is selected in Visual mode.
+
+- To paste from the clipboard, press Cmd+V (or Ctrl+V on windows) in insert mode.
 
 - `gd` is mapped to Go to Definition.
 
