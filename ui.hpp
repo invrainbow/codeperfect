@@ -151,8 +151,7 @@ struct Glyph {
 };
 
 struct Font {
-    u8 *font_data;
-    u32 font_data_len;
+    Font_Data *data;
     stbtt_fontinfo stbfont;
     hb_blob_t *hbblob;
     hb_face_t *hbface;
@@ -165,7 +164,7 @@ struct Font {
     ccstr filepath;
 
     bool init(ccstr font_name, u32 font_size);
-    bool init(ccstr font_name, u32 font_size, u8 *data, u32 data_len);
+    bool init(ccstr font_name, u32 font_size, Font_Data *data);
     void cleanup();
     bool can_render_chars(List<uchar> *chars);
 };

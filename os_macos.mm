@@ -216,28 +216,25 @@ bool list_all_fonts(List<ccstr> *out) {
     return true;
 }
 
-bool load_font_data_by_name(ccstr name, u8** data, u32 *len) {
+Font_Data *load_font_data_by_name(ccstr name) {
     auto cf_font_name = CFStringCreateWithCString(NULL, name, kCFStringEncodingUTF8);
 
     auto ctfont = (void*)CTFontCreateWithName(cf_font_name, 12, NULL);
-    if (!ctfont) return false;
+    if (!ctfont) return NULL;
 
     auto url = (CFURLRef)CTFontCopyAttribute((CTFontRef)ctfont, kCTFontURLAttribute);
-    if (!url) return false;
+    if (!url) return NULL;
     defer { CFRelease(url); };
 
     auto cffilepath = CFURLCopyFileSystemPath(url, kCFURLPOSIXPathStyle);
-    if (!cffilepath) return false;
+    if (!cffilepath) return NULL;
     defer { CFRelease(cffilepath); };
 
     auto fm = map_file_into_memory(cfstring_to_ccstr(cffilepath));
-    if (!fm) return false;
-    defer { fm->cleanup(); };
+    if (!fm) return NULL;
 
-    auto ret = (u8*)malloc(fm->len);
-    memcpy(ret, fm->data, fm->len);
-
-    *len = fm->len;
-    *data = ret;
-    return true;
+    auto ret = alloc_object(Font_Data);
+    ret->type = FONT_DATA_MMAP;
+    ret->fm = fm;
+    return ret;
 }

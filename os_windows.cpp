@@ -961,33 +961,35 @@ bool list_all_fonts(List<ccstr> *out) {
 }
 
 // allocates font data with malloc, needs to be freed.
-bool load_font_data_by_name(ccstr name, char** data, u32 *len) {
+Font_Data* load_font_data_by_name(ccstr name) {
     auto hdc = CreateDCW(L"DISPLAY", NULL, NULL, NULL);
-    if (!hdc) return false;
+    if (!hdc) return NULL;
     defer { ReleaseDC(NULL, hdc); };
 
     LOGFONTW lf; ptr0(&lf);
     if (wcscpy_s(lf.lfFaceName, _countof(lf.lfFaceName), to_wide(name)) != 0)
-        return false;
+        return NULL;
 
     auto hfont = CreateFontIndirectW(&lf);
-    if (!hfont) return false;
+    if (!hfont) return NULL;
     defer { DeleteObject(hfont); };
 
-    if (!SelectObject(hdc, hfont)) return false;
+    if (!SelectObject(hdc, hfont)) return NULL;
 
     auto datalen = GetFontData(hdc, 0, 0, NULL, 0);
-    if (datalen == GDI_ERROR) return false;
+    if (datalen == GDI_ERROR) return NULL;
 
     auto fontdata = (u8*)malloc(datalen);
     if (GetFontData(hdc, 0, 0, fontdata, datalen) == GDI_ERROR) {
         free(fontdata);
-        return false;
+        return NULL;
     }
 
-    *data = fontdata;
-    *len = datalen;
-    return true;
+    auto ret = alloc_object(Font_data);
+    ret->type = FONT_DATA_MALLOC;
+    ret->data = fontdata;
+    ret->len = datalen;
+    return ret;
 }
 
 ccstr _cp_dirname(ccstr path) {

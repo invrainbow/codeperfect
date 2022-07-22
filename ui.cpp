@@ -733,8 +733,13 @@ void UI::render_ts_cursor(TSTreeCursor *curr, cur2 open_cur) {
 }
 
 Font *init_builtin_base_font() {
+    auto fd = alloc_object(Font_Data);
+    fd->type = FONT_DATA_FIXED;
+    fd->data = vera_mono_ttf;
+    fd->len = vera_mono_ttf_len;
+
     auto ret = alloc_object(Font);
-    if (ret->init("Bitstream Vera Sans Mono", CODE_FONT_SIZE, vera_mono_ttf, vera_mono_ttf_len))
+    if (ret->init("Bitstream Vera Sans Mono", CODE_FONT_SIZE, fd))
         return ret;
     return NULL;
 }
@@ -6805,22 +6810,23 @@ Font* UI::find_font_for_grapheme(List<uchar> *grapheme) {
     auto font = acquire_font(name);
     if (!font) return NULL;
     if (!font->can_render_chars(grapheme)) return NULL;
-
     return font;
 }
 
-bool Font::init(ccstr font_name, u32 font_size, u8 *data, u32 data_len) {
+bool Font::init(ccstr font_name, u32 font_size, Font_Data *fontdata) {
     ptr0(this);
     name = font_name;
     height = font_size;
-    font_data = data;
-    font_data_len = data_len;
+    data = fontdata;
 
     bool ok = false;
     defer { if (!ok) cleanup(); };
 
+    u8 *data_ptr = data->type == FONT_DATA_MMAP ? data->fm->data : data->data;
+    u32 data_len = data->type == FONT_DATA_MMAP ? data->fm->len : data->len;
+
     // create harfbuzz crap
-    hbblob = hb_blob_create((char*)font_data, font_data_len, HB_MEMORY_MODE_READONLY, NULL, NULL);
+    hbblob = hb_blob_create((char*)data_ptr, data_len, HB_MEMORY_MODE_READONLY, NULL, NULL);
     if (!hbblob) return false;
     hbface = hb_face_create(hbblob, 0);
     if (!hbface) return false;
@@ -6828,9 +6834,7 @@ bool Font::init(ccstr font_name, u32 font_size, u8 *data, u32 data_len) {
     if (!hbfont) return false;
 
     // create stbtt font
-    auto ucdata = (unsigned char*)font_data;
-    // if (!stbtt_InitFont(&stbfont, ucdata, stbtt_GetFontOffsetForIndex(ucdata, 0))) return false;
-    if (!stbtt_InitFont(&stbfont, ucdata, 0)) return false;
+    if (!stbtt_InitFont(&stbfont, data_ptr, stbtt_GetFontOffsetForIndex(data_ptr, 0))) return false;
 
     int unscaled_width = 0, unscaled_offset_y = 0;
     stbtt_GetCodepointHMetrics(&stbfont, 'A', &unscaled_width, NULL);
@@ -6845,18 +6849,17 @@ bool Font::init(ccstr font_name, u32 font_size, u8 *data, u32 data_len) {
 }
 
 bool Font::init(ccstr font_name, u32 font_size) {
-    u8 *data = NULL;
-    u32 data_len = 0;
-    if (!load_font_data_by_name(font_name, &data, &data_len))
-        return false;
-    return init(font_name, font_size, data, data_len);
+    auto data = load_font_data_by_name(font_name);
+    if (!data) return false;
+
+    return init(font_name, font_size, data);
 }
 
 void Font::cleanup() {
     if (hbfont) { hb_font_destroy(hbfont); hbfont = NULL; }
     if (hbface) { hb_face_destroy(hbface); hbface = NULL; }
     if (hbblob) { hb_blob_destroy(hbblob); hbblob = NULL; }
-    if (font_data) { free(font_data); font_data = NULL; }
+    if (data) { data->cleanup(); data = NULL; }
 }
 
 bool Font::can_render_chars(List<uchar> *chars) {

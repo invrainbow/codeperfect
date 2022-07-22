@@ -378,7 +378,40 @@ int get_unix_time();
 void write_to_syslog(ccstr s);
 
 bool list_all_fonts(List<ccstr> *out);
-bool load_font_data_by_name(ccstr name, u8** data, u32 *len);
+
+enum Font_Data_Type {
+    FONT_DATA_MALLOC,
+    FONT_DATA_MMAP,
+    FONT_DATA_FIXED,
+};
+
+struct Font_Data {
+    Font_Data_Type type;
+    union {
+        struct {
+            u8 *data;
+            u32 len;
+        };
+        File_Mapping *fm;
+    };
+
+    void cleanup() {
+        if (type == FONT_DATA_MALLOC) {
+            if (data != NULL) {
+                free(data);
+                data = NULL;
+                len = 0;
+            }
+        } else if (type == FONT_DATA_MMAP) {
+            if (fm != NULL) {
+                fm->cleanup();
+                fm = NULL;
+            }
+        }
+    }
+};
+
+Font_Data* load_font_data_by_name(ccstr name);
 
 ccstr _cp_dirname(ccstr path);
 ccstr cp_dirname(ccstr path);
