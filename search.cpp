@@ -27,15 +27,7 @@ void Searcher::cleanup_search() {
         thread = NULL;
     }
 
-    if (re) {
-        pcre_free(re);
-        re = NULL;
-    }
-
-    if (re_extra) {
-        pcre_free(re_extra);
-        re_extra = NULL;
-    }
+    sess.cleanup();
 }
 
 void Searcher::cleanup() {
@@ -297,14 +289,89 @@ bool is_binary(ccstr buf, s32 len) {
     return ((suspicious_bytes * 100) / total_bytes > 10);
 }
 
-bool Searcher::start_search(ccstr _query, Search_Opts *_opts) {
+void Search_Session::cleanup() {
+    if (re) {
+        pcre_free(re);
+        re = NULL;
+    }
+
+    if (re_extra) {
+        pcre_free(re_extra);
+        re_extra = NULL;
+    }
+}
+
+bool Search_Session::start() {
+    if (literal) {
+        // generate find skip
+        {
+            find_skip = alloc_array(s32, qlen);
+
+            s32 last_prefix = qlen;
+            for (int i = last_prefix; i > 0; i--) {
+                if (is_prefix(query, qlen, i))
+                    last_prefix = i;
+                find_skip[i - 1] = last_prefix + (qlen - i);
+            }
+
+            for (int i = 0; i < qlen; i++) {
+                auto slen = suffix_len(query, qlen, i);
+                if (query[i - slen] != query[qlen - 1 - slen])
+                    find_skip[qlen - 1 - slen] = qlen - 1 - i + slen;
+            }
+        }
+
+        // generate alpha skip
+        {
+            alpha_skip = alloc_array(s32, 256);
+            for (int i = 0; i < 256; i++)
+                alpha_skip[i] = qlen;
+
+            int len = qlen-1;
+            for (int i = 0; i < len; i++) {
+                if (case_sensitive) {
+                    alpha_skip[(u8)query[i]] = len - i;
+                } else {
+                    alpha_skip[(u8)tolower(query[i])] = len - i;
+                    alpha_skip[(u8)toupper(query[i])] = len - i;
+                }
+            }
+        }
+    } else {
+        int pcre_opts = PCRE_MULTILINE;
+        if (!case_sensitive) pcre_opts |= PCRE_CASELESS;
+
+        const char *pcre_err = NULL;
+        int pcre_err_offset = 0;
+
+        re = pcre_compile(query, pcre_opts, &pcre_err, &pcre_err_offset, NULL);
+        if (!re) {
+            error("pcre error at position %d: %s", pcre_err_offse, pcre_err);
+            return false;
+        }
+
+        // jit enabled?
+        int jit = 0;
+        pcre_config(PCRE_CONFIG_JIT, &jit);
+        re_extra = pcre_study(re, jit ? PCRE_STUDY_JIT_COMPILE : 0, &pcre_err);
+        if (!re_extra) {
+            error("pcre error at position %d: %s", pcre_err_offse, pcre_err);
+            return false;
+        }
+    }
+}
+
+bool Searcher::start_search(ccstr _query, Searcher_Opts *_opts) {
     SCOPED_MEM(&mem);
 
     state = SEARCH_SEARCH_IN_PROGRESS;
     opts = *_opts;
 
-    query = cp_strdup(_query);
-    qlen = strlen(query);
+    ptr0(&sess);
+    sess.query = cp_strdup(_query);
+    sess.qlen = strlen(query);
+    sess.case_sensitive = opts.case_sensitive;
+    sess.literal = opts.literal;
 
     file_queue.init();
 

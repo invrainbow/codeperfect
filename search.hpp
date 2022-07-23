@@ -33,12 +33,33 @@ struct Search_File {
     List<Search_Result> *results;
 };
 
-struct Search_Opts {
+struct Search_Session {
+    ccstr query;
+    s32 qlen;
+    bool case_sensitive;
+    bool literal;
+
+    union {
+        struct {
+            s32 *find_skip;
+            s32 *alpha_skip;
+        };
+        struct {
+            pcre *re;
+            pcre_extra *re_extra;
+        };
+    };
+
+    bool start();
+    void cleanup();
+};
+
+struct Searcher_Opts {
     bool case_sensitive;
     bool literal;
     ccstr include;
     ccstr exclude;
-};
+}
 
 enum Searcher_State {
     SEARCH_NOTHING_HAPPENING = 0,
@@ -55,23 +76,21 @@ struct Searcher {
     bool mem_active;
     bool final_mem_active;
 
+    Search_Session sess;
     Searcher_State state;
-
-    Search_Opts opts;
-    ccstr query;
-    s32 qlen;
+    Searcher_Opts opts;
     ccstr replace_with;
 
     List<ccstr> *include_parts;
     List<ccstr> *exclude_parts;
 
     // search
-    s32 *find_skip;
-    s32 *alpha_skip;
-    pcre *re;
-    pcre_extra *re_extra;
-    List<ccstr> file_queue;
+    // s32 *find_skip;
+    // s32 *alpha_skip;
+    // pcre *re;
+    // pcre_extra *re_extra;
 
+    List<ccstr> file_queue;
     List<Search_File> search_results;
 
     Thread_Handle thread;
