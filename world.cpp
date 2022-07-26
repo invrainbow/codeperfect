@@ -1487,6 +1487,10 @@ Command_Info command_info_table[_CMD_COUNT_];
 
 bool is_command_enabled(Command cmd) {
     switch (cmd) {
+    case CMD_FIND:
+    case CMD_REPLACE:
+        return (bool)get_current_editor();
+
     case CMD_SAVE_FILE: {
         auto editor = get_current_editor();
         if (!editor) return false;
@@ -1655,6 +1659,8 @@ void init_command_info_table() {
     command_info_table[CMD_RUN_TO_CURSOR] = k(CP_MOD_SHIFT, CP_KEY_F10, "Run To Cursor");
     command_info_table[CMD_TOGGLE_BREAKPOINT] = k(CP_MOD_NONE, CP_KEY_F9, "Toggle Breakpoint");
     command_info_table[CMD_DELETE_ALL_BREAKPOINTS] = k(CP_MOD_SHIFT, CP_KEY_F9, "Delete All Breakpoints");
+    command_info_table[CMD_REPLACE] = k(CP_MOD_PRIMARY, CP_KEY_H, "Replace...");
+    command_info_table[CMD_FIND] = k(CP_MOD_PRIMARY, CP_KEY_F, "Find...");
     /**/
     command_info_table[CMD_ERROR_LIST] = k(0, 0, "Error List");
     command_info_table[CMD_FORMAT_SELECTION] = k(0, 0, "Format Selection");
@@ -1844,6 +1850,29 @@ void handle_command(Command cmd, bool from_menu) {
     if (!is_command_enabled(cmd)) return;
 
     switch (cmd) {
+    case CMD_REPLACE:
+    case CMD_FIND: {
+        auto &wnd = world.wnd_current_file_search;
+        wnd.replace = (cmd == CMD_REPLACE);
+
+        if (wnd.show) {
+            wnd.cmd_focus = true;
+            break;
+        }
+        wnd.sess.cleanup();
+        wnd.mem.cleanup();
+
+        wnd.mem.init();
+        {
+            SCOPED_MEM(&wnd.mem);
+            wnd.matches.init();
+        }
+        wnd.query[0] = '\0';
+        wnd.replace_str[0] = '\0';
+        wnd.show = true;
+        break;
+    }
+
     case CMD_BUY_LICENSE:
         open_webbrowser("https://codeperfect95.com/buy-license");
         break;

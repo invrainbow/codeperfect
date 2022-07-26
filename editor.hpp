@@ -111,6 +111,9 @@ struct Editor {
     // need to reset this when backspacing past it and when accepting an auto
     cur2 last_closed_autocomplete;
 
+    bool ui_rect_set;
+    boxf ui_rect;
+
     struct {
         bool is_buf_attached;
         u32 buf_id;

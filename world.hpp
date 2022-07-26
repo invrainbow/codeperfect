@@ -199,6 +199,8 @@ enum Command {
     CMD_VIEW_CALLEE_HIERARCHY,
     CMD_BUY_LICENSE,
     CMD_ENTER_LICENSE,
+    CMD_REPLACE,
+    CMD_FIND,
     /**/
     _CMD_COUNT_,
 };
@@ -245,6 +247,13 @@ struct Auth_To_Disk {
 
 struct Auth_Extras {
     // ???
+};
+
+struct File_Search_Match {
+    cur2 start;
+    cur2 end;
+    List<cur2> *group_starts;
+    List<cur2> *group_ends;
 };
 
 struct World {
@@ -371,6 +380,22 @@ struct World {
 
     bool auth_update_done;
     u64 auth_update_last_check;
+
+    struct Wnd_Current_File_Search : Wnd {
+        Pool mem;
+        char query[256];
+        char replace_str[256];
+
+        Search_Session sess;
+        List<File_Search_Match> matches;
+
+        bool replace;
+        bool case_sensitive;
+        bool use_regex;
+        // bool search_in_selection;
+
+        int current_idx;
+    } wnd_current_file_search;
 
     struct Wnd_Enter_License : Wnd {
         char email[256];

@@ -8,7 +8,86 @@
 #include "mem.hpp"
 #include "buffer.hpp"
 
-struct Search_Result {
+struct Search_Match {
+    int start;
+    int end;
+    List<int> *group_starts;
+    List<int> *group_ends;
+};
+
+struct Replace_Part {
+    bool dollar;
+    int group;
+    ccstr string;
+};
+
+struct Search_Session {
+    ccstr query;
+    u32 qlen;
+    bool case_sensitive;
+    bool literal;
+
+    bool limit_to_range;
+    int limit_start;
+    int limit_end;
+
+    union {
+        struct {
+            s32 *find_skip;
+            s32 *alpha_skip;
+        };
+        struct {
+            pcre *re;
+            pcre_extra *re_extra;
+        };
+    };
+
+    bool start();
+    void cleanup();
+    void search(char *buf, u32 buflen, List<Search_Match> *out, int limit);
+
+    inline bool chars_eq(char a, char b) {
+        if (!case_sensitive) {
+            a = tolower(a);
+            b = tolower(b);
+        }
+        return a == b;
+    }
+
+    inline bool is_prefix(ccstr s, s32 s_len, s32 pos) {
+        for (int i = 0; pos + i < s_len; i++)
+            if (!chars_eq(s[i], s[i+pos]))
+                return false;
+        return true;
+    }
+
+    inline s32 suffix_len(ccstr s, s32 s_len, s32 pos) {
+        s32 i = 0;
+        for (; i < pos; i++)
+            if (!chars_eq(s[pos - i], s[s_len - i - 1]))
+                break;
+        return i;
+    }
+
+    List<Replace_Part> *parse_replacement(ccstr replace_text);
+};
+
+struct Searcher_Opts {
+    bool case_sensitive;
+    bool literal;
+    ccstr include;
+    ccstr exclude;
+};
+
+enum Searcher_State {
+    SEARCH_NOTHING_HAPPENING = 0,
+    SEARCH_SEARCH_IN_PROGRESS,
+    SEARCH_SEARCH_DONE,
+    SEARCH_REPLACE_IN_PROGRESS,
+    SEARCH_REPLACE_DONE,
+};
+
+struct Searcher_Result_Match {
     ccstr match;
     s32 match_len;
     cur2 match_start;
@@ -28,45 +107,9 @@ struct Search_Result {
     List<ccstr> *groups;
 };
 
-struct Search_File {
+struct Searcher_Result_File {
     ccstr filepath;
-    List<Search_Result> *results;
-};
-
-struct Search_Session {
-    ccstr query;
-    s32 qlen;
-    bool case_sensitive;
-    bool literal;
-
-    union {
-        struct {
-            s32 *find_skip;
-            s32 *alpha_skip;
-        };
-        struct {
-            pcre *re;
-            pcre_extra *re_extra;
-        };
-    };
-
-    bool start();
-    void cleanup();
-};
-
-struct Searcher_Opts {
-    bool case_sensitive;
-    bool literal;
-    ccstr include;
-    ccstr exclude;
-}
-
-enum Searcher_State {
-    SEARCH_NOTHING_HAPPENING = 0,
-    SEARCH_SEARCH_IN_PROGRESS,
-    SEARCH_SEARCH_DONE,
-    SEARCH_REPLACE_IN_PROGRESS,
-    SEARCH_REPLACE_DONE,
+    List<Searcher_Result_Match> *results;
 };
 
 struct Searcher {
@@ -91,7 +134,7 @@ struct Searcher {
     // pcre_extra *re_extra;
 
     List<ccstr> file_queue;
-    List<Search_File> search_results;
+    List<Searcher_Result_File> search_results;
 
     Thread_Handle thread;
 
@@ -101,33 +144,12 @@ struct Searcher {
     void cleanup();
     void cleanup_search();
 
-    bool start_search(ccstr _query, Search_Opts *_opts);
+    bool start_search(ccstr _query, Searcher_Opts *_opts);
     void search_worker();
 
-    ccstr get_replacement_text(Search_Result *sr, ccstr replace_text);
+    ccstr get_replacement_text(Searcher_Result_Match *sr, ccstr replace_text);
     bool start_replace(ccstr _replace_with);
     void replace_worker();
-
-    inline bool chars_eq(char a, char b) {
-        if (opts.case_sensitive)
-            return a == b;
-        return tolower(a) == tolower(b);
-    }
-
-    bool is_prefix(ccstr s, s32 s_len, s32 pos) {
-        for (int i = 0; pos + i < s_len; i++)
-            if (!chars_eq(s[i], s[i+pos]))
-                return false;
-        return true;
-    }
-
-    s32 suffix_len(ccstr s, s32 s_len, s32 pos) {
-        s32 i = 0;
-        for (; i < pos; i++)
-            if (!chars_eq(s[pos - i], s[s_len - i - 1]))
-                break;
-        return i;
-    }
 };
 
 bool is_binary(ccstr buf, s32 len);

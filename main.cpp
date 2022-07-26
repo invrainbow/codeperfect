@@ -1203,6 +1203,7 @@ int main(int argc, char **argv) {
     io.KeyMap[ImGuiKey_Space] = CP_KEY_SPACE;
     io.KeyMap[ImGuiKey_Enter] = CP_KEY_ENTER;
     io.KeyMap[ImGuiKey_Escape] = CP_KEY_ESCAPE;
+    io.KeyMap[ImGuiKey_Tab] = CP_KEY_TAB;
     io.KeyMap[ImGuiKey_A] = CP_KEY_A;
     io.KeyMap[ImGuiKey_C] = CP_KEY_C;
     io.KeyMap[ImGuiKey_V] = CP_KEY_V;

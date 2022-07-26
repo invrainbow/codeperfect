@@ -255,6 +255,7 @@ struct UI {
     void open_project_settings();
 
     void imgui_small_newline();
+    bool imgui_input_text_full(ccstr label, ccstr inputid, char *buf, int count, int flags);
     bool imgui_input_text_full(ccstr label, char *buf, int count, int flags = 0);
     bool imgui_special_key_pressed(int key);
     bool imgui_key_pressed(int key);
@@ -353,3 +354,5 @@ extern Global_Colors global_colors;
 void init_global_colors();
 ccstr format_key(int mods, ccstr key, bool icon = false);
 void random_macos_tests();
+
+void trigger_file_search(int limit_start = -1, int limit_end = -1);

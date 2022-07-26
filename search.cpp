@@ -61,14 +61,7 @@ void Searcher::cleanup() {
 void Searcher::search_worker() {
     int total_results = 0;
 
-    struct Temp_Match {
-        int start, end;
-
-        List<int> *group_starts;
-        List<int> *group_ends;
-    };
-
-    auto matches = alloc_list<Temp_Match>();
+    auto matches = alloc_list<Search_Match>();
 
     while (file_queue.len > 0 && total_results < 1000) {
         auto filepath = *file_queue.last();
@@ -83,65 +76,8 @@ void Searcher::search_worker() {
 
         if (is_binary(buf, buflen)) continue;
 
-        int bufoff = 0;
-
         matches->len = 0;
-
-        if (opts.literal) {
-            while (bufoff < buflen) {
-                bool found = false;
-
-                // boyer moore
-                for (int k, i = bufoff + qlen - 1; i < buflen; i += max(alpha_skip[(u8)buf[i]], find_skip[k])) {
-                    for (k = qlen - 1; k >= 0 && chars_eq(buf[i], query[k]); k--)
-                        i--;
-
-                    if (k < 0) {
-                        bufoff = i+1;
-                        found = true;
-                        break;
-                    }
-                }
-
-                if (!found) break;
-                if (matches->len + total_results > 1000) break;
-
-                auto m = matches->append();
-                m->start = bufoff;
-                m->end = bufoff + qlen;
-
-                bufoff += qlen;
-            }
-        } else {
-            int offvec[3 * 17]; // full match + 16 possible groups
-
-            while (bufoff < buflen) {
-                int results = pcre_exec(re, re_extra, buf, buflen, bufoff, 0, offvec, _countof(offvec));
-                if (results <= 0) break;
-
-                if (matches->len + total_results > 1000) break;
-
-                // don't include empty results
-                if (offvec[0] != offvec[1]) {
-                    auto m = matches->append();
-                    m->start = offvec[0];
-                    m->end = offvec[1];
-
-                    if (results > 1) {
-                        m->group_starts = alloc_list<int>(results);
-                        m->group_ends = alloc_list<int>(results);
-                        for (int i = 1; i < results; i++) {
-                            m->group_starts->append(offvec[2*i + 0]);
-                            m->group_ends->append(offvec[2*i + 1]);
-                        }
-                    }
-                }
-
-                bufoff = offvec[1];
-                if (offvec[0] == offvec[1]) bufoff++;
-            }
-        }
-
+        sess.search(buf, buflen, matches, 1000);
         if (!matches->len) continue;
 
         int curr_match = 0;
@@ -155,8 +91,8 @@ void Searcher::search_worker() {
 
         auto editor = find_editor_by_filepath(final_filepath);
 
-        Search_Result sr; ptr0(&sr);
-        auto results = alloc_list<Search_Result>(matches->len);
+        Searcher_Result_Match sr; ptr0(&sr);
+        auto results = alloc_list<Searcher_Result_Match>(matches->len);
 
         // convert temp matches into search results
         for (int i = 0; i < buflen; i++) {
@@ -224,8 +160,7 @@ void Searcher::search_worker() {
 
                 results->append(&sr);
 
-                if (++curr_match >= matches->len)
-                    break;
+                if (++curr_match >= matches->len) break;
             }
 
             if (it == '\n') {
@@ -236,7 +171,7 @@ void Searcher::search_worker() {
             }
         }
 
-        Search_File sf;
+        Searcher_Result_File sf;
         sf.filepath = final_filepath;
         sf.results = results;
         search_results.append(&sf);
@@ -289,89 +224,22 @@ bool is_binary(ccstr buf, s32 len) {
     return ((suspicious_bytes * 100) / total_bytes > 10);
 }
 
-void Search_Session::cleanup() {
-    if (re) {
-        pcre_free(re);
-        re = NULL;
-    }
-
-    if (re_extra) {
-        pcre_free(re_extra);
-        re_extra = NULL;
-    }
-}
-
-bool Search_Session::start() {
-    if (literal) {
-        // generate find skip
-        {
-            find_skip = alloc_array(s32, qlen);
-
-            s32 last_prefix = qlen;
-            for (int i = last_prefix; i > 0; i--) {
-                if (is_prefix(query, qlen, i))
-                    last_prefix = i;
-                find_skip[i - 1] = last_prefix + (qlen - i);
-            }
-
-            for (int i = 0; i < qlen; i++) {
-                auto slen = suffix_len(query, qlen, i);
-                if (query[i - slen] != query[qlen - 1 - slen])
-                    find_skip[qlen - 1 - slen] = qlen - 1 - i + slen;
-            }
-        }
-
-        // generate alpha skip
-        {
-            alpha_skip = alloc_array(s32, 256);
-            for (int i = 0; i < 256; i++)
-                alpha_skip[i] = qlen;
-
-            int len = qlen-1;
-            for (int i = 0; i < len; i++) {
-                if (case_sensitive) {
-                    alpha_skip[(u8)query[i]] = len - i;
-                } else {
-                    alpha_skip[(u8)tolower(query[i])] = len - i;
-                    alpha_skip[(u8)toupper(query[i])] = len - i;
-                }
-            }
-        }
-    } else {
-        int pcre_opts = PCRE_MULTILINE;
-        if (!case_sensitive) pcre_opts |= PCRE_CASELESS;
-
-        const char *pcre_err = NULL;
-        int pcre_err_offset = 0;
-
-        re = pcre_compile(query, pcre_opts, &pcre_err, &pcre_err_offset, NULL);
-        if (!re) {
-            error("pcre error at position %d: %s", pcre_err_offse, pcre_err);
-            return false;
-        }
-
-        // jit enabled?
-        int jit = 0;
-        pcre_config(PCRE_CONFIG_JIT, &jit);
-        re_extra = pcre_study(re, jit ? PCRE_STUDY_JIT_COMPILE : 0, &pcre_err);
-        if (!re_extra) {
-            error("pcre error at position %d: %s", pcre_err_offse, pcre_err);
-            return false;
-        }
-    }
-}
-
 bool Searcher::start_search(ccstr _query, Searcher_Opts *_opts) {
     SCOPED_MEM(&mem);
 
+    bool ok = false;
     state = SEARCH_SEARCH_IN_PROGRESS;
+    defer { if (!ok) state = SEARCH_NOTHING_HAPPENING; };
+
     opts = *_opts;
 
     ptr0(&sess);
     sess.query = cp_strdup(_query);
-    sess.qlen = strlen(query);
+    sess.qlen = strlen(sess.query);
     sess.case_sensitive = opts.case_sensitive;
     sess.literal = opts.literal;
+    // sess.match_limit = 1000;
+    if (!sess.start()) return false;
 
     file_queue.init();
 
@@ -383,60 +251,7 @@ bool Searcher::start_search(ccstr _query, Searcher_Opts *_opts) {
     if (opts.include) include_parts = make_path(opts.include)->parts;
     if (opts.exclude) exclude_parts = make_path(opts.exclude)->parts;
 
-    // precompute shit
-    if (opts.literal) {
-        // generate find skip
-        {
-            find_skip = alloc_array(s32, qlen);
-
-            s32 last_prefix = qlen;
-            for (int i = last_prefix; i > 0; i--) {
-                if (is_prefix(query, qlen, i))
-                    last_prefix = i;
-                find_skip[i - 1] = last_prefix + (qlen - i);
-            }
-
-            for (int i = 0; i < qlen; i++) {
-                auto slen = suffix_len(query, qlen, i);
-                if (query[i - slen] != query[qlen - 1 - slen])
-                    find_skip[qlen - 1 - slen] = qlen - 1 - i + slen;
-            }
-        }
-
-        // generate alpha skip
-        {
-            alpha_skip = alloc_array(s32, 256);
-            for (int i = 0; i < 256; i++)
-                alpha_skip[i] = qlen;
-
-            int len = qlen-1;
-            for (int i = 0; i < len; i++) {
-                if (opts.case_sensitive) {
-                    alpha_skip[(u8)query[i]] = len - i;
-                } else {
-                    alpha_skip[(u8)tolower(query[i])] = len - i;
-                    alpha_skip[(u8)toupper(query[i])] = len - i;
-                }
-            }
-        }
-    } else {
-        int pcre_opts = PCRE_MULTILINE;
-        if (!opts.case_sensitive)
-            pcre_opts |= PCRE_CASELESS;
-
-        const char *pcre_err = NULL;
-        int pcre_err_offset = 0;
-
-        re = pcre_compile(query, pcre_opts, &pcre_err, &pcre_err_offset, NULL);
-        if (!re) return false;
-        // TODO: die("Bad regex! pcre_compile() failed at position %i: %s", pcre_err_offset, pcre_err);
-
-        // jit enabled?
-        int has_jit = 0;
-        pcre_config(PCRE_CONFIG_JIT, &has_jit);
-        re_extra = pcre_study(re, has_jit ? PCRE_STUDY_JIT_COMPILE : 0, &pcre_err);
-    }
-
+    // generate file queue
     {
         List<FT_Node*> stack;
         List<ccstr> stackpaths;
@@ -475,7 +290,10 @@ bool Searcher::start_search(ccstr _query, Searcher_Opts *_opts) {
     };
 
     thread = create_thread(fun, this);
-    return thread != NULL;
+    if (thread == NULL) return false;
+
+    ok = true;
+    return true;
 }
 
 bool Searcher::start_replace(ccstr _replace_with) {
@@ -492,53 +310,62 @@ bool Searcher::start_replace(ccstr _replace_with) {
     return thread != NULL;
 }
 
-ccstr Searcher::get_replacement_text(Search_Result *sr, ccstr replace_text) {
+List<Replace_Part> *Search_Session::parse_replacement(ccstr replace_text) {
+    int k = 0, rlen = strlen(replace_text);
+    auto ret = alloc_list<Replace_Part>();
+
+    while (k < rlen) {
+        bool is_dollar = false;
+        auto chars = alloc_list<char>();
+
+        Replace_Part rp; ptr0(&rp);
+
+        if (replace_text[k] == '$')
+            if (k+1 < rlen)
+                if (isdigit(replace_text[k+1]))
+                    rp.dollar = true;
+
+        if (rp.dollar) {
+            chars->append('$');
+            for (k++; k < rlen && isdigit(replace_text[k]); k++)
+                chars->append(replace_text[k]);
+        } else {
+            for (; k < rlen && replace_text[k] != '$'; k++)
+                chars->append(replace_text[k]);
+        }
+        chars->append('\0');
+
+        rp.string = chars->items;
+        if (rp.dollar)
+            rp.group = atoi(chars->items+1);
+        ret->append(&rp);
+    }
+
+    return ret;
+}
+
+ccstr Searcher::get_replacement_text(Searcher_Result_Match *sr, ccstr replace_text) {
     if (opts.literal) return replace_text;
+    if (!sr->groups) return replace_text;
 
     auto chars = alloc_list<char>();
-    auto rlen = strlen(replace_text);
+    auto parts = sess.parse_replacement(replace_text);
 
-    int k = 0;
-    while (k < rlen) {
-        bool is_dollar_replacement = false;
-
-        do {
-            if (!sr->groups) break;
-            if (replace_text[k] != '$') break;
-            if (k+1 >= rlen) break;
-            if (!isdigit(replace_text[k+1])) break;
-
-            Frame frame;
-
-            auto k2 = k + 1;
-            auto tmp = alloc_list<char>();
-            for(; k2 < rlen && isdigit(replace_text[k2]); k2++)
-                tmp->append(replace_text[k2]);
-            tmp->append('\0');
-
-            ccstr groupstr = NULL;
-
-            int group = atoi(tmp->items);
-            if (!group) {
-                groupstr = sr->match;
-            } else if (group-1 < sr->groups->len) {
-                groupstr = sr->groups->at(group-1);
-            } else {
-                frame.restore();
-                break;
-            }
-
-            for (auto p = groupstr; *p != '\0'; p++)
-                chars->append(*p);
-
-            k = k2;
-            is_dollar_replacement = true;
-        } while (0);
-
-        if (!is_dollar_replacement) {
-            chars->append(replace_text[k]);
-            k++;
+    For (*parts) {
+        ccstr newstr = NULL;
+        if (it.dollar) {
+            if (!it.group)
+                newstr = sr->match;
+            else if (it.group-1 < sr->groups->len)
+                newstr = sr->groups->at(it.group-1);
+            else
+                newstr = it.string;
+        } else {
+            newstr = it.string;
         }
+
+        for (auto p = newstr; *p; p++)
+            chars->append(*p);
     }
 
     chars->append('\0');
@@ -570,6 +397,140 @@ void Searcher::replace_worker() {
     state = SEARCH_REPLACE_DONE;
     close_thread_handle(thread);
     thread = NULL;
+}
+
+// ========================
+
+void Search_Session::search(char *buf, u32 buflen, List<Search_Match> *out, int limit) {
+    int startlen = out->len;
+
+    auto add_match = [&](int start, int end) -> Search_Match* {
+        if (out->len - startlen > limit) return NULL;
+
+        auto m = out->append();
+        m->start = start;
+        m->end = end;
+        return m;
+    };
+
+    int bufoff = limit_to_range ? limit_start : 0;
+    int bufend = limit_to_range ? min(limit_end, buflen) : buflen;
+
+    if (literal) {
+        while (bufoff < bufend) {
+            bool found = false;
+
+            // boyer moore
+            for (int k, i = bufoff + qlen - 1; i < bufend; i += max(alpha_skip[(u8)buf[i]], find_skip[k])) {
+                for (k = qlen - 1; k >= 0 && chars_eq(buf[i], query[k]); k--)
+                    i--;
+
+                if (k < 0) {
+                    bufoff = i+1;
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found) break;
+            if (!add_match(bufoff, bufoff + qlen)) break;
+
+            bufoff += qlen;
+        }
+    } else {
+        int offvec[3 * 17]; // full match + 16 possible groups
+
+        while (bufoff < bufend) {
+            int results = pcre_exec(re, re_extra, buf, bufend, bufoff, 0, offvec, _countof(offvec));
+            if (results <= 0) break;
+
+            // don't include empty results
+            if (offvec[0] != offvec[1]) {
+                auto m = add_match(offvec[0], offvec[1]);
+                if (!m) break;
+
+                if (results > 1) {
+                    m->group_starts = alloc_list<int>(results);
+                    m->group_ends = alloc_list<int>(results);
+                    for (int i = 1; i < results; i++) {
+                        m->group_starts->append(offvec[2*i + 0]);
+                        m->group_ends->append(offvec[2*i + 1]);
+                    }
+                }
+            }
+
+            bufoff = offvec[1];
+            if (offvec[0] == offvec[1]) bufoff++;
+        }
+    }
+}
+
+void Search_Session::cleanup() {
+    if (!literal) {
+        if (re) {
+            pcre_free(re);
+            re = NULL;
+        }
+        if (re_extra) {
+            pcre_free(re_extra);
+            re_extra = NULL;
+        }
+    }
+}
+
+bool Search_Session::start() {
+    if (literal) {
+        find_skip = alloc_array(s32, qlen);
+        alpha_skip = alloc_array(s32, 256);
+
+        // generate find skip
+        for (int last_prefix = qlen, i = qlen; i > 0; i--) {
+            if (is_prefix(query, qlen, i))
+                last_prefix = i;
+            find_skip[i - 1] = last_prefix + (qlen - i);
+        }
+
+        for (int i = 0; i < qlen; i++) {
+            auto slen = suffix_len(query, qlen, i);
+            if (query[i - slen] != query[qlen - 1 - slen])
+                find_skip[qlen - 1 - slen] = qlen - 1 - i + slen;
+        }
+
+        // generate alpha skip
+        for (int i = 0; i < 256; i++)
+            alpha_skip[i] = qlen;
+
+        for (int i = 0, len = qlen-1; i < len; i++) {
+            if (case_sensitive) {
+                alpha_skip[(u8)query[i]] = len - i;
+            } else {
+                alpha_skip[(u8)tolower(query[i])] = len - i;
+                alpha_skip[(u8)toupper(query[i])] = len - i;
+            }
+        }
+    } else {
+        int pcre_opts = PCRE_MULTILINE;
+        if (!case_sensitive) pcre_opts |= PCRE_CASELESS;
+
+        const char *pcre_err = NULL;
+        int pcre_err_offset = 0;
+
+        re = pcre_compile(query, pcre_opts, &pcre_err, &pcre_err_offset, NULL);
+        if (!re) {
+            error("pcre error at position %d: %s", pcre_err_offset, pcre_err);
+            return false;
+        }
+
+        // jit enabled?
+        int jit = 0;
+        pcre_config(PCRE_CONFIG_JIT, &jit);
+        re_extra = pcre_study(re, jit ? PCRE_STUDY_JIT_COMPILE : 0, &pcre_err);
+        if (!re_extra) {
+            error("pcre error at position %d: %s", pcre_err_offset, pcre_err);
+            return false;
+        }
+    }
+    return true;
 }
 
 // ========================

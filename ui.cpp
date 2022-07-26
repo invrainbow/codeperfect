@@ -1903,17 +1903,19 @@ void UI::imgui_small_newline() {
     ImGui::Dummy(ImVec2(0.0f, ImGui::GetFrameHeightWithSpacing() * 1/4));
 }
 
-bool UI::imgui_input_text_full(ccstr label, char *buf, int count, int flags) {
+bool UI::imgui_input_text_full(ccstr label, ccstr inputid, char *buf, int count, int flags) {
     ImGui::PushItemWidth(-1);
-    {
-        imgui_push_ui_font();
-        ImGui::Text("%s", label);
-        imgui_pop_font();
-    }
-    auto ret = ImGui::InputText(cp_sprintf("###%s", label), buf, count, flags);
-    ImGui::PopItemWidth();
+    defer { ImGui::PopItemWidth(); };
 
-    return ret;
+    imgui_push_ui_font();
+    ImGui::Text("%s", label);
+    imgui_pop_font();
+
+    return ImGui::InputText(cp_sprintf("###%s", inputid), buf, count, flags);
+}
+
+bool UI::imgui_input_text_full(ccstr label, char *buf, int count, int flags) {
+    return imgui_input_text_full(label, label, buf, count, flags);
 }
 
 #define imgui_input_text_full_fixbuf(x, y) imgui_input_text_full(x, y, _countof(y))
@@ -1953,7 +1955,10 @@ bool UI::imgui_special_key_pressed(int key) {
 }
 
 bool UI::imgui_key_pressed(int key) {
-    return ImGui::IsKeyPressed(tolower(key)) || ImGui::IsKeyPressed(toupper(key));
+    if (ImGui::IsWindowFocused())
+        if (ImGui::IsKeyPressed(tolower(key)) || ImGui::IsKeyPressed(toupper(key)))
+            return true;
+    return false;
 }
 
 u32 UI::imgui_get_keymods() {
@@ -2004,8 +2009,7 @@ struct Coarse_Clipper {
         auto window = g->CurrentWindow;
         auto ret = window->ClipRect;
 
-        // I don't know and don't care what this does. It's ripped from imgui.cpp
-        // and makes my code "just work."
+        // idk/idc what this does, it's ripped from imgui.cpp and just works
         if (g->NavMoveSubmitted)
             ret.Add(g->NavScoringRect);
         if (g->NavJustMovedToId && window->NavLastIds[0] == g->NavJustMovedToId)
@@ -2059,6 +2063,101 @@ void UI::focus_keyboard(Wnd *wnd, int cond) {
     } else if (wnd->focusing) {
         if (cond & FKC_FOCUSING)
             ImGui::SetKeyboardFocusHere();
+    }
+}
+
+void trigger_file_search(int limit_start, int limit_end) {
+    auto &wnd = world.wnd_current_file_search;
+
+    auto ed = get_current_editor();
+    if (!ed) return;
+
+    wnd.sess.cleanup();
+
+    ptr0(&wnd.sess);
+    wnd.sess.case_sensitive = wnd.case_sensitive;
+    wnd.sess.literal = !wnd.use_regex;
+    wnd.sess.query = wnd.query;
+    wnd.sess.qlen = strlen(wnd.query);
+
+    if (!wnd.query[0]) return;
+
+    /*
+    if (wnd.search_in_selection) {
+        wnd.sess.limit_to_range = true;
+
+        if (world.use_nvim) {
+            if (limit_start == -1 || limit_end == -1) return;
+            wnd.sess.limit_start = limit_start;
+            wnd.sess.limit_end = limit_end;
+        } else {
+            auto a = ed->select_start;
+            auto b = ed->cur;
+            if (a > b) {
+                auto tmp = a;
+                a = b;
+                b = tmp;
+            }
+
+            wnd.sess.limit_start = ed->cur_to_offset(a);
+            wnd.sess.limit_end = ed->cur_to_offset(b);
+        }
+    }
+    */
+
+    if (!wnd.sess.start()) return;
+
+    List<char> chars; chars.init();
+    char buf[4];
+
+    For (ed->buf->lines) {
+        For (it) {
+            int k = uchar_to_cstr(it, buf);
+            switch (k) {
+#define add(x) chars.append(buf[x])
+            case 1: add(0); break;
+            case 2: add(0); add(1); break;
+            case 3: add(0); add(1); add(2); break;
+            case 4: add(0); add(1); add(2); add(3); break;
+#undef add
+            }
+        }
+        chars.append('\n');
+    }
+
+    wnd.current_idx = -1;
+    wnd.matches.len = 0;
+
+    auto tmp = alloc_list<Search_Match>();
+    wnd.sess.search(chars.items, chars.len, tmp, 1000);
+
+    // is o(n*m) gonna fuck us? (n = number lines, m = number matches)
+    // n is at most 65k
+    // m is... i guess a lot :joy:
+    For (*tmp) {
+        File_Search_Match match; ptr0(&match);
+        match.start = ed->offset_to_cur(it.start);
+        match.end = ed->offset_to_cur(it.end);
+
+        if (it.group_starts) {
+            {
+                SCOPED_MEM(&wnd.mem);
+                match.group_starts = alloc_list<cur2>();
+            }
+            For (*it.group_starts)
+                match.group_starts->append(ed->offset_to_cur(it));
+        }
+
+        if (it.group_ends) {
+            {
+                SCOPED_MEM(&wnd.mem);
+                match.group_ends = alloc_list<cur2>();
+            }
+            For (*it.group_ends)
+                match.group_ends->append(ed->offset_to_cur(it));
+        }
+
+        wnd.matches.append(&match);
     }
 }
 
@@ -4197,8 +4296,223 @@ void UI::draw_everything() {
         ImGui::End();
     }
 
+    do {
+        if (!world.wnd_current_file_search.show) break;
+
+        auto ed = get_current_editor();
+        if (!ed) break;
+
+        auto &wnd = world.wnd_current_file_search;
+
+        ImGui::SetNextWindowSize(ImVec2(300, -1));
+
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+        defer { ImGui::PopStyleVar(); };
+
+        int flags = ImGuiWindowFlags_NoDocking
+            | ImGuiWindowFlags_NoMove
+            | ImGuiWindowFlags_NoScrollWithMouse
+            | ImGuiWindowFlags_NoDecoration;
+
+        if (!ed->ui_rect_set) break;
+
+        {
+            auto &r = ed->ui_rect;
+            ImGui::SetNextWindowPos(ImVec2(r.x + r.w - 10, r.y - 1), ImGuiCond_Always, ImVec2(1.0f, 0.0f));
+        }
+
+        begin_window("Search", &wnd, flags, true);
+        focus_keyboard(&wnd);
+
+        if (imgui_get_keymods() == CP_MOD_NONE) {
+            if (imgui_special_key_pressed(ImGuiKey_Escape)) {
+                wnd.show = false;
+            }
+        }
+
+        bool search_again = false;
+
+        ccstr label = NULL;
+        if (!wnd.matches.len)
+            label = "No results";
+        else if (wnd.current_idx == -1)
+            label = cp_sprintf("%d result%s", wnd.matches.len, wnd.matches.len == 1 ? "" : "s");
+        else
+            label = cp_sprintf("%d of %d", wnd.current_idx + 1, wnd.matches.len);
+
+        bool enter_pressed = imgui_input_text_full(cp_sprintf("Search (%s)", label), "current_file_search_search", wnd.query, _countof(wnd.query), ImGuiInputTextFlags_EnterReturnsTrue);
+
+        do {
+            if (!enter_pressed) break;
+
+            ImGui::SetKeyboardFocusHere(-1);
+
+            if (!wnd.matches.len) break;
+
+            auto curr = ed->cur;
+            int idx = -1;
+            {
+                int lo = 0, hi = wnd.matches.len-1;
+
+                while (lo < hi) {
+                    int mid = (lo+hi)/2;
+                    auto &it = wnd.matches[mid];
+                    if (it.start <= curr && curr < it.end) {
+                        idx = mid + 1;
+                        break;
+                    }
+
+                    if (curr < it.start)
+                        hi = mid-1;
+                    else
+                        lo = mid+1;
+                }
+
+                if (idx == -1) idx = hi;
+            }
+
+            auto dec = [&]() { if ((--idx) < 0)                idx = wnd.matches.len-1; };
+            auto inc = [&]() { if ((++idx) >= wnd.matches.len) idx = 0; };
+
+            if (wnd.matches[idx].start > curr) dec();
+
+            if (imgui_get_keymods() & CP_MOD_SHIFT) {
+                if (wnd.matches[idx].start == curr)
+                    dec();
+            } else {
+                inc();
+            }
+
+            cp_assert(idx >= 0);
+            cp_assert(idx < wnd.matches.len);
+
+            wnd.current_idx = idx;
+            ed->move_cursor(wnd.matches[wnd.current_idx].start);
+        } while (0);
+
+        if (ImGui::IsItemEdited()) search_again = true;
+
+        if (ImGui::Checkbox("Case-sensitive", &wnd.case_sensitive))
+            search_again = true;
+
+        ImGui::SameLine();
+        if (ImGui::Checkbox("Regular expression", &wnd.use_regex))
+            search_again = true;
+
+        if (wnd.replace) {
+            imgui_small_newline();
+
+            if (imgui_input_text_full("Replace:", wnd.replace_str, _countof(wnd.replace_str), ImGuiInputTextFlags_EnterReturnsTrue)) {
+
+                struct Nvim_Edit {
+                    // 0-indexed, end-exclusive
+                    int ystart;
+                    int yend;
+                    ccstr new_text;
+                };
+
+                auto nvim_edits = alloc_list<Nvim_Edit>();
+
+                auto repl_parts = wnd.sess.parse_replacement(wnd.replace_str);
+                For (wnd.matches) {
+                    auto chars = alloc_list<char>();
+                    auto &m = it;
+
+                    if (m.group_starts || m.group_ends) {
+                        cp_assert(m.group_starts);
+                        cp_assert(m.group_ends);
+                        cp_assert(m.group_starts->len == m.group_ends->len);
+                    }
+
+                    For (*repl_parts) {
+                        ccstr newstr = NULL;
+                        if (it.dollar) {
+                            if (!it.group)
+                                newstr = ed->buf->get_text(m.start, m.end);
+                            else if (it.group-1 < m.group_starts->len)
+                                newstr = ed->buf->get_text(m.group_starts->at(it.group-1), m.group_ends->at(it.group-1));
+                            else
+                                newstr = it.string;
+                        } else {
+                            newstr = it.string;
+                        }
+
+                        for (auto p = newstr; *p; p++) chars->append(*p);
+                    }
+
+                    ed->buf->remove(m.start, m.end);
+
+                    chars->append('\0');
+                    auto uchars = cstr_to_ustr(chars->items);
+                    ed->buf->insert(m.start, uchars->items, uchars->len);
+
+                    if (world.use_nvim) {
+                        Nvim_Edit edit; ptr0(&edit);
+                        edit.ystart = m.start.y;
+                        edit.yend = m.end.y + 1;
+                        edit.new_text = ed->buf->get_text(
+                            new_cur2(0, m.start.y),
+                            new_cur2(0, m.end.y+1)
+                        );
+                        nvim_edits->append(&edit);
+                    }
+                }
+
+                if (world.use_nvim) {
+                    auto &nv = world.nvim;
+
+                    nv.start_request_message("nvim_call_atomic", 1);
+                    nv.writer.write_array(nvim_edits->len);
+
+                    For (*nvim_edits) {
+                        auto lines = alloc_list<ccstr>();
+                        auto tmp = alloc_list<char>();
+
+                        for (auto p = it.new_text; *p; p++) {
+                            if (*p == '\n') {
+                                tmp->append('\0');
+                                lines->append(cp_strdup(tmp->items));
+                                tmp->len = 0;
+                                continue;
+                            }
+                            tmp->append(*p);
+                        }
+
+                        nv.writer.write_array(2);
+                        {
+                            nv.writer.write_string("nvim_buf_set_lines");
+                            nv.writer.write_array(5);
+                            {
+                                nv.writer.write_int(ed->nvim_data.buf_id);
+                                nv.writer.write_int(it.ystart);
+                                nv.writer.write_int(it.yend);
+                                nv.writer.write_bool(false);
+
+                                // write array of lines
+                                nv.writer.write_array(lines->len);
+                                For (*lines) nv.writer.write_string(it);
+                            }
+                        }
+                    }
+
+                    nv.end_message();
+                }
+            }
+            // if (ImGui::IsItemEdited()) { }
+        }
+
+        /*
+        if (ImGui::Checkbox("Search in selection", &wnd.search_in_selection))
+            search_again = true;
+        */
+
+        if (search_again) trigger_file_search();
+
+        ImGui::End();
+    } while (0);
+
     if (world.wnd_command.show) {
-        auto& wnd = world.wnd_command;
+        auto &wnd = world.wnd_command;
 
         auto begin_window = [&]() {
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 8));
@@ -4542,7 +4856,7 @@ void UI::draw_everything() {
             entered = true;
 
         ImGui::SameLine();
-        if (ImGui::Checkbox("Use regular expression", &wnd.use_regex))
+        if (ImGui::Checkbox("Regular expression", &wnd.use_regex))
             entered = true;
 
         imgui_small_newline();
@@ -4554,7 +4868,7 @@ void UI::draw_everything() {
             if (wnd.find_str[0] != '\0') {
                 s.init();
 
-                Search_Opts opts; ptr0(&opts);
+                Searcher_Opts opts; ptr0(&opts);
                 opts.case_sensitive = wnd.case_sensitive;
                 opts.literal = !wnd.use_regex;
 
@@ -4581,7 +4895,7 @@ void UI::draw_everything() {
             int result_index = 0;
             bool didnt_finish = false;
 
-            Search_Result *current_result = NULL;
+            Searcher_Result_Match *current_result = NULL;
             ccstr current_filepath = NULL;
 
             For (world.searcher.search_results) {
@@ -5095,6 +5409,11 @@ void UI::draw_everything() {
         boxf tabs_area, editor_area;
         get_tabs_and_editor_area(&pane_area, &tabs_area, &editor_area, pane.editors.len > 0);
 
+        For (pane.editors) {
+            it.ui_rect = editor_area;
+            it.ui_rect_set = true;
+        }
+
         if (pane.editors.len) {
             draw_rect(tabs_area, rgba(is_pane_selected ? global_colors.pane_active : global_colors.pane_inactive));
             auto editor = pane.get_current_editor();
@@ -5547,7 +5866,15 @@ void UI::draw_everything() {
 
             auto &hint = editor->parameter_hint;
 
-            int next_hl = (highlights.len > 0 ? 0 : -1);
+            int next_hl = (highlights.len ? 0 : -1);
+
+            int next_search_match = -1;
+            {
+                auto &wnd = world.wnd_current_file_search;
+                if (wnd.show)
+                    if (wnd.matches.len)
+                        next_search_match = 0;
+            }
 
             auto goroutines_hit = alloc_list<Dlv_Goroutine*>();
             u32 current_goroutine_id = 0;
@@ -5608,11 +5935,15 @@ void UI::draw_everything() {
                 draw_rect(b, color);
             };
 
+            u32 byte_offset = 0;
+            for (u32 y = 0; y < view.y; y++)
+                byte_offset += buf->bytecounts[y];
+
             auto grapheme_codepoints = alloc_list<uchar>();
 
             auto relative_y = 0;
-            for (u32 y = view.y; y < view.y + view.h; y++, relative_y++) {
-                if (y >= buf->lines.len) break;
+            for (u32 y = view.y; y < view.y + view.h && y < buf->lines.len; y++, relative_y++) {
+                defer { byte_offset += buf->bytecounts[y]; };
 
                 auto line = &buf->lines[y];
 
@@ -5772,6 +6103,28 @@ void UI::draw_everything() {
                             auto& hl = highlights[next_hl];
                             if (hl.start <= curr && curr < hl.end)
                                 text_color = hl.color;
+                        }
+                    }
+
+                    if (next_search_match != -1) {
+                        auto curr = new_cur2((u32)curr_byte_idx, (u32)y);
+                        auto &wnd = world.wnd_current_file_search;
+
+                        while (next_search_match != -1 && curr >= wnd.matches[next_search_match].end)
+                            if (++next_search_match >= wnd.matches.len)
+                                next_search_match = -1;
+
+                        if (next_search_match != -1) {
+                            auto& match = wnd.matches[next_search_match];
+                            if (match.start <= curr && curr < match.end) {
+                                if (next_search_match == wnd.current_idx) {
+                                    draw_highlight(rgba("#ffffdd", 0.4), glyph_width);
+                                    text_color = rgba("#ffffdd", 1.0);
+                                } else {
+                                    draw_highlight(rgba("#ffffdd", 0.2), glyph_width);
+                                    text_color = rgba("#ffffdd", 0.8);
+                                }
+                            }
                         }
                     }
 
