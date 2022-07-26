@@ -1,6 +1,6 @@
 CC = clang++
 
-CFLAGS = -std=c++17 -MMD -MP -I. -Iimgui/ -ferror-limit=100 -w -Itree-sitter
+CFLAGS = -std=c++17 -MMD -MP -I. -Iimgui/ -ferror-limit=100 -w -Itree-sitter/lib/include
 # CFLAGS += -mavx -maes
 
 ifeq ($(TESTING_BUILD), 1)
