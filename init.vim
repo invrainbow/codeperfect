@@ -24,7 +24,7 @@ function! CPClearUndo(bufId)
     unlet oldlevels
 endfunction
 
-function! CPCopyVisual()
+function! CPGetVisual(name)
     let m = mode()
     if m ==# "v" || m ==# "V"
         let [row_s, col_s] = getpos("v")[1:2]
@@ -33,7 +33,7 @@ function! CPCopyVisual()
         let [row_s, col_s] = getpos("'<")[1:2]
         let [row_e, col_e] = getpos("'>")[1:2]
     end
-    call NotifyIDE('copy_visual', row_s, col_s, row_e, col_e, bufnr("%"))
+    call NotifyIDE("get_visual", a:name, row_s, col_s, row_e, col_e, bufnr("%"))
 endfunction
 
 function! NotifyIDE(cmd, ...) abort

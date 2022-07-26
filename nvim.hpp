@@ -368,7 +368,7 @@ enum Nvim_Notification_Type {
     NVIM_NOTIF_CUSTOM_MOVE_CURSOR,
     NVIM_NOTIF_CUSTOM_JUMP,
     NVIM_NOTIF_CUSTOM_GOTO_DEFINITION,
-    NVIM_NOTIF_CUSTOM_COPY_VISUAL,
+    NVIM_NOTIF_CUSTOM_GET_VISUAL,
 };
 
 enum Screen_Pos {
@@ -414,10 +414,11 @@ struct Nvim_Message {
                 } buf_changedtick;
 
                 struct {
+                    ccstr for_what;
                     cur2 start;
                     cur2 end;
                     int bufid;
-                } custom_copy_visual;
+                } custom_get_visual;
 
                 struct {
                     Screen_Pos screen_pos;

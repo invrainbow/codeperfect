@@ -426,13 +426,37 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
         case NVIM_NOTIF_CUSTOM_GOTO_DEFINITION:
             handle_goto_definition();
             break;
-        case NVIM_NOTIF_CUSTOM_COPY_VISUAL: {
-            auto &args = event->notification.custom_copy_visual;
+        case NVIM_NOTIF_CUSTOM_GET_VISUAL: {
+            auto &args = event->notification.custom_get_visual;
+
             auto editor = find_editor_by_buffer(args.bufid);
             if (!editor) break;
 
-            auto s = editor->buf->get_text(args.start, editor->buf->inc_cur(args.end));
-            set_clipboard_string(s);
+            auto fix_pos = [&](cur2 c) {
+                auto newx = editor->buf->idx_byte_to_cp(c.y, c.x, true); // do we need/want nocrash?
+                return new_cur2((int)newx, (int)c.y);
+            };
+
+            auto start = fix_pos(args.start);
+            auto end = fix_pos(args.end);
+
+            if (streq(args.for_what, "copy_visual")) {
+                auto s = editor->buf->get_text(start, editor->buf->inc_cur(end));
+                set_clipboard_string(s);
+            }
+            /*
+            else if (streq(args.for_what, "search_in_visual")) {
+                auto &wnd = world.wnd_current_file_search;
+
+                auto editor = find_editor_by_buffer(args.bufid);
+                if (!editor) break;
+
+                trigger_file_search(
+                    editor->cur_to_offset(start),
+                    editor->cur_to_offset(end)
+                );
+            }
+            */
             break;
         }
         case NVIM_NOTIF_CUSTOM_MOVE_CURSOR: {
@@ -817,18 +841,20 @@ void Nvim::run_event_loop() {
                         msg->notification.custom_reveal_line.screen_pos = screen_pos;
                         msg->notification.custom_reveal_line.reset_cursor = reset_cursor;
                     });
-                } else if (streq(cmd, "copy_visual")) {
-                    ASSERT(num_args == 5);
+                } else if (streq(cmd, "get_visual")) {
+                    ASSERT(num_args == 6);
+                    auto for_what = reader.read_string(); CHECKOK();
                     auto ys = reader.read_int(); CHECKOK();
                     auto xs = reader.read_int(); CHECKOK();
                     auto ye = reader.read_int(); CHECKOK();
                     auto xe = reader.read_int(); CHECKOK();
                     auto bufid = reader.read_int(); CHECKOK();
                     add_event([&](auto msg) {
-                        msg->notification.type = NVIM_NOTIF_CUSTOM_COPY_VISUAL;
-                        msg->notification.custom_copy_visual.start = new_cur2((i32)xs-1, (i32)ys-1);
-                        msg->notification.custom_copy_visual.end = new_cur2((i32)xe-1, (i32)ye-1);
-                        msg->notification.custom_copy_visual.bufid = bufid;
+                        msg->notification.type = NVIM_NOTIF_CUSTOM_GET_VISUAL;
+                        msg->notification.custom_get_visual.for_what = cp_strdup(for_what);
+                        msg->notification.custom_get_visual.start = new_cur2((i32)xs-1, (i32)ys-1);
+                        msg->notification.custom_get_visual.end = new_cur2((i32)xe-1, (i32)ye-1);
+                        msg->notification.custom_get_visual.bufid = bufid;
                     });
                 } else if (streq(cmd, "goto_definition")) {
                     ASSERT(!num_args);
