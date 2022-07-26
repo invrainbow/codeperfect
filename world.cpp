@@ -1881,11 +1881,11 @@ void handle_command(Command cmd, bool from_menu) {
         auto &wnd = world.wnd_enter_license;
         if (wnd.show) {
             wnd.cmd_focus = true;
-        } else {
-            wnd.email[0] = '\0';
-            wnd.license[0] = '\0';
-            wnd.show = true;
+            break;
         }
+        wnd.email[0] = '\0';
+        wnd.license[0] = '\0';
+        wnd.show = true;
         break;
     }
 
