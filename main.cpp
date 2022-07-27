@@ -278,12 +278,12 @@ void handle_window_event(Window_Event *it) {
 
         if (action != CP_ACTION_PRESS && action != CP_ACTION_REPEAT) return;
 
+        // ==================
         // handle global keys
+        // ==================
 
         auto keymods = ui.imgui_get_keymods();
-
         // print("key = %d, mods = %d", key, keymods);
-
         switch (keymods) {
         case CP_MOD_PRIMARY:
             switch (key) {
@@ -328,6 +328,10 @@ void handle_window_event(Window_Event *it) {
             break;
         }
 
+        // ===============
+        // handle commands
+        // ===============
+
         for (int i = 0; i < _CMD_COUNT_; i++) {
             auto cmd = (Command)i;
 
@@ -346,7 +350,9 @@ void handle_window_event(Window_Event *it) {
         if (world.ui.keyboard_captured_by_imgui) return;
         if (ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow)) return;
 
+        // ======================
         // handle non-global keys
+        // ======================
 
         auto editor = get_current_editor();
 
@@ -472,7 +478,10 @@ void handle_window_event(Window_Event *it) {
             editor->update_parameter_hint();
         };
 
-        // handle movement
+        // =======================
+        // handle non-vim movement
+        // =======================
+
         do {
             if (world.use_nvim) break;
             if (!editor) break;
@@ -598,7 +607,10 @@ void handle_window_event(Window_Event *it) {
             return;
         } while (0);
 
+        // ============================
         // handle enter, backspace, tab
+        // ============================
+
         switch (keymods) {
         case CP_MOD_NONE:
         case CP_MOD_SHIFT:
@@ -628,6 +640,10 @@ void handle_window_event(Window_Event *it) {
             }
         }
 
+        // ====================
+        // handle rest of cases
+        // ====================
+
         switch (keymods) {
         case CP_MOD_SHIFT:
             switch (key) {
@@ -643,6 +659,7 @@ void handle_window_event(Window_Event *it) {
 
             switch (key) {
             case CP_KEY_ENTER:
+                // was there a reason this didn't work?
                 /*
                 if (world.nvim.mode == VI_INSERT && editor->postfix_stack.len > 0) {
                     auto pf = editor->postfix_stack.last();
@@ -864,7 +881,7 @@ void handle_window_event(Window_Event *it) {
                 }
                 break;
 
-            /*
+#if 0
             // We need to rethink this, because cmd+k is now used for the
             // command palette.
 
@@ -875,7 +892,7 @@ void handle_window_event(Window_Event *it) {
                 move_autocomplete_cursor(ed, key == CP_KEY_J ? 1 : -1);
                 break;
             }
-            */
+#endif
 
             case CP_KEY_W: {
                 auto pane = get_current_pane();
