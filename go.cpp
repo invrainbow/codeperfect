@@ -2254,8 +2254,9 @@ Goresult *Go_Indexer::find_decl_of_id(ccstr id_to_find, cur2 id_pos, Go_Ctx *ctx
 
                 auto check = [&](auto field) -> Goresult* {
                     if (!field->field_is_embedded)
-                        if (field->name_start <= id_pos && id_pos < field->name_end)
-                            return make_goresult(field, ctx);
+                        if (streq(field->name, id_to_find))
+                            if (field->name_start <= id_pos && id_pos < field->name_end)
+                                return make_goresult(field, ctx);
                     return NULL;
                 };
 
