@@ -780,10 +780,13 @@ void handle_window_event(Window_Event *it) {
             case CP_KEY_DOWN:
             case CP_KEY_UP:
                 if (world.use_nvim) {
-                    if (world.nvim.mode == VI_INSERT)
-                        move_autocomplete_cursor(editor, key == CP_KEY_DOWN ? 1 : -1);
-                    else
+                    if (world.nvim.mode == VI_INSERT) {
+                        if (!move_autocomplete_cursor(editor, key == CP_KEY_DOWN ? 1 : -1))  {
+                            // ???
+                        }
+                    } else {
                         send_nvim_keys(key == CP_KEY_DOWN ? "<Down>" : "<Up>");
+                    }
                 }
                 break;
 

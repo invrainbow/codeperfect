@@ -1237,6 +1237,17 @@ bool move_autocomplete_cursor(Editor *ed, int direction) {
     auto &ac = ed->autocomplete;
     if (!ac.ac.results) return false;
 
+    if (!ac.filtered_results->len) {
+        // Is this a good place to handle "close autocomplete"? Right now this
+        // function is called when user has just tried to go up/down in
+        // autocomplete menu and the menu is empty. Right now the next action
+        // is to move their cursor up or down. Not sure if this function will
+        // be used in other cases.
+        ac.ac.results = NULL;
+
+        return false;
+    }
+
     if (!ac.selection && direction == -1)
         ac.selection = ac.filtered_results->len - 1;
     else
