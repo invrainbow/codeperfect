@@ -12,7 +12,7 @@
 #include <search.h>
 #include <pathcch.h>
 
-void init_platform_specific_crap() {
+void init_platform_crap() {
     // max out clock frequency
     timeBeginPeriod(1);
 }
@@ -557,21 +557,25 @@ ccstr rel_to_abs_path(ccstr path) {
     return to_utf8(ret);
 }
 
-const s32 FS_WATCHER_BUFSIZE = 1024 * 32;
+const s32 FS_WATCHER_BUFSIZE = 64;
 
-bool Fs_Watcher::platform_specific_init() {
+bool Fs_Watcher::platform_init() {
     dir_handle = CreateFileW(to_wide(path), FILE_LIST_DIRECTORY, FILE_SHARE_WRITE | FILE_SHARE_READ | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED, NULL);
     if (dir_handle == INVALID_HANDLE_VALUE) {
         print("unable to create file for fswatcher: %s", get_last_error());
         return false;
     }
 
-    buf = alloc_array(FILE_NOTIFY_INFORMATION, FS_WATCHER_BUFSIZE);
+    {
+        SCOPED_MEM(&mem);
+        buf = alloc_array(FILE_NOTIFY_INFORMATION, FS_WATCHER_BUFSIZE);
+    }
+
     initiate_wait();
     return true;
 }
 
-void Fs_Watcher::cleanup() {
+void Fs_Watcher::platform_cleanup() {
     if (dir_handle) CloseHandle(dir_handle);
 }
 

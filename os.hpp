@@ -296,6 +296,7 @@ struct Fs_Event {
 
 struct Fs_Watcher {
     ccstr path;
+    Pool mem;
 
 #if OS_WINBLOWS
     FILE_NOTIFY_INFORMATION *buf;
@@ -306,7 +307,6 @@ struct Fs_Watcher {
 
     bool initiate_wait();
 #elif OS_MAC
-    Pool mem;
     List<Fs_Event> events;
     int curr;
 
@@ -320,12 +320,18 @@ struct Fs_Watcher {
 
     bool init(ccstr _path) {
         ptr0(this);
+        mem.init("fs_watcher mem");
         path = _path;
-        return platform_specific_init();
+        return platform_init();
     }
 
-    bool platform_specific_init();
-    void cleanup();
+    void cleanup() {
+        platform_cleanup();
+        mem.cleanup();
+    }
+
+    bool platform_init();
+    void platform_cleanup();
     bool next_event(Fs_Event *event);
 };
 
@@ -368,7 +374,7 @@ bool xplat_chdir(ccstr dir);
 bool create_directory(ccstr path);
 bool touch_file(ccstr path);
 
-void init_platform_specific_crap();
+void init_platform_crap();
 void open_webbrowser(ccstr url);
 
 ccstr cp_getcwd();

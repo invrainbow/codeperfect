@@ -367,7 +367,7 @@ void profile_parser() {
 }
 
 int main(int argc, char *argv[]) {
-    init_platform_specific_crap();
+    init_platform_crap();
     world.init();
 
     auto match = [&](ccstr s) -> bool {

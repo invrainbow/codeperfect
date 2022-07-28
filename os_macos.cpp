@@ -597,8 +597,7 @@ void Fs_Watcher::handle_event(size_t count, ccstr *paths) {
     }
 }
 
-bool Fs_Watcher::platform_specific_init() {
-    mem.init("fs_watcher mem");
+bool Fs_Watcher::platform_init() {
     SCOPED_MEM(&mem);
 
     events.init();
@@ -636,7 +635,7 @@ bool Fs_Watcher::platform_specific_init() {
     return FSEventStreamStart((FSEventStreamRef)stream);
 }
 
-void Fs_Watcher::cleanup() {
+void Fs_Watcher::platform_cleanup() {
     if (stream) {
         FSEventStreamStop((FSEventStreamRef)stream);
         FSEventStreamUnscheduleFromRunLoop((FSEventStreamRef)stream, CFRunLoopGetCurrent(), kCFRunLoopDefaultMode);

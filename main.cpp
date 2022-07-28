@@ -1012,7 +1012,7 @@ int main(int argc, char **argv) {
     Timer t;
     t.init();
 
-    init_platform_specific_crap();
+    init_platform_crap();
 
     if (!window_init_everything())
         return error("window init failed"), EXIT_FAILURE;
