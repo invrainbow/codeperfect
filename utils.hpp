@@ -385,7 +385,11 @@ struct Timer {
     }
 
     bool is_enabled() {
+#ifdef DEBUG_BUILD
         return penabled ? *penabled : enabled;
+#else
+        return 0;
+#endif
     }
 
     void output(ccstr s) {

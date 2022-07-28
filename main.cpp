@@ -1498,6 +1498,9 @@ int main(int argc, char **argv) {
 
         SCOPED_MEM(&world.frame_mem);
 
+        Timer fst; fst.init("frameskip");
+        fst.log_output = alloc_list<char>();
+
         {
             // Process message queue.
             auto messages = world.message_queue.start();
@@ -1528,9 +1531,12 @@ int main(int argc, char **argv) {
                     goto_file_and_pos(it.goto_file, it.goto_pos);
                     break;
                 }
+
+                fst.logf("handle message of type %s", main_thread_message_type_str(it.type));
             }
         }
 
+        fst.logf("end message queue");
         t.log("message queue");
 
         // Process filesystem changes.
@@ -1577,9 +1583,12 @@ int main(int argc, char **argv) {
                         msg->fsevent_filepath = cp_strdup(event.filepath);
                     });
                 }
+
+                fst.logf("fsevent %s", event.filepath);
             }
         }
 
+        fst.log("end filesystem changes");
         t.log("filesystem changes");
 
         glDisable(GL_SCISSOR_TEST);
@@ -1634,15 +1643,26 @@ int main(int argc, char **argv) {
             }
         }
 
+        fst.log("send shit to ui");
+
         poll_window_events();
-        For (world.window->events)
+
+        fst.log("poll window events");
+        For (world.window->events) {
             handle_window_event(&it);
+            fst.logf("handle window event %s", window_event_type_str(it.type));
+        }
+
+        fst.log("poll window events");
         world.window->events.len = 0;
 
         ui.draw_everything();
+        fst.log("draw everything");
         ui.end_frame(); // end frame after polling events, so our event callbacks have access to imgui
+        fst.log("end frame");
 
         world.window->swap_buffers();
+        fst.log("swap buffers");
 
         if (!world.turn_off_framerate_cap) {
             auto timeleft = [&]() -> i32 {
@@ -1686,6 +1706,13 @@ int main(int argc, char **argv) {
                 auto fs = world.frameskips.append();
                 fs->timestamp = current_time_milli();
                 fs->ms_over = -rem;
+
+#ifdef DEBUG_BUILD
+                print("frameskip!!!!!!!111111one =============");
+                fst.log_output->append('\0');
+                print("%s", fst.log_output->items);
+#endif
+
                 break;
             }
         }
