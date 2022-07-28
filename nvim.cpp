@@ -758,7 +758,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
 }
 
 void Nvim::run_event_loop() {
-#define ASSERT(x) if (!(x)) { cp_panic("nvim crashed"); }
+#define ASSERT(x) if (!(x)) { cp_panic("The Vim plugin has crashed."); }
 #define CHECKOK() ASSERT(reader.ok)
 
     {

@@ -1014,4 +1014,10 @@ ccstr cp_basename(ccstr path) {
     return (ccstr)ret;
 }
 
+void write_to_syslog(ccstr s) {
+    SCOPED_FRAME();
+    auto ws = to_wide(s);
+    if (ws) OutputDebugStringW(ws);
+}
+
 #endif // OS_WINBLOWS
