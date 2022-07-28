@@ -144,8 +144,8 @@ Process_Status Process::status() {
 
 bool Process::peek(char *ch) {
     if (!peek_buffer_full) {
-        if (!read1(&peek_buffer))
-            return false;
+        if (!can_read()) return false;
+        if (!read1(&peek_buffer)) return false;
         peek_buffer_full = true;
     }
 

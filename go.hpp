@@ -866,6 +866,7 @@ struct Module_Resolver {
     ccstr module_path;
 
     void init(ccstr current_module_filepath, ccstr _gomodcache);
+    void cleanup() { mem.cleanup(); }
 
     Node *goto_child(Node *node, ccstr name, bool create_if_not_found) {
         for (auto it = node->children; it; it = it->next)
@@ -923,6 +924,8 @@ struct Module_Resolver {
         auto parts = make_path(path)->parts;
 
         Node *curr = root;
+        if (!curr) return NULL;
+
         ccstr last_value = NULL;
         i32 last_index = -1;
 

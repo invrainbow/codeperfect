@@ -397,16 +397,46 @@ void Module_Resolver::init(ccstr current_module_filepath, ccstr _gomodcache) {
     proc.dir = current_module_filepath;
     proc.skip_shell = true;
     if (!proc.run(cp_sprintf("%s list -mod=mod -m all", world.go_binary_path))) return;
+    // if (!proc.run("sleep 99999")) return;
     defer { proc.cleanup(); };
 
     List<char> line;
     line.init();
     char ch;
 
+    auto start = current_time_milli();
+
     do {
         line.len = 0;
-        for (ch = '\0'; proc.read1(&ch) && ch != '\n'; ch = '\0')
+
+        while (true) {
+            while (!proc.can_read()) {
+                auto elapsed = (current_time_milli() - start) / 1000;
+                if (elapsed > 10) { // make this configurable?
+                    module_path = NULL;
+                    root_import_to_resolved = NULL;
+                    root_resolved_to_import = NULL;
+                    goto done;
+                }
+
+                auto status = proc.status();
+                if (status == PROCESS_DONE) break;
+                if (status == PROCESS_ERROR) {
+                    // should we surface these errors? even if only for debugging?
+                    module_path = NULL;
+                    root_import_to_resolved = NULL;
+                    root_resolved_to_import = NULL;
+                    goto done;
+                }
+                sleep_milliseconds(100);
+            }
+
+            char ch = 0;
+            if (!proc.read1(&ch) || ch == '\n') break;
+
             line.append(ch);
+        }
+
         line.append('\0');
 
         // print("%s", line.items);
@@ -441,10 +471,95 @@ void Module_Resolver::init(ccstr current_module_filepath, ccstr _gomodcache) {
         // go_print("%s -> %s", import_path, resolved_path);
         add_path(import_path, resolved_path);
     } while (ch != '\0');
+done:
 
-    if (!module_path) {
-        cp_panic("CodePerfect was unable to read your project folder as a Go module. Specifically, `go list -mod=mod -m all` didn't product valid output.\n\nIf this is unexpected, you can debug this by running `go list -mod=mod -m all` in a terminal in the folder of your project, and inspecting the output.");
-    }
+    // if we couldn't get a module path, try to read it from go.mod
+    do {
+        if (module_path) break;
+
+        auto fm = map_file_into_memory(path_join(current_module_filepath, "go.mod"));
+        if (!fm) break;
+        defer { fm->cleanup(); };
+
+        // based on https://go.dev/ref/mod#go-mod-file-grammar
+        auto validate_module_path = [&](ccstr path) -> bool {
+            SCOPED_FRAME();
+
+            // The path must consist of one or more path elements separated by slashes (/, U+002F). It must not begin or end with a slash.
+            int len = strlen(path);
+            if (!len) return false;
+            if (path[0] == '/' || path[len-1] == '/') return false;
+
+            auto is_valid_char = [&](char ch) -> bool {
+                return isalnum(ch) || ch == '-' || ch == '.' || ch == '_' || ch == '~';
+            };
+
+            auto parts = split_string(path, '/');
+            For (*parts) {
+                int plen = strlen(it);
+
+                // Each path element is a non-empty string made of up ASCII letters, ASCII digits, and limited ASCII punctuation (-, ., _, and ~).
+                // A path element may not begin or end with a dot (., U+002E).
+                if (it[0] == '\0') return false;
+                if (it[0] == '.') return false;
+                for (u32 i = 0; i < plen; i++)
+                    if (!is_valid_char(it[i]))
+                        return false;
+
+                // The element prefix up to the first dot must not be a reserved file name on Windows, regardless of case (CON, com1, NuL, and so on).
+                auto prefix = split_string(it, '.')->at(0);
+                ccstr bad[] = {
+                    "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3",
+                    "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+                    "LPT1", "LPT2", "LPT3", "LPT4", "LPT5",
+                    "LPT6", "LPT7", "LPT8", "LPT9",
+                };
+                For (bad)
+                    if (streqi(it, prefix))
+                        return false;
+
+                // The element prefix up to the first dot must not end with a tilde followed by one or more digits (like EXAMPL~1.COM).
+                auto tildeparts = split_string(prefix, '~');
+                if (tildeparts->len > 1) {
+                    auto digits = *tildeparts->last();
+                    bool alldigits = true;
+
+                    for (u32 i = 0, len = strlen(digits); i < len; i++) {
+                        if (!isdigit(digits[i])) {
+                            alldigits = false;
+                            break;
+                        }
+                    }
+
+                    if (alldigits) return false;
+                }
+
+                return true;
+            }
+        };
+
+        auto tmp = alloc_list<char>();
+        for (u32 i = 0; i < fm->len+1; i++) {
+            auto ch = fm->data[i];
+            if (i == fm->len || ch == '\n') {
+                tmp->append('\0');
+                if (str_starts_with(tmp->items, "module ")) {
+                    auto path = cp_strdup(tmp->items + strlen("module "));
+                    if (validate_module_path(path))
+                        module_path = path;
+                    break;
+                }
+                tmp->len = 0;
+            } else {
+                tmp->append(ch);
+            }
+        }
+    } while (0);
+
+    if (!module_path)
+        cp_panic("CodePerfect was unable to read your project folder as a Go module. Specifically, `go list -mod=mod -m all` either didn't produce valid output, or timed out.\n\nIf this is unexpected, you can debug this by running `go list -mod=mod -m all` in a terminal in the folder of your project, and inspecting the output.");
+    else
+        print("%s", module_path);
 }
 
 // -----
@@ -1066,7 +1181,7 @@ void Go_Indexer::background_thread() {
 
     auto rescan_gomod = [&](bool force_reset_index) {
         // nothing to clean up right now
-        // module_resolver.cleanup();
+        module_resolver.cleanup();
         module_resolver.init(world.current_path, gomodcache);
 
         init_index(force_reset_index);
