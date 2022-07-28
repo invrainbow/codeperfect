@@ -9,10 +9,14 @@ git submodule update --init --recursive
 
 # vcpkg
 ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
-if [[ "$(sh/detect_m1)" = "1" ]]; then
-    export VCPKG_DEFAULT_TRIPLET=arm64-osx
-else
-    export VCPKG_DEFAULT_TRIPLET=x64-osx
+if [[ "$os" = "mac" ]]; then
+    if [[ "$(sh/detect_m1)" = "1" ]]; then
+        export VCPKG_DEFAULT_TRIPLET=arm64-osx
+    else
+        export VCPKG_DEFAULT_TRIPLET=x64-osx
+    fi
+elif [[ "$os" = "windows" ]]; then
+    export VCPKG_DEFAULT_TRIPLET=x64-windows-static
 fi
 ./vcpkg/vcpkg install pcre harfbuzz fontconfig
 ./vcpkg/vcpkg integrate install

@@ -985,7 +985,7 @@ Font_Data* load_font_data_by_name(ccstr name) {
         return NULL;
     }
 
-    auto ret = alloc_object(Font_data);
+    auto ret = alloc_object(Font_Data);
     ret->type = FONT_DATA_MALLOC;
     ret->data = fontdata;
     ret->len = datalen;

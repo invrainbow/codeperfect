@@ -10,13 +10,13 @@ endif
 LDFLAGS =
 LDFLAGS += obj/gohelper.a
 LDFLAGS += -lfreetype -lharfbuzz -lpcre -lfontconfig
-LDFLAGS += -lbrotlicommon-static -lbz2 -lpng16 -lbrotlidec-static
+LDFLAGS += -lbrotlicommon-static -lbz2 -lbrotlidec-static
 
 BINARY_NAME = ide
 
 ifeq ($(OSTYPE), mac)
 	CFLAGS += -DOSTYPE_MAC
-	LDFLAGS += -ldl -lz -lexpat
+	LDFLAGS += -ldl -lz -lexpat -lpng16
 
 	frameworks = OpenGL Cocoa IOKit CoreFoundation Security
 	LDFLAGS += $(foreach it, $(frameworks), -framework $(it))
@@ -38,7 +38,7 @@ else ifeq ($(OSTYPE), windows)
 	CFLAGS += -I./vcpkg/installed/x64-windows-static/include
 	LDFLAGS += -L./vcpkg/installed/x64-windows-static/lib
 
-	LDFLAGS += -lzlib -llibexpatMD
+	LDFLAGS += -lzlib -llibexpatMD -llibpng16
 	LDFLAGS += -lopengl32 -ladvapi32 -lshlwapi -lole32
 	LDFLAGS += -lpathcch -lshell32 -lwinmm -lws2_32 -lgdi32 -lshcore
 	LDFLAGS += --for-linker "/IGNORE:4217"

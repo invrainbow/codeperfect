@@ -1,6 +1,6 @@
-#if OS_WINBLOWS
+#include "os.hpp"
 
-#define OEMRESOURCE
+#if OS_WINBLOWS
 
 #include "world.hpp"
 #include "window.hpp"
@@ -633,8 +633,8 @@ LRESULT Window::callback(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
         if (scan == 0x146) scan = 0x45;
 
         auto key = (Key)scan_to_key_table[scan];
-        print("scan = 0x%x", scan);
-        print("keydown: %s", key_str(key));
+        // print("scan = 0x%x", scan);
+        // print("keydown: %s", key_str(key));
 
         // The Ctrl keys require special handling
         if (w == VK_CONTROL) {
@@ -896,7 +896,8 @@ void make_bootstrap_context() {
     int pixel_format = ChoosePixelFormat(bootstrap_hdc, &pfd);
     if (!pixel_format)
         cp_panic("Unable to get pixel format to bootstrap OpenGL context.");
-    if (!SetPixelFormat(bootstrap_hdc, pixel_format, &pfd)) return false;
+    if (!SetPixelFormat(bootstrap_hdc, pixel_format, &pfd))
+        cp_panic("Unable to set pixel format to bootstrap OpenGL context.");
 
     bootstrap_ctx = wglCreateContext(bootstrap_hdc);
     if (!bootstrap_ctx)
@@ -1025,4 +1026,4 @@ void poll_window_events() {
     }
 }
 
-#endif
+#endif // OS_WINBLOWS
