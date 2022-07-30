@@ -557,7 +557,7 @@ done:
     } while (0);
 
     if (!module_path)
-        cp_panic("CodePerfect was unable to read your project folder as a Go module. Specifically, `go list -mod=mod -m all` either didn't produce valid output, or timed out.\n\nIf this is unexpected, you can debug this by running `go list -mod=mod -m all` in a terminal in the folder of your project, and inspecting the output.");
+        cp_panic("CodePerfect was unable to read your project folder as a Go module. Specifically, `go list -mod=mod -m all` either didn't produce valid output or timed out, and we weren't able to discern the module path from go.mod.\n\nIf this is unexpected, you can debug this by running `go list -mod=mod -m all` in a terminal in the folder of your project, and inspecting the output.");
     else
         print("%s", module_path);
 }
