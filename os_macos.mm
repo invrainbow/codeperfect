@@ -5,7 +5,7 @@
 #include "utils.hpp"
 #include "defer.hpp"
 
-void init_platform_specific_crap() { }
+void init_platform_crap() { }
 
 // idk why but including world.hpp gives us a bunch of dumb conflicts
 // i hate programming
