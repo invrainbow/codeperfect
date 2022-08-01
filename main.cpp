@@ -410,7 +410,7 @@ void handle_window_event(Window_Event *it) {
             editor->type_char_in_insert_mode('\t');
         };
 
-        auto alt_move = [&](bool back) -> cur2 {
+        auto alt_move = [&](bool back, bool backspace) -> cur2 {
             auto it = editor->iter();
 
             if (back) {
@@ -421,13 +421,26 @@ void handle_window_event(Window_Event *it) {
             auto done = [&]() { return back ? it.bof() : it.eof(); };
             auto advance = [&]() { back ? it.prev() : it.next(); };
 
-            for (; !done(); advance())
-                if (!isspace(it.peek()))
-                    break;
+            enum { TYPE_SPACE, TYPE_IDENT, TYPE_OTHER };
 
-            bool isid = isident(it.peek());
-            for (; !done(); advance()) {
-                if (isident(it.peek()) != isid || isspace(it.peek())) {
+            auto get_char_type = [](char ch) -> int {
+                if (isspace(ch)) return TYPE_SPACE;
+                if (isident(ch)) return TYPE_IDENT;
+                return TYPE_OTHER;
+            };
+
+            int start_type = get_char_type(it.peek());
+            int chars_moved = 0;
+
+            for (; !done(); advance(), chars_moved++) {
+                if (get_char_type(it.peek()) != start_type) {
+                    if (start_type == TYPE_SPACE && chars_moved == 1) {
+                        // If we only found one space, start over with the next space type.
+                        start_type = get_char_type(it.peek());
+                        chars_moved = 0;
+                        continue;
+                    }
+
                     if (back) it.next();
                     break;
                 }
@@ -454,7 +467,7 @@ void handle_window_event(Window_Event *it) {
             if (!world.use_nvim && editor->selecting) {
                 editor->delete_selection();
             } else if (keymods & CP_MOD_TEXT) {
-                auto new_cur = alt_move(true);
+                auto new_cur = alt_move(true, true);
                 while (editor->cur > new_cur)
                     editor->backspace_in_insert_mode(1, 0);
             } else {
@@ -538,7 +551,7 @@ void handle_window_event(Window_Event *it) {
                         else
                             cur = a > b ? a : b;
                     } else {
-                        cur = alt_move(key == CP_KEY_LEFT);
+                        cur = alt_move(key == CP_KEY_LEFT, false);
                     }
                     handled = true;
                     break;
