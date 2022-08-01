@@ -12,8 +12,24 @@
 
 extern "C" TSLanguage *tree_sitter_go();
 
-extern const unsigned char GO_INDEX_MAGIC_BYTES[3];
-extern const int GO_INDEX_VERSION;
+#define GO_INDEX_MAGIC_NUMBER 0x49fa98
+// version 16: add Go_Reference
+// version 17: change GO_INDEX_MAGIC_NUMBER
+// version 18: change Go_Reference
+// version 19: fix Go_File::read()/write() not saving Go_Reference
+// version 20: fix Go_Reference not using correct pool
+// version 21: remove array_size from Gotype
+// version 22: sort references
+// version 23: rename @builtins to @builtin
+// version 24: don't include "_" decls
+// version 25: fix selector references being counted a second time as single ident
+// version 26: fix scope ops not handling TS_FUNC_LITERAL
+// version 27: fix parser handling newlines and idents wrong in interface specs
+// version 28: upgrade tree-sitter-go
+// version 29: generics
+// version 30: support labels
+// version 31: version is fucked for some reason
+#define GO_INDEX_VERSION 31
 
 enum {
     CUSTOM_HASH_BUILTINS = 1,
