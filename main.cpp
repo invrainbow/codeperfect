@@ -1498,8 +1498,8 @@ int main(int argc, char **argv) {
 
         SCOPED_MEM(&world.frame_mem);
 
-        Timer fst; fst.init("frameskip");
-        fst.log_output = alloc_list<char>();
+        world.fst.init("frameskip");
+        world.fst.log_output = alloc_list<char>();
 
         {
             // Process message queue.
@@ -1532,11 +1532,11 @@ int main(int argc, char **argv) {
                     break;
                 }
 
-                fst.logf("handle message of type %s", main_thread_message_type_str(it.type));
+                fstlog("handle message of type %s", main_thread_message_type_str(it.type));
             }
         }
 
-        fst.logf("end message queue");
+        fstlog("end message queue");
         t.log("message queue");
 
         // Process filesystem changes.
@@ -1584,11 +1584,11 @@ int main(int argc, char **argv) {
                     });
                 }
 
-                fst.logf("fsevent %s", event.filepath);
+                fstlog("fsevent %s", event.filepath);
             }
         }
 
-        fst.log("end filesystem changes");
+        fstlog("end filesystem changes");
         t.log("filesystem changes");
 
         glDisable(GL_SCISSOR_TEST);
@@ -1643,26 +1643,26 @@ int main(int argc, char **argv) {
             }
         }
 
-        fst.log("send shit to ui");
+        fstlog("send shit to ui");
 
         poll_window_events();
 
-        fst.log("poll window events");
+        fstlog("poll window events");
         For (world.window->events) {
             handle_window_event(&it);
-            fst.logf("handle window event %s", window_event_type_str(it.type));
+            fstlog("handle window event %s", window_event_type_str(it.type));
         }
 
-        fst.log("poll window events");
+        fstlog("poll window events");
         world.window->events.len = 0;
 
         ui.draw_everything();
-        fst.log("draw everything");
+        fstlog("draw everything");
         ui.end_frame(); // end frame after polling events, so our event callbacks have access to imgui
-        fst.log("end frame");
+        fstlog("end frame");
 
         world.window->swap_buffers();
-        fst.log("swap buffers");
+        fstlog("swap buffers");
 
         if (!world.turn_off_framerate_cap) {
             auto timeleft = [&]() -> i32 {
@@ -1709,8 +1709,8 @@ int main(int argc, char **argv) {
 
 #ifdef DEBUG_BUILD
                 print("frameskip!!!!!!!111111one =============");
-                fst.log_output->append('\0');
-                print("%s", fst.log_output->items);
+                world.fst.log_output->append('\0');
+                print("%s", world.fst.log_output->items);
 #endif
 
                 break;

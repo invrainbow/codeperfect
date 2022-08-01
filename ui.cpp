@@ -2185,6 +2185,8 @@ void UI::draw_everything() {
         ImGui::SetNextWindowViewport(viewport->ID);
         ImGui::SetNextWindowBgAlpha(0.0f);
 
+        fstlog("draw dockspace - set shit");
+
         auto window_flags = ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar
             | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove
             | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
@@ -2198,6 +2200,8 @@ void UI::draw_everything() {
             /**/
             ImGui::PopStyleVar(3);
         }
+
+        fstlog("draw dockspace - begin window");
 
         /*
         // if the dockspace is focused, means we just closed last docked window
@@ -2235,8 +2239,12 @@ void UI::draw_everything() {
             dock_initialized = true;
         }
 
+        fstlog("draw dockspace - setup layout");
+
         auto dock_flags = ImGuiDockNodeFlags_NoDockingInCentralNode | ImGuiDockNodeFlags_PassthruCentralNode;
         ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), dock_flags);
+
+        fstlog("draw dockspace - ImGui::DockSpace()");
 
         {
             // get panes_area
@@ -2252,8 +2260,12 @@ void UI::draw_everything() {
             }
         }
 
+        fstlog("draw dockspace - get panes_area");
+
         ImGui::End();
+        fstlog("draw dockspace");
     }
+
 
     if (ImGui::BeginMainMenuBar()) {
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 8));
@@ -2510,6 +2522,7 @@ void UI::draw_everything() {
 
         ImGui::PopStyleVar(2);
         ImGui::EndMainMenuBar();
+        fstlog("menubar");
     }
 
     if (world.wnd_options.show) {
@@ -2616,6 +2629,8 @@ void UI::draw_everything() {
         }
 
         ImGui::End();
+
+        fstlog("wnd_options");
     }
 
     fn<void(Call_Hier_Node*, ccstr, bool)> render_call_hier;
@@ -2700,6 +2715,7 @@ void UI::draw_everything() {
         }
 
         ImGui::End();
+        fstlog("wnd_callee_hierarchy");
     }
 
     if (world.wnd_caller_hierarchy.show) {
@@ -2726,6 +2742,7 @@ void UI::draw_everything() {
         }
 
         ImGui::End();
+        fstlog("wnd_caller_hierarchy");
     }
 
     if (world.wnd_find_interfaces.show) {
@@ -2834,6 +2851,7 @@ void UI::draw_everything() {
         }
 
         ImGui::End();
+        fstlog("wnd_find_interfaces");
     }
 
     if (world.wnd_find_implementations.show) {
@@ -2902,6 +2920,7 @@ void UI::draw_everything() {
         }
 
         ImGui::End();
+        fstlog("wnd_find_implementations");
     }
 
     if (world.wnd_find_references.show) {
@@ -2939,6 +2958,7 @@ void UI::draw_everything() {
         }
 
         ImGui::End();
+        fstlog("wnd_find_references");
     }
 
     {
@@ -3039,6 +3059,7 @@ void UI::draw_everything() {
             }
 
             ImGui::End();
+            fstlog("wnd_generate_implementation");
         }
     }
 
@@ -3154,6 +3175,7 @@ void UI::draw_everything() {
         }
 
         ImGui::End();
+        fstlog("wnd_rename_identifier");
     }
 
     if (world.wnd_about.show) {
@@ -3197,6 +3219,7 @@ void UI::draw_everything() {
         imgui_pop_font();
 
         ImGui::End();
+        fstlog("wnd_index_log");
     }
 
     if (world.wnd_enter_license.show) {
@@ -3251,6 +3274,7 @@ void UI::draw_everything() {
         } while (0);
 
         ImGui::End();
+        fstlog("wnd_enter_license");
     }
 
     if (world.wnd_debug_output.show) {
@@ -3307,6 +3331,7 @@ void UI::draw_everything() {
         imgui_pop_font();
 
         ImGui::End();
+        fstlog("wnd_debug_output");
     }
 
     if (world.error_list.show) {
@@ -3389,6 +3414,7 @@ void UI::draw_everything() {
         }
 
         ImGui::End();
+        fstlog("wnd_error_list");
     }
 
     if (world.wnd_rename_file_or_folder.show) {
@@ -3452,6 +3478,7 @@ void UI::draw_everything() {
         } while (0);
 
         ImGui::End();
+        fstlog("wnd_rename_file_or_folder");
     }
 
     if (world.wnd_add_file_or_folder.show) {
@@ -3510,6 +3537,7 @@ void UI::draw_everything() {
         }
 
         ImGui::End();
+        fstlog("wnd_add_file_or_folder");
     }
 
     if (world.file_explorer.show) {
@@ -3523,6 +3551,8 @@ void UI::draw_everything() {
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
         begin_window("File Explorer", &wnd);
         ImGui::PopStyleVar();
+
+        fstlog("wnd_file_explorer - start window");
 
         auto begin_buttons_child = [&]() {
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6, 6));
@@ -3552,6 +3582,8 @@ void UI::draw_everything() {
                 fill_file_tree(); // TODO: async?
             }
         } ImGui::EndChild();
+
+        fstlog("wnd_file_explorer - draw buttons");
 
         auto begin_directory_child = [&]() {
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 4));
@@ -3739,6 +3771,8 @@ void UI::draw_everything() {
             for (auto child = world.file_tree->children; child; child = child->next)
                 draw(child);
 
+            fstlog("wnd_file_explorer - draw files");
+
             if (!menu_handled && ImGui::OurBeginPopupContextWindow("file_explorer_context_menu")) {
                 {
                     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, old_item_spacing);
@@ -3755,6 +3789,7 @@ void UI::draw_everything() {
                 ImGui::EndPopup();
             }
 
+            fstlog("wnd_file_explorer - right click");
         } ImGui::EndChild();
 
         if (wnd.focused) {
@@ -3829,12 +3864,14 @@ void UI::draw_everything() {
                 }
                 break;
             }
+            fstlog("wnd_file_explorer - handle keys");
         }
 
         wnd.scroll_to = NULL;
 
         ImGui::End();
         ImGui::PopStyleVar();
+        fstlog("wnd_file_explorer");
     }
 
     if (world.wnd_project_settings.show) {
@@ -4215,13 +4252,18 @@ void UI::draw_everything() {
         }
 
         ImGui::End();
+        fstlog("wnd_project_settings");
     }
 
-    if (world.windows_open.im_demo)
+    if (world.windows_open.im_demo) {
         ImGui::ShowDemoWindow(&world.windows_open.im_demo);
+        fstlog("im_demo");
+    }
 
-    if (world.windows_open.im_metrics)
+    if (world.windows_open.im_metrics) {
         ImGui::ShowMetricsWindow(&world.windows_open.im_metrics);
+        fstlog("im_metrics");
+    }
 
     if (world.wnd_goto_file.show) {
         auto& wnd = world.wnd_goto_file;
@@ -4294,6 +4336,7 @@ void UI::draw_everything() {
         }
 
         ImGui::End();
+        fstlog("wnd_goto_file");
     }
 
     do {
@@ -4509,6 +4552,7 @@ void UI::draw_everything() {
         if (search_again) trigger_file_search();
 
         ImGui::End();
+        fstlog("wnd_current_file_search");
     } while (0);
 
     if (world.wnd_command.show) {
@@ -4624,6 +4668,7 @@ void UI::draw_everything() {
         }
 
         ImGui::End();
+        fstlog("wnd_command");
     }
 
     {
@@ -4802,6 +4847,7 @@ void UI::draw_everything() {
             }
 
             ImGui::End();
+            fstlog("wnd_goto_symbol");
         }
     }
 
@@ -4810,6 +4856,7 @@ void UI::draw_everything() {
     // change later.
     if (world.dbg.state_flag != DLV_STATE_INACTIVE && world.dbg.state_flag != DLV_STATE_STARTING) {
         draw_debugger();
+        fstlog("debugger");
     }
 
     if (world.wnd_search_and_replace.show) {
@@ -5054,6 +5101,7 @@ void UI::draw_everything() {
         }
 
         ImGui::End();
+        fstlog("wnd_search_and_replace");
     }
 
     if (world.wnd_style_editor.show) {
@@ -5145,6 +5193,7 @@ void UI::draw_everything() {
         }
 
         ImGui::End();
+        fstlog("wnd_style_editor");
     }
 
 #ifdef DEBUG_BUILD
@@ -5183,6 +5232,7 @@ void UI::draw_everything() {
             ImGui::Text("no history to show");
 
         ImGui::End();
+        fstlog("wnd_history");
     }
 #endif
 
@@ -5211,6 +5261,7 @@ void UI::draw_everything() {
             render_ts_cursor(&editor->buf->cursor, open_cur);
 
             ImGui::End();
+            fstlog("wnd_ast_viewer");
         }
 
         if (world.wnd_gofile_viewer.show) {
@@ -5357,6 +5408,7 @@ void UI::draw_everything() {
             }
 
             ImGui::End();
+            fstlog("wnd_gofile_viewer");
         }
     } while (0);
 
@@ -5396,6 +5448,8 @@ void UI::draw_everything() {
         begin_window("Mouse Pos", &world.wnd_mouse_pos);
         ImGui::End();
     }
+
+    fstlog("blah blah");
 
     // Draw panes.
     draw_rect(panes_area, rgba(global_colors.background));
@@ -6213,6 +6267,8 @@ void UI::draw_everything() {
         pane_area.x += pane_area.w;
     }
 
+    fstlog("draw panes");
+
     {
         // Draw pane resizers.
 
@@ -6248,6 +6304,8 @@ void UI::draw_everything() {
         if (!world.ui.mouse_down[CP_MOUSE_LEFT])
             world.resizing_pane = -1;
     }
+
+    fstlog("draw pane resizers");
 
     {
         draw_rect(status_area, rgba(global_colors.status_area_background));
@@ -6416,6 +6474,8 @@ void UI::draw_everything() {
         }
     }
 
+    fstlog("draw status area");
+
     if (world.wnd_hover_info.show) {
         auto &wnd = world.wnd_hover_info;
 
@@ -6428,6 +6488,7 @@ void UI::draw_everything() {
         ImGui::Text("ready: %d", hover.ready);
 
         ImGui::End();
+        fstlog("wnd_hover_info");
     }
 
     if (world.show_frameskips) {

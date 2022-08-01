@@ -637,6 +637,8 @@ void init_goto_file() {
     wnd.filepaths = alloc_list<ccstr>();
     wnd.filtered_results = alloc_list<int>();
 
+    fstlog("init_goto_file - start");
+
     fn<void(FT_Node*, ccstr)> fill_files = [&](auto node, auto path) {
         for (auto it = node->children; it; it = it->next) {
             auto isdir = it->is_directory;
@@ -651,6 +653,7 @@ void init_goto_file() {
     };
 
     fill_files(world.file_tree, "");
+    fstlog("init_goto_file - fill");
     wnd.show = true;
 }
 
@@ -761,8 +764,7 @@ void filter_files() {
 
     wnd.filtered_results->len = 0;
 
-    Timer t;
-    // t.init("filter_files");
+    fstlog("filter_files - start");
 
     u32 i = 0, j = 0;
     For (*wnd.filepaths) {
@@ -774,7 +776,7 @@ void filter_files() {
         i++;
     }
 
-    // t.log("matching");
+    fstlog("filter_files - match");
 
     fuzzy_sort_filtered_results(
         wnd.query,
@@ -783,7 +785,7 @@ void filter_files() {
         [&](auto i) { return wnd.filepaths->at(i); }
     );
 
-    // t.log("scoring");
+    fstlog("filter_files - score/sort");
 }
 
 void run_proc_the_normal_way(Process* proc, ccstr cmd) {
@@ -1980,10 +1982,7 @@ void handle_command(Command cmd, bool from_menu) {
             if (from_menu)
                 world.wnd_goto_file.show = false;
         } else {
-            Timer t;
-            t.init();
             init_goto_file();
-            t.log("init_goto_file");
         }
         break;
 
@@ -3001,12 +3000,14 @@ void fuzzy_sort_filtered_results(ccstr query, List<int> *list, int total_results
     auto names = alloc_array(ccstr, total_results);
     auto scores = alloc_array(double, total_results);
 
-    // Timer t;
+    fstlog("fuzzysort - start");
 
     For (*list) {
         names[it] = get_name(it);
         scores[it] = fzy_match(query, names[it]);
     }
+
+    fstlog("fuzzysort - generate list of scores");
 
     list->sort([&](int* pa, int* pb) {
         auto a = scores[*pa];
@@ -3015,6 +3016,8 @@ void fuzzy_sort_filtered_results(ccstr query, List<int> *list, int total_results
 
         return (int)(strlen(names[*pa]) - strlen(names[*pb]));
     });
+
+    fstlog("fuzzysort - actual sorting");
 }
 
 ccstr get_auth_filepath() {
@@ -3073,4 +3076,11 @@ void clear_key_states() {
     mem0(world.ui.mouse_down, sizeof(world.ui.mouse_down));
     mem0(world.ui.mouse_just_pressed, sizeof(world.ui.mouse_just_pressed));
     mem0(world.ui.mouse_just_released, sizeof(world.ui.mouse_just_released));
+}
+
+void fstlog(ccstr fmt, ...) {
+    va_list vl;
+    va_start(vl, fmt);
+    auto s = cp_vsprintf(fmt, vl);
+    world.fst.log(s);
 }

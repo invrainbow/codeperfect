@@ -356,6 +356,7 @@ struct World {
     Lock global_mark_tree_lock;
 
     bool flag_defocus_imgui;
+    Timer fst;
 
     struct Navigation_Dest {
         int editor_id;
@@ -745,3 +746,5 @@ void write_auth();
 bool write_project_settings();
 void send_nvim_keys(ccstr s);
 void clear_key_states();
+
+void fstlog(ccstr fmt, ...);
