@@ -70,4 +70,19 @@ bool let_user_select_file(Select_File_Opts* opts) {
 }
 #endif
 
+ccstr get_executable_path() {
+    auto ret = alloc_array(char, PATH_MAX);
+    auto count = readlink("/proc/self/exe", ret, PATH_MAX);
+    if (count == -1) return NULL;
+    return ret;
+}
+
+int _cmp_trampoline(const void *a, const void *b, void *param) {
+    return (*(compare_func*)param)(a, b);
+}
+
+void xplat_quicksort(void *list, s32 num, s32 size, compare_func cmp) {
+    qsort_r(list, num, size, _cmp_trampoline, &cmp);
+}
+
 #endif

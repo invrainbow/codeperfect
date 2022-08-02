@@ -433,5 +433,95 @@ bool copy_file(ccstr src, ccstr dest, bool overwrite) {
     return std::filesystem::copy_file(src, dest, flags);
 }
 
+ccstr get_canon_path(ccstr path) {
+    auto new_path = alloc_list<ccstr>();
+    auto p = make_path(path);
+
+    int extra_dotdots = 0;
+
+    For (*p->parts) {
+        if (streq(it, "")) continue;
+        if (streq(it, ".")) continue;
+
+        if (streq(it, "..")) {
+            if (new_path->len > 0)
+                new_path->len--;
+            else
+                extra_dotdots++;
+            continue;
+        }
+
+        new_path->append(it);
+    }
+
+    auto ret = alloc_list<ccstr>();
+    for (int i = 0; i < extra_dotdots; i++)
+        ret->append("..");
+    For (*new_path)
+        ret->append(it);
+
+    Path pret;
+    pret.init(ret);
+    return pret.str(PATH_SEP);
+}
+
+ccstr get_normalized_path(ccstr path) {
+    auto ret = realpath(path, NULL);
+    if (!ret) return NULL;
+    defer { free(ret); };
+
+    return cp_strdup(ret);
+}
+
+// just add to utils.cpp? is there any reason to call win32 api version on
+// windows
+ccstr get_path_relative_to(ccstr full, ccstr base) {
+    auto pfull = make_path(full)->parts;
+    auto pbase = make_path(base)->parts;
+
+    int i = 0;
+    for (; i < pfull->len && i < pbase->len; i++)
+        if (!streqi(pfull->at(i), pbase->at(i)))
+            break;
+
+    int shared = i;
+
+    auto ret = alloc_list<ccstr>();
+    for (int i = shared; i < pbase->len; i++)
+        ret->append("..");
+    for (int i = shared; i < pfull->len; i++)
+        ret->append(pfull->at(i));
+
+    Path p;
+    p.init(ret);
+    return p.str();
+}
+
+ccstr rel_to_abs_path(ccstr path) {
+    int size = 5;
+    char *cwd;
+
+    while (true) {
+        Frame frame;
+        cwd = alloc_array(char, size);
+        if (getcwd(cwd, size)) break;
+
+        frame.restore();
+        size *= 5;
+    }
+
+    int len = cwk_path_get_absolute(cwd, path, NULL, 0);
+    if (!len) return NULL;
+
+    Frame frame;
+    auto ret = alloc_array(char, len+1);
+
+    if (!cwk_path_get_absolute(cwd, path, ret, len+1)) {
+        frame.restore();
+        return NULL;
+    }
+
+    return ret;
+}
 
 #endif // OS_MAC || OS_LINUX
