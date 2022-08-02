@@ -10,7 +10,7 @@
 #include <functional>
 #include <utility>
 
-#if OS_MAC
+#if OS_MAC || OS_LINUX
 #include <inttypes.h>
 #endif
 

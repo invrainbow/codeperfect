@@ -7,6 +7,25 @@ os=$(sh/detect_os)
 # download submodules
 git submodule update --init --recursive
 
+if [[ "$os" = "linux" ]]; then
+    sudo apt update
+    sudo apt upgrade
+    sudo apt install autoconf bison clang cloc cmake coreutils curl gcc git glib make neovim packages perl pkg-config python3 python-is-python3 silversearcher-ag tmux tree wget xclip
+    sudo apt install libtool
+    sudo apt install libx11-dev libxft-dev
+    sudo apt install autoconf
+    sudo apt install libtool
+    sudo apt install bison
+    sudo apt install gperf
+    sudo apt install libgles2-mesa-dev
+    sudo apt install libxext-dev
+    sudo apt install libxrandr-dev
+    sudo apt install libxi-dev
+    sudo apt install libxcursor-dev
+    sudo apt install libxdamage-dev
+    sudo apt install libxinerama-dev
+fi
+
 # vcpkg
 ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
 if [[ "$os" = "mac" ]]; then
@@ -17,6 +36,8 @@ if [[ "$os" = "mac" ]]; then
     fi
 elif [[ "$os" = "windows" ]]; then
     export VCPKG_DEFAULT_TRIPLET=x64-windows-static
+elif [[ "$os" = "linux" ]]; then
+    export VCPKG_DEFAULT_TRIPLET=x64-linux
 fi
 ./vcpkg/vcpkg install pcre harfbuzz fontconfig
 ./vcpkg/vcpkg integrate install
@@ -27,6 +48,11 @@ if [[ "$os" = "mac" ]]; then
     tar xvzf nvim-macos.tar.gz
     mv nvim-osx64 nvim-archive
     rm nvim-macos.tar.gz
+elif [[ "$os" = "linux" ]]; then
+    wget https://github.com/neovim/neovim/releases/download/v0.5.1/nvim-linux64.tar.gz
+    tar xvzf nvim-linux64.tar.gz
+    mv nvim-linux64 nvim-archive
+    rm nvim-linux64.tar.gz
 elif [[ "$os" = "windows" ]]; then
     wget https://github.com/neovim/neovim/releases/download/v0.5.1/nvim-win64.zip
     unzip nvim-win64.zip

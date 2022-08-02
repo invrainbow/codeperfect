@@ -755,7 +755,7 @@ void* get_native_window_handle() {
 #elif OS_MAC
     return world.window->ns_window;
 #else
-#error shit done fucked up
+    return NULL; // TODO
 #endif
 }
 
@@ -1641,7 +1641,7 @@ void init_command_info_table() {
 
     mem0(command_info_table, sizeof(command_info_table));
 
-#if OS_WINBLOWS
+#if OS_WINBLOWS || OS_LINUX
     command_info_table[CMD_EXIT] = k(CP_MOD_ALT, CP_KEY_F4, "Exit");
 #elif OS_MAC
     command_info_table[CMD_EXIT] = k(CP_MOD_CMD, CP_KEY_Q, "Quit");

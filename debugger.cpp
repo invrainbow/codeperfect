@@ -30,7 +30,7 @@ when a frame is opened
 
 #if OS_WINBLOWS
 #include "win32.hpp"
-#elif OS_MAC
+#elif OS_MAC || OS_LINUX
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/ioctl.h>

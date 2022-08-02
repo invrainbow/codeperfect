@@ -14,7 +14,7 @@ elif [ $os = "mac" ]; then
         cmd="arch -arm64 $cmd"
     fi
 elif [ $os = "linux" ]; then
-    echo todo
+    nprocs=$(nproc)
 fi
 
 OSTYPE=$os $cmd -j $nprocs $@
