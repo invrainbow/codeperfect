@@ -1,16 +1,14 @@
+#include "ostype.hpp"
+
+#if OS_LINUX
+
 #include "world.hpp"
 
 #include "window.hpp"
 #include "utils.hpp"
 #include <GLFW/glfw3.h>
 
-#if OS_WINBLOWS
-#define GLFW_EXPOSE_NATIVE_WIN32
-#elif OS_MAC
-#define GLFW_EXPOSE_NATIVE_COCOA
-#elif OS_LINUX
 #define GLFW_EXPOSE_NATIVE_X11
-#endif
 #include <GLFW/glfw3native.h>
 
 bool window_init_everything() {
@@ -18,13 +16,7 @@ bool window_init_everything() {
 }
 
 void* Window::get_native_handle() {
-#if OS_WINBLOWS
-    return (void*)glfwGetWin32Window(window);
-#elif OS_MAC
-    return (void*)glfwGetCocoaWindow(window);
-#elif OS_LINUX
     return (void*)glfwGetX11Window(window);
-#endif
 }
 
 void Window::set_clipboard_string(ccstr string) {
@@ -338,3 +330,5 @@ void Window::set_cursor(Cursor *_cursor) {
     cursor = _cursor;
     glfwSetCursor(window, cursor->cursor);
 }
+
+#endif // OS_LINUX

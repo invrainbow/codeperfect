@@ -1,4 +1,4 @@
-#include "os.hpp"
+#include "ostype.hpp"
 
 #if OS_WINBLOWS
 

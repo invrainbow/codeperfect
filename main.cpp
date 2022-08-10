@@ -1042,27 +1042,30 @@ int main(int argc, char **argv) {
         world.window = alloc_object(Window);
     }
 
-    /*
+#ifndef WINDOW_GLFW
     {
         // init glew using a dummy context
-        // make_bootstrap_context();
-        // defer { destroy_bootstrap_context(); };
+        make_bootstrap_context();
+        defer { destroy_bootstrap_context(); };
+
         glewExperimental = GL_TRUE;
         auto err = glewInit();
         if (err != GLEW_OK)
             return error("unable to init GLEW: %s", glewGetErrorString(err)), EXIT_FAILURE;
     }
-    */
+#endif
 
     if (!world.window->init(1280, 720, WINDOW_TITLE))
         return error("could not create window"), EXIT_FAILURE;
 
     world.window->make_context_current();
 
+#ifdef WINDOW_GLFW
     glewExperimental = GL_TRUE;
     auto err = glewInit();
     if (err != GLEW_OK)
         return error("unable to init GLEW: %s", glewGetErrorString(err)), EXIT_FAILURE;
+#endif
 
 #ifdef DEBUG_BUILD
     GHEnableDebugMode();
@@ -1258,17 +1261,15 @@ int main(int argc, char **argv) {
             {ImGuiMouseCursor_ResizeNS, CP_CUR_RESIZE_NS},
             {ImGuiMouseCursor_ResizeEW, CP_CUR_RESIZE_EW},
             {ImGuiMouseCursor_Hand, CP_CUR_POINTING_HAND},
-            // {ImGuiMouseCursor_ResizeAll, CP_CUR_RESIZE_ALL},
-            // {ImGuiMouseCursor_ResizeNESW, CP_CUR_RESIZE_NESW},
-            // {ImGuiMouseCursor_ResizeNWSE, CP_CUR_RESIZE_NWSE},
-            // {ImGuiMouseCursor_NotAllowed, CP_CUR_NOT_ALLOWED},
+            {ImGuiMouseCursor_ResizeAll, CP_CUR_RESIZE_ALL},
+            {ImGuiMouseCursor_ResizeNESW, CP_CUR_RESIZE_NESW},
+            {ImGuiMouseCursor_ResizeNWSE, CP_CUR_RESIZE_NWSE},
+            {ImGuiMouseCursor_NotAllowed, CP_CUR_NOT_ALLOWED},
         };
 
-        For (pairs) {
-            if (!world.ui.cursors[it.x].init(it.y))
-                return error("could not initialize cursor"), EXIT_FAILURE;
-            world.ui.cursors_ready[it.x] = true;
-        }
+        For (pairs)
+            if (world.ui.cursors[it.x].init(it.y))
+                world.ui.cursors_ready[it.x] = true;
     }
 
     world.ui.program = compile_program((char*)vert_glsl, vert_glsl_len, (char*)frag_glsl, frag_glsl_len);

@@ -4,25 +4,10 @@
 #include "common.hpp"
 #include "objc_id_shim.hpp"
 
-#if OS_WINBLOWS
-#   define WINDOW_WINDOWS
-#elif OS_MAC
-#   define WINDOW_MAC
+#if OS_MAC
 #   include <Carbon/Carbon.h>
-#endif
-
-#if 1
-#   ifdef WINDOW_WINDOWS
-#       undef WINDOW_WINDOWS
-#   endif
-#       ifdef WINDOW_MAC
-#   undef WINDOW_MAC
-#       endif
-#   define WINDOW_GLFW
-#endif
-
-#ifdef WINDOW_GLFW
-#include <GLFW/glfw3.h>
+#elif OS_LINUX
+#   include <GLFW/glfw3.h>
 #endif
 
 enum Window_Event_Type {
@@ -241,20 +226,22 @@ enum Key {
 enum Cursor_Type {
     CP_CUR_RESIZE_EW,
     CP_CUR_RESIZE_NS,
+    CP_CUR_RESIZE_NWSE,
+    CP_CUR_RESIZE_NESW,
     CP_CUR_ARROW,
     CP_CUR_IBEAM,
     CP_CUR_CROSSHAIR,
     CP_CUR_POINTING_HAND,
-    // CP_CUR_RESIZE_ALL,
-    // CP_CUR_NOT_ALLOWED,
+    CP_CUR_RESIZE_ALL,
+    CP_CUR_NOT_ALLOWED,
 };
 
 struct Cursor {
-#if defined(WINDOW_WINDOWS)
+#if OS_WINDOWS
     HCURSOR handle;
-#elif defined(WINDOW_MAC)
+#elif OS_MAC
     id object;
-#elif defined(WINDOW_GLFW)
+#elif OS_LINUX
     GLFWcursor *cursor;
 #endif
     Cursor_Type type;
@@ -290,20 +277,20 @@ struct Window {
         return init_os_specific(width, height, title);
     }
 
-#if defined(WINDOW_WINDOWS)
+#if OS_WINBLOWS
     HWND win32_window;
     ATOM win32_window_class;
     HGLRC wgl_context; // what type?
     HDC wgl_dc;
     WCHAR win32_high_surrogate;
-#elif defined(WINDOW_MAC)
+#elif OS_MAC
     id ns_window;
     id ns_view;
     id ns_delegate;
     id ns_layer;
     id nsgl_object;
     id nsgl_pixel_format;
-#elif defined(WINDOW_GLFW)
+#elif OS_LINUX
     GLFWwindow *window;
 #endif
 
@@ -330,7 +317,6 @@ struct Window {
     void make_context_current();
     void swap_buffers();
     void swap_interval(int interval);
-    void cleanup();
     void set_title(ccstr title);
     void get_size(int* width, int* height);
     void get_framebuffer_size(int* width, int* height);
@@ -340,13 +326,13 @@ struct Window {
     void set_cursor(Cursor *_cursor);
     void *get_native_handle();
 
-#if WINDOW_WINDOWS
+#if OS_WINDOWS
     LRESULT callback(HWND hwnd, UINT msg, WPARAM w, LPARAM l);
     void adjust_rect_using_windows_gayness(RECT *rect);
     bool create_actual_window(int width, int height, ccstr title);
     bool create_wgl_context();
     void dispatch_mouse_event_win32(Mouse_Button button, bool press);
-#elif WINDOW_MAC
+#elif OS_MAC
     void dispatch_mouse_event_cocoa(Mouse_Button button, bool press, void* /* NSEvent* */ event);
     bool is_cursor_in_content_area();
     void update_cursor_image();
@@ -361,5 +347,5 @@ void poll_window_events();
 // The purpose of this is function to get us to a point where the current
 // OpenGL context is a valid one, basically so we can initialize GLEW. Once GLEW is initialized the bootstrap context will be destroyed.
 // Panics if it can't do it.
-// void make_bootstrap_context();
-// void destroy_bootstrap_context();
+void make_bootstrap_context();
+void destroy_bootstrap_context();
