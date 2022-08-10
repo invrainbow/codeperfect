@@ -354,6 +354,7 @@ void World::init() {
     init_mem(caller_hierarchy_mem);
     init_mem(callee_hierarchy_mem);
     init_mem(project_settings_mem);
+    init_mem(fst_mem);
 #undef init_mem
 
     MEM = &frame_mem;
@@ -3075,5 +3076,7 @@ void fstlog(ccstr fmt, ...) {
     va_list vl;
     va_start(vl, fmt);
     auto s = cp_vsprintf(fmt, vl);
+    va_end(vl);
+
     world.fst.log(s);
 }

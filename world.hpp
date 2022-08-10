@@ -278,6 +278,7 @@ struct World {
     Pool caller_hierarchy_mem;
     Pool callee_hierarchy_mem;
     Pool project_settings_mem;
+    Pool fst_mem;
 
     Fridge<Mark> mark_fridge;
     Fridge<Mark_Node> mark_node_fridge;

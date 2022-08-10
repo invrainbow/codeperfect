@@ -61,6 +61,8 @@ ccstr cp_vsprintf(ccstr fmt, va_list args) {
     auto len = stbsp_vsnprintf(NULL, 0, fmt, args);
     auto buf = alloc_array(char, (len + 1));
     stbsp_vsnprintf(buf, len + 1, fmt, args2);
+
+    va_end(args2);
     return buf;
 }
 

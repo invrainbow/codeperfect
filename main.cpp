@@ -1510,11 +1510,14 @@ int main(int argc, char **argv) {
         auto frame_start_time = current_time_nano();
 
         world.frame_mem.reset();
-
         SCOPED_MEM(&world.frame_mem);
 
-        world.fst.init("frameskip");
-        world.fst.log_output = alloc_list<char>();
+        {
+            world.fst_mem.reset();
+            SCOPED_MEM(&world.fst_mem);
+            world.fst.init("frameskip");
+            world.fst.log_output = alloc_list<char>();
+        }
 
         {
             // Process message queue.
