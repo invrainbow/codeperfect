@@ -216,7 +216,7 @@ void handle_window_event(Window_Event *it) {
 
     case WINEV_MOUSE: {
         auto button = it->mouse.button;
-        auto action = it->mouse.action;
+        auto press = it->mouse.press;
         auto mods = it->mouse.mods;
 
         Timer t; t.init("mousebutton callback", &world.trace_next_frame); defer { t.log("done"); };
@@ -228,15 +228,10 @@ void handle_window_event(Window_Event *it) {
         if (button < 0 || button >= IM_ARRAYSIZE(world.ui.mouse_just_pressed))
             return;
 
-        switch (action) {
-        case CP_ACTION_PRESS:
-        case CP_ACTION_REPEAT:
+        if (press)
             world.ui.mouse_just_pressed[button] = true;
-            break;
-        case CP_ACTION_RELEASE:
+        else
             world.ui.mouse_just_released[button] = true;
-            break;
-        }
         break;
     }
 
@@ -264,20 +259,19 @@ void handle_window_event(Window_Event *it) {
 
     case WINEV_KEY: {
         auto key = it->key.key;
-        auto action = it->key.action;
+        auto press = it->key.press;
 
         Timer t; t.init("key callback", &world.trace_next_frame); defer { t.log("done"); };
 
         ImGuiIO& io = ImGui::GetIO();
-        if (action == CP_ACTION_PRESS || action == CP_ACTION_REPEAT) io.KeysDown[key] = true;
-        if (action == CP_ACTION_RELEASE) io.KeysDown[key] = false;
+        io.KeysDown[key] = press;
 
         io.KeyCtrl = io.KeysDown[CP_KEY_LEFT_CONTROL] || io.KeysDown[CP_KEY_RIGHT_CONTROL];
         io.KeyShift = io.KeysDown[CP_KEY_LEFT_SHIFT] || io.KeysDown[CP_KEY_RIGHT_SHIFT];
         io.KeyAlt = io.KeysDown[CP_KEY_LEFT_ALT] || io.KeysDown[CP_KEY_RIGHT_ALT];
         io.KeySuper = io.KeysDown[CP_KEY_LEFT_SUPER] || io.KeysDown[CP_KEY_RIGHT_SUPER];
 
-        if (action != CP_ACTION_PRESS && action != CP_ACTION_REPEAT) return;
+        if (!press) return;
 
         // ==================
         // handle global keys
