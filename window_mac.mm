@@ -1,3 +1,7 @@
+#include "ostype.hpp"
+
+#ifdef OS_MAC
+
 #include "world.hpp"
 
 #include <stdint.h>
@@ -276,7 +280,7 @@ int translate_key(unsigned int key) {
 }
 
 void* Window::get_native_handle() {
-    return ns_window;
+    return (__bridge void*)ns_window;
 }
 
 void Window::update_cursor_image() {
@@ -541,7 +545,7 @@ const NSRange kEmptyRange = { NSNotFound, 0 };
 }
 
 - (void)keyDown:(NSEvent *)event {
-    auto key = translate_key(scan);
+    auto key = translate_key([event keyCode]);
     auto mods = translate_keymod([event modifierFlags]);
 
     window->key_states[key] = true;
@@ -570,7 +574,7 @@ const NSRange kEmptyRange = { NSNotFound, 0 };
     const unsigned int modflags =
         [event modifierFlags] & NSEventModifierFlagDeviceIndependentFlagsMask;
 
-    auto key = translate_key(scan);
+    auto key = translate_key([event keyCode]);
     auto mods = translate_keymod(modflags);
 
     bool press;
@@ -588,7 +592,7 @@ const NSRange kEmptyRange = { NSNotFound, 0 };
 }
 
 - (void)keyUp:(NSEvent *)event {
-    auto key = translate_key(scan);
+    auto key = translate_key([event keyCode]);
     auto mods = translate_keymod([event modifierFlags]);
 
     window->key_states[key] = false;
@@ -800,26 +804,6 @@ bool Window::init_os_specific(int width, int height, ccstr title) {
     }
 }
 
-void Window::cleanup() {
-    @autoreleasepool {
-        [ns_window orderOut:nil];
-        nsgl_pixel_format = nil;
-        nsgl_object = nil;
-        ns_view = nil;
-
-        [ns_window setDelegate:nil];
-        ns_delegate = nil;
-
-        [ns_window close];
-        ns_window = nil;
-
-        // allow cocoa to catch up before returning
-        poll_window_events();
-    }
-
-    mem.cleanup();
-}
-
 void Window::set_title(ccstr title) {
     @autoreleasepool {
         NSString* string = @(title);
@@ -967,12 +951,6 @@ bool Cursor::init(Cursor_Type _type) {
     }
 }
 
-void Cursor::cleanup() {
-    @autoreleasepool {
-        object = nil;
-    }
-}
-
 void Window::set_cursor(Cursor *_cursor) {
     cursor = _cursor;
     @autoreleasepool {
@@ -981,7 +959,7 @@ void Window::set_cursor(Cursor *_cursor) {
     }
 }
 
-void set_clipboard_string(ccstr string) {
+void Window::set_clipboard_string(ccstr string) {
     @autoreleasepool {
         NSPasteboard* pasteboard = [NSPasteboard generalPasteboard];
         [pasteboard declareTypes:@[NSPasteboardTypeString] owner:nil];
@@ -992,7 +970,7 @@ void set_clipboard_string(ccstr string) {
 static ccstr static_clipboard_string = NULL;
 
 // Calls malloc. Don't call in a tight loop.
-ccstr get_clipboard_string() {
+ccstr Window::get_clipboard_string() {
     @autoreleasepool {
         NSPasteboard* pasteboard = [NSPasteboard generalPasteboard];
         if (![[pasteboard types] containsObject:NSPasteboardTypeString])
@@ -1107,3 +1085,5 @@ void destroy_bootstrap_context() {
         bootstrap_context = nil;
     }
 }
+
+#endif // OS_MAC
