@@ -9,7 +9,7 @@ endif
 
 LDFLAGS =
 LDFLAGS += obj/gohelper.a
-LDFLAGS += -lfreetype -lharfbuzz -lpcre -lfontconfig
+LDFLAGS += -lfreetype -lharfbuzz -lpcre -lfontconfig -lglfw3
 LDFLAGS += -lbrotlicommon-static -lbz2 -lbrotlidec-static
 
 BINARY_NAME = ide

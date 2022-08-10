@@ -442,7 +442,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
 
             if (streq(args.for_what, "copy_visual")) {
                 auto s = editor->buf->get_text(start, editor->buf->inc_cur(end));
-                set_clipboard_string(s);
+                world.window->set_clipboard_string(s);
             }
             /*
             else if (streq(args.for_what, "search_in_visual")) {

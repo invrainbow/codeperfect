@@ -1366,7 +1366,7 @@ void UI::draw_debugger_var(Draw_Debugger_Var_Args *args) {
         if (final_var_name) {
             if (ImGui::OurBeginPopupContextItem(cp_sprintf("dbg_copyvalue_%lld", (uptr)var))) {
                 if (ImGui::Selectable("Copy Name")) {
-                    set_clipboard_string(final_var_name);
+                    world.window->set_clipboard_string(final_var_name);
                 }
                 ImGui::EndPopup();
             }
@@ -1515,7 +1515,7 @@ void UI::draw_debugger_var(Draw_Debugger_Var_Args *args) {
             ImGui::EndPopup();
         }
 
-        if (copy) set_clipboard_string(underlying_value);
+        if (copy) world.window->set_clipboard_string(underlying_value);
 
         ImGui::TableNextColumn();
         if (!watch || watch->state != DBGWATCH_ERROR) {
@@ -1558,7 +1558,7 @@ void UI::draw_debugger_var(Draw_Debugger_Var_Args *args) {
                 ImGui::TextWrapped("%s", type_name);
                 if (ImGui::OurBeginPopupContextItem(cp_sprintf("dbg_copyvalue_%lld", (uptr)var))) {
                     if (ImGui::Selectable("Copy Type")) {
-                        set_clipboard_string(type_name);
+                        world.window->set_clipboard_string(type_name);
                     }
                     ImGui::EndPopup();
                 }
@@ -3298,7 +3298,7 @@ void UI::draw_everything() {
                     defer { ImGui::EndPopup(); };
 
                     if (ImGui::Selectable("Copy")) {
-                        set_clipboard_string(it);
+                        world.window->set_clipboard_string(it);
                     }
 
                     if (ImGui::Selectable("Copy All")) {
@@ -3311,7 +3311,7 @@ void UI::draw_everything() {
                         }
                         output->len--; // remove last '\n'
                         output->append('\0');
-                        set_clipboard_string(output->items);
+                        world.window->set_clipboard_string(output->items);
                     }
 
                     if (ImGui::Selectable("Clear")) {
@@ -3387,7 +3387,7 @@ void UI::draw_everything() {
 
                     if (ImGui::OurBeginPopupContextItem()) {
                         if (ImGui::Selectable("Copy")) {
-                            set_clipboard_string(label);
+                            world.window->set_clipboard_string(label);
                         }
                         ImGui::EndPopup();
                     }
@@ -3731,14 +3731,14 @@ void UI::draw_everything() {
                     if (ImGui::Selectable("Copy relative path")) {
                         SCOPED_FRAME();
                         auto rel_path = ft_node_to_path(it);
-                        set_clipboard_string(rel_path);
+                        world.window->set_clipboard_string(rel_path);
                     }
 
                     if (ImGui::Selectable("Copy absolute path")) {
                         SCOPED_FRAME();
                         auto rel_path = ft_node_to_path(it);
                         auto full_path = path_join(world.current_path, rel_path);
-                        set_clipboard_string(full_path);
+                        world.window->set_clipboard_string(full_path);
                     }
 
                     ImGui::PopStyleVar();

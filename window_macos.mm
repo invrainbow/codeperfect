@@ -275,16 +275,15 @@ int translate_key(unsigned int key) {
     return scan_to_key_table[key];
 }
 
+void* Window::get_native_handle() {
+    return ns_window;
+}
+
 void Window::update_cursor_image() {
     if (cursor)
         [(NSCursor*)cursor->object set];
     else
         [[NSCursor arrowCursor] set];
-}
-
-void Window::update_cursor_mode() {
-    if (is_cursor_in_content_area())
-        update_cursor_image();
 }
 
 bool Window::is_cursor_in_content_area() {
@@ -370,7 +369,8 @@ const NSRange kEmptyRange = { NSNotFound, 0 };
 }
 
 - (void)windowDidBecomeKey:(NSNotification *)notification {
-    window->update_cursor_mode();
+    if (window->is_cursor_in_content_area())
+        window->update_cursor_image();
     window->dispatch_event(WINEV_FOCUS, [&](auto ev) {});
 }
 
@@ -439,7 +439,7 @@ const NSRange kEmptyRange = { NSNotFound, 0 };
 }
 
 - (void)mouseDown:(NSEvent *)event {
-    window->dispatch_mouse_event(CP_MOUSE_LEFT, CP_ACTION_PRESS, translate_keymod([event modifierFlags]));
+    window->dispatch_mouse_event(CP_MOUSE_LEFT, true, translate_keymod([event modifierFlags]));
 }
 
 - (void)mouseDragged:(NSEvent *)event {
@@ -447,7 +447,7 @@ const NSRange kEmptyRange = { NSNotFound, 0 };
 }
 
 - (void)mouseUp:(NSEvent *)event {
-    window->dispatch_mouse_event(CP_MOUSE_LEFT, CP_ACTION_RELEASE, translate_keymod([event modifierFlags]));
+    window->dispatch_mouse_event(CP_MOUSE_LEFT, false, translate_keymod([event modifierFlags]));
 }
 
 - (void)mouseMoved:(NSEvent *)event {
@@ -462,7 +462,7 @@ const NSRange kEmptyRange = { NSNotFound, 0 };
 }
 
 - (void)rightMouseDown:(NSEvent *)event {
-    window->dispatch_mouse_event(CP_MOUSE_RIGHT, CP_ACTION_PRESS, translate_keymod([event modifierFlags]));
+    window->dispatch_mouse_event(CP_MOUSE_RIGHT, true, translate_keymod([event modifierFlags]));
 }
 
 - (void)rightMouseDragged:(NSEvent *)event {
@@ -470,14 +470,14 @@ const NSRange kEmptyRange = { NSNotFound, 0 };
 }
 
 - (void)rightMouseUp:(NSEvent *)event {
-    window->dispatch_mouse_event(CP_MOUSE_RIGHT, CP_ACTION_RELEASE, translate_keymod([event modifierFlags]));
+    window->dispatch_mouse_event(CP_MOUSE_RIGHT, false, translate_keymod([event modifierFlags]));
 }
 
 - (void)otherMouseDown:(NSEvent *)event {
     int button = (int) [event buttonNumber];
     if (button != CP_MOUSE_MIDDLE) return; // TODO
 
-    window->dispatch_mouse_event(CP_MOUSE_MIDDLE, CP_ACTION_PRESS, translate_keymod([event modifierFlags]));
+    window->dispatch_mouse_event(CP_MOUSE_MIDDLE, true, translate_keymod([event modifierFlags]));
 }
 
 - (void)otherMouseDragged:(NSEvent *)event {
@@ -488,7 +488,7 @@ const NSRange kEmptyRange = { NSNotFound, 0 };
     int button = (int) [event buttonNumber];
     if (button != CP_MOUSE_MIDDLE) return; // TODO
 
-    window->dispatch_mouse_event(CP_MOUSE_MIDDLE, CP_ACTION_RELEASE, translate_keymod([event modifierFlags]));
+    window->dispatch_mouse_event(CP_MOUSE_MIDDLE, false, translate_keymod([event modifierFlags]));
 }
 
 - (void)viewDidChangeBackingProperties {
@@ -541,15 +541,13 @@ const NSRange kEmptyRange = { NSNotFound, 0 };
 }
 
 - (void)keyDown:(NSEvent *)event {
-    auto scan = [event keyCode];
     auto key = translate_key(scan);
     auto mods = translate_keymod([event modifierFlags]);
 
-    window->key_states[key] = CP_ACTION_PRESS;
+    window->key_states[key] = true;
     window->dispatch_event(WINEV_KEY, [&](auto ev) {
         ev->key.key = key;
-        ev->key.scan = scan;
-        ev->key.action = CP_ACTION_PRESS;
+        ev->key.press = true;
         ev->key.mods = mods;
     });
 
@@ -572,39 +570,31 @@ const NSRange kEmptyRange = { NSNotFound, 0 };
     const unsigned int modflags =
         [event modifierFlags] & NSEventModifierFlagDeviceIndependentFlagsMask;
 
-    auto scan = [event keyCode];
     auto key = translate_key(scan);
     auto mods = translate_keymod(modflags);
 
-    Press_Action action;
-    if (translate_key_to_mod_flag(key) & modflags) {
-        if (window->key_states[key] == CP_ACTION_PRESS)
-            action = CP_ACTION_RELEASE;
-        else
-            action = CP_ACTION_PRESS;
-    } else {
-        action = CP_ACTION_RELEASE;
-    }
+    bool press;
+    if (translate_key_to_mod_flag(key) & modflags)
+        press = !window->key_states[key];
+    else
+        press = false;
 
-    window->key_states[key] = action;
+    window->key_states[key] = press;
     window->dispatch_event(WINEV_KEY, [&](auto ev) {
         ev->key.key = key;
-        ev->key.scan = scan;
-        ev->key.action = action;
+        ev->key.press = press;
         ev->key.mods = mods;
     });
 }
 
 - (void)keyUp:(NSEvent *)event {
-    auto scan = [event keyCode];
     auto key = translate_key(scan);
     auto mods = translate_keymod([event modifierFlags]);
 
-    window->key_states[key] = CP_ACTION_RELEASE;
+    window->key_states[key] = false;
     window->dispatch_event(WINEV_KEY, [&](auto ev) {
         ev->key.key = key;
-        ev->key.scan = scan;
-        ev->key.action = CP_ACTION_RELEASE;
+        ev->key.press = false;
         ev->key.mods = mods;
     });
 }
@@ -737,8 +727,8 @@ float cocoa_transform_y(float y) {
     return CGDisplayBounds(CGMainDisplayID()).size.height - y - 1;
 }
 
-void Window::dispatch_mouse_event_cocoa(Mouse_Button button, Press_Action action, void *event) {
-    dispatch_mouse_event(button, action, translate_keymod([((__bridge NSEvent*)event) modifierFlags]));
+void Window::dispatch_mouse_event_cocoa(Mouse_Button button, bool press, void *event) {
+    dispatch_mouse_event(button, press, translate_keymod([((__bridge NSEvent*)event) modifierFlags]));
 }
 
 void Window::make_context_current() {
@@ -770,6 +760,7 @@ void Window::create_nsgl_context() {
 
     attribs->append(NSOpenGLPFAAccelerated);
     attribs->append(NSOpenGLPFAClosestPolicy);
+
 #if MAC_OS_X_VERSION_MAX_ALLOWED >= 101000
     set_attrib(NSOpenGLPFAOpenGLProfile, NSOpenGLProfileVersion4_1Core);
 #else
@@ -837,40 +828,11 @@ void Window::set_title(ccstr title) {
     }
 }
 
-void Window::get_pos(int* xpos, int* ypos) {
-    @autoreleasepool {
-        const NSRect rect = [ns_window contentRectForFrameRect:[ns_window frame]];
-
-        if (xpos) *xpos = rect.origin.x;
-        if (ypos) *ypos = cocoa_transform_y(rect.origin.y + rect.size.height - 1);
-    }
-}
-
-void Window::set_pos(int x, int y) {
-    @autoreleasepool {
-        auto content_r = [ns_view frame];
-        auto dummy_r = NSMakeRect(x, cocoa_transform_y(y + content_r.size.height - 1), 0, 0);
-        auto frame_r = [ns_window frameRectForContentRect:dummy_r];
-        [ns_window setFrameOrigin:frame_r.origin];
-    }
-}
-
 void Window::get_size(int* width, int* height) {
     @autoreleasepool {
         const NSRect rect = [ns_view frame];
         if (width) *width = rect.size.width;
         if (height) *height = rect.size.height;
-    }
-}
-
-void Window::set_size(int width, int height) {
-    @autoreleasepool {
-        NSRect rect = [ns_window contentRectForFrameRect:[ns_window frame]];
-        rect.origin.y += rect.size.height - height;
-        rect.size = NSMakeSize(width, height);
-
-        [ns_window setFrame:[ns_window frameRectForContentRect:rect]
-                    display:YES];
     }
 }
 
@@ -1071,7 +1033,7 @@ bool Window::create_actual_window(int width, int height, ccstr title) {
     const NSWindowCollectionBehavior behavior = NSWindowCollectionBehaviorFullScreenPrimary | NSWindowCollectionBehaviorManaged;
     [ns_window setCollectionBehavior:behavior];
 
-    [ns_window zoom:nil];
+    // [ns_window zoom:nil];
 
     // TODO: figure out frame autosave name, maybe that's it wasn't working before
 
@@ -1107,6 +1069,8 @@ void _make_bootstrap_context() {
 
     attribs->append(NSOpenGLPFAAccelerated);
     attribs->append(NSOpenGLPFAClosestPolicy);
+    attribs->append(NSOpenGLPFAAllowOfflineRenderers);
+    attribs->append(kCGLPFASupportsAutomaticGraphicsSwitching);
 #if MAC_OS_X_VERSION_MAX_ALLOWED >= 101000
     set_attrib(NSOpenGLPFAOpenGLProfile, NSOpenGLProfileVersion4_1Core);
 #else

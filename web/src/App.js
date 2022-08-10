@@ -41,6 +41,7 @@ const LINKS = {
   buyPersonalYearly: "https://buy.stripe.com/fZefZb2aTdEAbi8aEN",
   buyProfessionalMonthly: "https://buy.stripe.com/6oE28ldTB5843PG9AK",
   buyProfessionalYearly: "https://buy.stripe.com/28o8wJ3eXfMI4TK5kv",
+  // linuxSignup: "https://exceptional-innovator-7731.ck.page/be60d8725b",
 };
 
 const CDN_PATH = "https://d2mje1xp79ofdv.cloudfront.net";
@@ -50,9 +51,16 @@ function asset(path) {
   return dev ? `${path}` : `${CDN_PATH}${path}`;
 }
 
-function A({ children, ...props }) {
+function A({ link, children, href, ...props }) {
+  if (link) {
+    return (
+      <Link to={href} {...props}>
+        {children}
+      </Link>
+    );
+  }
   return (
-    <a target="_blank" rel="noreferrer" {...props}>
+    <a href={href} {...props}>
       {children}
     </a>
   );
@@ -253,7 +261,7 @@ function VideoPlayer() {
 
 function FeaturesGrid() {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 w-full md:max-w-screen-lg mx-auto gap-4 md:gap-6 text-sm">
+    <div className="grid grid-cols-1 md:grid-cols-3 w-full md:max-w-screen-lg mx-auto gap-4 md:gap-6">
       {FEATURES.map((it) => (
         <div className="text-left block w-full rounded-md overflow-hidden p-4 bg-gray-100">
           <div className="flex flex-row items-center gap-x-2">
@@ -267,17 +275,28 @@ function FeaturesGrid() {
               {it.name}
             </div>
           </div>
-          <div className="text-sm text-gray-700 mt-2">{it.description}</div>
+          <div className="text-gray-700 mt-2">{it.description}</div>
         </div>
       ))}
     </div>
   );
 }
 
+/*
+function LinuxSubscribeConfirm() {
+  return (
+    <WallOfText className="my-16 md:my-36">
+      Your subscription is confirmed! We'll send you updates when we roll out
+      Linux support.
+    </WallOfText>
+  );
+}
+*/
+
 function Home() {
   return (
     <div className="my-8 md:my-20 w-full">
-      <div className="max-w-full md:max-w-xl md:mx-auto text-lg md:text-xl leading-relaxed mb-16 md:mb-24 p-4">
+      <div className="max-w-full md:max-w-xl md:mx-auto text-lg md:text-lg leading-relaxed mb-16 md:mb-24 p-4">
         <div className="text-center font-bold text-3xl md:text-4xl mb-8 text-black">
           A High Performance IDE for Go
         </div>
@@ -291,15 +310,17 @@ function Home() {
         </p>
 
         <div className="mt-8 text-center">
-          <Link
-            to="/download"
+          <A
+            link
+            href="/download"
             className="button main-button justify-center flex md:inline-flex text-center"
           >
             <Icon className="mr-2" icon={HiOutlineDownload} />
             Download
-          </Link>
+          </A>
         </div>
-        <div className="text-center text-3xl mt-4 font-medium text-gray-400">
+
+        <div className="text-center text-xl mt-4 font-medium text-gray-400">
           <Icon icon={AiFillWindows} /> <Icon icon={AiFillApple} />{" "}
           <Icon icon={FaLinux} />
         </div>
@@ -481,32 +502,6 @@ function BuyLicense() {
   );
 }
 
-function DownloadSupportingLink({ className, link, href, label }) {
-  const ourClassName = cx(
-    "inline-block border-b-2 border-gray-600",
-    "no-underline leading-none font-semibold",
-    className
-  );
-  const props = {
-    className: ourClassName,
-    style: { paddingBottom: "2px" },
-  };
-  let Component;
-  if (link) {
-    props.to = href;
-    Component = Link;
-  } else {
-    props.href = href;
-    Component = A;
-  }
-
-  return (
-    <div>
-      <Component {...props}>{label}</Component>
-    </div>
-  );
-}
-
 function Download() {
   const url = "/";
 
@@ -518,46 +513,43 @@ function Download() {
   ];
 
   const supportingLinks = (
-    <p className="flex flex-col w-full md:flex-row gap-2 md:gap-4">
-      <DownloadSupportingLink href="/buy" link label="Buy License" />
-      <DownloadSupportingLink
-        href="https://docs.codeperfect95.com/getting-started/"
-        label="Getting Started"
-      />
-      <DownloadSupportingLink
-        href="https://docs.codeperfect95.com/changelog/"
-        label="Changelog"
-      />
+    <p>
+      See also{" "}
+      <A href="https://docs.codeperfect95.com/getting-started/">
+        Getting Started
+      </A>
+      .
     </p>
   );
 
   return (
-    <div className="flex items-center flex-col md:flex-row max-w-screen-md px-4 mx-auto my-16 md:my-28 gap-8 md:gap-4 lg:gap-8">
-      <div className="max-w-full md:max-w-sm">
-        <Title>Download CodePerfect</Title>
-        <p>
-          CodePerfect is free to evaluate for 7 days, with all features
-          available. After the trial period you'll need a license for continued
-          use.
-        </p>
-        <div className="mt-4 hidden md:block">{supportingLinks}</div>
-      </div>
-      <div className="w-full md:w-auto md:flex-1 border border-gray-200 bg-gray-50 rounded-md overflow-hidden">
-        <h1 className="font-bold text-lg p-4 leading-none">Build 22.07</h1>
-        <div className="grid grid-cols-1">
+    <div className="max-w-screen-md px-4 mx-auto my-16 md:my-28">
+      <Title>Download CodePerfect</Title>
+      <p>
+        CodePerfect is free to evaluate for 7 days, with all features available.
+        After the trial period you'll need a{" "}
+        <A link href="/buy">
+          license
+        </A>{" "}
+        for continued use.
+      </p>
+      <div className="p-4 my-6 rounded bg-gray-100 border border-gray-400">
+        <div className="font-bold mb-3">Build 22.08</div>
+        <div className="">
           {links.map((it) => (
-            <A
-              href={it.url}
-              className="p-4 flex items-center border-t border-gray-200 bg-white no-underline hover:text-black leading-none"
-              {...disableButtonProps}
-            >
-              <Icon className="mr-1" icon={it.icon} />
-              {it.label}
-            </A>
+            <div className="mb-3 leading-none">
+              <A
+                href={it.url}
+                className="button download-button text-sm px-3 py-2"
+              >
+                <Icon className="mr-1" icon={it.icon} />
+                Download for {it.label}
+              </A>
+            </div>
           ))}
         </div>
       </div>
-      <div className="md:hidden w-full">{supportingLinks}</div>
+      {supportingLinks}
     </div>
   );
 }
@@ -636,8 +628,9 @@ function App() {
 
       <div className="">
         <div className="pt-4 lg:pt-8 px-4 pb-4 flex justify-between items-center w-full md:max-w-screen-lg md:mx-auto text-lg">
-          <Link
-            to="/"
+          <A
+            link
+            href="/"
             className="font-bold text-lg text-black no-underline whitespace-nowrap flex items-center"
           >
             <img
@@ -646,7 +639,7 @@ function App() {
               src={asset("/logo.png")}
             />
             <span className="hidden md:inline-block">CodePerfect 95</span>
-          </Link>
+          </A>
           <div className="flex items-baseline space-x-6">
             <A
               href={LINKS.docs}
@@ -660,16 +653,17 @@ function App() {
             >
               Changelog
             </A>
-            <Link
-              to="/buy"
+            <A
+              link
+              href="/buy"
               className="text-black no-underline whitespace-nowrap hidden md:inline-block"
             >
               Buy
-            </Link>
-            <Link to="/download" className="button main-button">
+            </A>
+            <A link href="/download" className="button main-button">
               <Icon className="mr-2" icon={HiOutlineDownload} />
               Download
-            </Link>
+            </A>
           </div>
         </div>
         <div>
@@ -677,6 +671,11 @@ function App() {
             <Route path="/download" exact>
               <Download />
             </Route>
+            {/*
+            <Route path="/linux-subscribe-confirm" exact>
+              <LinuxSubscribeConfirm />
+            </Route>
+            */}
             <Route path="/buy" exact>
               <BuyLicense />
             </Route>
@@ -707,12 +706,16 @@ function App() {
           )}
         >
           <span>&copy; {new Date().getFullYear()} CodePerfect 95</span>
-          <Link to="/buy" className="text-gray-500 no-underline md:hidden">
+          <A link href="/buy" className="text-gray-500 no-underline md:hidden">
             Buy
-          </Link>
-          <Link to="/download" className="text-gray-500 no-underline md:hidden">
+          </A>
+          <A
+            link
+            href="/download"
+            className="text-gray-500 no-underline md:hidden"
+          >
             Download
-          </Link>
+          </A>
           <A className="text-gray-500 no-underline" href={LINKS.docs}>
             Docs
           </A>
@@ -725,9 +728,9 @@ function App() {
           >
             Support
           </A>
-          <Link to="/terms" className="text-gray-500 no-underline">
+          <A link href="/terms" className="text-gray-500 no-underline">
             Terms &amp; Privacy
-          </Link>
+          </A>
         </div>
       </div>
     </Router>

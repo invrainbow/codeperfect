@@ -230,6 +230,7 @@ void handle_window_event(Window_Event *it) {
 
         switch (action) {
         case CP_ACTION_PRESS:
+        case CP_ACTION_REPEAT:
             world.ui.mouse_just_pressed[button] = true;
             break;
         case CP_ACTION_RELEASE:
@@ -268,7 +269,7 @@ void handle_window_event(Window_Event *it) {
         Timer t; t.init("key callback", &world.trace_next_frame); defer { t.log("done"); };
 
         ImGuiIO& io = ImGui::GetIO();
-        if (action == CP_ACTION_PRESS) io.KeysDown[key] = true;
+        if (action == CP_ACTION_PRESS || action == CP_ACTION_REPEAT) io.KeysDown[key] = true;
         if (action == CP_ACTION_RELEASE) io.KeysDown[key] = false;
 
         io.KeyCtrl = io.KeysDown[CP_KEY_LEFT_CONTROL] || io.KeysDown[CP_KEY_RIGHT_CONTROL];
@@ -864,7 +865,7 @@ void handle_window_event(Window_Event *it) {
                     }
 
                     auto s = editor->buf->get_text(a, b);
-                    set_clipboard_string(s);
+                    world.window->set_clipboard_string(s);
 
                     if (key == CP_KEY_X) {
                         editor->buf->remove(a, b);
@@ -876,7 +877,7 @@ void handle_window_event(Window_Event *it) {
 
             case CP_KEY_V:
                 if (!world.use_nvim || world.nvim.mode == VI_INSERT) {
-                    auto clipboard_contents = get_clipboard_string();
+                    auto clipboard_contents = world.window->get_clipboard_string();
                     if (!clipboard_contents) break;
 
                     if (editor->selecting) {
@@ -1047,19 +1048,27 @@ int main(int argc, char **argv) {
         world.window = alloc_object(Window);
     }
 
+    /*
     {
         // init glew using a dummy context
-        make_bootstrap_context();
-        defer { destroy_bootstrap_context(); };
-
+        // make_bootstrap_context();
+        // defer { destroy_bootstrap_context(); };
         glewExperimental = GL_TRUE;
         auto err = glewInit();
         if (err != GLEW_OK)
             return error("unable to init GLEW: %s", glewGetErrorString(err)), EXIT_FAILURE;
     }
+    */
 
     if (!world.window->init(1280, 720, WINDOW_TITLE))
         return error("could not create window"), EXIT_FAILURE;
+
+    world.window->make_context_current();
+
+    glewExperimental = GL_TRUE;
+    auto err = glewInit();
+    if (err != GLEW_OK)
+        return error("unable to init GLEW: %s", glewGetErrorString(err)), EXIT_FAILURE;
 
 #ifdef DEBUG_BUILD
     GHEnableDebugMode();
@@ -1124,7 +1133,6 @@ int main(int argc, char **argv) {
     };
 
     set_window_title(get_window_note());
-    world.window->make_context_current();
     world.window->swap_interval(0);
 
     auto configdir = GHGetConfigDir();
@@ -1244,8 +1252,8 @@ int main(int argc, char **argv) {
     io.KeyMap[ImGuiKey_Y] = CP_KEY_Y;
     io.KeyMap[ImGuiKey_Z] = CP_KEY_Z;
 
-    io.SetClipboardTextFn = [](void*, ccstr s) { set_clipboard_string(s); };
-    io.GetClipboardTextFn = [](void*) { return get_clipboard_string(); };
+    io.SetClipboardTextFn = [](void*, ccstr s) { world.window->set_clipboard_string(s); };
+    io.GetClipboardTextFn = [](void*) { return world.window->get_clipboard_string(); };
 
     {
         struct Cursor_Pair { int x; Cursor_Type y; };
@@ -1256,10 +1264,10 @@ int main(int argc, char **argv) {
             {ImGuiMouseCursor_ResizeNS, CP_CUR_RESIZE_NS},
             {ImGuiMouseCursor_ResizeEW, CP_CUR_RESIZE_EW},
             {ImGuiMouseCursor_Hand, CP_CUR_POINTING_HAND},
-            {ImGuiMouseCursor_ResizeAll, CP_CUR_RESIZE_ALL},
-            {ImGuiMouseCursor_ResizeNESW, CP_CUR_RESIZE_NESW},
-            {ImGuiMouseCursor_ResizeNWSE, CP_CUR_RESIZE_NWSE},
-            {ImGuiMouseCursor_NotAllowed, CP_CUR_NOT_ALLOWED},
+            // {ImGuiMouseCursor_ResizeAll, CP_CUR_RESIZE_ALL},
+            // {ImGuiMouseCursor_ResizeNESW, CP_CUR_RESIZE_NESW},
+            // {ImGuiMouseCursor_ResizeNWSE, CP_CUR_RESIZE_NWSE},
+            // {ImGuiMouseCursor_NotAllowed, CP_CUR_NOT_ALLOWED},
         };
 
         For (pairs) {

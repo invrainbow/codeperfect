@@ -245,6 +245,10 @@ bool window_init_everything() {
     return true;
 }
 
+void* Window::get_native_handle() {
+    return (void*)win32_window;
+}
+
 void Window::make_context_current() {
     wglMakeCurrent(wgl_dc, wgl_context);
 }
@@ -272,20 +276,6 @@ void Window::set_title(ccstr title) {
     SetWindowTextW(win32_window, wtitle);
 }
 
-void Window::get_pos(int *xpos, int *ypos) {
-    POINT pos = { 0, 0 };
-    ClientToScreen(win32_window, &pos);
-
-    if (xpos) *xpos = pos.x;
-    if (ypos) *ypos = pos.y;
-}
-
-void Window::set_pos(int x, int y) {
-    RECT rect = { x, y, x, y };
-    adjust_rect_using_windows_gayness(&rect);
-    SetWindowPos(win32_window, NULL, rect.left, rect.top, 0, 0, SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOSIZE);
-}
-
 void Window::get_size(int* w, int* h) {
     RECT area; ptr0(&area);
     GetClientRect(win32_window, &area);
@@ -299,12 +289,6 @@ void Window::adjust_rect_using_windows_gayness(RECT *rect) {
         AdjustWindowRectExForDpi(rect, window_style, FALSE, window_style_ex, GetDpiForWindow(win32_window));
     else
         AdjustWindowRectEx(rect, window_style, FALSE, window_style_ex);
-}
-
-void Window::set_size(int w, int h) {
-    RECT r = { 0, 0, w, h };
-    adjust_rect_using_windows_gayness(&r);
-    SetWindowPos(win32_window, HWND_TOP, 0, 0, r.right - r.left, r.bottom - r.top, SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_NOMOVE | SWP_NOZORDER);
 }
 
 void Window::get_framebuffer_size(int* w, int* h) {
@@ -621,19 +605,10 @@ LRESULT Window::callback(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
     case WM_SYSKEYDOWN:
     case WM_KEYUP:
     case WM_SYSKEYUP: {
-        Press_Action action = (HIWORD(l) & KF_UP) ? CP_ACTION_RELEASE : CP_ACTION_PRESS;
+        bool press = HIWORD(l) & KF_UP;
         int mods = get_key_mods();
 
-        int scan = (HIWORD(l) & (KF_EXTENDED | 0xff));
-        if (!scan) scan = MapVirtualKeyW((UINT)w, MAPVK_VK_TO_VSC);
-
-        // Alt+PrtSc has a different scan than just PrtSc
-        // Ctrl+Pause has a different scan than just Pause
-        if (scan == 0x54) scan = 0x137;
-        if (scan == 0x146) scan = 0x45;
-
         auto key = (Key)scan_to_key_table[scan];
-        // print("scan = 0x%x", scan);
         // print("keydown: %s", key_str(key));
 
         // The Ctrl keys require special handling
@@ -668,27 +643,24 @@ LRESULT Window::callback(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
         // so we have to do it manually
         // if this ever becomes a concern we'll handle it lol
 
-        if (action == CP_ACTION_RELEASE && w == VK_SHIFT) {
+        if (!press && w == VK_SHIFT) {
             // Release both Shift keys on Shift up event, as when both
             // are pressed the first release does not emit any event
             // The other half of this is in poll_window_events()
             dispatch_event(WINEV_KEY, [&](auto ev) {
                 ev->key.key = CP_KEY_LEFT_SHIFT;
-                ev->key.scan = scan;
-                ev->key.action = action;
+                ev->key.press = press;
                 ev->key.mods = mods;
             });
             dispatch_event(WINEV_KEY, [&](auto ev) {
                 ev->key.key = CP_KEY_RIGHT_SHIFT;
-                ev->key.scan = scan;
-                ev->key.action = action;
+                ev->key.press = press;
                 ev->key.mods = mods;
             });
         } else {
             dispatch_event(WINEV_KEY, [&](auto ev) {
                 ev->key.key = key;
-                ev->key.scan = scan;
-                ev->key.action = action;
+                ev->key.press = press;
                 ev->key.mods = mods;
             });
         }
@@ -696,19 +668,19 @@ LRESULT Window::callback(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
         break;
     }
 
-    case WM_LBUTTONDOWN: dispatch_mouse_event_win32(CP_MOUSE_LEFT, CP_ACTION_PRESS); return 0;
-    case WM_MBUTTONDOWN: dispatch_mouse_event_win32(CP_MOUSE_MIDDLE, CP_ACTION_PRESS); return 0;
-    case WM_RBUTTONDOWN: dispatch_mouse_event_win32(CP_MOUSE_RIGHT, CP_ACTION_PRESS); return 0;
+    case WM_LBUTTONDOWN: dispatch_mouse_event_win32(CP_MOUSE_LEFT, true); return 0;
+    case WM_MBUTTONDOWN: dispatch_mouse_event_win32(CP_MOUSE_MIDDLE, true); return 0;
+    case WM_RBUTTONDOWN: dispatch_mouse_event_win32(CP_MOUSE_RIGHT, true); return 0;
 
-    case WM_LBUTTONUP: dispatch_mouse_event_win32(CP_MOUSE_LEFT, CP_ACTION_RELEASE); return 0;
-    case WM_MBUTTONUP: dispatch_mouse_event_win32(CP_MOUSE_MIDDLE, CP_ACTION_RELEASE); return 0;
-    case WM_RBUTTONUP: dispatch_mouse_event_win32(CP_MOUSE_RIGHT, CP_ACTION_RELEASE); return 0;
+    case WM_LBUTTONUP: dispatch_mouse_event_win32(CP_MOUSE_LEFT, false); return 0;
+    case WM_MBUTTONUP: dispatch_mouse_event_win32(CP_MOUSE_MIDDLE, false); return 0;
+    case WM_RBUTTONUP: dispatch_mouse_event_win32(CP_MOUSE_RIGHT, false); return 0;
 
     case WM_XBUTTONDOWN:
     case WM_XBUTTONUP:
         dispatch_mouse_event_win32(
             GET_XBUTTON_WPARAM(w) == XBUTTON1 ? CP_MOUSE_BUTTON_4 : CP_MOUSE_BUTTON_5,
-            msg == WM_XBUTTONDOWN ? CP_ACTION_PRESS : CP_ACTION_RELEASE
+            msg == WM_XBUTTONDOWN
         );
         return TRUE;
 
@@ -811,8 +783,8 @@ LRESULT Window::callback(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
     return DefWindowProcW(hwnd, msg, w, l);
 }
 
-void Window::dispatch_mouse_event_win32(Mouse_Button button, Press_Action action) {
-    dispatch_mouse_event(button, action, get_key_mods());
+void Window::dispatch_mouse_event_win32(Mouse_Button button, bool press) {
+    dispatch_mouse_event(button, press, get_key_mods());
 }
 
 bool Window::create_actual_window(int width, int height, ccstr title) {
@@ -1012,15 +984,13 @@ void poll_window_events() {
     for (int i = 0; i < 4; i++) {
         const int vk = keys[i][0];
         const int key = keys[i][1];
-        const int scan = key_to_scan_table[key];
 
         if ((GetKeyState(vk) & 0x8000)) continue;
         if (window->key_states[key]) continue;
 
         window->dispatch_event(WINEV_KEY, [&](auto ev) {
             ev->key.key = key;
-            ev->key.scan = scan;
-            ev->key.action = CP_ACTION_RELEASE;
+            ev->key.press = false;
             ev->key.mods = get_key_mods();
         });
     }

@@ -18,7 +18,7 @@ if [[ "$os" = "mac" ]]; then
 elif [[ "$os" = "windows" ]]; then
     export VCPKG_DEFAULT_TRIPLET=x64-windows-static
 fi
-./vcpkg/vcpkg install pcre harfbuzz fontconfig
+./vcpkg/vcpkg install pcre harfbuzz fontconfig glfw
 ./vcpkg/vcpkg integrate install
 
 # nvim

@@ -318,11 +318,6 @@ struct World {
 
     bool cmd_unfocus_all_windows;
 
-    struct {
-        bool recording;
-        File f;
-    } record_keys;
-
     Message_Queue<Main_Thread_Message> message_queue;
 
     Searcher searcher;

@@ -5,8 +5,24 @@
 #include "objc_id_shim.hpp"
 
 #if OS_WINBLOWS
+#   define WINDOW_WINDOWS
 #elif OS_MAC
+#   define WINDOW_MAC
 #   include <Carbon/Carbon.h>
+#endif
+
+#if 1
+#   ifdef WINDOW_WINDOWS
+#       undef WINDOW_WINDOWS
+#   endif
+#       ifdef WINDOW_MAC
+#   undef WINDOW_MAC
+#       endif
+#   define WINDOW_GLFW
+#endif
+
+#ifdef WINDOW_GLFW
+#include <GLFW/glfw3.h>
 #endif
 
 enum Window_Event_Type {
@@ -31,12 +47,6 @@ enum Mouse_Button {
     __CP_MOUSE_COUNT,
 };
 
-enum Press_Action {
-    CP_ACTION_RELEASE = 0,
-    CP_ACTION_PRESS = 1,
-    CP_ACTION_REPEAT = 2,
-};
-
 struct Window_Event {
     Window_Event_Type type;
 
@@ -58,7 +68,7 @@ struct Window_Event {
 
         struct {
             Mouse_Button button;
-            Press_Action action;
+            bool press;
             int mods;
         } mouse;
 
@@ -74,8 +84,7 @@ struct Window_Event {
 
         struct {
             int key;
-            int scan;
-            Press_Action action;
+            bool press;
             int mods;
         } key;
 
@@ -148,7 +157,6 @@ enum Key {
     CP_KEY_GRAVE_ACCENT = 96,  /* ` */
     CP_KEY_WORLD_1 = 161, /* non-US #1 */
     CP_KEY_WORLD_2 = 162, /* non-US #2 */
-
     CP_KEY_ESCAPE = 256,
     CP_KEY_ENTER,
     CP_KEY_TAB,
@@ -233,26 +241,25 @@ enum Key {
 enum Cursor_Type {
     CP_CUR_RESIZE_EW,
     CP_CUR_RESIZE_NS,
-    CP_CUR_RESIZE_NWSE,
-    CP_CUR_RESIZE_NESW,
     CP_CUR_ARROW,
     CP_CUR_IBEAM,
     CP_CUR_CROSSHAIR,
     CP_CUR_POINTING_HAND,
-    CP_CUR_RESIZE_ALL,
-    CP_CUR_NOT_ALLOWED,
+    // CP_CUR_RESIZE_ALL,
+    // CP_CUR_NOT_ALLOWED,
 };
 
 struct Cursor {
-#if OS_WINBLOWS
+#if defined(WINDOW_WINDOWS)
     HCURSOR handle;
-#elif OS_MAC
+#elif defined(WINDOW_MAC)
     id object;
+#elif defined(WINDOW_GLFW)
+    GLFWcursor *cursor;
 #endif
     Cursor_Type type;
 
     bool init(Cursor_Type _type);
-    void cleanup();
 };
 
 struct Window {
@@ -283,20 +290,21 @@ struct Window {
         return init_os_specific(width, height, title);
     }
 
-#if OS_WINBLOWS
+#if defined(WINDOW_WINDOWS)
     HWND win32_window;
     ATOM win32_window_class;
     HGLRC wgl_context; // what type?
     HDC wgl_dc;
     WCHAR win32_high_surrogate;
-#elif OS_MAC
+#elif defined(WINDOW_MAC)
     id ns_window;
     id ns_view;
     id ns_delegate;
     id ns_layer;
-
     id nsgl_object;
     id nsgl_pixel_format;
+#elif defined(WINDOW_GLFW)
+    GLFWwindow *window;
 #endif
 
     void dispatch_event(Window_Event_Type type, fn<void(Window_Event*)> cb) {
@@ -306,14 +314,17 @@ struct Window {
         events.append(&ev);
     }
 
-    void dispatch_mouse_event(Mouse_Button button, Press_Action action, int mods) {
-        mouse_states[button] = (action != CP_ACTION_RELEASE);
+    void dispatch_mouse_event(Mouse_Button button, bool press, int mods) {
+        mouse_states[button] = press;
         dispatch_event(WINEV_MOUSE, [&](auto ev) {
             ev->mouse.button = button;
-            ev->mouse.action = action;
+            ev->mouse.press = press;
             ev->mouse.mods = mods;
         });
     }
+
+    void set_clipboard_string(ccstr string);
+    ccstr get_clipboard_string();
 
     bool init_os_specific(int width, int height, ccstr title);
     void make_context_current();
@@ -321,26 +332,23 @@ struct Window {
     void swap_interval(int interval);
     void cleanup();
     void set_title(ccstr title);
-    void get_pos(int* xpos, int* ypos);
-    void set_pos(int x, int y);
     void get_size(int* width, int* height);
-    void set_size(int width, int height);
     void get_framebuffer_size(int* width, int* height);
     void get_content_scale(float* xscale, float* yscale);
     bool is_focused();
     void get_cursor_pos(double* xpos, double* ypos);
     void set_cursor(Cursor *_cursor);
+    void *get_native_handle();
 
-#if OS_WINBLOWS
+#if WINDOW_WINDOWS
     LRESULT callback(HWND hwnd, UINT msg, WPARAM w, LPARAM l);
     void adjust_rect_using_windows_gayness(RECT *rect);
     bool create_actual_window(int width, int height, ccstr title);
     bool create_wgl_context();
-    void dispatch_mouse_event_win32(Mouse_Button button, Press_Action action);
-#elif OS_MAC
-    void dispatch_mouse_event_cocoa(Mouse_Button button, Press_Action action, void* /* NSEvent* */ event);
+    void dispatch_mouse_event_win32(Mouse_Button button, bool press);
+#elif WINDOW_MAC
+    void dispatch_mouse_event_cocoa(Mouse_Button button, bool press, void* /* NSEvent* */ event);
     bool is_cursor_in_content_area();
-    void update_cursor_mode();
     void update_cursor_image();
     bool create_actual_window(int width, int height, ccstr title);
     void create_nsgl_context();
@@ -348,12 +356,10 @@ struct Window {
 };
 
 bool window_init_everything();
-void set_clipboard_string(ccstr string);
-ccstr get_clipboard_string();
 void poll_window_events();
 
 // The purpose of this is function to get us to a point where the current
 // OpenGL context is a valid one, basically so we can initialize GLEW. Once GLEW is initialized the bootstrap context will be destroyed.
 // Panics if it can't do it.
-void make_bootstrap_context();
-void destroy_bootstrap_context();
+// void make_bootstrap_context();
+// void destroy_bootstrap_context();

@@ -749,14 +749,7 @@ void kick_off_build(Build_Profile *build_profile) {
 
 void* get_native_window_handle() {
     if (!world.window) return NULL;
-
-#if OS_WINBLOWS
-    return world.window->win32_window;
-#elif OS_MAC
-    return world.window->ns_window;
-#else
-#error shit done fucked up
-#endif
+    return world.window->get_native_handle();
 }
 
 void filter_files() {
