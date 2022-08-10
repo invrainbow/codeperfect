@@ -13,7 +13,7 @@
 
 #if OS_WINBLOWS
 #include <windows.h>
-#elif OS_MAC
+#elif OS_MAC || OS_LINUX
 #include <dlfcn.h>
 #endif
 

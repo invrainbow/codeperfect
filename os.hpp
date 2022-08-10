@@ -6,7 +6,7 @@
 #   include "win32.hpp"
 #   include <direct.h>
 #   define getcwd _getcwd
-#elif OS_MAC
+#elif OS_MAC || OS_LINUX
 #   include <pthread.h>
 #   include <errno.h>
 #   include <signal.h>
@@ -28,7 +28,7 @@
 #ifdef DEBUG_BUILD
 #   if OS_WINBLOWS
 #       define BREAK_HERE DebugBreak()
-#   elif OS_MAC
+#   elif OS_MAC || OS_LINUX
 #       define BREAK_HERE raise(SIGSTOP)
 #   endif
 #else
@@ -62,7 +62,7 @@ struct Process {
     HANDLE stdout_r;
     DWORD pid;
     HANDLE proc;
-#elif OS_MAC
+#elif OS_MAC || OS_LINUX
     union {
         struct {
             int stdin_pipe[2];
@@ -113,7 +113,7 @@ bool are_filepaths_equal(ccstr a, ccstr b);
 struct Lock {
 #if OS_WINBLOWS
     CRITICAL_SECTION lock;
-#elif OS_MAC
+#elif OS_MAC || OS_LINUX
     pthread_mutex_t lock;
 #endif
 
@@ -150,7 +150,7 @@ Check_Path_Result check_path(ccstr path);
 
 ccstr get_win32_error(DWORD error = -1);
 
-#elif OS_MAC
+#elif OS_MAC || OS_LINUX
 
 #define get_last_error() cp_sprintf("(%d) %s", errno, strerror(errno))
 #define get_socket_error() strerror(errno)
@@ -205,7 +205,7 @@ enum File_Result {
 struct File {
 #if OS_WINBLOWS
     HANDLE h;
-#elif OS_MAC
+#elif OS_MAC || OS_LINUX
     int fd;
 #endif
 
@@ -267,7 +267,7 @@ struct File_Mapping {
     HANDLE file;
     HANDLE mapping;
     bool create_actual_file_mapping(LARGE_INTEGER size);
-#elif OS_MAC
+#elif OS_MAC || OS_LINUX
     int fd;
     bool create_actual_file_mapping(i64 size);
 #endif

@@ -9,14 +9,14 @@ endif
 
 LDFLAGS =
 LDFLAGS += obj/gohelper.a
-LDFLAGS += -lfreetype -lharfbuzz -lpcre -lfontconfig -lglfw3
-LDFLAGS += -lbrotlicommon-static -lbz2 -lbrotlidec-static
 
 BINARY_NAME = ide
 
 ifeq ($(OSTYPE), mac)
 	CFLAGS += -DOSTYPE_MAC
 	LDFLAGS += -ldl -lz -lexpat -lpng16
+	LDFLAGS += -lfreetype -lharfbuzz -lpcre -lfontconfig
+	LDFLAGS += -lbrotlicommon-static -lbz2 -lbrotlidec-static
 
 	frameworks = OpenGL Cocoa IOKit CoreFoundation Security
 	LDFLAGS += $(foreach it, $(frameworks), -framework $(it))
@@ -37,7 +37,8 @@ else ifeq ($(OSTYPE), windows)
 	CFLAGS += -DOSTYPE_WINDOWS
 	CFLAGS += -I./vcpkg/installed/x64-windows-static/include
 	LDFLAGS += -L./vcpkg/installed/x64-windows-static/lib
-
+	LDFLAGS += -lfreetype -lharfbuzz -lpcre -lfontconfig
+	LDFLAGS += -lbrotlicommon-static -lbz2 -lbrotlidec-static
 	LDFLAGS += -lzlib -llibexpatMD -llibpng16
 	LDFLAGS += -lopengl32 -ladvapi32 -lshlwapi -lole32
 	LDFLAGS += -lpathcch -lshell32 -lwinmm -lws2_32 -lgdi32 -lshcore
@@ -45,6 +46,13 @@ else ifeq ($(OSTYPE), windows)
 	GOARCH = amd64
 else ifeq ($(OSTYPE), linux)
 	CFLAGS += -DOSTYPE_LINUX
+	CFLAGS += -arch x86_64
+	CFLAGS += -gdwarf-4 # apparently dwarf5 causes some weird invalid form value error
+	CFLAGS += -I./vcpkg/installed/x64-linux/include
+	LDFLAGS += -L./vcpkg/installed/x64-linux/lib
+	LDFLAGS += -lGL -lX11 -lXi -lXrandr -lXinerama -lXcursor -lrt -lm -pthread -lglfw3
+	LDFLAGS += -lpcre -lharfbuzz -lfontconfig -lfreetype -lbz2 -lexpat -lpng16 -lz -lbrotlidec-static -lbrotlicommon-static
+	GOARCH = amd64
 endif
 
 GOFLAGS =
@@ -92,10 +100,10 @@ clean:
 	mkdir -p obj build/bin
 
 build/bin/test: $(filter-out obj/main.o, $(OBJ_DEPS)) obj/tests.o obj/enums.o binaries.c
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^ $(LDFLAGS)
 
 build/bin/$(BINARY_NAME): $(OBJ_DEPS) binaries.c obj/enums.o
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 -include $(DEP_FILES)
 
