@@ -413,7 +413,7 @@ void World::init() {
         SCOPED_MEM(&world_mem);
         frameskips.init();
 #ifdef DEBUG_BUILD
-        show_frameskips = true;
+        // show_frameskips = true;
 #endif
     }
 
@@ -2901,10 +2901,17 @@ done_writing:
         // write all existing imports
         if (imports_node) {
             auto speclist = imports_node->child();
-            if (speclist->type() != TS_IMPORT_SPEC_LIST)
+            switch (speclist->type()) {
+            case TS_IMPORT_SPEC_LIST:
+                FOR_NODE_CHILDREN (speclist) {
+                    rend.write("\t%s\n", it->string());
+                }
+                break;
+            case TS_IMPORT_SPEC:
+                rend.write("\t%s\n", speclist->string());
+                break;
+            default:
                 return;
-            FOR_NODE_CHILDREN (speclist) {
-                rend.write("\t%s\n", it->string());
             }
         }
 

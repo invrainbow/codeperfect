@@ -375,7 +375,9 @@ void handle_window_event(Window_Event *it) {
                 }
             }
 
-            editor->delete_selection();
+            if (!world.use_nvim)
+                editor->delete_selection();
+
             editor->type_char_in_insert_mode('\n');
 
             auto indent_chars = editor->get_autoindent(editor->cur.y);
@@ -1727,9 +1729,9 @@ int main(int argc, char **argv) {
                 fs->ms_over = -rem;
 
 #ifdef DEBUG_BUILD
-                print("frameskip!!!!!!!111111one =============");
+                // print("frameskip!!!!!!!111111one =============");
                 world.fst.log_output->append('\0');
-                print("%s", world.fst.log_output->items);
+                // print("%s", world.fst.log_output->items);
 #endif
 
                 break;

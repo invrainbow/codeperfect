@@ -351,17 +351,18 @@ void Editor::perform_autocomplete(AC_Result *result) {
             ccstr valuename = "val";
 
             auto gotype = ac.operand_gotype;
-            if (gotype)
-                if (gotype->type == GOTYPE_SLICE || gotype->type == GOTYPE_ARRAY) {
-                    keyname = "i";
-                    valuename = "val";
-                }
-
-            if (result->postfix_operation == PFC_FORKEY) valuename = "_";
-            if (result->postfix_operation == PFC_FORVALUE) keyname = "_";
+            if (gotype && (gotype->type == GOTYPE_SLICE || gotype->type == GOTYPE_ARRAY))
+                keyname = "i";
 
             initialize_everything();
-            insert_text("for %s, %s := range %s {", keyname, valuename, operand_text);
+
+            if (result->postfix_operation == PFC_FORKEY)
+                insert_text("for %s := range %s {", keyname, operand_text);
+            else if (result->postfix_operation == PFC_FORVALUE)
+                insert_text("for _, %s := range %s {", valuename, operand_text);
+            else
+                insert_text("for %s, %s := range %s {", keyname, valuename, operand_text);
+
             save_autoindent();
             insert_newline(1);
             record_position();

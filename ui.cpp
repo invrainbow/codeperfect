@@ -2500,7 +2500,11 @@ void UI::draw_everything() {
                 world.auth.state = AUTH_TRIAL;
                 world.auth.trial_start = get_unix_time();
                 write_auth();
-                tell_user(NULL, "Ok, done.");
+            }
+
+            if (ImGui::MenuItem("Fake being registered")) {
+                world.auth.state = AUTH_REGISTERED;
+                world.window->set_title(cp_sprintf("CodePerfect 95 - %s", world.current_path));
             }
 
             ImGui::EndMenu();
@@ -3022,12 +3026,10 @@ void UI::draw_everything() {
                 wnd.selection = 0;
 
                 if (strlen(wnd.query) >= 2) {
-                    u32 i = 0;
-                    For (*wnd.symbols) {
+                    Fori (*wnd.symbols) {
                         if (fzy_has_match(wnd.query, symbol_to_name(it))) {
                             wnd.filtered_results->append(i);
-                            if (i++ > 10000)
-                                break;
+                            if (wnd.filtered_results->len > 10000) break;
                         }
                     }
 
@@ -4616,12 +4618,10 @@ void UI::draw_everything() {
             wnd.selection = 0;
 
             if (strlen(wnd.query) > 0) {
-                int i = 0;
                 For (*wnd.actions) {
                     if (fzy_has_match(wnd.query, get_command_name(it))) {
                         wnd.filtered_results->append(it);
-                        if (i++ > 10000)
-                            break;
+                        if (wnd.filtered_results->len > 10000) break;
                     }
                 }
 

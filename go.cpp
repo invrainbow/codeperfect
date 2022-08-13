@@ -413,7 +413,7 @@ void Module_Resolver::init(ccstr current_module_filepath, ccstr _gomodcache) {
                 sleep_milliseconds(100);
             }
 
-            char ch = 0;
+            ch = 0;
             if (!proc.read1(&ch) || ch == '\n') break;
 
             line.append(ch);
@@ -6040,10 +6040,12 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
 
         if (node->type() == TS_METHOD_DECLARATION) {
             auto recv_node = node->field(TSF_RECEIVER);
-            auto recv_type = recv_node->child()->field(TSF_TYPE);
-            if (!recv_type->null) {
-                gotype->func_recv = node_to_gotype(recv_type);
-                if (!gotype->func_recv) break;
+            if (!recv_node->null) {
+                auto recv_type = recv_node->child()->field(TSF_TYPE);
+                if (!recv_type->null) {
+                    gotype->func_recv = node_to_gotype(recv_type);
+                    if (!gotype->func_recv) break;
+                }
             }
         }
 
@@ -7798,7 +7800,7 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
         if (!result) return NULL;
 
         // if the result contains type parameters, get out
-        if (decl->type_params) {
+        if ((decl->type == GODECL_FUNC || decl->type == GODECL_TYPE) && decl->type_params) {
             For (*result) {
                 bool bad = false;
                 walk_gotype_and_replace(it.gotype, [&](Gotype *it) -> Gotype* {
