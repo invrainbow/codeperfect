@@ -29,6 +29,7 @@ import {
 import "./index.scss";
 
 const SUPPORT_EMAIL = "support@codeperfect95.com";
+const CURRENT_BUILD = "22.08";
 
 const LINKS = {
   // random links to docs
@@ -274,8 +275,7 @@ function Home() {
         </div>
         <p>
           Written in C++, CodePerfect indexes large codebases quickly and
-          responds to every input in &lt;16ms. Supported on Windows, Mac and
-          Linux.
+          responds to every key in 16ms. Supports Windows, Mac and Linux.
         </p>
         <p>
           Built for Vim users who want more power, Jetbrains users who want more
@@ -493,7 +493,7 @@ function Download() {
         for continued use.
       </p>
       <div className="p-4 my-6 rounded bg-gray-100 border border-gray-400">
-        <div className="font-bold mb-3">Build 22.08</div>
+        <div className="font-bold mb-3">Build {CURRENT_BUILD}</div>
         <div className="flex flex-col gap-2">
           {links.map((it) => (
             <div>
