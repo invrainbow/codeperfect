@@ -32,3 +32,8 @@ beneath the declaration of `AmplitudeEvent`:
 You can also run `Generate Implementation` with your cursor over the interface.
 In that case, CodePerfect will prompt you to select the type (`AmplitudeEvent`
 in this case).
+
+CodePerfect will add methods intelligently. If an interface is already
+partially implemented, it won't generate the methods that already exist. On the
+other hand, if a method exists with the wrong signature, CodePerfect won't
+implement it either, and you'll need to fix the method yourself.
