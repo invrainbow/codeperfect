@@ -114,7 +114,7 @@ If you click the indicator, you can see what the indexer is doing.
 In theory the indexer runs automagically in the background and keeps up to date
 by itself as your code and dependencies change. If it's ever broken or giving
 you incorrect results, however, there are two fixes you can try. (And please
-report the bug to us!)
+[report the bug](https://github.com/codeperfect95/issue-tracker) to us!)
 
 - Run `Tools` &gt; `Rescan Index`. This looks for missing and changed packages,
   and processes them. Most of the time, this should fix your problem. This also
