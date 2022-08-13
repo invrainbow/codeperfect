@@ -2,17 +2,17 @@ import { AiFillApple } from "@react-icons/all-files/ai/AiFillApple";
 import { AiFillWindows } from "@react-icons/all-files/ai/AiFillWindows";
 import { AiOutlineCheck } from "@react-icons/all-files/ai/AiOutlineCheck";
 import { AiOutlineClose } from "@react-icons/all-files/ai/AiOutlineClose";
+import { BsChevronRight } from "@react-icons/all-files/bs/BsChevronRight";
 import { BsCodeSlash } from "@react-icons/all-files/bs/BsCodeSlash";
 import { FaLayerGroup } from "@react-icons/all-files/fa/FaLayerGroup";
 import { FaLinux } from "@react-icons/all-files/fa/FaLinux";
-import { FaPalette } from "@react-icons/all-files/fa/FaPalette";
 import { FaRobot } from "@react-icons/all-files/fa/FaRobot";
 import { GoPackage } from "@react-icons/all-files/go/GoPackage";
+import { GrInfo } from "@react-icons/all-files/gr/GrInfo";
+import { IoMdSearch } from "@react-icons/all-files/io/IoMdSearch";
 import { HiOutlineDownload } from "@react-icons/all-files/hi/HiOutlineDownload";
 import { ImMagicWand } from "@react-icons/all-files/im/ImMagicWand";
-import { IoMdSearch } from "@react-icons/all-files/io/IoMdSearch";
 import { SiVim } from "@react-icons/all-files/si/SiVim";
-import { VscTools } from "@react-icons/all-files/vsc/VscTools";
 
 import cx from "classnames";
 import React from "react";
@@ -113,75 +113,66 @@ function Icon({ block, noshift, icon: IconComponent, ...props }) {
 
 const FEATURES = [
   {
-    name: "Code intelligence",
+    name: "Code navigation",
     icon: BsCodeSlash,
-    description:
-      "Autocomplete, go to definition, parameter hints, find usages, and more.",
-    videoId: "r9eQth4Q5jg",
-  },
-  {
-    name: "Build and debug",
-    icon: VscTools,
-    description: "Edit, build and debug in one workflow, one app, one place.",
-    videoId: "GC-0tCy4P1U",
+    description: "Jump to definition and find all references.",
+    videoId: "QRI09kTuyPQ",
   },
   {
     name: "Vim keybindings",
+    description: "Full vim keybindings out of the box.",
     icon: SiVim,
+    videoId: "nO_-RT8-iHM",
+  },
+  {
+    name: "Automatic rename",
+    description: "Rename any identifier along with all references to it.",
+    videoId: "GPwc2vuK4sA",
+    icon: ImMagicWand,
+  },
+  {
+    name: "Postfix completions",
     description:
-      "Vim keybindings work natively out of the box, the full feature set.",
-    videoId: "GKYCA3UsmrU",
+      "Generate code with macros that work intelligently on Go expressions.",
+    icon: FaRobot,
+    videoId: "qMAachk4TGI",
+  },
+  {
+    name: "Native interface support",
+    description: "Navigate and generate interfaces quickly and easily.",
+    icon: FaLayerGroup,
+    videoId: "CsxmGcahc4k",
   },
   {
     name: "Instant fuzzy search",
     icon: IoMdSearch,
     description: "Works on files, symbols, commands, and completions.",
-    videoId: "_xLgr6Ng4qQ",
-  },
-  {
-    name: "Automatic refactoring",
-    icon: ImMagicWand,
-    description: "Rename, move, and generate code automatically.",
-    videoId: "YDmD7RKX6wI",
+    videoId: "9tl5rP97pg4",
   },
   {
     name: "Automatic import",
-    icon: GoPackage,
     description: "Pull in libraries you need without moving your cursor.",
-    videoId: "r9eQth4Q5jg",
+    icon: GoPackage,
+    videoId: "XrZTgAVXaQ0",
   },
   {
-    name: "Postfix macros",
-    icon: FaRobot,
-    description:
-      "Generate code with macros that work intelligently on your Go expressions.",
-    videoId: "GC-0tCy4P1U",
-  },
-  {
-    name: "Native interface support",
-    icon: FaLayerGroup,
-    description: "Navigate and generate interfaces in a few keystrokes.",
-    videoId: "GKYCA3UsmrU",
-  },
-  {
-    name: "Command Palette",
-    icon: FaPalette,
-    description: "Press ⌘K to run any command or action inside CodePerfect.",
-    videoId: "_xLgr6Ng4qQ",
+    name: "Parameter hints",
+    icon: GrInfo,
+    description: "View function signatures as you're calling them.",
+    videoId: "TzJUEFedUIo",
   },
 ];
 
 function YoutubeEmbed({ videoId, first }) {
+  const autoplay = first ? 0 : 1;
   return (
     <div
       className="relative h-0 rounded-lg border-2 border-black overflow-hidden shadow-md"
-      style={{ paddingBottom: "56.25%" }}
+      style={{ paddingBottom: "58.60%" }}
     >
       <iframe
         className="absolute t-0 l-0 w-full h-full"
-        src={`https://www.youtube.com/embed/${videoId}?autoplay=${
-          first ? 0 : 1
-        }`}
+        src={`https://www.youtube.com/embed/${videoId}?autoplay=${autoplay}&loop=1&playlist=${videoId}&showinfo=0&controls=1&modestbranding=1`}
         title="YouTube video player"
         frameborder="0"
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; fullscreen; gyroscope; picture-in-picture"
@@ -202,82 +193,63 @@ function VideoPlayer() {
       style={{ "grid-template-columns": "250px auto" }}
     >
       <div className="max-w-full md:max-w-xs">
-        {FEATURES.map((it) => (
-          <button
-            className={cx(
-              "text-left block w-full rounded-md relative mb-1 overflow-hidden",
-              selected.name === it.name ? "opacity-100" : "opacity-70"
-            )}
-            style={{
-              background:
-                selected.name === it.name
+        {FEATURES.map((it) => {
+          const isSelected = selected && selected.name === it.name;
+          return (
+            <button
+              className={cx(
+                "text-left block w-full rounded-md relative mb-1 overflow-hidden",
+                isSelected ? "opacity-100" : "opacity-70"
+              )}
+              style={{
+                background: isSelected
                   ? "rgba(0, 0, 0, 0.2)"
                   : "rgba(0, 0, 0, 0.1)",
-            }}
-            onClick={() => {
-              setFirst(false);
-              setSelected(it);
-            }}
-          >
-            <div className="p-3">
-              <div className="flex flex-row items-center gap-x-2">
-                <div className="text-xl leading-none opacity-60 text-black">
-                  <Icon block icon={it.icon} />
+              }}
+              onClick={() => {
+                setFirst(false);
+                setSelected(it);
+              }}
+            >
+              <div className="p-3">
+                <div className="flex flex-row items-center gap-x-2">
+                  <div
+                    className={cx(
+                      "text-lg leading-none text-black",
+                      isSelected ? "opacity-90" : "opacity-60"
+                    )}
+                  >
+                    <Icon block icon={it.icon} />
+                  </div>
+                  <div
+                    className={cx(
+                      "font-semibold leading-none relative",
+                      isSelected ? "text-black" : "text-gray-700"
+                    )}
+                    style={{ paddingTop: "-1px" }}
+                  >
+                    {it.name}
+                  </div>
                 </div>
                 <div
                   className={cx(
-                    "font-semibold leading-none relative",
-                    selected.name === it.name ? "text-black" : "text-gray-700"
+                    "text-sm text-gray-700 overflow-hidden transition-all duration-100 ease-linear",
+                    isSelected ? "mt-1.5 max-h-16" : "mt-0 max-h-0"
                   )}
-                  style={{ paddingTop: "-1px" }}
                 >
-                  {it.name}
+                  {it.description}
                 </div>
               </div>
-              <div
-                className={cx(
-                  "text-sm text-gray-700 overflow-hidden transition-all duration-100 ease-linear",
-                  selected.name === it.name ? "mt-1.5 max-h-16" : "mt-0 max-h-0"
-                )}
-              >
-                {it.description}
-              </div>
-            </div>
-            {selected &&
-              selected.name === it.name &&
-              selected.videoId &&
-              !isbig && (
+              {isSelected && selected.videoId && !isbig && (
                 <YoutubeEmbed videoId={selected.videoId} first={first} />
               )}
-          </button>
-        ))}
+            </button>
+          );
+        })}
       </div>
       {selected && selected.videoId && isbig && (
         <YoutubeEmbed videoId={selected.videoId} first={first} />
       )}
-    </div>
-  );
-}
-
-function FeaturesGrid() {
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-3 w-full md:max-w-screen-lg mx-auto gap-4 md:gap-6">
-      {FEATURES.map((it) => (
-        <div className="text-left block w-full rounded-md overflow-hidden p-4 bg-gray-100">
-          <div className="flex flex-row items-center gap-x-2">
-            <div className="text-xl leading-none opacity-60 text-black">
-              <Icon block icon={it.icon} />
-            </div>
-            <div
-              className="font-semibold leading-none relative text-gray-800"
-              style={{ paddingTop: "-1px" }}
-            >
-              {it.name}
-            </div>
-          </div>
-          <div className="text-gray-700 mt-2">{it.description}</div>
-        </div>
-      ))}
     </div>
   );
 }
@@ -301,15 +273,16 @@ function Home() {
           A High Performance IDE for Go
         </div>
         <p>
-          Cross-platform and written in C++, CodePerfect indexes large codebases
-          quickly and responds to every user input in 16ms.
+          Written in C++, CodePerfect indexes large codebases quickly and
+          responds to every input in &lt;16ms. Supported on Windows, Mac and
+          Linux.
         </p>
         <p>
           Built for Vim users who want more power, Jetbrains users who want more
           speed, and everyone in between.
         </p>
 
-        <div className="mt-8 text-center">
+        <div className="mt-8 text-center flex gap-4 justify-center">
           <A
             link
             href="/download"
@@ -318,23 +291,21 @@ function Home() {
             <Icon className="mr-2" icon={HiOutlineDownload} />
             Download
           </A>
-        </div>
-
-        <div className="text-center text-xl mt-4 font-medium text-gray-400">
-          <Icon icon={AiFillWindows} /> <Icon icon={AiFillApple} />{" "}
-          <Icon icon={FaLinux} />
+          <A
+            href="https://docs.codeperfect95.com"
+            className="button download-button justify-center flex md:inline-flex text-center"
+          >
+            View Docs
+            <Icon className="ml-2" icon={BsChevronRight} />
+          </A>
         </div>
       </div>
 
       <div className="px-4">
-        <div className="mb-8 font-bold text-black text-2xl text-center">
+        <div className="mb-8 font-bold text-black text-3xl text-center">
           A full-featured IDE, as fast as Sublime Text.
         </div>
-        {/*
         <VideoPlayer />
-        <br />
-        */}
-        <FeaturesGrid />
       </div>
     </div>
   );
@@ -423,10 +394,7 @@ function BuyLicense() {
                   </div>
                   <div className="leading-none text-xs ml-1">/month</div>
                 </div>
-                <BuyLicenseButton
-                  {...disableButtonProps}
-                  href={LINKS.buyPersonalMonthly}
-                >
+                <BuyLicenseButton href={LINKS.buyPersonalMonthly}>
                   Buy Monthly
                 </BuyLicenseButton>
               </div>
@@ -437,10 +405,7 @@ function BuyLicense() {
                   </div>
                   <div className="leading-none text-xs ml-1">/year</div>
                 </div>
-                <BuyLicenseButton
-                  {...disableButtonProps}
-                  href={LINKS.buyPersonalYearly}
-                >
+                <BuyLicenseButton href={LINKS.buyPersonalYearly}>
                   Buy Yearly
                 </BuyLicenseButton>
               </div>
@@ -465,10 +430,7 @@ function BuyLicense() {
                   </div>
                   <div className="leading-none text-xs ml-1">/month</div>
                 </div>
-                <BuyLicenseButton
-                  {...disableButtonProps}
-                  href={LINKS.buyProfessionalMonthly}
-                >
+                <BuyLicenseButton href={LINKS.buyProfessionalMonthly}>
                   Buy Monthly
                 </BuyLicenseButton>
               </div>
@@ -479,10 +441,7 @@ function BuyLicense() {
                   </div>
                   <div className="leading-none text-xs ml-1">/year</div>
                 </div>
-                <BuyLicenseButton
-                  {...disableButtonProps}
-                  href={LINKS.buyProfessionalYearly}
-                >
+                <BuyLicenseButton href={LINKS.buyProfessionalYearly}>
                   Buy Yearly
                 </BuyLicenseButton>
               </div>
@@ -507,8 +466,8 @@ function Download() {
 
   const links = [
     { icon: AiFillWindows, label: "Windows", url },
-    { icon: AiFillApple, label: "macOS - Intel", url },
-    { icon: AiFillApple, label: "macOS - M1", url },
+    { icon: AiFillApple, label: "macOS — Intel", url },
+    { icon: AiFillApple, label: "macOS — M1", url },
     { icon: FaLinux, label: "Linux", url },
   ];
 
@@ -535,11 +494,12 @@ function Download() {
       </p>
       <div className="p-4 my-6 rounded bg-gray-100 border border-gray-400">
         <div className="font-bold mb-3">Build 22.08</div>
-        <div className="">
+        <div className="flex flex-col gap-2">
           {links.map((it) => (
-            <div className="mb-3 leading-none">
+            <div>
               <A
                 href={it.url}
+                {...disableButtonProps}
                 className="button download-button text-sm px-3 py-2"
               >
                 <Icon className="mr-1" icon={it.icon} />
