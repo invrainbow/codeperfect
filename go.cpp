@@ -2161,7 +2161,7 @@ void Go_Indexer::process_tree_into_gofile(
                     file->references->append(ref.copy());
                 }
 
-                return WALK_SKIP_CHILDREN;
+                break;
             }
             }
             return WALK_CONTINUE;
