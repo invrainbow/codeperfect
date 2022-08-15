@@ -1,0 +1,92 @@
+#!/bin/bash
+set -e
+
+# grab version
+pushd gostuff
+version_arr=($(go run ./cmd/printversion))
+version=${version_arr[0]}
+version_string=${version_arr[1]}
+popd
+
+os="$(sh/detect_os)"
+slug=x64
+
+# build the actual app
+if [[ -z "$NO_REBUILD" ]]; then
+    RELEASE=1 sh/build
+fi
+
+# create scratch directory
+rm -rf scratch/
+mkdir scratch/
+cd scratch
+
+if [[ $os = "windows" ]]; then
+    rm -rf CodePerfect
+    mkdir CodePerfect
+    cp -R ../build/bin/ CodePerfect/bin/
+    cp ../build/launcher.exe CodePerfect/codeperfect.exe
+    rm -rf CodePerfect/bin/ide.d
+
+    # zip up app
+    zip -r app.zip CodePerfect/
+
+    # zip up update
+    pushd CodePerfect.app/bin
+    zip -r ../../update.zip *
+    popd
+elif [[ $os = "mac" ]]; then
+    if [[ "$(sh/detect_m1)" = "1" ]]; then
+        slug=arm
+    fi
+
+    # create .app from launcher
+    rm -rf CodePerfect.app
+    appify -name CodePerfect \
+        -icon ../logo.png \
+        -version $version_string \
+        -author "CodePerfect" \
+        -id com.codeperfect95 \
+        ../build/launcher
+
+    # create bin folder inside .app
+    cp -R ../build/bin/ "CodePerfect.app/Contents/MacOS/bin/"
+    rm -rf CodePerfect.app/Contents/README
+    rm -rf CodePerfect.app/Contents/MacOS/bin/ide.d
+
+    # zip up app
+    zip -r app.zip CodePerfect.app/
+
+    # zip up update
+    pushd CodePerfect.app/Contents/MacOS/bin
+    zip -r ../../../../update.zip *
+    popd
+
+elif [[ $os = "linux" ]]; then
+    rm -rf CodePerfect
+    mkdir CodePerfect
+    cp -R ../build/bin/ CodePerfect/bin/
+    cp ../build/launcher CodePerfect/codeperfect
+    rm -rf CodePerfect/bin/ide.d
+
+    # zip up app
+    zip -r app.zip CodePerfect/
+
+    # zip up update
+    pushd CodePerfect.app/bin
+    zip -r ../../update.zip *
+    popd
+fi
+
+# push to s3 & database
+if [[ -z "$SKIP_UPLOAD" ]]; then
+    platform="$os-$slug"
+    filename="$platform-$version_string.zip"
+
+    aws s3 cp app.zip "s3://codeperfect95/app/$filename"
+    aws s3 cp update.zip "s3://codeperfect95/update/$filename"
+
+    pushd ../gostuff
+    POSTGRES_URL=$POSTGRES_URL_PROD go run ./cmd/addversion $platform ../scratch/app.zip ../scratch/update.zip
+    popd
+fi
