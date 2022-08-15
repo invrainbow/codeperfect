@@ -3898,10 +3898,14 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 p
             auto is_struct_field_in_literal = [&]() -> Ast_Node *{
                 auto p = node->parent();
                 if (p->null) return NULL;
-                if (p->type() != TS_KEYED_ELEMENT) return NULL;
+                if (p->type() != TS_LITERAL_ELEMENT) return NULL;
 
-                // field must be first child
-                if (!node->prev()->null) return NULL;
+                // must be first literal element (second is value)
+                if (!p->prev()->null) return NULL;
+
+                p = p->parent();
+                if (p->null) return NULL;
+                if (p->type() != TS_KEYED_ELEMENT) return NULL;
 
                 p = p->parent();
                 if (p->null) return NULL;
