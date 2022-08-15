@@ -453,13 +453,31 @@ function BuyLicense() {
 }
 
 function Download() {
-  const url = "/";
-
   const links = [
-    { platform: "windows-x64", icon: AiFillWindows, label: "Windows", url },
-    { platform: "mac-x64", icon: AiFillApple, label: "macOS — Intel", url },
-    { platform: "mac-arm", icon: AiFillApple, label: "macOS — M1", url },
-    { platform: "linux-x64", icon: FaLinux, label: "Linux", url },
+    {
+      platform: "windows-x64",
+      icon: AiFillWindows,
+      label: "Windows",
+      url: "/",
+    },
+    {
+      platform: "mac-x64",
+      icon: AiFillApple,
+      label: "macOS — Intel",
+      url: "/",
+    },
+    {
+      platform: "mac-arm",
+      icon: AiFillApple,
+      label: "macOS — M1",
+      url: "/",
+    },
+    {
+      platform: "linux-x64",
+      icon: FaLinux,
+      label: "Linux",
+      url: "/",
+    },
   ];
 
   const supportingLinks = (
@@ -490,11 +508,11 @@ function Download() {
             <div>
               <A
                 href={it.url}
-                {...disableButtonProps}
                 className="button download-button text-sm px-3 py-2"
-                onClick={() =>
-                  posthog.capture("download", { platform: it.platform })
-                }
+                onClick={(e) => {
+                  disableButtonProps.onClick(e);
+                  posthog.capture("download", { platform: it.platform });
+                }}
               >
                 <Icon className="mr-1" icon={it.icon} />
                 Download for {it.label}
