@@ -38,17 +38,13 @@ const SUPPORT_EMAIL = "support@codeperfect95.com";
 const CURRENT_BUILD = "22.08";
 
 const LINKS = {
-  // random links to docs
   docs: "https://docs.codeperfect95.com",
   gettingStarted: "https://docs.codeperfect95.com/getting-started",
   changelog: "https://docs.codeperfect95.com/changelog",
-
-  // stripe links
   buyPersonalMonthly: "https://buy.stripe.com/aEU5kx2aTaso4TK008",
   buyPersonalYearly: "https://buy.stripe.com/fZefZb2aTdEAbi8aEN",
   buyProfessionalMonthly: "https://buy.stripe.com/6oE28ldTB5843PG9AK",
   buyProfessionalYearly: "https://buy.stripe.com/28o8wJ3eXfMI4TK5kv",
-  // linuxSignup: "https://exceptional-innovator-7731.ck.page/be60d8725b",
 };
 
 const CDN_PATH = "https://d2mje1xp79ofdv.cloudfront.net";
@@ -260,17 +256,6 @@ function VideoPlayer() {
     </div>
   );
 }
-
-/*
-function LinuxSubscribeConfirm() {
-  return (
-    <WallOfText className="my-16 md:my-36">
-      Your subscription is confirmed! We'll send you updates when we roll out
-      Linux support.
-    </WallOfText>
-  );
-}
-*/
 
 function Home() {
   return (
