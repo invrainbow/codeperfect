@@ -458,25 +458,21 @@ function Download() {
       platform: "windows-x64",
       icon: AiFillWindows,
       label: "Windows",
-      url: "/",
     },
     {
       platform: "mac-x64",
       icon: AiFillApple,
       label: "macOS — Intel",
-      url: "/",
     },
     {
       platform: "mac-arm",
       icon: AiFillApple,
       label: "macOS — M1",
-      url: "/",
     },
     {
       platform: "linux-x64",
       icon: FaLinux,
       label: "Linux",
-      url: "/",
     },
   ];
 
@@ -507,7 +503,7 @@ function Download() {
           {links.map((it) => (
             <div>
               <A
-                href={it.url}
+                href={`https://codeperfect.s3.amazonaws.com/${it.platform}-${CURRENT_BUILD}.zip`}
                 className="button download-button text-sm px-3 py-2"
                 onClick={(e) => {
                   disableButtonProps.onClick(e);
