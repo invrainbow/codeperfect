@@ -1792,6 +1792,8 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
             return -compare_scores(&scores[*ia], &scores[*ib]);
         });
 
+        autocomplete.selection = 0;
+        autocomplete.view = 0;
         t.log("scoring");
     }
 
