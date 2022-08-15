@@ -1,7 +1,6 @@
 package main
 
 import (
-	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -211,6 +210,8 @@ func PostHeartbeat(c *gin.Context) {
 		return
 	}
 
+	PosthogCapture(user.ID, "user heartbeat", nil)
+
 	sess.LastHeartbeatAt = time.Now()
 	sess.Heartbeats++ // not safe, i don't care
 	db.DB.Save(&sess)
@@ -300,6 +301,12 @@ func PostStripeWebhook(c *gin.Context) {
 		return
 	}
 
+	PosthogCapture(user.ID, "user activation status changed", PosthogProps{
+		"active": user.Active,
+	})
+
+	PosthogIdentify(user.ID, PosthogProps{"active": user.Active})
+
 	type EmailParams struct {
 		Email      string
 		LicenseKey string
@@ -367,19 +374,4 @@ func PostStripeWebhook(c *gin.Context) {
 	} else {
 		doSendEmail("CodePerfect 95: License Deactivated", emailUserEnabledTxt, emailUserEnabledHtml)
 	}
-}
-
-func GetDownload(c *gin.Context) {
-	var currentVersion models.CurrentVersion
-	if res := db.DB.First(&currentVersion, "os = ?", "darwin"); res.Error != nil {
-		c.JSON(400, &gin.H{"error": "Unable to get current version."})
-		return
-	}
-
-	url := fmt.Sprintf(
-		"https://d2hzcm0ooi1duz.cloudfront.net/app/%v_v%d.zip",
-		"darwin",
-		currentVersion.Version,
-	)
-	c.JSON(200, &gin.H{"url": url})
 }

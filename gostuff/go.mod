@@ -17,6 +17,7 @@ require (
 	github.com/leodido/go-urn v1.2.1 // indirect
 	github.com/lib/pq v1.6.0 // indirect
 	github.com/mattn/go-isatty v0.0.13 // indirect
+	github.com/posthog/posthog-go v0.0.0-20220706162856-f7d06545b580 // indirect
 	github.com/reviewdog/errorformat v0.0.0-20210809090836-cda72036d1df
 	github.com/stretchr/testify v1.7.0 // indirect
 	github.com/stripe/stripe-go/v72 v72.86.0
