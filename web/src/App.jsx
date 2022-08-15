@@ -14,19 +14,25 @@ import { HiOutlineDownload } from "@react-icons/all-files/hi/HiOutlineDownload";
 import { ImMagicWand } from "@react-icons/all-files/im/ImMagicWand";
 import { SiVim } from "@react-icons/all-files/si/SiVim";
 
+import posthog from "posthog-js";
 import cx from "classnames";
 import React from "react";
 import { Helmet } from "react-helmet";
 import { useMediaQuery } from "react-responsive";
 import {
-  BrowserRouter as Router,
+  BrowserRouter,
   Link,
-  Redirect,
+  Outlet,
+  Navigate,
   Route,
-  Switch,
+  Routes,
   useLocation,
 } from "react-router-dom";
-import "./index.scss";
+import "./index.css";
+
+posthog.init("phc_kIt8VSMD8I2ScNhnjWDU2NmrK9kLIL3cHWpkgCX3Blw", {
+  api_host: "https://app.posthog.com",
+});
 
 const SUPPORT_EMAIL = "support@codeperfect95.com";
 const CURRENT_BUILD = "22.08";
@@ -49,7 +55,7 @@ const CDN_PATH = "https://d2mje1xp79ofdv.cloudfront.net";
 
 function asset(path) {
   const dev = process.env.NODE_ENV === "development";
-  return dev ? `${path}` : `${CDN_PATH}${path}`;
+  return dev ? `/public/${path}` : `${CDN_PATH}${path}`;
 }
 
 function A({ link, children, href, ...props }) {
@@ -576,9 +582,9 @@ function PricingPoint({ label, not }) {
   );
 }
 
-function App() {
+function Layout() {
   return (
-    <Router>
+    <div>
       <ScrollToTop />
 
       <Helmet>
@@ -627,37 +633,7 @@ function App() {
           </div>
         </div>
         <div>
-          <Switch>
-            <Route path="/download" exact>
-              <Download />
-            </Route>
-            {/*
-            <Route path="/linux-subscribe-confirm" exact>
-              <LinuxSubscribeConfirm />
-            </Route>
-            */}
-            <Route path="/buy" exact>
-              <BuyLicense />
-            </Route>
-            <Route path="/payment-done" exact>
-              <PaymentDone />
-            </Route>
-            <Route path="/portal-done" exact>
-              <PortalDone />
-            </Route>
-            <Route path="/terms">
-              <Terms />
-            </Route>
-            <Route path="/privacy">
-              <Redirect to="/terms" />
-            </Route>
-            <Route exact path="/">
-              <Home />
-            </Route>
-            <Route>
-              <Redirect to="/" />
-            </Route>
-          </Switch>
+          <Outlet />
         </div>
         <div
           className={cx(
@@ -693,7 +669,26 @@ function App() {
           </A>
         </div>
       </div>
-    </Router>
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Layout />}>
+          <Route path="download" element={<Download />} />
+          <Route path="buy" element={<BuyLicense />} />
+          <Route path="payment-done" element={<PaymentDone />} />
+          <Route path="portal-done" element={<PortalDone />} />
+          <Route path="terms" element={<Terms />} />
+          <Route path="privacy" element={<Navigate to="terms" />} />
+          <Route path="/" element={<Home />} />
+          <Route path="*" element={<Navigate to="/" />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
   );
 }
 
