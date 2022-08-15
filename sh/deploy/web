@@ -2,7 +2,7 @@
 set -e
 
 cd /root/codeperfect/web
-bun install
-bun run build
+yarn
+yarn build
 rsync -avz --delete ./build/ /var/www/codeperfect95.com/
 aws s3 sync ./public/ s3://codeperfect-static --delete
