@@ -34,7 +34,7 @@ int get_key_mods() {
     return mods;
 }
 
-ccstr get_clipboard_string() {
+ccstr Window::get_clipboard_string() {
     if (!OpenClipboard(NULL)) return NULL;
     defer { CloseClipboard(); };
 
@@ -48,7 +48,7 @@ ccstr get_clipboard_string() {
     return to_utf8(wbuf);
 }
 
-void set_clipboard_string(ccstr text) {
+void Window::set_clipboard_string(ccstr text) {
     if (!OpenClipboard(NULL)) return;
     defer { CloseClipboard(); };
 
@@ -260,13 +260,6 @@ void Window::swap_buffers() {
 void Window::swap_interval(int interval) {
     if (WGLEW_EXT_swap_control)
         wglSwapIntervalEXT(interval);
-}
-
-void Window::cleanup() {
-    if (wgl_context) {
-        wglDeleteContext(wgl_context);
-        wgl_context = NULL;
-    }
 }
 
 void Window::set_title(ccstr title) {
@@ -608,6 +601,13 @@ LRESULT Window::callback(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
         bool press = HIWORD(l) & KF_UP;
         int mods = get_key_mods();
 
+        int scan = (HIWORD(l) & (KF_EXTENDED | 0xff));
+        if (!scan) scan = MapVirtualKeyW((UINT)w, MAPVK_VK_TO_VSC);
+        // Alt+PrtSc has a different scan than just PrtSc
+        // Ctrl+Pause has a different scan than just Pause
+        if (scan == 0x54) scan = 0x137;
+        if (scan == 0x146) scan = 0x45;
+
         auto key = (Key)scan_to_key_table[scan];
         // print("keydown: %s", key_str(key));
 
@@ -946,13 +946,6 @@ bool Cursor::init(Cursor_Type _type) {
 
     handle = (HCURSOR)LoadImageW(NULL, MAKEINTRESOURCEW(id), IMAGE_CURSOR, 0, 0, LR_DEFAULTSIZE | LR_SHARED);
     return (bool)handle;
-}
-
-void Cursor::cleanup() {
-    if (handle) {
-        DestroyCursor(handle);
-        handle = NULL;
-    }
 }
 
 void poll_window_events() {

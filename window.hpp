@@ -237,7 +237,7 @@ enum Cursor_Type {
 };
 
 struct Cursor {
-#if OS_WINDOWS
+#if OS_WINBLOWS
     HCURSOR handle;
 #elif OS_MAC
     id object;
@@ -326,7 +326,7 @@ struct Window {
     void set_cursor(Cursor *_cursor);
     void *get_native_handle();
 
-#if OS_WINDOWS
+#if OS_WINBLOWS
     LRESULT callback(HWND hwnd, UINT msg, WPARAM w, LPARAM l);
     void adjust_rect_using_windows_gayness(RECT *rect);
     bool create_actual_window(int width, int height, ccstr title);
