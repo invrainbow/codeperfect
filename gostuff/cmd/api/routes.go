@@ -22,10 +22,7 @@ import (
 	"gorm.io/gorm"
 )
 
-var AdminPassword = os.Getenv("ADMIN_PASSWORD")
 var IsDevelMode = os.Getenv("DEVELOPMENT_MODE") == "1"
-var AirtableAPIKey = os.Getenv("AIRTABLE_API_KEY")
-var ConvertKitAPIKey = os.Getenv("CONVERTKIT_API_KEY")
 var StripeAPIKey = os.Getenv("STRIPE_API_KEY")
 
 func init() {
@@ -162,10 +159,9 @@ func PostAuth(c *gin.Context) {
 
 	SendSlackMessageForUser(user, "%s authed on version %s/%d.", user.Email, req.OS, req.CurrentVersion)
 
-	LogEvent(int(user.ID), &AmplitudeEvent{
-		EventType:       "user_auth",
-		EventProperties: req,
-		UserProperties:  user,
+	PosthogCapture(user.ID, "user auth", PosthogProps{
+		"os":              req.OS,
+		"current_version": req.CurrentVersion,
 	})
 
 	sess := models.Session{}
