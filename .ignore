@@ -12,7 +12,7 @@ stb_*
 docs
 meow_hash_x64_aesni.h
 Icons*.h
-web
+# web
 glew.c
 glew.h
 stb/*
