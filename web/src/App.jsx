@@ -516,7 +516,7 @@ function Download() {
           {links.map((it) => (
             <div>
               <A
-                href={`https://codeperfect.s3.amazonaws.com/${it.platform}-${CURRENT_BUILD}.zip`}
+                // href={`https://codeperfect95.s3.us-east-2.amazonaws.com/app/${it.platform}-${CURRENT_BUILD}.zip`}
                 className="button download-button text-sm px-3 py-2"
                 onClick={(e) => {
                   disableButtonProps.onClick(e);
