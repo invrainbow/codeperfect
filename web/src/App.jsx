@@ -311,6 +311,13 @@ function PaymentDone() {
         you don't see it, see if it's in your spam folder. If you still don't
         see it, please <a href={`mailto:${SUPPORT_EMAIL}`}>contact support</a>.
       </p>
+      <p>
+        If you haven't done so yet, you can download CodePerfect{" "}
+        <A link href="/download">
+          here
+        </A>
+        .
+      </p>
     </WallOfText>
   );
 }
@@ -385,7 +392,10 @@ function BuyLicense() {
                   </div>
                   <div className="leading-none text-xs ml-1">/month</div>
                 </div>
-                <BuyLicenseButton href={LINKS.buyPersonalMonthly}>
+                <BuyLicenseButton
+                  {...disableButtonProps}
+                  href={LINKS.buyPersonalMonthly}
+                >
                   Buy Monthly
                 </BuyLicenseButton>
               </div>
@@ -396,7 +406,10 @@ function BuyLicense() {
                   </div>
                   <div className="leading-none text-xs ml-1">/year</div>
                 </div>
-                <BuyLicenseButton href={LINKS.buyPersonalYearly}>
+                <BuyLicenseButton
+                  {...disableButtonProps}
+                  href={LINKS.buyPersonalYearly}
+                >
                   Buy Yearly
                 </BuyLicenseButton>
               </div>
