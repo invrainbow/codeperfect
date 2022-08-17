@@ -2620,6 +2620,7 @@ void do_generate_implementation() {
     auto dest_gofile = ind.find_gofile_from_ctx(dest->ctx);
     For (*dest_gofile->imports) {
         auto package_name = ind.get_import_package_name(&it);
+        if (!package_name) continue;
 
         import_table.set(it.import_path, package_name);
         import_table_r.set(package_name, it.import_path);
