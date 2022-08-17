@@ -13,6 +13,7 @@ docs
 meow_hash_x64_aesni.h
 Icons*.h
 # web
+web/node_modules
 glew.c
 glew.h
 stb/*
