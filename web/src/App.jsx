@@ -55,7 +55,7 @@ const CDN_PATH = "https://d2mje1xp79ofdv.cloudfront.net";
 
 function asset(path) {
   const dev = process.env.NODE_ENV === "development";
-  return dev ? `/public/${path}` : `${CDN_PATH}${path}`;
+  return dev ? `/public${path}` : `${CDN_PATH}${path}`;
 }
 
 function isExternalLink(href) {
@@ -268,7 +268,7 @@ function Home() {
             Download
           </A>
           <A
-            href="https://docs.codeperfect95.com"
+            href={LINKS.docs}
             className="button download-button justify-center flex md:inline-flex text-center"
           >
             View Docs
@@ -336,10 +336,6 @@ function BuyLicense() {
   return (
     <div className="max-w-screen-md px-4 mx-auto my-16 md:my-28">
       <Title>Buy CodePerfect</Title>
-      <p>
-        CodePerfect is free to evaluate for 7 days, after which you'll need a
-        license to keep using it.
-      </p>
       <div className="my-6 grid grid-cols-1 sm:grid-cols-2 gap-6">
         <BuyLicenseBox>
           <div className="p-5">
@@ -442,12 +438,12 @@ function Download() {
     {
       platform: "mac-x64",
       icon: AiFillApple,
-      label: "macOS — Intel",
+      label: "macOS Intel",
     },
     {
       platform: "mac-arm",
       icon: AiFillApple,
-      label: "macOS — M1",
+      label: "macOS M1",
     },
     {
       platform: "linux-x64",
@@ -456,46 +452,29 @@ function Download() {
     },
   ];
 
-  const supportingLinks = (
-    <p>
-      See also{" "}
-      <A href="https://docs.codeperfect95.com/getting-started/">
-        Getting Started
-      </A>
-      .
-    </p>
-  );
-
   return (
-    <div className="max-w-screen-md px-4 mx-auto my-16 md:my-28">
-      <Title>Download CodePerfect</Title>
-      <p>
-        CodePerfect is free to evaluate for 7 days, with all features available.
-        After the trial period you'll need a <A href="/buy">license</A> for
-        continued use.
+    <div className="max-w-lg px-4 mx-auto my-16 md:my-28 text-center">
+      <Title>Download CodePerfect {CURRENT_BUILD}</Title>
+      <p className="flex flex-wrap flex-row gap-2 justify-center">
+        {links.map((it) => (
+          <A
+            href="#"
+            // href={`https://codeperfect95.s3.us-east-2.amazonaws.com/app/${it.platform}-${CURRENT_BUILD}.zip`}
+            className="button download-button text-sm px-3 py-2"
+            onClick={(e) => {
+              disableButtonProps.onClick(e);
+              posthog.capture("download", { platform: it.platform });
+            }}
+          >
+            <Icon className="mr-1" icon={it.icon} />
+            {it.label}
+          </A>
+        ))}
       </p>
-      <div className="p-4 my-6 rounded bg-gray-100 border border-gray-400">
-        <div className="font-bold mb-3">Build {CURRENT_BUILD}</div>
-        <div className="flex flex-col gap-2">
-          {links.map((it) => (
-            <div>
-              <A
-                href="#"
-                // href={`https://codeperfect95.s3.us-east-2.amazonaws.com/app/${it.platform}-${CURRENT_BUILD}.zip`}
-                className="button download-button text-sm px-3 py-2"
-                onClick={(e) => {
-                  disableButtonProps.onClick(e);
-                  posthog.capture("download", { platform: it.platform });
-                }}
-              >
-                <Icon className="mr-1" icon={it.icon} />
-                Download for {it.label}
-              </A>
-            </div>
-          ))}
-        </div>
-      </div>
-      {supportingLinks}
+      <p>
+        CodePerfect is free to evaluate for 7 days. After that you'll need a{" "}
+        <A href="/buy">license</A> for continued use.
+      </p>
     </div>
   );
 }
@@ -569,7 +548,7 @@ const NavA = wrap(
 
 function Header() {
   return (
-    <div className="p-4 md:p-8 border-b border-gray-100 bg-gray-50">
+    <div className="p-4 md:p-4 border-b border-gray-100 bg-gray-50">
       <div className="flex justify-between items-center w-full md:max-w-screen-lg md:mx-auto text-lg">
         <A
           href="/"
@@ -598,7 +577,7 @@ function Header() {
 }
 
 const FootSection = wrap("div", "flex flex-col gap-y-3 md:gap-y-3");
-const FootA = wrap(A, "text-gray-500 no-underline");
+const FootLink = wrap(A, "text-gray-500 no-underline");
 
 function Footer() {
   return (
@@ -607,16 +586,16 @@ function Footer() {
         <div className="flex flex-col md:flex-row md:items-start gap-y-3 md:gap-x-14 text-gray-500 leading-none">
           <span>&copy; {new Date().getFullYear()} CodePerfect 95</span>
           <FootSection>
-            <FootA href="/buy">Buy License</FootA>
-            <FootA href="/download">Download</FootA>
+            <FootLink href="/buy">Buy License</FootLink>
+            <FootLink href="/download">Download</FootLink>
           </FootSection>
           <FootSection>
-            <FootA href={LINKS.docs}>Docs</FootA>
-            <FootA href={LINKS.changelog}>Changelog</FootA>
+            <FootLink href={LINKS.docs}>Docs</FootLink>
+            <FootLink href={LINKS.changelog}>Changelog</FootLink>
           </FootSection>
           <FootSection>
-            <FootA href={`mailto:${SUPPORT_EMAIL}`}>Support</FootA>
-            <FootA href="/terms">Terms &amp; Privacy</FootA>
+            <FootLink href={`mailto:${SUPPORT_EMAIL}`}>Support</FootLink>
+            <FootLink href="/terms">Terms &amp; Privacy</FootLink>
           </FootSection>
         </div>
         <div className="flex gap-x-4 text-2xl">
