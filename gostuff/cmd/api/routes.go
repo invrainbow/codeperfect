@@ -368,6 +368,6 @@ func PostStripeWebhook(c *gin.Context) {
 			doSendEmail("CodePerfect 95: License Reactivated", emailUserEnabledTxt, emailUserEnabledHtml)
 		}
 	} else {
-		doSendEmail("CodePerfect 95: License Deactivated", emailUserEnabledTxt, emailUserEnabledHtml)
+		doSendEmail("CodePerfect 95: License Deactivated", emailUserDisabledTxt, emailUserDisabledHtml)
 	}
 }
