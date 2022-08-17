@@ -58,10 +58,13 @@ function asset(path) {
   return dev ? `/public/${path}` : `${CDN_PATH}${path}`;
 }
 
+function isExternalLink(href) {
+  const prefixes = ["http://", "https://", "mailto:", "tel:"];
+  return prefixes.some((it) => href.startsWith(it));
+}
+
 function A({ link, children, href, ...props }) {
-  const ext =
-    !href || href.startsWith("http://") || href.startsWith("https://");
-  if (ext) {
+  if (!href || isExternalLink(href)) {
     props.href = href;
     return <a {...props}>{children}</a>;
   }
@@ -69,34 +72,23 @@ function A({ link, children, href, ...props }) {
   return <Link {...props}>{children}</Link>;
 }
 
-function WallOfText({ children, className, ...props }) {
-  return (
-    <div
-      className={cx(
-        "wall-of-text p-4 py-10 md:py-28 leading-normal md:mx-auto md:max-w-2xl",
-        className
-      )}
-      {...props}
-    >
-      {children}
-    </div>
-  );
+function wrap(elem, extraClassName, extraProps) {
+  return ({ children, className, ...props }) => {
+    const newProps = {
+      ...(extraProps || {}),
+      ...props,
+      className: cx(className, extraClassName),
+    };
+    return React.createElement(elem, newProps, children);
+  };
 }
 
-function H1({ className, children, ...props }) {
-  return (
-    <h2
-      className={cx("mb-6 text-2xl font-bold text-gray-800", className)}
-      {...props}
-    >
-      {children}
-    </h2>
-  );
-}
-
-function Title({ className, ...props }) {
-  return <H1 className={cx("text-3xl", className)} {...props} />;
-}
+const WallOfText = wrap(
+  "div",
+  "wall-of-text p-4 py-10 md:py-28 leading-normal md:mx-auto md:max-w-2xl"
+);
+const H1 = wrap("h2", "mb-6 text-2xl font-bold text-gray-800");
+const Title = wrap(H1, "text-3xl");
 
 function Icon({ block, noshift, icon: IconComponent, ...props }) {
   return (
@@ -322,29 +314,14 @@ function PortalDone() {
   );
 }
 
-function BuyLicenseButton({ className, ...props }) {
-  return (
-    <A
-      className={cx(
-        className,
-        "button download-button p-3 block text-center bg-white"
-      )}
-      {...props}
-    />
-  );
-}
-
-function BuyLicenseBox({ className, ...props }) {
-  return (
-    <div
-      className={cx(
-        className,
-        "w-auto overflow-hidden border rounded-md shadow-sm"
-      )}
-      {...props}
-    />
-  );
-}
+const BuyLicenseButton = wrap(
+  A,
+  "button download-button p-3 block text-center bg-white"
+);
+const BuyLicenseBox = wrap(
+  "div",
+  "w-auto overflow-hidden border rounded-md shadow-sm"
+);
 
 const disableButtonProps = {
   onClick: (e) => {
@@ -503,6 +480,7 @@ function Download() {
           {links.map((it) => (
             <div>
               <A
+                href="#"
                 // href={`https://codeperfect95.s3.us-east-2.amazonaws.com/app/${it.platform}-${CURRENT_BUILD}.zip`}
                 className="button download-button text-sm px-3 py-2"
                 onClick={(e) => {
@@ -584,63 +562,47 @@ function PricingPoint({ label, not }) {
   );
 }
 
-function NavA({ href, className, children }) {
-  return (
-    <A
-      href={href}
-      className={cx(
-        "text-black no-underline whitespace-nowrap hidden md:inline-block",
-        className
-      )}
-    >
-      {children}
-    </A>
-  );
-}
+const NavA = wrap(
+  A,
+  "text-black no-underline whitespace-nowrap hidden md:inline-block"
+);
 
 function Header() {
   return (
-    <div className="pt-4 lg:pt-8 px-4 pb-4 flex justify-between items-center w-full md:max-w-screen-lg md:mx-auto text-lg">
-      <A
-        href="/"
-        className="font-bold text-lg text-black no-underline whitespace-nowrap flex items-center"
-      >
-        <img
-          alt="logo"
-          className="w-auto h-12 inline-block mr-3"
-          src={asset("/logo.png")}
-        />
-        <span className="hidden md:inline-block">CodePerfect 95</span>
-      </A>
-      <div className="flex items-baseline space-x-6">
-        <NavA href={LINKS.docs}>Docs</NavA>
-        <NavA href={LINKS.changelog}>Changelog</NavA>
-        <NavA href={LINKS.discord}>Discord</NavA>
-        <NavA href="/buy">Buy</NavA>
-        <A href="/download" className="button main-button">
-          <Icon className="mr-2" icon={HiOutlineDownload} />
-          Download
+    <div className="p-4 md:p-8 border-b border-gray-100 bg-gray-50">
+      <div className="flex justify-between items-center w-full md:max-w-screen-lg md:mx-auto text-lg">
+        <A
+          href="/"
+          className="font-bold text-lg text-black no-underline whitespace-nowrap flex items-center"
+        >
+          <img
+            alt="logo"
+            className="w-auto h-12 inline-block mr-3"
+            src={asset("/logo.png")}
+          />
+          <span className="hidden md:inline-block">CodePerfect 95</span>
         </A>
+        <div className="flex items-baseline space-x-6">
+          <NavA href={LINKS.docs}>Docs</NavA>
+          <NavA href={LINKS.changelog}>Changelog</NavA>
+          <NavA href={LINKS.discord}>Discord</NavA>
+          <NavA href="/buy">Buy</NavA>
+          <A href="/download" className="button main-button">
+            <Icon className="mr-2" icon={HiOutlineDownload} />
+            Download
+          </A>
+        </div>
       </div>
     </div>
   );
 }
 
-function FootSection({ children }) {
-  return <div className="flex flex-col gap-y-3 md:gap-y-3">{children}</div>;
-}
-
-function FootA({ href, className, children }) {
-  return (
-    <A href={href} className={cx("text-gray-500 no-underline", className)}>
-      {children}
-    </A>
-  );
-}
+const FootSection = wrap("div", "flex flex-col gap-y-3 md:gap-y-3");
+const FootA = wrap(A, "text-gray-500 no-underline");
 
 function Footer() {
   return (
-    <div className="px-4 pt-6 lg:pt-8 mb-4 md:mb-12 border-t border-gray-100">
+    <div className="px-4 pt-6 lg:pt-8 pb-4 md:pb-12 border-t border-gray-100 bg-gray-50">
       <div className="flex flex-col md:flex-row gap-y-4 md:gap-0 hmd:flex-row justify-between w-full md:max-w-screen-lg md:mx-auto items-start">
         <div className="flex flex-col md:flex-row md:items-start gap-y-3 md:gap-x-14 text-gray-500 leading-none">
           <span>&copy; {new Date().getFullYear()} CodePerfect 95</span>
@@ -658,10 +620,10 @@ function Footer() {
           </FootSection>
         </div>
         <div className="flex gap-x-4 text-2xl">
-          <A href={LINKS.discord}>
+          <A className="text-gray-400" href={LINKS.discord}>
             <Icon block icon={FaDiscord} />
           </A>
-          <A href={LINKS.twitter}>
+          <A className="text-gray-400" href={LINKS.twitter}>
             <Icon block icon={FaTwitter} />
           </A>
         </div>
@@ -672,10 +634,12 @@ function Footer() {
 
 function Layout() {
   return (
-    <div>
-      <ScrollToTop />
-      <Header />
-      <Outlet />
+    <div className="flex flex-col min-h-screen">
+      <div className="flex-grow">
+        <ScrollToTop />
+        <Header />
+        <Outlet />
+      </div>
       <Footer />
     </div>
   );
