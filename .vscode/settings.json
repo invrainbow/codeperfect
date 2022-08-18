@@ -1,5 +1,8 @@
 {
     "editor.formatOnSave": false,
+    "[markdown]": {
+        "editor.formatOnSave": true,
+    },
     "[javascript]": {
         "editor.formatOnSave": true,
     },
