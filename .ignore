@@ -9,7 +9,7 @@ tree-sitter
 stb_*
 *.png
 *.svg
-docs
+docs/node_modules
 meow_hash_x64_aesni.h
 Icons*.h
 # web
