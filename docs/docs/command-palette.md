@@ -2,8 +2,8 @@
 title: "Command Palette"
 ---
 
-Press `Cmd+K` anywhere to open the Command Palette, similar to `Cmd+Shift+P` in
-VSCode. This lets you fuzzy-search for commands to run.
+Press `Primary+K` anywhere to open the Command Palette, similar to
+`Primary+Shift+P` in VSCode. This lets you fuzzy-search for commands to run.
 
 Any command that is accessible from the menu bar, including all commands
 referenced in the docs, can alternatively be run by opening the Command Palette
@@ -16,6 +16,6 @@ if you don't have an editor open, `Save File` won't show up.
 
 ## Keyboard Shortcuts
 
-| Command                | Shortcut |
-| ---------------------- | -------- |
-| Toggle Command Palette | `Cmd+K`  |
+| Command                | Shortcut    |
+| ---------------------- | ----------- |
+| Toggle Command Palette | `Primary+K` |

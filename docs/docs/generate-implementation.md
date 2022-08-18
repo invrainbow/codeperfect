@@ -16,7 +16,7 @@ Move your text cursor on top of a type that you want to generate methods for:
 
 ![](/generate-implementation.png)
 
-Here, the cursor is on top of the `AmplitudeEvent` type.
+Here, the cursor is on top of the `Foo` type.
 
 Run `Refactor` &gt; `Generate Implementation`. This will present you with a menu
 to select an interface (fuzzy-search enabled). For this example, we'll select
@@ -25,12 +25,12 @@ to select an interface (fuzzy-search enabled). For this example, we'll select
 ![](/generate-implementation2.png)
 
 Press Enter. In this case, CodePerfect generates the `Read` method directly
-beneath the declaration of `AmplitudeEvent`:
+beneath the declaration of `Foo`:
 
 ![](/generate-implementation3.png)
 
 You can also run `Generate Implementation` with your cursor over the interface.
-In that case, CodePerfect will prompt you to select the type (`AmplitudeEvent`
+In that case, CodePerfect will prompt you to select the type (`Foo`
 in this case).
 
 CodePerfect will add methods intelligently. If an interface is already

@@ -16,19 +16,20 @@ There are some additional things to note:
   important, and are working out how to support this in a safe way.
 
   - Importantly, `:%s/find/replace` currently does not work. For now, you can
-    get around this by doing a normal `/search`, using `ce` or similar to modify
-    it, then using `n.` to jump to each occurrence and repeat the replacement.
-    Sorry again; it isn't ideal.
+    get around this by using the native in-file search and replace by pressing
+    `Primary+H`. If you want to use Vim, you can do a normal `/search`, use
+    `ce` or similar to modify it, then use `n.` to jump to each occurrence and
+    repeat the replacement.
 
   - Since normal `/search` still works, you may find yourself needing
     `:nohlsearch`. We've bound `C-/` to this.
 
   - Custom .vimrc files are also unsupported at this time.
 
-- To copy to the clipboard, press Cmd+C (or Ctrl+C on Windows) while the text
+- To copy to the clipboard, press `Primary+C` while the text
   you want is selected in Visual mode.
 
-- To paste from the clipboard, press Cmd+V (or Ctrl+V on windows) in insert mode.
+- To paste from the clipboard, press `Primary+V` in insert mode.
 
 - `gd` is mapped to Go to Definition.
 

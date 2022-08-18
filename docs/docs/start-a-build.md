@@ -11,6 +11,6 @@ failed, errors will be displayed here. See
 
 ## Keyboard Shortcuts
 
-| Command     | Shortcut      |
-| ----------- | ------------- |
-| Start Build | `Cmd+Shift+B` |
+| Command     | Shortcut          |
+| ----------- | ----------------- |
+| Start Build | `Primary+Shift+B` |

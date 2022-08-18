@@ -30,7 +30,7 @@ const sidebars = {
     {
       type: "category",
       label: "Overview",
-      items: ["getting-started", "getting-license"],
+      items: ["getting-started", "getting-license", "platform-differences"],
     },
     {
       type: "category",

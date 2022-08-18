@@ -10,14 +10,15 @@ programs directly from inside CodePerfect.
 You'll need [the Delve debugger](https://github.com/go-delve/delve). You can
 install the latest version from their
 [docs](https://github.com/go-delve/delve/blob/master/Documentation/installation/README.md).
-Then, make sure Delve is installed correctly: open a Bash shell and run
-`which dlv`.
+
+Make sure Delve is installed correctly by opening a terminal and running `which dlv` on Mac/Linux and `where dlv` on Windows.
+If it's not able to find it, you may need to update your `PATH`.
 
 :::info
 
-CodePerfect locates the `dlv` binary the same way, by running `which dlv` inside
-a Bash shell. You don't need to configure anything; just run `which dlv` in a
-shell and make sure the right path pops up.
+CodePerfect locates the `dlv` binary the same way. You don't need to configure
+anything else — just run `which dlv` in bash on Mac/Linux and `where dlv` in
+cmd on Windows, and make sure it prints out the right path.
 
 :::
 

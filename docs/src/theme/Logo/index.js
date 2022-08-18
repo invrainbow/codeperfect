@@ -10,6 +10,7 @@ import ThemedImage from "@theme/ThemedImage";
 import useBaseUrl from "@docusaurus/useBaseUrl";
 import useDocusaurusContext from "@docusaurus/useDocusaurusContext";
 import { useThemeConfig } from "@docusaurus/theme-common";
+import cx from "classnames";
 
 function Logo(props) {
   const {
@@ -51,7 +52,7 @@ function Logo(props) {
         ) : (
           themedImage
         ))}
-      <b className={titleClassName}>
+      <b className={cx(titleClassName, "codeperfect-logo")}>
         CodePerfect 95
         <span style={{ color: "rgba(156, 163, 175)" }}>Docs</span>
       </b>

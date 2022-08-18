@@ -11,12 +11,14 @@ performs a few types of completions:
     includes fields and methods. For packages this lists all public
     declarations.
 
-  - [Postfix completions](postfix-completion), covered in the linked page.
+  - [Postfix completions](postfix-completion).
 
 - When you type lone identifiers, it looks for:
 
   - Identifiers declared in the current scope, as well as toplevels in other
     packages you might want to use.
+
+  - Currently imported packages and importable packages.
 
   - Language keywords.
 
@@ -31,12 +33,10 @@ or even a strict substring. For instance, you could type `of` to match
 
 ## Keyboard Shortcuts
 
-| Command                  | Shortcut           |
-| ------------------------ | ------------------ |
-| Open autocomplete menu\* | `Ctrl+Space`       |
-| Move cursor down         | `Ctrl+J` or `Down` |
-| Move cursor up           | `Ctrl+K` or `Up`   |
-| Select item              | `Tab`              |
+| Command                  | Shortcut     |
+| ------------------------ | ------------ |
+| Open autocomplete menu\* | `Ctrl+Space` |
+| Select item              | `Tab`        |
 
 \* The menu opens automatically as you type, but you can also manually trigger
 it after you've closed it.
