@@ -154,7 +154,7 @@ function YoutubeEmbed({ videoId, first }) {
   const autoplay = first ? 0 : 1;
   return (
     <div
-      className="relative h-0 md:rounded-lg md:border-2 md:border-black overflow-hidden shadow-md"
+      className="relative h-0 md:rounded-lg overflow-hidden"
       style={{ paddingBottom: "58.60%" }}
     >
       <iframe
@@ -176,8 +176,11 @@ function VideoPlayer() {
 
   return (
     <div
-      className="md:grid w-full md:max-w-screen-xl mx-auto md:gap-x-6 text-sm"
-      style={{ gridTemplateColumns: "250px auto" }}
+      className="md:grid w-full md:max-w-screen-xl mx-auto md:gap-x-4"
+      style={{
+        gridTemplateColumns: "250px auto",
+        ...(isbig ? { fontSize: "15px" } : {}),
+      }}
     >
       <div className="max-w-full md:max-w-xs">
         {FEATURES.map((it) => {
@@ -186,47 +189,40 @@ function VideoPlayer() {
             <button
               key={it.name}
               className={cx(
-                "text-left block w-full rounded-md relative mb-1 overflow-hidden",
-                isSelected ? "opacity-100" : "opacity-70"
+                "text-left block w-full relative overflow-hidden",
+                "md:pl-1 first:mt-0 py-3 border-gray-200"
               )}
-              style={{
-                background: isSelected
-                  ? "rgba(0, 0, 0, 0.2)"
-                  : "rgba(0, 0, 0, 0.1)",
-              }}
               onClick={() => {
                 setFirst(false);
                 setSelected(it);
               }}
             >
-              <div className="p-3">
-                <div className="flex flex-row items-center gap-x-2">
-                  <div
-                    className={cx(
-                      "text-lg leading-none text-black",
-                      isSelected ? "opacity-90" : "opacity-60"
-                    )}
-                  >
-                    <Icon block icon={it.icon} />
-                  </div>
-                  <div
-                    className={cx(
-                      "font-semibold leading-none relative",
-                      isSelected ? "text-black" : "text-gray-700"
-                    )}
-                    style={{ paddingTop: "-1px" }}
-                  >
-                    {it.name}
-                  </div>
+              <div
+                className={cx(
+                  "flex flex-row items-center gap-x-2",
+                  isSelected ? "opacity-90" : "opacity-40"
+                )}
+              >
+                <div className={cx("text-lg leading-none text-black")}>
+                  <Icon block icon={it.icon} />
                 </div>
                 <div
                   className={cx(
-                    "text-sm text-gray-700 overflow-hidden transition-all duration-100 ease-linear",
-                    isSelected ? "mt-1.5 max-h-16" : "mt-0 max-h-0"
+                    "font-semibold leading-none relative",
+                    isSelected ? "text-black" : "text-gray-700"
                   )}
+                  style={{ paddingTop: "-1px" }}
                 >
-                  {it.description}
+                  {it.name}
                 </div>
+              </div>
+              <div
+                className={cx(
+                  "text-gray-700 overflow-hidden transition-all duration-100 ease-linear leading-snug",
+                  isSelected ? "mb-2 md:mb-0 mt-1.5 max-h-20" : "mt-0 max-h-0"
+                )}
+              >
+                {it.description}
               </div>
               {isSelected && selected.videoId && !isbig && (
                 <YoutubeEmbed videoId={selected.videoId} first={first} />
@@ -245,7 +241,7 @@ function VideoPlayer() {
 function Home() {
   return (
     <div className="mt-8 mb-14 md:my-20 w-full">
-      <div className="max-w-full md:max-w-xl md:mx-auto text-lg md:text-lg leading-relaxed mb-16 md:mb-24 p-4">
+      <div className="max-w-full md:max-w-xl md:mx-auto text-lg md:text-lg leading-relaxed p-4">
         <div className="text-center font-bold text-3xl md:text-4xl mb-8 text-black leading-snug">
           A&nbsp;High&nbsp;Performance IDE&nbsp;for&nbsp;Go
         </div>
@@ -277,7 +273,7 @@ function Home() {
         </div>
       </div>
 
-      <div className="px-4">
+      <div className="px-4 mt-16 md:mt-28">
         <div className="mb-8 font-bold text-black text-3xl text-center">
           A full-featured IDE, as fast as Sublime Text.
         </div>
@@ -453,28 +449,43 @@ function Download() {
   ];
 
   return (
-    <div className="max-w-lg px-4 mx-auto my-16 md:my-28 text-center">
-      <Title>Download CodePerfect {CURRENT_BUILD}</Title>
-      <p className="flex flex-wrap flex-row gap-2 justify-center">
-        {links.map((it) => (
-          <A
-            href="#"
-            // href={`https://codeperfect95.s3.us-east-2.amazonaws.com/app/${it.platform}-${CURRENT_BUILD}.zip`}
-            className="button download-button text-sm px-3 py-2"
-            onClick={(e) => {
-              disableButtonProps.onClick(e);
-              posthog.capture("download", { platform: it.platform });
-            }}
-          >
-            <Icon className="mr-1" icon={it.icon} />
-            {it.label}
-          </A>
-        ))}
-      </p>
-      <p>
-        CodePerfect is free to evaluate for 7 days. After that you'll need a{" "}
-        <A href="/buy">license</A> for continued use.
-      </p>
+    <div className="my-12 md:my-28">
+      <Title className="px-4 md:text-center text-2xl">
+        Download CodePerfect {CURRENT_BUILD}
+      </Title>
+      <div
+        style={{ maxWidth: "calc(min(100%, 1280px))" }}
+        className="mx-auto items-center gap-8 -mt-4 hidden md:flex"
+      >
+        <img
+          alt="screenshot"
+          className="w-full h-auto block"
+          src={asset("/download.png")}
+        />
+      </div>
+      <div className="max-w-3xl mx-auto px-4 text-center">
+        <p className="flex flex-wrap flex-col md:flex-row gap-2 justify-center">
+          {links.map((it) => (
+            <A
+              href="#"
+              // href={`https://codeperfect95.s3.us-east-2.amazonaws.com/app/${it.platform}-${CURRENT_BUILD}.zip`}
+              className="button download-button"
+              onClick={(e) => {
+                disableButtonProps.onClick(e);
+                posthog.capture("download", { platform: it.platform });
+              }}
+            >
+              <Icon className="mr-1" icon={it.icon} />
+              {it.label}
+            </A>
+          ))}
+        </p>
+        <p>
+          CodePerfect is free to evaluate for 7 days. After that you'll need a{" "}
+          <A href="/buy">license</A> for continued use.
+        </p>
+      </div>
+      <div className="flex-grow"></div>
     </div>
   );
 }
@@ -552,14 +563,14 @@ function Header() {
       <div className="flex justify-between items-center w-full md:max-w-screen-lg md:mx-auto text-lg">
         <A
           href="/"
-          className="font-bold text-lg text-black no-underline whitespace-nowrap flex items-center"
+          className="font-bold text-lg text-black no-underline whitespace-nowrap flex flex-shrink-0 items-center"
         >
           <img
             alt="logo"
-            className="w-auto h-12 inline-block mr-3"
+            className="w-auto h-10 inline-block mr-3"
             src={asset("/logo.png")}
           />
-          <span className="hidden md:inline-block">CodePerfect 95</span>
+          <span className="hidden md:inline-block logo">CodePerfect 95</span>
         </A>
         <div className="flex items-baseline space-x-6">
           <NavA href={LINKS.docs}>Docs</NavA>

@@ -1,3 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=Oxygen:wght@300;400;700&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -14,9 +16,14 @@
 
   body {
     margin: 0;
+    font-family: "Oxygen", -apple-system, BlinkMacSystemFont, "Segoe UI",
+      "Roboto", "Helvetica Neue", "Ubuntu", sans-serif;
+    line-height: 1.7;
+  }
+
+  .logo {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
       "Helvetica Neue", "Ubuntu", sans-serif;
-    line-height: 1.7;
   }
 
   code {
