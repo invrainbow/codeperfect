@@ -6,17 +6,14 @@
 
 #include "window.hpp"
 #include "utils.hpp"
-#include <GLFW/glfw3.h>
-
-#define GLFW_EXPOSE_NATIVE_X11
-#include <GLFW/glfw3native.h>
+#include "glcrap.hpp"
 
 bool window_init_everything() {
     return glfwInit();
 }
 
 void* Window::get_native_handle() {
-    return (void*)glfwGetX11Window(window);
+    return get_linux_native_window_handle(window);
 }
 
 void Window::set_clipboard_string(ccstr string) {
@@ -299,8 +296,6 @@ void Window::swap_buffers() {
 void Window::swap_interval(int interval) {
     glfwSwapInterval(interval);
 }
-
-void Window::cleanup() {}
 
 void Window::set_title(ccstr title) {
     glfwSetWindowTitle(window, title);

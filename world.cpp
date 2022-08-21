@@ -3,8 +3,7 @@
 #include "fzy_match.h"
 #include "set.hpp"
 #include "defer.hpp"
-
-#include <GL/glew.h>
+#include "glcrap.hpp"
 
 World world;
 
@@ -1818,6 +1817,7 @@ void do_find_implementations() {
 
         defer { cancel_find_implementations(); };
 
+        auto &ind = world.indexer;
         auto results = ind.find_implementations(wnd.declres, wnd.search_everywhere);
         if (!results) return;
 

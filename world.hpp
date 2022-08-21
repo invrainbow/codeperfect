@@ -1,8 +1,7 @@
 #pragma once
 
 #include <math.h>
-#include <GL/glew.h>
-
+#include "glcrap.hpp"
 #include "common.hpp"
 #include "editor.hpp"
 #include "ui.hpp"

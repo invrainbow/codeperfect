@@ -7,7 +7,7 @@
 #if OS_MAC
 #   include <Carbon/Carbon.h>
 #elif OS_LINUX
-#   include <GLFW/glfw3.h>
+#   include "glcrap.hpp"
 #endif
 
 enum Window_Event_Type {
@@ -349,3 +349,7 @@ void poll_window_events();
 // Panics if it can't do it.
 void make_bootstrap_context();
 void destroy_bootstrap_context();
+
+#if OS_LINUX
+void* get_linux_native_window_handle(GLFWwindow *window);
+#endif

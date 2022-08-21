@@ -10,20 +10,9 @@ git submodule update --init --recursive
 if [[ "$os" = "linux" ]]; then
     sudo apt update
     sudo apt upgrade
-    sudo apt install autoconf bison clang cloc cmake coreutils curl gcc git glib make neovim packages perl pkg-config python3 python-is-python3 silversearcher-ag tmux tree wget xclip
-    sudo apt install libtool
-    sudo apt install libx11-dev libxft-dev
-    sudo apt install autoconf
-    sudo apt install libtool
-    sudo apt install bison
-    sudo apt install gperf
-    sudo apt install libgles2-mesa-dev
-    sudo apt install libxext-dev
-    sudo apt install libxrandr-dev
-    sudo apt install libxi-dev
-    sudo apt install libxcursor-dev
-    sudo apt install libxdamage-dev
-    sudo apt install libxinerama-dev
+    sudo apt install autoconf bison clang cloc cmake coreutils curl gcc git make neovim perl pkg-config python3 python-is-python3 silversearcher-ag tmux tree wget xclip
+    sudo apt install libx11-dev libxft-dev autoconf libtool bison gperf libgles2-mesa-dev libxext-dev libxrandr-dev libxi-dev libxcursor-dev libxdamage-dev libxinerama-dev
+    sudo apt install libgl1-mesa-dev libglu1-mesa-dev
 fi
 
 # vcpkg
@@ -39,10 +28,11 @@ elif [[ "$os" = "windows" ]]; then
 elif [[ "$os" = "linux" ]]; then
     export VCPKG_DEFAULT_TRIPLET=x64-linux
 fi
-./vcpkg/vcpkg install pcre harfbuzz fontconfig glfw
+./vcpkg/vcpkg install pcre harfbuzz fontconfig glfw3
 ./vcpkg/vcpkg integrate install
 
 # nvim
+rm -rf nvim-archive
 if [[ "$os" = "mac" ]]; then
     wget https://github.com/neovim/neovim/releases/download/v0.5.1/nvim-macos.tar.gz
     tar xvzf nvim-macos.tar.gz
@@ -61,7 +51,7 @@ elif [[ "$os" = "windows" ]]; then
 fi
 
 # wipe out the share folder but keep clipboard handler
-mv nvim-archive/share/nvim/runtime-autoload/provider/clipboard.vim clipboard.vim
+mv nvim-archive/share/nvim/runtime/autoload/provider/clipboard.vim clipboard.vim
 rm -rf nvim-archive/share
 mkdir -p nvim-archive/share/nvim/runtime/autoload/provider
 mv clipboard.vim nvim-archive/share/nvim/runtime/autoload/provider
