@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# on windows, ensure visual studio is finished installing first
+
 set -e
 
 os=$(sh/detect_os)
@@ -16,7 +18,15 @@ if [[ "$os" = "linux" ]]; then
 fi
 
 # vcpkg
-./vcpkg/bootstrap-vcpkg.sh -disableMetrics
+
+if [[ $os = windows ]]; then
+    cmd /c "vcpkg\bootstrap-vcpkg.bat -disableMetrics"
+else
+    ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
+fi
+
+vcpkg_binary=vcpkg/vcpkg
+
 if [[ "$os" = "mac" ]]; then
     if [[ "$(sh/detect_m1)" = "1" ]]; then
         export VCPKG_DEFAULT_TRIPLET=arm64-osx
@@ -24,12 +34,14 @@ if [[ "$os" = "mac" ]]; then
         export VCPKG_DEFAULT_TRIPLET=x64-osx
     fi
 elif [[ "$os" = "windows" ]]; then
+    vcpkg_binary=vcpkg/vcpkg.exe
     export VCPKG_DEFAULT_TRIPLET=x64-windows-static
 elif [[ "$os" = "linux" ]]; then
     export VCPKG_DEFAULT_TRIPLET=x64-linux
 fi
-./vcpkg/vcpkg install pcre harfbuzz fontconfig glfw3
-./vcpkg/vcpkg integrate install
+
+$vcpkg_binary install pcre harfbuzz fontconfig glfw3
+$vcpkg_binary integrate install
 
 # nvim
 rm -rf nvim-archive
