@@ -1044,16 +1044,22 @@ int main(int argc, char **argv) {
         world.window = alloc_object(Window);
     }
 
-#ifndef WINDOW_GLFW
+    auto init_glew = []() -> bool {
+        glewExperimental = GL_TRUE;
+        auto err = glewInit();
+        if (err != GLEW_OK) {
+            error("unable to init GLEW: %s", glewGetErrorString(err));
+            return false;
+        }
+        return true;
+    };
+
+#if !OS_LINUX
     {
         // init glew using a dummy context
         make_bootstrap_context();
         defer { destroy_bootstrap_context(); };
-
-        glewExperimental = GL_TRUE;
-        auto err = glewInit();
-        if (err != GLEW_OK)
-            return error("unable to init GLEW: %s", glewGetErrorString(err)), EXIT_FAILURE;
+        if (!init_glew()) return EXIT_FAILURE;
     }
 #endif
 
@@ -1062,11 +1068,8 @@ int main(int argc, char **argv) {
 
     world.window->make_context_current();
 
-#ifdef WINDOW_GLFW
-    glewExperimental = GL_TRUE;
-    auto err = glewInit();
-    if (err != GLEW_OK)
-        return error("unable to init GLEW: %s", glewGetErrorString(err)), EXIT_FAILURE;
+#if OS_LINUX
+    if (!init_glew()) return EXIT_FAILURE;
 #endif
 
 #ifdef DEBUG_BUILD

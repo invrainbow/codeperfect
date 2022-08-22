@@ -19,6 +19,24 @@
 #include "utils.hpp"
 #include "defer.hpp"
 
+bool Fs_Watcher::next_event(Fs_Event*) {
+    return false;
+}
+
+bool Fs_Watcher::platform_init() {
+    return true;
+}
+
+void init_platform_crap() {}
+
+bool list_all_fonts(List<char const*>*) {
+    return true; // TODO
+}
+
+Font_Data* load_font_data_by_name(char const*) {
+    return NULL; // TODO
+}
+
 u32 get_normalized_path(ccstr path, char *buf, u32 len) {
     auto ret = std::filesystem::absolute(path).c_str();
     auto retlen = strlen(ret);
@@ -43,8 +61,10 @@ void sleep_milliseconds(u32 milliseconds) {
 }
 
 // TODO: fix the gtk crap, now we're forced to use 4.0
-#if 0
 bool let_user_select_file(Select_File_Opts* opts) {
+    return false;
+
+    /*
     if (!gtk_init_check(NULL, NULL)) return false;
 
     auto get_action = [&]() -> GtkFileChooserAction {
@@ -67,8 +87,15 @@ bool let_user_select_file(Select_File_Opts* opts) {
 
     cp_strcpy(opts->buf, opts->bufsize, filename);
     return true;
+    */
 }
-#endif
+
+Ask_User_Result ask_user_yes_no(ccstr text, ccstr title, ccstr yeslabel, ccstr nolabel, bool cancel) {
+    return ASKUSER_ERROR;
+}
+
+void tell_user(ccstr text, ccstr title) {
+}
 
 ccstr get_executable_path() {
     auto ret = alloc_array(char, PATH_MAX);
