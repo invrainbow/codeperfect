@@ -1,2 +1,2 @@
-#include "window_mac.mm"
+#include "win_cocoa.mm"
 #include "os_mac.mm"
