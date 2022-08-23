@@ -1,9 +1,8 @@
 #pragma once
 
 #include <GL/glew.h>
-
-#include "ostype.hpp"
-#if OS_LINUX
+#include "wintype.hpp"
+#if WIN_GLFW
 #include <GLFW/glfw3.h>
 #endif
 

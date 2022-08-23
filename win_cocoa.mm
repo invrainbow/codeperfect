@@ -1,6 +1,6 @@
-#include "ostype.hpp"
+#include "wintype.hpp"
 
-#ifdef OS_MAC
+#if WIN_COCOA
 
 #include "world.hpp"
 
@@ -9,7 +9,7 @@
 #include <IOKit/hid/IOHIDLib.h>
 #import <Cocoa/Cocoa.h>
 
-#include "window.hpp"
+#include "win.hpp"
 
 static int scan_to_key_table[256];
 static int key_to_scan_table[__CP_KEY_COUNT];
@@ -1086,4 +1086,4 @@ void destroy_bootstrap_context() {
     }
 }
 
-#endif // OS_MAC
+#endif // WIN_COCOA

@@ -1,10 +1,10 @@
-#include "ostype.hpp"
+#include "wintype.hpp"
 
-#if OS_LINUX
+#if WIN_GLFW
 
 #include "world.hpp"
 
-#include "window.hpp"
+#include "win.hpp"
 #include "utils.hpp"
 #include "glcrap.hpp"
 
@@ -328,4 +328,4 @@ void Window::set_cursor(Cursor *_cursor) {
     glfwSetCursor(window, cursor->cursor);
 }
 
-#endif // OS_LINUX
+#endif // WIN_GLFW

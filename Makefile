@@ -39,7 +39,7 @@ else ifeq ($(OSTYPE), windows)
 	LDFLAGS += -L./vcpkg/installed/x64-windows-static/lib
 	LDFLAGS += -lfreetype -lharfbuzz -lpcre -lfontconfig
 	LDFLAGS += -lbrotlicommon-static -lbz2 -lbrotlidec-static
-	LDFLAGS += -lzlib -llibexpatMD -llibpng16
+	LDFLAGS += -lzlib -llibexpatMD -llibpng16 -lglfw3
 	LDFLAGS += -lopengl32 -ladvapi32 -lshlwapi -lole32
 	LDFLAGS += -lpathcch -lshell32 -lwinmm -lws2_32 -lgdi32 -lshcore
 	LDFLAGS += --for-linker "/IGNORE:4217"

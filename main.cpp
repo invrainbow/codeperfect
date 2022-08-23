@@ -1053,7 +1053,7 @@ int main(int argc, char **argv) {
         return true;
     };
 
-#if !OS_LINUX
+#if !WIN_GLFW
     {
         // init glew using a dummy context
         make_bootstrap_context();
@@ -1067,7 +1067,7 @@ int main(int argc, char **argv) {
 
     world.window->make_context_current();
 
-#if OS_LINUX
+#if WIN_GLFW
     if (!init_glew()) return EXIT_FAILURE;
 #endif
 

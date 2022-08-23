@@ -15,7 +15,7 @@
 #include "settings.hpp"
 #include "search.hpp"
 #include "fzy_match.h"
-#include "window.hpp"
+#include "win.hpp"
 
 typedef fn<bool(Editor* e)> find_editor_func;
 

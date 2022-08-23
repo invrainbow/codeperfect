@@ -1,9 +1,9 @@
-#include "ostype.hpp"
+#include "wintype.hpp"
 
-#if OS_WINBLOWS
+#if WIN_WIN32
 
 #include "world.hpp"
-#include "window.hpp"
+#include "win.hpp"
 #include "defer.hpp"
 #include "win32.hpp"
 #include "enums.hpp"
@@ -989,4 +989,4 @@ void poll_window_events() {
     }
 }
 
-#endif // OS_WINBLOWS
+#endif // WIN_WIN32
