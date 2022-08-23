@@ -51,7 +51,7 @@ const LINKS = {
   discord: "https://discord.gg/WkFY44BY7a",
 };
 
-const CDN_PATH = "https://d2mje1xp79ofdv.cloudfront.net";
+const CDN_PATH = "https://codeperfect-static.s3.us-east-2.amazonaws.com";
 
 function asset(path) {
   const dev = process.env.NODE_ENV === "development";
