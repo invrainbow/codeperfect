@@ -124,6 +124,12 @@ bool is_git_folder(ccstr path) {
     return pathlist->parts->find([&](auto it) { return streqi(*it, ".git"); });
 }
 
+void recalc_display_size() {
+    // calculate display_size
+    world.display_size.x = (int)(world.frame_size.x / world.display_scale.x);
+    world.display_size.y = (int)(world.frame_size.y / world.display_scale.y);
+}
+
 void handle_window_event(Window_Event *it) {
     switch (it->type) {
     case WINEV_FOCUS:
@@ -138,21 +144,8 @@ void handle_window_event(Window_Event *it) {
         auto w = it->window_size.w;
         auto h = it->window_size.h;
 
-        Timer t; t.init("windowsize callback", &world.trace_next_frame); defer { t.log("done"); };
-
         world.window_size.x = w;
         world.window_size.y = h;
-
-        mat4f projection;
-        new_ortho_matrix(projection, 0, w, h, 0);
-        glUseProgram(world.ui.im_program);
-        glUniformMatrix4fv(glGetUniformLocation(world.ui.im_program, "projection"), 1, GL_FALSE, (float*)projection);
-
-        // clear frame
-        auto bgcolor = global_colors.background;
-        glClearColor(bgcolor.r, bgcolor.g, bgcolor.b, 1.0);
-        glClear(GL_COLOR_BUFFER_BIT);
-        world.window->swap_buffers();
         break;
     }
 
@@ -162,13 +155,23 @@ void handle_window_event(Window_Event *it) {
 
         Timer t; t.init("framebuffersize callback", &world.trace_next_frame); defer { t.log("done"); };
 
-        world.display_size.x = w;
-        world.display_size.y = h;
+        world.frame_size.x = w;
+        world.frame_size.y = h;
+        recalc_display_size();
 
-        mat4f projection;
-        new_ortho_matrix(projection, 0, w, h, 0);
-        glUseProgram(world.ui.program);
-        glUniformMatrix4fv(glGetUniformLocation(world.ui.program, "projection"), 1, GL_FALSE, (float*)projection);
+        {
+            mat4f projection;
+            new_ortho_matrix(projection, 0, w, h, 0);
+            glUseProgram(world.ui.program);
+            glUniformMatrix4fv(glGetUniformLocation(world.ui.program, "projection"), 1, GL_FALSE, (float*)projection);
+        }
+
+        {
+            mat4f projection;
+            new_ortho_matrix(projection, 0, world.display_size.x, world.display_size.y, 0);
+            glUseProgram(world.ui.im_program);
+            glUniformMatrix4fv(glGetUniformLocation(world.ui.im_program, "projection"), 1, GL_FALSE, (float*)projection);
+        }
 
         // clear frame
         auto bgcolor = global_colors.background;
@@ -184,10 +187,8 @@ void handle_window_event(Window_Event *it) {
 
         Timer t; t.init("cursorpos callback", &world.trace_next_frame); defer { t.log("done"); };
 
-        // world.ui.mouse_delta.x = x - world.ui.mouse_pos.x;
-        // world.ui.mouse_delta.y = y - world.ui.mouse_pos.y;
-        world.ui.mouse_pos.x = x;
-        world.ui.mouse_pos.y = y;
+        world.ui.mouse_pos.x = (int)((float)x / world.window_size.x * world.display_size.x);
+        world.ui.mouse_pos.y = (int)((float)y / world.window_size.y * world.display_size.y);
 
         if (world.resizing_pane != -1) {
             auto i = world.resizing_pane;
@@ -203,10 +204,8 @@ void handle_window_event(Window_Event *it) {
             auto desired_width = relu_sub(x, leftoff);
             auto delta = desired_width - pane1.width;
 
-            if (delta < (100 - pane1.width))
-                delta = 100 - pane1.width;
-            if (delta > pane2.width - 100)
-                delta = pane2.width - 100;
+            if (delta < (100 - pane1.width)) delta = 100 - pane1.width;
+            if (delta > pane2.width - 100) delta = pane2.width - 100;
 
             pane1.width += delta;
             pane2.width -= delta;
@@ -254,6 +253,7 @@ void handle_window_event(Window_Event *it) {
         Timer t; t.init("windowcontentscale callback", &world.trace_next_frame); defer { t.log("done"); };
 
         world.display_scale = { xscale, yscale };
+        recalc_display_size();
         break;
     }
 
@@ -996,7 +996,6 @@ void handle_window_event(Window_Event *it) {
     }
 }
 
-
 #if OS_WINBLOWS
 // i can't believe this shit is necessary:
 // https://github.com/golang/go/issues/42190#issuecomment-1114628523
@@ -1285,10 +1284,11 @@ int main(int argc, char **argv) {
     if (world.ui.im_program == -1)
         return error("could not compile imgui shaders"), EXIT_FAILURE;
 
-    // grab window_size, display_size, and display_scale
+    // grab window_size, frame_size, and display_scale
     world.window->get_size((int*)&world.window_size.x, (int*)&world.window_size.y);
-    world.window->get_framebuffer_size((int*)&world.display_size.x, (int*)&world.display_size.y);
+    world.window->get_framebuffer_size((int*)&world.frame_size.x, (int*)&world.frame_size.y);
     world.window->get_content_scale(&world.display_scale.x, &world.display_scale.y);
+    recalc_display_size();
 
     // now that we have world.display_size, we can call wksp.activate_pane_by_index
     activate_pane_by_index(0);
@@ -1332,11 +1332,6 @@ int main(int argc, char **argv) {
 
         world.ui.im_font_mono = io.Fonts->AddFontFromMemoryTTF(vera_mono_ttf, vera_mono_ttf_len, CODE_FONT_SIZE);
         cp_assert(world.ui.im_font_mono);
-
-        /*
-        if (!world.font.init((u8*)vera_mono_ttf, CODE_FONT_SIZE, TEXTURE_FONT))
-            cp_panic("unable to load code font");
-        */
 
         io.Fonts->Build();
 
@@ -1399,7 +1394,7 @@ int main(int argc, char **argv) {
 
         loc = glGetUniformLocation(world.ui.program, "projection");
         mat4f ortho_projection;
-        new_ortho_matrix(ortho_projection, 0, world.display_size.x, world.display_size.y, 0);
+        new_ortho_matrix(ortho_projection, 0, world.frame_size.x, world.frame_size.y, 0);
         glUniformMatrix4fv(loc, 1, GL_FALSE, (float*)ortho_projection);
 
         for (u32 i = 0; i < __TEXTURE_COUNT__; i++) {
@@ -1430,7 +1425,7 @@ int main(int argc, char **argv) {
 
         loc = glGetUniformLocation(world.ui.im_program, "projection");
         mat4f ortho_projection;
-        new_ortho_matrix(ortho_projection, 0, world.window_size.x, world.window_size.y, 0);
+        new_ortho_matrix(ortho_projection, 0, world.display_size.x, world.display_size.y, 0);
         glUniformMatrix4fv(loc, 1, GL_FALSE, (float*)ortho_projection);
 
         loc = glGetUniformLocation(world.ui.im_program, "tex");
@@ -1624,7 +1619,7 @@ int main(int argc, char **argv) {
 
         {
             // Send info to UI and ImGui.
-            io.DisplaySize = ImVec2((float)world.window_size.x, (float)world.window_size.y);
+            io.DisplaySize = ImVec2((float)world.display_size.x, (float)world.display_size.y);
             io.DisplayFramebufferScale = ImVec2(world.display_scale.x, world.display_scale.y);
 
             auto now = current_time_nano();
@@ -1633,9 +1628,8 @@ int main(int argc, char **argv) {
 
             io.MousePos = ImVec2(-FLT_MAX, -FLT_MAX);
             if (world.window->is_focused()) {
-                double x, y;
-                world.window->get_cursor_pos(&x, &y);
-                io.MousePos = ImVec2((float)x, (float)y);
+                auto &pos = world.ui.mouse_pos;
+                io.MousePos = ImVec2((float)pos.x, (float)pos.y);
             }
 
             for (i32 i = 0; i < IM_ARRAYSIZE(io.MouseDown); i++) {

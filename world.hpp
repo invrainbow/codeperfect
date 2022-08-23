@@ -304,7 +304,9 @@ struct World {
 
     vec2 window_size;
     vec2 display_size;
+    vec2 frame_size;
     vec2f display_scale;
+
     bool use_nvim_this_time;
 
     int xdpi;
