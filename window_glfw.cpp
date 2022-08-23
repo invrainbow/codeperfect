@@ -13,7 +13,7 @@ bool window_init_everything() {
 }
 
 void* Window::get_native_handle() {
-    return get_linux_native_window_handle(window);
+    return get_native_window_handle(window);
 }
 
 void Window::set_clipboard_string(ccstr string) {
@@ -296,6 +296,8 @@ void Window::swap_buffers() {
 void Window::swap_interval(int interval) {
     glfwSwapInterval(interval);
 }
+
+// void Window::cleanup() {}
 
 void Window::set_title(ccstr title) {
     glfwSetWindowTitle(window, title);

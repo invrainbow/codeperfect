@@ -351,5 +351,5 @@ void make_bootstrap_context();
 void destroy_bootstrap_context();
 
 #if OS_LINUX
-void* get_linux_native_window_handle(GLFWwindow *window);
+void* get_native_window_handle(GLFWwindow *window);
 #endif
