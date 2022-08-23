@@ -1458,22 +1458,21 @@ bool Editor::trigger_escape(cur2 go_here_after) {
 void Pane::set_current_editor(u32 idx) {
     current_editor = idx;
 
+    // focus current editor in file explorer
+
     auto ed = get_current_editor();
     if (!ed) return;
+    if (ed->is_untitled) return;
 
-    auto focus_current_editor_in_file_explorer = [&]() {
-        auto edpath = get_path_relative_to(ed->filepath, world.current_path);
-        auto node = find_ft_node(edpath);
-        if (!node) return;
+    auto edpath = get_path_relative_to(ed->filepath, world.current_path);
+    auto node = find_ft_node(edpath);
+    if (!node) return;
 
-        world.file_explorer.scroll_to = node;
-        world.file_explorer.selection = node;
+    world.file_explorer.scroll_to = node;
+    world.file_explorer.selection = node;
 
-        for (auto it = node->parent; it && it->parent; it = it->parent)
-            it->open = true;
-    };
-
-    focus_current_editor_in_file_explorer();
+    for (auto it = node->parent; it && it->parent; it = it->parent)
+        it->open = true;
 }
 
 Editor *Pane::focus_editor_by_index(u32 idx, cur2 pos, bool pos_in_byte_format) {

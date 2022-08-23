@@ -6,8 +6,8 @@
 #include <stb/stb_image.h>
 #include <stb/stb_rect_pack.h>
 #include <harfbuzz/hb.h>
-#include <GL/glew.h>
 
+#include "glcrap.hpp"
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "common.hpp"

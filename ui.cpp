@@ -479,7 +479,7 @@ void UI::begin_centered_window(ccstr title, Wnd *wnd, int flags, int width, bool
     }
     flags |= ImGuiWindowFlags_NoDocking;
 
-    ImGui::SetNextWindowPos(ImVec2(world.window_size.x/2, 150), ImGuiCond_Always, ImVec2(0.5f, 0));
+    ImGui::SetNextWindowPos(ImVec2(world.display_size.x/2, 150), ImGuiCond_Always, ImVec2(0.5f, 0));
     begin_window(title, wnd, flags, noclose);
 }
 
@@ -794,7 +794,7 @@ void UI::start_clip(boxf b) {
     bs.y *= world.display_scale.y;
     bs.w *= world.display_scale.x;
     bs.h *= world.display_scale.y;
-    glScissor(bs.x, world.display_size.y - (bs.y + bs.h), bs.w, bs.h);
+    glScissor(bs.x, world.frame_size.y - (bs.y + bs.h), bs.w, bs.h);
 
     clipping = true;
     current_clip = b;
@@ -1207,10 +1207,10 @@ float UI::get_text_width(ccstr s) {
 
 boxf UI::get_status_area() {
     boxf b;
-    b.w = world.window_size.x;
+    b.w = world.display_size.x;
     b.h = base_font->height + settings.status_padding_y * 2;
     b.x = 0;
-    b.y = world.window_size.y - b.h;
+    b.y = world.display_size.y - b.h;
     return b;
 }
 
@@ -5422,7 +5422,7 @@ void UI::draw_everything() {
 
     {
         // prepare opengl for drawing shit
-        glViewport(0, 0, world.display_size.x, world.display_size.y);
+        glViewport(0, 0, world.frame_size.x, world.frame_size.y);
         glUseProgram(world.ui.program);
         glBindVertexArray(world.ui.vao); // bind my vertex array & buffers
         glBindBuffer(GL_ARRAY_BUFFER, world.ui.vbo);
@@ -6494,7 +6494,7 @@ void UI::draw_everything() {
     if (world.show_frameskips) {
         auto now = current_time_milli();
         auto pos = new_cur2(
-            (int)(world.window_size.x),
+            (int)(world.display_size.x),
             (int)(get_status_area().y - base_font->height)
         );
 
@@ -6537,7 +6537,7 @@ void UI::end_frame() {
         ImDrawData* draw_data = ImGui::GetDrawData();
         draw_data->ScaleClipRects(ImVec2(world.display_scale.x, world.display_scale.y));
 
-        glViewport(0, 0, world.display_size.x, world.display_size.y);
+        glViewport(0, 0, world.frame_size.x, world.frame_size.y);
         glUseProgram(world.ui.im_program);
         glBindVertexArray(world.ui.im_vao);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -6556,7 +6556,7 @@ void UI::end_frame() {
 
             for (i32 j = 0; j < cmd_list->CmdBuffer.Size; j++) {
                 const ImDrawCmd* cmd = &cmd_list->CmdBuffer[j];
-                glScissor(cmd->ClipRect.x, (world.display_size.y - cmd->ClipRect.w), (cmd->ClipRect.z - cmd->ClipRect.x), (cmd->ClipRect.w - cmd->ClipRect.y));
+                glScissor(cmd->ClipRect.x, (world.frame_size.y - cmd->ClipRect.w), (cmd->ClipRect.z - cmd->ClipRect.x), (cmd->ClipRect.w - cmd->ClipRect.y));
                 glDrawElements(GL_TRIANGLES, cmd->ElemCount, elem_size, offset);
                 offset += cmd->ElemCount;
             }
@@ -6564,7 +6564,7 @@ void UI::end_frame() {
     }
 
     // now go back and draw things that go on top, like autocomplete and param hints
-    glViewport(0, 0, world.display_size.x, world.display_size.y);
+    glViewport(0, 0, world.frame_size.x, world.frame_size.y);
     glUseProgram(world.ui.program);
     glBindVertexArray(world.ui.vao); // bind my vertex array & buffers
     glBindBuffer(GL_ARRAY_BUFFER, world.ui.vbo);
@@ -6627,19 +6627,19 @@ void UI::end_frame() {
                     + (settings.autocomplete_menu_padding * 2)
                 );
 
-                // menu.x = fmin(actual_cursor_position.x - strlen(ac.ac.prefix) * base_font->width, world.window_size.x - menu.w);
-                // menu.y = fmin(actual_cursor_position.y - base_font->offset_y + base_font->height, world.window_size.y - menu.h);
+                // menu.x = fmin(actual_cursor_position.x - strlen(ac.ac.prefix) * base_font->width, world.display_size.x - menu.w);
+                // menu.y = fmin(actual_cursor_position.y - base_font->offset_y + base_font->height, world.display_size.y - menu.h);
 
                 {
                     auto y1 = actual_cursor_position.y - base_font->offset_y - settings.autocomplete_menu_margin_y;
                     auto y2 = actual_cursor_position.y - base_font->offset_y + (base_font->height * settings.line_height) + settings.autocomplete_menu_margin_y;
 
-                    if (y2 + menu.h < world.window_size.y) {
+                    if (y2 + menu.h < world.display_size.y) {
                         menu.y = y2;
                     } else if (y1 >= menu.h) {
                         menu.y = y1 - menu.h;
                     } else {
-                        auto space_under = world.window_size.y - y2;
+                        auto space_under = world.display_size.y - y2;
                         auto space_above = y1;
 
                         if (space_under > space_above) {
@@ -6651,12 +6651,12 @@ void UI::end_frame() {
                         }
                     }
 
-                    if (menu.w > world.window_size.x - 4) // small margin
-                        menu.w = world.window_size.x - 4;
+                    if (menu.w > world.display_size.x - 4) // small margin
+                        menu.w = world.display_size.x - 4;
 
                     auto x1 = actual_cursor_position.x - strlen(ac.ac.prefix) * base_font->width;
-                    if (x1 + menu.w + 4 > world.window_size.x) // margin of 4
-                        x1 = world.window_size.x - menu.w - 4;
+                    if (x1 + menu.w + 4 > world.display_size.x) // margin of 4
+                        x1 = world.display_size.x - menu.w - 4;
                     menu.x = x1;
                 }
 
@@ -6992,8 +6992,8 @@ void UI::end_frame() {
             boxf bg;
             bg.w = base_font->width * get_text_width(help_text) + settings.parameter_hint_padding_x * 2;
             bg.h = base_font->height + settings.parameter_hint_padding_y * 2;
-            bg.x = fmin(actual_parameter_hint_start.x, world.window_size.x - bg.w);
-            bg.y = fmin(actual_parameter_hint_start.y - base_font->offset_y - bg.h - settings.parameter_hint_margin_y, world.window_size.y - bg.h);
+            bg.x = fmin(actual_parameter_hint_start.x, world.display_size.x - bg.w);
+            bg.y = fmin(actual_parameter_hint_start.y - base_font->offset_y - bg.h - settings.parameter_hint_margin_y, world.display_size.y - bg.h);
 
             draw_bordered_rect_outer(bg, rgba(color_darken(global_colors.background, 0.1), 1.0), rgba(global_colors.white, 0.8), 1, 4);
 

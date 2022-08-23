@@ -1,8 +1,7 @@
 #pragma once
 
 #include <math.h>
-#include <GL/glew.h>
-
+#include "glcrap.hpp"
 #include "common.hpp"
 #include "editor.hpp"
 #include "ui.hpp"
@@ -16,7 +15,7 @@
 #include "settings.hpp"
 #include "search.hpp"
 #include "fzy_match.h"
-#include "window.hpp"
+#include "win.hpp"
 
 typedef fn<bool(Editor* e)> find_editor_func;
 
@@ -305,7 +304,9 @@ struct World {
 
     vec2 window_size;
     vec2 display_size;
+    vec2 frame_size;
     vec2f display_scale;
+
     bool use_nvim_this_time;
 
     int xdpi;

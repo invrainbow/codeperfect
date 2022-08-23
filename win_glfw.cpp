@@ -1,22 +1,19 @@
-#include "ostype.hpp"
+#include "wintype.hpp"
 
-#if OS_LINUX
+#if WIN_GLFW
 
 #include "world.hpp"
 
-#include "window.hpp"
+#include "win.hpp"
 #include "utils.hpp"
-#include <GLFW/glfw3.h>
-
-#define GLFW_EXPOSE_NATIVE_X11
-#include <GLFW/glfw3native.h>
+#include "glcrap.hpp"
 
 bool window_init_everything() {
     return glfwInit();
 }
 
 void* Window::get_native_handle() {
-    return (void*)glfwGetX11Window(window);
+    return get_native_window_handle(window);
 }
 
 void Window::set_clipboard_string(ccstr string) {
@@ -300,7 +297,7 @@ void Window::swap_interval(int interval) {
     glfwSwapInterval(interval);
 }
 
-void Window::cleanup() {}
+// void Window::cleanup() {}
 
 void Window::set_title(ccstr title) {
     glfwSetWindowTitle(window, title);
@@ -331,4 +328,4 @@ void Window::set_cursor(Cursor *_cursor) {
     glfwSetCursor(window, cursor->cursor);
 }
 
-#endif // OS_LINUX
+#endif // WIN_GLFW

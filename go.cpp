@@ -1469,6 +1469,7 @@ void Go_Indexer::background_thread() {
             pkg->checked_for_outdated_hash = true;
 
             if (!last_package_processed || !streq(import_path, last_package_processed)) {
+                SCOPED_MEM(&mem);
                 last_package_processed = cp_strdup(import_path);
                 packages_processed_since_last_write++;
             }

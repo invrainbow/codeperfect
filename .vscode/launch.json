@@ -11,6 +11,9 @@
             ],
             "cwd": "${workspaceFolder}/build/bin",
             "expressions": "native",
+            "postRunCommands": [
+                "process handle p true -s false SIGURG"
+            ],
         },
         {
             "type": "lldb",
