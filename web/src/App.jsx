@@ -455,7 +455,7 @@ function Download() {
       </Title>
       <div
         style={{ maxWidth: "calc(min(100%, 1280px))" }}
-        className="mx-auto items-center gap-8 -mt-4 hidden md:flex"
+        className="mx-auto items-center gap-8 my-8 hidden md:flex rounded-xl overflow-hidden border border-gray-300"
       >
         <img
           alt="screenshot"
