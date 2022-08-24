@@ -453,17 +453,19 @@ function Download() {
       <Title className="px-4 md:text-center text-2xl">
         Download CodePerfect {CURRENT_BUILD}
       </Title>
-      <div
-        style={{ maxWidth: "calc(min(100%, 1280px))" }}
-        className="mx-auto items-center gap-8 my-8 hidden md:flex rounded-xl overflow-hidden border border-gray-300"
-      >
-        <img
-          alt="screenshot"
-          className="w-full h-auto block"
-          src={asset("/download.png")}
-        />
+      <div className="px-4">
+        <div
+          style={{ maxWidth: "calc(min(100%, 1280px))" }}
+          className="mx-auto items-center gap-8 my-8 hidden md:flex rounded-xl overflow-hidden border border-gray-300"
+        >
+          <img
+            alt="screenshot"
+            className="w-full h-auto block"
+            src={asset("/download.png")}
+          />
+        </div>
       </div>
-      <div className="max-w-3xl mx-auto px-4 text-center">
+      <div className="max-w-3xl mx-auto px-4 md:text-center">
         <p className="flex flex-wrap flex-col md:flex-row gap-2 justify-center">
           {links.map((it) => (
             <A
