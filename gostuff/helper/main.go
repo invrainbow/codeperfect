@@ -351,6 +351,11 @@ func GHGetVersion() int {
 	return versions.CurrentVersion
 }
 
+//export GHGetVersionString
+func GHGetVersionString() *C.char {
+	return C.CString(versions.CurrentVersionAsString())
+}
+
 func GetBinaryPath(bin string) (string, error) {
 	out, err := makeFindBinaryPathCommand(bin).Output()
 	if err != nil {
@@ -569,6 +574,11 @@ func GHReadCpfolderFile() *C.char {
 		return C.CString(line)
 	}
 	return nil
+}
+
+//export GHForceServerLocalhost
+func GHForceServerLocalhost() {
+	ForceServerLocalhost = true
 }
 
 func main() {}

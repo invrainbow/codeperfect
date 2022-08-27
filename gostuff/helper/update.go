@@ -153,10 +153,30 @@ func pushUnknownError(desc string, err error) {
 	PushMessage(msg, "Automatic Update", false)
 }
 
+func getOS() {
+	archvals := map[string]string{
+		"amd64": "x64",
+		"arm64": "arm",
+	}
+
+	osvals := map[string]string{
+		"darwin":  "mac",
+		"windows": "windows",
+		"linux":   "linux",
+	}
+
+	if osval, ok := osvals[runtime.GOOS]; ok {
+		if archval, ok := archvals[runtime.GOARCH]; ok {
+			return fmt.Sprintf("%s-%s", osval, archval)
+		}
+	}
+
+	panic("invalid os/arch")
+}
+
 func Update() {
-	osSlug := runtime.GOOS
 	req := &models.UpdateRequest{
-		OS:             osSlug,
+		OS:             getOS(),
 		CurrentVersion: versions.CurrentVersion,
 	}
 

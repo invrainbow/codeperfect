@@ -297,7 +297,7 @@ struct World {
 
     List<Frameskip> frameskips;
 
-    int gh_version;
+    char gh_version[16];
     int frame_index;
 
     Window* window;

@@ -331,7 +331,12 @@ bool copy_file(ccstr src, ccstr dest) {
 void World::init() {
     ptr0(this);
 
-    gh_version = GHGetVersion();
+    {
+        auto ver = GHGetVersionString();
+        if (!ver) cp_panic("couldn't get version");
+        defer { GHFree(ver); };
+        cp_strcpy_fixed(gh_version, ver);
+    }
 
 #define init_mem(x) x.init(#x)
     init_mem(world_mem);
@@ -418,6 +423,16 @@ void World::init() {
 
     fzy_init();
 
+    bool read_cpfolder_file = false;
+
+    for (int i = 1; i < gargc; i++) {
+        if (streq(gargv[i], "--debug")) {
+            read_cpfolder_file = true;
+        } else if (streq(gargv[i], "--force-server-localhost")) {
+            GHForceServerLocalhost();
+        }
+    }
+
     // init workspace
     {
         resizing_pane = -1;
@@ -426,15 +441,11 @@ void World::init() {
 #ifdef TESTING_BUILD
         cp_strcpy_fixed(current_path, "/Users/bh/ide/gostuff");
 #else
-        if (gargc >= 2) {
-            if (streq(gargv[1], "__debug__")) {
-                auto path = GHReadCpfolderFile();
-                if (!path) cp_panic("unable to read cpfolder file");
-                defer { GHFree(path); };
-                cp_strcpy_fixed(current_path, path);
-            } else {
-                cp_strcpy_fixed(current_path, gargv[1]);
-            }
+        if (read_cpfolder_file) {
+            auto path = GHReadCpfolderFile();
+            if (!path) cp_panic("unable to read cpfolder file");
+            defer { GHFree(path); };
+            cp_strcpy_fixed(current_path, path);
         } else {
             Select_File_Opts opts; ptr0(&opts);
             opts.buf = current_path;

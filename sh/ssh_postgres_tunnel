@@ -1,1 +1,1 @@
-ssh -f -L 25060:db-postgresql-nyc3-49763-do-user-9757259-0.b.db.ondigitalocean.com:25060 api.codeperfect95.com sleep 999999
+ssh -f -L 25060:db-postgresql-nyc3-49763-do-user-9757259-0.b.db.ondigitalocean.com:25060 codeperfect95.com sleep 999999

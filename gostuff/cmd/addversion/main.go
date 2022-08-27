@@ -64,12 +64,4 @@ func main() {
 	version.AppHash = appHash
 	version.UpdateHash = updateHash
 	db.DB.Save(&version)
-
-	var row models.CurrentVersion
-	if res := db.DB.First(&row, "os = ?", osSlug); res.Error != nil {
-		row.OS = osSlug
-		db.DB.Create(&row)
-	}
-	row.Version = versionNo
-	db.DB.Save(&row)
 }

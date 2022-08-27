@@ -2513,7 +2513,13 @@ void UI::draw_everything() {
 
 
         if (ImGui::BeginMenu("Help")) {
-            menu_command(CMD_ABOUT);
+            ImGui::MenuItem(cp_sprintf("CodePerfect %s", world.gh_version), NULL, false, false);
+            if (world.auth.state == AUTH_REGISTERED)
+                if (world.auth_status == GH_AUTH_OK)
+                    ImGui::MenuItem(cp_sprintf("Registered to %s", world.authed_email), NULL, false, false);
+
+            ImGui::Separator();
+
             menu_command(CMD_DOCUMENTATION);
 
             ImGui::Separator();
@@ -3178,22 +3184,6 @@ void UI::draw_everything() {
 
         ImGui::End();
         fstlog("wnd_rename_identifier");
-    }
-
-    if (world.wnd_about.show) {
-        auto &wnd = world.wnd_about;
-
-        begin_window("About", &wnd, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking);
-
-        ImGui::Text("CodePerfect 95");
-
-        ImGui::Text("Build %d", world.gh_version);
-
-        if (world.auth.state == AUTH_REGISTERED)
-            if (world.auth_status == GH_AUTH_OK)
-                ImGui::Text("Registered to %s", world.authed_email);
-
-        ImGui::End();
     }
 
     if (world.wnd_index_log.show) {

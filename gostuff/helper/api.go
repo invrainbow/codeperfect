@@ -10,8 +10,10 @@ import (
 	"github.com/invrainbow/codeperfect/gostuff/models"
 )
 
+var ForceServerLocalhost = false
+
 func GetServerBase() string {
-	if IsTestMode() || IsDebugMode() {
+	if ForceServerLocalhost || IsTestMode() || IsDebugMode() {
 		return "http://localhost:8080"
 	}
 	return "https://api.codeperfect95.com"

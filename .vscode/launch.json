@@ -7,7 +7,7 @@
             "name": "debug",
             "program": "${workspaceFolder}/build/bin/ide",
             "args": [
-                "__debug__",
+                "--debug",
             ],
             "cwd": "${workspaceFolder}/build/bin",
             "expressions": "native",
@@ -24,14 +24,18 @@
                 "parser_profile"
             ],
             "cwd": "${workspaceFolder}/build/bin",
-            "expressions": "native"
+            "expressions": "native",
+            "postRunCommands": [
+                "process handle p true -s false SIGURG"
+            ],
         },
         {
             "type": "lldb",
             "request": "custom",
             "name": "coredump",
             "initCommands": [
-                "target create -c ${input:coreFileName}"
+                "target create -c ${input:coreFileName}",
+                "process handle p true -s false SIGURG"
             ],
             "expressions": "native"
         },
@@ -40,7 +44,10 @@
             "request": "attach",
             "name": "attach",
             "program": "build/bin/ide",
-            "expressions": "native"
+            "expressions": "native",
+            "postRunCommands": [
+                "process handle p true -s false SIGURG"
+            ],
         },
     ],
     "inputs": [

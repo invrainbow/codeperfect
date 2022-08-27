@@ -78,6 +78,12 @@ elif [[ $os = "linux" ]]; then
     popd
 fi
 
+if [[ $PROD = 1 ]]; then
+    postgres_url=$POSTGRES_URL_PROD
+else
+    postgres_url=$POSTGRES_URL
+fi
+
 # push to s3 & database
 if [[ -z "$SKIP_UPLOAD" ]]; then
     platform="$os-$slug"
@@ -87,6 +93,6 @@ if [[ -z "$SKIP_UPLOAD" ]]; then
     aws s3 cp update.zip "s3://codeperfect95/update/$filename"
 
     pushd ../gostuff
-    POSTGRES_URL=$POSTGRES_URL_PROD go run ./cmd/addversion $platform ../scratch/app.zip ../scratch/update.zip
+    POSTGRES_URL=$postgres_url go run ./cmd/addversion $platform ../scratch/app.zip ../scratch/update.zip
     popd
 fi

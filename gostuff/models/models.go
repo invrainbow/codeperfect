@@ -33,7 +33,6 @@ type Version struct {
 
 type CurrentVersion struct {
 	gorm.Model
-	OS      string
 	Version int
 }
 

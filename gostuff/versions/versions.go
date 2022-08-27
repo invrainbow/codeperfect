@@ -4,11 +4,9 @@ import (
 	"fmt"
 )
 
-const CurrentVersion = 220800
+const CurrentVersion = 220801
 
-func CurrentVersionAsString() string {
-	v := CurrentVersion
-
+func VersionToString(v int) string {
 	major := (v / 100) / 100
 	minor := (v / 100) % 100
 	patch := v % 100
@@ -18,4 +16,8 @@ func CurrentVersionAsString() string {
 		ret = fmt.Sprintf("%s.%d", ret, patch)
 	}
 	return ret
+}
+
+func CurrentVersionAsString() string {
+	return VersionToString(CurrentVersion)
 }
