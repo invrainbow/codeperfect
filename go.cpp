@@ -3827,7 +3827,7 @@ Goresult *Go_Indexer::find_enclosing_toplevel(ccstr filepath, cur2 pos) {
 
 Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 pos) {
     Timer t;
-    t.init("jump_to_definition");
+    t.init("jump_to_definition", false);
 
     reload_all_editors();
 

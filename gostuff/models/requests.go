@@ -4,11 +4,6 @@ type ErrorResponse struct {
 	Error string `json:"error"`
 }
 
-type UpdateRequest struct {
-	OS             string `json:"os"`
-	CurrentVersion int    `json:"current_version"`
-}
-
 type UpdateResponse struct {
 	NeedAutoupdate bool   `json:"need_autoupdate"`
 	Version        int    `json:"version"`

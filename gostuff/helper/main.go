@@ -94,6 +94,10 @@ func GHStartBuild(cmdstr *C.char) bool {
 	go func(b *GoBuild) {
 		out, err := b.cmd.CombinedOutput()
 
+		log.Print("build output & error")
+		log.Println(string(out))
+		log.Println(err)
+
 		shouldReadErrors := func() bool {
 			if err != nil {
 				if _, ok := err.(*exec.ExitError); ok {
@@ -302,11 +306,6 @@ func GHAuth(rawEmail *C.char, rawLicenseKey *C.char) {
 	}
 
 	go run()
-}
-
-//export GHUpdate
-func GHUpdate() {
-	go Update()
 }
 
 type GitignoreChecker struct {

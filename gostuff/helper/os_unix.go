@@ -3,8 +3,8 @@
 package main
 
 import (
-	"os/exec"
 	"fmt"
+	"os/exec"
 )
 
 func makeShellCommand(s string) *exec.Cmd {

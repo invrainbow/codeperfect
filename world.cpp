@@ -3079,12 +3079,14 @@ void send_nvim_keys(ccstr s) {
 }
 
 void clear_key_states() {
-    auto &io = ImGui::GetIO();
-    ptr0(&io.KeysDown);
-    io.KeyCtrl = false;
-    io.KeyShift = false;
-    io.KeyAlt = false;
-    io.KeySuper = false;
+    if (GImGui) {
+        auto &io = ImGui::GetIO();
+        ptr0(&io.KeysDown);
+        io.KeyCtrl = false;
+        io.KeyShift = false;
+        io.KeyAlt = false;
+        io.KeySuper = false;
+    }
 
     mem0(world.ui.mouse_down, sizeof(world.ui.mouse_down));
     mem0(world.ui.mouse_just_pressed, sizeof(world.ui.mouse_just_pressed));

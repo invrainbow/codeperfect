@@ -1110,8 +1110,6 @@ int main(int argc, char **argv) {
     }
     }
 
-    GHUpdate();
-
     auto set_window_title = [&](ccstr note) {
         ccstr s = NULL;
         if (!note)

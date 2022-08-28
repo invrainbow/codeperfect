@@ -15,7 +15,6 @@ import (
 	"github.com/invrainbow/codeperfect/gostuff/cmd/lib"
 	"github.com/invrainbow/codeperfect/gostuff/db"
 	"github.com/invrainbow/codeperfect/gostuff/models"
-	"github.com/invrainbow/codeperfect/gostuff/versions"
 	"github.com/stripe/stripe-go/v72"
 	"github.com/stripe/stripe-go/v72/billingportal/session"
 	"github.com/stripe/stripe-go/v72/customer"
@@ -94,52 +93,6 @@ func SendSlackMessageForUser(user *models.User, format string, args ...interface
 		return
 	}
 	SendSlackMessage(format, args...)
-}
-
-func PostUpdate(c *gin.Context) {
-	var req models.UpdateRequest
-	if c.ShouldBindJSON(&req) != nil {
-		sendError(c, "Invalid data.")
-		return
-	}
-
-	if !isOSValid(req.OS) {
-		sendError(c, "Invalid OS.")
-		return
-	}
-
-	var currentVersion models.CurrentVersion
-	if res := db.DB.First(&currentVersion); res.Error != nil {
-		sendServerError(c, "unable to grab current version: %v", res.Error)
-		return
-	}
-
-	if req.CurrentVersion > currentVersion.Version {
-		sendError(c, "Invalid version.")
-		return
-	}
-
-	resp := &models.UpdateResponse{
-		Version:        currentVersion.Version,
-		NeedAutoupdate: req.CurrentVersion < currentVersion.Version,
-	}
-
-	if resp.NeedAutoupdate {
-		var ver models.Version
-		res := db.DB.First(&ver, "version = ? AND os = ?", currentVersion.Version, req.OS)
-		if res.Error != nil {
-			sendServerError(c, "find version: %v", res.Error)
-			return
-		}
-
-		url := "https://codeperfect95.s3.us-east-2.amazonaws.com/update/%s-%s.zip"
-		// spew.Dump(ver)
-		// url := "https://d2hzcm0ooi1duz.cloudfront.net/update/%v_v%d.zip"
-		resp.DownloadURL = fmt.Sprintf(url, req.OS, versions.VersionToString(currentVersion.Version))
-		resp.DownloadHash = ver.UpdateHash
-	}
-
-	c.JSON(200, resp)
 }
 
 func PostAuth(c *gin.Context) {
