@@ -39,23 +39,42 @@ posthog.init("phc_kIt8VSMD8I2ScNhnjWDU2NmrK9kLIL3cHWpkgCX3Blw", {
 const SUPPORT_EMAIL = "support@codeperfect95.com";
 const CURRENT_BUILD = "22.08";
 
+const isDev = process.env.NODE_ENV === "development";
+
 const LINKS = {
   docs: "https://docs.codeperfect95.com",
   gettingStarted: "https://docs.codeperfect95.com/getting-started",
   changelog: "https://docs.codeperfect95.com/changelog",
+
   buyPersonalMonthly: "https://buy.stripe.com/aEU5kx2aTaso4TK008",
   buyPersonalYearly: "https://buy.stripe.com/fZefZb2aTdEAbi8aEN",
-  buyProfessionalMonthly: "https://buy.stripe.com/6oE28ldTB5843PG9AK",
-  buyProfessionalYearly: "https://buy.stripe.com/28o8wJ3eXfMI4TK5kv",
+  buyProMonthly: "https://buy.stripe.com/6oE28ldTB5843PG9AK",
+  buyProYearly: "https://buy.stripe.com/28o8wJ3eXfMI4TK5kv",
+
   twitter: "https://twitter.com/codeperfect95",
   discord: "https://discord.gg/WkFY44BY7a",
 };
 
+const DEV_LINKS = {
+  buyPersonalMonthly: "https://buy.stripe.com/test_4gw8xrb10g8D7QsbIP",
+  buyPersonalYearly: "https://buy.stripe.com/test_8wMfZT3yy2hN1s45ks",
+  buyProMonthly: "https://buy.stripe.com/test_6oEdRL1qq5tZ5Ik6oy",
+  buyProYearly: "https://buy.stripe.com/test_3cs6pj9WW3lR3Ac7sB",
+};
+
+function getLink(key) {
+  if (isDev) {
+    if (DEV_LINKS[key]) {
+      return DEV_LINKS[key];
+    }
+  }
+  return LINKS[key];
+}
+
 const CDN_PATH = "https://codeperfect-static.s3.us-east-2.amazonaws.com";
 
 function asset(path) {
-  const dev = process.env.NODE_ENV === "development";
-  return dev ? `/public${path}` : `${CDN_PATH}${path}`;
+  return isDev ? `/public${path}` : `${CDN_PATH}${path}`;
 }
 
 function isExternalLink(href) {
@@ -72,11 +91,12 @@ function A({ link, children, href, ...props }) {
   return <Link {...props}>{children}</Link>;
 }
 
-function wrap(elem, extraClassName, extraProps) {
+function wrap(elem, extraClassName, defaultProps, overrideProps) {
   return ({ children, className, ...props }) => {
     const newProps = {
-      ...(extraProps || {}),
+      ...(defaultProps || {}),
       ...props,
+      ...(overrideProps || {}),
       className: cx(className, extraClassName),
     };
     return React.createElement(elem, newProps, children);
@@ -264,7 +284,7 @@ function Home() {
             Download
           </A>
           <A
-            href={LINKS.docs}
+            href={getLink("docs")}
             className="button download-button justify-center flex md:inline-flex text-center"
           >
             View Docs
@@ -310,10 +330,6 @@ function PortalDone() {
   );
 }
 
-const BuyLicenseButton = wrap(
-  A,
-  "button download-button p-3 block text-center bg-white"
-);
 const BuyLicenseBox = wrap(
   "div",
   "w-auto overflow-hidden border rounded-md shadow-sm"
@@ -327,6 +343,13 @@ const disableButtonProps = {
     );
   },
 };
+
+const BuyLicenseButton = wrap(
+  A,
+  "button download-button p-3 block text-center bg-white",
+  null
+  // { ...disableButtonProps, href: "#" }
+);
 
 function BuyLicense() {
   return (
@@ -351,10 +374,7 @@ function BuyLicense() {
                   </div>
                   <div className="leading-none text-xs ml-1">/month</div>
                 </div>
-                <BuyLicenseButton
-                  {...disableButtonProps}
-                  href={LINKS.buyPersonalMonthly}
-                >
+                <BuyLicenseButton href={getLink("buyPersonalMonthly")}>
                   Buy Monthly
                 </BuyLicenseButton>
               </div>
@@ -365,10 +385,7 @@ function BuyLicense() {
                   </div>
                   <div className="leading-none text-xs ml-1">/year</div>
                 </div>
-                <BuyLicenseButton
-                  {...disableButtonProps}
-                  href={LINKS.buyPersonalYearly}
-                >
+                <BuyLicenseButton href={getLink("buyPersonalYearly")}>
                   Buy Yearly
                 </BuyLicenseButton>
               </div>
@@ -393,7 +410,7 @@ function BuyLicense() {
                   </div>
                   <div className="leading-none text-xs ml-1">/month</div>
                 </div>
-                <BuyLicenseButton href={LINKS.buyProfessionalMonthly}>
+                <BuyLicenseButton href={getLink("buyProMonthly")}>
                   Buy Monthly
                 </BuyLicenseButton>
               </div>
@@ -404,7 +421,7 @@ function BuyLicense() {
                   </div>
                   <div className="leading-none text-xs ml-1">/year</div>
                 </div>
-                <BuyLicenseButton href={LINKS.buyProfessionalYearly}>
+                <BuyLicenseButton href={getLink("buyProYearly")}>
                   Buy Yearly
                 </BuyLicenseButton>
               </div>
@@ -575,9 +592,9 @@ function Header() {
           <span className="hidden md:inline-block logo">CodePerfect 95</span>
         </A>
         <div className="flex items-baseline space-x-6">
-          <NavA href={LINKS.docs}>Docs</NavA>
-          <NavA href={LINKS.changelog}>Changelog</NavA>
-          <NavA href={LINKS.discord}>Discord</NavA>
+          <NavA href={getLink("docs")}>Docs</NavA>
+          <NavA href={getLink("changelog")}>Changelog</NavA>
+          <NavA href={getLink("discord")}>Discord</NavA>
           <NavA href="/buy">Buy</NavA>
           <A href="/download" className="button main-button">
             <Icon className="mr-2" icon={HiOutlineDownload} />
@@ -603,8 +620,8 @@ function Footer() {
             <FootLink href="/download">Download</FootLink>
           </FootSection>
           <FootSection>
-            <FootLink href={LINKS.docs}>Docs</FootLink>
-            <FootLink href={LINKS.changelog}>Changelog</FootLink>
+            <FootLink href={getLink("docs")}>Docs</FootLink>
+            <FootLink href={getLink("changelog")}>Changelog</FootLink>
           </FootSection>
           <FootSection>
             <FootLink href={`mailto:${SUPPORT_EMAIL}`}>Support</FootLink>
@@ -612,10 +629,10 @@ function Footer() {
           </FootSection>
         </div>
         <div className="flex gap-x-4 text-2xl">
-          <A className="text-gray-400" href={LINKS.discord}>
+          <A className="text-gray-400" href={getLink("discord")}>
             <Icon block icon={FaDiscord} />
           </A>
-          <A className="text-gray-400" href={LINKS.twitter}>
+          <A className="text-gray-400" href={getLink("twitter")}>
             <Icon block icon={FaTwitter} />
           </A>
         </div>

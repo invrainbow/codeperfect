@@ -1089,9 +1089,9 @@ int main(int argc, char **argv) {
     case AUTH_TRIAL:
         if (get_unix_time() - world.auth.trial_start > 1000 * 60 * 60 * 24 * 7) {
             world.auth_error = true;
-            auto res = ask_user_yes_no(NULL, "Your trial has ended. A license is required for continued use.\n\nWould you like to purchase one now?", "Purchase License", "No");
+            auto res = ask_user_yes_no(NULL, "Your trial has ended. A license is required for continued use.\n\nDo you want to buy one now?", "Purchase License", "No");
             if (res == ASKUSER_YES) {
-                open_webbrowser("https://codeperfect95.com/buy-license");
+                open_webbrowser("https://codeperfect95.com/buy");
             }
         }
         break;

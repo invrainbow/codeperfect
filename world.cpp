@@ -1892,7 +1892,7 @@ void handle_command(Command cmd, bool from_menu) {
     }
 
     case CMD_BUY_LICENSE:
-        open_webbrowser("https://codeperfect95.com/buy-license");
+        open_webbrowser("https://codeperfect95.com/buy");
         break;
 
     case CMD_ENTER_LICENSE: {

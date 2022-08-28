@@ -24,8 +24,17 @@ import (
 
 var IsDevelMode = os.Getenv("DEVELOPMENT_MODE") == "1"
 var StripeAPIKey = os.Getenv("STRIPE_API_KEY")
+var StripeWebhookSecret = os.Getenv("STRIPE_WEBHOOK_SECRET")
 
 func init() {
+	if StripeAPIKey == "" {
+		panic("invalid stripe api key")
+	}
+
+	if StripeWebhookSecret == "" {
+		panic("invalid stripe webhook secret")
+	}
+
 	stripe.Key = StripeAPIKey
 }
 
@@ -178,7 +187,7 @@ func PostStripeWebhook(c *gin.Context) {
 		return
 	}
 
-	event, err := webhook.ConstructEvent(body, c.Request.Header.Get("Stripe-Signature"), os.Getenv("STRIPE_WEBHOOK_SECRET"))
+	event, err := webhook.ConstructEvent(body, c.Request.Header.Get("Stripe-Signature"), StripeWebhookSecret)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{})
 		log.Printf("webhook.ConstructEvent: %v", err)
@@ -188,9 +197,12 @@ func PostStripeWebhook(c *gin.Context) {
 	switch event.Type {
 	case "customer.subscription.created":
 	case "customer.subscription.updated":
+	case "customer.subscription.deleted":
 	default:
 		return
 	}
+
+	log.Printf("[EVENT] %s", event.Type)
 
 	var sub stripe.Subscription
 	if err := json.Unmarshal(event.Data.Raw, &sub); err != nil {
