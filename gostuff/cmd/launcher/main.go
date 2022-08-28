@@ -195,7 +195,7 @@ func doUpdate() {
 		return
 	}
 
-	dest := path.Join(path.Dir(path.Dir(exepath)), "newbintmp")
+	dest := path.Join(path.Dir(exepath), "newbintmp")
 
 	log.Printf("deleting %s", dest)
 	os.RemoveAll(dest)
@@ -206,7 +206,7 @@ func doUpdate() {
 		return
 	}
 
-	realdest := path.Join(path.Dir(path.Dir(exepath)), "newbin")
+	realdest := path.Join(path.Dir(exepath), "newbin")
 	log.Printf("moving unzipped folder to %s", realdest)
 
 	if err := replaceFolder(dest, realdest); err != nil {
