@@ -277,7 +277,7 @@ void handle_window_event(Window_Event *it) {
         // handle global keys
         // ==================
 
-        auto keymods = ui.imgui_get_keymods();
+        auto keymods = it->key.mods;
         // print("key = %d, mods = %d", key, keymods);
         switch (keymods) {
         case CP_MOD_PRIMARY:
@@ -1436,6 +1436,9 @@ int main(int argc, char **argv) {
 
     auto last_frame_time = current_time_nano();
 
+    if (world.testing.on)
+        world.testing.ready = true;
+
     for (; !world.window->should_close; world.frame_index++) {
         bool was_trace_on = world.trace_next_frame;
         defer { if (was_trace_on) world.trace_next_frame = false; };
@@ -1525,6 +1528,10 @@ int main(int argc, char **argv) {
 
             For (*messages) {
                 switch (it.type) {
+                case MTM_EXIT:
+                    exit(it.exit_code);
+                    break;
+
                 case MTM_PANIC:
                     cp_panic(it.panic_message);
                     break;
@@ -1668,6 +1675,16 @@ int main(int argc, char **argv) {
             handle_window_event(&it);
             fstlog("handle window event %s", window_event_type_str(it.type));
         }
+
+        do {
+            auto &t = world.testing;
+            if (!t.on) break;
+            if (!t.inject_event) break;
+
+            t.inject_event = false;
+            handle_window_event(&t.event);
+            t.processed_event = true;
+        } while (0);
 
         fstlog("poll window events");
         world.window->events.len = 0;

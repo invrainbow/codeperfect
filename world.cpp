@@ -4,6 +4,7 @@
 #include "set.hpp"
 #include "defer.hpp"
 #include "glcrap.hpp"
+#include "tests.hpp"
 
 World world;
 
@@ -426,10 +427,16 @@ void World::init() {
     bool read_cpfolder_file = false;
 
     for (int i = 1; i < gargc; i++) {
-        if (streq(gargv[i], "--debug")) {
+        auto it = gargv[i];
+        if (streq(it, "--debug")) {
             read_cpfolder_file = true;
-        } else if (streq(gargv[i], "--force-server-localhost")) {
+        } else if (streq(it, "--force-server-localhost")) {
             GHForceServerLocalhost();
+        } else if (streq(it, "--test")) {
+            testing.on = true;
+            testing.ready = false;
+            testing.h = create_thread([](void*) { run_tests(); });
+            if (!testing.h) cp_panic("unable to create test thread");
         }
     }
 
@@ -1982,14 +1989,18 @@ void handle_command(Command cmd, bool from_menu) {
         world.error_list.show ^= 1;
         break;
 
-    case CMD_GO_TO_FILE:
-        if (world.wnd_goto_file.show) {
-            if (from_menu)
-                world.wnd_goto_file.show = false;
+    case CMD_GO_TO_FILE: {
+        auto &wnd = world.wnd_goto_file;
+        if (wnd.show) {
+            if (from_menu || world.wnd_goto_file.focused)
+                wnd.show = false;
+            else
+                wnd.cmd_focus = true;
         } else {
             init_goto_file();
         }
         break;
+    }
 
     case CMD_GO_TO_SYMBOL:
         if (world.wnd_goto_symbol.show) {

@@ -18,6 +18,21 @@
         {
             "type": "lldb",
             "request": "launch",
+            "name": "jblow tests",
+            "program": "${workspaceFolder}/build/bin/ide",
+            "args": [
+                "--debug",
+                "--test"
+            ],
+            "cwd": "${workspaceFolder}/build/bin",
+            "expressions": "native",
+            "postRunCommands": [
+                "process handle p true -s false SIGURG"
+            ],
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
             "name": "test",
             "program": "build/bin/test",
             "args": [

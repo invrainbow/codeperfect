@@ -53,6 +53,7 @@ enum Main_Thread_Message_Type {
     MTM_TELL_USER,
     /**/
     MTM_RELOAD_EDITOR,
+    MTM_EXIT,
 };
 
 struct Main_Thread_Message {
@@ -71,6 +72,7 @@ struct Main_Thread_Message {
             ccstr tell_user_title;
         };
         ccstr debugger_stdout_line;
+        int exit_code;
     };
 };
 
@@ -289,6 +291,15 @@ struct World {
     Fridge<Chunk4> chunk4_fridge;
     Fridge<Chunk5> chunk5_fridge;
     Fridge<Chunk6> chunk6_fridge;
+
+    struct {
+        bool on;
+        bool ready;
+        bool inject_event;
+        bool processed_event;
+        Window_Event event;
+        Thread_Handle h;
+    } testing;
 
     struct Frameskip {
         u64 timestamp;

@@ -4276,11 +4276,13 @@ void UI::draw_everything() {
 
         begin_centered_window("Go To File", &wnd, 0, 500);
 
+        /*
         // close the window when we unfocus
         if (!wnd.focused) {
             wnd.show = false;
             ImGui::SetWindowFocus(NULL);
         }
+        */
 
         focus_keyboard(&wnd);
 
