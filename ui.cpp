@@ -2782,7 +2782,7 @@ void UI::draw_everything() {
 
             imgui_small_newline();
 
-            if (wnd.results && wnd.results->len > 0) {
+            if (!isempty(wnd.results)) {
                 imgui_push_mono_font();
 
                 int index = 0;
@@ -2885,7 +2885,7 @@ void UI::draw_everything() {
 
             imgui_small_newline();
 
-            if (wnd.results && wnd.results->len > 0) {
+            if (!isempty(wnd.results)) {
                 imgui_push_mono_font();
 
                 int index = 0;
@@ -2941,23 +2941,26 @@ void UI::draw_everything() {
         begin_window("Find References", &wnd, ImGuiWindowFlags_AlwaysAutoResize, !wnd.done);
 
         if (wnd.done) {
-            imgui_push_mono_font();
+            if (!isempty(wnd.results)) {
+                imgui_push_mono_font();
+                For (*wnd.results) {
+                    auto filepath = get_path_relative_to(it.filepath, world.current_path);
+                    For (*it.references) {
+                        auto pos = it.is_sel ? it.x_start : it.start;
 
-            For (*wnd.results) {
-                auto filepath = get_path_relative_to(it.filepath, world.current_path);
-                For (*it.references) {
-                    auto pos = it.is_sel ? it.x_start : it.start;
+                        auto rendered_pos = pos;
+                        rendered_pos.x++;
+                        rendered_pos.y++;
 
-                    auto rendered_pos = pos;
-                    rendered_pos.x++;
-                    rendered_pos.y++;
-
-                    if (ImGui::Selectable(cp_sprintf("%s:%s", filepath, rendered_pos.str())))
-                        goto_file_and_pos(filepath, pos, true);
+                        if (ImGui::Selectable(cp_sprintf("%s:%s", filepath, rendered_pos.str())))
+                            goto_file_and_pos(filepath, pos, true);
+                    }
                 }
+                imgui_pop_font();
+            } else {
+                ImGui::Text("No results found.");
             }
 
-            imgui_pop_font();
         } else {
             ImGui::Text("Searching...");
             ImGui::SameLine();
