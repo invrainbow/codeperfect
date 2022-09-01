@@ -267,7 +267,8 @@ function Home() {
         </div>
         <p>
           Written in C++, CodePerfect indexes large codebases quickly and
-          responds to every key in 16ms. Supports Windows, Mac and Linux.
+          responds to every key in 16ms. Supports Windows and Mac (Linux coming
+          soon).
         </p>
         <p>
           Built for Vim users who want more power, Jetbrains users who want more
@@ -462,6 +463,7 @@ function Download() {
       platform: "linux-x64",
       icon: FaLinux,
       label: "Linux",
+      disabledText: "Coming soon!",
     },
   ];
 
@@ -472,12 +474,12 @@ function Download() {
       </Title>
       <div className="px-4">
         <div
-          style={{ maxWidth: "calc(min(100%, 1280px))" }}
+          style={{ maxWidth: "calc(min(100%, 1024px))" }}
           className="mx-auto items-center gap-8 my-8 hidden md:flex rounded-xl overflow-hidden border border-gray-300"
         >
           <img
             alt="screenshot"
-            className="w-full h-auto block"
+            className="max-w-full max-h-full w-auto h-auto"
             src={asset("/download.png")}
           />
         </div>
@@ -486,9 +488,16 @@ function Download() {
         <p className="flex flex-wrap flex-col md:flex-row gap-2 justify-center">
           {links.map((it) => (
             <A
-              href="#"
-              // href={`https://codeperfect95.s3.us-east-2.amazonaws.com/app/${it.platform}-${CURRENT_BUILD}.zip`}
-              className="button download-button"
+              href={
+                it.disabledText
+                  ? "#"
+                  : `https://codeperfect95.s3.us-east-2.amazonaws.com/app/${it.platform}-${CURRENT_BUILD}.zip`
+              }
+              className={cx(
+                "button download-button",
+                it.disabledText && "disabled"
+              )}
+              title={it.disabledText}
               onClick={(e) => {
                 disableButtonProps.onClick(e);
                 posthog.capture("download", { platform: it.platform });

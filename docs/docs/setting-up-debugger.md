@@ -11,14 +11,15 @@ You'll need [the Delve debugger](https://github.com/go-delve/delve). You can
 install the latest version from their
 [docs](https://github.com/go-delve/delve/blob/master/Documentation/installation/README.md).
 
-Make sure Delve is installed correctly by opening a terminal and running `which dlv` on Mac/Linux and `where dlv` on Windows.
-If it's not able to find it, you may need to update your `PATH`.
+Make sure Delve is installed correctly by opening a terminal and running
+`which dlv` on Mac and `where dlv` on Windows. If it's not able to find it, you
+may need to update your `PATH`.
 
 :::info
 
 CodePerfect locates the `dlv` binary the same way. You don't need to configure
-anything else — just run `which dlv` in bash on Mac/Linux and `where dlv` in
-cmd on Windows, and make sure it prints out the right path.
+anything else — just run `which dlv` in bash on Mac and `where dlv` in cmd on
+Windows, and make sure it prints out the right path.
 
 :::
 

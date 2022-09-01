@@ -4,18 +4,14 @@ title: "Getting Started"
 
 ## Install CodePerfect
 
-CodePerfect is supported on Windows (x64), Mac (x64, ARM), and Linux (x64).
-Download the appropriate binary
-from the [download page](https://codeperfect95.com/download) and unzip it.
+CodePerfect is supported on Windows (x64) and Mac (x64, ARM). Download the
+appropriate binary from the [download page](https://codeperfect95.com/download)
+and unzip it.
 
 ### Windows
 
-Move the unzipped folder anywhere. A popular choice is your Program Files folder.
-Run `CodePerfect.exe`.
-
-### Linux
-
-Move the unzipped folder anywhere. Run `./codeperfect`.
+Move the unzipped folder anywhere. A popular choice is your Program Files
+folder. Run `CodePerfect.exe`.
 
 ### macOS
 
@@ -23,27 +19,32 @@ Drag `CodePerfect.app` into your Applications folder and run it.
 
 :::info
 
-The first time you run it, you may get an "Unidentified developer"
-warning. If this happens, right click CodePerfect.app and click Open, then press
-Open again. You'll only need to do this once.
+The first time you run it, you may get an "Unidentified developer" warning. If
+this happens, right click CodePerfect.app and click Open, then press Open again.
+You'll only need to do this once.
 
 :::
 
+### Linux
+
+Linux support is coming soon!
+
 ## Install Go
 
-CodePerfect requires Go version 1.13+. Preferred ways of installing Go are
-using the [official installer](https://go.dev/dl/) for your platform, or using
-a package manager of your choice, such as
+CodePerfect requires Go version 1.13+. Preferred ways of installing Go are using
+the [official installer](https://go.dev/dl/) for your platform, or using a
+package manager of your choice, such as
 [brew](https://formulae.brew.sh/formula/go),
 [choco](https://community.chocolatey.org/packages/golang), or
 [apt](https://github.com/golang/go/wiki/Ubuntu#using-ppa).
 
 ## Find your Go installation
 
-CodePerfect essentially uses whatever `go` binary is returned by running `which
-go` in bash on macOS/Linux and `where go` in cmd on Windows. More practically,
+CodePerfect essentially uses whatever `go` binary is returned by running
+`which go` in bash on macOS and `where go` in cmd on Windows. More practically,
 if you can run `go version` successfully in a terminal, CodePerfect will know
-how to find it. The way to set this up is to make sure the `go` binary is in your `PATH`.
+how to find it. The way to set this up is to make sure the `go` binary is in
+your `PATH`.
 
 Below are some notes for some of the common ways that people install Go:
 
@@ -53,8 +54,8 @@ Below are some notes for some of the common ways that people install Go:
 - **Using a package manager.** Chances are the package manager will set your
   `PATH` for you. In any case, you'll just need to make sure Brew-installed
   binaries are accessible from a terminal. You can verify this by running
-  `which go` (`where go` on Windows). If it works, there's nothing else you
-  need to do. If it doesn't, you'll need to update your `PATH` manually.
+  `which go` (`where go` on Windows). If it works, there's nothing else you need
+  to do. If it doesn't, you'll need to update your `PATH` manually.
 
 ## Projects
 
@@ -82,8 +83,8 @@ Note that none of these files are human-readable.
 
 ### Open an existing project
 
-CodePerfect can open any codebase organized as a
-single Go module. Just select the folder containing the root go.mod.
+CodePerfect can open any codebase organized as a single Go module. Just select
+the folder containing the root go.mod.
 
 If you're opening a pre-existing project, CodePerfect relies on
 `go list -mod=mod -m all` to find your dependencies, and if you have
@@ -138,4 +139,5 @@ you incorrect results, however, there are two fixes you can try. (And please
 
 CodePerfect automatically, unintrusively keeps itself up-to-date in the
 background. But if you ever want/need to update CodePerfect manually, you can
-grab the latest version from the [download page](https://codeperfect95.com/download).
+grab the latest version from the
+[download page](https://codeperfect95.com/download).

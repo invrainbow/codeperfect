@@ -113,6 +113,9 @@
   }
   .download-button {
     @apply bg-white border border-gray-300 text-gray-500;
+    &:disabled, &.disabled {
+      @apply opacity-50 cursor-default;
+    }
   }
   .download-button:hover:not(:disabled) {
     background: white;
