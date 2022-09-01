@@ -2444,6 +2444,27 @@ void UI::draw_everything() {
             ImGui::MenuItem("Show frame index", NULL, &world.show_frame_index);
             ImGui::MenuItem("Show frameskips", NULL, &world.show_frameskips);
 
+            ImGui::Separator();
+
+            if (ImGui::MenuItem("Message box - Ok")) {
+                tell_user("This is a message box.", "Message");
+            }
+
+            if (ImGui::MenuItem("Message box - Yes/No")) {
+                ask_user_yes_no("Would you like to suck a dick?", "Dick", "Suck dick", "Don't suck dick");
+            }
+
+            if (ImGui::MenuItem("Message box - Yes/No/Cancel")) {
+                ask_user_yes_no_cancel(
+                    "Before you suck a dick, you need to do this other thing. Do you want to do that?",
+                    "Dick",
+                    "Do other thing",
+                    "Don't do other thing"
+                );
+            }
+
+            ImGui::Separator();
+
             if (ImGui::MenuItem("Process file")) {
                 do {
                     auto editor = get_current_editor();

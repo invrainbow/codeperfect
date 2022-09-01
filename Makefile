@@ -23,20 +23,20 @@ ifeq ($(OSTYPE), mac)
 
 	ifeq ($(shell sh/detect_m1), 1)
 		CFLAGS += -arch arm64
-		CFLAGS += -I./vcpkg/installed/arm64-osx/include
-		LDFLAGS += -L./vcpkg/installed/arm64-osx/lib
+		CFLAGS += -I./vcpkg_installed/arm64-osx/include
+		LDFLAGS += -L./vcpkg_installed/arm64-osx/lib
 		GOARCH = arm64
 	else
 		CFLAGS += -arch x86_64
-		CFLAGS += -I./vcpkg/installed/x64-osx/include
-		LDFLAGS += -L./vcpkg/installed/x64-osx/lib
+		CFLAGS += -I./vcpkg_installed/x64-osx/include
+		LDFLAGS += -L./vcpkg_installed/x64-osx/lib
 		GOARCH = amd64
 	endif
 else ifeq ($(OSTYPE), windows)
 	BINARY_NAME = ide.exe
 	CFLAGS += -DOSTYPE_WINDOWS
-	CFLAGS += -I./vcpkg/installed/x64-windows-static/include
-	LDFLAGS += -L./vcpkg/installed/x64-windows-static/lib
+	CFLAGS += -I./vcpkg_installed/x64-windows-static/include
+	LDFLAGS += -L./vcpkg_installed/x64-windows-static/lib
 	LDFLAGS += -lfreetype -lharfbuzz -lpcre -lfontconfig
 	LDFLAGS += -lbrotlicommon-static -lbz2 -lbrotlidec-static
 	LDFLAGS += -lzlib -llibexpatMD -llibpng16 -lglfw3
@@ -47,18 +47,17 @@ else ifeq ($(OSTYPE), windows)
 else ifeq ($(OSTYPE), linux)
 	CFLAGS += -DOSTYPE_LINUX
 	CFLAGS += -arch x86_64
-	CFLAGS += -gdwarf-4 # apparently dwarf5 causes some weird invalid form value error
-	CFLAGS += -I./vcpkg/installed/x64-linux/include
-	LDFLAGS += -L./vcpkg/installed/x64-linux/lib
-	LDFLAGS += -lGL -lX11 -lXi -lXrandr -lXinerama -lXcursor -lrt -lm -pthread -lglfw3
-	LDFLAGS += -lpcre -lharfbuzz -lfontconfig -lfreetype -lbz2 -lexpat -lpng16 -lz -lbrotlidec-static -lbrotlicommon-static
+	PKGS = fontconfig freetype2 libpcre gtk+-3.0 glfw3 gl
+	CFLAGS += $(shell pkg-config --cflags $(PKGS))
+	LDFLAGS += $(shell pkg-config --libs $(PKGS))
 	GOARCH = amd64
 endif
 
 GOFLAGS =
 
 ifeq ($(RELEASE), 1)
-	CFLAGS += -O3
+	# CFLAGS += -O3
+	CFLAGS += -g -O0
 	GOFLAGS += -ldflags "-s -w"
 else
 	CFLAGS += -DDEBUG_BUILD -g -O0

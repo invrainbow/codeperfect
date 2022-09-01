@@ -72,8 +72,8 @@ elif [[ $os = "linux" ]]; then
     zip -r app.zip CodePerfect/
 
     # zip up update
-    pushd CodePerfect.app/bin
-    zip -r ../../update.zip *
+    pushd CodePerfect
+    zip -r ../update.zip *
     popd
 fi
 

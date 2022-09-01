@@ -997,21 +997,14 @@ void handle_window_event(Window_Event *it) {
 }
 
 #if OS_WINBLOWS
-// i can't believe this shit is necessary:
 // https://github.com/golang/go/issues/42190#issuecomment-1114628523
-//
-// and what happens if (after god intervenes and injects some iq points into
-// them) they decide to fix it, and call it themselves? will we be
-// double-calling? will that break things?
-extern "C" {
-    extern __declspec(dllexport) void _rt0_amd64_windows_lib();
-}
-#else
-#define _rt0_amd64_windows_lib()
+extern "C" { extern __declspec(dllexport) void _rt0_amd64_windows_lib(); }
 #endif
 
 int main(int argc, char **argv) {
+#if OS_WINBLOWS
     _rt0_amd64_windows_lib();
+#endif
 
     gargc = argc;
     gargv = argv;

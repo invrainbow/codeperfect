@@ -11,6 +11,11 @@
 #   include <errno.h>
 #   include <signal.h>
 #   include <unistd.h>
+#   if OS_LINUX
+#       include <sys/epoll.h>
+#       include <sys/inotify.h>
+#       include <limits.h>
+#   endif
 #endif
 
 #if OS_WINBLOWS
@@ -294,6 +299,10 @@ struct Fs_Event {
     char filepath[MAX_PATH];
 };
 
+#if OS_LINUX
+#define INOTIFY_BUFSIZE (64 * (sizeof(struct inotify_event) + NAME_MAX + 1))
+#endif
+
 struct Fs_Watcher {
     ccstr path;
     Pool mem;
@@ -316,13 +325,30 @@ struct Fs_Watcher {
 
     void handle_event(size_t count, ccstr *paths);
     void run_thread();
+#elif OS_LINUX
+    int ino_fd;
+    int epoll_fd;
+    epoll_event epoll_ev;
+    char curr_buf[INOTIFY_BUFSIZE];
+    u32 curr_len;
+    u32 curr_off;
+    void *wd_table;
+
+    ccstr wd_to_key(int wd);
+    void wd_table_set(int wd, ccstr name);
+    ccstr wd_table_get(int wd);
+    void wd_table_remove(int wd);
 #endif
 
     bool init(ccstr _path) {
         ptr0(this);
         mem.init("fs_watcher mem");
         path = _path;
-        return platform_init();
+        if (!platform_init()) {
+            cleanup();
+            return false;
+        }
+        return true;
     }
 
     void cleanup() {
@@ -367,7 +393,6 @@ Ask_User_Result ask_user_yes_no_cancel(ccstr text, ccstr title, ccstr yeslabel, 
 Ask_User_Result ask_user_yes_no(ccstr text, ccstr title, ccstr yeslabel, ccstr nolabel, bool cancel = false);
 void tell_user(ccstr text, ccstr title);
 ccstr get_executable_path();
-bool set_run_on_computer_startup(ccstr key, ccstr path_to_exe);
 
 bool xplat_chdir(ccstr dir);
 
@@ -378,7 +403,6 @@ void init_platform_crap();
 void open_webbrowser(ccstr url);
 
 ccstr cp_getcwd();
-int cpu_count();
 
 int get_unix_time();
 void write_to_syslog(ccstr s);

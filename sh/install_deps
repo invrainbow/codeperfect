@@ -15,6 +15,7 @@ if [[ "$os" = "linux" ]]; then
     sudo apt install autoconf bison clang cloc cmake coreutils curl gcc git make neovim perl pkg-config python3 python-is-python3 silversearcher-ag tmux tree wget xclip
     sudo apt install libx11-dev libxft-dev autoconf libtool bison gperf libgles2-mesa-dev libxext-dev libxrandr-dev libxi-dev libxcursor-dev libxdamage-dev libxinerama-dev
     sudo apt install libgl1-mesa-dev libglu1-mesa-dev
+    sudo apt install libgtk-3-dev
 fi
 
 # vcpkg
@@ -26,6 +27,7 @@ else
 fi
 
 vcpkg_binary=vcpkg/vcpkg
+vcpkg_packages="pcre harfbuzz fontconfig"
 
 if [[ "$os" = "mac" ]]; then
     if [[ "$(sh/detect_m1)" = "1" ]]; then
@@ -38,10 +40,10 @@ elif [[ "$os" = "windows" ]]; then
     export VCPKG_DEFAULT_TRIPLET=x64-windows-static
 elif [[ "$os" = "linux" ]]; then
     export VCPKG_DEFAULT_TRIPLET=x64-linux
+    vcpkg_packages="$vcpkg_packages glfw3"
 fi
 
-$vcpkg_binary install pcre harfbuzz fontconfig glfw3
-$vcpkg_binary integrate install
+$vcpkg_binary install $vcpkg_packages
 
 # nvim
 rm -rf nvim-archive

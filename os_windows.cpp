@@ -909,21 +909,6 @@ ccstr get_executable_path() {
     }
 }
 
-bool set_run_on_computer_startup(ccstr key, ccstr exepath) {
-    HKEY hkey = NULL;
-    auto subkey = L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run";
-
-    auto res = RegCreateKeyExW(HKEY_CURRENT_USER, subkey, 0, NULL, 0, KEY_SET_VALUE, NULL, &hkey, NULL);
-    if (res != ERROR_SUCCESS) {
-        error("RegCreateKeyEx: %s", get_specific_error(res));
-        return false;
-    }
-    defer { RegCloseKey(hkey); };
-
-    auto wpath = to_wide(exepath);
-    return RegSetValueExW(hkey, to_wide(key), 0, REG_SZ, (BYTE*)wpath, wcslen(wpath)+1) == ERROR_SUCCESS;
-}
-
 bool xplat_chdir(ccstr dir) {
     return SetCurrentDirectory(dir);
 }

@@ -1,0 +1,10 @@
+{
+  "name": "codeperfect",
+  "version-string": "0.1.0",
+  "dependencies": [
+    "pcre",
+    "harfbuzz",
+    "fontconfig",
+    "glfw3"
+  ]
+}

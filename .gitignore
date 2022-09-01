@@ -65,3 +65,5 @@ enums.cpp
 enums.hpp
 
 nvim-archive/
+
+vcpkg_installed/

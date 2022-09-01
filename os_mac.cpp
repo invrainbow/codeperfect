@@ -57,11 +57,6 @@ ccstr get_executable_path() {
     return ret;
 }
 
-bool set_run_on_computer_startup(ccstr key, ccstr path_to_exe) {
-    // TODO
-    return true;
-}
-
 int _cmp_trampoline(void *param, const void *a, const void *b) {
     return (*(compare_func*)param)(a, b);
 }
@@ -173,23 +168,6 @@ bool Fs_Watcher::next_event(Fs_Event *event) {
 
     memcpy(event, &events[curr++], sizeof(Fs_Event));
     return true;
-}
-
-int cpu_count() {
-    int mib[4];
-    int ret = 1;
-    size_t len = sizeof(ret);
-
-    mib[0] = CTL_HW;
-    mib[1] = HW_AVAILCPU;
-    sysctl(mib, 2, &ret, &len, NULL, 0);
-    if (ret >= 1) return ret;
-
-    mib[1] = HW_NCPU;
-    sysctl(mib, 2, &ret, &len, NULL, 0);
-    if (ret >= 1) return ret;
-
-    return 1;
 }
 
 #endif
