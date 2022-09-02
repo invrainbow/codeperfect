@@ -6,8 +6,6 @@ if [[ $os = "windows" ]]; then
     if [[ ! -z "$(tasklist /FI "IMAGENAME eq remedybg.exe" | grep remedybg)" ]]; then
         remedybg stop-debugging
     fi
-elif [[ $os = linux ]]; then
-    export PKG_CONFIG_PATH=vcpkg_installed/x64-linux/lib/pkgconfig
 fi
 
 if [[ "$RELEASE" == "1" ]]; then

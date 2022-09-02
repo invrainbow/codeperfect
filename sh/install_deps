@@ -26,24 +26,15 @@ else
     ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
 fi
 
-vcpkg_binary=vcpkg/vcpkg
-vcpkg_packages="pcre harfbuzz fontconfig"
 
-if [[ "$os" = "mac" ]]; then
-    if [[ "$(sh/detect_m1)" = "1" ]]; then
-        export VCPKG_DEFAULT_TRIPLET=arm64-osx
-    else
-        export VCPKG_DEFAULT_TRIPLET=x64-osx
-    fi
-elif [[ "$os" = "windows" ]]; then
+if [[ "$os" = "windows" ]]; then
     vcpkg_binary=vcpkg/vcpkg.exe
-    export VCPKG_DEFAULT_TRIPLET=x64-windows-static
-elif [[ "$os" = "linux" ]]; then
-    export VCPKG_DEFAULT_TRIPLET=x64-linux
-    vcpkg_packages="$vcpkg_packages glfw3"
+else
+    vcpkg_binary=vcpkg/vcpkg
 fi
 
-$vcpkg_binary install $vcpkg_packages
+export VCPKG_DEFAULT_TRIPLET=$(sh/vcpkg_triplet)
+$vcpkg_binary install
 
 # nvim
 rm -rf nvim-archive

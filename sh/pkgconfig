@@ -1,0 +1,8 @@
+#!/bin/bash
+
+path="vcpkg_installed/$(sh/vcpkg_triplet)/lib/pkgconfig"
+if [[ "$(sh/detect_os)" = "windows" ]]; then
+    path="$(cygpath -w "$(pwd)/$path")"
+fi
+
+PKG_CONFIG_PATH="$path" pkg-config $@

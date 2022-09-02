@@ -35,11 +35,12 @@ ifeq ($(OSTYPE), mac)
 else ifeq ($(OSTYPE), windows)
 	BINARY_NAME = ide.exe
 	CFLAGS += -DOSTYPE_WINDOWS
-	CFLAGS += -I./vcpkg_installed/x64-windows-static/include
-	LDFLAGS += -L./vcpkg_installed/x64-windows-static/lib
-	LDFLAGS += -lfreetype -lharfbuzz -lpcre -lfontconfig
-	LDFLAGS += -lbrotlicommon-static -lbz2 -lbrotlidec-static
-	LDFLAGS += -lzlib -llibexpatMD -llibpng16 -lglfw3
+
+	PKGS = fontconfig freetype2 libpcre glfw3 harfbuzz
+	CFLAGS += $(shell sh/pkgconfig --cflags $(PKGS))
+	LDFLAGS += $(shell sh/pkgconfig --libs $(PKGS))
+
+	# other shit we have to add manually
 	LDFLAGS += -lopengl32 -ladvapi32 -lshlwapi -lole32
 	LDFLAGS += -lpathcch -lshell32 -lwinmm -lws2_32 -lgdi32 -lshcore
 	LDFLAGS += --for-linker "/IGNORE:4217"
@@ -47,9 +48,9 @@ else ifeq ($(OSTYPE), windows)
 else ifeq ($(OSTYPE), linux)
 	CFLAGS += -DOSTYPE_LINUX
 	CFLAGS += -arch x86_64
-	PKGS = fontconfig freetype2 libpcre gtk+-3.0 glfw3 gl
-	CFLAGS += $(shell pkg-config --cflags $(PKGS))
-	LDFLAGS += $(shell pkg-config --libs $(PKGS))
+	PKGS = fontconfig freetype2 libpcre gtk+-3.0 glfw3 gl harfbuzz
+	CFLAGS += $(shell sh/pkgconfig --cflags $(PKGS))
+	LDFLAGS += $(shell sh/pkgconfig --libs $(PKGS))
 	GOARCH = amd64
 endif
 

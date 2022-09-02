@@ -1,0 +1,14 @@
+#!/bin/bash
+
+os="$(sh/detect_os)"
+if [[ "$os" = "mac" ]]; then
+    if [[ "$(sh/detect_m1)" = "1" ]]; then
+        echo arm64-osx
+    else
+        echo x64-osx
+    fi
+elif [[ "$os" = "windows" ]]; then
+    echo x64-windows-static
+elif [[ "$os" = "linux" ]]; then
+    echo x64-linux
+fi
