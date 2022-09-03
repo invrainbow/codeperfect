@@ -53,6 +53,10 @@ elif [[ "$os" = "windows" ]]; then
     unzip nvim-win64.zip
     mv Neovim nvim-archive
     rm nvim-win64.zip
+
+    # https://blog.yimingliu.com/2007/02/23/cvs-cygwin-and-error-code-0xc0000022/
+    # On Windows in Cygwin, if we don't do this, we get 0xc0000022 if we don't do this.
+    find nvim-archive -type f \( -name '*.dll' -or -name '*.exe' \) | xargs chmod +x
 fi
 
 # wipe out the share folder but keep clipboard handler

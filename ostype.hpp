@@ -16,3 +16,5 @@
 #else
 #   error "what the fuck OS is this?"
 #endif
+
+#define OS_UNIX (OS_MAC || OS_LINUX)

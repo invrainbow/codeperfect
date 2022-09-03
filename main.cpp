@@ -996,20 +996,11 @@ void handle_window_event(Window_Event *it) {
     }
 }
 
-#if OS_WINBLOWS
-// https://github.com/golang/go/issues/42190#issuecomment-1114628523
-extern "C" { extern __declspec(dllexport) void _rt0_amd64_windows_lib(); }
-#endif
-
-int main(int argc, char **argv) {
-#if OS_WINBLOWS
-    _rt0_amd64_windows_lib();
-#endif
+int realmain(int argc, char **argv) {
+    is_main_thread = true;
 
     gargc = argc;
     gargv = argv;
-
-    is_main_thread = true;
 
     Timer t;
     t.init();

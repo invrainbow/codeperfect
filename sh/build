@@ -1,18 +1,17 @@
 #!/bin/bash
 set -e
 
-os="$(sh/detect_os)"
-if [[ $os = "windows" ]]; then
-    if [[ ! -z "$(tasklist /FI "IMAGENAME eq remedybg.exe" | grep remedybg)" ]]; then
-        remedybg stop-debugging
-    fi
-fi
+# os="$(sh/detect_os)"
+# if [[ $os = "windows" ]]; then
+#     if [[ ! -z "$(tasklist /FI "IMAGENAME eq remedybg.exe" | grep remedybg)" ]]; then
+#         remedybg stop-debugging
+#     fi
+# fi
 
 if [[ "$RELEASE" == "1" ]]; then
     sh/make clean
-    sh/make prep
     sh/make
-    sh/make build/launcher
+    sh/make launcher
 else
     sh/make prep
     sh/make

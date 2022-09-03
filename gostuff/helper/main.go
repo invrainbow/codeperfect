@@ -21,6 +21,7 @@ import (
 
 	"github.com/denormal/go-gitignore"
 	"github.com/invrainbow/codeperfect/gostuff/models"
+	"github.com/invrainbow/codeperfect/gostuff/utils"
 	"github.com/invrainbow/codeperfect/gostuff/versions"
 	"github.com/reviewdog/errorformat"
 	"golang.org/x/tools/imports"
@@ -391,7 +392,7 @@ func GetGoEnv(envvar string) (string, error) {
 	if err != nil {
 		return "", nil
 	}
-	out, err := exec.Command(binpath, "env", envvar).Output()
+	out, err := utils.MakeExecCommand(binpath, "env", envvar).Output()
 	if err != nil {
 		return "", err
 	}
@@ -483,7 +484,7 @@ func GHBuildEnvInit() bool {
 
 	log.Printf("binpath: %s", binpath)
 
-	cmd := exec.Command(binpath, "run", filepath)
+	cmd := utils.MakeExecCommand(binpath, "run", filepath)
 	cmd.Dir = dirpath
 	out, err := cmd.Output()
 	if err != nil {

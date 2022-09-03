@@ -9,16 +9,16 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
 
 	"github.com/invrainbow/codeperfect/gostuff/versions"
+	"github.com/invrainbow/codeperfect/gostuff/utils"
 )
 
-func isDir(path string) bool {
-	info, err := os.Stat("./newbin")
+func isDir(fullpath string) bool {
+	info, err := os.Stat(fullpath)
 	return err == nil && info.IsDir()
 }
 
@@ -33,13 +33,13 @@ iff this is true, delete bin and mv newbin bin.
 */
 
 func replaceBinFolder(basedir string) error {
-	oldpath := path.Join(basedir, "newbin")
-	newpath := path.Join(basedir, "bin")
+	oldpath := filepath.Join(basedir, "newbin")
+	newpath := filepath.Join(basedir, "bin")
 	return replaceFolder(oldpath, newpath)
 }
 
 func replaceFolder(oldpath, newpath string) error {
-	deletemePath := path.Join(path.Dir(newpath), "DELETEME")
+	deletemePath := filepath.Join(filepath.Dir(newpath), "DELETEME")
 
 	info, err := os.Stat(oldpath)
 	if err != nil {
@@ -195,7 +195,7 @@ func doUpdate() {
 		return
 	}
 
-	dest := path.Join(path.Dir(exepath), "newbintmp")
+	dest := filepath.Join(filepath.Dir(exepath), "newbintmp")
 
 	log.Printf("deleting %s", dest)
 	os.RemoveAll(dest)
@@ -206,7 +206,7 @@ func doUpdate() {
 		return
 	}
 
-	realdest := path.Join(path.Dir(exepath), "newbin")
+	realdest := filepath.Join(filepath.Dir(exepath), "newbin")
 	log.Printf("moving unzipped folder to %s", realdest)
 
 	if err := replaceFolder(dest, realdest); err != nil {
@@ -286,16 +286,16 @@ func main() {
 		panic(err)
 	}
 
-	exedir := path.Dir(exepath)
+	exedir := filepath.Dir(exepath)
 	if err := replaceBinFolder(exedir); err != nil {
 		panic(err)
 	}
 
-	cmd := exec.Command(path.Join(exedir, "bin/ide"), os.Args[1:]...)
+	cmd := utils.MakeExecCommand(filepath.Join(exedir, idePath), os.Args[1:]...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Env = os.Environ()
-	cmd.Dir = path.Join(exedir, "bin")
+	cmd.Dir = filepath.Join(exedir, "bin")
 
 	if err := cmd.Start(); err != nil {
 		log.Printf("%v", err)

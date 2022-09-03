@@ -5,10 +5,12 @@ package main
 import (
 	"fmt"
 	"os/exec"
+
+	"github.com/invrainbow/codeperfect/gostuff/utils"
 )
 
 func makeShellCommand(s string) *exec.Cmd {
-	return exec.Command("/bin/bash", "-lc", s)
+	return utils.MakeExecCommand("/bin/bash", "-lc", s)
 }
 
 func makeFindBinaryPathCommand(bin string) *exec.Cmd {

@@ -9,8 +9,9 @@ endif
 
 LDFLAGS =
 LDFLAGS += obj/gohelper.a
+PKGS =
 
-BINARY_NAME = ide
+BINARY_SUFFIX =
 
 ifeq ($(OSTYPE), mac)
 	CFLAGS += -DOSTYPE_MAC
@@ -33,42 +34,31 @@ ifeq ($(OSTYPE), mac)
 		GOARCH = amd64
 	endif
 else ifeq ($(OSTYPE), windows)
-	BINARY_NAME = ide.exe
-	CFLAGS += -DOSTYPE_WINDOWS
-
-	PKGS = fontconfig freetype2 libpcre glfw3 harfbuzz
-	CFLAGS += $(shell sh/pkgconfig --cflags $(PKGS))
-	LDFLAGS += $(shell sh/pkgconfig --libs $(PKGS))
-
-	# other shit we have to add manually
-	LDFLAGS += -lopengl32 -ladvapi32 -lshlwapi -lole32
-	LDFLAGS += -lpathcch -lshell32 -lwinmm -lws2_32 -lgdi32 -lshcore
-	LDFLAGS += --for-linker "/IGNORE:4217"
+	BINARY_SUFFIX = .exe
 	GOARCH = amd64
+	CFLAGS += -DOSTYPE_WINDOWS -arch x86_64
+	PKGS += fontconfig freetype2 libpcre glfw3 harfbuzz
+	LDFLAGS += -lopengl32 -ladvapi32 -lshlwapi -lole32 -lpathcch -lshell32 -lwinmm -lws2_32 -lgdi32 -lshcore  # link windows dlls
+	LDFLAGS += --for-linker "/IGNORE:4217"  # do we still need this?
 else ifeq ($(OSTYPE), linux)
-	CFLAGS += -DOSTYPE_LINUX
-	CFLAGS += -arch x86_64
-	PKGS = fontconfig freetype2 libpcre gtk+-3.0 glfw3 gl harfbuzz
-	CFLAGS += $(shell sh/pkgconfig --cflags $(PKGS))
-	LDFLAGS += $(shell sh/pkgconfig --libs $(PKGS))
+	CFLAGS += -DOSTYPE_LINUX -arch x86_64
 	GOARCH = amd64
+	PKGS += fontconfig freetype2 libpcre gtk+-3.0 glfw3 gl harfbuzz
 endif
 
-GOFLAGS =
+CFLAGS += $(shell sh/pkgconfig --cflags $(PKGS))
+LDFLAGS += $(shell sh/pkgconfig --libs $(PKGS))
 
+GO_LDFLAGS =
 ifeq ($(RELEASE), 1)
 	# CFLAGS += -O3
 	CFLAGS += -g -O0
-	GOFLAGS += -ldflags "-s -w"
+	GO_LDFLAGS += -s -w
 else
 	CFLAGS += -DDEBUG_BUILD -g -O0
 endif
 
-ifeq ($(OSTYPE), windows)
-	PYTHON = python
-else
-	PYTHON = python3
-endif
+PYTHON = python3
 
 SEPARATE_SRC_FILES = tests.cpp enums.cpp
 SRC_FILES := $(filter-out $(SEPARATE_SRC_FILES), $(wildcard *.cpp))
@@ -76,19 +66,18 @@ OBJ_FILES = $(patsubst %.cpp,obj/%.o,$(SRC_FILES))
 DEP_FILES = $(patsubst %.cpp,obj/%.d,$(SRC_FILES))
 DEP_FILES += obj/clibs.d
 OBJ_DEPS = $(OBJ_FILES) obj/clibs.o obj/gohelper.a
-
-# GOSTUFF_DEPS = $(shell find gostuff/ -type d)
 GOSTUFF_DEPS = $(shell find gostuff/ -type f -name '*.go')
-# GOSTUFF_DEPS += gostuff/
 
 ifeq ($(OSTYPE), mac)
 	DEP_FILES += obj/objclibs.d
 	OBJ_DEPS += obj/objclibs.o
 endif
 
-.PHONY: all clean build/launcher
+.PHONY: all test clean prep launcher
 
-all: build/bin/$(BINARY_NAME) build/bin/init.vim build/bin/buildcontext.go
+all: build/bin/ide$(BINARY_SUFFIX) build/bin/init.vim build/bin/buildcontext.go
+
+launcher: build/launcher$(BINARY_SUFFIX)
 
 test: build/bin/test build/bin/init.vim build/bin/buildcontext.go
 
@@ -102,7 +91,7 @@ clean:
 build/bin/test: $(filter-out obj/main.o, $(OBJ_DEPS)) obj/tests.o obj/enums.o binaries.c
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^ $(LDFLAGS)
 
-build/bin/$(BINARY_NAME): $(OBJ_DEPS) binaries.c obj/enums.o
+build/bin/ide$(BINARY_SUFFIX): $(OBJ_DEPS) binaries.c obj/enums.o
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 -include $(DEP_FILES)
@@ -133,12 +122,17 @@ binaries.c: .cpcolors vert.glsl frag.glsl im.vert.glsl im.frag.glsl
 
 obj/gohelper.a: $(GOSTUFF_DEPS)
 	cd gostuff; \
-		CC=clang CGO_ENABLED=1 go build $(GOFLAGS) -o gohelper.a -buildmode=c-archive ./helper && \
+		CC=clang CGO_ENABLED=1 go build -ldflags "$(GO_LDFLAGS)" -o gohelper.a -buildmode=c-archive ./helper && \
 		(mkdir -p ../obj; mv gohelper.a ../obj; mv gohelper.h ..)
 
-build/launcher: $(GOSTUFF_DEPS)
+LAUNCHER_LDFLAGS =
+ifeq ($(OSTYPE), windows)
+	LAUNCHER_LDFLAGS += -H windowsgui
+endif
+
+build/launcher$(BINARY_SUFFIX): $(GOSTUFF_DEPS)
 	cd gostuff; \
-		go build $(GOFLAGS) -o ../build/launcher ./cmd/launcher
+		go build -ldflags "$(GO_LDFLAGS) $(LAUNCHER_LDFLAGS)" -o ../$@ ./cmd/launcher
 
 gohelper.h: obj/gohelper.a
 
@@ -155,4 +149,3 @@ build/bin/buildcontext.go: gostuff/buildcontext/main.go
 
 build/bin/init.vim: init.vim
 	cp init.vim build/bin/init.vim
-

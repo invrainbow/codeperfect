@@ -2,12 +2,11 @@ package main
 
 import (
 	"os"
-	"os/exec"
-	"path"
 	"path/filepath"
 	"strings"
 
 	"github.com/google/shlex"
+	"github.com/invrainbow/codeperfect/gostuff/utils"
 )
 
 func GetShellOutput(cmd string) string {
@@ -15,7 +14,7 @@ func GetShellOutput(cmd string) string {
 	if err != nil {
 		return ""
 	}
-	out, err := exec.Command(parts[0], parts[1:]...).Output()
+	out, err := utils.MakeExecCommand(parts[0], parts[1:]...).Output()
 	if err != nil {
 		return ""
 	}
@@ -28,7 +27,7 @@ func ReadFileFromExeFolder(filename string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return os.ReadFile(path.Join(filepath.Dir(exepath), filename))
+	return os.ReadFile(filepath.Join(filepath.Dir(exepath), filename))
 }
 
 func IsTestMode() bool {
@@ -47,7 +46,7 @@ func PrepareConfigDir() (string, error) {
 		return "", err
 	}
 
-	appdir := path.Join(configdir, "CodePerfect")
+	appdir := filepath.Join(configdir, "CodePerfect")
 	if err := os.MkdirAll(appdir, os.ModePerm); err != nil {
 		return "", err
 	}

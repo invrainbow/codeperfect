@@ -177,13 +177,14 @@ bool Process::run(ccstr _cmd) {
     STARTUPINFOW si = { 0 };
 
     si.cb = sizeof(si);
+    si.dwFlags = STARTF_USESTDHANDLES;
+
     if (!dont_use_stdout) {
         si.hStdError = stdout_w;
         si.hStdOutput = stdout_w;
     }
-    if (use_stdin)
-        si.hStdInput = stdin_r;
-    si.dwFlags = STARTF_USESTDHANDLES;
+
+    if (use_stdin) si.hStdInput = stdin_r;
 
     {
         SCOPED_FRAME();
@@ -199,7 +200,7 @@ bool Process::run(ccstr _cmd) {
         }
 
         auto wdir = to_wide(dir);
-        if (!CreateProcessW(NULL, wargs, NULL, NULL, TRUE, create_new_console ? CREATE_NEW_CONSOLE : 0, NULL, wdir, &si, &pi)) {
+        if (!CreateProcessW(NULL, wargs, NULL, NULL, TRUE, create_new_console ? CREATE_NEW_CONSOLE : CREATE_NO_WINDOW, NULL, wdir, &si, &pi)) {
             error("CreateProcessW: %s", get_last_error());
             return false;
         }

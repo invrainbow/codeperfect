@@ -32,7 +32,7 @@ if [[ $os = "windows" ]]; then
     zip -r app.zip CodePerfect/
 
     # zip up update
-    pushd CodePerfect.app/bin
+    pushd CodePerfect/bin
     zip -r ../../update.zip *
     popd
 elif [[ $os = "mac" ]]; then
@@ -72,8 +72,8 @@ elif [[ $os = "linux" ]]; then
     zip -r app.zip CodePerfect/
 
     # zip up update
-    pushd CodePerfect
-    zip -r ../update.zip *
+    pushd CodePerfect/bin
+    zip -r ../../update.zip *
     popd
 fi
 
