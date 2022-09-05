@@ -1015,7 +1015,7 @@ bool Debugger::start(Debug_Profile *debug_profile) {
 
     if (!delve_path || delve_path[0] == '\0') {
         dbg_print("delve path is empty");
-        send_tell_user("Couldn't find Delve. Please make sure it's installed and accessible from a Bash shell.", NULL);
+        send_tell_user("Couldn't find Delve. Please make sure it's installed and accessible from a shell.", NULL);
         return false;
     }
 
