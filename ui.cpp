@@ -2173,6 +2173,9 @@ void UI::draw_everything() {
     // start rendering imgui
     ImGui::NewFrame();
 
+    // prevent ctrl+tab from doing shit
+    GImGui->NavWindowingTarget = NULL;
+
     // draw the main dockspace
     {
         const ImGuiViewport* viewport = ImGui::GetMainViewport();
