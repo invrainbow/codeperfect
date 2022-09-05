@@ -269,6 +269,8 @@ bool Window::init_os_specific(int width, int height, ccstr title) {
         Key cp_key = glfw_to_cp_key(key);
         if (cp_key == CP_KEY_UNKNOWN) return;
 
+        world.window->key_states[cp_key] = press;
+
         world.window->dispatch_event(WINEV_KEY, [&](auto ev) {
             ev->key.key = (Key)cp_key;
             ev->key.press = press;

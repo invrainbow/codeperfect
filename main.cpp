@@ -642,11 +642,10 @@ void handle_window_event(Window_Event *it) {
                     break;
                 }
 #if OS_WINBLOWS
-                break;
-#else
+                if (keymods & CP_MOD_ALT) break;
+#endif
                 handle_tab();
                 return;
-#endif
             }
         }
 
@@ -1073,7 +1072,7 @@ int realmain(int argc, char **argv) {
     case AUTH_TRIAL:
         if (get_unix_time() - world.auth.trial_start > 1000 * 60 * 60 * 24 * 7) {
             world.auth_error = true;
-            auto res = ask_user_yes_no(NULL, "Your trial has ended. A license is required for continued use.\n\nDo you want to buy one now?", "Purchase License", "No");
+            auto res = ask_user_yes_no("Your trial has ended. A license is required for continued use.\n\nDo you want to buy one now?", NULL, "Purchase License", "No");
             if (res == ASKUSER_YES) {
                 open_webbrowser("https://codeperfect95.com/buy");
             }
@@ -1134,6 +1133,7 @@ int realmain(int argc, char **argv) {
     // ImGui::StyleColorsLight();
 
     auto &style = ImGui::GetStyle();
+    style.WindowMenuButtonPosition = ImGuiDir_None;
     style.WindowPadding = ImVec2(7, 7);
     style.FramePadding = ImVec2(7, 2);
     style.CellPadding = ImVec2(4, 2);

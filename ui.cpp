@@ -3271,12 +3271,12 @@ void UI::draw_everything() {
             auto license_len = strlen(wnd.license);
 
             if (email_len + 1 > _countof(auth.reg_email)) {
-                tell_user(NULL, "Sorry, that email is too long.");
+                tell_user("Sorry, that email is too long.", NULL);
                 break;
             }
 
             if (license_len + 1 > _countof(auth.reg_license)) {
-                tell_user(NULL, "Sorry, that license key is too long.");
+                tell_user("Sorry, that license key is too long.", NULL);
                 break;
             }
 
@@ -3286,7 +3286,7 @@ void UI::draw_everything() {
             auth.reg_license_len = license_len;
             write_auth();
 
-            tell_user(NULL, "Your license key was saved. Please restart CodePerfect for it to take effect. Thanks!");
+            tell_user("Your license key was saved. Please restart CodePerfect for it to take effect. Thanks!", "License key saved");
         } while (0);
 
         ImGui::End();

@@ -67,3 +67,5 @@ enums.hpp
 nvim-archive/
 
 vcpkg_installed/
+
+sh/dev_windows.local
