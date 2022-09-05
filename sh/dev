@@ -1,0 +1,12 @@
+#!/bin/bash
+
+os="$(sh/detect_os)"
+if [[ $os = windows ]]; then
+    if [[ -f sh/dev_windows.local ]]; then
+        . sh/dev_windows.local
+    else
+        dir="/cygdrive/c/Program Files/Microsoft Visual Studio/2022/Community/VC/Auxiliary/Build"
+        print_path_cmd="VcVarsAll.bat x64 && bash -c 'printenv PATH'"
+        export PATH="$(cd "$dir" && cmd /c "$print_path_cmd" | tail -n 1)"
+    fi
+fi
