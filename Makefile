@@ -15,22 +15,16 @@ BINARY_SUFFIX =
 
 ifeq ($(OSTYPE), mac)
 	CFLAGS += -DOSTYPE_MAC
-	LDFLAGS += -ldl -lz -lexpat -lpng16
-	LDFLAGS += -lfreetype -lharfbuzz -lpcre -lfontconfig
-	LDFLAGS += -lbrotlicommon-static -lbz2 -lbrotlidec-static
+	PKGS += fontconfig freetype2 libpcre harfbuzz
 
 	frameworks = OpenGL Cocoa IOKit CoreFoundation Security
 	LDFLAGS += $(foreach it, $(frameworks), -framework $(it))
 
 	ifeq ($(shell sh/detect_m1), 1)
 		CFLAGS += -arch arm64
-		CFLAGS += -I./vcpkg_installed/arm64-osx/include
-		LDFLAGS += -L./vcpkg_installed/arm64-osx/lib
 		GOARCH = arm64
 	else
 		CFLAGS += -arch x86_64
-		CFLAGS += -I./vcpkg_installed/x64-osx/include
-		LDFLAGS += -L./vcpkg_installed/x64-osx/lib
 		GOARCH = amd64
 	endif
 else ifeq ($(OSTYPE), windows)

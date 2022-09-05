@@ -592,6 +592,18 @@ void Buffer::update_tree() {
 
     input.read = [](void *p, uint32_t off, TSPoint pos, uint32_t *read) -> const char* {
         auto buf = (Buffer*)p;
+
+        if (buf->lines.len) {
+            int y = buf->lines.len-1;
+            auto c = new_cur2(buf->lines[y].len, y);
+
+            if (off > buf->cur_to_offset(buf->dec_cur(c))) {
+                buf->tsinput_buffer[0] = '\0';
+                *read = 0;
+                return buf->tsinput_buffer;
+            }
+        }
+
         auto it = buf->iter(buf->offset_to_cur(off));
         u32 n = 0;
 
