@@ -45,8 +45,8 @@ LDFLAGS += $(shell sh/pkgconfig --libs $(PKGS))
 
 GO_LDFLAGS =
 ifeq ($(RELEASE), 1)
-	# CFLAGS += -O3
-	CFLAGS += -g -O0
+	CFLAGS += -O3
+	# CFLAGS += -g -O0
 	GO_LDFLAGS += -s -w
 else
 	CFLAGS += -DDEBUG_BUILD -g -O0
