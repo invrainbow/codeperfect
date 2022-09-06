@@ -3496,7 +3496,7 @@ List<Find_References_File> *Go_Indexer::actually_find_references(Goresult *declr
             if (!streq(it->is_sel ? it->sel : it->name, decl_name))
                 return;
 
-            auto is_self = [&]() {
+            auto check_is_self = [&]() {
                 if (!same_file_as_decl) return false;
                 if (it->is_sel) return false;
                 if (it->start != decl->name_start) return false;
@@ -3505,7 +3505,8 @@ List<Find_References_File> *Go_Indexer::actually_find_references(Goresult *declr
                 return true;
             };
 
-            if (!include_self && is_self())
+            bool is_self = check_is_self();
+            if (!include_self && is_self)
                 return;
 
             /*
@@ -3544,7 +3545,7 @@ List<Find_References_File> *Go_Indexer::actually_find_references(Goresult *declr
                 }
                 break;
             case CASE_METHOD:
-                if (!it->is_sel) return;
+               if (!it->is_sel && !is_self) return;
                 break;
             }
 
