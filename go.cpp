@@ -7984,28 +7984,27 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
         Gotype *base = gotype->lazy_one_of_multi_base;
 
         switch (res->gotype->type) {
-        case GOTYPE_MULTI:
-            return _evaluate_type(res->gotype->multi_types->at(index), res->ctx);
+        case GOTYPE_MULTI: {
+            auto types = res->gotype->multi_types;
+            if (index >= types->len) return NULL;
+            return _evaluate_type(types->at(index), res->ctx);
+        }
 
         case GOTYPE_ASSERTION:
-            if (!index)
-                return _evaluate_type(res->gotype->assertion_base, res->ctx);
-            if (index == 1)
-                return res->wrap(new_primitive_type("bool"));
+            if (index == 0) return _evaluate_type(res->gotype->assertion_base, res->ctx);
+            if (index == 1) return res->wrap(new_primitive_type("bool"));
             break;
 
         case GOTYPE_RANGE:
             switch (res->gotype->range_base->type) {
             case GOTYPE_MAP:
-                if (!index)
-                    return _evaluate_type(res->gotype->range_base->map_key, res->ctx);
-                if (index == 1)
-                    return _evaluate_type(res->gotype->range_base->map_value, res->ctx);
+                if (index == 0) return _evaluate_type(res->gotype->range_base->map_key, res->ctx);
+                if (index == 1) return _evaluate_type(res->gotype->range_base->map_value, res->ctx);
                 break;
 
             case GOTYPE_ARRAY:
             case GOTYPE_SLICE:
-                if (!index)
+                if (index == 0)
                     return res->wrap(new_primitive_type("int"));
                 if (index == 1) {
                     auto base = res->gotype->type == GOTYPE_ARRAY ? res->gotype->array_base : res->gotype->slice_base;
@@ -8015,10 +8014,8 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
 
             case GOTYPE_ID:
                 if (!streq(res->gotype->id_name, "string")) break;
-                if (!index)
-                    return res->wrap(new_primitive_type("int"));
-                if (index == 1)
-                    return res->wrap(new_primitive_type("rune"));
+                if (index == 0) return res->wrap(new_primitive_type("int"));
+                if (index == 1) return res->wrap(new_primitive_type("rune"));
                 break;
             }
             break;
