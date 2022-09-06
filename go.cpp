@@ -4712,7 +4712,6 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                         continue;
 
                 if (it.decl->type != GODECL_FIELD) continue;
-                if (it.decl->field_is_embedded) continue;
 
                 auto res = ac_results->append();
                 res->type = ACR_DECLARATION;
@@ -5724,6 +5723,7 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
                 field->decl_start = type_node->start();
                 field->decl_end = type_node->end();
                 field->name = field_name;
+                field->name_start = type_node->start();
                 field->field_order = ret->struct_specs->len;
 
                 auto spec = ret->struct_specs->append();
