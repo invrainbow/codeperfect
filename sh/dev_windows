@@ -1,8 +1,0 @@
-#!/bin/bash
-if [[ -f sh/dev_windows.local ]]; then
-    source sh/dev_windows.local
-else
-    dir="/cygdrive/c/Program Files/Microsoft Visual Studio/2022/Community/VC/Auxiliary/Build"
-    print_path_cmd="VcVarsAll.bat x64 && bash -c 'printenv PATH'"
-    export PATH="$(cd "$dir" && cmd /c "$print_path_cmd" | tail -n 1)"
-fi

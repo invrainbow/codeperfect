@@ -4,7 +4,7 @@ import (
 	"fmt"
 )
 
-const CurrentVersion = 220801
+const CurrentVersion = 220800
 
 func VersionToString(v int) string {
 	major := (v / 100) / 100

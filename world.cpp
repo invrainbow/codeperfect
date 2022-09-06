@@ -402,7 +402,7 @@ void World::init() {
     {
         auto go_binary_path = GHGetGoBinaryPath();
         if (!go_binary_path)
-            cp_panic("Unable to find Go. Please make sure it's installed, and accessible from a Bash shell (with .bashrc).");
+            cp_panic("Unable to find Go. Please make sure it's installed, and accessible from a shell.");
         defer { GHFree(go_binary_path); };
         cp_strcpy_fixed(world.go_binary_path, go_binary_path);
     }
