@@ -2103,7 +2103,32 @@ void Go_Indexer::process_tree_into_gofile(
         walk_ast_node(root, true, [&](auto it, auto, auto) {
             Ast_Node *x = NULL, *sel = NULL;
 
-            auto add_ident_ref = [&](Ast_Node *it) {
+            switch (it->type()) {
+            case TS_IDENTIFIER:
+            case TS_FIELD_IDENTIFIER:
+            case TS_PACKAGE_IDENTIFIER:
+            case TS_TYPE_IDENTIFIER: {
+                auto is_selector_sel = [&]() {
+                    auto parent = it->parent();
+                    if (parent->null) return false;
+
+                    Ast_Node *field = NULL;
+                    switch (parent->type()) {
+                    case TS_QUALIFIED_TYPE:
+                        field = parent->field(TSF_NAME);
+                        break;
+                    case TS_SELECTOR_EXPRESSION:
+                        field = parent->field(TSF_FIELD);
+                        break;
+                    default:
+                        return false;
+                    }
+
+                    return field->eq(it);
+                };
+
+                if (is_selector_sel()) break;
+
                 Go_Reference ref;
                 ref.is_sel = false;
                 ref.start = it->start();
@@ -2113,14 +2138,6 @@ void Go_Indexer::process_tree_into_gofile(
                     SCOPED_MEM(&file->pool);
                     file->references->append(ref.copy());
                 }
-            };
-
-            switch (it->type()) {
-            case TS_IDENTIFIER:
-            case TS_FIELD_IDENTIFIER:
-            case TS_PACKAGE_IDENTIFIER:
-            case TS_TYPE_IDENTIFIER: {
-                add_ident_ref(it);
                 break;
             }
 
@@ -2134,15 +2151,6 @@ void Go_Indexer::process_tree_into_gofile(
                 } else {
                     x = it->field(TSF_OPERAND);
                     sel = it->field(TSF_FIELD);
-                }
-
-                switch (x->type()) {
-                case TS_IDENTIFIER:
-                case TS_FIELD_IDENTIFIER:
-                case TS_PACKAGE_IDENTIFIER:
-                case TS_TYPE_IDENTIFIER:
-                    add_ident_ref(x);
-                    break;
                 }
 
                 auto xtype = expr_to_gotype(x);
