@@ -297,10 +297,6 @@ void Type_Renderer::write_type(Gotype *t, Type_Renderer_Handler custom_handler, 
         }
         write("}");
         break;
-    case GOTYPE_VARIADIC:
-        write("...");
-        recur(t->variadic_base);
-        break;
     case GOTYPE_POINTER:
         write("*");
         recur(t->pointer_base);
@@ -339,7 +335,10 @@ void Type_Renderer::write_type(Gotype *t, Type_Renderer_Handler custom_handler, 
         break;
     }
     case GOTYPE_SLICE:
-        write("[]");
+        if (t->slice_is_variadic)
+            write("...");
+        else
+            write("[]");
         recur(t->slice_base);
         break;
     case GOTYPE_ARRAY:
@@ -845,8 +844,9 @@ void Go_Indexer::init_builtins(Go_Package *pkg) {
         };
 
         auto variadic = [&](Gotype *base) -> Gotype * {
-            auto ret = new_gotype(GOTYPE_VARIADIC);
-            ret->variadic_base = base;
+            auto ret = new_gotype(GOTYPE_SLICE);
+            ret->slice_base = base;
+            ret->slice_is_variadic = true;
             return ret;
         };
 
@@ -2794,13 +2794,6 @@ bool Go_Indexer::are_gotypes_equal(Goresult *ra, Goresult *rb) {
         return true;
     }
 
-    case GOTYPE_ASSERTION: {
-        auto abase = ra->wrap(a->assertion_base);
-        auto bbase = rb->wrap(b->assertion_base);
-        return are_gotypes_equal(abase, bbase);
-        break;
-    }
-
     case GOTYPE_STRUCT: {
         auto sa = a->struct_specs;
         auto sb = a->struct_specs;
@@ -2831,12 +2824,6 @@ bool Go_Indexer::are_gotypes_equal(Goresult *ra, Goresult *rb) {
         auto bkey = rb->wrap(b->map_key);
         auto bval = rb->wrap(b->map_value);
         return are_gotypes_equal(akey, bkey) && are_gotypes_equal(aval, bval);
-    }
-
-    case GOTYPE_POINTER: {
-        auto abase = ra->wrap(a->pointer_base);
-        auto bbase = rb->wrap(b->pointer_base);
-        return are_gotypes_equal(abase, bbase);
     }
 
     case GOTYPE_FUNC: {
@@ -2875,46 +2862,19 @@ bool Go_Indexer::are_gotypes_equal(Goresult *ra, Goresult *rb) {
         return true;
     }
 
-    case GOTYPE_SLICE: {
-        auto abase = ra->wrap(a->slice_base);
-        auto bbase = rb->wrap(b->slice_base);
-        return are_gotypes_equal(abase, bbase);
-    }
-
-    case GOTYPE_ARRAY: {
-        auto abase = ra->wrap(a->array_base);
-        auto bbase = rb->wrap(b->array_base);
-
-        // Strictly speaking, we should check the array size too. But that
-        // would require us to evaluate the actual *value* of expressions,
-        // something we can't do yet (right now we only deal with types).
-        //
-        // If it becomes important enough, we can do it.
-
-        // return a->array_size == b->array_size && are_gotypes_equal(abase, bbase);
-        return are_gotypes_equal(abase, bbase);
-    }
-
-    case GOTYPE_CHAN: {
-        auto abase = ra->wrap(a->chan_base);
-        auto bbase = rb->wrap(b->chan_base);
+    case GOTYPE_POINTER:
+    case GOTYPE_ASSERTION:
+    case GOTYPE_SLICE:
+    case GOTYPE_ARRAY:
+    case GOTYPE_CHAN:
+    case GOTYPE_RANGE: {
+        auto abase = ra->wrap(a->base);
+        auto bbase = rb->wrap(b->base);
         return are_gotypes_equal(abase, bbase);
     }
 
     case GOTYPE_MULTI:
         return false; // this isn't a real go type, it's for our purposes
-
-    case GOTYPE_VARIADIC: {
-        auto abase = ra->wrap(a->variadic_base);
-        auto bbase = rb->wrap(b->variadic_base);
-        return are_gotypes_equal(abase, bbase);
-    }
-
-    case GOTYPE_RANGE: {
-        auto abase = ra->wrap(a->range_base);
-        auto bbase = rb->wrap(b->range_base);
-        return are_gotypes_equal(abase, bbase);
-    }
 
     case GOTYPE_BUILTIN:
         return a->builtin_type == b->builtin_type;
@@ -5522,8 +5482,9 @@ List<Godecl> *Go_Indexer::parameter_list_to_fields(Ast_Node *params) {
             field->gotype = node_to_gotype(type_node);
 
             if (is_variadic) {
-                auto t = new_gotype(GOTYPE_VARIADIC);
-                t->variadic_base = field->gotype;
+                auto t = new_gotype(GOTYPE_SLICE);
+                t->slice_base = field->gotype;
+                t->slice_is_variadic = true;
                 field->gotype = t;
             }
         }
@@ -5540,8 +5501,9 @@ List<Godecl> *Go_Indexer::parameter_list_to_fields(Ast_Node *params) {
             field->gotype = node_to_gotype(type_node);
 
             if (is_variadic) {
-                auto t = new_gotype(GOTYPE_VARIADIC);
-                t->variadic_base = field->gotype;
+                auto t = new_gotype(GOTYPE_SLICE);
+                t->slice_base = field->gotype;
+                t->slice_is_variadic = true;
                 field->gotype = t;
             }
         }
@@ -6223,8 +6185,9 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
                 if (!type_node_gotype) continue;
 
                 if (node->type() == TS_PARAMETER_LIST && spec->type() == TS_VARIADIC_PARAMETER_DECLARATION) {
-                    auto t = new_gotype(GOTYPE_VARIADIC);
-                    t->variadic_base = type_node_gotype;
+                    auto t = new_gotype(GOTYPE_SLICE);
+                    t->slice_base = type_node_gotype;
+                    t->slice_is_variadic = true;
                     type_node_gotype = t;
                 }
 
@@ -6491,7 +6454,6 @@ Gotype* _walk_gotype_and_replace(Gotype *gotype, walk_gotype_and_replace_cb cb) 
     };
 
     switch (gotype->type) {
-    case GOTYPE_VARIADIC:
     case GOTYPE_POINTER:
     case GOTYPE_SLICE:
     case GOTYPE_ARRAY:
@@ -7215,7 +7177,6 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
                     break;
                 }
 
-                case GOTYPE_VARIADIC:
                 case GOTYPE_POINTER:
                 case GOTYPE_SLICE:
                 case GOTYPE_ARRAY:
@@ -8358,9 +8319,6 @@ void Gotype::read(Index_Stream *s) {
         }
         break;
     }
-    case GOTYPE_VARIADIC:
-        READ_OBJ(variadic_base);
-        break;
     case GOTYPE_ASSERTION:
         READ_OBJ(assertion_base);
         break;
@@ -8536,9 +8494,6 @@ void Gotype::write(Index_Stream *s) {
         break;
     case GOTYPE_MULTI:
         WRITE_LISTP(multi_types);
-        break;
-    case GOTYPE_VARIADIC:
-        WRITE_OBJ(variadic_base);
         break;
     case GOTYPE_ASSERTION:
         WRITE_OBJ(assertion_base);

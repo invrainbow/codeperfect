@@ -29,7 +29,8 @@ extern "C" TSLanguage *tree_sitter_go();
 // version 29: generics
 // version 30: support labels
 // version 31: version is fucked for some reason
-#define GO_INDEX_VERSION 31
+// version 32: get rid of GOTYPE_VARIADIC
+#define GO_INDEX_VERSION 32
 
 enum {
     CUSTOM_HASH_BUILTINS = 1,
@@ -581,7 +582,6 @@ enum Gotype_Type {
     GOTYPE_ARRAY,
     GOTYPE_CHAN,
     GOTYPE_MULTI,
-    GOTYPE_VARIADIC,
     GOTYPE_ASSERTION,
     GOTYPE_RANGE,
     GOTYPE_BUILTIN,
@@ -656,7 +656,11 @@ struct Gotype {
 
         Gotype *base; // to be used for any type that has a "base"
 
-        Gotype *slice_base;
+        struct {
+            Gotype *slice_base;
+            bool slice_is_variadic;
+        };
+
         Gotype *array_base;
 
         struct {
@@ -665,7 +669,6 @@ struct Gotype {
         };
 
         List<Gotype*> *multi_types;
-        Gotype *variadic_base;
         Gotype *assertion_base;
 
         struct {

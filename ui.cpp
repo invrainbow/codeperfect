@@ -581,19 +581,21 @@ void UI::render_gotype(Gotype *gotype, ccstr field) {
             }
             break;
         }
-        case GOTYPE_POINTER: render_gotype(gotype->pointer_base, "base"); break;
-        case GOTYPE_SLICE: render_gotype(gotype->slice_base, "base"); break;
-        case GOTYPE_ARRAY: render_gotype(gotype->array_base, "base"); break;
-        case GOTYPE_LAZY_INDEX: render_gotype(gotype->lazy_index_base, "base"); break;
-        case GOTYPE_LAZY_CALL: render_gotype(gotype->lazy_call_base, "base"); break;
-        case GOTYPE_LAZY_DEREFERENCE: render_gotype(gotype->lazy_dereference_base, "base"); break;
-        case GOTYPE_LAZY_REFERENCE: render_gotype(gotype->lazy_reference_base, "base"); break;
-        case GOTYPE_LAZY_ARROW: render_gotype(gotype->lazy_arrow_base, "base"); break;
-        case GOTYPE_VARIADIC: render_gotype(gotype->variadic_base, "base"); break;
-        case GOTYPE_ASSERTION: render_gotype(gotype->assertion_base, "base"); break;
+
+        case GOTYPE_POINTER:
+        case GOTYPE_SLICE:
+        case GOTYPE_ARRAY:
+        case GOTYPE_LAZY_INDEX:
+        case GOTYPE_LAZY_CALL:
+        case GOTYPE_LAZY_DEREFERENCE:
+        case GOTYPE_LAZY_REFERENCE:
+        case GOTYPE_LAZY_ARROW:
+        case GOTYPE_ASSERTION:
+            render_gotype(gotype->base, "base");
+            break;
 
         case GOTYPE_CHAN:
-            render_gotype(gotype->chan_base, "base"); break;
+            render_gotype(gotype->chan_base, "base");
             ImGui::Text("direction: %d", gotype->chan_direction);
             break;
 

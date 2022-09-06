@@ -234,9 +234,6 @@ Gotype *Gotype::copy() {
     case GOTYPE_MULTI:
         ret->multi_types = copy_listp(multi_types);
         break;
-    case GOTYPE_VARIADIC:
-        ret->variadic_base = copy_object(variadic_base);
-        break;
     case GOTYPE_ASSERTION:
         ret->assertion_base = copy_object(assertion_base);
         break;
