@@ -45,6 +45,7 @@ const LINKS = {
   docs: "https://docs.codeperfect95.com",
   gettingStarted: "https://docs.codeperfect95.com/getting-started",
   changelog: "https://docs.codeperfect95.com/changelog",
+  issueTracker: "https://github.com/codeperfect95/issue-tracker",
 
   buyPersonalMonthly: "https://buy.stripe.com/aEU5kx2aTaso4TK008",
   buyPersonalYearly: "https://buy.stripe.com/fZefZb2aTdEAbi8aEN",
@@ -631,6 +632,7 @@ function Footer() {
           <FootSection>
             <FootLink href={getLink("docs")}>Docs</FootLink>
             <FootLink href={getLink("changelog")}>Changelog</FootLink>
+            <FootLink href={getLink("issueTracker")}>Issue Tracker</FootLink>
           </FootSection>
           <FootSection>
             <FootLink href={`mailto:${SUPPORT_EMAIL}`}>Support</FootLink>

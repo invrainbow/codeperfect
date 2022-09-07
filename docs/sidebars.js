@@ -17,12 +17,7 @@ const sidebars = {
     {
       type: "category",
       label: "Changelog",
-      items: [
-        { type: "doc", id: "changelog/0.6", label: "Version 0.6" },
-        { type: "doc", id: "changelog/0.5", label: "Version 0.5" },
-        { type: "doc", id: "changelog/0.4", label: "Version 0.4" },
-        { type: "doc", id: "changelog/0.3", label: "Version 0.3" },
-      ],
+      items: [{ type: "doc", id: "changelog/22.08", label: "Release 22.09" }],
     },
   ],
 
