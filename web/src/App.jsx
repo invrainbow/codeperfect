@@ -37,7 +37,7 @@ posthog.init("phc_kIt8VSMD8I2ScNhnjWDU2NmrK9kLIL3cHWpkgCX3Blw", {
 });
 
 const SUPPORT_EMAIL = "support@codeperfect95.com";
-const CURRENT_BUILD = "22.08";
+const CURRENT_BUILD = "22.09";
 
 const isDev = process.env.NODE_ENV === "development";
 
