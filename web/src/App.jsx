@@ -500,7 +500,7 @@ function Download() {
               )}
               title={it.disabledText}
               onClick={(e) => {
-                disableButtonProps.onClick(e);
+                // disableButtonProps.onClick(e);
                 posthog.capture("download", { platform: it.platform });
               }}
             >
