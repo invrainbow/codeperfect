@@ -197,3 +197,20 @@ ccstr str_replace(ccstr s, ccstr find, ccstr replace) {
     ret->append('\0');
     return ret->items;
 }
+
+int binary_search(void *list, s32 num, s32 size, bs_test_func test) {
+    int lo = 0, hi = num-1;
+    while (lo <= hi) {
+        auto mid = (lo+hi)/2;
+        auto curr = (void*)((char*)list + mid*size);
+        auto result = test(curr);
+
+        if (result > 0)
+            lo = mid + 1;
+        else if (result < 0)
+            hi = mid - 1;
+        else
+            return mid;
+    }
+    return -1;
+}

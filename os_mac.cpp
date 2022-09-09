@@ -65,24 +65,6 @@ void xplat_quicksort(void *list, s32 num, s32 size, compare_func cmp) {
     qsort_r(list, num, size, &cmp, _cmp_trampoline);
 }
 
-// no bsearch_s, i guess i have to implement this myself...
-void *xplat_binary_search(const void *key, void *list, s32 num, s32 size, compare_func cmp) {
-    int lo = 0, hi = num-1;
-    while (lo <= hi) {
-        auto mid = (lo+hi)/2;
-        auto curr = (void*)((char*)list + mid*size);
-        auto result = cmp(key, curr);
-
-        if (result)
-            lo = mid + 1;
-        else if (result < 0)
-            hi = mid - 1;
-        else
-            return curr;
-    }
-    return NULL;
-}
-
 void sleep_milliseconds(u32 ms) {
     struct timespec elapsed, tv;
 

@@ -3442,7 +3442,7 @@ List<Find_References_File> *Go_Indexer::actually_find_references(Goresult *declr
         if (streq(ctx2.import_path, ctx->import_path) && streq(ctx2.filename, ctx->filename))
             same_file_as_decl = true;
 
-        auto references = alloc_list<Go_Reference>();
+        auto results = alloc_list<Go_Reference>();
 
         bool same_package = streq(pkg->import_path, ctx->import_path);
 
@@ -3513,21 +3513,43 @@ List<Find_References_File> *Go_Indexer::actually_find_references(Goresult *declr
                 }
                 break;
             case CASE_METHOD:
-               if (!it->is_sel && !is_self) return;
+                if (!it->is_sel && !is_self) return;
                 break;
             }
 
+            int tidx = 0;
+            auto toplevels = file->decls;
+
             auto decl = get_reference_decl(it, &ctx2);
-            if (decl && is_match(decl))
-                references->append(it);
+            if (decl && is_match(decl)) {
+                Find_References_Result result; ptr0(&result);
+                result.reference = it;
+
+                auto pos = it.is_sel ? it.x_start : it.start;
+                Godecl *toplevel = NULL;
+
+                while (toplevels->at(tidx).end < pos && tidx < toplevels->len)
+                    tidx++;
+                if (tidx < toplevels->len && toplevels->at(tidx).start < pos) {
+                    auto &toplevel = toplevels->at(tidx);
+
+                    switch (toplevel->type) {
+                    }
+
+                    result.toplevel_name = toplevel;
+                    toplevel
+                }
+
+                references->append(&result);
+            }
         };
 
         For (*file->references) process_ref(&it);
 
-        if (references->len > 0) {
+        if (results->len > 0) {
             Find_References_File out;
             out.filepath = cp_strdup(path_join(get_package_path(pkg->import_path), file->filename));
-            out.references = references;
+            out.results = results;
             ret->append(&out);
         }
     };

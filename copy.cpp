@@ -362,3 +362,11 @@ Project_Settings *Project_Settings::copy() {
     ret->debug_profiles = copy_list(debug_profiles);
     return ret;
 }
+
+Find_Refernces_Result *Find_Refernces_Result::copy() {
+    auto ret = clone(this);
+    ret->reference = copy_object(reference);
+    ret->toplevel_name = cp_strdup(toplevel_name);
+    return ret;
+
+}

@@ -18,6 +18,9 @@ void free_chunk_stub(uchar* buf, s32 cap);
 void *get_current_pool_stub();
 void *alloc_from_pool_stub(void *pool, s32 n);
 
+typedef fn<int(const void *it)> bs_stub_test_func;
+int binary_search_stub(void *list, s32 num, s32 size, bs_stub_test_func test);
+
 template <typename T>
 struct List {
     typedef T type;
@@ -194,11 +197,11 @@ struct List {
         return ret;
     }
 
-    typedef fn<int(T *a, T *b)> cmp_func;
+    typedef fn<int(T *a, T *b)> bfind_test_func;
 
-    T *bfind(T *key, cmp_func cmp) {
-        return (T*)xplat_binary_search(key, items, len, sizeof(T), [&](const void *a, const void *b) -> int {
-            return cmp((T*)a, (T*)b);
+    T *bfind(bfind_test_func cmp) {
+        return (T*)binary_search_stub(items, len, sizeof(T), [&](const void *it) -> int {
+            return cmp((T*)it);
         });
     }
 

@@ -2971,6 +2971,8 @@ void UI::draw_everything() {
                 imgui_push_mono_font();
                 For (*wnd.results) {
                     auto filepath = get_path_relative_to(it.filepath, world.current_path);
+                    ImGui::Text("%s", filepath);
+
                     For (*it.references) {
                         auto pos = it.is_sel ? it.x_start : it.start;
 

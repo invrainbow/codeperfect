@@ -514,10 +514,6 @@ void xplat_quicksort(void *list, s32 num, s32 size, compare_func cmp) {
     qsort_s(list, num, size, _cmp_trampoline, &cmp);
 }
 
-void *xplat_binary_search(const void *key, void *list, s32 num, s32 size, compare_func cmp) {
-    return bsearch_s(key, list, num, size, _cmp_trampoline, &cmp);
-}
-
 #define GET_FILE_SIZE_ERROR ((u64)-1)
 
 u64 _get_file_size(HANDLE f) {
