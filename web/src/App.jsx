@@ -473,19 +473,7 @@ function Download() {
       <Title className="px-4 md:text-center text-2xl">
         Download CodePerfect {CURRENT_BUILD}
       </Title>
-      <div className="px-4">
-        <div
-          style={{ maxWidth: "calc(min(100%, 1024px))" }}
-          className="mx-auto items-center gap-8 my-8 hidden md:flex rounded-xl overflow-hidden border border-gray-300"
-        >
-          <img
-            alt="screenshot"
-            className="max-w-full max-h-full w-auto h-auto"
-            src={asset("/download.png")}
-          />
-        </div>
-      </div>
-      <div className="max-w-3xl mx-auto px-4 md:text-center">
+      <div className="max-w-3xl mx-auto mt-8 px-4 md:text-center">
         <p className="flex flex-wrap flex-col md:flex-row gap-2 justify-center">
           {links.map((it) => (
             <A
@@ -513,6 +501,18 @@ function Download() {
           CodePerfect is free to evaluate for 7 days. After that you'll need a{" "}
           <A href="/buy">license</A> for continued use.
         </p>
+      </div>
+      <div className="px-4 mt-12 md:mt-20">
+        <div
+          style={{ maxWidth: "calc(min(100%, 1024px))" }}
+          className="mx-auto items-center gap-8 my-8 hidden md:flex rounded-xl overflow-hidden border border-gray-300"
+        >
+          <img
+            alt="screenshot"
+            className="max-w-full max-h-full w-auto h-auto"
+            src={asset("/download.png")}
+          />
+        </div>
       </div>
       <div className="flex-grow"></div>
     </div>

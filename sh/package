@@ -54,13 +54,21 @@ elif [[ $os = "mac" ]]; then
     rm -rf CodePerfect.app/Contents/README
     rm -rf CodePerfect.app/Contents/MacOS/bin/ide.d
 
-    # zip up app
-    zip -r app.zip CodePerfect.app/
+    # codesign garbage
+    codesign --force --options runtime --sign 'Developer ID Application: Brandon Hsiao' CodePerfect.app/Contents/MacOS/bin/ide
+    codesign --force --options runtime --sign 'Developer ID Application: Brandon Hsiao' CodePerfect.app/Contents/MacOS/bin/nvim/bin/nvim
+    codesign --deep --force --options runtime --sign 'Developer ID Application: Brandon Hsiao' CodePerfect.app
 
-    # zip up update
-    pushd CodePerfect.app/Contents/MacOS/bin
-    zip -r ../../../../update.zip *
-    popd
+    # zip up app & update
+    ditto -c -k --keepParent CodePerfect.app app.zip
+    ditto -c -k CodePerfect.app/Contents/MacOS/bin update.zip
+
+    # notarize
+    xcrun notarytool submit app.zip --keychain-profile AC_PASSWORD --wait
+    xcrun stapler staple CodePerfect.app
+    rm app.zip
+    ditto -c -k --keepParent CodePerfect.app app.zip
+
 elif [[ $os = "linux" ]]; then
     rm -rf CodePerfect
     mkdir CodePerfect
