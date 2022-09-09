@@ -16,12 +16,16 @@ if [[ "$os" = "linux" ]]; then
     sudo apt install libx11-dev libxft-dev autoconf libtool bison gperf libgles2-mesa-dev libxext-dev libxrandr-dev libxi-dev libxcursor-dev libxdamage-dev libxinerama-dev
     sudo apt install libgl1-mesa-dev libglu1-mesa-dev
     sudo apt install libgtk-3-dev
-else if [[ $os = mac ]]; then
-    if [[ -z $APP_CONNECT_PASSWORD ]]; then
+elif [[ $os = mac ]]; then
+    if [[ -n $APP_CONNECT_PASSWORD ]]; then
+        if [[ -n "$(which xcrun)" ]]; then
+            xcrun notarytool store-credentials AC_PASSWORD --apple-id bh.apple@codeperfect95.com --team-id XCW98WVBHN --password $APP_CONNECT_PASSWORD
+        else
+            echo "xcrun not found, please install xcode-tools"
+        fi
+    else
         echo "please set APP_CONNECT_PASSWORD, it's in 1password"
-        exit 1
     fi
-    xcrun notarytool store-credentials AC_PASSWORD --apple-id bh.apple@codeperfect95.com --team-id XCW98WVBHN --password $APP_CONNECT_PASSWORD
 fi
 
 # vcpkg
