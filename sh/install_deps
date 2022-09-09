@@ -34,7 +34,7 @@ else
 fi
 
 export VCPKG_DEFAULT_TRIPLET=$(sh/vcpkg_triplet)
-$vcpkg_binary install
+$vcpkg_binary install --x-install-root=vcpkg/installed
 
 # nvim
 rm -rf nvim-archive
