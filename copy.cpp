@@ -83,7 +83,7 @@ Go_Symbol* Go_Symbol::copy() {
 Find_References_File* Find_References_File::copy() {
     auto ret = clone(this);
     ret->filepath = cp_strdup(filepath);
-    ret->references = copy_list(references);
+    ret->results = copy_list(results);
     return ret;
 }
 
@@ -363,7 +363,7 @@ Project_Settings *Project_Settings::copy() {
     return ret;
 }
 
-Find_Refernces_Result *Find_Refernces_Result::copy() {
+Find_References_Result *Find_References_Result::copy() {
     auto ret = clone(this);
     ret->reference = copy_object(reference);
     ret->toplevel_name = cp_strdup(toplevel_name);

@@ -197,7 +197,8 @@ struct List {
         return ret;
     }
 
-    typedef fn<int(T *a, T *b)> bfind_test_func;
+    typedef fn<int(T *a)> bfind_test_func;
+    typedef fn<int(T *a, T *b)> cmp_func;
 
     T *bfind(bfind_test_func cmp) {
         return (T*)binary_search_stub(items, len, sizeof(T), [&](const void *it) -> int {

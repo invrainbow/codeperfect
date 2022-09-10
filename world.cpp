@@ -1348,16 +1348,18 @@ void kick_off_rename_identifier() {
             File_Replacer fr;
             if (!fr.init(filepath, "refactor_rename")) continue;
 
-            For (*it.references) {
+            For (*it.results) {
                 if (fr.done()) break;
 
+                auto ref = it.reference;
+
                 cur2 start, end;
-                if (it.is_sel) {
-                    start = it.sel_start;
-                    end = it.sel_end;
+                if (ref->is_sel) {
+                    start = ref->sel_start;
+                    end = ref->sel_end;
                 } else {
-                    start = it.start;
-                    end = it.end;
+                    start = ref->start;
+                    end = ref->end;
                 }
 
                 // i think this is a safe assumption?

@@ -1034,7 +1034,7 @@ struct Find_References_Result {
 
 struct Find_References_File {
     ccstr filepath;
-    List<Find_References_Result> results;
+    List<Find_References_Result> *results;
 
     Find_References_File* copy();
 };

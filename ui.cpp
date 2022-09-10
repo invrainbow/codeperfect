@@ -2973,8 +2973,9 @@ void UI::draw_everything() {
                     auto filepath = get_path_relative_to(it.filepath, world.current_path);
                     ImGui::Text("%s", filepath);
 
-                    For (*it.references) {
-                        auto pos = it.is_sel ? it.x_start : it.start;
+                    For (*it.results) {
+                        auto ref = it.reference;
+                        auto pos = ref->is_sel ? ref->x_start : ref->start;
 
                         auto rendered_pos = pos;
                         rendered_pos.x++;

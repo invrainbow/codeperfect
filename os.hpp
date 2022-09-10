@@ -250,7 +250,7 @@ bool delete_file(ccstr path);
 ccstr normalize_path_sep(ccstr path, char sep = 0);
 bool is_sep(char ch);
 
-typedef fn<int(const void *b)> compare_func;
+typedef fn<int(const void *a, const void *b)> compare_func;
 void xplat_quicksort(void *list, s32 num, s32 size, compare_func cmp);
 
 u64 get_file_size(ccstr file);
