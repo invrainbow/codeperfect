@@ -2973,6 +2973,9 @@ void UI::draw_everything() {
                     auto filepath = get_path_relative_to(it.filepath, world.current_path);
                     ImGui::Text("%s", filepath);
 
+                    ImGui::Indent();
+                    imgui_push_mono_font();
+
                     For (*it.results) {
                         auto ref = it.reference;
                         auto pos = ref->is_sel ? ref->x_start : ref->start;
@@ -2981,9 +2984,18 @@ void UI::draw_everything() {
                         rendered_pos.x++;
                         rendered_pos.y++;
 
-                        if (ImGui::Selectable(cp_sprintf("%s:%s", filepath, rendered_pos.str())))
+                        bool selected = false;
+                        if (it.toplevel_name)
+                            selected = ImGui::Selectable(cp_sprintf("%s (in %s)", rendered_pos.str(), it.toplevel_name));
+                        else
+                            selected = ImGui::Selectable(cp_sprintf("%s", rendered_pos.str()));
+
+                        if (selected)
                             goto_file_and_pos(filepath, pos, true);
                     }
+
+                    imgui_pop_font();
+                    ImGui::Unindent();
                 }
                 imgui_pop_font();
             } else {
