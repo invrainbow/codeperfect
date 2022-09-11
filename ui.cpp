@@ -2972,8 +2972,6 @@ void UI::draw_everything() {
 
                 imgui_push_mono_font();
                 For (*wnd.results) {
-                    defer { index++; };
-
                     auto filepath = get_path_relative_to(it.filepath, world.current_path);
                     ImGui::Text("%s", filepath);
 
@@ -2981,6 +2979,8 @@ void UI::draw_everything() {
                     imgui_push_mono_font();
 
                     For (*it.results) {
+                        defer { index++; };
+
                         auto ref = it.reference;
                         auto pos = ref->is_sel ? ref->x_start : ref->start;
 
@@ -2992,46 +2992,27 @@ void UI::draw_everything() {
                         auto text_size = ImVec2(availwidth, ImGui::CalcTextSize("blah").y);
                         auto drawpos = ImGui::GetCursorScreenPos();
 
-                        bool selected = false;
-
                         ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(ImColor(60, 60, 60)));
-                        if (ImGui::Selectable(cp_sprintf("##find_references_result_%d", index), false, 0, text_size)) {
+                        if (ImGui::Selectable(cp_sprintf("##find_references_result_%d", index), false, 0, text_size))
                             goto_file_and_pos(filepath, pos, true);
-                        }
                         ImGui::PopStyleColor();
 
                         // copied from search results, do we need to refactor?
-                        auto draw_text = [&](ccstr s, int len, bool strikethrough = false) {
-                            auto text = cp_sprintf("%.*s", len, s);
-                            auto size = ImGui::CalcTextSize(text);
+                        auto draw_text = [&](ccstr text, ImColor color) {
+                            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(color));
+                            defer { ImGui::PopStyleColor(); };
 
-                            auto drawlist = ImGui::GetWindowDrawList();
-                            drawlist->AddText(drawpos, ImGui::GetColorU32(ImGuiCol_Text), text);
-
-                            if (strikethrough) {
-                                ImVec2 a = drawpos, b = drawpos;
-                                b.y += size.y/2;
-                                a.y += size.y/2;
-                                b.x += size.x;
-                                // ImGui::GetFontSize() / 2
-                                drawlist->AddLine(a, b, ImGui::GetColorU32(ImGuiCol_Text), 1.0f);
-                            }
-
+                            ImGui::GetWindowDrawList()->AddText(drawpos, ImGui::GetColorU32(ImGuiCol_Text), text);
                             drawpos.x += ImGui::CalcTextSize(text).x;
                         };
 
-                        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(ImColor(200, 178, 178)));
-                        {
-                            draw_text(rendered_pos.str());
+                        draw_text(rendered_pos.str(), ImColor(200, 200, 200));
+
+                        if (it.toplevel_name) {
+                            draw_text(" (in ", ImColor(120, 120, 120));
+                            draw_text(it.toplevel_name, ImColor(200, 200, 200));
+                            draw_text(")", ImColor(120, 120, 120));
                         }
-                        ImGui::PopStyleColor();
-
-
-                        if (it.toplevel_name)
-                            selected = ImGui::Selectable(cp_sprintf("%s (in %s)", rendered_pos.str(), it.toplevel_name));
-                        else
-                            selected = ImGui::Selectable(cp_sprintf("%s", rendered_pos.str()));
-
                     }
 
                     imgui_pop_font();
@@ -3041,7 +3022,6 @@ void UI::draw_everything() {
             } else {
                 ImGui::Text("No results found.");
             }
-
         } else {
             ImGui::Text("Searching...");
             ImGui::SameLine();
@@ -3059,7 +3039,7 @@ void UI::draw_everything() {
         auto &wnd = world.wnd_generate_implementation;
 
         if (wnd.show && wnd.fill_running && current_time_milli() - wnd.fill_time_started_ms > 100) {
-            begin_centered_window("Generate Implementation...###generate_impelmentation_filling", &wnd, 0, 400);
+            begin_centered_window("Generate Implementation...###generate_implementation_filling", &wnd, 0, 400);
             ImGui::Text("Loading...");
             ImGui::End();
         }
