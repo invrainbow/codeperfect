@@ -368,20 +368,6 @@ ccstr get_canon_path(ccstr path);
 
 bool move_file_atomically(ccstr src, ccstr dest);
 
-/*
-enum Charset_Type {
-    CS_ENGLISH,
-    CS_CHINESE_SIM,
-    CS_CHINESE_TRAD,
-    CS_KOREAN,
-    CS_JAPANESE,
-    CS_CYRILLIC,
-};
-
-void *read_font_data_from_name(s32 *len, ccstr name, Charset_Type charset);
-void *read_font_data_from_first_found(s32 *plen, Charset_Type charset, ...);
-*/
-
 enum Ask_User_Result {
     ASKUSER_ERROR = 0,
     ASKUSER_YES,
