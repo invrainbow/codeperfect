@@ -2515,7 +2515,7 @@ void UI::draw_everything() {
 
             if (ImGui::MenuItem("Expire trial")) {
                 if (world.auth.state != AUTH_TRIAL) {
-                    tell_user("User is not currently in a trial state.", NULL);
+                    tell_user_error("User is not currently in a trial state.");
                 } else {
                     world.auth.trial_start = get_unix_time() - 1000 * 60 * 60 * 24 * 14;
                     write_auth();
@@ -3276,12 +3276,12 @@ void UI::draw_everything() {
             auto license_len = strlen(wnd.license);
 
             if (email_len + 1 > _countof(auth.reg_email)) {
-                tell_user("Sorry, that email is too long.", NULL);
+                tell_user_error("Sorry, that email is too long.");
                 break;
             }
 
             if (license_len + 1 > _countof(auth.reg_license)) {
-                tell_user("Sorry, that license key is too long.", NULL);
+                tell_user_error("Sorry, that license key is too long.");
                 break;
             }
 
@@ -3536,6 +3536,11 @@ void UI::draw_everything() {
             wnd.show = false;
 
             do {
+                if (world.file_tree_busy) {
+                    tell_user_error("Sorry, the file tree is currently being generated.");
+                    break;
+                }
+
                 if (!strlen(wnd.name)) break;
 
                 auto dest = wnd.location_is_root ? world.current_path : path_join(world.current_path, wnd.location);
@@ -3784,36 +3789,35 @@ void UI::draw_everything() {
                         draw(child);
             };
 
-            if (ImGui::BeginPopup("file_explorer_rename_file")) {
-                ImGui::Text("shit goes here");
-                ImGui::EndPopup();
-            }
+            if (world.file_tree_busy) {
+                ImGui::Text("Generating file tree...");
+            } else {
+                for (auto child = world.file_tree->children; child; child = child->next)
+                    draw(child);
 
-            for (auto child = world.file_tree->children; child; child = child->next)
-                draw(child);
+                fstlog("wnd_file_explorer - draw files");
 
-            fstlog("wnd_file_explorer - draw files");
+                if (!menu_handled && ImGui::OurBeginPopupContextWindow("file_explorer_context_menu")) {
+                    {
+                        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, old_item_spacing);
+                        defer { ImGui::PopStyleVar(); };
 
-            if (!menu_handled && ImGui::OurBeginPopupContextWindow("file_explorer_context_menu")) {
-                {
-                    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, old_item_spacing);
-                    defer { ImGui::PopStyleVar(); };
+                        if (ImGui::Selectable("Add new file...")) {
+                            open_add_file_or_folder(false);
+                        }
 
-                    if (ImGui::Selectable("Add new file...")) {
-                        open_add_file_or_folder(false);
+                        if (ImGui::Selectable("Add new folder...")) {
+                            open_add_file_or_folder(true);
+                        }
                     }
-
-                    if (ImGui::Selectable("Add new folder...")) {
-                        open_add_file_or_folder(true);
-                    }
+                    ImGui::EndPopup();
                 }
-                ImGui::EndPopup();
-            }
 
-            fstlog("wnd_file_explorer - right click");
+                fstlog("wnd_file_explorer - right click");
+            }
         } ImGui::EndChild();
 
-        if (wnd.focused) {
+        if (wnd.focused && !world.file_tree_busy) {
             auto mods = imgui_get_keymods();
             switch (mods) {
             case CP_MOD_NONE:

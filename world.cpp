@@ -254,65 +254,70 @@ bool exclude_from_file_tree(ccstr path) {
     return false;
 }
 
+void crawl_path_into_ftnode(ccstr path, FT_Node *parent, int depth = 0) {
+    FT_Node *last_child = parent->children;
+
+    list_directory(path, [&](Dir_Entry *ent) {
+        do {
+            auto fullpath = path_join(path, ent->name);
+            if (exclude_from_file_tree(fullpath)) break;
+
+            auto file = alloc_object(FT_Node);
+            file->name = cp_strdup(ent->name);
+            file->is_directory = (ent->type & FILE_TYPE_DIRECTORY);
+            file->num_children = 0;
+            file->parent = parent;
+            file->children = NULL;
+            file->depth = depth;
+            file->open = false;
+            file->next = NULL;
+
+            if (!last_child) {
+                parent->children = last_child = file;
+            } else {
+                last_child->next = file;
+                file->prev = last_child;
+                last_child = file;
+            }
+
+            parent->num_children++;
+            if (file->is_directory)
+                crawl_path_into_ftnode(fullpath, file, depth + 1);
+        } while (0);
+
+        return true;
+    });
+
+    parent->children = sort_ft_nodes(parent->children);
+}
+
 void fill_file_tree() {
-    SCOPED_MEM(&world.file_tree_mem);
-    world.file_tree_mem.reset();
+    if (world.file_tree_busy) return;
 
-    // invalidate pointers
-    world.file_explorer.selection = NULL;
-    world.file_explorer.last_file_copied = NULL;
-    world.file_explorer.last_file_cut = NULL;
+    world.file_tree_busy = true;
 
-    world.file_tree = alloc_object(FT_Node);
-    world.file_tree->is_directory = true;
-    world.file_tree->depth = -1;
+    auto t = create_thread([](void*) {
+        defer { world.file_tree_busy = false; };
 
-    u32 depth = 0;
+        SCOPED_MEM(&world.file_tree_mem);
+        world.file_tree_mem.reset();
 
-    GHGitIgnoreInit(world.current_path); // why do we need this here?
+        // invalidate pointers
+        world.file_explorer.selection = NULL;
+        world.file_explorer.last_file_copied = NULL;
+        world.file_explorer.last_file_cut = NULL;
 
-    fn<void(ccstr, FT_Node*)> recur = [&](ccstr path, FT_Node *parent) {
-        FT_Node *last_child = parent->children;
+        world.file_tree = alloc_object(FT_Node);
+        world.file_tree->is_directory = true;
+        world.file_tree->depth = -1;
 
-        list_directory(path, [&](Dir_Entry *ent) {
-            do {
-                auto fullpath = path_join(path, ent->name);
-                if (exclude_from_file_tree(fullpath)) break;
+        u32 depth = 0;
 
-                auto file = alloc_object(FT_Node);
-                file->name = cp_strdup(ent->name);
-                file->is_directory = (ent->type & FILE_TYPE_DIRECTORY);
-                file->num_children = 0;
-                file->parent = parent;
-                file->children = NULL;
-                file->depth = depth;
-                file->open = false;
-                file->next = NULL;
+        GHGitIgnoreInit(world.current_path); // why do we need this here?
+        crawl_path_into_ftnode(world.current_path, world.file_tree);
+    });
 
-                if (!last_child) {
-                    parent->children = last_child = file;
-                } else {
-                    last_child->next = file;
-                    file->prev = last_child;
-                    last_child = file;
-                }
-
-                parent->num_children++;
-
-                if (file->is_directory) {
-                    depth++;
-                    recur(fullpath, file);
-                    depth--;
-                }
-            } while (0);
-
-            return true;
-        });
-
-        parent->children = sort_ft_nodes(parent->children);
-    };
-
-    recur(world.current_path, world.file_tree);
+    if (t) close_thread_handle(t);
 }
 
 bool copy_file(ccstr src, ccstr dest) {
@@ -646,6 +651,11 @@ void activate_pane_by_index(u32 idx) {
 }
 
 void init_goto_file() {
+    if (world.file_tree_busy) {
+        tell_user_error("The file tree is currently being generated.");
+        return;
+    }
+
     SCOPED_MEM(&world.goto_file_mem);
     world.goto_file_mem.reset();
 
@@ -950,37 +960,6 @@ ccstr ft_node_to_path(FT_Node *node) {
     return r.finish();
 }
 
-FT_Node *find_or_create_ft_node(ccstr relpath, bool is_directory) {
-    auto ret = find_ft_node(relpath);
-    if (ret) return ret;
-
-    auto parent = find_ft_node(cp_dirname(relpath));
-    if (!parent) return NULL;
-
-
-    {
-        SCOPED_MEM(&world.file_tree_mem);
-
-        auto ret = alloc_object(FT_Node);
-        ret->is_directory = true;
-        ret->name = cp_basename(relpath);
-        ret->depth = parent->depth + 1;
-        ret->num_children = 0;
-        ret->parent = parent;
-        ret->children = NULL;
-        ret->prev = NULL;
-        ret->open = parent->open;
-
-        ret->next = parent->children;
-        if (parent->children)
-            parent->children->prev = ret;
-        parent->children = ret;
-        parent->children = sort_ft_nodes(parent->children);
-
-        return ret;
-    }
-}
-
 FT_Node *find_ft_node(ccstr relpath) {
     auto path = make_path(relpath);
     auto node = world.file_tree;
@@ -1132,13 +1111,16 @@ void goto_next_error(int direction) {
 }
 
 void reload_file_subtree(ccstr relpath) {
+    // TODO: if the file tree is busy, add the path to a queue of subtrees to reload
+    // and pull the stuff underneath into like actually_reload_file_subtree()
+    // and then when file tree is finished, call actually_reload_file_subtree() on everything in the queue
+    if (world.file_tree_busy) return;
+
     auto path = path_join(world.current_path, relpath);
     if (is_ignored_by_git(path))
         return;
 
     switch (check_path(path)) {
-    case CPR_DIRECTORY:
-        break;
     case CPR_NONEXISTENT: {
         auto node = find_ft_node(relpath);
         if (node)
@@ -1148,6 +1130,36 @@ void reload_file_subtree(ccstr relpath) {
     case CPR_FILE:
         return;
     }
+
+    auto find_or_create_ft_node = [&](ccstr relpath, bool is_directory) -> FT_Node * {
+        auto ret = find_ft_node(relpath);
+        if (ret) return ret;
+
+        auto parent = find_ft_node(cp_dirname(relpath));
+        if (!parent) return NULL;
+
+        {
+            SCOPED_MEM(&world.file_tree_mem);
+
+            auto ret = alloc_object(FT_Node);
+            ret->is_directory = true;
+            ret->name = cp_basename(relpath);
+            ret->depth = parent->depth + 1;
+            ret->num_children = 0;
+            ret->parent = parent;
+            ret->children = NULL;
+            ret->prev = NULL;
+            ret->open = parent->open;
+
+            ret->next = parent->children;
+            if (parent->children)
+                parent->children->prev = ret;
+            parent->children = ret;
+            parent->children = sort_ft_nodes(parent->children);
+
+            return ret;
+        }
+    };
 
     auto node = find_or_create_ft_node(relpath, true);
     if (!node) return;
@@ -1312,7 +1324,7 @@ void kick_off_rename_identifier() {
 
     auto &ind = world.indexer;
     if (!ind.acquire_lock(IND_READING)) {
-        tell_user("The indexer is currently busy.", NULL);
+        tell_user_error("The indexer is currently busy.");
         return;
     }
 
@@ -1404,7 +1416,7 @@ void kick_off_rename_identifier() {
     wnd.too_late_to_cancel = false;
     wnd.thread = create_thread(thread_proc, NULL);
     if (!wnd.thread) {
-        tell_user("Unable to kick off Rename Identifier.", NULL);
+        tell_user_error("Unable to kick off Rename Identifier.");
         return;
     }
 
@@ -1721,7 +1733,7 @@ void do_find_interfaces() {
 
     auto &ind = world.indexer;
     if (!ind.acquire_lock(IND_READING)) {
-        tell_user("The indexer is currently busy.", NULL);
+        tell_user_error("The indexer is currently busy.");
         return;
     }
 
@@ -1764,7 +1776,7 @@ void do_find_interfaces() {
 
     wnd.thread = create_thread(thread_proc, NULL);
     if (!wnd.thread) {
-        tell_user("Unable to kick off Find Interfaces.", NULL);
+        tell_user_error("Unable to kick off Find Interfaces.");
         return;
     }
 }
@@ -1823,7 +1835,7 @@ void do_find_implementations() {
 
     auto &ind = world.indexer;
     if (!ind.acquire_lock(IND_READING)) {
-        tell_user("The indexer is currently busy.", NULL);
+        tell_user_error("The indexer is currently busy.");
         return;
     }
 
@@ -1865,7 +1877,7 @@ void do_find_implementations() {
 
     wnd.thread = create_thread(thread_proc, NULL);
     if (!wnd.thread) {
-        tell_user("Unable to kick off Find Implementations.", NULL);
+        tell_user_error("Unable to kick off Find Implementations.");
         return;
     }
 }
@@ -2038,7 +2050,7 @@ void handle_command(Command cmd, bool from_menu) {
 
         auto &ind = world.indexer;
         if (!ind.acquire_lock(IND_READING)) {
-            tell_user("The indexer is currently busy.", NULL);
+            tell_user_error("The indexer is currently busy.");
             break;
         }
 
@@ -2079,7 +2091,7 @@ void handle_command(Command cmd, bool from_menu) {
         wnd.results = NULL;
         wnd.thread = create_thread(thread_proc, NULL);
         if (!wnd.thread) {
-            tell_user("Unable to kick off Find References.", NULL);
+            tell_user_error("Unable to kick off Find References.");
             break;
         }
         break;
@@ -2118,7 +2130,7 @@ void handle_command(Command cmd, bool from_menu) {
         auto result = get_current_definition(&filepath, true);
         if (!result) return;
         if (result->decl->decl->type == GODECL_IMPORT) {
-            tell_user("Sorry, we're currently not yet able to rename imports.", NULL);
+            tell_user_error("Sorry, we're currently not yet able to rename imports.");
             return;
         }
 
@@ -2335,7 +2347,7 @@ void handle_command(Command cmd, bool from_menu) {
 
         auto &ind = world.indexer;
         if (!ind.acquire_lock(IND_READING)) {
-            tell_user("The indexer is currently busy.", NULL);
+            tell_user_error("The indexer is currently busy.");
             break;
         }
 
@@ -2406,7 +2418,7 @@ void handle_command(Command cmd, bool from_menu) {
 
         wnd.thread = create_thread(thread_proc, NULL);
         if (!wnd.thread) {
-            tell_user("Unable to kick off View Call Hierarchy.", NULL);
+            tell_user_error("Unable to kick off View Call Hierarchy.");
             break;
         }
         break;
@@ -2417,7 +2429,7 @@ void handle_command(Command cmd, bool from_menu) {
 
         auto &ind = world.indexer;
         if (!ind.acquire_lock(IND_READING)) {
-            tell_user("The indexer is currently busy.", NULL);
+            tell_user_error("The indexer is currently busy.");
             break;
         }
 
@@ -2488,7 +2500,7 @@ void handle_command(Command cmd, bool from_menu) {
 
         wnd.thread = create_thread(thread_proc, NULL);
         if (!wnd.thread) {
-            tell_user("Unable to kick off View Call Hierarchy.", NULL);
+            tell_user_error("Unable to kick off View Call Hierarchy.");
             break;
         }
 
@@ -2573,6 +2585,11 @@ void handle_command(Command cmd, bool from_menu) {
 }
 
 void open_add_file_or_folder(bool folder, FT_Node *dest) {
+    if (world.file_tree_busy) {
+        tell_user_error("The file tree is currently being generated.");
+        return;
+    }
+
     if (!dest) dest = world.file_explorer.selection;
 
     FT_Node *node = NULL;

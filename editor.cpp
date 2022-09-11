@@ -1460,6 +1460,8 @@ void Pane::set_current_editor(u32 idx) {
 
     // focus current editor in file explorer
 
+    if (world.file_tree_busy) return;
+
     auto ed = get_current_editor();
     if (!ed) return;
     if (ed->is_untitled) return;
@@ -2477,6 +2479,8 @@ void Editor::handle_save(bool about_to_close) {
     file_was_deleted = false;
 
     auto find_node = [&]() -> FT_Node * {
+        if (world.file_tree_busy) return NULL;
+
         auto curr = world.file_tree;
         auto subpath = get_path_relative_to(filepath, world.current_path);
         auto parts = make_path(subpath)->parts;

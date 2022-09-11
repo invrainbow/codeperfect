@@ -392,8 +392,10 @@ enum Ask_User_Result {
 Ask_User_Result ask_user_yes_no_cancel(ccstr text, ccstr title, ccstr yeslabel, ccstr nolabel);
 Ask_User_Result ask_user_yes_no(ccstr text, ccstr title, ccstr yeslabel, ccstr nolabel, bool cancel = false);
 void tell_user(ccstr text, ccstr title);
-ccstr get_executable_path();
 
+#define tell_user_error(text) tell_user(text, NULL)
+
+ccstr get_executable_path();
 bool xplat_chdir(ccstr dir);
 
 bool create_directory(ccstr path);

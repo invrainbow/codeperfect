@@ -241,6 +241,11 @@ bool Searcher::start_search(ccstr _query, Searcher_Opts *_opts) {
     // sess.match_limit = 1000;
     if (!sess.start()) return false;
 
+    if (world.file_tree_busy) {
+        tell_user_error("The file list is currently being generated.");
+        return false;
+    }
+
     file_queue.init();
 
     {

@@ -345,6 +345,9 @@ struct World {
     u32 next_editor_id;
 
     FT_Node *file_tree;
+    bool file_tree_busy;
+    Thread_Handle file_tree_fill_thread;
+
     u64 next_build_id;
 
     char go_binary_path[MAX_PATH];
