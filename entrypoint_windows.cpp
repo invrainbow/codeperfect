@@ -11,9 +11,15 @@ extern "C" {
     extern __declspec(dllexport) void _rt0_amd64_windows_lib();
 }
 
-int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
+int stub(int argc, char **argv) {
     _rt0_amd64_windows_lib();
-    return realmain(__argc, __argv);
+    return realmain(argc, argv);
 }
+
+#ifdef DEBUG_BUILD
+    int main(int argc, char **argv) { return stub(argc, argv); }
+#else
+    int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) { return stub(__argc, __argv); }
+#endif // DEBUG_BUILD
 
 #endif // OS_WINBLOWS
