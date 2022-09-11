@@ -1025,9 +1025,16 @@ struct Go_Message {
     };
 };
 
+struct Find_References_Result {
+    Go_Reference *reference;
+    ccstr toplevel_name;
+
+    Find_References_Result *copy();
+};
+
 struct Find_References_File {
     ccstr filepath;
-    List<Go_Reference> *references;
+    List<Find_References_Result> *results;
 
     Find_References_File* copy();
 };

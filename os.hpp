@@ -251,9 +251,7 @@ ccstr normalize_path_sep(ccstr path, char sep = 0);
 bool is_sep(char ch);
 
 typedef fn<int(const void *a, const void *b)> compare_func;
-
 void xplat_quicksort(void *list, s32 num, s32 size, compare_func cmp);
-void *xplat_binary_search(const void *key, void *list, s32 num, s32 size, compare_func cmp);
 
 u64 get_file_size(ccstr file);
 
@@ -434,3 +432,6 @@ Font_Data* load_font_data_by_name(ccstr name);
 ccstr _cp_dirname(ccstr path);
 ccstr cp_dirname(ccstr path);
 ccstr cp_basename(ccstr path);
+
+typedef fn<int(const void *it)> bs_test_func;
+int binary_search(void *list, s32 num, s32 size, bs_test_func test);

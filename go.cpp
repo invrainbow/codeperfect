@@ -3222,15 +3222,17 @@ void Go_Indexer::actually_generate_caller_hierarchy(Goresult *declres, List<Call
 
         if (!file || !pkg) continue;
 
-        For (*it.references) {
+        For (*it.results) {
+            auto &ref = it.reference;
+
             // get the bounds of the reference
             cur2 start, end;
-            if (it.is_sel) {
-                start = it.x_start;
-                end = it.sel_end;
+            if (ref->is_sel) {
+                start = ref->x_start;
+                end = ref->sel_end;
             } else {
-                start = it.start;
-                end = it.end;
+                start = ref->start;
+                end = ref->end;
             }
 
             auto enclosing_decl = find_toplevel_containing(file, start, end);
@@ -3247,7 +3249,7 @@ void Go_Indexer::actually_generate_caller_hierarchy(Goresult *declres, List<Call
             Call_Hier_Node node;
             node.decl = fd;
             node.children = alloc_list<Call_Hier_Node>();
-            node.ref = &it;
+            node.ref = it.reference;
             out->append(&node);
 
             if (enclosing_decl->gotype)
@@ -3442,7 +3444,7 @@ List<Find_References_File> *Go_Indexer::actually_find_references(Goresult *declr
         if (streq(ctx2.import_path, ctx->import_path) && streq(ctx2.filename, ctx->filename))
             same_file_as_decl = true;
 
-        auto references = alloc_list<Go_Reference>();
+        auto results = alloc_list<Find_References_Result>();
 
         bool same_package = streq(pkg->import_path, ctx->import_path);
 
@@ -3513,21 +3515,48 @@ List<Find_References_File> *Go_Indexer::actually_find_references(Goresult *declr
                 }
                 break;
             case CASE_METHOD:
-               if (!it->is_sel && !is_self) return;
+                if (!it->is_sel && !is_self) return;
                 break;
             }
 
+            int tidx = 0;
+            auto toplevels = file->decls;
+
             auto decl = get_reference_decl(it, &ctx2);
-            if (decl && is_match(decl))
-                references->append(it);
+            if (decl && is_match(decl)) {
+                Find_References_Result result; ptr0(&result);
+                result.reference = it;
+
+                auto pos = it->is_sel ? it->x_start : it->start;
+                while (toplevels->at(tidx).spec_start < pos && tidx < toplevels->len)
+                    tidx++;
+
+                if (tidx) {
+                    auto &tl = toplevels->at(tidx - 1);
+                    if (tl.spec_start < pos && pos <= tl.decl_end) {
+                        ccstr name = NULL;
+                        switch (tl.type) {
+                        case GODECL_VAR:
+                        case GODECL_CONST:
+                        case GODECL_TYPE:
+                        case GODECL_FUNC:
+                            name = cp_strdup(tl.name);
+                            break;
+                        }
+                        result.toplevel_name = name;
+                    }
+                }
+
+                results->append(&result);
+            }
         };
 
         For (*file->references) process_ref(&it);
 
-        if (references->len > 0) {
+        if (results->len > 0) {
             Find_References_File out;
             out.filepath = cp_strdup(path_join(get_package_path(pkg->import_path), file->filename));
-            out.references = references;
+            out.results = results;
             ret->append(&out);
         }
     };
