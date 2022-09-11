@@ -323,9 +323,14 @@ func PostStripeWebhook(c *gin.Context) {
 			return
 		}
 
+        log.Printf("%s", txt)
+        log.Printf("%s", html)
+
+        /*
 		if err := lib.SendEmail(user.Email, subject, string(txt), string(html)); err != nil {
 			log.Printf("failed to send email to %s: %v", user.Email, err)
 		}
+        */
 	}
 
 	if user.Active {
