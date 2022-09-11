@@ -7051,6 +7051,10 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
             if (gotype->lazy_range_is_index)
                 return make_goresult(new_primitive_type("int"), NULL);
             return res->wrap(res->gotype->array_base);
+        case GOTYPE_CHAN:
+            if (gotype->lazy_range_is_index)
+                return res->wrap(res->gotype->chan_base);
+            break;
         }
         return NULL;
     }
@@ -8022,7 +8026,7 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
                 if (index == 0)
                     return res->wrap(new_primitive_type("int"));
                 if (index == 1) {
-                    auto base = res->gotype->type == GOTYPE_ARRAY ? res->gotype->array_base : res->gotype->slice_base;
+                    auto base = res->gotype->type == GOTYPE_ARRAY ? res->gotype->range_base->array_base : res->gotype->range_base->slice_base;
                     return _evaluate_type(base, res->ctx);
                 }
                 break;
