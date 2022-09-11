@@ -6,6 +6,8 @@ import (
 )
 
 func main() {
+	go stripeEventWorker()
+
 	r := gin.Default()
 	r.Use(cors.Default())
 	r.POST("/auth", PostAuth)

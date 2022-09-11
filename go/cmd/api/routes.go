@@ -26,6 +26,8 @@ var IsDevelMode = os.Getenv("DEVELOPMENT_MODE") == "1"
 var StripeAPIKey = os.Getenv("STRIPE_API_KEY")
 var StripeWebhookSecret = os.Getenv("STRIPE_WEBHOOK_SECRET")
 
+var eventQueue chan stripe.Event
+
 func init() {
 	if StripeAPIKey == "" {
 		panic("invalid stripe api key")
@@ -36,6 +38,7 @@ func init() {
 	}
 
 	stripe.Key = StripeAPIKey
+	eventQueue = make(chan stripe.Event)
 }
 
 func GetAPIBase() string {
@@ -194,6 +197,16 @@ func PostStripeWebhook(c *gin.Context) {
 		return
 	}
 
+	eventQueue <- event
+}
+
+func stripeEventWorker() {
+	for event := range eventQueue {
+		processStripeEvent(event)
+	}
+}
+
+func processStripeEvent(event stripe.Event) {
 	switch event.Type {
 	case "customer.subscription.created":
 	case "customer.subscription.updated":
@@ -323,14 +336,12 @@ func PostStripeWebhook(c *gin.Context) {
 			return
 		}
 
-        log.Printf("%s", txt)
-        log.Printf("%s", html)
+		// log.Printf("%s", txt)
+		// log.Printf("%s", html)
 
-        /*
 		if err := lib.SendEmail(user.Email, subject, string(txt), string(html)); err != nil {
 			log.Printf("failed to send email to %s: %v", user.Email, err)
 		}
-        */
 	}
 
 	if user.Active {
