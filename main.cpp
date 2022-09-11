@@ -1001,13 +1001,19 @@ int realmain(int argc, char **argv) {
     gargc = argc;
     gargv = argv;
 
+    Pool tmpmem;
+    tmpmem.init();
+    SCOPED_MEM(&tmpmem);
+
     Timer t;
     t.init();
 
     init_platform_crap();
 
+    t.log("init platform crap");
     if (!window_init_everything())
         return error("window init failed"), EXIT_FAILURE;
+    t.log("init window everything");
 
 #if 0
     {
@@ -1019,6 +1025,8 @@ int realmain(int argc, char **argv) {
 #endif
 
     world.init();
+
+    t.log("init world");
     SCOPED_MEM(&world.frame_mem);
 
     {
@@ -1049,16 +1057,22 @@ int realmain(int argc, char **argv) {
         return error("could not create window"), EXIT_FAILURE;
 
     world.window->make_context_current();
+    t.log("init window");
 
 #if WIN_GLFW
     if (!init_glew()) return EXIT_FAILURE;
+    t.log("init glew");
 #endif
 
 #ifdef DEBUG_BUILD
     GHEnableDebugMode();
+    t.log("enable debug mode");
 #endif
 
+
     read_auth();
+
+    t.log("read auth");
 
     switch (world.auth.state) {
     case AUTH_NOTHING: {
@@ -1117,9 +1131,13 @@ int realmain(int argc, char **argv) {
     set_window_title(get_window_note());
     world.window->swap_interval(0);
 
+    t.log("set window title");
+
     auto configdir = GHGetConfigDir();
     if (!configdir)
         return error("unable to get config dir"), EXIT_FAILURE;
+
+    t.log("get config dir");
 
     ImGui::CreateContext();
 
@@ -1238,6 +1256,8 @@ int realmain(int argc, char **argv) {
     io.SetClipboardTextFn = [](void*, ccstr s) { world.window->set_clipboard_string(s); };
     io.GetClipboardTextFn = [](void*) { return world.window->get_clipboard_string(); };
 
+    t.log("set imgui vars");
+
     {
         struct Cursor_Pair { int x; Cursor_Type y; };
 
@@ -1266,6 +1286,8 @@ int realmain(int argc, char **argv) {
     if (world.ui.im_program == -1)
         return error("could not compile imgui shaders"), EXIT_FAILURE;
 
+    t.log("compile opengl programs");
+
     // grab window_size, frame_size, and display_scale
     world.window->get_size((int*)&world.window_size.x, (int*)&world.window_size.y);
     world.window->get_framebuffer_size((int*)&world.frame_size.x, (int*)&world.frame_size.y);
@@ -1274,6 +1296,8 @@ int realmain(int argc, char **argv) {
 
     // now that we have world.display_size, we can call wksp.activate_pane_by_index
     activate_pane_by_index(0);
+
+    t.log("initialize window & shit");
 
     // initialize & bind textures
     glGenTextures(__TEXTURE_COUNT__, world.ui.textures);
@@ -1414,9 +1438,11 @@ int realmain(int argc, char **argv) {
         glUniform1i(loc, TEXTURE_FONT_IMGUI);
     }
 
+    t.log("gl crap");
+
     world.start_background_threads();
 
-    t.log("initialize everything");
+    t.log("start background threads");
 
     auto last_frame_time = current_time_nano();
 

@@ -5319,6 +5319,7 @@ ccstr Go_Indexer::filepath_to_import_path(ccstr path_str) {
 }
 
 void Go_Indexer::init() {
+    Timer t; t.init("Go_Indexer::init");
     ptr0(this);
 
     mem.init("indexer_mem");
@@ -5326,31 +5327,42 @@ void Go_Indexer::init() {
     ui_mem.init("ui_mem");
     scoped_table_mem.init("scoped_table_mem");
 
+    t.log("mems");
+
     SCOPED_MEM(&mem);
 
     message_queue.init();
+
+    t.log("2");
 
     {
         SCOPED_FRAME();
         cp_strcpy_fixed(current_exe_path, cp_dirname(get_executable_path()));
     }
 
+    t.log("3");
     auto init_buildenv = [&]() {
+        Timer t; t.init("init_buildenv");
         if (!GHBuildEnvInit())
             return false;
+        t.log("GHBuildEnvInit");
         if (!GHBuildEnvGoVersionSupported())
             return false;
+        t.log("GHBuildEnvGoVersionSupported");
         return true;
     };
 
     if (!init_buildenv())
         cp_panic("Please make sure Go version 1.13+ is installed and accessible through your PATH.");
 
+    t.log("4");
     auto copystr = [&](ccstr s) {
         auto ret = cp_strdup(s);
         GHFree((void*)s);
         return ret[0] == '\0' ? NULL : ret;
     };
+
+    t.log("more shit");
 
     {
         goroot = copystr(GHGetGoroot());
@@ -5376,9 +5388,13 @@ void Go_Indexer::init() {
             cp_panic("Unable to detect GOMODCACHE. Please make sure Go is installed and accessible through your PATH.");
     }
 
+    t.log("blah blah");
+
     lock.init();
 
     start_writing();
+
+    t.log("i am 12 and what is this");
 }
 
 bool Go_Indexer::acquire_lock(Indexer_Status new_status, bool just_try) {

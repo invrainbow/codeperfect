@@ -335,6 +335,8 @@ bool copy_file(ccstr src, ccstr dest) {
 }
 
 void World::init() {
+    Timer t; t.init("world::init");
+
     ptr0(this);
 
     {
@@ -343,6 +345,8 @@ void World::init() {
         defer { GHFree(ver); };
         cp_strcpy_fixed(gh_version, ver);
     }
+
+    t.log("getversionstring");
 
 #define init_mem(x) x.init(#x)
     init_mem(world_mem);
@@ -367,6 +371,8 @@ void World::init() {
     init_mem(fst_mem);
 #undef init_mem
 
+    t.log("init mem");
+
     MEM = &frame_mem;
 
     init_treesitter_go_trie();
@@ -384,6 +390,8 @@ void World::init() {
     chunk4_fridge.init(32);
     chunk5_fridge.init(16);
     chunk6_fridge.init(8);
+
+    t.log("init random shit");
 
     // read options from disk
     do {
@@ -412,6 +420,8 @@ void World::init() {
         cp_strcpy_fixed(world.go_binary_path, go_binary_path);
     }
 
+    t.log("segment a");
+
     {
         // do we need world_mem anywhere else?
         // i assume we will have other things that "orchestrate" world
@@ -429,6 +439,7 @@ void World::init() {
 
     fzy_init();
 
+    t.log("segment b");
     bool read_cpfolder_file = false;
 
     for (int i = 1; i < gargc; i++) {
@@ -476,6 +487,8 @@ void World::init() {
         xplat_chdir(current_path);
     }
 
+    t.log("segment c");
+
     // read project settings
     // TODO: handle errors
     {
@@ -501,14 +514,22 @@ void World::init() {
         }
     }
 
+    t.log("segment d");
+
     indexer.init();
+    t.log("segment d.1");
     if (use_nvim) nvim.init();
+    t.log("segment d.2");
     dbg.init();
+    t.log("segment d.3");
     history.init();
+    t.log("segment d.4");
 
     navigation_queue.init(LIST_FIXED, _countof(_navigation_queue), _navigation_queue);
+    t.log("segment d.5");
 
     fill_file_tree();
+    t.log("segment e");
 
     error_list.height = 125;
     file_explorer.selection = NULL;
@@ -522,6 +543,7 @@ void World::init() {
 
     fswatch.init(current_path);
 
+    t.log("segment f");
     // init ui shit
     init_global_colors();
     init_command_info_table();
@@ -533,6 +555,7 @@ void World::init() {
 
     show_frame_index = false;
 #endif
+    t.log("segment g");
 }
 
 void World::start_background_threads() {
