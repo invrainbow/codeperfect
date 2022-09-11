@@ -1,6 +1,6 @@
 #!/bin/bash
 set -e
 
-cd /root/codeperfect/gostuff
-/usr/local/go/bin/go build -o bin/api github.com/invrainbow/codeperfect/gostuff/cmd/api
+cd /root/codeperfect/go
+/usr/local/go/bin/go build -o bin/api github.com/invrainbow/codeperfect/go/cmd/api
 sudo service api restart

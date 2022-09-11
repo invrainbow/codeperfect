@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/invrainbow/codeperfect/gostuff/versions"
+	"github.com/invrainbow/codeperfect/go/versions"
 )
 
 func main() {

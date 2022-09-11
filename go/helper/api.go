@@ -7,7 +7,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/invrainbow/codeperfect/gostuff/models"
+	"github.com/invrainbow/codeperfect/go/models"
 )
 
 var ForceServerLocalhost = false

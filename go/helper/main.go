@@ -20,9 +20,9 @@ import (
 	"unsafe"
 
 	"github.com/denormal/go-gitignore"
-	"github.com/invrainbow/codeperfect/gostuff/models"
-	"github.com/invrainbow/codeperfect/gostuff/utils"
-	"github.com/invrainbow/codeperfect/gostuff/versions"
+	"github.com/invrainbow/codeperfect/go/models"
+	"github.com/invrainbow/codeperfect/go/utils"
+	"github.com/invrainbow/codeperfect/go/versions"
 	"github.com/reviewdog/errorformat"
 	"golang.org/x/tools/imports"
 )

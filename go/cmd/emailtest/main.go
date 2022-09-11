@@ -3,7 +3,7 @@ package main
 import (
 	_ "embed"
 
-	"github.com/invrainbow/codeperfect/gostuff/cmd/lib"
+	"github.com/invrainbow/codeperfect/go/cmd/lib"
 )
 
 //go:embed user_created.txt

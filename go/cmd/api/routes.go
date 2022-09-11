@@ -12,9 +12,9 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/invrainbow/codeperfect/gostuff/cmd/lib"
-	"github.com/invrainbow/codeperfect/gostuff/db"
-	"github.com/invrainbow/codeperfect/gostuff/models"
+	"github.com/invrainbow/codeperfect/go/cmd/lib"
+	"github.com/invrainbow/codeperfect/go/db"
+	"github.com/invrainbow/codeperfect/go/models"
 	"github.com/stripe/stripe-go/v72"
 	"github.com/stripe/stripe-go/v72/billingportal/session"
 	"github.com/stripe/stripe-go/v72/customer"

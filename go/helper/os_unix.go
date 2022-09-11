@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os/exec"
 
-	"github.com/invrainbow/codeperfect/gostuff/utils"
+	"github.com/invrainbow/codeperfect/go/utils"
 )
 
 func makeShellCommand(s string) *exec.Cmd {

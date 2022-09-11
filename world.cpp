@@ -462,7 +462,7 @@ void World::init() {
         panes.init(LIST_FIXED, _countof(_panes), _panes);
 
 #ifdef TESTING_BUILD
-        cp_strcpy_fixed(current_path, "/Users/bh/ide/gostuff");
+        cp_strcpy_fixed(current_path, "/Users/bh/ide/go");
 #else
         if (read_cpfolder_file) {
             auto path = GHReadCpfolderFile();

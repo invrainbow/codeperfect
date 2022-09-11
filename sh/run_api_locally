@@ -1,4 +1,4 @@
 #!/bin/bash
-cd gostuff
+cd go
 [[ -f .env ]] && source .env
 go run ./cmd/api "$@"

@@ -60,7 +60,7 @@ OBJ_FILES = $(patsubst %.cpp,obj/%.o,$(SRC_FILES))
 DEP_FILES = $(patsubst %.cpp,obj/%.d,$(SRC_FILES))
 DEP_FILES += obj/clibs.d
 OBJ_DEPS = $(OBJ_FILES) obj/clibs.o obj/gohelper.a
-GOSTUFF_DEPS = $(shell find gostuff/ -type f -name '*.go')
+GO_DEPS = $(shell find go/ -type f -name '*.go')
 
 ifeq ($(OSTYPE), mac)
 	DEP_FILES += obj/objclibs.d
@@ -114,8 +114,8 @@ obj/clibs.o: clibs.c
 binaries.c: .cpcolors vert.glsl frag.glsl im.vert.glsl im.frag.glsl
 	$(PYTHON) sh/create_binaries_c.py $^
 
-obj/gohelper.a: $(GOSTUFF_DEPS)
-	cd gostuff; \
+obj/gohelper.a: $(GO_DEPS)
+	cd go; \
 		CC=clang CGO_ENABLED=1 go build -ldflags "$(GO_LDFLAGS)" -o gohelper.a -buildmode=c-archive ./helper && \
 		(mkdir -p ../obj; mv gohelper.a ../obj; mv gohelper.h ..)
 
@@ -124,8 +124,8 @@ ifeq ($(OSTYPE), windows)
 	LAUNCHER_LDFLAGS += -H windowsgui
 endif
 
-build/launcher$(BINARY_SUFFIX): $(GOSTUFF_DEPS)
-	cd gostuff; \
+build/launcher$(BINARY_SUFFIX): $(GO_DEPS)
+	cd go; \
 		go build -ldflags "$(GO_LDFLAGS) $(LAUNCHER_LDFLAGS)" -o ../$@ ./cmd/launcher
 
 gohelper.h: obj/gohelper.a
@@ -138,8 +138,8 @@ enums.cpp: enums.hpp
 enums.hpp: $(filter-out enums.hpp, $(wildcard *.hpp)) tstypes.hpp sh/generate_enums.py
 	$(PYTHON) sh/generate_enums.py
 
-build/bin/buildcontext.go: gostuff/buildcontext/main.go
-	cp gostuff/buildcontext/main.go build/bin/buildcontext.go
+build/bin/buildcontext.go: go/buildcontext/main.go
+	cp go/buildcontext/main.go build/bin/buildcontext.go
 
 build/bin/init.vim: init.vim
 	cp init.vim build/bin/init.vim

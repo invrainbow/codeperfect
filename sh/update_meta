@@ -2,7 +2,7 @@
 version=$1
 
 if [[ -z $version ]]; then
-    pushd gostuff
+    pushd go
     version=$(go run ./cmd/printversion | cut -d' ' -f1)
     popd
 fi

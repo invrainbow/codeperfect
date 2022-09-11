@@ -4,7 +4,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/invrainbow/codeperfect/gostuff/models"
+	"github.com/invrainbow/codeperfect/go/models"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )

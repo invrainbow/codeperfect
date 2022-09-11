@@ -2,7 +2,7 @@
 set -e
 
 # grab version
-pushd gostuff
+pushd go
 version_arr=($(go run ./cmd/printversion))
 version=${version_arr[0]}
 version_string=${version_arr[1]}
