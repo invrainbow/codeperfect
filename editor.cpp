@@ -597,51 +597,55 @@ void Editor::perform_autocomplete(AC_Result *result) {
             auto root = new_ast_node(ts_tree_root_node(buf->tree), iter);
 
             Ast_Node *package_node = NULL;
-            Ast_Node *imports_node = NULL;
+            auto import_nodes = alloc_list<Ast_Node*>();
 
             FOR_NODE_CHILDREN (root) {
                 if (it->type() == TS_PACKAGE_CLAUSE) {
                     package_node = it;
                 } else if (it->type() == TS_IMPORT_DECLARATION) {
-                    imports_node = it;
-                    break;
+                    import_nodes->append(it);
                 }
             }
 
             do {
-                if (!imports_node && !package_node) break;
+                if (!import_nodes->len && !package_node) break;
 
-                Text_Renderer rend;
-                rend.init();
+                auto already_exists = [&]() {
+                    For (*import_nodes) {
+                        auto imports = alloc_list<Go_Import>();
+                        world.indexer.import_decl_to_goimports(it, NULL, imports);
+
+                        auto imp = imports->find([&](auto it) { return streq(it->import_path, import_to_add); });
+                        if (imp) return true;
+                    }
+                    return false;
+                };
+
+                if (already_exists()) break;
+
+                // we need to import, just insert it into the first import. format on save will fix the multiple imports
+
+                Ast_Node *firstnode = import_nodes->len ? import_nodes->at(0) : NULL;
+
+                Text_Renderer rend; rend.init();
                 rend.write("import (\n");
                 rend.write("\"%s\"\n", import_to_add);
+                {
+                    if (firstnode && cur > firstnode->end()) {
+                        auto imports = alloc_list<Go_Import>();
+                        world.indexer.import_decl_to_goimports(firstnode, NULL, imports);
 
-                if (imports_node && cur > imports_node->end()) {
-                    auto imports = alloc_list<Go_Import>();
-                    world.indexer.import_decl_to_goimports(imports_node, NULL, imports);
-
-                    auto imp = imports->find([&](auto it) { return streq(it->import_path, import_to_add); });
-                    if (imp) break;
-
-                    For (*imports) {
-                        switch (it.package_name_type) {
-                        case GPN_IMPLICIT:
-                            rend.write("\"%s\"", it.import_path);
-                            break;
-                        case GPN_EXPLICIT:
-                            rend.write("%s \"%s\"", it.package_name, it.import_path);
-                            break;
-                        case GPN_BLANK:
-                            rend.write("_ \"%s\"", it.import_path);
-                            break;
-                        case GPN_DOT:
-                            rend.write(". \"%s\"", it.import_path);
-                            break;
+                        For (*imports) {
+                            switch (it.package_name_type) {
+                            case GPN_IMPLICIT:  rend.write("\"%s\"", it.import_path);                       break;
+                            case GPN_EXPLICIT:  rend.write("%s \"%s\"", it.package_name, it.import_path);   break;
+                            case GPN_BLANK:     rend.write("_ \"%s\"", it.import_path);                     break;
+                            case GPN_DOT:       rend.write(". \"%s\"", it.import_path);                     break;
+                            }
+                            rend.write("\n");
                         }
-                        rend.write("\n");
                     }
                 }
-
                 rend.write(")");
 
                 GHFmtStart();
@@ -661,9 +665,9 @@ void Editor::perform_autocomplete(AC_Result *result) {
                 }
 
                 cur2 start, old_end, new_end;
-                if (imports_node) {
-                    start = imports_node->start();
-                    old_end = imports_node->end();
+                if (firstnode) {
+                    start = firstnode->start();
+                    old_end = firstnode->end();
                     if (world.use_nvim)
                         if (old_end.y >= nvim_insert.start.y) break;
                 } else {
@@ -673,7 +677,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
                 new_end = start;
 
                 auto chars = alloc_list<uchar>();
-                if (!imports_node) {
+                if (!firstnode) {
                     // add two newlines, it's going after the package decl
                     chars->append('\n');
                     chars->append('\n');
