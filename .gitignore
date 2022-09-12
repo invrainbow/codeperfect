@@ -69,3 +69,4 @@ nvim-archive/
 vcpkg_installed/
 
 sh/dev_windows.local
+go/.idea
