@@ -25,6 +25,8 @@
 #define go_print(fmt, ...)
 #endif
 
+const char BUILTIN_FAKE_FILENAME[] = "this is a fake file";
+
 void index_print(ccstr fmt, ...) {
     va_list args;
     va_start(args, fmt);
@@ -738,7 +740,7 @@ void Go_Indexer::replace_package_name(Go_Package *pkg, ccstr package_name) {
 void Go_Indexer::init_builtins(Go_Package *pkg) {
     pkg->package_name = "@builtin";
 
-    ccstr fake_filename = "this is a fake file";
+    ccstr fake_filename = cp_strdup(BUILTIN_FAKE_FILENAME);
 
     auto f = get_ready_file_in_package(pkg, fake_filename);
     f->hash = CUSTOM_HASH_BUILTINS;
@@ -1813,6 +1815,14 @@ Gotype *new_primitive_type(ccstr name) {
     auto ret = new_gotype(GOTYPE_ID);
     ret->id_name = name;
     return ret;
+}
+
+Goresult* new_primitive_type_goresult(ccstr name) {
+    auto ctx = alloc_object(Go_Ctx);
+    ctx->import_path = "@builtin";
+    ctx->filename = cp_strdup(BUILTIN_FAKE_FILENAME);
+
+    return make_goresult(new_primitive_type(name), ctx);
 }
 
 Go_Package *Go_Indexer::find_package_in_index(ccstr import_path) {
@@ -6998,7 +7008,7 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
 
         case GOTYPE_ID:
             if (streq(base_type->id_name, "string"))
-                return make_goresult(new_primitive_type("rune"), NULL);
+                return new_primitive_type_goresult("rune");
             break;
         case GOTYPE_MAP: {
             auto res2 = _evaluate_type(base_type->map_value, res->ctx, outdecl);
@@ -7045,11 +7055,11 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
             return res->wrap(res->gotype->map_value);
         case GOTYPE_SLICE:
             if (gotype->lazy_range_is_index)
-                return make_goresult(new_primitive_type("int"), NULL);
+                return new_primitive_type_goresult("int");
             return res->wrap(res->gotype->slice_base);
         case GOTYPE_ARRAY:
             if (gotype->lazy_range_is_index)
-                return make_goresult(new_primitive_type("int"), NULL);
+                return new_primitive_type_goresult("int");
             return res->wrap(res->gotype->array_base);
         case GOTYPE_CHAN:
             if (gotype->lazy_range_is_index)
@@ -8011,7 +8021,7 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
 
         case GOTYPE_ASSERTION:
             if (index == 0) return _evaluate_type(res->gotype->assertion_base, res->ctx);
-            if (index == 1) return res->wrap(new_primitive_type("bool"));
+            if (index == 1) return new_primitive_type_goresult("bool");
             break;
 
         case GOTYPE_RANGE:
@@ -8024,7 +8034,7 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
             case GOTYPE_ARRAY:
             case GOTYPE_SLICE:
                 if (index == 0)
-                    return res->wrap(new_primitive_type("int"));
+                    return new_primitive_type_goresult("int");
                 if (index == 1) {
                     auto base = res->gotype->type == GOTYPE_ARRAY ? res->gotype->range_base->array_base : res->gotype->range_base->slice_base;
                     return _evaluate_type(base, res->ctx);
@@ -8033,8 +8043,8 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
 
             case GOTYPE_ID:
                 if (!streq(res->gotype->id_name, "string")) break;
-                if (index == 0) return res->wrap(new_primitive_type("int"));
-                if (index == 1) return res->wrap(new_primitive_type("rune"));
+                if (index == 0) return new_primitive_type_goresult("int");
+                if (index == 1) return new_primitive_type_goresult("rune");
                 break;
             }
             break;
