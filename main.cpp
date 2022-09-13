@@ -468,20 +468,7 @@ void handle_window_event(Window_Event *it) {
                 while (editor->cur > new_cur)
                     editor->backspace_in_insert_mode(1, 0);
             } else {
-                // if we're at beginning of line
-                if (!editor->cur.x) {
-                    auto back1 = editor->buf->dec_cur(editor->cur);
-                    editor->buf->remove(back1, editor->cur);
-                    if (world.use_nvim) {
-                        if (back1 < editor->nvim_insert.start) {
-                            editor->nvim_insert.start = back1;
-                            editor->nvim_insert.deleted_graphemes++;
-                        }
-                    }
-                    editor->raw_move_cursor(back1);
-                } else {
-                    editor->backspace_in_insert_mode(1, 0); // erase one grapheme
-                }
+                editor->backspace_in_insert_mode(1, 0); // erase one grapheme
             }
 
             editor->update_autocomplete(false);
