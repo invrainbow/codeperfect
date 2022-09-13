@@ -2585,7 +2585,7 @@ void UI::draw_everything() {
                     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 8));
                     defer { ImGui::PopStyleVar(); };
 
-                    ImGui::BeginChild("container", ImVec2(200, 200), false, ImGuiWindowFlags_AlwaysUseWindowPadding);
+                    ImGui::BeginChild("container", ImVec2(400, 250), false, ImGuiWindowFlags_AlwaysUseWindowPadding);
                 };
 
                 begin_container_child(); {
@@ -2595,22 +2595,20 @@ void UI::draw_everything() {
                         ImGui::Checkbox("Enable vim keybindings", &tmp.enable_vim_mode);
                         if (ImGui::IsItemEdited())
                             wnd.something_that_needs_restart_was_changed = true;
-                        ImGui::SameLine();
-                        help_marker("Enables Vim keybindings in the editor.\n\nThis requires a restart.");
 
                         imgui_small_newline();
 
-                        ImGui::Checkbox("Auto format on save###", &tmp.format_on_save);
-                        ImGui::SameLine();
-                        help_marker("Automatically format your Go code with gofmt on save.");
+                        ImGui::Checkbox("Automatically format on save", &tmp.format_on_save);
 
                         imgui_small_newline();
 
-                        imgui_with_disabled(!tmp.format_on_save, [&]() {
-                            ImGui::Checkbox("Auto organize imports on save", &tmp.organize_imports_on_save);
-                        });
-                        ImGui::SameLine();
-                        help_marker("Automatically organize imports on save.");
+                        ImGui::Indent();
+                        {
+                            imgui_with_disabled(!tmp.format_on_save, [&]() {
+                                ImGui::Checkbox("Organize imports after formatting", &tmp.organize_imports_on_save);
+                            });
+                        }
+                        ImGui::Unindent();
 
                         imgui_small_newline();
 
