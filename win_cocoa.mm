@@ -546,6 +546,8 @@ const NSRange kEmptyRange = { NSNotFound, 0 };
 
 - (void)keyDown:(NSEvent *)event {
     auto key = translate_key([event keyCode]);
+    if (key == -1) return;
+
     auto mods = translate_keymod([event modifierFlags]);
 
     window->key_states[key] = true;
@@ -575,6 +577,8 @@ const NSRange kEmptyRange = { NSNotFound, 0 };
         [event modifierFlags] & NSEventModifierFlagDeviceIndependentFlagsMask;
 
     auto key = translate_key([event keyCode]);
+    if (key == -1) return;
+
     auto mods = translate_keymod(modflags);
 
     bool press;
@@ -593,6 +597,8 @@ const NSRange kEmptyRange = { NSNotFound, 0 };
 
 - (void)keyUp:(NSEvent *)event {
     auto key = translate_key([event keyCode]);
+    if (key == -1) return;
+
     auto mods = translate_keymod([event modifierFlags]);
 
     window->key_states[key] = false;
