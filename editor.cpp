@@ -613,7 +613,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
                 auto already_exists = [&]() {
                     For (*import_nodes) {
                         auto imports = alloc_list<Go_Import>();
-                        world.indexer.import_decl_to_goimports(it, NULL, imports);
+                        world.indexer.import_decl_to_goimports(it, imports);
 
                         auto imp = imports->find([&](auto it) { return streq(it->import_path, import_to_add); });
                         if (imp) return true;
@@ -633,7 +633,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
                 {
                     if (firstnode && cur > firstnode->end()) {
                         auto imports = alloc_list<Go_Import>();
-                        world.indexer.import_decl_to_goimports(firstnode, NULL, imports);
+                        world.indexer.import_decl_to_goimports(firstnode, imports);
 
                         For (*imports) {
                             switch (it.package_name_type) {
@@ -2230,6 +2230,14 @@ bool Editor::optimize_imports() {
         Ast_Node *first_imports_node = NULL;
         Ast_Node *last_imports_node = NULL;
 
+        auto cgo_imports = alloc_list<Ast_Node*>();
+
+        auto is_cgo_import = [&](Ast_Node *it) {
+            auto imports = alloc_list<Go_Import>();
+            world.indexer.import_decl_to_goimports(it, imports);
+            return imports->len == 1 && streq(imports->at(0).import_path, "C");
+        };
+
         FOR_NODE_CHILDREN (root) {
             switch (it->type()) {
             case TS_PACKAGE_CLAUSE:
@@ -2240,6 +2248,8 @@ bool Editor::optimize_imports() {
                     first_imports_node = it;
                 else
                     last_imports_node = it;
+
+                if (is_cgo_import(it)) cgo_imports->append(it);
                 break;
             default:
                 if (first_imports_node)
@@ -2250,8 +2260,38 @@ bool Editor::optimize_imports() {
 
         if (!first_imports_node && !package_node) break;
 
-        if (first_imports_node && !last_imports_node)
-            last_imports_node = first_imports_node;
+        cur2 first_import_start;
+
+        if (first_imports_node) {
+            first_import_start = first_imports_node->start();
+            if (!last_imports_node)
+                last_imports_node = first_imports_node;
+        }
+
+        auto cgo_imports_text = alloc_list<char>();
+
+        For (*cgo_imports) {
+            auto startnode = it;
+            while (true) {
+                auto prev = startnode->prev_all(false);
+                if (prev->type() != TS_COMMENT)
+                    break;
+                startnode = prev;
+            }
+
+            auto start = startnode->start();
+            if (start < first_import_start)
+                first_import_start = start;
+
+            cgo_imports_text->append('\n');
+            cgo_imports_text->append('\n');
+
+            auto text = buf->get_text(start, it->end());
+            for (auto p = text; *p; p++)
+                cgo_imports_text->append(*p);
+        }
+
+        cgo_imports_text->append('\0');
 
         Text_Renderer rend;
         rend.init();
@@ -2276,6 +2316,7 @@ bool Editor::optimize_imports() {
         }
 
         rend.write(")");
+        rend.write("%s", cgo_imports_text->items);
 
         GHFmtStart();
         GHFmtAddLine(rend.finish());
@@ -2295,7 +2336,7 @@ bool Editor::optimize_imports() {
 
         cur2 start, old_end;
         if (first_imports_node) {
-            start = first_imports_node->start();
+            start = first_import_start;
             old_end = last_imports_node->end();
         } else {
             start = package_node->end();
@@ -2463,7 +2504,14 @@ void Editor::handle_save(bool about_to_close) {
             buf->enable_tree();
     }
 
-    format_on_save(GH_FMT_GOIMPORTS, !about_to_close);
+    if (options.format_on_save) {
+        bool use_goimports_autoimport = false;
+        if (options.organize_imports_on_save)
+            if (!optimize_imports())
+                use_goimports_autoimport = true;
+
+        format_on_save(use_goimports_autoimport ? GH_FMT_GOIMPORTS_WITH_AUTOIMPORT : GH_FMT_GOIMPORTS, !about_to_close);
+    }
 
     // save to disk
     {

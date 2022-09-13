@@ -2212,7 +2212,7 @@ void Go_Indexer::process_tree_into_gofile(
 
         imports_seen = true;
 
-        import_decl_to_goimports(decl_node, filename, file->imports);
+        import_decl_to_goimports(decl_node, file->imports);
 
         {
             SCOPED_MEM(&file->pool);
@@ -2225,7 +2225,7 @@ void Go_Indexer::process_tree_into_gofile(
     file->hash = hash_file(filepath);
 }
 
-void Go_Indexer::import_decl_to_goimports(Ast_Node *decl_node, ccstr filename, List<Go_Import> *out) {
+void Go_Indexer::import_decl_to_goimports(Ast_Node *decl_node, List<Go_Import> *out) {
     auto speclist_node = decl_node->child();
     FOR_NODE_CHILDREN (speclist_node) {
         Ast_Node *name_node = NULL;

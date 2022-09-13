@@ -1194,7 +1194,7 @@ struct Go_Indexer {
 
     void fill_goto_symbol(List<Go_Symbol> *out);
     void init_builtins(Go_Package *pkg);
-    void import_decl_to_goimports(Ast_Node *decl_node, ccstr filename, List<Go_Import> *out);
+    void import_decl_to_goimports(Ast_Node *decl_node, List<Go_Import> *out);
     bool check_if_still_in_parameter_hint(ccstr filepath, cur2 cur, cur2 hint_start);
     Go_File *find_gofile_from_ctx(Go_Ctx *ctx, Go_Package **out = NULL);
 
