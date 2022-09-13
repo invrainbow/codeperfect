@@ -6220,18 +6220,10 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
             auto has_iota = [&](Ast_Node *node) -> bool {
                 bool ret = false;
                 walk_ast_node(node, true, [&](Ast_Node *it, Ts_Field_Type, int) -> Walk_Action {
-                    switch (it->type()) {
-                    case TS_IDENTIFIER:
-                    case TS_FIELD_IDENTIFIER:
-                    case TS_PACKAGE_IDENTIFIER:
-                    case TS_TYPE_IDENTIFIER:
-                        if (streq(it->string(), "iota")) {
-                            ret = true;
-                            return WALK_ABORT;
-                        }
-                        break;
-                    }
-                    return WALK_CONTINUE;
+                    if (it->type() != TS_IOTA_LITERAL) return WALK_CONTINUE;
+
+                    ret = true;
+                    return WALK_ABORT;
                 });
                 return ret;
             };
@@ -6679,8 +6671,9 @@ Gotype *Go_Indexer::expr_to_gotype(Ast_Node *expr) {
     case TS_PARENTHESIZED_EXPRESSION:
         return expr_to_gotype(expr->child());
 
-    case TS_TRUE: return new_primitive_type("bool");
-    case TS_FALSE: return new_primitive_type("bool");
+    case TS_TRUE_LITERAL: return new_primitive_type("bool");
+    case TS_FALSE_LITERAL: return new_primitive_type("bool");
+
     case TS_INT_LITERAL: return new_primitive_type("int");
     case TS_FLOAT_LITERAL: return new_primitive_type("float64");
     case TS_IMAGINARY_LITERAL: return new_primitive_type("complex128");
