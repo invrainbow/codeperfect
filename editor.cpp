@@ -2252,8 +2252,7 @@ bool Editor::optimize_imports() {
                 if (is_cgo_import(it)) cgo_imports->append(it);
                 break;
             default:
-                if (first_imports_node)
-                    goto done;
+                if (first_imports_node) goto done;
             }
         }
     done:
@@ -2274,8 +2273,7 @@ bool Editor::optimize_imports() {
             auto startnode = it;
             while (true) {
                 auto prev = startnode->prev_all(false);
-                if (prev->type() != TS_COMMENT)
-                    break;
+                if (prev->type() != TS_COMMENT) break;
                 startnode = prev;
             }
 
