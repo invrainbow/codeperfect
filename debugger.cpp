@@ -971,11 +971,13 @@ bool Debugger::start(Debug_Profile *debug_profile) {
         world.error_list.show = true;
         world.error_list.cmd_focus = true;
         kick_off_build(&build_profile);
-        while (!world.build.done) continue;
+        while (!world.build.done) sleep_milliseconds(10);
+
+        sleep_milliseconds(100);
 
         dbg_print("build completed");
 
-        if (world.build.errors.len > 0 || world.build.build_itself_had_error) {
+        if (world.build.errors.len || world.build.build_itself_had_error) {
             dbg_print("returning false, errors.len = %d, build_itself_had_error = %d", world.build.errors.len, world.build.build_itself_had_error);
             return false;
         }

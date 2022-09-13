@@ -733,8 +733,8 @@ void kick_off_build(Build_Profile *build_profile) {
         build->started = true;
 
         if (!GHStartBuild((char*)build_profile->cmd)) {
-            build->done = true;
             build->build_itself_had_error = true;
+            build->done = true;
             return;
         }
 
