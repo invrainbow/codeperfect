@@ -35,6 +35,8 @@ struct Options {
     serde_int scrolloff = 2; // serde(1)
     serde_int tabsize = 4; // serde(2)
     serde_bool enable_vim_mode = false; // serde(3)
+    serde_bool format_on_save = true; // serde(4)
+    serde_bool organize_imports_on_save = false; // serde(5)
 };
 
 struct Build_Profile {

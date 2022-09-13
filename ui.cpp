@@ -2592,12 +2592,25 @@ void UI::draw_everything() {
                     ImGui::PushItemWidth(-1);
                     imgui_push_ui_font();
                     {
-                        ImGui::Text("Vim keybindings");
-                        ImGui::SameLine();
-                        help_marker("Enables Vim keybindings in the editor.\n\nThis requires a restart.");
-                        ImGui::Checkbox("Enable", &tmp.enable_vim_mode);
+                        ImGui::Checkbox("Enable vim keybindings", &tmp.enable_vim_mode);
                         if (ImGui::IsItemEdited())
                             wnd.something_that_needs_restart_was_changed = true;
+                        ImGui::SameLine();
+                        help_marker("Enables Vim keybindings in the editor.\n\nThis requires a restart.");
+
+                        imgui_small_newline();
+
+                        ImGui::Checkbox("Auto format on save###", &tmp.format_on_save);
+                        ImGui::SameLine();
+                        help_marker("Automatically format your Go code with gofmt on save.");
+
+                        imgui_small_newline();
+
+                        imgui_with_disabled(!tmp.format_on_save, [&]() {
+                            ImGui::Checkbox("Auto organize imports on save", &tmp.organize_imports_on_save);
+                        });
+                        ImGui::SameLine();
+                        help_marker("Automatically organize imports on save.");
 
                         imgui_small_newline();
 
