@@ -17,7 +17,7 @@ const sidebars = {
     {
       type: "category",
       label: "Changelog",
-      items: [{ type: "doc", id: "changelog/22.08", label: "Release 22.09" }],
+      items: ["changelog/22.09.1", "changelog/22.09"],
     },
   ],
 
