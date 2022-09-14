@@ -758,7 +758,12 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
 }
 
 void Nvim::run_event_loop() {
-#define ASSERT(x) if (!(x)) { cp_panic("The Vim plugin has crashed."); }
+
+#define STRINGIZE(x) STRINGIZE2(x)
+#define STRINGIZE2(x) #x
+#define LINE_STRING STRINGIZE(__LINE__)
+
+#define ASSERT(x) if (!(x)) { cp_panic("The Vim plugin has crashed. (line = " LINE_STRING ")"); }
 #define CHECKOK() ASSERT(reader.ok)
 
     {
