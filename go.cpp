@@ -7812,9 +7812,27 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
         if (!decl) return NULL;
 
         if (decl->type == GODECL_TYPE) {
-            auto t = gotype->lazy_call_base->type;
-            if (t == GOTYPE_LAZY_ID || t == GOTYPE_LAZY_SEL)
-                return res;
+            // we have a Type(x) or pkg.Type(x)
+            // right now it thinks Type/pkg.Type are lazy_id/lazy_sel
+            // convert to a regular id/sel, since Type is the type itself
+            auto base = gotype->lazy_call_base;
+            switch (base->type) {
+            case GOTYPE_LAZY_ID: {
+                auto gotype = new_gotype(GOTYPE_ID);
+                gotype->id_name = base->lazy_id_name;
+                gotype->id_pos = base->lazy_id_pos;
+                return make_goresult(gotype, ctx);
+            }
+            case GOTYPE_LAZY_SEL: {
+                // this should be true, but check anyway
+                if (base->lazy_sel_base->type != GOTYPE_LAZY_ID) break;
+
+                auto gotype = new_gotype(GOTYPE_SEL);
+                gotype->sel_name = base->lazy_sel_base->lazy_id_name;
+                gotype->sel_sel = base->lazy_sel_sel;
+                return make_goresult(gotype, ctx);
+            }
+            }
         }
 
         res = resolve_type(res);       if (!res) return NULL;
