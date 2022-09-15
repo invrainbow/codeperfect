@@ -686,12 +686,11 @@ void handle_window_event(Window_Event *it) {
             case CP_KEY_I:
             case CP_KEY_D:
             case CP_KEY_U:
-                if (world.use_nvim) {
-                    if (world.nvim.mode != VI_INSERT) {
-                        SCOPED_FRAME();
+            case CP_KEY_B:
+            case CP_KEY_F:
+                if (world.use_nvim)
+                    if (world.nvim.mode != VI_INSERT)
                         send_nvim_keys(cp_sprintf("<C-%c>", tolower((char)key)));
-                    }
-                }
                 break;
             case CP_KEY_Y:
                 if (!editor) break;

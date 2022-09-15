@@ -70,13 +70,19 @@ xnoremap M <Cmd>call <SID>moveCursor(1)<CR>
 nnoremap L <Cmd>call <SID>moveCursor(2)<CR>
 xnoremap L <Cmd>call <SID>moveCursor(2)<CR>
 
-function s:jump(direction)
-    call NotifyIDE('jump', a:direction)
-endfunction
+" function s:jump(direction)
+"     call NotifyIDE('jump', a:direction)
+" endfunction
 
-nnoremap <C-o> <Cmd>call <SID>jump(0)<CR>
-nnoremap <C-i> <Cmd>call <SID>jump(1)<CR>
-nnoremap <Tab> <Cmd>call <SID>jump(1)<CR>
+nnoremap <C-o> <Cmd>call NotifyIDE('jump', 0)<CR>
+nnoremap <C-i> <Cmd>call NotifyIDE('jump', 1)<CR>
+nnoremap <Tab> <Cmd>call NotifyIDE('jump', 1)<CR>
+
+nnoremap <C-d> <Cmd>call NotifyIDE('halfjump', 1)<CR>
+nnoremap <C-u> <Cmd>call NotifyIDE('halfjump', 0)<CR>
+nnoremap <C-b> <Cmd>call NotifyIDE('pagejump', 0)<CR>
+nnoremap <C-f> <Cmd>call NotifyIDE('pagejump', 1)<CR>
+
 nnoremap Q <nop>
 nnoremap K <nop>
 

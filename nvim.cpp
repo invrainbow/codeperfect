@@ -498,6 +498,33 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 world.history.go_backward();
             break;
         }
+        case NVIM_NOTIF_CUSTOM_PAGEJUMP:
+        case NVIM_NOTIF_CUSTOM_HALFJUMP: {
+            auto ed = get_current_editor();
+            if (!ed) break;
+
+            bool forward = false;
+            int jumpsize = 0;
+
+            if (event->notification.type == NVIM_NOTIF_CUSTOM_PAGEJUMP) {
+                forward = event->notification.custom_pagejump.forward;
+                jumpsize = ed->view.h;
+            } else {
+                forward = event->notification.custom_halfjump.forward;
+                jumpsize = ed->view.h/2;
+            }
+
+            if (forward) {
+                int maxy = ed->buf->lines.len-1;
+                ed->view.y = min(maxy, ed->view.y + jumpsize);
+                ed->move_cursor(new_cur2((int)ed->cur.x, (int)min(maxy, ed->cur.y + jumpsize)));
+            } else {
+                ed->view.y = relu_sub(ed->view.y, jumpsize);
+                ed->move_cursor(new_cur2((int)ed->cur.x, (int)relu_sub(ed->cur.y, jumpsize)));
+            }
+            ed->ensure_cursor_on_screen();
+            break;
+        }
         case NVIM_NOTIF_CUSTOM_REVEAL_LINE: {
             auto editor = get_current_editor();
             if (!editor) break;
@@ -872,6 +899,20 @@ void Nvim::run_event_loop() {
                     add_event([&](auto msg) {
                         msg->notification.type = NVIM_NOTIF_CUSTOM_JUMP;
                         msg->notification.custom_jump.forward = forward;
+                    });
+                } else if (streq(cmd, "halfjump")) {
+                    ASSERT(num_args == 1);
+                    auto forward = (bool)reader.read_int();
+                    add_event([&](auto msg) {
+                        msg->notification.type = NVIM_NOTIF_CUSTOM_HALFJUMP;
+                        msg->notification.custom_halfjump.forward = forward;
+                    });
+                } else if (streq(cmd, "pagejump")) {
+                    ASSERT(num_args == 1);
+                    auto forward = (bool)reader.read_int();
+                    add_event([&](auto msg) {
+                        msg->notification.type = NVIM_NOTIF_CUSTOM_PAGEJUMP;
+                        msg->notification.custom_pagejump.forward = forward;
                     });
                 } else if (streq(cmd, "move_cursor")) {
                     ASSERT(num_args == 1);
