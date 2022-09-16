@@ -3930,6 +3930,10 @@ Generate_Func_Sig_Result* Go_Indexer::generate_function_signature(ccstr filepath
     rend.write("func ");
     bool add_newlines_after = false;
 
+    auto check_import_path = [&](auto import_path) {
+        return path_has_descendant(index.current_import_path, import_path);
+    };
+
     if (funcref->is_sel) {
         auto res = evaluate_type(funcref->x, ctx);
         if (!res) {
@@ -3938,6 +3942,7 @@ Generate_Func_Sig_Result* Go_Indexer::generate_function_signature(ccstr filepath
 
             auto import_path = find_import_path_referred_to_by_id(funcref->x->lazy_id_name, ctx);
             if (import_path == NULL) return NULL;
+            if (!check_import_path(import_path)) return NULL;
 
             auto pkg = find_up_to_date_package(import_path);
             if (!pkg) return NULL;
@@ -3974,6 +3979,7 @@ Generate_Func_Sig_Result* Go_Indexer::generate_function_signature(ccstr filepath
             }
 
             if (!declres) return NULL;
+            if (!check_import_path(declres->ctx->import_path)) return NULL;
 
             auto filepath = ctx_to_filepath(declres->ctx);
             if (!filepath) return NULL;
