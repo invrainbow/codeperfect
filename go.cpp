@@ -225,6 +225,7 @@ void Type_Renderer::write_type(Gotype *t, Type_Renderer_Handler custom_handler, 
         case GO_BUILTIN_TYPE: write("Type"); break;
         case GO_BUILTIN_TYPE1: write("Type1"); break;
         case GO_BUILTIN_BOOL: write("bool"); break;
+        case GO_BUILTIN_ANY: write("any"); break;
         case GO_BUILTIN_BYTE: write("byte"); break;
         case GO_BUILTIN_COMPLEX128: write("complex128"); break;
         case GO_BUILTIN_COMPLEX64: write("complex64"); break;
@@ -765,7 +766,6 @@ void Go_Indexer::init_builtins(Go_Package *pkg) {
     add_builtin(GODECL_TYPE, GO_BUILTIN_INTEGERTYPE, "IntegerType");
     add_builtin(GODECL_TYPE, GO_BUILTIN_TYPE, "Type");
     add_builtin(GODECL_TYPE, GO_BUILTIN_TYPE1, "Type1");
-
     add_builtin(GODECL_TYPE, GO_BUILTIN_BOOL, "bool");
     add_builtin(GODECL_TYPE, GO_BUILTIN_BYTE, "byte");
     add_builtin(GODECL_TYPE, GO_BUILTIN_COMPLEX128, "complex128");
@@ -877,6 +877,12 @@ void Go_Indexer::init_builtins(Go_Package *pkg) {
             ret->interface_specs = alloc_list<Go_Interface_Spec>(0);
             return ret;
         };
+
+        // "any"
+        {
+            auto gotype = add_builtin(GODECL_TYPE, GO_BUILTIN_ANY, "any");
+            gotype->base = empty_interface();
+        }
 
         // error interface
         {
@@ -2020,7 +2026,6 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
             }
             break;
         }
-
         }
 
         return WALK_CONTINUE;
@@ -2032,6 +2037,56 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
         op.pos = root->end();
         cb(&op);
     }
+}
+
+Go_Reference *Go_Indexer::node_to_reference(Ast_Node *it) {
+    Go_Reference ref; ptr0(&ref);
+    bool ok = false;
+
+    switch (it->type()) {
+    case TS_IDENTIFIER:
+    case TS_FIELD_IDENTIFIER:
+    case TS_PACKAGE_IDENTIFIER:
+    case TS_TYPE_IDENTIFIER:
+        ref.is_sel = false;
+        ref.start = it->start();
+        ref.end = it->end();
+        ref.name = it->string();
+        ok = true;
+        break;
+
+    case TS_QUALIFIED_TYPE:
+    case TS_SELECTOR_EXPRESSION: {
+        Ast_Node *x = NULL, *sel = NULL;
+
+        if (it->type() == TS_QUALIFIED_TYPE) {
+            x = it->field(TSF_PACKAGE);
+            sel = it->field(TSF_NAME); // TODO: this is wrong, look at astviewer
+        } else {
+            x = it->field(TSF_OPERAND);
+            sel = it->field(TSF_FIELD);
+        }
+
+        auto xtype = expr_to_gotype(x);
+        if (!xtype) break;
+
+        ref.is_sel = true;
+        ref.x = expr_to_gotype(x);
+        ref.x_start = x->start();
+        ref.x_end = x->end();
+        ref.sel = sel->string();
+        ref.sel_start = sel->start();
+        ref.sel_end = sel->end();
+        ok = true;
+        break;
+    }
+    }
+
+    if (!ok) return NULL;
+
+    auto ret = alloc_object(Go_Reference);
+    memcpy(ret, &ref, sizeof(Go_Reference));
+    return ret;
 }
 
 /*
@@ -2110,79 +2165,41 @@ void Go_Indexer::process_tree_into_gofile(
     if (path_has_descendant(world.current_path, filepath)) {
         int scope_ops_idx = 0;
 
+        auto is_selector_sel = [&](Ast_Node *it) {
+            auto parent = it->parent();
+            if (parent->null) return false;
+
+            Ast_Node *field = NULL;
+            switch (parent->type()) {
+            case TS_QUALIFIED_TYPE: field = parent->field(TSF_NAME); break;
+            case TS_SELECTOR_EXPRESSION: field = parent->field(TSF_FIELD); break;
+            default: return false;
+            }
+
+            return !field->null && field->eq(it);
+        };
+
         walk_ast_node(root, true, [&](auto it, auto, auto) {
-            Ast_Node *x = NULL, *sel = NULL;
+            Go_Reference *ref = NULL;
 
             switch (it->type()) {
             case TS_IDENTIFIER:
             case TS_FIELD_IDENTIFIER:
             case TS_PACKAGE_IDENTIFIER:
-            case TS_TYPE_IDENTIFIER: {
-                auto is_selector_sel = [&]() {
-                    auto parent = it->parent();
-                    if (parent->null) return false;
-
-                    Ast_Node *field = NULL;
-                    switch (parent->type()) {
-                    case TS_QUALIFIED_TYPE:
-                        field = parent->field(TSF_NAME);
-                        break;
-                    case TS_SELECTOR_EXPRESSION:
-                        field = parent->field(TSF_FIELD);
-                        break;
-                    default:
-                        return false;
-                    }
-
-                    return field->eq(it);
-                };
-
-                if (is_selector_sel()) break;
-
-                Go_Reference ref;
-                ref.is_sel = false;
-                ref.start = it->start();
-                ref.end = it->end();
-                ref.name = it->string();
-                {
-                    SCOPED_MEM(&file->pool);
-                    file->references->append(ref.copy());
-                }
-                break;
-            }
-
+            case TS_TYPE_IDENTIFIER:
+                if (is_selector_sel(it)) break;
+                // fallthrough
             case TS_QUALIFIED_TYPE:
-            case TS_SELECTOR_EXPRESSION: {
-                Ast_Node *x = NULL, *sel = NULL;
-
-                if (it->type() == TS_QUALIFIED_TYPE) {
-                    x = it->field(TSF_PACKAGE);
-                    sel = it->field(TSF_NAME); // TODO: this is wrong, look at astviewer
-                } else {
-                    x = it->field(TSF_OPERAND);
-                    sel = it->field(TSF_FIELD);
-                }
-
-                auto xtype = expr_to_gotype(x);
-                if (!xtype) break;
-
-                Go_Reference ref;
-                ref.is_sel = true;
-                ref.x = expr_to_gotype(x);
-                ref.x_start = x->start();
-                ref.x_end = x->end();
-                ref.sel = sel->string();
-                ref.sel_start = sel->start();
-                ref.sel_end = sel->end();
-
-                {
-                    SCOPED_MEM(&file->pool);
-                    file->references->append(ref.copy());
-                }
-
+            case TS_SELECTOR_EXPRESSION:
+                ref = node_to_reference(it);
                 break;
             }
+
+            if (ref) {
+                SCOPED_MEM(&file->pool);
+                file->references->append(ref->copy());
             }
+
             return WALK_CONTINUE;
         });
 
@@ -3833,6 +3850,330 @@ Goresult *Go_Indexer::find_enclosing_toplevel(ccstr filepath, cur2 pos) {
     return make_goresult(decl, ctx);
 }
 
+Generate_Func_Sig_Result* Go_Indexer::generate_function_signature(ccstr filepath, cur2 pos) {
+    reload_all_editors();
+
+    auto pf = parse_file(filepath, true);
+    if (!pf) return NULL;
+    defer { free_parsed_file(pf); };
+
+    auto file = pf->root;
+
+    auto ctx = filepath_to_ctx(filepath);
+    if (!ctx) return NULL;
+
+    Ast_Node *callnode = NULL;
+
+    find_nodes_containing_pos(file, pos, false, [&](auto node) -> Walk_Action {
+        switch (node->type()) {
+        case TS_QUALIFIED_TYPE:
+        case TS_SELECTOR_EXPRESSION: {
+            Ast_Node *sel = NULL;
+            if (node->type() == TS_QUALIFIED_TYPE)
+                sel = node->field(TSF_NAME);
+            else
+                sel = node->field(TSF_FIELD);
+            // maybe warn user to put cursor directly over name of function
+            if (cmp_pos_to_node(pos, sel) != 0)
+                return WALK_CONTINUE;
+            break;
+        }
+        case TS_PACKAGE_IDENTIFIER:
+        case TS_TYPE_IDENTIFIER:
+        case TS_IDENTIFIER:
+        case TS_LABEL_NAME:
+        case TS_FIELD_IDENTIFIER:
+            break;
+        default:
+            return WALK_CONTINUE;
+        }
+
+        auto parent = node->parent();
+        if (!parent->null && parent->type() == TS_CALL_EXPRESSION)
+            callnode = parent;
+
+        return WALK_ABORT;
+    });
+
+    if (!callnode) return NULL;
+
+    auto expr_to_evaled_type = [&](Ast_Node *expr) -> Goresult* {
+        auto gotype = expr_to_gotype(expr);
+        if (!gotype) return NULL;
+        return evaluate_type(gotype, ctx);
+    };
+
+    auto get_expr_type_decl = [&](Ast_Node *expr) -> Goresult* {
+        auto res = expr_to_evaled_type(expr);
+        if (!res) return NULL;
+
+        res = unpointer_type(res);
+        return resolve_type_to_decl(res->gotype, res->ctx);
+    };
+
+    auto func = callnode->field(TSF_FUNCTION);
+    if (func->null) return NULL;
+
+    auto funcref = node_to_reference(func);
+    if (!funcref) return NULL;
+
+    auto ret = alloc_object(Generate_Func_Sig_Result);
+
+    auto existing_decl = get_reference_decl(funcref, ctx);
+    if (existing_decl) {
+        ret->existing_decl_filepath = ctx_to_filepath(existing_decl->ctx);
+        ret->existing_decl_pos = existing_decl->decl->name_start;
+        return ret;
+    }
+
+    Type_Renderer rend; rend.init();
+    rend.write("func ");
+    bool add_newlines_after = false;
+
+    if (funcref->is_sel) {
+        auto res = evaluate_type(funcref->x, ctx);
+        if (!res) {
+            // try as import
+            if (funcref->x->type != GOTYPE_LAZY_ID) return NULL;
+
+            auto import_path = find_import_path_referred_to_by_id(funcref->x->lazy_id_name, ctx);
+            if (import_path == NULL) return NULL;
+
+            auto pkg = find_up_to_date_package(import_path);
+            if (!pkg) return NULL;
+            if (isempty(pkg->files)) return NULL;
+
+            auto package_path = get_package_path(import_path);
+            if (!package_path) return NULL;
+
+            add_newlines_after = false;
+            ret->insert_filepath = path_join(package_path, pkg->files->at(0).filename);
+
+            auto fm = map_file_into_memory(ret->insert_filepath);
+            if (!fm) return NULL;
+            defer { fm->cleanup(); };
+
+            cur2 pos = new_cur2(0, 0);
+            for (int i = 0; i < fm->len; i++) {
+                if (fm->data[i] == '\n') {
+                    pos.y++;
+                    pos.x = 0;
+                } else {
+                    pos.x++;
+                }
+            }
+            ret->insert_pos = pos;
+        } else {
+            Goresult *declres = NULL;
+
+            switch (res->gotype->type) {
+            case GOTYPE_ID:
+            case GOTYPE_SEL:
+                declres = resolve_type_to_decl(res->gotype, res->ctx);
+                break;
+            }
+
+            if (!declres) return NULL;
+
+            auto filepath = ctx_to_filepath(declres->ctx);
+            if (!filepath) return NULL;
+
+            auto decl = declres->decl;
+
+            ret->insert_filepath = filepath;
+            ret->insert_pos = decl->decl_end;
+
+            auto type_name = decl->name;
+            if (!type_name) {
+                // TODO: start calling tell_user_error from inside here?
+                return NULL;
+            }
+
+            ccstr type_var = NULL;
+            {
+                auto s = alloc_list<char>();
+                for (int i = 0, len = strlen(type_name); i < len && s->len < 3; i++)
+                    if (isupper(type_name[i]))
+                        s->append(tolower(type_name[i]));
+                s->append('\0');
+                type_var = s->items;
+            }
+
+            rend.write("(%s %s) ", type_var, type_name);
+            add_newlines_after = false;
+        }
+    } else {
+        auto curr = callnode;
+        while (true) {
+            auto parent = curr->parent();
+            if (parent->type() == TS_SOURCE_FILE)
+                break;
+            curr = parent;
+        }
+
+        add_newlines_after = true;
+        ret->insert_pos = curr->start();
+        ret->insert_filepath = filepath;
+    }
+
+    rend.write("%s(", funcref->is_sel ? funcref->sel : funcref->name);
+
+    auto argsnode = callnode->field(TSF_ARGUMENTS);
+    if (argsnode->null) return NULL;
+
+    ret->imports_needed = alloc_list<ccstr>();
+    ret->imports_needed_names = alloc_list<ccstr>();
+
+    Go_Package *pkg = NULL;
+    auto insert_file = find_gofile_from_ctx(filepath_to_ctx(ret->insert_filepath), &pkg);
+    if (!insert_file) return NULL;
+    if (!pkg) return NULL;
+
+    auto current_import_path = pkg->import_path;
+
+    Table<ccstr> existing_imports; existing_imports.init();
+    Table<ccstr> existing_imports_r; existing_imports_r.init();
+    For (*insert_file->imports) {
+        auto package_name = get_import_package_name(&it);
+        if (!package_name) continue;
+        existing_imports.set(package_name, it.import_path);
+        existing_imports_r.set(it.import_path, package_name);
+    }
+
+    int var_index = 0;
+    FOR_NODE_CHILDREN (argsnode) {
+        defer { var_index++; };
+
+        if (var_index) rend.write(", ");
+
+        rend.write("v%d ", var_index);
+
+        auto res = expr_to_evaled_type(it);
+        if (!res) {
+            rend.write("any");
+            continue;
+        };
+
+        bool shit_done_fucked_up = false;
+
+        rend.write_type(res->gotype, [&](auto rend, auto it) -> bool {
+            ccstr import_path = NULL, name = NULL;
+
+            switch (it->type) {
+            case GOTYPE_ID: {
+                name = it->id_name;
+
+                auto declres = find_decl_of_id(name, it->id_pos, res->ctx);
+                if (!declres) {
+                    shit_done_fucked_up = true;
+                    return false;
+                }
+
+                if (streq(declres->ctx->import_path, "@builtin")) {
+                    rend->write(name);
+                    return true;
+                }
+
+                import_path = res->ctx->import_path;
+                break;
+            }
+            case GOTYPE_SEL:
+                import_path = find_import_path_referred_to_by_id(it->sel_name, res->ctx);
+                name = it->sel_sel;
+                break;
+            default:
+                return false;
+            }
+
+            if (!import_path) {
+                shit_done_fucked_up = true;
+                return false;
+            }
+
+            if (streq(import_path, current_import_path)) {
+                rend->write(name);
+                return true;
+            }
+
+            auto pkgname = existing_imports_r.get(import_path);
+            if (!pkgname) {
+                auto pkg = find_up_to_date_package(import_path);
+                if (!pkg) {
+                    shit_done_fucked_up = true;
+                    return false;
+                }
+
+                auto base_pkgname = pkg->package_name;
+                ccstr name = NULL;
+
+                for (int i = 0;; i++) {
+                    name = i ? cp_sprintf("%s%d", base_pkgname, i) : base_pkgname;
+                    if (!existing_imports.get(name)) break;
+                }
+
+                pkgname = name;
+
+                existing_imports.set(pkgname, import_path);
+                existing_imports_r.set(import_path, pkgname);
+
+                ret->imports_needed->append(import_path);
+                if (streq(pkgname, pkg->package_name))
+                    ret->imports_needed_names->append((ccstr)NULL);
+                else
+                    ret->imports_needed_names->append(pkgname);
+            }
+
+            rend->write("%s.%s", pkgname, name);
+            return true;
+        });
+
+        if (shit_done_fucked_up) return NULL;
+    }
+
+    rend.write(") {\n\tpanic(\"not implemented yet\")\n}");
+
+    if (ret->imports_needed->len) {
+        rend.write("\n/*\nimport (\n");
+        Fori (*ret->imports_needed) {
+            auto name = ret->imports_needed_names->at(i);
+            if (name)
+                rend.write("\t%s \"%s\"\n", name, it);
+            else
+                rend.write("\t\"%s\"\n", it);
+        }
+        rend.write(")\n");
+        rend.write("*/");
+    }
+
+    if (add_newlines_after)
+        ret->insert_code = cp_sprintf("%s\n\n", rend.finish());
+    else
+        ret->insert_code = cp_sprintf("\n\n%s", rend.finish());
+
+    cur2 code_end = ret->insert_pos;
+    for (auto p = ret->insert_code; *p; p++) {
+        if (*p == '\n') {
+            code_end.y++;
+            code_end.x = 0;
+        } else {
+            code_end.x++;
+        }
+    }
+
+    if (add_newlines_after) {
+        ret->jump_to_pos = ret->insert_pos;
+        ret->highlight_start = ret->insert_pos;
+        ret->highlight_end = code_end;
+        ret->highlight_end.y--;
+    } else {
+        ret->jump_to_pos = new_cur2(0, ret->insert_pos.y+2);
+        ret->highlight_start = new_cur2(0, ret->insert_pos.y+2);
+        ret->highlight_end = code_end;
+    }
+
+    return ret;
+}
+
 Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 pos) {
     Timer t;
     t.init("jump_to_definition", false);
@@ -3979,20 +4320,8 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 p
     if (!result.file) return NULL;
 
     if (result.pos.y == -1) {
-        auto fm = map_file_into_memory(result.file);
-        if (!fm) return NULL;
-        defer { fm->cleanup(); };
-
-        cur2 newpos; ptr0(&newpos);
-        for (u32 i = 0; i < fm->len && i < result.pos.x; i++) {
-            if (fm->data[i] == '\r') continue;
-            if (fm->data[i] == '\n') {
-                newpos.y++;
-                newpos.x = 0;
-                continue;
-            }
-            newpos.x++;
-        }
+        auto newpos = offset_to_cur(result.pos.x, result.file);
+        if (newpos.x == -1) return NULL;
         result.pos = newpos;
     }
 
@@ -4004,6 +4333,24 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 p
     t.total();
 
     return ret;
+}
+
+cur2 offset_to_cur(int off, ccstr filepath) {
+    auto fm = map_file_into_memory(filepath);
+    if (!fm) return new_cur2(-1, -1);
+    defer { fm->cleanup(); };
+
+    cur2 newpos; ptr0(&newpos);
+    for (u32 i = 0; i < fm->len && i < off; i++) {
+        if (fm->data[i] == '\r') continue;
+        if (fm->data[i] == '\n') {
+            newpos.y++;
+            newpos.x = 0;
+            continue;
+        }
+        newpos.x++;
+    }
+    return newpos;
 }
 
 bool is_expression_node(Ast_Node *node) {
@@ -5309,6 +5656,8 @@ ccstr remove_ats_from_path(ccstr s) {
 }
 
 Go_Ctx *Go_Indexer::filepath_to_ctx(ccstr filepath) {
+    if (!filepath) return NULL;
+
     auto import_path = filepath_to_import_path(cp_dirname(filepath));
     if (!import_path) return NULL;
 
@@ -5328,6 +5677,8 @@ ccstr Go_Indexer::ctx_to_filepath(Go_Ctx *ctx) {
 }
 
 Go_File *Go_Indexer::find_gofile_from_ctx(Go_Ctx *ctx, Go_Package **out) {
+    if (!ctx) return NULL;
+
     auto pkg = find_up_to_date_package(ctx->import_path);
     if (!pkg) return NULL;
 

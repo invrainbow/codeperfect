@@ -549,6 +549,7 @@ enum Gotype_Builtin_Type {
     GO_BUILTIN_INTEGERTYPE,
     GO_BUILTIN_TYPE,
     GO_BUILTIN_TYPE1,
+    GO_BUILTIN_ANY,
     GO_BUILTIN_BOOL,
     GO_BUILTIN_BYTE,
     GO_BUILTIN_COMPLEX128,
@@ -636,8 +637,8 @@ struct Gotype {
         };
 
         struct {
-            ccstr sel_name; // now that we have pkg, do we need this?
-            // do we need sel_pos, so we can actually look up the decl?
+            ccstr sel_name; // now that we have pkg, do we need this? // update comment: what the fuck is pkg?
+                            // do we need sel_pos, so we can actually look up the decl?
             ccstr sel_sel;
         };
 
@@ -1085,6 +1086,21 @@ struct Actually_List_Dotprops_Opts {
     String_Set seen_embeds;
 };
 
+struct Generate_Func_Sig_Result {
+    ccstr existing_decl_filepath; // if this is non-null, rest of struct should be ignored,
+    cur2 existing_decl_pos;       // just take user to existing decl.
+
+    ccstr insert_code;
+    ccstr insert_filepath;
+    cur2 insert_pos;
+    cur2 jump_to_pos;
+    cur2 highlight_start;
+    cur2 highlight_end;
+
+    List<ccstr> *imports_needed;
+    List<ccstr> *imports_needed_names;
+};
+
 struct Go_Indexer {
     ccstr goroot;
     // ccstr gopath;
@@ -1131,7 +1147,6 @@ struct Go_Indexer {
     bool process_package(ccstr import_path, Go_Package *pkg);
     bool is_file_included_in_build(ccstr path);
     List<ccstr>* list_source_files(ccstr dirpath, bool include_tests);
-    ccstr get_package_name(ccstr path);
     ccstr get_package_path(ccstr import_path);
     Parsed_File *parse_file(ccstr filepath, bool use_latest = false);
     void free_parsed_file(Parsed_File *file);
@@ -1150,6 +1165,7 @@ struct Go_Indexer {
     Goresult *subst_generic_type(Gotype *type, Go_Ctx *ctx);
     List<Godecl> *parameter_list_to_fields(Ast_Node *params);
     Gotype *node_to_gotype(Ast_Node *node, bool toplevel = false);
+    Go_Reference *node_to_reference(Ast_Node *it);
     Goresult *find_decl_of_id(ccstr id, cur2 id_pos, Go_Ctx *ctx, Go_Import **single_import = NULL);
     void list_struct_fields(Goresult *type, List<Goresult> *ret);
     void list_dotprops(Goresult *type_res, Goresult *resolved_type_res, List<Goresult> *ret);
@@ -1235,8 +1251,8 @@ struct Go_Indexer {
     Goresult *find_enclosing_toplevel(ccstr filepath, cur2 pos);
     Gotype* do_subst_rename_this_later(Gotype *base, List<Godecl> *params, List<Goresult*> *args);
     Goresult *remove_override_ctx(Gotype *gotype, Go_Ctx *ctx);
+    Generate_Func_Sig_Result* generate_function_signature(ccstr filepath, cur2 pos);
 };
-
 
 void walk_ast_node(Ast_Node *node, bool abstract_only, Walk_TS_Callback cb);
 void find_nodes_containing_pos(Ast_Node *root, cur2 pos, bool abstract_only, fn<Walk_Action(Ast_Node *it)> callback, bool end_inclusive = false);
@@ -1342,3 +1358,5 @@ void walk_gotype(Gotype *gotype, walk_gotype_cb cb);
 
 Gotype *new_gotype(Gotype_Type type);
 Gotype *new_primitive_type(ccstr name);
+
+cur2 offset_to_cur(int off, ccstr filepath);

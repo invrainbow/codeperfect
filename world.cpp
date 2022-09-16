@@ -860,13 +860,14 @@ bool is_build_debug_free() {
     return true;
 }
 
-void goto_file_and_pos(ccstr file, cur2 pos, bool pos_in_byte_format, Ensure_Cursor_Mode mode) {
+Editor* goto_file_and_pos(ccstr file, cur2 pos, bool pos_in_byte_format, Ensure_Cursor_Mode mode) {
     auto editor = focus_editor(file, pos, pos_in_byte_format);
-    if (!editor) return; // TODO
+    if (!editor) return NULL; // TODO
 
     editor->ensure_cursor_on_screen_by_moving_view(mode);
 
     world.cmd_unfocus_all_windows = true;
+    return editor;
 }
 
 void goto_jump_to_definition_result(Jump_To_Definition_Result *result) {
@@ -1739,6 +1740,7 @@ void init_command_info_table() {
     command_info_table[CMD_OPTIONS] = k(CP_MOD_PRIMARY, CP_KEY_COMMA, "Options");
     command_info_table[CMD_ABOUT] = k(0, 0, "About");
     command_info_table[CMD_GENERATE_IMPLEMENTATION] = k(0, 0, "Generate Implementation");
+    command_info_table[CMD_GENERATE_FUNCTION] = k(0, 0, "[Experimental] Generate Function From Call");
 
     command_info_table[CMD_FIND_IMPLEMENTATIONS] = k(0, 0, "Find Implementations");
     command_info_table[CMD_FIND_INTERFACES] = k(0, 0, "Find Interfaces");
@@ -1912,6 +1914,10 @@ void handle_command(Command cmd, bool from_menu) {
     if (!is_command_enabled(cmd)) return;
 
     switch (cmd) {
+    case CMD_GENERATE_FUNCTION:
+        do_generate_function();
+        break;
+
     case CMD_REPLACE:
     case CMD_FIND: {
         auto &wnd = world.wnd_current_file_search;
@@ -2637,6 +2643,105 @@ void open_add_file_or_folder(bool folder, FT_Node *dest) {
     wnd.folder = folder;
     wnd.show = true;
     wnd.name[0] = '\0';
+}
+
+void do_generate_function() {
+    if (!handle_unsaved_files()) return;
+
+    auto editor = get_current_editor();
+    if (!editor) {
+        tell_user_error("Couldn't find anything under your cursor (you don't have an editor focused).");
+        return;
+    }
+
+    if (!editor->is_go_file) {
+        tell_user_error("Couldn't find anything under your cursor (you're not in a Go file).");
+        return;
+    }
+
+    auto &ind = world.indexer;
+
+    defer { ind.ui_mem.reset(); };
+
+    {
+        SCOPED_MEM(&ind.ui_mem);
+
+        if (!ind.acquire_lock(IND_READING, true)) {
+            tell_user_error("The indexer is currently busy.");
+            return;
+        }
+        defer { ind.release_lock(IND_READING); };
+
+        auto off = editor->cur_to_offset(editor->cur);
+        auto result = ind.generate_function_signature(editor->filepath, new_cur2(off, -1));
+        if (!result) {
+            tell_user_error("Unable to generate function.");
+            return;
+        }
+
+        if (result->existing_decl_filepath) {
+            goto_file_and_pos(result->existing_decl_filepath, result->existing_decl_pos, true, ECM_GOTO_DEF); // new ECM_*?
+            return;
+        }
+
+        auto ed = find_editor_by_filepath(result->insert_filepath);
+
+        if (ed) {
+            // if it's already open, just make the change
+            auto uchars = cstr_to_ustr(result->insert_code);
+
+            if (result->insert_pos.x == -1) {
+                int y = ed->buf->lines.len-1;
+                ed->buf->insert(new_cur2(y, ed->buf->lines[y].len), uchars->items, uchars->len);
+            } else {
+                ed->buf->insert(result->insert_pos, uchars->items, uchars->len);
+            }
+
+            if (world.use_nvim) {
+                ed->skip_next_nvim_update();
+
+                auto& nv = world.nvim;
+                nv.start_request_message("nvim_buf_set_lines", 5);
+                nv.writer.write_int(ed->nvim_data.buf_id);
+                nv.writer.write_int(0);
+                nv.writer.write_int(-1);
+                nv.writer.write_bool(false);
+                nv.writer.write_array(ed->buf->lines.len);
+                For (ed->buf->lines) nv.write_line(&it);
+                nv.end_message();
+            }
+        } else {
+            // otherwise, make the change on disk
+            File_Replacer fr;
+            if (!fr.init(result->insert_filepath, "generate_function")) {
+                tell_user_error("Failed to open the file where the generated function should go.");
+                return;
+            }
+
+            if (result->insert_pos.x == -1) {
+                // abuse the file replacer to insert it at end lol fuck me
+                while (!fr.done()) fr.write(fr.advance_read_pointer());
+                fr.do_replacement(fr.read_cur, result->insert_code);
+            } else {
+                fr.goto_next_replacement(result->insert_pos);
+                fr.do_replacement(result->insert_pos, result->insert_code);
+            }
+            fr.finish();
+        }
+
+        {
+            // open and go to the editor
+            auto ed = goto_file_and_pos(result->insert_filepath, result->jump_to_pos, true, ECM_GOTO_DEF); // new ECM_*?
+            ed->highlight_snippet.on = true;
+            ed->highlight_snippet.time_start_milli = current_time_milli();
+            ed->highlight_snippet.start = result->highlight_start;
+            ed->highlight_snippet.end = result->highlight_end;
+        }
+
+        // TODO: add imports
+        // Fori (*result->imports_needed_names)
+        //     print("%s \"%s\"", it, result->imports_needed->at(i));
+    }
 }
 
 void do_generate_implementation() {

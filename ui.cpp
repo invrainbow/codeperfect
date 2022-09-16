@@ -6041,6 +6041,29 @@ void UI::draw_everything() {
                 select_end = b;
             }
 
+            bool highlight_snippet;
+            vec4f highlight_snippet_color;
+            cur2 highlight_snippet_start;
+            cur2 highlight_snippet_end;
+
+            if (editor->highlight_snippet.on) {
+                double t = (current_time_milli() - editor->highlight_snippet.time_start_milli);
+                double alpha = 0;
+
+                if (0 < t && t < 200) {
+                    alpha = t/200;
+                } else if (t < 600) {
+                    alpha = 1 - ((t - 200) / 400);
+                }
+
+                if (alpha) {
+                    highlight_snippet = true;
+                    highlight_snippet_color = rgba("#eeeebb", alpha * 0.6);
+                    highlight_snippet_start = editor->highlight_snippet.start;
+                    highlight_snippet_end = editor->highlight_snippet.end;
+                }
+            }
+
             auto draw_highlight = [&](vec4f color, int width, bool fullsize = false) {
                 boxf b;
                 b.pos = cur_pos;
@@ -6251,6 +6274,12 @@ void UI::draw_everything() {
                                 }
                             }
                         }
+                    }
+
+                    if (highlight_snippet) {
+                        auto pos = new_cur2((int)curr_byte_idx, (int)y);
+                        if (highlight_snippet_start <= pos && pos < highlight_snippet_end)
+                            draw_highlight(highlight_snippet_color, glyph_width);
                     }
 
                     if (editor->cur == new_cur2((u32)curr_cp_idx, (u32)y)) {

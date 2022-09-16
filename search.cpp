@@ -639,4 +639,3 @@ void File_Replacer::finish() {
 
     move_file_atomically(tmpfile, filepath);
 }
-

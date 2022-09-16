@@ -93,6 +93,13 @@ struct Editor {
     } mouse_select;
     double scroll_leftover;
 
+    struct {
+        bool on;
+        u64 time_start_milli;
+        cur2 start;
+        cur2 end;
+    } highlight_snippet;
+
     bool double_clicked_selection;
 
     // TSInputEdit curr_change;

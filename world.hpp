@@ -202,6 +202,7 @@ enum Command {
     CMD_ENTER_LICENSE,
     CMD_REPLACE,
     CMD_FIND,
+    CMD_GENERATE_FUNCTION,
     /**/
     _CMD_COUNT_,
 };
@@ -713,7 +714,7 @@ void prompt_delete_all_breakpoints();
 void run_proc_the_normal_way(Process* proc, ccstr cmd);
 void* get_native_window_handle();
 bool is_build_debug_free();
-void goto_file_and_pos(ccstr file, cur2 pos, bool pos_in_byte_format = false, Ensure_Cursor_Mode mode = ECM_NONE);
+Editor* goto_file_and_pos(ccstr file, cur2 pos, bool pos_in_byte_format = false, Ensure_Cursor_Mode mode = ECM_NONE);
 void goto_jump_to_definition_result(Jump_To_Definition_Result *result);
 void handle_goto_definition(cur2 pos = {-1, -1});
 void save_all_unsaved_files();
@@ -750,6 +751,7 @@ bool has_unsaved_files();
 void fuzzy_sort_filtered_results(ccstr query, List<int> *list, int total_results, fn<ccstr(int)> get_name);
 void do_find_interfaces();
 void do_find_implementations();
+void do_generate_function();
 
 void read_auth();
 void write_auth();
