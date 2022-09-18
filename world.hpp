@@ -203,6 +203,7 @@ enum Command {
     CMD_REPLACE,
     CMD_FIND,
     CMD_GENERATE_FUNCTION,
+    CMD_TOGGLE_COMMENT,
     /**/
     _CMD_COUNT_,
 };

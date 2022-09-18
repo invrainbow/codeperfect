@@ -1553,6 +1553,13 @@ bool is_command_enabled(Command cmd) {
     case CMD_REPLACE:
         return (bool)get_current_editor();
 
+    case CMD_TOGGLE_COMMENT: {
+        auto editor = get_current_editor();
+        if (!editor) return false;
+        if (!editor->is_modifiable()) return false;
+        return true;
+    }
+
     case CMD_SAVE_FILE: {
         auto editor = get_current_editor();
         if (!editor) return false;
@@ -1741,6 +1748,7 @@ void init_command_info_table() {
     command_info_table[CMD_ABOUT] = k(0, 0, "About");
     command_info_table[CMD_GENERATE_IMPLEMENTATION] = k(0, 0, "Generate Implementation");
     command_info_table[CMD_GENERATE_FUNCTION] = k(0, 0, "[Experimental] Generate Function From Call");
+    command_info_table[CMD_TOGGLE_COMMENT] = k(CP_MOD_PRIMARY | CP_MOD_ALT, CP_KEY_SLASH, "Toggle Comment");
 
     command_info_table[CMD_FIND_IMPLEMENTATIONS] = k(0, 0, "Find Implementations");
     command_info_table[CMD_FIND_INTERFACES] = k(0, 0, "Find Interfaces");
@@ -1917,6 +1925,38 @@ void handle_command(Command cmd, bool from_menu) {
     case CMD_GENERATE_FUNCTION:
         do_generate_function();
         break;
+
+    case CMD_TOGGLE_COMMENT: {
+        auto editor = get_current_editor();
+        if (!editor) break;
+
+        if (world.use_nvim) {
+            if (world.nvim.mode == VI_INSERT) {
+                // TODO
+            } else {
+                auto& nv = world.nvim;
+                nv.start_request_message("nvim_call_function", 2);
+                nv.writer.write_string("CPGetVisual");
+                nv.writer.write_array(1);
+                nv.writer.write_string("toggle_comment");
+                nv.end_message();
+            }
+        } else {
+            if (editor->selecting) {
+                auto a = editor->select_start.y;
+                auto b = editor->cur.y;
+                if (a > b) {
+                    auto tmp = a;
+                    a = b;
+                    b = tmp;
+                }
+                editor->toggle_comment(a, b);
+            } else {
+                editor->toggle_comment(editor->cur.y, editor->cur.y);
+            }
+        }
+        break;
+    }
 
     case CMD_REPLACE:
     case CMD_FIND: {

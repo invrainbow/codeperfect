@@ -223,6 +223,7 @@ struct Editor {
     bool ask_user_about_unsaved_changes();
     void skip_next_nvim_update(int n = 1);
     void delete_selection();
+    void toggle_comment(int ystart, int yend);
 };
 
 struct Pane {

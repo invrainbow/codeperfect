@@ -440,10 +440,22 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
             auto start = fix_pos(args.start);
             auto end = fix_pos(args.end);
 
+            if (start > end) {
+                auto tmp = start;
+                start = end;
+                end = tmp;
+            }
+
             if (streq(args.for_what, "copy_visual")) {
                 auto s = editor->buf->get_text(start, editor->buf->inc_cur(end));
                 world.window->set_clipboard_string(s);
+            } else if (streq(args.for_what, "toggle_comment")) {
+                if (start.x == -1)
+                    editor->toggle_comment(editor->cur.y, editor->cur.y);
+                else
+                    editor->toggle_comment(start.y, end.y);
             }
+
             /*
             else if (streq(args.for_what, "search_in_visual")) {
                 auto &wnd = world.wnd_current_file_search;

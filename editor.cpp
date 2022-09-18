@@ -2592,6 +2592,108 @@ bool Editor::ask_user_about_unsaved_changes() {
     return true;
 }
 
+void Editor::toggle_comment(int ystart, int yend) {
+    print("toggling from [%d, %d]", ystart, yend);
+
+    auto u_isspace = [&](uchar uch) {
+        return uch < 128 && isspace(uch);
+    };
+
+    auto strip_spaces = [&](auto *line) {
+        int x = -1;
+        Fori (*line) {
+            if (!u_isspace(it)) {
+                x = i;
+                break;
+            }
+        }
+
+        auto ret = alloc_list<uchar>();
+        if (x != -1)
+            for (int i = x; i < line->len; i++)
+                ret->append(line->at(i));
+        return ret;
+    };
+
+    auto is_commented = [&]() {
+        for (int y = ystart; y <= yend; y++) {
+            auto line = strip_spaces(&buf->lines[y]);
+
+            if (line->len < 2) return false;
+            if (line->at(0) != '/') return false;
+            if (line->at(1) != '/') return false;
+        }
+        return true;
+    };
+
+    cur2 new_cur = new_cur2(-1, ystart);
+    buf->hist_batch_mode = true;
+
+    if (is_commented()) {
+        // remove comments
+        for (int y = ystart; y <= yend; y++) {
+            int x = 0;
+            auto line = &buf->lines[y];
+
+            for (; x+1 < line->len; x++) {
+                if (u_isspace(line->at(x))) continue;
+                if (line->at(x) != '/' || line->at(x+1) != '/') break;
+
+                if (new_cur.x == -1) new_cur.x = x;
+
+                cur2 start = new_cur2(x, y);
+                cur2 end = new_cur2(x+2, y);
+
+                if (u_isspace(line->at(x+2))) end.x++;
+
+                buf->remove(start, end);
+            }
+        }
+    } else {
+        // add comments
+        int smallest_indent = -1;
+
+        for (int y = ystart; y <= yend; y++) {
+            auto line = &buf->lines[y];
+            auto stripped = strip_spaces(line);
+            auto indent = line->len - stripped->len;
+
+            if (smallest_indent == -1 || indent < smallest_indent)
+                smallest_indent = indent;
+        }
+
+        new_cur.x = smallest_indent;
+
+        for (int y = ystart; y <= yend; y++) {
+            auto comments = cstr_to_ustr("// ");
+            buf->insert(new_cur2(smallest_indent, y), comments->items, comments->len, false);
+        }
+    }
+
+    buf->hist_batch_mode = false;
+    move_cursor(new_cur);
+
+    if (world.use_nvim) {
+        skip_next_nvim_update();
+
+        auto& nv = world.nvim;
+        nv.start_request_message("nvim_buf_set_lines", 5);
+        nv.writer.write_int(nvim_data.buf_id);
+        nv.writer.write_int(ystart);
+        nv.writer.write_int(yend+1);
+        nv.writer.write_bool(false);
+        nv.writer.write_array(yend-ystart+1);
+        for (int y = ystart; y <= yend; y++)
+            nv.write_line(&buf->lines[y]);
+        nv.end_message();
+
+        // remove highlight
+        trigger_escape();
+    } else {
+        selecting = false;
+    }
+}
+
 void Editor::delete_selection() {
     if (!selecting) return;
 
