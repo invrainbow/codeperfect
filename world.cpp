@@ -1343,6 +1343,85 @@ bool handle_unsaved_files() {
     return true;
 }
 
+
+void rename_identifier_thread(void *param) {
+    auto &wnd = world.wnd_rename_identifier;
+    wnd.thread_mem.cleanup();
+    wnd.thread_mem.init();
+    SCOPED_MEM(&wnd.thread_mem);
+
+    defer {
+        cancel_rename_identifier();
+        wnd.show = false;
+        world.flag_defocus_imgui = true;
+    };
+
+    auto files = world.indexer.find_references(wnd.declres, true);
+    if (!files) return;
+
+    wnd.too_late_to_cancel = true;
+
+    auto symbol = wnd.declres->decl->name;
+    auto symbol_len = strlen(symbol);
+
+    For (*files) {
+        auto filepath = it.filepath;
+
+        File_Replacer fr;
+        if (!fr.init(filepath, "refactor_rename")) continue;
+
+        For (*it.results) {
+            if (fr.done()) break;
+
+            auto ref = it.reference;
+
+            cur2 start, end;
+            if (ref->is_sel) {
+                start = ref->sel_start;
+                end = ref->sel_end;
+            } else {
+                start = ref->start;
+                end = ref->end;
+            }
+
+            // i think this is a safe assumption?
+            if (start.y != end.y) continue;
+
+            if (end.x - start.x != symbol_len) continue;
+
+            fr.goto_next_replacement(start);
+
+            bool matches = true;
+            for (int i = 0; i < symbol_len; i++) {
+                if (symbol[i] != fr.fmr->data[fr.read_pointer + i]) {
+                    matches = false;
+                    break;
+                }
+            }
+            if (!matches) continue;
+
+            fr.do_replacement(end, wnd.rename_to);
+        }
+
+        fr.finish();
+
+        auto editor = find_editor_by_filepath(filepath);
+        if (editor) {
+            world.message_queue.add([&](auto msg) {
+                msg->type = MTM_RELOAD_EDITOR;
+                msg->reload_editor_id = editor->id;
+            });
+            editor->disable_file_watcher_until = current_time_nano() + (2 * 1000000000);
+        }
+    }
+
+    // close the thread handle first so it doesn't try to kill the thread
+    if (wnd.thread) {
+        close_thread_handle(wnd.thread);
+        wnd.thread = NULL;
+    }
+}
+
 void kick_off_rename_identifier() {
     bool ok = false;
 
@@ -1356,91 +1435,10 @@ void kick_off_rename_identifier() {
 
     if (!handle_unsaved_files()) return;
 
-    auto thread_proc = [](void *param) {
-        // TODO: put a sleep here so we can test out cancellation shit
-
-        auto &wnd = world.wnd_rename_identifier;
-        wnd.thread_mem.cleanup();
-        wnd.thread_mem.init();
-        SCOPED_MEM(&wnd.thread_mem);
-
-        defer {
-            cancel_rename_identifier();
-            wnd.show = false;
-            world.flag_defocus_imgui = true;
-        };
-
-        auto files = world.indexer.find_references(wnd.declres, true);
-        if (!files) return;
-
-        wnd.too_late_to_cancel = true;
-
-        auto symbol = wnd.declres->decl->name;
-        auto symbol_len = strlen(symbol);
-
-        For (*files) {
-            auto filepath = it.filepath;
-
-            File_Replacer fr;
-            if (!fr.init(filepath, "refactor_rename")) continue;
-
-            For (*it.results) {
-                if (fr.done()) break;
-
-                auto ref = it.reference;
-
-                cur2 start, end;
-                if (ref->is_sel) {
-                    start = ref->sel_start;
-                    end = ref->sel_end;
-                } else {
-                    start = ref->start;
-                    end = ref->end;
-                }
-
-                // i think this is a safe assumption?
-                if (start.y != end.y) continue;
-
-                if (end.x - start.x != symbol_len) continue;
-
-                fr.goto_next_replacement(start);
-
-                bool matches = true;
-                for (int i = 0; i < symbol_len; i++) {
-                    if (symbol[i] != fr.fmr->data[fr.read_pointer + i]) {
-                        matches = false;
-                        break;
-                    }
-                }
-                if (!matches) continue;
-
-                fr.do_replacement(end, wnd.rename_to);
-            }
-
-            fr.finish();
-
-            auto editor = find_editor_by_filepath(filepath);
-            if (editor) {
-                world.message_queue.add([&](auto msg) {
-                    msg->type = MTM_RELOAD_EDITOR;
-                    msg->reload_editor_id = editor->id;
-                });
-            }
-
-            editor->disable_file_watcher_until = current_time_nano() + (2 * 1000000000);
-        }
-
-        // close the thread handle first so it doesn't try to kill the thread
-        if (wnd.thread) {
-            close_thread_handle(wnd.thread);
-            wnd.thread = NULL;
-        }
-    };
-
     auto &wnd = world.wnd_rename_identifier;
     wnd.running = true;
     wnd.too_late_to_cancel = false;
-    wnd.thread = create_thread(thread_proc, NULL);
+    wnd.thread = create_thread(rename_identifier_thread, NULL);
     if (!wnd.thread) {
         tell_user_error("Unable to kick off Rename Identifier.");
         return;
