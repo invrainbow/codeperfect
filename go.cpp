@@ -3850,6 +3850,133 @@ Goresult *Go_Indexer::find_enclosing_toplevel(ccstr filepath, cur2 pos) {
     return make_goresult(decl, ctx);
 }
 
+Generate_Struct_Tags_Result* Go_Indexer::generate_struct_tags(ccstr filepath, cur2 pos, ccstr lang, Case_Style case_style) {
+    reload_all_editors();
+
+    auto pf = parse_file(filepath, true);
+    if (!pf) return NULL;
+    defer { free_parsed_file(pf); };
+
+    auto file = pf->root;
+
+    auto ctx = filepath_to_ctx(filepath);
+    if (!ctx) return NULL;
+
+    auto ret = alloc_object(Generate_Struct_Tags_Result);
+    ret->insert_starts = alloc_list<cur2>();
+    ret->insert_ends = alloc_list<cur2>();
+    ret->insert_texts = alloc_list<ccstr>();
+
+    auto make_tag_name = [&](ccstr name) -> ccstr {
+        auto len = strlen(name);
+        cp_assert(len);
+
+        auto parts = alloc_list<ccstr>();
+        auto curr = alloc_list<char>();
+
+        for (u32 i = 0; i < len; i++) {
+            if (i && isupper(name[i])) {
+                curr->append('\0');
+                parts->append(cp_strdup(curr->items));
+                curr->len = 0;
+            }
+            curr->append(name[i]);
+        }
+
+        curr->append('\0');
+        parts->append(cp_strdup(curr->items));
+
+        auto ret = alloc_list<char>();
+
+        Fori (*parts) {
+            switch (case_style) {
+            case CASE_SNAKE:
+                if (i) ret->append('_');
+                for (auto p = it; *p; p++)
+                    ret->append(tolower(*p));
+                break;
+            case CASE_PASCAL:
+                for (auto p = it; *p; p++) {
+                    if (p == it)
+                        ret->append(toupper(*p));
+                    else
+                        ret->append(tolower(*p));
+                }
+                break;
+            case CASE_CAMEL:
+                for (auto p = it; *p; p++) {
+                    if (p == it && i)
+                        ret->append(toupper(*p));
+                    else
+                        ret->append(tolower(*p));
+                }
+                break;
+            }
+        }
+
+        ret->append('\0');
+        return ret->items;
+    };
+
+    find_nodes_containing_pos(file, pos, false, [&](auto node) {
+        if (node->type() != TS_TYPE_SPEC) return WALK_CONTINUE;
+
+        auto typenode = node->field(TSF_TYPE);
+        if (typenode->null) return WALK_ABORT;
+        if (typenode->type() != TS_STRUCT_TYPE) return WALK_ABORT;
+
+        auto listnode = typenode->child();
+        if (listnode->null) return WALK_ABORT;
+
+        FOR_NODE_CHILDREN (listnode) {
+            if (it->type() != TS_FIELD_DECLARATION) return WALK_ABORT;
+
+            auto name = it->field(TSF_NAME);
+            if (name->null) continue;  // don't fuck with embedded type fields
+
+            auto namestr = name->string();
+            if (!namestr) continue;
+            if (!namestr[0]) continue;
+            if (!isupper(namestr[0])) continue;
+
+            auto tagname = make_tag_name(namestr);
+
+            auto tag = it->field(TSF_TAG);
+            if (!tag->null) {
+                auto tagstr = tag->string();
+                if (!tagstr) continue;
+
+                tagstr = parse_go_string(tagstr);
+                if (!tagstr) continue;
+
+                GoUint8 ok = false;
+                if (GHHasTag((char*)tagstr, (char*)lang, &ok)) continue;
+                if (!ok) continue;
+
+                tagstr = GHAddTag((char*)tagstr, (char*)lang, (char*)tagname, &ok);
+                if (!ok) continue;
+                defer { GHFree((void*)tagstr); };
+
+                auto newtagstr = cp_sprintf("`%s`", tagstr);
+                ret->insert_starts->append(tag->start());
+                ret->insert_ends->append(tag->end());
+                ret->insert_texts->append(newtagstr);
+            } else {
+                auto newtagstr = cp_sprintf(" `%s:\"%s\"`", lang, tagname);
+                ret->insert_starts->append(it->end());
+                ret->insert_ends->append(it->end());
+                ret->insert_texts->append(newtagstr);
+            }
+        }
+
+        ret->highlight_start = typenode->start();
+        ret->highlight_end = typenode->end();
+        return WALK_ABORT;
+    });
+
+    return ret;
+}
+
 Generate_Func_Sig_Result* Go_Indexer::generate_function_signature(ccstr filepath, cur2 pos) {
     reload_all_editors();
 
@@ -8637,6 +8764,19 @@ TSParser *new_ts_parser() {
     auto ret = ts_parser_new();
     ts_parser_set_language(ret, tree_sitter_go());
     return ret;
+}
+
+ccstr case_style_pretty_str(int x) {
+    return case_style_pretty_str((Case_Style)x);
+}
+
+ccstr case_style_pretty_str(Case_Style x) {
+    switch (x) {
+    case CASE_SNAKE: return "Snake case (looks_like_this)";
+    case CASE_PASCAL: return "Pascal case (LooksLikeThis)";
+    case CASE_CAMEL: return "Camel case (looksLikeThis)";
+    }
+    return NULL;
 }
 
 // -----

@@ -1548,21 +1548,18 @@ Command_Info command_info_table[_CMD_COUNT_];
 bool is_command_enabled(Command cmd) {
     switch (cmd) {
     case CMD_FIND:
-    case CMD_REPLACE:
         return (bool)get_current_editor();
 
-    case CMD_TOGGLE_COMMENT: {
+    case CMD_REPLACE:
+    case CMD_GENERATE_JSON_TAGS:
+    case CMD_GENERATE_YAML_TAGS:
+    case CMD_GENERATE_XML_TAGS:
+    case CMD_TOGGLE_COMMENT:
+    case CMD_SAVE_FILE:
+    case CMD_FORMAT_FILE:
+    case CMD_FORMAT_FILE_AND_ORGANIZE_IMPORTS: {
         auto editor = get_current_editor();
-        if (!editor) return false;
-        if (!editor->is_modifiable()) return false;
-        return true;
-    }
-
-    case CMD_SAVE_FILE: {
-        auto editor = get_current_editor();
-        if (!editor) return false;
-        if (!editor->is_modifiable()) return false;
-        return true;
+        return editor && editor->is_modifiable();
     }
 
     case CMD_SAVE_ALL:
@@ -1593,12 +1590,6 @@ bool is_command_enabled(Command cmd) {
 
     case CMD_CONTINUE:
         return world.dbg.state_flag == DLV_STATE_PAUSED;
-
-    case CMD_FORMAT_FILE:
-    case CMD_FORMAT_FILE_AND_ORGANIZE_IMPORTS: {
-        auto editor = get_current_editor();
-        return editor && editor->is_modifiable();
-    }
 
     case CMD_FORMAT_SELECTION:
         return false;
@@ -1747,7 +1738,6 @@ void init_command_info_table() {
     command_info_table[CMD_GENERATE_IMPLEMENTATION] = k(0, 0, "Generate Implementation");
     command_info_table[CMD_GENERATE_FUNCTION] = k(0, 0, "[Experimental] Generate Function From Call");
     command_info_table[CMD_TOGGLE_COMMENT] = k(CP_MOD_PRIMARY | CP_MOD_ALT, CP_KEY_SLASH, "Toggle Comment");
-
     command_info_table[CMD_FIND_IMPLEMENTATIONS] = k(0, 0, "Find Implementations");
     command_info_table[CMD_FIND_INTERFACES] = k(0, 0, "Find Interfaces");
     command_info_table[CMD_UNDO] = k(CP_MOD_PRIMARY, CP_KEY_Z, "Undo");
@@ -1757,6 +1747,10 @@ void init_command_info_table() {
     command_info_table[CMD_VIEW_CALLEE_HIERARCHY] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_I, "View Callee Hierarchy");
     command_info_table[CMD_BUY_LICENSE] = k(0, 0, "Buy a License");
     command_info_table[CMD_ENTER_LICENSE] = k(0, 0, "Enter License...");
+
+    command_info_table[CMD_GENERATE_JSON_TAGS] = k(0, 0, "Generate struct JSON tags");
+    command_info_table[CMD_GENERATE_YAML_TAGS] = k(0, 0, "Generate struct YAML tags");
+    command_info_table[CMD_GENERATE_XML_TAGS] = k(0, 0, "Generate struct XML tags");
 }
 
 void do_find_interfaces() {
@@ -1924,9 +1918,83 @@ void handle_command(Command cmd, bool from_menu) {
         do_generate_function();
         break;
 
+    case CMD_GENERATE_JSON_TAGS:
+    case CMD_GENERATE_YAML_TAGS:
+    case CMD_GENERATE_XML_TAGS: {
+        ccstr lang = NULL;
+        switch (cmd) {
+        case CMD_GENERATE_JSON_TAGS: lang = "json"; break;
+        case CMD_GENERATE_YAML_TAGS: lang = "yaml"; break;
+        case CMD_GENERATE_XML_TAGS:  lang = "xml"; break;
+        }
+        cp_assert(lang);
+
+        auto editor = get_current_editor();
+        if (!editor) break;
+        if (!editor->is_modifiable()) break;
+
+        auto &ind = world.indexer;
+        defer { ind.ui_mem.reset(); };
+        {
+            SCOPED_MEM(&ind.ui_mem);
+
+            if (!ind.acquire_lock(IND_READING, true)) {
+                tell_user_error("The indexer is currently busy.");
+                return;
+            }
+            defer { ind.release_lock(IND_READING); };
+
+            auto result = ind.generate_struct_tags(editor->filepath, editor->cur, lang, (Case_Style)options.struct_tag_case_style);
+            if (!result) {
+                tell_user_error("Unable to generate struct tags.");
+                return;
+            }
+
+            int miny = result->highlight_start.y;
+            int maxy = result->highlight_end.y;
+
+            editor->buf->hist_batch_mode = true;
+
+            Fori (*result->insert_starts) {
+                auto start = it;
+                auto end = result->insert_ends->at(i);
+                auto text = result->insert_texts->at(i);
+
+                auto utext = cstr_to_ustr(text);
+                if (!utext) continue;
+
+                if (start.y < miny) miny = start.y;
+                if (end.y > maxy) maxy = end.y;
+
+                editor->buf->remove(start, end);
+                editor->buf->insert(start, utext->items, utext->len);
+            }
+
+            editor->buf->hist_batch_mode = false;
+            editor->highlight_snippet(result->highlight_start, result->highlight_end);
+
+            if (world.use_nvim) {
+                // TODO: refactor this
+                editor->skip_next_nvim_update();
+                auto& nv = world.nvim;
+                nv.start_request_message("nvim_buf_set_lines", 5);
+                nv.writer.write_int(editor->nvim_data.buf_id);
+                nv.writer.write_int(miny);
+                nv.writer.write_int(maxy+1);
+                nv.writer.write_bool(false);
+                nv.writer.write_array(maxy-miny+1);
+                for (int y = miny; y <= maxy; y++)
+                    nv.write_line(&editor->buf->lines[y]);
+                nv.end_message();
+            }
+        }
+        break;
+    }
+
     case CMD_TOGGLE_COMMENT: {
         auto editor = get_current_editor();
         if (!editor) break;
+        if (!editor->is_modifiable()) break;
 
         if (world.use_nvim) {
             if (world.nvim.mode == VI_INSERT) {
@@ -2650,6 +2718,7 @@ void handle_command(Command cmd, bool from_menu) {
             memcpy(&world.wnd_options.tmp, &options, sizeof(Options));
         }
         break;
+
     }
 }
 
@@ -2770,10 +2839,7 @@ void do_generate_function() {
         {
             // open and go to the editor
             auto ed = goto_file_and_pos(result->insert_filepath, result->jump_to_pos, true, ECM_GOTO_DEF); // new ECM_*?
-            ed->highlight_snippet.on = true;
-            ed->highlight_snippet.time_start_milli = current_time_milli();
-            ed->highlight_snippet.start = result->highlight_start;
-            ed->highlight_snippet.end = result->highlight_end;
+            ed->highlight_snippet(result->highlight_start, result->highlight_end);
         }
 
         // TODO: add imports

@@ -37,6 +37,7 @@ struct Options {
     serde_bool enable_vim_mode = false; // serde(3)
     serde_bool format_on_save = true; // serde(4)
     serde_bool organize_imports_on_save = false; // serde(5)
+    serde_int struct_tag_case_style = 0; // serde(6)
 };
 
 struct Build_Profile {

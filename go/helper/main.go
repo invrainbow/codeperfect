@@ -20,6 +20,7 @@ import (
 	"unsafe"
 
 	"github.com/denormal/go-gitignore"
+	"github.com/fatih/structtag"
 	"github.com/invrainbow/codeperfect/go/models"
 	"github.com/invrainbow/codeperfect/go/utils"
 	"github.com/invrainbow/codeperfect/go/versions"
@@ -579,6 +580,40 @@ func GHReadCpfolderFile() *C.char {
 //export GHForceServerLocalhost
 func GHForceServerLocalhost() {
 	ForceServerLocalhost = true
+}
+
+//export GHHasTag
+func GHHasTag(tagstr, lang *C.char, ok *bool) bool {
+	tags, err := structtag.Parse(C.GoString(tagstr))
+	if err != nil {
+		*ok = false
+		return false
+	}
+
+	tag, _ := tags.Get(C.GoString(lang))
+	*ok = true
+	return tag != nil
+}
+
+// TODO: figure out how to use multiple return values instead of *bool param
+//export GHAddTag
+func GHAddTag(tagstr, lang, tagname *C.char, ok *bool) *C.char {
+	tags, err := structtag.Parse(C.GoString(tagstr))
+	if err != nil {
+		*ok = false
+		return nil
+	}
+
+	tag, _ := tags.Get(C.GoString(lang))
+	if tag == nil {
+		tags.Set(&structtag.Tag{
+			Key:     C.GoString(lang),
+			Name:    C.GoString(tagname),
+			Options: []string{},
+		})
+	}
+
+	return C.CString(tags.String())
 }
 
 func main() {}

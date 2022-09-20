@@ -1101,6 +1101,24 @@ struct Generate_Func_Sig_Result {
     List<ccstr> *imports_needed_names;
 };
 
+enum Case_Style {
+    CASE_SNAKE,
+    CASE_PASCAL,
+    CASE_CAMEL,
+};
+
+ccstr case_style_pretty_str(Case_Style x);
+ccstr case_style_pretty_str(int x);
+
+struct Generate_Struct_Tags_Result {
+    List<cur2> *insert_starts;
+    List<cur2> *insert_ends;
+    List<ccstr> *insert_texts;
+
+    cur2 highlight_start;
+    cur2 highlight_end;
+};
+
 struct Go_Indexer {
     ccstr goroot;
     // ccstr gopath;
@@ -1252,6 +1270,7 @@ struct Go_Indexer {
     Gotype* do_subst_rename_this_later(Gotype *base, List<Godecl> *params, List<Goresult*> *args);
     Goresult *remove_override_ctx(Gotype *gotype, Go_Ctx *ctx);
     Generate_Func_Sig_Result* generate_function_signature(ccstr filepath, cur2 pos);
+    Generate_Struct_Tags_Result* generate_struct_tags(ccstr filepath, cur2 pos, ccstr lang, Case_Style case_style);
 };
 
 void walk_ast_node(Ast_Node *node, bool abstract_only, Walk_TS_Callback cb);

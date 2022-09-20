@@ -2694,6 +2694,13 @@ void Editor::toggle_comment(int ystart, int yend) {
     }
 }
 
+void Editor::highlight_snippet(cur2 start, cur2 end) {
+    highlight_snippet_state.on = true;
+    highlight_snippet_state.time_start_milli = current_time_milli();
+    highlight_snippet_state.start = start;
+    highlight_snippet_state.end = end;
+}
+
 void Editor::delete_selection() {
     if (!selecting) return;
 

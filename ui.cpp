@@ -2580,53 +2580,78 @@ void UI::draw_everything() {
         int outer_window_padding = outer_style.WindowPadding.y;
 
         if (ImGui::BeginTabBar("wnd_options_tab_bar", 0)) {
-            if (ImGui::BeginTabItem("Editor Settings", NULL)) {
-                auto begin_container_child = [&]() {
-                    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 8));
-                    defer { ImGui::PopStyleVar(); };
+            auto begin_tab = [&](ccstr name) -> bool {
+                if (!ImGui::BeginTabItem(name, NULL)) return false;
 
-                    ImGui::BeginChild("container", ImVec2(400, 250), false, ImGuiWindowFlags_AlwaysUseWindowPadding);
-                };
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 8));
+                ImGui::BeginChild("container", ImVec2(400, 250), false, ImGuiWindowFlags_AlwaysUseWindowPadding);
+                ImGui::PopStyleVar();
+                return true;
+            };
 
-                begin_container_child(); {
-                    ImGui::PushItemWidth(-1);
-                    imgui_push_ui_font();
-                    {
-                        ImGui::Checkbox("Enable vim keybindings", &tmp.enable_vim_mode);
-                        if (ImGui::IsItemEdited())
-                            wnd.something_that_needs_restart_was_changed = true;
-
-                        imgui_small_newline();
-
-                        ImGui::Checkbox("Automatically format on save", &tmp.format_on_save);
-
-                        imgui_small_newline();
-
-                        ImGui::Indent();
-                        {
-                            imgui_with_disabled(!tmp.format_on_save, [&]() {
-                                ImGui::Checkbox("Organize imports after formatting", &tmp.organize_imports_on_save);
-                            });
-                        }
-                        ImGui::Unindent();
-
-                        imgui_small_newline();
-
-                        ImGui::Text("Scroll offset");
-                        ImGui::SameLine();
-                        help_marker("The number of lines the editor will keep between your cursor and the top/bottom of the screen.");
-                        ImGui::SliderInt("###scroll_offset", &tmp.scrolloff, 0, 10);
-
-                        imgui_small_newline();
-
-                        ImGui::Text("Tab size");
-                        ImGui::SliderInt("###tab_size", &tmp.tabsize, 1, 8);
-                    }
-                    imgui_pop_font();
-                    ImGui::PopItemWidth();
-                } ImGui::EndChild();
-
+            auto end_tab = [&]() {
+                ImGui::EndChild();
                 ImGui::EndTabItem();
+            };
+
+            if (begin_tab("Editor Settings")) {
+                ImGui::PushItemWidth(-1);
+                imgui_push_ui_font();
+                {
+                    ImGui::Checkbox("Enable vim keybindings", &tmp.enable_vim_mode);
+                    if (ImGui::IsItemEdited())
+                        wnd.something_that_needs_restart_was_changed = true;
+
+                    imgui_small_newline();
+                    ImGui::Checkbox("Automatically format on save", &tmp.format_on_save);
+
+                    imgui_small_newline();
+                    ImGui::Indent();
+                    {
+                        imgui_with_disabled(!tmp.format_on_save, [&]() {
+                            ImGui::Checkbox("Organize imports after formatting", &tmp.organize_imports_on_save);
+                        });
+                    }
+                    ImGui::Unindent();
+
+                    imgui_small_newline();
+                    ImGui::Text("Scroll offset");
+                    ImGui::SameLine();
+                    help_marker("The number of lines the editor will keep between your cursor and the top/bottom of the screen.");
+                    ImGui::SliderInt("###scroll_offset", &tmp.scrolloff, 0, 10);
+
+                    imgui_small_newline();
+                    ImGui::Text("Tab size");
+                    ImGui::SliderInt("###tab_size", &tmp.tabsize, 1, 8);
+                }
+                imgui_pop_font();
+                ImGui::PopItemWidth();
+
+                end_tab();
+            }
+
+            if (begin_tab("Code Intelligence")) {
+                ImGui::PushItemWidth(-1);
+                imgui_push_ui_font();
+                {
+                    ImGui::Text("Struct tag casing");
+                    if (ImGui::BeginCombo("###struct_tag_casing", case_style_pretty_str(tmp.struct_tag_case_style))) {
+                        Case_Style styles[] = {CASE_SNAKE, CASE_PASCAL, CASE_CAMEL};
+                        For (styles) {
+                            ImGui::PushID((void*)it);
+                            if (ImGui::Selectable(case_style_pretty_str(it), it == tmp.struct_tag_case_style))
+                                tmp.struct_tag_case_style = it;
+                            ImGui::PopID();
+                        }
+                        ImGui::EndCombo();
+                    }
+
+                    // imgui_small_newline();
+                }
+                imgui_pop_font();
+                ImGui::PopItemWidth();
+
+                end_tab();
             }
             ImGui::EndTabBar();
         }
@@ -6041,13 +6066,15 @@ void UI::draw_everything() {
                 select_end = b;
             }
 
-            bool highlight_snippet;
-            vec4f highlight_snippet_color;
-            cur2 highlight_snippet_start;
-            cur2 highlight_snippet_end;
+            struct {
+                bool on;
+                vec4f color;
+                cur2 start;
+                cur2 end;
+            } highlight_snippet;
 
-            if (editor->highlight_snippet.on) {
-                double t = (current_time_milli() - editor->highlight_snippet.time_start_milli);
+            if (editor->highlight_snippet_state.on) {
+                double t = (current_time_milli() - editor->highlight_snippet_state.time_start_milli);
                 double alpha = 0;
 
                 if (0 < t && t < 200) {
@@ -6057,10 +6084,10 @@ void UI::draw_everything() {
                 }
 
                 if (alpha) {
-                    highlight_snippet = true;
-                    highlight_snippet_color = rgba("#eeeebb", alpha * 0.6);
-                    highlight_snippet_start = editor->highlight_snippet.start;
-                    highlight_snippet_end = editor->highlight_snippet.end;
+                    highlight_snippet.on = true;
+                    highlight_snippet.color = rgba("#eeeebb", alpha * 0.6);
+                    highlight_snippet.start = editor->highlight_snippet_state.start;
+                    highlight_snippet.end = editor->highlight_snippet_state.end;
                 }
             }
 
@@ -6276,10 +6303,10 @@ void UI::draw_everything() {
                         }
                     }
 
-                    if (highlight_snippet) {
+                    if (highlight_snippet.on) {
                         auto pos = new_cur2((int)curr_byte_idx, (int)y);
-                        if (highlight_snippet_start <= pos && pos < highlight_snippet_end)
-                            draw_highlight(highlight_snippet_color, glyph_width);
+                        if (highlight_snippet.start <= pos && pos < highlight_snippet.end)
+                            draw_highlight(highlight_snippet.color, glyph_width);
                     }
 
                     if (editor->cur == new_cur2((u32)curr_cp_idx, (u32)y)) {

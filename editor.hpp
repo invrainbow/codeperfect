@@ -98,7 +98,7 @@ struct Editor {
         u64 time_start_milli;
         cur2 start;
         cur2 end;
-    } highlight_snippet;
+    } highlight_snippet_state;
 
     bool double_clicked_selection;
 
@@ -224,6 +224,7 @@ struct Editor {
     void skip_next_nvim_update(int n = 1);
     void delete_selection();
     void toggle_comment(int ystart, int yend);
+    void highlight_snippet(cur2 start, cur2 end);
 };
 
 struct Pane {
