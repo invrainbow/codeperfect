@@ -1944,6 +1944,7 @@ curr_change.new_end_point = cur_to_tspoint(cur);
 void Editor::type_char_in_insert_mode(uchar ch) {
     bool already_typed = false;
 
+    /*
     // handle typing a dot when an import is selected
     do {
         if (ch != '.') break;
@@ -1961,6 +1962,7 @@ void Editor::type_char_in_insert_mode(uchar ch) {
         perform_autocomplete(&result);
         already_typed = true;
     } while (0);
+    */
 
     if (!already_typed) type_char(ch);
 
