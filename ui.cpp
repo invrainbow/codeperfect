@@ -6787,7 +6787,10 @@ void UI::end_frame() {
                     menu.x = x1;
                 }
 
-                draw_bordered_rect_outer(menu, rgba(global_colors.autocomplete_background), rgba(global_colors.autocomplete_border), 1, 4);
+                if (world.autocomplete_basic_mode)
+                    draw_bordered_rect_outer(menu, rgba(global_colors.autocomplete_background), rgba(global_colors.autocomplete_border), 1, 4);
+                else
+                    draw_bordered_rect_outer(menu, rgba(global_colors.autocomplete_background), rgba("#ddddbb"), 1, 4);
 
                 boxf items_area = menu;
                 items_area.w = menu.w;

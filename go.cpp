@@ -5192,31 +5192,28 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
             }
         }
 
-        // workspace or are immediate deps?
-        For (*index.packages) {
-            if (!it.import_path) continue;
-            if (existing_imports.has(it.import_path)) continue;
-            if (it.status != GPS_READY) continue;
-            if (!it.package_name) continue;
-            if (streq(it.import_path, ctx->import_path)) continue;
+        if (!world.autocomplete_basic_mode) {
+            // workspace or are immediate deps?
+            For (*index.packages) {
+                if (!it.import_path) continue;
+                if (existing_imports.has(it.import_path)) continue;
+                if (it.status != GPS_READY) continue;
+                if (!it.package_name) continue;
+                if (streq(it.import_path, ctx->import_path)) continue;
 
-            // gofile->imports
-            // TODO: check if import already exists in file
+                // gofile->imports
+                // TODO: check if import already exists in file
 
-            if (!path_has_descendant(index.current_import_path, it.import_path))
-                if (is_import_path_internal(it.import_path))
-                    continue;
+                if (!path_has_descendant(index.current_import_path, it.import_path))
+                    if (is_import_path_internal(it.import_path))
+                        continue;
 
-            auto res = ac_results->append();
-            res->name = it.package_name;
-            res->type = ACR_IMPORT;
-            res->import_path = it.import_path;
+                auto res = ac_results->append();
+                res->name = it.package_name;
+                res->type = ACR_IMPORT;
+                res->import_path = it.import_path;
+            }
         }
-
-        t.log("iterate over packages");
-
-
-        t.log("crazy shit");
 
         do {
             if (!lone_identifier_struct_literal) break;
@@ -5275,41 +5272,44 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
 
         t.log("list package decls");
 
-        ccstr keywords[] = {
-            "package", "import", "const", "var", "func",
-            "type", "struct", "interface", "map", "chan",
-            "fallthrough", "break", "continue", "goto", "return",
-            "go", "defer", "if", "else",
-            "for", "range", "switch", "case",
-            "default", "select", "new", "make", "iota",
-        };
+        // if the identifier isn't empty, show keywords & builtins
+        if (keyword_start < pos) {
+            ccstr keywords[] = {
+                "package", "import", "const", "var", "func",
+                "type", "struct", "interface", "map", "chan",
+                "fallthrough", "break", "continue", "goto", "return",
+                "go", "defer", "if", "else",
+                "for", "range", "switch", "case",
+                "default", "select", "new", "make", "iota",
+            };
 
-        For (keywords) {
-            auto res = ac_results->append();
-            res->name = it;
-            res->type = ACR_KEYWORD;
-        }
+            For (keywords) {
+                auto res = ac_results->append();
+                res->name = it;
+                res->type = ACR_KEYWORD;
+            }
 
-        // add builtins
-        {
-            auto results = list_package_decls("@builtin", LISTDECLS_EXCLUDE_METHODS);
-            if (results) {
-                For (*results) {
-                    auto res = add_declaration_result(it.decl->name); // i think this is enough?
-                    if (res) {
-                        res->declaration_godecl = it.decl;
-                        res->declaration_import_path = it.ctx->import_path;
-                        res->declaration_filename = it.ctx->filename;
+            // add builtins
+            {
+                auto results = list_package_decls("@builtin", LISTDECLS_EXCLUDE_METHODS);
+                if (results) {
+                    For (*results) {
+                        auto res = add_declaration_result(it.decl->name); // i think this is enough?
+                        if (res) {
+                            res->declaration_godecl = it.decl;
+                            res->declaration_import_path = it.ctx->import_path;
+                            res->declaration_filename = it.ctx->filename;
 
-                        auto gores = evaluate_type(it.decl->gotype, it.ctx);
-                        if (gores)
-                            res->declaration_evaluated_gotype = gores->gotype;
+                            auto gores = evaluate_type(it.decl->gotype, it.ctx);
+                            if (gores)
+                                res->declaration_evaluated_gotype = gores->gotype;
+                        }
                     }
                 }
             }
-        }
 
-        t.log("add keywords & builtins");
+            t.log("add keywords & builtins");
+        }
 
         if (!ac_results->len) return false;
         out->type = AUTOCOMPLETE_IDENTIFIER;

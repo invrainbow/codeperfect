@@ -398,6 +398,8 @@ struct World {
     bool auth_update_done;
     u64 auth_update_last_check;
 
+    bool autocomplete_basic_mode;
+
     struct Wnd_Current_File_Search : Wnd {
         Pool mem;
         char query[256];

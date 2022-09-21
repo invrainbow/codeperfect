@@ -550,6 +550,8 @@ void World::init() {
 
     world.file_explorer.show = true;
 
+    autocomplete_basic_mode = true;
+
 #ifdef DEBUG_BUILD
     // if (!use_nvim) world.wnd_history.show = true;
 
