@@ -38,7 +38,7 @@ void fzy_init() {
 int fzy_has_match(const char *needle, const char *haystack) {
     while (*needle) {
         char nch = *needle++;
-        const char accept[3] = {nch, (char)toupper(nch), 0};
+        const char accept[3] = {(char)tolower(nch), (char)toupper(nch), 0};
         if (!(haystack = strpbrk(haystack, accept))) {
             return 0;
         }
