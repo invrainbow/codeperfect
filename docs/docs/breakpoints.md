@@ -15,7 +15,7 @@ stopped on a breakpoint (or on any line), it turns yellow.
 
 To delete all breakpoints, run `Debug` &gt; `Delete All Breakpoints`.
 
-## Keyboard Shortcuts
+## Keyboard shortcuts
 
 | Command                | Shortcut   |
 | ---------------------- | ---------- |

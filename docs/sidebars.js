@@ -40,7 +40,12 @@ const sidebars = {
     {
       type: "category",
       label: "Editor",
-      items: ["panes-and-tabs", "vim-keybindings", "format-document"],
+      items: [
+        "panes-and-tabs",
+        "vim-keybindings",
+        "format-document",
+        "toggle-comment",
+      ],
     },
     {
       type: "category",
@@ -58,7 +63,7 @@ const sidebars = {
     {
       type: "category",
       label: "Refactoring",
-      items: ["rename", "generate-implementation"],
+      items: ["rename", "generate-implementation", "generate-function"],
     },
     {
       type: "category",

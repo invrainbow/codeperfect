@@ -9,7 +9,7 @@ is finished, if successful, the window will simply disappear. If the build
 failed, errors will be displayed here. See
 [Navigating Errors](navigating-errors) for more information.
 
-## Keyboard Shortcuts
+## Keyboard shortcuts
 
 | Command     | Shortcut          |
 | ----------- | ----------------- |

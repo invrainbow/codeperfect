@@ -26,7 +26,7 @@ Set this debug profile as the default by going to `Debug` &gt;
 `Select Active Debug Profile...` &gt; `Test Package`. Then start the debugger as
 usual, by going to `Debug` &gt; `Start Debugging`.
 
-## Keyboard Shortcuts
+## Keyboard shortcuts
 
 | Command                 | Shortcut |
 | ----------------------- | -------- |

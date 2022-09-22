@@ -14,7 +14,7 @@ If a command has a keyboard shortcut, the Command Palette will also display it.
 Commands that aren't runnable in the current context are excluded. For instance,
 if you don't have an editor open, `Save File` won't show up.
 
-## Keyboard Shortcuts
+## Keyboard shortcuts
 
 | Command                | Shortcut    |
 | ---------------------- | ----------- |

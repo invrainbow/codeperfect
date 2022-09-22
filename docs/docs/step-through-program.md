@@ -31,7 +31,7 @@ If the current line contains no function call, this behaves like Step Over.
 This runs until the current function finishes, then breaks in the caller of the
 current function on the line after the function call.
 
-## Keyboard Shortcuts
+## Keyboard shortcuts
 
 | Command   | Shortcut    |
 | --------- | ----------- |

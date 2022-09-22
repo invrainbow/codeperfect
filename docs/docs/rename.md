@@ -10,7 +10,7 @@ toc: true
 CodePerfect can rename an identifier and all references to it. Put your cursor
 over an identifier and run `Refactor` &gt; `Rename`.
 
-## Keyboard Shortcuts
+## Keyboard shortcuts
 
 | Command | Shortcut |
 | ------- | -------- |

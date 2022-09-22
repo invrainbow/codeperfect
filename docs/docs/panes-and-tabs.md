@@ -5,7 +5,7 @@ title: "Panes and Tabs"
 CodePerfect supports panes and tabs. Panes are vertical splits that let you edit
 two files side by side. Each pane can contain several tabs.
 
-## Keyboard Shortcuts
+## Keyboard shortcuts
 
 | Command            | Shortcut                                       |
 | ------------------ | ---------------------------------------------- |

@@ -15,7 +15,7 @@ By default, Organize Imports uses our native implementation, which runs
 instantly and is more accurate than `goimports` due to our in-memory index. When
 the indexer is busy, we fallback to `goimports`, which sometimes has a lag.
 
-## Keyboard Shortcuts
+## Keyboard shortcuts
 
 | Command                          | Shortcut         |
 | -------------------------------- | ---------------- |

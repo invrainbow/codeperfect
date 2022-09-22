@@ -12,7 +12,7 @@ After [configuring your debug profiles](setting-up-debugger), go to `Debug` &gt;
 
 To start debugging, run `Debug` &gt; `Start Debugging`.
 
-## Keyboard Shortcuts
+## Keyboard shortcuts
 
 | Command         | Shortcut |
 | --------------- | -------- |

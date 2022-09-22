@@ -7,7 +7,7 @@ CodePerfect lets you fuzzy-search for a file and open it. To do this, press
 
 ![](/go-to-file.png)
 
-## Keyboard Shortcuts
+## Keyboard shortcuts
 
 | Command                  | Shortcut    |
 | ------------------------ | ----------- |

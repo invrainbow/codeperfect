@@ -17,17 +17,17 @@ There are some additional things to note:
 
   - Importantly, `:%s/find/replace` currently does not work. For now, you can
     get around this by using the native in-file search and replace by pressing
-    `Primary+H`. If you want to use Vim, you can do a normal `/search`, use
-    `ce` or similar to modify it, then use `n.` to jump to each occurrence and
-    repeat the replacement.
+    `Primary+H`. If you want to use Vim, you can do a normal `/search`, use `ce`
+    or similar to modify it, then use `n.` to jump to each occurrence and repeat
+    the replacement.
 
   - Since normal `/search` still works, you may find yourself needing
     `:nohlsearch`. We've bound `C-/` to this.
 
   - Custom .vimrc files are also unsupported at this time.
 
-- To copy to the clipboard, press `Primary+C` while the text
-  you want is selected in Visual mode.
+- To copy to the clipboard, press `Primary+C` while the text you want is
+  selected in Visual mode.
 
 - To paste from the clipboard, press `Primary+V` in insert mode.
 
@@ -41,4 +41,5 @@ There are some additional things to note:
 - `>` and `<` are mapped so that they don't exit Visual mode. You can select
   some text, press `>` five times, then press Escape.
 
-- The `z` keys, `H`, `M`, `L`, `C-e`, and `C-y` work as expected.
+- The `z` keys, `H`, `M`, `L`, `C-e`, `C-y`, `C-b`, `C-f`, `C-d`, and `C-u` work
+  as expected.

@@ -16,7 +16,7 @@ of each word, or any fuzzy substring.
 Go To Symbol depends on the indexer. If the indexer is busy indexing, this
 feature will be temporarily disabled.
 
-## Keyboard Shortcuts
+## Keyboard shortcuts
 
 | Command                    | Shortcut    |
 | -------------------------- | ----------- |

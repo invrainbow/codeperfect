@@ -9,7 +9,7 @@ function, CodePerfect will show you its signature:
 
 When you type a `,` inside a function call, it will re-open the hint.
 
-## Keyboard Shortcuts
+## Keyboard shortcuts
 
 | Command               | Shortcut           |
 | --------------------- | ------------------ |
