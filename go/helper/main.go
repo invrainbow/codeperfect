@@ -596,6 +596,7 @@ func GHHasTag(tagstr, lang *C.char, ok *bool) bool {
 }
 
 // TODO: figure out how to use multiple return values instead of *bool param
+//
 //export GHAddTag
 func GHAddTag(tagstr, lang, tagname *C.char, ok *bool) *C.char {
 	tags, err := structtag.Parse(C.GoString(tagstr))

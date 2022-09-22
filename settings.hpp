@@ -38,6 +38,7 @@ struct Options {
     serde_bool format_on_save = true; // serde(4)
     serde_bool organize_imports_on_save = false; // serde(5)
     serde_int struct_tag_case_style = 0; // serde(6)
+    serde_bool autocomplete_func_add_paren = true; // serde(7)
 };
 
 struct Build_Profile {

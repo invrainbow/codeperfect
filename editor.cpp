@@ -551,6 +551,10 @@ void Editor::perform_autocomplete(AC_Result *result) {
                 if (result->declaration_is_struct_literal_field)
                     return cp_sprintf("%s: ", s);
 
+                // check if it's a func type and add "("
+
+                if (!options.autocomplete_func_add_paren) break;
+
                 auto godecl = result->declaration_godecl;
                 if (!godecl) break;
 
@@ -572,7 +576,6 @@ void Editor::perform_autocomplete(AC_Result *result) {
 
                 is_function = true;
                 return cp_sprintf("%s(", s); // it's a func, add a '('
-                break;
             }
             }
 

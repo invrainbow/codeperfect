@@ -2646,6 +2646,9 @@ void UI::draw_everything() {
                         ImGui::EndCombo();
                     }
 
+                    imgui_small_newline();
+                    ImGui::Checkbox("Add a `(` after autocompleting a func type", &tmp.autocomplete_func_add_paren);
+
                     // imgui_small_newline();
                 }
                 imgui_pop_font();

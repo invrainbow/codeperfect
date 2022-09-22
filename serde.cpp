@@ -172,6 +172,8 @@ void Serde::write_type(void* val, int type) {
         WRITE(3, enable_vim_mode, SERDE_BOOL);
         WRITE(4, format_on_save, SERDE_BOOL);
         WRITE(5, organize_imports_on_save, SERDE_BOOL);
+        WRITE(6, struct_tag_case_style, SERDE_INT);
+        WRITE(7, autocomplete_func_add_paren, SERDE_BOOL);
         write_int(0);
         break;
     }
@@ -247,6 +249,8 @@ void Serde::read_type_field(void* out, int type, int field_id) {
         FIELD(3, enable_vim_mode, SERDE_BOOL);
         FIELD(4, format_on_save, SERDE_BOOL);
         FIELD(5, organize_imports_on_save, SERDE_BOOL);
+        FIELD(6, struct_tag_case_style, SERDE_INT);
+        FIELD(7, autocomplete_func_add_paren, SERDE_BOOL);
         }
         break;
     }
