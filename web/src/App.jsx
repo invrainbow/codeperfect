@@ -54,6 +54,7 @@ const LINKS = {
 
   twitter: "https://twitter.com/codeperfect95",
   discord: "https://discord.gg/WkFY44BY7a",
+  mailingList: "https://exceptional-innovator-7731.ck.page/0b59fe1347",
 };
 
 const DEV_LINKS = {
@@ -637,6 +638,7 @@ function Footer() {
           <FootSection>
             <FootLink href={`mailto:${SUPPORT_EMAIL}`}>Support</FootLink>
             <FootLink href="/terms">Terms &amp; Privacy</FootLink>
+            <FootLink href={LINKS.mailingList}>Newsletter</FootLink>
           </FootSection>
         </div>
         <div className="flex gap-x-4 text-2xl">
