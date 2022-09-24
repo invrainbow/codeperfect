@@ -6392,6 +6392,163 @@ void UI::draw_everything() {
                 cur_pos.x = editor_area.x + settings.editor_margin_x;
                 cur_pos.y += base_font->height * settings.line_height;
             }
+
+            // render toplevel first line if it's offscreen
+            do {
+                Parser_It it; ptr0(&it);
+                it.init(editor->buf);
+                auto tree = editor->buf->tree;
+                if (!tree) break;
+                Ast_Node root; ptr0(&root);
+                root.init(ts_tree_root_node(tree), &it);
+
+                Ast_Node *toplevel = NULL;
+                int first_line = -1;
+
+                find_nodes_containing_pos(&root, editor->cur, true, [&](auto it) -> Walk_Action {
+                    switch (it->type()) {
+                    case TS_VAR_DECLARATION:
+                    case TS_CONST_DECLARATION:
+                    case TS_FUNCTION_DECLARATION:
+                    case TS_METHOD_DECLARATION:
+                    case TS_TYPE_DECLARATION:
+                    case TS_TYPE_ALIAS:
+                    case TS_SHORT_VAR_DECLARATION:
+                        toplevel = alloc_object(Ast_Node);
+                        memcpy(toplevel, it, sizeof(Ast_Node));
+                        return WALK_ABORT;
+                    }
+                    return WALK_CONTINUE;
+                });
+
+                if (!toplevel) break;
+
+                int start = toplevel->start().y;
+
+                // is it offscreen? if not, break
+                if (start >= editor->view.y) break;
+
+                int x = 0;
+                auto &line = editor->buf->lines[start];
+
+                for (; x < line.len; x++)
+                    if (line[x] >= 128 || !isspace(line[x]))
+                        break;
+
+                if (x >= line.len) break;
+
+                // float rect_size = 0;
+                auto grapheme = alloc_list<uchar>();
+
+                boxf preview_area;
+                preview_area.pos = editor_area.pos;
+
+                preview_area.x += settings.line_number_margin_left;
+                preview_area.x += get_line_number_width(editor) * base_font->width;
+                preview_area.x += settings.line_number_margin_right;
+
+                preview_area.x += settings.editor_margin_x;
+                preview_area.y += settings.editor_margin_y;
+
+                preview_area.w = settings.editor_margin_x * 2;
+                preview_area.h = base_font->height + settings.editor_margin_y * 2;
+
+                int graphemes_to_draw = 0;
+
+                // vec2f start_cur = editor_area.pos + new_vec2f(settings.editor_margin_x, settings.editor_margin_y);
+
+                // calculate the rect size
+                {
+                    u32 cp_idx = x;
+                    u32 vx = x;
+
+                    Grapheme_Clusterer gc;
+                    gc.init();
+                    gc.feed(line[cp_idx]); // feed first character for GB1
+
+                    auto cur_pos = preview_area.pos;
+                    cur_pos.x += settings.editor_margin_x;
+                    cur_pos.y += settings.editor_margin_y;
+
+                    while (preview_area.x + preview_area.w < editor_area.x + editor_area.w - settings.editor_margin_x) {
+                        if (cp_idx >= line.len) break;
+
+                        auto curr_cp_idx = cp_idx;
+                        int curr_cp = line[cp_idx];
+
+                        grapheme->len = 0;
+
+                        do {
+                            auto uch = line[cp_idx];
+                            grapheme->append(uch);
+                            cp_idx++;
+                        } while (cp_idx < line.len && !gc.feed(line[cp_idx]));
+
+                        int gw = 0;
+                        if (grapheme->len == 1 && curr_cp == '\t')
+                            gw = options.tabsize - (vx % options.tabsize);
+                        else
+                            gw = cp_wcswidth(grapheme->items, grapheme->len);
+
+                        auto w = base_font->width * (gw == -1 ? 2 : gw);
+                        preview_area.w += w;
+                        cur_pos.x += w;
+                        graphemes_to_draw++;
+                    }
+                }
+
+                draw_bordered_rect_outer(preview_area, rgba("#151515"), rgba("#444444"), 1, 4);
+
+                /*
+                vec2f cur_pos = editor_area.pos + new_vec2f(settings.editor_margin_x, settings.editor_margin_y);
+                cur_pos.y += base_font->offset_y;
+                */
+
+                {
+                    u32 cp_idx = x;
+                    u32 vx = x;
+
+                    auto cur_pos = preview_area.pos;
+                    cur_pos.y += base_font->offset_y;
+                    cur_pos.x += settings.editor_margin_x;
+                    cur_pos.y += settings.editor_margin_y;
+
+                    Grapheme_Clusterer gc;
+                    gc.init();
+                    gc.feed(line[cp_idx]); // feed first character for GB1
+
+                    for (int i = 0; i < graphemes_to_draw; i++) {
+                        if (cp_idx >= line.len) break; // prob not actually necessary, assert instead?
+
+                        auto curr_cp_idx = cp_idx;
+                        int curr_cp = line[cp_idx];
+
+                        grapheme->len = 0;
+
+                        do {
+                            auto uch = line[cp_idx];
+                            grapheme->append(uch);
+                            cp_idx++;
+                        } while (cp_idx < line.len && !gc.feed(line[cp_idx]));
+
+                        int glyph_width = 0;
+                        if (grapheme->len == 1 && curr_cp == '\t')
+                            glyph_width = options.tabsize - (vx % options.tabsize);
+                        else
+                            glyph_width = cp_wcswidth(grapheme->items, grapheme->len);
+
+                        if (glyph_width == -1) glyph_width = 1;
+
+                        uchar uch = curr_cp;
+                        if (uch == '\t')
+                            cur_pos.x += base_font->width * glyph_width;
+                        else
+                            draw_char(&cur_pos, grapheme, rgba(global_colors.foreground, 0.8));
+
+                        vx += glyph_width;
+                    }
+                }
+            } while (0);
         } while (0);
 
         pane_area.x += pane_area.w;
