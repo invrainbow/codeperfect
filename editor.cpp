@@ -1888,7 +1888,7 @@ void Editor::update_parameter_hint() {
 
         Ast_Node *arglist = NULL;
 
-        find_nodes_containing_pos(pf.root, cur, false, [&](auto it) {
+        find_nodes_containing_pos(pf.root, cur, true, [&](auto it) {
             if (it->type() == TS_ARGUMENT_LIST) {
                 if (!arglist)
                     arglist = alloc_object(Ast_Node);

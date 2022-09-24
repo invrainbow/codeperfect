@@ -3918,7 +3918,7 @@ Generate_Struct_Tags_Result* Go_Indexer::generate_struct_tags(ccstr filepath, cu
         return ret->items;
     };
 
-    find_nodes_containing_pos(file, pos, false, [&](auto node) {
+    find_nodes_containing_pos(file, pos, true, [&](auto node) {
         if (node->type() != TS_TYPE_SPEC) return WALK_CONTINUE;
 
         auto typenode = node->field(TSF_TYPE);
@@ -3991,7 +3991,7 @@ Generate_Func_Sig_Result* Go_Indexer::generate_function_signature(ccstr filepath
 
     Ast_Node *callnode = NULL;
 
-    find_nodes_containing_pos(file, pos, false, [&](auto node) -> Walk_Action {
+    find_nodes_containing_pos(file, pos, true, [&](auto node) -> Walk_Action {
         switch (node->type()) {
         case TS_QUALIFIED_TYPE:
         case TS_SELECTOR_EXPRESSION: {
@@ -4328,7 +4328,7 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 p
 
     t.log("setup shit");
 
-    find_nodes_containing_pos(file, pos, false, [&](auto node) -> Walk_Action {
+    find_nodes_containing_pos(file, pos, true, [&](auto node) -> Walk_Action {
         auto contains_pos = [&](Ast_Node *node) -> bool {
             return cmp_pos_to_node(pos, node) == 0;
         };
