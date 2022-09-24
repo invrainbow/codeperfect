@@ -117,7 +117,6 @@ struct Build {
     int current_error;
     bool build_itself_had_error;
     Thread_Handle thread;
-    // i32 scroll_offset;
     u32 selection;
     int scroll_to;
 
@@ -663,11 +662,6 @@ struct World {
         List<Go_Symbol> *symbols;
         List<int> *filtered_results;
     } wnd_goto_symbol;
-
-    struct {
-        i32 scroll_offset;
-        // ???
-    } wnd_build_and_debug;
 
     struct {
         bool focused;
