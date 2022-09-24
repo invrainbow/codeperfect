@@ -5619,6 +5619,14 @@ void UI::draw_everything() {
             editor_area_considering_pane_resizers.x += PANE_RESIZER_WIDTH / 2;
             editor_area_considering_pane_resizers.w -= PANE_RESIZER_WIDTH;
 
+            auto offset_adjust_pos = [&](cur2 pos) -> cur2 {
+                if (pos.y < editor->view.y + options.scrolloff)
+                    pos.y = editor->view.y + options.scrolloff;
+                if (pos.y > editor->view.y + editor->view.h - options.scrolloff - 1)
+                    pos.y = editor->view.y + editor->view.h - options.scrolloff - 1;
+                return pos;
+            };
+
             auto is_hovered = test_hover(editor_area_considering_pane_resizers, HOVERID_EDITORS + current_pane, ImGuiMouseCursor_TextInput);
             if (is_hovered) {
                 if (world.ui.mouse_just_pressed[0]) {
@@ -5637,14 +5645,14 @@ void UI::draw_everything() {
 
                             auto opts = default_move_cursor_opts();
                             opts->is_user_movement = true;
-                            editor->move_cursor(pos, opts);
+                            editor->move_cursor(offset_adjust_pos(pos), opts);
                         }
                     }
                 } else if (world.ui.mouse_down[0]) {
                     if (editor->mouse_select.on)
                         if (editor->mouse_select.editor_id == editor->id)
                             if (!editor->double_clicked_selection)
-                                editor->move_cursor(calculate_pos_from_mouse());
+                                editor->move_cursor(offset_adjust_pos(calculate_pos_from_mouse()));
                 } else if (editor->mouse_select.on) {
                     editor->mouse_select.on = false;
                 }
