@@ -880,6 +880,8 @@ void Go_Indexer::init_builtins(Go_Package *pkg) {
 
         // "any"
         {
+            SCOPED_MEM(&final_mem);
+
             auto gotype = add_builtin(GODECL_TYPE, GO_BUILTIN_ANY, "any");
             gotype->base = empty_interface();
         }
@@ -1263,9 +1265,9 @@ void Go_Indexer::background_thread() {
         filepath = path_join(index.current_path, filepath);
 
         auto import_path = filepath_to_import_path(filepath);
-        auto res = check_path(filepath);
+        if (!import_path) return;
 
-        switch (res) {
+        switch (check_path(filepath)) {
         case CPR_DIRECTORY:
             if (is_go_package(filepath)) {
                 start_writing(true);
