@@ -26,7 +26,7 @@ endfunction
 
 function! CPGetVisual(name)
     let m = mode()
-    if m ==# "v" || m ==# "V"
+    if m == "v" || m == "V" || m == "\<C-V>"
         let [row_s, col_s] = getpos("v")[1:2]
         let [row_e, col_e] = getpos(".")[1:2]
     else

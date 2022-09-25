@@ -2002,12 +2002,16 @@ void handle_command(Command cmd, bool from_menu) {
             if (world.nvim.mode == VI_INSERT) {
                 // TODO
             } else {
-                auto& nv = world.nvim;
-                nv.start_request_message("nvim_call_function", 2);
-                nv.writer.write_string("CPGetVisual");
-                nv.writer.write_array(1);
-                nv.writer.write_string("toggle_comment");
-                nv.end_message();
+                if (world.nvim.mode == VI_VISUAL) {
+                    auto& nv = world.nvim;
+                    nv.start_request_message("nvim_call_function", 2);
+                    nv.writer.write_string("CPGetVisual");
+                    nv.writer.write_array(1);
+                    nv.writer.write_string("toggle_comment");
+                    nv.end_message();
+                } else {
+                    editor->toggle_comment(editor->cur.y, editor->cur.y);
+                }
             }
         } else {
             if (editor->selecting) {

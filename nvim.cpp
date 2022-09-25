@@ -450,7 +450,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 auto s = editor->buf->get_text(start, editor->buf->inc_cur(end));
                 world.window->set_clipboard_string(s);
             } else if (streq(args.for_what, "toggle_comment")) {
-                if (start.x == -1)
+                if (start.y == -1)
                     editor->toggle_comment(editor->cur.y, editor->cur.y);
                 else
                     editor->toggle_comment(start.y, end.y);
