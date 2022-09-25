@@ -15,6 +15,10 @@ const config = {
   organizationName: "codeperfect",
   projectName: "codeperfect",
 
+  customFields: {
+    fuckingRetardation: process.env.BUILD_VERSION,
+  },
+
   plugins: ["docusaurus-plugin-sass"],
 
   presets: [

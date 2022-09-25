@@ -20,8 +20,8 @@
     "web-vitals": "^2.1.4"
   },
   "scripts": {
-    "start": "concurrently --kill-others postcss\\ -w\\ -o\\ src/index.css\\ src/index.scss bun\\ dev",
-    "build": "postcss -o src/index.css src/index.scss && react-scripts build"
+    "start": "export REACT_APP_BUILD_VERSION=$(cat ../user_facing_version); concurrently --kill-others postcss\\ -w\\ -o\\ src/index.css\\ src/index.scss bun\\ dev",
+    "build": "export REACT_APP_BUILD_VERSION=$(cat ../user_facing_version); postcss -o src/index.css src/index.scss && react-scripts build"
   },
   "eslintConfig": {
     "extends": [

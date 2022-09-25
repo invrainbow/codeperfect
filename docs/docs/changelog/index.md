@@ -3,5 +3,9 @@ title: Changelog
 ---
 
 import { Redirect } from "@docusaurus/router";
+import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 
-<Redirect to="/changelog/22.09.4" />
+export default function Home() {
+  const { siteConfig } = useDocusaurusContext();
+  return <Redirect to={`/changelog/${siteConfig.customFields.fuckingRetardation}`} />;
+};
