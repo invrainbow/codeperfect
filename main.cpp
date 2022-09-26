@@ -709,6 +709,7 @@ void handle_window_event(Window_Event *it) {
                 break;
             case CP_KEY_Y:
                 if (!editor) break;
+                if (!world.use_nvim) break;
                 if (world.nvim.mode == VI_INSERT) break;
                 if (editor->view.y > 0) {
                     editor->view.y--;
@@ -717,6 +718,7 @@ void handle_window_event(Window_Event *it) {
                 break;
             case CP_KEY_E:
                 if (!editor) break;
+                if (!world.use_nvim) break;
                 if (world.nvim.mode == VI_INSERT) break;
                 if (editor->view.y + 1 < editor->buf->lines.len) {
                     editor->view.y++;
