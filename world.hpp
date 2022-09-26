@@ -207,6 +207,7 @@ enum Command {
     CMD_GENERATE_XML_TAGS,
     /**/
     _CMD_COUNT_,
+    CMD_INVALID = -1,
 };
 
 struct Command_Info {
@@ -397,6 +398,10 @@ struct World {
     u64 auth_update_last_check;
 
     bool autocomplete_basic_mode;
+
+    // i guess this should go in wnd_run_command, but i don't want it to get cleared out if
+    // i ptr0 the whole wnd, and i also don't want to have to worry about not doing that
+    Command last_manually_run_command;
 
     struct Wnd_Current_File_Search : Wnd {
         Pool mem;

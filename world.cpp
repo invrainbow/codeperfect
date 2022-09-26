@@ -552,6 +552,8 @@ void World::init() {
 
     autocomplete_basic_mode = true;
 
+    last_manually_run_command = CMD_INVALID;
+
 #ifdef DEBUG_BUILD
     // if (!use_nvim) world.wnd_history.show = true;
 

@@ -4663,9 +4663,8 @@ void UI::draw_everything() {
 
         auto begin_window = [&]() {
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 8));
-            defer { ImGui::PopStyleVar(); };
-
             begin_centered_window("Run Command", &wnd, 0, 400);
+            ImGui::PopStyleVar();
         };
 
         begin_window();
@@ -4708,8 +4707,14 @@ void UI::draw_everything() {
                 wnd.show = false;
                 ImGui::SetWindowFocus(NULL);
 
-                if (wnd.filtered_results->len > 0)
-                    handle_command((Command)wnd.filtered_results->at(wnd.selection), false);
+                if (!wnd.query[0]) {
+                    if (world.last_manually_run_command != CMD_INVALID)
+                        handle_command(world.last_manually_run_command, false);
+                } else if (wnd.filtered_results->len > 0) {
+                    auto cmd = (Command)wnd.filtered_results->at(wnd.selection);
+                    handle_command(cmd, false);
+                    world.last_manually_run_command = cmd;
+                }
             }
         }
         ImGui::PopItemWidth();
@@ -4735,6 +4740,34 @@ void UI::draw_everything() {
             }
         }
 
+        auto render_command_in_menu = [&](auto pm, Command it, bool selected) {
+            pretty_menu_item(pm, selected);
+
+            pretty_menu_text(pm, get_command_name(it));
+
+            auto keystr = get_menu_command_key(it);
+            if (!keystr) return;
+
+            // imgui_push_mono_font();
+            // defer { imgui_pop_font(); };
+            pm->pos.x = pm->text_br.x - ImGui::CalcTextSize(keystr).x;
+            pretty_menu_text(
+                pm,
+                keystr,
+                selected ? IM_COL32(150, 150, 150, 255) : IM_COL32(110, 110, 110, 255)
+            );
+        };
+
+        // if empty query, show last command
+        if (!wnd.query[0]) {
+            if (world.last_manually_run_command != CMD_INVALID) {
+                ImGui::Text("Last command");
+
+                auto pm = pretty_menu_start();
+                render_command_in_menu(pm, world.last_manually_run_command, true);
+            }
+        }
+
         if (wnd.filtered_results->len > 0) {
             imgui_small_newline();
 
@@ -4742,29 +4775,9 @@ void UI::draw_everything() {
             defer { ImGui::PopStyleVar(); };
 
             auto pm = pretty_menu_start();
-
             for (u32 i = 0; i < wnd.filtered_results->len && i < settings.run_command_max_results; i++) {
-                pretty_menu_item(pm, i == wnd.selection);
-
                 auto it = (Command)wnd.filtered_results->at(i);
-
-                auto name = get_command_name(it);
-                pretty_menu_text(pm, get_command_name(it));
-
-                auto keystr = get_menu_command_key(it);
-                if (keystr) {
-                    // imgui_push_mono_font();
-                    // defer { imgui_pop_font(); };
-
-                    pm->pos.x = pm->text_br.x - ImGui::CalcTextSize(keystr).x;
-
-                    // TODO: refactor
-                    auto color = i == wnd.selection
-                        ? IM_COL32(150, 150, 150, 255)
-                        : IM_COL32(110, 110, 110, 255);
-
-                    pretty_menu_text(pm, keystr, color);
-                }
+                render_command_in_menu(pm, it, i == wnd.selection);
             }
         }
 
