@@ -2614,11 +2614,13 @@ void UI::draw_everything() {
                     }
                     ImGui::Unindent();
 
+                    /*
                     imgui_small_newline();
                     ImGui::Text("Scroll offset");
                     ImGui::SameLine();
                     help_marker("The number of lines the editor will keep between your cursor and the top/bottom of the screen.");
                     ImGui::SliderInt("###scroll_offset", &tmp.scrolloff, 0, 10);
+                    */
 
                     imgui_small_newline();
                     ImGui::Text("Tab size");
@@ -5592,10 +5594,14 @@ void UI::draw_everything() {
                     return new_cur2(-1, -1);
 
                 auto pos = new_vec2f(im_pos.x, im_pos.y);
+                if (!area.contains(pos)) return new_cur2(-1, -1);
+
                 pos.x -= area.x;
                 pos.y -= area.y;
 
                 auto y = view.y + pos.y / (ui.base_font->height * settings.line_height);
+                if (y > view.y + view.h) return new_cur2(-1, -1);
+
                 if (y >= buf->lines.len) {
                     y = buf->lines.len-1;
                     return new_cur2((i32)buf->lines[y].len, (i32)y);
@@ -5610,22 +5616,13 @@ void UI::draw_everything() {
             auto calculate_pos_from_mouse = [&]() -> cur2 {
                 if (saved_pos.x != -1) return saved_pos;
 
-                auto pos = actually_calculate_pos_from_mouse();
-                saved_pos = pos;
-                return pos;
+                saved_pos = actually_calculate_pos_from_mouse();
+                return saved_pos ;
             };
 
             boxf editor_area_considering_pane_resizers = editor_area;
             editor_area_considering_pane_resizers.x += PANE_RESIZER_WIDTH / 2;
             editor_area_considering_pane_resizers.w -= PANE_RESIZER_WIDTH;
-
-            auto offset_adjust_pos = [&](cur2 pos) -> cur2 {
-                if (pos.y < editor->view.y + options.scrolloff)
-                    pos.y = editor->view.y + options.scrolloff;
-                if (pos.y > editor->view.y + editor->view.h - options.scrolloff - 1)
-                    pos.y = editor->view.y + editor->view.h - options.scrolloff - 1;
-                return pos;
-            };
 
             auto is_hovered = test_hover(editor_area_considering_pane_resizers, HOVERID_EDITORS + current_pane, ImGuiMouseCursor_TextInput);
             if (is_hovered) {
@@ -5645,14 +5642,21 @@ void UI::draw_everything() {
 
                             auto opts = default_move_cursor_opts();
                             opts->is_user_movement = true;
-                            editor->move_cursor(offset_adjust_pos(pos), opts);
+                            editor->move_cursor(pos, opts);
                         }
                     }
                 } else if (world.ui.mouse_down[0]) {
-                    if (editor->mouse_select.on)
-                        if (editor->mouse_select.editor_id == editor->id)
-                            if (!editor->double_clicked_selection)
-                                editor->move_cursor(offset_adjust_pos(calculate_pos_from_mouse()));
+                    do {
+                        if (world.use_nvim) break;
+                        if (!editor->mouse_select.on) break;
+                        if (editor->mouse_select.editor_id != editor->id) break;
+                        if (editor->double_clicked_selection) break;
+
+                        auto pos = calculate_pos_from_mouse();
+                        if (pos.x == -1 || pos.y == -1) break;
+
+                        editor->move_cursor(pos);
+                    } while (0);
                 } else if (editor->mouse_select.on) {
                     editor->mouse_select.on = false;
                 }
@@ -5668,52 +5672,53 @@ void UI::draw_everything() {
                 auto flags = get_mouse_flags(editor_area);
                 if (flags & MOUSE_DBLCLICKED) {
                     auto pos = calculate_pos_from_mouse();
+                    if (pos.x != -1 && pos.y != -1) {
+                        auto classify_char = [&](uchar ch) {
+                            if (isspace(ch)) return 0;
+                            if (isident(ch)) return 1;
+                            return 2;
+                        };
 
-                    auto classify_char = [&](uchar ch) {
-                        if (isspace(ch)) return 0;
-                        if (isident(ch)) return 1;
-                        return 2;
-                    };
+                        cur2 start, end;
+                        auto type = classify_char(editor->iter(pos).peek());
 
-                    cur2 start, end;
-                    auto type = classify_char(editor->iter(pos).peek());
+                        // figure out start
+                        {
+                            auto it = editor->iter(pos);
+                            while (true) {
+                                it.prev();
+                                if (classify_char(it.peek()) != type || it.y != pos.y) {
+                                    it.next();
+                                    break;
+                                }
+                                if (it.bof())
+                                    break;
+                            }
+                            start = it.pos;
+                        }
 
-                    // figure out start
-                    {
-                        auto it = editor->iter(pos);
-                        while (true) {
-                            it.prev();
-                            if (classify_char(it.peek()) != type || it.y != pos.y) {
+                        // figure out end
+                        {
+                            auto it = editor->iter(pos);
+                            while (true) {
                                 it.next();
-                                break;
+                                if (classify_char(it.peek()) != type || it.y != pos.y) {
+                                    if (it.y != pos.y)
+                                        it.prev();
+                                    break;
+                                }
+                                if (it.eof())
+                                    break;
                             }
-                            if (it.bof())
-                                break;
+                            end = it.pos;
                         }
-                        start = it.pos;
-                    }
 
-                    // figure out end
-                    {
-                        auto it = editor->iter(pos);
-                        while (true) {
-                            it.next();
-                            if (classify_char(it.peek()) != type || it.y != pos.y) {
-                                if (it.y != pos.y)
-                                    it.prev();
-                                break;
-                            }
-                            if (it.eof())
-                                break;
+                        if (start < end) {
+                            editor->selecting = true;
+                            editor->select_start = start;
+                            editor->double_clicked_selection = true;
+                            editor->move_cursor(end);
                         }
-                        end = it.pos;
-                    }
-
-                    if (start < end) {
-                        editor->selecting = true;
-                        editor->select_start = start;
-                        editor->double_clicked_selection = true;
-                        editor->move_cursor(end);
                     }
                 }
 
@@ -6445,6 +6450,8 @@ void UI::draw_everything() {
 
                 if (x >= line.len) break;
 
+                cur2 toplevel_firstline_pos = new_cur2(x, start);
+
                 // float rect_size = 0;
                 auto grapheme = alloc_list<uchar>();
 
@@ -6505,7 +6512,18 @@ void UI::draw_everything() {
                     }
                 }
 
-                draw_bordered_rect_outer(preview_area, rgba("#151515"), rgba("#444444"), 1, 4);
+                auto is_hovered = test_hover(preview_area, HOVERID_TOPLEVEL_FIRSTLINE + editor_index);
+                if (is_hovered) {
+                    auto mouse_flags = get_mouse_flags(preview_area);
+                    if (mouse_flags & MOUSE_CLICKED) {
+                        editor->move_cursor(toplevel_firstline_pos);
+                        editor->selecting = false;
+                        editor->mouse_select.on = false;
+                    }
+                    draw_bordered_rect_outer(preview_area, rgba("#181818"), rgba("#666666"), 1, 4);
+                } else {
+                    draw_bordered_rect_outer(preview_area, rgba("#151515"), rgba("#444444"), 1, 4);
+                }
 
                 /*
                 vec2f cur_pos = editor_area.pos + new_vec2f(settings.editor_margin_x, settings.editor_margin_y);
@@ -7431,20 +7449,16 @@ bool UI::test_hover(boxf area, int id, ImGuiMouseCursor cursor) {
     if (!(get_mouse_flags(area) & MOUSE_HOVER))
         return false;
 
-    hover.id = id;
-    hover.cursor = cursor;
-
     auto now = current_time_nano();
 
-    if (id != hover.id_last_frame) {
-        if (world.wnd_hover_info.show) {
-            ImGui::Begin("Hover Info");
-            ImGui::Text("id = %d, last = %d", id, hover.id_last_frame);
-            ImGui::End();
-        }
+    if (id >= hover.id_last_frame) {
+        hover.id = id;
+        hover.cursor = cursor;
 
-        hover.start_time = now;
-        hover.ready = false;
+        if (id > hover.id_last_frame) {
+            hover.start_time = now;
+            hover.ready = false;
+        }
     }
 
     if (now - hover.start_time > WINDOWS_RESIZE_FROM_EDGES_FEEDBACK_TIMER)

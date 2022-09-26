@@ -167,7 +167,7 @@ void Serde::write_type(void* val, int type) {
 
     case SERDE_OPTIONS: {
         auto o = (Options*)val;
-        WRITE(1, scrolloff, SERDE_INT);
+        // WRITE(1, scrolloff, SERDE_INT);
         WRITE(2, tabsize, SERDE_INT);
         WRITE(3, enable_vim_mode, SERDE_BOOL);
         WRITE(4, format_on_save, SERDE_BOOL);
@@ -244,7 +244,7 @@ void Serde::read_type_field(void* out, int type, int field_id) {
     case SERDE_OPTIONS: {
         auto o = (Options*)out;
         switch (field_id) {
-        FIELD(1, scrolloff, SERDE_INT);
+        // FIELD(1, scrolloff, SERDE_INT);
         FIELD(2, tabsize, SERDE_INT);
         FIELD(3, enable_vim_mode, SERDE_BOOL);
         FIELD(4, format_on_save, SERDE_BOOL);
