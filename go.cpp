@@ -7606,7 +7606,17 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
                 func_args = res->gotype->multi_types;
             } while (0);
 
-            if (func_args->len != func_params->len) return NULL;
+            auto arity_matches = [&]() {
+                if (func_params->len) {
+                    auto param = func_params->at(func_params->len-1);
+                    if (param.gotype->type == GOTYPE_SLICE)
+                        if (param.gotype->slice_is_variadic)
+                            return func_args->len >= func_params->len - 1;
+                }
+                return func_args->len == func_params->len;
+            };
+
+            if (!arity_matches()) return NULL;
 
             auto func_result = result->target->func_sig.result;
             if (!func_result) return NULL;
