@@ -1736,7 +1736,6 @@ void init_command_info_table() {
     command_info_table[CMD_RESCAN_INDEX] = k(0, 0, "Rescan Index");
     command_info_table[CMD_OBLITERATE_AND_RECREATE_INDEX] = k(0, 0, "Obliterate and Recreate Index");
     command_info_table[CMD_OPTIONS] = k(CP_MOD_PRIMARY, CP_KEY_COMMA, "Options");
-    command_info_table[CMD_ABOUT] = k(0, 0, "About");
     command_info_table[CMD_GENERATE_IMPLEMENTATION] = k(0, 0, "Generate Implementation");
     command_info_table[CMD_GENERATE_FUNCTION] = k(0, 0, "[Experimental] Generate Function From Call");
     command_info_table[CMD_TOGGLE_COMMENT] = k(CP_MOD_PRIMARY | CP_MOD_ALT, CP_KEY_SLASH, "Toggle Comment");
@@ -2393,10 +2392,6 @@ void handle_command(Command cmd, bool from_menu) {
     case CMD_DEBUG_PROFILES:
         ui.open_project_settings();
         world.wnd_project_settings.focus_debug_profiles = true;
-        break;
-
-    case CMD_ABOUT:
-        world.wnd_about.show = true;
         break;
 
     case CMD_GENERATE_IMPLEMENTATION: {

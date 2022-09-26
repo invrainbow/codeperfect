@@ -188,7 +188,6 @@ enum Command {
     CMD_RESCAN_INDEX,
     CMD_OBLITERATE_AND_RECREATE_INDEX,
     CMD_OPTIONS,
-    CMD_ABOUT,
     CMD_UNDO,
     CMD_REDO,
     CMD_GENERATE_IMPLEMENTATION,
@@ -527,9 +526,6 @@ struct World {
         int selection;
         bool cmd_scroll_to_end;
     } wnd_debug_output;
-
-    struct Wnd_About : Wnd {
-    } wnd_about;
 
     struct Wnd_Project_Settings : Wnd {
         Pool pool;
