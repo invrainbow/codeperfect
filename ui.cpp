@@ -2271,6 +2271,9 @@ void UI::draw_everything() {
         fstlog("draw dockspace");
     }
 
+    if (world.dbg.state_flag != DLV_STATE_INACTIVE) {
+        ImGui::PushStyleColor(ImGuiCol_MenuBarBg, to_imcolor(rgba("#30571C")));
+    }
 
     if (ImGui::BeginMainMenuBar()) {
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 8));
@@ -2557,8 +2560,30 @@ void UI::draw_everything() {
         }
 
         ImGui::PopStyleVar(2);
-        ImGui::EndMainMenuBar();
         fstlog("menubar");
+
+        // draw debugger
+        {
+            ccstr dbgstate = NULL;
+            switch (world.dbg.state_flag) {
+            case DLV_STATE_PAUSED: dbgstate = "PAUSED"; break;
+            case DLV_STATE_STARTING: dbgstate = "STARTING"; break;
+            case DLV_STATE_RUNNING: dbgstate = "RUNNING"; break;
+            }
+
+            if (dbgstate) {
+                imgui_push_mono_font();
+                ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - ImGui::CalcTextSize(dbgstate).x);
+                ImGui::Text("%s", dbgstate);
+                imgui_pop_font();
+            }
+        }
+
+        ImGui::EndMainMenuBar();
+    }
+
+    if (world.dbg.state_flag != DLV_STATE_INACTIVE) {
+        ImGui::PopStyleColor();
     }
 
     if (world.wnd_options.show) {
@@ -6736,6 +6761,7 @@ void UI::draw_everything() {
             draw_status_piece(RIGHT, s, bg, fg);
         }
 
+        /*
         switch (world.dbg.state_flag) {
         case DLV_STATE_PAUSED:
             draw_status_piece(LEFT, "PAUSED", rgba(global_colors.status_debugger_paused_background), rgba(global_colors.white));
@@ -6747,6 +6773,7 @@ void UI::draw_everything() {
             draw_status_piece(LEFT, "RUNNING", rgba(global_colors.status_debugger_running_background), rgba(global_colors.white));
             break;
         }
+        */
 
         int index_mouse_flags = 0;
         switch (world.indexer.status) {
