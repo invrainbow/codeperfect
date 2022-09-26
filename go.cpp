@@ -6555,16 +6555,29 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
 
         if (!node_func_to_gotype_sig(params_node, result_node, &gotype->func_sig)) break;
 
-        if (node->type() == TS_METHOD_DECLARATION) {
+        bool ok = true;
+        do {
+            if (node->type() != TS_METHOD_DECLARATION) break;
+
             auto recv_node = node->field(TSF_RECEIVER);
-            if (!recv_node->null) {
-                auto recv_type = recv_node->child()->field(TSF_TYPE);
-                if (!recv_type->null) {
-                    gotype->func_recv = node_to_gotype(recv_type);
-                    if (!gotype->func_recv) break;
-                }
+            if (recv_node->null) break;
+
+            auto child = recv_node->child();
+            if (child->null) break;
+
+            auto recv_type = child->field(TSF_TYPE);
+            if (recv_type->null) break;
+
+            auto func_recv = node_to_gotype(recv_type);
+            if (!func_recv) {
+                ok = false;
+                break;
             }
-        }
+
+            gotype->func_recv = func_recv;
+        } while (0);
+
+        if (!ok) break;
 
         auto decl = new_result();
         decl->type = GODECL_FUNC;
@@ -6575,7 +6588,6 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
         decl->gotype = gotype;
         decl->type_params = type_params;
         save_decl(decl);
-
         break;
     }
 
