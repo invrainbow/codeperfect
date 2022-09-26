@@ -1570,7 +1570,7 @@ void UI::draw_debugger_var(Draw_Debugger_Var_Args *args) {
         ImGui::TableNextColumn();
         if (watch && !watch->fresh) {
             // TODO: grey out
-            ImGui::TextWrapped("Reading...");
+            // ImGui::TextWrapped("Reading...");
         }
         ImGui::TableNextColumn();
     }
@@ -1658,7 +1658,7 @@ void UI::draw_debugger() {
         ImGui::Begin("Call Stack");
         imgui_push_mono_font();
 
-        if (world.dbg.state_flag == DLV_STATE_PAUSED && !world.dbg.exiting) {
+        if (/* world.dbg.state_flag == DLV_STATE_PAUSED && */!world.dbg.exiting) {
             for (int i = 0; i < state.goroutines.len; i++) {
                 auto &goroutine = state.goroutines[i];
 
@@ -1682,7 +1682,7 @@ void UI::draw_debugger() {
                 if (is_current)
                     ImGui::PopStyleColor();
 
-                if (ImGui::IsItemClicked()) {
+                if (ImGui::IsItemClicked() && world.dbg.state_flag == DLV_STATE_PAUSED) {
                     world.dbg.push_call(DLVC_SET_CURRENT_GOROUTINE, [&](auto call) {
                         call->set_current_goroutine.goroutine_id = goroutine.id;
                     });
@@ -1729,7 +1729,7 @@ void UI::draw_debugger() {
 
         imgui_push_mono_font();
 
-        if (world.dbg.state_flag == DLV_STATE_PAUSED) {
+        // if (world.dbg.state_flag == DLV_STATE_PAUSED) {
             auto flags = ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable;
             if (ImGui::BeginTable("vars", 3, flags)) {
                 ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_NoHide);
@@ -1794,7 +1794,7 @@ void UI::draw_debugger() {
                     if ((!frame->locals || !frame->locals->len) && (!frame->args || !frame->args->len))
                         ImGui::Text("No variables to show here.");
             }
-        }
+        // }
 
         imgui_pop_font();
         ImGui::End();
@@ -1811,7 +1811,7 @@ void UI::draw_debugger() {
 
         imgui_push_mono_font();
 
-        if (world.dbg.state_flag == DLV_STATE_PAUSED) {
+        // if (world.dbg.state_flag == DLV_STATE_PAUSED) {
             auto flags = ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable;
             if (ImGui::BeginTable("vars", 3, flags)) {
                 ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_NoHide);
@@ -1873,7 +1873,7 @@ void UI::draw_debugger() {
 
                 ImGui::EndTable();
             }
-        }
+        // }
 
         imgui_pop_font();
         ImGui::End();
