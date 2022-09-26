@@ -44,7 +44,7 @@ func main() {
 
 	fmt.Printf("%s\n", strings.Join(names, " "))
 
-	out, err := utils.MakeExecCommand("cloc", append([]string{"--json"}, names...)...).CombinedOutput()
+	out, err := exec.Command("cloc", append([]string{"--json"}, names...)...).CombinedOutput()
 	if err != nil {
 		die("couldn't run cloc")
 	}
