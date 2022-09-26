@@ -1060,6 +1060,7 @@ bool Editor::load_file(ccstr new_filepath) {
 
     is_go_file = (new_filepath && str_ends_with(new_filepath, ".go"));
     buf->init(&mem, is_go_file, !world.use_nvim);
+    buf->editable_from_main_thread_only = true;
 
     FILE* f = NULL;
     if (new_filepath) {

@@ -318,14 +318,20 @@ void Buffer::copy_from(Buffer *other) {
 }
 
 bool Buffer::read(Buffer_Read_Func f, bool reread) {
+    cp_assert(!editable_from_main_thread_only || is_main_thread);
+
     // Expects buf to be empty.
 
     char ch;
     bool found;
 
     if (reread) {
-        u32 y = lines.len-1;
-        internal_start_edit(new_cur2(0, 0), new_cur2(lines[y].len, y));
+        if (lines.len) {
+            u32 y = lines.len-1;
+            internal_start_edit(new_cur2(0, 0), new_cur2(lines[y].len, y));
+        } else {
+            internal_start_edit(new_cur2(0, 0), new_cur2(0, 0));
+        }
     }
 
     clear();
@@ -428,6 +434,8 @@ void Buffer::write(File *f) {
 }
 
 void Buffer::internal_delete_lines(u32 y1, u32 y2) {
+    cp_assert(!editable_from_main_thread_only || is_main_thread);
+
     if (y2 > lines.len) y2 = lines.len;
 
     for (u32 y = y1; y < y2; y++)
@@ -456,6 +464,8 @@ s32 get_bytecount(Line *line) {
 }
 
 void Buffer::internal_insert_line(u32 y, uchar* text, s32 len) {
+    cp_assert(!editable_from_main_thread_only || is_main_thread);
+
     lines.ensure_cap(lines.len + 1);
     bytecounts.ensure_cap(bytecounts.len + 1);
 
@@ -478,6 +488,8 @@ void Buffer::internal_insert_line(u32 y, uchar* text, s32 len) {
 }
 
 void Buffer::internal_append_line(uchar* text, s32 len) {
+    cp_assert(!editable_from_main_thread_only || is_main_thread);
+
     internal_insert_line(lines.len, text, len);
     dirty = true;
 }
@@ -627,6 +639,8 @@ void Buffer::update_tree() {
 }
 
 void Buffer::internal_start_edit(cur2 start, cur2 end) {
+    cp_assert(!editable_from_main_thread_only || is_main_thread);
+
     // we use the tsedit for other things, right now for mark tree calculations.
     // so create it even if !use_tree, it's not only used for the tree.
     ptr0(&tsedit);
@@ -639,11 +653,20 @@ void Buffer::internal_start_edit(cur2 start, cur2 end) {
     edit_buffer_new.len = 0;
 
     auto it = iter(start);
-    while (it.pos < end)
+    while (it.pos < end) {
+        // Temporary solution: check if we're at the end but still not reaching
+        // `end`. If so, break out. But the real root cause we need to fix is,
+        // why is this function being called with an `end` that is beyond its
+        // real end?
+        auto old_pos = it.pos;
         edit_buffer_old.append(it.next());
+        if (it.pos == old_pos) break;
+    }
 }
 
 void Buffer::internal_finish_edit(cur2 new_end) {
+    cp_assert(!editable_from_main_thread_only || is_main_thread);
+
     tsedit.new_end_byte = cur_to_offset(new_end);
     tsedit.new_end_point = cur_to_tspoint(new_end);
 
@@ -656,6 +679,8 @@ void Buffer::internal_finish_edit(cur2 new_end) {
 }
 
 void Buffer::internal_update_mark_tree() {
+    cp_assert(!editable_from_main_thread_only || is_main_thread);
+
     if (!mark_tree.root) return;
 
     {
@@ -773,6 +798,8 @@ void Buffer::hist_end_batch() {
 */
 
 int Buffer::internal_distance_between(cur2 a, cur2 b) {
+    cp_assert(!editable_from_main_thread_only || is_main_thread);
+
     if (a.y == b.y) return b.x - a.x;
 
     int total = 0;
@@ -994,6 +1021,8 @@ u32 Buffer::idx_byte_to_cp(int y, int off, bool nocrash) {
 }
 
 u32 Buffer::internal_convert_x_vx(int y, int off, bool to_vx) {
+    cp_assert(!editable_from_main_thread_only || is_main_thread);
+
     int x = 0;
     int vx = 0;
     auto &line = lines[y];

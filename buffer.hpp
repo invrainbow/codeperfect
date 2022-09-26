@@ -176,6 +176,7 @@ struct Buffer {
     TSInputEdit tsedit;
     List<uchar> edit_buffer_old;
     List<uchar> edit_buffer_new;
+    bool editable_from_main_thread_only;
 
     // TODO: if we have any more ring buffers, consider refactor
 
