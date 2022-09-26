@@ -568,19 +568,18 @@ void World::start_background_threads() {
     dbg.start_loop();
 
 #if DEBUG_BUILD
-    // VSCode debugger frequently fails to break when I press break.  But, it
-    // works if I set a breakpoint which is hit. So the asinine solution I've
-    // devised is to create a background thread that runs in a loop, so I can
-    // set a breakpoint in it at any time.
+    // VSCode debugger frequently fails to break when I press break, but it
+    // works if I set a breakpoint which is hit. My asinine solution is to
+    // create a background thread that runs in a loop, and set a breakpoint in
+    // it when I need to break.
+
     auto microsoft_programmers_are_fucking_monkeys = [](void*) {
-        while (true)
-            sleep_milliseconds(1000);
+        while (true) sleep_milliseconds(1000);
     };
 
     {
         auto t = create_thread(microsoft_programmers_are_fucking_monkeys, NULL);
-        if (!t)
-            cp_panic("couldn't create thread");
+        if (!t) cp_panic("couldn't create thread");
         close_thread_handle(t);
     }
 #endif
