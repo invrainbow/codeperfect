@@ -5636,11 +5636,9 @@ void UI::draw_everything() {
                     return new_cur2(-1, -1);
 
                 auto pos = new_vec2f(im_pos.x, im_pos.y);
-                if (!area.contains(pos)) return new_cur2(-1, -1);
+                if (pos.y < area.y || pos.y >= area.y + area.h) return new_cur2(-1, -1);
 
-                pos.x -= area.x;
                 pos.y -= area.y;
-
                 auto y = view.y + pos.y / (ui.base_font->height * settings.line_height);
                 if (y > view.y + view.h) return new_cur2(-1, -1);
 
@@ -5649,28 +5647,68 @@ void UI::draw_everything() {
                     return new_cur2((i32)buf->lines[y].len, (i32)y);
                 }
 
-                auto vx = (int)(pos.x / ui.base_font->width);
-                auto x = buf->idx_vcp_to_cp(y, vx);
+                if (pos.x < area.x)  return new_cur2((i32)0, (i32)y);
+                if (pos.x >= area.x) return new_cur2((i32)buf->lines[y].len, (i32)y);
 
-                return new_cur2((i32)x, (i32)y);
+                auto vx = (int)((pos.x - area.x) / ui.base_font->width);
+                return new_cur2(buf->idx_vcp_to_cp(y, vx), y);
             };
 
             auto calculate_pos_from_mouse = [&]() -> cur2 {
                 if (saved_pos.x != -1) return saved_pos;
-
                 saved_pos = actually_calculate_pos_from_mouse();
-                return saved_pos ;
+                return saved_pos;
             };
 
             boxf editor_area_considering_pane_resizers = editor_area;
             editor_area_considering_pane_resizers.x += PANE_RESIZER_WIDTH / 2;
             editor_area_considering_pane_resizers.w -= PANE_RESIZER_WIDTH;
 
-            auto is_hovered = test_hover(editor_area_considering_pane_resizers, HOVERID_EDITORS + current_pane, ImGuiMouseCursor_TextInput);
-            if (is_hovered) {
-                if (world.ui.mouse_just_pressed[0]) {
-                    focus_editor_by_id(editor->id, new_cur2(-1, -1));
+            // handle dragging text above/below the area
+            do {
+                if (!editor->mouse_selecting) break;
 
+                auto im_pos = ImGui::GetIO().MousePos;
+                auto pos = new_vec2f(im_pos.x, im_pos.y);
+                auto area = editor_area;
+
+                if (pos.y >= area.y && pos.y <= area.y + area.h) break;
+
+                auto now = current_time_milli();
+
+                i64 delta = now - editor->mouse_drag_last_time_ms;
+                if (pos.y < area.y) delta = -delta;
+
+                editor->mouse_drag_accum += delta;
+                editor->mouse_drag_last_time_ms = now;
+
+                cur2 cur = editor->cur;
+                cur2 old_cur = cur;
+
+                auto period = 30; // how often to move a line, in milliseconds
+
+                // for every 30 pixels, reduce 1 millisecond
+                if (pos.y < area.y)          period -= min(28, (area.y - pos.y) / 10);
+                if (pos.y > area.y + area.h) period -= min(28, (pos.y - (area.y + area.h)) / 10);
+
+                while (editor->mouse_drag_accum < -period) {
+                    if (cur.y) cur.y--;
+                    editor->mouse_drag_accum += period;
+                }
+
+                while (editor->mouse_drag_accum > period) {
+                    if (cur.y < editor->buf->lines.len-1) cur.y++;
+                    editor->mouse_drag_accum -= period;
+                }
+
+                if (cur != old_cur) editor->move_cursor(cur);
+            } while (0);
+
+            auto is_hovered = test_hover(editor_area_considering_pane_resizers, HOVERID_EDITORS + current_pane, ImGuiMouseCursor_TextInput);
+
+            if (world.ui.mouse_just_pressed[0]) {
+                if (is_hovered) {
+                    focus_editor_by_id(editor->id, new_cur2(-1, -1));
                     auto pos = calculate_pos_from_mouse();
                     if (pos.x != -1 && pos.y != -1) {
                         auto &io = ImGui::GetIO();
@@ -5679,122 +5717,111 @@ void UI::draw_everything() {
                         } else {
                             editor->select_start = pos;
                             editor->selecting = true;
-                            editor->mouse_select.on = true;
-                            editor->mouse_select.editor_id = editor->id;
+                            editor->mouse_selecting = true;
 
                             auto opts = default_move_cursor_opts();
                             opts->is_user_movement = true;
                             editor->move_cursor(pos, opts);
                         }
                     }
-                } else if (world.ui.mouse_down[0]) {
-                    do {
-                        if (world.use_nvim) break;
-                        if (!editor->mouse_select.on) break;
-                        if (editor->mouse_select.editor_id != editor->id) break;
-                        if (editor->double_clicked_selection) break;
-
+                }
+            } else if (editor->mouse_selecting) {
+                if (world.ui.mouse_down[0]) {
+                    if (!editor->double_clicked_selection) {
                         auto pos = calculate_pos_from_mouse();
-                        if (pos.x == -1 || pos.y == -1) break;
-
-                        editor->move_cursor(pos);
-                    } while (0);
-                } else if (editor->mouse_select.on) {
-                    editor->mouse_select.on = false;
+                        if (pos.x != -1 && pos.y != -1)
+                            editor->move_cursor(pos);
+                    }
+                } else {
+                    editor->mouse_selecting = false;
                 }
+            }
 
-                if (world.ui.mouse_just_released[0]) {
-                    if (editor->selecting)
-                        if (editor->select_start == editor->cur)
-                            editor->selecting = false;
-                    editor->double_clicked_selection = false;
-                    editor->mouse_select.on = false;
-                }
-
+            // handle double click
+            do {
                 auto flags = get_mouse_flags(editor_area);
-                if (flags & MOUSE_DBLCLICKED) {
-                    auto pos = calculate_pos_from_mouse();
-                    if (pos.x != -1 && pos.y != -1) {
-                        auto classify_char = [&](uchar ch) {
-                            if (isspace(ch)) return 0;
-                            if (isident(ch)) return 1;
-                            return 2;
-                        };
+                if (!(flags & MOUSE_DBLCLICKED)) break;
 
-                        cur2 start, end;
-                        auto type = classify_char(editor->iter(pos).peek());
+                auto pos = calculate_pos_from_mouse();
+                if (pos.x == -1 || pos.y == -1) break;
 
-                        // figure out start
-                        {
-                            auto it = editor->iter(pos);
-                            while (true) {
-                                it.prev();
-                                if (classify_char(it.peek()) != type || it.y != pos.y) {
-                                    it.next();
-                                    break;
-                                }
-                                if (it.bof())
-                                    break;
-                            }
-                            start = it.pos;
+                auto classify_char = [&](uchar ch) {
+                    if (isspace(ch)) return 0;
+                    if (isident(ch)) return 1;
+                    return 2;
+                };
+
+                cur2 start, end;
+                auto type = classify_char(editor->iter(pos).peek());
+
+                // figure out start
+                auto its = editor->iter(pos);
+                auto ite = editor->iter(pos);
+
+                while (!its.bof()) {
+                    its.prev();
+                    if (classify_char(its.peek()) != type || its.y != pos.y) {
+                        its.next();
+                        break;
+                    }
+                }
+
+                // figure out end
+                while (!ite.eof()) {
+                    ite.next();
+                    if (classify_char(ite.peek()) != type || ite.y != pos.y) {
+                        if (ite.y != pos.y)
+                            ite.prev();
+                        break;
+                    }
+                }
+
+                if (its.pos == ite.pos) break;
+
+                editor->selecting = true;
+                editor->select_start = its.pos;
+                editor->double_clicked_selection = true;
+                editor->move_cursor(ite.pos);
+            } while (0);
+
+            // handle scrolling
+            auto dy = ImGui::GetIO().MouseWheel;
+            if (dy) {
+                bool flip = true;
+                if (dy < 0) {
+                    flip = false;
+                    dy = -dy;
+                }
+
+                dy *= 6;
+                dy += editor->scroll_leftover;
+
+                editor->scroll_leftover = fmod(dy, base_font->height);
+                auto lines = (int)(dy / base_font->height);
+
+                for (int i = 0; i < lines; i++) {
+                    if (flip) {
+                        if (editor->view.y > 0) {
+                            editor->view.y--;
+                            editor->ensure_cursor_on_screen();
                         }
-
-                        // figure out end
-                        {
-                            auto it = editor->iter(pos);
-                            while (true) {
-                                it.next();
-                                if (classify_char(it.peek()) != type || it.y != pos.y) {
-                                    if (it.y != pos.y)
-                                        it.prev();
-                                    break;
-                                }
-                                if (it.eof())
-                                    break;
-                            }
-                            end = it.pos;
-                        }
-
-                        if (start < end) {
-                            editor->selecting = true;
-                            editor->select_start = start;
-                            editor->double_clicked_selection = true;
-                            editor->move_cursor(end);
+                    } else {
+                        if (editor->view.y + 1 < editor->buf->lines.len) {
+                            editor->view.y++;
+                            editor->ensure_cursor_on_screen();
                         }
                     }
                 }
 
-                // handle scrolling
-                auto dy = ImGui::GetIO().MouseWheel;
-                if (dy) {
-                    bool flip = true;
-                    if (dy < 0) {
-                        flip = false;
-                        dy = -dy;
-                    }
+                if (lines) editor->scroll_leftover = 0;
+            }
 
-                    dy *= 6;
-                    dy += editor->scroll_leftover;
-
-                    editor->scroll_leftover = fmod(dy, base_font->height);
-                    auto lines = (int)(dy / base_font->height);
-
-                    for (int i = 0; i < lines; i++) {
-                        if (flip) {
-                            if (editor->view.y > 0) {
-                                editor->view.y--;
-                                editor->ensure_cursor_on_screen();
-                            }
-                        } else {
-                            if (editor->view.y + 1 < editor->buf->lines.len) {
-                                editor->view.y++;
-                                editor->ensure_cursor_on_screen();
-                            }
-                        }
-                    }
-
-                    if (lines) editor->scroll_leftover = 0;
-                }
+            if (world.ui.mouse_just_released[0]) {
+                if (editor->selecting)
+                    if (editor->select_start == editor->cur)
+                        editor->selecting = false;
+                editor->double_clicked_selection = false;
+                editor->mouse_selecting = false;
             }
         }
 
@@ -6460,6 +6487,11 @@ void UI::draw_everything() {
                 Ast_Node *toplevel = NULL;
                 int first_line = -1;
 
+                // hide if we're currently selecting with mouse, because it
+                // looks weird if we're dragging and random toplevel firstline
+                // previews keep showing up and disappearing
+                if (editor->mouse_selecting) break;
+
                 find_nodes_containing_pos(&root, editor->cur, true, [&](auto it) -> Walk_Action {
                     switch (it->type()) {
                     case TS_VAR_DECLARATION:
@@ -6560,7 +6592,7 @@ void UI::draw_everything() {
                     if (mouse_flags & MOUSE_CLICKED) {
                         editor->move_cursor(toplevel_firstline_pos);
                         editor->selecting = false;
-                        editor->mouse_select.on = false;
+                        editor->mouse_selecting = false;
                     }
                     draw_bordered_rect_outer(preview_area, rgba("#181818"), rgba("#666666"), 1, 4);
                 } else {

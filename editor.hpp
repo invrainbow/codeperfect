@@ -87,10 +87,9 @@ struct Editor {
     // only used when !world.use_nvim
     bool selecting;
     cur2 select_start;
-    struct {
-        bool on;
-        int editor_id;
-    } mouse_select;
+    bool mouse_selecting;
+    u64 mouse_drag_last_time_ms;
+    i64 mouse_drag_accum;
     double scroll_leftover;
 
     struct {
