@@ -6139,7 +6139,7 @@ void UI::draw_everything() {
 
                 if (alpha) {
                     highlight_snippet.on = true;
-                    highlight_snippet.color = rgba("#eeeebb", alpha * 0.6);
+                    highlight_snippet.color = rgba("#eeeebb", alpha * 0.15);
                     highlight_snippet.start = editor->highlight_snippet_state.start;
                     highlight_snippet.end = editor->highlight_snippet_state.end;
                 }

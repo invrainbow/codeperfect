@@ -1110,6 +1110,13 @@ enum Case_Style {
 ccstr case_style_pretty_str(Case_Style x);
 ccstr case_style_pretty_str(int x);
 
+enum Generate_Struct_Tags_Op {
+    GSTOP_ADD_ALL,
+    GSTOP_ADD_ONE,
+    GSTOP_REMOVE_ONE,
+    GSTOP_REMOVE_ALL,
+};
+
 struct Generate_Struct_Tags_Result {
     List<cur2> *insert_starts;
     List<cur2> *insert_ends;
@@ -1270,7 +1277,7 @@ struct Go_Indexer {
     Gotype* do_subst_rename_this_later(Gotype *base, List<Godecl> *params, List<Goresult*> *args);
     Goresult *remove_override_ctx(Gotype *gotype, Go_Ctx *ctx);
     Generate_Func_Sig_Result* generate_function_signature(ccstr filepath, cur2 pos);
-    Generate_Struct_Tags_Result* generate_struct_tags(ccstr filepath, cur2 pos, ccstr lang, Case_Style case_style);
+    Generate_Struct_Tags_Result* generate_struct_tags(ccstr filepath, cur2 pos, Generate_Struct_Tags_Op op, ccstr lang, Case_Style case_style);
 };
 
 void walk_ast_node(Ast_Node *node, bool abstract_only, Walk_TS_Callback cb);

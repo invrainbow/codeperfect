@@ -65,7 +65,12 @@ const sidebars = {
     {
       type: "category",
       label: "Refactoring",
-      items: ["rename", "generate-implementation", "generate-function"],
+      items: [
+        "rename",
+        "generate-implementation",
+        "generate-function",
+        "struct-tags",
+      ],
     },
     {
       type: "category",

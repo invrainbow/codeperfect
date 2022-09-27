@@ -1553,10 +1553,39 @@ bool is_command_enabled(Command cmd) {
     case CMD_FIND:
         return (bool)get_current_editor();
 
+    case CMD_ADD_JSON_TAG:
+    case CMD_ADD_YAML_TAG:
+    case CMD_ADD_XML_TAG:
+    case CMD_ADD_ALL_JSON_TAGS:
+    case CMD_ADD_ALL_YAML_TAGS:
+    case CMD_ADD_ALL_XML_TAGS:
+    case CMD_REMOVE_TAG:
+    case CMD_REMOVE_ALL_TAGS: {
+        auto editor = get_current_editor();
+        if (!editor) return false;
+        if (!editor->is_go_file) return false;
+
+        if (!path_has_descendant(world.current_path, editor->filepath)) return false;
+        if (!editor->buf->tree) return false;
+
+        bool ret = false;
+
+        Parser_It it;
+        it.init(editor->buf);
+        auto root_node = new_ast_node(ts_tree_root_node(editor->buf->tree), &it);
+
+        find_nodes_containing_pos(root_node, editor->cur, true, [&](auto it) -> Walk_Action {
+            if (it->type() == TS_STRUCT_TYPE) {
+                ret = true;
+                return WALK_ABORT;
+            }
+            return WALK_CONTINUE;
+        });
+
+        return ret;
+    }
+
     case CMD_REPLACE:
-    case CMD_GENERATE_JSON_TAGS:
-    case CMD_GENERATE_YAML_TAGS:
-    case CMD_GENERATE_XML_TAGS:
     case CMD_TOGGLE_COMMENT:
     case CMD_SAVE_FILE:
     case CMD_FORMAT_FILE:
@@ -1750,9 +1779,14 @@ void init_command_info_table() {
     command_info_table[CMD_BUY_LICENSE] = k(0, 0, "Buy a License");
     command_info_table[CMD_ENTER_LICENSE] = k(0, 0, "Enter License...");
 
-    command_info_table[CMD_GENERATE_JSON_TAGS] = k(0, 0, "Generate struct JSON tags");
-    command_info_table[CMD_GENERATE_YAML_TAGS] = k(0, 0, "Generate struct YAML tags");
-    command_info_table[CMD_GENERATE_XML_TAGS] = k(0, 0, "Generate struct XML tags");
+    command_info_table[CMD_ADD_JSON_TAG] = k(0, 0, "Struct: Add JSON tag");
+    command_info_table[CMD_ADD_YAML_TAG] = k(0, 0, "Struct: Add YAML tag");
+    command_info_table[CMD_ADD_XML_TAG] = k(0, 0, "Struct: Add XML tag");
+    command_info_table[CMD_ADD_ALL_JSON_TAGS] = k(0, 0, "Struct: Add all JSON tags");
+    command_info_table[CMD_ADD_ALL_YAML_TAGS] = k(0, 0, "Struct: Add all YAML tags");
+    command_info_table[CMD_ADD_ALL_XML_TAGS] = k(0, 0, "Struct: Add all XML tags");
+    command_info_table[CMD_REMOVE_TAG] = k(0, 0, "Struct: Remove tag");
+    command_info_table[CMD_REMOVE_ALL_TAGS] = k(0, 0, "Struct: Remove all tags");
 }
 
 void do_find_interfaces() {
@@ -1920,15 +1954,28 @@ void handle_command(Command cmd, bool from_menu) {
         do_generate_function();
         break;
 
-    case CMD_GENERATE_JSON_TAGS:
-    case CMD_GENERATE_YAML_TAGS:
-    case CMD_GENERATE_XML_TAGS: {
+    case CMD_ADD_ALL_JSON_TAGS:
+    case CMD_ADD_ALL_XML_TAGS:
+    case CMD_ADD_ALL_YAML_TAGS:
+    case CMD_ADD_JSON_TAG:
+    case CMD_ADD_XML_TAG:
+    case CMD_ADD_YAML_TAG:
+    case CMD_REMOVE_TAG:
+    case CMD_REMOVE_ALL_TAGS: {
         ccstr lang = NULL;
+        auto op = (Generate_Struct_Tags_Op)0;
+
         switch (cmd) {
-        case CMD_GENERATE_JSON_TAGS: lang = "json"; break;
-        case CMD_GENERATE_YAML_TAGS: lang = "yaml"; break;
-        case CMD_GENERATE_XML_TAGS:  lang = "xml"; break;
+        case CMD_ADD_ALL_JSON_TAGS: lang = "json";  op = GSTOP_ADD_ALL;    break;
+        case CMD_ADD_ALL_XML_TAGS:  lang = "xml";   op = GSTOP_ADD_ALL;    break;
+        case CMD_ADD_ALL_YAML_TAGS: lang = "yaml";  op = GSTOP_ADD_ALL;    break;
+        case CMD_ADD_JSON_TAG:      lang = "json";  op = GSTOP_ADD_ONE;    break;
+        case CMD_ADD_XML_TAG:       lang = "xml";   op = GSTOP_ADD_ONE;    break;
+        case CMD_ADD_YAML_TAG:      lang = "yaml";  op = GSTOP_ADD_ONE;    break;
+        case CMD_REMOVE_TAG:        lang = "";      op = GSTOP_REMOVE_ONE; break;
+        case CMD_REMOVE_ALL_TAGS:   lang = "";      op = GSTOP_REMOVE_ALL; break;
         }
+
         cp_assert(lang);
 
         auto editor = get_current_editor();
@@ -1946,7 +1993,7 @@ void handle_command(Command cmd, bool from_menu) {
             }
             defer { ind.release_lock(IND_READING); };
 
-            auto result = ind.generate_struct_tags(editor->filepath, editor->cur, lang, (Case_Style)options.struct_tag_case_style);
+            auto result = ind.generate_struct_tags(editor->filepath, editor->cur, op, lang, (Case_Style)options.struct_tag_case_style);
             if (!result) {
                 tell_user_error("Unable to generate struct tags.");
                 return;

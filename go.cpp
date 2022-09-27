@@ -3852,7 +3852,7 @@ Goresult *Go_Indexer::find_enclosing_toplevel(ccstr filepath, cur2 pos) {
     return make_goresult(decl, ctx);
 }
 
-Generate_Struct_Tags_Result* Go_Indexer::generate_struct_tags(ccstr filepath, cur2 pos, ccstr lang, Case_Style case_style) {
+Generate_Struct_Tags_Result* Go_Indexer::generate_struct_tags(ccstr filepath, cur2 pos, Generate_Struct_Tags_Op op, ccstr lang, Case_Style case_style) {
     reload_all_editors();
 
     auto pf = parse_file(filepath, true);
@@ -3863,6 +3863,17 @@ Generate_Struct_Tags_Result* Go_Indexer::generate_struct_tags(ccstr filepath, cu
 
     auto ctx = filepath_to_ctx(filepath);
     if (!ctx) return NULL;
+
+    Ast_Node *target_struct = NULL;
+
+    // find the innermost struct
+    find_nodes_containing_pos(file, pos, true, [&](auto node) {
+        if (node->type() == TS_STRUCT_TYPE) {
+            if (!target_struct) target_struct = alloc_object(Ast_Node);
+            memcpy(target_struct, node, sizeof(Ast_Node));
+        }
+        return WALK_CONTINUE;
+    });
 
     auto ret = alloc_object(Generate_Struct_Tags_Result);
     ret->insert_starts = alloc_list<cur2>();
@@ -3920,62 +3931,80 @@ Generate_Struct_Tags_Result* Go_Indexer::generate_struct_tags(ccstr filepath, cu
         return ret->items;
     };
 
-    find_nodes_containing_pos(file, pos, true, [&](auto node) {
-        if (node->type() != TS_TYPE_SPEC) return WALK_CONTINUE;
+    if (!target_struct) return NULL;
 
-        auto typenode = node->field(TSF_TYPE);
-        if (typenode->null) return WALK_ABORT;
-        if (typenode->type() != TS_STRUCT_TYPE) return WALK_ABORT;
-
-        auto listnode = typenode->child();
-        if (listnode->null) return WALK_ABORT;
+    fn<void(Ast_Node*)> process_struct = [&](auto node) {
+        auto listnode = node->child();
+        if (listnode->null) return;
 
         FOR_NODE_CHILDREN (listnode) {
-            if (it->type() != TS_FIELD_DECLARATION) return WALK_ABORT;
+            if (it->type() != TS_FIELD_DECLARATION) return;
 
-            auto name = it->field(TSF_NAME);
-            if (name->null) continue;  // don't fuck with embedded type fields
-
-            auto namestr = name->string();
-            if (!namestr) continue;
-            if (!namestr[0]) continue;
-            if (!isupper(namestr[0])) continue;
-
-            auto tagname = make_tag_name(namestr);
-
-            auto tag = it->field(TSF_TAG);
-            if (!tag->null) {
-                auto tagstr = tag->string();
-                if (!tagstr) continue;
-
-                tagstr = parse_go_string(tagstr);
-                if (!tagstr) continue;
-
-                GoUint8 ok = false;
-                if (GHHasTag((char*)tagstr, (char*)lang, &ok)) continue;
-                if (!ok) continue;
-
-                tagstr = GHAddTag((char*)tagstr, (char*)lang, (char*)tagname, &ok);
-                if (!ok) continue;
-                defer { GHFree((void*)tagstr); };
-
-                auto newtagstr = cp_sprintf("`%s`", tagstr);
-                ret->insert_starts->append(tag->start());
-                ret->insert_ends->append(tag->end());
-                ret->insert_texts->append(newtagstr);
+            if (op == GSTOP_ADD_ONE || op == GSTOP_REMOVE_ONE) {
+                if (cmp_pos_to_node(pos, it) != 0)
+                    continue;
             } else {
-                auto newtagstr = cp_sprintf(" `%s:\"%s\"`", lang, tagname);
-                ret->insert_starts->append(it->end());
-                ret->insert_ends->append(it->end());
-                ret->insert_texts->append(newtagstr);
+                auto typenode = it->field(TSF_TYPE);
+                if (!typenode->null)
+                    if (typenode->type() == TS_STRUCT_TYPE)
+                        process_struct(typenode);
+            }
+
+            if (op == GSTOP_ADD_ONE || op == GSTOP_ADD_ALL) {
+                auto name = it->field(TSF_NAME);
+                if (name->null) continue;  // don't fuck with embedded type fields
+
+                auto namestr = name->string();
+                if (!namestr) continue;
+                if (!namestr[0]) continue;
+                if (!isupper(namestr[0])) continue;
+
+                auto tagname = make_tag_name(namestr);
+
+                auto tag = it->field(TSF_TAG);
+                if (!tag->null) {
+                    auto tagstr = tag->string();
+                    if (!tagstr) continue;
+
+                    tagstr = parse_go_string(tagstr);
+                    if (!tagstr) continue;
+
+                    GoUint8 ok = false;
+                    if (GHHasTag((char*)tagstr, (char*)lang, &ok)) continue;
+                    if (!ok) continue;
+
+                    tagstr = GHAddTag((char*)tagstr, (char*)lang, (char*)tagname, &ok);
+                    if (!ok) continue;
+                    defer { GHFree((void*)tagstr); };
+
+                    auto newtagstr = cp_sprintf("`%s`", tagstr);
+                    ret->insert_starts->append(tag->start());
+                    ret->insert_ends->append(tag->end());
+                    ret->insert_texts->append(newtagstr);
+                } else {
+                    auto newtagstr = cp_sprintf(" `%s:\"%s\"`", lang, tagname);
+                    ret->insert_starts->append(it->end());
+                    ret->insert_ends->append(it->end());
+                    ret->insert_texts->append(newtagstr);
+                }
+            } else if (op == GSTOP_REMOVE_ONE || op == GSTOP_REMOVE_ALL) {
+                auto tag = it->field(TSF_TAG);
+                if (tag->null) continue;
+
+                auto type = it->field(TSF_TYPE);
+                if (type->null) continue;
+
+                ret->insert_starts->append(type->end());
+                ret->insert_ends->append(tag->end());
+                ret->insert_texts->append("");
             }
         }
+    };
 
-        ret->highlight_start = typenode->start();
-        ret->highlight_end = typenode->end();
-        return WALK_ABORT;
-    });
+    process_struct(target_struct);
 
+    ret->highlight_start = target_struct->start();
+    ret->highlight_end = target_struct->end();
     return ret;
 }
 
