@@ -5692,12 +5692,19 @@ void UI::draw_everything() {
                 if (pos.y > area.y + area.h) period -= min(28, (pos.y - (area.y + area.h)) / 10);
 
                 while (editor->mouse_drag_accum < -period) {
-                    if (cur.y) cur.y--;
+                    if (cur.y)
+                        cur.y--;
+                    else
+                        cur.x = 0;
                     editor->mouse_drag_accum += period;
                 }
 
                 while (editor->mouse_drag_accum > period) {
-                    if (cur.y < editor->buf->lines.len-1) cur.y++;
+                    int last = editor->buf->lines.len-1;
+                    if (cur.y < last)
+                        cur.y++;
+                    else
+                        cur.x = editor->buf->lines[last].len;
                     editor->mouse_drag_accum -= period;
                 }
 
