@@ -7289,6 +7289,8 @@ Gotype *Go_Indexer::expr_to_gotype(Ast_Node *expr) {
         }
 
         auto base = expr_to_gotype(expr->field(TSF_FUNCTION));
+        if (!base) return NULL;
+
         if (type_args) {
             auto newbase = new_gotype(GOTYPE_LAZY_INSTANCE);
             newbase->lazy_instance_base = base;
@@ -7617,6 +7619,8 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
     case GOTYPE_LAZY_CALL: {
         auto try_with_type_args = [&]() -> Goresult* {
             auto base = gotype->lazy_call_base;
+            if (!base) return NULL;
+
             switch (base->type) {
             case GOTYPE_LAZY_INDEX:
             case GOTYPE_LAZY_INSTANCE:
