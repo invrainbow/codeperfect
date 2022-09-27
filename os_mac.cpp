@@ -27,6 +27,7 @@
 
 #include "utils.hpp"
 #include "defer.hpp"
+#include "world.hpp"
 
 u64 current_time_nano() {
     static uint64_t start_mach;
@@ -150,6 +151,25 @@ bool Fs_Watcher::next_event(Fs_Event *event) {
 
     memcpy(event, &events[curr++], sizeof(Fs_Event));
     return true;
+}
+
+void restart_program() {
+    auto path = get_executable_path();
+    if (!path) return;
+
+    auto pid = fork();
+    if (pid == -1) return;
+
+    if (pid == 0) {
+        auto our_argv = alloc_list<char*>();
+        for (int i = 0; i < gargc; i++)
+            our_argv->append(gargv[i]);
+        our_argv->append((char*)NULL);
+        execv(path, our_argv->items);
+        exit(1); // failed
+    } else {
+        exit(0);
+    }
 }
 
 #endif

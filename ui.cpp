@@ -2717,7 +2717,9 @@ void UI::draw_everything() {
                 } while (0);
 
                 if (wnd.something_that_needs_restart_was_changed) {
-                    tell_user("One of the settings changed requires you to restart CodePerfect.", "Restart needed");
+                    auto res = ask_user_yes_no("One of the settings changed requires you to restart CodePerfect. Restart now?", "Restart needed", "Restart", "Don't restart");
+                    if (res == ASKUSER_YES)
+                        restart_program();
                 }
 
                 wnd.show = false;
@@ -3392,7 +3394,9 @@ void UI::draw_everything() {
             auth.reg_license_len = license_len;
             write_auth();
 
-            tell_user("Your license key was saved. Please restart CodePerfect for it to take effect. Thanks!", "License key saved");
+            auto res = ask_user_yes_no("Your license key was saved. You'll need to restart CodePerfect for it to take effect. Restart now?", "License key saved", "Restart", "Don't restart");
+            if (res == ASKUSER_YES)
+                restart_program();
         } while (0);
 
         ImGui::End();

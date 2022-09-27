@@ -1002,4 +1002,18 @@ void write_to_syslog(ccstr s) {
     if (ws) OutputDebugStringW(ws);
 }
 
+void restart_program() {
+    STARTUPINFOW si;
+    PROCESS_INFORMATION pi;
+
+    ptr0(&si);
+    ptr0(&pi);
+    si.cb = sizeof(si);
+
+    if (!CreateProcessW(NULL, GetCommandLineW(), NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi))
+        return;
+
+    ExitProcess(0);
+}
+
 #endif // OS_WINBLOWS
