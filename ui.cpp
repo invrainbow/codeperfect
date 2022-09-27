@@ -6401,6 +6401,14 @@ void UI::draw_everything() {
                             draw_highlight(highlight_snippet.color, glyph_width);
                     }
 
+                    if (!world.use_nvim && editor->selecting) {
+                        auto pos = new_cur2((u32)curr_cp_idx, (u32)y);
+                        if (select_start <= pos && pos < select_end) {
+                            draw_highlight(rgba(global_colors.visual_background), glyph_width, true);
+                            text_color = rgba(global_colors.visual_foreground);
+                        }
+                    }
+
                     if (editor->cur == new_cur2((u32)curr_cp_idx, (u32)y)) {
                         draw_cursor(glyph_width);
                         if (current_pane == world.current_pane && world.use_nvim)
@@ -6427,14 +6435,6 @@ void UI::draw_everything() {
                                 text_color = rgba(global_colors.visual_foreground);
                                 break;
                             }
-                        }
-                    }
-
-                    if (!world.use_nvim && editor->selecting) {
-                        auto pos = new_cur2((u32)curr_cp_idx, (u32)y);
-                        if (select_start <= pos && pos < select_end) {
-                            draw_highlight(rgba(global_colors.visual_background), glyph_width, true);
-                            text_color = rgba(global_colors.visual_foreground);
                         }
                     }
 
