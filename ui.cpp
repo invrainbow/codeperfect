@@ -899,7 +899,7 @@ void UI::draw_rounded_rect(boxf b, vec4f color, float radius, int round_flags) {
     auto draw_rounded_corner = [&](vec2f center, float start_rad, float end_rad) {
         vec2f zeroval; ptr0(&zeroval);
 
-        float increment = (end_rad - start_rad) / max(3, (int)(radius / 5));
+        float increment = (end_rad - start_rad) / max(7, (int)(radius / 5));
         for (float angle = start_rad; angle < end_rad; angle += increment) {
             auto ang1 = angle;
             auto ang2 = angle + increment;
@@ -6084,7 +6084,12 @@ void UI::draw_everything() {
                 b.y++;
                 b.h -= 2;
 
-                draw_rect(b, rgba(global_colors.cursor, muted ? 0.5 : 1.0));
+                auto cursor_color = rgba(global_colors.cursor, muted ? 0.5 : 1.0);
+
+                if (is_insert_cursor)
+                    draw_rect(b, cursor_color);
+                else
+                    draw_rounded_rect(b, cursor_color, 1, ROUND_ALL);
             };
 
             List<Client_Breakpoint> breakpoints_for_this_editor;
