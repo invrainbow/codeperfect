@@ -169,6 +169,13 @@ struct Font {
     bool can_render_chars(List<uchar> *chars);
 };
 
+struct Pane_Areas {
+    boxf tabs_area;
+    boxf editor_area;
+    boxf scrollbar_area;
+    bool has_tabs;
+};
+
 struct UI {
     List<Vert> verts;
 
@@ -238,7 +245,7 @@ struct UI {
     boxf get_status_area();
     void draw_everything();
     void end_frame();
-    void get_tabs_and_editor_area(boxf* pane_area, boxf* ptabs_area, boxf* peditor_area, bool has_tabs);
+    Pane_Areas *get_pane_areas(boxf* pane_area, bool has_tabs);
     void recalculate_view_sizes(bool force = false);
     i32 get_current_resize_area(boxf* out);
     int get_mouse_flags(boxf area);
@@ -295,6 +302,7 @@ enum {
     HOVERID_TABS = 2000,
     HOVERID_EDITORS = 3000,
     HOVERID_TOPLEVEL_FIRSTLINE = 3200,
+    HOVERID_EDITOR_SCROLLBAR = 3300,
 };
 
 #define AUTOCOMPLETE_TRUNCATE_LENGTH 40

@@ -5603,8 +5603,10 @@ void UI::draw_everything() {
         pane_area.w = pane.width;
         pane_area.h = panes_area.h;
 
-        boxf tabs_area, editor_area;
-        get_tabs_and_editor_area(&pane_area, &tabs_area, &editor_area, pane.editors.len > 0);
+        auto areas = get_pane_areas(&pane_area, pane.editors.len > 0);
+        boxf tabs_area = areas->tabs_area;
+        boxf editor_area = areas->editor_area;
+        boxf scrollbar_area = areas->scrollbar_area;
 
         For (pane.editors) {
             it.ui_rect = editor_area;
@@ -6663,6 +6665,83 @@ void UI::draw_everything() {
             } while (0);
         } while (0);
 
+        // draw scrollbar
+        do {
+            if (!pane.editors.len) break;
+            auto editor = pane.get_current_editor();
+            auto view = editor->view;
+
+            auto bg = global_colors.background;
+            bg.r *= 0.85;
+            bg.g *= 0.85;
+            bg.b *= 0.85;
+            draw_rect(scrollbar_area, rgba(global_colors.white, 0.05));
+
+            auto buf = editor->buf;
+
+            int ymax = buf->lines.len-1;
+            if (!ymax) break;
+
+            float M = 2; // margin
+            boxf handle; ptr0(&handle);
+
+            auto real_area = scrollbar_area;
+            real_area.x += M;
+            real_area.w -= M*2;
+            real_area.y += M;
+            real_area.h -= M*2;
+
+            if (buf->lines.len < view.h) {
+                handle = real_area;
+            } else {
+                float ystart = 0;
+                float yend = buf->lines.len - view.h;
+
+                handle.x = real_area.x;
+                handle.w = real_area.w;
+                handle.h = view.h / (yend - ystart) * real_area.h;
+                handle.y = real_area.y + ((real_area.h - handle.h) * fmin(1.0, (view.y - ystart) / (yend - ystart)));
+            }
+
+            bool is_hovered = test_hover(handle, HOVERID_PANE_RESIZERS + current_pane, ImGuiMouseCursor_Arrow);
+
+            if (is_hovered)
+                draw_rounded_rect(handle, rgba(global_colors.white, 0.3), 2, ROUND_ALL);
+            else
+                draw_rounded_rect(handle, rgba(global_colors.white, 0.2), 2, ROUND_ALL);
+
+            if (world.ui.mouse_just_pressed[0]) {
+                if (is_hovered) {
+                    auto im_pos = ImGui::GetIO().MousePos;
+                    auto pos = new_vec2f(im_pos.x, im_pos.y);
+
+                    pane.scrollbar_drag_offset = pos.y - handle.y;
+                    pane.scrollbar_drag_start = pos.y;
+                    pane.scrollbar_dragging = true;
+                }
+            } else if (pane.scrollbar_dragging) {
+                if (world.ui.mouse_down[CP_MOUSE_LEFT]) {
+                    auto im_pos = ImGui::GetIO().MousePos;
+                    auto pos = new_vec2f(im_pos.x, im_pos.y);
+
+                    auto new_handle_y = pos.y - pane.scrollbar_drag_offset;
+                    auto y = (int)((buf->lines.len - view.h) * (new_handle_y - real_area.y) / (real_area.h - handle.h));
+
+                    if (buf->lines.len < view.h) {
+                        y = 0;
+                    } else {
+                        if (y < 0) y = 0;
+                        if (y > buf->lines.len - view.h) y = buf->lines.len - view.h;
+                    }
+
+                    editor->view.y = y;
+                    editor->ensure_cursor_on_screen();
+                } else {
+                    pane.scrollbar_dragging = false;
+                }
+            }
+        } while (0);
+
         pane_area.x += pane_area.w;
     }
 
@@ -7438,28 +7517,32 @@ void UI::end_frame() {
     recalculate_view_sizes();
 }
 
-void UI::get_tabs_and_editor_area(boxf* pane_area, boxf* ptabs_area, boxf* peditor_area, bool has_tabs) {
-    boxf tabs_area, editor_area;
+Pane_Areas* UI::get_pane_areas(boxf* pane_area, bool has_tabs) {
+    boxf tabs_area, editor_area, scrollbar_area;
 
     if (has_tabs) {
         tabs_area.pos = pane_area->pos;
         tabs_area.w = pane_area->w;
-        tabs_area.h = 24; // ???
+        tabs_area.h = 24; // TODO
     }
 
     editor_area.pos = pane_area->pos;
-    if (has_tabs)
-        editor_area.y += tabs_area.h;
+    if (has_tabs) editor_area.y += tabs_area.h;
     editor_area.w = pane_area->w;
     editor_area.h = pane_area->h;
-    if (has_tabs)
-        editor_area.h -= tabs_area.h;
+    if (has_tabs) editor_area.h -= tabs_area.h;
 
-    if (has_tabs)
-        if (ptabs_area)
-            memcpy(ptabs_area, &tabs_area, sizeof(boxf));
-    if (peditor_area)
-        memcpy(peditor_area, &editor_area, sizeof(boxf));
+    scrollbar_area.y = editor_area.y;
+    scrollbar_area.h = editor_area.h;
+    scrollbar_area.w = 16;
+    scrollbar_area.x = editor_area.x + editor_area.w - scrollbar_area.w;
+    editor_area.w -= scrollbar_area.w;
+
+    auto ret = alloc_object(Pane_Areas);
+    ret->editor_area = editor_area;
+    ret->scrollbar_area = scrollbar_area;
+    if (has_tabs) ret->tabs_area = tabs_area;
+    return ret;
 }
 
 void UI::recalculate_view_sizes(bool force) {
@@ -7481,8 +7564,9 @@ void UI::recalculate_view_sizes(bool force) {
         if (editor)
             line_number_width = get_line_number_width(editor);
 
-        boxf editor_area;
-        get_tabs_and_editor_area(&pane_area, NULL, &editor_area, it.editors.len > 0);
+        auto areas = get_pane_areas(&pane_area, it.editors.len > 0);
+
+        auto editor_area = areas->editor_area;;
         editor_area.w -= ((line_number_width * base_font->width) + settings.line_number_margin_left + settings.line_number_margin_right);
         new_sizes->append(editor_area.size);
 

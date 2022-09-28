@@ -232,6 +232,10 @@ struct Pane {
     double width;
     float tabs_offset;
 
+    bool scrollbar_dragging;
+    float scrollbar_drag_offset;
+    float scrollbar_drag_start;
+
     void init();
     void cleanup();
     Editor* focus_editor(ccstr path);
