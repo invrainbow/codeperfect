@@ -5800,25 +5800,25 @@ void UI::draw_everything() {
                     dy = -dy;
                 }
 
-                dy *= 6;
+                dy *= 30;
                 dy += editor->scroll_leftover;
 
                 editor->scroll_leftover = fmod(dy, base_font->height);
                 auto lines = (int)(dy / base_font->height);
 
+                auto old = editor->view.y;
+
                 for (int i = 0; i < lines; i++) {
                     if (flip) {
-                        if (editor->view.y > 0) {
+                        if (editor->view.y > 0)
                             editor->view.y--;
-                            editor->ensure_cursor_on_screen();
-                        }
                     } else {
-                        if (editor->view.y + 1 < editor->buf->lines.len) {
+                        if (editor->view.y + 1 < editor->buf->lines.len)
                             editor->view.y++;
-                            editor->ensure_cursor_on_screen();
-                        }
                     }
                 }
+
+                if (old != editor->view.y) editor->ensure_cursor_on_screen();
 
                 if (lines) editor->scroll_leftover = 0;
             }
