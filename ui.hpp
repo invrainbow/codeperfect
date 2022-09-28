@@ -173,6 +173,8 @@ struct Pane_Areas {
     boxf tabs_area;
     boxf editor_area;
     boxf scrollbar_area;
+    boxf preview_area;
+    float preview_margin;
     bool has_tabs;
 };
 
@@ -236,8 +238,8 @@ struct UI {
     void draw_rect(boxf b, vec4f color);
     void draw_rounded_rect(boxf b, vec4f color, float radius, int round_flags);
     void draw_bordered_rect_outer(boxf b, vec4f color, vec4f border_color, int border_width, float radius = 0);
-    void draw_char(vec2f* pos, List<uchar> *grapheme, vec4f color);
-    void draw_char(vec2f* pos, uchar ch, vec4f color);
+    int draw_char(vec2f* pos, List<uchar> *grapheme, vec4f color);
+    int draw_char(vec2f* pos, uchar ch, vec4f color);
     vec2f draw_string(vec2f pos, ccstr s, vec4f color);
     float get_text_width(ccstr s);
     boxf get_build_results_area();
@@ -301,7 +303,7 @@ enum {
     HOVERID_PANE_RESIZERS = 1000,
     HOVERID_TABS = 2000,
     HOVERID_EDITORS = 3000,
-    HOVERID_TOPLEVEL_FIRSTLINE = 3200,
+    HOVERID_EDITOR_PREVIEWS = 3200,
     HOVERID_EDITOR_SCROLLBAR = 3300,
 };
 

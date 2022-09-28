@@ -1132,13 +1132,13 @@ Glyph *UI::lookup_glyph_for_grapheme(List<uchar> *grapheme) {
 }
 
 // advances pos forward
-void UI::draw_char(vec2f* pos, List<uchar> *grapheme, vec4f color) {
-    if (!grapheme->len) return;
+int UI::draw_char(vec2f* pos, List<uchar> *grapheme, vec4f color) {
+    if (!grapheme->len) return -1;
 
     glActiveTexture(GL_TEXTURE0 + TEXTURE_FONT);
 
     auto glyph = lookup_glyph_for_grapheme(grapheme);
-    if (!glyph) return;
+    if (!glyph) return -1;
 
     if (current_texture_id != glyph->atlas->gl_texture_id) {
         flush_verts();
@@ -1154,12 +1154,13 @@ void UI::draw_char(vec2f* pos, List<uchar> *grapheme, vec4f color) {
     auto gw = cp_wcswidth(grapheme->items, grapheme->len);
     if (gw == -1) gw = 2;
     pos->x += base_font->width * gw;
+    return gw;
 }
 
-void UI::draw_char(vec2f* pos, uchar codepoint, vec4f color) {
+int UI::draw_char(vec2f* pos, uchar codepoint, vec4f color) {
     auto grapheme = alloc_list<uchar>();
     grapheme->append(codepoint);
-    draw_char(pos, grapheme, color);
+    return draw_char(pos, grapheme, color);
 }
 
 /*
@@ -5607,6 +5608,7 @@ void UI::draw_everything() {
         boxf tabs_area = areas->tabs_area;
         boxf editor_area = areas->editor_area;
         boxf scrollbar_area = areas->scrollbar_area;
+        boxf preview_area = areas->preview_area;
 
         For (pane.editors) {
             it.ui_rect = editor_area;
@@ -6489,6 +6491,12 @@ void UI::draw_everything() {
                 cur_pos.y += base_font->height * settings.line_height;
             }
 
+            auto is_hovered = test_hover(preview_area, HOVERID_EDITOR_PREVIEWS + editor_index);
+            if (is_hovered)
+                draw_rect(preview_area, rgba(global_colors.white, 0.1));
+            else
+                draw_rect(preview_area, rgba(global_colors.white, 0.05));
+
             // render toplevel first line if it's offscreen
             do {
                 Parser_It it; ptr0(&it);
@@ -6504,7 +6512,7 @@ void UI::draw_everything() {
                 // hide if we're currently selecting with mouse, because it
                 // looks weird if we're dragging and random toplevel firstline
                 // previews keep showing up and disappearing
-                if (editor->mouse_selecting) break;
+                // if (editor->mouse_selecting) break;
 
                 find_nodes_containing_pos(&root, editor->cur, true, [&](auto it) -> Walk_Action {
                     switch (it->type()) {
@@ -6540,128 +6548,62 @@ void UI::draw_everything() {
 
                 cur2 toplevel_firstline_pos = new_cur2(x, start);
 
-                // float rect_size = 0;
-                auto grapheme = alloc_list<uchar>();
-
-                boxf preview_area;
-                preview_area.pos = editor_area.pos;
-
-                preview_area.x += settings.line_number_margin_left;
-                preview_area.x += get_line_number_width(editor) * base_font->width;
-                preview_area.x += settings.line_number_margin_right;
-
-                preview_area.x += settings.editor_margin_x;
-                preview_area.y += settings.editor_margin_y;
-
-                preview_area.w = settings.editor_margin_x * 2;
-                preview_area.h = base_font->height + settings.editor_margin_y * 2;
-
-                int graphemes_to_draw = 0;
-
-                // vec2f start_cur = editor_area.pos + new_vec2f(settings.editor_margin_x, settings.editor_margin_y);
-
-                // calculate the rect size
-                {
-                    u32 cp_idx = x;
-                    u32 vx = x;
-
-                    Grapheme_Clusterer gc;
-                    gc.init();
-                    gc.feed(line[cp_idx]); // feed first character for GB1
-
-                    auto cur_pos = preview_area.pos;
-                    cur_pos.x += settings.editor_margin_x;
-                    cur_pos.y += settings.editor_margin_y;
-
-                    while (preview_area.x + preview_area.w < editor_area.x + editor_area.w - settings.editor_margin_x) {
-                        if (cp_idx >= line.len) break;
-
-                        auto curr_cp_idx = cp_idx;
-                        int curr_cp = line[cp_idx];
-
-                        grapheme->len = 0;
-
-                        do {
-                            auto uch = line[cp_idx];
-                            grapheme->append(uch);
-                            cp_idx++;
-                        } while (cp_idx < line.len && !gc.feed(line[cp_idx]));
-
-                        int gw = 0;
-                        if (grapheme->len == 1 && curr_cp == '\t')
-                            gw = options.tabsize - (vx % options.tabsize);
-                        else
-                            gw = cp_wcswidth(grapheme->items, grapheme->len);
-
-                        auto w = base_font->width * (gw == -1 ? 2 : gw);
-                        preview_area.w += w;
-                        cur_pos.x += w;
-                        graphemes_to_draw++;
-                    }
-                }
-
-                auto is_hovered = test_hover(preview_area, HOVERID_TOPLEVEL_FIRSTLINE + editor_index);
-                if (is_hovered) {
-                    auto mouse_flags = get_mouse_flags(preview_area);
-                    if (mouse_flags & MOUSE_CLICKED) {
+                if (test_hover(preview_area, HOVERID_EDITOR_PREVIEWS + editor_index)) {
+                    if (get_mouse_flags(preview_area) & MOUSE_CLICKED) {
                         editor->move_cursor(toplevel_firstline_pos);
                         editor->selecting = false;
                         editor->mouse_selecting = false;
                     }
-                    draw_bordered_rect_outer(preview_area, rgba("#181818"), rgba("#666666"), 1, 4);
-                } else {
-                    draw_bordered_rect_outer(preview_area, rgba("#151515"), rgba("#444444"), 1, 4);
                 }
 
-                /*
-                vec2f cur_pos = editor_area.pos + new_vec2f(settings.editor_margin_x, settings.editor_margin_y);
+                u32 cp_idx = x;
+                u32 vx = x;
+
+                Grapheme_Clusterer gc;
+                gc.init();
+                gc.feed(line[cp_idx]); // feed first character for GB1
+
+                auto cur_pos = preview_area.pos;
+                cur_pos.x += settings.editor_margin_x;
+                cur_pos.y += settings.editor_margin_y;
                 cur_pos.y += base_font->offset_y;
-                */
+
+                auto line_number_width = get_line_number_width(editor);
 
                 {
-                    u32 cp_idx = x;
-                    u32 vx = x;
+                    cur_pos.x += settings.line_number_margin_left;
+                    ccstr line_number_str = cp_sprintf("%*d", line_number_width, start + 1);
+                    for (auto p = line_number_str; *p; p++)
+                        draw_char(&cur_pos, *p, rgba(global_colors.white, 0.3));
+                    cur_pos.x += settings.line_number_margin_right;
+                }
 
-                    auto cur_pos = preview_area.pos;
-                    cur_pos.y += base_font->offset_y;
-                    cur_pos.x += settings.editor_margin_x;
-                    cur_pos.y += settings.editor_margin_y;
+                start_clip(preview_area);
 
-                    Grapheme_Clusterer gc;
-                    gc.init();
-                    gc.feed(line[cp_idx]); // feed first character for GB1
+                while (cur_pos.x < preview_area.x + preview_area.w) {
+                    if (cp_idx >= line.len) break;
 
-                    for (int i = 0; i < graphemes_to_draw; i++) {
-                        if (cp_idx >= line.len) break; // prob not actually necessary, assert instead?
+                    // collect the entire grapheme cluster
+                    auto grapheme = alloc_list<uchar>();
+                    do {
+                        auto uch = line[cp_idx];
+                        grapheme->append(uch);
+                        cp_idx++;
+                    } while (cp_idx < line.len && !gc.feed(line[cp_idx]));
 
-                        auto curr_cp_idx = cp_idx;
-                        int curr_cp = line[cp_idx];
-
-                        grapheme->len = 0;
-
-                        do {
-                            auto uch = line[cp_idx];
-                            grapheme->append(uch);
-                            cp_idx++;
-                        } while (cp_idx < line.len && !gc.feed(line[cp_idx]));
-
-                        int glyph_width = 0;
-                        if (grapheme->len == 1 && curr_cp == '\t')
-                            glyph_width = options.tabsize - (vx % options.tabsize);
-                        else
-                            glyph_width = cp_wcswidth(grapheme->items, grapheme->len);
-
-                        if (glyph_width == -1) glyph_width = 1;
-
-                        uchar uch = curr_cp;
-                        if (uch == '\t')
-                            cur_pos.x += base_font->width * glyph_width;
-                        else
-                            draw_char(&cur_pos, grapheme, rgba(global_colors.foreground, 0.8));
-
-                        vx += glyph_width;
+                    // render it
+                    int gw = 0;
+                    if (grapheme->len == 1 && grapheme->at(0) == '\t') {
+                        int gw = options.tabsize - (vx % options.tabsize);
+                        cur_pos.x += base_font->width * gw;
+                        vx += gw;
+                    } else {
+                        int gw = draw_char(&cur_pos, grapheme, rgba(global_colors.foreground, 0.4));
+                        if (gw != -1) vx += gw;
                     }
                 }
+
+                end_clip();
             } while (0);
         } while (0);
 
@@ -7518,7 +7460,7 @@ void UI::end_frame() {
 }
 
 Pane_Areas* UI::get_pane_areas(boxf* pane_area, bool has_tabs) {
-    boxf tabs_area, editor_area, scrollbar_area;
+    boxf tabs_area, editor_area, scrollbar_area, preview_area;
 
     if (has_tabs) {
         tabs_area.pos = pane_area->pos;
@@ -7532,6 +7474,13 @@ Pane_Areas* UI::get_pane_areas(boxf* pane_area, bool has_tabs) {
     editor_area.h = pane_area->h;
     if (has_tabs) editor_area.h -= tabs_area.h;
 
+    float preview_margin = 4;
+
+    preview_area.pos = editor_area.pos;
+    preview_area.w = editor_area.w;
+    preview_area.h = base_font->height + preview_margin*2;
+    editor_area.y += preview_area.h;
+
     scrollbar_area.y = editor_area.y;
     scrollbar_area.h = editor_area.h;
     scrollbar_area.w = 16;
@@ -7540,6 +7489,8 @@ Pane_Areas* UI::get_pane_areas(boxf* pane_area, bool has_tabs) {
 
     auto ret = alloc_object(Pane_Areas);
     ret->editor_area = editor_area;
+    ret->preview_area = preview_area;
+    ret->preview_margin = preview_margin;
     ret->scrollbar_area = scrollbar_area;
     if (has_tabs) ret->tabs_area = tabs_area;
     return ret;
@@ -7623,14 +7574,15 @@ bool UI::test_hover(boxf area, int id, ImGuiMouseCursor cursor) {
 
     auto now = current_time_nano();
 
-    if (id >= hover.id_last_frame) {
-        hover.id = id;
-        hover.cursor = cursor;
+    if (id < hover.id_last_frame)
+        return false;
 
-        if (id > hover.id_last_frame) {
-            hover.start_time = now;
-            hover.ready = false;
-        }
+    hover.id = id;
+    hover.cursor = cursor;
+
+    if (id > hover.id_last_frame) {
+        hover.start_time = now;
+        hover.ready = false;
     }
 
     if (now - hover.start_time > WINDOWS_RESIZE_FROM_EDGES_FEEDBACK_TIMER)
