@@ -5647,8 +5647,8 @@ void UI::draw_everything() {
                     return new_cur2((i32)buf->lines[y].len, (i32)y);
                 }
 
-                if (pos.x < area.x)  return new_cur2((i32)0, (i32)y);
-                if (pos.x >= area.x) return new_cur2((i32)buf->lines[y].len, (i32)y);
+                if (pos.x < area.x)           return new_cur2((i32)0, (i32)y);
+                if (pos.x >= area.x + area.w) return new_cur2((i32)buf->lines[y].len, (i32)y);
 
                 auto vx = (int)((pos.x - area.x) / ui.base_font->width);
                 return new_cur2(buf->idx_vcp_to_cp(y, vx), y);
