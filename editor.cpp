@@ -2512,7 +2512,7 @@ void Editor::handle_save(bool about_to_close) {
             buf->enable_tree();
     }
 
-    if (options.format_on_save) {
+    if (options.format_on_save && !editor.file_was_deleted) {
         bool use_goimports_autoimport = false;
         if (options.organize_imports_on_save)
             if (!optimize_imports())
