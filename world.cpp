@@ -54,9 +54,7 @@ void History::push(int editor_id, cur2 pos) {
         return delta >= 10;
     };
 
-    if (!should_push()) {
-        return;
-    }
+    if (!should_push()) return;
 
     check_marks();
 
@@ -135,8 +133,8 @@ void History::check_marks(int upper) {
         auto node = it->node;
         while (node->parent)
             node = node->parent;
-        if (it->tree->root != node)
-            cp_panic("mark node is detached from root!");
+
+        if (it->tree->root != node) cp_panic("mark node is detached from root!");
     }
 #endif
 }
