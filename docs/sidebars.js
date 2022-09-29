@@ -38,7 +38,7 @@ const sidebars = {
     {
       type: "category",
       label: "Navigation",
-      items: ["command-palette", "go-to-file", "go-to-symbol"],
+      items: ["command-palette", "go-to-file", "go-to-symbol", "history"],
     },
     {
       type: "category",

@@ -1550,6 +1550,16 @@ Command_Info command_info_table[_CMD_COUNT_];
 
 bool is_command_enabled(Command cmd) {
     switch (cmd) {
+    case CMD_GO_FORWARD: {
+        auto &hist = world.history;
+        return hist.curr != hist.top;
+    }
+
+    case CMD_GO_BACK: {
+        auto &hist = world.history;
+        return hist.curr != hist.start;
+    }
+
     case CMD_FIND:
         return (bool)get_current_editor();
 
@@ -1787,6 +1797,9 @@ void init_command_info_table() {
     command_info_table[CMD_ADD_ALL_XML_TAGS] = k(0, 0, "Struct: Add all XML tags");
     command_info_table[CMD_REMOVE_TAG] = k(0, 0, "Struct: Remove tag");
     command_info_table[CMD_REMOVE_ALL_TAGS] = k(0, 0, "Struct: Remove all tags");
+
+    command_info_table[CMD_GO_BACK] = k(CP_MOD_PRIMARY, CP_KEY_MINUS, "Go Back");
+    command_info_table[CMD_GO_FORWARD] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_MINUS, "Go Forward");
 }
 
 void do_find_interfaces() {
@@ -2768,6 +2781,13 @@ void handle_command(Command cmd, bool from_menu) {
         }
         break;
 
+    case CMD_GO_BACK:
+        world.history.go_backward();
+        break;
+
+    case CMD_GO_FORWARD:
+        world.history.go_forward();
+        break;
     }
 }
 
