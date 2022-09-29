@@ -3616,6 +3616,9 @@ List<Go_Import> *Go_Indexer::optimize_imports(ccstr filepath) {
     Timer t; t.init("list_missing_imports");
 
     auto editor = find_editor_by_filepath(filepath);
+    if (!editor) return NULL;
+    if (!editor->buf) return NULL;
+
     if (editor->buf->tree_dirty)
         reload_editor(editor);
 
