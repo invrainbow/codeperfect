@@ -6290,7 +6290,7 @@ void UI::draw_everything() {
                         line_number_str = cp_sprintf("%*d", line_number_width, y + 1);
                     auto len = strlen(line_number_str);
                     for (u32 i = 0; i < len; i++)
-                        draw_char(&cur_pos, line_number_str[i], rgba(global_colors.white, 0.3));
+                        draw_char(&cur_pos, line_number_str[i], rgba(global_colors.foreground, 0.3));
                     cur_pos.x += settings.line_number_margin_right;
                 }
 
@@ -6565,7 +6565,7 @@ void UI::draw_everything() {
 
                 auto cur_pos = preview_area.pos;
                 cur_pos.x += settings.editor_margin_x;
-                cur_pos.y += settings.editor_margin_y;
+                cur_pos.y += areas->preview_margin;
                 cur_pos.y += base_font->offset_y;
 
                 auto line_number_width = get_line_number_width(editor);
@@ -6574,7 +6574,7 @@ void UI::draw_everything() {
                     cur_pos.x += settings.line_number_margin_left;
                     ccstr line_number_str = cp_sprintf("%*d", line_number_width, start + 1);
                     for (auto p = line_number_str; *p; p++)
-                        draw_char(&cur_pos, *p, rgba(global_colors.white, 0.3));
+                        draw_char(&cur_pos, *p, rgba(global_colors.foreground, 0.15));
                     cur_pos.x += settings.line_number_margin_right;
                 }
 
@@ -6598,7 +6598,7 @@ void UI::draw_everything() {
                         cur_pos.x += base_font->width * gw;
                         vx += gw;
                     } else {
-                        int gw = draw_char(&cur_pos, grapheme, rgba(global_colors.foreground, 0.4));
+                        int gw = draw_char(&cur_pos, grapheme, rgba(global_colors.foreground, 0.2));
                         if (gw != -1) vx += gw;
                     }
                 }
@@ -7474,12 +7474,13 @@ Pane_Areas* UI::get_pane_areas(boxf* pane_area, bool has_tabs) {
     editor_area.h = pane_area->h;
     if (has_tabs) editor_area.h -= tabs_area.h;
 
-    float preview_margin = 4;
+    float preview_margin = 2;
 
     preview_area.pos = editor_area.pos;
     preview_area.w = editor_area.w;
     preview_area.h = base_font->height + preview_margin*2;
     editor_area.y += preview_area.h;
+    editor_area.h -= preview_area.h;
 
     scrollbar_area.y = editor_area.y;
     scrollbar_area.h = editor_area.h;
