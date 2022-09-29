@@ -2245,8 +2245,7 @@ void Go_Indexer::process_tree_into_gofile(
 }
 
 void Go_Indexer::import_decl_to_goimports(Ast_Node *decl_node, List<Go_Import> *out) {
-    auto speclist_node = decl_node->child();
-    FOR_NODE_CHILDREN (speclist_node) {
+    auto process_spec = [&](Ast_Node *it) {
         Ast_Node *name_node = NULL;
         Ast_Node *path_node = NULL;
 
@@ -2256,12 +2255,10 @@ void Go_Indexer::import_decl_to_goimports(Ast_Node *decl_node, List<Go_Import> *
         } else if (it->type() == TS_INTERPRETED_STRING_LITERAL) {
             path_node = it;
             name_node = NULL;
-        } else {
-            continue;
-        }
+        } else return;
 
         auto new_import_path = parse_go_string(path_node->string());
-        if (!new_import_path) continue;
+        if (!new_import_path) return;
 
         // decl
         auto decl = alloc_object(Godecl);
@@ -2279,11 +2276,25 @@ void Go_Indexer::import_decl_to_goimports(Ast_Node *decl_node, List<Go_Import> *
             imp->package_name_type = GPN_DOT;
         else if (name_node->type() == TS_BLANK_IDENTIFIER)
             imp->package_name_type = GPN_BLANK;
+        else if (name_node->type() == TS_PACKAGE_IDENTIFIER && streq(name_node->string(), "_"))
+            imp->package_name_type = GPN_BLANK;
         else
             imp->package_name_type = GPN_EXPLICIT;
 
         if (imp->package_name_type == GPN_EXPLICIT)
             imp->package_name = name_node->string();
+    };
+
+    auto child = decl_node->child();
+    switch (child->type()) {
+    case TS_IMPORT_SPEC_LIST:
+        FOR_NODE_CHILDREN (child)
+            process_spec(it);
+        break;
+    case TS_IMPORT_SPEC:
+    case TS_INTERPRETED_STRING_LITERAL:
+        process_spec(child);
+        break;
     }
 }
 
