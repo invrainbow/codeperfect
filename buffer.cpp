@@ -69,8 +69,7 @@ uchar Buffer_It::peek() {
 }
 
 uchar Buffer_It::prev() {
-    if (bof())
-        return 0;
+    if (bof()) return 0;
 
     if (x-- == 0) {
         y--;
@@ -80,8 +79,7 @@ uchar Buffer_It::prev() {
 }
 
 uchar Buffer_It::next() {
-    if (eof())
-        return 0;
+    if (eof()) return 0;
 
     auto ret = peek();
     if (has_fake_end && pos >= fake_end) {
@@ -101,12 +99,9 @@ void Cstr_To_Ustr::init() {
 }
 
 s32 Cstr_To_Ustr::get_uchar_size(u8 first_char) {
-    if (first_char < 0b10000000)
-        return 1;
-    if (first_char < 0b11100000)
-        return 2;
-    if (first_char < 0b11110000)
-        return 3;
+    if (first_char < 0b10000000) return 1;
+    if (first_char < 0b11100000) return 2;
+    if (first_char < 0b11110000) return 3;
     return 4;
 }
 
@@ -192,8 +187,8 @@ void Buffer::hist_apply_change(Change *change, bool undo) {
         new_text = &change->new_text;
     }
 
-    if (start != old_end)
-        remove(start, old_end, true);
+    if (start != old_end) remove(start, old_end, true);
+
     insert(start, new_text->items, new_text->len, true);
 }
 
@@ -212,8 +207,7 @@ cur2 Buffer::hist_undo() {
         auto it = arr->at(arr->len - i - 1);
         hist_apply_change(it, true);
 
-        if (i == arr->len-1)
-            ret = it->start;
+        if (i == arr->len-1) ret = it->start;
     }
 
     return ret;
@@ -226,8 +220,7 @@ cur2 Buffer::hist_redo() {
 
     for (auto it = history[hist_curr]; it; it = it->next){
         hist_apply_change(it, false);
-        if (!it->next)
-            ret = it->new_end;
+        if (!it->next) ret = it->new_end;
     }
 
     hist_curr = hist_inc(hist_curr);
@@ -267,8 +260,7 @@ void Buffer::init(Pool *_mem, bool _use_tree, bool _use_history) {
     initialized = true;
     dirty = false;
 
-    if (_use_tree)
-        enable_tree();
+    if (_use_tree) enable_tree();
 
     mark_tree.init(this);
 }
@@ -285,10 +277,8 @@ void Buffer::cleanup() {
     if (!initialized) return;
 
     clear();
-    if (parser)
-        ts_parser_delete(parser);
-    if (tree)
-        ts_tree_delete(tree);
+    if (parser) ts_parser_delete(parser);
+    if (tree) ts_tree_delete(tree);
 
     mark_tree.cleanup();
 
@@ -362,19 +352,16 @@ bool Buffer::read(Buffer_Read_Func f, bool reread) {
         if (conv.feed(ch)) {
             if (conv.uch == '\n') {
                 last_was_cr = false;
-                if (!insert_new_line())
-                    return false;
+                if (!insert_new_line()) return false;
             } else {
                 if (last_was_cr) {
-                    if (!line->append('\r'))
-                        return false;
+                    if (!line->append('\r')) return false;
                     last_was_cr = false;
                 } else if (conv.uch == '\r') {
                     last_was_cr = true;
                     continue;
                 }
-                if (!line->append(conv.uch))
-                    return false;
+                if (!line->append(conv.uch)) return false;
             }
         }
     }

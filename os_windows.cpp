@@ -96,9 +96,9 @@ bool get_win32_file_info(ccstr path, BY_HANDLE_FILE_INFORMATION* out) {
     SCOPED_FRAME();
 
     HANDLE h = CreateFileW(to_wide(path), 0, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (h == INVALID_HANDLE_VALUE)
-        return false;
+    if (h == INVALID_HANDLE_VALUE) return false;
     defer { CloseHandle(h); };
+
     return GetFileInformationByHandle(h, out);
 }
 
@@ -129,9 +129,10 @@ u64 current_time_nano() {
 }
 
 void close_and_null_handle(HANDLE* ph) {
-    if (*ph)
+    if (*ph) {
         CloseHandle(*ph);
-    *ph = NULL;
+        *ph = NULL;
+    }
 }
 
 void Process::cleanup() {
@@ -378,8 +379,8 @@ File_Result File::init(ccstr path, int access, File_Open_Mode open_mode) {
 }
 
 u32 File::seek(u32 pos) {
-    if (pos == FILE_SEEK_END)
-        return SetFilePointer(h, 0, NULL, FILE_END);
+    if (pos == FILE_SEEK_END) return SetFilePointer(h, 0, NULL, FILE_END);
+
     auto ret = SetFilePointer(h, pos, NULL, FILE_BEGIN);
     if (ret == INVALID_SET_FILE_POINTER) return FILE_SEEK_ERROR;
     return ret;
@@ -745,12 +746,9 @@ bool File_Mapping::finish_writing(i64 final_size) {
 }
 
 void File_Mapping::cleanup() {
-    if (data)
-        UnmapViewOfFile(data);
-    if (mapping)
-        CloseHandle(mapping);
-    if (file)
-        CloseHandle(file);
+    if (data) UnmapViewOfFile(data);
+    if (mapping) CloseHandle(mapping);
+    if (file) CloseHandle(file);
 }
 
 ccstr get_path_relative_to(ccstr full, ccstr base) {
@@ -856,8 +854,7 @@ void *read_font_data_from_first_found(s32 *plen, Charset_Type charset, ...) {
 
     va_end(vl);
 
-    if (font_data)
-        *plen = len;
+    if (font_data) *plen = len;
     return font_data;
 }
 */

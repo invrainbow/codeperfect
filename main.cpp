@@ -375,8 +375,7 @@ void handle_window_event(Window_Event *it) {
                 }
             }
 
-            if (!world.use_nvim)
-                editor->delete_selection();
+            if (!world.use_nvim) editor->delete_selection();
 
             editor->type_char_in_insert_mode('\n');
 
@@ -476,9 +475,7 @@ void handle_window_event(Window_Event *it) {
         };
 
         auto handle_autocomplete_control = [&]() -> bool {
-            if (key != CP_KEY_LEFT_ALT && key != CP_KEY_RIGHT_ALT)
-                return false;
-
+            if (key != CP_KEY_LEFT_ALT && key != CP_KEY_RIGHT_ALT) return false;
             if (!editor) return false;
             if (!editor->autocomplete.ac.results) return false;
 
@@ -691,8 +688,7 @@ void handle_window_event(Window_Event *it) {
         case CP_MOD_SHIFT:
             switch (key) {
             case CP_KEY_ESCAPE:
-                if (!editor->trigger_escape())
-                    send_nvim_keys("<S-Esc>");
+                if (!editor->trigger_escape()) send_nvim_keys("<S-Esc>");
                 break;
             }
             break;
@@ -720,8 +716,7 @@ void handle_window_event(Window_Event *it) {
                 break;
 
             case CP_KEY_ESCAPE:
-                if (!editor->trigger_escape())
-                    send_nvim_keys("<C-Esc>");
+                if (!editor->trigger_escape()) send_nvim_keys("<C-Esc>");
                 break;
 
             case CP_KEY_TAB:
@@ -838,8 +833,7 @@ void handle_window_event(Window_Event *it) {
 
             case CP_KEY_ESCAPE:
                 if (editor->trigger_escape()) break;
-                if (world.use_nvim)
-                    send_nvim_keys("<Esc>");
+                if (world.use_nvim) send_nvim_keys("<Esc>");
                 break;
             }
             break;
@@ -957,8 +951,7 @@ void handle_window_event(Window_Event *it) {
                     if (world.current_pane >= world.panes.len)
                         activate_pane_by_index(world.panes.len - 1);
                 } else {
-                    if (!editor->ask_user_about_unsaved_changes())
-                        break;
+                    if (!editor->ask_user_about_unsaved_changes()) break;
 
                     editor->cleanup();
 
@@ -972,8 +965,7 @@ void handle_window_event(Window_Event *it) {
                         pane->focus_editor_by_index(new_idx);
                     }
 
-                    if (world.use_nvim)
-                        send_nvim_keys("<Esc>");
+                    if (world.use_nvim) send_nvim_keys("<Esc>");
                 }
                 break;
             }
@@ -1483,8 +1475,7 @@ int realmain(int argc, char **argv) {
 
     auto last_frame_time = current_time_nano();
 
-    if (world.testing.on)
-        world.testing.ready = true;
+    if (world.testing.on) world.testing.ready = true;
 
     for (; !world.window->should_close; world.frame_index++) {
         bool was_trace_on = world.trace_next_frame;
@@ -1551,8 +1542,7 @@ int realmain(int argc, char **argv) {
             if (GHGetMessage(&msg)) {
                 print("GHGetMessage returned: %s", msg.text);
                 tell_user(msg.text, msg.title);
-                if (msg.is_panic)
-                    return EXIT_FAILURE;
+                if (msg.is_panic) return EXIT_FAILURE;
             }
         }
 
@@ -1629,16 +1619,13 @@ int realmain(int argc, char **argv) {
                             if (are_filepaths_equal(it.filepath, filepath))
                                 it.file_was_deleted = true;
 
-                if (res != CPR_DIRECTORY)
-                    filedir = cp_dirname(filedir);
-                if (streq(filedir, "."))
-                    filedir = "";
+                if (res != CPR_DIRECTORY) filedir = cp_dirname(filedir);
+                if (streq(filedir, ".")) filedir = "";
 
                 reload_file_subtree(get_path_relative_to(filedir, world.current_path));
 
                 auto editor = find_editor_by_filepath(filepath);
-                if (editor)
-                    editor->reload_file(true);
+                if (editor) editor->reload_file(true);
 
                 auto should_handle_fsevent = [&]() {
                     if (res == CPR_DIRECTORY) return true;

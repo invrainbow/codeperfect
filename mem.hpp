@@ -201,8 +201,7 @@ struct Pool {
                 request_new_block();
             } else {
                 auto idx = pblock - used_blocks.items;
-                if (curr)
-                    unused_blocks.append(curr);
+                if (curr) unused_blocks.append(curr);
                 for (u32 i = idx + 1; i < used_blocks.len; i++)
                     unused_blocks.append(used_blocks[i]);
                 used_blocks.len = idx;

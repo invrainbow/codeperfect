@@ -87,8 +87,7 @@ File_Result File::init(ccstr path, int access, File_Open_Mode open_mode) {
         flags |= (O_CREAT | O_TRUNC);
 
     int mode = 0;
-    if (flags & O_CREAT)
-        mode = 0644;
+    if (flags & O_CREAT) mode = 0644;
 
     fd = open(path, flags, mode);
     if (fd == -1) return FILE_RESULT_FAILURE;
@@ -312,9 +311,7 @@ bool File_Mapping::init(ccstr path, File_Mapping_Opts *_opts) {
         len = statbuf.st_size;
     }
 
-    if (len)
-        if (!create_actual_file_mapping(len))
-            return false;
+    if (len && !create_actual_file_mapping(len)) return false;
 
     ok = true;
     return true;
@@ -428,8 +425,7 @@ bool list_directory(ccstr folder, list_directory_cb cb) {
 
 bool copy_file(ccstr src, ccstr dest, bool overwrite) {
     auto flags = std::filesystem::copy_options::skip_existing;
-    if (overwrite)
-        flags = std::filesystem::copy_options::overwrite_existing;
+    if (overwrite) flags = std::filesystem::copy_options::overwrite_existing;
     return std::filesystem::copy_file(src, dest, flags);
 }
 

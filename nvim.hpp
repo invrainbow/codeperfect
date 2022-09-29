@@ -185,8 +185,7 @@ struct Mp_Reader {
 
     Mp_Type peek_type() {
         u8 b = peek();
-        if (!ok)
-            return MP_UNKNOWN;
+        if (!ok) return MP_UNKNOWN;
 
         switch (b) {
         case 0xc0: return MP_NIL;
@@ -609,8 +608,7 @@ struct Nvim {
         auto req = find_request_by_msgid(msgid);
         if (req) requests.remove(req);
 
-        if (!requests.len)
-            requests_mem.reset();
+        if (!requests.len) requests_mem.reset();
     }
 
     void run_event_loop();

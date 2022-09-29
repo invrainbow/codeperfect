@@ -177,8 +177,7 @@ bool list_all_fonts(List<ccstr> *out) {
         FcPattern* font = fs->fonts[i];
         FcChar8 *family = NULL;
 
-        if (FcPatternGetString(font, FC_FAMILY, 0, &family) != FcResultMatch)
-            continue;
+        if (FcPatternGetString(font, FC_FAMILY, 0, &family) != FcResultMatch) continue;
 
         out->append(cp_strdup((char*)family));
     }
@@ -247,8 +246,7 @@ Ask_User_Result ask_user_yes_no(ccstr text, ccstr title, ccstr yeslabel, ccstr n
     int result = run_dialog(text, title, [&](auto dialog) {
         gtk_dialog_add_button(GTK_DIALOG(dialog), yeslabel, GTK_RESPONSE_YES);
         gtk_dialog_add_button(GTK_DIALOG(dialog), nolabel, GTK_RESPONSE_NO);
-        if (cancel)
-            gtk_dialog_add_button(GTK_DIALOG(dialog), "Cancel", GTK_RESPONSE_CANCEL);
+        if (cancel) gtk_dialog_add_button(GTK_DIALOG(dialog), "Cancel", GTK_RESPONSE_CANCEL);
     });
 
     switch (result) {
@@ -282,10 +280,8 @@ bool let_user_select_file(Select_File_Opts* opts) {
     if (!gtk_init_check(NULL, NULL)) return false;
 
     auto get_action = [&]() -> GtkFileChooserAction {
-        if (opts->folder)
-            return GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER;
-        if (opts->save)
-            return GTK_FILE_CHOOSER_ACTION_OPEN;
+        if (opts->folder) return GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER;
+        if (opts->save) return GTK_FILE_CHOOSER_ACTION_OPEN;
         return GTK_FILE_CHOOSER_ACTION_SAVE;
     };
 

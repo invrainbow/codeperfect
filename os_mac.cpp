@@ -145,8 +145,7 @@ bool Fs_Watcher::next_event(Fs_Event *event) {
         }
 
         CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0, true);
-        if (!events.len)
-            return false;
+        if (!events.len) return false;
     }
 
     memcpy(event, &events[curr++], sizeof(Fs_Event));

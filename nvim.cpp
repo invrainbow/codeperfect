@@ -132,8 +132,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
         case NVIM_REQ_POST_SAVE_SETLINES: {
             auto was_saving = editor->saving;
             editor->saving = false;
-            if (was_saving)
-                editor->buf->dirty = false;
+            if (was_saving) editor->buf->dirty = false;
 
             /*
             auto cur = req->post_save_setlines.cur;
@@ -297,8 +296,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
             if (editor->nvim_data.need_initial_pos_set) {
                 nvim_print("need initial pos set, setting...");
                 auto pos = editor->nvim_data.initial_pos;
-                if (pos.y == -1)
-                    pos = editor->offset_to_cur(pos.x);
+                if (pos.y == -1) pos = editor->offset_to_cur(pos.x);
                 // editor->raw_move_cursor(pos);
                 editor->move_cursor(pos);
             }
@@ -343,8 +341,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 r.init();
                 Fori (*args.cells) {
                     r.write("(%d x %d)", it.hl, it.reps);
-                    if (i+1 < args.cells->len)
-                        r.writestr(", ");
+                    if (i+1 < args.cells->len) r.writestr(", ");
                 }
                 nvim_print("grid line %d:%d: %s", args.row, args.col, r.finish());
             }
@@ -640,18 +637,12 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                     post_insert_dotrepeat_time = 0;
                 }
             }
-            else if (streq(args.mode_name, "insert"))
-                mode = VI_INSERT;
-            else if (streq(args.mode_name, "replace"))
-                mode = VI_REPLACE;
-            else if (streq(args.mode_name, "visual"))
-                mode = VI_VISUAL;
-            else if (streq(args.mode_name, "operator"))
-                mode = VI_OPERATOR;
-            else if (streq(args.mode_name, "cmdline_normal"))
-                mode = VI_CMDLINE;
-            else
-                mode = VI_UNKNOWN;
+            else if (streq(args.mode_name, "insert"))         mode = VI_INSERT;
+            else if (streq(args.mode_name, "replace"))        mode = VI_REPLACE;
+            else if (streq(args.mode_name, "visual"))         mode = VI_VISUAL;
+            else if (streq(args.mode_name, "operator"))       mode = VI_OPERATOR;
+            else if (streq(args.mode_name, "cmdline_normal")) mode = VI_CMDLINE;
+            else                                              mode = VI_UNKNOWN;
 
             auto editor = get_current_editor();
             if (editor) {
@@ -670,8 +661,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
             if (mode != VI_INSERT && exiting_insert_mode) {
                 if (editor_that_triggered_escape) {
                     auto ed = find_editor_by_id(editor_that_triggered_escape);
-                    if (ed)
-                        editor = ed;
+                    if (ed) editor = ed;
                     editor_that_triggered_escape = 0;
                 }
 
@@ -679,8 +669,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                     auto &gohere = editor->go_here_after_escape;
                     if (gohere.x != -1 && gohere.y != -1) {
                         ccstr insert_cmd = "i";
-                        if (gohere.x == editor->buf->lines[gohere.y].len)
-                            insert_cmd = "a";
+                        if (gohere.x == editor->buf->lines[gohere.y].len) insert_cmd = "a";
 
                         // gohere.x--;
                         editor->move_cursor(gohere);
@@ -723,8 +712,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
             assoc_grid_with_window(args.grid, args.window.object_id);
 
             auto editor = find_editor_by_window(args.window.object_id);
-            if (!editor)
-                break; // TODO: handle us still receiving notifications for nonexistent window
+            if (!editor) break; // TODO: handle us still receiving notifications for nonexistent window
 
             editor->nvim_data.grid_topline = args.topline;
 
@@ -767,8 +755,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                         return false;
                     };
 
-                    if (new_cur == pos || !is_pos_even_valid())
-                        set = true;
+                    if (new_cur == pos || !is_pos_even_valid()) set = true;
                 } else {
                     set = true;
                 }
@@ -1549,8 +1536,7 @@ void Mp_Reader::skip_object() {
         if (ok) {
             for (u32 i = 0; i < arrlen; i++) {
                 skip_object();
-                if (!ok)
-                    break;
+                if (!ok) break;
             }
         }
         return;
