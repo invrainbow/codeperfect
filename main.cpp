@@ -532,6 +532,40 @@ void handle_window_event(Window_Event *it) {
                     }
                     handled = true;
                     break;
+
+                case CP_KEY_PAGE_UP:
+                    editor->view.y -= editor->view.h;
+                    if (editor->view.y < 0) {
+                        editor->view.y = 0;
+                        cur = new_cur2(0, 0);
+                    } else {
+                        editor->ensure_cursor_on_screen();
+                        cur = editor->cur;
+                    }
+                    handled = true;
+                    break;
+
+                case CP_KEY_PAGE_DOWN:
+                    editor->view.y += editor->view.h;
+                    if (editor->view.y > buf->lines.len-1) {
+                        editor->view.y = buf->lines.len-1;
+                        cur = new_cur2((int)buf->lines[buf->lines.len-1].len, (int)buf->lines.len-1);
+                    } else {
+                        editor->ensure_cursor_on_screen();
+                        cur = editor->cur;
+                    }
+                    handled = true;
+                    break;
+
+                case CP_KEY_HOME:
+                    cur.x = 0;
+                    handled = true;
+                    break;
+
+                case CP_KEY_END:
+                    cur.x = buf->lines[cur.y].len;
+                    handled = true;
+                    break;
                 }
                 break;
 
