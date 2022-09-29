@@ -696,7 +696,7 @@ Pane* get_current_pane();
 Editor* get_current_editor();
 Editor* find_editor(find_editor_func f);
 Editor* find_editor_by_id(u32 id);
-Editor* find_editor_by_filepath(ccstr filepath);
+Editor* find_editor_by_filepath(ccstr filepath); // this is fairly expensive -- it does a stat lookup, not just string based comparison
 void fill_file_tree();
 
 Editor *focus_editor(ccstr path);
