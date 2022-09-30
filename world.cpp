@@ -2303,7 +2303,7 @@ void handle_command(Command cmd, bool from_menu) {
         if (!editor) break;
         if (!editor->is_modifiable()) break;
 
-        editor->format_on_save(GH_FMT_GOIMPORTS);
+        editor->format_on_save(false);
         break;
     }
 
@@ -2313,9 +2313,9 @@ void handle_command(Command cmd, bool from_menu) {
         if (!editor->is_modifiable()) break;
 
         if (editor->optimize_imports())
-            editor->format_on_save(GH_FMT_GOIMPORTS);
+            editor->format_on_save(false);
         else
-            editor->format_on_save(GH_FMT_GOIMPORTS_WITH_AUTOIMPORT);
+            editor->format_on_save(true);
         break;
     }
 
@@ -3270,7 +3270,7 @@ done_writing:
         GHFmtAddLine(rend.finish());
         GHFmtAddLine("");
 
-        auto new_contents = GHFmtFinish(GH_FMT_GOIMPORTS);
+        auto new_contents = GHFmtFinish(false);
         if (!new_contents) return;
         defer { GHFree(new_contents); };
 
