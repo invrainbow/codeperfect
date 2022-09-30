@@ -1548,6 +1548,46 @@ Command_Info command_info_table[_CMD_COUNT_];
 
 bool is_command_enabled(Command cmd) {
     switch (cmd) {
+    case CMD_BUILD_PROFILE_1:
+    case CMD_BUILD_PROFILE_2:
+    case CMD_BUILD_PROFILE_3:
+    case CMD_BUILD_PROFILE_4:
+    case CMD_BUILD_PROFILE_5:
+    case CMD_BUILD_PROFILE_6:
+    case CMD_BUILD_PROFILE_7:
+    case CMD_BUILD_PROFILE_8:
+    case CMD_BUILD_PROFILE_9:
+    case CMD_BUILD_PROFILE_10:
+    case CMD_BUILD_PROFILE_11:
+    case CMD_BUILD_PROFILE_12:
+    case CMD_BUILD_PROFILE_13:
+    case CMD_BUILD_PROFILE_14:
+    case CMD_BUILD_PROFILE_15:
+    case CMD_BUILD_PROFILE_16: {
+        int index = (int)cmd - CMD_BUILD_PROFILE_1;
+        return index < project_settings.build_profiles->len;
+    }
+
+    case CMD_DEBUG_PROFILE_1:
+    case CMD_DEBUG_PROFILE_2:
+    case CMD_DEBUG_PROFILE_3:
+    case CMD_DEBUG_PROFILE_4:
+    case CMD_DEBUG_PROFILE_5:
+    case CMD_DEBUG_PROFILE_6:
+    case CMD_DEBUG_PROFILE_7:
+    case CMD_DEBUG_PROFILE_8:
+    case CMD_DEBUG_PROFILE_9:
+    case CMD_DEBUG_PROFILE_10:
+    case CMD_DEBUG_PROFILE_11:
+    case CMD_DEBUG_PROFILE_12:
+    case CMD_DEBUG_PROFILE_13:
+    case CMD_DEBUG_PROFILE_14:
+    case CMD_DEBUG_PROFILE_15:
+    case CMD_DEBUG_PROFILE_16: {
+        int index = (int)cmd - CMD_DEBUG_PROFILE_1;
+        return index < project_settings.debug_profiles->len;
+    }
+
     case CMD_GO_FORWARD: {
         auto &hist = world.history;
         return hist.curr != hist.top;
@@ -1697,6 +1737,51 @@ ccstr get_command_name(Command cmd) {
     auto info = command_info_table[cmd];
 
     switch (cmd) {
+
+    case CMD_BUILD_PROFILE_1:
+    case CMD_BUILD_PROFILE_2:
+    case CMD_BUILD_PROFILE_3:
+    case CMD_BUILD_PROFILE_4:
+    case CMD_BUILD_PROFILE_5:
+    case CMD_BUILD_PROFILE_6:
+    case CMD_BUILD_PROFILE_7:
+    case CMD_BUILD_PROFILE_8:
+    case CMD_BUILD_PROFILE_9:
+    case CMD_BUILD_PROFILE_10:
+    case CMD_BUILD_PROFILE_11:
+    case CMD_BUILD_PROFILE_12:
+    case CMD_BUILD_PROFILE_13:
+    case CMD_BUILD_PROFILE_14:
+    case CMD_BUILD_PROFILE_15:
+    case CMD_BUILD_PROFILE_16: {
+        int index = (int)cmd - CMD_BUILD_PROFILE_1;
+        if (index >= project_settings.build_profiles->len) break; // shouldn't happen
+	    auto profile = project_settings.build_profiles->at(index);
+        return cp_sprintf("Build: %s", profile.label);
+    }
+
+    case CMD_DEBUG_PROFILE_1:
+    case CMD_DEBUG_PROFILE_2:
+    case CMD_DEBUG_PROFILE_3:
+    case CMD_DEBUG_PROFILE_4:
+    case CMD_DEBUG_PROFILE_5:
+    case CMD_DEBUG_PROFILE_6:
+    case CMD_DEBUG_PROFILE_7:
+    case CMD_DEBUG_PROFILE_8:
+    case CMD_DEBUG_PROFILE_9:
+    case CMD_DEBUG_PROFILE_10:
+    case CMD_DEBUG_PROFILE_11:
+    case CMD_DEBUG_PROFILE_12:
+    case CMD_DEBUG_PROFILE_13:
+    case CMD_DEBUG_PROFILE_14:
+    case CMD_DEBUG_PROFILE_15:
+    case CMD_DEBUG_PROFILE_16: {
+        int index = (int)cmd - CMD_DEBUG_PROFILE_1;
+        if (index >= project_settings.debug_profiles->len) break;
+	    auto profile = project_settings.debug_profiles->at(index);
+        return cp_sprintf("Start Debugging: %s", profile.label);
+    }
+
     case CMD_SAVE_FILE: {
         auto editor = get_current_editor();
         if (editor) {
@@ -2366,6 +2451,30 @@ void handle_command(Command cmd, bool from_menu) {
         kick_off_build();
         break;
 
+    case CMD_BUILD_PROFILE_1:
+    case CMD_BUILD_PROFILE_2:
+    case CMD_BUILD_PROFILE_3:
+    case CMD_BUILD_PROFILE_4:
+    case CMD_BUILD_PROFILE_5:
+    case CMD_BUILD_PROFILE_6:
+    case CMD_BUILD_PROFILE_7:
+    case CMD_BUILD_PROFILE_8:
+    case CMD_BUILD_PROFILE_9:
+    case CMD_BUILD_PROFILE_10:
+    case CMD_BUILD_PROFILE_11:
+    case CMD_BUILD_PROFILE_12:
+    case CMD_BUILD_PROFILE_13:
+    case CMD_BUILD_PROFILE_14:
+    case CMD_BUILD_PROFILE_15:
+    case CMD_BUILD_PROFILE_16: {
+        int index = (int)cmd - CMD_BUILD_PROFILE_1;
+        if (index >= project_settings.build_profiles->len) break; // shouldn't happen
+
+	    auto profile = &project_settings.build_profiles->items[index];
+        kick_off_build(profile);
+        break;
+    }
+
     case CMD_BUILD_RESULTS:
         world.error_list.show ^= 1;
         break;
@@ -2447,6 +2556,33 @@ void handle_command(Command cmd, bool from_menu) {
         save_all_unsaved_files();
         world.dbg.push_call(DLVC_START);
         break;
+
+    case CMD_DEBUG_PROFILE_1:
+    case CMD_DEBUG_PROFILE_2:
+    case CMD_DEBUG_PROFILE_3:
+    case CMD_DEBUG_PROFILE_4:
+    case CMD_DEBUG_PROFILE_5:
+    case CMD_DEBUG_PROFILE_6:
+    case CMD_DEBUG_PROFILE_7:
+    case CMD_DEBUG_PROFILE_8:
+    case CMD_DEBUG_PROFILE_9:
+    case CMD_DEBUG_PROFILE_10:
+    case CMD_DEBUG_PROFILE_11:
+    case CMD_DEBUG_PROFILE_12:
+    case CMD_DEBUG_PROFILE_13:
+    case CMD_DEBUG_PROFILE_14:
+    case CMD_DEBUG_PROFILE_15:
+    case CMD_DEBUG_PROFILE_16: {
+        int index = (int)cmd - CMD_DEBUG_PROFILE_1;
+        if (index >= project_settings.debug_profiles->len) break;
+
+        save_all_unsaved_files();
+        world.dbg.push_call(DLVC_START, [&](auto call) {
+            call->start.use_custom_profile = true;
+            call->start.profile_index = index;
+        });
+        break;
+    }
 
     case CMD_DEBUG_PROFILES:
         ui.open_project_settings();

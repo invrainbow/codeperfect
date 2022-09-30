@@ -1399,7 +1399,13 @@ void Debugger::do_everything() {
                         }
                     }
                 } else {
-                    debug_profile = project_settings.get_active_debug_profile();
+                    if (it.type == DLVC_START)
+                        if (it.start.use_custom_profile)
+                            if (it.start.profile_index < project_settings.debug_profiles->len)
+                                debug_profile = &project_settings.debug_profiles->items[it.start.profile_index];
+
+                    if (!debug_profile)
+                        debug_profile = project_settings.get_active_debug_profile();
                 }
 
                 if (!debug_profile) {
