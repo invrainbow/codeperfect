@@ -1079,7 +1079,6 @@ int realmain(int argc, char **argv) {
     t.log("enable debug mode");
 #endif
 
-
     read_auth();
 
     t.log("read auth");
