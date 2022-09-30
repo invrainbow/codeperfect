@@ -2639,7 +2639,10 @@ void UI::draw_everything() {
                     ImGui::Indent();
                     {
                         imgui_with_disabled(!tmp.format_on_save, [&]() {
-                            ImGui::Checkbox("Organize imports after formatting", &tmp.organize_imports_on_save);
+                            ImGui::Checkbox("Fix imports after formatting", &tmp.organize_imports_on_save);
+
+                            ImGui::SameLine();
+                            help_marker("This adds missing imports and removes unused ones.");
                         });
                     }
                     ImGui::Unindent();
