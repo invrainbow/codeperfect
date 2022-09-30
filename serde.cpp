@@ -63,19 +63,28 @@ void Serde::read_fixstr(char *out, int maxlen) {
     auto len = read_int();
     if (!ok) return;
 
-    if (maxlen < len) {
-        readn(out, maxlen);
-        if (!ok) return;
+    if (out) {
+        if (maxlen < len) {
+            readn(out, maxlen);
+            if (!ok) return;
 
-        // read remaining characters
-        for (int i = 0; i < len - maxlen; i++) {
+            // read remaining characters
+            for (int i = 0; i < len - maxlen; i++) {
+                char junk;
+                readn(&junk, 1);
+                if (!ok) return;
+            }
+        } else {
+            readn(out, len);
+            if (!ok) return;
+        }
+    } else {
+        // just eat entire string
+        for (int i = 0; i < len; i++) {
             char junk;
             readn(&junk, 1);
             if (!ok) return;
         }
-    } else {
-        readn(out, len);
-        if (!ok) return;
     }
 }
 
@@ -84,16 +93,21 @@ void Serde::read_type(void* out, int type) {
     int t = read_int();
     if (!ok) return;
 
-    if (t != type) {
+    if (type == -1) {
+        if (out) {
+            ok = false;
+            return;
+        }
+    } else if (t != type) {
         ok = false;
         return;
     }
 
     switch (type) {
-    case SERDE_INT: *(serde_int*)out = read_int(); return;
-    case SERDE_BOOL: *(serde_bool*)out = read_bool(); return;
-    case SERDE_FLOAT: *(serde_float*)out = read_float(); return;
-    case SERDE_STRING: *(serde_string*)out = read_string(); return;
+    case SERDE_STRING: { auto val = read_string(); if (out) *(serde_string*)out = val; return; }
+    case SERDE_INT:    { auto val = read_int();    if (out) *(serde_int*)out = val;    return; }
+    case SERDE_BOOL:   { auto val = read_bool();   if (out) *(serde_bool*)out = val;   return; }
+    case SERDE_FLOAT:  { auto val = read_float();  if (out) *(serde_float*)out = val;  return; }
     }
 
     while (true) {
@@ -101,8 +115,14 @@ void Serde::read_type(void* out, int type) {
         if (!ok) return;
         if (!field_id) break;
 
-        read_type_field(out, type, field_id);
+        bool was_something_read = read_type_field(out, type, field_id);
         if (!ok) break;
+
+        if (!was_something_read) {
+            // unrecognized field, eat the value
+            read_type(NULL, -1);
+            if (!ok) break;
+        }
     }
 }
 
@@ -226,20 +246,22 @@ void Serde::write_type(void* val, int type) {
 
 #define FIELD(id, field, type) \
     case id: \
-        read_type(&o->field, type); \
-        break
+        read_type(o ? &o->field : NULL, type); \
+        return true
 
 #define FIELD_ARR(id, field, ctype, type) \
-    case id: \
-        o->field = read_array<ctype>(type); \
-        break
+    case id: { \
+        auto arr = read_array<ctype>(type); \
+        if (o) o->field = arr; \
+        return true; \
+    }
 
 #define FIELD_FIXSTR(id, field) \
     case id: \
-        read_fixstr(o->field, _countof(o->field)); \
-        break
+        read_fixstr(o ? o->field : NULL, _countof(o->field)); \
+        return true
 
-void Serde::read_type_field(void* out, int type, int field_id) {
+bool Serde::read_type_field(void* out, int type, int field_id) {
     switch (type) {
     case SERDE_OPTIONS: {
         auto o = (Options*)out;
@@ -292,6 +314,7 @@ void Serde::read_type_field(void* out, int type, int field_id) {
     }
 
     }
+    return false;
 }
 
 #undef FIELD

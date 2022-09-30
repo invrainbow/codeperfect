@@ -52,7 +52,7 @@ struct Serde {
     serde_bool read_bool();
     serde_float read_float();
     serde_string read_string();
-    void read_type_field(void* out, int type, int field_id);
+    bool read_type_field(void* out, int type, int field_id);
     void read_type(void* out, int type);
     void read_fixstr(char *out, int maxlen);
 
@@ -75,6 +75,12 @@ struct Serde {
         T ret; ptr0(&ret);
         readn((char*)(&ret), sizeof(T));
         return ret;
+    }
+
+    template<typename T>
+    void read_out(T *out) {
+        auto val = read_primitive<T>();
+        if (out) *out = val;
     }
 
     template<typename T>
