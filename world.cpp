@@ -54,9 +54,7 @@ void History::push(int editor_id, cur2 pos) {
         return delta >= 10;
     };
 
-    if (!should_push()) {
-        return;
-    }
+    if (!should_push()) return;
 
     check_marks();
 
@@ -135,8 +133,8 @@ void History::check_marks(int upper) {
         auto node = it->node;
         while (node->parent)
             node = node->parent;
-        if (it->tree->root != node)
-            cp_panic("mark node is detached from root!");
+
+        if (it->tree->root != node) cp_panic("mark node is detached from root!");
     }
 #endif
 }
@@ -1550,6 +1548,56 @@ Command_Info command_info_table[_CMD_COUNT_];
 
 bool is_command_enabled(Command cmd) {
     switch (cmd) {
+    case CMD_BUILD_PROFILE_1:
+    case CMD_BUILD_PROFILE_2:
+    case CMD_BUILD_PROFILE_3:
+    case CMD_BUILD_PROFILE_4:
+    case CMD_BUILD_PROFILE_5:
+    case CMD_BUILD_PROFILE_6:
+    case CMD_BUILD_PROFILE_7:
+    case CMD_BUILD_PROFILE_8:
+    case CMD_BUILD_PROFILE_9:
+    case CMD_BUILD_PROFILE_10:
+    case CMD_BUILD_PROFILE_11:
+    case CMD_BUILD_PROFILE_12:
+    case CMD_BUILD_PROFILE_13:
+    case CMD_BUILD_PROFILE_14:
+    case CMD_BUILD_PROFILE_15:
+    case CMD_BUILD_PROFILE_16: {
+        int index = (int)cmd - CMD_BUILD_PROFILE_1;
+        return index < project_settings.build_profiles->len;
+    }
+
+    case CMD_DEBUG_PROFILE_1:
+    case CMD_DEBUG_PROFILE_2:
+    case CMD_DEBUG_PROFILE_3:
+    case CMD_DEBUG_PROFILE_4:
+    case CMD_DEBUG_PROFILE_5:
+    case CMD_DEBUG_PROFILE_6:
+    case CMD_DEBUG_PROFILE_7:
+    case CMD_DEBUG_PROFILE_8:
+    case CMD_DEBUG_PROFILE_9:
+    case CMD_DEBUG_PROFILE_10:
+    case CMD_DEBUG_PROFILE_11:
+    case CMD_DEBUG_PROFILE_12:
+    case CMD_DEBUG_PROFILE_13:
+    case CMD_DEBUG_PROFILE_14:
+    case CMD_DEBUG_PROFILE_15:
+    case CMD_DEBUG_PROFILE_16: {
+        int index = (int)cmd - CMD_DEBUG_PROFILE_1;
+        return index < project_settings.debug_profiles->len;
+    }
+
+    case CMD_GO_FORWARD: {
+        auto &hist = world.history;
+        return hist.curr != hist.top;
+    }
+
+    case CMD_GO_BACK: {
+        auto &hist = world.history;
+        return hist.curr != hist.start;
+    }
+
     case CMD_FIND:
         return (bool)get_current_editor();
 
@@ -1689,6 +1737,51 @@ ccstr get_command_name(Command cmd) {
     auto info = command_info_table[cmd];
 
     switch (cmd) {
+
+    case CMD_BUILD_PROFILE_1:
+    case CMD_BUILD_PROFILE_2:
+    case CMD_BUILD_PROFILE_3:
+    case CMD_BUILD_PROFILE_4:
+    case CMD_BUILD_PROFILE_5:
+    case CMD_BUILD_PROFILE_6:
+    case CMD_BUILD_PROFILE_7:
+    case CMD_BUILD_PROFILE_8:
+    case CMD_BUILD_PROFILE_9:
+    case CMD_BUILD_PROFILE_10:
+    case CMD_BUILD_PROFILE_11:
+    case CMD_BUILD_PROFILE_12:
+    case CMD_BUILD_PROFILE_13:
+    case CMD_BUILD_PROFILE_14:
+    case CMD_BUILD_PROFILE_15:
+    case CMD_BUILD_PROFILE_16: {
+        int index = (int)cmd - CMD_BUILD_PROFILE_1;
+        if (index >= project_settings.build_profiles->len) break; // shouldn't happen
+	    auto profile = project_settings.build_profiles->at(index);
+        return cp_sprintf("Build: %s", profile.label);
+    }
+
+    case CMD_DEBUG_PROFILE_1:
+    case CMD_DEBUG_PROFILE_2:
+    case CMD_DEBUG_PROFILE_3:
+    case CMD_DEBUG_PROFILE_4:
+    case CMD_DEBUG_PROFILE_5:
+    case CMD_DEBUG_PROFILE_6:
+    case CMD_DEBUG_PROFILE_7:
+    case CMD_DEBUG_PROFILE_8:
+    case CMD_DEBUG_PROFILE_9:
+    case CMD_DEBUG_PROFILE_10:
+    case CMD_DEBUG_PROFILE_11:
+    case CMD_DEBUG_PROFILE_12:
+    case CMD_DEBUG_PROFILE_13:
+    case CMD_DEBUG_PROFILE_14:
+    case CMD_DEBUG_PROFILE_15:
+    case CMD_DEBUG_PROFILE_16: {
+        int index = (int)cmd - CMD_DEBUG_PROFILE_1;
+        if (index >= project_settings.debug_profiles->len) break;
+	    auto profile = project_settings.debug_profiles->at(index);
+        return cp_sprintf("Start Debugging: %s", profile.label);
+    }
+
     case CMD_SAVE_FILE: {
         auto editor = get_current_editor();
         if (editor) {
@@ -1787,6 +1880,9 @@ void init_command_info_table() {
     command_info_table[CMD_ADD_ALL_XML_TAGS] = k(0, 0, "Struct: Add all XML tags");
     command_info_table[CMD_REMOVE_TAG] = k(0, 0, "Struct: Remove tag");
     command_info_table[CMD_REMOVE_ALL_TAGS] = k(0, 0, "Struct: Remove all tags");
+
+    command_info_table[CMD_GO_BACK] = k(CP_MOD_PRIMARY, CP_KEY_MINUS, "Go Back");
+    command_info_table[CMD_GO_FORWARD] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_MINUS, "Go Forward");
 }
 
 void do_find_interfaces() {
@@ -2292,7 +2388,7 @@ void handle_command(Command cmd, bool from_menu) {
         if (!editor) break;
         if (!editor->is_modifiable()) break;
 
-        editor->format_on_save(GH_FMT_GOIMPORTS);
+        editor->format_on_save(false);
         break;
     }
 
@@ -2302,9 +2398,9 @@ void handle_command(Command cmd, bool from_menu) {
         if (!editor->is_modifiable()) break;
 
         if (editor->optimize_imports())
-            editor->format_on_save(GH_FMT_GOIMPORTS);
+            editor->format_on_save(false);
         else
-            editor->format_on_save(GH_FMT_GOIMPORTS_WITH_AUTOIMPORT);
+            editor->format_on_save(true);
         break;
     }
 
@@ -2354,6 +2450,30 @@ void handle_command(Command cmd, bool from_menu) {
         save_all_unsaved_files();
         kick_off_build();
         break;
+
+    case CMD_BUILD_PROFILE_1:
+    case CMD_BUILD_PROFILE_2:
+    case CMD_BUILD_PROFILE_3:
+    case CMD_BUILD_PROFILE_4:
+    case CMD_BUILD_PROFILE_5:
+    case CMD_BUILD_PROFILE_6:
+    case CMD_BUILD_PROFILE_7:
+    case CMD_BUILD_PROFILE_8:
+    case CMD_BUILD_PROFILE_9:
+    case CMD_BUILD_PROFILE_10:
+    case CMD_BUILD_PROFILE_11:
+    case CMD_BUILD_PROFILE_12:
+    case CMD_BUILD_PROFILE_13:
+    case CMD_BUILD_PROFILE_14:
+    case CMD_BUILD_PROFILE_15:
+    case CMD_BUILD_PROFILE_16: {
+        int index = (int)cmd - CMD_BUILD_PROFILE_1;
+        if (index >= project_settings.build_profiles->len) break; // shouldn't happen
+
+	    auto profile = &project_settings.build_profiles->items[index];
+        kick_off_build(profile);
+        break;
+    }
 
     case CMD_BUILD_RESULTS:
         world.error_list.show ^= 1;
@@ -2436,6 +2556,33 @@ void handle_command(Command cmd, bool from_menu) {
         save_all_unsaved_files();
         world.dbg.push_call(DLVC_START);
         break;
+
+    case CMD_DEBUG_PROFILE_1:
+    case CMD_DEBUG_PROFILE_2:
+    case CMD_DEBUG_PROFILE_3:
+    case CMD_DEBUG_PROFILE_4:
+    case CMD_DEBUG_PROFILE_5:
+    case CMD_DEBUG_PROFILE_6:
+    case CMD_DEBUG_PROFILE_7:
+    case CMD_DEBUG_PROFILE_8:
+    case CMD_DEBUG_PROFILE_9:
+    case CMD_DEBUG_PROFILE_10:
+    case CMD_DEBUG_PROFILE_11:
+    case CMD_DEBUG_PROFILE_12:
+    case CMD_DEBUG_PROFILE_13:
+    case CMD_DEBUG_PROFILE_14:
+    case CMD_DEBUG_PROFILE_15:
+    case CMD_DEBUG_PROFILE_16: {
+        int index = (int)cmd - CMD_DEBUG_PROFILE_1;
+        if (index >= project_settings.debug_profiles->len) break;
+
+        save_all_unsaved_files();
+        world.dbg.push_call(DLVC_START, [&](auto call) {
+            call->start.use_custom_profile = true;
+            call->start.profile_index = index;
+        });
+        break;
+    }
 
     case CMD_DEBUG_PROFILES:
         ui.open_project_settings();
@@ -2768,6 +2915,13 @@ void handle_command(Command cmd, bool from_menu) {
         }
         break;
 
+    case CMD_GO_BACK:
+        world.history.go_backward();
+        break;
+
+    case CMD_GO_FORWARD:
+        world.history.go_forward();
+        break;
     }
 }
 
@@ -3252,7 +3406,7 @@ done_writing:
         GHFmtAddLine(rend.finish());
         GHFmtAddLine("");
 
-        auto new_contents = GHFmtFinish(GH_FMT_GOIMPORTS);
+        auto new_contents = GHFmtFinish(false);
         if (!new_contents) return;
         defer { GHFree(new_contents); };
 

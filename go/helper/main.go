@@ -5,7 +5,6 @@ import (
 	"encoding/gob"
 	"fmt"
 	"go/build"
-	"go/format"
 	"io"
 	"log"
 	"net"
@@ -202,14 +201,8 @@ func GHFmtAddLine(line *C.char) {
 	autofmtBuffer = append(autofmtBuffer, '\n')
 }
 
-const (
-	FmtGoFmt                   = 0
-	FmtGoImports               = 1
-	FmtGoImportsWithAutoImport = 2
-)
-
 //export GHFmtFinish
-func GHFmtFinish(fmtType int) *C.char {
+func GHFmtFinish(organizeImports bool) *C.char {
 	buflen := len(autofmtBuffer)
 	if buflen > 0 {
 		autofmtBuffer = autofmtBuffer[:buflen-1]
@@ -218,28 +211,13 @@ func GHFmtFinish(fmtType int) *C.char {
 	var newSource []byte
 	var err error
 
-	if fmtType == FmtGoFmt {
-		newSource, err = format.Source(autofmtBuffer)
-	} else if fmtType == FmtGoImports {
-		newSource, err = imports.Process("<standard input>", autofmtBuffer, &imports.Options{
-			TabWidth:   8,
-			TabIndent:  true,
-			Comments:   true,
-			Fragment:   true,
-			FormatOnly: true,
-		})
-	} else if fmtType == FmtGoImportsWithAutoImport {
-		newSource, err = imports.Process("<standard input>", autofmtBuffer, &imports.Options{
-			TabWidth:   8,
-			TabIndent:  true,
-			Comments:   true,
-			Fragment:   true,
-			FormatOnly: false,
-		})
-	} else {
-		LastError = fmt.Errorf("Invalid format type.")
-		return nil
-	}
+	newSource, err = imports.Process("<standard input>", autofmtBuffer, &imports.Options{
+		TabWidth:   8,
+		TabIndent:  true,
+		Comments:   true,
+		Fragment:   true,
+		FormatOnly: !organizeImports,
+	})
 
 	if err != nil {
 		LastError = fmt.Errorf("unable to format")

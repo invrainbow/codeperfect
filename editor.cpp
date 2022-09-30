@@ -655,7 +655,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
                 GHFmtAddLine(rend.finish());
                 GHFmtAddLine("");
 
-                auto new_contents = GHFmtFinish(GH_FMT_GOIMPORTS);
+                auto new_contents = GHFmtFinish(false);
                 if (!new_contents) break;
                 defer { GHFree(new_contents); };
 
@@ -2330,7 +2330,7 @@ bool Editor::optimize_imports() {
         GHFmtAddLine(rend.finish());
         GHFmtAddLine("");
 
-        auto new_contents = GHFmtFinish(GH_FMT_GOIMPORTS);
+        auto new_contents = GHFmtFinish(false);
         if (!new_contents) break;
         defer { GHFree(new_contents); };
 
@@ -2398,7 +2398,7 @@ bool Editor::optimize_imports() {
     return true;
 }
 
-void Editor::format_on_save(int fmt_type, bool write_to_nvim) {
+void Editor::format_on_save(bool fix_imports, bool write_to_nvim) {
     if (!is_go_file) return; // any more checks needed?
 
     auto old_cur = cur;
@@ -2425,7 +2425,7 @@ void Editor::format_on_save(int fmt_type, bool write_to_nvim) {
         GHFmtAddLine(line.items);
     }
 
-    auto new_contents = GHFmtFinish(fmt_type);
+    auto new_contents = GHFmtFinish(fix_imports);
     if (!new_contents) {
         saving = false;
         return;
@@ -2512,13 +2512,12 @@ void Editor::handle_save(bool about_to_close) {
             buf->enable_tree();
     }
 
-    if (options.format_on_save && !editor.file_was_deleted) {
+    if (options.format_on_save && !file_was_deleted) {
         bool use_goimports_autoimport = false;
         if (options.organize_imports_on_save)
             if (!optimize_imports())
                 use_goimports_autoimport = true;
-
-        format_on_save(use_goimports_autoimport ? GH_FMT_GOIMPORTS_WITH_AUTOIMPORT : GH_FMT_GOIMPORTS, !about_to_close);
+        format_on_save(use_goimports_autoimport);
     }
 
     // save to disk

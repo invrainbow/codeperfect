@@ -732,33 +732,14 @@ void handle_window_event(Window_Event *it) {
 #if !OS_WIN
             case CP_KEY_F:
 #endif
+            case CP_KEY_E:
+            case CP_KEY_Y:
+            case CP_KEY_V:
                 if (world.use_nvim)
                     if (world.nvim.mode != VI_INSERT)
                         send_nvim_keys(cp_sprintf("<C-%c>", tolower((char)key)));
                 break;
-            case CP_KEY_Y:
-                if (!editor) break;
-                if (!world.use_nvim) break;
-                if (world.nvim.mode == VI_INSERT) break;
-                if (editor->view.y > 0) {
-                    editor->view.y--;
-                    editor->ensure_cursor_on_screen();
-                }
-                break;
-            case CP_KEY_E:
-                if (!editor) break;
-                if (!world.use_nvim) break;
-                if (world.nvim.mode == VI_INSERT) break;
-                if (editor->view.y + 1 < editor->buf->lines.len) {
-                    editor->view.y++;
-                    editor->ensure_cursor_on_screen();
-                }
-                break;
-            case CP_KEY_V:
-                if (world.use_nvim)
-                    if (world.nvim.mode != VI_INSERT)
-                        send_nvim_keys("<C-v>");
-                break;
+
             case CP_KEY_SLASH: {
                 auto &nv = world.nvim;
                 nv.start_request_message("nvim_exec", 2);

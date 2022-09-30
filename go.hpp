@@ -31,7 +31,8 @@ extern "C" TSLanguage *tree_sitter_go();
 // version 31: version is fucked for some reason
 // version 32: get rid of GOTYPE_VARIADIC
 // version 33: fix embedded struct fields
-#define GO_INDEX_VERSION 33
+// version 34: fix import_decl_to_goimports()
+#define GO_INDEX_VERSION 34
 
 enum {
     CUSTOM_HASH_BUILTINS = 1,

@@ -507,6 +507,21 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                 world.history.go_backward();
             break;
         }
+        case NVIM_NOTIF_CUSTOM_SCROLLVIEW: {
+            auto editor = get_current_editor();
+            if (!editor) break;
+
+            int old = editor->view.y;
+            if (event->notification.custom_scrollview.forward) {
+                if (editor->view.y + 1 < editor->buf->lines.len)
+                    editor->view.y++;
+            } else {
+                if (editor->view.y > 0)
+                    editor->view.y--;
+            }
+            if (old != editor->view.y) editor->ensure_cursor_on_screen();
+            break;
+        }
         case NVIM_NOTIF_CUSTOM_PAGEJUMP:
         case NVIM_NOTIF_CUSTOM_HALFJUMP: {
             auto ed = get_current_editor();
@@ -905,6 +920,13 @@ void Nvim::run_event_loop() {
                     add_event([&](auto msg) {
                         msg->notification.type = NVIM_NOTIF_CUSTOM_HALFJUMP;
                         msg->notification.custom_halfjump.forward = forward;
+                    });
+                } else if (streq(cmd, "scrollview")) {
+                    ASSERT(num_args == 1);
+                    auto forward = (bool)reader.read_int();
+                    add_event([&](auto msg) {
+                        msg->notification.type = NVIM_NOTIF_CUSTOM_SCROLLVIEW;
+                        msg->notification.custom_scrollview.forward = forward;
                     });
                 } else if (streq(cmd, "pagejump")) {
                     ASSERT(num_args == 1);

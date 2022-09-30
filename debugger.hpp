@@ -219,6 +219,11 @@ struct Dlv_Call {
         } toggle_breakpoint;
 
         struct {
+            bool use_custom_profile;
+            int profile_index;
+        } start;
+
+        struct {
             u32 goroutine_id;
             u32 frame;
         } set_current_frame;

@@ -14,12 +14,6 @@ const int AUTOCOMPLETE_WINDOW_ITEMS = 10;
 #define MAX_BREAKPOINTS 128
 
 enum {
-    GH_FMT_GOFMT = 0,
-    GH_FMT_GOIMPORTS = 1,
-    GH_FMT_GOIMPORTS_WITH_AUTOIMPORT = 2,
-};
-
-enum {
     HINT_NAME,
     HINT_TYPE,
     HINT_NORMAL,
@@ -209,7 +203,7 @@ struct Editor {
     void update_lines(int firstline, int lastline, List<uchar*> *lines, List<s32> *line_lengths);
     bool trigger_escape(cur2 go_here_after = {-1, -1});
     bool optimize_imports();
-    void format_on_save(int fmt_type, bool write_to_nvim = true);
+    void format_on_save(bool fix_imports, bool write_to_nvim = true);
     void handle_save(bool about_to_close = false);
     bool is_current_editor();
     void backspace_in_insert_mode(int graphemes_to_erase, int codepoints_to_erase);

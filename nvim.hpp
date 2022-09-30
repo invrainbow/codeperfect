@@ -370,6 +370,7 @@ enum Nvim_Notification_Type {
     NVIM_NOTIF_CUSTOM_GET_VISUAL,
     NVIM_NOTIF_CUSTOM_HALFJUMP,
     NVIM_NOTIF_CUSTOM_PAGEJUMP,
+    NVIM_NOTIF_CUSTOM_SCROLLVIEW,
 };
 
 enum Screen_Pos {
@@ -437,6 +438,10 @@ struct Nvim_Message {
                 struct {
                     bool forward;
                 } custom_pagejump;
+
+                struct {
+                    bool forward;
+                } custom_scrollview;
 
                 struct {
                     bool forward;

@@ -146,6 +146,7 @@ ccstr get_key_name(int key) {
     case CP_KEY_LEFT_BRACKET: return "[";
     case CP_KEY_RIGHT_BRACKET: return "]";
     case CP_KEY_COMMA: return ",";
+    case CP_KEY_MINUS: return "-";
     }
     return NULL;
 }
@@ -2305,6 +2306,9 @@ void UI::draw_everything() {
         }
 
         if (ImGui::BeginMenu("Navigate")) {
+            menu_command(CMD_GO_BACK);
+            menu_command(CMD_GO_FORWARD);
+            ImGui::Separator();
             menu_command(CMD_GO_TO_FILE);
             menu_command(CMD_GO_TO_SYMBOL);
             menu_command(CMD_GO_TO_NEXT_ERROR);
@@ -2635,7 +2639,10 @@ void UI::draw_everything() {
                     ImGui::Indent();
                     {
                         imgui_with_disabled(!tmp.format_on_save, [&]() {
-                            ImGui::Checkbox("Organize imports after formatting", &tmp.organize_imports_on_save);
+                            ImGui::Checkbox("Fix imports after formatting", &tmp.organize_imports_on_save);
+
+                            ImGui::SameLine();
+                            help_marker("This adds missing imports and removes unused ones.");
                         });
                     }
                     ImGui::Unindent();
