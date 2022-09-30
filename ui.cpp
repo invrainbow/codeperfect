@@ -5804,7 +5804,7 @@ void UI::draw_everything() {
 
             // handle scrolling
             auto dy = ImGui::GetIO().MouseWheel;
-            if (dy) {
+            if (is_hovered && dy) {
                 bool flip = true;
                 if (dy < 0) {
                     flip = false;
