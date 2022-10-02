@@ -1854,13 +1854,15 @@ Go_Package *Go_Indexer::find_up_to_date_package(ccstr import_path) {
 }
 
 ccstr Go_Indexer::get_import_package_name(Go_Import *it) {
+    if (it->package_name_type == GPN_DOT)
+        return NULL;
+
     if (it->package_name_type == GPN_EXPLICIT)
         if (it->package_name)
             return it->package_name;
 
     auto pkg = find_up_to_date_package(it->import_path);
-    if (pkg)
-        return pkg->package_name;
+    if (pkg) return pkg->package_name;
 
     return NULL;
 }
@@ -2478,19 +2480,20 @@ Goresult *Go_Indexer::find_decl_of_id(ccstr id_to_find, cur2 id_pos, Go_Ctx *ctx
 
                 return res->wrap(type_params->at(decl->type_param_index).copy());
             }
-        }
 
-        For (*pkg->files) {
-            if (streq(it.filename, ctx->filename)) {
-                For (*it.imports) {
-                    auto package_name = get_import_package_name(&it);
-                    if (package_name && streq(package_name, id_to_find)) {
-                        if (single_import)
-                            *single_import = &it;
-                        return make_goresult(it.decl, ctx);
-                    }
+            For (*file->imports) {
+                if (it.package_name_type == GPN_DOT) {
+                    auto ret = find_decl_in_package(id_to_find, it.import_path);
+                    if (ret) return ret;
+                    continue;
                 }
-                break;
+
+                auto package_name = get_import_package_name(&it);
+                if (!package_name) continue;
+                if (!streq(package_name, id_to_find)) continue;
+
+                if (single_import) *single_import = &it;
+                return make_goresult(it.decl, ctx);
             }
         }
     }
@@ -3644,10 +3647,10 @@ List<Go_Import> *Go_Indexer::optimize_imports(ccstr filepath) {
     auto ctx = filepath_to_ctx(filepath);
     if (!ctx) return NULL;
 
+    /*
     String_Set package_refs; package_refs.init();
     String_Set full_refs; full_refs.init();
 
-    /*
     walk_ast_node(pf->root, true, [&](auto it, auto, auto) {
         Ast_Node *x = NULL, *sel = NULL;
 
@@ -3738,10 +3741,16 @@ List<Go_Import> *Go_Indexer::optimize_imports(ccstr filepath) {
 
     String_Set imported_package_names; imported_package_names.init();
     auto ret = alloc_list<Go_Import>();
+    auto dot_imports = alloc_list<Go_Import>();
 
     if (gofile->imports) {
         For (*gofile->imports) {
             auto package_name = get_import_package_name(&it);
+
+            if (it.package_name_type == GPN_DOT) {
+                dot_imports->append(&it);
+                continue;
+            }
 
             // leave _ imports alone
             if (it.package_name_type != GPN_BLANK)
@@ -3756,6 +3765,41 @@ List<Go_Import> *Go_Indexer::optimize_imports(ccstr filepath) {
     }
 
     t.log("get existing imports");
+
+
+    {
+        Table<ccstr> dot_names; dot_names.init();
+
+        For (*dot_imports) {
+            auto import_path = it.import_path;
+            auto decls = list_package_decls(import_path, LISTDECLS_PUBLIC_ONLY | LISTDECLS_EXCLUDE_METHODS);
+            For (*decls) dot_names.set(it.decl->name, import_path);
+        }
+
+        String_Set included_imports; included_imports.init();
+
+        // go thru references
+        For (*gofile->references) {
+            if (it.is_sel) continue;
+
+            // is the ref associated with an import path from our crawling of dot imports?
+            auto import_path = dot_names.get(it.name);
+            if (import_path) {
+                // does the ref actually point to that import path?
+                auto res = find_decl_of_id(it.name, it.start, ctx);
+                if (streq(import_path, res->ctx->import_path)) {
+                    // if so, check that import path off
+                    included_imports.add(import_path);
+                }
+            }
+        }
+
+        For (*dot_imports)
+            if (included_imports.has(it.import_path))
+                ret->append(&it);
+    }
+
+    t.log("handle dot imports");
 
     For (*pkgs) {
         if (imported_package_names.has(it.name)) continue;
@@ -5176,6 +5220,24 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
 
             t.log("add imports");
 
+            For (*gofile->imports) {
+                if (it.package_name_type != GPN_DOT) continue;
+                if (!it.import_path) continue;
+
+                auto decls = list_package_decls(it.import_path, LISTDECLS_PUBLIC_ONLY | LISTDECLS_EXCLUDE_METHODS);
+
+                For (*decls) {
+                    auto res = add_declaration_result(it.decl->name);
+                    if (!res) continue;
+
+                    res->declaration_godecl = it.decl;
+                    res->declaration_import_path = it.ctx->import_path;
+                    res->declaration_filename = it.ctx->filename;
+                }
+            }
+
+            t.log("add decls from dot imports");
+
             Parser_It it = *pf->it;
             it.set_pos(keyword_start);
 
@@ -5192,6 +5254,8 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
 
             if (has_three_letters) {
                 For (*gofile->imports) {
+                    if (it.package_name_type == GPN_DOT) continue;
+
                     auto pkgname = get_import_package_name(&it);
                     if (!pkgname) continue;
 
