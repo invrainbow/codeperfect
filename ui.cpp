@@ -6581,7 +6581,7 @@ void UI::draw_everything() {
                     cur_pos.x += settings.line_number_margin_left;
                     ccstr line_number_str = cp_sprintf("%*d", line_number_width, start + 1);
                     for (auto p = line_number_str; *p; p++)
-                        draw_char(&cur_pos, *p, rgba(global_colors.foreground, 0.15));
+                        draw_char(&cur_pos, *p, rgba(global_colors.foreground, 0.3));
                     cur_pos.x += settings.line_number_margin_right;
                 }
 
@@ -6605,7 +6605,7 @@ void UI::draw_everything() {
                         cur_pos.x += base_font->width * gw;
                         vx += gw;
                     } else {
-                        int gw = draw_char(&cur_pos, grapheme, rgba(global_colors.foreground, 0.2));
+                        int gw = draw_char(&cur_pos, grapheme, rgba(global_colors.foreground, 0.6));
                         if (gw != -1) vx += gw;
                     }
                 }
