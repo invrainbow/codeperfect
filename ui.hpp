@@ -358,6 +358,10 @@ struct Global_Colors {
     vec3f status_index_ready_foreground;
     vec3f status_index_indexing_background;
     vec3f status_index_indexing_foreground;
+
+    vec4f preview_background;
+    vec4f preview_border;
+    vec4f preview_foreground;
 };
 
 extern Global_Colors global_colors;
@@ -367,3 +371,5 @@ ccstr format_key(int mods, ccstr key, bool icon = false);
 void random_macos_tests();
 
 void trigger_file_search(int limit_start = -1, int limit_end = -1);
+
+vec3f merge_colors(vec3f a, vec3f b, float perc);

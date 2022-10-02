@@ -195,6 +195,15 @@ int get_line_number_width(Editor *editor) {
     return max(4, (int)log10(maxval) + 1);
 }
 
+vec3f merge_colors(vec3f a, vec3f b, float perc) {
+    vec3f ret; ptr0(&ret);
+
+    ret.r = a.r + (b.r - a.r) * perc;
+    ret.g = a.g + (b.g - a.g) * perc;
+    ret.b = a.b + (b.b - a.b) * perc;
+    return ret;
+}
+
 vec3f rgb_hex(ccstr s) {
     if (s[0] == '#') s++;
 
@@ -2652,12 +2661,12 @@ void UI::draw_everything() {
                     ImGui::Text("Scroll offset");
                     ImGui::SameLine();
                     help_marker("The number of lines the editor will keep between your cursor and the top/bottom of the screen.");
-                    ImGui::SliderInt("###scroll_offset", &tmp.scrolloff, 0, 10);
+                    ImGui::InputInt("###scroll_offset", &tmp.scrolloff);
                     */
 
                     imgui_small_newline();
                     ImGui::Text("Tab size");
-                    ImGui::SliderInt("###tab_size", &tmp.tabsize, 1, 8);
+                    ImGui::InputInt("###tab_size", &tmp.tabsize);
                 }
                 imgui_pop_font();
                 ImGui::PopItemWidth();
@@ -5260,24 +5269,24 @@ void UI::draw_everything() {
 
         if (ImGui::BeginTabBar("style_editor_tabbar", 0)) {
             if (ImGui::BeginTabItem("Margins & Padding", NULL, 0)) {
-                ImGui::SliderInt("status_padding_x", &settings.status_padding_x, 0.0, 20.0f, "%d");
-                ImGui::SliderInt("status_padding_y", &settings.status_padding_y, 0.0, 20.0f, "%d");
-                ImGui::SliderInt("line_number_margin_left", &settings.line_number_margin_left, 0.0, 20.0f, "%d");
-                ImGui::SliderInt("line_number_margin_right", &settings.line_number_margin_right, 0.0, 20.0f, "%d");
-                ImGui::SliderInt("autocomplete_menu_padding", &settings.autocomplete_menu_padding, 0.0, 20.0f, "%d");
-                ImGui::SliderInt("autocomplete_item_padding_x", &settings.autocomplete_item_padding_x, 0.0, 20.0f, "%d");
-                ImGui::SliderInt("autocomplete_item_padding_y", &settings.autocomplete_item_padding_y, 0.0, 20.0f, "%d");
-                ImGui::SliderInt("tabs_offset", &settings.tabs_offset, 0.0, 20.0f, "%d");
-                ImGui::SliderInt("parameter_hint_margin_y", &settings.parameter_hint_margin_y, 0, 0, "%d");
-                ImGui::SliderInt("parameter_hint_padding_x", &settings.parameter_hint_padding_x, 0, 0, "%d");
-                ImGui::SliderInt("parameter_hint_padding_y", &settings.parameter_hint_padding_y, 0, 0, "%d");
-                ImGui::SliderInt("editor_margin_x", &settings.editor_margin_x, 0, 0, "%d");
-                ImGui::SliderInt("editor_margin_y", &settings.editor_margin_y, 0, 0, "%d");
-                ImGui::SliderFloat("line_height", &settings.line_height, 0, 0, "%f");
-                ImGui::SliderInt("goto_file_max_results", &settings.goto_file_max_results, 0, 0, "%d");
-                ImGui::SliderInt("goto_symbol_max_results", &settings.goto_symbol_max_results, 0, 0, "%d");
-                ImGui::SliderInt("generate_implementation_max_results", &settings.generate_implementation_max_results, 0, 0, "%d");
-                ImGui::SliderInt("run_command_max_results", &settings.run_command_max_results, 0, 0, "%d");
+                ImGui::InputInt("status_padding_x", &settings.status_padding_x);
+                ImGui::InputInt("status_padding_y", &settings.status_padding_y);
+                ImGui::InputInt("line_number_margin_left", &settings.line_number_margin_left);
+                ImGui::InputInt("line_number_margin_right", &settings.line_number_margin_right);
+                ImGui::InputInt("autocomplete_menu_padding", &settings.autocomplete_menu_padding);
+                ImGui::InputInt("autocomplete_item_padding_x", &settings.autocomplete_item_padding_x);
+                ImGui::InputInt("autocomplete_item_padding_y", &settings.autocomplete_item_padding_y);
+                ImGui::InputInt("tabs_offset", &settings.tabs_offset);
+                ImGui::InputInt("parameter_hint_margin_y", &settings.parameter_hint_margin_y);
+                ImGui::InputInt("parameter_hint_padding_x", &settings.parameter_hint_padding_x);
+                ImGui::InputInt("parameter_hint_padding_y", &settings.parameter_hint_padding_y);
+                ImGui::InputInt("editor_margin_x", &settings.editor_margin_x);
+                ImGui::InputInt("editor_margin_y", &settings.editor_margin_y);
+                ImGui::InputFloat("line_height", &settings.line_height, 0.01, 0.1, "%.3f");
+                ImGui::InputInt("goto_file_max_results", &settings.goto_file_max_results);
+                ImGui::InputInt("goto_symbol_max_results", &settings.goto_symbol_max_results);
+                ImGui::InputInt("generate_implementation_max_results", &settings.generate_implementation_max_results);
+                ImGui::InputInt("run_command_max_results", &settings.run_command_max_results);
                 ImGui::EndTabItem();
             }
 
@@ -5330,9 +5339,15 @@ void UI::draw_everything() {
                 ImGui::ColorEdit3("status_index_indexing_background", (float*)&global_colors.status_index_indexing_background);
                 ImGui::ColorEdit3("status_index_indexing_foreground", (float*)&global_colors.status_index_indexing_foreground);
 
+                ImGui::ColorEdit4("preview_background", (float*)&global_colors.preview_background);
+                ImGui::ColorEdit4("preview_border", (float*)&global_colors.preview_border);
+                ImGui::ColorEdit4("preview_foreground", (float*)&global_colors.preview_foreground);
+
                 if (ImGui::Button("Save to disk")) {
                     File f;
-                    f.init_write("/Users/brandon/.cpcolors");
+                    auto filepath = path_join(cp_dirname(cp_dirname(cp_dirname(get_executable_path()))), ".cpcolors");
+                    print("%s", filepath);
+                    f.init_write(filepath); // "/Users/bh/brandon/.cpcolors"
                     f.write((char*)&global_colors, sizeof(global_colors));
                     f.cleanup();
                 }
@@ -6499,10 +6514,16 @@ void UI::draw_everything() {
             }
 
             auto is_hovered = test_hover(preview_area, HOVERID_EDITOR_PREVIEWS + editor_index);
-            if (is_hovered)
-                draw_rect(preview_area, rgba(global_colors.white, 0.1));
-            else
-                draw_rect(preview_area, rgba(global_colors.white, 0.05));
+
+            // draw box
+            {
+                auto b = preview_area;
+
+                b.h++;
+                draw_rect(b, global_colors.preview_border);
+                b.h--;
+                draw_rect(b, rgba(merge_colors(global_colors.background, global_colors.preview_background.rgb, global_colors.preview_background.a * (is_hovered ? 1.2 : 1))));
+            }
 
             // render toplevel first line if it's offscreen
             do {
@@ -6581,7 +6602,7 @@ void UI::draw_everything() {
                     cur_pos.x += settings.line_number_margin_left;
                     ccstr line_number_str = cp_sprintf("%*d", line_number_width, start + 1);
                     for (auto p = line_number_str; *p; p++)
-                        draw_char(&cur_pos, *p, rgba(global_colors.foreground, 0.3));
+                        draw_char(&cur_pos, *p, rgba(global_colors.preview_foreground.rgb, global_colors.preview_foreground.a * 0.7));
                     cur_pos.x += settings.line_number_margin_right;
                 }
 
@@ -6605,7 +6626,7 @@ void UI::draw_everything() {
                         cur_pos.x += base_font->width * gw;
                         vx += gw;
                     } else {
-                        int gw = draw_char(&cur_pos, grapheme, rgba(global_colors.foreground, 0.6));
+                        int gw = draw_char(&cur_pos, grapheme, global_colors.preview_foreground);
                         if (gw != -1) vx += gw;
                     }
                 }
