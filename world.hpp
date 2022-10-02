@@ -7,7 +7,7 @@
 #include "ui.hpp"
 #include "os.hpp"
 #include "go.hpp"
-#include "debugger.hpp"
+#include "dbg.hpp"
 #include "nvim.hpp"
 #include "utils.hpp"
 #include "imgui.h"

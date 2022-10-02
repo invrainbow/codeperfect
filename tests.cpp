@@ -1,6 +1,6 @@
 #include "buffer.hpp"
 #include "common.hpp"
-#include "debugger.hpp"
+#include "dbg.hpp"
 #include "editor.hpp"
 #include "go.hpp"
 #include "mem.hpp"

@@ -18,7 +18,7 @@ when a frame is opened
 */
 
 #include "defer.hpp"
-#include "debugger.hpp"
+#include "dbg.hpp"
 
 #include "world.hpp"
 #include "os.hpp"

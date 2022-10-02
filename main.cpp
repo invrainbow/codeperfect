@@ -14,7 +14,7 @@
 #include <utility>
 
 #include "common.hpp"
-#include "debugger.hpp"
+#include "dbg.hpp"
 #include "defer.hpp"
 #include "editor.hpp"
 #include "enums.hpp"

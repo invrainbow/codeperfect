@@ -13,7 +13,7 @@
 #include "common.hpp"
 #include "editor.hpp"
 #include "list.hpp"
-#include "debugger.hpp"
+#include "dbg.hpp"
 #include "hash.hpp"
 
 #define CODE_FONT_SIZE 14
