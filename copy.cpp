@@ -3,6 +3,7 @@
 #include "copy.hpp"
 #include "settings.hpp"
 #include "go.hpp"
+#include "dbg.hpp"
 
 // -----
 // stupid c++ template shit
@@ -368,5 +369,38 @@ Find_References_Result *Find_References_Result::copy() {
     ret->reference = copy_object(reference);
     ret->toplevel_name = cp_strdup(toplevel_name);
     return ret;
+}
 
+Dlv_Var *Dlv_Var::copy() {
+    auto ret = clone(this);
+    ret->name = cp_strdup(name);
+    ret->type = cp_strdup(type);
+    ret->real_type = cp_strdup(real_type);
+    ret->value = cp_strdup(value);
+    ret->unreadable_description = cp_strdup(unreadable_description);
+    ret->children = copy_listp(children);
+    return ret;
+}
+
+Dlv_Frame *Dlv_Frame::copy() {
+    auto ret = clone(this);
+    ret->locals = copy_listp(locals);
+    ret->args = copy_listp(args);
+    ret->filepath = cp_strdup(filepath);
+    ret->func_name = cp_strdup(func_name);
+    return ret;
+}
+
+Dlv_Goroutine *Dlv_Goroutine::copy() {
+    auto ret = clone(this);
+    ret->frames = copy_list(frames);
+    ret->curr_file = cp_strdup(curr_file);
+    ret->curr_func_name = cp_strdup(curr_func_name);
+    return ret;
+}
+
+Debugger_State *Debugger_State::copy() {
+    auto ret = clone(this);
+    ret->goroutines = copy_list(goroutines);
+    return ret;
 }

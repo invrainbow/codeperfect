@@ -104,7 +104,6 @@ enum Dlv_Call_Type {
     DLVC_BREAK_ALL,
     DLVC_STOP,
     DLVC_SET_CURRENT_FRAME,
-    DLVC_SET_CURRENT_GOROUTINE,
     DLVC_DELETE_ALL_BREAKPOINTS,
     DLVC_VAR_LOAD_MORE,
     DLVC_CREATE_WATCH,
@@ -150,6 +149,7 @@ enum {
 	DLV_VAR_ARGUMENT = 1 << 3,
 	DLV_VAR_RETURNARGUMENT = 1 << 4,
 	DLV_VAR_FAKEADDRESS = 1 << 5,
+	DLV_VAR_CANTREAD = 1 << 6,
 };
 
 struct Dlv_Var {
@@ -161,13 +161,14 @@ struct Dlv_Var {
     int len;
     int cap;
     ccstr value; // do we need anything deeper than this?
-    List<Dlv_Var>* children;
+    List<Dlv_Var*>* children;
     bool is_shadowed;
     u64 address;
     bool only_addr; // for interface types
     ccstr unreadable_description;
 
     bool incomplete();
+    Dlv_Var *copy();
 };
 
 enum Dlv_Watch_State {
@@ -183,7 +184,7 @@ struct Dlv_Watch {
     bool open_before_editing;
     bool edit_first_frame;
     Dlv_Watch_State state;
-    Dlv_Var value;
+    Dlv_Var *value;
     bool fresh;
     bool deleted;
 };
@@ -192,9 +193,11 @@ struct Dlv_Frame {
     ccstr filepath;
     u32 lineno;
     ccstr func_name;
-    List<Dlv_Var> *locals;
-    List<Dlv_Var> *args;
+    List<Dlv_Var*> *locals;
+    List<Dlv_Var*> *args;
     bool fresh;
+
+    Dlv_Frame *copy();
 };
 
 struct Dlv_Goroutine {
@@ -208,6 +211,8 @@ struct Dlv_Goroutine {
     int thread_id;
     bool breakpoint_hit;
     bool fresh;
+
+    Dlv_Goroutine *copy();
 };
 
 struct Dlv_Call {
@@ -229,10 +234,6 @@ struct Dlv_Call {
         } set_current_frame;
 
         struct {
-            u32 goroutine_id;
-        } set_current_goroutine;
-
-        struct {
             u32 frame;
         } eval_watches;
 
@@ -243,7 +244,8 @@ struct Dlv_Call {
 
         struct {
             int state_id;
-            Dlv_Var *var;
+            Dlv_Var **var;
+            bool is_watch;
         } var_load_more;
 
         struct {
@@ -268,10 +270,19 @@ enum Save_Var_Mode {
     SAVE_VAR_VALUE_APPEND,
 };
 
+struct Debugger_State {
+    List<Dlv_Goroutine> *goroutines;
+    i32 current_goroutine_id;
+    i32 current_frame;
+
+    Debugger_State *copy();
+};
+
 struct Debugger {
     Pool mem;
-    Pool loop_mem;   // throwaway memory for miscellaneous operations inside loop
-    Pool state_mem;  // memory for holding state info; torn down & rebuilt every time state changes.
+    Pool loop_mem;
+    Pool state_mem_a;
+    Pool state_mem_b;
     Pool breakpoints_mem;
     Pool watches_mem;
     Pool stdout_mem;
@@ -297,11 +308,10 @@ struct Debugger {
 
     Dlv_State state_flag;
     bool exiting;
-    struct {
-        List<Dlv_Goroutine> goroutines;
-        i32 current_goroutine_id;
-        i32 current_frame;
-    } state;
+
+    Debugger_State *state;
+    bool which_state_pool;
+
     bool waiting_for_dlv_state;
 
     // shit for piping stuff out of stdout
@@ -338,9 +348,8 @@ struct Debugger {
     List<Breakpoint>* list_breakpoints();
     bool eval_expression(ccstr expression, i32 goroutine_id, i32 frame, Dlv_Var* out, Save_Var_Mode save_mode = SAVE_VAR_NORMAL);
     void eval_watch(Dlv_Watch *watch, int goroutine_id, int frame);
-    i32 get_current_goroutine_id();
 
-    void save_list_of_vars(Json_Navigator js, i32 idx, List<Dlv_Var>* out);
+    void save_list_of_vars(Json_Navigator js, i32 idx, List<Dlv_Var*>* out);
     void save_single_var(Json_Navigator js, i32 idx, Dlv_Var* out, Save_Var_Mode save_mode = SAVE_VAR_NORMAL);
     void start_loop();
     void do_everything();
@@ -350,14 +359,11 @@ struct Debugger {
     void push_call(Dlv_Call_Type type, fn<void(Dlv_Call *call)> f);
     void push_call(Dlv_Call_Type type);
 
-    void fetch_stackframe(Dlv_Goroutine *goroutine);
-    void fetch_variables(int goroutine_id, int frame, Dlv_Frame *dlvframe);
-    bool fetch_goroutines();
     void handle_new_state(Packet *p);
     void pause_and_resume(fn<void()> f);
     void halt_when_already_running();
     void select_frame(u32 goroutine_id, u32 frame);
-    void set_current_goroutine(u32 goroutine_id);
+    void mutate_state(fn<void(Debugger_State *draft)> cb);
 
     void pipe_stdout_into_our_buffer();
 };

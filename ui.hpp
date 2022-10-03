@@ -86,7 +86,7 @@ enum Dbg_Index_Type {
 };
 
 struct Draw_Debugger_Var_Args {
-    Dlv_Var *var;
+    Dlv_Var **var;
     Dbg_Index_Type index_type;
     union {
         int index;
