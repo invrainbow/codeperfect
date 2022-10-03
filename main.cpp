@@ -1008,6 +1008,14 @@ void handle_window_event(Window_Event *it) {
 int realmain(int argc, char **argv) {
     is_main_thread = true;
 
+#if DEBUG_BUILD
+    {
+        Pool mem; mem.init();
+        mem.owns_address(0);
+        mem.cleanup();
+    }
+#endif
+
     gargc = argc;
     gargv = argv;
 
