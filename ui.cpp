@@ -5690,6 +5690,8 @@ void UI::draw_everything() {
             editor_area_considering_pane_resizers.x += PANE_RESIZER_WIDTH / 2;
             editor_area_considering_pane_resizers.w -= PANE_RESIZER_WIDTH;
 
+            bool is_dragging = false;
+
             // handle dragging text above/below the area
             do {
                 if (!editor->mouse_selecting) break;
@@ -5700,8 +5702,11 @@ void UI::draw_everything() {
 
                 if (pos.y >= area.y && pos.y <= area.y + area.h) break;
 
-                auto now = current_time_milli();
+                is_dragging = true;
 
+                auto now = current_time_milli();
+                if (editor->mouse_drag_last_time_ms == -1)
+                    editor->mouse_drag_last_time_ms = now;
                 i64 delta = now - editor->mouse_drag_last_time_ms;
                 if (pos.y < area.y) delta = -delta;
 
@@ -5736,6 +5741,11 @@ void UI::draw_everything() {
 
                 if (cur != old_cur) editor->move_cursor(cur);
             } while (0);
+
+            if (!is_dragging) {
+                editor->mouse_drag_last_time_ms = -1;
+                editor->mouse_drag_accum = 0;
+            }
 
             auto is_hovered = test_hover(editor_area_considering_pane_resizers, HOVERID_EDITORS + current_pane, ImGuiMouseCursor_TextInput);
 
