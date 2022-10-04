@@ -305,6 +305,14 @@ struct File_Search_Match {
     List<cur2> *group_ends;
 };
 
+struct Drawn_Quad {
+    boxf b;
+    vec4f color;
+    Draw_Mode mode;
+    Texture_Id texture;
+    ccstr backtrace;
+};
+
 struct World {
     Pool world_mem;
     Pool frame_mem;
@@ -719,6 +727,13 @@ struct World {
 
     struct Wnd_Style_Editor : Wnd {
     } wnd_style_editor;
+
+    struct Wnd_Poor_Mans_Gpu_Debugger : Wnd {
+        bool tracking;
+        Pool mem;
+        List<Drawn_Quad> *logs;
+        int selected_quad;
+    } wnd_poor_mans_gpu_debugger;
 
     void init();
     void start_background_threads();

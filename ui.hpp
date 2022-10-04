@@ -46,7 +46,6 @@ struct Vert {
 #define ROUND_BR (1 << 3)
 #define ROUND_ALL (ROUND_TL | ROUND_BL | ROUND_TR | ROUND_BR)
 
-// these names are shit lol
 enum Draw_Mode {
     DRAW_SOLID = 0,         // draw solid color
     DRAW_FONT_MASK = 1,     // draw color using texture(...).r as mask

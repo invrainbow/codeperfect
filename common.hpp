@@ -224,6 +224,12 @@ struct vec3f {
         };
     };
 
+    bool equals(vec3f v) {
+        return v.x == x && v.y == y && v.z == z;
+    }
+
+    bool operator==(vec3f v) { return equals(v); }
+    bool operator!=(vec3f v) { return !equals(v); }
     ccstr str();
 };
 
@@ -277,6 +283,12 @@ struct vec4f {
         };
     };
 
+    bool equals(vec4f b) {
+        return b.xyz == xyz && b.w == w;
+    }
+
+    bool operator==(vec4f b) { return equals(b); }
+    bool operator!=(vec4f b) { return !equals(b); }
     ccstr str();
 };
 
@@ -310,6 +322,17 @@ struct boxf {
             vec2f size;
         };
     };
+
+    bool equals(boxf b) {
+        if (b.x != x) return false;
+        if (b.y != y) return false;
+        if (b.w != w) return false;
+        if (b.h != h) return false;
+        return true;
+    }
+
+    bool operator!=(boxf b) { return !equals(b); }
+    bool operator==(boxf b) { return equals(b); }
 
     ccstr str();
     bool contains(vec2f point);

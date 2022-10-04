@@ -21,6 +21,10 @@
 #include "tree_sitter_crap.hpp"
 #include "binaries.h"
 
+#if OS_MAC
+#include <execinfo.h>
+#endif
+
 void open_ft_node(FT_Node *it);
 
 UI ui;
@@ -861,6 +865,51 @@ void UI::draw_quad(boxf b, boxf uv, vec4f color, Draw_Mode mode, Texture_Id text
         mode,
         texture
     );
+
+#if OS_MAC
+    auto &wnd = world.wnd_poor_mans_gpu_debugger;
+    do {
+        if (!wnd.tracking) break;
+
+        if (!b.contains(world.ui.mouse_pos)) break;
+
+        auto existing = wnd.logs->find([&](auto it) -> bool {
+            if (it->b != b) return false;
+            if (it->color != color) return false;
+            if (it->mode != mode) return false;
+            if (it->texture != texture) return false;
+
+            return true;
+        });
+
+        // if it already exists, get out
+        if (existing) break;
+
+        Text_Renderer r; r.init();
+
+        void *array[128];
+        auto size = backtrace(array, 128);
+        auto strings = backtrace_symbols(array, size);
+        if (!strings) break;
+        defer { free(strings); };
+
+        for (u32 i = 0; i < size; i++)
+            r.write("%s\n", strings[i]);
+
+        auto output = r.finish();
+
+        Drawn_Quad item; ptr0(&item);
+        item.b = b;
+        item.color = color;
+        item.mode = mode;
+        item.texture = texture;
+        {
+            SCOPED_MEM(&wnd.mem);
+            item.backtrace = cp_strdup(output);
+        }
+        wnd.logs->append(&item);
+    } while (0);
+#endif
 }
 
 void UI::draw_rect(boxf b, vec4f color) {
@@ -2471,6 +2520,7 @@ void UI::draw_everything() {
             ImGui::MenuItem("Hover Info", NULL, &world.wnd_hover_info.show);
             ImGui::MenuItem("Show frame index", NULL, &world.show_frame_index);
             ImGui::MenuItem("Show frameskips", NULL, &world.show_frameskips);
+            ImGui::MenuItem("Poor man's GPU debugger", NULL, &world.wnd_poor_mans_gpu_debugger.show);
 
             ImGui::Separator();
 
@@ -6292,6 +6342,7 @@ void UI::draw_everything() {
                 cur2 start;
                 cur2 end;
             } highlight_snippet;
+            ptr0(&highlight_snippet);
 
             if (editor->highlight_snippet_state.on) {
                 double t = (current_time_milli() - editor->highlight_snippet_state.time_start_milli);
@@ -6968,6 +7019,87 @@ void UI::draw_everything() {
         ImGui::End();
         fstlog("wnd_hover_info");
     }
+
+#ifdef DEBUG_BUILD
+    if (world.wnd_poor_mans_gpu_debugger.show) {
+        auto &wnd = world.wnd_poor_mans_gpu_debugger;
+
+        begin_window("Poor man's GPU debugger", &wnd);
+
+        if (wnd.tracking) {
+            if (ImGui::Button("stop tracking")) {
+                wnd.tracking = false;
+            }
+        } else {
+            if (ImGui::Button("start tracking")) {
+                wnd.mem.cleanup();
+                wnd.mem.init();
+                {
+                    SCOPED_MEM(&wnd.mem);
+                    wnd.logs = alloc_list<Drawn_Quad>();
+                }
+                wnd.selected_quad = -1;
+                wnd.tracking = true;
+            }
+        }
+
+        if (wnd.logs) {
+            ImGui::SameLine();
+
+            Drawn_Quad *sel = NULL;
+            if (wnd.selected_quad != -1)
+                sel = &wnd.logs->at(wnd.selected_quad);
+
+            auto render_drawn_quad = [&](auto q) {
+                ccstr texture_str = texture_id_str(q->texture);
+                if (!texture_str)
+                    texture_str = cp_sprintf("%d", q->texture);
+
+                auto col = q->color;
+
+                return cp_sprintf(
+                     "%dx%d at (%d,%d), color = #%02x%02x%02x, mode = %s, texture = %s",
+                    (int)q->b.w, (int)q->b.h,
+                    (int)q->b.pos.x, (int)q->b.pos.y,
+                    (int)(col.r*255), (int)(col.g*255), (int)(col.b*255),
+                    draw_mode_str(q->mode),
+                    texture_str
+                );
+            };
+
+            if (ImGui::BeginCombo("###quad_picker", sel ? render_drawn_quad(sel) : NULL, 0)) {
+                Fori (*wnd.logs) {
+                    bool selected = (i == wnd.selected_quad);
+                    if (ImGui::Selectable(render_drawn_quad(&it), selected))
+                        wnd.selected_quad = i;
+                    if (selected)
+                        ImGui::SetItemDefaultFocus();
+                }
+                ImGui::EndCombo();
+            }
+
+            if (sel) {
+                ImGui::SameLine();
+
+                auto color = to_imcolor(sel->color);
+                ImGui::PushStyleColor(ImGuiCol_Button, color);
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, color);
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, color);
+                ImGui::Button(" ");
+                ImGui::PopStyleColor(3);
+
+                imgui_push_mono_font();
+                ImGui::InputTextMultiline(
+                    "##backtrace", (char*)sel->backtrace, strlen(sel->backtrace),
+                    ImVec2(-FLT_MIN, ImGui::GetTextLineHeight() * 16),
+                    ImGuiInputTextFlags_ReadOnly);
+                imgui_pop_font();
+            }
+        }
+
+        ImGui::End();
+    }
+#endif
 
     if (world.show_frameskips) {
         auto now = current_time_milli();
