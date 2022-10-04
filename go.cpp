@@ -3491,15 +3491,18 @@ List<Find_References_File> *Go_Indexer::actually_find_references(Goresult *declr
 
         bool same_package = streq(pkg->import_path, ctx->import_path);
 
-        ccstr package_name_we_want;
+        ccstr package_name_we_want = NULL;
+        bool package_is_dot = false;
+
         if (!same_package && case_type == CASE_NORMAL) {
             For (*file->imports) {
-                // TODO: handle dot
-                if (it.package_name_type == GPN_DOT) continue;
                 if (it.package_name_type == GPN_BLANK) continue;
 
                 if (streq(it.import_path, ctx->import_path)) {
-                    package_name_we_want = get_import_package_name(&it);
+                    if (it.package_name_type == GPN_DOT)
+                        package_is_dot = true;
+                    else
+                        package_name_we_want = get_import_package_name(&it);
                     break;
                 }
             }
@@ -3550,9 +3553,13 @@ List<Find_References_File> *Go_Indexer::actually_find_references(Goresult *declr
             switch (case_type) {
             case CASE_NORMAL:
                 if (!same_package) {
-                    if (!it->is_sel) return;
-                    if (it->x->type != GOTYPE_LAZY_ID) return;
-                    if (!streq(it->x->lazy_id_name, package_name_we_want)) return;
+                    if (it->is_sel) {
+                        if (package_is_dot) return;
+                        if (it->x->type != GOTYPE_LAZY_ID) return;
+                        if (!streq(it->x->lazy_id_name, package_name_we_want)) return;
+                    } else {
+                        if (!package_is_dot) return;
+                    }
                 } else {
                     if (it->is_sel) return;
                 }
@@ -5233,6 +5240,9 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                     res->declaration_godecl = it.decl;
                     res->declaration_import_path = it.ctx->import_path;
                     res->declaration_filename = it.ctx->filename;
+
+                    auto eval = evaluate_type(it.decl->gotype, it.ctx);
+                    if (eval) res->declaration_evaluated_gotype = eval->gotype;
                 }
             }
 
