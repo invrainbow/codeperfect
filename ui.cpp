@@ -4458,6 +4458,7 @@ void UI::draw_everything() {
         fstlog("wnd_project_settings");
     }
 
+#ifdef DEBUG_BUILD
     if (world.windows_open.im_demo) {
         ImGui::ShowDemoWindow(&world.windows_open.im_demo);
         fstlog("im_demo");
@@ -4467,6 +4468,7 @@ void UI::draw_everything() {
         ImGui::ShowMetricsWindow(&world.windows_open.im_metrics);
         fstlog("im_metrics");
     }
+#endif
 
     if (world.wnd_goto_file.show) {
         auto& wnd = world.wnd_goto_file;
