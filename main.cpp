@@ -159,25 +159,15 @@ void handle_window_event(Window_Event *it) {
         world.frame_size.y = h;
         recalc_display_size();
 
-        {
-            mat4f projection;
-            new_ortho_matrix(projection, 0, w, h, 0);
-            glUseProgram(world.ui.program);
-            glUniformMatrix4fv(glGetUniformLocation(world.ui.program, "projection"), 1, GL_FALSE, (float*)projection);
-        }
+        mat4f projection;
 
-        {
-            mat4f projection;
-            new_ortho_matrix(projection, 0, world.display_size.x, world.display_size.y, 0);
-            glUseProgram(world.ui.im_program);
-            glUniformMatrix4fv(glGetUniformLocation(world.ui.im_program, "projection"), 1, GL_FALSE, (float*)projection);
-        }
+        new_ortho_matrix(projection, 0, w, h, 0);
+        glUseProgram(world.ui.program);
+        glUniformMatrix4fv(glGetUniformLocation(world.ui.program, "projection"), 1, GL_FALSE, (float*)projection);
 
-        // clear frame
-        auto bgcolor = global_colors.background;
-        glClearColor(bgcolor.r, bgcolor.g, bgcolor.b, 1.0);
-        glClear(GL_COLOR_BUFFER_BIT);
-        world.window->swap_buffers();
+        new_ortho_matrix(projection, 0, world.display_size.x, world.display_size.y, 0);
+        glUseProgram(world.ui.im_program);
+        glUniformMatrix4fv(glGetUniformLocation(world.ui.im_program, "projection"), 1, GL_FALSE, (float*)projection);
         break;
     }
 
