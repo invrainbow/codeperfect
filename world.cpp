@@ -565,7 +565,7 @@ void World::start_background_threads() {
     if (use_nvim) nvim.start_running();
     dbg.start_loop();
 
-#if DEBUG_BUILD
+#ifdef DEBUG_BUILD
     // VSCode debugger frequently fails to break when I press break, but it
     // works if I set a breakpoint which is hit. My asinine solution is to
     // create a background thread that runs in a loop, and set a breakpoint in
