@@ -18,6 +18,7 @@ const sidebars = {
       type: "category",
       label: "Changelog",
       items: [
+        "changelog/22.10",
         "changelog/22.09.7",
         "changelog/22.09.6",
         "changelog/22.09.5",
