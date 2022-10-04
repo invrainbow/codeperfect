@@ -1,0 +1,6 @@
+#!/bin/bash
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
+
+pushd $SCRIPT_DIR/../go > /dev/null
+go run ./cmd/printversion | cut -d' ' -f2
+popd > /dev/null

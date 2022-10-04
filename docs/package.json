@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "docusaurus": "docusaurus",
-    "start": "export BUILD_VERSION=$(cat ../user_facing_version); docusaurus start",
-    "build": "export BUILD_VERSION=$(cat ../user_facing_version); docusaurus build",
+    "start": "export BUILD_VERSION=$(../sh/printversion); docusaurus start",
+    "build": "export BUILD_VERSION=$(../sh/printversion); docusaurus build",
     "swizzle": "docusaurus swizzle",
     "deploy": "docusaurus deploy",
     "clear": "docusaurus clear",
