@@ -1,6 +1,6 @@
 CC = clang++
 
-CFLAGS = -std=c++17 -MMD -MP -I. -Iimgui/ -ferror-limit=100 -w -Itree-sitter/lib/include
+CFLAGS = -std=c++17 -I. -Iimgui/ -ferror-limit=100 -w -Itree-sitter/lib/include
 # CFLAGS += -mavx -maes
 
 ifeq ($(TESTING_BUILD), 1)
@@ -45,11 +45,13 @@ LDFLAGS += $(shell sh/pkgconfig --libs $(PKGS))
 
 GO_LDFLAGS =
 ifeq ($(RELEASE), 1)
-	CFLAGS += -O3
-	# CFLAGS += -g -O0
+	# CFLAGS += -O3
+	CFLAGS += -g -O3
 	GO_LDFLAGS += -s -w
+	# LDFLAGS += -Wl,-S,-x
 else
 	CFLAGS += -DDEBUG_BUILD -g -O0
+	CFLAGS += -MMD -MP
 endif
 
 PYTHON = python3
@@ -91,13 +93,13 @@ build/bin/ide$(BINARY_SUFFIX): $(OBJ_DEPS) binaries.c obj/enums.o
 -include $(DEP_FILES)
 
 $(OBJ_FILES): obj/%.o: %.cpp gohelper.h tstypes.hpp enums.hpp # Makefile
-	$(CC) $(CFLAGS) -MMD -MP -c -o $@ $<
+	$(CC) $(CFLAGS) -c -o $@ $<
 
 obj/enums.o: enums.cpp # Makefile
-	$(CC) $(CFLAGS) -MMD -MP -c -o $@ $<
+	$(CC) $(CFLAGS) -c -o $@ $<
 
 obj/tests.o: tests.cpp # Makefile
-	$(CC) $(CFLAGS) -MMD -MP -c -o $@ $<
+	$(CC) $(CFLAGS) -c -o $@ $<
 
 obj/objclibs.o: objclibs.mm
 	$(CC) $(CFLAGS) -fobjc-arc -c -o $@ $<

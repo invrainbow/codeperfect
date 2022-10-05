@@ -26,7 +26,6 @@ if [[ $os = "windows" ]]; then
     mkdir CodePerfect
     cp -R ../build/bin/ CodePerfect/bin/
     cp ../build/launcher.exe CodePerfect/codeperfect.exe
-    rm -rf CodePerfect/bin/ide.d
 
     # zip up app
     zip -r app.zip CodePerfect/
@@ -40,6 +39,8 @@ elif [[ $os = "mac" ]]; then
         slug=arm
     fi
 
+    mv ../build/dsym debug-symbols
+
     # create .app from launcher
     rm -rf CodePerfect.app
     appify -name CodePerfect \
@@ -52,7 +53,6 @@ elif [[ $os = "mac" ]]; then
     # create bin folder inside .app
     cp -R ../build/bin/ "CodePerfect.app/Contents/MacOS/bin/"
     rm -rf CodePerfect.app/Contents/README
-    rm -rf CodePerfect.app/Contents/MacOS/bin/ide.d
 
     # codesign garbage
     codesign --force --options runtime --sign 'Developer ID Application: Brandon Hsiao' CodePerfect.app/Contents/MacOS/bin/ide
@@ -74,7 +74,6 @@ elif [[ $os = "linux" ]]; then
     mkdir CodePerfect
     cp -R ../build/bin/ CodePerfect/bin/
     cp ../build/launcher CodePerfect/codeperfect
-    rm -rf CodePerfect/bin/ide.d
 
     # zip up app
     zip -r app.zip CodePerfect/
@@ -90,4 +89,5 @@ if [[ -z "$SKIP_UPLOAD" ]]; then
     filename="$os-$slug-$version_string.zip"
     aws s3 cp app.zip "s3://codeperfect95/app/$filename"
     aws s3 cp update.zip "s3://codeperfect95/update/$filename"
+    aws s3 cp debug-symbols "s3://codeperfect95-private/debug-symbols-$os-$slug-$version_string"
 fi

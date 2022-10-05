@@ -2524,6 +2524,12 @@ void UI::draw_everything() {
 
             ImGui::Separator();
 
+            if (ImGui::MenuItem("Cause intentional crash")) {
+                find_editor_by_id(121231231123)->optimize_imports();
+            }
+
+            ImGui::Separator();
+
             if (ImGui::MenuItem("Message box - Ok")) {
                 tell_user("This is a message box.", "Message");
             }
