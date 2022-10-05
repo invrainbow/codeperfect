@@ -545,7 +545,6 @@ void UI::render_godecl(Godecl *decl) {
         }
         ImGui::TreePop();
     }
-
 }
 
 void UI::render_gotype(Gotype *gotype, ccstr field) {

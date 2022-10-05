@@ -8573,7 +8573,6 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
             default:
                 return NULL;
             }
-
         } while (0);
 
         auto res = _evaluate_type(gotype->lazy_sel_base, ctx);

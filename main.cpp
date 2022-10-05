@@ -991,7 +991,6 @@ void handle_window_event(Window_Event *it) {
         }
         break;
     }
-
     }
 }
 
@@ -1769,7 +1768,6 @@ int realmain(int argc, char **argv) {
             while (fs.len && fs[0].timestamp + 2000 < now)
                 fs.remove((u32)0);
         }
-
     }
 
     return EXIT_SUCCESS;

@@ -240,7 +240,6 @@ void Serde::write_type(void* val, int type) {
         write_int(0);
         break;
     }
-
     }
 }
 
@@ -312,7 +311,6 @@ bool Serde::read_type_field(void* out, int type, int field_id) {
         }
         break;
     }
-
     }
     return false;
 }
