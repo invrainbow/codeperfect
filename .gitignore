@@ -70,3 +70,5 @@ vcpkg_installed/
 
 sh/dev_windows.local
 go/.idea
+
+.x64
