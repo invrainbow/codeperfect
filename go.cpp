@@ -2387,6 +2387,8 @@ ccstr Go_Indexer::get_package_path(ccstr import_path) {
 }
 
 Goresult *Go_Indexer::find_decl_of_id(ccstr id_to_find, cur2 id_pos, Go_Ctx *ctx, Go_Import **single_import) {
+    if (!ctx) return NULL;
+
     auto pkg = find_up_to_date_package(ctx->import_path);
     if (pkg) {
         auto check = [&](Go_File *it) { return streq(it->filename, ctx->filename); };
