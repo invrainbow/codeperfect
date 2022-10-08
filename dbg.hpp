@@ -8,8 +8,6 @@
 #include "list.hpp"
 #include "settings.hpp"
 
-ccstr jsmn_type_str(int type);
-
 enum Json_KeyType {
     KEY_TYPE_ARR,
     KEY_TYPE_OBJ,
@@ -320,6 +318,10 @@ struct Debugger {
     List<char> stdout_line_buffer;
     bool stop_piping_stdout;
 
+    char read_buffer[1024];
+    int read_buffer_ptr;
+    int read_buffer_len;
+
     // Debugger has no cleanup method, because it's meant to run for the
     // program's entire lifespan.
 
@@ -347,7 +349,7 @@ struct Debugger {
     bool can_read();
     List<Breakpoint>* list_breakpoints();
     bool eval_expression(ccstr expression, i32 goroutine_id, i32 frame, Dlv_Var* out, Save_Var_Mode save_mode = SAVE_VAR_NORMAL);
-    void eval_watch(Dlv_Watch *watch, int goroutine_id, int frame);
+    void eval_watch(Dlv_Watch *watch);
 
     void save_list_of_vars(Json_Navigator js, i32 idx, List<Dlv_Var*>* out);
     void save_single_var(Json_Navigator js, i32 idx, Dlv_Var* out, Save_Var_Mode save_mode = SAVE_VAR_NORMAL);
@@ -366,6 +368,15 @@ struct Debugger {
     void mutate_state(fn<void(Debugger_State *draft)> cb);
 
     void pipe_stdout_into_our_buffer();
+
+    void eval_watches();
+    bool fill_stacktrace(Debugger_State *draft);
+    bool fill_local_vars(Debugger_State *draft);
+    bool fill_function_args(Debugger_State *draft);
+    void jump_to_frame();
 };
+
+Dlv_Goroutine *find_goroutine(Debugger_State *state);
+Dlv_Frame *find_frame(Dlv_Goroutine *goroutine, int frame_id);
 
 void debugger_loop_thread(void*);

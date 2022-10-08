@@ -2761,6 +2761,13 @@ void UI::draw_everything() {
 
                 end_tab();
             }
+
+            if (begin_tab("Debugger")) {
+                ImGui::Checkbox("Hide system goroutines", &tmp.dbg_hide_system_goroutines);
+
+                end_tab();
+            }
+
             ImGui::EndTabBar();
         }
 

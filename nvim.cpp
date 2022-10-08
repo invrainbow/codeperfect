@@ -6,7 +6,7 @@
 #include "settings.hpp"
 #include "unicode.hpp"
 #include "defer.hpp"
-// #include <strsafe.h>
+#include "enums.hpp"
 
 #define NVIM_DEBUG 0
 
@@ -1247,7 +1247,7 @@ void Nvim::run_event_loop() {
                 } else {
                     auto type = reader.peek_type();
                     reader.skip_object(); CHECKOK();
-                    nvim_print("error in response for msgid %d, reqtype = %d: (error was not a string, instead was %s)", msgid, req_type, mptype_str(type));
+                    nvim_print("error in response for msgid %d, reqtype = %d: (error was not a string, instead was %s)", msgid, req_type, mp_type_str(type));
                 }
                 reader.skip_object();
                 delete_request_by_msgid(msgid);

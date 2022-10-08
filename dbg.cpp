@@ -234,13 +234,20 @@ void Debugger::save_single_var(Json_Navigator js, i32 idx, Dlv_Var* out, Save_Va
     }
 }
 
-void Debugger::eval_watch(Dlv_Watch *watch, int goroutine_id, int frame) {
+void Debugger::eval_watches() {
+    For (watches) eval_watch(&it);
+}
+
+void Debugger::eval_watch(Dlv_Watch *watch) {
     // TODO: is there any difference between these two flags?
     watch->fresh = false;
     watch->state = DBGWATCH_PENDING;
 
+    int goroutine_id = state->current_goroutine_id;
+    int frame_id = state->current_frame;
+
     Dlv_Var value; ptr0(&value);
-    if (eval_expression(watch->expr, goroutine_id, frame, &value, SAVE_VAR_NORMAL)) {
+    if (eval_expression(watch->expr, goroutine_id, frame_id, &value, SAVE_VAR_NORMAL)) {
         SCOPED_MEM(&watches_mem);
         watch->value = alloc_object(Dlv_Var);
         memcpy(watch->value, value.copy(), sizeof(Dlv_Var));
@@ -255,7 +262,7 @@ void Debugger::eval_watch(Dlv_Watch *watch, int goroutine_id, int frame) {
     watch->fresh = true;
 }
 
-bool Debugger::eval_expression(ccstr expression, i32 goroutine_id, i32 frame, Dlv_Var* out, Save_Var_Mode save_mode) {
+bool Debugger::eval_expression(ccstr expression, i32 goroutine_id, i32 frame_id, Dlv_Var* out, Save_Var_Mode save_mode) {
     if (goroutine_id == -1) {
         auto resp = send_packet("State", [&]() {});
         auto js = resp->js();
@@ -272,7 +279,7 @@ bool Debugger::eval_expression(ccstr expression, i32 goroutine_id, i32 frame, Dl
         rend->field("Scope", [&]() {
             rend->obj([&]() {
                 rend->field("goroutineID", goroutine_id);
-                rend->field("frame", frame);
+                rend->field("frame", frame_id);
             });
         });
         rend->field("Cfg", [&]() {
@@ -296,14 +303,24 @@ bool Debugger::eval_expression(ccstr expression, i32 goroutine_id, i32 frame, Dl
 }
 
 bool Debugger::can_read() {
+    if (read_buffer_ptr < read_buffer_len) return true;
+
     char ret = 0;
     return recv(conn, (char*)&ret, 1, MSG_PEEK) == 1;
 }
 
 u8 Debugger::read1() {
-    u8 ret = 0;
-    recv(conn, (char*)&ret, 1, 0);
-    return ret;
+    if (read_buffer_ptr >= read_buffer_len) {
+        read_buffer_ptr = 0;
+        read_buffer_len = 0;
+
+        int read = recv(conn, read_buffer, _countof(read_buffer), 0);
+        if (read == -1) return 0;
+
+        read_buffer_len = read;
+    }
+
+    return read_buffer[read_buffer_ptr++];
 }
 
 bool Debugger::write1(u8 ch) {
@@ -387,6 +404,8 @@ void Debugger::cleanup() {
 #endif
 
 Packet* Debugger::send_packet(ccstr packet_name, lambda f, bool read) {
+    Timer t; t.init("send_packet", step_over_time);
+
     {
         SCOPED_FRAME();
 
@@ -407,6 +426,8 @@ Packet* Debugger::send_packet(ccstr packet_name, lambda f, bool read) {
         write1('\n');
     }
 
+    t.log("write shit out");
+
     if (!read) return NULL;
 
     Packet p;
@@ -415,22 +436,23 @@ Packet* Debugger::send_packet(ccstr packet_name, lambda f, bool read) {
         return NULL;
     }
 
+    t.log("read packet");
+
     auto packet = alloc_object(Packet);
     memcpy(packet, &p, sizeof(p));
     return packet;
 }
 
 bool Debugger::read_packet(Packet* p) {
-    u_long mode_blocking = 0;
-    u_long mode_nonblocking = 1;
+    Timer t; t.init("read_packet", step_over_time);
 
-#if OS_WINBLOWS
-    ioctlsocket(conn, FIONBIO, &mode_blocking);
-    defer { ioctlsocket(conn, FIONBIO, &mode_nonblocking); };
-#else
-    ioctl(conn, FIONBIO, &mode_blocking);
-    defer { ioctl(conn, FIONBIO, &mode_nonblocking); };
-#endif
+    u_long mode_blocking = 0;
+    ioctl_stub(conn, FIONBIO, &mode_blocking);
+
+    defer {
+        u_long mode_nonblocking = 1;
+        ioctl_stub(conn, FIONBIO, &mode_nonblocking);
+    };
 
     auto read = [&]() -> ccstr {
         Frame frame;
@@ -453,12 +475,16 @@ bool Debugger::read_packet(Packet* p) {
             return false;
         }
 
+        t.log("read from stream");
+
         Json_Navigator js;
         if (!js.parse(s)) {
             dbg_print("recv.run: js.parse returned false");
             dbg_print("%s", s);
             return false;
         }
+
+        t.log("parse json");
 
         p->string = js.string;
         p->tokens = js.tokens;
@@ -467,7 +493,10 @@ bool Debugger::read_packet(Packet* p) {
 
     dbg_print("running");
 
-    if (run()) {
+    bool ok = run();
+    t.log("run");
+
+    if (ok) {
         SCOPED_FRAME();
 		dbg_print("[\"recv\"]\n%s", p->string); // cp_format_json(p->string));
         return true;
@@ -609,47 +638,28 @@ List<Breakpoint>* Debugger::list_breakpoints() {
     return ret;
 }
 
-int parse_json_with_jsmn(ccstr s, jsmntok_t* tokens, u32 num_toks) {
+bool Json_Navigator::parse(ccstr s) {
+    Timer t; t.init("Json_Navigator::parse");
+
+    string = s;
+    tokens = alloc_list<jsmntok_t>();
+
     jsmn_parser parser;
     jsmn_init(&parser);
-    return jsmn_parse(&parser, s, strlen(s), tokens, num_toks);
-}
 
-ccstr jsmn_type_str(int type) {
-    switch (type) {
-        define_str_case(JSMN_PRIMITIVE);
-        define_str_case(JSMN_ARRAY);
-        define_str_case(JSMN_OBJECT);
-        define_str_case(JSMN_STRING);
+    int len = strlen(s);
+    t.log("get len");
+
+    auto ret = jsmn_parse(&parser, s, len, tokens);
+    t.log("parse");
+
+    switch (ret) {
+    case JSMN_ERROR_INVAL:
+    case JSMN_ERROR_NOMEM:
+    case JSMN_ERROR_PART:
+        return false;
     }
-    return NULL;
-}
-
-bool Json_Navigator::parse(ccstr s) {
-    string = s;
-
-    auto is_jsmn_error = [&](int result) -> bool {
-        switch (result) {
-        case JSMN_ERROR_INVAL:
-        case JSMN_ERROR_NOMEM:
-        case JSMN_ERROR_PART:
-            return true;
-        }
-        return false;
-    };
-
-    auto num_toks = parse_json_with_jsmn(string, NULL, 0);
-    if (is_jsmn_error(num_toks))
-        return false;
-
-    Frame frame;
-
-    tokens = alloc_list<jsmntok_t>(num_toks);
-    tokens->len = num_toks;
-
-    bool ret = !is_jsmn_error(parse_json_with_jsmn(string, tokens->items, num_toks));
-    if (!ret) frame.restore();
-    return ret;
+    return true;
 }
 
 int Json_Navigator::advance_node(int i) {
@@ -1152,130 +1162,147 @@ void Debugger::mutate_state(fn<void(Debugger_State *draft)> cb) {
     state_id++;
 };
 
-void Debugger::select_frame(u32 goroutine_id, u32 frame) {
-    Timer t; t.init("select_frame", step_over_time);
+Dlv_Goroutine *find_goroutine(Debugger_State *state) {
+    int goroutine_id = state->current_goroutine_id;
+    if (goroutine_id == -1) // halting
+        goroutine_id = state->goroutines->at(0).id;
 
-    auto old_goroutine_id = state->current_goroutine_id;
-    if (old_goroutine_id != goroutine_id)
-        send_command("switchGoroutine", true, goroutine_id);
+    return state->goroutines->find([&](auto it) { return it->id == goroutine_id; });
+}
 
-    mutate_state([&](auto draft) {
-        draft->current_frame = 0;
-        draft->current_goroutine_id = goroutine_id;
-        draft->current_frame = frame;
+Dlv_Frame *find_frame(Dlv_Goroutine *goroutine, int frame_id) {
+    if (frame_id >= goroutine->frames->len) return NULL;
 
-        t.log("set_current_goroutine");
+    return &goroutine->frames->items[frame_id];
+}
 
-        auto goroutine = draft->goroutines->find([&](auto it) { return it->id == goroutine_id; });
-        if (!goroutine) return;
+bool Debugger::fill_stacktrace(Debugger_State *draft) {
+    auto goroutine = find_goroutine(draft);
+    if (!goroutine) return false;
 
-        do {
-            if (goroutine->fresh) break;
+    do {
+        if (goroutine->fresh) break;
 
-            auto resp = send_packet("Stacktrace", [&]() {
-                rend->field("id", (int)goroutine->id);
-                rend->field("depth", 50);
-                rend->field("full", false);
-            });
+        auto resp = send_packet("Stacktrace", [&]() {
+            rend->field("id", (int)goroutine->id);
+            rend->field("depth", 50);
+            rend->field("full", false);
+        });
 
-            auto js = resp->js();
+        auto js = resp->js();
 
-            auto locations_idx = js.get(0, ".result.Locations");
-            if (locations_idx == -1) break;
+        auto locations_idx = js.get(0, ".result.Locations");
+        if (locations_idx == -1) break;
 
-            auto locations_len = js.array_length(locations_idx);
+        auto locations_len = js.array_length(locations_idx);
 
-            goroutine->frames = alloc_list<Dlv_Frame>();
+        goroutine->frames = alloc_list<Dlv_Frame>();
 
-            for (u32 i = 0; i < locations_len; i++) {
-                auto it = js.get(locations_idx, i);
-                auto frame = goroutine->frames->append();
-                frame->filepath  = js.str(js.get(it, ".file"));
-                frame->lineno    = js.num(js.get(it, ".line"));
-                frame->func_name = js.str(js.get(it, ".function.name"));
-                frame->fresh     = false;
-            }
-
-            goroutine->fresh = true;
-        } while (0);
-
-        t.log("fetch_stackframe");
-
-        auto dlvframe = &goroutine->frames->items[frame];
-        if (!dlvframe->fresh) {
-            Json_Navigator js;
-
-            dlvframe->locals = NULL;
-            dlvframe->args = NULL;
-
-            js = send_packet("ListLocalVars", [&]() {
-                rend->field("Scope", [&]() {
-                    rend->obj([&]() {
-                        rend->field("GoroutineId", (int)goroutine_id);
-                        rend->field("Frame", (int)frame);
-                        rend->field("DeferredCall", 0);
-                    });
-                });
-                rend->field("Cfg", [&]() {
-                    rend->obj([&]() {
-                        rend->field("followPointers", true);
-                        rend->field("maxVariableRecurse", 1);
-                        rend->field("maxStringLen", 64);
-                        rend->field("maxArrayValues", 64);
-                        rend->field("maxStructFields", -1);
-                    });
-                });
-            })->js();
-
-            auto vars_idx = js.get(0, ".result.Variables");
-            if (vars_idx != -1) {
-                dlvframe->locals = alloc_list<Dlv_Var*>();
-                save_list_of_vars(js, vars_idx, dlvframe->locals);
-            }
-
-            js = send_packet("ListFunctionArgs", [&]() {
-                rend->field("Scope", [&]() {
-                    rend->obj([&]() {
-                        rend->field("GoroutineId", (int)goroutine_id);
-                        rend->field("Frame", (int)frame);
-                        rend->field("DeferredCall", 0);
-                    });
-                });
-                rend->field("Cfg", [&]() {
-                    rend->obj([&]() {
-                        rend->field("followPointers", true);
-                        rend->field("maxVariableRecurse", 1);
-                        rend->field("maxStringLen", 64);
-                        rend->field("maxArrayValues", 64);
-                        rend->field("maxStructFields", -1);
-                    });
-                });
-            })->js();
-
-            vars_idx = js.get(0, ".result.Args");
-            if (vars_idx != -1) {
-                dlvframe->args = alloc_list<Dlv_Var*>();
-                save_list_of_vars(js, vars_idx, dlvframe->args);
-            }
-
-            t.log("ListFunctionArgs");
-
-            dlvframe->fresh = true;
+        for (u32 i = 0; i < locations_len; i++) {
+            auto it = js.get(locations_idx, i);
+            auto frame = goroutine->frames->append();
+            frame->filepath  = js.str(js.get(it, ".file"));
+            frame->lineno    = js.num(js.get(it, ".line"));
+            frame->func_name = js.str(js.get(it, ".function.name"));
+            frame->fresh     = false;
         }
 
-        if (!exiting) {
-            world.message_queue.add([&](auto msg) {
-                msg->type = MTM_GOTO_FILEPOS;
-                msg->goto_file = cp_strdup(dlvframe->filepath);
-                msg->goto_pos = new_cur2((i32)0, (i32)dlvframe->lineno - 1);
+        goroutine->fresh = true;
+    } while (0);
+
+    return true;
+}
+
+bool Debugger::fill_local_vars(Debugger_State *draft) {
+    auto goroutine = find_goroutine(draft);
+    if (!goroutine) return false;
+
+    auto frame = find_frame(goroutine, draft->current_frame);
+    if (!frame) return false;
+    if (frame->fresh) return false;
+
+    frame->locals = NULL;
+    frame->args = NULL;
+
+    auto js = send_packet("ListLocalVars", [&]() {
+        rend->field("Scope", [&]() {
+            rend->obj([&]() {
+                rend->field("GoroutineId", (int)draft->current_goroutine_id);
+                rend->field("Frame", (int)draft->current_frame);
+                rend->field("DeferredCall", 0);
             });
-        }
+        });
+        rend->field("Cfg", [&]() {
+            rend->obj([&]() {
+                rend->field("followPointers", true);
+                rend->field("maxVariableRecurse", 1);
+                rend->field("maxStringLen", 64);
+                rend->field("maxArrayValues", 64);
+                rend->field("maxStructFields", -1);
+            });
+        });
+    })->js();
+
+    auto vars_idx = js.get(0, ".result.Variables");
+    if (vars_idx != -1) {
+        frame->locals = alloc_list<Dlv_Var*>();
+        save_list_of_vars(js, vars_idx, frame->locals);
+    }
+
+    return true;
+}
+
+bool Debugger::fill_function_args(Debugger_State *draft) {
+    auto goroutine = find_goroutine(draft);
+    if (!goroutine) return false;
+
+    auto frame = find_frame(goroutine, draft->current_frame);
+    if (!frame) return false;
+    if (frame->fresh) return false;
+
+    auto js = send_packet("ListFunctionArgs", [&]() {
+        rend->field("Scope", [&]() {
+            rend->obj([&]() {
+                rend->field("GoroutineId", (int)draft->current_goroutine_id);
+                rend->field("Frame", (int)draft->current_frame);
+                rend->field("DeferredCall", 0);
+            });
+        });
+        rend->field("Cfg", [&]() {
+            rend->obj([&]() {
+                rend->field("followPointers", true);
+                rend->field("maxVariableRecurse", 1);
+                rend->field("maxStringLen", 64);
+                rend->field("maxArrayValues", 64);
+                rend->field("maxStructFields", -1);
+            });
+        });
+    })->js();
+
+    auto vars_idx = js.get(0, ".result.Args");
+    if (vars_idx != -1) {
+        frame->args = alloc_list<Dlv_Var*>();
+        save_list_of_vars(js, vars_idx, frame->args);
+    }
+
+    frame->fresh = true;
+    return true;
+}
+
+void Debugger::jump_to_frame() {
+    if (exiting) return;
+
+    auto goroutine = find_goroutine(state);
+    if (!goroutine) return;
+
+    auto frame = find_frame(goroutine, state->current_frame);
+    if (!frame) return;
+
+    world.message_queue.add([&](auto msg) {
+        msg->type = MTM_GOTO_FILEPOS;
+        msg->goto_file = cp_strdup(frame->filepath);
+        msg->goto_pos = new_cur2((i32)0, (i32)frame->lineno - 1);
     });
-
-    t.log("fetch_variables");
-
-    For (watches) eval_watch(&it, goroutine_id, frame);
-    t.log("eval_watch");
 }
 
 void Debugger::do_everything() {
@@ -1304,8 +1331,7 @@ void Debugger::do_everything() {
                     cp_strcpy_fixed(watch->expr_tmp, args.expression);
                 }
 
-                if (state_flag == DLV_STATE_PAUSED)
-                    eval_watch(watch, state->current_goroutine_id, state->current_frame);
+                if (state_flag == DLV_STATE_PAUSED) eval_watch(watch);
                 break;
             }
             case DLVC_EDIT_WATCH: {
@@ -1323,8 +1349,7 @@ void Debugger::do_everything() {
                     cp_strcpy_fixed(watch->expr_tmp, args.expression);
                 }
 
-                if (state_flag == DLV_STATE_PAUSED)
-                    eval_watch(watch, state->current_goroutine_id, state->current_frame);
+                if (state_flag == DLV_STATE_PAUSED) eval_watch(watch);
                 break;
             }
             case DLVC_DELETE_WATCH: {
@@ -1418,7 +1443,22 @@ void Debugger::do_everything() {
 
             case DLVC_SET_CURRENT_FRAME: {
                 auto &args = it.set_current_frame;
-                select_frame(args.goroutine_id, args.frame);
+
+                if (state->current_goroutine_id != args.goroutine_id)
+                    send_command("switchGoroutine", true, args.goroutine_id);
+
+                mutate_state([&](auto draft) {
+                    draft->current_goroutine_id = args.goroutine_id;
+                    draft->current_frame = args.frame;
+
+                    fill_stacktrace(draft);
+                    fill_local_vars(draft);
+                    fill_function_args(draft);
+                });
+
+                state_flag = DLV_STATE_PAUSED;
+                jump_to_frame();
+                eval_watches();
                 break;
             }
             case DLVC_STOP:
@@ -1452,7 +1492,7 @@ void Debugger::do_everything() {
                         state = alloc_object(Debugger_State);
                         state->goroutines = alloc_list<Dlv_Goroutine>();
                         state->current_goroutine_id = -1;
-                        state->current_frame = -1;
+                        state->current_frame = 0;
                     }
 
                     state_flag = DLV_STATE_STARTING;
@@ -1671,12 +1711,14 @@ void Debugger::handle_new_state(Packet *p) {
 
     mutate_state([&](auto draft) {
         ptr0(draft);
-        draft->current_goroutine_id = -1;
-        draft->current_frame = 0;
 
+        // grab the current goroutine
         auto current_goroutine_idx = js.get(0, ".result.State.currentGoroutine");
         if (current_goroutine_idx != -1)
             draft->current_goroutine_id = js.num(js.get(current_goroutine_idx, ".id"));
+        else
+            draft->current_goroutine_id = -1;
+        draft->current_frame = 0;
 
         t.log("checking threads");
 
@@ -1685,6 +1727,16 @@ void Debugger::handle_new_state(Packet *p) {
             auto resp = send_packet("ListGoroutines", [&]() {
                 rend->field("Start", 0);
                 rend->field("Count", 0);
+                if (options.dbg_hide_system_goroutines) {
+                    rend->field("Filters", [&]() {
+                        rend->arr([&]() {
+                            rend->obj([&]() {
+                                rend->field("Kind", 7);
+                                rend->field("Negated", false);
+                            });
+                        });
+                    });
+                }
             });
             auto js = resp->js();
 
@@ -1708,9 +1760,11 @@ void Debugger::handle_new_state(Packet *p) {
             }
         } while (0);
 
-        For (*draft->goroutines) {
-            auto entry = goroutines_with_breakpoint.find([&](auto g) { return g->goroutine_id == it.id; });
-            if (entry) {
+        if (draft->goroutines) {
+            For (*draft->goroutines) {
+                auto entry = goroutines_with_breakpoint.find([&](auto g) { return g->goroutine_id == it.id; });
+                if (!entry) continue;
+
                 it.curr_file = entry->breakpoint_file;
                 it.curr_line = entry->breakpoint_line;
                 it.curr_func_name = entry->breakpoint_func_name;
@@ -1718,15 +1772,12 @@ void Debugger::handle_new_state(Packet *p) {
             }
         }
 
-        t.log("fetch goroutines");
+        fill_stacktrace(draft);
+        fill_local_vars(draft);
+        fill_function_args(draft);
     });
 
-    int goroutine_id = state->current_goroutine_id;
-    if (goroutine_id == -1) // halting
-        goroutine_id = state->goroutines->at(0).id;
-    select_frame(goroutine_id, state->current_frame);
-
-    t.log("select frame");
-
     state_flag = DLV_STATE_PAUSED;
+    jump_to_frame();
+    eval_watches();
 }

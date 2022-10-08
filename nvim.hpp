@@ -24,8 +24,6 @@ enum Mp_Type {
     MP_EXT,
 };
 
-ccstr mptype_str(Mp_Type type);
-
 enum Mp_Opcode {
     MP_OP_NIL = 0xc0,
     MP_OP_TRUE = 0xc3,
