@@ -444,8 +444,17 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
             }
 
             if (streq(args.for_what, "copy_visual")) {
-                auto s = editor->buf->get_text(start, editor->buf->inc_cur(end));
-                world.window->set_clipboard_string(s);
+                end = editor->buf->inc_cur(end);
+
+                if (streq(args.mode, "V")) {
+                    start.x = 0;
+                    end.x = editor->buf->lines[end.y].len;
+                } else if (streq(args.mode, "\x16")) {
+                    // block mode not supported (TODO)
+                    break;
+                }
+
+                world.window->set_clipboard_string(editor->buf->get_text(start, end));
             } else if (streq(args.for_what, "toggle_comment")) {
                 if (start.y == -1)
                     editor->toggle_comment(editor->cur.y, editor->cur.y);
@@ -888,19 +897,22 @@ void Nvim::run_event_loop() {
                         msg->notification.custom_reveal_line.reset_cursor = reset_cursor;
                     });
                 } else if (streq(cmd, "get_visual")) {
-                    ASSERT(num_args == 6);
+                    ASSERT(num_args == 7);
                     auto for_what = reader.read_string(); CHECKOK();
                     auto ys = reader.read_int(); CHECKOK();
                     auto xs = reader.read_int(); CHECKOK();
                     auto ye = reader.read_int(); CHECKOK();
                     auto xe = reader.read_int(); CHECKOK();
                     auto bufid = reader.read_int(); CHECKOK();
+                    auto mode = reader.read_string(); CHECKOK();
+
                     add_event([&](auto msg) {
                         msg->notification.type = NVIM_NOTIF_CUSTOM_GET_VISUAL;
                         msg->notification.custom_get_visual.for_what = cp_strdup(for_what);
                         msg->notification.custom_get_visual.start = new_cur2((i32)xs-1, (i32)ys-1);
                         msg->notification.custom_get_visual.end = new_cur2((i32)xe-1, (i32)ye-1);
                         msg->notification.custom_get_visual.bufid = bufid;
+                        msg->notification.custom_get_visual.mode = cp_strdup(mode);
                     });
                 } else if (streq(cmd, "goto_definition")) {
                     ASSERT(!num_args);

@@ -33,7 +33,7 @@ function! CPGetVisual(name)
         let [row_s, col_s] = getpos("'<")[1:2]
         let [row_e, col_e] = getpos("'>")[1:2]
     end
-    call NotifyIDE("get_visual", a:name, row_s, col_s, row_e, col_e, bufnr("%"))
+    call NotifyIDE("get_visual", a:name, row_s, col_s, row_e, col_e, bufnr("%"), m)
 endfunction
 
 function! NotifyIDE(cmd, ...) abort

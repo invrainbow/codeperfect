@@ -418,6 +418,7 @@ struct Nvim_Message {
                     cur2 start;
                     cur2 end;
                     int bufid;
+                    ccstr mode;
                 } custom_get_visual;
 
                 struct {
