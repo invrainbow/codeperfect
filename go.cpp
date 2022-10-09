@@ -8020,6 +8020,9 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
                     if (!res) return NULL;
 
                     auto other_gotype = res->decl->gotype;
+                    if (other_gotype->type == GOTYPE_BUILTIN)
+                        other_gotype = other_gotype->base;
+
                     if (other_gotype->type == GOTYPE_INTERFACE)
                         return gotype_to_type_node(other_gotype, res->ctx);
 
@@ -8412,8 +8415,8 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
 
             // apply constraint type inference
             if (!is_done() && (added_new_types || !ran_constraint_type_inference))
-              if (!constraint_type_inference())
-                  return NULL;
+                if (!constraint_type_inference())
+                    return NULL;
 
             if (!is_done()) return NULL;
 
