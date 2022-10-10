@@ -2982,10 +2982,7 @@ void handle_command(Command cmd, bool from_menu) {
             nav.siblings = alloc_list<Ast_Node*>();
         }
         editor->update_selected_ast_node(node);
-
-        if (world.use_nvim)
-            if (world.nvim.mode != VI_NORMAL)
-                editor->trigger_escape();
+        editor->trigger_escape();
     }
     }
 }
