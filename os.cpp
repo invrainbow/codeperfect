@@ -87,3 +87,26 @@ ccstr cp_dirname(ccstr path) {
     if (streq(ret, ".")) ret = "";
     return ret;
 }
+
+bool Process::peek(char *out) {
+    if (read_buffer_ptr >= read_buffer_len) {
+        read_buffer_ptr = 0;
+        read_buffer_len = 0;
+
+        int count = readn(read_buffer, _countof(read_buffer));
+        if (!count || count == -1) return false;
+
+        read_buffer_len = count;
+    }
+
+    *out = read_buffer[read_buffer_ptr];
+    return true;
+}
+
+bool Process::read1(char* out) {
+    if (peek(out)) {
+        read_buffer_ptr++;
+        return true;
+    }
+    return false;
+}

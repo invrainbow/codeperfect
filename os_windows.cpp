@@ -235,13 +235,6 @@ Process_Status Process::status() {
     return PROCESS_ERROR;
 }
 
-bool Process::peek(char *ch) {
-    DWORD read = 0, total, left;
-    if (!PeekNamedPipe(stdout_r, ch, 1, &read, &total, &left))
-        return false;
-    return read == 1;
-}
-
 bool Process::can_read() {
     DWORD total = 0;
     if (!PeekNamedPipe(stdout_r, NULL, 0, NULL, &total, NULL))
@@ -249,9 +242,11 @@ bool Process::can_read() {
     return total > 0;
 }
 
-bool Process::read1(char* ch) {
-    DWORD n = 0;
-    return ReadFile(stdout_r, ch, 1, &n, NULL) && (n == 1);
+int Process::readn(char* buf, int n) {
+    DWORD read = 0;
+    if (!ReadFile(stdout_r, buf, n, &read, NULL))
+        return -1;
+    return (int)read;
 }
 
 bool Process::writestr(ccstr s, s32 len) {

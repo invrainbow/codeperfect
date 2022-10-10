@@ -85,6 +85,10 @@ struct Process {
     bool peek_buffer_full;
 #endif
 
+    char read_buffer[1024];
+    int read_buffer_ptr;
+    int read_buffer_len;
+
     u32 exit_code;
 
     void init() {
@@ -96,7 +100,10 @@ struct Process {
     Process_Status status();
     bool peek(char *ch);
     bool can_read();
-    bool read1(char* ch);
+
+    bool read1(char* out);
+    int readn(char* out, int n);
+
     bool write1(char ch);
     bool writestr(ccstr s, s32 len = 0);
     ccstr readall(u32* plen = NULL);
