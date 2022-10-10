@@ -245,9 +245,18 @@ func GHGetAuthStatus() int {
 
 //export GHAuth
 func GHAuth(rawEmail *C.char, rawLicenseKey *C.char) {
-	license := &License{}
-	license.Email = C.GoString(rawEmail)
-	license.LicenseKey = C.GoString(rawLicenseKey)
+	var license *License
+	var endpoint string
+
+	if rawEmail != nil && rawLicenseKey != nil {
+		license = &License{
+			Email:      C.GoString(rawEmail),
+			LicenseKey: C.GoString(rawLicenseKey),
+		}
+		endpoint = "auth"
+	} else {
+		endpoint = "trial"
+	}
 
 	osSlug := runtime.GOOS
 	req := &models.AuthRequest{
@@ -258,7 +267,7 @@ func GHAuth(rawEmail *C.char, rawLicenseKey *C.char) {
 	var resp models.AuthResponse
 
 	doAuth := func() int {
-		if err := CallServer("auth", license, req, &resp); err != nil {
+		if err := CallServer(endpoint, license, req, &resp); err != nil {
 			log.Println(err)
 			switch err.(type) {
 			case net.Error, *net.OpError, syscall.Errno:

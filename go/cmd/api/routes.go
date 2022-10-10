@@ -107,6 +107,28 @@ func SendSlackMessageForUser(user *models.User, format string, args ...interface
 	SendSlackMessage(format, args...)
 }
 
+func PostTrial(c *gin.Context) {
+	var req models.AuthRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		sendError(c, "Invalid data.")
+		return
+	}
+
+	ip := c.ClientIP()
+
+	SendSlackMessage("trial user opened on ip `%s`", ip)
+
+	PosthogCaptureStringId(ip, "trial user", PosthogProps{
+		"os":              req.OS,
+		"current_version": req.CurrentVersion,
+		"ip":              ip,
+	})
+
+	c.JSON(http.StatusOK, &models.AuthResponse{
+		Success: true,
+	})
+}
+
 func PostAuth(c *gin.Context) {
 	user, err := authUser(c)
 	if err != nil {

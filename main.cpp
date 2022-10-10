@@ -1154,6 +1154,8 @@ int realmain(int argc, char **argv) {
             if (res == ASKUSER_YES) {
                 GHOpenURLInBrowser("https://codeperfect95.com/buy");
             }
+        } else {
+            GHAuth(NULL, NULL);
         }
         break;
 

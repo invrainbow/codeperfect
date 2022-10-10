@@ -26,12 +26,17 @@ func init() {
 
 type PosthogProps posthog.Properties
 
-func PosthogCapture(userid uint, event string, properties PosthogProps) error {
+func PosthogCaptureStringId(id string, event string, properties PosthogProps) error {
 	return client.Enqueue(posthog.Capture{
-		DistinctId: strconv.FormatUint(uint64(userid), 10),
+		DistinctId: id,
 		Event:      event,
 		Properties: posthog.Properties(properties),
 	})
+}
+
+func PosthogCapture(userid uint, event string, properties PosthogProps) error {
+	id := strconv.FormatUint(uint64(userid), 10)
+	return PosthogCaptureStringId(id, event, properties)
 }
 
 func PosthogIdentify(userid uint, properties PosthogProps) error {
