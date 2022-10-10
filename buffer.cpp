@@ -623,6 +623,7 @@ void Buffer::update_tree() {
 
     tree = ts_parser_parse(parser, tree, input);
     tree_dirty = true;
+    tree_version++;
 }
 
 void Buffer::internal_start_edit(cur2 start, cur2 end) {

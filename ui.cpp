@@ -6376,6 +6376,41 @@ void UI::draw_everything() {
                 }
             }
 
+            struct {
+                bool on;
+                cur2 start;
+                cur2 end;
+                int curr_sib;
+                List<Ast_Node*> *siblings;
+            } ast_navigation;
+
+            ptr0(&ast_navigation);
+            ast_navigation.on = false;
+            ast_navigation.start = new_cur2(0, 0);
+            ast_navigation.end = new_cur2(0, 0);
+            ast_navigation.curr_sib = 0;
+            ast_navigation.siblings = alloc_list<Ast_Node*>();
+
+            do {
+                auto &nav = editor->ast_navigation;
+                if (!nav.on) break;
+
+                if (nav.tree_version != editor->buf->tree_version) {
+                    nav.on = false;
+                    break;
+                }
+
+                auto node = nav.node;
+                if (!node) break;
+                if (node->null) break;
+
+                auto &out = ast_navigation;
+                out.start = node->start();
+                out.end = node->end();
+                out.on = true;
+                out.siblings = editor->ast_navigation.siblings;
+            } while (0);
+
             auto draw_highlight = [&](vec4f color, int width, bool fullsize = false) {
                 boxf b;
                 b.pos = cur_pos;
@@ -6588,6 +6623,25 @@ void UI::draw_everything() {
                         }
                     }
 
+                    if (ast_navigation.on) {
+                        auto &ref = ast_navigation;
+
+                        auto pos = new_cur2((int)curr_byte_idx, (int)y);
+                        if (ref.start <= pos && pos < ref.end) {
+                            draw_highlight(rgba(global_colors.cursor), glyph_width, true);
+                            text_color = rgba(global_colors.cursor_foreground);
+                        } else {
+                            while (ref.curr_sib < ref.siblings->len && pos >= ref.siblings->at(ref.curr_sib)->end())
+                                ref.curr_sib++;
+
+                            if (ref.curr_sib < ref.siblings->len) {
+                                auto node = ref.siblings->at(ref.curr_sib);
+                                if (node->start() <= pos && pos < node->end())
+                                    draw_highlight(rgba("#ffffff", 0.1), glyph_width, true);
+                            }
+                        }
+                    }
+
                     if (highlight_snippet.on) {
                         auto pos = new_cur2((int)curr_byte_idx, (int)y);
                         if (highlight_snippet.start <= pos && pos < highlight_snippet.end)
@@ -6646,6 +6700,19 @@ void UI::draw_everything() {
                 }
 
                 if (!line->len) {
+                    if (ast_navigation.on) {
+                        auto &ref = ast_navigation;
+
+                        auto pos = new_cur2(0, (int)y);
+                        if (ref.start <= pos && pos < ref.end) {
+                            draw_highlight(rgba(global_colors.cursor), 1, true);
+                        } else if (ref.curr_sib < ref.siblings->len) {
+                            auto node = ref.siblings->at(ref.curr_sib);
+                            if (node->start() <= pos && pos < node->end())
+                                draw_highlight(rgba("#ffffff", 0.1), 1, true);
+                        }
+                    }
+
                     if (world.use_nvim) {
                         auto topline = editor->nvim_data.grid_topline;
                         if (topline <= y && y < topline + NVIM_DEFAULT_HEIGHT) {

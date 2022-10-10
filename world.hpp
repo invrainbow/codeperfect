@@ -244,6 +244,7 @@ enum Command {
     CMD_REMOVE_ALL_TAGS,
     CMD_GO_BACK,
     CMD_GO_FORWARD,
+    CMD_AST_NAVIGATION,
     /**/
     _CMD_COUNT_,
     CMD_INVALID = -1,

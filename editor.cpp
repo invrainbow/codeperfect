@@ -1556,6 +1556,109 @@ void Editor::init() {
     }
 
     nvim_insert.mem.init("nvim_insert mem");
+    ast_navigation.mem.init("ast_navigation mem");
+}
+
+void Editor::update_selected_ast_node(Ast_Node *node) {
+    auto &nav = ast_navigation;
+
+    auto prev_siblings = alloc_list<Ast_Node*>();
+    for (auto curr = node->prev(); !curr->null; curr = curr->prev())
+        prev_siblings->append(curr);
+
+    {
+        SCOPED_MEM(&nav.mem);
+
+        nav.node = node->dup();
+        nav.siblings->len = 0;
+
+        for (int i = prev_siblings->len-1; i >= 0; i--)
+            nav.siblings->append(prev_siblings->at(i)->dup());
+        for (auto curr = node->next(); !curr->null; curr = curr->next())
+            nav.siblings->append(curr);
+    }
+}
+
+void Editor::update_ast_navigate(fn<Ast_Node*(Ast_Node*)> cb) {
+    auto &nav = ast_navigation;
+    if (!nav.on) return;
+
+    auto node = nav.node;
+    if (!node) return;
+
+    node = cb(node);
+    if (!node) return;
+    if (node->null) return;
+
+    update_selected_ast_node(node);
+    move_cursor(node->start());
+
+    auto end = node->end().y;
+    if (end >= view.y + view.h)
+        view.y = relu_sub(node->start().y, 3);
+}
+
+void Editor::ast_navigate_in() {
+    update_ast_navigate([&](auto node) -> Ast_Node* {
+        auto child = node->child();
+        if (child->null) return NULL;
+
+        // skip the children that have no siblings
+        while (!child->null && child->prev()->null && child->next()->null) // no siblings
+            child = child->child();
+
+        // no children with siblings, just grab the innermost child
+        if (child->null) {
+            child = node->child();
+            while (true) {
+                auto next = child->child();
+                if (next->null) break;
+                child = next;
+            }
+
+            // if the innermost child is indistinguishable from current node, return null
+            if (child->start() == node->start() && child->end() == node->end())
+                return NULL;
+        }
+
+        return child;
+    });
+}
+
+void Editor::ast_navigate_out() {
+    update_ast_navigate([&](auto node) -> Ast_Node* {
+        auto parent = node->parent();
+        if (parent->null) return NULL;
+        if (parent->type() == TS_SOURCE_FILE) return NULL;
+
+        // skip the children that have no siblings
+        while (!parent->null && parent->prev()->null && parent->next()->null) // no siblings
+            parent = parent->parent();
+
+        if (parent->null) {
+            parent = node->parent();
+            while (true) {
+                auto next = parent->parent();
+                if (next->null) break;
+                if (next->type() == TS_SOURCE_FILE) break;
+                parent = next;
+            }
+        }
+
+        return parent;
+    });
+}
+
+void Editor::ast_navigate_prev() {
+    update_ast_navigate([&](auto node) {
+        return node->prev();
+    });
+}
+
+void Editor::ast_navigate_next() {
+    update_ast_navigate([&](auto node) {
+        return node->next();
+    });
 }
 
 void Editor::cleanup() {

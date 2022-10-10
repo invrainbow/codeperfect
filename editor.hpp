@@ -165,6 +165,14 @@ struct Editor {
         u32 view;
     } autocomplete;
 
+    struct {
+        Pool mem;
+        bool on;
+        Ast_Node *node;
+        List<Ast_Node*> *siblings;
+        int tree_version;
+    } ast_navigation;
+
     Client_Parameter_Hint parameter_hint;
 
     void init();
@@ -218,6 +226,12 @@ struct Editor {
     void delete_selection();
     void toggle_comment(int ystart, int yend);
     void highlight_snippet(cur2 start, cur2 end);
+    void update_selected_ast_node(Ast_Node *node);
+    void update_ast_navigate(fn<Ast_Node*(Ast_Node*)> cb);
+    void ast_navigate_in();
+    void ast_navigate_out();
+    void ast_navigate_prev();
+    void ast_navigate_next();
 };
 
 struct Pane {

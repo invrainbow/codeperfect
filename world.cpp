@@ -1588,6 +1588,11 @@ bool is_command_enabled(Command cmd) {
         return index < project_settings.debug_profiles->len;
     }
 
+    case CMD_AST_NAVIGATION: {
+        auto editor = get_current_editor();
+        return editor && editor->is_go_file && editor->buf->tree;
+    }
+
     case CMD_GO_FORWARD: {
         auto &hist = world.history;
         return hist.curr != hist.top;
@@ -1737,6 +1742,14 @@ ccstr get_command_name(Command cmd) {
     auto info = command_info_table[cmd];
 
     switch (cmd) {
+    case CMD_AST_NAVIGATION: {
+        auto editor = get_current_editor();
+        if (!editor) break;
+
+        if (editor->ast_navigation.on)
+            return "Leave AST Navigation";
+        return "Enter AST Navigation";
+    }
 
     case CMD_BUILD_PROFILE_1:
     case CMD_BUILD_PROFILE_2:
@@ -1883,6 +1896,7 @@ void init_command_info_table() {
 
     command_info_table[CMD_GO_BACK] = k(CP_MOD_PRIMARY, CP_KEY_MINUS, "Go Back");
     command_info_table[CMD_GO_FORWARD] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_MINUS, "Go Forward");
+    command_info_table[CMD_AST_NAVIGATION] = k(CP_MOD_ALT | CP_MOD_SHIFT, CP_KEY_A, "Enter AST Navigation");
 }
 
 void do_find_interfaces() {
@@ -2922,6 +2936,59 @@ void handle_command(Command cmd, bool from_menu) {
     case CMD_GO_FORWARD:
         world.history.go_forward();
         break;
+
+    case CMD_AST_NAVIGATION: {
+        auto editor = get_current_editor();
+
+        auto tree = editor->buf->tree;
+        if (!tree) break;
+
+        auto &nav = editor->ast_navigation;
+        if (nav.on) {
+            nav.on = false;
+            break;
+        }
+
+        // or reset?
+        nav.mem.cleanup();
+        nav.mem.init();
+
+        Parser_It *it = NULL;
+        {
+            SCOPED_MEM(&nav.mem);
+            it = alloc_object(Parser_It);
+            it->init(editor->buf);
+        }
+
+        auto root = new_ast_node(ts_tree_root_node(tree), it);
+
+        Ast_Node *node = NULL;
+        find_nodes_containing_pos(root, editor->cur, true, [&](auto it) -> Walk_Action {
+            if (it->type() == TS_SOURCE_FILE) return WALK_CONTINUE;
+
+            if (node)
+                if (it->start() == node->start())
+                    if (it->end() == node->end())
+                        return WALK_CONTINUE;
+
+            node = it->dup();
+            return WALK_CONTINUE;
+        });
+
+        if (!node) return; // TODO: ENG-302: flash the cursor red or something?
+
+        nav.on = true;
+        nav.tree_version = editor->buf->tree_version;
+        {
+            SCOPED_MEM(&nav.mem);
+            nav.siblings = alloc_list<Ast_Node*>();
+        }
+        editor->update_selected_ast_node(node);
+
+        if (world.use_nvim)
+            if (world.nvim.mode != VI_NORMAL)
+                editor->trigger_escape();
+    }
     }
 }
 

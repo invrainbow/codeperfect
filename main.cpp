@@ -475,6 +475,36 @@ void handle_window_event(Window_Event *it) {
 
         if (handle_autocomplete_control()) break;
 
+        if (editor && editor->ast_navigation.on) {
+            switch (keymods) {
+            case CP_MOD_NONE: {
+                switch (key) {
+                case CP_KEY_LEFT:
+                    editor->ast_navigate_out();
+                    break;
+
+                case CP_KEY_RIGHT:
+                    editor->ast_navigate_in();
+                    break;
+
+                case CP_KEY_DOWN:
+                    editor->ast_navigate_next();
+                    break;
+
+                case CP_KEY_UP:
+                    editor->ast_navigate_prev();
+                    break;
+
+                case CP_KEY_ESCAPE:
+                    editor->ast_navigation.on = false;
+                    break;
+                }
+                break;
+            }
+            }
+            break;
+        }
+
         // =======================
         // handle non-vim movement
         // =======================
@@ -678,6 +708,7 @@ void handle_window_event(Window_Event *it) {
         case CP_MOD_SHIFT:
             switch (key) {
             case CP_KEY_ESCAPE:
+                if (!editor) break;
                 if (!editor->trigger_escape()) send_nvim_keys("<S-Esc>");
                 break;
             }
@@ -690,6 +721,7 @@ void handle_window_event(Window_Event *it) {
             case CP_KEY_ENTER:
                 // was there a reason this didn't work?
                 /*
+                if (!editor) break;
                 if (world.nvim.mode == VI_INSERT && editor->postfix_stack.len > 0) {
                     auto pf = editor->postfix_stack.last();
                     cp_assert(pf->current_insert_position < pf->insert_positions.len);
@@ -706,6 +738,7 @@ void handle_window_event(Window_Event *it) {
                 break;
 
             case CP_KEY_ESCAPE:
+                if (!editor) break;
                 if (!editor->trigger_escape()) send_nvim_keys("<C-Esc>");
                 break;
 
@@ -764,6 +797,7 @@ void handle_window_event(Window_Event *it) {
         case CP_MOD_CTRL | CP_MOD_SHIFT:
             switch (key) {
             case CP_KEY_ESCAPE:
+                if (!editor) break;
                 if (!editor->trigger_escape())
                     send_nvim_keys("<C-S-Esc>");
                 break;
@@ -771,26 +805,39 @@ void handle_window_event(Window_Event *it) {
                 goto_previous_tab();
                 break;
             case CP_KEY_SPACE: {
-                auto ed = get_current_editor();
-                if (!ed) break;
-                ed->trigger_parameter_hint();
+                if (!editor) break;
+                editor->trigger_parameter_hint();
                 break;
             }
             }
             break;
 
         case CP_MOD_NONE: {
-            if (!editor) break;
-
             switch (key) {
             case CP_KEY_LEFT:
             case CP_KEY_RIGHT:
+                if (!editor) break;
+                if (editor->ast_navigation.on) {
+                    if (key == CP_KEY_LEFT)
+                        editor->ast_navigate_out();
+                    else
+                        editor->ast_navigate_in();
+                    break;
+                }
                 if (world.use_nvim && world.nvim.mode != VI_INSERT)
                     send_nvim_keys(key == CP_KEY_LEFT ? "<Left>" : "<Right>");
                 break;
 
             case CP_KEY_DOWN:
             case CP_KEY_UP:
+                if (!editor) break;
+                if (editor->ast_navigation.on) {
+                    if (key == CP_KEY_DOWN)
+                        editor->ast_navigate_next();
+                    else
+                        editor->ast_navigate_prev();
+                    break;
+                }
                 if (world.use_nvim) {
                     if (world.nvim.mode == VI_INSERT) {
                         if (!move_autocomplete_cursor(editor, key == CP_KEY_DOWN ? 1 : -1))  {
@@ -803,6 +850,7 @@ void handle_window_event(Window_Event *it) {
                 break;
 
             case CP_KEY_ESCAPE:
+                if (!editor) break;
                 if (editor->trigger_escape()) break;
                 if (world.use_nvim) send_nvim_keys("<Esc>");
                 break;
@@ -974,6 +1022,16 @@ void handle_window_event(Window_Event *it) {
 
         auto ed = get_current_editor();
         if (!ed) return;
+
+        if (ed->ast_navigation.on) {
+            switch (ch) {
+            case 'h': ed->ast_navigate_out();  break;
+            case 'j': ed->ast_navigate_next(); break;
+            case 'k': ed->ast_navigate_prev(); break;
+            case 'l': ed->ast_navigate_in();   break;
+            }
+            return;
+        }
 
         if (world.use_nvim) {
             if (world.nvim.mode == VI_INSERT) {

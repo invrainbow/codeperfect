@@ -303,6 +303,7 @@ struct Ast_Node {
     Parser_It *it;
     bool null;
 
+    Ast_Node *dup() { return dup(node); }
     Ast_Node *dup(TSNode new_node);
     ccstr string();
 
