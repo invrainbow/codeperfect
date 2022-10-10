@@ -640,16 +640,8 @@ void Buffer::internal_start_edit(cur2 start, cur2 end) {
     edit_buffer_old.len = 0;
     edit_buffer_new.len = 0;
 
-    auto it = iter(start);
-    while (it.pos < end) {
-        // Temporary solution: check if we're at the end but still not reaching
-        // `end`. If so, break out. But the real root cause we need to fix is,
-        // why is this function being called with an `end` that is beyond its
-        // real end?
-        auto old_pos = it.pos;
-        edit_buffer_old.append(it.next());
-        if (it.pos == old_pos) break;
-    }
+    for (auto it = iter(start); it.pos < end && !it.eof(); it.next())
+        edit_buffer_old.append(it.peek());
 }
 
 void Buffer::internal_finish_edit(cur2 new_end) {
@@ -675,9 +667,8 @@ void Buffer::internal_update_mark_tree() {
         auto start = tspoint_to_cur(tsedit.start_point);
         auto end = tspoint_to_cur(tsedit.new_end_point);
 
-        auto it = iter(start);
-        while (it.pos < end)
-            edit_buffer_new.append(it.next());
+        for (auto it = iter(start); it.pos < end && !it.eof(); it.next())
+            edit_buffer_new.append(it.peek());
     }
 
     auto a = new_dstr(&edit_buffer_old);
