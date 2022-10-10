@@ -1747,8 +1747,8 @@ ccstr get_command_name(Command cmd) {
         if (!editor) break;
 
         if (editor->ast_navigation.on)
-            return "Leave AST Navigation";
-        return "Enter AST Navigation";
+            return "Leave Tree-Based Navigation";
+        return "Enter Tree-Based Navigation";
     }
 
     case CMD_BUILD_PROFILE_1:
@@ -1865,7 +1865,7 @@ void init_command_info_table() {
     command_info_table[CMD_VIEW_CALLEE_HIERARCHY] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_I, "View Callee Hierarchy");
     command_info_table[CMD_GO_BACK] = k(CP_MOD_PRIMARY, CP_KEY_MINUS, "Go Back");
     command_info_table[CMD_GO_FORWARD] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_MINUS, "Go Forward");
-    command_info_table[CMD_AST_NAVIGATION] = k(CP_MOD_CTRL | CP_MOD_ALT, CP_KEY_A, "Enter AST Navigation");
+    command_info_table[CMD_AST_NAVIGATION] = k(CP_MOD_CTRL | CP_MOD_ALT, CP_KEY_A, "Enter Tree-Based Navigation");
     /**/
     command_info_table[CMD_ERROR_LIST] = k(0, 0, "Error List");
     command_info_table[CMD_FORMAT_SELECTION] = k(0, 0, "Format Selection");
