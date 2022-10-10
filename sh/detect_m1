@@ -1,5 +1,7 @@
 #!/bin/bash
-if [[ -f .x64 ]]; then
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
+
+if [[ -f "$SCRIPT_DIR/../.x64" ]]; then
     echo 0
 elif [[ -n $(sysctl -n machdep.cpu.brand_string | grep "Apple M1") ]]; then
     echo 1
