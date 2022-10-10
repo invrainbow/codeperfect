@@ -1857,6 +1857,15 @@ void init_command_info_table() {
     command_info_table[CMD_DELETE_ALL_BREAKPOINTS] = k(CP_MOD_SHIFT, CP_KEY_F9, "Delete All Breakpoints");
     command_info_table[CMD_REPLACE] = k(CP_MOD_PRIMARY, CP_KEY_H, "Replace...");
     command_info_table[CMD_FIND] = k(CP_MOD_PRIMARY, CP_KEY_F, "Find...");
+    command_info_table[CMD_OPTIONS] = k(CP_MOD_PRIMARY, CP_KEY_COMMA, "Options");
+    command_info_table[CMD_TOGGLE_COMMENT] = k(CP_MOD_PRIMARY | CP_MOD_ALT, CP_KEY_SLASH, "Toggle Comment");
+    command_info_table[CMD_UNDO] = k(CP_MOD_PRIMARY, CP_KEY_Z, "Undo");
+    command_info_table[CMD_REDO] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_Z, "Redo");
+    command_info_table[CMD_VIEW_CALLER_HIERARCHY] = k(CP_MOD_PRIMARY, CP_KEY_I, "View Caller Hierarchy");
+    command_info_table[CMD_VIEW_CALLEE_HIERARCHY] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_I, "View Callee Hierarchy");
+    command_info_table[CMD_GO_BACK] = k(CP_MOD_PRIMARY, CP_KEY_MINUS, "Go Back");
+    command_info_table[CMD_GO_FORWARD] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_MINUS, "Go Forward");
+    command_info_table[CMD_AST_NAVIGATION] = k(CP_MOD_CTRL | CP_MOD_ALT, CP_KEY_A, "Enter AST Navigation");
     /**/
     command_info_table[CMD_ERROR_LIST] = k(0, 0, "Error List");
     command_info_table[CMD_FORMAT_SELECTION] = k(0, 0, "Format Selection");
@@ -1871,20 +1880,13 @@ void init_command_info_table() {
     command_info_table[CMD_DEBUG_PROFILES] = k(0, 0, "Debug Profiles");
     command_info_table[CMD_RESCAN_INDEX] = k(0, 0, "Rescan Index");
     command_info_table[CMD_OBLITERATE_AND_RECREATE_INDEX] = k(0, 0, "Obliterate and Recreate Index");
-    command_info_table[CMD_OPTIONS] = k(CP_MOD_PRIMARY, CP_KEY_COMMA, "Options");
     command_info_table[CMD_GENERATE_IMPLEMENTATION] = k(0, 0, "Generate Implementation");
     command_info_table[CMD_GENERATE_FUNCTION] = k(0, 0, "[Experimental] Generate Function From Call");
-    command_info_table[CMD_TOGGLE_COMMENT] = k(CP_MOD_PRIMARY | CP_MOD_ALT, CP_KEY_SLASH, "Toggle Comment");
     command_info_table[CMD_FIND_IMPLEMENTATIONS] = k(0, 0, "Find Implementations");
     command_info_table[CMD_FIND_INTERFACES] = k(0, 0, "Find Interfaces");
-    command_info_table[CMD_UNDO] = k(CP_MOD_PRIMARY, CP_KEY_Z, "Undo");
-    command_info_table[CMD_REDO] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_Z, "Redo");
     command_info_table[CMD_DOCUMENTATION] = k(0, 0, "Documentation");
-    command_info_table[CMD_VIEW_CALLER_HIERARCHY] = k(CP_MOD_PRIMARY, CP_KEY_I, "View Caller Hierarchy");
-    command_info_table[CMD_VIEW_CALLEE_HIERARCHY] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_I, "View Callee Hierarchy");
     command_info_table[CMD_BUY_LICENSE] = k(0, 0, "Buy a License");
     command_info_table[CMD_ENTER_LICENSE] = k(0, 0, "Enter License...");
-
     command_info_table[CMD_ADD_JSON_TAG] = k(0, 0, "Struct: Add JSON tag");
     command_info_table[CMD_ADD_YAML_TAG] = k(0, 0, "Struct: Add YAML tag");
     command_info_table[CMD_ADD_XML_TAG] = k(0, 0, "Struct: Add XML tag");
@@ -1893,10 +1895,6 @@ void init_command_info_table() {
     command_info_table[CMD_ADD_ALL_XML_TAGS] = k(0, 0, "Struct: Add all XML tags");
     command_info_table[CMD_REMOVE_TAG] = k(0, 0, "Struct: Remove tag");
     command_info_table[CMD_REMOVE_ALL_TAGS] = k(0, 0, "Struct: Remove all tags");
-
-    command_info_table[CMD_GO_BACK] = k(CP_MOD_PRIMARY, CP_KEY_MINUS, "Go Back");
-    command_info_table[CMD_GO_FORWARD] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_MINUS, "Go Forward");
-    command_info_table[CMD_AST_NAVIGATION] = k(CP_MOD_CTRL | CP_MOD_ALT, CP_KEY_A, "Enter AST Navigation");
 }
 
 void do_find_interfaces() {
