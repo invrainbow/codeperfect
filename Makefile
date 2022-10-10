@@ -43,11 +43,11 @@ endif
 CFLAGS += $(shell sh/pkgconfig --cflags $(PKGS))
 LDFLAGS += $(shell sh/pkgconfig --libs $(PKGS))
 
-GO_LDFLAGS =
+GOLDFLAGS =
 ifeq ($(RELEASE), 1)
 	# CFLAGS += -O3
 	CFLAGS += -g -O3
-	GO_LDFLAGS += -s -w
+	GOLDFLAGS += -s -w
 	# LDFLAGS += -Wl,-S,-x
 else
 	CFLAGS += -DDEBUG_BUILD -g -O0
@@ -118,7 +118,7 @@ binaries.c: .cpcolors vert.glsl frag.glsl im.vert.glsl im.frag.glsl
 
 obj/gohelper.a: $(GO_DEPS)
 	cd go; \
-		CC=clang CGO_ENABLED=1 go build -ldflags "$(GO_LDFLAGS)" -o gohelper.a -buildmode=c-archive ./helper && \
+		GOARCH=$(GOARCH) CC=clang CGO_ENABLED=1 go build -ldflags "$(GOLDFLAGS)" -o gohelper.a -buildmode=c-archive ./helper && \
 		(mkdir -p ../obj; mv gohelper.a ../obj; mv gohelper.h ..)
 
 LAUNCHER_LDFLAGS =
@@ -128,7 +128,7 @@ endif
 
 build/launcher$(BINARY_SUFFIX): $(GO_DEPS)
 	cd go; \
-		go build -ldflags "$(GO_LDFLAGS) $(LAUNCHER_LDFLAGS)" -o ../$@ ./cmd/launcher
+		GOARCH=$(GOARCH) go build -ldflags "$(GOLDFLAGS) $(LAUNCHER_LDFLAGS)" -o ../$@ ./cmd/launcher
 
 gohelper.h: obj/gohelper.a
 
