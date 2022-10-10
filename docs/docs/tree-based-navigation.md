@@ -17,4 +17,4 @@ is active:
 | Command                     | Shortcut     |
 | --------------------------- | ------------ |
 | Enter Tree-Based Navigation | `Ctrl+Alt+A` |
-| Enter Tree-Based Navigation | `Ctrl+Alt+A` |
+| Leave Tree-Based Navigation | `Ctrl+Alt+A` |
