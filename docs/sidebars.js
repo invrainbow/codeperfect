@@ -18,6 +18,7 @@ const sidebars = {
       type: "category",
       label: "Changelog",
       items: [
+        "changelog/22.10.1",
         "changelog/22.10",
         "changelog/22.09.7",
         "changelog/22.09.6",
@@ -40,7 +41,13 @@ const sidebars = {
     {
       type: "category",
       label: "Navigation",
-      items: ["command-palette", "go-to-file", "go-to-symbol", "history"],
+      items: [
+        "command-palette",
+        "go-to-file",
+        "go-to-symbol",
+        "history",
+        "tree-based-navigation",
+      ],
     },
     {
       type: "category",
