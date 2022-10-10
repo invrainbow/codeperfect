@@ -67,24 +67,6 @@ Ask_User_Result ask_user_yes_no_cancel(ccstr text, ccstr title, ccstr yeslabel, 
     return ask_user_yes_no(text, title, yeslabel, nolabel, true);
 }
 
-#if OS_WINBLOWS
-#   define OPEN_COMMAND "start"
-#elif OS_MAC
-#   define OPEN_COMMAND "open"
-#elif OS_LINUX
-#   define OPEN_COMMAND "xdg-open"
-#endif
-
-void open_webbrowser(ccstr url) {
-    // for highlevel stuff like this, shell out to go?
-    Process p;
-    p.init();
-    p.run(cp_sprintf("%s %s", OPEN_COMMAND, url));
-    p.cleanup();
-}
-
-#undef OPEN_COMMAND
-
 ccstr cp_getcwd() {
     auto ret = alloc_array(char, 256);
     return getcwd(ret, 256);

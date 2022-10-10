@@ -386,7 +386,6 @@ bool create_directory(ccstr path);
 bool touch_file(ccstr path);
 
 void init_platform_crap();
-void open_webbrowser(ccstr url);
 
 ccstr cp_getcwd();
 

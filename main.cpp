@@ -1152,7 +1152,7 @@ int realmain(int argc, char **argv) {
             world.auth_error = true;
             auto res = ask_user_yes_no("Your trial has ended. A license is required for continued use.\n\nDo you want to buy one now?", NULL, "Purchase License", "No");
             if (res == ASKUSER_YES) {
-                open_webbrowser("https://codeperfect95.com/buy");
+                GHOpenURLInBrowser("https://codeperfect95.com/buy");
             }
         }
         break;

@@ -2209,7 +2209,7 @@ void handle_command(Command cmd, bool from_menu) {
     }
 
     case CMD_BUY_LICENSE:
-        open_webbrowser("https://codeperfect95.com/buy");
+        GHOpenURLInBrowser("https://codeperfect95.com/buy");
         break;
 
     case CMD_ENTER_LICENSE: {
@@ -2225,7 +2225,7 @@ void handle_command(Command cmd, bool from_menu) {
     }
 
     case CMD_DOCUMENTATION:
-        open_webbrowser("https://docs.codeperfect95.com/");
+        GHOpenURLInBrowser("https://docs.codeperfect95.com/");
         break;
 
     case CMD_UNDO:

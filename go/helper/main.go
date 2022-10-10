@@ -23,6 +23,7 @@ import (
 	"github.com/invrainbow/codeperfect/go/models"
 	"github.com/invrainbow/codeperfect/go/utils"
 	"github.com/invrainbow/codeperfect/go/versions"
+	"github.com/pkg/browser"
 	"github.com/reviewdog/errorformat"
 	"golang.org/x/tools/imports"
 )
@@ -593,6 +594,12 @@ func GHAddTag(tagstr, lang, tagname *C.char, ok *bool) *C.char {
 	}
 
 	return C.CString(tags.String())
+}
+
+//export GHOpenURLInBrowser
+func GHOpenURLInBrowser(url *C.char) bool {
+	err := browser.OpenURL(C.GoString(url))
+	return err != nil
 }
 
 func main() {}
