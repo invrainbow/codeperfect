@@ -201,17 +201,6 @@ Process_Status Process::status() {
     return PROCESS_WAITING;
 }
 
-bool Process::peek(char *ch) {
-    if (!peek_buffer_full) {
-        if (!can_read()) return false;
-        if (!read1(&peek_buffer)) return false;
-        peek_buffer_full = true;
-    }
-
-    *ch = peek_buffer;
-    return true;
-}
-
 bool Process::can_read() {
     struct timeval timeout = {0};
 
@@ -227,19 +216,8 @@ bool Process::can_read() {
     return (ret > 0);
 }
 
-bool Process::read1(char* out) {
-    if (peek_buffer_full) {
-        peek_buffer_full = false;
-        *out = peek_buffer;
-        return true;
-    }
-
-    char ch = 0;
-    if (read(stdout_pipe_read, &ch, 1) == 1) {
-        *out = ch;
-        return true;
-    }
-    return false;
+int Process::readn(char* buf, int n) {
+    return read(stdout_pipe_read, buf, n);
 }
 
 bool Process::write1(char ch) {
