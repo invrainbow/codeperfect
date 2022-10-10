@@ -2483,6 +2483,10 @@ void handle_command(Command cmd, bool from_menu) {
         if (index >= project_settings.build_profiles->len) break; // shouldn't happen
 
 	    auto profile = &project_settings.build_profiles->items[index];
+
+        world.error_list.show = true;
+        world.error_list.cmd_make_visible_but_dont_focus = true;
+        save_all_unsaved_files();
         kick_off_build(profile);
         break;
     }
