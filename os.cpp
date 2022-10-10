@@ -54,15 +54,6 @@ File_Mapping *map_file_into_memory(ccstr path, File_Mapping_Opts *opts) {
     return fm;
 }
 
-/*
-bool list_directory(ccstr path, list_directory_cb_void cb) {
-    list_directory(path, [&](Dir_Entry *it) -> bool {
-        cb(it);
-        return true;
-    });
-}
-*/
-
 Ask_User_Result ask_user_yes_no_cancel(ccstr text, ccstr title, ccstr yeslabel, ccstr nolabel) {
     return ask_user_yes_no(text, title, yeslabel, nolabel, true);
 }
