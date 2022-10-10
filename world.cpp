@@ -1896,7 +1896,7 @@ void init_command_info_table() {
 
     command_info_table[CMD_GO_BACK] = k(CP_MOD_PRIMARY, CP_KEY_MINUS, "Go Back");
     command_info_table[CMD_GO_FORWARD] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_MINUS, "Go Forward");
-    command_info_table[CMD_AST_NAVIGATION] = k(CP_MOD_ALT | CP_MOD_SHIFT, CP_KEY_A, "Enter AST Navigation");
+    command_info_table[CMD_AST_NAVIGATION] = k(CP_MOD_CTRL | CP_MOD_ALT, CP_KEY_A, "Enter AST Navigation");
 }
 
 void do_find_interfaces() {
