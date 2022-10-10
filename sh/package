@@ -89,5 +89,5 @@ if [[ -z "$SKIP_UPLOAD" ]]; then
     filename="$os-$slug-$version_string.zip"
     aws s3 cp app.zip "s3://codeperfect95/app/$filename"
     aws s3 cp update.zip "s3://codeperfect95/update/$filename"
-    aws s3 cp debug-symbols "s3://codeperfect95-private/debug-symbols-$os-$slug-$version_string"
+    aws s3 cp debug-symbols "s3://codeperfect-private/debug-symbols-$os-$slug-$version_string"
 fi
