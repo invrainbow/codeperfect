@@ -1521,7 +1521,7 @@ int realmain(int argc, char **argv) {
         Timer t;
         t.init("frame tracer", &world.trace_next_frame);
 
-        if (world.auth_status == GH_AUTH_WAITING) {
+        if (world.auth.state == AUTH_REGISTERED && world.auth_status == GH_AUTH_WAITING) {
             auto &auth = world.auth;
 
             auto in_grace_period = [&](int days) {
