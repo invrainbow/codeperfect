@@ -458,6 +458,11 @@ void UI::pretty_menu_item(Pretty_Menu *pm, bool selected) {
 void UI::begin_window(ccstr title, Wnd *wnd, int flags, bool noclose) {
     ImGui::Begin(title, noclose ? NULL : &wnd->show, flags);
     init_window(wnd);
+
+    if (wnd->focused && !noclose)
+        if (imgui_get_keymods() == CP_MOD_NONE)
+            if (imgui_special_key_pressed(ImGuiKey_Escape))
+                wnd->show = false;
 }
 
 void UI::init_window(Wnd *wnd) {
@@ -2667,15 +2672,6 @@ void UI::draw_everything() {
 
         begin_window("Options", &wnd, ImGuiWindowFlags_AlwaysAutoResize);
 
-        if (wnd.focused) {
-            auto mods = imgui_get_keymods();
-            switch (mods) {
-            case CP_MOD_NONE:
-                if (imgui_special_key_pressed(ImGuiKey_Escape)) wnd.show = false;
-                break;
-            }
-        }
-
         auto &outer_style = ImGui::GetStyle();
         int outer_window_padding = outer_style.WindowPadding.y;
 
@@ -3219,16 +3215,17 @@ void UI::draw_everything() {
             else
                 ImGui::TextWrapped("You've selected a type. Please select an interface and we'll add that interface's methods to this type.");
 
+            // closing
+            if (!wnd.show) {
+                wnd.filtered_results->len = 0;
+                wnd.selection = 0;
+            }
+
             auto mods = imgui_get_keymods();
             switch (mods) {
             case CP_MOD_NONE:
                 if (imgui_special_key_pressed(ImGuiKey_DownArrow)) go_down();
                 if (imgui_special_key_pressed(ImGuiKey_UpArrow)) go_up();
-                if (imgui_special_key_pressed(ImGuiKey_Escape)) {
-                    wnd.show = false;
-                    wnd.filtered_results->len = 0;
-                    wnd.selection = 0;
-                }
                 break;
             }
 
@@ -3365,18 +3362,6 @@ void UI::draw_everything() {
             if (ImGui::Button(cp_sprintf("Rename", wnd.declres->decl->name)))
                 submitted = true;
         }
-
-        /*
-        if (wnd.focused) {
-            auto mods = imgui_get_keymods();
-            switch (mods) {
-            case CP_MOD_NONE:
-                if (imgui_special_key_pressed(ImGuiKey_Escape))
-                    wnd.show = false;
-                break;
-            }
-        }
-        */
 
         // We need to close this window when defocused, because otherwise the
         // user might move the cursor and fuck this up
@@ -4094,10 +4079,6 @@ void UI::draw_everything() {
 
         begin_window("Project Settings", &wnd, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking);
 
-        if (imgui_get_keymods() == CP_MOD_NONE)
-            if (imgui_special_key_pressed(ImGuiKey_Escape))
-                wnd.show = false;
-
         auto &ps = wnd.tmp;
 
         if (ImGui::BeginTabBar("MyTabBar", 0)) {
@@ -4527,7 +4508,6 @@ void UI::draw_everything() {
             case CP_MOD_NONE:
                 if (imgui_special_key_pressed(ImGuiKey_DownArrow)) go_down();
                 if (imgui_special_key_pressed(ImGuiKey_UpArrow)) go_up();
-                if (imgui_special_key_pressed(ImGuiKey_Escape)) wnd.show = false;
                 break;
             }
         }
@@ -4585,12 +4565,6 @@ void UI::draw_everything() {
 
         begin_window("Search", &wnd, flags, true);
         focus_keyboard(&wnd);
-
-        if (imgui_get_keymods() == CP_MOD_NONE) {
-            if (imgui_special_key_pressed(ImGuiKey_Escape)) {
-                wnd.show = false;
-            }
-        }
 
         bool search_again = false;
 
@@ -4813,7 +4787,6 @@ void UI::draw_everything() {
         case CP_MOD_NONE:
             if (imgui_special_key_pressed(ImGuiKey_DownArrow)) go_down();
             if (imgui_special_key_pressed(ImGuiKey_UpArrow)) go_up();
-            if (imgui_special_key_pressed(ImGuiKey_Escape)) wnd.show = false;
             break;
         }
 
@@ -4935,16 +4908,16 @@ void UI::draw_everything() {
 
             imgui_small_newline();
 
+            if (!wnd.show) {
+                wnd.filtered_results->len = 0;
+                wnd.selection = 0;
+            }
+
             auto mods = imgui_get_keymods();
             switch (mods) {
             case CP_MOD_NONE:
                 if (imgui_special_key_pressed(ImGuiKey_DownArrow)) go_down();
                 if (imgui_special_key_pressed(ImGuiKey_UpArrow)) go_up();
-                if (imgui_special_key_pressed(ImGuiKey_Escape)) {
-                    wnd.show = false;
-                    wnd.filtered_results->len = 0;
-                    wnd.selection = 0;
-                }
                 break;
             }
 
