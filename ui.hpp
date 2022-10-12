@@ -281,8 +281,8 @@ struct UI {
     void help_marker(fn<void()> cb);
 
     void init_window(Wnd *wnd);
-    void begin_window(ccstr title, Wnd *wnd, int flags = 0, bool noclose = false);
-    void begin_centered_window(ccstr title, Wnd *wnd, int flags = 0, int width = -1, bool noclose = false);
+    void begin_window(ccstr title, Wnd *wnd, int flags = 0, bool noclose = false, bool noescape = true);
+    void begin_centered_window(ccstr title, Wnd *wnd, int flags = 0, int width = -1, bool noclose = false, bool noescape = false);
 
     Pretty_Menu *pretty_menu_start(ImVec2 padding = ImVec2(4, 2));
     void pretty_menu_item(Pretty_Menu *menu, bool selected);

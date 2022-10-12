@@ -455,11 +455,11 @@ void UI::pretty_menu_item(Pretty_Menu *pm, bool selected) {
     pm->pos = pm->text_tl;
 }
 
-void UI::begin_window(ccstr title, Wnd *wnd, int flags, bool noclose) {
+void UI::begin_window(ccstr title, Wnd *wnd, int flags, bool noclose, bool noescape) {
     ImGui::Begin(title, noclose ? NULL : &wnd->show, flags);
     init_window(wnd);
 
-    if (wnd->focused && !noclose)
+    if (wnd->focused && !noclose && !noescape)
         if (imgui_get_keymods() == CP_MOD_NONE)
             if (imgui_special_key_pressed(ImGuiKey_Escape))
                 wnd->show = false;
@@ -490,7 +490,7 @@ void UI::init_window(Wnd *wnd) {
     }
 }
 
-void UI::begin_centered_window(ccstr title, Wnd *wnd, int flags, int width, bool noclose) {
+void UI::begin_centered_window(ccstr title, Wnd *wnd, int flags, int width, bool noclose, bool noescape) {
     if (width != -1) {
         ImGui::SetNextWindowSize(ImVec2(width, -1));
     } else {
@@ -499,7 +499,7 @@ void UI::begin_centered_window(ccstr title, Wnd *wnd, int flags, int width, bool
     flags |= ImGuiWindowFlags_NoDocking;
 
     ImGui::SetNextWindowPos(ImVec2(world.display_size.x/2, 150), ImGuiCond_Always, ImVec2(0.5f, 0));
-    begin_window(title, wnd, flags, noclose);
+    begin_window(title, wnd, flags, noclose, noescape);
 }
 
 void UI::help_marker(fn<void()> cb) {
@@ -2670,7 +2670,7 @@ void UI::draw_everything() {
         auto &wnd = world.wnd_options;
         auto &tmp = wnd.tmp;
 
-        begin_window("Options", &wnd, ImGuiWindowFlags_AlwaysAutoResize);
+        begin_window("Options", &wnd, ImGuiWindowFlags_AlwaysAutoResize, false, false);
 
         auto &outer_style = ImGui::GetStyle();
         int outer_window_padding = outer_style.WindowPadding.y;
@@ -3188,7 +3188,7 @@ void UI::draw_everything() {
         auto &wnd = world.wnd_generate_implementation;
 
         if (wnd.show && wnd.fill_running && current_time_milli() - wnd.fill_time_started_ms > 100) {
-            begin_centered_window("Generate Implementation...###generate_implementation_filling", &wnd, 0, 400);
+            begin_centered_window("Generate Implementation...###generate_implementation_filling", &wnd, 0, 650);
             ImGui::Text("Loading...");
             ImGui::End();
         }
@@ -3208,7 +3208,7 @@ void UI::draw_everything() {
                 wnd.selection %= min(wnd.filtered_results->len, settings.generate_implementation_max_results);
             };
 
-            begin_centered_window("Generate Implementation###generate_impelmentation_ready", &wnd, 0, 400);
+            begin_centered_window("Generate Implementation###generate_impelmentation_ready", &wnd, 0, 650);
 
             if (wnd.selected_interface)
                 ImGui::TextWrapped("You've selected an interface. Please select a type and we'll add this interface's methods to that type.");
@@ -4480,7 +4480,7 @@ void UI::draw_everything() {
             wnd.selection %= min(wnd.filtered_results->len, settings.goto_file_max_results);
         };
 
-        begin_centered_window("Go To File", &wnd, 0, 500);
+        begin_centered_window("Go To File", &wnd, 0, 650);
 
         /*
         // close the window when we unfocus
@@ -4878,7 +4878,7 @@ void UI::draw_everything() {
         auto &wnd = world.wnd_goto_symbol;
 
         if (wnd.show && wnd.fill_running && current_time_milli() - wnd.fill_time_started_ms > 100) {
-            begin_centered_window("Go To Symbol...###goto_symbol_filling", &wnd, 0, 600);
+            begin_centered_window("Go To Symbol...###goto_symbol_filling", &wnd, 0, 650);
             ImGui::Text("Loading symbols...");
             ImGui::End();
         }
@@ -4898,7 +4898,7 @@ void UI::draw_everything() {
                 wnd.selection %= min(wnd.filtered_results->len, settings.goto_symbol_max_results);
             };
 
-            begin_centered_window("Go To Symbol###goto_symbol_ready", &wnd, 0, 600);
+            begin_centered_window("Go To Symbol###goto_symbol_ready", &wnd, 0, 650);
 
             bool refilter = false;
 
