@@ -55,7 +55,7 @@ bool Buffer_It::eof() {
     }
 
     if (!buf->lines.len) return true;
-    if (y == buf->lines.len - 1 && x == buf->lines[y].len) return true;
+    if (y == buf->lines.len - 1 && x >= buf->lines[y].len) return true;
     if (y > buf->lines.len - 1) return true;
     return false;
 }
