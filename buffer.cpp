@@ -63,6 +63,13 @@ bool Buffer_It::eof() {
 uchar Buffer_It::peek() {
     if (has_fake_end && append_chars_to_end && pos >= fake_end)
         return chars_to_append_to_end[pos.x - fake_end.x];
+
+    if (!buf->lines.len)
+        cp_panic(cp_sprintf("cannot peek on empty buffer, x = %d, y = %d", x, y));
+
+    if (x > buf->lines[y].len)
+        cp_panic(cp_sprintf("cannot access x = %d on line y = %d, length of line is %d", x, y, buf->lines[y].len));
+
     if (x == buf->lines[y].len)
         return '\n';
     return buf->lines[y][x];
