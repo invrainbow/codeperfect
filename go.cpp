@@ -517,9 +517,8 @@ done:
 
                     if (alldigits) return false;
                 }
-
-                return true;
             }
+            return true;
         };
 
         auto tmp = alloc_list<char>();
@@ -5514,7 +5513,7 @@ bool Go_Indexer::check_if_still_in_parameter_hint(ccstr filepath, cur2 cur, cur2
         suffix = cp_sprintf("%c", string_close_char);
     suffix = cp_sprintf("%s)}}}}}}}}}}}}}}}}", suffix);
 
-    if (!truncate_parsed_file(pf, cur, suffix)) return NULL;
+    if (!truncate_parsed_file(pf, cur, suffix)) return false;
     defer { ts_tree_delete(pf->tree); };
 
     bool ret = false;
@@ -6763,7 +6762,7 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
 
         FOR_NODE_CHILDREN (node) {
             if (it->eq(type_node)) break;
-            if (!it->type() == TS_IDENTIFIER) continue;
+            if (it->type() != TS_IDENTIFIER) continue;
 
             auto decl = new_result();
             decl->type = GODECL_TYPE_PARAM;
@@ -8044,6 +8043,8 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
                     ret->term = make_goresult(gotype, ctx);
                     return ret;
                 }
+
+                return NULL;
             };
 
             // mutates node

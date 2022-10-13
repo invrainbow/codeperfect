@@ -14,6 +14,16 @@
 #include <inttypes.h>
 #endif
 
+#ifdef __GNUC__
+#define NORETURN __attribute__((noreturn))
+#elif __MINGW32__
+#define NORETURN __attribute__((noreturn))
+#elif __clang__
+#define NORETURN __attribute__((noreturn))
+#elif _MSC_VER
+#define NORETURN __declspec(noreturn)
+#endif
+
 #include "ostype.hpp"
 
 // tools for macros
@@ -416,7 +426,7 @@ bool str_starts_with(ccstr a, ccstr pre);
 extern s32 global_mem_allocated;
 extern const u64 MAX_U64;
 
-void cp_panic(ccstr s);
+NORETURN void cp_panic(ccstr s);
 
 extern thread_local bool is_main_thread;
 void assert_main_thread();

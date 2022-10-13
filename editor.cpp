@@ -2254,7 +2254,7 @@ void Editor::type_char_in_insert_mode(uchar ch) {
 
     if (!did_autocomplete)
         if (autocomplete.ac.results)
-            trigger_autocomplete(false, isident, ch);
+            trigger_autocomplete(false, isident(ch), ch);
 
     if (!did_parameter_hint) update_parameter_hint();
 }

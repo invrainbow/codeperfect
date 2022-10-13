@@ -49,6 +49,7 @@ GLint compile_program(cstr vert_code, u32 vert_len, cstr frag_code, u32 frag_len
         char log[512];
         glGetShaderInfoLog(shader, 512, NULL, log);
         cp_panic(cp_sprintf("failed to build shader, error: %s", log));
+        return 0;
     };
 
     auto vert = compile_shader(vert_code, vert_len, GL_VERTEX_SHADER);
@@ -471,6 +472,7 @@ void handle_window_event(Window_Event *it) {
 
             world.autocomplete_basic_mode = !world.autocomplete_basic_mode;
             editor->trigger_autocomplete(false, false);
+            return true;
         };
 
         if (handle_autocomplete_control()) break;

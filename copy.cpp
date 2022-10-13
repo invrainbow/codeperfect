@@ -183,6 +183,7 @@ Go_Ctx *Go_Ctx::copy() {
 
     ret->import_path = cp_strdup(import_path);
     ret->filename = cp_strdup(filename);
+    return ret;
 }
 
 Gotype *Gotype::copy() {

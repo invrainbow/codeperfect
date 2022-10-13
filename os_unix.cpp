@@ -54,7 +54,7 @@ void kill_thread(Thread_Handle h) {
 }
 
 void exit_thread(int retval) {
-    pthread_exit((void*)retval);
+    pthread_exit((void*)(uptr)retval);
 }
 
 void Lock::init() {

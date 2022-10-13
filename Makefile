@@ -1,6 +1,7 @@
 CC = clang++
 
-CFLAGS = -std=c++17 -I. -Iimgui/ -ferror-limit=100 -w -Itree-sitter/lib/include
+CFLAGS = -std=c++17 -I. -Iimgui/ -ferror-limit=100 -Itree-sitter/lib/include
+CFLAGS += -Wno-switch -Wno-writable-strings -Wno-arc-performSelector-leaks -Wno-deprecated
 # CFLAGS += -mavx -maes
 
 ifeq ($(TESTING_BUILD), 1)

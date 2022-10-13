@@ -113,7 +113,7 @@ bool boxf::contains(vec2f point) {
 
 s32 global_mem_allocated = 0;
 
-void cp_panic(ccstr s) {
+NORETURN void cp_panic(ccstr s) {
 #ifdef DEBUG_BUILD
     // throw exception so we can debug it
 	throw Panic_Exception(s);

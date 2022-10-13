@@ -63,6 +63,9 @@ struct List {
             if (!items)
                 cp_panic("unable to alloc chunk for array");
             break;
+        default:
+            cp_panic("invalid mode");
+            break;
         }
     }
 
@@ -74,6 +77,8 @@ struct List {
             break;
         case LIST_CHUNK:
             free_chunk_stub((uchar*)items, cap);
+            break;
+        default:
             break;
         }
 
@@ -165,6 +170,10 @@ struct List {
             cap = chunksize;
             break;
         }
+
+        case LIST_UNINITIALIZED:
+            cp_panic("invalid mode");
+            break;
         }
 
         return true;

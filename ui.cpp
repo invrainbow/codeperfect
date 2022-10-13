@@ -515,7 +515,7 @@ void UI::help_marker(fn<void()> cb) {
 
 void UI::help_marker(ccstr text) {
     help_marker([&]() {
-        ImGui::TextWrapped(text);
+        ImGui::TextWrapped("%s", text);
     });
 }
 
@@ -2530,7 +2530,7 @@ void UI::draw_everything() {
             ImGui::Separator();
 
             if (ImGui::MenuItem("Cause intentional crash")) {
-                find_editor_by_id(121231231123)->optimize_imports();
+                find_editor_by_id(231231123)->optimize_imports();
             }
 
             ImGui::Separator();
@@ -3399,11 +3399,9 @@ void UI::draw_everything() {
 
         ImGuiListClipper clipper;
         clipper.Begin(wnd.len);
-        while (clipper.Step()) {
-            for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++) {
-                ImGui::Text(wnd.buf[(wnd.start + i) % INDEX_LOG_CAP]);
-            }
-        }
+        while (clipper.Step())
+            for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
+                ImGui::Text("%s", wnd.buf[(wnd.start + i) % INDEX_LOG_CAP]);
 
         if (wnd.cmd_scroll_to_end) {
             wnd.cmd_scroll_to_end = false;
@@ -5427,7 +5425,7 @@ void UI::draw_everything() {
 
                 for (auto it = change; it; it = it->next) {
                     ImGui::BulletText(
-                        "start = %s, oldend = %s, newend = %s, oldlen = %d, newlen = %d",
+                        "start = %s, oldend = %s, newend = %s, oldlen = %lu, newlen = %lu",
                         it->start.str(),
                         it->old_end.str(),
                         it->new_end.str(),

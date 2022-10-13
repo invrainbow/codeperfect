@@ -188,11 +188,13 @@ bool is_binary(ccstr buf, s32 len) {
     s32 suspicious_bytes = 0;
     s32 total_bytes = len > 512 ? 512 : len;
 
+    auto ubuf = (u8*)buf;
+
     // empty
     if (!len) return false;
 
     // utf8 bom
-    if (len >= 3 && buf[0] == 0xEF && buf[1] == 0xBB && buf[2] == 0xBF) return false;
+    if (len >= 3 && ubuf[0] == 0xEF && ubuf[1] == 0xBB && ubuf[2] == 0xBF) return false;
 
     // pdf
     if (len >= 5 && !strncmp(buf, "%PDF-", 5)) return true;
@@ -200,15 +202,15 @@ bool is_binary(ccstr buf, s32 len) {
     for (u32 i = 0; i < total_bytes; i++) {
         if (buf[i] == '\0') return true;
 
-        if ((buf[i] < 7 || buf[i] > 14) && (buf[i] < 32 || buf[i] > 127)) {
+        if ((ubuf[i] < 7 || ubuf[i] > 14) && (ubuf[i] < 32 || ubuf[i] > 127)) {
             /* UTF-8 detection */
-            if (buf[i] > 193 && buf[i] < 224 && i + 1 < total_bytes) {
+            if (ubuf[i] > 193 && ubuf[i] < 224 && i + 1 < total_bytes) {
                 i++;
-                if (buf[i] > 127 && buf[i] < 192)
+                if (ubuf[i] > 127 && ubuf[i] < 192)
                     continue;
-            } else if (buf[i] > 223 && buf[i] < 240 && i + 2 < total_bytes) {
+            } else if (ubuf[i] > 223 && ubuf[i] < 240 && i + 2 < total_bytes) {
                 i++;
-                if (buf[i] > 127 && buf[i] < 192 && buf[i + 1] > 127 && buf[i + 1] < 192) {
+                if (ubuf[i] > 127 && ubuf[i] < 192 && ubuf[i + 1] > 127 && ubuf[i + 1] < 192) {
                     i++;
                     continue;
                 }

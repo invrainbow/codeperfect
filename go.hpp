@@ -112,6 +112,9 @@ struct Parser_It {
 
     uchar peek() {
         switch (type) {
+        case IT_INVALID:
+            cp_panic("invalid iterator");
+            break;
         case IT_MMAP: return mmap_params.fm->data[mmap_params.pos.x];
         case IT_BUFFER: return buffer_params.it.peek();
         }
@@ -120,6 +123,9 @@ struct Parser_It {
 
     uchar next() {
         switch (type) {
+        case IT_INVALID:
+            cp_panic("invalid iterator");
+            break;
         case IT_MMAP: {
             auto ret = peek();
             mmap_params.pos.x++;
@@ -133,6 +139,9 @@ struct Parser_It {
 
     uchar prev() {
         switch (type) {
+        case IT_INVALID:
+            cp_panic("invalid iterator");
+            break;
         case IT_MMAP: {
             auto ret = peek();
             mmap_params.pos.x--;
@@ -146,13 +155,20 @@ struct Parser_It {
 
     bool bof() {
         switch (type) {
+        case IT_INVALID:
+            cp_panic("invalid iterator");
+            break;
         case IT_MMAP: return (!mmap_params.pos.x);
         case IT_BUFFER: return buffer_params.it.bof();
         }
+        return false;
     }
 
     bool eof() {
         switch (type) {
+        case IT_INVALID:
+            cp_panic("invalid iterator");
+            break;
         case IT_MMAP: return (mmap_params.pos.x == mmap_params.fm->len);
         case IT_BUFFER: return buffer_params.it.eof();
         }
@@ -162,6 +178,9 @@ struct Parser_It {
     cur2 get_pos() {
         // TODO: to convert between pos types based on this->type
         switch (type) {
+        case IT_INVALID:
+            cp_panic("invalid iterator");
+            break;
         case IT_MMAP:
             return new_cur2(mmap_params.pos.x, -1);
         case IT_BUFFER:
@@ -173,6 +192,9 @@ struct Parser_It {
     void set_pos(cur2 pos) {
         // TODO: to convert between pos types based on this->type
         switch (type) {
+        case IT_INVALID:
+            cp_panic("invalid iterator");
+            break;
         case IT_MMAP:
             mmap_params.pos = pos;
             break;
