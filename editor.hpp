@@ -86,6 +86,10 @@ struct Editor {
     i64 mouse_drag_accum;
     double scroll_leftover;
 
+    u64 flash_cursor_error_start_time;
+
+    void flash_cursor_error();
+
     struct {
         bool on;
         u64 time_start_milli;

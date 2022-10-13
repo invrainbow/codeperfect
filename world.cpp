@@ -556,6 +556,8 @@ void World::init() {
     // if (!use_nvim) world.wnd_history.show = true;
 
     show_frame_index = false;
+    escape_flashes_cursor_red = true;
+
 #endif
     t.log("segment g");
 }

@@ -63,6 +63,10 @@ done:
     return ret->items;
 }
 
+void Editor::flash_cursor_error() {
+    flash_cursor_error_start_time = current_time_milli();
+}
+
 void Editor::insert_text_in_insert_mode(ccstr s) {
     auto len = strlen(s);
     if (!len) return;

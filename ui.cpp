@@ -2525,6 +2525,7 @@ void UI::draw_everything() {
             ImGui::MenuItem("Show frame index", NULL, &world.show_frame_index);
             ImGui::MenuItem("Show frameskips", NULL, &world.show_frameskips);
             ImGui::MenuItem("Poor man's GPU debugger", NULL, &world.wnd_poor_mans_gpu_debugger.show);
+            ImGui::MenuItem("Escape flashes cursor red", NULL, &world.escape_flashes_cursor_red);
 
             ImGui::Separator();
 
@@ -6181,6 +6182,23 @@ void UI::draw_everything() {
             auto editor = pane.get_current_editor();
             // if (!editor->is_nvim_ready()) break;
 
+            bool flash_cursor = false;
+            float flash_cursor_perc;
+
+            if (editor->flash_cursor_error_start_time) {
+                flash_cursor = true;
+
+                auto t = current_time_milli() - editor->flash_cursor_error_start_time;
+                if (t < 100)
+                    flash_cursor_perc = t / 100.0f;
+                else if (t < 350)
+                    flash_cursor_perc = 1.0f;
+                else if (t < 450)
+                    flash_cursor_perc = (450 - t) / 100.0f;
+                else
+                    flash_cursor = false;
+            }
+
             struct Highlight {
                 cur2 start;
                 cur2 end;
@@ -6244,12 +6262,9 @@ void UI::draw_everything() {
                 b.y++;
                 b.h -= 2;
 
-                auto cursor_color = rgba(global_colors.cursor, muted ? 0.5 : 1.0);
-
-                if (is_insert_cursor)
-                    draw_rect(b, cursor_color);
-                else
-                    draw_rounded_rect(b, cursor_color, 1, ROUND_ALL);
+                draw_rect(b, rgba(global_colors.cursor, muted ? 0.5 : 1.0));
+                if (flash_cursor)
+                    draw_rect(b, rgba("#ff0000", flash_cursor_perc));
             };
 
             List<Client_Breakpoint> breakpoints_for_this_editor;
@@ -6631,8 +6646,13 @@ void UI::draw_everything() {
 
                     if (editor->cur == new_cur2((u32)curr_cp_idx, (u32)y)) {
                         draw_cursor(glyph_width);
-                        if (current_pane == world.current_pane && world.use_nvim)
-                            text_color = rgba(global_colors.cursor_foreground);
+                        if (current_pane == world.current_pane && world.use_nvim) {
+                            if (flash_cursor) {
+                                text_color = rgba(merge_colors(global_colors.cursor_foreground, rgb_hex("#ffffff"), flash_cursor_perc));
+                            } else {
+                                text_color = rgba(global_colors.cursor_foreground);
+                            }
+                        }
                     } else if (world.use_nvim && world.nvim.mode != VI_INSERT) {
                         auto topline = editor->nvim_data.grid_topline;
                         if (topline <= y && y < topline + NVIM_DEFAULT_HEIGHT) {

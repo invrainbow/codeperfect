@@ -375,6 +375,8 @@ struct World {
     int xdpi;
     int ydpi;
 
+    bool escape_flashes_cursor_red;
+
     Auth_To_Disk auth;
     Auth_Extras auth_extras;
     bool auth_error;

@@ -853,6 +853,7 @@ void handle_window_event(Window_Event *it) {
                 if (!editor) break;
                 if (editor->trigger_escape()) break;
                 if (world.use_nvim) send_nvim_keys("<Esc>");
+                if (world.escape_flashes_cursor_red) editor->flash_cursor_error();
                 break;
             }
             break;
