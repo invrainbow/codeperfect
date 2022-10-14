@@ -7214,11 +7214,17 @@ void UI::draw_tutorial(boxf rect) {
 
     float spacing_x = 20;
     float spacing_y = 16;
-    float max_name_width = 0;
-    float max_hotkey_width = 0;
     float hotkey_margin_x = 4;
     float hotkey_padding_x = 3;
     float hotkey_padding_y = 2;
+
+    float max_name_width = get_text_width("Switch Pane");
+
+    float max_hotkey_width = 0;
+    max_hotkey_width += base_font->width * get_text_width(CP_MOD_PRIMARY == CP_MOD_CMD ? "Cmd" : "Ctrl");
+    max_hotkey_width += base_font->width * get_text_width("1/2/3/4");
+    max_hotkey_width += hotkey_padding_x * 4;
+    max_hotkey_width += hotkey_margin_x;
 
     For (commands) {
         auto name = get_command_name(it);
@@ -7253,7 +7259,8 @@ void UI::draw_tutorial(boxf rect) {
     }
 
     float total_width = max_name_width + max_hotkey_width + spacing_x;
-    float total_height = _countof(commands) * base_font->height + (_countof(commands)+1) * spacing_y;
+    int rows = _countof(commands)+1;
+    float total_height = rows * base_font->height + (rows+1) * spacing_y;
 
     vec2f start;
     start.x = rect.x + rect.w/2 - total_width/2;
@@ -7261,47 +7268,47 @@ void UI::draw_tutorial(boxf rect) {
 
     vec2f cur = start;
 
-    For (commands) {
-        auto name = get_command_name(it);
-        cp_assert(name);
+    auto draw_hotkey_part = [&](ccstr s) {
+        boxf b;
+        b.pos = cur;
+        b.x -= hotkey_padding_x;
+        b.y -= hotkey_padding_y;
+        b.w = get_text_width(s) * base_font->width + hotkey_padding_x * 2;
+        b.h = base_font->height + hotkey_padding_y * 2;
+        draw_rounded_rect(b, rgba("#ffffff", 0.15), 3, ROUND_ALL);
 
+        draw_string(cur, s, rgba("#ffffff", 0.6));
+
+        cur.x += (b.w - hotkey_padding_x) + hotkey_margin_x * 2;
+    };
+
+    auto draw_command_name = [&](ccstr name) {
         cur.x = start.x + max_name_width - get_text_width(name) * base_font->width;
         draw_string(cur, name, rgba("#ffffff", 0.5));
 
         cur.x = start.x + max_name_width + spacing_x;
+    };
 
-        bool first = true;
-
-        auto draw_hotkey_part = [&](ccstr s) {
-            if (first)
-                first = false;
-            else
-                cur.x += hotkey_margin_x;
-
-            boxf b;
-            b.pos = cur;
-            b.x -= hotkey_padding_x;
-            b.y -= hotkey_padding_y;
-            b.w = get_text_width(s) * base_font->width + hotkey_padding_x * 2;
-            b.h = base_font->height + hotkey_padding_y * 2;
-            draw_rounded_rect(b, rgba("#ffffff", 0.15), 3, ROUND_ALL);
-
-            draw_string(cur, s, rgba("#ffffff", 0.6));
-
-            cur.x += (b.w - hotkey_padding_x) + hotkey_margin_x;
-        };
+    For (commands) {
+        auto name = get_command_name(it);
+        cp_assert(name);
+        draw_command_name(name);
 
         auto info = command_info_table[it];
+
         auto mods = info.mods;
         if (mods & CP_MOD_CMD)   draw_hotkey_part("Cmd");
         if (mods & CP_MOD_SHIFT) draw_hotkey_part("Shift");
         if (mods & CP_MOD_ALT)   draw_hotkey_part("Alt");
         if (mods & CP_MOD_CTRL)  draw_hotkey_part("Ctrl");
-
         draw_hotkey_part(get_key_name(info.key));
 
         cur.y += base_font->height + spacing_y;
     }
+
+    draw_command_name("Switch Pane");
+    draw_hotkey_part(CP_MOD_PRIMARY == CP_MOD_CMD ? "Cmd" : "Ctrl");
+    draw_hotkey_part("1/2/3/4");
 }
 
 bool UI::imgui_icon_button(ccstr icon) {
@@ -7917,6 +7924,7 @@ void UI::recalculate_view_sizes(bool force) {
             // cursor is on the screen.
             editor.ensure_cursor_on_screen_by_moving_view();
 
+            // TODO: do we care about this?
             if (world.use_nvim) {
                 auto& nv = world.nvim;
                 nv.start_request_message("nvim_win_set_option", 3);
