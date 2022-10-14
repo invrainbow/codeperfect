@@ -2618,8 +2618,8 @@ void UI::draw_everything() {
 
             ImGui::EndMenu();
         }
-#endif
 
+#endif
 
         if (ImGui::BeginMenu("Help")) {
             ImGui::MenuItem(cp_sprintf("CodePerfect %s", world.gh_version), NULL, false, false);
