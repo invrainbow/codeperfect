@@ -1550,6 +1550,9 @@ Command_Info command_info_table[_CMD_COUNT_];
 
 bool is_command_enabled(Command cmd) {
     switch (cmd) {
+    case CMD_COMMAND_PALETTE:
+        return !world.wnd_command.show;
+
     case CMD_BUILD_PROFILE_1:
     case CMD_BUILD_PROFILE_2:
     case CMD_BUILD_PROFILE_3:
@@ -1897,6 +1900,7 @@ void init_command_info_table() {
     command_info_table[CMD_ADD_ALL_XML_TAGS] = k(0, 0, "Struct: Add all XML tags");
     command_info_table[CMD_REMOVE_TAG] = k(0, 0, "Struct: Remove tag");
     command_info_table[CMD_REMOVE_ALL_TAGS] = k(0, 0, "Struct: Remove all tags");
+    command_info_table[CMD_COMMAND_PALETTE] = k(CP_MOD_PRIMARY, CP_KEY_K, "Command Palette");
 }
 
 void do_find_interfaces() {
@@ -2060,6 +2064,26 @@ void handle_command(Command cmd, bool from_menu) {
     if (!is_command_enabled(cmd)) return;
 
     switch (cmd) {
+    case CMD_COMMAND_PALETTE: {
+        SCOPED_MEM(&world.run_command_mem);
+        world.run_command_mem.reset();
+
+        auto &wnd = world.wnd_command;
+        wnd.query[0] = '\0';
+        wnd.actions = alloc_list<Command>();
+        wnd.filtered_results = alloc_list<int>();
+        wnd.selection = 0;
+
+        for (int i = 0; i < _CMD_COUNT_; i++) {
+            auto fuck_cpp = (Command)i;
+            if (is_command_enabled(fuck_cpp))
+                wnd.actions->append(fuck_cpp);
+        }
+
+        world.wnd_command.show = true;
+        break;
+    }
+
     case CMD_GENERATE_FUNCTION:
         do_generate_function();
         break;

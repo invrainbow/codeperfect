@@ -245,6 +245,7 @@ enum Command {
     CMD_GO_BACK,
     CMD_GO_FORWARD,
     CMD_AST_NAVIGATION,
+    CMD_COMMAND_PALETTE,
     /**/
     _CMD_COUNT_,
     CMD_INVALID = -1,

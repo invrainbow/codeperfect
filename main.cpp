@@ -280,26 +280,6 @@ void handle_window_event(Window_Event *it) {
                 activate_pane_by_index(key - CP_KEY_1);
                 world.cmd_unfocus_all_windows = true;
                 break;
-
-            case CP_KEY_K: {
-                SCOPED_MEM(&world.run_command_mem);
-                world.run_command_mem.reset();
-
-                auto &wnd = world.wnd_command;
-                wnd.query[0] = '\0';
-                wnd.actions = alloc_list<Command>();
-                wnd.filtered_results = alloc_list<int>();
-                wnd.selection = 0;
-
-                for (int i = 0; i < _CMD_COUNT_; i++) {
-                    auto fuck_cpp = (Command)i;
-                    if (is_command_enabled(fuck_cpp))
-                        wnd.actions->append(fuck_cpp);
-                }
-
-                world.wnd_command.show = true;
-                break;
-            }
             }
             break;
 

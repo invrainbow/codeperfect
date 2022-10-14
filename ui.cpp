@@ -74,11 +74,6 @@ ccstr format_key(int mods, ccstr key, bool icon) {
     return rend.finish();
 }
 
-ccstr format_key(int mods, int key) {
-    auto keystr = "TODO"; // TODO: convert key to string
-    return format_key(mods, keystr);
-}
-
 namespace ImGui {
     bool OurBeginPopupContextItem(const char* str_id = NULL, ImGuiPopupFlags popup_flags = 1) {
         ImGuiWindow* window = GImGui->CurrentWindow;
@@ -5912,6 +5907,9 @@ void UI::draw_everything() {
 
         draw_rect(editor_area, rgba(global_colors.background));
 
+        if (!pane.editors.len && world.panes.len == 1)
+            draw_tutorial(editor_area);
+
         vec2 tab_padding = { 8, 3 };
 
         boxf tab;
@@ -7201,6 +7199,106 @@ void UI::draw_everything() {
 }
 
 ImVec2 icon_button_padding = ImVec2(4, 2);
+
+void UI::draw_tutorial(boxf rect) {
+    Command commands[] = {
+        CMD_GO_TO_FILE,
+        CMD_GO_TO_SYMBOL,
+        CMD_SEARCH,
+        CMD_COMMAND_PALETTE,
+    };
+
+    float spacing_x = 20;
+    float spacing_y = 12;
+    float max_name_width = 0;
+    float max_hotkey_width = 0;
+    float hotkey_margin_x = 4;
+    float hotkey_padding_x = 3;
+    float hotkey_padding_y = 1;
+
+    For (commands) {
+        auto name = get_command_name(it);
+        cp_assert(name);
+
+        auto name_width = get_text_width(name) * base_font->width;
+        if (name_width > max_name_width) max_name_width = name_width;
+
+        auto info = command_info_table[it];
+        cp_assert(info.key);
+
+        float hotkey_width = 0;
+
+        auto add_hotkey_part = [&](ccstr s) {
+            if (hotkey_width != 0)
+                hotkey_width += hotkey_margin_x;
+            hotkey_width += base_font->width * get_text_width(s);
+            hotkey_width += hotkey_padding_x * 2;
+        };
+
+        auto mods = info.mods;
+        if (mods & CP_MOD_CMD)   add_hotkey_part("Cmd");
+        if (mods & CP_MOD_SHIFT) add_hotkey_part("Shift");
+        if (mods & CP_MOD_ALT)   add_hotkey_part("Alt");
+        if (mods & CP_MOD_CTRL)  add_hotkey_part("Ctrl");
+
+        auto keyname = get_key_name(info.key);
+        cp_assert(strlen(keyname) <= 3);
+        add_hotkey_part(keyname);
+
+        if (hotkey_width > max_hotkey_width) max_hotkey_width = hotkey_width;
+    }
+
+    float total_width = max_name_width + max_hotkey_width + spacing_x;
+    float total_height = _countof(commands) * base_font->height + (_countof(commands)+1) * spacing_y;
+
+    vec2f start;
+    start.x = rect.x + rect.w/2 - total_width/2;
+    start.y = rect.y + rect.h/2 - total_height/2;
+
+    vec2f cur = start;
+
+    For (commands) {
+        auto name = get_command_name(it);
+        cp_assert(name);
+
+        cur.x = start.x + max_name_width - get_text_width(name) * base_font->width;
+        draw_string(cur, name, rgba("#ffffff", 0.7));
+
+        cur.x = start.x + max_name_width + spacing_x;
+
+        bool first = true;
+
+        auto draw_hotkey_part = [&](ccstr s) {
+            if (first)
+                first = false;
+            else
+                cur.x += hotkey_margin_x;
+
+            boxf b;
+            b.pos = cur;
+            b.x -= hotkey_padding_x;
+            b.y -= hotkey_padding_y;
+            b.w = get_text_width(s) * base_font->width + hotkey_padding_x * 2;
+            b.h = base_font->height + hotkey_padding_y * 2;
+            draw_rounded_rect(b, rgba("#ffffff", 0.1), 3, ROUND_ALL);
+
+            draw_string(cur, s, rgba("#ffffff", 0.7));
+
+            cur.x += (b.w - hotkey_padding_x) + hotkey_margin_x;
+        };
+
+        auto info = command_info_table[it];
+        auto mods = info.mods;
+        if (mods & CP_MOD_CMD)   draw_hotkey_part("Cmd");
+        if (mods & CP_MOD_SHIFT) draw_hotkey_part("Shift");
+        if (mods & CP_MOD_ALT)   draw_hotkey_part("Alt");
+        if (mods & CP_MOD_CTRL)  draw_hotkey_part("Ctrl");
+
+        draw_hotkey_part(get_key_name(info.key));
+
+        cur.y += base_font->height + spacing_y;
+    }
+}
 
 bool UI::imgui_icon_button(ccstr icon) {
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, icon_button_padding);

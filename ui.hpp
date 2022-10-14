@@ -288,6 +288,7 @@ struct UI {
     void pretty_menu_item(Pretty_Menu *menu, bool selected);
     void pretty_menu_text(Pretty_Menu *pm, ccstr text, ImU32 color = PM_DEFAULT_COLOR);
     Glyph *lookup_glyph_for_grapheme(List<uchar> *grapheme);
+    void draw_tutorial(boxf rect);
 };
 
 extern UI ui;
