@@ -2334,6 +2334,9 @@ void UI::draw_everything() {
         fstlog("draw dockspace");
     }
 
+    // now that we have the panes area, recalculate view sizes
+    recalculate_view_sizes();
+
     bool is_running = world.dbg.state_flag != DLV_STATE_INACTIVE;
 
     if (is_running) {
