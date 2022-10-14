@@ -120,7 +120,7 @@ NORETURN void cp_panic(ccstr s) {
 #else
     if (is_main_thread) {
         tell_user(s, "An error has occurred");
-        exit(1);
+        throw Panic_Exception(s);
     } else {
         world.message_queue.add([&](auto msg) {
             msg->type = MTM_PANIC;

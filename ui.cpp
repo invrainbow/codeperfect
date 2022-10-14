@@ -2525,7 +2525,7 @@ void UI::draw_everything() {
             ImGui::Separator();
 
             if (ImGui::MenuItem("Cause intentional crash")) {
-                find_editor_by_id(231231123)->optimize_imports();
+                cp_panic("This is an intentionally caused crash");
             }
 
             ImGui::Separator();
