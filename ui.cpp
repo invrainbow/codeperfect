@@ -2365,6 +2365,7 @@ void UI::draw_everything() {
         if (ImGui::BeginMenu("View")) {
             menu_command(CMD_FILE_EXPLORER, world.file_explorer.show);
             menu_command(CMD_ERROR_LIST, world.error_list.show);
+            menu_command(CMD_COMMAND_PALETTE);
             ImGui::EndMenu();
         }
 
@@ -7209,12 +7210,12 @@ void UI::draw_tutorial(boxf rect) {
     };
 
     float spacing_x = 20;
-    float spacing_y = 12;
+    float spacing_y = 16;
     float max_name_width = 0;
     float max_hotkey_width = 0;
     float hotkey_margin_x = 4;
     float hotkey_padding_x = 3;
-    float hotkey_padding_y = 1;
+    float hotkey_padding_y = 2;
 
     For (commands) {
         auto name = get_command_name(it);
@@ -7262,7 +7263,7 @@ void UI::draw_tutorial(boxf rect) {
         cp_assert(name);
 
         cur.x = start.x + max_name_width - get_text_width(name) * base_font->width;
-        draw_string(cur, name, rgba("#ffffff", 0.7));
+        draw_string(cur, name, rgba("#ffffff", 0.5));
 
         cur.x = start.x + max_name_width + spacing_x;
 
@@ -7280,9 +7281,9 @@ void UI::draw_tutorial(boxf rect) {
             b.y -= hotkey_padding_y;
             b.w = get_text_width(s) * base_font->width + hotkey_padding_x * 2;
             b.h = base_font->height + hotkey_padding_y * 2;
-            draw_rounded_rect(b, rgba("#ffffff", 0.1), 3, ROUND_ALL);
+            draw_rounded_rect(b, rgba("#ffffff", 0.15), 3, ROUND_ALL);
 
-            draw_string(cur, s, rgba("#ffffff", 0.7));
+            draw_string(cur, s, rgba("#ffffff", 0.6));
 
             cur.x += (b.w - hotkey_padding_x) + hotkey_margin_x;
         };
