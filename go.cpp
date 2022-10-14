@@ -7420,7 +7420,10 @@ Gotype *Go_Indexer::expr_to_gotype(Ast_Node *expr) {
     case TS_QUALIFIED_TYPE:
     case TS_SELECTOR_EXPRESSION: {
         auto operand_node = expr->field(expr->type() == TS_QUALIFIED_TYPE ? TSF_PACKAGE : TSF_OPERAND);
+        if (operand_node->null) return NULL;
+
         auto field_node = expr->field(expr->type() == TS_QUALIFIED_TYPE ? TSF_NAME : TSF_FIELD);
+        if (field_node->null) return NULL;
 
         ret = new_gotype(GOTYPE_LAZY_SEL);
         ret->lazy_sel_sel = field_node->string();
@@ -7571,8 +7574,9 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
                 newtype->id_pos = key->lazy_id_pos;
                 break;
             case GOTYPE_LAZY_SEL:
-                if (key->lazy_sel_base->type != GOTYPE_ID)
-                    return NULL;
+                if (!key->lazy_sel_base) return NULL;
+                if (key->lazy_sel_base->type != GOTYPE_ID) return NULL;
+
                 newtype = new_gotype(GOTYPE_SEL);
                 newtype->sel_name = key->lazy_sel_base->id_name;
                 newtype->sel_sel = key->lazy_sel_sel;
