@@ -331,7 +331,6 @@ struct Ast_Node {
 
     void init(TSNode _node, Parser_It *_it) {
         ptr0(this);
-
         node = _node;
         it = _it;
         null = ts_node_is_null(node);
@@ -350,72 +349,27 @@ struct Ast_Node {
     bool is_missing() { return null ? false : ts_node_is_missing(node); }
     Ast_Node *parent() { return null ? NULL : dup(ts_node_parent(node)); }
 
-    Ast_Node *source_node() {
-        auto curr = node;
-        while (true) {
-            if ((Ts_Ast_Type)ts_node_symbol(curr) == TS_SOURCE_FILE)
-                break;
-            if (ts_node_is_null(curr))
-                break;
-            curr = ts_node_parent(curr);
-        }
-        return dup(curr);
-    }
-
     bool eq(Ast_Node *other) { return ts_node_eq(node, other->node); }
     Ast_Node *field(Ts_Field_Type f) { return dup(ts_node_child_by_field_id(node, f)); }
 
-    TSNode _skip_comment(TSNode x, bool forward, bool named) {
-        auto next_func = forward
-            ? (named ? ts_node_next_named_sibling : ts_node_next_sibling)
-            : (named ? ts_node_prev_named_sibling : ts_node_prev_sibling);
-
-        while (!ts_node_is_null(x) && ts_node_symbol(x) == TS_COMMENT)
-            x = next_func(x);
-        return x;
+    Ast_Node* _finalize(TSNode x, bool skip_comment, bool forward, bool named) {
+        if (skip_comment) {
+            while (!ts_node_is_null(x) && ts_node_symbol(x) == TS_COMMENT) {
+                if (forward)
+                    x = named ? ts_node_next_named_sibling(x) : ts_node_next_sibling(x);
+                else
+                    x = named ? ts_node_prev_named_sibling(x) : ts_node_prev_sibling(x);
+            }
+        }
+        return dup(x);
     }
 
-    Ast_Node *child(bool skip_comment = true) {
-        auto ret = ts_node_named_child(node, 0);
-        if (skip_comment)
-            ret = _skip_comment(ret, true, true);
-        return dup(ret);
-    }
-
-    Ast_Node *next(bool skip_comment = true) {
-        auto ret = ts_node_next_named_sibling(node);
-        if (skip_comment)
-            ret = _skip_comment(ret, true, true);
-        return dup(ret);
-    }
-
-    Ast_Node *prev(bool skip_comment = true) {
-        auto ret = ts_node_prev_named_sibling(node);
-        if (skip_comment)
-            ret = _skip_comment(ret, false, true);
-        return dup(ret);
-    }
-
-    Ast_Node *child_all(bool skip_comment = true) {
-        auto ret = ts_node_child(node, 0);
-        if (skip_comment)
-            ret = _skip_comment(ret, true, false);
-        return dup(ret);
-    }
-
-    Ast_Node *next_all(bool skip_comment = true) {
-        auto ret = ts_node_next_sibling(node);
-        if (skip_comment)
-            ret = _skip_comment(ret, true, false);
-        return dup(ret);
-    }
-
-    Ast_Node *prev_all(bool skip_comment = true) {
-        auto ret = ts_node_prev_sibling(node);
-        if (skip_comment)
-            ret = _skip_comment(ret, false, false);
-        return dup(ret);
-    }
+    Ast_Node *child(bool skip_comment = true)     { return _finalize(ts_node_named_child(node, 0), skip_comment, true, true);      }
+    Ast_Node *next(bool skip_comment = true)      { return _finalize(ts_node_next_named_sibling(node), skip_comment, true, true);  }
+    Ast_Node *prev(bool skip_comment = true)      { return _finalize(ts_node_prev_named_sibling(node), skip_comment, false, true); }
+    Ast_Node *child_all(bool skip_comment = true) { return _finalize(ts_node_child(node, 0), skip_comment, true, false);           }
+    Ast_Node *next_all(bool skip_comment = true)  { return _finalize(ts_node_next_sibling(node), skip_comment, true, false);       }
+    Ast_Node *prev_all(bool skip_comment = true)  { return _finalize(ts_node_prev_sibling(node), skip_comment, false, false);      }
 };
 
 #define MAX_INDEX_EVENTS 1024 // don't let file change dos us
