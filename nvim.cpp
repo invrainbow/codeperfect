@@ -420,6 +420,9 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
             }
             break;
         }
+        case NVIM_NOTIF_CUSTOM_ASTNAVIGATION:
+            handle_command(CMD_AST_NAVIGATION, false);
+            break;
         case NVIM_NOTIF_CUSTOM_GOTO_DEFINITION:
             handle_goto_definition();
             break;
@@ -918,6 +921,11 @@ void Nvim::run_event_loop() {
                     ASSERT(!num_args);
                     add_event([&](auto msg) {
                         msg->notification.type = NVIM_NOTIF_CUSTOM_GOTO_DEFINITION;
+                    });
+                } else if (streq(cmd, "astnavigation")) {
+                    ASSERT(!num_args);
+                    add_event([&](auto msg) {
+                        msg->notification.type = NVIM_NOTIF_CUSTOM_ASTNAVIGATION;
                     });
                 } else if (streq(cmd, "jump")) {
                     ASSERT(num_args == 1);

@@ -557,7 +557,6 @@ void World::init() {
 
     show_frame_index = false;
     escape_flashes_cursor_red = true;
-
 #endif
     t.log("segment g");
 }

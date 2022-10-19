@@ -459,21 +459,35 @@ void handle_window_event(Window_Event *it) {
 
         if (editor && editor->ast_navigation.on) {
             switch (keymods) {
-            case CP_MOD_NONE: {
+            case CP_MOD_SHIFT:
                 switch (key) {
-                case CP_KEY_LEFT:
-                    editor->ast_navigate_out();
-                    break;
-
+                case CP_KEY_DOWN:
                 case CP_KEY_RIGHT:
+                case CP_KEY_J:
+                case CP_KEY_L:
                     editor->ast_navigate_in();
                     break;
-
+                case CP_KEY_UP:
+                case CP_KEY_LEFT:
+                case CP_KEY_H:
+                case CP_KEY_K:
+                    editor->ast_navigate_out();
+                    break;
+                }
+                break;
+            case CP_MOD_NONE:
+                switch (key) {
                 case CP_KEY_DOWN:
+                case CP_KEY_RIGHT:
+                case CP_KEY_J:
+                case CP_KEY_L:
                     editor->ast_navigate_next();
                     break;
 
                 case CP_KEY_UP:
+                case CP_KEY_LEFT:
+                case CP_KEY_H:
+                case CP_KEY_K:
                     editor->ast_navigate_prev();
                     break;
 
@@ -482,7 +496,6 @@ void handle_window_event(Window_Event *it) {
                     break;
                 }
                 break;
-            }
             }
             break;
         }
@@ -801,9 +814,9 @@ void handle_window_event(Window_Event *it) {
                 if (!editor) break;
                 if (editor->ast_navigation.on) {
                     if (key == CP_KEY_LEFT)
-                        editor->ast_navigate_out();
+                        editor->ast_navigate_prev();
                     else
-                        editor->ast_navigate_in();
+                        editor->ast_navigate_next();
                     break;
                 }
                 if (world.use_nvim && world.nvim.mode != VI_INSERT)
@@ -1007,11 +1020,43 @@ void handle_window_event(Window_Event *it) {
         if (!ed) return;
 
         if (ed->ast_navigation.on) {
-            switch (ch) {
-            case 'h': ed->ast_navigate_out();  break;
-            case 'j': ed->ast_navigate_next(); break;
-            case 'k': ed->ast_navigate_prev(); break;
-            case 'l': ed->ast_navigate_in();   break;
+            if (mods == CP_MOD_NONE) {
+                switch (tolower(ch)) {
+                case 's':
+                case 'c':
+                case 'x': {
+                    if (!world.use_nvim) break;
+
+                    auto &nav = ed->ast_navigation;
+
+                    if (nav.tree_version != ed->buf->tree_version) break;
+
+                    auto start = nav.node->start();
+                    auto end = nav.node->end();
+                    ed->buf->remove(start, end);
+
+                    ed->skip_next_nvim_update();
+
+                    auto& nv = world.nvim;
+                    nv.start_request_message("nvim_buf_set_lines", 5);
+                    nv.writer.write_int(ed->nvim_data.buf_id);
+                    nv.writer.write_int(start.y);
+                    nv.writer.write_int(end.y+1);
+                    nv.writer.write_bool(false);
+                    nv.writer.write_array(1);
+                    {
+                        nv.write_line(&ed->buf->lines[start.y]);
+                    }
+                    nv.end_message();
+
+                    nav.on = false;
+
+                    ed->move_cursor(start);
+
+                    if (tolower(ch) != 'x') send_nvim_keys("i");
+                    break;
+                }
+                }
             }
             return;
         }

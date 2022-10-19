@@ -83,6 +83,8 @@ nnoremap <C-u> <Cmd>call NotifyIDE('halfjump', 0)<CR>
 nnoremap <C-b> <Cmd>call NotifyIDE('pagejump', 0)<CR>
 nnoremap <C-f> <Cmd>call NotifyIDE('pagejump', 1)<CR>
 
+nnoremap gt <Cmd>call NotifyIDE('astnavigation')<CR>
+
 nnoremap <C-e> <Cmd>call NotifyIDE('scrollview', 1)<CR>
 nnoremap <C-y> <Cmd>call NotifyIDE('scrollview', 0)<CR>
 

@@ -1587,6 +1587,8 @@ void Editor::update_ast_navigate(fn<Ast_Node*(Ast_Node*)> cb) {
     auto &nav = ast_navigation;
     if (!nav.on) return;
 
+    if (nav.tree_version != buf->tree_version) return;
+
     auto node = nav.node;
     if (!node) return;
 
