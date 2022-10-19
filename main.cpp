@@ -1019,8 +1019,11 @@ void handle_window_event(Window_Event *it) {
         auto ed = get_current_editor();
         if (!ed) return;
 
-        if (ed->ast_navigation.on) {
-            if (mods == CP_MOD_NONE) {
+        if (!ed->ast_navigation.on) {
+            do {
+                if (mods != CP_MOD_NONE) break;
+                if (!world.use_nvim) break;
+
                 switch (tolower(ch)) {
                 case 's':
                 case 'c':
@@ -1057,7 +1060,7 @@ void handle_window_event(Window_Event *it) {
                     break;
                 }
                 }
-            }
+            } while (0);
             return;
         }
 
