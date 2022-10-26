@@ -1719,6 +1719,7 @@ void Debugger::handle_new_state(Packet *p) {
         else
             draft->current_goroutine_id = -1;
         draft->current_frame = 0;
+        draft->goroutines = alloc_list<Dlv_Goroutine>();
 
         t.log("checking threads");
 
@@ -1746,7 +1747,6 @@ void Debugger::handle_new_state(Packet *p) {
             auto goroutines_len = js.array_length(goroutines_idx);
             if (!goroutines_len) break;
 
-            draft->goroutines = alloc_list<Dlv_Goroutine>();
             for (u32 i = 0; i < goroutines_len; i++) {
                 auto it = js.get(goroutines_idx, i);
                 auto goroutine = draft->goroutines->append();
@@ -1760,16 +1760,14 @@ void Debugger::handle_new_state(Packet *p) {
             }
         } while (0);
 
-        if (draft->goroutines) {
-            For (*draft->goroutines) {
-                auto entry = goroutines_with_breakpoint.find([&](auto g) { return g->goroutine_id == it.id; });
-                if (!entry) continue;
+        For (*draft->goroutines) {
+            auto entry = goroutines_with_breakpoint.find([&](auto g) { return g->goroutine_id == it.id; });
+            if (!entry) continue;
 
-                it.curr_file = entry->breakpoint_file;
-                it.curr_line = entry->breakpoint_line;
-                it.curr_func_name = entry->breakpoint_func_name;
-                it.breakpoint_hit = true;
-            }
+            it.curr_file = entry->breakpoint_file;
+            it.curr_line = entry->breakpoint_line;
+            it.curr_func_name = entry->breakpoint_func_name;
+            it.breakpoint_hit = true;
         }
 
         fill_stacktrace(draft);
