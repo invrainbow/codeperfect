@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Oxygen:wght@300;400;700&display=swap");
+@use "sass:math";
 
 @tailwind base;
 @tailwind components;
@@ -11,20 +11,22 @@
   }
 
   html {
-    font-size: 16px;
+    /* font-size: 18px; */
   }
 
   body {
+    background: #222;
+    color: #d9d9d9;
     margin: 0;
-    font-family: "Oxygen", -apple-system, BlinkMacSystemFont, "Segoe UI",
-      "Roboto", "Helvetica Neue", "Ubuntu", sans-serif;
-    line-height: 1.7;
+    line-height: 1.6;
   }
 
+  /*
   .logo {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
       "Helvetica Neue", "Ubuntu", sans-serif;
   }
+  */
 
   code {
     font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New",
@@ -96,29 +98,62 @@
 }
 
 @layer components {
-  .button {
+  .btn {
     @apply rounded-md shadow-sm leading-none;
     @apply py-4 px-5;
     @apply disabled:opacity-50 no-underline outline-none;
     @apply whitespace-nowrap;
     @apply inline-flex items-center;
+
     &:disabled {
       opacity: 0.5;
       cursor: not-allowed;
     }
-  }
-  .main-button {
-    background: #222;
-    color: white;
-  }
-  .download-button {
-    @apply bg-white border border-gray-300 text-gray-500;
-    &:disabled, &.disabled {
+    &.btn1 {
+      background: #f2f2f2;
+      color: #333333;
+      @apply shadow;
+      &:hover:not(:disabled):not(.disabled) {
+        @apply shadow-md;
+        background: #ffffff;
+        color: #000000;
+      }
+      &.btn-invert {
+        @apply shadow-none;
+        color: #fff;
+        background: #222;
+        &:hover:not(:disabled):not(.disabled) {
+          background: #000;
+          color: #fff;
+          @apply shadow-none;
+        }
+      }
+    }
+    &.btn2 {
+      @apply border border-neutral-300 text-neutral-300 bg-transparent;
+      &:hover:not(:disabled):not(.disabled) {
+        @apply text-neutral-100 border-neutral-100;
+      }
+      &.btn-invert {
+        @apply border-neutral-800 text-neutral-800;
+        &:hover:not(:disabled):not(.disabled) {
+          @apply text-black border-black;
+        }
+      }
+    }
+    &:disabled,
+    &.disabled {
       @apply opacity-50 cursor-default;
     }
   }
-  .download-button:hover:not(:disabled) {
-    background: white;
+
+  .caps-title {
+    letter-spacing: 0.015em;
+    font-style: normal;
+    font-weight: 700;
+    font-size: 18px;
+    line-height: 20px;
+    text-transform: uppercase;
   }
 }
 
@@ -131,7 +166,7 @@
       @apply mt-4;
     }
     h3 {
-      @apply mt-4 text-gray-300 font-semibold;
+      @apply mt-4 text-neutral-700 font-semibold;
     }
     p,
     ol,
@@ -177,6 +212,60 @@
     }
     100% {
       transform: rotate(360deg);
+    }
+  }
+
+  $skew-angle: 2.11deg;
+  $skew-angle-tan: math.tan($skew-angle);
+
+  .batteries-included {
+    position: relative;
+    z-index: 100;
+    color: #555555;
+    background: linear-gradient(
+      180deg,
+      rgb(246, 246, 246) 0%,
+      rgb(232, 232, 232) 100%
+    );
+    overflow: hidden;
+    transform: skewY(-$skew-angle);
+    .batteries-included-child {
+      position: relative;
+      z-index: 100;
+      transform: skewY($skew-angle);
+    }
+    .batteries-included-tile {
+      background: white;
+    }
+  }
+
+  .back-to-basics {
+    position: relative;
+    z-index: 0;
+    top: calc(-50vw * $skew-angle-tan);
+    margin-bottom: calc(-50vw * $skew-angle-tan);
+    color: #242424;
+    overflow: hidden;
+    background: white;
+  }
+
+  .handmade-link {
+    @apply text-neutral-700 no-underline relative inline-block leading-none font-semibold;
+    &::after {
+      position: absolute;
+      content: " ";
+      top: 100%;
+      left: 0;
+      right: 0;
+      margin-top: 2px;
+      height: 3px;
+      @apply bg-neutral-200;
+    }
+    &:hover {
+      @apply text-neutral-600;
+      &::after {
+        @apply bg-neutral-300;
+      }
     }
   }
 }

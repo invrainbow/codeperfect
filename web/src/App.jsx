@@ -2,25 +2,20 @@ import { AiFillApple } from "@react-icons/all-files/ai/AiFillApple";
 import { AiFillWindows } from "@react-icons/all-files/ai/AiFillWindows";
 import { AiOutlineCheck } from "@react-icons/all-files/ai/AiOutlineCheck";
 import { AiOutlineClose } from "@react-icons/all-files/ai/AiOutlineClose";
+import { BiMenu } from "@react-icons/all-files/bi/BiMenu";
 import { BsChevronRight } from "@react-icons/all-files/bs/BsChevronRight";
-import { BsCodeSlash } from "@react-icons/all-files/bs/BsCodeSlash";
-import { FaLayerGroup } from "@react-icons/all-files/fa/FaLayerGroup";
 import { FaLinux } from "@react-icons/all-files/fa/FaLinux";
 import { FaTwitter } from "@react-icons/all-files/fa/FaTwitter";
 import { FaDiscord } from "@react-icons/all-files/fa/FaDiscord";
-import { FaRobot } from "@react-icons/all-files/fa/FaRobot";
-import { GoPackage } from "@react-icons/all-files/go/GoPackage";
-import { GrInfo } from "@react-icons/all-files/gr/GrInfo";
-import { IoMdSearch } from "@react-icons/all-files/io/IoMdSearch";
 import { HiOutlineDownload } from "@react-icons/all-files/hi/HiOutlineDownload";
-import { ImMagicWand } from "@react-icons/all-files/im/ImMagicWand";
-import { SiVim } from "@react-icons/all-files/si/SiVim";
 
 import posthog from "posthog-js";
 import cx from "classnames";
 import React from "react";
 import { Helmet } from "react-helmet";
 import { useMediaQuery } from "react-responsive";
+import { twMerge } from "tailwind-merge";
+
 import {
   BrowserRouter,
   Link,
@@ -30,6 +25,7 @@ import {
   Routes,
   useLocation,
 } from "react-router-dom";
+import _ from "lodash";
 import "./index.css";
 
 posthog.init("phc_kIt8VSMD8I2ScNhnjWDU2NmrK9kLIL3cHWpkgCX3Blw", {
@@ -41,7 +37,7 @@ const CURRENT_BUILD = process.env.REACT_APP_BUILD_VERSION; // "22.09.4";
 
 const isDev = process.env.NODE_ENV === "development";
 
-const LINKS = {
+const BASE_LINKS = {
   docs: "https://docs.codeperfect95.com",
   gettingStarted: "https://docs.codeperfect95.com/getting-started",
   changelog: "https://docs.codeperfect95.com/changelog",
@@ -55,6 +51,7 @@ const LINKS = {
   twitter: "https://twitter.com/codeperfect95",
   discord: "https://discord.gg/WkFY44BY7a",
   mailingList: "https://exceptional-innovator-7731.ck.page/0b59fe1347",
+  handmadeManifesto: "https://handmade.network/manifesto",
 };
 
 const DEV_LINKS = {
@@ -64,14 +61,15 @@ const DEV_LINKS = {
   buyProYearly: "https://buy.stripe.com/test_3cs6pj9WW3lR3Ac7sB",
 };
 
-function getLink(key) {
+function makeMergedLinks() {
+  const mergedLinks = { ...BASE_LINKS };
   if (isDev) {
-    if (DEV_LINKS[key]) {
-      return DEV_LINKS[key];
-    }
+    _.merge(mergedLinks, DEV_LINKS);
   }
-  return LINKS[key];
+  return mergedLinks;
 }
+
+const LINKS = makeMergedLinks();
 
 const CDN_PATH = "https://codeperfect-static.s3.us-east-2.amazonaws.com";
 
@@ -84,9 +82,12 @@ function isExternalLink(href) {
   return prefixes.some((it) => href.startsWith(it));
 }
 
-function A({ link, children, href, ...props }) {
-  if (!href || isExternalLink(href)) {
+function A({ link, children, href, newWindow, ...props }) {
+  if (!href || isExternalLink(href) || newWindow) {
     props.href = href;
+    if (newWindow) {
+      props.target = "_blank";
+    }
     return <a {...props}>{children}</a>;
   }
   props.to = href;
@@ -99,7 +100,7 @@ function wrap(elem, extraClassName, defaultProps, overrideProps) {
       ...(defaultProps || {}),
       ...props,
       ...(overrideProps || {}),
-      className: cx(className, extraClassName),
+      className: twMerge(extraClassName, className),
     };
     return React.createElement(elem, newProps, children);
   };
@@ -107,10 +108,9 @@ function wrap(elem, extraClassName, defaultProps, overrideProps) {
 
 const WallOfText = wrap(
   "div",
-  "wall-of-text p-4 py-10 md:py-28 leading-normal md:mx-auto md:max-w-2xl"
+  "wall-of-text leading-normal md:mx-auto md:max-w-2xl bg-white md:my-32 p-8 md:p-16 md:rounded-lg md:shadow text-neutral-700"
 );
-const H1 = wrap("h2", "mb-6 text-2xl font-bold text-gray-800");
-const Title = wrap(H1, "text-3xl");
+const Title = wrap("h2", "m-0 mb-6 font-bold text-3xl text-black");
 
 function Icon({ block, noshift, icon: IconComponent, ...props }) {
   return (
@@ -120,187 +120,349 @@ function Icon({ block, noshift, icon: IconComponent, ...props }) {
   );
 }
 
-const FEATURES = [
+const FEATURES = _.shuffle([
   {
-    name: "Code navigation",
-    icon: BsCodeSlash,
-    description: "Jump to definition and find all references.",
-    videoId: "QRI09kTuyPQ",
+    label: "Integrated Debugger",
+    desc: "Full Delve integration. Debug your program from inside your IDE.",
   },
   {
-    name: "Vim keybindings",
-    description: "Full vim keybindings out of the box.",
-    icon: SiVim,
-    videoId: "nO_-RT8-iHM",
+    label: "Code Intelligence",
+    desc: "Go to definition, find all usages, parameter hints, and autocomplete.",
   },
   {
-    name: "Automatic rename",
-    description: "Rename any identifier along with all references to it.",
-    videoId: "GPwc2vuK4sA",
-    icon: ImMagicWand,
+    label: "Smart Autocomplete",
+    desc: "Context-specific suggestions as you type. ",
   },
   {
-    name: "Postfix completions",
-    description:
-      "Generate code with macros that work intelligently on Go expressions.",
-    icon: FaRobot,
-    videoId: "qMAachk4TGI",
+    label: "Postfix Completions",
+    desc: "Macros that work intelligently on your Go expressions.",
   },
   {
-    name: "Native interface support",
-    description: "Navigate and generate interfaces quickly and easily.",
-    icon: FaLayerGroup,
-    videoId: "CsxmGcahc4k",
+    label: "Global Fuzzy Selector",
+    desc: "Works on files, symbols, commands, and completions.",
+  },
+  /*
+  {
+    label: "Custom GPU Renderer",
+    desc: "OpenGL-based renderer. No Electron. 144 FPS, everything instant.",
+  },
+  */
+  {
+    label: "Tree-Based Navigation",
+    desc: "Use the power of our integrated parser to directly walk the AST.",
   },
   {
-    name: "Instant fuzzy search",
-    icon: IoMdSearch,
-    description: "Works on files, symbols, commands, and completions.",
-    videoId: "9tl5rP97pg4",
+    label: "Auto Format",
+    desc: "Automatically gofmt your code on save, with zero configuration.",
   },
   {
-    name: "Automatic import",
-    description: "Pull in libraries you need without moving your cursor.",
-    icon: GoPackage,
-    videoId: "XrZTgAVXaQ0",
+    label: "Integrated Build",
+    desc: "Build, jump to & fix each error, all with ergonomic keyboard shortcuts.",
   },
   {
-    name: "Parameter hints",
-    icon: GrInfo,
-    description: "View function signatures as you're calling them.",
-    videoId: "TzJUEFedUIo",
+    label: "Rename Identifier",
+    desc: "Rename any symbol across your entire codebase.",
+  },
+  {
+    label: "Command Palette",
+    desc: "Press Primary+K to run any command or action inside CodePerfect.",
+  },
+  {
+    label: "Generate Function",
+    desc: "Take a call to a non-existent function and generate its signature.",
+  },
+  {
+    label: "Fast Project-Wide Grep",
+    desc: "Fast search (and replace) runs in milliseconds on large codebases.",
+  },
+  {
+    label: "Manage Interfaces",
+    desc: "Find implementations and interfaces and generate implementations.",
+  },
+  {
+    label: "Organize Imports",
+    desc: "Intelligently add/remove imports with our native import organizer.",
+  },
+  {
+    label: "Manage Struct Tags",
+    desc: "Add & remove struct tags automatically.",
+  },
+]);
+
+const SELLING_POINTS = [
+  {
+    icon: asset("/icon-vim.png"),
+    label: "Full Vim integration",
+    content: (
+      <>
+        <p>
+          CodePerfect provides Vim functionality as a first-class concept, not
+          as an afterthought plugin. This gives you the entire Vim feature-set
+          at your fingertips, integrated seamlessly with everything else.
+        </p>
+      </>
+    ),
+  },
+  {
+    icon: asset("/icon-basics.png"),
+    label: "Back to basics",
+    content: (
+      <>
+        <p>
+          <p>
+            CodePerfect is old-school about performance, and makes a conscious
+            effort not to squander your CPU cycles.
+          </p>
+          <p>
+            Instant startup. A buttery smooth 144 FPS. Instant response to every
+            keystroke. An optimized indexer that gobbles through large
+            codebases.
+          </p>
+        </p>
+      </>
+    ),
+  },
+  {
+    icon: asset("/icon-bicycle.png"),
+    label: "A bicycle for coding",
+    content: (
+      <>
+        <p>
+          With predictable operations, ergonomic hotkeys, and tons of cases of
+          “just doing the right thing,” CodePerfect assists instead of
+          interfering with your dev workflow. It does its job and gets out of
+          your way.
+        </p>
+      </>
+    ),
   },
 ];
 
-function YoutubeEmbed({ videoId, first }) {
-  const autoplay = first ? 0 : 1;
-  return (
-    <div
-      className="relative h-0 md:rounded-lg overflow-hidden"
-      style={{ paddingBottom: "58.60%" }}
-    >
-      <iframe
-        className="absolute t-0 l-0 w-full h-full"
-        src={`https://www.youtube.com/embed/${videoId}?autoplay=${autoplay}&loop=1&playlist=${videoId}&showinfo=0&controls=1&modestbranding=1`}
-        title="YouTube video player"
-        frameBorder="0"
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; fullscreen; gyroscope; picture-in-picture"
-        allowFullScreen
-      />
-    </div>
-  );
-}
-
-function VideoPlayer() {
-  const [selected, setSelected] = React.useState(FEATURES[0]);
-  const [first, setFirst] = React.useState(true);
-  const isbig = useMediaQuery({ query: "(min-width: 768px)" });
-
-  return (
-    <div
-      className="md:grid w-full md:max-w-screen-xl mx-auto md:gap-x-4"
-      style={{
-        gridTemplateColumns: "250px auto",
-        ...(isbig ? { fontSize: "15px" } : {}),
-      }}
-    >
-      <div className="max-w-full md:max-w-xs">
-        {FEATURES.map((it) => {
-          const isSelected = selected && selected.name === it.name;
-          return (
-            <button
-              key={it.name}
-              className={cx(
-                "text-left block w-full relative overflow-hidden",
-                "md:pl-1 first:mt-0 py-3 border-gray-200"
-              )}
-              onClick={() => {
-                setFirst(false);
-                setSelected(it);
-              }}
-            >
-              <div
-                className={cx(
-                  "flex flex-row items-center gap-x-2",
-                  isSelected ? "opacity-90" : "opacity-40"
-                )}
-              >
-                <div className={cx("text-lg leading-none text-black")}>
-                  <Icon block icon={it.icon} />
-                </div>
-                <div
-                  className={cx(
-                    "font-semibold leading-none relative",
-                    isSelected ? "text-black" : "text-gray-700"
-                  )}
-                  style={{ paddingTop: "-1px" }}
-                >
-                  {it.name}
-                </div>
-              </div>
-              <div
-                className={cx(
-                  "text-gray-700 overflow-hidden transition-all duration-100 ease-linear leading-snug",
-                  isSelected ? "mb-2 md:mb-0 mt-1.5 max-h-20" : "mt-0 max-h-0"
-                )}
-              >
-                {it.description}
-              </div>
-              {isSelected && selected.videoId && !isbig && (
-                <YoutubeEmbed videoId={selected.videoId} first={first} />
-              )}
-            </button>
-          );
-        })}
-      </div>
-      {selected && selected.videoId && isbig && (
-        <YoutubeEmbed videoId={selected.videoId} first={first} />
-      )}
-    </div>
-  );
-}
+const BAD_FEATURES = [
+  "Electron",
+  "JavaScript",
+  "language servers",
+  "virtual machines",
+  "browsers",
+  "opaque runtimes",
+  "bloated abstractions",
+];
 
 function Home() {
+  const getIconName = (name) => {
+    return name
+      .split(/[^A-Za-z]/)
+      .map((it) => it.toLowerCase())
+      .join("-");
+  };
+
   return (
-    <div className="mt-8 mb-14 md:my-20 w-full">
-      <div className="max-w-full md:max-w-xl md:mx-auto text-lg md:text-lg leading-relaxed p-4">
-        <div className="text-center font-bold text-3xl md:text-4xl mb-8 text-black leading-snug">
-          A&nbsp;High&nbsp;Performance IDE&nbsp;for&nbsp;Go
+    <div
+      className="mx-auto mt-8 md:mt-24 w-full"
+      style={{ maxWidth: "1920px" }}
+    >
+      <div className="max-w-full text-lg leading-relaxed p-4">
+        <div className="text-center text-4xl md:text-5xl mb-6 font-bold text-white leading-snug">
+          A&nbsp;fast,&nbsp;powerful IDE&nbsp;for&nbsp;Go
         </div>
-        <p>
-          Written in C++, CodePerfect indexes large codebases quickly and
-          responds to every key in 16ms. Supports Windows and Mac (Linux coming
-          soon).
+
+        <p className="md:hidden text-center">
+          A power tool with a minimal resource footprint. Designed around the Go
+          development workflow.
         </p>
-        <p>
-          Built for Vim users who want more power, Jetbrains users who want more
-          speed, and everyone in between.
+
+        <p className="hidden md:display max-w-full mx-auto text-center text-xl text-neutral-100 leading-normal">
+          A power tool with a minimal resource footprint.
+          <br />
+          Designed around the Go development workflow.
         </p>
 
         <div className="mt-8 text-center flex gap-4 justify-center">
           <A
             link
             href="/download"
-            className="button main-button justify-center flex md:inline-flex text-center"
+            className="btn btn1 justify-center flex md:inline-flex text-center"
           >
             <Icon className="mr-2" icon={HiOutlineDownload} />
             Download
           </A>
           <A
-            href={getLink("docs")}
-            className="button download-button justify-center flex md:inline-flex text-center"
+            href={LINKS.docs}
+            className="btn btn2 justify-center flex md:inline-flex text-center"
           >
             View Docs
             <Icon className="ml-2" icon={BsChevronRight} />
           </A>
         </div>
+
+        <div className="md:hidden my-12">
+          <A href={asset("/basics-screenshot.png")}>
+            <img alt="screenshot" src={asset("/basics-screenshot.png")} />
+          </A>
+        </div>
+
+        <div
+          className="hidden md:block relative max-w-screen-xl mt-16 mx-auto"
+          style={{ height: "450px" }}
+        >
+          <img
+            className="max-w-full opacity-80 absolute top-0 left-0 right-0"
+            alt="screenshot"
+            src={asset("/basics-screenshot.png")}
+          />
+        </div>
       </div>
 
-      <div className="px-4 mt-16 md:mt-28">
-        <div className="mb-8 font-bold text-black text-3xl text-center">
-          A full-featured IDE, as fast as Sublime Text.
+      <div className="batteries-included">
+        <div className="batteries-included-child md:flex max-w-screen-xl mx-auto py-16 md:py-32">
+          <div className="md:w-2/5 px-4 md:p-0 md:pr-16">
+            <div className="text-4xl md:mt-24 mb-6 font-bold text-black">
+              Batteries included
+            </div>
+
+            <div className="text-xl text-neutral-700 leading-relaxed">
+              <p>
+                CodePerfect is feature-rich and works out of the box with
+                (almost) zero configuration.
+              </p>
+              <p>
+                The power of an IDE, bundled into a software package as fast as
+                Vim.
+              </p>
+            </div>
+            <div className="mt-8">
+              <A
+                href={LINKS.docs}
+                className="btn btn2 btn-invert justify-center flex md:inline-flex text-center"
+              >
+                View Docs
+                <Icon className="ml-2" icon={BsChevronRight} />
+              </A>
+            </div>
+          </div>
+          <div className="flex-1 mx-auto grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6 mt-8 md:mt-0 p-4 md:p-0">
+            {FEATURES.map((it) => (
+              <div
+                className="batteries-included-tile shadow-sm rounded-md p-3 hover:scale-105 transition-all select-none"
+                key={it.label}
+              >
+                <div className="leading-none mb-2">
+                  <img
+                    className="inline-block w-auto h-6 mb-1.5"
+                    src={asset(`/icon-${getIconName(it.label)}.png`)}
+                    alt={it.label}
+                  />
+                  <div className="leading-none font-bold text-sm text-neutral-700">
+                    {it.label}
+                  </div>
+                </div>
+                <div className="text-sm text-neutral-500">{it.desc}</div>
+              </div>
+            ))}
+          </div>
         </div>
-        <VideoPlayer />
+      </div>
+
+      <div className="back-to-basics relative">
+        <div
+          className="hidden md:block absolute z-0 left-0 top-0 bottom-0 overflow-hidden bg-cover bg-center"
+          style={{
+            backgroundImage: `url(${asset("/cutting-tree.png")})`,
+            width: "calc((100% - 1280px)/2 + (1280px * 0.5))",
+          }}
+        />
+        <div
+          className="flex relative z-10 mx-auto"
+          style={{ maxWidth: "1280px" }}
+        >
+          <div
+            style={{ background: "rgba(255, 255, 255, 0.0)" }}
+            className="flex-1 flex flex-col items-center justify-center"
+          />
+          <div className="box-border md:w-1/2 py-16 px-8 md:py-36 md:px-24 text-xl leading-relaxed border-dashed border-neutral-200">
+            <p>
+              {BAD_FEATURES.map((name) => (
+                <div className="text-2xl md:text-3xl font-bold text-neutral-800 leading-tight">
+                  No {name}.
+                </div>
+              ))}
+            </p>
+            <div className="mt-6 md:mt-12 mb-6">
+              We{" "}
+              <A
+                className="underline underline-offset-4 decoration-2 font-semibold text-neutral-500 decoration-neutral-200 hover:text-neutral-600 hover:decoration-neutral-300"
+                newWindow
+                href={LINKS.handmadeManifesto}
+              >
+                handmade
+              </A>{" "}
+              the entire IDE stack from the metal up in blazing fast C/C++, into
+              a barebones native app that literally just does the thing it's
+              supposed to
+            </div>
+            <p>
+              From the UI renderer to the code intelligence engine, everything
+              is hand-optimized to be as performant as a video game.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div
+        className="p-8 md:py-32 md:px-0"
+        style={{ background: "rgba(0, 0, 0, 0.2)" }}
+      >
+        <div className="grid grid-cols-1 md:grid-cols-3 max-w-screen-lg mx-auto gap-12 md:gap-20">
+          {SELLING_POINTS.map((it) => (
+            <div
+              key={it.label}
+              style={{ borderColor: "rgba(255, 255, 255, 0.05)" }}
+            >
+              <img src={it.icon} alt={it.label} className="w-auto h-10 mb-2" />
+              <div className="text-lg font-semibold text-white mb-4">
+                {it.label}
+              </div>
+              <div>{it.content}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-white py-8 px-4 md:px-0 md:pt-24 md:pb-28 overflow-hidden border-t border-white border-2">
+        <div className="max-w-screen-xl mx-auto md:flex text-neutral-700 border-white border-2">
+          <div className="md:w-1/3">
+            <div className="text-black font-bold text-3xl mb-6">
+              Ready to get started?
+            </div>
+            <p className="text-xl leading-relaxed mb-8">
+              Try CodePerfect for free for 7 days
+              <br />
+              with all features available.
+            </p>
+            <p>
+              <A
+                link
+                href="/download"
+                className={twMerge(
+                  "btn btn1 btn-invert justify-center inline-flex text-center bg-black text-white text-lg px-6"
+                )}
+              >
+                <Icon className="mr-2" icon={HiOutlineDownload} />
+                Download
+              </A>
+            </p>
+          </div>
+          <div className="flex-1 relative hidden md:block">
+            <div className="absolute -bottom-24 left-0 -right-8">
+              <img
+                src={asset("/basics-screenshot.png")}
+                className="max-w-full h-auto opacity-100"
+                alt="screenshot"
+                // style={{ marginBottom: "-10%" }}
+              />
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -335,7 +497,7 @@ function PortalDone() {
 
 const BuyLicenseBox = wrap(
   "div",
-  "w-auto overflow-hidden border rounded-md shadow-sm"
+  "w-auto overflow-hidden border border-neutral-300 rounded-md shadow-sm"
 );
 
 const disableButtonProps = {
@@ -349,87 +511,72 @@ const disableButtonProps = {
 
 const BuyLicenseButton = wrap(
   A,
-  "button download-button p-3 block text-center bg-white",
+  "btn btn1 btn-invert p-3 block text-center",
   null
   // { ...disableButtonProps, href: "#" }
 );
 
+function BuyLicenseButtons({ monthly, monthlyLink, yearly, yearlyLink }) {
+  const options = [
+    [monthly, monthlyLink, "Monthly", "month"],
+    [yearly, yearlyLink, "Yearly", "year"],
+  ];
+
+  return (
+    <div className="p-5 border-t border-neutral-200 bg-neutral-100">
+      <div className="grid grid-cols-2 gap-3">
+        {options.map(([amount, link, unit, unit2]) => (
+          <div>
+            <div className="flex items-center mb-2.5">
+              <div className="leading-none text-xl font-bold text-neutral-900">
+                ${amount}
+              </div>
+              <div className="text-neutral-600 leading-none text-sm relative top-0.5 ml-1">
+                /{unit2}
+              </div>
+            </div>
+            <BuyLicenseButton href={link}>Buy {unit}</BuyLicenseButton>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function BuyLicense() {
   return (
-    <div className="max-w-screen-md px-4 mx-auto my-16 md:my-28">
+    <WallOfText className="md:max-w-3xl">
       <Title>Buy CodePerfect</Title>
       <div className="my-6 grid grid-cols-1 sm:grid-cols-2 gap-6">
         <BuyLicenseBox>
           <div className="p-5">
-            <h1 className="font-bold text-gray-700 mb-2">Personal</h1>
+            <h1 className="font-bold text-neutral-900 mb-2">Personal</h1>
             <PricingPoint label="Commercial use ok" />
             <PricingPoint label="All features available" />
             <PricingPoint not label="Company can't pay" />
             <PricingPoint not label="Purchase can't be expensed" />
           </div>
-
-          <div className="p-5 border-t border-gray-100 bg-gray-50">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <div className="flex items-center mb-2.5">
-                  <div className="leading-none text-xl font-bold text-gray-700">
-                    $5
-                  </div>
-                  <div className="leading-none text-xs ml-1">/month</div>
-                </div>
-                <BuyLicenseButton href={getLink("buyPersonalMonthly")}>
-                  Buy Monthly
-                </BuyLicenseButton>
-              </div>
-              <div>
-                <div className="flex items-center mb-2.5">
-                  <div className="leading-none text-xl font-bold text-gray-700">
-                    $50
-                  </div>
-                  <div className="leading-none text-xs ml-1">/year</div>
-                </div>
-                <BuyLicenseButton href={getLink("buyPersonalYearly")}>
-                  Buy Yearly
-                </BuyLicenseButton>
-              </div>
-            </div>
-          </div>
+          <BuyLicenseButtons
+            monthly={5}
+            yearly={50}
+            monthlyLink={LINKS.buyPersonalMonthly}
+            yearlyLink={LINKS.buyPersonalYearly}
+          />
         </BuyLicenseBox>
         <BuyLicenseBox>
           <div className="p-5">
-            <h1 className="font-bold text-gray-700 mb-2">Pro</h1>
+            <h1 className="font-bold text-neutral-900 mb-2">Pro</h1>
             <PricingPoint label="Commercial use ok" />
             <PricingPoint label="All features available" />
             <PricingPoint label="Company can pay" />
             <PricingPoint label="Purchase can be expensed" />
           </div>
-
-          <div className="p-5 border-t border-gray-100 bg-gray-50">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <div className="flex items-center mb-2.5">
-                  <div className="leading-none text-xl font-bold text-gray-700">
-                    $10
-                  </div>
-                  <div className="leading-none text-xs ml-1">/month</div>
-                </div>
-                <BuyLicenseButton href={getLink("buyProMonthly")}>
-                  Buy Monthly
-                </BuyLicenseButton>
-              </div>
-              <div>
-                <div className="flex items-center mb-2.5">
-                  <div className="leading-none text-xl font-bold text-gray-700">
-                    $100
-                  </div>
-                  <div className="leading-none text-xs ml-1">/year</div>
-                </div>
-                <BuyLicenseButton href={getLink("buyProYearly")}>
-                  Buy Yearly
-                </BuyLicenseButton>
-              </div>
-            </div>
-          </div>
+          <BuyLicenseButtons
+            monthly={10}
+            yearly={100}
+            monthlyLink={LINKS.buyProMonthly}
+            yearlyLink={LINKS.buyProYearly}
+          />
         </BuyLicenseBox>
       </div>
       <p>
@@ -440,7 +587,7 @@ function BuyLicense() {
         other custom requests, please{" "}
         <a href={`mailto:${SUPPORT_EMAIL}`}>contact support</a>.
       </p>
-    </div>
+    </WallOfText>
   );
 }
 
@@ -471,9 +618,9 @@ function Download() {
 
   return (
     <div className="my-12 md:my-28">
-      <Title className="px-4 md:text-center text-2xl">
+      <div className="font-bold px-4 md:text-center text-3xl text-white">
         Download CodePerfect {CURRENT_BUILD}
-      </Title>
+      </div>
       <div className="max-w-3xl mx-auto mt-8 px-4 md:text-center">
         <p className="flex flex-wrap flex-col md:flex-row gap-2 justify-center">
           {links.map((it) => (
@@ -483,10 +630,7 @@ function Download() {
                   ? "#"
                   : `https://codeperfect95.s3.us-east-2.amazonaws.com/app/${it.platform}-${CURRENT_BUILD}.zip`
               }
-              className={cx(
-                "button download-button",
-                it.disabledText && "disabled"
-              )}
+              className={cx("btn", it.disabledText ? "btn2 disabled" : "btn1")}
               title={it.disabledText}
               onClick={(e) => {
                 // disableButtonProps.onClick(e);
@@ -506,7 +650,7 @@ function Download() {
       <div className="px-4 mt-12 md:mt-20">
         <div
           style={{ maxWidth: "calc(min(100%, 1024px))" }}
-          className="mx-auto items-center gap-8 my-8 hidden md:flex rounded-xl overflow-hidden border border-gray-300"
+          className="mx-auto items-center gap-8 my-8 hidden md:flex rounded-xl overflow-hidden border border-gray-300 shadow-md"
         >
           <img
             alt="screenshot"
@@ -523,7 +667,7 @@ function Download() {
 function Terms() {
   return (
     <WallOfText>
-      <H1>Terms of Service</H1>
+      <Title>Terms of Service</Title>
       <p>
         This website provides you with information about the IDE and a means for
         you to subscribe to our services, which allow you to use the IDE for as
@@ -536,7 +680,7 @@ function Terms() {
       </p>
 
       <div className="mt-16">
-        <H1>Privacy Policy</H1>
+        <Title>Privacy Policy</Title>
         <p>
           When you sign up, we collect your name, email, and credit card
           information. We use this information to bill you and send you emails
@@ -570,7 +714,7 @@ function PricingPoint({ label, not }) {
     <div
       className={cx(
         "flex items-start space-x-1 leading-6 mb-1 last:mb-0",
-        not && "text-red-600"
+        not && "text-red-400"
       )}
     >
       <Icon
@@ -584,70 +728,122 @@ function PricingPoint({ label, not }) {
 
 const NavA = wrap(
   A,
-  "text-black no-underline whitespace-nowrap hidden md:inline-block"
+  "text-white no-underline whitespace-nowrap hidden md:inline-block"
 );
 
-function Header() {
+const MenuA = wrap(
+  A,
+  "block text-neutral-200 no-underline whitespace-nowrap md:hidden leading-none py-2"
+);
+
+function Logo() {
   return (
-    <div className="p-4 md:p-4 border-b border-gray-100 bg-gray-50">
+    <A
+      href="/"
+      className="font-bold text-lg text-white no-underline whitespace-nowrap flex flex-shrink-0 items-center"
+    >
+      <img
+        alt="logo"
+        className="w-auto h-8 inline-block mr-3 invert"
+        src={asset("/logo.png")}
+      />
+      <span className="inline-block logo text-lg">CodePerfect 95</span>
+    </A>
+  );
+}
+
+function Header() {
+  const [showMenu, setShowMenu] = React.useState(true);
+
+  React.useEffect(() => {
+    const listener = (e) => {
+      setShowMenu(false);
+    };
+    document.body.addEventListener("click", listener);
+    return () => document.body.removeEventListener("click", listener);
+  }, []);
+
+  return (
+    <div className="p-4 md:p-4 border-b border-gray-50">
       <div className="flex justify-between items-center w-full md:max-w-screen-lg md:mx-auto text-lg">
-        <A
-          href="/"
-          className="font-bold text-lg text-black no-underline whitespace-nowrap flex flex-shrink-0 items-center"
-        >
-          <img
-            alt="logo"
-            className="w-auto h-10 inline-block mr-3"
-            src={asset("/logo.png")}
+        <Logo />
+        <div className="md:hidden relative">
+          <Icon
+            block
+            onClick={(e) => {
+              setShowMenu(!showMenu);
+              e.stopPropagation();
+            }}
+            className="ml-2 text-4xl leading-none"
+            icon={BiMenu}
           />
-          <span className="hidden md:inline-block logo">CodePerfect 95</span>
-        </A>
-        <div className="flex items-baseline space-x-6">
-          <NavA href={getLink("docs")}>Docs</NavA>
-          <NavA href={getLink("changelog")}>Changelog</NavA>
-          <NavA href={getLink("discord")}>Discord</NavA>
+          {showMenu && (
+            <div
+              className="bg-black text-black fixed top-0 left-0 right-0 p-4 border-b border-gray-200 shadow-lg"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                onClick={() => setShowMenu(false)}
+                className="absolute top-4 right-4 w-8 flex items-center justify-center h-8 rounded-full bg-neutral-700 text-white"
+              >
+                <Icon icon={AiOutlineClose} />
+              </button>
+              <Logo />
+              <div className="mt-2">
+                <MenuA href={LINKS.docs}>Docs</MenuA>
+                <MenuA href={LINKS.changelog}>Changelog</MenuA>
+                <MenuA href={LINKS.discord}>Discord</MenuA>
+                <MenuA href="/buy">Buy</MenuA>
+                <MenuA href="/download">Download</MenuA>
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="hidden md:flex items-baseline space-x-6">
+          <NavA href={LINKS.docs}>Docs</NavA>
+          <NavA href={LINKS.changelog}>Changelog</NavA>
+          <NavA href={LINKS.discord}>Discord</NavA>
           <NavA href="/buy">Buy</NavA>
-          <A href="/download" className="button main-button">
-            <Icon className="mr-2" icon={HiOutlineDownload} />
-            Download
-          </A>
+          <NavA href="/download">Download</NavA>
         </div>
       </div>
     </div>
   );
 }
 
-const FootSection = wrap("div", "flex flex-col gap-y-3 md:gap-y-3");
-const FootLink = wrap(A, "text-gray-500 no-underline");
+const FootSection = wrap("div", "flex flex-col gap-y-3 md:gap-y-3 text-left");
+const FootLink = wrap(A, "text-gray-800 no-underline");
 
 function Footer() {
   return (
-    <div className="px-4 pt-6 lg:pt-8 pb-4 md:pb-12 border-t border-gray-100 bg-gray-50">
-      <div className="flex flex-col md:flex-row gap-y-4 md:gap-0 hmd:flex-row justify-between w-full md:max-w-screen-lg md:mx-auto items-start">
-        <div className="flex flex-col md:flex-row md:items-start gap-y-3 md:gap-x-14 text-gray-500 leading-none">
+    <div className="px-4 pt-6 lg:pt-12 pb-8 md:pb-24 border-t border-gray-100 md:border-0">
+      <div className="flex flex-col md:flex-row gap-y-4 md:gap-0 hmd:flex-row justify-between w-full md:max-w-screen-xl md:mx-auto items-start">
+        <div className="text-gray-500 ">
           <span>&copy; {new Date().getFullYear()} CodePerfect 95</span>
+        </div>
+        <div className="flex flex-col md:flex-row md:items-start gap-y-3 md:gap-x-14 leading-none">
           <FootSection>
             <FootLink href="/buy">Buy License</FootLink>
             <FootLink href="/download">Download</FootLink>
           </FootSection>
           <FootSection>
-            <FootLink href={getLink("docs")}>Docs</FootLink>
-            <FootLink href={getLink("changelog")}>Changelog</FootLink>
-            <FootLink href={getLink("issueTracker")}>Issue Tracker</FootLink>
+            <FootLink href={LINKS.docs}>Docs</FootLink>
+            <FootLink href={LINKS.changelog}>Changelog</FootLink>
+            <FootLink href={LINKS.issueTracker}>Issue Tracker</FootLink>
           </FootSection>
           <FootSection>
             <FootLink href={`mailto:${SUPPORT_EMAIL}`}>Support</FootLink>
             <FootLink href="/terms">Terms &amp; Privacy</FootLink>
             <FootLink href={LINKS.mailingList}>Newsletter</FootLink>
           </FootSection>
-        </div>
-        <div className="flex gap-x-4 text-2xl">
-          <A className="text-gray-400" href={getLink("discord")}>
-            <Icon block icon={FaDiscord} />
-          </A>
-          <A className="text-gray-400" href={getLink("twitter")}>
-            <Icon block icon={FaTwitter} />
-          </A>
+          <div className="flex gap-x-4 text-2xl mt-3 md:mt-0">
+            <A className="text-gray-800" href={LINKS.discord}>
+              <Icon block icon={FaDiscord} />
+            </A>
+            <A className="text-gray-800" href={LINKS.twitter}>
+              <Icon block icon={FaTwitter} />
+            </A>
+          </div>
         </div>
       </div>
     </div>
