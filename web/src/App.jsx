@@ -611,7 +611,7 @@ function BuyLicense() {
           </p>
           <p>
             <A href={`mailto:${SUPPORT_EMAIL}`} className="btn btn2 btn-small">
-              Contact Us
+              Contact us
             </A>
           </p>
         </>
@@ -628,8 +628,8 @@ function BuyLicense() {
         <div className="my-6 grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-12 rounded">
           {plans.map(({ name, price, features, buttons }) => {
             const options = [
-              [buttons.monthlyLink, "Monthly"],
-              [buttons.yearlyLink, "Yearly*"],
+              [buttons.monthlyLink, "monthly"],
+              [buttons.yearlyLink, "yearly*"],
             ];
 
             return (
@@ -664,7 +664,7 @@ function BuyLicense() {
                       className="btn btn2 block text-center py-3"
                       href={`mailto:${SUPPORT_EMAIL}`}
                     >
-                      Contact Support
+                      Contact support
                     </A>
                   ) : (
                     <div className="grid grid-cols-2 items-center gap-x-2">
