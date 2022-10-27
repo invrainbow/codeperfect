@@ -698,7 +698,7 @@ function BuyLicense() {
                 filter: "saturate(0.35)",
               }}
             />
-            <div className="font-title text-white text-lg font-bold mb-2">
+            <div className="font-title text-neutral-300 text-lg font-bold mb-2">
               {it.title}
             </div>
             <div className="text-gray-500">{it.content}</div>
