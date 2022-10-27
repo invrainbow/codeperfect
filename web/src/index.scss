@@ -100,7 +100,7 @@
 
 @layer components {
   .btn {
-    @apply rounded shadow leading-none text-shadow;
+    @apply rounded shadow leading-none;
     @apply py-3 px-6;
     @apply disabled:opacity-50 no-underline outline-none;
     @apply whitespace-nowrap;
