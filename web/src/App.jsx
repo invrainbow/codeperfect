@@ -411,11 +411,7 @@ function Home() {
             </p>
             <div className="mt-6 md:mt-12 mb-6">
               We{" "}
-              <A
-                className="underline underline-offset-4 decoration-2 font-semibold text-neutral-500 decoration-neutral-200 hover:text-neutral-600 hover:decoration-neutral-300"
-                newWindow
-                href={LINKS.handmadeManifesto}
-              >
+              <A newWindow href={LINKS.handmadeManifesto}>
                 handmade
               </A>{" "}
               the entire IDE stack from the metal up in blazing fast C/C++, into
@@ -431,7 +427,7 @@ function Home() {
       </div>
 
       <div
-        className="py-12 px-8 md:py-32 md:px-0"
+        className="py-12 px-8 md:py-32"
         // style={{ background: "rgba(0, 0, 0, 0.2)" }}
       >
         <div className="grid grid-cols-1 md:grid-cols-3 max-w-screen-lg mx-auto gap-12 md:gap-20">
@@ -450,37 +446,39 @@ function Home() {
         </div>
       </div>
 
-      <div className="bg-white max-w-screen-xl mx-auto md:flex text-neutral-700 border-white border-2 py-12 px-8 md:p-16 overflow-hidden md:rounded-lg md:shadow-lg md:mb-24">
-        <div className="md:w-1/3">
-          <div className="text-black font-bold text-3xl mb-6 font-title">
-            Ready to get started?
+      <div className="md:px-4">
+        <div className="bg-white max-w-screen-xl mx-auto md:flex text-neutral-700 border-white border-2 py-12 px-8 md:p-8 lg:p-16 overflow-hidden md:rounded-lg md:shadow-lg md:mb-24">
+          <div className="md:w-1/3">
+            <div className="text-black font-bold text-3xl mb-6 font-title">
+              Ready to get started?
+            </div>
+            <p className="text-xl leading-relaxed mb-8">
+              Try CodePerfect for free for 7 days
+              <br />
+              with all features available.
+            </p>
+            <p>
+              <A
+                link
+                href="/download"
+                className={twMerge(
+                  "btn btn1 justify-center inline-flex text-center bg-black text-white px-6"
+                )}
+              >
+                <Icon className="mr-2" icon={HiOutlineDownload} />
+                Download
+              </A>
+            </p>
           </div>
-          <p className="text-xl leading-relaxed mb-8">
-            Try CodePerfect for free for 7 days
-            <br />
-            with all features available.
-          </p>
-          <p>
-            <A
-              link
-              href="/download"
-              className={twMerge(
-                "btn btn1 justify-center inline-flex text-center bg-black text-white px-6"
-              )}
-            >
-              <Icon className="mr-2" icon={HiOutlineDownload} />
-              Download
-            </A>
-          </p>
-        </div>
-        <div className="flex-1 relative hidden md:block">
-          <div className="absolute -bottom-16 left-0 -right-8">
-            <img
-              src={asset("/basics-screenshot.png")}
-              className="max-w-full h-auto opacity-100"
-              alt="screenshot"
-              // style={{ marginBottom: "-10%" }}
-            />
+          <div className="flex-1 relative hidden md:block">
+            <div className="absolute -bottom-16 left-0 -right-8">
+              <img
+                src={asset("/basics-screenshot.png")}
+                className="max-w-full h-auto opacity-100"
+                alt="screenshot"
+                // style={{ marginBottom: "-10%" }}
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -795,11 +793,7 @@ function Download() {
             </span>
             <span>
               CodePerfect is free to evaluate for 7 days. After that you'll need
-              a{" "}
-              <A className="text-neutral-300" href="/buy">
-                license
-              </A>{" "}
-              for continued use.
+              a <A href="/buy">license</A> for continued use.
             </span>
           </div>
         </div>

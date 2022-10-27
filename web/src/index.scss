@@ -39,8 +39,9 @@
   }
 
   a {
-    @apply text-gray-600 underline;
+    @apply text-primary underline;
     @apply break-words;
+    @apply underline-offset-4;
   }
   a.btn {
     @apply no-underline;
@@ -121,8 +122,7 @@
       font-size: 0.9em;
     }
     &.btn1 {
-      color: white;
-      background: rgb(11, 158, 245);
+      @apply bg-primary text-white;
       filter: saturate(0.8);
     }
     &.btn2 {
