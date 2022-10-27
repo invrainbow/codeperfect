@@ -53,7 +53,7 @@ void kill_thread(Thread_Handle h) {
     pthread_cancel((pthread_t)h);
 }
 
-void exit_thread(int retval) {
+NORETURN void exit_thread(int retval) {
     pthread_exit((void*)(uptr)retval);
 }
 
