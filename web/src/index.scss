@@ -126,7 +126,7 @@
       filter: saturate(0.8);
     }
     &.btn2 {
-      @apply bg-gradient-to-b from-neutral-200 to-neutral-300 border text-neutral-700;
+      @apply bg-gradient-to-b from-neutral-50 to-neutral-100 text-neutral-700;
     }
   }
 
