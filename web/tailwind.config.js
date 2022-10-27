@@ -32,6 +32,16 @@ module.exports = {
         "Ubuntu",
         "sans-serif",
       ],
+      mono: ["Menlo", "Monaco", "Consolas", "Courier New", "monospace"],
+      title: [
+        "-apple-system",
+        "BlinkMacSystemFont",
+        "Segoe UI",
+        "Roboto",
+        "Helvetica Neue",
+        "Ubuntu",
+        "sans-serif",
+      ],
     },
   },
   variants: {

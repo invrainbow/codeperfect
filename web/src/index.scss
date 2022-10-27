@@ -28,10 +28,11 @@
   }
   */
 
+  /*
   code {
-    font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New",
-      monospace;
+    font-family: Menlo, Monaco, Consolas, "Courier New", monospace;
   }
+  */
 
   * {
     @apply outline-none;
@@ -99,47 +100,35 @@
 
 @layer components {
   .btn {
-    @apply rounded-md shadow-sm leading-none;
-    @apply py-4 px-5;
+    @apply rounded shadow leading-none text-shadow;
+    @apply py-3 px-6;
     @apply disabled:opacity-50 no-underline outline-none;
     @apply whitespace-nowrap;
     @apply inline-flex items-center;
+    @apply text-base font-bold;
+    @apply font-title;
+
+    &:not(:disabled):not(.disabled) {
+      @apply hover:scale-[1.015] active:top-[1px] active:scale-[.985];
+    }
 
     &:disabled {
       opacity: 0.5;
       cursor: not-allowed;
     }
+    &.btn-small {
+      @apply py-1.5 px-4;
+      font-size: 0.9em;
+    }
     &.btn1 {
-      background: #f2f2f2;
-      color: #333333;
-      @apply shadow;
-      &:hover:not(:disabled):not(.disabled) {
-        @apply shadow-md;
-        background: #ffffff;
-        color: #000000;
-      }
-      &.btn-invert {
-        @apply shadow-none;
-        color: #fff;
-        background: #222;
-        &:hover:not(:disabled):not(.disabled) {
-          background: #000;
-          color: #fff;
-          @apply shadow-none;
-        }
-      }
+      color: white;
+      background: rgb(11, 158, 245);
+      filter: saturate(0.8);
     }
     &.btn2 {
-      @apply border border-neutral-300 text-neutral-300 bg-transparent;
-      &:hover:not(:disabled):not(.disabled) {
-        @apply text-neutral-100 border-neutral-100;
-      }
-      &.btn-invert {
-        @apply border-neutral-800 text-neutral-800;
-        &:hover:not(:disabled):not(.disabled) {
-          @apply text-black border-black;
-        }
-      }
+      background: #ddd;
+      color: #444;
+      @apply shadow-sm;
     }
     &:disabled,
     &.disabled {
@@ -158,6 +147,22 @@
 }
 
 @layer utilities {
+  .text-shadow {
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+
+  .text-shadow-md {
+    text-shadow: 0 4px 8px rgba(0, 0, 0, 0.12), 0 2px 4px rgba(0, 0, 0, 0.08);
+  }
+
+  .text-shadow-lg {
+    text-shadow: 0 15px 30px rgba(0, 0, 0, 0.11), 0 5px 15px rgba(0, 0, 0, 0.08);
+  }
+
+  .text-shadow-none {
+    text-shadow: none;
+  }
+
   .thick-list li {
     @apply mb-3;
   }
@@ -215,27 +220,28 @@
     }
   }
 
-  $skew-angle: 2.11deg;
+  $skew-angle: 4deg;
   $skew-angle-tan: math.tan($skew-angle);
 
   .batteries-included {
     position: relative;
-    z-index: 100;
     color: #555555;
     background: linear-gradient(
       180deg,
-      rgb(246, 246, 246) 0%,
-      rgb(232, 232, 232) 100%
+      rgb(246, 246, 250) 0%,
+      rgb(232, 232, 236) 100%
     );
     overflow: hidden;
     transform: skewY(-$skew-angle);
     .batteries-included-child {
       position: relative;
-      z-index: 100;
       transform: skewY($skew-angle);
     }
     .batteries-included-tile {
       background: white;
+      &:hover {
+        transform: scale(1.03);
+      }
     }
   }
 

@@ -1,9 +1,12 @@
 import { AiFillApple } from "@react-icons/all-files/ai/AiFillApple";
 import { AiFillWindows } from "@react-icons/all-files/ai/AiFillWindows";
+import { AiFillInfoCircle } from "@react-icons/all-files/ai/AiFillInfoCircle";
 import { AiOutlineCheck } from "@react-icons/all-files/ai/AiOutlineCheck";
 import { AiOutlineClose } from "@react-icons/all-files/ai/AiOutlineClose";
 import { BiMenu } from "@react-icons/all-files/bi/BiMenu";
 import { BsChevronRight } from "@react-icons/all-files/bs/BsChevronRight";
+import { AiFillTag } from "@react-icons/all-files/ai/AiFillTag";
+import { AiOutlineClockCircle } from "@react-icons/all-files/ai/AiOutlineClockCircle";
 import { FaLinux } from "@react-icons/all-files/fa/FaLinux";
 import { FaTwitter } from "@react-icons/all-files/fa/FaTwitter";
 import { FaDiscord } from "@react-icons/all-files/fa/FaDiscord";
@@ -85,7 +88,7 @@ function isExternalLink(href) {
 function A({ link, children, href, newWindow, ...props }) {
   if (!href || isExternalLink(href) || newWindow) {
     props.href = href;
-    if (newWindow) {
+    if (newWindow || isExternalLink(href)) {
       props.target = "_blank";
     }
     return <a {...props}>{children}</a>;
@@ -104,6 +107,25 @@ function wrap(elem, extraClassName, defaultProps, overrideProps) {
     };
     return React.createElement(elem, newProps, children);
   };
+}
+
+function Image({ src, ...rest }) {
+  const imgProps = {
+    alt: "image",
+    src,
+    ...rest,
+  };
+
+  return (
+    <>
+      <A newWindow href={src} className="md:hidden">
+        <img {...imgProps} />
+      </A>
+      <span className="hidden md:block">
+        <img {...imgProps} />
+      </span>
+    </>
+  );
 }
 
 const WallOfText = wrap(
@@ -262,7 +284,7 @@ function Home() {
       style={{ maxWidth: "1920px" }}
     >
       <div className="max-w-full text-lg leading-relaxed p-4">
-        <div className="text-center text-4xl md:text-5xl mb-6 font-bold text-white leading-snug">
+        <div className="text-center text-4xl md:text-5xl mb-6 font-bold text-white leading-snug font-title">
           A&nbsp;fast,&nbsp;powerful IDE&nbsp;for&nbsp;Go
         </div>
 
@@ -271,7 +293,7 @@ function Home() {
           development workflow.
         </p>
 
-        <p className="hidden md:display max-w-full mx-auto text-center text-xl text-neutral-100 leading-normal">
+        <p className="hidden md:block max-w-full mx-auto text-center text-xl text-neutral-400 leading-normal">
           A power tool with a minimal resource footprint.
           <br />
           Designed around the Go development workflow.
@@ -300,23 +322,22 @@ function Home() {
             <img alt="screenshot" src={asset("/basics-screenshot.png")} />
           </A>
         </div>
-
         <div
           className="hidden md:block relative max-w-screen-xl mt-16 mx-auto"
           style={{ height: "450px" }}
         >
           <img
-            className="max-w-full opacity-80 absolute top-0 left-0 right-0"
+            className="max-w-full opacity-100 absolute top-0 left-0 right-0"
             alt="screenshot"
             src={asset("/basics-screenshot.png")}
           />
         </div>
       </div>
 
-      <div className="batteries-included">
+      <div className="batteries-included z-10">
         <div className="batteries-included-child md:flex max-w-screen-xl mx-auto py-16 md:py-32">
           <div className="md:w-2/5 px-4 md:p-0 md:pr-16">
-            <div className="text-4xl md:mt-24 mb-6 font-bold text-black">
+            <div className="text-4xl md:mt-24 mb-6 font-bold text-black font-title">
               Batteries included
             </div>
 
@@ -333,7 +354,7 @@ function Home() {
             <div className="mt-8">
               <A
                 href={LINKS.docs}
-                className="btn btn2 btn-invert justify-center flex md:inline-flex text-center"
+                className="btn btn2 justify-center flex md:inline-flex text-center"
               >
                 View Docs
                 <Icon className="ml-2" icon={BsChevronRight} />
@@ -343,7 +364,7 @@ function Home() {
           <div className="flex-1 mx-auto grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6 mt-8 md:mt-0 p-4 md:p-0">
             {FEATURES.map((it) => (
               <div
-                className="batteries-included-tile shadow-sm rounded-md p-3 hover:scale-105 transition-all select-none"
+                className="batteries-included-tile shadow-sm rounded p-3 transition-all select-none"
                 key={it.label}
               >
                 <div className="leading-none mb-2">
@@ -376,13 +397,13 @@ function Home() {
           style={{ maxWidth: "1280px" }}
         >
           <div
-            style={{ background: "rgba(255, 255, 255, 0.0)" }}
+            style={{ background: "rgba(255, 255, 255, 0.1)" }}
             className="flex-1 flex flex-col items-center justify-center"
           />
-          <div className="box-border md:w-1/2 py-16 px-8 md:py-36 md:px-24 text-xl leading-relaxed border-dashed border-neutral-200">
+          <div className="box-border md:w-1/2 py-16 px-8 md:pt-48 md:pb-36 md:px-24 text-xl leading-relaxed border-dashed border-neutral-200">
             <p>
               {BAD_FEATURES.map((name) => (
-                <div className="text-2xl md:text-3xl font-bold text-neutral-800 leading-tight">
+                <div className="text-2xl md:text-3xl font-bold text-neutral-800 md:leading-snug font-title">
                   No {name}.
                 </div>
               ))}
@@ -398,7 +419,7 @@ function Home() {
               </A>{" "}
               the entire IDE stack from the metal up in blazing fast C/C++, into
               a barebones native app that literally just does the thing it's
-              supposed to
+              supposed to.
             </div>
             <p>
               From the UI renderer to the code intelligence engine, everything
@@ -410,7 +431,7 @@ function Home() {
 
       <div
         className="p-8 md:py-32 md:px-0"
-        style={{ background: "rgba(0, 0, 0, 0.2)" }}
+        // style={{ background: "rgba(0, 0, 0, 0.2)" }}
       >
         <div className="grid grid-cols-1 md:grid-cols-3 max-w-screen-lg mx-auto gap-12 md:gap-20">
           {SELLING_POINTS.map((it) => (
@@ -419,7 +440,7 @@ function Home() {
               style={{ borderColor: "rgba(255, 255, 255, 0.05)" }}
             >
               <img src={it.icon} alt={it.label} className="w-auto h-10 mb-2" />
-              <div className="text-lg font-semibold text-white mb-4">
+              <div className="text-lg font-title font-semibold text-white mb-4">
                 {it.label}
               </div>
               <div>{it.content}</div>
@@ -428,39 +449,37 @@ function Home() {
         </div>
       </div>
 
-      <div className="bg-white py-8 px-4 md:px-0 md:pt-24 md:pb-28 overflow-hidden border-t border-white border-2">
-        <div className="max-w-screen-xl mx-auto md:flex text-neutral-700 border-white border-2">
-          <div className="md:w-1/3">
-            <div className="text-black font-bold text-3xl mb-6">
-              Ready to get started?
-            </div>
-            <p className="text-xl leading-relaxed mb-8">
-              Try CodePerfect for free for 7 days
-              <br />
-              with all features available.
-            </p>
-            <p>
-              <A
-                link
-                href="/download"
-                className={twMerge(
-                  "btn btn1 btn-invert justify-center inline-flex text-center bg-black text-white text-lg px-6"
-                )}
-              >
-                <Icon className="mr-2" icon={HiOutlineDownload} />
-                Download
-              </A>
-            </p>
+      <div className="bg-white max-w-screen-xl mx-auto md:flex text-neutral-700 border-white border-2 py-8 px-4 md:p-16 overflow-hidden rounded-lg md:mb-24">
+        <div className="md:w-1/3">
+          <div className="text-black font-bold text-3xl mb-6 font-title">
+            Ready to get started?
           </div>
-          <div className="flex-1 relative hidden md:block">
-            <div className="absolute -bottom-24 left-0 -right-8">
-              <img
-                src={asset("/basics-screenshot.png")}
-                className="max-w-full h-auto opacity-100"
-                alt="screenshot"
-                // style={{ marginBottom: "-10%" }}
-              />
-            </div>
+          <p className="text-xl leading-relaxed mb-8">
+            Try CodePerfect for free for 7 days
+            <br />
+            with all features available.
+          </p>
+          <p>
+            <A
+              link
+              href="/download"
+              className={twMerge(
+                "btn btn1 justify-center inline-flex text-center bg-black text-white px-6"
+              )}
+            >
+              <Icon className="mr-2" icon={HiOutlineDownload} />
+              Download
+            </A>
+          </p>
+        </div>
+        <div className="flex-1 relative hidden md:block">
+          <div className="absolute -bottom-16 left-0 -right-8">
+            <img
+              src={asset("/basics-screenshot.png")}
+              className="max-w-full h-auto opacity-100"
+              alt="screenshot"
+              // style={{ marginBottom: "-10%" }}
+            />
           </div>
         </div>
       </div>
@@ -495,11 +514,6 @@ function PortalDone() {
   );
 }
 
-const BuyLicenseBox = wrap(
-  "div",
-  "w-auto overflow-hidden border border-neutral-300 rounded-md shadow-sm"
-);
-
 const disableButtonProps = {
   onClick: (e) => {
     e.preventDefault();
@@ -509,85 +523,189 @@ const disableButtonProps = {
   },
 };
 
-const BuyLicenseButton = wrap(
-  A,
-  "btn btn1 btn-invert p-3 block text-center",
-  null
-  // { ...disableButtonProps, href: "#" }
-);
+function BuyLicense() {
+  const plans = [
+    {
+      name: "Personal",
+      price: 5,
+      features: [
+        { label: "Commercial use ok" },
+        { label: "All features available" },
+        { not: true, label: "Company can't pay" },
+        { not: true, label: "Purchase can't be expensed" },
+      ],
+      buttons: {
+        monthlyLink: LINKS.buyPersonalMonthly,
+        yearlyLink: LINKS.buyPersonalYearly,
+      },
+    },
 
-function BuyLicenseButtons({ monthly, monthlyLink, yearly, yearlyLink }) {
-  const options = [
-    [monthly, monthlyLink, "Monthly", "month"],
-    [yearly, yearlyLink, "Yearly", "year"],
+    {
+      name: "Pro",
+      price: 10,
+      features: [
+        { label: "Commercial use ok" },
+        { label: "All features available" },
+        { label: "Company can pay" },
+        { label: "Purchase can be expensed" },
+      ],
+      buttons: {
+        monthlyLink: LINKS.buyProMonthly,
+        yearlyLink: LINKS.buyProYearly,
+      },
+    },
+
+    {
+      name: "Enterprise",
+      price: "custom",
+      features: [
+        { label: "Priority support" },
+        { label: "Custom billing & pricing" },
+        { label: "Team licensing & management" },
+        { label: "Other custom requests" },
+      ],
+      buttons: { enterprise: true },
+    },
+  ];
+
+  const faqs = [
+    {
+      title: "Not sure yet?",
+      content: (
+        <>
+          <p>
+            You can download CodePerfect for a free 7 day trial before buying a
+            license. No credit card is required and all functionality is enabled
+            during this period.
+          </p>
+          <p>
+            <A href="/download" className="btn btn1 btn-small">
+              Try CodePerfect for free
+            </A>
+          </p>
+        </>
+      ),
+    },
+    {
+      title: "Buying as a team?",
+      content: (
+        <>
+          <p>
+            If you need multiple licenses, bulk pricing, team management, or
+            have any other custom requests, please get in touch with us.
+          </p>
+          <p>
+            <A href={`mailto:${SUPPORT_EMAIL}`} className="btn btn2 btn-small">
+              Get in touch
+            </A>
+          </p>
+        </>
+      ),
+    },
+    {
+      title: "Have another question?",
+      content: (
+        <>
+          <p>
+            Our support staff is happy to help. Please get in touch with us and
+            we'll respond within 1 business day.
+          </p>
+          <p>
+            <A href={`mailto:${SUPPORT_EMAIL}`} className="btn btn2 btn-small">
+              Contact Us
+            </A>
+          </p>
+        </>
+      ),
+    },
   ];
 
   return (
-    <div className="p-5 border-t border-neutral-200 bg-neutral-100">
-      <div className="grid grid-cols-2 gap-3">
-        {options.map(([amount, link, unit, unit2]) => (
-          <div>
-            <div className="flex items-center mb-2.5">
-              <div className="leading-none text-xl font-bold text-neutral-900">
-                ${amount}
+    <div className="mt-12 md:mt-24">
+      <div className="text-center text-white font-title text-3xl md:text-5xl font-bold mb-4 md:mb-12">
+        Buy License
+      </div>
+      <div className="md:max-w-screen-xl mx-auto">
+        <div className="my-6 grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-12 rounded">
+          {plans.map(({ name, price, features, buttons }) => {
+            const options = [
+              [buttons.monthlyLink, "Monthly"],
+              [buttons.yearlyLink, "Yearly*"],
+            ];
+
+            return (
+              <div className="w-auto overflow-hidden border border-neutral-600 rounded-lg shadow-lg p-5 mx-6 md:mx-0">
+                <div className="text-neutral-300">
+                  <div className="font-title font-bold text-lg text-neutral-400">
+                    {name}
+                  </div>
+                  <div className="font-title font-bold text-xl">
+                    {price === "custom" ? "Custom pricing" : <>${price}/mo</>}
+                  </div>
+                </div>
+                <div className="my-5">
+                  {features.map((it) => (
+                    <div
+                      className={cx(
+                        "flex items-start space-x-1 leading-6 mb-1 last:mb-0",
+                        it.not ? "text-red-600" : "text-neutral-200"
+                      )}
+                    >
+                      <Icon
+                        className="relative top-1 transform scale-90 origin-center"
+                        icon={it.not ? AiOutlineClose : AiOutlineCheck}
+                      />
+                      <span>{it.label}</span>
+                    </div>
+                  ))}
+                </div>
+                <div>
+                  {buttons.enterprise ? (
+                    <A
+                      className="btn btn2 block text-center py-3"
+                      href={`mailto:${SUPPORT_EMAIL}`}
+                    >
+                      Contact Support
+                    </A>
+                  ) : (
+                    <div className="grid grid-cols-2 items-center gap-x-2">
+                      {options.map(([link, unit]) => (
+                        <A
+                          className="btn btn1 py-3 block text-center"
+                          href={link}
+                        >
+                          Buy {unit}
+                        </A>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
-              <div className="text-neutral-600 leading-none text-sm relative top-0.5 ml-1">
-                /{unit2}
-              </div>
+            );
+          })}
+        </div>
+        <div className="text-center text-neutral-400 text-lg mt-4">
+          * get two months free when you buy yearly
+        </div>
+      </div>
+      <div className="md:max-w-screen-xl mx-auto grid grid-cols-1 md:grid-cols-3 mt-12 md:mt-24 mb:4 md:my-24 md:border-t border-gray-100">
+        {faqs.map((it) => (
+          <div className="border-t md:border-t-0 md:border-r border-gray-100 first:border-l p-6 md:pt-8 md:pb-0 md:px-8">
+            <div
+              className="w-8 border-b-4 mb-2"
+              style={{
+                borderColor: "rgb(11, 158, 245)",
+                filter: "saturate(0.35)",
+              }}
+            />
+            <div className="font-title text-white text-lg font-bold mb-2">
+              {it.title}
             </div>
-            <BuyLicenseButton href={link}>Buy {unit}</BuyLicenseButton>
+            <div className="text-gray-500">{it.content}</div>
           </div>
         ))}
       </div>
     </div>
-  );
-}
-
-function BuyLicense() {
-  return (
-    <WallOfText className="md:max-w-3xl">
-      <Title>Buy CodePerfect</Title>
-      <div className="my-6 grid grid-cols-1 sm:grid-cols-2 gap-6">
-        <BuyLicenseBox>
-          <div className="p-5">
-            <h1 className="font-bold text-neutral-900 mb-2">Personal</h1>
-            <PricingPoint label="Commercial use ok" />
-            <PricingPoint label="All features available" />
-            <PricingPoint not label="Company can't pay" />
-            <PricingPoint not label="Purchase can't be expensed" />
-          </div>
-          <BuyLicenseButtons
-            monthly={5}
-            yearly={50}
-            monthlyLink={LINKS.buyPersonalMonthly}
-            yearlyLink={LINKS.buyPersonalYearly}
-          />
-        </BuyLicenseBox>
-        <BuyLicenseBox>
-          <div className="p-5">
-            <h1 className="font-bold text-neutral-900 mb-2">Pro</h1>
-            <PricingPoint label="Commercial use ok" />
-            <PricingPoint label="All features available" />
-            <PricingPoint label="Company can pay" />
-            <PricingPoint label="Purchase can be expensed" />
-          </div>
-          <BuyLicenseButtons
-            monthly={10}
-            yearly={100}
-            monthlyLink={LINKS.buyProMonthly}
-            yearlyLink={LINKS.buyProYearly}
-          />
-        </BuyLicenseBox>
-      </div>
-      <p>
-        We'll send your license key to the email you provide during checkout.
-      </p>
-      <p>
-        Licenses are per-user. If you want to buy licenses in bulk, or have any
-        other custom requests, please{" "}
-        <a href={`mailto:${SUPPORT_EMAIL}`}>contact support</a>.
-      </p>
-    </WallOfText>
   );
 }
 
@@ -617,43 +735,72 @@ function Download() {
   ];
 
   return (
-    <div className="my-12 md:my-28">
-      <div className="font-bold px-4 md:text-center text-3xl text-white">
-        Download CodePerfect {CURRENT_BUILD}
+    <div className="my-12 md:my-28 px-8 md:px-0">
+      <div className="font-bold md:px-4 md:text-center text-3xl md:text-5xl text-white font-title">
+        Download CodePerfect
       </div>
-      <div className="max-w-3xl mx-auto mt-8 px-4 md:text-center">
-        <p className="flex flex-wrap flex-col md:flex-row gap-2 justify-center">
+      <div className="text-center font-title mt-4 flex items-start md:items:center md:justify-center flex-col md:flex-row gap-1 md:gap-2">
+        <span className="inline-block">
+          <span className="py-1 px-3 font-semibold text-sm bg-yellow-200 text-yellow-600 rounded-full">
+            <Icon className="relative top-0.5" icon={AiFillTag} /> Build{" "}
+            {CURRENT_BUILD}
+          </span>
+        </span>
+        <span className="inline-block">
+          <span className="py-1 px-3 font-semibold text-sm bg-neutral-200 text-neutral-600 rounded-full">
+            <Icon className="relative top-0.5" icon={AiOutlineClockCircle} />{" "}
+            Released October 26, 2022
+          </span>
+        </span>
+      </div>
+      <div className="max-w-3xl mx-auto mt-12 md:px-4 md:text-center">
+        <p className="flex flex-wrap flex-col md:flex-row justify-center">
           {links.map((it) => (
-            <A
-              href={
-                it.disabledText
-                  ? "#"
-                  : `https://codeperfect95.s3.us-east-2.amazonaws.com/app/${it.platform}-${CURRENT_BUILD}.zip`
-              }
-              className={cx("btn", it.disabledText ? "btn2 disabled" : "btn1")}
-              title={it.disabledText}
-              onClick={(e) => {
-                // disableButtonProps.onClick(e);
-                posthog.capture("download", { platform: it.platform });
-              }}
-            >
-              <Icon className="mr-1" icon={it.icon} />
-              {it.label}
-            </A>
+            <div className="p-3 border-l border-r border-t last:border-b md:border-0 md:border-t md:border-b md:border-l first:rounded-tl first:rounded-bl md:last:border-r last:rounded-tr last:rounded-br border-dashed border-gray-200">
+              <A
+                href={
+                  it.disabledText
+                    ? "#"
+                    : `https://codeperfect95.s3.us-east-2.amazonaws.com/app/${it.platform}-${CURRENT_BUILD}.zip`
+                }
+                className={cx("btn btn1", it.disabledText && "disabled")}
+                title={it.disabledText}
+                onClick={(e) => {
+                  // disableButtonProps.onClick(e);
+                  posthog.capture("download", { platform: it.platform });
+                }}
+              >
+                <Icon className="mr-1" icon={it.icon} />
+                {it.label}
+              </A>
+            </div>
           ))}
         </p>
-        <p>
-          CodePerfect is free to evaluate for 7 days. After that you'll need a{" "}
-          <A href="/buy">license</A> for continued use.
-        </p>
+        <div className="flex items-center justify-center">
+          <div className="mt-12 py-4 px-6 bg-neutral-900 rounded flex items-strt md:items-center gap-2 text-neutral-400">
+            <span
+              className="text-xl relative pr-2 md:pr-0"
+              style={{ top: "1px" }}
+            >
+              <Icon icon={AiFillInfoCircle} />
+            </span>
+            <span>
+              CodePerfect is free to evaluate for 7 days. After that you'll need
+              a{" "}
+              <A className="text-neutral-300" href="/buy">
+                license
+              </A>{" "}
+              for continued use.
+            </span>
+          </div>
+        </div>
       </div>
       <div className="px-4 mt-12 md:mt-20">
         <div
-          style={{ maxWidth: "calc(min(100%, 1024px))" }}
-          className="mx-auto items-center gap-8 my-8 hidden md:flex rounded-xl overflow-hidden border border-gray-300 shadow-md"
+          // style={{ maxWidth: "calc(min(100%, 1024px))" }}
+          className="max-w-screen-xl mx-auto items-center gap-8 my-8 flex rounded-md md:rounded-xl overflow-hidden border border-gray-100 md:border-gray-300 shadow-md"
         >
-          <img
-            alt="screenshot"
+          <Image
             className="max-w-full max-h-full w-auto h-auto"
             src={asset("/download.png")}
           />
@@ -709,33 +856,6 @@ function ScrollToTop() {
   return null;
 }
 
-function PricingPoint({ label, not }) {
-  return (
-    <div
-      className={cx(
-        "flex items-start space-x-1 leading-6 mb-1 last:mb-0",
-        not && "text-red-400"
-      )}
-    >
-      <Icon
-        className="relative top-1 transform scale-90 origin-center"
-        icon={not ? AiOutlineClose : AiOutlineCheck}
-      />
-      <span>{label}</span>
-    </div>
-  );
-}
-
-const NavA = wrap(
-  A,
-  "text-white no-underline whitespace-nowrap hidden md:inline-block"
-);
-
-const MenuA = wrap(
-  A,
-  "block text-neutral-200 no-underline whitespace-nowrap md:hidden leading-none py-2"
-);
-
 function Logo() {
   return (
     <A
@@ -747,13 +867,15 @@ function Logo() {
         className="w-auto h-8 inline-block mr-3 invert"
         src={asset("/logo.png")}
       />
-      <span className="inline-block logo text-lg">CodePerfect 95</span>
+      <span className="inline-block logo text-lg font-title">
+        CodePerfect 95
+      </span>
     </A>
   );
 }
 
 function Header() {
-  const [showMenu, setShowMenu] = React.useState(true);
+  const [showMenu, setShowMenu] = React.useState(false);
 
   React.useEffect(() => {
     const listener = (e) => {
@@ -763,8 +885,16 @@ function Header() {
     return () => document.body.removeEventListener("click", listener);
   }, []);
 
+  const links = [
+    [LINKS.docs, "Docs"],
+    [LINKS.changelog, "Changelog"],
+    [LINKS.discord, "Discord"],
+    ["/buy", "Buy"],
+    ["/download", "Download"],
+  ];
+
   return (
-    <div className="p-4 md:p-4 border-b border-gray-50">
+    <div className="p-4 md:p-4 border-b border-gray-50 font-title">
       <div className="flex justify-between items-center w-full md:max-w-screen-lg md:mx-auto text-lg">
         <Logo />
         <div className="md:hidden relative">
@@ -774,12 +904,12 @@ function Header() {
               setShowMenu(!showMenu);
               e.stopPropagation();
             }}
-            className="ml-2 text-4xl leading-none"
+            className="ml-2 text-3xl leading-none opacity-50"
             icon={BiMenu}
           />
           {showMenu && (
             <div
-              className="bg-black text-black fixed top-0 left-0 right-0 p-4 border-b border-gray-200 shadow-lg"
+              className="bg-neutral-900 text-black fixed top-0 left-0 right-0 p-4 border-b border-gray-200 shadow-lg z-50"
               onClick={(e) => e.stopPropagation()}
             >
               <button
@@ -790,21 +920,29 @@ function Header() {
               </button>
               <Logo />
               <div className="mt-2">
-                <MenuA href={LINKS.docs}>Docs</MenuA>
-                <MenuA href={LINKS.changelog}>Changelog</MenuA>
-                <MenuA href={LINKS.discord}>Discord</MenuA>
-                <MenuA href="/buy">Buy</MenuA>
-                <MenuA href="/download">Download</MenuA>
+                {links.map(([url, label]) => (
+                  <A
+                    className="block text-neutral-100 no-underline whitespace-nowrap md:hidden leading-none py-2"
+                    onClick={() => setShowMenu(false)}
+                    href={url}
+                  >
+                    {label}
+                  </A>
+                ))}
               </div>
             </div>
           )}
         </div>
         <div className="hidden md:flex items-baseline space-x-6">
-          <NavA href={LINKS.docs}>Docs</NavA>
-          <NavA href={LINKS.changelog}>Changelog</NavA>
-          <NavA href={LINKS.discord}>Discord</NavA>
-          <NavA href="/buy">Buy</NavA>
-          <NavA href="/download">Download</NavA>
+          {links.map(([url, label]) => (
+            <A
+              className="font-semibold text-neutral-400 hover:text-neutral-300 no-underline whitespace-nowrap hidden md:inline-block"
+              style={{ fontSize: "0.9em" }}
+              href={url}
+            >
+              {label}
+            </A>
+          ))}
         </div>
       </div>
     </div>
@@ -816,9 +954,9 @@ const FootLink = wrap(A, "text-gray-800 no-underline");
 
 function Footer() {
   return (
-    <div className="px-4 pt-6 lg:pt-12 pb-8 md:pb-24 border-t border-gray-100 md:border-0">
+    <div className="px-4 pt-6 lg:pt-12 pb-8 md:pb-24 border-t border-gray-100 md:border-0 font-title">
       <div className="flex flex-col md:flex-row gap-y-4 md:gap-0 hmd:flex-row justify-between w-full md:max-w-screen-xl md:mx-auto items-start">
-        <div className="text-gray-500 ">
+        <div className="text-gray-500">
           <span>&copy; {new Date().getFullYear()} CodePerfect 95</span>
         </div>
         <div className="flex flex-col md:flex-row md:items-start gap-y-3 md:gap-x-14 leading-none">
