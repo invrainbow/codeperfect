@@ -368,6 +368,9 @@ func processStripeEvent(event stripe.Event) {
 
 	if user.Active {
 		if newUser {
+			if err := AddEmailToMailingList(user.Email); err != nil {
+				log.Printf("couldn't add email to convertkit: %v", err)
+			}
 			doSendEmail("CodePerfect 95: New License", emailUserCreatedTxt, emailUserCreatedHtml)
 		} else {
 			doSendEmail("CodePerfect 95: License Reactivated", emailUserEnabledTxt, emailUserEnabledHtml)
