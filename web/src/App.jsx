@@ -335,9 +335,9 @@ function Home() {
         </div>
       </div>
 
-      <div className="batteries-included z-10">
-        <div className="batteries-included-child md:flex max-w-screen-xl mx-auto py-16 md:py-32">
-          <div className="md:w-2/5 px-4 md:p-0 md:pr-16">
+      <div className="batteries-included z-10 px-4 py-16 md:py-32">
+        <div className="batteries-included-child md:flex max-w-screen-xl mx-auto">
+          <div className="md:w-2/5 md:pr-8 lg:pr-16">
             <div className="text-4xl md:mt-24 mb-6 font-bold text-black font-title">
               Batteries included
             </div>
@@ -362,7 +362,7 @@ function Home() {
               </A>
             </div>
           </div>
-          <div className="flex-1 mx-auto grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6 mt-8 md:mt-0 p-4 md:p-0">
+          <div className="flex-1 mx-auto grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6 mt-8 md:mt-0 md:p-0">
             {FEATURES.map((it) => (
               <div
                 className="batteries-included-tile shadow-sm rounded p-3 transition-all select-none"
@@ -401,7 +401,7 @@ function Home() {
             style={{ background: "rgba(255, 255, 255, 0.1)" }}
             className="flex-1 flex flex-col items-center justify-center"
           />
-          <div className="box-border md:w-1/2 py-16 px-8 md:pt-48 md:pb-36 md:px-24 text-xl leading-relaxed border-dashed border-neutral-200">
+          <div className="box-border md:w-1/2 pt-28 pb-14 px-8 md:pt-48 md:pb-36 md:px-24 text-xl leading-relaxed border-dashed border-neutral-200">
             <p>
               {BAD_FEATURES.map((name) => (
                 <div className="text-2xl md:text-3xl font-bold text-neutral-800 md:leading-snug font-title">
@@ -431,7 +431,7 @@ function Home() {
       </div>
 
       <div
-        className="p-8 md:py-32 md:px-0"
+        className="py-12 px-8 md:py-32 md:px-0"
         // style={{ background: "rgba(0, 0, 0, 0.2)" }}
       >
         <div className="grid grid-cols-1 md:grid-cols-3 max-w-screen-lg mx-auto gap-12 md:gap-20">
@@ -450,7 +450,7 @@ function Home() {
         </div>
       </div>
 
-      <div className="bg-white max-w-screen-xl mx-auto md:flex text-neutral-700 border-white border-2 py-8 px-4 md:p-16 overflow-hidden rounded-lg md:mb-24">
+      <div className="bg-white max-w-screen-xl mx-auto md:flex text-neutral-700 border-white border-2 py-12 px-8 md:p-16 overflow-hidden md:rounded-lg md:shadow-lg md:mb-24">
         <div className="md:w-1/3">
           <div className="text-black font-bold text-3xl mb-6 font-title">
             Ready to get started?
