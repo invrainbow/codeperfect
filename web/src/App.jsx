@@ -36,7 +36,8 @@ posthog.init("phc_kIt8VSMD8I2ScNhnjWDU2NmrK9kLIL3cHWpkgCX3Blw", {
 });
 
 const SUPPORT_EMAIL = "support@codeperfect95.com";
-const CURRENT_BUILD = process.env.REACT_APP_BUILD_VERSION; // "22.09.4";
+const CURRENT_BUILD = process.env.REACT_APP_BUILD_VERSION;
+const CURRENT_BUILD_RELEASE_DATE = "October 26, 2022";
 
 const isDev = process.env.NODE_ENV === "development";
 
@@ -739,19 +740,27 @@ function Download() {
       <div className="font-bold md:px-4 md:text-center text-3xl md:text-5xl text-white font-title">
         Download CodePerfect
       </div>
-      <div className="text-center font-title mt-4 flex items-start md:items:center md:justify-center flex-col md:flex-row gap-1 md:gap-2">
-        <span className="inline-block">
-          <span className="py-1 px-3 font-semibold text-sm bg-yellow-200 text-yellow-600 rounded-full">
-            <Icon className="relative top-0.5" icon={AiFillTag} /> Build{" "}
-            {CURRENT_BUILD}
+      <div className="text-center font-title mt-2">
+        <A
+          href={`${LINKS.changelog}/${CURRENT_BUILD}`}
+          className={cx(
+            "flex items-start md:items:center md:justify-center flex-col md:flex-row",
+            "gap-1 md:gap-4 no-underline opacity-90 hover:opacity-100"
+          )}
+        >
+          <span className="inline-block">
+            <span className="font-semibold text-sm text-yellow-400">
+              <Icon className="relative top-0.5" icon={AiFillTag} /> Build{" "}
+              {CURRENT_BUILD}
+            </span>
           </span>
-        </span>
-        <span className="inline-block">
-          <span className="py-1 px-3 font-semibold text-sm bg-neutral-200 text-neutral-600 rounded-full">
-            <Icon className="relative top-0.5" icon={AiOutlineClockCircle} />{" "}
-            Released October 26, 2022
+          <span className="inline-block">
+            <span className="font-semibold text-sm text-lime-300">
+              <Icon className="relative top-0.5" icon={AiOutlineClockCircle} />{" "}
+              Released {CURRENT_BUILD_RELEASE_DATE}
+            </span>
           </span>
-        </span>
+        </A>
       </div>
       <div className="max-w-3xl mx-auto mt-12 md:px-4 md:text-center">
         <p className="flex flex-wrap flex-col md:flex-row justify-center">
