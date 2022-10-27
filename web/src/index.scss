@@ -101,7 +101,7 @@
 
 @layer components {
   .btn {
-    @apply rounded shadow leading-none;
+    @apply rounded-md shadow leading-none;
     @apply py-3 px-6;
     @apply disabled:opacity-50 no-underline outline-none;
     @apply whitespace-nowrap;
@@ -126,9 +126,7 @@
       filter: saturate(0.8);
     }
     &.btn2 {
-      background: #ddd;
-      color: #444;
-      @apply shadow-sm;
+      @apply bg-gradient-to-b from-neutral-200 to-neutral-300 border text-neutral-700;
     }
   }
 
