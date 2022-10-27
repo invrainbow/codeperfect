@@ -548,8 +548,6 @@ void World::init() {
 
     world.file_explorer.show = true;
 
-    autocomplete_basic_mode = true;
-
     last_manually_run_command = CMD_INVALID;
 
 #ifdef DEBUG_BUILD

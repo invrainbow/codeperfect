@@ -263,6 +263,9 @@ struct AC_Result {
             bool declaration_is_builtin;
             ccstr declaration_package; // if the decl is "foo.bar", this will be "foo"
             bool declaration_is_struct_literal_field;
+            bool declaration_is_own_file;
+            bool declaration_is_scopeop;
+            int declaration_scopeop_depth;
         };
 
         struct {

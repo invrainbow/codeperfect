@@ -1802,9 +1802,8 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
 
     {
         auto prefix = autocomplete.ac.prefix;
+        auto prefix_len = strlen(prefix);
         auto results = autocomplete.ac.results;
-
-        bool prefix_is_empty = strlen(prefix) == 0;
 
         autocomplete.filtered_results->len = 0;
 
@@ -1824,94 +1823,114 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
         }
         */
 
-        struct Score {
-            double fzy_score;
-            AC_Result_Type result_type;
-            bool is_struct_literal;
+        struct Cached_Stuff {
+            bool filled;
+            double score;
             int str_length;
-            int field_order;
-            int field_depth;
-
-            bool import_in_workspace;
-            bool import_in_file;
         };
 
-        auto compare_scores = [&](Score *a, Score *b) -> int {
-            // ACR_DECLARATION comes before ACR_POSTFIX
-            if (autocomplete.ac.type == AUTOCOMPLETE_DOT_COMPLETE) {
-                auto at = a->result_type;
-                auto bt = b->result_type;
-
-                if (at != bt)
-                    if (at == ACR_POSTFIX || bt == ACR_POSTFIX)
-                        return at == ACR_POSTFIX ? -1 : 1;
-            }
-
-            if (a->is_struct_literal != b->is_struct_literal)
-                return a->is_struct_literal ? 1 : -1;
-
-            if (a->fzy_score != b->fzy_score && !prefix_is_empty)
-                return a->fzy_score > b->fzy_score ? 1 : -1;
-
-            if (a->result_type == ACR_IMPORT && b->result_type == ACR_IMPORT) {
-                if (a->import_in_file != b->import_in_file)
-                    return a->import_in_file ? 1 : -1;
-                if (a->import_in_workspace != b->import_in_workspace)
-                    return a->import_in_workspace ? 1 : -1;
-            }
-
-            if (a->str_length != b->str_length)
-                return b->str_length - a->str_length;
-
-            if (a->result_type == ACR_KEYWORD && b->result_type == ACR_DECLARATION)
-                return 1;
-            if (a->result_type == ACR_DECLARATION && b->result_type == ACR_KEYWORD)
-                return -1;
-
-            if (a->field_depth != -1 && b->field_depth != -1) {
-                if (a->field_depth != b->field_depth)
-                    return b->field_depth - a->field_depth;
-                return b->field_order - a->field_order;
-            }
-
-            return 0;
-        };
-
+        auto cache = alloc_array(Cached_Stuff, results->len);
         auto filtered_results = autocomplete.filtered_results;
-        auto scores = alloc_array(Score, results->len);
 
-        for (int i = 0; i < filtered_results->len; i++) {
-            auto idx = filtered_results->at(i);
-            auto &it = results->at(idx);
-            auto &score = scores[idx];
-            ptr0(&score);
+        // lazy load expensive operations
+        auto fill_cache = [&](int i) {
+            auto &it = cache[i];
+            if (it.filled) return;
 
-            score.fzy_score = fzy_match(prefix, it.name);
-            score.result_type = it.type;
-            score.str_length = strlen(it.name);
+            auto name = results->at(i).name;
+            it.score = fzy_match(prefix, name);
+            it.str_length = strlen(name);
+            it.filled = true;
+        };
 
-            if (it.type == ACR_DECLARATION) {
-                if (it.declaration_is_struct_literal_field)
-                    score.is_struct_literal = true;
-                if (it.declaration_godecl->type == GODECL_FIELD) {
-                    score.field_depth = it.declaration_godecl->field_depth;
-                    score.field_order = it.declaration_godecl->field_order;
-                } else {
-                    score.field_depth = -1;
+        filtered_results->sort([&](int *pa, int *pb) -> int {
+            int ia = *pa;
+            int ib = *pb;
+            auto &a = results->at(ia);
+            auto &b = results->at(ib);
+
+            int ret = 0;
+
+            auto compare = [&](fn<bool(AC_Result*)> test, bool good) -> bool {
+                auto isa = test(&a);
+                auto isb = test(&b);
+                if (isa == isb) return false;
+
+                ret = (isa == good ? -1 : 1);
+                return true;
+            };
+
+#define reward(expr) if (compare([&](auto it) { return expr; }, true)) { return ret; }
+#define penalize(expr) if (compare([&](auto it) { return expr; }, false)) { return ret; }
+
+            // penalize ACR_POSTFIX
+            penalize(it->type == ACR_POSTFIX);
+
+            // struct literals come first
+            reward(it->declaration_is_struct_literal_field);
+
+            // if prefix is less than 2 characters and it's a lone identifier dotcomplete, then, in order:
+            //  - reward scopeops (locally defined vars)
+            //  - reward same-file decls
+            //  - penalize external imports
+            //  - penalize imports
+            if (prefix_len < 2 && autocomplete.ac.type == AUTOCOMPLETE_IDENTIFIER) {
+                reward(it->type == ACR_DECLARATION && it->declaration_is_scopeop);
+                reward(it->type == ACR_DECLARATION && it->declaration_is_own_file);
+                penalize(it->type == ACR_IMPORT && !it->import_is_existing);
+                penalize(it->type == ACR_IMPORT);
+            }
+
+            // if they're both scope ops, inner ones first
+            {
+                auto isa = a.type == ACR_DECLARATION && a.declaration_is_scopeop;
+                auto isb = b.type == ACR_DECLARATION && b.declaration_is_scopeop;
+                if (isa && isb) return b.declaration_scopeop_depth - a.declaration_scopeop_depth;
+            }
+
+            // now we need stuff inside the cache
+            fill_cache(ia);
+            fill_cache(ib);
+
+            // compare based on score
+            if (cache[ia].score != cache[ib].score && prefix_len)
+                return cache[ia].score < cache[ib].score ? 1 : -1;
+
+            if (a.type == ACR_IMPORT && b.type == ACR_IMPORT) {
+                // check if import in file
+                reward(it->import_is_existing);
+
+                // check if import in workspace
+                if (wksp_import_path) {
+                    reward(path_has_descendant(wksp_import_path, it->import_path));
                 }
             }
 
-            if (it.type == ACR_IMPORT) {
-                if (it.import_is_existing)
-                    score.import_in_file = true;
-                if (wksp_import_path)
-                    if (path_has_descendant(wksp_import_path, it.import_path))
-                        score.import_in_workspace = true;
-            }
-        }
+            if (cache[ia].str_length != cache[ib].str_length)
+                return cache[ia].str_length - cache[ib].str_length;
 
-        filtered_results->sort([&](int *ia, int *ib) -> int {
-            return -compare_scores(&scores[*ia], &scores[*ib]);
+            if (a.type == ACR_KEYWORD     && b.type == ACR_DECLARATION) return -1;
+            if (a.type == ACR_DECLARATION && b.type == ACR_KEYWORD)     return 1;
+
+
+            bool both_fields = false;
+            if (a.declaration_godecl)
+                if (a.declaration_godecl->type == GODECL_FIELD)
+                    if (b.declaration_godecl)
+                        if (b.declaration_godecl->type == GODECL_FIELD)
+                            both_fields = true;
+
+            if (both_fields) {
+                int deptha = a.declaration_godecl->field_depth;
+                int depthb = b.declaration_godecl->field_depth;
+                if (deptha != depthb) return deptha - depthb;
+
+                int ordera = a.declaration_godecl->field_order;
+                int orderb = b.declaration_godecl->field_order;
+                return deptha - depthb;
+            }
+
+            return 0;
         });
 
         autocomplete.selection = 0;

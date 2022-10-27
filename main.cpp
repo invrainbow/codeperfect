@@ -445,18 +445,6 @@ void handle_window_event(Window_Event *it) {
             editor->update_parameter_hint();
         };
 
-        auto handle_autocomplete_control = [&]() -> bool {
-            if (key != CP_KEY_LEFT_ALT && key != CP_KEY_RIGHT_ALT) return false;
-            if (!editor) return false;
-            if (!editor->autocomplete.ac.results) return false;
-
-            world.autocomplete_basic_mode = !world.autocomplete_basic_mode;
-            editor->trigger_autocomplete(false, false);
-            return true;
-        };
-
-        if (handle_autocomplete_control()) break;
-
         if (editor && editor->ast_navigation.on) {
             switch (keymods) {
             case CP_MOD_SHIFT:

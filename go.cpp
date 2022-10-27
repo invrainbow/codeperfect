@@ -5172,7 +5172,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
         auto gofile = find_gofile_from_ctx(ctx);
         if (gofile) {
             SCOPED_FRAME_WITH_MEM(&scoped_table_mem);
-            Scoped_Table<Godecl*> table;
+            Scoped_Table<Go_Scope_Op*> table;
             {
                 SCOPED_MEM(&scoped_table_mem);
                 table.init();
@@ -5190,7 +5190,7 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
                     table.pop_scope();
                     break;
                 case GSOP_DECL:
-                    table.set(it.decl->name, it.decl->copy());
+                    table.set(it.decl->name, it.copy());
                     break;
                 }
             }
@@ -5201,11 +5201,14 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
             For (*entries) {
                 auto r = add_declaration_result(it->name);
                 if (r) {
-                    r->declaration_godecl = it->value;
+                    r->declaration_godecl = it->value->decl;
                     r->declaration_import_path = ctx->import_path;
                     r->declaration_filename = ctx->filename;
+                    r->declaration_is_own_file = true;
+                    r->declaration_is_scopeop = true;
+                    r->declaration_scopeop_depth = it->value->decl_scope_depth;
 
-                    auto res = evaluate_type(it->value->gotype, ctx);
+                    auto res = evaluate_type(it->value->decl->gotype, ctx);
                     if (res)
                         r->declaration_evaluated_gotype = res->gotype;
                 }
@@ -5312,27 +5315,25 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
             }
         }
 
-        if (!world.autocomplete_basic_mode) {
-            // workspace or are immediate deps?
-            For (*index.packages) {
-                if (!it.import_path) continue;
-                if (existing_imports.has(it.import_path)) continue;
-                if (it.status != GPS_READY) continue;
-                if (!it.package_name) continue;
-                if (streq(it.import_path, ctx->import_path)) continue;
+        // workspace or are immediate deps?
+        For (*index.packages) {
+            if (!it.import_path) continue;
+            if (existing_imports.has(it.import_path)) continue;
+            if (it.status != GPS_READY) continue;
+            if (!it.package_name) continue;
+            if (streq(it.import_path, ctx->import_path)) continue;
 
-                // gofile->imports
-                // TODO: check if import already exists in file
+            // gofile->imports
+            // TODO: check if import already exists in file
 
-                if (!path_has_descendant(index.current_import_path, it.import_path))
-                    if (is_import_path_internal(it.import_path))
-                        continue;
+            if (!path_has_descendant(index.current_import_path, it.import_path))
+                if (is_import_path_internal(it.import_path))
+                    continue;
 
-                auto res = ac_results->append();
-                res->name = it.package_name;
-                res->type = ACR_IMPORT;
-                res->import_path = it.import_path;
-            }
+            auto res = ac_results->append();
+            res->name = it.package_name;
+            res->type = ACR_IMPORT;
+            res->import_path = it.import_path;
         }
 
         do {
@@ -5377,11 +5378,14 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
         auto results = list_package_decls(ctx->import_path, LISTDECLS_EXCLUDE_METHODS);
         if (results) {
             For (*results) {
+                bool is_own_file = (gofile && streq(gofile->filename, it.ctx->filename));
+
                 auto result = add_declaration_result(it.decl->name);
                 if (result) {
                     result->declaration_godecl = it.decl;
                     result->declaration_import_path = it.ctx->import_path;
                     result->declaration_filename = it.ctx->filename;
+                    result->declaration_is_own_file = is_own_file;
 
                     auto res = evaluate_type(it.decl->gotype, it.ctx);
                     if (res)

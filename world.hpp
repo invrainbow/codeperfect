@@ -448,8 +448,6 @@ struct World {
     bool auth_update_done;
     u64 auth_update_last_check;
 
-    bool autocomplete_basic_mode;
-
     // i guess this should go in wnd_run_command, but i don't want it to get cleared out if
     // i ptr0 the whole wnd, and i also don't want to have to worry about not doing that
     Command last_manually_run_command;
