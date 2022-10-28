@@ -87,15 +87,25 @@ function isExternalLink(href) {
 }
 
 function A({ link, children, href, newWindow, ...props }) {
-  if (!href || isExternalLink(href) || newWindow) {
-    props.href = href;
-    if (newWindow || (isExternalLink(href) && !href.startsWith("mailto:"))) {
-      props.target = "_blank";
-    }
-    return <a {...props}>{children}</a>;
+  if (href && !isExternalLink(href) && !newWindow) {
+    props.to = href;
+    return <Link {...props}>{children}</Link>;
   }
-  props.to = href;
-  return <Link {...props}>{children}</Link>;
+
+  let useNewWindow;
+  if (newWindow) {
+    useNewWindow = true;
+  } else if (newWindow === false) {
+    useNewWindow = false;
+  } else if (isExternalLink(href) && !href.startsWith("mailto:")) {
+    useNewWindow = true;
+  }
+
+  if (useNewWindow) {
+    props.target = "_blank";
+  }
+  props.href = href;
+  return <a {...props}>{children}</a>;
 }
 
 function wrap(elem, extraClassName, defaultProps, overrideProps) {
@@ -150,7 +160,7 @@ const FEATURES = _.shuffle([
   },
   {
     label: "Code Intelligence",
-    desc: "Go to definition, find all usages, parameter hints, and autocomplete.",
+    desc: "Go to definition, find all usages, parameter hints, autocomplete, all the table stakes.",
   },
   {
     label: "Smart Autocomplete",
@@ -410,13 +420,9 @@ function Home() {
               ))}
             </p>
             <div className="mt-6 md:mt-12 mb-6">
-              We{" "}
-              <A newWindow href={LINKS.handmadeManifesto}>
-                handmade
-              </A>{" "}
-              the entire IDE stack from the metal up in blazing fast C/C++, into
-              a barebones native app that literally just does the thing it's
-              supposed to.
+              We <A href={LINKS.handmadeManifesto}>handmade</A> the entire IDE
+              stack from the metal up in blazing fast C/C++, into a barebones
+              native app that literally just does the thing it's supposed to.
             </div>
             <p>
               From the UI renderer to the code intelligence engine, everything
