@@ -89,7 +89,7 @@ function isExternalLink(href) {
 function A({ link, children, href, newWindow, ...props }) {
   if (!href || isExternalLink(href) || newWindow) {
     props.href = href;
-    if (newWindow || isExternalLink(href)) {
+    if (newWindow || (isExternalLink(href) && !href.startsWith("mailto:"))) {
       props.target = "_blank";
     }
     return <a {...props}>{children}</a>;
