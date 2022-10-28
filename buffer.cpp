@@ -358,7 +358,10 @@ bool Buffer::read(Buffer_Read_Func f, bool reread) {
 
         if (conv.feed(ch)) {
             if (conv.uch == '\n') {
-                last_was_cr = false;
+                if (last_was_cr) {
+                    (*bc)--;
+                    last_was_cr = false;
+                }
                 if (!insert_new_line()) return false;
             } else {
                 if (last_was_cr) {
