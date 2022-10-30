@@ -106,7 +106,7 @@
     @apply disabled:opacity-50 no-underline outline-none;
     @apply whitespace-nowrap;
     @apply inline-flex items-center;
-    @apply text-base font-bold;
+    @apply text-base font-semibold;
     @apply font-title;
 
     &:not(:disabled):not(.disabled) {

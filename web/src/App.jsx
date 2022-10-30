@@ -16,7 +16,7 @@ import posthog from "posthog-js";
 import cx from "classnames";
 import React from "react";
 import { Helmet } from "react-helmet";
-import { useMediaQuery } from "react-responsive";
+// import { useMediaQuery } from "react-responsive";
 import { twMerge } from "tailwind-merge";
 
 import {
@@ -86,7 +86,7 @@ function isExternalLink(href) {
   return prefixes.some((it) => href.startsWith(it));
 }
 
-function A({ link, children, href, newWindow, ...props }) {
+function A({ children, href, newWindow, ...props }) {
   if (href && !isExternalLink(href) && !newWindow) {
     props.to = href;
     return <Link {...props}>{children}</Link>;
@@ -143,7 +143,7 @@ const WallOfText = wrap(
   "div",
   "wall-of-text leading-normal md:mx-auto md:max-w-2xl bg-white md:my-32 p-8 md:p-16 md:rounded-lg md:shadow text-neutral-700"
 );
-const Title = wrap("h2", "m-0 mb-6 font-bold text-3xl text-black");
+const Title = wrap("h2", "m-0 mb-6 font-bold text-3xl text-black font-title");
 
 function Icon({ block, noshift, icon: IconComponent, ...props }) {
   return (
@@ -229,28 +229,22 @@ const SELLING_POINTS = [
     content: (
       <>
         <p>
-          CodePerfect provides Vim functionality as a first-class concept, not
-          as an afterthought plugin. This gives you the entire Vim feature-set
-          at your fingertips, integrated seamlessly with everything else.
+          Vim support is a first-class concept, not an afterthought plugin. Get
+          the whole Vim feature set at your fingertips, integrated seamlessly
+          with everything else.
         </p>
       </>
     ),
   },
   {
-    icon: asset("/icon-basics.png"),
-    label: "Back to basics",
+    icon: asset("/icon-gpu.png"),
+    label: "Old school performance",
+    classes: "opacity-80",
     content: (
       <>
         <p>
-          <p>
-            CodePerfect is old-school about performance, and makes a conscious
-            effort not to squander your CPU cycles.
-          </p>
-          <p>
-            Instant startup. A buttery smooth 144 FPS. Instant response to every
-            keystroke. An optimized indexer that gobbles through large
-            codebases.
-          </p>
+          Instant startup. A buttery smooth 144 frames/sec. No latency after
+          keystrokes. An optimized indexer that gobbles through large codebases.
         </p>
       </>
     ),
@@ -261,10 +255,10 @@ const SELLING_POINTS = [
     content: (
       <>
         <p>
+          CodePerfect assists with your workflow instead of interfering with it.
           With predictable operations, ergonomic hotkeys, and tons of cases of
-          “just doing the right thing,” CodePerfect assists instead of
-          interfering with your dev workflow. It does its job and gets out of
-          your way.
+          “just doing the right thing,” CodePerfect performs its job and gets
+          out of the way.
         </p>
       </>
     ),
@@ -304,7 +298,7 @@ function Home() {
           development workflow.
         </p>
 
-        <p className="hidden md:block max-w-full mx-auto text-center text-xl text-neutral-400 leading-normal">
+        <p className="hidden md:block max-w-full mx-auto text-center text-xl text-neutral-300 leading-normal">
           A power tool with a minimal resource footprint.
           <br />
           Designed around the Go development workflow.
@@ -312,7 +306,6 @@ function Home() {
 
         <div className="mt-8 text-center flex gap-4 justify-center">
           <A
-            link
             href="/download"
             className="btn btn1 justify-center flex md:inline-flex text-center"
           >
@@ -352,7 +345,7 @@ function Home() {
               Batteries included
             </div>
 
-            <div className="text-xl text-neutral-700 leading-relaxed">
+            <div className="text-xl text-neutral-700">
               <p>
                 CodePerfect is feature-rich and works out of the box with
                 (almost) zero configuration.
@@ -380,15 +373,17 @@ function Home() {
               >
                 <div className="leading-none mb-2">
                   <img
-                    className="inline-block w-auto h-6 mb-1.5"
+                    className="inline-block w-auto h-5 mb-1.5"
                     src={asset(`/icon-${getIconName(it.label)}.png`)}
                     alt={it.label}
                   />
-                  <div className="leading-none font-bold text-sm text-neutral-700">
+                  <div className="font-sans text-sm leading-none font-semibold text-neutral-700">
                     {it.label}
                   </div>
                 </div>
-                <div className="text-sm text-neutral-500">{it.desc}</div>
+                <div className="font-sans text-sm text-neutral-400 leading-snug">
+                  {it.desc}
+                </div>
               </div>
             ))}
           </div>
@@ -408,7 +403,7 @@ function Home() {
           style={{ maxWidth: "1280px" }}
         >
           <div
-            style={{ background: "rgba(255, 255, 255, 0.1)" }}
+            // style={{ background: "rgba(255, 255, 255, 0.1)" }}
             className="flex-1 flex flex-col items-center justify-center"
           />
           <div className="box-border md:w-1/2 pt-28 pb-14 px-8 md:pt-48 md:pb-36 md:px-24 text-xl leading-relaxed border-dashed border-neutral-200">
@@ -421,8 +416,8 @@ function Home() {
             </p>
             <div className="mt-6 md:mt-12 mb-6">
               We <A href={LINKS.handmadeManifesto}>handmade</A> the entire IDE
-              stack from the metal up in blazing fast C/C++, into a barebones
-              native app that literally just does the thing it's supposed to.
+              stack from the metal up, in blazing fast C/C++, into a barebones
+              native app that just does what it's supposed to.
             </div>
             <p>
               From the UI renderer to the code intelligence engine, everything
@@ -436,24 +431,35 @@ function Home() {
         className="py-12 px-8 md:py-32"
         // style={{ background: "rgba(0, 0, 0, 0.2)" }}
       >
-        <div className="grid grid-cols-1 md:grid-cols-3 max-w-screen-lg mx-auto gap-12 md:gap-20">
+        <div className="grid grid-cols-1 md:grid-cols-3 max-w-screen-xl mx-auto gap-12 md:gap-20">
           {SELLING_POINTS.map((it) => (
-            <div
-              key={it.label}
-              style={{ borderColor: "rgba(255, 255, 255, 0.05)" }}
-            >
-              <img src={it.icon} alt={it.label} className="w-auto h-10 mb-2" />
-              <div className="text-lg font-title font-semibold text-white mb-4">
+            <div key={it.label}>
+              <div className="relative">
+                <img
+                  src={it.icon}
+                  className={twMerge(cx("w-auto h-10 mb-3", it.classes))}
+                />
+                <div
+                  className="absolute top-0 bottom-0 right-full mr-3 border-r-4"
+                  style={{
+                    borderColor: "rgb(11, 158, 245)",
+                    filter: "saturate(0.35)",
+                  }}
+                />
+              </div>
+              <div className="text-lg font-bold font-title mb-2">
                 {it.label}
               </div>
-              <div>{it.content}</div>
+              <div className="text-neutral-400 leading-relaxed">
+                {it.content}
+              </div>
             </div>
           ))}
         </div>
       </div>
 
-      <div className="md:px-4">
-        <div className="bg-white max-w-screen-xl mx-auto md:flex text-neutral-700 border-white border-2 py-12 px-8 md:p-8 lg:p-16 overflow-hidden md:rounded-lg md:shadow-lg md:mb-24">
+      <div className="md:px-4 bg-neutral-200 border-neutral-200 border-t-2">
+        <div className="max-w-screen-xl mx-auto md:flex text-neutral-700 py-12 px-8 md:p-16 lg:p-24 overflow-hidden md:mb-12">
           <div className="md:w-1/3">
             <div className="text-black font-bold text-3xl mb-6 font-title">
               Ready to get started?
@@ -463,9 +469,8 @@ function Home() {
               <br />
               with all features available.
             </p>
-            <p>
+            <p className="flex gap-3">
               <A
-                link
                 href="/download"
                 className={twMerge(
                   "btn btn1 justify-center inline-flex text-center bg-black text-white px-6"
@@ -473,6 +478,15 @@ function Home() {
               >
                 <Icon className="mr-2" icon={HiOutlineDownload} />
                 Download
+              </A>
+              <A
+                href="/faq"
+                className={twMerge(
+                  "btn btn2 justify-center inline-flex text-center bg-black text-white px-6"
+                )}
+              >
+                View FAQs
+                <Icon className="ml-2" icon={BsChevronRight} />
               </A>
             </p>
           </div>
@@ -573,7 +587,7 @@ function BuyLicense() {
     },
   ];
 
-  const faqs = [
+  const help = [
     {
       title: "Not sure yet?",
       content: (
@@ -694,7 +708,7 @@ function BuyLicense() {
         </div>
       </div>
       <div className="md:max-w-screen-xl mx-auto grid grid-cols-1 md:grid-cols-3 mt-12 md:mt-24 mb:4 md:my-24 md:border-t border-gray-100">
-        {faqs.map((it) => (
+        {help.map((it) => (
           <div className="border-t md:border-t-0 md:border-r border-gray-100 first:border-l p-6 md:pt-8 md:pb-0 md:px-8">
             <div
               className="w-8 border-b-4 mb-2"
@@ -706,11 +720,29 @@ function BuyLicense() {
             <div className="font-title text-neutral-300 text-lg font-bold mb-2">
               {it.title}
             </div>
-            <div className="text-gray-500">{it.content}</div>
+            <div className="text-gray-500 leading-normal">{it.content}</div>
           </div>
         ))}
       </div>
     </div>
+  );
+}
+
+function Question({ q, children }) {
+  return (
+    <>
+      <p className="font-title font-bold">{q}</p>
+      <p>{children}</p>
+    </>
+  );
+}
+
+function FAQ() {
+  return (
+    <WallOfText>
+      <Title>Frequently Asked Questions</Title>
+      <Question q="How big is my cock?">Absolutely humongous.</Question>
+    </WallOfText>
   );
 }
 
@@ -790,7 +822,7 @@ function Download() {
           ))}
         </p>
         <div className="flex items-center justify-center">
-          <div className="mt-12 py-4 px-6 bg-neutral-900 rounded flex items-strt md:items-center gap-2 text-neutral-400">
+          <div className="max-w-screen-xl mt-12 py-4 px-6 bg-neutral-900 rounded flex items-start md:items-center gap-2 text-neutral-400">
             <span
               className="text-xl relative pr-2 md:pr-0"
               style={{ top: "1px" }}
@@ -799,7 +831,7 @@ function Download() {
             </span>
             <span>
               CodePerfect is free to evaluate for 7 days. After that you'll need
-              a <A href="/buy">license</A> for continued use.
+              a <A href="/buy">license</A> to keep using it.
             </span>
           </div>
         </div>
@@ -972,6 +1004,7 @@ function Footer() {
           <FootSection>
             <FootLink href="/buy">Buy License</FootLink>
             <FootLink href="/download">Download</FootLink>
+            <FootLink href="/faq">FAQs</FootLink>
           </FootSection>
           <FootSection>
             <FootLink href={LINKS.docs}>Docs</FootLink>
@@ -1022,6 +1055,7 @@ function App() {
           <Route path="/" element={<Layout />}>
             <Route path="download" element={<Download />} />
             <Route path="buy" element={<BuyLicense />} />
+            <Route path="faq" element={<FAQ />} />
             <Route path="payment-done" element={<PaymentDone />} />
             <Route path="portal-done" element={<PortalDone />} />
             <Route path="terms" element={<Terms />} />

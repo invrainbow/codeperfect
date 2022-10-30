@@ -22,6 +22,7 @@ module.exports = {
       },
     },
     fontFamily: {
+      serif: ["New York", "Georgia", "serif"],
       sans: [
         "Oxygen",
         "system-ui",
