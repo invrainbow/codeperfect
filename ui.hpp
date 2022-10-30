@@ -104,6 +104,17 @@ enum Focus_Keyboard_Cond {
     FKC_FOCUSING = 1 << 1,
 };
 
+enum Keyboard_Nav {
+    KN_NONE,
+    KN_UP,
+    KN_LEFT,
+    KN_DOWN,
+    KN_RIGHT,
+    KN_DELETE,
+    KN_ENTER,
+    KN_SUPER_ENTER, // ?
+};
+
 struct Wnd {
     bool show;
     bool focused;
@@ -175,6 +186,11 @@ struct Pane_Areas {
     boxf preview_area;
     float preview_margin;
     bool has_tabs;
+};
+
+enum Keyboard_Nav_Flags {
+    KNF_ALLOW_HJKL = 1 << 0,
+    KNF_ALLOW_IMGUI_FOCUSED = 1 << 1,
 };
 
 struct UI {
@@ -289,6 +305,8 @@ struct UI {
     void pretty_menu_text(Pretty_Menu *pm, ccstr text, ImU32 color = PM_DEFAULT_COLOR);
     Glyph *lookup_glyph_for_grapheme(List<uchar> *grapheme);
     void draw_tutorial(boxf rect);
+
+    Keyboard_Nav get_keyboard_nav(Wnd *wnd, int flags);
 };
 
 extern UI ui;

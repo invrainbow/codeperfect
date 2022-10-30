@@ -520,6 +520,12 @@ struct World {
         Thread_Handle thread;
         List<Find_References_File> *results;
         ccstr current_import_path;
+        int current_file;
+        int current_result;
+
+        int scroll_to_file;
+        int scroll_to_result;
+
     } wnd_find_references;
 
     struct Wnd_Find_Interfaces : Wnd {
@@ -531,6 +537,8 @@ struct World {
         bool include_empty;
         List<Find_Decl*> *results;
         ccstr current_import_path;
+        int selection;
+        int scroll_to;
     } wnd_find_interfaces;
 
     struct Wnd_Find_Implementations : Wnd {
@@ -541,6 +549,8 @@ struct World {
         Thread_Handle thread;
         List<Find_Decl*> *results;
         ccstr current_import_path;
+        int selection;
+        int scroll_to;
     } wnd_find_implementations;
 
     struct Wnd_Caller_Hierarchy : Wnd {

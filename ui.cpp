@@ -2960,17 +2960,20 @@ void UI::draw_everything() {
             if (!isempty(wnd.results)) {
                 imgui_push_mono_font();
 
-                int index = 0;
+                auto results = alloc_list<Find_Decl*>();
                 For (*wnd.results) {
-                    auto is_empty = [&]() {
+                    if (!wnd.include_empty) {
                         auto gotype = it->decl->decl->gotype;
-                        if (!gotype) return false;
-                        if (gotype->type != GOTYPE_INTERFACE) return false;
-                        return isempty(gotype->interface_specs);
-                    };
+                        if (gotype)
+                            if (gotype->type == GOTYPE_INTERFACE)
+                                if (isempty(gotype->interface_specs))
+                                    continue;
+                    }
+                    results->append(it);
+                }
 
-                    if (!wnd.include_empty && is_empty())
-                        continue;
+                Fori (*results) {
+                    auto index = i;
 
                     // TODO: refactor out custom draw
                     auto availwidth = ImGui::GetContentRegionAvail().x;
@@ -2979,11 +2982,16 @@ void UI::draw_everything() {
                     auto drawlist = ImGui::GetWindowDrawList();
 
                     auto draw_selectable = [&]() {
-                        auto label = cp_sprintf("##find_implementations_result__%d", index++);
-                        return ImGui::Selectable(label, false, 0, text_size);
+                        auto label = cp_sprintf("##find_implementations_result_%d", index);
+                        return ImGui::Selectable(label, wnd.selection == index, 0, text_size);
                     };
 
                     auto clicked = draw_selectable();
+
+                    if (wnd.scroll_to == index) {
+                        ImGui::SetScrollHereY();
+                        wnd.scroll_to = -1;
+                    }
 
                     auto draw_text = [&](ccstr text) {
                         drawlist->AddText(drawpos, ImGui::GetColorU32(ImGuiCol_Text), text);
@@ -3020,9 +3028,48 @@ void UI::draw_everything() {
                     ImGui::PopStyleColor();
 
                     // TODO: previews?
-                    if (clicked) goto_file_and_pos(it->filepath, it->decl->decl->name_start, true);
+                    if (clicked) {
+                        wnd.scroll_to = index;
+                        wnd.selection = index;
+                        goto_file_and_pos(it->filepath, it->decl->decl->name_start, true);
+                    }
                 }
                 imgui_pop_font();
+
+                auto oob = !(0 <= wnd.selection && wnd.selection < wnd.results->len);
+
+                switch (get_keyboard_nav(&wnd, KNF_ALLOW_HJKL)) {
+                case KN_ENTER: {
+                    if (oob) break;
+                    auto it = results->at(wnd.selection);
+                    goto_file_and_pos(it->filepath, it->decl->decl->name_start, true);
+                    break;
+                }
+                case KN_UP:
+                    if (oob) {
+                        wnd.selection = results->len-1;
+                        wnd.scroll_to = wnd.selection;
+                        break;
+                    }
+                    if (wnd.selection > 0) {
+                        wnd.selection--;
+                        wnd.scroll_to = wnd.selection;
+                    }
+                    break;
+                case KN_DOWN:
+                    if (oob) {
+                        wnd.selection = results->len-1;
+                        wnd.scroll_to = wnd.selection;
+                        break;
+                    }
+
+                    if (wnd.selection + 1 < results->len) {
+                        wnd.selection++;
+                        wnd.scroll_to = wnd.selection;
+                    }
+                    break;
+                }
+
             } else {
                 ImGui::Text("No interfaces found.");
             }
@@ -3063,8 +3110,9 @@ void UI::draw_everything() {
             if (!isempty(wnd.results)) {
                 imgui_push_mono_font();
 
-                int index = 0;
-                For (*wnd.results) {
+                Fori (*wnd.results) {
+                    int index = i;
+
                     // TODO: refactor out custom draw
                     auto availwidth = ImGui::GetContentRegionAvail().x;
                     auto text_size = ImVec2(availwidth, ImGui::CalcTextSize("blah").y);
@@ -3072,11 +3120,16 @@ void UI::draw_everything() {
                     auto drawlist = ImGui::GetWindowDrawList();
 
                     auto draw_selectable = [&]() {
-                        auto label = cp_sprintf("##find_implementations_result__%d", index++);
-                        return ImGui::Selectable(label, false, 0, text_size);
+                        auto label = cp_sprintf("##find_implementations_result_%d", index);
+                        return ImGui::Selectable(label, wnd.selection == index, 0, text_size);
                     };
 
                     auto clicked = draw_selectable();
+
+                    if (wnd.scroll_to == index) {
+                        ImGui::SetScrollHereY();
+                        wnd.scroll_to = -1;
+                    }
 
                     auto draw_text = [&](ccstr text) {
                         drawlist->AddText(drawpos, ImGui::GetColorU32(ImGuiCol_Text), text);
@@ -3090,10 +3143,48 @@ void UI::draw_everything() {
                     ImGui::PopStyleColor();
 
                     // TODO: previews?
-                    if (clicked) goto_file_and_pos(it->filepath, it->decl->decl->name_start, true);
+                    if (clicked) {
+                        wnd.selection = index;
+                        wnd.scroll_to = index;
+                        goto_file_and_pos(it->filepath, it->decl->decl->name_start, true);
+                    }
                 }
 
                 imgui_pop_font();
+
+                auto oob = !(0 <= wnd.selection && wnd.selection < wnd.results->len);
+
+                switch (get_keyboard_nav(&wnd, KNF_ALLOW_HJKL)) {
+                case KN_ENTER: {
+                    if (oob) break;
+                    auto it = wnd.results->at(wnd.selection);
+                    goto_file_and_pos(it->filepath, it->decl->decl->name_start, true);
+                    break;
+                }
+                case KN_UP:
+                    if (oob) {
+                        wnd.selection = wnd.results->len-1;
+                        wnd.scroll_to = wnd.selection;
+                        break;
+                    }
+                    if (wnd.selection > 0) {
+                        wnd.selection--;
+                        wnd.scroll_to = wnd.selection;
+                    }
+                    break;
+                case KN_DOWN:
+                    if (oob) {
+                        wnd.selection = wnd.results->len-1;
+                        wnd.scroll_to = wnd.selection;
+                        break;
+                    }
+
+                    if (wnd.selection + 1 < wnd.results->len) {
+                        wnd.selection++;
+                        wnd.scroll_to = wnd.selection;
+                    }
+                    break;
+                }
             }
         } else {
             ImGui::Text("Searching...");
@@ -3117,34 +3208,45 @@ void UI::draw_everything() {
 
         if (wnd.done) {
             if (!isempty(wnd.results)) {
-                int index = 0;
-
                 imgui_push_mono_font();
-                For (*wnd.results) {
+                Fori (*wnd.results) {
+                    int file_index = i;
+
                     auto filepath = get_path_relative_to(it.filepath, world.current_path);
                     ImGui::Text("%s", filepath);
 
                     ImGui::Indent();
                     imgui_push_mono_font();
 
-                    For (*it.results) {
-                        defer { index++; };
+                    Fori (*it.results) {
+                        int result_index = i;
 
                         auto ref = it.reference;
                         auto pos = ref->is_sel ? ref->x_start : ref->start;
-
-                        auto rendered_pos = pos;
-                        rendered_pos.x++;
-                        rendered_pos.y++;
 
                         auto availwidth = ImGui::GetContentRegionAvail().x;
                         auto text_size = ImVec2(availwidth, ImGui::CalcTextSize("blah").y);
                         auto drawpos = ImGui::GetCursorScreenPos();
 
-                        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(ImColor(60, 60, 60)));
-                        if (ImGui::Selectable(cp_sprintf("##find_references_result_%d", index), false, 0, text_size))
+                        bool selected = wnd.current_file == file_index && wnd.current_result == result_index;
+
+                        if (selected) ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(ImColor(60, 60, 60)));
+
+                        if (ImGui::Selectable(cp_sprintf("##find_references_result_%d_%d", file_index, result_index), selected, 0, text_size)) {
+                            wnd.current_file = file_index;
+                            wnd.current_result = result_index;
+                            wnd.scroll_to_file = file_index;
+                            wnd.scroll_to_result = result_index;
                             goto_file_and_pos(filepath, pos, true);
-                        ImGui::PopStyleColor();
+                        }
+
+                        if (wnd.scroll_to_file == file_index && wnd.scroll_to_result == result_index) {
+                            ImGui::SetScrollHereY();
+                            wnd.scroll_to_file = -1;
+                            wnd.scroll_to_result = -1;
+                        }
+
+                        if (selected) ImGui::PopStyleColor();
 
                         // copied from search results, do we need to refactor?
                         auto draw_text = [&](ccstr text, ImColor color) {
@@ -3155,7 +3257,7 @@ void UI::draw_everything() {
                             drawpos.x += ImGui::CalcTextSize(text).x;
                         };
 
-                        draw_text(rendered_pos.str(), ImColor(200, 200, 200));
+                        draw_text(new_cur2(pos.x+1, pos.y+1).str(), ImColor(200, 200, 200));
 
                         if (it.toplevel_name) {
                             draw_text(" (in ", ImColor(120, 120, 120));
@@ -3168,9 +3270,71 @@ void UI::draw_everything() {
                     ImGui::Unindent();
                 }
                 imgui_pop_font();
+
+                do {
+                    int fidx = wnd.current_file;
+                    int ridx = wnd.current_result;
+                    auto results = wnd.results;
+
+                    auto is_oob = [&]() {
+                        if (fidx == -1) return true;
+                        if (!(0 <= fidx && fidx < results->len)) return true;
+
+                        auto file = results->at(fidx);
+                        if (!(0 <= ridx && ridx < file.results->len)) return true;
+                        return false;
+                    };
+
+                    auto goto_result = [&](int file, int result) {
+                        wnd.current_file = file;
+                        wnd.current_result = result;
+                        wnd.scroll_to_file = file;
+                        wnd.scroll_to_result = result;
+                    };
+
+                    switch (get_keyboard_nav(&wnd, KNF_ALLOW_HJKL)) {
+                    case KN_ENTER: {
+                        if (is_oob()) break;
+
+                        auto file = results->at(fidx);
+                        auto filepath = get_path_relative_to(file.filepath, world.current_path);
+
+                        auto result = file.results->at(ridx);
+                        auto ref = result.reference;
+                        auto pos = ref->is_sel ? ref->x_start : ref->start;
+
+                        goto_file_and_pos(filepath, pos, true);
+                        break;
+                    }
+                    case KN_DOWN: {
+                        if (is_oob()) {
+                            goto_result(0, 0);
+                            break;
+                        }
+                        auto file = results->at(fidx);
+                        if (ridx + 1 < file.results->len)
+                            goto_result(fidx, ridx+1);
+                        else if (fidx+1 < results->len)
+                            goto_result(fidx+1, 0);
+                        break;
+                    }
+                    case KN_UP:
+                        if (is_oob()) {
+                            goto_result(0, 0);
+                            break;
+                        }
+                        if (ridx > 0)
+                            goto_result(fidx, ridx-1);
+                        else if (fidx > 0)
+                            goto_result(fidx-1, results->at(fidx-1).results->len-1);
+                        break;
+                    }
+                } while (0);
             } else {
                 ImGui::Text("No results found.");
             }
+
+            // ...
         } else {
             ImGui::Text("Searching...");
             ImGui::SameLine();
@@ -3194,20 +3358,6 @@ void UI::draw_everything() {
         }
 
         if (wnd.show && !wnd.fill_running) {
-            auto go_up = [&]() {
-                if (!wnd.filtered_results->len) return;
-                if (!wnd.selection)
-                    wnd.selection = min(wnd.filtered_results->len, settings.generate_implementation_max_results) - 1;
-                else
-                    wnd.selection--;
-            };
-
-            auto go_down = [&]() {
-                if (!wnd.filtered_results->len) return;
-                wnd.selection++;
-                wnd.selection %= min(wnd.filtered_results->len, settings.generate_implementation_max_results);
-            };
-
             begin_centered_window("Generate Implementation###generate_impelmentation_ready", &wnd, 0, 650);
 
             if (wnd.selected_interface)
@@ -3221,11 +3371,18 @@ void UI::draw_everything() {
                 wnd.selection = 0;
             }
 
-            auto mods = imgui_get_keymods();
-            switch (mods) {
-            case CP_MOD_NONE:
-                if (imgui_special_key_pressed(ImGuiKey_DownArrow)) go_down();
-                if (imgui_special_key_pressed(ImGuiKey_UpArrow)) go_up();
+            switch (get_keyboard_nav(&wnd, KNF_ALLOW_IMGUI_FOCUSED)) {
+            case KN_DOWN:
+                if (!wnd.filtered_results->len) break;
+                wnd.selection++;
+                wnd.selection %= min(wnd.filtered_results->len, settings.generate_implementation_max_results);
+                break;
+            case KN_UP:
+                if (!wnd.filtered_results->len) break;
+                if (!wnd.selection)
+                    wnd.selection = min(wnd.filtered_results->len, settings.generate_implementation_max_results) - 1;
+                else
+                    wnd.selection--;
                 break;
             }
 
@@ -3990,82 +4147,88 @@ void UI::draw_everything() {
             }
         } ImGui::EndChild();
 
-        if (wnd.focused && !world.file_tree_busy) {
-            auto mods = imgui_get_keymods();
-            switch (mods) {
-            case CP_MOD_NONE:
-                if (imgui_special_key_pressed(ImGuiKey_DownArrow) || imgui_key_pressed('j')) {
-                    auto getnext = [&]() -> FT_Node * {
-                        auto curr = wnd.selection;
-                        if (!curr) return world.file_tree->children;
+        if (!world.file_tree_busy) {
+            switch (get_keyboard_nav(&wnd, KNF_ALLOW_HJKL)) {
+            case KN_DOWN: {
+                auto getnext = [&]() -> FT_Node * {
+                    auto curr = wnd.selection;
+                    if (!curr) return world.file_tree->children;
 
-                        if (curr->children && curr->open)
-                            return curr->children;
+                    if (curr->children && curr->open)
+                        return curr->children;
+                    if (curr->next)
+                        return curr->next;
+
+                    while (curr->parent) {
+                        curr = curr->parent;
                         if (curr->next)
                             return curr->next;
-
-                        while (curr->parent) {
-                            curr = curr->parent;
-                            if (curr->next)
-                                return curr->next;
-                        }
-
-                        return NULL;
-                    };
-
-                    auto next = getnext();
-                    if (next)
-                        wnd.selection = next;
-                }
-                if (imgui_special_key_pressed(ImGuiKey_LeftArrow) || imgui_key_pressed('h')) {
-                    auto curr = wnd.selection;
-                    if (curr)
-                        if (curr->is_directory)
-                            curr->open = false;
-                }
-                if (imgui_special_key_pressed(ImGuiKey_RightArrow) || imgui_key_pressed('l')) {
-                    auto curr = wnd.selection;
-                    if (curr)
-                        if (curr->is_directory)
-                            curr->open = true;
-                }
-                if (imgui_special_key_pressed(ImGuiKey_UpArrow) || imgui_key_pressed('k')) {
-                    auto curr = wnd.selection;
-                    if (curr) {
-                        if (curr->prev) {
-                            curr = curr->prev;
-                            // as long as curr has children, keep grabbing the last child
-                            while (curr->is_directory && curr->open && curr->children) {
-                                curr = curr->children;
-                                while (curr->next)
-                                    curr = curr->next;
-                            }
-                        } else {
-                            curr = curr->parent;
-                            if (!curr->parent) // if we're at the root
-                                curr = NULL; // don't set selection to root
-                        }
                     }
 
-                    if (curr)
-                        wnd.selection = curr;
-                }
-                break;
-            case CP_MOD_PRIMARY:
-                if (imgui_special_key_pressed(ImGuiKey_Delete) || imgui_special_key_pressed(ImGuiKey_Backspace)) {
-                    auto curr = wnd.selection;
-                    if (curr) delete_ft_node(curr);
-                }
-                if (imgui_special_key_pressed(ImGuiKey_Enter)) {
-                    auto curr = wnd.selection;
-                    if (curr) open_ft_node(curr);
+                    return NULL;
+                };
+
+                auto next = getnext();
+                if (next) {
+                    wnd.selection = next;
+                    wnd.scroll_to = next;
                 }
                 break;
             }
+            case KN_LEFT: {
+                auto curr = wnd.selection;
+                if (curr)
+                    if (curr->is_directory)
+                        curr->open = false;
+                break;
+            }
+            case KN_RIGHT: {
+                auto curr = wnd.selection;
+                if (curr)
+                    if (curr->is_directory)
+                        curr->open = true;
+                break;
+            }
+            case KN_UP: {
+                auto curr = wnd.selection;
+                if (curr) {
+                    if (curr->prev) {
+                        curr = curr->prev;
+                        // as long as curr has children, keep grabbing the last child
+                        while (curr->is_directory && curr->open && curr->children) {
+                            curr = curr->children;
+                            while (curr->next)
+                                curr = curr->next;
+                        }
+                    } else {
+                        curr = curr->parent;
+                        if (!curr->parent) // if we're at the root
+                            curr = NULL; // don't set selection to root
+                    }
+                }
+
+                if (curr) {
+                    wnd.selection = curr;
+                    wnd.scroll_to = curr;
+                }
+                break;
+            }
+
+            case KN_DELETE: {
+                auto curr = wnd.selection;
+                if (curr) delete_ft_node(curr);
+                break;
+            }
+
+            case KN_SUPER_ENTER: {
+                auto curr = wnd.selection;
+                if (curr) open_ft_node(curr);
+                break;
+            }
+            }
+
             fstlog("wnd_file_explorer - handle keys");
         }
-
-        wnd.scroll_to = NULL;
 
         ImGui::End();
         ImGui::PopStyleVar();
@@ -4464,20 +4627,6 @@ void UI::draw_everything() {
     if (world.wnd_goto_file.show) {
         auto& wnd = world.wnd_goto_file;
 
-        auto go_up = [&]() {
-            if (!wnd.filtered_results->len) return;
-            if (!wnd.selection)
-                wnd.selection = min(wnd.filtered_results->len, settings.goto_file_max_results) - 1;
-            else
-                wnd.selection--;
-        };
-
-        auto go_down = [&]() {
-            if (!wnd.filtered_results->len) return;
-            wnd.selection++;
-            wnd.selection %= min(wnd.filtered_results->len, settings.goto_file_max_results);
-        };
-
         begin_centered_window("Go To File", &wnd, 0, 650);
 
         /*
@@ -4500,14 +4649,19 @@ void UI::draw_everything() {
             ImGui::SetWindowFocus(NULL);
         }
 
-        if (wnd.focused) {
-            auto mods = imgui_get_keymods();
-            switch (mods) {
-            case CP_MOD_NONE:
-                if (imgui_special_key_pressed(ImGuiKey_DownArrow)) go_down();
-                if (imgui_special_key_pressed(ImGuiKey_UpArrow)) go_up();
-                break;
-            }
+        switch (get_keyboard_nav(&wnd, KNF_ALLOW_IMGUI_FOCUSED)) {
+        case KN_UP:
+            if (!wnd.filtered_results->len) break;
+            if (!wnd.selection)
+                wnd.selection = min(wnd.filtered_results->len, settings.goto_file_max_results) - 1;
+            else
+                wnd.selection--;
+            break;
+        case KN_DOWN:
+            if (!wnd.filtered_results->len) break;
+            wnd.selection++;
+            wnd.selection %= min(wnd.filtered_results->len, settings.goto_file_max_results);
+            break;
         }
 
         if (ImGui::IsItemEdited()) {
@@ -4766,25 +4920,18 @@ void UI::draw_everything() {
             ImGui::SetWindowFocus(NULL);
         }
 
-        auto go_up = [&]() {
-            if (!wnd.filtered_results->len) return;
+        switch (get_keyboard_nav(&wnd, KNF_ALLOW_IMGUI_FOCUSED)) {
+        case KN_DOWN:
+            if (!wnd.filtered_results->len) break;
+            wnd.selection++;
+            wnd.selection %= min(wnd.filtered_results->len, settings.run_command_max_results);
+            break;
+        case KN_UP:
+            if (!wnd.filtered_results->len) break;
             if (!wnd.selection)
                 wnd.selection = min(wnd.filtered_results->len, settings.run_command_max_results) - 1;
             else
                 wnd.selection--;
-        };
-
-        auto go_down = [&]() {
-            if (!wnd.filtered_results->len) return;
-            wnd.selection++;
-            wnd.selection %= min(wnd.filtered_results->len, settings.run_command_max_results);
-        };
-
-        auto mods = imgui_get_keymods();
-        switch (mods) {
-        case CP_MOD_NONE:
-            if (imgui_special_key_pressed(ImGuiKey_DownArrow)) go_down();
-            if (imgui_special_key_pressed(ImGuiKey_UpArrow)) go_up();
             break;
         }
 
@@ -4882,20 +5029,6 @@ void UI::draw_everything() {
         }
 
         if (wnd.show && !wnd.fill_running) {
-            auto go_up = [&]() {
-                if (!wnd.filtered_results->len) return;
-                if (!wnd.selection)
-                    wnd.selection = min(wnd.filtered_results->len, settings.goto_symbol_max_results) - 1;
-                else
-                    wnd.selection--;
-            };
-
-            auto go_down = [&]() {
-                if (!wnd.filtered_results->len) return;
-                wnd.selection++;
-                wnd.selection %= min(wnd.filtered_results->len, settings.goto_symbol_max_results);
-            };
-
             begin_centered_window("Go To Symbol###goto_symbol_ready", &wnd, 0, 650);
 
             bool refilter = false;
@@ -4911,11 +5044,18 @@ void UI::draw_everything() {
                 wnd.selection = 0;
             }
 
-            auto mods = imgui_get_keymods();
-            switch (mods) {
-            case CP_MOD_NONE:
-                if (imgui_special_key_pressed(ImGuiKey_DownArrow)) go_down();
-                if (imgui_special_key_pressed(ImGuiKey_UpArrow)) go_up();
+            switch (get_keyboard_nav(&wnd, KNF_ALLOW_IMGUI_FOCUSED)) {
+            case KN_UP:
+                if (!wnd.filtered_results->len) break;
+                if (!wnd.selection)
+                    wnd.selection = min(wnd.filtered_results->len, settings.goto_symbol_max_results) - 1;
+                else
+                    wnd.selection--;
+                break;
+            case KN_DOWN:
+                if (!wnd.filtered_results->len) break;
+                wnd.selection++;
+                wnd.selection %= min(wnd.filtered_results->len, settings.goto_symbol_max_results);
                 break;
             }
 
@@ -5263,28 +5403,22 @@ void UI::draw_everything() {
                 ImGui::Unindent();
             }
 
-            if (wnd.focused && !world.ui.keyboard_captured_by_imgui) {
-                auto mods = imgui_get_keymods();
-                switch (mods) {
-                case CP_MOD_NONE:
-                    if (imgui_special_key_pressed(ImGuiKey_DownArrow) || imgui_key_pressed('j')) {
-                        if (wnd.selection < index-1)
-                            wnd.selection++;
-                    }
-                    if (imgui_special_key_pressed(ImGuiKey_UpArrow) || imgui_key_pressed('k')) {
-                        if (wnd.selection)
-                            wnd.selection--;
-                    }
-                    if (imgui_special_key_pressed(ImGuiKey_Enter))
-                        if (current_result)
-                            goto_file_and_pos(current_filepath, current_result->match_start, true);
-                    break;
-                }
+            switch (get_keyboard_nav(&wnd, KNF_ALLOW_IMGUI_FOCUSED)) {
+            case KN_DOWN:
+                if (wnd.selection < index-1)
+                    wnd.selection++;
+                break;
+            case KN_UP:
+                if (wnd.selection)
+                    wnd.selection--;
+                break;
+            case KN_ENTER:
+                if (current_result)
+                    goto_file_and_pos(current_filepath, current_result->match_start, true);
+                break;
             }
 
-            if (didnt_finish) {
-                ImGui::Text("There were too many results; some are omitted.");
-            }
+            if (didnt_finish) ImGui::Text("There were too many results; some are omitted.");
             break;
         }
         case SEARCH_REPLACE_IN_PROGRESS:
@@ -7203,6 +7337,39 @@ void UI::draw_everything() {
 }
 
 ImVec2 icon_button_padding = ImVec2(4, 2);
+
+Keyboard_Nav UI::get_keyboard_nav(Wnd *wnd, int flags) {
+    if (!wnd->focused) return KN_NONE;
+
+    if (world.ui.keyboard_captured_by_imgui)
+        if (!(flags & KNF_ALLOW_IMGUI_FOCUSED))
+            return KN_NONE;
+
+    auto mods = imgui_get_keymods();
+
+    switch (mods) {
+    case CP_MOD_NONE:
+        if (imgui_special_key_pressed(ImGuiKey_DownArrow)) return KN_DOWN;
+        if (imgui_special_key_pressed(ImGuiKey_LeftArrow)) return KN_LEFT;
+        if (imgui_special_key_pressed(ImGuiKey_RightArrow)) return KN_RIGHT;
+        if (imgui_special_key_pressed(ImGuiKey_UpArrow)) return KN_UP;
+        if (imgui_special_key_pressed(ImGuiKey_Enter)) return KN_ENTER;
+        if (flags & KNF_ALLOW_HJKL) {
+            if (imgui_key_pressed('j')) return KN_DOWN;
+            if (imgui_key_pressed('h')) return KN_LEFT;
+            if (imgui_key_pressed('l')) return KN_RIGHT;
+            if (imgui_key_pressed('k')) return KN_UP;
+        }
+        break;
+    case CP_MOD_PRIMARY:
+        if (imgui_special_key_pressed(ImGuiKey_Delete)) return KN_DELETE;
+        if (imgui_special_key_pressed(ImGuiKey_Backspace)) return KN_DELETE;
+        if (imgui_special_key_pressed(ImGuiKey_Enter)) return KN_SUPER_ENTER;
+        break;
+    }
+
+    return KN_NONE;
+}
 
 void UI::draw_tutorial(boxf rect) {
     Command commands[] = {

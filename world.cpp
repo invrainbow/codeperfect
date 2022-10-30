@@ -2385,7 +2385,10 @@ void handle_command(Command cmd, bool from_menu) {
             defer { cancel_find_references(); };
 
             auto files = world.indexer.find_references(wnd.declres, false);
-            if (!files) return;
+            if (isempty(files)) return;
+
+            wnd.current_file = 0;
+            wnd.current_result = 0;
 
             {
                 SCOPED_MEM(&world.find_references_mem);
@@ -2411,6 +2414,10 @@ void handle_command(Command cmd, bool from_menu) {
         wnd.done = false;
         wnd.results = NULL;
         wnd.thread = create_thread(thread_proc, NULL);
+        wnd.current_file = -1;
+        wnd.current_result = -1;
+        wnd.scroll_to_file = -1;
+        wnd.scroll_to_result = -1;
         if (!wnd.thread) {
             tell_user_error("Unable to kick off Find References.");
             break;
