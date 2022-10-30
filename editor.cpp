@@ -1912,15 +1912,15 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
             if (a.type == ACR_KEYWORD     && b.type == ACR_DECLARATION) return -1;
             if (a.type == ACR_DECLARATION && b.type == ACR_KEYWORD)     return 1;
 
+            auto is_field = [&](auto it) {
+                if (it->type == ACR_DECLARATION)
+                    if (it->declaration_godecl)
+                        if (it->declaration_godecl->type == GODECL_FIELD)
+                            return true;
+                return false;
+            };
 
-            bool both_fields = false;
-            if (a.declaration_godecl)
-                if (a.declaration_godecl->type == GODECL_FIELD)
-                    if (b.declaration_godecl)
-                        if (b.declaration_godecl->type == GODECL_FIELD)
-                            both_fields = true;
-
-            if (both_fields) {
+            if (is_field(&a) && is_field(&b)) {
                 int deptha = a.declaration_godecl->field_depth;
                 int depthb = b.declaration_godecl->field_depth;
                 if (deptha != depthb) return deptha - depthb;
