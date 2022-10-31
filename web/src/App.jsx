@@ -174,12 +174,6 @@ const FEATURES = _.shuffle([
     label: "Global Fuzzy Selector",
     desc: "Works on files, symbols, commands, and completions.",
   },
-  /*
-  {
-    label: "Custom GPU Renderer",
-    desc: "OpenGL-based renderer. No Electron. 144 FPS, everything instant.",
-  },
-  */
   {
     label: "Tree-Based Navigation",
     desc: "Use the power of our integrated parser to directly walk the AST.",
@@ -237,14 +231,22 @@ const SELLING_POINTS = [
     ),
   },
   {
-    icon: asset("/icon-gpu.png"),
-    label: "Old school performance",
-    classes: "opacity-80",
+    icon: asset("/icon-basics.png"),
+    label: "Back to basics",
     content: (
       <>
         <p>
-          Instant startup. A buttery smooth 144 frames/sec. No latency after
-          keystrokes. An optimized indexer that gobbles through large codebases.
+          We achieve our its performant speeds mostly by keeping things light
+          and writing straightforward,{" "}
+          <A href="https://www.youtube.com/watch?v=pgoetgxecw8">
+            non-pessimized
+          </A>{" "}
+          code.
+        </p>
+        <p>
+          Instant startup. A buttery smooth 144 frames/sec. Imperceptible
+          latency after keystrokes. An indexer that gobbles through large
+          codebases.
         </p>
       </>
     ),
@@ -284,27 +286,21 @@ function Home() {
   };
 
   return (
-    <div
-      className="mx-auto mt-8 md:mt-24 w-full"
-      style={{ maxWidth: "1920px" }}
-    >
-      <div className="max-w-full text-lg leading-relaxed p-4">
-        <div className="text-center text-4xl md:text-5xl mb-6 font-bold text-white leading-snug font-title">
-          A&nbsp;fast,&nbsp;powerful IDE&nbsp;for&nbsp;Go
+    <div className="mx-auto md:mt-24 w-full" style={{ maxWidth: "1920px" }}>
+      <div className="max-w-full leading-relaxed p-8">
+        <div
+          className="md:text-center text-5xl md:text-5xl mb-6 md:mb-1 font-bold text-white font-title"
+          style={{ lineHeight: "1.1" }}
+        >
+          A fast &amp; powerful IDE for Go
         </div>
 
-        <p className="md:hidden text-center">
-          A power tool with a minimal resource footprint. Designed around the Go
-          development workflow.
+        <p className="font-title md:text-center text-xl text-neutral-300">
+          Feature-rich and lightweight. A power tool with a small resource
+          footprint.
         </p>
 
-        <p className="hidden md:block max-w-full mx-auto text-center text-xl text-neutral-300 leading-normal">
-          A power tool with a minimal resource footprint.
-          <br />
-          Designed around the Go development workflow.
-        </p>
-
-        <div className="mt-8 text-center flex gap-4 justify-center">
+        <div className="mt-8 md:mt-8 md:text-center flex gap-4 md:justify-center">
           <A
             href="/download"
             className="btn btn1 justify-center flex md:inline-flex text-center"
@@ -326,6 +322,7 @@ function Home() {
             <img alt="screenshot" src={asset("/basics-screenshot.png")} />
           </A>
         </div>
+
         <div
           className="hidden md:block relative max-w-screen-xl mt-16 mx-auto"
           style={{ height: "450px" }}
@@ -341,14 +338,14 @@ function Home() {
       <div className="batteries-included z-10 px-4 py-16 md:py-32">
         <div className="batteries-included-child md:flex max-w-screen-xl mx-auto">
           <div className="md:w-2/5 md:pr-8 lg:pr-16">
-            <div className="text-4xl md:mt-24 mb-6 font-bold text-black font-title">
+            <div className="text-3xl md:mt-24 mb-6 font-bold text-black font-title">
               Batteries included
             </div>
 
             <div className="text-xl text-neutral-700">
               <p>
-                CodePerfect is feature-rich and works out of the box with
-                (almost) zero configuration.
+                CodePerfect is feature-rich and works out of the box with almost
+                zero configuration.
               </p>
               <p>
                 The power of an IDE, bundled into a software package as fast as
@@ -371,17 +368,15 @@ function Home() {
                 className="batteries-included-tile shadow-sm rounded p-3 transition-all select-none"
                 key={it.label}
               >
-                <div className="leading-none mb-2">
-                  <img
-                    className="inline-block w-auto h-5 mb-1.5"
-                    src={asset(`/icon-${getIconName(it.label)}.png`)}
-                    alt={it.label}
-                  />
-                  <div className="font-sans text-sm leading-none font-semibold text-neutral-700">
-                    {it.label}
-                  </div>
+                <img
+                  className="inline-block w-auto h-5 mb-3"
+                  src={asset(`/icon-${getIconName(it.label)}.png`)}
+                  alt={it.label}
+                />
+                <div className="font-sans text-sm leading-none font-semibold text-neutral-700">
+                  {it.label}
                 </div>
-                <div className="font-sans text-sm text-neutral-400 leading-snug">
+                <div className="mt-1.5 font-sans text-sm text-neutral-400 leading-snug">
                   {it.desc}
                 </div>
               </div>
@@ -415,13 +410,14 @@ function Home() {
               ))}
             </p>
             <div className="mt-6 md:mt-12 mb-6">
-              We <A href={LINKS.handmadeManifesto}>handmade</A> the entire IDE
-              stack from the metal up, in blazing fast C/C++, into a barebones
+              We threw out the modern software stack and{" "}
+              <A href={LINKS.handmadeManifesto}>handmade</A> the whole IDE from
+              the metal up, in blazing fast C/C++. The result: a barebones
               native app that just does what it's supposed to.
             </div>
             <p>
-              From the UI renderer to the code intelligence engine, everything
-              is hand-optimized to be as performant as a video game.
+              From the UI renderer to the code indexer, everything is
+              hand-optimized to be as performant as a video game.
             </p>
           </div>
         </div>
@@ -447,7 +443,7 @@ function Home() {
                   }}
                 />
               </div>
-              <div className="text-lg font-bold font-title mb-2">
+              <div className="text-lg font-bold font-title mb-2 font-white">
                 {it.label}
               </div>
               <div className="text-neutral-400 leading-relaxed">
@@ -458,7 +454,7 @@ function Home() {
         </div>
       </div>
 
-      <div className="md:px-4 bg-neutral-200 border-neutral-200 border-t-2">
+      <div className="md:px-4 bg-stone-200 border-neutral-200 border-t-2 md:rounded-lg md:shadow">
         <div className="max-w-screen-xl mx-auto md:flex text-neutral-700 py-12 px-8 md:p-16 lg:p-24 overflow-hidden md:mb-12">
           <div className="md:w-1/3">
             <div className="text-black font-bold text-3xl mb-6 font-title">
@@ -974,11 +970,11 @@ function Header() {
             </div>
           )}
         </div>
-        <div className="hidden md:flex items-baseline space-x-6">
+        <div className="hidden md:flex items-baseline gap-x-8">
           {links.map(([url, label]) => (
             <A
-              className="font-semibold text-neutral-400 hover:text-neutral-300 no-underline whitespace-nowrap hidden md:inline-block"
-              style={{ fontSize: "0.9em" }}
+              className="text-neutral-400 hover:text-neutral-300 no-underline whitespace-nowrap hidden md:inline-block"
+              // style={{ fontSize: "0.95em" }}
               href={url}
             >
               {label}
