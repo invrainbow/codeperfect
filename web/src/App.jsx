@@ -454,7 +454,7 @@ function Home() {
         </div>
       </div>
 
-      <div className="md:px-4 bg-stone-200 border-neutral-200 border-t-2 md:rounded-lg md:shadow">
+      <div className="md:px-4 bg-white border-white border-t-2 md:rounded-lg md:shadow">
         <div className="max-w-screen-xl mx-auto md:flex text-neutral-700 py-12 px-8 md:p-16 lg:p-24 overflow-hidden md:mb-12">
           <div className="md:w-1/3">
             <div className="text-black font-bold text-3xl mb-6 font-title">
@@ -556,6 +556,7 @@ function BuyLicense() {
     },
 
     {
+      recommended: true,
       name: "Pro",
       price: 10,
       features: [
@@ -637,19 +638,37 @@ function BuyLicense() {
 
   return (
     <div className="mt-12 md:mt-24">
-      <div className="text-center text-white font-title text-3xl md:text-5xl font-bold mb-4 md:mb-12">
+      <div className="text-center text-white font-title text-3xl md:text-5xl font-bold mb-6 md:mb-24">
         Buy License
       </div>
       <div className="md:max-w-screen-xl mx-auto">
-        <div className="my-6 grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-12 rounded">
-          {plans.map(({ name, price, features, buttons }) => {
+        <div className="mx-6 my-6 grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-12 rounded">
+          {plans.map(({ name, price, features, buttons, recommended }) => {
             const options = [
-              [buttons.monthlyLink, "monthly"],
-              [buttons.yearlyLink, "yearly*"],
+              [buttons.monthlyLink, "monthly", false],
+              [buttons.yearlyLink, "yearly", true],
             ];
 
             return (
-              <div className="w-auto overflow-hidden border border-neutral-600 rounded-lg shadow-lg p-5 mx-6 md:mx-0">
+              <div
+                className={cx(
+                  twMerge(
+                    "w-auto shadow-lg p-5 mx-6 md:mx-0 relative",
+                    recommended ? "rounded-b-lg" : "rounded-lg",
+                    recommended
+                      ? "border border-primary"
+                      : "border border-neutral-600"
+                  )
+                )}
+              >
+                {recommended && (
+                  <div
+                    className="absolute bg-primary text-white bottom-full left-0 right-0 rounded-t-lg text-base font-semibold leading-none p-3 text-center font-title"
+                    style={{ marginLeft: "-1px", marginRight: "-1px" }}
+                  >
+                    Most Popular*
+                  </div>
+                )}
                 <div className="text-neutral-300">
                   <div className="font-title font-bold text-lg text-neutral-400">
                     {name}
@@ -663,7 +682,7 @@ function BuyLicense() {
                     <div
                       className={cx(
                         "flex items-start space-x-1 leading-6 mb-1 last:mb-0",
-                        it.not ? "text-red-600" : "text-neutral-200"
+                        it.not ? "text-red-400" : "text-neutral-300"
                       )}
                     >
                       <Icon
@@ -684,13 +703,26 @@ function BuyLicense() {
                     </A>
                   ) : (
                     <div className="grid grid-cols-2 items-center gap-x-2">
-                      {options.map(([link, unit]) => (
-                        <A
-                          className="btn btn1 py-3 block text-center"
-                          href={link}
-                        >
-                          Buy {unit}
-                        </A>
+                      {options.map(([link, unit, yearly]) => (
+                        <span className="relative group">
+                          {yearly && (
+                            <span className="hidden group-hover:inline-block shadow absolute bottom-full mb-4 text-sm font-title font-semibold text-gray-500 right-1/2 whitespace-nowrap translate-x-1/2 w-auto rounded bg-neutral-100 text-neutral-500 py-2 px-3 leading-none">
+                              <span
+                                class={twMerge(
+                                  "w-0 h-0 border-transparent border-t-neutral-100 absolute top-full left-1/2 -translate-x-1/2"
+                                )}
+                                style={{ borderWidth: "6px" }}
+                              />
+                              2 months free!
+                            </span>
+                          )}
+                          <A
+                            className="btn btn1 py-3 block text-center"
+                            href={link}
+                          >
+                            Buy {unit}
+                          </A>
+                        </span>
                       ))}
                     </div>
                   )}
@@ -699,26 +731,28 @@ function BuyLicense() {
             );
           })}
         </div>
-        <div className="text-center text-neutral-400 text-lg mt-4">
-          * get two months free when you buy yearly
+        <div className="text-neutral-300 mt-4 text-center leading-tight text-base">
+          * Many users expense the purchase with their employer.
         </div>
       </div>
-      <div className="md:max-w-screen-xl mx-auto grid grid-cols-1 md:grid-cols-3 mt-12 md:mt-24 mb:4 md:my-24 md:border-t border-gray-100">
-        {help.map((it) => (
-          <div className="border-t md:border-t-0 md:border-r border-gray-100 first:border-l p-6 md:pt-8 md:pb-0 md:px-8">
-            <div
-              className="w-8 border-b-4 mb-2"
-              style={{
-                borderColor: "rgb(11, 158, 245)",
-                filter: "saturate(0.35)",
-              }}
-            />
-            <div className="font-title text-neutral-300 text-lg font-bold mb-2">
-              {it.title}
+      <div className="md:max-w-screen-xl mx-auto">
+        <div className="mx-6 grid grid-cols-1 md:grid-cols-3 mt-12 md:mt-24 mb:4 md:my-24 md:border-t border-gray-100">
+          {help.map((it) => (
+            <div className="border-t md:border-t-0 md:border-r border-gray-100 first:border-l p-6 md:pt-8 md:pb-0 md:px-8">
+              <div
+                className="w-8 border-b-4 mb-2"
+                style={{
+                  borderColor: "rgb(11, 158, 245)",
+                  filter: "saturate(0.35)",
+                }}
+              />
+              <div className="font-title text-neutral-300 text-lg font-bold mb-2">
+                {it.title}
+              </div>
+              <div className="text-gray-500 leading-normal">{it.content}</div>
             </div>
-            <div className="text-gray-500 leading-normal">{it.content}</div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -974,7 +1008,7 @@ function Header() {
         <div className="hidden md:flex items-baseline gap-x-8">
           {links.map(([url, label]) => (
             <A
-              className="text-neutral-400 hover:text-neutral-300 no-underline whitespace-nowrap hidden md:inline-block"
+              className="text-neutral-300 hover:text-neutral-100 no-underline whitespace-nowrap hidden md:inline-block"
               // style={{ fontSize: "0.95em" }}
               href={url}
             >
