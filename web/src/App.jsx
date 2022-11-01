@@ -475,7 +475,7 @@ function Home() {
                 <Icon className="mr-2" icon={HiOutlineDownload} />
                 Download
               </A>
-              <A
+              {/* <A
                 href="/faq"
                 className={twMerge(
                   "btn btn2 justify-center inline-flex text-center bg-black text-white px-6"
@@ -483,7 +483,7 @@ function Home() {
               >
                 View FAQs
                 <Icon className="ml-2" icon={BsChevronRight} />
-              </A>
+              </A> */}
             </p>
           </div>
           <div className="flex-1 relative hidden md:block">
@@ -724,6 +724,7 @@ function BuyLicense() {
   );
 }
 
+/*
 function Question({ q, children }) {
   return (
     <>
@@ -737,10 +738,10 @@ function FAQ() {
   return (
     <WallOfText>
       <Title>Frequently Asked Questions</Title>
-      <Question q="How big is my cock?">Absolutely humongous.</Question>
     </WallOfText>
   );
 }
+*/
 
 function Download() {
   const links = [
@@ -1000,7 +1001,7 @@ function Footer() {
           <FootSection>
             <FootLink href="/buy">Buy License</FootLink>
             <FootLink href="/download">Download</FootLink>
-            <FootLink href="/faq">FAQs</FootLink>
+            {/* <FootLink href="/faq">FAQs</FootLink> */}
           </FootSection>
           <FootSection>
             <FootLink href={LINKS.docs}>Docs</FootLink>
@@ -1051,7 +1052,7 @@ function App() {
           <Route path="/" element={<Layout />}>
             <Route path="download" element={<Download />} />
             <Route path="buy" element={<BuyLicense />} />
-            <Route path="faq" element={<FAQ />} />
+            {/* <Route path="faq" element={<FAQ />} /> */}
             <Route path="payment-done" element={<PaymentDone />} />
             <Route path="portal-done" element={<PortalDone />} />
             <Route path="terms" element={<Terms />} />
