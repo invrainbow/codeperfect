@@ -66,7 +66,10 @@ struct Main_Thread_Message {
             ccstr goto_file;
             cur2 goto_pos;
         };
-        ccstr panic_message;
+        struct {
+            ccstr panic_message;
+            ccstr panic_stacktrace;
+        };
         struct {
             ccstr tell_user_text;
             ccstr tell_user_title;
@@ -830,3 +833,5 @@ void send_nvim_keys(ccstr s);
 void clear_key_states();
 
 void fstlog(ccstr fmt, ...);
+void write_stacktrace_to_file(ccstr stacktrace);
+NORETURN void crash_handler(int sig);

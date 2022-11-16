@@ -1192,6 +1192,8 @@ int realmain(int argc, char **argv) {
     }
     }
 
+    GHSendCrashReports();
+
     auto set_window_title = [&](ccstr note) {
         ccstr s = NULL;
         if (!note)
@@ -1619,9 +1621,16 @@ int realmain(int argc, char **argv) {
                     exit(it.exit_code);
                     break;
 
-                case MTM_PANIC:
-                    cp_panic(it.panic_message);
+                case MTM_PANIC: {
+                    // When we get here, we already called cp_panic in the
+                    // other thread. There's no point in throwing a new
+                    // exception, since the stacktrace will just be this
+                    // thread's, so just exit.
+                    tell_user(NULL, it.panic_message);
+                    write_stacktrace_to_file(it.panic_stacktrace);
+                    exit(1);
                     break;
+                }
 
                 case MTM_TELL_USER:
                     tell_user(it.tell_user_text, it.tell_user_title);
@@ -1772,6 +1781,8 @@ int realmain(int argc, char **argv) {
 
         fstlog("poll window events");
         world.window->events.len = 0;
+
+        // cp_panic("leld0ingz");
 
         ui.draw_everything();
         fstlog("draw everything");

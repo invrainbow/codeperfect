@@ -15,6 +15,7 @@ import (
 	"github.com/invrainbow/codeperfect/go/cmd/lib"
 	"github.com/invrainbow/codeperfect/go/db"
 	"github.com/invrainbow/codeperfect/go/models"
+	"github.com/invrainbow/codeperfect/go/versions"
 	"github.com/stripe/stripe-go/v72"
 	"github.com/stripe/stripe-go/v72/billingportal/session"
 	"github.com/stripe/stripe-go/v72/customer"
@@ -202,6 +203,43 @@ func PostHeartbeat(c *gin.Context) {
 	db.DB.Save(&sess)
 
 	c.JSON(200, &gin.H{"ok": true})
+}
+
+func PostCrashReport(c *gin.Context) {
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{})
+		log.Printf("ioutil.Readall: %v", err)
+		return
+	}
+
+	var req models.CrashReportRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{})
+		log.Printf("json.unmarshal", err)
+		return
+	}
+
+	if len(req.OS) > 16) {
+		c.JSON(http.StatusBadRequest, gin.H{})
+		log.Printf("user sent bad os: %s", req.OS[:128])
+		return
+	}
+
+	if !strings.HasPrefix(req.HastebinUrl, "https://hastebin.com/raw/") {
+		c.JSON(http.StatusBadRequest, gin.H{})
+		log.Printf("user sent bad hastebin url: %s", req.HastebinUrl[:128])
+		return
+	}
+
+	if len(strings.TrimPrefix(req.HastebinUrl, "https://hastebin.com/raw/")) > 32 {
+		c.JSON(http.StatusBadRequest, gin.H{})
+		log.Printf("user sent bad hastebin url: %s", req.HastebinUrl[:128])
+		return
+	}
+
+	go SendSlackMessage("%s\n%s | %s | %s", req.HastebinUrl, req.OS, versions.VersionToString(req.CurrentVersion), c.ClientIP())
+	c.JSON(http.StatusOK, true)
 }
 
 func PostStripeWebhook(c *gin.Context) {

@@ -390,7 +390,7 @@ bool File::read(char *buf, s32 size) {
     return (n == size);
 }
 
-bool File::write(char *buf, s32 size) {
+bool File::write(ccstr buf, s32 size) {
     DWORD n = 0;
     if (!WriteFile(h, buf, size, &n, NULL)) return false;
     return (n == size);
@@ -1006,6 +1006,20 @@ void restart_program() {
         return;
 
     ExitProcess(0);
+}
+
+NORETURN void exit_from_crash_handler() {
+    ExitProcess(1);
+}
+
+void* get_binary_base_address() {
+    return (void*)GetModuleHandleA(NULL):
+}
+
+ccstr generate_stack_trace(ccstr message) {
+    // Text_Renderer r; r.init();
+    // TODO
+    return NULL;
 }
 
 #endif // OS_WINBLOWS

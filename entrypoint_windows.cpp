@@ -13,7 +13,12 @@ extern "C" {
 
 int stub(int argc, char **argv) {
     _rt0_amd64_windows_lib();
-    return realmain(argc, argv);
+    __try {
+        return realmain(argc, argv);
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        crash_handler(GetExceptionCode());
+        return 1; // this shouldn't happen
+    }
 }
 
 #ifdef DEBUG_BUILD

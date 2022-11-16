@@ -21,10 +21,6 @@
 #include "tree_sitter_crap.hpp"
 #include "binaries.h"
 
-#if OS_MAC
-#include <execinfo.h>
-#endif
-
 void open_ft_node(FT_Node *it);
 
 UI ui;
@@ -884,18 +880,8 @@ void UI::draw_quad(boxf b, boxf uv, vec4f color, Draw_Mode mode, Texture_Id text
         // if it already exists, get out
         if (existing) break;
 
-        Text_Renderer r; r.init();
-
-        void *array[128];
-        auto size = backtrace(array, 128);
-        auto strings = backtrace_symbols(array, size);
-        if (!strings) break;
-        defer { free(strings); };
-
-        for (u32 i = 0; i < size; i++)
-            r.write("%s\n", strings[i]);
-
-        auto output = r.finish();
+        auto output = generate_stack_trace();
+        if (!output) break;
 
         Drawn_Quad item; ptr0(&item);
         item.b = b;

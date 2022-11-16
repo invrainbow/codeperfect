@@ -21,6 +21,7 @@
 
 #include "utils.hpp"
 #include "defer.hpp"
+#include "world.hpp"
 
 struct Thread_Ctx {
     Thread_Callback callback;
@@ -118,7 +119,7 @@ bool File::read(char *buf, s32 size) {
     return true;
 }
 
-bool File::write(char *buf, s32 size) {
+bool File::write(ccstr buf, s32 size) {
     int off = 0;
 
     while (off < size) {
@@ -496,6 +497,10 @@ ccstr rel_to_abs_path(ccstr path) {
     }
 
     return ret;
+}
+
+NORETURN void exit_from_crash_handler() {
+    _exit(1);
 }
 
 #endif // OS_MAC || OS_LINUX

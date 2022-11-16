@@ -28,3 +28,9 @@ type HeartbeatRequest struct {
 type HeartbeatResponse struct {
 	Ok bool `json:"ok"`
 }
+
+type CrashReportRequest struct {
+	HastebinUrl    string `json:"hastebin_url"`
+	OS             string `json:"os"`
+	CurrentVersion int    `json:"current_version"`
+}
