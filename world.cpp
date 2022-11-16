@@ -391,12 +391,12 @@ void World::init() {
 
     t.log("init random shit");
 
+    configdir = GHGetConfigDir();
+    if (!configdir) cp_panic("couldn't get config dir");
+
     // read options from disk
     do {
-        auto configpath = GHGetConfigDir();
-        if (!configpath) break;
-
-        auto filepath = path_join(configpath, ".options");
+        auto filepath = path_join(configdir, ".options");
 
         File f;
         if (f.init_read(filepath) != FILE_RESULT_OK)
@@ -3595,9 +3595,7 @@ void fuzzy_sort_filtered_results(ccstr query, List<int> *list, int total_results
 }
 
 ccstr get_auth_filepath() {
-    auto configpath = GHGetConfigDir();
-    if (!configpath) cp_panic("Unable to open config directory.");
-    return path_join(configpath, ".auth");
+    return path_join(world.configdir, ".auth");
 }
 
 void read_auth() {

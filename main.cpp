@@ -1218,19 +1218,13 @@ int realmain(int argc, char **argv) {
 
     t.log("set window title");
 
-    auto configdir = GHGetConfigDir();
-    if (!configdir)
-        return error("unable to get config dir"), EXIT_FAILURE;
-
-    t.log("get config dir");
-
     ImGui::CreateContext();
 
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     {
         SCOPED_MEM(&world.world_mem);
-        io.IniFilename = path_join(configdir, "imgui.ini");
+        io.IniFilename = path_join(world.configdir, "imgui.ini");
     }
 
     // ImGui::StyleColorsLight();

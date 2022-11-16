@@ -2782,10 +2782,7 @@ void UI::draw_everything() {
 
                 // write out options
                 do {
-                    auto configdir = GHGetConfigDir();
-                    if (!configdir) break;
-
-                    auto filepath = path_join(configdir, ".options");
+                    auto filepath = path_join(world.configdir, ".options");
 
                     File f;
                     if (f.init_write(filepath) != FILE_RESULT_OK)

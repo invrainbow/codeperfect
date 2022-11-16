@@ -345,6 +345,8 @@ struct World {
     Fridge<Chunk5> chunk5_fridge;
     Fridge<Chunk6> chunk6_fridge;
 
+    ccstr configdir;
+
     struct {
         bool on;
         bool ready;
