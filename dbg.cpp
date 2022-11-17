@@ -1090,6 +1090,21 @@ bool Debugger::start(Debug_Profile *debug_profile) {
     if (!resp)
         return error("unable to set API version"), false;
 
+    auto get_pid = [&]() {
+        resp = send_packet("ProcessPid", [&]() {});
+        if (!resp) return false;
+
+        auto js = resp->js();
+        auto pid_idx = js.get(0, ".result.Pid");
+        if (pid_idx == -1) return false;
+        debuggee_pid = js.num(pid_idx);
+
+        return true;
+    };
+
+    if (!get_pid())
+        return error("unable to grab pidset API version"), false;
+
     world.wnd_debug_output.selection = -1;
     world.wnd_debug_output.show = true;
     world.wnd_debug_output.cmd_focus = true;
@@ -1303,6 +1318,13 @@ void Debugger::jump_to_frame() {
         msg->goto_file = cp_strdup(frame->filepath);
         msg->goto_pos = new_cur2((i32)0, (i32)frame->lineno - 1);
     });
+
+    if (debuggee_pid) {
+        world.message_queue.add([&](auto msg) {
+            msg->type = MTM_FOCUS_APP_DEBUGGER;
+            msg->focus_app_debugger_pid = debuggee_pid;
+        });
+    }
 }
 
 void Debugger::do_everything() {

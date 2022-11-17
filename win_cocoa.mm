@@ -880,6 +880,7 @@ void Window::request_attention() {
         [NSApp requestUserAttention:NSInformationalRequest];
     }
 }
+*/
 
 void Window::focus() {
     @autoreleasepool {
@@ -888,7 +889,6 @@ void Window::focus() {
         [ns_window makeKeyAndOrderFront:nil];
     }
 }
-*/
 
 bool Window::is_focused() {
     @autoreleasepool {
@@ -1090,6 +1090,12 @@ void destroy_bootstrap_context() {
         bootstrap_pixel_format = nil;
         bootstrap_context = nil;
     }
+}
+
+int get_current_focused_window_pid() {
+    auto app = [[NSWorkspace sharedWorkspace] frontmostApplication];
+    if (!app) return 0;
+    return [app processIdentifier];
 }
 
 #endif // WIN_COCOA
