@@ -1832,6 +1832,10 @@ Goresult* new_primitive_type_goresult(ccstr name) {
     return make_goresult(new_primitive_type(name), ctx);
 }
 
+bool isastnull(Ast_Node* x) {
+    return !x || x->null;
+}
+
 Go_Package *Go_Indexer::find_package_in_index(ccstr import_path) {
     if (!import_path) return NULL;
 
@@ -1941,11 +1945,11 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
         case TS_TYPE_CASE:
         case TS_DEFAULT_CASE: {
             auto parent = node->parent();
-            if (parent->null) break;
+            if (isastnull(parent)) break;
             if (parent->type() != TS_TYPE_SWITCH_STATEMENT) break;
 
             auto alias = parent->field(TSF_ALIAS);
-            if (alias->null) break;
+            if (isastnull(alias)) break;
             if (alias->type() != TS_EXPRESSION_LIST) break;
 
             FOR_NODE_CHILDREN (alias) {
@@ -2008,7 +2012,7 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
                 bool ok = false;
                 do {
                     auto parent = node->parent();
-                    if (parent->null) break;
+                    if (isastnull(parent)) break;
                     if (parent->type() != TS_COMMUNICATION_CASE) break;
                     ok = true;
                 } while (0);
@@ -2170,7 +2174,7 @@ void Go_Indexer::process_tree_into_gofile(
 
         auto is_selector_sel = [&](Ast_Node *it) {
             auto parent = it->parent();
-            if (parent->null) return false;
+            if (isastnull(parent)) return false;
 
             Ast_Node *field = NULL;
             switch (parent->type()) {
@@ -2179,7 +2183,7 @@ void Go_Indexer::process_tree_into_gofile(
             default: return false;
             }
 
-            return !field->null && field->eq(it);
+            return !isastnull(field) && field->eq(it);
         };
 
         walk_ast_node(root, true, [&](auto it, auto, auto) {
@@ -2271,7 +2275,7 @@ void Go_Indexer::import_decl_to_goimports(Ast_Node *decl_node, List<Go_Import> *
         auto imp = out->append();
         imp->decl = decl;
         imp->import_path = new_import_path;
-        if (!name_node || name_node->null)
+        if (isastnull(name_node))
             imp->package_name_type = GPN_IMPLICIT;
         else if (name_node->type() == TS_DOT)
             imp->package_name_type = GPN_DOT;
@@ -3687,7 +3691,7 @@ List<Go_Import> *Go_Indexer::optimize_imports(ccstr filepath) {
             return WALK_CONTINUE;
         }
 
-        if (x->null || sel->null) return WALK_CONTINUE;
+        if (isastnull(x) || isastnull(sel)) return WALK_CONTINUE;
 
         auto node = alloc_object(Ast_Node);
         memcpy(node, x, sizeof(Ast_Node));
@@ -4001,7 +4005,7 @@ Generate_Struct_Tags_Result* Go_Indexer::generate_struct_tags(ccstr filepath, cu
 
     fn<void(Ast_Node*)> process_struct = [&](auto node) {
         auto listnode = node->child();
-        if (listnode->null) return;
+        if (isastnull(listnode)) return;
 
         FOR_NODE_CHILDREN (listnode) {
             if (it->type() != TS_FIELD_DECLARATION) return;
@@ -4011,14 +4015,14 @@ Generate_Struct_Tags_Result* Go_Indexer::generate_struct_tags(ccstr filepath, cu
                     continue;
             } else {
                 auto typenode = it->field(TSF_TYPE);
-                if (!typenode->null)
+                if (!isastnull(typenode))
                     if (typenode->type() == TS_STRUCT_TYPE)
                         process_struct(typenode);
             }
 
             if (op == GSTOP_ADD_ONE || op == GSTOP_ADD_ALL) {
                 auto name = it->field(TSF_NAME);
-                if (name->null) continue;  // don't fuck with embedded type fields
+                if (isastnull(name)) continue;  // don't fuck with embedded type fields
 
                 auto namestr = name->string();
                 if (!namestr) continue;
@@ -4028,7 +4032,7 @@ Generate_Struct_Tags_Result* Go_Indexer::generate_struct_tags(ccstr filepath, cu
                 auto tagname = make_tag_name(namestr);
 
                 auto tag = it->field(TSF_TAG);
-                if (!tag->null) {
+                if (!isastnull(tag)) {
                     auto tagstr = tag->string();
                     if (!tagstr) continue;
 
@@ -4055,10 +4059,10 @@ Generate_Struct_Tags_Result* Go_Indexer::generate_struct_tags(ccstr filepath, cu
                 }
             } else if (op == GSTOP_REMOVE_ONE || op == GSTOP_REMOVE_ALL) {
                 auto tag = it->field(TSF_TAG);
-                if (tag->null) continue;
+                if (isastnull(tag)) continue;
 
                 auto type = it->field(TSF_TYPE);
-                if (type->null) continue;
+                if (isastnull(type)) continue;
 
                 ret->insert_starts->append(type->end());
                 ret->insert_ends->append(tag->end());
@@ -4113,7 +4117,7 @@ Generate_Func_Sig_Result* Go_Indexer::generate_function_signature(ccstr filepath
         }
 
         auto parent = node->parent();
-        if (!parent->null && parent->type() == TS_CALL_EXPRESSION)
+        if (!isastnull(parent) && parent->type() == TS_CALL_EXPRESSION)
             callnode = parent;
 
         return WALK_ABORT;
@@ -4136,7 +4140,7 @@ Generate_Func_Sig_Result* Go_Indexer::generate_function_signature(ccstr filepath
     };
 
     auto func = callnode->field(TSF_FUNCTION);
-    if (func->null) return NULL;
+    if (isastnull(func)) return NULL;
 
     auto funcref = node_to_reference(func);
     if (!funcref) return NULL;
@@ -4249,7 +4253,7 @@ Generate_Func_Sig_Result* Go_Indexer::generate_function_signature(ccstr filepath
     rend.write("%s(", funcref->is_sel ? funcref->sel : funcref->name);
 
     auto argsnode = callnode->field(TSF_ARGUMENTS);
-    if (argsnode->null) return NULL;
+    if (isastnull(argsnode)) return NULL;
 
     ret->imports_needed = alloc_list<ccstr>();
     ret->imports_needed_names = alloc_list<ccstr>();
@@ -4477,22 +4481,22 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 p
         case TS_FIELD_IDENTIFIER: {
             auto is_struct_field_in_literal = [&]() -> Ast_Node *{
                 auto p = node->parent();
-                if (p->null) return NULL;
+                if (isastnull(p)) return NULL;
                 if (p->type() != TS_LITERAL_ELEMENT) return NULL;
 
                 // must be first literal element (second is value)
-                if (!p->prev()->null) return NULL;
+                if (!isastnull(p->prev())) return NULL;
 
                 p = p->parent();
-                if (p->null) return NULL;
+                if (isastnull(p)) return NULL;
                 if (p->type() != TS_KEYED_ELEMENT) return NULL;
 
                 p = p->parent();
-                if (p->null) return NULL;
+                if (isastnull(p)) return NULL;
                 if (p->type() != TS_LITERAL_VALUE) return NULL;
 
                 p = p->parent();
-                if (p->null) return NULL;
+                if (isastnull(p)) return NULL;
                 if (p->type() != TS_COMPOSITE_LITERAL) return NULL;
 
                 return p;
@@ -4504,7 +4508,7 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 p
             if (comp_literal) {
                 do {
                     auto p = comp_literal->field(TSF_TYPE);
-                    if (p->null) break;
+                    if (isastnull(p)) break;
 
                     auto gotype = expr_to_gotype(p);
                     if (!gotype) break;
@@ -4946,13 +4950,13 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
         case TS_QUALIFIED_TYPE:
         case TS_SELECTOR_EXPRESSION: {
             auto operand_node = node->field(node->type() == TS_QUALIFIED_TYPE ? TSF_PACKAGE : TSF_OPERAND);
-            if (operand_node->null) return WALK_ABORT;
+            if (isastnull(operand_node)) return WALK_ABORT;
             if (cmp_pos_to_node(pos, operand_node) == 0) return WALK_CONTINUE;
 
             auto sel_node = node->field(node->type() == TS_QUALIFIED_TYPE ? TSF_NAME : TSF_FIELD);
 
             bool dot_found = false;
-            for (auto curr = node->child_all(); !curr->null; curr = curr->next_all()) {
+            for (auto curr = node->child_all(); !isastnull(curr); curr = curr->next_all()) {
                 if (curr->type() == TS_ANON_DOT) {
                     dot_found = true;
                     break;
@@ -4999,20 +5003,20 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
             {
                 auto get_struct_literal_type = [&]() -> Ast_Node* {
                     auto curr = node->parent();
-                    if (curr->null) return NULL;
+                    if (isastnull(curr)) return NULL;
                     if (curr->type() != TS_KEYED_ELEMENT && curr->type() != TS_LITERAL_ELEMENT) return NULL;
-                    if (!node->prev()->null) return NULL; // must be key, not value
+                    if (!isastnull(node->prev())) return NULL; // must be key, not value
 
                     curr = curr->parent();
-                    if (curr->null) return NULL;
+                    if (isastnull(curr)) return NULL;
                     if (curr->type() != TS_LITERAL_VALUE) return NULL;
 
                     curr = curr->parent();
-                    if (curr->null) return NULL;
+                    if (isastnull(curr)) return NULL;
                     if (curr->type() != TS_COMPOSITE_LITERAL) return NULL;
 
                     curr = curr->field(TSF_TYPE);
-                    if (curr->null) return NULL;
+                    if (isastnull(curr)) return NULL;
 
                     return copy_node(curr);
                 };
@@ -5022,16 +5026,16 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
 
         case TS_ANON_DOT: {
             auto prev = node->prev();
-            if (!prev->null) {
+            if (!isastnull(prev)) {
                 expr_to_analyze = copy_node(prev);
                 situation = FOUND_DOT_COMPLETE;
                 keyword_start = pos;
                 prefix = "";
             } else {
                 auto parent = node->parent();
-                if (!parent->null && parent->type() == TS_ERROR) {
+                if (!isastnull(parent) && parent->type() == TS_ERROR) {
                     auto expr = parent->prev();
-                    if (!expr->null) {
+                    if (!isastnull(expr)) {
                         expr_to_analyze = copy_node(expr);
                         situation = FOUND_DOT_COMPLETE_NEED_CRAWL;
                         keyword_start = pos;
@@ -5135,10 +5139,10 @@ bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period
             if (expr->type() == TS_PARENTHESIZED_EXPRESSION) return false;
 
             expr = expr->child();
-            if (expr->null) return false;
+            if (isastnull(expr)) return false;
 
             Ast_Node *next = NULL;
-            while (!(next = expr->next())->null) expr = next;
+            while (!isastnull(next = expr->next())) expr = next;
         }
         break;
     case FOUND_DOT_COMPLETE:
@@ -5594,7 +5598,7 @@ Parameter_Hint *Go_Indexer::parameter_hint(ccstr filepath, cur2 pos) {
             }
 
             if (cmp_pos_to_node(pos, args) < 0) break;
-            if (func->null || args->null) break;
+            if (isastnull(func) || isastnull(args)) break;
 
             func_expr = func;
 
@@ -5629,7 +5633,7 @@ Parameter_Hint *Go_Indexer::parameter_hint(ccstr filepath, cur2 pos) {
         }
         case TS_LPAREN: {
             auto prev = node->prev_all();
-            if (!prev->null) {
+            if (!isastnull(prev)) {
                 func_expr = prev;
                 if (func_expr->type() == TS_ERROR) {
                     func_expr = func_expr->child();
@@ -5639,9 +5643,9 @@ Parameter_Hint *Go_Indexer::parameter_hint(ccstr filepath, cur2 pos) {
                 call_args_start = node->start();
             } else {
                 auto parent = node->parent();
-                if (!parent->null && parent->type() == TS_ERROR) {
+                if (!isastnull(parent) && parent->type() == TS_ERROR) {
                     auto parent_prev = parent->prev_all();
-                    if (!parent_prev->null) {
+                    if (!isastnull(parent_prev)) {
                         func_expr = parent_prev;
                         call_args_start = node->start();
                     }
@@ -6187,7 +6191,7 @@ bool Go_Indexer::node_func_to_gotype_sig(Ast_Node *params, Ast_Node *result, Go_
 
     sig->params = parameter_list_to_fields(params);
 
-    if (!result->null) {
+    if (!isastnull(result)) {
         if (result->type() == TS_PARAMETER_LIST) {
             sig->result = parameter_list_to_fields(result);
         } else {
@@ -6206,7 +6210,7 @@ bool Go_Indexer::node_func_to_gotype_sig(Ast_Node *params, Ast_Node *result, Go_
 }
 
 Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
-    if (node->null) return NULL;
+    if (isastnull(node)) return NULL;
 
     Gotype *ret = NULL;
 
@@ -6220,13 +6224,13 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
             if (it->type() != TS_CONSTRAINT_TERM) continue; // ???
 
             auto child_node = it->child();
-            if (!child_node || child_node->null) continue; // ???
+            if (isastnull(child_node)) continue; // ???
 
             auto term = node_to_gotype(child_node);
             if (!term) continue; // just break out of the whole thing?
 
             auto prev = child_node->prev_all();
-            if (prev && !prev->null && prev->type() == TS_TILDE) {
+            if (!isastnull(prev) && prev->type() == TS_TILDE) {
                 auto tmp = new_gotype(GOTYPE_CONSTRAINT_UNDERLYING);
                 tmp->constraint_underlying_base = term;
                 term = tmp;
@@ -6239,9 +6243,9 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
 
     case TS_QUALIFIED_TYPE: {
         auto pkg_node = node->field(TSF_PACKAGE);
-        if (pkg_node->null) break;
+        if (isastnull(pkg_node)) break;
         auto name_node = node->field(TSF_NAME);
-        if (name_node->null) break;
+        if (isastnull(name_node)) break;
 
         ret = new_gotype(GOTYPE_SEL);
         ret->sel_name = pkg_node->string();
@@ -6265,7 +6269,7 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
         ret->generic_base = node_to_gotype(node->field(TSF_TYPE));
 
         auto args_node = node->field(TSF_TYPE_ARGUMENTS);
-        if (!args_node->null) {
+        if (!isastnull(args_node)) {
             bool ok = true;
             auto args = alloc_list<Gotype*>();
 
@@ -6312,7 +6316,7 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
 
     case TS_STRUCT_TYPE: {
         auto fieldlist_node = node->child();
-        if (fieldlist_node->null) break;
+        if (isastnull(fieldlist_node)) break;
         ret = new_gotype(GOTYPE_STRUCT);
 
         s32 num_children = 0;
@@ -6338,7 +6342,7 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
 
             auto tag_node = field_node->field(TSF_TAG);
             auto type_node = field_node->field(TSF_TYPE);
-            if (type_node->null) continue;
+            if (isastnull(type_node)) continue;
 
             auto field_type = node_to_gotype(type_node);
             if (!field_type) continue;
@@ -6367,7 +6371,7 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
 
                     auto spec = ret->struct_specs->append();
                     spec->field = field;
-                    if (!tag_node->null)
+                    if (!isastnull(tag_node))
                         spec->tag = tag_node->string();
                 }
             } else {
@@ -6399,7 +6403,7 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
 
                 auto spec = ret->struct_specs->append();
                 spec->field = field;
-                if (!tag_node->null)
+                if (!isastnull(tag_node))
                     spec->tag = tag_node->string();
             }
         }
@@ -6454,7 +6458,7 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
                 if (node->type() == TS_INTERFACE_TYPE_NAME)
                     node = node->child();
 
-                if (node->null) continue;
+                if (isastnull(node)) continue;
 
                 auto gotype = node_to_gotype(node);
                 if (!gotype) break;
@@ -6498,14 +6502,14 @@ void Go_Indexer::import_spec_to_decl(Ast_Node *spec_node, Godecl *decl) {
     decl->spec_start = spec_node->start();
 
     auto name_node = spec_node->field(TSF_NAME);
-    if (!name_node->null) {
+    if (!isastnull(name_node)) {
         decl->name = name_node->string();
         decl->name_start = name_node->start();
         decl->name_end = name_node->end();
     }
 
     auto path_node = spec_node->field(TSF_PATH);
-    if (!path_node->null)
+    if (!isastnull(path_node))
         decl->import_path = path_node->string();
 }
 
@@ -6612,7 +6616,7 @@ bool Go_Indexer::assignment_to_decls(List<Ast_Node*> *lhs, List<Ast_Node*> *rhs,
 // input-output.  This function is like that.
 void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr filename, Pool *target_pool) {
     auto parent = node->parent();
-    bool is_toplevel = (!parent->null && parent->type() == TS_SOURCE_FILE);
+    bool is_toplevel = (!isastnull(parent) && parent->type() == TS_SOURCE_FILE);
 
     auto new_result = [&]() -> Godecl * {
         auto decl = results->append();
@@ -6631,15 +6635,15 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
     };
 
     auto parse_type_params = [&](Ast_Node *node) -> List<Godecl> * {
-        if (node->null) return NULL;
+        if (isastnull(node)) return NULL;
 
         auto ret = alloc_list<Godecl>();
         FOR_NODE_CHILDREN (node) {
             auto name_node = it->field(TSF_NAME);
-            if (name_node->null) return NULL;
+            if (isastnull(name_node)) return NULL;
 
             auto type_node = it->field(TSF_TYPE);
-            if (type_node->null) return NULL;
+            if (isastnull(type_node)) return NULL;
 
             auto obj = ret->append();
             obj->type = GODECL_TYPE_PARAM;
@@ -6660,7 +6664,7 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
     case TS_FUNCTION_DECLARATION:
     case TS_METHOD_DECLARATION: {
         auto name_node = node->field(TSF_NAME);
-        if (name_node->null) break;
+        if (isastnull(name_node)) break;
 
         auto name = name_node->string();
 
@@ -6682,13 +6686,13 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
             if (node->type() != TS_METHOD_DECLARATION) break;
 
             auto recv_node = node->field(TSF_RECEIVER);
-            if (recv_node->null) break;
+            if (isastnull(recv_node)) break;
 
             auto child = recv_node->child();
-            if (child->null) break;
+            if (isastnull(child)) break;
 
             auto recv_type = child->field(TSF_TYPE);
-            if (recv_type->null) break;
+            if (isastnull(recv_type)) break;
 
             auto func_recv = node_to_gotype(recv_type);
             if (!func_recv) {
@@ -6715,7 +6719,7 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
 
     case TS_LABELED_STATEMENT: {
         auto label = node->field(TSF_LABEL);
-        if (label->null) break;
+        if (isastnull(label)) break;
 
         auto decl = new_result();
         decl->type = GODECL_LABEL;
@@ -6730,9 +6734,9 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
 
     case TS_TYPE_DECLARATION:
         // TODO: handle TS_TYPE_ALIAS here.
-        for (auto spec = node->child(); !spec->null; spec = spec->next()) {
+        for (auto spec = node->child(); !isastnull(spec); spec = spec->next()) {
             auto name_node = spec->field(TSF_NAME);
-            if (name_node->null) continue;
+            if (isastnull(name_node)) continue;
 
             auto type_params = parse_type_params(spec->field(TSF_TYPE_PARAMETERS));
 
@@ -6740,7 +6744,7 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
             if (streq(name, "_")) continue;
 
             auto type_node = spec->field(TSF_TYPE);
-            if (type_node->null) continue;
+            if (isastnull(type_node)) continue;
 
             auto gotype = node_to_gotype(type_node, is_toplevel);
             if (!gotype) continue;
@@ -6759,7 +6763,7 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
 
     case TS_TYPE_PARAMETER_DECLARATION: {
         auto type_node = node->field(TSF_TYPE);
-        if (type_node->null) break;
+        if (isastnull(type_node)) break;
 
         auto type_node_gotype = node_to_gotype(type_node);
         if (!type_node_gotype) break;
@@ -6805,7 +6809,7 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
             // type && value        save type from type, try to save iota
             // type && !value       save type from type
 
-            if (type_node->null && value_node->null) {
+            if (isastnull(type_node) && isastnull(value_node)) {
                 do {
                     if (!saved_iota_types) break;
 
@@ -6835,7 +6839,7 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
                 continue;
             }
 
-            // at this point, !type_node->null || !value_node->null
+            // at this point, !isastnull(type_node) || !isastnull(value_node)
 
             auto has_iota = [&](Ast_Node *node) -> bool {
                 bool ret = false;
@@ -6850,12 +6854,12 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
 
             bool should_save_iota_types = (
                 !saved_iota_types
-                && !value_node->null
+                && !isastnull(value_node)
                 && has_iota(value_node)
             );
 
             Gotype *type_node_gotype = NULL;
-            if (!type_node->null) {
+            if (!isastnull(type_node)) {
                 type_node_gotype = node_to_gotype(type_node);
                 if (!type_node_gotype) continue;
 
@@ -6879,12 +6883,14 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
                         if (spec->type() != TS_PARAMETER_DECLARATION) break;
 
                         auto method_decl = node->parent();
-                        if (method_decl->null) break;
+                        if (!method_decl) break;
+                        if (isastnull(method_decl)) break;
                         if (method_decl->type() != TS_METHOD_DECLARATION) break;
 
                         auto gotype = decl_gotype;
-                        while (gotype->type == GOTYPE_POINTER)
+                        while (gotype && gotype->type == GOTYPE_POINTER)
                             gotype = gotype->base;
+                        if (!gotype) break;
 
                         if (gotype->type != GOTYPE_GENERIC) break;
 
@@ -6894,21 +6900,21 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
                         // try to grab the type arguments and create decls from them
 
                         auto generic_type_node = type_node;
-                        while (!generic_type_node->null && generic_type_node->type() == TS_POINTER_TYPE)
+                        while (!isastnull(generic_type_node) && generic_type_node->type() == TS_POINTER_TYPE)
                             generic_type_node = generic_type_node->child();
 
                         // should this be an assert? gotype->type == GOTYPE_GENERIC at this point
                         if (generic_type_node->type() != TS_GENERIC_TYPE) break;
 
                         auto base_type_node = generic_type_node->field(TSF_TYPE);
-                        if (base_type_node->null) break;
+                        if (isastnull(base_type_node)) break;
                         if (base_type_node->type() != TS_TYPE_IDENTIFIER) break;
 
                         auto base_type = node_to_gotype(base_type_node);
                         if (!base_type) break;
 
                         auto args_node = generic_type_node->field(TSF_TYPE_ARGUMENTS);
-                        if (args_node->null) break;
+                        if (isastnull(args_node)) break;
 
                         FOR_NODE_CHILDREN (args_node) {
                             if (it->type() != TS_TYPE_IDENTIFIER) continue;
@@ -7038,11 +7044,11 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
             if (!isdecl) break;
 
             auto left = node->field(TSF_LEFT);
-            if (left->null) break;
+            if (isastnull(left)) break;
             if (left->type() != TS_EXPRESSION_LIST) break;
 
             auto right = node->field(TSF_RIGHT);
-            if (right->null) break;
+            if (isastnull(right)) break;
             if (!is_expression_node(right)) break;
 
             lhs = alloc_list<Ast_Node*>(left->child_count());
@@ -7054,8 +7060,8 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
             auto left = node->field(TSF_LEFT);
             auto right = node->field(TSF_RIGHT);
 
-            if (left->null) break;
-            if (right->null) break;
+            if (isastnull(left)) break;
+            if (isastnull(right)) break;
 
             if (left->type() != TS_EXPRESSION_LIST) break;
             if (right->type() != TS_EXPRESSION_LIST) break;
@@ -7283,7 +7289,7 @@ Goresult *Go_Indexer::find_decl_in_package(ccstr id, ccstr import_path) {
 }
 
 Gotype *Go_Indexer::expr_to_gotype(Ast_Node *expr) {
-    if (expr->null) return NULL;
+    if (isastnull(expr)) return NULL;
 
     Gotype *ret = NULL; // so we don't have to declare inside switch
 
@@ -7339,11 +7345,11 @@ Gotype *Go_Indexer::expr_to_gotype(Ast_Node *expr) {
             if (!streq(func->string(), "make") && !streq(func->string(), "new")) break;
 
             auto args = expr->field(TSF_ARGUMENTS);
-            if (args->null) break;
+            if (isastnull(args)) break;
             if (args->type() != TS_ARGUMENT_LIST) break;
 
             auto firstarg = args->child();
-            if (firstarg->null) break;
+            if (isastnull(firstarg)) break;
 
             ret = node_to_gotype(firstarg);
             if (streq(func->string(), "new")) {
@@ -7359,7 +7365,7 @@ Gotype *Go_Indexer::expr_to_gotype(Ast_Node *expr) {
         List<Gotype*> *type_args = NULL;
 
         auto type_args_node = expr->field(TSF_TYPE_ARGUMENTS);
-        if (!type_args_node->null) {
+        if (!isastnull(type_args_node)) {
             type_args = alloc_list<Gotype*>();
             FOR_NODE_CHILDREN (type_args_node) {
                 auto gotype = node_to_gotype(it);
@@ -7405,7 +7411,7 @@ Gotype *Go_Indexer::expr_to_gotype(Ast_Node *expr) {
 
     case TS_INSTANCE_EXPRESSION: {
         auto args_node = expr->field(TSF_TYPE_ARGUMENTS);
-        if (args_node->null) return NULL; // ?
+        if (isastnull(args_node)) return NULL; // ?
 
         auto args = alloc_list<Gotype*>();
         FOR_NODE_CHILDREN (args_node) {
@@ -7424,10 +7430,10 @@ Gotype *Go_Indexer::expr_to_gotype(Ast_Node *expr) {
     case TS_QUALIFIED_TYPE:
     case TS_SELECTOR_EXPRESSION: {
         auto operand_node = expr->field(expr->type() == TS_QUALIFIED_TYPE ? TSF_PACKAGE : TSF_OPERAND);
-        if (operand_node->null) return NULL;
+        if (isastnull(operand_node)) return NULL;
 
         auto field_node = expr->field(expr->type() == TS_QUALIFIED_TYPE ? TSF_NAME : TSF_FIELD);
-        if (field_node->null) return NULL;
+        if (isastnull(field_node)) return NULL;
 
         ret = new_gotype(GOTYPE_LAZY_SEL);
         ret->lazy_sel_sel = field_node->string();

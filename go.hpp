@@ -1366,4 +1366,6 @@ void walk_gotype(Gotype *gotype, walk_gotype_cb cb);
 Gotype *new_gotype(Gotype_Type type);
 Gotype *new_primitive_type(ccstr name);
 
+bool isastnull(Ast_Node* x);
+
 cur2 offset_to_cur(int off, ccstr filepath);
