@@ -3955,19 +3955,38 @@ Generate_Struct_Tags_Result* Go_Indexer::generate_struct_tags(ccstr filepath, cu
         cp_assert(len);
 
         auto parts = alloc_list<ccstr>();
-        auto curr = alloc_list<char>();
 
-        for (u32 i = 0; i < len; i++) {
-            if (i && isupper(name[i])) {
-                curr->append('\0');
-                parts->append(cp_strdup(curr->items));
-                curr->len = 0;
+        String_Cursor sc;
+        sc.init(name);
+
+        while (!sc.end()) {
+            auto curr = alloc_list<char>();
+
+            char ch = sc.next();
+            curr->append(ch);
+
+            if (!sc.end()) {
+                // if it's upper and next is upper, read all the uppers
+                if (isupper(ch) && isupper(sc.get())) {
+                    auto chars = sc.slurp([](char ch) { return isupper(ch); });
+                    if (chars->len) {
+                        // unless we're at the end, don't eat the last upper, because it's part of next word
+                        // for instance, in GetOSName, we would read "OSN" but we only want "OS"
+                        if (!sc.end()) {
+                            sc.back();
+                            chars->len--;
+                        }
+
+                        curr->concat(chars);
+                    }
+                } else {
+                    curr->concat(sc.slurp([](char ch) { return !isupper(ch); }));
+                }
             }
-            curr->append(name[i]);
-        }
 
-        curr->append('\0');
-        parts->append(cp_strdup(curr->items));
+            curr->append('\0');
+            parts->append(curr->items);
+        }
 
         auto ret = alloc_list<char>();
 

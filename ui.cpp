@@ -1167,7 +1167,7 @@ Glyph *UI::lookup_glyph_for_grapheme(List<uchar> *grapheme) {
         glyph->codepoint = grapheme->at(0);
     } else {
         auto copy = alloc_list<uchar>();
-        For (*grapheme) copy->append(it);
+        copy->concat(grapheme);
         glyph->grapheme = copy;
     }
 
