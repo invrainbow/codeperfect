@@ -40,6 +40,7 @@ struct Options {
     serde_int struct_tag_case_style = 0; // serde(6)
     serde_bool autocomplete_func_add_paren = true; // serde(7)
     serde_bool dbg_hide_system_goroutines = true; // serde(8)
+    serde_int zoom_level = 100; // serde(9)
 };
 
 struct Build_Profile {

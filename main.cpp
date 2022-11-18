@@ -126,9 +126,16 @@ bool is_git_folder(ccstr path) {
 }
 
 void recalc_display_size() {
+    auto scale = world.get_display_scale();
     // calculate display_size
-    world.display_size.x = (int)(world.frame_size.x / world.display_scale.x);
-    world.display_size.y = (int)(world.frame_size.y / world.display_scale.y);
+    world.display_size.x = (int)(world.frame_size.x / scale.x);
+    world.display_size.y = (int)(world.frame_size.y / scale.y);
+
+    // set projection based on new display size
+    mat4f projection;
+    new_ortho_matrix(projection, 0, world.display_size.x, world.display_size.y, 0);
+    glUseProgram(world.ui.im_program);
+    glUniformMatrix4fv(glGetUniformLocation(world.ui.im_program, "projection"), 1, GL_FALSE, (float*)projection);
 }
 
 void handle_window_event(Window_Event *it) {
@@ -161,14 +168,9 @@ void handle_window_event(Window_Event *it) {
         recalc_display_size();
 
         mat4f projection;
-
         new_ortho_matrix(projection, 0, w, h, 0);
         glUseProgram(world.ui.program);
         glUniformMatrix4fv(glGetUniformLocation(world.ui.program, "projection"), 1, GL_FALSE, (float*)projection);
-
-        new_ortho_matrix(projection, 0, world.display_size.x, world.display_size.y, 0);
-        glUseProgram(world.ui.im_program);
-        glUniformMatrix4fv(glGetUniformLocation(world.ui.im_program, "projection"), 1, GL_FALSE, (float*)projection);
         break;
     }
 
@@ -1394,8 +1396,13 @@ int realmain(int argc, char **argv) {
 
         s32 len = 0;
 
-        world.ui.im_font_ui = io.Fonts->AddFontFromMemoryTTF(open_sans_ttf, open_sans_ttf_len, UI_FONT_SIZE);
-        cp_assert(world.ui.im_font_ui);
+        {
+            ImFontConfig config;
+            config.OversampleH = 3;
+            config.OversampleV = 2;
+            world.ui.im_font_ui = io.Fonts->AddFontFromMemoryTTF(open_sans_ttf, open_sans_ttf_len, UI_FONT_SIZE, &config);
+            cp_assert(world.ui.im_font_ui);
+        }
 
         {
             // merge font awesome into main font
@@ -1403,6 +1410,8 @@ int realmain(int argc, char **argv) {
             config.MergeMode = true;
             config.GlyphMinAdvanceX = ICON_FONT_SIZE;
             config.GlyphOffset.y = 3;
+            config.OversampleH = 3;
+            config.OversampleV = 2;
 
             /*
             ImWchar icon_ranges[] = { ICON_MIN_FA, ICON_MAX_FA, 0 };
@@ -1417,8 +1426,13 @@ int realmain(int argc, char **argv) {
             io.Fonts->AddFontFromMemoryTTF(open_sans_ttf, open_sans_ttf_len, UI_FONT_SIZE, &config, icon_ranges2);
         }
 
-        world.ui.im_font_mono = io.Fonts->AddFontFromMemoryTTF(vera_mono_ttf, vera_mono_ttf_len, CODE_FONT_SIZE);
-        cp_assert(world.ui.im_font_mono);
+        {
+            ImFontConfig config;
+            config.OversampleH = 3;
+            config.OversampleV = 2;
+            world.ui.im_font_mono = io.Fonts->AddFontFromMemoryTTF(vera_mono_ttf, vera_mono_ttf_len, CODE_FONT_SIZE);
+            cp_assert(world.ui.im_font_mono);
+        }
 
         io.Fonts->Build();
 
@@ -1478,6 +1492,22 @@ int realmain(int argc, char **argv) {
         loc = glGetAttribLocation(world.ui.program, "texture_id");
         glEnableVertexAttribArray(loc);
         glVertexAttribIPointer(loc, 1, GL_INT, sizeof(Vert), (void*)_offsetof(Vert, texture_id));
+
+        loc = glGetAttribLocation(world.ui.program, "round_w");
+        glEnableVertexAttribArray(loc);
+        glVertexAttribPointer(loc, 1, GL_FLOAT, GL_FALSE, sizeof(Vert), (void*)_offsetof(Vert, round_w));
+
+        loc = glGetAttribLocation(world.ui.program, "round_h");
+        glEnableVertexAttribArray(loc);
+        glVertexAttribPointer(loc, 1, GL_FLOAT, GL_FALSE, sizeof(Vert), (void*)_offsetof(Vert, round_h));
+
+        loc = glGetAttribLocation(world.ui.program, "round_r");
+        glEnableVertexAttribArray(loc);
+        glVertexAttribPointer(loc, 1, GL_FLOAT, GL_FALSE, sizeof(Vert), (void*)_offsetof(Vert, round_r));
+
+        loc = glGetAttribLocation(world.ui.program, "round_flags");
+        glEnableVertexAttribArray(loc);
+        glVertexAttribIPointer(loc, 1, GL_INT, sizeof(Vert), (void*)_offsetof(Vert, round_flags));
 
         loc = glGetUniformLocation(world.ui.program, "projection");
         mat4f ortho_projection;
@@ -1723,9 +1753,12 @@ int realmain(int argc, char **argv) {
         glClear(GL_COLOR_BUFFER_BIT);
 
         {
+            auto &io = ImGui::GetIO();
             // Send info to UI and ImGui.
             io.DisplaySize = ImVec2((float)world.display_size.x, (float)world.display_size.y);
-            io.DisplayFramebufferScale = ImVec2(world.display_scale.x, world.display_scale.y);
+
+            auto scale = world.get_display_scale();
+            io.DisplayFramebufferScale = ImVec2(scale.x, scale.y);
 
             auto now = current_time_nano();
             io.DeltaTime = (double)(now - last_frame_time) / (double)1000000000;

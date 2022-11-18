@@ -379,6 +379,20 @@ struct World {
     vec2 frame_size;
     vec2f display_scale;
 
+    float zoom_level;
+
+    vec2f get_display_scale() {
+        auto ret = display_scale;
+
+        auto zl = options.zoom_level;
+        if (!zl) zl = 100;
+
+        auto zf = sqrt(zl / 100.0f);
+        ret.x *= zf;
+        ret.y *= zf;
+        return ret;
+    }
+
     bool use_nvim_this_time;
 
     int xdpi;
@@ -838,3 +852,5 @@ void clear_key_states();
 void fstlog(ccstr fmt, ...);
 void write_stacktrace_to_file(ccstr stacktrace);
 NORETURN void crash_handler(int sig);
+
+void recalc_display_size();
