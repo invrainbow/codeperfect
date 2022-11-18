@@ -803,12 +803,14 @@ void UI::start_clip(boxf b) {
     flush_verts();
     glEnable(GL_SCISSOR_TEST);
 
+    auto scale = world.get_display_scale();
+
     boxf bs;
     memcpy(&bs, &b, sizeof(boxf));
-    bs.x *= world.display_scale.x;
-    bs.y *= world.display_scale.y;
-    bs.w *= world.display_scale.x;
-    bs.h *= world.display_scale.y;
+    bs.x *= scale.x;
+    bs.y *= scale.y;
+    bs.w *= scale.x;
+    bs.h *= scale.y;
     glScissor(bs.x, world.frame_size.y - (bs.y + bs.h), bs.w, bs.h);
 
     clipping = true;
@@ -825,12 +827,13 @@ void UI::draw_triangle(vec2f a, vec2f b, vec2f c, vec2f uva, vec2f uvb, vec2f uv
     if (verts.len + 3 >= verts.cap)
         flush_verts();
 
-    a.x *= world.display_scale.x;
-    a.y *= world.display_scale.y;
-    b.x *= world.display_scale.x;
-    b.y *= world.display_scale.y;
-    c.x *= world.display_scale.x;
-    c.y *= world.display_scale.y;
+    auto scale = world.get_display_scale();
+    a.x *= scale.x;
+    a.y *= scale.y;
+    b.x *= scale.x;
+    b.y *= scale.y;
+    c.x *= scale.x;
+    c.y *= scale.y;
 
     verts.append({ a.x, a.y, uva.x, uva.y, color, mode, texture });
     verts.append({ b.x, b.y, uvb.x, uvb.y, color, mode, texture });
@@ -2370,6 +2373,31 @@ void UI::draw_everything() {
             menu_command(CMD_FILE_EXPLORER, world.file_explorer.show);
             menu_command(CMD_ERROR_LIST, world.error_list.show);
             menu_command(CMD_COMMAND_PALETTE);
+            ImGui::Separator();
+            if (ImGui::BeginMenu("Zoom")) {
+                int levels[] = {50, 67, 75, 80, 90, 100,110, 125, 133, 140, 150, 175, 200};
+                For (levels) {
+                    if (ImGui::MenuItem(cp_sprintf("%d%%", it), NULL, it == options.zoom_level)) {
+                        options.zoom_level = it;
+                        if (world.wnd_options.show)
+                            world.wnd_options.tmp.zoom_level = it;
+
+                        recalc_display_size();
+
+                        // write out options
+                        File f;
+                        auto filepath = path_join(world.configdir, ".options");
+                        if (f.init_write(filepath) == FILE_RESULT_OK) {
+                            defer { f.cleanup(); };
+                            Serde serde;
+                            serde.init(&f);
+                            serde.write_type(&options, SERDE_OPTIONS);
+                        }
+
+                    }
+                }
+                ImGui::EndMenu();
+            }
             ImGui::EndMenu();
         }
 
@@ -7491,7 +7519,8 @@ void UI::end_frame() {
     {
         // draw imgui buffers
         ImDrawData* draw_data = ImGui::GetDrawData();
-        draw_data->ScaleClipRects(ImVec2(world.display_scale.x, world.display_scale.y));
+        auto scale = world.get_display_scale();
+        draw_data->ScaleClipRects(ImVec2(scale.x, scale.y));
 
         glViewport(0, 0, world.frame_size.x, world.frame_size.y);
         glUseProgram(world.ui.im_program);

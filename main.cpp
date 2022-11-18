@@ -126,9 +126,16 @@ bool is_git_folder(ccstr path) {
 }
 
 void recalc_display_size() {
+    auto scale = world.get_display_scale();
     // calculate display_size
-    world.display_size.x = (int)(world.frame_size.x / world.display_scale.x);
-    world.display_size.y = (int)(world.frame_size.y / world.display_scale.y);
+    world.display_size.x = (int)(world.frame_size.x / scale.x);
+    world.display_size.y = (int)(world.frame_size.y / scale.y);
+
+    // set projection based on new display size
+    mat4f projection;
+    new_ortho_matrix(projection, 0, world.display_size.x, world.display_size.y, 0);
+    glUseProgram(world.ui.im_program);
+    glUniformMatrix4fv(glGetUniformLocation(world.ui.im_program, "projection"), 1, GL_FALSE, (float*)projection);
 }
 
 void handle_window_event(Window_Event *it) {
@@ -161,14 +168,9 @@ void handle_window_event(Window_Event *it) {
         recalc_display_size();
 
         mat4f projection;
-
         new_ortho_matrix(projection, 0, w, h, 0);
         glUseProgram(world.ui.program);
         glUniformMatrix4fv(glGetUniformLocation(world.ui.program, "projection"), 1, GL_FALSE, (float*)projection);
-
-        new_ortho_matrix(projection, 0, world.display_size.x, world.display_size.y, 0);
-        glUseProgram(world.ui.im_program);
-        glUniformMatrix4fv(glGetUniformLocation(world.ui.im_program, "projection"), 1, GL_FALSE, (float*)projection);
         break;
     }
 
@@ -1714,9 +1716,12 @@ int realmain(int argc, char **argv) {
         glClear(GL_COLOR_BUFFER_BIT);
 
         {
+            auto &io = ImGui::GetIO();
             // Send info to UI and ImGui.
             io.DisplaySize = ImVec2((float)world.display_size.x, (float)world.display_size.y);
-            io.DisplayFramebufferScale = ImVec2(world.display_scale.x, world.display_scale.y);
+
+            auto scale = world.get_display_scale();
+            io.DisplayFramebufferScale = ImVec2(scale.x, scale.y);
 
             auto now = current_time_nano();
             io.DeltaTime = (double)(now - last_frame_time) / (double)1000000000;
