@@ -1009,17 +1009,19 @@ void restart_program() {
 }
 
 NORETURN void exit_from_crash_handler() {
-    ExitProcess(1);
-}
-
-void* get_binary_base_address() {
-    return (void*)GetModuleHandleA(NULL):
+    _exit(1); // is this supported on windows?
 }
 
 ccstr generate_stack_trace(ccstr message) {
-    // Text_Renderer r; r.init();
-    // TODO
-    return NULL;
+    void* pointers[62];
+    int n = CaptureStackBackTrace(0, 62, pointers, NULL);
+    if (!n) return NULL;
+
+    Text_Renderer r; r.init();
+    for (int i = 0; i < n && i < _countof(pointers); i++)
+        r.write("%-2d 0x%lx\n", i, (uptr)pointers[i]);
+    r.write("base = 0x%lx", (uptr)GetModuleHandleA(NULL));
+    return r.finish();
 }
 
 #endif // OS_WINBLOWS
