@@ -1479,6 +1479,22 @@ int realmain(int argc, char **argv) {
         glEnableVertexAttribArray(loc);
         glVertexAttribIPointer(loc, 1, GL_INT, sizeof(Vert), (void*)_offsetof(Vert, texture_id));
 
+        loc = glGetAttribLocation(world.ui.program, "round_w");
+        glEnableVertexAttribArray(loc);
+        glVertexAttribPointer(loc, 1, GL_FLOAT, GL_FALSE, sizeof(Vert), (void*)_offsetof(Vert, round_w));
+
+        loc = glGetAttribLocation(world.ui.program, "round_h");
+        glEnableVertexAttribArray(loc);
+        glVertexAttribPointer(loc, 1, GL_FLOAT, GL_FALSE, sizeof(Vert), (void*)_offsetof(Vert, round_h));
+
+        loc = glGetAttribLocation(world.ui.program, "round_r");
+        glEnableVertexAttribArray(loc);
+        glVertexAttribPointer(loc, 1, GL_FLOAT, GL_FALSE, sizeof(Vert), (void*)_offsetof(Vert, round_r));
+
+        loc = glGetAttribLocation(world.ui.program, "round_flags");
+        glEnableVertexAttribArray(loc);
+        glVertexAttribIPointer(loc, 1, GL_INT, sizeof(Vert), (void*)_offsetof(Vert, round_flags));
+
         loc = glGetUniformLocation(world.ui.program, "projection");
         mat4f ortho_projection;
         new_ortho_matrix(ortho_projection, 0, world.frame_size.x, world.frame_size.y, 0);

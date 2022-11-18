@@ -38,6 +38,10 @@ struct Vert {
     vec4f color;
     i32 mode;
     i32 texture_id;
+    float round_w;
+    float round_h;
+    float round_r;
+    int round_flags;
 };
 
 #define ROUND_TL (1 << 0)
@@ -51,6 +55,7 @@ enum Draw_Mode {
     DRAW_FONT_MASK = 1,     // draw color using texture(...).r as mask
     DRAW_IMAGE = 2,         // draw a texture directly
     DRAW_IMAGE_MASK = 3,    // draw color using texture(...).a as mask
+    DRAW_SOLID_ROUNDED = 4, // draw solid color with rounded rect
 };
 
 enum Sprites_Image_Type {
@@ -248,8 +253,7 @@ struct UI {
     bool init();
     bool init_fonts();
     void flush_verts();
-    void draw_triangle(vec2f a, vec2f b, vec2f c, vec2f uva, vec2f uvb, vec2f uvc, vec4f color, Draw_Mode mode, Texture_Id texture = TEXTURE_FONT);
-    void draw_quad(boxf b, boxf uv, vec4f color, Draw_Mode mode, Texture_Id texture = TEXTURE_FONT);
+    void draw_quad(boxf b, boxf uv, vec4f color, Draw_Mode mode, Texture_Id texture = TEXTURE_FONT, float round_r = 0.0, int round_flags = 0);
     void draw_rect(boxf b, vec4f color);
     void draw_rounded_rect(boxf b, vec4f color, float radius, int round_flags);
     void draw_bordered_rect_outer(boxf b, vec4f color, vec4f border_color, int border_width, float radius = 0);

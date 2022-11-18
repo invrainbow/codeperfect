@@ -823,49 +823,46 @@ void UI::end_clip() {
     clipping = false;
 }
 
-void UI::draw_triangle(vec2f a, vec2f b, vec2f c, vec2f uva, vec2f uvb, vec2f uvc, vec4f color, Draw_Mode mode, Texture_Id texture) {
-    if (verts.len + 3 >= verts.cap)
-        flush_verts();
-
-    auto scale = world.get_display_scale();
-    a.x *= scale.x;
-    a.y *= scale.y;
-    b.x *= scale.x;
-    b.y *= scale.y;
-    c.x *= scale.x;
-    c.y *= scale.y;
-
-    verts.append({ a.x, a.y, uva.x, uva.y, color, mode, texture });
-    verts.append({ b.x, b.y, uvb.x, uvb.y, color, mode, texture });
-    verts.append({ c.x, c.y, uvc.x, uvc.y, color, mode, texture });
-}
-
-void UI::draw_quad(boxf b, boxf uv, vec4f color, Draw_Mode mode, Texture_Id texture) {
+void UI::draw_quad(boxf box, boxf uv, vec4f color, Draw_Mode mode, Texture_Id texture, float round_r, int round_flags) {
     if (verts.len + 6 >= verts.cap)
         flush_verts();
 
+    auto draw_triangle = [&](vec2f a, vec2f b, vec2f c, vec2f uva, vec2f uvb, vec2f uvc) {
+        auto scale = world.get_display_scale();
+        a.x *= scale.x;
+        a.y *= scale.y;
+        b.x *= scale.x;
+        b.y *= scale.y;
+        c.x *= scale.x;
+        c.y *= scale.y;
+
+        if (round_flags) {
+            verts.append({ a.x, a.y, uva.x, uva.y, color, mode, texture, box.w, box.h, round_r, round_flags });
+            verts.append({ b.x, b.y, uvb.x, uvb.y, color, mode, texture, box.w, box.h, round_r, round_flags });
+            verts.append({ c.x, c.y, uvc.x, uvc.y, color, mode, texture, box.w, box.h, round_r, round_flags });
+        } else {
+            verts.append({ a.x, a.y, uva.x, uva.y, color, mode, texture });
+            verts.append({ b.x, b.y, uvb.x, uvb.y, color, mode, texture });
+            verts.append({ c.x, c.y, uvc.x, uvc.y, color, mode, texture });
+        }
+    };
+
     draw_triangle(
-        {b.x, b.y + b.h},
-        {b.x, b.y},
-        {b.x + b.w, b.y},
+        {box.x, box.y + box.h},
+        {box.x, box.y},
+        {box.x + box.w, box.y},
         {uv.x, uv.y + uv.h},
         {uv.x, uv.y},
-        {uv.x + uv.w, uv.y},
-        color,
-        mode,
-        texture
+        {uv.x + uv.w, uv.y}
     );
 
     draw_triangle(
-        {b.x, b.y + b.h},
-        {b.x + b.w, b.y},
-        {b.x + b.w, b.y + b.h},
+        {box.x, box.y + box.h},
+        {box.x + box.w, box.y},
+        {box.x + box.w, box.y + box.h},
         {uv.x, uv.y + uv.h},
         {uv.x + uv.w, uv.y},
-        {uv.x + uv.w, uv.y + uv.h},
-        color,
-        mode,
-        texture
+        {uv.x + uv.w, uv.y + uv.h}
     );
 
 #if OS_MAC
@@ -873,10 +870,10 @@ void UI::draw_quad(boxf b, boxf uv, vec4f color, Draw_Mode mode, Texture_Id text
     do {
         if (!wnd.tracking) break;
 
-        if (!b.contains(world.ui.mouse_pos)) break;
+        if (!box.contains(world.ui.mouse_pos)) break;
 
         auto existing = wnd.logs->find([&](auto it) -> bool {
-            if (it->b != b) return false;
+            if (it->b != box) return false;
             if (it->color != color) return false;
             if (it->mode != mode) return false;
             if (it->texture != texture) return false;
@@ -901,7 +898,7 @@ void UI::draw_quad(boxf b, boxf uv, vec4f color, Draw_Mode mode, Texture_Id text
         auto output = r.finish();
 
         Drawn_Quad item; ptr0(&item);
-        item.b = b;
+        item.b = box;
         item.color = color;
         item.mode = mode;
         item.texture = texture;
@@ -919,77 +916,7 @@ void UI::draw_rect(boxf b, vec4f color) {
 }
 
 void UI::draw_rounded_rect(boxf b, vec4f color, float radius, int round_flags) {
-    /* A picture is worth a thousand words:
-       _________
-      |_|     |_|
-      |_       _|
-      |_|_____|_| */
-
-    boxf edge;
-    edge.x = b.x;
-    edge.y = b.y + radius;
-    edge.w = radius;
-    edge.h = b.h - radius * 2;
-    draw_rect(edge, color);
-
-    edge.x = b.x + radius;
-    edge.y = b.y;
-    edge.h = radius;
-    edge.w = b.w - radius * 2;
-    draw_rect(edge, color);
-
-    edge.x = b.x + b.w - radius;
-    edge.y = b.y + radius;
-    edge.w = radius;
-    edge.h = b.h - radius * 2;
-    draw_rect(edge, color);
-
-    edge.x = b.x + radius;
-    edge.y = b.y + b.h - radius;
-    edge.w = b.w - radius * 2;
-    edge.h = radius;
-    draw_rect(edge, color);
-
-    boxf center;
-    center.x = b.x + radius;
-    center.y = b.y + radius;
-    center.w = b.w - radius * 2;
-    center.h = b.h - radius * 2;
-    draw_rect(center, color);
-
-    auto draw_rounded_corner = [&](vec2f center, float start_rad, float end_rad) {
-        vec2f zeroval; ptr0(&zeroval);
-
-        float increment = (end_rad - start_rad) / max(7, (int)(radius / 5));
-        for (float angle = start_rad; angle < end_rad; angle += increment) {
-            auto ang1 = angle;
-            auto ang2 = angle + increment;
-
-            vec2f v1 = {center.x + radius * cos(ang1), center.y - radius * sin(ang1)};
-            vec2f v2 = {center.x + radius * cos(ang2), center.y - radius * sin(ang2)};
-
-            draw_triangle(center, v1, v2, zeroval, zeroval, zeroval, color, DRAW_SOLID);
-        }
-    };
-
-    auto draw_corner = [&](bool round, vec2f center, float ang_start, float ang_end) {
-        if (round) {
-            draw_rounded_corner(center, ang_start, ang_end);
-            return;
-        }
-
-        boxf b;
-        b.x = fmin(center.x, center.x + radius * cos(ang_start));
-        b.y = fmin(center.y, center.y - radius * sin(ang_start));
-        b.w = radius;
-        b.h = radius;
-        draw_rect(b, color);
-    };
-
-    draw_corner(round_flags & ROUND_TR, {b.x + b.w - radius, b.y + radius}, 0, M_PI / 2);
-    draw_corner(round_flags & ROUND_TL, {b.x + radius, b.y + radius}, M_PI / 2, M_PI);
-    draw_corner(round_flags & ROUND_BL, {b.x + radius, b.y + b.h - radius}, M_PI, M_PI * 3/2);
-    draw_corner(round_flags & ROUND_BR, {b.x + b.w - radius, b.y + b.h - radius}, M_PI * 3/2, M_PI * 2);
+    draw_quad(b, { 0, 0, 1, 1 }, color, DRAW_SOLID_ROUNDED, TEXTURE_FONT, radius, round_flags);
 }
 
 void UI::draw_bordered_rect_outer(boxf b, vec4f color, vec4f border_color, int border_width, float radius) {
