@@ -25,10 +25,10 @@
 #include <CoreServices/CoreServices.h>
 #include <libgen.h>
 #include "cwalk.h"
-
-// for places where i can't be fucked to learn the linux
-// way of doing things, just use c++ stdlib (requires c++17)
-#include <filesystem>
+#define UNW_LOCAL_ONLY
+#include <libunwind.h>
+#include <cxxabi.h>
+#include <dlfcn.h>
 
 #include "utils.hpp"
 #include "defer.hpp"
@@ -175,11 +175,6 @@ void restart_program() {
         exit(0);
     }
 }
-
-#define UNW_LOCAL_ONLY
-#include <libunwind.h>
-#include <cxxabi.h>
-#include <dlfcn.h>
 
 ccstr generate_stack_trace(ccstr message) {
     Text_Renderer r; r.init();
