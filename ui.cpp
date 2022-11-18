@@ -975,7 +975,7 @@ Glyph *UI::lookup_glyph_for_grapheme(List<uchar> *grapheme) {
 
     if (!glyph_count) return NULL; // but then won't it keep calling this every single frame?
 
-    float oversample_x = 2.0f;
+    float oversample_x = 3.0f;
     float oversample_y = 2.0f;
 
     for (u32 i = 0; i < glyph_count; i++) {

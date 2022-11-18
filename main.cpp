@@ -1394,8 +1394,13 @@ int realmain(int argc, char **argv) {
 
         s32 len = 0;
 
-        world.ui.im_font_ui = io.Fonts->AddFontFromMemoryTTF(open_sans_ttf, open_sans_ttf_len, UI_FONT_SIZE);
-        cp_assert(world.ui.im_font_ui);
+        {
+            ImFontConfig config;
+            config.OversampleH = 3;
+            config.OversampleV = 2;
+            world.ui.im_font_ui = io.Fonts->AddFontFromMemoryTTF(open_sans_ttf, open_sans_ttf_len, UI_FONT_SIZE, &config);
+            cp_assert(world.ui.im_font_ui);
+        }
 
         {
             // merge font awesome into main font
@@ -1403,6 +1408,8 @@ int realmain(int argc, char **argv) {
             config.MergeMode = true;
             config.GlyphMinAdvanceX = ICON_FONT_SIZE;
             config.GlyphOffset.y = 3;
+            config.OversampleH = 3;
+            config.OversampleV = 2;
 
             /*
             ImWchar icon_ranges[] = { ICON_MIN_FA, ICON_MAX_FA, 0 };
@@ -1417,8 +1424,13 @@ int realmain(int argc, char **argv) {
             io.Fonts->AddFontFromMemoryTTF(open_sans_ttf, open_sans_ttf_len, UI_FONT_SIZE, &config, icon_ranges2);
         }
 
-        world.ui.im_font_mono = io.Fonts->AddFontFromMemoryTTF(vera_mono_ttf, vera_mono_ttf_len, CODE_FONT_SIZE);
-        cp_assert(world.ui.im_font_mono);
+        {
+            ImFontConfig config;
+            config.OversampleH = 3;
+            config.OversampleV = 2;
+            world.ui.im_font_mono = io.Fonts->AddFontFromMemoryTTF(vera_mono_ttf, vera_mono_ttf_len, CODE_FONT_SIZE);
+            cp_assert(world.ui.im_font_mono);
+        }
 
         io.Fonts->Build();
 
