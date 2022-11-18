@@ -9,7 +9,6 @@
 #include <fcntl.h>
 #include <mach-o/dyld_images.h>
 #include <mach-o/dyld.h>
-#include "dyld_priv.h"
 #include <mach/mach.h>
 #include <mach/mach_vm.h>
 #include <mach/mach_time.h>
