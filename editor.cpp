@@ -2496,10 +2496,7 @@ bool Editor::optimize_imports() {
             chars->append('\n');
         }
 
-        {
-            auto ustr = cstr_to_ustr(new_contents);
-            For (*ustr) chars->append(it);
-        }
+        chars->concat(cstr_to_ustr(new_contents));
 
         buf->hist_force_push_next_change = true;
         if (start != old_end)

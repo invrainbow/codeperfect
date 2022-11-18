@@ -1617,6 +1617,13 @@ int realmain(int argc, char **argv) {
 
             For (*messages) {
                 switch (it.type) {
+                case MTM_FOCUS_APP_DEBUGGER:
+                    if (it.focus_app_debugger_pid)
+                        if (it.focus_app_debugger_pid == get_current_focused_window_pid())
+                            if (!world.window->is_focused())
+                                world.window->focus();
+                    break;
+
                 case MTM_EXIT:
                     exit(it.exit_code);
                     break;

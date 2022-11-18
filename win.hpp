@@ -325,6 +325,7 @@ struct Window {
     void get_framebuffer_size(int* width, int* height);
     void get_content_scale(float* xscale, float* yscale);
     bool is_focused();
+    void focus();
     void get_cursor_pos(double* xpos, double* ypos);
     void set_cursor(Cursor *_cursor);
     void *get_native_handle();
@@ -355,4 +356,6 @@ void* get_native_window_handle(GLFWwindow *window);
 // Panics if it can't do it.
 void make_bootstrap_context();
 void destroy_bootstrap_context();
+int get_current_focused_window_pid();
+
 #endif

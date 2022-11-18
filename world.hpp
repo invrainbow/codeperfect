@@ -54,12 +54,14 @@ enum Main_Thread_Message_Type {
     /**/
     MTM_RELOAD_EDITOR,
     MTM_EXIT,
+    MTM_FOCUS_APP_DEBUGGER,
 };
 
 struct Main_Thread_Message {
     Main_Thread_Message_Type type;
 
     union {
+        int focus_app_debugger_pid;
         Nvim_Message nvim_message;
         u32 reload_editor_id;
         struct {
@@ -249,6 +251,7 @@ enum Command {
     CMD_GO_FORWARD,
     CMD_AST_NAVIGATION,
     CMD_COMMAND_PALETTE,
+    CMD_OPEN_FILE_MANUALLY,
     /**/
     _CMD_COUNT_,
     CMD_INVALID = -1,

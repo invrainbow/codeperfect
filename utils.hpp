@@ -475,3 +475,30 @@ template<typename T>
 bool isempty(List<T> *arr) {
     return !arr || !arr->len;
 }
+
+// Experimental utility for soft-parsing strings
+struct String_Cursor {
+    ccstr s;
+    u32 len;
+    int i;
+
+    void init(ccstr _s) {
+        ptr0(this);
+        s = _s;
+        len = strlen(s);
+        i = 0;
+    }
+
+    bool end() { return i >= len; }
+    char get() { return s[i]; }
+    char next() { return s[i++]; }
+    void back() { i--; }
+
+    List<char> *slurp(fn<bool(char)> f) {
+        auto ret = alloc_list<char>();
+        for (; i < len && f(s[i]); i++)
+            ret->append(s[i]);
+        // '\0'?
+        return ret;
+    }
+};
