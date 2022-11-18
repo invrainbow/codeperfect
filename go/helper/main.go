@@ -3,13 +3,11 @@ package main
 import (
 	"bytes"
 	"encoding/gob"
-	"encoding/json"
 	"fmt"
 	"go/build"
 	"io"
 	"log"
 	"net"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -238,33 +236,6 @@ const (
 	AuthBadCreds
 )
 
-func createHastebin(stuff []byte) (string, error) {
-	buf := bytes.NewBuffer(stuff)
-
-	resp, err := http.Post("https://hastebin.com/documents", "text/plain", buf)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-
-	m := map[string]string{}
-	if err := json.Unmarshal(data, &m); err != nil {
-		return "", err
-	}
-
-	key, ok := m["key"]
-	if !ok {
-		return "", fmt.Errorf("bad response from hastebin")
-	}
-
-	return fmt.Sprintf("https://hastebin.com/raw/%s", key), nil
-}
-
 func sendCrashReports() error {
 	dir, err := GetConfigDir()
 	if err != nil {
@@ -272,20 +243,26 @@ func sendCrashReports() error {
 	}
 
 	fp := filepath.Join(dir, "crash-report.txt")
+
 	data, err := os.ReadFile(fp)
 	if err != nil {
+		if os.IsNotExist(err) {
+			log.Printf("crashreport file doesn't exist")
+			return nil
+		}
 		return err
 	}
 	defer os.Remove(fp)
 
-	hastebinUrl, err := createHastebin(data)
-	if err != nil {
-		return err
+	// big crash report, skip
+	if len(data) > 2048 {
+		log.Printf("data is big, len = %d", len(data))
+		return nil
 	}
 
 	req := models.CrashReportRequest{
 		OS:             fmt.Sprintf("%s-%s", runtime.GOOS, runtime.GOARCH),
-		HastebinUrl:    hastebinUrl,
+		Content:        string(data),
 		CurrentVersion: versions.CurrentVersion,
 	}
 

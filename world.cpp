@@ -554,7 +554,7 @@ void World::init() {
     // if (!use_nvim) world.wnd_history.show = true;
 
     show_frame_index = false;
-    escape_flashes_cursor_red = true;
+    // escape_flashes_cursor_red = true;
 #endif
     t.log("segment g");
 }
@@ -3680,7 +3680,7 @@ void fstlog(ccstr fmt, ...) {
 u8 huge_buffer_for_crash_handler[1024 * 64];
 
 void write_stacktrace_to_file(ccstr stacktrace) {
-    auto fp = path_join(world.configdir, cp_sprintf("crash-%d.txt", get_unix_time()));
+    auto fp = path_join(world.configdir, cp_sprintf("crash-report.txt", get_unix_time()));
     print("filepath: %s", fp);
 
     File f;

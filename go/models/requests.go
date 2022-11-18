@@ -30,7 +30,7 @@ type HeartbeatResponse struct {
 }
 
 type CrashReportRequest struct {
-	HastebinUrl    string `json:"hastebin_url"`
+	Content        string `json:"content"`
 	OS             string `json:"os"`
 	CurrentVersion int    `json:"current_version"`
 }

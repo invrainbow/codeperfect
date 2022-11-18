@@ -220,25 +220,32 @@ func PostCrashReport(c *gin.Context) {
 		return
 	}
 
-	if len(req.OS) > 16) {
+	if len(req.OS) > 16 {
 		c.JSON(http.StatusBadRequest, gin.H{})
 		log.Printf("user sent bad os: %s", req.OS[:128])
 		return
 	}
 
-	if !strings.HasPrefix(req.HastebinUrl, "https://hastebin.com/raw/") {
-		c.JSON(http.StatusBadRequest, gin.H{})
-		log.Printf("user sent bad hastebin url: %s", req.HastebinUrl[:128])
-		return
+	content := req.Content
+
+	if len(content) > 2048 {
+		log.Printf("user sent large content with len %d", len(content))
+		content = content[:2048]
 	}
 
-	if len(strings.TrimPrefix(req.HastebinUrl, "https://hastebin.com/raw/")) > 32 {
-		c.JSON(http.StatusBadRequest, gin.H{})
-		log.Printf("user sent bad hastebin url: %s", req.HastebinUrl[:128])
-		return
+	newlines := 0
+	for i, ch := range content {
+		if ch == '\n' {
+			newlines++
+			if newlines > 128 {
+				log.Printf("user sent large content with lots of lines")
+				content = content[:i]
+				break
+			}
+		}
 	}
 
-	go SendSlackMessage("%s\n%s | %s | %s", req.HastebinUrl, req.OS, versions.VersionToString(req.CurrentVersion), c.ClientIP())
+	go SendSlackMessage("*New crash report*: `%s` `%s` `%s`\n```%s```", req.OS, versions.VersionToString(req.CurrentVersion), c.ClientIP(), content)
 	c.JSON(http.StatusOK, true)
 }
 
