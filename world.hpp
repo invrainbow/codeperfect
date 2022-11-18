@@ -248,6 +248,7 @@ enum Command {
     CMD_GO_FORWARD,
     CMD_AST_NAVIGATION,
     CMD_COMMAND_PALETTE,
+    CMD_OPEN_FILE_MANUALLY,
     /**/
     _CMD_COUNT_,
     CMD_INVALID = -1,

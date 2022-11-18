@@ -1898,6 +1898,7 @@ void init_command_info_table() {
     command_info_table[CMD_REMOVE_TAG] = k(0, 0, "Struct: Remove tag");
     command_info_table[CMD_REMOVE_ALL_TAGS] = k(0, 0, "Struct: Remove all tags");
     command_info_table[CMD_COMMAND_PALETTE] = k(CP_MOD_PRIMARY, CP_KEY_K, "Command Palette");
+    command_info_table[CMD_OPEN_FILE_MANUALLY] = k(CP_MOD_PRIMARY, CP_KEY_O, "Open File...");
 }
 
 void do_find_interfaces() {
@@ -2061,6 +2062,21 @@ void handle_command(Command cmd, bool from_menu) {
     if (!is_command_enabled(cmd)) return;
 
     switch (cmd) {
+    case CMD_OPEN_FILE_MANUALLY: {
+        Select_File_Opts opts; ptr0(&opts);
+        opts.buf = alloc_array(char, 256);
+        opts.bufsize = 256;
+        opts.starting_folder = cp_strdup(world.current_path);
+        opts.folder = false;
+        opts.save = false;
+        if (!let_user_select_file(&opts)) break;
+        if (!goto_file_and_pos(opts.buf, new_cur2(0, 0))) {
+            tell_user(NULL, cp_sprintf("Unable to open %s.", cp_basename(opts.buf)));
+            break;
+        }
+        break;
+    }
+
     case CMD_COMMAND_PALETTE: {
         SCOPED_MEM(&world.run_command_mem);
         world.run_command_mem.reset();

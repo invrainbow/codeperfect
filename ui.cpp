@@ -2349,6 +2349,7 @@ void UI::draw_everything() {
 
         if (ImGui::BeginMenu("File")) {
             menu_command(CMD_NEW_FILE);
+            menu_command(CMD_OPEN_FILE_MANUALLY);
             menu_command(CMD_SAVE_FILE);
             menu_command(CMD_SAVE_ALL);
             ImGui::Separator();
