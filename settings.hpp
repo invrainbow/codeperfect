@@ -41,6 +41,7 @@ struct Options {
     serde_bool autocomplete_func_add_paren = true; // serde(7)
     serde_bool dbg_hide_system_goroutines = true; // serde(8)
     serde_int zoom_level = 100; // serde(9)
+    serde_bool send_crash_reports = true; // serde(10)
 };
 
 struct Build_Profile {

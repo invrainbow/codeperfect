@@ -1194,7 +1194,7 @@ int realmain(int argc, char **argv) {
     }
     }
 
-    {
+    if (options.send_crash_reports) {
         ccstr email = NULL;
         ccstr license = NULL;
 

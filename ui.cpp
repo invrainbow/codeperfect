@@ -2551,6 +2551,10 @@ void UI::draw_everything() {
                 world.auth.state = AUTH_TRIAL;
                 world.auth.trial_start = get_unix_time();
                 write_auth();
+
+                auto res = ask_user_yes_no("New trial started, restart to take effect?", "Restart needed", "Restart", "Don't restart");
+                if (res == ASKUSER_YES)
+                    restart_program();
             }
 
             if (ImGui::MenuItem("Fake being registered")) {
@@ -2703,6 +2707,11 @@ void UI::draw_everything() {
             if (begin_tab("Debugger")) {
                 ImGui::Checkbox("Hide system goroutines", &tmp.dbg_hide_system_goroutines);
 
+                end_tab();
+            }
+
+            if (begin_tab("Privacy")) {
+                ImGui::Checkbox("Send crash reports", &tmp.send_crash_reports);
                 end_tab();
             }
 

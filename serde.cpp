@@ -196,6 +196,7 @@ void Serde::write_type(void* val, int type) {
         WRITE(7, autocomplete_func_add_paren, SERDE_BOOL);
         WRITE(8, dbg_hide_system_goroutines, SERDE_BOOL);
         WRITE(9, zoom_level, SERDE_INT);
+        WRITE(10, send_crash_reports, SERDE_BOOL);
         write_int(0);
         break;
     }
@@ -276,6 +277,7 @@ bool Serde::read_type_field(void* out, int type, int field_id) {
         FIELD(7, autocomplete_func_add_paren, SERDE_BOOL);
         FIELD(8, dbg_hide_system_goroutines, SERDE_BOOL);
         FIELD(9, zoom_level, SERDE_INT);
+        FIELD(10, send_crash_reports, SERDE_BOOL);
         }
         break;
     }
