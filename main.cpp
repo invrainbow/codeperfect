@@ -1194,7 +1194,18 @@ int realmain(int argc, char **argv) {
     }
     }
 
-    GHSendCrashReports();
+    {
+        ccstr email = NULL;
+        ccstr license = NULL;
+
+        auto &a = world.auth;
+        if (a.state == AUTH_REGISTERED) {
+            email = cp_sprintf("%.*s", a.reg_email_len, a.reg_email);
+            license = cp_sprintf("%.*s", a.reg_license_len, a.reg_license);
+        }
+
+        GHSendCrashReports((char*)email, (char*)license);
+    }
 
     auto set_window_title = [&](ccstr note) {
         ccstr s = NULL;

@@ -21,3 +21,24 @@ func VersionToString(v int) string {
 func CurrentVersionAsString() string {
 	return VersionToString(CurrentVersion)
 }
+
+func GetOSSlug(goos, goarch string) (string, error) {
+	archvals := map[string]string{
+		"amd64": "x64",
+		"arm64": "arm",
+	}
+
+	osvals := map[string]string{
+		"darwin":  "mac",
+		"windows": "windows",
+		"linux":   "linux",
+	}
+
+	if osval, ok := osvals[goos]; ok {
+		if archval, ok := archvals[goarch]; ok {
+			return fmt.Sprintf("%s-%s", osval, archval), nil
+		}
+	}
+
+	return fmt.Sprintf("invalid-%s-%s", goos, goarch), fmt.Errorf("invalid goos/goarch")
+}

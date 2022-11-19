@@ -30,7 +30,7 @@ type HeartbeatResponse struct {
 }
 
 type CrashReportRequest struct {
-	Content        string `json:"content"`
-	OS             string `json:"os"`
-	CurrentVersion int    `json:"current_version"`
+	Content string `json:"content"`
+	OS      string `json:"os"`
+	Version int    `json:"version"`
 }

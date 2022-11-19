@@ -206,6 +206,19 @@ func PostHeartbeat(c *gin.Context) {
 }
 
 func PostCrashReport(c *gin.Context) {
+	// just try to auth the user, but it's ok if user isn't authed, and don't fail if there's an error
+	user, err := authUser(c)
+	if err != nil {
+		// do print it out though
+		log.Print(err)
+	}
+
+	if user == nil {
+		log.Print("user is nil")
+	} else {
+		log.Printf("user not nil, email = %s license = %s", user.Email, user.LicenseKey)
+	}
+
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{})
@@ -245,7 +258,20 @@ func PostCrashReport(c *gin.Context) {
 		}
 	}
 
-	go SendSlackMessage("*New crash report*: `%s` `%s` `%s`\n```%s```", req.OS, versions.VersionToString(req.CurrentVersion), c.ClientIP(), content)
+	infoParts := []string{
+		req.OS + "-" + versions.VersionToString(req.Version),
+		c.ClientIP(),
+	}
+
+	if user != nil {
+		infoParts = append(infoParts, user.Email)
+	}
+
+	for i, val := range infoParts {
+		infoParts[i] = fmt.Sprintf("`%s`", val)
+	}
+
+	go SendSlackMessage("*New crash report*: %s\n```%s```", strings.Join(infoParts, " "), content)
 	c.JSON(http.StatusOK, true)
 }
 

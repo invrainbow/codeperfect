@@ -236,7 +236,7 @@ const (
 	AuthBadCreds
 )
 
-func sendCrashReports() error {
+func sendCrashReports(license *License) error {
 	dir, err := GetConfigDir()
 	if err != nil {
 		return err
@@ -260,19 +260,34 @@ func sendCrashReports() error {
 		return nil
 	}
 
-	req := models.CrashReportRequest{
-		OS:             fmt.Sprintf("%s-%s", runtime.GOOS, runtime.GOARCH),
-		Content:        string(data),
-		CurrentVersion: versions.CurrentVersion,
+	osSlug, err := versions.GetOSSlug(runtime.GOOS, runtime.GOARCH)
+	if err != nil {
+		log.Printf("unable to get os slug???")
+		return err
 	}
 
-	return CallServer("crash-report", nil, req, nil)
+	req := models.CrashReportRequest{
+		OS:      osSlug,
+		Content: string(data),
+		Version: versions.CurrentVersion,
+	}
+
+	return CallServer("crash-report", license, req, nil)
 }
 
 //export GHSendCrashReports
-func GHSendCrashReports() {
+func GHSendCrashReports(rawEmail, rawLicenseKey *C.char) {
+	var license *License
+
+	if rawEmail != nil && rawLicenseKey != nil {
+		license = &License{
+			Email:      C.GoString(rawEmail),
+			LicenseKey: C.GoString(rawLicenseKey),
+		}
+	}
+
 	go func() {
-		if err := sendCrashReports(); err != nil {
+		if err := sendCrashReports(license); err != nil {
 			log.Printf("error sending crash report: %v", err)
 		}
 	}()
@@ -286,7 +301,7 @@ func GHGetAuthStatus() int {
 }
 
 //export GHAuth
-func GHAuth(rawEmail *C.char, rawLicenseKey *C.char) {
+func GHAuth(rawEmail, rawLicenseKey *C.char) {
 	var license *License
 	var endpoint string
 
