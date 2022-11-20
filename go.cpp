@@ -3594,9 +3594,12 @@ List<Find_References_File> *Go_Indexer::actually_find_references(Goresult *declr
                         case GODECL_VAR:
                         case GODECL_CONST:
                         case GODECL_TYPE:
-                        case GODECL_FUNC:
+                        case GODECL_FUNC: {
                             name = cp_strdup(tl.name);
-                            break;
+                            auto recvname = get_godecl_recvname(&tl);
+                            if (recvname)
+                                name = cp_sprintf("%s.%s", recvname, name);
+                        }
                         }
                         result.toplevel_name = name;
                     }

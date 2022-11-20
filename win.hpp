@@ -356,6 +356,4 @@ void* get_native_window_handle(GLFWwindow *window);
 // Panics if it can't do it.
 void make_bootstrap_context();
 void destroy_bootstrap_context();
-int get_current_focused_window_pid();
-
 #endif

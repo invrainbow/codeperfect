@@ -292,12 +292,12 @@ function Home() {
           className="md:text-center text-5xl md:text-5xl mb-6 md:mb-1 font-bold text-white font-title"
           style={{ lineHeight: "1.1" }}
         >
-          A fast &amp; powerful IDE for Go
+          A fast, powerful IDE for Go
         </div>
 
-        <p className="font-title md:text-center text-xl text-neutral-300">
-          Feature-rich and lightweight. A power tool with a small resource
-          footprint.
+        <p className="md:text-center text-xl text-gray-500 leading-normal">
+          Feature-rich and lightweight.
+          <br />A power tool with a small resource footprint.
         </p>
 
         <div className="mt-8 md:mt-8 md:text-center flex gap-4 md:justify-center">

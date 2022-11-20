@@ -1024,4 +1024,13 @@ ccstr generate_stack_trace(ccstr message) {
     return r.finish();
 }
 
+int get_current_focused_window_pid() {
+    HWND wnd = GetForegroundWindow();
+    if (!wnd) return 0;
+
+    DWORD pid = 0;
+    GetWindowThreadProcessId(wnd, &pid);
+    return (int)pid;
+}
+
 #endif // OS_WINBLOWS

@@ -676,13 +676,20 @@ struct World {
     } windows_open;
 
     struct Wnd_Search_And_Replace : Wnd {
+        Pool mem;
         bool replace;
         char find_str[256];
         char replace_str[256];
         bool use_regex;
         bool case_sensitive;
         int focus_textbox;
-        int selection;
+        int sel_file;
+        int sel_result;
+        int scroll_file;
+        int scroll_result;
+        bool *files_open;
+        bool *set_file_open;
+        bool *set_file_close;
     } wnd_search_and_replace;
 
     struct Wnd_Editor_Tree : Wnd {

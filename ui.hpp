@@ -294,6 +294,7 @@ struct UI {
     void imgui_push_mono_font();
     void imgui_push_ui_font();
     void imgui_pop_font();
+    bool imgui_is_window_focused();
 
     void focus_keyboard(Wnd *wnd, int cond = FKC_APPEARING | FKC_FOCUSING);
 

@@ -1092,10 +1092,4 @@ void destroy_bootstrap_context() {
     }
 }
 
-int get_current_focused_window_pid() {
-    auto app = [[NSWorkspace sharedWorkspace] frontmostApplication];
-    if (!app) return 0;
-    return [app processIdentifier];
-}
-
 #endif // WIN_COCOA
