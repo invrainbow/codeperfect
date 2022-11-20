@@ -443,3 +443,5 @@ void restart_program(); // if this returns, something fucked up
 
 typedef fn<int(const void *it)> bs_test_func;
 int binary_search(void *list, s32 num, s32 size, bs_test_func test);
+
+int get_current_focused_window_pid();

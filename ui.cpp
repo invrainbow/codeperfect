@@ -5660,7 +5660,7 @@ void UI::draw_everything() {
 
                 for (auto it = change; it; it = it->next) {
                     im::BulletText(
-                        "start = %s, oldend = %s, newend = %s, oldlen = %lu, newlen = %lu",
+                        "start = %s, oldend = %s, newend = %s, oldlen = %llu, newlen = %llu",
                         it->start.str(),
                         it->old_end.str(),
                         it->new_end.str(),

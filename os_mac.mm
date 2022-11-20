@@ -240,3 +240,9 @@ Font_Data *load_font_data_by_name(ccstr name) {
     ret->fm = fm;
     return ret;
 }
+
+int get_current_focused_window_pid() {
+    auto app = [[NSWorkspace sharedWorkspace] frontmostApplication];
+    if (!app) return 0;
+    return [app processIdentifier];
+}
