@@ -340,7 +340,7 @@ func GHAuth(rawEmail, rawLicenseKey *C.char) {
 
 	run := func() {
 		authStatus = doAuth()
-		if authStatus == AuthOk {
+		if authStatus == AuthOk && license != nil {
 			// heartbeat
 			for {
 				req := &models.HeartbeatRequest{SessionID: resp.SessionID}
