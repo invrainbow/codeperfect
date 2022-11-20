@@ -3685,12 +3685,11 @@ void write_stacktrace_to_file(ccstr stacktrace) {
 
     File f;
     if (f.init_write(fp) != FILE_RESULT_OK) {
-        print("what is wrong with this");
+        print("unable to open file??");
         return;
     }
     defer { f.cleanup(); };
 
-    print("what is wrong with russian water (%zu): %s", strlen(stacktrace), stacktrace);
     f.write(stacktrace, strlen(stacktrace));
 }
 

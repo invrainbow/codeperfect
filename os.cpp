@@ -1,6 +1,7 @@
 #include "os.hpp"
 #include "world.hpp"
 #include <filesystem>
+#include <signal.h>
 
 #if OS_WINBLOWS
 #else
@@ -100,4 +101,16 @@ bool Process::read1(char* out) {
         return true;
     }
     return false;
+}
+
+void install_crash_handlers() {
+    signal(SIGSEGV, crash_handler);
+    signal(SIGILL, crash_handler);
+    signal(SIGABRT, crash_handler);
+    signal(SIGFPE, crash_handler);
+
+#if OS_UNIX
+    // not supported on windows
+    signal(SIGBUS, crash_handler);
+#endif
 }

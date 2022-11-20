@@ -4,7 +4,6 @@
 #include <functional>
 #include <inttypes.h>
 #include <math.h>
-#include <signal.h>
 #include <stdarg.h>
 #include <stdexcept>
 #include <stdint.h>
@@ -1075,6 +1074,8 @@ void handle_window_event(Window_Event *it) {
 
 int realmain(int argc, char **argv) {
     is_main_thread = true;
+
+    install_crash_handlers();
 
 #ifdef DEBUG_BUILD
     {

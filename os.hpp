@@ -446,4 +446,6 @@ int binary_search(void *list, s32 num, s32 size, bs_test_func test);
 
 ccstr generate_stack_trace(ccstr message = NULL);
 NORETURN void exit_from_crash_handler();
+void install_crash_handlers();
+
 int get_current_focused_window_pid();
