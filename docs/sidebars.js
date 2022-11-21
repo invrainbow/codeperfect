@@ -11,26 +11,54 @@
 
 // @ts-check
 
+const fs = require("fs");
+
+function isVersion(s) {
+  const parts = s.split(".");
+  return (
+    (parts.length === 2 || parts.length === 3) &&
+    parts.every((it) => !isNaN(it))
+  );
+}
+
+function parseVersion(s) {
+  const parts = s.split(".").map((it) => parseInt(it, 10));
+  if (parts.length === 2) {
+    parts.push(0);
+  }
+
+  let ret = 0;
+  parts.forEach((it) => {
+    ret *= 100;
+    ret += it;
+  });
+  return ret;
+}
+
+/**
+ * @returns {any} // fuck this typing garbage
+ */
+function getChangelogItems() {
+  const items = fs.readdirSync("docs/changelog");
+  return items
+    .filter((it) => it.endsWith(".md"))
+    .map((it) => it.slice(0, -".md".length))
+    .filter((it) => isVersion(it))
+    .sort((a, b) => {
+      const an = parseVersion(a);
+      const bn = parseVersion(b);
+      return bn - an;
+    })
+    .map((it) => `changelog/${it}`);
+}
+
 /** @type {import('@docusaurus/plugin-content-docs').SidebarsConfig} */
 const sidebars = {
   changelogSidebar: [
     {
       type: "category",
       label: "Changelog",
-      items: [
-        "changelog/22.11",
-        "changelog/22.10.2",
-        "changelog/22.10.1",
-        "changelog/22.10",
-        "changelog/22.09.7",
-        "changelog/22.09.6",
-        "changelog/22.09.5",
-        "changelog/22.09.4",
-        "changelog/22.09.3",
-        "changelog/22.09.2",
-        "changelog/22.09.1",
-        "changelog/22.09",
-      ],
+      items: getChangelogItems(),
     },
   ],
 
