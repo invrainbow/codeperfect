@@ -154,7 +154,7 @@ func PostTrial(c *gin.Context) {
 
 	ip := WorkaroundGinRetardationAndGetClientIP(c)
 
-	SendSlackMessage("trial user opened: `%s` `%s` `%s`", ip, req.OS, req.CurrentVersion)
+	SendSlackMessage("trial user `%s` opened on `%s-%s`", ip, req.OS, versions.VersionToString(req.CurrentVersion))
 
 	PosthogCaptureStringId(ip, "trial user", PosthogProps{
 		"os":              req.OS,
@@ -184,7 +184,7 @@ func PostAuth(c *gin.Context) {
 		return
 	}
 
-	SendSlackMessageForUser(user, "%s authed on version %s/%d.", user.Email, req.OS, req.CurrentVersion)
+	SendSlackMessageForUser(user, "%s authed on `%s-%s`", user.Email, req.OS, versions.VersionToString(req.CurrentVersion))
 
 	PosthogCapture(user.ID, "user auth", PosthogProps{
 		"os":              req.OS,
