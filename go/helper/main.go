@@ -260,12 +260,7 @@ func sendCrashReports(license *License) error {
 		return nil
 	}
 
-	osSlug, err := versions.GetOSSlug(runtime.GOOS, runtime.GOARCH)
-	if err != nil {
-		log.Printf("unable to get os slug???")
-		return err
-	}
-
+	osSlug, _ := versions.GetOSSlug(runtime.GOOS, runtime.GOARCH)
 	req := models.CrashReportRequest{
 		OS:      osSlug,
 		Content: string(data),
@@ -315,7 +310,7 @@ func GHAuth(rawEmail, rawLicenseKey *C.char) {
 		endpoint = "trial"
 	}
 
-	osSlug := runtime.GOOS
+	osSlug, _ := versions.GetOSSlug(runtime.GOOS, runtime.GOARCH)
 	req := &models.AuthRequest{
 		OS:             osSlug,
 		CurrentVersion: versions.CurrentVersion,
