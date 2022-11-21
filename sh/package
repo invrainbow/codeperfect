@@ -27,6 +27,8 @@ if [[ $os = "windows" ]]; then
     cp -R ../build/bin/ CodePerfect/bin/
     cp ../build/launcher.exe CodePerfect/codeperfect.exe
 
+    mv ../build/pdb debug-symbols
+
     # zip up app
     zip -r app.zip CodePerfect/
 
