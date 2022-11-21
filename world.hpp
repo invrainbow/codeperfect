@@ -54,19 +54,24 @@ enum Main_Thread_Message_Type {
     /**/
     MTM_RELOAD_EDITOR,
     MTM_EXIT,
+    MTM_FOCUS_APP_DEBUGGER,
 };
 
 struct Main_Thread_Message {
     Main_Thread_Message_Type type;
 
     union {
+        int focus_app_debugger_pid;
         Nvim_Message nvim_message;
         u32 reload_editor_id;
         struct {
             ccstr goto_file;
             cur2 goto_pos;
         };
-        ccstr panic_message;
+        struct {
+            ccstr panic_message;
+            ccstr panic_stacktrace;
+        };
         struct {
             ccstr tell_user_text;
             ccstr tell_user_title;
@@ -246,6 +251,7 @@ enum Command {
     CMD_GO_FORWARD,
     CMD_AST_NAVIGATION,
     CMD_COMMAND_PALETTE,
+    CMD_OPEN_FILE_MANUALLY,
     /**/
     _CMD_COUNT_,
     CMD_INVALID = -1,
@@ -345,6 +351,8 @@ struct World {
     Fridge<Chunk5> chunk5_fridge;
     Fridge<Chunk6> chunk6_fridge;
 
+    ccstr configdir;
+
     struct {
         bool on;
         bool ready;
@@ -370,6 +378,20 @@ struct World {
     vec2 display_size;
     vec2 frame_size;
     vec2f display_scale;
+
+    float zoom_level;
+
+    vec2f get_display_scale() {
+        auto ret = display_scale;
+
+        auto zl = options.zoom_level;
+        if (!zl) zl = 100;
+
+        auto zf = sqrt(zl / 100.0f);
+        ret.x *= zf;
+        ret.y *= zf;
+        return ret;
+    }
 
     bool use_nvim_this_time;
 
@@ -448,8 +470,6 @@ struct World {
     bool auth_update_done;
     u64 auth_update_last_check;
 
-    bool autocomplete_basic_mode;
-
     // i guess this should go in wnd_run_command, but i don't want it to get cleared out if
     // i ptr0 the whole wnd, and i also don't want to have to worry about not doing that
     Command last_manually_run_command;
@@ -522,6 +542,12 @@ struct World {
         Thread_Handle thread;
         List<Find_References_File> *results;
         ccstr current_import_path;
+        int current_file;
+        int current_result;
+
+        int scroll_to_file;
+        int scroll_to_result;
+
     } wnd_find_references;
 
     struct Wnd_Find_Interfaces : Wnd {
@@ -533,6 +559,8 @@ struct World {
         bool include_empty;
         List<Find_Decl*> *results;
         ccstr current_import_path;
+        int selection;
+        int scroll_to;
     } wnd_find_interfaces;
 
     struct Wnd_Find_Implementations : Wnd {
@@ -543,6 +571,8 @@ struct World {
         Thread_Handle thread;
         List<Find_Decl*> *results;
         ccstr current_import_path;
+        int selection;
+        int scroll_to;
     } wnd_find_implementations;
 
     struct Wnd_Caller_Hierarchy : Wnd {
@@ -646,13 +676,20 @@ struct World {
     } windows_open;
 
     struct Wnd_Search_And_Replace : Wnd {
+        Pool mem;
         bool replace;
         char find_str[256];
         char replace_str[256];
         bool use_regex;
         bool case_sensitive;
         int focus_textbox;
-        int selection;
+        int sel_file;
+        int sel_result;
+        int scroll_file;
+        int scroll_result;
+        bool *files_open;
+        bool *set_file_open;
+        bool *set_file_close;
     } wnd_search_and_replace;
 
     struct Wnd_Editor_Tree : Wnd {
@@ -820,3 +857,7 @@ void send_nvim_keys(ccstr s);
 void clear_key_states();
 
 void fstlog(ccstr fmt, ...);
+void write_stacktrace_to_file(ccstr stacktrace);
+NORETURN void crash_handler(int sig);
+
+void recalc_display_size();

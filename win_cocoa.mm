@@ -880,6 +880,7 @@ void Window::request_attention() {
         [NSApp requestUserAttention:NSInformationalRequest];
     }
 }
+*/
 
 void Window::focus() {
     @autoreleasepool {
@@ -888,7 +889,6 @@ void Window::focus() {
         [ns_window makeKeyAndOrderFront:nil];
     }
 }
-*/
 
 bool Window::is_focused() {
     @autoreleasepool {

@@ -4,7 +4,6 @@
 #include <functional>
 #include <inttypes.h>
 #include <math.h>
-#include <signal.h>
 #include <stdarg.h>
 #include <stdexcept>
 #include <stdint.h>
@@ -126,9 +125,16 @@ bool is_git_folder(ccstr path) {
 }
 
 void recalc_display_size() {
+    auto scale = world.get_display_scale();
     // calculate display_size
-    world.display_size.x = (int)(world.frame_size.x / world.display_scale.x);
-    world.display_size.y = (int)(world.frame_size.y / world.display_scale.y);
+    world.display_size.x = (int)(world.frame_size.x / scale.x);
+    world.display_size.y = (int)(world.frame_size.y / scale.y);
+
+    // set projection based on new display size
+    mat4f projection;
+    new_ortho_matrix(projection, 0, world.display_size.x, world.display_size.y, 0);
+    glUseProgram(world.ui.im_program);
+    glUniformMatrix4fv(glGetUniformLocation(world.ui.im_program, "projection"), 1, GL_FALSE, (float*)projection);
 }
 
 void handle_window_event(Window_Event *it) {
@@ -161,14 +167,9 @@ void handle_window_event(Window_Event *it) {
         recalc_display_size();
 
         mat4f projection;
-
         new_ortho_matrix(projection, 0, w, h, 0);
         glUseProgram(world.ui.program);
         glUniformMatrix4fv(glGetUniformLocation(world.ui.program, "projection"), 1, GL_FALSE, (float*)projection);
-
-        new_ortho_matrix(projection, 0, world.display_size.x, world.display_size.y, 0);
-        glUseProgram(world.ui.im_program);
-        glUniformMatrix4fv(glGetUniformLocation(world.ui.im_program, "projection"), 1, GL_FALSE, (float*)projection);
         break;
     }
 
@@ -444,18 +445,6 @@ void handle_window_event(Window_Event *it) {
             editor->update_autocomplete(false);
             editor->update_parameter_hint();
         };
-
-        auto handle_autocomplete_control = [&]() -> bool {
-            if (key != CP_KEY_LEFT_ALT && key != CP_KEY_RIGHT_ALT) return false;
-            if (!editor) return false;
-            if (!editor->autocomplete.ac.results) return false;
-
-            world.autocomplete_basic_mode = !world.autocomplete_basic_mode;
-            editor->trigger_autocomplete(false, false);
-            return true;
-        };
-
-        if (handle_autocomplete_control()) break;
 
         if (editor && editor->ast_navigation.on) {
             switch (keymods) {
@@ -1086,6 +1075,8 @@ void handle_window_event(Window_Event *it) {
 int realmain(int argc, char **argv) {
     is_main_thread = true;
 
+    install_crash_handlers();
+
 #ifdef DEBUG_BUILD
     {
         Pool mem; mem.init();
@@ -1204,6 +1195,19 @@ int realmain(int argc, char **argv) {
     }
     }
 
+    if (options.send_crash_reports) {
+        ccstr email = NULL;
+        ccstr license = NULL;
+
+        auto &a = world.auth;
+        if (a.state == AUTH_REGISTERED) {
+            email = cp_sprintf("%.*s", a.reg_email_len, a.reg_email);
+            license = cp_sprintf("%.*s", a.reg_license_len, a.reg_license);
+        }
+
+        GHSendCrashReports((char*)email, (char*)license);
+    }
+
     auto set_window_title = [&](ccstr note) {
         ccstr s = NULL;
         if (!note)
@@ -1230,19 +1234,13 @@ int realmain(int argc, char **argv) {
 
     t.log("set window title");
 
-    auto configdir = GHGetConfigDir();
-    if (!configdir)
-        return error("unable to get config dir"), EXIT_FAILURE;
-
-    t.log("get config dir");
-
     ImGui::CreateContext();
 
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     {
         SCOPED_MEM(&world.world_mem);
-        io.IniFilename = path_join(configdir, "imgui.ini");
+        io.IniFilename = path_join(world.configdir, "imgui.ini");
     }
 
     // ImGui::StyleColorsLight();
@@ -1410,8 +1408,13 @@ int realmain(int argc, char **argv) {
 
         s32 len = 0;
 
-        world.ui.im_font_ui = io.Fonts->AddFontFromMemoryTTF(open_sans_ttf, open_sans_ttf_len, UI_FONT_SIZE);
-        cp_assert(world.ui.im_font_ui);
+        {
+            ImFontConfig config;
+            config.OversampleH = 3;
+            config.OversampleV = 2;
+            world.ui.im_font_ui = io.Fonts->AddFontFromMemoryTTF(open_sans_ttf, open_sans_ttf_len, UI_FONT_SIZE, &config);
+            cp_assert(world.ui.im_font_ui);
+        }
 
         {
             // merge font awesome into main font
@@ -1419,6 +1422,8 @@ int realmain(int argc, char **argv) {
             config.MergeMode = true;
             config.GlyphMinAdvanceX = ICON_FONT_SIZE;
             config.GlyphOffset.y = 3;
+            config.OversampleH = 3;
+            config.OversampleV = 2;
 
             /*
             ImWchar icon_ranges[] = { ICON_MIN_FA, ICON_MAX_FA, 0 };
@@ -1433,8 +1438,13 @@ int realmain(int argc, char **argv) {
             io.Fonts->AddFontFromMemoryTTF(open_sans_ttf, open_sans_ttf_len, UI_FONT_SIZE, &config, icon_ranges2);
         }
 
-        world.ui.im_font_mono = io.Fonts->AddFontFromMemoryTTF(vera_mono_ttf, vera_mono_ttf_len, CODE_FONT_SIZE);
-        cp_assert(world.ui.im_font_mono);
+        {
+            ImFontConfig config;
+            config.OversampleH = 3;
+            config.OversampleV = 2;
+            world.ui.im_font_mono = io.Fonts->AddFontFromMemoryTTF(vera_mono_ttf, vera_mono_ttf_len, CODE_FONT_SIZE);
+            cp_assert(world.ui.im_font_mono);
+        }
 
         io.Fonts->Build();
 
@@ -1494,6 +1504,22 @@ int realmain(int argc, char **argv) {
         loc = glGetAttribLocation(world.ui.program, "texture_id");
         glEnableVertexAttribArray(loc);
         glVertexAttribIPointer(loc, 1, GL_INT, sizeof(Vert), (void*)_offsetof(Vert, texture_id));
+
+        loc = glGetAttribLocation(world.ui.program, "round_w");
+        glEnableVertexAttribArray(loc);
+        glVertexAttribPointer(loc, 1, GL_FLOAT, GL_FALSE, sizeof(Vert), (void*)_offsetof(Vert, round_w));
+
+        loc = glGetAttribLocation(world.ui.program, "round_h");
+        glEnableVertexAttribArray(loc);
+        glVertexAttribPointer(loc, 1, GL_FLOAT, GL_FALSE, sizeof(Vert), (void*)_offsetof(Vert, round_h));
+
+        loc = glGetAttribLocation(world.ui.program, "round_r");
+        glEnableVertexAttribArray(loc);
+        glVertexAttribPointer(loc, 1, GL_FLOAT, GL_FALSE, sizeof(Vert), (void*)_offsetof(Vert, round_r));
+
+        loc = glGetAttribLocation(world.ui.program, "round_flags");
+        glEnableVertexAttribArray(loc);
+        glVertexAttribIPointer(loc, 1, GL_INT, sizeof(Vert), (void*)_offsetof(Vert, round_flags));
 
         loc = glGetUniformLocation(world.ui.program, "projection");
         mat4f ortho_projection;
@@ -1633,13 +1659,27 @@ int realmain(int argc, char **argv) {
 
             For (*messages) {
                 switch (it.type) {
+                case MTM_FOCUS_APP_DEBUGGER:
+                    if (it.focus_app_debugger_pid)
+                        if (it.focus_app_debugger_pid == get_current_focused_window_pid())
+                            if (!world.window->is_focused())
+                                world.window->focus();
+                    break;
+
                 case MTM_EXIT:
                     exit(it.exit_code);
                     break;
 
-                case MTM_PANIC:
-                    cp_panic(it.panic_message);
+                case MTM_PANIC: {
+                    // When we get here, we already called cp_panic in the
+                    // other thread. There's no point in throwing a new
+                    // exception, since the stacktrace will just be this
+                    // thread's, so just exit.
+                    tell_user(NULL, it.panic_message);
+                    write_stacktrace_to_file(it.panic_stacktrace);
+                    exit(1);
                     break;
+                }
 
                 case MTM_TELL_USER:
                     tell_user(it.tell_user_text, it.tell_user_title);
@@ -1725,9 +1765,12 @@ int realmain(int argc, char **argv) {
         glClear(GL_COLOR_BUFFER_BIT);
 
         {
+            auto &io = ImGui::GetIO();
             // Send info to UI and ImGui.
             io.DisplaySize = ImVec2((float)world.display_size.x, (float)world.display_size.y);
-            io.DisplayFramebufferScale = ImVec2(world.display_scale.x, world.display_scale.y);
+
+            auto scale = world.get_display_scale();
+            io.DisplayFramebufferScale = ImVec2(scale.x, scale.y);
 
             auto now = current_time_nano();
             io.DeltaTime = (double)(now - last_frame_time) / (double)1000000000;
@@ -1790,6 +1833,8 @@ int realmain(int argc, char **argv) {
 
         fstlog("poll window events");
         world.window->events.len = 0;
+
+        // cp_panic("leld0ingz");
 
         ui.draw_everything();
         fstlog("draw everything");

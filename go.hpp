@@ -263,6 +263,9 @@ struct AC_Result {
             bool declaration_is_builtin;
             ccstr declaration_package; // if the decl is "foo.bar", this will be "foo"
             bool declaration_is_struct_literal_field;
+            bool declaration_is_own_file;
+            bool declaration_is_scopeop;
+            int declaration_scopeop_depth;
         };
 
         struct {
@@ -1362,5 +1365,7 @@ void walk_gotype(Gotype *gotype, walk_gotype_cb cb);
 
 Gotype *new_gotype(Gotype_Type type);
 Gotype *new_primitive_type(ccstr name);
+
+bool isastnull(Ast_Node* x);
 
 cur2 offset_to_cur(int off, ccstr filepath);

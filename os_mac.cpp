@@ -5,8 +5,12 @@
 #include <stdio.h>
 #include <dirent.h>
 #include <errno.h>
+#include <execinfo.h>
 #include <fcntl.h>
+#include <mach-o/dyld_images.h>
 #include <mach-o/dyld.h>
+#include <mach/mach.h>
+#include <mach/mach_vm.h>
 #include <mach/mach_time.h>
 #include <string.h>
 #include <sys/mman.h>
@@ -20,10 +24,10 @@
 #include <CoreServices/CoreServices.h>
 #include <libgen.h>
 #include "cwalk.h"
-
-// for places where i can't be fucked to learn the linux
-// way of doing things, just use c++ stdlib (requires c++17)
-#include <filesystem>
+#define UNW_LOCAL_ONLY
+#include <libunwind.h>
+#include <cxxabi.h>
+#include <dlfcn.h>
 
 #include "utils.hpp"
 #include "defer.hpp"
@@ -169,6 +173,45 @@ void restart_program() {
     } else {
         exit(0);
     }
+}
+
+ccstr generate_stack_trace(ccstr message) {
+    Text_Renderer r; r.init();
+
+    r.write("%s\n", message);
+
+    unw_cursor_t cursor;
+    unw_context_t context;
+
+    unw_getcontext(&context);
+    unw_init_local(&cursor, &context);
+
+    for (int n = 0; unw_step(&cursor); n++) {
+        char symbol[256] = {"<unknown>"};
+        char *name = symbol;
+
+        unw_word_t off = 0;
+        if (!unw_get_proc_name(&cursor, symbol, sizeof(symbol), &off)) {
+            int status = 0;
+            if ((name = abi::__cxa_demangle(symbol, NULL, NULL, &status)) == 0)
+            name = symbol;
+        }
+
+        unw_word_t ip = 0;
+        unw_get_reg(&cursor, UNW_REG_IP, &ip);
+
+        // for some reason the value returned by unw_get_reg(UNW_REG_IP) is
+        // correct in the lower 32 bits but garbled in the higher 32 bits
+        // however, the lowest 8 bits of the higher 32 bits seems to be correct (0x01 on my machine)
+        // so just mask against lower 40 bits
+        ip = ip & 0xffffffffff;
+
+        r.write("%-2d 0x%lx %s + 0x%lx\n", n, ip, name, off);
+        if (name != symbol) free(name);
+    }
+
+    r.write("base = 0x%lx", (uptr)_dyld_get_image_header(0));
+    return r.finish();
 }
 
 #endif

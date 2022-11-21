@@ -390,7 +390,7 @@ bool File::read(char *buf, s32 size) {
     return (n == size);
 }
 
-bool File::write(char *buf, s32 size) {
+bool File::write(ccstr buf, s32 size) {
     DWORD n = 0;
     if (!WriteFile(h, buf, size, &n, NULL)) return false;
     return (n == size);
@@ -1006,6 +1006,31 @@ void restart_program() {
         return;
 
     ExitProcess(0);
+}
+
+NORETURN void exit_from_crash_handler() {
+    _exit(1); // is this supported on windows?
+}
+
+ccstr generate_stack_trace(ccstr message) {
+    void* pointers[62];
+    int n = CaptureStackBackTrace(0, 62, pointers, NULL);
+    if (!n) return NULL;
+
+    Text_Renderer r; r.init();
+    for (int i = 0; i < n && i < _countof(pointers); i++)
+        r.write("%-2d 0x%lx\n", i, (uptr)pointers[i]);
+    r.write("base = 0x%lx", (uptr)GetModuleHandleA(NULL));
+    return r.finish();
+}
+
+int get_current_focused_window_pid() {
+    HWND wnd = GetForegroundWindow();
+    if (!wnd) return 0;
+
+    DWORD pid = 0;
+    GetWindowThreadProcessId(wnd, &pid);
+    return (int)pid;
 }
 
 #endif // OS_WINBLOWS

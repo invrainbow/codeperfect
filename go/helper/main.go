@@ -236,6 +236,63 @@ const (
 	AuthBadCreds
 )
 
+func sendCrashReports(license *License) error {
+	dir, err := GetConfigDir()
+	if err != nil {
+		return err
+	}
+
+	fp := filepath.Join(dir, "crash-report.txt")
+
+	data, err := os.ReadFile(fp)
+	if err != nil {
+		if os.IsNotExist(err) {
+			log.Printf("crashreport file doesn't exist")
+			return nil
+		}
+		return err
+	}
+	defer os.Remove(fp)
+
+	// big crash report, skip
+	if len(data) > 2048 {
+		log.Printf("data is big, len = %d", len(data))
+		return nil
+	}
+
+	osSlug, err := versions.GetOSSlug(runtime.GOOS, runtime.GOARCH)
+	if err != nil {
+		log.Printf("unable to get os slug???")
+		return err
+	}
+
+	req := models.CrashReportRequest{
+		OS:      osSlug,
+		Content: string(data),
+		Version: versions.CurrentVersion,
+	}
+
+	return CallServer("crash-report", license, req, nil)
+}
+
+//export GHSendCrashReports
+func GHSendCrashReports(rawEmail, rawLicenseKey *C.char) {
+	var license *License
+
+	if rawEmail != nil && rawLicenseKey != nil {
+		license = &License{
+			Email:      C.GoString(rawEmail),
+			LicenseKey: C.GoString(rawLicenseKey),
+		}
+	}
+
+	go func() {
+		if err := sendCrashReports(license); err != nil {
+			log.Printf("error sending crash report: %v", err)
+		}
+	}()
+}
+
 var authStatus int = AuthWaiting
 
 //export GHGetAuthStatus
@@ -244,7 +301,7 @@ func GHGetAuthStatus() int {
 }
 
 //export GHAuth
-func GHAuth(rawEmail *C.char, rawLicenseKey *C.char) {
+func GHAuth(rawEmail, rawLicenseKey *C.char) {
 	var license *License
 	var endpoint string
 
@@ -283,7 +340,7 @@ func GHAuth(rawEmail *C.char, rawLicenseKey *C.char) {
 
 	run := func() {
 		authStatus = doAuth()
-		if authStatus == AuthOk {
+		if authStatus == AuthOk && license != nil {
 			// heartbeat
 			for {
 				req := &models.HeartbeatRequest{SessionID: resp.SessionID}

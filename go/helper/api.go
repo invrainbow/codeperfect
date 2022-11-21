@@ -67,8 +67,10 @@ func CallServer(endpoint string, license *License, params interface{}, out inter
 		}
 	}
 
-	if err := json.Unmarshal(body, out); err != nil {
-		return err
+	if out != nil {
+		if err := json.Unmarshal(body, out); err != nil {
+			return err
+		}
 	}
 
 	return nil

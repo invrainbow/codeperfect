@@ -30,10 +30,13 @@ ifeq ($(OSTYPE), mac)
 	endif
 else ifeq ($(OSTYPE), windows)
 	# a bunch of clang on windows specific warnings idgaf about
-	CFLAGS += -Wno-ignored-attributes -Wno-constant-conversion -Wno-static-in-inline -Wno-microsoft-include
 	BINARY_SUFFIX = .exe
 	GOARCH = amd64
+
 	CFLAGS += -DOSTYPE_WINDOWS
+	CFLAGS += -Wno-ignored-attributes -Wno-constant-conversion -Wno-static-in-inline -Wno-microsoft-include
+	CFLAGS += -gcodeview
+
 	PKGS += fontconfig freetype2 libpcre glfw3 harfbuzz
 	LDFLAGS += -lopengl32 -ladvapi32 -lshlwapi -lole32 -lpathcch -lshell32 -lwinmm -lws2_32 -lgdi32 -lshcore  # link windows dlls
 	LDFLAGS += --for-linker "/IGNORE:4217"  # do we still need this?

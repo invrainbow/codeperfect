@@ -38,6 +38,10 @@ struct Vert {
     vec4f color;
     i32 mode;
     i32 texture_id;
+    float round_w;
+    float round_h;
+    float round_r;
+    int round_flags;
 };
 
 #define ROUND_TL (1 << 0)
@@ -51,6 +55,7 @@ enum Draw_Mode {
     DRAW_FONT_MASK = 1,     // draw color using texture(...).r as mask
     DRAW_IMAGE = 2,         // draw a texture directly
     DRAW_IMAGE_MASK = 3,    // draw color using texture(...).a as mask
+    DRAW_SOLID_ROUNDED = 4, // draw solid color with rounded rect
 };
 
 enum Sprites_Image_Type {
@@ -102,6 +107,17 @@ struct Draw_Debugger_Var_Args {
 enum Focus_Keyboard_Cond {
     FKC_APPEARING = 1 << 0,
     FKC_FOCUSING = 1 << 1,
+};
+
+enum Keyboard_Nav {
+    KN_NONE,
+    KN_UP,
+    KN_LEFT,
+    KN_DOWN,
+    KN_RIGHT,
+    KN_DELETE,
+    KN_ENTER,
+    KN_SUPER_ENTER, // ?
 };
 
 struct Wnd {
@@ -177,6 +193,11 @@ struct Pane_Areas {
     bool has_tabs;
 };
 
+enum Keyboard_Nav_Flags {
+    KNF_ALLOW_HJKL = 1 << 0,
+    KNF_ALLOW_IMGUI_FOCUSED = 1 << 1,
+};
+
 struct UI {
     List<Vert> verts;
 
@@ -232,8 +253,7 @@ struct UI {
     bool init();
     bool init_fonts();
     void flush_verts();
-    void draw_triangle(vec2f a, vec2f b, vec2f c, vec2f uva, vec2f uvb, vec2f uvc, vec4f color, Draw_Mode mode, Texture_Id texture = TEXTURE_FONT);
-    void draw_quad(boxf b, boxf uv, vec4f color, Draw_Mode mode, Texture_Id texture = TEXTURE_FONT);
+    void draw_quad(boxf b, boxf uv, vec4f color, Draw_Mode mode, Texture_Id texture = TEXTURE_FONT, float round_r = 0.0, int round_flags = 0);
     void draw_rect(boxf b, vec4f color);
     void draw_rounded_rect(boxf b, vec4f color, float radius, int round_flags);
     void draw_bordered_rect_outer(boxf b, vec4f color, vec4f border_color, int border_width, float radius = 0);
@@ -274,6 +294,7 @@ struct UI {
     void imgui_push_mono_font();
     void imgui_push_ui_font();
     void imgui_pop_font();
+    bool imgui_is_window_focused();
 
     void focus_keyboard(Wnd *wnd, int cond = FKC_APPEARING | FKC_FOCUSING);
 
@@ -289,6 +310,8 @@ struct UI {
     void pretty_menu_text(Pretty_Menu *pm, ccstr text, ImU32 color = PM_DEFAULT_COLOR);
     Glyph *lookup_glyph_for_grapheme(List<uchar> *grapheme);
     void draw_tutorial(boxf rect);
+
+    Keyboard_Nav get_keyboard_nav(Wnd *wnd, int flags);
 };
 
 extern UI ui;

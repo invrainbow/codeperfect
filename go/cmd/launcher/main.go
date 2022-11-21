@@ -136,27 +136,6 @@ func getLatestVersion() (int, error) {
 	return meta.CurrentVersion, nil
 }
 
-func getOS() string {
-	archvals := map[string]string{
-		"amd64": "x64",
-		"arm64": "arm",
-	}
-
-	osvals := map[string]string{
-		"darwin":  "mac",
-		"windows": "windows",
-		"linux":   "linux",
-	}
-
-	if osval, ok := osvals[runtime.GOOS]; ok {
-		if archval, ok := archvals[runtime.GOARCH]; ok {
-			return fmt.Sprintf("%s-%s", osval, archval)
-		}
-	}
-
-	panic("invalid os/arch")
-}
-
 func doUpdate() {
 	log.Printf("current version is %s", versions.CurrentVersionAsString())
 
@@ -173,7 +152,12 @@ func doUpdate() {
 		return
 	}
 
-	downloadUrl := makeS3Url(fmt.Sprintf("update/%s-%s.zip", getOS(), versions.VersionToString(ver)))
+	osSlug, err := versions.GetOSSlug(runtime.GOOS, runtime.GOARCH)
+	if err != nil {
+		panic("invalid os/arch")
+	}
+
+	downloadUrl := makeS3Url(fmt.Sprintf("update/%s-%s.zip", osSlug, versions.VersionToString(ver)))
 	log.Printf("downloading %s", downloadUrl)
 
 	tmpfile, err := os.CreateTemp("", "update.zip")

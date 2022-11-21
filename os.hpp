@@ -233,7 +233,7 @@ struct File {
 
     void cleanup();
     bool read(char *buf, s32 size);
-    bool write(char *buf, s32 size);
+    bool write(ccstr buf, s32 size);
     u32 seek(u32 pos);
 };
 
@@ -443,3 +443,9 @@ void restart_program(); // if this returns, something fucked up
 
 typedef fn<int(const void *it)> bs_test_func;
 int binary_search(void *list, s32 num, s32 size, bs_test_func test);
+
+ccstr generate_stack_trace(ccstr message = NULL);
+NORETURN void exit_from_crash_handler();
+void install_crash_handlers();
+
+int get_current_focused_window_pid();

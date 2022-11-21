@@ -16,7 +16,7 @@ import posthog from "posthog-js";
 import cx from "classnames";
 import React from "react";
 import { Helmet } from "react-helmet";
-import { useMediaQuery } from "react-responsive";
+// import { useMediaQuery } from "react-responsive";
 import { twMerge } from "tailwind-merge";
 
 import {
@@ -86,16 +86,26 @@ function isExternalLink(href) {
   return prefixes.some((it) => href.startsWith(it));
 }
 
-function A({ link, children, href, newWindow, ...props }) {
-  if (!href || isExternalLink(href) || newWindow) {
-    props.href = href;
-    if (newWindow || isExternalLink(href)) {
-      props.target = "_blank";
-    }
-    return <a {...props}>{children}</a>;
+function A({ children, href, newWindow, ...props }) {
+  if (href && !isExternalLink(href) && !newWindow) {
+    props.to = href;
+    return <Link {...props}>{children}</Link>;
   }
-  props.to = href;
-  return <Link {...props}>{children}</Link>;
+
+  let useNewWindow;
+  if (newWindow) {
+    useNewWindow = true;
+  } else if (newWindow === false) {
+    useNewWindow = false;
+  } else if (isExternalLink(href) && !href.startsWith("mailto:")) {
+    useNewWindow = true;
+  }
+
+  if (useNewWindow) {
+    props.target = "_blank";
+  }
+  props.href = href;
+  return <a {...props}>{children}</a>;
 }
 
 function wrap(elem, extraClassName, defaultProps, overrideProps) {
@@ -133,7 +143,7 @@ const WallOfText = wrap(
   "div",
   "wall-of-text leading-normal md:mx-auto md:max-w-2xl bg-white md:my-32 p-8 md:p-16 md:rounded-lg md:shadow text-neutral-700"
 );
-const Title = wrap("h2", "m-0 mb-6 font-bold text-3xl text-black");
+const Title = wrap("h2", "m-0 mb-6 font-bold text-3xl text-black font-title");
 
 function Icon({ block, noshift, icon: IconComponent, ...props }) {
   return (
@@ -150,7 +160,7 @@ const FEATURES = _.shuffle([
   },
   {
     label: "Code Intelligence",
-    desc: "Go to definition, find all usages, parameter hints, and autocomplete.",
+    desc: "Go to definition, find all usages, parameter hints, autocomplete, all the table stakes.",
   },
   {
     label: "Smart Autocomplete",
@@ -164,12 +174,6 @@ const FEATURES = _.shuffle([
     label: "Global Fuzzy Selector",
     desc: "Works on files, symbols, commands, and completions.",
   },
-  /*
-  {
-    label: "Custom GPU Renderer",
-    desc: "OpenGL-based renderer. No Electron. 144 FPS, everything instant.",
-  },
-  */
   {
     label: "Tree-Based Navigation",
     desc: "Use the power of our integrated parser to directly walk the AST.",
@@ -219,9 +223,9 @@ const SELLING_POINTS = [
     content: (
       <>
         <p>
-          CodePerfect provides Vim functionality as a first-class concept, not
-          as an afterthought plugin. This gives you the entire Vim feature-set
-          at your fingertips, integrated seamlessly with everything else.
+          Vim support is a first-class concept, not an afterthought plugin. Get
+          the whole Vim feature set at your fingertips, integrated seamlessly
+          with everything else.
         </p>
       </>
     ),
@@ -232,15 +236,17 @@ const SELLING_POINTS = [
     content: (
       <>
         <p>
-          <p>
-            CodePerfect is old-school about performance, and makes a conscious
-            effort not to squander your CPU cycles.
-          </p>
-          <p>
-            Instant startup. A buttery smooth 144 FPS. Instant response to every
-            keystroke. An optimized indexer that gobbles through large
-            codebases.
-          </p>
+          We achieve our its performant speeds mostly by keeping things light
+          and writing straightforward,{" "}
+          <A href="https://www.youtube.com/watch?v=pgoetgxecw8">
+            non-pessimized
+          </A>{" "}
+          code.
+        </p>
+        <p>
+          Instant startup. A buttery smooth 144 frames/sec. Imperceptible
+          latency after keystrokes. An indexer that gobbles through large
+          codebases.
         </p>
       </>
     ),
@@ -251,10 +257,10 @@ const SELLING_POINTS = [
     content: (
       <>
         <p>
+          CodePerfect assists with your workflow instead of interfering with it.
           With predictable operations, ergonomic hotkeys, and tons of cases of
-          “just doing the right thing,” CodePerfect assists instead of
-          interfering with your dev workflow. It does its job and gets out of
-          your way.
+          “just doing the right thing,” CodePerfect performs its job and gets
+          out of the way.
         </p>
       </>
     ),
@@ -280,29 +286,22 @@ function Home() {
   };
 
   return (
-    <div
-      className="mx-auto mt-8 md:mt-24 w-full"
-      style={{ maxWidth: "1920px" }}
-    >
-      <div className="max-w-full text-lg leading-relaxed p-4">
-        <div className="text-center text-4xl md:text-5xl mb-6 font-bold text-white leading-snug font-title">
-          A&nbsp;fast,&nbsp;powerful IDE&nbsp;for&nbsp;Go
+    <div className="mx-auto md:mt-24 w-full" style={{ maxWidth: "1920px" }}>
+      <div className="max-w-full leading-relaxed p-8">
+        <div
+          className="md:text-center text-5xl md:text-5xl mb-6 md:mb-1 font-bold text-white font-title"
+          style={{ lineHeight: "1.1" }}
+        >
+          A fast, powerful IDE for Go
         </div>
 
-        <p className="md:hidden text-center">
-          A power tool with a minimal resource footprint. Designed around the Go
-          development workflow.
+        <p className="md:text-center text-xl text-gray-500 leading-normal">
+          Feature-rich and lightweight.
+          <br />A power tool with a small resource footprint.
         </p>
 
-        <p className="hidden md:block max-w-full mx-auto text-center text-xl text-neutral-400 leading-normal">
-          A power tool with a minimal resource footprint.
-          <br />
-          Designed around the Go development workflow.
-        </p>
-
-        <div className="mt-8 text-center flex gap-4 justify-center">
+        <div className="mt-8 md:mt-8 md:text-center flex gap-4 md:justify-center">
           <A
-            link
             href="/download"
             className="btn btn1 justify-center flex md:inline-flex text-center"
           >
@@ -323,6 +322,7 @@ function Home() {
             <img alt="screenshot" src={asset("/basics-screenshot.png")} />
           </A>
         </div>
+
         <div
           className="hidden md:block relative max-w-screen-xl mt-16 mx-auto"
           style={{ height: "450px" }}
@@ -338,14 +338,14 @@ function Home() {
       <div className="batteries-included z-10 px-4 py-16 md:py-32">
         <div className="batteries-included-child md:flex max-w-screen-xl mx-auto">
           <div className="md:w-2/5 md:pr-8 lg:pr-16">
-            <div className="text-4xl md:mt-24 mb-6 font-bold text-black font-title">
+            <div className="text-3xl md:mt-24 mb-6 font-bold text-black font-title">
               Batteries included
             </div>
 
-            <div className="text-xl text-neutral-700 leading-relaxed">
+            <div className="text-xl text-neutral-700">
               <p>
-                CodePerfect is feature-rich and works out of the box with
-                (almost) zero configuration.
+                CodePerfect is feature-rich and works out of the box with almost
+                zero configuration.
               </p>
               <p>
                 The power of an IDE, bundled into a software package as fast as
@@ -368,17 +368,17 @@ function Home() {
                 className="batteries-included-tile shadow-sm rounded p-3 transition-all select-none"
                 key={it.label}
               >
-                <div className="leading-none mb-2">
-                  <img
-                    className="inline-block w-auto h-6 mb-1.5"
-                    src={asset(`/icon-${getIconName(it.label)}.png`)}
-                    alt={it.label}
-                  />
-                  <div className="leading-none font-bold text-sm text-neutral-700">
-                    {it.label}
-                  </div>
+                <img
+                  className="inline-block w-auto h-5 mb-3"
+                  src={asset(`/icon-${getIconName(it.label)}.png`)}
+                  alt={it.label}
+                />
+                <div className="font-sans text-sm leading-none font-semibold text-neutral-700">
+                  {it.label}
                 </div>
-                <div className="text-sm text-neutral-500">{it.desc}</div>
+                <div className="mt-1.5 font-sans text-sm text-neutral-400 leading-snug">
+                  {it.desc}
+                </div>
               </div>
             ))}
           </div>
@@ -398,7 +398,7 @@ function Home() {
           style={{ maxWidth: "1280px" }}
         >
           <div
-            style={{ background: "rgba(255, 255, 255, 0.1)" }}
+            // style={{ background: "rgba(255, 255, 255, 0.1)" }}
             className="flex-1 flex flex-col items-center justify-center"
           />
           <div className="box-border md:w-1/2 pt-28 pb-14 px-8 md:pt-48 md:pb-36 md:px-24 text-xl leading-relaxed border-dashed border-neutral-200">
@@ -410,17 +410,14 @@ function Home() {
               ))}
             </p>
             <div className="mt-6 md:mt-12 mb-6">
-              We{" "}
-              <A newWindow href={LINKS.handmadeManifesto}>
-                handmade
-              </A>{" "}
-              the entire IDE stack from the metal up in blazing fast C/C++, into
-              a barebones native app that literally just does the thing it's
-              supposed to.
+              We threw out the modern software stack and{" "}
+              <A href={LINKS.handmadeManifesto}>handmade</A> the whole IDE from
+              the metal up, in blazing fast C/C++. The result: a barebones
+              native app that just does what it's supposed to.
             </div>
             <p>
-              From the UI renderer to the code intelligence engine, everything
-              is hand-optimized to be as performant as a video game.
+              From the UI renderer to the code indexer, everything is
+              hand-optimized to be as performant as a video game.
             </p>
           </div>
         </div>
@@ -430,24 +427,35 @@ function Home() {
         className="py-12 px-8 md:py-32"
         // style={{ background: "rgba(0, 0, 0, 0.2)" }}
       >
-        <div className="grid grid-cols-1 md:grid-cols-3 max-w-screen-lg mx-auto gap-12 md:gap-20">
+        <div className="grid grid-cols-1 md:grid-cols-3 max-w-screen-xl mx-auto gap-12 md:gap-20">
           {SELLING_POINTS.map((it) => (
-            <div
-              key={it.label}
-              style={{ borderColor: "rgba(255, 255, 255, 0.05)" }}
-            >
-              <img src={it.icon} alt={it.label} className="w-auto h-10 mb-2" />
-              <div className="text-lg font-title font-semibold text-white mb-4">
+            <div key={it.label}>
+              <div className="relative">
+                <img
+                  src={it.icon}
+                  className={twMerge(cx("w-auto h-10 mb-3", it.classes))}
+                />
+                <div
+                  className="absolute top-0 bottom-0 right-full mr-3 border-r-4"
+                  style={{
+                    borderColor: "rgb(11, 158, 245)",
+                    filter: "saturate(0.35)",
+                  }}
+                />
+              </div>
+              <div className="text-lg font-bold font-title mb-2 font-white">
                 {it.label}
               </div>
-              <div>{it.content}</div>
+              <div className="text-neutral-400 leading-relaxed">
+                {it.content}
+              </div>
             </div>
           ))}
         </div>
       </div>
 
-      <div className="md:px-4">
-        <div className="bg-white max-w-screen-xl mx-auto md:flex text-neutral-700 border-white border-2 py-12 px-8 md:p-8 lg:p-16 overflow-hidden md:rounded-lg md:shadow-lg md:mb-24">
+      <div className="md:px-4 bg-white border-white border-t-2 md:rounded-lg md:shadow">
+        <div className="max-w-screen-xl mx-auto md:flex text-neutral-700 py-12 px-8 md:p-16 lg:p-24 overflow-hidden md:mb-12">
           <div className="md:w-1/3">
             <div className="text-black font-bold text-3xl mb-6 font-title">
               Ready to get started?
@@ -457,9 +465,8 @@ function Home() {
               <br />
               with all features available.
             </p>
-            <p>
+            <p className="flex gap-3">
               <A
-                link
                 href="/download"
                 className={twMerge(
                   "btn btn1 justify-center inline-flex text-center bg-black text-white px-6"
@@ -468,6 +475,15 @@ function Home() {
                 <Icon className="mr-2" icon={HiOutlineDownload} />
                 Download
               </A>
+              {/* <A
+                href="/faq"
+                className={twMerge(
+                  "btn btn2 justify-center inline-flex text-center bg-black text-white px-6"
+                )}
+              >
+                View FAQs
+                <Icon className="ml-2" icon={BsChevronRight} />
+              </A> */}
             </p>
           </div>
           <div className="flex-1 relative hidden md:block">
@@ -540,6 +556,7 @@ function BuyLicense() {
     },
 
     {
+      recommended: true,
       name: "Pro",
       price: 10,
       features: [
@@ -567,7 +584,7 @@ function BuyLicense() {
     },
   ];
 
-  const faqs = [
+  const help = [
     {
       title: "Not sure yet?",
       content: (
@@ -611,7 +628,7 @@ function BuyLicense() {
           </p>
           <p>
             <A href={`mailto:${SUPPORT_EMAIL}`} className="btn btn2 btn-small">
-              Contact Us
+              Contact us
             </A>
           </p>
         </>
@@ -621,19 +638,37 @@ function BuyLicense() {
 
   return (
     <div className="mt-12 md:mt-24">
-      <div className="text-center text-white font-title text-3xl md:text-5xl font-bold mb-4 md:mb-12">
+      <div className="text-center text-white font-title text-3xl md:text-5xl font-bold mb-6 md:mb-24">
         Buy License
       </div>
       <div className="md:max-w-screen-xl mx-auto">
-        <div className="my-6 grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-12 rounded">
-          {plans.map(({ name, price, features, buttons }) => {
+        <div className="mx-6 my-6 grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-12 rounded">
+          {plans.map(({ name, price, features, buttons, recommended }) => {
             const options = [
-              [buttons.monthlyLink, "Monthly"],
-              [buttons.yearlyLink, "Yearly*"],
+              [buttons.monthlyLink, "monthly", false],
+              [buttons.yearlyLink, "yearly", true],
             ];
 
             return (
-              <div className="w-auto overflow-hidden border border-neutral-600 rounded-lg shadow-lg p-5 mx-6 md:mx-0">
+              <div
+                className={cx(
+                  twMerge(
+                    "w-auto shadow-lg p-5 mx-6 md:mx-0 relative",
+                    recommended ? "rounded-b-lg" : "rounded-lg",
+                    recommended
+                      ? "border border-primary"
+                      : "border border-neutral-600"
+                  )
+                )}
+              >
+                {recommended && (
+                  <div
+                    className="absolute bg-primary text-white bottom-full left-0 right-0 rounded-t-lg text-base font-semibold leading-none p-3 text-center font-title"
+                    style={{ marginLeft: "-1px", marginRight: "-1px" }}
+                  >
+                    Most Popular*
+                  </div>
+                )}
                 <div className="text-neutral-300">
                   <div className="font-title font-bold text-lg text-neutral-400">
                     {name}
@@ -647,7 +682,7 @@ function BuyLicense() {
                     <div
                       className={cx(
                         "flex items-start space-x-1 leading-6 mb-1 last:mb-0",
-                        it.not ? "text-red-600" : "text-neutral-200"
+                        it.not ? "text-red-400" : "text-neutral-300"
                       )}
                     >
                       <Icon
@@ -664,17 +699,30 @@ function BuyLicense() {
                       className="btn btn2 block text-center py-3"
                       href={`mailto:${SUPPORT_EMAIL}`}
                     >
-                      Contact Support
+                      Contact support
                     </A>
                   ) : (
                     <div className="grid grid-cols-2 items-center gap-x-2">
-                      {options.map(([link, unit]) => (
-                        <A
-                          className="btn btn1 py-3 block text-center"
-                          href={link}
-                        >
-                          Buy {unit}
-                        </A>
+                      {options.map(([link, unit, yearly]) => (
+                        <span className="relative group">
+                          {yearly && (
+                            <span className="hidden group-hover:inline-block shadow absolute bottom-full mb-4 text-sm font-title font-semibold text-gray-500 right-1/2 whitespace-nowrap translate-x-1/2 w-auto rounded bg-neutral-100 text-neutral-500 py-2 px-3 leading-none">
+                              <span
+                                class={twMerge(
+                                  "w-0 h-0 border-transparent border-t-neutral-100 absolute top-full left-1/2 -translate-x-1/2"
+                                )}
+                                style={{ borderWidth: "6px" }}
+                              />
+                              2 months free!
+                            </span>
+                          )}
+                          <A
+                            className="btn btn1 py-3 block text-center"
+                            href={link}
+                          >
+                            Buy {unit}
+                          </A>
+                        </span>
                       ))}
                     </div>
                   )}
@@ -683,30 +731,51 @@ function BuyLicense() {
             );
           })}
         </div>
-        <div className="text-center text-neutral-400 text-lg mt-4">
-          * get two months free when you buy yearly
+        <div className="text-neutral-300 mt-4 text-center leading-tight text-base">
+          * Many users expense the purchase with their employer.
         </div>
       </div>
-      <div className="md:max-w-screen-xl mx-auto grid grid-cols-1 md:grid-cols-3 mt-12 md:mt-24 mb:4 md:my-24 md:border-t border-gray-100">
-        {faqs.map((it) => (
-          <div className="border-t md:border-t-0 md:border-r border-gray-100 first:border-l p-6 md:pt-8 md:pb-0 md:px-8">
-            <div
-              className="w-8 border-b-4 mb-2"
-              style={{
-                borderColor: "rgb(11, 158, 245)",
-                filter: "saturate(0.35)",
-              }}
-            />
-            <div className="font-title text-neutral-300 text-lg font-bold mb-2">
-              {it.title}
+      <div className="md:max-w-screen-xl mx-auto">
+        <div className="mx-6 grid grid-cols-1 md:grid-cols-3 mt-12 md:mt-24 mb:4 md:my-24 md:border-t border-gray-100">
+          {help.map((it) => (
+            <div className="border-t md:border-t-0 md:border-r border-gray-100 first:border-l p-6 md:pt-8 md:pb-0 md:px-8">
+              <div
+                className="w-8 border-b-4 mb-2"
+                style={{
+                  borderColor: "rgb(11, 158, 245)",
+                  filter: "saturate(0.35)",
+                }}
+              />
+              <div className="font-title text-neutral-300 text-lg font-bold mb-2">
+                {it.title}
+              </div>
+              <div className="text-gray-500 leading-normal">{it.content}</div>
             </div>
-            <div className="text-gray-500">{it.content}</div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     </div>
   );
 }
+
+/*
+function Question({ q, children }) {
+  return (
+    <>
+      <p className="font-title font-bold">{q}</p>
+      <p>{children}</p>
+    </>
+  );
+}
+
+function FAQ() {
+  return (
+    <WallOfText>
+      <Title>Frequently Asked Questions</Title>
+    </WallOfText>
+  );
+}
+*/
 
 function Download() {
   const links = [
@@ -784,7 +853,7 @@ function Download() {
           ))}
         </p>
         <div className="flex items-center justify-center">
-          <div className="mt-12 py-4 px-6 bg-neutral-900 rounded flex items-strt md:items-center gap-2 text-neutral-400">
+          <div className="max-w-screen-xl mt-12 py-4 px-6 bg-neutral-900 rounded flex items-start md:items-center gap-2 text-neutral-400">
             <span
               className="text-xl relative pr-2 md:pr-0"
               style={{ top: "1px" }}
@@ -793,7 +862,7 @@ function Download() {
             </span>
             <span>
               CodePerfect is free to evaluate for 7 days. After that you'll need
-              a <A href="/buy">license</A> for continued use.
+              a <A href="/buy">license</A> to keep using it.
             </span>
           </div>
         </div>
@@ -936,11 +1005,11 @@ function Header() {
             </div>
           )}
         </div>
-        <div className="hidden md:flex items-baseline space-x-6">
+        <div className="hidden md:flex items-baseline gap-x-8">
           {links.map(([url, label]) => (
             <A
-              className="font-semibold text-neutral-400 hover:text-neutral-300 no-underline whitespace-nowrap hidden md:inline-block"
-              style={{ fontSize: "0.9em" }}
+              className="text-neutral-300 hover:text-neutral-100 no-underline whitespace-nowrap hidden md:inline-block"
+              // style={{ fontSize: "0.95em" }}
               href={url}
             >
               {label}
@@ -966,6 +1035,7 @@ function Footer() {
           <FootSection>
             <FootLink href="/buy">Buy License</FootLink>
             <FootLink href="/download">Download</FootLink>
+            {/* <FootLink href="/faq">FAQs</FootLink> */}
           </FootSection>
           <FootSection>
             <FootLink href={LINKS.docs}>Docs</FootLink>
@@ -1016,6 +1086,7 @@ function App() {
           <Route path="/" element={<Layout />}>
             <Route path="download" element={<Download />} />
             <Route path="buy" element={<BuyLicense />} />
+            {/* <Route path="faq" element={<FAQ />} /> */}
             <Route path="payment-done" element={<PaymentDone />} />
             <Route path="portal-done" element={<PortalDone />} />
             <Route path="terms" element={<Terms />} />

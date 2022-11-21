@@ -17,6 +17,11 @@ if [[ "$RELEASE" == "1" ]]; then
         mv build/bin/ide.dSYM/Contents/Resources/DWARF/ide build/dsym
         rm -rf build/bin/ide.dSYM
         strip -u -r -S -x build/bin/ide
+    elif [[ $os == "windows" ]]; then
+        mv build/bin/ide.pdb build/pdb
+        pushd build/bin
+        rm -f ide.exe.manifest ide.exp ide.ilk ide.lib
+        popd
     fi
 else
     sh/make prep

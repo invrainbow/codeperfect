@@ -325,6 +325,7 @@ struct Window {
     void get_framebuffer_size(int* width, int* height);
     void get_content_scale(float* xscale, float* yscale);
     bool is_focused();
+    void focus();
     void get_cursor_pos(double* xpos, double* ypos);
     void set_cursor(Cursor *_cursor);
     void *get_native_handle();

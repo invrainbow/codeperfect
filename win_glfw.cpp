@@ -317,6 +317,10 @@ void Window::get_content_scale(float* xscale, float* yscale) {
     glfwGetWindowContentScale(window, xscale, yscale);
 }
 
+void Window::focus() {
+    glfwFocusWindow(window);
+}
+
 bool Window::is_focused() {
     return glfwGetWindowAttrib(window, GLFW_FOCUSED);
 }

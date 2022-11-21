@@ -391,12 +391,12 @@ void World::init() {
 
     t.log("init random shit");
 
+    configdir = GHGetConfigDir();
+    if (!configdir) cp_panic("couldn't get config dir");
+
     // read options from disk
     do {
-        auto configpath = GHGetConfigDir();
-        if (!configpath) break;
-
-        auto filepath = path_join(configpath, ".options");
+        auto filepath = path_join(configdir, ".options");
 
         File f;
         if (f.init_read(filepath) != FILE_RESULT_OK)
@@ -548,15 +548,13 @@ void World::init() {
 
     world.file_explorer.show = true;
 
-    autocomplete_basic_mode = true;
-
     last_manually_run_command = CMD_INVALID;
 
 #ifdef DEBUG_BUILD
     // if (!use_nvim) world.wnd_history.show = true;
 
     show_frame_index = false;
-    escape_flashes_cursor_red = true;
+    // escape_flashes_cursor_red = true;
 #endif
     t.log("segment g");
 }
@@ -1900,6 +1898,7 @@ void init_command_info_table() {
     command_info_table[CMD_REMOVE_TAG] = k(0, 0, "Struct: Remove tag");
     command_info_table[CMD_REMOVE_ALL_TAGS] = k(0, 0, "Struct: Remove all tags");
     command_info_table[CMD_COMMAND_PALETTE] = k(CP_MOD_PRIMARY, CP_KEY_K, "Command Palette");
+    command_info_table[CMD_OPEN_FILE_MANUALLY] = k(CP_MOD_PRIMARY, CP_KEY_O, "Open File...");
 }
 
 void do_find_interfaces() {
@@ -2063,6 +2062,21 @@ void handle_command(Command cmd, bool from_menu) {
     if (!is_command_enabled(cmd)) return;
 
     switch (cmd) {
+    case CMD_OPEN_FILE_MANUALLY: {
+        Select_File_Opts opts; ptr0(&opts);
+        opts.buf = alloc_array(char, 256);
+        opts.bufsize = 256;
+        opts.starting_folder = cp_strdup(world.current_path);
+        opts.folder = false;
+        opts.save = false;
+        if (!let_user_select_file(&opts)) break;
+        if (!goto_file_and_pos(opts.buf, new_cur2(0, 0))) {
+            tell_user(NULL, cp_sprintf("Unable to open %s.", cp_basename(opts.buf)));
+            break;
+        }
+        break;
+    }
+
     case CMD_COMMAND_PALETTE: {
         SCOPED_MEM(&world.run_command_mem);
         world.run_command_mem.reset();
@@ -2387,7 +2401,10 @@ void handle_command(Command cmd, bool from_menu) {
             defer { cancel_find_references(); };
 
             auto files = world.indexer.find_references(wnd.declres, false);
-            if (!files) return;
+            if (isempty(files)) return;
+
+            wnd.current_file = 0;
+            wnd.current_result = 0;
 
             {
                 SCOPED_MEM(&world.find_references_mem);
@@ -2413,6 +2430,10 @@ void handle_command(Command cmd, bool from_menu) {
         wnd.done = false;
         wnd.results = NULL;
         wnd.thread = create_thread(thread_proc, NULL);
+        wnd.current_file = -1;
+        wnd.current_result = -1;
+        wnd.scroll_to_file = -1;
+        wnd.scroll_to_result = -1;
         if (!wnd.thread) {
             tell_user_error("Unable to kick off Find References.");
             break;
@@ -3590,9 +3611,7 @@ void fuzzy_sort_filtered_results(ccstr query, List<int> *list, int total_results
 }
 
 ccstr get_auth_filepath() {
-    auto configpath = GHGetConfigDir();
-    if (!configpath) cp_panic("Unable to open config directory.");
-    return path_join(configpath, ".auth");
+    return path_join(world.configdir, ".auth");
 }
 
 void read_auth() {
@@ -3656,4 +3675,45 @@ void fstlog(ccstr fmt, ...) {
     va_end(vl);
 
     world.fst.log(s);
+}
+
+u8 huge_buffer_for_crash_handler[1024 * 64];
+
+void write_stacktrace_to_file(ccstr stacktrace) {
+    auto fp = path_join(world.configdir, cp_sprintf("crash-report.txt", get_unix_time()));
+    print("filepath: %s", fp);
+
+    File f;
+    if (f.init_write(fp) != FILE_RESULT_OK) {
+        print("unable to open file??");
+        return;
+    }
+    defer { f.cleanup(); };
+
+    f.write(stacktrace, strlen(stacktrace));
+}
+
+NORETURN void crash_handler(int sig) {
+    print("crash handler sig %d", sig);
+
+    // this is so stupid, but we have to create a pool that never calls malloc
+    Pool mem; ptr0(&mem);
+    mem.name = "crash_handler";
+    mem.blocksize = _countof(huge_buffer_for_crash_handler);
+    mem.sp = 0;
+    {
+        Pool_Block block; ptr0(&block);
+        block.base = huge_buffer_for_crash_handler;
+        block.size = _countof(huge_buffer_for_crash_handler);
+        mem.curr = &block;
+    }
+    SCOPED_MEM(&mem);
+
+    print("mem initialized");
+
+    auto st = generate_stack_trace(cp_sprintf("crash handler on signal %d", sig));
+    write_stacktrace_to_file(st);
+    print("stacktrace:\n%s", st);
+
+    exit_from_crash_handler();
 }

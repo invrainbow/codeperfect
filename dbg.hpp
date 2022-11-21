@@ -302,6 +302,7 @@ struct Debugger {
     int conn;
     int packetid;
 
+    int debuggee_pid;
     int state_id;
 
     Dlv_State state_flag;

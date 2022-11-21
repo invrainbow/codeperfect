@@ -25,9 +25,9 @@ struct Settings {
     int editor_margin_x = 5;
     int editor_margin_y = 5;
     float line_height = 1.2;
-    int goto_file_max_results = 50;
-    int goto_symbol_max_results = 50;
-    int generate_implementation_max_results = 50;
+    int goto_file_max_results = 20;
+    int goto_symbol_max_results = 20;
+    int generate_implementation_max_results = 20;
     int run_command_max_results = 10;
 };
 
@@ -40,6 +40,8 @@ struct Options {
     serde_int struct_tag_case_style = 0; // serde(6)
     serde_bool autocomplete_func_add_paren = true; // serde(7)
     serde_bool dbg_hide_system_goroutines = true; // serde(8)
+    serde_int zoom_level = 100; // serde(9)
+    serde_bool send_crash_reports = true; // serde(10)
 };
 
 struct Build_Profile {

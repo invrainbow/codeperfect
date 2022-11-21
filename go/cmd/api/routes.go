@@ -15,6 +15,7 @@ import (
 	"github.com/invrainbow/codeperfect/go/cmd/lib"
 	"github.com/invrainbow/codeperfect/go/db"
 	"github.com/invrainbow/codeperfect/go/models"
+	"github.com/invrainbow/codeperfect/go/versions"
 	"github.com/stripe/stripe-go/v72"
 	"github.com/stripe/stripe-go/v72/billingportal/session"
 	"github.com/stripe/stripe-go/v72/customer"
@@ -204,6 +205,76 @@ func PostHeartbeat(c *gin.Context) {
 	c.JSON(200, &gin.H{"ok": true})
 }
 
+func PostCrashReport(c *gin.Context) {
+	// just try to auth the user, but it's ok if user isn't authed, and don't fail if there's an error
+	user, err := authUser(c)
+	if err != nil {
+		// do print it out though
+		log.Print(err)
+	}
+
+	if user == nil {
+		log.Print("user is nil")
+	} else {
+		log.Printf("user not nil, email = %s license = %s", user.Email, user.LicenseKey)
+	}
+
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{})
+		log.Printf("ioutil.Readall: %v", err)
+		return
+	}
+
+	var req models.CrashReportRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{})
+		log.Printf("json.unmarshal", err)
+		return
+	}
+
+	if len(req.OS) > 16 {
+		c.JSON(http.StatusBadRequest, gin.H{})
+		log.Printf("user sent bad os: %s", req.OS[:128])
+		return
+	}
+
+	content := req.Content
+
+	if len(content) > 2048 {
+		log.Printf("user sent large content with len %d", len(content))
+		content = content[:2048]
+	}
+
+	newlines := 0
+	for i, ch := range content {
+		if ch == '\n' {
+			newlines++
+			if newlines > 128 {
+				log.Printf("user sent large content with lots of lines")
+				content = content[:i]
+				break
+			}
+		}
+	}
+
+	infoParts := []string{
+		req.OS + "-" + versions.VersionToString(req.Version),
+		c.ClientIP(),
+	}
+
+	if user != nil {
+		infoParts = append(infoParts, user.Email)
+	}
+
+	for i, val := range infoParts {
+		infoParts[i] = fmt.Sprintf("`%s`", val)
+	}
+
+	go SendSlackMessage("*New crash report*: %s\n```%s```", strings.Join(infoParts, " "), content)
+	c.JSON(http.StatusOK, true)
+}
+
 func PostStripeWebhook(c *gin.Context) {
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
@@ -368,6 +439,9 @@ func processStripeEvent(event stripe.Event) {
 
 	if user.Active {
 		if newUser {
+			if err := AddEmailToMailingList(user.Email); err != nil {
+				log.Printf("couldn't add email to convertkit: %v", err)
+			}
 			doSendEmail("CodePerfect 95: New License", emailUserCreatedTxt, emailUserCreatedHtml)
 		} else {
 			doSendEmail("CodePerfect 95: License Reactivated", emailUserEnabledTxt, emailUserEnabledHtml)
