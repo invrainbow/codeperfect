@@ -1,11 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -40,6 +42,41 @@ func init() {
 
 	stripe.Key = StripeAPIKey
 	eventQueue = make(chan stripe.Event)
+}
+
+// https://github.com/gin-gonic/gin/issues/2697#issuecomment-957244574
+func isPrivateIP(ip string) bool {
+	if ip == "127.0.0.1" || ip == "::1" {
+		return true
+	}
+
+	ranges := [][]net.IP{
+		{net.ParseIP("10.0.0.0"), net.ParseIP("10.255.255.255")},
+		{net.ParseIP("127.0.0.0"), net.ParseIP("127.255.255.255")},
+		{net.ParseIP("169.254.0.0"), net.ParseIP("169.254.255.255")},
+		{net.ParseIP("172.16.0.0"), net.ParseIP("172.31.255.255")},
+		{net.ParseIP("192.168.0.0"), net.ParseIP("192.168.255.255")},
+	}
+
+	trial := net.ParseIP(ip)
+	for _, pair := range ranges {
+		if bytes.Compare(trial, pair[0]) >= 0 && bytes.Compare(trial, pair[1]) <= 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func WorkaroundGinRetardationAndGetClientIP(c *gin.Context) string {
+	ip := c.ClientIP()
+	if ip != "127.0.0.1" && ip != "::1" {
+		return ip
+	}
+	realip := c.GetHeader("X-Forwarded-For")
+	if realip == "" || isPrivateIP(realip) {
+		return ip
+	}
+	return realip
 }
 
 func GetAPIBase() string {
@@ -115,9 +152,9 @@ func PostTrial(c *gin.Context) {
 		return
 	}
 
-	ip := c.ClientIP()
+	ip := WorkaroundGinRetardationAndGetClientIP(c)
 
-	SendSlackMessage("trial user opened on ip `%s`", ip)
+	SendSlackMessage("trial user opened: `%s` `%s` `%s`", ip, req.OS, req.CurrentVersion)
 
 	PosthogCaptureStringId(ip, "trial user", PosthogProps{
 		"os":              req.OS,
@@ -260,7 +297,7 @@ func PostCrashReport(c *gin.Context) {
 
 	infoParts := []string{
 		req.OS + "-" + versions.VersionToString(req.Version),
-		c.ClientIP(),
+		WorkaroundGinRetardationAndGetClientIP(c),
 	}
 
 	if user != nil {
