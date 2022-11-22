@@ -1,6 +1,6 @@
 import { AiFillApple } from "@react-icons/all-files/ai/AiFillApple";
 import { AiFillWindows } from "@react-icons/all-files/ai/AiFillWindows";
-import { AiFillInfoCircle } from "@react-icons/all-files/ai/AiFillInfoCircle";
+import { AiOutlineInfoCircle } from "@react-icons/all-files/ai/AiOutlineInfoCircle";
 import { AiOutlineCheck } from "@react-icons/all-files/ai/AiOutlineCheck";
 import { AiOutlineClose } from "@react-icons/all-files/ai/AiOutlineClose";
 import { BiMenu } from "@react-icons/all-files/bi/BiMenu";
@@ -335,9 +335,9 @@ function Home() {
         </div>
       </div>
 
-      <div className="batteries-included z-10 px-4 py-16 md:py-32">
+      <div className="batteries-included z-10 px-6 md:px-12 py-16 md:py-32">
         <div className="batteries-included-child md:flex max-w-screen-xl mx-auto">
-          <div className="md:w-2/5 md:pr-8 lg:pr-16">
+          <div className="md:w-2/5 pb-6 md:pb-0 md:pr-8 lg:pr-12">
             <div className="text-3xl md:mt-24 mb-6 font-bold text-black font-title">
               Batteries included
             </div>
@@ -365,7 +365,7 @@ function Home() {
           <div className="flex-1 mx-auto grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6 mt-8 md:mt-0 md:p-0">
             {FEATURES.map((it) => (
               <div
-                className="batteries-included-tile shadow-sm rounded p-3 transition-all select-none"
+                className="batteries-included-tile shadow-sm rounded p-3 md:p-4 transition-all select-none"
                 key={it.label}
               >
                 <img
@@ -404,7 +404,7 @@ function Home() {
           <div className="box-border md:w-1/2 pt-28 pb-14 px-8 md:pt-48 md:pb-36 md:px-24 text-xl leading-relaxed border-dashed border-neutral-200">
             <p>
               {BAD_FEATURES.map((name) => (
-                <div className="text-2xl md:text-3xl font-bold text-neutral-800 md:leading-snug font-title">
+                <div className="text-3xl md:text-4xl font-bold text-neutral-800 leading-snug md:leading-tight font-title">
                   No {name}.
                 </div>
               ))}
@@ -424,7 +424,7 @@ function Home() {
       </div>
 
       <div
-        className="py-12 px-8 md:py-32"
+        className="py-12 pl-12 pr-8 md:pl-16 md:pr-12 md:py-32"
         // style={{ background: "rgba(0, 0, 0, 0.2)" }}
       >
         <div className="grid grid-cols-1 md:grid-cols-3 max-w-screen-xl mx-auto gap-12 md:gap-20">
@@ -454,16 +454,14 @@ function Home() {
         </div>
       </div>
 
-      <div className="md:px-4 bg-white border-white border-t-2 md:rounded-lg md:shadow">
+      <div className="md:mx-8 md:px-4 bg-white border-white border-t-2 md:rounded-lg md:shadow">
         <div className="max-w-screen-xl mx-auto md:flex text-neutral-700 py-12 px-8 md:p-16 lg:p-24 overflow-hidden md:mb-12">
-          <div className="md:w-1/3">
+          <div className="md:w-1/3 border-box pr-8">
             <div className="text-black font-bold text-3xl mb-6 font-title">
               Ready to get started?
             </div>
             <p className="text-xl leading-relaxed mb-8">
-              Try CodePerfect for free for 7 days
-              <br />
-              with all features available.
+              Try CodePerfect for free for 7 days with all features available.
             </p>
             <p className="flex gap-3">
               <A
@@ -642,7 +640,7 @@ function BuyLicense() {
         Buy License
       </div>
       <div className="md:max-w-screen-xl mx-auto">
-        <div className="mx-6 my-6 grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-12 rounded">
+        <div className="mx-6 my-6 grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-12 rounded">
           {plans.map(({ name, price, features, buttons, recommended }) => {
             const options = [
               [buttons.monthlyLink, "monthly", false],
@@ -653,92 +651,97 @@ function BuyLicense() {
               <div
                 className={cx(
                   twMerge(
-                    "w-auto shadow-lg p-5 mx-6 md:mx-0 relative",
-                    recommended ? "rounded-b-lg" : "rounded-lg",
-                    recommended
-                      ? "border border-primary"
-                      : "border border-neutral-600"
+                    cx(
+                      "w-auto shadow-lg relative",
+                      "rounded-lg",
+                      recommended && "md:rounded-t-none md:rounded-b-lg",
+                      recommended
+                        ? "border border-primary"
+                        : "border border-neutral-600"
+                    )
                   )
                 )}
               >
                 {recommended && (
                   <div
-                    className="absolute bg-primary text-white bottom-full left-0 right-0 rounded-t-lg text-base font-semibold leading-none p-3 text-center font-title"
+                    className="md:absolute md:bottom-full md:left-0 md:right-0 rounded-t-lg bg-primary text-white text-base font-semibold leading-none p-3 text-center font-title"
                     style={{ marginLeft: "-1px", marginRight: "-1px" }}
                   >
                     Most Popular*
                   </div>
                 )}
-                <div className="text-neutral-300">
-                  <div className="font-title font-bold text-lg text-neutral-400">
-                    {name}
-                  </div>
-                  <div className="font-title font-bold text-xl">
-                    {price === "custom" ? "Custom pricing" : <>${price}/mo</>}
-                  </div>
-                </div>
-                <div className="my-5">
-                  {features.map((it) => (
-                    <div
-                      className={cx(
-                        "flex items-start space-x-1 leading-6 mb-1 last:mb-0",
-                        it.not ? "text-red-400" : "text-neutral-300"
-                      )}
-                    >
-                      <Icon
-                        className="relative top-1 transform scale-90 origin-center"
-                        icon={it.not ? AiOutlineClose : AiOutlineCheck}
-                      />
-                      <span>{it.label}</span>
+                <div className="p-5">
+                  <div className="text-neutral-300">
+                    <div className="font-title font-bold text-lg text-neutral-400">
+                      {name}
                     </div>
-                  ))}
-                </div>
-                <div>
-                  {buttons.enterprise ? (
-                    <A
-                      className="btn btn2 block text-center py-3"
-                      href={`mailto:${SUPPORT_EMAIL}`}
-                    >
-                      Contact support
-                    </A>
-                  ) : (
-                    <div className="grid grid-cols-2 items-center gap-x-2">
-                      {options.map(([link, unit, yearly]) => (
-                        <span className="relative group">
-                          {yearly && (
-                            <span className="hidden group-hover:inline-block shadow absolute bottom-full mb-4 text-sm font-title font-semibold text-gray-500 right-1/2 whitespace-nowrap translate-x-1/2 w-auto rounded bg-neutral-100 text-neutral-500 py-2 px-3 leading-none">
-                              <span
-                                class={twMerge(
-                                  "w-0 h-0 border-transparent border-t-neutral-100 absolute top-full left-1/2 -translate-x-1/2"
-                                )}
-                                style={{ borderWidth: "6px" }}
-                              />
-                              2 months free!
-                            </span>
-                          )}
-                          <A
-                            className="btn btn1 py-3 block text-center"
-                            href={link}
-                          >
-                            Buy {unit}
-                          </A>
-                        </span>
-                      ))}
+                    <div className="font-title font-bold text-xl">
+                      {price === "custom" ? "Custom pricing" : <>${price}/mo</>}
                     </div>
-                  )}
+                  </div>
+                  <div className="my-5">
+                    {features.map((it) => (
+                      <div
+                        className={cx(
+                          "flex items-start space-x-1 leading-6 mb-1 last:mb-0",
+                          it.not ? "text-red-400" : "text-neutral-300"
+                        )}
+                      >
+                        <Icon
+                          className="relative top-1 transform scale-90 origin-center"
+                          icon={it.not ? AiOutlineClose : AiOutlineCheck}
+                        />
+                        <span>{it.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div>
+                    {buttons.enterprise ? (
+                      <A
+                        className="btn btn2 block text-center py-3"
+                        href={`mailto:${SUPPORT_EMAIL}`}
+                      >
+                        Contact support
+                      </A>
+                    ) : (
+                      <div className="flex flex-col md:grid md:grid-cols-2 items-center gap-2">
+                        {options.map(([link, unit, yearly]) => (
+                          <span className="block w-full md:w-auto md:inline-block relative group">
+                            {yearly && (
+                              <span className="hidden group-hover:inline-block shadow absolute bottom-full mb-4 text-sm font-title font-semibold text-gray-500 right-1/2 whitespace-nowrap translate-x-1/2 w-auto rounded bg-neutral-100 text-neutral-500 py-2 px-3 leading-none">
+                                <span
+                                  class={twMerge(
+                                    "w-0 h-0 border-transparent border-t-neutral-100 absolute top-full left-1/2 -translate-x-1/2"
+                                  )}
+                                  style={{ borderWidth: "6px" }}
+                                />
+                                2 months free!
+                              </span>
+                            )}
+                            <A
+                              className="btn btn1 py-3 block text-center"
+                              href={link}
+                            >
+                              Buy {unit}
+                            </A>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             );
           })}
         </div>
-        <div className="text-neutral-300 mt-4 text-center leading-tight text-base">
+        <div className="text-neutral-300 mt-4 mx-6 md:mx-0 md:text-center leading-tight text-base">
           * Many users expense the purchase with their employer.
         </div>
       </div>
       <div className="md:max-w-screen-xl mx-auto">
         <div className="mx-6 grid grid-cols-1 md:grid-cols-3 mt-12 md:mt-24 mb:4 md:my-24 md:border-t border-gray-100">
           {help.map((it) => (
-            <div className="border-t md:border-t-0 md:border-r border-gray-100 first:border-l p-6 md:pt-8 md:pb-0 md:px-8">
+            <div className="border-t md:border-t-0 md:border-r border-gray-100 md:first:border-l px-0 py-8 md:pt-8 md:pb-0 md:px-8">
               <div
                 className="w-8 border-b-4 mb-2"
                 style={{
@@ -839,30 +842,27 @@ function Download() {
                     ? "#"
                     : `https://codeperfect95.s3.us-east-2.amazonaws.com/app/${it.platform}-${CURRENT_BUILD}.zip`
                 }
-                className={cx("btn btn1", it.disabledText && "disabled")}
+                className={cx(
+                  "btn btn1 flex md:inline-flex leading-none py-4 px-5",
+                  it.disabledText && "disabled"
+                )}
                 title={it.disabledText}
                 onClick={(e) => {
                   // disableButtonProps.onClick(e);
                   posthog.capture("download", { platform: it.platform });
                 }}
               >
-                <Icon className="mr-1" icon={it.icon} />
-                {it.label}
+                <Icon className="relative mr-1 text-lg" icon={it.icon} />
+                <span>{it.label}</span>
               </A>
             </div>
           ))}
         </p>
         <div className="flex items-center justify-center">
-          <div className="max-w-screen-xl mt-12 py-4 px-6 bg-neutral-900 rounded flex items-start md:items-center gap-2 text-neutral-400">
-            <span
-              className="text-xl relative pr-2 md:pr-0"
-              style={{ top: "1px" }}
-            >
-              <Icon icon={AiFillInfoCircle} />
-            </span>
+          <div className="max-w-screen-xl mt-4 flex items-start md:items-center gap-2">
             <span>
-              CodePerfect is free to evaluate for 7 days. After that you'll need
-              a <A href="/buy">license</A> to keep using it.
+              (CodePerfect is free to evaluate for 7 days. After that you'll
+              need a <A href="/buy">license</A> to keep using it.)
             </span>
           </div>
         </div>
