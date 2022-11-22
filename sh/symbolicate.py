@@ -26,10 +26,10 @@ if flavor == '-windows':
         lines = lines[i:]
         break
 
-    for i, line in enumerate(lines):
+    for line in lines:
         addr = line.split()[1]
         addr = hex(int(addr, 16) - base)
-        print(f'{i} {addr}')
+        print(f'ln ide.exe+{addr}')
 
 elif flavor == '-mac':
     lines, last = lines[:-1], lines[-1]
