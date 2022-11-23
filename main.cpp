@@ -627,6 +627,28 @@ void handle_window_event(Window_Event *it) {
                 break;
             }
 
+#if OS_MAC
+            // emacs style keybindings on macos
+            switch (keymods) {
+            case CP_MOD_CTRL:
+            case CP_MOD_CTRL | CP_MOD_SHIFT: {
+                switch (key) {
+                case CP_KEY_E: {
+                    auto &line = buf->lines[editor->cur.y];
+                    cur.x = line.len;
+                    handled = true;
+                    break;
+                }
+                case CP_KEY_A:
+                    cur.x = 0;
+                    handled = true;
+                    break;
+                }
+            }
+            }
+#endif
+
+
             if (!handled) break;
 
             if (keymods & CP_MOD_SHIFT) {
