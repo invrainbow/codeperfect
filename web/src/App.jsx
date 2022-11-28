@@ -1,6 +1,5 @@
 import { AiFillApple } from "@react-icons/all-files/ai/AiFillApple";
 import { AiFillWindows } from "@react-icons/all-files/ai/AiFillWindows";
-import { AiOutlineInfoCircle } from "@react-icons/all-files/ai/AiOutlineInfoCircle";
 import { AiOutlineCheck } from "@react-icons/all-files/ai/AiOutlineCheck";
 import { AiOutlineClose } from "@react-icons/all-files/ai/AiOutlineClose";
 import { BiMenu } from "@react-icons/all-files/bi/BiMenu";
@@ -928,11 +927,12 @@ function ScrollToTop() {
   return null;
 }
 
-function Logo() {
+function Logo({ onClick }) {
   return (
     <A
       href="/"
-      className="font-bold text-lg text-white no-underline whitespace-nowrap flex flex-shrink-0 items-center"
+      className="font-bold text-lg text-white no-underline whitespace-nowrap inline-flex flex-shrink-0 items-center"
+      onClick={onClick}
     >
       <img
         alt="logo"
@@ -990,7 +990,7 @@ function Header() {
               >
                 <Icon icon={AiOutlineClose} />
               </button>
-              <Logo />
+              <Logo onClick={() => setShowMenu(false)} />
               <div className="mt-2">
                 {links.map(([url, label]) => (
                   <A
