@@ -7319,6 +7319,7 @@ Gotype *Go_Indexer::expr_to_gotype(Ast_Node *expr) {
     case TS_PARENTHESIZED_EXPRESSION:
         return expr_to_gotype(expr->child());
 
+    case TS_NIL_LITERAL: return new_primitive_type("Type"); // what is the nil type again?
     case TS_TRUE_LITERAL: return new_primitive_type("bool");
     case TS_FALSE_LITERAL: return new_primitive_type("bool");
 
