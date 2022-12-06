@@ -1,15 +1,37 @@
+import {
+  IconMenu2,
+  IconCheck,
+  IconDownload,
+  IconTag,
+  IconChevronRight,
+  IconChevronDown,
+  IconClockHour4,
+  IconX,
+  IconBooks,
+  IconTelescope,
+  IconHexagons,
+  IconSearch,
+  IconRobot,
+  IconBinaryTree,
+  IconBulb,
+  IconBug,
+  IconTags,
+  IconWand,
+  IconDiamond,
+  IconCommand,
+  IconEdit,
+  IconTools,
+  IconBrain,
+  IconKeyboard,
+  IconBike,
+  IconCategory2,
+} from "@tabler/icons";
+
 import { AiFillApple } from "@react-icons/all-files/ai/AiFillApple";
 import { AiFillWindows } from "@react-icons/all-files/ai/AiFillWindows";
-import { AiOutlineCheck } from "@react-icons/all-files/ai/AiOutlineCheck";
-import { AiOutlineClose } from "@react-icons/all-files/ai/AiOutlineClose";
-import { BiMenu } from "@react-icons/all-files/bi/BiMenu";
-import { BsChevronRight } from "@react-icons/all-files/bs/BsChevronRight";
-import { AiFillTag } from "@react-icons/all-files/ai/AiFillTag";
-import { AiOutlineClockCircle } from "@react-icons/all-files/ai/AiOutlineClockCircle";
 import { FaLinux } from "@react-icons/all-files/fa/FaLinux";
 import { FaTwitter } from "@react-icons/all-files/fa/FaTwitter";
 import { FaDiscord } from "@react-icons/all-files/fa/FaDiscord";
-import { HiOutlineDownload } from "@react-icons/all-files/hi/HiOutlineDownload";
 
 import posthog from "posthog-js";
 import cx from "classnames";
@@ -155,111 +177,124 @@ function Icon({ block, noshift, icon: IconComponent, ...props }) {
 const FEATURES = _.shuffle([
   {
     label: "Integrated Debugger",
-    desc: "Full Delve integration. Debug your program from inside your IDE.",
+    desc: "Full Delve integration lets you full debugging powers.",
+    icon: IconBug,
   },
   {
     label: "Code Intelligence",
     desc: "Go to definition, find all usages, parameter hints, autocomplete, all the table stakes.",
+    icon: IconBulb,
   },
   {
     label: "Smart Autocomplete",
     desc: "Context-specific suggestions as you type. ",
+    icon: IconBrain,
   },
   {
     label: "Postfix Completions",
     desc: "Macros that work intelligently on your Go expressions.",
+    icon: IconRobot,
   },
   {
     label: "Global Fuzzy Selector",
     desc: "Works on files, symbols, commands, and completions.",
+    icon: IconTelescope,
   },
   {
     label: "Tree-Based Navigation",
     desc: "Use the power of our integrated parser to directly walk the AST.",
+    icon: IconBinaryTree,
   },
   {
     label: "Auto Format",
     desc: "Automatically gofmt your code on save, with zero configuration.",
+    icon: IconWand,
   },
   {
     label: "Integrated Build",
     desc: "Build, jump to & fix each error, all with ergonomic keyboard shortcuts.",
+    icon: IconTools,
   },
   {
     label: "Rename Identifier",
     desc: "Rename any symbol across your entire codebase.",
+    icon: IconEdit,
   },
   {
     label: "Command Palette",
     desc: "Press Primary+K to run any command or action inside CodePerfect.",
+    icon: IconCommand,
   },
   {
     label: "Generate Function",
     desc: "Take a call to a non-existent function and generate its signature.",
+    icon: IconDiamond,
   },
   {
     label: "Fast Project-Wide Grep",
     desc: "Fast search (and replace) runs in milliseconds on large codebases.",
+    icon: IconSearch,
   },
   {
     label: "Manage Interfaces",
     desc: "Find implementations and interfaces and generate implementations.",
+    icon: IconHexagons,
   },
   {
     label: "Organize Imports",
     desc: "Intelligently add/remove imports with our native import organizer.",
+    icon: IconBooks,
   },
   {
     label: "Manage Struct Tags",
     desc: "Add & remove struct tags automatically.",
+    icon: IconTags,
   },
 ]);
 
 const SELLING_POINTS = [
   {
-    icon: asset("/icon-vim.png"),
-    label: "Full Vim integration",
+    icon: IconKeyboard,
+    icon2: asset("/icon-vim.png"),
+    image: asset("/vim.avif"),
+    label: "Full native Vim integration",
     content: (
       <>
         <p>
-          Vim support is a first-class concept, not an afterthought plugin. Get
-          the whole Vim feature set at your fingertips, integrated seamlessly
-          with everything else.
+          First-class Vim support &mdash; not a plugin as an afterthought. The
+          whole Vim feature set, integrated seamlessly with everything else.
         </p>
       </>
     ),
   },
   {
-    icon: asset("/icon-basics.png"),
+    icon: IconCategory2,
+    icon2: asset("/icon-basics.png"),
     label: "Back to basics",
     content: (
       <>
         <p>
-          We achieve our its performant speeds mostly by keeping things light
-          and writing straightforward,{" "}
+          Straightforward,{" "}
           <A href="https://www.youtube.com/watch?v=pgoetgxecw8">
             non-pessimized
           </A>{" "}
-          code.
-        </p>
-        <p>
-          Instant startup. A buttery smooth 144 frames/sec. Imperceptible
-          latency after keystrokes. An indexer that gobbles through large
+          code brings you: Instant startup. A buttery 144 frames/sec. Near-zero
+          latency between keystrokes. An indexer that gobbles through large
           codebases.
         </p>
       </>
     ),
   },
   {
-    icon: asset("/icon-bicycle.png"),
+    icon: IconBike,
+    icon2: asset("/icon-bicycle.png"),
     label: "A bicycle for coding",
     content: (
       <>
         <p>
-          CodePerfect assists with your workflow instead of interfering with it.
-          With predictable operations, ergonomic hotkeys, and tons of cases of
-          “just doing the right thing,” CodePerfect performs its job and gets
-          out of the way.
+          With predictable operations, ergonomic shortcuts, and tons of cases of
+          “just doing the right thing,” CodePerfect does its job and gets out of
+          the way.
         </p>
       </>
     ),
@@ -270,25 +305,17 @@ const BAD_FEATURES = [
   "Electron",
   "JavaScript",
   "language servers",
-  "virtual machines",
   "browsers",
-  "opaque runtimes",
+  "laggy runtimes",
   "bloated abstractions",
 ];
 
 function Home() {
-  const getIconName = (name) => {
-    return name
-      .split(/[^A-Za-z]/)
-      .map((it) => it.toLowerCase())
-      .join("-");
-  };
-
   return (
     <div className="mx-auto md:mt-24 w-full" style={{ maxWidth: "1920px" }}>
-      <div className="max-w-full leading-relaxed p-8">
+      <div className="max-w-full leading-relaxed p-8 pb-28">
         <div
-          className="md:text-center text-5xl md:text-5xl mb-6 md:mb-1 font-bold text-white font-title"
+          className="md:text-center text-5xl md:text-5xl mb-6 md:mb-1 tracking-wide text-white font-serif"
           style={{ lineHeight: "1.1" }}
         >
           A fast, powerful IDE for Go
@@ -304,7 +331,7 @@ function Home() {
             href="/download"
             className="btn btn1 justify-center flex md:inline-flex text-center"
           >
-            <Icon className="mr-2" icon={HiOutlineDownload} />
+            <Icon size={18} className="mr-1" icon={IconDownload} />
             Download
           </A>
           <A
@@ -312,140 +339,111 @@ function Home() {
             className="btn btn2 justify-center flex md:inline-flex text-center"
           >
             View Docs
-            <Icon className="ml-2" icon={BsChevronRight} />
+            <Icon size={18} className="ml-1" icon={IconChevronRight} />
           </A>
         </div>
+      </div>
 
-        <div className="md:hidden my-12">
-          <A href={asset("/basics-screenshot.png")}>
-            <img alt="screenshot" src={asset("/basics-screenshot.png")} />
-          </A>
-        </div>
+      <div className="p-24 px-8 bg-neutral-900 pb-24 relative z-10 flex items-center justify-center">
+        <div className="max-w-screen-2xl flex items-center gap-x-16">
+          <div className="w-1/3">
+            <div className="md:text-[250%] tracking-wide font-medium text-white leading-tight md:leading-tight font-title">
+              {BAD_FEATURES.map((name) => (
+                <div className="whitespace-nowrap">No {name}.</div>
+              ))}
+            </div>
+            <div className="text-lg leading-normal mt-8 text-neutral-300">
+              <p>
+                We threw out the modern software stack and{" "}
+                <A href={LINKS.handmadeManifesto}>handmade</A> the entire IDE
+                stack in blazing fast C/C++. From the UI to the code indexer,
+                everything runs as fast as a video game.
+              </p>
 
-        <div
-          className="hidden md:block relative max-w-screen-xl mt-16 mx-auto"
-          style={{ height: "450px" }}
-        >
-          <img
-            className="max-w-full opacity-100 absolute top-0 left-0 right-0"
-            alt="screenshot"
-            src={asset("/basics-screenshot.png")}
-          />
+              <p>
+                A tool that assists your thinking instead of interfering with
+                it. A barebones native app that does its job and gets out of
+                your way.
+              </p>
+              <p></p>
+            </div>
+          </div>
+          <div className="flex-1">
+            <img
+              className="max-w-full border border-neutral-500 shadow-lg rounded-lg overflow-hidden"
+              alt="screenshot"
+              src={asset("/download.png")}
+            />
+          </div>
         </div>
       </div>
 
       <div className="batteries-included z-10 px-6 md:px-12 py-16 md:py-32">
-        <div className="batteries-included-child md:flex max-w-screen-xl mx-auto">
-          <div className="md:w-2/5 pb-6 md:pb-0 md:pr-8 lg:pr-12">
-            <div className="text-3xl md:mt-24 mb-6 font-bold text-black font-title">
+        <div className="batteries-included-child md:flex max-w-screen-xl md:gap-x-12 mx-auto">
+          <div className="md:w-1/3 pb-6 md:pb-0 lg:pr-12">
+            <h1 className="font-serif tracking-wide text-4xl text-black mb-6 mt-24">
               Batteries included
-            </div>
-
-            <div className="text-xl text-neutral-700">
-              <p>
-                CodePerfect is feature-rich and works out of the box with almost
-                zero configuration.
-              </p>
-              <p>
-                The power of an IDE, bundled into a software package as fast as
-                Vim.
-              </p>
-            </div>
+            </h1>
+            <p className="text-lg leading-normal">
+              Everything works out of the box with almost zero configuration.
+              Enjoy the power of an IDE, bundled into an app that runs faster
+              than Alacritty + tmux + vim.
+            </p>
             <div className="mt-8">
               <A
                 href={LINKS.docs}
                 className="btn btn2 justify-center flex md:inline-flex text-center"
               >
                 View Docs
-                <Icon className="ml-2" icon={BsChevronRight} />
+                <Icon className="ml-2" icon={IconChevronRight} />
               </A>
             </div>
           </div>
-          <div className="flex-1 mx-auto grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6 mt-8 md:mt-0 md:p-0">
-            {FEATURES.map((it) => (
-              <div
-                className="batteries-included-tile shadow-sm rounded p-3 md:p-4 transition-all select-none"
-                key={it.label}
-              >
-                <img
-                  className="inline-block w-auto h-5 mb-3"
-                  src={asset(`/icon-${getIconName(it.label)}.png`)}
-                  alt={it.label}
-                />
-                <div className="font-sans text-sm leading-none font-semibold text-neutral-700">
-                  {it.label}
-                </div>
-                <div className="mt-1.5 font-sans text-sm text-neutral-400 leading-snug">
-                  {it.desc}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="back-to-basics relative">
-        <div
-          className="hidden md:block absolute z-0 left-0 top-0 bottom-0 overflow-hidden bg-cover bg-center"
-          style={{
-            backgroundImage: `url(${asset("/cutting-tree.png")})`,
-            width: "calc((100% - 1280px)/2 + (1280px * 0.5))",
-          }}
-        />
-        <div
-          className="flex relative z-10 mx-auto"
-          style={{ maxWidth: "1280px" }}
-        >
-          <div
-            // style={{ background: "rgba(255, 255, 255, 0.1)" }}
-            className="flex-1 flex flex-col items-center justify-center"
-          />
-          <div className="box-border md:w-1/2 pt-28 pb-14 px-8 md:pt-48 md:pb-36 md:px-24 text-xl leading-relaxed border-dashed border-neutral-200">
-            <p>
-              {BAD_FEATURES.map((name) => (
-                <div className="text-3xl md:text-4xl font-bold text-neutral-800 leading-snug md:leading-tight font-title">
-                  No {name}.
+          <div className="flex-1">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6 mt-8 md:mt-0 md:p-0">
+              {FEATURES.map((it) => (
+                <div
+                  className="bg-white hover:scale-[103%] shadow-sm rounded p-3 md:p-4 transition-all select-none"
+                  key={it.label}
+                >
+                  <Icon stroke={1.25} size={26} icon={it.icon} />
+                  <div className="leading-none font-semibold text-neutral-700 mt-1.5">
+                    {it.label}
+                  </div>
+                  <div className="mt-1.5 font-sans text-[90%] text-neutral-400 leading-snug">
+                    {it.desc}
+                  </div>
                 </div>
               ))}
-            </p>
-            <div className="mt-6 md:mt-12 mb-6">
-              We threw out the modern software stack and{" "}
-              <A href={LINKS.handmadeManifesto}>handmade</A> the whole IDE from
-              the metal up, in blazing fast C/C++. The result: a barebones
-              native app that just does what it's supposed to.
             </div>
-            <p>
-              From the UI renderer to the code indexer, everything is
-              hand-optimized to be as performant as a video game.
-            </p>
           </div>
         </div>
       </div>
 
-      <div
-        className="py-12 pl-12 pr-8 md:pl-16 md:pr-12 md:py-32"
-        // style={{ background: "rgba(0, 0, 0, 0.2)" }}
-      >
-        <div className="grid grid-cols-1 md:grid-cols-3 max-w-screen-xl mx-auto gap-12 md:gap-20">
-          {SELLING_POINTS.map((it) => (
-            <div key={it.label}>
-              <div className="relative">
-                <img
-                  src={it.icon}
-                  className={twMerge(cx("w-auto h-10 mb-3", it.classes))}
-                />
-                <div
-                  className="absolute top-0 bottom-0 right-full mr-3 border-r-4"
-                  style={{
-                    borderColor: "rgb(11, 158, 245)",
-                    filter: "saturate(0.35)",
-                  }}
+      <div className="bg-white py-16">
+        <div className="grid grid-cols-1 md:grid-cols-3 max-w-screen-2xl mx-auto">
+          {SELLING_POINTS.map((it, i) => (
+            <div
+              key={it.label}
+              className="px-16 bg-white border-r border-neutral-200 last:border-0"
+            >
+              <div
+                className={`w-16 h-16 rounded-xl bg-gradient-to-b shadow-lg opacity-70
+              ${["from-zinc-600", "from-zinc-600", "from-zinc-600"][i]} 
+              ${["to-zinc-500", "to-zinc-500", "to-stone-500"][i]} 
+              flex items-center justify-center`}
+              >
+                <Icon
+                  icon={it.icon}
+                  stroke={1.0}
+                  className="text-neutral-200"
+                  size={42}
                 />
               </div>
-              <div className="text-lg font-bold font-title mb-2 font-white">
+              <div className="text-lg font-bold text-neutral-800 mt-6 mb-2">
                 {it.label}
               </div>
-              <div className="text-neutral-400 leading-relaxed">
+              <div className="leading-normal text-neutral-700">
                 {it.content}
               </div>
             </div>
@@ -453,47 +451,22 @@ function Home() {
         </div>
       </div>
 
-      <div className="md:mx-8 md:px-4 bg-white border-white border-t-2 md:rounded-lg md:shadow">
-        <div className="max-w-screen-xl mx-auto md:flex text-neutral-700 py-12 px-8 md:p-16 lg:p-24 overflow-hidden md:mb-12">
-          <div className="md:w-1/3 border-box pr-8">
-            <div className="text-black font-bold text-3xl mb-6 font-title">
-              Ready to get started?
-            </div>
-            <p className="text-xl leading-relaxed mb-8">
-              Try CodePerfect for free for 7 days with all features available.
-            </p>
-            <p className="flex gap-3">
-              <A
-                href="/download"
-                className={twMerge(
-                  "btn btn1 justify-center inline-flex text-center bg-black text-white px-6"
-                )}
-              >
-                <Icon className="mr-2" icon={HiOutlineDownload} />
-                Download
-              </A>
-              {/* <A
-                href="/faq"
-                className={twMerge(
-                  "btn btn2 justify-center inline-flex text-center bg-black text-white px-6"
-                )}
-              >
-                View FAQs
-                <Icon className="ml-2" icon={BsChevronRight} />
-              </A> */}
-            </p>
-          </div>
-          <div className="flex-1 relative hidden md:block">
-            <div className="absolute -bottom-16 left-0 -right-8">
-              <img
-                src={asset("/basics-screenshot.png")}
-                className="max-w-full h-auto opacity-100"
-                alt="screenshot"
-                // style={{ marginBottom: "-10%" }}
-              />
-            </div>
-          </div>
+      <div className="text-center py-24 bg-neutral-900">
+        <div className="text-white tracking-wide text-4xl mb-2 font-title">
+          Ready to get started?
         </div>
+        <p className="mx-auto text-xl leading-relaxed mb-12 text-neutral-400">
+          Try CodePerfect for free for 7 days with all features available.
+        </p>
+        <A
+          href="/download"
+          className={twMerge(
+            "btn btn1 btn-lg justify-center inline-flex text-center bg-black text-white px-6"
+          )}
+        >
+          <Icon className="mr-2" icon={IconDownload} size={20} />
+          Download
+        </A>
       </div>
     </div>
   );
@@ -525,15 +498,6 @@ function PortalDone() {
     </WallOfText>
   );
 }
-
-const disableButtonProps = {
-  onClick: (e) => {
-    e.preventDefault();
-    alert(
-      "CodePerfect is currently in maintenance mode and is not available for download. Please check back later."
-    );
-  },
-};
 
 function BuyLicense() {
   const plans = [
@@ -587,12 +551,11 @@ function BuyLicense() {
       content: (
         <>
           <p>
-            You can download CodePerfect for a free 7 day trial before buying a
-            license. No credit card is required and all functionality is enabled
-            during this period.
+            You can download CodePerfect for a free, full-functionality 7 day
+            trial before buying a license. No credit card is required.
           </p>
           <p>
-            <A href="/download" className="btn btn1 btn-small">
+            <A href="/download" className="btn btn1 btn-sm">
               Try CodePerfect for free
             </A>
           </p>
@@ -608,7 +571,7 @@ function BuyLicense() {
             have any other custom requests, please get in touch with us.
           </p>
           <p>
-            <A href={`mailto:${SUPPORT_EMAIL}`} className="btn btn2 btn-small">
+            <A href={`mailto:${SUPPORT_EMAIL}`} className="btn btn2 btn-sm">
               Get in touch
             </A>
           </p>
@@ -624,7 +587,7 @@ function BuyLicense() {
             we'll respond within 1 business day.
           </p>
           <p>
-            <A href={`mailto:${SUPPORT_EMAIL}`} className="btn btn2 btn-small">
+            <A href={`mailto:${SUPPORT_EMAIL}`} className="btn btn2 btn-sm">
               Contact us
             </A>
           </p>
@@ -635,7 +598,7 @@ function BuyLicense() {
 
   return (
     <div className="mt-12 md:mt-24">
-      <div className="text-center text-white font-title text-3xl md:text-5xl font-bold mb-6 md:mb-24">
+      <div className="text-center text-white font-serif text-3xl md:text-5xl mb-6 md:mb-24">
         Buy License
       </div>
       <div className="md:max-w-screen-xl mx-auto">
@@ -663,7 +626,7 @@ function BuyLicense() {
               >
                 {recommended && (
                   <div
-                    className="md:absolute md:bottom-full md:left-0 md:right-0 rounded-t-lg bg-primary text-white text-base font-semibold leading-none p-3 text-center font-title"
+                    className="md:absolute md:bottom-full md:left-0 md:right-0 rounded-t-lg bg-primary text-white text-base font-semibold leading-none p-3 text-center"
                     style={{ marginLeft: "-1px", marginRight: "-1px" }}
                   >
                     Most Popular*
@@ -671,10 +634,10 @@ function BuyLicense() {
                 )}
                 <div className="p-5">
                   <div className="text-neutral-300">
-                    <div className="font-title font-bold text-lg text-neutral-400">
+                    <div className="font-title text-lg font-medium text-neutral-300">
                       {name}
                     </div>
-                    <div className="font-title font-bold text-xl">
+                    <div className="font-title font-semibold text-2xl text-white">
                       {price === "custom" ? "Custom pricing" : <>${price}/mo</>}
                     </div>
                   </div>
@@ -682,14 +645,11 @@ function BuyLicense() {
                     {features.map((it) => (
                       <div
                         className={cx(
-                          "flex items-start space-x-1 leading-6 mb-1 last:mb-0",
+                          "flex items-center space-x-1.5 leading-6 mb-1 last:mb-0",
                           it.not ? "text-red-400" : "text-neutral-300"
                         )}
                       >
-                        <Icon
-                          className="relative top-1 transform scale-90 origin-center"
-                          icon={it.not ? AiOutlineClose : AiOutlineCheck}
-                        />
+                        <Icon size={18} icon={it.not ? IconX : IconCheck} />
                         <span>{it.label}</span>
                       </div>
                     ))}
@@ -748,10 +708,10 @@ function BuyLicense() {
                   filter: "saturate(0.35)",
                 }}
               />
-              <div className="font-title text-neutral-300 text-lg font-bold mb-2">
+              <div className="font-title text-neutral-100 tracking-wide text-xl mb-2">
                 {it.title}
               </div>
-              <div className="text-gray-500 leading-normal">{it.content}</div>
+              <div className="text-gray-400 leading-normal">{it.content}</div>
             </div>
           ))}
         </div>
@@ -806,27 +766,27 @@ function Download() {
 
   return (
     <div className="my-12 md:my-28 px-8 md:px-0">
-      <div className="font-bold md:px-4 md:text-center text-3xl md:text-5xl text-white font-title">
+      <div className="font-normal tracking-wide md:px-4 md:text-center text-3xl md:text-5xl text-white font-serif">
         Download CodePerfect
       </div>
-      <div className="text-center font-title mt-2">
+      <div className="text-center mt-4">
         <A
           href={`${LINKS.changelog}/${CURRENT_BUILD}`}
           className={cx(
             "flex items-start md:items:center md:justify-center flex-col md:flex-row",
-            "gap-1 md:gap-4 no-underline opacity-90 hover:opacity-100"
+            "gap-1 md:gap-4 no-underline opacity-90 hover:opacity-100 font-ui"
           )}
         >
           <span className="inline-block">
-            <span className="font-semibold text-sm text-yellow-400">
-              <Icon className="relative top-0.5" icon={AiFillTag} /> Build{" "}
-              {CURRENT_BUILD}
+            <span className="font-semibold text-sm text-yellow-400 flex gap-x-1.5 items-center">
+              <Icon size={18} icon={IconTag} />
+              <span>Build {CURRENT_BUILD}</span>
             </span>
           </span>
           <span className="inline-block">
-            <span className="font-semibold text-sm text-lime-300">
-              <Icon className="relative top-0.5" icon={AiOutlineClockCircle} />{" "}
-              Released {CURRENT_BUILD_RELEASE_DATE}
+            <span className="font-semibold text-sm text-lime-300 gap-x-1.5 items-center flex">
+              <Icon size={18} icon={IconClockHour4} />
+              <span>Released {CURRENT_BUILD_RELEASE_DATE}</span>
             </span>
           </span>
         </A>
@@ -851,7 +811,12 @@ function Download() {
                   posthog.capture("download", { platform: it.platform });
                 }}
               >
-                <Icon className="relative mr-1 text-lg" icon={it.icon} />
+                <Icon
+                  size={18}
+                  stroke={2}
+                  className="relative mt-0.5 mr-1"
+                  icon={it.icon}
+                />
                 <span>{it.label}</span>
               </A>
             </div>
@@ -869,12 +834,9 @@ function Download() {
       <div className="px-4 mt-12 md:mt-20">
         <div
           // style={{ maxWidth: "calc(min(100%, 1024px))" }}
-          className="max-w-screen-xl mx-auto items-center gap-8 my-8 flex rounded-md md:rounded-xl overflow-hidden border border-gray-100 md:border-gray-300 shadow-md"
+          className="max-w-screen-xl mx-auto my-8"
         >
-          <Image
-            className="max-w-full max-h-full w-auto h-auto"
-            src={asset("/download.png")}
-          />
+          <Image src={asset("/get-started-screenshot.png")} />
         </div>
       </div>
       <div className="flex-grow"></div>
@@ -939,7 +901,7 @@ function Logo({ onClick }) {
         className="w-auto h-8 inline-block mr-3 invert"
         src={asset("/logo.png")}
       />
-      <span className="inline-block logo text-lg font-title">
+      <span className="inline-block logo text-lg font-bold font-ui">
         CodePerfect 95
       </span>
     </A>
@@ -966,7 +928,7 @@ function Header() {
   ];
 
   return (
-    <div className="p-4 md:p-4 border-b border-gray-50 font-title">
+    <div className="p-4 md:p-4 border-b border-gray-50 font-ui">
       <div className="flex justify-between items-center w-full md:max-w-screen-lg md:mx-auto text-lg">
         <Logo />
         <div className="md:hidden relative">
@@ -977,7 +939,7 @@ function Header() {
               e.stopPropagation();
             }}
             className="ml-2 text-3xl leading-none opacity-50"
-            icon={BiMenu}
+            icon={IconMenu2}
           />
           {showMenu && (
             <div
@@ -988,7 +950,7 @@ function Header() {
                 onClick={() => setShowMenu(false)}
                 className="absolute top-4 right-4 w-8 flex items-center justify-center h-8 rounded-full bg-neutral-700 text-white"
               >
-                <Icon icon={AiOutlineClose} />
+                <Icon icon={IconX} />
               </button>
               <Logo onClick={() => setShowMenu(false)} />
               <div className="mt-2">
@@ -1026,7 +988,7 @@ const FootLink = wrap(A, "text-gray-800 no-underline");
 
 function Footer() {
   return (
-    <div className="px-4 pt-6 lg:pt-12 pb-8 md:pb-24 border-t border-gray-100 md:border-0 font-title">
+    <div className="px-4 pt-6 lg:pt-12 pb-8 md:pb-24 border-t border-gray-100 md:border-0">
       <div className="flex flex-col md:flex-row gap-y-4 md:gap-0 hmd:flex-row justify-between w-full md:max-w-screen-xl md:mx-auto items-start">
         <div className="text-gray-500">
           <span>&copy; {new Date().getFullYear()} CodePerfect 95</span>

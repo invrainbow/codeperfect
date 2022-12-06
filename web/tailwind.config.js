@@ -20,6 +20,10 @@ module.exports = {
           900: "rgba(255, 255, 255, 0.9)",
         },
       },
+      letterSpacing: {
+        tight: "-0.015em",
+        wide: "0.015em",
+      },
     },
     fontFamily: {
       serif: ["New York", "Georgia", "serif"],
@@ -34,8 +38,19 @@ module.exports = {
         "Ubuntu",
         "sans-serif",
       ],
+      ui: [
+        "system-ui",
+        "-apple-system",
+        "BlinkMacSystemFont",
+        "Segoe UI",
+        "Roboto",
+        "Helvetica Neue",
+        "Ubuntu",
+        "sans-serif",
+      ],
       mono: ["Menlo", "Monaco", "Consolas", "Courier New", "monospace"],
-      title: [
+      title: ["New York", "Georgia", "serif"],
+      title2: [
         "-apple-system",
         "BlinkMacSystemFont",
         "Segoe UI",

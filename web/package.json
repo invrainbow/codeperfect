@@ -5,6 +5,7 @@
   "dependencies": {
     "@csstools/postcss-sass": "^5.0.1",
     "@react-icons/all-files": "^4.1.0",
+    "@tabler/icons": "^1.115.0",
     "classnames": "^2.3.1",
     "concurrently": "^7.3.0",
     "postcss": "^8.4.16",
@@ -21,7 +22,8 @@
     "web-vitals": "^2.1.4"
   },
   "scripts": {
-    "start": "export REACT_APP_BUILD_VERSION=$(../sh/printversion); concurrently --kill-others postcss\\ -w\\ -o\\ src/index.css\\ src/index.scss bun\\ dev",
+    "start": "export REACT_APP_BUILD_VERSION=$(../sh/printversion); bun dev",
+    "css": "postcss -w -o src/index.css src/index.scss",
     "build": "export REACT_APP_BUILD_VERSION=$(../sh/printversion); postcss -o src/index.css src/index.scss && react-scripts build"
   },
   "eslintConfig": {
