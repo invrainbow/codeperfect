@@ -177,7 +177,7 @@ function Icon({ block, noshift, icon: IconComponent, ...props }) {
 const FEATURES = _.shuffle([
   {
     label: "Integrated Debugger",
-    desc: "Full Delve integration lets you full debugging powers.",
+    desc: "Full Delve integration gives you full debugging powers.",
     icon: IconBug,
   },
   {
@@ -207,12 +207,12 @@ const FEATURES = _.shuffle([
   },
   {
     label: "Auto Format",
-    desc: "Automatically gofmt your code on save, with zero configuration.",
+    desc: "Automatically format your code on save, with zero configuration.",
     icon: IconWand,
   },
   {
     label: "Integrated Build",
-    desc: "Build, jump to & fix each error, all with ergonomic keyboard shortcuts.",
+    desc: "Build and jump to/fix each error with ergonomic shortcuts.",
     icon: IconTools,
   },
   {
@@ -222,7 +222,7 @@ const FEATURES = _.shuffle([
   },
   {
     label: "Command Palette",
-    desc: "Press Primary+K to run any command or action inside CodePerfect.",
+    desc: "Press Primary+K to run any command or action.",
     icon: IconCommand,
   },
   {
@@ -247,7 +247,7 @@ const FEATURES = _.shuffle([
   },
   {
     label: "Manage Struct Tags",
-    desc: "Add & remove struct tags automatically.",
+    desc: "Add/remove struct tags automatically.",
     icon: IconTags,
   },
 ]);
@@ -278,9 +278,8 @@ const SELLING_POINTS = [
           <A href="https://www.youtube.com/watch?v=pgoetgxecw8">
             non-pessimized
           </A>{" "}
-          code brings you: Instant startup. A buttery 144 frames/sec. Near-zero
-          latency between keystrokes. An indexer that gobbles through large
-          codebases.
+          code brings you: Instant startup. A buttery 144 FPS. No latency
+          between keystrokes. An indexer that gobbles through large codebases.
         </p>
       </>
     ),
@@ -313,9 +312,9 @@ const BAD_FEATURES = [
 function Home() {
   return (
     <div className="mx-auto md:mt-24 w-full" style={{ maxWidth: "1920px" }}>
-      <div className="max-w-full leading-relaxed p-8 pb-28">
+      <div className="max-w-full leading-relaxed px-8 py-12 md:py-8 md:pb-28">
         <div
-          className="md:text-center text-5xl md:text-5xl mb-6 md:mb-1 tracking-wide text-white font-serif"
+          className="md:text-center font-semibold text-4xl md:text-5xl mb-6 md:mb-1 text-white font-title"
           style={{ lineHeight: "1.1" }}
         >
           A fast, powerful IDE for Go
@@ -344,15 +343,15 @@ function Home() {
         </div>
       </div>
 
-      <div className="p-24 px-8 bg-neutral-900 pb-24 relative z-10 flex items-center justify-center">
-        <div className="max-w-screen-2xl flex items-center gap-x-16">
-          <div className="w-1/3">
-            <div className="md:text-[250%] tracking-wide font-medium text-white leading-tight md:leading-tight font-title">
+      <div className="p-8 py-12 md:py-24 bg-neutral-900 relative z-10 flex items-center justify-center">
+        <div className="max-w-screen-2xl flex flex-col md:flex-row items-center gap-4 md:gap-16">
+          <div className="md:w-1/3 md:mx-0">
+            <div className="text-[175%] md:text-[250%] font-semibold text-white leading-tight font-title">
               {BAD_FEATURES.map((name) => (
-                <div className="whitespace-nowrap">No {name}.</div>
+                <div className="md:whitespace-nowrap">No {name}.</div>
               ))}
             </div>
-            <div className="text-lg leading-normal mt-8 text-neutral-300">
+            <div className="text-lg leading-normal mt-6 md:mt-8 text-neutral-300">
               <p>
                 We threw out the modern software stack and{" "}
                 <A href={LINKS.handmadeManifesto}>handmade</A> the entire IDE
@@ -368,7 +367,7 @@ function Home() {
               <p></p>
             </div>
           </div>
-          <div className="flex-1">
+          <div className="md:flex-1">
             <img
               className="max-w-full border border-neutral-500 shadow-lg rounded-lg overflow-hidden"
               alt="screenshot"
@@ -378,10 +377,10 @@ function Home() {
         </div>
       </div>
 
-      <div className="batteries-included z-10 px-6 md:px-12 py-16 md:py-32">
+      <div className="batteries-included z-10 px-6 md:px-12 py-12 md:py-32">
         <div className="batteries-included-child md:flex max-w-screen-xl md:gap-x-12 mx-auto">
           <div className="md:w-1/3 pb-6 md:pb-0 lg:pr-12">
-            <h1 className="font-serif tracking-wide text-4xl text-black mb-6 mt-24">
+            <h1 className="font-title font-bold text-4xl text-black mb-6 md:mt-24">
               Batteries included
             </h1>
             <p className="text-lg leading-normal">
@@ -400,14 +399,14 @@ function Home() {
             </div>
           </div>
           <div className="flex-1">
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6 mt-8 md:mt-0 md:p-0">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6 mt-4 md:mt-0 md:p-0">
               {FEATURES.map((it) => (
                 <div
                   className="bg-white hover:scale-[103%] shadow-sm rounded p-3 md:p-4 transition-all select-none"
                   key={it.label}
                 >
                   <Icon stroke={1.25} size={26} icon={it.icon} />
-                  <div className="leading-none font-semibold text-neutral-700 mt-1.5">
+                  <div className="leading-none font-semibold text-neutral-700 mt-0.5 md:mt-1.5">
                     {it.label}
                   </div>
                   <div className="mt-1.5 font-sans text-[90%] text-neutral-400 leading-snug">
@@ -420,12 +419,12 @@ function Home() {
         </div>
       </div>
 
-      <div className="bg-white py-16">
+      <div className="bg-white py-4 md:py-16 px-6 md:px-0">
         <div className="grid grid-cols-1 md:grid-cols-3 max-w-screen-2xl mx-auto">
           {SELLING_POINTS.map((it, i) => (
             <div
               key={it.label}
-              className="px-16 bg-white border-r border-neutral-200 last:border-0"
+              className="py-8 md:py-0 md:px-16 bg-white border-b md:border-b-0 md:border-r border-neutral-200 last:border-0"
             >
               <div
                 className={`w-16 h-16 rounded-xl bg-gradient-to-b shadow-lg opacity-70
@@ -451,11 +450,11 @@ function Home() {
         </div>
       </div>
 
-      <div className="text-center py-24 bg-neutral-900">
-        <div className="text-white tracking-wide text-4xl mb-2 font-title">
+      <div className="md:text-center px-6 py-12 md:py-24 bg-neutral-900">
+        <div className="text-white font-semibold text-3xl md:text-4xl mb-2 font-title">
           Ready to get started?
         </div>
-        <p className="mx-auto text-xl leading-relaxed mb-12 text-neutral-400">
+        <p className="mx-auto text-lg md:text-xl leading-relaxed mb-6 md:mb-12 text-neutral-400">
           Try CodePerfect for free for 7 days with all features available.
         </p>
         <A
@@ -568,7 +567,7 @@ function BuyLicense() {
         <>
           <p>
             If you need multiple licenses, bulk pricing, team management, or
-            have any other custom requests, please get in touch with us.
+            have any other custom requests, please reach out to us.
           </p>
           <p>
             <A href={`mailto:${SUPPORT_EMAIL}`} className="btn btn2 btn-sm">
@@ -598,7 +597,7 @@ function BuyLicense() {
 
   return (
     <div className="mt-12 md:mt-24">
-      <div className="text-center text-white font-serif text-3xl md:text-5xl mb-6 md:mb-24">
+      <div className="text-center font-semibold text-white font-title text-3xl md:text-5xl mb-6 md:mb-24">
         Buy License
       </div>
       <div className="md:max-w-screen-xl mx-auto">
@@ -708,7 +707,7 @@ function BuyLicense() {
                   filter: "saturate(0.35)",
                 }}
               />
-              <div className="font-title text-neutral-100 tracking-wide text-xl mb-2">
+              <div className="font-title text-neutral-100 text-lg font-semibold mb-2">
                 {it.title}
               </div>
               <div className="text-gray-400 leading-normal">{it.content}</div>
@@ -766,7 +765,7 @@ function Download() {
 
   return (
     <div className="my-12 md:my-28 px-8 md:px-0">
-      <div className="font-normal tracking-wide md:px-4 md:text-center text-3xl md:text-5xl text-white font-serif">
+      <div className="md:px-4 md:text-center text-3xl md:text-5xl font-bold text-white font-title">
         Download CodePerfect
       </div>
       <div className="text-center mt-4">
@@ -834,7 +833,7 @@ function Download() {
       <div className="px-4 mt-12 md:mt-20">
         <div
           // style={{ maxWidth: "calc(min(100%, 1024px))" }}
-          className="max-w-screen-xl mx-auto my-8"
+          className="max-w-screen-lg mx-auto my-8"
         >
           <Image src={asset("/get-started-screenshot.png")} />
         </div>
@@ -988,7 +987,7 @@ const FootLink = wrap(A, "text-gray-800 no-underline");
 
 function Footer() {
   return (
-    <div className="px-4 pt-6 lg:pt-12 pb-8 md:pb-24 border-t border-gray-100 md:border-0">
+    <div className="px-6 pt-6 lg:pt-12 pb-8 md:pb-24 border-t border-gray-100 md:border-0">
       <div className="flex flex-col md:flex-row gap-y-4 md:gap-0 hmd:flex-row justify-between w-full md:max-w-screen-xl md:mx-auto items-start">
         <div className="text-gray-500">
           <span>&copy; {new Date().getFullYear()} CodePerfect 95</span>

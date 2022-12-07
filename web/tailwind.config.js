@@ -26,7 +26,13 @@ module.exports = {
       },
     },
     fontFamily: {
-      serif: ["New York", "Georgia", "serif"],
+      serif: [
+        "New York",
+        "-apple-system-ui-serif",
+        "ui-serif",
+        "Georgia",
+        "serif",
+      ],
       sans: [
         "Oxygen",
         "system-ui",
@@ -48,8 +54,25 @@ module.exports = {
         "Ubuntu",
         "sans-serif",
       ],
-      mono: ["Menlo", "Monaco", "Consolas", "Courier New", "monospace"],
-      title: ["New York", "Georgia", "serif"],
+      mono: [
+        "SF Mono",
+        "SFMono-Regular",
+        "ui-monospace",
+        "DejaVu Sans Mono",
+        "Menlo",
+        "Consolas",
+        "monospace",
+      ],
+      title: [
+        "system-ui",
+        "-apple-system",
+        "BlinkMacSystemFont",
+        "Segoe UI",
+        "Roboto",
+        "Helvetica Neue",
+        "Ubuntu",
+        "sans-serif",
+      ],
       title2: [
         "-apple-system",
         "BlinkMacSystemFont",
