@@ -36,10 +36,9 @@ else
     ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
 fi
 
+vcpkg_binary=vcpkg/vcpkg
 if [[ "$os" = "windows" ]]; then
-    vcpkg_binary=vcpkg/vcpkg.exe
-else
-    vcpkg_binary=vcpkg/vcpkg
+    vcpkg_binary=${vcpkg_binary}.exe
 fi
 
 export VCPKG_DEFAULT_TRIPLET=$(sh/vcpkg_triplet)
