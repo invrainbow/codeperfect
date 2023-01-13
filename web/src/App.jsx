@@ -4,7 +4,6 @@ import {
   IconDownload,
   IconTag,
   IconChevronRight,
-  IconChevronDown,
   IconClockHour4,
   IconX,
   IconBooks,
@@ -75,7 +74,7 @@ const BASE_LINKS = {
 
   twitter: "https://twitter.com/codeperfect95",
   discord: "https://discord.gg/WkFY44BY7a",
-  mailingList: "https://exceptional-innovator-7731.ck.page/0b59fe1347",
+  mailingList: "https://codeperfect95.substack.com/",
   handmadeManifesto: "https://handmade.network/manifesto",
 };
 
@@ -86,15 +85,10 @@ const DEV_LINKS = {
   buyProYearly: "https://buy.stripe.com/test_3cs6pj9WW3lR3Ac7sB",
 };
 
-function makeMergedLinks() {
-  const mergedLinks = { ...BASE_LINKS };
-  if (isDev) {
-    _.merge(mergedLinks, DEV_LINKS);
-  }
-  return mergedLinks;
-}
-
-const LINKS = makeMergedLinks();
+const LINKS = {
+  ...BASE_LINKS,
+  ...(isDev ? DEV_LINKS : {}),
+};
 
 const CDN_PATH = "https://codeperfect-static.s3.us-east-2.amazonaws.com";
 
@@ -386,7 +380,7 @@ function Home() {
             <p className="text-lg leading-normal">
               Everything works out of the box with almost zero configuration.
               Enjoy the power of an IDE, bundled into an app that runs faster
-              than Alacritty + tmux + vim.
+              than alacritty/tmux/vim.
             </p>
             <div className="mt-8">
               <A
@@ -426,12 +420,7 @@ function Home() {
               key={it.label}
               className="py-8 md:py-0 md:px-16 bg-white border-b md:border-b-0 md:border-r border-neutral-200 last:border-0"
             >
-              <div
-                className={`w-16 h-16 rounded-xl bg-gradient-to-b shadow-lg opacity-70
-              ${["from-zinc-600", "from-zinc-600", "from-zinc-600"][i]} 
-              ${["to-zinc-500", "to-zinc-500", "to-stone-500"][i]} 
-              flex items-center justify-center`}
-              >
+              <div className="w-16 h-16 rounded-xl bg-gradient-to-b shadow-lg opacity-70 from-zinc-600 to-zinc-500 flex items-center justify-center">
                 <Icon
                   icon={it.icon}
                   stroke={1.0}
@@ -451,7 +440,7 @@ function Home() {
       </div>
 
       <div className="md:text-center px-6 py-12 md:py-24 bg-neutral-900">
-        <div className="text-white font-semibold text-3xl md:text-4xl mb-2 font-title">
+        <div className="text-white font-bold text-3xl md:text-4xl mb-2 font-title">
           Ready to get started?
         </div>
         <p className="mx-auto text-lg md:text-xl leading-relaxed mb-6 md:mb-12 text-neutral-400">
