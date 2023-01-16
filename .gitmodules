@@ -1,6 +1,6 @@
 [submodule "tree-sitter-go"]
 	path = tree-sitter-go
-	url = git@github.com:invrainbow/tree-sitter-go.git
+	url = git@github.com:codeperfect95/tree-sitter-go.git
 [submodule "stb"]
 	path = stb
 	url = https://github.com/nothings/stb
@@ -9,7 +9,13 @@
 	url = https://github.com/ocornut/imgui
 [submodule "vcpkg"]
 	path = vcpkg
-	url = git@github.com:invrainbow/vcpkg.git
+	url = git@github.com:codeperfect95/vcpkg.git
 [submodule "tree-sitter"]
 	path = tree-sitter
 	url = https://github.com/tree-sitter/tree-sitter
+[submodule "tree-sitter-go-work"]
+	path = tree-sitter-go-work
+	url = https://github.com/codeperfect95/tree-sitter-go-work
+[submodule "tree-sitter-go-mod"]
+	path = tree-sitter-go-mod
+	url = git@github.com:codeperfect95/tree-sitter-go-mod.git

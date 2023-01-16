@@ -20,9 +20,9 @@ import (
 
 	"github.com/denormal/go-gitignore"
 	"github.com/fatih/structtag"
-	"github.com/invrainbow/codeperfect/go/models"
-	"github.com/invrainbow/codeperfect/go/utils"
-	"github.com/invrainbow/codeperfect/go/versions"
+	"github.com/codeperfect95/codeperfect/go/models"
+	"github.com/codeperfect95/codeperfect/go/utils"
+	"github.com/codeperfect95/codeperfect/go/versions"
 	"github.com/pkg/browser"
 	"github.com/reviewdog/errorformat"
 	"golang.org/x/tools/imports"

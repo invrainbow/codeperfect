@@ -5,7 +5,7 @@ import (
 	"os/exec"
 
 	"github.com/buildkite/shellwords"
-	"github.com/invrainbow/codeperfect/go/utils"
+	"github.com/codeperfect95/codeperfect/go/utils"
 )
 
 func makeShellCommand(s string) *exec.Cmd {

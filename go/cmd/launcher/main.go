@@ -12,8 +12,8 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/invrainbow/codeperfect/go/utils"
-	"github.com/invrainbow/codeperfect/go/versions"
+	"github.com/codeperfect95/codeperfect/go/utils"
+	"github.com/codeperfect95/codeperfect/go/versions"
 )
 
 func isDir(fullpath string) bool {

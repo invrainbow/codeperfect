@@ -123,9 +123,8 @@ binaries.c: .cpcolors vert.glsl frag.glsl im.vert.glsl im.frag.glsl
 	$(PYTHON) sh/create_binaries_c.py $^
 
 obj/gohelper.a: $(GO_DEPS)
-	cd go; \
-		GOARCH=$(GOARCH) CC=clang CGO_ENABLED=1 go build -ldflags "$(GOLDFLAGS)" -o gohelper.a -buildmode=c-archive ./helper && \
-		(mkdir -p ../obj; mv gohelper.a ../obj; mv gohelper.h ..)
+	GOARCH=$(GOARCH) CC=clang CGO_ENABLED=1 go build -ldflags "$(GOLDFLAGS)" -o obj/gohelper.a -buildmode=c-archive github.com/codeperfect95/codeperfect/go/helper && \
+		mv obj/gohelper.h .
 
 LAUNCHER_LDFLAGS =
 ifeq ($(OSTYPE), windows)

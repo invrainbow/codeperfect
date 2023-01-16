@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/google/shlex"
-	"github.com/invrainbow/codeperfect/go/utils"
+	"github.com/codeperfect95/codeperfect/go/utils"
 )
 
 func GetShellOutput(cmd string) string {

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"math/rand"
 
-	"github.com/invrainbow/codeperfect/go/cmd/lib"
+	"github.com/codeperfect95/codeperfect/go/cmd/lib"
 	"golang.org/x/exp/maps"
 )
 
