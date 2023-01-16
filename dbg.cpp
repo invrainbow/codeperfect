@@ -891,11 +891,13 @@ bool Debugger::start(Debug_Profile *debug_profile) {
                 if (!str_ends_with(editor->filepath, "_test.go"))
                     return;
 
-            if (!path_has_descendant(world.current_path, editor->filepath)) return;
+            // if (!path_has_descendant(world.current_path, editor->filepath)) return;
 
-            auto root_module_path = world.indexer.module_resolver.module_path;
-            auto subpath = get_path_relative_to(cp_dirname(editor->filepath), world.current_path);
-            package_path = normalize_path_sep(path_join(root_module_path, subpath), '/');
+            auto mod = world.workspace->find_module_containing_resolved(editor->filepath);
+            if (!mod) return;
+
+            auto subpath = get_path_relative_to(cp_dirname(editor->filepath), mod->resolved_path);
+            package_path = normalize_path_sep(path_join(mod->import_path, subpath), '/');
 
             if (debug_profile->type == DEBUG_TEST_CURRENT_FUNCTION) {
                 if (editor->buf->tree) {

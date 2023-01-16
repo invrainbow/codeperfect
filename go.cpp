@@ -371,13 +371,13 @@ void Module_Resolver::init(ccstr root_filepath, ccstr _gomodcache) {
     {
         SCOPED_MEM(&mem);
         gomodcache = cp_strdup(_gomodcache);
-        root_import_to_resolved = alloc_object(Node);
-        root_resolved_to_import = alloc_object(Node);
-        modules = alloc_list<Workspace_Module>();
+        root_import_to_resolved = alloc_object(Trie_Node);
+        root_resolved_to_import = alloc_object(Trie_Node);
+        workspace.modules = alloc_list<Go_Work_Module>();
     }
 
     auto get_module_import_path = [&](ccstr filepath) -> ccstr {
-        auto pf = parse_file(path_join(filepath, "go.mod"));
+        auto pf = parse_file(path_join(filepath, "go.mod"), LANG_GOMOD, false);
         if (!pf) return NULL;
 
         FOR_NODE_CHILDREN (pf->root) {
@@ -401,7 +401,7 @@ void Module_Resolver::init(ccstr root_filepath, ccstr _gomodcache) {
     // to depend on the output of `go list` because that is "what go actually
     // sees", but we fall back on this list if for some reason `go list -m
     // all` fails.
-    auto inferred_modules = alloc_list<Workspace_Module>();
+    auto inferred_modules = alloc_list<Go_Work_Module>();
 
     bool is_work = false;
 
@@ -409,31 +409,32 @@ void Module_Resolver::init(ccstr root_filepath, ccstr _gomodcache) {
         auto import_path = get_module_import_path(filepath);
         if (!import_path) return false;
 
-        Workspace_Module mod;
+        Go_Work_Module mod;
         mod.import_path = import_path;
         mod.resolved_path = filepath;
-        inffered_modules->append(&mod);
+        inferred_modules->append(&mod);
 
         module_lookup.set(import_path, filepath);
         return true;
     };
 
     do {
-        auto gowork_path = GHGetGoWork();
+        auto gowork_path = GHGetGoWork(world.current_path);
         if (!gowork_path) break;
         defer { GHFree(gowork_path); };
 
         auto pf = parse_file(gowork_path, LANG_GOWORK, false);
-        if (!path) break;
+        if (!pf) break;
 
         is_work = true;
 
         auto root = pf->root;
         FOR_NODE_CHILDREN (root) {
             // TODO: handle replace?
-            if (!it->type() != TSGW_USE_DIRECTIVE) continue;
+            if (it->type() != TSGW_USE_DIRECTIVE) continue;
 
-            FOR_NODE_CHILDREN (it) {
+            auto child = it;
+            FOR_NODE_CHILDREN (child) {
                 auto fpnode = it->child();
                 if (fpnode->type() != TSGW_FILE_PATH) continue;
 
@@ -462,18 +463,18 @@ void Module_Resolver::init(ccstr root_filepath, ccstr _gomodcache) {
 
         auto start = current_time_milli();
 
-        while (proc.status() != PROCESS_DONE) {
+        while (proc->status() != PROCESS_DONE) {
             if (current_time_milli() - start > 10000)
                 return NULL;
             sleep_milliseconds(100);
         }
 
         // should we surface these errors? even if only for debugging?
-        if (proc.status() == PROCESS_ERROR)
+        if (proc->status() == PROCESS_ERROR)
             return NULL;
 
         // wait another second for pipe to be readable
-        while (!proc.can_read()) {
+        while (!proc->can_read()) {
             if (current_time_milli() - start > 1000)
                 return NULL;
             sleep_milliseconds(100);
@@ -483,37 +484,40 @@ void Module_Resolver::init(ccstr root_filepath, ccstr _gomodcache) {
     };
 
     auto proc = prepare_golist_proc();
-    if (!proc || !proc.can_read())
+    if (!proc || !proc->can_read())
         cp_panic("Unable to run `go list -m all` in folder.");
 
     bool found_module = false;
+    bool done = false;
 
     do {
         auto line = alloc_list<char>();
         while (true) {
             char ch = 0;
-            if (!proc.read1(&ch) || ch == '\n') break;
-            line.append(ch);
+            if (!proc->read1(&ch) || ch == '\n') {
+                if (ch == 0) done = true;
+                break;
+            }
+            line->append(ch);
         }
-        line.append('\0');
-        // print("%s", line.items);
+        line->append('\0');
+        // print("%s", line->items);
 
         ccstr import_path = NULL;
         ccstr resolved_path = NULL;
 
-        auto parts = split_string(line.items, ' ');
+        auto parts = split_string(line->items, ' ');
         if (parts->len == 1) {
-            module_path = cp_strdup(parts->at(0));
-
-            auto resolved_path = module_lookup.get(module_path);
+            import_path = cp_strdup(parts->at(0));
+            resolved_path = module_lookup.get(import_path);
             if (!resolved_path) continue;
-            import_path = module_path;
+
             {
                 SCOPED_MEM(&mem);
-                Workspace_Module mod;
+                Go_Work_Module mod;
                 mod.import_path = import_path;
                 mod.resolved_path = resolved_path;
-                modules->append(mod.copy());
+                workspace.modules->append(mod.copy());
             }
         } else if (parts->len == 2) {
             import_path = parts->at(0);
@@ -536,11 +540,21 @@ void Module_Resolver::init(ccstr root_filepath, ccstr _gomodcache) {
 
         // go_print("%s -> %s", import_path, resolved_path);
         add_path(import_path, resolved_path);
-    } while (ch != '\0');
+    } while (!done);
 
-    if (!modules->len)
+    workspace.is_work = is_work;
+    if (!workspace.modules->len)
         For (inferred_modules)
-            modules->append(it.copy());
+            workspace.modules->append(it.copy());
+
+    world.which_workspace_mem ^= 1;
+    auto mem = world.which_workspace_mem ? &world.workspace_mem_1 : &world.workspace_mem_2;
+    mem->reset();
+    {
+        SCOPED_MEM(mem);
+        auto newobj = workspace.copy();
+        world.workspace = newobj;
+    }
 }
 
 // -----
@@ -1144,40 +1158,34 @@ void Go_Indexer::background_thread() {
     // ===
 
     auto init_index = [&](bool force_reset_index) {
-        bool reset_index = false;
+        bool reset_index = force_reset_index;
 
-        if (force_reset_index)
-            reset_index = true;
+        auto workspace = module_resolver.workspace.copy();
 
-        SCOPED_MEM(&final_mem);
-        if (index.current_path && !streq(index.current_path, world.current_path))
-            reset_index = true;
+        auto workspace_changed = [&]() -> bool {
+            if (index.workspace->is_work != workspace->is_work) return true;
+            if (index.workspace->modules->len != workspace->modules->len) return true;
 
-        // TODO: copy module paths
-
-        auto modules = alloc_list<Workspace_Module>();
-        For (module_resolver.modules)
-            modules->append(it.copy());
-
-        auto modules_changed = [&]() -> bool {
-            if (index.modules->len != modules->len) return true;
+            auto hash_kinda = [&](auto &mod) {
+                return cp_sprintf("%s // %s", mod.import_path, mod.resolved_path);
+            };
 
             String_Set set; set.init();
-            For (modules) set.add(it.import_path);
+            For (workspace->modules) set.add(hash_kinda(it));
 
-            For (index.modules) {
-                if (!set.has(it.import_path))
-                    return true;
-                set.remove(it.import_path);
+            For (index.workspace->modules) {
+                auto h = hash_kinda(it);
+                if (!set.has(h)) return true;
+                set.remove(h);
             }
-            return (set->len > 0);
+            return (set.len > 0);
         };
 
-        if (modules_changed())
+        if (workspace_changed())
             reset_index = true;
 
-        index.modules = modules;
-        index.is_work = module_resolver.is_work;
+        index.workspace = workspace;
+        index.is_work = module_resolver.workspace.is_work;
 
         if (!index.packages || reset_index)
             index.packages = alloc_list<Go_Package>();
@@ -1187,10 +1195,8 @@ void Go_Indexer::background_thread() {
     rebuild_package_lookup();
 
     auto rescan_gomod = [&](bool force_reset_index) {
-        // nothing to clean up right now
         module_resolver.cleanup();
         module_resolver.init(world.current_path, gomodcache);
-
         init_index(force_reset_index);
     };
 
@@ -1203,12 +1209,9 @@ void Go_Indexer::background_thread() {
             auto import_paths_queue = alloc_list<ccstr>();
             auto resolved_paths_queue = alloc_list<ccstr>();
 
-            For (index.module_import_paths) {
-                auto resolved_path = module_resolver.resolve_import(it);
-                if (!resolved_path) continue; // ???
-
-                import_paths_queue->append(it);
-                resolved_paths_queue->append(resolved_path);
+            For (index.workspace->modules) {
+                import_paths_queue->append(it.import_path);
+                resolved_paths_queue->append(it.resolved_path);
             }
 
             while (import_paths_queue->len > 0) {
@@ -1225,7 +1228,7 @@ void Go_Indexer::background_thread() {
                     do {
                         if (ent->type == DIRENT_FILE) {
                             if (!already_in_index && !is_go_package)
-                                if (str_ends_with(ent->name, ".go"))
+                                if (str_ends_with(ent->name, ".go") || streq(ent->name, "go.mod"))
                                     if (is_file_included_in_build(path_join(resolved_path, ent->name)))
                                         is_go_package = true;
                             break;
@@ -1241,10 +1244,8 @@ void Go_Indexer::background_thread() {
                     return true;
                 });
 
-                if (!already_in_index) {
-                    if (is_go_package || streq(import_path, index.current_import_path))
-                        enqueue_package(import_path);
-                }
+                if (!already_in_index && is_go_package)
+                    enqueue_package(import_path);
             }
         }
 
@@ -1282,7 +1283,7 @@ void Go_Indexer::background_thread() {
     rescan_everything(); // kick off rescan
 
     auto handle_fsevent = [&](ccstr filepath) {
-        filepath = path_join(index.current_path, filepath);
+        filepath = path_join(world.current_path, filepath);
 
         auto import_path = filepath_to_import_path(filepath);
         if (!import_path) return;
@@ -1294,19 +1295,28 @@ void Go_Indexer::background_thread() {
                 mark_package_for_reprocessing(import_path);
             }
             break;
-        case CPR_FILE:
+        case CPR_FILE: {
             if (is_go_package(cp_dirname(filepath)) && str_ends_with(filepath, ".go")) {
                 start_writing(true);
                 mark_package_for_reprocessing(cp_dirname(import_path));
             }
-            if (are_filepaths_equal(path_join(index.current_path, "go.mod"), filepath)) {
-                if (status == IND_READY) {
-                    start_writing();
-                    rescan_gomod(false);
-                    rescan_everything();
-                }
+
+            auto workspace_changed = [&]() {
+                if (are_filepaths_equal(filepath, path_join(world.current_path, "go.work")))
+                    return true;
+                For (index.workspace->modules)
+                    if (streq(filepath, path_join(it.resolved_path, "go.mod")))
+                        return true;
+                return false;
+            };
+
+            if (status == IND_READY && workspace_changed()) {
+                start_writing();
+                rescan_gomod(false);
+                rescan_everything();
             }
             break;
+        }
         case CPR_NONEXISTENT: {
             auto pkg = find_package_in_index(import_path);
             if (pkg) {
@@ -3227,16 +3237,10 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_symbol(ccstr symbol) {
         pkgname[len] = '\0';
     }
 
-    auto base_path = make_path(index.current_import_path);
-
     For (index.packages) {
         if (it.status != GPS_READY) continue;
 
-        {
-            SCOPED_FRAME();
-            if (!base_path->contains(make_path(it.import_path)))
-                continue;
-        }
+        if (!index.workspace->find_module_containing(it.import_path)) continue;
 
         if (!streq(it.package_name, pkgname)) continue;
 
@@ -3684,11 +3688,23 @@ List<Find_References_File> *Go_Indexer::actually_find_references(Goresult *declr
     return ret;
 }
 
-bool Go_Indexer::index_has_module_containing(ccstr import_path) {
-    For (index.module_import_paths)
-        if (path_has_descendant(it, import_path))
-            return true;
-    return false;
+Go_Work_Module *Go_Workspace::find_module_containing(ccstr import_path) {
+    For (modules)
+        if (path_has_descendant(it.import_path, import_path))
+            return &it;
+    return NULL;
+}
+
+Go_Work_Module *Go_Workspace::find_module_containing_resolved(ccstr resolved_path) {
+    For (modules)
+        if (path_has_descendant(it.resolved_path, resolved_path))
+            return &it;
+    return NULL;
+}
+
+bool Go_Indexer::index_has_module_containing(ccstr path) {
+    if (!index.workspace) return false;
+    return (index.workspace->find_module_containing(path) != NULL);
 }
 
 List<Go_Import> *Go_Indexer::optimize_imports(ccstr filepath) {
@@ -4822,16 +4838,12 @@ Gotype *Go_Indexer::get_closest_function(ccstr filepath, cur2 pos) {
 void Go_Indexer::fill_generate_implementation(List<Go_Symbol> *out, bool selected_interface) {
     reload_all_editors();
 
-    auto base_path = make_path(index.current_import_path);
-
     For (index.packages) {
         if (it.status != GPS_READY) continue;
 
-        if (selected_interface) {
-            SCOPED_FRAME();
-            if (!base_path->contains(make_path(it.import_path)))
+        if (selected_interface)
+            if (!index.workspace->find_module_containing(it.import_path))
                 continue;
-        }
 
         auto pkg = &it;
 
@@ -4877,17 +4889,10 @@ void Go_Indexer::fill_generate_implementation(List<Go_Symbol> *out, bool selecte
 void Go_Indexer::fill_goto_symbol(List<Go_Symbol> *out) {
     reload_all_editors();
 
-    auto base_path = make_path(index.current_import_path);
     auto packages = alloc_list<Go_Package*>();
-
-    For (index.packages) {
-        {
-            SCOPED_FRAME();
-            if (!base_path->contains(make_path(it.import_path)))
-                continue;
-        }
-        packages->append(&it);
-    }
+    For (index.packages)
+        if (index.workspace->find_module_containing(it.import_path))
+            packages->append(&it);
 
     For (packages) {
         auto pkg = it;
@@ -8992,6 +8997,15 @@ ccstr case_style_pretty_str(Case_Style x) {
 
 // ---
 
+void Go_Workspace::read(Index_Stream *s) {
+    READ_LIST(modules);
+}
+
+void Go_Work_Module::read(Index_Stream *s) {
+    READ_STR(import_path);
+    READ_STR(resolved_path);
+}
+
 void Godecl::read(Index_Stream *s) {
     READ_STR(name);
 
@@ -9164,8 +9178,7 @@ void Go_Package::read(Index_Stream *s) {
 }
 
 void Go_Index::read(Index_Stream *s) {
-    READ_STR(current_path);
-    READ_STR(current_import_path);
+    READ_OBJ(workspace);
     READ_LIST(packages);
 }
 
@@ -9175,6 +9188,15 @@ void Go_Index::read(Index_Stream *s) {
 #define WRITE_OBJ(x) write_object<std::remove_pointer<decltype(x)>::type>(x, s)
 #define WRITE_LIST(x) write_list<decltype(x)>(x, s)
 #define WRITE_LISTP(x) write_listp<decltype(x)>(x, s)
+
+void Go_Workspace::write(Index_Stream *s) {
+    WRITE_LIST(modules);
+}
+
+void Go_Work_Module::write(Index_Stream *s) {
+    WRITE_STR(import_path);
+    WRITE_STR(resolved_path);
+}
 
 void Godecl::write(Index_Stream *s) {
     WRITE_STR(name);
@@ -9337,7 +9359,6 @@ void Go_Package::write(Index_Stream *s) {
 }
 
 void Go_Index::write(Index_Stream *s) {
-    WRITE_STR(current_path);
-    WRITE_STR(current_import_path);
+    WRITE_OBJ(workspace);
     WRITE_LIST(packages);
 }

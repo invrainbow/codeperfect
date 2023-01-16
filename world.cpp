@@ -367,6 +367,8 @@ void World::init() {
     init_mem(callee_hierarchy_mem);
     init_mem(project_settings_mem);
     init_mem(fst_mem);
+    init_mem(workspace_mem_1);
+    init_mem(workspace_mem_2);
 #undef init_mem
 
     t.log("init mem");
@@ -545,7 +547,7 @@ void World::init() {
 }
 
 void World::start_background_threads() {
-    // indexer.start_background_thread();
+    indexer.start_background_thread();
 
     if (use_nvim) nvim.start_running();
     dbg.start_loop();
@@ -1918,7 +1920,7 @@ void do_find_interfaces() {
             For (results) newresults->append(it.copy());
 
             wnd.results = newresults;
-            wnd.current_import_path = cp_strdup(world.indexer.index.current_import_path);
+            wnd.workspace = ind.index.workspace->copy();
         }
 
         // close the thread handle first so it doesn't try to kill the thread
@@ -1970,7 +1972,7 @@ void init_goto_symbol() {
             For (symbols) wnd.symbols->append(it.copy());
 
             wnd.filtered_results = alloc_list<int>();
-            wnd.current_import_path = cp_strdup(world.indexer.index.current_import_path);
+            wnd.workspace = world.indexer.index.workspace->copy();
         }
 
         wnd.fill_running = false;
@@ -2019,7 +2021,7 @@ void do_find_implementations() {
             For (results) newresults->append(it.copy());
 
             wnd.results = newresults;
-            wnd.current_import_path = cp_strdup(world.indexer.index.current_import_path);
+            wnd.workspace = ind.index.workspace->copy();
         }
 
         // close the thread handle first so it doesn't try to kill the thread
@@ -2399,7 +2401,7 @@ void handle_command(Command cmd, bool from_menu) {
                 For (files) newfiles->append(it.copy());
 
                 wnd.results = newfiles;
-                wnd.current_import_path = cp_strdup(world.indexer.index.current_import_path);
+                wnd.workspace = world.indexer.index.workspace->copy();
             }
 
             // close the thread handle first so it doesn't try to kill the thread
@@ -2780,7 +2782,7 @@ void handle_command(Command cmd, bool from_menu) {
                 For (results) newresults->append(it.copy());
 
                 wnd.results = newresults;
-                wnd.current_import_path = cp_strdup(world.indexer.index.current_import_path);
+                wnd.workspace = ind.index.workspace->copy();
             }
 
             // close the thread handle first so it doesn't try to kill the thread
@@ -2862,7 +2864,7 @@ void handle_command(Command cmd, bool from_menu) {
                 For (results) newresults->append(it.copy());
 
                 wnd.results = newresults;
-                wnd.current_import_path = cp_strdup(world.indexer.index.current_import_path);
+                wnd.workspace = ind.index.workspace->copy();
             }
 
             // close the thread handle first so it doesn't try to kill the thread

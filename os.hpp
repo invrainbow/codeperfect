@@ -298,7 +298,7 @@ struct File_Mapping {
 File_Mapping *map_file_into_memory(ccstr path);
 File_Mapping *map_file_into_memory(ccstr path, File_Mapping_Opts *opts);
 
-ccstr rel_to_abs_path(ccstr path, ccstr cwd);
+ccstr rel_to_abs_path(ccstr path, ccstr cwd = NULL);
 
 struct Fs_Event {
     char filepath[MAX_PATH];

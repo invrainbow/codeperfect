@@ -340,6 +340,10 @@ struct World {
     Pool project_settings_mem;
     Pool fst_mem;
 
+    Pool workspace_mem_1;
+    Pool workspace_mem_2;
+    bool which_workspace_mem;
+
     Fridge<Mark> mark_fridge;
     Fridge<Mark_Node> mark_node_fridge;
     Fridge<Change> change_fridge;
@@ -366,6 +370,8 @@ struct World {
         u64 timestamp;
         u64 ms_over;
     };
+
+    Go_Workspace *workspace;
 
     List<Frameskip> frameskips;
 
@@ -541,7 +547,7 @@ struct World {
         Goresult *declres;
         Thread_Handle thread;
         List<Find_References_File> *results;
-        ccstr current_import_path;
+        Go_Workspace *workspace;
         int current_file;
         int current_result;
 
@@ -558,7 +564,7 @@ struct World {
         Thread_Handle thread;
         bool include_empty;
         List<Find_Decl*> *results;
-        ccstr current_import_path;
+        Go_Workspace *workspace;
         int selection;
         int scroll_to;
     } wnd_find_interfaces;
@@ -570,7 +576,7 @@ struct World {
         Goresult *declres;
         Thread_Handle thread;
         List<Find_Decl*> *results;
-        ccstr current_import_path;
+        Go_Workspace *workspace;
         int selection;
         int scroll_to;
     } wnd_find_implementations;
@@ -584,8 +590,8 @@ struct World {
         // find interfaces, find implementations, call hierarchy, etc...
         Thread_Handle thread;
         List<Call_Hier_Node> *results;
-        ccstr current_import_path;
-        bool show_tests_and_benchmarks;
+        Go_Workspace *workspace;
+        bool show_tests_benches;
     } wnd_caller_hierarchy;
 
     struct Wnd_Callee_Hierarchy : Wnd {
@@ -594,7 +600,7 @@ struct World {
         Goresult *declres;
         Thread_Handle thread;
         List<Call_Hier_Node> *results;
-        ccstr current_import_path;
+        Go_Workspace *workspace;
     } wnd_callee_hierarchy;
 
     struct Wnd_Index_Log : Wnd {
@@ -745,7 +751,7 @@ struct World {
         u64 fill_time_started_ms;
 
         char query[MAX_PATH];
-        ccstr current_import_path;
+        Go_Workspace *workspace;
         bool current_file_only;
         u32 selection;
         List<Go_Symbol> *symbols;

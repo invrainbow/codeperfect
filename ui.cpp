@@ -2788,12 +2788,12 @@ void UI::draw_everything() {
         fstlog("wnd_options");
     }
 
-    fn<void(Call_Hier_Node*, ccstr, bool)> render_call_hier;
-    render_call_hier = [&](auto it, auto current_import_path, auto show_tests_and_benchmarks) {
+    fn<void(Call_Hier_Node*, Go_Workspace*, bool)> render_call_hier;
+    render_call_hier = [&](auto it, auto workspace, auto show_tests_benches) {
         auto should_hide = [&](Call_Hier_Node *it) {
             auto decl = it->decl->decl->decl;
             if (!world.indexer.get_godecl_recvname(decl))
-                if (!show_tests_and_benchmarks)
+                if (!show_tests_benches)
                     if (is_name_special_function(decl->name))
                         return true;
             return false;
@@ -2824,14 +2824,12 @@ void UI::draw_everything() {
         else
             flags = ImGuiTreeNodeFlags_Bullet;
 
-        bool open = im::TreeNodeEx(
-            (void*)it,
-            flags,
-            "%s.%s (%s)",
-            fd->package_name,
-            name,
-            get_path_relative_to(ctx->import_path, current_import_path)
-        );
+        ccstr import_label = ctx->import_path;
+        auto mod = workspace->find_module_containing(ctx->import_path);
+        if (mod)
+            import_label = get_path_relative_to(ctx->import_path, mod->import_path);
+
+        bool open = im::TreeNodeEx((void*)it, flags, "%s.%s (%s)", fd->package_name, name, import_label);
 
         if (im::IsItemClicked()) {
             auto ref = it->ref;
@@ -2841,7 +2839,7 @@ void UI::draw_everything() {
 
         if (open) {
             For (it->children)
-                render_call_hier(&it, current_import_path, show_tests_and_benchmarks);
+                render_call_hier(&it, workspace, show_tests_benches);
             im::TreePop();
         }
     };
@@ -2859,7 +2857,7 @@ void UI::draw_everything() {
 
         if (wnd.done) {
             im::Text("Done!");
-            For (wnd.results) render_call_hier(&it, wnd.current_import_path, true);
+            For (wnd.results) render_call_hier(&it, wnd.workspace, true);
         } else {
             im::Text("Generating callee hierarchy...");
             im::SameLine();
@@ -2885,8 +2883,8 @@ void UI::draw_everything() {
         );
 
         if (wnd.done) {
-            im::Checkbox("Show tests, examples, and benchmarks", &wnd.show_tests_and_benchmarks);
-            For (wnd.results) render_call_hier(&it, wnd.current_import_path, wnd.show_tests_and_benchmarks);
+            im::Checkbox("Show tests, examples, and benchmarks", &wnd.show_tests_benches);
+            For (wnd.results) render_call_hier(&it, wnd.workspace, wnd.show_tests_benches);
         } else {
             im::Text("Generating caller hierarchy...");
             im::SameLine();
@@ -2970,7 +2968,7 @@ void UI::draw_everything() {
 
                     auto import_path = it->decl->ctx->import_path;
 
-                    if (!path_has_descendant(wnd.current_import_path, import_path)) {
+                    if (!wnd.workspace->find_module_containing(import_path)) {
                         im::PushStyleColor(ImGuiCol_Text, to_imcolor(global_colors.muted));
                         defer { im::PopStyleColor(); };
 
@@ -2981,17 +2979,13 @@ void UI::draw_everything() {
 
                     im::PushStyleColor(ImGuiCol_Text, to_imcolor(global_colors.muted));
                     {
-                        ccstr path = NULL;
+                        ccstr path = import_path;
+                        auto mod = wnd.workspace->find_module_containing(import_path);
 
-                        ccstr parents[] = {wnd.current_import_path, world.indexer.goroot};
-                        For (&parents) {
-                            if (path_has_descendant(it, import_path)) {
-                                path = get_path_relative_to(import_path, it);
-                                break;
-                            }
-                        }
-
-                        if (!path) path = import_path;
+                        if (mod)
+                            path = get_path_relative_to(path, mod->import_path);
+                        else if (path_has_descendant(world.indexer.goroot, path))
+                            path = get_path_relative_to(path, world.indexer.goroot);
 
                         draw_text(cp_sprintf(" (%s)", path));
                     }
@@ -3109,7 +3103,13 @@ void UI::draw_everything() {
                     draw_text(cp_sprintf("%s.%s", it->package_name, it->decl->decl->name));
 
                     im::PushStyleColor(ImGuiCol_Text, to_imcolor(global_colors.muted));
-                    draw_text(cp_sprintf(" (%s)", get_path_relative_to(it->decl->ctx->import_path, wnd.current_import_path)));
+                    {
+                        auto import_path = it->decl->ctx->import_path;
+                        auto mod = wnd.workspace->find_module_containing(it->decl->ctx->import_path);
+                        if (mod)
+                            import_path = get_path_relative_to(import_path, mod->import_path);
+                        draw_text(cp_sprintf(" (%s)", import_path));
+                    }
                     im::PopStyleColor();
 
                     // TODO: previews?
@@ -5154,8 +5154,12 @@ void UI::draw_everything() {
                     pm->pos.x += 8;
 
                     auto import_path = it.decl->ctx->import_path;
-                    if (path_has_descendant(wnd.current_import_path, import_path))
-                        import_path = get_path_relative_to(import_path, wnd.current_import_path);
+
+                    auto mod = wnd.workspace->find_module_containing(import_path);
+                    if (mod)
+                        import_path = get_path_relative_to(import_path, mod->import_path);
+
+                    // TODO: this is wrong with workspaces
                     if (streq(import_path, ""))
                         import_path = "(root)";
 

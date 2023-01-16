@@ -823,15 +823,31 @@ struct Go_Package {
     void write(Index_Stream *s);
 };
 
-struct Go_Index {
-    // ccstr current_path;
-    // ccstr current_import_path;
-    List<Workspace_Module> *modules;
+struct Go_Work_Module {
+    ccstr import_path;
+    ccstr resolved_path;
 
+    Go_Work_Module *copy();
+    void read(Index_Stream *s);
+    void write(Index_Stream *s);
+};
+
+struct Go_Workspace {
+    bool is_work;
+    List<Go_Work_Module> *modules;
+
+    Go_Work_Module *find_module_containing(ccstr import_path);
+    Go_Work_Module *find_module_containing_resolved(ccstr resolved_path);
+
+    Go_Workspace *copy();
+    void read(Index_Stream *s);
+    void write(Index_Stream *s);
+};
+
+struct Go_Index {
+    Go_Workspace *workspace;
     List<Go_Package> *packages;
     bool is_work;
-
-    // modules;
 
     //// .................
 
@@ -867,46 +883,38 @@ struct Jump_To_Definition_Result {
 
 typedef fn<Godecl*()> New_Godecl_Func;
 
-struct Workspace_Module {
-    ccstr import_path;
-    ccstr resolved_path;
-
-    Workspace_Module *copy();
-};
-
-// weird name, but what else to call it? Module_Collection?
-
+// Go_Workspace is essentially a collection of modules and their dependency trees,
+// and various data structures and methods to edit/query it. It can be copied
+// around so that various subsystems can answer question about import paths and
+// resolved paths. It's a competely offline (in-memory, not touching
+// filesystem) database of workspace info.
 struct Module_Resolver {
-    struct Node {
+    struct Trie_Node {
         ccstr name;
-        Node *children;
-        Node *next;
+        Trie_Node *children;
+        Trie_Node *next;
         ccstr value; // only leaves have values
+
+        // Trie_Node *copy();
     };
 
-    ccstr gomodcache;
-    bool is_work;
-    List<Workspace_Module> *modules;
-
     Pool mem;
-    Node *root_import_to_resolved;
-    Node *root_resolved_to_import;
+    ccstr gomodcache;
+    Go_Workspace workspace;
+    Trie_Node *root_import_to_resolved;
+    Trie_Node *root_resolved_to_import;
 
-    Workspace wksp;
-
-    // ccstr module_path;
-
-    void init(ccstr current_module_filepath, ccstr _gomodcache);
+    void init(ccstr root_filepath, ccstr _gomodcache);
     void cleanup() { mem.cleanup(); }
 
-    Node *goto_child(Node *node, ccstr name, bool create_if_not_found) {
+    Trie_Node *goto_child(Trie_Node *node, ccstr name, bool create_if_not_found) {
         for (auto it = node->children; it; it = it->next)
             if (streqi(it->name, name))
                 return it;
 
         if (create_if_not_found) {
             SCOPED_MEM(&mem);
-            auto ret = alloc_object(Node);
+            auto ret = alloc_object(Trie_Node);
             ret->next = node->children;
             ret->name = cp_strdup(name);
             node->children = ret;
@@ -919,7 +927,7 @@ struct Module_Resolver {
     void add_path(ccstr import_path, ccstr resolved_path) {
         resolved_path = normalize_path_sep(cp_strdup(resolved_path));
 
-        auto add_to_root = [&](Node *root, ccstr key, ccstr value) {
+        auto add_to_root = [&](Trie_Node *root, ccstr key, ccstr value) {
             //print("adding %s -> %s", key, value);
 
             auto path = make_path(key);
@@ -953,10 +961,10 @@ struct Module_Resolver {
         return new_filepath;
     }
 
-    ccstr convert_path(Node *root, ccstr path, char sep) {
+    ccstr convert_path(Trie_Node *root, ccstr path, char sep) {
         auto parts = make_path(path)->parts;
 
-        Node *curr = root;
+        Trie_Node *curr = root;
         if (!curr) return NULL;
 
         ccstr last_value = NULL;
@@ -1149,13 +1157,12 @@ struct Go_Indexer {
 
     Pool scoped_table_mem;
 
+    Module_Resolver module_resolver;
     Go_Index index;
 
     char current_exe_path[MAX_PATH];
 
     Thread_Handle bgthread;
-
-    Module_Resolver module_resolver;
 
     Table<int> package_lookup;
     bool is_work; // duplicated in index?

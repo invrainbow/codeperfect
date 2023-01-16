@@ -1812,15 +1812,6 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
         }
     }
 
-    ccstr wksp_import_path = NULL;
-
-    if (ind.try_acquire_lock(IND_READING)) {
-        defer { ind.release_lock(IND_READING); };
-
-        // only needs to live for duration of function
-        wksp_import_path = cp_strdup(ind.index.current_import_path);
-    }
-
     {
         auto prefix = autocomplete.ac.prefix;
         auto prefix_len = strlen(prefix);
@@ -1877,8 +1868,7 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
                 auto isb = test(&b);
                 if (isa == isb) return false;
 
-                ret = (isa == good ? -1 : 1);
-                return true;
+                return (isa == good ? -1 : 1);
             };
 
 #define reward(expr) if (compare([&](auto it) { return expr; }, true)) { return ret; }
@@ -1922,8 +1912,8 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
                 reward(it->import_is_existing);
 
                 // check if import in workspace
-                if (wksp_import_path) {
-                    reward(path_has_descendant(wksp_import_path, it->import_path));
+                if (world.workspace) {
+                    reward(world.workspace->find_module_containing(it->import_path) != NULL);
                 }
             }
 

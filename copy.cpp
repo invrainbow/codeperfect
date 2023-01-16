@@ -352,8 +352,7 @@ Go_File *Go_File::copy() {
 
 Go_Index *Go_Index::copy() {
     auto ret = clone(this);
-    ret->current_path = cp_strdup(current_path);
-    ret->module_import_paths = copy_string_list(module_import_paths);
+    ret->workspace = copy_object(workspace);
     ret->packages = copy_list(packages);
     return ret;
 }
@@ -416,9 +415,29 @@ Debugger_State *Debugger_State::copy() {
     return ret;
 }
 
-Workspace_Module *Workspace_Module::copy() {
+Go_Work_Module *Go_Work_Module::copy() {
     auto ret = clone(this);
     ret->import_path = cp_strdup(import_path);
     ret->resolved_path = cp_strdup(resolved_path);
     return ret;
 }
+
+Go_Workspace *Go_Workspace::copy() {
+    auto ret = clone(this);
+    ret->modules = copy_list(modules);
+    return ret;
+}
+
+/*
+Work_Trie_Node *Work_Trie_Node::copy() {
+    auto ret = clone(this);
+    ret->name = cp_strdup(name);
+    ret->value = cp_strdup(value);
+
+    // i think this just recursively works
+    ret->children = copy_object(children);
+    ret->next = copy_object(next);
+
+    return ret;
+}
+*/

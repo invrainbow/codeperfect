@@ -664,7 +664,7 @@ func GHOpenURLInBrowser(url *C.char) bool {
 	return err != nil
 }
 
-// GHGetGoWork
+//export GHGetGoWork
 func GHGetGoWork(filepath *C.char) *C.char {
 	binpath, err := GetBinaryPath("go")
 	if err != nil {

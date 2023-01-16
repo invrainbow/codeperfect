@@ -2,6 +2,7 @@
 #include "world.hpp"
 #include <filesystem>
 #include <signal.h>
+#include "cwalk.h"
 
 #if OS_WINBLOWS
 #else
@@ -115,14 +116,17 @@ void install_crash_handlers() {
 #endif
 }
 
-ccstr rel_to_abs_path(ccstr path, char *cwd) {
+ccstr rel_to_abs_path(ccstr path, ccstr cwd) {
     int size = 16;
 
     if (cwd == NULL) {
         while (true) {
             Frame frame;
-            cwd = alloc_array(char, size);
-            if (getcwd(cwd, size)) break;
+            auto newcwd = alloc_array(char, size);
+            if (getcwd(newcwd, size)) {
+                cwd = newcwd;
+                break;
+            }
             frame.restore();
             size *= 2;
         }
