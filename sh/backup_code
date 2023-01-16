@@ -1,0 +1,15 @@
+#!/bin/bash
+
+folder="$(mktemp -d)"
+
+for file in $(ag -g ""); do
+    mkdir -p "$folder/source/$(dirname "$file")"
+    cp "$file" "$folder/source/$file"
+done
+
+pushd $folder
+zip -r source.zip source/
+aws s3 cp source.zip s3://codeperfect-private/source.zip
+popd
+
+rm -rf "$folder"
