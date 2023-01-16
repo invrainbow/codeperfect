@@ -10,7 +10,7 @@ done
 
 pushd $folder
 zip -r source.zip source/
-aws s3 cp source.zip s3://codeperfect-private/source-$branch.zip
+aws s3 cp source.zip s3://codeperfect-private/source/$branch.zip
 popd
 
 rm -rf "$folder"
