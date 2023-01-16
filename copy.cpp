@@ -26,7 +26,7 @@ List<T> *copy_list(List<T> *arr, fn<T*(T* it)> copy_func) {
 
     auto new_arr = alloc_object(List<T>);
     new_arr->init(LIST_POOL, max(arr->len, 1));
-    For (*arr) new_arr->append(copy_func(&it));
+    For (arr) new_arr->append(copy_func(&it));
     return new_arr;
 }
 
@@ -36,7 +36,7 @@ List<T> *copy_listp(List<T> *arr) {
 
     auto new_arr = alloc_object(List<T>);
     new_arr->init(LIST_POOL, max(arr->len, 1));
-    For (*arr) new_arr->append(copy_object(it));
+    For (arr) new_arr->append(copy_object(it));
     return new_arr;
 }
 
@@ -44,6 +44,16 @@ template <typename T>
 List<T> *copy_list(List<T> *arr) {
     auto copy_func = [&](T *it) -> T* { return copy_object(it); };
     return copy_list<T>(arr, copy_func);
+}
+
+// specialization of copy_list for ccstr
+List<ccstr> *copy_string_list(List<ccstr> *arr) {
+    if (!arr) return NULL;
+
+    auto new_arr = alloc_object(List<ccstr>);
+    new_arr->init(LIST_POOL, max(arr->len, 1));
+    For (arr) new_arr->append(cp_strdup(it));
+    return new_arr;
 }
 
 template <typename T>
@@ -286,7 +296,7 @@ Go_Package *Go_Package::copy() {
 
     auto new_files = alloc_object(List<Go_File>);
     new_files->init(LIST_POOL, max(ret->files->len, 1));
-    For (*ret->files) {
+    For (ret->files) {
         auto gofile = new_files->append();
         memcpy(gofile, &it, sizeof(Go_File));
 
@@ -343,7 +353,7 @@ Go_File *Go_File::copy() {
 Go_Index *Go_Index::copy() {
     auto ret = clone(this);
     ret->current_path = cp_strdup(current_path);
-    ret->current_import_path = cp_strdup(current_import_path);
+    ret->module_import_paths = copy_string_list(module_import_paths);
     ret->packages = copy_list(packages);
     return ret;
 }
@@ -403,5 +413,12 @@ Dlv_Goroutine *Dlv_Goroutine::copy() {
 Debugger_State *Debugger_State::copy() {
     auto ret = clone(this);
     ret->goroutines = copy_list(goroutines);
+    return ret;
+}
+
+Workspace_Module *Workspace_Module::copy() {
+    auto ret = clone(this);
+    ret->import_path = cp_strdup(import_path);
+    ret->resolved_path = cp_strdup(resolved_path);
     return ret;
 }

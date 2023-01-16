@@ -276,7 +276,7 @@ struct UI {
     void flush_images();
     void start_clip(boxf b);
     void end_clip();
-    void render_ts_cursor(TSTreeCursor *curr, cur2 open_cur);
+    void render_ts_cursor(TSTreeCursor *curr, Parse_Lang lang, cur2 open_cur);
     void render_godecl(Godecl *decl);
     void render_gotype(Gotype *gotype, ccstr field = NULL);
     bool test_hover(boxf area, int id, ImGuiMouseCursor cursor = ImGuiMouseCursor_Arrow);

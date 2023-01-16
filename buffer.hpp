@@ -166,11 +166,11 @@ struct Buffer {
 
     bool initialized;
     bool dirty;
-    bool use_tree;
     TSTree *tree;
     int tree_version;
     TSTreeCursor cursor;
     bool tree_dirty;
+    int lang;
 
     TSParser *parser;
     char tsinput_buffer[128];
@@ -203,7 +203,7 @@ struct Buffer {
     void hist_apply_change(Change *change, bool undo);
 
     void copy_from(Buffer *other);
-    void init(Pool *_mem, bool use_tree, bool use_history);
+    void init(Pool *_mem, int _lang, bool use_history);
     void cleanup();
     bool read(Buffer_Read_Func f, bool reread = false);
     bool read_data(char *data, int len, bool reread = false);
@@ -212,7 +212,7 @@ struct Buffer {
     void clear();
     uchar* alloc_temp_array(s32 size);
     void free_temp_array(uchar* buf, s32 size);
-    void enable_tree();
+    void enable_tree(int _lang);
     void update_tree();
 
     void internal_append_line(uchar* text, s32 len);

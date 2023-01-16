@@ -66,8 +66,8 @@ SEPARATE_SRC_FILES = tests.cpp enums.cpp
 SRC_FILES := $(filter-out $(SEPARATE_SRC_FILES), $(wildcard *.cpp))
 OBJ_FILES = $(patsubst %.cpp,obj/%.o,$(SRC_FILES))
 DEP_FILES = $(patsubst %.cpp,obj/%.d,$(SRC_FILES))
-DEP_FILES += obj/clibs.d
-OBJ_DEPS = $(OBJ_FILES) obj/clibs.o obj/gohelper.a
+DEP_FILES += obj/clibs.d obj/tsgo.d
+OBJ_DEPS = $(OBJ_FILES) obj/clibs.o obj/gohelper.a obj/tsgo.o obj/tsgomod.o obj/tsgowork.o
 GO_DEPS = $(shell find go/ -type f -name '*.go')
 
 ifeq ($(OSTYPE), mac)
@@ -117,6 +117,15 @@ else
 endif
 
 obj/clibs.o: clibs.c
+	clang $(CFLAGS) -std=gnu99 $(PIC_FLAGS) -c -o $@ $<
+
+obj/tsgo.o: tsgo.c
+	clang $(CFLAGS) -std=gnu99 $(PIC_FLAGS) -c -o $@ $<
+
+obj/tsgomod.o: tree-sitter-go-mod/src/parser.c
+	clang $(CFLAGS) -std=gnu99 $(PIC_FLAGS) -c -o $@ $<
+
+obj/tsgowork.o: tree-sitter-go-work/src/parser.c
 	clang $(CFLAGS) -std=gnu99 $(PIC_FLAGS) -c -o $@ $<
 
 binaries.c: .cpcolors vert.glsl frag.glsl im.vert.glsl im.frag.glsl

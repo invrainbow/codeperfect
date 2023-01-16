@@ -20,7 +20,7 @@ void test_diff() {
         for (auto p = b; *p != '\0'; p++) bl->append(*p);
 
         auto diffs = diff_main(new_dstr(al), new_dstr(bl));
-        For (*diffs) {
+        For (diffs) {
             switch (it.type) {
             case DIFF_INSERT: print(" - [insert] %s", it.s.str()); break;
             case DIFF_DELETE: print(" - [delete] %s", it.s.str()); break;
@@ -97,7 +97,7 @@ struct Mark_Tree_Fuzzer {
 
     void cleanup() {
         tree.cleanup();
-        For (marks) world.mark_fridge.free(it);
+        For (&marks) world.mark_fridge.free(it);
     }
 
     // assume 100x100 grid
@@ -233,7 +233,7 @@ struct Mark_Tree_Fuzzer {
 
             /*
             // ensure marks is still good
-            For (marks) {
+            For (&marks) {
                 // check that mark node contains the mark
                 bool found = false;
                 for (auto m = it->node->marks; m; m = m->next) {
@@ -330,7 +330,7 @@ void profile_parser() {
 
     t.log("list source files");
 
-    For (*source_files) {
+    For (source_files) {
         auto filename = it;
 
         SCOPED_FRAME();

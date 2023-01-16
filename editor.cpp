@@ -44,7 +44,7 @@ done:
     for (u32 x = 0; x < copy_spaces_until; x++)
         ret->append((char)line[x]); // has to be ' ' or '\t'
 
-    if (is_go_file) {
+    if (lang == LANG_GO) {
         for (i32 x = line.len-1; x >= 0; x--) {
             if (isspace(line[x])) continue;
 
@@ -470,7 +470,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
                                     "uint8", "uintptr",
                                 };
 
-                                For (int_types)
+                                For (&int_types)
                                     if (streq(gotype->id_name, it))
                                         return "0";
 
@@ -545,7 +545,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
                     "for", "select", "switch",
                 };
 
-                For (builtins_with_space)
+                For (&builtins_with_space)
                     if (streq(s, it))
                         return cp_sprintf("%s ", s);
                 break;
@@ -618,7 +618,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
                 if (!import_nodes->len && !package_node) break;
 
                 auto already_exists = [&]() {
-                    For (*import_nodes) {
+                    For (import_nodes) {
                         auto imports = alloc_list<Go_Import>();
                         world.indexer.import_decl_to_goimports(it, imports);
 
@@ -642,7 +642,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
                         auto imports = alloc_list<Go_Import>();
                         world.indexer.import_decl_to_goimports(firstnode, imports);
 
-                        For (*imports) {
+                        For (imports) {
                             switch (it.package_name_type) {
                             case GPN_IMPLICIT:  rend.write("\"%s\"", it.import_path);                       break;
                             case GPN_EXPLICIT:  rend.write("%s \"%s\"", it.package_name, it.import_path);   break;
@@ -694,7 +694,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
 
                 {
                     auto ustr = cstr_to_ustr(new_contents);
-                    For (*ustr) {
+                    For (ustr) {
                         chars->append(it);
                         if (it == '\n') {
                             new_end.x = 0;
@@ -1035,7 +1035,7 @@ void Editor::reload_file(bool because_of_file_watcher) {
     /*
     if (buf->initialized)
         buf->cleanup();
-    buf->init(&mem, is_go_file);
+    buf->init(&mem, lang == LANG_GO);
     */
 
     print("=== reloading %s", filepath);
@@ -1051,9 +1051,20 @@ void Editor::reload_file(bool because_of_file_watcher) {
         nv.writer.write_int(-1);
         nv.writer.write_bool(false);
         nv.writer.write_array(buf->lines.len);
-        For (buf->lines) nv.write_line(&it);
+        For (&buf->lines) nv.write_line(&it);
         nv.end_message();
     }
+}
+
+Parse_Lang determine_lang(ccstr filepath) {
+    if (filepath) {
+        if (str_ends_with(filepath, ".go")) return LANG_GO;
+
+        auto base = cp_basename(filepath);
+        if (streq(base, "go.mod")) return LANG_GOMOD;
+        if (streq(base, "go.work")) return LANG_GOWORK;
+    }
+    return LANG_NONE;
 }
 
 bool Editor::load_file(ccstr new_filepath) {
@@ -1062,8 +1073,8 @@ bool Editor::load_file(ccstr new_filepath) {
     if (buf->initialized)
         buf->cleanup();
 
-    is_go_file = (new_filepath && str_ends_with(new_filepath, ".go"));
-    buf->init(&mem, is_go_file, !world.use_nvim);
+    lang = determine_lang(new_filepath);
+    buf->init(&mem, lang, !world.use_nvim);
     buf->editable_from_main_thread_only = true;
 
     FILE* f = NULL;
@@ -1108,7 +1119,7 @@ bool Editor::load_file(ccstr new_filepath) {
     auto &b = world.build;
     if (b.ready()) {
         auto editor_path = get_path_relative_to(filepath, world.current_path);
-        For (b.errors) {
+        For (&b.errors) {
             if (is_mark_valid(it.mark)) continue;
             if (!it.valid) continue;
             if (!are_filepaths_equal(editor_path, it.file)) continue;
@@ -1121,10 +1132,10 @@ bool Editor::load_file(ccstr new_filepath) {
 
     // fill in search results
     if (world.searcher.state == SEARCH_SEARCH_DONE) {
-        For (world.searcher.search_results) {
+        For (&world.searcher.search_results) {
             if (!are_filepaths_equal(it.filepath, filepath)) continue;
 
-            For (*it.results) {
+            For (it.results) {
                 if (!it.mark_start) cp_panic("mark_start was null");
                 if (!it.mark_end) cp_panic("mark_end was null");
 
@@ -1208,7 +1219,7 @@ void Pane::init() {
 }
 
 void Pane::cleanup() {
-    For (editors) {
+    For (&editors) {
         it.cleanup();
     }
     editors.cleanup();
@@ -1220,7 +1231,7 @@ Editor* Pane::focus_editor(ccstr path) {
 
 Editor* Pane::focus_editor(ccstr path, cur2 pos, bool pos_in_byte_format) {
     u32 i = 0;
-    For (editors) {
+    For (&editors) {
         // TODO: use are_filepaths_equal instead, don't have to access filesystem
         if (are_filepaths_same_file(path, it.filepath))
             return focus_editor_by_index(i, pos, pos_in_byte_format);
@@ -1298,7 +1309,7 @@ bool Editor::trigger_escape(cur2 go_here_after) {
             {
                 writer.write_array(nvim_insert.other_changes.len + 8);
 
-                For (nvim_insert.other_changes) {
+                For (&nvim_insert.other_changes) {
                     writer.write_array(2);
                     writer.write_string("nvim_buf_set_lines");
                     {
@@ -1310,7 +1321,7 @@ bool Editor::trigger_escape(cur2 go_here_after) {
                             writer.write_bool(false);
                             writer.write_array(it.lines.len);
                             {
-                                For (it.lines) nv.write_line(&it);
+                                For (&it.lines) nv.write_line(&it);
                             }
                         }
                     }
@@ -1577,7 +1588,7 @@ void Editor::update_selected_ast_node(Ast_Node *node) {
     auto &nav = ast_navigation;
 
     auto prev_siblings = alloc_list<Ast_Node*>();
-    for (auto curr = node->prev(); !curr->null; curr = curr->prev())
+    for (auto curr = node->prev(); !isastnull(curr); curr = curr->prev())
         prev_siblings->append(curr);
 
     {
@@ -1588,7 +1599,7 @@ void Editor::update_selected_ast_node(Ast_Node *node) {
 
         for (int i = prev_siblings->len-1; i >= 0; i--)
             nav.siblings->append(prev_siblings->at(i)->dup());
-        for (auto curr = node->next(); !curr->null; curr = curr->next())
+        for (auto curr = node->next(); !isastnull(curr); curr = curr->next())
             nav.siblings->append(curr);
     }
 }
@@ -1604,7 +1615,7 @@ void Editor::update_ast_navigate(fn<Ast_Node*(Ast_Node*)> cb) {
 
     node = cb(node);
     if (!node) return;
-    if (node->null) return;
+    if (isastnull(node)) return;
 
     update_selected_ast_node(node);
     move_cursor(node->start());
@@ -1617,18 +1628,18 @@ void Editor::update_ast_navigate(fn<Ast_Node*(Ast_Node*)> cb) {
 void Editor::ast_navigate_in() {
     update_ast_navigate([&](auto node) -> Ast_Node* {
         auto child = node->child();
-        if (child->null) return NULL;
+        if (isastnull(child)) return NULL;
 
         // skip the children that have no siblings
-        while (!child->null && child->prev()->null && child->next()->null) // no siblings
+        while (!isastnull(child) && isastnull(child->prev()) && isastnull(child->next())) // no siblings
             child = child->child();
 
         // no children with siblings, just grab the innermost child
-        if (child->null) {
+        if (isastnull(child)) {
             child = node->child();
             while (true) {
                 auto next = child->child();
-                if (next->null) break;
+                if (isastnull(next)) break;
                 child = next;
             }
 
@@ -1644,18 +1655,18 @@ void Editor::ast_navigate_in() {
 void Editor::ast_navigate_out() {
     update_ast_navigate([&](auto node) -> Ast_Node* {
         auto parent = node->parent();
-        if (parent->null) return NULL;
+        if (isastnull(parent)) return NULL;
         if (parent->type() == TS_SOURCE_FILE) return NULL;
 
         // skip the children that have no siblings
-        while (!parent->null && parent->prev()->null && parent->next()->null) // no siblings
+        while (!isastnull(parent) && isastnull(parent->prev()) && isastnull(parent->next())) // no siblings
             parent = parent->parent();
 
-        if (parent->null) {
+        if (isastnull(parent)) {
             parent = node->parent();
             while (true) {
                 auto next = parent->parent();
-                if (next->null) break;
+                if (isastnull(next)) break;
                 if (next->type() == TS_SOURCE_FILE) break;
                 parent = next;
             }
@@ -1731,7 +1742,7 @@ bool Editor::cur_is_inside_comment_or_string() {
 // basically the rule is, if autocomplete comes up empty ON FIRST OPEN, then keep it closed
 
 void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typing_ident, uchar typed_ident_char) {
-    if (!is_go_file) return;
+    if (lang != LANG_GO) return;
 
     if (cur_is_inside_comment_or_string()) {
         return;
@@ -1788,7 +1799,7 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
 
             // copy results
             auto new_results = alloc_list<AC_Result>(ac.results->len);
-            For (*ac.results) {
+            For (ac.results) {
                 auto r = new_results->append();
                 memcpy(r, it.copy(), sizeof(AC_Result));
             }
@@ -1957,7 +1968,7 @@ bool is_goident_empty(ccstr name) {
 }
 
 void Editor::trigger_parameter_hint() {
-    if (!is_go_file) return;
+    if (lang != LANG_GO) return;
 
     ptr0(&parameter_hint);
 
@@ -2108,7 +2119,7 @@ void Editor::type_char_in_insert_mode(uchar ch) {
 
     if (!already_typed) type_char(ch);
 
-    if (!is_go_file) return;
+    if (lang != LANG_GO) return;
 
     // at this point, tree is up to date! we can simply walk, don't need to re-parse :)
 
@@ -2139,7 +2150,7 @@ void Editor::type_char_in_insert_mode(uchar ch) {
     case '}':
     case ')':
     case ']': {
-        if (!is_go_file) break;
+        if (lang != LANG_GO) break;
 
         if (!cur.x) break;
 
@@ -2195,11 +2206,11 @@ void Editor::type_char_in_insert_mode(uchar ch) {
             while (true) {
                 // try to get prev
                 auto prev = curr->prev_all();
-                if (!prev->null) return prev;
+                if (!isastnull(prev)) return prev;
 
                 // unable to? get parent, try again
                 curr = curr->parent();
-                if (curr->null) return curr;
+                if (isastnull(curr)) return curr;
             }
         };
 
@@ -2229,13 +2240,13 @@ void Editor::type_char_in_insert_mode(uchar ch) {
             }
         };
 
-        for (; !curr->null && lbrace_line == -1; curr = walk_upwards(curr))
+        for (; !isastnull(curr) && lbrace_line == -1; curr = walk_upwards(curr))
             process_node(curr);
 
         if (lbrace_line == -1) break;
 
         auto indentation = alloc_list<uchar>();
-        For (buf->lines[lbrace_line]) {
+        For (&buf->lines[lbrace_line]) {
             if (it == '\t' || it == ' ')
                 indentation->append(it);
             else
@@ -2417,7 +2428,7 @@ bool Editor::optimize_imports() {
 
         auto cgo_imports_text = alloc_list<char>();
 
-        For (*cgo_imports) {
+        For (cgo_imports) {
             auto startnode = it;
             while (true) {
                 auto prev = startnode->prev_all(false);
@@ -2443,7 +2454,7 @@ bool Editor::optimize_imports() {
         rend.init();
         rend.write("import (\n");
 
-        For (*imports) {
+        For (imports) {
             switch (it.package_name_type) {
             case GPN_IMPLICIT:
                 rend.write("\"%s\"", it.import_path);
@@ -2525,7 +2536,7 @@ bool Editor::optimize_imports() {
             nv.writer.write_int(-1);
             nv.writer.write_bool(false);
             nv.writer.write_array(buf->lines.len);
-            For (buf->lines) nv.write_line(&it);
+            For (&buf->lines) nv.write_line(&it);
             nv.end_message();
         }
     } while (0);
@@ -2534,7 +2545,7 @@ bool Editor::optimize_imports() {
 }
 
 void Editor::format_on_save(bool fix_imports, bool write_to_nvim) {
-    if (!is_go_file) return; // any more checks needed?
+    if (lang != LANG_GO) return; // any more checks needed?
 
     auto old_cur = cur;
 
@@ -2549,7 +2560,7 @@ void Editor::format_on_save(bool fix_imports, bool write_to_nvim) {
         List<char> line;
         line.init();
 
-        For (buf->lines[i]) {
+        For (&buf->lines[i]) {
             char tmp[4];
             auto n = uchar_to_cstr(it, tmp);
             for (u32 j = 0; j < n; j++)
@@ -2608,7 +2619,7 @@ void Editor::format_on_save(bool fix_imports, bool write_to_nvim) {
         writer.write_bool(false);
 
         writer.write_array(buf->lines.len);
-        For (buf->lines) nv.write_line(&it);
+        For (&buf->lines) nv.write_line(&it);
         nv.end_message();
     }
 }
@@ -2641,10 +2652,9 @@ void Editor::handle_save(bool about_to_close) {
         }
 
         is_untitled = false;
-        is_go_file = str_ends_with(filepath, ".go");
-
-        if (is_go_file)
-            buf->enable_tree();
+        lang = determine_lang(filepath);
+        if (lang != LANG_NONE)
+            buf->enable_tree(lang);
     }
 
     if (options.format_on_save && !file_was_deleted) {
@@ -2682,7 +2692,7 @@ void Editor::handle_save(bool about_to_close) {
         if (!parts->len) return NULL;
         parts->len--; // chop off last, we want dirname
 
-        For (*parts) {
+        For (parts) {
             bool found = false;
             for (auto child = curr->children; child; child = child->next) {
                 if (streq(child->name, it)) {

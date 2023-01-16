@@ -62,7 +62,7 @@ ccstr format_key(int mods, ccstr key, bool icon) {
     if (mods & CP_MOD_CTRL)  parts.append(icon ? ICON_MD_KEYBOARD_CONTROL_KEY : "Ctrl");
 
     Text_Renderer rend; rend.init();
-    For (parts) {
+    For (&parts) {
         if (icon)
             rend.write("%s", it);
         else
@@ -182,7 +182,7 @@ int get_line_number_width(Editor *editor) {
 
     u32 maxval = 0;
     if (world.replace_line_numbers_with_bytecounts) {
-        For (buf->bytecounts)
+        For (&buf->bytecounts)
             if (it > maxval)
                 maxval = it;
     } else {
@@ -243,166 +243,175 @@ ImVec4 to_imcolor(vec3f color) {
 }
 
 bool get_type_color(Ast_Node *node, Editor *editor, vec4f *out) {
-    switch (node->type()) {
-    case TS_PACKAGE:
-    case TS_IMPORT:
-    case TS_CONST:
-    case TS_VAR:
-    case TS_FUNC:
-    case TS_TYPE:
-    case TS_FALLTHROUGH:
-    case TS_BREAK:
-    case TS_CONTINUE:
-    case TS_GOTO:
-    case TS_RETURN:
-    case TS_GO:
-    case TS_DEFER:
-    case TS_IF:
-    case TS_ELSE:
-    case TS_FOR:
-    case TS_RANGE:
-    case TS_SWITCH:
-    case TS_CASE:
-    case TS_DEFAULT:
-    case TS_SELECT:
-    case TS_NEW:
-    case TS_MAKE:
-        *out = rgba(global_colors.keyword);
-        return true;
+    switch (editor->lang) {
+    case LANG_GO:
+        switch (node->type()) {
+        case TS_PACKAGE:
+        case TS_IMPORT:
+        case TS_CONST:
+        case TS_VAR:
+        case TS_FUNC:
+        case TS_TYPE:
+        case TS_FALLTHROUGH:
+        case TS_BREAK:
+        case TS_CONTINUE:
+        case TS_GOTO:
+        case TS_RETURN:
+        case TS_GO:
+        case TS_DEFER:
+        case TS_IF:
+        case TS_ELSE:
+        case TS_FOR:
+        case TS_RANGE:
+        case TS_SWITCH:
+        case TS_CASE:
+        case TS_DEFAULT:
+        case TS_SELECT:
+        case TS_NEW:
+        case TS_MAKE:
+            *out = rgba(global_colors.keyword);
+            return true;
 
-    case TS_STRUCT:
-    case TS_INTERFACE:
-    case TS_MAP:
-    case TS_CHAN:
-        *out = rgba(global_colors.type);
-        return true;
+        case TS_STRUCT:
+        case TS_INTERFACE:
+        case TS_MAP:
+        case TS_CHAN:
+            *out = rgba(global_colors.type);
+            return true;
 
-    case TS_PLUS:
-    case TS_DASH:
-    case TS_BANG:
-    case TS_SEMI:
-    case TS_DOT:
-    case TS_ANON_DOT:
-    case TS_LPAREN:
-    case TS_RPAREN:
-    case TS_COMMA:
-    case TS_EQ:
-    case TS_DOT_DOT_DOT:
-    case TS_STAR:
-    case TS_LBRACK:
-    case TS_RBRACK:
-    case TS_LBRACE:
-    case TS_RBRACE:
-    case TS_CARET:
-    case TS_AMP:
-    case TS_SLASH:
-    case TS_PERCENT:
-    case TS_LT_DASH:
-    case TS_COLON_EQ:
-    case TS_PLUS_PLUS:
-    case TS_DASH_DASH:
-    case TS_STAR_EQ:
-    case TS_SLASH_EQ:
-    case TS_PERCENT_EQ:
-    case TS_LT_LT_EQ:
-    case TS_GT_GT_EQ:
-    case TS_AMP_EQ:
-    case TS_AMP_CARET_EQ:
-    case TS_PLUS_EQ:
-    case TS_DASH_EQ:
-    case TS_PIPE_EQ:
-    case TS_CARET_EQ:
-    case TS_COLON:
-    case TS_LT_LT:
-    case TS_GT_GT:
-    case TS_AMP_CARET:
-    case TS_PIPE:
-    case TS_EQ_EQ:
-    case TS_BANG_EQ:
-    case TS_LT:
-    case TS_LT_EQ:
-    case TS_GT:
-    case TS_GT_EQ:
-    case TS_AMP_AMP:
-    case TS_PIPE_PIPE:
-        *out = rgba(global_colors.punctuation, 0.75);
-        return true;
+        case TS_PLUS:
+        case TS_DASH:
+        case TS_BANG:
+        case TS_SEMI:
+        case TS_DOT:
+        case TS_ANON_DOT:
+        case TS_LPAREN:
+        case TS_RPAREN:
+        case TS_COMMA:
+        case TS_EQ:
+        case TS_DOT_DOT_DOT:
+        case TS_STAR:
+        case TS_LBRACK:
+        case TS_RBRACK:
+        case TS_LBRACE:
+        case TS_RBRACE:
+        case TS_CARET:
+        case TS_AMP:
+        case TS_SLASH:
+        case TS_PERCENT:
+        case TS_LT_DASH:
+        case TS_COLON_EQ:
+        case TS_PLUS_PLUS:
+        case TS_DASH_DASH:
+        case TS_STAR_EQ:
+        case TS_SLASH_EQ:
+        case TS_PERCENT_EQ:
+        case TS_LT_LT_EQ:
+        case TS_GT_GT_EQ:
+        case TS_AMP_EQ:
+        case TS_AMP_CARET_EQ:
+        case TS_PLUS_EQ:
+        case TS_DASH_EQ:
+        case TS_PIPE_EQ:
+        case TS_CARET_EQ:
+        case TS_COLON:
+        case TS_LT_LT:
+        case TS_GT_GT:
+        case TS_AMP_CARET:
+        case TS_PIPE:
+        case TS_EQ_EQ:
+        case TS_BANG_EQ:
+        case TS_LT:
+        case TS_LT_EQ:
+        case TS_GT:
+        case TS_GT_EQ:
+        case TS_AMP_AMP:
+        case TS_PIPE_PIPE:
+            *out = rgba(global_colors.punctuation, 0.75);
+            return true;
 
-    case TS_INT_LITERAL:
-    case TS_FLOAT_LITERAL:
-    case TS_IMAGINARY_LITERAL:
-    case TS_RUNE_LITERAL:
-    case TS_NIL:
-    case TS_TRUE:
-    case TS_FALSE:
-        *out = rgba(global_colors.number_literal);
-        return true;
+        case TS_INT_LITERAL:
+        case TS_FLOAT_LITERAL:
+        case TS_IMAGINARY_LITERAL:
+        case TS_RUNE_LITERAL:
+        case TS_NIL:
+        case TS_TRUE:
+        case TS_FALSE:
+            *out = rgba(global_colors.number_literal);
+            return true;
 
-    case TS_COMMENT:
-        *out = rgba(global_colors.comment);
-        return true;
+        case TS_COMMENT:
+            *out = rgba(global_colors.comment);
+            return true;
 
-    case TS_INTERPRETED_STRING_LITERAL:
-    case TS_RAW_STRING_LITERAL:
-        *out = rgba(global_colors.string_literal);
-        return true;
+        case TS_INTERPRETED_STRING_LITERAL:
+        case TS_RAW_STRING_LITERAL:
+            *out = rgba(global_colors.string_literal);
+            return true;
 
-    case TS_IDENTIFIER:
-    case TS_FIELD_IDENTIFIER:
-    case TS_PACKAGE_IDENTIFIER:
-    case TS_TYPE_IDENTIFIER: {
-        auto len = node->end_byte() - node->start_byte();
-        if (len >= 16) break;
+        case TS_IDENTIFIER:
+        case TS_FIELD_IDENTIFIER:
+        case TS_PACKAGE_IDENTIFIER:
+        case TS_TYPE_IDENTIFIER: {
+            auto len = node->end_byte() - node->start_byte();
+            if (len >= 16) break;
 
-        ccstr keywords[] = {
-            "package", "import", "const", "var", "func",
-            "type", "struct", "interface",
-            "fallthrough", "break", "continue", "goto", "return",
-            "go", "defer", "if", "else",
-            "for", "range", "switch", "case",
-            "default", "select", "new", "make", "iota",
-        };
+            ccstr keywords[] = {
+                "package", "import", "const", "var", "func",
+                "type", "struct", "interface",
+                "fallthrough", "break", "continue", "goto", "return",
+                "go", "defer", "if", "else",
+                "for", "range", "switch", "case",
+                "default", "select", "new", "make", "iota",
+            };
 
-        ccstr builtin_types[] = {
-            // technically keywords, but look better here
-            "map", "chan", "bool", "byte", "complex128", "complex64",
-            "error", "float32", "float64", "int", "int16", "int32",
-            "int64", "int8", "rune", "string", "uint", "uint16", "uint32",
-            "uint64", "uint8", "uintptr",
-        };
+            ccstr builtin_types[] = {
+                // technically keywords, but look better here
+                "map", "chan", "bool", "byte", "complex128", "complex64",
+                "error", "float32", "float64", "int", "int16", "int32",
+                "int64", "int8", "rune", "string", "uint", "uint16", "uint32",
+                "uint64", "uint8", "uintptr",
+            };
 
-        ccstr builtin_others[] = {
-            "append", "cap", "close", "complex", "copy", "delete", "imag",
-            "len", "make", "new", "panic", "real", "recover",
-        };
+            ccstr builtin_others[] = {
+                "append", "cap", "close", "complex", "copy", "delete", "imag",
+                "len", "make", "new", "panic", "real", "recover",
+            };
 
-        char token[16] = {0};
-        auto it = editor->iter(node->start());
-        for (u32 i = 0; i < _countof(token) && it.pos != node->end(); i++)
-            token[i] = it.next();
+            char token[16] = {0};
+            auto it = editor->iter(node->start());
+            for (u32 i = 0; i < _countof(token) && it.pos != node->end(); i++)
+                token[i] = it.next();
 
-        For (keywords) {
-            if (streq(it, token)) {
-                *out = rgba(global_colors.keyword);
-                return true;
+            For (&keywords) {
+                if (streq(it, token)) {
+                    *out = rgba(global_colors.keyword);
+                    return true;
+                }
             }
-        }
 
-        For (builtin_types) {
-            if (streq(it, token)) {
-                *out = rgba(global_colors.type);
-                return true;
+            For (&builtin_types) {
+                if (streq(it, token)) {
+                    *out = rgba(global_colors.type);
+                    return true;
+                }
             }
-        }
 
-        For (builtin_others) {
-            if (streq(it, token)) {
-                *out = rgba(global_colors.builtin);
-                return true;
+            For (&builtin_others) {
+                if (streq(it, token)) {
+                    *out = rgba(global_colors.builtin);
+                    return true;
+                }
             }
+            break;
         }
+        }
+    case LANG_GOMOD:
+        // TODO
         break;
-    }
+    case LANG_GOWORK:
+        // TODO
+        break;
     }
 
     return false;
@@ -583,11 +592,11 @@ void UI::render_gotype(Gotype *gotype, ccstr field) {
 
             if (gotype->type == GOTYPE_STRUCT) {
                 int i = 0;
-                For (*gotype->struct_specs)
+                For (gotype->struct_specs)
                     render_shit(&it, it.field, it.tag, i++);
             } else {
                 int i = 0;
-                For (*gotype->interface_specs)
+                For (gotype->interface_specs)
                     render_shit(&it, it.field, NULL, i++);
             }
             break;
@@ -614,7 +623,7 @@ void UI::render_gotype(Gotype *gotype, ccstr field) {
             if (!gotype->func_sig.params) {
                 im::Text("params: NULL");
             } else if (im::TreeNodeEx(&gotype->func_sig.params, flags, "params:")) {
-                For (*gotype->func_sig.params)
+                For (gotype->func_sig.params)
                     render_godecl(&it);
                 im::TreePop();
             }
@@ -622,7 +631,7 @@ void UI::render_gotype(Gotype *gotype, ccstr field) {
             if (!gotype->func_sig.result) {
                 im::Text("result: NULL");
             } else if (im::TreeNodeEx(&gotype->func_sig.result, flags, "result:")) {
-                For (*gotype->func_sig.result)
+                For (gotype->func_sig.result)
                     render_godecl(&it);
                 im::TreePop();
             }
@@ -631,7 +640,7 @@ void UI::render_gotype(Gotype *gotype, ccstr field) {
             break;
 
         case GOTYPE_MULTI:
-            For (*gotype->multi_types) render_gotype(it);
+            For (gotype->multi_types) render_gotype(it);
             break;
 
         case GOTYPE_RANGE:
@@ -658,7 +667,7 @@ void UI::render_gotype(Gotype *gotype, ccstr field) {
     }
 }
 
-void UI::render_ts_cursor(TSTreeCursor *curr, cur2 open_cur) {
+void UI::render_ts_cursor(TSTreeCursor *curr, Parse_Lang lang, cur2 open_cur) {
     int last_depth = 0;
     bool last_open = false;
 
@@ -688,11 +697,12 @@ void UI::render_ts_cursor(TSTreeCursor *curr, cur2 open_cur) {
         if (!node->child_count())
             flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_Bullet;
 
-        auto type_str = ts_ast_type_str(node->type());
-        if (!type_str)
-            type_str = "(unknown)";
-        else
-            type_str += strlen("TS_");
+        ccstr type_str = "(unknown)";
+        switch (lang) {
+        case LANG_GO:     type_str = ts_ast_type_str((Ts_Ast_Type)node->type());   break;
+        case LANG_GOMOD:  type_str = tsgm_ast_type_str((Tsgm_Ast_Type)node->type()); break;
+        case LANG_GOWORK: type_str = tsgw_ast_type_str((Tsgw_Ast_Type)node->type()); break;
+        }
 
         if (node->anon())
             im::PushStyleColor(ImGuiCol_Text, (ImVec4)ImColor(128, 128, 128));
@@ -704,7 +714,10 @@ void UI::render_ts_cursor(TSTreeCursor *curr, cur2 open_cur) {
             im::SetNextItemOpen(open, ImGuiCond_Always);
         }
 
-        auto field_type_str = ts_field_type_str(field_type);
+        ccstr field_type_str = NULL;
+        if (lang == LANG_GO)
+            field_type_str = ts_field_type_str(field_type);
+
         if (!field_type_str)
             last_open = im::TreeNodeEx(
                 node->id(),
@@ -719,7 +732,7 @@ void UI::render_ts_cursor(TSTreeCursor *curr, cur2 open_cur) {
                 node->id(),
                 flags,
                 "(%s) %s, start = %s, end = %s",
-                field_type_str + strlen("TSF_"),
+                field_type_str,
                 type_str,
                 node->start().str(),
                 node->end().str()
@@ -768,7 +781,7 @@ bool UI::init() {
         base_font = init_builtin_base_font();
         if (!base_font) {
             ccstr base_font_candidates[] = { "SF Mono", "Menlo", "Monaco", "Consolas", "Liberation Mono" };
-            For (base_font_candidates) {
+            For (&base_font_candidates) {
                 base_font = acquire_font(it);
                 if (base_font) break;
             }
@@ -925,7 +938,7 @@ void UI::draw_bordered_rect_outer(boxf b, vec4f color, vec4f border_color, int b
 
 Glyph *UI::lookup_glyph_for_grapheme(List<uchar> *grapheme) {
     auto utf8chars = alloc_list<char>();
-    For (*grapheme) {
+    For (grapheme) {
         char buf[4];
         int len = uchar_to_cstr(it, buf);
         for (int i = 0; i < len; i++)
@@ -1006,12 +1019,12 @@ Glyph *UI::lookup_glyph_for_grapheme(List<uchar> *grapheme) {
 
     int leftmost = glyph_positions->at(0).x;
     int topmost = glyph_positions->at(0).y;
-    For (*glyph_positions) {
+    For (glyph_positions) {
         if (it.y < topmost) topmost = it.y;
         if (it.x < leftmost) leftmost = it.x;
     }
-    For (*glyph_positions) it.y -= topmost;
-    For (*glyph_positions) it.x -= leftmost;
+    For (glyph_positions) it.y -= topmost;
+    For (glyph_positions) it.x -= leftmost;
 
     boxf bbox; ptr0(&bbox);
     bbox.x = (float)bx0;
@@ -1806,7 +1819,7 @@ void UI::draw_debugger() {
                 im::TableHeadersRow();
 
                 bool some_watch_being_edited = false;
-                For (world.dbg.watches) {
+                For (&world.dbg.watches) {
                     if (it.editing) {
                         some_watch_being_edited = true;
                         break;
@@ -2097,8 +2110,8 @@ void trigger_file_search(int limit_start, int limit_end) {
     List<char> chars; chars.init();
     char buf[4];
 
-    For (ed->buf->lines) {
-        For (it) {
+    For (&ed->buf->lines) {
+        For (&it) {
             int k = uchar_to_cstr(it, buf);
             switch (k) {
 #define add(x) chars.append(buf[x])
@@ -2121,7 +2134,7 @@ void trigger_file_search(int limit_start, int limit_end) {
     // is o(n*m) gonna fuck us? (n = number lines, m = number matches)
     // n is at most 65k
     // m is... i guess a lot :joy:
-    For (*tmp) {
+    For (tmp) {
         File_Search_Match match; ptr0(&match);
         match.start = ed->offset_to_cur(it.start);
         match.end = ed->offset_to_cur(it.end);
@@ -2131,7 +2144,7 @@ void trigger_file_search(int limit_start, int limit_end) {
                 SCOPED_MEM(&wnd.mem);
                 match.group_starts = alloc_list<cur2>();
             }
-            For (*it.group_starts)
+            For (it.group_starts)
                 match.group_starts->append(ed->offset_to_cur(it));
         }
 
@@ -2140,7 +2153,7 @@ void trigger_file_search(int limit_start, int limit_end) {
                 SCOPED_MEM(&wnd.mem);
                 match.group_ends = alloc_list<cur2>();
             }
-            For (*it.group_ends)
+            For (it.group_ends)
                 match.group_ends->append(ed->offset_to_cur(it));
         }
 
@@ -2298,7 +2311,7 @@ void UI::draw_everything() {
             im::Separator();
             if (im::BeginMenu("Zoom")) {
                 int levels[] = {50, 67, 75, 80, 90, 100,110, 125, 133, 140, 150, 175, 200};
-                For (levels) {
+                For (&levels) {
                     if (im::MenuItem(cp_sprintf("%d%%", it), NULL, it == options.zoom_level)) {
                         options.zoom_level = it;
                         if (world.wnd_options.show)
@@ -2693,7 +2706,7 @@ void UI::draw_everything() {
                     im::Text("Struct tag casing");
                     if (im::BeginCombo("###struct_tag_casing", case_style_pretty_str(tmp.struct_tag_case_style))) {
                         Case_Style styles[] = {CASE_SNAKE, CASE_PASCAL, CASE_CAMEL};
-                        For (styles) {
+                        For (&styles) {
                             im::PushID((void*)it);
                             if (im::Selectable(case_style_pretty_str(it), it == tmp.struct_tag_case_style))
                                 tmp.struct_tag_case_style = it;
@@ -2799,7 +2812,7 @@ void UI::draw_everything() {
             name = cp_sprintf("%s.%s", recvname, name);
 
         auto has_children = [&]() {
-            For (*it->children)
+            For (it->children)
                 if (!should_hide(&it))
                     return true;
             return false;
@@ -2827,7 +2840,7 @@ void UI::draw_everything() {
         }
 
         if (open) {
-            For (*it->children)
+            For (it->children)
                 render_call_hier(&it, current_import_path, show_tests_and_benchmarks);
             im::TreePop();
         }
@@ -2846,7 +2859,7 @@ void UI::draw_everything() {
 
         if (wnd.done) {
             im::Text("Done!");
-            For (*wnd.results) render_call_hier(&it, wnd.current_import_path, true);
+            For (wnd.results) render_call_hier(&it, wnd.current_import_path, true);
         } else {
             im::Text("Generating callee hierarchy...");
             im::SameLine();
@@ -2873,7 +2886,7 @@ void UI::draw_everything() {
 
         if (wnd.done) {
             im::Checkbox("Show tests, examples, and benchmarks", &wnd.show_tests_and_benchmarks);
-            For (*wnd.results) render_call_hier(&it, wnd.current_import_path, wnd.show_tests_and_benchmarks);
+            For (wnd.results) render_call_hier(&it, wnd.current_import_path, wnd.show_tests_and_benchmarks);
         } else {
             im::Text("Generating caller hierarchy...");
             im::SameLine();
@@ -2918,7 +2931,7 @@ void UI::draw_everything() {
                 imgui_push_mono_font();
 
                 auto results = alloc_list<Find_Decl*>();
-                For (*wnd.results) {
+                For (wnd.results) {
                     if (!wnd.include_empty) {
                         auto gotype = it->decl->decl->gotype;
                         if (gotype)
@@ -2971,7 +2984,7 @@ void UI::draw_everything() {
                         ccstr path = NULL;
 
                         ccstr parents[] = {wnd.current_import_path, world.indexer.goroot};
-                        For (parents) {
+                        For (&parents) {
                             if (path_has_descendant(it, import_path)) {
                                 path = get_path_relative_to(import_path, it);
                                 break;
@@ -3623,7 +3636,7 @@ void UI::draw_everything() {
 
                     if (im::Selectable("Copy All")) {
                         auto output = alloc_list<char>();
-                        For (lines) {
+                        For (&lines) {
                             for (auto p = it; *p != '\0'; p++) {
                                 output->append(*p);
                             }
@@ -4775,7 +4788,7 @@ void UI::draw_everything() {
                 auto nvim_edits = alloc_list<Nvim_Edit>();
 
                 auto repl_parts = wnd.sess.parse_replacement(wnd.replace_str);
-                For (wnd.matches) {
+                For (&wnd.matches) {
                     auto chars = alloc_list<char>();
                     auto &m = it;
 
@@ -4785,7 +4798,7 @@ void UI::draw_everything() {
                         cp_assert(m.group_starts->len == m.group_ends->len);
                     }
 
-                    For (*repl_parts) {
+                    For (repl_parts) {
                         ccstr newstr = NULL;
                         if (it.dollar) {
                             if (!it.group)
@@ -4825,7 +4838,7 @@ void UI::draw_everything() {
                     nv.start_request_message("nvim_call_atomic", 1);
                     nv.writer.write_array(nvim_edits->len);
 
-                    For (*nvim_edits) {
+                    For (nvim_edits) {
                         auto lines = alloc_list<ccstr>();
                         auto tmp = alloc_list<char>();
 
@@ -4851,7 +4864,7 @@ void UI::draw_everything() {
 
                                 // write array of lines
                                 nv.writer.write_array(lines->len);
-                                For (*lines) nv.writer.write_string(it);
+                                For (lines) nv.writer.write_string(it);
                             }
                         }
                     }
@@ -4931,7 +4944,7 @@ void UI::draw_everything() {
             wnd.selection = 0;
 
             if (strlen(wnd.query) > 0) {
-                For (*wnd.actions) {
+                For (wnd.actions) {
                     if (fzy_has_match(wnd.query, get_command_name(it))) {
                         wnd.filtered_results->append(it);
                         if (wnd.filtered_results->len > 10000) break;
@@ -5696,7 +5709,7 @@ void UI::draw_everything() {
                 open_cur = editor->cur;
 
             ts_tree_cursor_reset(&editor->buf->cursor, ts_tree_root_node(tree));
-            render_ts_cursor(&editor->buf->cursor, open_cur);
+            render_ts_cursor(&editor->buf->cursor, editor->lang, open_cur);
 
             im::End();
             fstlog("wnd_ast_viewer");
@@ -5794,12 +5807,12 @@ void UI::draw_everything() {
                     }
 
                     if (im::BeginTabItem("Decls", NULL)) {
-                        For (*gofile->decls) render_godecl(&it);
+                        For (gofile->decls) render_godecl(&it);
                         im::EndTabItem();
                     }
 
                     if (im::BeginTabItem("Imports", NULL)) {
-                        For (*gofile->imports) {
+                        For (gofile->imports) {
                             im::Text(
                                 "%s %s %s %s",
                                 it.package_name,
@@ -5812,7 +5825,7 @@ void UI::draw_everything() {
                     }
 
                     if (im::BeginTabItem("References", NULL)) {
-                        For (*gofile->references) {
+                        For (gofile->references) {
                             if (it.is_sel) {
                                 auto flags = ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth;
                                 bool is_open = im::TreeNodeEx(&it, flags, "<selector> at %s", it.x_start.str());
@@ -5871,7 +5884,7 @@ void UI::draw_everything() {
 
     int editor_index = 0;
 
-    For (actual_cursor_positions) {
+    For (&actual_cursor_positions) {
         it.x = -1;
         it.y = -1;
     }
@@ -5901,7 +5914,7 @@ void UI::draw_everything() {
         boxf scrollbar_area = areas->scrollbar_area;
         boxf preview_area = areas->preview_area;
 
-        For (pane.editors) {
+        For (&pane.editors) {
             it.ui_rect = editor_area;
             it.ui_rect_set = true;
         }
@@ -6499,12 +6512,12 @@ void UI::draw_everything() {
 
             {
                 u32 len = 0;
-                For (world.dbg.breakpoints)
+                For (&world.dbg.breakpoints)
                     if (streq(it.file, editor->filepath))
                         len++;
 
                 alloc_list(&breakpoints_for_this_editor, len);
-                For (world.dbg.breakpoints) {
+                For (&world.dbg.breakpoints) {
                     if (are_filepaths_equal(it.file, editor->filepath)) {
                         auto p = breakpoints_for_this_editor.append();
                         memcpy(p, &it, sizeof(it));
@@ -6534,7 +6547,7 @@ void UI::draw_everything() {
 
             if (world.dbg.state_flag == DLV_STATE_PAUSED) {
                 current_goroutine_id = world.dbg.state->current_goroutine_id;
-                For (*world.dbg.state->goroutines) {
+                For (world.dbg.state->goroutines) {
                     if (it.id == current_goroutine_id) {
                         current_goroutine = &it;
                         if (current_goroutine->fresh) {
@@ -6618,7 +6631,7 @@ void UI::draw_everything() {
 
                 auto node = nav.node;
                 if (!node) break;
-                if (node->null) break;
+                if (isastnull(node)) break;
 
                 auto &out = ast_navigation;
                 out.start = node->start();
@@ -6676,12 +6689,12 @@ void UI::draw_everything() {
                                 return BREAKPOINT_CURRENT_GOROUTINE;
                         }
 
-                        For (*goroutines_hit)
+                        For (goroutines_hit)
                             if (it->curr_line == y + 1)
                                 return BREAKPOINT_OTHER_GOROUTINE;
                     }
 
-                    For (breakpoints_for_this_editor) {
+                    For (&breakpoints_for_this_editor) {
                         if (it.line == y + 1) {
                             bool inactive = (it.pending || world.dbg.state_flag == DLV_STATE_INACTIVE);
                             return inactive ? BREAKPOINT_INACTIVE : BREAKPOINT_ACTIVE;
@@ -7096,7 +7109,7 @@ void UI::draw_everything() {
         float offset = 0;
 
         bool is_any_pane_scrolling = false;
-        For (world.panes) {
+        For (&world.panes) {
             if (it.scrollbar_dragging) {
                 is_any_pane_scrolling = true;
                 break;
@@ -7410,7 +7423,7 @@ void UI::draw_everything() {
             (int)(get_status_area().y - base_font->height)
         );
 
-        For (world.frameskips) {
+        For (&world.frameskips) {
             auto s = cp_sprintf("failed frame deadline by %llums", it.ms_over);
 
             auto newpos = pos;
@@ -7492,7 +7505,7 @@ void UI::draw_tutorial(boxf rect) {
     max_hotkey_width += hotkey_padding_x * 4;
     max_hotkey_width += hotkey_margin_x;
 
-    For (commands) {
+    For (&commands) {
         auto name = get_command_name(it);
         cp_assert(name);
 
@@ -7555,7 +7568,7 @@ void UI::draw_tutorial(boxf rect) {
         cur.x = start.x + max_name_width + spacing_x;
     };
 
-    For (commands) {
+    For (&commands) {
         auto name = get_command_name(it);
         cp_assert(name);
         draw_command_name(name);
@@ -7644,7 +7657,7 @@ void UI::end_frame() {
             s32 max_len = 0;
             s32 num_items = min(ac.filtered_results->len, AUTOCOMPLETE_WINDOW_ITEMS);
 
-            For (*ac.filtered_results) {
+            For (ac.filtered_results) {
                 auto len = get_text_width(ac.ac.results->at(it).name);
                 if (len > AUTOCOMPLETE_TRUNCATE_LENGTH)
                     len = AUTOCOMPLETE_TRUNCATE_LENGTH + 3;
@@ -8134,13 +8147,13 @@ void UI::recalculate_view_sizes(bool force) {
     auto new_sizes = alloc_list<vec2f>();
 
     float total = 0;
-    For (world.panes) total += it.width;
+    For (&world.panes) total += it.width;
 
     boxf pane_area;
     pane_area.pos = {0, 0};
     pane_area.h = panes_area.h;
 
-    For (world.panes) {
+    For (&world.panes) {
         it.width = it.width / total * panes_area.w;
         pane_area.w = it.width;
 
@@ -8174,7 +8187,7 @@ void UI::recalculate_view_sizes(bool force) {
     if (!changed() && !force) return;
 
     editor_sizes.len = 0;
-    For (*new_sizes) editor_sizes.append(&it);
+    For (new_sizes) editor_sizes.append(&it);
 
     for (u32 i = 0; i < world.panes.len; i++) {
         for (auto&& editor : world.panes[i].editors) {
@@ -8257,7 +8270,7 @@ Font* UI::find_font_for_grapheme(List<uchar> *grapheme) {
     if (!charset) return error("FcCharSetCreate failed"), (Font*)NULL;
     defer { FcCharSetDestroy(charset); };
 
-    For (*grapheme)
+    For (grapheme)
         if (!FcCharSetAddChar(charset, it))
             return error("FcCharSetAddChar failed"), (Font*)NULL;
 
@@ -8284,7 +8297,7 @@ Font* UI::find_font_for_grapheme(List<uchar> *grapheme) {
     auto name = cp_strdup((ccstr)uncasted_name);
     if (streq(name, "LastResort")) {
         bool found = false;
-        For (*all_font_names) {
+        For (all_font_names) {
             auto font = acquire_font(it);
             if (font->can_render_chars(grapheme))
                 return font;
@@ -8348,7 +8361,7 @@ void Font::cleanup() {
 }
 
 bool Font::can_render_chars(List<uchar> *chars) {
-    For (*chars)
+    For (chars)
         if (stbtt_FindGlyphIndex(&stbfont, it) == 0)
             return false;
     return true;

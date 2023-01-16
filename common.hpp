@@ -380,7 +380,7 @@ void _error(ccstr fmt, ...);
 #define error(fmt, ...) _error("error: " fmt "\n", ##__VA_ARGS__)
 #define mem0(ptr, n) memset(ptr, 0, n)
 #define ptr0(ptr) memset(ptr, 0, sizeof(*ptr))
-#define For(arr) for (auto &&it : arr)
+#define For(arr) for (auto &&it : *arr)
 
 // https://github.com/therocode/enumerate/blob/master/enumerate.hpp
 template <typename L>

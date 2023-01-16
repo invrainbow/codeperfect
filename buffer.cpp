@@ -250,7 +250,7 @@ ccstr Buffer::get_text(cur2 start, cur2 end) {
     return ret->items;
 }
 
-void Buffer::init(Pool *_mem, bool _use_tree, bool _use_history) {
+void Buffer::init(Pool *_mem, int _lang, bool _use_history) {
     ptr0(this);
 
     mem = _mem;
@@ -267,16 +267,17 @@ void Buffer::init(Pool *_mem, bool _use_tree, bool _use_history) {
     initialized = true;
     dirty = false;
 
-    if (_use_tree) enable_tree();
+    if (_lang != LANG_NONE)
+        enable_tree(_lang);
 
     mark_tree.init(this);
 }
 
-void Buffer::enable_tree() {
-    if (use_tree) return; // already enabled
+void Buffer::enable_tree(int _lang) {
+    if (lang != LANG_NONE) return; // already enabled
 
-    use_tree = true;
-    parser = new_ts_parser();
+    lang = (int)_lang;
+    parser = new_ts_parser((Parse_Lang)lang);
     update_tree();
 }
 
@@ -379,7 +380,7 @@ bool Buffer::read(Buffer_Read_Func f, bool reread) {
     (*bytecounts.last())++;
     dirty = false;
 
-    if (use_tree && !reread) {
+    if (lang != LANG_NONE && !reread) {
         if (tree) {
             ts_tree_delete(tree);
             tree = NULL;
@@ -420,7 +421,7 @@ void Buffer::write(File *f) {
     };
 
     bool first = true;
-    For (lines) {
+    For (&lines) {
         if (first)
             first = false;
         else
@@ -456,7 +457,7 @@ void Buffer::clear() {
 
 s32 get_bytecount(Line *line) {
     s32 bc = 0;
-    For (*line) bc += uchar_size(it);
+    For (line) bc += uchar_size(it);
     return bc + 1;
 }
 
@@ -640,7 +641,7 @@ void Buffer::internal_start_edit(cur2 start, cur2 end) {
     cp_assert(!editable_from_main_thread_only || is_main_thread);
 
     // we use the tsedit for other things, right now for mark tree calculations.
-    // so create it even if !use_tree, it's not only used for the tree.
+    // so create it even if lang == LANG_NONE, it's not only used for the tree.
     ptr0(&tsedit);
     tsedit.start_byte = cur_to_offset(start);
     tsedit.start_point = cur_to_tspoint(start);
@@ -660,7 +661,7 @@ void Buffer::internal_finish_edit(cur2 new_end) {
     tsedit.new_end_byte = cur_to_offset(new_end);
     tsedit.new_end_point = cur_to_tspoint(new_end);
 
-    if (use_tree) {
+    if (lang != LANG_NONE) {
         ts_tree_edit(tree, &tsedit);
         update_tree();
     }
@@ -708,7 +709,7 @@ void Buffer::internal_update_mark_tree() {
 
     auto cur = start;
 
-    For (*diffs) {
+    For (diffs) {
         switch (it.type) {
         case DIFF_DELETE:
             mark_tree.apply_edit(cur, advance_cur(cur, it.s), cur);
@@ -864,13 +865,13 @@ void Buffer::remove(cur2 start, cur2 end, bool applying_change) {
 
             {
                 auto tmp = alloc_list<uchar>();
-                For (change->old_text)
+                For (&change->old_text)
                     tmp->append(it);
 
                 change->old_text.len = 0;
                 for (; it.pos != end_of_chars_to_copy; it.next())
                     change->old_text.append(it.peek());
-                For (*tmp)
+                For (tmp)
                     change->old_text.append(it);
             }
 

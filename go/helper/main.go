@@ -437,6 +437,7 @@ func GetGoEnv(envvar string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
 	return strings.TrimSpace(string(out)), nil
 }
 
@@ -661,6 +662,29 @@ func GHAddTag(tagstr, lang, tagname *C.char, ok *bool) *C.char {
 func GHOpenURLInBrowser(url *C.char) bool {
 	err := browser.OpenURL(C.GoString(url))
 	return err != nil
+}
+
+// GHGetGoWork
+func GHGetGoWork(filepath *C.char) *C.char {
+	binpath, err := GetBinaryPath("go")
+	if err != nil {
+	    return nil
+	}
+
+	cmd := utils.MakeExecCommand(binpath, "env", "GOWORK")
+	cmd.Dir = C.GoString(filepath)
+
+	out, err := cmd.Output()
+	if err != nil {
+	    return nil
+	}
+
+	ret := strings.TrimSpace(string(out))
+	if ret == "" {
+	    return nil
+	}
+
+	return C.CString(ret)
 }
 
 func main() {}

@@ -332,7 +332,7 @@ void handle_window_event(Window_Event *it) {
             if (keymods & CP_MOD_CTRL)  parts.append("C");
 
             Text_Renderer rend; rend.init();
-            For (parts) rend.write("%s-", it);
+            For (&parts) rend.write("%s-", it);
             rend.write("<%s>", s);
             return rend.finish();
         };
@@ -1390,7 +1390,7 @@ int realmain(int argc, char **argv) {
             {ImGuiMouseCursor_NotAllowed, CP_CUR_NOT_ALLOWED},
         };
 
-        For (pairs)
+        For (&pairs)
             if (world.ui.cursors[it.x].init(it.y))
                 world.ui.cursors_ready[it.x] = true;
     }
@@ -1679,7 +1679,7 @@ int realmain(int argc, char **argv) {
             auto messages = world.message_queue.start();
             defer { world.message_queue.end(); };
 
-            For (*messages) {
+            For (messages) {
                 switch (it.type) {
                 case MTM_FOCUS_APP_DEBUGGER:
                     if (it.focus_app_debugger_pid)
@@ -1744,8 +1744,8 @@ int realmain(int argc, char **argv) {
                 auto res = check_path(filedir);
 
                 if (res == CPR_NONEXISTENT)
-                    For (world.panes)
-                        For (it.editors)
+                    For (&world.panes)
+                        For (&it.editors)
                             if (are_filepaths_equal(it.filepath, filepath))
                                 it.file_was_deleted = true;
 
@@ -1838,7 +1838,7 @@ int realmain(int argc, char **argv) {
         poll_window_events();
 
         fstlog("poll window events");
-        For (world.window->events) {
+        For (&world.window->events) {
             handle_window_event(&it);
             fstlog("handle window event %s", window_event_type_str(it.type));
         }

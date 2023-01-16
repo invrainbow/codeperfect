@@ -3,6 +3,7 @@
 #include "list.hpp"
 #include "hash.hpp"
 
+// TODO: union, intersection? we've already had a couple of those cases
 struct String_Set {
     struct Item {
         ccstr name;

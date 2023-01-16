@@ -101,9 +101,9 @@ struct Pool {
 
 #define CHECK(x) if (check_block(x)) return true
 
-        For (obsolete_blocks) CHECK(it);
-        For (used_blocks) CHECK(it);
-        For (unused_blocks) CHECK(it);
+        For (&obsolete_blocks) CHECK(it);
+        For (&used_blocks) CHECK(it);
+        For (&unused_blocks) CHECK(it);
         CHECK(curr);
 
 #undef CHECK
@@ -113,9 +113,9 @@ struct Pool {
 
     u64 recount_total_allocated() {
         u64 ret = 0;
-        For (obsolete_blocks) ret += it->size;
-        For (used_blocks) ret += it->size;
-        For (unused_blocks) ret += it->size;
+        For (&obsolete_blocks) ret += it->size;
+        For (&used_blocks) ret += it->size;
+        For (&unused_blocks) ret += it->size;
         if (curr) ret += curr->size;
         return ret;
     }
@@ -146,9 +146,9 @@ struct Pool {
     }
 
     void cleanup() {
-        For (unused_blocks) free_block(it);
-        For (used_blocks) free_block(it);
-        For (obsolete_blocks) free_block(it);
+        For (&unused_blocks) free_block(it);
+        For (&used_blocks) free_block(it);
+        For (&obsolete_blocks) free_block(it);
         if (curr) free_block(curr);
 
         unused_blocks.len = 0;
@@ -196,7 +196,7 @@ struct Pool {
                     unused_blocks.append(curr);
                     curr = NULL;
                 }
-                For (used_blocks) unused_blocks.append(it);
+                For (&used_blocks) unused_blocks.append(it);
                 used_blocks.len = 0;
                 request_new_block();
             } else {
@@ -219,9 +219,9 @@ struct Pool {
         if (bs > blocksize) {
             blocksize = bs;
             if (curr) obsolete_blocks.append(curr);
-            For (used_blocks) obsolete_blocks.append(it);
+            For (&used_blocks) obsolete_blocks.append(it);
             used_blocks.len = 0;
-            For (unused_blocks) obsolete_blocks.append(it);
+            For (&unused_blocks) obsolete_blocks.append(it);
             unused_blocks.len = 0;
             curr = NULL;
         }
@@ -248,10 +248,10 @@ struct Pool {
             curr = NULL;
         }
 
-        For (used_blocks) unused_blocks.append(it);
+        For (&used_blocks) unused_blocks.append(it);
         used_blocks.len = 0;
 
-        For (obsolete_blocks) free_block(it);
+        For (&obsolete_blocks) free_block(it);
         obsolete_blocks.len = 0;
 
         request_new_block();

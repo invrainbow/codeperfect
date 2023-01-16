@@ -31,9 +31,9 @@ void Searcher::cleanup_search() {
 }
 
 void Searcher::cleanup() {
-    For (search_results) {
+    For (&search_results) {
         if (!it.results) continue;
-        For (*it.results) {
+        For (it.results) {
             it.mark_start->cleanup();
             it.mark_end->cleanup();
 
@@ -358,7 +358,7 @@ ccstr Searcher::get_replacement_text(Searcher_Result_Match *sr, ccstr replace_te
     auto chars = alloc_list<char>();
     auto parts = sess.parse_replacement(replace_text);
 
-    For (*parts) {
+    For (parts) {
         ccstr newstr = NULL;
         if (it.dollar) {
             if (!it.group)
@@ -382,7 +382,7 @@ ccstr Searcher::get_replacement_text(Searcher_Result_Match *sr, ccstr replace_te
 void Searcher::replace_worker() {
     int off = 0;
 
-    For (search_results) {
+    For (&search_results) {
         // would these ever happen
         if (!it.filepath) continue;
         if (!it.results || !it.results->len) continue;
@@ -390,7 +390,7 @@ void Searcher::replace_worker() {
         File_Replacer fr;
         if (!fr.init(it.filepath, "search_and_replace")) continue;
 
-        For (*it.results) {
+        For (it.results) {
             if (fr.done()) break;
 
             auto newtext = get_replacement_text(&it, replace_with);

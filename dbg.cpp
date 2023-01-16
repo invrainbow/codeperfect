@@ -95,7 +95,7 @@ bool Debugger::find_breakpoint(ccstr filename, u32 line, Breakpoint* out) {
     if (!breakpoints)
         return false;
 
-    For (*breakpoints)
+    For (breakpoints)
         if (are_filepaths_equal(it.file, filename))
             if (it.line == line)
                 return memcpy(out, &it, sizeof(Breakpoint)), true;
@@ -235,7 +235,7 @@ void Debugger::save_single_var(Json_Navigator js, i32 idx, Dlv_Var* out, Save_Va
 }
 
 void Debugger::eval_watches() {
-    For (watches) eval_watch(&it);
+    For (&watches) eval_watch(&it);
 }
 
 void Debugger::eval_watch(Dlv_Watch *watch) {
@@ -885,7 +885,7 @@ bool Debugger::start(Debug_Profile *debug_profile) {
         auto get_info_from_current_editor = [&]() {
             auto editor = get_current_editor();
             if (!editor) return;
-            if (!editor->is_go_file) return;
+            if (editor->lang != LANG_GO) return;
 
             if (debug_profile->type == DEBUG_TEST_CURRENT_FUNCTION)
                 if (!str_ends_with(editor->filepath, "_test.go"))
@@ -909,7 +909,7 @@ bool Debugger::start(Debug_Profile *debug_profile) {
 
                         if (it->type() == TS_FUNCTION_DECLARATION) {
                             auto name = it->field(TSF_NAME);
-                            if (!name->null) {
+                            if (!isastnull(name)) {
                                 auto func_name = name->string();
                                 if (str_starts_with(func_name, "Test"))
                                     test_function_name = func_name;
@@ -1338,7 +1338,7 @@ void Debugger::do_everything() {
 
     {
         SCOPED_LOCK(&calls_lock);
-        For (calls) {
+        For (&calls) {
             switch (it.type) {
             case DLVC_CREATE_WATCH: {
                 auto &args = it.create_watch;
@@ -1453,7 +1453,7 @@ void Debugger::do_everything() {
             case DLVC_DELETE_ALL_BREAKPOINTS:
                 pause_and_resume([&]() {
                     if (state_flag != DLV_STATE_INACTIVE) {
-                        For (breakpoints) {
+                        For (&breakpoints) {
                             send_packet("ClearBreakpoint", [&]() {
                                 rend->field("Id", (int)it.dlv_id);
                             });
@@ -1524,7 +1524,7 @@ void Debugger::do_everything() {
 
                 Debug_Profile *debug_profile = NULL;
                 if (it.type == DLVC_DEBUG_TEST_UNDER_CURSOR) {
-                    For (*project_settings.debug_profiles) {
+                    For (project_settings.debug_profiles) {
                         if (it.is_builtin && it.type == DEBUG_TEST_CURRENT_FUNCTION) {
                             debug_profile = &it;
                             break;
@@ -1555,7 +1555,7 @@ void Debugger::do_everything() {
 
                 auto new_ids = alloc_list<int>();
 
-                For (breakpoints) {
+                For (&breakpoints) {
                     auto js = set_breakpoint(it.file, it.line)->js();
                     auto idx = js.get(0, ".result.Breakpoint.id");
                     new_ids->append(idx == -1 ? -1 : js.num(idx));
@@ -1782,7 +1782,7 @@ void Debugger::handle_new_state(Packet *p) {
             }
         } while (0);
 
-        For (*draft->goroutines) {
+        For (draft->goroutines) {
             auto entry = goroutines_with_breakpoint.find([&](auto g) { return g->goroutine_id == it.id; });
             if (!entry) continue;
 

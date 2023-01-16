@@ -82,9 +82,9 @@ List<Diff> *diff_compute(DString a, DString b) {
         auto diffs_b = diff_main(text1_b, text2_b);
 
         auto ret = alloc_list<Diff>();
-        For (*diffs_a) ret->append(&it);
+        For (diffs_a) ret->append(&it);
         add_diff(ret, DIFF_SAME, mid_common);
-        For (*diffs_b) ret->append(&it);
+        For (diffs_b) ret->append(&it);
         return ret;
     }
 
@@ -111,7 +111,7 @@ List<Diff> *diff_main(DString a, DString b) {
 
     auto ret = alloc_list<Diff>();
     if (prefix.len() > 0) add_diff(ret, DIFF_SAME, prefix);
-    For (*diffs) ret->append(&it);
+    For (diffs) ret->append(&it);
     if (suffix.len() > 0) add_diff(ret, DIFF_SAME, suffix);
     return ret;
 }
@@ -209,8 +209,8 @@ List<Diff> *diff_bisect_split(DString a, DString b, int x, int y) {
     auto diffsb = diff_main(a.slice(x), b.slice(y));
 
     auto ret = alloc_list<Diff>();
-    For (*diffs) ret->append(&it);
-    For (*diffsb) ret->append(&it);
+    For (diffs) ret->append(&it);
+    For (diffsb) ret->append(&it);
     return ret;
 }
 

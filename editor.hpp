@@ -102,7 +102,7 @@ struct Editor {
     // TSInputEdit curr_change;
 
     // is this file "dirty" from the perspective of the index?
-    bool is_go_file;
+    Parse_Lang lang;
     u64 disable_file_watcher_until;
 
     bool saving;
@@ -237,6 +237,8 @@ struct Editor {
     void ast_navigate_prev();
     void ast_navigate_next();
 };
+
+Parse_Lang determine_lang(ccstr filepath);
 
 struct Pane {
     List<Editor> editors;

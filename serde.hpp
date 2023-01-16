@@ -99,7 +99,7 @@ struct Serde {
         write_int(val->len);
         if (!ok) return;
 
-        For (*val) {
+        For (val) {
             write_type(&it, type);
             if (!ok) break;
         }

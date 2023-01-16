@@ -70,12 +70,12 @@ void Nvim::write_line(Line *line) {
     writer.write1(MP_OP_STRING);
 
     int len = 0;
-    For (*line)
+    For (line)
         len += uchar_size(it);
 
     writer.write4(len);
 
-    For (*line) {
+    For (line) {
         char buf[4];
         auto size = uchar_to_cstr(it, buf);
         for (int j = 0; j < size; j++)
@@ -241,7 +241,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                         writer.write_bool(false);
 
                         writer.write_array(editor->buf->lines.len);
-                        For (editor->buf->lines) write_line(&it);
+                        For (&editor->buf->lines) write_line(&it);
                     }
                 }
 
@@ -353,7 +353,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
             Hl_Type last_hltype = HL_NONE;
             auto col = args.col;
 
-            For (*args.cells) {
+            For (args.cells) {
                 if (streq(it.text, "")) continue;
 
                 if (it.hl != -1 && it.hl != last_hl) {
@@ -715,7 +715,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
                         Text_Renderer rend;
                         rend.init();
 
-                        For (chars_after_exiting_insert_mode) {
+                        For (&chars_after_exiting_insert_mode) {
                             if (it == '\b')
                                 rend.write("<Backspace>");
                             else

@@ -5,6 +5,8 @@ imstb_*
 *.sln
 packages.config
 tree-sitter-go
+tree-sitter-go-work
+tree-sitter-go-mod
 tree-sitter
 stb_*
 *.png
@@ -14,6 +16,7 @@ meow_hash_x64_aesni.h
 Icons*.h
 # web
 web/node_modules
+web/src/index.css
 glew.c
 glew.h
 stb/*

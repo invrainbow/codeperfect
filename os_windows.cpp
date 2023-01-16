@@ -525,6 +525,7 @@ u64 get_file_size(ccstr path) {
     return _get_file_size(f);
 }
 
+/*
 ccstr rel_to_abs_path(ccstr path) {
     auto wpath = to_wide(path);
 
@@ -549,6 +550,7 @@ ccstr rel_to_abs_path(ccstr path) {
 
     return to_utf8(ret);
 }
+*/
 
 const s32 FS_WATCHER_BUFSIZE = 64;
 

@@ -418,8 +418,6 @@ void World::init() {
         cp_strcpy_fixed(world.go_binary_path, go_binary_path);
     }
 
-    t.log("segment a");
-
     {
         // do we need world_mem anywhere else?
         // i assume we will have other things that "orchestrate" world
@@ -437,7 +435,6 @@ void World::init() {
 
     fzy_init();
 
-    t.log("segment b");
     bool read_cpfolder_file = false;
 
     for (int i = 1; i < gargc; i++) {
@@ -485,8 +482,6 @@ void World::init() {
         xplat_chdir(current_path);
     }
 
-    t.log("segment c");
-
     // read project settings
     // TODO: handle errors
     {
@@ -512,22 +507,14 @@ void World::init() {
         }
     }
 
-    t.log("segment d");
-
     indexer.init();
-    t.log("segment d.1");
     if (use_nvim) nvim.init();
-    t.log("segment d.2");
     dbg.init();
-    t.log("segment d.3");
     history.init();
-    t.log("segment d.4");
 
     navigation_queue.init(LIST_FIXED, _countof(_navigation_queue), _navigation_queue);
-    t.log("segment d.5");
 
     fill_file_tree();
-    t.log("segment e");
 
     error_list.height = 125;
     file_explorer.selection = NULL;
@@ -541,7 +528,6 @@ void World::init() {
 
     fswatch.init(current_path);
 
-    t.log("segment f");
     // init ui shit
     init_global_colors();
     init_command_info_table();
@@ -556,11 +542,11 @@ void World::init() {
     show_frame_index = false;
     // escape_flashes_cursor_red = true;
 #endif
-    t.log("segment g");
 }
 
 void World::start_background_threads() {
-    indexer.start_background_thread();
+    // indexer.start_background_thread();
+
     if (use_nvim) nvim.start_running();
     dbg.start_loop();
 
@@ -597,7 +583,7 @@ Editor* get_current_editor() {
 
 Editor* find_editor(find_editor_func f) {
     for (auto&& pane : world.panes)
-        For (pane.editors)
+        For (&pane.editors)
             if (f(&it))
                 return &it;
     return NULL;
@@ -777,12 +763,12 @@ void kick_off_build(Build_Profile *build_profile) {
                 // world.error_list.show = false;
             }
 
-            For (world.panes) {
-                For (it.editors) {
+            For (&world.panes) {
+                For (&it.editors) {
                     auto &editor = it;
                     auto path = get_path_relative_to(it.filepath, world.current_path);
 
-                    For (build->errors) {
+                    For (&build->errors) {
                         if (!it.valid) continue;
                         if (!are_filepaths_equal(path, it.file)) continue;
 
@@ -811,7 +797,7 @@ void filter_files() {
     fstlog("filter_files - start");
 
     u32 i = 0, j = 0;
-    For (*wnd.filepaths) {
+    For (wnd.filepaths) {
         if (fzy_has_match(wnd.query, it)) {
             wnd.filtered_results->append(i);
             if (j++ > 10000)
@@ -840,7 +826,7 @@ void run_proc_the_normal_way(Process* proc, ccstr cmd) {
 }
 
 Editor* focus_editor_by_id(int editor_id, cur2 pos, bool pos_in_byte_format) {
-    For (world.panes) {
+    For (&world.panes) {
         for (int j = 0; j < it.editors.len; j++) {
             auto &editor = it.editors[j];
             if (editor.id == editor_id) {
@@ -885,7 +871,7 @@ Jump_To_Definition_Result *get_current_definition(ccstr *filepath, bool display_
     auto editor = get_current_editor();
     if (!editor)
         return show_error("Couldn't find anything under your cursor (you don't have an editor focused).");
-    if (!editor->is_go_file)
+    if (editor->lang != LANG_GO)
         return show_error("Couldn't find anything under your cursor (you're not in a Go file).");
 
     defer { world.indexer.ui_mem.reset(); };
@@ -923,7 +909,7 @@ void handle_goto_definition(cur2 pos) {
 
 void save_all_unsaved_files() {
     for (auto&& pane : world.panes) {
-        For (pane.editors) {
+        For (&pane.editors) {
             // TODO: handle untitled files; and when we do, put it behind a
             // flag, because save_all_unsaved_files() is now depended on and we
             // can't break existing functionality
@@ -987,7 +973,7 @@ ccstr ft_node_to_path(FT_Node *node) {
 FT_Node *find_ft_node(ccstr relpath) {
     auto path = make_path(relpath);
     auto node = world.file_tree;
-    For (*path->parts) {
+    For (path->parts) {
         FT_Node *next = NULL;
         for (auto child = node->children; child; child = child->next) {
             if (streqi(child->name, it)) {
@@ -1113,7 +1099,7 @@ void goto_next_error(int direction) {
     auto &b = world.build;
 
     bool has_valid = false;
-    For (b.errors) {
+    For (&b.errors) {
         if (it.valid) {
             has_valid = true;
             break;
@@ -1210,7 +1196,7 @@ void reload_file_subtree(ccstr relpath) {
         return true;
     });
 
-    For (*current_items.items()) {
+    For (current_items.items()) {
         // TODO: check for type mismatch (e.g. used to be file, now is a directory)
 
         if (new_files.has(it))  {
@@ -1242,7 +1228,7 @@ void reload_file_subtree(ccstr relpath) {
             if (!current_items.has(it->name))
                 add_child(it);
 
-        For (*new_files.items()) {
+        For (new_files.items()) {
             SCOPED_MEM(&world.file_tree_mem);
 
             auto child = alloc_object(FT_Node);
@@ -1256,7 +1242,7 @@ void reload_file_subtree(ccstr relpath) {
             add_child(child);
         }
 
-        For (*new_directories.items()) {
+        For (new_directories.items()) {
             SCOPED_MEM(&world.file_tree_mem);
 
             // TODO: recurse into directory
@@ -1315,7 +1301,7 @@ void Build::cleanup() {
         close_thread_handle(thread);
     }
 
-    For (errors) {
+    For (&errors) {
         it.mark->cleanup();
         world.mark_fridge.free(it.mark);
     }
@@ -1325,8 +1311,8 @@ void Build::cleanup() {
 }
 
 bool has_unsaved_files() {
-    For (world.panes)
-        For (it.editors)
+    For (&world.panes)
+        For (&it.editors)
             if (it.is_unsaved())
                 return true;
     return false;
@@ -1364,13 +1350,13 @@ void rename_identifier_thread(void *param) {
     auto symbol = wnd.declres->decl->name;
     auto symbol_len = strlen(symbol);
 
-    For (*files) {
+    For (files) {
         auto filepath = it.filepath;
 
         File_Replacer fr;
         if (!fr.init(filepath, "refactor_rename")) continue;
 
-        For (*it.results) {
+        For (it.results) {
             if (fr.done()) break;
 
             auto ref = it.reference;
@@ -1592,7 +1578,7 @@ bool is_command_enabled(Command cmd) {
 
     case CMD_AST_NAVIGATION: {
         auto editor = get_current_editor();
-        return editor && editor->is_go_file && editor->buf->tree;
+        return editor && editor->lang == LANG_GO && editor->buf->tree;
     }
 
     case CMD_GO_FORWARD: {
@@ -1618,7 +1604,7 @@ bool is_command_enabled(Command cmd) {
     case CMD_REMOVE_ALL_TAGS: {
         auto editor = get_current_editor();
         if (!editor) return false;
-        if (!editor->is_go_file) return false;
+        if (editor->lang != LANG_GO) return false;
 
         if (!path_has_descendant(world.current_path, editor->filepath)) return false;
         if (!editor->buf->tree) return false;
@@ -1650,8 +1636,8 @@ bool is_command_enabled(Command cmd) {
     }
 
     case CMD_SAVE_ALL:
-        For (world.panes)
-            For (it.editors)
+        For (&world.panes)
+            For (&it.editors)
                 if (it.is_modifiable())
                     return true;
         return false;
@@ -1660,7 +1646,7 @@ bool is_command_enabled(Command cmd) {
     case CMD_GO_TO_NEXT_ERROR: {
         auto &b = world.build;
         bool has_valid = false;
-        For (b.errors) {
+        For (&b.errors) {
             if (it.valid) {
                 has_valid = true;
                 break;
@@ -1686,7 +1672,7 @@ bool is_command_enabled(Command cmd) {
 
         auto editor = get_current_editor();
         if (!editor) return false;
-        if (!editor->is_go_file) return false;
+        if (editor->lang != LANG_GO) return false;
         if (!str_ends_with(editor->filepath, "_test.go")) return false;
         if (!path_has_descendant(world.current_path, editor->filepath)) return false;
         if (!editor->buf->tree) return false;
@@ -1703,7 +1689,7 @@ bool is_command_enabled(Command cmd) {
 
             if (it->type() == TS_FUNCTION_DECLARATION) {
                 auto name = it->field(TSF_NAME);
-                if (!name->null)
+                if (!isastnull(name))
                     ret = str_starts_with(name->string(), "Test");
             }
 
@@ -1929,7 +1915,7 @@ void do_find_interfaces() {
             SCOPED_MEM(&world.find_interfaces_mem);
 
             auto newresults = alloc_list<Find_Decl*>(results->len);
-            For (*results) newresults->append(it.copy());
+            For (results) newresults->append(it.copy());
 
             wnd.results = newresults;
             wnd.current_import_path = cp_strdup(world.indexer.index.current_import_path);
@@ -1981,7 +1967,7 @@ void init_goto_symbol() {
         {
             SCOPED_MEM(&world.goto_symbol_mem);
             wnd.symbols = alloc_list<Go_Symbol>(symbols->len);
-            For (*symbols) wnd.symbols->append(it.copy());
+            For (symbols) wnd.symbols->append(it.copy());
 
             wnd.filtered_results = alloc_list<int>();
             wnd.current_import_path = cp_strdup(world.indexer.index.current_import_path);
@@ -2030,7 +2016,7 @@ void do_find_implementations() {
             SCOPED_MEM(&world.find_implementations_mem);
 
             auto newresults = alloc_list<Find_Decl*>(results->len);
-            For (*results) newresults->append(it.copy());
+            For (results) newresults->append(it.copy());
 
             wnd.results = newresults;
             wnd.current_import_path = cp_strdup(world.indexer.index.current_import_path);
@@ -2410,7 +2396,7 @@ void handle_command(Command cmd, bool from_menu) {
                 SCOPED_MEM(&world.find_references_mem);
 
                 auto newfiles = alloc_list<Find_References_File>(files->len);
-                For (*files) newfiles->append(it.copy());
+                For (files) newfiles->append(it.copy());
 
                 wnd.results = newfiles;
                 wnd.current_import_path = cp_strdup(world.indexer.index.current_import_path);
@@ -2716,7 +2702,7 @@ void handle_command(Command cmd, bool from_menu) {
             {
                 SCOPED_MEM(&world.generate_implementation_mem);
                 wnd.symbols = alloc_list<Go_Symbol>(symbols->len);
-                For (*symbols) wnd.symbols->append(it.copy());
+                For (symbols) wnd.symbols->append(it.copy());
             }
 
             wnd.fill_running = false;
@@ -2751,7 +2737,7 @@ void handle_command(Command cmd, bool from_menu) {
 
         auto editor = get_current_editor();
         if (!editor) break;
-        if (!editor->is_go_file) break;
+        if (editor->lang != LANG_GO) break;
 
         Goresult *result = NULL;
         {
@@ -2791,7 +2777,7 @@ void handle_command(Command cmd, bool from_menu) {
                 SCOPED_MEM(&world.callee_hierarchy_mem);
 
                 auto newresults = alloc_list<Call_Hier_Node>(results->len);
-                For (*results) newresults->append(it.copy());
+                For (results) newresults->append(it.copy());
 
                 wnd.results = newresults;
                 wnd.current_import_path = cp_strdup(world.indexer.index.current_import_path);
@@ -2833,7 +2819,7 @@ void handle_command(Command cmd, bool from_menu) {
 
         auto editor = get_current_editor();
         if (!editor) break;
-        if (!editor->is_go_file) break;
+        if (editor->lang != LANG_GO) break;
 
         Goresult *result = NULL;
         {
@@ -2873,7 +2859,7 @@ void handle_command(Command cmd, bool from_menu) {
                 SCOPED_MEM(&world.caller_hierarchy_mem);
 
                 auto newresults = alloc_list<Call_Hier_Node>(results->len);
-                For (*results) newresults->append(it.copy());
+                For (results) newresults->append(it.copy());
 
                 wnd.results = newresults;
                 wnd.current_import_path = cp_strdup(world.indexer.index.current_import_path);
@@ -3076,7 +3062,7 @@ void do_generate_function() {
         return;
     }
 
-    if (!editor->is_go_file) {
+    if (editor->lang != LANG_GO) {
         tell_user_error("Couldn't find anything under your cursor (you're not in a Go file).");
         return;
     }
@@ -3129,7 +3115,7 @@ void do_generate_function() {
                 nv.writer.write_int(-1);
                 nv.writer.write_bool(false);
                 nv.writer.write_array(ed->buf->lines.len);
-                For (ed->buf->lines) nv.write_line(&it);
+                For (&ed->buf->lines) nv.write_line(&it);
                 nv.end_message();
             }
         } else {
@@ -3206,7 +3192,7 @@ void do_generate_implementation() {
     Table<ccstr> import_table_r; import_table_r.init();
 
     auto dest_gofile = ind.find_gofile_from_ctx(dest->ctx);
-    For (*dest_gofile->imports) {
+    For (dest_gofile->imports) {
         auto package_name = ind.get_import_package_name(&it);
         if (!package_name) continue;
 
@@ -3234,9 +3220,9 @@ void do_generate_implementation() {
         return;
 
     auto methods_to_add = alloc_list<Goresult>();
-    For (*src_methods) {
+    For (src_methods) {
         auto &srcmeth = it;
-        For (*dest_methods)
+        For (dest_methods)
             if (streq(srcmeth.decl->name, it.decl->name))
                 if (ind.are_gotypes_equal(src->wrap(srcmeth.decl->gotype), dest->wrap(it.decl->gotype)))
                     goto skip;
@@ -3374,7 +3360,7 @@ void do_generate_implementation() {
 
     bool error = false;
 
-    For (*methods_to_add) {
+    For (methods_to_add) {
         auto method_ctx = it.ctx;
 
         auto gotype = it.decl->gotype;
@@ -3391,7 +3377,7 @@ void do_generate_implementation() {
         rend.write("func (%s *%s) %s(", type_var, type_name, it.decl->name);
 
         bool first = true;
-        For (*sig.params) {
+        For (sig.params) {
             if (first)
                 first = false;
             else
@@ -3412,7 +3398,7 @@ void do_generate_implementation() {
             if (sig.result->len > 1) rend.write("(");
 
             bool first = true;
-            For (*sig.result) {
+            For (sig.result) {
                 if (first)
                     first = false;
                 else
@@ -3504,7 +3490,7 @@ done_writing:
             }
         }
 
-        For (*imports_to_add) {
+        For (imports_to_add) {
             if (it.declare_explicitly) {
                 rend.write("\t%s \"%s\"\n", it.package_name, it.import_path);
             } else {
@@ -3549,7 +3535,7 @@ done_writing:
         int lines_in_new = 0;
         {
             auto ustr = cstr_to_ustr(new_contents);
-            For (*ustr) {
+            For (ustr) {
                 chars->append(it);
                 if (it == '\n') lines_in_new++;
             }
@@ -3592,7 +3578,7 @@ void fuzzy_sort_filtered_results(ccstr query, List<int> *list, int total_results
 
     fstlog("fuzzysort - start");
 
-    For (*list) {
+    For (list) {
         names[it] = get_name(it);
         scores[it] = fzy_match(query, names[it]);
     }

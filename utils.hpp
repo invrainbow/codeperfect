@@ -141,8 +141,8 @@ struct Table {
     void clear() {
         List<ccstr> keys; keys.init();
         auto ents = entries();
-        For (*ents) keys.append(it->name);
-        For (keys) remove(it);
+        For (ents) keys.append(it->name);
+        For (&keys) remove(it);
     }
 
     List<Table_Entry*> *entries() {
@@ -230,8 +230,8 @@ struct Scoped_Table {
     void clear() {
         List<ccstr> keys; keys.init();
         auto ents = entries();
-        For (*ents) keys.append(it->name);
-        For (keys) remove(it);
+        For (ents) keys.append(it->name);
+        For (&keys) remove(it);
     }
 
     List<Table_Entry*> *entries() {

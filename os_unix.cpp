@@ -414,7 +414,7 @@ ccstr get_canon_path(ccstr path) {
 
     int extra_dotdots = 0;
 
-    For (*p->parts) {
+    For (p->parts) {
         if (streq(it, "")) continue;
         if (streq(it, ".")) continue;
 
@@ -432,7 +432,7 @@ ccstr get_canon_path(ccstr path) {
     auto ret = alloc_list<ccstr>();
     for (int i = 0; i < extra_dotdots; i++)
         ret->append("..");
-    For (*new_path)
+    For (new_path)
         ret->append(it);
 
     Path pret;
@@ -470,33 +470,6 @@ ccstr get_path_relative_to(ccstr full, ccstr base) {
     Path p;
     p.init(ret);
     return p.str();
-}
-
-ccstr rel_to_abs_path(ccstr path) {
-    int size = 5;
-    char *cwd;
-
-    while (true) {
-        Frame frame;
-        cwd = alloc_array(char, size);
-        if (getcwd(cwd, size)) break;
-
-        frame.restore();
-        size *= 5;
-    }
-
-    int len = cwk_path_get_absolute(cwd, path, NULL, 0);
-    if (!len) return NULL;
-
-    Frame frame;
-    auto ret = alloc_array(char, len+1);
-
-    if (!cwk_path_get_absolute(cwd, path, ret, len+1)) {
-        frame.restore();
-        return NULL;
-    }
-
-    return ret;
 }
 
 NORETURN void exit_from_crash_handler() {

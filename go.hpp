@@ -11,6 +11,15 @@
 #include "set.hpp"
 
 extern "C" TSLanguage *tree_sitter_go();
+extern "C" TSLanguage *tree_sitter_gowork();
+extern "C" TSLanguage *tree_sitter_gomod();
+
+enum Parse_Lang {
+    LANG_NONE = 0,
+    LANG_GO,
+    LANG_GOMOD,
+    LANG_GOWORK,
+};
 
 #define GO_INDEX_MAGIC_NUMBER 0x49fa98
 // version 16: add Go_Reference
@@ -32,7 +41,8 @@ extern "C" TSLanguage *tree_sitter_go();
 // version 32: get rid of GOTYPE_VARIADIC
 // version 33: fix embedded struct fields
 // version 34: fix import_decl_to_goimports()
-#define GO_INDEX_VERSION 34
+// version 35: support workspaces
+#define GO_INDEX_VERSION 35
 
 enum {
     CUSTOM_HASH_BUILTINS = 1,
@@ -326,7 +336,6 @@ struct Go_Indexer;
 struct Ast_Node {
     TSNode node;
     Parser_It *it;
-    bool null;
 
     Ast_Node *dup() { return dup(node); }
     Ast_Node *dup(TSNode new_node);
@@ -336,24 +345,23 @@ struct Ast_Node {
         ptr0(this);
         node = _node;
         it = _it;
-        null = ts_node_is_null(node);
     }
 
-    cur2 start() { return null ? new_cur2(0, 0) : tspoint_to_cur(ts_node_start_point(node)); }
-    cur2 end() { return null ? new_cur2(0, 0) : tspoint_to_cur(ts_node_end_point(node)); }
-    u32 start_byte() { return null ? 0 : ts_node_start_byte(node); }
-    u32 end_byte() { return null ? 0 : ts_node_end_byte(node); }
-    Ts_Ast_Type type() { return (Ts_Ast_Type)(null ? 0 : ts_node_symbol(node)); }
-    ccstr name() { return null ? NULL : ts_node_type(node); }
-    const void* id() { return null ? NULL : node.id; }
-    bool anon() { return null ? false : !ts_node_is_named(node); }
-    int child_count() { return null ? 0 : ts_node_named_child_count(node); }
-    int all_child_count() { return null ? 0 : ts_node_child_count(node); }
-    bool is_missing() { return null ? false : ts_node_is_missing(node); }
-    Ast_Node *parent() { return null ? NULL : dup(ts_node_parent(node)); }
+    cur2 start() { return tspoint_to_cur(ts_node_start_point(node)); }
+    cur2 end() { return tspoint_to_cur(ts_node_end_point(node)); }
+    u32 start_byte() { return ts_node_start_byte(node); }
+    u32 end_byte() { return ts_node_end_byte(node); }
+    int type() { return (int)ts_node_symbol(node); }
+    ccstr name() { return ts_node_type(node); }
+    const void* id() { return node.id; }
+    bool anon() { return !ts_node_is_named(node); }
+    int child_count() { return ts_node_named_child_count(node); }
+    int all_child_count() { return ts_node_child_count(node); }
+    bool is_missing() { return ts_node_is_missing(node); }
+    Ast_Node *parent() { return dup(ts_node_parent(node)); }
 
     bool eq(Ast_Node *other) { return ts_node_eq(node, other->node); }
-    Ast_Node *field(Ts_Field_Type f) { return dup(ts_node_child_by_field_id(node, f)); }
+    Ast_Node *field(int f) { return dup(ts_node_child_by_field_id(node, f)); }
 
     Ast_Node* _finalize(TSNode x, bool skip_comment, bool forward, bool named) {
         if (skip_comment) {
@@ -806,7 +814,7 @@ struct Go_Package {
 
     void cleanup_files() {
         if (!files) return;
-        For (*files) it.cleanup();
+        For (files) it.cleanup();
         files->len = 0;
     }
 
@@ -816,9 +824,16 @@ struct Go_Package {
 };
 
 struct Go_Index {
-    ccstr current_path;
-    ccstr current_import_path;
+    // ccstr current_path;
+    // ccstr current_import_path;
+    List<Workspace_Module> *modules;
+
     List<Go_Package> *packages;
+    bool is_work;
+
+    // modules;
+
+    //// .................
 
     Go_Index *copy();
     void read(Index_Stream *s);
@@ -852,6 +867,15 @@ struct Jump_To_Definition_Result {
 
 typedef fn<Godecl*()> New_Godecl_Func;
 
+struct Workspace_Module {
+    ccstr import_path;
+    ccstr resolved_path;
+
+    Workspace_Module *copy();
+};
+
+// weird name, but what else to call it? Module_Collection?
+
 struct Module_Resolver {
     struct Node {
         ccstr name;
@@ -861,11 +885,16 @@ struct Module_Resolver {
     };
 
     ccstr gomodcache;
+    bool is_work;
+    List<Workspace_Module> *modules;
 
     Pool mem;
     Node *root_import_to_resolved;
     Node *root_resolved_to_import;
-    ccstr module_path;
+
+    Workspace wksp;
+
+    // ccstr module_path;
 
     void init(ccstr current_module_filepath, ccstr _gomodcache);
     void cleanup() { mem.cleanup(); }
@@ -876,6 +905,7 @@ struct Module_Resolver {
                 return it;
 
         if (create_if_not_found) {
+            SCOPED_MEM(&mem);
             auto ret = alloc_object(Node);
             ret->next = node->children;
             ret->name = cp_strdup(name);
@@ -886,17 +916,18 @@ struct Module_Resolver {
         return NULL;
     }
 
-    void add_to_root(Node *root, ccstr key, ccstr value) {
-        //print("adding %s -> %s", key, value);
-
-        auto path = make_path(key);
-        auto curr = root;
-        For (*path->parts) curr = goto_child(curr, it, true);
-        curr->value = value;
-    }
-
     void add_path(ccstr import_path, ccstr resolved_path) {
         resolved_path = normalize_path_sep(cp_strdup(resolved_path));
+
+        auto add_to_root = [&](Node *root, ccstr key, ccstr value) {
+            //print("adding %s -> %s", key, value);
+
+            auto path = make_path(key);
+            auto curr = root;
+            For (path->parts) curr = goto_child(curr, it, true);
+            curr->value = value;
+        };
+
         add_to_root(root_import_to_resolved, import_path, resolved_path);
         add_to_root(root_resolved_to_import, resolved_path, import_path);
     }
@@ -1127,6 +1158,7 @@ struct Go_Indexer {
     Module_Resolver module_resolver;
 
     Table<int> package_lookup;
+    bool is_work; // duplicated in index?
 
     Message_Queue<Go_Message> message_queue;
 
@@ -1154,7 +1186,6 @@ struct Go_Indexer {
     bool is_file_included_in_build(ccstr path);
     List<ccstr>* list_source_files(ccstr dirpath, bool include_tests);
     ccstr get_package_path(ccstr import_path);
-    Parsed_File *parse_file(ccstr filepath, bool use_latest = false);
     void free_parsed_file(Parsed_File *file);
     void handle_error(ccstr err);
     u64 hash_package(ccstr resolved_package_path);
@@ -1259,20 +1290,23 @@ struct Go_Indexer {
     Goresult *remove_override_ctx(Gotype *gotype, Go_Ctx *ctx);
     Generate_Func_Sig_Result* generate_function_signature(ccstr filepath, cur2 pos);
     Generate_Struct_Tags_Result* generate_struct_tags(ccstr filepath, cur2 pos, Generate_Struct_Tags_Op op, ccstr lang, Case_Style case_style);
+    bool index_has_module_containing(ccstr path);
 };
+
+Parsed_File *parse_file(ccstr filepath, Parse_Lang lang, bool use_latest = false);
 
 void walk_ast_node(Ast_Node *node, bool abstract_only, Walk_TS_Callback cb);
 void find_nodes_containing_pos(Ast_Node *root, cur2 pos, bool abstract_only, fn<Walk_Action(Ast_Node *it)> callback, bool end_inclusive = false);
 
 Ast_Node *new_ast_node(TSNode node, Parser_It *it);
 
-#define FOR_NODE_CHILDREN(node) for (auto it = (node)->child(); !it->null; it = it->next())
-#define FOR_ALL_NODE_CHILDREN(node) for (auto it = (node)->child_all(); !it->null; it = it->next_all())
+#define FOR_NODE_CHILDREN(node) for (auto it = (node)->child(); !isastnull(it); it = it->next())
+#define FOR_ALL_NODE_CHILDREN(node) for (auto it = (node)->child_all(); !isastnull(it); it = it->next_all())
 
 Goresult *make_goresult(Gotype *gotype, Go_Ctx *ctx);
 Goresult *make_goresult(Godecl *decl, Go_Ctx *ctx);
 
-TSParser *new_ts_parser();
+TSParser *new_ts_parser(Parse_Lang lang);
 
 template<typename T>
 T *read_object(Index_Stream *s) {
@@ -1328,7 +1362,7 @@ void write_list(L arr, Index_Stream *s) {
         return;
     }
     s->write4(arr->len);
-    For (*arr) write_object(&it, s);
+    For (arr) write_object(&it, s);
 }
 
 template<typename L>
@@ -1338,7 +1372,7 @@ void write_listp(L arr, Index_Stream *s) {
         return;
     }
     s->write4(arr->len);
-    For (*arr) write_object(it, s);
+    For (arr) write_object(it, s);
 }
 
 struct Type_Renderer;

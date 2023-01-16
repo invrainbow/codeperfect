@@ -114,3 +114,31 @@ void install_crash_handlers() {
     signal(SIGBUS, crash_handler);
 #endif
 }
+
+ccstr rel_to_abs_path(ccstr path, char *cwd) {
+    int size = 16;
+
+    if (cwd == NULL) {
+        while (true) {
+            Frame frame;
+            cwd = alloc_array(char, size);
+            if (getcwd(cwd, size)) break;
+            frame.restore();
+            size *= 2;
+        }
+    }
+
+    int len = cwk_path_get_absolute(cwd, path, NULL, 0);
+    if (!len) return NULL;
+
+    Frame frame;
+    auto ret = alloc_array(char, len+1);
+
+    if (!cwk_path_get_absolute(cwd, path, ret, len+1)) {
+        frame.restore();
+        return NULL;
+    }
+
+    return ret;
+}
+
