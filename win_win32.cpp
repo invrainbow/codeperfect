@@ -402,7 +402,7 @@ int get_pixel_format(HDC dc) {
                 return 0;
 
             auto find_attrib_value = [&](int a) -> int {
-                Fori (*attribs)
+                Fori (attribs)
                     if (it == a)
                         return values->at(i);
                 return 0;
@@ -478,7 +478,7 @@ int get_pixel_format(HDC dc) {
 
     auto scores = alloc_list<Score>();
 
-    Fori (*fbconfigs) {
+    Fori (fbconfigs) {
         int missing = 0;
         if (!it.alpha_bits) missing++;
         if (!it.depth_bits) missing++;
@@ -510,7 +510,7 @@ int get_pixel_format(HDC dc) {
 
     int winner = 0;
 
-    Fori (*scores) {
+    Fori (scores) {
         if (i == 0) continue;
 
         auto compare_scores = [&](auto &a, auto &b) -> int {

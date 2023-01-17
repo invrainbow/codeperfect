@@ -11,7 +11,11 @@
 #include "defer.hpp"
 
 bool Editor::is_modifiable() {
-    return is_untitled || path_has_descendant(world.current_path, filepath);
+    if (is_untitled) return true;
+    if (path_has_descendant(world.current_path, filepath)) return true;
+    if (!world.workspace) return false;
+    if (world.workspace->find_module_containing_resolved(filepath)) return true;
+    return false;
 }
 
 ccstr Editor::get_autoindent(int for_y) {
@@ -384,7 +388,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
                 auto multi_types = ac.operand_gotype->multi_types;
 
                 if (is_multi) {
-                    Fori (*multi_types) {
+                    Fori (multi_types) {
                         if (it->type == GOTYPE_ID && streq(it->id_name, "error")) {
                             error_found_at = i;
                             break;
@@ -399,7 +403,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
                 if (is_multi) {
                     int varcount = 0;
 
-                    Fori (*multi_types) {
+                    Fori (multi_types) {
                         if (i == error_found_at) {
                             insert_text("err");
                         } else {
@@ -484,7 +488,7 @@ void Editor::perform_autocomplete(AC_Result *result) {
 
                         insert_text("return ");
 
-                        Fori (*result) {
+                        Fori (result) {
                             auto val = get_zero_value_of_gotype(it.gotype);
                             if (i)
                                 insert_text(", ");
@@ -1822,7 +1826,7 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
         Timer t;
         t.init("autocomplete");
 
-        Fori (*results)
+        Fori (results)
             if (fzy_has_match(prefix, it.name))
                 autocomplete.filtered_results->append(i);
 
@@ -2049,7 +2053,7 @@ void Editor::update_parameter_hint() {
         // not even gonna bother binary searching lol
 
         int current_param = -1;
-        Fori (*commas)
+        Fori (commas)
             if (cur <= it)
                 current_param = i;
 
@@ -2741,7 +2745,7 @@ void Editor::toggle_comment(int ystart, int yend) {
 
     auto strip_spaces = [&](auto *line) {
         int x = -1;
-        Fori (*line) {
+        Fori (line) {
             if (!u_isspace(it)) {
                 x = i;
                 break;

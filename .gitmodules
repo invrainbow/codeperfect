@@ -1,6 +1,7 @@
 [submodule "tree-sitter-go"]
 	path = tree-sitter-go
 	url = git@github.com:codeperfect95/tree-sitter-go.git
+    branch = codeperfect
 [submodule "stb"]
 	path = stb
 	url = https://github.com/nothings/stb

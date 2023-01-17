@@ -196,7 +196,7 @@ void Type_Renderer::write_type(Gotype *t, Type_Renderer_Handler custom_handler, 
 
     switch (t->type) {
     case GOTYPE_CONSTRAINT:
-        Fori (*t->constraint_terms) {
+        Fori (t->constraint_terms) {
             if (i) write(" | ");
             recur(it);
         }
@@ -210,7 +210,7 @@ void Type_Renderer::write_type(Gotype *t, Type_Renderer_Handler custom_handler, 
     case GOTYPE_GENERIC:
         recur(t->base);
         write("[");
-        Fori (*t->generic_args) {
+        Fori (t->generic_args) {
             if (i) write(", ");
             recur(it);
         }
@@ -374,6 +374,7 @@ void Module_Resolver::init(ccstr root_filepath, ccstr _gomodcache) {
         root_import_to_resolved = alloc_object(Trie_Node);
         root_resolved_to_import = alloc_object(Trie_Node);
         workspace.modules = alloc_list<Go_Work_Module>();
+        workspace.flag = GWS_NO_GOWORK;
     }
 
     auto get_module_import_path = [&](ccstr filepath) -> ccstr {
@@ -403,8 +404,6 @@ void Module_Resolver::init(ccstr root_filepath, ccstr _gomodcache) {
     // all` fails.
     auto inferred_modules = alloc_list<Go_Work_Module>();
 
-    bool is_work = false;
-
     auto process_module_filepath = [&](ccstr filepath) -> bool {
         auto import_path = get_module_import_path(filepath);
         if (!import_path) return false;
@@ -426,7 +425,12 @@ void Module_Resolver::init(ccstr root_filepath, ccstr _gomodcache) {
         auto pf = parse_file(gowork_path, LANG_GOWORK, false);
         if (!pf) break;
 
-        is_work = true;
+        if (are_filepaths_same_file(world.current_path, cp_dirname(gowork_path)))
+            workspace.flag = GWS_GOWORK_AT_ROOT;
+        else
+            workspace.flag = GWS_GOWORK_SOMEWHERE_ELSE;
+
+        auto work_path = cp_dirname(gowork_path);
 
         auto root = pf->root;
         FOR_NODE_CHILDREN (root) {
@@ -441,7 +445,7 @@ void Module_Resolver::init(ccstr root_filepath, ccstr _gomodcache) {
                 auto relpath = fpnode->string();
                 if (!relpath) continue;
 
-                auto abspath = rel_to_abs_path(relpath, root_filepath);
+                auto abspath = rel_to_abs_path(relpath, work_path);
                 if (!abspath) continue;
 
                 process_module_filepath(abspath);
@@ -449,7 +453,7 @@ void Module_Resolver::init(ccstr root_filepath, ccstr _gomodcache) {
         }
     } while (0);
 
-    if (!is_work)
+    if (workspace.flag == GWS_NO_GOWORK)
         if (!process_module_filepath(root_filepath))
             cp_panic("CodePerfect was unable to read your project folder as a Go module or workspace.\n\nPlease make sure this folder contains a valid go.mod or go.work file. If you're sure it does, you can run `go list -m all` in a terminal in this folder and inspect the output.");
 
@@ -542,7 +546,6 @@ void Module_Resolver::init(ccstr root_filepath, ccstr _gomodcache) {
         add_path(import_path, resolved_path);
     } while (!done);
 
-    workspace.is_work = is_work;
     if (!workspace.modules->len)
         For (inferred_modules)
             workspace.modules->append(it.copy());
@@ -1098,7 +1101,7 @@ void Go_Indexer::background_thread() {
 
         if (!index.packages) return;
 
-        Fori (*index.packages) {
+        Fori (index.packages) {
             bool found = false;
             package_lookup.get(it.import_path, &found);
             if (found)
@@ -1163,7 +1166,9 @@ void Go_Indexer::background_thread() {
         auto workspace = module_resolver.workspace.copy();
 
         auto workspace_changed = [&]() -> bool {
-            if (index.workspace->is_work != workspace->is_work) return true;
+            if (!index.workspace) return true;
+
+            if (index.workspace->flag != workspace->flag) return true;
             if (index.workspace->modules->len != workspace->modules->len) return true;
 
             auto hash_kinda = [&](auto &mod) {
@@ -1185,8 +1190,6 @@ void Go_Indexer::background_thread() {
             reset_index = true;
 
         index.workspace = workspace;
-        index.is_work = module_resolver.workspace.is_work;
-
         if (!index.packages || reset_index)
             index.packages = alloc_list<Go_Package>();
     };
@@ -2293,7 +2296,7 @@ void Go_Indexer::process_tree_into_gofile(
 
         {
             SCOPED_MEM(&file->pool);
-            Fori (*file->imports) memcpy(&it, it.copy(), sizeof(Go_Import));
+            Fori (file->imports) memcpy(&it, it.copy(), sizeof(Go_Import));
         }
     }
 
@@ -2908,7 +2911,7 @@ bool Go_Indexer::are_gotypes_equal(Goresult *ra, Goresult *rb) {
         auto sb = a->struct_specs;
         if (sa->len != sb->len) return false;
 
-        Fori (*sa) {
+        Fori (sa) {
             auto &ita = it;
             auto &itb = sb->at(i);
 
@@ -2951,7 +2954,7 @@ bool Go_Indexer::are_gotypes_equal(Goresult *ra, Goresult *rb) {
         if (mismatch(fa.params, fb.params)) return false;
 
         if (!isempty(fa.params)) {
-            Fori (*fa.params) {
+            Fori (fa.params) {
                 auto ga = ra->wrap(it.gotype);
                 auto gb = rb->wrap(fb.params->at(i).gotype);
                 if (!are_gotypes_equal(ga, gb)) return false;
@@ -2961,7 +2964,7 @@ bool Go_Indexer::are_gotypes_equal(Goresult *ra, Goresult *rb) {
         if (mismatch(fa.result, fb.result)) return false;
 
         if (!isempty(fa.result)) {
-            Fori (*fa.result) {
+            Fori (fa.result) {
                 auto ga = ra->wrap(it.gotype);
                 auto gb = rb->wrap(fb.result->at(i).gotype);
                 if (!are_gotypes_equal(ga, gb)) return false;
@@ -3153,7 +3156,7 @@ List<Find_Decl> *Go_Indexer::find_implementations(Goresult *target, bool search_
                 auto type_name = cp_sprintf("%s:%s", import_path, recv->id_name);
                 auto method_name = it.name;
 
-                Fori (*methods) {
+                Fori (methods) {
                     if (!streq(it.decl->name, method_name)) continue;
                     if (!are_gotypes_equal(it.wrap(it.decl->gotype), make_goresult(gotype, ctx)))
                         continue; // break here
@@ -3179,7 +3182,7 @@ List<Find_Decl> *Go_Indexer::find_implementations(Goresult *target, bool search_
 
     auto entries = huge_table.entries();
 
-    Fori (*entries) {
+    Fori (entries) {
         auto info = it->value;
 
         auto match = [&]() {
@@ -4056,7 +4059,7 @@ Generate_Struct_Tags_Result* Go_Indexer::generate_struct_tags(ccstr filepath, cu
 
         auto ret = alloc_list<char>();
 
-        Fori (*parts) {
+        Fori (parts) {
             switch (case_style) {
             case CASE_SNAKE:
                 if (i) ret->append('_');
@@ -4449,7 +4452,7 @@ Generate_Func_Sig_Result* Go_Indexer::generate_function_signature(ccstr filepath
 
     if (ret->imports_needed->len) {
         rend.write("\n/*\nimport (\n");
-        Fori (*ret->imports_needed) {
+        Fori (ret->imports_needed) {
             auto name = ret->imports_needed_names->at(i);
             if (name)
                 rend.write("\t%s \"%s\"\n", name, it);
@@ -6568,7 +6571,7 @@ bool Go_Indexer::assignment_to_decls(List<Ast_Node*> *lhs, List<Ast_Node*> *rhs,
         if (range) {
             auto range_base = expr_to_gotype(rhs->at(0));
 
-            Fori (*lhs) {
+            Fori (lhs) {
                 if (i >= 2) break;
 
                 if (!it) continue;
@@ -7053,6 +7056,10 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
     case TS_RANGE_CLAUSE: {
         auto left = node->field(TSF_LEFT);
         auto right = node->field(TSF_RIGHT);
+
+        if (!left) break;
+        if (!right) break;
+
         if (left->type() != TS_EXPRESSION_LIST) break;
 
         auto lhs = alloc_list<Ast_Node*>(left->child_count());
@@ -7236,7 +7243,7 @@ Gotype* Go_Indexer::do_subst_rename_this_later(Gotype *base, List<Godecl> *param
     if (params->len != args->len) return NULL;
 
     Table<Goresult*> lookup; lookup.init();
-    Fori (*params) {
+    Fori (params) {
         lookup.set(it.name, args->at(i));
     }
     return walk_gotype_and_replace_ids(base, &lookup);
@@ -7821,7 +7828,7 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
             Table<Goresult*> lookup; lookup.init();
             int types_found = 0;
 
-            Fori (*result->params) {
+            Fori (result->params) {
                 Goresult *arg = NULL;
                 if (i < result->args->len)
                     arg = make_goresult(result->args->at(i), ctx);
@@ -7901,7 +7908,7 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
                     if (!aarr || !barr) return false;
                     if (aarr->len != barr->len) return false;
 
-                    Fori (*aarr) {
+                    Fori (aarr) {
                         auto &a2 = it;
                         auto &b2 = barr->at(i);
                         if (!unify_types(make_goresult(a2, actx), make_goresult(b2, bctx))) return false;
@@ -7956,7 +7963,7 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
 
                     if (aspecs->len != bspecs->len) return false;
 
-                    Fori (*aspecs) {
+                    Fori (aspecs) {
                         auto &a2 = it.field->gotype;
                         auto &b2 = bspecs->at(i).field->gotype;
                         if (!unify_types(ares->wrap(a2), bres->wrap(b2))) return false;
@@ -7969,7 +7976,7 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
 
                     if (aspecs->len != bspecs->len) return false;
 
-                    Fori (*aspecs) {
+                    Fori (aspecs) {
                         auto &a2 = it.field->gotype;
                         auto &b2 = bspecs->at(i).field->gotype;
                         if (!unify_types(ares->wrap(a2), bres->wrap(b2))) return false;
@@ -7986,13 +7993,13 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
                     if (aparams->len != bparams->len) return false;
                     if (aresult->len != bresult->len) return false;
 
-                    Fori (*aparams) {
+                    Fori (aparams) {
                         auto &a2 = it;
                         auto &b2 = bparams->at(i);
                         if (!unify_types(ares->wrap(a2.gotype), bres->wrap(b2.gotype))) return false;
                     }
 
-                    Fori (*aresult) {
+                    Fori (aresult) {
                         auto &a2 = it;
                         auto &b2 = bresult->at(i);
                         if (!unify_types(ares->wrap(a2.gotype), bres->wrap(b2.gotype))) return false;
@@ -8421,7 +8428,7 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
                 added_new_types = false;
                 auto old = types_found;
 
-                Fori (*func_params) {
+                Fori (func_params) {
                     auto &arg = func_args->at(i);
                     if (is_func_arg_untyped(arg) != untyped) continue;
 
@@ -8698,7 +8705,7 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
             if (recv->generic_args->len != object_type->generic_args->len) return;
 
             Table<Goresult*> lookup; lookup.init();
-            Fori (*recv->generic_args) {
+            Fori (recv->generic_args) {
                 if (it->type != GOTYPE_ID)
                     return;
                 lookup.set(it->id_name, object_res->wrap(object_type->generic_args->at(i)));

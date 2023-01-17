@@ -59,6 +59,7 @@ struct Process {
     bool create_new_console;
     bool keep_open_after_exit;
     bool skip_shell; // don't run command through a shell
+    Process_Status saved_status;
 
 #if OS_WINBLOWS
     HANDLE stdin_w;
@@ -93,11 +94,20 @@ struct Process {
 
     void init() {
         ptr0(this);
+        saved_status = PROCESS_WAITING;
     }
 
     void cleanup();
     bool run(ccstr _cmd);
-    Process_Status status();
+
+    Process_Status os_status();
+
+    Process_Status status() {
+        if (saved_status == PROCESS_WAITING)
+            saved_status = os_status();
+        return saved_status;
+    }
+
     bool peek(char *ch);
     bool can_read();
 

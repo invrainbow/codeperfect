@@ -109,7 +109,7 @@ void Searcher::search_worker() {
                     SCOPED_MEM(&final_mem);
 
                     sr.groups = alloc_list<ccstr>(nextmatch.group_starts->len);
-                    Fori (*nextmatch.group_starts) {
+                    Fori (nextmatch.group_starts) {
                         auto start = it;
                         auto end = nextmatch.group_ends->at(i);
 

@@ -339,7 +339,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
 
                 Text_Renderer r;
                 r.init();
-                Fori (*args.cells) {
+                Fori (args.cells) {
                     r.write("(%d x %d)", it.hl, it.reps);
                     if (i+1 < args.cells->len) r.writestr(", ");
                 }

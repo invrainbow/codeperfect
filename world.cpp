@@ -2139,7 +2139,7 @@ void handle_command(Command cmd, bool from_menu) {
 
             editor->buf->hist_batch_mode = true;
 
-            Fori (*result->insert_starts) {
+            Fori (result->insert_starts) {
                 auto start = it;
                 auto end = result->insert_ends->at(i);
                 auto text = result->insert_texts->at(i);
@@ -3146,7 +3146,7 @@ void do_generate_function() {
         }
 
         // TODO: add imports
-        // Fori (*result->imports_needed_names)
+        // Fori (result->imports_needed_names)
         //     print("%s \"%s\"", it, result->imports_needed->at(i));
     }
 }

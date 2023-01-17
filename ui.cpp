@@ -407,10 +407,52 @@ bool get_type_color(Ast_Node *node, Editor *editor, vec4f *out) {
         }
         }
     case LANG_GOMOD:
-        // TODO
+        switch (node->type()) {
+        case TSGM_LPAREN:
+        case TSGM_RPAREN:
+            *out = rgba(global_colors.punctuation, 0.75);
+            return true;
+        case TSGM_MODULE_PATH:
+        case TSGM_STRING_LITERAL:
+        case TSGM_RAW_STRING_LITERAL:
+        case TSGM_INTERPRETED_STRING_LITERAL:
+            *out = rgba(global_colors.string_literal, 0.75);
+            return true;
+        case TSGM_GO_VERSION:
+        case TSGM_VERSION:
+            *out = rgba(global_colors.number_literal, 0.75);
+            return true;
+        case TSGM_REQUIRE:
+        case TSGM_EXCLUDE:
+        case TSGM_REPLACE:
+        case TSGM_MODULE:
+        case TSGM_GO:
+            *out = rgba(global_colors.keyword);
+            return true;
+        }
         break;
     case LANG_GOWORK:
-        // TODO
+        switch (node->type()) {
+        case TSGW_LPAREN:
+        case TSGW_RPAREN:
+            *out = rgba(global_colors.punctuation, 0.75);
+            return true;
+        case TSGW_MODULE_PATH:
+        case TSGW_STRING_LITERAL:
+        case TSGW_RAW_STRING_LITERAL:
+        case TSGW_INTERPRETED_STRING_LITERAL:
+            *out = rgba(global_colors.string_literal, 0.75);
+            return true;
+        case TSGW_GO_VERSION:
+        case TSGW_VERSION:
+            *out = rgba(global_colors.number_literal, 0.75);
+            return true;
+        case TSGW_REPLACE:
+        case TSGW_USE:
+        case TSGW_GO:
+            *out = rgba(global_colors.keyword);
+            return true;
+        }
         break;
     }
 
@@ -1760,7 +1802,7 @@ void UI::draw_debugger() {
                     int index = 0;
 
                     if (frame->locals) {
-                        Fori (*frame->locals) {
+                        Fori (frame->locals) {
                             Draw_Debugger_Var_Args a; ptr0(&a);
                             a.var = &frame->locals->items[i];
                             a.is_child = false;
@@ -1772,7 +1814,7 @@ void UI::draw_debugger() {
                     }
 
                     if (frame->args) {
-                        Fori (*frame->args) {
+                        Fori (frame->args) {
                             Draw_Debugger_Var_Args a; ptr0(&a);
                             a.var = &frame->args->items[i];
                             a.is_child = false;
@@ -2388,7 +2430,7 @@ void UI::draw_everything() {
             // TODO: add these as commands
             if (im::BeginMenu("Select Active Build Profile..."))  {
                 if (project_settings.build_profiles->len > 0) {
-                    Fori (*project_settings.build_profiles) {
+                    Fori (project_settings.build_profiles) {
                         if (im::MenuItem(it.label, NULL, project_settings.active_build_profile == i, true)) {
                             project_settings.active_build_profile = i;
                             write_project_settings();
@@ -2824,12 +2866,8 @@ void UI::draw_everything() {
         else
             flags = ImGuiTreeNodeFlags_Bullet;
 
-        ccstr import_label = ctx->import_path;
-        auto mod = workspace->find_module_containing(ctx->import_path);
-        if (mod)
-            import_label = get_path_relative_to(ctx->import_path, mod->import_path);
-
-        bool open = im::TreeNodeEx((void*)it, flags, "%s.%s (%s)", fd->package_name, name, import_label);
+        ccstr label = get_import_path_label(ctx->import_path, workspace);
+        bool open = im::TreeNodeEx((void*)it, flags, "%s.%s (%s)", fd->package_name, name, label);
 
         if (im::IsItemClicked()) {
             auto ref = it->ref;
@@ -2940,7 +2978,7 @@ void UI::draw_everything() {
                     results->append(it);
                 }
 
-                Fori (*results) {
+                Fori (results) {
                     auto index = i;
 
                     // TODO: refactor out custom draw
@@ -2979,15 +3017,8 @@ void UI::draw_everything() {
 
                     im::PushStyleColor(ImGuiCol_Text, to_imcolor(global_colors.muted));
                     {
-                        ccstr path = import_path;
-                        auto mod = wnd.workspace->find_module_containing(import_path);
-
-                        if (mod)
-                            path = get_path_relative_to(path, mod->import_path);
-                        else if (path_has_descendant(world.indexer.goroot, path))
-                            path = get_path_relative_to(path, world.indexer.goroot);
-
-                        draw_text(cp_sprintf(" (%s)", path));
+                        auto label = get_import_path_label(import_path, wnd.workspace);
+                        draw_text(cp_sprintf(" (%s)", label));
                     }
                     im::PopStyleColor();
 
@@ -3074,7 +3105,7 @@ void UI::draw_everything() {
             if (!isempty(wnd.results)) {
                 imgui_push_mono_font();
 
-                Fori (*wnd.results) {
+                Fori (wnd.results) {
                     int index = i;
 
                     // TODO: refactor out custom draw
@@ -3104,11 +3135,8 @@ void UI::draw_everything() {
 
                     im::PushStyleColor(ImGuiCol_Text, to_imcolor(global_colors.muted));
                     {
-                        auto import_path = it->decl->ctx->import_path;
-                        auto mod = wnd.workspace->find_module_containing(it->decl->ctx->import_path);
-                        if (mod)
-                            import_path = get_path_relative_to(import_path, mod->import_path);
-                        draw_text(cp_sprintf(" (%s)", import_path));
+                        auto label = get_import_path_label(it->decl->ctx->import_path, wnd.workspace);
+                        draw_text(cp_sprintf(" (%s)", label));
                     }
                     im::PopStyleColor();
 
@@ -3179,7 +3207,7 @@ void UI::draw_everything() {
         if (wnd.done) {
             if (!isempty(wnd.results)) {
                 imgui_push_mono_font();
-                Fori (*wnd.results) {
+                Fori (wnd.results) {
                     int file_index = i;
 
                     auto filepath = get_path_relative_to(it.filepath, world.current_path);
@@ -3199,7 +3227,7 @@ void UI::draw_everything() {
                         im::Indent();
                         imgui_push_mono_font();
 
-                        Fori (*it.results) {
+                        Fori (it.results) {
                             int result_index = i;
 
                             auto ref = it.reference;
@@ -3385,7 +3413,7 @@ void UI::draw_everything() {
                 wnd.selection = 0;
 
                 if (strlen(wnd.query) >= 2) {
-                    Fori (*wnd.symbols) {
+                    Fori (wnd.symbols) {
                         if (fzy_has_match(wnd.query, symbol_to_name(it))) {
                             wnd.filtered_results->append(i);
                             if (wnd.filtered_results->len > 10000) break;
@@ -4316,7 +4344,7 @@ void UI::draw_everything() {
                         im::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 4));
                         defer { im::PopStyleVar(); };
 
-                        Fori (*ps->debug_profiles) {
+                        Fori (ps->debug_profiles) {
                             auto label = cp_sprintf("%s##debug_profile_%d", it.label, i);
                             if (im::Selectable(label, wnd.current_debug_profile == i))
                                 wnd.current_debug_profile = i;
@@ -4480,7 +4508,7 @@ void UI::draw_everything() {
                         im::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 4));
                         defer { im::PopStyleVar(); };
 
-                        Fori (*ps->build_profiles) {
+                        Fori (ps->build_profiles) {
                             auto label = cp_sprintf("%s##build_profile_%d", it.label, i);
                             if (im::Selectable(label, wnd.current_build_profile == i))
                                 wnd.current_build_profile = i;
@@ -5153,19 +5181,11 @@ void UI::draw_everything() {
                     pretty_menu_text(pm, it.full_name());
                     pm->pos.x += 8;
 
-                    auto import_path = it.decl->ctx->import_path;
-
-                    auto mod = wnd.workspace->find_module_containing(import_path);
-                    if (mod)
-                        import_path = get_path_relative_to(import_path, mod->import_path);
-
-                    // TODO: this is wrong with workspaces
-                    if (streq(import_path, ""))
-                        import_path = "(root)";
+                    auto label = get_import_path_label(it.decl->ctx->import_path, wnd.workspace);
 
                     int rem_chars = (pm->text_br.x - pm->pos.x) / base_font->width;
 
-                    auto s = import_path;
+                    auto s = label;
                     if (strlen(s) > rem_chars)
                         s = cp_sprintf("%.*s...", rem_chars - 3, s);
 
@@ -5286,7 +5306,7 @@ void UI::draw_everything() {
             auto &search_results = world.searcher.search_results;
             int num_files = search_results.len;
 
-            Fori (search_results) {
+            Fori (&search_results) {
                 auto file_idx = i;
 
                 if (index + it.results->len > 400) {
@@ -5326,7 +5346,7 @@ void UI::draw_everything() {
 
                     auto filepath = it.filepath;
 
-                    Fori (*it.results) {
+                    Fori (it.results) {
                         auto result_idx = i;
                         defer { index++; };
 
@@ -6193,28 +6213,58 @@ void UI::draw_everything() {
             SCOPED_FRAME();
 
             bool is_selected = (tab_id == pane.current_editor);
-
+            bool is_external = false;
+            ccstr prefix = NULL;
             ccstr label = "<untitled>";
+
             if (!editor.is_untitled) {
                 auto &ind = world.indexer;
-                bool external = false;
 
                 if (ind.goroot && path_has_descendant(ind.goroot, editor.filepath)) {
                     label = get_path_relative_to(editor.filepath, ind.goroot);
-                    external = true;
+                    prefix = "GOROOT/";
+                    is_external = true;
                 } else if (ind.gomodcache && path_has_descendant(ind.gomodcache, editor.filepath)) {
                     auto path = get_path_relative_to(editor.filepath, ind.gomodcache);
 
-                    auto parts = split_string(cp_dirname(path), '@');
-                    parts->len--; // remove last part
+                    auto p = make_path(path);
+                    int base_index = -1;
+                    auto prefix_parts = alloc_list<ccstr>();
+                    auto label_parts  = alloc_list<ccstr>();
 
-                    label = cp_sprintf("%s:%s", join_array(parts, '@'), cp_basename(path));
-                    external = true;
+                    Fori (p->parts) {
+                        auto part = it;
+                        bool found = false;
+                        if (strchr(part, '@')) {
+                            auto arr = split_string(cp_dirname(path), '@');
+                            arr->len--; // remove last part
+                            part = join_array(arr, '@');
+                            found = true;
+                        }
+                        if (base_index == -1)
+                            prefix_parts->append(part);
+                        else
+                            label_parts->append(part);
+                        if (found) base_index = i;
+                    }
+
+                    prefix = join_array(prefix_parts, PATH_SEP);
+                    label = join_array(label_parts, PATH_SEP);
+                    prefix = cp_sprintf("%s/", prefix);
+                    is_external = true;
                 } else {
-                    label = get_path_relative_to(editor.filepath, world.current_path);
+                    auto mod = world.workspace->find_module_containing_resolved(editor.filepath);
+                    if (mod) {
+                        label = get_path_relative_to(editor.filepath, mod->resolved_path);
+                        if (!are_filepaths_equal(mod->resolved_path, world.current_path)) {
+                            prefix = cp_basename(mod->resolved_path);
+                            prefix = cp_sprintf("%s/", prefix);
+                        }
+                    } else {
+                        label = get_path_relative_to(editor.filepath, world.current_path);
+                        prefix = "(root)";
+                    }
                 }
-
-                if (external) label = cp_sprintf("[ext] %s", label);
             }
 
             if (editor.is_unsaved())
@@ -6224,7 +6274,8 @@ void UI::draw_everything() {
             if (editor.file_was_deleted)
                 label = cp_sprintf("%s [deleted]", label);
 
-            auto text_width = get_text_width(label) * base_font->width;
+            auto full_text = prefix ? cp_sprintf("%s%s", prefix, label) : label;
+            auto text_width = get_text_width(full_text) * base_font->width;
 
             tab.w = text_width + tab_padding.x * 2;
             tab.h = base_font->height + tab_padding.y * 2;
@@ -6286,7 +6337,11 @@ void UI::draw_everything() {
             */
 
             draw_rounded_rect(tab, tab_color, 4, ROUND_TL | ROUND_TR);
-            draw_string(tab.pos + tab_padding, label, rgba(is_selected ? global_colors.white : global_colors.white_muted));
+
+            auto pos = tab.pos + tab_padding;
+            if (prefix)
+                pos = draw_string(pos, prefix, rgba(is_selected ? global_colors.white : global_colors.white_muted, 0.4));
+            pos = draw_string(pos, label, rgba(is_selected ? global_colors.white : global_colors.white_muted));
 
             auto mouse_flags = get_mouse_flags(tab);
             if (mouse_flags & MOUSE_CLICKED) {
@@ -7387,7 +7442,7 @@ void UI::draw_everything() {
             };
 
             if (im::BeginCombo("###quad_picker", sel ? render_drawn_quad(sel) : NULL, 0)) {
-                Fori (*wnd.logs) {
+                Fori (wnd.logs) {
                     bool selected = (i == wnd.selected_quad);
                     if (im::Selectable(render_drawn_quad(&it), selected))
                         wnd.selected_quad = i;
@@ -7448,6 +7503,24 @@ void UI::draw_everything() {
 }
 
 ImVec2 icon_button_padding = ImVec2(4, 2);
+
+ccstr get_import_path_label(ccstr import_path, Go_Workspace *workspace) {
+    auto mod = workspace->find_module_containing(import_path);
+    if (!mod) return import_path;
+
+    // just get the last part
+    int len = strlen(mod->import_path);
+    int i = len-1;
+    for (; i >= 0; i--)
+        if (mod->import_path[i] == '/')
+            break;
+    auto mod_short = mod->import_path+i+1;
+
+    import_path = get_path_relative_to(import_path, mod->import_path);
+    if (streq(import_path, ""))
+        return mod_short;
+    return cp_sprintf("%s/%s", mod_short, import_path);
+}
 
 Keyboard_Nav UI::get_keyboard_nav(Wnd *wnd, int flags) {
     if (!wnd->focused) return KN_NONE;

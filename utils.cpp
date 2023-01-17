@@ -158,7 +158,7 @@ ccstr join_array(List<ccstr> *arr, ccstr glue) {
             ret->append(*p);
     };
 
-    Fori (*arr) {
+    Fori (arr) {
         if (i) append_str(glue);
         append_str(it);
     }

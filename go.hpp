@@ -360,7 +360,11 @@ struct Ast_Node {
     bool is_missing() { return ts_node_is_missing(node); }
     Ast_Node *parent() { return dup(ts_node_parent(node)); }
 
-    bool eq(Ast_Node *other) { return ts_node_eq(node, other->node); }
+    bool eq(Ast_Node *other) {
+        if (!other) return false;
+        return ts_node_eq(node, other->node);
+    }
+
     Ast_Node *field(int f) { return dup(ts_node_child_by_field_id(node, f)); }
 
     Ast_Node* _finalize(TSNode x, bool skip_comment, bool forward, bool named) {
@@ -832,8 +836,16 @@ struct Go_Work_Module {
     void write(Index_Stream *s);
 };
 
+
+enum Go_Workspace_Situation {
+    GWS_NO_GOWORK,
+    GWS_GOWORK_AT_ROOT,
+    GWS_GOWORK_SOMEWHERE_ELSE,
+};
+
 struct Go_Workspace {
-    bool is_work;
+    Go_Workspace_Situation flag;
+
     List<Go_Work_Module> *modules;
 
     Go_Work_Module *find_module_containing(ccstr import_path);
@@ -847,7 +859,6 @@ struct Go_Workspace {
 struct Go_Index {
     Go_Workspace *workspace;
     List<Go_Package> *packages;
-    bool is_work;
 
     //// .................
 
@@ -1165,7 +1176,6 @@ struct Go_Indexer {
     Thread_Handle bgthread;
 
     Table<int> package_lookup;
-    bool is_work; // duplicated in index?
 
     Message_Queue<Go_Message> message_queue;
 

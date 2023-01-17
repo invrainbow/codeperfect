@@ -413,7 +413,7 @@ struct enumerate {
     constexpr itertype end() { return std::end(container); }
 };
 
-#define Fori(arr) for (auto &&[i, it] : enumerate(arr))
+#define Fori(arr) for (auto &&[i, it] : enumerate(*arr))
 
 #define define_str_case(x) case x: return #x
 #define cp_assert(x) if (!(x)) cp_panic("assertion failed")

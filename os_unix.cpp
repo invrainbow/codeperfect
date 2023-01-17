@@ -189,7 +189,7 @@ bool Process::run(ccstr _cmd) {
     return true;
 }
 
-Process_Status Process::status() {
+Process_Status Process::os_status() {
     int status;
     auto w = waitpid(pid, &status, WNOHANG);
     if (w == -1) return PROCESS_ERROR;
@@ -198,7 +198,6 @@ Process_Status Process::status() {
         exit_code = WEXITSTATUS(status);
         return PROCESS_DONE;
     }
-
     return PROCESS_WAITING;
 }
 
