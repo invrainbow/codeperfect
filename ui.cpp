@@ -1993,12 +1993,12 @@ void UI::imgui_with_disabled(bool disable, fn<void()> f) {
 }
 
 bool UI::imgui_special_key_pressed(int key) {
-    return imgui_key_pressed(im::GetKeyIndex(key));
+    return imgui_key_pressed(im::GetKeyIndex((ImGuiKey)key));
 }
 
 bool UI::imgui_key_pressed(int key) {
     if (imgui_is_window_focused())
-        if (im::IsKeyPressed(tolower(key)) || im::IsKeyPressed(toupper(key)))
+        if (im::IsKeyPressed((ImGuiKey)tolower(key)) || im::IsKeyPressed((ImGuiKey)toupper(key)))
             return true;
     return false;
 }
