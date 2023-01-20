@@ -4,7 +4,7 @@
 #include "set.hpp"
 #include "defer.hpp"
 #include "glcrap.hpp"
-#include "tests.hpp"
+#include "jblow_tests.hpp"
 
 World world;
 
@@ -438,19 +438,41 @@ void World::init() {
     fzy_init();
 
     bool read_cpfolder_file = false;
+    bool already_read_current_path = false;
+    bool make_testing_headless = false;
 
     for (int i = 1; i < gargc; i++) {
         auto it = gargv[i];
         if (streq(it, "--debug")) {
             read_cpfolder_file = true;
-        } else if (streq(it, "--force-server-localhost")) {
-            GHForceServerLocalhost();
-        } else if (streq(it, "--test")) {
-            testing.on = true;
-            testing.ready = false;
-            testing.h = create_thread([](void*) { run_tests(); });
-            if (!testing.h) cp_panic("unable to create test thread");
         }
+
+        else if (streq(it, "--force-server-localhost")) {
+            GHForceServerLocalhost();
+        }
+
+#ifndef RELEASE_MODE
+
+        else if (streq(it, "--jblow-tests")) {
+            if (i+1 >= gargc) cp_panic("missing test name");
+
+            auto name = gargv[++i];
+            jblow_tests.init(name);
+            cp_strcpy_fixed(current_path, cp_sprintf("/Users/brandon/ide/jblow_test_suite/%s", name));
+            already_read_current_path = true;
+        }
+
+        else if (streq(it, "--headless")) {
+            make_testing_headless = true;
+        }
+
+#endif // RELEASE_MODE
+    }
+
+    if (make_testing_headless) {
+        if (!jblow_tests.on)
+            cp_panic("headless only valid when --test");
+        jblow_tests.headless = true;
     }
 
     // init workspace
@@ -461,18 +483,20 @@ void World::init() {
 #ifdef TESTING_BUILD
         cp_strcpy_fixed(current_path, "/Users/bh/ide/go");
 #else
-        if (read_cpfolder_file) {
-            auto path = GHReadCpfolderFile();
-            if (!path) cp_panic("unable to read cpfolder file");
-            defer { GHFree(path); };
-            cp_strcpy_fixed(current_path, path);
-        } else {
-            Select_File_Opts opts; ptr0(&opts);
-            opts.buf = current_path;
-            opts.bufsize = _countof(current_path);
-            opts.folder = true;
-            opts.save = false;
-            if (!let_user_select_file(&opts)) exit(0);
+        if (!already_read_current_path) {
+            if (read_cpfolder_file) {
+                auto path = GHReadCpfolderFile();
+                if (!path) cp_panic("unable to read cpfolder file");
+                defer { GHFree(path); };
+                cp_strcpy_fixed(current_path, path);
+            } else {
+                Select_File_Opts opts; ptr0(&opts);
+                opts.buf = current_path;
+                opts.bufsize = _countof(current_path);
+                opts.folder = true;
+                opts.save = false;
+                if (!let_user_select_file(&opts)) exit(0);
+            }
         }
 #endif
 

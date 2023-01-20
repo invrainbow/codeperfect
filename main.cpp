@@ -1591,7 +1591,11 @@ int realmain(int argc, char **argv) {
 
     auto last_frame_time = current_time_nano();
 
-    if (world.testing.on) world.testing.ready = true;
+    if (world.jblow_tests.on) {
+        if (world.jblow_tests.headless)
+            world.window->hide();
+        world.jblow_tests.ready = true;
+    }
 
     for (; !world.window->should_close; world.frame_index++) {
         bool was_trace_on = world.trace_next_frame;
@@ -1844,19 +1848,20 @@ int realmain(int argc, char **argv) {
         }
 
         do {
-            auto &t = world.testing;
-            if (!t.on) break;
-            if (!t.inject_event) break;
+            auto &ref = world.jblow_tests;
+            if (!ref.on) break;
+            if (!ref.events.len) break;
 
-            t.inject_event = false;
-            handle_window_event(&t.event);
-            t.processed_event = true;
+            SCOPED_LOCK(&ref.lock);
+            For (&ref.events) {
+                if (it.handled) continue;
+                handle_window_event(&it.event);
+                it.handled = true;
+            }
         } while (0);
 
         fstlog("poll window events");
         world.window->events.len = 0;
-
-        // cp_panic("leld0ingz");
 
         ui.draw_everything();
         fstlog("draw everything");
@@ -1867,8 +1872,10 @@ int realmain(int argc, char **argv) {
         fstlog("swap buffers");
 
         if (!world.turn_off_framerate_cap) {
+            int framecap = world.jblow_tests.on ? 144 : FRAME_RATE_CAP;
+
             auto timeleft = [&]() -> i32 {
-                auto budget = (1000.f / FRAME_RATE_CAP);
+                auto budget = 1000.f / framecap;
                 auto spent = (current_time_nano() - frame_start_time) / 1000000.f;
                 return (i32)((i64)budget - (i64)spent);
             };

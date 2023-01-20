@@ -16,6 +16,7 @@
 #include "search.hpp"
 #include "fzy_match.h"
 #include "win.hpp"
+#include "jblow_tests.hpp"
 
 typedef fn<bool(Editor* e)> find_editor_func;
 
@@ -357,14 +358,7 @@ struct World {
 
     ccstr configdir;
 
-    struct {
-        bool on;
-        bool ready;
-        bool inject_event;
-        bool processed_event;
-        Window_Event event;
-        Thread_Handle h;
-    } testing;
+    Jblow_Tests jblow_tests;
 
     struct Frameskip {
         u64 timestamp;

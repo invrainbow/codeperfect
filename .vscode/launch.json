@@ -21,8 +21,8 @@
             "name": "jblow tests",
             "program": "${workspaceFolder}/build/bin/ide",
             "args": [
-                "--debug",
-                "--test"
+                "--jblow-tests",
+                "normal",
             ],
             "cwd": "${workspaceFolder}/build/bin",
             "expressions": "native",

@@ -863,6 +863,13 @@ void Window::maximize() {
     }
 }
 
+void Window::request_attention() {
+    @autoreleasepool {
+        [NSApp requestUserAttention:NSInformationalRequest];
+    }
+}
+*/
+
 void Window::show() {
     @autoreleasepool {
         [ns_window orderFront:nil];
@@ -874,13 +881,6 @@ void Window::hide() {
         [ns_window orderOut:nil];
     }
 }
-
-void Window::request_attention() {
-    @autoreleasepool {
-        [NSApp requestUserAttention:NSInformationalRequest];
-    }
-}
-*/
 
 void Window::focus() {
     @autoreleasepool {

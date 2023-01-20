@@ -325,6 +325,14 @@ bool Window::is_focused() {
     return glfwGetWindowAttrib(window, GLFW_FOCUSED);
 }
 
+void Window::show() {
+    glfwShowWindow(window);
+}
+
+void Window::hide() {
+    glfwHideWindow(window);
+}
+
 void Window::get_cursor_pos(double* xpos, double* ypos) {
     glfwGetCursorPos(window, xpos, ypos);
 }

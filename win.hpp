@@ -326,6 +326,8 @@ struct Window {
     void get_content_scale(float* xscale, float* yscale);
     bool is_focused();
     void focus();
+    void show();
+    void hide();
     void get_cursor_pos(double* xpos, double* ypos);
     void set_cursor(Cursor *_cursor);
     void *get_native_handle();
