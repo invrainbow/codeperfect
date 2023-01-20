@@ -137,15 +137,142 @@ void recalc_display_size() {
     glUniformMatrix4fv(glGetUniformLocation(world.ui.im_program, "projection"), 1, GL_FALSE, (float*)projection);
 }
 
+void update_keymod_states() {
+    ImGuiIO& io = ImGui::GetIO();
+    io.AddKeyEvent(ImGuiMod_Ctrl, world.window->key_states[CP_KEY_LEFT_CONTROL] || world.window->key_states[CP_KEY_RIGHT_CONTROL]);
+    io.AddKeyEvent(ImGuiMod_Shift, world.window->key_states[CP_KEY_LEFT_SHIFT] || world.window->key_states[CP_KEY_RIGHT_SHIFT]);
+    io.AddKeyEvent(ImGuiMod_Alt,  world.window->key_states[CP_KEY_LEFT_ALT] || world.window->key_states[CP_KEY_RIGHT_ALT]);
+    io.AddKeyEvent(ImGuiMod_Super, world.window->key_states[CP_KEY_LEFT_SUPER] || world.window->key_states[CP_KEY_RIGHT_SUPER]);
+}
+
+ImGuiKey cp_key_to_imgui_key(Key key) {
+    switch (key) {
+    case CP_KEY_TAB: return ImGuiKey_Tab;
+    case CP_KEY_LEFT: return ImGuiKey_LeftArrow;
+    case CP_KEY_RIGHT: return ImGuiKey_RightArrow;
+    case CP_KEY_UP: return ImGuiKey_UpArrow;
+    case CP_KEY_DOWN: return ImGuiKey_DownArrow;
+    case CP_KEY_PAGE_UP: return ImGuiKey_PageUp;
+    case CP_KEY_PAGE_DOWN: return ImGuiKey_PageDown;
+    case CP_KEY_HOME: return ImGuiKey_Home;
+    case CP_KEY_END: return ImGuiKey_End;
+    case CP_KEY_INSERT: return ImGuiKey_Insert;
+    case CP_KEY_DELETE: return ImGuiKey_Delete;
+    case CP_KEY_BACKSPACE: return ImGuiKey_Backspace;
+    case CP_KEY_SPACE: return ImGuiKey_Space;
+    case CP_KEY_ENTER: return ImGuiKey_Enter;
+    case CP_KEY_ESCAPE: return ImGuiKey_Escape;
+    case CP_KEY_APOSTROPHE: return ImGuiKey_Apostrophe;
+    case CP_KEY_COMMA: return ImGuiKey_Comma;
+    case CP_KEY_MINUS: return ImGuiKey_Minus;
+    case CP_KEY_PERIOD: return ImGuiKey_Period;
+    case CP_KEY_SLASH: return ImGuiKey_Slash;
+    case CP_KEY_SEMICOLON: return ImGuiKey_Semicolon;
+    case CP_KEY_EQUAL: return ImGuiKey_Equal;
+    case CP_KEY_LEFT_BRACKET: return ImGuiKey_LeftBracket;
+    case CP_KEY_BACKSLASH: return ImGuiKey_Backslash;
+    case CP_KEY_RIGHT_BRACKET: return ImGuiKey_RightBracket;
+    case CP_KEY_GRAVE_ACCENT: return ImGuiKey_GraveAccent;
+    case CP_KEY_CAPS_LOCK: return ImGuiKey_CapsLock;
+    case CP_KEY_SCROLL_LOCK: return ImGuiKey_ScrollLock;
+    case CP_KEY_NUM_LOCK: return ImGuiKey_NumLock;
+    case CP_KEY_PRINT_SCREEN: return ImGuiKey_PrintScreen;
+    case CP_KEY_PAUSE: return ImGuiKey_Pause;
+    case CP_KEY_KP_0: return ImGuiKey_Keypad0;
+    case CP_KEY_KP_1: return ImGuiKey_Keypad1;
+    case CP_KEY_KP_2: return ImGuiKey_Keypad2;
+    case CP_KEY_KP_3: return ImGuiKey_Keypad3;
+    case CP_KEY_KP_4: return ImGuiKey_Keypad4;
+    case CP_KEY_KP_5: return ImGuiKey_Keypad5;
+    case CP_KEY_KP_6: return ImGuiKey_Keypad6;
+    case CP_KEY_KP_7: return ImGuiKey_Keypad7;
+    case CP_KEY_KP_8: return ImGuiKey_Keypad8;
+    case CP_KEY_KP_9: return ImGuiKey_Keypad9;
+    case CP_KEY_KP_DECIMAL: return ImGuiKey_KeypadDecimal;
+    case CP_KEY_KP_DIVIDE: return ImGuiKey_KeypadDivide;
+    case CP_KEY_KP_MULTIPLY: return ImGuiKey_KeypadMultiply;
+    case CP_KEY_KP_SUBTRACT: return ImGuiKey_KeypadSubtract;
+    case CP_KEY_KP_ADD: return ImGuiKey_KeypadAdd;
+    case CP_KEY_KP_ENTER: return ImGuiKey_KeypadEnter;
+    case CP_KEY_KP_EQUAL: return ImGuiKey_KeypadEqual;
+    case CP_KEY_LEFT_SHIFT: return ImGuiKey_LeftShift;
+    case CP_KEY_LEFT_CONTROL: return ImGuiKey_LeftCtrl;
+    case CP_KEY_LEFT_ALT: return ImGuiKey_LeftAlt;
+    case CP_KEY_LEFT_SUPER: return ImGuiKey_LeftSuper;
+    case CP_KEY_RIGHT_SHIFT: return ImGuiKey_RightShift;
+    case CP_KEY_RIGHT_CONTROL: return ImGuiKey_RightCtrl;
+    case CP_KEY_RIGHT_ALT: return ImGuiKey_RightAlt;
+    case CP_KEY_RIGHT_SUPER: return ImGuiKey_RightSuper;
+    case CP_KEY_MENU: return ImGuiKey_Menu;
+    case CP_KEY_0: return ImGuiKey_0;
+    case CP_KEY_1: return ImGuiKey_1;
+    case CP_KEY_2: return ImGuiKey_2;
+    case CP_KEY_3: return ImGuiKey_3;
+    case CP_KEY_4: return ImGuiKey_4;
+    case CP_KEY_5: return ImGuiKey_5;
+    case CP_KEY_6: return ImGuiKey_6;
+    case CP_KEY_7: return ImGuiKey_7;
+    case CP_KEY_8: return ImGuiKey_8;
+    case CP_KEY_9: return ImGuiKey_9;
+    case CP_KEY_A: return ImGuiKey_A;
+    case CP_KEY_B: return ImGuiKey_B;
+    case CP_KEY_C: return ImGuiKey_C;
+    case CP_KEY_D: return ImGuiKey_D;
+    case CP_KEY_E: return ImGuiKey_E;
+    case CP_KEY_F: return ImGuiKey_F;
+    case CP_KEY_G: return ImGuiKey_G;
+    case CP_KEY_H: return ImGuiKey_H;
+    case CP_KEY_I: return ImGuiKey_I;
+    case CP_KEY_J: return ImGuiKey_J;
+    case CP_KEY_K: return ImGuiKey_K;
+    case CP_KEY_L: return ImGuiKey_L;
+    case CP_KEY_M: return ImGuiKey_M;
+    case CP_KEY_N: return ImGuiKey_N;
+    case CP_KEY_O: return ImGuiKey_O;
+    case CP_KEY_P: return ImGuiKey_P;
+    case CP_KEY_Q: return ImGuiKey_Q;
+    case CP_KEY_R: return ImGuiKey_R;
+    case CP_KEY_S: return ImGuiKey_S;
+    case CP_KEY_T: return ImGuiKey_T;
+    case CP_KEY_U: return ImGuiKey_U;
+    case CP_KEY_V: return ImGuiKey_V;
+    case CP_KEY_W: return ImGuiKey_W;
+    case CP_KEY_X: return ImGuiKey_X;
+    case CP_KEY_Y: return ImGuiKey_Y;
+    case CP_KEY_Z: return ImGuiKey_Z;
+    case CP_KEY_F1: return ImGuiKey_F1;
+    case CP_KEY_F2: return ImGuiKey_F2;
+    case CP_KEY_F3: return ImGuiKey_F3;
+    case CP_KEY_F4: return ImGuiKey_F4;
+    case CP_KEY_F5: return ImGuiKey_F5;
+    case CP_KEY_F6: return ImGuiKey_F6;
+    case CP_KEY_F7: return ImGuiKey_F7;
+    case CP_KEY_F8: return ImGuiKey_F8;
+    case CP_KEY_F9: return ImGuiKey_F9;
+    case CP_KEY_F10: return ImGuiKey_F10;
+    case CP_KEY_F11: return ImGuiKey_F11;
+    case CP_KEY_F12: return ImGuiKey_F12;
+    default: return ImGuiKey_None;
+    }
+}
+
 void handle_window_event(Window_Event *it) {
     switch (it->type) {
-    case WINEV_FOCUS:
+    case WINEV_FOCUS: {
         clear_key_states();
-        break;
 
-    case WINEV_BLUR:
-        clear_key_states();
+        ImGuiIO& io = ImGui::GetIO();
+        io.AddFocusEvent(true);
         break;
+    }
+
+    case WINEV_BLUR: {
+        clear_key_states();
+
+        ImGuiIO& io = ImGui::GetIO();
+        io.AddFocusEvent(false);
+        break;
+    }
 
     case WINEV_WINDOW_SIZE: {
         auto w = it->window_size.w;
@@ -202,6 +329,9 @@ void handle_window_event(Window_Event *it) {
             pane1.width += delta;
             pane2.width -= delta;
         }
+
+        ImGuiIO& io = ImGui::GetIO();
+        io.AddMousePosEvent((float)x, (float)y);
         break;
     }
 
@@ -216,6 +346,8 @@ void handle_window_event(Window_Event *it) {
         // world.ui.mouse_just_pressed and some additional logic below, while
         // we're setting io.MouseDown for ImGui.
 
+        update_keymod_states();
+
         if (button < 0 || button >= IM_ARRAYSIZE(world.ui.mouse_just_pressed))
             return;
 
@@ -223,6 +355,9 @@ void handle_window_event(Window_Event *it) {
             world.ui.mouse_just_pressed[button] = true;
         else
             world.ui.mouse_just_released[button] = true;
+
+        auto &io = ImGui::GetIO();
+        io.AddMouseButtonEvent(button, press);
         break;
     }
 
@@ -256,12 +391,11 @@ void handle_window_event(Window_Event *it) {
         Timer t; t.init("key callback", &world.trace_next_frame); defer { t.log("done"); };
 
         ImGuiIO& io = ImGui::GetIO();
-        io.KeysDown[key] = press;
-
-        io.KeyCtrl = io.KeysDown[CP_KEY_LEFT_CONTROL] || io.KeysDown[CP_KEY_RIGHT_CONTROL];
-        io.KeyShift = io.KeysDown[CP_KEY_LEFT_SHIFT] || io.KeysDown[CP_KEY_RIGHT_SHIFT];
-        io.KeyAlt = io.KeysDown[CP_KEY_LEFT_ALT] || io.KeysDown[CP_KEY_RIGHT_ALT];
-        io.KeySuper = io.KeysDown[CP_KEY_LEFT_SUPER] || io.KeysDown[CP_KEY_RIGHT_SUPER];
+        ImGuiKey imgui_key = cp_key_to_imgui_key((Key)key);
+        io.AddKeyEvent(imgui_key, press);
+        // do we need this?
+        // what the fuck is the scancode? do we care?
+        // io.SetKeyEventNativeData(imgui_key, keycode, scancode);
 
         if (!press) return;
 
@@ -1348,6 +1482,7 @@ int realmain(int argc, char **argv) {
     io.BackendFlags |= ImGuiBackendFlags_HasMouseCursors;
     io.BackendFlags |= ImGuiBackendFlags_HasSetMousePos;
 
+    /*
     io.KeyMap[ImGuiKey_LeftArrow] = CP_KEY_LEFT;
     io.KeyMap[ImGuiKey_RightArrow] = CP_KEY_RIGHT;
     io.KeyMap[ImGuiKey_UpArrow] = CP_KEY_UP;
@@ -1369,6 +1504,7 @@ int realmain(int argc, char **argv) {
     io.KeyMap[ImGuiKey_X] = CP_KEY_X;
     io.KeyMap[ImGuiKey_Y] = CP_KEY_Y;
     io.KeyMap[ImGuiKey_Z] = CP_KEY_Z;
+    */
 
     io.SetClipboardTextFn = [](void*, ccstr s) { world.window->set_clipboard_string(s); };
     io.GetClipboardTextFn = [](void*) { return world.window->get_clipboard_string(); };
@@ -1798,15 +1934,17 @@ int realmain(int argc, char **argv) {
             io.DeltaTime = (double)(now - last_frame_time) / (double)1000000000;
             last_frame_time = now;
 
+            /*
             io.MousePos = ImVec2(-FLT_MAX, -FLT_MAX);
             if (world.window->is_focused()) {
                 auto &pos = world.ui.mouse_pos;
                 io.MousePos = ImVec2((float)pos.x, (float)pos.y);
             }
+            */
 
-            for (i32 i = 0; i < IM_ARRAYSIZE(io.MouseDown); i++) {
+            for (i32 i = 0; i < IM_ARRAYSIZE(world.ui.mouse_just_pressed); i++) {
                 bool down = world.ui.mouse_just_pressed[i] || world.window->mouse_states[i];
-                io.MouseDown[i] = down;
+                // io.MouseDown[i] = down;
                 world.ui.mouse_down[i] = down && !world.ui.mouse_captured_by_imgui;
                 world.ui.mouse_just_pressed[i] = false;
                 world.ui.mouse_just_released[i] = false;
