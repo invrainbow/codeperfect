@@ -348,7 +348,7 @@ void handle_window_event(Window_Event *it) {
 
         update_keymod_states();
 
-        if (button < 0 || button >= IM_ARRAYSIZE(world.ui.mouse_just_pressed))
+        if (button < 0 || button >= _countof(world.ui.mouse_just_pressed))
             return;
 
         if (press)
@@ -1482,30 +1482,6 @@ int realmain(int argc, char **argv) {
     io.BackendFlags |= ImGuiBackendFlags_HasMouseCursors;
     io.BackendFlags |= ImGuiBackendFlags_HasSetMousePos;
 
-    /*
-    io.KeyMap[ImGuiKey_LeftArrow] = CP_KEY_LEFT;
-    io.KeyMap[ImGuiKey_RightArrow] = CP_KEY_RIGHT;
-    io.KeyMap[ImGuiKey_UpArrow] = CP_KEY_UP;
-    io.KeyMap[ImGuiKey_DownArrow] = CP_KEY_DOWN;
-    io.KeyMap[ImGuiKey_PageUp] = CP_KEY_PAGE_UP;
-    io.KeyMap[ImGuiKey_PageDown] = CP_KEY_PAGE_DOWN;
-    io.KeyMap[ImGuiKey_Home] = CP_KEY_HOME;
-    io.KeyMap[ImGuiKey_End] = CP_KEY_END;
-    io.KeyMap[ImGuiKey_Insert] = CP_KEY_INSERT;
-    io.KeyMap[ImGuiKey_Delete] = CP_KEY_DELETE;
-    io.KeyMap[ImGuiKey_Backspace] = CP_KEY_BACKSPACE;
-    io.KeyMap[ImGuiKey_Space] = CP_KEY_SPACE;
-    io.KeyMap[ImGuiKey_Enter] = CP_KEY_ENTER;
-    io.KeyMap[ImGuiKey_Escape] = CP_KEY_ESCAPE;
-    io.KeyMap[ImGuiKey_Tab] = CP_KEY_TAB;
-    io.KeyMap[ImGuiKey_A] = CP_KEY_A;
-    io.KeyMap[ImGuiKey_C] = CP_KEY_C;
-    io.KeyMap[ImGuiKey_V] = CP_KEY_V;
-    io.KeyMap[ImGuiKey_X] = CP_KEY_X;
-    io.KeyMap[ImGuiKey_Y] = CP_KEY_Y;
-    io.KeyMap[ImGuiKey_Z] = CP_KEY_Z;
-    */
-
     io.SetClipboardTextFn = [](void*, ccstr s) { world.window->set_clipboard_string(s); };
     io.GetClipboardTextFn = [](void*) { return world.window->get_clipboard_string(); };
 
@@ -1927,8 +1903,9 @@ int realmain(int argc, char **argv) {
         glClear(GL_COLOR_BUFFER_BIT);
 
         {
-            auto &io = ImGui::GetIO();
             // Send info to UI and ImGui.
+
+            auto &io = ImGui::GetIO();
             io.DisplaySize = ImVec2((float)world.display_size.x, (float)world.display_size.y);
 
             auto scale = world.get_display_scale();
@@ -1938,41 +1915,27 @@ int realmain(int argc, char **argv) {
             io.DeltaTime = (double)(now - last_frame_time) / (double)1000000000;
             last_frame_time = now;
 
-            /*
-            io.MousePos = ImVec2(-FLT_MAX, -FLT_MAX);
-            if (world.window->is_focused()) {
-                auto &pos = world.ui.mouse_pos;
-                io.MousePos = ImVec2((float)pos.x, (float)pos.y);
-            }
-            */
-
-            for (i32 i = 0; i < IM_ARRAYSIZE(world.ui.mouse_just_pressed); i++) {
+            for (i32 i = 0; i < _countof(world.ui.mouse_just_pressed); i++) {
                 bool down = world.ui.mouse_just_pressed[i] || world.window->mouse_states[i];
-                // io.MouseDown[i] = down;
                 world.ui.mouse_down[i] = down && !world.ui.mouse_captured_by_imgui;
                 world.ui.mouse_just_pressed[i] = false;
                 world.ui.mouse_just_released[i] = false;
             }
 
-            if (!(io.ConfigFlags & ImGuiConfigFlags_NoMouseCursorChange)) {
-                auto imgui_to_cp_cursor = [&](ImGuiMouseCursor cur) {
-                    if (!world.ui.cursors_ready[cur])
-                        cur = ImGuiMouseCursor_Arrow;
-                    cp_assert(world.ui.cursors_ready[cur]);
-                    return &world.ui.cursors[cur];
-                };
+            auto get_imgui_cursor = [&]() -> ImGuiMouseCursor {
+                ImGuiMouseCursor cur = ImGui::GetMouseCursor();
+                if (cur != ImGuiMouseCursor_Arrow)
+                    return cur;
+                if (ui.hover.ready && ui.hover.cursor != ImGuiMouseCursor_Arrow)
+                    return ui.hover.cursor;
+                return ImGuiMouseCursor_Arrow;
+            };
 
-                auto get_imgui_cursor = [&]() -> ImGuiMouseCursor {
-                    ImGuiMouseCursor cur = ImGui::GetMouseCursor();
-                    if (cur != ImGuiMouseCursor_Arrow)
-                        return cur;
-                    if (ui.hover.ready && ui.hover.cursor != ImGuiMouseCursor_Arrow)
-                        return ui.hover.cursor;
-                    return ImGuiMouseCursor_Arrow;
-                };
-
-                world.window->set_cursor(imgui_to_cp_cursor(get_imgui_cursor()));
-            }
+            auto cur = get_imgui_cursor();
+            if (!world.ui.cursors_ready[cur])
+                cur = ImGuiMouseCursor_Arrow;
+            cp_assert(world.ui.cursors_ready[cur]);
+            world.window->set_cursor(&world.ui.cursors[cur]);
         }
 
         fstlog("send shit to ui");
