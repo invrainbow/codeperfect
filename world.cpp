@@ -396,22 +396,6 @@ void World::init() {
     configdir = GHGetConfigDir();
     if (!configdir) cp_panic("couldn't get config dir");
 
-    // read options from disk
-    do {
-        auto filepath = path_join(configdir, ".options");
-
-        File f;
-        if (f.init_read(filepath) != FILE_RESULT_OK)
-            break;
-        defer { f.cleanup(); };
-
-        Serde serde;
-        serde.init(&f);
-        serde.read_type(&options, SERDE_OPTIONS);
-    } while (0);
-
-    world.use_nvim = options.enable_vim_mode;
-
     {
         auto go_binary_path = GHGetGoBinaryPath();
         if (!go_binary_path)
@@ -458,7 +442,11 @@ void World::init() {
 
             auto name = gargv[++i];
             jblow_tests.init(name);
-            cp_strcpy_fixed(current_path, cp_sprintf("/Users/brandon/ide/jblow_test_suite/%s", name));
+
+            auto path = GHCopyJblowTestSuite((char*)cp_sprintf("/Users/brandon/ide/jblow_test_suite/%s", name));
+            if (!path) cp_panic("unable to copy test suite to temporary folder");
+
+            cp_strcpy_fixed(current_path, path);
             already_read_current_path = true;
         }
 
@@ -468,6 +456,25 @@ void World::init() {
 
 #endif // RELEASE_MODE
     }
+
+    // read options from disk
+    do {
+        if (world.jblow_tests.on) break;
+
+        auto filepath = path_join(configdir, ".options");
+
+        File f;
+        if (f.init_read(filepath) != FILE_RESULT_OK)
+            break;
+        defer { f.cleanup(); };
+
+        Serde serde;
+        serde.init(&f);
+        serde.read_type(&options, SERDE_OPTIONS);
+    } while (0);
+
+    world.use_nvim = options.enable_vim_mode;
+
 
     if (make_testing_headless) {
         if (!jblow_tests.on)

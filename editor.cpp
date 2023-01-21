@@ -1916,9 +1916,8 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
                 reward(it->import_is_existing);
 
                 // check if import in workspace
-                if (world.workspace) {
+                if (world.workspace)
                     reward(world.workspace->find_module_containing(it->import_path) != NULL);
-                }
             }
 
             if (cache[ia].str_length != cache[ib].str_length)

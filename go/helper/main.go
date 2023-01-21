@@ -18,11 +18,11 @@ import (
 	"unicode"
 	"unsafe"
 
-	"github.com/denormal/go-gitignore"
-	"github.com/fatih/structtag"
 	"github.com/codeperfect95/codeperfect/go/models"
 	"github.com/codeperfect95/codeperfect/go/utils"
 	"github.com/codeperfect95/codeperfect/go/versions"
+	"github.com/denormal/go-gitignore"
+	"github.com/fatih/structtag"
 	"github.com/pkg/browser"
 	"github.com/reviewdog/errorformat"
 	"golang.org/x/tools/imports"
@@ -668,7 +668,7 @@ func GHOpenURLInBrowser(url *C.char) bool {
 func GHGetGoWork(filepath *C.char) *C.char {
 	binpath, err := GetBinaryPath("go")
 	if err != nil {
-	    return nil
+		return nil
 	}
 
 	cmd := utils.MakeExecCommand(binpath, "env", "GOWORK")
@@ -676,15 +676,37 @@ func GHGetGoWork(filepath *C.char) *C.char {
 
 	out, err := cmd.Output()
 	if err != nil {
-	    return nil
+		return nil
 	}
 
 	ret := strings.TrimSpace(string(out))
 	if ret == "" {
-	    return nil
+		return nil
 	}
 
 	return C.CString(ret)
+}
+
+//export GHCopyJblowTestSuite
+func GHCopyJblowTestSuite(src *C.char) *C.char {
+	configDir, err := GetConfigDir()
+	if err != nil {
+		log.Print(err)
+		return nil
+	}
+
+	path := filepath.Join(configDir, "test-suite")
+	if err := os.RemoveAll(path); err != nil {
+		log.Print(err)
+		return nil
+	}
+
+	cmd := exec.Command("cp", "-R", C.GoString(src), path)
+	if err := cmd.Run(); err != nil {
+		log.Print(err)
+		return nil
+	}
+	return C.CString(path)
 }
 
 func main() {}

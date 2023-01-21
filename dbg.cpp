@@ -893,6 +893,8 @@ bool Debugger::start(Debug_Profile *debug_profile) {
 
             // if (!path_has_descendant(world.current_path, editor->filepath)) return;
 
+            if (!world.workspace) return;
+
             auto mod = world.workspace->find_module_containing_resolved(editor->filepath);
             if (!mod) return;
 

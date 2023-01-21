@@ -19,11 +19,7 @@ void Jblow_Tests::inject(Window_Event_Type type, fn<void(Window_Event*)> cb) {
     }
 }
 
-void Jblow_Tests::skip_frame() {
-    auto start = world.frame_index;
-    while (world.frame_index < start + 2)
-        sleep_milliseconds(10);
-
+void Jblow_Tests::catchup() {
     auto check = [&]() {
         SCOPED_LOCK(&lock);
         For (&events)
@@ -39,6 +35,12 @@ void Jblow_Tests::skip_frame() {
     while (!check()) sleep_milliseconds(10);
 }
 
+void Jblow_Tests::skip_frame() {
+    auto start = world.frame_index;
+    while (world.frame_index < start + 2)
+        sleep_milliseconds(10);
+}
+
 bool is_editor_selected(ccstr relative_filepath) {
     auto ed = get_current_editor();
     if (ed) {
@@ -49,41 +51,70 @@ bool is_editor_selected(ccstr relative_filepath) {
 }
 
 struct Timeout {
-    int n;
+    int line;
     u64 start;
 
-    Timeout(int _n) { init(_n); }
-    Timeout() { init(100000000); }
-
-    void init(int _n) {
-        n = _n;
+    Timeout(int _line) {
+        line = _line;
         start = current_time_milli();
     }
 
-    void inc() {
-        if (current_time_milli() - start > n)
-            cp_panic("timeout");
-        sleep_milliseconds(10);
+    void operator+(fn<bool()> f) {
+        while (current_time_milli() - start <= 3000) {
+            if (f()) return;
+            sleep_milliseconds(10);
+        }
+        cp_panic(cp_sprintf("timeout at line %d", line));
     }
 };
 
-#define WAIT_FOR(x) for (Timeout t; !(x);) t.inc()
+#define WAIT_FOR Timeout(__LINE__) + [&]()
 
-void wait_for_editor(ccstr relative_filepath) {
-    WAIT_FOR(is_editor_selected(relative_filepath));
+Editor* wait_for_editor(ccstr relative_filepath) {
+    Editor* ret = NULL;
+    WAIT_FOR {
+        auto ed = get_current_editor();
+        if (!ed) return false;
+        if (world.use_nvim && !ed->is_nvim_ready()) return false;
+
+        auto relpath = get_path_relative_to(ed->filepath, world.current_path);
+        if (!streq(relpath, relative_filepath)) return false;
+
+        ret = ed;
+        return true;
+    };
+    return ret;
 }
 
-void Jblow_Tests::run_normal() {
+Editor* Jblow_Tests::open_editor(ccstr relative_filepath) {
+    // open file fuzzy search
     press_key(CP_KEY_P, CP_MOD_PRIMARY);
     skip_frame();
 
-    type_string("helpermaingo");
-    skip_frame();
-
+    // open main.go
+    type_string(relative_filepath);
     press_key(CP_KEY_ENTER);
-    skip_frame();
 
-    wait_for_editor("helper/main.go");
+    // wait for editor
+    return wait_for_editor(relative_filepath);
+}
+
+void Jblow_Tests::run_normal() {
+    // wait for editor
+    auto editor = open_editor("main.go");
+    print("%s", editor->filepath);
+
+    // spam a bunch of keys lol
+    ccstr chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890";
+    int chars_len = strlen(chars);
+
+    // see if we can cause any kind of crash lol
+    for (int i = 0; i < 1000; i++) {
+        for (int i = 0; i < 1000; i++)
+            type_char(chars[rand() % chars_len]);
+        catchup();
+        sleep_milliseconds(10);
+    }
 }
 
 void Jblow_Tests::run_workspace() {}
@@ -95,11 +126,31 @@ void Jblow_Tests::init(ccstr _test_name) {
     ready = false;
     cp_strcpy_fixed(test_name, _test_name);
 
+    // Initialize options with some defaults.
+    {
+        Options opts; // reinitialize with defaults
+        memcpy(&options, &opts, sizeof(Options));
+
+        // set overrides for all tests
+        options.send_crash_reports = false;
+
+        // per-test overrides
+        init_options();
+    }
+
     h = create_thread([](void* param) {
         ((Jblow_Tests*)param)->run();
     }, this);
 
     if (!h) cp_panic("unable to create test thread");
+}
+
+void Jblow_Tests::init_options() {
+    // TODO
+
+    if (streq(test_name, "normal")) {
+        options.enable_vim_mode = true;
+    }
 }
 
 void Jblow_Tests::run() {
@@ -118,11 +169,10 @@ void Jblow_Tests::run() {
     defer { pool.cleanup(); };
     SCOPED_MEM(&pool);
 
-    while (!world.jblow_tests.ready) sleep_milliseconds(10);
+    while (!ready) sleep_milliseconds(10);
 
-    auto &t = world.jblow_tests;
-    if (streq(t.test_name, "workspace")) t.run_workspace();
-    if (streq(t.test_name, "normal")) t.run_normal();
+    if (streq(test_name, "workspace")) run_workspace();
+    if (streq(test_name, "normal")) run_normal();
 
     // all good!
     world.message_queue.add([&](auto msg) {

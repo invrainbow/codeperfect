@@ -17,7 +17,15 @@ struct Jblow_Tests {
     Thread_Handle h;
 
     void init(ccstr _test_name);
+    void init_options();
+
     void inject(Window_Event_Type type, fn<void(Window_Event*)> cb);
+    void catchup();
+
+    // We need this because some events are not truly processed until the next frame.
+    // E.g. if we press cmd+p the imgui window won't be open to process our fuzzy search query until next frame.
+    // Skips a whole frame, i.e. if we're on frame 3, it will skip frame 4 entirely and wait until we're on frame 5.
+    void skip_frame();
 
     void raw_type_char(u32 ch) {
         inject(WINEV_CHAR, [&](auto ev) {
@@ -25,10 +33,6 @@ struct Jblow_Tests {
         });
     }
 
-    // We need this because some events are not truly processed until the next frame.
-    // E.g. if we press cmd+p the imgui window won't be open to process our fuzzy search query until next frame.
-    // Skips a whole frame, i.e. if we're on frame 3, it will skip frame 4 entirely and wait until we're on frame 5.
-    void skip_frame();
 
     void type_char(u32 ch) {
         raw_type_char(ch);
@@ -55,5 +59,6 @@ struct Jblow_Tests {
     void run();
     void run_normal();
     void run_workspace();
+    Editor* open_editor(ccstr relative_filepath);
 };
 
