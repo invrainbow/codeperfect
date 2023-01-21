@@ -6253,7 +6253,10 @@ void UI::draw_everything() {
                     prefix = cp_sprintf("%s/", prefix);
                     is_external = true;
                 } else {
-                    auto mod = world.workspace->find_module_containing_resolved(editor.filepath);
+                    Go_Work_Module *mod = NULL;
+                    if (world.workspace)
+                        mod = world.workspace->find_module_containing_resolved(editor.filepath);
+
                     if (mod) {
                         label = get_path_relative_to(editor.filepath, mod->resolved_path);
                         if (!are_filepaths_equal(mod->resolved_path, world.current_path)) {
