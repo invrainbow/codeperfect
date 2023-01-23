@@ -1,0 +1,9 @@
+#!/bin/bash
+
+for x in $(seq 100); do
+    echo "normal (seed = $x)"
+    JBLOW_TESTS_NORMAL_SEED="$x" build/bin/ide --jblow-tests normal
+done
+
+echo "workspace"
+# build/bin/ide --jblow-tests workspace

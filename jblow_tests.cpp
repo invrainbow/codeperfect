@@ -5,6 +5,16 @@
 #include "ostype.hpp"
 #include "defer.hpp"
 
+extern "C" {
+#ifdef __cplusplus
+#   undef __cplusplus
+#   include "mtwist.h"
+#   define __cplusplus
+#else
+#   include "mtwist.h"
+#endif
+}
+
 void Jblow_Tests::inject(Window_Event_Type type, fn<void(Window_Event*)> cb) {
     Jblow_Test_Event te; ptr0(&te);
     te.handled = false;
@@ -37,7 +47,7 @@ void Jblow_Tests::catchup() {
 
 void Jblow_Tests::skip_frame() {
     auto start = world.frame_index;
-    while (world.frame_index < start + 2)
+    while (world.frame_index < start + 5)
         sleep_milliseconds(10);
 }
 
@@ -105,16 +115,33 @@ void Jblow_Tests::run_normal() {
     print("%s", editor->filepath);
 
     // spam a bunch of keys lol
-    ccstr chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890";
+    ccstr chars = (
+        "KKKKKKKKKKKKKK"                // does nothing in normal mode
+        "aioaioaioaio"                  // enter insert mode
+        "\x01\x01\x01\x01\x01\x01\x01"  // escape
+    );
     int chars_len = strlen(chars);
 
-    // see if we can cause any kind of crash lol
-    for (int i = 0; i < 1000; i++) {
-        for (int i = 0; i < 1000; i++)
-            type_char(chars[rand() % chars_len]);
-        catchup();
-        sleep_milliseconds(10);
+    int seed = 0;
+    {
+        auto seed_str = getenv("JBLOW_TESTS_NORMAL_SEED");
+        if (seed_str) seed = atoi(seed_str);
     }
+    mt_seed32(seed);
+
+    auto input = alloc_list<char>();
+
+    for (int i = 0; i < 1000; i++) {
+        auto it = chars[mt_lrand() % chars_len];
+        if (it == 0x01)
+            press_key(CP_KEY_ESCAPE);
+        else
+            type_char(it);
+
+        if (i % 100 == 0) catchup();
+    }
+
+    sleep_milliseconds(999999999);
 }
 
 void Jblow_Tests::run_workspace() {}
