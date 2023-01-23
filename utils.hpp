@@ -446,7 +446,10 @@ struct Message_Queue {
     void init() {
         mem.init();
         lock.init();
-        messages.init();
+        {
+            SCOPED_MEM(&mem);
+            messages.init();
+        }
     }
 
     List<T> *start() {
@@ -460,14 +463,21 @@ struct Message_Queue {
 
     void end() {
         mem.reset();
-        messages.len = 0;
+        {
+            SCOPED_MEM(&mem);
+            messages.init();
+        }
         lock.leave();
     }
 
     void add(fn<void(T *t)> f) {
         SCOPED_LOCK(&lock);
-        SCOPED_MEM(&mem);
-        f(messages.append());
+        {
+            SCOPED_MEM(&mem);
+            T msg; ptr0(&msg);
+            f(&msg);
+            messages.append(&msg);
+        }
     }
 };
 

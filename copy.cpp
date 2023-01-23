@@ -4,6 +4,7 @@
 #include "settings.hpp"
 #include "go.hpp"
 #include "dbg.hpp"
+#include "nvim.hpp"
 
 // -----
 // stupid c++ template shit
@@ -53,6 +54,16 @@ List<ccstr> *copy_string_list(List<ccstr> *arr) {
     auto new_arr = alloc_object(List<ccstr>);
     new_arr->init(LIST_POOL, max(arr->len, 1));
     For (arr) new_arr->append(cp_strdup(it));
+    return new_arr;
+}
+
+template <typename T>
+List<T> *copy_raw_list(List<T> *arr) {
+    if (!arr) return NULL;
+
+    auto new_arr = alloc_object(List<T>);
+    new_arr->init(LIST_POOL, max(arr->len, 1));
+    new_arr->concat(arr);
     return new_arr;
 }
 
@@ -441,3 +452,18 @@ Work_Trie_Node *Work_Trie_Node::copy() {
     return ret;
 }
 */
+
+Nvim_Message_Buf_Lines *Nvim_Message_Buf_Lines::copy() {
+    auto ret = clone(this);
+    ret->line_lengths = copy_raw_list(line_lengths);
+
+    ret->lines = alloc_object(List<uchar*>);
+    ret->lines->init(LIST_POOL, max(lines->len, 1));
+    Fori (lines) {
+        auto newarr = alloc_array(uchar, line_lengths->at(i));
+        memcpy(newarr, it, sizeof(uchar) * line_lengths->at(i));
+        ret->lines->append(newarr);
+    }
+
+    return ret;
+}

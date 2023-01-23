@@ -224,10 +224,12 @@ struct List {
         return true;
     }
 
-    void concat(List<T> *list) {
-        for (int i = 0; i < list->len; i++)
-            append(list->items[i]);
+    void concat(const T *arr, u32 len) {
+        for (u32 i = 0; i < len; i++)
+            append((T*)&arr[i]);
     }
+
+    void concat(List<T> *x) { concat(x->items, x->len); }
 
     // Everything below blindly stolen from internet.
     // Makes "for (auto &&it : array)" and "array[i]" work.

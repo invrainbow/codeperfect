@@ -96,7 +96,6 @@ struct Ext_Info {
 struct Mp_Reader {
     u64 offset;
     Process* proc;
-    bool ok; // success status of last read
 
     /*
     Ok, so I suck at C and the whole sign/unsigned thing. Basically, the only
@@ -118,72 +117,46 @@ struct Mp_Reader {
 
     u8 _read1() {
         u8 ret = 0;
-        ok = proc->read1((char*)&ret);
+        if (!proc->read1((char*)&ret))
+            cp_panic("failed to read");
         return ret;
     }
 
     u8 read1() {
         auto ret = _read1();
-        if (ok) offset++;
+        offset++;
         return ret;
     }
 
     i16 read2() {
-        do {
-            u8 a = read1(); if (!ok) break;
-            u8 b = read1(); if (!ok) break;
-
-            ok = true;
-            return (a << 8) | b;
-        } while (0);
-
-        ok = false;
-        return 0;
+        u8 a = read1();
+        u8 b = read1();
+        return (a << 8) | b;
     }
 
     i32 read4() {
-        do {
-            u8 a = read1(); if (!ok) break;
-            u8 b = read1(); if (!ok) break;
-            u8 c = read1(); if (!ok) break;
-            u8 d = read1(); if (!ok) break;
-
-            ok = true;
-            return (a << 24) | (b << 16) | (c << 8) | d;
-        } while (0);
-
-        ok = false;
-        return 0;
+        u8 a = read1();
+        u8 b = read1();
+        u8 c = read1();
+        u8 d = read1();
+        return (a << 24) | (b << 16) | (c << 8) | d;
     }
 
     i64 read8() {
-        do {
-            i64 a = (i64)read1(); if (!ok) break;
-            i64 b = (i64)read1(); if (!ok) break;
-            i64 c = (i64)read1(); if (!ok) break;
-            i64 d = (i64)read1(); if (!ok) break;
-            i64 e = (i64)read1(); if (!ok) break;
-            i64 f = (i64)read1(); if (!ok) break;
-            i64 g = (i64)read1(); if (!ok) break;
-            i64 h = (i64)read1(); if (!ok) break;
-
-            ok = true;
-            return (a << 56) | (b << 48) | (c << 40) | (d << 32) | (e << 24) | (f << 16) | (g << 8) | h;
-        } while (0);
-
-        ok = false;
-        return 0;
-    }
-
-    u8 peek() {
-        u8 ch = 0;
-        ok = proc->peek((char*)&ch);
-        return ch;
+        i64 a = (i64)read1();
+        i64 b = (i64)read1();
+        i64 c = (i64)read1();
+        i64 d = (i64)read1();
+        i64 e = (i64)read1();
+        i64 f = (i64)read1();
+        i64 g = (i64)read1();
+        i64 h = (i64)read1();
+        return (a << 56) | (b << 48) | (c << 40) | (d << 32) | (e << 24) | (f << 16) | (g << 8) | h;
     }
 
     Mp_Type peek_type() {
-        u8 b = peek();
-        if (!ok) return MP_UNKNOWN;
+        u8 b = 0;
+        if (!proc->peek((char*)&b)) return MP_UNKNOWN;
 
         switch (b) {
         case 0xc0: return MP_NIL;
@@ -227,40 +200,36 @@ struct Mp_Reader {
 
     s32 read_array() {
         auto b = read1();
-        if (ok) {
-            if (b >> 4 == 0b1001) return b & 0b00001111;
-            if (b == 0xdc) return (s32)(u16)read2();
-            if (b == 0xdd) return (s32)(u32)read4();
-            ok = false;
+        if (b >> 4 == 0b1001) return b & 0b00001111;
+        if (b == 0xdc) return (s32)(u16)read2();
+        if (b == 0xdd) return (s32)(u32)read4();
+
+        print("0x%x", b);
+        while (true) {
+            print("0x%x", read1());
         }
-        return 0;
     }
 
     s32 read_map() {
         auto b = read1();
-        if (ok) {
-            if (b >> 4 == 0b1000) return b & 0b00001111;
-            if (b == 0xde) return (s32)(u16)read2();
-            if (b == 0xdf) return (s32)(u32)read4();
-            ok = false;
-        }
-        return 0;
+        if (b >> 4 == 0b1000) return b & 0b00001111;
+        if (b == 0xde) return (s32)(u16)read2();
+        if (b == 0xdf) return (s32)(u32)read4();
+        cp_panic("invalid map");
     }
 
     i64 read_int() {
         u8 b = read1();
-        if (ok) {
-            if (b >> 7 == 0b0) return b;
-            if (b >> 5 == 0b111) return (i8)b;
-            if (b == 0xcc || b == 0xd0) return b == 0xcc ? (u8)read1() : (i8)read1();
-            if (b == 0xcd || b == 0xd1) return b == 0xcd ? (u16)read2() : (i16)read2();
-            if (b == 0xce || b == 0xd2) return b == 0xce ? (u32)read4() : (i32)read4();
+        if (b >> 7 == 0b0) return b;
+        if (b >> 5 == 0b111) return (i8)b;
+        if (b == 0xcc || b == 0xd0) return b == 0xcc ? (u8)read1() : (i8)read1();
+        if (b == 0xcd || b == 0xd1) return b == 0xcd ? (u16)read2() : (i16)read2();
+        if (b == 0xce || b == 0xd2) return b == 0xce ? (u32)read4() : (i32)read4();
 
-            // we can't return a u64, so have caller cast
-            if (b == 0xd3 || b == 0xcf) return (i64)read8();
-            ok = false;
-        }
-        return 0;
+        // we can't return a u64, so have caller cast
+        if (b == 0xd3 || b == 0xcf) return (i64)read8();
+
+        cp_panic("invalid int");
     }
 
     void skip_object();
@@ -269,37 +238,26 @@ struct Mp_Reader {
 
     double read_double() {
         auto b = read1();
-        if (!ok) return 0;
-
         char buf[8];
         u32 bytes = (b == 0xca ? 4 : 8);
-
-        for (u32 i = 0; i < bytes; i++) {
+        for (u32 i = 0; i < bytes; i++)
             buf[i] = read1();
-            if (!ok) return 0;
-        }
-
-        ok = true;
         return (bytes == 4 ? (double)(*(float*)buf) : *(double*)buf);
     }
 
     bool read_bool() {
         auto b = read1();
-        if (ok) {
-            if (b == 0xc2) return false;
-            if (b == 0xc3) return true;
-            ok = false;
-        }
-        return false;
+        if (b == 0xc2) return false;
+        if (b == 0xc3) return true;
+        cp_panic("couldn't read bool");
     }
 
     void read_nil() {
-        auto b = read1();
-        ok = ok && (b == 0xc0);
+        cp_assert(read1() == 0xc0);
     }
 };
 
-enum MprpcMessageType {
+enum Mprpc_Message_Type {
     MPRPC_REQUEST = 0,
     MPRPC_RESPONSE = 1,
     MPRPC_NOTIFICATION = 2,
@@ -384,8 +342,19 @@ struct Grid_Cell {
     ccstr text;
 };
 
+struct Nvim_Message_Buf_Lines {
+    Ext_Info buf;
+    int changedtick;
+    int firstline;
+    int lastline;
+    List<uchar*> *lines;
+    List<s32> *line_lengths;
+
+    Nvim_Message_Buf_Lines *copy();
+};
+
 struct Nvim_Message {
-    MprpcMessageType type;
+    Mprpc_Message_Type type;
     union {
         struct {
             u32 msgid;
@@ -400,14 +369,7 @@ struct Nvim_Message {
         struct {
             Nvim_Notification_Type type;
             union {
-                struct {
-                    Ext_Info buf;
-                    int changedtick;
-                    int firstline;
-                    int lastline;
-                    List<uchar*> *lines;
-                    List<s32> *line_lengths;
-                } buf_lines;
+                Nvim_Message_Buf_Lines buf_lines;
 
                 struct {
                     Ext_Info buf;
@@ -536,6 +498,7 @@ struct Nvim {
     Pool loop_mem;
     // Pool messages_mem;
     Pool requests_mem;
+    Pool line_updates_mem;
 
     // orchestration
     Process nvim_proc;
@@ -558,6 +521,7 @@ struct Nvim {
     u32 dotrepeat_win_id;
     u32 current_win_id;
     u32 editor_that_triggered_escape;
+    List<Nvim_Message_Buf_Lines*> line_updates;
 
     Pool started_messages_mem;
 
@@ -630,5 +594,6 @@ struct Nvim {
     void handle_message_from_main_thread(Nvim_Message *event);
     void assoc_grid_with_window(u32 grid, u32 win);
     Editor* find_editor_by_grid(u32 grid);
+    void apply_line_update(Nvim_Message_Buf_Lines *args);
 };
 

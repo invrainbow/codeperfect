@@ -941,12 +941,6 @@ i32 Buffer::cur_to_offset(cur2 c) {
     return ret;
 }
 
-#ifdef DEBUG_BUILD
-#   define idx_assert(x) if (!(x)) BREAK_HERE
-#else
-#   define idx_assert(x) cp_assert(x)
-#endif
-
 u32 Buffer::idx_gr_to_cp(int y, int off) {
     auto &line = lines[y];
 
@@ -969,7 +963,7 @@ u32 Buffer::idx_cp_to_byte(int y, int off) {
     auto &line = lines[y];
     int ret = 0;
 
-    idx_assert(off <= line.len);
+    cp_assert(off <= line.len);
 
     for (int i = 0; i < off && i < line.len; i++)
         ret += uchar_size(line[i]);
@@ -996,7 +990,7 @@ u32 Buffer::idx_byte_to_gr(int y, int off) {
         off -= size;
     }
 
-    idx_assert(!off);
+    cp_assert(!off);
     return x;
 }
 
@@ -1008,7 +1002,9 @@ u32 Buffer::idx_byte_to_cp(int y, int off, bool nocrash) {
         off -= size;
     }
 
-    if (!nocrash) idx_assert(!off);
+    if (!nocrash) {
+        cp_assert(!off);
+    }
     return lines[y].len;
 }
 
@@ -1065,8 +1061,8 @@ cur2 Buffer::offset_to_cur(i32 off) {
     }
 
     if (ret.x == -1 || ret.y == -1) {
-        idx_assert(ret.x == -1 && ret.y == -1);
-        idx_assert(!off);
+        cp_assert(ret.x == -1 && ret.y == -1);
+        cp_assert(!off);
         ret.y = lines.len-1;
         ret.x = lines[ret.y].len;
     }

@@ -83,6 +83,31 @@ void Nvim::write_line(Line *line) {
     }
 }
 
+void Nvim::apply_line_update(Nvim_Message_Buf_Lines *args) {
+    auto editor = find_editor_by_buffer(args->buf.object_id);
+    if (!editor) return;
+
+    if (args->changedtick > editor->nvim_data.changedtick)
+        editor->nvim_data.changedtick = args->changedtick;
+
+    auto is_change_empty = (args->firstline == args->lastline && !args->lines->len);
+
+    bool skip = (
+        !editor->nvim_data.got_initial_lines
+        || args->changedtick <= editor->nvim_insert.skip_changedticks_until
+        || is_change_empty
+    );
+
+    nvim_print("updating lines...");
+    if (!skip) editor->update_lines(args->firstline, args->lastline, args->lines, args->line_lengths);
+
+    if (!editor->nvim_data.got_initial_lines) {
+        nvim_print("got_initial_lines = false, setting to true & calling handle_editor_on_ready()");
+        editor->nvim_data.got_initial_lines = true;
+        handle_editor_on_ready(editor);
+    }
+}
+
 // TODO: also need to remove request from queue once it's been processed
 void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
     switch (event->type) {
@@ -149,7 +174,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
             start_request_message("nvim_call_atomic", 1);
 
             u64 diff = current_time_nano() - post_insert_dotrepeat_time;
-            print("postinsert dotrepeat took %d ms", (int)(diff / 1000000.0));
+            nvim_print("postinsert dotrepeat took %d ms", (int)(diff / 1000000.0));
             post_insert_dotrepeat_time = current_time_nano();
 
             auto curr_editor = get_current_editor();
@@ -604,28 +629,14 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
         case NVIM_NOTIF_BUF_LINES: {
             auto &args = event->notification.buf_lines;
 
-            auto editor = find_editor_by_buffer(args.buf.object_id);
-            if (!editor) break;
-
-            if (args.changedtick > editor->nvim_data.changedtick)
-                editor->nvim_data.changedtick = args.changedtick;
-
-            auto is_change_empty = (args.firstline == args.lastline && !args.lines->len);
-
-            bool skip = (
-                !editor->nvim_data.got_initial_lines
-                || args.changedtick <= editor->nvim_insert.skip_changedticks_until
-                || is_change_empty
-            );
-
-            nvim_print("updating lines...");
-            if (!skip) editor->update_lines(args.firstline, args.lastline, args.lines, args.line_lengths);
-
-            if (!editor->nvim_data.got_initial_lines) {
-                nvim_print("got_initial_lines = false, setting to true & calling handle_editor_on_ready()");
-                editor->nvim_data.got_initial_lines = true;
-                handle_editor_on_ready(editor);
+            // don't make any changes in insert mode, save the update to do later
+            if (mode == VI_INSERT) {
+                SCOPED_MEM(&line_updates_mem);
+                line_updates.append(args.copy());
+                break;
             }
+
+            apply_line_update(&args);
             break;
         }
 
@@ -653,6 +664,8 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
         case NVIM_NOTIF_MODE_CHANGE: {
             auto &args = event->notification.mode_change;
 
+            int old_mode = mode;
+
             nvim_print("mode: %s", args.mode_name);
 
             if (streq(args.mode_name, "normal")) {
@@ -660,7 +673,7 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
 
                 if (post_insert_dotrepeat_time) {
                     auto diff = current_time_nano() - post_insert_dotrepeat_time;
-                    print("postinsert mode change took %d ms", (int)(diff / 1000000.0));
+                    nvim_print("postinsert mode change took %d ms", (int)(diff / 1000000.0));
                     post_insert_dotrepeat_time = 0;
                 }
             }
@@ -670,6 +683,18 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
             else if (streq(args.mode_name, "operator"))       mode = VI_OPERATOR;
             else if (streq(args.mode_name, "cmdline_normal")) mode = VI_CMDLINE;
             else                                              mode = VI_UNKNOWN;
+
+            // if we just left insert mode
+            if (old_mode == VI_INSERT && mode != VI_INSERT && line_updates.len) {
+                For (&line_updates)
+                    apply_line_update(it);
+
+                line_updates_mem.reset();
+                {
+                    SCOPED_MEM(&line_updates_mem);
+                    line_updates.init();
+                }
+            }
 
             auto editor = get_current_editor();
             if (editor) {
@@ -811,14 +836,6 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
 }
 
 void Nvim::run_event_loop() {
-
-#define STRINGIZE(x) STRINGIZE2(x)
-#define STRINGIZE2(x) #x
-#define LINE_STRING STRINGIZE(__LINE__)
-
-#define ASSERT(x) if (!(x)) { cp_panic("The Vim plugin has crashed. (line = " LINE_STRING ")"); }
-#define CHECKOK() ASSERT(reader.ok)
-
     {
         auto msgid = start_request_message("nvim_ui_attach", 3);
         save_request(NVIM_REQ_UI_ATTACH, msgid, 0);
@@ -850,11 +867,14 @@ void Nvim::run_event_loop() {
     }
 
     while (true) {
-        s32 msglen = reader.read_array(); CHECKOK();
-        auto msgtype = (MprpcMessageType)reader.read_int(); CHECKOK();
+        while (reader.peek_type() != MP_ARRAY)
+            reader.skip_object();
+
+        s32 msglen = reader.read_array();
+        auto msgtype = (Mprpc_Message_Type)reader.read_int();
 
         auto expected_len = (msgtype == MPRPC_NOTIFICATION ? 3 : 4);
-        ASSERT(msglen == expected_len);
+        cp_assert(msglen == expected_len);
 
         auto add_event = [&](fn<void(Nvim_Message*)> f) {
             world.message_queue.add([&](auto msg) {
@@ -864,23 +884,17 @@ void Nvim::run_event_loop() {
             });
         };
 
-        switch (msgtype) {
-        case MPRPC_REQUEST: nvim_print("[received] MPRPC_REQUEST"); break;
-        case MPRPC_RESPONSE: nvim_print("[received] MPRPC_RESPONSE"); break;
-        case MPRPC_NOTIFICATION: nvim_print("[received] MPRPC_NOTIFICATION"); break;
-        }
+        nvim_print("[received] %s", mprpc_message_type_str(msgtype));
 
         switch (msgtype) {
         case MPRPC_NOTIFICATION: {
-            auto method = reader.read_string(); CHECKOK();
+            auto method = reader.read_string();
             // nvim_print("got notification with method %s", method);
-            auto params_length = reader.read_array(); CHECKOK();
+            auto params_length = reader.read_array();
 
             auto just_skip_params = [&]() {
-                for (u32 i = 0; i < params_length; i++) {
+                for (u32 i = 0; i < params_length; i++)
                     reader.skip_object();
-                    CHECKOK();
-                }
             };
 
             nvim_print("method: %s", method);
@@ -888,11 +902,11 @@ void Nvim::run_event_loop() {
             if (streq(method, "custom_notification")) {
                 SCOPED_FRAME();
 
-                auto cmd = reader.read_string(); CHECKOK();
-                auto num_args = reader.read_array(); CHECKOK();
+                auto cmd = reader.read_string();
+                auto num_args = reader.read_array();
                 if (streq(cmd, "reveal_line")) {
-                    ASSERT(num_args == 2);
-                    auto screen_pos = (Screen_Pos)reader.read_int(); CHECKOK();
+                    cp_assert(num_args == 2);
+                    auto screen_pos = (Screen_Pos)reader.read_int();
                     auto reset_cursor = (bool)reader.read_int();
                     add_event([&](auto msg) {
                         msg->notification.type = NVIM_NOTIF_CUSTOM_REVEAL_LINE;
@@ -900,14 +914,14 @@ void Nvim::run_event_loop() {
                         msg->notification.custom_reveal_line.reset_cursor = reset_cursor;
                     });
                 } else if (streq(cmd, "get_visual")) {
-                    ASSERT(num_args == 7);
-                    auto for_what = reader.read_string(); CHECKOK();
-                    auto ys = reader.read_int(); CHECKOK();
-                    auto xs = reader.read_int(); CHECKOK();
-                    auto ye = reader.read_int(); CHECKOK();
-                    auto xe = reader.read_int(); CHECKOK();
-                    auto bufid = reader.read_int(); CHECKOK();
-                    auto mode = reader.read_string(); CHECKOK();
+                    cp_assert(num_args == 7);
+                    auto for_what = reader.read_string();
+                    auto ys = reader.read_int();
+                    auto xs = reader.read_int();
+                    auto ye = reader.read_int();
+                    auto xe = reader.read_int();
+                    auto bufid = reader.read_int();
+                    auto mode = reader.read_string();
 
                     add_event([&](auto msg) {
                         msg->notification.type = NVIM_NOTIF_CUSTOM_GET_VISUAL;
@@ -918,46 +932,46 @@ void Nvim::run_event_loop() {
                         msg->notification.custom_get_visual.mode = cp_strdup(mode);
                     });
                 } else if (streq(cmd, "goto_definition")) {
-                    ASSERT(!num_args);
+                    cp_assert(!num_args);
                     add_event([&](auto msg) {
                         msg->notification.type = NVIM_NOTIF_CUSTOM_GOTO_DEFINITION;
                     });
                 } else if (streq(cmd, "astnavigation")) {
-                    ASSERT(!num_args);
+                    cp_assert(!num_args);
                     add_event([&](auto msg) {
                         msg->notification.type = NVIM_NOTIF_CUSTOM_ASTNAVIGATION;
                     });
                 } else if (streq(cmd, "jump")) {
-                    ASSERT(num_args == 1);
+                    cp_assert(num_args == 1);
                     auto forward = (bool)reader.read_int();
                     add_event([&](auto msg) {
                         msg->notification.type = NVIM_NOTIF_CUSTOM_JUMP;
                         msg->notification.custom_jump.forward = forward;
                     });
                 } else if (streq(cmd, "halfjump")) {
-                    ASSERT(num_args == 1);
+                    cp_assert(num_args == 1);
                     auto forward = (bool)reader.read_int();
                     add_event([&](auto msg) {
                         msg->notification.type = NVIM_NOTIF_CUSTOM_HALFJUMP;
                         msg->notification.custom_halfjump.forward = forward;
                     });
                 } else if (streq(cmd, "scrollview")) {
-                    ASSERT(num_args == 1);
+                    cp_assert(num_args == 1);
                     auto forward = (bool)reader.read_int();
                     add_event([&](auto msg) {
                         msg->notification.type = NVIM_NOTIF_CUSTOM_SCROLLVIEW;
                         msg->notification.custom_scrollview.forward = forward;
                     });
                 } else if (streq(cmd, "pagejump")) {
-                    ASSERT(num_args == 1);
+                    cp_assert(num_args == 1);
                     auto forward = (bool)reader.read_int();
                     add_event([&](auto msg) {
                         msg->notification.type = NVIM_NOTIF_CUSTOM_PAGEJUMP;
                         msg->notification.custom_pagejump.forward = forward;
                     });
                 } else if (streq(cmd, "move_cursor")) {
-                    ASSERT(num_args == 1);
-                    auto screen_pos = (Screen_Pos)reader.read_int(); CHECKOK();
+                    cp_assert(num_args == 1);
+                    auto screen_pos = (Screen_Pos)reader.read_int();
                     add_event([&](auto msg) {
                         msg->notification.type = NVIM_NOTIF_CUSTOM_MOVE_CURSOR;
                         msg->notification.custom_move_cursor.screen_pos = screen_pos;
@@ -966,8 +980,8 @@ void Nvim::run_event_loop() {
             } else if (streq(method, "nvim_buf_changedtick_event")) {
                 SCOPED_FRAME();
 
-                auto buf = reader.read_ext(); CHECKOK();
-                auto changedtick = reader.read_int(); CHECKOK();
+                auto buf = reader.read_ext();
+                auto changedtick = reader.read_int();
 
                 add_event([&](auto msg) {
                     msg->notification.type = NVIM_NOTIF_BUF_CHANGEDTICK;
@@ -977,11 +991,11 @@ void Nvim::run_event_loop() {
             } else if (streq(method, "nvim_buf_lines_event")) {
                 SCOPED_FRAME();
 
-                auto buf = reader.read_ext(); CHECKOK();
-                auto changedtick = reader.read_int(); CHECKOK();
-                auto firstline = reader.read_int(); CHECKOK();
-                auto lastline = reader.read_int(); CHECKOK();
-                auto num_lines = reader.read_array(); CHECKOK();
+                auto buf = reader.read_ext();
+                auto changedtick = reader.read_int();
+                auto firstline = reader.read_int();
+                auto lastline = reader.read_int();
+                auto num_lines = reader.read_array();
 
                 add_event([&](auto msg) {
                     msg->notification.type = NVIM_NOTIF_BUF_LINES;
@@ -994,7 +1008,7 @@ void Nvim::run_event_loop() {
                     auto line_lengths = alloc_list<s32>();
 
                     for (u32 i = 0; i < num_lines; i++) {
-                        auto line = reader.read_string(); CHECKOK();
+                        auto line = reader.read_string();
                         {
                             auto uline = cstr_to_ustr(line);
                             lines->append(uline->items);
@@ -1008,38 +1022,38 @@ void Nvim::run_event_loop() {
 
                 // skip {more} param. we don't care, we'll just handle the next
                 // notif when it comes
-                reader.skip_object(); CHECKOK();
+                reader.skip_object();
             } else if (streq(method, "redraw")) {
                 for (u32 i = 0; i < params_length; i++) {
-                    auto argsets_len = reader.read_array(); CHECKOK();
-                    auto op = reader.read_string(); CHECKOK();
-
-                    nvim_print("redraw op: %s", op);
+                    auto argsets_len = reader.read_array();
+                    auto op = reader.read_string();
+                    nvim_print("redraw op: %s, argsets_len = %lu", op, argsets_len);
 
                     for (u32 j = 1; j < argsets_len; j++) {
-                        auto args_len = reader.read_array(); CHECKOK();
+                        auto args_len = reader.read_array();
+                        nvim_print("j = %u, len = %zu", j, args_len);
 
                         if (streq(op, "cmdline_show")) {
                             SCOPED_FRAME();
-                            ASSERT(args_len == 6);
+                            cp_assert(args_len == 6);
 
                             Text_Renderer r;
                             r.init();
-                            auto num_content_parts = reader.read_array(); CHECKOK();
+                            auto num_content_parts = reader.read_array();
                             for (u32 i = 0; i < num_content_parts; i++) {
-                                auto partsize = reader.read_array(); CHECKOK();
-                                ASSERT(partsize == 2);
-                                reader.skip_object(); CHECKOK(); // skip attrs, we don't care
-                                auto s = reader.read_string(); CHECKOK();
+                                auto partsize = reader.read_array();
+                                cp_assert(partsize == 2);
+                                reader.skip_object(); // skip attrs, we don't care
+                                auto s = reader.read_string();
                                 r.writestr(s);
                             }
                             auto content = r.finish();
 
-                            /* auto pos = */ reader.read_int(); CHECKOK();
-                            auto firstc = reader.read_string(); CHECKOK();
-                            auto prompt = reader.read_string(); CHECKOK();
-                            /* auto indent = */ reader.read_int(); CHECKOK();
-                            /* auto level = */ reader.read_int(); CHECKOK();
+                            /* auto pos = */ reader.read_int();
+                            auto firstc = reader.read_string();
+                            auto prompt = reader.read_string();
+                            /* auto indent = */ reader.read_int();
+                            /* auto level = */ reader.read_int();
 
                             add_event([&](auto m) {
                                 m->notification.type = NVIM_NOTIF_CMDLINE_SHOW;
@@ -1049,10 +1063,10 @@ void Nvim::run_event_loop() {
                             });
                         } else if (streq(op, "mode_change")) {
                             SCOPED_FRAME();
-                            ASSERT(args_len == 2);
+                            cp_assert(args_len == 2);
 
-                            auto mode_name = reader.read_string(); CHECKOK();
-                            auto mode_index = reader.read_int(); CHECKOK();
+                            auto mode_name = reader.read_string();
+                            auto mode_index = reader.read_int();
 
                             add_event([&](auto m) {
                                 m->notification.type = NVIM_NOTIF_MODE_CHANGE;
@@ -1061,14 +1075,14 @@ void Nvim::run_event_loop() {
                             });
                         } else if (streq(op, "win_viewport")) {
                             SCOPED_FRAME();
-                            ASSERT(args_len == 6);
+                            cp_assert(args_len == 6);
 
-                            auto grid = reader.read_int(); CHECKOK();
-                            auto window = reader.read_ext(); CHECKOK();
-                            auto topline = reader.read_int(); CHECKOK();
-                            auto botline = reader.read_int(); CHECKOK();
-                            auto curline = reader.read_int(); CHECKOK();
-                            auto curcol = reader.read_int(); CHECKOK();
+                            auto grid = reader.read_int();
+                            auto window = reader.read_ext();
+                            auto topline = reader.read_int();
+                            auto botline = reader.read_int();
+                            auto curline = reader.read_int();
+                            auto curcol = reader.read_int();
 
                             add_event([&](auto m) {
                                 m->notification.type = NVIM_NOTIF_WIN_VIEWPORT;
@@ -1080,13 +1094,13 @@ void Nvim::run_event_loop() {
                                 m->notification.win_viewport.curcol = curcol;
                             });
                         } else if (streq(op, "win_pos")) {
-                            ASSERT(args_len == 6);
-                            auto grid = reader.read_int(); CHECKOK();
-                            auto window = reader.read_ext(); CHECKOK();
-                            /* auto start_row = */ reader.read_int(); CHECKOK();
-                            /* auto start_col = */ reader.read_int(); CHECKOK();
-                            /* auto width = */ reader.read_int(); CHECKOK();
-                            /* auto height = */ reader.read_int(); CHECKOK();
+                            cp_assert(args_len == 6);
+                            auto grid = reader.read_int();
+                            auto window = reader.read_ext();
+                            /* auto start_row = */ reader.read_int();
+                            /* auto start_col = */ reader.read_int();
+                            /* auto width = */ reader.read_int();
+                            /* auto height = */ reader.read_int();
 
                             add_event([&](auto m) {
                                 m->notification.type = NVIM_NOTIF_WIN_POS;
@@ -1094,9 +1108,9 @@ void Nvim::run_event_loop() {
                                 m->notification.win_pos.window = *window;
                             });
                         } else if (streq(op, "win_external_pos")) {
-                            ASSERT(args_len == 2);
-                            auto grid = reader.read_int(); CHECKOK();
-                            auto window = reader.read_ext(); CHECKOK();
+                            cp_assert(args_len == 2);
+                            auto grid = reader.read_int();
+                            auto window = reader.read_ext();
 
                             add_event([&](auto m) {
                                 m->notification.type = NVIM_NOTIF_WIN_POS;
@@ -1104,19 +1118,19 @@ void Nvim::run_event_loop() {
                                 m->notification.win_pos.window = *window;
                             });
                         } else if (streq(op, "grid_clear")) {
-                            ASSERT(args_len == 1);
-                            auto grid = reader.read_int(); CHECKOK();
+                            cp_assert(args_len == 1);
+                            auto grid = reader.read_int();
                             add_event([&](auto m) {
                                 m->notification.type = NVIM_NOTIF_GRID_CLEAR;
                                 m->notification.grid_clear.grid = grid;
                             });
                         } else if (streq(op, "grid_line")) {
-                            ASSERT(args_len == 4);
+                            cp_assert(args_len == 4);
 
-                            auto grid = reader.read_int(); CHECKOK();
-                            auto row = reader.read_int(); CHECKOK();
-                            auto col = reader.read_int(); CHECKOK();
-                            auto num_cells = reader.read_array(); CHECKOK();
+                            auto grid = reader.read_int();
+                            auto row = reader.read_int();
+                            auto col = reader.read_int();
+                            auto num_cells = reader.read_array();
 
                             add_event([&](auto m) {
                                 m->notification.type = NVIM_NOTIF_GRID_LINE;
@@ -1127,17 +1141,17 @@ void Nvim::run_event_loop() {
                                 auto cells = alloc_list<Grid_Cell>();
                                 for (u32 k = 0; k < num_cells; k++) {
                                     auto cell_len = reader.read_array();
-                                    ASSERT(1 <= cell_len && cell_len <= 3);
+                                    cp_assert(1 <= cell_len && cell_len <= 3);
 
-                                    auto text = reader.read_string(); CHECKOK();
+                                    auto text = reader.read_string();
 
                                     // read highlight id & reps
                                     i32 hl = -1, reps = 0;
                                     if (cell_len == 2) {
-                                        hl = reader.read_int(); CHECKOK();
+                                        hl = reader.read_int();
                                     } else if (cell_len == 3) {
-                                        hl = reader.read_int(); CHECKOK();
-                                        reps = reader.read_int(); CHECKOK();
+                                        hl = reader.read_int();
+                                        reps = reader.read_int();
                                     }
 
                                     auto cell = cells->append();
@@ -1149,14 +1163,14 @@ void Nvim::run_event_loop() {
                                 m->notification.grid_line.cells = cells;
                             });
                         } else if (streq(op, "grid_scroll")) {
-                            ASSERT(args_len == 7);
-                            auto grid = reader.read_int(); CHECKOK();
-                            auto top = reader.read_int(); CHECKOK();
-                            auto bot = reader.read_int(); CHECKOK();
-                            auto left = reader.read_int(); CHECKOK();
-                            auto right = reader.read_int(); CHECKOK();
-                            auto rows = reader.read_int(); CHECKOK();
-                            auto cols = reader.read_int(); CHECKOK();
+                            cp_assert(args_len == 7);
+                            auto grid = reader.read_int();
+                            auto top = reader.read_int();
+                            auto bot = reader.read_int();
+                            auto left = reader.read_int();
+                            auto right = reader.read_int();
+                            auto rows = reader.read_int();
+                            auto cols = reader.read_int();
 
                             add_event([&](auto m) {
                                 m->notification.type = NVIM_NOTIF_GRID_SCROLL;
@@ -1169,30 +1183,30 @@ void Nvim::run_event_loop() {
                                 m->notification.grid_scroll.cols = cols;
                             });
                         } else if (streq(op, "hl_attr_define")) {
-                            ASSERT(args_len == 4);
-                            auto id = reader.read_int(); CHECKOK();
-                            /* rgb_attr = */ reader.skip_object(); CHECKOK();
-                            /* cterm_attr = */ reader.skip_object(); CHECKOK();
-                            auto info_maps = reader.read_array(); CHECKOK();
+                            cp_assert(args_len == 4);
+                            auto id = reader.read_int();
+                            /* rgb_attr = */ reader.skip_object();
+                            /* cterm_attr = */ reader.skip_object();
+                            auto info_maps = reader.read_array();
                             ccstr hi_name = NULL;
 
                             if (info_maps > 0) {
                                 for (u32 i = 0; i < info_maps - 1; i++) {
-                                    reader.skip_object(); CHECKOK();
+                                    reader.skip_object();
                                 }
 
-                                auto info_keys = reader.read_map(); CHECKOK();
+                                auto info_keys = reader.read_map();
                                 for (u32 i = 0; i < info_keys; i++) {
-                                    auto key = reader.read_string(); CHECKOK();
+                                    auto key = reader.read_string();
                                     if (hi_name) {
-                                        reader.skip_object(); CHECKOK();
+                                        reader.skip_object();
                                         continue;
                                     }
 
                                     if (streq(key, "hi_name")) {
-                                        hi_name = reader.read_string(); CHECKOK();
+                                        hi_name = reader.read_string();
                                     } else {
-                                        reader.skip_object(); CHECKOK();
+                                        reader.skip_object();
                                     }
                                 }
                             }
@@ -1205,32 +1219,27 @@ void Nvim::run_event_loop() {
                                 });
                             }
                         } else {
-                            for (u32 k = 0; k < args_len; k++) {
+                            for (u32 k = 0; k < args_len; k++)
                                 reader.skip_object();
-                                CHECKOK();
-                            }
                         }
                     }
                 }
             } else {
                 just_skip_params();
-                CHECKOK();
             }
             break;
         }
         case MPRPC_REQUEST: {
-            auto msgid = reader.read_int(); CHECKOK();
-            auto method = reader.read_string(); CHECKOK();
-            auto params_length = reader.read_array(); CHECKOK();
+            auto msgid = reader.read_int();
+            auto method = reader.read_string();
+            auto params_length = reader.read_array();
 
             // nvim_print("got request with method %s", method);
             // check `method` against names of rpcrequests
 
             // in the default case we just skip params
-            for (u32 i = 0; i < params_length; i++) {
+            for (u32 i = 0; i < params_length; i++)
                 reader.skip_object();
-                CHECKOK();
-            }
 
             start_response_message(msgid);
             writer.write_nil(); // no error
@@ -1239,8 +1248,8 @@ void Nvim::run_event_loop() {
             break;
         }
         case MPRPC_RESPONSE: {
-            auto msgid = reader.read_int(); CHECKOK();
-            nvim_print("[raw] got response with msgid %d", msgid);
+            auto msgid = reader.read_int();
+            nvim_print("[raw] got response with msgid %lld", msgid);
 
             u32 req_editor_id;
             Nvim_Request_Type req_type;
@@ -1249,9 +1258,9 @@ void Nvim::run_event_loop() {
                 SCOPED_LOCK(&requests_lock);
                 auto req = find_request_by_msgid(msgid);
                 if (!req) {
-                    nvim_print("couldn't find request for msgid %d", msgid);
-                    reader.skip_object(); CHECKOK(); // error
-                    reader.skip_object(); CHECKOK(); // result
+                    nvim_print("couldn't find request for msgid %lld", msgid);
+                    reader.skip_object(); // error
+                    reader.skip_object(); // result
                     break;
                 }
 
@@ -1261,13 +1270,13 @@ void Nvim::run_event_loop() {
 
             if (reader.peek_type() != MP_NIL) {
                 if (reader.peek_type() == MP_STRING) {
-                    auto error_str = reader.read_string(); CHECKOK();
+                    auto error_str = reader.read_string();
                     SCOPED_FRAME();
-                    nvim_print("error in response for msgid %d, reqtype = %d: %d", msgid, req_type, error_str);
+                    nvim_print("error in response for msgid %lld, reqtype = %u: %s", msgid, req_type, error_str);
                 } else {
                     auto type = reader.peek_type();
-                    reader.skip_object(); CHECKOK();
-                    nvim_print("error in response for msgid %d, reqtype = %d: (error was not a string, instead was %s)", msgid, req_type, mp_type_str(type));
+                    reader.skip_object();
+                    nvim_print("error in response for msgid %lld, reqtype = %u: (error was not a string, instead was %s)", msgid, req_type, mp_type_str(type));
                 }
                 reader.skip_object();
                 delete_request_by_msgid(msgid);
@@ -1275,7 +1284,7 @@ void Nvim::run_event_loop() {
             }
 
             // read the error
-            reader.read_nil(); CHECKOK();
+            reader.read_nil();
 
             // grab associated editor, break if we can't find it
             Editor* editor = NULL;
@@ -1297,32 +1306,32 @@ void Nvim::run_event_loop() {
             };
 
             auto read_atomic_call_response = [&](fn<void()> f) {
-                auto arrlen = reader.read_array(); CHECKOK();
-                ASSERT(arrlen == 2);
+                auto arrlen = reader.read_array();
+                cp_assert(arrlen == 2);
 
                 f(); // read response
 
                 if (reader.peek_type() == MP_NIL) {
-                    reader.read_nil(); CHECKOK();
+                    reader.read_nil();
                 } else {
-                    auto arrlen = reader.read_array(); CHECKOK();
-                    ASSERT(arrlen == 3);
+                    auto arrlen = reader.read_array();
+                    cp_assert(arrlen == 3);
 
-                    auto index = reader.read_int(); CHECKOK();
-                    reader.skip_object(); CHECKOK();
-                    auto err = reader.read_string(); CHECKOK();
+                    auto index = reader.read_int();
+                    reader.skip_object();
+                    auto err = reader.read_string();
 
-                    nvim_print("nvim_call_atomic call #%d had error: %s", index, err);
+                    nvim_print("nvim_call_atomic call #%lld had error: %s", index, err);
                 }
             };
 
             switch (req_type) {
             case NVIM_REQ_GET_API_INFO: {
-                auto len = reader.read_array(); CHECKOK();
-                ASSERT(len == 2);
+                auto len = reader.read_array();
+                cp_assert(len == 2);
 
-                auto channel_id = reader.read_int(); CHECKOK();
-                reader.skip_object(); CHECKOK();
+                auto channel_id = reader.read_int();
+                reader.skip_object();
 
                 add_response_event([&](auto m) {
                     m->response.channel_id = channel_id;
@@ -1333,11 +1342,11 @@ void Nvim::run_event_loop() {
             case NVIM_REQ_CREATE_BUF:
             case NVIM_REQ_DOTREPEAT_CREATE_BUF: {
                 if (reader.peek_type() != MP_EXT) {
-                    reader.skip_object(); CHECKOK(); // check if this path ever gets hit
+                    reader.skip_object(); // check if this path ever gets hit
                     break;
                 }
 
-                auto buf = reader.read_ext(); CHECKOK();
+                auto buf = reader.read_ext();
                 add_response_event([&](auto m) {
                     m->response.buf = *buf;
                 });
@@ -1347,7 +1356,7 @@ void Nvim::run_event_loop() {
             case NVIM_REQ_POST_INSERT_DOTREPEAT_REPLAY:
             case NVIM_REQ_BUF_ATTACH:
                 read_atomic_call_response([&]() {
-                    reader.skip_object(); CHECKOK();
+                    reader.skip_object();
                     add_response_event([&](auto) {});
                 });
                 break;
@@ -1355,11 +1364,11 @@ void Nvim::run_event_loop() {
             case NVIM_REQ_CREATE_WIN:
             case NVIM_REQ_DOTREPEAT_CREATE_WIN: {
                 if (reader.peek_type() != MP_EXT) {
-                    reader.skip_object(); CHECKOK(); // check if this path ever gets hit
+                    reader.skip_object(); // check if this path ever gets hit
                     break;
                 }
 
-                auto win = reader.read_ext(); CHECKOK();
+                auto win = reader.read_ext();
                 add_response_event([&](auto m) {
                     m->response.win = *win;
                 });
@@ -1375,9 +1384,6 @@ void Nvim::run_event_loop() {
         }
         }
     }
-
-#undef CHECKOK
-#undef ASSERT
 }
 
 // caller is expected to write `params_length` params
@@ -1408,25 +1414,33 @@ void Nvim::init() {
     ptr0(this);
 
     mem.init("nvim::mem");
+    line_updates_mem.init("nvim::line_updates_mem");
     loop_mem.init("nvim::loop_mem");
     started_messages_mem.init();
 
     request_id = 0;
 
-    SCOPED_MEM(&mem);
+    {
+        SCOPED_MEM(&line_updates_mem);
+        line_updates.init();
+    }
 
-    requests_lock.init();
-    requests.init();
-    requests_mem.init("nvim::requests_mem");
+    {
+        SCOPED_MEM(&mem);
 
-    grid_to_window.init();
-    chars_after_exiting_insert_mode.init();
+        requests_lock.init();
+        requests.init();
+        requests_mem.init("nvim::requests_mem");
 
-    cmdline.content.init();
-    cmdline.firstc.init();
-    cmdline.prompt.init();
+        grid_to_window.init();
+        chars_after_exiting_insert_mode.init();
 
-    hl_defs.init();
+        cmdline.content.init();
+        cmdline.firstc.init();
+        cmdline.prompt.init();
+
+        hl_defs.init();
+    }
 }
 
 void Nvim::start_running() {
@@ -1475,38 +1489,26 @@ void Nvim::cleanup() {
 ccstr Mp_Reader::read_string() {
     auto read_length = [&]() -> i32 {
         auto b = read1();
-        if (ok) {
-            if (b >> 5 == 0b101) return b & 0b00011111;
-            if (b == 0xd9) return read1();
-            if (b == 0xda) return read2();
-            if (b == 0xdb) return read4();
-            ok = false;
-        }
-        return -1;
+        if (b >> 5 == 0b101) return b & 0b00011111;
+        if (b == 0xd9) return read1();
+        if (b == 0xda) return read2();
+        if (b == 0xdb) return read4();
+        cp_panic("invalid length");
     };
 
     auto len = read_length();
-    if (!ok) return NULL;
 
     Frame frame;
     Text_Renderer r;
     r.init();
 
-    for (u32 i = 0; i < len; i++) {
-        char ch = read1();
-        if (!ok) {
-            frame.restore();
-            return NULL;
-        }
-        r.writechar(ch);
-    }
-    ok = true;
+    for (u32 i = 0; i < len; i++)
+        r.writechar(read1());
     return r.finish();
 }
 
 Ext_Info* Mp_Reader::read_ext() {
     u8 b = read1();
-    if (!ok) return NULL;
 
     Nvim_Ext_Type type;
     s32 len = 0;
@@ -1517,7 +1519,7 @@ Ext_Info* Mp_Reader::read_ext() {
     case 0xd6:
     case 0xd7:
     case 0xd8:
-        type = (Nvim_Ext_Type)read1(); if (!ok) return NULL;
+        type = (Nvim_Ext_Type)read1();
         switch (b) {
         case 0xd4: len = 1; break;
         case 0xd5: len = 2; break;
@@ -1527,36 +1529,30 @@ Ext_Info* Mp_Reader::read_ext() {
         }
         break;
     case 0xc7:
-        len = (s32)(u8)read1(); if (!ok) return NULL;
-        type = (Nvim_Ext_Type)read1(); if (!ok) return NULL;
+        len = (s32)(u8)read1();
+        type = (Nvim_Ext_Type)read1();
         break;
     case 0xc8:
-        len = (s32)(u16)read2(); if (!ok) return NULL;
-        type = (Nvim_Ext_Type)read1(); if (!ok) return NULL;
+        len = (s32)(u16)read2();
+        type = (Nvim_Ext_Type)read1();
         break;
     case 0xc9:
-        len = (s32)(u32)read4(); if (!ok) return NULL;
-        type = (Nvim_Ext_Type)read1(); if (!ok) return NULL;
+        len = (s32)(u32)read4();
+        type = (Nvim_Ext_Type)read1();
         break;
     default:
-        ok = false;
-        return NULL;
+        cp_panic("invalid ext object");
     }
 
     auto start_offset = offset;
     auto object_id = (u32)read_int();
-    if (!ok) return NULL;
 
-    while (offset < start_offset + len) {
+    while (offset < start_offset + len)
         read1();
-        if (!ok) return NULL;
-    }
 
     auto ret = alloc_object(Ext_Info);
     ret->type = type;
     ret->object_id = object_id;
-
-    ok = true;
     return ret;
 }
 
@@ -1565,6 +1561,7 @@ void Mp_Reader::skip_object() {
 
     u32 arrlen; // for array and map
     auto obj_type = peek_type();
+    nvim_print("skipping %s", mp_type_str(obj_type));
     switch (obj_type) {
     case MP_NIL: read_nil(); return;
     case MP_BOOL: read_bool(); return;
@@ -1575,12 +1572,9 @@ void Mp_Reader::skip_object() {
     case MP_ARRAY:
     case MP_MAP:
         arrlen = obj_type == MP_ARRAY ? read_array() : (read_map() * 2);
-        if (ok) {
-            for (u32 i = 0; i < arrlen; i++) {
-                skip_object();
-                if (!ok) break;
-            }
-        }
+        for (u32 i = 0; i < arrlen; i++)
+            skip_object();
         return;
     }
+    cp_panic("invalid object type");
 }
