@@ -88,8 +88,7 @@ struct List {
     }
 
     T* append(T* t) {
-        if (!ensure_cap(len + 1))
-            return NULL;
+        if (!ensure_cap(len + 1)) return NULL;
 
         auto ret = items + len;
         memcpy(ret, t, sizeof(T));
@@ -100,8 +99,7 @@ struct List {
     bool append(T t) { return append(&t); }
 
     T* append() {
-        if (!ensure_cap(len + 1))
-            return NULL;
+        if (!ensure_cap(len + 1)) return NULL;
         auto ret = items + (len++);
         ptr0(ret);
         return ret;
@@ -125,8 +123,7 @@ struct List {
     }
 
     bool ensure_cap(s32 new_cap) {
-        if (cap >= new_cap)
-            return true;
+        if (cap >= new_cap) return true;
 
         switch (mode) {
         case LIST_MALLOC: {
@@ -134,8 +131,7 @@ struct List {
             cap = 1 << (int)ceil(log2(new_cap));
 
             items = (T*)realloc(items, sizeof(T) * cap);
-            if (!items)
-                return false;
+            if (!items) return false;
 
             global_mem_allocated -= sizeof(T) * old_cap;
             global_mem_allocated += sizeof(T) * cap;
@@ -147,8 +143,8 @@ struct List {
         case LIST_POOL: {
             cap = 1 << (int)ceil(log2(new_cap));
             auto new_items = (T*)alloc_from_pool_stub(pool, sizeof(T) * cap);
-            if (!new_items)
-                return false;
+            if (!new_items) return false;
+
             mem0(new_items, sizeof(T) * cap);
             memcpy(new_items, items, sizeof(T) * len);
             items = new_items;
