@@ -6265,7 +6265,6 @@ void UI::draw_everything() {
                         }
                     } else {
                         label = get_path_relative_to(editor.filepath, world.current_path);
-                        prefix = "(root)/";
                     }
                 }
             }
