@@ -434,6 +434,8 @@ void Buffer::write(File *f) {
 void Buffer::internal_delete_lines(u32 y1, u32 y2) {
     cp_assert(!editable_from_main_thread_only || is_main_thread);
 
+    // holy shit, is this the end of a two year long bug????????
+    if (y1 > lines.len) y1 = lines.len;
     if (y2 > lines.len) y2 = lines.len;
 
     for (u32 y = y1; y < y2; y++)
