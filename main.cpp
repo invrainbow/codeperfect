@@ -390,6 +390,8 @@ void handle_window_event(Window_Event *it) {
 
         Timer t; t.init("key callback", &world.trace_next_frame); defer { t.log("done"); };
 
+        update_keymod_states();
+
         ImGuiIO& io = ImGui::GetIO();
         ImGuiKey imgui_key = cp_key_to_imgui_key((Key)key);
         io.AddKeyEvent(imgui_key, press);
