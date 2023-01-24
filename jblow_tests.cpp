@@ -63,14 +63,16 @@ bool is_editor_selected(ccstr relative_filepath) {
 struct Timeout {
     int line;
     u64 start;
+    int timeout;
 
-    Timeout(int _line) {
+    Timeout(int _timeout, int _line) {
+        timeout = _timeout;
         line = _line;
         start = current_time_milli();
     }
 
     void operator+(fn<bool()> f) {
-        while (current_time_milli() - start <= 3000) {
+        while (current_time_milli() - start <= timeout) {
             if (f()) return;
             sleep_milliseconds(10);
         }
@@ -78,11 +80,13 @@ struct Timeout {
     }
 };
 
-#define WAIT_FOR Timeout(__LINE__) + [&]()
+#define WAIT_FOR(t) Timeout(t, __LINE__) + [&]()
+#define WAIT WAIT_FOR(3000)
+#define WAIT_FOREVER WAIT_FOR(999999999)
 
 Editor* wait_for_editor(ccstr relative_filepath) {
     Editor* ret = NULL;
-    WAIT_FOR {
+    WAIT {
         auto ed = get_current_editor();
         if (!ed) return false;
         if (world.use_nvim && !ed->is_nvim_ready()) return false;
@@ -112,13 +116,14 @@ Editor* Jblow_Tests::open_editor(ccstr relative_filepath) {
 void Jblow_Tests::run_normal() {
     // wait for editor
     auto editor = open_editor("main.go");
-    print("%s", editor->filepath);
 
     // spam a bunch of keys lol
     ccstr chars = (
         "KKKKKKKKKKKKKK"                // does nothing in normal mode
         "aioaioaioaio"                  // enter insert mode
         "\x01\x01\x01\x01\x01\x01\x01"  // escape
+        "\x02\x02\x02\x02\x02\x02\x02"  // backspace
+        "\n\n\n\n\n\n"                  // new line
     );
     int chars_len = strlen(chars);
 
@@ -135,16 +140,41 @@ void Jblow_Tests::run_normal() {
         auto it = chars[mt_lrand() % chars_len];
         if (it == 0x01)
             press_key(CP_KEY_ESCAPE);
+        else if (it == 0x02)
+            press_key(CP_KEY_BACKSPACE);
+        else if (it == '\n')
+            press_key(CP_KEY_ENTER);
         else
             type_char(it);
 
-        if (i % 100 == 0) catchup();
+        if (i % 10 == 0) sleep_milliseconds(25);
     }
-
-    sleep_milliseconds(999999999);
 }
 
-void Jblow_Tests::run_workspace() {}
+void Jblow_Tests::run_workspace() {
+    WAIT_FOREVER {
+        if (world.indexer.status == IND_READY)
+            if (world.indexer.index.packages->len)
+                return true;
+        return false;
+    };
+
+    auto editor = open_editor("packer/provisioner/file/version/version.go");
+    type_string("jjjjjjj$");
+
+    WAIT {
+        auto &cur = editor->cur;
+        return cur.x == 48 && cur.y == 7;
+    };
+
+    type_string("gd");
+
+    editor = wait_for_editor("packer-plugin-sdk/version/version.go");
+    WAIT {
+        auto cur = editor->cur;
+        return cur.x == 5 && cur.y == 50;
+    };
+}
 
 void Jblow_Tests::init(ccstr _test_name) {
     ptr0(this);
@@ -173,9 +203,11 @@ void Jblow_Tests::init(ccstr _test_name) {
 }
 
 void Jblow_Tests::init_options() {
-    // TODO
-
     if (streq(test_name, "normal")) {
+        options.enable_vim_mode = true;
+    }
+
+    if (streq(test_name, "workspace")) {
         options.enable_vim_mode = true;
     }
 }

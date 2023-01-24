@@ -20,3 +20,9 @@
 [submodule "tree-sitter-go-mod"]
 	path = tree-sitter-go-mod
 	url = git@github.com:codeperfect95/tree-sitter-go-mod.git
+[submodule "jblow_test_suite/workspace/packer"]
+	path = jblow_test_suite/workspace/packer
+	url = git@github.com:hashicorp/packer.git
+[submodule "jblow_test_suite/workspace/packer-plugin-sdk"]
+	path = jblow_test_suite/workspace/packer-plugin-sdk
+	url = git@github.com:hashicorp/packer-plugin-sdk.git

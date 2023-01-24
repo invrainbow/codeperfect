@@ -1,9 +1,15 @@
 #!/bin/bash
 
+set -e
+
 for x in $(seq 100); do
     echo "normal (seed = $x)"
-    JBLOW_TESTS_NORMAL_SEED="$x" build/bin/ide --jblow-tests normal
+    if [[ $HEADLESS = "1" ]]; then
+        JBLOW_TESTS_NORMAL_SEED="$x" build/bin/ide --jblow-tests normal --headless
+    else
+        JBLOW_TESTS_NORMAL_SEED="$x" build/bin/ide --jblow-tests normal
+    fi
 done
 
 echo "workspace"
-# build/bin/ide --jblow-tests workspace
+build/bin/ide --jblow-tests workspace

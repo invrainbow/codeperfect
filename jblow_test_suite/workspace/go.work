@@ -1,6 +1,6 @@
 go 1.19
 
 use (
-	./mod1
-	./mod2
+	./packer
+	./packer-plugin-sdk
 )
