@@ -353,6 +353,24 @@ struct Nvim_Message_Buf_Lines {
     Nvim_Message_Buf_Lines *copy();
 };
 
+enum Nvim_Insert_Delayed_Action_Type {
+    NIDA_LINE_UPDATE,
+    NIDA_CURSOR_MOVE,
+};
+
+struct Nvim_Insert_Delayed_Action {
+    Nvim_Insert_Delayed_Action_Type type;
+    union {
+        Nvim_Message_Buf_Lines *update_lines;
+        struct {
+            cur2 pos;
+            int editor_id;
+        } cursor_move;
+    };
+
+    Nvim_Insert_Delayed_Action *copy();
+};
+
 struct Nvim_Message {
     Mprpc_Message_Type type;
     union {
@@ -498,7 +516,7 @@ struct Nvim {
     Pool loop_mem;
     // Pool messages_mem;
     Pool requests_mem;
-    Pool line_updates_mem;
+    Pool delayed_actions_mem;
 
     // orchestration
     Process nvim_proc;
@@ -521,7 +539,7 @@ struct Nvim {
     u32 dotrepeat_win_id;
     u32 current_win_id;
     u32 editor_that_triggered_escape;
-    List<Nvim_Message_Buf_Lines*> line_updates;
+    List<Nvim_Insert_Delayed_Action*> delayed_actions;
 
     Pool started_messages_mem;
 

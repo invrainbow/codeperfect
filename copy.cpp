@@ -467,3 +467,13 @@ Nvim_Message_Buf_Lines *Nvim_Message_Buf_Lines::copy() {
 
     return ret;
 }
+
+Nvim_Insert_Delayed_Action *Nvim_Insert_Delayed_Action::copy() {
+    auto ret = clone(this);
+    switch (type) {
+    case NIDA_LINE_UPDATE:
+        ret->update_lines = copy_object(update_lines);
+        break;
+    }
+    return ret;
+}

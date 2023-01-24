@@ -631,8 +631,14 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
 
             // don't make any changes in insert mode, save the update to do later
             if (mode == VI_INSERT) {
-                SCOPED_MEM(&line_updates_mem);
-                line_updates.append(args.copy());
+                Nvim_Insert_Delayed_Action nida; ptr0(&nida);
+                nida.type = NIDA_LINE_UPDATE;
+                nida.update_lines = args.copy();
+
+                {
+                    SCOPED_MEM(&delayed_actions_mem);
+                    delayed_actions.append(nida.copy());
+                }
                 break;
             }
 
@@ -685,14 +691,25 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
             else                                              mode = VI_UNKNOWN;
 
             // if we just left insert mode
-            if (old_mode == VI_INSERT && mode != VI_INSERT && line_updates.len) {
-                For (&line_updates)
-                    apply_line_update(it);
+            if (old_mode == VI_INSERT && mode != VI_INSERT && delayed_actions.len) {
+                For (&delayed_actions) {
+                    switch (it->type) {
+                    case NIDA_CURSOR_MOVE: {
+                        auto editor = find_editor_by_id(it->cursor_move.editor_id);
+                        if (editor)
+                            editor->raw_move_cursor(it->cursor_move.pos);
+                        break;
+                    }
+                    case NIDA_LINE_UPDATE:
+                        apply_line_update(it->update_lines);
+                        break;
+                    }
+                }
 
-                line_updates_mem.reset();
+                delayed_actions_mem.reset();
                 {
-                    SCOPED_MEM(&line_updates_mem);
-                    line_updates.init();
+                    SCOPED_MEM(&delayed_actions_mem);
+                    delayed_actions.init();
                 }
             }
 
@@ -819,8 +836,18 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
             }
 
             if (editor->is_nvim_ready()) {
-                // if (mode != VI_INSERT || new_cur != editor->cur)
-                editor->raw_move_cursor(new_cur);
+                if (mode == VI_INSERT) {
+                    Nvim_Insert_Delayed_Action nida; ptr0(&nida);
+                    nida.type = NIDA_CURSOR_MOVE;
+                    nida.cursor_move.pos = new_cur;
+                    nida.cursor_move.editor_id = editor->id;
+                    {
+                        SCOPED_MEM(&delayed_actions_mem);
+                        delayed_actions.append(nida.copy());
+                    }
+                } else {
+                    editor->raw_move_cursor(new_cur);
+                }
             }
             break;
         }
@@ -1414,15 +1441,15 @@ void Nvim::init() {
     ptr0(this);
 
     mem.init("nvim::mem");
-    line_updates_mem.init("nvim::line_updates_mem");
+    delayed_actions_mem.init("nvim::delayed_actions_mem");
     loop_mem.init("nvim::loop_mem");
     started_messages_mem.init();
 
     request_id = 0;
 
     {
-        SCOPED_MEM(&line_updates_mem);
-        line_updates.init();
+        SCOPED_MEM(&delayed_actions_mem);
+        delayed_actions.init();
     }
 
     {
