@@ -1431,7 +1431,24 @@ bool Editor::trigger_escape(cur2 go_here_after) {
                     for (u32 i = 0; i < delete_len; i++)
                         r.writestr("<BS>");
 
-                    auto it = buf->iter(nvim_insert.start);
+                    auto start = nvim_insert.start;
+
+                    // Honestly, this is such a stupid bandaid, but I still
+                    // don't know why sometimes nvim_insert.start has a value
+                    // that's out of bounds.
+                    //
+                    // I mean, it must be because buf->lines get changed after
+                    // nvim_insert.start is set, but I don't know why that
+                    // happens.
+
+                    if (start.y >= buf->lines.len) {
+                        start.y = buf->lines.len-1;
+                        start.x = buf->lines[start.y].len;
+                    }
+                    if (start.x > buf->lines[start.y].len)
+                        start.x = buf->lines[start.y].len;
+
+                    auto it = buf->iter(start);
                     while (it.pos < cur) {
                         // wait, does this take utf-8?
                         auto ch = it.next();
