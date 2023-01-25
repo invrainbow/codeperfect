@@ -60,5 +60,6 @@ struct Jblow_Tests {
     void run_vimfuzzer();
     void run_workspace();
     Editor* open_editor(ccstr relative_filepath);
+    Editor* wait_for_editor(ccstr relative_filepath);
 };
 

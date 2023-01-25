@@ -359,17 +359,17 @@ void Nvim::handle_message_from_main_thread(Nvim_Message *event) {
         case NVIM_NOTIF_GRID_LINE: {
             auto &args = event->notification.grid_line;
 
+#if 0
             {
                 SCOPED_FRAME();
-
-                Text_Renderer r;
-                r.init();
+                Text_Renderer r; r.init();
                 Fori (args.cells) {
                     r.write("(%d x %d)", it.hl, it.reps);
                     if (i+1 < args.cells->len) r.writestr(", ");
                 }
                 nvim_print("grid line %d:%d: %s", args.row, args.col, r.finish());
             }
+#endif
 
             auto editor = find_editor_by_grid(args.grid);
             if (!editor) break;
@@ -1351,6 +1351,8 @@ void Nvim::run_event_loop() {
                     nvim_print("nvim_call_atomic call #%lld had error: %s", index, err);
                 }
             };
+
+            nvim_print("req_type = %s", nvim_request_type_str(req_type));
 
             switch (req_type) {
             case NVIM_REQ_GET_API_INFO: {

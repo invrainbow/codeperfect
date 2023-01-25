@@ -1117,6 +1117,8 @@ void handle_window_event(Window_Event *it) {
                         if (!editor->ask_user_about_unsaved_changes())
                             break;
 
+                    if (world.use_nvim) send_nvim_keys("<Esc>");
+
                     editor->cleanup();
 
                     pane->editors.remove(pane->current_editor);
@@ -1128,8 +1130,6 @@ void handle_window_event(Window_Event *it) {
                             new_idx = pane->editors.len - 1;
                         pane->focus_editor_by_index(new_idx);
                     }
-
-                    if (world.use_nvim) send_nvim_keys("<Esc>");
                 }
                 break;
             }

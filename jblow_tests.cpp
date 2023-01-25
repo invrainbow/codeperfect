@@ -47,7 +47,7 @@ void Jblow_Tests::catchup() {
 
 void Jblow_Tests::skip_frame() {
     auto start = world.frame_index;
-    while (world.frame_index < start + 5)
+    while (world.frame_index < start + 3)
         sleep_milliseconds(10);
 }
 
@@ -64,37 +64,40 @@ struct Timeout {
     int line;
     u64 start;
     int timeout;
+    Jblow_Tests *jt;
 
-    Timeout(int _timeout, int _line) {
+    Timeout(int _timeout, int _line, Jblow_Tests *_jt) {
         timeout = _timeout;
         line = _line;
+        jt = _jt;
         start = current_time_milli();
     }
 
     void operator+(fn<bool()> f) {
         while (current_time_milli() - start <= timeout) {
-            if (f()) return;
+            if (f()) {
+                jt->skip_frame();
+                return;
+            }
             sleep_milliseconds(10);
         }
         cp_panic(cp_sprintf("timeout at line %d", line));
     }
 };
 
-#define WAIT_FOR(t) Timeout(t, __LINE__) + [&]()
+#define WAIT_FOR(t) Timeout(t, __LINE__, this) + [&]()
 #define WAIT WAIT_FOR(3000)
 #define WAIT_FOREVER WAIT_FOR(999999999)
 
-Editor* wait_for_editor(ccstr relative_filepath) {
+Editor* Jblow_Tests::wait_for_editor(ccstr relative_filepath) {
     Editor* ret = NULL;
     WAIT {
-        auto ed = get_current_editor();
-        if (!ed) return false;
-        if (world.use_nvim && !ed->is_nvim_ready()) return false;
+        auto abspath = path_join(world.current_path, relative_filepath);
 
-        auto relpath = get_path_relative_to(ed->filepath, world.current_path);
-        if (!streq(relpath, relative_filepath)) return false;
+        ret = find_editor_by_filepath(abspath);
+        if (!ret) return false;
+        if (world.use_nvim && !ret->is_nvim_ready()) return false;
 
-        ret = ed;
         return true;
     };
     return ret;
@@ -103,7 +106,7 @@ Editor* wait_for_editor(ccstr relative_filepath) {
 Editor* Jblow_Tests::open_editor(ccstr relative_filepath) {
     // open file fuzzy search
     press_key(CP_KEY_P, CP_MOD_PRIMARY);
-    skip_frame();
+    WAIT { return world.wnd_goto_file.show; };
 
     // open main.go
     type_string(relative_filepath);
@@ -151,9 +154,17 @@ void Jblow_Tests::run_vimfuzzer() {
             if (i % 10 == 0) sleep_milliseconds(25);
         }
 
+        // ensure we leave insert mode with some time before & after
+        press_key(CP_KEY_ESCAPE);
+        sleep_milliseconds(200);
+
         // close editor
         press_key(CP_KEY_W, CP_MOD_PRIMARY);
         WAIT { return get_current_editor() == NULL; };
+        print("last input: %d", inputs->at(inputs->len-1));
+
+        // wait for imgui input queue to finish
+        WAIT_FOREVER { return !ImGui::GetCurrentContext()->InputEventsQueue.Size; };
     }
 }
 
@@ -235,6 +246,10 @@ void Jblow_Tests::run() {
     SCOPED_MEM(&pool);
 
     while (!ready) sleep_milliseconds(10);
+
+    if (world.use_nvim) {
+        WAIT_FOR(10000) { return world.nvim.is_ui_attached; };
+    }
 
     if (streq(test_name, "workspace")) run_workspace();
     if (streq(test_name, "vimfuzzer")) run_vimfuzzer();

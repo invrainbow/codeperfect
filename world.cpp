@@ -3675,11 +3675,16 @@ void send_nvim_keys(ccstr s) {
 void clear_key_states() {
     if (GImGui) {
         auto &io = ImGui::GetIO();
-        ptr0(&io.KeysDown);
-        io.KeyCtrl = false;
-        io.KeyShift = false;
-        io.KeyAlt = false;
-        io.KeySuper = false;
+        // TODO: under the new imgui AddKeyInput model, do we need to
+        // iterate thru all keys and just add events for all?
+        //
+        // previous:
+        // ptr0(&io.KeysDown);
+
+        io.AddKeyEvent(ImGuiMod_Ctrl, false);
+        io.AddKeyEvent(ImGuiMod_Shift, false);
+        io.AddKeyEvent(ImGuiMod_Alt,  false);
+        io.AddKeyEvent(ImGuiMod_Super, false);
     }
 
     mem0(world.ui.mouse_down, sizeof(world.ui.mouse_down));

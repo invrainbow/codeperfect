@@ -2219,7 +2219,7 @@ void UI::draw_everything() {
     world.ui.keyboard_captured_by_imgui = io.WantCaptureKeyboard;
 
     // prevent ctrl+tab from doing shit
-    GImGui->NavWindowingTarget = NULL;
+    im::GetCurrentContext()->NavWindowingTarget = NULL;
 
     // draw the main dockspace
     {

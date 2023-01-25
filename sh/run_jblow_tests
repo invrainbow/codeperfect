@@ -2,9 +2,14 @@
 
 set -e
 
+headless=0
+if [[ $1 == "--headless" ]]; then
+    headless=1
+fi
+
 runtests() {
     echo $1
-    if [[ $HEADLESS = "1" ]]; then
+    if [[ $headless == "1" ]]; then
         build/bin/ide --jblow-tests $1 --headless
     else
         build/bin/ide --jblow-tests $1
