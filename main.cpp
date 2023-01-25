@@ -1113,7 +1113,9 @@ void handle_window_event(Window_Event *it) {
                     if (world.current_pane >= world.panes.len)
                         activate_pane_by_index(world.panes.len - 1);
                 } else {
-                    if (!editor->ask_user_about_unsaved_changes()) break;
+                    if (!world.dont_prompt_on_close_unsaved_tab)
+                        if (!editor->ask_user_about_unsaved_changes())
+                            break;
 
                     editor->cleanup();
 

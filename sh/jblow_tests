@@ -2,14 +2,14 @@
 
 set -e
 
-for x in $(seq 100); do
-    echo "normal (seed = $x)"
+runtests() {
+    echo $1
     if [[ $HEADLESS = "1" ]]; then
-        JBLOW_TESTS_NORMAL_SEED="$x" build/bin/ide --jblow-tests normal --headless
+        build/bin/ide --jblow-tests $1 --headless
     else
-        JBLOW_TESTS_NORMAL_SEED="$x" build/bin/ide --jblow-tests normal
+        build/bin/ide --jblow-tests $1
     fi
-done
+}
 
-echo "workspace"
-build/bin/ide --jblow-tests workspace
+runtests "vimfuzzer"
+runtests "workspace"

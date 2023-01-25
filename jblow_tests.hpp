@@ -57,7 +57,7 @@ struct Jblow_Tests {
     }
 
     void run();
-    void run_normal();
+    void run_vimfuzzer();
     void run_workspace();
     Editor* open_editor(ccstr relative_filepath);
 };

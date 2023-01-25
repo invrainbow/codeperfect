@@ -113,11 +113,7 @@ Editor* Jblow_Tests::open_editor(ccstr relative_filepath) {
     return wait_for_editor(relative_filepath);
 }
 
-void Jblow_Tests::run_normal() {
-    // wait for editor
-    auto editor = open_editor("main.go");
-
-    // spam a bunch of keys lol
+void Jblow_Tests::run_vimfuzzer() {
     ccstr chars = (
         "KKKKKKKKKKKKKK"                // does nothing in normal mode
         "aioaioaioaio"                  // enter insert mode
@@ -125,29 +121,39 @@ void Jblow_Tests::run_normal() {
         "\x02\x02\x02\x02\x02\x02\x02"  // backspace
         "\n\n\n\n\n\n"                  // new line
     );
+
     int chars_len = strlen(chars);
 
-    int seed = 0;
-    {
-        auto seed_str = getenv("JBLOW_TESTS_NORMAL_SEED");
-        if (seed_str) seed = atoi(seed_str);
-    }
-    mt_seed32(seed);
+    auto generate_inputs = [&](int seed, int n) -> List<char>* {
+        mt_seed32(seed);
+        auto ret = alloc_list<char>();
+        for (int i = 0; i < n; i++)
+            ret->append(chars[mt_lrand() % chars_len]);
+        return ret;
+    };
 
-    auto input = alloc_list<char>();
+    world.dont_prompt_on_close_unsaved_tab = true;
 
-    for (int i = 0; i < 1000; i++) {
-        auto it = chars[mt_lrand() % chars_len];
-        if (it == 0x01)
-            press_key(CP_KEY_ESCAPE);
-        else if (it == 0x02)
-            press_key(CP_KEY_BACKSPACE);
-        else if (it == '\n')
-            press_key(CP_KEY_ENTER);
-        else
-            type_char(it);
+    for (int seed = 0; seed < 16; seed++) {
+        // wait for editor
+        auto editor = open_editor("main.go");
 
-        if (i % 10 == 0) sleep_milliseconds(25);
+        auto inputs = generate_inputs(seed, 500);
+        Fori (inputs) {
+            if (it == 0x01)
+                press_key(CP_KEY_ESCAPE);
+            else if (it == 0x02)
+                press_key(CP_KEY_BACKSPACE);
+            else if (it == '\n')
+                press_key(CP_KEY_ENTER);
+            else
+                type_char(it);
+            if (i % 10 == 0) sleep_milliseconds(25);
+        }
+
+        // close editor
+        press_key(CP_KEY_W, CP_MOD_PRIMARY);
+        WAIT { return get_current_editor() == NULL; };
     }
 }
 
@@ -203,7 +209,7 @@ void Jblow_Tests::init(ccstr _test_name) {
 }
 
 void Jblow_Tests::init_options() {
-    if (streq(test_name, "normal")) {
+    if (streq(test_name, "vimfuzzer")) {
         options.enable_vim_mode = true;
     }
 
@@ -231,7 +237,7 @@ void Jblow_Tests::run() {
     while (!ready) sleep_milliseconds(10);
 
     if (streq(test_name, "workspace")) run_workspace();
-    if (streq(test_name, "normal")) run_normal();
+    if (streq(test_name, "vimfuzzer")) run_vimfuzzer();
 
     // all good!
     world.message_queue.add([&](auto msg) {

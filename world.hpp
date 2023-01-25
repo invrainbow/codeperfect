@@ -464,6 +464,7 @@ struct World {
     bool show_frame_index;
     bool trace_next_frame;
     bool show_frameskips;
+    bool dont_prompt_on_close_unsaved_tab;
 
     Fs_Watcher fswatch;
 

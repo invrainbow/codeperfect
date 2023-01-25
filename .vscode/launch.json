@@ -20,12 +20,9 @@
             "request": "launch",
             "name": "jblow tests",
             "program": "${workspaceFolder}/build/bin/ide",
-            "env": {
-                "JBLOW_TESTS_NORMAL_SEED": "2",
-            },
             "args": [
                 "--jblow-tests",
-                "normal",
+                "vimfuzzer",
             ],
             "cwd": "${workspaceFolder}/build/bin",
             "expressions": "native",

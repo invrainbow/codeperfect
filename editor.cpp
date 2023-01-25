@@ -2320,6 +2320,10 @@ void Editor::backspace_in_insert_mode(int graphemes_to_erase, int codepoints_to_
     auto start = cur;
     auto zero = new_cur2(0, 0);
 
+    // does this just solve the whole stupid inconsistency thing?
+    if (start < nvim_insert.start)
+        nvim_insert.start = start;
+
     if (graphemes_to_erase > 0 && codepoints_to_erase > 0)
         cp_panic("backspace_in_insert_mode called with both graphemes and codepoints");
 
@@ -2330,12 +2334,17 @@ void Editor::backspace_in_insert_mode(int graphemes_to_erase, int codepoints_to_
             if (graphemes_to_erase > 0) graphemes_to_erase--;
             if (codepoints_to_erase > 0) codepoints_to_erase--;
 
-            if (start < nvim_insert.start)
+            if (start < nvim_insert.start) {
+                nvim_insert.start = start;
                 nvim_insert.deleted_graphemes++;
+            }
             continue;
         }
 
-        auto old_start = start;
+        auto old_start = start.x;
+
+        // if we're not backspace past the beginning of the line,
+        // from here on, we only backspace within the current line
 
         if (graphemes_to_erase > 0) {
             // we have current cursor as cp index
@@ -2359,18 +2368,18 @@ void Editor::backspace_in_insert_mode(int graphemes_to_erase, int codepoints_to_
             }
         }
 
+        // if we backspaced PAST the last nvim_insert...
         if (start < nvim_insert.start) {
-            if (old_start.y != nvim_insert.start.y)
-                cp_panic("this shouldn't happen");
+            // assert that we only acted on current line
+            cp_assert(start.y == nvim_insert.start.y);
 
             int lo = buf->idx_cp_to_gr(start.y, start.x);
-            int hi = buf->idx_cp_to_gr(start.y, min(old_start.x, nvim_insert.start.x));
+            int hi = buf->idx_cp_to_gr(start.y, min(old_start, nvim_insert.start.x));
             nvim_insert.deleted_graphemes += (hi - lo);
+
+            nvim_insert.start = start;
         }
     }
-
-    if (start < nvim_insert.start)
-        nvim_insert.start = start;
 
     buf->remove(start, cur);
     raw_move_cursor(start);
