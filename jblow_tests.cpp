@@ -143,14 +143,11 @@ void Jblow_Tests::run_vimfuzzer() {
 
         auto inputs = generate_inputs(seed, 500);
         Fori (inputs) {
-            if (it == 0x01)
-                press_key(CP_KEY_ESCAPE);
-            else if (it == 0x02)
-                press_key(CP_KEY_BACKSPACE);
-            else if (it == '\n')
-                press_key(CP_KEY_ENTER);
-            else
-                type_char(it);
+            if (it == 0x01)        press_key(CP_KEY_ESCAPE);
+            else if (it == 0x02)   press_key(CP_KEY_BACKSPACE);
+            else if (it == '\n')   press_key(CP_KEY_ENTER);
+            else                   type_char(it);
+
             if (i % 10 == 0) sleep_milliseconds(25);
         }
 
@@ -161,7 +158,6 @@ void Jblow_Tests::run_vimfuzzer() {
         // close editor
         press_key(CP_KEY_W, CP_MOD_PRIMARY);
         WAIT { return get_current_editor() == NULL; };
-        print("last input: %d", inputs->at(inputs->len-1));
 
         // wait for imgui input queue to finish
         WAIT_FOREVER { return !ImGui::GetCurrentContext()->InputEventsQueue.Size; };
