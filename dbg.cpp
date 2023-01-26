@@ -1010,7 +1010,34 @@ bool Debugger::start(Debug_Profile *debug_profile) {
         return false;
     }
 
-    ccstr dlv_cmd = cp_sprintf("%s exec --headless --listen=127.0.0.1:1234 %s", delve_path, binary_path);
+    auto is_port_available = [&](int port) {
+        auto fd = socket(AF_INET, SOCK_STREAM, 0);
+        if (fd == -1) return false;
+        defer { close_stub(fd); };
+
+        struct sockaddr_in addr; ptr0(&addr);
+        addr.sin_family = AF_INET;
+        addr.sin_port = htons(port);
+        addr.sin_addr.s_addr = INADDR_ANY;
+        if (bind(fd, (const struct sockaddr*)&addr, sizeof(struct sockaddr_in)) == -1) return false;
+
+        return true;
+    };
+
+    auto find_available_port = [&]() -> int {
+        for (int port = 1234; port <= 9999; port++)
+            if (is_port_available(port))
+                return port;
+        return 0;
+    };
+
+    auto delve_port = find_available_port();
+    if (!delve_port) {
+        send_tell_user("We were unable to find a port to open the Delve debugger on.", "Unable to run Delve");
+        return false;
+    }
+
+    ccstr dlv_cmd = cp_sprintf("%s exec --headless --listen=127.0.0.1:%d %s", delve_path, delve_port, binary_path);
     if (debug_profile->type == DEBUG_TEST_CURRENT_FUNCTION)
         dlv_cmd = cp_sprintf("%s -- -test.v -test.run %s", dlv_cmd, test_function_name);
 
@@ -1052,7 +1079,7 @@ bool Debugger::start(Debug_Profile *debug_profile) {
     } while (ch != '\n');
 
     auto server = "127.0.0.1";
-    auto port = "1234";
+    auto delve_port_str = cp_sprintf("%d", delve_port);
 
     addrinfo hints = { 0 };
     hints.ai_family = AF_INET;
@@ -1060,8 +1087,8 @@ bool Debugger::start(Debug_Profile *debug_profile) {
     hints.ai_protocol = IPPROTO_TCP;
 
     addrinfo* result;
-    if (getaddrinfo(server, port, &hints, &result) != 0)
-        return error("unable to resolve server:port %s:%s", server, port), false;
+    if (getaddrinfo(server, delve_port_str, &hints, &result) != 0)
+        return error("unable to resolve server:port %s:%s", server, delve_port_str), false;
 
     auto make_connection = [&]() -> int {
         for (auto ptr = result; ptr; ptr = ptr->ai_next) {
