@@ -318,20 +318,6 @@ void fill_file_tree() {
     if (t) close_thread_handle(t);
 }
 
-bool copy_file(ccstr src, ccstr dest) {
-    auto fm = map_file_into_memory(src);
-    if (!fm) return false;
-    defer { fm->cleanup(); };
-
-    // TODO: map this into memory too?
-    File f;
-    if (f.init_write(dest) != FILE_RESULT_OK)
-        return false;
-    defer { f.cleanup(); };
-
-    return f.write((char*)fm->data, fm->len);
-}
-
 void World::init() {
     Timer t; t.init("world::init");
 

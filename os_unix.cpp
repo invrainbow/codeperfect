@@ -401,12 +401,6 @@ bool list_directory(ccstr folder, list_directory_cb cb) {
     return true;
 }
 
-bool copy_file(ccstr src, ccstr dest, bool overwrite) {
-    auto flags = std::filesystem::copy_options::skip_existing;
-    if (overwrite) flags = std::filesystem::copy_options::overwrite_existing;
-    return std::filesystem::copy_file(src, dest, flags);
-}
-
 ccstr get_canon_path(ccstr path) {
     auto new_path = alloc_list<ccstr>();
     auto p = make_path(path);

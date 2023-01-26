@@ -444,11 +444,6 @@ bool let_user_select_file(Select_File_Opts* opts) {
     return true;
 }
 
-bool copy_file(ccstr src, ccstr dest, bool overwrite) {
-    SCOPED_FRAME();
-    return CopyFileW(to_wide(src), to_wide(dest), !overwrite);
-}
-
 bool ensure_directory_exists(ccstr path) {
     SCOPED_FRAME();
 

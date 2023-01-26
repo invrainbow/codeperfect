@@ -16,6 +16,7 @@ BINARY_SUFFIX =
 
 ifeq ($(OSTYPE), mac)
 	CFLAGS += -DOSTYPE_MAC
+	CFLAGS += -mmacosx-version-min=10.12
 	PKGS += fontconfig freetype2 libpcre harfbuzz
 
 	frameworks = OpenGL Cocoa IOKit CoreFoundation Security
@@ -132,7 +133,7 @@ binaries.c: .cpcolors vert.glsl frag.glsl im.vert.glsl im.frag.glsl
 	$(PYTHON) sh/create_binaries_c.py $^
 
 obj/gohelper.a: $(GO_DEPS)
-	GOARCH=$(GOARCH) CC=clang CGO_ENABLED=1 go build -ldflags "$(GOLDFLAGS)" -o obj/gohelper.a -buildmode=c-archive github.com/codeperfect95/codeperfect/go/helper && \
+	GOARCH=$(GOARCH) CC=clang CGO_CFLAGS="-mmacosx-version-min=10.12" CGO_LDFLAGS="-mmacosx-version-min=10.12" CGO_ENABLED=1 go build -ldflags "$(GOLDFLAGS)" -o obj/gohelper.a -buildmode=c-archive github.com/codeperfect95/codeperfect/go/helper && \
 		mv obj/gohelper.h .
 
 LAUNCHER_LDFLAGS =

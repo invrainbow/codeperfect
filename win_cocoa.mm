@@ -9,6 +9,10 @@
 #include <IOKit/hid/IOHIDLib.h>
 #import <Cocoa/Cocoa.h>
 
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 101300
+#define NSPasteboardTypeURL NSURLPboardType
+#endif
+
 #include "win.hpp"
 
 static int scan_to_key_table[256];

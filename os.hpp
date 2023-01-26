@@ -259,7 +259,7 @@ struct Select_File_Opts {
 };
 
 bool let_user_select_file(Select_File_Opts* opts);
-bool copy_file(ccstr src, ccstr dest, bool overwrite);
+bool copy_file(ccstr src, ccstr dest);
 bool ensure_directory_exists(ccstr path);
 bool delete_rm_rf(ccstr path);
 bool delete_file(ccstr path);

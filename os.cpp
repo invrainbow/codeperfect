@@ -1,11 +1,9 @@
 #include "os.hpp"
 #include "world.hpp"
-#include <filesystem>
-#include <signal.h>
 #include "cwalk.h"
-
-#if OS_WINBLOWS
-#else
+#include "defer.hpp"
+#include <signal.h>
+#if !OS_WINBLOWS
 #   include <unistd.h>
 #endif
 
@@ -144,5 +142,21 @@ ccstr rel_to_abs_path(ccstr path, ccstr cwd) {
     }
 
     return ret;
+}
+
+// for now just use this for all platforms, but specialize if we start copying
+// lots of files (do we ever even do that?)
+bool copy_file(ccstr src, ccstr dest) {
+    auto fm = map_file_into_memory(src);
+    if (!fm) return false;
+    defer { fm->cleanup(); };
+
+    // TODO: map this into memory too?
+    File f;
+    if (f.init_write(dest) != FILE_RESULT_OK)
+        return false;
+    defer { f.cleanup(); };
+
+    return f.write((char*)fm->data, fm->len);
 }
 

@@ -9,6 +9,7 @@ nprocs=4
 if [ $os = "windows" ]; then
     nprocs=$NUMBER_OF_PROCESSORS
 elif [ $os = "mac" ]; then
+    export MACOSX_DEPLOYMENT_TARGET=10.12
     nprocs=$(sysctl hw.ncpu | grep -o '[0-9]\+')
     if [ "$(sh/detect_m1)" = "1" ]; then
         cmd="arch -arm64 $cmd"
