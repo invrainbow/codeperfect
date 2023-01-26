@@ -1098,42 +1098,8 @@ void handle_window_event(Window_Event *it) {
                 break;
             }
 #endif
-
-            case CP_KEY_W: {
-                auto pane = get_current_pane();
-                if (!pane) break;
-
-                auto editor = pane->get_current_editor();
-                if (!editor) {
-                    // can't close the last pane
-                    if (world.panes.len <= 1) break;
-
-                    pane->cleanup();
-                    world.panes.remove(world.current_pane);
-                    if (world.current_pane >= world.panes.len)
-                        activate_pane_by_index(world.panes.len - 1);
-                } else {
-                    if (!world.dont_prompt_on_close_unsaved_tab)
-                        if (!editor->ask_user_about_unsaved_changes())
-                            break;
-
-                    if (world.use_nvim) send_nvim_keys("<Esc>");
-
-                    editor->cleanup();
-
-                    pane->editors.remove(pane->current_editor);
-                    if (!pane->editors.len)
-                        pane->current_editor = -1;
-                    else {
-                        auto new_idx = pane->current_editor;
-                        if (new_idx >= pane->editors.len)
-                            new_idx = pane->editors.len - 1;
-                        pane->focus_editor_by_index(new_idx);
-                    }
-                }
-                break;
             }
-            }
+            break;
         }
         break;
     }
@@ -1713,7 +1679,18 @@ int realmain(int argc, char **argv) {
         world.jblow_tests.ready = true;
     }
 
-    for (; !world.window->should_close; world.frame_index++) {
+    for (;; world.frame_index++) {
+        if (world.window->should_close) {
+            auto editor = get_current_editor();
+            if (!editor) break;
+
+            if (editor->ask_user_about_unsaved_changes())
+                break;
+
+            world.window->should_close = false;
+            // canceled close, keep going
+        }
+
         bool was_trace_on = world.trace_next_frame;
         defer { if (was_trace_on) world.trace_next_frame = false; };
 

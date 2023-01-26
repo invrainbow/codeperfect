@@ -253,6 +253,7 @@ enum Command {
     CMD_AST_NAVIGATION,
     CMD_COMMAND_PALETTE,
     CMD_OPEN_FILE_MANUALLY,
+    CMD_CLOSE_EDITOR,
     /**/
     _CMD_COUNT_,
     CMD_INVALID = -1,

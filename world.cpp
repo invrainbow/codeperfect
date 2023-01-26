@@ -1566,6 +1566,16 @@ Command_Info command_info_table[_CMD_COUNT_];
 
 bool is_command_enabled(Command cmd) {
     switch (cmd) {
+    case CMD_CLOSE_EDITOR: {
+        auto pane = get_current_pane();
+        if (!pane) return false;
+
+        auto editor = pane->get_current_editor();
+        if (editor) return true;
+
+        return world.panes.len > 1;
+    }
+
     case CMD_COMMAND_PALETTE:
         return !world.wnd_command.show;
 
@@ -1763,6 +1773,14 @@ ccstr get_command_name(Command cmd) {
     auto info = command_info_table[cmd];
 
     switch (cmd) {
+    case CMD_CLOSE_EDITOR: {
+        auto pane = get_current_pane();
+        if (!pane) break;
+
+        auto editor = pane->get_current_editor();
+        return editor ? "Close Editor" : "Close Pane";
+    }
+
     case CMD_AST_NAVIGATION: {
         auto editor = get_current_editor();
         if (!editor) break;
@@ -1918,6 +1936,7 @@ void init_command_info_table() {
     command_info_table[CMD_REMOVE_ALL_TAGS] = k(0, 0, "Struct: Remove all tags");
     command_info_table[CMD_COMMAND_PALETTE] = k(CP_MOD_PRIMARY, CP_KEY_K, "Command Palette");
     command_info_table[CMD_OPEN_FILE_MANUALLY] = k(CP_MOD_PRIMARY, CP_KEY_O, "Open File...");
+    command_info_table[CMD_CLOSE_EDITOR] = k(CP_MOD_PRIMARY, CP_KEY_W, "Close Editor");
 }
 
 void do_find_interfaces() {
@@ -2315,10 +2334,43 @@ void handle_command(Command cmd, bool from_menu) {
         if (editor) editor->handle_save();
         break;
     }
-
     case CMD_SAVE_ALL:
         save_all_unsaved_files();
         break;
+
+    case CMD_CLOSE_EDITOR: {
+        auto pane = get_current_pane();
+        if (!pane) break;
+
+        auto editor = pane->get_current_editor();
+        if (!editor) {
+            // can't close the last pane
+            if (world.panes.len <= 1) break;
+
+            pane->cleanup();
+            world.panes.remove(world.current_pane);
+            if (world.current_pane >= world.panes.len)
+                activate_pane_by_index(world.panes.len - 1);
+        } else {
+            if (!world.dont_prompt_on_close_unsaved_tab)
+                if (!editor->ask_user_about_unsaved_changes())
+                    break;
+
+            if (world.use_nvim) send_nvim_keys("<Esc>");
+
+            editor->cleanup();
+
+            pane->editors.remove(pane->current_editor);
+            if (!pane->editors.len)
+                pane->current_editor = -1;
+            else {
+                auto new_idx = pane->current_editor;
+                if (new_idx >= pane->editors.len)
+                    new_idx = pane->editors.len - 1;
+                pane->focus_editor_by_index(new_idx);
+            }
+        }
+    }
 
     case CMD_EXIT:
         world.window->should_close = true;
