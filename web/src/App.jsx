@@ -352,7 +352,7 @@ function Home() {
                 </div>
               ))}
             </div>
-            <div className="text-lg leading-snug mt-6 md:mt-8 text-neutral-400">
+            <div className="text-lg leading-normal mt-6 md:mt-8 text-neutral-400">
               <p>
                 We threw out the modern software stack and{" "}
                 <A href={LINKS.handmadeManifesto}>handmade</A> the entire IDE in
@@ -372,7 +372,7 @@ function Home() {
           </div>
           <div className="md:flex-1">
             <img
-              className="max-w-full border border-neutral-500 shadow-lg rounded-lg overflow-hidden"
+              className="max-w-full shadow-lg rounded-lg overflow-hidden"
               alt="screenshot"
               src={asset("/download.png")}
             />
@@ -390,7 +390,7 @@ function Home() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6 mt-4 md:mt-0 md:p-0">
             {FEATURES.map((it) => (
               <div
-                className="bg-white text-[90%] hover:scale-[103%] shadow-sm rounded p-3 md:p-4 transition-all select-none"
+                className="bg-white hover:scale-[103%] shadow-sm rounded p-3 md:p-4 transition-all select-none"
                 key={it.label}
               >
                 <Icon stroke={1.25} size={26} icon={it.icon} />
@@ -534,12 +534,12 @@ function BuyLicense() {
       content: (
         <>
           <p>
-            You can download CodePerfect for a free, full-functionality 7 day
-            trial before buying a license. No credit card is required.
+            You can try CodePerfect for free for 7 days, no restrictions. No
+            credit card required.
           </p>
           <p>
             <A href="/download" className="btn btn1 btn-sm">
-              Try CodePerfect for free
+              Visit Downloads
             </A>
           </p>
         </>
@@ -551,7 +551,7 @@ function BuyLicense() {
         <>
           <p>
             If you need multiple licenses, bulk pricing, team management, or
-            have any other custom requests, please reach out to us.
+            have any other custom requests, please reach out.
           </p>
           <p>
             <A href={`mailto:${SUPPORT_EMAIL}`} className="btn btn2 btn-sm">
@@ -566,8 +566,7 @@ function BuyLicense() {
       content: (
         <>
           <p>
-            Our support staff is happy to help. Please get in touch with us and
-            we'll respond within 1 business day.
+            Please get in touch with us and we'll respond within 1 business day.
           </p>
           <p>
             <A href={`mailto:${SUPPORT_EMAIL}`} className="btn btn2 btn-sm">
@@ -662,7 +661,7 @@ function BuyLicense() {
       <div className="md:max-w-screen-xl mx-auto">
         <div className="mx-6 grid grid-cols-1 md:grid-cols-3 mt-12 md:mt-24 mb-8 md:my-24">
           {help.map((it) => (
-            <div className="border-x border-t last:border-b md:border-y md:border-l md:last:border-r border-dashed border-gray-200 md:first:border-l p-6 md:p-8">
+            <div className="border-x border-t last:border-b md:border-y md:border-l md:border-r-0 md:last:border-r border-dashed border-gray-200 md:first:border-l p-6 md:p-8">
               <div
                 className="w-8 border-b-4 mb-2 hidden md:block"
                 style={{
