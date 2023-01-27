@@ -132,8 +132,10 @@ obj/tsgowork.o: tree-sitter-go-work/src/parser.c
 binaries.c: .cpcolors vert.glsl frag.glsl im.vert.glsl im.frag.glsl
 	$(PYTHON) sh/create_binaries_c.py $^
 
+COMMON_GOFLAGS = GOARCH=$(GOARCH) CC=clang CGO_CFLAGS="-mmacosx-version-min=10.12" CGO_LDFLAGS="-mmacosx-version-min=10.12"
+
 obj/gohelper.a: $(GO_DEPS)
-	GOARCH=$(GOARCH) CC=clang CGO_CFLAGS="-mmacosx-version-min=10.12" CGO_LDFLAGS="-mmacosx-version-min=10.12" CGO_ENABLED=1 go build -ldflags "$(GOLDFLAGS)" -o obj/gohelper.a -buildmode=c-archive github.com/codeperfect95/codeperfect/go/helper && \
+	$(COMMON_GOFLAGS) CGO_ENABLED=1 go build -ldflags "$(GOLDFLAGS)" -o $@ -buildmode=c-archive github.com/codeperfect95/codeperfect/go/helper && \
 		mv obj/gohelper.h .
 
 LAUNCHER_LDFLAGS =
@@ -142,8 +144,7 @@ ifeq ($(OSTYPE), windows)
 endif
 
 build/launcher$(BINARY_SUFFIX): $(GO_DEPS)
-	cd go; \
-		GOARCH=$(GOARCH) go build -ldflags "$(GOLDFLAGS) $(LAUNCHER_LDFLAGS)" -o ../$@ ./cmd/launcher
+	$(COMMON_GOFLAGS) GOARCH=$(GOARCH) go build -ldflags "$(GOLDFLAGS) $(LAUNCHER_LDFLAGS)" -o $@ github.com/codeperfect95/codeperfect/go/cmd/launcher
 
 gohelper.h: obj/gohelper.a
 
