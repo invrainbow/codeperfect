@@ -21,13 +21,14 @@ import {
   IconEdit,
   IconTools,
   IconBrain,
-  IconKeyboard,
   IconBike,
   IconCategory2,
+  IconKeyboard,
 } from "@tabler/icons";
 
 import { AiFillApple } from "@react-icons/all-files/ai/AiFillApple";
 import { AiFillWindows } from "@react-icons/all-files/ai/AiFillWindows";
+import { SiVim } from "@react-icons/all-files/si/SiVim";
 import { FaLinux } from "@react-icons/all-files/fa/FaLinux";
 import { FaTwitter } from "@react-icons/all-files/fa/FaTwitter";
 import { FaDiscord } from "@react-icons/all-files/fa/FaDiscord";
@@ -57,7 +58,7 @@ posthog.init("phc_kIt8VSMD8I2ScNhnjWDU2NmrK9kLIL3cHWpkgCX3Blw", {
 
 const SUPPORT_EMAIL = "support@codeperfect95.com";
 const CURRENT_BUILD = process.env.REACT_APP_BUILD_VERSION;
-const CURRENT_BUILD_RELEASE_DATE = "November 20, 2022";
+const CURRENT_BUILD_RELEASE_DATE = "January 25, 2023";
 
 const isDev = process.env.NODE_ENV === "development";
 
@@ -156,9 +157,9 @@ function Image({ src, ...rest }) {
 
 const WallOfText = wrap(
   "div",
-  "wall-of-text leading-normal md:mx-auto md:max-w-2xl bg-white md:my-32 p-8 md:p-16 md:rounded-lg md:shadow text-neutral-700"
+  "wall-of-text leading-normal md:mx-auto md:max-w-2xl bg-white md:my-32 p-8 md:p-16 md:rounded-lg md:shadow-sm text-neutral-700"
 );
-const Title = wrap("h2", "m-0 mb-6 font-bold text-3xl text-black font-title");
+const Title = wrap("h2", "m-0 mb-6 title text-3xl");
 
 function Icon({ block, noshift, icon: IconComponent, ...props }) {
   return (
@@ -244,6 +245,11 @@ const FEATURES = _.shuffle([
     desc: "Add/remove struct tags automatically.",
     icon: IconTags,
   },
+  {
+    label: "Vim Integration",
+    desc: "First-class Vim support, integrated with everything else.",
+    icon: SiVim,
+  },
 ]);
 
 const SELLING_POINTS = [
@@ -261,6 +267,7 @@ const SELLING_POINTS = [
       </>
     ),
   },
+  /*
   {
     icon: IconCategory2,
     icon2: asset("/icon-basics.png"),
@@ -272,12 +279,13 @@ const SELLING_POINTS = [
           <A href="https://www.youtube.com/watch?v=pgoetgxecw8">
             non-pessimized
           </A>{" "}
-          code brings you: Instant startup. A buttery 144 FPS. No latency
-          between keystrokes. An indexer that gobbles through large codebases.
+          code. Instant startup. A buttery smooth 144 FPS. No latency between
+          keystrokes. An indexer that gobbles through large codebases.
         </p>
       </>
     ),
   },
+  */
   {
     icon: IconBike,
     icon2: asset("/icon-bicycle.png"),
@@ -285,7 +293,7 @@ const SELLING_POINTS = [
     content: (
       <>
         <p>
-          With predictable operations, ergonomic shortcuts, and tons of cases of
+          With predictable operations, ergonomic shortcuts, and a design of
           “just doing the right thing,” CodePerfect does its job and gets out of
           the way.
         </p>
@@ -298,27 +306,24 @@ const BAD_FEATURES = [
   "Electron",
   "JavaScript",
   "language servers",
-  "browsers",
-  "laggy runtimes",
+  "slow runtimes",
+  "bulky frameworks",
   "bloated abstractions",
 ];
 
 function Home() {
   return (
-    <div className="mx-auto md:mt-24 w-full" style={{ maxWidth: "1920px" }}>
-      <div className="max-w-full leading-relaxed px-8 py-12 md:py-8 md:pb-28">
+    <div className="bg-neutral-50 mx-auto md:pt-12 w-full">
+      <div className="max-w-full leading-relaxed px-8 py-12 md:py-8 md:pb-20">
         <div
-          className="md:text-center font-semibold text-4xl md:text-5xl mb-6 md:mb-1 text-white font-title"
+          className="md:text-center font-bold text-5xl md:text-5xl mb-1 md:mb-2 text-black tracking-tight"
           style={{ lineHeight: "1.1" }}
         >
-          A fast, powerful IDE for Go
+          A fast, lightweight IDE for Go
         </div>
-
-        <p className="md:text-center text-xl text-gray-500 leading-normal">
-          Feature-rich and lightweight.
-          <br />A power tool with a small resource footprint.
-        </p>
-
+        <div className="md:text-center text-[130%] text-gray-600 leading-normal">
+          A power tool with a small resource footprint.
+        </div>
         <div className="mt-8 md:mt-8 md:text-center flex gap-4 md:justify-center">
           <A
             href="/download"
@@ -337,28 +342,32 @@ function Home() {
         </div>
       </div>
 
-      <div className="p-8 py-12 md:py-24 bg-neutral-900 relative z-10 flex items-center justify-center">
-        <div className="max-w-screen-2xl flex flex-col md:flex-row items-center gap-4 md:gap-16">
-          <div className="md:w-1/3 md:mx-0">
-            <div className="text-[175%] md:text-[250%] font-semibold text-white leading-tight font-title">
+      <div className="bg-neutral-800 border-gray-100 p-8 py-12 md:pb-24 relative z-10 flex items-center justify-center">
+        <div className="max-w-screen-2xl flex flex-col lg:flex-row items-center gap-8 md:gap-16">
+          <div className="lg:w-1/3 md:mx-0">
+            <div className="text-[200%] md:text-[225%] font-semibold text-black leading-tight">
               {BAD_FEATURES.map((name) => (
-                <div className="md:whitespace-nowrap">No {name}.</div>
+                <div className="text-white md:whitespace-nowrap">
+                  No {name}.
+                </div>
               ))}
             </div>
-            <div className="text-lg leading-normal mt-6 md:mt-8 text-neutral-300">
+            <div className="text-lg leading-snug mt-6 md:mt-8 text-neutral-400">
               <p>
                 We threw out the modern software stack and{" "}
-                <A href={LINKS.handmadeManifesto}>handmade</A> the entire IDE
-                stack in blazing fast C/C++. From the UI to the code indexer,
-                everything runs as fast as a video game.
+                <A href={LINKS.handmadeManifesto}>handmade</A> the entire IDE in
+                blazing fast C/C++.
               </p>
-
               <p>
-                A tool that assists your thinking instead of interfering with
-                it. A barebones native app that does its job and gets out of
-                your way.
+                Performance as fast as a video game. Instant startup. 144 FPS.
+                No latency between keystrokes. An indexer that gobbles through
+                large codebases.
               </p>
-              <p></p>
+              <p>
+                With predictable operations, ergonomic shortcuts, and a
+                streamlined workflow, CodePerfect "just does the right thing"
+                and gets out of the way.
+              </p>
             </div>
           </div>
           <div className="md:flex-1">
@@ -371,50 +380,35 @@ function Home() {
         </div>
       </div>
 
-      <div className="batteries-included z-10 px-6 md:px-12 py-12 md:py-32">
-        <div className="batteries-included-child md:flex max-w-screen-xl md:gap-x-12 mx-auto">
-          <div className="md:w-1/3 pb-6 md:pb-0 lg:pr-12">
-            <h1 className="font-title font-bold text-4xl text-black mb-6 md:mt-24">
-              Batteries included
-            </h1>
-            <p className="text-lg leading-normal">
-              Everything works out of the box with almost zero configuration.
-              Enjoy the power of an IDE, bundled into an app that runs faster
-              than alacritty/tmux/vim.
-            </p>
-            <div className="mt-8">
-              <A
-                href={LINKS.docs}
-                className="btn btn2 justify-center flex md:inline-flex text-center"
+      <div className="batteries-included z-10 px-4 md:px-12 py-12 md:py-20">
+        <h1 className="title text-4xl mb-12 text-center">
+          <div className="block md:inline-block">Batteries included,</div>
+          <span className="hidden md:inline-block">&nbsp;</span>
+          <div className="block md:inline-block">zero configuration.</div>
+        </h1>
+        <div className="max-w-screen-lg md:gap-x-12 mx-auto">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6 mt-4 md:mt-0 md:p-0">
+            {FEATURES.map((it) => (
+              <div
+                className="bg-white text-[90%] hover:scale-[103%] shadow-sm rounded p-3 md:p-4 transition-all select-none"
+                key={it.label}
               >
-                View Docs
-                <Icon className="ml-2" icon={IconChevronRight} />
-              </A>
-            </div>
-          </div>
-          <div className="flex-1">
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6 mt-4 md:mt-0 md:p-0">
-              {FEATURES.map((it) => (
-                <div
-                  className="bg-white hover:scale-[103%] shadow-sm rounded p-3 md:p-4 transition-all select-none"
-                  key={it.label}
-                >
-                  <Icon stroke={1.25} size={26} icon={it.icon} />
-                  <div className="leading-none font-semibold text-neutral-700 mt-0.5 md:mt-1.5">
-                    {it.label}
-                  </div>
-                  <div className="mt-1.5 font-sans text-[90%] text-neutral-400 leading-snug">
-                    {it.desc}
-                  </div>
+                <Icon stroke={1.25} size={26} icon={it.icon} />
+                <div className="title leading-none text-neutral-700 mt-0.5 md:mt-0.5">
+                  {it.label}
                 </div>
-              ))}
-            </div>
+                <div className="mt-2 font-sans text-neutral-500 leading-snug">
+                  {it.desc}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
 
+      {/*
       <div className="bg-white py-4 md:py-16 px-6 md:px-0">
-        <div className="grid grid-cols-1 md:grid-cols-3 max-w-screen-2xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-2 max-w-screen-2xl mx-auto">
           {SELLING_POINTS.map((it, i) => (
             <div
               key={it.label}
@@ -438,14 +432,15 @@ function Home() {
           ))}
         </div>
       </div>
+      */}
 
-      <div className="md:text-center px-6 py-12 md:py-24 bg-neutral-900">
-        <div className="text-white font-bold text-3xl md:text-4xl mb-2 font-title">
+      <div className="md:text-center px-6 py-12 md:py-16 bg-white">
+        <div className="title text-3xl md:text-4xl mb-3">
           Ready to get started?
         </div>
-        <p className="mx-auto text-lg md:text-xl leading-relaxed mb-6 md:mb-12 text-neutral-400">
+        <div className="mx-auto text-lg md:text-xl leading-relaxed mb-6 md:mb-12 text-neutral-600">
           Try CodePerfect for free for 7 days with all features available.
-        </p>
+        </div>
         <A
           href="/download"
           className={twMerge(
@@ -505,13 +500,13 @@ function BuyLicense() {
     },
 
     {
-      recommended: true,
+      // recommended: true,
       name: "Pro",
       price: 10,
       features: [
         { label: "Commercial use ok" },
         { label: "All features available" },
-        { label: "Company can pay" },
+        { label: "Company can pay*" },
         { label: "Purchase can be expensed" },
       ],
       buttons: {
@@ -584,48 +579,27 @@ function BuyLicense() {
     },
   ];
 
+  const planOptions = (buttons) => [
+    [buttons.monthlyLink, "monthly", false],
+    [buttons.yearlyLink, "yearly", true],
+  ];
+
   return (
     <div className="mt-12 md:mt-24">
-      <div className="text-center font-semibold text-white font-title text-3xl md:text-5xl mb-6 md:mb-24">
+      <div className="title text-center text-3xl md:text-5xl mb-6 md:mb-12">
         Buy License
       </div>
       <div className="md:max-w-screen-xl mx-auto">
-        <div className="mx-6 my-6 grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-12 rounded">
+        <div className="mx-6 my-6 grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 rounded">
           {plans.map(({ name, price, features, buttons, recommended }) => {
-            const options = [
-              [buttons.monthlyLink, "monthly", false],
-              [buttons.yearlyLink, "yearly", true],
-            ];
-
             return (
-              <div
-                className={cx(
-                  twMerge(
-                    cx(
-                      "w-auto shadow-lg relative",
-                      "rounded-lg",
-                      recommended && "md:rounded-t-none md:rounded-b-lg",
-                      recommended
-                        ? "border border-primary"
-                        : "border border-neutral-600"
-                    )
-                  )
-                )}
-              >
-                {recommended && (
-                  <div
-                    className="md:absolute md:bottom-full md:left-0 md:right-0 rounded-t-lg bg-primary text-white text-base font-semibold leading-none p-3 text-center"
-                    style={{ marginLeft: "-1px", marginRight: "-1px" }}
-                  >
-                    Most Popular*
-                  </div>
-                )}
+              <div className="shadow rounded-lg bg-white">
                 <div className="p-5">
                   <div className="text-neutral-300">
-                    <div className="font-title text-lg font-medium text-neutral-300">
+                    <div className="font-title font-medium text-neutral-500">
                       {name}
                     </div>
-                    <div className="font-title font-semibold text-2xl text-white">
+                    <div className="title text-xl">
                       {price === "custom" ? "Custom pricing" : <>${price}/mo</>}
                     </div>
                   </div>
@@ -634,7 +608,7 @@ function BuyLicense() {
                       <div
                         className={cx(
                           "flex items-center space-x-1.5 leading-6 mb-1 last:mb-0",
-                          it.not ? "text-red-400" : "text-neutral-300"
+                          it.not ? "text-red-400" : "text-neutral-600"
                         )}
                       >
                         <Icon size={18} icon={it.not ? IconX : IconCheck} />
@@ -645,20 +619,20 @@ function BuyLicense() {
                   <div>
                     {buttons.enterprise ? (
                       <A
-                        className="btn btn2 block text-center py-3"
+                        className="btn btn2 block text-center py-3 border border-neutral-200 shadow-sm"
                         href={`mailto:${SUPPORT_EMAIL}`}
                       >
                         Contact support
                       </A>
                     ) : (
                       <div className="flex flex-col md:grid md:grid-cols-2 items-center gap-2">
-                        {options.map(([link, unit, yearly]) => (
+                        {planOptions(buttons).map(([link, unit, yearly]) => (
                           <span className="block w-full md:w-auto md:inline-block relative group">
                             {yearly && (
-                              <span className="hidden group-hover:inline-block shadow absolute bottom-full mb-4 text-sm font-title font-semibold text-gray-500 right-1/2 whitespace-nowrap translate-x-1/2 w-auto rounded bg-neutral-100 text-neutral-500 py-2 px-3 leading-none">
+                              <span className="hidden group-hover:inline-block shadow absolute bottom-full mb-4 text-sm font-title font-semibold right-1/2 whitespace-nowrap translate-x-1/2 w-auto rounded bg-neutral-800 text-neutral-200 py-2 px-3 leading-none">
                                 <span
                                   class={twMerge(
-                                    "w-0 h-0 border-transparent border-t-neutral-100 absolute top-full left-1/2 -translate-x-1/2"
+                                    "w-0 h-0 border-transparent border-t-neutral-800 absolute top-full left-1/2 -translate-x-1/2"
                                   )}
                                   style={{ borderWidth: "6px" }}
                                 />
@@ -681,25 +655,25 @@ function BuyLicense() {
             );
           })}
         </div>
-        <div className="text-neutral-300 mt-4 mx-6 md:mx-0 md:text-center leading-tight text-base">
+        <div className="text-neutral-600 mt-4 mx-6 md:mx-0 md:text-center leading-tight text-base">
           * Many users expense the purchase with their employer.
         </div>
       </div>
       <div className="md:max-w-screen-xl mx-auto">
-        <div className="mx-6 grid grid-cols-1 md:grid-cols-3 mt-12 md:mt-24 mb:4 md:my-24 md:border-t border-gray-100">
+        <div className="mx-6 grid grid-cols-1 md:grid-cols-3 mt-12 md:mt-24 mb-8 md:my-24">
           {help.map((it) => (
-            <div className="border-t md:border-t-0 md:border-r border-gray-100 md:first:border-l px-0 py-8 md:pt-8 md:pb-0 md:px-8">
+            <div className="border-x border-t last:border-b md:border-y md:border-l md:last:border-r border-dashed border-gray-200 md:first:border-l p-6 md:p-8">
               <div
-                className="w-8 border-b-4 mb-2"
+                className="w-8 border-b-4 mb-2 hidden md:block"
                 style={{
                   borderColor: "rgb(11, 158, 245)",
                   filter: "saturate(0.35)",
                 }}
               />
-              <div className="font-title text-neutral-100 text-lg font-semibold mb-2">
+              <div className="text-neutral-700 text-lg font-semibold mb-2">
                 {it.title}
               </div>
-              <div className="text-gray-400 leading-normal">{it.content}</div>
+              <div className="text-gray-600 leading-normal">{it.content}</div>
             </div>
           ))}
         </div>
@@ -754,7 +728,7 @@ function Download() {
 
   return (
     <div className="my-12 md:my-28 px-8 md:px-0">
-      <div className="md:px-4 md:text-center text-3xl md:text-5xl font-bold text-white font-title">
+      <div className="md:px-4 md:text-center text-3xl md:text-5xl title">
         Download CodePerfect
       </div>
       <div className="text-center mt-4">
@@ -766,13 +740,13 @@ function Download() {
           )}
         >
           <span className="inline-block">
-            <span className="font-semibold text-sm text-yellow-400 flex gap-x-1.5 items-center">
+            <span className="font-semibold text-sm text-yellow-600 flex gap-x-1.5 items-center">
               <Icon size={18} icon={IconTag} />
               <span>Build {CURRENT_BUILD}</span>
             </span>
           </span>
           <span className="inline-block">
-            <span className="font-semibold text-sm text-lime-300 gap-x-1.5 items-center flex">
+            <span className="font-semibold text-sm text-lime-600 gap-x-1.5 items-center flex">
               <Icon size={18} icon={IconClockHour4} />
               <span>Released {CURRENT_BUILD_RELEASE_DATE}</span>
             </span>
@@ -819,15 +793,17 @@ function Download() {
           </div>
         </div>
       </div>
+      {/*
       <div className="px-4 mt-12 md:mt-20">
         <div
           // style={{ maxWidth: "calc(min(100%, 1024px))" }}
-          className="max-w-screen-lg mx-auto my-8"
+          className="max-w-screen-lg mx-auto my-8 border border-gray-200 rounded-xl"
         >
           <Image src={asset("/get-started-screenshot.png")} />
         </div>
       </div>
       <div className="flex-grow"></div>
+      */}
     </div>
   );
 }
@@ -877,21 +853,23 @@ function ScrollToTop() {
   return null;
 }
 
-function Logo({ onClick }) {
+function Logo({ onClick, hideText }) {
   return (
     <A
       href="/"
-      className="font-bold text-lg text-white no-underline whitespace-nowrap inline-flex flex-shrink-0 items-center"
+      className="font-bold text-lg text-black no-underline whitespace-nowrap inline-flex flex-shrink-0 items-center"
       onClick={onClick}
     >
       <img
         alt="logo"
-        className="w-auto h-8 inline-block mr-3 invert"
+        className="w-auto h-8 inline-block mr-3"
         src={asset("/logo.png")}
       />
-      <span className="inline-block logo text-lg font-bold font-ui">
-        CodePerfect 95
-      </span>
+      {!hideText && (
+        <span className="inline-block logo text-lg font-bold">
+          CodePerfect 95
+        </span>
+      )}
     </A>
   );
 }
@@ -916,7 +894,7 @@ function Header() {
   ];
 
   return (
-    <div className="p-4 md:p-4 border-b border-gray-50 font-ui">
+    <div className="p-4 md:p-4 border-b border-gray-50 bg-white">
       <div className="flex justify-between items-center w-full md:max-w-screen-lg md:mx-auto text-lg">
         <Logo />
         <div className="md:hidden relative">
@@ -936,11 +914,13 @@ function Header() {
             >
               <button
                 onClick={() => setShowMenu(false)}
-                className="absolute top-4 right-4 w-8 flex items-center justify-center h-8 rounded-full bg-neutral-700 text-white"
+                className="absolute z-50 top-4 right-4 w-8 flex items-center justify-center h-8 rounded-full bg-neutral-700 text-white"
               >
                 <Icon icon={IconX} />
               </button>
-              <Logo onClick={() => setShowMenu(false)} />
+              <div className="invert z-40 relative">
+                <Logo onClick={() => setShowMenu(false)} />
+              </div>
               <div className="mt-2">
                 {links.map(([url, label]) => (
                   <A
@@ -958,7 +938,7 @@ function Header() {
         <div className="hidden md:flex items-baseline gap-x-8">
           {links.map(([url, label]) => (
             <A
-              className="text-neutral-300 hover:text-neutral-100 no-underline whitespace-nowrap hidden md:inline-block"
+              className="text-[95%] text-neutral-700 no-underline whitespace-nowrap hidden md:inline-block"
               // style={{ fontSize: "0.95em" }}
               href={url}
             >
@@ -976,10 +956,13 @@ const FootLink = wrap(A, "text-gray-800 no-underline");
 
 function Footer() {
   return (
-    <div className="px-6 pt-6 lg:pt-12 pb-8 md:pb-24 border-t border-gray-100 md:border-0">
-      <div className="flex flex-col md:flex-row gap-y-4 md:gap-0 hmd:flex-row justify-between w-full md:max-w-screen-xl md:mx-auto items-start">
+    <div className="bg-white px-6 pt-6 lg:pt-12 pb-8 md:pb-24 border-t border-gray-50">
+      <div className="flex flex-col-reverse md:flex-row gap-y-4 md:gap-0 hmd:flex-row justify-between w-full md:max-w-screen-xl md:mx-auto items-start">
         <div className="text-gray-500">
-          <span>&copy; {new Date().getFullYear()} CodePerfect 95</span>
+          <div className="opacity-50 hidden md:block">
+            <Logo hideText />
+          </div>
+          <div>&copy; {new Date().getFullYear()} CodePerfect 95</div>
         </div>
         <div className="flex flex-col md:flex-row md:items-start gap-y-3 md:gap-x-14 leading-none">
           <FootSection>
