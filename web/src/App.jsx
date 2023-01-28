@@ -21,9 +21,6 @@ import {
   IconEdit,
   IconTools,
   IconBrain,
-  IconBike,
-  // IconCategory2,
-  IconKeyboard,
 } from "@tabler/icons";
 
 import { AiFillApple } from "@react-icons/all-files/ai/AiFillApple";
@@ -37,7 +34,6 @@ import posthog from "posthog-js";
 import cx from "classnames";
 import React from "react";
 import { Helmet } from "react-helmet";
-// import { useMediaQuery } from "react-responsive";
 import { twMerge } from "tailwind-merge";
 
 import {
@@ -60,8 +56,8 @@ const SUPPORT_EMAIL = "support@codeperfect95.com";
 const CURRENT_BUILD = process.env.REACT_APP_BUILD_VERSION;
 const CURRENT_BUILD_RELEASE_DATE = "January 25, 2023";
 
-const isDev = process.env.NODE_ENV === "development";
-const isStaging = process.env.NODE_ENV === "staging";
+const isDev = process.env.REACT_APP_CPENV === "development";
+const isStaging = process.env.REACT_APP_CPENV === "staging";
 
 const BASE_LINKS = {
   docs: "https://docs.codeperfect95.com",
@@ -140,25 +136,6 @@ function wrap(elem, extraClassName, defaultProps, overrideProps) {
     };
     return React.createElement(elem, newProps, children);
   };
-}
-
-function Image({ src, ...rest }) {
-  const imgProps = {
-    alt: "image",
-    src,
-    ...rest,
-  };
-
-  return (
-    <>
-      <A newWindow href={src} className="md:hidden">
-        <img {...imgProps} />
-      </A>
-      <span className="hidden md:block">
-        <img {...imgProps} />
-      </span>
-    </>
-  );
 }
 
 const WallOfText = wrap(
@@ -257,56 +234,6 @@ const FEATURES = _.shuffle([
     icon: SiVim,
   },
 ]);
-
-const SELLING_POINTS = [
-  {
-    icon: IconKeyboard,
-    icon2: asset("/icon-vim.png"),
-    image: asset("/vim.avif"),
-    label: "Full native Vim integration",
-    content: (
-      <>
-        <p>
-          First-class Vim support &mdash; not a plugin as an afterthought. The
-          whole Vim feature set, integrated seamlessly with everything else.
-        </p>
-      </>
-    ),
-  },
-  /*
-  {
-    icon: IconCategory2,
-    icon2: asset("/icon-basics.png"),
-    label: "Back to basics",
-    content: (
-      <>
-        <p>
-          Straightforward,{" "}
-          <A href="https://www.youtube.com/watch?v=pgoetgxecw8">
-            non-pessimized
-          </A>{" "}
-          code. Instant startup. A buttery smooth 144 FPS. No latency between
-          keystrokes. An indexer that gobbles through large codebases.
-        </p>
-      </>
-    ),
-  },
-  */
-  {
-    icon: IconBike,
-    icon2: asset("/icon-bicycle.png"),
-    label: "A bicycle for coding",
-    content: (
-      <>
-        <p>
-          With predictable operations, ergonomic shortcuts, and a design of
-          “just doing the right thing,” CodePerfect does its job and gets out of
-          the way.
-        </p>
-      </>
-    ),
-  },
-];
 
 const BAD_FEATURES = [
   "Electron",
@@ -412,34 +339,6 @@ function Home() {
         </div>
       </div>
 
-      {/*
-      <div className="bg-white py-4 md:py-16 px-6 md:px-0">
-        <div className="grid grid-cols-1 md:grid-cols-2 max-w-screen-2xl mx-auto">
-          {SELLING_POINTS.map((it, i) => (
-            <div
-              key={it.label}
-              className="py-8 md:py-0 md:px-16 bg-white border-b md:border-b-0 md:border-r border-neutral-200 last:border-0"
-            >
-              <div className="w-16 h-16 rounded-xl bg-gradient-to-b shadow-lg opacity-70 from-zinc-600 to-zinc-500 flex items-center justify-center">
-                <Icon
-                  icon={it.icon}
-                  stroke={1.0}
-                  className="text-neutral-200"
-                  size={42}
-                />
-              </div>
-              <div className="text-lg font-bold text-neutral-800 mt-6 mb-2">
-                {it.label}
-              </div>
-              <div className="leading-normal text-neutral-700">
-                {it.content}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-      */}
-
       <div className="md:text-center px-6 py-12 md:py-16 bg-white">
         <div className="title text-3xl md:text-4xl mb-3">
           Ready to get started?
@@ -506,7 +405,6 @@ function BuyLicense() {
     },
 
     {
-      // recommended: true,
       name: "Pro",
       price: 10,
       features: [
@@ -687,25 +585,6 @@ function BuyLicense() {
   );
 }
 
-/*
-function Question({ q, children }) {
-  return (
-    <>
-      <p className="font-title font-bold">{q}</p>
-      <p>{children}</p>
-    </>
-  );
-}
-
-function FAQ() {
-  return (
-    <WallOfText>
-      <Title>Frequently Asked Questions</Title>
-    </WallOfText>
-  );
-}
-*/
-
 function Download() {
   const links = [
     {
@@ -773,8 +652,7 @@ function Download() {
                   it.disabledText && "disabled"
                 )}
                 title={it.disabledText}
-                onClick={(e) => {
-                  // disableButtonProps.onClick(e);
+                onClick={() => {
                   posthog.capture("download", { platform: it.platform });
                 }}
               >
@@ -798,17 +676,6 @@ function Download() {
           </div>
         </div>
       </div>
-      {/*
-      <div className="px-4 mt-12 md:mt-20">
-        <div
-          // style={{ maxWidth: "calc(min(100%, 1024px))" }}
-          className="max-w-screen-lg mx-auto my-8 border border-gray-200 rounded-xl"
-        >
-          <Image src={asset("/get-started-screenshot.png")} />
-        </div>
-      </div>
-      <div className="flex-grow"></div>
-      */}
     </div>
   );
 }
@@ -944,7 +811,6 @@ function Header() {
           {links.map(([url, label]) => (
             <A
               className="text-[95%] text-neutral-700 no-underline whitespace-nowrap hidden md:inline-block"
-              // style={{ fontSize: "0.95em" }}
               href={url}
             >
               {label}
@@ -973,7 +839,6 @@ function Footer() {
           <FootSection>
             <FootLink href="/buy">Buy License</FootLink>
             <FootLink href="/download">Download</FootLink>
-            {/* <FootLink href="/faq">FAQs</FootLink> */}
           </FootSection>
           <FootSection>
             <FootLink href={LINKS.docs}>Docs</FootLink>
@@ -1024,7 +889,6 @@ function App() {
           <Route path="/" element={<Layout />}>
             <Route path="download" element={<Download />} />
             <Route path="buy" element={<BuyLicense />} />
-            {/* <Route path="faq" element={<FAQ />} /> */}
             <Route path="payment-done" element={<PaymentDone />} />
             <Route path="portal-done" element={<PortalDone />} />
             <Route path="terms" element={<Terms />} />

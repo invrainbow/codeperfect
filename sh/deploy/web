@@ -1,8 +1,0 @@
-#!/bin/bash
-set -e
-
-cd /root/codeperfect/web
-yarn
-yarn build
-rsync -avz --delete ./build/ /var/www/codeperfect95.com/
-aws s3 sync ./public/ s3://codeperfect-static --delete
