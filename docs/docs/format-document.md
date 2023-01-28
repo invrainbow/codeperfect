@@ -11,9 +11,9 @@ By default, Format File does _not_ automatically add and remove imports. To
 format with import organization, run `Format` &gt;
 `Format File and Organize Imports`.
 
-By default, Organize Imports uses our native implementation, which runs
-instantly and is more accurate than `goimports` due to our in-memory index. When
-the indexer is busy, we fallback to `goimports`, which sometimes has a lag.
+By default, Organize Imports uses our native implementation, which is faster and
+more accurate than `goimports` due to our in-memory index. When the indexer is
+busy, we fallback to `goimports`, which sometimes has a lag.
 
 ## Keyboard shortcuts
 
