@@ -387,6 +387,25 @@ function PortalDone() {
   );
 }
 
+function WithTooltip({ className, label, show, children }) {
+  return (
+    <div className={cx("relative group", className)}>
+      {show && (
+        <span className="hidden group-hover:inline-block shadow absolute bottom-full mb-4 text-sm font-title font-semibold right-1/2 whitespace-nowrap translate-x-1/2 w-auto rounded bg-neutral-800 text-neutral-200 py-2 px-3 leading-none">
+          <span
+            class={twMerge(
+              "w-0 h-0 border-transparent border-t-neutral-800 absolute top-full left-1/2 -translate-x-1/2"
+            )}
+            style={{ borderWidth: "6px" }}
+          />
+          {label}
+        </span>
+      )}
+      {children}
+    </div>
+  );
+}
+
 function BuyLicense() {
   const plans = [
     {
@@ -530,25 +549,18 @@ function BuyLicense() {
                     ) : (
                       <div className="flex flex-col md:grid md:grid-cols-2 items-center gap-2">
                         {planOptions(buttons).map(([link, unit, yearly]) => (
-                          <span className="block w-full md:w-auto md:inline-block relative group">
-                            {yearly && (
-                              <span className="hidden group-hover:inline-block shadow absolute bottom-full mb-4 text-sm font-title font-semibold right-1/2 whitespace-nowrap translate-x-1/2 w-auto rounded bg-neutral-800 text-neutral-200 py-2 px-3 leading-none">
-                                <span
-                                  class={twMerge(
-                                    "w-0 h-0 border-transparent border-t-neutral-800 absolute top-full left-1/2 -translate-x-1/2"
-                                  )}
-                                  style={{ borderWidth: "6px" }}
-                                />
-                                2 months free!
-                              </span>
-                            )}
+                          <WithTooltip
+                            className="block w-full md:w-auto md:inline-block"
+                            label="2 months free!"
+                            show={yearly}
+                          >
                             <A
                               className="btn btn1 py-3 block text-center"
                               href={link}
                             >
                               Buy {unit}
                             </A>
-                          </span>
+                          </WithTooltip>
                         ))}
                       </div>
                     )}
@@ -591,6 +603,7 @@ function Download() {
       platform: "windows-x64",
       icon: AiFillWindows,
       label: "Windows",
+      disabledText: "Temporarily unavailable.",
     },
     {
       platform: "mac-x64",
@@ -641,29 +654,34 @@ function Download() {
         <p className="flex flex-wrap flex-col md:flex-row justify-center">
           {links.map((it) => (
             <div className="p-3 border-l border-r border-t last:border-b md:border-0 md:border-t md:border-b md:border-l first:rounded-tl first:rounded-bl md:last:border-r last:rounded-tr last:rounded-br border-dashed border-gray-200">
-              <A
-                href={
-                  it.disabledText
-                    ? "#"
-                    : `https://codeperfect95.s3.us-east-2.amazonaws.com/app/${it.platform}-${CURRENT_BUILD}.zip`
-                }
-                className={cx(
-                  "btn btn1 flex md:inline-flex leading-none py-4 px-5",
-                  it.disabledText && "disabled"
-                )}
-                title={it.disabledText}
-                onClick={() => {
-                  posthog.capture("download", { platform: it.platform });
-                }}
+              <WithTooltip
+                className="w-full h-full"
+                show={it.disabledText}
+                label={it.disabledText}
               >
-                <Icon
-                  size={18}
-                  stroke={2}
-                  className="relative mt-0.5 mr-1"
-                  icon={it.icon}
-                />
-                <span>{it.label}</span>
-              </A>
+                <A
+                  href={
+                    it.disabledText
+                      ? "#"
+                      : `https://codeperfect95.s3.us-east-2.amazonaws.com/app/${it.platform}-${CURRENT_BUILD}.zip`
+                  }
+                  className={cx(
+                    "btn btn1 flex md:inline-flex leading-none py-4 px-5 relative",
+                    it.disabledText && "disabled"
+                  )}
+                  onClick={() => {
+                    posthog.capture("download", { platform: it.platform });
+                  }}
+                >
+                  <Icon
+                    size={18}
+                    stroke={2}
+                    className="relative mt-0.5 mr-1"
+                    icon={it.icon}
+                  />
+                  <span>{it.label}</span>
+                </A>
+              </WithTooltip>
             </div>
           ))}
         </p>
