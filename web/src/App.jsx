@@ -22,7 +22,7 @@ import {
   IconTools,
   IconBrain,
   IconBike,
-  IconCategory2,
+  // IconCategory2,
   IconKeyboard,
 } from "@tabler/icons";
 
@@ -61,6 +61,7 @@ const CURRENT_BUILD = process.env.REACT_APP_BUILD_VERSION;
 const CURRENT_BUILD_RELEASE_DATE = "January 25, 2023";
 
 const isDev = process.env.NODE_ENV === "development";
+const isStaging = process.env.NODE_ENV === "staging";
 
 const BASE_LINKS = {
   docs: "https://docs.codeperfect95.com",
@@ -86,15 +87,20 @@ const DEV_LINKS = {
   buyProYearly: "https://buy.stripe.com/test_3cs6pj9WW3lR3Ac7sB",
 };
 
+const STAGING_LINKS = {
+  docs: "https://dev-docs.codeperfect95.com",
+  gettingStarted: "https://dev-docs.codeperfect95.com/getting-started",
+  changelog: "https://dev-docs.codeperfect95.com/changelog",
+};
+
 const LINKS = {
   ...BASE_LINKS,
   ...(isDev ? DEV_LINKS : {}),
+  ...(isStaging ? STAGING_LINKS : {}),
 };
 
-const CDN_PATH = "https://codeperfect-static.s3.us-east-2.amazonaws.com";
-
 function asset(path) {
-  return isDev ? `/public${path}` : `${CDN_PATH}${path}`;
+  return isDev ? `/public${path}` : path;
 }
 
 function isExternalLink(href) {
