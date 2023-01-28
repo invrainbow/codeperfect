@@ -2356,6 +2356,7 @@ void handle_command(Command cmd, bool from_menu) {
                 pane->focus_editor_by_index(new_idx);
             }
         }
+        break;
     }
 
     case CMD_EXIT:
