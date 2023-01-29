@@ -74,6 +74,8 @@ const BASE_LINKS = {
   discord: "https://discord.gg/WkFY44BY7a",
   mailingList: "https://codeperfect95.substack.com/",
   handmadeManifesto: "https://handmade.network/manifesto",
+  nonPessimized: "https://www.youtube.com/watch?v=pgoetgxecw8",
+  mikeActon: "https://www.youtube.com/watch?v=rX0ItVEVjHc",
 };
 
 const DEV_LINKS = {
@@ -597,6 +599,146 @@ function BuyLicense() {
   );
 }
 
+const faqs = [
+  {
+    q: "Why is CodePerfect fast?",
+    a: (
+      <>
+        <p>
+          It actually isn't particularly fast. It's just fast compared to modern
+          software. What makes modern software slow is a complicated question,
+          but it's a hundred different things, and what what makes CodePerfect
+          relatively fast is that we mostly just declined to copy them.
+        </p>
+
+        <p>
+          More concretely, we use a low level language (C/C++). We manage our
+          own memory and do amortized bulk allocation with arena allocators. We
+          write straightforward,{" "}
+          <A href={LINKS.nonPessimized}>non-pessimized</A> code that just{" "}
+          <A href={LINKS.mikeActon}>does the actual thing</A> it's supposed to.
+        </p>
+
+        <p>
+          Really CodePerfect's speed comes from how fast modern computers are.
+          We aren't hyperoptimizing or hypertuning with crazy inline assembly or
+          anything. There are some techniques we use, like using file mappings
+          and multithreading some things where it makes sense, but overall it's
+          just straightforward C code that performs the actual task of executing
+          an IDE, and as it turns out, that task can be done quite efficiently
+          by modern computers.
+        </p>
+      </>
+    ),
+  },
+  {
+    q: "How does CodePerfect compare with Jetbrains and VSCode?",
+    a: (
+      <>
+        <p>
+          Jetbrains has more features, VSCode is free and customizable, and
+          CodePerfect is fast.
+        </p>
+
+        <p>
+          Right now we're targeting the demographic that wants a coding
+          experience as fluid as alacritty/tmux/vim or Sublime Text, but comes
+          with the code intelligence and other IDE features you need to program
+          productively. Our users are people who spend substantial amounts of
+          time in their IDE, want every second to count, and derive significant
+          value (and joy) from an IDE that provides a seamless, latency-free
+          workflow.
+        </p>
+        <p>
+          We're trying to be <A href="https://sesuperhuman.com">Superhuman</A>{" "}
+          for programming. Programmers use their IDE all day, much like business
+          people use email.
+        </p>
+      </>
+    ),
+  },
+  {
+    q: "What's the long term goal?",
+    a: (
+      <>
+        <p>
+          It's actually not speed per se. In the long run, we want to build the
+          smoothest programming experience, a "bicycle for the mind" for
+          programming. But up to a point, the smoothness of the experience
+          basically equals speed (or rather latency), so we're focusing on speed
+          first.
+        </p>
+        <p>
+          Efforts to improve programming tools have a tendency to be based on
+          abstract ideas like how to make programming more visualizable, or
+          collaborative, or involve less actual writing of code. We lean into
+          the opposite practical view that, for now at least, the core activity
+          of programming is still editing, compiling, and debugging code.
+          CodePerfect is tightly integrated and optimized around that particular
+          workflow.
+        </p>
+      </>
+    ),
+  },
+  {
+    q: "Why is it a subscription model? Can I buy a perpetual license?",
+    a: (
+      <>
+        <p>
+          To be blunt, because we have rent to pay, and our rent is a
+          subscription model :)
+        </p>
+        <p>
+          CodePerfect is also in active development and shipping{" "}
+          <A href={LINKS.changelog}>aggressively</A>, so your recurring payments
+          help to fund ongoing development.
+        </p>
+        <p>
+          We understand some users are adamantly opposed to subscription models
+          and would prefer a perpetual license. We sell one for the cost of four
+          years: $200 for individuals, or $400 if you're expensing it.
+        </p>
+      </>
+    ),
+  },
+  {
+    q: "What does the name mean?",
+    a: (
+      <>
+        <p>
+          It's a throwback to a time when the hardware was many times slower
+          than it is today, but somehow all the software felt much faster. "Back
+          to a time when Microsoft Word and Visual Studio opened instantly" sort
+          of thing.
+        </p>
+      </>
+    ),
+  },
+];
+
+function FAQ() {
+  return (
+    <div className="my-12 md:my-28 px-8 md:px-0 md:max-w-screen-sm mx-auto">
+      <div className="md:px-4 md:text-center text-3xl md:text-5xl title mb-4 md:mb-8">
+        FAQ
+      </div>
+      <div>
+        {faqs.map((it) => (
+          <div
+            className="mb-4 last:mb-0 bg-white rounded-lg shadow-sm p-4"
+            key={it.q}
+          >
+            <div className="p-4">
+              <p className="text-lg font-bold">{it.q}</p>
+              {it.a}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function Download() {
   const links = [
     {
@@ -779,6 +921,7 @@ function Header() {
     [LINKS.docs, "Docs"],
     [LINKS.changelog, "Changelog"],
     [LINKS.discord, "Discord"],
+    ["/faq", "FAQ"],
     ["/buy", "Buy"],
     ["/download", "Download"],
   ];
@@ -814,6 +957,7 @@ function Header() {
               <div className="mt-2">
                 {links.map(([url, label]) => (
                   <A
+                    key={url}
                     className="block text-neutral-100 no-underline whitespace-nowrap md:hidden leading-none py-2"
                     onClick={() => setShowMenu(false)}
                     href={url}
@@ -828,6 +972,7 @@ function Header() {
         <div className="hidden md:flex items-baseline gap-x-8">
           {links.map(([url, label]) => (
             <A
+              key={url}
               className="text-[95%] text-neutral-700 no-underline whitespace-nowrap hidden md:inline-block"
               href={url}
             >
@@ -865,6 +1010,7 @@ function Footer() {
           </FootSection>
           <FootSection>
             <FootLink href={`mailto:${SUPPORT_EMAIL}`}>Support</FootLink>
+            <FootLink href="/faq">FAQ</FootLink>
             <FootLink href="/terms">Terms &amp; Privacy</FootLink>
             <FootLink href={LINKS.mailingList}>Newsletter</FootLink>
           </FootSection>
@@ -906,6 +1052,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Layout />}>
             <Route path="download" element={<Download />} />
+            <Route path="faq" element={<FAQ />} />
             <Route path="buy" element={<BuyLicense />} />
             <Route path="payment-done" element={<PaymentDone />} />
             <Route path="portal-done" element={<PortalDone />} />
