@@ -278,7 +278,7 @@ function Home() {
       <div className="bg-neutral-800 border-gray-100 p-8 py-12 md:pb-24 relative z-10 flex items-center justify-center">
         <div className="max-w-screen-2xl flex flex-col lg:flex-row items-center gap-8 md:gap-16">
           <div className="lg:w-1/3 md:mx-0">
-            <div className="text-[200%] md:text-[225%] font-semibold text-black leading-tight">
+            <div className="text-[160%] md:text-[225%] font-semibold text-black leading-tight">
               {BAD_FEATURES.map((name) => (
                 <div className="text-white md:whitespace-nowrap">
                   No {name}.
@@ -314,7 +314,7 @@ function Home() {
       </div>
 
       <div className="batteries-included z-10 px-4 md:px-12 py-12 md:py-20">
-        <h1 className="title text-4xl mb-12 text-center">
+        <h1 className="title text-3xl md:text-4xl mb-6 md:mb-12 text-center">
           <div className="block md:inline-block">Batteries included,</div>
           <span className="hidden md:inline-block">&nbsp;</span>
           <div className="block md:inline-block">zero configuration.</div>
