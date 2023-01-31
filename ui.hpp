@@ -282,27 +282,27 @@ struct UI {
     bool test_hover(boxf area, int id, ImGuiMouseCursor cursor = ImGuiMouseCursor_Arrow);
     void open_project_settings();
 
-    void imgui_small_newline();
-    bool imgui_input_text_full(ccstr label, ccstr inputid, char *buf, int count, int flags);
-    bool imgui_input_text_full(ccstr label, char *buf, int count, int flags = 0);
-    bool imgui_special_key_pressed(int key);
-    bool imgui_key_pressed(int key);
-    void imgui_with_disabled(bool disable, fn<void()> f);
-    u32 imgui_get_keymods();
-    bool imgui_icon_button(ccstr icon);
+    void im_small_newline();
+    bool im_input_text_full(ccstr label, ccstr inputid, char *buf, int count, int flags);
+    bool im_input_text_full(ccstr label, char *buf, int count, int flags = 0);
+    bool im_special_key_pressed(int key);
+    bool im_key_pressed(int key);
+    void im_with_disabled(bool disable, fn<void()> f);
+    u32 im_get_keymods();
+    bool im_icon_button(ccstr icon);
 
-    void imgui_push_mono_font();
-    void imgui_push_ui_font();
-    void imgui_pop_font();
-    bool imgui_is_window_focused();
+    void im_push_mono_font();
+    void im_push_ui_font();
+    void im_pop_font();
+    bool im_is_window_focused();
 
-    void focus_keyboard(Wnd *wnd, int cond = FKC_APPEARING | FKC_FOCUSING);
+    void focus_keyboard_here(Wnd *wnd, int cond = FKC_APPEARING | FKC_FOCUSING);
 
     void help_marker(ccstr text);
     void help_marker(fn<void()> cb);
 
     void init_window(Wnd *wnd);
-    void begin_window(ccstr title, Wnd *wnd, int flags = 0, bool noclose = false, bool noescape = true);
+    void begin_window(ccstr title, Wnd *wnd, int flags = 0, bool noclose = false, bool noescape = false);
     void begin_centered_window(ccstr title, Wnd *wnd, int flags = 0, int width = -1, bool noclose = false, bool noescape = false);
 
     Pretty_Menu *pretty_menu_start(ImVec2 padding = ImVec2(4, 2));
