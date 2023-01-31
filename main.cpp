@@ -776,7 +776,7 @@ void handle_window_event(Window_Event *it) {
             // emacs style keybindings on macos
             switch (keymods) {
             case CP_MOD_CTRL:
-            case CP_MOD_CTRL | CP_MOD_SHIFT: {
+            case CP_MOD_CTRL | CP_MOD_SHIFT:
                 switch (key) {
                 case CP_KEY_E: {
                     auto &line = buf->lines[editor->cur.y];
@@ -802,7 +802,18 @@ void handle_window_event(Window_Event *it) {
                     handled = true;
                     break;
                 }
-            }
+                break;
+
+            case CP_MOD_CTRL | CP_MOD_TEXT:
+            case CP_MOD_CTRL | CP_MOD_TEXT | CP_MOD_SHIFT:
+                switch (key) {
+                case CP_KEY_B:
+                case CP_KEY_F:
+                    cur = alt_move(key == CP_KEY_B, false);
+                    handled = true;
+                    break;
+                }
+                break;
             }
 #endif
 
