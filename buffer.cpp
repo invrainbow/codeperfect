@@ -904,6 +904,8 @@ Buffer_It Buffer::iter(cur2 c) {
     Buffer_It it; ptr0(&it);
     it.buf = this;
     it.pos = c;
+
+    // TODO: should we assert or clamp here if c is out of bounds?
     return it;
 }
 

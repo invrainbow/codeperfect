@@ -378,9 +378,15 @@ bool get_type_color(Ast_Node *node, Editor *editor, vec4f *out) {
                 "len", "make", "new", "panic", "real", "recover",
             };
 
+            auto start = node->start();
+            auto end = node->start();
+
+            start = new_cur2((u32)editor->buf->idx_byte_to_cp(start.y, start.x), (u32)start.y);
+            end = new_cur2((u32)editor->buf->idx_byte_to_cp(end.y, end.x), (u32)end.y);
+
             char token[16] = {0};
-            auto it = editor->iter(node->start());
-            for (u32 i = 0; i < _countof(token) && it.pos != node->end(); i++)
+            auto it = editor->iter(start);
+            for (u32 i = 0; i < _countof(token) && it.pos != end; i++)
                 token[i] = it.next();
 
             For (&keywords) {
