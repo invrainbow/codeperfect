@@ -638,35 +638,60 @@ void handle_window_event(Window_Event *it) {
             auto buf = editor->buf;
             auto cur = editor->cur;
 
+            bool was_updown_movement;
+
+            auto handle_cursor_left = [&]() {
+                if (!(keymods & CP_MOD_SHIFT) && editor->selecting) {
+                    auto a = editor->select_start;
+                    auto b = cur;
+                    cur = a < b ? a : b;
+                } else if (cur.x) {
+                    cur.x--;
+                } else if (cur.y) {
+                    cur.y--;
+                    cur.x = buf->lines[cur.y].len;
+                }
+            };
+
+            auto handle_cursor_right = [&]() {
+                if (!(keymods & CP_MOD_SHIFT) && editor->selecting) {
+                    auto a = editor->select_start;
+                    auto b = cur;
+                    cur = a > b ? a : b;
+                } else if (cur.x < buf->lines[cur.y].len) {
+                    cur.x++;
+                } else if (cur.y < buf->lines.len-1) {
+                    cur.y++;
+                    cur.x = 0;
+                }
+            };
+
+            auto handle_cursor_updown = [&](bool down) {
+                int lo = 0, hi = buf->lines.len-1;
+
+                int y = (int)cur.y + (down ? 1 : -1);
+                if (y > hi) y = hi;
+                if (y < lo) y = lo;
+
+                if (y != cur.y) {
+                    cur.y = y;
+                    cur.x = buf->idx_vcp_to_cp(cur.y, editor->savedvx);
+                }
+
+                was_updown_movement = true;
+            };
+
             switch (keymods) {
             case CP_MOD_SHIFT:
             case CP_MOD_NONE:
                 switch (key) {
                 case CP_KEY_LEFT:
-                    if (!(keymods & CP_MOD_SHIFT) && editor->selecting) {
-                        auto a = editor->select_start;
-                        auto b = cur;
-                        cur = a < b ? a : b;
-                    } else if (cur.x) {
-                        cur.x--;
-                    } else if (cur.y) {
-                        cur.y--;
-                        cur.x = buf->lines[cur.y].len;
-                    }
+                    handle_cursor_left();
                     handled = true;
                     break;
 
                 case CP_KEY_RIGHT:
-                    if (!(keymods & CP_MOD_SHIFT) && editor->selecting) {
-                        auto a = editor->select_start;
-                        auto b = cur;
-                        cur = a > b ? a : b;
-                    } else if (cur.x < buf->lines[cur.y].len) {
-                        cur.x++;
-                    } else if (cur.y < buf->lines.len-1) {
-                        cur.y++;
-                        cur.x = 0;
-                    }
+                    handle_cursor_right();
                     handled = true;
                     break;
 
@@ -739,23 +764,7 @@ void handle_window_event(Window_Event *it) {
                         if (move_autocomplete_cursor(editor, key == CP_KEY_DOWN ? 1 : -1))
                             break;
 
-                    auto old_savedvx = editor->savedvx;
-
-                    auto calc_x = [&]() -> int {
-                        return buf->idx_vcp_to_cp(cur.y, editor->savedvx);
-                    };
-
-                    if (key == CP_KEY_DOWN) {
-                        if (cur.y < buf->lines.len-1) {
-                            cur.y++;
-                            cur.x = calc_x();
-                        }
-                    } else {
-                        if (cur.y) {
-                            cur.y--;
-                            cur.x = calc_x();
-                        }
-                    }
+                    handle_cursor_updown(key == CP_KEY_DOWN);
                     handled = true;
                     break;
                 }
@@ -779,11 +788,23 @@ void handle_window_event(Window_Event *it) {
                     cur.x = 0;
                     handled = true;
                     break;
+                case CP_KEY_N:
+                case CP_KEY_P:
+                    handle_cursor_updown(key == CP_KEY_N);
+                    handled = true;
+                    break;
+                case CP_KEY_B:
+                    handle_cursor_left();
+                    handled = true;
+                    break;
+                case CP_KEY_F:
+                    handle_cursor_right();
+                    handled = true;
+                    break;
                 }
             }
             }
 #endif
-
 
             if (!handled) break;
 
@@ -802,7 +823,7 @@ void handle_window_event(Window_Event *it) {
             opts->is_user_movement = true;
             editor->move_cursor(cur, opts);
 
-            if (key == CP_KEY_UP || key == CP_KEY_DOWN)
+            if (was_updown_movement)
                 editor->savedvx = old_savedvx;
 
             editor->update_autocomplete(false); // TODO: why call this here?
