@@ -620,8 +620,8 @@ const faqs = [
         </p>
 
         <p>
-          Really CodePerfect's speed comes from how fast modern computers are.
-          We aren't hyperoptimizing or hypertuning with crazy inline assembly or
+          Really CodePerfect's speed is just the speed of modern computers. We
+          aren't hyperoptimizing or hypertuning with crazy inline assembly or
           anything. There are some techniques we use, like using file mappings
           and multithreading some things where it makes sense, but overall it's
           just straightforward C code that performs the actual task of executing
@@ -718,20 +718,18 @@ const faqs = [
 
 function FAQ() {
   return (
-    <div className="my-12 md:my-28 px-8 md:px-0 md:max-w-screen-sm mx-auto">
-      <div className="md:px-4 md:text-center text-3xl md:text-5xl title mb-4 md:mb-8">
+    <div className="bg-white md:bg-transparent py-12 px-6 md:px-4 md:py-28 md:max-w-screen-sm mx-auto">
+      <div className="md:px-4 md:text-center text-3xl md:text-5xl title mb-8">
         FAQ
       </div>
       <div>
         {faqs.map((it) => (
           <div
-            className="mb-4 last:mb-0 bg-white rounded-lg shadow-sm p-4"
+            className="md:p-6 md:border-0 mb-12 md:mb-4 last:mb-0 md:bg-white md:rounded-lg md:shadow-sm"
             key={it.q}
           >
-            <div className="p-4">
-              <p className="text-lg font-bold">{it.q}</p>
-              {it.a}
-            </div>
+            <p className="text-lg font-bold">{it.q}</p>
+            {it.a}
           </div>
         ))}
       </div>
@@ -766,7 +764,7 @@ function Download() {
   ];
 
   return (
-    <div className="my-12 md:my-28 px-8 md:px-0">
+    <div className="my-12 md:my-28 px-6 md:px-0">
       <div className="md:px-4 md:text-center text-3xl md:text-5xl title">
         Download CodePerfect
       </div>
@@ -795,7 +793,7 @@ function Download() {
       <div className="max-w-3xl mx-auto mt-12 md:px-4 md:text-center">
         <p className="flex flex-wrap flex-col md:flex-row justify-center">
           {links.map((it) => (
-            <div className="p-3 border-l border-r border-t last:border-b md:border-0 md:border-t md:border-b md:border-l first:rounded-tl first:rounded-bl md:last:border-r last:rounded-tr last:rounded-br border-dashed border-gray-200">
+            <div className="mb-3 md:m-0 md:p-3 md:border-t md:border-b md:border-l first:rounded-tl first:rounded-bl md:last:border-r last:rounded-tr last:rounded-br border-dashed border-gray-200">
               <WithTooltip
                 className="w-full h-full"
                 show={it.disabledText}
