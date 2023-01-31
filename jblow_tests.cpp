@@ -116,6 +116,88 @@ Editor* Jblow_Tests::open_editor(ccstr relative_filepath) {
     return wait_for_editor(relative_filepath);
 }
 
+void Jblow_Tests::run_nonvimfuzzer() {
+    struct Input {
+        bool ischar;
+        union {
+            char ch; // ischar
+            struct {
+                int mods; // !ischar
+                int key; // !ischar
+            };
+        };
+    };
+
+    auto generate_inputs = [&](int seed, int n) {
+        mt_seed32(seed);
+        auto ret = alloc_list<Input>();
+
+        auto add_char = [&](char c) {
+            Input it; ptr0(&it);
+            it.ischar = true;
+            it.ch = c;
+            ret->append(&it);
+        };
+
+        auto add_key = [&](char key, int mods) {
+            Input it; ptr0(&it);
+            it.ischar = false;
+            it.key = key;
+            it.mods = mods;
+            ret->append(&it);
+        };
+
+        for (int i = 0; i < n; i++) {
+            int n = mt_lrand() % 100;
+            if (n < 10) {
+                add_char('a' + (mt_lrand() % ('z' - 'a')));
+            } else if (n < 20) {
+                add_char('A' + (mt_lrand() % ('Z' - 'A')));
+            } else if (n < 30) {
+                add_char('0' + (mt_lrand() % ('9' - '0')));
+            } else if (n < 45) {
+                int keys[] = {CP_KEY_BACKSPACE, CP_KEY_ENTER};
+                add_key(keys[mt_lrand() % _countof(keys)], 0);
+            } else if (n < 70) {
+                int keys[] = {CP_KEY_UP, CP_KEY_LEFT, CP_KEY_RIGHT, CP_KEY_DOWN};
+                int flags = 0;
+                if (mt_lrand() % 2 == 0) flags |= CP_MOD_SHIFT;
+                if (mt_lrand() % 2 == 0) flags |= CP_MOD_TEXT;
+                add_key(keys[mt_lrand() % _countof(keys)], flags);
+            } else {
+                int keys[] = {CP_KEY_E, CP_KEY_A, CP_KEY_N, CP_KEY_P, CP_KEY_SPACE};
+                int flags = CP_MOD_CTRL;
+                if (mt_lrand() % 2 == 0) flags |= CP_MOD_SHIFT;
+                add_key(keys[mt_lrand() % _countof(keys)], flags);
+            }
+        }
+        return ret;
+    };
+
+    world.dont_prompt_on_close_unsaved_tab = true;
+
+    for (int seed = 0; seed < 16; seed++) {
+        // wait for editor
+        auto editor = open_editor("main.go");
+
+        auto inputs = generate_inputs(seed, 500);
+        Fori (inputs) {
+            if (it.ischar)
+                type_char(it.ch);
+            else
+                press_key(it.key, it.mods);
+            if (i % 10 == 0) sleep_milliseconds(25);
+        }
+
+        // close editor
+        press_key(CP_KEY_W, CP_MOD_PRIMARY);
+        WAIT { return get_current_editor() == NULL; };
+
+        // wait for imgui input queue to finish
+        WAIT_FOREVER { return !ImGui::GetCurrentContext()->InputEventsQueue.Size; };
+    }
+}
+
 void Jblow_Tests::run_vimfuzzer() {
     ccstr chars = (
         "KKKKKKKKKKKKKK"                // does nothing in normal mode
@@ -220,6 +302,10 @@ void Jblow_Tests::init_options() {
         options.enable_vim_mode = true;
     }
 
+    if (streq(test_name, "nonvimfuzzer")) {
+        options.enable_vim_mode = false;
+    }
+
     if (streq(test_name, "workspace")) {
         options.enable_vim_mode = true;
     }
@@ -249,6 +335,7 @@ void Jblow_Tests::run() {
 
     if (streq(test_name, "workspace")) run_workspace();
     if (streq(test_name, "vimfuzzer")) run_vimfuzzer();
+    if (streq(test_name, "nonvimfuzzer")) run_nonvimfuzzer();
 
     // all good!
     world.message_queue.add([&](auto msg) {

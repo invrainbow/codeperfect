@@ -23,7 +23,7 @@
             "program": "${workspaceFolder}/build/bin/ide",
             "args": [
                 "--jblow-tests",
-                "vimfuzzer",
+                "nonvimfuzzer",
             ],
             "cwd": "${workspaceFolder}/build/bin",
             "expressions": "native",
