@@ -12,7 +12,8 @@
             "cwd": "${workspaceFolder}/build/bin",
             "expressions": "native",
             "postRunCommands": [
-                "process handle p true -s false SIGURG"
+                "process handle -p true -s false SIGURG",
+                "settings set target.process.follow-fork-mode child",
             ],
         },
         {

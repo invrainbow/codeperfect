@@ -2538,6 +2538,10 @@ void UI::draw_everything() {
                 cp_panic("This is an intentionally caused crash");
             }
 
+            if (im::MenuItem("Restart CodePerfect")) {
+                restart_program();
+            }
+
             im::Separator();
 
             if (im::MenuItem("Message box - Ok")) {
