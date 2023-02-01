@@ -382,15 +382,18 @@ struct World {
 
     float zoom_level;
 
+    float get_zoom_scale() {
+        auto zl = options.zoom_level;
+        if (!zl) zl = 100;
+        return sqrt(zl / 100.0f);
+    }
+
     vec2f get_display_scale() {
         auto ret = display_scale;
 
-        auto zl = options.zoom_level;
-        if (!zl) zl = 100;
-
-        auto zf = sqrt(zl / 100.0f);
-        ret.x *= zf;
-        ret.y *= zf;
+        auto zs = get_zoom_scale();
+        ret.x *= zs;
+        ret.y *= zs;
         return ret;
     }
 

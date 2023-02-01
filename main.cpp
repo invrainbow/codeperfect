@@ -330,8 +330,8 @@ void handle_window_event(Window_Event *it) {
             pane2.width -= delta;
         }
 
-        ImGuiIO& io = ImGui::GetIO();
-        io.AddMousePosEvent((float)x, (float)y);
+        auto zs = world.get_zoom_scale();
+        ImGui::GetIO().AddMousePosEvent((float)x / zs, (float)y / zs);
         break;
     }
 
