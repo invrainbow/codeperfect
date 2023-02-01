@@ -198,6 +198,7 @@ void Serde::write_type(void* val, int type) {
         WRITE(9, zoom_level, SERDE_INT);
         WRITE(10, send_crash_reports, SERDE_BOOL);
         WRITE(11, fps_limit_enum, SERDE_INT);
+        WRITE(12, open_last_folder, SERDE_BOOL);
         write_int(0);
         break;
     }
@@ -280,6 +281,7 @@ bool Serde::read_type_field(void* out, int type, int field_id) {
         FIELD(9, zoom_level, SERDE_INT);
         FIELD(10, send_crash_reports, SERDE_BOOL);
         FIELD(11, fps_limit_enum, SERDE_INT);
+        FIELD(12, open_last_folder, SERDE_BOOL);
         }
         break;
     }

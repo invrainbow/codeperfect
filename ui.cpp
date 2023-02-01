@@ -2773,6 +2773,9 @@ void UI::draw_everything() {
                         }
                         im::EndCombo();
                     }
+
+                    im_small_newline();
+                    im::Checkbox("Open last folder on startup", &tmp.open_last_folder);
                 }
                 im_pop_font();
                 im::PopItemWidth();
