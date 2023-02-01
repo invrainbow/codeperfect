@@ -223,6 +223,7 @@ struct UI {
     Atlas *atlases_head;
     int current_texture_id;
     Font* base_font;
+    Font* base_ui_font;
     List<ccstr> *all_font_names;
 
     // we need a way of looking up fonts...
@@ -247,6 +248,7 @@ struct UI {
     void draw_debugger_var(Draw_Debugger_Var_Args *args);
 
     Font* acquire_font(ccstr name);
+    Font* acquire_system_ui_font();
     Font* find_font_for_grapheme(List<uchar> *grapheme);
 
     bool init();

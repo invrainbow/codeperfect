@@ -812,16 +812,40 @@ void UI::render_ts_cursor(TSTreeCursor *curr, Parse_Lang lang, cur2 open_cur) {
     pop(0);
 }
 
-Font *init_builtin_base_font() {
+
+Font *init_builtin_font(u8 *data, u32 len, int size, ccstr name) {
     auto fd = alloc_object(Font_Data);
     fd->type = FONT_DATA_FIXED;
-    fd->data = vera_mono_ttf;
-    fd->len = vera_mono_ttf_len;
+    fd->data = data;
+    fd->len = len;
 
     auto ret = alloc_object(Font);
-    if (ret->init("Bitstream Vera Sans Mono", CODE_FONT_SIZE, fd))
-        return ret;
-    return NULL;
+    return ret->init(name, size, fd) ? ret : NULL;
+}
+
+Font *init_builtin_base_font() {
+    return init_builtin_font(vera_mono_ttf, vera_mono_ttf_len, CODE_FONT_SIZE, "Bitstream Vera Sans Mono");
+}
+
+Font *init_builtin_base_ui_font() {
+    return init_builtin_font(open_sans_ttf, open_sans_ttf_len, UI_FONT_SIZE, "Open Sans");
+}
+
+Font* UI::acquire_system_ui_font() {
+    SCOPED_MEM(&world.ui_mem);
+    Frame frame;
+
+    auto data = load_system_ui_font();
+    if (!data) return NULL;
+
+    auto font = alloc_object(Font);
+    if (!font->init("<system ui font>", UI_FONT_SIZE, data)) {
+        frame.restore();
+        error("unable to acquire system font");
+        return NULL;
+    }
+
+    return font;
 }
 
 bool UI::init() {
@@ -832,16 +856,18 @@ bool UI::init() {
         font_cache.init();
         glyph_cache.init();
 
-        base_font = init_builtin_base_font();
-        if (!base_font) {
-            ccstr base_font_candidates[] = { "SF Mono", "Menlo", "Monaco", "Consolas", "Liberation Mono" };
-            For (&base_font_candidates) {
-                base_font = acquire_font(it);
-                if (base_font) break;
-            }
+        ccstr base_font_candidates[] = { "SF Mono", "Menlo", "Monaco", "Consolas", "Liberation Mono" };
+        For (&base_font_candidates) {
+            base_font = acquire_font(it);
+            if (base_font) break;
         }
 
+        if (!base_font) base_font = init_builtin_base_font();
         if (!base_font) return false;
+
+        base_ui_font = init_builtin_base_ui_font();
+        if (!base_ui_font) base_ui_font = init_builtin_base_ui_font();
+        if (!base_ui_font) return false;
 
         // list available font names
         all_font_names = alloc_list<ccstr>();

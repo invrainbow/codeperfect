@@ -427,6 +427,20 @@ struct Font_Data {
         File_Mapping *fm;
     };
 
+    u8* get_data() {
+        if (type == FONT_DATA_MALLOC) return data;
+        if (type == FONT_DATA_MMAP) return fm->data;
+        if (type == FONT_DATA_FIXED) return data;
+        cp_panic("invalid font type");
+    }
+
+    u32 get_len() {
+        if (type == FONT_DATA_MALLOC) return len;
+        if (type == FONT_DATA_MMAP) return fm->len;
+        if (type == FONT_DATA_FIXED) return len;
+        cp_panic("invalid font type");
+    }
+
     void cleanup() {
         if (type == FONT_DATA_MALLOC) {
             if (data != NULL) {
@@ -443,6 +457,7 @@ struct Font_Data {
     }
 };
 
+Font_Data* load_system_ui_font();
 Font_Data* load_font_data_by_name(ccstr name);
 
 ccstr _cp_dirname(ccstr path);

@@ -1548,7 +1548,8 @@ int realmain(int argc, char **argv) {
             ImFontConfig config;
             config.OversampleH = 3;
             config.OversampleV = 2;
-            world.ui.im_font_ui = io.Fonts->AddFontFromMemoryTTF(open_sans_ttf, open_sans_ttf_len, UI_FONT_SIZE, &config);
+            // config.GlyphExtraSpacing.x = 0.40;
+            world.ui.im_font_ui = io.Fonts->AddFontFromMemoryTTF(ui.base_ui_font->data->get_data(), ui.base_ui_font->data->get_len(), UI_FONT_SIZE, &config);
             cp_assert(world.ui.im_font_ui);
         }
 
@@ -1576,9 +1577,9 @@ int realmain(int argc, char **argv) {
 
         {
             ImFontConfig config;
-            config.OversampleH = 3;
-            config.OversampleV = 2;
-            world.ui.im_font_mono = io.Fonts->AddFontFromMemoryTTF(vera_mono_ttf, vera_mono_ttf_len, CODE_FONT_SIZE);
+            config.OversampleH = 4;
+            config.OversampleV = 3;
+            world.ui.im_font_mono = io.Fonts->AddFontFromMemoryTTF(ui.base_font->data->get_data(), ui.base_font->data->get_len(), CODE_FONT_SIZE);
             cp_assert(world.ui.im_font_mono);
         }
 
