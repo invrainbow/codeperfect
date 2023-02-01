@@ -72,7 +72,7 @@ const BASE_LINKS = {
 
   twitter: "https://twitter.com/codeperfect95",
   discord: "https://discord.gg/WkFY44BY7a",
-  mailingList: "https://codeperfect95.substack.com/",
+  substack: "https://codeperfect95.substack.com/",
   handmadeManifesto: "https://handmade.network/manifesto",
   nonPessimized: "https://www.youtube.com/watch?v=pgoetgxecw8",
   mikeActon: "https://www.youtube.com/watch?v=rX0ItVEVjHc",
@@ -1010,7 +1010,7 @@ function Footer() {
             <FootLink href={`mailto:${SUPPORT_EMAIL}`}>Support</FootLink>
             <FootLink href="/faq">FAQ</FootLink>
             <FootLink href="/terms">Terms &amp; Privacy</FootLink>
-            <FootLink href={LINKS.mailingList}>Newsletter</FootLink>
+            <FootLink href={LINKS.substack}>Substack</FootLink>
           </FootSection>
           <div className="flex gap-x-4 text-2xl mt-3 md:mt-0">
             <A className="text-gray-800" href={LINKS.discord}>
