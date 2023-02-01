@@ -16,8 +16,8 @@
 #include "dbg.hpp"
 #include "hash.hpp"
 
-#define CODE_FONT_SIZE 14
-#define UI_FONT_SIZE 17
+#define CODE_FONT_SIZE 15
+#define UI_FONT_SIZE 16
 #define ICON_FONT_SIZE 16
 
 extern ImVec2 icon_button_padding;

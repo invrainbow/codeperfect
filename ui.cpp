@@ -856,16 +856,26 @@ bool UI::init() {
         font_cache.init();
         glyph_cache.init();
 
-        ccstr base_font_candidates[] = { "SF Mono", "Menlo", "Monaco", "Consolas", "Liberation Mono" };
-        For (&base_font_candidates) {
-            base_font = acquire_font(it);
-            if (base_font) break;
+        {
+            ccstr candidates[] = { "SF Mono", "Menlo", "Monaco", "Consolas", "Liberation Mono" };
+            For (&candidates) {
+                base_font = acquire_font(it);
+                if (base_font) break;
+            }
         }
 
         if (!base_font) base_font = init_builtin_base_font();
         if (!base_font) return false;
 
-        base_ui_font = init_builtin_base_ui_font();
+        {
+            // base_ui_font = acquire_system_ui_font();
+            ccstr candidates[] = { "Lucida Grande", "Segoe UI", "Helvetica Neue" };
+            For (&candidates) {
+                base_ui_font = acquire_font(it);
+                if (base_ui_font) break;
+            }
+        }
+
         if (!base_ui_font) base_ui_font = init_builtin_base_ui_font();
         if (!base_ui_font) return false;
 

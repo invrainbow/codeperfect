@@ -1548,7 +1548,7 @@ int realmain(int argc, char **argv) {
             ImFontConfig config;
             config.OversampleH = 3;
             config.OversampleV = 2;
-            // config.GlyphExtraSpacing.x = 0.40;
+            // config.GlyphExtraSpacing.x = 0.25;
             world.ui.im_font_ui = io.Fonts->AddFontFromMemoryTTF(ui.base_ui_font->data->get_data(), ui.base_ui_font->data->get_len(), UI_FONT_SIZE, &config);
             cp_assert(world.ui.im_font_ui);
         }
