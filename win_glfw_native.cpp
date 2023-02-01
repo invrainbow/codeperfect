@@ -8,6 +8,8 @@
 #define GLFW_EXPOSE_NATIVE_X11
 #elif OS_WINBLOWS
 #define GLFW_EXPOSE_NATIVE_WIN32
+#elif OS_MAC
+#define GLFW_EXPOSE_NATIVE_COCOA
 #endif
 
 #include <GLFW/glfw3native.h>
@@ -17,6 +19,8 @@ void* get_native_window_handle(GLFWwindow *window) {
     return (void*)glfwGetX11Window(window);
 #elif OS_WINBLOWS
     return (void*)glfwGetWin32Window(window);
+#elif OS_MAC
+    return (void*)glfwGetCocoaWindow(window);
 #endif
 }
 
