@@ -3561,6 +3561,8 @@ List<Find_References_File> *Go_Indexer::actually_find_references(Goresult *declr
                     break;
                 }
             }
+
+            if (!package_is_dot && !package_name_we_want) return;
         }
 
         auto process_ref = [&](Go_Reference *it) {
