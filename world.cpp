@@ -441,6 +441,11 @@ void World::init() {
         }
 
 #endif // RELEASE_MODE
+
+        else if (!already_read_current_path) {
+            cp_strcpy_fixed(current_path, it);
+            already_read_current_path = true;
+        }
     }
 
     // read options from disk
@@ -460,7 +465,6 @@ void World::init() {
     } while (0);
 
     world.use_nvim = options.enable_vim_mode;
-
 
     if (make_testing_headless) {
         if (!jblow_tests.on)
@@ -1923,6 +1927,7 @@ void init_command_info_table() {
     command_info_table[CMD_COMMAND_PALETTE] = k(CP_MOD_PRIMARY, CP_KEY_K, "Command Palette");
     command_info_table[CMD_OPEN_FILE_MANUALLY] = k(CP_MOD_PRIMARY, CP_KEY_O, "Open File...");
     command_info_table[CMD_CLOSE_EDITOR] = k(CP_MOD_PRIMARY, CP_KEY_W, "Close Editor");
+    command_info_table[CMD_OPEN_FOLDER] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_O, "Open Folder...");
 }
 
 void do_find_interfaces() {
@@ -2086,6 +2091,23 @@ void handle_command(Command cmd, bool from_menu) {
     if (!is_command_enabled(cmd)) return;
 
     switch (cmd) {
+    case CMD_OPEN_FOLDER: {
+        auto buf = alloc_array(char, MAX_PATH);
+
+        Select_File_Opts opts; ptr0(&opts);
+        opts.buf = buf;
+        opts.bufsize = MAX_PATH;
+        opts.folder = true;
+        opts.save = false;
+
+        if (!let_user_select_file(&opts)) break;
+
+        auto args = alloc_list<char*>();
+        args->append(buf);
+        fork_self(args, false);
+        break;
+    }
+
     case CMD_OPEN_FILE_MANUALLY: {
         Select_File_Opts opts; ptr0(&opts);
         opts.buf = alloc_array(char, 256);

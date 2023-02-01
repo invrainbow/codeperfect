@@ -260,6 +260,7 @@ enum Command {
     CMD_COMMAND_PALETTE,
     CMD_OPEN_FILE_MANUALLY,
     CMD_CLOSE_EDITOR,
+    CMD_OPEN_FOLDER,
     /**/
     _CMD_COUNT_,
     CMD_INVALID = -1,

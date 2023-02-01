@@ -156,7 +156,7 @@ bool Fs_Watcher::next_event(Fs_Event *event) {
     return true;
 }
 
-void restart_program() {
+void fork_self(List<char*> *args, bool exit_this) {
     auto path = get_executable_path();
     if (!path) return;
 
@@ -165,13 +165,18 @@ void restart_program() {
 
     if (pid == 0) {
         auto our_argv = alloc_list<char*>();
-        for (int i = 0; i < gargc; i++)
-            our_argv->append(gargv[i]);
+        if (args) {
+            our_argv->append(gargv[0]);
+            For (args) our_argv->append(it);
+        } else {
+            for (int i = 0; i < gargc; i++)
+                our_argv->append(gargv[i]);
+        }
         our_argv->append((char*)NULL);
         execv(path, our_argv->items);
         exit(1); // failed
     } else {
-        exit(0);
+        if (exit_this) exit(0);
     }
 }
 

@@ -2371,6 +2371,7 @@ void UI::draw_everything() {
         if (im::BeginMenu("File")) {
             menu_command(CMD_NEW_FILE);
             menu_command(CMD_OPEN_FILE_MANUALLY);
+            menu_command(CMD_OPEN_FOLDER);
             menu_command(CMD_SAVE_FILE);
             menu_command(CMD_SAVE_ALL);
             menu_command(CMD_CLOSE_EDITOR);
@@ -2581,7 +2582,7 @@ void UI::draw_everything() {
             }
 
             if (im::MenuItem("Restart CodePerfect")) {
-                restart_program();
+                fork_self();
             }
 
             im::Separator();
@@ -2664,7 +2665,7 @@ void UI::draw_everything() {
 
                 auto res = ask_user_yes_no("New trial started, restart to take effect?", "Restart needed", "Restart", "Don't restart");
                 if (res == ASKUSER_YES)
-                    restart_program();
+                    fork_self();
             }
 
             if (im::MenuItem("Fake being registered")) {
@@ -2891,7 +2892,7 @@ void UI::draw_everything() {
                 if (wnd.something_that_needs_restart_was_changed) {
                     auto res = ask_user_yes_no("One of the settings changed requires you to restart CodePerfect. Restart now?", "Restart needed", "Restart", "Don't restart");
                     if (res == ASKUSER_YES)
-                        restart_program();
+                        fork_self();
                 }
 
                 wnd.show = false;
@@ -3710,7 +3711,7 @@ void UI::draw_everything() {
 
             auto res = ask_user_yes_no("Your license key was saved. You'll need to restart CodePerfect for it to take effect. Restart now?", "License key saved", "Restart", "Don't restart");
             if (res == ASKUSER_YES)
-                restart_program();
+                fork_self();
         } while (0);
 
         im::End();

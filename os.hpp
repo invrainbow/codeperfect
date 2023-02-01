@@ -464,7 +464,7 @@ ccstr _cp_dirname(ccstr path);
 ccstr cp_dirname(ccstr path);
 ccstr cp_basename(ccstr path);
 
-void restart_program(); // if this returns, something fucked up
+void fork_self(List<char*> *args = NULL, bool exit_this = true);
 
 typedef fn<int(const void *it)> bs_test_func;
 int binary_search(void *list, s32 num, s32 size, bs_test_func test);
