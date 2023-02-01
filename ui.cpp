@@ -6119,7 +6119,6 @@ void UI::draw_everything() {
                     return 2;
                 };
 
-                cur2 start, end;
                 auto type = classify_char(editor->iter(pos).peek());
 
                 // figure out start
