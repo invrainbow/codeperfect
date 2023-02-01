@@ -19,7 +19,6 @@
 #define CODE_FONT_SIZE 14
 #define UI_FONT_SIZE 17
 #define ICON_FONT_SIZE 16
-#define FRAME_RATE_CAP 60
 
 extern ImVec2 icon_button_padding;
 

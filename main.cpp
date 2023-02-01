@@ -1986,7 +1986,18 @@ int realmain(int argc, char **argv) {
         fstlog("swap buffers");
 
         if (!world.turn_off_framerate_cap) {
-            int framecap = world.jblow_tests.on ? 144 : FRAME_RATE_CAP;
+            auto get_framecap = [&]() {
+                if (world.jblow_tests.on) return 144;
+
+                switch (options.fps_limit_enum) {
+                case FPS_30: return 30;
+                case FPS_60: return 60;
+                case FPS_120: return 120;
+                }
+                return 60;
+            };
+
+            int framecap = get_framecap();
 
             auto timeleft = [&]() -> i32 {
                 auto budget = 1000.f / framecap;

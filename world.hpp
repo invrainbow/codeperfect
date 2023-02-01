@@ -31,6 +31,12 @@ struct Build_Error {
     Mark *mark;
 };
 
+enum Fps_Limit {
+    FPS_30,
+    FPS_60,
+    FPS_120,
+};
+
 struct FT_Node {
     bool is_directory;
     ccstr name;
