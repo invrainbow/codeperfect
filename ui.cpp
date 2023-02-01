@@ -2736,6 +2736,39 @@ void UI::draw_everything() {
                 im::EndTabItem();
             };
 
+
+            if (begin_tab("General")) {
+                auto fps_limit_str = [&](Fps_Limit it) {
+                    switch (it) {
+                    case FPS_30: return "30";
+                    case FPS_60: return "60";
+                    case FPS_120: return "120";
+                    }
+                    return "60";
+                };
+
+                im::PushItemWidth(-1);
+                im_push_ui_font();
+                {
+                    im::Text("FPS limit");
+                    if (im::BeginCombo("###fps_limit", fps_limit_str((Fps_Limit)tmp.fps_limit_enum), 0)) {
+                        Fps_Limit opts[] = { FPS_30, FPS_60, FPS_120 };
+                        For (&opts) {
+                            const bool selected = (tmp.fps_limit_enum == it);
+                            if (ImGui::Selectable(fps_limit_str(it), selected))
+                                tmp.fps_limit_enum = it;
+                            if (selected)
+                                ImGui::SetItemDefaultFocus();
+                        }
+                        im::EndCombo();
+                    }
+                }
+                im_pop_font();
+                im::PopItemWidth();
+
+                end_tab();
+            }
+
             if (begin_tab("Editor Settings")) {
                 im::PushItemWidth(-1);
                 im_push_ui_font();
