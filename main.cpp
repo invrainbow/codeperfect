@@ -1671,10 +1671,8 @@ int realmain(int argc, char **argv) {
         new_ortho_matrix(ortho_projection, 0, world.frame_size.x, world.frame_size.y, 0);
         glUniformMatrix4fv(loc, 1, GL_FALSE, (float*)ortho_projection);
 
-        for (u32 i = 0; i < __TEXTURE_COUNT__; i++) {
-            loc = glGetUniformLocation(world.ui.program, cp_sprintf("tex%d", i));
-            glUniform1i(loc, i);
-        }
+        loc = glGetUniformLocation(world.ui.program, "tex");
+        glUniform1i(loc, TEXTURE_FONT);
     }
 
     {

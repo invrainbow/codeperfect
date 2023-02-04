@@ -25,7 +25,6 @@ extern ImVec2 icon_button_padding;
 enum Texture_Id {
     TEXTURE_FONT,
     TEXTURE_FONT_IMGUI,
-    TEXTURE_IMAGES,
     __TEXTURE_COUNT__,
 };
 
