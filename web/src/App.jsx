@@ -250,10 +250,7 @@ function Home() {
   return (
     <div className="bg-neutral-50 mx-auto md:pt-12 w-full">
       <div className="max-w-full leading-relaxed px-8 py-12 md:py-8 md:pb-20">
-        <div
-          className="md:text-center font-bold text-5xl md:text-5xl mb-1 md:mb-2 text-black tracking-tight"
-          style={{ lineHeight: "1.1" }}
-        >
+        <div className="md:text-center font-bold text-5xl md:text-5xl mb-1 md:mb-2 text-black tracking-tight leading-[1.1] md:leading-[1.1]">
           A fast, lightweight IDE for Go
         </div>
         <div className="md:text-center text-[130%] text-gray-600 leading-normal">
@@ -394,12 +391,7 @@ function WithTooltip({ className, label, show, children }) {
     <div className={cx("relative group", className)}>
       {show && (
         <span className="hidden group-hover:inline-block shadow absolute bottom-full mb-4 text-sm font-title font-semibold right-1/2 whitespace-nowrap translate-x-1/2 w-auto rounded bg-neutral-800 text-neutral-200 py-2 px-3 leading-none">
-          <span
-            class={twMerge(
-              "w-0 h-0 border-transparent border-t-neutral-800 absolute top-full left-1/2 -translate-x-1/2"
-            )}
-            style={{ borderWidth: "6px" }}
-          />
+          <span class="w-0 h-0 border-[6px] border-transparent border-t-neutral-800 absolute top-full left-1/2 -translate-x-1/2" />
           {label}
         </span>
       )}
@@ -581,10 +573,9 @@ function BuyLicense() {
           {help.map((it) => (
             <div className="border-x border-t last:border-b md:border-y md:border-l md:border-r-0 md:last:border-r border-dashed border-gray-200 md:first:border-l p-6 md:p-8">
               <div
-                className="w-8 border-b-4 mb-2 hidden md:block"
+                className="w-8 border-b-4 mb-2 hidden md:block saturate-[0.35]"
                 style={{
                   borderColor: "rgb(11, 158, 245)",
-                  filter: "saturate(0.35)",
                 }}
               />
               <div className="text-neutral-700 text-lg font-semibold mb-2">
