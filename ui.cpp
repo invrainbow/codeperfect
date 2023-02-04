@@ -7931,7 +7931,7 @@ void UI::end_frame() {
 
                         auto actual_color = color;
                         if (result.type == ACR_POSTFIX)
-                            actual_color = new_vec3f(1.0, 0.8, 0.8);
+                            actual_color = new_vec3f(0.5, 0.5, 0.5);
                         else if (result.type == ACR_KEYWORD)
                             actual_color = new_vec3f(1.0, 1.0, 0.8);
                         else if (result.type == ACR_DECLARATION && result.declaration_is_builtin)

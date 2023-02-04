@@ -1889,7 +1889,13 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
                 auto isb = test(&b);
                 if (isa == isb) return false;
 
-                return (isa == good ? -1 : 1);
+                // I once changed this to `return (sia == good ? ...` because
+                // it looked like that was what I wanted to do, and that I was
+                // erroneously just returning true. That is not the case. This
+                // function returns WHETHER OR NOT A AND B ARE DIFFERENT. `ret`
+                // then stores the result of that comparison.
+                ret = (isa == good ? -1 : 1);
+                return true;
             };
 
 #define reward(expr) if (compare([&](auto it) { return expr; }, true)) { return ret; }
