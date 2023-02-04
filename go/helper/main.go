@@ -41,10 +41,16 @@ typedef struct _GH_Build_Error {
 } GH_Build_Error;
 
 typedef struct _GH_Message {
-	char* text;
-	char* title;
+	char *text;
+	char *title;
 	int32_t is_panic;
 } GH_Message;
+
+typedef struct _GH_Env_Vars {
+	char *goroot;
+	char *gopath;
+	char *gomodcache;
+} GH_Env_Vars;
 */
 import "C"
 
@@ -474,35 +480,45 @@ func GHGetDelvePath() *C.char {
 	return C.CString(ret)
 }
 
-func GetGoEnv(envvar string) (string, error) {
-	binpath, err := GetBinaryPath("go")
-	if err != nil {
-		return "", nil
-	}
-	out, err := utils.MakeExecCommand(binpath, "env", envvar).Output()
-	if err != nil {
-		return "", err
-	}
-
-	return strings.TrimSpace(string(out)), nil
-}
-
-func GetGoEnvAsCString(envvar string) *C.char {
-	ret, err := GetGoEnv(envvar)
-	if err != nil {
+//export GHGetGoEnvVars
+func GHGetGoEnvVars() *C.GH_Env_Vars {
+	binpath := GetGoBinaryPath()
+	if binpath == "" {
+		log.Print("couldn't find go")
 		return nil
 	}
-	return C.CString(ret)
+	out, err := utils.MakeExecCommand(binpath, "env", "GOPATH", "GOMODCACHE", "GOROOT").Output()
+	if err != nil {
+		log.Print(err)
+		return nil
+	}
+
+	lines := strings.Split(strings.ReplaceAll(string(out), "\r\n", "\n"), "\n")
+	if len(lines) < 3 {
+		log.Printf("invalid output from go env: %s", out)
+		return nil
+	}
+
+	vars := (*C.GH_Env_Vars)(C.malloc(C.size_t(unsafe.Sizeof(C.GH_Env_Vars{}))))
+	vars.gopath = C.CString(lines[0])
+	vars.gomodcache = C.CString(lines[1])
+	vars.goroot = C.CString(lines[2])
+	return vars
 }
 
-//export GHGetGopath
-func GHGetGopath() *C.char { return GetGoEnvAsCString("GOPATH") }
-
-//export GHGetGoroot
-func GHGetGoroot() *C.char { return GetGoEnvAsCString("GOROOT") }
-
-//export GHGetGomodcache
-func GHGetGomodcache() *C.char { return GetGoEnvAsCString("GOMODCACHE") }
+//export GHFreeGoEnvVars
+func GHFreeGoEnvVars(vars *C.GH_Env_Vars) {
+	if vars.goroot != nil {
+		C.free(unsafe.Pointer(vars.goroot))
+	}
+	if vars.gopath != nil {
+		C.free(unsafe.Pointer(vars.gopath))
+	}
+	if vars.gomodcache != nil {
+		C.free(unsafe.Pointer(vars.gomodcache))
+	}
+	C.free(unsafe.Pointer(vars))
+}
 
 //export GHGetMessage
 func GHGetMessage(p unsafe.Pointer) bool {
@@ -548,8 +564,46 @@ var buildenv struct {
 	Ok      bool
 }
 
-//export GHBuildEnvInit
-func GHBuildEnvInit() bool {
+func getBuildContextFile() (string, error) {
+	dir, err := GetConfigDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, ".gobuildcontext"), nil
+}
+
+func readBuildContextFromDisk(out *build.Context) error {
+	fullpath, err := getBuildContextFile()
+	if err != nil {
+		return err
+	}
+	f, err := os.Open(fullpath)
+	if err != nil {
+		return err
+	}
+	return gob.NewDecoder(f).Decode(out)
+}
+
+func saveBuildContextToDisk() error {
+	fullpath, err := getBuildContextFile()
+	if err != nil {
+		return err
+	}
+
+	f, err := os.Create(fullpath)
+	if err != nil {
+		return err
+	}
+
+	enc := gob.NewEncoder(f)
+	return enc.Encode(&buildenv.Context)
+}
+
+func getBuildContext() bool {
+	if err := readBuildContextFromDisk(&buildenv.Context); err == nil {
+		return true
+	}
+
 	exepath, err := os.Executable()
 	if err != nil {
 		log.Print(err)
@@ -589,8 +643,18 @@ func GHBuildEnvInit() bool {
 		return false
 	}
 
-	buildenv.Ok = true
+	if err := saveBuildContextToDisk(); err != nil {
+		log.Print(err)
+		// couldn't write to disk, but we do have the context, so don't fail
+	}
+
 	return true
+}
+
+//export GHBuildEnvInit
+func GHBuildEnvInit() bool {
+	buildenv.Ok = getBuildContext()
+	return buildenv.Ok
 }
 
 //export GHBuildEnvIsFileIncluded

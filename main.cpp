@@ -1293,16 +1293,24 @@ int realmain(int argc, char **argv) {
     {
         // init glew using a dummy context
         make_bootstrap_context();
-        defer { destroy_bootstrap_context(); };
+        t.log("make bootstrap context");
+
+        defer {
+            destroy_bootstrap_context();
+            t.log("destroy bootstrap context");
+        };
+
         if (!init_glew()) return EXIT_FAILURE;
+        t.log("bootstrap context, init glew");
     }
 #endif
 
     if (!world.window->init(1280, 720, WINDOW_TITLE))
         return error("could not create window"), EXIT_FAILURE;
 
-    world.window->make_context_current();
     t.log("init window");
+    world.window->make_context_current();
+    t.log("make context current");
 
 #if WIN_GLFW
     if (!init_glew()) return EXIT_FAILURE;

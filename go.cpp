@@ -6073,27 +6073,29 @@ void Go_Indexer::init() {
     };
 
     {
-        goroot = copystr(GHGetGoroot());
-        if (!goroot)
+        auto vars = GHGetGoEnvVars();
+        if (!vars) cp_panic("Unable to detect Go installation.");
+        defer { GHFreeGoEnvVars(vars); };
+
+        if (streq(vars->goroot, ""))
             cp_panic("Unable to detect GOROOT. Please make sure Go is installed and accessible through your PATH.");
+        if (streq(vars->gomodcache, ""))
+            cp_panic("Unable to detect GOMODCACHE. Please make sure Go is installed and accessible through your PATH.");
+
+        goroot = cp_strdup(vars->goroot);
+        gomodcache = cp_strdup(vars->gomodcache);
 
         auto goroot_without_src = goroot;
         goroot = path_join(goroot, "src");
 
         if (check_path(goroot) != CPR_DIRECTORY) {
-            // This is called from main thread, so we can just call tell_user().
-            tell_user(
-                cp_sprintf(
-                    "We found the following GOROOT:\n\n%s\n\nIt doesn't appear to be valid. The program will keep running, but code intelligence might not fully work.",
-                    goroot_without_src
-                ),
-                "Warning"
+            auto msg = cp_sprintf(
+                "We found the following GOROOT:\n\n%s\n\nIt doesn't appear to be valid. The program will keep running, but code intelligence might not fully work.",
+                goroot_without_src
             );
+            // This is called from main thread, so we can just call tell_user().
+            tell_user(msg, "Warning");
         }
-
-        gomodcache = copystr(GHGetGomodcache());
-        if (!gomodcache)
-            cp_panic("Unable to detect GOMODCACHE. Please make sure Go is installed and accessible through your PATH.");
     }
 
     lock.init();

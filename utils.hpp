@@ -414,7 +414,7 @@ struct Timer {
 
     void log(ccstr s) {
         auto ms = read_time() / 1000000.f;
-        if (ms > 50.0f)
+        if (ms > 10.0f)
             output(cp_sprintf("%s: %.4fms", make_label(s), ms));
     }
 

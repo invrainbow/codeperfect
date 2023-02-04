@@ -319,7 +319,7 @@ void fill_file_tree() {
 }
 
 void World::init() {
-    Timer t; t.init("world::init");
+    Timer t; t.init("world::init", false);
 
     ptr0(this);
 
@@ -382,6 +382,8 @@ void World::init() {
     configdir = GHGetConfigDir();
     if (!configdir) cp_panic("couldn't get config dir");
 
+    t.log("get config dir");
+
     {
         auto go_binary_path = GHGetGoBinaryPath();
         if (!go_binary_path) {
@@ -395,6 +397,8 @@ void World::init() {
         defer { GHFree(go_binary_path); };
         cp_strcpy_fixed(world.go_binary_path, go_binary_path);
     }
+
+    t.log("get go binary path");
 
     {
         // do we need world_mem anywhere else?
@@ -412,6 +416,8 @@ void World::init() {
     }
 
     fzy_init();
+
+    t.log("init more random shit");
 
     bool read_cpfolder_file = false;
     bool already_read_current_path = false;
@@ -454,6 +460,8 @@ void World::init() {
         }
     }
 
+    t.log("parse argv");
+
     // read options from disk
     do {
         if (world.jblow_tests.on) break;
@@ -477,6 +485,8 @@ void World::init() {
             cp_panic("headless only valid when --test");
         jblow_tests.headless = true;
     }
+
+    t.log("more shit");
 
     // init workspace
     {
@@ -545,6 +555,8 @@ void World::init() {
         }
     }
 
+    t.log("init workspace");
+
     // read project settings
     // TODO: handle errors
     {
@@ -570,14 +582,21 @@ void World::init() {
         }
     }
 
+    t.log("read project settings");
+
     indexer.init();
+    t.log("init indexer");
     if (use_nvim) nvim.init();
     dbg.init();
+    t.log("init debugger");
     history.init();
+    t.log("init history");
 
     navigation_queue.init(LIST_FIXED, _countof(_navigation_queue), _navigation_queue);
 
+    t.log("init navigation queue");
     fill_file_tree();
+    t.log("fill file tree");
 
     error_list.height = 125;
     file_explorer.selection = NULL;
@@ -588,6 +607,8 @@ void World::init() {
             cp_panic("Unable to initialize UI.");
         }
     }
+
+    t.log("init ui");
 
     fswatch.init(current_path);
 
@@ -605,6 +626,8 @@ void World::init() {
     show_frame_index = false;
     // escape_flashes_cursor_red = true;
 #endif
+
+    t.log("rest of shit");
 }
 
 void World::start_background_threads() {
