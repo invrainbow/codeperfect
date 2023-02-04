@@ -2,7 +2,7 @@
 title: "Getting Started"
 ---
 
-## Install CodePerfect
+## Install
 
 CodePerfect currently supports Windows (x64) and Mac (x64, arm64);
 [download](https://codeperfect95.com/download) and unzip the appropriate binary.
@@ -24,22 +24,30 @@ You'll only need to do this once.
 
 :::
 
-## Install Go
+## Setup
 
-CodePerfect requires Go version 1.13+. Preferred ways of installing Go are using
-the [official installer](https://go.dev/dl/) for your platform, or using a
-package manager of your choice, such as
+CodePerfect requires Go version 1.13+. You can use
+the [official installer](https://go.dev/dl/) for your platform, or a
+package manager like
 [brew](https://formulae.brew.sh/formula/go) or
 [choco](https://community.chocolatey.org/packages/golang).
 
-## Find your Go installation
+### Find Go installation (automatic)
 
-CodePerfect basically uses whatever `go` binary your terminal does. It runs:
+By default, CodePerfect uses whatever `go` binary your terminal does. It detects go by running
 
 - macOS: `which go` in `bash`
 - Windows: `where go` in `cmd`
 
 The way to make the `go` binary findable is to ensure it's in your `PATH`.
+
+### Find Go installation (manual)
+
+You can also manually tell CodePerfect the exact path of your `go` binary.
+Create a file `~/.cpgobin`, and put the full absolute path inside.
+
+This is the path to the go binary itself, not the folder containing it. E.g. you
+want `/opt/homebrew/bin/go`, not `/opt/homebrew/bin`.
 
 :::note
 

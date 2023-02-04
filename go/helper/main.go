@@ -5,7 +5,6 @@ import (
 	"encoding/gob"
 	"fmt"
 	"go/build"
-	"io"
 	"log"
 	"net"
 	"os"
@@ -409,10 +408,57 @@ func GetBinaryPath(bin string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-//export GHGetGoBinaryPath
-func GHGetGoBinaryPath() *C.char {
+func readCpgobin() string {
+	homedir, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+
+	s, err := ReadFile(filepath.Join(homedir, ".cpgobin"))
+	if err != nil || s == "" {
+		return ""
+	}
+	s = strings.TrimSpace(s)
+
+	fi, err := os.Stat(s)
+	if err != nil {
+		return ""
+	}
+
+	if fi.IsDir() {
+		return ""
+	}
+
+	return s
+}
+
+func actuallyGetGoBinaryPath() string {
+	ret := readCpgobin()
+	if ret != "" {
+		return ret
+	}
+
 	ret, err := GetBinaryPath("go")
 	if err != nil {
+		return ""
+	}
+	return ret
+}
+
+var cachedGoBinPath string
+
+func GetGoBinaryPath() string {
+	if cachedGoBinPath != "" {
+		return cachedGoBinPath
+	}
+	cachedGoBinPath = actuallyGetGoBinaryPath()
+	return cachedGoBinPath
+}
+
+//export GHGetGoBinaryPath
+func GHGetGoBinaryPath() *C.char {
+	ret := GetGoBinaryPath()
+	if ret == "" {
 		return nil
 	}
 	return C.CString(ret)
@@ -518,9 +564,8 @@ func GHBuildEnvInit() bool {
 	log.Printf("dirpath = %s", dirpath)
 	log.Printf("using buildcontext.go at %s", filepath)
 
-	binpath, err := GetBinaryPath("go")
-	if err != nil {
-		log.Print(err)
+	binpath := GetGoBinaryPath()
+	if binpath == "" {
 		return false
 	}
 
@@ -595,19 +640,12 @@ func GHReadCpfolderFile() *C.char {
 		return nil
 	}
 
-	f, err := os.Open(filepath.Join(homedir, ".cpfolder"))
+	s, err := ReadFile(filepath.Join(homedir, ".cpfolder"))
 	if err != nil {
 		fmt.Println(err)
 		return nil
 	}
 
-	buf, err := io.ReadAll(f)
-	if err != nil {
-		fmt.Println(err)
-		return nil
-	}
-
-	s := string(buf)
 	lines := strings.Split(strings.ReplaceAll(s, "\r\n", "\n"), "\n")
 	for _, line := range lines {
 		if strings.HasPrefix(line, "#") {
@@ -666,8 +704,8 @@ func GHOpenURLInBrowser(url *C.char) bool {
 
 //export GHGetGoWork
 func GHGetGoWork(filepath *C.char) *C.char {
-	binpath, err := GetBinaryPath("go")
-	if err != nil {
+	binpath := GetGoBinaryPath()
+	if binpath == "" {
 		return nil
 	}
 

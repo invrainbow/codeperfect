@@ -384,8 +384,14 @@ void World::init() {
 
     {
         auto go_binary_path = GHGetGoBinaryPath();
-        if (!go_binary_path)
-            cp_panic("Unable to find Go. Please make sure it's installed, and accessible from a shell.");
+        if (!go_binary_path) {
+#if OS_WINDOWS
+            cp_panic("Unable to find go binary.\n\nUsually, CodePerfect runs `where go` inside cmd to find go, but we did that and couldn't find anything.\n\nPlease visit docs.codeperfect95.com to see how to manually tell CodePerfect where go is.");
+#else
+            cp_panic("Unable to find a go binary.\n\nUsually, CodePerfect runs `which go` inside bash to find go, but we did that and couldn't find anything.\n\nPlease visit docs.codeperfect95.com to see how to manually tell CodePerfect where go is.");
+#endif
+        }
+
         defer { GHFree(go_binary_path); };
         cp_strcpy_fixed(world.go_binary_path, go_binary_path);
     }
