@@ -356,6 +356,7 @@ struct Timer {
     bool enabled;
     bool *penabled;
     List<char> *log_output;
+    bool always_log;
 
     void init(ccstr _name, bool *_penabled) {
         ptr0(this);
@@ -414,7 +415,7 @@ struct Timer {
 
     void log(ccstr s) {
         auto ms = read_time() / 1000000.f;
-        if (ms > 10.0f)
+        if (always_log || ms > 10.0f)
             output(cp_sprintf("%s: %.4fms", make_label(s), ms));
     }
 
