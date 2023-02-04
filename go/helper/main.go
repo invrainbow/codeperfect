@@ -252,7 +252,6 @@ func sendCrashReports(license *License) error {
 	data, err := os.ReadFile(fp)
 	if err != nil {
 		if os.IsNotExist(err) {
-			log.Printf("crashreport file doesn't exist")
 			return nil
 		}
 		return err
