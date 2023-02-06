@@ -3289,7 +3289,50 @@ void UI::draw_everything() {
 
         if (wnd.done) {
             if (!isempty(wnd.results)) {
+                bool go_prev = false;
+                bool go_next = false;
+
+                switch (get_keyboard_nav(&wnd, KNF_ALLOW_HJKL)) {
+                case KN_ENTER: {
+                    auto results = wnd.results;
+                    int fidx = wnd.current_file;
+                    int ridx = wnd.current_result;
+
+                    if (fidx == -1) break;
+                    if (!(0 <= fidx && fidx < results->len)) break;
+
+                    auto file = results->at(fidx);
+                    if (!(0 <= ridx && ridx < file.results->len)) break;
+
+                    auto filepath = get_path_relative_to(file.filepath, world.current_path);
+
+                    auto result = file.results->at(ridx);
+                    auto ref = result.reference;
+                    auto pos = ref->is_sel ? ref->x_start : ref->start;
+
+                    goto_file_and_pos(filepath, pos, true);
+                    break;
+                }
+                case KN_DOWN:
+                    go_next = true;
+                    break;
+                case KN_UP:
+                    go_prev = true;
+                    break;
+                }
+
+                int last_file = -1;
+                int last_result = -1;
+
+                auto goto_result = [&](int file, int result) {
+                    wnd.current_file = file;
+                    wnd.current_result = result;
+                    wnd.scroll_to_file = file;
+                    wnd.scroll_to_result = result;
+                };
+
                 im_push_mono_font();
+
                 Fori (wnd.results) {
                     int file_index = i;
 
@@ -3306,123 +3349,93 @@ void UI::draw_everything() {
                         return im::TreeNodeEx(filepath, flags);
                     };
 
-                    if (render_header()) {
-                        im::Indent();
-                        im_push_mono_font();
-
-                        Fori (it.results) {
-                            int result_index = i;
-
-                            auto ref = it.reference;
-                            auto pos = ref->is_sel ? ref->x_start : ref->start;
-
-                            auto availwidth = im::GetContentRegionAvail().x;
-                            auto text_size = ImVec2(availwidth, im::CalcTextSize("blah").y);
-                            auto drawpos = im::GetCursorScreenPos();
-
-                            bool selected = wnd.current_file == file_index && wnd.current_result == result_index;
-
-                            if (selected) im::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(ImColor(60, 60, 60)));
-
-                            if (im::Selectable(cp_sprintf("##find_references_result_%d_%d", file_index, result_index), selected, 0, text_size)) {
-                                wnd.current_file = file_index;
-                                wnd.current_result = result_index;
-                                wnd.scroll_to_file = file_index;
-                                wnd.scroll_to_result = result_index;
-                                goto_file_and_pos(filepath, pos, true);
+                    if (!render_header()) {
+                        if (wnd.current_file == file_index) {
+                            if (go_prev) {
+                                if (wnd.current_file) {
+                                    int idx = wnd.current_file - 1;
+                                    goto_result(idx, wnd.results->at(idx).results->len - 1);
+                                }
+                            } else if (go_next) {
+                                if (wnd.current_file + 1 < it.results->len)
+                                    goto_result(wnd.current_file + 1, 0);
+                                go_next = false;
                             }
+                        }
+                        continue;
+                    }
 
-                            if (wnd.scroll_to_file == file_index && wnd.scroll_to_result == result_index) {
-                                im::SetScrollHereY();
-                                wnd.scroll_to_file = -1;
-                                wnd.scroll_to_result = -1;
-                            }
+                    im::Indent();
+                    im_push_mono_font();
 
-                            if (selected) im::PopStyleColor();
+                    Fori (it.results) {
+                        int result_index = i;
 
-                            // copied from search results, do we need to refactor?
-                            auto draw_text = [&](ccstr text, ImColor color) {
-                                im::PushStyleColor(ImGuiCol_Text, ImVec4(color));
-                                defer { im::PopStyleColor(); };
+                        if (go_prev)
+                            if (file_index == wnd.current_file && result_index == wnd.current_result)
+                                if (last_file != -1 && last_result != -1)
+                                    goto_result(last_file, last_result);
 
-                                im::GetWindowDrawList()->AddText(drawpos, im::GetColorU32(ImGuiCol_Text), text);
-                                drawpos.x += im::CalcTextSize(text).x;
-                            };
-
-                            draw_text(new_cur2(pos.x+1, pos.y+1).str(), ImColor(200, 200, 200));
-
-                            if (it.toplevel_name) {
-                                draw_text(" (in ", ImColor(120, 120, 120));
-                                draw_text(it.toplevel_name, ImColor(200, 200, 200));
-                                draw_text(")", ImColor(120, 120, 120));
+                        if (go_next) {
+                            if (last_file == wnd.current_file && last_result == wnd.current_result) {
+                                goto_result(file_index, result_index);
+                                go_next = false;
                             }
                         }
 
-                        im_pop_font();
-                        im::Unindent();
-                    }
-                }
-                im_pop_font();
-
-                do {
-                    int fidx = wnd.current_file;
-                    int ridx = wnd.current_result;
-                    auto results = wnd.results;
-
-                    auto is_oob = [&]() {
-                        if (fidx == -1) return true;
-                        if (!(0 <= fidx && fidx < results->len)) return true;
-
-                        auto file = results->at(fidx);
-                        if (!(0 <= ridx && ridx < file.results->len)) return true;
-                        return false;
-                    };
-
-                    auto goto_result = [&](int file, int result) {
-                        wnd.current_file = file;
-                        wnd.current_result = result;
-                        wnd.scroll_to_file = file;
-                        wnd.scroll_to_result = result;
-                    };
-
-                    switch (get_keyboard_nav(&wnd, KNF_ALLOW_HJKL)) {
-                    case KN_ENTER: {
-                        if (is_oob()) break;
-
-                        auto file = results->at(fidx);
-                        auto filepath = get_path_relative_to(file.filepath, world.current_path);
-
-                        auto result = file.results->at(ridx);
-                        auto ref = result.reference;
+                        auto ref = it.reference;
                         auto pos = ref->is_sel ? ref->x_start : ref->start;
 
-                        goto_file_and_pos(filepath, pos, true);
-                        break;
-                    }
-                    case KN_DOWN: {
-                        if (is_oob()) {
-                            goto_result(0, 0);
-                            break;
+                        auto availwidth = im::GetContentRegionAvail().x;
+                        auto text_size = ImVec2(availwidth, im::CalcTextSize("blah").y);
+                        auto drawpos = im::GetCursorScreenPos();
+
+                        bool selected = wnd.current_file == file_index && wnd.current_result == result_index;
+
+                        if (selected) im::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(ImColor(60, 60, 60)));
+
+                        if (im::Selectable(cp_sprintf("##find_references_result_%d_%d", file_index, result_index), selected, 0, text_size)) {
+                            wnd.current_file = file_index;
+                            wnd.current_result = result_index;
+                            wnd.scroll_to_file = file_index;
+                            wnd.scroll_to_result = result_index;
+                            goto_file_and_pos(filepath, pos, true);
                         }
-                        auto file = results->at(fidx);
-                        if (ridx + 1 < file.results->len)
-                            goto_result(fidx, ridx+1);
-                        else if (fidx+1 < results->len)
-                            goto_result(fidx+1, 0);
-                        break;
-                    }
-                    case KN_UP:
-                        if (is_oob()) {
-                            goto_result(0, 0);
-                            break;
+
+                        if (wnd.scroll_to_file == file_index && wnd.scroll_to_result == result_index) {
+                            im::SetScrollHereY();
+                            wnd.scroll_to_file = -1;
+                            wnd.scroll_to_result = -1;
                         }
-                        if (ridx > 0)
-                            goto_result(fidx, ridx-1);
-                        else if (fidx > 0)
-                            goto_result(fidx-1, results->at(fidx-1).results->len-1);
-                        break;
+
+                        if (selected) im::PopStyleColor();
+
+                        // copied from search results, do we need to refactor?
+                        auto draw_text = [&](ccstr text, ImColor color) {
+                            im::PushStyleColor(ImGuiCol_Text, ImVec4(color));
+                            defer { im::PopStyleColor(); };
+
+                            im::GetWindowDrawList()->AddText(drawpos, im::GetColorU32(ImGuiCol_Text), text);
+                            drawpos.x += im::CalcTextSize(text).x;
+                        };
+
+                        draw_text(new_cur2(pos.x+1, pos.y+1).str(), ImColor(200, 200, 200));
+
+                        if (it.toplevel_name) {
+                            draw_text(" (in ", ImColor(120, 120, 120));
+                            draw_text(it.toplevel_name, ImColor(200, 200, 200));
+                            draw_text(")", ImColor(120, 120, 120));
+                        }
+
+                        last_file = file_index;
+                        last_result = result_index;
                     }
-                } while (0);
+
+                    im_pop_font();
+                    im::Unindent();
+                }
+
+                im_pop_font();
             } else {
                 im::Text("No results found.");
             }
