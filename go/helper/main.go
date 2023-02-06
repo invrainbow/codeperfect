@@ -695,30 +695,6 @@ func GHIsUnicodeDigit(code rune) bool {
 	return unicode.IsDigit(code)
 }
 
-//export GHReadCpfolderFile
-func GHReadCpfolderFile() *C.char {
-	homedir, err := os.UserHomeDir()
-	if err != nil {
-		fmt.Println(err)
-		return nil
-	}
-
-	s, err := ReadFile(filepath.Join(homedir, ".cpfolder"))
-	if err != nil {
-		fmt.Println(err)
-		return nil
-	}
-
-	lines := strings.Split(strings.ReplaceAll(s, "\r\n", "\n"), "\n")
-	for _, line := range lines {
-		if strings.HasPrefix(line, "#") {
-			continue
-		}
-		return C.CString(line)
-	}
-	return nil
-}
-
 //export GHForceServerLocalhost
 func GHForceServerLocalhost() {
 	ForceServerLocalhost = true

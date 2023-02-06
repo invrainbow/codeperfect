@@ -419,17 +419,13 @@ void World::init() {
 
     t.log("init more random shit");
 
-    bool read_cpfolder_file = false;
     bool already_read_current_path = false;
     bool make_testing_headless = false;
 
     for (int i = 1; i < gargc; i++) {
         auto it = gargv[i];
-        if (streq(it, "--debug")) {
-            read_cpfolder_file = true;
-        }
 
-        else if (streq(it, "--force-server-localhost")) {
+        if (streq(it, "--force-server-localhost")) {
             GHForceServerLocalhost();
         }
 
@@ -497,45 +493,38 @@ void World::init() {
         cp_strcpy_fixed(current_path, "/Users/bh/ide/go");
 #else
         if (!already_read_current_path) {
-            if (read_cpfolder_file) {
-                auto path = GHReadCpfolderFile();
-                if (!path) cp_panic("unable to read cpfolder file");
-                defer { GHFree(path); };
-                cp_strcpy_fixed(current_path, path);
-            } else {
-                ccstr last_folder = NULL;
+            ccstr last_folder = NULL;
 
-                do {
-                    if (!options.open_last_folder) break;
+            do {
+                if (!options.open_last_folder) break;
 
-                    auto fm = map_file_into_memory(path_join(configdir, ".last_folder"));
-                    if (!fm) break;
-                    defer { fm->cleanup(); };
+                auto fm = map_file_into_memory(path_join(configdir, ".last_folder"));
+                if (!fm) break;
+                defer { fm->cleanup(); };
 
-                    auto result = alloc_list<char>();
-                    for (int i = 0; i < fm->len; i++) {
-                        auto it = fm->data[i];
-                        if (it == '\n' || it == '\0')
-                            break;
-                        result->append(it);
-                    }
-                    result->append('\0');
-
-                    auto path = result->items;
-                    if (check_path(path) == CPR_DIRECTORY)
-                        last_folder = path;
-                } while (0);
-
-                if (last_folder) {
-                    cp_strcpy_fixed(current_path, last_folder);
-                } else {
-                    Select_File_Opts opts; ptr0(&opts);
-                    opts.buf = current_path;
-                    opts.bufsize = _countof(current_path);
-                    opts.folder = true;
-                    opts.save = false;
-                    if (!let_user_select_file(&opts)) exit(0);
+                auto result = alloc_list<char>();
+                for (int i = 0; i < fm->len; i++) {
+                    auto it = fm->data[i];
+                    if (it == '\n' || it == '\0')
+                        break;
+                    result->append(it);
                 }
+                result->append('\0');
+
+                auto path = result->items;
+                if (check_path(path) == CPR_DIRECTORY)
+                    last_folder = path;
+            } while (0);
+
+            if (last_folder) {
+                cp_strcpy_fixed(current_path, last_folder);
+            } else {
+                Select_File_Opts opts; ptr0(&opts);
+                opts.buf = current_path;
+                opts.bufsize = _countof(current_path);
+                opts.folder = true;
+                opts.save = false;
+                if (!let_user_select_file(&opts)) exit(0);
             }
         }
 #endif
