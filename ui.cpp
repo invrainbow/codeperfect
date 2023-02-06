@@ -841,7 +841,7 @@ Font* UI::acquire_system_ui_font() {
     auto font = alloc_object(Font);
     if (!font->init("<system ui font>", UI_FONT_SIZE, data)) {
         frame.restore();
-        error("unable to acquire system font");
+        // error("unable to acquire system font");
         return NULL;
     }
 
@@ -8420,7 +8420,7 @@ Font* UI::acquire_font(ccstr name) {
     font = alloc_object(Font);
     if (!font->init(name, CODE_FONT_SIZE)) {
         frame.restore();
-        error("unable to acquire font: %s", name);
+        // error("unable to acquire font: %s", name);
         font = NULL;
     }
 

@@ -324,7 +324,7 @@ func GHAuth(rawEmail, rawLicenseKey *C.char) {
 
 	doAuth := func() int {
 		if err := CallServer(endpoint, license, req, &resp); err != nil {
-			log.Println(err)
+			// log.Println(err)
 			switch err.(type) {
 			case net.Error, *net.OpError, syscall.Errno:
 				return AuthInternetError
