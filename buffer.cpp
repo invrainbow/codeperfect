@@ -278,7 +278,8 @@ void Buffer::enable_tree(int _lang) {
 
     lang = (int)_lang;
     parser = new_ts_parser((Parse_Lang)lang);
-    update_tree();
+
+    if (lines.len) update_tree();
 }
 
 void Buffer::cleanup() {
