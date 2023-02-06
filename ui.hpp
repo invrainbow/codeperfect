@@ -391,7 +391,6 @@ extern Global_Colors global_colors;
 
 void init_global_colors();
 ccstr format_key(int mods, ccstr key, bool icon = false);
-void random_macos_tests();
 
 void trigger_file_search(int limit_start = -1, int limit_end = -1);
 

@@ -1261,15 +1261,6 @@ int realmain(int argc, char **argv) {
         return error("window init failed"), EXIT_FAILURE;
     t.log("init window everything");
 
-#if 0
-    {
-        Pool pool;
-        pool.init();
-        SCOPED_MEM(&pool);
-        random_macos_tests();
-    }
-#endif
-
     world.init();
 
     t.log("init world");
