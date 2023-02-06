@@ -1399,6 +1399,11 @@ typedef fn<bool(Type_Renderer*, Gotype*)> Type_Renderer_Handler;
 struct Type_Renderer : public Text_Renderer {
     bool full;
 
+    void init() {
+        ptr0(this);
+        Text_Renderer::init();
+    }
+
     void write_type(Gotype *t, Type_Renderer_Handler custom_handler, bool omit_func_keyword = false);
 
     void write_type(Gotype *t, bool omit_func_keyword = false) {
