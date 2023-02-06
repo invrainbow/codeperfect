@@ -2973,7 +2973,8 @@ void UI::draw_everything() {
             cp_sprintf("Callee Hierarchy for %s###callee_hierarchy", wnd.declres->decl->name),
             &wnd,
             0,
-            !wnd.done
+            !wnd.done,
+            true
         );
 
         if (wnd.done) {
@@ -3000,7 +3001,8 @@ void UI::draw_everything() {
             cp_sprintf("Caller Hierarchy for %s###caller_hierarchy", wnd.declres->decl->name),
             &wnd,
             0,
-            !wnd.done
+            !wnd.done,
+            true
         );
 
         if (wnd.done) {
@@ -3024,7 +3026,7 @@ void UI::draw_everything() {
 
         im::SetNextWindowDockID(dock_sidebar_id, ImGuiCond_Once);
 
-        begin_window("Find Interfaces", &wnd, ImGuiWindowFlags_AlwaysAutoResize, !wnd.done);
+        begin_window("Find Interfaces", &wnd, ImGuiWindowFlags_AlwaysAutoResize, !wnd.done, true);
 
         if (wnd.done) {
             im::Checkbox("Show empty interfaces", &wnd.include_empty);
@@ -3169,7 +3171,7 @@ void UI::draw_everything() {
 
         im::SetNextWindowDockID(dock_sidebar_id, ImGuiCond_Once);
 
-        begin_window("Find Implementations", &wnd, ImGuiWindowFlags_AlwaysAutoResize, !wnd.done);
+        begin_window("Find Implementations", &wnd, ImGuiWindowFlags_AlwaysAutoResize, !wnd.done, true);
 
         if (wnd.done) {
             im::Checkbox("Search everywhere", &wnd.search_everywhere);
@@ -3285,7 +3287,7 @@ void UI::draw_everything() {
 
         im::SetNextWindowDockID(dock_sidebar_id, ImGuiCond_Once);
 
-        begin_window("Find References", &wnd, ImGuiWindowFlags_AlwaysAutoResize, !wnd.done);
+        begin_window("Find References", &wnd, ImGuiWindowFlags_AlwaysAutoResize, !wnd.done, true);
 
         if (wnd.done) {
             if (!isempty(wnd.results)) {
@@ -4011,7 +4013,7 @@ void UI::draw_everything() {
         im::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
 
         im::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-        begin_window("File Explorer", &wnd);
+        begin_window("File Explorer", &wnd, 0, false, true);
         im::PopStyleVar();
 
         fstlog("wnd_file_explorer - start window");
@@ -5321,7 +5323,7 @@ void UI::draw_everything() {
         im::SetNextWindowDockID(dock_sidebar_id, ImGuiCond_Once);
 
         auto title = cp_sprintf("%s###search_and_replace", wnd.replace ? "Search and Replace" : "Search");
-        begin_window(title, &wnd, ImGuiWindowFlags_AlwaysAutoResize);
+        begin_window(title, &wnd, ImGuiWindowFlags_AlwaysAutoResize, false, true);
 
         bool entered = false;
 
@@ -5780,7 +5782,7 @@ void UI::draw_everything() {
     if (world.wnd_history.show) {
         im::SetNextWindowDockID(dock_sidebar_id, ImGuiCond_Once);
 
-        begin_window("History", &world.wnd_history, ImGuiWindowFlags_AlwaysAutoResize);
+        begin_window("History", &world.wnd_history, ImGuiWindowFlags_AlwaysAutoResize, false, true);
 
         bool handled = false;
         do {
