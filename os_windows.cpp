@@ -991,7 +991,7 @@ void write_to_syslog(ccstr s) {
     if (ws) OutputDebugStringW(ws);
 }
 
-void restart_program() {
+void fork_self(List<char*> *args, bool exit_this) {
     STARTUPINFOW si;
     PROCESS_INFORMATION pi;
 
@@ -999,10 +999,13 @@ void restart_program() {
     ptr0(&pi);
     si.cb = sizeof(si);
 
+    // TODO: handle args
+    // basically need opposite of CommandLineToArgvW
+
     if (!CreateProcessW(NULL, GetCommandLineW(), NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi))
         return;
 
-    ExitProcess(0);
+    if (exit_this) ExitProcess(0);
 }
 
 NORETURN void exit_from_crash_handler() {

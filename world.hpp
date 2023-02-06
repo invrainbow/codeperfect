@@ -31,6 +31,12 @@ struct Build_Error {
     Mark *mark;
 };
 
+enum Fps_Limit {
+    FPS_30,
+    FPS_60,
+    FPS_120,
+};
+
 struct FT_Node {
     bool is_directory;
     ccstr name;
@@ -254,6 +260,7 @@ enum Command {
     CMD_COMMAND_PALETTE,
     CMD_OPEN_FILE_MANUALLY,
     CMD_CLOSE_EDITOR,
+    CMD_OPEN_FOLDER,
     /**/
     _CMD_COUNT_,
     CMD_INVALID = -1,

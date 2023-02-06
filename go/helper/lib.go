@@ -1,12 +1,13 @@
 package main
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/google/shlex"
 	"github.com/codeperfect95/codeperfect/go/utils"
+	"github.com/google/shlex"
 )
 
 func GetShellOutput(cmd string) string {
@@ -58,4 +59,18 @@ func PrepareConfigDir() (string, error) {
 		return "", err
 	}
 	return appdir, nil
+}
+
+func ReadFile(fp string) (string, error) {
+	f, err := os.Open(fp)
+	if err != nil {
+		return "", err
+	}
+
+	buf, err := io.ReadAll(f)
+	if err != nil {
+		return "", err
+	}
+
+	return string(buf), nil
 }

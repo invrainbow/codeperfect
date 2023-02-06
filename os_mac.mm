@@ -218,12 +218,7 @@ bool list_all_fonts(List<ccstr> *out) {
     return true;
 }
 
-Font_Data *load_font_data_by_name(ccstr name) {
-    auto cf_font_name = CFStringCreateWithCString(NULL, name, kCFStringEncodingUTF8);
-
-    auto ctfont = (void*)CTFontCreateWithName(cf_font_name, 12, NULL);
-    if (!ctfont) return NULL;
-
+Font_Data *load_font_data_from_ctfont(CTFontRef ctfont) {
     auto url = (CFURLRef)CTFontCopyAttribute((CTFontRef)ctfont, kCTFontURLAttribute);
     if (!url) return NULL;
     defer { CFRelease(url); };
@@ -239,6 +234,29 @@ Font_Data *load_font_data_by_name(ccstr name) {
     ret->type = FONT_DATA_MMAP;
     ret->fm = fm;
     return ret;
+}
+
+Font_Data *load_system_ui_font() {
+    auto font = [NSFont systemFontOfSize:12];
+    return load_font_data_from_ctfont((__bridge CTFontRef)font);
+}
+
+Font_Data *load_font_data_by_name(ccstr name) {
+    auto cf_font_name = CFStringCreateWithCString(NULL, name, kCFStringEncodingUTF8);
+
+    auto ctfont = CTFontCreateWithName(cf_font_name, 12, NULL);
+    if (!ctfont) return NULL;
+
+    // CTFontCreateWithName will use a fallback if it couldn't find the font,
+    // so check that it actually found the right font
+    {
+        auto ctname = (CFStringRef)CTFontCopyAttribute(ctfont, kCTFontFamilyNameAttribute);
+        if (!ctname) return NULL;
+        defer { CFRelease(ctname); };
+        if (!streq(cfstring_to_ccstr(ctname), name)) return NULL;
+    }
+
+    return load_font_data_from_ctfont(ctfont);
 }
 
 int get_current_focused_window_pid() {

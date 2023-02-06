@@ -16,17 +16,15 @@
 #include "dbg.hpp"
 #include "hash.hpp"
 
-#define CODE_FONT_SIZE 14
-#define UI_FONT_SIZE 17
+#define CODE_FONT_SIZE 15
+#define UI_FONT_SIZE 16
 #define ICON_FONT_SIZE 16
-#define FRAME_RATE_CAP 60
 
 extern ImVec2 icon_button_padding;
 
 enum Texture_Id {
     TEXTURE_FONT,
     TEXTURE_FONT_IMGUI,
-    TEXTURE_IMAGES,
     __TEXTURE_COUNT__,
 };
 
@@ -224,6 +222,7 @@ struct UI {
     Atlas *atlases_head;
     int current_texture_id;
     Font* base_font;
+    Font* base_ui_font;
     List<ccstr> *all_font_names;
 
     // we need a way of looking up fonts...
@@ -248,6 +247,7 @@ struct UI {
     void draw_debugger_var(Draw_Debugger_Var_Args *args);
 
     Font* acquire_font(ccstr name);
+    Font* acquire_system_ui_font();
     Font* find_font_for_grapheme(List<uchar> *grapheme);
 
     bool init();
@@ -391,7 +391,6 @@ extern Global_Colors global_colors;
 
 void init_global_colors();
 ccstr format_key(int mods, ccstr key, bool icon = false);
-void random_macos_tests();
 
 void trigger_file_search(int limit_start = -1, int limit_end = -1);
 

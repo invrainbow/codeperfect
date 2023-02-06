@@ -284,6 +284,16 @@ bool Window::init_os_specific(int width, int height, ccstr title) {
         });
     });
 
+    glfwSetWindowFocusCallback(window, [](GLFWwindow* wnd, int focused) {
+        if (focused)
+            world.window->dispatch_event(WINEV_FOCUS, [&](auto ev) {});
+        else
+            world.window->dispatch_event(WINEV_BLUR, [&](auto ev) {});
+
+        mem0(world.window->key_states, sizeof(world.window->key_states));
+        mem0(world.window->mouse_states, sizeof(world.window->mouse_states));
+    });
+
     return true;
 }
 

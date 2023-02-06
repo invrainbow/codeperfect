@@ -1251,7 +1251,8 @@ int realmain(int argc, char **argv) {
     SCOPED_MEM(&tmpmem);
 
     Timer t;
-    t.init();
+    t.init(NULL, false);
+    // t.always_log = true;
 
     init_platform_crap();
 
@@ -1259,15 +1260,6 @@ int realmain(int argc, char **argv) {
     if (!window_init_everything())
         return error("window init failed"), EXIT_FAILURE;
     t.log("init window everything");
-
-#if 0
-    {
-        Pool pool;
-        pool.init();
-        SCOPED_MEM(&pool);
-        random_macos_tests();
-    }
-#endif
 
     world.init();
 
@@ -1281,11 +1273,13 @@ int realmain(int argc, char **argv) {
 
     auto init_glew = []() -> bool {
         glewExperimental = GL_TRUE;
+        Timer t; t.init("glewInit", false);
         auto err = glewInit();
         if (err != GLEW_OK) {
             error("unable to init GLEW: %s", glewGetErrorString(err));
             return false;
         }
+        t.total();
         return true;
     };
 
@@ -1293,16 +1287,24 @@ int realmain(int argc, char **argv) {
     {
         // init glew using a dummy context
         make_bootstrap_context();
-        defer { destroy_bootstrap_context(); };
+        t.log("make bootstrap context");
+
+        defer {
+            destroy_bootstrap_context();
+            t.log("destroy bootstrap context");
+        };
+
         if (!init_glew()) return EXIT_FAILURE;
+        t.log("bootstrap context, init glew");
     }
 #endif
 
     if (!world.window->init(1280, 720, WINDOW_TITLE))
         return error("could not create window"), EXIT_FAILURE;
 
-    world.window->make_context_current();
     t.log("init window");
+    world.window->make_context_current();
+    t.log("make context current");
 
 #if WIN_GLFW
     if (!init_glew()) return EXIT_FAILURE;
@@ -1539,6 +1541,8 @@ int realmain(int argc, char **argv) {
     // from here, if we want to modify a texture, just set the active texture
     // are we going to run out of texture units?
 
+    t.log("generate textures");
+
     {
         SCOPED_FRAME();
 
@@ -1548,9 +1552,12 @@ int realmain(int argc, char **argv) {
             ImFontConfig config;
             config.OversampleH = 3;
             config.OversampleV = 2;
-            world.ui.im_font_ui = io.Fonts->AddFontFromMemoryTTF(open_sans_ttf, open_sans_ttf_len, UI_FONT_SIZE, &config);
+            // config.GlyphExtraSpacing.x = 0.25;
+            world.ui.im_font_ui = io.Fonts->AddFontFromMemoryTTF(ui.base_ui_font->data->get_data(), ui.base_ui_font->data->get_len(), UI_FONT_SIZE, &config);
             cp_assert(world.ui.im_font_ui);
         }
+
+        t.log("load im_ui_font");
 
         {
             // merge font awesome into main font
@@ -1570,19 +1577,27 @@ int realmain(int argc, char **argv) {
             ImWchar icon_ranges[] = { ICON_MIN_MD, ICON_MAX_MD, 0 };
             io.Fonts->AddFontFromMemoryTTF(material_icons_regular_ttf, material_icons_regular_ttf_len, ICON_FONT_SIZE, &config, icon_ranges);
 
+            t.log("load material icons font");
+
             ImWchar icon_ranges2[] = { 0x21E7, 0x21E7+1, 0 };
             io.Fonts->AddFontFromMemoryTTF(open_sans_ttf, open_sans_ttf_len, UI_FONT_SIZE, &config, icon_ranges2);
+
+            t.log("load open sans font");
         }
 
         {
             ImFontConfig config;
-            config.OversampleH = 3;
-            config.OversampleV = 2;
-            world.ui.im_font_mono = io.Fonts->AddFontFromMemoryTTF(vera_mono_ttf, vera_mono_ttf_len, CODE_FONT_SIZE);
+            config.OversampleH = 4;
+            config.OversampleV = 3;
+            world.ui.im_font_mono = io.Fonts->AddFontFromMemoryTTF(ui.base_font->data->get_data(), ui.base_font->data->get_len(), CODE_FONT_SIZE);
             cp_assert(world.ui.im_font_mono);
+
+            t.log("load im_font_mono");
         }
 
         io.Fonts->Build();
+
+        t.log("build fonts");
 
         // init imgui texture
         u8* pixels;
@@ -1594,7 +1609,11 @@ int realmain(int argc, char **argv) {
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+
+        t.log("load texture data");
     }
+
+    t.log("init fonts");
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -1662,10 +1681,8 @@ int realmain(int argc, char **argv) {
         new_ortho_matrix(ortho_projection, 0, world.frame_size.x, world.frame_size.y, 0);
         glUniformMatrix4fv(loc, 1, GL_FALSE, (float*)ortho_projection);
 
-        for (u32 i = 0; i < __TEXTURE_COUNT__; i++) {
-            loc = glGetUniformLocation(world.ui.program, cp_sprintf("tex%d", i));
-            glUniform1i(loc, i);
-        }
+        loc = glGetUniformLocation(world.ui.program, "tex");
+        glUniform1i(loc, TEXTURE_FONT);
     }
 
     {
@@ -1710,6 +1727,8 @@ int realmain(int argc, char **argv) {
             world.window->hide();
         world.jblow_tests.ready = true;
     }
+
+    t.total();
 
     for (;; world.frame_index++) {
         if (world.window->should_close) {
@@ -1986,7 +2005,18 @@ int realmain(int argc, char **argv) {
         fstlog("swap buffers");
 
         if (!world.turn_off_framerate_cap) {
-            int framecap = world.jblow_tests.on ? 144 : FRAME_RATE_CAP;
+            auto get_framecap = [&]() {
+                if (world.jblow_tests.on) return 144;
+
+                switch (options.fps_limit_enum) {
+                case FPS_30: return 30;
+                case FPS_60: return 60;
+                case FPS_120: return 120;
+                }
+                return 60;
+            };
+
+            int framecap = get_framecap();
 
             auto timeleft = [&]() -> i32 {
                 auto budget = 1000.f / framecap;

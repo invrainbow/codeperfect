@@ -42,6 +42,8 @@ struct Options {
     serde_bool dbg_hide_system_goroutines = true; // serde(8)
     serde_int zoom_level = 100; // serde(9)
     serde_bool send_crash_reports = true; // serde(10)
+    serde_int fps_limit_enum = 60; // serde(11)
+    serde_bool open_last_folder = true; // serde(12)
 };
 
 struct Build_Profile {

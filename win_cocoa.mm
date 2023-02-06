@@ -379,10 +379,15 @@ const NSRange kEmptyRange = { NSNotFound, 0 };
 - (void)windowDidBecomeKey:(NSNotification *)notification {
     if (window->is_cursor_in_content_area())
         window->update_cursor_image();
+
+    mem0(window->key_states, sizeof(window->key_states));
+    mem0(window->mouse_states, sizeof(window->mouse_states));
     window->dispatch_event(WINEV_FOCUS, [&](auto ev) {});
 }
 
 - (void)windowDidResignKey:(NSNotification *)notification {
+    mem0(window->key_states, sizeof(window->key_states));
+    mem0(window->mouse_states, sizeof(window->mouse_states));
     window->dispatch_event(WINEV_BLUR, [&](auto ev) {});
 }
 
