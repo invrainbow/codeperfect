@@ -6,7 +6,7 @@ module.exports = {
       colors: {
         black: "#000",
         white: "#fff",
-        primary: "rgb(25, 168, 240)",
+        primary: "rgb(30, 35, 40)",
         gray: {
           50: "rgba(0, 0, 0, 0.05)",
           100: "rgba(0, 0, 0, 0.1)",

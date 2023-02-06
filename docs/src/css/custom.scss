@@ -117,17 +117,11 @@ html[data-theme="dark"] .docusaurus-highlight-code-line {
     }
 
     a {
-      text-decoration: none !important;
-      color: maroon;
+      text-decoration: underline;
+      color: #777a83;
       font-weight: 500 !important;
       display: inline-block !important;
-
-      padding-bottom: 2px;
-      line-height: 1;
-      border-bottom: solid 3px rgba(maroon, 0.1);
-      &:hover {
-        border-bottom-color: rgba(maroon, 0.2);
-      }
+      text-underline-offset: 2px;
       &.hash-link {
         text-decoration: none !important;
         padding-bottom: 0;
