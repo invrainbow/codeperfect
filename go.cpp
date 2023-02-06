@@ -138,7 +138,7 @@ ccstr Index_Stream::readstr() {
 
     auto size = (u32)read2();
     if (!ok) return NULL;
-    if (!size) return NULL;
+    if (!size) return alloc_array(char, 1); // empty string
 
     auto s = alloc_array(char, size + 1);
     readn(s, size);
@@ -148,7 +148,6 @@ ccstr Index_Stream::readstr() {
     }
 
     s[size] = '\0';
-    ok = true;
     return s;
 }
 

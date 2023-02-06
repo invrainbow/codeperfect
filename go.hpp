@@ -42,7 +42,8 @@ enum Parse_Lang {
 // version 33: fix embedded struct fields
 // version 34: fix import_decl_to_goimports()
 // version 35: support workspaces
-#define GO_INDEX_VERSION 35
+// version 36: fix readstr bug with empty spaces
+#define GO_INDEX_VERSION 36
 
 enum {
     CUSTOM_HASH_BUILTINS = 1,
