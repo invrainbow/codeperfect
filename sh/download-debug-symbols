@@ -1,0 +1,15 @@
+#!/bin/bash
+
+slug=x64
+os=$(sh/detect_os)
+version=$1
+
+if [[ $os = "mac" ]]; then
+    if [[ $(sh/detect_m1) = "1" ]]; then
+        slug=arm
+    fi
+fi
+
+filename=debug-symbols-$os-$slug-$1
+mkdir -p scratch
+aws s3 cp s3://codeperfect-private/$filename scratch/$filename
