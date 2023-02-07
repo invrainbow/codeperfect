@@ -6313,14 +6313,21 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
         ret->id_pos = node->start();
         break;
 
-    case TS_POINTER_TYPE:
+    case TS_POINTER_TYPE: {
+        auto base = node_to_gotype(node->child());
+        if (!base) break;
+
         ret = new_gotype(GOTYPE_POINTER);
-        ret->pointer_base = node_to_gotype(node->child());
+        ret->pointer_base = base;
         break;
+    }
 
     case TS_GENERIC_TYPE: {
+        auto base = node_to_gotype(node->field(TSF_TYPE));
+        if (!base) break;
+
         ret = new_gotype(GOTYPE_GENERIC);
-        ret->generic_base = node_to_gotype(node->field(TSF_TYPE));
+        ret->generic_base = base;
 
         auto args_node = node->field(TSF_TYPE_ARGUMENTS);
         if (!isastnull(args_node)) {
@@ -6348,25 +6355,35 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
         break;
 
     case TS_IMPLICIT_LENGTH_ARRAY_TYPE:
-        ret = new_gotype(GOTYPE_ARRAY);
-        ret->array_base = node_to_gotype(node->field(TSF_ELEMENT));
-        break;
-
     case TS_ARRAY_TYPE:
-        ret = new_gotype(GOTYPE_ARRAY);
-        ret->array_base = node_to_gotype(node->field(TSF_ELEMENT));
-        break;
+    case TS_SLICE_TYPE: {
+        auto base = node_to_gotype(node->field(TSF_ELEMENT));
+        if (!base) break;
 
-    case TS_SLICE_TYPE:
-        ret = new_gotype(GOTYPE_SLICE);
-        ret->slice_base = node_to_gotype(node->field(TSF_ELEMENT));
+        switch (node->type()) {
+        case TS_IMPLICIT_LENGTH_ARRAY_TYPE:
+        case TS_ARRAY_TYPE:
+            ret = new_gotype(GOTYPE_ARRAY);
+            break;
+        case TS_SLICE_TYPE:
+            ret = new_gotype(GOTYPE_SLICE);
+            break;
+        }
+        ret->base = base;
         break;
+    }
 
-    case TS_MAP_TYPE:
+    case TS_MAP_TYPE: {
+        auto key = node_to_gotype(node->field(TSF_KEY));
+        if (!key) break;
+        auto value = node_to_gotype(node->field(TSF_VALUE));
+        if (!value) break;
+
         ret = new_gotype(GOTYPE_MAP);
-        ret->map_key = node_to_gotype(node->field(TSF_KEY));
-        ret->map_value = node_to_gotype(node->field(TSF_VALUE));
+        ret->map_key = key;
+        ret->map_value = value;
         break;
+    }
 
     case TS_STRUCT_TYPE: {
         auto fieldlist_node = node->child();
@@ -6464,10 +6481,14 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
         break;
     }
 
-    case TS_CHANNEL_TYPE:
+    case TS_CHANNEL_TYPE: {
+        auto base = node_to_gotype(node->field(TSF_VALUE));
+        if (!base) break;
+
         ret = new_gotype(GOTYPE_CHAN);
-        ret->chan_base = node_to_gotype(node->field(TSF_VALUE));
+        ret->chan_base = base;
         break;
+    }
 
     case TS_INTERFACE_TYPE: {
         ret = alloc_object(Gotype);
