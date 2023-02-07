@@ -609,7 +609,10 @@ void UI::render_godecl(Godecl *decl) {
 }
 
 void UI::render_gotype(Gotype *gotype, ccstr field) {
-    if (!gotype) return;
+    if (!gotype) {
+        im::Text("%s: null", field);
+        return;
+    }
 
     auto flags = ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_SpanAvailWidth;
     bool is_open = false;
@@ -674,6 +677,8 @@ void UI::render_gotype(Gotype *gotype, ccstr field) {
             break;
 
         case GOTYPE_FUNC:
+            render_gotype(gotype->func_recv, "recv");
+
             if (!gotype->func_sig.params) {
                 im::Text("params: NULL");
             } else if (im::TreeNodeEx(&gotype->func_sig.params, flags, "params:")) {
@@ -735,10 +740,10 @@ void UI::render_ts_cursor(TSTreeCursor *curr, Parse_Lang lang, cur2 open_cur) {
     };
 
     walk_ts_cursor(curr, false, [&](Ast_Node *node, Ts_Field_Type field_type, int depth) -> Walk_Action {
-        if (node->anon() && !world.wnd_editor_tree.show_anon_nodes)
+        if (node->anon() && !world.wnd_tree_viewer.show_anon_nodes)
             return WALK_SKIP_CHILDREN;
 
-        if (node->type() == TS_COMMENT && !world.wnd_editor_tree.show_comments)
+        if (node->type() == TS_COMMENT && !world.wnd_tree_viewer.show_comments)
             return WALK_SKIP_CHILDREN;
 
         // auto changed = ts_node_has_changes(node->node);
@@ -2558,8 +2563,7 @@ void UI::draw_everything() {
 
             im::Separator();
 
-            im::MenuItem("AST viewer", NULL, &world.wnd_editor_tree.show);
-            im::MenuItem("Gofile viewer", NULL, &world.wnd_gofile_viewer.show);
+            im::MenuItem("Tree viewer", NULL, &world.wnd_tree_viewer.show);
 
             im::Separator();
 
@@ -5819,178 +5823,188 @@ void UI::draw_everything() {
 #endif
 
     do {
+        auto &wnd = world.wnd_tree_viewer;
+        if (!wnd.show) break;
+
+        begin_window("Tree Viewer", &wnd);
+        defer { im::End(); };
+
         auto editor = get_current_editor();
-        if (!editor) break;
-
-        auto tree = editor->buf->tree;
-        if (!tree) break;
-
-        if (world.wnd_editor_tree.show) {
-            auto &wnd = world.wnd_editor_tree;
-
-            begin_window("AST", &wnd);
-
-            im::Checkbox("show anon?", &wnd.show_anon_nodes);
-            im::SameLine();
-            im::Checkbox("show comments?", &wnd.show_comments);
-            im::SameLine();
-
-            cur2 open_cur = new_cur2(-1, -1);
-            if (im::Button("go to cursor"))
-                open_cur = editor->cur;
-
-            ts_tree_cursor_reset(&editor->buf->cursor, ts_tree_root_node(tree));
-            render_ts_cursor(&editor->buf->cursor, editor->lang, open_cur);
-
-            im::End();
-            fstlog("wnd_ast_viewer");
+        if (!editor) {
+            im::Text("No editor open.");
+            break;
         }
 
-        if (world.wnd_gofile_viewer.show) {
-            auto &wnd = world.wnd_gofile_viewer;
+        auto tree = editor->buf->tree;
+        if (!tree) {
+            im::Text("Editor has no tree.");
+            break;
+        }
 
-            begin_window("Gofile Viewer", &wnd);
+        if (im::BeginTabBar("wnd_tree_viewer", 0)) {
+            defer { im::EndTabBar(); };
 
-            if (im::Button("Get current file")) {
-                do {
-                    auto editor = get_current_editor();
-                    if (!editor) break;
+            if (im::BeginTabItem("AST", NULL)) {
+                defer {im::EndTabItem(); };
 
-                    auto &ind = world.indexer;
-                    if (!ind.try_acquire_lock(IND_READING)) break;
-                    defer { ind.release_lock(IND_READING); };
+                im::Checkbox("show anon?", &wnd.show_anon_nodes);
+                im::SameLine();
+                im::Checkbox("show comments?", &wnd.show_comments);
+                im::SameLine();
 
-                    if (wnd.gofile) {
-                        wnd.gofile->cleanup();
-                        wnd.gofile = NULL;
-                    }
+                cur2 open_cur = new_cur2(-1, -1);
+                if (im::Button("go to cursor"))
+                    open_cur = editor->cur;
 
-                    ind.reload_all_editors(true);
-
-                    auto ctx = ind.filepath_to_ctx(editor->filepath);
-                    auto gofile = ind.find_gofile_from_ctx(ctx);
-                    if (!gofile) break;
-
-                    wnd.pool.cleanup();
-                    wnd.pool.init();
-
-                    {
-                        SCOPED_MEM(&wnd.pool);
-                        wnd.gofile = gofile->copy();
-                        wnd.filepath = cp_strdup(editor->filepath);
-                    }
-                } while (0);
+                ts_tree_cursor_reset(&editor->buf->cursor, ts_tree_root_node(tree));
+                render_ts_cursor(&editor->buf->cursor, editor->lang, open_cur);
             }
 
-            auto gofile = wnd.gofile;
-            if (gofile) {
-                if (im::BeginTabBar("wnd_gofile_viewer_tab_bar", 0)) {
-                    if (im::BeginTabItem("Scope Ops", NULL)) {
-                        int i = 0;
-                        while (i < gofile->scope_ops->len) {
-                            auto &it = gofile->scope_ops->at(i++);
-                            auto pos = new_cur2(-1, -1);
+            if (im::BeginTabItem("Gofile", NULL)) {
+                defer {im::EndTabItem(); };
 
-                            switch (it.type) {
-                            case GSOP_OPEN_SCOPE: {
-                                auto flags = ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_DefaultOpen;
-                                bool open = im::TreeNodeEx(&it, flags, "scope open at %s", it.pos.str());
+                if (editor->buf->lang == LANG_GO) {
+                    if (im::Button("Get current file")) {
+                        do {
+                            auto editor = get_current_editor();
+                            if (!editor) break;
 
-                                if (im::IsItemClicked())
-                                    pos = it.pos;
+                            auto &ind = world.indexer;
+                            if (!ind.try_acquire_lock(IND_READING)) break;
+                            defer { ind.release_lock(IND_READING); };
 
-                                if (open) break;
+                            if (wnd.gofile) {
+                                wnd.gofile->cleanup();
+                                wnd.gofile = NULL;
+                            }
 
-                                int depth = 1;
+                            ind.reload_all_editors(true);
+
+                            auto ctx = ind.filepath_to_ctx(editor->filepath);
+                            auto gofile = ind.find_gofile_from_ctx(ctx);
+                            if (!gofile) break;
+
+                            wnd.pool.cleanup();
+                            wnd.pool.init();
+
+                            {
+                                SCOPED_MEM(&wnd.pool);
+                                wnd.gofile = gofile->copy();
+                                wnd.filepath = cp_strdup(editor->filepath);
+                            }
+                        } while (0);
+                    }
+
+                    auto gofile = wnd.gofile;
+                    if (gofile) {
+                        if (im::BeginTabBar("wnd_gofile_viewer_tab_bar", 0)) {
+                            defer { im::EndTabBar(); };
+
+                            if (im::BeginTabItem("Scope Ops", NULL)) {
+                                defer { im::EndTabItem(); };
+
+                                int i = 0;
                                 while (i < gofile->scope_ops->len) {
-                                    auto &it2 = gofile->scope_ops->at(i++);
-                                    if (it2.type == GSOP_OPEN_SCOPE) {
-                                        depth++;
-                                    } else if (it2.type == GSOP_CLOSE_SCOPE) {
-                                        depth--;
-                                        if (!depth)
-                                            break;
+                                    auto &it = gofile->scope_ops->at(i++);
+                                    auto pos = new_cur2(-1, -1);
+
+                                    switch (it.type) {
+                                    case GSOP_OPEN_SCOPE: {
+                                        auto flags = ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_DefaultOpen;
+                                        bool open = im::TreeNodeEx(&it, flags, "scope open at %s", it.pos.str());
+
+                                        if (im::IsItemClicked())
+                                            pos = it.pos;
+
+                                        if (open) break;
+
+                                        int depth = 1;
+                                        while (i < gofile->scope_ops->len) {
+                                            auto &it2 = gofile->scope_ops->at(i++);
+                                            if (it2.type == GSOP_OPEN_SCOPE) {
+                                                depth++;
+                                            } else if (it2.type == GSOP_CLOSE_SCOPE) {
+                                                depth--;
+                                                if (!depth)
+                                                    break;
+                                            }
+                                        }
+                                        break;
+                                    }
+                                    case GSOP_DECL: {
+                                        render_godecl(it.decl);
+                                        break;
+                                    }
+                                    case GSOP_CLOSE_SCOPE: {
+                                        auto flags = ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+                                        im::TreeNodeEx(&it, flags, "scope close at %s", it.pos.str());
+
+                                        if (im::IsItemClicked())
+                                            pos = it.pos;
+
+                                        im::TreePop();
+                                        break;
+                                    }
+                                    }
+
+                                    if (pos.x != -1 && pos.y != -1)
+                                        goto_file_and_pos(wnd.filepath, pos, true);
+                                }
+                            }
+
+                            if (im::BeginTabItem("Decls", NULL)) {
+                                defer { im::EndTabItem(); };
+
+                                For (gofile->decls) render_godecl(&it);
+                            }
+
+                            if (im::BeginTabItem("Imports", NULL)) {
+                                defer { im::EndTabItem(); };
+
+                                For (gofile->imports) {
+                                    im::Text(
+                                        "%s %s %s %s",
+                                        it.package_name,
+                                        go_package_name_type_str(it.package_name_type),
+                                        it.import_path,
+                                        it.decl->decl_start.str()
+                                    );
+                                }
+                            }
+
+                            if (im::BeginTabItem("References", NULL)) {
+                                defer { im::EndTabItem(); };
+
+                                For (gofile->references) {
+                                    if (it.is_sel) {
+                                        auto flags = ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth;
+                                        bool is_open = im::TreeNodeEx(&it, flags, "<selector> at %s", it.x_start.str());
+
+                                        if (im::IsItemClicked())
+                                            goto_file_and_pos(wnd.filepath, it.x_start, true);
+
+                                        if (is_open) {
+                                            render_gotype(it.x);
+
+                                            auto flags = ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+                                            im::TreeNodeEx(it.sel, flags);
+                                            if (im::IsItemClicked())
+                                                goto_file_and_pos(wnd.filepath, it.sel_start, true);
+
+                                            im::TreePop();
+                                        }
+                                    } else {
+                                        auto flags = ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+                                        im::TreeNodeEx(it.name, flags, "%s at %s", it.name, it.start.str());
+                                        if (im::IsItemClicked())
+                                            goto_file_and_pos(wnd.filepath, it.start, true);
                                     }
                                 }
-                                break;
-                            }
-                            case GSOP_DECL: {
-                                render_godecl(it.decl);
-                                break;
-                            }
-                            case GSOP_CLOSE_SCOPE: {
-                                auto flags = ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
-                                im::TreeNodeEx(&it, flags, "scope close at %s", it.pos.str());
-
-                                if (im::IsItemClicked())
-                                    pos = it.pos;
-
-                                im::TreePop();
-                                break;
-                            }
-                            }
-
-                            if (pos.x != -1 && pos.y != -1)
-                                goto_file_and_pos(wnd.filepath, pos, true);
-                        }
-
-                        im::EndTabItem();
-                    }
-
-                    if (im::BeginTabItem("Decls", NULL)) {
-                        For (gofile->decls) render_godecl(&it);
-                        im::EndTabItem();
-                    }
-
-                    if (im::BeginTabItem("Imports", NULL)) {
-                        For (gofile->imports) {
-                            im::Text(
-                                "%s %s %s %s",
-                                it.package_name,
-                                go_package_name_type_str(it.package_name_type),
-                                it.import_path,
-                                it.decl->decl_start.str()
-                            );
-                        }
-                        im::EndTabItem();
-                    }
-
-                    if (im::BeginTabItem("References", NULL)) {
-                        For (gofile->references) {
-                            if (it.is_sel) {
-                                auto flags = ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth;
-                                bool is_open = im::TreeNodeEx(&it, flags, "<selector> at %s", it.x_start.str());
-
-                                if (im::IsItemClicked())
-                                    goto_file_and_pos(wnd.filepath, it.x_start, true);
-
-                                if (is_open) {
-                                    render_gotype(it.x);
-
-                                    auto flags = ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
-                                    im::TreeNodeEx(it.sel, flags);
-                                    if (im::IsItemClicked())
-                                        goto_file_and_pos(wnd.filepath, it.sel_start, true);
-
-                                    im::TreePop();
-                                }
-                            } else {
-                                auto flags = ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
-                                im::TreeNodeEx(it.name, flags, "%s at %s", it.name, it.start.str());
-                                if (im::IsItemClicked())
-                                    goto_file_and_pos(wnd.filepath, it.start, true);
                             }
                         }
-
-                        im::EndTabItem();
                     }
-
-                    im::EndTabBar();
                 }
             }
-
-            im::End();
-            fstlog("wnd_gofile_viewer");
         }
     } while (0);
 
