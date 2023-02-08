@@ -76,6 +76,7 @@ const BASE_LINKS = {
   handmadeManifesto: "https://handmade.network/manifesto",
   nonPessimized: "https://www.youtube.com/watch?v=pgoetgxecw8",
   mikeActon: "https://www.youtube.com/watch?v=rX0ItVEVjHc",
+  roadAhead: "https://codeperfect95.substack.com/p/the-road-ahead",
 };
 
 const DEV_LINKS = {
@@ -142,7 +143,7 @@ function wrap(elem, extraClassName, defaultProps, overrideProps) {
 
 const WallOfText = wrap(
   "div",
-  "wall-of-text leading-normal md:mx-auto md:max-w-2xl bg-white md:my-32 p-8 md:p-16 md:rounded-lg md:shadow-sm text-neutral-700"
+  "prose leading-normal md:mx-auto md:max-w-2xl bg-white md:my-32 p-8 md:p-16 md:rounded-lg md:shadow-sm text-neutral-700"
 );
 const Title = wrap("h2", "m-0 mb-6 title text-3xl");
 
@@ -274,7 +275,7 @@ function Home() {
         </div>
       </div>
 
-      <div className="bg-neutral-800 border-gray-100 p-8 py-12 md:pb-24 relative z-10 flex items-center justify-center">
+      <div className="bg-neutral-900 border-gray-100 p-8 py-12 md:pb-24 relative z-10 flex items-center justify-center">
         <div className="max-w-screen-2xl flex flex-col lg:flex-row items-center gap-8 md:gap-16">
           <div className="lg:w-1/3 md:mx-0">
             <div className="text-[160%] md:text-[225%] font-semibold text-black leading-tight">
@@ -614,28 +615,29 @@ const faqs = [
     a: (
       <>
         <p>
-          It actually isn't particularly fast. It's just fast compared to modern
-          software. What makes modern software slow is a complicated question,
-          but it's a hundred different things, and what what makes CodePerfect
-          relatively fast is that we mostly just declined to copy them.
+          It's actually not particularly fast, just fast compared to modern
+          software. Why modern software is slow is complicated, but suffice it
+          to say it's a hundred different reasons, and CodePerfect achieves
+          relative fastness mostly by declining to copy them.
         </p>
 
         <p>
-          More concretely, we use a low level language (C/C++). We manage our
-          own memory and do amortized bulk allocation with arena allocators. We
-          write straightforward,{" "}
-          <A href={LINKS.nonPessimized}>non-pessimized</A> code that just{" "}
-          <A href={LINKS.mikeActon}>does the actual thing</A> it's supposed to.
+          The biggest of these reasons is extreme bloat everywhere in the modern
+          tech stack. We eschewed all that in favor of a low level language
+          (C/C++) and managing our own memory by doing amortized bulk allocation
+          with arena allocators. We write straightforward,{" "}
+          <A href={LINKS.nonPessimized}>non-pessimized</A> code that more or
+          less just executes the actual CPU instructions that it needs to in
+          order to do the thing it's supposed to do.
         </p>
 
         <p>
-          Really CodePerfect's speed is just the speed of modern computers. We
-          aren't hyperoptimizing or hypertuning with crazy inline assembly or
-          anything. There are some techniques we use, like using file mappings
-          and multithreading some things where it makes sense, but overall it's
-          just straightforward C code that performs the actual task of executing
-          an IDE, and as it turns out, that task can be done quite efficiently
-          by modern computers.
+          CodePerfect's speed is really just the speed of modern computers. We
+          aren't hyperoptimizing by writing crazy inline assembly or anything.
+          There are some techniques we use, like using file mappings and
+          multithreading some things where it makes sense, but overall it's just
+          straightforward C code that performs the actual task of executing an
+          IDE, which as it turns out modern computers can do quite efficiently.
         </p>
       </>
     ),
@@ -650,18 +652,16 @@ const faqs = [
         </p>
 
         <p>
-          Right now we're targeting the demographic that wants a coding
-          experience as fluid as alacritty/tmux/vim or Sublime Text, but comes
-          with the code intelligence and other IDE features you need to program
-          productively. Our users are people who spend substantial amounts of
-          time in their IDE, want every second to count, and derive significant
-          value (and joy) from an IDE that provides a seamless, latency-free
-          workflow.
+          Right now we're targeting people who want a code editor as fast as
+          alacritty/tmux/vim or Sublime Text, but comes with code intelligence
+          and other IDE features you need to program productively. Our users
+          spend substantial amounts of time in their editor, and derive
+          significant value and joy from a seamless, latency-free workflow.
         </p>
         <p>
-          We're trying to be <A href="https://sesuperhuman.com">Superhuman</A>{" "}
-          for programming. Programmers use their IDE all day, much like business
-          people use email.
+          We want to be <A href="https://sesuperhuman.com">Superhuman</A> for
+          programming. Much like business people and email, programmers use
+          their IDE all day.
         </p>
       </>
     ),
@@ -671,20 +671,23 @@ const faqs = [
     a: (
       <>
         <p>
-          It's actually not speed per se. In the long run, we want to build the
-          smoothest programming experience, a "bicycle for the mind" for
-          programming. But up to a point, the smoothness of the experience
-          basically equals speed (or rather latency), so we're focusing on speed
-          first.
+          We are trying to build a tool tailor-made specifically for the task of
+          programming.
         </p>
         <p>
-          Efforts to improve programming tools have a tendency to be based on
-          abstract ideas like how to make programming more visualizable, or
-          collaborative, or involve less actual writing of code. We lean into
-          the opposite practical view that, for now at least, the core activity
-          of programming is still editing, compiling, and debugging code.
-          CodePerfect is tightly integrated and optimized around that particular
-          workflow.
+          Efforts to improve programming tools tend to focus on abstract ideas
+          like making programming more collaborative, or involve less code, or
+          more integrated with third-party tools. Those are fine goals; we're
+          just aiming in an orthogonal, more boring direction: simply building
+          the best tool for literally editing, compiling, and debugging code.
+          CodePerfect is tightly integrated and optimized around that use case.
+        </p>
+
+        <p>
+          A big part of this is building a smooth experience. We're trying to
+          build a "bicycle for the mind" for programming. But up to a point,
+          smoothness basically means speed (or latency), so that is a big
+          initial focus.
         </p>
       </>
     ),
@@ -694,18 +697,19 @@ const faqs = [
     a: (
       <>
         <p>
-          To be blunt, because we have rent to pay, and our rent is a
-          subscription model :)
+          Because we have rent to pay, and our rent is a subscription model :)
         </p>
         <p>
           CodePerfect is also in active development and shipping{" "}
-          <A href={LINKS.changelog}>aggressively</A>, so your recurring payments
-          help to fund ongoing development.
+          <A href={LINKS.changelog}>actively</A>, so your recurring payments
+          help fund ongoing development.
         </p>
         <p>
-          We understand some users are adamantly opposed to subscription models
-          and would prefer a perpetual license. We sell one for the cost of four
-          years: $200 for individuals, or $400 if you're expensing it.
+          We understand some users adamantly oppose subscription models and
+          strongly prefer a perpetual license. We sell one for the cost of four
+          years: $200 for individuals, or $400 if you're expensing it. Please{" "}
+          <A href={`mailto:${SUPPORT_EMAIL}`}>email us</A> to initiate this
+          process.
         </p>
       </>
     ),
@@ -715,10 +719,9 @@ const faqs = [
     a: (
       <>
         <p>
-          It's a throwback to a time when the hardware was many times slower
-          than it is today, but somehow all the software felt much faster. "Back
-          to a time when Microsoft Word and Visual Studio opened instantly" sort
-          of thing.
+          It's a throwback to a time when the hardware was much slower but
+          somehow the software was much faster, back to a time when Word and
+          Visual Studio opened instantly.
         </p>
       </>
     ),
@@ -734,7 +737,7 @@ function FAQ() {
       <div>
         {faqs.map((it) => (
           <div
-            className="md:p-6 md:border-0 mb-12 md:mb-4 last:mb-0 md:bg-white md:rounded-lg md:shadow-sm"
+            className="prose md:p-6 md:border-0 mb-12 md:mb-4 last:mb-0 md:bg-white md:rounded-lg md:shadow-sm"
             key={it.q}
           >
             <p className="text-lg font-bold">{it.q}</p>
@@ -786,13 +789,13 @@ function Download() {
           )}
         >
           <span className="inline-block">
-            <span className="font-semibold text-sm text-yellow-600 flex gap-x-1.5 items-center">
+            <span className="font-semibold text-sm text-neutral-700 flex gap-x-1.5 items-center">
               <Icon size={18} icon={IconTag} />
               <span>Build {CURRENT_BUILD}</span>
             </span>
           </span>
           <span className="inline-block">
-            <span className="font-semibold text-sm text-lime-600 gap-x-1.5 items-center flex">
+            <span className="font-semibold text-sm text-neutral-700 gap-x-1.5 items-center flex">
               <Icon size={18} icon={IconClockHour4} />
               <span>Released {CURRENT_BUILD_RELEASE_DATE}</span>
             </span>
