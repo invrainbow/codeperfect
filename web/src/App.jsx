@@ -77,6 +77,8 @@ const BASE_LINKS = {
   nonPessimized: "https://www.youtube.com/watch?v=pgoetgxecw8",
   mikeActon: "https://www.youtube.com/watch?v=rX0ItVEVjHc",
   roadAhead: "https://codeperfect95.substack.com/p/the-road-ahead",
+  oldSoftwareOpenedInstantly:
+    "https://www.youtube.com/watch?v=GC-0tCy4P1U&t=2168s",
 };
 
 const DEV_LINKS = {
@@ -719,9 +721,9 @@ const faqs = [
     a: (
       <>
         <p>
-          It's a throwback to a time when the hardware was much slower but
-          somehow the software was much faster, back to a time when Word and
-          Visual Studio opened instantly.
+          It's a throwback to an era when somehow, on hardware way slower than
+          today's, software was way{" "}
+          <A href={LINKS.oldSoftwareOpenedInstantly}>faster</A>.
         </p>
       </>
     ),
@@ -730,7 +732,7 @@ const faqs = [
 
 function FAQ() {
   return (
-    <div className="bg-white md:bg-transparent py-12 px-6 md:px-4 md:py-28 md:max-w-screen-sm mx-auto">
+    <div className="bg-white md:bg-transparent py-12 px-6 md:px-4 md:py-24 md:max-w-screen-sm mx-auto">
       <div className="md:px-4 md:text-center text-3xl md:text-5xl title mb-8">
         FAQ
       </div>
