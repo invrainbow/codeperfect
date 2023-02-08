@@ -2,7 +2,7 @@
 title: "Getting Started"
 ---
 
-## Install CodePerfect
+## Install
 
 CodePerfect currently supports Windows (x64) and Mac (x64, arm64);
 [download](https://codeperfect95.com/download) and unzip the appropriate binary.
@@ -24,22 +24,30 @@ You'll only need to do this once.
 
 :::
 
-## Install Go
+## Setup
 
-CodePerfect requires Go version 1.13+. Preferred ways of installing Go are using
-the [official installer](https://go.dev/dl/) for your platform, or using a
-package manager of your choice, such as
+CodePerfect requires Go version 1.13+. You can use
+the [official installer](https://go.dev/dl/) for your platform, or a
+package manager like
 [brew](https://formulae.brew.sh/formula/go) or
 [choco](https://community.chocolatey.org/packages/golang).
 
-## Find your Go installation
+### Find Go installation (automatic)
 
-CodePerfect basically uses whatever `go` binary your terminal does. It runs:
+By default, CodePerfect uses whatever `go` binary your terminal does. It detects go by running
 
 - macOS: `which go` in `bash`
 - Windows: `where go` in `cmd`
 
 The way to make the `go` binary findable is to ensure it's in your `PATH`.
+
+### Find Go installation (manual)
+
+You can also manually tell CodePerfect the exact path of your `go` binary.
+Create a file `~/.cpgobin`, and put the full absolute path inside.
+
+This is the path to the go binary itself, not the folder containing it. E.g. you
+want `/opt/homebrew/bin/go`, not `/opt/homebrew/bin`.
 
 :::note
 
@@ -52,33 +60,32 @@ you used a package manager, you may or may not need to set the `PATH` manually.
 
 CodePerfect doesn't really have the concept of a project. It simply knows how to
 read a Go module or workspace. When you open CodePerfect, it prompts you to
-select a folder:
+select a folder.
 
 - **Module:** CodePerfect can open a single module. In this case, it expects a
   folder containing a `go.mod` file at the root of the folder.
 - **Workspace:** CodePerfect can open any folder that is, or belongs to, a
   workspace. This means any folder that contains a `go.work`, or has a parent
-  folder that contains a `go.work`. CodePerfect runs
-  `go env GOWORK` to detect what workspace (if any) the current folder belongs to.
+  folder that contains a `go.work`. CodePerfect runs `go env GOWORK` to detect
+  what workspace (if any) the current folder belongs to.
 
 When you open a folder, CodePerfect creates some files inside for internal use:
 
 - `.cpproj` &mdash; project-specific settings
 - `.cpdb` &mdash; the index of your code
 
-We recommend committing `.cpproj` to version control (for consistent build and debug
-configurations), but excluding `.cpdb` (it needs to be rebuilt on each machine).
-Note that none of these files are human-readable.
+We recommend committing `.cpproj` to version control (for consistent build and
+debug configurations), but excluding `.cpdb` (it needs to be rebuilt on each
+machine). Note that none of these files are human-readable.
 
 ### Open an existing project
 
 CodePerfect can open any Go module or workspace as described above. Just run
 CodePerfect and select the right folder.
 
-If you're opening a pre-existing project, CodePerfect uses `go list -m all`
-to find your dependencies, and if you have un-downloaded dependencies, the
-indexer will naturally be unable to find them. You can ensure they've been
-downloaded:
+If you're opening a pre-existing project, CodePerfect uses `go list -m all` to
+find your dependencies, and if you have un-downloaded dependencies, the indexer
+will naturally be unable to find them. You can ensure they've been downloaded:
 
 ```
 go mod tidy

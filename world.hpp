@@ -704,23 +704,23 @@ struct World {
         bool *set_file_close;
     } wnd_search_and_replace;
 
-    struct Wnd_Editor_Tree : Wnd {
+    struct Wnd_Tree_Viewer : Wnd {
+        // ast viewer
         bool show_anon_nodes;
         bool show_comments;
         // bool move;
         // cur2 move_to_cur;
-    } wnd_editor_tree;
+
+        // gofile
+        Pool pool;
+        Go_File *gofile;
+        ccstr filepath;
+    } wnd_tree_viewer;
 
     struct Wnd_Options : Wnd {
         Options tmp;
         bool something_that_needs_restart_was_changed;
     } wnd_options;
-
-    struct Wnd_Gofile_Viewer : Wnd {
-        Pool pool;
-        Go_File *gofile;
-        ccstr filepath;
-    } wnd_gofile_viewer;
 
     struct Wnd_Add_File_Or_Folder : Wnd {
         char name[MAX_PATH];

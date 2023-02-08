@@ -173,7 +173,7 @@ struct Buffer {
     int lang;
 
     TSParser *parser;
-    char tsinput_buffer[128];
+    char tsinput_buffer[1024];
     TSInputEdit tsedit;
     List<uchar> edit_buffer_old;
     List<uchar> edit_buffer_new;

@@ -609,7 +609,10 @@ void UI::render_godecl(Godecl *decl) {
 }
 
 void UI::render_gotype(Gotype *gotype, ccstr field) {
-    if (!gotype) return;
+    if (!gotype) {
+        im::Text("%s: null", field);
+        return;
+    }
 
     auto flags = ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_SpanAvailWidth;
     bool is_open = false;
@@ -674,6 +677,8 @@ void UI::render_gotype(Gotype *gotype, ccstr field) {
             break;
 
         case GOTYPE_FUNC:
+            render_gotype(gotype->func_recv, "recv");
+
             if (!gotype->func_sig.params) {
                 im::Text("params: NULL");
             } else if (im::TreeNodeEx(&gotype->func_sig.params, flags, "params:")) {
@@ -735,10 +740,10 @@ void UI::render_ts_cursor(TSTreeCursor *curr, Parse_Lang lang, cur2 open_cur) {
     };
 
     walk_ts_cursor(curr, false, [&](Ast_Node *node, Ts_Field_Type field_type, int depth) -> Walk_Action {
-        if (node->anon() && !world.wnd_editor_tree.show_anon_nodes)
+        if (node->anon() && !world.wnd_tree_viewer.show_anon_nodes)
             return WALK_SKIP_CHILDREN;
 
-        if (node->type() == TS_COMMENT && !world.wnd_editor_tree.show_comments)
+        if (node->type() == TS_COMMENT && !world.wnd_tree_viewer.show_comments)
             return WALK_SKIP_CHILDREN;
 
         // auto changed = ts_node_has_changes(node->node);
@@ -841,7 +846,7 @@ Font* UI::acquire_system_ui_font() {
     auto font = alloc_object(Font);
     if (!font->init("<system ui font>", UI_FONT_SIZE, data)) {
         frame.restore();
-        error("unable to acquire system font");
+        // error("unable to acquire system font");
         return NULL;
     }
 
@@ -2558,8 +2563,7 @@ void UI::draw_everything() {
 
             im::Separator();
 
-            im::MenuItem("AST viewer", NULL, &world.wnd_editor_tree.show);
-            im::MenuItem("Gofile viewer", NULL, &world.wnd_gofile_viewer.show);
+            im::MenuItem("Tree viewer", NULL, &world.wnd_tree_viewer.show);
 
             im::Separator();
 
@@ -2973,7 +2977,8 @@ void UI::draw_everything() {
             cp_sprintf("Callee Hierarchy for %s###callee_hierarchy", wnd.declres->decl->name),
             &wnd,
             0,
-            !wnd.done
+            !wnd.done,
+            true
         );
 
         if (wnd.done) {
@@ -3000,7 +3005,8 @@ void UI::draw_everything() {
             cp_sprintf("Caller Hierarchy for %s###caller_hierarchy", wnd.declres->decl->name),
             &wnd,
             0,
-            !wnd.done
+            !wnd.done,
+            true
         );
 
         if (wnd.done) {
@@ -3024,7 +3030,7 @@ void UI::draw_everything() {
 
         im::SetNextWindowDockID(dock_sidebar_id, ImGuiCond_Once);
 
-        begin_window("Find Interfaces", &wnd, ImGuiWindowFlags_AlwaysAutoResize, !wnd.done);
+        begin_window("Find Interfaces", &wnd, ImGuiWindowFlags_AlwaysAutoResize, !wnd.done, true);
 
         if (wnd.done) {
             im::Checkbox("Show empty interfaces", &wnd.include_empty);
@@ -3169,7 +3175,7 @@ void UI::draw_everything() {
 
         im::SetNextWindowDockID(dock_sidebar_id, ImGuiCond_Once);
 
-        begin_window("Find Implementations", &wnd, ImGuiWindowFlags_AlwaysAutoResize, !wnd.done);
+        begin_window("Find Implementations", &wnd, ImGuiWindowFlags_AlwaysAutoResize, !wnd.done, true);
 
         if (wnd.done) {
             im::Checkbox("Search everywhere", &wnd.search_everywhere);
@@ -3285,11 +3291,54 @@ void UI::draw_everything() {
 
         im::SetNextWindowDockID(dock_sidebar_id, ImGuiCond_Once);
 
-        begin_window("Find References", &wnd, ImGuiWindowFlags_AlwaysAutoResize, !wnd.done);
+        begin_window("Find References", &wnd, ImGuiWindowFlags_AlwaysAutoResize, !wnd.done, true);
 
         if (wnd.done) {
             if (!isempty(wnd.results)) {
+                bool go_prev = false;
+                bool go_next = false;
+
+                switch (get_keyboard_nav(&wnd, KNF_ALLOW_HJKL)) {
+                case KN_ENTER: {
+                    auto results = wnd.results;
+                    int fidx = wnd.current_file;
+                    int ridx = wnd.current_result;
+
+                    if (fidx == -1) break;
+                    if (!(0 <= fidx && fidx < results->len)) break;
+
+                    auto file = results->at(fidx);
+                    if (!(0 <= ridx && ridx < file.results->len)) break;
+
+                    auto filepath = get_path_relative_to(file.filepath, world.current_path);
+
+                    auto result = file.results->at(ridx);
+                    auto ref = result.reference;
+                    auto pos = ref->is_sel ? ref->x_start : ref->start;
+
+                    goto_file_and_pos(filepath, pos, true);
+                    break;
+                }
+                case KN_DOWN:
+                    go_next = true;
+                    break;
+                case KN_UP:
+                    go_prev = true;
+                    break;
+                }
+
+                int last_file = -1;
+                int last_result = -1;
+
+                auto goto_result = [&](int file, int result) {
+                    wnd.current_file = file;
+                    wnd.current_result = result;
+                    wnd.scroll_to_file = file;
+                    wnd.scroll_to_result = result;
+                };
+
                 im_push_mono_font();
+
                 Fori (wnd.results) {
                     int file_index = i;
 
@@ -3306,123 +3355,93 @@ void UI::draw_everything() {
                         return im::TreeNodeEx(filepath, flags);
                     };
 
-                    if (render_header()) {
-                        im::Indent();
-                        im_push_mono_font();
-
-                        Fori (it.results) {
-                            int result_index = i;
-
-                            auto ref = it.reference;
-                            auto pos = ref->is_sel ? ref->x_start : ref->start;
-
-                            auto availwidth = im::GetContentRegionAvail().x;
-                            auto text_size = ImVec2(availwidth, im::CalcTextSize("blah").y);
-                            auto drawpos = im::GetCursorScreenPos();
-
-                            bool selected = wnd.current_file == file_index && wnd.current_result == result_index;
-
-                            if (selected) im::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(ImColor(60, 60, 60)));
-
-                            if (im::Selectable(cp_sprintf("##find_references_result_%d_%d", file_index, result_index), selected, 0, text_size)) {
-                                wnd.current_file = file_index;
-                                wnd.current_result = result_index;
-                                wnd.scroll_to_file = file_index;
-                                wnd.scroll_to_result = result_index;
-                                goto_file_and_pos(filepath, pos, true);
+                    if (!render_header()) {
+                        if (wnd.current_file == file_index) {
+                            if (go_prev) {
+                                if (wnd.current_file) {
+                                    int idx = wnd.current_file - 1;
+                                    goto_result(idx, wnd.results->at(idx).results->len - 1);
+                                }
+                            } else if (go_next) {
+                                if (wnd.current_file + 1 < it.results->len)
+                                    goto_result(wnd.current_file + 1, 0);
+                                go_next = false;
                             }
+                        }
+                        continue;
+                    }
 
-                            if (wnd.scroll_to_file == file_index && wnd.scroll_to_result == result_index) {
-                                im::SetScrollHereY();
-                                wnd.scroll_to_file = -1;
-                                wnd.scroll_to_result = -1;
-                            }
+                    im::Indent();
+                    im_push_mono_font();
 
-                            if (selected) im::PopStyleColor();
+                    Fori (it.results) {
+                        int result_index = i;
 
-                            // copied from search results, do we need to refactor?
-                            auto draw_text = [&](ccstr text, ImColor color) {
-                                im::PushStyleColor(ImGuiCol_Text, ImVec4(color));
-                                defer { im::PopStyleColor(); };
+                        if (go_prev)
+                            if (file_index == wnd.current_file && result_index == wnd.current_result)
+                                if (last_file != -1 && last_result != -1)
+                                    goto_result(last_file, last_result);
 
-                                im::GetWindowDrawList()->AddText(drawpos, im::GetColorU32(ImGuiCol_Text), text);
-                                drawpos.x += im::CalcTextSize(text).x;
-                            };
-
-                            draw_text(new_cur2(pos.x+1, pos.y+1).str(), ImColor(200, 200, 200));
-
-                            if (it.toplevel_name) {
-                                draw_text(" (in ", ImColor(120, 120, 120));
-                                draw_text(it.toplevel_name, ImColor(200, 200, 200));
-                                draw_text(")", ImColor(120, 120, 120));
+                        if (go_next) {
+                            if (last_file == wnd.current_file && last_result == wnd.current_result) {
+                                goto_result(file_index, result_index);
+                                go_next = false;
                             }
                         }
 
-                        im_pop_font();
-                        im::Unindent();
-                    }
-                }
-                im_pop_font();
-
-                do {
-                    int fidx = wnd.current_file;
-                    int ridx = wnd.current_result;
-                    auto results = wnd.results;
-
-                    auto is_oob = [&]() {
-                        if (fidx == -1) return true;
-                        if (!(0 <= fidx && fidx < results->len)) return true;
-
-                        auto file = results->at(fidx);
-                        if (!(0 <= ridx && ridx < file.results->len)) return true;
-                        return false;
-                    };
-
-                    auto goto_result = [&](int file, int result) {
-                        wnd.current_file = file;
-                        wnd.current_result = result;
-                        wnd.scroll_to_file = file;
-                        wnd.scroll_to_result = result;
-                    };
-
-                    switch (get_keyboard_nav(&wnd, KNF_ALLOW_HJKL)) {
-                    case KN_ENTER: {
-                        if (is_oob()) break;
-
-                        auto file = results->at(fidx);
-                        auto filepath = get_path_relative_to(file.filepath, world.current_path);
-
-                        auto result = file.results->at(ridx);
-                        auto ref = result.reference;
+                        auto ref = it.reference;
                         auto pos = ref->is_sel ? ref->x_start : ref->start;
 
-                        goto_file_and_pos(filepath, pos, true);
-                        break;
-                    }
-                    case KN_DOWN: {
-                        if (is_oob()) {
-                            goto_result(0, 0);
-                            break;
+                        auto availwidth = im::GetContentRegionAvail().x;
+                        auto text_size = ImVec2(availwidth, im::CalcTextSize("blah").y);
+                        auto drawpos = im::GetCursorScreenPos();
+
+                        bool selected = wnd.current_file == file_index && wnd.current_result == result_index;
+
+                        if (selected) im::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(ImColor(60, 60, 60)));
+
+                        if (im::Selectable(cp_sprintf("##find_references_result_%d_%d", file_index, result_index), selected, 0, text_size)) {
+                            wnd.current_file = file_index;
+                            wnd.current_result = result_index;
+                            wnd.scroll_to_file = file_index;
+                            wnd.scroll_to_result = result_index;
+                            goto_file_and_pos(filepath, pos, true);
                         }
-                        auto file = results->at(fidx);
-                        if (ridx + 1 < file.results->len)
-                            goto_result(fidx, ridx+1);
-                        else if (fidx+1 < results->len)
-                            goto_result(fidx+1, 0);
-                        break;
-                    }
-                    case KN_UP:
-                        if (is_oob()) {
-                            goto_result(0, 0);
-                            break;
+
+                        if (wnd.scroll_to_file == file_index && wnd.scroll_to_result == result_index) {
+                            im::SetScrollHereY();
+                            wnd.scroll_to_file = -1;
+                            wnd.scroll_to_result = -1;
                         }
-                        if (ridx > 0)
-                            goto_result(fidx, ridx-1);
-                        else if (fidx > 0)
-                            goto_result(fidx-1, results->at(fidx-1).results->len-1);
-                        break;
+
+                        if (selected) im::PopStyleColor();
+
+                        // copied from search results, do we need to refactor?
+                        auto draw_text = [&](ccstr text, ImColor color) {
+                            im::PushStyleColor(ImGuiCol_Text, ImVec4(color));
+                            defer { im::PopStyleColor(); };
+
+                            im::GetWindowDrawList()->AddText(drawpos, im::GetColorU32(ImGuiCol_Text), text);
+                            drawpos.x += im::CalcTextSize(text).x;
+                        };
+
+                        draw_text(new_cur2(pos.x+1, pos.y+1).str(), ImColor(200, 200, 200));
+
+                        if (it.toplevel_name) {
+                            draw_text(" (in ", ImColor(120, 120, 120));
+                            draw_text(it.toplevel_name, ImColor(200, 200, 200));
+                            draw_text(")", ImColor(120, 120, 120));
+                        }
+
+                        last_file = file_index;
+                        last_result = result_index;
                     }
-                } while (0);
+
+                    im_pop_font();
+                    im::Unindent();
+                }
+
+                im_pop_font();
             } else {
                 im::Text("No results found.");
             }
@@ -3998,7 +4017,7 @@ void UI::draw_everything() {
         im::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
 
         im::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-        begin_window("File Explorer", &wnd);
+        begin_window("File Explorer", &wnd, 0, false, true);
         im::PopStyleVar();
 
         fstlog("wnd_file_explorer - start window");
@@ -5308,7 +5327,7 @@ void UI::draw_everything() {
         im::SetNextWindowDockID(dock_sidebar_id, ImGuiCond_Once);
 
         auto title = cp_sprintf("%s###search_and_replace", wnd.replace ? "Search and Replace" : "Search");
-        begin_window(title, &wnd, ImGuiWindowFlags_AlwaysAutoResize);
+        begin_window(title, &wnd, ImGuiWindowFlags_AlwaysAutoResize, false, true);
 
         bool entered = false;
 
@@ -5767,7 +5786,7 @@ void UI::draw_everything() {
     if (world.wnd_history.show) {
         im::SetNextWindowDockID(dock_sidebar_id, ImGuiCond_Once);
 
-        begin_window("History", &world.wnd_history, ImGuiWindowFlags_AlwaysAutoResize);
+        begin_window("History", &world.wnd_history, ImGuiWindowFlags_AlwaysAutoResize, false, true);
 
         bool handled = false;
         do {
@@ -5804,178 +5823,188 @@ void UI::draw_everything() {
 #endif
 
     do {
+        auto &wnd = world.wnd_tree_viewer;
+        if (!wnd.show) break;
+
+        begin_window("Tree Viewer", &wnd);
+        defer { im::End(); };
+
         auto editor = get_current_editor();
-        if (!editor) break;
-
-        auto tree = editor->buf->tree;
-        if (!tree) break;
-
-        if (world.wnd_editor_tree.show) {
-            auto &wnd = world.wnd_editor_tree;
-
-            begin_window("AST", &wnd);
-
-            im::Checkbox("show anon?", &wnd.show_anon_nodes);
-            im::SameLine();
-            im::Checkbox("show comments?", &wnd.show_comments);
-            im::SameLine();
-
-            cur2 open_cur = new_cur2(-1, -1);
-            if (im::Button("go to cursor"))
-                open_cur = editor->cur;
-
-            ts_tree_cursor_reset(&editor->buf->cursor, ts_tree_root_node(tree));
-            render_ts_cursor(&editor->buf->cursor, editor->lang, open_cur);
-
-            im::End();
-            fstlog("wnd_ast_viewer");
+        if (!editor) {
+            im::Text("No editor open.");
+            break;
         }
 
-        if (world.wnd_gofile_viewer.show) {
-            auto &wnd = world.wnd_gofile_viewer;
+        auto tree = editor->buf->tree;
+        if (!tree) {
+            im::Text("Editor has no tree.");
+            break;
+        }
 
-            begin_window("Gofile Viewer", &wnd);
+        if (im::BeginTabBar("wnd_tree_viewer", 0)) {
+            defer { im::EndTabBar(); };
 
-            if (im::Button("Get current file")) {
-                do {
-                    auto editor = get_current_editor();
-                    if (!editor) break;
+            if (im::BeginTabItem("AST", NULL)) {
+                defer {im::EndTabItem(); };
 
-                    auto &ind = world.indexer;
-                    if (!ind.try_acquire_lock(IND_READING)) break;
-                    defer { ind.release_lock(IND_READING); };
+                im::Checkbox("show anon?", &wnd.show_anon_nodes);
+                im::SameLine();
+                im::Checkbox("show comments?", &wnd.show_comments);
+                im::SameLine();
 
-                    if (wnd.gofile) {
-                        wnd.gofile->cleanup();
-                        wnd.gofile = NULL;
-                    }
+                cur2 open_cur = new_cur2(-1, -1);
+                if (im::Button("go to cursor"))
+                    open_cur = editor->cur;
 
-                    ind.reload_all_editors(true);
-
-                    auto ctx = ind.filepath_to_ctx(editor->filepath);
-                    auto gofile = ind.find_gofile_from_ctx(ctx);
-                    if (!gofile) break;
-
-                    wnd.pool.cleanup();
-                    wnd.pool.init();
-
-                    {
-                        SCOPED_MEM(&wnd.pool);
-                        wnd.gofile = gofile->copy();
-                        wnd.filepath = cp_strdup(editor->filepath);
-                    }
-                } while (0);
+                ts_tree_cursor_reset(&editor->buf->cursor, ts_tree_root_node(tree));
+                render_ts_cursor(&editor->buf->cursor, editor->lang, open_cur);
             }
 
-            auto gofile = wnd.gofile;
-            if (gofile) {
-                if (im::BeginTabBar("wnd_gofile_viewer_tab_bar", 0)) {
-                    if (im::BeginTabItem("Scope Ops", NULL)) {
-                        int i = 0;
-                        while (i < gofile->scope_ops->len) {
-                            auto &it = gofile->scope_ops->at(i++);
-                            auto pos = new_cur2(-1, -1);
+            if (im::BeginTabItem("Gofile", NULL)) {
+                defer {im::EndTabItem(); };
 
-                            switch (it.type) {
-                            case GSOP_OPEN_SCOPE: {
-                                auto flags = ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_DefaultOpen;
-                                bool open = im::TreeNodeEx(&it, flags, "scope open at %s", it.pos.str());
+                if (editor->buf->lang == LANG_GO) {
+                    if (im::Button("Get current file")) {
+                        do {
+                            auto editor = get_current_editor();
+                            if (!editor) break;
 
-                                if (im::IsItemClicked())
-                                    pos = it.pos;
+                            auto &ind = world.indexer;
+                            if (!ind.try_acquire_lock(IND_READING)) break;
+                            defer { ind.release_lock(IND_READING); };
 
-                                if (open) break;
+                            if (wnd.gofile) {
+                                wnd.gofile->cleanup();
+                                wnd.gofile = NULL;
+                            }
 
-                                int depth = 1;
+                            ind.reload_all_editors(true);
+
+                            auto ctx = ind.filepath_to_ctx(editor->filepath);
+                            auto gofile = ind.find_gofile_from_ctx(ctx);
+                            if (!gofile) break;
+
+                            wnd.pool.cleanup();
+                            wnd.pool.init();
+
+                            {
+                                SCOPED_MEM(&wnd.pool);
+                                wnd.gofile = gofile->copy();
+                                wnd.filepath = cp_strdup(editor->filepath);
+                            }
+                        } while (0);
+                    }
+
+                    auto gofile = wnd.gofile;
+                    if (gofile) {
+                        if (im::BeginTabBar("wnd_gofile_viewer_tab_bar", 0)) {
+                            defer { im::EndTabBar(); };
+
+                            if (im::BeginTabItem("Scope Ops", NULL)) {
+                                defer { im::EndTabItem(); };
+
+                                int i = 0;
                                 while (i < gofile->scope_ops->len) {
-                                    auto &it2 = gofile->scope_ops->at(i++);
-                                    if (it2.type == GSOP_OPEN_SCOPE) {
-                                        depth++;
-                                    } else if (it2.type == GSOP_CLOSE_SCOPE) {
-                                        depth--;
-                                        if (!depth)
-                                            break;
+                                    auto &it = gofile->scope_ops->at(i++);
+                                    auto pos = new_cur2(-1, -1);
+
+                                    switch (it.type) {
+                                    case GSOP_OPEN_SCOPE: {
+                                        auto flags = ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_DefaultOpen;
+                                        bool open = im::TreeNodeEx(&it, flags, "scope open at %s", it.pos.str());
+
+                                        if (im::IsItemClicked())
+                                            pos = it.pos;
+
+                                        if (open) break;
+
+                                        int depth = 1;
+                                        while (i < gofile->scope_ops->len) {
+                                            auto &it2 = gofile->scope_ops->at(i++);
+                                            if (it2.type == GSOP_OPEN_SCOPE) {
+                                                depth++;
+                                            } else if (it2.type == GSOP_CLOSE_SCOPE) {
+                                                depth--;
+                                                if (!depth)
+                                                    break;
+                                            }
+                                        }
+                                        break;
+                                    }
+                                    case GSOP_DECL: {
+                                        render_godecl(it.decl);
+                                        break;
+                                    }
+                                    case GSOP_CLOSE_SCOPE: {
+                                        auto flags = ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+                                        im::TreeNodeEx(&it, flags, "scope close at %s", it.pos.str());
+
+                                        if (im::IsItemClicked())
+                                            pos = it.pos;
+
+                                        im::TreePop();
+                                        break;
+                                    }
+                                    }
+
+                                    if (pos.x != -1 && pos.y != -1)
+                                        goto_file_and_pos(wnd.filepath, pos, true);
+                                }
+                            }
+
+                            if (im::BeginTabItem("Decls", NULL)) {
+                                defer { im::EndTabItem(); };
+
+                                For (gofile->decls) render_godecl(&it);
+                            }
+
+                            if (im::BeginTabItem("Imports", NULL)) {
+                                defer { im::EndTabItem(); };
+
+                                For (gofile->imports) {
+                                    im::Text(
+                                        "%s %s %s %s",
+                                        it.package_name,
+                                        go_package_name_type_str(it.package_name_type),
+                                        it.import_path,
+                                        it.decl->decl_start.str()
+                                    );
+                                }
+                            }
+
+                            if (im::BeginTabItem("References", NULL)) {
+                                defer { im::EndTabItem(); };
+
+                                For (gofile->references) {
+                                    if (it.is_sel) {
+                                        auto flags = ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth;
+                                        bool is_open = im::TreeNodeEx(&it, flags, "<selector> at %s", it.x_start.str());
+
+                                        if (im::IsItemClicked())
+                                            goto_file_and_pos(wnd.filepath, it.x_start, true);
+
+                                        if (is_open) {
+                                            render_gotype(it.x);
+
+                                            auto flags = ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+                                            im::TreeNodeEx(it.sel, flags);
+                                            if (im::IsItemClicked())
+                                                goto_file_and_pos(wnd.filepath, it.sel_start, true);
+
+                                            im::TreePop();
+                                        }
+                                    } else {
+                                        auto flags = ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+                                        im::TreeNodeEx(it.name, flags, "%s at %s", it.name, it.start.str());
+                                        if (im::IsItemClicked())
+                                            goto_file_and_pos(wnd.filepath, it.start, true);
                                     }
                                 }
-                                break;
-                            }
-                            case GSOP_DECL: {
-                                render_godecl(it.decl);
-                                break;
-                            }
-                            case GSOP_CLOSE_SCOPE: {
-                                auto flags = ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
-                                im::TreeNodeEx(&it, flags, "scope close at %s", it.pos.str());
-
-                                if (im::IsItemClicked())
-                                    pos = it.pos;
-
-                                im::TreePop();
-                                break;
-                            }
-                            }
-
-                            if (pos.x != -1 && pos.y != -1)
-                                goto_file_and_pos(wnd.filepath, pos, true);
-                        }
-
-                        im::EndTabItem();
-                    }
-
-                    if (im::BeginTabItem("Decls", NULL)) {
-                        For (gofile->decls) render_godecl(&it);
-                        im::EndTabItem();
-                    }
-
-                    if (im::BeginTabItem("Imports", NULL)) {
-                        For (gofile->imports) {
-                            im::Text(
-                                "%s %s %s %s",
-                                it.package_name,
-                                go_package_name_type_str(it.package_name_type),
-                                it.import_path,
-                                it.decl->decl_start.str()
-                            );
-                        }
-                        im::EndTabItem();
-                    }
-
-                    if (im::BeginTabItem("References", NULL)) {
-                        For (gofile->references) {
-                            if (it.is_sel) {
-                                auto flags = ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth;
-                                bool is_open = im::TreeNodeEx(&it, flags, "<selector> at %s", it.x_start.str());
-
-                                if (im::IsItemClicked())
-                                    goto_file_and_pos(wnd.filepath, it.x_start, true);
-
-                                if (is_open) {
-                                    render_gotype(it.x);
-
-                                    auto flags = ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
-                                    im::TreeNodeEx(it.sel, flags);
-                                    if (im::IsItemClicked())
-                                        goto_file_and_pos(wnd.filepath, it.sel_start, true);
-
-                                    im::TreePop();
-                                }
-                            } else {
-                                auto flags = ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
-                                im::TreeNodeEx(it.name, flags, "%s at %s", it.name, it.start.str());
-                                if (im::IsItemClicked())
-                                    goto_file_and_pos(wnd.filepath, it.start, true);
                             }
                         }
-
-                        im::EndTabItem();
                     }
-
-                    im::EndTabBar();
                 }
             }
-
-            im::End();
-            fstlog("wnd_gofile_viewer");
         }
     } while (0);
 
@@ -7931,7 +7960,7 @@ void UI::end_frame() {
 
                         auto actual_color = color;
                         if (result.type == ACR_POSTFIX)
-                            actual_color = new_vec3f(1.0, 0.8, 0.8);
+                            actual_color = new_vec3f(0.5, 0.5, 0.5);
                         else if (result.type == ACR_KEYWORD)
                             actual_color = new_vec3f(1.0, 1.0, 0.8);
                         else if (result.type == ACR_DECLARATION && result.declaration_is_builtin)
@@ -8420,7 +8449,7 @@ Font* UI::acquire_font(ccstr name) {
     font = alloc_object(Font);
     if (!font->init(name, CODE_FONT_SIZE)) {
         frame.restore();
-        error("unable to acquire font: %s", name);
+        // error("unable to acquire font: %s", name);
         font = NULL;
     }
 

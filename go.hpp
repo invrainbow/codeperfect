@@ -42,7 +42,8 @@ enum Parse_Lang {
 // version 33: fix embedded struct fields
 // version 34: fix import_decl_to_goimports()
 // version 35: support workspaces
-#define GO_INDEX_VERSION 35
+// version 36: fix readstr bug with empty spaces
+#define GO_INDEX_VERSION 36
 
 enum {
     CUSTOM_HASH_BUILTINS = 1,
@@ -1397,6 +1398,11 @@ typedef fn<bool(Type_Renderer*, Gotype*)> Type_Renderer_Handler;
 
 struct Type_Renderer : public Text_Renderer {
     bool full;
+
+    void init() {
+        ptr0(this);
+        Text_Renderer::init();
+    }
 
     void write_type(Gotype *t, Type_Renderer_Handler custom_handler, bool omit_func_keyword = false);
 

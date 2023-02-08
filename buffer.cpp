@@ -278,7 +278,8 @@ void Buffer::enable_tree(int _lang) {
 
     lang = (int)_lang;
     parser = new_ts_parser((Parse_Lang)lang);
-    update_tree();
+
+    if (lines.len) update_tree();
 }
 
 void Buffer::cleanup() {
@@ -320,9 +321,6 @@ bool Buffer::read(Buffer_Read_Func f, bool reread) {
 
     // Expects buf to be empty.
 
-    char ch;
-    bool found;
-
     if (reread) {
         if (lines.len) {
             u32 y = lines.len-1;
@@ -353,6 +351,7 @@ bool Buffer::read(Buffer_Read_Func f, bool reread) {
 
     Cstr_To_Ustr conv; conv.init();
     bool last_was_cr = false;
+    char ch;
 
     while (f(&ch)) {
         (*bc)++;
@@ -605,18 +604,13 @@ void Buffer::update_tree() {
     input.read = [](void *p, uint32_t off, TSPoint pos, uint32_t *read) -> const char* {
         auto buf = (Buffer*)p;
 
-        if (buf->lines.len) {
-            int y = buf->lines.len-1;
-            auto c = new_cur2(buf->lines[y].len, y);
-
-            if (off > buf->cur_to_offset(buf->dec_cur(c))) {
-                buf->tsinput_buffer[0] = '\0';
-                *read = 0;
-                return buf->tsinput_buffer;
-            }
+        if (pos.row >= buf->lines.len) {
+            buf->tsinput_buffer[0] = '\0';
+            *read = 0;
+            return buf->tsinput_buffer;
         }
 
-        auto it = buf->iter(buf->offset_to_cur(off));
+        auto it = buf->iter(new_cur2(buf->idx_byte_to_cp(pos.row, pos.column, true), pos.row));
         u32 n = 0;
 
         while (!it.eof()) {
@@ -1052,11 +1046,10 @@ cur2 Buffer::offset_to_cur(i32 off) {
     ret.x = -1;
     ret.y = -1;
 
-    for (u32 y = 0; y < bytecounts.len; y++) {
-        auto& it = bytecounts[y];
+    Fori (&bytecounts) {
         if (off < it) {
-            ret.y = y;
-            ret.x = idx_byte_to_cp(y, off);
+            ret.y = i;
+            ret.x = idx_byte_to_cp(i, off);
             break;
         }
         off -= it;

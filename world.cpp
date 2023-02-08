@@ -319,7 +319,7 @@ void fill_file_tree() {
 }
 
 void World::init() {
-    Timer t; t.init("world::init");
+    Timer t; t.init("world::init", false);
 
     ptr0(this);
 
@@ -382,13 +382,23 @@ void World::init() {
     configdir = GHGetConfigDir();
     if (!configdir) cp_panic("couldn't get config dir");
 
+    t.log("get config dir");
+
     {
         auto go_binary_path = GHGetGoBinaryPath();
-        if (!go_binary_path)
-            cp_panic("Unable to find Go. Please make sure it's installed, and accessible from a shell.");
+        if (!go_binary_path) {
+#if OS_WINDOWS
+            cp_panic("Unable to find go binary.\n\nUsually, CodePerfect searches for go by running `where go` inside `cmd`, but we did that and couldn't find anything.\n\nPlease visit docs.codeperfect95.com to see how to manually tell CodePerfect where go is.");
+#else
+            cp_panic("Unable to find a go binary.\n\nUsually, CodePerfect searches for go by running `which go` inside `bash`, but we did that and couldn't find anything.\n\nPlease visit docs.codeperfect95.com to see how to manually tell CodePerfect where go is.");
+#endif
+        }
+
         defer { GHFree(go_binary_path); };
         cp_strcpy_fixed(world.go_binary_path, go_binary_path);
     }
+
+    t.log("get go binary path");
 
     {
         // do we need world_mem anywhere else?
@@ -407,17 +417,15 @@ void World::init() {
 
     fzy_init();
 
-    bool read_cpfolder_file = false;
+    t.log("init more random shit");
+
     bool already_read_current_path = false;
     bool make_testing_headless = false;
 
     for (int i = 1; i < gargc; i++) {
         auto it = gargv[i];
-        if (streq(it, "--debug")) {
-            read_cpfolder_file = true;
-        }
 
-        else if (streq(it, "--force-server-localhost")) {
+        if (streq(it, "--force-server-localhost")) {
             GHForceServerLocalhost();
         }
 
@@ -448,6 +456,8 @@ void World::init() {
         }
     }
 
+    t.log("parse argv");
+
     // read options from disk
     do {
         if (world.jblow_tests.on) break;
@@ -472,6 +482,8 @@ void World::init() {
         jblow_tests.headless = true;
     }
 
+    t.log("more shit");
+
     // init workspace
     {
         resizing_pane = -1;
@@ -481,45 +493,38 @@ void World::init() {
         cp_strcpy_fixed(current_path, "/Users/bh/ide/go");
 #else
         if (!already_read_current_path) {
-            if (read_cpfolder_file) {
-                auto path = GHReadCpfolderFile();
-                if (!path) cp_panic("unable to read cpfolder file");
-                defer { GHFree(path); };
-                cp_strcpy_fixed(current_path, path);
-            } else {
-                ccstr last_folder = NULL;
+            ccstr last_folder = NULL;
 
-                do {
-                    if (!options.open_last_folder) break;
+            do {
+                if (!options.open_last_folder) break;
 
-                    auto fm = map_file_into_memory(path_join(configdir, ".last_folder"));
-                    if (!fm) break;
-                    defer { fm->cleanup(); };
+                auto fm = map_file_into_memory(path_join(configdir, ".last_folder"));
+                if (!fm) break;
+                defer { fm->cleanup(); };
 
-                    auto result = alloc_list<char>();
-                    for (int i = 0; i < fm->len; i++) {
-                        auto it = fm->data[i];
-                        if (it == '\n' || it == '\0')
-                            break;
-                        result->append(it);
-                    }
-                    result->append('\0');
-
-                    auto path = result->items;
-                    if (check_path(path) == CPR_DIRECTORY)
-                        last_folder = path;
-                } while (0);
-
-                if (last_folder) {
-                    cp_strcpy_fixed(current_path, last_folder);
-                } else {
-                    Select_File_Opts opts; ptr0(&opts);
-                    opts.buf = current_path;
-                    opts.bufsize = _countof(current_path);
-                    opts.folder = true;
-                    opts.save = false;
-                    if (!let_user_select_file(&opts)) exit(0);
+                auto result = alloc_list<char>();
+                for (int i = 0; i < fm->len; i++) {
+                    auto it = fm->data[i];
+                    if (it == '\n' || it == '\0')
+                        break;
+                    result->append(it);
                 }
+                result->append('\0');
+
+                auto path = result->items;
+                if (check_path(path) == CPR_DIRECTORY)
+                    last_folder = path;
+            } while (0);
+
+            if (last_folder) {
+                cp_strcpy_fixed(current_path, last_folder);
+            } else {
+                Select_File_Opts opts; ptr0(&opts);
+                opts.buf = current_path;
+                opts.bufsize = _countof(current_path);
+                opts.folder = true;
+                opts.save = false;
+                if (!let_user_select_file(&opts)) exit(0);
             }
         }
 #endif
@@ -538,6 +543,8 @@ void World::init() {
             }
         }
     }
+
+    t.log("init workspace");
 
     // read project settings
     // TODO: handle errors
@@ -564,14 +571,21 @@ void World::init() {
         }
     }
 
+    t.log("read project settings");
+
     indexer.init();
+    t.log("init indexer");
     if (use_nvim) nvim.init();
     dbg.init();
+    t.log("init debugger");
     history.init();
+    t.log("init history");
 
     navigation_queue.init(LIST_FIXED, _countof(_navigation_queue), _navigation_queue);
 
+    t.log("init navigation queue");
     fill_file_tree();
+    t.log("fill file tree");
 
     error_list.height = 125;
     file_explorer.selection = NULL;
@@ -582,6 +596,8 @@ void World::init() {
             cp_panic("Unable to initialize UI.");
         }
     }
+
+    t.log("init ui");
 
     fswatch.init(current_path);
 
@@ -599,6 +615,8 @@ void World::init() {
     show_frame_index = false;
     // escape_flashes_cursor_red = true;
 #endif
+
+    t.log("rest of shit");
 }
 
 void World::start_background_threads() {

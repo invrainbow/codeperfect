@@ -25,7 +25,6 @@ extern ImVec2 icon_button_padding;
 enum Texture_Id {
     TEXTURE_FONT,
     TEXTURE_FONT_IMGUI,
-    TEXTURE_IMAGES,
     __TEXTURE_COUNT__,
 };
 
@@ -392,7 +391,6 @@ extern Global_Colors global_colors;
 
 void init_global_colors();
 ccstr format_key(int mods, ccstr key, bool icon = false);
-void random_macos_tests();
 
 void trigger_file_search(int limit_start = -1, int limit_end = -1);
 

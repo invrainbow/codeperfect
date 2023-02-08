@@ -27,10 +27,7 @@
 
   a {
     @apply text-primary underline;
-    @apply break-words;
-    text-underline-offset: 4px;
-    text-decoration-thickness: 2px;
-    text-decoration-color: rgb(25, 168, 240, 0.6);
+    @apply break-words underline-offset-2;
   }
   a.btn {
     @apply no-underline;

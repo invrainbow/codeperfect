@@ -138,7 +138,7 @@ ccstr Index_Stream::readstr() {
 
     auto size = (u32)read2();
     if (!ok) return NULL;
-    if (!size) return NULL;
+    if (!size) return alloc_array(char, 1); // empty string
 
     auto s = alloc_array(char, size + 1);
     readn(s, size);
@@ -148,7 +148,6 @@ ccstr Index_Stream::readstr() {
     }
 
     s[size] = '\0';
-    ok = true;
     return s;
 }
 
@@ -6073,27 +6072,29 @@ void Go_Indexer::init() {
     };
 
     {
-        goroot = copystr(GHGetGoroot());
-        if (!goroot)
+        auto vars = GHGetGoEnvVars();
+        if (!vars) cp_panic("Unable to detect Go installation.");
+        defer { GHFreeGoEnvVars(vars); };
+
+        if (streq(vars->goroot, ""))
             cp_panic("Unable to detect GOROOT. Please make sure Go is installed and accessible through your PATH.");
+        if (streq(vars->gomodcache, ""))
+            cp_panic("Unable to detect GOMODCACHE. Please make sure Go is installed and accessible through your PATH.");
+
+        goroot = cp_strdup(vars->goroot);
+        gomodcache = cp_strdup(vars->gomodcache);
 
         auto goroot_without_src = goroot;
         goroot = path_join(goroot, "src");
 
         if (check_path(goroot) != CPR_DIRECTORY) {
-            // This is called from main thread, so we can just call tell_user().
-            tell_user(
-                cp_sprintf(
-                    "We found the following GOROOT:\n\n%s\n\nIt doesn't appear to be valid. The program will keep running, but code intelligence might not fully work.",
-                    goroot_without_src
-                ),
-                "Warning"
+            auto msg = cp_sprintf(
+                "We found the following GOROOT:\n\n%s\n\nIt doesn't appear to be valid. The program will keep running, but code intelligence might not fully work.",
+                goroot_without_src
             );
+            // This is called from main thread, so we can just call tell_user().
+            tell_user(msg, "Warning");
         }
-
-        gomodcache = copystr(GHGetGomodcache());
-        if (!gomodcache)
-            cp_panic("Unable to detect GOMODCACHE. Please make sure Go is installed and accessible through your PATH.");
     }
 
     lock.init();
@@ -6312,14 +6313,21 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
         ret->id_pos = node->start();
         break;
 
-    case TS_POINTER_TYPE:
+    case TS_POINTER_TYPE: {
+        auto base = node_to_gotype(node->child());
+        if (!base) break;
+
         ret = new_gotype(GOTYPE_POINTER);
-        ret->pointer_base = node_to_gotype(node->child());
+        ret->pointer_base = base;
         break;
+    }
 
     case TS_GENERIC_TYPE: {
+        auto base = node_to_gotype(node->field(TSF_TYPE));
+        if (!base) break;
+
         ret = new_gotype(GOTYPE_GENERIC);
-        ret->generic_base = node_to_gotype(node->field(TSF_TYPE));
+        ret->generic_base = base;
 
         auto args_node = node->field(TSF_TYPE_ARGUMENTS);
         if (!isastnull(args_node)) {
@@ -6347,25 +6355,35 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
         break;
 
     case TS_IMPLICIT_LENGTH_ARRAY_TYPE:
-        ret = new_gotype(GOTYPE_ARRAY);
-        ret->array_base = node_to_gotype(node->field(TSF_ELEMENT));
-        break;
-
     case TS_ARRAY_TYPE:
-        ret = new_gotype(GOTYPE_ARRAY);
-        ret->array_base = node_to_gotype(node->field(TSF_ELEMENT));
-        break;
+    case TS_SLICE_TYPE: {
+        auto base = node_to_gotype(node->field(TSF_ELEMENT));
+        if (!base) break;
 
-    case TS_SLICE_TYPE:
-        ret = new_gotype(GOTYPE_SLICE);
-        ret->slice_base = node_to_gotype(node->field(TSF_ELEMENT));
+        switch (node->type()) {
+        case TS_IMPLICIT_LENGTH_ARRAY_TYPE:
+        case TS_ARRAY_TYPE:
+            ret = new_gotype(GOTYPE_ARRAY);
+            break;
+        case TS_SLICE_TYPE:
+            ret = new_gotype(GOTYPE_SLICE);
+            break;
+        }
+        ret->base = base;
         break;
+    }
 
-    case TS_MAP_TYPE:
+    case TS_MAP_TYPE: {
+        auto key = node_to_gotype(node->field(TSF_KEY));
+        if (!key) break;
+        auto value = node_to_gotype(node->field(TSF_VALUE));
+        if (!value) break;
+
         ret = new_gotype(GOTYPE_MAP);
-        ret->map_key = node_to_gotype(node->field(TSF_KEY));
-        ret->map_value = node_to_gotype(node->field(TSF_VALUE));
+        ret->map_key = key;
+        ret->map_value = value;
         break;
+    }
 
     case TS_STRUCT_TYPE: {
         auto fieldlist_node = node->child();
@@ -6463,10 +6481,14 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
         break;
     }
 
-    case TS_CHANNEL_TYPE:
+    case TS_CHANNEL_TYPE: {
+        auto base = node_to_gotype(node->field(TSF_VALUE));
+        if (!base) break;
+
         ret = new_gotype(GOTYPE_CHAN);
-        ret->chan_base = node_to_gotype(node->field(TSF_VALUE));
+        ret->chan_base = base;
         break;
+    }
 
     case TS_INTERFACE_TYPE: {
         ret = alloc_object(Gotype);

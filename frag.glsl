@@ -14,21 +14,10 @@ flat in float _round_h;
 flat in float _round_r;
 flat in int _round_flags;
 out vec4 outcolor;
-uniform sampler2D tex0;
-uniform sampler2D tex1;
-uniform sampler2D tex2;
-uniform sampler2D tex3;
-uniform sampler2D tex4;
-uniform sampler2D tex5;
+uniform sampler2D tex;
 
 vec4 cp_texture(vec2 uv) {
-    if (_texture_id == 0) return texture(tex0, uv);
-    if (_texture_id == 1) return texture(tex1, uv);
-    if (_texture_id == 2) return texture(tex2, uv);
-    if (_texture_id == 3) return texture(tex3, uv);
-    if (_texture_id == 4) return texture(tex4, uv);
-    if (_texture_id == 5) return texture(tex5, uv);
-    return vec4(0);
+    return texture(tex, uv);
 }
 
 bool should_discard_for_rounded_rects() {

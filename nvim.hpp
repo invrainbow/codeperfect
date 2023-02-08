@@ -37,11 +37,26 @@ enum Mp_Opcode {
 
 struct Mp_Writer {
     Process* proc;
+    char buf[16];
+    int buf_idx;
 
     // "private" interface
 
-    void flush() { proc->flush(); };
-    void write1(char ch) { proc->write1(ch); }
+    void flush() {
+        if (buf_idx) {
+            proc->writestr(buf, buf_idx);
+            buf_idx = 0;
+        }
+        proc->flush();
+    };
+
+    void write1(char ch) {
+        if (buf_idx >= _countof(buf)) {
+            proc->writestr(buf, buf_idx);
+            buf_idx = 0;
+        }
+        buf[buf_idx++] = ch;
+    }
 
     void write4(u32 n) {
         for (i32 i = 3; i >= 0; i--)

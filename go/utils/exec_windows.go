@@ -1,8 +1,8 @@
 package utils
 
 import (
-	"syscall"
 	"os/exec"
+	"syscall"
 )
 
 func MakeExecCommand(name string, args ...string) *exec.Cmd {

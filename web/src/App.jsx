@@ -54,7 +54,7 @@ posthog.init("phc_kIt8VSMD8I2ScNhnjWDU2NmrK9kLIL3cHWpkgCX3Blw", {
 
 const SUPPORT_EMAIL = "support@codeperfect95.com";
 const CURRENT_BUILD = process.env.REACT_APP_BUILD_VERSION;
-const CURRENT_BUILD_RELEASE_DATE = "February 1, 2023";
+const CURRENT_BUILD_RELEASE_DATE = "February 7, 2023";
 
 const isDev = process.env.REACT_APP_CPENV === "development";
 const isStaging = process.env.REACT_APP_CPENV === "staging";
@@ -250,10 +250,7 @@ function Home() {
   return (
     <div className="bg-neutral-50 mx-auto md:pt-12 w-full">
       <div className="max-w-full leading-relaxed px-8 py-12 md:py-8 md:pb-20">
-        <div
-          className="md:text-center font-bold text-5xl md:text-5xl mb-1 md:mb-2 text-black tracking-tight"
-          style={{ lineHeight: "1.1" }}
-        >
+        <div className="md:text-center font-bold text-5xl md:text-5xl mb-1 md:mb-2 text-black tracking-tight leading-[1.1] md:leading-[1.1]">
           A fast, lightweight IDE for Go
         </div>
         <div className="md:text-center text-[130%] text-gray-600 leading-normal">
@@ -290,8 +287,10 @@ function Home() {
             <div className="text-lg leading-normal mt-6 md:mt-8 text-neutral-400">
               <p>
                 We threw out the modern software stack and{" "}
-                <A href={LINKS.handmadeManifesto}>handmade</A> the entire IDE in
-                blazing fast C/C++.
+                <A className="text-neutral-300" href={LINKS.handmadeManifesto}>
+                  handmade
+                </A>{" "}
+                the entire IDE in blazing fast C/C++.
               </p>
               <p>
                 Performance as fast as a video game. Instant startup. 144 FPS.
@@ -389,16 +388,25 @@ function PortalDone() {
   );
 }
 
-function WithTooltip({ className, label, show, children }) {
+function WithTooltip({ className, label, show, children, bottom }) {
+  console.log(bottom);
   return (
     <div className={cx("relative group", className)}>
       {show && (
-        <span className="hidden group-hover:inline-block shadow absolute bottom-full mb-4 text-sm font-title font-semibold right-1/2 whitespace-nowrap translate-x-1/2 w-auto rounded bg-neutral-800 text-neutral-200 py-2 px-3 leading-none">
+        <span
+          className={cx(
+            "hidden group-hover:inline-block text-sm font-title font-semibold shadow absolute",
+            "rounded bg-neutral-800 text-neutral-200 py-2 px-3 leading-none whitespace-nowrap w-auto",
+            !bottom && "bottom-full mb-4 right-1/2 translate-x-1/2",
+            bottom && "top-full mt-4 right-1/2 translate-x-1/2"
+          )}
+        >
           <span
-            class={twMerge(
-              "w-0 h-0 border-transparent border-t-neutral-800 absolute top-full left-1/2 -translate-x-1/2"
+            class={cx(
+              "w-0 h-0 border-[6px] border-transparent absolute left-1/2 -translate-x-1/2",
+              !bottom && "border-t-neutral-800 top-full",
+              bottom && "border-b-neutral-800 bottom-full"
             )}
-            style={{ borderWidth: "6px" }}
           />
           {label}
         </span>
@@ -550,20 +558,22 @@ function BuyLicense() {
                       </A>
                     ) : (
                       <div className="flex flex-col md:grid md:grid-cols-2 items-center gap-2">
-                        {planOptions(buttons).map(([link, unit, yearly]) => (
-                          <WithTooltip
-                            className="block w-full md:w-auto md:inline-block"
-                            label="2 months free!"
-                            show={yearly}
-                          >
-                            <A
-                              className="btn btn1 py-3 block text-center"
-                              href={link}
+                        {planOptions(buttons).map(
+                          ([link, unit, yearly], index) => (
+                            <WithTooltip
+                              className="block w-full md:w-auto md:inline-block"
+                              label="2 months free!"
+                              show={yearly}
                             >
-                              Buy {unit}
-                            </A>
-                          </WithTooltip>
-                        ))}
+                              <A
+                                className="btn btn1 py-3 block text-center"
+                                href={link}
+                              >
+                                Buy {unit}
+                              </A>
+                            </WithTooltip>
+                          )
+                        )}
                       </div>
                     )}
                   </div>
@@ -581,10 +591,9 @@ function BuyLicense() {
           {help.map((it) => (
             <div className="border-x border-t last:border-b md:border-y md:border-l md:border-r-0 md:last:border-r border-dashed border-gray-200 md:first:border-l p-6 md:p-8">
               <div
-                className="w-8 border-b-4 mb-2 hidden md:block"
+                className="w-8 border-b-4 mb-2 hidden md:block saturate-[0.35]"
                 style={{
                   borderColor: "rgb(11, 158, 245)",
-                  filter: "saturate(0.35)",
                 }}
               />
               <div className="text-neutral-700 text-lg font-semibold mb-2">
@@ -765,10 +774,10 @@ function Download() {
 
   return (
     <div className="my-12 md:my-28 px-6 md:px-0">
-      <div className="md:px-4 md:text-center text-3xl md:text-5xl title">
+      <div className="md:px-4 md:text-center text-3xl md:text-5xl title leading-none">
         Download CodePerfect
       </div>
-      <div className="text-center mt-4">
+      <div className="text-center mt-2">
         <A
           href={`${LINKS.changelog}/${CURRENT_BUILD}`}
           className={cx(
@@ -790,14 +799,15 @@ function Download() {
           </span>
         </A>
       </div>
-      <div className="max-w-3xl mx-auto mt-12 md:px-4 md:text-center">
-        <p className="flex flex-wrap flex-col md:flex-row justify-center">
-          {links.map((it) => (
-            <div className="mb-3 md:m-0 md:p-3 md:border-t md:border-b md:border-l first:rounded-tl first:rounded-bl md:last:border-r last:rounded-tr last:rounded-br border-dashed border-gray-200">
+      <div className="mt-8 md:text-center">
+        <p className="md:max-w-xs mx-auto flex flex-wrap flex-col justify-center">
+          {links.map((it, index) => (
+            <div className="mb-3 md:mb-2">
               <WithTooltip
                 className="w-full h-full"
                 show={it.disabledText}
                 label={it.disabledText}
+                bottom={index === links.length - 1}
               >
                 <A
                   href={
@@ -806,7 +816,7 @@ function Download() {
                       : `https://codeperfect95.s3.us-east-2.amazonaws.com/app/${it.platform}-${CURRENT_BUILD}.zip`
                   }
                   className={cx(
-                    "btn btn1 flex md:inline-flex leading-none py-4 px-5 relative",
+                    "btn btn1 flex leading-none py-4 px-5 relative",
                     it.disabledText && "disabled"
                   )}
                   onClick={() => {
@@ -1005,12 +1015,12 @@ function Footer() {
             <FootLink href={LINKS.docs}>Docs</FootLink>
             <FootLink href={LINKS.changelog}>Changelog</FootLink>
             <FootLink href={LINKS.issueTracker}>Issue Tracker</FootLink>
+            <FootLink href={LINKS.substack}>Substack</FootLink>
           </FootSection>
           <FootSection>
             <FootLink href={`mailto:${SUPPORT_EMAIL}`}>Support</FootLink>
             <FootLink href="/faq">FAQ</FootLink>
             <FootLink href="/terms">Terms &amp; Privacy</FootLink>
-            <FootLink href={LINKS.substack}>Substack</FootLink>
           </FootSection>
           <div className="flex gap-x-4 text-2xl mt-3 md:mt-0">
             <A className="text-gray-800" href={LINKS.discord}>
