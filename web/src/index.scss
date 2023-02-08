@@ -154,7 +154,7 @@
   .thick-list li {
     @apply mb-3;
   }
-  .wall-of-text {
+  .prose {
     h2:not(:first-child) {
       @apply mt-4;
     }

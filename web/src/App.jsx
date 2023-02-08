@@ -76,6 +76,7 @@ const BASE_LINKS = {
   handmadeManifesto: "https://handmade.network/manifesto",
   nonPessimized: "https://www.youtube.com/watch?v=pgoetgxecw8",
   mikeActon: "https://www.youtube.com/watch?v=rX0ItVEVjHc",
+  roadAhead: "https://codeperfect95.substack.com/p/the-road-ahead",
 };
 
 const DEV_LINKS = {
@@ -142,7 +143,7 @@ function wrap(elem, extraClassName, defaultProps, overrideProps) {
 
 const WallOfText = wrap(
   "div",
-  "wall-of-text leading-normal md:mx-auto md:max-w-2xl bg-white md:my-32 p-8 md:p-16 md:rounded-lg md:shadow-sm text-neutral-700"
+  "prose leading-normal md:mx-auto md:max-w-2xl bg-white md:my-32 p-8 md:p-16 md:rounded-lg md:shadow-sm text-neutral-700"
 );
 const Title = wrap("h2", "m-0 mb-6 title text-3xl");
 
@@ -274,7 +275,7 @@ function Home() {
         </div>
       </div>
 
-      <div className="bg-neutral-800 border-gray-100 p-8 py-12 md:pb-24 relative z-10 flex items-center justify-center">
+      <div className="bg-neutral-900 border-gray-100 p-8 py-12 md:pb-24 relative z-10 flex items-center justify-center">
         <div className="max-w-screen-2xl flex flex-col lg:flex-row items-center gap-8 md:gap-16">
           <div className="lg:w-1/3 md:mx-0">
             <div className="text-[160%] md:text-[225%] font-semibold text-black leading-tight">
@@ -696,8 +697,7 @@ const faqs = [
     a: (
       <>
         <p>
-          To be blunt, because we have rent to pay, and our rent is a
-          subscription model :)
+          Because we have rent to pay, and our rent is a subscription model :)
         </p>
         <p>
           CodePerfect is also in active development and shipping{" "}
@@ -705,9 +705,11 @@ const faqs = [
           help fund ongoing development.
         </p>
         <p>
-          We understand some users are adamantly opposed to subscription models
-          and would prefer a perpetual license. We sell one for the cost of four
-          years: $200 for individuals, or $400 if you're expensing it.
+          We understand some users adamantly oppose subscription models and
+          strongly prefer a perpetual license. We sell one for the cost of four
+          years: $200 for individuals, or $400 if you're expensing it. Please{" "}
+          <A href={`mailto:${SUPPORT_EMAIL}`}>email us</A> to initiate this
+          process.
         </p>
       </>
     ),
@@ -735,7 +737,7 @@ function FAQ() {
       <div>
         {faqs.map((it) => (
           <div
-            className="md:p-6 md:border-0 mb-12 md:mb-4 last:mb-0 md:bg-white md:rounded-lg md:shadow-sm"
+            className="prose md:p-6 md:border-0 mb-12 md:mb-4 last:mb-0 md:bg-white md:rounded-lg md:shadow-sm"
             key={it.q}
           >
             <p className="text-lg font-bold">{it.q}</p>
@@ -787,13 +789,13 @@ function Download() {
           )}
         >
           <span className="inline-block">
-            <span className="font-semibold text-sm text-yellow-600 flex gap-x-1.5 items-center">
+            <span className="font-semibold text-sm text-neutral-700 flex gap-x-1.5 items-center">
               <Icon size={18} icon={IconTag} />
               <span>Build {CURRENT_BUILD}</span>
             </span>
           </span>
           <span className="inline-block">
-            <span className="font-semibold text-sm text-lime-600 gap-x-1.5 items-center flex">
+            <span className="font-semibold text-sm text-neutral-700 gap-x-1.5 items-center flex">
               <Icon size={18} icon={IconClockHour4} />
               <span>Released {CURRENT_BUILD_RELEASE_DATE}</span>
             </span>
