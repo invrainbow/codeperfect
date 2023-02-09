@@ -684,7 +684,7 @@ void Go_Indexer::reload_editor(void *editor) {
     SCOPED_FRAME();
 
     Timer t;
-    t.init(cp_sprintf("reload %s", cp_basename(it->filepath)));
+    t.init(cp_sprintf("reload %s", cp_basename(it->filepath)), false);
 
     auto filename = cp_basename(it->filepath);
 
@@ -4950,7 +4950,7 @@ void Go_Indexer::fill_goto_symbol(List<Go_Symbol> *out) {
 
 bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period, Autocomplete *out) {
     Timer t;
-    t.init("autocomplete");
+    t.init("autocomplete", false);
 
     reload_all_editors();
 
