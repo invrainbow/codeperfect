@@ -26,3 +26,9 @@
 [submodule "jblow_test_suite/workspace/packer-plugin-sdk"]
 	path = jblow_test_suite/workspace/packer-plugin-sdk
 	url = git@github.com:hashicorp/packer-plugin-sdk.git
+[submodule "jblow_test_suite/autocomplete/hugo"]
+	path = jblow_test_suite/autocomplete/hugo
+	url = https://github.com/gohugoio/hugo
+[submodule "jblow_test_suite/autocomplete/controller-idioms"]
+	path = jblow_test_suite/autocomplete/controller-idioms
+	url = https://github.com/authzed/controller-idioms
