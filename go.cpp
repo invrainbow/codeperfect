@@ -5901,7 +5901,10 @@ void Go_Indexer::actually_list_dotprops(Goresult *type_res, Goresult *resolved_t
                 auto embedded_type = it.field->gotype;
                 auto res = resolve_embedded_type_to_decl(embedded_type, resolved_type_res->ctx);
                 if (!res) continue;
-                if (res->gotype->type != resolved_type->type) continue; // this is an error, should we surface it here?
+
+                if (res->gotype->type != GOTYPE_STRUCT)
+                    if (res->gotype->type != GOTYPE_INTERFACE)
+                        continue;
 
                 opts->depth++;
                 actually_list_dotprops(resolved_type_res->wrap(embedded_type), res, opts);
@@ -5933,7 +5936,7 @@ void Go_Indexer::actually_list_dotprops(Goresult *type_res, Goresult *resolved_t
                 auto embedded_type = it.field->gotype;
                 auto res = resolve_embedded_type_to_decl(embedded_type, resolved_type_res->ctx);
                 if (!res) continue;
-                if (res->gotype->type != resolved_type->type) continue; // this is an error, should we surface it here?
+                if (res->gotype->type != GOTYPE_INTERFACE) continue; // this is an error, should we surface it here?
 
                 opts->depth++;
                 actually_list_dotprops(resolved_type_res->wrap(embedded_type), res, opts);
