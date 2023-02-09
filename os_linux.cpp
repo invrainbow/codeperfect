@@ -318,7 +318,7 @@ int _cmp_trampoline(const void *a, const void *b, void *param) {
     return (*(compare_func*)param)(a, b);
 }
 
-void xplat_quicksort(void *list, s32 num, s32 size, compare_func cmp) {
+void cp_quicksort(void *list, s32 num, s32 size, compare_func cmp) {
     qsort_r(list, num, size, _cmp_trampoline, &cmp);
 }
 

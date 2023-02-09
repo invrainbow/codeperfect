@@ -533,7 +533,7 @@ void World::init() {
             cp_panic("Unable to open selected folder.");
 
         GHGitIgnoreInit(current_path);
-        xplat_chdir(current_path);
+        cp_chdir(current_path);
 
         {
             File f;

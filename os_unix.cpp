@@ -350,7 +350,7 @@ bool move_file_atomically(ccstr src, ccstr dest) {
     return rename(src, dest) == 0;
 }
 
-bool xplat_chdir(ccstr dir) {
+bool cp_chdir(ccstr dir) {
     return chdir(dir) == 0;
 }
 
