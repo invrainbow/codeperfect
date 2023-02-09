@@ -20,15 +20,15 @@
 [submodule "tree-sitter-go-mod"]
 	path = tree-sitter-go-mod
 	url = git@github.com:codeperfect95/tree-sitter-go-mod.git
-[submodule "jblow_test_suite/workspace/packer"]
-	path = jblow_test_suite/workspace/packer
+[submodule "jblow_tests/workspace/packer"]
+	path = jblow_tests/workspace/packer
 	url = git@github.com:hashicorp/packer.git
-[submodule "jblow_test_suite/workspace/packer-plugin-sdk"]
-	path = jblow_test_suite/workspace/packer-plugin-sdk
+[submodule "jblow_tests/workspace/packer-plugin-sdk"]
+	path = jblow_tests/workspace/packer-plugin-sdk
 	url = git@github.com:hashicorp/packer-plugin-sdk.git
-[submodule "jblow_test_suite/autocomplete/hugo"]
-	path = jblow_test_suite/autocomplete/hugo
+[submodule "jblow_tests/autocomplete/hugo"]
+	path = jblow_tests/autocomplete/hugo
 	url = https://github.com/gohugoio/hugo
-[submodule "jblow_test_suite/autocomplete/controller-idioms"]
-	path = jblow_test_suite/autocomplete/controller-idioms
+[submodule "jblow_tests/autocomplete/controller-idioms"]
+	path = jblow_tests/autocomplete/controller-idioms
 	url = https://github.com/authzed/controller-idioms
