@@ -8762,18 +8762,61 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
         auto handle_generics = [&]() {
             if (field_type->type != GOTYPE_FUNC) return;
 
-            auto object_res = res;
-            auto object_type = res->gotype;
-
-            if (object_type->type == GOTYPE_POINTER)
-                object_type = object_type->base;
-            if (object_type->type != GOTYPE_GENERIC) return;
-
             auto recv = field_type->func_recv;
             if (!recv) return;
             recv = unpointer_type(recv, NULL)->gotype;
             if (recv->type != GOTYPE_GENERIC) return;
             if (!recv->generic_args) return;
+
+            auto object_res = res;
+            auto object_type = res->gotype;
+
+            if (object_type->type == GOTYPE_POINTER)
+                object_type = object_type->base;
+
+            if (object_type->type != GOTYPE_GENERIC) {
+                // Here, we are unlucky and did not get the straightforward
+                // case where the object type was itself the generic. Instead,
+                // it's probably a struct or something that embeds a generic
+                // type.
+                //
+                // Fortunately, we know what to do. We have the field, which is
+                // a func. Inside that is the receiver in `func_recv`. We just
+                // need to find the embedded struct inside the struct that that
+                // func_recv points to. If that is a generic, we're golden --
+                // just use it.
+
+                // are there any other cases? like can interfaces do this?
+                //
+                // wait, can a generic type even be an interface?
+                //
+                // i actually hate programming language design/theory, i have
+                // zero respect for the nerds that like this shit instead of
+                // actually building anything useful. the colin barretts of the
+                // world, lmao
+                if (object_type->type != GOTYPE_STRUCT) return;
+
+                // field_contj
+                auto base = recv->generic_base;
+                if (base->type != GOTYPE_ID) return; // ??? this can't even happen can it
+                auto recv_name = base->id_name;
+
+                // so basically, now we need to find an embedded type with name recv_name
+                // whose decl is located in same ctx as the recv's ctx, i.e. field_ctx
+                auto find_embedded_type_pointing_to_recv = [&](Goresult *res) {
+                    if (streq(res->ctx->import_path))
+                        // TODO: pick off here
+
+                    type
+
+                    auto find_
+                    object_type->struct_specs
+
+                    ok = true;
+                } while (0);
+
+                if (!ok) return;
+            }
 
             if (!object_type->generic_args->len) return;
             if (recv->generic_args->len != object_type->generic_args->len) return;
