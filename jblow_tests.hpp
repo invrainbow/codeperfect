@@ -17,7 +17,6 @@ struct Jblow_Tests {
     Thread_Handle h;
 
     void init(ccstr _test_name);
-    void init_options();
 
     void inject(Window_Event_Type type, fn<void(Window_Event*)> cb);
     void catchup();
@@ -27,20 +26,15 @@ struct Jblow_Tests {
     // Skips a whole frame, i.e. if we're on frame 3, it will skip frame 4 entirely and wait until we're on frame 5.
     void skip_frame();
 
-    void raw_type_char(u32 ch) {
+    void type_char(u32 ch) {
         inject(WINEV_CHAR, [&](auto ev) {
             ev->character.ch = ch;
         });
     }
 
-
-    void type_char(u32 ch) {
-        raw_type_char(ch);
-    }
-
     void type_string(ccstr s) {
         for (auto p = s; *p; p++)
-            raw_type_char((u32)(*p));
+            type_char((u32)(*p));
     }
 
     void inject_key(int key, int mods, bool press) {
@@ -57,10 +51,9 @@ struct Jblow_Tests {
     }
 
     void run();
-    void run_vimfuzzer();
-    void run_nonvimfuzzer();
-    void run_workspace();
     Editor* open_editor(ccstr relative_filepath);
     Editor* wait_for_editor(ccstr relative_filepath);
+    void wait_for_indexer_ready();
+    void move_cursor(cur2 cur);
 };
 

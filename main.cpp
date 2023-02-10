@@ -1735,8 +1735,9 @@ int realmain(int argc, char **argv) {
             auto editor = get_current_editor();
             if (!editor) break;
 
-            if (editor->ask_user_about_unsaved_changes())
-                break;
+            if (!world.dont_prompt_on_close_unsaved_tab)
+                if (editor->ask_user_about_unsaved_changes())
+                    break;
 
             world.window->should_close = false;
             // canceled close, keep going
@@ -1829,6 +1830,13 @@ int realmain(int argc, char **argv) {
 
             For (messages) {
                 switch (it.type) {
+                case MTM_TEST_MOVE_CURSOR: {
+                    auto editor = get_current_editor();
+                    if (editor)
+                        editor->move_cursor(it.test_move_cursor);
+                    break;
+                }
+
                 case MTM_FOCUS_APP_DEBUGGER:
                     if (it.focus_app_debugger_pid)
                         if (it.focus_app_debugger_pid == get_current_focused_window_pid())
@@ -2065,7 +2073,6 @@ int realmain(int argc, char **argv) {
                 world.fst.log_output->append('\0');
                 // print("%s", world.fst.log_output->items);
 #endif
-
                 break;
             }
         }

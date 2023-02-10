@@ -43,7 +43,10 @@ enum Parse_Lang {
 // version 34: fix import_decl_to_goimports()
 // version 35: support workspaces
 // version 36: fix readstr bug with empty spaces
-#define GO_INDEX_VERSION 36
+// version 37: handle ok in receive expression
+// version 38: allow embedding generic type inside struct
+// version 39: support type aliases
+#define GO_INDEX_VERSION 39
 
 enum {
     CUSTOM_HASH_BUILTINS = 1,
@@ -429,12 +432,15 @@ struct Godecl {
             Gotype *gotype;
             union {
                 struct {
-                    bool field_is_embedded; // for GODECL_FIELD
+                    bool field_is_embedded; // GODECL_FIELD
                     int field_depth;
                     int field_order;
                 };
-                List<Godecl> *type_params; // for GODECL_FUNC, GODECL_TYPE
-                struct { // for GODECL_METHOD_RECEIVER_TYPE_PARAM
+                struct {
+                    List<Godecl> *type_params; // GODECL_FUNC, GODECL_TYPE
+                    bool is_alias; // GODECL_TYPE
+                };
+                struct { // GODECL_METHOD_RECEIVER_TYPE_PARAM
                     Gotype *base;
                     int type_param_index;
                 };
@@ -579,6 +585,7 @@ enum Gotype_Type {
     GOTYPE_CHAN,
     GOTYPE_MULTI,
     GOTYPE_ASSERTION,
+    GOTYPE_RECEIVE,
     GOTYPE_RANGE,
     GOTYPE_BUILTIN,
     GOTYPE_CONSTRAINT,
@@ -666,6 +673,7 @@ struct Gotype {
 
         List<Gotype*> *multi_types;
         Gotype *assertion_base;
+        Gotype *receive_base;
 
         struct {
             // This is the type of the thing in range, not the type of the returned item.
@@ -817,7 +825,7 @@ struct Go_Package {
     u64 hash;
     bool checked_for_outdated_hash;
 
-    void cleanup_files() {
+    void cleanup() {
         if (!files) return;
         For (files) it.cleanup();
         files->len = 0;
@@ -862,6 +870,10 @@ struct Go_Index {
     List<Go_Package> *packages;
 
     //// .................
+
+    void cleanup() {
+        For (packages) it.cleanup();
+    }
 
     Go_Index *copy();
     void read(Index_Stream *s);
@@ -1162,6 +1174,11 @@ struct Go_Indexer {
     ccstr goroot;
     // ccstr gopath;
     ccstr gomodcache;
+
+    // Right now `mem` holds both orchestrating stuff (like the import
+    // queue) and random allocations by called functions. We need to split
+    // these up so that we can do a SCOPED_FRAME() on just the random
+    // allocations to clean up memory.
 
     Pool mem;        // mem that exists for lifetime of Go_Indexer
     Pool final_mem;  // memory that holds the final value of `this->index`

@@ -437,8 +437,11 @@ void World::init() {
             auto name = gargv[++i];
             jblow_tests.init(name);
 
-            auto path = GHCopyJblowTestSuite((char*)cp_sprintf("/Users/brandon/ide/jblow_test_suite/%s", name));
-            if (!path) cp_panic("unable to copy test suite to temporary folder");
+            auto path = cp_getcwd();
+            path = cp_dirname(path); // bin
+            path = cp_dirname(path); // build
+            path = path_join(path, "jblow_tests");
+            path = path_join(path, name);
 
             cp_strcpy_fixed(current_path, path);
             already_read_current_path = true;

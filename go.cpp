@@ -1113,7 +1113,7 @@ void Go_Indexer::background_thread() {
         start_writing();
         defer { stop_writing(); };
 
-        pkg->cleanup_files();
+        pkg->cleanup();
         index.packages->remove(pkg);
         rebuild_package_lookup();
     };
@@ -1349,6 +1349,8 @@ void Go_Indexer::background_thread() {
 
     bool try_write_after_checking_hashes = false;
     for (;; sleep_milliseconds(100)) {
+        // SCOPED_FRAME(); // does this work? lol
+
         bool try_write_this_time = false;
         bool cleanup_unused_memory_this_time = false;
 
@@ -1378,6 +1380,7 @@ void Go_Indexer::background_thread() {
 
                 start_writing();
                 delete_file(path_join(world.current_path, ".cpdb"));
+                index.cleanup();
                 final_mem.reset();
                 package_lookup.clear();
                 rescan_gomod(true);
@@ -1465,7 +1468,7 @@ void Go_Indexer::background_thread() {
             create_package_if_null();
 
             pkg->status = GPS_UPDATING;
-            pkg->cleanup_files();
+            pkg->cleanup();
 
             ccstr package_name = NULL;
             ccstr test_package_name = NULL;
@@ -1608,6 +1611,8 @@ void Go_Indexer::background_thread() {
                 SCOPED_MEM(&new_pool);
                 new_index = index.copy();
             }
+
+            index.cleanup();
 
             t.log("copy");
 
@@ -2039,7 +2044,6 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
             break;
         }
 
-        // TODO: handle TS_TYPE_ALIAS here
         case TS_METHOD_DECLARATION:
         case TS_FUNCTION_DECLARATION:
         case TS_TYPE_DECLARATION:
@@ -2195,7 +2199,9 @@ void Go_Indexer::process_tree_into_gofile(
         case TS_FUNCTION_DECLARATION:
         case TS_METHOD_DECLARATION:
         case TS_TYPE_DECLARATION:
-        case TS_TYPE_ALIAS:
+        // We dont handle this here right? This is a child of
+        // TS_TYPE_DECLARATION.
+        // case TS_TYPE_ALIAS:
         case TS_SHORT_VAR_DECLARATION:
             node_to_decls(it, file->decls, filename, &file->pool);
             break;
@@ -2975,6 +2981,7 @@ bool Go_Indexer::are_gotypes_equal(Goresult *ra, Goresult *rb) {
 
     case GOTYPE_POINTER:
     case GOTYPE_ASSERTION:
+    case GOTYPE_RECEIVE:
     case GOTYPE_SLICE:
     case GOTYPE_ARRAY:
     case GOTYPE_CHAN:
@@ -5869,6 +5876,9 @@ void Go_Indexer::actually_list_dotprops(Goresult *type_res, Goresult *resolved_t
         while (gotype->type == GOTYPE_POINTER)
             gotype = gotype->base;
 
+        if (gotype->type == GOTYPE_GENERIC)
+            gotype = gotype->generic_base;
+
         auto t = gotype->type;
         if (t != GOTYPE_ID && t != GOTYPE_SEL) return NULL;
 
@@ -5885,8 +5895,23 @@ void Go_Indexer::actually_list_dotprops(Goresult *type_res, Goresult *resolved_t
     auto resolved_type = resolved_type_res->gotype;
     switch (resolved_type->type) {
     case GOTYPE_POINTER:
+    case GOTYPE_RECEIVE:
     case GOTYPE_ASSERTION: {
         auto new_resolved_type_res = resolved_type_res->wrap(resolved_type->base);
+
+        opts->depth++;
+        actually_list_dotprops(type_res, new_resolved_type_res, opts);
+        opts->depth--;
+        return;
+    }
+
+    case GOTYPE_CONSTRAINT: {
+        // as far as i understand, if a type constraint is an interface
+        // with methods, it can't be joined with other interfaces.
+        if (resolved_type->constraint_terms->len != 1) break;
+
+        auto term = resolved_type->constraint_terms->at(0);
+        auto new_resolved_type_res = resolved_type_res->wrap(term);
 
         opts->depth++;
         actually_list_dotprops(type_res, new_resolved_type_res, opts);
@@ -5902,9 +5927,7 @@ void Go_Indexer::actually_list_dotprops(Goresult *type_res, Goresult *resolved_t
                 auto res = resolve_embedded_type_to_decl(embedded_type, resolved_type_res->ctx);
                 if (!res) continue;
 
-                if (res->gotype->type != GOTYPE_STRUCT)
-                    if (res->gotype->type != GOTYPE_INTERFACE)
-                        continue;
+                // no need to check type of res->gotype->type, apparently we can embed anything?
 
                 opts->depth++;
                 actually_list_dotprops(resolved_type_res->wrap(embedded_type), res, opts);
@@ -5954,12 +5977,32 @@ getout:
 
     type_res = unpointer_type(type_res);
 
+    // "unalias" type - if it is an alias, follow it
+    while (true) {
+        auto t = type_res->gotype->type;
+        if (t != GOTYPE_ID && t != GOTYPE_SEL) break;
+
+        auto res = resolve_type_to_decl(type_res->gotype, type_res->ctx);
+        if (!res) break;
+
+        if (res->decl->type != GODECL_TYPE) break;
+        if (!res->decl->is_alias) break;
+
+        // we found an alias! follow it
+        type_res = res->wrap(res->decl->gotype);
+    }
+
     auto type = type_res->gotype;
     ccstr type_name = NULL;
     ccstr target_import_path = NULL;
 
-    if (type->type == GOTYPE_GENERIC || type->type == GOTYPE_ASSERTION)
+    switch (type->type) {
+    case GOTYPE_GENERIC:
+    case GOTYPE_ASSERTION:
+    case GOTYPE_RECEIVE:
         type = type->base;
+        break;
+    }
 
     switch (type->type) {
     case GOTYPE_ID:
@@ -6421,13 +6464,7 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
             auto field_type = node_to_gotype(type_node);
             if (!field_type) continue;
 
-            bool names_found = false;
-            FOR_NODE_CHILDREN (field_node) {
-                names_found = !it->eq(type_node);
-                break;
-            }
-
-            if (names_found) {
+            if (!field_node->child()->eq(type_node)) {
                 FOR_NODE_CHILDREN (field_node) {
                     if (it->eq(type_node)) break;
 
@@ -6451,6 +6488,9 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
             } else {
                 auto unptr_type = unpointer_type(field_type, NULL)->gotype;
                 ccstr field_name = NULL;
+
+                if (unptr_type->type == GOTYPE_GENERIC)
+                    unptr_type = unptr_type->generic_base;
 
                 switch (unptr_type->type) {
                 case GOTYPE_SEL:
@@ -6673,8 +6713,8 @@ bool Go_Indexer::assignment_to_decls(List<Ast_Node*> *lhs, List<Ast_Node*> *rhs,
             if (gotype->type == GOTYPE_MULTI || gotype->type == GOTYPE_RANGE)
                 continue;
 
-            if (gotype->type == GOTYPE_ASSERTION)
-                gotype = gotype->assertion_base;
+            if (gotype->type == GOTYPE_ASSERTION || gotype->type == GOTYPE_RECEIVE)
+                gotype = gotype->base;
 
             auto decl = new_godecl();
             decl->name = name_node->string();
@@ -6811,7 +6851,6 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
     }
 
     case TS_TYPE_DECLARATION:
-        // TODO: handle TS_TYPE_ALIAS here.
         for (auto spec = node->child(); !isastnull(spec); spec = spec->next()) {
             auto name_node = spec->field(TSF_NAME);
             if (isastnull(name_node)) continue;
@@ -6835,6 +6874,7 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
             decl->name_end = name_node->end();
             decl->gotype = gotype;
             decl->type_params = type_params;
+            decl->is_alias = (spec->type() == TS_TYPE_ALIAS);
             save_decl(decl);
         }
         break;
@@ -7222,6 +7262,7 @@ Gotype* _walk_gotype_and_replace(Gotype *gotype, walk_gotype_and_replace_cb cb) 
     case GOTYPE_ARRAY:
     case GOTYPE_CHAN:
     case GOTYPE_ASSERTION:
+    case GOTYPE_RECEIVE:
     case GOTYPE_RANGE:
     case GOTYPE_CONSTRAINT_UNDERLYING:
     case GOTYPE_BUILTIN:
@@ -7969,6 +8010,7 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
                 case GOTYPE_ARRAY:
                 case GOTYPE_CHAN:
                 case GOTYPE_ASSERTION:
+                case GOTYPE_RECEIVE:
                 case GOTYPE_RANGE:
                 case GOTYPE_CONSTRAINT_UNDERLYING:
                     recur(base);
@@ -8631,7 +8673,12 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
         if (!res) return NULL;
         if (res->gotype->type != GOTYPE_CHAN) return NULL;
 
-        return _evaluate_type(res->gotype->chan_base, res->ctx, outdecl);
+        res = _evaluate_type(res->gotype->chan_base, res->ctx, outdecl);
+        if (!res) return NULL;
+
+        auto ret = new_gotype(GOTYPE_RECEIVE);
+        ret->receive_base = res->gotype;
+        return res->wrap(ret);
     }
 
     case GOTYPE_LAZY_ID: {
@@ -8761,6 +8808,11 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
             return _evaluate_type(types->at(index), res->ctx);
         }
 
+        case GOTYPE_RECEIVE:
+            if (index == 0) return _evaluate_type(res->gotype->receive_base, res->ctx);
+            if (index == 1) return new_primitive_type_goresult("bool");
+            break;
+
         case GOTYPE_ASSERTION:
             if (index == 0) return _evaluate_type(res->gotype->assertion_base, res->ctx);
             if (index == 1) return new_primitive_type_goresult("bool");
@@ -8865,6 +8917,17 @@ Goresult *Go_Indexer::resolve_type(Gotype *type, Go_Ctx *ctx, String_Set *seen) 
             break;
         return resolve_type(type->builtin_underlying_base, ctx, seen);
 
+    // is this a hack? does it work?
+    case GOTYPE_CONSTRAINT: {
+        // as far as i understand, if a type constraint is an interface
+        // with methods, it can't be joined with other interfaces.
+        if (type->constraint_terms->len != 1) break;
+
+        auto term = type->constraint_terms->at(0);
+        return resolve_type(term, ctx, seen);
+    }
+
+    case GOTYPE_RECEIVE:
     case GOTYPE_ASSERTION:
     case GOTYPE_POINTER: {
         auto b = type->base;
@@ -9147,6 +9210,9 @@ void Gotype::read(Index_Stream *s) {
     case GOTYPE_ASSERTION:
         READ_OBJ(assertion_base);
         break;
+    case GOTYPE_RECEIVE:
+        READ_OBJ(receive_base);
+        break;
     case GOTYPE_RANGE:
         READ_OBJ(range_base);
         break;
@@ -9330,6 +9396,9 @@ void Gotype::write(Index_Stream *s) {
         break;
     case GOTYPE_ASSERTION:
         WRITE_OBJ(assertion_base);
+        break;
+    case GOTYPE_RECEIVE:
+        WRITE_OBJ(receive_base);
         break;
     case GOTYPE_RANGE:
         WRITE_OBJ(range_base);

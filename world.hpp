@@ -62,6 +62,8 @@ enum Main_Thread_Message_Type {
     MTM_RELOAD_EDITOR,
     MTM_EXIT,
     MTM_FOCUS_APP_DEBUGGER,
+    // for tests
+    MTM_TEST_MOVE_CURSOR,
 };
 
 struct Main_Thread_Message {
@@ -84,6 +86,7 @@ struct Main_Thread_Message {
             ccstr tell_user_title;
         };
         ccstr debugger_stdout_line;
+        cur2 test_move_cursor;
         int exit_code;
     };
 };
