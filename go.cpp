@@ -2825,8 +2825,8 @@ bool Go_Indexer::are_gotypes_equal(Goresult *ra, Goresult *rb) {
     if (b->type > _GOTYPE_LAZY_MARKER_) return false;
 
     if (a->type != b->type) {
-        auto a_is_ref = (a->type == GOTYPE_ID || a->type == GOTYPE_SEL);
-        auto b_is_ref = (b->type == GOTYPE_ID || b->type == GOTYPE_SEL);
+        auto a_is_ref = is_type_ident(a);
+        auto b_is_ref = is_type_ident(b);
 
         if (a_is_ref && b_is_ref) {
             auto resa = resolve_type_to_decl(a, ra->ctx);
@@ -5879,8 +5879,7 @@ void Go_Indexer::actually_list_dotprops(Goresult *type_res, Goresult *resolved_t
         if (gotype->type == GOTYPE_GENERIC)
             gotype = gotype->generic_base;
 
-        auto t = gotype->type;
-        if (t != GOTYPE_ID && t != GOTYPE_SEL) return NULL;
+        if (!is_type_ident(gotype)) return NULL;
 
         auto res = resolve_type_to_decl(gotype, ctx);
         if (!res) return NULL;
@@ -5979,8 +5978,7 @@ getout:
 
     // "unalias" type - if it is an alias, follow it
     while (true) {
-        auto t = type_res->gotype->type;
-        if (t != GOTYPE_ID && t != GOTYPE_SEL) break;
+        if (!is_type_ident(type_res->gotype)) break;
 
         auto res = resolve_type_to_decl(type_res->gotype, type_res->ctx);
         if (!res) break;
@@ -7321,8 +7319,7 @@ Goresult *Go_Indexer::_subst_generic_type(Gotype *type, Go_Ctx *ctx) {
     cp_assert(type->type == GOTYPE_GENERIC);
 
     auto base = type->generic_base;
-    if (base->type != GOTYPE_ID && base->type != GOTYPE_SEL)
-        return NULL;
+    if (!is_type_ident(base)) return NULL;
 
     auto res = resolve_type_to_decl(base, ctx);
     if (!res) return NULL;
@@ -7839,7 +7836,7 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
         // then as index
         if (gotype->lazy_instance_args->len != 1) return NULL;
         auto arg = gotype->lazy_instance_args->at(0);
-        if (arg->type != GOTYPE_ID && arg->type != GOTYPE_SEL) return NULL;
+        if (!is_type_ident(arg)) return NULL;
         return try_evaluating_index(gotype->lazy_instance_base);
     }
 
@@ -7963,7 +7960,7 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
                         return false;
                 }
 
-                if ((a->type == GOTYPE_ID || a->type == GOTYPE_SEL) && (b->type == GOTYPE_ID || b->type == GOTYPE_SEL)) {
+                if (is_type_ident(a) && is_type_ident(b)) {
                     auto resa = resolve_type_to_decl(a, ares->ctx);
                     auto resb = resolve_type_to_decl(b, bres->ctx);
                     return are_decls_equal(resa, resb);
@@ -8979,7 +8976,7 @@ Goresult *Go_Indexer::resolve_type(Gotype *type, Go_Ctx *ctx, String_Set *seen) 
         // (we need to resolve because the table key needs to know the go_ctx too)
         // if so, break out, otherwise, proceed as usual
         // this does mean we'll be resolving twice, but who cares
-        if (b->type == GOTYPE_ID || b->type == GOTYPE_SEL) {
+        if (is_type_ident(b)) {
             auto res = resolve_type_to_decl(b, ctx);
             if (!res) return NULL;
 
@@ -9124,6 +9121,15 @@ ccstr case_style_pretty_str(Case_Style x) {
     case CASE_CAMEL: return "Camel case (looksLikeThis)";
     }
     return NULL;
+}
+
+bool is_type_ident(Gotype *x) {
+    switch (x->type) {
+    case GOTYPE_ID:
+    case GOTYPE_SEL:
+        return true;
+    }
+    return false;
 }
 
 // -----

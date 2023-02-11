@@ -1442,4 +1442,5 @@ Gotype *new_primitive_type(ccstr name);
 
 bool isastnull(Ast_Node* x);
 
+bool is_type_ident(Gotype *x);
 cur2 offset_to_cur(int off, ccstr filepath);
