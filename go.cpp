@@ -8783,36 +8783,63 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
                 // func_recv points to. If that is a generic, we're golden --
                 // just use it.
 
-                // are there any other cases? like can interfaces do this?
-                //
-                // wait, can a generic type even be an interface?
-                //
-                // i actually hate programming language design/theory, i have
-                // zero respect for the nerds that like this shit instead of
-                // actually building anything useful. the colin barretts of the
-                // world, lmao
-                if (object_type->type != GOTYPE_STRUCT) return;
+                auto recv_base = recv->generic_base;
+                if (recv_base->type != GOTYPE_ID) return; // ??? this can't even happen can it
+                auto recv_name = recv_base->id_name;
 
-                // field_contj
-                auto base = recv->generic_base;
-                if (base->type != GOTYPE_ID) return; // ??? this can't even happen can it
-                auto recv_name = base->id_name;
+                typedef fn<bool(Goresult*)> fn_type;
 
                 // so basically, now we need to find an embedded type with name recv_name
                 // whose decl is located in same ctx as the recv's ctx, i.e. field_ctx
-                auto find_embedded_type_pointing_to_recv = [&](Goresult *res) {
-                    if (streq(res->ctx->import_path))
-                        // TODO: pick off here
+                fn_type find_embedded_generic = [&](auto res) {
+                    auto gotype = unpointer_type(res)->gotype;
 
-                    type
+                    if (gotype->type == GOTYPE_GENERIC) {
+                        auto base = gotype->generic_base;
+                        if (!is_type_ident(base)) return false;
 
-                    auto find_
-                    object_type->struct_specs
+                        do {
+                            // we now have a gotype_id or gotype_sel
+                            // we need to know if it refers to the same as the recv
 
-                    ok = true;
-                } while (0);
+                            // find what the generic in the struct points to
+                            auto a = resolve_type_to_decl(base, res->ctx);
+                            if (!a) break;
 
-                if (!ok) return;
+                            // find what the generic in the recv points to
+                            auto b = resolve_type_to_decl(recv_base, field_ctx);
+                            if (!b) break;
+
+                            if (!are_decls_equal(a, b)) break;
+
+                            object_res = res;
+                            object_type = gotype;
+                            return true;
+                        } while (0);
+
+                        // if the generic wasn't a match, grab its base and try it as an id/sel
+                        gotype = base;
+                    }
+
+                    switch (gotype->type) {
+                    case GOTYPE_ID:
+                    case GOTYPE_SEL: {
+                        auto newres = resolve_type_to_decl(gotype, res->ctx);
+                        if (!newres) break;
+                        return find_embedded_generic(newres->wrap(newres->decl->gotype));
+                    }
+                    case GOTYPE_STRUCT:
+                        For (gotype->struct_specs)
+                            if (it.field->field_is_embedded)
+                                if (find_embedded_generic(res->wrap(it.field->gotype)))
+                                    return true;
+                        break;
+                    }
+                    return false;
+                };
+
+                if (!find_embedded_generic(object_res->wrap(object_type)))
+                    return;
             }
 
             if (!object_type->generic_args->len) return;
