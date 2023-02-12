@@ -201,7 +201,7 @@ Process_Status Process::os_status() {
     return PROCESS_WAITING;
 }
 
-bool Process::can_read() {
+bool Process::os_can_read() {
     struct timeval timeout = {0};
 
     fd_set fs;

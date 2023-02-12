@@ -235,7 +235,7 @@ Process_Status Process::status() {
     return PROCESS_ERROR;
 }
 
-bool Process::can_read() {
+bool Process::os_can_read() {
     DWORD total = 0;
     if (!PeekNamedPipe(stdout_r, NULL, 0, NULL, &total, NULL))
         return false;

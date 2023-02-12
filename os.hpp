@@ -110,6 +110,7 @@ struct Process {
 
     bool peek(char *ch);
     bool can_read();
+    bool os_can_read();
 
     bool read1(char* out);
     int readn(char* out, int n);
