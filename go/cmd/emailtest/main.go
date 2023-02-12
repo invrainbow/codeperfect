@@ -3,42 +3,23 @@ package main
 import (
 	_ "embed"
 
+	"github.com/codeperfect95/codeperfect/go/cmd/api/emails"
 	"github.com/codeperfect95/codeperfect/go/cmd/lib"
 )
 
-//go:embed user_created.txt
-var userCreatedText string
-
-//go:embed user_created.html
-var userCreatedHtml string
-
-//go:embed user_enabled.txt
-var userEnabledText string
-
-//go:embed user_enabled.html
-var userEnabledHtml string
-
-//go:embed user_disabled.txt
-var userDisabledText string
-
-//go:embed user_disabled.html
-var userDisabledHtml string
-
-const TestEmail = "brhs.again@gmail.com"
+const TestEmail = "bh@codeperfect95.com"
 
 func main() {
 	type EmailParams struct {
 		Email      string
 		LicenseKey string
 		Greeting   string
-		PortalLink string
 	}
 
 	params := &EmailParams{
 		Email:      TestEmail,
 		LicenseKey: lib.GenerateLicenseKey(),
 		Greeting:   "Hi Brandon,",
-		PortalLink: "https://stripe.com",
 	}
 
 	type Email struct {
@@ -48,19 +29,19 @@ func main() {
 	}
 
 	emails := []Email{
-		Email{
-			Text:    userCreatedText,
-			Html:    userCreatedHtml,
+		{
+			Text:    emails.EmailUserCreatedText,
+			Html:    emails.EmailUserCreatedHtml,
 			Subject: "CodePerfect 95: New License",
 		},
-		Email{
-			Text:    userEnabledText,
-			Html:    userEnabledHtml,
+		{
+			Text:    emails.EmailUserEnabledText,
+			Html:    emails.EmailUserEnabledHtml,
 			Subject: "CodePerfect 95: License Reactivated",
 		},
-		Email{
-			Text:    userDisabledText,
-			Html:    userDisabledHtml,
+		{
+			Text:    emails.EmailUserDisabledText,
+			Html:    emails.EmailUserDisabledHtml,
 			Subject: "CodePerfect 95: License Deactivated",
 		},
 	}

@@ -13,13 +13,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codeperfect95/codeperfect/go/cmd/api/emails"
 	"github.com/codeperfect95/codeperfect/go/cmd/lib"
 	"github.com/codeperfect95/codeperfect/go/db"
 	"github.com/codeperfect95/codeperfect/go/models"
 	"github.com/codeperfect95/codeperfect/go/versions"
 	"github.com/gin-gonic/gin"
 	"github.com/stripe/stripe-go/v72"
-	"github.com/stripe/stripe-go/v72/billingportal/session"
 	"github.com/stripe/stripe-go/v72/customer"
 	"github.com/stripe/stripe-go/v72/webhook"
 	"gorm.io/gorm"
@@ -134,15 +134,11 @@ func isOSValid(os string) bool {
 
 var SendAlertsForSelf = (os.Getenv("SEND_ALERTS_FOR_SELF") == "1")
 
-func isMyself(user *models.User) bool {
-	return user.Email == "bh@codeperfect95.com" || user.Email == "brhs.again@gmail.com"
-}
-
 func SendSlackMessageForUser(user *models.User, format string, args ...interface{}) {
-	if !SendAlertsForSelf && isMyself(user) {
+	if !SendAlertsForSelf && user.Email == "bh@codeperfect95.com" {
 		return
 	}
-	SendSlackMessage(format, args...)
+	go SendSlackMessage(format, args...)
 }
 
 func PostTrial(c *gin.Context) {
@@ -154,7 +150,7 @@ func PostTrial(c *gin.Context) {
 
 	ip := WorkaroundGinRetardationAndGetClientIP(c)
 
-	SendSlackMessage("trial user `%s` opened on `%s-%s`", ip, req.OS, versions.VersionToString(req.CurrentVersion))
+	go SendSlackMessage("trial user `%s` opened on `%s-%s`", ip, req.OS, versions.VersionToString(req.CurrentVersion))
 
 	PosthogCaptureStringId(ip, "trial user", PosthogProps{
 		"os":              req.OS,
@@ -417,7 +413,6 @@ func processStripeEvent(event stripe.Event) {
 		Email      string
 		LicenseKey string
 		Greeting   string
-		PortalLink string
 	}
 
 	makeGreeting := func() string {
@@ -430,45 +425,21 @@ func processStripeEvent(event stripe.Event) {
 		return "Hi,"
 	}
 
-	makePortalLink := func() (string, error) {
-		params := &stripe.BillingPortalSessionParams{
-			Customer:  stripe.String(cus.ID),
-			ReturnURL: stripe.String("https://codeperfect95.com/portal-done"),
-		}
-		s, err := session.New(params)
-		if err != nil {
-			return "", err
-		}
-		return s.URL, nil
-	}
-
-	portalLink, err := makePortalLink()
-	if err != nil {
-		log.Printf("unable to create portal link: %v", err)
-		return
-	}
-
 	params := &EmailParams{
 		Email:      user.Email,
 		LicenseKey: user.LicenseKey,
 		Greeting:   makeGreeting(),
-		PortalLink: portalLink,
 	}
 
-	doSendEmail := func(subject, txtTmpl, htmlTmpl string) {
+	sendEmail := func(subject, txtTmpl, htmlTmpl string) {
 		txt, err := lib.ExecuteTemplate(txtTmpl, params)
 		if err != nil {
 			return
 		}
-
 		html, err := lib.ExecuteTemplate(htmlTmpl, params)
 		if err != nil {
 			return
 		}
-
-		// log.Printf("%s", txt)
-		// log.Printf("%s", html)
-
 		if err := lib.SendEmail(user.Email, subject, string(txt), string(html)); err != nil {
 			log.Printf("failed to send email to %s: %v", user.Email, err)
 		}
@@ -476,11 +447,11 @@ func processStripeEvent(event stripe.Event) {
 
 	if user.Active {
 		if newUser {
-			doSendEmail("CodePerfect 95: New License", emailUserCreatedTxt, emailUserCreatedHtml)
+			sendEmail("CodePerfect 95: New License", emails.EmailUserCreatedText, emails.EmailUserCreatedHtml)
 		} else {
-			doSendEmail("CodePerfect 95: License Reactivated", emailUserEnabledTxt, emailUserEnabledHtml)
+			sendEmail("CodePerfect 95: License Reactivated", emails.EmailUserEnabledText, emails.EmailUserEnabledHtml)
 		}
 	} else {
-		doSendEmail("CodePerfect 95: License Deactivated", emailUserDisabledTxt, emailUserDisabledHtml)
+		sendEmail("CodePerfect 95: License Deactivated", emails.EmailUserDisabledText, emails.EmailUserDisabledHtml)
 	}
 }
