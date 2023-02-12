@@ -127,11 +127,6 @@ func authUser(c *gin.Context) (*models.User, error) {
 	return &user, nil
 }
 
-func isOSValid(os string) bool {
-	// for now only darwin is valid
-	return os == "darwin"
-}
-
 var SendAlertsForSelf = (os.Getenv("SEND_ALERTS_FOR_SELF") == "1")
 
 func SendSlackMessageForUser(user *models.User, format string, args ...interface{}) {
@@ -448,10 +443,13 @@ func processStripeEvent(event stripe.Event) {
 	if user.Active {
 		if newUser {
 			sendEmail("CodePerfect 95: New License", emails.EmailUserCreatedText, emails.EmailUserCreatedHtml)
+			go SendSlackMessage("user created: %s", user.Email)
 		} else {
 			sendEmail("CodePerfect 95: License Reactivated", emails.EmailUserEnabledText, emails.EmailUserEnabledHtml)
+			go SendSlackMessage("user reactivated: %s", user.Email)
 		}
 	} else {
 		sendEmail("CodePerfect 95: License Deactivated", emails.EmailUserDisabledText, emails.EmailUserDisabledHtml)
+		go SendSlackMessage("user deactivated: %s", user.Email)
 	}
 }
