@@ -235,7 +235,7 @@ Process_Status Process::status() {
     return PROCESS_ERROR;
 }
 
-bool Process::can_read() {
+bool Process::os_can_read() {
     DWORD total = 0;
     if (!PeekNamedPipe(stdout_r, NULL, 0, NULL, &total, NULL))
         return false;
@@ -501,7 +501,7 @@ int _cmp_trampoline(void *param, const void *a, const void *b) {
     return (*(compare_func*)param)(a, b);
 }
 
-void xplat_quicksort(void *list, s32 num, s32 size, compare_func cmp) {
+void cp_quicksort(void *list, s32 num, s32 size, compare_func cmp) {
     qsort_s(list, num, size, _cmp_trampoline, &cmp);
 }
 
@@ -895,7 +895,7 @@ ccstr get_executable_path() {
     }
 }
 
-bool xplat_chdir(ccstr dir) {
+bool cp_chdir(ccstr dir) {
     return SetCurrentDirectory(dir);
 }
 

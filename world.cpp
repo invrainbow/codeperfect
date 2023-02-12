@@ -437,8 +437,11 @@ void World::init() {
             auto name = gargv[++i];
             jblow_tests.init(name);
 
-            auto path = GHCopyJblowTestSuite((char*)cp_sprintf("/Users/brandon/ide/jblow_test_suite/%s", name));
-            if (!path) cp_panic("unable to copy test suite to temporary folder");
+            auto path = cp_getcwd();
+            path = cp_dirname(path); // bin
+            path = cp_dirname(path); // build
+            path = path_join(path, "jblow_tests");
+            path = path_join(path, name);
 
             cp_strcpy_fixed(current_path, path);
             already_read_current_path = true;
@@ -533,7 +536,7 @@ void World::init() {
             cp_panic("Unable to open selected folder.");
 
         GHGitIgnoreInit(current_path);
-        xplat_chdir(current_path);
+        cp_chdir(current_path);
 
         {
             File f;
@@ -1979,6 +1982,7 @@ void init_command_info_table() {
     command_info_table[CMD_COMMAND_PALETTE] = k(CP_MOD_PRIMARY, CP_KEY_K, "Command Palette");
     command_info_table[CMD_OPEN_FILE_MANUALLY] = k(CP_MOD_PRIMARY, CP_KEY_O, "Open File...");
     command_info_table[CMD_CLOSE_EDITOR] = k(CP_MOD_PRIMARY, CP_KEY_W, "Close Editor");
+    command_info_table[CMD_CLOSE_ALL_EDITORS] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_W, "Close All Editors");
     command_info_table[CMD_OPEN_FOLDER] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_O, "Open Folder...");
 }
 

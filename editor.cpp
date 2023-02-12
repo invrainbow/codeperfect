@@ -1801,7 +1801,7 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
         Autocomplete ac; ptr0(&ac);
 
         Timer t;
-        t.init();
+        t.init(NULL, false);
 
         if (!ind.autocomplete(filepath, cur, triggered_by_dot, &ac)) return;
 
@@ -1841,7 +1841,7 @@ void Editor::trigger_autocomplete(bool triggered_by_dot, bool triggered_by_typin
         autocomplete.filtered_results->len = 0;
 
         Timer t;
-        t.init("autocomplete");
+        t.init("autocomplete", false);
 
         Fori (results)
             if (fzy_has_match(prefix, it.name))

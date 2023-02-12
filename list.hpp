@@ -212,7 +212,7 @@ struct List {
     }
 
     void sort(cmp_func cmp) {
-        xplat_quicksort(items, len, sizeof(T), [&](const void *a, const void *b) -> int {
+        cp_quicksort(items, len, sizeof(T), [&](const void *a, const void *b) -> int {
             return cmp((T*)a, (T*)b);
         });
     }

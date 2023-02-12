@@ -110,6 +110,7 @@ struct Process {
 
     bool peek(char *ch);
     bool can_read();
+    bool os_can_read();
 
     bool read1(char* out);
     int readn(char* out, int n);
@@ -268,7 +269,7 @@ ccstr normalize_path_sep(ccstr path, char sep = 0);
 bool is_sep(char ch);
 
 typedef fn<int(const void *a, const void *b)> compare_func;
-void xplat_quicksort(void *list, s32 num, s32 size, compare_func cmp);
+void cp_quicksort(void *list, s32 num, s32 size, compare_func cmp);
 
 u64 get_file_size(ccstr file);
 
@@ -397,7 +398,7 @@ void tell_user(ccstr text, ccstr title);
 #define tell_user_error(text) tell_user(text, NULL)
 
 ccstr get_executable_path();
-bool xplat_chdir(ccstr dir);
+bool cp_chdir(ccstr dir);
 
 bool create_directory(ccstr path);
 bool touch_file(ccstr path);

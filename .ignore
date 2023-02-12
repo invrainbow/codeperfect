@@ -22,4 +22,4 @@ glew.h
 stb/*
 GL/*
 vcpkg
-jblow_test_suite
+jblow_tests

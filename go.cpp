@@ -675,7 +675,8 @@ void Go_Indexer::reload_single_file(ccstr filepath) {
 
     ccstr package_name = NULL;
     process_tree_into_gofile(file, pf->root, filepath, &package_name);
-    replace_package_name(pkg, package_name);
+    if (!str_ends_with(filepath, "_test.go"))
+        replace_package_name(pkg, package_name);
 }
 
 void Go_Indexer::reload_editor(void *editor) {
@@ -684,7 +685,7 @@ void Go_Indexer::reload_editor(void *editor) {
     SCOPED_FRAME();
 
     Timer t;
-    t.init(cp_sprintf("reload %s", cp_basename(it->filepath)));
+    t.init(cp_sprintf("reload %s", cp_basename(it->filepath)), false);
 
     auto filename = cp_basename(it->filepath);
 
@@ -704,7 +705,8 @@ void Go_Indexer::reload_editor(void *editor) {
 
     ccstr package_name = NULL;
     process_tree_into_gofile(file, root_node, it->filepath, &package_name);
-    replace_package_name(pkg, package_name);
+    if (!str_ends_with(it->filepath, "_test.go"))
+        replace_package_name(pkg, package_name);
 
     t.log("process tree");
 
@@ -1113,7 +1115,7 @@ void Go_Indexer::background_thread() {
         start_writing();
         defer { stop_writing(); };
 
-        pkg->cleanup_files();
+        pkg->cleanup();
         index.packages->remove(pkg);
         rebuild_package_lookup();
     };
@@ -1349,6 +1351,8 @@ void Go_Indexer::background_thread() {
 
     bool try_write_after_checking_hashes = false;
     for (;; sleep_milliseconds(100)) {
+        // SCOPED_FRAME(); // does this work? lol
+
         bool try_write_this_time = false;
         bool cleanup_unused_memory_this_time = false;
 
@@ -1378,6 +1382,7 @@ void Go_Indexer::background_thread() {
 
                 start_writing();
                 delete_file(path_join(world.current_path, ".cpdb"));
+                index.cleanup();
                 final_mem.reset();
                 package_lookup.clear();
                 rescan_gomod(true);
@@ -1465,7 +1470,7 @@ void Go_Indexer::background_thread() {
             create_package_if_null();
 
             pkg->status = GPS_UPDATING;
-            pkg->cleanup_files();
+            pkg->cleanup();
 
             ccstr package_name = NULL;
             ccstr test_package_name = NULL;
@@ -1608,6 +1613,8 @@ void Go_Indexer::background_thread() {
                 SCOPED_MEM(&new_pool);
                 new_index = index.copy();
             }
+
+            index.cleanup();
 
             t.log("copy");
 
@@ -2039,7 +2046,6 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
             break;
         }
 
-        // TODO: handle TS_TYPE_ALIAS here
         case TS_METHOD_DECLARATION:
         case TS_FUNCTION_DECLARATION:
         case TS_TYPE_DECLARATION:
@@ -2195,7 +2201,9 @@ void Go_Indexer::process_tree_into_gofile(
         case TS_FUNCTION_DECLARATION:
         case TS_METHOD_DECLARATION:
         case TS_TYPE_DECLARATION:
-        case TS_TYPE_ALIAS:
+        // We dont handle this here right? This is a child of
+        // TS_TYPE_DECLARATION.
+        // case TS_TYPE_ALIAS:
         case TS_SHORT_VAR_DECLARATION:
             node_to_decls(it, file->decls, filename, &file->pool);
             break;
@@ -2396,7 +2404,7 @@ u64 Go_Indexer::hash_package(ccstr resolved_package_path) {
     return ret;
 }
 
-bool Go_Indexer::is_file_included_in_build(ccstr path) {
+bool is_file_included_in_build(ccstr path) {
     return GHBuildEnvIsFileIncluded((char*)path);
 }
 
@@ -2819,8 +2827,8 @@ bool Go_Indexer::are_gotypes_equal(Goresult *ra, Goresult *rb) {
     if (b->type > _GOTYPE_LAZY_MARKER_) return false;
 
     if (a->type != b->type) {
-        auto a_is_ref = (a->type == GOTYPE_ID || a->type == GOTYPE_SEL);
-        auto b_is_ref = (b->type == GOTYPE_ID || b->type == GOTYPE_SEL);
+        auto a_is_ref = is_type_ident(a);
+        auto b_is_ref = is_type_ident(b);
 
         if (a_is_ref && b_is_ref) {
             auto resa = resolve_type_to_decl(a, ra->ctx);
@@ -2975,6 +2983,7 @@ bool Go_Indexer::are_gotypes_equal(Goresult *ra, Goresult *rb) {
 
     case GOTYPE_POINTER:
     case GOTYPE_ASSERTION:
+    case GOTYPE_RECEIVE:
     case GOTYPE_SLICE:
     case GOTYPE_ARRAY:
     case GOTYPE_CHAN:
@@ -3217,7 +3226,8 @@ ccstr Go_Indexer::get_godecl_recvname(Godecl *it) {
     auto recv = it->gotype->func_recv;
     if (!recv) return NULL;
 
-    recv = unpointer_type(recv, NULL)->gotype;
+    recv = unpointer_type(recv);
+    if (!recv) return NULL;
     if (recv->type != GOTYPE_ID) return NULL;
 
     return recv->id_name;
@@ -4922,7 +4932,8 @@ void Go_Indexer::fill_goto_symbol(List<Go_Symbol> *out) {
                     auto recv = it.gotype->func_recv;
                     if (!recv) return NULL;
 
-                    recv = unpointer_type(recv, NULL)->gotype;
+                    recv = unpointer_type(recv);
+                    if (!recv) return NULL;
                     if (recv->type == GOTYPE_GENERIC) recv = recv->base;
                     if (recv->type != GOTYPE_ID) return NULL;
 
@@ -4950,7 +4961,7 @@ void Go_Indexer::fill_goto_symbol(List<Go_Symbol> *out) {
 
 bool Go_Indexer::autocomplete(ccstr filepath, cur2 pos, bool triggered_by_period, Autocomplete *out) {
     Timer t;
-    t.init("autocomplete");
+    t.init("autocomplete", false);
 
     reload_all_editors();
 
@@ -5827,7 +5838,8 @@ bool Go_Indexer::list_type_methods(ccstr type_name, ccstr import_path, List<Gore
         auto functype = decl->gotype;
         if (!functype->func_recv) continue;
 
-        auto recv = unpointer_type(functype->func_recv, NULL)->gotype;
+        auto recv = unpointer_type(functype->func_recv);
+        if (!recv) continue;
 
         if (recv->type == GOTYPE_GENERIC) recv = recv->base;
 
@@ -5865,26 +5877,62 @@ void Go_Indexer::list_dotprops(Goresult *type_res, Goresult *resolved_type_res, 
 }
 
 void Go_Indexer::actually_list_dotprops(Goresult *type_res, Goresult *resolved_type_res, Actually_List_Dotprops_Opts *opts) {
-    auto resolve_embedded_type_to_decl = [&](Gotype *gotype, Go_Ctx *ctx) -> Goresult* {
-        while (gotype->type == GOTYPE_POINTER)
-            gotype = gotype->base;
+    auto resolve_embedded_field = [&](Gotype *gotype, Go_Ctx *ctx) -> Goresult* {
+        bool is_alias = false;
 
-        auto t = gotype->type;
-        if (t != GOTYPE_ID && t != GOTYPE_SEL) return NULL;
+        do {
+            gotype = unpointer_type(gotype);
 
-        auto res = resolve_type_to_decl(gotype, ctx);
-        if (!res) return NULL;
+            List<Goresult*> *generic_args = NULL;
+            if (gotype->type == GOTYPE_GENERIC) {
+                generic_args = alloc_list<Goresult*>();
+                For (gotype->generic_args)
+                    generic_args->append(make_goresult(it, ctx));
+                gotype = gotype->generic_base;
+            }
 
-        auto key = cp_sprintf("%s:%s", ctx_to_filepath(res->ctx), res->decl->name);
-        if (opts->seen_embeds.has(key)) return NULL;
-        opts->seen_embeds.add(key);
+            if (!is_type_ident(gotype)) return NULL;
 
-        return res->wrap(res->decl->gotype);
+            auto res = resolve_type_to_decl(gotype, ctx);
+            if (!res) return NULL;
+
+            auto key = cp_sprintf("%s:%s", ctx_to_filepath(res->ctx), res->decl->name);
+            if (opts->seen_embeds.has(key)) return NULL;
+            opts->seen_embeds.add(key);
+
+            auto decl = res->decl;
+            is_alias = decl->is_alias;
+
+            gotype = decl->gotype;
+            if (generic_args && decl->type == GODECL_TYPE && decl->type_params) {
+                auto newret = do_generic_subst(gotype, decl->type_params, generic_args);
+                if (newret) gotype = newret;
+            }
+            ctx = res->ctx;
+        } while (is_alias);
+
+        return make_goresult(gotype, ctx);
+    };
+
+    auto process_field = [&](Godecl *field, Go_Ctx *ctx) {
+        if (field->field_is_embedded) {
+            auto rres = resolve_embedded_field(field->gotype, ctx);
+            if (rres) {
+                opts->depth++;
+                actually_list_dotprops(make_goresult(field->gotype, ctx), rres, opts);
+                opts->depth--;
+            }
+        }
+
+        auto val = field->copy(); // is this gonna substantially slow things down?
+        val->field_depth = opts->depth;
+        opts->out->append(resolved_type_res->wrap(val));
     };
 
     auto resolved_type = resolved_type_res->gotype;
     switch (resolved_type->type) {
     case GOTYPE_POINTER:
+    case GOTYPE_RECEIVE:
     case GOTYPE_ASSERTION: {
         auto new_resolved_type_res = resolved_type_res->wrap(resolved_type->base);
 
@@ -5894,24 +5942,23 @@ void Go_Indexer::actually_list_dotprops(Goresult *type_res, Goresult *resolved_t
         return;
     }
 
+    case GOTYPE_CONSTRAINT: {
+        // as far as i understand, if a type constraint is an interface
+        // with methods, it can't be joined with other interfaces.
+        if (resolved_type->constraint_terms->len != 1) break;
+
+        auto term = resolved_type->constraint_terms->at(0);
+        auto new_resolved_type_res = resolved_type_res->wrap(term);
+
+        opts->depth++;
+        actually_list_dotprops(type_res, new_resolved_type_res, opts);
+        opts->depth--;
+        return;
+    }
+
     case GOTYPE_STRUCT: {
-        For (resolved_type->struct_specs) {
-            // recursively list methods for embedded fields
-            if (it.field->field_is_embedded) {
-                auto embedded_type = it.field->gotype;
-                auto res = resolve_embedded_type_to_decl(embedded_type, resolved_type_res->ctx);
-                if (!res) continue;
-                if (res->gotype->type != resolved_type->type) continue; // this is an error, should we surface it here?
-
-                opts->depth++;
-                actually_list_dotprops(resolved_type_res->wrap(embedded_type), res, opts);
-                opts->depth--;
-            }
-
-            auto field = it.field->copy(); // is this gonna substantially slow things down?
-            field->field_depth = opts->depth;
-            opts->out->append(resolved_type_res->wrap(field));
-        }
+        For (resolved_type->struct_specs)
+            process_field(it.field, resolved_type_res->ctx);
         break;
     }
 
@@ -5927,23 +5974,8 @@ void Go_Indexer::actually_list_dotprops(Goresult *type_res, Goresult *resolved_t
                 goto getout;
 
         // no elems found
-        For (resolved_type->interface_specs) {
-            // recursively list methods for embedded fields
-            if (it.field->field_is_embedded) {
-                auto embedded_type = it.field->gotype;
-                auto res = resolve_embedded_type_to_decl(embedded_type, resolved_type_res->ctx);
-                if (!res) continue;
-                if (res->gotype->type != resolved_type->type) continue; // this is an error, should we surface it here?
-
-                opts->depth++;
-                actually_list_dotprops(resolved_type_res->wrap(embedded_type), res, opts);
-                opts->depth--;
-            }
-
-            auto field = it.field->copy();
-            field->field_depth = opts->depth;
-            opts->out->append(resolved_type_res->wrap(field));
-        }
+        For (resolved_type->interface_specs)
+            process_field(it.field, resolved_type_res->ctx);
         break;
     }
     }
@@ -5951,12 +5983,31 @@ getout:
 
     type_res = unpointer_type(type_res);
 
+    // "unalias" type - if it is an alias, follow it
+    while (true) {
+        if (!is_type_ident(type_res->gotype)) break;
+
+        auto res = resolve_type_to_decl(type_res->gotype, type_res->ctx);
+        if (!res) break;
+
+        if (res->decl->type != GODECL_TYPE) break;
+        if (!res->decl->is_alias) break;
+
+        // we found an alias! follow it
+        type_res = res->wrap(res->decl->gotype);
+    }
+
     auto type = type_res->gotype;
     ccstr type_name = NULL;
     ccstr target_import_path = NULL;
 
-    if (type->type == GOTYPE_GENERIC || type->type == GOTYPE_ASSERTION)
+    switch (type->type) {
+    case GOTYPE_GENERIC:
+    case GOTYPE_ASSERTION:
+    case GOTYPE_RECEIVE:
         type = type->base;
+        break;
+    }
 
     switch (type->type) {
     case GOTYPE_ID:
@@ -6418,13 +6469,7 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
             auto field_type = node_to_gotype(type_node);
             if (!field_type) continue;
 
-            bool names_found = false;
-            FOR_NODE_CHILDREN (field_node) {
-                names_found = !it->eq(type_node);
-                break;
-            }
-
-            if (names_found) {
+            if (!field_node->child()->eq(type_node)) {
                 FOR_NODE_CHILDREN (field_node) {
                     if (it->eq(type_node)) break;
 
@@ -6446,8 +6491,13 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
                         spec->tag = tag_node->string();
                 }
             } else {
-                auto unptr_type = unpointer_type(field_type, NULL)->gotype;
+                auto unptr_type = unpointer_type(field_type);
+                if (!unptr_type) break;
+
                 ccstr field_name = NULL;
+
+                if (unptr_type->type == GOTYPE_GENERIC)
+                    unptr_type = unptr_type->generic_base;
 
                 switch (unptr_type->type) {
                 case GOTYPE_SEL:
@@ -6670,8 +6720,8 @@ bool Go_Indexer::assignment_to_decls(List<Ast_Node*> *lhs, List<Ast_Node*> *rhs,
             if (gotype->type == GOTYPE_MULTI || gotype->type == GOTYPE_RANGE)
                 continue;
 
-            if (gotype->type == GOTYPE_ASSERTION)
-                gotype = gotype->assertion_base;
+            if (gotype->type == GOTYPE_ASSERTION || gotype->type == GOTYPE_RECEIVE)
+                gotype = gotype->base;
 
             auto decl = new_godecl();
             decl->name = name_node->string();
@@ -6808,7 +6858,6 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
     }
 
     case TS_TYPE_DECLARATION:
-        // TODO: handle TS_TYPE_ALIAS here.
         for (auto spec = node->child(); !isastnull(spec); spec = spec->next()) {
             auto name_node = spec->field(TSF_NAME);
             if (isastnull(name_node)) continue;
@@ -6832,6 +6881,7 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
             decl->name_end = name_node->end();
             decl->gotype = gotype;
             decl->type_params = type_params;
+            decl->is_alias = (spec->type() == TS_TYPE_ALIAS);
             save_decl(decl);
         }
         break;
@@ -6962,9 +7012,7 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
                         if (isastnull(method_decl)) break;
                         if (method_decl->type() != TS_METHOD_DECLARATION) break;
 
-                        auto gotype = decl_gotype;
-                        while (gotype && gotype->type == GOTYPE_POINTER)
-                            gotype = gotype->base;
+                        auto gotype = unpointer_type(decl_gotype);
                         if (!gotype) break;
 
                         if (gotype->type != GOTYPE_GENERIC) break;
@@ -7219,6 +7267,7 @@ Gotype* _walk_gotype_and_replace(Gotype *gotype, walk_gotype_and_replace_cb cb) 
     case GOTYPE_ARRAY:
     case GOTYPE_CHAN:
     case GOTYPE_ASSERTION:
+    case GOTYPE_RECEIVE:
     case GOTYPE_RANGE:
     case GOTYPE_CONSTRAINT_UNDERLYING:
     case GOTYPE_BUILTIN:
@@ -7261,7 +7310,7 @@ Gotype* _walk_gotype_and_replace(Gotype *gotype, walk_gotype_and_replace_cb cb) 
     return gotype;
 }
 
-Gotype* Go_Indexer::do_subst_rename_this_later(Gotype *base, List<Godecl> *params, List<Goresult*> *args) {
+Gotype* Go_Indexer::do_generic_subst(Gotype *base, List<Godecl> *params, List<Goresult*> *args) {
     if (!params) return NULL;
     if (!args) return NULL;
     if (params->len != args->len) return NULL;
@@ -7277,8 +7326,7 @@ Goresult *Go_Indexer::_subst_generic_type(Gotype *type, Go_Ctx *ctx) {
     cp_assert(type->type == GOTYPE_GENERIC);
 
     auto base = type->generic_base;
-    if (base->type != GOTYPE_ID && base->type != GOTYPE_SEL)
-        return NULL;
+    if (!is_type_ident(base)) return NULL;
 
     auto res = resolve_type_to_decl(base, ctx);
     if (!res) return NULL;
@@ -7291,7 +7339,7 @@ Goresult *Go_Indexer::_subst_generic_type(Gotype *type, Go_Ctx *ctx) {
         args->append(make_goresult(it, ctx));
     }
 
-    auto ret = do_subst_rename_this_later(decl->gotype, decl->type_params, args);
+    auto ret = do_generic_subst(decl->gotype, decl->type_params, args);
     if (!ret) return NULL;
 
     return make_goresult(ret, ctx);
@@ -7320,10 +7368,16 @@ Goresult *Go_Indexer::unpointer_type(Goresult *res) {
     return unpointer_type(res->gotype, res->ctx);
 }
 
-Goresult *Go_Indexer::unpointer_type(Gotype *type, Go_Ctx *ctx) {
-    while (type->type == GOTYPE_POINTER)
+Gotype *Go_Indexer::unpointer_type(Gotype *type) {
+    while (type && type->type == GOTYPE_POINTER)
         type = type->pointer_base;
-    return make_goresult(type, ctx);
+    return type;
+}
+
+Goresult *Go_Indexer::unpointer_type(Gotype *type, Go_Ctx *ctx) {
+    auto ret = unpointer_type(type);
+    if (!ret) return NULL;
+    return make_goresult(ret, ctx);
 }
 
 List<Goresult> *Go_Indexer::list_package_decls(ccstr import_path, int flags) {
@@ -7388,6 +7442,13 @@ Gotype *Go_Indexer::expr_to_gotype(Ast_Node *expr) {
     case TS_RAW_STRING_LITERAL:
     case TS_INTERPRETED_STRING_LITERAL:
         return new_primitive_type("string");
+
+    case TS_VARIADIC_ARGUMENT: {
+        auto ret = new_gotype(GOTYPE_SLICE);
+        ret->slice_base = expr_to_gotype(expr->child());
+        ret->slice_is_variadic = true;
+        return ret;
+    }
 
     case TS_UNARY_EXPRESSION:
         switch (expr->field(TSF_OPERATOR)->type()) {
@@ -7737,7 +7798,7 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
             args->append(make_goresult(it, ctx));
         }
 
-        auto ret = do_subst_rename_this_later(subst->target, subst->params, args);
+        auto ret = do_generic_subst(subst->target, subst->params, args);
         if (!ret) return NULL;
 
         return subst->res->wrap(ret);
@@ -7795,7 +7856,7 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
         // then as index
         if (gotype->lazy_instance_args->len != 1) return NULL;
         auto arg = gotype->lazy_instance_args->at(0);
-        if (arg->type != GOTYPE_ID && arg->type != GOTYPE_SEL) return NULL;
+        if (!is_type_ident(arg)) return NULL;
         return try_evaluating_index(gotype->lazy_instance_base);
     }
 
@@ -7919,7 +7980,7 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
                         return false;
                 }
 
-                if ((a->type == GOTYPE_ID || a->type == GOTYPE_SEL) && (b->type == GOTYPE_ID || b->type == GOTYPE_SEL)) {
+                if (is_type_ident(a) && is_type_ident(b)) {
                     auto resa = resolve_type_to_decl(a, ares->ctx);
                     auto resb = resolve_type_to_decl(b, bres->ctx);
                     return are_decls_equal(resa, resb);
@@ -7966,6 +8027,7 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
                 case GOTYPE_ARRAY:
                 case GOTYPE_CHAN:
                 case GOTYPE_ASSERTION:
+                case GOTYPE_RECEIVE:
                 case GOTYPE_RANGE:
                 case GOTYPE_CONSTRAINT_UNDERLYING:
                     recur(base);
@@ -8628,7 +8690,12 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
         if (!res) return NULL;
         if (res->gotype->type != GOTYPE_CHAN) return NULL;
 
-        return _evaluate_type(res->gotype->chan_base, res->ctx, outdecl);
+        res = _evaluate_type(res->gotype->chan_base, res->ctx, outdecl);
+        if (!res) return NULL;
+
+        auto ret = new_gotype(GOTYPE_RECEIVE);
+        ret->receive_base = res->gotype;
+        return res->wrap(ret);
     }
 
     case GOTYPE_LAZY_ID: {
@@ -8685,6 +8752,7 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
         if (!rres) return NULL;
 
         rres = unpointer_type(rres);
+        if (!rres) return NULL;
 
         List<Goresult> results;
         results.init();
@@ -8712,18 +8780,90 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
         auto handle_generics = [&]() {
             if (field_type->type != GOTYPE_FUNC) return;
 
+            auto recv = field_type->func_recv;
+            if (!recv) return;
+            recv = unpointer_type(recv);
+            if (!recv) return;
+            if (recv->type != GOTYPE_GENERIC) return;
+            if (!recv->generic_args) return;
+
             auto object_res = res;
             auto object_type = res->gotype;
 
             if (object_type->type == GOTYPE_POINTER)
                 object_type = object_type->base;
-            if (object_type->type != GOTYPE_GENERIC) return;
 
-            auto recv = field_type->func_recv;
-            if (!recv) return;
-            recv = unpointer_type(recv, NULL)->gotype;
-            if (recv->type != GOTYPE_GENERIC) return;
-            if (!recv->generic_args) return;
+            if (object_type->type != GOTYPE_GENERIC) {
+                // Here, we are unlucky and did not get the straightforward
+                // case where the object type was itself the generic. Instead,
+                // it's probably a struct or something that embeds a generic
+                // type.
+                //
+                // Fortunately, we know what to do. We have the field, which is
+                // a func. Inside that is the receiver in `func_recv`. We just
+                // need to find the embedded struct inside the struct that that
+                // func_recv points to. If that is a generic, we're golden --
+                // just use it.
+
+                auto recv_base = recv->generic_base;
+                if (recv_base->type != GOTYPE_ID) return; // ??? this can't even happen can it
+                auto recv_name = recv_base->id_name;
+
+                typedef fn<bool(Goresult*)> fn_type;
+
+                // so basically, now we need to find an embedded type with name recv_name
+                // whose decl is located in same ctx as the recv's ctx, i.e. field_ctx
+                fn_type find_embedded_generic = [&](auto res) {
+                    auto gotype = unpointer_type(res->gotype);
+                    if (!gotype) return false;
+
+                    if (gotype->type == GOTYPE_GENERIC) {
+                        auto base = gotype->generic_base;
+                        if (!is_type_ident(base)) return false;
+
+                        do {
+                            // we now have a gotype_id or gotype_sel
+                            // we need to know if it refers to the same as the recv
+
+                            // find what the generic in the struct points to
+                            auto a = resolve_type_to_decl(base, res->ctx);
+                            if (!a) break;
+
+                            // find what the generic in the recv points to
+                            auto b = resolve_type_to_decl(recv_base, field_ctx);
+                            if (!b) break;
+
+                            if (!are_decls_equal(a, b)) break;
+
+                            object_res = res;
+                            object_type = gotype;
+                            return true;
+                        } while (0);
+
+                        // if the generic wasn't a match, grab its base and try it as an id/sel
+                        gotype = base;
+                    }
+
+                    switch (gotype->type) {
+                    case GOTYPE_ID:
+                    case GOTYPE_SEL: {
+                        auto newres = resolve_type_to_decl(gotype, res->ctx);
+                        if (!newres) break;
+                        return find_embedded_generic(newres->wrap(newres->decl->gotype));
+                    }
+                    case GOTYPE_STRUCT:
+                        For (gotype->struct_specs)
+                            if (it.field->field_is_embedded)
+                                if (find_embedded_generic(res->wrap(it.field->gotype)))
+                                    return true;
+                        break;
+                    }
+                    return false;
+                };
+
+                if (!find_embedded_generic(object_res->wrap(object_type)))
+                    return;
+            }
 
             if (!object_type->generic_args->len) return;
             if (recv->generic_args->len != object_type->generic_args->len) return;
@@ -8757,6 +8897,11 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
             if (index >= types->len) return NULL;
             return _evaluate_type(types->at(index), res->ctx);
         }
+
+        case GOTYPE_RECEIVE:
+            if (index == 0) return _evaluate_type(res->gotype->receive_base, res->ctx);
+            if (index == 1) return new_primitive_type_goresult("bool");
+            break;
 
         case GOTYPE_ASSERTION:
             if (index == 0) return _evaluate_type(res->gotype->assertion_base, res->ctx);
@@ -8862,6 +9007,17 @@ Goresult *Go_Indexer::resolve_type(Gotype *type, Go_Ctx *ctx, String_Set *seen) 
             break;
         return resolve_type(type->builtin_underlying_base, ctx, seen);
 
+    // is this a hack? does it work?
+    case GOTYPE_CONSTRAINT: {
+        // as far as i understand, if a type constraint is an interface
+        // with methods, it can't be joined with other interfaces.
+        if (type->constraint_terms->len != 1) break;
+
+        auto term = type->constraint_terms->at(0);
+        return resolve_type(term, ctx, seen);
+    }
+
+    case GOTYPE_RECEIVE:
     case GOTYPE_ASSERTION:
     case GOTYPE_POINTER: {
         auto b = type->base;
@@ -8870,7 +9026,7 @@ Goresult *Go_Indexer::resolve_type(Gotype *type, Go_Ctx *ctx, String_Set *seen) 
         // (we need to resolve because the table key needs to know the go_ctx too)
         // if so, break out, otherwise, proceed as usual
         // this does mean we'll be resolving twice, but who cares
-        if (b->type == GOTYPE_ID || b->type == GOTYPE_SEL) {
+        if (is_type_ident(b)) {
             auto res = resolve_type_to_decl(b, ctx);
             if (!res) return NULL;
 
@@ -9017,6 +9173,15 @@ ccstr case_style_pretty_str(Case_Style x) {
     return NULL;
 }
 
+bool is_type_ident(Gotype *x) {
+    switch (x->type) {
+    case GOTYPE_ID:
+    case GOTYPE_SEL:
+        return true;
+    }
+    return false;
+}
+
 // -----
 // read functions
 
@@ -9143,6 +9308,9 @@ void Gotype::read(Index_Stream *s) {
     }
     case GOTYPE_ASSERTION:
         READ_OBJ(assertion_base);
+        break;
+    case GOTYPE_RECEIVE:
+        READ_OBJ(receive_base);
         break;
     case GOTYPE_RANGE:
         READ_OBJ(range_base);
@@ -9327,6 +9495,9 @@ void Gotype::write(Index_Stream *s) {
         break;
     case GOTYPE_ASSERTION:
         WRITE_OBJ(assertion_base);
+        break;
+    case GOTYPE_RECEIVE:
+        WRITE_OBJ(receive_base);
         break;
     case GOTYPE_RANGE:
         WRITE_OBJ(range_base);

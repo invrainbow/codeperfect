@@ -16,5 +16,7 @@ runtests() {
     fi
 }
 
-runtests "vimfuzzer"
+runtests "vim_fuzzer"
+runtests "non_vim_fuzzer"
 runtests "workspace"
+runtests "autocomplete"

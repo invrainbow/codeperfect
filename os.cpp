@@ -79,6 +79,12 @@ ccstr cp_dirname(ccstr path) {
     return ret;
 }
 
+bool Process::can_read() {
+    if (read_buffer_ptr < read_buffer_len)
+        return true;
+    return os_can_read();
+}
+
 bool Process::peek(char *out) {
     if (read_buffer_ptr >= read_buffer_len) {
         read_buffer_ptr = 0;
