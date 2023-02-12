@@ -7306,7 +7306,7 @@ Gotype* _walk_gotype_and_replace(Gotype *gotype, walk_gotype_and_replace_cb cb) 
     return gotype;
 }
 
-Gotype* Go_Indexer::do_subst_rename_this_later(Gotype *base, List<Godecl> *params, List<Goresult*> *args) {
+Gotype* Go_Indexer::do_generic_subst(Gotype *base, List<Godecl> *params, List<Goresult*> *args) {
     if (!params) return NULL;
     if (!args) return NULL;
     if (params->len != args->len) return NULL;
@@ -7335,7 +7335,7 @@ Goresult *Go_Indexer::_subst_generic_type(Gotype *type, Go_Ctx *ctx) {
         args->append(make_goresult(it, ctx));
     }
 
-    auto ret = do_subst_rename_this_later(decl->gotype, decl->type_params, args);
+    auto ret = do_generic_subst(decl->gotype, decl->type_params, args);
     if (!ret) return NULL;
 
     return make_goresult(ret, ctx);
@@ -7787,7 +7787,7 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
             args->append(make_goresult(it, ctx));
         }
 
-        auto ret = do_subst_rename_this_later(subst->target, subst->params, args);
+        auto ret = do_generic_subst(subst->target, subst->params, args);
         if (!ret) return NULL;
 
         return subst->res->wrap(ret);

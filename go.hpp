@@ -1322,7 +1322,7 @@ struct Go_Indexer {
     Goresult *get_reference_decl(Go_Reference *it, Go_Ctx *ctx);
     Godecl *find_toplevel_containing(Go_File *file, cur2 start, cur2 end);
     Goresult *find_enclosing_toplevel(ccstr filepath, cur2 pos);
-    Gotype* do_subst_rename_this_later(Gotype *base, List<Godecl> *params, List<Goresult*> *args);
+    Gotype* do_generic_subst(Gotype *base, List<Godecl> *params, List<Goresult*> *args);
     Goresult *remove_override_ctx(Gotype *gotype, Go_Ctx *ctx);
     Generate_Func_Sig_Result* generate_function_signature(ccstr filepath, cur2 pos);
     Generate_Struct_Tags_Result* generate_struct_tags(ccstr filepath, cur2 pos, Generate_Struct_Tags_Op op, ccstr lang, Case_Style case_style);
