@@ -118,8 +118,7 @@ html[data-theme="dark"] .docusaurus-highlight-code-line {
 
     a {
       text-decoration: underline;
-      color: #777a83;
-      font-weight: 500 !important;
+      color: rgb(30, 95, 160);
       display: inline-block !important;
       text-underline-offset: 2px;
       &.hash-link {
@@ -181,6 +180,7 @@ a.navbar__link > span > svg {
   .menu__link {
     padding: 0 !important;
     color: #555;
+    font-weight: 400;
     &:hover {
       background: none;
     }
@@ -199,8 +199,8 @@ a.navbar__link > span > svg {
   .menu__list-item-collapsible {
     .menu__link {
       text-transform: uppercase;
-      font-weight: 700;
-      font-size: 0.85em;
+      font-size: 0.8em;
+      font-weight: bold;
       padding-top: 0;
       padding-bottom: 0;
       color: rgb(156, 163, 175) !important;
