@@ -1982,6 +1982,7 @@ void init_command_info_table() {
     command_info_table[CMD_COMMAND_PALETTE] = k(CP_MOD_PRIMARY, CP_KEY_K, "Command Palette");
     command_info_table[CMD_OPEN_FILE_MANUALLY] = k(CP_MOD_PRIMARY, CP_KEY_O, "Open File...");
     command_info_table[CMD_CLOSE_EDITOR] = k(CP_MOD_PRIMARY, CP_KEY_W, "Close Editor");
+    command_info_table[CMD_CLOSE_ALL_EDITORS] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_W, "Close All Editors");
     command_info_table[CMD_OPEN_FOLDER] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_O, "Open Folder...");
 }
 
