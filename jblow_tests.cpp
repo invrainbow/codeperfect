@@ -446,6 +446,7 @@ void Jblow_Tests::run() {
                 return WALK_CONTINUE;
             });
 
+            /*
             struct Exception {
                 ccstr filename;
                 cur2 dot;
@@ -454,22 +455,23 @@ void Jblow_Tests::run() {
             Exception exceptions[] = {
                 // {"controller-idioms/queue/controls.go", new_cur2(-1, -1)},
             };
+            */
 
             if (targets->len) {
-                for (int j = 0; j < samples; j++) {
-                    auto &target = random_choice(targets);
-
+                auto process_target = [&](cur2 dot, ccstr name) {
+                    /*
                     auto should_skip = [&]() {
                         for (auto &&it : exceptions)
                             if (streq(filename, it.filename))
-                                if ((target.dot == it.dot) || (it.dot.x == -1 && it.dot.y == -1))
+                                if ((dot == it.dot) || (it.dot.x == -1 && it.dot.y == -1))
                                     return true;
                         return false;
                     };
 
                     if (should_skip()) continue;
+                    */
 
-                    move_cursor(new_cur2(target.dot.x+1, target.dot.y));
+                    move_cursor(new_cur2(dot.x+1, dot.y));
 
                     press_key(CP_KEY_BACKSPACE);
                     type_char('.');
@@ -479,7 +481,7 @@ void Jblow_Tests::run() {
                         if (results != NULL)
                             For (results)
                                 if (it.type == ACR_DECLARATION)
-                                    if (streq(it.name, target.name))
+                                    if (streq(it.name, name))
                                         return true;
                         return false;
                     };
@@ -487,6 +489,16 @@ void Jblow_Tests::run() {
                     press_key(CP_KEY_ESCAPE);
 
                     WAIT { return editor->autocomplete.ac.results == NULL; };
+                };
+
+                if (samples < targets->len) {
+                    for (int j = 0; j < samples; j++) {
+                        auto &it = random_choice(targets);
+                        process_target(it.dot, it.name);
+                    }
+                } else {
+                    For (targets)
+                        process_target(it.dot, it.name);
                 }
             }
 
@@ -495,11 +507,13 @@ void Jblow_Tests::run() {
             WAIT { return get_current_editor() == NULL; };
         };
 
+        /*
         // there are far fewer ci files, just go thru all of them
         for (int seed = 0; seed < 4; seed++) {
             mt_seed32(seed);
             For (ci_files) process_file(it, 10);
         }
+        */
 
         // sample hugo files randomly
         for (int seed = 0; seed < 4; seed++) {
