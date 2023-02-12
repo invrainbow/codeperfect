@@ -5877,36 +5877,56 @@ void Go_Indexer::list_dotprops(Goresult *type_res, Goresult *resolved_type_res, 
 }
 
 void Go_Indexer::actually_list_dotprops(Goresult *type_res, Goresult *resolved_type_res, Actually_List_Dotprops_Opts *opts) {
-    auto resolve_embedded_type_to_decl = [&](Gotype *gotype, Go_Ctx *ctx) -> Goresult* {
-        gotype = unpointer_type(gotype);
+    auto resolve_embedded_field = [&](Gotype *gotype, Go_Ctx *ctx) -> Goresult* {
+        bool is_alias = false;
 
-        List<Goresult*> *generic_args = NULL;
+        do {
+            gotype = unpointer_type(gotype);
 
-        if (gotype->type == GOTYPE_GENERIC) {
-            generic_args = alloc_list<Goresult*>();
-            For (gotype->generic_args)
-                generic_args->append(make_goresult(it, ctx));
-            gotype = gotype->generic_base;
+            List<Goresult*> *generic_args = NULL;
+            if (gotype->type == GOTYPE_GENERIC) {
+                generic_args = alloc_list<Goresult*>();
+                For (gotype->generic_args)
+                    generic_args->append(make_goresult(it, ctx));
+                gotype = gotype->generic_base;
+            }
+
+            if (!is_type_ident(gotype)) return NULL;
+
+            auto res = resolve_type_to_decl(gotype, ctx);
+            if (!res) return NULL;
+
+            auto key = cp_sprintf("%s:%s", ctx_to_filepath(res->ctx), res->decl->name);
+            if (opts->seen_embeds.has(key)) return NULL;
+            opts->seen_embeds.add(key);
+
+            auto decl = res->decl;
+            is_alias = decl->is_alias;
+
+            gotype = decl->gotype;
+            if (generic_args && decl->type == GODECL_TYPE && decl->type_params) {
+                auto newret = do_generic_subst(gotype, decl->type_params, generic_args);
+                if (newret) gotype = newret;
+            }
+            ctx = res->ctx;
+        } while (is_alias);
+
+        return make_goresult(gotype, ctx);
+    };
+
+    auto process_field = [&](Godecl *field, Go_Ctx *ctx) {
+        if (field->field_is_embedded) {
+            auto rres = resolve_embedded_field(field->gotype, ctx);
+            if (rres) {
+                opts->depth++;
+                actually_list_dotprops(make_goresult(field->gotype, ctx), rres, opts);
+                opts->depth--;
+            }
         }
 
-        if (!is_type_ident(gotype)) return NULL;
-
-        auto res = resolve_type_to_decl(gotype, ctx);
-        if (!res) return NULL;
-
-        auto key = cp_sprintf("%s:%s", ctx_to_filepath(res->ctx), res->decl->name);
-        if (opts->seen_embeds.has(key)) return NULL;
-        opts->seen_embeds.add(key);
-
-        auto decl = res->decl;
-        auto ret = decl->gotype;
-
-        if (generic_args && decl->type == GODECL_TYPE && decl->type_params) {
-            auto newret = do_generic_subst(ret, decl->type_params, generic_args);
-            if (newret) ret = newret;
-        }
-
-        return res->wrap(ret);
+        auto val = field->copy(); // is this gonna substantially slow things down?
+        val->field_depth = opts->depth;
+        opts->out->append(resolved_type_res->wrap(val));
     };
 
     auto resolved_type = resolved_type_res->gotype;
@@ -5937,25 +5957,8 @@ void Go_Indexer::actually_list_dotprops(Goresult *type_res, Goresult *resolved_t
     }
 
     case GOTYPE_STRUCT: {
-        For (resolved_type->struct_specs) {
-            // recursively list methods for embedded fields
-            if (it.field->field_is_embedded) {
-                auto embedded_type = unpointer_type(it.field->gotype);
-
-                auto res = resolve_embedded_type_to_decl(embedded_type, resolved_type_res->ctx);
-                if (!res) continue;
-
-                // no need to check type of res->gotype->type, apparently we can embed anything?
-
-                opts->depth++;
-                actually_list_dotprops(resolved_type_res->wrap(embedded_type), res, opts);
-                opts->depth--;
-            }
-
-            auto field = it.field->copy(); // is this gonna substantially slow things down?
-            field->field_depth = opts->depth;
-            opts->out->append(resolved_type_res->wrap(field));
-        }
+        For (resolved_type->struct_specs)
+            process_field(it.field, resolved_type_res->ctx);
         break;
     }
 
@@ -5971,23 +5974,8 @@ void Go_Indexer::actually_list_dotprops(Goresult *type_res, Goresult *resolved_t
                 goto getout;
 
         // no elems found
-        For (resolved_type->interface_specs) {
-            // recursively list methods for embedded fields
-            if (it.field->field_is_embedded) {
-                auto embedded_type = it.field->gotype;
-                auto res = resolve_embedded_type_to_decl(embedded_type, resolved_type_res->ctx);
-                if (!res) continue;
-                if (res->gotype->type != GOTYPE_INTERFACE) continue; // this is an error, should we surface it here?
-
-                opts->depth++;
-                actually_list_dotprops(resolved_type_res->wrap(embedded_type), res, opts);
-                opts->depth--;
-            }
-
-            auto field = it.field->copy();
-            field->field_depth = opts->depth;
-            opts->out->append(resolved_type_res->wrap(field));
-        }
+        For (resolved_type->interface_specs)
+            process_field(it.field, resolved_type_res->ctx);
         break;
     }
     }
