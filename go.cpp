@@ -7443,6 +7443,13 @@ Gotype *Go_Indexer::expr_to_gotype(Ast_Node *expr) {
     case TS_INTERPRETED_STRING_LITERAL:
         return new_primitive_type("string");
 
+    case TS_VARIADIC_ARGUMENT: {
+        auto ret = new_gotype(GOTYPE_SLICE);
+        ret->slice_base = expr_to_gotype(expr->child());
+        ret->slice_is_variadic = true;
+        return ret;
+    }
+
     case TS_UNARY_EXPRESSION:
         switch (expr->field(TSF_OPERATOR)->type()) {
         // case TS_RANGE: // idk even what to do here
