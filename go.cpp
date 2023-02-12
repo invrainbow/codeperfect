@@ -675,7 +675,8 @@ void Go_Indexer::reload_single_file(ccstr filepath) {
 
     ccstr package_name = NULL;
     process_tree_into_gofile(file, pf->root, filepath, &package_name);
-    replace_package_name(pkg, package_name);
+    if (!str_ends_with(filepath, "_test.go"))
+        replace_package_name(pkg, package_name);
 }
 
 void Go_Indexer::reload_editor(void *editor) {
@@ -704,7 +705,8 @@ void Go_Indexer::reload_editor(void *editor) {
 
     ccstr package_name = NULL;
     process_tree_into_gofile(file, root_node, it->filepath, &package_name);
-    replace_package_name(pkg, package_name);
+    if (!str_ends_with(it->filepath, "_test.go"))
+        replace_package_name(pkg, package_name);
 
     t.log("process tree");
 
