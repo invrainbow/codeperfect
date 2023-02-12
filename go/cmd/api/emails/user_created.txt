@@ -1,7 +1,7 @@
 {{.Greeting}}
 
 Thanks for your purchase! To activate your license, please open CodePerfect and
-go to Help > Enter License, then enter the following license key.
+go to Help > Enter License.
 
 {{.LicenseKey}}
 
