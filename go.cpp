@@ -2404,7 +2404,7 @@ u64 Go_Indexer::hash_package(ccstr resolved_package_path) {
     return ret;
 }
 
-bool Go_Indexer::is_file_included_in_build(ccstr path) {
+bool is_file_included_in_build(ccstr path) {
     return GHBuildEnvIsFileIncluded((char*)path);
 }
 

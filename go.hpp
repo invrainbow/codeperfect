@@ -1218,7 +1218,6 @@ struct Go_Indexer {
 
     ccstr filepath_to_import_path(ccstr filepath);
     bool process_package(ccstr import_path, Go_Package *pkg);
-    bool is_file_included_in_build(ccstr path);
     List<ccstr>* list_source_files(ccstr dirpath, bool include_tests);
     ccstr get_package_path(ccstr import_path);
     void free_parsed_file(Parsed_File *file);
@@ -1445,3 +1444,4 @@ bool isastnull(Ast_Node* x);
 
 bool is_type_ident(Gotype *x);
 cur2 offset_to_cur(int off, ccstr filepath);
+bool is_file_included_in_build(ccstr path);
