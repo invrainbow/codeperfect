@@ -590,15 +590,9 @@ function BuyLicense() {
         </div>
       </div>
       <div className="md:max-w-screen-xl mx-auto">
-        <div className="mx-6 grid grid-cols-1 md:grid-cols-3 mt-12 md:mt-24 mb-8 md:my-24">
+        <div className="mx-6 grid grid-cols-1 md:grid-cols-3 my-12 md:mb-16 gap-12 md:gap-0">
           {help.map((it) => (
-            <div className="border-x border-t last:border-b md:border-y md:border-l md:border-r-0 md:last:border-r border-dashed border-gray-200 md:first:border-l p-6 md:p-8">
-              <div
-                className="w-8 border-b-4 mb-2 hidden md:block saturate-[0.35]"
-                style={{
-                  borderColor: "rgb(11, 158, 245)",
-                }}
-              />
+            <div className="md:border-y md:border-l md:border-r-0 md:last:border-r md:border-gray-200 md:first:border-l md:border-dashed md:p-8">
               <div className="text-neutral-700 text-lg font-semibold mb-2">
                 {it.title}
               </div>
