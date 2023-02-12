@@ -1232,6 +1232,7 @@ struct Go_Indexer {
     Goresult *resolve_type_to_decl(Gotype *type, Go_Ctx *ctx);
     Goresult *unpointer_type(Goresult *res);
     Goresult *unpointer_type(Gotype *type, Go_Ctx *ctx);
+    Gotype *unpointer_type(Gotype *type);
     Goresult *_subst_generic_type(Gotype *type, Go_Ctx *ctx);
     Goresult *subst_generic_type(Goresult *res);
     Goresult *subst_generic_type(Gotype *type, Go_Ctx *ctx);

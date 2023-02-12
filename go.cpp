@@ -3224,7 +3224,8 @@ ccstr Go_Indexer::get_godecl_recvname(Godecl *it) {
     auto recv = it->gotype->func_recv;
     if (!recv) return NULL;
 
-    recv = unpointer_type(recv, NULL)->gotype;
+    recv = unpointer_type(recv);
+    if (!recv) return NULL;
     if (recv->type != GOTYPE_ID) return NULL;
 
     return recv->id_name;
@@ -4929,7 +4930,8 @@ void Go_Indexer::fill_goto_symbol(List<Go_Symbol> *out) {
                     auto recv = it.gotype->func_recv;
                     if (!recv) return NULL;
 
-                    recv = unpointer_type(recv, NULL)->gotype;
+                    recv = unpointer_type(recv);
+                    if (!recv) return NULL;
                     if (recv->type == GOTYPE_GENERIC) recv = recv->base;
                     if (recv->type != GOTYPE_ID) return NULL;
 
@@ -5834,7 +5836,8 @@ bool Go_Indexer::list_type_methods(ccstr type_name, ccstr import_path, List<Gore
         auto functype = decl->gotype;
         if (!functype->func_recv) continue;
 
-        auto recv = unpointer_type(functype->func_recv, NULL)->gotype;
+        auto recv = unpointer_type(functype->func_recv);
+        if (!recv) continue;
 
         if (recv->type == GOTYPE_GENERIC) recv = recv->base;
 
@@ -5873,8 +5876,7 @@ void Go_Indexer::list_dotprops(Goresult *type_res, Goresult *resolved_type_res, 
 
 void Go_Indexer::actually_list_dotprops(Goresult *type_res, Goresult *resolved_type_res, Actually_List_Dotprops_Opts *opts) {
     auto resolve_embedded_type_to_decl = [&](Gotype *gotype, Go_Ctx *ctx) -> Goresult* {
-        while (gotype->type == GOTYPE_POINTER)
-            gotype = gotype->base;
+        gotype = unpointer_type(gotype);
 
         if (gotype->type == GOTYPE_GENERIC)
             gotype = gotype->generic_base;
@@ -5922,7 +5924,8 @@ void Go_Indexer::actually_list_dotprops(Goresult *type_res, Goresult *resolved_t
         For (resolved_type->struct_specs) {
             // recursively list methods for embedded fields
             if (it.field->field_is_embedded) {
-                auto embedded_type = it.field->gotype;
+                auto embedded_type = unpointer_type(it.field->gotype);
+
                 auto res = resolve_embedded_type_to_decl(embedded_type, resolved_type_res->ctx);
                 if (!res) continue;
 
@@ -6484,7 +6487,9 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
                         spec->tag = tag_node->string();
                 }
             } else {
-                auto unptr_type = unpointer_type(field_type, NULL)->gotype;
+                auto unptr_type = unpointer_type(field_type);
+                if (!unptr_type) break;
+
                 ccstr field_name = NULL;
 
                 if (unptr_type->type == GOTYPE_GENERIC)
@@ -7003,9 +7008,7 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
                         if (isastnull(method_decl)) break;
                         if (method_decl->type() != TS_METHOD_DECLARATION) break;
 
-                        auto gotype = decl_gotype;
-                        while (gotype && gotype->type == GOTYPE_POINTER)
-                            gotype = gotype->base;
+                        auto gotype = unpointer_type(decl_gotype);
                         if (!gotype) break;
 
                         if (gotype->type != GOTYPE_GENERIC) break;
@@ -7361,10 +7364,16 @@ Goresult *Go_Indexer::unpointer_type(Goresult *res) {
     return unpointer_type(res->gotype, res->ctx);
 }
 
-Goresult *Go_Indexer::unpointer_type(Gotype *type, Go_Ctx *ctx) {
-    while (type->type == GOTYPE_POINTER)
+Gotype *Go_Indexer::unpointer_type(Gotype *type) {
+    while (type && type->type == GOTYPE_POINTER)
         type = type->pointer_base;
-    return make_goresult(type, ctx);
+    return type;
+}
+
+Goresult *Go_Indexer::unpointer_type(Gotype *type, Go_Ctx *ctx) {
+    auto ret = unpointer_type(type);
+    if (!ret) return NULL;
+    return make_goresult(ret, ctx);
 }
 
 List<Goresult> *Go_Indexer::list_package_decls(ccstr import_path, int flags) {
@@ -8732,6 +8741,7 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
         if (!rres) return NULL;
 
         rres = unpointer_type(rres);
+        if (!rres) return NULL;
 
         List<Goresult> results;
         results.init();
@@ -8761,7 +8771,8 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
 
             auto recv = field_type->func_recv;
             if (!recv) return;
-            recv = unpointer_type(recv, NULL)->gotype;
+            recv = unpointer_type(recv);
+            if (!recv) return;
             if (recv->type != GOTYPE_GENERIC) return;
             if (!recv->generic_args) return;
 
@@ -8792,7 +8803,8 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
                 // so basically, now we need to find an embedded type with name recv_name
                 // whose decl is located in same ctx as the recv's ctx, i.e. field_ctx
                 fn_type find_embedded_generic = [&](auto res) {
-                    auto gotype = unpointer_type(res)->gotype;
+                    auto gotype = unpointer_type(res->gotype);
+                    if (!gotype) return false;
 
                     if (gotype->type == GOTYPE_GENERIC) {
                         auto base = gotype->generic_base;
