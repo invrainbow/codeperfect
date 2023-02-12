@@ -5878,8 +5878,14 @@ void Go_Indexer::actually_list_dotprops(Goresult *type_res, Goresult *resolved_t
     auto resolve_embedded_type_to_decl = [&](Gotype *gotype, Go_Ctx *ctx) -> Goresult* {
         gotype = unpointer_type(gotype);
 
-        if (gotype->type == GOTYPE_GENERIC)
+        List<Goresult*> *generic_args = NULL;
+
+        if (gotype->type == GOTYPE_GENERIC) {
+            generic_args = alloc_list<Goresult*>();
+            For (gotype->generic_args)
+                generic_args->append(make_goresult(it, ctx));
             gotype = gotype->generic_base;
+        }
 
         if (!is_type_ident(gotype)) return NULL;
 
@@ -5890,7 +5896,15 @@ void Go_Indexer::actually_list_dotprops(Goresult *type_res, Goresult *resolved_t
         if (opts->seen_embeds.has(key)) return NULL;
         opts->seen_embeds.add(key);
 
-        return res->wrap(res->decl->gotype);
+        auto decl = res->decl;
+        auto ret = decl->gotype;
+
+        if (generic_args && decl->type == GODECL_TYPE && decl->type_params) {
+            auto newret = do_generic_subst(ret, decl->type_params, generic_args);
+            if (newret) ret = newret;
+        }
+
+        return res->wrap(ret);
     };
 
     auto resolved_type = resolved_type_res->gotype;
