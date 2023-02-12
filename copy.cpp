@@ -260,6 +260,9 @@ Gotype *Gotype::copy() {
     case GOTYPE_ASSERTION:
         ret->assertion_base = copy_object(assertion_base);
         break;
+    case GOTYPE_RECEIVE:
+        ret->receive_base = copy_object(receive_base);
+        break;
     case GOTYPE_RANGE:
         ret->range_base = copy_object(range_base);
         break;
