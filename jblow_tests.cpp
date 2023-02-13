@@ -560,7 +560,7 @@ void Jblow_Tests::run() {
                     "int64", "int8", "iota", "len", "make", "new", "nil",
                     "panic", "print", "println", "real", "recover",
                     "rune", "string", "true", "uint", "uint16", "uint32",
-                    "uint64", "uint8", "uintptr"
+                    "uint64", "uint8", "uintptr", "Error", "init",
                 };
                 For (&bad_words) bad.add(it);
             }
