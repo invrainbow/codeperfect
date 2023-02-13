@@ -936,7 +936,7 @@ bool list_all_fonts(List<ccstr> *out) {
 }
 
 // allocates font data with malloc, needs to be freed.
-Font_Data* load_font_data_by_name(ccstr name) {
+Font_Data* load_font_data_by_name(ccstr name, bool dont_check_name) {
     auto hdc = CreateDCW(L"DISPLAY", NULL, NULL, NULL);
     if (!hdc) return NULL;
     defer { ReleaseDC(NULL, hdc); };

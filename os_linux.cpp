@@ -185,7 +185,7 @@ bool list_all_fonts(List<ccstr> *out) {
     return true;
 }
 
-Font_Data* load_font_data_by_name(ccstr name) {
+Font_Data* load_font_data_by_name(ccstr name, bool dont_check_name) {
     auto config = FcInitLoadConfigAndFonts();
     if (!config) return NULL;
 

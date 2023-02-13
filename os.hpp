@@ -459,7 +459,9 @@ struct Font_Data {
 };
 
 Font_Data* load_system_ui_font();
-Font_Data* load_font_data_by_name(ccstr name);
+// set dont_check_name to true when we're fairly sure the font exists
+// such as when it's a name returned by fontconfig
+Font_Data* load_font_data_by_name(ccstr name, bool dont_check_name);
 
 ccstr _cp_dirname(ccstr path);
 ccstr cp_dirname(ccstr path);

@@ -241,7 +241,7 @@ Font_Data *load_system_ui_font() {
     return load_font_data_from_ctfont((__bridge CTFontRef)font);
 }
 
-Font_Data *load_font_data_by_name(ccstr name) {
+Font_Data *load_font_data_by_name(ccstr name, bool dont_check_name) {
     auto cf_font_name = CFStringCreateWithCString(NULL, name, kCFStringEncodingUTF8);
 
     auto ctfont = CTFontCreateWithName(cf_font_name, 12, NULL);
@@ -249,8 +249,8 @@ Font_Data *load_font_data_by_name(ccstr name) {
 
     // CTFontCreateWithName will use a fallback if it couldn't find the font,
     // so check that it actually found the right font
-    {
-        auto ctname = (CFStringRef)CTFontCopyAttribute(ctfont, kCTFontFamilyNameAttribute);
+    if (!dont_check_name) {
+        auto ctname = (CFStringRef)CTFontCopyAttribute(ctfont, kCTFontNameAttribute);
         if (!ctname) return NULL;
         defer { CFRelease(ctname); };
         if (!streq(cfstring_to_ccstr(ctname), name)) return NULL;

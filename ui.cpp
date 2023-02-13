@@ -864,7 +864,7 @@ bool UI::init() {
         {
             ccstr candidates[] = { "SF Mono", "Menlo", "Monaco", "Consolas", "Liberation Mono" };
             For (&candidates) {
-                base_font = acquire_font(it);
+                base_font = acquire_font(it, false);
                 if (base_font) break;
             }
         }
@@ -876,7 +876,7 @@ bool UI::init() {
             // base_ui_font = acquire_system_ui_font();
             ccstr candidates[] = { "Lucida Grande", "Segoe UI", "Helvetica Neue" };
             For (&candidates) {
-                base_ui_font = acquire_font(it);
+                base_ui_font = acquire_font(it, false);
                 if (base_ui_font) break;
             }
         }
@@ -8438,7 +8438,7 @@ bool UI::test_hover(boxf area, int id, ImGuiMouseCursor cursor) {
     return hover.ready;
 }
 
-Font* UI::acquire_font(ccstr name) {
+Font* UI::acquire_font(ccstr name, bool dont_check) {
     bool found = false;
     auto font = font_cache.get(name, &found);
     if (found) return font;
@@ -8447,7 +8447,7 @@ Font* UI::acquire_font(ccstr name) {
     Frame frame;
 
     font = alloc_object(Font);
-    if (!font->init(name, CODE_FONT_SIZE)) {
+    if (!font->init(name, CODE_FONT_SIZE, dont_check)) {
         frame.restore();
         // error("unable to acquire font: %s", name);
         font = NULL;
@@ -8497,14 +8497,14 @@ Font* UI::find_font_for_grapheme(List<uchar> *grapheme) {
     if (streq(name, "LastResort")) {
         bool found = false;
         For (all_font_names) {
-            auto font = acquire_font(it);
+            auto font = acquire_font(it, false);
             if (font->can_render_chars(grapheme))
                 return font;
         }
         return NULL;
     }
 
-    auto font = acquire_font(name);
+    auto font = acquire_font(name, true);
     if (!font) return NULL;
     if (!font->can_render_chars(grapheme)) return NULL;
     return font;
@@ -8545,8 +8545,8 @@ bool Font::init(ccstr font_name, u32 font_size, Font_Data *fontdata) {
     return true;
 }
 
-bool Font::init(ccstr font_name, u32 font_size) {
-    auto data = load_font_data_by_name(font_name);
+bool Font::init(ccstr font_name, u32 font_size, bool dont_check) {
+    auto data = load_font_data_by_name(font_name, dont_check);
     if (!data) return false;
 
     return init(font_name, font_size, data);
@@ -8561,7 +8561,7 @@ void Font::cleanup() {
 
 bool Font::can_render_chars(List<uchar> *chars) {
     For (chars)
-        if (stbtt_FindGlyphIndex(&stbfont, it) == 0)
+        if (!stbtt_FindGlyphIndex(&stbfont, it))
             return false;
     return true;
 }

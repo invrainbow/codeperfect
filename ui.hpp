@@ -176,7 +176,7 @@ struct Font {
     ccstr name;
     ccstr filepath;
 
-    bool init(ccstr font_name, u32 font_size);
+    bool init(ccstr font_name, u32 font_size, bool dont_check_name);
     bool init(ccstr font_name, u32 font_size, Font_Data *data);
     void cleanup();
     bool can_render_chars(List<uchar> *chars);
@@ -246,7 +246,7 @@ struct UI {
     ccstr var_value_as_string(Dlv_Var *var);
     void draw_debugger_var(Draw_Debugger_Var_Args *args);
 
-    Font* acquire_font(ccstr name);
+    Font* acquire_font(ccstr name, bool dont_check);
     Font* acquire_system_ui_font();
     Font* find_font_for_grapheme(List<uchar> *grapheme);
 
