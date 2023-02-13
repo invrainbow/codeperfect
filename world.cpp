@@ -1611,6 +1611,13 @@ Command_Info command_info_table[_CMD_COUNT_];
 
 bool is_command_enabled(Command cmd) {
     switch (cmd) {
+    case CMD_CLOSE_ALL_EDITORS: {
+        if (world.panes.len > 1) return true;
+        auto pane = get_current_pane();
+        if (!pane) return false;
+        return pane->editors.len;
+    }
+
     case CMD_CLOSE_EDITOR: {
         auto pane = get_current_pane();
         if (!pane) return false;
@@ -2401,6 +2408,32 @@ void handle_command(Command cmd, bool from_menu) {
     case CMD_SAVE_ALL:
         save_all_unsaved_files();
         break;
+
+    case CMD_CLOSE_ALL_EDITORS: {
+        if (world.use_nvim) send_nvim_keys("<Esc>");
+
+        auto &panes = world.panes;
+        while (true) {
+            auto pane = panes.last();
+            while (pane->editors.len) {
+                auto editor = pane->editors.last();
+                if (!world.dont_prompt_on_close_unsaved_tab)
+                    if (!editor->ask_user_about_unsaved_changes())
+                        goto getout;
+                editor->cleanup();
+                pane->editors.len--;
+            }
+
+            if (panes.len == 1) break;
+
+            pane->cleanup();
+            panes.len--;
+            if (world.current_pane >= panes.len)
+                activate_pane_by_index(panes.len - 1);
+        }
+    getout:
+        break;
+    }
 
     case CMD_CLOSE_EDITOR: {
         auto pane = get_current_pane();

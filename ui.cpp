@@ -2380,6 +2380,7 @@ void UI::draw_everything() {
             menu_command(CMD_SAVE_FILE);
             menu_command(CMD_SAVE_ALL);
             menu_command(CMD_CLOSE_EDITOR);
+            menu_command(CMD_CLOSE_ALL_EDITORS);
             im::Separator();
             menu_command(CMD_EXIT);
             im::EndMenu();
