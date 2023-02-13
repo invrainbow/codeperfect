@@ -2094,6 +2094,61 @@ void Go_Indexer::iterate_over_scope_ops(Ast_Node *root, fn<bool(Go_Scope_Op*)> c
             }
             break;
         }
+
+        case TS_METHOD_SPEC:
+        case TS_FIELD_DECLARATION: {
+            auto process_field = [&](Godecl *field) -> bool {
+                if (!field->name) return true;
+
+                // add an open scope just for the field
+                {
+                    Open_Scope os;
+                    os.depth = depth;
+                    os.close_pos = field->name_end;
+                    open_scopes.append(&os);
+
+                    Go_Scope_Op op;
+                    op.type = GSOP_OPEN_SCOPE;
+                    op.pos = field->name_start;
+                    if (!cb(&op)) return false;
+                }
+
+                // add the field as a decl
+                {
+                    Go_Scope_Op op;
+                    op.type = GSOP_DECL;
+                    op.decl = field;
+                    op.decl_scope_depth = open_scopes.len;
+                    op.pos = field->name_start;
+                    if (!cb(&op)) return false;
+                }
+
+                // close the scope
+                {
+                    auto it = open_scopes.last();
+                    Go_Scope_Op op;
+                    op.type = GSOP_CLOSE_SCOPE;
+                    op.pos = it->close_pos;
+                    if (!cb(&op)) return false;
+                    open_scopes.len--;
+                }
+
+                return true;
+            };
+
+            if (node_type == TS_METHOD_SPEC) {
+                auto field = read_method_spec_into_field(node, 0);
+                if (!field) break;
+                if (!process_field(field)) return WALK_ABORT;
+            } else {
+                auto specs = read_struct_field_into_specs(node, 0, false);
+                if (!specs) break;
+                For (specs)
+                    if (!process_field(it.field))
+                        return WALK_ABORT;
+            }
+            break;
+        }
         }
 
         return WALK_CONTINUE;
@@ -2455,118 +2510,95 @@ ccstr Go_Indexer::get_package_path(ccstr import_path) {
 Goresult *Go_Indexer::find_decl_of_id(ccstr id_to_find, cur2 id_pos, Go_Ctx *ctx, Go_Import **single_import) {
     if (!ctx) return NULL;
 
-    auto pkg = find_up_to_date_package(ctx->import_path);
-    if (pkg) {
+    auto find_in_current_file = [&]() -> Goresult* {
+        auto pkg = find_up_to_date_package(ctx->import_path);
+        if (!pkg) return NULL;
+
         auto check = [&](Go_File *it) { return streq(it->filename, ctx->filename); };
         auto file = pkg->files->find(check);
-        if (file) {
-            // see if we're on a struct field declaration
-            For (file->decls) {
-                if (it.type != GODECL_TYPE) continue;
-                if (!(it.decl_start <= id_pos && id_pos < it.decl_end)) continue;
-                if (it.decl_start > id_pos) break;
+        if (!file) return NULL;
 
-                auto gotype = it.gotype;
+        auto scope_ops = file->scope_ops;
 
-                auto check = [&](auto field) -> Goresult* {
-                    if (!field->field_is_embedded)
-                        if (streq(field->name, id_to_find))
-                            if (field->name_start <= id_pos && id_pos < field->name_end)
-                                return make_goresult(field, ctx);
-                    return NULL;
-                };
+        SCOPED_FRAME_WITH_MEM(&scoped_table_mem);
 
-                if (gotype->type == GOTYPE_STRUCT) {
-                    For (gotype->struct_specs) {
-                        auto ret = check(it.field);
-                        if (ret) return ret;
-                    }
-                } else if (gotype->type == GOTYPE_INTERFACE) {
-                    For (gotype->interface_specs) {
-                        if (it.type != GO_INTERFACE_SPEC_METHOD) continue;
-                        auto ret = check(it.field);
-                        if (ret) return ret;
-                    }
-                }
-            }
-
-            auto scope_ops = file->scope_ops;
-
-            SCOPED_FRAME_WITH_MEM(&scoped_table_mem);
-
-            Scoped_Table<Godecl*> table;
-            {
-                SCOPED_MEM(&scoped_table_mem);
-                table.init();
-            }
-            defer { table.cleanup(); };
-
-            For (scope_ops) {
-                if (it.pos > id_pos) break;
-
-                bool get_out = false;
-                switch (it.type) {
-                case GSOP_OPEN_SCOPE:
-                    table.push_scope();
-                    break;
-                case GSOP_CLOSE_SCOPE:
-                    table.pop_scope();
-                    break;
-                case GSOP_DECL:
-                    if (!streq(it.decl->name, id_to_find)) break;
-                    if (it.decl->decl_start <= id_pos && id_pos < it.decl->decl_end)
-                        if (it.decl_scope_depth == table.frames.len)
-                            if (!(it.decl->name_start <= id_pos && id_pos < it.decl->name_end))
-                                break;
-                    table.set(it.decl->name, it.decl);
-
-                    // ENG-133: handle the specific case where pos is on the name of a func decl
-                    // because if we don't it might conflict with the generic type params
-                    if (it.decl->type == GODECL_FUNC)
-                        if (it.decl->name_start <= id_pos && id_pos < it.decl->name_end)
-                            get_out = true;
-
-                    break;
-                }
-
-                if (get_out) break;
-            }
-
-            auto decl = table.get(id_to_find);
-            if (decl) {
-                if (decl->type != GODECL_METHOD_RECEIVER_TYPE_PARAM)
-                    return make_goresult(decl, ctx);
-
-                auto res = resolve_type_to_decl(decl->base, ctx);
-                if (!res) return NULL;
-
-                if (res->decl->type != GODECL_TYPE) return NULL;
-
-                auto type_params = res->decl->type_params;
-                if (!type_params) return NULL;
-                if (decl->type_param_index >= type_params->len) return NULL;
-
-                return res->wrap(type_params->at(decl->type_param_index).copy());
-            }
-
-            For (file->imports) {
-                if (it.package_name_type == GPN_DOT) {
-                    auto ret = find_decl_in_package(id_to_find, it.import_path);
-                    if (ret) return ret;
-                    continue;
-                }
-
-                auto package_name = get_import_package_name(&it);
-                if (!package_name) continue;
-                if (!streq(package_name, id_to_find)) continue;
-
-                if (single_import) *single_import = &it;
-                return make_goresult(it.decl, ctx);
-            }
+        Scoped_Table<Godecl*> table;
+        {
+            SCOPED_MEM(&scoped_table_mem);
+            table.init();
         }
-    }
+        defer { table.cleanup(); };
 
-    auto ret = find_decl_in_package(id_to_find, ctx->import_path);
+        For (scope_ops) {
+            if (it.pos > id_pos) break;
+
+            bool get_out = false;
+            switch (it.type) {
+            case GSOP_OPEN_SCOPE:
+                table.push_scope();
+                break;
+            case GSOP_CLOSE_SCOPE:
+                table.pop_scope();
+                break;
+            case GSOP_DECL:
+                if (!streq(it.decl->name, id_to_find)) break;
+                if (it.decl->decl_start <= id_pos && id_pos < it.decl->decl_end)
+                    if (it.decl_scope_depth == table.frames.len)
+                        if (!(it.decl->name_start <= id_pos && id_pos < it.decl->name_end))
+                            break;
+                table.set(it.decl->name, it.decl);
+
+                // ENG-133: handle the specific case where pos is on the name of a func decl
+                // because if we don't it might conflict with the generic type params
+                if (it.decl->type == GODECL_FUNC)
+                    if (it.decl->name_start <= id_pos && id_pos < it.decl->name_end)
+                        get_out = true;
+
+                break;
+            }
+
+            if (get_out) break;
+        }
+
+        auto decl = table.get(id_to_find);
+        if (decl) {
+            if (decl->type != GODECL_METHOD_RECEIVER_TYPE_PARAM)
+                return make_goresult(decl, ctx);
+
+            auto res = resolve_type_to_decl(decl->base, ctx);
+            if (!res) return NULL;
+
+            if (res->decl->type != GODECL_TYPE) return NULL;
+
+            auto type_params = res->decl->type_params;
+            if (!type_params) return NULL;
+            if (decl->type_param_index >= type_params->len) return NULL;
+
+            return res->wrap(type_params->at(decl->type_param_index).copy());
+        }
+
+        For (file->imports) {
+            if (it.package_name_type == GPN_DOT) {
+                auto ret = find_decl_in_package(id_to_find, it.import_path);
+                if (ret) return ret;
+                continue;
+            }
+
+            auto package_name = get_import_package_name(&it);
+            if (!package_name) continue;
+            if (!streq(package_name, id_to_find)) continue;
+
+            if (single_import) *single_import = &it;
+            return make_goresult(it.decl, ctx);
+        }
+
+        return NULL;
+    };
+
+    auto ret = find_in_current_file();
+    if (ret) return ret;
+
+    ret = find_decl_in_package(id_to_find, ctx->import_path);
     if (ret) return ret;
 
     ret = find_decl_in_package(id_to_find, "@builtin");
@@ -6327,6 +6359,101 @@ bool Go_Indexer::node_func_to_gotype_sig(Ast_Node *params, Ast_Node *result, Go_
     return true;
 }
 
+Godecl *Go_Indexer::read_method_spec_into_field(Ast_Node *node, int field_order) {
+    auto name_node = node->field(TSF_NAME);
+    if (!name_node) return NULL;
+
+    auto field = alloc_object(Godecl);
+    field->type = GODECL_FIELD;
+    field->name = name_node->string();
+    field->gotype = new_gotype(GOTYPE_FUNC);
+    field->decl_start = node->start();
+    field->decl_end =  node->end();
+    field->spec_start = node->start();
+    field->name_start = name_node->start();
+    field->name_end = name_node->end();
+    field->field_order = field_order;
+
+    node_func_to_gotype_sig(
+        node->field(TSF_PARAMETERS),
+        node->field(TSF_RESULT),
+        &field->gotype->func_sig
+    );
+    return field;
+}
+
+List<Go_Struct_Spec> *Go_Indexer::read_struct_field_into_specs(Ast_Node *field_node, int starting_field_order, bool is_toplevel) {
+    auto tag_node = field_node->field(TSF_TAG);
+    auto type_node = field_node->field(TSF_TYPE);
+    if (isastnull(type_node)) return NULL;
+
+    auto field_type = node_to_gotype(type_node);
+    if (!field_type) return NULL;
+
+    auto ret = alloc_list<Go_Struct_Spec>();
+
+    if (!field_node->child()->eq(type_node)) {
+        FOR_NODE_CHILDREN (field_node) {
+            if (it->eq(type_node)) break;
+
+            auto field = alloc_object(Godecl);
+            field->type = GODECL_FIELD;
+            field->is_toplevel = is_toplevel;
+            field->gotype = field_type;
+            field->name = it->string();
+            field->name_start = it->start();
+            field->name_end = it->end();
+            field->spec_start = field_node->start();
+            field->decl_start = field_node->start();
+            field->decl_end = field_node->end();
+            field->field_order = starting_field_order + ret->len;
+
+            auto spec = ret->append();
+            spec->field = field;
+            if (!isastnull(tag_node))
+                spec->tag = tag_node->string();
+        }
+    } else {
+        auto unptr_type = unpointer_type(field_type);
+        if (!unptr_type) return NULL;
+
+        ccstr field_name = NULL;
+
+        if (unptr_type->type == GOTYPE_GENERIC)
+            unptr_type = unptr_type->generic_base;
+
+        switch (unptr_type->type) {
+        case GOTYPE_SEL:
+            field_name = unptr_type->sel_sel;
+            break;
+        case GOTYPE_ID:
+            field_name = unptr_type->id_name;
+            break;
+        }
+
+        if (!field_name) return NULL;
+
+        auto field = alloc_object(Godecl);
+        field->type = GODECL_FIELD;
+        field->is_toplevel = is_toplevel;
+        field->field_is_embedded = true;
+        field->gotype = field_type;
+        field->spec_start = type_node->start();
+        field->decl_start = type_node->start();
+        field->decl_end = type_node->end();
+        field->name = field_name;
+        field->name_start = type_node->start();
+        field->field_order = starting_field_order + ret->len;
+
+        auto spec = ret->append();
+        spec->field = field;
+        if (!isastnull(tag_node))
+            spec->tag = tag_node->string();
+    }
+
+    return ret;
+}
+
 Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
     if (isastnull(node)) return NULL;
 
@@ -6452,104 +6579,15 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
     case TS_STRUCT_TYPE: {
         auto fieldlist_node = node->child();
         if (isastnull(fieldlist_node)) break;
+
         ret = new_gotype(GOTYPE_STRUCT);
-
-        s32 num_children = 0;
-
-        FOR_NODE_CHILDREN (fieldlist_node) {
-            auto field_node = it;
-            auto type_node = field_node->field(TSF_TYPE);
-
-            u32 total = 0;
-            FOR_NODE_CHILDREN (field_node) {
-                if (it->eq(type_node)) break;
-                total++;
-            }
-            if (!total) total++;
-
-            num_children += total;
-        }
-
-        ret->struct_specs = alloc_list<Go_Struct_Spec>(num_children);
+        ret->struct_specs = alloc_list<Go_Struct_Spec>();
 
         FOR_NODE_CHILDREN (fieldlist_node) {
-            auto field_node = it;
-
-            auto tag_node = field_node->field(TSF_TAG);
-            auto type_node = field_node->field(TSF_TYPE);
-            if (isastnull(type_node)) continue;
-
-            auto field_type = node_to_gotype(type_node);
-            if (!field_type) continue;
-
-            if (!field_node->child()->eq(type_node)) {
-                FOR_NODE_CHILDREN (field_node) {
-                    if (it->eq(type_node)) break;
-
-                    auto field = alloc_object(Godecl);
-                    field->type = GODECL_FIELD;
-                    field->is_toplevel = toplevel;
-                    field->gotype = field_type;
-                    field->name = it->string();
-                    field->name_start = it->start();
-                    field->name_end = it->end();
-                    field->spec_start = field_node->start();
-                    field->decl_start = field_node->start();
-                    field->decl_end = field_node->end();
-                    field->field_order = ret->struct_specs->len;
-
-                    auto spec = ret->struct_specs->append();
-                    spec->field = field;
-                    if (!isastnull(tag_node))
-                        spec->tag = tag_node->string();
-                }
-            } else {
-                auto unptr_type = unpointer_type(field_type);
-                if (!unptr_type) break;
-
-                ccstr field_name = NULL;
-
-                if (unptr_type->type == GOTYPE_GENERIC)
-                    unptr_type = unptr_type->generic_base;
-
-                switch (unptr_type->type) {
-                case GOTYPE_SEL:
-                    field_name = unptr_type->sel_sel;
-                    break;
-                case GOTYPE_ID:
-                    field_name = unptr_type->id_name;
-                    break;
-                }
-
-                if (!field_name) continue;
-
-                auto field = alloc_object(Godecl);
-                field->type = GODECL_FIELD;
-                field->is_toplevel = toplevel;
-                field->field_is_embedded = true;
-                field->gotype = field_type;
-                field->spec_start = type_node->start();
-                field->decl_start = type_node->start();
-                field->decl_end = type_node->end();
-                field->name = field_name;
-                field->name_start = type_node->start();
-                field->field_order = ret->struct_specs->len;
-
-                auto spec = ret->struct_specs->append();
-                spec->field = field;
-                if (!isastnull(tag_node))
-                    spec->tag = tag_node->string();
-            }
+            auto specs = read_struct_field_into_specs(it, ret->struct_specs->len, toplevel);
+            if (!specs) continue;
+            ret->struct_specs->concat(specs);
         }
-        break;
-    }
-
-    case TS_CHANNEL_TYPE: {
-        auto base = node_to_gotype(node->field(TSF_VALUE));
-        if (!base) break;
-
-        ret = new_gotype(GOTYPE_CHAN);
-        ret->chan_base = base;
         break;
     }
 
@@ -6562,28 +6600,10 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
         FOR_NODE_CHILDREN (node) {
             defer { i++; };
 
-            Godecl *field = NULL;
-
             switch (it->type()) {
             case TS_METHOD_SPEC: {
-                auto name_node = it->field(TSF_NAME);
-
-                field = alloc_object(Godecl);
-                field->type = GODECL_FIELD;
-                field->name = name_node->string();
-                field->gotype = new_gotype(GOTYPE_FUNC);
-                field->decl_start = it->start();
-                field->decl_end =  it->end();
-                field->spec_start = it->start();
-                field->name_start = name_node->start();
-                field->name_end = name_node->end();
-                field->field_order = i;
-
-                node_func_to_gotype_sig(
-                    it->field(TSF_PARAMETERS),
-                    it->field(TSF_RESULT),
-                    &field->gotype->func_sig
-                );
+                auto field = read_method_spec_into_field(it, ret->interface_specs->len);
+                if (!field) break;
 
                 auto spec = ret->interface_specs->append();
                 spec->type = GO_INTERFACE_SPEC_METHOD;
@@ -6601,7 +6621,7 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
                 auto gotype = node_to_gotype(node);
                 if (!gotype) break;
 
-                field = alloc_object(Godecl);
+                auto field = alloc_object(Godecl);
                 field->type = GODECL_FIELD;
                 field->name = NULL;
                 field->field_is_embedded = true;
@@ -6621,6 +6641,15 @@ Gotype *Go_Indexer::node_to_gotype(Ast_Node *node, bool toplevel) {
             }
             }
         }
+        break;
+    }
+
+    case TS_CHANNEL_TYPE: {
+        auto base = node_to_gotype(node->field(TSF_VALUE));
+        if (!base) break;
+
+        ret = new_gotype(GOTYPE_CHAN);
+        ret->chan_base = base;
         break;
     }
 

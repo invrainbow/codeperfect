@@ -1328,6 +1328,9 @@ struct Go_Indexer {
     Generate_Func_Sig_Result* generate_function_signature(ccstr filepath, cur2 pos);
     Generate_Struct_Tags_Result* generate_struct_tags(ccstr filepath, cur2 pos, Generate_Struct_Tags_Op op, ccstr lang, Case_Style case_style);
     bool index_has_module_containing(ccstr path);
+
+    Godecl *read_method_spec_into_field(Ast_Node *node, int field_order);
+    List<Go_Struct_Spec> *read_struct_field_into_specs(Ast_Node *field_node, int starting_field_order, bool is_toplevel);
 };
 
 Parsed_File *parse_file(ccstr filepath, Parse_Lang lang, bool use_latest = false);
