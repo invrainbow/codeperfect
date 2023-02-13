@@ -8642,9 +8642,8 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
         auto res = _evaluate_type(make_goresult(gotype->lazy_call_base, ctx), &decl);
         if (outdecl) *outdecl = decl;
         if (!res) return NULL;
-        if (!decl) return NULL;
 
-        if (decl->type == GODECL_TYPE) {
+        if (decl && decl->type == GODECL_TYPE) {
             // we have a Type(x) or pkg.Type(x)
             // right now it thinks Type/pkg.Type are lazy_id/lazy_sel
             // convert to a regular id/sel, since Type is the type itself
@@ -8678,7 +8677,7 @@ Goresult *Go_Indexer::_evaluate_type(Gotype *gotype, Go_Ctx *ctx, Godecl** outde
         if (!result) return NULL;
 
         // if the result contains type parameters, get out
-        if ((decl->type == GODECL_FUNC || decl->type == GODECL_TYPE) && decl->type_params) {
+        if (decl && (decl->type == GODECL_FUNC || decl->type == GODECL_TYPE) && decl->type_params) {
             For (result) {
                 bool bad = false;
                 walk_gotype_and_replace(it.gotype, [&](Gotype *it) -> Gotype* {
