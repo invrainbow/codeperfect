@@ -57,3 +57,4 @@ struct Jblow_Tests {
     void move_cursor(cur2 cur);
 };
 
+List<ccstr> *list_go_files(ccstr subfolder);

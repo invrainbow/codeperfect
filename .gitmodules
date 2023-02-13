@@ -32,3 +32,9 @@
 [submodule "jblow_tests/autocomplete/controller-idioms"]
 	path = jblow_tests/autocomplete/controller-idioms
 	url = https://github.com/authzed/controller-idioms
+[submodule "jblow_tests/jump_to_def/hugo"]
+	path = jblow_tests/jump_to_def/hugo
+	url = ssh://git@github.com/gohugoio/hugo
+[submodule "jblow_tests/jump_to_def/controller-idioms"]
+	path = jblow_tests/jump_to_def/controller-idioms
+	url = ssh://git@github.com/authzed/controller-idioms

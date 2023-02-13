@@ -148,6 +148,10 @@ void Jblow_Tests::init(ccstr _test_name) {
         options.enable_vim_mode = false;
     }
 
+    else if (streq(test_name, "jump_to_def")) {
+        options.enable_vim_mode = false;
+    }
+
     h = create_thread([](void* p) { ((Jblow_Tests*)p)->run(); }, this);
     if (!h) cp_panic("unable to create test thread");
 }
@@ -177,6 +181,35 @@ void Jblow_Tests::move_cursor(cur2 cur) {
     });
 
     WAIT { return editor->cur == cur; };
+}
+
+List<ccstr> *list_go_files(ccstr subfolder) {
+    auto go_files = alloc_list<ccstr>();
+
+    auto queue = alloc_list<ccstr>();
+    queue->append(subfolder);
+
+    auto cwd = cp_getcwd();
+
+    while (queue->len) {
+        auto path = *queue->last();
+        queue->len--;
+
+        auto pre = "jblow_tests/autocomplete";
+        auto fullpath = streq(path, "") ? pre : path_join(pre, path);
+
+        list_directory(fullpath, [&](auto ent) {
+            if (ent->type == DIRENT_FILE) {
+                if (str_ends_with(ent->name, ".go"))
+                    if (is_file_included_in_build(path_join(cwd, path_join(fullpath, ent->name))))
+                        go_files->append(path_join(path, ent->name));
+            } else {
+                queue->append(path_join(path, ent->name));
+            }
+            return true;
+        });
+    }
+    return go_files;
 }
 
 void Jblow_Tests::run() {
@@ -359,35 +392,6 @@ void Jblow_Tests::run() {
     else if (streq(test_name, "autocomplete")) {
         wait_for_indexer_ready();
 
-        auto list_go_files = [&](ccstr subfolder) {
-            auto go_files = alloc_list<ccstr>();
-
-            auto queue = alloc_list<ccstr>();
-            queue->append(subfolder);
-
-            auto cwd = cp_getcwd();
-
-            while (queue->len) {
-                auto path = *queue->last();
-                queue->len--;
-
-                auto pre = "jblow_tests/autocomplete";
-                auto fullpath = streq(path, "") ? pre : path_join(pre, path);
-
-                list_directory(fullpath, [&](auto ent) {
-                    if (ent->type == DIRENT_FILE) {
-                        if (str_ends_with(ent->name, ".go"))
-                            if (is_file_included_in_build(path_join(cwd, path_join(fullpath, ent->name))))
-                                go_files->append(path_join(path, ent->name));
-                    } else {
-                        queue->append(path_join(path, ent->name));
-                    }
-                    return true;
-                });
-            }
-            return go_files;
-        };
-
         auto ci_files = list_go_files("controller-idioms");
         if (!ci_files->len)
             cp_panic("no go files found");
@@ -510,13 +514,147 @@ void Jblow_Tests::run() {
             WAIT { return get_current_editor() == NULL; };
         };
 
-        /*
         // there are far fewer ci files, just go thru all of them
         for (int seed = 0; seed < 4; seed++) {
             mt_seed32(seed);
             For (ci_files) process_file(it, 10);
         }
-        */
+
+        // sample hugo files randomly
+        for (int seed = 0; seed < 4; seed++) {
+            mt_seed32(seed);
+            for (int i = 0; i < 64; i++)
+                process_file(random_choice(hugo_go_files), 5);
+        }
+    }
+
+    else if (streq(test_name, "jump_to_def")) {
+        wait_for_indexer_ready();
+
+        auto ci_files = list_go_files("controller-idioms");
+        if (!ci_files->len)
+            cp_panic("no go files found");
+
+        auto hugo_go_files = list_go_files("hugo");
+        if (!hugo_go_files->len)
+            cp_panic("no go files found");
+
+        auto process_file = [&](ccstr filename, int samples) {
+            auto editor = open_editor(filename);
+            auto buf = editor->buf;
+
+            WAIT { return buf->tree != NULL; };
+
+            auto iter = alloc_object(Parser_It);
+            iter->init(buf);
+            auto root = new_ast_node(ts_tree_root_node(buf->tree), iter);
+
+            String_Set bad; bad.init();
+            {
+                ccstr bad_words[] = {
+                    "ComplexType", "FloatType", "IntegerType", "Type",
+                    "Type1", "any", "append", "bool", "byte", "cap",
+                    "close", "comparable", "complex", "complex128",
+                    "complex64", "copy", "delete", "error", "false",
+                    "float32", "float64", "imag", "int", "int16", "int32",
+                    "int64", "int8", "iota", "len", "make", "new", "nil",
+                    "panic", "print", "println", "real", "recover",
+                    "rune", "string", "true", "uint", "uint16", "uint32",
+                    "uint64", "uint8", "uintptr"
+                };
+                For (&bad_words) bad.add(it);
+            }
+
+            struct Target {
+                cur2 pos;
+                ccstr name;
+            };
+
+            auto targets = alloc_list<Target>();
+
+            walk_ast_node(root, true, [&](auto it, auto, auto) {
+                switch (it->type()) {
+                case TS_IDENTIFIER:
+                case TS_FIELD_IDENTIFIER:
+                case TS_PACKAGE_IDENTIFIER:
+                case TS_TYPE_IDENTIFIER: {
+                    auto name = it->string();
+                    if (name[0] == '\0' || name[1] == '\0') break;
+                    if (bad.has(name)) break;
+
+                    auto curr = it->parent();
+                    if (curr && curr->type() == TS_LITERAL_ELEMENT) {
+                        curr = curr->parent();
+                        if (curr && curr->type() == TS_KEYED_ELEMENT) {
+                            curr = curr->parent();
+                            if (curr && curr->type() == TS_LITERAL_VALUE)
+                                break;
+                        }
+                    }
+
+                    Target target;
+                    target.pos = it->start();
+                    target.name = it->string();
+                    targets->append(&target);
+
+                    return WALK_SKIP_CHILDREN;
+                }
+                }
+                return WALK_CONTINUE;
+            });
+
+            if (targets->len) {
+                auto process_target = [&](cur2 pos, ccstr name) {
+                    WAIT { return world.indexer.status == IND_READY; };
+
+                    cur2 cur = new_cur2(pos.x+1, pos.y);
+                    move_cursor(cur);
+
+                    press_key(CP_KEY_G, CP_MOD_PRIMARY);
+
+                    // wait for us to move
+                    WAIT {
+                        auto curr = get_current_editor();
+                        if (curr->id != editor->id) return true;
+                        if (curr->cur != cur) return true;
+
+                        return false;
+                    };
+
+                    // if we jumped to a new file, close the editor and
+                    // ensure we're back in the original editor
+                    auto curr = get_current_editor();
+                    if (curr->id != editor->id) {
+                        press_key(CP_KEY_W, CP_MOD_PRIMARY);
+
+                        WAIT {
+                            auto curr = get_current_editor();
+                            return curr && curr->id == editor->id;
+                        };
+                    }
+                };
+
+                if (samples < targets->len) {
+                    for (int j = 0; j < samples; j++) {
+                        auto &it = random_choice(targets);
+                        process_target(it.pos, it.name);
+                    }
+                } else {
+                    For (targets)
+                        process_target(it.pos, it.name);
+                }
+            }
+
+            // close editor
+            press_key(CP_KEY_W, CP_MOD_PRIMARY);
+            WAIT { return get_current_editor() == NULL; };
+        };
+
+        // there are far fewer ci files, just go thru all of them
+        for (int seed = 0; seed < 4; seed++) {
+            mt_seed32(seed);
+            For (ci_files) process_file(it, 10);
+        }
 
         // sample hugo files randomly
         for (int seed = 0; seed < 4; seed++) {
