@@ -1202,6 +1202,7 @@ struct Go_Indexer {
     Lock lock;
     Indexer_Status status;
     int reacquires;
+    bool dont_resolve_builtin;
 
     // ---
 

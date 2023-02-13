@@ -381,131 +381,152 @@ void Editor::perform_autocomplete(AC_Result *result) {
         }
 
         case PFC_CHECK: {
-                auto is_multi = ac.operand_gotype->type == GOTYPE_MULTI;
-                if (!(is_multi || ac.operand_is_error_type)) break;
+            auto is_multi = ac.operand_gotype->type == GOTYPE_MULTI;
+            if (!(is_multi || ac.operand_is_error_type)) break;
 
-                int error_found_at = -1;
-                auto multi_types = ac.operand_gotype->multi_types;
+            int error_found_at = -1;
+            auto multi_types = ac.operand_gotype->multi_types;
 
-                if (is_multi) {
-                    Fori (multi_types) {
-                        if (it->type == GOTYPE_ID && streq(it->id_name, "error")) {
-                            error_found_at = i;
-                            break;
-                        }
+            if (is_multi) {
+                Fori (multi_types) {
+                    if (it->type == GOTYPE_ID && streq(it->id_name, "error")) {
+                        error_found_at = i;
+                        break;
                     }
-
-                    if (error_found_at == -1) break;
                 }
 
-                initialize_everything();
-
-                if (is_multi) {
-                    int varcount = 0;
-
-                    Fori (multi_types) {
-                        if (i == error_found_at) {
-                            insert_text("err");
-                        } else {
-                            if (!varcount)
-                                insert_text("val");
-                            else
-                                insert_text("val%d", varcount);
-                            varcount++;
-                        }
-
-                        if (i + 1 < multi_types->len)
-                            insert_text(",");
-                        insert_text(" ");
-                    }
-
-                    // TODO: make this smarter, like if we're already using err, either
-                    // make it a = instead of :=, or use a different name.
-                    insert_text(":= %s", operand_text);
-                    save_autoindent();
-                    insert_newline();
-                    insert_text("if err != nil {");
-                    insert_newline(1);
-                } else {
-                    insert_text("if err := %s; err != nil {", operand_text);
-                    save_autoindent();
-                    insert_newline(1);
-                }
-
-                {
-                    bool ok = false;
-
-                    do {
-                        // get gotype of current function
-                        auto functype = world.indexer.get_closest_function(filepath, cur);
-                        if (!functype) break;
-
-                        auto result = functype->func_sig.result;
-                        if (!result  || !result->len) {
-                            insert_text("return");
-                            ok = true;
-                            break;
-                        }
-
-                        bool error_found = false;
-                        auto &ind = world.indexer;
-
-                        auto get_zero_value_of_gotype = [&](Gotype *gotype) -> ccstr {
-                            if (!gotype) return NULL;
-
-                            Go_Ctx ctx; ptr0(&ctx);
-                            ctx.import_path = ind.filepath_to_import_path(cp_dirname(filepath));
-                            ctx.filename = cp_basename(filepath);
-
-                            auto res = ind.evaluate_type(gotype, &ctx);
-                            if (!res) return NULL;
-
-                            auto rres = ind.resolve_type(res->gotype, res->ctx);
-                            if (!rres) return NULL;
-
-                            gotype = rres->gotype;
-
-                            // TODO: check for aliases of error
-                            if (gotype->type == GOTYPE_ID) {
-                                ccstr int_types[] = {
-                                    "byte", "complex128", "complex64", "float32", "float64",
-                                    "int", "int16", "int32", "int64", "int8",
-                                    "rune", "uint", "uint16", "uint32", "uint64",
-                                    "uint8", "uintptr",
-                                };
-
-                                For (&int_types)
-                                    if (streq(gotype->id_name, it))
-                                        return "0";
-
-                                if (streq(gotype->id_name, "bool")) return "false";
-                                if (streq(gotype->id_name, "string")) return "\"\"";
-                                if (!error_found && streq(gotype->id_name, "error")) return "err";
-                            }
-
-                            return NULL;
-                        };
-
-                        insert_text("return ");
-
-                        Fori (result) {
-                            auto val = get_zero_value_of_gotype(it.gotype);
-                            if (i)
-                                insert_text(", ");
-                            insert_text(!val ? "nil" : val);
-                        }
-
-                        ok = true;
-                    } while (0);
-
-                    if (!ok) insert_text("// sorry, couldn't deduce return type");
-                }
-
-                insert_newline(0);
-                insert_text("}");
-                insert_newline(0);
+                if (error_found_at == -1) break;
             }
+
+            initialize_everything();
+
+            if (is_multi) {
+                int varcount = 0;
+
+                Fori (multi_types) {
+                    if (i == error_found_at) {
+                        insert_text("err");
+                    } else {
+                        if (!varcount)
+                            insert_text("val");
+                        else
+                            insert_text("val%d", varcount);
+                        varcount++;
+                    }
+
+                    if (i + 1 < multi_types->len)
+                        insert_text(",");
+                    insert_text(" ");
+                }
+
+                // TODO: make this smarter, like if we're already using err, either
+                // make it a = instead of :=, or use a different name.
+                insert_text(":= %s", operand_text);
+                save_autoindent();
+                insert_newline();
+                insert_text("if err != nil {");
+                insert_newline(1);
+            } else {
+                insert_text("if err := %s; err != nil {", operand_text);
+                save_autoindent();
+                insert_newline(1);
+            }
+
+            {
+                bool ok = false;
+
+                do {
+                    // get gotype of current function
+                    auto functype = world.indexer.get_closest_function(filepath, cur);
+                    if (!functype) break;
+
+                    auto result = functype->func_sig.result;
+                    if (!result || !result->len) {
+                        insert_text("return");
+                        ok = true;
+                        break;
+                    }
+
+                    bool error_found = false;
+                    auto &ind = world.indexer;
+
+                    auto get_zero_value_of_gotype = [&](Gotype *gotype) -> ccstr {
+                        if (!gotype) return NULL;
+
+                        Go_Ctx ctx; ptr0(&ctx);
+                        ctx.import_path = ind.filepath_to_import_path(cp_dirname(filepath));
+                        ctx.filename = cp_basename(filepath);
+
+                        auto res = ind.evaluate_type(gotype, &ctx);
+                        if (!res) return NULL;
+
+                        Goresult *rres = NULL;
+                        {
+                            auto old = ind.dont_resolve_builtin;
+                            ind.dont_resolve_builtin = true;
+                            defer { ind.dont_resolve_builtin = old; };
+
+                            rres = ind.resolve_type(res->gotype, res->ctx);
+                        }
+                        if (!rres) return NULL;
+
+                        gotype = rres->gotype;
+
+                        if (gotype->type == GOTYPE_BUILTIN) {
+                            switch (gotype->builtin_type) {
+                            case GO_BUILTIN_COMPLEXTYPE:
+                            case GO_BUILTIN_FLOATTYPE:
+                            case GO_BUILTIN_INTEGERTYPE:
+                            case GO_BUILTIN_BYTE:
+                            case GO_BUILTIN_COMPLEX128:
+                            case GO_BUILTIN_COMPLEX64:
+                            case GO_BUILTIN_FLOAT32:
+                            case GO_BUILTIN_FLOAT64:
+                            case GO_BUILTIN_INT:
+                            case GO_BUILTIN_INT16:
+                            case GO_BUILTIN_INT32:
+                            case GO_BUILTIN_INT64:
+                            case GO_BUILTIN_INT8:
+                            case GO_BUILTIN_UINT:
+                            case GO_BUILTIN_UINT16:
+                            case GO_BUILTIN_UINT32:
+                            case GO_BUILTIN_UINT64:
+                            case GO_BUILTIN_UINT8:
+                            case GO_BUILTIN_UINTPTR:
+                                return "0";
+                            case GO_BUILTIN_STRING:
+                                return "\"\"";
+                            case GO_BUILTIN_BOOL:
+                                return "false";
+                            case GO_BUILTIN_ANY:
+                                return "nil";
+                            case GO_BUILTIN_ERROR:
+                                return "err";
+                            }
+                        }
+                        return NULL;
+                    };
+
+                    insert_text("return ");
+
+                    Fori (result) {
+                        auto val = get_zero_value_of_gotype(it.gotype);
+                        if (i)
+                            insert_text(", ");
+                        insert_text(!val ? "nil" : val);
+                    }
+
+                    ok = true;
+                } while (0);
+
+                if (!ok) insert_text("// sorry, couldn't deduce return type");
+            }
+
+            insert_newline(0);
+            insert_text("}");
+            insert_newline(0);
             break;
+        }
 
         default:
             notfound = true;

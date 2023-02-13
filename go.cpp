@@ -9044,8 +9044,8 @@ Goresult *Go_Indexer::resolve_type(Gotype *type, Go_Ctx *ctx, String_Set *seen) 
 
     switch (type->type) {
     case GOTYPE_BUILTIN: // pending decision: should we do this here?
-        if (!type->builtin_underlying_base)
-            break;
+        if (dont_resolve_builtin) break;
+        if (!type->builtin_underlying_base) break;
         return resolve_type(type->builtin_underlying_base, ctx, seen);
 
     // is this a hack? does it work?
