@@ -969,7 +969,7 @@ Jump_To_Definition_Result *get_current_definition(ccstr *filepath, bool display_
         result = world.indexer.jump_to_definition(editor->filepath, new_cur2(off, -1));
     }
 
-    if (!result || !result->decl || !result->decl->decl)
+    if (!result)
         return show_error("Couldn't find anything under your cursor.");
 
     if (filepath)
@@ -2608,7 +2608,7 @@ void handle_command(Command cmd, bool from_menu) {
 
         // TODO: this should be a "blocking" modal, like it disables activity in rest of IDE
         auto result = get_current_definition(&filepath, true);
-        if (!result) return;
+        if (!result || !result->decl) return;
         if (result->decl->decl->type == GODECL_IMPORT) {
             tell_user_error("Sorry, we're currently not yet able to rename imports.");
             return;
@@ -2808,8 +2808,7 @@ void handle_command(Command cmd, bool from_menu) {
         };
 
         auto result = get_current_definition();
-        if (!result) break;
-        if (!result->decl) break;
+        if (!result || !result->decl) break;
 
         auto decl = result->decl->decl;
         if (!decl->gotype) break;
@@ -3043,8 +3042,7 @@ void handle_command(Command cmd, bool from_menu) {
         auto &wnd = world.wnd_find_implementations;
 
         auto result = get_current_definition(NULL, true);
-        if (!result) break;
-        if (!result->decl) break;
+        if (!result || !result->decl) break;
 
         auto decl = result->decl->decl;
         if (!decl) break;
@@ -3076,8 +3074,7 @@ void handle_command(Command cmd, bool from_menu) {
         auto &wnd = world.wnd_find_interfaces;
 
         auto result = get_current_definition(NULL, true);
-        if (!result) break;
-        if (!result->decl) break;
+        if (!result || !result->decl) break;
 
         auto decl = result->decl->decl;
         if (!decl) break;
