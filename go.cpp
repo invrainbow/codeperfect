@@ -7016,6 +7016,19 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
 
                     auto decl_gotype = type_node_gotype;
 
+                    auto decl = new_result();
+                    switch (node->type()) {
+                    case TS_PARAMETER_LIST: decl->type = GODECL_PARAM; break;
+                    case TS_CONST_DECLARATION: decl->type = GODECL_CONST; break;
+                    case TS_VAR_DECLARATION: decl->type = GODECL_VAR; break;
+                    }
+                    decl->spec_start = spec->start();
+                    decl->name = it->string();
+                    decl->name_start = it->start();
+                    decl->name_end = it->end();
+                    decl->gotype = decl_gotype;
+                    save_decl(decl);
+
                     do {
                         if (node->type() != TS_PARAMETER_LIST) break;
                         if (spec->type() != TS_PARAMETER_DECLARATION) break;
@@ -7024,6 +7037,8 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
                         if (!method_decl) break;
                         if (isastnull(method_decl)) break;
                         if (method_decl->type() != TS_METHOD_DECLARATION) break;
+                        auto recv = method_decl->field(TSF_RECEIVER);
+                        if (isastnull(recv) || !recv->eq(node)) break;
 
                         auto gotype = unpointer_type(decl_gotype);
                         if (!gotype) break;
@@ -7071,21 +7086,6 @@ void Go_Indexer::node_to_decls(Ast_Node *node, List<Godecl> *results, ccstr file
                             save_decl(decl);
                         }
                     } while (0);
-
-                    auto decl = new_result();
-
-                    switch (node->type()) {
-                    case TS_PARAMETER_LIST: decl->type = GODECL_PARAM; break;
-                    case TS_CONST_DECLARATION: decl->type = GODECL_CONST; break;
-                    case TS_VAR_DECLARATION: decl->type = GODECL_VAR; break;
-                    }
-
-                    decl->spec_start = spec->start();
-                    decl->name = it->string();
-                    decl->name_start = it->start();
-                    decl->name_end = it->end();
-                    decl->gotype = decl_gotype;
-                    save_decl(decl);
 
                     if (should_save_iota_types)
                         saved_iota_types->append(type_node_gotype);
