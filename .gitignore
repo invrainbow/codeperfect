@@ -72,5 +72,4 @@ sh/dev_windows.local
 go/.idea
 
 .x64
-jblow_tests_normal_input
 *.core
