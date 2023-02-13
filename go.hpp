@@ -46,7 +46,8 @@ enum Parse_Lang {
 // version 37: handle ok in receive expression
 // version 38: allow embedding generic type inside struct
 // version 39: support type aliases
-#define GO_INDEX_VERSION 39
+// version 40: distinguish between null and empty lists
+#define GO_INDEX_VERSION 40
 
 enum {
     CUSTOM_HASH_BUILTINS = 1,
@@ -1362,6 +1363,8 @@ T *read_object(Index_Stream *s) {
 template<typename T>
 List<T> *read_list(Index_Stream *s) {
     auto len = s->read4();
+    if (len == -1) return NULL;
+
     auto ret = alloc_object(List<T>);
     ret->init(LIST_POOL, len);
     for (u32 i = 0; i < len; i++)
@@ -1372,6 +1375,8 @@ List<T> *read_list(Index_Stream *s) {
 template<typename T>
 List<T*> *read_listp(Index_Stream *s) {
     auto len = s->read4();
+    if (len == -1) return NULL;
+
     auto ret = alloc_object(List<T*>);
     ret->init(LIST_POOL, len);
     for (u32 i = 0; i < len; i++)
@@ -1394,7 +1399,7 @@ void write_object(T *obj, Index_Stream *s) {
 template<typename L>
 void write_list(L arr, Index_Stream *s) {
     if (!arr) {
-        s->write4(0);
+        s->write4(-1);
         return;
     }
     s->write4(arr->len);
@@ -1404,7 +1409,7 @@ void write_list(L arr, Index_Stream *s) {
 template<typename L>
 void write_listp(L arr, Index_Stream *s) {
     if (!arr) {
-        s->write4(0);
+        s->write4(-1);
         return;
     }
     s->write4(arr->len);
