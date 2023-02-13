@@ -250,7 +250,7 @@ Font_Data *load_font_data_by_name(ccstr name, bool dont_check_name) {
     // CTFontCreateWithName will use a fallback if it couldn't find the font,
     // so check that it actually found the right font
     if (!dont_check_name) {
-        auto ctname = (CFStringRef)CTFontCopyAttribute(ctfont, kCTFontNameAttribute);
+        auto ctname = (CFStringRef)CTFontCopyAttribute(ctfont, kCTFontFamilyNameAttribute);
         if (!ctname) return NULL;
         defer { CFRelease(ctname); };
         if (!streq(cfstring_to_ccstr(ctname), name)) return NULL;
