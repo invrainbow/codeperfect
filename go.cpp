@@ -4574,7 +4574,7 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 p
         case TS_IDENTIFIER:
         case TS_LABEL_NAME:
         case TS_FIELD_IDENTIFIER: {
-            auto is_struct_field_in_literal = [&]() -> Ast_Node *{
+            auto is_struct_field_in_literal = [&]() -> Ast_Node* {
                 auto p = node->parent();
                 if (isastnull(p)) return NULL;
                 if (p->type() != TS_LITERAL_ELEMENT) return NULL;
@@ -4605,7 +4605,7 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 p
                     auto p = comp_literal->field(TSF_TYPE);
                     if (isastnull(p)) break;
 
-                    auto gotype = expr_to_gotype(p);
+                    auto gotype = node_to_gotype(p);
                     if (!gotype) break;
 
                     auto res = evaluate_type(gotype, ctx);
@@ -4614,8 +4614,19 @@ Jump_To_Definition_Result* Go_Indexer::jump_to_definition(ccstr filepath, cur2 p
                     auto rres = resolve_type(res);
                     if (!rres) break;
 
+                    rres = subst_generic_type(rres);
+                    if (!rres) break;
+
+                    rres = remove_override_ctx(rres->gotype, rres->ctx);
+
                     auto tmp = alloc_list<Goresult>();
-                    list_struct_fields(rres, tmp);
+
+                    Actually_List_Dotprops_Opts opts; ptr0(&opts);
+                    opts.out = tmp;
+                    opts.depth = 0;
+                    opts.seen_embeds.init();
+                    opts.fields_only = true;
+                    actually_list_dotprops(res, rres, &opts);
 
                     auto name = node->string();
                     For (tmp) {
@@ -5980,6 +5991,8 @@ void Go_Indexer::actually_list_dotprops(Goresult *type_res, Goresult *resolved_t
     }
     }
 getout:
+
+    if (opts->fields_only) return;
 
     type_res = unpointer_type(type_res);
 

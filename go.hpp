@@ -1128,6 +1128,7 @@ struct Actually_List_Dotprops_Opts {
     List<Goresult> *out;
     int depth;
     String_Set seen_embeds;
+    bool fields_only;
 };
 
 struct Generate_Func_Sig_Result {
