@@ -4067,6 +4067,19 @@ void UI::draw_everything() {
         begin_directory_child(); {
             SCOPED_FRAME();
 
+            /*
+            {
+                auto win = im::GetWindowPos();
+                auto tl = im::GetWindowContentRegionMin() + win;
+                auto br = im::GetWindowContentRegionMax() + win;
+
+                tl.y += im::GetScrollY();
+                br.y += im::GetScrollY();
+
+                im::GetForegroundDrawList()->AddRect(tl, br, IM_COL32(255, 255, 0, 255));
+            }
+            */
+
             fn<void(FT_Node*)> draw = [&](auto it) {
                 for (u32 j = 0; j < it->depth; j++) im::Indent();
 
@@ -4099,7 +4112,19 @@ void UI::draw_everything() {
                         label = cp_sprintf("%s %s", icon, it->name);
 
                     if (it == wnd.scroll_to) {
-                        im::SetScrollHereY();
+                        auto offset = im::GetWindowPos().y + im::GetScrollY();
+                        auto top = im::GetWindowContentRegionMin().y + offset;
+                        auto bot = im::GetWindowContentRegionMax().y + offset;
+                        auto pos = im::GetCursorScreenPos().y;
+
+                        auto hi = top + (bot - top) * 0.85;
+                        if (pos > hi)
+                            im::SetScrollY(im::GetScrollY() + (pos - hi));
+
+                        auto lo = top + (bot - top) * 0.15;
+                        if (pos < lo)
+                            im::SetScrollY(im::GetScrollY() - (lo - pos));
+
                         wnd.scroll_to = NULL;
                     }
 
