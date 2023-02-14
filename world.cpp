@@ -1611,6 +1611,15 @@ Command_Info command_info_table[_CMD_COUNT_];
 
 bool is_command_enabled(Command cmd) {
     switch (cmd) {
+    case CMD_ZOOM_ORIGINAL:
+        return options.zoom_level != 100;
+
+    case CMD_ZOOM_IN:
+        return options.zoom_level < ZOOM_LEVELS[ZOOM_LEVELS_COUNT-1];
+
+    case CMD_ZOOM_OUT:
+        return options.zoom_level > ZOOM_LEVELS[0];
+
     case CMD_CLOSE_ALL_EDITORS: {
         if (world.panes.len > 1) return true;
         auto pane = get_current_pane();
@@ -1954,8 +1963,6 @@ void init_command_info_table() {
     command_info_table[CMD_REDO] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_Z, "Redo");
     command_info_table[CMD_VIEW_CALLER_HIERARCHY] = k(CP_MOD_PRIMARY, CP_KEY_I, "View Caller Hierarchy");
     command_info_table[CMD_VIEW_CALLEE_HIERARCHY] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_I, "View Callee Hierarchy");
-    command_info_table[CMD_GO_BACK] = k(CP_MOD_PRIMARY, CP_KEY_MINUS, "Go Back");
-    command_info_table[CMD_GO_FORWARD] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_MINUS, "Go Forward");
     command_info_table[CMD_AST_NAVIGATION] = k(CP_MOD_CTRL | CP_MOD_ALT, CP_KEY_A, "Enter Tree-Based Navigation");
     /**/
     command_info_table[CMD_ERROR_LIST] = k(0, 0, "Error List");
@@ -1991,6 +1998,16 @@ void init_command_info_table() {
     command_info_table[CMD_CLOSE_EDITOR] = k(CP_MOD_PRIMARY, CP_KEY_W, "Close Editor");
     command_info_table[CMD_CLOSE_ALL_EDITORS] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_W, "Close All Editors");
     command_info_table[CMD_OPEN_FOLDER] = k(CP_MOD_PRIMARY | CP_MOD_SHIFT, CP_KEY_O, "Open Folder...");
+    command_info_table[CMD_ZOOM_IN] = k(CP_MOD_PRIMARY, CP_KEY_EQUAL, "Zoom In");
+    command_info_table[CMD_ZOOM_OUT] = k(CP_MOD_PRIMARY, CP_KEY_MINUS, "Zoom Out");
+    command_info_table[CMD_ZOOM_ORIGINAL] = k(CP_MOD_PRIMARY, CP_KEY_0, "Original Size");
+#if OS_MAC
+    command_info_table[CMD_GO_BACK] = k(CP_MOD_CTRL, CP_KEY_MINUS, "Go Back");
+    command_info_table[CMD_GO_FORWARD] = k(CP_MOD_CTRL, CP_KEY_EQUAL, "Go Forward");
+#else
+    command_info_table[CMD_GO_BACK] = k(CP_MOD_CTRL | CP_MOD_ALT, CP_KEY_MINUS, "Go Back");
+    command_info_table[CMD_GO_FORWARD] = k(CP_MOD_CTRL | CP_MOD_ALT, CP_KEY_EQUAL, "Go Forward");
+#endif
 }
 
 void do_find_interfaces() {
@@ -2154,6 +2171,34 @@ void handle_command(Command cmd, bool from_menu) {
     if (!is_command_enabled(cmd)) return;
 
     switch (cmd) {
+    case CMD_ZOOM_ORIGINAL:
+        set_zoom_level(100);
+        break;
+
+    case CMD_ZOOM_IN:
+    case CMD_ZOOM_OUT: {
+        int idx = -1;
+        for (int i = 0; i < ZOOM_LEVELS_COUNT; i++) {
+            if (options.zoom_level == ZOOM_LEVELS[i]) {
+                idx = i;
+                break;
+            }
+        }
+
+        int new_level = 100;
+        if (idx != -1) {
+            if (cmd == CMD_ZOOM_IN) {
+                if (idx == ZOOM_LEVELS_COUNT-1) return;
+                new_level = ZOOM_LEVELS[idx+1];
+            } else {
+                if (idx == 0) return;
+                new_level = ZOOM_LEVELS[idx-1];
+            }
+        }
+        set_zoom_level(new_level);
+        break;
+    }
+
     case CMD_OPEN_FOLDER: {
         auto buf = alloc_array(char, MAX_PATH);
 
@@ -3887,4 +3932,22 @@ NORETURN void crash_handler(int sig) {
     print("stacktrace:\n%s", st);
 
     exit_from_crash_handler();
+}
+
+void set_zoom_level(int level) {
+    options.zoom_level = level;
+    if (world.wnd_options.show)
+        world.wnd_options.tmp.zoom_level = level;
+
+    recalc_display_size();
+
+    // write out options
+    File f;
+    auto filepath = path_join(world.configdir, ".options");
+    if (f.init_write(filepath) == FILE_RESULT_OK) {
+        defer { f.cleanup(); };
+        Serde serde;
+        serde.init(&f);
+        serde.write_type(&options, SERDE_OPTIONS);
+    }
 }

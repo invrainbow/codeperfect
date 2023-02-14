@@ -31,6 +31,9 @@ Global_Colors global_colors;
 ccstr get_menu_command_key(Command cmd);
 bool menu_command(Command cmd, bool selected = false);
 
+const int ZOOM_LEVELS[] = {50, 67, 75, 80, 90, 100,110, 125, 133, 140, 150, 175, 200};
+const int ZOOM_LEVELS_COUNT = _countof(ZOOM_LEVELS);
+
 void init_global_colors() {
 #if 0 // def DEBUG_BUILD
     if (check_path("/Users/brandon/.cpcolors") == CPR_FILE) {
@@ -144,6 +147,7 @@ ccstr get_key_name(int key) {
     case CP_KEY_RIGHT_BRACKET: return "]";
     case CP_KEY_COMMA: return ",";
     case CP_KEY_MINUS: return "-";
+    case CP_KEY_EQUAL: return "=";
     }
     return NULL;
 }
@@ -2400,28 +2404,13 @@ void UI::draw_everything() {
             menu_command(CMD_ERROR_LIST, world.error_list.show);
             menu_command(CMD_COMMAND_PALETTE);
             im::Separator();
+            menu_command(CMD_ZOOM_ORIGINAL);
+            menu_command(CMD_ZOOM_IN);
+            menu_command(CMD_ZOOM_OUT);
             if (im::BeginMenu("Zoom")) {
-                int levels[] = {50, 67, 75, 80, 90, 100,110, 125, 133, 140, 150, 175, 200};
-                For (&levels) {
-                    if (im::MenuItem(cp_sprintf("%d%%", it), NULL, it == options.zoom_level)) {
-                        options.zoom_level = it;
-                        if (world.wnd_options.show)
-                            world.wnd_options.tmp.zoom_level = it;
-
-                        recalc_display_size();
-
-                        // write out options
-                        File f;
-                        auto filepath = path_join(world.configdir, ".options");
-                        if (f.init_write(filepath) == FILE_RESULT_OK) {
-                            defer { f.cleanup(); };
-                            Serde serde;
-                            serde.init(&f);
-                            serde.write_type(&options, SERDE_OPTIONS);
-                        }
-
-                    }
-                }
+                For (&ZOOM_LEVELS)
+                    if (im::MenuItem(cp_sprintf("%d%%", it), NULL, it == options.zoom_level))
+                        set_zoom_level(it);
                 im::EndMenu();
             }
             im::EndMenu();

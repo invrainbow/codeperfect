@@ -265,6 +265,9 @@ enum Command {
     CMD_CLOSE_EDITOR,
     CMD_CLOSE_ALL_EDITORS,
     CMD_OPEN_FOLDER,
+    CMD_ZOOM_IN,
+    CMD_ZOOM_OUT,
+    CMD_ZOOM_ORIGINAL,
     /**/
     _CMD_COUNT_,
     CMD_INVALID = -1,
@@ -877,3 +880,5 @@ void write_stacktrace_to_file(ccstr stacktrace);
 NORETURN void crash_handler(int sig);
 
 void recalc_display_size();
+
+void set_zoom_level(int level);
